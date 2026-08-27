@@ -1,10 +1,10 @@
 import { Markdown } from "@musepi/desktop-web";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
-import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
 import { wrapSelectionForChat } from "../lib/selection-capture";
-import { tapFeedback } from "../lib/haptic";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -172,7 +172,11 @@ export function AskPopover({ rpc, sessionId }: { rpc: RpcClient | null; sessionI
 						disabled={phase === "asking" || !question.trim()}
 						onClick={() => void ask()}
 					>
-						{phase === "asking" ? <span className="gui-ask-pop-dots" /> : <Icon name="arrow-up" className="h-3.5 w-3.5" />}
+						{phase === "asking" ? (
+							<span className="gui-ask-pop-dots" />
+						) : (
+							<Icon name="arrow-up" className="h-3.5 w-3.5" />
+						)}
 					</button>
 				</div>
 			)}

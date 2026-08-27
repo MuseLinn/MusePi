@@ -16,7 +16,6 @@ export { LanguageToggle } from "./components/shell/LanguageToggle";
 export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
-export { DiffBlock, type DiffLayout } from "./tool-render/parts";
 export { Markdown } from "./components/transcript/Markdown";
 export { type MermaidMode, mermaidMode, renderMermaidHtml } from "./components/transcript/mermaid";
 export {
@@ -45,7 +44,12 @@ export {
 	typingFadeOpacity,
 } from "./components/transcript/reveal";
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
-export { Transcript, transcriptNodeKind, type TranscriptNodeInjection, type TranscriptProps } from "./components/transcript/Transcript";
+export {
+	Transcript,
+	type TranscriptNodeInjection,
+	type TranscriptProps,
+	transcriptNodeKind,
+} from "./components/transcript/Transcript";
 export {
 	collectWidgetPayloads,
 	latestWidgetFromEntries,
@@ -85,3 +89,4 @@ export {
 	useUiThemePreferences,
 } from "./lib/theme";
 export * from "./tool-render";
+export { DiffBlock, type DiffLayout } from "./tool-render/parts";

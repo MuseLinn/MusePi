@@ -8,10 +8,14 @@
  * `persistForeignSession`. The foreign agent never needs to be running.
  */
 
-import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import { getAgentDir } from "@musepi/pi-utils";
+import { Args, Command, Flags } from "@musepi/pi-utils/cli";
 import { importHelp as commandHelp } from "../cli/command-help";
-import { createForeignSessionStore, foreignSessionSources, persistForeignSession } from "../session/foreign-session-import";
+import {
+	createForeignSessionStore,
+	foreignSessionSources,
+	persistForeignSession,
+} from "../session/foreign-session-import";
 import type { ForeignSessionSource } from "../session/foreign-session-store";
 
 export default class Import extends Command {
@@ -68,9 +72,7 @@ export default class Import extends Command {
 		}
 
 		if (!args.id) {
-			process.stderr.write(
-				`Missing session id. Run \`musepi import ${source} --sessions\` to list candidates.\n`,
-			);
+			process.stderr.write(`Missing session id. Run \`musepi import ${source} --sessions\` to list candidates.\n`);
 			process.exitCode = 2;
 			return;
 		}
@@ -153,7 +155,9 @@ export default class Import extends Command {
 			sessions.find(s => s.path === id) ??
 			sessions.find(s => s.path.endsWith(id));
 		if (!match) {
-			process.stderr.write(`Session not found in ${source}: ${id}. Run \`musepi import ${source} --sessions\` to list.\n`);
+			process.stderr.write(
+				`Session not found in ${source}: ${id}. Run \`musepi import ${source} --sessions\` to list.\n`,
+			);
 			process.exitCode = 1;
 			return;
 		}

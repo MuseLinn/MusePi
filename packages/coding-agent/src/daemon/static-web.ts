@@ -216,8 +216,7 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 			}
 			return new Response(file, {
 				headers: {
-					"content-type":
-						MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
+					"content-type": MIME[path.extname(filePath).toLowerCase()] ?? "application/octet-stream",
 				},
 			});
 		},

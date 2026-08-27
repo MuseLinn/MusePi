@@ -28,10 +28,10 @@ export const settings = {
 	"Optional shared bank base name. Per-project modes derive project-local banks from it.":
 		"Optional shared bank base name. Per-project modes derive project-local banks from it.",
 	"Mnemopi Scoping": "Mnemopi Scoping",
-	"active": "Active",
-	"add": "add",
+	active: "Active",
+	add: "add",
 	"add instance": "Add instance",
-	"archived": "Archived",
+	archived: "Archived",
 	"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility":
 		"global = one shared bank; per-project = isolated bank per cwd; per-project-tagged = project-local writes plus global recall visibility",
 	Global: "Global",
@@ -48,7 +48,7 @@ export const settings = {
 	"BAAI/bge-base-en-v1.5 (768d), English-only": "BAAI/bge-base-en-v1.5 (768d), English-only",
 	"Multilingual (multilingual-e5-large)": "Multilingual (multilingual-e5-large)",
 	"instance label": "Instance label",
-	"instances": "Instances",
+	instances: "Instances",
 	"intfloat/multilingual-e5-large (1024d), cross-language recall":
 		"intfloat/multilingual-e5-large (1024d), cross-language recall",
 	"Mnemopi Auto Recall": "Mnemopi Auto Recall",
@@ -1194,9 +1194,11 @@ export const settings = {
 	"session update": "session update",
 	"connect to a computer on your network": "Connect to a computer on your network",
 	"scan the QR code": "Scan the QR code",
-	"scan the desktop share QR with your camera": "Scan the QR on the desktop share panel — this app or any phone browser works",
+	"scan the desktop share QR with your camera":
+		"Scan the QR on the desktop share panel — this app or any phone browser works",
 	"pair code": "Pair code",
-	"enter the 6-digit code from the desktop share panel": "6-digit code + computer address, both shown on the share panel",
+	"enter the 6-digit code from the desktop share panel":
+		"6-digit code + computer address, both shown on the share panel",
 	"paste a join link": "Paste a join link",
 	"skip for now": "Skip for now",
 	"not connected yet — connect to a computer to view sessions":
@@ -1205,9 +1207,8 @@ export const settings = {
 	"scan failed — use the pair code instead": "Scan failed — use the pair code instead",
 	"camera unavailable — use the pair code instead": "Camera unavailable — use the pair code instead",
 	"align the QR code in the frame": "Align the QR code in the frame",
-	"torch": "Torch",
-	"camera permission denied — use the pair code instead":
-		"Camera permission denied — use the pair code instead",
+	torch: "Torch",
+	"camera permission denied — use the pair code instead": "Camera permission denied — use the pair code instead",
 	"or use MusePi Mobile pair code": "or use MusePi Mobile pair code",
 	"get code": "Get code",
 	"enter the 6-digit code in MusePi Mobile (same network)": "Enter the 6-digit code in MusePi Mobile (same network)",
@@ -1220,8 +1221,10 @@ export const settings = {
 	"invalid or expired pair code": "Invalid or expired pair code",
 	"invalid pair response": "Invalid pair response",
 	"cannot reach the computer — same Wi-Fi?": "Cannot reach the computer — same Wi-Fi?",
-	"no address shown? share with a public tunnel and scan the link instead": "No address shown? Share with a public tunnel and scan the link instead",
-	"offline — showing cached content, connecting needs a network": "Offline — showing cached content, connecting needs a network",
+	"no address shown? share with a public tunnel and scan the link instead":
+		"No address shown? Share with a public tunnel and scan the link instead",
+	"offline — showing cached content, connecting needs a network":
+		"Offline — showing cached content, connecting needs a network",
 	"no channels configured": "No channels configured",
 	start: "Start",
 	"save and start": "Save & start",
@@ -3027,5 +3030,6 @@ export const settings = {
 	"speech models": "Speech recognition models",
 	"model ready offline": "Ready · available offline",
 	"launch at login": "Launch at login",
-	"launch at login description": "Start the MusePi daemon automatically when you log in (keeps background features available without opening the app)",
+	"launch at login description":
+		"Start the MusePi daemon automatically when you log in (keeps background features available without opening the app)",
 } as const satisfies Record<SettingsKey, string>;

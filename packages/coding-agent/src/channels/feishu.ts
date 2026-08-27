@@ -1,5 +1,5 @@
+import { AppType, Client, EventDispatcher, type Logger, WSClient } from "@larksuiteoapi/node-sdk";
 import { logger } from "@musepi/pi-utils";
-import { AppType, Client, EventDispatcher, WSClient, type Logger } from "@larksuiteoapi/node-sdk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** Feishu / Lark bot channel — official @larksuiteoapi/node-sdk:
@@ -13,12 +13,18 @@ import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } f
  *  the message.receive_v1 event. */
 export class FeishuChannel implements ChannelAdapter {
 	readonly kind: "feishu" | "lark";
-	#config: { appId: string; appSecret: string; domain: string } = { appId: "", appSecret: "", domain: "https://open.feishu.cn" };
+	#config: { appId: string; appSecret: string; domain: string } = {
+		appId: "",
+		appSecret: "",
+		domain: "https://open.feishu.cn",
+	};
 	#state: ChannelStatus["state"] = "off";
 	#detail: string | undefined;
 	#client: Client | null = null;
 	#ws: WSClient | null = null;
-	#onMessage: ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>) | null = null;
+	#onMessage:
+		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
+		| null = null;
 
 	constructor(kind: "feishu" | "lark" = "feishu") {
 		this.kind = kind;
@@ -33,10 +39,7 @@ export class FeishuChannel implements ChannelAdapter {
 		this.#config = {
 			appId: typeof config.appId === "string" ? config.appId : "",
 			appSecret: typeof config.appSecret === "string" ? config.appSecret : "",
-			domain:
-				typeof config.domain === "string" && config.domain
-					? config.domain
-					: FeishuChannel.DOMAINS[this.kind],
+			domain: typeof config.domain === "string" && config.domain ? config.domain : FeishuChannel.DOMAINS[this.kind],
 		};
 	}
 
@@ -115,10 +118,9 @@ export class FeishuChannel implements ChannelAdapter {
 
 	async #downloadImage(imageKey: string): Promise<string | null> {
 		try {
-			const res = await fetch(
-				`${this.#config.domain}/open-apis/im/v1/images/${imageKey}`,
-				{ headers: await this.#authHeaders() },
-			);
+			const res = await fetch(`${this.#config.domain}/open-apis/im/v1/images/${imageKey}`, {
+				headers: await this.#authHeaders(),
+			});
 			if (!res.ok) return null;
 			const bytes = Buffer.from(await res.arrayBuffer());
 			if (bytes.length > 20 * 1024 * 1024) return null;

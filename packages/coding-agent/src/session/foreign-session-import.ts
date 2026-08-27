@@ -1,10 +1,10 @@
 import { directoryExists } from "@musepi/pi-utils";
 import { ClaudeSessionStore } from "./claude-session-store";
 import { CodexSessionStore } from "./codex-session-store";
+import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
 import { GenericJsonlSessionStore } from "./generic-jsonl-session-store";
 import { OpencodeSessionStore } from "./opencode-session-store";
 import { SdkCompatSessionStore } from "./sdk-compat-session-store";
-import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
 import type { SessionInfo } from "./session-listing";
 import type { SessionManager } from "./session-manager";
 

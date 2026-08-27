@@ -14,12 +14,9 @@ const noop = (): void => {};
 describe("approval bridge", () => {
 	test("approval select pauses and resolve(true) returns Approve", async () => {
 		const requests: Array<{ requestId: string; tool: string }> = [];
-		const bridge = createApprovalBridge(
-			record => {
-				requests.push({ requestId: record.requestId, tool: record.tool });
-			},
-			noop,
-		);
+		const bridge = createApprovalBridge(record => {
+			requests.push({ requestId: record.requestId, tool: record.tool });
+		}, noop);
 		const pending = bridge.uiContext.select("Allow tool: bash\nReason: write-tier", [
 			{ label: "Approve", description: "Run once" },
 			{ label: "Deny", description: "Block" },

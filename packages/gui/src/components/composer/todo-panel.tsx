@@ -44,16 +44,11 @@ export function TodoPanel({
 						</span>
 					</div>
 					<div className="gui-todo-bar">
-						<div
-							className="gui-todo-fill"
-							style={{ width: `${(phase.done / phase.total) * 100}%` }}
-						/>
+						<div className="gui-todo-fill" style={{ width: `${(phase.done / phase.total) * 100}%` }} />
 					</div>
 					{phase.tasks.map((task, i) => (
 						<div key={i} className={`gui-todo-task gui-todo-task--${task.status}`}>
-							<span className="gui-todo-task-icon">
-								{TODO_STATUS_ICONS[task.status] ?? "·"}
-							</span>
+							<span className="gui-todo-task-icon">{TODO_STATUS_ICONS[task.status] ?? "·"}</span>
 							<span className="min-w-0 flex-1 truncate" title={task.content}>
 								{task.content}
 							</span>

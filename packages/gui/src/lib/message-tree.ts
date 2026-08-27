@@ -99,7 +99,10 @@ export function treeTextOf(entry: unknown): string {
 				? m.content
 				: typeof m?.text === "string"
 					? m.text
-					: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
+					: blocks
+							.filter(b => b?.type === "text")
+							.map(b => b.text ?? "")
+							.join(" ");
 		return text.replace(/\s+/g, " ").trim().slice(0, 90) || "…";
 	}
 	return typeof e.type === "string" ? e.type : "entry";

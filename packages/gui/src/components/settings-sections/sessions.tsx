@@ -1,18 +1,7 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RpcClient } from "../../lib/rpc";
 import {
 	cleanupAction as cleanupActionPref,
 	cleanupCandidates,
@@ -20,9 +9,7 @@ import {
 	cleanupEnabled as cleanupEnabledPref,
 	runCleanupOnce,
 } from "../../lib/session-cleanup";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
+import { Icon } from "../../vendor/oc-icons";
 
 /** Session behavior: auto titles, delete-confirmation toggle, and
  *  auto-cleanup of stale sessions (archive = session.close → daemon

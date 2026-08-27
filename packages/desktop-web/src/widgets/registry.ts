@@ -3,26 +3,34 @@ import { CalcCard } from "./calc";
 import { calcDefaults } from "./calc-defaults";
 import { ClockCard } from "./clock";
 import { clockDefaults } from "./clock-defaults";
+import {
+	GaugeCard,
+	HeatwallCard,
+	heatwallDefaults,
+	IndextapeCard,
+	indextapeDefaults,
+	KlineCard,
+	klineDefaults,
+} from "./finance";
+import { FxCard, fxDefaults } from "./fx";
+import { GalleryCard } from "./gallery";
+import { galleryDefaults } from "./gallery-defaults";
+import { gaugeDefaults } from "./gauge-defaults";
+import { HistoryCard, historyDefaults } from "./history";
+import { HtmlCard, htmlDefaults } from "./html";
 import { MetricCard } from "./metric";
 import { metricDefaults } from "./metric-defaults";
+import { MusicCard, musicDefaults } from "./music";
 import { PomodoroCard } from "./pomodoro";
 import { pomodoroDefaults } from "./pomodoro-defaults";
 import { SliderCard } from "./slider";
 import { sliderDefaults } from "./slider-defaults";
+import { StocksCard, stocksDefaults } from "./stocks";
 import { TickerCard } from "./ticker";
 import { tickerDefaults } from "./ticker-defaults";
 import { TodoCard } from "./todo";
 import { todoDefaults } from "./todo-defaults";
-import { GaugeCard, HeatwallCard, IndextapeCard, KlineCard, heatwallDefaults, indextapeDefaults, klineDefaults } from "./finance";
-import { gaugeDefaults } from "./gauge-defaults";
-import { GalleryCard } from "./gallery";
-import { galleryDefaults } from "./gallery-defaults";
-import { HtmlCard, htmlDefaults } from "./html";
 import { VideoCard, videoDefaults } from "./video";
-import { MusicCard, musicDefaults } from "./music";
-import { HistoryCard, historyDefaults } from "./history";
-import { FxCard, fxDefaults } from "./fx";
-import { StocksCard, stocksDefaults } from "./stocks";
 
 /**
  * Widget registry — the whitelist of board/inline widget types (see
@@ -278,7 +286,6 @@ export const WIDGET_REGISTRY: readonly WidgetDef[] = [
 		defaults: htmlDefaults,
 		Component: HtmlCard,
 	},
-
 ];
 
 export function widgetDef(type: string): WidgetDef | undefined {

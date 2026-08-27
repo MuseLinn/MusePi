@@ -13,12 +13,17 @@ import {
 import { BracketedPasteHandler } from "@musepi/pi-tui/bracketed-paste";
 import type { AppKeybinding } from "../../config/keybindings";
 import { isSettingsInitialized, settings } from "../../config/settings";
+import {
+	attachmentSgr,
+	COMPOSER_TOKEN_REGEX,
+	chipLabel,
+	collapseImageMarkers,
+	renderPlaceholders,
+} from "../composer-attachments";
 import { imageReferenceHyperlink } from "../image-references";
-import { attachmentSgr, chipLabel, collapseImageMarkers, COMPOSER_TOKEN_REGEX, renderPlaceholders } from "../composer-attachments";
 import { hasMagicKeyword, highlightMagicKeywords } from "../magic-keywords";
 import { isQueuedMessageList, parseQueueShorthand, QUEUE_LIST_MARKER_RE } from "../queue-input";
 import { fgOrPlain, theme } from "../theme/theme";
-
 
 /** A large text paste staged as a composer chip. `content` feeds the band card's snippet and
  *  captions; the submit-time expansion (verbatim content or a wrapped block) lives in the
@@ -595,9 +600,7 @@ export class CustomEditor extends Editor {
 				if (form === "chip") {
 					// Chip tokens carry their attachment identity color (matches the band card).
 					const styled = `${attachmentSgr(kind, index)}\x1b[1m${value}\x1b[22m\x1b[39m`;
-					return kind === "image"
-						? imageReferenceHyperlink(value, index, this.imageLinks, () => styled)
-						: styled;
+					return kind === "image" ? imageReferenceHyperlink(value, index, this.imageLinks, () => styled) : styled;
 				}
 				return kind === "image"
 					? imageReferenceHyperlink(value, index, this.imageLinks, label =>

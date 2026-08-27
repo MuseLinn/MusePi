@@ -277,7 +277,8 @@ export const handleDiscogs: SpecialHandler = async (
 			signal,
 			headers: {
 				Accept: "application/json",
-				"User-Agent": USER_AGENT,			},
+				"User-Agent": USER_AGENT,
+			},
 		});
 
 		if (!result.ok) return null;

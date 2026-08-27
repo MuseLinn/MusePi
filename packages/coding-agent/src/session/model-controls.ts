@@ -508,7 +508,7 @@ export class ModelControls {
 			const previousLevel = this.#thinkingLevel;
 			this.#autoThinking = true;
 			this.#autoResolvedLevel = undefined;
-		this.#autoResolvedForModel = undefined;
+			this.#autoResolvedForModel = undefined;
 			this.#thinkingLevel = provisional;
 			if (!wasAuto) {
 				this.#host.clearInheritedProviderPromptCacheKey();

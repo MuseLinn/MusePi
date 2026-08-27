@@ -21,9 +21,10 @@ export async function widgetFetch(
 	try {
 		return await fetchFn(url, {
 			...init,
-			signal: typeof AbortSignal.any === "function" && init.signal
-				? AbortSignal.any([init.signal, controller.signal])
-				: controller.signal,
+			signal:
+				typeof AbortSignal.any === "function" && init.signal
+					? AbortSignal.any([init.signal, controller.signal])
+					: controller.signal,
 		});
 	} finally {
 		clearTimeout(timer);

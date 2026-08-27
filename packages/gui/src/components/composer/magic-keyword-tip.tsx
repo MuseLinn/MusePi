@@ -13,10 +13,7 @@ import { t } from "../../i18n/index.js";
  */
 
 const KW = (kw: string): RegExp =>
-	new RegExp(
-		String.raw`(?<![\p{L}\p{N}_./\\-])(?<!::)${kw}(?![\p{L}\p{N}_/\\-])(?!\.[\p{L}\p{N}_-])(?!\()`,
-		"u",
-	);
+	new RegExp(String.raw`(?<![\p{L}\p{N}_./\\-])(?<!::)${kw}(?![\p{L}\p{N}_/\\-])(?!\.[\p{L}\p{N}_-])(?!\()`, "u");
 
 const ULTRATHINK_RE = KW("ultrathink");
 const ORCHESTRATE_RE = KW("orchestrate");

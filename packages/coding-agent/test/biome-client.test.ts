@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from "bun:test";
+import { writeFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { Subprocess } from "bun";
-import { writeFileSync } from "node:fs";
 import { logger } from "@musepi/pi-utils";
+import type { Subprocess } from "bun";
 import { BiomeClient } from "../src/lsp/clients/biome-client";
 import type { ServerConfig } from "../src/lsp/types";
 
@@ -226,8 +226,9 @@ describe("BiomeClient lint", () => {
 		// `lint` exits non-zero when diagnostics exist, but the JSON payload is
 		// still on stdout — the client must parse it rather than treat the
 		// non-zero exit as a run failure.
-		const spawnMock = vi.spyOn(Bun, "spawn").mockImplementation((() =>
-			completedProcess(sample, "", 1)) as typeof Bun.spawn);
+		const spawnMock = vi
+			.spyOn(Bun, "spawn")
+			.mockImplementation((() => completedProcess(sample, "", 1)) as typeof Bun.spawn);
 		try {
 			const diagnostics = await new BiomeClient(biomeConfig("biome"), tempDir).lint(targetFile);
 
@@ -274,8 +275,9 @@ describe("BiomeClient lint", () => {
 		const unregister = logger.registerLogSink(event => {
 			if (event.level === "warn") warnEvents.push(event.message);
 		});
-		const spawnMock = vi.spyOn(Bun, "spawn").mockImplementation((() =>
-			completedProcess(sample, "", 1)) as typeof Bun.spawn);
+		const spawnMock = vi
+			.spyOn(Bun, "spawn")
+			.mockImplementation((() => completedProcess(sample, "", 1)) as typeof Bun.spawn);
 		try {
 			const diagnostics = await new BiomeClient(biomeConfig("biome"), tempDir).lint(targetFile);
 

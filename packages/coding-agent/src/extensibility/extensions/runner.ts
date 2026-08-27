@@ -19,7 +19,7 @@ import type { ModelRegistry } from "../../config/model-registry";
 import type { Settings } from "../../config/settings";
 import type { LocalProtocolOptions } from "../../internal-urls/local-protocol";
 import type { MemoryRuntimeContext } from "../../memory-backend";
-import { setExtensionThemeTokens, theme, type Theme } from "../../modes/theme/theme";
+import { setExtensionThemeTokens, type Theme, theme } from "../../modes/theme/theme";
 import type { AsyncJobSnapshot } from "../../session/agent-session";
 import type { SessionManager } from "../../session/session-manager";
 import { addFileDeleteFallback, addFileWriteFallback } from "../../tools/file-write-fallback";
@@ -49,13 +49,14 @@ import type {
 	ExtensionEvent,
 	ExtensionFlag,
 	ExtensionMode,
-	ExtensionRuntime,
+	ExtensionModeDefinition,
 	ExtensionNotificationChannel,
 	ExtensionNotificationMessage,
+	ExtensionRuntime,
 	ExtensionService,
-	ExtensionThemeToken,
-	ExtensionStatusBarSegment,
 	ExtensionShortcut,
+	ExtensionStatusBarSegment,
+	ExtensionThemeToken,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 	InputEvent,
@@ -82,7 +83,6 @@ import type {
 	UserBashEventResult,
 	UserPythonEvent,
 	UserPythonEventResult,
-	ExtensionModeDefinition,
 } from "./types";
 
 /** Combined result from all before_agent_start handlers */
@@ -1505,15 +1505,21 @@ export class ExtensionRunner {
 		}
 	}
 
-	#invokeServiceLifecycle(event: "service_start" | "service_stop", extensionPath: string, fn: () => void | Promise<void>): void {
+	#invokeServiceLifecycle(
+		event: "service_start" | "service_stop",
+		extensionPath: string,
+		fn: () => void | Promise<void>,
+	): void {
 		try {
 			const result = fn();
 			if (result instanceof Promise) {
-				result.catch(error => this.emitError({
-					extensionPath,
-					event,
-					error: error instanceof Error ? error.message : String(error),
-				}));
+				result.catch(error =>
+					this.emitError({
+						extensionPath,
+						event,
+						error: error instanceof Error ? error.message : String(error),
+					}),
+				);
 			}
 		} catch (error) {
 			this.emitError({

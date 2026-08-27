@@ -59,9 +59,11 @@ export function getBundledModels(provider: GeneratedProvider): Model<Api>[] {
 export function getBundledModelsDevCapabilities(): Map<string, Model<Api>> {
 	const capabilities = new Map<string, Model<Api>>();
 	for (const [id, row] of Object.entries(MODELS_DEV_REF)) {
-		const input = (Array.isArray(row.input) && row.input.length > 0
-			? row.input
-			: ["text"]) as ("text" | "image" | "video")[];
+		const input = (Array.isArray(row.input) && row.input.length > 0 ? row.input : ["text"]) as (
+			| "text"
+			| "image"
+			| "video"
+		)[];
 		capabilities.set(
 			id,
 			buildModel({

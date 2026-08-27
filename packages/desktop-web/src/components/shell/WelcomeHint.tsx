@@ -1,5 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { t, type TranslationKey } from "../../i18n/index.js";
+import { type ReactNode, useEffect, useState } from "react";
+import { type TranslationKey, t } from "../../i18n/index.js";
 
 /**
  * Empty-state greeting + rotating tip (absorbed from the gui WelcomeComposer).
@@ -59,7 +59,7 @@ export function WelcomeHint(): ReactNode {
 		<div className="sh-welcome-hint">
 			<p className="sh-welcome-greeting">{greeting(new Date().getHours())}</p>
 			<p key={tipKey} className="sh-welcome-tip">
-								{t(tipKey)}
+				{t(tipKey)}
 			</p>
 		</div>
 	);

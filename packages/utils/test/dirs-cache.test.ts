@@ -67,36 +67,37 @@ describe("document conversion cache directory", () => {
 		expect(getDocumentConversionCacheDir()).toBe(path.join(customAgentDir, "cache", "document-conversions"));
 	});
 
-describe("PI_CONFIG_DIR config-root override", () => {
-	let originalPiConfigDir: string | undefined;
+	describe("PI_CONFIG_DIR config-root override", () => {
+		let originalPiConfigDir: string | undefined;
 
-	beforeEach(() => {
-		originalPiConfigDir = process.env.PI_CONFIG_DIR;
+		beforeEach(() => {
+			originalPiConfigDir = process.env.PI_CONFIG_DIR;
+		});
+		afterEach(() => {
+			restoreEnv("PI_CONFIG_DIR", originalPiConfigDir);
+			__resetDirsFromEnvForTests();
+		});
+
+		it("treats an absolute PI_CONFIG_DIR as the full config root (not home-joined)", async () => {
+			const absoluteRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-utils-config-root-"));
+			process.env.PI_CONFIG_DIR = absoluteRoot;
+			__resetDirsFromEnvForTests();
+
+			expect(getConfigRootDir()).toBe(absoluteRoot);
+			expect(getProfileRootDir(undefined)).toBe(absoluteRoot);
+			expect(getConfigDirName()).toBe(absoluteRoot);
+
+			await fs.rm(absoluteRoot, { recursive: true, force: true });
+		});
+
+		it("keeps home-joining for a relative PI_CONFIG_DIR", () => {
+			process.env.PI_CONFIG_DIR = ".musepi-custom";
+			__resetDirsFromEnvForTests();
+
+			expect(getConfigRootDir()).toBe(path.join(os.homedir(), ".musepi-custom"));
+		});
 	});
-	afterEach(() => {
-		restoreEnv("PI_CONFIG_DIR", originalPiConfigDir);
-		__resetDirsFromEnvForTests();
-	});
-
-	it("treats an absolute PI_CONFIG_DIR as the full config root (not home-joined)", async () => {
-		const absoluteRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pi-utils-config-root-"));
-		process.env.PI_CONFIG_DIR = absoluteRoot;
-		__resetDirsFromEnvForTests();
-
-		expect(getConfigRootDir()).toBe(absoluteRoot);
-		expect(getProfileRootDir(undefined)).toBe(absoluteRoot);
-		expect(getConfigDirName()).toBe(absoluteRoot);
-
-		await fs.rm(absoluteRoot, { recursive: true, force: true });
-	});
-
-	it("keeps home-joining for a relative PI_CONFIG_DIR", () => {
-		process.env.PI_CONFIG_DIR = ".musepi-custom";
-		__resetDirsFromEnvForTests();
-
-		expect(getConfigRootDir()).toBe(path.join(os.homedir(), ".musepi-custom"));
-	});
-});});
+});
 
 describe("test directory state cleanup", () => {
 	it("restores the active profile from the current env after setAgentDir mutations", () => {
@@ -123,7 +124,7 @@ describe("test directory state cleanup", () => {
 		} finally {
 			restoreEnv("PI_CODING_AGENT_DIR", originalPiCodingAgentDir);
 			restoreEnv("MUSEPI_PROFILE", originalProfile);
-				restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
+			restoreEnv("XDG_CACHE_HOME", originalXdgCacheHome);
 			__resetDirsFromEnvForTests();
 		}
 	});

@@ -10,11 +10,11 @@ import { afterAll, describe, expect, it } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { loadAssemblyManifest, AssemblyManifestError } from "@musepi/pi-coding-agent/assembly/manifest";
-import { verifyExtensionLoad, filterExtensionPaths } from "@musepi/pi-coding-agent/assembly/verify";
 import { surfaceFromMode } from "@musepi/pi-coding-agent/assembly";
-import { resolveTerminalProvider, isTerminalProvider } from "@musepi/pi-coding-agent/daemon/terminal-provider";
+import { AssemblyManifestError, loadAssemblyManifest } from "@musepi/pi-coding-agent/assembly/manifest";
 import type { AssemblyManifest } from "@musepi/pi-coding-agent/assembly/types";
+import { filterExtensionPaths, verifyExtensionLoad } from "@musepi/pi-coding-agent/assembly/verify";
+import { isTerminalProvider, resolveTerminalProvider } from "@musepi/pi-coding-agent/daemon/terminal-provider";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "assembly-test-"));
 const home = path.join(tmp, "home");
@@ -43,7 +43,7 @@ describe("manifest parsing", () => {
 		fs.writeFileSync(
 			path.join(projDir, ".musepi", "assembly.toml"),
 			[
-				'[assembly]',
+				"[assembly]",
 				'surface = "tui"',
 				"degraded_ok = true",
 				"",
@@ -107,7 +107,11 @@ describe("extension load verification", () => {
 	}
 
 	function fakeLoadResult(extensions: unknown[] = [], errors: Array<{ path: string; error: string }> = []) {
-		return { extensions, errors, runtime: {} } as never as import("../src/extensibility/extensions/types.ts").LoadExtensionsResult;
+		return {
+			extensions,
+			errors,
+			runtime: {},
+		} as never as import("../src/extensibility/extensions/types.ts").LoadExtensionsResult;
 	}
 
 	it("no manifest: all errors are warnings, report ok", () => {
@@ -132,7 +136,8 @@ describe("extension load verification", () => {
 				[
 					{ path: "/tmp/broken/index.ts", error: "boom" }, // id = "broken"
 					{ path: "/tmp/other/index.ts", error: "nope" }, // id = "other"
-				]),
+				],
+			),
 			manifest,
 			"tui",
 		);
@@ -171,7 +176,11 @@ describe("extension path filtering", () => {
 	}
 
 	function fakeLoadResult(extensions: unknown[] = [], errors: Array<{ path: string; error: string }> = []) {
-		return { extensions, errors, runtime: {} } as never as import("../src/extensibility/extensions/types.ts").LoadExtensionsResult;
+		return {
+			extensions,
+			errors,
+			runtime: {},
+		} as never as import("../src/extensibility/extensions/types.ts").LoadExtensionsResult;
 	}
 
 	const paths = ["/tmp/a/index.ts", "/tmp/b/index.ts", "/tmp/c/index.ts"];
@@ -189,7 +198,7 @@ describe("extension path filtering", () => {
 	it("settings.disabledExtensions applies without a manifest", () => {
 		const filtered = filterExtensionPaths(paths, null, fakeSettings(["b"]) as never);
 		expect(filtered).toHaveLength(2);
-		expect(filtered.some((p) => p.includes("/tmp/b/"))).toBe(false);
+		expect(filtered.some(p => p.includes("/tmp/b/"))).toBe(false);
 	});
 
 	it("exclude glob removes matching ids", () => {
@@ -199,7 +208,7 @@ describe("extension path filtering", () => {
 		};
 		const filtered = filterExtensionPaths(paths, manifest, fakeSettings() as never);
 		expect(filtered).toHaveLength(2);
-		expect(filtered.some((p) => p.includes("/tmp/b/"))).toBe(false);
+		expect(filtered.some(p => p.includes("/tmp/b/"))).toBe(false);
 	});
 });
 

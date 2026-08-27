@@ -14,11 +14,10 @@
  * abandons the current request (the daemon side channel keeps running but
  * its result is discarded — runEphemeralTurn has no cross-request cancel).
  */
-import { type TranslationKey, t } from "@musepi/desktop-web";
+import { Markdown, type TranslationKey, t } from "@musepi/desktop-web";
 import { GitBranch, Sparkles, StopCircle, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
-import { Markdown } from "@musepi/desktop-web";
 
 export interface BtwQuestion {
 	question: string;
@@ -108,12 +107,7 @@ export function BtwFloatingCard({
 			<div className="gui-btw-head">
 				<Sparkles size={13} />
 				<span className="gui-btw-title">{t("side question")}</span>
-				<button
-					type="button"
-					className="gui-btw-x"
-					aria-label={t("close")}
-					onClick={onClose}
-				>
+				<button type="button" className="gui-btw-x" aria-label={t("close")} onClick={onClose}>
 					<X size={14} />
 				</button>
 			</div>
@@ -149,12 +143,7 @@ export function BtwFloatingCard({
 			</div>
 			<div className="gui-btw-foot">
 				{asking && (
-					<button
-						type="button"
-						className="gui-btw-stop"
-						onClick={() => setAsking(false)}
-						title={t("stop")}
-					>
+					<button type="button" className="gui-btw-stop" onClick={() => setAsking(false)} title={t("stop")}>
 						<StopCircle size={13} />
 						<span>{t("stop")}</span>
 					</button>
@@ -184,9 +173,7 @@ export function BtwFloatingCard({
 					{t("ask")}
 				</button>
 			</div>
-			{inputFocused && (
-				<div className="gui-btw-hint">{t("Enter to ask — Esc closes")}</div>
-			)}
+			{inputFocused && <div className="gui-btw-hint">{t("Enter to ask — Esc closes")}</div>}
 		</div>
 	);
 }

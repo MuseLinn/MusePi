@@ -7,13 +7,8 @@
  * persistForeignSession) but with a TUI picker UX instead of args.
  */
 
-import {
-	type Component,
-	Container,
-	matchesKey,
-	Spacer,
-	Text,
-} from "@musepi/pi-tui";
+import { type Component, Container, matchesKey, Spacer, Text } from "@musepi/pi-tui";
+import { getAgentDir, getProjectDir } from "@musepi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
@@ -22,8 +17,11 @@ import {
 	matchesSelectPageUp,
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
-import { getAgentDir, getProjectDir } from "@musepi/pi-utils";
-import { createForeignSessionStore, foreignSessionSources, persistForeignSession } from "../../session/foreign-session-import";
+import {
+	createForeignSessionStore,
+	foreignSessionSources,
+	persistForeignSession,
+} from "../../session/foreign-session-import";
 import type { ForeignSessionSource } from "../../session/foreign-session-store";
 import { DynamicBorder } from "./dynamic-border";
 import { rawKeyHint } from "./keybinding-hints";
@@ -43,14 +41,22 @@ interface ImportSessionEntry {
 
 function sourceName(source: ForeignSessionSource): string {
 	switch (source) {
-		case "claude": return "Claude";
-		case "codex": return "Codex";
-		case "grok": return "Grok";
-		case "kimicode": return "Kimi Code";
-		case "musepi": return "MusePi";
-		case "omp": return "OMP";
-		case "opencode": return "OpenCode";
-		case "pi": return "Pi";
+		case "claude":
+			return "Claude";
+		case "codex":
+			return "Codex";
+		case "grok":
+			return "Grok";
+		case "kimicode":
+			return "Kimi Code";
+		case "musepi":
+			return "MusePi";
+		case "omp":
+			return "OMP";
+		case "opencode":
+			return "OpenCode";
+		case "pi":
+			return "Pi";
 	}
 }
 
@@ -76,7 +82,12 @@ export class ImportSessionSelector extends Container {
 
 	handleInput(keyData: string): void {
 		if (this.#phase === "importing" || this.#phase === "done") {
-			if (matchesAppInterrupt(keyData) || matchesKey(keyData, "enter") || matchesKey(keyData, "return") || keyData === "\n") {
+			if (
+				matchesAppInterrupt(keyData) ||
+				matchesKey(keyData, "enter") ||
+				matchesKey(keyData, "return") ||
+				keyData === "\n"
+			) {
 				this.#done();
 			}
 			return;

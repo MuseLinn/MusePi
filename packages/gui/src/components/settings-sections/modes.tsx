@@ -38,7 +38,13 @@ interface ModeDef {
 	settings?: Record<string, unknown>;
 }
 
-export function ModesSection({ rpc, onCreateChat }: { rpc: RpcClient | null; onCreateChat?: (text: string) => void }): ReactNode {
+export function ModesSection({
+	rpc,
+	onCreateChat,
+}: {
+	rpc: RpcClient | null;
+	onCreateChat?: (text: string) => void;
+}): ReactNode {
 	const [modes, setModes] = useState<ModeRow[] | null>(null);
 	const [errors, setErrors] = useState<string[]>([]);
 

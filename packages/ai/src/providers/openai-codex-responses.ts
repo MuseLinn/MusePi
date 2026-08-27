@@ -3687,7 +3687,8 @@ class CodexWebSocketConnection {
 			this.#lastInboundAt = Date.now();
 			this.#writeDebugWebSocketFrame(frame.data);
 			try {
-				const text = typeof frame.data === "string" ? frame.data : Buffer.from(frame.data as Uint8Array).toString("utf-8");
+				const text =
+					typeof frame.data === "string" ? frame.data : Buffer.from(frame.data as Uint8Array).toString("utf-8");
 				if (!text) return;
 				const parsed = JSON.parse(text) as Record<string, unknown>;
 				if (parsed.type === "error" && typeof parsed.error === "object" && parsed.error) {
@@ -4538,10 +4539,7 @@ function normalizeInputMessageContent(
 	model: Model<"openai-codex-responses">,
 	content:
 		| string
-		| Array<
-				| { type: "text"; text: string }
-				| { type: "image"; mimeType: string; data: string; url?: string }
-		  >,
+		| Array<{ type: "text"; text: string } | { type: "image"; mimeType: string; data: string; url?: string }>,
 ): ResponseInputContent[] {
 	// gpt-5.x codex rejects reserved Harmony control-token spellings in input
 	// data; escape the transport copy of untrusted user text so ordinary docs or

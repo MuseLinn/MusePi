@@ -43,6 +43,8 @@ describe("highlightToCodeHtml", () => {
 	});
 
 	it("drops the trailing newline before splitting so empty last lines stay clean", () => {
-		expect(highlightToCodeHtml("a\n")).toBe('<span class="tr-code-line"><span class="tr-code-line-content">a</span></span>\n');
+		expect(highlightToCodeHtml("a\n")).toBe(
+			'<span class="tr-code-line"><span class="tr-code-line-content">a</span></span>\n',
+		);
 	});
 });

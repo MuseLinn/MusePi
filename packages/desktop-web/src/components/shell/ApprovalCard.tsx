@@ -5,8 +5,8 @@
  * host-mode render path.
  */
 import type { ReactNode } from "react";
-import { useGuestSelector, type SessionClient } from "../../lib/use-guest";
 import { t } from "../../i18n/index.js";
+import { type SessionClient, useGuestSelector } from "../../lib/use-guest";
 
 /** Renders the pending approval card, or null when none. */
 export function ApprovalCard({ client }: { client: SessionClient }): ReactNode {

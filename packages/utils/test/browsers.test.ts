@@ -40,12 +40,30 @@ describe("Chrome-for-Testing layout goldens", () => {
 		{
 			platform: BrowserPlatform.MAC,
 			url: `https://storage.googleapis.com/chrome-for-testing-public/${BUILD_ID}/mac-x64/chrome-mac-x64.zip`,
-			executable: path.join("/cache", "chrome", `mac-${BUILD_ID}`, "chrome-mac-x64", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"),
+			executable: path.join(
+				"/cache",
+				"chrome",
+				`mac-${BUILD_ID}`,
+				"chrome-mac-x64",
+				"Google Chrome for Testing.app",
+				"Contents",
+				"MacOS",
+				"Google Chrome for Testing",
+			),
 		},
 		{
 			platform: BrowserPlatform.MAC_ARM,
 			url: `https://storage.googleapis.com/chrome-for-testing-public/${BUILD_ID}/mac-arm64/chrome-mac-arm64.zip`,
-			executable: path.join("/cache", "chrome", `mac_arm-${BUILD_ID}`, "chrome-mac-arm64", "Google Chrome for Testing.app", "Contents", "MacOS", "Google Chrome for Testing"),
+			executable: path.join(
+				"/cache",
+				"chrome",
+				`mac_arm-${BUILD_ID}`,
+				"chrome-mac-arm64",
+				"Google Chrome for Testing.app",
+				"Contents",
+				"MacOS",
+				"Google Chrome for Testing",
+			),
 		},
 		{
 			platform: BrowserPlatform.WIN32,

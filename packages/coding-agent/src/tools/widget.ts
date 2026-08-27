@@ -7,9 +7,9 @@
  * visual goes in the widget.
  */
 import { type } from "@musepi/musepi-type";
-import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
+import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
 
 // The widget registry lives in desktop-web (shared with the GUI board);
 // the daemon keeps the type/field table in sync here for schema-driven
@@ -42,7 +42,10 @@ export const WIDGET_TONES: Record<string, "default" | "dark" | "light" | "blue">
 	stocks: "dark",
 };
 
-export const WIDGET_TYPES: Record<string, { fields: Array<{ key: string; type: string }>; defaults: Record<string, unknown> }> = {
+export const WIDGET_TYPES: Record<
+	string,
+	{ fields: Array<{ key: string; type: string }>; defaults: Record<string, unknown> }
+> = {
 	clock: { fields: [{ key: "market", type: "string" }], defaults: { market: "cn" } },
 	slider: {
 		fields: [
@@ -53,28 +56,113 @@ export const WIDGET_TYPES: Record<string, { fields: Array<{ key: string; type: s
 		],
 		defaults: { noise: 0.2, jitter: 0.1, freq: 2, amp: 1 },
 	},
-	calc: { fields: [{ key: "mode", type: "string" }, { key: "amount", type: "number" }], defaults: { mode: "post", amount: 1760 } },
+	calc: {
+		fields: [
+			{ key: "mode", type: "string" },
+			{ key: "amount", type: "number" },
+		],
+		defaults: { mode: "post", amount: 1760 },
+	},
 	ticker: {
-		fields: [{ key: "label", type: "string" }, { key: "value", type: "string" }, { key: "delta", type: "number" }],
-		defaults: { label: "EUR / CNY", value: "7.7945", delta: 0.0046, spark: [7.7, 7.72, 7.69, 7.74, 7.76, 7.75, 7.79, 7.78, 7.8] },
+		fields: [
+			{ key: "label", type: "string" },
+			{ key: "value", type: "string" },
+			{ key: "delta", type: "number" },
+		],
+		defaults: {
+			label: "EUR / CNY",
+			value: "7.7945",
+			delta: 0.0046,
+			spark: [7.7, 7.72, 7.69, 7.74, 7.76, 7.75, 7.79, 7.78, 7.8],
+		},
 	},
 	metric: {
-		fields: [{ key: "label", type: "string" }, { key: "value", type: "number" }, { key: "delta", type: "number" }],
+		fields: [
+			{ key: "label", type: "string" },
+			{ key: "value", type: "number" },
+			{ key: "delta", type: "number" },
+		],
 		defaults: { label: "metric", value: 4200, delta: 0.12, history: [3, 4, 3.5, 5, 4.5, 6, 5.5, 7, 6.5, 8, 7.5, 9] },
 	},
 	todo: { fields: [{ key: "items", type: "array" }], defaults: { items: [] } },
-	pomodoro: { fields: [{ key: "mode", type: "string" }, { key: "rounds", type: "number" }], defaults: { mode: "focus", rounds: 0, minutes: 0, day: "" } },
-	video: { fields: [{ key: "url", type: "string" }], defaults: { url: "", bvid: "BV1vT411d7QE", title: "凡人修仙传", subtitle: "BILIBILI · 年番" } },
+	pomodoro: {
+		fields: [
+			{ key: "mode", type: "string" },
+			{ key: "rounds", type: "number" },
+		],
+		defaults: { mode: "focus", rounds: 0, minutes: 0, day: "" },
+	},
+	video: {
+		fields: [{ key: "url", type: "string" }],
+		defaults: { url: "", bvid: "BV1vT411d7QE", title: "凡人修仙传", subtitle: "BILIBILI · 年番" },
+	},
 	gallery: {
 		fields: [{ key: "items", type: "array" }],
-		defaults: { items: [{ title: "MusePi 桌面" }, { title: "MusePi 看板" }, { title: "MusePi 桌宠" }, { title: "MusePi 引导" }] },
+		defaults: {
+			items: [
+				{ title: "MusePi 桌面" },
+				{ title: "MusePi 看板" },
+				{ title: "MusePi 桌宠" },
+				{ title: "MusePi 引导" },
+			],
+		},
 	},
-	gauge: { fields: [{ key: "value", type: "number" }, { key: "status", type: "string" }], defaults: { label: "A股市场温度", value: 70, status: "活跃 · 沪深创" } },
-	kline: { fields: [{ key: "candles", type: "array" }], defaults: { symbol: "腾讯控股", price: 478.8, delta: -0.08, candles: [], stocks: ["腾讯控股", "阿里巴巴", "贵州茅台", "宁德时代"] } },
-	heatwall: { fields: [{ key: "tiles", type: "array" }], defaults: { tiles: [			{ name: "工商银行", delta: -0.53 },			{ name: "中国石油", delta: 0.84 },			{ name: "宁德时代", delta: 0.02 },			{ name: "贵州茅台", delta: 0.05 },			{ name: "中芯国际", delta: 3.5 },			{ name: "招商银行", delta: -0.44 },			{ name: "中国平安", delta: -0.22 },			{ name: "紫金矿业", delta: 1.88 },			{ name: "比亚迪", delta: 0.66 },			{ name: "长江电力", delta: 0 },			{ name: "美的集团", delta: -2.13 },			{ name: "中国石化", delta: 0.39 },			{ name: "立讯精密", delta: 0.1 },			{ name: "中信证券", delta: 0.2 },			{ name: "兴业银行", delta: -0.12 },			{ name: "恒瑞医药", delta: 0.05 },			{ name: "京东方A", delta: 1.84 },			{ name: "平安银行", delta: 0.08 },		] } },
-	indextape: { fields: [{ key: "indices", type: "array" }], defaults: { indices: ["上证", "深证", "恒生"], value: 3940.84, delta: 1.02, series: [3800, 3850, 3830, 3900, 3920, 3880, 3940, 3930, 3955, 3940] } },
+	gauge: {
+		fields: [
+			{ key: "value", type: "number" },
+			{ key: "status", type: "string" },
+		],
+		defaults: { label: "A股市场温度", value: 70, status: "活跃 · 沪深创" },
+	},
+	kline: {
+		fields: [{ key: "candles", type: "array" }],
+		defaults: {
+			symbol: "腾讯控股",
+			price: 478.8,
+			delta: -0.08,
+			candles: [],
+			stocks: ["腾讯控股", "阿里巴巴", "贵州茅台", "宁德时代"],
+		},
+	},
+	heatwall: {
+		fields: [{ key: "tiles", type: "array" }],
+		defaults: {
+			tiles: [
+				{ name: "工商银行", delta: -0.53 },
+				{ name: "中国石油", delta: 0.84 },
+				{ name: "宁德时代", delta: 0.02 },
+				{ name: "贵州茅台", delta: 0.05 },
+				{ name: "中芯国际", delta: 3.5 },
+				{ name: "招商银行", delta: -0.44 },
+				{ name: "中国平安", delta: -0.22 },
+				{ name: "紫金矿业", delta: 1.88 },
+				{ name: "比亚迪", delta: 0.66 },
+				{ name: "长江电力", delta: 0 },
+				{ name: "美的集团", delta: -2.13 },
+				{ name: "中国石化", delta: 0.39 },
+				{ name: "立讯精密", delta: 0.1 },
+				{ name: "中信证券", delta: 0.2 },
+				{ name: "兴业银行", delta: -0.12 },
+				{ name: "恒瑞医药", delta: 0.05 },
+				{ name: "京东方A", delta: 1.84 },
+				{ name: "平安银行", delta: 0.08 },
+			],
+		},
+	},
+	indextape: {
+		fields: [{ key: "indices", type: "array" }],
+		defaults: {
+			indices: ["上证", "深证", "恒生"],
+			value: 3940.84,
+			delta: 1.02,
+			series: [3800, 3850, 3830, 3900, 3920, 3880, 3940, 3930, 3955, 3940],
+		},
+	},
 	html: {
-		fields: [{ key: "html", type: "string" }, { key: "data", type: "object" }],
+		fields: [
+			{ key: "html", type: "string" },
+			{ key: "data", type: "object" },
+		],
 		defaults: { html: "", data: {} },
 	},
 	music: {
@@ -208,7 +296,12 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 		const spec = WIDGET_TYPES[typeName];
 		if (!spec) {
 			return {
-				content: [{ type: "text", text: `widget: unknown type "${typeName}" — available: ${Object.keys(WIDGET_TYPES).join(", ")}` }],
+				content: [
+					{
+						type: "text",
+						text: `widget: unknown type "${typeName}" — available: ${Object.keys(WIDGET_TYPES).join(", ")}`,
+					},
+				],
 				isError: true,
 			};
 		}
@@ -218,7 +311,9 @@ export class WidgetTool implements AgentTool<typeof widgetSchema, WidgetToolDeta
 				: {};
 		if (rawData && JSON.stringify(rawData).length > MAX_DATA_JSON) {
 			return {
-				content: [{ type: "text", text: `widget: data payload exceeds ${MAX_DATA_JSON} bytes — trim the data fields` }],
+				content: [
+					{ type: "text", text: `widget: data payload exceeds ${MAX_DATA_JSON} bytes — trim the data fields` },
+				],
 				isError: true,
 			};
 		}

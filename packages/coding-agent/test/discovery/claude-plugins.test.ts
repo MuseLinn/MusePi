@@ -11,11 +11,18 @@ import {
 } from "@musepi/pi-coding-agent/discovery/helpers";
 import { loadSlashCommands } from "@musepi/pi-coding-agent/extensibility/slash-commands";
 import { discoverAgents } from "@musepi/pi-coding-agent/task/discovery";
-import { __resetDirsFromEnvForTests, getPluginsDir, getProjectAgentDir, removeWithRetries, setAgentDir } from "@musepi/pi-utils";
+import {
+	__resetDirsFromEnvForTests,
+	getPluginsDir,
+	getProjectAgentDir,
+	removeWithRetries,
+	setAgentDir,
+} from "@musepi/pi-utils";
 import "@musepi/pi-coding-agent/discovery/claude-plugins";
 import { type MCPServer, mcpCapability } from "@musepi/pi-coding-agent/capability/mcp";
 import type { Skill } from "@musepi/pi-coding-agent/capability/skill";
 import type { SlashCommand } from "@musepi/pi-coding-agent/capability/slash-command";
+
 describe("parseClaudePluginsRegistry", () => {
 	test("parses valid registry", () => {
 		const content = JSON.stringify({

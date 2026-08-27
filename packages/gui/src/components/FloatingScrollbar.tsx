@@ -1,12 +1,12 @@
 import type { CSSProperties, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { PacMan } from "../vendor/pac-man";
 import {
 	getScrollbarSkin,
 	readScrollbarStyle,
 	SCROLLBAR_SKINS_CHANGED_EVENT,
 	SCROLLBAR_STYLE_CHANGED_EVENT,
 } from "../lib/scrollbar-skins";
+import { PacMan } from "../vendor/pac-man";
 
 /**
  * Floating scroll indicator (Chromium 150+ / Electron 43).
@@ -112,7 +112,10 @@ export function FloatingScrollbar(): ReactNode {
 			if (skin.base === "gummy") {
 				const g = gummyRef.current;
 				if (g) {
-					const thumbH = Math.min(barH, Math.max(24, Math.round(barH * (target.clientHeight / target.scrollHeight))));
+					const thumbH = Math.min(
+						barH,
+						Math.max(24, Math.round(barH * (target.clientHeight / target.scrollHeight))),
+					);
 					g.style.height = `${Math.round(thumbH)}px`;
 					g.style.top = `${Math.round(ratio * Math.max(0, barH - thumbH))}px`;
 					// Stretch while scrolling; the release transition is

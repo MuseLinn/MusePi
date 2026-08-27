@@ -65,10 +65,7 @@ class FakeWebSocket {
 }
 
 /** Connect the client, then open + wire the daemon handler. */
-function connectToDaemon(
-	url: string,
-	handler: DaemonHandler,
-): { ws: FakeWebSocket; calls: CallLog } {
+function connectToDaemon(url: string, handler: DaemonHandler): { ws: FakeWebSocket; calls: CallLog } {
 	const instance = FakeWebSocket.instances.at(-1)!;
 	const calls: CallLog = [];
 	instance.daemon = (method, params) => {

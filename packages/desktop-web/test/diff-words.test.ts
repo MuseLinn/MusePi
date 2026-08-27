@@ -3,9 +3,7 @@ import { diffWords, type WordDiffPart } from "../src/tool-render/diff-words";
 
 /** Rendered marker string: `[-removed-]`, `[+added+]`, plain equal. */
 function render(parts: WordDiffPart[]): string {
-	return parts
-		.map(p => (p.removed ? `[-${p.value}-]` : p.added ? `[+${p.value}+]` : p.value))
-		.join("");
+	return parts.map(p => (p.removed ? `[-${p.value}-]` : p.added ? `[+${p.value}+]` : p.value)).join("");
 }
 
 describe("diffWords (jsdiff/pi-natives semantics)", () => {
@@ -14,9 +12,7 @@ describe("diffWords (jsdiff/pi-natives semantics)", () => {
 	});
 
 	it("highlights only changed tokens in a line", () => {
-		expect(render(diffWords("const x = 1;", "const y = 2;"))).toBe(
-			"const [-x-][+y+] = [-1-][+2+];",
-		);
+		expect(render(diffWords("const x = 1;", "const y = 2;"))).toBe("const [-x-][+y+] = [-1-][+2+];");
 	});
 
 	it("treats equal lines as a single keep run", () => {
@@ -38,7 +34,7 @@ describe("diffWords (jsdiff/pi-natives semantics)", () => {
 
 	it("concatenated values reproduce the new text (minus removed runs)", () => {
 		const oldT = "  return `Hello, ${name}!`;";
-		const newT = "  const prefix = name ? \"Hello\" : \"Hi\";";
+		const newT = '  const prefix = name ? "Hello" : "Hi";';
 		const parts = diffWords(oldT, newT);
 		const concat = parts
 			.filter(p => !p.removed)

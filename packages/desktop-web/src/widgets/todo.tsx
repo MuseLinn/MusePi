@@ -1,6 +1,6 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { t } from "../i18n/index.js";
 import { SendChip } from "./send";
 
 /** Todo widget — local checklist (kimi 待办打卡 pattern). */
@@ -34,9 +34,7 @@ export function TodoCard({
 							type="button"
 							className={`gui-widget-todo-check${item.done ? " gui-widget-todo-check--done" : ""}`}
 							aria-label={t("widget todo toggle")}
-							onClick={() =>
-								setItems(items.map(i => (i.id === item.id ? { ...i, done: !i.done } : i)))
-							}
+							onClick={() => setItems(items.map(i => (i.id === item.id ? { ...i, done: !i.done } : i)))}
 						>
 							{item.done ? "✓" : ""}
 						</button>
@@ -79,11 +77,11 @@ export function TodoCard({
 					+
 				</button>
 			</div>
-		
+
 			<SendChip
 				text={`${t("widget todo done")} ${items.filter(i => i.done).length}/${items.length}`}
 				onSend={sendPrompt}
 			/>
-</div>
+		</div>
 	);
 }

@@ -4,10 +4,10 @@
  * was missing, so agents couldn't render a widget the board offered).
  */
 import { describe, expect, test } from "bun:test";
-import { WIDGET_REGISTRY } from "../src/widgets/registry";
 // Test-only cross-package import: WIDGET_TYPES lives in the daemon tool.
 // eslint-disable-next-line import/no-relative-parent-imports
 import { WIDGET_TONES, WIDGET_TYPES } from "../../coding-agent/src/tools/widget";
+import { WIDGET_REGISTRY } from "../src/widgets/registry";
 
 describe("widget registry ↔ WIDGET_TYPES parity", () => {
 	test("every registry type exists in the daemon table", () => {

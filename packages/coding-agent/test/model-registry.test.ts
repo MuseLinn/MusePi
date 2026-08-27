@@ -7,7 +7,7 @@ import { Effort, type FetchImpl, type Model, type OpenAICompat, type ThinkingCon
 import { buildModel } from "@musepi/pi-catalog/build";
 import { writeModelCache } from "@musepi/pi-catalog/model-cache";
 import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
-import { resetSettingsForTest, settings, Settings } from "@musepi/pi-coding-agent/config/settings";
+import { resetSettingsForTest, Settings, settings } from "@musepi/pi-coding-agent/config/settings";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { removeSyncWithRetries, Snowflake } from "@musepi/pi-utils";
 

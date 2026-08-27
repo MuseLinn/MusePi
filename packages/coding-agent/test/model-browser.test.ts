@@ -108,11 +108,7 @@ describe("ModelBrowser perf display", () => {
 describe("ModelBrowser favorites (TUI/GUI parity)", () => {
 	test("favorites pin to the top of the unfiltered list", () => {
 		const browser = makeBrowser(
-			[
-				makeModel("openai", "gpt-5"),
-				makeModel("openai", "gpt-5.5"),
-				makeModel("openai", "gpt-6"),
-			],
+			[makeModel("openai", "gpt-5"), makeModel("openai", "gpt-5.5"), makeModel("openai", "gpt-6")],
 			[],
 		);
 		browser.setFavorites(["openai/gpt-5.5"]);
@@ -126,13 +122,7 @@ describe("ModelBrowser favorites (TUI/GUI parity)", () => {
 	});
 
 	test("favorited rows render a star; unfavorited do not", () => {
-		const browser = makeBrowser(
-			[
-				makeModel("openai", "gpt-5"),
-				makeModel("openai", "gpt-5.5"),
-			],
-			[],
-		);
+		const browser = makeBrowser([makeModel("openai", "gpt-5"), makeModel("openai", "gpt-5.5")], []);
 		browser.setFavorites(["openai/gpt-5.5"]);
 		const rows = browser.render(120).map(line => Bun.stripANSI(line));
 		const star = "★";
@@ -143,13 +133,7 @@ describe("ModelBrowser favorites (TUI/GUI parity)", () => {
 	});
 
 	test("search mode does not reorder by favorites (match quality wins)", () => {
-		const browser = makeBrowser(
-			[
-				makeModel("openai", "gpt-5.5"),
-				makeModel("openai", "gpt-6"),
-			],
-			[],
-		);
+		const browser = makeBrowser([makeModel("openai", "gpt-5.5"), makeModel("openai", "gpt-6")], []);
 		browser.setFavorites(["openai/gpt-6"]);
 		browser.setQuery("gpt-5.5");
 		const rows = browser.render(120).map(line => Bun.stripANSI(line));

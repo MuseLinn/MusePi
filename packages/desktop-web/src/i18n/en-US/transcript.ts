@@ -50,7 +50,7 @@ export const transcript = {
 	"trajectory collapse branch": "Collapse branch",
 	"branch re-answer here": "Re-answer from this branch",
 	"fork session here": "Fork a new session from here",
-	"root": "root",
+	root: "root",
 	"open sidebar": "Open sidebar",
 	"close sidebar": "Close sidebar",
 	connected: "Connected",

@@ -1,18 +1,18 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { isNativeShell } from "../../lib/capacitor";
 import { useLocale } from "../../i18n/use-locale.js";
+import { isNativeShell } from "../../lib/capacitor";
 import { type Connection, loadConnections, rememberConnection, removeConnection } from "../../lib/connections";
 import { haptic } from "../../lib/haptics";
 import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
 import { AccentToggle } from "./AccentToggle";
-import { LanguageToggle } from "./LanguageToggle";
 import { BlurText } from "./BlurText";
 import { DotMatrixMark } from "./DotMatrixMark";
-import { ShinyText } from "./ShinyText";
+import { LanguageToggle } from "./LanguageToggle";
 import { QrScanner } from "./QrScanner";
+import { ShinyText } from "./ShinyText";
 import { ThemeToggle } from "./ThemeToggle";
 
 export interface ConnectScreenProps {
@@ -219,9 +219,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		return (
 			<div className="sh-connect">
 				<div className="sh-connect-card sh-connect-card--empty">
-				<div className="sh-connect-matrix" aria-hidden="true">
-					<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
-				</div>
+					<div className="sh-connect-matrix" aria-hidden="true">
+						<DotMatrixMark text="MusePi" fontSize={64} gridGap={7} dotRadius={1.6} />
+					</div>
 					<div className="sh-connect-head">
 						<div className="sh-lockup">
 							<span className="sh-lockup-mark" aria-hidden="true" />
@@ -231,7 +231,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 						<AccentToggle />
 						<LanguageToggle />
 					</div>
-					<div className="sh-connect-sub"><ShinyText text={t("live agent session, in your browser")} speed={3.4} spread={120} /></div>
+					<div className="sh-connect-sub">
+						<ShinyText text={t("live agent session, in your browser")} speed={3.4} spread={120} />
+					</div>
 					<p className="sh-connect-empty-text">
 						{t("not connected yet — connect to a computer to view sessions")}
 					</p>
@@ -287,7 +289,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					<AccentToggle />
 					<LanguageToggle />
 				</div>
-				<div className="sh-connect-sub"><ShinyText text={t("connect to a computer on your network")} speed={3.4} spread={120} /></div>
+				<div className="sh-connect-sub">
+					<ShinyText text={t("connect to a computer on your network")} speed={3.4} spread={120} />
+				</div>
 				{offline && (
 					<div className="sh-connect-offline" role="status">
 						{t("offline — showing cached content, connecting needs a network")}
@@ -467,9 +471,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					{t("skip for now")}
 				</button>
 			</div>
-			{scanning && (
-				<QrScanner onCancel={onScanCancel} onResult={onScanResult} />
-			)}
+			{scanning && <QrScanner onCancel={onScanCancel} onResult={onScanResult} />}
 		</div>
 	);
 }

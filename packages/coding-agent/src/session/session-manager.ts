@@ -1,13 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type {
-	ImageContent,
-	Message,
-	MessageAttribution,
-	ServiceTierByFamily,
-	TextContent,
-	Usage,
-} from "@musepi/pi-ai";
+import type { ImageContent, Message, MessageAttribution, ServiceTierByFamily, TextContent, Usage } from "@musepi/pi-ai";
 import {
 	directoryExists,
 	getBlobsDir,
@@ -2490,7 +2483,6 @@ export class SessionManager {
 		this.#notifyDurableEntries(kept);
 		return dropped;
 	}
-
 
 	/**
 	 * The session as a tree. A well-formed session has exactly one root; orphaned

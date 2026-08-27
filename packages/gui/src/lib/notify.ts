@@ -192,11 +192,14 @@ export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext): vo
 	if (!built) return;
 	const notifier = electronNotifier();
 	if (notifier?.showNotification) {
-		void notifier.showNotification(built.title, built.body).then((result) => {
-			if (result?.ok === false) {
-				console.warn("[notify] notification disabled:", result.reason);
-			}
-		}).catch(() => {});
+		void notifier
+			.showNotification(built.title, built.body)
+			.then(result => {
+				if (result?.ok === false) {
+					console.warn("[notify] notification disabled:", result.reason);
+				}
+			})
+			.catch(() => {});
 		return;
 	}
 	if (!("Notification" in window) || Notification.permission !== "granted") return;

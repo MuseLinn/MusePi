@@ -117,12 +117,15 @@ export function SessionList({
 	// with the working/unread rank as a primary key within each group), THEN
 	// flatten. Sorting the flattened array instead would scatter forked
 	// children out of their parent subtrees and reshuffle on every poll.
-	const ordered = sort !== "none" ? sortSessionTree(nodes, (a, b) => {
-		const rank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
-		const rDelta = rank(b.entry.id) - rank(a.entry.id);
-		if (rDelta !== 0) return rDelta;
-		return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
-	}) : nodes;
+	const ordered =
+		sort !== "none"
+			? sortSessionTree(nodes, (a, b) => {
+					const rank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
+					const rDelta = rank(b.entry.id) - rank(a.entry.id);
+					if (rDelta !== 0) return rDelta;
+					return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
+				})
+			: nodes;
 	const flat = flattenTree(ordered);
 	if (flat.length === 0) return null;
 	// Parent lookup for fork markers **at the SESSION level** (a session forked
@@ -184,7 +187,12 @@ export function SessionList({
 								</span>
 							)}
 							{workingIds?.has(node.entry.id) && (
-								<span className="gui-tree-working" role="img" aria-label={t("in progress")} title={t("in progress")}>
+								<span
+									className="gui-tree-working"
+									role="img"
+									aria-label={t("in progress")}
+									title={t("in progress")}
+								>
 									<span className="gui-tree-working-dot" aria-hidden />
 								</span>
 							)}

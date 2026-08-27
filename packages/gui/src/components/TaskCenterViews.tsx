@@ -38,7 +38,15 @@ export function taskScheduleLabel(s: TaskCenterTask["schedule"]): string {
 		case "daily":
 			return `${t("scheduled daily")} ${(s.times?.length ? s.times : s.time ? [s.time] : ["09:00"]).join(" / ")}`;
 		case "weekly": {
-			const names = [t("scheduled sun"), t("scheduled mon"), t("scheduled tue"), t("scheduled wed"), t("scheduled thu"), t("scheduled fri"), t("scheduled sat")];
+			const names = [
+				t("scheduled sun"),
+				t("scheduled mon"),
+				t("scheduled tue"),
+				t("scheduled wed"),
+				t("scheduled thu"),
+				t("scheduled fri"),
+				t("scheduled sat"),
+			];
 			return `${t("scheduled weekly")} ${(s.weekdays ?? []).map(d => names[d] ?? d).join("、")} ${s.time ?? ""}`;
 		}
 		case "monthly":
@@ -116,7 +124,8 @@ export function TaskCalendarView({
 	const startDow = first.getDay();
 	const daysInMonth = new Date(year, month + 1, 0).getDate();
 	const today = new Date();
-	const isToday = (d: number): boolean => today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+	const isToday = (d: number): boolean =>
+		today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
 	const monthKey = `${year}-${month}`;
 
 	// day → tasks scheduled that day
@@ -138,7 +147,8 @@ export function TaskCalendarView({
 	}
 
 	const cells: ReactNode[] = [];
-	for (let i = 0; i < startDow; i++) cells.push(<div key={`pad-${i}`} className="gui-taskcal-cell gui-taskcal-cell--pad" />);
+	for (let i = 0; i < startDow; i++)
+		cells.push(<div key={`pad-${i}`} className="gui-taskcal-cell gui-taskcal-cell--pad" />);
 	for (let d = 1; d <= daysInMonth; d++) {
 		const dayTasks = byDay.get(d) ?? [];
 		const failed = dayTasks.some(task => runStatusByDay.get(`${d}:${task.id}`) === "error");
@@ -152,7 +162,9 @@ export function TaskCalendarView({
 			>
 				<span className="gui-taskcal-day">{d}</span>
 				{dayTasks.length > 0 && (
-					<span className={`gui-taskcal-dots${failed ? " gui-taskcal-dots--fail" : ran ? " gui-taskcal-dots--done" : ""}`}>
+					<span
+						className={`gui-taskcal-dots${failed ? " gui-taskcal-dots--fail" : ran ? " gui-taskcal-dots--done" : ""}`}
+					>
 						{dayTasks.slice(0, 3).map(task => (
 							<span key={task.id} className="gui-taskcal-dot" />
 						))}
@@ -166,19 +178,27 @@ export function TaskCalendarView({
 	return (
 		<div className="gui-taskcal" data-month={monthKey}>
 			<div className="gui-taskcal-head">
-				<button type="button" className="gui-taskcal-nav" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label={t("previous month")}>
+				<button
+					type="button"
+					className="gui-taskcal-nav"
+					onClick={() => setCursor(new Date(year, month - 1, 1))}
+					aria-label={t("previous month")}
+				>
 					‹
 				</button>
 				<span className="gui-taskcal-title">
 					{new Date(year, month, 1).toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
 				</span>
-				<button type="button" className="gui-taskcal-nav" onClick={() => setCursor(new Date(year, month + 1, 1))} aria-label={t("next month")}>
+				<button
+					type="button"
+					className="gui-taskcal-nav"
+					onClick={() => setCursor(new Date(year, month + 1, 1))}
+					aria-label={t("next month")}
+				>
 					›
 				</button>
 			</div>
-			{tasks.length === 0 && (
-				<p className="gui-taskcal-empty">{t("task calendar empty")}</p>
-			)}
+			{tasks.length === 0 && <p className="gui-taskcal-empty">{t("task calendar empty")}</p>}
 			<div className="gui-taskcal-grid">
 				{["日", "一", "二", "三", "四", "五", "六"].map(w => (
 					<div key={w} className="gui-taskcal-weekday">
@@ -232,12 +252,22 @@ export function TaskBoardView({
 						) : (
 							col.list.map(task => (
 								<div key={task.id} className="gui-taskboard-card">
-									<button type="button" className="gui-taskboard-card-main" onClick={() => onSelectTask?.(task.id)}>
+									<button
+										type="button"
+										className="gui-taskboard-card-main"
+										onClick={() => onSelectTask?.(task.id)}
+									>
 										<span className="gui-taskboard-card-name">{task.name || t("scheduled untitled")}</span>
 										<span className="gui-taskboard-card-sched">{taskScheduleLabel(task.schedule)}</span>
 										{task.state.nextRunAt && task.enabled && (
 											<span className="gui-taskboard-card-next">
-												{t("scheduled next")} {new Date(task.state.nextRunAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+												{t("scheduled next")}{" "}
+												{new Date(task.state.nextRunAt).toLocaleString("zh-CN", {
+													month: "2-digit",
+													day: "2-digit",
+													hour: "2-digit",
+													minute: "2-digit",
+												})}
 											</span>
 										)}
 										{col.key === "failed" && task.state.lastError && (
@@ -245,7 +275,11 @@ export function TaskBoardView({
 										)}
 									</button>
 									<div className="gui-taskboard-card-actions">
-										<button type="button" onClick={() => onToggle?.(task.id)} title={task.enabled ? t("board pause") : t("board resume")}>
+										<button
+											type="button"
+											onClick={() => onToggle?.(task.id)}
+											title={task.enabled ? t("board pause") : t("board resume")}
+										>
 											{task.enabled ? "⏸" : "▶"}
 										</button>
 										<button type="button" onClick={() => onDelete?.(task.id)} title={t("board delete")}>

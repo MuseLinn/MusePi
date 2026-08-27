@@ -142,8 +142,8 @@ export class SessionHandoff {
 			}
 		}
 
-		let advisorRecordersDetached = false;
-		let sessionTransitioned = false;
+		const advisorRecordersDetached = false;
+		const sessionTransitioned = false;
 		try {
 			throwIfHandoffAborted(handoffSignal);
 

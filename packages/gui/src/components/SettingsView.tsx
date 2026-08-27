@@ -460,8 +460,19 @@ export function SettingsView({
 				setApiProviders(Array.isArray(raw?.api) ? (raw.api as ApiProviderInfo[]) : []);
 			}
 			const cfg = await rpc.request<{
-			providers?: Record<string, { models?: { id: string; name?: string; input?: string[]; contextWindow?: number; maxTokens?: number }[] }>;
-		}>("models.listCustom", { sessionId: sessionId ?? undefined });
+				providers?: Record<
+					string,
+					{
+						models?: {
+							id: string;
+							name?: string;
+							input?: string[];
+							contextWindow?: number;
+							maxTokens?: number;
+						}[];
+					}
+				>;
+			}>("models.listCustom", { sessionId: sessionId ?? undefined });
 			setCustom(
 				Object.entries(cfg?.providers ?? {}).map(([name, v]) => ({
 					name,
@@ -786,7 +797,6 @@ import {
 	HooksSection,
 	IndexesSection,
 	InteractionSection,
-	VoiceSection,
 	McpSection,
 	MemorySection,
 	ModelSection,
@@ -801,4 +811,5 @@ import {
 	SubagentsSection,
 	ToolsSection,
 	UsageSection,
+	VoiceSection,
 } from "./settings-sections";

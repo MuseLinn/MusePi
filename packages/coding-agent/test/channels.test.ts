@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from "bun:test";
 import { ChannelCommandHandler, type ChannelOps } from "../src/channels/handler";
-import { ChannelRegistry } from "../src/channels/registry";
 import { HuaweiTodayChannel } from "../src/channels/huawei-today";
+import { ChannelRegistry } from "../src/channels/registry";
 import type { ChannelAdapter, ChannelHost, ChannelKind } from "../src/channels/types";
 
 function mockOps(): ChannelOps & {
@@ -79,9 +79,7 @@ describe("channel command handler", () => {
 		const ops = mockOps();
 		const h = new ChannelCommandHandler(ops, async () => {});
 		await h.handleIncoming("discord", "chat-9", "/switch s1");
-		await h.handleIncoming("discord", "chat-9", "analyze this", [
-			{ data: "aGVsbG8=", mimeType: "image/png" },
-		]);
+		await h.handleIncoming("discord", "chat-9", "analyze this", [{ data: "aGVsbG8=", mimeType: "image/png" }]);
 		expect(ops.sent).toEqual([
 			{ sessionId: "s1", text: "analyze this", images: [{ data: "aGVsbG8=", mimeType: "image/png" }] },
 		]);

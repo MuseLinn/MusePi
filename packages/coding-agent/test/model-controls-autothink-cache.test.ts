@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
 import { Effort, type Model } from "@musepi/pi-ai";
 import { getBundledModel } from "@musepi/pi-catalog/models";
-import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 import { ModelControls, type ModelControlsHost } from "@musepi/pi-coding-agent/session/model-controls";
+import { AUTO_THINKING } from "@musepi/pi-coding-agent/thinking";
 
 // Mock the classifier so tests count real classification runs (the cache
 // must skip it after the first per-model classification).

@@ -41,7 +41,11 @@ export interface SpeakOptions {
 }
 
 /* ── 设备枚举 ─────────────────────────────────────────────────── */
-export interface MicDevice { deviceId: string; label: string; kind: string }
+export interface MicDevice {
+	deviceId: string;
+	label: string;
+	kind: string;
+}
 export async function enumerateMicDevices(): Promise<MicDevice[]> {
 	try {
 		// 触发一次权限，否则 label 为空
@@ -60,9 +64,12 @@ export async function enumerateMicDevices(): Promise<MicDevice[]> {
 }
 
 /* ── 录音（16kHz mono float PCM + 能量端点 VAD） ───────────────── */
-async function recordPcm(
-	opts: { maxSeconds?: number; deviceId?: string; vadEndMs?: number; onLevel?: (rms: number) => void },
-): Promise<{ pcm: Float32Array; stop(): void } | null> {
+async function recordPcm(opts: {
+	maxSeconds?: number;
+	deviceId?: string;
+	vadEndMs?: number;
+	onLevel?: (rms: number) => void;
+}): Promise<{ pcm: Float32Array; stop(): void } | null> {
 	const maxSeconds = opts.maxSeconds ?? 15;
 	const vadEndMs = opts.vadEndMs ?? 0;
 	try {
@@ -82,7 +89,8 @@ async function recordPcm(
 		const stop = (): void => {
 			if (stopped) return;
 			stopped = true;
-			node.disconnect(); source.disconnect();
+			node.disconnect();
+			source.disconnect();
 			stream.getTracks().forEach(t => t.stop());
 			void ctx.close();
 		};
@@ -99,9 +107,13 @@ async function recordPcm(
 				// 短时能量低 → 视为静音；累计超过 vadEndMs 则自动结束
 				if (rms < noiseFloor * 1.15) {
 					silenceMs += (data.length / ctx.sampleRate) * 1000;
-					if (silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) { stop(); return; }
+					if (silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) {
+						stop();
+						return;
+					}
 				} else {
-					silenceMs = 0; lastVoiceAt = Date.now();
+					silenceMs = 0;
+					lastVoiceAt = Date.now();
 					// 缓慢抬升噪声底（背景缓慢变吵）
 					noiseFloor = Math.max(0.01, Math.min(0.3, noiseFloor * 0.999 + rms * 0.001));
 				}
@@ -115,7 +127,10 @@ async function recordPcm(
 				const total = chunks.reduce((n, c) => n + c.length, 0);
 				const out = new Float32Array(total);
 				let off = 0;
-				for (const c of chunks) { out.set(c, off); off += c.length; }
+				for (const c of chunks) {
+					out.set(c, off);
+					off += c.length;
+				}
 				return out;
 			})(),
 			stop,
@@ -173,7 +188,10 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 			return;
 		}
 		rec = recorded;
-		if (cancelled) { recorded.stop(); return; }
+		if (cancelled) {
+			recorded.stop();
+			return;
+		}
 		onState?.({ phase: "transcribing" });
 		try {
 			const res = await rpc.request<{ text: string }>("stt.transcribe", {
@@ -181,7 +199,8 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 				...(opts.language ? { language: opts.language } : {}),
 			});
 			if (cancelled) return;
-			if (res?.text) onFinal(res.text); else onError("empty transcript");
+			if (res?.text) onFinal(res.text);
+			else onError("empty transcript");
 		} catch (err) {
 			if (cancelled) return;
 			onError(err instanceof Error ? err.message : String(err));
@@ -225,14 +244,24 @@ export function speak(
 					audio.playbackRate = options.rate;
 					audio.preservesPitch = true;
 				}
-				audio.onended = () => { onState?.({ phase: "done" }); activeTts = null; };
+				audio.onended = () => {
+					onState?.({ phase: "done" });
+					activeTts = null;
+				};
 				audio.onerror = () => onState?.({ phase: "error", message: "tts playback failed" });
 				onState?.({ phase: "speaking" });
 				audio.play().catch(() => onState?.({ phase: "error", message: "tts playback failed" }));
 				activeTts = {
-					duck: () => { if (audio) audio.volume = 0.25; },
+					duck: () => {
+						if (audio) audio.volume = 0.25;
+					},
 					pause: () => audio?.pause(),
-					resume: () => { if (audio) { audio.volume = 1; void audio.play().catch(() => {}); } },
+					resume: () => {
+						if (audio) {
+							audio.volume = 1;
+							void audio.play().catch(() => {});
+						}
+					},
 				};
 			})
 			.catch(err => onState?.({ phase: "error", message: err instanceof Error ? err.message : String(err) }));
@@ -245,15 +274,17 @@ export function speak(
 	}
 	try {
 		const u = new SpeechSynthesisUtterance(clean);
-		u.lang = (options?.voice ?? "").startsWith("am") || (options?.voice ?? "").startsWith("bm")
-			? "en-US" : "en-US";
+		u.lang = (options?.voice ?? "").startsWith("am") || (options?.voice ?? "").startsWith("bm") ? "en-US" : "en-US";
 		if (options?.rate) u.rate = options.rate;
 		u.onend = () => onState?.({ phase: "done" });
 		u.onerror = () => onState?.({ phase: "error", message: "speech synthesis failed" });
 		speechSynthesis.cancel();
 		onState?.({ phase: "speaking" });
 		speechSynthesis.speak(u);
-		return () => { speechSynthesis.cancel(); onState?.({ phase: "stopped" }); };
+		return () => {
+			speechSynthesis.cancel();
+			onState?.({ phase: "stopped" });
+		};
 	} catch (err) {
 		onState?.({ phase: "error", message: String(err) });
 		return () => {};
@@ -265,7 +296,10 @@ export function voiceAvailable(): boolean {
 	return !!w.SpeechRecognition || !!w.webkitSpeechRecognition || typeof speechSynthesis !== "undefined";
 }
 
-export function stopAllTtsAndResume(): void { activeTts?.resume(); activeTts = null; }
+export function stopAllTtsAndResume(): void {
+	activeTts?.resume();
+	activeTts = null;
+}
 
 /* ── 口述提交判定（TUI stt.submitTrigger parity）────────────────
  * Renderer-side copy of packages/coding-agent/src/stt/submit-trigger.ts —
@@ -337,15 +371,32 @@ function webSpeechFallback(
 	lang?: string,
 ): (() => void) | null {
 	const Ctor = recognitionCtor();
-	if (!Ctor) { onError("speech recognition unavailable"); return null; }
+	if (!Ctor) {
+		onError("speech recognition unavailable");
+		return null;
+	}
 	const rec = new Ctor();
 	rec.lang = lang ?? (navigator.language.startsWith("zh") ? "zh-CN" : "en-US");
 	rec.continuous = false;
 	rec.interimResults = false;
-	rec.onresult = e => { const last = e.results[e.results.length - 1]; if (last?.[0]?.transcript) onFinal(last[0].transcript); };
+	rec.onresult = e => {
+		const last = e.results[e.results.length - 1];
+		if (last?.[0]?.transcript) onFinal(last[0].transcript);
+	};
 	rec.onerror = e => onError(e.error ?? "speech error");
-	try { rec.start(); } catch { onError("could not start recognition"); return null; }
-	return () => { try { rec.stop(); } catch { /* already stopped */ } };
+	try {
+		rec.start();
+	} catch {
+		onError("could not start recognition");
+		return null;
+	}
+	return () => {
+		try {
+			rec.stop();
+		} catch {
+			/* already stopped */
+		}
+	};
 }
 
 /* ── PCM → WAV ────────────────────────────────────────────────── */
@@ -353,12 +404,27 @@ function pcmToWav(pcm: number[], sampleRate: number): Uint8Array {
 	const n = pcm.length;
 	const buf = new ArrayBuffer(44 + n * 2);
 	const view = new DataView(buf);
-	const ws = (o: number, s: string): void => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
-	ws(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); ws(8, "WAVE");
-	ws(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
-	view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
-	ws(36, "data"); view.setUint32(40, n * 2, true);
+	const ws = (o: number, s: string): void => {
+		for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i));
+	};
+	ws(0, "RIFF");
+	view.setUint32(4, 36 + n * 2, true);
+	ws(8, "WAVE");
+	ws(12, "fmt ");
+	view.setUint32(16, 16, true);
+	view.setUint16(20, 1, true);
+	view.setUint16(22, 1, true);
+	view.setUint32(24, sampleRate, true);
+	view.setUint32(28, sampleRate * 2, true);
+	view.setUint16(32, 2, true);
+	view.setUint16(34, 16, true);
+	ws(36, "data");
+	view.setUint32(40, n * 2, true);
 	let off = 44;
-	for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, pcm[i])); view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true); off += 2; }
+	for (let i = 0; i < n; i++) {
+		const s = Math.max(-1, Math.min(1, pcm[i]));
+		view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+		off += 2;
+	}
 	return new Uint8Array(buf);
 }

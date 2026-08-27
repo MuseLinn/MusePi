@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 
 /**
  * Dot-matrix bloom loader (desktop GUI parity — action-buttons.tsx

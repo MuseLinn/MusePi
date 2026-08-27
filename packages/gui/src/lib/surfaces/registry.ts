@@ -8,8 +8,16 @@ import type { RpcClient } from "../rpc";
 
 export type SurfaceAvailability = "always" | "has-content";
 export type SurfaceId =
-	| "context" | "files" | "widget" | "trajectory" | "jobs"
-	| "git" | "pr" | "diff" | "notes" | "browser"
+	| "context"
+	| "files"
+	| "widget"
+	| "trajectory"
+	| "jobs"
+	| "git"
+	| "pr"
+	| "diff"
+	| "notes"
+	| "browser"
 	| (string & {}); // 扩展槽注入（panel.tab.* / rail.*）
 
 export interface SurfaceProps {
@@ -41,20 +49,62 @@ export interface SurfaceDescriptor {
 export const SURFACES: SurfaceDescriptor[] = [
 	// Session views (formerly the panel header tabs) — VSCode Activity-Bar
 	// unification: ONE rail drives the whole panel.
-	{ id: "context", label: "context", icon: "donut-chart", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{
+		id: "context",
+		label: "context",
+		icon: "donut-chart",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
 	{ id: "files", label: "files", icon: "folder", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "trajectory", label: "trajectory", icon: "list-unordered", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{
+		id: "trajectory",
+		label: "trajectory",
+		icon: "list-unordered",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
 	{ id: "jobs", label: "jobs", icon: "task", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
 	// Workbench tool panes.
 	// Git is a single rail entry (Phase 3 merge): the panel opens with a
 	// view-local sub-tab bar switching workspace changes / commit history /
 	// pull requests (see GitPanel in ContextPanel). The old 3 independent
 	// git/diff/pr surfaces are folded into it.
-	{ id: "git", label: "git", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "notes", label: "project knowledge", icon: "book-open", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
-	{ id: "browser", label: "browser", icon: "global", group: "primary", availability: "always", defaultWidthFraction: 0.6 },
+	{
+		id: "git",
+		label: "git",
+		icon: "git-branch",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.55,
+	},
+	{
+		id: "notes",
+		label: "project knowledge",
+		icon: "book-open",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
+	{
+		id: "browser",
+		label: "browser",
+		icon: "global",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.6,
+	},
 	// Niche: widget preview folds into the overflow menu.
-	{ id: "widget", label: "widget preview", icon: "sparkling", group: "secondary", availability: "always", defaultWidthFraction: 0.45 },
+	{
+		id: "widget",
+		label: "widget preview",
+		icon: "sparkling",
+		group: "secondary",
+		availability: "always",
+		defaultWidthFraction: 0.45,
+	},
 ];
 
 const byId = new Map<string, SurfaceDescriptor>(SURFACES.map(s => [s.id, s]));
@@ -80,7 +130,9 @@ export function readSurfaceOrder(cwd?: string): string[] {
 	try {
 		const raw = localStorage.getItem(key);
 		if (raw) order = JSON.parse(raw);
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 	// 兜底 = 注册表顺序，并落掉已不存在的 id
 	const fallback = SURFACES.map(s => s.id);
 	const validNew = order.filter(id => byId.has(id));
@@ -90,15 +142,24 @@ export function readSurfaceOrder(cwd?: string): string[] {
 
 export function writeSurfaceOrder(ids: string[], cwd?: string): void {
 	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}` : SURFACE_ORDER_KEY;
-	try { localStorage.setItem(key, JSON.stringify(ids)); } catch { /* ignore */ }
+	try {
+		localStorage.setItem(key, JSON.stringify(ids));
+	} catch {
+		/* ignore */
+	}
 }
 
 export function readSurfaceWidth(cwd?: string): number {
 	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try { const n = Number(localStorage.getItem(key)); if (Number.isFinite(n)) return Math.min(1200, Math.max(200, n)); } catch {}
+	try {
+		const n = Number(localStorage.getItem(key));
+		if (Number.isFinite(n)) return Math.min(1200, Math.max(200, n));
+	} catch {}
 	return 300;
 }
 export function writeSurfaceWidth(w: number, cwd?: string): void {
 	const key = cwd ? `${SURFACE_CTX_PREFIX}${cwd}:w` : SURFACE_WIDTH_KEY;
-	try { localStorage.setItem(key, String(Math.round(w))); } catch {}
+	try {
+		localStorage.setItem(key, String(Math.round(w)));
+	} catch {}
 }

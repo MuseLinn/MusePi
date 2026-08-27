@@ -1,9 +1,9 @@
 import { t } from "@musepi/desktop-web";
-import { GuiSelect } from "./GuiSelect";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { WEEK_START_KEY } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
+import { GuiSelect } from "./GuiSelect";
 import { Pop } from "./Pop";
 import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
 
@@ -338,8 +338,17 @@ export function ScheduledTasksPage({
 							className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
 							onClick={() => setView(v)}
 						>
-							<Icon name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"} className="h-4 w-4" />
-							<span>{v === "calendar" ? t("task center calendar") : v === "board" ? t("task center board") : t("task list")}</span>
+							<Icon
+								name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"}
+								className="h-4 w-4"
+							/>
+							<span>
+								{v === "calendar"
+									? t("task center calendar")
+									: v === "board"
+										? t("task center board")
+										: t("task list")}
+							</span>
 						</button>
 					))}
 				</div>
@@ -379,7 +388,7 @@ export function ScheduledTasksPage({
 				</div>
 			</div>
 
-						{view === "calendar" ? (
+			{view === "calendar" ? (
 				<div className="gui-taskcenter-body">
 					<TaskCalendarView
 						tasks={tasks}
@@ -565,25 +574,25 @@ export function ScheduledTasksPage({
 				</div>
 			)}
 
-		{/* Always mounted — DialogFrame drives enter/exit via `open` (Pop
-		 * parity); data falls back to the last non-null task during the
-		 * exit frame. */}
-		<CronEditor
-			open={draft !== null}
-			rpc={rpc}
-			task={editorTask ?? EMPTY_TASK}
-			busy={busy}
-			onCancel={() => setDraft(null)}
-			onSave={save}
-		/>
-		<DeleteConfirmDialog
-			open={deleteTarget !== null}
-			task={deleteTask ?? EMPTY_TASK}
-			sessionCount={taskSessionIds(deleteTask ?? EMPTY_TASK).length}
-			busy={busy}
-			onCancel={() => setDeleteTarget(null)}
-			onConfirm={cleanup => remove((deleteTask ?? EMPTY_TASK).id, cleanup)}
-		/>
+			{/* Always mounted — DialogFrame drives enter/exit via `open` (Pop
+			 * parity); data falls back to the last non-null task during the
+			 * exit frame. */}
+			<CronEditor
+				open={draft !== null}
+				rpc={rpc}
+				task={editorTask ?? EMPTY_TASK}
+				busy={busy}
+				onCancel={() => setDraft(null)}
+				onSave={save}
+			/>
+			<DeleteConfirmDialog
+				open={deleteTarget !== null}
+				task={deleteTask ?? EMPTY_TASK}
+				sessionCount={taskSessionIds(deleteTask ?? EMPTY_TASK).length}
+				busy={busy}
+				onCancel={() => setDeleteTarget(null)}
+				onConfirm={cleanup => remove((deleteTask ?? EMPTY_TASK).id, cleanup)}
+			/>
 		</div>
 	);
 }
@@ -694,7 +703,14 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("scheduled pick date")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
-			<Pop open={open} className="gui-calendar-pop" portal anchor={anchorRef.current} align="left" onOpenChange={setOpen}>
+			<Pop
+				open={open}
+				className="gui-calendar-pop"
+				portal
+				anchor={anchorRef.current}
+				align="left"
+				onOpenChange={setOpen}
+			>
 				<div className="gui-calendar">
 					<div className="gui-calendar-head">
 						<button
@@ -894,11 +910,14 @@ function CronEditor({
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled model")}</span>
 								<GuiSelect
-					className="gui-settings-select"
-					value={draft.model ?? ""}
-					onChange={v => patch({ model: v || undefined })}
-					options={[{ value: "", label: t("scheduled model default") }, ...models.map(m => ({ value: m.id, label: m.name ?? m.id }))]}
-				/>
+									className="gui-settings-select"
+									value={draft.model ?? ""}
+									onChange={v => patch({ model: v || undefined })}
+									options={[
+										{ value: "", label: t("scheduled model default") },
+										...models.map(m => ({ value: m.id, label: m.name ?? m.id })),
+									]}
+								/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled prompt")} *</span>
@@ -915,11 +934,17 @@ function CronEditor({
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled type")}</span>
 								<GuiSelect
-					className="gui-settings-select"
-					value={kind}
-					onChange={v => patchSchedule({ kind: v as CronSchedule["kind"] })}
-					options={[{ value: "once", label: t("scheduled type once") }, { value: "daily", label: t("scheduled type daily") }, { value: "weekly", label: t("scheduled type weekly") }, { value: "monthly", label: t("scheduled type monthly") }, { value: "cron", label: t("scheduled type cron") }]}
-				/>
+									className="gui-settings-select"
+									value={kind}
+									onChange={v => patchSchedule({ kind: v as CronSchedule["kind"] })}
+									options={[
+										{ value: "once", label: t("scheduled type once") },
+										{ value: "daily", label: t("scheduled type daily") },
+										{ value: "weekly", label: t("scheduled type weekly") },
+										{ value: "monthly", label: t("scheduled type monthly") },
+										{ value: "cron", label: t("scheduled type cron") },
+									]}
+								/>
 							</div>
 							{kind === "once" && (
 								<div className="gui-widget-editor-field">
@@ -975,7 +1000,14 @@ function CronEditor({
 										className="gui-task-input"
 										type="time"
 										value={draft.schedule.idleWindow?.start ?? ""}
-										onChange={e => patchSchedule({ idleWindow: { start: e.target.value, end: draft.schedule.idleWindow?.end ?? "08:00" } })}
+										onChange={e =>
+											patchSchedule({
+												idleWindow: {
+													start: e.target.value,
+													end: draft.schedule.idleWindow?.end ?? "08:00",
+												},
+											})
+										}
 										aria-label={t("idle window start")}
 									/>
 									<span className="gui-cron-idle-sep">–</span>
@@ -983,7 +1015,14 @@ function CronEditor({
 										className="gui-task-input"
 										type="time"
 										value={draft.schedule.idleWindow?.end ?? ""}
-										onChange={e => patchSchedule({ idleWindow: { start: draft.schedule.idleWindow?.start ?? "22:00", end: e.target.value } })}
+										onChange={e =>
+											patchSchedule({
+												idleWindow: {
+													start: draft.schedule.idleWindow?.start ?? "22:00",
+													end: e.target.value,
+												},
+											})
+										}
 										aria-label={t("idle window end")}
 									/>
 									{draft.schedule.idleWindow && (
@@ -1042,20 +1081,25 @@ function CronEditor({
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
 								<GuiSelect
-					className="gui-settings-select"
-					value={draft.schedule.timezone ?? "Asia/Shanghai"}
-					onChange={v => patchSchedule({ timezone: v })}
-					options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
-				/>
+									className="gui-settings-select"
+									value={draft.schedule.timezone ?? "Asia/Shanghai"}
+									onChange={v => patchSchedule({ timezone: v })}
+									options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
+								/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled thinking")}</span>
 								<GuiSelect
-					className="gui-settings-select"
-					value={draft.thinkingLevel ?? "default"}
-					onChange={v => patch({ thinkingLevel: v as CronTask["thinkingLevel"] })}
-					options={[{ value: "default", label: t("scheduled thinking default") }, { value: "low", label: t("scheduled thinking low") }, { value: "medium", label: t("scheduled thinking medium") }, { value: "high", label: t("scheduled thinking high") }]}
-				/>
+									className="gui-settings-select"
+									value={draft.thinkingLevel ?? "default"}
+									onChange={v => patch({ thinkingLevel: v as CronTask["thinkingLevel"] })}
+									options={[
+										{ value: "default", label: t("scheduled thinking default") },
+										{ value: "low", label: t("scheduled thinking low") },
+										{ value: "medium", label: t("scheduled thinking medium") },
+										{ value: "high", label: t("scheduled thinking high") },
+									]}
+								/>
 							</div>
 							<div className="gui-widget-editor-field">
 								<span className="gui-widget-editor-label">{t("scheduled cwd")}</span>
@@ -1164,7 +1208,12 @@ function DeleteConfirmDialog({
 }): ReactNode {
 	const [cleanup, setCleanup] = useState<"none" | "archive" | "delete">("none");
 	return (
-		<DialogFrame open={open} label={t("scheduled delete title")} onClose={onCancel} className="gui-cron-delete-dialog">
+		<DialogFrame
+			open={open}
+			label={t("scheduled delete title")}
+			onClose={onCancel}
+			className="gui-cron-delete-dialog"
+		>
 			<div className="gui-cron-delete">
 				<p className="gui-cron-delete-desc">
 					{t("scheduled delete desc", { name: task.name || t("scheduled untitled") })}

@@ -11,8 +11,8 @@ import {
 } from "@musepi/pi-tui";
 import { adjustHsv, formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../../config/settings";
-import type { AgentSession } from "../../../session/agent-session";
 import type { ExtensionStatusBarSegment } from "../../../extensibility/extensions/types";
+import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
 import { limitMatchesActiveAccount } from "../../../slash-commands/helpers/active-oauth-account";
 import { type ActiveRepoContext, resolveActiveRepoContextSync } from "../../../utils/active-repo-context";
@@ -22,12 +22,12 @@ import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/sessio
 import { calculateTokensPerSecond } from "../../../utils/token-rate";
 import { sanitizeStatusText } from "../../shared";
 import { theme } from "../../theme/theme";
+import { type CompactionBoundaries, computeCompactionBoundaries } from "../../utils/context-usage";
 import {
 	type CodexResetFireworksEvent,
 	type CodexResetUsageSnapshot,
 	detectCodexResetFireworks,
 } from "../codex-reset-fireworks";
-import { computeCompactionBoundaries, type CompactionBoundaries } from "../../utils/context-usage";
 import { canReuseCachedPr, createPrCacheContext, isSamePrCacheContext, type PrCacheContext } from "./git-utils";
 import { getPreset } from "./presets";
 import { renderSegment, type SegmentContext } from "./segments";
@@ -1971,7 +1971,7 @@ export class StatusLineComponent implements Component {
 		// runs to the border edge instead of disappearing, so embedded context
 		// labels don't fall back to a context chip until the session is titled.
 		return leftGroup + this.#buildContextGaugeFill(gapWidth, ctx, effectiveSettings, embedContext) + rightGroup;
- 	}
+	}
 
 	/**
 	 * The gauge line bridging the left and right groups in box layout. Driven

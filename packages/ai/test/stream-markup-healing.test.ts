@@ -1,10 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	type Dialect,
-	getDialectDefinition,
-	type InbandScanEvent,
-	ThinkingInbandScanner,
-} from "@musepi/pi-ai/dialect";
+import { type Dialect, getDialectDefinition, type InbandScanEvent, ThinkingInbandScanner } from "@musepi/pi-ai/dialect";
 import { streamGoogleGeminiCli } from "@musepi/pi-ai/providers/google-gemini-cli";
 import { streamOpenAICompletions } from "@musepi/pi-ai/providers/openai-completions";
 import { stream } from "@musepi/pi-ai/stream";
@@ -13,6 +8,7 @@ import { getStreamMarkupHealingPattern, StreamMarkupHealing } from "@musepi/pi-a
 import { buildModel } from "@musepi/pi-catalog/build";
 import { getBundledModel } from "@musepi/pi-catalog/models";
 import { INTENT_FIELD } from "@musepi/pi-wire";
+
 interface SseToolCallDelta {
 	index: number;
 	id?: string;

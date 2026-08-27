@@ -42,7 +42,7 @@ export function CharTexture({ className, seed = 0 }: { className?: string; seed?
 			const cy = rows * 0.12;
 			const rx = cols * 0.34;
 			const ry = rows * 0.58;
-			let rngState = (seed >>> 0) || 7;
+			let rngState = seed >>> 0 || 7;
 			const rng = () => {
 				rngState |= 0;
 				rngState = (rngState + 0x6d2b79f5) | 0;
@@ -86,5 +86,12 @@ export function CharTexture({ className, seed = 0 }: { className?: string; seed?
 		};
 	}, [seed]);
 
-	return <div ref={ref} className={`gui-char-tex${className ? ` ${className}` : ""}`} aria-hidden="true" style={{ ["--seed" as string]: seed } as CSSProperties} />;
+	return (
+		<div
+			ref={ref}
+			className={`gui-char-tex${className ? ` ${className}` : ""}`}
+			aria-hidden="true"
+			style={{ ["--seed" as string]: seed } as CSSProperties}
+		/>
+	);
 }

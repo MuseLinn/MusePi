@@ -1,6 +1,6 @@
-import { t, type TranslationKey } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { type TranslationKey, t } from "../i18n/index.js";
 import { SendChip } from "./send";
 
 /**
@@ -67,11 +67,11 @@ export function SliderCard({
 			<svg viewBox="0 0 200 100" className="gui-widget-slider-plot" aria-hidden="true">
 				<polyline points={points.join(" ")} fill="none" className="gui-widget-slider-line" />
 			</svg>
-		
+
 			<SendChip
 				text={`${t("widget noise")} ${noise} / ${t("widget jitter")} ${jitter} / ${t("widget frequency")} ${freq} / ${t("widget amplitude")} ${amp}`}
 				onSend={sendPrompt}
 			/>
-</div>
+		</div>
 	);
 }

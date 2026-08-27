@@ -1,6 +1,6 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n/index.js";
 import { widgetFetch } from "./fetch";
 
 /** Real-time FX quote source (fx.tsx parity). */

@@ -1,10 +1,10 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import { useState, type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { TextMorph } from "../TextMorph";
 import { Icon } from "../../vendor/oc-icons";
+import { TextMorph } from "../TextMorph";
 
 /** Prompt-enhancement lifecycle (aicss AI Agent Input parity). */
 export type EnhanceState = "idle" | "enhancing" | "enhanced";
@@ -253,10 +253,7 @@ export function SendOrStopButton({
 					<span aria-hidden className="gui-send-label gui-send-label--sizer">
 						{t("working active")}
 					</span>
-					<TextMorph
-						text={interacting ? t("stop turn") : t("working active")}
-						className="gui-send-morph"
-					/>
+					<TextMorph text={interacting ? t("stop turn") : t("working active")} className="gui-send-morph" />
 				</span>
 			</span>
 		</button>

@@ -1,12 +1,6 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import type { RpcClient } from "../../lib/rpc";
 import { SchemaTabSection } from "./schema";
 
 /** Settings → Shell: TUI shell-tab parity (bash/eval groups), schema

@@ -145,7 +145,8 @@ export const general = {
 	"jumped back": "Jumped back",
 	"jumped back to": "Jumped back to",
 	"undo jump": "Undo jump",
-	"jump back hint": "The original reply stays on the tree as a sibling branch — undo jumps back, or send a new message to commit the new branch.",
+	"jump back hint":
+		"The original reply stays on the tree as a sibling branch — undo jumps back, or send a new message to commit the new branch.",
 	"plan not written yet": "No plan written yet — ask the agent to write one",
 	"plan mode off": "Plan mode is off",
 	"guided goal mode": "Guided goal",

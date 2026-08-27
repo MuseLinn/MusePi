@@ -64,7 +64,9 @@ export function CollabDialog({
 	>(null);
 	const [expandedKind, setExpandedKind] = useState<string | null>(null);
 	const [configDraft, setConfigDraft] = useState<Record<string, string>>({});
-	const [plugins, setPlugins] = useState<{ kind: string; label: string; origin: string; registered: boolean }[] | null>(null);
+	const [plugins, setPlugins] = useState<
+		{ kind: string; label: string; origin: string; registered: boolean }[] | null
+	>(null);
 
 	const refreshPlugins = async (): Promise<void> => {
 		if (!rpc) return;
@@ -110,10 +112,9 @@ export function CollabDialog({
 	const refreshChannels = async (): Promise<void> => {
 		if (!rpc) return;
 		try {
-			const list = await rpc.request<{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[]>(
-				"channels.list",
-				{},
-			);
+			const list = await rpc.request<
+				{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[]
+			>("channels.list", {});
 			setChannels(list);
 		} catch {
 			setChannels([]);
@@ -251,9 +252,7 @@ export function CollabDialog({
 									{t("or use MusePi Mobile pair code")}
 								</span>
 								<div className="gui-collab-pair-row">
-									<span className="gui-collab-pair-code">
-										{pairCode ?? "——————"}
-									</span>
+									<span className="gui-collab-pair-code">{pairCode ?? "——————"}</span>
 									<button type="button" className="gui-btn" onClick={() => void genPairCode()}>
 										<Icon name="refresh" className="h-3.5 w-3.5" />
 										<span>{t("get code")}</span>
@@ -362,9 +361,7 @@ export function CollabDialog({
 													type={f.secret ? "password" : "text"}
 													placeholder={f.label}
 													value={configDraft[f.key] ?? ""}
-													onChange={e =>
-														setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))
-													}
+													onChange={e => setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))}
 													autoComplete="off"
 												/>
 											))}

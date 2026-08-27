@@ -1,20 +1,8 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useCallback,
-	useEffect,
-	useState,
-} from "react";
-import {
-	useConfirm,
-} from "../../lib/prompt-dialog";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useConfirm } from "../../lib/prompt-dialog";
+import type { RpcClient } from "../../lib/rpc";
 import { SchemaTabSection } from "./schema";
 
 /** memory.status wire contract (daemon MemoryBackendStatus). */
@@ -124,9 +112,10 @@ function MemoryMaintenance({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				.catch(err => setActionError(err instanceof Error ? err.message : String(err)))
 				.finally(() => setBusy(null));
 		};
-		if (confirmText) void confirm(confirmText).then(ok => {
-			if (ok) go();
-		});
+		if (confirmText)
+			void confirm(confirmText).then(ok => {
+				if (ok) go();
+			});
 		else go();
 	};
 
@@ -141,7 +130,9 @@ function MemoryMaintenance({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			) : s ? (
 				<div className="gui-memory-card">
 					<div className="gui-memory-status-head">
-						<span className="gui-memory-backend">{t("memory backend {id}", { id: status?.id ?? s.backend })}</span>
+						<span className="gui-memory-backend">
+							{t("memory backend {id}", { id: status?.id ?? s.backend })}
+						</span>
 						<span className="flex items-center gap-1.5">
 							<span className={`gui-provider-status-dot${s.active ? " gui-provider-status-dot--on" : ""}`} />
 							<span className="text-[12px] text-[var(--color-text-muted)]">
@@ -217,8 +208,16 @@ function MemoryMaintenance({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							</div>
 						)}
 					</div>
-					{s.message && <div className="gui-memory-status-note">{t("memory message")}: {s.message}</div>}
-					{s.error && <div className="gui-memory-status-note gui-memory-status-note--error">{t("memory error")}: {s.error}</div>}
+					{s.message && (
+						<div className="gui-memory-status-note">
+							{t("memory message")}: {s.message}
+						</div>
+					)}
+					{s.error && (
+						<div className="gui-memory-status-note gui-memory-status-note--error">
+							{t("memory error")}: {s.error}
+						</div>
+					)}
 				</div>
 			) : null}
 			<div className="gui-memory-actions">
@@ -264,9 +263,7 @@ function MemoryMaintenance({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</button>
 			</div>
 			{actionError && <div className="text-[12.5px] text-[var(--color-warning)]">{actionError}</div>}
-			{output !== null && (
-				<div className="gui-ext-detail-label">{outputLabel}</div>
-			)}
+			{output !== null && <div className="gui-ext-detail-label">{outputLabel}</div>}
 			{output !== null && (
 				<div className="gui-ext-detail-code gui-memory-code">
 					<pre>{output}</pre>

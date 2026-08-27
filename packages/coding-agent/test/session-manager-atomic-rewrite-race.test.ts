@@ -4,10 +4,8 @@ import {
 	IndexedSessionStorage,
 	type SessionStorageBackend,
 } from "@musepi/pi-coding-agent/session/indexed-session-storage";
+import { SessionManager, SessionPersistenceIndeterminateError } from "@musepi/pi-coding-agent/session/session-manager";
 import {
-	SessionManager,
-	SessionPersistenceIndeterminateError,
-} from "@musepi/pi-coding-agent/session/session-manager";import {
 	MemorySessionStorage,
 	type SessionStorageWriter,
 	type WriteTextAtomicOptions,

@@ -52,8 +52,8 @@ import type {
 	ExtensionService,
 	ExtensionSetting,
 	ExtensionSkillDeclaration,
-	ExtensionThemeToken,
 	ExtensionStatusBarSegment,
+	ExtensionThemeToken,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
 	MessageRenderer,
@@ -355,10 +355,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		}
 		this.extension.themeTokens.push({ key, value });
 	}
-	registerStatusBarSegment(
-		id: string,
-		options: { label: string; order?: number; renderKey?: string },
-	): void {
+	registerStatusBarSegment(id: string, options: { label: string; order?: number; renderKey?: string }): void {
 		if (typeof id !== "string" || id.length === 0) {
 			throw new TypeError("registerStatusBarSegment: id must be a non-empty string");
 		}

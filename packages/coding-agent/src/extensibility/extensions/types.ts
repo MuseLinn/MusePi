@@ -1463,10 +1463,7 @@ export interface ExtensionAPI {
 	 *  `renderKey` is a forward-compat hint for hosts that register named
 	 *  renderers for a segment id. Dropped on unload so a re-added extension
 	 *  re-registers it. */
-	registerStatusBarSegment(
-		id: string,
-		options: { label: string; order?: number; renderKey?: string },
-	): void;
+	registerStatusBarSegment(id: string, options: { label: string; order?: number; renderKey?: string }): void;
 	// Actions
 	// =========================================================================
 

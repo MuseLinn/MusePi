@@ -64,9 +64,7 @@ function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<voi
  * EPERM/EACCES/EBUSY; on POSIX those codes are real permission errors and
  * only EBUSY is transient. Mirrors proma's fs-retry platform split.
  */
-const RETRYABLE_RENAME_CODES = new Set(
-	process.platform === "win32" ? ["EPERM", "EACCES", "EBUSY"] : ["EBUSY"],
-);
+const RETRYABLE_RENAME_CODES = new Set(process.platform === "win32" ? ["EPERM", "EACCES", "EBUSY"] : ["EBUSY"]);
 
 /**
  * Per-file live fd registry. Several AppendJournal instances can hold the
@@ -127,7 +125,10 @@ export class AppendJournal {
 		// awaits #fdReady so an append landing during a rewrite's
 		// close→rename→reopen window is written to the reopened fd.
 		const prev = this.#pendingWrite ?? Promise.resolve();
-		this.#pendingWrite = prev.then(() => this.#fdReady).then(fd => fd?.write(line)).then(() => {});
+		this.#pendingWrite = prev
+			.then(() => this.#fdReady)
+			.then(fd => fd?.write(line))
+			.then(() => {});
 		return seq;
 	}
 

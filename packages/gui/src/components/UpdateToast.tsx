@@ -1,5 +1,5 @@
 import { getLocaleSnapshot, Markdown, subscribeLocale, t } from "@musepi/desktop-web";
-import { type ReactNode, useEffect, useSyncExternalStore, useState } from "react";
+import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import {
 	downloadUpdate,
 	installUpdate,
@@ -141,10 +141,10 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</button>
 			</div>
 			{notes ? (
-			<div className="gui-update-toast-notes">
-				<Markdown text={notes} />
-			</div>
-		) : null}
+				<div className="gui-update-toast-notes">
+					<Markdown text={notes} />
+				</div>
+			) : null}
 			{downloading && (
 				<div className="gui-update-toast-progress">
 					<div className="gui-update-toast-progress-bar" style={{ width: `${percent}%` }} />

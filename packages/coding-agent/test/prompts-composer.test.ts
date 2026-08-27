@@ -110,7 +110,8 @@ describe("extensions-inventory block (agent awareness, §5.7)", () => {
 		// Whole-source re-hang (hot-switch): the old inventory is replaced.
 		composer.removeBySource("ext:inventory");
 		expect(composer.compose(["core"])).toEqual(["core"]);
-		const emptyText = "# 已安装扩展\n\n（当前没有已启用的扩展。）\n\n你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。";
+		const emptyText =
+			"# 已安装扩展\n\n（当前没有已启用的扩展。）\n\n你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。";
 		composer.add({ name: "extensions-inventory", order: 25, text: emptyText }, "ext:inventory");
 		expect(composer.compose(["core"])).toEqual(["core", emptyText]);
 	});

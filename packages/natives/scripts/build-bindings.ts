@@ -119,13 +119,13 @@ async function installBinary(src: string, dest: string): Promise<void> {
 				// Windows cannot unlink a loaded DLL. Keep the old file — the
 				// new build is in tempPath and will be picked up on next
 				// process restart (or overwritten by the next build).
-				console.warn(`[natives] ${path.basename(dest)} is in use; keeping old version (new build in ${path.basename(tempPath)})`);
+				console.warn(
+					`[natives] ${path.basename(dest)} is in use; keeping old version (new build in ${path.basename(tempPath)})`,
+				);
 				return;
 			} else {
 				await fs.unlink(tempPath).catch(() => {});
-				throw new Error(
-					`Cannot replace ${path.basename(dest)}: ${(unlinkErr as Error).message}`,
-				);
+				throw new Error(`Cannot replace ${path.basename(dest)}: ${(unlinkErr as Error).message}`);
 			}
 		}
 		try {
@@ -257,9 +257,11 @@ try {
 	// toolchain from the *cwd*, not --manifest-path, and napi spawns cargo
 	// with cwd=this package — so a rust-toolchain.toml here is required.
 	// (crates/pi-natives/rust-toolchain.toml covers direct cargo use.)
-	const buildResult = await $`${process.execPath} ${napiBin} ${napiArgs}`.env({
-		RUSTUP_TOOLCHAIN: "nightly",
-	}).nothrow();
+	const buildResult = await $`${process.execPath} ${napiBin} ${napiArgs}`
+		.env({
+			RUSTUP_TOOLCHAIN: "nightly",
+		})
+		.nothrow();
 	if (buildResult.exitCode !== 0) {
 		const stdout = buildResult.stdout?.toString("utf-8") ?? "";
 		const stderr = buildResult.stderr?.toString("utf-8") ?? "";

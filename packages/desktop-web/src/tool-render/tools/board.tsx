@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { t } from "../../i18n/index.js";
 import { openBoardFromChat } from "../../components/transcript/canvas-jump.js";
+import { t } from "../../i18n/index.js";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { isRecord, str } from "../util";
 
@@ -33,13 +33,7 @@ function boardTitleOf(args: unknown, result: unknown): string {
 	const r = isRecord(result) ? result : null;
 	const rBoard = isRecord(r?.board) ? r.board : null;
 	const aBoard = isRecord(a?.board) ? a.board : null;
-	return (
-		str(rBoard?.title) ??
-		str(aBoard?.title) ??
-		str(r?.title) ??
-		str(a?.title) ??
-		""
-	);
+	return str(rBoard?.title) ?? str(aBoard?.title) ?? str(r?.title) ?? str(a?.title) ?? "";
 }
 
 function widgetCountOf(args: unknown, result: unknown): number {
@@ -73,9 +67,7 @@ export const boardRenderer: ToolRenderer = {
 					<span className="tv-board-title">{title || t("board")}</span>
 					<span className="tv-board-tag">{t("board saved")}</span>
 				</div>
-				<div className="tv-board-meta">
-					{count > 0 ? `${count} ${t("widgets count")}` : ""}
-				</div>
+				<div className="tv-board-meta">{count > 0 ? `${count} ${t("widgets count")}` : ""}</div>
 				{id ? (
 					<button type="button" className="tv-board-open" onClick={() => openBoardFromChat(id, title)}>
 						<span>▦</span>

@@ -87,9 +87,7 @@ export class HostClient implements SessionClient {
 
 	connect(): void {
 		if (this.#ws) return;
-		const wsUrl = this.#token
-			? `${this.#wsUrl}?token=${encodeURIComponent(this.#token)}`
-			: this.#wsUrl;
+		const wsUrl = this.#token ? `${this.#wsUrl}?token=${encodeURIComponent(this.#token)}` : this.#wsUrl;
 		const ws = new WebSocket(wsUrl);
 		ws.onopen = () => this.#onOpen();
 		ws.onmessage = (ev: MessageEvent) => this.#onMessage(ev.data);
@@ -350,28 +348,20 @@ export class HostClient implements SessionClient {
 				if (!record || !("id" in record) || typeof record.id !== "string" || !("progress" in record)) {
 					return;
 				}
-				this.#progress = new Map(this.#progress).set(
-					record.id,
-					record.progress as SubagentProgressPayload,
-				);
+				this.#progress = new Map(this.#progress).set(record.id, record.progress as SubagentProgressPayload);
 				break;
 			}
 			case "agent-lifecycle": {
 				const record = asRecord(payload);
 				if (!record || !("id" in record) || typeof record.id !== "string") return;
-				this.#lifecycle = new Map(this.#lifecycle).set(
-					record.id,
-					record as unknown as SubagentLifecyclePayload,
-				);
+				this.#lifecycle = new Map(this.#lifecycle).set(record.id, record as unknown as SubagentLifecyclePayload);
 				break;
 			}
 			case "stream-end": {
 				const record = asRecord(payload);
 				this.#phase = "ended";
 				this.#endedReason =
-					record && "reason" in record && typeof record.reason === "string"
-						? record.reason
-						: "stream ended";
+					record && "reason" in record && typeof record.reason === "string" ? record.reason : "stream ended";
 				break;
 			}
 			case "approval-request": {
@@ -467,18 +457,14 @@ export class HostClient implements SessionClient {
 				const tool: ActiveTool = existing
 					? {
 							...existing,
-							...(typeof event.partialResult === "string"
-								? { partialResult: event.partialResult }
-								: {}),
+							...(typeof event.partialResult === "string" ? { partialResult: event.partialResult } : {}),
 						}
 					: {
 							toolCallId,
 							toolName,
 							args: event.args,
 							intent: typeof event.intent === "string" ? event.intent : undefined,
-							...(typeof event.partialResult === "string"
-								? { partialResult: event.partialResult }
-								: {}),
+							...(typeof event.partialResult === "string" ? { partialResult: event.partialResult } : {}),
 							startedAt: Date.now(),
 						};
 				this.#activeTools = new Map(this.#activeTools).set(toolCallId, tool);
@@ -501,20 +487,14 @@ export class HostClient implements SessionClient {
 					}
 					if (this.#stream?.role === "assistant") assistantTs = this.#stream.timestamp;
 					if (userTs !== undefined && assistantTs !== undefined) {
-						this.#roundDurations = new Map(this.#roundDurations).set(
-							assistantTs,
-							Date.now() - userTs,
-						);
+						this.#roundDurations = new Map(this.#roundDurations).set(assistantTs, Date.now() - userTs);
 					}
 				}
 				break;
 			case "notice": {
 				const level = event.level;
 				const message = event.message;
-				if (
-					(level === "info" || level === "error" || level === "warning") &&
-					typeof message === "string"
-				) {
+				if ((level === "info" || level === "error" || level === "warning") && typeof message === "string") {
 					this.#pushNotice(level, message);
 				}
 				break;

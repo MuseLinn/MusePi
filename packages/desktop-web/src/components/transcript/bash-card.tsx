@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
 import type { BashExecutionMessage } from "@musepi/pi-wire";
+import { type ReactNode, useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
 
 /** Rows of output shown in the collapsed state; the rest folds behind a toggle. */
@@ -36,7 +36,9 @@ export function BashCard({ message }: { message: BashExecutionMessage }): ReactN
 					$
 				</span>
 				<code>{message.command}</code>
-				{message.excludeFromContext && <span className="tr-bash-excluded">{t("bash output excluded from context")}</span>}
+				{message.excludeFromContext && (
+					<span className="tr-bash-excluded">{t("bash output excluded from context")}</span>
+				)}
 			</div>
 			{message.output.length > 0 && (
 				<pre className="tr-bash-out">

@@ -24,10 +24,7 @@ describe("board tool validation (validateBoards)", () => {
 	});
 
 	test("rejects non-integer positions", () => {
-		const r = validateBoards(
-			[board([{ id: "w1", type: "clock", pos: { x: 10.5, y: 0, w: 100, h: 100 } }])],
-			known,
-		);
+		const r = validateBoards([board([{ id: "w1", type: "clock", pos: { x: 10.5, y: 0, w: 100, h: 100 } }])], known);
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.error).toContain("integer pos");
 	});

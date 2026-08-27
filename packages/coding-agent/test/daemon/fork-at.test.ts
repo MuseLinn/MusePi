@@ -287,10 +287,13 @@ describe("daemon session.forkAt", () => {
 					message: m,
 				}),
 			);
-			await fs.promises.writeFile(parentFile, `${titleSlotLine}
+			await fs.promises.writeFile(
+				parentFile,
+				`${titleSlotLine}
 ${JSON.stringify(header)}
 ${sdkLines.join("\n")}
-`);
+`,
+			);
 
 			const fb = await call("session.forkAt", {
 				sessionId,
@@ -300,7 +303,6 @@ ${sdkLines.join("\n")}
 			expect(fb.sessionId).toBeTruthy();
 			const fork = await forkFile(sessionDir, fb.sessionId);
 			// DEBUG
-
 
 			// The fork's OWN header carries the NEW id (type "session"), and
 			// the body must NOT contain the parent's header record.

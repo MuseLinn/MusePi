@@ -9,8 +9,6 @@ import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
-import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
-import { LongPasteDialog, type LongPasteAction } from "./composer/long-paste-dialog";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
 import { rankSlashEntries } from "../lib/slash-rank";
@@ -37,6 +35,8 @@ import {
 	type UsageReportView,
 	type UsageUnreportedAccountView,
 } from "./Composer";
+import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
+import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
@@ -1171,8 +1171,8 @@ export function WelcomeComposer({
 												<span>{t("not in a project")}</span>
 											</button>
 										)}
-								</>,
-							)}
+									</>,
+								)}
 							</div>
 							{/* 预设(mode)chip:与项目 chip 并排一行(DSH hero 对齐),
 							 * 新会话创建时应用。样式与项目选择同款(按钮 + 浮层菜单)。 */}
@@ -1205,7 +1205,9 @@ export function WelcomeComposer({
 													}}
 												>
 													<span className="min-w-0 flex-1 truncate">{m.label}</span>
-													{activeModeId === m.id && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
+													{activeModeId === m.id && (
+														<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+													)}
 												</button>
 											))}
 										</>,
@@ -1437,7 +1439,7 @@ export function WelcomeComposer({
 											))}
 									</div>,
 								)}
-								
+
 								{pendingPaste && (
 									<LongPasteDialog
 										lineCount={pendingPaste.lineCount}
@@ -1454,28 +1456,40 @@ export function WelcomeComposer({
 												void (async () => {
 													try {
 														const name = `paste-${Date.now()}.md`;
-														await rpc.request("fs.write", { cwd: project ?? "", path: name, content: pendingPaste.text });
+														await rpc.request("fs.write", {
+															cwd: project ?? "",
+															path: name,
+															content: pendingPaste.text,
+														});
 														const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
 														setText(newText);
-														requestAnimationFrame(() => ta.setSelectionRange(start + name.length, start + name.length));
+														requestAnimationFrame(() =>
+															ta.setSelectionRange(start + name.length, start + name.length),
+														);
 													} catch {
-														const newText = ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
+														const newText =
+															ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
 														setText(newText);
 													}
 												})();
 												dismissLongPaste();
 												return;
 											}
-											const insertion = action === "code-block" ? `\`\`\`\n${pendingPaste.text}\n\`\`\`` : pendingPaste.text;
+											const insertion =
+												action === "code-block"
+													? `\`\`\`\n${pendingPaste.text}\n\`\`\``
+													: pendingPaste.text;
 											const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
 											setText(newText);
-											requestAnimationFrame(() => ta.setSelectionRange(start + insertion.length, start + insertion.length));
+											requestAnimationFrame(() =>
+												ta.setSelectionRange(start + insertion.length, start + insertion.length),
+											);
 											dismissLongPaste();
 										}}
 										onDismiss={dismissLongPaste}
 									/>
 								)}
-<textarea
+								<textarea
 									ref={el => {
 										taRef.current = el;
 										compAnchorRef(el);

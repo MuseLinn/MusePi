@@ -4,9 +4,10 @@
  * line; wait shows settled/cancelled rows; kill/list show a status line.
  * The status icon morphs (morphicons) between pending and settled states.
  */
-import type { ReactNode } from "react";
+
 import { Check as CheckIconData, LoaderCircle as LoaderCircleIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
+import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, Badges, Note, Output } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
@@ -97,7 +98,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 	const op = opOf(args, result);
 	const pending = isPending(args, result);
 	const text = Array.isArray(result?.content)
-		? (result.content as Array<{ type?: string; text?: string }>).find(p => p.type === "text")?.text ?? ""
+		? ((result.content as Array<{ type?: string; text?: string }>).find(p => p.type === "text")?.text ?? "")
 		: "";
 
 	if (op === "spawn" || op === "send") {

@@ -35,9 +35,7 @@ export interface AskDialogResultItem {
 
 /** Ask dialog answer: submit carries per-question results, chat hands off
  *  to the chat loop, null cancels. */
-export type AskDialogAnswer =
-	| { kind: "submit"; results: AskDialogResultItem[] }
-	| { kind: "chat" };
+export type AskDialogAnswer = { kind: "submit"; results: AskDialogResultItem[] } | { kind: "chat" };
 
 /** One pending ask question pushed by the daemon (TUI ask parity). */
 export interface AskRequest {
@@ -62,8 +60,6 @@ export interface AskDialogSubmit {
 
 const OTHER_LABEL = "Other (type your own)";
 
-
-
 /** localStorage key for in-flight multi-question draft answers — survives
  *  session switches/relaunches until the ask resolves (openchamber
  *  QuestionCard parity: re-opening the same card restores selections). */
@@ -82,9 +78,10 @@ interface AnswerState {
 
 function initialAnswers(questions: AskDialogQuestion[]): AnswerState[] {
 	return questions.map(q => ({
-		selected: q.recommended !== undefined && q.recommended >= 0 && q.recommended < q.options.length
-			? [q.options[q.recommended]?.label ?? ""].filter(Boolean)
-			: [],
+		selected:
+			q.recommended !== undefined && q.recommended >= 0 && q.recommended < q.options.length
+				? [q.options[q.recommended]?.label ?? ""].filter(Boolean)
+				: [],
 		custom: "",
 		otherMode: false,
 		note: "",
@@ -131,13 +128,7 @@ function clearDraft(requestId: string): void {
  * QuestionCard / proma AskUserBanner parity) — above the input, never a
  * centered modal: no backdrop, no focus trap, Escape cancels.
  */
-export function AskCard({
-	ask,
-	onAnswer,
-}: {
-	ask: AskRequest;
-	onAnswer(answer: AskAnswer): void;
-}): ReactNode {
+export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: AskAnswer): void }): ReactNode {
 	const [custom, setCustom] = useState("");
 	const [otherMode, setOtherMode] = useState(false);
 	const inputRef = useRef<HTMLInputElement | null>(null);
@@ -483,12 +474,10 @@ export function AskCard({
 		// markdown preview, the question renders left options + right preview.
 		// Shows the selected option's preview, falling back to the
 		// recommended option, then the first preview-bearing option.
-		const previewOption = q.options.find(
-			o => a.selected.includes(o.label) && o.preview?.trim(),
-		) ?? (q.recommended !== undefined && q.recommended >= 0
-			? q.options[q.recommended]
-			: undefined
-		) ?? q.options.find(o => o.preview?.trim());
+		const previewOption =
+			q.options.find(o => a.selected.includes(o.label) && o.preview?.trim()) ??
+			(q.recommended !== undefined && q.recommended >= 0 ? q.options[q.recommended] : undefined) ??
+			q.options.find(o => o.preview?.trim());
 		const hasPreview = q.options.some(o => o.preview?.trim());
 		const previewText = previewOption?.preview?.trim() ?? "";
 		const qIndex = questions.indexOf(q);
@@ -516,7 +505,9 @@ export function AskCard({
 								)}
 								<span className={`gui-ask-opt-check${selected ? " gui-ask-opt-check--on" : ""}`}>
 									{q.multi ? (
-										selected ? <Icon name="checkbox-multiple" className="h-3.5 w-3.5" /> : null
+										selected ? (
+											<Icon name="checkbox-multiple" className="h-3.5 w-3.5" />
+										) : null
 									) : selected ? (
 										<Icon name="checkbox-circle" className="h-3.5 w-3.5" />
 									) : null}
@@ -529,9 +520,7 @@ export function AskCard({
 										</span>
 									)}
 								</span>
-								{opt.description && (
-									<span className="gui-ask-opt-desc">{opt.description}</span>
-								)}
+								{opt.description && <span className="gui-ask-opt-desc">{opt.description}</span>}
 							</button>
 						);
 					})}
@@ -561,7 +550,7 @@ export function AskCard({
 							className={`gui-ask-note-btn${a.noteOpen ? " gui-ask-note-btn--open" : ""}${a.note.trim() ? " gui-ask-note-btn--filled" : ""}`}
 							onClick={() => toggleNote(qIndex)}
 							title={`${t("add note")} (N)`}
-						>							
+						>
 							<Icon name="sticky-note" className="h-3 w-3" />
 							<span>{a.note.trim() ? t("note") : t("add note")}</span>
 						</button>
@@ -641,7 +630,7 @@ export function AskCard({
 			<div className="gui-ask-card-head">
 				<Icon name="chat-1" className="h-3.5 w-3.5 flex-none opacity-70" />
 				<span className="gui-ask-card-title">
-					{isDialog && !isSubmitTab ? questions[activeTab]?.question ?? ask.title : ask.title}
+					{isDialog && !isSubmitTab ? (questions[activeTab]?.question ?? ask.title) : ask.title}
 				</span>
 				<button
 					type="button"

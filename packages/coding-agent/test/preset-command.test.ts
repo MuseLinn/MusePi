@@ -2,9 +2,9 @@ import { describe, expect, it, spyOn } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { AgentSession } from "../src/session/agent-session";
 import { BUILTIN_SLASH_COMMANDS_INTERNAL } from "../src/slash-commands/builtin-registry";
 import type { SlashCommandRuntime } from "../src/slash-commands/types";
-import type { AgentSession } from "../src/session/agent-session";
 
 /** TUI preset (mode) parity with the GUI ModesCenter: /preset lists and
  *  hot-switches presets in-session (modes v2 switcher). */

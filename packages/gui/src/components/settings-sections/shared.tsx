@@ -1,15 +1,7 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useState,
-} from "react";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useState } from "react";
+import { Icon } from "../../vendor/oc-icons";
 
 /** Openchamber-style number stepper: [−] input [+] unit, plus reset. */
 export function NumberStepper({

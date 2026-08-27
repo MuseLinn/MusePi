@@ -22,10 +22,10 @@
  */
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import * as net from "node:net";
-import * as tls from "node:tls";
 import type { AddressInfo } from "node:net";
+import * as net from "node:net";
 import * as path from "node:path";
+import * as tls from "node:tls";
 import type { RelayControlMessage } from "./protocol";
 import { rewriteEnvelopePeer, unpackEnvelope } from "./protocol";
 

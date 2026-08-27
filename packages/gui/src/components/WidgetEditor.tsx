@@ -1,9 +1,9 @@
 import { t } from "@musepi/desktop-web/src/i18n/index.js";
-import { GuiSelect } from "./GuiSelect";
 import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
+import { GuiSelect } from "./GuiSelect";
 
 /**
  * Board edit panel (kimi 修改 parity): opens from the header 编辑 button.
@@ -49,7 +49,11 @@ export function WidgetEditor({
 	const widget = active?.widgets.find(w => w.id === selectedId) ?? null;
 	const def = widget ? widgetDef(widget.type) : undefined;
 	return (
-		<div className={`gui-widget-editor${closing ? " gui-widget-editor--closing" : ""}`} role="dialog" aria-label={t("board edit")}>
+		<div
+			className={`gui-widget-editor${closing ? " gui-widget-editor--closing" : ""}`}
+			role="dialog"
+			aria-label={t("board edit")}
+		>
 			<div className="gui-widget-editor-head">
 				<span className="gui-widget-editor-title">{t("board edit")}</span>
 				<button type="button" className="gui-tool-btn" onClick={handleClose} aria-label={t("close")}>

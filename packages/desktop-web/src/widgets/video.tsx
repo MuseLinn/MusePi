@@ -29,15 +29,7 @@ function fmt(sec: number): string {
 	return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-function Cover({
-	title,
-	subtitle,
-	onPlay,
-}: {
-	title: string;
-	subtitle: string;
-	onPlay?: () => void;
-}): ReactNode {
+function Cover({ title, subtitle, onPlay }: { title: string; subtitle: string; onPlay?: () => void }): ReactNode {
 	return (
 		<div className="gui-widget-video gui-widget-video--cover" onClick={onPlay}>
 			<span className="gui-widget-video-corner c-tl" />
@@ -171,10 +163,7 @@ export function VideoCard({
 				>
 					<div className="gui-widget-video-track">
 						<div className="gui-widget-video-fill" style={{ width: `${dur > 0 ? (t / dur) * 100 : 0}%` }} />
-						<div
-							className="gui-widget-video-knob"
-							style={{ left: `${dur > 0 ? (t / dur) * 100 : 0}%` }}
-						/>
+						<div className="gui-widget-video-knob" style={{ left: `${dur > 0 ? (t / dur) * 100 : 0}%` }} />
 					</div>
 				</div>
 				<span className="gui-widget-video-tc">

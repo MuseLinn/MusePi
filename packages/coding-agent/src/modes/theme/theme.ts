@@ -6,10 +6,10 @@ import { colorLuma, getCustomThemesDir, logger } from "@musepi/pi-utils";
 import { ansi256ToHex, resolveThemeColors, resolveVarRefs } from "./color";
 import { type CreateThemeOptions, getBuiltinThemes, loadTheme, loadThemeJson, loadThemeSync } from "./loader";
 import type { ThemeColor, ThemeJson } from "./schema";
-import type { SymbolPreset } from "./symbols";
-import type { Theme } from "./theme-class";
 import { isValidThemeColor } from "./schema";
+import type { SymbolPreset } from "./symbols";
 import { SYMBOL_PRESETS } from "./symbols";
+import type { Theme } from "./theme-class";
 
 export { getLanguageFromPath, isMarkdownPath } from "../../utils/lang-from-path";
 export { getAvailableThemes, getAvailableThemesWithPaths, getThemeByName, type ThemeInfo } from "./loader";

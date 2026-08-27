@@ -1,19 +1,8 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import {
-	tapFeedback,
-} from "../../lib/haptic";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { tapFeedback } from "../../lib/haptic";
+import type { RpcClient } from "../../lib/rpc";
 
 /** File-index service status (daemon file-index RPC). */
 interface IndexStatus {

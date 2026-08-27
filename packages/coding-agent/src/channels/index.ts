@@ -1,8 +1,8 @@
-export * from "./types";
-export { ChannelRegistry } from "./registry";
+export { DiscordChannel } from "./discord";
+export { FeishuChannel } from "./feishu";
 export { ChannelCommandHandler, type ChannelOps } from "./handler";
 export { HuaweiTodayChannel } from "./huawei-today";
-export { DiscordChannel } from "./discord";
-export { WechatChannel } from "./wechat";
+export { ChannelRegistry } from "./registry";
 export { TelegramChannel } from "./telegram";
-export { FeishuChannel } from "./feishu";
+export * from "./types";
+export { WechatChannel } from "./wechat";

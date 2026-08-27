@@ -1,5 +1,18 @@
 import { highlightToCodeHtml, ImageLightbox, Markdown, t } from "@musepi/desktop-web";
-import { ArrowLeft, File as FileIcon, FileCode, FileImage, FileJson, FilePlus, FileText, FileType, Folder, FolderPlus, RefreshCw, Search } from "lucide-react";
+import {
+	ArrowLeft,
+	FileCode,
+	File as FileIcon,
+	FileImage,
+	FileJson,
+	FilePlus,
+	FileText,
+	FileType,
+	Folder,
+	FolderPlus,
+	RefreshCw,
+	Search,
+} from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -605,11 +618,7 @@ export function FilePane({
 		return items;
 	}, [ctx, openPreview, copyPath, load, startNewFile, startNewDir, startRename, confirmDelete, cwd]);
 
-	const renderRow = (
-		row: { node: TreeNode; depth: number },
-		posInSet?: number,
-		setSize?: number,
-	): ReactNode => {
+	const renderRow = (row: { node: TreeNode; depth: number }, posInSet?: number, setSize?: number): ReactNode => {
 		const { node, depth } = row;
 		const { entry } = node;
 		const isDir = entry.isDir;
@@ -790,53 +799,57 @@ export function FilePane({
 								✕
 							</button>
 						</div>
-							<div className="gui-filepane-preview-body">
-								{preview.error && <p className="gui-error">{preview.error}</p>}
-								{preview.htmlLive !== undefined && (
-									<HtmlPreview live={htmlLiveMode === "live"} source={preview.htmlLive} onToggle={setHtmlLiveMode} />
-								)}
-								{preview.html !== undefined && (
-									// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from the tree-sitter highlighter
-									<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
-								)}
-								{preview.text !== undefined && extOf(preview.name) === "md" ? (
-									<div className="gui-filepane-preview-md">
-										<Markdown text={preview.text} basePath={cwd} />
-									</div>
-								) : preview.text !== undefined ? (
-									<pre className="gui-filepane-preview-text">{preview.text}</pre>
-								) : null}
-								{preview.imageUrl && (
-									<div className="gui-filepane-preview-img-wrap">
-										<button
-											type="button"
-											className="gui-filepane-preview-img-btn"
-											title={t("open image viewer")}
-											onClick={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
-										>
-											<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
-										</button>
-									</div>
-								)}
-								{preview.pdfPages && (
-									<div className="gui-filepane-preview-img-wrap">
-										{preview.pdfPages.map((page, i) => (
-											<img
-												key={i}
-												className="gui-filepane-preview-img gui-filepane-preview-pdf"
-												src={page}
-												alt={`${preview.name} p${i + 1}`}
-											/>
-										))}
-									</div>
-								)}
-								{preview.external && (
-									<p className="gui-filepane-preview-note">
-										{t("opened in default app")} — {preview.size.toLocaleString()} B
-									</p>
-								)}
-							</div>
+						<div className="gui-filepane-preview-body">
+							{preview.error && <p className="gui-error">{preview.error}</p>}
+							{preview.htmlLive !== undefined && (
+								<HtmlPreview
+									live={htmlLiveMode === "live"}
+									source={preview.htmlLive}
+									onToggle={setHtmlLiveMode}
+								/>
+							)}
+							{preview.html !== undefined && (
+								// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from the tree-sitter highlighter
+								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
+							)}
+							{preview.text !== undefined && extOf(preview.name) === "md" ? (
+								<div className="gui-filepane-preview-md">
+									<Markdown text={preview.text} basePath={cwd} />
+								</div>
+							) : preview.text !== undefined ? (
+								<pre className="gui-filepane-preview-text">{preview.text}</pre>
+							) : null}
+							{preview.imageUrl && (
+								<div className="gui-filepane-preview-img-wrap">
+									<button
+										type="button"
+										className="gui-filepane-preview-img-btn"
+										title={t("open image viewer")}
+										onClick={() => setLightbox({ src: preview.imageUrl!, name: preview.name })}
+									>
+										<img className="gui-filepane-preview-img" src={preview.imageUrl} alt={preview.name} />
+									</button>
+								</div>
+							)}
+							{preview.pdfPages && (
+								<div className="gui-filepane-preview-img-wrap">
+									{preview.pdfPages.map((page, i) => (
+										<img
+											key={i}
+											className="gui-filepane-preview-img gui-filepane-preview-pdf"
+											src={page}
+											alt={`${preview.name} p${i + 1}`}
+										/>
+									))}
+								</div>
+							)}
+							{preview.external && (
+								<p className="gui-filepane-preview-note">
+									{t("opened in default app")} — {preview.size.toLocaleString()} B
+								</p>
+							)}
 						</div>
+					</div>
 				)}
 			</div>
 			<ContextMenu

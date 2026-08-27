@@ -34,11 +34,7 @@ describe("usage-card parser", () => {
 		expect(parsed).not.toBeNull();
 		expect(parsed!.provider).toBe("Opencode Go");
 		expect(parsed!.fetchedLabel).toBe("2m ago");
-		expect(parsed!.models).toEqual([
-			"opencode/deepseek-v4-flash",
-			"opencode/deepseek-v4-pro",
-			"opencode/kimi-k2.5",
-		]);
+		expect(parsed!.models).toEqual(["opencode/deepseek-v4-flash", "opencode/deepseek-v4-pro", "opencode/kimi-k2.5"]);
 		expect(parsed!.limits).toHaveLength(3);
 		const [fiveHour, weekly, monthly] = parsed!.limits;
 		expect(fiveHour!.label).toBe("5 Hour limit");

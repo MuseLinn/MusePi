@@ -1,4 +1,4 @@
-import type { HTMLAttributes, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { HTMLAttributes, ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useRef } from "react";
 
 /**
@@ -26,7 +26,12 @@ export function ChromaGroup({
 		el.style.setProperty("--cg-y", `${Math.round(e.clientY - rect.top)}px`);
 	};
 	return (
-		<div ref={ref} className={`gui-chroma${className ? ` ${className}` : ""}`} onPointerMove={onPointerMove} {...rest}>
+		<div
+			ref={ref}
+			className={`gui-chroma${className ? ` ${className}` : ""}`}
+			onPointerMove={onPointerMove}
+			{...rest}
+		>
 			<div className="gui-chroma-glow" aria-hidden="true" />
 			{children}
 		</div>

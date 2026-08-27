@@ -44,8 +44,12 @@ export function GaugeCard({
 					/>
 					<line x1={cx} y1={cy} x2={nx} y2={ny} className="gui-widget-gauge-needle" />
 					<circle cx={cx} cy={cy} r={2.5} className="gui-widget-gauge-pivot" />
-					<text x={8} y={58} className="gui-widget-gauge-scale">0</text>
-					<text x={90} y={58} className="gui-widget-gauge-scale">100</text>
+					<text x={8} y={58} className="gui-widget-gauge-scale">
+						0
+					</text>
+					<text x={90} y={58} className="gui-widget-gauge-scale">
+						100
+					</text>
 				</svg>
 				<div className="gui-widget-gauge-value">{Math.round(value)}</div>
 				{status && <div className="gui-widget-gauge-status">{status}</div>}
@@ -91,7 +95,13 @@ function sampleCandles(n: number, start: number, drift = 0.4): Ohlc[] {
 
 export function klineDefaults(): Record<string, unknown> {
 	const candles = sampleCandles(40, 470);
-	return { symbol: "腾讯控股", price: 478.8, delta: -0.08, candles, stocks: ["腾讯控股", "阿里巴巴", "贵州茅台", "宁德时代"] };
+	return {
+		symbol: "腾讯控股",
+		price: 478.8,
+		delta: -0.08,
+		candles,
+		stocks: ["腾讯控股", "阿里巴巴", "贵州茅台", "宁德时代"],
+	};
 }
 
 export function KlineCard({
@@ -125,7 +135,7 @@ export function KlineCard({
 	const volH = 14;
 	const x = (i: number): number => (i / Math.max(1, n - 1)) * W;
 	const y = (v: number): number => priceH - ((v - min) / range) * (priceH - 4) - 2;
-	const cw = W / n * 0.62;
+	const cw = (W / n) * 0.62;
 	// MA5 / MA20.
 	const ma = (win: number): string =>
 		candles
@@ -157,9 +167,16 @@ export function KlineCard({
 			</div>
 			<div className="gui-widget-kline-data">
 				<span>{t("widget kline ohlc")}</span>
-				<span>开 {last.o.toFixed(2)} 高 {last.h.toFixed(2)} 低 {last.l.toFixed(2)} 收 {last.c.toFixed(2)}</span>
+				<span>
+					开 {last.o.toFixed(2)} 高 {last.h.toFixed(2)} 低 {last.l.toFixed(2)} 收 {last.c.toFixed(2)}
+				</span>
 			</div>
-			<svg viewBox={`0 0 ${W} ${priceH + volH}`} className="gui-widget-kline-svg" preserveAspectRatio="none" aria-hidden="true">
+			<svg
+				viewBox={`0 0 ${W} ${priceH + volH}`}
+				className="gui-widget-kline-svg"
+				preserveAspectRatio="none"
+				aria-hidden="true"
+			>
 				{candles.map((c, i) => {
 					const up = c.c >= c.o;
 					const color = up ? "var(--color-danger, #e5484d)" : "var(--color-success, #30a46c)";
@@ -171,8 +188,21 @@ export function KlineCard({
 							 * pointer device. */}
 							<title>{`O ${c.o.toFixed(2)}  H ${c.h.toFixed(2)}  L ${c.l.toFixed(2)}  C ${c.c.toFixed(2)}  V ${c.v}`}</title>
 							<line x1={cx} y1={y(c.h)} x2={cx} y2={y(c.l)} stroke={color} strokeWidth={0.5} />
-							<rect x={cx - cw / 2} y={Math.min(y(c.o), y(c.c))} width={cw} height={Math.max(1.2, Math.abs(y(c.o) - y(c.c)))} fill={color} />
-							<rect x={cx - cw / 4} y={priceH + 2 + (1 - c.v / 100) * volH} width={cw / 2} height={(c.v / 100) * volH} fill={color} opacity={0.55} />
+							<rect
+								x={cx - cw / 2}
+								y={Math.min(y(c.o), y(c.c))}
+								width={cw}
+								height={Math.max(1.2, Math.abs(y(c.o) - y(c.c)))}
+								fill={color}
+							/>
+							<rect
+								x={cx - cw / 4}
+								y={priceH + 2 + (1 - c.v / 100) * volH}
+								width={cw / 2}
+								height={(c.v / 100) * volH}
+								fill={color}
+								opacity={0.55}
+							/>
 						</g>
 					);
 				})}
@@ -226,7 +256,9 @@ export function HeatwallCard({
 	update(patch: Record<string, unknown>): void;
 }): ReactNode {
 	const raw = Array.isArray(data.tiles) ? (data.tiles as unknown[]) : [];
-	const tiles = raw.filter((x): x is HeatTile => typeof x === "object" && x !== null && typeof (x as HeatTile).name === "string");
+	const tiles = raw.filter(
+		(x): x is HeatTile => typeof x === "object" && x !== null && typeof (x as HeatTile).name === "string",
+	);
 	return (
 		<div className="gui-widget-heatwall">
 			<div className="gui-widget-heatwall-head">
@@ -245,7 +277,9 @@ export function HeatwallCard({
 							title={`${tl.name} ${d > 0 ? "+" : ""}${d.toFixed(2)}%`}
 						>
 							<span className="gui-widget-heatwall-name">{tl.name}</span>
-							<span className="gui-widget-heatwall-delta">{d === 0 ? "0.00" : `${d > 0 ? "+" : ""}${d.toFixed(2)}%`}</span>
+							<span className="gui-widget-heatwall-delta">
+								{d === 0 ? "0.00" : `${d > 0 ? "+" : ""}${d.toFixed(2)}%`}
+							</span>
 						</div>
 					);
 				})}
@@ -283,7 +317,9 @@ export function IndextapeCard({
 	const min = Math.min(...series);
 	const max = Math.max(...series);
 	const range = max - min || 1;
-	const pts = series.map((v, i) => `${(i / Math.max(1, series.length - 1)) * 100},${100 - ((v - min) / range) * 88 - 6}`).join(" ");
+	const pts = series
+		.map((v, i) => `${(i / Math.max(1, series.length - 1)) * 100},${100 - ((v - min) / range) * 88 - 6}`)
+		.join(" ");
 	return (
 		<div className="gui-widget-indextape">
 			<div className="gui-widget-indextape-tabs">
@@ -301,7 +337,10 @@ export function IndextapeCard({
 			<div className="gui-widget-indextape-head">
 				<span className="gui-widget-indextape-title">INDEX TAPE · {idx} · DAILY</span>
 				<span className="gui-widget-indextape-value">
-					{value.toLocaleString()} <b className={delta >= 0 ? "" : "gui-widget-indextape-down"}>{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(2)}%</b>
+					{value.toLocaleString()}{" "}
+					<b className={delta >= 0 ? "" : "gui-widget-indextape-down"}>
+						{delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(2)}%
+					</b>
 				</span>
 			</div>
 			<svg viewBox="0 0 100 40" preserveAspectRatio="none" className="gui-widget-indextape-svg" aria-hidden="true">

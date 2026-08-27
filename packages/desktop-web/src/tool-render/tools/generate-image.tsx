@@ -81,7 +81,9 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 				<div className="tr-img-shimmer" aria-hidden="true" />
 				<div className="tr-img-ph-title">{t("generating image")}</div>
 				{subjectPrompt && (
-					<div className="tr-img-ph-prompt">“{subjectPrompt.length > 140 ? `${subjectPrompt.slice(0, 140)}…` : subjectPrompt}”</div>
+					<div className="tr-img-ph-prompt">
+						“{subjectPrompt.length > 140 ? `${subjectPrompt.slice(0, 140)}…` : subjectPrompt}”
+					</div>
 				)}
 			</div>
 		) : null;
@@ -89,71 +91,71 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 		<>
 			{placeholder ?? (
 				<>
-			<KvGrid>
-				{PROMPT_FIELDS.map(([arg, label]) => {
-					const value = args[arg];
-					return (
-						<Kv key={arg} k={t(label)}>
-							{value === undefined ? null : (str(value) ?? <InvalidArg what={label} />)}
-						</Kv>
-					);
-				})}
-			</KvGrid>
-			{changes && changes.length > 0 && (
-				<div className="tv-list">
-					{changes.map((change, i) => (
-						// Tool-argument rows are static arrays — the index is their identity.
-						// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
-						<Row key={i} k={i === 0 ? t("changes") : undefined}>
-							{typeof change === "string" ? change : <InvalidArg what="change" />}
-						</Row>
-					))}
-				</div>
-			)}
-			{inputs && inputs.length > 0 && (
-				<div className="tv-list">
-					{inputs.map((input, i) => {
-						const path = isRecord(input) ? str(input.path) : null;
-						const mime = isRecord(input) ? str(input.mime_type) : null;
-						return (
-							// Tool-argument rows are static arrays — the index is their identity.
-							// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
-							<Row key={i} k={i === 0 ? t("input") : undefined}>
-								{!isRecord(input) ? (
-									<InvalidArg what="input" />
-								) : path ? (
-									<PathText path={path} />
-								) : mime ? (
-									t("base64 image ({mime})", { mime: mime })
-								) : (
-									t("base64 image")
-								)}
-							</Row>
-						);
-					})}
-				</div>
-			)}
-			{(provider || model) && <Badges items={[provider, model]} />}
-			{revised && <Note>{t("revised: {value}", { value: truncate(revised, 400) })}</Note>}
-			{hasImages && (
-				<figure className="tr-tool-image">
-					<ResultImages result={merged} />
-					{caption && <figcaption className="tr-tool-image-caption">{caption}</figcaption>}
-				</figure>
-			)}
-			{paths.length > 0 && (
-				<div className="tv-list">
-					{paths.map((p, i) => (
-						// Tool-argument rows are static arrays — the index is their identity.
-						// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
-						<Row key={i} k={i === 0 ? t("saved") : undefined}>
-							<PathText path={p} />
-						</Row>
-					))}
-				</div>
-			)}
-			{!hasImages && <ResultText result={result} maxLines={8} />}
-			</>
+					<KvGrid>
+						{PROMPT_FIELDS.map(([arg, label]) => {
+							const value = args[arg];
+							return (
+								<Kv key={arg} k={t(label)}>
+									{value === undefined ? null : (str(value) ?? <InvalidArg what={label} />)}
+								</Kv>
+							);
+						})}
+					</KvGrid>
+					{changes && changes.length > 0 && (
+						<div className="tv-list">
+							{changes.map((change, i) => (
+								// Tool-argument rows are static arrays — the index is their identity.
+								// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+								<Row key={i} k={i === 0 ? t("changes") : undefined}>
+									{typeof change === "string" ? change : <InvalidArg what="change" />}
+								</Row>
+							))}
+						</div>
+					)}
+					{inputs && inputs.length > 0 && (
+						<div className="tv-list">
+							{inputs.map((input, i) => {
+								const path = isRecord(input) ? str(input.path) : null;
+								const mime = isRecord(input) ? str(input.mime_type) : null;
+								return (
+									// Tool-argument rows are static arrays — the index is their identity.
+									// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+									<Row key={i} k={i === 0 ? t("input") : undefined}>
+										{!isRecord(input) ? (
+											<InvalidArg what="input" />
+										) : path ? (
+											<PathText path={path} />
+										) : mime ? (
+											t("base64 image ({mime})", { mime: mime })
+										) : (
+											t("base64 image")
+										)}
+									</Row>
+								);
+							})}
+						</div>
+					)}
+					{(provider || model) && <Badges items={[provider, model]} />}
+					{revised && <Note>{t("revised: {value}", { value: truncate(revised, 400) })}</Note>}
+					{hasImages && (
+						<figure className="tr-tool-image">
+							<ResultImages result={merged} />
+							{caption && <figcaption className="tr-tool-image-caption">{caption}</figcaption>}
+						</figure>
+					)}
+					{paths.length > 0 && (
+						<div className="tv-list">
+							{paths.map((p, i) => (
+								// Tool-argument rows are static arrays — the index is their identity.
+								// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
+								<Row key={i} k={i === 0 ? t("saved") : undefined}>
+									<PathText path={p} />
+								</Row>
+							))}
+						</div>
+					)}
+					{!hasImages && <ResultText result={result} maxLines={8} />}
+				</>
 			)}
 		</>
 	);

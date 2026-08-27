@@ -4,7 +4,11 @@ import * as themeModule from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { SessionEntry, SessionTreeNode } from "@musepi/pi-coding-agent/session/session-entries";
 
 let counter = 0;
-function makeNode(message: Record<string, unknown>, parentId: string | null = null, timestamp = Date.now()): SessionTreeNode {
+function makeNode(
+	message: Record<string, unknown>,
+	parentId: string | null = null,
+	timestamp = Date.now(),
+): SessionTreeNode {
 	const id = `entry-${counter++}`;
 	const entry: SessionEntry = {
 		type: "message",
@@ -16,11 +20,7 @@ function makeNode(message: Record<string, unknown>, parentId: string | null = nu
 	return { entry, children: [], label: undefined };
 }
 
-function render(
-	tree: SessionTreeNode[],
-	projection: "tree" | "trace" = "tree",
-	width = 120,
-): string {
+function render(tree: SessionTreeNode[], projection: "tree" | "trace" = "tree", width = 120): string {
 	const leaf = tree[tree.length - 1]?.entry.id ?? null;
 	const selector = new TreeSelectorComponent(
 		tree,
@@ -48,13 +48,13 @@ describe("TreeSelectorComponent /trace trajectory projection", () => {
 				content: [{ type: "text", text: "fixed" }],
 				timestamp: 2,
 				usage: {
-				input: 100,
-				output: 50,
-				cacheRead: 0,
-				cacheWrite: 0,
-				totalTokens: 150,
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-			},
+					input: 100,
+					output: 50,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 150,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
 				duration: 900,
 				stopReason: "stop",
 			},
@@ -80,7 +80,14 @@ describe("TreeSelectorComponent /trace trajectory projection", () => {
 				role: "assistant",
 				content: [{ type: "text", text: "answer" }],
 				timestamp: Date.parse("2026-08-21T10:02:31Z"),
-				usage: { input: 12_400, output: 3_100, cacheRead: 0, cacheWrite: 2_000, totalTokens: 15_500, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				usage: {
+					input: 12_400,
+					output: 3_100,
+					cacheRead: 0,
+					cacheWrite: 2_000,
+					totalTokens: 15_500,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
 				duration: 8_500,
 				stopReason: "stop",
 			},
@@ -105,7 +112,14 @@ describe("TreeSelectorComponent /trace trajectory projection", () => {
 				role: "assistant",
 				content: [],
 				timestamp: 2,
-				usage: { input: 1_000, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 1_000, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+				usage: {
+					input: 1_000,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 1_000,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
 				duration: 1_200,
 				stopReason: "error",
 				errorMessage: "overloaded_error",

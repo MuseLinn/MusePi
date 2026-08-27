@@ -11,15 +11,16 @@
  * - `WidgetCard` + `WidgetFullscreen` are host-agnostic (used by the
  *   collab transcript and the GUI sidebar tab alike).
  */
+
+import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
+import { Maximize2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { Maximize2, X } from "lucide-react";
 import { t } from "../../i18n/index.js";
-import { widgetDef } from "../../widgets/registry";
-import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
 import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
+import { widgetDef } from "../../widgets/registry";
 
 /** localStorage key for the standalone widget display. */
 export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
@@ -119,7 +120,12 @@ export function WidgetFullscreen({
 				<span className="tr-widget-fs-title">{payload.title ?? t("widget")}</span>
 			</div>
 			<div className="tr-widget-fs-body">
-				<InlineWidget type={payload.type} data={payload.data} title={payload.title ?? ""} sendPrompt={host?.sendPrompt} />
+				<InlineWidget
+					type={payload.type}
+					data={payload.data}
+					title={payload.title ?? ""}
+					sendPrompt={host?.sendPrompt}
+				/>
 			</div>
 		</div>,
 		document.body,

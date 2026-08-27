@@ -344,7 +344,9 @@ describe("update-cli package manager commands", () => {
 
 describe("update-cli npm rename contract", () => {
 	it("parses the musepi.rename pointer and rejects malformed ones", () => {
-		expect(resolveReleaseRename({ musepi: { rename: { package: "@new/musepi", natives: "@new/musepi-natives" } } })).toEqual({
+		expect(
+			resolveReleaseRename({ musepi: { rename: { package: "@new/musepi", natives: "@new/musepi-natives" } } }),
+		).toEqual({
 			pkg: "@new/musepi",
 			natives: "@new/musepi-natives",
 		});

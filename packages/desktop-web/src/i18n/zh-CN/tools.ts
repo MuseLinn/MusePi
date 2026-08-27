@@ -499,10 +499,10 @@ export const tools = {
 	"no model assigned": "未分配模型",
 	// ── Computer permissions ────────────────────────────────────────────
 	"screen recording": "屏幕录制",
-	"accessibility": "辅助功能",
+	accessibility: "辅助功能",
 	"input monitoring": "输入监控",
-	"granted": "已授权",
-	"authorize": "授权",
+	granted: "已授权",
+	authorize: "授权",
 	"computer permissions": "Computer 权限",
 	"computer permissions hint": "开启以下权限,让 MusePi 在电脑上为你提供帮助",
 	"permission screen recording description": "用于支持屏幕截图和视觉上下文",

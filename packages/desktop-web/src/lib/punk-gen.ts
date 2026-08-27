@@ -215,38 +215,25 @@ const SQUARE: Layer = {
 /** Shades: full dark band with a nose bridge gap. */
 const SHADES: Layer = {
 	colors: ["", "1a1a1a"],
-	grid: R(
-		".......111111111111.....",
-		".......1111..1111.......",
-		".......111111111111.....",
-	),
+	grid: R(".......111111111111.....", ".......1111..1111.......", ".......111111111111....."),
 };
 
 /** Moustache above the mouth. */
 const MUSTACHE: Layer = {
 	colors: ["", "3b2a1a"],
-	grid: R(
-		".........111111.........",
-		".........111111.........",
-	),
+	grid: R(".........111111.........", ".........111111........."),
 };
 
 /** Blush dots at the cheeks. */
 const BLUSH: Layer = {
 	colors: ["", "e88b8b"],
-	grid: R(
-		"......11............11..",
-		"......11............11..",
-	),
+	grid: R("......11............11..", "......11............11.."),
 };
 
 /** Open-mouth smile replacing the man's closed mouth line. */
 const SMILE: Layer = {
 	colors: ["", "201a14"],
-	grid: R(
-		".........111111.........",
-		"..........1111..........",
-	),
+	grid: R(".........111111.........", "..........1111.........."),
 };
 
 /** Skin palettes (replaces man index 2). */
@@ -302,10 +289,10 @@ export function punkGrid(seed: string): { colors: string[]; grid: number[][] } {
 	// 0 none, 1 round, 2 square, 3 shades (none is 2/5 — keep faces clean
 	// often but accessory faces common enough for visible variety)
 	const eyewear = (h >>> 16) % 5;
-	const mustache = ((h >>> 20) % 3) === 0;
-	const blush = ((h >>> 22) % 3) === 0;
-	const smoke = ((h >>> 24) % 3) === 0;
-	const smile = ((h >>> 26) % 3) === 0;
+	const mustache = (h >>> 20) % 3 === 0;
+	const blush = (h >>> 22) % 3 === 0;
+	const smoke = (h >>> 24) % 3 === 0;
+	const smile = (h >>> 26) % 3 === 0;
 
 	const out = { colors: ["", skin, hairColor, "585858", "fdfdfd"], grid: [] as number[][] };
 	// Base face, remapped from MAN (hair/skin indices swapped in place:

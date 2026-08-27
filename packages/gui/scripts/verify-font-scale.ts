@@ -103,10 +103,7 @@ try {
 	console.log("baseline:", baseline);
 
 	// Simulate the settings stepper: set --gui-font-scale on the root.
-	await evalJs(
-		cdp,
-		`document.documentElement.style.setProperty('--gui-font-scale', '18px')`,
-	);
+	await evalJs(cdp, `document.documentElement.style.setProperty('--gui-font-scale', '18px')`);
 	await Bun.sleep(200);
 	const scaled = (await evalJs(
 		cdp,

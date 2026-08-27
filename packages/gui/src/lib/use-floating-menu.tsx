@@ -62,7 +62,9 @@ export function useFloatingMenu(
 	// effect below sees it on the SAME commit the menu opens. A point
 	// anchor (ContextMenu parity) positions at the pointer instead.
 	const anchorEl = anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current;
-	const [pos, setPos] = useState<{ left?: number; right?: number; top?: number; bottom?: number; up: boolean } | null>(null);
+	const [pos, setPos] = useState<{ left?: number; right?: number; top?: number; bottom?: number; up: boolean } | null>(
+		null,
+	);
 	const [closing, setClosing] = useState(false);
 	const [entered, setEntered] = useState(false);
 	// Latest close callback without re-running the mutex effect.
@@ -94,7 +96,7 @@ export function useFloatingMenu(
 		const flipUpForBottomOverflow = r.bottom + 6 + menuH > window.innerHeight - MENU_EDGE_PAD;
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
-		const up = flipUpForBottomOverflow || (roomAbove > roomBelow);
+		const up = flipUpForBottomOverflow || roomAbove > roomBelow;
 		// Align: right -> menu's right edge on anchor's right edge; left ->
 		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
 		// the viewport — the previous anchor-only clamp (right: innerWidth -
@@ -239,7 +241,8 @@ export function useFloatingMenu(
 					right: pos.right ?? "auto",
 					top: pos.top ?? "auto",
 					bottom: pos.bottom ?? "auto",
-					transformOrigin: align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
+					transformOrigin:
+						align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
 				}}
 			>
 				{children}

@@ -232,7 +232,10 @@ describe("GuestClient frame apply", () => {
 		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: first } });
 		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
 		// Round 2: a new user message anchors the next round.
-		client.applyFrameForTest({ t: "entry", entry: messageEntry("u2", { role: "user", content: "again", timestamp: 3_000 }) });
+		client.applyFrameForTest({
+			t: "entry",
+			entry: messageEntry("u2", { role: "user", content: "again", timestamp: 3_000 }),
+		});
 		const second = assistantMessage("answer 2");
 		second.timestamp = 4_000;
 		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: second } });

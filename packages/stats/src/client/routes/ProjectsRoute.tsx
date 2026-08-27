@@ -65,59 +65,59 @@ export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRoutePr
 			key: "totalCost",
 			header: t("Cost"),
 			numeric: true,
-				render: (item: FolderRowView) => (
-					<div className="stats-text-right">
-						<div className="font-mono">{formatCost(item.totalCost)}</div>
-						<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
-							<div
-								className="stats-progress-bar-fill"
-								data-variant="success"
-								style={{ width: `${item.costPercentage}%` }}
-							/>
-						</div>
+			render: (item: FolderRowView) => (
+				<div className="stats-text-right">
+					<div className="font-mono">{formatCost(item.totalCost)}</div>
+					<div className="stats-progress-bar-track mt-1 ml-auto w-24 h-1">
+						<div
+							className="stats-progress-bar-fill"
+							data-variant="success"
+							style={{ width: `${item.costPercentage}%` }}
+						/>
 					</div>
-				),
-			},
-			{
-				key: "totalTokens",
-				header: "Tokens",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<div className="font-mono">{formatInteger(item.totalInputTokens + item.totalOutputTokens)}</div>
-				),
-			},
-			{
-				key: "cacheRate",
-				header: "Cache Rate",
-				numeric: true,
-				render: (item: FolderRowView) => <span className="font-mono">{formatPercent(item.cacheRate)}</span>,
-			},
-			{
-				key: "cacheSavings",
-				header: "Cache Savings",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<span className={`${item.cacheSavings < 0 ? "stats-text-danger" : "stats-text-success"} font-medium`}>
-						{formatPercent(item.cacheSavings)}
-					</span>
-				),
-			},
-			{
-				key: "errorRate",
-				header: "Error Rate",
-				numeric: true,
-				render: (item: FolderRowView) => (
-					<StatusPill variant={item.errorRate > 0.1 ? "danger" : item.errorRate > 0 ? "warning" : "success"}>
-						{formatPercent(item.errorRate)}
-					</StatusPill>
-				),
-			},
-			{
-				key: "avgDuration",
-				header: "Avg Duration",
-				numeric: true,
-				render: (item: FolderRowView) => formatDurationMs(item.avgDuration),
-			},
+				</div>
+			),
+		},
+		{
+			key: "totalTokens",
+			header: "Tokens",
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<div className="font-mono">{formatInteger(item.totalInputTokens + item.totalOutputTokens)}</div>
+			),
+		},
+		{
+			key: "cacheRate",
+			header: "Cache Rate",
+			numeric: true,
+			render: (item: FolderRowView) => <span className="font-mono">{formatPercent(item.cacheRate)}</span>,
+		},
+		{
+			key: "cacheSavings",
+			header: "Cache Savings",
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<span className={`${item.cacheSavings < 0 ? "stats-text-danger" : "stats-text-success"} font-medium`}>
+					{formatPercent(item.cacheSavings)}
+				</span>
+			),
+		},
+		{
+			key: "errorRate",
+			header: "Error Rate",
+			numeric: true,
+			render: (item: FolderRowView) => (
+				<StatusPill variant={item.errorRate > 0.1 ? "danger" : item.errorRate > 0 ? "warning" : "success"}>
+					{formatPercent(item.errorRate)}
+				</StatusPill>
+			),
+		},
+		{
+			key: "avgDuration",
+			header: "Avg Duration",
+			numeric: true,
+			render: (item: FolderRowView) => formatDurationMs(item.avgDuration),
+		},
 	];
 	const renderMobileCard = (item: FolderRowView) => (
 		<div className="stats-mobile-card">
@@ -137,14 +137,16 @@ export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRoutePr
 					<div className="stats-mobile-card-value font-mono">{formatCost(item.totalCost)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Cache Rate</div>					<div className="stats-mobile-card-value">{formatPercent(item.cacheRate)}</div>
+					<div className="stats-mobile-card-label">Cache Rate</div>{" "}
+					<div className="stats-mobile-card-value">{formatPercent(item.cacheRate)}</div>
 				</div>
 				<div>
 					<div className="stats-mobile-card-label">Cache Savings</div>
 					<div className="stats-mobile-card-value">{formatPercent(item.cacheSavings)}</div>
 				</div>
 				<div>
-					<div className="stats-mobile-card-label">Duration</div>					<div className="stats-mobile-card-value">{formatDurationMs(item.avgDuration)}</div>
+					<div className="stats-mobile-card-label">Duration</div>{" "}
+					<div className="stats-mobile-card-value">{formatDurationMs(item.avgDuration)}</div>
 				</div>
 			</div>
 		</div>

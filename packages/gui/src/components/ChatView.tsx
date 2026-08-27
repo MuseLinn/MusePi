@@ -1,5 +1,11 @@
-import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t, type TranscriptNodeInjection } from "@musepi/desktop-web";
-import { Reveal } from "./Reveal";
+import {
+	CodeHighlightProvider,
+	punkAvatarUri,
+	relTime,
+	Transcript,
+	type TranscriptNodeInjection,
+	t,
+} from "@musepi/desktop-web";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,9 +17,9 @@ import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {
 	PANEL_TAB_SLOT_PREFIX,
-	TRANSCRIPT_NODE_SLOT,
 	SlotComponentMount,
 	selectTranscriptNodeComponents,
+	TRANSCRIPT_NODE_SLOT,
 	useExtensionToolViews,
 	useSlotComponents,
 	useSlotComponentsByPrefix,
@@ -29,19 +35,20 @@ import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
 import { AskPopover } from "./AskPopover";
 import { PunkAvatar } from "./avatar-presets";
+import { BrowserGuiHint } from "./BrowserGuiHint";
+import { BtwFloatingCard } from "./BtwFloatingCard";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
 import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageTreeButton } from "./MessageTree";
-import { SessionTreeCanvas } from "./SessionTreeCanvas";
 import type { ReminderRow } from "./RemindersPanel";
-import { BrowserGuiHint } from "./BrowserGuiHint";
+import { Reveal } from "./Reveal";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
-import { SessionTreeNav, type BreadcrumbSegment } from "./SessionTreeNav";
 import { SelectionToolbar } from "./SelectionToolbar";
+import { SessionTreeCanvas } from "./SessionTreeCanvas";
+import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { SubagentPanel } from "./SubagentPanel";
-import { BtwFloatingCard } from "./BtwFloatingCard";
 import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -871,10 +878,7 @@ export function ChatView({
 		return path;
 	}, [effectiveLeaf, snap?.entries]);
 	// Active path id set for transcript filtering (off-path entries collapse).
-	const activePathIds = useMemo(
-		() => new Set(leafPath.map(p => p.id)),
-		[leafPath],
-	);
+	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -892,7 +896,10 @@ export function ChatView({
 		const text =
 			typeof m?.content === "string"
 				? m.content
-				: blocks.filter(b => b?.type === "text").map(b => b.text ?? "").join(" ");
+				: blocks
+						.filter(b => b?.type === "text")
+						.map(b => b.text ?? "")
+						.join(" ");
 		return text.replace(/\s+/g, " ").trim().slice(0, 60) || fallback;
 	};
 	const breadcrumb: BreadcrumbSegment[] = useMemo(
@@ -1275,9 +1282,15 @@ export function ChatView({
 													activePathIds={activePathIds}
 													onJump={id => {
 														const ts = (snap?.entries ?? []).find(
-															e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+															e =>
+																typeof e === "object" &&
+																e !== null &&
+																(e as { id?: unknown }).id === id,
 														);
-														const t2 = typeof ts === "object" && ts !== null ? (ts as { timestamp?: unknown }).timestamp : null;
+														const t2 =
+															typeof ts === "object" && ts !== null
+																? (ts as { timestamp?: unknown }).timestamp
+																: null;
 														if (typeof t2 === "string") {
 															setViewMode("chat");
 															// 双击跳转 + 短暂高亮(1.2s flash)。
@@ -1291,203 +1304,217 @@ export function ChatView({
 													}}
 													onForkAt={id => {
 														const entry = (snap?.entries ?? []).find(
-															e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+															e =>
+																typeof e === "object" &&
+																e !== null &&
+																(e as { id?: unknown }).id === id,
 														);
 														const isUser = entry?.type === "message" && entry.message.role === "user";
 														void forkFromMessage(id, undefined, !isUser);
 													}}
 												/>
 											) : (
-											<>
-											<div
-												ref={transcriptRef}
-												className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
-												data-top-scroll="false"
-												data-bottom-scroll="false"
-											>
-												<CodeHighlightProvider highlight={chatHighlight}>
-													<Transcript
-														entries={snap?.entries ?? []}
-														/* No stream ghost: the view folds the assistant message into
-														 * entries at message_start, so the entry row IS the live
-														 * stream renderer (immutable upserts re-render it). */
-														stream={null}
-														streamDone={true}
-														activeTools={snap?.activeTools ?? new Map()}
-														working={snap?.working ?? false}
-														roundDurations={snap?.roundDurations}
-														thinkingLevel={resolvedThinkingLevel ?? undefined}
-														host={host}
-														renderTranscriptNode={renderTranscriptNode}
-														/* Chat settings (openchamber parity): user message
-														 * markdown/plain + long-message collapse. */
-														userPlain={(() => {
-															try {
-																return localStorage.getItem("musepi-gui-chat-usermsg") === "plain";
-															} catch {
-																return false;
-															}
-														})()}
-														collapseLongUserMessages={(() => {
-															try {
-																return localStorage.getItem("musepi-gui-chat-collapseuser") !== "0";
-															} catch {
-																return true;
-															}
-														})()}
-														/* TUI display-settings parity: the daemon
-														 * settings drive the transcript (unflagged
-														 * from tuiOnly 2026-08-12). */
-														smoothStreaming={displaySettings["display.smoothStreaming"] !== false}
-														hideToolActivity={displaySettings["display.hideToolActivity"] === true}
-														showTokenUsage={displaySettings["display.showTokenUsage"] === true}
-														collapseCompacted={displaySettings["display.collapseCompacted"] !== false}
-														taskCardStyle={
-															displaySettings["display.taskCardStyle"] === "classic"
-																? "classic"
-																: "swarm"
-														}
-														colorBlind={displaySettings.colorBlindMode === true}
-														onQuote={text => appendQuote(text)}
-														onRevert={(id, text) => void jumpBackToMessage(id, text)}
-														/* 编辑并重发 (Transcript onEdit, previously unwired):
-														 * backfill the composer with the message text for
-														 * re-editing — same pendingEdit path as the revert
-														 * dock's 恢复到输入框 and the fork flow. */
-														onEdit={(_id, text) => setPendingEdit(text)}
-														onFork={(id, text, includeTarget) =>
-															void forkFromMessage(id, text, includeTarget)
-														}
-														onLoadOlder={onLoadOlderStable}
-														loadingOlder={loadingOlder}
-														onRetry={(id, text) => void retryFromUserMessage(id, text)}
-														onSpeak={(text, id) => {
-															// TTS read-aloud via the daemon's local Kokoro worker;
-															// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。
-															if (stopSpeakRef.current) {
-																stopSpeakRef.current();
-																setSpeakingId(null);
-																return;
-															}
-															const entryId = id ?? null;
-															stopSpeakRef.current = speak(
-																text,
-																rpc,
-																{
-																	rate:
-																		typeof displaySettings["tts.rate"] === "number"
-																			? (displaySettings["tts.rate"] as number)
-																			: undefined,
-																},
-																activity => {
-																	if (activity.phase === "speaking") setSpeakingId(entryId);
-																	else if (
-																		activity.phase === "done" ||
-																		activity.phase === "stopped" ||
-																		activity.phase === "error"
-																	) {
-																		stopSpeakRef.current = null;
-																		setSpeakingId(prev => (prev === entryId ? null : prev));
-																	}
-																},
-															);
-															setSpeakingId(entryId);
-														}}
-														speakingId={speakingId}
-														onStopSpeak={() => {
-															stopSpeakRef.current?.();
-															stopSpeakRef.current = null;
-															setSpeakingId(null);
-														}}
-														onSaveImage={text => setSaveImageText(text)}
-														/* ZCode: avatars replace the 宿主/代理 gutter labels. */
-														userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
-														agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
-														/* Layer-1 branch topology: multi-child messages render a
-														 * switchable branch bar; off-path entries collapse. */
-														branchInfo={{
-															childCount: new Map(
-																[...branchChildren.entries()].map(([pid, kids]) => [pid, kids.length]),
-															),
-															activePathIds,
-															onSwitchBranch: switchBranch,
-														}}
-													/>
-												</CodeHighlightProvider>
-											</div>
-											{/* Jump-to-bottom (openchamber ScrollToBottomButton parity):
-											 * floats over the composer edge while scrolled up. */}
-											<JumpToBottomButton rootRef={transcriptRef} />
-											{/* Message-tree navigation (TUI tree-selector parity):
-											 * a floating searchable turn tree — jump to any
-											 * position in the conversation, or fork a new session
-											 * from any node (user nodes re-answer with the message
-											 * text; assistant/toolResult nodes continue from the
-											 * node). Anchored to the WRAP (not the outer column) so
-											 * the pause banner — which lives in the column above
-											 * the wrap — can never sit under it. */}
-											<MessageTreeButton
-												entries={snap?.entries ?? []}
-												transcriptRef={transcriptRef}
-												onFork={(entry, text, includeTarget) =>
-													void forkFromMessage(entry.id, text, includeTarget)
-												}
-												onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
-											/>
-											{/* In-message text selection actions (openchamber parity):
-											 * quote a snippet (not the whole message), copy, start a
-											 * new session from it, or append it to the workspace notes. */}
-											<SelectionToolbar
-												containerRef={transcriptRef}
-												onQuote={text => appendQuote(text)}
-												onAsk={(text, x, y) =>
-													window.dispatchEvent(
-														new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
-													)
-												}
-												onCopy={text => void navigator.clipboard.writeText(text)}
-												onNewSession={text => onSubmitNewSession(text)}
-												onAddNote={text => {
-													// v1.19 parity: each "add to notes" becomes its own
-													// note (notes.create), never appended to the blob.
-													const cwd = store.cwd;
-													void rpc.request("notes.create", { cwd, body: `> ${text}` }).catch(() => {});
-												}}
-											/>
-											{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
-											 * generates it after recap.idleSeconds of quiet; a rounded
-											 * floating card above the composer edge, foldable to one
-											 * line (click to expand/collapse), cleared by the next
-											 * wire activity or the dismiss button. */}
-											{snap?.recap && (
-												<div
-													className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
-													title={recapExpanded ? t("collapse") : t("expand")}
-													role="button"
-													onClick={() => setRecapExpanded(v => !v)}
-												>
-													<span className="gui-recap-prefix">※</span>
-													<span className="gui-recap-text">{snap.recap.text}</span>
-													<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
-													<Icon
-														name="arrow-down-s"
-														className={`gui-recap-chevron${recapExpanded ? " gui-recap-chevron--open" : ""}`}
-													/>
-													<button
-														type="button"
-														className="gui-recap-dismiss"
-														title={t("dismiss")}
-														aria-label={t("dismiss")}
-														onClick={e => {
-															e.stopPropagation();
-															store?.dismissRecap();
-														}}
+												<>
+													<div
+														ref={transcriptRef}
+														className={`gui-transcript min-h-0 min-w-0 h-full overflow-y-auto px-5 py-4${sessionLoading === true ? "" : " gui-transcript--fadein"}`}
+														data-top-scroll="false"
+														data-bottom-scroll="false"
 													>
-														<Icon name="close" className="h-3 w-3" />
-													</button>
-												</div>
-											)}
-											</>
+														<CodeHighlightProvider highlight={chatHighlight}>
+															<Transcript
+																entries={snap?.entries ?? []}
+																/* No stream ghost: the view folds the assistant message into
+																 * entries at message_start, so the entry row IS the live
+																 * stream renderer (immutable upserts re-render it). */
+																stream={null}
+																streamDone={true}
+																activeTools={snap?.activeTools ?? new Map()}
+																working={snap?.working ?? false}
+																roundDurations={snap?.roundDurations}
+																thinkingLevel={resolvedThinkingLevel ?? undefined}
+																host={host}
+																renderTranscriptNode={renderTranscriptNode}
+																/* Chat settings (openchamber parity): user message
+																 * markdown/plain + long-message collapse. */
+																userPlain={(() => {
+																	try {
+																		return (
+																			localStorage.getItem("musepi-gui-chat-usermsg") === "plain"
+																		);
+																	} catch {
+																		return false;
+																	}
+																})()}
+																collapseLongUserMessages={(() => {
+																	try {
+																		return (
+																			localStorage.getItem("musepi-gui-chat-collapseuser") !== "0"
+																		);
+																	} catch {
+																		return true;
+																	}
+																})()}
+																/* TUI display-settings parity: the daemon
+																 * settings drive the transcript (unflagged
+																 * from tuiOnly 2026-08-12). */
+																smoothStreaming={displaySettings["display.smoothStreaming"] !== false}
+																hideToolActivity={displaySettings["display.hideToolActivity"] === true}
+																showTokenUsage={displaySettings["display.showTokenUsage"] === true}
+																collapseCompacted={
+																	displaySettings["display.collapseCompacted"] !== false
+																}
+																taskCardStyle={
+																	displaySettings["display.taskCardStyle"] === "classic"
+																		? "classic"
+																		: "swarm"
+																}
+																colorBlind={displaySettings.colorBlindMode === true}
+																onQuote={text => appendQuote(text)}
+																onRevert={(id, text) => void jumpBackToMessage(id, text)}
+																/* 编辑并重发 (Transcript onEdit, previously unwired):
+																 * backfill the composer with the message text for
+																 * re-editing — same pendingEdit path as the revert
+																 * dock's 恢复到输入框 and the fork flow. */
+																onEdit={(_id, text) => setPendingEdit(text)}
+																onFork={(id, text, includeTarget) =>
+																	void forkFromMessage(id, text, includeTarget)
+																}
+																onLoadOlder={onLoadOlderStable}
+																loadingOlder={loadingOlder}
+																onRetry={(id, text) => void retryFromUserMessage(id, text)}
+																onSpeak={(text, id) => {
+																	// TTS read-aloud via the daemon's local Kokoro worker;
+																	// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。
+																	if (stopSpeakRef.current) {
+																		stopSpeakRef.current();
+																		setSpeakingId(null);
+																		return;
+																	}
+																	const entryId = id ?? null;
+																	stopSpeakRef.current = speak(
+																		text,
+																		rpc,
+																		{
+																			rate:
+																				typeof displaySettings["tts.rate"] === "number"
+																					? (displaySettings["tts.rate"] as number)
+																					: undefined,
+																		},
+																		activity => {
+																			if (activity.phase === "speaking") setSpeakingId(entryId);
+																			else if (
+																				activity.phase === "done" ||
+																				activity.phase === "stopped" ||
+																				activity.phase === "error"
+																			) {
+																				stopSpeakRef.current = null;
+																				setSpeakingId(prev => (prev === entryId ? null : prev));
+																			}
+																		},
+																	);
+																	setSpeakingId(entryId);
+																}}
+																speakingId={speakingId}
+																onStopSpeak={() => {
+																	stopSpeakRef.current?.();
+																	stopSpeakRef.current = null;
+																	setSpeakingId(null);
+																}}
+																onSaveImage={text => setSaveImageText(text)}
+																/* ZCode: avatars replace the 宿主/代理 gutter labels. */
+																userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
+																agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
+																/* Layer-1 branch topology: multi-child messages render a
+																 * switchable branch bar; off-path entries collapse. */
+																branchInfo={{
+																	childCount: new Map(
+																		[...branchChildren.entries()].map(([pid, kids]) => [
+																			pid,
+																			kids.length,
+																		]),
+																	),
+																	activePathIds,
+																	onSwitchBranch: switchBranch,
+																}}
+															/>
+														</CodeHighlightProvider>
+													</div>
+													{/* Jump-to-bottom (openchamber ScrollToBottomButton parity):
+													 * floats over the composer edge while scrolled up. */}
+													<JumpToBottomButton rootRef={transcriptRef} />
+													{/* Message-tree navigation (TUI tree-selector parity):
+													 * a floating searchable turn tree — jump to any
+													 * position in the conversation, or fork a new session
+													 * from any node (user nodes re-answer with the message
+													 * text; assistant/toolResult nodes continue from the
+													 * node). Anchored to the WRAP (not the outer column) so
+													 * the pause banner — which lives in the column above
+													 * the wrap — can never sit under it. */}
+													<MessageTreeButton
+														entries={snap?.entries ?? []}
+														transcriptRef={transcriptRef}
+														onFork={(entry, text, includeTarget) =>
+															void forkFromMessage(entry.id, text, includeTarget)
+														}
+														onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
+													/>
+													{/* In-message text selection actions (openchamber parity):
+													 * quote a snippet (not the whole message), copy, start a
+													 * new session from it, or append it to the workspace notes. */}
+													<SelectionToolbar
+														containerRef={transcriptRef}
+														onQuote={text => appendQuote(text)}
+														onAsk={(text, x, y) =>
+															window.dispatchEvent(
+																new CustomEvent("musepi-gui-ask", { detail: { text, x, y } }),
+															)
+														}
+														onCopy={text => void navigator.clipboard.writeText(text)}
+														onNewSession={text => onSubmitNewSession(text)}
+														onAddNote={text => {
+															// v1.19 parity: each "add to notes" becomes its own
+															// note (notes.create), never appended to the blob.
+															const cwd = store.cwd;
+															void rpc
+																.request("notes.create", { cwd, body: `> ${text}` })
+																.catch(() => {});
+														}}
+													/>
+													{/* Idle recap (TUI `※ recap:` status-line parity): the daemon
+													 * generates it after recap.idleSeconds of quiet; a rounded
+													 * floating card above the composer edge, foldable to one
+													 * line (click to expand/collapse), cleared by the next
+													 * wire activity or the dismiss button. */}
+													{snap?.recap && (
+														<div
+															className={`gui-recap-row${recapExpanded ? " gui-recap-row--expanded" : ""}`}
+															title={recapExpanded ? t("collapse") : t("expand")}
+															role="button"
+															onClick={() => setRecapExpanded(v => !v)}
+														>
+															<span className="gui-recap-prefix">※</span>
+															<span className="gui-recap-text">{snap.recap.text}</span>
+															<span className="gui-recap-time">{relTime(snap.recap.at)}</span>
+															<Icon
+																name="arrow-down-s"
+																className={`gui-recap-chevron${recapExpanded ? " gui-recap-chevron--open" : ""}`}
+															/>
+															<button
+																type="button"
+																className="gui-recap-dismiss"
+																title={t("dismiss")}
+																aria-label={t("dismiss")}
+																onClick={e => {
+																	e.stopPropagation();
+																	store?.dismissRecap();
+																}}
+															>
+																<Icon name="close" className="h-3 w-3" />
+															</button>
+														</div>
+													)}
+												</>
 											)}
 										</div>
 										{/* Turn-position rail (openchamber PromptNavigatorRail
@@ -1576,28 +1603,28 @@ export function ChatView({
 											/>
 										))}
 										{ask && onAskAnswer && (
-								<div className="gui-ask-float">
-									<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
-								</div>
-							)}
+											<div className="gui-ask-float">
+												<AskCard ask={ask} onAnswer={answer => onAskAnswer(answer)} />
+											</div>
+										)}
 										{/* Layer-1 session-tree nav chrome: breadcrumb path + fork hint
 										 * above the composer (root > … > leaf, click any segment to jump). */}
 										{currentLeafKey !== null && (
-										<SessionTreeNav
-											segments={breadcrumb}
-											activeLeafIsHistorical={leafChildren.length > 0}
-											activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("this node"))}
-											onJump={id => {
-												const entry = (snap?.entries ?? []).find(
-													e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
-												);
-												const ts =
-													typeof entry === "object" && entry !== null
-														? (entry as { timestamp?: unknown }).timestamp
-														: null;
-												if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
-											}}
-										/>
+											<SessionTreeNav
+												segments={breadcrumb}
+												activeLeafIsHistorical={leafChildren.length > 0}
+												activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("this node"))}
+												onJump={id => {
+													const entry = (snap?.entries ?? []).find(
+														e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+													);
+													const ts =
+														typeof entry === "object" && entry !== null
+															? (entry as { timestamp?: unknown }).timestamp
+															: null;
+													if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
+												}}
+											/>
 										)}
 										<Composer
 											working={snap?.working ?? false}
@@ -1612,7 +1639,7 @@ export function ChatView({
 											sessionId={store.sessionId}
 											cwd={store.cwd}
 											thinkingLevel={thinkingLevel}
-										thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
+											thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
 											onSetThinking={setThinking}
 											onModelChange={onComposerModelChange}
 											thinkingCeiling={thinkingCeiling}
@@ -1714,9 +1741,7 @@ export function ChatView({
 							// conversation context: prior turns are prepended so
 							// follow-ups see the same thread (ephemeralAsk is
 							// stateless — no transcript write).
-							const ctx = history
-								.map(h => `Q: ${h.question}\nA: ${h.answer}`)
-								.join("\n\n");
+							const ctx = history.map(h => `Q: ${h.question}\nA: ${h.answer}`).join("\n\n");
 							const promptText = ctx
 								? `Context:\n${ctx}\n\nNew question:\n${question}\n\nAnswer the new question in the context above.`
 								: question;
@@ -1727,23 +1752,23 @@ export function ChatView({
 								})
 								.then(res => (res?.replyText ? { replyText: res.replyText } : null));
 						}}
-							onBranch={async (question: string, replyText: string): Promise<boolean> => {
-								const sessionId = store?.sessionId;
-								if (!rpc || !sessionId) return true;
-								try {
-									const res = await rpc.request<{ ok?: boolean } | null>("session.btwBranch", {
-										sessionId,
-										question,
-										replyText,
-									});
-									// Promote = close the card; the new session appears
-									// in the sidebar (session list refreshes via tree).
-									if (res?.ok === true) setBtwQuestion(null);
-								} catch {
-									// daemon rejected (busy/guard) — keep the card open
-								}
-								return true;
-							}}
+						onBranch={async (question: string, replyText: string): Promise<boolean> => {
+							const sessionId = store?.sessionId;
+							if (!rpc || !sessionId) return true;
+							try {
+								const res = await rpc.request<{ ok?: boolean } | null>("session.btwBranch", {
+									sessionId,
+									question,
+									replyText,
+								});
+								// Promote = close the card; the new session appears
+								// in the sidebar (session list refreshes via tree).
+								if (res?.ok === true) setBtwQuestion(null);
+							} catch {
+								// daemon rejected (busy/guard) — keep the card open
+							}
+							return true;
+						}}
 						onClose={() => setBtwQuestion(null)}
 					/>
 				)}

@@ -1,28 +1,10 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
-import {
-	openExternalUrl,
-} from "../../lib/electron";
-import {
-	useConfirm,
-	usePrompt,
-} from "../../lib/prompt-dialog";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { openExternalUrl } from "../../lib/electron";
+import { useConfirm, usePrompt } from "../../lib/prompt-dialog";
+import type { RpcClient } from "../../lib/rpc";
+import { Icon } from "../../vendor/oc-icons";
 
 /** Read-only keyboard shortcut reference (openchamber parity). */
 interface GitAuthState {

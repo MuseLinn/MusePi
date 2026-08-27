@@ -379,7 +379,9 @@ function TodosSection({
 			<div className="flex items-center justify-between px-1 pt-1">
 				<span className="flex min-w-0 items-baseline gap-2">
 					<span className="gui-group-label px-2">{t("todo count items", { count: todos.length })}</span>
-					<span className="text-[11px] text-[var(--color-text-faint)]">{todoInput.length}/{TODO_TEXT_MAX}</span>
+					<span className="text-[11px] text-[var(--color-text-faint)]">
+						{todoInput.length}/{TODO_TEXT_MAX}
+					</span>
 				</span>
 				<button
 					type="button"
@@ -535,7 +537,13 @@ function PlanEditor({
 	return (
 		<div className="flex h-full min-h-0 flex-col gap-2 px-1 pt-1">
 			<div className="flex items-center gap-1.5">
-				<button type="button" className="gui-btn gui-btn--icon" onClick={onBack} title={t("back")} aria-label={t("back")}>
+				<button
+					type="button"
+					className="gui-btn gui-btn--icon"
+					onClick={onBack}
+					title={t("back")}
+					aria-label={t("back")}
+				>
 					<Icon name="arrow-left-s" className="h-3.5 w-3.5" />
 				</button>
 				<input
@@ -674,7 +682,9 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 	const needle = query.trim().toLowerCase();
 	const notesCount = notes ? notes.filter(n => !needle || n.body.toLowerCase().includes(needle)).length : 0;
 	const todosCount = todos.filter(t => !needle || t.text.toLowerCase().includes(needle)).length;
-	const plansCount = plans ? plans.filter(p => !needle || `${p.title} ${p.id}`.toLowerCase().includes(needle)).length : 0;
+	const plansCount = plans
+		? plans.filter(p => !needle || `${p.title} ${p.id}`.toLowerCase().includes(needle)).length
+		: 0;
 	// Follow the search to where the matches are: a query whose hits live in
 	// another section must not leave an empty list on screen.
 	useEffect(() => {
@@ -755,7 +765,13 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 					)}
 					{section === "todos" && <TodosSection todos={todos} query={query} onPersist={persistTodos} />}
 					{section === "plans" && planOpen && (
-						<PlanEditor rpc={rpc} cwd={cwd} plan={planOpen} onBack={() => setPlanOpen(null)} onChanged={loadPlans} />
+						<PlanEditor
+							rpc={rpc}
+							cwd={cwd}
+							plan={planOpen}
+							onBack={() => setPlanOpen(null)}
+							onChanged={loadPlans}
+						/>
 					)}
 					{section === "plans" && !planOpen && plans !== null && (
 						<PlansSection
@@ -769,11 +785,7 @@ export function NotesPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactN
 				</div>
 				{/* Section nav (openchamber v1.19: content left, sections right —
 				 * the same arrangement the files surface uses). */}
-				<nav
-					className="gui-knowledge-nav"
-					style={{ width: navW }}
-					aria-label={t("project knowledge")}
-				>
+				<nav className="gui-knowledge-nav" style={{ width: navW }} aria-label={t("project knowledge")}>
 					<div
 						className="gui-knowledge-nav-resize"
 						onPointerDown={onNavResizeStart}

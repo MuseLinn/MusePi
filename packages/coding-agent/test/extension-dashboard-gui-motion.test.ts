@@ -43,10 +43,7 @@ describe("loadAllExtensions — gui-motion packs", () => {
 		// Point the project-scope settings at the extension package root.
 		const projectAgentDir = getProjectAgentDir(projectDir);
 		await fs.mkdir(projectAgentDir, { recursive: true });
-		await fs.writeFile(
-			path.join(projectAgentDir, "settings.json"),
-			JSON.stringify({ extensions: [extRoot] }),
-		);
+		await fs.writeFile(path.join(projectAgentDir, "settings.json"), JSON.stringify({ extensions: [extRoot] }));
 
 		const settings = await Settings.init({ inMemory: true, cwd: projectDir });
 		initializeWithSettings(settings);

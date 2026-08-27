@@ -49,4 +49,3 @@ export const companion = {
 	"tool result arrived": "Tool result returned",
 	"sound palette": "Sound library",
 } as const satisfies Record<CompanionKey, string>;
-

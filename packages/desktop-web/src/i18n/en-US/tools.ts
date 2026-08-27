@@ -305,7 +305,8 @@ export const tools = {
 	"browser no history": "No browsing history",
 	"browser type or paste url": "Enter a URL, or pick from recent visits below",
 	"browser start title": "Browse the web",
-	"browser start subtitle": "Shares one browser instance with the agent: agent actions are visible live, and login state is shared.",
+	"browser start subtitle":
+		"Shares one browser instance with the agent: agent actions are visible live, and login state is shared.",
 	"browser local only hint": "Local-only login · port {port}",
 	"public internet only": "Public internet only",
 	"public internet only description":
@@ -487,13 +488,15 @@ export const tools = {
 	"shake context": "Shake context",
 	"fresh provider": "Reset provider stream",
 	"clear session context": "Clear session context",
-	"shake result {dropped} blocks {tokens} tokens": "Shake result: dropped {dropped} tool results, freed {tokens} tokens",
+	"shake result {dropped} blocks {tokens} tokens":
+		"Shake result: dropped {dropped} tool results, freed {tokens} tokens",
 	"fresh result {closed} sessions": "Closed {closed} provider session(s)",
 	"clear result {dropped} messages": "Cleared {dropped} message(s)",
 	"confirm clear context": "Clear the session context? This cannot be undone.",
 	// ── Advisor (settings → 智能体 → 顾问) ────────────────────────────────
 	"advisor settings": "Advisor settings",
-	"advisor settings description": "Advisor (WATCHDOG.yml passive-review role) settings, same source as the terminal /advisor command",
+	"advisor settings description":
+		"Advisor (WATCHDOG.yml passive-review role) settings, same source as the terminal /advisor command",
 	"advisor enabled": "Advisor enabled",
 	"advisor enabled desc": "A second model passively reviews each turn of the main agent and injects notes",
 	"advisor configured": "Configured",
@@ -509,10 +512,10 @@ export const tools = {
 	"no model assigned": "No model assigned",
 	// ── Computer permissions ────────────────────────────────────────────
 	"screen recording": "Screen Recording",
-	"accessibility": "Accessibility",
+	accessibility: "Accessibility",
 	"input monitoring": "Input Monitoring",
-	"granted": "Granted",
-	"authorize": "Authorize",
+	granted: "Granted",
+	authorize: "Authorize",
 	"computer permissions": "Computer Permissions",
 	"computer permissions hint": "Enable the following permissions to let MusePi assist you across your computer",
 	"permission screen recording description": "Used to support screen captures and visual context",
@@ -520,7 +523,8 @@ export const tools = {
 	"permission input description": "Used to support input monitoring",
 	"refresh permissions": "Refresh",
 	"computer permissions overlay title": "Computer Use Requires Permissions",
-	"computer permissions overlay description": "MusePi needs the following permissions for Computer Use. Already granted ones won't be shown again.",
+	"computer permissions overlay description":
+		"MusePi needs the following permissions for Computer Use. Already granted ones won't be shown again.",
 	"overlay authorize": "Authorize",
 	"overlay later": "Later",
 	"computer permissions missing": "Insufficient permissions — Computer Use is unavailable",

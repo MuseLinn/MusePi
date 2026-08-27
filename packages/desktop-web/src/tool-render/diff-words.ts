@@ -60,7 +60,10 @@ function tokenKey(token: string): string {
  * removed / equal tokens. Uses a simple DP LCS backtrack (n·m bounded by
  * line length — typically < 2 000 cells).
  */
-function tokenRuns(oldTokens: string[], newTokens: string[]): Array<{ value: string; added?: boolean; removed?: boolean }> {
+function tokenRuns(
+	oldTokens: string[],
+	newTokens: string[],
+): Array<{ value: string; added?: boolean; removed?: boolean }> {
 	const n = oldTokens.length;
 	const m = newTokens.length;
 	const oldKeys = oldTokens.map(tokenKey);
@@ -72,21 +75,14 @@ function tokenRuns(oldTokens: string[], newTokens: string[]): Array<{ value: str
 	}
 	for (let i = n - 1; i >= 0; i--) {
 		for (let j = m - 1; j >= 0; j--) {
-			dp[i]![j] =
-				oldKeys[i] === newKeys[j]
-					? dp[i + 1]![j + 1]! + 1
-					: Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
+			dp[i]![j] = oldKeys[i] === newKeys[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!);
 		}
 	}
 	const runs: Array<{ value: string; added?: boolean; removed?: boolean }> = [];
 	const pushRun = (tokens: readonly string[], added?: boolean, removed?: boolean): void => {
 		const last = runs[runs.length - 1];
 		const value = wordJoin(tokens);
-		if (
-			last &&
-			Boolean(last.added) === Boolean(added) &&
-			Boolean(last.removed) === Boolean(removed)
-		) {
+		if (last && Boolean(last.added) === Boolean(added) && Boolean(last.removed) === Boolean(removed)) {
 			// A merged run is not the first token of the joined sequence —
 			// strip leading whitespace like wordJoin would for tokens after
 			// the first (jsdiff builds values from the whole run's tokens).
@@ -214,8 +210,7 @@ function dedupeWhitespace(
 				changes[endKeep]!.value = delFullWs + changes[endKeep]!.value.slice(endWs.length);
 				changes[deletion]!.value = changes[deletion]!.value.slice(delFullWs.length);
 			} else {
-				changes[endKeep]!.value =
-					changes[endKeep]!.value.slice(endWs.length) + changes[deletion]!.value;
+				changes[endKeep]!.value = changes[endKeep]!.value.slice(endWs.length) + changes[deletion]!.value;
 				changes[deletion]!.value = "";
 			}
 		} else if (startKeep != null && endKeep == null) {
@@ -267,11 +262,7 @@ export function diffWords(oldText: string, newText: string): WordDiffPart[] {
 	const merged: WordDiffPart[] = [];
 	for (const run of runs) {
 		const prev = merged[merged.length - 1];
-		if (
-			prev &&
-			Boolean(prev.added) === Boolean(run.added) &&
-			Boolean(prev.removed) === Boolean(run.removed)
-		) {
+		if (prev && Boolean(prev.added) === Boolean(run.added) && Boolean(prev.removed) === Boolean(run.removed)) {
 			prev.value += run.value;
 		} else {
 			merged.push({ ...run });

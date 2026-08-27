@@ -1,5 +1,5 @@
-import { Marked } from "@musepi/pi-utils/marked";
 import type { Tokens } from "@musepi/pi-utils/marked";
+import { Marked } from "@musepi/pi-utils/marked";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -9,7 +9,14 @@ import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
-import { ensureMermaidFallbackObserver, MERMAID_FALLBACK_DEBOUNCE_MS, mermaidFallbackHtml, mermaidMode, renderMermaidAsyncHtml, renderMermaidHtml } from "./mermaid";
+import {
+	ensureMermaidFallbackObserver,
+	MERMAID_FALLBACK_DEBOUNCE_MS,
+	mermaidFallbackHtml,
+	mermaidMode,
+	renderMermaidAsyncHtml,
+	renderMermaidHtml,
+} from "./mermaid";
 import { graphemeSpans } from "./reveal";
 import { useStreamingReveal } from "./use-streaming-reveal";
 
@@ -171,8 +178,7 @@ function extractTableData(table: HTMLTableElement): { headers: string[]; rows: s
 	return { headers, rows };
 }
 
-const escapeCsv = (value: string): string =>
-	/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const escapeCsv = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
 
 function tableToCSV({ headers, rows }: { headers: string[]; rows: string[][] }): string {
 	return [headers, ...rows].map(row => row.map(escapeCsv).join(",")).join("\n");
@@ -638,7 +644,9 @@ export const Markdown = memo(function Markdown({
 			// a data-zoom fraction so repeated clicks compound 1.2× / ÷1.2.
 			// svg has max-width:100% in CSS, which would pin the zoomed
 			// layout — clear it while zoomed (restored at 1×).
-			const svgWrap = mermaidZoom.closest<HTMLElement>(".tr-mermaid-block")?.querySelector<HTMLElement>(".tr-mermaid");
+			const svgWrap = mermaidZoom
+				.closest<HTMLElement>(".tr-mermaid-block")
+				?.querySelector<HTMLElement>(".tr-mermaid");
 			if (!svgWrap) return;
 			const dir = mermaidZoom.dataset.mermaidZoom;
 			const cur = Number.parseFloat(svgWrap.dataset.zoom ?? "1") || 1;
@@ -689,9 +697,12 @@ export const Markdown = memo(function Markdown({
 			if (!table) return;
 			const data = extractTableData(table);
 			const fmt = tableCopy.dataset.tableCopy ?? "csv";
-			const text =
-				fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
-			const hash = tableCopy.closest<HTMLElement>(".tr-table")?.querySelector("[data-copy-hash]")?.getAttribute("data-copy-hash") ?? "";
+			const text = fmt === "tsv" ? tableToTSV(data) : fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
+			const hash =
+				tableCopy
+					.closest<HTMLElement>(".tr-table")
+					?.querySelector("[data-copy-hash]")
+					?.getAttribute("data-copy-hash") ?? "";
 			if (!text || hash === "") return;
 			void navigator.clipboard.writeText(text).then(() => {
 				setCopiedHash(hash);
@@ -706,7 +717,11 @@ export const Markdown = memo(function Markdown({
 			const data = extractTableData(table);
 			const fmt = tableDl.dataset.tableDownload ?? "csv";
 			const content = fmt === "markdown" ? tableToMarkdown(data) : tableToCSV(data);
-			downloadBlob(fmt === "markdown" ? "table.md" : "table.csv", content, fmt === "markdown" ? "text/markdown" : "text/csv");
+			downloadBlob(
+				fmt === "markdown" ? "table.md" : "table.csv",
+				content,
+				fmt === "markdown" ? "text/markdown" : "text/csv",
+			);
 			return;
 		}
 		const btn = target.closest<HTMLElement>(".tr-code-copy, .tr-math-copy");
@@ -848,32 +863,30 @@ export const Markdown = memo(function Markdown({
 	const effectCls = streaming ? ` gui-chat-effect-${effect}` : "";
 	return (
 		<>
-			<div
-				ref={rootRef}
-				className={`tr-md${streaming ? " tr-md--streaming" : ""}${effectCls}`}
-				onClick={onCopy}
-			>
-			<div dangerouslySetInnerHTML={{ __html: body }} />
-			{/* Stable streaming-tail container: React never rebuilds this
-			 * element's children — the per-char spans are appended by the
-			 * layout effect above, so each char's entrance animation plays
-			 * exactly once. Absent when settled (the tail is then part of
-			 * the markdown html above). */}
-			{streaming && render.tail !== null && <div ref={tailRef} className="tr-md-streaming-tail" aria-live="polite" />}
-			{mermaidFull && (
-				<MermaidLightbox
-					value={mermaidFull}
-					zoom={mermaidFsZoom}
-					onZoom={setMermaidFsZoom}
-					onClose={() => setMermaidFull(null)}
-				/>
+			<div ref={rootRef} className={`tr-md${streaming ? " tr-md--streaming" : ""}${effectCls}`} onClick={onCopy}>
+				<div dangerouslySetInnerHTML={{ __html: body }} />
+				{/* Stable streaming-tail container: React never rebuilds this
+				 * element's children — the per-char spans are appended by the
+				 * layout effect above, so each char's entrance animation plays
+				 * exactly once. Absent when settled (the tail is then part of
+				 * the markdown html above). */}
+				{streaming && render.tail !== null && (
+					<div ref={tailRef} className="tr-md-streaming-tail" aria-live="polite" />
+				)}
+				{mermaidFull && (
+					<MermaidLightbox
+						value={mermaidFull}
+						zoom={mermaidFsZoom}
+						onZoom={setMermaidFsZoom}
+						onClose={() => setMermaidFull(null)}
+					/>
+				)}
+			</div>
+			{truncated && (
+				<button type="button" className="tr-long-expand" onClick={() => setLongExpanded(true)}>
+					{t("expand full message")}（{fullText.length.toLocaleString()}）
+				</button>
 			)}
-		</div>
-		{truncated && (
-			<button type="button" className="tr-long-expand" onClick={() => setLongExpanded(true)}>
-				{t("expand full message")}（{fullText.length.toLocaleString()}）
-			</button>
-		)}
-	</>
+		</>
 	);
 });

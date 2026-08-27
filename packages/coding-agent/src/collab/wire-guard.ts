@@ -9,8 +9,8 @@
  */
 import type {
 	AgentEvent as WireAgentEvent,
-	SessionEntry as WireSessionEntry,
 	WireCustomMessage,
+	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
 import type { AgentSessionEvent } from "../session/agent-session-events";
 import type { SessionEntry as StoredSessionEntry } from "../session/session-entries";

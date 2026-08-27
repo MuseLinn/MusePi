@@ -60,5 +60,9 @@ const parts = built.systemPrompt;
 const part0 = parts[0] ?? "";
 const rest = parts.slice(1).join("\n");
 console.log(`system prompt parts: ${parts.length}`);
-console.log(`SYSTEM PROMPT tokens (part0, no skills): ${new Tokenizer(undefined).countTokens(part0)}  (bytes=${bytes(part0)})`);
-console.log(`SYSTEM CONTEXT tokens (parts[1..]): ${new Tokenizer(undefined).countTokens(rest)}  (bytes=${bytes(rest)})`);
+console.log(
+	`SYSTEM PROMPT tokens (part0, no skills): ${new Tokenizer(undefined).countTokens(part0)}  (bytes=${bytes(part0)})`,
+);
+console.log(
+	`SYSTEM CONTEXT tokens (parts[1..]): ${new Tokenizer(undefined).countTokens(rest)}  (bytes=${bytes(rest)})`,
+);

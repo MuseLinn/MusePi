@@ -216,7 +216,7 @@ export const fixtureEntries: SessionEntry[] = [
 			content: [
 				{
 					type: "text",
-					text: "--- a/src/hello.ts\n+++ b/src/hello.ts\n@@ -1,3 +1,4 @@\n export function greet(name: string): string {\n-  return `Hello, ${name}!`;\n+  return `Hi, ${name}!`;\n }\n+export const version = \"1.2.0\";",
+					text: '--- a/src/hello.ts\n+++ b/src/hello.ts\n@@ -1,3 +1,4 @@\n export function greet(name: string): string {\n-  return `Hello, ${name}!`;\n+  return `Hi, ${name}!`;\n }\n+export const version = "1.2.0";',
 				},
 			],
 			isError: false,

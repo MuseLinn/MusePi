@@ -1,12 +1,6 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import {
-	shortcutLabel,
-} from "../../lib/shortcuts";
-import type {
-	ReactNode,
-} from "react";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { shortcutLabel } from "../../lib/shortcuts";
 
 export function ShortcutsSection(): ReactNode {
 	const rows: { keys: string; action: string }[] = [

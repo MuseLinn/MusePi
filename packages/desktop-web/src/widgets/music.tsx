@@ -29,9 +29,27 @@ export function musicDefaults(): Record<string, unknown> {
 		mode: "78RPM",
 		volume: 0.8,
 		queue: [
-			{ id: "78_valse-in-d-flat-major_sergei-rachmaninoff-chopin_gbia0012582a", year: "1921", title: "Valse in D Flat Major", artist: "Sergei Rachmaninoff · Chopin", file: "Valse in D Flat Major - Sergei Rachmaninoff-restored.mp3" },
-			{ id: "78_valse-in-a-flat-op-42_sergei-rachmaninoff-chopin_gbia0307222a", year: "1919", title: "Valse in A Flat, Op. 42", artist: "Sergei Rachmaninoff · Chopin", file: "Valse in A Flat Op. 42 - SERGEI RACHMANINOFF.mp3" },
-			{ id: "78_mazurka-in-c-sharp-minor_sergei-rachmaninoff-chopin_gbia0015772a", year: "1923", title: "Mazurka in C Sharp Minor", artist: "Sergei Rachmaninoff · Chopin", file: "Mazurka (in C Sharp Minor) - Sergei Rachmaninoff-restored.mp3" },
+			{
+				id: "78_valse-in-d-flat-major_sergei-rachmaninoff-chopin_gbia0012582a",
+				year: "1921",
+				title: "Valse in D Flat Major",
+				artist: "Sergei Rachmaninoff · Chopin",
+				file: "Valse in D Flat Major - Sergei Rachmaninoff-restored.mp3",
+			},
+			{
+				id: "78_valse-in-a-flat-op-42_sergei-rachmaninoff-chopin_gbia0307222a",
+				year: "1919",
+				title: "Valse in A Flat, Op. 42",
+				artist: "Sergei Rachmaninoff · Chopin",
+				file: "Valse in A Flat Op. 42 - SERGEI RACHMANINOFF.mp3",
+			},
+			{
+				id: "78_mazurka-in-c-sharp-minor_sergei-rachmaninoff-chopin_gbia0015772a",
+				year: "1923",
+				title: "Mazurka in C Sharp Minor",
+				artist: "Sergei Rachmaninoff · Chopin",
+				file: "Mazurka (in C Sharp Minor) - Sergei Rachmaninoff-restored.mp3",
+			},
 		],
 	};
 }
@@ -105,7 +123,9 @@ export function MusicCard({
 				return;
 			}
 			try {
-				const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+				const AC =
+					window.AudioContext ??
+					(window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
 				if (!AC) {
 					analyserDead = true;
 					return;
@@ -154,7 +174,7 @@ export function MusicCard({
 			for (let i = 0; i < BARS; i++) {
 				let target: number;
 				if (liveData) {
-					const idx = Math.min(freq!.length - 1, Math.floor(Math.pow(i / (BARS - 1), 1.7) * freq!.length * 0.72));
+					const idx = Math.min(freq!.length - 1, Math.floor((i / (BARS - 1)) ** 1.7 * freq!.length * 0.72));
 					target = 0.05 + 0.93 * (freq![idx] / 255);
 				} else if (isPlaying) {
 					const c = (i / (BARS - 1)) * 2 - 1;
@@ -184,7 +204,14 @@ export function MusicCard({
 					bass = isPlaying ? (vals[2] + vals[3]) / 2 : 0.04;
 				}
 				if (isPlaying) {
-					const glow = vctx.createRadialGradient(W / 2, baseY, 0, W / 2, baseY, Math.max(10, W * (0.24 + bass * 0.42)));
+					const glow = vctx.createRadialGradient(
+						W / 2,
+						baseY,
+						0,
+						W / 2,
+						baseY,
+						Math.max(10, W * (0.24 + bass * 0.42)),
+					);
 					glow.addColorStop(0, `rgba(145,212,255,${(0.1 + bass * 0.24).toFixed(3)})`);
 					glow.addColorStop(1, "rgba(145,212,255,0)");
 					vctx.fillStyle = glow;
@@ -325,7 +352,9 @@ export function MusicCard({
 			<section className="gui-widget-music-left">
 				<div className="gui-widget-music-screen">
 					<div className="gui-widget-music-scrtop">
-						<span>{brand} · {mode}</span>
+						<span>
+							{brand} · {mode}
+						</span>
 						<span className="gui-widget-music-dots">
 							<i />
 							<i className={playing ? "gui-widget-music-live" : ""} />
@@ -355,28 +384,65 @@ export function MusicCard({
 						</div>
 						<div className="gui-widget-music-badges">
 							<span className="gui-widget-music-badge">
-								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2.5" /></svg>
+								<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+									<circle cx="12" cy="12" r="9" />
+									<circle cx="12" cy="12" r="2.5" />
+								</svg>
 								HQ
 							</span>
-							{currentTrack?.year && <span className="gui-widget-music-badge gui-widget-music-badge--acc">{currentTrack.year}</span>}
+							{currentTrack?.year && (
+								<span className="gui-widget-music-badge gui-widget-music-badge--acc">{currentTrack.year}</span>
+							)}
 						</div>
 					</div>
 				</div>
 				<div className="gui-widget-music-transport">
-					<button type="button" className="gui-widget-music-tbtn gui-widget-music-tbtn--side" onClick={() => step(-1)} aria-label="上一首">
-						<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7zM20 5v14L9 12z" /></svg>
+					<button
+						type="button"
+						className="gui-widget-music-tbtn gui-widget-music-tbtn--side"
+						onClick={() => step(-1)}
+						aria-label="上一首"
+					>
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path d="M7 5h2v14H7zM20 5v14L9 12z" />
+						</svg>
 					</button>
-					<button type="button" className="gui-widget-music-tbtn gui-widget-music-tbtn--play" onClick={toggle} aria-label="播放/暂停">
-						<svg viewBox="0 0 24 24" fill="currentColor"><path d={playing ? ICON_PAUSE : ICON_PLAY} /></svg>
+					<button
+						type="button"
+						className="gui-widget-music-tbtn gui-widget-music-tbtn--play"
+						onClick={toggle}
+						aria-label="播放/暂停"
+					>
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path d={playing ? ICON_PAUSE : ICON_PLAY} />
+						</svg>
 					</button>
-					<button type="button" className="gui-widget-music-tbtn gui-widget-music-tbtn--side" onClick={() => step(1)} aria-label="下一首">
-						<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5h2v14h-2zM4 5l11 7-11 7z" /></svg>
+					<button
+						type="button"
+						className="gui-widget-music-tbtn gui-widget-music-tbtn--side"
+						onClick={() => step(1)}
+						aria-label="下一首"
+					>
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path d="M15 5h2v14h-2zM4 5l11 7-11 7z" />
+						</svg>
 					</button>
 					<div className="gui-widget-music-volwrap">
-						<button type="button" className={`gui-widget-music-vbtn${muted ? " gui-widget-music-vbtn--muted" : ""}`} onClick={onMute} aria-label="静音">
+						<button
+							type="button"
+							className={`gui-widget-music-vbtn${muted ? " gui-widget-music-vbtn--muted" : ""}`}
+							onClick={onMute}
+							aria-label="静音"
+						>
 							<svg viewBox="0 0 24 24" fill="currentColor">
 								<path d="M4 9v6h4l5 5V4L8 9H4z" />
-								<path d={muted ? "M16 9l6 6M22 9l-6 6" : "M16 8.5a4 4 0 010 7"} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+								<path
+									d={muted ? "M16 9l6 6M22 9l-6 6" : "M16 8.5a4 4 0 010 7"}
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+									strokeLinecap="round"
+								/>
 							</svg>
 						</button>
 						<input
@@ -397,32 +463,65 @@ export function MusicCard({
 			<section className="gui-widget-music-right">
 				<div className="gui-widget-music-qhead">
 					<h2>播放队列</h2>
-					<button type="button" className="gui-widget-music-menu" aria-label="菜单" onClick={() => setQueueScroll(q => q + 1)}>
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+					<button
+						type="button"
+						className="gui-widget-music-menu"
+						aria-label="菜单"
+						onClick={() => setQueueScroll(q => q + 1)}
+					>
+						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+							<path d="M4 7h16M4 12h16M4 17h16" />
+						</svg>
 					</button>
 				</div>
 				<button type="button" className="gui-widget-music-qload" onClick={() => queue.length && select(0, true)}>
-					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+						<path d="M12 5v14M5 12h14" />
+					</svg>
 					从头播放队列
 				</button>
 				<div className="gui-widget-music-qlist" key={queueScroll}>
 					{queue.map((t, i) => (
-						<button key={`${t.id ?? t.title}-${i}`} type="button" className={`gui-widget-music-qitem${i === current ? " gui-widget-music-qitem--on" : ""}`} onClick={() => select(i, true)}>
-							<span className="gui-widget-music-qidx">{i < 9 ? "0" : ""}{i + 1}</span>
+						<button
+							key={`${t.id ?? t.title}-${i}`}
+							type="button"
+							className={`gui-widget-music-qitem${i === current ? " gui-widget-music-qitem--on" : ""}`}
+							onClick={() => select(i, true)}
+						>
+							<span className="gui-widget-music-qidx">
+								{i < 9 ? "0" : ""}
+								{i + 1}
+							</span>
 							{t.id ? (
-								<img className="gui-widget-music-qthumb" loading="lazy" alt="" src={thumbUrl(t.id)} onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }} />
+								<img
+									className="gui-widget-music-qthumb"
+									loading="lazy"
+									alt=""
+									src={thumbUrl(t.id)}
+									onError={e => {
+										(e.currentTarget as HTMLImageElement).style.visibility = "hidden";
+									}}
+								/>
 							) : (
 								<span className="gui-widget-music-qthumb gui-widget-music-qthumb--blank" />
 							)}
 							<span className="gui-widget-music-qmeta">
 								<b>{t.title}</b>
 								<span>
-									<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>
+									<svg viewBox="0 0 24 24" fill="currentColor">
+										<path d="M9 18V5l10-2v13" />
+										<circle cx="6" cy="18" r="3" />
+										<circle cx="16" cy="16" r="3" />
+									</svg>
 									{t.artist}
 								</span>
 							</span>
 							<span className="gui-widget-music-qtag">
-								<span className="gui-widget-music-eq"><i /><i /><i /></span>
+								<span className="gui-widget-music-eq">
+									<i />
+									<i />
+									<i />
+								</span>
 								{t.year}
 							</span>
 						</button>

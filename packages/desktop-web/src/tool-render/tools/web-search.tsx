@@ -1,10 +1,10 @@
 /** `web_search` — provider-backed web search with synthesized answer and sources. */
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode, useMemo } from "react";
+import { escapeHtml } from "../../components/transcript/highlight.js";
 import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Kv, KvGrid, Note, ResultText, useHighlight } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, normalizeWs, num, resultTextOf, str, truncate } from "../util";
-import { escapeHtml } from "../../components/transcript/highlight.js";
 
 function getDomain(url: string): string {
 	try {
@@ -127,23 +127,26 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 
 	// aicss web-search: while the search runs, show a shimmering query
 	// header with skeleton source rows instead of the empty result block.
-	const searching = running && !response ? (
-		<div className="tr-search-placeholder">
-			<div className="tr-search-shimmer" aria-hidden="true" />
-			<div className="tr-search-ph-title">{t("searching")}</div>
-			{query && <div className="tr-search-ph-query">“{query.length > 140 ? `${query.slice(0, 140)}…` : query}”</div>}
-			<div className="tr-search-ph-sources" aria-hidden="true">
-				{Array.from({ length: 3 }, (_, i) => (
-					// Static skeleton rows — index is their identity.
-					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
-					<div key={i} className="tr-search-ph-source">
-						<span className="tr-search-ph-line" />
-						<span className="tr-search-ph-line tr-search-ph-line--dim" />
-					</div>
-				))}
+	const searching =
+		running && !response ? (
+			<div className="tr-search-placeholder">
+				<div className="tr-search-shimmer" aria-hidden="true" />
+				<div className="tr-search-ph-title">{t("searching")}</div>
+				{query && (
+					<div className="tr-search-ph-query">“{query.length > 140 ? `${query.slice(0, 140)}…` : query}”</div>
+				)}
+				<div className="tr-search-ph-sources" aria-hidden="true">
+					{Array.from({ length: 3 }, (_, i) => (
+						// Static skeleton rows — index is their identity.
+						// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
+						<div key={i} className="tr-search-ph-source">
+							<span className="tr-search-ph-line" />
+							<span className="tr-search-ph-line tr-search-ph-line--dim" />
+						</div>
+					))}
+				</div>
 			</div>
-		</div>
-	) : null;
+		) : null;
 
 	return (
 		<>

@@ -1,12 +1,6 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import type { RpcClient } from "../../lib/rpc";
 import { SchemaTabSection } from "./schema";
 
 /** Settings → Files & LSP: every setting with ui metadata on the daemon's

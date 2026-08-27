@@ -674,11 +674,7 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				if (ids.length === 0) {
 					await runtime.output(t("preset list empty"));
 				} else {
-					await runtime.output(
-						ids
-							.map(id => (id === current ? `* ${id}` : `  ${id}`))
-							.join("\n"),
-					);
+					await runtime.output(ids.map(id => (id === current ? `* ${id}` : `  ${id}`)).join("\n"));
 				}
 				return commandConsumed();
 			}

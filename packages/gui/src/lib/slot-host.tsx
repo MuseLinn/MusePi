@@ -24,25 +24,25 @@ import type { RpcClient } from "./rpc";
  *  EXTENSION_SLOT_DECLARATION.exact order: [panel.right, rail.right, settings.extensions, composer.dock, composer.left, composer.right] */
 export const SETTINGS_EXTENSION_SLOT = EXTENSION_SLOT_DECLARATION.exact[2]; // "settings.extensions"
 /** Right-side workspace panel slot. */
-export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[0];       // "panel.right"
+export const RIGHT_PANEL_SLOT = EXTENSION_SLOT_DECLARATION.exact[0]; // "panel.right"
 /** Right-edge 44px icon rail slot. */
-export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1];        // "rail.right"
+export const RIGHT_RAIL_SLOT = EXTENSION_SLOT_DECLARATION.exact[1]; // "rail.right"
 /** 内核级 slot 命名空间(P1 架构开放):slot 名是开放命名空间,前缀决定挂载位置。 */
 export const PANEL_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[0]; // "panel.tab."
 export const SETTINGS_TAB_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[1]; // "settings.tab."
-export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2];    // "rail."
+export const RAIL_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[2]; // "rail."
 /** Keyed settings card slot. */
 export const SETTINGS_ITEM_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[3]; // "settings.item."
 /** 单行偏好槽。 */
 export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4]; // "settings.action."
 /** Composer 座位槽。 */
-export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3];     // "composer.dock"
-export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4];     // "composer.left"
-export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5];    // "composer.right"
+export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3]; // "composer.dock"
+export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4]; // "composer.left"
+export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5]; // "composer.right"
 /** transcript.node seat slot —— DSH `conversation.chat.node` 粒度:单一
  *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
  *  都是该 seat 的节点 kind,而非独立槽。 */
-export const TRANSCRIPT_NODE_SLOT = EXTENSION_SLOT_DECLARATION.exact[6];   // "transcript.node"
+export const TRANSCRIPT_NODE_SLOT = EXTENSION_SLOT_DECLARATION.exact[6]; // "transcript.node"
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
@@ -50,7 +50,9 @@ export const TRANSCRIPT_NODE_SLOT = EXTENSION_SLOT_DECLARATION.exact[6];   // "t
  *  Values derived from the collab-proto single source of truth. */
 export const GUI_SLOT_HOSTS = {
 	exact: EXTENSION_SLOT_DECLARATION.exact.map(s => s as string) as unknown as typeof EXTENSION_SLOT_DECLARATION.exact,
-	prefixes: EXTENSION_SLOT_DECLARATION.prefixes.map(s => s as string) as unknown as typeof EXTENSION_SLOT_DECLARATION.prefixes,
+	prefixes: EXTENSION_SLOT_DECLARATION.prefixes.map(
+		s => s as string,
+	) as unknown as typeof EXTENSION_SLOT_DECLARATION.prefixes,
 } as const;
 
 export interface SlotComponent {
@@ -308,10 +310,7 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
  *  的组件中挑出声明处理该 kind 的。无 entryKinds 的组件不参与按 kind 派发
  *  (它面向其它精确槽位)。命中列表为空 -> seat 回退到内建渲染 (DSH fallback);
  *  命中 -> 命中组件"拥有"该节点渲染(可包含 children 基座做增强或完全自绘)。 */
-export function selectTranscriptNodeComponents(
-	components: readonly SlotComponent[],
-	kind: string,
-): SlotComponent[] {
+export function selectTranscriptNodeComponents(components: readonly SlotComponent[], kind: string): SlotComponent[] {
 	return components
 		.filter(c => (c.entryKinds?.includes(kind) ?? false) === true)
 		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

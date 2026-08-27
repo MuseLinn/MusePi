@@ -32,7 +32,11 @@ const EMPTY: ModeToggleState = {
 function parseModes(res: unknown): ModeToggleState {
 	const r = (res ?? {}) as Record<string, unknown>;
 	const vision = (r.vision ?? {}) as { mode?: string; active?: boolean; model?: string | null };
-	const prewalk = (r.prewalk ?? {}) as { enabled?: boolean; target?: { id: string } | null; thinkingLevel?: string | null };
+	const prewalk = (r.prewalk ?? {}) as {
+		enabled?: boolean;
+		target?: { id: string } | null;
+		thinkingLevel?: string | null;
+	};
 	return {
 		fastModeEnabled: r.fastModeEnabled === true,
 		fastModeActive: r.fastModeActive === true,
@@ -140,7 +144,8 @@ export function useModeToggles(
 					mode,
 				})
 				.then(res => {
-					if (res) setState(prev => ({ ...prev, vision: { mode: res.mode, active: res.active, model: res.model } }));
+					if (res)
+						setState(prev => ({ ...prev, vision: { mode: res.mode, active: res.active, model: res.model } }));
 				})
 				.catch(() => {});
 		},
@@ -152,10 +157,10 @@ export function useModeToggles(
 		// One-shot arm with the fast small model (@smol role alias), the
 		// same default the TUI /prewalk uses.
 		void rpc
-			.request<{ armed: boolean; prewalk?: { enabled: boolean; target?: { id: string } | null; thinkingLevel?: string | null } }>(
-				"session.armPrewalk",
-				{ sessionId, model: "@smol" },
-			)
+			.request<{
+				armed: boolean;
+				prewalk?: { enabled: boolean; target?: { id: string } | null; thinkingLevel?: string | null };
+			}>("session.armPrewalk", { sessionId, model: "@smol" })
 			.then(res => {
 				if (!res) return;
 				setState(prev => ({

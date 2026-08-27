@@ -3,8 +3,13 @@ import { WidgetErrorBoundary } from "@musepi/desktop-web/src/widgets/error-bound
 import { WidgetFit } from "@musepi/desktop-web/src/widgets/fit";
 import { type BoardWidget, widgetDef } from "@musepi/desktop-web/src/widgets/registry";
 import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
-import { executeWidgetTask, isTaskDue, runTimeString, type TaskRunResult } from "@musepi/desktop-web/src/widgets/task-run";
-import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import {
+	executeWidgetTask,
+	isTaskDue,
+	runTimeString,
+	type TaskRunResult,
+} from "@musepi/desktop-web/src/widgets/task-run";
+import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -931,7 +936,10 @@ export function BoardPage({
 		if (!board) return;
 		const nextBoards = boardsRef.current.map(b =>
 			b.id === board.id
-				? { ...b, widgets: b.widgets.map(x => (x.id === widgetId ? { ...x, data: { ...x.data, ...dataPatch } } : x)) }
+				? {
+						...b,
+						widgets: b.widgets.map(x => (x.id === widgetId ? { ...x, data: { ...x.data, ...dataPatch } } : x)),
+					}
 				: b,
 		);
 		persist(nextBoards);
@@ -941,7 +949,11 @@ export function BoardPage({
 		const w = activeRef.current?.widgets.find(x => x.id === widgetId);
 		if (!w || !hasTask(w.data)) return;
 		const t = w.data.task as WidgetTask;
-		const next: WidgetTask = { ...t, lastRunAt: Date.now(), runs: [{ time: runTimeString(new Date()), success: result.success }, ...t.runs].slice(0, 12) };
+		const next: WidgetTask = {
+			...t,
+			lastRunAt: Date.now(),
+			runs: [{ time: runTimeString(new Date()), success: result.success }, ...t.runs].slice(0, 12),
+		};
 		persistWidgetData(widgetId, { ...result.data, task: next });
 	};
 	/** First-sight baseline for a scheduled task (no run recorded) — sets the
@@ -1038,9 +1050,7 @@ export function BoardPage({
 						return {
 							...b,
 							widgets: b.widgets.map(w =>
-								patchById[w.id] !== undefined
-									? { ...w, data: { ...w.data, ...patchById[w.id] } }
-									: w,
+								patchById[w.id] !== undefined ? { ...w, data: { ...w.data, ...patchById[w.id] } } : w,
 							),
 						};
 					});

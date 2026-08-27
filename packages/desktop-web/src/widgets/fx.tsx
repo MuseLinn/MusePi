@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { CharTexture } from "./texture";
 import { SlidingNumber } from "../lib/sliding-number.js";
 import { widgetFetch } from "./fetch";
+import { CharTexture } from "./texture";
 
 /**
  * Live FX card — ported from the kimiwork "实时汇率" widget
@@ -220,19 +220,23 @@ export function FxCard({
 							<span className="gui-fx-pair">{r.code} / CNY</span>
 							<span className="gui-fx-unit">{r.note}</span>
 						</div>
-						<div className="gui-fx-spark" title="近 30 日走势" dangerouslySetInnerHTML={{ __html: sparkSvg(r.series) }} />
+						<div
+							className="gui-fx-spark"
+							title="近 30 日走势"
+							dangerouslySetInnerHTML={{ __html: sparkSvg(r.series) }}
+						/>
 						<div className="gui-fx-ratebox">
 							<div className="gui-fx-rate">
-								{r.cur == null ? "--" : (
+								{r.cur == null ? (
+									"--"
+								) : (
 									<>
 										<span className="gui-fx-currency">¥</span>
 										<SlidingNumber value={r.cur} decimals={4} />
 									</>
 								)}
 							</div>
-							{r.delta && (
-								<span className={`gui-fx-delta gui-fx-delta--${r.delta.cls}`}>{r.delta.text}</span>
-							)}
+							{r.delta && <span className={`gui-fx-delta gui-fx-delta--${r.delta.cls}`}>{r.delta.text}</span>}
 						</div>
 					</div>
 				))}

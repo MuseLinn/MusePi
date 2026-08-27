@@ -4,10 +4,9 @@
  */
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { t } from "../i18n/index.js";
-import { highlightToCodeHtml } from "../components/transcript/highlight.js";
-import { escapeHtml } from "../components/transcript/highlight.js";
+import { escapeHtml, highlightToCodeHtml } from "../components/transcript/highlight.js";
 import { useCodeHighlight } from "../components/transcript/highlight-context.js";
+import { t } from "../i18n/index.js";
 import { diffWords } from "./diff-words.js";
 import { diffLayoutPref } from "./parts-shared";
 import type { ToolRenderHost, ToolResultImage, ToolResultLike } from "./types";
@@ -360,7 +359,7 @@ function SideBySideDiff({
 				// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans built by highlightToCodeHtml
 				<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
 			) : (
-				text ?? ""
+				(text ?? "")
 			);
 		/**
 		 * Paired del+add rows (a same-line replacement): render a word-level
@@ -414,9 +413,7 @@ function SideBySideDiff({
 			// and tint the right pane as an addition too.
 			const pairedRow = row.kind === "del" && row.right !== null;
 			const leftCls = `tv-diff-sbs-cell${row.kind === "del" ? " tv-diff-sbs-cell--del" : ""}`;
-			const rightCls = `tv-diff-sbs-cell${
-				pairedRow || row.kind === "add" ? " tv-diff-sbs-cell--add" : ""
-			}`;
+			const rightCls = `tv-diff-sbs-cell${pairedRow || row.kind === "add" ? " tv-diff-sbs-cell--add" : ""}`;
 			return {
 				cls: `tv-diff-sbs-row tv-diff-sbs-row--${row.kind}`,
 				left: pairedRow ? (
@@ -660,9 +657,7 @@ function InlineDiff({ rows, hlLines }: { rows: string[]; hlLines: string[] | nul
 							"…"
 						) : html !== null ? (
 							<>
-								{(cls === "--add" || cls === "--del") && (
-									<span className="tv-diff-sig">{line.charAt(0)}</span>
-								)}
+								{(cls === "--add" || cls === "--del") && <span className="tv-diff-sig">{line.charAt(0)}</span>}
 								{/* biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans (escapeHtml / highlightToCodeHtml) */}
 								<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html || "\u00A0" }} />
 							</>

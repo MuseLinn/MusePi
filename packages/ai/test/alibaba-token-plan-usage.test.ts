@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { FetchImpl } from "@musepi/pi-ai/types";
 import type { UsageFetchParams } from "@musepi/pi-ai/usage";
 import { alibabaTokenPlanRankingStrategy, alibabaTokenPlanUsageProvider } from "@musepi/pi-ai/usage/alibaba-token-plan";
-import { ALIBABA_TOKEN_PLAN_CN_BASE_URL, serializeAlibabaTokenPlanCredential } from "@musepi/pi-catalog/wire/alibaba-token-plan";
+import {
+	ALIBABA_TOKEN_PLAN_CN_BASE_URL,
+	serializeAlibabaTokenPlanCredential,
+} from "@musepi/pi-catalog/wire/alibaba-token-plan";
 
 function params(apiKey: string): UsageFetchParams {
 	return {

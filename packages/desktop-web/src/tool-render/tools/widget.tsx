@@ -3,9 +3,9 @@ import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { WIDGET_REGISTRY, widgetDef } from "../../widgets/registry";
+import { ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, str } from "../util";
-import { ResultText } from "../parts";
 
 /** Shallow content equality for widget data records. Identity alone can't
  *  gate the incoming-data adopt below: while a tool is still running the

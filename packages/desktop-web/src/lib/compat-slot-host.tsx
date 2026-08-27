@@ -1,4 +1,4 @@
-import { createElement, memo, type ComponentType, type ReactNode } from "react";
+import { type ComponentType, createElement, memo, type ReactNode } from "react";
 import type { MusePiCompatHost } from "../components/transcript/Transcript";
 
 /**

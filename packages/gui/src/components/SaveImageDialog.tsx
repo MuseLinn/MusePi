@@ -4,9 +4,9 @@ import { Loader } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { DialogFrame } from "./DialogFrame";
-import { Icon } from "../vendor/oc-icons";
 import { dataUrlToBlob } from "../lib/image-resize";
+import { Icon } from "../vendor/oc-icons";
+import { DialogFrame } from "./DialogFrame";
 
 /**
  * 保存为图片 export dialog: a LIVE preview of the message card with three
@@ -74,10 +74,7 @@ export function SaveImageDialog({
 			</div>
 			<div className="gui-saveimg-body">
 				<div className="gui-saveimg-preview">
-					<div
-						ref={cardRef}
-						className={`gui-saveimg-card${border ? " gui-saveimg-card--border" : ""}`}
-					>
+					<div ref={cardRef} className={`gui-saveimg-card${border ? " gui-saveimg-card--border" : ""}`}>
 						{title.trim() && <div className="gui-saveimg-card-title">{title.trim()}</div>}
 						<div className="gui-saveimg-card-md">
 							<Markdown text={text} />

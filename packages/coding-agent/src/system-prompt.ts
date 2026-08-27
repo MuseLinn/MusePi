@@ -7,7 +7,16 @@ import * as path from "node:path";
 import type { AgentTool } from "@musepi/pi-agent-core";
 import type { ToolExample, TSchema } from "@musepi/pi-ai";
 import { renderToolInventory } from "@musepi/pi-ai/dialect";
-import { $env, getAgentDir, getGpuCachePath, getProjectDir, hasFsCode, isEnoent, logger, prompt } from "@musepi/pi-utils";
+import {
+	$env,
+	getAgentDir,
+	getGpuCachePath,
+	getProjectDir,
+	hasFsCode,
+	isEnoent,
+	logger,
+	prompt,
+} from "@musepi/pi-utils";
 import { contextFileCapability } from "./capability/context-file";
 import { systemPromptCapability } from "./capability/system-prompt";
 import { findConfigFile } from "./config";

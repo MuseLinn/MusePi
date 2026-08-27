@@ -30,7 +30,9 @@ describe("daemon git branch RPCs", () => {
 			const ws = new WebSocket(`ws://127.0.0.1:${daemon.wsPort}`);
 			await new Promise(r => ws.addEventListener("open", r, { once: true }));
 			const res = await new Promise<any>(resolve => {
-				ws.addEventListener("message", ev => resolve(JSON.parse((ev as MessageEvent).data as string)), { once: true });
+				ws.addEventListener("message", ev => resolve(JSON.parse((ev as MessageEvent).data as string)), {
+					once: true,
+				});
 				ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "git.branches", params: { cwd: repo } }));
 			});
 			expect(res.result).toEqual({ current: "main", branches: ["feature/x", "main"] });
@@ -55,7 +57,9 @@ describe("daemon git branch RPCs", () => {
 			const ws = new WebSocket(`ws://127.0.0.1:${daemon.wsPort}`);
 			await new Promise(r => ws.addEventListener("open", r, { once: true }));
 			const res = await new Promise<any>(resolve => {
-				ws.addEventListener("message", ev => resolve(JSON.parse((ev as MessageEvent).data as string)), { once: true });
+				ws.addEventListener("message", ev => resolve(JSON.parse((ev as MessageEvent).data as string)), {
+					once: true,
+				});
 				ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "git.log", params: { cwd: repo, graph: true } }));
 			});
 			expect(typeof res.result.graph).toBe("string");

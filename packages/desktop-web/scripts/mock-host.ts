@@ -281,7 +281,13 @@ const mockBoards = [
 		title: "项目",
 		builtin: true,
 		widgets: [
-			{ id: "w3", type: "todo", title: "Todo", data: { items: [{ done: false, text: "设计评审" }] }, pos: { x: 0, y: 0, w: 2, h: 2 } },
+			{
+				id: "w3",
+				type: "todo",
+				title: "Todo",
+				data: { items: [{ done: false, text: "设计评审" }] },
+				pos: { x: 0, y: 0, w: 2, h: 2 },
+			},
 		],
 	},
 ];
@@ -306,8 +312,20 @@ const mockCronTasks = [
 	},
 ];
 const mockCronRuns = [
-	{ id: "run-1", taskId: "cron-1", startedAt: Date.now() - 3600_000, finishedAt: Date.now() - 3599_000, status: "success" },
-	{ id: "run-2", taskId: "cron-1", startedAt: Date.now() - 2 * 3600_000, finishedAt: Date.now() - 2 * 3600_000 + 40_000, status: "success" },
+	{
+		id: "run-1",
+		taskId: "cron-1",
+		startedAt: Date.now() - 3600_000,
+		finishedAt: Date.now() - 3599_000,
+		status: "success",
+	},
+	{
+		id: "run-2",
+		taskId: "cron-1",
+		startedAt: Date.now() - 2 * 3600_000,
+		finishedAt: Date.now() - 2 * 3600_000 + 40_000,
+		status: "success",
+	},
 ];
 const mockTreeEntries: WorkspaceEntry[] = [
 	{ name: "src", path: "/mock/src", isDir: true, size: 0, mtime: Date.now(), depth: 0 },
@@ -388,7 +406,14 @@ function handleRpcRequest(reqId: number, method: string, params: unknown, fromPe
 				const parts = path.split("/").filter(Boolean);
 				const name = parts.at(-1) ?? path;
 				if (!mockTreeEntries.some(e => e.path === path)) {
-					mockTreeEntries.push({ name, path, isDir: false, size: content.length, mtime: Date.now(), depth: parts.length - 1 });
+					mockTreeEntries.push({
+						name,
+						path,
+						isDir: false,
+						size: content.length,
+						mtime: Date.now(),
+						depth: parts.length - 1,
+					});
 				}
 				rpcOk(reqId, { ok: true }, fromPeer);
 				break;
@@ -439,9 +464,7 @@ const mockFileTexts = new Map<string, string>([
 	["/mock/src/index.ts", 'import { greet } from "./hello";\nconsole.log(greet("world"));\n'],
 	["/mock/README.md", "# Mock Workspace\n\nDemo files served by the collab mock host.\n"],
 ]);
-const mockFileSizes = new Map<string, number>(
-	[...mockFileTexts.entries()].map(([k, v]) => [k, v.length]),
-);
+const mockFileSizes = new Map<string, number>([...mockFileTexts.entries()].map(([k, v]) => [k, v.length]));
 
 function handleFrame(frame: WireFrame, fromPeer: number): void {
 	switch (frame.t) {

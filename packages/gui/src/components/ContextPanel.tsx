@@ -3,9 +3,9 @@ import {
 	CodeHighlightProvider,
 	DiffBlock,
 	latestWidgetFromEntries,
+	type TranslationKey,
 	t,
 	WidgetCard,
-	type TranslationKey,
 } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -500,7 +500,7 @@ export function ContextPanel({
 									</p>
 								)}
 							</div>
-												)}
+						)}
 						{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
 						 * 挂内容区末尾,随面板滚动。 */}
 						<div className="gui-pane-extension px-2 pt-3">
@@ -1067,7 +1067,9 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 									{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
 									{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
 									{!fileDiff?.staged && !fileDiff?.unstaged && (
-										<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+										<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
+											{t("no changes")}
+										</div>
 									)}
 								</>
 							</CodeHighlightProvider>

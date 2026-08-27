@@ -51,11 +51,7 @@ export function openBoardFromChat(canvasId: string, title?: string): void {
 
 export function CanvasJumpCard({ block }: { block: CanvasJumpBlock }): ReactNode {
 	return (
-		<button
-			type="button"
-			className="tr-canvas-jump"
-			onClick={() => openBoardFromChat(block.canvasId, block.title)}
-		>
+		<button type="button" className="tr-canvas-jump" onClick={() => openBoardFromChat(block.canvasId, block.title)}>
 			<span className="tr-canvas-jump-icon" aria-hidden="true">
 				▦
 			</span>

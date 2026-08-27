@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { runCleanseLoop } from "@musepi/pi-coding-agent/cleanse/loop";
-import type { CleanseAgentOutcome, CleanseDiagnostic, CleanseDiagnosticReport } from "@musepi/pi-coding-agent/cleanse/types";
+import type {
+	CleanseAgentOutcome,
+	CleanseDiagnostic,
+	CleanseDiagnosticReport,
+} from "@musepi/pi-coding-agent/cleanse/types";
 
 function fileDiagnostics(file: string, count: number): CleanseDiagnostic[] {
 	return Array.from({ length: count }, (_, index) => ({

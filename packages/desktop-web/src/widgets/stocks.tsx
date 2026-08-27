@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { CharTexture } from "./texture";
 import { SlidingNumber } from "../lib/sliding-number.js";
+import { CharTexture } from "./texture";
 
 /**
  * A-share watchlist — ported from the kimiwork "A股盯盘" widget
@@ -111,7 +111,11 @@ export function StocksCard({
 			});
 
 		const parseKline = (row: StockRow, payload: unknown): Quote => {
-			const data = (payload as { data?: Record<string, { qt?: Record<string, number[]>; qfqday?: number[][]; day?: number[][] }> })?.data;
+			const data = (
+				payload as {
+					data?: Record<string, { qt?: Record<string, number[]>; qfqday?: number[][]; day?: number[][] }>;
+				}
+			)?.data;
 			const d = data && data[row.code];
 			if (!d) throw new Error(`${row.code} missing`);
 			const qt = (d.qt && d.qt[row.code]) || [];
@@ -193,31 +197,43 @@ export function StocksCard({
 							<span className="gui-stocks-delta">真实 A 股行情暂时不可用</span>
 						</div>
 					</div>
-				) : (quotes ?? []).map(q => {
-					const dir = q.change >= 0 ? "up" : "down";
-					const sign = q.change >= 0 ? "+" : "";
-					const hasSpark = Array.isArray(q.series) && q.series.length >= 3;
-					return (
-						<div key={q.label} className={`gui-stocks-row gui-stocks-row--${dir}${hasSpark ? "" : " gui-stocks-row--nospark"}`}>
-							<div className="gui-stocks-ident">
-								<div className="gui-stocks-copy">
-									<span className="gui-stocks-name">{q.name}</span>
-									<span className="gui-stocks-code">{q.label}</span>
+				) : (
+					(quotes ?? []).map(q => {
+						const dir = q.change >= 0 ? "up" : "down";
+						const sign = q.change >= 0 ? "+" : "";
+						const hasSpark = Array.isArray(q.series) && q.series.length >= 3;
+						return (
+							<div
+								key={q.label}
+								className={`gui-stocks-row gui-stocks-row--${dir}${hasSpark ? "" : " gui-stocks-row--nospark"}`}
+							>
+								<div className="gui-stocks-ident">
+									<div className="gui-stocks-copy">
+										<span className="gui-stocks-name">{q.name}</span>
+										<span className="gui-stocks-code">{q.label}</span>
+									</div>
+								</div>
+								{hasSpark ? (
+									<div
+										className="gui-stocks-spark"
+										aria-hidden="true"
+										dangerouslySetInnerHTML={{ __html: sparkSvg(q.series) }}
+									/>
+								) : null}
+								<div className="gui-stocks-pricebox">
+									<div className="gui-stocks-price">
+										<span className="gui-stocks-currency">¥</span>
+										<SlidingNumber value={q.price} decimals={2} />
+									</div>
+									<span className="gui-stocks-delta">
+										{q.change >= 0 ? "▲" : "▼"} {sign}
+										{fmt(q.pct)}%
+									</span>
 								</div>
 							</div>
-							{hasSpark ? (
-								<div className="gui-stocks-spark" aria-hidden="true" dangerouslySetInnerHTML={{ __html: sparkSvg(q.series) }} />
-							) : null}
-							<div className="gui-stocks-pricebox">
-								<div className="gui-stocks-price">
-									<span className="gui-stocks-currency">¥</span>
-									<SlidingNumber value={q.price} decimals={2} />
-								</div>
-								<span className="gui-stocks-delta">{q.change >= 0 ? "▲" : "▼"} {sign}{fmt(q.pct)}%</span>
-							</div>
-						</div>
-					);
-				})}
+						);
+					})
+				)}
 			</section>
 			<div className="gui-stocks-foot">
 				<div className="gui-stocks-status">

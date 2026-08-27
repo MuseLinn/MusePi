@@ -1,5 +1,5 @@
-import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
 
 // Dev-only dev server for the Electron renderer (prod build stays on bun
 // build). @musepi/desktop-web resolves via its package exports straight to

@@ -6,8 +6,8 @@ import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { useFocusTrap } from "../lib/use-focus-trap";
 import type { RpcClient } from "../lib/rpc";
+import { useFocusTrap } from "../lib/use-focus-trap";
 
 const EMPTY_TOOLS: TranscriptProps["activeTools"] = new Map();
 const POLL_MS = 1200;

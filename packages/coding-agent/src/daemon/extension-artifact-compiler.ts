@@ -168,9 +168,7 @@ export async function collectSlotComponents(
 					code: compiled.code,
 					...(compiled.css ? { css: compiled.css } : {}),
 					...(component.order !== undefined ? { order: component.order } : {}),
-					...(component.entryKinds && component.entryKinds.length > 0
-						? { entryKinds: component.entryKinds }
-						: {}),
+					...(component.entryKinds && component.entryKinds.length > 0 ? { entryKinds: component.entryKinds } : {}),
 				});
 			} catch (error) {
 				// A broken component must not fail the whole extensions.list —

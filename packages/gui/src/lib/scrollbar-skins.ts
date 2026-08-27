@@ -103,7 +103,8 @@ export function validateImportedSkin(raw: unknown): ScrollbarSkin | null {
 	const accent = typeof colors.accent === "string" && colors.accent ? colors.accent : BUILTIN_PACMAN.colors.accent;
 	const track = typeof colors.track === "string" && colors.track ? colors.track : BUILTIN_SNAKE.colors.track;
 	const eaten = typeof colors.eaten === "string" && colors.eaten ? colors.eaten : BUILTIN_PACMAN.colors.eaten;
-	const size = typeof r.size === "number" && Number.isFinite(r.size) ? Math.min(24, Math.max(6, Math.round(r.size))) : 12;
+	const size =
+		typeof r.size === "number" && Number.isFinite(r.size) ? Math.min(24, Math.max(6, Math.round(r.size))) : 12;
 	const pacGlyph = typeof r.pacGlyph === "string" && r.pacGlyph.startsWith("data:") ? r.pacGlyph : null;
 	return {
 		id: r.id,
@@ -122,9 +123,7 @@ export function readImportedSkins(): ScrollbarSkin[] {
 		if (!raw) return [];
 		const parsed: unknown = JSON.parse(raw);
 		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.map(s => validateImportedSkin(s))
-			.filter((s): s is ScrollbarSkin => s !== null);
+		return parsed.map(s => validateImportedSkin(s)).filter((s): s is ScrollbarSkin => s !== null);
 	} catch {
 		return [];
 	}

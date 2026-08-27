@@ -20,6 +20,7 @@ import * as path from "node:path";
 import { logger, parseFrontmatter, tryParseJson } from "@musepi/pi-utils";
 import { registerProvider } from "../capability";
 import { readDirEntries, readFile } from "../capability/fs";
+import { type GuiMotion, guiMotionCapability } from "../capability/gui-motion";
 import { type Hook, hookCapability } from "../capability/hook";
 import { type MCPServer, mcpCapability } from "../capability/mcp";
 import { type Prompt, promptCapability } from "../capability/prompt";
@@ -27,7 +28,6 @@ import { type Rule, ruleCapability } from "../capability/rule";
 import { type Skill, skillCapability } from "../capability/skill";
 import { type SlashCommand, slashCommandCapability } from "../capability/slash-command";
 import { type CustomTool, toolCapability } from "../capability/tool";
-import { type GuiMotion, guiMotionCapability } from "../capability/gui-motion";
 import type { LoadContext, LoadResult } from "../capability/types";
 import { legacyProviderAllowed } from "./agent-plugin-format";
 import {

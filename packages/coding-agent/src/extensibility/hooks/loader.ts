@@ -222,10 +222,7 @@ export async function discoverAndLoadHooks(configuredPaths: string[], cwd: strin
 	const discovered = await loadCapability<Hook>(hookCapability.id, { cwd });
 
 	// 2. Explicitly configured paths (can override/add); dedupe in order
-	const allPaths = resolveUniquePaths(
-		[...discovered.items.map(hook => hook.path), ...configuredPaths],
-		cwd,
-	);
+	const allPaths = resolveUniquePaths([...discovered.items.map(hook => hook.path), ...configuredPaths], cwd);
 
 	return loadHooks(allPaths, cwd);
 }

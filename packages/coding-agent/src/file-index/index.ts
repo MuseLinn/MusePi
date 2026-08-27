@@ -39,7 +39,28 @@ const SKIP_DIRS = new Set([
 	".turbo",
 	".yarn",
 ]);
-const SKIP_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mp3", ".wav", ".woff", ".woff2", ".ttf", ".icns", ".sqlite", ".db", ".wasm"]);
+const SKIP_EXT = new Set([
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".webp",
+	".ico",
+	".pdf",
+	".zip",
+	".gz",
+	".tar",
+	".mp4",
+	".mp3",
+	".wav",
+	".woff",
+	".woff2",
+	".ttf",
+	".icns",
+	".sqlite",
+	".db",
+	".wasm",
+]);
 
 export interface IndexStatus {
 	enabled: boolean;
@@ -148,7 +169,11 @@ export class FileIndexService {
 	/** Enable/disable (persisted in idx_meta). */
 	setEnabled(on: boolean): void {
 		this.#enabled = on;
-		this.#db.query("INSERT INTO idx_meta (key, value) VALUES ('enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(on ? "1" : "0");
+		this.#db
+			.query(
+				"INSERT INTO idx_meta (key, value) VALUES ('enabled', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+			)
+			.run(on ? "1" : "0");
 	}
 
 	/**
@@ -182,7 +207,9 @@ export class FileIndexService {
 			this.#scanning = false;
 			this.#lastScan = Date.now();
 		}
-		console.log(`[file-index] scan done: ${this.#files} files, ${this.#skipped} skipped, ${Date.now() - started}ms (${dir})`);
+		console.log(
+			`[file-index] scan done: ${this.#files} files, ${this.#skipped} skipped, ${Date.now() - started}ms (${dir})`,
+		);
 	}
 
 	#inflight: Promise<void> | null = null;

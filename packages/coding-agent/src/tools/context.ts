@@ -1,7 +1,7 @@
-import type { CollabToolHandle } from "./collab";
 import type { AgentToolContext, ToolCallContext } from "@musepi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
+import type { CollabToolHandle } from "./collab";
 
 declare module "@musepi/pi-agent-core" {
 	interface AgentToolContext extends CustomToolContext {

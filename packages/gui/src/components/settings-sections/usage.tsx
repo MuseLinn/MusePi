@@ -1,32 +1,11 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import {
-	LoaderCircle as LoaderCircleIconData,
-	RefreshCw as RefreshCwIconData,
-} from "lucide";
-import {
-	MorphIcon,
-} from "morphicons/react";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "react";
-import {
-	tapFeedback,
-} from "../../lib/haptic";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
+import { t } from "@musepi/desktop-web";
+import { LoaderCircle as LoaderCircleIconData, RefreshCw as RefreshCwIconData } from "lucide";
+import { MorphIcon } from "morphicons/react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { tapFeedback } from "../../lib/haptic";
+import type { RpcClient } from "../../lib/rpc";
+import { Icon } from "../../vendor/oc-icons";
 
 /* ============ 数据与统计: 使用统计 / 索引库 / 钩子 ============ */
 

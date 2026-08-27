@@ -8,9 +8,14 @@
 import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { isProviderEnabled } from "../../discovery";
 import { t } from "../../i18n/index.js";
+import {
+	clampSelection,
+	contentRowWidth,
+	renderScrollableList,
+	searchableChar,
+} from "../../modes/components/selector-helpers";
 import { theme } from "../../modes/theme/theme";
 import { matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
-import { clampSelection, contentRowWidth, renderScrollableList, searchableChar } from "../../modes/components/selector-helpers";
 import { applyFilter } from "./state-manager";
 import type { Extension, ExtensionKind, ExtensionState } from "./types";
 

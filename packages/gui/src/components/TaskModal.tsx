@@ -1,11 +1,11 @@
 import { t } from "@musepi/desktop-web/src/i18n/index.js";
-import { GuiSelect } from "./GuiSelect";
 import { hasTask, type WidgetTask } from "@musepi/desktop-web/src/widgets/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { useFocusTrap } from "../lib/use-focus-trap";
+import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
+import { GuiSelect } from "./GuiSelect";
 
 /**
  * Widget task modal (kimi 小组件任务 parity): task status toggle, name,
@@ -74,11 +74,15 @@ export function TaskModal({
 					<div className="gui-task-row">
 						<span className="gui-task-label">{t("widget task schedule")}</span>
 						<GuiSelect
-					className="gui-settings-select"
-					value={task.schedule ?? "manual"}
-					onChange={v => update({ task: { ...task, schedule: v as WidgetTask["schedule"] } })}
-					options={[{ value: "manual", label: t("widget task manual") }, { value: "hourly", label: t("widget task hourly") }, { value: "daily", label: t("widget task daily") }]}
-				/>
+							className="gui-settings-select"
+							value={task.schedule ?? "manual"}
+							onChange={v => update({ task: { ...task, schedule: v as WidgetTask["schedule"] } })}
+							options={[
+								{ value: "manual", label: t("widget task manual") },
+								{ value: "hourly", label: t("widget task hourly") },
+								{ value: "daily", label: t("widget task daily") },
+							]}
+						/>
 					</div>
 					<div className="gui-task-field">
 						<span className="gui-task-label">{t("widget task name")}</span>

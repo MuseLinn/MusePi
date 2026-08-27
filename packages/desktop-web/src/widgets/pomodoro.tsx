@@ -1,6 +1,6 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { t } from "../i18n/index.js";
 import { SendChip } from "./send";
 
 /**
@@ -105,11 +105,17 @@ export function PomodoroCard({
 				</svg>
 				<div className="gui-widget-pomodoro-center">
 					<span className="gui-widget-pomodoro-time">{fmt(left)}</span>
-					<span className="gui-widget-pomodoro-state">{running ? t("widget pomodoro running") : t("widget pomodoro ready")}</span>
+					<span className="gui-widget-pomodoro-state">
+						{running ? t("widget pomodoro running") : t("widget pomodoro ready")}
+					</span>
 				</div>
 			</div>
 			<div className="gui-widget-pomodoro-actions">
-				<button type="button" className="gui-widget-pomodoro-btn gui-widget-pomodoro-btn--primary" onClick={() => setRunning(r => !r)}>
+				<button
+					type="button"
+					className="gui-widget-pomodoro-btn gui-widget-pomodoro-btn--primary"
+					onClick={() => setRunning(r => !r)}
+				>
 					{running ? t("widget pomodoro pause") : t("widget pomodoro start")}
 				</button>
 				<button
@@ -133,11 +139,8 @@ export function PomodoroCard({
 			</div>
 			<div className="gui-widget-pomodoro-hint">{t("widget pomodoro reward")}</div>
 			{tick >= 0 && null}
-		
-			<SendChip
-				text={`${t("widget pomodoro done")} ${rounds} ${t("widget pomodoro rounds")}`}
-				onSend={sendPrompt}
-			/>
-</div>
+
+			<SendChip text={`${t("widget pomodoro done")} ${rounds} ${t("widget pomodoro rounds")}`} onSend={sendPrompt} />
+		</div>
 	);
 }

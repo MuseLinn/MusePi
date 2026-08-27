@@ -16,10 +16,10 @@ function hapticTap(): void {
 }
 
 import {
+	type ComponentType,
 	createElement,
 	Fragment,
 	memo,
-	type ComponentType,
 	type ReactNode,
 	useCallback,
 	useEffect,
@@ -185,9 +185,7 @@ export function BranchBar({
 		<div className="tr-branch">
 			<button type="button" className="tr-branch-bar" onClick={() => setOpen(v => !v)} aria-expanded={open}>
 				<span className="tr-branch-line" aria-hidden />
-				<span className="tr-branch-count">
-					{t("this node has {count} branches", { count: String(count) })}
-				</span>
+				<span className="tr-branch-count">{t("this node has {count} branches", { count: String(count) })}</span>
 				<span className="tr-branch-line" aria-hidden />
 			</button>
 			{open && (
@@ -578,20 +576,32 @@ export function transcriptNodeKind(entry: SessionEntry): string {
 		case "message": {
 			const role = entry.message.role;
 			switch (role) {
-				case "user": return "message:user";
-				case "assistant": return "message:assistant";
-				case "toolResult": return "message:tool_result";
-				case "bashExecution": return "message:bash_execution";
-				case "developer": return "message:developer";
-				default: return `message:${role}`;
+				case "user":
+					return "message:user";
+				case "assistant":
+					return "message:assistant";
+				case "toolResult":
+					return "message:tool_result";
+				case "bashExecution":
+					return "message:bash_execution";
+				case "developer":
+					return "message:developer";
+				default:
+					return `message:${role}`;
 			}
 		}
-		case "custom_message": return `custom_message:${entry.customType}`;
-		case "compaction": return "compaction";
-		case "branch_summary": return "branch_summary";
-		case "model_change": return "model_change";
-		case "thinking_level_change": return "thinking_level_change";
-		default: return "unknown";
+		case "custom_message":
+			return `custom_message:${entry.customType}`;
+		case "compaction":
+			return "compaction";
+		case "branch_summary":
+			return "branch_summary";
+		case "model_change":
+			return "model_change";
+		case "thinking_level_change":
+			return "thinking_level_change";
+		default:
+			return "unknown";
 	}
 }
 
@@ -631,12 +641,13 @@ export interface MusePiCompatHost {
 	}>;
 	/** Components registered for a slot that own the given kind (transcript
 	 *  node dispatch). */
-	get(slot: string, kind: string): { Component: ComponentType<Record<string, unknown>>; extensionId: string } | undefined;
+	get(
+		slot: string,
+		kind: string,
+	): { Component: ComponentType<Record<string, unknown>>; extensionId: string } | undefined;
 }
 
-function compatHostRenderer(
-	kind: string,
-): ((node: TranscriptNodeInjection) => ReactNode) | undefined {
+function compatHostRenderer(kind: string): ((node: TranscriptNodeInjection) => ReactNode) | undefined {
 	const host = (globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost;
 	const entry = host?.get("transcript.node", kind);
 	if (!entry) return undefined;
@@ -1235,231 +1246,231 @@ const EntryRow = memo(function EntryRow({
 }: EntryRowProps): ReactNode {
 	const row = ((): ReactNode => {
 		switch (entry.type) {
-		case "message": {
-			const msg = entry.message;
-			switch (msg.role) {
-				case "user":
+			case "message": {
+				const msg = entry.message;
+				switch (msg.role) {
+					case "user":
+						return (
+							<Row
+								kind="user"
+								id={entry.id}
+								gutter={userGutter ?? t("host")}
+								title={entry.timestamp}
+								onQuote={onQuote}
+								onEdit={onEdit}
+								onRetry={onRetry}
+								onRevert={onRevert}
+								onFork={onFork}
+								quoteText={msgText(msg)}
+							>
+								<UserMsgContent
+									content={msg.content}
+									plain={userPlain}
+									collapse={collapseLongUserMessages}
+									onPreviewImage={onPreviewImage}
+								/>
+							</Row>
+						);
+					case "assistant":
+						return (
+							<Row
+								kind="assistant"
+								id={entry.id}
+								gutter={agentGutter ?? t("agent")}
+								title={entry.timestamp}
+								onQuote={onQuote}
+								onRetry={onRetry}
+								onFork={onFork}
+								onSpeak={onSpeak}
+								onSaveImage={onSaveImage}
+								speaking={speaking}
+								onStopSpeak={onStopSpeak}
+								quoteText={msgText(msg)}
+								retryTarget={retryTarget}
+							>
+								<AssistantBody
+									message={msg}
+									results={results}
+									active={active}
+									pending={streamingLast}
+									runStartTs={runStartTs}
+									roundDuration={roundDuration}
+									host={host}
+									hideToolActivity={hideToolActivity}
+									showTokenUsage={showTokenUsage}
+									smoothStreaming={smoothStreaming}
+									taskCardStyle={taskCardStyle}
+									artifacts={artifacts}
+									thinkingLevel={thinkingLevel}
+									onPreviewImage={onPreviewImage}
+								/>
+							</Row>
+						);
+					case "bashExecution":
+						// User-initiated shell command (! / !! composer parity): the
+						// daemon streams the bashExecution message as a wire entry.
+						return (
+							<Row kind="bash" gutter="&gt;_" title={entry.timestamp}>
+								<BashCard message={msg as import("@musepi/pi-wire").BashExecutionMessage} />
+							</Row>
+						);
+					default:
+						// toolResult entries are consumed via pairing; developer & unknown roles skipped
+						return null;
+				}
+			}
+			case "custom_message": {
+				if (entry.customType === "collab-prompt") {
+					const details = entry.details;
+					const from =
+						details !== null &&
+						typeof details === "object" &&
+						typeof (details as Record<string, unknown>).from === "string"
+							? ((details as Record<string, unknown>).from as string)
+							: t("guest");
 					return (
-						<Row
-							kind="user"
-							id={entry.id}
-							gutter={userGutter ?? t("host")}
-							title={entry.timestamp}
-							onQuote={onQuote}
-							onEdit={onEdit}
-							onRetry={onRetry}
-							onRevert={onRevert}
-							onFork={onFork}
-							quoteText={msgText(msg)}
-						>
-							<UserMsgContent
-								content={msg.content}
-								plain={userPlain}
-								collapse={collapseLongUserMessages}
-								onPreviewImage={onPreviewImage}
-							/>
+						<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
+							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
 						</Row>
 					);
-				case "assistant":
+				}
+				if (entry.customType === "ttsr") {
+					const details = entry.details as
+						| { rules?: { name: string; description?: string; content?: string }[] }
+						| null
+						| undefined;
 					return (
-						<Row
-							kind="assistant"
-							id={entry.id}
-							gutter={agentGutter ?? t("agent")}
-							title={entry.timestamp}
-							onQuote={onQuote}
-							onRetry={onRetry}
-							onFork={onFork}
-							onSpeak={onSpeak}
-							onSaveImage={onSaveImage}
-							speaking={speaking}
-							onStopSpeak={onStopSpeak}
-							quoteText={msgText(msg)}
-							retryTarget={retryTarget}
-						>
-							<AssistantBody
-								message={msg}
-								results={results}
-								active={active}
-								pending={streamingLast}
-								runStartTs={runStartTs}
-								roundDuration={roundDuration}
-								host={host}
-								hideToolActivity={hideToolActivity}
-								showTokenUsage={showTokenUsage}
-								smoothStreaming={smoothStreaming}
-								taskCardStyle={taskCardStyle}
-								artifacts={artifacts}
-								thinkingLevel={thinkingLevel}
-								onPreviewImage={onPreviewImage}
-							/>
+						<Row kind="custom" gutter="" title={entry.timestamp}>
+							<TtsrBlock rules={details?.rules ?? []} />
 						</Row>
 					);
-				case "bashExecution":
-					// User-initiated shell command (! / !! composer parity): the
-					// daemon streams the bashExecution message as a wire entry.
+				}
+				if (entry.customType === "advisor") {
+					// Advisor notes (customType "advisor", display:true): renders the
+					// details.notes[] as a distinct-voice card (severity rail + badge).
+					// The message content is the model-facing `<advisory>` XML — never
+					// surface it; only the clean note text from details.
+					const details = entry.details as { notes?: AdvisorNote[] } | null | undefined;
 					return (
-						<Row kind="bash" gutter="&gt;_" title={entry.timestamp}>
-							<BashCard message={msg as import("@musepi/pi-wire").BashExecutionMessage} />
+						<Row kind="custom" gutter="" title={entry.timestamp}>
+							<AdvisorBlock notes={details?.notes ?? []} />
 						</Row>
 					);
-				default:
-					// toolResult entries are consumed via pairing; developer & unknown roles skipped
-					return null;
-			}
-		}
-		case "custom_message": {
-			if (entry.customType === "collab-prompt") {
-				const details = entry.details;
-				const from =
-					details !== null &&
-					typeof details === "object" &&
-					typeof (details as Record<string, unknown>).from === "string"
-						? ((details as Record<string, unknown>).from as string)
-						: t("guest");
-				return (
-					<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
-						<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
-					</Row>
-				);
-			}
-			if (entry.customType === "ttsr") {
-				const details = entry.details as
-					| { rules?: { name: string; description?: string; content?: string }[] }
-					| null
-					| undefined;
-				return (
-					<Row kind="custom" gutter="" title={entry.timestamp}>
-						<TtsrBlock rules={details?.rules ?? []} />
-					</Row>
-				);
-			}
-			if (entry.customType === "advisor") {
-				// Advisor notes (customType "advisor", display:true): renders the
-				// details.notes[] as a distinct-voice card (severity rail + badge).
-				// The message content is the model-facing `<advisory>` XML — never
-				// surface it; only the clean note text from details.
-				const details = entry.details as { notes?: AdvisorNote[] } | null | undefined;
-				return (
-					<Row kind="custom" gutter="" title={entry.timestamp}>
-						<AdvisorBlock notes={details?.notes ?? []} />
-					</Row>
-				);
-			}
-			if (entry.customType === "async-result") {
-				// Background job completion (async-result custom message) —
-				// renders as compact "Background job completed" rows, NOT the
-				// raw `<system-notice>` content template (the LLM-facing
-				// prompt text must never surface to the user). Mirrors the TUI
-				// buildAsyncResultBlock: one row per job with id + duration.
-				const details = entry.details as
-					| {
-							jobId?: string;
-							type?: "bash" | "task" | "agnes-video";
-							label?: string;
-							durationMs?: number;
-							jobs?: Array<{
+				}
+				if (entry.customType === "async-result") {
+					// Background job completion (async-result custom message) —
+					// renders as compact "Background job completed" rows, NOT the
+					// raw `<system-notice>` content template (the LLM-facing
+					// prompt text must never surface to the user). Mirrors the TUI
+					// buildAsyncResultBlock: one row per job with id + duration.
+					const details = entry.details as
+						| {
 								jobId?: string;
 								type?: "bash" | "task" | "agnes-video";
 								label?: string;
 								durationMs?: number;
-							}>;
-					  }
-					| null
-					| undefined;
-				const jobs =
-					details?.jobs && details.jobs.length > 0
-						? details.jobs
-						: [
-								{
-									jobId: details?.jobId,
-									type: details?.type,
-									label: details?.label,
-									durationMs: details?.durationMs,
-								},
-							];
+								jobs?: Array<{
+									jobId?: string;
+									type?: "bash" | "task" | "agnes-video";
+									label?: string;
+									durationMs?: number;
+								}>;
+						  }
+						| null
+						| undefined;
+					const jobs =
+						details?.jobs && details.jobs.length > 0
+							? details.jobs
+							: [
+									{
+										jobId: details?.jobId,
+										type: details?.type,
+										label: details?.label,
+										durationMs: details?.durationMs,
+									},
+								];
+					return (
+						<Row kind="custom" gutter="" title={entry.timestamp}>
+							<div className="tr-async-result" role="status">
+								{jobs.map((job, i) => (
+									<div key={i} className="tr-async-result-row">
+										<span className="tr-async-result-done" aria-hidden>
+											✓
+										</span>
+										<span className="tr-async-result-text">{t("Background job completed")}</span>
+										{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
+										<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
+										{typeof job.durationMs === "number" ? (
+											<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
+										) : null}
+									</div>
+								))}
+							</div>
+						</Row>
+					);
+				}
+				if (entry.customType.startsWith("irc:")) {
+					const details = entry.details as { from?: string; message?: string; body?: string } | null | undefined;
+					const from = details?.from ?? "irc";
+					// irc:incoming content is the rendered LLM prompt template
+					// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
+					// reply instructions that must not reach the UI. The clean
+					// body lives in details.message (mirror the TUI card, which
+					// renders card.body = details.message); fall back to content
+					// with the wrapper stripped for snapshots without details.
+					// relay/autoreply content is already display-shaped
+					// ([IRC a → b] header + body), so keep it verbatim.
+					const content =
+						entry.customType === "irc:incoming"
+							? (details?.message ??
+								msgText(entry)
+									.replace(/^\s*<irc>\s*/i, "")
+									.replace(/\s*<\/irc>\s*$/i, ""))
+							: entry.content;
+					return (
+						<Row kind="custom" gutter="" title={entry.timestamp}>
+							<div className="tr-irc">
+								<span className="tr-irc-from">{from}</span>
+								<MsgContent content={content} onPreviewImage={onPreviewImage} />
+							</div>
+						</Row>
+					);
+				}
+				if (!entry.display) return null;
 				return (
 					<Row kind="custom" gutter="" title={entry.timestamp}>
-						<div className="tr-async-result" role="status">
-							{jobs.map((job, i) => (
-								<div key={i} className="tr-async-result-row">
-									<span className="tr-async-result-done" aria-hidden>
-										✓
-									</span>
-									<span className="tr-async-result-text">{t("Background job completed")}</span>
-									{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
-									<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
-									{typeof job.durationMs === "number" ? (
-										<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
-									) : null}
-								</div>
-							))}
+						<div className="tr-custom">
+							<span className="tr-chip">{entry.customType}</span>
+							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
 						</div>
 					</Row>
 				);
 			}
-			if (entry.customType.startsWith("irc:")) {
-				const details = entry.details as { from?: string; message?: string; body?: string } | null | undefined;
-				const from = details?.from ?? "irc";
-				// irc:incoming content is the rendered LLM prompt template
-				// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
-				// reply instructions that must not reach the UI. The clean
-				// body lives in details.message (mirror the TUI card, which
-				// renders card.body = details.message); fall back to content
-				// with the wrapper stripped for snapshots without details.
-				// relay/autoreply content is already display-shaped
-				// ([IRC a → b] header + body), so keep it verbatim.
-				const content =
-					entry.customType === "irc:incoming"
-						? (details?.message ??
-							msgText(entry)
-								.replace(/^\s*<irc>\s*/i, "")
-								.replace(/\s*<\/irc>\s*$/i, ""))
-						: entry.content;
+			case "compaction":
 				return (
-					<Row kind="custom" gutter="" title={entry.timestamp}>
-						<div className="tr-irc">
-							<span className="tr-irc-from">{from}</span>
-							<MsgContent content={content} onPreviewImage={onPreviewImage} />
-						</div>
-					</Row>
-				);
-			}
-			if (!entry.display) return null;
-			return (
-				<Row kind="custom" gutter="" title={entry.timestamp}>
-					<div className="tr-custom">
-						<span className="tr-chip">{entry.customType}</span>
-						<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
+					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
+						<span>{t("context compacted · {count} tokens", { count: fmtTokens(entry.tokensBefore) })}</span>
 					</div>
-				</Row>
-			);
-		}
-		case "compaction":
-			return (
-				<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
-					<span>{t("context compacted · {count} tokens", { count: fmtTokens(entry.tokensBefore) })}</span>
-				</div>
-			);
-		case "branch_summary":
-			return (
-				<div className="tr-divider" title={entry.summary}>
-					<span>{t("branch summary")}</span>
-				</div>
-			);
-		case "model_change":
-			// No marker row: the composer's model selector shows the live
-			// model, and mid-session switches are just noise in the flow
-			// (same treatment as thinking_level_change).
-			return null;
-		case "thinking_level_change":
-			// No marker row: the composer's thinking chip (ChatView) derives
-			// the live level from these entries, so a transcript marker is
-			// redundant noise — keep model_change (informative) visible.
-			return null;
-		default:
-			// unknown entry types from newer hosts — skip tolerantly
-			return null;
+				);
+			case "branch_summary":
+				return (
+					<div className="tr-divider" title={entry.summary}>
+						<span>{t("branch summary")}</span>
+					</div>
+				);
+			case "model_change":
+				// No marker row: the composer's model selector shows the live
+				// model, and mid-session switches are just noise in the flow
+				// (same treatment as thinking_level_change).
+				return null;
+			case "thinking_level_change":
+				// No marker row: the composer's thinking chip (ChatView) derives
+				// the live level from these entries, so a transcript marker is
+				// redundant noise — keep model_change (informative) visible.
+				return null;
+			default:
+				// unknown entry types from newer hosts — skip tolerantly
+				return null;
 		}
 	})();
 	const kind = transcriptNodeKind(entry);
@@ -1795,9 +1806,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
-			{entries.length === 0 && stream === null && !working && (
-				emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>
-			)}
+			{entries.length === 0 &&
+				stream === null &&
+				!working &&
+				(emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>)}
 			{hidden > 0 && (
 				<div ref={sentinelRef} className="tr-window-more" style={{ height: Math.round(hidden * avgRowH) }}>
 					<button
@@ -1868,45 +1880,41 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						// transcript-node kind + id as data attributes so the served
 						// renderer's injected extension host can find and augment
 						// nodes without touching the React tree.
-						<div
-							data-entry-kind={transcriptNodeKind(entry)}
-							data-entry-id={entry.id}
-							className="tr-entry"
-						>
+						<div data-entry-kind={transcriptNodeKind(entry)} data-entry-id={entry.id} className="tr-entry">
 							<EntryRow
 								key={entry.id}
 								entry={entry}
-							results={results}
-							active={activeTools}
-							host={host}
-							userGutter={userGutter}
-							agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
-							userPlain={userPlain}
-							collapseLongUserMessages={collapseLongUserMessages}
-							hideToolActivity={hideToolActivity}
-							showTokenUsage={showTokenUsage}
-							smoothStreaming={smoothStreaming}
-							taskCardStyle={taskCardStyle}
-							artifacts={turnArtifactsByFinal.get(entry.id)}
-							thinkingLevel={thinkingLevel}
-							streamingLast={streamingLast}
-							runStartTs={streamingLast ? lastUserTs : undefined}
-							roundDuration={roundDuration}
-							onQuote={onQuote}
-							onEdit={onEdit}
-							onRetry={onRetry}
-							onRevert={onRevert}
-							onFork={onFork}
-							onSpeak={onSpeak}
-							onSaveImage={onSaveImage}
-							onPreviewImage={openPreview}
-							speaking={speakingId != null && speakingId === entry.id}
-							onStopSpeak={onStopSpeak}
-							retryTarget={retryTargets.get(entry.id) ?? null}
-							renderTranscriptNode={renderTranscriptNode}
-						/>
-					</div>
-				);
+								results={results}
+								active={activeTools}
+								host={host}
+								userGutter={userGutter}
+								agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
+								userPlain={userPlain}
+								collapseLongUserMessages={collapseLongUserMessages}
+								hideToolActivity={hideToolActivity}
+								showTokenUsage={showTokenUsage}
+								smoothStreaming={smoothStreaming}
+								taskCardStyle={taskCardStyle}
+								artifacts={turnArtifactsByFinal.get(entry.id)}
+								thinkingLevel={thinkingLevel}
+								streamingLast={streamingLast}
+								runStartTs={streamingLast ? lastUserTs : undefined}
+								roundDuration={roundDuration}
+								onQuote={onQuote}
+								onEdit={onEdit}
+								onRetry={onRetry}
+								onRevert={onRevert}
+								onFork={onFork}
+								onSpeak={onSpeak}
+								onSaveImage={onSaveImage}
+								onPreviewImage={openPreview}
+								speaking={speakingId != null && speakingId === entry.id}
+								onStopSpeak={onStopSpeak}
+								retryTarget={retryTargets.get(entry.id) ?? null}
+								renderTranscriptNode={renderTranscriptNode}
+							/>
+						</div>
+					);
 					// toolResult entries render no row but continue the turn.
 					if (
 						entry.type === "message" &&

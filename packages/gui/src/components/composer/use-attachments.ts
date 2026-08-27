@@ -19,9 +19,7 @@ export interface ComposerAttachment {
  */
 export function useAttachments(rpc: RpcClient): {
 	attachments: ComposerAttachment[];
-	setAttachments(
-		next: ComposerAttachment[] | ((prev: ComposerAttachment[]) => ComposerAttachment[]),
-	): void;
+	setAttachments(next: ComposerAttachment[] | ((prev: ComposerAttachment[]) => ComposerAttachment[])): void;
 	addImageFiles(files: File[]): Promise<void>;
 	onPaste(e: ClipboardEvent): void;
 	onDrop(e: DragEvent): void;

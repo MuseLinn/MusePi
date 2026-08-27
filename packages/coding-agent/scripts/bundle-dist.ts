@@ -101,7 +101,8 @@ async function main(): Promise<void> {
 			external: [...ALWAYS_EXTERNAL, ...RUNTIME_EXTERNAL],
 			define: {
 				"process.env.PI_BUNDLED": JSON.stringify("true"),
-				"process.env.PI_DOCS_EMBED": JSON.stringify(docsPayload.payload),			},
+				"process.env.PI_DOCS_EMBED": JSON.stringify(docsPayload.payload),
+			},
 			minify: {
 				whitespace: true,
 				syntax: true,

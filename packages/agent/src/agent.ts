@@ -25,7 +25,6 @@ import {
 import type { Dialect } from "@musepi/pi-ai/dialect";
 import type { HarmonyAuditEvent } from "@musepi/pi-ai/utils/harmony-leak";
 import { getBundledModel } from "@musepi/pi-catalog/models";
-import { Tokenizer, tokenizerEncodingForModel } from "./tokenizer";
 import { logger } from "@musepi/pi-utils";
 import {
 	abortReasonText,
@@ -39,6 +38,7 @@ import {
 import type { AppendOnlyContextManager } from "./append-only-context";
 import type { PauseGate } from "./pause";
 import { isProviderRefusalMessage } from "./replay-policy";
+import { Tokenizer, tokenizerEncodingForModel } from "./tokenizer";
 import type {
 	AgentBeforeModelCall,
 	AgentContext,

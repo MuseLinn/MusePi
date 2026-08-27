@@ -139,22 +139,31 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
-		void rpc.request<{ enabled: boolean; supported: boolean }>("system.getAutostart", {}).then(r => {
-			if (!alive) return;
-			setAutostartEnabled(r.enabled);
-			setAutostartSupported(r.supported);
-		}).catch(() => {});
-		return () => { alive = false; };
+		void rpc
+			.request<{ enabled: boolean; supported: boolean }>("system.getAutostart", {})
+			.then(r => {
+				if (!alive) return;
+				setAutostartEnabled(r.enabled);
+				setAutostartSupported(r.supported);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
 	}, [rpc]);
 	const toggleAutostart = (): void => {
 		if (autostartBusy || !rpc) return;
 		setAutostartBusy(true);
 		const next = !autostartEnabled;
-		void rpc.request<{ enabled: boolean }>("system.setAutostart", { enabled: next }).then(r => {
-			setAutostartEnabled(r.enabled);
-		}).catch(() => {
-			setAutostartEnabled(false);
-		}).finally(() => setAutostartBusy(false));
+		void rpc
+			.request<{ enabled: boolean }>("system.setAutostart", { enabled: next })
+			.then(r => {
+				setAutostartEnabled(r.enabled);
+			})
+			.catch(() => {
+				setAutostartEnabled(false);
+			})
+			.finally(() => setAutostartBusy(false));
 	};
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");

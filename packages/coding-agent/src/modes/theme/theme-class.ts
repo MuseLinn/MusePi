@@ -5,8 +5,8 @@ import chalk from "@musepi/pi-utils/chalk";
 import { bgAnsi, colorToAnsi, fgAnsi, resolveToHex } from "./color";
 import type { ColorMode, ThemeBg, ThemeColor } from "./schema";
 import {
-	SPINNER_FRAMES,
 	type SlashCommandIconName,
+	SPINNER_FRAMES,
 	type SpinnerType,
 	SYMBOL_PRESETS,
 	type SymbolKey,

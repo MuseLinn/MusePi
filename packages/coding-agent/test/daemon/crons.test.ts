@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { computeNextRun, validateCronTask, type CronTask } from "../../src/daemon/crons";
+import { type CronTask, computeNextRun, validateCronTask } from "../../src/daemon/crons";
 
 function task(partial: Partial<CronTask["schedule"]> & { kind: CronTask["schedule"]["kind"] }): CronTask {
 	return {
@@ -37,7 +37,6 @@ describe("computeNextRun", () => {
 		const next = computeNextRun(task({ kind: "daily", time: "09:00", times: ["09:00", "10:00"] }), FROM);
 		expect(next).toBe(FROM + 23 * 60 * 60 * 1000);
 	});
-
 
 	test("once fires at date+time when in the future", () => {
 		const next = computeNextRun(task({ kind: "once", date: "2026-08-09", time: "08:00" }), FROM);

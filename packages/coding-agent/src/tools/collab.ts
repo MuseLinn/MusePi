@@ -1,7 +1,7 @@
 import { type } from "@musepi/musepi-type";
+import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { prompt } from "@musepi/pi-utils";
 import type { CustomTool } from "../extensibility/custom-tools/types";
-import type { AgentToolContext } from "@musepi/pi-agent-core";
 
 /**
  * Collab share tool — lets the agent start/stop remote sharing of the
@@ -31,7 +31,7 @@ const collabSchema = type({
 			'Share transport and scope for action="start": "lan" shares on the local network (default), "tunnel" opens a public URL via cloudflared/ngrok, "workspace" shares the whole workspace instead of the current session',
 		),
 	"sessionId?": type("string").describe(
-		"Session to share; defaults to the current session. Ignored when mode is \"workspace\"",
+		'Session to share; defaults to the current session. Ignored when mode is "workspace"',
 	),
 });
 
@@ -71,7 +71,8 @@ export const collabTool: CustomTool<typeof collabSchema, CollabToolDetails> = {
 					"Opens a PUBLIC tunnel — anyone with the link can join this agent session. Only continue if remote access is intended.",
 			};
 		}
-		if (a.action === "start") return { tier: "write", reason: "Starts a remote share of this session on the local network." };
+		if (a.action === "start")
+			return { tier: "write", reason: "Starts a remote share of this session on the local network." };
 		if (a.action === "stop") return { tier: "write", reason: "Closes the active remote share." };
 		return { tier: "read" };
 	},
@@ -83,7 +84,7 @@ export const collabTool: CustomTool<typeof collabSchema, CollabToolDetails> = {
 		return lines;
 	},
 	description: prompt.render(
-		"Start, stop, or check remote sharing of the current session or workspace. When sharing is active, the host's phone (MusePi Mobile) or any browser can join to watch and send messages. Use `collab` with `action: \"start\"` when the user asks to enable remote/mobile access; report the returned link (and 6-digit pair code on LAN) to the user. Prefer `mode: \"lan\"` unless the user is away from the local network — `mode: \"tunnel\"` exposes a public URL and requires explicit approval.",
+		'Start, stop, or check remote sharing of the current session or workspace. When sharing is active, the host\'s phone (MusePi Mobile) or any browser can join to watch and send messages. Use `collab` with `action: "start"` when the user asks to enable remote/mobile access; report the returned link (and 6-digit pair code on LAN) to the user. Prefer `mode: "lan"` unless the user is away from the local network — `mode: "tunnel"` exposes a public URL and requires explicit approval.',
 	),
 	parameters: collabSchema,
 	async execute(toolCallId, params, _onUpdate, ctx) {
@@ -148,7 +149,7 @@ export const collabTool: CustomTool<typeof collabSchema, CollabToolDetails> = {
 		const link = res.webLink ?? res.link!;
 		const warning =
 			mode === "tunnel"
-				? "\n\n⚠️ PUBLIC tunnel: anyone with this link can join. Stop the share (collab action:\"stop\") when done."
+				? '\n\n⚠️ PUBLIC tunnel: anyone with this link can join. Stop the share (collab action:"stop") when done.'
 				: "\n\nGuests on the same network can join by scanning the QR or opening the link; the 6-digit code works in the MusePi Mobile app.";
 		return {
 			content: [

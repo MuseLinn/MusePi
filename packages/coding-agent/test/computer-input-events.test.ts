@@ -2,13 +2,17 @@
 // half. Runs real desktop scripts against a mock native session and
 // asserts the ComputerInputEvent messages the worker emits per input
 // action (kind, target frame, scaled click point).
-import { test, expect } from "bun:test";
+import { expect, test } from "bun:test";
+import type {
+	ComputerWorkerInbound,
+	ComputerWorkerOutbound,
+	ComputerWorkerTransport,
+} from "../src/tools/computer/protocol";
 import {
 	ComputerWorkerCore,
 	type NativeDesktopSession,
 	type NativeDesktopSessionFactory,
 } from "../src/tools/computer/worker";
-import type { ComputerWorkerInbound, ComputerWorkerOutbound, ComputerWorkerTransport } from "../src/tools/computer/protocol";
 
 const WINDOW: Record<string, { x: number; y: number; width: number; height: number }> = {
 	"win-1": { x: 100, y: 200, width: 800, height: 600 },
@@ -83,9 +87,7 @@ function makeHarness(code: string) {
 	};
 	const core = new ComputerWorkerCore(transport, factory);
 	const inputs = () =>
-		sent
-			.filter((m): m is Extract<ComputerWorkerOutbound, { type: "input" }> => m.type === "input")
-			.map(m => m.event);
+		sent.filter((m): m is Extract<ComputerWorkerOutbound, { type: "input" }> => m.type === "input").map(m => m.event);
 	const run = async (): Promise<void> => {
 		const message: Extract<ComputerWorkerInbound, { type: "run" }> = {
 			type: "run",
@@ -157,9 +159,7 @@ test("type/press/scroll/raise emit kinds without points", async () => {
 });
 
 test("ax element actions emit element bounds", async () => {
-	const h = await makeHarness(
-		`const el = await desktop.focusedElement(); await el.click();`,
-	);
+	const h = await makeHarness(`const el = await desktop.focusedElement(); await el.click();`);
 	await h.run();
 	const events = h.inputs();
 	expect(events).toHaveLength(1);
@@ -184,7 +184,14 @@ test("read_only runs emit no input events", async () => {
 		id: "r2",
 		code: `const w = await desktop.window("win-1"); w.click(10, 10);`,
 		timeoutMs: 10_000,
-		session: { cwd: "/tmp", sessionId: "s2", captureMaxWidth: 1280, captureMaxHeight: 960, display: "all", readOnly: true },
+		session: {
+			cwd: "/tmp",
+			sessionId: "s2",
+			captureMaxWidth: 1280,
+			captureMaxHeight: 960,
+			display: "all",
+			readOnly: true,
+		},
 	});
 	for (let i = 0; i < 200 && !sent.some(m => m.type === "result"); i++) {
 		await new Promise(resolve => setTimeout(resolve, 10));

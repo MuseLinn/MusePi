@@ -44,7 +44,10 @@ function extBadge(path: string): string {
 	const name = baseName(path);
 	const dot = name.lastIndexOf(".");
 	if (dot <= 0 || dot === name.length - 1) return "";
-	return name.slice(dot + 1).toUpperCase().slice(0, 6);
+	return name
+		.slice(dot + 1)
+		.toUpperCase()
+		.slice(0, 6);
 }
 
 export const FileCards = memo(function FileCards({ items }: { items: FileCardItem[] }): ReactNode | null {

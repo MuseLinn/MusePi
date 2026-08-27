@@ -1,6 +1,6 @@
-import { ACCENT_PRESETS, useAccentPreference } from "../../lib/theme.js";
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
+import { ACCENT_PRESETS, useAccentPreference } from "../../lib/theme.js";
 
 const PRESET_LABEL: Record<string, string> = {
 	brand: "Brand pink",
@@ -28,11 +28,7 @@ export function AccentToggle(): ReactNode {
 			aria-label={title}
 			title={title}
 		>
-			<span
-				className="sh-accent-dot"
-				style={{ background: `var(--accent)` }}
-				aria-hidden="true"
-			/>
+			<span className="sh-accent-dot" style={{ background: `var(--accent)` }} aria-hidden="true" />
 		</button>
 	);
 }

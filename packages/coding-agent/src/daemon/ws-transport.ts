@@ -214,11 +214,18 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 		socket.on("data", (chunk: Buffer) => {
 			try {
 				for (const frame of frameDecoder.push(new Uint8Array(chunk))) {
-					handleFrame(conn, socket, frame, teardown, code => {
-						closeCode = code;
-					}, () => {
-						pongedAt = Date.now();
-					});
+					handleFrame(
+						conn,
+						socket,
+						frame,
+						teardown,
+						code => {
+							closeCode = code;
+						},
+						() => {
+							pongedAt = Date.now();
+						},
+					);
 				}
 			} catch (err) {
 				const code = err instanceof RelayProtocolError ? err.closeCode : 1002;
@@ -254,9 +261,9 @@ export async function startDaemonWs(options: DaemonWsOptions): Promise<DaemonWsH
 			return;
 		}
 		if (frame.opcode === OP_PONG) {
-		onPong?.();
-		return;
-	}
+			onPong?.();
+			return;
+		}
 		if (frame.opcode === OP_CLOSE) {
 			const code =
 				frame.payload.byteLength >= 2

@@ -75,7 +75,9 @@ export class WechatChannel implements ChannelAdapter {
 	#stopped = false;
 	/** context_token per sender (required to reply/media-send to them). */
 	#contextTokens = new Map<string, string>();
-	#onMessage: ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>) | null = null;
+	#onMessage:
+		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
+		| null = null;
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		// Token can be pre-supplied (reuse across restarts); empty = QR login.
@@ -90,9 +92,13 @@ export class WechatChannel implements ChannelAdapter {
 			await this.#fetchQr();
 			this.#state = "waiting_scan";
 			this.#detail = "scan the QR with WeChat";
-			this.#pollTimer = setInterval(() => void this.#pollQrStatus().catch(err => {
-				logger.warn("wechat qr poll failed", { error: err instanceof Error ? err.message : String(err) });
-			}), 3000);
+			this.#pollTimer = setInterval(
+				() =>
+					void this.#pollQrStatus().catch(err => {
+						logger.warn("wechat qr poll failed", { error: err instanceof Error ? err.message : String(err) });
+					}),
+				3000,
+			);
 			this.#pollTimer.unref?.();
 			return;
 		}
@@ -111,7 +117,9 @@ export class WechatChannel implements ChannelAdapter {
 	}
 
 	async #pollQrStatus(): Promise<void> {
-		const res = await fetch(`${WechatChannel.BASE_URL}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(this.#qrCode)}`);
+		const res = await fetch(
+			`${WechatChannel.BASE_URL}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(this.#qrCode)}`,
+		);
 		if (!res.ok) throw new Error(`wechat QR status failed: HTTP ${res.status}`);
 		const data = (await res.json()) as {
 			status?: string;
@@ -190,7 +198,8 @@ export class WechatChannel implements ChannelAdapter {
 			const fileNotes = items
 				.filter(i => i.type === 4 && i.file_item?.file_name)
 				.map(i => `📎 ${i.file_item!.file_name}`);
-			const finalText = fileNotes.length > 0 ? (text ? `${text}\n${fileNotes.join("\n")}` : fileNotes.join("\n")) : text;
+			const finalText =
+				fileNotes.length > 0 ? (text ? `${text}\n${fileNotes.join("\n")}` : fileNotes.join("\n")) : text;
 			if (!finalText.trim() && images.length === 0) continue;
 			void this.#onMessage?.(this.kind, m.from_user_id, finalText, images).catch(() => {});
 		}
@@ -235,7 +244,9 @@ export class WechatChannel implements ChannelAdapter {
 			throw new Error("image_item has neither url nor media");
 		}
 		const cdnBase = "https://novac2c.cdn.weixin.qq.com/c2c";
-		const url = img.media.full_url ?? `${cdnBase}/download?encrypted_query_param=${encodeURIComponent(img.media.encrypt_query_param!)}`;
+		const url =
+			img.media.full_url ??
+			`${cdnBase}/download?encrypted_query_param=${encodeURIComponent(img.media.encrypt_query_param!)}`;
 		const res = await fetch(url);
 		if (!res.ok) throw new Error(`cdn fetch failed: HTTP ${res.status}`);
 		const encrypted = Buffer.from(await res.arrayBuffer());
@@ -253,7 +264,10 @@ export class WechatChannel implements ChannelAdapter {
 		const contextToken = this.#contextTokens.get(to);
 		const mediaItems: {
 			type: number;
-			image_item?: { media: { encrypt_query_param: string; aes_key: string; encrypt_type: number }; mid_size: number };
+			image_item?: {
+				media: { encrypt_query_param: string; aes_key: string; encrypt_type: number };
+				mid_size: number;
+			};
 			file_item?: {
 				media: { encrypt_query_param: string; aes_key: string; encrypt_type: number };
 				file_name: string;
@@ -335,11 +349,7 @@ export class WechatChannel implements ChannelAdapter {
 		return { encryptQueryParam, aesKeyBase64: aeskey.toString("base64"), rawSize: rawsize, cipherSize };
 	}
 
-	async #sendItems(
-		to: string,
-		contextToken: string | undefined,
-		items: unknown[],
-	): Promise<void> {
+	async #sendItems(to: string, contextToken: string | undefined, items: unknown[]): Promise<void> {
 		await this.#post("/ilink/bot/sendmessage", {
 			msg: {
 				from_user_id: this.#botId,

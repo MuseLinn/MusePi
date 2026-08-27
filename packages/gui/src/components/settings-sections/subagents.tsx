@@ -1,12 +1,6 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import type { RpcClient } from "../../lib/rpc";
 import { SchemaTabSection } from "./schema";
 
 /** Settings → 任务与子智能体: TUI tasks-tab parity (modes, subagent

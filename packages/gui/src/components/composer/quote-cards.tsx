@@ -5,13 +5,7 @@ import { t } from "../../i18n/index.js";
 /** ZCode 引用回复 / Cmd+L 追加引用: quoted texts render as cards above the
  * input (not raw `> ` text pasted into the box). Cards stay until the
  * message is sent or closed individually. */
-export function QuoteCards({
-	quotes,
-	onRemove,
-}: {
-	quotes: string[];
-	onRemove(index: number): void;
-}): ReactNode {
+export function QuoteCards({ quotes, onRemove }: { quotes: string[]; onRemove(index: number): void }): ReactNode {
 	return (
 		<>
 			{quotes.map((q, i) => (

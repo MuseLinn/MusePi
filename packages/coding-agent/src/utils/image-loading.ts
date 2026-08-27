@@ -1,12 +1,5 @@
 import * as fs from "node:fs/promises";
-import type {
-	Context,
-	ImageContent,
-	Message,
-	Model,
-	OpenAIResponsesHistoryPayload,
-	TextContent,
-} from "@musepi/pi-ai";
+import type { Context, ImageContent, Message, Model, OpenAIResponsesHistoryPayload, TextContent } from "@musepi/pi-ai";
 import { formatBytes, isRecord, logger, readImageMetadata, SUPPORTED_IMAGE_MIME_TYPES } from "@musepi/pi-utils";
 import { LRUCache } from "@musepi/pi-utils/lru";
 import { resolveReadPath } from "../tools/path-utils";

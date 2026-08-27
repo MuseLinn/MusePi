@@ -55,11 +55,7 @@ export class ChannelCommandHandler implements ChannelHost {
 		}
 	}
 
-	async #runCommand(
-		reply: (from: string, text: string) => Promise<void>,
-		from: string,
-		text: string,
-	): Promise<void> {
+	async #runCommand(reply: (from: string, text: string) => Promise<void>, from: string, text: string): Promise<void> {
 		const [cmd, ...rest] = text.split(/\s+/);
 		const arg = rest.join(" ").trim();
 		switch (cmd) {
@@ -84,9 +80,7 @@ export class ChannelCommandHandler implements ChannelHost {
 				}
 				await reply(
 					from,
-					sessions
-						.map(s => `${s.id === current ? "* " : "  "}${s.id} — ${s.title || "(untitled)"}`)
-						.join("\n"),
+					sessions.map(s => `${s.id === current ? "* " : "  "}${s.id} — ${s.title || "(untitled)"}`).join("\n"),
 				);
 				return;
 			}
@@ -109,7 +103,7 @@ export class ChannelCommandHandler implements ChannelHost {
 			case "/stop": {
 				const sessions = await this.#ops.listSessions();
 				const target = arg
-					? sessions.find(s => s.id === arg) ?? sessions[Number(arg) - 1]
+					? (sessions.find(s => s.id === arg) ?? sessions[Number(arg) - 1])
 					: sessions.find(s => s.id === this.#binding.get(from));
 				if (!target) {
 					await reply(from, "No session to stop.");

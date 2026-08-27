@@ -7,10 +7,10 @@
  * before authoring widgets.
  */
 import { type } from "@musepi/musepi-type";
-import boardDescription from "../prompts/tools/board.md" with { type: "text" };
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { readBoards, validateBoards, writeBoards } from "../daemon/boards";
+import boardDescription from "../prompts/tools/board.md" with { type: "text" };
 import { WIDGET_TONES, WIDGET_TYPES } from "./widget";
 
 const boardSchema = type({
@@ -37,7 +37,9 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				board: {
 					id: "hello",
 					title: "一块活的看板",
-					widgets: [{ id: "w1", type: "pomodoro", title: "番茄钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 300 } }],
+					widgets: [
+						{ id: "w1", type: "pomodoro", title: "番茄钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 300 } },
+					],
 				},
 			},
 		},
@@ -62,7 +64,12 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				return String(v);
 			}
 		};
-		const widgetLine = (w: { type: string; title?: string; pos?: unknown; data?: Record<string, unknown> }): string => {
+		const widgetLine = (w: {
+			type: string;
+			title?: string;
+			pos?: unknown;
+			data?: Record<string, unknown>;
+		}): string => {
 			const t = typeof w.title === "string" && w.title.length > 0 ? ` "${w.title}"` : "";
 			const p = w.pos ? ` pos=${compact(w.pos, 120)}` : "";
 			const d = w.data && Object.keys(w.data).length > 0 ? ` data=${compact(w.data)}` : "";
@@ -91,13 +98,23 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				const board = boards.find(b => b.id === id);
 				if (!board) {
 					return {
-						content: [{ type: "text", text: `board: no board with id "${id}" — available: ${boards.map(b => b.id).join(", ") || "none"}` }],
+						content: [
+							{
+								type: "text",
+								text: `board: no board with id "${id}" — available: ${boards.map(b => b.id).join(", ") || "none"}`,
+							},
+						],
 						isError: true,
 					};
 				}
 				const lines = board.widgets.map((w, i) => `[${i + 1}] ${widgetLine(w as never)}`);
 				return {
-					content: [{ type: "text", text: `board "${board.title}" (${board.widgets.length} widgets)\n${lines.join("\n")}` }],
+					content: [
+						{
+							type: "text",
+							text: `board "${board.title}" (${board.widgets.length} widgets)\n${lines.join("\n")}`,
+						},
+					],
 					details: { board },
 				};
 			}
@@ -129,7 +146,12 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				const existing = current.find(b => b.id === id);
 				if (existing && (existing as { builtin?: boolean }).builtin === true) {
 					return {
-						content: [{ type: "text", text: `board: "${id}" is a built-in example and cannot be modified — create a new board instead` }],
+						content: [
+							{
+								type: "text",
+								text: `board: "${id}" is a built-in example and cannot be modified — create a new board instead`,
+							},
+						],
 						isError: true,
 					};
 				}
@@ -138,12 +160,20 @@ export class BoardTool implements AgentTool<typeof boardSchema, unknown> {
 				else current.push(board as never);
 				writeBoards(current);
 				return {
-					content: [{ type: "text", text: `saved board "${id}" (${((board as { widgets?: unknown[] }).widgets ?? []).length} widgets)` }],
+					content: [
+						{
+							type: "text",
+							text: `saved board "${id}" (${((board as { widgets?: unknown[] }).widgets ?? []).length} widgets)`,
+						},
+					],
 					details: { boards: current },
 				};
 			}
 			default: {
-				return { content: [{ type: "text", text: `board: unknown action "${action}" — list | get | save | schema` }], isError: true };
+				return {
+					content: [{ type: "text", text: `board: unknown action "${action}" — list | get | save | schema` }],
+					isError: true,
+				};
 			}
 		}
 	}

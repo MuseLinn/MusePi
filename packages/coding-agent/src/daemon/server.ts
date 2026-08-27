@@ -56,7 +56,6 @@ import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
-import type { CollabToolHandle } from "../tools/collab";
 import { isWireAgentEvent, toWireAgentEvent } from "../collab/wire-guard";
 import { findConfigFile } from "../config";
 import type { ModelRegistry } from "../config/model-registry";
@@ -102,6 +101,7 @@ import { parseSlashCommand } from "../slash-commands/helpers/parse";
 import { resolvePromptInput } from "../system-prompt";
 import { refreshAgentDiscovery } from "../task";
 import type { ConfiguredThinkingLevel } from "../thinking";
+import type { CollabToolHandle } from "../tools/collab";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
@@ -435,26 +435,30 @@ async function snapshotFromJsonl(file: string, sessionId: string): Promise<Stati
 }
 
 import { ModelsConfigFile } from "../config/models-config";
-import type { ExtensionNotificationMessage, ExtensionSetting, ExtensionUIContext } from "../extensibility/extensions/types";
+import type {
+	ExtensionNotificationMessage,
+	ExtensionSetting,
+	ExtensionUIContext,
+} from "../extensibility/extensions/types";
 import type { AgentSession } from "../session/agent-session";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import {
-	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
-	TASK_SUBAGENT_PROGRESS_CHANNEL,
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
+	TASK_SUBAGENT_LIFECYCLE_CHANNEL,
+	TASK_SUBAGENT_PROGRESS_CHANNEL,
 } from "../task/types";
 import { EventBus } from "../utils/event-bus";
-import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { openPath } from "../utils/open";
+import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
+import { getFxRates } from "./fx-rates";
 import { AppendJournal } from "./journal";
+import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
-import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
-import { getFxRates } from "./fx-rates";
 
 export interface DaemonOptions {
 	socketPath?: string;
@@ -960,9 +964,7 @@ export class DaemonSessionHost {
 	setCollabToolProvider(provider: () => CollabToolHandle): void {
 		this.#collabToolProvider = provider;
 	}
-	setOnExtensionNotification(
-		handler: (channel: string, message: ExtensionNotificationMessage) => void,
-	): void {
+	setOnExtensionNotification(handler: (channel: string, message: ExtensionNotificationMessage) => void): void {
 		this.#onExtensionNotification = handler;
 	}
 	/** Workspace file-content index (settings → 索引库 → 代码库); lazily
@@ -1816,8 +1818,7 @@ export class DaemonSessionHost {
 				void live.journal
 					.shouldCompact()
 					.then(needed => {
-						if (needed && live.journal)
-							return live.journal.compact(live.view.cursor, live.view.snapshot());
+						if (needed && live.journal) return live.journal.compact(live.view.cursor, live.view.snapshot());
 					})
 					.catch(err => {
 						// A failed compaction (e.g. transient Windows EPERM on
@@ -2871,8 +2872,7 @@ export class DaemonServer {
 		const dummyConn: DaemonConnection = { id: "collab-tool", send: () => {} };
 		return {
 			start: async opts => {
-				const mode =
-					opts.mode === "tunnel" ? "tunnel" : opts.mode === "workspace" ? "workspace" : "session";
+				const mode = opts.mode === "tunnel" ? "tunnel" : opts.mode === "workspace" ? "workspace" : "session";
 				const result = await this.handle(
 					"collab.start",
 					{ mode, ...(opts.sessionId ? { sessionId: opts.sessionId } : {}) },
@@ -3114,10 +3114,7 @@ export class DaemonServer {
 	/** 广播 extensions.notification(扩展 registerNotificationChannel 推送):
 	 *  转发到 events.subscribe 的 GUI 客户端。频道消息带 channel + 完整
 	 *  message(text/title/kind),GUI 渲染为通知。 */
-	#broadcastExtensionNotification(
-		channel: string,
-		message: ExtensionNotificationMessage,
-	): void {
+	#broadcastExtensionNotification(channel: string, message: ExtensionNotificationMessage): void {
 		const seq = ++this.#globalEventSeq;
 		const payload = { type: "extensions.notification" as const, channel, message, at: Date.now() };
 		for (const conn of this.#globalEventTargets) {
@@ -3415,7 +3412,9 @@ export class DaemonServer {
 				return null;
 			}
 		})();
-		const provider = getTerminalProvider(resolveTerminalProvider(settings ?? { getRaw: () => undefined } as never, manifestProvider));
+		const provider = getTerminalProvider(
+			resolveTerminalProvider(settings ?? ({ getRaw: () => undefined } as never), manifestProvider),
+		);
 
 		// Wrap the provider handle to emit daemon events.
 		const handle = await provider.open(realCwd, cols, rows, shell, args, env);
@@ -3423,15 +3422,18 @@ export class DaemonServer {
 			async write(msg: unknown): Promise<void> {
 				const m = msg as { method?: string; params?: Record<string, unknown> };
 				if (m.method === "input") handle.write(String(m.params?.data ?? ""));
-				else if (m.method === "resize") handle.resize(Number(m.params?.cols) || cols, Number(m.params?.rows) || rows);
+				else if (m.method === "resize")
+					handle.resize(Number(m.params?.cols) || cols, Number(m.params?.rows) || rows);
 				else if (m.method === "close") handle.dispose();
 			},
-			dispose(): void { handle.dispose(); },
+			dispose(): void {
+				handle.dispose();
+			},
 		};
 		handle.onData(d =>
 			this.#host.emitEvent(conn, { kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }),
 		);
-		handle.onExit((code) => {
+		handle.onExit(code => {
 			this.#host.emitEvent(conn, {
 				kind: "terminal-exit",
 				seq: ++this.#eventSeq,
@@ -4078,8 +4080,17 @@ export class DaemonServer {
 							enabled: p.enabled,
 							description: p.manifest.description ?? null,
 							tools: p.manifest.tools ? 1 : 0,
-							commands: Array.isArray(p.manifest.commands) ? p.manifest.commands.length : p.manifest.commands ? 1 : 0,
-							handlers: typeof p.manifest.hooks === "string" ? 1 : p.manifest.hooks ? Object.keys(p.manifest.hooks).length : 0,
+							commands: Array.isArray(p.manifest.commands)
+								? p.manifest.commands.length
+								: p.manifest.commands
+									? 1
+									: 0,
+							handlers:
+								typeof p.manifest.hooks === "string"
+									? 1
+									: p.manifest.hooks
+										? Object.keys(p.manifest.hooks).length
+										: 0,
 						})),
 					};
 				}
@@ -4204,8 +4215,7 @@ export class DaemonServer {
 				const shellMode = s?.getRaw("shell.mode");
 				const shellCfg = {
 					enabled: shellEnabled !== false,
-					mode:
-						shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
+					mode: shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
 					webUrl: this.#webUrl,
 				};
 				for (const ext of extensions) {
@@ -4232,7 +4242,9 @@ export class DaemonServer {
 				// Renderer-side slot components (ui-slots analogue): compiled
 				// from active extension-module entries, cached 10s with the
 				// extension scan. The GUI mounts them by slot id.
-				const { collectSlotComponents, collectToolViews, collectStatusBarSegments } = await import("./extension-artifact-compiler");
+				const { collectSlotComponents, collectToolViews, collectStatusBarSegments } = await import(
+					"./extension-artifact-compiler"
+				);
 				const components = await collectSlotComponents(
 					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
 					this.#host.cwd(),
@@ -4725,8 +4737,7 @@ export class DaemonServer {
 				const p = (params ?? {}) as { feed?: unknown; base?: unknown };
 				const feed = typeof p.feed === "string" ? p.feed : "";
 				if (feed !== "fx-rates") return { error: `widget.data: unknown feed "${feed}"` };
-				const base =
-					typeof p.base === "string" && /^[A-Za-z]{3}$/.test(p.base) ? p.base.toUpperCase() : "CNY";
+				const base = typeof p.base === "string" && /^[A-Za-z]{3}$/.test(p.base) ? p.base.toUpperCase() : "CNY";
 				const rates = await getFxRates(base);
 				if (rates === null) return { error: "widget.data: FX feed unavailable" };
 				return { rates, base, updatedAt: Date.now() };
@@ -4765,7 +4776,13 @@ export class DaemonServer {
 				const maxLines = Math.min(500, Math.max(20, p.maxLines ?? 200));
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
 				const run = async (args: string[]): Promise<string> => {
-					const proc = Bun.spawnSync({ cmd: ["git", ...args], cwd, stdout: "pipe", stderr: "pipe", windowsHide: true, });
+					const proc = Bun.spawnSync({
+						cmd: ["git", ...args],
+						cwd,
+						stdout: "pipe",
+						stderr: "pipe",
+						windowsHide: true,
+					});
 					return proc.stdout.toString();
 				};
 				let root = "";
@@ -4876,7 +4893,13 @@ export class DaemonServer {
 				const cwd = path.resolve(
 					typeof p.cwd === "string" && (p.cwd as string).length > 0 ? (p.cwd as string) : this.#host.cwd(),
 				);
-				const proc = Bun.spawn({ cmd: ["git", "add", "--", ...paths], cwd, stdout: "pipe", stderr: "pipe", windowsHide: true, });
+				const proc = Bun.spawn({
+					cmd: ["git", "add", "--", ...paths],
+					cwd,
+					stdout: "pipe",
+					stderr: "pipe",
+					windowsHide: true,
+				});
 				setTimeout(() => {
 					try {
 						proc.kill();
@@ -5090,7 +5113,7 @@ export class DaemonServer {
 				): Promise<{ exit: number; out: string; err: string }> => {
 					const gh = ghPath();
 					if (gh === null) return { exit: -1, out: "", err: "gh CLI not installed" };
-					const proc = Bun.spawn({ cmd: [gh, ...args], stdout: "pipe", stderr: "pipe", env, windowsHide: true, });
+					const proc = Bun.spawn({ cmd: [gh, ...args], stdout: "pipe", stderr: "pipe", env, windowsHide: true });
 					setTimeout(() => {
 						try {
 							proc.kill();
@@ -5447,8 +5470,7 @@ export class DaemonServer {
 					getLeafEntry(): { message: WireMessage } | undefined;
 				};
 				const bleafEntry = bsm.getLeafEntry();
-				const bleafKey =
-					bleafEntry ? messageKey(bleafEntry.message as WireMessage) : null;
+				const bleafKey = bleafEntry ? messageKey(bleafEntry.message as WireMessage) : null;
 				return {
 					ok: true,
 					leafId: bleafKey,
@@ -5468,9 +5490,11 @@ export class DaemonServer {
 				if (!bp.question) throw new Error("question required");
 				const blive = this.#host.get(bp.sessionId);
 				if (!blive) throw new Error("btwBranch requires a live session");
-				const bsm = (blive.agentSession as unknown as {
-					sessionManager: { getLeafId(): string | null };
-				}).sessionManager;
+				const bsm = (
+					blive.agentSession as unknown as {
+						sessionManager: { getLeafId(): string | null };
+					}
+				).sessionManager;
 				const leafId = bsm.getLeafId();
 				if (!leafId) throw new Error("btwBranch requires a branchable leaf");
 				// Reconstruct the minimum AssistantMessage the boundary op
@@ -5496,9 +5520,11 @@ export class DaemonServer {
 				// sessionFile + new id — TUI parity: the current view IS the new
 				// session). Rekey the host entry so later RPCs under the new id
 				// resolve; the GUI navigates to it (same as forkAt).
-				const bnewId = (blive.agentSession as unknown as {
-					sessionManager: { getSessionId(): string };
-				}).sessionManager.getSessionId();
+				const bnewId = (
+					blive.agentSession as unknown as {
+						sessionManager: { getSessionId(): string };
+					}
+				).sessionManager.getSessionId();
 				if (bnewId && bnewId !== bp.sessionId) {
 					this.#host.rekeySession(bp.sessionId, bnewId);
 				}
@@ -8840,9 +8866,7 @@ export async function startDaemon(
 		// A remote token opts the daemon into listening on all interfaces
 		// with mandatory bearer auth — the remote-instance switcher's
 		// security gate. Without it the WS stays loopback-only (local GUI).
-		const remote = options.remoteToken
-			? { host: "0.0.0.0" as const, authToken: options.remoteToken }
-			: undefined;
+		const remote = options.remoteToken ? { host: "0.0.0.0" as const, authToken: options.remoteToken } : undefined;
 		try {
 			wsHandle = await startDaemonWs({
 				port: options.wsPort,
@@ -8981,7 +9005,6 @@ export async function startDaemon(
 	};
 }
 
-
 // ── Launch-at-login (daemon self-registration, openchamber parity) ────────
 // The daemon is independent of the Electron GUI, so Electron's
 // setLoginItemSettings cannot cover it. We register the DAEMON command
@@ -8993,8 +9016,7 @@ export async function startDaemon(
 // on demand (open-design sidecar model). The check reads the actual slot so
 // external edits are reflected.
 
-const AUTOSTART_RUN_KEY =
-	"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\Run";
+const AUTOSTART_RUN_KEY = "Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\Run";
 
 /** Resolve the daemon binary path for autostart registration. Returns empty
  *  when the binary cannot be found (dev mode — autostart only makes sense
@@ -9008,8 +9030,20 @@ function resolveDaemonBinary(): string {
 		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi.exe"),
 		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi"),
 		// Electron asar-unpacked path (packaged app)
-		path.join((process as { resourcesPath?: string }).resourcesPath ?? "", "app.asar.unpacked", "vendor", "daemon", "musepi.exe"),
-		path.join((process as { resourcesPath?: string }).resourcesPath ?? "", "app.asar.unpacked", "vendor", "daemon", "musepi"),
+		path.join(
+			(process as { resourcesPath?: string }).resourcesPath ?? "",
+			"app.asar.unpacked",
+			"vendor",
+			"daemon",
+			"musepi.exe",
+		),
+		path.join(
+			(process as { resourcesPath?: string }).resourcesPath ?? "",
+			"app.asar.unpacked",
+			"vendor",
+			"daemon",
+			"musepi",
+		),
 		// PATH fallback
 		Bun.which("musepi") ?? "",
 	];
@@ -9023,7 +9057,8 @@ export function getAutostartState(): { enabled: boolean; supported: boolean; bin
 	if (process.platform === "win32") {
 		try {
 			const out = Bun.spawnSync(["reg.exe", "query", AUTOSTART_RUN_KEY, "/v", "musepi-daemon"], {
-				stdout: "pipe", stderr: "pipe",
+				stdout: "pipe",
+				stderr: "pipe",
 			});
 			return { enabled: out.exitCode === 0, supported: true };
 		} catch {
@@ -9047,12 +9082,28 @@ export async function setAutostartState(enabled: boolean): Promise<void> {
 		if (enabled) {
 			const bin = resolveDaemonBinary();
 			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
-			Bun.spawnSync(["reg.exe", "add", AUTOSTART_RUN_KEY, "/v", "musepi-daemon", "/t", "REG_SZ", "/d", `"${bin}" serve --port 8300`, "/f"], {
-				stdout: "pipe", stderr: "pipe",
-			});
+			Bun.spawnSync(
+				[
+					"reg.exe",
+					"add",
+					AUTOSTART_RUN_KEY,
+					"/v",
+					"musepi-daemon",
+					"/t",
+					"REG_SZ",
+					"/d",
+					`"${bin}" serve --port 8300`,
+					"/f",
+				],
+				{
+					stdout: "pipe",
+					stderr: "pipe",
+				},
+			);
 		} else {
 			Bun.spawnSync(["reg.exe", "delete", AUTOSTART_RUN_KEY, "/v", "musepi-daemon", "/f"], {
-				stdout: "pipe", stderr: "pipe",
+				stdout: "pipe",
+				stderr: "pipe",
 			});
 		}
 		return;
@@ -9063,7 +9114,9 @@ export async function setAutostartState(enabled: boolean): Promise<void> {
 			const bin = resolveDaemonBinary();
 			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
 			await fs.promises.mkdir(path.dirname(plist), { recursive: true });
-			await fs.promises.writeFile(plist, `<?xml version="1.0" encoding="UTF-8"?>
+			await fs.promises.writeFile(
+				plist,
+				`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>dev.musepi.daemon</string>
@@ -9074,9 +9127,15 @@ export async function setAutostartState(enabled: boolean): Promise<void> {
     <string>8300</string>
   </array>
   <key>RunAtLoad</key><true/>
-</dict></plist>`, "utf8");
+</dict></plist>`,
+				"utf8",
+			);
 		} else {
-			try { await fs.promises.unlink(plist); } catch { /* no-op */ }
+			try {
+				await fs.promises.unlink(plist);
+			} catch {
+				/* no-op */
+			}
 		}
 		return;
 	}
@@ -9087,17 +9146,24 @@ export async function setAutostartState(enabled: boolean): Promise<void> {
 			const bin = resolveDaemonBinary();
 			if (!bin) throw new Error("cannot register autostart: daemon binary not found");
 			await fs.promises.mkdir(path.dirname(desktop), { recursive: true });
-			await fs.promises.writeFile(desktop, `[Desktop Entry]
+			await fs.promises.writeFile(
+				desktop,
+				`[Desktop Entry]
 Type=Application
 Name=Musepi Daemon
 Exec=${bin} serve --port 8300
 X-GNOME-Autostart-enabled=true
-`, "utf8");
+`,
+				"utf8",
+			);
 		} else {
-			try { await fs.promises.unlink(desktop); } catch { /* no-op */ }
+			try {
+				await fs.promises.unlink(desktop);
+			} catch {
+				/* no-op */
+			}
 		}
 		return;
 	}
 	throw new Error("autostart not supported on this platform");
 }
-

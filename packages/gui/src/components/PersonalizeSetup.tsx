@@ -1,7 +1,7 @@
 import { type TranslationKey, t } from "@musepi/desktop-web";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
-import { BUILTIN_PETDEX, loadPetdex, petId, type PetdexPackage } from "../lib/pet";
+import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage, petId } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
@@ -62,7 +62,11 @@ export function PersonalizeSetup({
 			const next = !v;
 			void rpc
 				?.request("settings.set", { key: "display.smoothStreaming", value: next })
-				.then(() => window.dispatchEvent(new CustomEvent("omp-settings-changed", { detail: { key: "display.smoothStreaming" } })))
+				.then(() =>
+					window.dispatchEvent(
+						new CustomEvent("omp-settings-changed", { detail: { key: "display.smoothStreaming" } }),
+					),
+				)
 				.catch(() => {});
 			return next;
 		});
@@ -79,7 +83,10 @@ export function PersonalizeSetup({
 		window.dispatchEvent(new CustomEvent("omp-pet-changed"));
 	};
 
-	const petOptions = [...BUILTIN_PETDEX, ...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" }))];
+	const petOptions = [
+		...BUILTIN_PETDEX,
+		...petdex.map(p => ({ id: p.id, displayName: p.displayName, description: "" })),
+	];
 	// Where the pet lives: docked inside the composer ("input") or its own
 	// desktop window ("desktop") — musepi-gui-pet-mode, same key the pet host
 	// reads. State is lifted (OnboardingOverlay) so the chat preview on the

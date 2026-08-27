@@ -18,6 +18,7 @@ import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
+
 /** Known open-in app ids → built-in oc-icon fallback (shown when the
  *  shell couldn't extract a real icon, e.g. WindowsApps aliases like
  *  wt.exe whose icon the shell won't resolve). */
@@ -948,8 +949,16 @@ export function GuiHeader({
 							type="button"
 							data-header-trigger="openIn-main"
 							className={`gui-openin-main${openInScanning ? " gui-openin-main--scanning" : ""}`}
-							title={selectedOpenInApp ? t("open with {app}", { app: openInLabel(selectedOpenInApp) }) : t("open actions")}
-							aria-label={selectedOpenInApp ? t("open with {app}", { app: openInLabel(selectedOpenInApp) }) : t("open actions")}
+							title={
+								selectedOpenInApp
+									? t("open with {app}", { app: openInLabel(selectedOpenInApp) })
+									: t("open actions")
+							}
+							aria-label={
+								selectedOpenInApp
+									? t("open with {app}", { app: openInLabel(selectedOpenInApp) })
+									: t("open actions")
+							}
 							onClick={() => {
 								if (selectedOpenInApp) void openWith(selectedOpenInApp.appName, openInDir);
 							}}
@@ -1217,21 +1226,13 @@ export function GuiHeader({
 								>
 									{t("add")}
 								</button>
-								<button
-									type="button"
-									className="gui-btn gui-btn-sm"
-									onClick={() => setAddHostOpen(false)}
-								>
+								<button type="button" className="gui-btn gui-btn-sm" onClick={() => setAddHostOpen(false)}>
 									{t("cancel")}
 								</button>
 							</div>
 						</div>
 					) : (
-						<button
-							type="button"
-							className="gui-view-opt"
-							onClick={() => setAddHostOpen(true)}
-						>
+						<button type="button" className="gui-view-opt" onClick={() => setAddHostOpen(true)}>
 							<Icon name="add-circle" className="h-3.5 w-3.5" />
 							<span>{t("add instance")}</span>
 						</button>

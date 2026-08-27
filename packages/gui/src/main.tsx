@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
-import { initTooltips } from "./lib/tooltips";
 import { shellPlatform } from "./lib/electron";
+import { initTooltips } from "./lib/tooltips";
 import "@musepi/desktop-web/src/styles/tokens.css";
 import "@musepi/desktop-web/src/styles/base.css";
 import "@musepi/desktop-web/src/components/shell/shell.css";

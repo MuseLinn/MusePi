@@ -1,6 +1,6 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { t } from "../i18n/index.js";
 
 /**
  * Clock widget — market-style digital clock with three market states
@@ -56,7 +56,11 @@ export function ClockCard({
 				{ss}
 			</div>
 			<div className="gui-widget-clock-row">
-				{[["cn", "CN"], ["us", "US"], ["eu", "EU"]].map(([id, label]) => {
+				{[
+					["cn", "CN"],
+					["us", "US"],
+					["eu", "EU"],
+				].map(([id, label]) => {
 					const st = marketState(id);
 					return (
 						<button

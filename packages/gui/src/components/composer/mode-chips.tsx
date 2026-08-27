@@ -36,12 +36,8 @@ export function GoalChip({
 			onClick={armed ? onToggle : onOpen}
 		>
 			<Icon name={paused ? "pause" : "target"} className="h-3 w-3" />
-			<span className="max-w-[200px] truncate">
-				{armed ? t("goal") : objective || t("goal")}
-			</span>
-			{!armed && (
-				<Icon name="more" className="h-2.5 w-2.5 opacity-60" />
-			)}
+			<span className="max-w-[200px] truncate">{armed ? t("goal") : objective || t("goal")}</span>
+			{!armed && <Icon name="more" className="h-2.5 w-2.5 opacity-60" />}
 		</button>
 	);
 }

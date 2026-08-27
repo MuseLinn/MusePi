@@ -169,7 +169,11 @@ const VIEWPORTS = [
 
 // ── quick links (start page 快速链接) ─────────────────────────────────
 
-const QUICK_LINKS: Array<{ label: string; url: string; icon: "github" | "search" | "book" | "terminal" | "chat-1" | "compass-3" }> = [
+const QUICK_LINKS: Array<{
+	label: string;
+	url: string;
+	icon: "github" | "search" | "book" | "terminal" | "chat-1" | "compass-3";
+}> = [
 	{ label: "GitHub", url: "https://github.com", icon: "github" },
 	{ label: "Google", url: "https://www.google.com", icon: "search" },
 	{ label: "Bing", url: "https://www.bing.com", icon: "search" },
@@ -372,9 +376,7 @@ export function ManagedBrowserPane({
 			url: entry.url,
 		}));
 		if (showDefault || !query) return historySuggestions;
-		return historySuggestions.filter(item =>
-			`${item.label} ${item.detail}`.toLocaleLowerCase().includes(query),
-		);
+		return historySuggestions.filter(item => `${item.label} ${item.detail}`.toLocaleLowerCase().includes(query));
 	}, [addressEditing, addressValue, history]);
 
 	// Close the menu/suggestions on outside pointerdown (open-design parity).
@@ -520,12 +522,7 @@ export function ManagedBrowserPane({
 					{suggestionsOpen && suggestions.length > 0 ? (
 						<div className="gui-browser-suggestions" role="listbox">
 							{suggestions.map(item => (
-								<button
-									key={item.key}
-									type="button"
-									role="option"
-									onClick={() => void navigateTo(item.url)}
-								>
+								<button key={item.key} type="button" role="option" onClick={() => void navigateTo(item.url)}>
 									<span className="gui-browser-suggestion-icon">
 										<Icon name={item.icon} className="h-3.5 w-3.5" />
 									</span>
@@ -616,28 +613,15 @@ export function ManagedBrowserPane({
 									{t("browser hard reload")}
 								</button>
 								<span className="gui-browser-menu-sep" />
-								<button
-									type="button"
-									role="menuitem"
-									disabled={history.length === 0}
-									onClick={clearHistory}
-								>
+								<button type="button" role="menuitem" disabled={history.length === 0} onClick={clearHistory}>
 									<Icon name="history" className="h-3.5 w-3.5" />
 									{t("browser clear history")}
 								</button>
-								<button
-									type="button"
-									role="menuitem"
-									onClick={() => void clearBrowserData("cookies")}
-								>
+								<button type="button" role="menuitem" onClick={() => void clearBrowserData("cookies")}>
 									<Icon name="lock" className="h-3.5 w-3.5" />
 									{t("browser clear cookies")}
 								</button>
-								<button
-									type="button"
-									role="menuitem"
-									onClick={() => void clearBrowserData("all")}
-								>
+								<button type="button" role="menuitem" onClick={() => void clearBrowserData("all")}>
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
 									{t("browser clear all data")}
 								</button>
@@ -671,12 +655,8 @@ export function ManagedBrowserPane({
 								aria-label={`${tab.title}${tab.openedByAgent ? ` (${t("agent created tab")})` : ""}`}
 								onClick={() => void api?.managedBrowserSelectTab(tab.id)}
 							>
-								<span className="max-w-[110px] truncate">
-									{tab.title?.trim() || t("browser empty tab")}
-								</span>
-								{tab.openedByAgent && (
-									<span className="gui-browser-tab-badge">{t("agent created tab")}</span>
-								)}
+								<span className="max-w-[110px] truncate">{tab.title?.trim() || t("browser empty tab")}</span>
+								{tab.openedByAgent && <span className="gui-browser-tab-badge">{t("agent created tab")}</span>}
 							</button>
 							<button
 								type="button"
@@ -700,7 +680,9 @@ export function ManagedBrowserPane({
 					aria-live="polite"
 				>
 					<span className="flex-shrink-0 font-medium text-[var(--color-accent)]">{t("agent activity")}</span>
-					<span className="flex-shrink-0 text-[var(--color-text-faint)]">{statusLabel(state.activity.status)}</span>
+					<span className="flex-shrink-0 text-[var(--color-text-faint)]">
+						{statusLabel(state.activity.status)}
+					</span>
 					<span className="truncate text-[var(--color-text-muted)]">
 						{state.activity.summary}
 						{state.activity.domain ? ` · ${state.activity.domain}` : ""}
@@ -769,18 +751,10 @@ export function ManagedBrowserPane({
 					/>
 				) : viewport ? (
 					<div className="gui-browser-viewport-wrap" style={{ maxWidth: viewport }}>
-						<div
-							ref={slotRef}
-							className="gui-browser-slot"
-							aria-label={t("managed browser")}
-						/>
+						<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
 					</div>
 				) : (
-					<div
-						ref={slotRef}
-						className="gui-browser-slot"
-						aria-label={t("managed browser")}
-					/>
+					<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
 				)}
 			</div>
 			{/* Local-only login note (Proma parity) */}

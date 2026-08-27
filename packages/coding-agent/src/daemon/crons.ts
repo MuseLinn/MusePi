@@ -122,9 +122,13 @@ function sanitizeCronTask(t: unknown): CronTask | null {
 		schedule: {
 			kind: kind as CronSchedule["kind"],
 			time: typeof schedule.time === "string" ? schedule.time : undefined,
-			times: Array.isArray(schedule.times) ? schedule.times.filter((x): x is string => typeof x === "string") : undefined,
+			times: Array.isArray(schedule.times)
+				? schedule.times.filter((x): x is string => typeof x === "string")
+				: undefined,
 			date: typeof schedule.date === "string" ? schedule.date : undefined,
-			weekdays: Array.isArray(schedule.weekdays) ? schedule.weekdays.filter((d): d is number => typeof d === "number") : undefined,
+			weekdays: Array.isArray(schedule.weekdays)
+				? schedule.weekdays.filter((d): d is number => typeof d === "number")
+				: undefined,
 			dayOfMonth: typeof schedule.dayOfMonth === "number" ? schedule.dayOfMonth : undefined,
 			cron: typeof schedule.cron === "string" ? schedule.cron : undefined,
 			timezone: typeof schedule.timezone === "string" ? schedule.timezone : undefined,
@@ -160,15 +164,19 @@ export function validateCronTask(t: unknown): { ok: boolean; error?: string } {
 	if (typeof kind !== "string" || !["once", "daily", "weekly", "monthly", "cron"].includes(kind)) {
 		return { ok: false, error: `schedule.kind must be once|daily|weekly|monthly|cron` };
 	}
-	if (kind === "once" && typeof s.date !== "string") return { ok: false, error: "once schedule needs date (YYYY-MM-DD)" };
+	if (kind === "once" && typeof s.date !== "string")
+		return { ok: false, error: "once schedule needs date (YYYY-MM-DD)" };
 	if (kind === "daily") {
 		const times = Array.isArray(s.times) && s.times.length > 0 ? s.times : s.time ? [s.time] : null;
 		if (!times || times.some(x => !parseTime(x))) return { ok: false, error: "daily schedule needs time(s) (HH:mm)" };
 	}
-	if (kind !== "once" && kind !== "daily" && typeof s.time !== "string") return { ok: false, error: "schedule needs time (HH:mm)" };
+	if (kind !== "once" && kind !== "daily" && typeof s.time !== "string")
+		return { ok: false, error: "schedule needs time (HH:mm)" };
 	if (kind === "weekly" && !Array.isArray(s.weekdays)) return { ok: false, error: "weekly schedule needs weekdays" };
-	if (kind === "monthly" && typeof s.dayOfMonth !== "number") return { ok: false, error: "monthly schedule needs dayOfMonth" };
-	if (kind === "cron" && typeof s.cron !== "string") return { ok: false, error: "cron schedule needs cron expression" };
+	if (kind === "monthly" && typeof s.dayOfMonth !== "number")
+		return { ok: false, error: "monthly schedule needs dayOfMonth" };
+	if (kind === "cron" && typeof s.cron !== "string")
+		return { ok: false, error: "cron schedule needs cron expression" };
 	return { ok: true };
 }
 
@@ -206,7 +214,9 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 	}
 	if (s.kind === "daily") {
 		// openchamber parity: daily tasks fire at every configured time.
-		const times = (s.times?.length ? s.times : s.time ? [s.time] : []).map(parseTime).filter((x): x is { h: number; m: number } => x !== null);
+		const times = (s.times?.length ? s.times : s.time ? [s.time] : [])
+			.map(parseTime)
+			.filter((x): x is { h: number; m: number } => x !== null);
 		if (times.length === 0) return null;
 		for (let i = 0; i < 32; i++) {
 			const d = new Date(from + i * 24 * 60 * 60 * 1000);
@@ -285,11 +295,7 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 			// Vixie semantics: when BOTH dom and dow are constrained they
 			// AND; a wildcard on either side turns it into OR.
 			const dayMatch = !doms || !dows ? domMatch || dowMatch : domMatch && dowMatch;
-			if (
-				dayMatch &&
-				(!hours || hours.includes(d.getHours())) &&
-				(!mins || mins.includes(d.getMinutes()))
-			) {
+			if (dayMatch && (!hours || hours.includes(d.getHours())) && (!mins || mins.includes(d.getMinutes()))) {
 				const at = d.getTime();
 				if (at > from) return at;
 			}

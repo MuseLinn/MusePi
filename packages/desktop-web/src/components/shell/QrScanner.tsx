@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
+import { useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { haptic } from "../../lib/haptics";
 
@@ -137,9 +137,7 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 				<button type="button" className="qr-torch" onClick={() => void toggleTorch()} aria-pressed={torch}>
 					{torch ? "💡" : "🔦"} <span>{t("torch")}</span>
 				</button>
-				<p className="qr-hint">
-					{error ?? t("align the QR code in the frame")}
-				</p>
+				<p className="qr-hint">{error ?? t("align the QR code in the frame")}</p>
 			</footer>
 		</div>
 	);

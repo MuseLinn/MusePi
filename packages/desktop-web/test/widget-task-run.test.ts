@@ -4,7 +4,7 @@
  * success) and the schedule consumers (hourly/daily) are pure + testable.
  */
 import { describe, expect, test } from "bun:test";
-import { executeWidgetTask, isTaskDue, runTimeString, sameLocalDay, HOURLY_MS } from "../src/widgets/task-run";
+import { executeWidgetTask, HOURLY_MS, isTaskDue, runTimeString, sameLocalDay } from "../src/widgets/task-run";
 
 describe("executeWidgetTask — real execution (not a fake success)", () => {
 	test("metric task re-derives fresh data", async () => {
@@ -25,9 +25,13 @@ describe("executeWidgetTask — real execution (not a fake success)", () => {
 				status: 200,
 				headers: { "content-type": "application/json" },
 			});
-		const res = await executeWidgetTask("ticker", { value: "7.7945", delta: 0.0046 }, {
-			fetch: fakeFetch as unknown as typeof fetch,
-		});
+		const res = await executeWidgetTask(
+			"ticker",
+			{ value: "7.7945", delta: 0.0046 },
+			{
+				fetch: fakeFetch as unknown as typeof fetch,
+			},
+		);
 		expect(res.success).toBe(true);
 		expect(typeof res.data.value).toBe("string");
 		// 1/0.1283 ≈ 7.794 — a real CN¥-per-EUR quote, not a fixed string.
@@ -38,9 +42,13 @@ describe("executeWidgetTask — real execution (not a fake success)", () => {
 		const badFetch = async () => {
 			throw new Error("network down");
 		};
-		const res = await executeWidgetTask("ticker", { value: "7.7945" }, {
-			fetch: badFetch as unknown as typeof fetch,
-		});
+		const res = await executeWidgetTask(
+			"ticker",
+			{ value: "7.7945" },
+			{
+				fetch: badFetch as unknown as typeof fetch,
+			},
+		);
 		expect(res.success).toBe(true);
 		expect(typeof res.data.value).toBe("string");
 	});

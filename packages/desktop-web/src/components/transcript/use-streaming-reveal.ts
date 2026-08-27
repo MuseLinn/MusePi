@@ -1,9 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-	BlockUnitCounter,
-	nextRevealPosition,
-	sliceGraphemes,
-} from "./reveal";
+import { BlockUnitCounter, nextRevealPosition, sliceGraphemes } from "./reveal";
 
 /**
  * Character-level reveal for a streaming text block (the 平滑流式渲染
@@ -18,12 +14,7 @@ import {
  *   (checked on every tick, so toggling mid-stream applies on the next frame).
  * - `resetKey` change → reveal restarts from 0 (preview loops).
  */
-export function useStreamingReveal(
-	text: string,
-	streaming: boolean,
-	enabled: boolean,
-	resetKey = 0,
-): string {
+export function useStreamingReveal(text: string, streaming: boolean, enabled: boolean, resetKey = 0): string {
 	const [revealed, setRevealed] = useState(0);
 	const counterRef = useRef<BlockUnitCounter | null>(null);
 	if (counterRef.current === null) counterRef.current = new BlockUnitCounter();

@@ -71,6 +71,8 @@ export function highlightToCodeHtml(ansiOutput: string): string {
 	const trimmed = ansiOutput.endsWith("\n") ? ansiOutput.slice(0, -1) : ansiOutput;
 	return `${trimmed
 		.split("\n")
-		.map(line => `<span class="tr-code-line"><span class="tr-code-line-content">${ansiLineToHtml(line)}</span></span>`)
+		.map(
+			line => `<span class="tr-code-line"><span class="tr-code-line-content">${ansiLineToHtml(line)}</span></span>`,
+		)
 		.join("\n")}\n`;
 }

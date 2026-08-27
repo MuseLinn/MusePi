@@ -18,11 +18,12 @@ export interface ComposerModes {
  * is returned so the composer's send path can apply a goal created from
  * the sent message.
  */
-export function useModes(rpc: RpcClient | null, sessionId: string): {
+export function useModes(
+	rpc: RpcClient | null,
+	sessionId: string,
+): {
 	modes: ComposerModes | null;
-	setModes(
-		next: ComposerModes | null | ((prev: ComposerModes | null) => ComposerModes | null),
-	): void;
+	setModes(next: ComposerModes | null | ((prev: ComposerModes | null) => ComposerModes | null)): void;
 	todo: TodoPhaseView[];
 	todoTotal: number;
 	todoDone: number;

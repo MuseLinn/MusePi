@@ -1,24 +1,11 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import {
-	tapFeedback,
-} from "../../lib/haptic";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
-import { hitText } from "./shared";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { tapFeedback } from "../../lib/haptic";
+import type { RpcClient } from "../../lib/rpc";
+import { Icon } from "../../vendor/oc-icons";
 import type { SearchHit, SearchResult } from "./shared";
+import { hitText } from "./shared";
 
 /** One row from daemon session.list (history viewer left pane). */
 interface SessionRow {

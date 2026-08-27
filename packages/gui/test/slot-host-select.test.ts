@@ -1,6 +1,6 @@
 import "./dom-shim";
 import { describe, expect, it } from "bun:test";
-import { selectTranscriptNodeComponents, type SlotComponent } from "../src/lib/slot-host";
+import { type SlotComponent, selectTranscriptNodeComponents } from "../src/lib/slot-host";
 
 /** Minimal SlotComponent fixture — only entryKinds/order matter for dispatch. */
 function comp(over: Partial<SlotComponent> & { slot: string; extensionId: string; code: string }): SlotComponent {
@@ -20,7 +20,12 @@ describe("selectTranscriptNodeComponents", () => {
 	});
 
 	it("kind-scoped: a renderer does NOT leak to kinds it did not declare", () => {
-		const a = comp({ slot: "transcript.node", extensionId: "e1", code: "c", entryKinds: ["message:assistant", "message:tool_result"] });
+		const a = comp({
+			slot: "transcript.node",
+			extensionId: "e1",
+			code: "c",
+			entryKinds: ["message:assistant", "message:tool_result"],
+		});
 		expect(selectTranscriptNodeComponents([a], "message:assistant")).toEqual([a]);
 		expect(selectTranscriptNodeComponents([a], "message:user")).toEqual([]);
 		expect(selectTranscriptNodeComponents([a], "compaction")).toEqual([]);
@@ -32,8 +37,23 @@ describe("selectTranscriptNodeComponents", () => {
 	});
 
 	it("preserves ascending order", () => {
-		const low = comp({ slot: "transcript.node", extensionId: "low", code: "c", order: 1, entryKinds: ["message:user"] });
-		const high = comp({ slot: "transcript.node", extensionId: "high", code: "c", order: 10, entryKinds: ["message:user"] });
-		expect(selectTranscriptNodeComponents([high, low], "message:user").map(c => c.extensionId)).toEqual(["low", "high"]);
+		const low = comp({
+			slot: "transcript.node",
+			extensionId: "low",
+			code: "c",
+			order: 1,
+			entryKinds: ["message:user"],
+		});
+		const high = comp({
+			slot: "transcript.node",
+			extensionId: "high",
+			code: "c",
+			order: 10,
+			entryKinds: ["message:user"],
+		});
+		expect(selectTranscriptNodeComponents([high, low], "message:user").map(c => c.extensionId)).toEqual([
+			"low",
+			"high",
+		]);
 	});
 });

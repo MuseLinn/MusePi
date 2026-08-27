@@ -22,7 +22,9 @@ export class DiscordChannel implements ChannelAdapter {
 	#lastSeq: number | null = null;
 	#selfId = "";
 	/** Injected by the registry at construction: (kind, from, text, images). */
-	#onMessage: ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>) | null = null;
+	#onMessage:
+		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
+		| null = null;
 
 	static readonly GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 	static readonly INTENTS = (1 << 9) | (1 << 12); // GUILD_MESSAGES | DIRECT_MESSAGES
@@ -69,11 +71,18 @@ export class DiscordChannel implements ChannelAdapter {
 					const hello = msg.d as { heartbeat_interval?: number };
 					this.#heartbeatTimer?.unref?.();
 					if (this.#heartbeatTimer) clearInterval(this.#heartbeatTimer);
-					this.#heartbeatTimer = setInterval(() => {
-						this.#sendOp(1, this.#lastSeq);
-					}, (hello.heartbeat_interval ?? 41250) * 0.9);
+					this.#heartbeatTimer = setInterval(
+						() => {
+							this.#sendOp(1, this.#lastSeq);
+						},
+						(hello.heartbeat_interval ?? 41250) * 0.9,
+					);
 					this.#heartbeatTimer.unref?.();
-					this.#sendOp(2, { token: this.#token, intents: DiscordChannel.INTENTS, properties: { os: "linux", browser: "musepi", device: "musepi" } });
+					this.#sendOp(2, {
+						token: this.#token,
+						intents: DiscordChannel.INTENTS,
+						properties: { os: "linux", browser: "musepi", device: "musepi" },
+					});
 					return;
 				}
 				if (msg.op === 0 && msg.t === "READY") {

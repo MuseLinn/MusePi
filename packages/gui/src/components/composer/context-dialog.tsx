@@ -265,9 +265,7 @@ export function ContextUsageCard({
 								data.freeTokens ??
 									Math.max(
 										0,
-										data.contextWindow -
-											data.breakdown.usedTokens -
-											(data.autoCompactBufferTokens ?? 0),
+										data.contextWindow - data.breakdown.usedTokens - (data.autoCompactBufferTokens ?? 0),
 									),
 								data.contextWindow,
 								CONTEXT_CELL_FREE,

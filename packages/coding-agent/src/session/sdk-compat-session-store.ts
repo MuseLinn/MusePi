@@ -1,8 +1,8 @@
 import type * as fsTypes from "node:fs";
-import * as fs from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
-import * as path from "node:path";
+import * as fs from "node:fs/promises";
 import { homedir } from "node:os";
+import * as path from "node:path";
 import type {
 	AssistantMessage,
 	ImageContent,

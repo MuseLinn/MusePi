@@ -41,7 +41,8 @@ export function MetricCluster({ stats }: MetricClusterProps) {
 					className="stats-metric-card primary"
 					title="Prompt input served from cache: cache reads / (uncached input + cache reads)"
 				>
-					<div className="stats-metric-label">Cache Rate</div>					<div className="stats-metric-value">{formatPercent(stats.cacheRate)}</div>
+					<div className="stats-metric-label">Cache Rate</div>{" "}
+					<div className="stats-metric-value">{formatPercent(stats.cacheRate)}</div>
 				</div>
 				<div className="stats-metric-card primary">
 					<div className="stats-metric-label">{t("Error Rate")}</div>

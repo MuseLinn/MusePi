@@ -1,17 +1,7 @@
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
-import {
-	type SchemaItem,
-	SchemaSettings,
-} from "../SchemaSettings";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { RpcClient } from "../../lib/rpc";
+import { type SchemaItem, SchemaSettings } from "../SchemaSettings";
 import { TaskCardStylePreview } from "./general";
 
 /** Schema-driven settings tab: fetches settings.schema + current values

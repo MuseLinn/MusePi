@@ -10,7 +10,7 @@
  * so capture order is: text control → DOM range.
  */
 
-const CHAT_INPUT_HOST_SELECTOR = "[data-chat-input=\"true\"]";
+const CHAT_INPUT_HOST_SELECTOR = '[data-chat-input="true"]';
 
 const isInsideChatComposer = (node: Node | null): boolean => {
 	if (!node) return false;

@@ -1,10 +1,10 @@
 import { agents } from "./agents.js";
 import { collab } from "./collab.js";
+import { companion } from "./companion.js";
 import { composer } from "./composer.js";
 import { context } from "./context.js";
-import { guest } from "./guest.js";
-import { companion } from "./companion.js";
 import { general } from "./general.js";
+import { guest } from "./guest.js";
 import { sessions } from "./sessions.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";

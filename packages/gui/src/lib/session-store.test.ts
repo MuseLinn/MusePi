@@ -108,7 +108,17 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 			index: 0,
 			agent: "scout",
 			task: "do a thing",
-			progress: { id, status, agent: "scout", task: "do a thing", toolCount: 1, requests: 1, tokens: 1000, cost: 0.01, durationMs: 100 },
+			progress: {
+				id,
+				status,
+				agent: "scout",
+				task: "do a thing",
+				toolCount: 1,
+				requests: 1,
+				tokens: 1000,
+				cost: 0.01,
+				durationMs: 100,
+			},
 			sessionId,
 		} as never;
 	}

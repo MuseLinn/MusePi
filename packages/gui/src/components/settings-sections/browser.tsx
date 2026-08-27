@@ -1,16 +1,7 @@
-import {
-	t,
-} from "@musepi/desktop-web";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import { t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
+import type { RpcClient } from "../../lib/rpc";
 
 interface BrowserTabInfo {
 	targetId: string;

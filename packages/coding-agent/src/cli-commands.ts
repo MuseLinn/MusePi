@@ -217,7 +217,12 @@ export const commands: CommandEntry[] = [
 	{
 		name: "assembly",
 		load: () => import("./commands/assembly").then(m => m.default),
-		help: { description: "Inspect the musepi assembly manifest and surface configuration", hidden: false, flags: {}, args: {} },
+		help: {
+			description: "Inspect the musepi assembly manifest and surface configuration",
+			hidden: false,
+			flags: {},
+			args: {},
+		},
 	},
 ];
 

@@ -7,12 +7,12 @@ import { createMockModel, registerMockApi } from "@musepi/pi-ai/providers/mock";
 import { __providerInFlightForTesting, streamSimple } from "@musepi/pi-ai/stream";
 import type { Context } from "@musepi/pi-ai/types";
 import {
+	isSensitiveSettingPath,
 	onAppendOnlyModeChanged,
 	onStatusLineSessionAccentChanged,
 	resetSettingsForTest,
 	type SettingPath,
 	Settings,
-	isSensitiveSettingPath,
 } from "@musepi/pi-coding-agent/config/settings";
 import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { AUTO_IMAGE_PROVIDER_ORDER } from "@musepi/pi-coding-agent/tools/image-providers";
@@ -877,7 +877,6 @@ describe("Settings", () => {
 			]);
 		});
 	});
-
 
 	describe("project override ledger", () => {
 		it("lists only keys the project layer owns with effective + global values", async () => {

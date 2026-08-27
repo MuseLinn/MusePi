@@ -1001,7 +1001,8 @@ export const SETTINGS_SCHEMA = {
 			tuiOnly: true,
 			group: "Terminal",
 			label: "Terminal Provider",
-			description: "Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
+			description:
+				"Explicit terminal backend selection. 'auto' falls back to node-pty on bun-pty failure; 'bun-pty' or 'node-pty' fail loud on unsupported platforms.",
 		},
 	},
 

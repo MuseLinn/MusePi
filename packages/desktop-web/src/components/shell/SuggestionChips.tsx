@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
-import { t, type TranslationKey } from "../../i18n/index.js";
+import { type TranslationKey, t } from "../../i18n/index.js";
 
 /**
  * Empty-state draft suggestion chips (openchamber DraftPresetChips parity,
@@ -55,11 +55,7 @@ export function SuggestionChips({ onPick }: { onPick(prompt: string): void }): R
 						key={s.promptKey}
 						type="button"
 						className={cls}
-						style={
-							extra && expanded
-								? { animationDelay: `${(i - collapsed.length) * 40}ms` }
-								: undefined
-						}
+						style={extra && expanded ? { animationDelay: `${(i - collapsed.length) * 40}ms` } : undefined}
 						onClick={() => onPick(t(s.promptKey))}
 					>
 						{t(s.labelKey)}

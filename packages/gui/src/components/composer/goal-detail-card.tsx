@@ -115,9 +115,7 @@ export function GoalDetailCard({
 			<div className="gui-quota-title">
 				<Icon name="target" className="h-3.5 w-3.5" />
 				{t("goal mode")}
-				{detail && (
-					<span className={`gui-goal-status gui-goal-status--${status}`}>{statusLabel(status)}</span>
-				)}
+				{detail && <span className={`gui-goal-status gui-goal-status--${status}`}>{statusLabel(status)}</span>}
 			</div>
 			{loading ? (
 				<div className="gui-quota-note">…</div>

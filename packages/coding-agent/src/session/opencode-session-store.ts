@@ -1,6 +1,6 @@
-import * as path from "node:path";
-import { homedir } from "node:os";
 import { Database } from "bun:sqlite";
+import { homedir } from "node:os";
+import * as path from "node:path";
 import type {
 	AssistantMessage,
 	ImageContent,
@@ -80,8 +80,11 @@ function collectBlocks(value: unknown): {
 				const input = isRecord(block.input) ? block.input : isRecord(block.arguments) ? block.arguments : {};
 				out.tools.push({ id, name, input });
 			} else if (block.type === "image" || block.type === "file") {
-				const data = stringField(block, "data") ?? stringField((block.source ?? {}) as Record<string, unknown>, "data");
-				const mimeType = stringField(block, "mimeType") ?? stringField((block.source ?? {}) as Record<string, unknown>, "media_type");
+				const data =
+					stringField(block, "data") ?? stringField((block.source ?? {}) as Record<string, unknown>, "data");
+				const mimeType =
+					stringField(block, "mimeType") ??
+					stringField((block.source ?? {}) as Record<string, unknown>, "media_type");
 				if (data && mimeType) out.images.push({ type: "image", data, mimeType });
 			} else if (Array.isArray(block.parts)) {
 				walk(block.parts);
@@ -130,7 +133,9 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 		const rows: OpencodeRow[] = [];
 		try {
 			rows.push(
-				...(db.query("SELECT id, title, directory, time_created, time_updated FROM session ORDER BY time_updated DESC").all() as OpencodeRow[]),
+				...(db
+					.query("SELECT id, title, directory, time_created, time_updated FROM session ORDER BY time_updated DESC")
+					.all() as OpencodeRow[]),
 			);
 		} catch {
 			return [];
@@ -160,7 +165,7 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 		const usedIds = new Set<string>();
 		let parentId: string | null = null;
 		let synthetic = 0;
-		let title = info.title;
+		const title = info.title;
 
 		for (const row of rows) {
 			let data: Record<string, unknown>;
@@ -182,19 +187,52 @@ export class OpencodeSessionStore implements ForeignSessionStore {
 						: blocks.texts.join("\n");
 				const message: UserMessage = { role: "user", content, timestamp: ts };
 				const id = uniqueEntryId(`oc-${synthetic++}`, usedIds);
-				const entry: SessionMessageEntry = { type: "message", id, parentId, timestamp: new Date(ts).toISOString(), message };
+				const entry: SessionMessageEntry = {
+					type: "message",
+					id,
+					parentId,
+					timestamp: new Date(ts).toISOString(),
+					message,
+				};
 				manager.ingestReplicatedEntry(entry);
 				parentId = id;
 			} else if (role === "assistant" || blocks.tools.length > 0) {
 				const content: (TextContent | ThinkingContent | ToolCall)[] = [
 					...blocks.thinking.map(t => ({ type: "thinking" as const, thinking: t })),
 					...blocks.texts.map(t => ({ type: "text" as const, text: t })),
-					...blocks.tools.map(t => ({ type: "toolCall" as const, id: t.id ?? `t${synthetic}`, name: t.name ?? "tool", arguments: t.input ?? {} })),
+					...blocks.tools.map(t => ({
+						type: "toolCall" as const,
+						id: t.id ?? `t${synthetic}`,
+						name: t.name ?? "tool",
+						arguments: t.input ?? {},
+					})),
 				];
 				if (content.length === 0) continue;
-				const message: AssistantMessage = { role: "assistant", content, api: "opencode", provider: "opencode", model: "unknown", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: ts };
+				const message: AssistantMessage = {
+					role: "assistant",
+					content,
+					api: "opencode",
+					provider: "opencode",
+					model: "unknown",
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 0,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+					},
+					stopReason: "stop",
+					timestamp: ts,
+				};
 				const id = uniqueEntryId(`oc-${synthetic++}`, usedIds);
-				const entry: SessionMessageEntry = { type: "message", id, parentId, timestamp: new Date(ts).toISOString(), message };
+				const entry: SessionMessageEntry = {
+					type: "message",
+					id,
+					parentId,
+					timestamp: new Date(ts).toISOString(),
+					message,
+				};
 				manager.ingestReplicatedEntry(entry);
 				parentId = id;
 			}

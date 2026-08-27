@@ -4,12 +4,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { clearCustomApis } from "@musepi/pi-ai/api-registry";
 import { createMockModel, registerMockApi } from "@musepi/pi-ai/providers/mock";
-import {
-	__providerInFlightForTesting,
-	configureProviderMaxInFlightRequests,
-	streamSimple,
-} from "@musepi/pi-ai/stream";
+import { __providerInFlightForTesting, configureProviderMaxInFlightRequests, streamSimple } from "@musepi/pi-ai/stream";
 import type { Context } from "@musepi/pi-ai/types";
+
 function context(): Context {
 	return {
 		systemPrompt: [],

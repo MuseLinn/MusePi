@@ -814,56 +814,57 @@ it("allow_always: caches decision and calls bridge only once for subsequent exec
 	expect(bashTool.executeCalls).toBe(2);
 });
 
-it.each(
-	boundaryCases,
-)("%s permission decisions prompt again after a successful %s session boundary", async (decision, transition) => {
-	const bashTool = makeFakeTool("bash");
-	const bridge = makeBridge({ outcome: "selected", optionId: decision, kind: decision });
-	const permissionSpy = spyOn(bridge, "requestPermission");
-	session = await createSession([bashTool], bridge, {}, { persist: true });
+it.each(boundaryCases)(
+	"%s permission decisions prompt again after a successful %s session boundary",
+	async (decision, transition) => {
+		const bashTool = makeFakeTool("bash");
+		const bridge = makeBridge({ outcome: "selected", optionId: decision, kind: decision });
+		const permissionSpy = spyOn(bridge, "requestPermission");
+		session = await createSession([bashTool], bridge, {}, { persist: true });
 
-	await session.setActiveToolsByName(["bash"]);
-	const wrappedBash = session.agent.state.tools.find(tool => tool.name === "bash");
-	if (!wrappedBash) throw new Error("Expected wrapped bash tool");
+		await session.setActiveToolsByName(["bash"]);
+		const wrappedBash = session.agent.state.tools.find(tool => tool.name === "bash");
+		if (!wrappedBash) throw new Error("Expected wrapped bash tool");
 
-	for (let callIndex = 0; callIndex < 2; callIndex++) {
-		if (callIndex === 1) {
-			if (transition === "new") {
-				expect(await session.newSession()).toBe(true);
+		for (let callIndex = 0; callIndex < 2; callIndex++) {
+			if (callIndex === 1) {
+				if (transition === "new") {
+					expect(await session.newSession()).toBe(true);
+				} else {
+					const targetId = `permission-target-${Bun.nanoseconds()}`;
+					const targetPath = `${tempDir.path()}/${targetId}.jsonl`;
+					await Bun.write(
+						targetPath,
+						`${JSON.stringify({
+							type: "session",
+							version: 3,
+							id: targetId,
+							timestamp: new Date().toISOString(),
+							cwd: tempDir.path(),
+						})}\n`,
+					);
+					expect(await session.switchSession(targetPath)).toBe(true);
+				}
+			}
+
+			const execution = wrappedBash.execute(
+				`call-${callIndex}`,
+				{ command: "echo boundary" },
+				undefined,
+				undefined as never,
+				undefined as never,
+			);
+			if (decision === "reject_always") {
+				await expect(execution).rejects.toThrow(/rejected by user/);
 			} else {
-				const targetId = `permission-target-${Bun.nanoseconds()}`;
-				const targetPath = `${tempDir.path()}/${targetId}.jsonl`;
-				await Bun.write(
-					targetPath,
-					`${JSON.stringify({
-						type: "session",
-						version: 3,
-						id: targetId,
-						timestamp: new Date().toISOString(),
-						cwd: tempDir.path(),
-					})}\n`,
-				);
-				expect(await session.switchSession(targetPath)).toBe(true);
+				await execution;
 			}
 		}
 
-		const execution = wrappedBash.execute(
-			`call-${callIndex}`,
-			{ command: "echo boundary" },
-			undefined,
-			undefined as never,
-			undefined as never,
-		);
-		if (decision === "reject_always") {
-			await expect(execution).rejects.toThrow(/rejected by user/);
-		} else {
-			await execution;
-		}
-	}
-
-	expect(permissionSpy).toHaveBeenCalledTimes(2);
-	expect(bashTool.executeCalls).toBe(decision === "allow_always" ? 2 : 0);
-});
+		expect(permissionSpy).toHaveBeenCalledTimes(2);
+		expect(bashTool.executeCalls).toBe(decision === "allow_always" ? 2 : 0);
+	},
+);
 
 // ---------------------------------------------------------------------------
 // 4. Read tool not gated: bridge never called even when bridge is set

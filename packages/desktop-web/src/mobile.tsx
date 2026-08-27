@@ -7,8 +7,8 @@ import "./styles/mobile.css";
 import "./i18n";
 import {
 	getSystemBarInsets,
-	isNativeShell,
 	isMobileShell,
+	isNativeShell,
 	setupAndroidBackHandler,
 	setupDeepLinkHandler,
 	setupNotificationTapHandler,

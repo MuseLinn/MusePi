@@ -13,10 +13,10 @@
  * but the ExtensionRunner is internal to session creation — the daemon
  * cannot subscribe, so the request carries the rendered prompt only.)
  */
-import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type {
 	ExtensionAskDialogQuestion,
 	ExtensionAskDialogResult,
+	ExtensionUIContext,
 } from "../extensibility/extensions/types";
 import type { Theme } from "../modes/theme/theme";
 
@@ -168,11 +168,7 @@ export function createApprovalBridge(
 					pendingAsks.delete(requestId);
 					// dialog mode answers are always ExtensionAskDialogResult
 					// (submit/chat) or undefined (cancel) — never a bare string.
-					resolve(
-						typeof answer === "string" || Array.isArray(answer)
-							? undefined
-							: answer,
-					);
+					resolve(typeof answer === "string" || Array.isArray(answer) ? undefined : answer);
 				},
 			};
 			pendingAsks.set(requestId, record);

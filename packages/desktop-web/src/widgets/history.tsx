@@ -32,7 +32,10 @@ export function historyDefaults(): Record<string, unknown> {
 		header: "HISTORY",
 		date: "历史上的今天",
 		events: [
-			{ year: "2008", text: "北京承办的奥运会为世界奉献了一场精彩的体育盛宴，共创造43项新世界纪录及132项新奥运纪录，中国以51枚金牌居金牌榜首位。" },
+			{
+				year: "2008",
+				text: "北京承办的奥运会为世界奉献了一场精彩的体育盛宴，共创造43项新世界纪录及132项新奥运纪录，中国以51枚金牌居金牌榜首位。",
+			},
 			{ year: "1887", text: "李享亭（1897～1987），内科专家、医学教育家、中国消化病学的奠基人。" },
 			{ year: "1980", text: "罗杰·费德勒（Roger Federer, 1981年8月8日—），瑞士男子职业网球运动员。" },
 		],
@@ -171,16 +174,22 @@ export function HistoryCard({
 			{
 				label: "60s API · 百度百科 · 实时获取",
 				url: "https://60s.viki.moe/v2/today-in-history",
-				parse: (payload) => {
-					const items = (payload as { data?: { items?: Array<{ year?: string; description?: string; title?: string }> } })?.data?.items;
+				parse: payload => {
+					const items = (
+						payload as { data?: { items?: Array<{ year?: string; description?: string; title?: string }> } }
+					)?.data?.items;
 					if (!Array.isArray(items)) return [];
-					return items.map(ev => ({ year: String(ev?.year ?? ""), text: ev?.description || ev?.title || "", link: "" }));
+					return items.map(ev => ({
+						year: String(ev?.year ?? ""),
+						text: ev?.description || ev?.title || "",
+						link: "",
+					}));
 				},
 			},
 			{
 				label: "百度百科 · 国内备用线路 · 实时获取",
 				url: "https://api.yum6.cn/briefing/baidu.php?format=json",
-				parse: (payload) => {
+				parse: payload => {
 					const items = (payload as { content?: string[] })?.content;
 					if (!Array.isArray(items)) return [];
 					return items.map(title => ({ year: "今日", text: String(title ?? ""), link: "" }));
@@ -228,9 +237,7 @@ export function HistoryCard({
 			const j = Math.floor(Math.random() * (i + 1));
 			[copy[i], copy[j]] = [copy[j], copy[i]];
 		}
-		return copy
-			.slice(0, n)
-			.sort((a, b) => (parseInt(b.year, 10) || 0) - (parseInt(a.year, 10) || 0));
+		return copy.slice(0, n).sort((a, b) => (parseInt(b.year, 10) || 0) - (parseInt(a.year, 10) || 0));
 	};
 
 	const shuffle = () => {
@@ -247,9 +254,13 @@ export function HistoryCard({
 			widgetFetch("https://60s.viki.moe/v2/today-in-history", { cache: "no-store" })
 				.then(r => r.json())
 				.then(p => {
-					const items = (p as { data?: { items?: Array<{ year?: string; description?: string; title?: string }> } })?.data?.items;
+					const items = (
+						p as { data?: { items?: Array<{ year?: string; description?: string; title?: string }> } }
+					)?.data?.items;
 					if (Array.isArray(items) && items.length) {
-						const list = items.map(ev => ({ year: String(ev?.year ?? ""), text: ev?.description || ev?.title || "", link: "" })).filter(ev => ev.text);
+						const list = items
+							.map(ev => ({ year: String(ev?.year ?? ""), text: ev?.description || ev?.title || "", link: "" }))
+							.filter(ev => ev.text);
 						setAll(list);
 						setSource("数据来源 · 60s API · 百度百科 · 实时获取");
 						setRows(pick(list, 12));
@@ -270,15 +281,21 @@ export function HistoryCard({
 			<h1 className="gui-widget-history-head" ref={headRef}>
 				<canvas ref={logoRef} className="gui-widget-history-logo" aria-hidden="true" />
 				<span className="gui-widget-history-headline">
-					<span className="gui-widget-history-date" ref={dateRef}>{dateLabel}</span>
-					<span className="gui-widget-history-sub">{header === "HISTORY" ? "历史上的今天" : String(data.date ?? "历史上的今天")}</span>
+					<span className="gui-widget-history-date" ref={dateRef}>
+						{dateLabel}
+					</span>
+					<span className="gui-widget-history-sub">
+						{header === "HISTORY" ? "历史上的今天" : String(data.date ?? "历史上的今天")}
+					</span>
 				</span>
 			</h1>
 			<div className="gui-widget-history-panel" ref={panelRef}>
 				{loading && shown.length === 0 ? (
 					<div className="gui-widget-history-state">正在从可用线路获取今日事件…</div>
 				) : shown.length === 0 ? (
-					<div className="gui-widget-history-state">{offline ? "历史事件获取失败，请稍后重试" : "暂时没有可显示的历史事件"}</div>
+					<div className="gui-widget-history-state">
+						{offline ? "历史事件获取失败，请稍后重试" : "暂时没有可显示的历史事件"}
+					</div>
 				) : (
 					shown.map((ev, i) => (
 						<div className="gui-widget-history-ev" key={`${ev.year}-${i}`}>
@@ -286,7 +303,9 @@ export function HistoryCard({
 							<span className="gui-widget-history-copy">
 								{esc(ev.text)}
 								{ev.link && (
-									<a href={ev.link} target="_blank" rel="noopener noreferrer">→</a>
+									<a href={ev.link} target="_blank" rel="noopener noreferrer">
+										→
+									</a>
 								)}
 							</span>
 						</div>

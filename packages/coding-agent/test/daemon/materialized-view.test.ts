@@ -244,7 +244,10 @@ describe("MaterializedView TTSR / IRC projection", () => {
 		const events: AgentEvent[] = [
 			{ type: "turn_start" },
 			{ type: "ttsr_triggered", rules: [{ name: "no-console" }] },
-			{ type: "irc_message", message: { role: "custom", customType: "irc:incoming", content: "hi", display: true, timestamp: 5 } },
+			{
+				type: "irc_message",
+				message: { role: "custom", customType: "irc:incoming", content: "hi", display: true, timestamp: 5 },
+			},
 		];
 		const incremental = new MaterializedView(SESSION, CWD);
 		for (const e of events) incremental.apply(e);

@@ -1,5 +1,5 @@
 import { relTime, t } from "@musepi/desktop-web";
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 
 /** One row of the welcome-scene reminders (kimi 实时提醒 parity). */

@@ -89,6 +89,8 @@ import light_zenith from "./light-zenith.json" with { type: "json" };
 import limestone from "./limestone.json" with { type: "json" };
 import mahogany from "./mahogany.json" with { type: "json" };
 import marble from "./marble.json" with { type: "json" };
+import musepi from "./musepi.json" with { type: "json" };
+import musepi_light from "./musepi-light.json" with { type: "json" };
 import obsidian from "./obsidian.json" with { type: "json" };
 import onyx from "./onyx.json" with { type: "json" };
 import pearl from "./pearl.json" with { type: "json" };
@@ -96,8 +98,6 @@ import porcelain from "./porcelain.json" with { type: "json" };
 import quartz from "./quartz.json" with { type: "json" };
 import sandstone from "./sandstone.json" with { type: "json" };
 import titanium from "./titanium.json" with { type: "json" };
-import musepi from "./musepi.json" with { type: "json" };
-import musepi_light from "./musepi-light.json" with { type: "json" };
 
 export const defaultThemes = {
 	alabaster: alabaster,

@@ -1,6 +1,6 @@
-import { setLocale, type TranslationKey, t } from "@musepi/desktop-web"
-import { GuiSelect } from "./GuiSelect";
+import { setLocale, type TranslationKey, t } from "@musepi/desktop-web";
 import { type ReactNode, useState } from "react";
+import { GuiSelect } from "./GuiSelect";
 import { Reveal } from "./Reveal";
 
 /**
@@ -235,7 +235,11 @@ export function SchemaSettings({
 															options={(() => {
 																const opts = item.runtimeOptions.map(o => ({ value: o, label: o }));
 																// Keep a stored value not in the registry selectable
-																if (typeof value === "string" && value !== "" && !item.runtimeOptions.includes(value)) {
+																if (
+																	typeof value === "string" &&
+																	value !== "" &&
+																	!item.runtimeOptions.includes(value)
+																) {
 																	opts.push({ value, label: value });
 																}
 																return opts;

@@ -45,7 +45,6 @@ import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
 import bundledBoardDesignSkill from "./bundled-skills/board-design/SKILL.md" with { type: "text" };
-import { collabTool, type CollabToolHandle } from "./tools/collab";
 import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
 import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
 import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
@@ -76,7 +75,10 @@ import { Settings, type SkillsSettings } from "./config/settings";
 import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
 import { createTaskCardStyleExtension } from "./musepi/swarm/task-card-style";
+import { type CollabToolHandle, collabTool } from "./tools/collab";
 import "./discovery";
+import { createImageUrlServiceFromSettings } from "./blob-broker/service";
+import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
 import { initializeWithSettings } from "./discovery";
 import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
@@ -178,8 +180,6 @@ import { collectMountedMCPToolRoutes, projectMountedMCPXdevGuidance } from "./se
 import { createSettingsAwareStreamFn } from "./session/settings-stream-fn";
 import { SnapcompactInlineTransformer } from "./session/snapcompact-inline";
 import { createSnapcompactSavingsRecorder } from "./session/snapcompact-savings-journal";
-import { createImageUrlServiceFromSettings } from "./blob-broker/service";
-import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
 import { closeAllConnections } from "./ssh/connection-manager";
 import { unmountAll } from "./ssh/sshfs-mount";
 import {
@@ -2378,7 +2378,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		// 扩展清单区块(agent 感知,§5.7):agent 必须知道已启用哪些扩展及其
 		// 贡献能力 —— "插件化了不能 agent 自己不知道插件相关的事"。纯文本
 		// 拼接(扩展名/工具名为简单文本),order 25 注入区,热切换整源重挂。
-		const rebuildExtensionInventory = (exts: ReadonlyArray<{ label?: string; path: string; tools: Map<string, unknown> }>): void => {
+		const rebuildExtensionInventory = (
+			exts: ReadonlyArray<{ label?: string; path: string; tools: Map<string, unknown> }>,
+		): void => {
 			const lines: string[] = ["# 已安装扩展", ""];
 			const named = exts
 				.map(ext => ({
@@ -2396,10 +2398,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			lines.push("");
 			lines.push("你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。");
 			modeRuntime.composer.removeBySource("ext:inventory");
-			modeRuntime.composer.add(
-				{ name: "extensions-inventory", order: 25, text: lines.join("\n") },
-				"ext:inventory",
-			);
+			modeRuntime.composer.add({ name: "extensions-inventory", order: 25, text: lines.join("\n") }, "ext:inventory");
 		};
 		rebuildExtensionInventory(extensionsResult.extensions);
 

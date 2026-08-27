@@ -1,4 +1,4 @@
-import { t, type TranslationKey } from "@musepi/desktop-web";
+import { type TranslationKey, t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";

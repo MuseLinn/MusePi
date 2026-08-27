@@ -1,7 +1,7 @@
+import { t } from "../i18n/index.js";
 import { runPauseScreen } from "../modes/components/pause-screen";
 import { shutdownHandlerTui } from "./builtin-lifecycle";
-
-import { t } from "../i18n/index.js";import { commandConsumed, errorMessage, usage } from "./helpers/parse";
+import { commandConsumed, errorMessage, usage } from "./helpers/parse";
 import type { SlashCommandSpec } from "./types";
 
 /**
@@ -25,7 +25,7 @@ export const BUILTIN_CONTROL_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 				? statusLine("Force", t("no active tools"))
 				: statusLine("Force", `${count} ${t("active tools")}`);
 		},
-		
+
 		handle: async (command, runtime) => {
 			const spaceIdx = command.args.indexOf(" ");
 			const toolName = spaceIdx === -1 ? command.args : command.args.slice(0, spaceIdx);

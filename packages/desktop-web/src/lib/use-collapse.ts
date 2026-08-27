@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
+import { type CSSProperties, type RefObject, useEffect, useRef } from "react";
 
 /**
  * Collapse/expand height animation for conditionally-visible bodies.
@@ -12,11 +12,7 @@ import { useEffect, useRef, type CSSProperties, type RefObject } from "react";
  *   its natural height.
  * First render lands directly at the open/closed state (no flash, no jump).
  */
-export function useCollapseHeight(
-	open: boolean,
-	ref: RefObject<HTMLDivElement | null>,
-	durationMs = 220,
-): void {
+export function useCollapseHeight(open: boolean, ref: RefObject<HTMLDivElement | null>, durationMs = 220): void {
 	const animVer = useRef(0);
 	const first = useRef(true);
 	useEffect(() => {

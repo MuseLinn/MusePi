@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import type { AgentEvent } from "../src/types.js";
-import { Agent } from "../src/agent.js";
 import { createMockModel } from "@musepi/pi-ai/providers/mock";
 import { AssistantMessageEventStream } from "@musepi/pi-ai/utils/event-stream";
+import { Agent } from "../src/agent.js";
+import type { AgentEvent } from "../src/types.js";
 
 describe("optimistic user-message emit", () => {
 	it("emits the user message before agent_start and never duplicates it", async () => {
@@ -32,9 +32,7 @@ describe("optimistic user-message emit", () => {
 				e.type === "message_end" && e.message.role === "user",
 		);
 		const agentStartIdx = events.findIndex(e => e.type === "agent_start");
-		const userStartIdx = events.findIndex(
-			e => e.type === "message_start" && e.message.role === "user",
-		);
+		const userStartIdx = events.findIndex(e => e.type === "message_start" && e.message.role === "user");
 
 		// Exactly one of each — the run loop must not re-broadcast the
 		// pre-emitted message objects.
@@ -66,9 +64,7 @@ describe("optimistic user-message emit", () => {
 
 		// The optimistic user message still fired exactly once, and the
 		// assistant error lifecycle follows the same shape as before.
-		const userStarts = events.filter(
-			e => e.type === "message_start" && e.message.role === "user",
-		).length;
+		const userStarts = events.filter(e => e.type === "message_start" && e.message.role === "user").length;
 		expect(userStarts).toBe(1);
 		const assistantEnd = events.find(
 			(e): e is Extract<AgentEvent, { type: "message_end" }> =>

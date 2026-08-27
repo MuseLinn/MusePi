@@ -31,7 +31,7 @@ export function CountUp({
 		let raf = 0;
 		const step = (t: number): void => {
 			const k = Math.min(1, (t - start) / duration);
-			const eased = 1 - Math.pow(1 - k, 3); // easeOutCubic
+			const eased = 1 - (1 - k) ** 3; // easeOutCubic
 			setDisplay(prev + (value - prev) * eased);
 			if (k < 1) raf = requestAnimationFrame(step);
 			else setDisplay(value);

@@ -35,15 +35,8 @@ export function SlashNotice({
 	markdown?: boolean;
 }): ReactNode {
 	return (
-		<div
-			className={`gui-composer-slash-note gui-composer-slash-note--${level}`}
-			role="status"
-			aria-live="polite"
-		>
-			<Icon
-				name={level === "error" ? "close-circle" : "information"}
-				className="h-3.5 w-3.5 shrink-0"
-			/>
+		<div className={`gui-composer-slash-note gui-composer-slash-note--${level}`} role="status" aria-live="polite">
+			<Icon name={level === "error" ? "close-circle" : "information"} className="h-3.5 w-3.5 shrink-0" />
 			{markdown ? (
 				<div className="min-w-0 flex-1 gui-composer-slash-note-md">
 					<Markdown text={text} />
@@ -123,12 +116,7 @@ export function CompletionMenus({
 				<div className="gui-slash-menu gui-slash-menu--rich" ref={menuRef}>
 					<div className="gui-slash-rows">
 						{slashItems.map((c, i) => (
-							<SlashRow
-								key={c.name}
-								item={c}
-								active={i === slashIdx}
-								onClick={() => onPickSlash(c.name)}
-							/>
+							<SlashRow key={c.name} item={c} active={i === slashIdx} onClick={() => onPickSlash(c.name)} />
 						))}
 					</div>
 					<div className="gui-slash-footer">{t("slash completion hints")}</div>
@@ -152,9 +140,7 @@ export function CompletionMenus({
 								<span className="font-medium">{e.name}</span>
 								{e.isDir && <span className="ml-1 text-[12px] text-[var(--color-text-faint)]">/</span>}
 							</span>
-							<span className="max-w-[200px] truncate text-[12px] text-[var(--color-text-faint)]">
-								{e.path}
-							</span>
+							<span className="max-w-[200px] truncate text-[12px] text-[var(--color-text-faint)]">{e.path}</span>
 						</button>
 					))}
 				</div>

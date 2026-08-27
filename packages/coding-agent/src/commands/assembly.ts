@@ -6,12 +6,12 @@
 
 import * as os from "node:os";
 import * as path from "node:path";
-import { Command } from "@musepi/pi-utils/cli";
 import { getAgentDir } from "@musepi/pi-utils";
+import { Command } from "@musepi/pi-utils/cli";
+import { AssemblyManifestError, assemblySessionState, filterExtensionPaths } from "../assembly/index.ts";
 import { loadAssemblyManifest } from "../assembly/manifest.ts";
-import { filterExtensionPaths, assemblySessionState, AssemblyManifestError } from "../assembly/index.ts";
-import { discoverSessionExtensionPaths } from "../sdk.ts";
 import { Settings as SettingsClass } from "../config/settings.ts";
+import { discoverSessionExtensionPaths } from "../sdk.ts";
 
 export default class Index extends Command {
 	static description = "Inspect the musepi assembly manifest and surface configuration";
@@ -58,8 +58,10 @@ export default class Index extends Command {
 			lines.push(`degraded_ok: ${manifest.degradedOk}`);
 			if (manifest.seams.terminal?.provider) lines.push(`terminal.provider: ${manifest.seams.terminal.provider}`);
 			if (manifest.seams.compaction?.method) lines.push(`compaction.method: ${manifest.seams.compaction.method}`);
-			if (manifest.extensions.include?.length) lines.push(`extensions.include: [${manifest.extensions.include.join(", ")}]`);
-			if (manifest.extensions.exclude?.length) lines.push(`extensions.exclude: [${manifest.extensions.exclude.join(", ")}]`);
+			if (manifest.extensions.include?.length)
+				lines.push(`extensions.include: [${manifest.extensions.include.join(", ")}]`);
+			if (manifest.extensions.exclude?.length)
+				lines.push(`extensions.exclude: [${manifest.extensions.exclude.join(", ")}]`);
 		} else {
 			lines.push("no manifest — all extensions unmanaged (soft-fail)");
 		}
@@ -89,13 +91,9 @@ export default class Index extends Command {
 		// Discover current extension paths to validate manifest selectors.
 		const { Settings: S } = await import("../config/settings.ts");
 		const resolved = await S.init({ cwd, agentDir: getAgentDir() });
-		const paths = await discoverSessionExtensionPaths(
-			{},
-			cwd,
-			resolved,
-		);
+		const paths = await discoverSessionExtensionPaths({}, cwd, resolved);
 		const filtered = filterExtensionPaths(paths, manifest, resolved);
-		const removed = new Set(paths.filter((p) => !filtered.includes(p)));
+		const removed = new Set(paths.filter(p => !filtered.includes(p)));
 
 		const lines: string[] = [];
 		lines.push(`discovered: ${paths.length} extensions`);

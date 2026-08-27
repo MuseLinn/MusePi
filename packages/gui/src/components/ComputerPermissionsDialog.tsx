@@ -1,16 +1,12 @@
-import { t, type TranslationKey } from "@musepi/desktop-web";
+import { type TranslationKey, t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import type { RpcClient } from "../lib/rpc";
+import type { IconName } from "../vendor/oc-icons";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
-import {
-	computerPermissionRows,
-	type ComputerPermissionKind,
-} from "./settings-sections/computer-permissions";
-
-import type { IconName } from "../vendor/oc-icons";
+import { type ComputerPermissionKind, computerPermissionRows } from "./settings-sections/computer-permissions";
 
 const SYSTEM_PREFERENCE_URLS: Record<ComputerPermissionKind, string> = {
 	capture: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",

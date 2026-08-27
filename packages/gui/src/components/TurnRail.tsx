@@ -471,16 +471,16 @@ export function TurnRail({
 									className={`gui-turn-tick${hover === index ? " gui-turn-tick--hover" : ""}${active === index ? " gui-turn-tick--active" : ""}`}
 									style={{ top: `${index * TICK_PITCH_PX}px` }}
 								>
-								<span className="gui-turn-tick-bar" style={{ width: `${resolveWidth(index)}px` }}>
-									{style === "pacman" && (
-										<PacMan
-											size={resolveWidth(index)}
-											side={side === "left" ? "left" : "right"}
-											mouth={active === index ? 0.04 : hover === index ? 0.6 : 0.3}
-											animating={hover === index}
-										/>
-									)}
-								</span>
+									<span className="gui-turn-tick-bar" style={{ width: `${resolveWidth(index)}px` }}>
+										{style === "pacman" && (
+											<PacMan
+												size={resolveWidth(index)}
+												side={side === "left" ? "left" : "right"}
+												mouth={active === index ? 0.04 : hover === index ? 0.6 : 0.3}
+												animating={hover === index}
+											/>
+										)}
+									</span>
 								</div>
 							);
 						})}

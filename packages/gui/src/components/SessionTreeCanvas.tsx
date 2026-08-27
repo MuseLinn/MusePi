@@ -1,14 +1,8 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
-import {
-	buildMessageTree,
-	TREE_ICON,
-	treeKindOf,
-	treeTextOf,
-	type MessageTreeNode,
-} from "../lib/message-tree";
 
 /**
  * 第三层:会话树地图画布(dagre 式分层布局的零依赖手写版)。
@@ -63,7 +57,13 @@ function entryTextOf(entry: unknown): string {
 	const e = entry as { type?: string; message?: { role?: string; content?: unknown } };
 	if (e.type !== "message" || !e.message) return "…";
 	const parts = Array.isArray(e.message.content)
-		? (e.message.content as Array<{ type?: string; text?: string; name?: string; arguments?: unknown; thinking?: string }>)
+		? (e.message.content as Array<{
+				type?: string;
+				text?: string;
+				name?: string;
+				arguments?: unknown;
+				thinking?: string;
+			}>)
 		: [];
 	const texts: string[] = [];
 	for (const p of parts) {
@@ -118,7 +118,10 @@ export function SessionTreeCanvas({
 		fittedFor.current = key;
 		const scale = Math.min(
 			MAX_SCALE,
-			Math.max(MIN_SCALE, Math.min((wrap.clientWidth - FIT_PADDING * 2) / width, (wrap.clientHeight - FIT_PADDING * 2) / height, 1)),
+			Math.max(
+				MIN_SCALE,
+				Math.min((wrap.clientWidth - FIT_PADDING * 2) / width, (wrap.clientHeight - FIT_PADDING * 2) / height, 1),
+			),
 		);
 		const scaledW = width * scale;
 		const scaledH = height * scale;
@@ -189,13 +192,16 @@ export function SessionTreeCanvas({
 		});
 	}, []);
 
-	const onPointerDown = useCallback((e: React.PointerEvent) => {
-		// 背景左键拖拽 = 平移;节点上的拖拽也平移(单击仍触发跳转,拖动超阈值则吞掉 click)。
-		if (e.button !== 0) return;
-		dragRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false };
-		setDragging(true);
-		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-	}, [view.x, view.y]);
+	const onPointerDown = useCallback(
+		(e: React.PointerEvent) => {
+			// 背景左键拖拽 = 平移;节点上的拖拽也平移(单击仍触发跳转,拖动超阈值则吞掉 click)。
+			if (e.button !== 0) return;
+			dragRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false };
+			setDragging(true);
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		},
+		[view.x, view.y],
+	);
 
 	const onPointerMove = useCallback((e: React.PointerEvent) => {
 		const d = dragRef.current;
@@ -324,42 +330,42 @@ export function SessionTreeCanvas({
 						transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
 					}}
 				>
-	<svg className="stc-edges" width={width} height={height}>
-		<defs>
-			<marker
-				id="stc-arrow"
-				viewBox="0 0 10 10"
-				refX="9"
-				refY="5"
-				markerWidth="7"
-				markerHeight="7"
-				orient="auto-start-reverse"
-			>
-				<path d="M 0 0 L 10 5 L 0 10 z" className="stc-arrow-head" />
-			</marker>
-		</defs>
-					{nodes.flatMap(n =>
-						n.node.children.map(c => {
-							const child = nodes.find(m => m.node.id === c.id);
-							if (!child) return null;
-							const x1 = n.x + NODE_W / 2;
-							const y1 = n.y + NODE_H;
-							const x2 = child.x + NODE_W / 2;
-							// Leave room so the arrowhead lands at the child top edge.
-							const y2 = child.y + 4;
-							const my = (y1 + y2) / 2;
-							const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
-							return (
-								<path
-									key={`${n.node.id}-${c.id}`}
-									className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
-									markerEnd={onPath ? "url(#stc-arrow)" : undefined}
-									d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
-								/>
-							);
-						}),
-					)}
-	</svg>
+					<svg className="stc-edges" width={width} height={height}>
+						<defs>
+							<marker
+								id="stc-arrow"
+								viewBox="0 0 10 10"
+								refX="9"
+								refY="5"
+								markerWidth="7"
+								markerHeight="7"
+								orient="auto-start-reverse"
+							>
+								<path d="M 0 0 L 10 5 L 0 10 z" className="stc-arrow-head" />
+							</marker>
+						</defs>
+						{nodes.flatMap(n =>
+							n.node.children.map(c => {
+								const child = nodes.find(m => m.node.id === c.id);
+								if (!child) return null;
+								const x1 = n.x + NODE_W / 2;
+								const y1 = n.y + NODE_H;
+								const x2 = child.x + NODE_W / 2;
+								// Leave room so the arrowhead lands at the child top edge.
+								const y2 = child.y + 4;
+								const my = (y1 + y2) / 2;
+								const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
+								return (
+									<path
+										key={`${n.node.id}-${c.id}`}
+										className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
+										markerEnd={onPath ? "url(#stc-arrow)" : undefined}
+										d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
+									/>
+								);
+							}),
+						)}
+					</svg>
 					{nodes.map(n => {
 						const kind = treeKindOf(n.node.entry);
 						const isLeaf = leafId != null && n.node.id === leafId;
@@ -427,7 +433,11 @@ export function SessionTreeCanvas({
 					<div className="stc-focus-card" onClick={e => e.stopPropagation()}>
 						<div className="stc-focus-head">
 							<Icon
-								name={((focusedKind ? TREE_ICON[focusedKind] : undefined) ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
+								name={
+									((focusedKind ? TREE_ICON[focusedKind] : undefined) ?? "file-list-2") as Parameters<
+										typeof Icon
+									>[0]["name"]
+								}
 								className={`h-3.5 w-3.5 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${focusedKind ?? "other"}`}
 							/>
 							<span className="stc-focus-label">
@@ -484,7 +494,14 @@ export function SessionTreeCanvas({
 						if (!wrap) return;
 						const scale = Math.min(
 							MAX_SCALE,
-							Math.max(MIN_SCALE, Math.min((wrap.clientWidth - FIT_PADDING * 2) / width, (wrap.clientHeight - FIT_PADDING * 2) / height, 1)),
+							Math.max(
+								MIN_SCALE,
+								Math.min(
+									(wrap.clientWidth - FIT_PADDING * 2) / width,
+									(wrap.clientHeight - FIT_PADDING * 2) / height,
+									1,
+								),
+							),
 						);
 						setView({
 							scale,

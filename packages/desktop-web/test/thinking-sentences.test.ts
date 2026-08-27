@@ -18,18 +18,17 @@ describe("splitThinkingSentences", () => {
 	});
 
 	it("does not split a fence on comment punctuation like '. '", () => {
-		const text =
-			"Reasoning.\n```python\n# note. keep together\nprint('x')\n```\nResolved.";
+		const text = "Reasoning.\n```python\n# note. keep together\nprint('x')\n```\nResolved.";
 		const out = splitThinkingSentences(text);
 		expect(out).toHaveLength(3);
 		expect(out[1]).toBe("```python\n# note. keep together\nprint('x')\n```");
 	});
 
 	it("keeps an unterminated fence as one unit to the end", () => {
-		const text = "Start.\n```json\n{ \"a\": 1 }";
+		const text = 'Start.\n```json\n{ "a": 1 }';
 		const out = splitThinkingSentences(text);
 		expect(out).toHaveLength(2);
-		expect(out[1]).toBe("```json\n{ \"a\": 1 }");
+		expect(out[1]).toBe('```json\n{ "a": 1 }');
 	});
 
 	it("handles multiple fences and interleaved prose", () => {

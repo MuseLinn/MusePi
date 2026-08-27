@@ -24,9 +24,5 @@ export function modLabel(): string {
  */
 export function shortcutLabel(keys: string): string {
 	if (isMac()) return keys;
-	return keys
-		.replace("⌘", "Ctrl+")
-		.replace("⇧", "Shift+")
-		.replace("⌥", "Alt+")
-		.replace(/\+$/, "");
+	return keys.replace("⌘", "Ctrl+").replace("⇧", "Shift+").replace("⌥", "Alt+").replace(/\+$/, "");
 }

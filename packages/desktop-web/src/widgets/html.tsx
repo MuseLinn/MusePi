@@ -67,7 +67,7 @@ window.addEventListener("message", function (e) {
     try { parent.postMessage({ type: "omp-widget-face-updated", canvasId: window.DaimonCanvas && window.DaimonCanvas.canvasId, mountId: window.DaimonCanvas && window.DaimonCanvas.mountId }, "*"); } catch (err) {}
   }
 });
-<\/script>`;
+</script>`;
 }
 
 export function HtmlCard({
@@ -111,7 +111,7 @@ export function HtmlCard({
 			`html.omp-theme-dark body{color:#e8e8ea}html.omp-theme-light body{color:#1f2328}` +
 			`html.omp-theme-dark body,html.omp-theme-light body{font-size:14px;line-height:1.6}</style>`;
 		const boot = bootScript(canvasId ?? "", mountId ?? "", theme);
-		const bootData = `<script>window.__WIDGET_DATA__ = ${JSON.stringify(payload)};<\/script>`;
+		const bootData = `<script>window.__WIDGET_DATA__ = ${JSON.stringify(payload)};</script>`;
 		return head + bootData + boot + raw;
 	}, [raw, data.data, canvasId, mountId, theme]);
 

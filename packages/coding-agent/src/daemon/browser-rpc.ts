@@ -17,9 +17,9 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
+import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
 import type { Settings } from "../config/settings";
 import { ensureSharedBrowser } from "../tools/browser/shared-daemon";
-import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
 
 export interface BrowserTabInfo {
 	targetId: string;
@@ -63,7 +63,7 @@ async function cdpConnect(wsUrl: string, timeoutMs = 8_000): Promise<CdpConn> {
 		clearTimeout(timer);
 		opened.resolve();
 	});
-	conn.ws.addEventListener("message", (ev) => {
+	conn.ws.addEventListener("message", ev => {
 		try {
 			const data = JSON.parse(String(ev.data)) as {
 				id?: number;
@@ -251,9 +251,10 @@ export async function browserExtensions(
 				.at(-1);
 			if (!version) continue;
 			try {
-				const manifest = JSON.parse(
-					await fsReadFile(path.join(extRoot, version, "manifest.json"), "utf8"),
-				) as { name?: string; version?: string };
+				const manifest = JSON.parse(await fsReadFile(path.join(extRoot, version, "manifest.json"), "utf8")) as {
+					name?: string;
+					version?: string;
+				};
 				out.push({
 					id: extId,
 					name: manifest.name ?? extId,
@@ -394,9 +395,12 @@ export async function browserClearAll(
 				})) as { sessionId?: string };
 				if (!attach.sessionId) continue;
 				try {
-					await cdpCall(conn, "Storage.clearDataForOrigin", { origin: "*", storageTypes: "all" }, attach.sessionId).catch(
-						() => {},
-					);
+					await cdpCall(
+						conn,
+						"Storage.clearDataForOrigin",
+						{ origin: "*", storageTypes: "all" },
+						attach.sessionId,
+					).catch(() => {});
 				} finally {
 					await cdpCall(conn, "Target.detachFromTarget", { targetId: t.targetId }).catch(() => {});
 				}

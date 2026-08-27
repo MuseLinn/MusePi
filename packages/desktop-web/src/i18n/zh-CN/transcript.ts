@@ -47,7 +47,7 @@ export const transcript = {
 	"trajectory collapse branch": "折叠分支",
 	"branch re-answer here": "在此分支重新回答",
 	"fork session here": "从此处分叉新会话",
-	"root": "根",
+	root: "根",
 	"open sidebar": "打开侧边栏",
 	"close sidebar": "关闭侧边栏",
 	connected: "已连接",

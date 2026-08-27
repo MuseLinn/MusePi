@@ -1,8 +1,8 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
-import { buildMessageTree, TREE_ICON, type MessageTreeNode, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { FadeScroll } from "./FadeScroll";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import {
@@ -145,70 +145,70 @@ function InspectorCard({
 				</button>
 			</div>
 			<div className="traj-inspector-body">
-			<div className="traj-inspector-grid">
-				<div className="gui-ctx-stat">
-					<div className="gui-ctx-stat-v text-[11px]">{t("trajectory time")}</div>
-					<div className="traj-inspector-value">{timeText}</div>
-				</div>
-				<div className="gui-ctx-stat">
-					<div className="gui-ctx-stat-v text-[11px]">{t("trajectory turns")}</div>
-					<div className="traj-inspector-value">Turn {ev.turn}</div>
-				</div>
-				{roundDurationMs !== undefined && (
+				<div className="traj-inspector-grid">
 					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory round duration")}</div>
-						<div className="traj-inspector-value">{durationText(roundDurationMs)}</div>
+						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory time")}</div>
+						<div className="traj-inspector-value">{timeText}</div>
 					</div>
-				)}
-				{ev.tsMs !== undefined && (
 					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory clock")}</div>
-						<div className="traj-inspector-value">
-							{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory turns")}</div>
+						<div className="traj-inspector-value">Turn {ev.turn}</div>
+					</div>
+					{roundDurationMs !== undefined && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory round duration")}</div>
+							<div className="traj-inspector-value">{durationText(roundDurationMs)}</div>
 						</div>
-					</div>
-				)}
-				{/* settled 回合的模型请求统计(wire AssistantMessage 原样携带)。 */}
-				{ev.usage && (
-					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory tokens")}</div>
-						<div className="traj-inspector-value">
-							{fmtTokens(ev.usage.input + ev.usage.cacheWrite)}↑ {fmtTokens(ev.usage.output)}↓
-							{ev.usage.cacheRead > 0 ? ` ☍${fmtTokens(ev.usage.cacheRead)}` : ""}
+					)}
+					{ev.tsMs !== undefined && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory clock")}</div>
+							<div className="traj-inspector-value">
+								{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+							</div>
 						</div>
-					</div>
-				)}
-				{ev.usage && ev.ttftMs !== undefined && (
-					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory ttft")}</div>
-						<div className="traj-inspector-value">{(ev.ttftMs / 1000).toFixed(1)}s</div>
-					</div>
-				)}
-				{ev.durationMs !== undefined && (
-					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory request duration")}</div>
-						<div className="traj-inspector-value">{durationText(ev.durationMs)}</div>
-					</div>
-				)}
-				{rateText !== undefined && (
-					<div className="gui-ctx-stat">
-						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory rate")}</div>
-						<div className="traj-inspector-value">{rateText}</div>
-					</div>
-				)}
-			</div>
-			{input !== undefined && input !== "" && (
-				<div className="traj-inspector-block">
-					<div className="traj-inspector-block-label">{t("trajectory input")}</div>
-					<pre className="traj-inspector-pre">{input}</pre>
+					)}
+					{/* settled 回合的模型请求统计(wire AssistantMessage 原样携带)。 */}
+					{ev.usage && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory tokens")}</div>
+							<div className="traj-inspector-value">
+								{fmtTokens(ev.usage.input + ev.usage.cacheWrite)}↑ {fmtTokens(ev.usage.output)}↓
+								{ev.usage.cacheRead > 0 ? ` ☍${fmtTokens(ev.usage.cacheRead)}` : ""}
+							</div>
+						</div>
+					)}
+					{ev.usage && ev.ttftMs !== undefined && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory ttft")}</div>
+							<div className="traj-inspector-value">{(ev.ttftMs / 1000).toFixed(1)}s</div>
+						</div>
+					)}
+					{ev.durationMs !== undefined && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory request duration")}</div>
+							<div className="traj-inspector-value">{durationText(ev.durationMs)}</div>
+						</div>
+					)}
+					{rateText !== undefined && (
+						<div className="gui-ctx-stat">
+							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory rate")}</div>
+							<div className="traj-inspector-value">{rateText}</div>
+						</div>
+					)}
 				</div>
-			)}
-			{output !== undefined && output !== "" && (
-				<div className="traj-inspector-block">
-					<div className="traj-inspector-block-label">{t("trajectory output")}</div>
-					<pre className="traj-inspector-pre">{output}</pre>
-				</div>
-			)}
+				{input !== undefined && input !== "" && (
+					<div className="traj-inspector-block">
+						<div className="traj-inspector-block-label">{t("trajectory input")}</div>
+						<pre className="traj-inspector-pre">{input}</pre>
+					</div>
+				)}
+				{output !== undefined && output !== "" && (
+					<div className="traj-inspector-block">
+						<div className="traj-inspector-block-label">{t("trajectory output")}</div>
+						<pre className="traj-inspector-pre">{output}</pre>
+					</div>
+				)}
 			</div>
 		</div>
 	);
@@ -391,15 +391,10 @@ export function TrajectoryView({
 			.map(([lane, rows]) => ({
 				lane,
 				rows,
-				head:
-					lane === 0
-						? undefined
-						: rows[0]
-							? treeTextOf(rows[0].node.entry).slice(0, 60)
-							: undefined,
+				head: lane === 0 ? undefined : rows[0] ? treeTextOf(rows[0].node.entry).slice(0, 60) : undefined,
 			}));
 	}, [treeRoots, collapsedNodes, leafId, activePathIds]);
-		// 性能:进入树模式时默认折叠非当前路径的多子分支(懒展开——折叠节点
+	// 性能:进入树模式时默认折叠非当前路径的多子分支(懒展开——折叠节点
 	// 的子行只在展开后渲染)。以 leafId 作会话标识,切会话重新播种。
 	const seededCollapseFor = useRef<string | null>(null);
 	useEffect(() => {

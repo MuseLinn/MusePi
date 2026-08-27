@@ -1,14 +1,14 @@
+import { formatCollabWebLink, parseCollabLink } from "@musepi/collab-proto";
 import { Spacer } from "@musepi/pi-tui";
 import { APP_NAME } from "@musepi/pi-utils";
 import { CollabGuestLink } from "../collab/guest";
-import { findLanIpv4, isTailscaleIpv4, type LanShareUrls, LocalShareManager } from "../collab/local-share";
-import { formatCollabWebLink, parseCollabLink } from "@musepi/collab-proto";
-import { t } from "../i18n/index.js";
 import { CollabHost } from "../collab/host";
+import { findLanIpv4, isTailscaleIpv4, type LanShareUrls, LocalShareManager } from "../collab/local-share";
 import type { SettingPath, SettingValue } from "../config/settings";
 import { settings } from "../config/settings";
 import { parseExportArgs } from "../export/html/args";
 import { shareSession } from "../export/share";
+import { t } from "../i18n/index.js";
 import { theme } from "../modes/theme/theme";
 import type { InteractiveModeContext } from "../modes/types";
 import { extractLastCodeBlock, extractLastCommand } from "../modes/utils/copy-targets";
@@ -35,18 +35,15 @@ async function stopCollabSharing(ctx: InteractiveModeContext): Promise<void> {
 	}
 }
 
-
 interface AltLinkInfo {
 	label: string;
 	webLink: string;
 }
 
-
 function isSelfSignedWebLink(webLink: string): boolean {
 	const url = new URL(webLink);
 	return url.protocol === "https:" && !url.hostname.endsWith(".ts.net");
 }
-
 
 function collabLinkHint(
 	host: CollabHost,
@@ -80,7 +77,6 @@ function collabLinkHint(
 	return rows.join("\n");
 }
 
-
 function showCollabQrCode(ctx: InteractiveModeContext, webLink: string): void {
 	try {
 		ctx.present([new Spacer(1), new CollabQrCodeComponent(webLink)]);
@@ -88,7 +84,6 @@ function showCollabQrCode(ctx: InteractiveModeContext, webLink: string): void {
 		ctx.showError(t("Failed to render collab QR code: {0}", errorMessage(err)));
 	}
 }
-
 
 function showCollabLink(
 	ctx: InteractiveModeContext,
@@ -102,7 +97,6 @@ function showCollabLink(
 	ctx.showStatus(collabLinkHint(host, heading, view, alt, certHint), { dim: false });
 	showCollabQrCode(ctx, qrWebLink ?? (view ? host.webViewLink : host.webLink));
 }
-
 
 /**
  * Render a "<Prefix>: <state>" autocomplete status line, translating both
@@ -135,7 +129,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			if (stats.configured) return statusLine("Advisor", t("configured, no model"));
 			return statusLine("Advisor", t("off"));
 		},
-		
+
 		handle: async (command, runtime) => {
 			const { verb, rest } = parseSubcommand(command.args);
 			if (!verb || verb === "toggle") {
@@ -402,7 +396,9 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 							updatedAt: s.modified.getTime(),
 						}));
 						// The live session always leads the directory.
-						return rows.sort((a, b) => (a.id === currentId ? -1 : b.id === currentId ? 1 : b.updatedAt - a.updatedAt));
+						return rows.sort((a, b) =>
+							a.id === currentId ? -1 : b.id === currentId ? 1 : b.updatedAt - a.updatedAt,
+						);
 					},
 					subscribeWorkspace: (cb: () => void) =>
 						ctx.session.subscribe(event => {
@@ -652,7 +648,7 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				? statusLine("Browser", t("headless"))
 				: statusLine("Browser", t("visible"));
 		},
-		
+
 		handle: async (command, runtime) => {
 			const arg = command.args.toLowerCase();
 			const enabled = runtime.settings.get("browser.enabled" as SettingPath) as boolean;

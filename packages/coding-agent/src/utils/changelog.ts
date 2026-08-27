@@ -318,9 +318,7 @@ export function renderChangelogEntries(
 ): RenderedChangelog {
 	const locale = options.locale ?? CHANGELOG_DEFAULT_LOCALE;
 	const orderedEntries = options.oldestFirst === false ? entries : [...entries].reverse();
-	const markdown = orderedEntries
-		.map(entry => localizeChangelogContent(entry.content, locale))
-		.join("\n\n");
+	const markdown = orderedEntries.map(entry => localizeChangelogContent(entry.content, locale)).join("\n\n");
 	if (options.maxBytes === undefined || Buffer.byteLength(markdown) <= options.maxBytes) {
 		return { markdown, truncated: false };
 	}

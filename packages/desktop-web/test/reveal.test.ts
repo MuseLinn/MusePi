@@ -276,9 +276,7 @@ describe("burstStyleFor (彩虹烟花)", () => {
 	});
 
 	it("opacity rises as the burst settles (older = more opaque)", () => {
-		const ops = [BURST_WINDOW - 1, BURST_WINDOW - 3, BURST_WINDOW - 5].map(i =>
-			Number(burstStyleFor(i)!.opacity),
-		);
+		const ops = [BURST_WINDOW - 1, BURST_WINDOW - 3, BURST_WINDOW - 5].map(i => Number(burstStyleFor(i)!.opacity));
 		for (let i = 1; i < ops.length; i++) expect(ops[i]).toBeGreaterThan(ops[i - 1]);
 	});
 

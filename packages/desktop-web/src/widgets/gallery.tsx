@@ -22,7 +22,9 @@ export function GalleryCard({
 	update(patch: Record<string, unknown>): void;
 }): ReactNode {
 	const raw = Array.isArray(data.items) ? (data.items as unknown[]) : [];
-	const items = raw.filter((it): it is GalleryItem => typeof it === "object" && it !== null && typeof (it as GalleryItem).title === "string");
+	const items = raw.filter(
+		(it): it is GalleryItem => typeof it === "object" && it !== null && typeof (it as GalleryItem).title === "string",
+	);
 	const [active, setActive] = useState(0);
 	if (items.length === 0) {
 		return <div className="gui-widget-gallery-empty">{t("widget gallery empty")}</div>;

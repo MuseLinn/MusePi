@@ -3830,7 +3830,7 @@ describe("ExtensionRunner", () => {
 				assistantThinkingRenderers: [],
 				fileWriteFallbackHandlers: [],
 				fileDeleteFallbackHandlers: [],
-		composerShapes: new Map(),
+				composerShapes: new Map(),
 				messageRenderers: new Map(),
 				commands: new Map(),
 				flags: new Map(),
@@ -4094,15 +4094,19 @@ describe("ExtensionRunner", () => {
 				} as never,
 			);
 
-			const send = (globalThis as typeof globalThis & { __notificationSend?: (m: unknown) => void }).__notificationSend;
+			const send = (globalThis as typeof globalThis & { __notificationSend?: (m: unknown) => void })
+				.__notificationSend;
 			expect(send).toBeDefined();
 			send!({ text: "hello", title: "T", kind: "info" });
 			expect(received).toEqual([{ channel: "ext.chan", message: { text: "hello", title: "T", kind: "info" } }]);
 
 			unsubscribe();
 			// Reload dropping the channel: the contributed channel is gone.
-			fs.writeFileSync(extPath, `export default function (pi: any) {}
-`);
+			fs.writeFileSync(
+				extPath,
+				`export default function (pi: any) {}
+`,
+			);
 			const { errors } = await runner.reloadExtension(extPath);
 			expect(errors).toEqual([]);
 			expect(runner.getNotificationChannels()).toEqual([]);
@@ -4151,7 +4155,7 @@ describe("ExtensionRunner", () => {
 			expect(Boolean(g.__svcBoomyStopped)).toBe(true);
 		});
 
-				it("registerThemeToken aggregates tokens and removes them on reload", async () => {
+		it("registerThemeToken aggregates tokens and removes them on reload", async () => {
 			const extPath = path.join(extensionsDir, "theme-token.ts");
 			fs.writeFileSync(
 				extPath,
@@ -4172,8 +4176,11 @@ describe("ExtensionRunner", () => {
 			);
 			expect(runner.getThemeTokens()).toEqual({ "ext.accent": "#ff0000", "ext.border": "#00ff00" });
 			// Reload dropping the tokens: the theme token set is restored (no residue).
-			fs.writeFileSync(extPath, `export default function (pi: any) {}
-`);
+			fs.writeFileSync(
+				extPath,
+				`export default function (pi: any) {}
+`,
+			);
 			const { errors } = await runner.reloadExtension(extPath);
 			expect(errors).toEqual([]);
 			expect(runner.getThemeTokens()).toEqual({});
@@ -4206,8 +4213,11 @@ describe("ExtensionRunner", () => {
 				{ id: "statusbar.seg.leaderboard", label: "Lb", renderKey: "leaderboard" },
 			]);
 			// Reload dropping the segments: the status-bar segment set is restored (no residue).
-			fs.writeFileSync(extPath, `export default function (pi: any) {}
-`);
+			fs.writeFileSync(
+				extPath,
+				`export default function (pi: any) {}
+`,
+			);
 			const { errors } = await runner.reloadExtension(extPath);
 			expect(errors).toEqual([]);
 			expect(runner.getStatusBarSegments()).toEqual([]);

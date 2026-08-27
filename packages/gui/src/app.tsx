@@ -33,13 +33,13 @@ import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/gla
 import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
+import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
 import { RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
 import { clearRoundDurations, dispatchPetActivity, GuiSessionStore, type PetBubbleKind } from "./lib/session-store";
 import { sfxFor } from "./lib/sfx";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import { buildWsUrl, loadHosts, saveHosts, newHostId, type RemoteHost } from "./lib/remote-hosts";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
@@ -523,9 +523,7 @@ function AppInner(): ReactNode {
 				.then(res => {
 					if (!alive) return;
 					const modes = res?.modes;
-					setWelcomeModes(
-						Array.isArray(modes) && modes.length > 0 ? modes : WELCOME_MODES_FALLBACK,
-					);
+					setWelcomeModes(Array.isArray(modes) && modes.length > 0 ? modes : WELCOME_MODES_FALLBACK);
 				})
 				.catch(err => {
 					console.warn("[gui] modes.list failed; falling back to builtin modes", err);
@@ -1125,8 +1123,8 @@ function AppInner(): ReactNode {
 				// 版本比对:不一致 → daemon-restart(kill+spawn 新代码)
 				// 后重连。dev 迭代(版本号不变)不触发,发布/OTA 必触发。
 				// Token-bearing URLs are user-configured remote instances (the
-			// instance switcher): the version gate must NOT restart them.
-			if (isElectron() && isLocalUrl(u) && !new URL(u).searchParams.has("token")) {
+				// instance switcher): the version gate must NOT restart them.
+				if (isElectron() && isLocalUrl(u) && !new URL(u).searchParams.has("token")) {
 					const rpc = rpcRef.current;
 					const api = (
 						window as unknown as {
@@ -1306,7 +1304,14 @@ function AppInner(): ReactNode {
 					state?: unknown;
 					cursor: number;
 					header?: { cwd?: string };
-					activeTools?: { toolCallId: string; toolName: string; args: unknown; intent?: string; partialResult?: unknown; startedAt: number }[];
+					activeTools?: {
+						toolCallId: string;
+						toolName: string;
+						args: unknown;
+						intent?: string;
+						partialResult?: unknown;
+						startedAt: number;
+					}[];
 					agentsProgress?: SubagentProgressPayload[];
 				} | null = null;
 				try {
@@ -1318,7 +1323,14 @@ function AppInner(): ReactNode {
 							cursor: number;
 							header?: { cwd?: string };
 							tail?: { hasMore: boolean; beforeId: string | null };
-							activeTools?: { toolCallId: string; toolName: string; args: unknown; intent?: string; partialResult?: unknown; startedAt: number }[];
+							activeTools?: {
+								toolCallId: string;
+								toolName: string;
+								args: unknown;
+								intent?: string;
+								partialResult?: unknown;
+								startedAt: number;
+							}[];
 							agentsProgress?: SubagentProgressPayload[];
 						};
 					}>("session.subscribe", { sessionId });
@@ -1515,7 +1527,7 @@ function AppInner(): ReactNode {
 					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
 					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
 					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
-					...(opts?.modeId ?? welcomeModeId ? { modeId: opts?.modeId ?? welcomeModeId } : {}),
+					...((opts?.modeId ?? welcomeModeId) ? { modeId: opts?.modeId ?? welcomeModeId } : {}),
 				});
 				// Carry the welcome-composer model seed so the composer never
 				// flashes a stale model from a previous session while
@@ -1809,17 +1821,23 @@ function AppInner(): ReactNode {
 		setUrl(targetUrl);
 		localStorage.setItem("musepi-gui-url", targetUrl);
 	}, []);
-	const addHost = useCallback((input: { label: string; url: string; token?: string }): void => {
-		const h: RemoteHost = { id: newHostId(), label: input.label, url: input.url, token: input.token || undefined };
-		const next = [...hosts, h];
-		setHosts(next);
-		saveHosts(next);
-	}, [hosts]);
-	const removeHost = useCallback((id: string): void => {
-		const next = hosts.filter(h => h.id !== id);
-		setHosts(next);
-		saveHosts(next);
-	}, [hosts]);
+	const addHost = useCallback(
+		(input: { label: string; url: string; token?: string }): void => {
+			const h: RemoteHost = { id: newHostId(), label: input.label, url: input.url, token: input.token || undefined };
+			const next = [...hosts, h];
+			setHosts(next);
+			saveHosts(next);
+		},
+		[hosts],
+	);
+	const removeHost = useCallback(
+		(id: string): void => {
+			const next = hosts.filter(h => h.id !== id);
+			setHosts(next);
+			saveHosts(next);
+		},
+		[hosts],
+	);
 	/** Permanently delete a session (journal + index) and refresh the tree;
 	 *  resets the UI when the deleted session was the active one. The
 	 *  confirm dialog honors the settings toggle (musepi-gui-confirm-delete). */

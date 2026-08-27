@@ -117,7 +117,7 @@ export function SlidingNumber({
 			style={{ display: "inline-flex", alignItems: "baseline", fontVariantNumeric: "tabular-nums" }}
 		>
 			{value < 0 ? "-" : null}
-			{intPlaces.map((p) => (
+			{intPlaces.map(p => (
 				<Digit key={`i${p}`} value={intValue} place={p} />
 			))}
 			{decPart !== undefined && (

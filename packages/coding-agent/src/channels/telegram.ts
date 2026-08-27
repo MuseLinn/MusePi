@@ -15,7 +15,9 @@ export class TelegramChannel implements ChannelAdapter {
 	#polling = false;
 	#stopped = false;
 	#timer: ReturnType<typeof setTimeout> | null = null;
-	#onMessage: ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>) | null = null;
+	#onMessage:
+		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
+		| null = null;
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		this.#token = typeof config.token === "string" ? config.token : "";
@@ -58,7 +60,16 @@ export class TelegramChannel implements ChannelAdapter {
 	}
 
 	async #getUpdates(): Promise<
-		{ update_id: number; message?: { chat?: { id: number }; text?: string; photo?: { file_id: string }[]; document?: { file_id: string; file_name?: string }; from?: { id: number } } }[]
+		{
+			update_id: number;
+			message?: {
+				chat?: { id: number };
+				text?: string;
+				photo?: { file_id: string }[];
+				document?: { file_id: string; file_name?: string };
+				from?: { id: number };
+			};
+		}[]
 	> {
 		const res = await fetch(
 			`${TelegramChannel.API}${this.#token}/getUpdates?timeout=20&offset=${this.#offset}&limit=20`,
@@ -70,7 +81,12 @@ export class TelegramChannel implements ChannelAdapter {
 
 	async #handleUpdate(u: {
 		update_id: number;
-		message?: { chat?: { id: number }; text?: string; photo?: { file_id: string }[]; document?: { file_id: string; file_name?: string } };
+		message?: {
+			chat?: { id: number };
+			text?: string;
+			photo?: { file_id: string }[];
+			document?: { file_id: string; file_name?: string };
+		};
 	}): Promise<void> {
 		this.#offset = Math.max(this.#offset, u.update_id + 1);
 		const msg = u.message;
@@ -142,11 +158,7 @@ export class TelegramChannel implements ChannelAdapter {
 			form.append("chat_id", to);
 			if (payload.text.trim()) form.append("caption", payload.text.slice(0, 1024));
 			const file = payload.files[0];
-			form.append(
-				"document",
-				new Blob([Buffer.from(file.data, "base64")], { type: file.mimeType }),
-				file.name,
-			);
+			form.append("document", new Blob([Buffer.from(file.data, "base64")], { type: file.mimeType }), file.name);
 			await this.#post("sendDocument", form);
 			return;
 		}

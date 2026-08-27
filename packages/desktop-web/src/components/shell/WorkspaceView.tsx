@@ -1,10 +1,10 @@
+import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus, Square, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
-import { shortenPath, formatWhen } from "../../lib/format";
-import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
+import { formatWhen, shortenPath } from "../../lib/format";
 
 /**
  * Multi-session workspace: a directory of session cards so remote guests can
@@ -40,12 +40,17 @@ export function WorkspaceView({
 	// Archive (localStorage, same concept as the desktop GUI SessionSidebar).
 	const ARCHIVE_KEY = "musepi-collab-archived";
 	const [archived, setArchived] = useState<Set<string>>(() => {
-		try { return new Set(JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]")); } catch { return new Set(); }
+		try {
+			return new Set(JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]"));
+		} catch {
+			return new Set();
+		}
 	});
 	const [archivedView, setArchivedView] = useState(false);
 	const toggleArchive = (id: string): void => {
 		const next = new Set(archived);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
 		setArchived(next);
 		localStorage.setItem(ARCHIVE_KEY, JSON.stringify([...next]));
 	};
@@ -111,33 +116,43 @@ export function WorkspaceView({
 					<h1 className="sh-workspace-title">{t("workspace")}</h1>
 					<p className="sh-workspace-desc">{t("sessions on this machine — tap one to watch it live")}</p>
 					<div className="sh-workspace-actions">
-					{archived.size > 0 && (
-						<button
-							type="button"
-							className="sh-ws-create"
-							onClick={() => setArchivedView(v => !v)}
-							title={archivedView ? t("show active sessions") : t("show archived")}
-						>
-							<Archive size={14} />
-							<span>{archivedView ? t("active") : t("archived")} ({archived.size})</span>
-						</button>
-					)}
-					{onCreateSession && (
-						<button
-							type="button"
-							className="sh-ws-create"
-							onClick={() => void onCreateSession()}
-							title={t("new session")}
-						>
-							<Plus size={14} />
-							<span>{t("new session")}</span>
-						</button>
-					)}
-				</div>
+						{archived.size > 0 && (
+							<button
+								type="button"
+								className="sh-ws-create"
+								onClick={() => setArchivedView(v => !v)}
+								title={archivedView ? t("show active sessions") : t("show archived")}
+							>
+								<Archive size={14} />
+								<span>
+									{archivedView ? t("active") : t("archived")} ({archived.size})
+								</span>
+							</button>
+						)}
+						{onCreateSession && (
+							<button
+								type="button"
+								className="sh-ws-create"
+								onClick={() => void onCreateSession()}
+								title={t("new session")}
+							>
+								<Plus size={14} />
+								<span>{t("new session")}</span>
+							</button>
+						)}
+					</div>
 				</div>
 				<div className="sh-workspace-grid">
 					{visibleSessions.map(session => (
-						<WorkspaceCard key={session.id} session={session} onSelect={onSelect} onDeleteSession={onDeleteSession} onRenameSession={onRenameSession} onArchive={toggleArchive} onStopSession={onStopSession} />
+						<WorkspaceCard
+							key={session.id}
+							session={session}
+							onSelect={onSelect}
+							onDeleteSession={onDeleteSession}
+							onRenameSession={onRenameSession}
+							onArchive={toggleArchive}
+							onStopSession={onStopSession}
+						/>
 					))}
 				</div>
 				{sessions.length === 0 && <p className="sh-workspace-empty">{t("no sessions yet")}</p>}
@@ -165,10 +180,7 @@ function WorkspaceSideItem({
 			{session.working ? (
 				<Loader2 size={10} className="sh-ws-spin" />
 			) : (
-				<span
-					className={`sh-ws-side-dot${session.paused ? " sh-ws-side-dot--paused" : ""}`}
-					aria-hidden
-				/>
+				<span className={`sh-ws-side-dot${session.paused ? " sh-ws-side-dot--paused" : ""}`} aria-hidden />
 			)}
 			<span className="sh-ws-side-title" title={title}>
 				{title}
@@ -243,9 +255,7 @@ function WorkspaceCard({
 				</div>
 				<div className="sh-ws-card-meta">
 					<span className="sh-ws-meta">{when}</span>
-					<span className="sh-ws-meta">
-						{t("{count} messages", { count: String(session.messageCount) })}
-					</span>
+					<span className="sh-ws-meta">{t("{count} messages", { count: String(session.messageCount) })}</span>
 					{session.cwd && (
 						<span className="sh-ws-meta sh-ws-meta-cwd" title={session.cwd}>
 							{shortenPath(session.cwd)}
@@ -280,33 +290,33 @@ function WorkspaceCard({
 					<Archive size={12} />
 				</button>
 				{onRenameSession && (
-						<button
-							type="button"
-							className="sh-ws-action-btn"
-							title={t("rename")}
-							onClick={e => {
-								e.stopPropagation();
-								setDraft(title);
-								setRenaming(v => !v);
-							}}
-						>
-							<Pencil size={12} />
-						</button>
-					)}
-					{onDeleteSession && (
-						<button
-							type="button"
-							className="sh-ws-action-btn"
-							title={t("delete")}
-							onClick={e => {
-								e.stopPropagation();
-								if (window.confirm(t("confirm delete session"))) void onDeleteSession(session.id);
-							}}
-						>
-							<Trash2 size={12} />
-						</button>
-					)}
-				</div>
+					<button
+						type="button"
+						className="sh-ws-action-btn"
+						title={t("rename")}
+						onClick={e => {
+							e.stopPropagation();
+							setDraft(title);
+							setRenaming(v => !v);
+						}}
+					>
+						<Pencil size={12} />
+					</button>
+				)}
+				{onDeleteSession && (
+					<button
+						type="button"
+						className="sh-ws-action-btn"
+						title={t("delete")}
+						onClick={e => {
+							e.stopPropagation();
+							if (window.confirm(t("confirm delete session"))) void onDeleteSession(session.id);
+						}}
+					>
+						<Trash2 size={12} />
+					</button>
+				)}
+			</div>
 		</div>
 	);
 }

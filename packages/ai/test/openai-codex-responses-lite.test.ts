@@ -197,40 +197,38 @@ describe("openai-codex optional response controls", () => {
 
 	// gpt-5.1-codex / gpt-5.3-codex / gpt-5.3-codex-spark reject `all_turns`
 	// ("Unsupported value: 'all_turns' is not supported with this model").
-	it.each([
-		"gpt-5.1-codex",
-		"gpt-5.3-codex",
-		"gpt-5.3-codex-spark",
-	])("omits unsupported all_turns context for pre-5.4 model %s", async modelId => {
-		const model = createCodexModel(modelId);
-		const forced = await transformRequestBody({ model: model.id }, model, {
-			reasoningEffort: "medium",
-			reasoningContext: "all_turns",
-		});
-		expect(forced.reasoning).toEqual({ effort: "medium" });
+	it.each(["gpt-5.1-codex", "gpt-5.3-codex", "gpt-5.3-codex-spark"])(
+		"omits unsupported all_turns context for pre-5.4 model %s",
+		async modelId => {
+			const model = createCodexModel(modelId);
+			const forced = await transformRequestBody({ model: model.id }, model, {
+				reasoningEffort: "medium",
+				reasoningContext: "all_turns",
+			});
+			expect(forced.reasoning).toEqual({ effort: "medium" });
 
-		const overridden = await transformRequestBody({ model: model.id }, model, {
-			reasoningEffort: "medium",
-			reasoningContext: "current_turn",
-		});
-		expect(overridden.reasoning).toEqual({ effort: "medium", context: "current_turn" });
-	});
+			const overridden = await transformRequestBody({ model: model.id }, model, {
+				reasoningEffort: "medium",
+				reasoningContext: "current_turn",
+			});
+			expect(overridden.reasoning).toEqual({ effort: "medium", context: "current_turn" });
+		},
+	);
 
 	// gpt-5.1-codex / gpt-5.3-codex / gpt-5.3-codex-spark reject `reasoning.summary`
 	// ("Unsupported parameter: 'reasoning.summary' is not supported with this model").
-	it.each([
-		"gpt-5.1-codex",
-		"gpt-5.3-codex",
-		"gpt-5.3-codex-spark",
-	])("omits reasoning.summary for pre-5.4 model %s", async modelId => {
-		const model = createCodexModel(modelId);
-		const forced = await transformRequestBody({ model: model.id }, model, {
-			reasoningEffort: "medium",
-			reasoningSummary: "detailed",
-		});
-		expect(forced.reasoning).toEqual({ effort: "medium" });
-		expect("stream_options" in forced).toBe(false);
-	});
+	it.each(["gpt-5.1-codex", "gpt-5.3-codex", "gpt-5.3-codex-spark"])(
+		"omits reasoning.summary for pre-5.4 model %s",
+		async modelId => {
+			const model = createCodexModel(modelId);
+			const forced = await transformRequestBody({ model: model.id }, model, {
+				reasoningEffort: "medium",
+				reasoningSummary: "detailed",
+			});
+			expect(forced.reasoning).toEqual({ effort: "medium" });
+			expect("stream_options" in forced).toBe(false);
+		},
+	);
 });
 
 describe("openai-codex Responses Lite input shaping", () => {
@@ -335,23 +333,21 @@ describe("openai-codex Responses Lite input shaping", () => {
 		expect(disabled.tools).toBeUndefined();
 	});
 
-	it.each([
-		"gpt-5.3-codex-spark",
-		"gpt-5.6-luna",
-		"gpt-5.6-terra",
-		"gpt-5.6-sol",
-	])("preserves a forced computer function through Lite for %s", async modelId => {
-		const model = createCodexModel(modelId);
-		const computer = { type: "function", name: "computer", parameters: { type: "object" } };
-		const other = { type: "function", name: "read", parameters: { type: "object" } };
-		const body = await transformRequestBody(
-			{ model: model.id, tools: [computer, other], tool_choice: { type: "function", name: "computer" } },
-			model,
-			{ responsesLite: true },
-		);
-		expect(body.input?.[0]).toEqual({ type: "additional_tools", role: "developer", tools: [computer] });
-		expect(body.tool_choice).toBe("required");
-	});
+	it.each(["gpt-5.3-codex-spark", "gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"])(
+		"preserves a forced computer function through Lite for %s",
+		async modelId => {
+			const model = createCodexModel(modelId);
+			const computer = { type: "function", name: "computer", parameters: { type: "object" } };
+			const other = { type: "function", name: "read", parameters: { type: "object" } };
+			const body = await transformRequestBody(
+				{ model: model.id, tools: [computer, other], tool_choice: { type: "function", name: "computer" } },
+				model,
+				{ responsesLite: true },
+			);
+			expect(body.input?.[0]).toEqual({ type: "additional_tools", role: "developer", tools: [computer] });
+			expect(body.tool_choice).toBe("required");
+		},
+	);
 
 	it("moves instructions and tools into input items under lite", async () => {
 		const model = createCodexModel("gpt-5.6-terra");

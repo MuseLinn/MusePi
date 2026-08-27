@@ -29,9 +29,9 @@
 import { setLocale, t } from "@musepi/desktop-web";
 import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { initTooltips } from "./lib/tooltips";
 import { PetSprite, usePet } from "./components/PetSprite";
 import { type PetActivity, type PetMood, petScale } from "./lib/pet";
+import { initTooltips } from "./lib/tooltips";
 
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
  *  walk frames — absorbs the ±1–2px per-move jitter of real mouse deltas. */
@@ -192,18 +192,15 @@ function PetApp(): ReactNode {
 
 		const playBeat = (): void => {
 			setAmbientMood(AMBIENT_MOODS[Math.floor(Math.random() * AMBIENT_MOODS.length)] ?? "waiting");
-			const playMs =
-				AMBIENT_PLAY_MIN_MS + Math.floor(Math.random() * AMBIENT_PLAY_VARIANCE_MS);
+			const playMs = AMBIENT_PLAY_MIN_MS + Math.floor(Math.random() * AMBIENT_PLAY_VARIANCE_MS);
 			playTimer = window.setTimeout(() => {
 				setAmbientMood(null);
-				const restMs =
-					AMBIENT_REST_MIN_MS + Math.floor(Math.random() * AMBIENT_REST_VARIANCE_MS);
+				const restMs = AMBIENT_REST_MIN_MS + Math.floor(Math.random() * AMBIENT_REST_VARIANCE_MS);
 				restTimer = window.setTimeout(playBeat, restMs);
 			}, playMs);
 		};
 
-		const initialDelay =
-			AMBIENT_INITIAL_DELAY_MIN_MS + Math.floor(Math.random() * AMBIENT_INITIAL_DELAY_VARIANCE_MS);
+		const initialDelay = AMBIENT_INITIAL_DELAY_MIN_MS + Math.floor(Math.random() * AMBIENT_INITIAL_DELAY_VARIANCE_MS);
 		restTimer = window.setTimeout(playBeat, initialDelay);
 
 		return () => {
@@ -449,7 +446,7 @@ function PetApp(): ReactNode {
 
 	if (!enabled) return null;
 
-	const displayMood = dragging ? "dragging" : hovering ? "hover" : ambientMood ?? mood;
+	const displayMood = dragging ? "dragging" : hovering ? "hover" : (ambientMood ?? mood);
 	// Docked to the left edge the pet faces OUT of the screen (the walk
 	// frames face left) — mirror it so it always faces the workspace.
 	const mirrored = flip || dockSide === "left";

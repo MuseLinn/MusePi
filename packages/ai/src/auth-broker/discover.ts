@@ -116,7 +116,8 @@ async function readConfigYaml(agentDir: string): Promise<ConfigSnapshot> {
 }
 
 export async function loadAuthBrokerAccountPool(): Promise<AuthBrokerAccountPool | undefined> {
-	const filePath = process.env.MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE ?? process.env.OMP_AUTH_BROKER_ACCOUNT_POOL_FILE?.trim();
+	const filePath =
+		process.env.MUSEPI_AUTH_BROKER_ACCOUNT_POOL_FILE ?? process.env.OMP_AUTH_BROKER_ACCOUNT_POOL_FILE?.trim();
 	if (!filePath) return undefined;
 
 	let parsed: unknown;

@@ -186,7 +186,10 @@ export const BURST_WINDOW = 9;
 
 /** CSS style for the `localIndex`-th grapheme inside the burst window,
  * or null once settled (caller then emits plain text, no span). */
-export function burstStyleFor(localIndex: number, windowSize: number = BURST_WINDOW): {
+export function burstStyleFor(
+	localIndex: number,
+	windowSize: number = BURST_WINDOW,
+): {
 	opacity: string;
 	color?: string;
 	textShadow?: string;
@@ -214,7 +217,10 @@ export function burstStyleFor(localIndex: number, windowSize: number = BURST_WIN
  */
 export const FLIP_WINDOW = 9;
 
-export function flipStyleFor(localIndex: number, windowSize: number = FLIP_WINDOW): {
+export function flipStyleFor(
+	localIndex: number,
+	windowSize: number = FLIP_WINDOW,
+): {
 	display: string;
 	opacity: string;
 	transform: string;
@@ -254,7 +260,10 @@ export function glitchGlyph(): string {
 	return GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
 }
 
-export function glitchStyleFor(localIndex: number, windowSize: number = GLITCH_WINDOW): {
+export function glitchStyleFor(
+	localIndex: number,
+	windowSize: number = GLITCH_WINDOW,
+): {
 	textShadow: string;
 	transform: string;
 } | null {
@@ -277,7 +286,10 @@ export function glitchStyleFor(localIndex: number, windowSize: number = GLITCH_W
  */
 export const INK_WINDOW = 9;
 
-export function inkStyleFor(localIndex: number, windowSize: number = INK_WINDOW): {
+export function inkStyleFor(
+	localIndex: number,
+	windowSize: number = INK_WINDOW,
+): {
 	display: string;
 	opacity: string;
 	filter: string;

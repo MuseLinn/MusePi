@@ -84,7 +84,10 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!rpc) return;
 		const onOpen = (): void => {
 			void rpc
-				.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", { force: true, locale: getLocaleSnapshot() })
+				.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", {
+					force: true,
+					locale: getLocaleSnapshot(),
+				})
 				.then(changelog => {
 					if (!changelog?.markdown) return;
 					setMarkdown(changelog.markdown);
@@ -116,19 +119,16 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 
 	if (!open || !markdown) return null;
 	return (
-		<div className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}>
+		<div
+			className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}
+		>
 			<div className={`gui-onboarding-card gui-announcement-card${closing ? " gui-onboarding-card--closing" : ""}`}>
 				<div className="gui-onboarding-topbar">
 					<div className="gui-onboarding-badge">
 						<Sparkles size={14} />
 						{t("what's new")}
 					</div>
-					<button
-						className="gui-btn gui-btn-icon"
-						type="button"
-						onClick={requestClose}
-						aria-label={t("close")}
-					>
+					<button className="gui-btn gui-btn-icon" type="button" onClick={requestClose} aria-label={t("close")}>
 						<X size={16} />
 					</button>
 				</div>

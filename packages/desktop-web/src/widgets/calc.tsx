@@ -1,7 +1,7 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
-import { SendChip } from "./send";
 import { useState } from "react";
+import { t } from "../i18n/index.js";
+import { SendChip } from "./send";
 
 /**
  * Calc widget — labor-fee tax calculator (kimi calculator pattern):
@@ -64,7 +64,9 @@ export function CalcCard({
 			/>
 			<div className="gui-widget-calc-bar">
 				<div className="gui-widget-calc-bar-fill" style={{ width: `${pct}%` }} />
-				<span className="gui-widget-calc-bar-label">{t("widget take-home")} {pct.toFixed(1)}%</span>
+				<span className="gui-widget-calc-bar-label">
+					{t("widget take-home")} {pct.toFixed(1)}%
+				</span>
 			</div>
 			<div className="gui-widget-calc-grid">
 				<div className="gui-widget-calc-cell">
@@ -95,11 +97,11 @@ export function CalcCard({
 					<span className="gui-widget-calc-rule-val">20%</span>
 				</div>
 			</div>
-		
+
 			<SendChip
 				text={`${t("widget gross")} ${r.gross.toFixed(2)} → ${t("widget net")} ${r.net.toFixed(2)}（${t("widget rate")} ${r.rate.toFixed(1)}%）`}
 				onSend={sendPrompt}
 			/>
-</div>
+		</div>
 	);
 }

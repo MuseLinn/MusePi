@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { ChannelAdapter, ChannelKind, ChannelRegistryOptions, ChannelStatus } from "./types";
 
@@ -107,7 +107,10 @@ export class ChannelRegistry {
 		const adapter = this.#adapter(kind);
 		if (adapter && this.#isRunning(kind)) {
 			void adapter.stop().catch(() => {});
-			void adapter.configure(config).then(() => adapter.start()).catch(() => {});
+			void adapter
+				.configure(config)
+				.then(() => adapter.start())
+				.catch(() => {});
 		}
 	}
 

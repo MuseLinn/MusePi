@@ -22,14 +22,8 @@ import type {
 	CollabUiResponseValue,
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
-import { readBoards, validateBoards, writeBoards, type BoardRecord } from "../daemon/boards.js";
-import {
-	computeNextRun,
-	loadCronRuns,
-	loadCronTasks,
-	saveCronTasks,
-	validateCronTask,
-} from "../daemon/crons.js";
+import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
+import { computeNextRun, loadCronRuns, loadCronTasks, saveCronTasks, validateCronTask } from "../daemon/crons.js";
 import {
 	createWorkspaceDir,
 	deleteWorkspaceEntry,
@@ -57,11 +51,11 @@ import {
 	type CollabPromptDetails,
 	type CollabSessionState,
 	type CronTask,
-	type WorkspaceEntry,
 	formatCollabLink,
 	formatCollabWebLink,
 	generateRoomId,
 	parseCollabLink,
+	type WorkspaceEntry,
 	type WorkspaceSessionInfo,
 } from "./protocol";
 import { CollabSocket } from "./relay-client";
@@ -452,7 +446,11 @@ export class CollabHost {
 		// a live transcript; it picks a session with `workspace-select`.
 		if (this.#mode === "workspace") {
 			void this.#broadcastWorkspace();
-			this.#ctx.session.emitNotice("info", `${cleanName} joined the workspace${canWrite ? "" : " (read-only)"}`, "collab");
+			this.#ctx.session.emitNotice(
+				"info",
+				`${cleanName} joined the workspace${canWrite ? "" : " (read-only)"}`,
+				"collab",
+			);
 			this.#updateStatusSegment();
 			return;
 		}
@@ -550,10 +548,7 @@ export class CollabHost {
 			failReason = err instanceof Error ? err.message : String(err);
 		}
 		if (!ok) {
-			this.#socket?.send(
-				{ t: "error", message: failReason ?? `Cannot stream session ${sessionId} live` },
-				fromPeer,
-			);
+			this.#socket?.send({ t: "error", message: failReason ?? `Cannot stream session ${sessionId} live` }, fromPeer);
 			return;
 		}
 		this.#ctx.session.emitNotice("info", `Collab focus switched to session ${sessionId}`, "collab");
@@ -861,10 +856,7 @@ export class CollabHost {
 	 * on the peer's write token; every request gets a directed `rpc-result`
 	 * carrying the same `reqId` (mirrors the fetch-transcript reply path).
 	 */
-	async #handleRpcRequest(
-		frame: Extract<CollabFrame, { t: "rpc-request" }>,
-		fromPeer: number,
-	): Promise<void> {
+	async #handleRpcRequest(frame: Extract<CollabFrame, { t: "rpc-request" }>, fromPeer: number): Promise<void> {
 		const reply = (ok: boolean, data?: unknown, error?: string) =>
 			this.#socket?.send({ t: "rpc-result", reqId: frame.reqId, ok, data, error }, fromPeer);
 		const peer = this.#peers.get(fromPeer);
@@ -938,7 +930,7 @@ export class CollabHost {
 				const task = tasks.find(t => t.id === id);
 				if (!task) throw new Error(`cron.toggle: unknown task "${id}"`);
 				task.enabled = enabled !== false;
-				task.state.nextRunAt = task.enabled ? computeNextRun(task, Date.now()) ?? undefined : undefined;
+				task.state.nextRunAt = task.enabled ? (computeNextRun(task, Date.now()) ?? undefined) : undefined;
 				saveCronTasks(tasks);
 				return { tasks };
 			}

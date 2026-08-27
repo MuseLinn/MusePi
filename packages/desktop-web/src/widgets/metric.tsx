@@ -1,6 +1,6 @@
-import { t } from "../i18n/index.js";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { t } from "../i18n/index.js";
 import { CountUp } from "./count-up";
 
 /**

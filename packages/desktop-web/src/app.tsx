@@ -6,14 +6,13 @@ import { AgentsPanel } from "./components/agents/AgentsPanel";
 import { BoardPanel } from "./components/panels/BoardPanel";
 import { FilePanel } from "./components/panels/FilePanel";
 import { ScheduledPanel } from "./components/panels/ScheduledPanel";
-import { Banners } from "./components/shell/Banners";
 import { ApprovalCard } from "./components/shell/ApprovalCard";
+import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
-import { CompatSlotHost } from "./lib/compat-slot-host";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
-import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { Toasts } from "./components/shell/Toasts";
+import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
 import { t } from "./i18n/index.js";
@@ -28,8 +27,9 @@ import {
 } from "./lib/capacitor";
 import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
+import { CompatSlotHost } from "./lib/compat-slot-host";
 import { HostClient } from "./lib/host-client";
-import { useGuestSelector, type SessionClient } from "./lib/use-guest";
+import { type SessionClient, useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
 import "./components/shell/shell.css";
 
@@ -464,15 +464,9 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 	const hostMode = client instanceof HostClient;
 	return (
 		<div
-			className={
-				[
-					"sh-app",
-					isCompatShell() ? "sh-app--compat" : null,
-					hostMode ? "sh-app--host" : null,
-				]
-					.filter(Boolean)
-					.join(" ")
-			}
+			className={["sh-app", isCompatShell() ? "sh-app--compat" : null, hostMode ? "sh-app--host" : null]
+				.filter(Boolean)
+				.join(" ")}
 		>
 			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
 			<HeaderBar

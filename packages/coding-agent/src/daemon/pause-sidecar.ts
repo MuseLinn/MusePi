@@ -38,12 +38,7 @@ export async function readPauseSidecar(
  *  file (absence is the non-paused state); failures are best-effort — the
  *  gate stays authoritative for the live session and only the next
  *  archive/reactivation could observe a stale pause. */
-export function writePauseSidecar(
-	sessionId: string,
-	paused: boolean,
-	pausedAt: number | null,
-	dir: string,
-): void {
+export function writePauseSidecar(sessionId: string, paused: boolean, pausedAt: number | null, dir: string): void {
 	const p = pauseSidecarPath(sessionId, dir);
 	void (async () => {
 		try {

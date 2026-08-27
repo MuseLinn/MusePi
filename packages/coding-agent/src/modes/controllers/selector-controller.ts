@@ -23,6 +23,7 @@ import { getRoleInfo } from "../../config/model-roles";
 import { settings } from "../../config/settings";
 import { disableProvider, enableProvider } from "../../discovery";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../../discovery/helpers";
+import { ExtensionDashboard } from "../../extensibility/extensions-center";
 import {
 	getInstalledPluginsRegistryPath,
 	getMarketplacesCacheDir,
@@ -85,7 +86,6 @@ import { AgentHubOverlayComponent } from "../components/agent-hub";
 import { AgentsHubComponent } from "../components/agents-hub";
 import { AssistantMessageComponent } from "../components/assistant-message";
 import { CopySelectorComponent } from "../components/copy-selector";
-import { ExtensionDashboard } from "../../extensibility/extensions-center";
 import { HistorySearchComponent } from "../components/history-search";
 import { ImportSessionSelector } from "../components/import-session-selector";
 import { LoginDialogComponent } from "../components/login-dialog";
@@ -371,13 +371,10 @@ export class SelectorController {
 
 	showImportSelector(): void {
 		this.showSelector(done => {
-			const component = new ImportSessionSelector(
-				done,
-				() => {
-					done();
-					this.ctx.ui.requestRender();
-				},
-			);
+			const component = new ImportSessionSelector(done, () => {
+				done();
+				this.ctx.ui.requestRender();
+			});
 			return { component, focus: component };
 		});
 	}

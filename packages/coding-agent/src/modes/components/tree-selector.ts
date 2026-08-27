@@ -14,7 +14,7 @@ import {
 } from "@musepi/pi-tui";
 import type { TreeFilterMode } from "../../config/settings-schema";
 import { t } from "../../i18n/index.js";
-import { theme, type ThemeColor } from "../../modes/theme/theme";
+import { type ThemeColor, theme } from "../../modes/theme/theme";
 import {
 	matchesAppInterrupt,
 	matchesSelectDown,
@@ -1180,7 +1180,6 @@ export class TreeSelectorComponent extends Container {
 			setTimeout(() => onCancel(), 100);
 		}
 	}
-
 
 	#showLabelInput(entryId: string, currentLabel: string | undefined): void {
 		this.#labelInput = new LabelInput(entryId, currentLabel);

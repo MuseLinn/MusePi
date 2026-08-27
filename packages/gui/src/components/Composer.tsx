@@ -34,6 +34,7 @@ import { CompactionStatusLine } from "./composer/agent-status-line";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { GoalDetailCard } from "./composer/goal-detail-card";
+import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
@@ -53,10 +54,9 @@ import type {
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
 import { useAttachments } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
-import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
-import { LongPasteDialog, type LongPasteAction } from "./composer/long-paste-dialog";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
+import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModeToggles } from "./composer/use-mode-toggles";
 import { useModes } from "./composer/use-modes";
 import { autosize, MIN_ROWS } from "./composer-autosize";
@@ -1871,7 +1871,9 @@ export function Composer({
 										await rpc.request("fs.write", { cwd: cwd ?? "", path: name, content: pendingPaste.text });
 										const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
 										setText(newText);
-										requestAnimationFrame(() => ta.setSelectionRange(start + name.length, start + name.length));
+										requestAnimationFrame(() =>
+											ta.setSelectionRange(start + name.length, start + name.length),
+										);
 									} catch {
 										const newText = ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
 										setText(newText);
@@ -1880,10 +1882,13 @@ export function Composer({
 								dismissLongPaste();
 								return;
 							}
-							const insertion = action === "code-block" ? `\`\`\`\n${pendingPaste.text}\n\`\`\`` : pendingPaste.text;
+							const insertion =
+								action === "code-block" ? `\`\`\`\n${pendingPaste.text}\n\`\`\`` : pendingPaste.text;
 							const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
 							setText(newText);
-							requestAnimationFrame(() => ta.setSelectionRange(start + insertion.length, start + insertion.length));
+							requestAnimationFrame(() =>
+								ta.setSelectionRange(start + insertion.length, start + insertion.length),
+							);
 							dismissLongPaste();
 						}}
 						onDismiss={dismissLongPaste}

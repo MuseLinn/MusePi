@@ -115,93 +115,85 @@ describe("daemon session.branchAt", () => {
 		for (const fn of cleanup.reverse()) await fn();
 	});
 
-	test(
-		"moves the leaf onto an assistant node without truncating the tail",
-		async () => {
-			const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-branchat-"));
-			const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
-			cleanup.push(async () => {
-				await daemon.close();
-			});
-			const ws = await openWs(daemon.wsPort!);
-			const call = makeRpc(ws);
-			const sessionId = crypto.randomUUID();
-			const tA = Date.now() - 2000;
-			const tA2 = Date.now() - 1000;
-			const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
-				{ role: "user", timestamp: tA, content: [{ type: "text", text: "第一轮 A" }] },
-				{ role: "assistant", timestamp: tA2, content: [{ type: "text", text: "助手回复 A" }] },
-			]);
-			cleanup.push(async () => {
-				ws.close();
-				await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
-				new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
-				await fs.promises.rm(parentFile, { force: true });
-				// The mangled session dir lives under ~/.musepi/agent/sessions
-				// (NOT under tmp) — remove it too or the SDK scan keeps listing
-				// the test session in the real daemon's tree.
-				await fs.promises.rm(sessionDir, { recursive: true, force: true });
-				await fs.promises.rm(tmp, { recursive: true, force: true });
-			});
+	test("moves the leaf onto an assistant node without truncating the tail", async () => {
+		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-branchat-"));
+		const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
+		cleanup.push(async () => {
+			await daemon.close();
+		});
+		const ws = await openWs(daemon.wsPort!);
+		const call = makeRpc(ws);
+		const sessionId = crypto.randomUUID();
+		const tA = Date.now() - 2000;
+		const tA2 = Date.now() - 1000;
+		const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
+			{ role: "user", timestamp: tA, content: [{ type: "text", text: "第一轮 A" }] },
+			{ role: "assistant", timestamp: tA2, content: [{ type: "text", text: "助手回复 A" }] },
+		]);
+		cleanup.push(async () => {
+			ws.close();
+			await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
+			new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
+			await fs.promises.rm(parentFile, { force: true });
+			// The mangled session dir lives under ~/.musepi/agent/sessions
+			// (NOT under tmp) — remove it too or the SDK scan keeps listing
+			// the test session in the real daemon's tree.
+			await fs.promises.rm(sessionDir, { recursive: true, force: true });
+			await fs.promises.rm(tmp, { recursive: true, force: true });
+		});
 
-			// Activate the session (history → live) so branchAt can move its leaf.
-			await call("session.subscribe", { sessionId });
+		// Activate the session (history → live) so branchAt can move its leaf.
+		await call("session.subscribe", { sessionId });
 
-			// ── Branch onto the assistant node (view key "assistant:<ts>") ──
-			const res = branchAtResult(await call("session.branchAt", { sessionId, messageId: `assistant:${tA2}` }));
-			expect(res.ok).toBe(true);
-			// Leaf lands on the assistant node itself.
-			expect(res.leafId).toBe(`assistant:${tA2}`);
-			// Assistant nodes do NOT backfill editor text (continue-from).
-			expect(res.editorText).toBeNull();
-			await new Promise(r => setTimeout(r, 50));
+		// ── Branch onto the assistant node (view key "assistant:<ts>") ──
+		const res = branchAtResult(await call("session.branchAt", { sessionId, messageId: `assistant:${tA2}` }));
+		expect(res.ok).toBe(true);
+		// Leaf lands on the assistant node itself.
+		expect(res.leafId).toBe(`assistant:${tA2}`);
+		// Assistant nodes do NOT backfill editor text (continue-from).
+		expect(res.editorText).toBeNull();
+		await new Promise(r => setTimeout(r, 50));
 
-			// ── Branch onto the user node: leaf = parent (null root), text
-			// backfilled for re-answer.
-			const res2 = branchAtResult(await call("session.branchAt", { sessionId, messageId: `user:${tA}` }));
-			expect(res2.ok).toBe(true);
-			expect(res2.leafId).toBeNull();
-			expect(res2.editorText).toContain("第一轮 A");
-		},
-		20_000,
-	);
+		// ── Branch onto the user node: leaf = parent (null root), text
+		// backfilled for re-answer.
+		const res2 = branchAtResult(await call("session.branchAt", { sessionId, messageId: `user:${tA}` }));
+		expect(res2.ok).toBe(true);
+		expect(res2.leafId).toBeNull();
+		expect(res2.editorText).toContain("第一轮 A");
+	}, 20_000);
 
-	test(
-		"rejects an unknown message key",
-		async () => {
-			const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-branchat-"));
-			const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
-			cleanup.push(async () => {
-				await daemon.close();
-			});
-			const ws = await openWs(daemon.wsPort!);
-			const call = makeRpc(ws);
-			const sessionId = crypto.randomUUID();
-			const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
-				{ role: "user", timestamp: Date.now() - 1000, content: [{ type: "text", text: "只有一条" }] },
-			]);
-			cleanup.push(async () => {
-				ws.close();
-				await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
-				new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
-				await fs.promises.rm(parentFile, { force: true });
-				// The mangled session dir lives under ~/.musepi/agent/sessions
-				// (NOT under tmp) — remove it too or the SDK scan keeps listing
-				// the test session in the real daemon's tree.
-				await fs.promises.rm(sessionDir, { recursive: true, force: true });
-				await fs.promises.rm(tmp, { recursive: true, force: true });
-			});
+	test("rejects an unknown message key", async () => {
+		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-branchat-"));
+		const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
+		cleanup.push(async () => {
+			await daemon.close();
+		});
+		const ws = await openWs(daemon.wsPort!);
+		const call = makeRpc(ws);
+		const sessionId = crypto.randomUUID();
+		const { sessionDir, parentFile } = await seedSession(tmp, sessionId, [
+			{ role: "user", timestamp: Date.now() - 1000, content: [{ type: "text", text: "只有一条" }] },
+		]);
+		cleanup.push(async () => {
+			ws.close();
+			await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`)).catch(() => {});
+			new ViewStore(viewStorePath(JOURNAL_DIR)).remove(sessionId);
+			await fs.promises.rm(parentFile, { force: true });
+			// The mangled session dir lives under ~/.musepi/agent/sessions
+			// (NOT under tmp) — remove it too or the SDK scan keeps listing
+			// the test session in the real daemon's tree.
+			await fs.promises.rm(sessionDir, { recursive: true, force: true });
+			await fs.promises.rm(tmp, { recursive: true, force: true });
+		});
 
-			await call("session.subscribe", { sessionId });
+		await call("session.subscribe", { sessionId });
 
-			let rejected = false;
-			try {
-				await call("session.branchAt", { sessionId, messageId: `user:${Date.now()}` });
-			} catch {
-				rejected = true;
-			}
-			expect(rejected).toBe(true);
-		},
-		20_000,
-	);
+		let rejected = false;
+		try {
+			await call("session.branchAt", { sessionId, messageId: `user:${Date.now()}` });
+		} catch {
+			rejected = true;
+		}
+		expect(rejected).toBe(true);
+	}, 20_000);
 });

@@ -5,9 +5,10 @@
  * sealed frames round-trip across the relay. This is the exact wiring
  * `/collab lan` performs, minus the TUI context.
  */
+
+import { afterAll, describe, expect, it } from "bun:test";
 import { createHash, randomBytes } from "node:crypto";
 import * as tls from "node:tls";
-import { afterAll, describe, expect, it } from "bun:test";
 import {
 	CollabSocket,
 	formatCollabLink,

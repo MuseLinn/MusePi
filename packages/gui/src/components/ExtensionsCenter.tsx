@@ -218,9 +218,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		void rpc
 			.request("plugins.setEnabled", { name: p.name, enabled: !p.enabled })
 			.then(() => {
-				setPlugins(prev =>
-					prev.map(x => (x.name === p.name ? { ...x, enabled: !p.enabled } : x)),
-				);
+				setPlugins(prev => prev.map(x => (x.name === p.name ? { ...x, enabled: !p.enabled } : x)));
 				setError(null);
 			})
 			.catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)));
@@ -386,9 +384,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 									<div key={p.path} className="gui-ext-provider">
 										<div className="gui-ext-provider-h">
 											<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-												{p.name}
-											</span>
+											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
 											<span className="gui-ext-group-count">
 												{t("plugin counts", {
 													tools: p.tools,
@@ -407,7 +403,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 										</div>
 										<div className="gui-ext-plugins-meta">
 											<span className="gui-ext-plugins-version">v{p.version}</span>
-											<span className="gui-ext-plugins-scope">{p.scope === "project" ? t("plugin scope project") : t("plugin scope user")}</span>
+											<span className="gui-ext-plugins-scope">
+												{p.scope === "project" ? t("plugin scope project") : t("plugin scope user")}
+											</span>
 										</div>
 										{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
 										<div className="gui-ext-plugins-path">{p.path}</div>

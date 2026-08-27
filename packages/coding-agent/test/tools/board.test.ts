@@ -21,7 +21,11 @@ function withTempBoard(body: () => Promise<void>): Promise<void> {
 	fs.writeFileSync(
 		file,
 		JSON.stringify([
-			{ id: "b1", title: "测试板", widgets: [{ id: "w1", type: "clock", title: "时钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 210 } }] },
+			{
+				id: "b1",
+				title: "测试板",
+				widgets: [{ id: "w1", type: "clock", title: "时钟", data: {}, pos: { x: 0, y: 0, w: 300, h: 210 } }],
+			},
 			{ id: "bbuiltin", title: "内置示例", builtin: true, widgets: [] },
 		]),
 	);
@@ -88,7 +92,11 @@ describe("board tool", () => {
 			const res = await tool.execute("c1", {
 				action: "save",
 				id: "b1",
-				board: { id: "b1", title: "x", widgets: [{ id: "w", type: "nope", data: {}, pos: { x: 0, y: 0, w: 100, h: 100 } }] },
+				board: {
+					id: "b1",
+					title: "x",
+					widgets: [{ id: "w", type: "nope", data: {}, pos: { x: 0, y: 0, w: 100, h: 100 } }],
+				},
 			});
 			expect(res.isError).toBe(true);
 			const text = res.content[0].type === "text" ? res.content[0].text : "";
@@ -102,7 +110,11 @@ describe("board tool", () => {
 			const res = await tool.execute("c1", {
 				action: "save",
 				id: "b1",
-				board: { id: "b1", title: "x", widgets: [{ id: "w", type: "clock", data: {}, pos: { x: 0, y: 0.5, w: 100, h: 100 } }] },
+				board: {
+					id: "b1",
+					title: "x",
+					widgets: [{ id: "w", type: "clock", data: {}, pos: { x: 0, y: 0.5, w: 100, h: 100 } }],
+				},
 			});
 			expect(res.isError).toBe(true);
 			const text = res.content[0].type === "text" ? res.content[0].text : "";

@@ -1,19 +1,6 @@
-import {
-	type TranslationKey,
-	t,
-} from "@musepi/desktop-web";
-import {
-	GuiSelect,
-} from "../GuiSelect";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import { type TranslationKey, t } from "@musepi/desktop-web";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	BUILTIN_PETDEX,
 	DEFAULT_PET_ID,
@@ -32,19 +19,11 @@ import {
 	savePetdex,
 	setPetScale,
 } from "../../lib/pet";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
-import {
-	BuiltinPetSprite,
-	PetdexSprite,
-} from "../PetSprite";
-import {
-	Reveal,
-} from "../Reveal";
-import {
-	SpotlightCard,
-} from "../SpotlightCard";
+import { Icon } from "../../vendor/oc-icons";
+import { GuiSelect } from "../GuiSelect";
+import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
+import { Reveal } from "../Reveal";
+import { SpotlightCard } from "../SpotlightCard";
 
 /** Agent companion (伙伴, BitFun parity): master switch + display mode
  * (input / floating desktop pet) + appearance (preset grid or imported
@@ -563,16 +542,19 @@ export function PetSection(): ReactNode {
 								<div className="gui-settings-row-desc">{t("display position description")}</div>
 							</div>
 							<GuiSelect
-					className="gui-input gui-pet-mode-select"
-					value={mode}
-					onChange={v => {
+								className="gui-input gui-pet-mode-select"
+								value={mode}
+								onChange={v => {
 									const next = v as PetDisplayMode;
 									setMode(next);
 									setPref("musepi-gui-pet-mode", next);
 								}}
-					ariaLabel={t("display position")}
-					options={[{ value: "input", label: t("pet display input") }, { value: "desktop", label: t("pet display desktop") }]}
-				/>
+								ariaLabel={t("display position")}
+								options={[
+									{ value: "input", label: t("pet display input") },
+									{ value: "desktop", label: t("pet display desktop") },
+								]}
+							/>
 						</div>
 						<div className="gui-settings-row">
 							<div>

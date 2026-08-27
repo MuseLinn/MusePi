@@ -320,7 +320,7 @@ async function installAddon(sourcePath: string, destPath: string): Promise<void>
 	}
 }
 
-async function buildWindowsHostAddon(host: HostInfo, destDir: string): Promise<void> {
+async function buildWindowsHostAddon(_host: HostInfo, destDir: string): Promise<void> {
 	const script = path.join(repoRoot, "packages/natives/scripts/build-bindings.ts");
 	console.log(`win32 host: bazel msvc toolchain is linux/mac-only; building via ${path.relative(repoRoot, script)}`);
 	const proc = Bun.spawn([process.execPath, script], {

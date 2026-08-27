@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
-import { Badge, Badges, KvGrid, Kv, Note, Output, Row } from "../parts";
+import { Badge, Badges, Kv, KvGrid, Note, Output, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, str } from "../util";
 
@@ -22,7 +22,9 @@ interface ComputerShot {
 function shotsOf(args: Record<string, unknown>, result: ToolRenderProps["result"]): ComputerShot[] {
 	const details = detailsRecord(result);
 	const raw = details?.screenshots;
-	return Array.isArray(raw) ? (raw.filter((s): s is ComputerShot => !!s && typeof s === "object") as ComputerShot[]) : [];
+	return Array.isArray(raw)
+		? (raw.filter((s): s is ComputerShot => !!s && typeof s === "object") as ComputerShot[])
+		: [];
 }
 
 function srcOf(shot: ComputerShot): string | null {
@@ -87,14 +89,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				</div>
 			)}
 			{code && (
-				<Output
-					text={code}
-					maxLines={8}
-					lang="js"
-					title={t("computer action")}
-					error={error}
-					variant="code"
-				/>
+				<Output text={code} maxLines={8} lang="js" title={t("computer action")} error={error} variant="code" />
 			)}
 			{details?.returnValue !== undefined && str(details.returnValue) !== "" && (
 				<Row k={t("return value")}>{str(details.returnValue)}</Row>

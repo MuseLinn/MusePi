@@ -83,12 +83,20 @@ describe("extension rpc + skills + toolviews", () => {
 `,
 		);
 		try {
-			const result = await invokeExtensionRpc(modPath, process.cwd(), "echo", { x: 1 }, { cwd: "/tmp", sessionId: "s1" });
+			const result = await invokeExtensionRpc(
+				modPath,
+				process.cwd(),
+				"echo",
+				{ x: 1 },
+				{ cwd: "/tmp", sessionId: "s1" },
+			);
 			expect(result).toEqual({ x: 1, cwd: "/tmp", sessionId: "s1" });
 			await expect(invokeExtensionRpc(modPath, process.cwd(), "missing", {}, { cwd: "/tmp" })).rejects.toThrow(
 				/unknown extension rpc method "missing"/,
 			);
-			await expect(invokeExtensionRpc(modPath, process.cwd(), "boom", {}, { cwd: "/tmp" })).rejects.toThrow("rpc boom");
+			await expect(invokeExtensionRpc(modPath, process.cwd(), "boom", {}, { cwd: "/tmp" })).rejects.toThrow(
+				"rpc boom",
+			);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

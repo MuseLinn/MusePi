@@ -75,7 +75,7 @@ export interface WorkspaceSessionInfo {
 	/** Read-only guests may not focus+prompt sessions they don't own. */
 	readOnly?: boolean;
 	updatedAt: number;
-};
+}
 
 /**
  * Encrypted payload frames (inside AES-GCM, JSON). The wire package pins the

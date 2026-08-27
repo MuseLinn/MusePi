@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { useFloatingMenu } from "../lib/use-floating-menu";
 import { tapFeedback } from "../lib/haptic";
+import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
 export interface ContextMenuItem {

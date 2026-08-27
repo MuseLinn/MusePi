@@ -1,8 +1,8 @@
 import type * as fsTypes from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import * as fs from "node:fs/promises";
-import * as path from "node:path";
 import { homedir } from "node:os";
+import * as path from "node:path";
 import type {
 	AssistantMessage,
 	ImageContent,
@@ -110,7 +110,9 @@ function collectBlocks(record: Record<string, unknown>): {
 				out.tools.push({ id, name, input });
 			} else if (block.type === "image" || block.type === "file") {
 				const data = stringField(block, "data");
-				const mimeType = stringField(block, "mimeType") ?? stringField((block.source ?? {}) as Record<string, unknown>, "media_type");
+				const mimeType =
+					stringField(block, "mimeType") ??
+					stringField((block.source ?? {}) as Record<string, unknown>, "media_type");
 				if (data && mimeType) out.images.push({ type: "image", data, mimeType });
 			}
 		}
@@ -118,7 +120,12 @@ function collectBlocks(record: Record<string, unknown>): {
 	// Assistant text may live at top level ({type:"assistant", text})
 	if (!role && typeof record.type === "string") {
 		const type = record.type;
-		if (type === "assistant" || type === "assistant_message" || type === "llm.response" || type === "llm.completion") {
+		if (
+			type === "assistant" ||
+			type === "assistant_message" ||
+			type === "llm.response" ||
+			type === "llm.completion"
+		) {
 			out.role = "assistant";
 		} else if (type === "user" || type === "user_message" || type === "turn.prompt" || type === "turn") {
 			out.role = "user";
@@ -190,7 +197,8 @@ export class GenericJsonlSessionStore implements ForeignSessionStore {
 				for (const file of files) {
 					try {
 						const meta = await this.#head(file);
-						const id = this.source === "kimicode" ? path.basename(path.dirname(file)) : path.basename(file, ".jsonl");
+						const id =
+							this.source === "kimicode" ? path.basename(path.dirname(file)) : path.basename(file, ".jsonl");
 						sessions.push({
 							source: this.source,
 							id,
@@ -214,7 +222,9 @@ export class GenericJsonlSessionStore implements ForeignSessionStore {
 		);
 	}
 
-	async #head(file: string): Promise<{ created: number; modified: number; firstMessage?: string; messageCount: number }> {
+	async #head(
+		file: string,
+	): Promise<{ created: number; modified: number; firstMessage?: string; messageCount: number }> {
 		const stats = await fs.stat(file);
 		let created = stats.mtimeMs;
 		let modified = stats.mtimeMs;
@@ -277,7 +287,10 @@ export class GenericJsonlSessionStore implements ForeignSessionStore {
 				const entry: SessionMessageEntry = { type: "message", id, parentId, timestamp: ts, message };
 				manager.ingestReplicatedEntry(entry);
 				parentId = id;
-			} else if (blocks.role === "assistant" && (blocks.texts.length > 0 || blocks.thinking.length > 0 || blocks.tools.length > 0)) {
+			} else if (
+				blocks.role === "assistant" &&
+				(blocks.texts.length > 0 || blocks.thinking.length > 0 || blocks.tools.length > 0)
+			) {
 				const content: (TextContent | ThinkingContent | ToolCall)[] = [
 					...blocks.thinking.map(t => ({ type: "thinking" as const, thinking: t })),
 					...blocks.texts.map(t => ({ type: "text" as const, text: t })),
@@ -288,7 +301,23 @@ export class GenericJsonlSessionStore implements ForeignSessionStore {
 						arguments: t.input ?? {},
 					})),
 				];
-				const message: AssistantMessage = { role: "assistant", content, api: "generic", provider: "unknown", model: "unknown", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: Date.parse(ts) || Date.now() };
+				const message: AssistantMessage = {
+					role: "assistant",
+					content,
+					api: "generic",
+					provider: "unknown",
+					model: "unknown",
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 0,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+					},
+					stopReason: "stop",
+					timestamp: Date.parse(ts) || Date.now(),
+				};
 				const id = uniqueEntryId(`g-${synthetic++}`, usedIds);
 				const entry: SessionMessageEntry = { type: "message", id, parentId, timestamp: ts, message };
 				manager.ingestReplicatedEntry(entry);

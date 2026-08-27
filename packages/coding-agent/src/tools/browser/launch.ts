@@ -276,10 +276,7 @@ function systemChromiumCandidates(
 				onNixos = fs.existsSync("/etc/NIXOS");
 			} catch {}
 			if (onNixos) {
-				candidates.push(
-					path.posix.join(home, ".nix-profile/bin/chromium"),
-					"/run/current-system/sw/bin/chromium",
-				);
+				candidates.push(path.posix.join(home, ".nix-profile/bin/chromium"), "/run/current-system/sw/bin/chromium");
 			}
 			for (const name of ["ungoogled-chromium", "ungoogled-chromium-browser"]) {
 				const found = which(name);

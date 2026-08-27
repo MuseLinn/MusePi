@@ -5,8 +5,7 @@
  */
 
 import path from "node:path";
-import type { AgentEvent, AgentIdentity, AgentMessage, AgentTelemetryConfig } from "@musepi/pi-agent-core";
-import type { PauseGate } from "@musepi/pi-agent-core";
+import type { AgentEvent, AgentIdentity, AgentMessage, AgentTelemetryConfig, PauseGate } from "@musepi/pi-agent-core";
 import { EventLoopKeepalive, recordHandoff, resolveTelemetry } from "@musepi/pi-agent-core";
 import type { Api, Model, ServiceTierByFamily, Usage } from "@musepi/pi-ai";
 import { logger, popLoopPhase, prompt, pushLoopPhase, untilAborted } from "@musepi/pi-utils";

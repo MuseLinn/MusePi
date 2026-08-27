@@ -1,18 +1,18 @@
-import { t, type TranslationKey } from "@musepi/desktop-web";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type TranslationKey, t } from "@musepi/desktop-web";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
-import { Icon, type IconName } from "../vendor/oc-icons";
+import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
 import {
 	readSurfaceOrder,
 	readSurfaceWidth,
+	SURFACES,
+	type SurfaceProps,
 	surfaceById,
 	surfaceVisible,
 	writeSurfaceOrder,
 	writeSurfaceWidth,
-	SURFACES,
-	type SurfaceProps,
 } from "../lib/surfaces/registry";
-import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";
+import { Icon, type IconName } from "../vendor/oc-icons";
 
 /**
  * RightRail — the right-edge 44px icon rail, driven by the surface registry:
@@ -74,10 +74,7 @@ export function RightRail({
 	}, [order, ctx]);
 
 	// Extension tabs render as primary items after the built-ins.
-	const extItems = useMemo(
-		() => extTabs.map(item => ({ id: `ext:${item.slot}`, item })),
-		[extTabs],
-	);
+	const extItems = useMemo(() => extTabs.map(item => ({ id: `ext:${item.slot}`, item })), [extTabs]);
 
 	// primary → rail 图标；secondary → 折叠菜单
 	const primaryItems = useMemo(() => items.filter(({ s }) => s.group === "primary"), [items]);
@@ -87,7 +84,13 @@ export function RightRail({
 	const railItems = railFits ? items : primaryItems;
 	const foldedItems = railFits ? [] : secondaryItems;
 
-	const persist = useCallback((next: string[]) => { setOrder(next); writeSurfaceOrder(next, cwd); }, [cwd]);
+	const persist = useCallback(
+		(next: string[]) => {
+			setOrder(next);
+			writeSurfaceOrder(next, cwd);
+		},
+		[cwd],
+	);
 
 	// 拖拽重排（原生 HTML5 drag，primary 组内）
 	const [dragId, setDragId] = useState<string | null>(null);
@@ -157,7 +160,11 @@ export function RightRail({
 	}, [tool, cwd]);
 
 	return (
-		<aside ref={railRef} className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`} aria-label="right rail">
+		<aside
+			ref={railRef}
+			className={`gui-right-rail${rightPanelOpen ? "" : " gui-right-rail--closed"}`}
+			aria-label="right rail"
+		>
 			{/* The single navigation axis (VSCode Activity-Bar unification).
 			 * Scrolls when a short window cannot fit every view; edges
 			 * feather only while overflowing. */}

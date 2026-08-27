@@ -1,20 +1,7 @@
-import {
-	type TranslationKey,
-	t,
-} from "@musepi/desktop-web";
-import type {
-	SoundName,
-} from "cuelume";
-import {
-	GuiSelect,
-} from "../GuiSelect";
-import type {
-	ReactNode,
-} from "react";
-import {
-	useEffect,
-	useState,
-} from "react";
+import { type TranslationKey, t } from "@musepi/desktop-web";
+import type { SoundName } from "cuelume";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
 	defaultTemplate,
 	eventEnabled,
@@ -28,9 +15,7 @@ import {
 	saveNotifyTemplates,
 	sendTestNotification,
 } from "../../lib/notify";
-import type {
-	RpcClient,
-} from "../../lib/rpc";
+import type { RpcClient } from "../../lib/rpc";
 import {
 	ALL_SOUNDS,
 	DEFAULT_SFX,
@@ -41,12 +26,9 @@ import {
 	soundFor,
 	WIRED_SOUNDS,
 } from "../../lib/sfx";
-import {
-	Icon,
-} from "../../vendor/oc-icons";
-import {
-	Reveal,
-} from "../Reveal";
+import { Icon } from "../../vendor/oc-icons";
+import { GuiSelect } from "../GuiSelect";
+import { Reveal } from "../Reveal";
 
 /** Wired sound → trigger description (i18n keys); see sfx.ts WIRED_SOUNDS. */
 const SOUND_USAGE_KEYS: Partial<Record<SoundName, TranslationKey>> = {
@@ -82,16 +64,16 @@ export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 				<Icon name="play" className="h-3.5 w-3.5" />
 			</button>
 			<GuiSelect
-					className="gui-settings-select"
-					value={name}
-					onChange={v => {
+				className="gui-settings-select"
+				value={name}
+				onChange={v => {
 					const next = v as SoundName;
 					setName(next);
 					setSoundFor(ev, next);
 				}}
-					ariaLabel={t(`sfx event ${ev}`)}
-					options={ALL_SOUNDS.map(s => ({ value: s, label: s }))}
-				/>
+				ariaLabel={t(`sfx event ${ev}`)}
+				options={ALL_SOUNDS.map(s => ({ value: s, label: s }))}
+			/>
 		</div>
 	);
 }
@@ -412,18 +394,21 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 							</div>
 						</div>
 						<GuiSelect
-					className="gui-settings-select"
-					value={String(recapIdleSeconds)}
-					onChange={v => {
+							className="gui-settings-select"
+							value={String(recapIdleSeconds)}
+							onChange={v => {
 								const next = Number(v);
 								setRecapIdleSeconds(next);
 								if (rpc) {
 									void rpc.request("settings.set", { key: "recap.idleSeconds", value: next }).catch(() => {});
 								}
 							}}
-					ariaLabel={t("Idle Recap Delay")}
-					options={[60, 120, 240, 300, 600].map(seconds => ({ value: String(seconds), label: t("idle recap delay option", { count: String(seconds / 60) }) }))}
-				/>
+							ariaLabel={t("Idle Recap Delay")}
+							options={[60, 120, 240, 300, 600].map(seconds => ({
+								value: String(seconds),
+								label: t("idle recap delay option", { count: String(seconds / 60) }),
+							}))}
+						/>
 					</div>
 				</Reveal>
 			</div>

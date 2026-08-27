@@ -74,7 +74,12 @@ export function ImageLightbox({
 		const rect = wrap.getBoundingClientRect();
 		const x = rect.width ? ((e.clientX - rect.left) / rect.width) * 100 : 0;
 		const y = rect.height ? ((e.clientY - rect.top) / rect.height) * 100 : 0;
-		const pin = { index: pins.length + 1, x: Math.min(100, Math.max(0, x)), y: Math.min(100, Math.max(0, y)), note: "" };
+		const pin = {
+			index: pins.length + 1,
+			x: Math.min(100, Math.max(0, x)),
+			y: Math.min(100, Math.max(0, y)),
+			note: "",
+		};
 		setPins(prev => [...prev, pin]);
 		setEditing(pin.index);
 		setNoteDraft("");
@@ -270,7 +275,12 @@ export function ImageLightbox({
 					{annotateMode ? (
 						<>
 							<span className="tr-img-lb-annotate-hint">{t("click on image to place a pin")}</span>
-							<button type="button" className="tr-img-lb-tool tr-img-lb-tool--primary" onClick={finishAnnotate} disabled={pins.length === 0}>
+							<button
+								type="button"
+								className="tr-img-lb-tool tr-img-lb-tool--primary"
+								onClick={finishAnnotate}
+								disabled={pins.length === 0}
+							>
 								{t("send annotations")}
 							</button>
 							<button type="button" className="tr-img-lb-tool" onClick={cancelAnnotate}>
@@ -356,10 +366,7 @@ export function ImageLightbox({
 							</button>
 						))}
 						{editing !== null && (
-							<div
-								className="tr-img-lb-note"
-								onMouseDown={e => e.stopPropagation()}
-							>
+							<div className="tr-img-lb-note" onMouseDown={e => e.stopPropagation()}>
 								<input
 									className="tr-img-lb-note-input"
 									value={noteDraft}

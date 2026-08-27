@@ -137,7 +137,9 @@ export function UsageCard({ usage }: { usage: ParsedUsage }): ReactNode {
 								{m}
 							</span>
 						))}
-						{usage.models.length > 8 && <span className="tr-usage-chip tr-usage-chip--more">+{usage.models.length - 8}</span>}
+						{usage.models.length > 8 && (
+							<span className="tr-usage-chip tr-usage-chip--more">+{usage.models.length - 8}</span>
+						)}
 					</div>
 				</div>
 			)}
