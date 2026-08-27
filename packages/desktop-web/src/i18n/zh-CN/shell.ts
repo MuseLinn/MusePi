@@ -38,6 +38,9 @@ export const shell = {
 	"Ocean blue": "海洋蓝",
 	"Jade green": "翡翠绿",
 	"click for {name}": "点击切换为{name}",
+	"approval needed": "需要审批",
+	"approve tool": "允许",
+	"deny tool": "拒绝",
 } as const;
 
 /** Key union for the shell domain (source of truth). */

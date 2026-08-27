@@ -1,4 +1,4 @@
-import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t } from "@musepi/desktop-web";
+import { CodeHighlightProvider, punkAvatarUri, relTime, Transcript, t, type TranscriptNodeInjection } from "@musepi/desktop-web";
 import { Reveal } from "./Reveal";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
@@ -11,7 +11,11 @@ import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {
 	PANEL_TAB_SLOT_PREFIX,
+	TRANSCRIPT_NODE_SLOT,
+	SlotComponentMount,
+	selectTranscriptNodeComponents,
 	useExtensionToolViews,
+	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import { scrollToEntry, scrollToEntryAndFlash } from "../lib/transcript-jump";
@@ -618,6 +622,35 @@ export function ChatView({
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
+	// transcript.node seat dispatch (DSH `conversation.chat.node` entryKey
+	// analog): extensions register renderers for specific node kinds
+	// (transcriptNodeKind). A matched renderer OWNS the entry's rendering
+	// (may include the built-in children base or render fully custom);
+	// unregistered kinds fall through to the built-in (DSH fallback).
+	// Memoized: the identity is part of EntryRow's memo comparison, and the
+	// component set changes only on extensions.changed — not on stream frames.
+	const transcriptNodeComponents = useSlotComponents(rpc, TRANSCRIPT_NODE_SLOT);
+	const renderTranscriptNode = useCallback(
+		(node: TranscriptNodeInjection) => {
+			const selected = selectTranscriptNodeComponents(transcriptNodeComponents, node.kind);
+			if (selected.length === 0) return node.children;
+			return (
+				<>
+					{selected.map(item => (
+						<SlotComponentMount
+							key={`${item.extensionId}:${item.slot}`}
+							item={item}
+							rpc={rpc}
+							sessionId={store?.sessionId ?? null}
+							cwd={store?.cwd ?? undefined}
+							node={node}
+						/>
+					))}
+				</>
+			);
+		},
+		[transcriptNodeComponents, rpc, store?.sessionId, store?.cwd],
+	);
 	useEffect(() => {
 		const onOpenFile = (ev: Event): void => {
 			const detail = (ev as CustomEvent<{ path?: string }>).detail;
@@ -1285,6 +1318,7 @@ export function ChatView({
 														roundDurations={snap?.roundDurations}
 														thinkingLevel={resolvedThinkingLevel ?? undefined}
 														host={host}
+														renderTranscriptNode={renderTranscriptNode}
 														/* Chat settings (openchamber parity): user message
 														 * markdown/plain + long-message collapse. */
 														userPlain={(() => {

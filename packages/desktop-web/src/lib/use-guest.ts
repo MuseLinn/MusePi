@@ -1,8 +1,13 @@
-/** React binding for {@link GuestClient} via `useSyncExternalStore`. */
+/** React binding for {@link GuestClient} / {@link HostClient} via
+ *  `useSyncExternalStore`. The structural type covers both transports — the
+ *  guest (collab frames) and the host (daemon JSON-RPC) expose the same
+ *  `GuestSnapshot` contract. */
 import { useCallback, useRef, useSyncExternalStore } from "react";
-import type { GuestClient, GuestSnapshot } from "./client";
+import type { GuestSnapshot, SessionClient } from "./client";
 
-export function useGuestSnapshot(client: GuestClient): GuestSnapshot {
+export type { SessionClient };
+
+export function useGuestSnapshot(client: SessionClient): GuestSnapshot {
 	return useSyncExternalStore(
 		listener => client.subscribe(listener),
 		() => client.getSnapshot(),
@@ -16,7 +21,7 @@ export function useGuestSnapshot(client: GuestClient): GuestSnapshot {
  * snapshot field) or a primitive — a derived object compares unequal every
  * frame and defeats the memoization (and can loop the store).
  */
-export function useGuestSelector<T>(client: GuestClient, selector: (snap: GuestSnapshot) => T): T {
+export function useGuestSelector<T>(client: SessionClient, selector: (snap: GuestSnapshot) => T): T {
 	const selectorRef = useRef(selector);
 	selectorRef.current = selector;
 	const get = useCallback(() => selectorRef.current(client.getSnapshot()), [client]);

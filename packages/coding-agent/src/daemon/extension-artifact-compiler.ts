@@ -29,6 +29,10 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
+	 *  renderer owns. No entryKinds -> does not participate in per-kind node
+	 *  dispatch. DSH entryKey analog. */
+	entryKinds?: string[];
 }
 
 /** One compiled per-tool view served to the renderer (registerToolView —
@@ -164,6 +168,9 @@ export async function collectSlotComponents(
 					code: compiled.code,
 					...(compiled.css ? { css: compiled.css } : {}),
 					...(component.order !== undefined ? { order: component.order } : {}),
+					...(component.entryKinds && component.entryKinds.length > 0
+						? { entryKinds: component.entryKinds }
+						: {}),
 				});
 			} catch (error) {
 				// A broken component must not fail the whole extensions.list —

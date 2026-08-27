@@ -376,3 +376,17 @@ daemon RPC:
 
 ### win32 磨砂玻璃修复（2026-08-26）
 `gui-base.css`：`html:root, html:root body { background: transparent }`（此前被忽略、带不透明 `var(--bg)` 的一层）；`[data-platform="win32"] .gui-main, [data-platform="linux"] .gui-main { backdrop-filter:none }`（模糊来自窗口材质）；`[data-platform="win32"][data-theme="light"]` scrim 22–58%。
+
+### dsh-desktop 兼容链（运行时 serve 渲染器 + host-mode，2026-08-27）
+
+dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆绑 Electron 耦合的 UI。MusePi 的三半：
+
+- **运行时 serve 渲染器** — `musepi serve --web-port <n>` → `daemon/static-web.ts` `startDaemonWeb` 在 loopback HTTP 上 serve 构建好的 `desktop-web` SPA（仅纯 GET；JSON-RPC WS 留在 `net.createServer`/`ws-transport.ts` — `Bun.serve` 的 http 兼容层会在升级 socket 上丢字节）。同时 serve 启动配置 `GET /__daemon.json` → `{ wsUrl: "ws://127.0.0.1:<wsPort>/", token? }`（仅 `--remote-token` 时带 token）。渲染器 dist 缺失**非致命** — 壳回退到本地 bundle。
+- **壳包装它** — Electron `main.cjs`：设置 `MUSEPI_GUI_COMPAT_URL` 时 `mainWindow.loadURL(compatUrl)`，而非本地 bundle / Vite dev server。
+- **渲染器以 host 连接** — `desktop-web/src/lib/host-client.ts` `HostClient` 实现 `SessionClient` 接口（与 collab guest 暴露的 `GuestSnapshot` 契约相同）：经 `?token=` 连 daemon WS，`session.list` → `session.subscribe`（初始快照 + `entry`/`event`/`state` 流），渲染复用 guest 的 Transcript/工具卡/composer 不动。App 在读到 `/__daemon.json` 时自动以 host 连接（无 collab 深链 + 配置存在 → `connectHost`，跳过 ConnectScreen）。
+
+坑位：tsgo 下 `server.port` 类型为 `number | undefined`（`const port = server.port ?? options.port`）；host 视图是 **v1 最小**（`recap`/`approval-request`/`ask-request` 事件忽略、`sendUiResponse` no-op、subagent chat/kill 走 `agents.*` rpc）；`desktop-web` 绝不能 import `@musepi/gui`（分层：collab-proto ← desktop-web ← gui），故 host client 放在 desktop-web，GUI 在需要处自己供应 slot-host。
+
+**Frame 叠加 + host 富交互（2026-08-27）：**compat 壳以 `?shell=1` 通知渲染器 — `desktop-web/src/lib/compat-shell.ts` `isCompatShell()` 精确匹配值 `"1"`；页面随即加 `.sh-app--compat`（`padding-top:48px`）+ `.compat-titlebar`（48px fixed 拖拽条，`-webkit-app-region: drag`），Electron 以 `compatUrl + "?shell=1"` 加载并沿用既有 `titleBarStyle:"hidden"` + `titleBarOverlay:{height:48}`（win32/linux）。纯浏览器中无效（无 OS 控件）。host 视图现已接线富交互：`HostClient` 把 `ask-request`→`uiRequest`（Composer 渲染，`sendUiResponse`→`session.askAnswer`，经 `#askReqIds` 桥接 daemon 字符串 id ↔ composer 数字 reqId）、`approval-request`→`approvalRequest`（`components/shell/ApprovalCard.tsx` 渲染允许/拒绝 → `tool.approve`/`tool.deny`）、`recap`→notice。`GuestSnapshot`/`SessionClient` 新增 `approvalRequest` + `respondApproval`；collab guest 两处保持 null/no-op。
+
+**Compat slot host（serve 注入,2026-08-28):**desktop-web 保持被动渲染器——`musepi serve` 在 `?shell=1`(Electron compat)请求根路径时,把 `compatSlotHostScript()` 注入 `</head>` 前:脚本开自己的 daemon WS(读 `/__daemon.json`),调 `extensions.list`,过滤 `slot:"transcript.node"` 组件,blob-import 已编译 ESM(react 绑定 `window.MusePiReact`,desktop-web 入口同 GUI 一样暴露),然后 `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`。Transcript 在未注入 `renderTranscriptNode` 时(独立页/ compat 页)回退查该注册表按 kind 分派——纯浏览器 guest 无注册表,内建渲染不受影响。注入缝在 `static-web.ts`;seam 是 Transcript 条目行的 `data-entry-kind`/`data-entry-id`(被动的 DOM 锚,React 树不改)。

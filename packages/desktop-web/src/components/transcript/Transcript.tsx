@@ -16,8 +16,10 @@ function hapticTap(): void {
 }
 
 import {
+	createElement,
 	Fragment,
 	memo,
+	type ComponentType,
 	type ReactNode,
 	useCallback,
 	useEffect,
@@ -156,6 +158,11 @@ export interface TranscriptProps {
 		activePathIds: ReadonlySet<string>;
 		onSwitchBranch?(leafEntryId: string): void;
 	};
+	/** transcript.node seat 注入 (DSH `conversation.chat.node` analog):
+	 *  host 提供按条目派发的渲染器,按 `transcriptNodeKind(entry)` 分发,
+	 *  可用 `children`(内建渲染)增强/追加;缺省 -> 仅内建渲染(inert)。
+	 *  调用方 MUST memoize(身份参与 EntryRow memo 比较)。 */
+	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
 }
 
 /** Layer-1 branch bar: rendered under a message that has MULTIPLE
@@ -560,6 +567,79 @@ export function msgText(msg: { content?: unknown }): string {
 			.join(" ");
 	}
 	return "";
+}
+
+/** transcript.node seat 派发键 (DSH `conversation.chat.node` entryKey 类比):
+ *  entry / message role -> 稳定渲染器 kind 字符串。宿主(调用方)按此派发到
+ *  注册的 seat 渲染器;内置类型(a message/compaction/…) 走内建渲染,扩展可
+ *  追加 (augment,经 `children`) 或贡献新 kind。 */
+export function transcriptNodeKind(entry: SessionEntry): string {
+	switch (entry.type) {
+		case "message": {
+			const role = entry.message.role;
+			switch (role) {
+				case "user": return "message:user";
+				case "assistant": return "message:assistant";
+				case "toolResult": return "message:tool_result";
+				case "bashExecution": return "message:bash_execution";
+				case "developer": return "message:developer";
+				default: return `message:${role}`;
+			}
+		}
+		case "custom_message": return `custom_message:${entry.customType}`;
+		case "compaction": return "compaction";
+		case "branch_summary": return "branch_summary";
+		case "model_change": return "model_change";
+		case "thinking_level_change": return "thinking_level_change";
+		default: return "unknown";
+	}
+}
+
+/** transcript.node seat 注入 (DSH `conversation.chat.node` analog):宿主
+ *  (GUI) 提供按条目派发的渲染器 —— 按 `transcriptNodeKind(entry)` 分发,
+ *  可用 `children`(内建 MusePi 渲染)增强/追加,或独立渲染。缺省 -> 仅内建
+ *  渲染(inert)。调用方 MUST memoize 该回调(其身份参与 EntryRow 的
+ *  memo 比较 —— 见 entryRowEqual)。 */
+export type TranscriptNodeInjection = {
+	/** 该 transcript 条目原始 wire 值。 */
+	entry: SessionEntry;
+	/** transcriptNodeKind(entry) —— seat 派发键。 */
+	kind: string;
+	/** 归属回合序号(尚未在渲染路径计算时缺省)。 */
+	turnIndex?: number;
+	/** 内建 MusePi 渲染 —— “增强而不替换” (DSH 不 replace 核心)。 */
+	children: ReactNode;
+};
+
+/** Compat slot-host registry on window (populated by the `musepi serve`
+ *  injected script, NOT by the bundle): kind -> extension component. The
+ *  desktop-web bundle stays passive — it only READS this registry when no
+ *  host injected renderTranscriptNode; guests in a plain browser have no
+ *  registry and keep the built-in rendering. */
+export interface MusePiCompatHost {
+	register(
+		slot: string,
+		entryKinds: string[],
+		Component: ComponentType<Record<string, unknown>>,
+		extensionId: string,
+	): void;
+	get(kind: string): { Component: ComponentType<Record<string, unknown>>; extensionId: string } | undefined;
+}
+
+function compatHostRenderer(
+	kind: string,
+): ((node: TranscriptNodeInjection) => ReactNode) | undefined {
+	const host = (globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost;
+	const entry = host?.get(kind);
+	if (!entry) return undefined;
+	const { Component, extensionId } = entry;
+	return (node: TranscriptNodeInjection) =>
+		createElement(Component, {
+			node: { entry: node.entry, kind: node.kind, children: node.children },
+			extensionId,
+			slot: "transcript.node",
+			children: node.children,
+		});
 }
 
 /** Compact token counts (TUI formatNumber parity): 142, 1.8K, 453K. */
@@ -1074,6 +1154,8 @@ interface EntryRowProps {
 	onStopSpeak?(): void;
 	/** The user message whose reply this assistant row is (retry target). */
 	retryTarget?: { id: string; text: string } | null;
+	/** transcript.node seat 注入 —— 按条目派发(见 TranscriptProps)。 */
+	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
 }
 
 /** Re-render only when the entry itself or one of its tool pairings changed. */
@@ -1101,6 +1183,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
 	if (prev.speaking !== next.speaking || prev.onStopSpeak !== next.onStopSpeak) return false;
 	if (prev.onPreviewImage !== next.onPreviewImage) return false;
+	if (prev.renderTranscriptNode !== next.renderTranscriptNode) return false;
 	const e = next.entry;
 	if (e.type !== "message" || e.message.role !== "assistant") return true;
 	for (const block of e.message.content) {
@@ -1140,8 +1223,10 @@ const EntryRow = memo(function EntryRow({
 	speaking,
 	onStopSpeak,
 	retryTarget,
+	renderTranscriptNode,
 }: EntryRowProps): ReactNode {
-	switch (entry.type) {
+	const row = ((): ReactNode => {
+		switch (entry.type) {
 		case "message": {
 			const msg = entry.message;
 			switch (msg.role) {
@@ -1367,7 +1452,18 @@ const EntryRow = memo(function EntryRow({
 		default:
 			// unknown entry types from newer hosts — skip tolerantly
 			return null;
-	}
+		}
+	})();
+	const kind = transcriptNodeKind(entry);
+	// Passive compat slot-host dispatch: when the GUI does not inject
+	// renderTranscriptNode (desktop-web standalone / served compat page),
+	// fall back to the daemon-hosted extension registry that the serve
+	// entry's compat script populated on window.MusePiCompatHost. Guests in
+	// a plain browser have no such registry — built-in rendering stays.
+	const compatRenderer = compatHostRenderer(kind);
+	return (renderTranscriptNode ?? compatRenderer) && row != null
+		? (renderTranscriptNode ?? compatRenderer)!({ entry, kind, children: row })
+		: row;
 }, entryRowEqual);
 
 export const Transcript = memo(function Transcript(props: TranscriptProps): ReactNode {
@@ -1404,6 +1500,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		speakingId,
 		onStopSpeak,
 		branchInfo,
+		renderTranscriptNode,
 	} = props;
 
 	const results = useMemo(() => {
@@ -1759,9 +1856,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const streamingLast = working && isTail && lastAssistantInRound;
 					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
 					const row = (
-						<EntryRow
-							key={entry.id}
-							entry={entry}
+						// Passive seam (compat slot host): the entry row carries its
+						// transcript-node kind + id as data attributes so the served
+						// renderer's injected extension host can find and augment
+						// nodes without touching the React tree.
+						<div
+							data-entry-kind={transcriptNodeKind(entry)}
+							data-entry-id={entry.id}
+							className="tr-entry"
+						>
+							<EntryRow
+								key={entry.id}
+								entry={entry}
 							results={results}
 							active={activeTools}
 							host={host}
@@ -1789,8 +1895,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							speaking={speakingId != null && speakingId === entry.id}
 							onStopSpeak={onStopSpeak}
 							retryTarget={retryTargets.get(entry.id) ?? null}
+							renderTranscriptNode={renderTranscriptNode}
 						/>
-					);
+					</div>
+				);
 					// toolResult entries render no row but continue the turn.
 					if (
 						entry.type === "message" &&

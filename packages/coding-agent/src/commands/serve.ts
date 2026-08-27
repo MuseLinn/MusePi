@@ -4,7 +4,11 @@
  * foreground until interrupted.
  *
  * Options:
- *   --port <n>   also listen for browser JSON-RPC on ws://127.0.0.1:<n>
+ *   --port <n>     also listen for browser JSON-RPC on ws://127.0.0.1:<n>
+ *   --web-port <n> also serve the renderer bundle (desktop-web dist) on
+ *                  http://127.0.0.1:<n> — the dsh-desktop-compat "runtime
+ *                  serves the web renderer" half; the Electron compat shell
+ *                  loadURLs this origin (MUSEPI_GUI_COMPAT_URL).
  */
 import { Command, Flags } from "@musepi/pi-utils/cli";
 import { startDaemon } from "../daemon/server";
@@ -13,6 +17,9 @@ export default class Serve extends Command {
 	static description = "Start the MusePi daemon (unix socket JSON-RPC)";
 	static flags = {
 		port: Flags.integer({ description: "WebSocket port for browser GUI connections" }),
+		"web-port": Flags.integer({
+			description: "HTTP port serving the renderer bundle (compat shell target)",
+		}),
 		"remote-token": Flags.string({
 			description:
 				"Enable remote connections: bind the WS to all interfaces and require this bearer token (Authorization: Bearer, or ?token= for browsers). NEVER share this token.",
@@ -25,11 +32,15 @@ export default class Serve extends Command {
 		if (wsPort !== undefined && (wsPort < 1 || wsPort > 65535)) {
 			throw new Error(`Invalid --port: ${wsPort}`);
 		}
+		const webPort = flags["web-port"];
+		if (webPort !== undefined && (webPort < 1 || webPort > 65535)) {
+			throw new Error(`Invalid --web-port: ${webPort}`);
+		}
 		const remoteToken = flags["remote-token"];
 		if (remoteToken !== undefined && remoteToken.length < 16) {
 			throw new Error("--remote-token must be at least 16 characters");
 		}
-		const { socketPath, wsPort: boundWsPort, close } = await startDaemon({ wsPort, remoteToken });
+		const { socketPath, wsPort: boundWsPort, webUrl, close } = await startDaemon({ wsPort, webPort, remoteToken });
 		process.stdout.write(`musepi daemon listening on ${socketPath}\n`);
 		if (boundWsPort) {
 			process.stdout.write(
@@ -37,6 +48,9 @@ export default class Serve extends Command {
 					? `browser GUI: ws://0.0.0.0:${boundWsPort} (remote, token required)\n`
 					: `browser GUI: ws://127.0.0.1:${boundWsPort}\n`,
 			);
+		}
+		if (webUrl) {
+			process.stdout.write(`renderer (compat shell): ${webUrl}\n`);
 		}
 		process.stdout.write("press Ctrl+C to stop\n");
 

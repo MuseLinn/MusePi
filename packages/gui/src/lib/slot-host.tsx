@@ -1,5 +1,6 @@
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/desktop-web";
+import type { SessionEntry } from "@musepi/pi-wire";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -38,6 +39,10 @@ export const SETTINGS_ACTION_SLOT_PREFIX = EXTENSION_SLOT_DECLARATION.prefixes[4
 export const COMPOSER_DOCK_SLOT = EXTENSION_SLOT_DECLARATION.exact[3];     // "composer.dock"
 export const COMPOSER_LEFT_SLOT = EXTENSION_SLOT_DECLARATION.exact[4];     // "composer.left"
 export const COMPOSER_RIGHT_SLOT = EXTENSION_SLOT_DECLARATION.exact[5];    // "composer.right"
+/** transcript.node seat slot —— DSH `conversation.chat.node` 粒度:单一
+ *  聊天节点 seat,按节点 kind(entryKey)分发;turn-tail/tool/user/assistant
+ *  都是该 seat 的节点 kind,而非独立槽。 */
+export const TRANSCRIPT_NODE_SLOT = EXTENSION_SLOT_DECLARATION.exact[6];   // "transcript.node"
 
 /** 桌面端实际挂载的槽位(与 daemon 声明对比,诊断未挂载槽位)。
  *  exact 顺序与 collab-proto EXTENSION_SLOT_DECLARATION.exact 对齐。 */
@@ -59,6 +64,10 @@ export interface SlotComponent {
 	css?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
+	 *  renderer owns. No entryKinds → does not participate in per-kind
+	 *  dispatch (targets other exact slots). DSH entryKey analog. */
+	entryKinds?: string[];
 }
 
 /** One compiled per-tool view from extensions.list (registerToolView —
@@ -167,6 +176,27 @@ export interface SlotComponentProps {
 	 *  (ext.call RPC). Bound to the component's extensionId; absent when
 	 *  no rpc bridge is available. */
 	extensionCall?: (method: string, params?: unknown) => Promise<unknown>;
+	/** transcript.node seat —— DSH ChatNodeOwnerProps 类比。宿主(渲染器)按节点
+	 *  kind(entryKey)派发到注册组件;组件可用 `children`(内建 MusePi 渲染)做
+	 *  增强/追加,或独立渲染。核心消息渲染仍由宿主持有 —— 扩展只贡献到 seat。 */
+	node?: {
+		/** 该 transcript 条目的原始 wire 值。 */
+		entry: SessionEntry;
+		/** transcriptNodeKind(entry) —— seat 的派发键(entryKey)。 */
+		kind: string;
+		/** 归属回合序号(可选)。 */
+		turnIndex?: number;
+		/** 内建 MusePi 对该条目的渲染 —— 用于“增强而不替换”(DSH 不 replace 核心)。 */
+		children?: ReactNode;
+	} | null;
+	/** turn 级上下文 —— DSH TurnTailOwnerProps 类比。用于回合底 footer / 总结面板。 */
+	turn?: {
+		turnIndex: number;
+		userText?: string;
+		assistantMessageId?: string;
+		usage?: { input?: number; output?: number; cache?: number };
+		durationMs?: number;
+	} | null;
 }
 
 /** ── 全局单例 registry 数据源 ─────────────────────────────────────
@@ -274,6 +304,19 @@ export function useSlotComponentsByPrefix(rpc: RpcClient | null, prefix: string)
 	}, [data, prefix]);
 }
 
+/** transcript.node seat 派发 (DSH `entryKey` 类比): 从注册到 `transcript.node`
+ *  的组件中挑出声明处理该 kind 的。无 entryKinds 的组件不参与按 kind 派发
+ *  (它面向其它精确槽位)。命中列表为空 -> seat 回退到内建渲染 (DSH fallback);
+ *  命中 -> 命中组件"拥有"该节点渲染(可包含 children 基座做增强或完全自绘)。 */
+export function selectTranscriptNodeComponents(
+	components: readonly SlotComponent[],
+	kind: string,
+): SlotComponent[] {
+	return components
+		.filter(c => (c.entryKinds?.includes(kind) ?? false) === true)
+		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+}
+
 /** Mount every extension-contributed component registered for a slot. */
 export function SlotComponentHost({
 	rpc,
@@ -311,6 +354,8 @@ export function SlotComponentMount({
 	sessionId,
 	cwd,
 	settingsScope,
+	node,
+	turn,
 }: {
 	item: SlotComponent;
 	rpc?: RpcClient | null;
@@ -318,6 +363,11 @@ export function SlotComponentMount({
 	cwd?: string;
 	/** Settings read/write proxy (keyed settings-item hosts inject it). */
 	settingsScope?: SlotComponentProps["settingsScope"];
+	/** transcript.node seat 节点上下文(DSH ChatNodeOwnerProps 类比):命中
+	 *  kind 的组件收到它,可用 node.children 增强或完全自绘。 */
+	node?: SlotComponentProps["node"];
+	/** turn 级上下文(DSH TurnTailOwnerProps 类比)。 */
+	turn?: SlotComponentProps["turn"];
 }): ReactNode {
 	const [error, setError] = useState<string | null>(null);
 	const [Comp, setComp] = useState<ComponentType<SlotComponentProps> | null>(null);
@@ -389,6 +439,8 @@ export function SlotComponentMount({
 		slot: item.slot,
 		extensionId: item.extensionId,
 		settingsScope,
+		node,
+		turn,
 		// 扩展 RPC 桥(registerRpc):绑定当前
 		// 组件的 extensionId,组件直接调自己扩展的 daemon 侧方法。
 		extensionCall:

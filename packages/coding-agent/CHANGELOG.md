@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `musepi serve --web-port <n>` — the daemon serves the renderer bundle (`desktop-web` dist) over loopback HTTP, the dsh-desktop-compat "runtime serves the renderer" half. Also serves the boot config at `/__daemon.json` (`{ wsUrl, token? }`) so the compat shell can connect as a host.
+- Added the Electron compat shell entry: when `MUSEPI_GUI_COMPAT_URL` is set, the BrowserWindow loads that origin instead of the local bundle — the shell wraps the runtime-served content. The compat URL is loaded with `?shell=1` so the served renderer reserves the `titleBarOverlay` height (48px) as a drag-region titlebar (frame overlay).
+- Added the compat slot-host injection: `musepi serve --web-port` serves `?shell=1` requests with an injected script that pulls the daemon's `extensions.list`, blob-imports compiled `transcript.node` extension components, and registers them on `window.MusePiCompatHost` — the served renderer dispatches registered node kinds through the same seat an injected `renderTranscriptNode` uses, closing the "plugins target the runtime-served renderer" loop (dsh-desktop parity). Plain-browser guests never receive the injection.
+
 ## [17.3.0] - 2026-08-13
 
 ### Breaking Changes

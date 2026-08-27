@@ -2006,8 +2006,21 @@ function createWindow() {
 	// Dev hot-reload renderer: with MUSEPI_GUI_DEV=1 (bun run desktop:dev)
 	// load the Vite dev server so component edits HMR in place; otherwise
 	// serve the built dist bundle.
+	//
+	// Musepi compat shell (dsh-desktop-compat): with MUSEPI_GUI_COMPAT_URL
+	// set (the daemon's webPort serves the desktop-web dist at loopback),
+	// load the daemon-served renderer — the runtime owns the content, the
+	// Electron shell is the frame wrapper. A frame overlay (titlebar
+	// reservation below) is a presentational follow-up; the loadURL swap is
+	// the "shell wraps runtime content" chain.
 	const devServer = DEV && process.env.MUSEPI_GUI_DEV === "1" ? "http://127.0.0.1:5173/" : null;
-	if (devServer) mainWindow.loadURL(devServer);
+	const compatUrl = process.env.MUSEPI_GUI_COMPAT_URL;
+	if (compatUrl) {
+		// `?shell=1` signals the served renderer to reserve the titlebar
+		// region (titleBarOverlay.height, 48px) so the OS window controls
+		// never sit on content — the desktopWindow frame-overlay contract.
+		mainWindow.loadURL(`${compatUrl}?shell=1`);
+	} else if (devServer) mainWindow.loadURL(devServer);
 	else mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
 
 	// Renderer crash (OOM / fatal page error): the WebSocket to the daemon

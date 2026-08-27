@@ -40,4 +40,7 @@ export const shell = {
 	"Ocean blue": "Ocean blue",
 	"Jade green": "Jade green",
 	"click for {name}": "Click for {name}",
+	"approval needed": "Approval needed",
+	"approve tool": "Approve tool",
+	"deny tool": "Deny tool",
 } as const satisfies Record<ShellKey, string>;

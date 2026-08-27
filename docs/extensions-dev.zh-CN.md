@@ -220,3 +220,30 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 **分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 desktop-web tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
 
 **参考实现**：`packages/desktop-web/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/gui/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
+
+## 10. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
+
+扩展为**指定节点 kind** 贡献 transcript 渲染器。对应 DSH `conversation.chat.node` 的单一“聊天节点 seat”槽：按节点 kind（entryKey）分发，命中即“拥有”该条目的渲染，未命中回退到内建渲染（fallback）。
+
+**注册**：
+
+```ts
+pi.registerComponent({
+	slot: "transcript.node",
+	moduleUrl: "./ui/my-node.tsx",
+	label: "My Chat Node",
+	entryKinds: ["message:user"], // 派发键（transcriptNodeKind）
+});
+```
+
+**模块契约**（与 registerComponent 同编译管线，blob import + `window.MusePiReact`）：
+- default export React component，收到 `SlotComponentProps.node`：`{ entry, kind, turnIndex?, children? }`。
+  - `entry` = 原始 `SessionEntry` wire 值；`kind` = `transcriptNodeKind(entry)` 派发键；
+  - `children` = 内建 MusePi 对该条目的渲染——组件可包含它做“增强”（保留官方骨架），或完全自绘（**拥有**该 kind）。
+- 未命中的 kind → 内建渲染（children 直接返回），等价 DSH fallback。
+
+**分派**：daemon 编译（透传 `entryKinds`）→ `extensions.list.components` → GUI `useSlotComponents(rpc, "transcript.node")` → `renderTranscriptNode`（ChatView）按 kind 过滤（`selectTranscriptNodeComponents`）→ 命中组件收到 `node` 上下文拥有渲染，未命中回退内建。组件集只在 `extensions.changed` 变化，不随 stream 帧变（memo 安全）。
+
+**防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
+
+**参考实现**：`packages/desktop-web/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/gui/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。

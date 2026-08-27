@@ -1973,6 +1973,11 @@ export interface ExtensionComponent {
 	label?: string;
 	/** List-slot render order (ascending; registration order otherwise). */
 	order?: number;
+	/** transcript.node seat: the node kinds (transcriptNodeKind entryKey)
+	 *  this renderer owns. A component with no entryKinds does not
+	 *  participate in per-kind node dispatch (it targets other exact slots).
+	 *  DSH `conversation.chat.node` entryKey analog. */
+	entryKinds?: string[];
 }
 
 /**

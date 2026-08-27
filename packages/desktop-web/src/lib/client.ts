@@ -47,6 +47,39 @@ export interface Notice {
 	at: number;
 }
 
+/** Daemon `approval-request` event payload — a tool call awaiting the host's
+ *  approve/deny. `prompt` is the full formatted body (Allow tool / Reason /
+ *  command+args) the GUI card shows so the host decides on the real action. */
+export interface ApprovalRequest {
+	requestId: string;
+	tool: string;
+	args: unknown;
+	prompt: string | null;
+}
+
+/** The client surface the shell renders against — shared by the collab guest
+ *  (GuestClient) and the daemon host (HostClient) transports. The host view
+ *  implements the workspace/UI-request members as inert stubs. */
+export interface SessionClient {
+	subscribe(listener: () => void): () => void;
+	getSnapshot(): GuestSnapshot;
+	sendPrompt(text: string): void;
+	sendAbort(): void;
+	selectWorkspaceSession(sessionId: string | null): void;
+	sendUiResponse(reqId: number, value?: CollabUiResponseValue): void;
+	sendAgentCmd(cmd: "chat" | "kill" | "revive", agentId: string, text?: string): void;
+	fetchTranscript(agentId: string, fromByte: number): Promise<TranscriptResult | null>;
+	rpc<T>(method: string, params?: unknown): Promise<T>;
+	/** Pending tool approval for the host to approve/deny (see
+	 *  {@link ApprovalRequest}); null when none. The collab guest never sees
+	 *  approvals — always null. */
+	readonly approvalRequest: ApprovalRequest | null;
+	respondApproval(requestId: string, approve: boolean): void;
+	readonly plaintext: boolean;
+	readonly workspace: readonly WorkspaceSessionInfo[] | null;
+	readonly focusedSessionId: string | null;
+}
+
 export interface GuestSnapshot {
 	phase: ConnectionPhase;
 	endedReason: string | null;
@@ -75,6 +108,9 @@ export interface GuestSnapshot {
 	focusedSessionId: string | null;
 	/** Pending host-side UI request (`ask` select/editor) this guest can answer. */
 	uiRequest: CollabUiRequest | null;
+	/** Pending tool approval the host must approve/deny (daemon host-mode only;
+	 *  the collab guest never sees approvals — always null). */
+	approvalRequest: ApprovalRequest | null;
 	/** Capped at 50, newest last. */
 	notices: readonly Notice[];
 }
@@ -252,6 +288,17 @@ export class GuestClient {
 
 	sendAgentCmd(cmd: "chat" | "kill" | "revive", agentId: string, text?: string): void {
 		this.#socket.send({ t: "agent-cmd", cmd, agentId, text });
+	}
+
+	/** Tool approvals are host-side only (the collab guest never receives
+	 *  `approval-request` frames) — a no-op on the guest transport. */
+	respondApproval(_requestId: string, _approve: boolean): void {
+		// no-op
+	}
+
+	/** Tool approvals are host-side only — always null on the guest. */
+	get approvalRequest(): null {
+		return null;
 	}
 
 	/**
@@ -682,6 +729,7 @@ export class GuestClient {
 			workspace: this.#workspace,
 			focusedSessionId: this.#focusedSessionId,
 			uiRequest: this.#uiRequest,
+			approvalRequest: null,
 			notices: this.#notices,
 		};
 	}

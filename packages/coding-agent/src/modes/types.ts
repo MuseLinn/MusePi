@@ -408,6 +408,7 @@ export interface InteractiveModeContext {
 	showCopySelector(): void;
 showTreeSelector(): void;
 showTraceSelector(): void;
+showImportSelector(): void;
 showSessionSelector(source?: ForeignSessionSource): void;
 	handleResumeSession(sessionPath: string): Promise<void>;
 	handleSessionDeleteCommand(): Promise<void>;

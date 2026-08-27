@@ -45,7 +45,7 @@ export {
 	typingFadeOpacity,
 } from "./components/transcript/reveal";
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
-export { Transcript, type TranscriptProps } from "./components/transcript/Transcript";
+export { Transcript, transcriptNodeKind, type TranscriptNodeInjection, type TranscriptProps } from "./components/transcript/Transcript";
 export {
 	collectWidgetPayloads,
 	latestWidgetFromEntries,

@@ -7,6 +7,7 @@ import { BoardPanel } from "./components/panels/BoardPanel";
 import { FilePanel } from "./components/panels/FilePanel";
 import { ScheduledPanel } from "./components/panels/ScheduledPanel";
 import { Banners } from "./components/shell/Banners";
+import { ApprovalCard } from "./components/shell/ApprovalCard";
 import { Composer } from "./components/shell/Composer";
 import { ConnectScreen } from "./components/shell/ConnectScreen";
 import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
@@ -25,7 +26,9 @@ import {
 	isNativeShell,
 } from "./lib/capacitor";
 import { GuestClient } from "./lib/client";
-import { useGuestSelector } from "./lib/use-guest";
+import { isCompatShell } from "./lib/compat-shell";
+import { HostClient } from "./lib/host-client";
+import { useGuestSelector, type SessionClient } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
 import "./components/shell/shell.css";
 
@@ -53,9 +56,10 @@ function hashLink(): string | null {
 }
 
 export function App(): ReactNode {
-	const [client, setClient] = useState<GuestClient | null>(null);
+	const [client, setClient] = useState<GuestClient | HostClient | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const credsRef = useRef<Creds | null>(null);
+	const hostRef = useRef<{ wsUrl: string; token?: string } | null>(null);
 
 	const connect = useCallback((link: string, name: string): void => {
 		// WebCrypto only exists in secure contexts (https or localhost). On
@@ -84,18 +88,38 @@ export function App(): ReactNode {
 		});
 	}, []);
 
+	/** Host-mode: connect to the serving daemon's own session (compat shell).
+	 *  No collab link, no E2E — the daemon's WS is loopback + token-gated. */
+	const connectHost = useCallback((wsUrl: string, token?: string): void => {
+		const next = new HostClient(wsUrl, token);
+		next.connect();
+		hostRef.current = { wsUrl, token };
+		credsRef.current = null;
+		setConnectError(null);
+		setClient(prev => {
+			prev?.close();
+			return next;
+		});
+	}, []);
+
 	const leave = useCallback((): void => {
 		setClient(prev => {
 			prev?.close();
 			return null;
 		});
+		hostRef.current = null;
 		history.replaceState(null, "", window.location.pathname + window.location.search);
 	}, []);
 
 	const rejoin = useCallback((): void => {
+		const host = hostRef.current;
+		if (host) {
+			connectHost(host.wsUrl, host.token);
+			return;
+		}
 		const creds = credsRef.current;
 		if (creds) connect(creds.link, creds.name);
-	}, [connect]);
+	}, [connect, connectHost]);
 
 	// Visual Viewport: adjust app height to fit screen space when mobile keyboard opens.
 	useEffect(() => {
@@ -122,6 +146,28 @@ export function App(): ReactNode {
 		const link = hashLink();
 		if (link) connect(link, storedName());
 	}, [connect]);
+
+	// Host-mode boot config: when served by `musepi serve --web-port`, the
+	// daemon also serves /__daemon.json with the JSON-RPC WS origin + token.
+	// Auto-connect as host (skip ConnectScreen) unless a collab deep link is
+	// present. Absent config (dev server / static host) → ConnectScreen.
+	useEffect(() => {
+		if (hashLink()) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch("/__daemon.json");
+				if (!res.ok) return;
+				const config = (await res.json()) as { wsUrl?: string; token?: string };
+				if (config.wsUrl && !cancelled) connectHost(config.wsUrl, config.token);
+			} catch {
+				// Not served by a daemon — ConnectScreen below handles it.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [connectHost]);
 
 	// Deep link: a native musepi:// URL (notification tap / QR / external link)
 	// delivered by the Capacitor App plugin — connect directly, same as hash.
@@ -174,7 +220,7 @@ export function App(): ReactNode {
  * This is the LAN-architecture equivalent of openchamber's APNs/FCM relay
  * (which requires a cloud server we do not have).
  */
-function useMobileNotifications(client: GuestClient | null, link: string | null): void {
+function useMobileNotifications(client: SessionClient | null, link: string | null): void {
 	const lastNotifiedRef = useRef(0);
 	// Android 13+ requires an explicit POST_NOTIFICATIONS grant before
 	// schedule() does anything; without it the call silently no-ops. Request
@@ -276,7 +322,7 @@ function PlaintextBanner(): ReactNode {
 }
 
 interface SessionProps {
-	client: GuestClient;
+	client: SessionClient;
 	onLeave(): void;
 	onRejoin(): void;
 	/** Current connection link (switcher highlight). */
@@ -289,7 +335,7 @@ interface SessionProps {
  * transcript frame, so this pane is the only thing that re-renders during
  * a stream — never the shell, header, composer, or toasts.
  */
-function TranscriptPane({ client, host }: { client: GuestClient; host: ToolRenderHost }): ReactNode {
+function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRenderHost }): ReactNode {
 	const entries = useGuestSelector(client, s => s.entries);
 	const stream = useGuestSelector(client, s => s.stream);
 	const streamDone = useGuestSelector(client, s => s.streamDone);
@@ -319,7 +365,7 @@ function AgentsRail({
 	selectedId,
 	onSelect,
 }: {
-	client: GuestClient;
+	client: SessionClient;
 	selectedId: string | null;
 	onSelect(id: string | null): void;
 }): ReactNode {
@@ -415,7 +461,8 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 	}, [selectedId, railOpen, activePanel, workspace, focusedSessionId, backToWorkspace]);
 
 	return (
-		<div className="sh-app">
+		<div className={isCompatShell() ? "sh-app sh-app--compat" : "sh-app"}>
+			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
 			<HeaderBar
 				client={client}
 				railOpen={railOpen}
@@ -469,6 +516,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				)}
 			</main>
 			{!inWorkspace && activePanel === null && <Composer client={client} />}
+			{!inWorkspace && activePanel === null && <ApprovalCard client={client} />}
 			{drawerAgent && (
 				<>
 					<div className="ag-drawer-backdrop" onClick={() => setSelectedId(null)} />

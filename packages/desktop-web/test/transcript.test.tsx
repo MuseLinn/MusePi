@@ -527,3 +527,18 @@ describe("Transcript work-timer round anchoring", () => {
 		expect(countElements(html, ".tr-working")).toBe(0);
 	});
 });
+
+describe("Transcript compat seam (data-entry attributes)", () => {
+	it("marks each entry row with its transcript-node kind + id (compat slot-host anchor)", () => {
+		const html = renderTranscript({
+			entries: [userEntry(200), assistantEntry({ timestamp: 300 })],
+			working: false,
+		});
+		// The passive seam: the row carries data-entry-kind (transcriptNodeKind)
+		// + data-entry-id so the injected compat slot host (musepi serve
+		// ?shell=1) can find and augment nodes without touching the React tree.
+		expect(countElements(html, '[data-entry-kind="message:user"]')).toBe(1);
+		expect(countElements(html, '[data-entry-kind="message:assistant"]')).toBe(1);
+		expect(countElements(html, "[data-entry-id]")).toBe(2);
+	});
+});

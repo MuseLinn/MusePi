@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Added host-mode session client (`HostClient`): connects to the daemon JSON-RPC WebSocket via `?token=` (bearer auth), calls `session.subscribe` for the initial snapshot + live entry/event stream, and exposes the same `GuestSnapshot` the collab guest renders. When the page is served by `musepi serve --web-port`, it auto-connects as a host (reads `/__daemon.json`) instead of showing the collab ConnectScreen — the "runtime serves the full host renderer" half of the dsh-desktop-compat chain.
+- Wired the host view's rich interactions: `ask-request`→`uiRequest` (Composer renders it, `sendUiResponse`→`session.askAnswer`), `approval-request`→`approvalRequest` (new `ApprovalCard` renders approve/deny → `tool.approve`/`tool.deny`), `recap`→notice. `GuestSnapshot`/`SessionClient` gained `approvalRequest` + `respondApproval`.
+- Added the compat-shell frame overlay: `?shell=1` (exact match via `isCompatShell`) reserves a 48px drag-region titlebar (`sh-app--compat` / `.compat-titlebar`) for the Electron compat shell's `titleBarOverlay`.
+- Added the passive compat slot-host seam: transcript rows carry `data-entry-kind`/`data-entry-id`, and `Transcript` falls back to the `window.MusePiCompatHost` registry (populated by the `musepi serve` injected compat script from the daemon's `extensions.list`) when no host injected `renderTranscriptNode` — daemon-hosted `transcript.node` extension components render in the served compat page. Plain-browser guests have no registry and keep the built-in rendering. `main.tsx` now exposes `window.MusePiReact` so blob-imported extension modules bind to the bundle's React instance.
+
 ## [0.4.3] - 2026-08-23
 
 ### Added

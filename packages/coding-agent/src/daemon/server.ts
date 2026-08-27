@@ -453,12 +453,17 @@ import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal } from "./journal";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
+import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { getFxRates } from "./fx-rates";
 
 export interface DaemonOptions {
 	socketPath?: string;
 	/** Optional WebSocket port (browser-reachable JSON-RPC transport). */
 	wsPort?: number;
+	/** Optional loopback HTTP port serving the renderer bundle (desktop-web
+	 *  dist) — the dsh-desktop-compat "runtime serves the web renderer" half.
+	 *  The Electron compat shell loadURLs this origin; the WS stays on wsPort. */
+	webPort?: number;
 	cwd?: string;
 	/**
 	 * Remote-access token. When set, the WS transport binds all interfaces
@@ -3827,6 +3832,7 @@ export class DaemonServer {
 							timestamp: string;
 							label?: string;
 							source?: string;
+							updatedAt?: string;
 						};
 						children: unknown[];
 					}
@@ -8673,9 +8679,19 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
  */
 let sdkPrewarmed = false;
 
+/** Resolve the renderer dist dir the compat HTTP server serves. Env
+ *  MUSEPI_RENDERER_DIST overrides; defaults to the workspace sibling
+ *  desktop-web/dist (dev layout). A missing dist is non-fatal —
+ *  startDaemonWeb throws and the shell falls back to its local bundle. */
+function rendererDistDir(): string {
+	const fromEnv = process.env.MUSEPI_RENDERER_DIST;
+	if (fromEnv) return fromEnv;
+	return path.resolve(import.meta.dir, "../../../desktop-web", "dist");
+}
+
 export async function startDaemon(
 	options: DaemonOptions = {},
-): Promise<{ socketPath: string; wsPort?: number; close: () => Promise<void> }> {
+): Promise<{ socketPath: string; wsPort?: number; webUrl?: string; close: () => Promise<void> }> {
 	// Windows: every Bun.spawn child (git/gh/shell/powershell) opens a new
 	// console window unless windowsHide is set. Patch the globals once so no
 	// spawn site (current or future) can leak a terminal popup from the
@@ -8756,6 +8772,25 @@ export async function startDaemon(
 		}
 	}
 
+	// Loopback HTTP static renderer — the "runtime serves the web renderer"
+	// half of the dsh-desktop-compat chain: the Electron compat shell
+	// loadURLs this origin and overlays the desktop frame over the served
+	// content. Optional (webPort); a missing renderer dist is non-fatal —
+	// the shell falls back to its local bundle.
+	let webHandle: DaemonWebHandle | null = null;
+	if (options.webPort !== undefined) {
+		try {
+			webHandle = await startDaemonWeb({
+				port: options.webPort,
+				distDir: rendererDistDir(),
+				wsPort: wsHandle?.port,
+				token: options.remoteToken,
+			});
+		} catch (err) {
+			logger.warn(`compat renderer unavailable (fall back to local bundle): ${String(err)}`);
+		}
+	}
+
 	const netServer = net.createServer(socket => {
 		const conn: DaemonConnection = {
 			id: `c${++connCounter}`,
@@ -8817,6 +8852,7 @@ export async function startDaemon(
 	return {
 		socketPath,
 		wsPort: wsHandle?.port,
+		webUrl: webHandle?.url,
 		close: async () => {
 			try {
 				await fs.promises.unlink(portFile);
@@ -8824,6 +8860,7 @@ export async function startDaemon(
 				// already gone
 			}
 			if (wsHandle) await wsHandle.close();
+			if (webHandle) await webHandle.close();
 			unsubscribePause();
 			for (const socket of sockets) socket.destroy();
 			host.dispose();
