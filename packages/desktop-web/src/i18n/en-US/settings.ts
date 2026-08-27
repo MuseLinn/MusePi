@@ -936,6 +936,7 @@ export const settings = {
 	"image title placeholder": "Optional, shown at the top of the image",
 	"image watermark placeholder": "Watermark text",
 	board: "Board",
+	workbench: "Workbench",
 	"board title": "Board title",
 	"board hello title": "A living board",
 	"board finance title": "Daily finance",

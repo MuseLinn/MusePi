@@ -461,8 +461,19 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 		return () => window.removeEventListener(BACK_EVENT, onBack);
 	}, [selectedId, railOpen, activePanel, workspace, focusedSessionId, backToWorkspace]);
 
+	const hostMode = client instanceof HostClient;
 	return (
-		<div className={isCompatShell() ? "sh-app sh-app--compat" : "sh-app"}>
+		<div
+			className={
+				[
+					"sh-app",
+					isCompatShell() ? "sh-app--compat" : null,
+					hostMode ? "sh-app--host" : null,
+				]
+					.filter(Boolean)
+					.join(" ")
+			}
+		>
 			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
 			<HeaderBar
 				client={client}
@@ -498,6 +509,9 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 								<ScheduledPanel client={client} cwd={sessionCwd} readOnly={readOnly} />
 							)}
 							{activePanel === "files" && <FilePanel client={client} cwd={sessionCwd} readOnly={readOnly} />}
+							{activePanel === "workbench" && (
+								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
+							)}
 						</div>
 					</section>
 				) : (

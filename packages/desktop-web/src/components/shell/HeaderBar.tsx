@@ -13,7 +13,7 @@ import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Guest side panels reachable from the header nav. */
-export type GuestPanel = "board" | "scheduled" | "files";
+export type GuestPanel = "board" | "scheduled" | "files" | "workbench";
 
 export interface HeaderBarProps {
 	client: SessionClient;
@@ -41,6 +41,7 @@ const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: 
 	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "board" },
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "scheduled tasks" },
 	{ panel: "files", icon: <Folder size={14} />, title: "files" },
+	{ panel: "workbench", icon: <PanelRight size={14} />, title: "workbench" },
 ];
 
 export function HeaderBar({

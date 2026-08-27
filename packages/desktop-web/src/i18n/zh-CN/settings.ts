@@ -888,6 +888,7 @@ export const settings = {
 	"image title placeholder": "可选，显示在图片顶部",
 	"image watermark placeholder": "水印文字",
 	board: "看板",
+	workbench: "工作台",
 	"board title": "看板标题",
 	"board hello title": "一块活的看板",
 	"board finance title": "每日财经",
