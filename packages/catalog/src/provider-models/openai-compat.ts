@@ -20,7 +20,7 @@ import {
 } from "../identity/family";
 import { resolveModelReference } from "../identity/reference";
 import type { ModelManagerOptions } from "../model-manager";
-import { type GeneratedProvider, getBundledModels } from "../models";
+import { type GeneratedProvider, getBundledModels, getBundledModelsDevCapabilities } from "../models";
 import { OPENAI_GPT_56_CYBER_STANDARD_COST, OPENAI_GPT_56_SOL_STANDARD_COST } from "../openai-pricing";
 import type {
 	Api,
@@ -32,7 +32,15 @@ import type {
 	Provider,
 	ThinkingConfig,
 } from "../types";
-import { discoveryFetch, isAnthropicOAuthToken, isRecord, toBoolean, toNumber, toPositiveNumber } from "../utils";
+import {
+	discoveryFetch,
+	isAnthropicOAuthToken,
+	isRecord,
+	toBoolean,
+	toNumber,
+	toPositiveNumber,
+	toPositiveNumberOrNull,
+} from "../utils";
 import { ALIBABA_TOKEN_PLAN_BASE_URL, parseAlibabaTokenPlanCredential } from "../wire/alibaba-token-plan";
 import { coreWeaveProjectHeaders } from "../wire/coreweave";
 import {
@@ -1665,6 +1673,122 @@ export function deepseekModelManagerOptions(
 	config?: DeepSeekModelManagerConfig,
 ): ModelManagerOptions<"openai-completions"> {
 	return createSimpleOpenAICompletionsOptions("deepseek", "https://api.deepseek.com", config);
+}
+
+// ---------------------------------------------------------------------------
+// 6.55 Command Code (Goat subscription)
+// ---------------------------------------------------------------------------
+
+export interface CommandCodeModelManagerConfig {
+	apiKey?: string;
+	baseUrl?: string;
+	fetch?: FetchImpl;
+}
+
+/**
+ * Command Code serves official model ids (claude-sonnet-5, gpt-5.6-sol,
+ * deepseek/deepseek-v4-flash, …) whose metadata lives on models.dev under
+ * their own providers, so the gateway's `/v1/models` rows are bare `{id}`
+ * and carry no context/input/reasoning metadata. Hydrate each discovered id
+ * from the canonical bundled reference index (which already resolves
+ * `vendor/id` suffixes), falling back to the bundled models.dev gap snapshot
+ * and the cached live payload for gateway-first ids — mirroring the
+ * opencode-go/zen hydration path without a fresh global index build.
+ */
+function findCachedModelsDevCapability(payload: unknown, modelId: string): ModelSpec<"openai-completions"> | undefined {
+	if (!isRecord(payload)) return undefined;
+	// Command Code serves `vendor/id` rows; models.dev keys by the bare id.
+	const candidates = new Set<string>([modelId]);
+	const slashIndex = modelId.lastIndexOf("/");
+	if (slashIndex !== -1) candidates.add(modelId.slice(slashIndex + 1));
+	for (const providerData of Object.values(payload)) {
+		if (!isRecord(providerData) || !isRecord(providerData.models)) continue;
+		for (const [id, raw] of Object.entries(providerData.models)) {
+			if (!candidates.has(id)) continue;
+			if (!isRecord(raw)) continue;
+			const model = raw as ModelsDevModel;
+			const contextWindow = toPositiveNumberOrNull(model.limit?.context);
+			const maxTokens = toPositiveNumberOrNull(model.limit?.output);
+			return {
+				id: modelId,
+				name: toModelName(model.name, modelId),
+				api: "openai-completions",
+				provider: "command-code",
+				baseUrl: "custom://models-dev",
+				reasoning: model.reasoning === true,
+				input: toInputCapabilities(model.modalities?.input),
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow,
+				maxTokens,
+			};
+		}
+	}
+	return undefined;
+}
+
+export function commandCodeModelManagerOptions(
+	config?: CommandCodeModelManagerConfig,
+): ModelManagerOptions<"openai-completions"> {
+	const apiKey = config?.apiKey;
+	const baseUrl = config?.baseUrl ?? "https://api.commandcode.ai/provider/v1";
+	return {
+		providerId: "command-code",
+		dynamicModelsAuthoritative: true,
+		...(apiKey && {
+			fetchDynamicModels: async () => {
+				// Resolved here, not at options construction: walking the bundled
+				// reference index is only worth paying for when dynamic discovery
+				// actually runs, keeping the ModelManager cache fast path cheap.
+				const canonicalReferences = getBundledModelReferenceIndex();
+				const bundledDevSnapshot = getBundledModelsDevCapabilities();
+				const cachedModelsDevPayload = getCachedModelsDevPayload();
+				return fetchOpenAICompatibleModels({
+					api: "openai-completions",
+					provider: "command-code",
+					baseUrl,
+					apiKey,
+					mapModel: (entry, defaults) => {
+						// Official models resolve from the canonical bundled index,
+						// inheriting context/input/reasoning/thinking (and pricing).
+						const canonical = resolveModelReference(defaults.id, canonicalReferences);
+						if (canonical) {
+							return mapWithBundledReference(
+								entry,
+								defaults,
+								toModelSpec(canonical as Model<"openai-completions">),
+							);
+						}
+						// Gateway-first ids missing from the bundled catalog (e.g.
+						// deepseek-v4-flash-vision-exp) recover capabilities from the
+						// bundled models.dev gap snapshot, then the cached live payload.
+						// The snapshot keys by bare id, so strip the `vendor/` prefix.
+						const slashIndex = defaults.id.lastIndexOf("/");
+						const bareId = slashIndex !== -1 ? defaults.id.slice(slashIndex + 1) : defaults.id;
+						const snapshot = bundledDevSnapshot.get(bareId);
+						const capabilitySource =
+							snapshot ?? findCachedModelsDevCapability(cachedModelsDevPayload, defaults.id);
+						if (!capabilitySource) {
+							return defaults;
+						}
+						const contextWindow = capabilitySource.contextWindow ?? defaults.contextWindow;
+						const maxTokens =
+							capabilitySource.maxTokens != null && contextWindow != null
+								? Math.min(capabilitySource.maxTokens, contextWindow)
+								: (capabilitySource.maxTokens ?? defaults.maxTokens);
+						return {
+							...defaults,
+							name: toModelName(entry.name, capabilitySource.name ?? defaults.name),
+							reasoning: capabilitySource.reasoning,
+							input: capabilitySource.input,
+							contextWindow,
+							maxTokens,
+						};
+					},
+					fetch: config?.fetch,
+				});
+			},
+		}),
+	};
 }
 
 // ---------------------------------------------------------------------------
