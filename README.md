@@ -28,7 +28,7 @@
 
 MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-Current app version **`0.4.5`** (independent of upstream versioning).
+Current app version **`0.4.6`** (independent of upstream versioning).
 
 ## Install (one command)
 
