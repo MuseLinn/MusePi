@@ -641,8 +641,48 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 	},
 	{
 		name: "preset",
-		description: "Show the session preset (mode); applied at startup via --preset <id>",
-		handle: async (_command, runtime) => {
+		description: "Show or switch the session preset (mode); applied at startup via --preset <id>",
+		allowArgs: true,
+		inlineHint: "[use <id> | list]",
+		subcommands: [
+			{ name: "use", description: "Hot-switch the session preset (mode)", usage: "<id>" },
+			{ name: "list", description: "List all presets (modes)" },
+		],
+		handle: async (command, runtime) => {
+			const args = command.args.trim().split(/\s+/).filter(Boolean);
+			// `/preset use <id>` — hot-switch via the modes v2 switcher.
+			if (args[0] === "use") {
+				const modeId = args[1];
+				if (!modeId || !MODE_ID_PATTERN.test(modeId)) {
+					return usage(t("preset use usage"), runtime);
+				}
+				const result = await runtime.session.setMode(modeId, { hot: true });
+				if (result.ok) {
+					await runtime.output(t("preset use ok", modeId));
+				} else {
+					await runtime.output(t("preset use fail", modeId, result.error ?? "unknown error"));
+				}
+				return commandConsumed();
+			}
+			// `/preset list` — enumerate the modes dir (daemon modes.list parity,
+			// in-process so it works without a daemon).
+			if (args[0] === "list") {
+				const { listModeIds } = await import("../presets/resolve");
+				const dir = process.env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+				const ids = listModeIds(dir);
+				const current = runtime.sessionManager.getHeader()?.modeId;
+				if (ids.length === 0) {
+					await runtime.output(t("preset list empty"));
+				} else {
+					await runtime.output(
+						ids
+							.map(id => (id === current ? `* ${id}` : `  ${id}`))
+							.join("\n"),
+					);
+				}
+				return commandConsumed();
+			}
+			// Bare `/preset` — show the current session preset (mode).
 			const modeId = runtime.sessionManager.getHeader()?.modeId;
 			if (!modeId) {
 				await runtime.output(t("preset slash none"));
