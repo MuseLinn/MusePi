@@ -144,6 +144,7 @@ import {
 } from "./presets/resolve";
 import { PromptComposer } from "./prompts/composer";
 import mcpXdevGuidanceTemplate from "./prompts/system/mcp-xdev-guidance.md" with { type: "text" };
+import extensionsInventoryTemplate from "./prompts/system/extensions-inventory.md" with { type: "text" };
 import lateDiagnosticTemplate from "./prompts/tools/lsp-late-diagnostic.md" with { type: "text" };
 import { AgentLifecycleManager } from "./registry/agent-lifecycle";
 import { type AgentRef, AgentRegistry, MAIN_AGENT_ID } from "./registry/agent-registry";
@@ -2376,29 +2377,23 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			for (const section of ext.promptSections) modeRuntime.composer.add({ ...section, source });
 		}
 		// 扩展清单区块(agent 感知,§5.7):agent 必须知道已启用哪些扩展及其
-		// 贡献能力 —— "插件化了不能 agent 自己不知道插件相关的事"。纯文本
-		// 拼接(扩展名/工具名为简单文本),order 25 注入区,热切换整源重挂。
+		// 贡献能力 —— "插件化了不能 agent 自己不知道插件相关的事"。模板
+		// 走 prompts/system/extensions-inventory.md + Handlebars(prompt.render),
+		// order 25 注入区,热切换整源重挂。
 		const rebuildExtensionInventory = (
 			exts: ReadonlyArray<{ label?: string; path: string; tools: Map<string, unknown> }>,
 		): void => {
-			const lines: string[] = ["# 已安装扩展", ""];
 			const named = exts
 				.map(ext => ({
 					label: ext.label ?? path.basename(ext.path),
 					tools: [...ext.tools.keys()].sort().join(", "),
 				}))
 				.filter(e => e.label.length > 0);
-			if (named.length === 0) {
-				lines.push("（当前没有已启用的扩展。）");
-			} else {
-				for (const e of named) {
-					lines.push(`- **${e.label}**${e.tools ? `（工具：${e.tools}）` : ""}`);
-				}
-			}
-			lines.push("");
-			lines.push("你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。");
 			modeRuntime.composer.removeBySource("ext:inventory");
-			modeRuntime.composer.add({ name: "extensions-inventory", order: 25, text: lines.join("\n") }, "ext:inventory");
+			modeRuntime.composer.add(
+				{ name: "extensions-inventory", order: 25, text: prompt.render(extensionsInventoryTemplate, { extensions: named }) },
+				"ext:inventory",
+			);
 		};
 		rebuildExtensionInventory(extensionsResult.extensions);
 

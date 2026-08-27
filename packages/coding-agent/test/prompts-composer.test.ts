@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { PromptComposer } from "@musepi/pi-coding-agent/prompts/composer";
+import { prompt } from "@musepi/pi-utils";
+import extensionsInventoryTemplate from "../src/prompts/system/extensions-inventory.md" with { type: "text" };
 
 // PromptComposer(§5):插槽排序、同名覆盖、removeBySource、promptComplete、无注入回归锚。
 
@@ -114,5 +116,25 @@ describe("extensions-inventory block (agent awareness, §5.7)", () => {
 			"# 已安装扩展\n\n（当前没有已启用的扩展。）\n\n你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。";
 		composer.add({ name: "extensions-inventory", order: 25, text: emptyText }, "ext:inventory");
 		expect(composer.compose(["core"])).toEqual(["core", emptyText]);
+	});
+});
+
+describe("extensions-inventory template (Handlebars render)", () => {
+	const template = extensionsInventoryTemplate;
+	it("renders extension names + tools from the .md template", () => {
+		const out = prompt.render(template, {
+			extensions: [
+				{ label: "my-ext", tools: "probe_tool, scan_tool" },
+				{ label: "other", tools: "" },
+			],
+		});
+		expect(out).toContain("# 已安装扩展");
+		expect(out).toContain("**my-ext**（工具：probe_tool, scan_tool）");
+		expect(out).toContain("**other**");
+	});
+	it("renders the empty state when no extensions", () => {
+		const out = prompt.render(template, { extensions: [] });
+		expect(out).toContain("（当前没有已启用的扩展。）");
+		expect(out).not.toContain("**");
 	});
 });
