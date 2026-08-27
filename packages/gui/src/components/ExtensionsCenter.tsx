@@ -269,7 +269,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				nativeItems.push(...items);
 				continue;
 			}
-			if (items.length === 0 && !p.enabled) continue; // empty disabled providers stay hidden
+			// Empty disabled providers stay hidden — EXCEPT musepi-extensions:
+			// the MusePi-native extension provider is a first-class entry the
+			// user must always see (management surface even with zero items,
+			// "插件化了用户要能了解"), unlike third-party providers.
+			if (items.length === 0 && !p.enabled && p.id !== "musepi-extensions") continue;
 			const kinds = new Map<string, ExtensionItem[]>();
 			for (const it of items) {
 				const list = kinds.get(it.kind) ?? [];

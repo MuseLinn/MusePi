@@ -55,7 +55,11 @@ const EXT_FOOTER = " ↑/↓: navigate · Space: toggle · ←/→: provider · 
 export function buildTabBarTabs(tabs: ProviderTab[]): Tab[] {
 	return tabs.map(tab => {
 		const isAll = tab.id === "all";
-		const isEmptyEnabled = tab.count === 0 && tab.enabled && !isAll;
+		// musepi-extensions: the MusePi-native extension provider stays
+		// selectable even when empty — it is a first-class management entry
+		// ("插件化了用户要能了解"), unlike third-party providers whose empty
+		// tabs are muted.
+		const isEmptyEnabled = tab.count === 0 && tab.enabled && !isAll && tab.id !== "musepi-extensions";
 		const isDisabled = !tab.enabled && !isAll;
 		let label = tab.label;
 		if (tab.count > 0) label += ` (${tab.count})`;

@@ -127,3 +127,17 @@ describe("buildProviderTabs", () => {
 		expect(off?.label).toContain("Off (2)");
 	});
 });
+
+describe("buildTabBarTabs (provider tabs)", () => {
+	test("musepi-extensions stays selectable when empty (first-class entry)", () => {
+		const tabs = buildTabBarTabs([
+			{ id: "all", label: "ALL", enabled: true, count: 0 },
+			{ id: "musepi-extensions", label: "MusePi Extensions", enabled: true, count: 0 },
+			{ id: "omp-plugins", label: "OMP", enabled: true, count: 0 },
+		]);
+		const me = tabs.find(t => t.id === "musepi-extensions");
+		const omp = tabs.find(t => t.id === "omp-plugins");
+		expect(me?.muted).toBe(false); // MusePi-native entry always reachable
+		expect(omp?.muted).toBe(true); // third-party empty tabs stay muted
+	});
+});
