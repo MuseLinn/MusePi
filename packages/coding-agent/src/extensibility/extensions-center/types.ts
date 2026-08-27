@@ -18,7 +18,8 @@ export type ExtensionKind =
 	| "hook"
 	| "slash-command"
 	| "style"
-	| "gui-motion";
+	| "gui-motion"
+	| "desktop-shell";
 
 /**
  * Extension state (active, disabled, or shadowed).

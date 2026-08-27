@@ -17,7 +17,7 @@ const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification,
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
-const { probe, restart, start, kill, portOpen } = require("./daemon.cjs");
+const { probe, probeWeb, restart, start, kill, portOpen } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
 const { checkForUpdates, downloadUpdate, quitAndInstall, wireRenderer, state: updaterState } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
@@ -2014,7 +2014,11 @@ function createWindow() {
 	// reservation below) is a presentational follow-up; the loadURL swap is
 	// the "shell wraps runtime content" chain.
 	const devServer = DEV && process.env.MUSEPI_GUI_DEV === "1" ? "http://127.0.0.1:5173/" : null;
-	const compatUrl = process.env.MUSEPI_GUI_COMPAT_URL;
+	// Compat shell: MUSEPI_GUI_COMPAT_URL (explicit override) wins, else the
+	// daemon's web.port discovery file (written when the desktop:shell
+	// extension is enabled and --web-port serves the renderer). Absent ->
+	// the shell loads its local bundle.
+	const compatUrl = process.env.MUSEPI_GUI_COMPAT_URL ?? probeWeb();
 	if (compatUrl) {
 		// `?shell=1` signals the served renderer to reserve the titlebar
 		// region (titleBarOverlay.height, 48px) so the OS window controls

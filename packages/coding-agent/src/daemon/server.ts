@@ -2641,6 +2641,27 @@ function extractEntryText(entry: { content?: unknown; text?: unknown }): string 
 
 export class DaemonServer {
 	readonly #host: DaemonSessionHost;
+	/** Served compat renderer origin (set by startDaemon after startDaemonWeb
+	 *  binds; null when --web-port is absent or the dist is missing). The
+	 *  desktop-shell extension reports it so the GUI shell knows where the
+	 *  runtime-served content lives. */
+	#webUrl: string | null = null;
+
+	setWebUrl(url: string | null): void {
+		this.#webUrl = url;
+	}
+
+	getWebUrl(): string | null {
+		return this.#webUrl;
+	}
+
+	/** Daemon socket path (set by startDaemon; used for the web.port
+	 *  discovery file that sits beside daemon.sock). */
+	#socketPath: string = "";
+
+	setSocketPath(p: string): void {
+		this.#socketPath = p;
+	}
 	/** Connections registered via events.subscribe — receive global (non-
 	 *  session) daemon events such as extensions.changed (HMR). */
 	readonly #globalEventTargets = new Set<DaemonConnection>();
@@ -4174,6 +4195,18 @@ export class DaemonServer {
 						ext.state = styleSetting === "classic" ? "disabled" : "active";
 						ext.disabledReason = styleSetting === "classic" ? "item-disabled" : undefined;
 					}
+					// Desktop shell mirrors shell.enabled (setEnabled writes it);
+					// disabled -> the GUI loads its local bundle instead of the
+					// runtime-served renderer.
+					if (ext.id === "desktop-shell:shell") {
+						const shellEnabled = s?.getRaw("shell.enabled");
+						ext.state = shellEnabled === false ? "disabled" : "active";
+						ext.disabledReason = shellEnabled === false ? "item-disabled" : undefined;
+						// The served origin + the effective shell mode ride on
+						// the entry's raw so the GUI shell (and extension
+						// center) reads them from the registry, not env.
+						(ext.raw as Record<string, unknown>).webUrl = this.#webUrl;
+					}
 				}
 				const { buildProviderTabs } = await import("../extensibility/extensions-center/state-manager");
 				const tabs = buildProviderTabs(extensions);
@@ -4249,6 +4282,35 @@ export class DaemonServer {
 						(p.enabled ? "swarm" : "classic") as never,
 					);
 					await settings.flush();
+					this.#extensionsCache = null;
+					this.#broadcastExtensionsChanged();
+					return { ok: true };
+				}
+				if (p.id === "desktop-shell:shell") {
+					// Desktop shell toggle: enabled -> the GUI shell loads the
+					// runtime-served renderer; disabled -> local bundle. The
+					// setting drives the extension's mirrored state, and the
+					// web.port discovery file is written/deleted so the shell
+					// sees the change without an RPC round-trip.
+					settings.set("shell.enabled" as Parameters<Settings["set"]>[0], p.enabled as never);
+					await settings.flush();
+					const webPortFile = path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port");
+					if (p.enabled && this.#webUrl) {
+						const port = new URL(this.#webUrl).port;
+						if (port) {
+							try {
+								await fs.promises.writeFile(webPortFile, port, "utf8");
+							} catch {
+								// non-fatal
+							}
+						}
+					} else {
+						try {
+							await fs.promises.unlink(webPortFile);
+						} catch {
+							// already gone
+						}
+					}
 					this.#extensionsCache = null;
 					this.#broadcastExtensionsChanged();
 					return { ok: true };
@@ -8790,6 +8852,10 @@ export async function startDaemon(
 			logger.warn(`compat renderer unavailable (fall back to local bundle): ${String(err)}`);
 		}
 	}
+	// The desktop-shell extension reports the served origin so the GUI shell
+	// (and any extension center) sees where the runtime-served content lives.
+	server.setWebUrl(webHandle?.url ?? null);
+	server.setSocketPath(socketPath);
 
 	const netServer = net.createServer(socket => {
 		const conn: DaemonConnection = {
@@ -8840,6 +8906,17 @@ export async function startDaemon(
 			// non-fatal: discovery just falls back to probing
 		}
 	}
+	// Persist the served compat-renderer origin (web.port) so the desktop
+	// shell discovers the runtime-served content without an RPC round-trip —
+	// same model as ws.port. Absent = the shell loads its local bundle.
+	const webPortFile = path.join(path.dirname(socketPath), "web.port");
+	if (webHandle) {
+		try {
+			await fs.promises.writeFile(webPortFile, String(webHandle.port), "utf8");
+		} catch {
+			// non-fatal: the shell falls back to the local bundle
+		}
+	}
 
 	await new Promise<void>((resolve, reject) => {
 		// net.createServer's returned type lacks .once in the current Bun
@@ -8856,6 +8933,11 @@ export async function startDaemon(
 		close: async () => {
 			try {
 				await fs.promises.unlink(portFile);
+			} catch {
+				// already gone
+			}
+			try {
+				await fs.promises.unlink(webPortFile);
 			} catch {
 				// already gone
 			}

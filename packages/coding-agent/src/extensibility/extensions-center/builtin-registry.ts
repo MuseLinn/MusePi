@@ -37,6 +37,15 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		settingsMirror: { key: "display.taskCardStyle", on: "swarm", off: "classic" },
 		raw: { name: "task-card-swarm", style: "swarm" },
 	},
+	{
+		kind: "desktop-shell",
+		name: "shell",
+		displayName: "MusePi Desktop Shell",
+		description:
+			"Electron compat shell: wraps the daemon-served renderer (dsh-desktop parity). Enabled -> the shell loads the runtime-served content; disabled -> the local bundle.",
+		settingsMirror: { key: "shell.enabled", on: true, off: false },
+		raw: { name: "shell", kind: "desktop-shell" },
+	},
 ];
 
 /** 生成内置扩展条目(state 按 disabledExtensions 计算;镜像设置的项由

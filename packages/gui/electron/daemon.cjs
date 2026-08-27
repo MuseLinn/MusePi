@@ -21,6 +21,7 @@ const { spawn } = require("node:child_process");
 
 const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
 const PORT_FILE = path.join(SOCKET_DIR, "ws.port");
+const WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
 const STARTUP_TIMEOUT_MS = 10_000;
 
 /** GUI package version (brand version for the spawned daemon). */
@@ -37,6 +38,19 @@ function probe() {
 	try {
 		const port = Number.parseInt(fs.readFileSync(PORT_FILE, "utf8").trim(), 10);
 		return Number.isInteger(port) && port > 0 ? port : null;
+	} catch {
+		return null;
+	}
+}
+
+/** Discover the daemon-served compat renderer origin (web.port file, written
+ *  by startDaemon when the desktop-shell extension is enabled). Returns the
+ *  loopback URL or null — null = the shell loads its local bundle. */
+function probeWeb() {
+	try {
+		const port = Number.parseInt(fs.readFileSync(WEB_PORT_FILE, "utf8").trim(), 10);
+		if (!Number.isInteger(port) || port <= 0) return null;
+		return `http://127.0.0.1:${port}/`;
 	} catch {
 		return null;
 	}
@@ -72,7 +86,7 @@ function daemonCommand(port) {
 	if (inPath) {
 		return {
 			program: "musepi",
-			args: ["serve", "--port", String(port)],
+			args: ["serve", "--port", String(port), "--web-port", "0"],
 		};
 	}
 	// Packaged app: the compiled daemon binary is asarUnpacked so it can be
@@ -85,14 +99,14 @@ function daemonCommand(port) {
 		win ? "musepi.exe" : "musepi",
 	);
 	if (fs.existsSync(unpacked)) {
-		return { program: unpacked, args: ["serve", "--port", String(port)] };
+		return { program: unpacked, args: ["serve", "--port", String(port), "--web-port", "0"] };
 	}
 	// Dev checkout: electron/ sits at <repo>/packages/gui/electron/.
 	let dir = path.resolve(__dirname);
 	while (true) {
 		const cli = path.join(dir, "packages", "coding-agent", "src", "cli.ts");
 		if (fs.existsSync(cli)) {
-			return { program: "bun", args: [cli, "serve", "--port", String(port)] };
+			return { program: "bun", args: [cli, "serve", "--port", String(port), "--web-port", "0"] };
 		}
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
@@ -216,4 +230,4 @@ async function restart(port, env = {}) {
 	return start(port, env);
 }
 
-module.exports = { probe, start, restart, kill, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE };
+module.exports = { probe, probeWeb, start, restart, kill, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE, WEB_PORT_FILE };

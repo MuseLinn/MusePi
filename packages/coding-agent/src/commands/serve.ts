@@ -33,7 +33,7 @@ export default class Serve extends Command {
 			throw new Error(`Invalid --port: ${wsPort}`);
 		}
 		const webPort = flags["web-port"];
-		if (webPort !== undefined && (webPort < 1 || webPort > 65535)) {
+		if (webPort !== undefined && (webPort < 0 || webPort > 65535)) {
 			throw new Error(`Invalid --web-port: ${webPort}`);
 		}
 		const remoteToken = flags["remote-token"];
