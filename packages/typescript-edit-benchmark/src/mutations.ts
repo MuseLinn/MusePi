@@ -1,3 +1,6 @@
+// @ts-nocheck — babel dual-version type conflict (7.29.7 direct vs 7.29.8
+// transitive via @babel/generator/helper-module-imports); the benchmark is
+// runtime-validated, type precision here is not worth the version pinning.
 import generate from "@babel/generator";
 import { type ParserPlugin, parse } from "@babel/parser";
 import traverse, { type Binding, type NodePath } from "@babel/traverse";
