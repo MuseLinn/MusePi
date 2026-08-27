@@ -43,7 +43,7 @@ MusePi 移动端是 **桌面 agent 的"随身遥控器"**，不是桌面客户�
 | 首帧主题 | 阻塞脚本预置 `color-scheme` + 背景色，杜绝白闪 | ✅ 同款（`mobile.html` 内联脚本） |
 | 会话切换 | 手机：底部 sheet；平板：常驻左侧栏；SIZE 类而非设备检测 | ⏳ 现状：header 内 popover（`ServerSwitcher`）+ workspace 卡片；P2 评估底部 sheet |
 | 工作区抽屉 | 右缘滑动 → 抽屉（Changes/Files/Terminal/Notes/MCP 多 tab） | ⏳ 现状：header 面板按钮 → 全屏 panel；P2 评估抽屉化 |
-| 返回键 | 分层关闭：plan → surface → drawer → chat | ❌ 缺失（本次补，§6.3） |
+| 返回键 | 分层关闭：plan → surface → drawer → chat | ✅ 已实现（capacitor.ts setupAndroidBackHandler + app.tsx onBack 分层） |
 | 推送 | APNs/FCM + relay + presence 抑制 | ⏳ 本架构无云端：本地通知（§6.4） |
 | 深链 | `openchamber://` 意图词汇表（通知/小组件/Control Center 复用） | ⏳ 现状：hash 深链（浏览器）；P2 评估原生 scheme |
 | QR 配对 | mlkit 捆绑 barcode 模型离线扫描 | ✅ 同款（`@capacitor-mlkit/barcode-scanning`） |
