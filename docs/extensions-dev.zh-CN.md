@@ -247,3 +247,17 @@ pi.registerComponent({
 **防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
 
 **参考实现**：`packages/desktop-web/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/gui/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
+
+## 11. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
+
+Electron 壳本身是**一等扩展**（`kind: "desktop-shell"`, id `desktop-shell:shell`, 内置注册表 `builtin-registry.ts`）：
+- `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳启用状态（`shell.enabled` 设置键）、DSH 三模式、daemon serve 的渲染器 origin。
+- `extensions.setEnabled("desktop-shell:shell", { enabled, mode? })` 切换壳开关与模式（写 `shell.enabled`/`shell.mode`, 管理 `web.port` 发现文件 —— 壳进程据此决定 loadURL 运行时渲染器 or 本地 bundle）。
+- daemon `--web-port` serve 渲染器（`desktop-web/dist`）+ `/__daemon.json`（wsUrl/token）；壳 `probeWeb()` 读 `web.port` 自动发现。
+
+**Shell 三模式**（DSH compatibility/extended/enhanced）：
+- `compatibility`（默认）：注入脚本只注册 `transcript.node` —— 扩展贡献聊天节点。
+- `extended`：注入脚本额外注册 `composer.dock` / `panel.tab.workbench` / `statusbar`；desktop-web 的 `CompatSlotHost` 按 slot 渲染注册组件（composer 上方 dock、底部状态条、workbench 面板）。
+- `enhanced`：渲染器侧同 extended，壳保留原生 titlebar（原生 UI 面板预留）。
+
+**注册表契约**：daemon 注入脚本（`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`）blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`；desktop-web 初始化注册表（`main.tsx`），`Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
