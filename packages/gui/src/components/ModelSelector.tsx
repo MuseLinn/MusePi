@@ -104,6 +104,7 @@ export function ModelSelector({
 	maxLabelWidth = "150px",
 	allowSetDefault = false,
 	currentModelId = null,
+	capsule = false,
 }: {
 	rpc: RpcClient;
 	sessionId: string | null;
@@ -123,6 +124,10 @@ export function ModelSelector({
 	 *  re-entering the session instead of the selector snapping to the
 	 *  list head (or to another session's stale preselect). */
 	currentModelId?: string | null;
+	/** Compact capsule presentation (ModelThinkingCapsule): switch the
+	 *  container/button to the `.gui-model-capsule-seg(-btn)` classes and
+	 *  anchor the menu on the button (ThinkingSelector parity). */
+	capsule?: boolean;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [models, setModels] = useState<WireModel[]>([]);
@@ -327,10 +332,11 @@ export function ModelSelector({
 	};
 
 	return (
-		<div className="gui-model" ref={anchorRef}>
+		<div className={capsule ? "gui-model-capsule-seg" : "gui-model"} ref={capsule ? undefined : anchorRef}>
 			<button
 				type="button"
-				className="gui-model-btn"
+				className={capsule ? "gui-model-capsule-seg-btn" : "gui-model-btn"}
+				ref={capsule ? anchorRef : undefined}
 				onClick={() => setOpen(v => !v)}
 				title={current ? `${current.provider}/${current.id} · ${current.name}` : t("model")}
 				aria-label={t("select model")}
@@ -340,7 +346,7 @@ export function ModelSelector({
 				) : (
 					<Icon name="ai-agent" className="h-3.5 w-3.5" />
 				)}
-				<span className="gui-model-capsule-seg-text truncate" style={{ maxLabelWidth }}>
+				<span className="gui-model-capsule-seg-text truncate" style={{ maxWidth: maxLabelWidth }}>
 					{label}
 				</span>
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />

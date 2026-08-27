@@ -358,6 +358,7 @@ export function SettingsView({
 	onBack,
 	initialSection,
 	onOpenSession,
+	onCreateChat,
 	cwd,
 }: {
 	rpc: RpcClient | null;
@@ -368,6 +369,9 @@ export function SettingsView({
 	initialSection?: SectionId;
 	/** Open a session from the 索引库 search results (app layer owns openSession). */
 	onOpenSession?: (sessionId: string) => void;
+	/** DSH creation-flow entry: settings preset 新建 sends a natural-language
+	 *  description to a Creator session that designs & saves the preset. */
+	onCreateChat?: (text: string) => void;
 	/** Active session's workspace dir — the 代码库 index scans this. */
 	cwd?: string | null;
 }): ReactNode {
@@ -750,7 +754,7 @@ export function SettingsView({
 									})()
 								: null}
 							{section === "suggestions" && <PromptsSection />}
-							{section === "modes" && <ModesSection rpc={rpc} />}
+							{section === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
 							{section === "migration" && <MigrationSection rpc={rpc} />}
 							{section === "subagents" && <SubagentsSection rpc={rpc} />}
 							{section === "commands" && <CommandsSection rpc={rpc} />}

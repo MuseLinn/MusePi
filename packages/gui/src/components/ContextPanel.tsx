@@ -316,16 +316,12 @@ export function ContextPanel({
 					 * rect — a padded/scrollable wrapper breaks the height chain
 					 * and clips the projection. */
 					<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
+				) : view === "git" || view === "diff" || view === "pr" ? (
+					<GitPanel rpc={rpc} cwd={cwd} />
 				) : (
 					<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 						{view === "notes" ? (
 							<NotesPane rpc={rpc} cwd={cwd} />
-						) : view === "diff" ? (
-							<DiffPane rpc={rpc} cwd={cwd} />
-						) : view === "git" ? (
-							<GitLogPane rpc={rpc} cwd={cwd} />
-						) : view === "pr" ? (
-							<PrPane rpc={rpc} cwd={cwd} />
 						) : view === "files" && cwd ? (
 							<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
 						) : view === "widget" ? (
@@ -1379,6 +1375,49 @@ function PrPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			) : (
 				<div className="px-2 py-5 text-[12.5px] text-[var(--color-text-faint)]">{t("no open pull requests")}</div>
 			)}
+		</div>
+	);
+}
+
+/**
+ * Single rail "git" surface (Phase 3 merge of the former git/diff/pr
+ * surfaces): a view-local sub-tab bar — workspace changes / commit
+ * history / pull requests — over the merged panes. The rail stays the
+ * single navigation axis; these tabs switch content *within* the surface.
+ */
+type GitPaneTab = "changes" | "commits" | "pr";
+const GIT_PANE_TABS: Array<{ id: GitPaneTab; label: string }> = [
+	{ id: "changes", label: "workspace changes" },
+	{ id: "commits", label: "commit history" },
+	{ id: "pr", label: "pull requests" },
+];
+function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
+	const [tab, setTab] = useState<GitPaneTab>("changes");
+	return (
+		<div className="flex h-full min-h-0 flex-col">
+			<div className="gui-pane-subtabs" role="tablist" aria-label={t("git")}>
+				{GIT_PANE_TABS.map(({ id, label }) => (
+					<button
+						key={id}
+						type="button"
+						role="tab"
+						aria-selected={tab === id}
+						className={`gui-pane-subtab${tab === id ? " gui-pane-subtab--active" : ""}`}
+						onClick={() => setTab(id)}
+					>
+						{t(label as TranslationKey)}
+					</button>
+				))}
+			</div>
+			<div className="min-h-0 flex-1">
+				{tab === "commits" ? (
+					<GitLogPane rpc={rpc} cwd={cwd} />
+				) : tab === "pr" ? (
+					<PrPane rpc={rpc} cwd={cwd} />
+				) : (
+					<DiffPane rpc={rpc} cwd={cwd} />
+				)}
+			</div>
 		</div>
 	);
 }

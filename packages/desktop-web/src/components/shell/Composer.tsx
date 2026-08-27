@@ -2,14 +2,14 @@ import { SendHorizontal, Square } from "lucide-react";
 import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import { useGuestSelector } from "../../lib/use-guest";
 import { MatrixLoader } from "./matrix-loader";
 import { SuggestionChips } from "./SuggestionChips";
 
 export interface ComposerProps {
-	client: GuestClient;
+	client: SessionClient;
 }
 
 /** Textarea metrics: line-height 20px + 8px vertical padding × 2 (kept in sync with shell.css). */

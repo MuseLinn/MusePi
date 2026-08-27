@@ -2,7 +2,7 @@ import type { CronRun, CronSchedule, CronTask } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { relTime } from "../../lib/format";
 
 /**
@@ -18,7 +18,7 @@ const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6] as const;
 const WEEKDAY_KEYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
 interface ScheduledPanelProps {
-	client: GuestClient;
+	client: SessionClient;
 	/** Session cwd; null before the first state frame. */
 	cwd: string | null;
 	readOnly: boolean;
@@ -123,7 +123,7 @@ function TaskForm({
 	cwd,
 	onAdded,
 }: {
-	client: GuestClient;
+	client: SessionClient;
 	cwd: string | null;
 	onAdded(): Promise<void>;
 }): ReactNode {

@@ -2,7 +2,7 @@ import type { WorkspaceEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 
 /**
  * Guest workspace file panel: workspace.tree rendered as an expandable
@@ -13,7 +13,7 @@ import type { GuestClient } from "../../lib/client";
  */
 
 interface FilePanelProps {
-	client: GuestClient;
+	client: SessionClient;
 	/** Session cwd; null before the first state frame. */
 	cwd: string | null;
 	readOnly: boolean;

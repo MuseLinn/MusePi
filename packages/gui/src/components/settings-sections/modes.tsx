@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
+import { DialogFrame } from "../DialogFrame";
 import { FadeScroll } from "../FadeScroll";
+import { SpotlightCard } from "../SpotlightCard";
 
 /** Settings → 智能体 → 预设:命名预设(工具集 + 提示词 + settings 覆盖)卡片面板
  *  + 完整编辑器(modes-plan §8/§9:ModesCenter)。数据源 daemon modes.list/
@@ -36,15 +38,13 @@ interface ModeDef {
 	settings?: Record<string, unknown>;
 }
 
-export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function ModesSection({ rpc, onCreateChat }: { rpc: RpcClient | null; onCreateChat?: (text: string) => void }): ReactNode {
 	const [modes, setModes] = useState<ModeRow[] | null>(null);
 	const [errors, setErrors] = useState<string[]>([]);
 
-	/** 编辑面板:null = 关闭;对象 = 编辑中(编辑中的快照)。 */
-	/** 看板式新建输入框(参考 BoardPage 悬浮输入):点击「新建」出现输入框,
-	 *  Enter 以 id 创建空预设后进入编辑 —— 非人为填表。 */
-	const [newOpen, setNewOpen] = useState(false);
-	const [newId, setNewId] = useState("");
+	/** 看板式新建输入框(参考 BoardPage 悬浮输入):始终可见的自然语言输入,
+	 *  Enter 把预设描述发给 Creator 会话 —— 由 Creator 设计并保存预设。 */
+	const [newDesc, setNewDesc] = useState("");
 	const [saving, setSaving] = useState(false);
 	const [saveMsg, setSaveMsg] = useState<string | null>(null);
 	/** 当前默认预设(新会话;localStorage 持久化,app.tsx welcome 同步)。 */
@@ -91,31 +91,13 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		};
 	}, [rpc]);
 
-	const startNew = (): void => {
-		setNewOpen(true);
-		setNewId("");
-		setSaveMsg(null);
-	};
-
-	const createNew = async (): Promise<void> => {
-		if (!rpc || !newId.trim()) return;
-		const id = newId.trim();
-		// 与 daemon modes.save 同一校验(MODE_ID_PATTERN)。
-		if (!/^[a-z0-9][a-z0-9-]*$/.test(id)) {
-			setSaveMsg(`⚠ invalid id: ${id}`);
-			return;
-		}
-		setSaving(true);
-		try {
-			await rpc.request("modes.save", { id, label: id, prompt: [] });
-			setNewOpen(false);
-			setNewId("");
-			setSaveMsg(t("modes saved"));
-		} catch (error) {
-			setSaveMsg(`⚠ ${String(error)}`);
-		} finally {
-			setSaving(false);
-		}
+	/** DSH creation-flow: send the preset description to a Creator session
+	 *  (app layer owns createAndSend → createSession + sendPrompt). */
+	const submitPreset = (): void => {
+		const desc = newDesc.trim();
+		if (!desc || !onCreateChat) return;
+		setNewDesc("");
+		onCreateChat(desc);
 	};
 
 	const setDefault = (id: string): void => {
@@ -192,37 +174,33 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{errors.length > 0 && (
 				<div className="gui-settings-row text-[12px] text-[var(--color-danger)]">{errors.join("; ")}</div>
 			)}
-			<div className="mt-1 flex items-center gap-2">
-				<button type="button" className="gui-pane-action" onClick={startNew} disabled={newOpen}>
-					<span>{t("modes new")}</span>
+			{/* 新建预设:看板式始终可见自然语言输入框 —— Enter/发送把预设描述
+			 * 发给 Creator 会话(DSH),由 Creator 设计并保存预设。SpotlightCard
+			 * 提供板输入框同款光标跟随光晕(accent 微光),overflow-visible 让
+			 * 发送按钮的 glow 不被容器裁掉。 */}
+			<SpotlightCard
+				className="mt-2 flex items-center gap-2 overflow-visible rounded-xl border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-1.5"
+				spotlightColor="color-mix(in oklab, var(--color-accent) 10%, transparent)"
+				glowSize={340}
+			>
+				<input
+					className="gui-board-home-input"
+					placeholder={t("modes create placeholder")}
+					value={newDesc}
+					onChange={e => setNewDesc(e.target.value)}
+					onKeyDown={e => {
+						if (e.key === "Enter") submitPreset();
+					}}
+				/>
+				<button
+					type="button"
+					className="gui-board-home-send"
+					disabled={!newDesc.trim() || !onCreateChat}
+					onClick={submitPreset}
+				>
+					<Icon name="arrow-up" className="h-4 w-4" />
 				</button>
-			</div>
-			{newOpen && (
-				<div className="mt-1 flex items-center gap-2 rounded-xl border border-[var(--color-accent)] bg-[var(--color-surface)] px-3 py-1.5">
-					<input
-						className="h-8 min-w-0 flex-1 rounded-lg bg-transparent px-1 text-[13px] text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-muted)]"
-						placeholder={t("modes id field")}
-						value={newId}
-						autoFocus
-						onChange={e => setNewId(e.target.value)}
-						onKeyDown={e => {
-							if (e.key === "Enter") void createNew();
-							if (e.key === "Escape") setNewOpen(false);
-						}}
-					/>
-					<button
-						type="button"
-						className="gui-pane-action"
-						onClick={() => void createNew()}
-						disabled={saving || !newId.trim()}
-					>
-						<span>{t("modes save")}</span>
-					</button>
-					<button type="button" className="gui-pane-action" onClick={() => setNewOpen(false)}>
-						<span>{t("modes cancel")}</span>
-					</button>
-				</div>
-			)}
+			</SpotlightCard>
 
 			{modes === null ? (
 				<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">{t("loading")}</div>
@@ -318,17 +296,18 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</div>
 				</>
 			)}
-			{/* 查看弹窗:只读展示预设完整定义 */}
-			{viewDef && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-					onClick={() => setViewDef(null)}
-				>
-					<FadeScroll
-						className="max-h-[70vh] w-[520px] overflow-auto rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-4 shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
-						onClick={e => e.stopPropagation()}
-					>
-						<div className="flex items-center justify-between">
+			{/* 查看弹窗(DialogFrame = 进入/退出动画 + Escape/焦点托管 + portal
+			 * 到 body;始终挂载、用 open 驱动,条件挂载会杀掉退出动画):只读展示
+			 * 预设完整定义。 */}
+			<DialogFrame
+				open={viewDef !== null}
+				onClose={() => setViewDef(null)}
+				label={t("modes view title")}
+				className="w-[520px] max-w-[92vw]"
+			>
+				{viewDef && (
+					<>
+						<div className="gui-dialog-head">
 							<h3 className="text-[14px] font-medium">{t("modes view title")}</h3>
 							<button
 								type="button"
@@ -338,22 +317,24 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								✕
 							</button>
 						</div>
-						<pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-[var(--color-surface-2)] p-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-							{JSON.stringify(viewDef, null, 2)}
-						</pre>
-					</FadeScroll>
-				</div>
-			)}
-			{/* 复制弹窗:输入新 id → 复制为自定义预设 */}
-			{duplicateSource && (
-				<div
-					className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-					onClick={() => setDuplicateSource(null)}
-				>
-					<div
-						className="w-[400px] rounded-xl border border-[var(--border)] bg-[var(--color-surface)] p-4 shadow-[0_16px_48px_rgba(0,0,0,0.4)]"
-						onClick={e => e.stopPropagation()}
-					>
+						<FadeScroll className="min-h-0 flex-1 overflow-auto p-4">
+							<pre className="whitespace-pre-wrap break-all rounded-lg bg-[var(--color-surface-2)] p-3 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+								{JSON.stringify(viewDef, null, 2)}
+							</pre>
+						</FadeScroll>
+					</>
+				)}
+			</DialogFrame>
+			{/* 复制弹窗(DialogFrame 紧凑样式 gui-dialog--confirm:自动尺寸 +
+			 * 进入/退出动画):输入新 id → 复制为自定义预设。 */}
+			<DialogFrame
+				open={duplicateSource !== null}
+				onClose={() => setDuplicateSource(null)}
+				label={t("modes duplicate as")}
+				className="gui-dialog--confirm"
+			>
+				{duplicateSource && (
+					<>
 						<h3 className="text-[14px] font-medium">{t("modes duplicate as")}</h3>
 						<p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{t("modes duplicate hint")}</p>
 						<input
@@ -381,9 +362,9 @@ export function ModesSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							</button>
 							{saveMsg && <span className="text-[12px] text-[var(--color-text-muted)]">{saveMsg}</span>}
 						</div>
-					</div>
-				</div>
-			)}
+					</>
+				)}
+			</DialogFrame>
 		</>
 	);
 }

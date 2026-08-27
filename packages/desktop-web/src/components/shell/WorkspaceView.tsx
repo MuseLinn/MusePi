@@ -2,7 +2,7 @@ import { Archive, ChevronRight, Loader2, PanelLeft, PanelLeftClose, Pencil, Plus
 import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { shortenPath, formatWhen } from "../../lib/format";
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 
@@ -22,7 +22,7 @@ export function WorkspaceView({
 	onRenameSession,
 	onStopSession,
 }: {
-	client: GuestClient;
+	client: SessionClient;
 	sessions: readonly WorkspaceSessionInfo[];
 	onSelect(sessionId: string): void;
 	/** Create a fresh session (guest session.create RPC, write token gated). */

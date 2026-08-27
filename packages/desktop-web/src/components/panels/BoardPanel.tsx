@@ -2,7 +2,7 @@ import type { BoardData, BoardWidget as WireBoardWidget } from "@musepi/pi-wire"
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { widgetDef } from "../../widgets/registry";
 
@@ -14,7 +14,7 @@ import { widgetDef } from "../../widgets/registry";
  */
 
 interface BoardPanelProps {
-	client: GuestClient;
+	client: SessionClient;
 }
 
 export function BoardPanel({ client }: BoardPanelProps): ReactNode {

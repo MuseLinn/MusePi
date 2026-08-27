@@ -3,7 +3,7 @@ import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { fmtCost, fmtDuration, fmtTokens } from "../../lib/format";
 import { decideTranscriptPoll } from "../../lib/transcript-poll";
 import { useGuestSelector } from "../../lib/use-guest";
@@ -15,7 +15,7 @@ const POLL_MS = 1200;
 
 export function AgentDrawer(props: {
 	agent: AgentSnapshot;
-	client: GuestClient;
+	client: SessionClient;
 	/** View-link guests: hide kill/revive/chat (the host rejects them anyway). */
 	readOnly?: boolean;
 	/** Forwarded to tool renderers so nested task cards can drill further. */

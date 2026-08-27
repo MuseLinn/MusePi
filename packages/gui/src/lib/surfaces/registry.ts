@@ -46,9 +46,11 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{ id: "trajectory", label: "trajectory", icon: "list-unordered", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
 	{ id: "jobs", label: "jobs", icon: "task", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
 	// Workbench tool panes.
-	{ id: "git", label: "git graph", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "diff", label: "workspace changes", icon: "file", group: "secondary", availability: "always", defaultWidthFraction: 0.55 },
-	{ id: "pr", label: "pull requests", icon: "git-pull-request", group: "secondary", availability: "always", defaultWidthFraction: 0.5 },
+	// Git is a single rail entry (Phase 3 merge): the panel opens with a
+	// view-local sub-tab bar switching workspace changes / commit history /
+	// pull requests (see GitPanel in ContextPanel). The old 3 independent
+	// git/diff/pr surfaces are folded into it.
+	{ id: "git", label: "git", icon: "git-branch", group: "primary", availability: "always", defaultWidthFraction: 0.55 },
 	{ id: "notes", label: "project knowledge", icon: "book-open", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
 	{ id: "browser", label: "browser", icon: "global", group: "primary", availability: "always", defaultWidthFraction: 0.6 },
 	// Niche: widget preview folds into the overflow menu.

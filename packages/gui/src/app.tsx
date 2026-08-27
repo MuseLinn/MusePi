@@ -1481,6 +1481,9 @@ function AppInner(): ReactNode {
 			cwd?: string | null;
 			planMode?: boolean;
 			goalMode?: string | null;
+			/** Explicit modeId override (creation flows pass "creator"); falls
+			 * back to the welcome chip selection. */
+			modeId?: string | null;
 		}): Promise<string | null> => {
 			const client = rpcRef.current;
 			if (!client) return null;
@@ -1509,9 +1512,10 @@ function AppInner(): ReactNode {
 					// role exactly like the old swallowed setModel error.
 					...(opts?.thinkingLevel ? { thinkingLevel: opts.thinkingLevel } : {}),
 					...(opts?.modelId ? { modelPattern: opts.modelId } : {}),
-					// Welcome 预设 chip 选择:modeId 随 create 一次应用(daemon 侧
-					// 白名单/提示词/settings 覆盖);无选择 = 默认(Standard)。
-					...(welcomeModeId ? { modeId: welcomeModeId } : {}),
+					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
+					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
+					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
+					...(opts?.modeId ?? welcomeModeId ? { modeId: opts?.modeId ?? welcomeModeId } : {}),
 				});
 				// Carry the welcome-composer model seed so the composer never
 				// flashes a stale model from a previous session while
@@ -1718,6 +1722,34 @@ function AppInner(): ReactNode {
 			await sendPrompt(text, opts?.images, id);
 		},
 		[createSession, project, sendPrompt],
+	);
+
+	/** DSH creation-flow parity: open a chat session under the given modeId
+	 *  (creation contexts pass "creator") and send the first prompt right
+	 *  away — used by the board and settings-preset 新建输入框, where the
+	 *  agent designs & saves the artifact (board / preset) in a chat. */
+	const createAndSend = useCallback(
+		async (text: string, modeId: string): Promise<void> => {
+			viewSwapRef.current("chat");
+			const id = await createSession({ cwd: project, modeId });
+			if (id) void sendPrompt(text, undefined, id);
+		},
+		[createSession, sendPrompt, project],
+	);
+
+	/** Settings → 智能体 → 预设 新建输入框 (DSH):send the natural-language
+	 *  preset description to a Creator session that designs & saves the
+	 *  preset (modes-plan structure → modes.save). Closes the settings pane
+	 *  first so the new chat isn't buried behind it. */
+	const onPresetCreate = useCallback(
+		(text: string): void => {
+			const trimmed = text.trim();
+			if (!trimmed) return;
+			closeSettings();
+			const prompt = `${trimmed}。请设计并保存这个预设：遵循 docs/modes-plan.md 契约（extends 继承、promptComplete、settings 覆盖），完成后用 modes.validate 自检，再用 modes.save 保存到模式目录。`;
+			void createAndSend(prompt, "creator");
+		},
+		[createAndSend, closeSettings],
 	);
 
 	/** Persist a user-set session title (daemon session.rename), then
@@ -2558,6 +2590,7 @@ function AppInner(): ReactNode {
 							closeSettings();
 							void openSession(sessionId);
 						}}
+						onCreateChat={onPresetCreate}
 					/>
 				</div>
 			) : (
@@ -2742,18 +2775,16 @@ function AppInner(): ReactNode {
 												onJumpConsumed={() => setBoardJumpId(null)}
 												onChatCreate={text => {
 													// 对话创建 (kimi parity): leave the board and prompt the
-													// agent to design boards; with text, create a session and
-													// send it right away.
-													viewSwapRef.current("chat");
+													// agent to design boards; with text, create a session
+													// (DSH creation flow: Creator persona) and send it
+													// right away.
 													const trimmed = text.trim();
 													if (!trimmed) {
 														startNewTask();
 														return;
 													}
 													const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-													void createSession({ cwd: project }).then(id => {
-														if (id) void sendPrompt(prompt, undefined, id);
-													});
+													void createAndSend(prompt, "creator");
 												}}
 											/>
 										</div>
@@ -2771,18 +2802,16 @@ function AppInner(): ReactNode {
 										onJumpConsumed={() => setBoardJumpId(null)}
 										onChatCreate={text => {
 											// 对话创建 (kimi parity): leave the board and prompt the
-											// agent to design boards; with text, create a session and
-											// send it right away.
-											viewSwapRef.current("chat");
+											// agent to design boards; with text, create a session
+											// (DSH creation flow: Creator persona) and send it
+											// right away.
 											const trimmed = text.trim();
 											if (!trimmed) {
 												startNewTask();
 												return;
 											}
 											const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-											void createSession({ cwd: project }).then(id => {
-												if (id) void sendPrompt(prompt, undefined, id);
-											});
+											void createAndSend(prompt, "creator");
 										}}
 									/>
 								</ChatSurfaceShell>

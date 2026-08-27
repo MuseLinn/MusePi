@@ -3,7 +3,7 @@ import { ArrowLeft, CalendarClock, Folder, LayoutDashboard, LogOut, MessageSquar
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { type TranslationKey, t } from "../../i18n/index.js";
-import type { GuestClient } from "../../lib/client";
+import type { SessionClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
 import { useGuestSelector } from "../../lib/use-guest";
 import { AccentToggle } from "./AccentToggle";
@@ -16,7 +16,7 @@ import { ThemeToggle } from "./ThemeToggle";
 export type GuestPanel = "board" | "scheduled" | "files";
 
 export interface HeaderBarProps {
-	client: GuestClient;
+	client: SessionClient;
 	railOpen: boolean;
 	onToggleRail(): void;
 	onLeave(): void;

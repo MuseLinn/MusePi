@@ -222,7 +222,10 @@ export function CommandPalette({
 							key={id}
 							type="button"
 							className={`gui-palette-tab${tab === id ? " gui-palette-tab--active" : ""}`}
-							onClick={() => setTab(id)}
+							onClick={() => {
+								setTab(id);
+								setActive(0);
+							}}
 						>
 							<Icon
 								name={id === "all" ? "menu-2" : id === "actions" ? "rocket" : "list-check-2"}
@@ -232,7 +235,7 @@ export function CommandPalette({
 						</button>
 					))}
 				</div>
-				<div className="gui-palette-body" ref={listRef}>
+				<div className="gui-palette-body" key={tab} ref={listRef}>
 					{showActions && (
 						<div className="gui-palette-section">
 							<div className="gui-palette-section-title">{t("suggestions")}</div>

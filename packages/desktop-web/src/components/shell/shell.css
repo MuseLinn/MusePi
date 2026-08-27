@@ -1,6 +1,81 @@
 /* Shell styles (sh-*). Token vars only — no raw colors. */
 
 /* ---- app frame ---- */
+.compat-titlebar {
+	/* dsh-desktop desktopWindow frame-overlay: the Electron compat shell
+	 * draws a 48px titlebar (titleBarOverlay) over the top of the served
+	 * page. This strip reserves it and is the drag region (inert in a plain
+	 * browser). Position:fixed so it does not consume a grid row; the app
+	 * pads `padding-top:48px` via sh-app--compat so content sits below. */
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 48px;
+	z-index: 1000;
+	-webkit-app-region: drag;
+	user-select: none;
+}
+.compat-titlebar::after {
+	content: "";
+	display: block;
+	height: 1px;
+	background: rgba(255, 255, 255, 0.08);
+}
+.sh-app--compat {
+	padding-top: 48px;
+}
+/* ---- tool approval card (host-mode) ---- */
+.sh-approval {
+	position: fixed;
+	bottom: 88px;
+	left: 50%;
+	transform: translateX(-50%);
+	width: min(480px, calc(100% - 24px));
+	max-height: 40vh;
+	overflow: auto;
+	padding: 14px 16px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 12px;
+	background: rgba(24, 26, 32, 0.96);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+	z-index: 900;
+}
+.sh-approval-title {
+	font-size: 13px;
+	font-weight: 600;
+	margin-bottom: 6px;
+}
+.sh-approval-tool {
+	font-family: var(--mono, ui-monospace, monospace);
+	font-size: 12px;
+	color: #8ab4ff;
+	margin-bottom: 6px;
+}
+.sh-approval-prompt {
+	font-size: 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: rgba(232, 232, 232, 0.8);
+	max-height: 160px;
+	overflow: auto;
+	margin: 0 0 10px;
+}
+.sh-approval-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+}
+.sh-btn-approve {
+	background: rgba(42, 130, 78, 0.25);
+	border-color: rgba(42, 130, 78, 0.6);
+	color: #7fdca3;
+}
+.sh-btn-deny {
+	background: rgba(180, 62, 62, 0.2);
+	border-color: rgba(180, 62, 62, 0.55);
+	color: #ff9b9b;
+}
 .sh-app {
 	display: grid;
 	grid-template-rows: auto 1fr auto;
