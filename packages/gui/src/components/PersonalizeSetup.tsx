@@ -1,7 +1,7 @@
 import { type TranslationKey, t } from "@musepi/desktop-web";
 import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
-import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage, petId } from "../lib/pet";
+import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";

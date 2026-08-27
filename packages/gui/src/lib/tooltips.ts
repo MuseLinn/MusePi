@@ -216,8 +216,8 @@ function onPointerMove(e: PointerEvent): void {
 function onPointerOut(e: PointerEvent): void {
 	const related = e.relatedTarget instanceof Node ? e.relatedTarget : null;
 	if (related !== null) {
-		if (currentEl !== null && currentEl.contains(related)) return;
-		if (hoveredEl !== null && hoveredEl.contains(related)) return;
+		if (currentEl?.contains(related)) return;
+		if (hoveredEl?.contains(related)) return;
 	}
 	// Leaving the element (to a non-descendant) hides the tooltip. When a
 	// VISIBLE tooltip's element is left for another titled element,

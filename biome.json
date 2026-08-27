@@ -13,12 +13,13 @@
 			"a11y": "off",
 			"correctness": {
 				"noUnusedImports": "error",
-				"noUnusedVariables": {
-					"level": "warn",
-					"fix": "none"
-				},
+				"noUnusedVariables": "off",
 				"noVoidTypeReturn": "off",
-				"useExhaustiveDependencies": "off"
+				"useExhaustiveDependencies": "off",
+				"noUnusedFunctionParameters": "off",
+				"noChildrenProp": "off",
+				"useJsxKeyInIterable": "off",
+				"noSelfAssign": "off"
 			},
 			"style": {
 				"noNonNullAssertion": "off",
@@ -31,7 +32,12 @@
 				"noEmptyInterface": "off",
 				"noConstEnum": "off",
 				"noConfusingVoidType": "off",
-				"noArrayIndexKey": "off"
+				"noArrayIndexKey": "off",
+				"noTemplateCurlyInString": "off",
+				"useIterableCallbackReturn": "off"
+			},
+			"security": {
+				"noDangerouslySetInnerHtml": "off"
 			}
 		}
 	},

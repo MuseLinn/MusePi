@@ -87,7 +87,7 @@ export const collabTool: CustomTool<typeof collabSchema, CollabToolDetails> = {
 		'Start, stop, or check remote sharing of the current session or workspace. When sharing is active, the host\'s phone (MusePi Mobile) or any browser can join to watch and send messages. Use `collab` with `action: "start"` when the user asks to enable remote/mobile access; report the returned link (and 6-digit pair code on LAN) to the user. Prefer `mode: "lan"` unless the user is away from the local network — `mode: "tunnel"` exposes a public URL and requires explicit approval.',
 	),
 	parameters: collabSchema,
-	async execute(toolCallId, params, _onUpdate, ctx) {
+	async execute(_toolCallId, params, _onUpdate, ctx) {
 		// The daemon injects the collab handle on AgentToolContext (declaration
 		// merging in tools/context.ts); the CustomTool execute signature only
 		// sees CustomToolContext, so narrow through the extended interface.

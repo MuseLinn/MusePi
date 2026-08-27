@@ -42,7 +42,6 @@ import type { TerminalAppearanceRequestToken } from "@musepi/pi-tui/terminal";
 import { isInsideTerminalMultiplexer } from "@musepi/pi-tui/terminal-capabilities";
 import {
 	$env,
-	APP_NAME,
 	adjustHsv,
 	formatNumber,
 	getProjectDir,
@@ -3877,7 +3876,7 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	async #handleGoalSetSubcommand(
 		rest: string,
-		input?: Pick<SubmittedUserInput, "images" | "imageLinks">,
+		_input?: Pick<SubmittedUserInput, "images" | "imageLinks">,
 	): Promise<boolean> {
 		if (!this.goalModeEnabled && this.#getPausedGoalState()) {
 			this.showWarning("Resume the current goal first, or drop it before setting a new objective.");

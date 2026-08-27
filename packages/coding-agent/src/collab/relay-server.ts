@@ -112,7 +112,6 @@ export class FrameDecoder {
 	#buffer = new Uint8Array(0);
 	#fragOpcode = -1;
 	#fragParts: Uint8Array[] = [];
-	#fragLen = 0;
 
 	push(chunk: Uint8Array): WsFrame[] {
 		this.#buffer = concatBytes(this.#buffer, chunk);
@@ -325,7 +324,7 @@ export function startRelayServer(options: RelayServerOptions): Promise<RelayServ
 			headers.set(line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim());
 		}
 		const upgrade = headers.get("upgrade");
-		if (!upgrade || upgrade.toLowerCase() !== "websocket") {
+		if (upgrade?.toLowerCase() !== "websocket") {
 			if (staticDir) return serveStatic(socket, target ?? "/", method, staticDir);
 			return rejectHttp(socket, 426, "websocket upgrade required");
 		}
@@ -543,7 +542,7 @@ function copyEnvelopeWithSender(sealed: Uint8Array, senderId: number): Uint8Arra
 }
 
 function sendControl(peer: Peer | null, msg: RelayControlMessage): void {
-	if (!peer || !peer.socket.writable) return;
+	if (!peer?.socket.writable) return;
 	peer.socket.write(encodeFrame(OP_TEXT, new TextEncoder().encode(JSON.stringify(msg))));
 }
 

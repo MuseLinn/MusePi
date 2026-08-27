@@ -1127,9 +1127,7 @@ function CronEditor({
 						onClick={() => {
 							const iw = draft.schedule.idleWindow;
 							const clean =
-								iw && iw.start.trim() && iw.end.trim()
-									? { start: iw.start.trim(), end: iw.end.trim() }
-									: undefined;
+								iw?.start.trim() && iw.end.trim() ? { start: iw.start.trim(), end: iw.end.trim() } : undefined;
 							onSave({ ...draft, schedule: { ...draft.schedule, idleWindow: clean } });
 						}}
 					>

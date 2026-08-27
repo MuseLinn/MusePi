@@ -13,7 +13,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { AppendJournal } from "../../src/daemon/journal";
 import { startDaemon } from "../../src/daemon/server";
-import { ViewStore, viewStorePath } from "../../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
 import { FileSessionStorage } from "../../src/session/session-storage";
 

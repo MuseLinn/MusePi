@@ -62,7 +62,7 @@ export function CharTexture({ className, seed = 0 }: { className?: string; seed?
 					const pool = POOLS[b];
 					const ch = pool[Math.floor(rng() * pool.length)];
 					const s = document.createElement("i");
-					s.className = "gui-char-tex" + cls(b, ch);
+					s.className = `gui-char-tex${cls(b, ch)}`;
 					s.textContent = ch;
 					row.appendChild(s);
 				}

@@ -7,7 +7,7 @@
  * persistForeignSession) but with a TUI picker UX instead of args.
  */
 
-import { type Component, Container, matchesKey, Spacer, Text } from "@musepi/pi-tui";
+import { Container, matchesKey, Spacer, Text } from "@musepi/pi-tui";
 import { getAgentDir, getProjectDir } from "@musepi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import {

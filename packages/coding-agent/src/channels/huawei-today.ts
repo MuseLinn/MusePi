@@ -47,9 +47,9 @@ export class HuaweiTodayChannel implements ChannelAdapter {
 			state: this.#state,
 			detail: this.#detail,
 			config: {
-				apiKey: this.#config.apiKey ? "••••" + this.#config.apiKey.slice(-4) : "",
+				apiKey: this.#config.apiKey ? `••••${this.#config.apiKey.slice(-4)}` : "",
 				uid: this.#config.uid,
-				authCode: this.#config.authCode ? "••••" + this.#config.authCode.slice(-4) : "",
+				authCode: this.#config.authCode ? `••••${this.#config.authCode.slice(-4)}` : "",
 				apiUrl: this.#config.apiUrl ?? HuaweiTodayChannel.DEFAULT_URL,
 			},
 		};

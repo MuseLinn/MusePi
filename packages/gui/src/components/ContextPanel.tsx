@@ -1063,15 +1063,11 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("loading…")}</div>
 						) : (
 							<CodeHighlightProvider highlight={highlight}>
-								<>
-									{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
-									{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
-									{!fileDiff?.staged && !fileDiff?.unstaged && (
-										<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">
-											{t("no changes")}
-										</div>
-									)}
-								</>
+								{fileDiff?.staged ? <DiffBlock diff={fileDiff.staged} /> : null}
+								{fileDiff?.unstaged ? <DiffBlock diff={fileDiff.unstaged} /> : null}
+								{!fileDiff?.staged && !fileDiff?.unstaged && (
+									<div className="px-1 py-2 text-[12px] text-[var(--color-text-faint)]">{t("no changes")}</div>
+								)}
 							</CodeHighlightProvider>
 						)}
 					</div>

@@ -4,7 +4,6 @@ import { Loader } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
-import { dataUrlToBlob } from "../lib/image-resize";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 

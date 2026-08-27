@@ -1,4 +1,3 @@
-import type * as fsTypes from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import * as fs from "node:fs/promises";
 import { homedir } from "node:os";
@@ -14,7 +13,7 @@ import type {
 	UserMessage,
 } from "@musepi/pi-ai";
 import { isRecord } from "@musepi/pi-utils";
-import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
+import type { ForeignSessionInfo, ForeignSessionStore } from "./foreign-session-store";
 import type { ModelChangeEntry, SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 
@@ -293,7 +292,9 @@ export class SdkCompatSessionStore implements ForeignSessionStore {
 					created = Math.min(created, ts);
 					modified = Math.max(modified, ts);
 				}
-				if (record.type === "session" && typeof record.cwd === "string") modified = modified; // cwd on session record
+				if (record.type === "session" && typeof record.cwd === "string") {
+					modified = Math.max(modified, ts); // cwd on session record
+				}
 				if (record.type === "message") messageCount += 1;
 				if (!firstMessage) firstMessage = firstMessagePreview(record);
 			}

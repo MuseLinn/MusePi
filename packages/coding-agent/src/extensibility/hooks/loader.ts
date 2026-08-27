@@ -1,7 +1,3 @@
-/**
- * Hook loader - loads TypeScript hook modules using native Bun import.
- */
-import * as path from "node:path";
 import { type } from "@musepi/musepi-type";
 import * as zod from "@musepi/musepi-type/zod";
 import { logger } from "@musepi/pi-utils";

@@ -36,7 +36,7 @@ import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
-import type { AgentEvent, SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
+import type { SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
@@ -3446,28 +3446,6 @@ export class DaemonServer {
 
 	#terminalSeq = 0;
 
-	/** Find a node binary that can host node-pty (spawn-helper fork). */
-	async #resolveNodeBinary(): Promise<string> {
-		const { existsSync } = await import("node:fs");
-		const candidates = [
-			process.env.NODE_BINARY,
-			"/opt/homebrew/bin/node",
-			"/usr/local/bin/node",
-			"/opt/local/bin/node",
-			"/usr/bin/node",
-			"/usr/bin/env node",
-		].filter((c): c is string => typeof c === "string");
-		for (const c of candidates) {
-			if (c === "/usr/bin/env node") return c;
-			try {
-				if (existsSync(c)) return c;
-			} catch {
-				// ignore
-			}
-		}
-		return "node";
-	}
-
 	/** Resolved settings for debug report bundles (TUI #getResolvedSettings
 	 *  parity — the daemon has no TUI context, so the AgentSession carries
 	 *  the same fields). */
@@ -5638,7 +5616,7 @@ export class DaemonServer {
 					.slice(headerIdx + 1, keep + 1)
 					.filter(l => l?.trim())
 					.join("\n");
-				const head = titleSlot ? titleSlot + "\n" : "";
+				const head = titleSlot ? `${titleSlot}\n` : "";
 				await fs.promises.writeFile(newFile, `${head}${JSON.stringify(newHeader)}\n${body}${body ? "\n" : ""}`);
 				// Bust the SDK-session scan cache so the tree lists the fork
 				// on the next refresh (listAllSessions is TTL-cached).

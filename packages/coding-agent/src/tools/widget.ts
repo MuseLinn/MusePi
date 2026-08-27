@@ -256,7 +256,7 @@ export const WIDGET_TYPES: Record<
 const MAX_DATA_JSON = 12_000;
 
 const widgetSchema = type({
-	type: type("string").describe("Widget type: " + Object.keys(WIDGET_TYPES).join(" / ")),
+	type: type("string").describe(`Widget type: ${Object.keys(WIDGET_TYPES).join(" / ")}`),
 	"data?": type("object").describe("Widget data fields per type (defaults fill the rest)"),
 	"title?": type("string").describe("Optional card title (defaults to the widget name)"),
 });

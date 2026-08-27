@@ -306,7 +306,7 @@ export function MusicCard({
 	};
 	const seek = (e: MouseEvent<HTMLDivElement>) => {
 		const a = audioRef.current;
-		if (!a || !a.duration) return;
+		if (!a?.duration) return;
 		const r = e.currentTarget.getBoundingClientRect();
 		a.currentTime = ((e.clientX - r.left) / r.width) * a.duration;
 	};
@@ -376,7 +376,7 @@ export function MusicCard({
 							</h1>
 							<div className="gui-widget-music-by">
 								{loadFailed
-									? "无法加载此曲目，请重试或切换 · " + (currentTrack?.year ?? "")
+									? `无法加载此曲目，请重试或切换 · ${currentTrack?.year ?? ""}`
 									: currentTrack
 										? `${currentTrack.artist} · ${currentTrack.year}`
 										: "只收录 1930 年及以前已进入公共领域的录音"}

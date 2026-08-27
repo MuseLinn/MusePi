@@ -11,7 +11,6 @@ import {
 } from "@musepi/pi-tui";
 import { adjustHsv, formatNumber, getProjectDir } from "@musepi/pi-utils";
 import { settings } from "../../../config/settings";
-import type { ExtensionStatusBarSegment } from "../../../extensibility/extensions/types";
 import type { AgentSession } from "../../../session/agent-session";
 import type { OAuthAccountIdentity } from "../../../session/auth-storage";
 import { limitMatchesActiveAccount } from "../../../slash-commands/helpers/active-oauth-account";

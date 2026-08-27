@@ -11,7 +11,6 @@
 // according to manifest include/exclude patterns + settings.disabledExtensions.
 // ============================================================
 
-import * as path from "node:path";
 import type { Settings } from "../config/settings.ts";
 import type { LoadExtensionsResult } from "../extensibility/extensions/types.ts";
 import { extensionIdOf } from "../sdk.ts";

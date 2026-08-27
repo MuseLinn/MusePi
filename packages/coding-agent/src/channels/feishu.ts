@@ -1,4 +1,4 @@
-import { AppType, Client, EventDispatcher, type Logger, WSClient } from "@larksuiteoapi/node-sdk";
+import { AppType, Client, EventDispatcher, WSClient } from "@larksuiteoapi/node-sdk";
 import { logger } from "@musepi/pi-utils";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
@@ -155,7 +155,7 @@ export class FeishuChannel implements ChannelAdapter {
 			detail: this.#detail,
 			config: {
 				appId: this.#config.appId,
-				appSecret: this.#config.appSecret ? "••••" + this.#config.appSecret.slice(-4) : "",
+				appSecret: this.#config.appSecret ? `••••${this.#config.appSecret.slice(-4)}` : "",
 				domain: this.#config.domain,
 			},
 		};

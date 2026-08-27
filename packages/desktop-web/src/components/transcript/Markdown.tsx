@@ -1,4 +1,3 @@
-import type { Tokens } from "@musepi/pi-utils/marked";
 import { Marked } from "@musepi/pi-utils/marked";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -9,14 +8,7 @@ import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalFilePath } from "./markdown-shared";
 import { mathExtensions } from "./math";
-import {
-	ensureMermaidFallbackObserver,
-	MERMAID_FALLBACK_DEBOUNCE_MS,
-	mermaidFallbackHtml,
-	mermaidMode,
-	renderMermaidAsyncHtml,
-	renderMermaidHtml,
-} from "./mermaid";
+import { ensureMermaidFallbackObserver, mermaidMode, renderMermaidHtml } from "./mermaid";
 import { graphemeSpans } from "./reveal";
 import { useStreamingReveal } from "./use-streaming-reveal";
 

@@ -1,4 +1,3 @@
-import type * as fsTypes from "node:fs";
 import type { FileHandle } from "node:fs/promises";
 import * as fs from "node:fs/promises";
 import { homedir } from "node:os";
@@ -12,7 +11,7 @@ import type {
 	UserMessage,
 } from "@musepi/pi-ai";
 import { isRecord } from "@musepi/pi-utils";
-import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
+import type { ForeignSessionInfo, ForeignSessionStore } from "./foreign-session-store";
 import type { SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 

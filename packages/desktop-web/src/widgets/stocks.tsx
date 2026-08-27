@@ -116,9 +116,9 @@ export function StocksCard({
 					data?: Record<string, { qt?: Record<string, number[]>; qfqday?: number[][]; day?: number[][] }>;
 				}
 			)?.data;
-			const d = data && data[row.code];
+			const d = data?.[row.code];
 			if (!d) throw new Error(`${row.code} missing`);
-			const qt = (d.qt && d.qt[row.code]) || [];
+			const qt = d.qt?.[row.code] || [];
 			const series = (d.qfqday || d.day || []).map(item => Number(item[2])).filter(Number.isFinite);
 			const price = Number(qt[3]);
 			const change = Number(qt[31]);

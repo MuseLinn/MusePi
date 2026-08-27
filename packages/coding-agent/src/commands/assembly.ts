@@ -10,7 +10,6 @@ import { getAgentDir } from "@musepi/pi-utils";
 import { Command } from "@musepi/pi-utils/cli";
 import { AssemblyManifestError, assemblySessionState, filterExtensionPaths } from "../assembly/index.ts";
 import { loadAssemblyManifest } from "../assembly/manifest.ts";
-import { Settings as SettingsClass } from "../config/settings.ts";
 import { discoverSessionExtensionPaths } from "../sdk.ts";
 
 export default class Index extends Command {
@@ -74,7 +73,7 @@ export default class Index extends Command {
 		} else {
 			lines.push("boot: not yet verified (this command is static — run musepi launch to verify)");
 		}
-		process.stdout.write(lines.join("\n") + "\n");
+		process.stdout.write(`${lines.join("\n")}\n`);
 	}
 
 	private async cmdVerify(cwd: string, home: string): Promise<void> {
@@ -106,7 +105,7 @@ export default class Index extends Command {
 		if (manifest?.seams.compaction?.method) {
 			lines.push(`compaction.method: ${manifest.seams.compaction.method} (known)`);
 		}
-		process.stdout.write(lines.join("\n") + "\n");
+		process.stdout.write(`${lines.join("\n")}\n`);
 	}
 
 	private findManifestPath(cwd: string, home: string): string | null {

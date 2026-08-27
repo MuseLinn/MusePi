@@ -15,7 +15,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import { loadAssemblyManifest } from "./manifest.ts";
-import type { AssemblyManifest, AssemblyVerifyReport, Surface, TerminalProvider } from "./types.ts";
+import type { AssemblyManifest, AssemblyVerifyReport, Surface } from "./types.ts";
 import { AssemblyVerifyError, verifyExtensionLoad } from "./verify.ts";
 
 export { AssemblyManifestError } from "./manifest.ts";

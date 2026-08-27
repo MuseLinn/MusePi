@@ -208,7 +208,7 @@ export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonW
 			if (isRoot && url.searchParams.get("shell") === "1" && filePath.endsWith("index.html")) {
 				const html = await file.text();
 				const withHost = html.includes("</head>")
-					? html.replace("</head>", compatSlotHostScript() + "</head>")
+					? html.replace("</head>", `${compatSlotHostScript()}</head>`)
 					: html + compatSlotHostScript();
 				return new Response(withHost, {
 					headers: { "content-type": "text/html; charset=utf-8" },

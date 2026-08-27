@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { ChannelCommandHandler, type ChannelOps } from "../src/channels/handler";
 import { HuaweiTodayChannel } from "../src/channels/huawei-today";
 import { ChannelRegistry } from "../src/channels/registry";
@@ -31,7 +31,7 @@ describe("channel command handler", () => {
 	it("routes plain text to the bound session after /switch", async () => {
 		const ops = mockOps();
 		const replies: { from: string; text: string }[] = [];
-		const h = new ChannelCommandHandler(ops, async (kind, from, text) => {
+		const h = new ChannelCommandHandler(ops, async (_kind, from, text) => {
 			replies.push({ from, text });
 		});
 		await h.handleIncoming("wechat", "chat-1", "/switch s2");

@@ -29,7 +29,6 @@ const WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 class RawTlsWsClient {
 	readonly messages: { opcode: number; payload: Uint8Array }[] = [];
 	readonly closeFrame: Promise<{ code: number; reason: string } | null>;
-	#socket: tls.TLSSocket;
 	#buffer = new Uint8Array(0);
 
 	private constructor(socket: tls.TLSSocket) {

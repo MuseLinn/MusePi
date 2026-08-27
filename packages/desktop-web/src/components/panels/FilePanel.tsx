@@ -340,7 +340,7 @@ function buildTree(entries: WorkspaceEntry[]): TreeNode[] {
 		nodes.set(full, node);
 		const dir = dirOf(full);
 		const parent = dir === "/" || dir === "" ? null : nodes.get(dir);
-		if (parent && parent.children) parent.children.push(node);
+		if (parent?.children) parent.children.push(node);
 		else top.push(node);
 	}
 	return top;
@@ -360,13 +360,13 @@ function setExpanded(nodes: TreeNode[] | null, path: string): TreeNode[] | null 
 
 function normalize(p: string): string {
 	if (p === "/") return "/";
-	return "/" + p.split("/").filter(Boolean).join("/");
+	return `/${p.split("/").filter(Boolean).join("/")}`;
 }
 
 function dirOf(p: string): string {
 	const parts = normalize(p).split("/").filter(Boolean);
 	parts.pop();
-	return "/" + parts.join("/");
+	return `/${parts.join("/")}`;
 }
 
 function joinPath(dir: string, name: string): string {

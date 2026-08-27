@@ -8,7 +8,7 @@
  */
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
-import { Badge, Badges, Kv, KvGrid, Note, Output, Row } from "../parts";
+import { Badges, Kv, KvGrid, Note, Output, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, str } from "../util";
 
@@ -19,7 +19,7 @@ interface ComputerShot {
 	target?: string;
 }
 
-function shotsOf(args: Record<string, unknown>, result: ToolRenderProps["result"]): ComputerShot[] {
+function shotsOf(_args: Record<string, unknown>, result: ToolRenderProps["result"]): ComputerShot[] {
 	const details = detailsRecord(result);
 	const raw = details?.screenshots;
 	return Array.isArray(raw)

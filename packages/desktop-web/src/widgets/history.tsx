@@ -205,7 +205,7 @@ export function HistoryCard({
 					return res.json();
 				})
 				.then(payload => {
-					const list = s.parse(payload).filter(ev => ev && ev.text);
+					const list = s.parse(payload).filter(ev => ev?.text);
 					if (!list.length) throw new Error("empty events");
 					return { rows: list, label: s.label };
 				})

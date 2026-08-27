@@ -7,11 +7,10 @@ import type {
 	TextContent,
 	ThinkingContent,
 	ToolCall,
-	ToolResultMessage,
 	UserMessage,
 } from "@musepi/pi-ai";
 import { isRecord } from "@musepi/pi-utils";
-import type { ForeignSessionInfo, ForeignSessionSource, ForeignSessionStore } from "./foreign-session-store";
+import type { ForeignSessionInfo, ForeignSessionStore } from "./foreign-session-store";
 import type { SessionMessageEntry } from "./session-entries";
 import { SessionManager } from "./session-manager";
 

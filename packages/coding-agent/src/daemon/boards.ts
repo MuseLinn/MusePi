@@ -70,7 +70,7 @@ export function readBoards(): BoardRecord[] {
 export function writeBoards(boards: BoardRecord[]): void {
 	const file = boardsFile();
 	fs.mkdirSync(path.dirname(file), { recursive: true });
-	const tmp = file + ".tmp";
+	const tmp = `${file}.tmp`;
 	fs.writeFileSync(tmp, JSON.stringify(boards, null, 2));
 	fs.renameSync(tmp, file);
 }

@@ -86,7 +86,7 @@ export default class Import extends Command {
 			name: this.#sourceName(source),
 		}));
 		if (json) {
-			process.stdout.write(JSON.stringify(sources, null, 2) + "\n");
+			process.stdout.write(`${JSON.stringify(sources, null, 2)}\n`);
 			return;
 		}
 		const pad = Math.max(...sources.map(s => s.source.length), 8);
@@ -97,7 +97,7 @@ export default class Import extends Command {
 
 	async #listSessions(source: ForeignSessionSource, json: boolean): Promise<void> {
 		const store = createForeignSessionStore(source);
-		let sessions;
+		let sessions: Awaited<ReturnType<typeof store.list>>;
 		try {
 			sessions = await store.list();
 		} catch (error) {
@@ -107,7 +107,7 @@ export default class Import extends Command {
 		}
 		if (json) {
 			process.stdout.write(
-				JSON.stringify(
+				`${JSON.stringify(
 					sessions.map(s => ({
 						id: s.id,
 						path: s.path,
@@ -118,7 +118,7 @@ export default class Import extends Command {
 					})),
 					null,
 					2,
-				) + "\n",
+				)}\n`,
 			);
 			return;
 		}
@@ -142,7 +142,7 @@ export default class Import extends Command {
 		json: boolean,
 	): Promise<void> {
 		const store = createForeignSessionStore(source);
-		let sessions;
+		let sessions: Awaited<ReturnType<typeof store.list>>;
 		try {
 			sessions = await store.list();
 		} catch (error) {
@@ -177,7 +177,7 @@ export default class Import extends Command {
 			return;
 		}
 		if (json) {
-			process.stdout.write(JSON.stringify({ ok: true, source, sourceId: match.id, sessionFile }) + "\n");
+			process.stdout.write(`${JSON.stringify({ ok: true, source, sourceId: match.id, sessionFile })}\n`);
 		} else {
 			process.stdout.write(`Imported ${match.id} → ${sessionFile}\n`);
 		}

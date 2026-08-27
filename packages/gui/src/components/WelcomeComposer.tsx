@@ -35,7 +35,7 @@ import {
 	type UsageReportView,
 	type UsageUnreportedAccountView,
 } from "./Composer";
-import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
+import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";

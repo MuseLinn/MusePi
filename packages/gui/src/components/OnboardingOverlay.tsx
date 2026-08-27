@@ -384,6 +384,9 @@ function ProviderSetup({
 	// provider account list + single-open dropdown + portal-rendered anchors.
 	const [credsByProvider, setCredsByProvider] = useState<Record<string, CredentialInfo[]>>({});
 	const [credsMenu, setCredsMenu] = useState<string | null>(null);
+	// Builtin provider list search (declared with the other hooks — before
+	// the renderCredsMenu closure, so useHookAtTopLevel stays satisfied).
+	const [providerQuery, setProviderQuery] = useState("");
 	const credsAnchors = useRef(new Map<string, HTMLElement>());
 	const { prompt } = usePrompt();
 	// Close the credential menus on outside click / Escape (settings parity).
@@ -803,7 +806,6 @@ function ProviderSetup({
 
 	// Builtin list: all providers (no cap), logged-in first, local search —
 	// the API-key import rows join the same scrolled list and filter.
-	const [providerQuery, setProviderQuery] = useState("");
 	const q = providerQuery.trim().toLowerCase();
 	const matchQ = (name: string): boolean => !q || name.toLowerCase().includes(q);
 	const visibleBuiltins = (builtins ?? [])

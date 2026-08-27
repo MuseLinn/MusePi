@@ -155,7 +155,7 @@ export class DiscordChannel implements ChannelAdapter {
 			kind: this.kind,
 			state: this.#state,
 			detail: this.#detail,
-			config: { token: this.#token ? "••••" + this.#token.slice(-4) : "" },
+			config: { token: this.#token ? `••••${this.#token.slice(-4)}` : "" },
 		};
 	}
 

@@ -14,10 +14,9 @@
  * abandons the current request (the daemon side channel keeps running but
  * its result is discarded — runEphemeralTurn has no cross-request cancel).
  */
-import { Markdown, type TranslationKey, t } from "@musepi/desktop-web";
+import { Markdown, t } from "@musepi/desktop-web";
 import { GitBranch, Sparkles, StopCircle, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RpcClient } from "../lib/rpc";
 
 export interface BtwQuestion {
 	question: string;

@@ -369,7 +369,7 @@ export class WechatChannel implements ChannelAdapter {
 			state: this.#state,
 			detail: this.#detail,
 			config: {
-				token: this.#botToken ? "••••" + this.#botToken.slice(-4) : "",
+				token: this.#botToken ? `••••${this.#botToken.slice(-4)}` : "",
 				qrUrl: this.#qrUrl || undefined,
 				qrCode: this.#qrCode || undefined,
 			},

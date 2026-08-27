@@ -906,7 +906,7 @@ class TreeList implements Component {
 	/** Failure/abort marker for the status column; empty when the turn settled cleanly. */
 	#traceStatus(entry: SessionEntry): string {
 		const msg = entry.type === "message" ? asTraceMessage(entry) : undefined;
-		if (!msg || msg.role !== "assistant") return "";
+		if (msg?.role !== "assistant") return "";
 		switch (msg.stopReason) {
 			case "error":
 				return theme.fg("error", ` ${theme.status.error}`);

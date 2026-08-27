@@ -99,7 +99,7 @@ export function FxCard({
 			if (cancelled) return;
 			const rows: FxRow[] = [];
 			for (const p of pairs) {
-				const daily = (hist && hist[p.code]) || [];
+				const daily = hist?.[p.code] || [];
 				const cur = live && live[p.code] != null ? live[p.code] : daily.length ? daily[daily.length - 1] : null;
 				const series = cur != null ? daily.concat([cur]) : daily;
 				let delta: { cls: "up" | "down" | "flat"; text: string } | null = null;
@@ -160,7 +160,7 @@ export function FxCard({
 			try {
 				const res = await widgetFetch(LIVE_API, { cache: "no-store" });
 				const data = (await res.json()) as { result?: string; rates?: Record<string, number> };
-				if (!data || data.result !== "success" || !data.rates) throw new Error("bad payload");
+				if (data?.result !== "success" || !data.rates) throw new Error("bad payload");
 				const vals: Record<string, number> = {};
 				for (const p of pairs) {
 					if (data.rates[p.code]) vals[p.code] = Number(((1 / data.rates[p.code]) * p.unit).toFixed(5));

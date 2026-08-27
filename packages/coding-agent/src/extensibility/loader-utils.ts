@@ -1,4 +1,3 @@
-import type { CapabilityResult } from "../capability";
 import { loadCapability } from "../capability";
 import { resolvePath, resolveUniquePaths } from "./utils";
 

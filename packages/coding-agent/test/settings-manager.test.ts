@@ -897,7 +897,7 @@ describe("Settings", () => {
 			expect(smol?.effective).toBe("project/smol:high");
 
 			const globalFlat = settings.getGlobalLayerFlat();
-			expect(globalFlat["shellPath"]).toBe("/bin/bash");
+			expect(globalFlat.shellPath).toBe("/bin/bash");
 			expect(globalFlat["modelRoles.default"]).toBe("global/default");
 			// Project-owned keys are NOT in the global layer.
 			expect(globalFlat["modelRoles.smol"]).toBeUndefined();

@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { t } from "../i18n/index.js";
 import { SendChip } from "./send";
 

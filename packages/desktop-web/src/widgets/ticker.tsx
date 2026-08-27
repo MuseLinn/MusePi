@@ -48,7 +48,7 @@ export function TickerCard({
 			try {
 				const res = await widgetFetch(LIVE_API, { cache: "no-store" });
 				const json = (await res.json()) as { result?: string; rates?: Record<string, number> };
-				if (!json || json.result !== "success" || !json.rates || json.rates[code] == null) return;
+				if (json?.result !== "success" || !json.rates || json.rates[code] == null) return;
 				const v = 1 / json.rates[code];
 				if (cancelled) return;
 				const prevV = prevRef.current;

@@ -56,7 +56,6 @@ import type {
 	ExtensionService,
 	ExtensionShortcut,
 	ExtensionStatusBarSegment,
-	ExtensionThemeToken,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
 	InputEvent,

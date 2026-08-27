@@ -14,7 +14,6 @@
 // fallback recovery" piece of the assembly design.
 // ============================================================
 
-import * as fs from "node:fs";
 import * as path from "node:path";
 import type { Settings } from "../config/settings.ts";
 
@@ -77,12 +76,12 @@ async function spawnBunPty(
 // ------------------------------------------------------------
 
 async function spawnNodePtyBridge(
-	cwd: string,
+	_cwd: string,
 	cols: number,
 	rows: number,
-	shell: string,
+	_shell: string,
 	_shellArgs: string[],
-	env: Record<string, string>,
+	_env: Record<string, string>,
 ): Promise<TerminalHandle> {
 	// Bridge uses newline-delimited JSON over stdio with node-pty.
 	const { spawn } = await import("node:child_process");

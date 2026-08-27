@@ -82,14 +82,12 @@ function Summary(props: ToolRenderProps): ReactNode {
 		if (wait.timedOut === true) extra.push(t("vibe timed out"));
 	}
 	return (
-		<>
-			<div className="tv-kv-line">
-				<StatusIcon pending={pending} />
-				<span>vibe {describe(props.args, props.result)}</span>
-				<Badge>{status}</Badge>
-				{extra.length > 0 && <Badges items={extra} />}
-			</div>
-		</>
+		<div className="tv-kv-line">
+			<StatusIcon pending={pending} />
+			<span>vibe {describe(props.args, props.result)}</span>
+			<Badge>{status}</Badge>
+			{extra.length > 0 && <Badges items={extra} />}
+		</div>
 	);
 }
 
