@@ -2375,6 +2375,33 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			modeRuntime.composer.removeBySource(source);
 			for (const section of ext.promptSections) modeRuntime.composer.add({ ...section, source });
 		}
+		// 扩展清单区块(agent 感知,§5.7):agent 必须知道已启用哪些扩展及其
+		// 贡献能力 —— "插件化了不能 agent 自己不知道插件相关的事"。纯文本
+		// 拼接(扩展名/工具名为简单文本),order 25 注入区,热切换整源重挂。
+		const rebuildExtensionInventory = (exts: ReadonlyArray<{ label?: string; path: string; tools: Map<string, unknown> }>): void => {
+			const lines: string[] = ["# 已安装扩展", ""];
+			const named = exts
+				.map(ext => ({
+					label: ext.label ?? path.basename(ext.path),
+					tools: [...ext.tools.keys()].sort().join(", "),
+				}))
+				.filter(e => e.label.length > 0);
+			if (named.length === 0) {
+				lines.push("（当前没有已启用的扩展。）");
+			} else {
+				for (const e of named) {
+					lines.push(`- **${e.label}**${e.tools ? `（工具：${e.tools}）` : ""}`);
+				}
+			}
+			lines.push("");
+			lines.push("你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。");
+			modeRuntime.composer.removeBySource("ext:inventory");
+			modeRuntime.composer.add(
+				{ name: "extensions-inventory", order: 25, text: lines.join("\n") },
+				"ext:inventory",
+			);
+		};
+		rebuildExtensionInventory(extensionsResult.extensions);
 
 		// Load inline extensions from factories
 		if (inlineExtensions.length > 0) {
@@ -3830,6 +3857,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					modeRuntime.composer.removeBySource(`ext:${id}`);
 				}
 				modeRuntime.activeExtensionIds = nextIds;
+				// 扩展清单区块跟随热切换(agent 感知保持新鲜)。
+				const activeExts = [...nextIds]
+					.map(id => {
+						const p = extensionPaths.find(x => extensionIdOf(x) === id);
+						return p ? extensionRunner.getExtensionByPath(p) : undefined;
+					})
+					.filter((e): e is NonNullable<typeof e> => e !== undefined);
+				rebuildExtensionInventory(activeExts);
 			}
 			// 4) 模型:新旧 mode 的 modelRole 不同 → 会话级切模型(§6.2)。
 			if (next.modelRole && next.modelRole !== prev?.modelRole) {

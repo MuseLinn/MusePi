@@ -94,3 +94,24 @@ describe("prompts/composer composeComplete", () => {
 		expect(composer.composeComplete()).not.toEqual(expect.arrayContaining(["core"]));
 	});
 });
+
+describe("extensions-inventory block (agent awareness, §5.7)", () => {
+	it("inventory block composes into the injection slot and re-hangs on source reload", () => {
+		const composer = new PromptComposer();
+		const inventoryText = [
+			"# 已安装扩展",
+			"",
+			"- **my-ext**（工具：probe_tool, scan_tool）",
+			"",
+			"你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。",
+		].join("\n");
+		composer.add({ name: "extensions-inventory", order: 25, text: inventoryText }, "ext:inventory");
+		expect(composer.compose(["core"])).toEqual(["core", inventoryText]);
+		// Whole-source re-hang (hot-switch): the old inventory is replaced.
+		composer.removeBySource("ext:inventory");
+		expect(composer.compose(["core"])).toEqual(["core"]);
+		const emptyText = "# 已安装扩展\n\n（当前没有已启用的扩展。）\n\n你可以主动使用这些扩展的能力，或用 /extensions 查看与管理。";
+		composer.add({ name: "extensions-inventory", order: 25, text: emptyText }, "ext:inventory");
+		expect(composer.compose(["core"])).toEqual(["core", emptyText]);
+	});
+});
