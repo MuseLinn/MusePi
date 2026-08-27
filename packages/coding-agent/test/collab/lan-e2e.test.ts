@@ -30,6 +30,7 @@ class RawTlsWsClient {
 	readonly messages: { opcode: number; payload: Uint8Array }[] = [];
 	readonly closeFrame: Promise<{ code: number; reason: string } | null>;
 	#buffer = new Uint8Array(0);
+	#socket: tls.TLSSocket;
 
 	private constructor(socket: tls.TLSSocket) {
 		this.#socket = socket;

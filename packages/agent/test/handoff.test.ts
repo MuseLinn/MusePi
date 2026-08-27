@@ -74,17 +74,7 @@ describe("handoff summary injection", () => {
 	const document = "## Goal\nContinue the resize fix.\n\n## Next Steps\n1. Run the focused test";
 
 	function convertedText(method: string | undefined): string {
-		const message = createCompactionSummaryMessage(
-			document,
-			1000,
-			new Date().toISOString(),
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			undefined,
-			{ method },
-		);
+		const message = createCompactionSummaryMessage(document, 1000, new Date().toISOString(), { method });
 		const [converted] = defaultConvertToLlm([message]);
 		if (!converted || !Array.isArray(converted.content)) throw new Error("Expected converted content blocks");
 		const block = converted.content[0];

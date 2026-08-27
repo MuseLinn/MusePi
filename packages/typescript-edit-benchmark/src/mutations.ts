@@ -76,7 +76,7 @@ function parseWithPlugins(code: string, plugins: ParserPlugin[]): t.File {
 		allowReturnOutsideFunction: true,
 		errorRecovery: true,
 		plugins,
-	});
+	}) as t.File;
 }
 
 function parseCode(code: string): Parsed | null {
