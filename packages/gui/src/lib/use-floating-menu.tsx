@@ -117,6 +117,24 @@ export function useFloatingMenu(
 		positionMenu();
 	}, [open, align]);
 
+	// Re-position on scroll/resize: an anchor inside a scrolling container
+	// (settings provider cards, onboarding provider list) moves with the
+	// container; without this the menu stays at its open-time viewport
+	// position — the anchor scrolls away and the menu reads as floating
+	// over unrelated content ("被界面挡住" reports). Capture-phase scroll
+	// so container scrolls that don't bubble (overflow-y auto) still fire.
+	useEffect(() => {
+		if (!open) return;
+		positionMenu();
+		const onScroll = (): void => positionMenu();
+		document.addEventListener("scroll", onScroll, true);
+		window.addEventListener("resize", onScroll);
+		return () => {
+			document.removeEventListener("scroll", onScroll, true);
+			window.removeEventListener("resize", onScroll);
+		};
+	}, [open, align, anchorOption]);
+
 	// One-shot re-measure: first positioning ran before the portal existed
 	// (estimated width) — after mount, snap left/right to the real menu
 	// width so right-aligned menus keep their right edge ON the anchor.

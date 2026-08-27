@@ -2451,6 +2451,12 @@
 	position: relative;
 	display: flex;
 	flex-direction: column;
+	/* Floating menus inside the onboarding card (provider creds dropdown,
+	 * custom-accent picker) portal to the root — never let any sibling
+	 * overlay stack above them. This beats the generic z-index:1000 when
+	 * a backdrop-filter ancestor (which creates a stacking context) is
+	 * involved. */
+	z-index: 210;
 	/* Centered floating (2026-08-11): never full-window — the frosted
 	 * backdrop must stay clearly visible on all four sides (羽化弥散磨砂).
 	 * ~100px min margin each side; capped so large displays don't blow up. */
@@ -3212,7 +3218,12 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	padding: 4px 2px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	transition: background 120ms ease;
+}
+.gui-obo-provider-row:hover {
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 }
 .gui-obo-provider-name {
 	font-size: var(--ui-font-size-sm);
