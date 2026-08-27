@@ -243,6 +243,15 @@ export function ContextPanel({
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const [maximized, setMaximized] = useState(false);
 	const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
+	/** Snap points for right-panel width (px). Drag snaps on release. */
+	const SNAP_POINTS = [300, 480, 800];
+	const snapWidth = (w: number): number => {
+		let best = SNAP_POINTS[0];
+		for (const sp of SNAP_POINTS) {
+			if (Math.abs(sp - w) < Math.abs(best - w)) best = sp;
+		}
+		return best;
+	};
 	const onResizeStart = (e: React.PointerEvent<HTMLDivElement>): void => {
 		resizeRef.current = { startX: e.clientX, startW: width };
 		const move = (ev: PointerEvent): void => {
@@ -255,8 +264,10 @@ export function ContextPanel({
 			resizeRef.current = null;
 			window.removeEventListener("pointermove", move);
 			window.removeEventListener("pointerup", up);
+			const snapped = snapWidth(width);
+			setWidth(snapped);
 			try {
-				localStorage.setItem("musepi-gui-right-width", String(width));
+				localStorage.setItem("musepi-gui-right-width", String(snapped));
 			} catch {
 				// storage unavailable
 			}
