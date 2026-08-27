@@ -4,10 +4,20 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
-## [Unreleased]
+## [0.4.6] - 2026-08-28
 
 ### Added
 
+- **dsh-desktop 兼容链**:`musepi serve --web-port` serve 渲染器 + `/__daemon.json`,Electron 壳经 `probeWeb()` 自动发现并 loadURL 运行时渲染器;`?shell=1` 注入 compat slot host(`extensions.list` → `window.MusePiCompatHost`),transcript.node 扩展在 serve 页渲染。
+  - EN: dsh-desktop-compat chain — daemon-served renderer, Electron shell discovery via web.port, `?shell=1` injected compat slot host, transcript.node extensions render in the served page.
+- **desktop-shell 一等扩展 + Shell 三模式**:壳是扩展(`extensions.list` 顶层 `shell:{enabled,mode,webUrl}`),`setEnabled` 切开关/模式;compatibility/extended/enhanced 按 mode 选 slot,extended 消费 composer.dock/statusbar/workbench。
+  - EN: desktop-shell first-class extension + three shell modes (compatibility/extended/enhanced) with mode-driven slot injection.
+- **agent 感知扩展清单**:system prompt 注入"已安装扩展"区块(扩展名+工具),热切换跟随更新——agent 知道自己的插件。
+  - EN: extension inventory block in the system prompt — the agent sees its live plugins and their tools.
+- **TUI `/preset use|list`**:会话内预设热切换(复用 modes v2 switcher)+ 列表。
+  - EN: `/preset use|list` in-session preset hot-switch + enumeration.
+- **扩展中心 musepi 插件管理**:GUI+TUI 的 musepi-extensions provider 空也可见(管理入口);onboarding 浮层菜单 scroll 跟随修复。
+  - EN: musepi-extensions provider always visible in GUI/TUI extension centers; onboarding floating-menu scroll-follow fix.
 - **Command Code 内置供应商**:新增 `command-code` 内置 OpenAI 兼容供应商(goat 订阅网关),动态 `/v1/models` 发现 61 个官方模型,并从 canonical 索引/models.dev 兜底注入上下文长度、输入能力、推理与思考等级;`/login command-code` 支持粘贴 API key 校验。
   - EN: Command Code (`command-code`) built-in OpenAI-compatible provider (goat subscription gateway) — dynamic `/v1/models` discovery of 61 official models, with context window / input modalities / reasoning / thinking efforts hydrated from the canonical reference index with models.dev fallback; `/login command-code` API-key paste validation.
 
