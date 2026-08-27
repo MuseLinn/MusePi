@@ -321,7 +321,7 @@ Test the contract the system exposes — not the easiest internal detail to asse
 
 ## Changelog
 
-Location: `packages/*/CHANGELOG.md` (per package).
+Location: single file — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's own release notes, read by the GUI "what's-new" panel and `/changelog`). `packages/coding-agent/CHANGELOG.md` remains only as a compiled-in upstream fallback (imported by `src/utils/changelog.ts`); do not add per-package `packages/*/CHANGELOG.md` files — that upstream convention was removed.
 
 **Format** — sections under `## [Unreleased]`:
 
@@ -334,7 +334,7 @@ Location: `packages/*/CHANGELOG.md` (per package).
 **Rules:**
 
 - New entries always go under `## [Unreleased]`.
-- Never modify already-released sections (e.g., `## [0.12.2]`) — they are immutable.
+- Never modify already-released sections (e.g., `## [0.4.5]`) — they are immutable.
 - Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.
 
 **Attribution:**
@@ -344,7 +344,7 @@ Location: `packages/*/CHANGELOG.md` (per package).
 
 ## Releasing
 
-1. Ensure all changes since last release are in each affected package's `[Unreleased]` section.
+1. Ensure all changes since last release are in the `[Unreleased]` section of `CHANGELOG.musepi.md`.
 2. Run `bun run release`.
 
 The script handles version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.

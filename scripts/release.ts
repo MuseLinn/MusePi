@@ -13,7 +13,7 @@ import { compareVersions } from "../packages/utils/src/version.ts";
 import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
-const changelogGlob = new Glob("packages/*/CHANGELOG.md");
+const changelogGlob = new Glob("packages/coding-agent/CHANGELOG.md");
 const packageJsonGlob = new Glob("packages/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /**
