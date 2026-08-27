@@ -2,6 +2,9 @@ import { describe, expect, it } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
+// daemon.cjs lives outside tsconfig include (electron/) and has no types;
+// the surface it exercises here (probeWeb/WEB_PORT_FILE) is trivial.
+// @ts-expect-error — untyped CJS module (electron/, outside tsconfig include)
 import { probeWeb, WEB_PORT_FILE } from "../electron/daemon.cjs";
 
 /** Desktop-shell discovery (dsh-desktop parity): the daemon writes web.port
