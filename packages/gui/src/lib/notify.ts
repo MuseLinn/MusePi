@@ -9,6 +9,8 @@
  * stream event that maps to a notification fires here.
  */
 
+import { sfxFor } from "./sfx";
+
 const EVENTS = ["completion", "subtask", "error", "question"] as const;
 export type NotifyEvent = (typeof EVENTS)[number];
 export const NOTIFY_EVENTS: readonly NotifyEvent[] = EVENTS;
@@ -185,8 +187,16 @@ function electronNotifier(): ElectronNotifier | undefined {
 /** Dispatch one notification (session-store calls this on stream events).
  *  Inside the desktop shell the renderer's HTML5 Notification API does not
  *  surface on macOS, so notifications route through the main process
- *  (preload → ipcMain). Plain browsers fall back to the Web API. */
+ *  (preload → ipcMain). Plain browsers fall back to the Web API.
+ *  A matching activity sound plays alongside (Settings → 通知与音效联动):
+ *  completion→complete, error→error, question→approval, subtask→tool. */
 export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext): void {
+	// Notification–sound coupling: the same activity is heard and seen.
+	// Silent when the user disabled sounds (sfxFor gates on soundEnabled).
+	if (event === "completion") sfxFor("complete");
+	else if (event === "error") sfxFor("error");
+	else if (event === "question") sfxFor("approval");
+	else if (event === "subtask") sfxFor("tool");
 	if (typeof window === "undefined") return;
 	const built = buildNotification(event, ctx);
 	if (!built) return;
