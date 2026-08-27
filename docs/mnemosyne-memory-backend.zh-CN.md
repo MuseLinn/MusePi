@@ -1,5 +1,7 @@
 # Mnemopi 记忆后端
 
+
+[English](mnemosyne-memory-backend.md) | 中文
 English | [中文](mnemosyne-memory-backend.md)
 
 MusePi 可以把 `@musepi/pi-mnemopi` 用作本地长期记忆后端。

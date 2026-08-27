@@ -2,4 +2,4 @@
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/mnemosyne-memory-backend
 mnemosyne-memory-backend.md: a19f69d88375c204e7f2c2159669969f643c18dc
-mnemosyne-memory-backend.zh-CN.md: 306cb02866b0a4a15ea4a1bae7e07836e857ab2f
+mnemosyne-memory-backend.zh-CN.md: 5d2d99d9a5df897a650a6fac868549a222527bbd
