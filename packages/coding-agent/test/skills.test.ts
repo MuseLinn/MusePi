@@ -652,10 +652,8 @@ describe("parseSkillInvocation", () => {
 				name: "reviewer",
 				args: "$echo",
 			});
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal string containing shell variable
 			expect(parseSkillInvocation("${HOME}/bin /skill:foo")).toEqual({
 				name: "foo",
-				// biome-ignore lint/suspicious/noTemplateCurlyInString: testing literal string containing shell variable
 				args: "${HOME}/bin",
 			});
 		});

@@ -14,7 +14,6 @@ export interface ErrorsRouteProps {
 }
 
 export function ErrorsRoute({ active, range, refreshTrigger, onRequestClick }: ErrorsRouteProps) {
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 	const {
 		data: recentErrors,

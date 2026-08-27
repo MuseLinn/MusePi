@@ -195,7 +195,6 @@ export function ToolView(props: ToolViewProps): ReactNode {
 					{partialLines.map((line, i) => (
 						<div
 							// Streamed lines have no stable id — the append-only index is their identity.
-							// biome-ignore lint/suspicious/noArrayIndexKey: streamed lines have no stable id
 							key={i}
 							className="tr-stream-line"
 							// Tight cascade: 16ms steps, capped at 5 lines (~80ms) so a

@@ -910,7 +910,6 @@ export function AppearanceSection({
 
 /** ZCode code-preview card: the selected theme's real colors over a sample
  * snippet; the card matching the active main scheme gets the tag. */
-// biome-ignore lint/suspicious/noTemplateCurlyInString: sample code shown verbatim in the preview card
 const PREVIEW_SNIPPET = ["const greet = (name: string) => {", "  return `hello, ${name}!`;", "};"].join("\n");
 
 /** Once-per-scheme cache: the snippet is static, the bridge is async. */
@@ -954,7 +953,6 @@ export function CodePreviewCard({
 			</div>
 			<pre className="gui-code-preview-body" style={{ background: theme.bg, color: theme.fg }}>
 				{html !== null ? (
-					// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans built by highlightToCodeHtml
 					<code dangerouslySetInnerHTML={{ __html: html }} />
 				) : (
 					<span className="tr-code-line">{PREVIEW_SNIPPET}</span>

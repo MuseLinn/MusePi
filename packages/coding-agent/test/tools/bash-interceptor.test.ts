@@ -133,7 +133,6 @@ describe("compound command interception", () => {
 		for (const command of [
 			'echo "$(git commit -m message)"',
 			"echo `git commit -m message`",
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: literal shell parameter expansion under test
 			"echo ${x:-foo;git commit -m message}",
 			"( git commit -m message )",
 			"echo start; { true; git commit -m message; }",

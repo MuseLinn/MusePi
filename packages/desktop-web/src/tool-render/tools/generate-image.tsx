@@ -105,7 +105,6 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 						<div className="tv-list">
 							{changes.map((change, i) => (
 								// Tool-argument rows are static arrays — the index is their identity.
-								// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
 								<Row key={i} k={i === 0 ? t("changes") : undefined}>
 									{typeof change === "string" ? change : <InvalidArg what="change" />}
 								</Row>
@@ -119,7 +118,6 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 								const mime = isRecord(input) ? str(input.mime_type) : null;
 								return (
 									// Tool-argument rows are static arrays — the index is their identity.
-									// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
 									<Row key={i} k={i === 0 ? t("input") : undefined}>
 										{!isRecord(input) ? (
 											<InvalidArg what="input" />
@@ -147,7 +145,6 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 						<div className="tv-list">
 							{paths.map((p, i) => (
 								// Tool-argument rows are static arrays — the index is their identity.
-								// biome-ignore lint/suspicious/noArrayIndexKey: static arg rows
 								<Row key={i} k={i === 0 ? t("saved") : undefined}>
 									<PathText path={p} />
 								</Row>

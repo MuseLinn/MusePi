@@ -14,7 +14,6 @@ export interface RequestsRouteProps {
 }
 
 export function RequestsRoute({ active, refreshTrigger, onRequestClick }: RequestsRouteProps) {
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 	const {
 		data: recentRequests,

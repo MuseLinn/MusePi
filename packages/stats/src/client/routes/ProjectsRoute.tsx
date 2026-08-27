@@ -15,7 +15,6 @@ export interface ProjectsRouteProps {
 }
 
 export function ProjectsRoute({ active, range, refreshTrigger }: ProjectsRouteProps) {
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 	const {
 		data: foldersData,

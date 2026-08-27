@@ -156,7 +156,6 @@ function renderContextGrid(breakdown: ContextBreakdownView, autoCompactBufferTok
 						const cell = cellList[r * CONTEXT_GRID_COLS + c];
 						return cell ? (
 							// Anonymous visual cells — index is identity.
-							// biome-ignore lint/suspicious/noArrayIndexKey: grid cells
 							<span key={c} className={`gui-context-cell ${cell.cls}`}>
 								{cell.glyph}
 							</span>

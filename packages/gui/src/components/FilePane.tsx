@@ -809,7 +809,6 @@ export function FilePane({
 								/>
 							)}
 							{preview.html !== undefined && (
-								// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from the tree-sitter highlighter
 								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
 							)}
 							{preview.text !== undefined && extOf(preview.name) === "md" ? (

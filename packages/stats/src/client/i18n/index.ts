@@ -28,7 +28,6 @@ function detectLocale(): string {
 }
 
 // React re-render trigger: a simple version counter that increments on locale change.
-// biome-ignore lint/correctness/noUnusedVariables: version counter kept for desktop-web parity; listeners drive the re-render
 let localeVersion = 0;
 const listeners = new Set<() => void>();
 

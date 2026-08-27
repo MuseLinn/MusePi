@@ -13,7 +13,6 @@ const store = new Map<string, string>();
 import {
 	buildNotification,
 	defaultTemplate,
-	dispatchNotification,
 	eventEnabled,
 	NOTIFY_EVENTS,
 	notifyEnabled,

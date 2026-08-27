@@ -158,7 +158,6 @@ function ToolCallsChart({ series, timeRange }: { series: ToolTimeSeriesPoint[]; 
 	const theme = useSystemTheme();
 	const chartTheme = CHART_THEMES[theme];
 	const meta = rangeMeta(timeRange);
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 
 	const chartSeries = useMemo(() => buildToolCallSeries(series), [series, locale]);
@@ -255,7 +254,6 @@ function errorPillVariant(errorRate: number): "danger" | "warning" | "success" {
 function ToolsTable({ byTool }: { byTool: ToolUsageStats[] }) {
 	const rows = useMemo(() => buildToolRows(byTool), [byTool]);
 
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 
 	const columns = [
@@ -380,7 +378,6 @@ function ToolsTable({ byTool }: { byTool: ToolUsageStats[] }) {
 function ToolModelPanel({ byToolModel }: { byToolModel: ToolModelStats[] }) {
 	const [tool, setTool] = useState<string | null>(null);
 
-	// biome-ignore lint/correctness/noUnusedVariables: subscribe to locale so t() labels refresh on language switch
 	const locale = useLocale();
 
 	const tools = useMemo(() => [...new Set(byToolModel.map(row => row.tool))].sort(), [byToolModel]);

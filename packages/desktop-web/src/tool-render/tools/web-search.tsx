@@ -138,7 +138,6 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 				<div className="tr-search-ph-sources" aria-hidden="true">
 					{Array.from({ length: 3 }, (_, i) => (
 						// Static skeleton rows — index is their identity.
-						// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
 						<div key={i} className="tr-search-ph-source">
 							<span className="tr-search-ph-line" />
 							<span className="tr-search-ph-line tr-search-ph-line--dim" />

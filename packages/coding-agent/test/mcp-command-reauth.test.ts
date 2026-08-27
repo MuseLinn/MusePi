@@ -632,9 +632,7 @@ describe("/mcp auth commands", () => {
 							type: "http",
 							url: RAW_SERVER_URL,
 							oauth: {
-								// biome-ignore lint/suspicious/noTemplateCurlyInString: test placeholder string for env expansion
 								clientId: "${MCP_OAUTH_CLIENT_ID}",
-								// biome-ignore lint/suspicious/noTemplateCurlyInString: test placeholder string for env expansion
 								clientSecret: "${MCP_OAUTH_CLIENT_SECRET}",
 							},
 						},
@@ -676,9 +674,7 @@ describe("/mcp auth commands", () => {
 			// The config file keeps the placeholder; only the flow sees the value.
 			const saved = JSON.parse(await Bun.file(configPath).text()) as TestConfigFile;
 			const savedServer = saved.mcpServers?.envserver;
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: test placeholder string for env expansion
 			expect(savedServer?.oauth?.clientSecret).toBe("${MCP_OAUTH_CLIENT_SECRET}");
-			// biome-ignore lint/suspicious/noTemplateCurlyInString: test placeholder string for env expansion
 			expect(savedServer?.oauth?.clientId).toBe("${MCP_OAUTH_CLIENT_ID}");
 		} finally {
 			restoreEnvValue("MCP_OAUTH_CLIENT_ID", originalClientId);

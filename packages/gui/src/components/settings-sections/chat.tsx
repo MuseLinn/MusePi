@@ -257,7 +257,6 @@ export function ChatSection(): ReactNode {
 				</div>
 				<div className="gui-chat-preview-inline">
 					<div className="gui-chat-preview-label">{t("mermaid preview")}</div>
-					{/* biome-ignore lint/security/noDangerouslySetInnerHtml: built by renderMermaidHtml (escaped source) */}
 					<div className="gui-chat-preview-mermaid" dangerouslySetInnerHTML={{ __html: mermaidPreviewHtml }} />
 				</div>
 				<div className="gui-settings-row">

@@ -356,7 +356,6 @@ function SideBySideDiff({
 		// must start its line-number gutter at the same x.
 		const cell = (text: string | null, html: string | null): ReactNode =>
 			html !== null && html.length > 0 ? (
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans built by highlightToCodeHtml
 				<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
 			) : (
 				(text ?? "")
@@ -387,10 +386,7 @@ function SideBySideDiff({
 					return cls ? `<span class="${cls}">${v}</span>` : v;
 				})
 				.join("");
-			return (
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: escaped by escapeHtml
-				<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />
-			);
+			return <span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html }} />;
 		};
 		return paired.map(row => {
 			if (row.kind === "hunk" || row.kind === "header" || row.kind === "gap") {
@@ -658,7 +654,6 @@ function InlineDiff({ rows, hlLines }: { rows: string[]; hlLines: string[] | nul
 						) : html !== null ? (
 							<>
 								{(cls === "--add" || cls === "--del") && <span className="tv-diff-sig">{line.charAt(0)}</span>}
-								{/* biome-ignore lint/security/noDangerouslySetInnerHtml: escaped spans (escapeHtml / highlightToCodeHtml) */}
 								<span className="tv-diff-hl" dangerouslySetInnerHTML={{ __html: html || "\u00A0" }} />
 							</>
 						) : (

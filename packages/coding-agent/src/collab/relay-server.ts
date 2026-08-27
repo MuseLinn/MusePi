@@ -112,6 +112,7 @@ export class FrameDecoder {
 	#buffer = new Uint8Array(0);
 	#fragOpcode = -1;
 	#fragParts: Uint8Array[] = [];
+	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: fragment length state (written by frame assembly)
 	#fragLen = 0;
 
 	push(chunk: Uint8Array): WsFrame[] {

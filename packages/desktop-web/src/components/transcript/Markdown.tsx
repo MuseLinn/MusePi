@@ -737,7 +737,6 @@ export const Markdown = memo(function Markdown({
 		});
 	}, []);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: effect re-runs on each text change to highlight new blocks
 	useLayoutEffect(() => {
 		const root = rootRef.current;
 		if (!highlight || !root) return;
@@ -820,7 +819,6 @@ export const Markdown = memo(function Markdown({
 	// Local images: swap raw filesystem srcs for data URLs via the desktop
 	// bridge. Re-runs on each text change (new message content), like the
 	// highlight pass; cache keeps repeated renders instant.
-	// biome-ignore lint/correctness/useExhaustiveDependencies: effect re-runs on each text change to resolve new images
 	useLayoutEffect(() => {
 		const root = rootRef.current;
 		if (!root) return;
@@ -849,7 +847,6 @@ export const Markdown = memo(function Markdown({
 					`$1 data-copied>${copiedLabel}<`,
 				);
 
-	// biome-ignore lint/security/noDangerouslySetInnerHtml: html built from escaped marked output
 	// Effect class on the streaming root: typewriter carries one too so
 	// the caret (CSS ::after) can be scoped to the typewriter preset only.
 	const effectCls = streaming ? ` gui-chat-effect-${effect}` : "";

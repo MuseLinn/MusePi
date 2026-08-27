@@ -26,7 +26,6 @@ function SearchList({ text }: { text: string }): ReactNode {
 	return (
 		<ul className="tr-tool-search">
 			{lines.map((line, i) => (
-				// biome-ignore lint/suspicious/noArrayIndexKey: derived display list
 				<li key={i} className={isUrlish(line) ? "tr-tool-search-url" : "tr-tool-search-title"}>
 					{line}
 				</li>
