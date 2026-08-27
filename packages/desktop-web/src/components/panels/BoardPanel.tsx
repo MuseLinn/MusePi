@@ -76,7 +76,7 @@ export function BoardPanel({ client }: BoardPanelProps): ReactNode {
 	);
 }
 
-function BoardWidgetCard({
+export function BoardWidgetCard({
 	widget,
 	update,
 }: {

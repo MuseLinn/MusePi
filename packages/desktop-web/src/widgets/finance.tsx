@@ -166,6 +166,10 @@ export function KlineCard({
 					const cx = x(i);
 					return (
 						<g key={i}>
+							{/* Per-candle native tooltip (dsh-genui chart tooltip parity):
+							 * hover shows that bar's OHLC — zero JS, works on any
+							 * pointer device. */}
+							<title>{`O ${c.o.toFixed(2)}  H ${c.h.toFixed(2)}  L ${c.l.toFixed(2)}  C ${c.c.toFixed(2)}  V ${c.v}`}</title>
 							<line x1={cx} y1={y(c.h)} x2={cx} y2={y(c.l)} stroke={color} strokeWidth={0.5} />
 							<rect x={cx - cw / 2} y={Math.min(y(c.o), y(c.c))} width={cw} height={Math.max(1.2, Math.abs(y(c.o) - y(c.c)))} fill={color} />
 							<rect x={cx - cw / 4} y={priceH + 2 + (1 - c.v / 100) * volH} width={cw / 2} height={(c.v / 100) * volH} fill={color} opacity={0.55} />
