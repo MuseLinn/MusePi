@@ -10,7 +10,7 @@ English | [中文](board-dashboard.zh-CN.md)
 > 缺 `widget.generate` RPC 与模板市场）；M5 已落地（pin.html + pinned-widgets.json 重启恢复 +
 > alwaysOnTop 切换，文档旧标"未验证"过时）；iframe 沙箱层按 §7 决策仅用于 html widget
 > （opaque-origin，缺 token CSS 预加载与沙箱 sendPrompt）；**调度执行引擎已实现（GUI 侧）**、
-> **`widget.data` 数据源代理 RPC 未实现**（行情卡为静态默认值）——详见 §4 里程碑标注。
+> **`widget.data` 数据源代理 RPC 已实现（fx-rates 源）但 renderer market 卡仍直连**（`fx`/`stocks` 用 `widgetFetch` 直连 open.er-api / 腾讯；把 market 卡整批迁到代理属 §4 独立决策，非单卡改）——详见 §4 里程碑标注。
 
 ## 1. 动机与参考
 

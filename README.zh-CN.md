@@ -24,7 +24,7 @@
 
 MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
 
-应用版本 `0.4.4`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
+应用版本 `0.4.5`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
 
 ## ✨ 特性
 
@@ -61,9 +61,22 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ## 🚀 快速开始
 
-需要 **Bun ≥ 1.3.14**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。
+### 一键安装
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
+musepi --version
+```
+
+安装脚本在 Bun 与宿主架构匹配时用 `bun install -g @musepi/pi-coding-agent`，否则从 GitHub Releases 拉取预编译二进制。选项：
+
+- `--binary` — 强制拉取预编译二进制
+- `--source` — 强制用 Bun 安装（缺 Bun 则自动装）
+- `--ref <tag|commit|branch>` — 固定某个版本（source 模式）
 
 ### 开发模式
+
+需要 **Bun ≥ 1.3.14**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。
 
 ```sh
 # 安装依赖 + 构建 natives + 链接 CLI
@@ -176,4 +189,4 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.4）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.5）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。

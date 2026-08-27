@@ -9,6 +9,14 @@ English | [中文](index.zh-CN.md)
 
 > 147 documents (incl. subdirectories). Living docs are marked **活文档** — keep them in sync with code changes.
 
+## Install (one command)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
+```
+
+Installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when it matches your host architecture, otherwise the prebuilt release binary. `--binary` forces the binary; `--source` forces Bun; `--ref <tag>` pins a version.
+
 ## GUI & Desktop
 
 - [gui-design.md](gui-design.html) — **活文档** GUI design spec: layout / tokens / motion / component patterns / pet visual style

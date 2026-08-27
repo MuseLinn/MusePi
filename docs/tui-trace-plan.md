@@ -1,11 +1,11 @@
 # TUI /trace 方案:消息树 × 轨迹融合视图(2026-08-21 规划)
 
-> 状态:**已实现(2026-08-26)**。`/trace` 已落地:`packages/coding-agent/src/modes/components/tree-selector.ts` 的投影参数(TreeProjection:HH:mm:ss 时间列、tokens↑↓ 用量、耗时、8 级成本条、错误态符号)叠加在既有 `/tree` 结构投影上;`slash-commands/builtin-session.ts` 注册 `/trace`(与 `/tree` 同入口,切换投影)。测试:`test/modes/components/trace-selector.test.ts`(29 断言,全通过)。
+> 状态:**已实现(2026-08-26)**。`/trace` 已落地:`packages/coding-agent/src/modes/components/tree-selector.ts` 的投影参数(TreeProjection:HH:mm:ss 时间列、tokens↑↓ 用量、耗时、8 级成本条、错误态符号)叠加在既有 `/tree` 结构投影上;`slash-commands/builtin-session.ts` 注册 `/trace`(与 `/tree` 同入口,切换投影)。测试:`test/modes/components/trace-selector.test.ts`(3 个测试、9 个断言,全通过)。
 > 背景与术语见 `docs/gui-design.md` §0 术语表——本方案的核心前提是「会话树(消息树)」与「轨迹」是同一批 entries 的两个投影轴:结构(parentId 分支)与时间/成本——`/tree` 与 `/trace` 分别落地这两个轴。
 
 ## 1. 动机
 
-- GUI 右侧轨迹面板已具备完整时间投影(turn 树 + Overview 时间轴 + 检视,TODO 2026-08-21 落地)。
+- GUI 右侧轨迹面板已具备完整时间投影(turn 树 + Overview 时间轴 + 检视)。
 - TUI 的 `/tree` 已有完整的**结构投影**(分支点 gutter、叶移动、选中汇总、label 编辑),但节点只显示文本+结构,**没有时间/成本维度**——"这步花了多久、烧了多少 token、哪里失败"答不上来。
 - dsh 生态的 [dsh-TUI](https://github.com/ccch1mneyyy/dsh-TUI)(DeepSeek Harness 官方公众号收录的 TUI 插件)已经示范了 TUI 轨迹的排版,可直接借鉴,无需重复发明。
 

@@ -13,8 +13,8 @@
 > 核对方法：逐项 vs `packages/gui/src/`。
 
 - **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ❌。
-- **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ❌、上下文 gating ❌、Mod+1..9 ❌、pop-out ❌。
-- **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌）；Git/Diff/PR 仍 3 独立 surface ❌；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。
+- **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ✅（`ContextPanel.tsx:247` `SNAP_POINTS=[300,480,800]`，释放吸附，0a51f37788）、上下文 gating ❌、Mod+1..9 ❌、pop-out ❌。
+- **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌）；Git/Diff/PR 合并为单一 `git` surface（子 tab：Changes/Commits/PR，视图内导航，rail 仍唯一导航轴）✅；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。
 - **结论**：核心改造主体已落地（分组/宽度/折叠），TabBar 与多实例为架构否决项，剩余为 Phase 3 面板级细化。实施下一批时更新本表。
 
 ---
@@ -217,6 +217,8 @@ settings、sessions、mcp、roles、computer、updates、search、board、friend
 - Commit history
 
 即 rail 一个「git」图标，tab 条展开 3-4 个子 tab。
+
+**实现（0a51f37788 后）**：以 3 个子 tab 落地 —— Changes / Commit history / Pull requests；其中 Working tree 与 Staged 由 DiffPane 的合并视图（同屏分 staged/unstaged 两区 + stage/unstage 动作）覆盖，故不再拆两 tab。rail 只剩一个 `git` 图标（`registry.ts`），GitPanel（`ContextPanel.tsx`）是视图内导航，rail 仍是唯一导航轴。
 
 #### 3.5.4 Notes（笔记）— 保持
 

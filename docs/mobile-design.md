@@ -41,18 +41,18 @@ MusePi 移动端是 **桌面 agent 的"随身遥控器"**，不是桌面客户�
 | 键盘 | `resize: "none"` + CSS inset 变量驱动（非原生 adjustResize 动画滞后） | ✅ 同款（`--mp-keyboard-inset`） |
 | 状态栏 | overlay + safe-area inset + 主题色 | ✅ 同款（`setupImmersiveSystemBars`） |
 | 首帧主题 | 阻塞脚本预置 `color-scheme` + 背景色，杜绝白闪 | ✅ 同款（`mobile.html` 内联脚本） |
-| 会话切换 | 手机：底部 sheet；平板：常驻左侧栏；SIZE 类而非设备检测 | ⏳ 现状：header 内 popover（`ServerSwitcher`）+ workspace 卡片；P2 评估底部 sheet |
-| 工作区抽屉 | 右缘滑动 → 抽屉（Changes/Files/Terminal/Notes/MCP 多 tab） | ⏳ 现状：header 面板按钮 → 全屏 panel；P2 评估抽屉化 |
+| 会话切换 | 手机：底部 sheet；平板：常驻左侧栏；SIZE 类而非设备检测 | ✅ 底部 sheet（§11.1 `SessionsSheet`，header 标题触发）|
+| 工作区抽屉 | 右缘滑动 → 抽屉（Changes/Files/Terminal/Notes/MCP 多 tab） | ⏳ 现状：header 面板按钮 → 全屏 panel；P3 抽屉化（§10）|
 | 返回键 | 分层关闭：plan → surface → drawer → chat | ✅ 已实现（capacitor.ts setupAndroidBackHandler + app.tsx onBack 分层） |
 | 推送 | APNs/FCM + relay + presence 抑制 | ⏳ 本架构无云端：本地通知（§6.4） |
-| 深链 | `openchamber://` 意图词汇表（通知/小组件/Control Center 复用） | ⏳ 现状：hash 深链（浏览器）；P2 评估原生 scheme |
+| 深链 | `openchamber://` 意图词汇表（通知/小组件/Control Center 复用） | ✅ 原生 `musepi://` 深链（§11.3）+ 通知点击跳会话 |
 | QR 配对 | mlkit 捆绑 barcode 模型离线扫描 | ✅ 同款（`@capacitor-mlkit/barcode-scanning`） |
 | 安全存储 | `@aparajita/capacitor-secure-storage` 存连接 token | ✅ 同款（`secure-store.ts`） |
 
 ### 2.2 高星项目移动端惯例（采纳项）
 
 - **Linear mobile** — 底部 sheet 承担导航（会话/工作区），全屏面只保留"设置"类；我们的面板（board/
-  scheduled/files）在手机上应保持全屏但可从 header 一键往返（现状已符合），P2 迁移到抽屉。
+  scheduled/files）在手机上应保持全屏但可从 header 一键往返（现状已符合），P3 迁移到抽屉。
 - **Obsidian mobile** — 安全区纪律：`env(safe-area-inset-*)` 必须兜底 + 旧 WebView 固定值降级
   （已实现 `setupSafeAreaFallback`）；内容滚动容器 `overscroll-behavior: contain` 防滚动链
   （已实现）；`-webkit-overflow-scrolling: touch` 惯性滚动（已实现）。
@@ -188,7 +188,7 @@ Session（会话）
 ### 4.4 面板（board / scheduled / files）
 
 移动端全屏（`sh-panel`），header 返回按钮（MessageSquare 图标）回 transcript；与 rail 互斥。
-面板内滚动与键盘处理同 transcript 契约。P2 迁入工作区抽屉（§10）。
+面板内滚动与键盘处理同 transcript 契约。P3 迁入工作区抽屉（§10）。
 
 ### 4.5 覆盖层
 
@@ -206,9 +206,9 @@ Session（会话）
 |---|---|---|---|
 | 点按 | 全部分发 | — | ✅ |
 | 返回（系统键） | 分层关闭（§3.2） | header 返回按钮 | 本次补 |
-| 边缘滑动（左/右） | 会话/工作区抽屉 | header 按钮 | P2 |
-| 下拉刷新 | 重连/重新拉快照 | Rejoin 按钮 | P2 |
-| 长按 | （预留）复制/操作菜单 | 行内按钮 | P2 |
+| 边缘滑动（左/右） | 会话/工作区抽屉 | header 按钮 | P3 |
+| 下拉刷新 | 重连/重新拉快照 | Rejoin 按钮 | P3 |
+| 长按 | （预留）复制/操作菜单 | 行内按钮 | P3 |
 
 原则：手势从不承载唯一入口（Arc 惯例）。
 
@@ -284,7 +284,7 @@ Session（会话）
 ### 6.6 深链
 
 - 浏览器：hash 深链（`window.location.hash = link`，加载时自动连接，已有）；
-- 原生：P2 —— `musepi://` scheme + 冷启动 intent stash（openchamber `deepLinks.ts` 模式），
+- 原生：✅ —— `musepi://` scheme + 冷启动 intent stash（openchamber `deepLinks.ts` 模式），
   用于通知点击跳回对应会话。
 
 ## 7. 无障碍

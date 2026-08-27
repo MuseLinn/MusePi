@@ -28,7 +28,20 @@
 
 MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-Current app version **`0.4.4`** (independent of upstream versioning).
+Current app version **`0.4.5`** (independent of upstream versioning).
+
+## Install (one command)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
+musepi --version
+```
+
+The installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when Bun matches your host architecture; otherwise it fetches the prebuilt release binary from GitHub Releases. Options:
+
+- `--binary` — always fetch the prebuilt release binary
+- `--source` — always install via Bun (installs Bun if missing)
+- `--ref <tag|commit|branch>` — pin an exact version (source mode)
 
 ## Screenshots
 

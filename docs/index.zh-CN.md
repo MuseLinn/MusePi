@@ -8,6 +8,14 @@ lang: zh-CN
 
 > 147 份文档（含子目录）。**活文档** 标记表示需随代码变更保持同步。
 
+## 一键安装
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
+```
+
+安装脚本在 Bun 与宿主架构匹配时用 `bun install -g @musepi/pi-coding-agent`，否则拉取预编译二进制。`--binary` 强制二进制、`--source` 强制 Bun、`--ref <tag>` 固定版本。
+
 [English](index.md) | 中文
 
 ## GUI 与桌面
