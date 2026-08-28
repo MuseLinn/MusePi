@@ -78,15 +78,43 @@ function portOpen(port) {
  * checkout under development (`bun packages/coding-agent/src/cli.ts serve`)
  * by walking up from this file's location.
  */
+/**
+ * Desktop-shell state (dsh-desktop compat): the Electron shell serves the
+ * runtime-rendered desktop-web ONLY when the desktop-shell extension is
+ * explicitly enabled (settings shell.enabled === true). Default OFF — the
+ * compat path loads desktop-web, which is the collab client ("musepi 协作"
+ * connect screen), not the full working GUI; users who want the shell
+ * wrapper enable it in the extension center. When off, spawn the daemon
+ * WITHOUT --web-port so it never binds a random web port / writes
+ * web.port — the shell loads its local bundle.
+ */
+function shellEnabled() {
+	const home = os.homedir();
+	for (const base of [path.join(home, ".musepi", "agent"), path.join(home, ".musepi")]) {
+		try {
+			const raw = JSON.parse(fs.readFileSync(path.join(base, "settings.json"), "utf8"));
+			const v = raw["shell.enabled"];
+			if (v !== undefined) return v === true;
+		} catch {
+			// missing/unreadable — fall through to the next candidate
+		}
+	}
+	return false;
+}
+
 function daemonCommand(port) {
 	const win = process.platform === "win32";
+	// --web-port only when the desktop-shell extension is enabled (see
+	// shellEnabled); 0 = a random loopback port the daemon persists to
+	// web.port for the compat shell to discover.
+	const webArgs = shellEnabled() ? ["--web-port", "0"] : [];
 	const inPath = (process.env.PATH ?? "")
 		.split(win ? ";" : ":")
 		.some(dir => fs.existsSync(path.join(dir, win ? "musepi.exe" : "musepi")));
 	if (inPath) {
 		return {
 			program: "musepi",
-			args: ["serve", "--port", String(port), "--web-port", "0"],
+			args: ["serve", "--port", String(port), ...webArgs],
 		};
 	}
 	// Packaged app: the compiled daemon binary is asarUnpacked so it can be
@@ -99,14 +127,14 @@ function daemonCommand(port) {
 		win ? "musepi.exe" : "musepi",
 	);
 	if (fs.existsSync(unpacked)) {
-		return { program: unpacked, args: ["serve", "--port", String(port), "--web-port", "0"] };
+		return { program: unpacked, args: ["serve", "--port", String(port), ...webArgs] };
 	}
 	// Dev checkout: electron/ sits at <repo>/packages/gui/electron/.
 	let dir = path.resolve(__dirname);
 	while (true) {
 		const cli = path.join(dir, "packages", "coding-agent", "src", "cli.ts");
 		if (fs.existsSync(cli)) {
-			return { program: "bun", args: [cli, "serve", "--port", String(port), "--web-port", "0"] };
+			return { program: "bun", args: [cli, "serve", "--port", String(port), ...webArgs] };
 		}
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
@@ -143,6 +171,16 @@ async function start(port, env = {}) {
 		// satisfy the wait (the spawned process writes its own --port).
 		if (bound === port && (await portOpen(bound))) {
 			console.error("[daemon] bound on :" + bound);
+			// Shell-disabled: the daemon does not serve desktop-web, so a
+			// stale web.port from an earlier shell-enabled daemon must not
+			// send the GUI to the collab-client renderer next launch.
+			if (!shellEnabled()) {
+				try {
+					fs.unlinkSync(WEB_PORT_FILE);
+				} catch {
+					// already gone
+				}
+			}
 			return bound;
 		}
 		// The spawned process died during startup.
@@ -155,11 +193,31 @@ async function start(port, env = {}) {
 	throw new Error("timed out waiting for daemon to bind");
 }
 
-/** Resolve the pid of the process listening on 127.0.0.1:port (lsof).
- *  NOTE: `-iTCP:<port>` must stay ONE argument — splitting it makes lsof
- *  treat the port as a file name and fail. */
+/** Resolve the pid of the process listening on 127.0.0.1:port.
+ *  Windows: `netstat -ano` (lsof does not exist there — the old code's
+ *  spawn("lsof") errored, so listenerPid always resolved null and kill()
+ *  silently did nothing: daemon-restart/daemon-start spawned a fresh daemon
+ *  while the old one still held the port → EADDRINUSE crash at startup).
+ *  macOS/Linux: lsof, with `-iTCP:<port>` kept as ONE argument (splitting
+ *  it makes lsof treat the port as a file name and fail). */
 function listenerPid(port) {
 	return new Promise(resolve => {
+		if (process.platform === "win32") {
+			const netstat = spawn("netstat", ["-ano"], { stdio: ["ignore", "pipe", "ignore"] });
+			let out = "";
+			netstat.stdout.on("data", chunk => {
+				out += chunk;
+			});
+			netstat.on("error", () => resolve(null));
+			netstat.on("close", () => {
+				const line = out
+					.split(/\r?\n/)
+					.find(l => l.includes(`:${port}`) && l.includes("LISTENING"));
+				const pid = Number.parseInt((line ?? "").trim().split(/\s+/).pop() ?? "", 10);
+				resolve(Number.isInteger(pid) && pid > 0 ? pid : null);
+			});
+			return;
+		}
 		const lsof = spawn("lsof", [`-tiTCP:${port}`, "-sTCP:LISTEN"], {
 			stdio: ["ignore", "pipe", "ignore"],
 		});

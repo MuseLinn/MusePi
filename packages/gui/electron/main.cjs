@@ -941,7 +941,7 @@ function handleTrayAction(action) {
 			openMiniChatWindow();
 			break;
 		case "show-main-window":
-			if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+			if (!mainWindow || mainWindow.isDestroyed()) void createWindow();
 			focusMainFromPet();
 			break;
 		case "quit":
@@ -1935,7 +1935,24 @@ function loadMainWindowBounds() {
 	}
 }
 
-function createWindow() {
+/**
+ * Resolve the compat-shell renderer origin (dsh-desktop parity).
+ * Explicit MUSEPI_GUI_COMPAT_URL wins; otherwise read web.port but ONLY
+ * accept it when the port actually listens — a stale web.port (daemon died
+ * without unlinking: taskkill / crash / SIGKILL) must resolve null so the
+ * shell loads its local bundle instead of white-screening on a dead origin
+ * (same liveness gate the tray's probe uses).
+ */
+async function resolveCompatUrl() {
+	const explicit = process.env.MUSEPI_GUI_COMPAT_URL;
+	if (explicit) return explicit;
+	const url = probeWeb();
+	if (!url) return null;
+	const port = Number.parseInt(new URL(url).port, 10);
+	return port > 0 && (await portOpen(port)) ? url : null;
+}
+
+async function createWindow() {
 	const saved = loadMainWindowBounds();
 	mainWindow = new BrowserWindow({
 		title: "MusePi",
@@ -2015,17 +2032,23 @@ function createWindow() {
 	// the "shell wraps runtime content" chain.
 	const devServer = DEV && process.env.MUSEPI_GUI_DEV === "1" ? "http://127.0.0.1:5173/" : null;
 	// Compat shell: MUSEPI_GUI_COMPAT_URL (explicit override) wins, else the
-	// daemon's web.port discovery file (written when the desktop:shell
-	// extension is enabled and --web-port serves the renderer). Absent ->
-	// the shell loads its local bundle.
-	const compatUrl = process.env.MUSEPI_GUI_COMPAT_URL ?? probeWeb();
+	// daemon's web.port discovery file — but only while that port actually
+	// listens (resolveCompatUrl); a stale file falls through to the local
+	// bundle, whose renderer boot re-discovers/spawns the daemon via ws.port.
+	const compatUrl = await resolveCompatUrl();
+	// `?shell=1` signals the served renderer to reserve the titlebar
+	// region (titleBarOverlay.height, 48px) so the OS window controls
+	// never sit on content — the desktopWindow frame-overlay contract.
+	const loadLocal = () => mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
 	if (compatUrl) {
-		// `?shell=1` signals the served renderer to reserve the titlebar
-		// region (titleBarOverlay.height, 48px) so the OS window controls
-		// never sit on content — the desktopWindow frame-overlay contract.
-		mainWindow.loadURL(`${compatUrl}?shell=1`);
+		// Defense-in-depth: a listener can die between the liveness probe and
+		// loadURL (or serve a broken page) — never white-screen on it.
+		mainWindow.loadURL(`${compatUrl}?shell=1`).catch(() => {
+			console.error(`[main] compat renderer unreachable (${compatUrl}), loading local bundle`);
+			loadLocal();
+		});
 	} else if (devServer) mainWindow.loadURL(devServer);
-	else mainWindow.loadFile(path.join(DIST_DIR, "index.html"));
+	else loadLocal();
 
 	// Renderer crash (OOM / fatal page error): the WebSocket to the daemon
 	// dies with the renderer, leaving the window dead and the session turn
@@ -2752,7 +2775,7 @@ app.whenReady().then(async () => {
 	// The dist/ build is regenerated frequently in dev — never serve stale
 	// file:// resources (the old Tauri webview cached them and confused us).
 	await session.defaultSession.clearCache();
-	createWindow();
+	await createWindow();
 	// Managed in-app browser (right-pane tool): WebContentsView tabs + the
 	// loopback CDP bridge the browser tool attaches to (browser.gui). The
 	// controller needs the main window as its view owner. Async: the CDP
@@ -2795,7 +2818,7 @@ app.whenReady().then(async () => {
 		// Glow overlays are transparent chrome, not app windows — they
 		// must not count toward "a window is open" on re-activate.
 		const real = BrowserWindow.getAllWindows().filter(w => !glowWindows.has(w));
-		if (real.length === 0) createWindow();
+		if (real.length === 0) void createWindow();
 	});
 });
 
