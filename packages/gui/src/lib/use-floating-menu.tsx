@@ -78,7 +78,7 @@ export function useFloatingMenu(
 	// re-measure effect below).
 	const MENU_ESTIMATED_W = 260;
 	const MENU_ESTIMATED_H = 300;
-	const positionMenu = (): void => {
+	const positionMenu = (resetEntered: boolean): void => {
 		const anchor = anchorOption ?? anchorRef.current;
 		if (!anchor) return;
 		// Point anchors (right-click menus) are a zero-size rect at (x,y);
@@ -108,15 +108,30 @@ export function useFloatingMenu(
 			Math.max(MENU_EDGE_PAD, window.innerWidth - menuW - MENU_EDGE_PAD),
 		);
 		setClosing(false);
-		setEntered(false);
-		setPos({ left, ...(!up ? { top: r.bottom + 6 } : { bottom: window.innerHeight - r.top + 6 }), up });
+		// Entered is reset ONLY on a fresh open (the two-phase enter fades in
+		// from opacity 0). Scroll/resize re-positioning must NOT touch it —
+		// resetting here made menus flicker transparent → glassy on every
+		// scroll tick inside the menu or its scrolling container.
+		if (resetEntered) setEntered(false);
+		const top = !up ? r.bottom + 6 : undefined;
+		const bottom = up ? window.innerHeight - r.top + 6 : undefined;
+		setPos(prev => {
+			// Skip identical positions (scroll inside the menu moves the
+			// anchor's rect not at all; every tick otherwise re-renders the
+			// wrapper AND re-runs the [open,pos] enter effect — churn that
+			// also risks a visible hitch on low-end machines).
+			if (prev?.left === left && prev.top === top && prev.bottom === bottom && prev.up === up) {
+				return prev;
+			}
+			return { left, top, bottom, up };
+		});
 	};
 	useLayoutEffect(() => {
 		if (!open) {
 			measuredRef.current = false;
 			return;
 		}
-		positionMenu();
+		positionMenu(true);
 	}, [open, align]);
 
 	// Re-position on scroll/resize: an anchor inside a scrolling container
@@ -125,10 +140,12 @@ export function useFloatingMenu(
 	// position — the anchor scrolls away and the menu reads as floating
 	// over unrelated content ("被界面挡住" reports). Capture-phase scroll
 	// so container scrolls that don't bubble (overflow-y auto) still fire.
+	// Position updates keep `entered` — resetting it on scroll made menus
+	// flicker on every tick (transparent → glassy re-enter).
 	useEffect(() => {
 		if (!open) return;
-		positionMenu();
-		const onScroll = (): void => positionMenu();
+		positionMenu(false);
+		const onScroll = (): void => positionMenu(false);
 		document.addEventListener("scroll", onScroll, true);
 		window.addEventListener("resize", onScroll);
 		return () => {
@@ -144,7 +161,7 @@ export function useFloatingMenu(
 		if (!open || !pos || measuredRef.current) return;
 		if (!menuRef.current) return;
 		measuredRef.current = true;
-		positionMenu();
+		positionMenu(false);
 	}, [open, pos]);
 
 	// Two-phase enter: paint at opacity 0, then start the fade next frame so
