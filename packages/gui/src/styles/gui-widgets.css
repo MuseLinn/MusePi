@@ -2705,6 +2705,325 @@
 .gui-announcement-body a {
 	color: var(--accent);
 }
+
+/* ---- Reward overlay (campaign ticket card, ZCode Weekend-Build style) ---- */
+/* Frost shell reuses .gui-onboarding-backdrop; the card is a compact
+ * two-section stack: animated star sky + claim panel. Layered transforms:
+ * tilt (--tilt-x/--tilt-y) / idle float / one-shot entrance each live on
+ * their own element so the animations never fight over `transform`. */
+.gui-reward-card {
+	position: relative;
+	z-index: 210;
+	width: min(520px, calc(100vw - 120px));
+	border: 1px solid var(--border);
+	border-radius: 20px;
+	background: var(--bg-raised);
+	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+	overflow: hidden;
+	animation: gui-obo-card-in 240ms var(--spring) both;
+}
+.gui-reward-card.gui-reward-card--closing {
+	animation: gui-obo-card-out 200ms var(--spring) forwards;
+}
+.gui-reward-sky {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 330px;
+	overflow: hidden;
+	perspective: 900px;
+	background:
+		radial-gradient(120% 90% at 50% 118%, rgb(43 74 143 / 0.9) 0%, transparent 55%),
+		radial-gradient(90% 70% at 50% 115%, #16306b 0%, transparent 60%),
+		linear-gradient(180deg, #0a142e 0%, #122452 58%, #1b356e 100%);
+}
+.gui-reward-stars {
+	position: absolute;
+	inset: 0;
+	background-image:
+		radial-gradient(1.4px 1.4px at 12% 24%, rgb(255 255 255 / 0.95) 50%, transparent 51%),
+		radial-gradient(1.1px 1.1px at 28% 64%, rgb(255 255 255 / 0.7) 50%, transparent 51%),
+		radial-gradient(1.6px 1.6px at 41% 18%, rgb(255 255 255 / 0.85) 50%, transparent 51%),
+		radial-gradient(1px 1px at 55% 42%, rgb(255 255 255 / 0.6) 50%, transparent 51%),
+		radial-gradient(1.3px 1.3px at 66% 12%, rgb(255 255 255 / 0.9) 50%, transparent 51%),
+		radial-gradient(1px 1px at 74% 58%, rgb(255 255 255 / 0.65) 50%, transparent 51%),
+		radial-gradient(1.5px 1.5px at 86% 30%, rgb(255 255 255 / 0.85) 50%, transparent 51%),
+		radial-gradient(1px 1px at 93% 70%, rgb(255 255 255 / 0.6) 50%, transparent 51%),
+		radial-gradient(1.2px 1.2px at 20% 84%, rgb(255 255 255 / 0.7) 50%, transparent 51%),
+		radial-gradient(1px 1px at 62% 82%, rgb(255 255 255 / 0.55) 50%, transparent 51%);
+	animation: gui-reward-twinkle 5s ease-in-out infinite alternate;
+}
+@keyframes gui-reward-twinkle {
+	from {
+		opacity: 0.5;
+	}
+	to {
+		opacity: 1;
+	}
+}
+.gui-reward-shoot {
+	position: absolute;
+	top: 22%;
+	left: -14%;
+	width: 130px;
+	height: 1.5px;
+	border-radius: 999px;
+	background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.85));
+	opacity: 0;
+	transform: rotate(-32deg);
+	animation: gui-reward-shoot 7s ease-in infinite;
+}
+.gui-reward-shoot--b {
+	top: 58%;
+	left: -18%;
+	width: 90px;
+	animation-delay: 4.2s;
+}
+@keyframes gui-reward-shoot {
+	0% {
+		transform: translate(0, 0) rotate(-32deg);
+		opacity: 0;
+	}
+	3% {
+		opacity: 0.9;
+	}
+	9% {
+		transform: translate(460px, 280px) rotate(-32deg);
+		opacity: 0;
+	}
+	100% {
+		transform: translate(460px, 280px) rotate(-32deg);
+		opacity: 0;
+	}
+}
+.gui-reward-skybtn {
+	position: absolute;
+	top: 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 9px;
+	color: rgb(255 255 255 / 0.75);
+	background: rgb(255 255 255 / 0.08);
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-reward-skybtn:hover {
+	color: #fff;
+	background: rgb(255 255 255 / 0.16);
+}
+.gui-reward-skybtn--replay {
+	left: 12px;
+}
+.gui-reward-skybtn--close {
+	right: 12px;
+}
+.gui-reward-tilt {
+	transform: rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg));
+	transition: transform 180ms ease-out;
+	transform-style: preserve-3d;
+}
+.gui-reward-float {
+	animation: gui-reward-float 6s ease-in-out 640ms infinite;
+}
+@keyframes gui-reward-float {
+	0%,
+	100% {
+		transform: translateY(0) rotate(0deg);
+	}
+	50% {
+		transform: translateY(-7px) rotate(0.6deg);
+	}
+}
+.gui-reward-ticket {
+	position: relative;
+	width: 340px;
+	max-width: calc(100vw - 200px);
+	padding: 18px 22px 12px;
+	border-radius: 16px;
+	color: #17203a;
+	text-align: left;
+	background: linear-gradient(160deg, #fff 0%, #eef3fd 100%);
+	box-shadow:
+		0 18px 50px rgb(4 12 38 / 0.55),
+		0 2px 8px rgb(4 12 38 / 0.35);
+	animation: gui-reward-ticket-in 640ms cubic-bezier(0.22, 1.4, 0.36, 1) both;
+}
+@keyframes gui-reward-ticket-in {
+	from {
+		opacity: 0;
+		transform: translateY(46px) rotate(-9deg) scale(0.72);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) rotate(0deg) scale(1);
+	}
+}
+.gui-reward-ticket-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.gui-reward-brand {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 15px;
+	font-weight: 800;
+	letter-spacing: 0.02em;
+	color: #101828;
+}
+.gui-reward-logo {
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 6px;
+	background: #101828;
+	font-size: 11px;
+	font-weight: 800;
+	color: #fff;
+}
+.gui-reward-label {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.14em;
+	color: #3e63dd;
+}
+.gui-reward-amount {
+	margin-top: 12px;
+	font-size: 29px;
+	font-weight: 800;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	color: #101828;
+}
+.gui-reward-subtitle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	font-size: 13px;
+	color: #475467;
+}
+/* Ticket stub divider: dashed tear line with side notches punched through
+ * (notch fill matches the sky band behind the card). */
+.gui-reward-divider {
+	position: relative;
+	margin: 14px -22px 0;
+	border-top: 1.5px dashed #cdd6e4;
+}
+.gui-reward-notch {
+	position: absolute;
+	top: -7px;
+	width: 14px;
+	height: 14px;
+	border-radius: 999px;
+	background: var(--reward-notch, #152a58);
+}
+.gui-reward-notch--l {
+	left: -7px;
+}
+.gui-reward-notch--r {
+	right: -7px;
+}
+.gui-reward-expires {
+	padding: 10px 2px 6px;
+	font-size: 11.5px;
+	color: #667085;
+	text-align: center;
+}
+.gui-reward-panel {
+	padding: 16px 22px 20px;
+}
+.gui-reward-success {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+}
+.gui-reward-check {
+	flex-shrink: 0;
+	margin-top: 1px;
+	color: #34c759;
+	animation: gui-reward-check-in 480ms var(--spring) 200ms both;
+}
+@keyframes gui-reward-check-in {
+	from {
+		opacity: 0;
+		transform: scale(0);
+	}
+	70% {
+		transform: scale(1.15);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+.gui-reward-success-title {
+	font-size: 15px;
+	font-weight: 700;
+	color: var(--fg);
+}
+.gui-reward-success-desc {
+	margin-top: 2px;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--fg-muted);
+}
+.gui-reward-primary {
+	width: 100%;
+	height: 40px;
+	margin-top: 16px;
+	border-radius: 12px;
+	font-size: 14px;
+	font-weight: 650;
+	background: var(--fg);
+	color: var(--bg-raised);
+	transition: filter 120ms ease;
+}
+.gui-reward-primary:hover {
+	filter: brightness(1.12);
+}
+.gui-reward-secondary {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	height: 38px;
+	margin-top: 10px;
+	border-radius: 12px;
+	font-size: 13px;
+	color: var(--fg-muted);
+	background: color-mix(in oklab, var(--fg) 7%, transparent);
+	transition: background 120ms ease;
+}
+.gui-reward-secondary:hover {
+	background: color-mix(in oklab, var(--fg) 11%, transparent);
+}
+/* Motion-off / reduced-motion: the sky settles, the ticket sits still. */
+.gui-motion-off .gui-reward-stars,
+.gui-motion-off .gui-reward-shoot,
+.gui-motion-off .gui-reward-float,
+.gui-motion-off .gui-reward-ticket,
+.gui-motion-off .gui-reward-check {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-reward-stars,
+	.gui-reward-shoot,
+	.gui-reward-float,
+	.gui-reward-ticket,
+	.gui-reward-check {
+		animation: none;
+	}
+}
+
 .gui-btn-ghost {
 	background: transparent;
 }

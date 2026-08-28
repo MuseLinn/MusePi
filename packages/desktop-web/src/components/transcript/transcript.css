@@ -1989,29 +1989,26 @@ a.tr-tool-search-title:hover {
 /* ── Session-switch stagger reveal (逐字错峰) ────────────────────────────
  * When ChatView swaps sessions it marks the transcript container with
  * data-switched for ~700ms; rows then fade in one after another so the
- * context swap reads as a transition instead of a hard cut. */
+ * context swap reads as a transition instead of a hard cut.
+ * Timing budget: duration 240ms, tail delay capped at 120ms — the last
+ * row settles ~360ms after the swap. The original 210ms tail + 300ms run
+ * kept half the transcript invisible for half a second on every switch
+ * (user: 切换会话卡顿/延迟感). gui/pet.css carried a conflicting duplicate
+ * ladder of this rule — removed; this file is the single source. */
 .gui-transcript[data-switched="1"] .tr-row,
 .gui-transcript[data-switched="1"] .tr-divider,
 .gui-transcript[data-switched="1"] .tr-marker {
-	animation: tr-switch-in 300ms var(--spring) both;
+	animation: tr-switch-in 240ms var(--spring) both;
 }
 
-.gui-transcript[data-switched="1"] .tr-row:nth-child(1) { animation-delay: 0ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(2) { animation-delay: 14ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(3) { animation-delay: 28ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(4) { animation-delay: 42ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(5) { animation-delay: 56ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(6) { animation-delay: 70ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(7) { animation-delay: 84ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(8) { animation-delay: 98ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(9) { animation-delay: 112ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(10) { animation-delay: 126ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(11) { animation-delay: 140ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(12) { animation-delay: 154ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(13) { animation-delay: 168ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(14) { animation-delay: 182ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(15) { animation-delay: 196ms; }
-.gui-transcript[data-switched="1"] .tr-row:nth-child(n + 16) { animation-delay: 210ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(2) { animation-delay: 15ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(3) { animation-delay: 30ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(4) { animation-delay: 45ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(5) { animation-delay: 60ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(6) { animation-delay: 75ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(7) { animation-delay: 90ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(8) { animation-delay: 105ms; }
+.gui-transcript[data-switched="1"] .tr-row:nth-child(n + 9) { animation-delay: 120ms; }
 
 @keyframes tr-switch-in {
 	from {
@@ -2021,6 +2018,20 @@ a.tr-tool-search-title:hover {
 	to {
 		opacity: 1;
 		transform: none;
+	}
+}
+
+/* Motion-off / reduced-motion: the swap lands instantly. */
+.gui-motion-off .gui-transcript[data-switched="1"] .tr-row,
+.gui-motion-off .gui-transcript[data-switched="1"] .tr-divider,
+.gui-motion-off .gui-transcript[data-switched="1"] .tr-marker {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-transcript[data-switched="1"] .tr-row,
+	.gui-transcript[data-switched="1"] .tr-divider,
+	.gui-transcript[data-switched="1"] .tr-marker {
+		animation: none;
 	}
 }
 
@@ -2964,4 +2975,19 @@ a.tr-tool-search-title:hover {
 		transform: translateY(0);
 		filter: blur(0);
 	}
+}
+
+/* Jump flash (message tree / trajectory / canvas jumps): the jumped-to
+ * row pulses once so the landing spot reads instantly in long sessions. */
+@keyframes tr-flash-highlight {
+	0% {
+		background: color-mix(in oklab, var(--color-accent, #4f7cff) 22%, transparent);
+	}
+	100% {
+		background: transparent;
+	}
+}
+.tr-flash-highlight {
+	animation: tr-flash-highlight 1.3s ease-out;
+	border-radius: 8px;
 }

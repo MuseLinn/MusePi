@@ -29,9 +29,16 @@ import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
 import { CompatSlotHost } from "./lib/compat-slot-host";
 import { HostClient } from "./lib/host-client";
+import { enableNativeGlass } from "./lib/native-glass";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
 import "./components/shell/shell.css";
+
+// Compat shell + Electron bridge → opt the served renderer into the native
+// window glass (transparent root + translucent shell scrims + material
+// mirroring). Runs at import time so the first paint is already glass —
+// a plain-browser guest no-ops (no bridge, no marker).
+enableNativeGlass();
 
 const NAME_KEY = "omp.collab.name";
 

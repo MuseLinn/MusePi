@@ -5,6 +5,7 @@ import { composer } from "./composer.js";
 import { context } from "./context.js";
 import { general } from "./general.js";
 import { guest } from "./guest.js";
+import { reward } from "./reward.js";
 import { sessions } from "./sessions.js";
 import { settings } from "./settings.js";
 import { shell } from "./shell.js";
@@ -30,6 +31,7 @@ export const zhCN = {
 	...companion,
 	...general,
 	...guest,
+	...reward,
 } as const;
 
 // Module-load duplicate guard: a key landing in two domains silently
@@ -49,6 +51,7 @@ export const zhCN = {
 		companion,
 		general,
 		guest,
+		reward,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {

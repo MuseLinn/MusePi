@@ -74,6 +74,16 @@ musepi --version
 - `--source` — 强制用 Bun 安装（缺 Bun 则自动装）
 - `--ref <tag|commit|branch>` — 固定某个版本（source 模式）
 
+## 下载（三种形态）
+
+| 形态 | 获取方式 |
+|---|---|
+| 🖥️ **桌面客户端**（Electron GUI，应用内自动更新） | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — 到 [Release 页](https://github.com/MuseLinn/MusePi/releases) 取对应版本资产 |
+| 📱 **Android 移动伴侣**（Capacitor，局域网配对） | [Release 页](https://github.com/MuseLinn/MusePi/releases) 的 `app-debug.apk`（`adb install -r app-debug.apk`） |
+| ⌨️ **终端 TUI** | `npm i -g @musepi/pi-coding-agent` 后运行 `musepi` —— 或用上方 curl 安装脚本 |
+
+官网：<https://muselinn.github.io/MusePi/>（双语，含三种形态的下载指引）。
+
 ### 开发模式
 
 需要 **Bun ≥ 1.3.14**（macOS 为主要开发平台；Rust 工具链用于 natives 构建）。

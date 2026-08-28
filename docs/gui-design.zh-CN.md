@@ -235,6 +235,13 @@
 - **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4)——`docs/ota-update-design.md`;toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
 - **双语文档约定**(`docs/i18n/README.md`):范围内 `docs/**` 每个 markdown 成对 `foo.md` + `foo.zh-CN.md` + `foo.i18n.yaml`(blob 哈希一致性记录);标题后语言切换行(`English | [中文](foo.zh-CN.md)` / `[English](foo.md) | 中文`);`bun run verify-translation-pairing` 执行(`--write` 记录哈希,具名 pair 严格校验);两语言地位平等、结构镜像。
 
+## 5h. 吸收轮增补(2026-08-29)
+
+- **浮动状态卡**(会话右上角,ZCode 悬浮卡对齐):紧凑磨砂启动卡(Git / 智能体 / 待办),248px 宽,`gui-menu-in` 入场;可折叠为细药丸(持久化 `musepi-gui-status-cards`);全部为空时整栈消失——不为空闲会话装饰。点击穿透打开对应 surface;除分支切换器外不复刻 surface 内部 UI。
+- **奖励票券弹窗**(活动版 what's-new 形态):星空 + 3D 倾斜漂浮票券,变换分层(tilt / float / entrance 各在独立元素——每个 `transform` 只有一个动画源);数额 CountUp 滚动;`gui-motion-off`/`prefers-reduced-motion` 下全部静止。领取反馈耦合完成音效。
+- **右侧面板最大化**是模态:遮罩(z-840,自 48px 头栏之下起,点击还原)垫在 z-850 面板之后——浮动 fixed 层(浮层滚动条、tooltip)必须低于遮罩层,否则会被读成面板内容。
+- **Git 图谱表格**(提交历史子标签):车道求解 SVG 图轨 + 徽章(HEAD=home/强调色,本地分支=branch,远端=cloud/弱化,tag=琥珀) + 日期/作者/哈希列;点击哈希复制,1.2s 反馈。会话级 i18n key 在 settings 域(`subject/date/author/commit column`、`load more`)。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/gui/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

@@ -753,6 +753,7 @@
 
 /* ── Round 6: compact group/project tab strip + project remove ─────── */
 .gui-tabstrip-capsule {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	gap: 2px;
@@ -765,6 +766,42 @@
 	background: transparent;
 	flex: 0 1 auto;
 	min-width: 0;
+}
+
+/* Sliding highlight (分组/项目 segmented control): one thumb translates
+ * behind the active pill instead of two backgrounds fading — the switch
+ * reads as motion, not a swap. Both pills are fixed-width so the thumb
+ * geometry is deterministic: width = pill width (50% − padding/gap),
+ * projects shifts by one pill + the 2px gap. */
+.gui-tab-thumb {
+	position: absolute;
+	top: 2px;
+	bottom: 2px;
+	left: 2px;
+	width: calc(50% - 3px);
+	border-radius: 999px;
+	background: var(--color-surface-raised);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+	transition: transform 200ms var(--spring);
+}
+.gui-tabstrip-capsule[data-tab="projects"] .gui-tab-thumb {
+	transform: translateX(calc(100% + 2px));
+}
+/* The thumb IS the active fill in the capsule — the pill keeps only the
+ * text-color emphasis (base .gui-tab-pill--active fill stays for other
+ * users of the class, e.g. the composer). */
+.gui-tabstrip-capsule .gui-tab-pill {
+	position: relative;
+	z-index: 1;
+}
+.gui-tabstrip-capsule .gui-tab-pill--active {
+	background: transparent;
+	box-shadow: none;
+}
+/* Sidebar list pane swap (groups ↔ projects ↔ archive): quick fade so the
+ * content replacement follows the thumb instead of popping. */
+.gui-tab-pane-in {
+	animation: gui-fade-in 160ms ease;
 }
 
 .gui-tab-pill--fixed {
@@ -1192,6 +1229,18 @@
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	color: var(--color-accent);
 	font-weight: 600;
+}
+/* Load-failed badge + dot (dsh PluginInventory failed phase parity):
+ * a broken extension is visible in the LIST, not only its detail pane. */
+.gui-ext-item-tag--err {
+	border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+	color: var(--color-danger);
+	font-weight: 600;
+}
+.gui-ext-dot--error {
+	background: var(--color-danger);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-danger) 22%, transparent);
 }
 .gui-ext-item-ops {
 	display: none;
@@ -2145,6 +2194,14 @@
 }
 .stc-node--active.stc-node--leaf {
 	border-color: var(--color-accent);
+}
+/* Current-position marker: when tail-following (leafId null) the deepest
+ * active-path node carries a dashed accent ring — the map keeps a "我在哪"
+ * anchor, and the zoom stack's target button centers back onto it. */
+.stc-node--current {
+	border-color: var(--color-accent);
+	border-style: dashed;
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 .stc-node--active .stc-node-text {
 	color: var(--color-text);

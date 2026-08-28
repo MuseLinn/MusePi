@@ -141,6 +141,34 @@
 		var(--color-bg);
 }
 
+/* ---- native glass (Electron compat shell) ----
+ * The served renderer runs inside the SAME acrylic/vibrancy window the gui
+ * uses — but base.css paints html/body with opaque --bg and .sh-app with
+ * solid --color-bg, so the sidebar, top bar and the area around the main
+ * card never showed the frost. Under `.sh-native-glass` (set by
+ * lib/native-glass.ts — compat marker + Electron bridge only; plain
+ * browsers keep the opaque paint) the root goes clear and the shell scrims
+ * thin out so the OS material reads through. */
+.sh-native-glass,
+.sh-native-glass body {
+	background: transparent;
+}
+.sh-native-glass .sh-app {
+	background:
+		radial-gradient(120% 90% at 50% 0%, color-mix(in oklab, var(--color-accent) 6%, transparent) 0%, transparent 55%),
+		radial-gradient(80% 60% at 85% 100%, color-mix(in oklab, var(--color-accent) 4%, transparent) 0%, transparent 50%),
+		color-mix(in oklab, var(--color-bg) 38%, transparent);
+}
+/* Header/rail mixes drop from ~80% to ~45% — the window material supplies
+ * the blur; the scrims only tint (gui win32 recipe: page blur samples the
+ * page, not the OS material, so heavy CSS blur is dead weight here). */
+.sh-native-glass .sh-header {
+	background: color-mix(in oklab, var(--bg) 45%, transparent);
+}
+.sh-native-glass .sh-rail {
+	background: color-mix(in oklab, var(--bg) 45%, transparent);
+}
+
 .sh-main {
 	display: flex;
 	min-height: 0;

@@ -12,6 +12,7 @@ export function SchemaTabSection({
 	tabs,
 	groups,
 	excludeGroups,
+	excludeKeys,
 }: {
 	rpc: RpcClient | null;
 	tabs: string[];
@@ -23,6 +24,10 @@ export function SchemaTabSection({
 	 * when no `groups` include filter is set (e.g. interaction tab
 	 * excludes "Speech" so it only lives on the voice tab). */
 	excludeGroups?: readonly string[];
+	/** Optional key exclude: individual settings keys are skipped even when
+	 * their group renders (e.g. the tools tab excludes `computer.glow` —
+	 * the browser & desktop tab owns a live-apply custom row for it). */
+	excludeKeys?: readonly string[];
 }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -40,8 +45,9 @@ export function SchemaTabSection({
 					: excludeGroups
 						? all.filter(i => i.ui?.group === undefined || !excludeGroups.includes(i.ui.group))
 						: all;
-				setSchema(items);
-				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: items.map(i => i.key) });
+				const filtered = excludeKeys ? items.filter(i => !excludeKeys.includes(i.key)) : items;
+				setSchema(filtered);
+				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: filtered.map(i => i.key) });
 				if (alive) {
 					setValues(vals ?? {});
 					setError(null);
@@ -51,7 +57,7 @@ export function SchemaTabSection({
 		return () => {
 			alive = false;
 		};
-	}, [rpc, tabs, groups]);
+	}, [rpc, tabs, groups, excludeGroups, excludeKeys]);
 	const onChange = (key: string, value: unknown): void => {
 		if (!rpc) return;
 		// Optimistic flip; revert on failure.

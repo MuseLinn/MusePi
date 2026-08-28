@@ -37,6 +37,9 @@ function kindLabel(kind: string): string {
 }
 
 function stateLabel(e: ExtensionItem): string {
+	// Load failure is the winning phase (dsh PluginInventory parity): the
+	// item may nominally be "active" in config but nothing registered.
+	if (e.loadError) return t("ext load failed");
 	if (e.state === "active") return t("extension active");
 	if (e.state === "shadowed") return t("ext shadowed");
 	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
@@ -502,9 +505,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																			}}
 																		>
 																			<span
-																				className={`gui-ext-dot${e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+																				className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 																			/>
 																			<span className="min-w-0 flex-1 truncate">{e.name}</span>
+																			{e.loadError && (
+																				<span className="gui-ext-item-tag gui-ext-item-tag--err">
+																					{t("ext load failed")}
+																				</span>
+																			)}
 																			{isGuiKind(e) && (
 																				<span className="gui-ext-item-tag gui-ext-item-tag--gui">
 																					GUI
@@ -573,9 +581,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 													onClick={() => setSelectedId(e.id)}
 												>
 													<span
-														className={`gui-ext-dot${e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+														className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 													/>
 													<span className="min-w-0 flex-1 truncate">{e.name}</span>
+													{e.loadError && (
+														<span className="gui-ext-item-tag gui-ext-item-tag--err">
+															{t("ext load failed")}
+														</span>
+													)}
 												</div>
 											))}
 										</div>

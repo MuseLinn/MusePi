@@ -1,30 +1,77 @@
 ---
 layout: default
-title: MusePi
+title: MusePi — 桌面优先的 AI 编程助手
 lang: zh-CN
+en_url: /MusePi/
 ---
 
 <section class="mp-hero">
-  <h1>MusePi</h1>
-  <p class="mp-tagline">
-    桌面优先的 AI 编程助手——Electron 桌面 GUI、常驻桌宠、移动端伴侣与 daemon 服务，
-    构建于 oh-my-pi agent 引擎之上。中文优先、磨砂玻璃、键盘驱动。
-  </p>
-  <p class="mp-lang">[English](index.md) | 中文</p>
-  <div class="mp-cta-row">
-    <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases">下载 v0.4.4 →</a>
-    <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
-  </div>
-  <div class="mp-version">
-    <span class="mp-pulse" aria-hidden="true"></span>
-    <span class="mp-version-tag">v0.4.4</span>
-    <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
+  <div class="mp-hero-grid">
+    <div class="mp-hero-copy">
+      <p class="mp-kicker">桌面优先的 AI 编程助手</p>
+      <h1>MusePi</h1>
+      <p class="mp-tagline">
+        Electron 桌面 GUI、常驻桌宠、Android 移动伴侣与 daemon 服务，构建于
+        oh-my-pi agent 引擎之上。中文优先、磨砂玻璃、键盘驱动。
+      </p>
+      <div class="mp-cta-row">
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-latest-release>下载桌面客户端</a>
+        <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
+      </div>
+      <div class="mp-version">
+        <span class="mp-pulse" aria-hidden="true"></span>
+        <span class="mp-version-tag" data-release-version>v0.4.6</span>
+        <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
+      </div>
+    </div>
+    <div class="mp-hero-mark" aria-hidden="true">
+      <canvas class="mp-dots"></canvas>
+      <p class="mp-hero-mark-note">π — 点阵品牌标记，页面实时绘制</p>
+    </div>
   </div>
   <div class="mp-hero-code">
-    <span class="mp-cmd">bun run setup</span><br>
-    <span class="mp-cmd">bun run musepi</span>                <span style="opacity:.5"># 终端 TUI</span><br>
-    <span class="mp-cmd">bun --cwd=packages/gui run desktop</span>  <span style="opacity:.5"># 桌面 GUI</span>
+<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>   <span class="mp-c"># 终端 TUI → musepi</span>
+<span class="mp-cmd">bun run setup &amp;&amp; bun run musepi</span>    <span class="mp-c"># 从源码运行</span></pre>
   </div>
+</section>
+
+<section class="mp-section mp-reveal" id="download">
+  <h2>下载</h2>
+  <p class="mp-section-desc">三种运行形态，按场景选择：桌面客户端为正式 tag 发布（应用内自动更新）；
+  TUI 来自 npm；Android 与桌面 daemon 局域网配对。</p>
+  <div class="mp-dl-grid">
+    <div class="mp-dl-card">
+      <div class="mp-dl-icon" aria-hidden="true">🖥️</div>
+      <h3>桌面客户端</h3>
+      <p class="mp-dl-sub">Electron GUI · 磨砂玻璃窗口 · 自动更新</p>
+      <ul class="mp-dl-list">
+        <li><a data-asset="MusePi-{v}-arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
+        <li><a data-asset="MusePi-{v}-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
+        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage / .deb</a></li>
+      </ul>
+    </div>
+    <div class="mp-dl-card">
+      <div class="mp-dl-icon" aria-hidden="true">📱</div>
+      <h3>Android 移动伴侣</h3>
+      <p class="mp-dl-sub">Capacitor 应用 · 局域网配对 · 远程控制</p>
+      <ul class="mp-dl-list">
+        <li><a data-asset="app-debug.apk" href="https://github.com/MuseLinn/MusePi/releases/latest">Android arm64 — .apk</a></li>
+        <li><a href="https://github.com/MuseLinn/MusePi/tree/main/packages/mobile">从源码构建（Capacitor）</a></li>
+      </ul>
+    </div>
+    <div class="mp-dl-card">
+      <div class="mp-dl-icon" aria-hidden="true">⌨️</div>
+      <h3>终端 TUI</h3>
+      <p class="mp-dl-sub">完整的 agent 能力面，就在你的终端里</p>
+      <div class="mp-hero-code mp-hero-code--tight">
+<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>
+<span class="mp-cmd">musepi</span></pre>
+      </div>
+      <p class="mp-dl-sub">需要 Node ≥ 22 或 Bun。与桌面端共享会话、daemon 与设置。</p>
+    </div>
+  </div>
+  <p class="mp-dl-note">每个 release 都附带 <code>update-manifest.json</code> 供应用内自动更新；
+  beta 渠道构建以 <a href="https://github.com/MuseLinn/MusePi/releases">预发布</a> 形式发布。</p>
 </section>
 
 <section class="mp-section mp-reveal" id="features">
@@ -32,42 +79,32 @@ lang: zh-CN
   <div class="mp-grid">
     <div class="mp-card">
       <h3><span class="mp-dot"></span>桌面 GUI</h3>
-      <p>三栏布局、磨砂玻璃 vibrancy 窗口、三轴设计 token（主题 / 强调色 / 密度），
-        完整 TUI 命令面全部接入。</p>
+      <p>三栏布局、真实磨砂玻璃窗口材质（Win11 acrylic / macOS vibrancy）、对话 ↔
+         会话树地图双表面、右上浮动状态卡，全部 TUI 设置合并进可搜索的设置面板。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>常驻桌宠</h3>
-      <p>动画伙伴（petdex 帧包），支持拖拽定位、点击穿透、悬停交互与任务气泡——
-        一眼看清 agent 状态。</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Daemon 架构</h3>
-      <p>WebSocket 上的 JSON-RPC。会话经 journal + materialized view 持久化，
-        空闲会话快照为历史，daemon 在 GUI 退出后继续存活。</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>全部设置</h3>
-      <p>TUI 的 336 项设置全部并入桌面面板（schema 驱动、同一事实源），
-        可搜索到单个设置行。</p>
+      <h3><span class="mp-dot"></span>会话即树</h3>
+      <p>每条消息携带父节点——任意节点可分支、分叉、撤回、重答。画布地图绘制整棵对话
+         DAG，轨迹面板把同一棵树投影成时间线。</p>
     </div>
     <div class="mp-card">
       <h3><span class="mp-dot"></span>Agent 引擎</h3>
-      <p>40+ LLM 供应商、32 个内置工具、LSP/DAP 接线、任务子智能体、hashline、
-        hindsight、ACP、collab 共享。</p>
+      <p>40+ 模型供应商，内置生图（多 provider 自动回退）与生视频工具，浏览器 +
+         computer-use 工具，LSP/DAP，任务子智能体，ACP，魔法关键词。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>看板与组件</h3>
-      <p>实时看板，窗口自适应画布 + ChromaGrid 式组辉光；自定义 HTML 组件支持主题热切换。</p>
+      <h3><span class="mp-dot"></span>扩展生态</h3>
+      <p>双扩展中心（OMP Extension Packages + MusePi Extensions）：槽位组件、工具视图、
+         RPC、技能、主题、动效包——daemon 监听扩展目录，改动热生效。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>移动端伴侣</h3>
-      <p>Capacitor Android 应用经局域网配对桌面 daemon——QR 加入、会话归档、
-        点阵绽放三合一发送、盲文工作指示。PWA 离线壳 + HarmonyOS WebView 壳。</p>
+      <h3><span class="mp-dot"></span>常驻桌宠</h3>
+      <p>可拖拽、可点击穿透的动画伴侣，悬停互动 + 任务气泡——agent 状态一眼可见。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>远程与分支</h3>
-      <p>访客远程管理会话、中止运行中的回合（E2E 加密 collab）。撤回 = branchAt 树跳转
-        带动画撤销坞；/btw 晋升为分支会话；plan 批准即压缩保持上下文精简。</p>
+      <h3><span class="mp-dot"></span>远程与移动</h3>
+      <p>协作者可远程管理会话、终止运行中的回合（端到端加密）；Android 伴侣扫码经
+         局域网配对，三合一发送栏随时追加输入。</p>
     </div>
   </div>
 </section>
@@ -76,40 +113,41 @@ lang: zh-CN
   <h2>界面</h2>
   <div class="mp-shots">
     <figure class="mp-shot">
-      <img src="{{ '/assets/../docs/screenshots/gui-welcome.png' | relative_url }}" alt="欢迎页">
-      <figcaption>欢迎页——点阵品牌背景</figcaption>
+      <img src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="欢迎页" loading="lazy">
+      <figcaption>欢迎页 — 点阵品牌背景、时段问候</figcaption>
     </figure>
     <figure class="mp-shot">
-      <img src="{{ '/assets/../docs/screenshots/gui-session.png' | relative_url }}" alt="会话">
-      <figcaption>会话——bash 卡片、转录、上下文圆环</figcaption>
+      <img src="{{ '/docs/screenshots/gui-session.png' | relative_url }}" alt="会话" loading="lazy">
+      <figcaption>会话 — 转写、上下文环、浮动状态卡</figcaption>
     </figure>
     <figure class="mp-shot">
-      <img src="{{ '/assets/../docs/screenshots/gui-settings.png' | relative_url }}" alt="设置">
-      <figcaption>设置——336 项 TUI 设置，可搜索</figcaption>
+      <img src="{{ '/docs/screenshots/gui-settings.png' | relative_url }}" alt="设置" loading="lazy">
+      <figcaption>设置 — 全部 TUI 设置，可搜索、分组呈现</figcaption>
     </figure>
   </div>
 </section>
 
 <section class="mp-section mp-reveal" id="quick-start">
-  <h2>快速开始</h2>
+  <h2>快速开始（源码）</h2>
   <div class="mp-quick">
-<pre><span class="mp-cmd">bun run setup</span>                  # 安装 + natives + link
-<span class="mp-cmd">bun run musepi</span>                 # 终端 TUI
-<span class="mp-cmd">bun --cwd=packages/coding-agent src/cli.ts serve --port 8300</span>   # daemon
-<span class="mp-cmd">bun --cwd=packages/gui run desktop</span>        # 桌面 GUI</pre>
+<pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
+<span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># 安装 + 原生依赖 + 链接</span>
+<span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># 终端 TUI</span>
+<span class="mp-cmd">bun --cwd=packages/gui run desktop</span>   <span class="mp-c"># 桌面 GUI</span></pre>
   </div>
-  <p style="color:var(--text-muted);font-size:14px">完整指南见 <a href="{{ 'README.zh-CN.md' | relative_url }}">README.zh-CN.md</a>。</p>
+  <p class="mp-note">完整指南见 <a href="{{ 'README.zh-CN.md' | relative_url }}">README.zh-CN.md</a> —
+  daemon 架构、供应商配置、移动端构建、协作共享。</p>
 </section>
 
 <section class="mp-section mp-reveal">
   <h2>文档</h2>
   <ul class="mp-docs">
-    <li><a href="{{ 'docs/gui-design.md' | relative_url }}">GUI 设计规范——布局 / token / 动效 / 组件</a></li>
-    <li><a href="{{ 'docs/mobile-design.md' | relative_url }}">移动端设计规范——界面 / 动效 / 原生 chrome</a></li>
-    <li><a href="{{ 'docs/gui-implementation.md' | relative_url }}">GUI 实现笔记——daemon RPC 形状、坑、验证</a></li>
-    <li><a href="{{ 'docs/widget-design-system.md' | relative_url }}">组件设计系统</a></li>
-    <li><a href="{{ 'docs/board-dashboard.md' | relative_url }}">看板</a></li>
-    <li><a href="{{ 'docs/collab.md' | relative_url }}">Collab 共享（LAN / 隧道 / Tailscale）</a></li>
-    <li><a href="{{ 'UPSTREAM.md' | relative_url }}">上游同步跟踪</a></li>
+    <li><a href="{{ 'docs/gui-design.md' | relative_url }}">GUI 设计规范 — 布局 / 令牌 / 动效 / 组件</a></li>
+    <li><a href="{{ 'docs/gui-implementation.md' | relative_url }}">GUI 实现 — daemon RPC 契约、坑位、验证</a></li>
+    <li><a href="{{ 'docs/mobile-design.md' | relative_url }}">移动端设计规范 — 屏幕 / 动效 / 原生框架</a></li>
+    <li><a href="{{ 'docs/plugin-design.md' | relative_url }}">插件化设计 — MusePi 插件化（pi ↔ dsh 接缝映射）</a></li>
+    <li><a href="{{ 'docs/extensions-dev.md' | relative_url }}">扩展开发 — 槽位 / HMR / API</a></li>
+    <li><a href="{{ 'docs/board-dashboard.md' | relative_url }}">看板与组件设计系统</a></li>
+    <li><a href="{{ 'UPSTREAM.md' | relative_url }}">上游同步追踪</a></li>
   </ul>
 </section>

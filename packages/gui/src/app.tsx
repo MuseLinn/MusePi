@@ -288,6 +288,17 @@ function AppInner(): ReactNode {
 			clearTimeout(id);
 		};
 	}, [error]);
+	// Shared in-app error toast: WelcomeComposer's branch checkout (and any
+	// other pane far from the banner) dispatches `musepi-gui-toast` — route
+	// it into the same banner instead of dropping it (was listener-less).
+	useEffect(() => {
+		const onToast = (e: Event): void => {
+			const detail = (e as CustomEvent<string>).detail;
+			if (typeof detail === "string" && detail) setError(detail);
+		};
+		window.addEventListener("musepi-gui-toast", onToast);
+		return () => window.removeEventListener("musepi-gui-toast", onToast);
+	}, []);
 	const [tree, setTree] = useState<SessionListNode[]>([]);
 	// Sessions with an undismissed completion (pet badge + persistent
 	// bubble + sidebar 未读 marker + welcome reminders panel) — cleared
@@ -364,7 +375,7 @@ function AppInner(): ReactNode {
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
 	// Session-open loading overlay (React-Bits-style skeleton): armed by
-	// openSession with a 150ms flicker threshold, cleared when the store
+	// openSession with a 250ms flicker threshold, cleared when the store
 	// lands (or the open fails). MUST sit above the booting/connect early
 	// returns below — a hook after them is skipped by the splash/connect
 	// renders and throws "Rendered more hooks than during the previous
@@ -1271,7 +1282,7 @@ function AppInner(): ReactNode {
 			// a cold open — show the skeleton only when the wait actually
 			// exceeds the flicker threshold, clear it when the store lands.
 			if (sessionLoadingTimerRef.current !== null) clearTimeout(sessionLoadingTimerRef.current);
-			sessionLoadingTimerRef.current = setTimeout(() => setSessionLoading(true), 150);
+			sessionLoadingTimerRef.current = setTimeout(() => setSessionLoading(true), 250);
 			setUnreadSessions(prev => {
 				if (!prev.has(sessionId)) return prev;
 				const next = new Set(prev);

@@ -525,7 +525,11 @@ export function SessionSidebar({
 				 * item padding), and ml-auto on the cluster mirrors the shortcut
 				 * symbols' right edge — both scale with pane width. */}
 				<div className="gui-tabstrip mx-5 mt-3 flex items-center">
-					<div className="gui-tabstrip-capsule">
+					{/* Sliding thumb: the capsule tracks the active tab with one
+					 * translating highlight (both pills are fixed-width, so the
+					 * thumb position is deterministic — no measuring). */}
+					<div className="gui-tabstrip-capsule" data-tab={tab}>
+						<span className="gui-tab-thumb" aria-hidden />
 						<button
 							type="button"
 							className={`gui-tab-pill gui-tab-pill--fixed${tab === "groups" ? " gui-tab-pill--active" : ""}`}
@@ -717,7 +721,11 @@ export function SessionSidebar({
 					</div>
 					<div
 						ref={sessionListRef}
-						className="gui-sessions-list min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
+						/* Keyed by view so a groups↔projects (or archive) switch
+						 * remounts the pane with the fade-in — the swap reads as a
+						 * transition instead of an instant content replacement. */
+						key={archivedView ? "archived" : tab}
+						className="gui-sessions-list gui-tab-pane-in min-h-0 flex-1 overflow-y-auto px-1.5 pb-2"
 						data-top-scroll="false"
 						data-bottom-scroll="false"
 					>

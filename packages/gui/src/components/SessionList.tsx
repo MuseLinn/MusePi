@@ -107,22 +107,26 @@ export function SessionList({
 	/** User-assigned status TAG per session id (ContextMenu #完成/#中断/
 	 *  #错误…) — persisted locally, wins over the derived status. */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
-	/** Row order: "statusTime" (default) pins working, then unread
-	 *  sessions to the top and sorts the rest newest-first; "none"
-	 *  preserves the caller's order (groups keep manual drag-reorder
-	 *  order below their own status pins). */
+	/** Row order: "statusTime" (default) sorts by last-activity, newest
+	 *  first (working/unread are visual row markers only — they must not
+	 *  reorder rows under the cursor, see note above); "none" preserves the
+	 *  caller's order (groups keep manual drag-reorder order). */
 	sort?: "statusTime" | "none";
 }): ReactNode {
 	// Hierarchical sort FIRST (roots + each sibling group by last-activity,
-	// with the working/unread rank as a primary key within each group), THEN
-	// flatten. Sorting the flattened array instead would scatter forked
-	// children out of their parent subtrees and reshuffle on every poll.
+	// with a stable id tiebreak), THEN flatten. Sorting the flattened array
+	// instead would scatter forked children out of their parent subtrees and
+	// reshuffle on every poll.
+	//
+	// ⚠️ NO working/unread rank here (was `working?2:0 + unread?1:0` as the
+	// primary key): both flags flip as a DIRECT result of clicking a row —
+	// opening clears the unread mark, leaving drops `working` — so the row
+	// under the cursor jumped up/down on every switch (user: 点击切换会话时
+	// 排序跳动). Order is purely last-activity; working/unread stay as
+	// visual-only row indicators (pulse dot, bold title).
 	const ordered =
 		sort !== "none"
 			? sortSessionTree(nodes, (a, b) => {
-					const rank = (id: string): number => (workingIds?.has(id) ? 2 : 0) + (unread?.has(id) ? 1 : 0);
-					const rDelta = rank(b.entry.id) - rank(a.entry.id);
-					if (rDelta !== 0) return rDelta;
 					return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
 				})
 			: nodes;

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ page.lang | default: site.lang | default: 'en' }}">
+<html lang="{% if page.lang == 'zh-CN' %}zh-CN{% else %}en{% endif %}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -8,36 +8,36 @@
   <meta property="og:title" content="{{ page.title | default: site.title }}">
   <meta property="og:description" content="{{ site.description }}">
   <meta property="og:image" content="{{ '/assets/hero.png' | absolute_url }}">
+  <meta name="theme-color" content="#0d0d0f">
   <link rel="icon" type="image/svg+xml" href="{{ '/assets/icon.svg' | relative_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/main.css' | relative_url }}">
 </head>
 <body>
-  <div class="mp-bg" aria-hidden="true"></div>
+  <div class="mp-bg" aria-hidden="true">
+    <div class="mp-bg-glow mp-bg-glow--a"></div>
+    <div class="mp-bg-glow mp-bg-glow--b"></div>
+  </div>
   <div class="mp-wrap">
     <header class="mp-topbar">
       <a class="mp-brand" href="{{ '/' | relative_url }}">
-        <img src="{{ '/assets/icon.svg' | relative_url }}" alt="MusePi" width="22" height="16">
+        <span class="mp-brand-pi" aria-hidden="true">π</span>
         <span>MusePi</span>
       </a>
       <nav class="mp-nav">
         {% if page.lang == 'zh-CN' %}
         <a href="#features">特性</a>
+        <a href="#download">下载</a>
         <a href="#screens">界面</a>
         <a href="{{ '/docs/' | relative_url }}">文档</a>
         <a href="#quick-start">快速开始</a>
+        <a class="mp-lang-link" href="{{ page.en_url | default: '/' | relative_url }}" hreflang="en">EN</a>
         {% else %}
         <a href="#features">Features</a>
+        <a href="#download">Download</a>
         <a href="#screens">Screens</a>
         <a href="{{ '/docs/' | relative_url }}">Docs</a>
-        <a href="#quick-start">Quick Start</a>
-        {% endif %}
-        {% if page.lang == 'zh-CN' %}
-        <a class="mp-lang-link" href="{{ page.url | replace: '.zh-CN.html', '.html' | relative_url }}">English</a>
-        {% else %}
-        {% assign zh_url = page.url | replace: '.html', '.zh-CN.html' %}
-        {% assign zh_exists = false %}
-        {% for p in site.pages %}{% if p.url == zh_url %}{% assign zh_exists = true %}{% endif %}{% endfor %}
-        {% if zh_exists %}<a class="mp-lang-link" href="{{ zh_url | relative_url }}">中文</a>{% endif %}
+        <a href="#quick-start">Quick start</a>
+        <a class="mp-lang-link" href="{{ page.zh_url | default: '/' | relative_url }}" hreflang="zh-CN">中文</a>
         {% endif %}
       </nav>
     </header>
@@ -47,32 +47,124 @@
     </main>
 
     <footer class="mp-footer">
-      {% if page.lang == 'zh-CN' %}
-      <span>MusePi —— 桌面优先的 AI 编程助手 · 派生自 <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
-      {% else %}
-      <span>MusePi — desktop-first AI coding agent · fork of <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a></span>
-      {% endif %}
+      <div class="mp-footer-row">
+        <span>© {{ "now" | date: "%Y" }} MusePi · <a href="https://github.com/MuseLinn/MusePi">GitHub</a></span>
+        <span class="mp-footer-links">
+          <a href="https://github.com/MuseLinn/MusePi/releases">Releases</a> ·
+          <a href="https://github.com/MuseLinn/MusePi/issues">Issues</a> ·
+          <a href="{{ '/docs/' | relative_url }}">Docs</a>
+        </span>
+      </div>
+      <p class="mp-footer-note">{% if page.lang == 'zh-CN' %}构建于 <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> 之上 · 桌面优先的 AI 编程助手{% else %}Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · a desktop-first AI coding agent{% endif %}</p>
     </footer>
   </div>
+
   <script>
-    // Scroll-reveal (GUI Reveal parity: 240ms ease + 160ms fade, opacity-only —
-    // no transform keyframes so static transforms survive). Elements opt in via
-    // class="mp-reveal"; reduced-motion users see everything immediately.
-    (function () {
-      document.body.classList.add("mp-js");
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-      var els = document.querySelectorAll(".mp-reveal");
-      if (!els.length || !("IntersectionObserver" in window)) return;
+  (function () {
+    "use strict";
+
+    /* ── Scroll reveal (GUI Reveal parity; motion-off renders instantly) ── */
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var revealables = document.querySelectorAll(".mp-reveal");
+    if (reduced || !("IntersectionObserver" in window)) {
+      revealables.forEach(function (el) { el.classList.add("mp-reveal-in"); });
+    } else {
       var io = new IntersectionObserver(function (entries) {
-        for (var i = 0; i < entries.length; i++) {
-          if (entries[i].isIntersecting) {
-            entries[i].target.classList.add("mp-reveal-in");
-            io.unobserve(entries[i].target);
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("mp-reveal-in");
+            io.unobserve(entry.target);
           }
+        });
+      }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+      revealables.forEach(function (el) { io.observe(el); });
+    }
+
+    /* ── Dot-matrix π: the same dot-grid mark the app's welcome backdrop
+     *    draws, rendered live on the site hero (gold dots, sparse colored
+     *    accents, staggered entrance + gentle twinkle) ──────────────────── */
+    var GLYPH = [
+      ".#..........",
+      ".##########.",
+      ".#.#.....#..",
+      "...#.....#..",
+      "...#.....#..",
+      "...#.....#..",
+      "...#.....#..",
+      "...#.....#..",
+      "...##...##.."
+    ];
+    var ACCENTS = ["#d9a441", "#d9a441", "#d9a441", "#46a758", "#3e63dd", "#e5484d"];
+    document.querySelectorAll("canvas.mp-dots").forEach(function (canvas) {
+      var cell = 26;
+      var pad = 4;
+      var cols = GLYPH[0].length;
+      var rows = GLYPH.length;
+      var dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = (cols * cell + pad * 2) * dpr;
+      canvas.height = (rows * cell + pad * 2) * dpr;
+      canvas.style.width = cols * cell + pad * 2 + "px";
+      canvas.style.height = rows * cell + pad * 2 + "px";
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.scale(dpr, dpr);
+      var dots = [];
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          if (GLYPH[r].charAt(c) !== "#") continue;
+          var pick = (r * 7 + c * 3) % 11;
+          dots.push({
+            x: pad + c * cell + cell / 2,
+            y: pad + r * cell + cell / 2,
+            color: pick < 8 ? "#d9a441" : ACCENTS[4 + (pick % 3)] === undefined ? "#d9a441" : ["#46a758", "#3e63dd", "#e5484d"][pick % 3],
+            delay: (c * 34 + r * 55) % 900
+          });
         }
-      }, { threshold: 0.12 });
-      for (var j = 0; j < els.length; j++) io.observe(els[j]);
-    })();
+      }
+      var start = performance.now();
+      function frame(now) {
+        var t = now - start;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (var i = 0; i < dots.length; i++) {
+          var d = dots[i];
+          var k = reduced ? 1 : Math.min(1, Math.max(0, (t - d.delay) / 420));
+          var ease = 1 - Math.pow(1 - k, 3);
+          var tw = reduced ? 1 : 0.84 + 0.16 * Math.sin(t / 900 + d.x * 0.05 + d.y * 0.03);
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, cell * 0.28 * (0.4 + 0.6 * ease) * tw, 0, Math.PI * 2);
+          ctx.fillStyle = d.color;
+          ctx.globalAlpha = 0.35 + 0.65 * ease;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    });
+
+    /* ── Latest release: rewrite download links + version badge from the
+     *    GitHub API (CORS-enabled for public repos); the static fallbacks
+     *    point at the releases page when the API is unreachable ─────────── */
+    var RELEASES = "https://github.com/MuseLinn/MusePi/releases";
+    document.querySelectorAll("[data-latest-release]").forEach(function (el) {
+      el.setAttribute("href", RELEASES + "/latest");
+    });
+    fetch("https://api.github.com/repos/MuseLinn/MusePi/releases/latest")
+      .then(function (res) { return res.ok ? res.json() : null; })
+      .then(function (rel) {
+        if (!rel || typeof rel.tag_name !== "string") return;
+        var tag = rel.tag_name;           // "v0.4.6"
+        var ver = tag.replace(/^v/, "");  // "0.4.6"
+        var base = RELEASES + "/download/" + tag + "/";
+        document.querySelectorAll("[data-release-version]").forEach(function (el) {
+          el.textContent = tag;
+        });
+        document.querySelectorAll("[data-asset]").forEach(function (a) {
+          a.setAttribute("href", base + a.getAttribute("data-asset").replace(/\{v\}/g, ver));
+        });
+      })
+      .catch(function () { /* fallback links already point at the releases page */ });
+  })();
   </script>
 </body>
 </html>

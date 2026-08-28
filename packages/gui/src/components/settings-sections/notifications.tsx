@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/desktop-web";
+import { t } from "@musepi/desktop-web";
 import type { SoundName } from "cuelume";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -19,27 +19,22 @@ import type { RpcClient } from "../../lib/rpc";
 import {
 	ALL_SOUNDS,
 	DEFAULT_SFX,
+	inQuietHours,
 	previewSound,
+	type QuietHours,
+	quietHoursPref,
 	SFX_EVENTS,
 	type SfxEvent,
+	setQuietHoursPref,
 	setSoundFor,
+	setVolumePref,
 	soundFor,
+	volumePref,
 	WIRED_SOUNDS,
 } from "../../lib/sfx";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
-
-/** Wired sound → trigger description (i18n keys); see sfx.ts WIRED_SOUNDS. */
-const SOUND_USAGE_KEYS: Partial<Record<SoundName, TranslationKey>> = {
-	chime: "send message, approval request",
-	sparkle: "first message, prompt enhanced",
-	error: "connect error, approval denied",
-	page: "session switch",
-	release: "stop current turn",
-	success: "approval granted",
-	tick: "tool result arrived",
-};
 
 /** One configurable activity row (opencode per-category sounds parity):
  *  activity name + trigger desc, a preview button for the current choice,
@@ -104,6 +99,21 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 	const [templates, setTemplates] = useState<NotifyTemplates>(() => loadNotifyTemplates());
 	const [sound, setSound] = useState<boolean>(() => localStorage.getItem("musepi-gui-sound") !== "0");
 	const [hapticOn, setHapticOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-haptic") !== "0");
+	// Master volume + quiet hours (免打扰): the in-window flag re-evaluates on
+	// a minute tick so the active hint flips without user interaction.
+	const [volume, setVolume] = useState<number>(() => volumePref());
+	const [quiet, setQuiet] = useState<QuietHours | null>(() => quietHoursPref());
+	const [inQuiet, setInQuiet] = useState<boolean>(() => inQuietHours());
+	const [auditionTimer, setAuditionTimer] = useState<number[] | null>(null);
+	useEffect(() => {
+		if (quiet === null) {
+			setInQuiet(false);
+			return;
+		}
+		setInQuiet(inQuietHours());
+		const id = window.setInterval(() => setInQuiet(inQuietHours()), 60_000);
+		return () => window.clearInterval(id);
+	}, [quiet]);
 	const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
 	// Idle recap (daemon recap.enabled / recap.idleSeconds — TUI parity).
 	// Daemon-side settings (config.yml), unlike the renderer-local prefs
@@ -297,60 +307,163 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("haptic feedback")}</div>
-						<div className="gui-settings-row-desc">{t("haptic feedback description")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={hapticOn}
-						className={`gui-toggle${hapticOn ? " gui-toggle--on" : ""}`}
-						onClick={() => {
-							const next = !hapticOn;
-							setHapticOn(next);
-							localStorage.setItem("musepi-gui-haptic", next ? "1" : "0");
-						}}
-						aria-label={t("haptic feedback")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row-desc">{t("sfx choose per activity")}</div>
 				<Reveal open={sound}>
-					<div className="gui-sfx-event-list">
-						{SFX_EVENTS.map(ev => (
-							<SoundEventRow key={ev} ev={ev} />
-						))}
+					{/* Master volume (cuelume engine-global setVolume) — applies
+					 * live so the preview buttons double as an audible check. */}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("master volume")}</div>
+							<div className="gui-settings-row-desc">{t("master volume description")}</div>
+						</div>
+						<div className="flex items-center gap-2">
+							<input
+								type="range"
+								min={0}
+								max={100}
+								value={Math.round(volume * 100)}
+								className="gui-range w-36"
+								aria-label={t("master volume")}
+								onChange={e => {
+									const next = Number(e.target.value) / 100;
+									setVolume(next);
+									setVolumePref(next);
+								}}
+							/>
+							<span className="w-10 text-right text-[12px] tabular-nums text-[var(--color-text-muted)]">
+								{Math.round(volume * 100)}%
+							</span>
+						</div>
+					</div>
+					{/* Quiet hours (免打扰时段): event sounds mute inside the
+					 * window (overnight wrap supported); previews stay audible. */}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("quiet hours")}</div>
+							<div className="gui-settings-row-desc">{t("quiet hours description")}</div>
+							{quiet !== null && inQuiet && (
+								<div className="gui-settings-row-desc text-[var(--color-warning)]">
+									{t("quiet hours active")}
+								</div>
+							)}
+						</div>
+						<div className="flex items-center gap-1.5">
+							<input
+								type="time"
+								className="gui-input !w-auto"
+								value={quiet?.from ?? ""}
+								aria-label={t("quiet hours from")}
+								onChange={e => {
+									const from = e.target.value;
+									if (!from) {
+										setQuiet(null);
+										setQuietHoursPref(null);
+										return;
+									}
+									const next: QuietHours = { from, to: quiet?.to ?? "07:00" };
+									setQuiet(next);
+									setQuietHoursPref(next);
+								}}
+							/>
+							<span className="text-[12px] text-[var(--color-text-faint)]">→</span>
+							<input
+								type="time"
+								className="gui-input !w-auto"
+								value={quiet?.to ?? ""}
+								aria-label={t("quiet hours to")}
+								onChange={e => {
+									const to = e.target.value;
+									if (!to || !quiet) {
+										setQuiet(null);
+										setQuietHoursPref(null);
+										return;
+									}
+									const next: QuietHours = { from: quiet.from, to };
+									setQuiet(next);
+									setQuietHoursPref(next);
+								}}
+							/>
+						</div>
+					</div>
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("haptic feedback")}</div>
+							<div className="gui-settings-row-desc">{t("haptic feedback description")}</div>
+						</div>
+						<button
+							type="button"
+							role="switch"
+							aria-checked={hapticOn}
+							className={`gui-toggle${hapticOn ? " gui-toggle--on" : ""}`}
+							onClick={() => {
+								const next = !hapticOn;
+								setHapticOn(next);
+								localStorage.setItem("musepi-gui-haptic", next ? "1" : "0");
+							}}
+							aria-label={t("haptic feedback")}
+						>
+							<span className="gui-toggle-knob" />
+						</button>
+					</div>
+					<div className="gui-settings-row-desc">{t("sfx choose per activity")}</div>
+					<Reveal open={sound}>
+						<div className="gui-sfx-event-list">
+							{SFX_EVENTS.map(ev => (
+								<SoundEventRow key={ev} ev={ev} />
+							))}
+						</div>
+					</Reveal>
+					{/* Audition the whole wired set in one go — a second click
+					 * stops the remaining sequence. */}
+					<div className="gui-settings-row">
+						<div>
+							<div className="gui-settings-row-label">{t("audition all wired sounds")}</div>
+							<div className="gui-settings-row-desc">{t("audition all wired sounds description")}</div>
+						</div>
+						<button
+							type="button"
+							className="gui-btn"
+							onClick={() => {
+								if (auditionTimer !== null) {
+									for (const id of auditionTimer) clearTimeout(id);
+									setAuditionTimer(null);
+									return;
+								}
+								const names = [...WIRED_SOUNDS];
+								const ids = names.map((name, i) => window.setTimeout(() => previewSound(name), i * 450));
+								const stop = window.setTimeout(() => setAuditionTimer(null), names.length * 450 + 300);
+								setAuditionTimer([...ids, stop]);
+							}}
+						>
+							<Icon name={auditionTimer !== null ? "stop" : "play"} className="h-3.5 w-3.5" />
+							{auditionTimer !== null ? t("stop") : t("audition all")}
+						</button>
 					</div>
 				</Reveal>
-				<div className="gui-settings-row-desc">
-					{t("preview each effect; dimmed ones are not wired to the UI yet")}
-				</div>
+				{/* Palette reference: sounds WITHOUT a wired trigger only — the
+				 * wired ones are already expressed by the per-event rows above,
+				 * so the old full-grid duplicated them (user: 设计有点问题). */}
+				{(ALL_SOUNDS.filter(name => !WIRED_SOUNDS.has(name)).length > 0 && (
+					<div className="gui-settings-row-desc">{t("unwired palette reference")}</div>
+				)) ||
+					null}
 				<div className="gui-sound-grid">
-					{ALL_SOUNDS.map(name => {
-						const wired = WIRED_SOUNDS.has(name);
-						return (
-							<div key={name} className={`gui-sound-card${wired ? "" : " gui-sound-card--idle"}`}>
-								<button
-									type="button"
-									className="gui-sound-preview"
-									onClick={() => previewSound(name)}
-									aria-label={`${t("preview")} ${name}`}
-									title={`${t("preview")} ${name}`}
-								>
-									<Icon name="play" className="h-3.5 w-3.5" />
-								</button>
-								<div className="min-w-0">
-									<div className="gui-sound-name">{name}</div>
-									<div className="gui-sound-usage">
-										{wired ? t(SOUND_USAGE_KEYS[name] ?? "sound palette") : t("not wired to the UI yet")}
-									</div>
-								</div>
+					{ALL_SOUNDS.filter(name => !WIRED_SOUNDS.has(name)).map(name => (
+						<div key={name} className="gui-sound-card gui-sound-card--idle">
+							<button
+								type="button"
+								className="gui-sound-preview"
+								onClick={() => previewSound(name)}
+								aria-label={`${t("preview")} ${name}`}
+								title={`${t("preview")} ${name}`}
+							>
+								<Icon name="play" className="h-3.5 w-3.5" />
+							</button>
+							<div className="min-w-0">
+								<div className="gui-sound-name">{name}</div>
+								<div className="gui-sound-usage">{t("not wired to the UI yet")}</div>
 							</div>
-						);
-					})}
+						</div>
+					))}
 				</div>
 			</div>
 			{/* Idle recap (TUI 通知组 parity): daemon-side, persisted to

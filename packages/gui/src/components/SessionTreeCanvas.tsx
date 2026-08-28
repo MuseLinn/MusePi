@@ -109,35 +109,69 @@ export function SessionTreeCanvas({
 
 	const { nodes, width, height } = useMemo(() => layoutTree(buildMessageTree(entries)), [entries]);
 
-	// 首次有内容时适配视口(居中 + 缩放至可见)。
-	const fittedFor = useRef("");
-	useEffect(() => {
-		const key = `${width}x${height}`;
+	// 当前位置节点:显式 leaf(回看历史时)或活动路径的最深节点(尾部跟随
+	// 时 leafId 为 null,不标记会让地图失去"我在哪"的锚点)。声明在 fitView
+	// 之前 — 智能适配以它为焦点。
+	const currentNodeId = useMemo(() => {
+		if (leafId != null && nodes.some(n => n.node.id === leafId)) return leafId;
+		let deepest: CanvasNode | undefined;
+		for (const n of nodes) {
+			if (activePathIds && !activePathIds.has(n.node.id)) continue;
+			if (!deepest || n.depth > deepest.depth || (n.depth === deepest.depth && n.x > deepest.x)) deepest = n;
+		}
+		return deepest?.node.id ?? null;
+	}, [leafId, activePathIds, nodes]);
+
+	// Fit-to-viewport: runs once per canvas mount (the component only renders
+	// in canvas view mode) and re-runs when the wrap leaves a degenerate size
+	// (pane animating open → the old width×height latch computed the fit once
+	// against a 0px wrap and never re-ran: nodes landed off-view in a corner,
+	// user: 地图视图显示的内容不合适). Trees too big to full-fit center on the
+	// CURRENT node instead — "where am I" beats showing the root of a chain
+	// the user scrolled far past. Pan/zoom afterwards is untouched; the reset
+	// button re-runs the same smart fit.
+	const needsFitRef = useRef(true);
+	const fitView = useCallback((): void => {
 		const wrap = wrapRef.current;
-		if (!wrap || width === 0 || fittedFor.current === key) return;
-		fittedFor.current = key;
-		const scale = Math.min(
-			MAX_SCALE,
-			Math.max(
-				MIN_SCALE,
-				Math.min((wrap.clientWidth - FIT_PADDING * 2) / width, (wrap.clientHeight - FIT_PADDING * 2) / height, 1),
-			),
-		);
-		const scaledW = width * scale;
-		const scaledH = height * scale;
-		const rootX = nodes.find(n => n.depth === 0)?.x ?? 0;
-		setView({
-			scale,
-			// Whole map fits → center it; else center on the ROOT (the flow
-			// start) so it's always in view and branches grow rightward —
-			// centering an overflowing tree hides the root off-screen left.
-			x:
-				scaledW > wrap.clientWidth
-					? wrap.clientWidth / 2 - (rootX + NODE_W / 2) * scale
-					: (wrap.clientWidth - scaledW) / 2,
-			y: scaledH > wrap.clientHeight ? FIT_PADDING : (wrap.clientHeight - scaledH) / 2,
+		if (!wrap || width === 0 || height === 0) return;
+		const cw = wrap.clientWidth;
+		const ch = wrap.clientHeight;
+		if (cw < 80 || ch < 80) return;
+		needsFitRef.current = false;
+		const fullScale = Math.min((cw - FIT_PADDING * 2) / width, (ch - FIT_PADDING * 2) / height, 1);
+		if (fullScale >= 0.55) {
+			const scaledW = width * fullScale;
+			const scaledH = height * fullScale;
+			const rootX = nodes.find(n => n.depth === 0)?.x ?? 0;
+			setView({
+				scale: fullScale,
+				// Whole map fits → center it; else center on the ROOT (the flow
+				// start) so it's always in view and branches grow rightward.
+				x: scaledW > cw ? cw / 2 - (rootX + NODE_W / 2) * fullScale : (cw - scaledW) / 2,
+				y: scaledH > ch ? FIT_PADDING : (ch - scaledH) / 2,
+			});
+			return;
+		}
+		// Huge tree: readable scale, centered on the current position.
+		const focus =
+			(currentNodeId != null ? nodes.find(n => n.node.id === currentNodeId) : undefined) ??
+			nodes.find(n => n.depth === 0) ??
+			nodes[0] ??
+			null;
+		const fx = focus ? focus.x + NODE_W / 2 : width / 2;
+		const fy = focus ? focus.y + NODE_H / 2 : height / 2;
+		setView({ scale: 0.7, x: cw / 2 - fx * 0.7, y: ch / 2 - fy * 0.7 });
+	}, [width, height, nodes, currentNodeId]);
+	useEffect(() => {
+		const wrap = wrapRef.current;
+		if (!wrap) return;
+		const ro = new ResizeObserver(() => {
+			if (needsFitRef.current) fitView();
 		});
-	}, [width, height]);
+		ro.observe(wrap);
+		if (needsFitRef.current) fitView();
+		return () => ro.disconnect();
+	}, [fitView]);
 
 	const centerOnNode = useCallback(
 		(nodeId: string, targetScale?: number): void => {
@@ -369,6 +403,7 @@ export function SessionTreeCanvas({
 					{nodes.map(n => {
 						const kind = treeKindOf(n.node.entry);
 						const isLeaf = leafId != null && n.node.id === leafId;
+						const isCurrent = currentNodeId === n.node.id;
 						const onPath = !activePathIds || activePathIds.has(n.node.id);
 						const childCount = n.node.children.length;
 						const searchMatch = hasSearch && searchMatchIds.has(n.node.id);
@@ -377,7 +412,7 @@ export function SessionTreeCanvas({
 						return (
 							<div
 								key={n.node.id}
-								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${onPath ? " stc-node--active" : " stc-node--off"}${searchMatch ? " stc-node--search-match" : ""}${isSearchCurrent ? " stc-node--search-current" : ""}${searchDim ? " stc-node--search-dim" : ""}`}
+								className={`stc-node stc-node--${kind}${isLeaf ? " stc-node--leaf" : ""}${isCurrent ? " stc-node--current" : ""}${onPath ? " stc-node--active" : " stc-node--off"}${searchMatch ? " stc-node--search-match" : ""}${isSearchCurrent ? " stc-node--search-current" : ""}${searchDim ? " stc-node--search-dim" : ""}`}
 								style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H }}
 								onClick={() => handleClick(n.node.id)}
 								onDoubleClick={() => handleDblClick(n.node.id)}
@@ -444,10 +479,10 @@ export function SessionTreeCanvas({
 								{focusedKind === "user"
 									? t("trajectory user")
 									: focusedKind === "assistant"
-										? "ASSISTANT"
+										? t("trajectory assistant")
 										: focusedKind === "toolResult"
-											? "TOOL"
-											: "SYSTEM"}
+											? t("trajectory tool")
+											: t("trajectory system")}
 							</span>
 							<button
 								type="button"
@@ -465,6 +500,16 @@ export function SessionTreeCanvas({
 
 			{/* 右下缩放控件(滚轮之外的精确入口)。 */}
 			<div className="stc-zoom">
+				<button
+					type="button"
+					className="stc-zoom-btn"
+					title={t("locate current")}
+					aria-label={t("locate current")}
+					disabled={currentNodeId === null}
+					onClick={() => currentNodeId && centerOnNode(currentNodeId)}
+				>
+					<Icon name="target" className="h-3 w-3" />
+				</button>
 				<button
 					type="button"
 					className="stc-zoom-btn"
@@ -489,25 +534,8 @@ export function SessionTreeCanvas({
 					title={t("canvas reset view")}
 					aria-label={t("canvas reset view")}
 					onClick={() => {
-						fittedFor.current = "";
-						const wrap = wrapRef.current;
-						if (!wrap) return;
-						const scale = Math.min(
-							MAX_SCALE,
-							Math.max(
-								MIN_SCALE,
-								Math.min(
-									(wrap.clientWidth - FIT_PADDING * 2) / width,
-									(wrap.clientHeight - FIT_PADDING * 2) / height,
-									1,
-								),
-							),
-						);
-						setView({
-							scale,
-							x: (wrap.clientWidth - width * scale) / 2,
-							y: (wrap.clientHeight - height * scale) / 2,
-						});
+						needsFitRef.current = true;
+						fitView();
 					}}
 				>
 					<Icon name="align-justify" className="h-3 w-3" />

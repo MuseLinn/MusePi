@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { solveGraphLanes } from "../lib/git-graph-lanes";
 import { useChatHighlight } from "../lib/highlight";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -212,12 +213,16 @@ export function ContextPanel({
 	}, [browserOpenRequest, onViewChange]);
 	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
 	// browser (browser.gui), surface the browser tool so the user sees the
-	// agent's work without hunting for the panel.
+	// agent's work without hunting for the panel. Skipped while the panel is
+	// maximized (the mirror ref is declared here, wired to state below) — an
+	// agent browsing in the background must not yank the maximized view.
 	const agentBrowserTabRef = useRef<string | null>(null);
+	const maximizedRef = useRef(false);
 	useEffect(() => {
 		const api = window.electronAPI;
 		if (!api || typeof api.onManagedBrowserState !== "function") return;
 		return api.onManagedBrowserState(next => {
+			if (maximizedRef.current) return;
 			if (next.agentActivity === true && next.activeTabId && agentBrowserTabRef.current !== next.activeTabId) {
 				agentBrowserTabRef.current = next.activeTabId;
 				onViewChange("browser");
@@ -242,6 +247,7 @@ export function ContextPanel({
 	// the panel floats over the chat column at near-full width/height; toggling
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const [maximized, setMaximized] = useState(false);
+	maximizedRef.current = maximized;
 	const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
 	/** Snap points for right-panel width (px). Drag snaps on release. */
 	const SNAP_POINTS = [300, 480, 800];
@@ -286,230 +292,244 @@ export function ContextPanel({
 	}, [view, extTabs]);
 
 	return (
-		<aside className={panelClass} style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}>
-			{/* Left-edge drag handle for width (pointer capture on the 4px
-			 * strip; cursor col-resize over it). */}
-			<div className="gui-pane-resize-x" onPointerDown={maximized ? undefined : onResizeStart} aria-hidden />
-			<div className="flex h-full min-h-0 w-full flex-col">
-				{/* View-local chrome (nav unification): the RightRail owns
-				 * navigation; the header shows the current view's title plus the
-				 * panel-level maximize toggle. */}
-				<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
-					<span className="gui-pane-title truncate text-[12px] font-medium text-[var(--color-text-muted)]">
-						{headerTitle}
-					</span>
-					<div className="ml-auto flex items-center gap-0.5">
-						<button
-							type="button"
-							title={maximized ? t("restore panel") : t("maximize panel")}
-							aria-label={maximized ? t("restore panel") : t("maximize panel")}
-							className="gui-pane-tool"
-							onClick={() => setMaximized(v => !v)}
-						>
-							<Icon name={maximized ? "fullscreen-exit" : "fullscreen"} className="h-3.5 w-3.5" />
-						</button>
-					</div>
-				</div>
-				{view === "browser" ? (
-					/* Browser pane renders OUTSIDE the feather-scroll container:
-					 * the native WebContentsView projects the slot's exact CSS
-					 * rect — a padded/scrollable wrapper breaks the height chain
-					 * and clips the projection. */
-					<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
-				) : view === "git" || view === "diff" || view === "pr" ? (
-					<GitPanel rpc={rpc} cwd={cwd} />
-				) : (
-					<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
-						{view === "notes" ? (
-							<NotesPane rpc={rpc} cwd={cwd} />
-						) : view === "files" && cwd ? (
-							<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
-						) : view === "widget" ? (
-							<WidgetSidebarTab entries={snap?.entries ?? []} />
-						) : view === "trajectory" ? (
-							<TrajectoryView
-								entries={snap?.entries ?? []}
-								modelId={snap?.state?.model?.id}
-								roundDurations={snap?.roundDurations}
-								onJumpToEntry={onJumpToEntry}
-								leafId={leafId}
-								activePathIds={activePathIds}
-								onBranchTo={onBranchTo}
-								onForkAt={onForkAt}
-							/>
-						) : view === "jobs" ? (
-							snap?.sessionId ? (
-								<JobsPane rpc={rpc} sessionId={snap.sessionId} />
-							) : (
-								<div className="gui-pane-tab-empty">
-									<span className="gui-pane-tab-empty-icon">
-										<Icon name="inbox-archive" />
-									</span>
-									<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
-									<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
-								</div>
-							)
-						) : typeof view === "string" && view.startsWith("ext:") ? (
-							(() => {
-								const item = extTabs.find(x => `ext:${x.slot}` === view);
-								return item ? (
-									<FadeScroll className="h-full overflow-y-auto">
-										<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
-									</FadeScroll>
-								) : null;
-							})()
-						) : (
-							<div className="px-1 py-2">
-								<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
-								<div className="flex flex-col gap-1 px-2 text-[13px]">
-									<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-										<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-										<span className="truncate">{cwd || t("no folder")}</span>
-									</div>
-									{snap?.state?.model?.id && (
-										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-											<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
-											<span className="truncate">{snap.state.model.id}</span>
-										</div>
-									)}
-									{modes && (
-										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-											<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-											<span className="truncate">
-												{modes.goalMode?.enabled === true
-													? `${t("goal mode")}: ${modes.goalMode.objective ?? ""}`
-													: modes.planMode === true
-														? t("plan mode")
-														: t("default mode")}
-											</span>
-										</div>
-									)}
-								</div>
-								{/* Session stats (openchamber context-drawer parity): message
-								 * count and run time at a glance. */}
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
-								<div className="grid grid-cols-2 gap-1.5 px-2">
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v">{messageCount}</div>
-										<div className="gui-ctx-stat-l">{t("messages")}</div>
-									</div>
-									<div className="gui-ctx-stat">
-										<div className="gui-ctx-stat-v">{runMinutes}</div>
-										<div className="gui-ctx-stat-l">{t("minutes")}</div>
-									</div>
-								</div>
-								{/* Context-window usage: live tokens/capacity bar (product
-								 * parity with the header ring — same RPC). */}
-								{ctxUsage && (
-									<>
-										<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
-										<div className="px-2">
-											<div className="gui-ctx-usage-row">
-												<span className="text-[12px] tabular-nums opacity-80">
-													{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
-													{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
-												</span>
-												<span className="text-[12px] tabular-nums opacity-70">
-													{Math.round(ctxUsage.percent)}%
-												</span>
-											</div>
-											<div className="gui-ctx-usage-track">
-												<div
-													className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
-													style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
-												/>
-											</div>
-										</div>
-									</>
-								)}
-								{/* Reusable context quick actions: copy the workspace path. */}
-								<div className="mt-2 flex flex-col gap-0.5 px-2">
-									<button
-										type="button"
-										className="gui-pane-action"
-										onClick={() => {
-											if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
-										}}
-									>
-										<Icon name="clipboard" className="h-3.5 w-3.5" />
-										<span>{t("copy workspace path")}</span>
-									</button>
-								</div>
-								{/* Swarm visual parity (TUI subagent HUD): live agent rows —
-								 * status dot, activity line, token/cost meta — fed from
-								 * the session stream (agent-progress/lifecycle). Click a
-								 * row to open its kill/revive/chat controls. */}
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
-								<div className="px-2">
-									<AgentsPanel
-										agents={snap?.agents ?? []}
-										progress={snap?.progress ?? new Map()}
-										lifecycle={snap?.lifecycle ?? new Map()}
-										selectedId={selectedAgentId}
-										onSelect={setSelectedAgentId}
-									/>
-									{selectedAgent && (
-										<AgentControls agent={selectedAgent} rpc={rpc} onClose={() => setSelectedAgentId(null)} />
-									)}
-								</div>
-								{/* Session hygiene (会话维护): shake context / reset
-								 * provider stream / clear session context — each RPC
-								 * reports counts into the status line below. */}
-								<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
-								<div className="flex flex-col gap-0.5 px-2">
-									<button
-										type="button"
-										className="gui-pane-action"
-										disabled={!snap?.sessionId || maintenanceBusy !== null}
-										onClick={() => void runMaintenance("shake")}
-									>
-										<Icon
-											name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
-											className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
-										/>
-										<span>{t("shake context")}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-pane-action"
-										disabled={!snap?.sessionId || maintenanceBusy !== null}
-										onClick={() => void runMaintenance("fresh")}
-									>
-										<Icon
-											name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
-											className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
-										/>
-										<span>{t("fresh provider")}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-pane-action"
-										disabled={!snap?.sessionId || maintenanceBusy !== null}
-										onClick={() => void runMaintenance("clear")}
-									>
-										<Icon
-											name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
-											className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
-										/>
-										<span>{t("clear session context")}</span>
-									</button>
-								</div>
-								{maintenanceStatus && (
-									<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-										{maintenanceStatus}
-									</p>
-								)}
-							</div>
-						)}
-						{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
-						 * 挂内容区末尾,随面板滚动。 */}
-						<div className="gui-pane-extension px-2 pt-3">
-							<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
+		<>
+			{/* Maximize modal scrim (user: 最大化没有遮罩、前后内容重叠): dims the
+			 * chat column behind the floated panel — the fixed transcript float
+			 * scrollbar and hover chrome must not read as part of the panel.
+			 * Click-through restores the docked width. Starts below the 48px
+			 * header so the title bar stays live. */}
+			{maximized && open && (
+				<div className="gui-pane-maximize-backdrop" onClick={() => setMaximized(false)} aria-hidden />
+			)}
+			<aside className={panelClass} style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}>
+				{/* Left-edge drag handle for width (pointer capture on the 4px
+				 * strip; cursor col-resize over it). */}
+				<div className="gui-pane-resize-x" onPointerDown={maximized ? undefined : onResizeStart} aria-hidden />
+				<div className="flex h-full min-h-0 w-full flex-col">
+					{/* View-local chrome (nav unification): the RightRail owns
+					 * navigation; the header shows the current view's title plus the
+					 * panel-level maximize toggle. */}
+					<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
+						<span className="gui-pane-title truncate text-[12px] font-medium text-[var(--color-text-muted)]">
+							{headerTitle}
+						</span>
+						<div className="ml-auto flex items-center gap-0.5">
+							<button
+								type="button"
+								title={maximized ? t("restore panel") : t("maximize panel")}
+								aria-label={maximized ? t("restore panel") : t("maximize panel")}
+								className="gui-pane-tool"
+								onClick={() => setMaximized(v => !v)}
+							>
+								<Icon name={maximized ? "fullscreen-exit" : "fullscreen"} className="h-3.5 w-3.5" />
+							</button>
 						</div>
-					</FadeScroll>
-				)}
-			</div>
-		</aside>
+					</div>
+					{view === "browser" ? (
+						/* Browser pane renders OUTSIDE the feather-scroll container:
+						 * the native WebContentsView projects the slot's exact CSS
+						 * rect — a padded/scrollable wrapper breaks the height chain
+						 * and clips the projection. */
+						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
+					) : view === "git" || view === "diff" || view === "pr" ? (
+						<GitPanel rpc={rpc} cwd={cwd} />
+					) : (
+						<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
+							{view === "notes" ? (
+								<NotesPane rpc={rpc} cwd={cwd} />
+							) : view === "files" && cwd ? (
+								<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
+							) : view === "widget" ? (
+								<WidgetSidebarTab entries={snap?.entries ?? []} />
+							) : view === "trajectory" ? (
+								<TrajectoryView
+									entries={snap?.entries ?? []}
+									modelId={snap?.state?.model?.id}
+									roundDurations={snap?.roundDurations}
+									onJumpToEntry={onJumpToEntry}
+									leafId={leafId}
+									activePathIds={activePathIds}
+									onBranchTo={onBranchTo}
+									onForkAt={onForkAt}
+								/>
+							) : view === "jobs" ? (
+								snap?.sessionId ? (
+									<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+								) : (
+									<div className="gui-pane-tab-empty">
+										<span className="gui-pane-tab-empty-icon">
+											<Icon name="inbox-archive" />
+										</span>
+										<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
+										<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
+									</div>
+								)
+							) : typeof view === "string" && view.startsWith("ext:") ? (
+								(() => {
+									const item = extTabs.find(x => `ext:${x.slot}` === view);
+									return item ? (
+										<FadeScroll className="h-full overflow-y-auto">
+											<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
+										</FadeScroll>
+									) : null;
+								})()
+							) : (
+								<div className="px-1 py-2">
+									<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
+									<div className="flex flex-col gap-1 px-2 text-[13px]">
+										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+											<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
+											<span className="truncate">{cwd || t("no folder")}</span>
+										</div>
+										{snap?.state?.model?.id && (
+											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+												<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
+												<span className="truncate">{snap.state.model.id}</span>
+											</div>
+										)}
+										{modes && (
+											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+												<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
+												<span className="truncate">
+													{modes.goalMode?.enabled === true
+														? `${t("goal mode")}: ${modes.goalMode.objective ?? ""}`
+														: modes.planMode === true
+															? t("plan mode")
+															: t("default mode")}
+												</span>
+											</div>
+										)}
+									</div>
+									{/* Session stats (openchamber context-drawer parity): message
+									 * count and run time at a glance. */}
+									<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
+									<div className="grid grid-cols-2 gap-1.5 px-2">
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v">{messageCount}</div>
+											<div className="gui-ctx-stat-l">{t("messages")}</div>
+										</div>
+										<div className="gui-ctx-stat">
+											<div className="gui-ctx-stat-v">{runMinutes}</div>
+											<div className="gui-ctx-stat-l">{t("minutes")}</div>
+										</div>
+									</div>
+									{/* Context-window usage: live tokens/capacity bar (product
+									 * parity with the header ring — same RPC). */}
+									{ctxUsage && (
+										<>
+											<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
+											<div className="px-2">
+												<div className="gui-ctx-usage-row">
+													<span className="text-[12px] tabular-nums opacity-80">
+														{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
+														{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
+													</span>
+													<span className="text-[12px] tabular-nums opacity-70">
+														{Math.round(ctxUsage.percent)}%
+													</span>
+												</div>
+												<div className="gui-ctx-usage-track">
+													<div
+														className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+														style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+													/>
+												</div>
+											</div>
+										</>
+									)}
+									{/* Reusable context quick actions: copy the workspace path. */}
+									<div className="mt-2 flex flex-col gap-0.5 px-2">
+										<button
+											type="button"
+											className="gui-pane-action"
+											onClick={() => {
+												if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
+											}}
+										>
+											<Icon name="clipboard" className="h-3.5 w-3.5" />
+											<span>{t("copy workspace path")}</span>
+										</button>
+									</div>
+									{/* Swarm visual parity (TUI subagent HUD): live agent rows —
+									 * status dot, activity line, token/cost meta — fed from
+									 * the session stream (agent-progress/lifecycle). Click a
+									 * row to open its kill/revive/chat controls. */}
+									<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
+									<div className="px-2">
+										<AgentsPanel
+											agents={snap?.agents ?? []}
+											progress={snap?.progress ?? new Map()}
+											lifecycle={snap?.lifecycle ?? new Map()}
+											selectedId={selectedAgentId}
+											onSelect={setSelectedAgentId}
+										/>
+										{selectedAgent && (
+											<AgentControls
+												agent={selectedAgent}
+												rpc={rpc}
+												onClose={() => setSelectedAgentId(null)}
+											/>
+										)}
+									</div>
+									{/* Session hygiene (会话维护): shake context / reset
+									 * provider stream / clear session context — each RPC
+									 * reports counts into the status line below. */}
+									<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
+									<div className="flex flex-col gap-0.5 px-2">
+										<button
+											type="button"
+											className="gui-pane-action"
+											disabled={!snap?.sessionId || maintenanceBusy !== null}
+											onClick={() => void runMaintenance("shake")}
+										>
+											<Icon
+												name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
+												className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
+											/>
+											<span>{t("shake context")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-pane-action"
+											disabled={!snap?.sessionId || maintenanceBusy !== null}
+											onClick={() => void runMaintenance("fresh")}
+										>
+											<Icon
+												name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
+												className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
+											/>
+											<span>{t("fresh provider")}</span>
+										</button>
+										<button
+											type="button"
+											className="gui-pane-action"
+											disabled={!snap?.sessionId || maintenanceBusy !== null}
+											onClick={() => void runMaintenance("clear")}
+										>
+											<Icon
+												name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
+												className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
+											/>
+											<span>{t("clear session context")}</span>
+										</button>
+									</div>
+									{maintenanceStatus && (
+										<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+											{maintenanceStatus}
+										</p>
+									)}
+								</div>
+							)}
+							{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
+							 * 挂内容区末尾,随面板滚动。 */}
+							<div className="gui-pane-extension px-2 pt-3">
+								<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
+							</div>
+						</FadeScroll>
+					)}
+				</div>
+			</aside>
+		</>
 	);
 }
 
@@ -671,152 +691,219 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 	);
 }
 
-/** Parse one `git log --graph` line into its graph column chars + the
- *  commit tail (hash, decorations, subject). Graph columns are the
- *  leading run of `* | \ /` and spaces; a commit line continues with
- *  `<hash> [(<decor>)] <subject>`. Lines without a hash are connector
- *  rows (bare graph chars) that still occupy a row in the SVG. */
-function parseGraphLine(line: string): { cols: string[]; tail: string | null } {
-	const cols: string[] = [];
-	let i = 0;
-	while (i < line.length && "*|\\/ ".includes(line[i] ?? "")) {
-		cols.push(line[i]!);
-		i++;
-	}
-	const rest = line.slice(i).trim();
-	const tail = /^[0-9a-f]{7,}(?: \(| )/.test(rest) ? rest : rest.startsWith("(") ? rest : null;
-	return { cols, tail };
+/** Structured commit row from the daemon git.log RPC (parsed from
+ *  `git log --all --topo-order` with \x1f fields). */
+interface GitLogCommit {
+	hash: string;
+	shortHash: string;
+	author: string;
+	timestamp: number;
+	refs: { kind: "head" | "local" | "remote" | "tag"; name: string }[];
+	parents: string[];
+	subject: string;
 }
 
-/** Branch colors per graph column (gitk-style palette). */
+/** Branch colors per graph lane (gitk-style palette). */
 const GRAPH_COLORS = ["#e5484d", "#46a758", "#3e63dd", "#f76b15", "#8e4ec6", "#0091ff", "#f2b8c6", "#94a3b8"];
 
-/** Commit-graph view: parses `git log --graph --all` ASCII into an SVG of
- *  nodes + connector lines, with commit tails as HTML beside it. */
-function GitGraph({ graph }: { graph: string }): ReactNode {
-	const rows = graph.split("\n").map(parseGraphLine);
-	const maxCols = Math.max(1, ...rows.map(r => r.cols.length));
-	const COLS = 14;
-	const ROW_H = 20;
-	const W = maxCols * COLS + 8;
-	const H = rows.length * ROW_H;
+const GRAPH_ROW_H = 22;
+const GRAPH_COL_W = 14;
+const GIT_LOG_PAGE = 100;
+
+const pad2 = (n: number): string => String(n).padStart(2, "0");
+
+function formatCommitDate(ts: number): string {
+	const d = new Date(ts);
+	if (Number.isNaN(d.getTime())) return "";
+	const now = new Date();
+	const md = `${pad2(d.getMonth() + 1)}/${pad2(d.getDate())}`;
+	return d.getFullYear() === now.getFullYear()
+		? `${md} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+		: `${d.getFullYear()}/${md}`;
+}
+
+/** Ref badge (ZCode git-graph style): HEAD with a home marker, local
+ *  branches with a branch glyph, remotes with a cloud, tags in amber. */
+function GitRefBadge({ kind, name }: { kind: "head" | "local" | "remote" | "tag"; name: string }): ReactNode {
+	const cls =
+		kind === "head"
+			? "bg-[var(--color-accent)]/20 text-[var(--color-accent)]"
+			: kind === "tag"
+				? "bg-amber-500/20 text-amber-700 dark:text-amber-400"
+				: kind === "remote"
+					? "bg-[var(--color-surface-sunken)] text-[var(--color-text-muted)]"
+					: "bg-[var(--color-surface-sunken)] text-[var(--color-text)]";
+	const icon = kind === "head" ? "home" : kind === "local" ? "git-branch" : kind === "remote" ? "cloud" : null;
+	return (
+		<span className={`flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[9.5px] leading-none ${cls}`}>
+			{icon && <Icon name={icon} className="h-2.5 w-2.5" />}
+			{name}
+		</span>
+	);
+}
+
+/** Commit-graph view: lane-solved SVG rail (dots + bezier connectors) with
+ *  a ZCode-style table beside it — subject with ref badges, date, author,
+ *  click-to-copy short hash. */
+function GitCommitGraph({
+	commits,
+	copied,
+	onCopyHash,
+}: {
+	commits: GitLogCommit[];
+	copied: string | null;
+	onCopyHash: (hash: string) => void;
+}): ReactNode {
+	const layout = useMemo(() => solveGraphLanes(commits.map(c => ({ hash: c.hash, parents: c.parents }))), [commits]);
+	const railW = layout.lanes * GRAPH_COL_W + 8;
+	const H = layout.rows.length * GRAPH_ROW_H;
 	const segs: ReactNode[] = [];
-	for (let r = 0; r < rows.length; r++) {
-		const { cols } = rows[r]!;
-		const y0 = r * ROW_H;
-		for (let c = 0; c < cols.length; c++) {
-			const ch = cols[c]!;
-			const x = c * COLS + 7;
-			const color = GRAPH_COLORS[c % GRAPH_COLORS.length]!;
-			if (ch === "*") {
-				segs.push(<circle key={`n${r}-${c}`} cx={x} cy={y0 + ROW_H / 2} r={3.2} fill={color} />);
-			} else if (ch === "|") {
+	layout.rows.forEach((row, r) => {
+		const y0 = r * GRAPH_ROW_H;
+		const y1 = y0 + GRAPH_ROW_H;
+		for (const s of row.segments) {
+			const color = GRAPH_COLORS[s.from % GRAPH_COLORS.length]!;
+			const x1 = s.from * GRAPH_COL_W + 7;
+			const x2 = s.to * GRAPH_COL_W + 7;
+			const key = `${r}:${s.from}-${s.to}-${s.kind}`;
+			if (s.from === s.to) {
+				segs.push(<line key={key} x1={x1} y1={y0} x2={x2} y2={y1} stroke={color} strokeWidth={1.6} />);
+			} else {
+				const midY = (y0 + y1) / 2;
 				segs.push(
-					<line key={`v${r}-${c}`} x1={x} y1={y0} x2={x} y2={y0 + ROW_H} stroke={color} strokeWidth={1.6} />,
-				);
-			} else if (ch === "\\") {
-				segs.push(
-					<line
-						key={`b${r}-${c}`}
-						x1={x}
-						y1={y0}
-						x2={x + COLS}
-						y2={y0 + ROW_H}
+					<path
+						key={key}
+						d={`M ${x1} ${y0} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y1}`}
+						fill="none"
 						stroke={color}
-						strokeWidth={1.4}
-					/>,
-				);
-			} else if (ch === "/") {
-				segs.push(
-					<line
-						key={`f${r}-${c}`}
-						x1={x + COLS}
-						y1={y0}
-						x2={x}
-						y2={y0 + ROW_H}
-						stroke={color}
-						strokeWidth={1.4}
+						strokeWidth={1.5}
 					/>,
 				);
 			}
 		}
-	}
+	});
+	layout.rows.forEach((row, r) => {
+		segs.push(
+			<circle
+				key={`n${r}`}
+				cx={row.lane * GRAPH_COL_W + 7}
+				cy={r * GRAPH_ROW_H + GRAPH_ROW_H / 2}
+				r={3.2}
+				fill={GRAPH_COLORS[row.lane % GRAPH_COLORS.length]}
+			/>,
+		);
+	});
 	return (
 		<div className="relative">
-			<svg width={W} height={H} className="absolute left-0 top-0" aria-hidden>
+			<svg width={railW} height={H} className="absolute left-0 top-0" aria-hidden>
 				{segs}
 			</svg>
-			<div style={{ marginLeft: W }}>
-				{rows.map((row, r) =>
-					row.tail ? (
-						<div key={r} className="flex h-5 items-center gap-1.5 whitespace-nowrap pr-1">
-							<span className="font-mono text-[10.5px] text-[var(--color-text-faint)]">
-								{row.tail.slice(0, 7)}
-							</span>
-							{(() => {
-								const m = /^\(([^)]*)\)/.exec(row.tail.slice(7).trim());
-								return m ? (
-									<span className="flex items-center gap-1 overflow-hidden">
-										{m[1]!.split(/,\s*/).map(d => {
-											const isHead = d.includes("HEAD");
-											const isTag = d.startsWith("tag:");
-											return (
-												<span
-													key={d}
-													className={`rounded px-1 py-px text-[9.5px] leading-none ${isHead ? "bg-[var(--color-accent)]/20 text-[var(--color-accent)]" : isTag ? "bg-amber-500/20 text-amber-700" : "bg-[var(--color-surface-sunken)] text-[var(--color-text-muted)]"}`}
-												>
-													{d.replace(/^tag: /, "tag/")}
-												</span>
-											);
-										})}
-									</span>
-								) : null;
-							})()}
-							<span className="truncate text-[12px] text-[var(--color-text)]">
-								{row.tail.replace(/^\([^)]*\)\s*/, "")}
-							</span>
+			<div style={{ marginLeft: railW }}>
+				<div className="flex h-5 items-center gap-2 border-b border-[var(--border)] pr-1 text-[10px] text-[var(--color-text-faint)]">
+					<span className="min-w-0 flex-1">{t("subject column")}</span>
+					<span className="w-[86px] shrink-0">{t("date column")}</span>
+					<span className="w-[72px] shrink-0">{t("author column")}</span>
+					<span className="w-[52px] shrink-0">{t("commit column")}</span>
+				</div>
+				{commits.map((c, i) => (
+					<div key={`${c.hash}-${i}`} className="flex h-[22px] items-center gap-2 whitespace-nowrap pr-1">
+						<div className="flex min-w-0 flex-1 items-center gap-1.5">
+							{c.refs.length > 0 && (
+								<span className="flex max-w-[55%] shrink items-center gap-1 overflow-hidden">
+									{c.refs.map(ref => (
+										<GitRefBadge key={ref.kind + ref.name} kind={ref.kind} name={ref.name} />
+									))}
+								</span>
+							)}
+							<span className="truncate text-[12px] text-[var(--color-text)]">{c.subject}</span>
 						</div>
-					) : (
-						<div key={r} className="h-5" />
-					),
-				)}
+						<span className="w-[86px] shrink-0 text-[11px] text-[var(--color-text-faint)]">
+							{formatCommitDate(c.timestamp)}
+						</span>
+						<span className="w-[72px] shrink-0 truncate text-[11px] text-[var(--color-text-faint)]">
+							{c.author}
+						</span>
+						<button
+							type="button"
+							className="w-[52px] shrink-0 text-left font-mono text-[10.5px] text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
+							title={copied === c.hash ? t("copied") : c.hash}
+							onClick={() => onCopyHash(c.hash)}
+						>
+							{copied === c.hash ? t("copied") : c.shortHash}
+						</button>
+					</div>
+				))}
 			</div>
 		</div>
 	);
 }
 
-/** Recent-commit view (right-pane git tool): git log + branch sync state
- *  via the daemon git.log + git.status RPCs. */
+/** Recent-commit view (right-pane git tool): structured git log via the
+ *  daemon git.log RPC (lane-solved graph + ZCode-style columns), branch
+ *  sync state via git.status, paged with a load-more button. */
 function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
-	const [graph, setGraph] = useState<string | null>(null);
+	const [commits, setCommits] = useState<GitLogCommit[] | null>(null);
+	const [hasMore, setHasMore] = useState(false);
+	const [loadingMore, setLoadingMore] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [branch, setBranch] = useState<string | null>(null);
 	const [ahead, setAhead] = useState(0);
 	const [behind, setBehind] = useState(0);
-	const load = useCallback((): void => {
-		if (!rpc) return;
+	const [copied, setCopied] = useState<string | null>(null);
+	const skipRef = useRef(0);
+	const load = useCallback(
+		(mode: "reset" | "more"): void => {
+			if (!rpc) return;
+			if (mode === "more") setLoadingMore(true);
+			else {
+				setCommits(null);
+				skipRef.current = 0;
+			}
+			const skip = skipRef.current;
+			void rpc
+				.request<{ commits?: GitLogCommit[]; hasMore?: boolean; error?: string }>("git.log", {
+					cwd,
+					limit: GIT_LOG_PAGE,
+					skip: mode === "more" ? skip : 0,
+				})
+				.then(res => {
+					if (res?.error) {
+						setError(res.error);
+						return;
+					}
+					const page = res?.commits ?? [];
+					setError(null);
+					setHasMore(res?.hasMore === true);
+					skipRef.current = skip + page.length;
+					if (mode === "more") setCommits(prev => [...(prev ?? []), ...page]);
+					else setCommits(page);
+				})
+				.catch(err => setError(err instanceof Error ? err.message : String(err)))
+				.finally(() => setLoadingMore(false));
+		},
+		[rpc, cwd],
+	);
+	useEffect(() => {
+		load("reset");
 		void rpc
-			.request<{ graph?: string; error?: string }>("git.log", { cwd, graph: true })
-			.then(res => {
-				setGraph(res?.graph ?? null);
-				setError(res?.error ?? null);
-			})
-			.catch(err => setError(err instanceof Error ? err.message : String(err)));
-		void rpc
-			.request<{ branch?: string | null; ahead?: number; behind?: number }>("git.status", { cwd })
+			?.request<{ branch?: string | null; ahead?: number; behind?: number }>("git.status", { cwd })
 			.then(res => {
 				setBranch(res?.branch ?? null);
 				setAhead(res?.ahead ?? 0);
 				setBehind(res?.behind ?? 0);
 			})
 			.catch(() => {});
-	}, [rpc, cwd]);
-	useEffect(load, [load]);
+	}, [load, rpc, cwd]);
+	const copyHash = useCallback((hash: string): void => {
+		void navigator.clipboard?.writeText(hash).catch(() => {});
+		setCopied(hash);
+		window.setTimeout(() => setCopied(cur => (cur === hash ? null : cur)), 1200);
+	}, []);
 	return (
 		<div className="flex h-full min-h-0 flex-col">
 			<div className="flex items-center justify-between px-1 pb-1 pt-1">
-				<span className="gui-group-label px-2">{t("git graph")}</span>
-				<button type="button" className="gui-pane-action !w-auto px-2" onClick={load}>
+				<span className="gui-group-label px-2">{t("commit history")}</span>
+				<button type="button" className="gui-pane-action !w-auto px-2" onClick={() => load("reset")}>
 					<Icon name="refresh" className="h-3.5 w-3.5" />
 					<span>{t("refresh")}</span>
 				</button>
@@ -836,12 +923,25 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 			<FadeScroll className="min-h-0 flex-1 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)] p-2">
 				{error ? (
 					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{error}</div>
-				) : graph === null ? (
+				) : commits === null ? (
 					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("loading…")}</div>
-				) : graph === "" ? (
+				) : commits.length === 0 ? (
 					<div className="px-1 py-4 text-[12.5px] text-[var(--color-text-faint)]">{t("no changes")}</div>
 				) : (
-					<GitGraph graph={graph} />
+					<>
+						<GitCommitGraph commits={commits} copied={copied} onCopyHash={copyHash} />
+						{hasMore && (
+							<button
+								type="button"
+								className="gui-pane-action mt-1 !w-full justify-center"
+								disabled={loadingMore}
+								onClick={() => load("more")}
+							>
+								<Icon name={loadingMore ? "loader-4" : "arrow-down"} className="h-3.5 w-3.5" />
+								<span>{loadingMore ? t("loading…") : t("load more")}</span>
+							</button>
+						)}
+					</>
 				)}
 			</FadeScroll>
 		</div>

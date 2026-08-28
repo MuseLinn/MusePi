@@ -42,7 +42,6 @@ import { DotMatrixMark } from "./DotMatrixMark";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
-import { ShinyText } from "./ShinyText";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
@@ -1067,7 +1066,7 @@ export function WelcomeComposer({
 						<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
 					</div>
 					<p className="gui-welcome-greet pointer-events-none mb-4">
-						<ShinyText text={greeting(hour)} speed={3.2} />
+						<BlurText text={greeting(hour)} stepMs={38} />
 					</p>
 					{/* Project target — an independent row above the composer,
 					 * left-aligned (openchamber DraftTargetSelectors). */}

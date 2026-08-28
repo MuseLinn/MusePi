@@ -362,6 +362,7 @@ export const tools = {
 	"ext kind gui-motion": "动效包",
 	"ext kind style": "风格",
 	"ext shadowed": "被遮蔽",
+	"ext load failed": "加载失败",
 	"ext provider disabled": "已停用（来源关闭）",
 	"ext item disabled": "已停用",
 	"ext provider": "来源",

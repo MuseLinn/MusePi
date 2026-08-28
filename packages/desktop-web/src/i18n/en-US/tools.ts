@@ -373,6 +373,7 @@ export const tools = {
 	"ext kind gui-motion": "Motion pack",
 	"ext kind style": "Style",
 	"ext shadowed": "Shadowed",
+	"ext load failed": "Load failed",
 	"ext provider disabled": "Disabled (source turned off)",
 	"ext item disabled": "Disabled",
 	"ext provider": "Source",

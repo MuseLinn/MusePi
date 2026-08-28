@@ -17,6 +17,11 @@ function fmtTokens(n: number): string {
 	return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : String(n);
 }
 
+/** 分支树缩进硬上限(层级数):depth 只在真实分支点增长,但病态的深分支
+ *  仍可能超出窄面板 — 封顶后更深的分支与父级对齐(行内已有 kind 图标区
+ *  分层级关系)。 */
+const TRAJ_MAX_INDENT = 6;
+
 /** 单条轨迹事件行(折叠树展开后 + 无 onJumpToEntry 时的平铺回退)。
  *  点击行 = 选中进检视器;右上跳转按钮 = 跳转 transcript(事件不冒泡)。 */
 function EventRow({
@@ -244,7 +249,7 @@ function TreeNodeRow({
 	return (
 		<div
 			className={`traj-trow${onPath ? "" : " traj-trow--off"}${isLeaf ? " traj-trow--leaf" : ""}`}
-			style={{ paddingLeft: depth * 14 }}
+			style={{ paddingLeft: Math.min(depth, TRAJ_MAX_INDENT) * 14 }}
 		>
 			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("trajectory jump")}>
 				<Icon
@@ -338,7 +343,13 @@ export function TrajectoryView({
 		const walk = (nodes: readonly MessageTreeNode[], depth: number): void => {
 			for (const node of nodes) {
 				rows.push({ node, depth });
-				if (!collapsedNodes.has(node.id)) walk(node.children, depth + 1);
+				if (collapsedNodes.has(node.id)) continue;
+				// Depth counts BRANCHES, not messages: a single-child chain (the
+				// linear message flow) keeps its parent's depth — incrementing
+				// per level made every record indent +14px until rows walked
+				// off the panel edge (user: 每个记录都缩进最后都超出界面).
+				// Real branch points (siblings > 1) open the next level.
+				walk(node.children, node.children.length > 1 ? depth + 1 : depth);
 			}
 		};
 		walk(treeRoots, 0);

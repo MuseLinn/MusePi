@@ -69,6 +69,21 @@ const MAX_THINK_SENTENCES = 80;
 // message rows (text + padding) run 60-100px, so 64 is closer than 44.
 const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
 
+/** Scroll the entry row carrying `title=<timestamp>` into view and flash it
+ *  (jump feedback for the request path and the post-expansion path; the
+ *  caller releases bottom-follow before invoking). */
+function jumpFlashRow(root: HTMLElement | null, timestamp: string): void {
+	const el = root?.querySelector<HTMLElement>(`[title="${CSS.escape(timestamp)}"]`);
+	if (!el) return;
+	el.scrollIntoView({ block: "start", behavior: "smooth" });
+	el.classList.remove("tr-flash-highlight");
+	// rAF so the class re-add restarts the animation on consecutive jumps.
+	requestAnimationFrame(() => {
+		el.classList.add("tr-flash-highlight");
+		window.setTimeout(() => el.classList.remove("tr-flash-highlight"), 1300);
+	});
+}
+
 export interface TranscriptProps {
 	entries: readonly SessionEntry[];
 	stream: AssistantMessage | null;
@@ -139,6 +154,13 @@ export interface TranscriptProps {
 	/** True while the caller is paging the next older chunk — the top
 	 *  spacer shows a shimmer so the wait reads as loading, not emptiness. */
 	loadingOlder?: boolean;
+	/** Jump request (message tree / trajectory tree / canvas jumps): when
+	 *  `nonce` advances, expand the tail window (and the compaction fold)
+	 *  until the target row mounts, then scroll it into view with the
+	 *  flash highlight. Long sessions previously scrolled to the top
+	 *  spacer instead — the target stayed unmounted (user: 轨迹跳转不能
+	 *  合理处理). */
+	jumpRequest?: { timestamp: string; nonce: number } | null;
 	/** Read an assistant reply aloud (TTS). */
 	onSpeak?(text: string, messageId?: string): void;
 	/** 当前朗读中的消息 id(播放状态行级指示;null = 无朗读)。 */
@@ -1514,6 +1536,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onFork,
 		onLoadOlder,
 		loadingOlder = false,
+		jumpRequest = null,
 		onSpeak,
 		onSaveImage,
 		speakingId,
@@ -1711,6 +1734,41 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		obs.observe(el);
 		return () => obs.disconnect();
 	}, [hidden > 0, entries.length, onLoadOlder]);
+
+	// Jump requests (message tree / trajectory / canvas / branch bar): the
+	// target row may live in the folded window or behind the compaction
+	// fold — expand both until it mounts, then scroll + flash. Without the
+	// expansion a jump into folded history just hit the top spacer and the
+	// target stayed unmounted (user: 滚动和导航条、轨迹跳转不能合理处理).
+	const lastJumpNonceRef = useRef(0);
+	const pendingJumpRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
+		lastJumpNonceRef.current = jumpRequest.nonce;
+		const idx = entries.findIndex(e => e.timestamp === jumpRequest.timestamp);
+		if (idx < 0) return;
+		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
+		if (idx < hidden) {
+			// Keep ~20 rows of context above the target so it doesn't land
+			// flush against the "show earlier" spacer.
+			setVisibleCount(entries.length - Math.max(0, idx - 20));
+			pendingJumpRef.current = jumpRequest.timestamp;
+		} else {
+			jumpFlashRow(rootRef.current, jumpRequest.timestamp);
+		}
+	}, [jumpRequest, entries, hidden, visibleCount, folding, firstCompactionIdx]);
+
+	// A jump that expanded the window: scroll once the target row mounts.
+	useLayoutEffect(() => {
+		const ts = pendingJumpRef.current;
+		if (!ts) return;
+		const root = rootRef.current;
+		if (!root?.querySelector(`[title="${CSS.escape(ts)}"]`)) return;
+		pendingJumpRef.current = null;
+		lockRef.current = false; // jumped away from the tail — release follow
+		jumpFlashRow(root, ts);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [visibleCount, entries.length]);
 
 	// Refine the spacer's row-height estimate from the mounted rows.
 	useLayoutEffect(() => {

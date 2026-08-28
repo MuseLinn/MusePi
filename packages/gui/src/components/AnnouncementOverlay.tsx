@@ -5,9 +5,18 @@ import { useCallback, useEffect, useState } from "react";
 import { onboardingPending } from "../lib/onboarding";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
+import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
 const ANNOUNCEMENT_EXIT_MS = 200;
+
+/** changelog.startup payload — release notes plus an optional campaign
+ *  reward (rendered as the celebratory ticket overlay instead). */
+interface StartupChangelog {
+	markdown?: string;
+	latestVersion?: string;
+	reward?: RewardPayload | null;
+}
 
 /**
  * Release-notes announcement panel (what's-new push for future features).
@@ -24,6 +33,7 @@ const ANNOUNCEMENT_EXIT_MS = 200;
 export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [markdown, setMarkdown] = useState<string | null>(null);
+	const [reward, setReward] = useState<RewardPayload | null>(null);
 	const [latest, setLatest] = useState<string | null>(null);
 	const enteredCls = useTwoPhaseEnter(open);
 	// Stay mounted through the exit so the fade-out plays instead of cutting.
@@ -41,22 +51,26 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!rpc) return;
 		let cancelled = false;
 		const markdownRef = { current: "" };
+		const rewardRef = { current: null as RewardPayload | null };
 		const openRef = { current: false };
 		void (async () => {
 			try {
 				const [changelog, updates] = await Promise.all([
-					rpc.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", {
+					rpc.request<StartupChangelog | null>("changelog.startup", {
 						locale: getLocaleSnapshot(),
 					}),
 					rpc.request<{ latest?: string } | null>("updates.check", {}),
 				]);
 				if (cancelled) return;
 				const md = changelog?.markdown ?? null;
+				const rw = changelog?.reward ?? null;
 				markdownRef.current = md ?? "";
+				rewardRef.current = rw;
 				setMarkdown(md);
+				setReward(rw);
 				setLatest(updates?.latest ?? null);
 				// The primer owns the first-run experience — defer to it.
-				if (md && !onboardingPending()) {
+				if ((md || rw) && !onboardingPending()) {
 					openRef.current = true;
 					setOpen(true);
 				}
@@ -67,7 +81,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		// The primer finishing mid-session releases the announcement we
 		// deferred earlier (first launch → onboarding → what's new).
 		const onPrimerDone = (): void => {
-			if (markdownRef.current && !openRef.current) {
+			if ((markdownRef.current || rewardRef.current) && !openRef.current) {
 				openRef.current = true;
 				setOpen(true);
 			}
@@ -84,13 +98,14 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (!rpc) return;
 		const onOpen = (): void => {
 			void rpc
-				.request<{ markdown?: string; latestVersion?: string } | null>("changelog.startup", {
+				.request<StartupChangelog | null>("changelog.startup", {
 					force: true,
 					locale: getLocaleSnapshot(),
 				})
 				.then(changelog => {
-					if (!changelog?.markdown) return;
-					setMarkdown(changelog.markdown);
+					if (!changelog?.markdown && !changelog?.reward) return;
+					setMarkdown(changelog.markdown ?? null);
+					setReward(changelog.reward ?? null);
 					setLatest(null);
 					setOpen(true);
 				})
@@ -105,7 +120,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	// the early return (hooks rule: no hook may follow a conditional
 	// return, or the hook count flips between renders).
 	useEffect(() => {
-		if (!open || !markdown) return;
+		if (!open || (!markdown && !reward)) return;
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") {
 				e.preventDefault();
@@ -115,9 +130,11 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 		};
 		document.addEventListener("keydown", onKey, true);
 		return () => document.removeEventListener("keydown", onKey, true);
-	}, [open, markdown, requestClose]);
+	}, [open, markdown, reward, requestClose]);
 
-	if (!open || !markdown) return null;
+	if (!open) return null;
+	if (reward) return <RewardOverlay payload={reward} onClose={requestClose} />;
+	if (!markdown) return null;
 	return (
 		<div
 			className={`gui-onboarding-backdrop${enteredCls ? " gui-onboarding-backdrop--entered" : ""}${closing ? " gui-onboarding-backdrop--closing" : ""}`}

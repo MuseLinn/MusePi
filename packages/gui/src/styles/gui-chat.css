@@ -1254,7 +1254,31 @@ body.gui-resizing .gui-pane-right {
 		color-mix(in oklab, var(--color-text) 5%, transparent) 75%
 	);
 	background-size: 200% 100%;
-	animation: gui-loading-shimmer 1.4s ease-in-out infinite;
+	animation:
+		gui-loading-bar-in 360ms var(--spring) both,
+		gui-loading-shimmer 1.4s ease-in-out infinite;
+}
+/* Staggered rise-in: the three skeleton bars settle one after another
+ * (session-switch polish — the overlay itself fades, the bars drift up). */
+.gui-loading-bar:nth-child(2) {
+	animation-delay:
+		70ms,
+		0ms;
+}
+.gui-loading-bar:nth-child(3) {
+	animation-delay:
+		140ms,
+		0ms;
+}
+@keyframes gui-loading-bar-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
 }
 
 .gui-loading-note {
@@ -1264,6 +1288,7 @@ body.gui-resizing .gui-pane-right {
 	gap: 8px;
 	font-size: 12.5px;
 	color: var(--color-text-faint);
+	animation: gui-loading-bar-in 360ms var(--spring) 160ms both;
 }
 
 .gui-loading-orb {
@@ -1309,9 +1334,219 @@ body.gui-resizing .gui-pane-right {
 	animation: gui-loading-fadein 200ms ease-out;
 }
 
-.gui-motion-off .gui-loading-bar,
-.gui-motion-off .gui-loading-orb {
+/* ── Floating status-card stack (ZCode 悬浮卡 parity) ──────────────────── */
+/* Pinned to the transcript's top-right; each card is a compact launcher
+ * (git state / running subagents / todo progress). Collapsed → slim pill. */
+.gui-status-cards {
+	position: absolute;
+	/* Below the 对话/地图 surface-mode toggle (top 8px + ~28px row) — both
+	 * pin to the transcript's top-right corner and used to overlap. */
+	top: 46px;
+	right: 12px;
+	z-index: 4;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 8px;
+}
+.gui-status-card {
+	width: 248px;
+	padding: 8px 6px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(14px) saturate(140%);
+	-webkit-backdrop-filter: blur(14px) saturate(140%);
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+	animation: gui-menu-in 130ms var(--spring);
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.gui-status-card-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 2px 8px 5px;
+}
+.gui-status-card-title {
+	flex: 1;
+	min-width: 0;
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--color-text-muted);
+}
+.gui-status-count {
+	display: inline-flex;
+	align-items: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-weight: 650;
+	color: var(--color-text-muted);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	font-variant-numeric: tabular-nums;
+}
+.gui-status-count--live {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+.gui-status-row {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 5px 8px;
+	border-radius: 8px;
+	font-size: 12px;
+	color: var(--color-text);
+	transition: background 120ms ease;
+	text-align: left;
+}
+.gui-status-row:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-status-row--ended {
+	color: var(--color-text-faint);
+}
+.gui-status-row-icon {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+.gui-status-caret {
+	width: 12px;
+	height: 12px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+.gui-status-nums {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+	font-size: 11px;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.gui-status-num-add {
+	color: var(--color-ok);
+}
+.gui-status-num-del {
+	color: var(--color-danger);
+}
+.gui-status-branch {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 5px 8px;
+	border-radius: 8px;
+	font-size: 12px;
+	font-weight: 550;
+	color: var(--color-text);
+	transition: background 120ms ease;
+}
+.gui-status-branch:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-status-branch-menu {
+	display: flex;
+	flex-direction: column;
+	padding: 4px;
+	gap: 1px;
+	max-height: 240px;
+	overflow-y: auto;
+	min-width: 180px;
+}
+.gui-status-branch-item {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 5px 8px;
+	border-radius: 8px;
+	font-size: 12px;
+	color: var(--color-text);
+}
+.gui-status-branch-item:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-status-branch-empty {
+	padding: 6px 8px;
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+.gui-status-elapsed {
+	flex-shrink: 0;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+.gui-status-spin {
+	animation: gui-loading-pulse 1.1s ease-in-out infinite;
+}
+.gui-status-collapse {
+	position: absolute;
+	top: -7px;
+	left: -14px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+	color: var(--color-text-faint);
+	transition: color 120ms ease;
+}
+.gui-status-collapse:hover {
+	color: var(--color-text);
+}
+.gui-status-cards--pill {
+	align-items: flex-end;
+}
+.gui-status-pill {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 9px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(14px) saturate(140%);
+	-webkit-backdrop-filter: blur(14px) saturate(140%);
+	font-size: 11px;
+	font-weight: 650;
+	color: var(--color-text-muted);
+	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.gui-motion-off .gui-status-card,
+.gui-motion-off .gui-status-pill,
+.gui-motion-off .gui-status-spin {
 	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-status-card,
+	.gui-status-pill,
+	.gui-status-spin {
+		animation: none;
+	}
+}
+
+.gui-motion-off .gui-loading-bar,
+.gui-motion-off .gui-loading-orb,
+.gui-motion-off .gui-loading-note {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-loading-bar,
+	.gui-loading-orb,
+	.gui-loading-note {
+		animation: none;
+	}
 }
 
 /* ── Transcript scroll progress rail (openchamber overlay scrollbar) ─── */
@@ -3020,6 +3255,22 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
+}
+
+/* Maximize modal scrim: dims the chat column behind the floated panel
+ * (starts below the 48px header so the title bar stays live); click
+ * restores the docked width. Sits under the panel (850) but above every
+ * transcript-local layer — the fixed float scrollbar (30) and hover
+ * chrome can no longer read as panel content (前后内容重叠 fix). */
+.gui-pane-maximize-backdrop {
+	position: fixed;
+	top: 48px;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	z-index: 840;
+	background: color-mix(in oklab, var(--color-bg) 48%, transparent);
+	animation: gui-fade-in 160ms ease;
 }
 
 /* Maximized mode (openchamber fullscreen-surface parity): the panel floats

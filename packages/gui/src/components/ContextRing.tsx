@@ -1,4 +1,5 @@
 import { t } from "@musepi/desktop-web";
+import { SlidingNumber } from "@musepi/desktop-web/src/lib/sliding-number";
 import { CountUp } from "@musepi/desktop-web/src/widgets/count-up";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
@@ -178,7 +179,7 @@ export function ContextRing({
 					<div className="gui-context-pop-row">
 						<span>{t("utilization")}</span>
 						<span className="gui-context-pop-val" style={{ color }}>
-							{Math.round(pct)}%
+							<SlidingNumber value={Math.round(pct)} />%
 						</span>
 					</div>
 					{pct > 100 && (

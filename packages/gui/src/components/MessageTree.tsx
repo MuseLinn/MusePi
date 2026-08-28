@@ -11,9 +11,8 @@
  */
 import { t } from "@musepi/desktop-web";
 import type { SessionEntry } from "@musepi/pi-wire";
-import type { ReactNode, RefObject } from "react";
+import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { scrollToEntry } from "../lib/transcript-jump";
 import { Icon } from "../vendor/oc-icons";
 
 interface TurnNode {
@@ -145,12 +144,15 @@ function filterTree(nodes: TurnNode[], q: string): TurnNode[] {
 
 export function MessageTreeButton({
 	entries,
-	transcriptRef,
+	onJump,
 	onFork,
 	onRevertTo,
 }: {
 	entries: readonly SessionEntry[];
-	transcriptRef: RefObject<HTMLDivElement | null>;
+	/** Jump the transcript to this entry (Transcript jumpRequest): the
+	 *  transcript expands its window/compaction fold until the row mounts,
+	 *  then scrolls + flashes. */
+	onJump(timestamp: string): void;
 	/** Fork a NEW session starting from this node (TUI navigateTree parity):
 	 *  user messages truncate before the node and backfill the composer with
 	 *  its text (re-answer); assistant/toolResult nodes keep the node as the
@@ -203,7 +205,7 @@ export function MessageTreeButton({
 	}, [open]);
 
 	const jump = (node: TurnNode): void => {
-		scrollToEntry(transcriptRef.current, node.entry.timestamp);
+		onJump(node.entry.timestamp);
 		setOpen(false);
 	};
 

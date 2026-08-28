@@ -43,6 +43,16 @@ The installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when Bun match
 - `--source` — always install via Bun (installs Bun if missing)
 - `--ref <tag|commit|branch>` — pin an exact version (source mode)
 
+## Download (three surfaces)
+
+| Surface | Get it |
+|---|---|
+| 🖥️ **Desktop client** (Electron GUI, auto-update) | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — grab the version-matched assets on the [releases page](https://github.com/MuseLinn/MusePi/releases) |
+| 📱 **Android companion** (Capacitor, LAN pairing) | `app-debug.apk` on the [releases page](https://github.com/MuseLinn/MusePi/releases) (`adb install -r app-debug.apk`) |
+| ⌨️ **Terminal TUI** | `npm i -g @musepi/pi-coding-agent` then `musepi` — or the curl installer above |
+
+Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for all three surfaces).
+
 ## Screenshots
 
 | Welcome | Session | Settings |

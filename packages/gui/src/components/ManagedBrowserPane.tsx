@@ -304,13 +304,23 @@ export function ManagedBrowserPane({
 			if (mutations.some(mutationIsOverlayLifecycle)) project(true);
 		});
 		mo.observe(document.body, { childList: true, subtree: true });
-		const onResize = (): void => project(true);
-		window.addEventListener("resize", onResize);
+		// ResizeObserver only sees SIZE changes — a position-only shift
+		// (capture-phase scrolls, minimize→restore, DPI change when the
+		// window crosses monitors) left the native view at stale bounds
+		// (user: 页面内容显示错位). Re-project on those signals too.
+		const onReproject = (): void => project(true);
+		window.addEventListener("resize", onReproject);
+		window.addEventListener("scroll", onReproject, true);
+		window.addEventListener("focus", onReproject);
+		document.addEventListener("visibilitychange", onReproject);
 		return () => {
 			cancelled = true;
 			ro.disconnect();
 			mo.disconnect();
-			window.removeEventListener("resize", onResize);
+			window.removeEventListener("resize", onReproject);
+			window.removeEventListener("scroll", onReproject, true);
+			window.removeEventListener("focus", onReproject);
+			document.removeEventListener("visibilitychange", onReproject);
 			nextLayoutRevision += 1;
 			void api.managedBrowserSetLayout({
 				bounds: { x: 0, y: 0, width: 0, height: 0 },

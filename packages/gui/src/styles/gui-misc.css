@@ -2473,7 +2473,10 @@
 .gui-float-scrollbar {
 	position: fixed;
 	width: 12px;
-	z-index: 100000;
+	/* Transcript-local tier: above the transcript content (and its loading
+	 * overlay), below panes/menus/dialogs — the old 100000 painted this
+	 * fixed bar OVER the maximized right panel (前后内容重叠). */
+	z-index: 30;
 	pointer-events: none;
 	opacity: 0;
 	visibility: hidden;

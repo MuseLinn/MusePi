@@ -4,6 +4,49 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Added
+
+- **Git 图谱表格化**:侧面板 git · 提交历史重做为 ZCode 风格表格(车道求解 SVG 图轨 + HEAD/分支/远端/tag 徽章 + 日期/作者/短哈希列,点击复制完整 hash,加载更多分页);daemon `git.log` 改结构化输出(`--topo-order` + \x1f 分隔字段),`git.status` 支持 `numstat` 行级增删汇总。
+  - EN: ZCode-style git-graph table in the side panel (lane-solved SVG rail, ref badges, date/author/hash columns, click-to-copy, load-more paging); daemon `git.log` now returns structured commits and `git.status` accepts `numstat`.
+- **浮动状态卡**:会话右上角悬浮卡栈(ZCode 悬浮卡吸收)——Git 工具卡(更改 +N/−M、分支切换、提交入口)、智能体卡(运行中子代理 + 已用时 + 已结束折叠)、待办进度卡;可折叠为药丸,空态隐藏。
+  - EN: floating status-card stack top-right of the chat — git tools (±counts, branch switcher, commit jump), running/ended subagents with elapsed timers, todo progress; collapses to a pill.
+- **奖励票券弹窗**:星空背景 + 3D 倾斜票券卡 + 数字滚动 + 领取成功面板(RewardOverlay),接入 what's-new 公告流——daemon 可选 `<agentDir>/reward.json` 驱动,按 id 只弹一次,设置页可重开。
+  - EN: celebratory reward-ticket overlay (starry sky, 3D tilt, count-up amount, claim panel) wired into the what's-new announcement flow, driven by an optional daemon reward.json.
+- **长会话跳转修复 + 树地图定位**:Transcript 新增 jumpRequest——跳转目标在折叠窗口/压缩折叠内时先扩窗再滚动高亮(此前直接滚到顶部 spacer);会话树地图新增当前位置虚线标记 + "回到当前位置"按钮,聚焦卡标签中文化。
+  - EN: Transcript jumpRequest expands the window/compaction fold until the target mounts then scroll+flashes; the session tree canvas gains a current-position marker and a locate button.
+
+### Changed
+
+- **动效打磨**:会话切换骨架屏错落入场;上下文用量百分比改 per-digit 弹簧滚动(SlidingNumber);欢迎问候语逐字模糊渐显(BlurText)。
+  - EN: staggered session-switch skeleton, per-digit spring-rolling context utilization (SlidingNumber), per-char blur-in welcome greeting.
+- **设置整合与人性化(通知与音效/语音/交互)**:通知与音效新增主音量(cuelume setVolume 即时生效)、免打扰时段(事件音效窗口内静音,支持跨零点)、试听全部接线音效;音效库网格只保留未接线音效(接线过的由事件行表达,不再重复罗列)。语音 tab 的 5 组 schema 标签/描述补齐中文。设置分组去重:审批组从交互挪到工具(审批策略紧跟它管控的工具开关)、Language 组从交互挪到外观(外观语言控件本就双写 GUI locale + settings.locale)、computer.glow 从工具 tab 排除(浏览器与桌面 tab 持有实时生效的自定义行);交互 tab 描述文案同步。
+  - EN: notifications gains master volume (live cuelume setVolume), quiet hours (overnight-wrap event-sound muting), audition-all; the palette grid lists unwired sounds only (wired ones live in the event rows). Voice tab schema labels/descriptions translated. Group-level dedupe: Approvals → Tools, Language → Appearance (its picker dual-writes), computer.glow → Browser & desktop only; interaction tab description updated.
+- **会话列表排序修复**:working/unread 不再作为排序主键(点击打开清未读、离开时 working 翻转,行在光标下跳动)——纯按最后活跃时间排序,working/未读仅为行上视觉标记。分组/项目 tab 新增滑动胶囊指示器 + 列表 160ms 淡入;会话切换错峰动画收紧(尾延迟 210→120ms、时长 300→240ms)并删除 gui-pet.css 的冲突重复规则、补 motion-off/reduced-motion 降级;骨架屏闪烁阈值 150→250ms。
+  - EN: session-list sort is pure last-activity (working/unread flips used to reorder rows under the cursor); groups/projects tab gains a sliding capsule thumb + 160ms pane fade; the switch stagger reveal tightens (tail 210→120ms, 300→240ms) with its conflicting duplicate removed and motion-off gating added; skeleton flicker threshold 150→250ms.
+
+### Fixed
+
+- **最大化面板遮罩**:右侧面板最大化新增模态遮罩(z 840,点击还原);浮层滚动条 z 100000 → 30(此前固定定位画在最大化面板之上,前后内容重叠);最大化期间 agent 后台浏览不再强行切换视图。
+  - EN: maximized right panel gains a modal scrim; the fixed float scrollbar drops to a transcript-local tier (was painting over the maximized panel); agent browsing no longer yanks the view while maximized.
+- **daemon `git.log` spawnSync 隐患**:改异步 spawn + 10s kill 守卫(spawnSync 曾冻结整个 daemon 事件循环)。
+  - EN: daemon git.log switched from spawnSync to async spawn with a 10s kill guard.
+- **分支切换错误静默**:WelcomeComposer 派发的 `musepi-gui-toast` 此前无监听者,现接入全局错误横幅。
+  - EN: the listener-less `musepi-gui-toast` event from branch checkout now feeds the global error banner.
+- **扩展中心加载失败可见性**:列表行对 `loadError` 扩展显示红点 + "加载失败"徽章(dsh PluginInventory failed 相位对齐),状态标签以失败相位优先。
+  - EN: extension list rows show a red dot + "load failed" badge for loadError items (dsh PluginInventory parity).
+- **内置浏览器投影加固**:原生视图在仅位移(捕获滚动/最小化恢复/DPI 变化)后重投影,修复页面错位/空白。
+  - EN: the managed browser re-projects after position-only shifts (capture scrolls, minimize/restore, DPI change).
+- **compat 壳透明契约**:serve 的 desktop-web 渲染器此前 html/body 实心 `--bg`、无玻璃管线,Electron 壳的 acrylic/vibrancy 窗口被完全遮住(侧栏/顶栏/主体四周不透明)。新增 `lib/native-glass.ts`:compat 标记 + Electron bridge 同在时 html/body 转透明、`sh-app`/头栏/侧轨 scrim 减薄,并把主题镜像到窗口材质;纯浏览器 guest 保持不透明画法。
+  - EN: the served desktop-web renderer now opts into the native window glass (transparent root, thinned shell scrims, theme mirrored onto the material) via lib/native-glass.ts; plain-browser guests keep the opaque paint.
+- **浮动状态卡遮挡切换钮**:Git/智能体/待办卡与「对话/地图」surface 切换同贴转写右上角(top 10px vs 8px)直接重叠——卡片整体下移至切换行之下(top 46px)。
+  - EN: the floating status cards moved below the chat/canvas surface-mode toggle they overlapped in the top-right corner.
+- **地图视图适配**:canvas 首次 fit 曾以 0px 容器计算且被 width×height 锁存吞掉——节点缩在角落一条;改为挂载 + ResizeObserver 守卫的智能适配(容器退化尺寸时重试),放不下的巨树以可读缩放居中「当前节点」;复位按钮复用同一适配。
+  - EN: the tree-map fit now retries on degenerate wrap sizes (ResizeObserver) instead of a one-shot latch, and oversized trees center on the current node at a readable scale; the reset button reuses the same smart fit.
+- **轨迹分支树缩进溢出**:缩进按消息层级逐行 +14px,线性长会话每行都超面板——改为只在真实分支点(多子)加层、单子链保持父级深度,并加 6 层硬上限。
+  - EN: trajectory branch-tree indent now grows only at real branch points (single-child chains keep the parent depth) with a 6-level cap — long linear sessions no longer walk off the panel.
+
 ## [0.4.6] - 2026-08-28
 
 ### Added

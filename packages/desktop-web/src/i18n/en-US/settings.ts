@@ -297,7 +297,7 @@ export const settings = {
 	"tasks & subagents settings":
 		"Task mode, subagent parameters, isolation, and commands/skills (same source as the terminal settings panel)",
 	"interaction settings description":
-		"Input, approvals, notifications, voice, collaboration, and startup behavior (same source as the terminal settings panel)",
+		"Input, notifications, voice, collaboration, and startup behavior (approvals live in Tools, interface language in Appearance; same source as the terminal settings panel)",
 	"context settings description":
 		"Workspace context, compaction, TTSR rules, and experimental items (same source as the terminal settings panel)",
 	"shell settings description": "Bash and Eval/runtime behavior (same source as the terminal settings panel)",
@@ -509,9 +509,43 @@ export const settings = {
 	"project notes": "Project notes",
 	"workspace changes": "Workspace changes",
 	"pull requests": "Pull requests",
+	approvals: "Tool approvals",
 	"git graph": "Git Graph",
 	git: "Git",
 	"commit history": "Commit history",
+	"subject column": "Subject",
+	"date column": "Date",
+	"author column": "Author",
+	"commit column": "Commit",
+	"load more": "Load more",
+	"master volume": "Master volume",
+	"master volume description":
+		"Overall volume for all UI sounds (applies live — preview buttons double as an audible check)",
+	"quiet hours": "Quiet hours",
+	"quiet hours description":
+		"Event sounds are muted inside this window (overnight wrap supported); previews stay audible. Empty disables.",
+	"quiet hours active": "Quiet hours are active — event sounds are muted",
+	"quiet hours from": "Quiet hours start",
+	"quiet hours to": "Quiet hours end",
+	"audition all wired sounds": "Audition all wired sounds",
+	"audition all wired sounds description": "Play every wired event sound in order; click again to stop",
+	"audition all": "Audition all",
+	"unwired palette reference":
+		"These sounds have no wired UI event yet — audition here or pick them for any event above",
+	"Silence threshold (ms)": "Silence threshold (ms)",
+	"How long of a pause counts as the end of dictation.": "How long of a pause counts as the end of dictation.",
+	"Auto-read new replies": "Auto-read new replies",
+	"Automatically read aloud new assistant replies via the local TTS engine":
+		"Automatically read aloud new assistant replies via the local TTS engine",
+	"Speech rate (0.5–2)": "Speech rate (0.5–2)",
+	"Playback rate for local TTS — 0.8× is common for reading aloud.":
+		"Playback rate for local TTS — 0.8× is common for reading aloud.",
+	"Read content": "Read content",
+	"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.":
+		"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+	"Dictation barge-in": "Dictation barge-in",
+	"What happens to playback when dictation starts: duck (drop volume) or pause.":
+		"What happens to playback when dictation starts: duck (drop volume) or pause.",
 	terminal: "Terminal",
 	files: "Files",
 	edit: "Edit",
@@ -3003,6 +3037,10 @@ export const settings = {
 	"trajectory jump": "Jump to this message",
 	"trajectory timeline": "Trajectory timeline",
 	"trajectory user": "User message",
+	"trajectory assistant": "Assistant message",
+	"trajectory tool": "Tool call",
+	"trajectory system": "System event",
+	"locate current": "Locate current position",
 	"trajectory focus": "Focus",
 	"trajectory clear filter": "Clear filter",
 	"trajectory close": "Close",

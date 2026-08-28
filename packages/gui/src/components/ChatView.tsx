@@ -24,7 +24,6 @@ import {
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
-import { scrollToEntry, scrollToEntryAndFlash } from "../lib/transcript-jump";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -48,6 +47,7 @@ import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionTreeCanvas } from "./SessionTreeCanvas";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
+import { StatusCards } from "./StatusCards";
 import { SubagentPanel } from "./SubagentPanel";
 import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
@@ -569,6 +569,16 @@ export function ChatView({
 	});
 	const terminalDockRef = useRef<HTMLDivElement | null>(null);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
+	// Jump requests (message tree / trajectory / canvas / branch bar): the
+	// Transcript owns window expansion — a jump into the folded window
+	// mounts the target row first, then scrolls + flashes (previously the
+	// raw querySelector missed unmounted rows and fell back to scrollTop 0).
+	const [jumpRequest, setJumpRequest] = useState<{ timestamp: string; nonce: number } | null>(null);
+	const jumpNonceRef = useRef(0);
+	const requestJump = useCallback((timestamp: string): void => {
+		jumpNonceRef.current += 1;
+		setJumpRequest({ timestamp, nonce: jumpNonceRef.current });
+	}, []);
 	// Session-switch reveal: when the active session changes, the transcript
 	// rows play a staggered fade-in (逐字错峰) so the context swap reads as a
 	// transition instead of a hard cut. The marker is removed after the
@@ -920,7 +930,7 @@ export function ChatView({
 				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === childId,
 			);
 			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
-			if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
+			if (typeof ts === "string") requestJump(ts);
 			setCurrentLeafKey(childId);
 			void branchTo(childId);
 		},
@@ -1255,6 +1265,20 @@ export function ChatView({
 													{t("surface canvas")}
 												</button>
 											</div>
+											{/* Floating status cards (ZCode 悬浮卡 parity): live git
+											 * state + subagents + todo progress, pinned top-right;
+											 * hidden entirely when there is nothing to show. */}
+											<StatusCards
+												rpc={rpc}
+												cwd={store?.cwd ?? ""}
+												progress={snap?.progress ?? null}
+												entries={snap?.entries ?? []}
+												working={snap?.working ?? false}
+												onOpenSurface={view => {
+													setActiveView(view);
+													if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+												}}
+											/>
 											{/* History-session cold-open skeleton (React-Bits style):
 											 * the daemon reactivates the session on demand — cover
 											 * the (stale) previous transcript while the RPC runs. */}
@@ -1294,7 +1318,7 @@ export function ChatView({
 														if (typeof t2 === "string") {
 															setViewMode("chat");
 															// 双击跳转 + 短暂高亮(1.2s flash)。
-															scrollToEntryAndFlash(transcriptRef.current, t2);
+															requestJump(t2);
 														}
 													}}
 													onBranchTo={id => {
@@ -1329,6 +1353,7 @@ export function ChatView({
 																 * stream renderer (immutable upserts re-render it). */
 																stream={null}
 																streamDone={true}
+																jumpRequest={jumpRequest}
 																activeTools={snap?.activeTools ?? new Map()}
 																working={snap?.working ?? false}
 																roundDurations={snap?.roundDurations}
@@ -1453,7 +1478,7 @@ export function ChatView({
 													 * the wrap — can never sit under it. */}
 													<MessageTreeButton
 														entries={snap?.entries ?? []}
-														transcriptRef={transcriptRef}
+														onJump={requestJump}
 														onFork={(entry, text, includeTarget) =>
 															void forkFromMessage(entry.id, text, includeTarget)
 														}
@@ -1622,7 +1647,7 @@ export function ChatView({
 														typeof entry === "object" && entry !== null
 															? (entry as { timestamp?: unknown }).timestamp
 															: null;
-													if (typeof ts === "string") scrollToEntry(transcriptRef.current, ts);
+													if (typeof ts === "string") requestJump(ts);
 												}}
 											/>
 										)}
@@ -1677,7 +1702,7 @@ export function ChatView({
 									extTabs={extTabs}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
-										if (ts) scrollToEntry(transcriptRef.current, ts);
+										if (ts) requestJump(ts);
 									}}
 									leafId={effectiveLeaf}
 									activePathIds={activePathIds}

@@ -3497,6 +3497,23 @@ export class DaemonServer {
 				// one source of truth, no double-push. `force` peeks the
 				// three most recent entries WITHOUT advancing the marker
 				// (manual "what's new" re-open).
+				//
+				// Optional campaign reward card: <agentDir>/reward.json
+				// (id + amount required) rides along in both branches; the
+				// GUI renders it as the celebratory ticket overlay. Absent
+				// or malformed → no reward, never a startup error.
+				const readReward = async (): Promise<Record<string, unknown> | null> => {
+					try {
+						const raw = JSON.parse(await Bun.file(path.join(getAgentDir(), "reward.json")).text()) as Record<
+							string,
+							unknown
+						>;
+						if (typeof raw.id === "string" && raw.id.length > 0 && typeof raw.amount === "number") return raw;
+						return null;
+					} catch {
+						return null;
+					}
+				};
 				const { parseChangelog, resolveStartupChangelogForDisplay, selectStartupChangelog } = await import(
 					"../utils/changelog"
 				);
@@ -3507,7 +3524,8 @@ export class DaemonServer {
 				if (force) {
 					const entries = await parseChangelog(undefined);
 					const sel = selectStartupChangelog(entries, "0.0.0", currentVersion, locale);
-					return sel ? { markdown: sel.markdown, latestVersion: sel.latestVersion } : null;
+					const reward = await readReward();
+					return sel || reward ? { markdown: sel?.markdown, latestVersion: sel?.latestVersion, reward } : null;
 				}
 				const settings = await this.#settingsForRpc();
 				const mode = String(settings.get("startup.changelogMode") ?? "summary") as
@@ -3520,11 +3538,13 @@ export class DaemonServer {
 					agentDir: getAgentDir(),
 					locale,
 				});
-				return changelog
+				const reward = await readReward();
+				return changelog || reward
 					? {
-							markdown: changelog.markdown,
-							latestVersion: changelog.latestVersion,
+							markdown: changelog?.markdown,
+							latestVersion: changelog?.latestVersion,
 							locale,
+							reward,
 						}
 					: null;
 			}
@@ -4723,26 +4743,112 @@ export class DaemonServer {
 			case "git.log": {
 				// Recent commit history for the right-pane git view.
 				// Runs git in the caller's session cwd (params.cwd), not the
-				// daemon cwd — the GUI passes snap.state.cwd. With
-				// `graph: true` returns `git log --graph --all` ASCII (the
-				// GUI parses it into the commit-graph SVG).
-				const p = (params ?? {}) as { cwd?: unknown; graph?: unknown };
+				// daemon cwd — the GUI passes snap.state.cwd.
+				//
+				// Structured mode (default): `git log --all --topo-order`
+				// with \x1f-separated fields / \x1e-separated records — full
+				// hash, short hash, author, author timestamp, decorations
+				// (%D) and parents — parsed into typed commits for the GUI's
+				// lane-solving graph renderer. `limit`/`skip` page the log
+				// (load-more fetches the next slice); one extra record beyond
+				// `limit` yields `hasMore`. `graph: true` keeps the legacy
+				// `--graph --oneline` ASCII string. Async spawn with a 10s
+				// kill guard — NOT spawnSync, which froze the whole daemon
+				// event loop once (see git.status).
+				const p = (params ?? {}) as { cwd?: unknown; graph?: unknown; limit?: unknown; skip?: unknown };
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
-				const args =
-					p.graph === true
-						? ["log", "--graph", "--all", "--oneline", "--decorate", "-n", "60"]
-						: ["log", "--oneline", "--decorate", "-n", "30"];
-				const proc = Bun.spawnSync({
-					cmd: ["git", ...args],
-					cwd,
-					stdout: "pipe",
-					stderr: "pipe",
-					windowsHide: true,
-				});
-				if (proc.exitCode !== 0) return { error: "not a git repository" };
-				return p.graph === true
-					? { graph: proc.stdout.toString().trim() }
-					: { commits: proc.stdout.toString().trim() };
+				const run = (args: string[]): Promise<{ exitCode: number | null; stdout: string; stderr: string }> => {
+					const proc = Bun.spawn({
+						cmd: ["git", ...args],
+						cwd,
+						stdout: "pipe",
+						stderr: "pipe",
+						windowsHide: true,
+					});
+					// Belt-and-braces: a hung git (network FS, hooks) must
+					// never pin the RPC open forever.
+					setTimeout(() => {
+						try {
+							proc.kill();
+						} catch {
+							// already exited
+						}
+					}, 10_000);
+					return Promise.all([
+						proc.exited.catch(() => null),
+						new Response(proc.stdout).text(),
+						new Response(proc.stderr).text(),
+					]).then(([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }));
+				};
+				if (p.graph === true) {
+					const res = await run(["log", "--graph", "--all", "--oneline", "--decorate", "-n", "60"]);
+					if (res.exitCode !== 0) return { error: "not a git repository" };
+					return { graph: res.stdout.trim() };
+				}
+				const limit = Math.min(
+					500,
+					Math.max(10, typeof p.limit === "number" && Number.isFinite(p.limit) ? Math.floor(p.limit) : 100),
+				);
+				const skip = typeof p.skip === "number" && p.skip > 0 ? Math.floor(p.skip) : 0;
+				// Remote names distinguish `origin/main`-style remote refs
+				// from same-shaped local branches (`feature/x`) in %D.
+				const [logRes, remotesRes] = await Promise.all([
+					run([
+						"log",
+						"--all",
+						"--topo-order",
+						// %H %h %an %at %D %P %s — records end with \x1e.
+						"--pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%D%x1f%P%x1f%s%x1e",
+						`--max-count=${limit + 1}`,
+						...(skip > 0 ? [`--skip=${skip}`] : []),
+					]),
+					run(["remote"]),
+				]);
+				if (logRes.exitCode !== 0) return { error: "not a git repository" };
+				const remoteNames =
+					remotesRes.exitCode === 0
+						? remotesRes.stdout
+								.split("\n")
+								.map(r => r.trim())
+								.filter(Boolean)
+						: [];
+				const commits: {
+					hash: string;
+					shortHash: string;
+					author: string;
+					timestamp: number;
+					refs: { kind: "head" | "local" | "remote" | "tag"; name: string }[];
+					parents: string[];
+					subject: string;
+				}[] = [];
+				for (const record of logRes.stdout.split("\x1e")) {
+					const trimmed = record.replace(/^\n/, "");
+					if (!trimmed.trim()) continue;
+					const [hash, shortHash, author, at, deco, parentsRaw, subject] = trimmed.split("\x1f");
+					if (!hash || !shortHash) continue;
+					const refs: { kind: "head" | "local" | "remote" | "tag"; name: string }[] = [];
+					for (const d of (deco ?? "").split(/,\s*/)) {
+						const ref = d.trim();
+						if (!ref) continue;
+						const arrow = /^HEAD -> (.+)$/.exec(ref);
+						if (arrow) refs.push({ kind: "head", name: arrow[1]! });
+						else if (ref === "HEAD") refs.push({ kind: "head", name: "HEAD" });
+						else if (ref.startsWith("tag: ")) refs.push({ kind: "tag", name: ref.slice(5) });
+						else if (remoteNames.some(r => ref.startsWith(`${r}/`))) refs.push({ kind: "remote", name: ref });
+						else refs.push({ kind: "local", name: ref });
+					}
+					commits.push({
+						hash,
+						shortHash,
+						author: author ?? "",
+						timestamp: Number.parseInt(at ?? "0", 10) * 1000,
+						refs,
+						parents: (parentsRaw ?? "").split(" ").filter(Boolean),
+						subject: subject ?? "",
+					});
+				}
+				const hasMore = commits.length > limit;
+				return { commits: hasMore ? commits.slice(0, limit) : commits, hasMore };
 			}
 			case "git.diff": {
 				// Working-tree diff for the right-pane workspace-changes view.
@@ -4790,11 +4896,14 @@ export class DaemonServer {
 				// untracked lists (parsed from `status --porcelain=v1`).
 				// `ignored: true` also lists gitignored files (--ignored flag,
 				// parsed from the `!!` lines) — the settings Git tab toggle.
+				// `numstat: true` additionally sums line insertions/deletions
+				// (`diff HEAD --numstat`, staged+unstaged vs HEAD) for the
+				// floating status card's +N/−M badge.
 				//
 				// Async spawns (NOT spawnSync — that froze the whole daemon
 				// event loop, stalling every session's turn while git ran),
-				// and the four probes run concurrently instead of serially.
-				const p = (params ?? {}) as { ignored?: boolean; cwd?: unknown };
+				// and the probes run concurrently instead of serially.
+				const p = (params ?? {}) as { ignored?: boolean; numstat?: boolean; cwd?: unknown };
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
 				const run = (args: string[]): Promise<{ exitCode: number | null; stdout: string; stderr: string }> => {
 					const proc = Bun.spawn({
@@ -4819,11 +4928,12 @@ export class DaemonServer {
 						new Response(proc.stderr).text(),
 					]).then(([exitCode, stdout, stderr]) => ({ exitCode, stdout, stderr }));
 				};
-				const [root, branchRaw, aheadRaw, statusRaw] = await Promise.all([
+				const [root, branchRaw, aheadRaw, statusRaw, numstatRaw] = await Promise.all([
 					run(["rev-parse", "--show-toplevel"]),
 					run(["branch", "--show-current"]),
 					run(["rev-list", "--left-right", "--count", "HEAD...@{upstream}"]),
 					run(["status", "--porcelain=v1", ...(p.ignored ? ["--ignored"] : [])]),
+					p.numstat === true ? run(["diff", "HEAD", "--numstat"]) : Promise.resolve(null),
 				]);
 				if (root.exitCode !== 0) return { error: "not a git repository" };
 				const staged: { path: string; status: string }[] = [];
@@ -4853,6 +4963,19 @@ export class DaemonServer {
 					ahead = a;
 					behind = b;
 				}
+				// numstat sums (binary files report "-" — skip them).
+				let added: number | undefined;
+				let deleted: number | undefined;
+				if (numstatRaw && numstatRaw.exitCode === 0) {
+					added = 0;
+					deleted = 0;
+					for (const line of numstatRaw.stdout.split("\n")) {
+						const m = /^(\d+|-)\t(\d+|-)\t/.exec(line);
+						if (!m) continue;
+						added += m[1] === "-" ? 0 : Number.parseInt(m[1], 10);
+						deleted += m[2] === "-" ? 0 : Number.parseInt(m[2], 10);
+					}
+				}
 				return {
 					root: root.stdout.toString().trim(),
 					branch: branchRaw.exitCode === 0 ? branchRaw.stdout.toString().trim() : null,
@@ -4862,6 +4985,8 @@ export class DaemonServer {
 					unstaged,
 					untracked,
 					ignored: p.ignored ? ignored : undefined,
+					added,
+					deleted,
 				};
 			}
 			case "git.stage": {
