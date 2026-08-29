@@ -15,9 +15,9 @@ en_url: /
         oh-my-pi agent 引擎之上。中文优先、磨砂玻璃、键盘驱动。
       </p>
       <div class="mp-cta-row">
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-arm64.dmg">下载 macOS</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-setup.exe">下载 Windows</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-x86_64.AppImage">下载 Linux</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">下载 macOS</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">下载 Windows</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">下载 Linux</a>
         <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
       </div>
       <div class="mp-version">
@@ -32,8 +32,10 @@ en_url: /
     </div>
   </div>
   <div class="mp-hero-code">
-<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>   <span class="mp-c"># 终端 TUI → musepi</span>
-<span class="mp-cmd">bun run setup &amp;&amp; bun run musepi</span>    <span class="mp-c"># 从源码运行</span></pre>
+<pre><span class="mp-c"># macOS · Linux · WSL</span>
+<span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>
+<span class="mp-c"># Windows — 从源码（全平台通用）</span>
+<span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</span></pre>
   </div>
 </section>
 
@@ -47,10 +49,10 @@ en_url: /
       <h3>桌面客户端</h3>
       <p class="mp-dl-sub">Electron GUI · 磨砂玻璃窗口 · 自动更新</p>
       <ul class="mp-dl-list">
-        <li><a data-asset="MusePi-{v}-arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
-        <li><a data-asset="MusePi-{v}-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
-        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
-        <li><a data-asset="MusePi-{v}-amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
+        <li><a data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
+        <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
+        <li><a data-asset="x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
+        <li><a data-asset="amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
       </ul>
     </div>
     <div class="mp-dl-card">
@@ -67,8 +69,9 @@ en_url: /
       <h3>终端 TUI</h3>
       <p class="mp-dl-sub">完整的 agent 能力面，就在你的终端里</p>
       <div class="mp-hero-code mp-hero-code--tight">
-<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>
-<span class="mp-cmd">musepi</span></pre>
+<pre><span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>   <span class="mp-c"># macOS / Linux / WSL</span>
+<span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
+<span class="mp-cmd">bun run setup &amp;&amp; bun run musepi</span>   <span class="mp-c"># Windows · 从源码</span></pre>
       </div>
       <p class="mp-dl-sub">需要 Node ≥ 22 或 Bun。与桌面端共享会话、daemon 与设置。</p>
     </div>
@@ -136,7 +139,7 @@ en_url: /
 <pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
 <span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># 安装 + 原生依赖 + 链接</span>
 <span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># 终端 TUI</span>
-<span class="mp-cmd">bun --cwd=packages/gui run desktop</span>   <span class="mp-c"># 桌面 GUI</span></pre>
+<span class="mp-cmd">bun run --cwd=packages/gui desktop</span>   <span class="mp-c"># 桌面 GUI</span></pre>
   </div>
   <p class="mp-note">完整指南见 <a href="{{ 'README.zh-CN.md' | relative_url }}">README.zh-CN.md</a> —
   daemon 架构、供应商配置、移动端构建、协作共享。</p>

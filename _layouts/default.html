@@ -288,14 +288,14 @@
       .then(function (res) { return res.ok ? res.json() : null; })
       .then(function (rel) {
         if (!rel || typeof rel.tag_name !== "string") return;
-        var tag = rel.tag_name;           // "v0.4.6"
-        var ver = tag.replace(/^v/, "");  // "0.4.6"
-        var base = RELEASES + "/download/" + tag + "/";
+        var assets = rel.assets || [];
         document.querySelectorAll("[data-release-version]").forEach(function (el) {
-          el.textContent = tag;
+          el.textContent = rel.tag_name;
         });
         document.querySelectorAll("[data-asset]").forEach(function (a) {
-          a.setAttribute("href", base + a.getAttribute("data-asset").replace(/\{v\}/g, ver));
+          var suffix = a.getAttribute("data-asset"); // e.g. "arm64.dmg", "setup.exe"
+          var hit = assets.find(function (x) { return x.name.endsWith(suffix); });
+          if (hit) a.setAttribute("href", hit.browser_download_url);
         });
       })
       .catch(function () { /* fallback links already point at the releases page */ });

@@ -16,9 +16,9 @@ zh_url: /index.zh-CN.html
         frosted-glass, keyboard-driven.
       </p>
       <div class="mp-cta-row">
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-arm64.dmg">Download macOS</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-setup.exe">Download Windows</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-x86_64.AppImage">Download Linux</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">Download macOS</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Download Windows</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Download Linux</a>
         <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
       </div>
       <div class="mp-version">
@@ -33,8 +33,10 @@ zh_url: /index.zh-CN.html
     </div>
   </div>
   <div class="mp-hero-code">
-<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>   <span class="mp-c"># terminal TUI → musepi</span>
-<span class="mp-cmd">bun run setup &amp;&amp; bun run musepi</span>    <span class="mp-c"># from source</span></pre>
+<pre><span class="mp-c"># macOS · Linux · WSL</span>
+<span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>
+<span class="mp-c"># Windows — from source (all platforms)</span>
+<span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</span></pre>
   </div>
 </section>
 
@@ -49,10 +51,10 @@ zh_url: /index.zh-CN.html
       <h3>Desktop client</h3>
       <p class="mp-dl-sub">Electron GUI · frosted-glass window · auto-update</p>
       <ul class="mp-dl-list">
-        <li><a data-asset="MusePi-{v}-arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
-        <li><a data-asset="MusePi-{v}-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
-        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
-        <li><a data-asset="MusePi-{v}-amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
+        <li><a data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
+        <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
+        <li><a data-asset="x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
+        <li><a data-asset="amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
       </ul>
     </div>
     <div class="mp-dl-card">
@@ -69,8 +71,9 @@ zh_url: /index.zh-CN.html
       <h3>Terminal TUI</h3>
       <p class="mp-dl-sub">The full agent surface in your terminal</p>
       <div class="mp-hero-code mp-hero-code--tight">
-<pre><span class="mp-cmd">npm i -g @musepi/pi-coding-agent</span>
-<span class="mp-cmd">musepi</span></pre>
+<pre><span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>   <span class="mp-c"># macOS / Linux / WSL</span>
+<span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
+<span class="mp-cmd">bun run setup &amp;&amp; bun run musepi</span>   <span class="mp-c"># Windows · from source</span></pre>
       </div>
       <p class="mp-dl-sub">Requires Node ≥ 22 or Bun. Same sessions, same daemon,
       same settings as the desktop app.</p>
@@ -145,7 +148,7 @@ zh_url: /index.zh-CN.html
 <pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
 <span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># install + natives + link</span>
 <span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># terminal TUI</span>
-<span class="mp-cmd">bun --cwd=packages/gui run desktop</span>   <span class="mp-c"># desktop GUI</span></pre>
+<span class="mp-cmd">bun run --cwd=packages/gui desktop</span>   <span class="mp-c"># desktop GUI</span></pre>
   </div>
   <p class="mp-note">The full guide lives in <a href="{{ 'README.md' | relative_url }}">README.md</a> —
   daemon architecture, provider setup, mobile build, collab sharing.</p>

@@ -575,8 +575,8 @@ body {
 .mp-main strong {
   color: var(--text);
 }
-.mp-main a {
-  color: var(--accent);
+.mp-main a:not(.mp-cta):not(.mp-cta-ghost) {
+	color: var(--accent);
 }
 .mp-main code {
   font-family: var(--mono);

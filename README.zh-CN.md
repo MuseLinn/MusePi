@@ -80,7 +80,7 @@ musepi --version
 |---|---|
 | 🖥️ **桌面客户端**（Electron GUI，应用内自动更新） | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — 到 [Release 页](https://github.com/MuseLinn/MusePi/releases) 取对应版本资产 |
 | 📱 **Android 移动伴侣**（Capacitor，局域网配对） | [Release 页](https://github.com/MuseLinn/MusePi/releases) 的 `app-debug.apk`（`adb install -r app-debug.apk`） |
-| ⌨️ **终端 TUI** | `npm i -g @musepi/pi-coding-agent` 后运行 `musepi` —— 或用上方 curl 安装脚本 |
+| ⌨️ **终端 TUI** | 上方 curl 安装脚本（macOS/Linux/WSL）装 `musepi` —— 或 `bun run setup && bun run musepi` 从源码（Windows/全平台） |
 
 官网：<https://muselinn.github.io/MusePi/>（双语，含三种形态的下载指引）。
 
@@ -99,7 +99,7 @@ bun run musepi          # 或 bun run dev
 bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
 
 # 桌面 GUI（构建 + 启动 Electron）
-bun --cwd=packages/gui run desktop
+bun run --cwd=packages/gui desktop
 ```
 
 `musepi` 子命令：`launch`（默认对话）、`serve`（daemon）、`acp`、`agents`、`commit`、`config`、`join`、`models`、`plugin`、`say`、`share`、`setup`、`shell`、`stats`、`update`、`completions` 等。
@@ -156,7 +156,7 @@ bun run lint / fmt       # biome + rustfmt
 
 - 全量测试建议 `MUSEPI_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
 - Rust bucket 需要 `cargo-nextest`，且在 `~/.cargo/bin` 前置的 PATH 下跑。
-- 改 `desktop-web` 后必须重建 GUI（`bun --cwd=packages/gui run build`）再验证——浏览器会缓存旧 bundle。
+- 改 `desktop-web` 后必须重建 GUI（`bun run --cwd=packages/gui build`）再验证——浏览器会缓存旧 bundle。
 - GUI/daemon E2E 隔离：`PI_CONFIG_DIR=musepi-test` 起测试 daemon（:8310）；测试 GUI 用 `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`，puppeteer 只连 **9223**（CDP 端点）。
 
 提交习惯：`git commit --no-verify`（husky/biome 基线问题）；natives 变更后需重建（`bun run build:native`，macOS LINKEDIT 对齐自动）。
@@ -173,8 +173,8 @@ bun run lint / fmt       # biome + rustfmt
 ### 桌面应用（macOS）
 
 ```sh
-bun --cwd=packages/gui run pack          # 构建 + electron-builder + 签名
-bun --cwd=packages/gui run pack:dir      # electron-builder dir 构建 + 签名（不重新构建）
+bun run --cwd=packages/gui pack          # 构建 + electron-builder + 签名
+bun run --cwd=packages/gui pack:dir      # electron-builder dir 构建 + 签名（不重新构建）
 ```
 
 产物：`release/mac-arm64/MusePi.app`。`pack` 脚本做 **ad-hoc 签名**（本机可运行）。**正式分发**需要 Developer ID Application 证书 + Apple 公证——macOS 26 对未签名/未公证应用的多项能力（通知等）直接拒绝。CLI 二进制的签名/公证流程见 `docs/macos-signing-notarization.md`（hardened runtime + `notarytool`）；与裸 Mach-O 不同，`.app` bundle 还可以 **staple**（公证票据内嵌，离线也能通过 Gatekeeper 校验）。

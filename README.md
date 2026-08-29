@@ -49,7 +49,7 @@ The installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when Bun match
 |---|---|
 | 🖥️ **Desktop client** (Electron GUI, auto-update) | [macOS arm64 `.dmg`](https://github.com/MuseLinn/MusePi/releases/latest) · [Windows `setup.exe`](https://github.com/MuseLinn/MusePi/releases/latest) · [Linux `.AppImage`/`.deb`](https://github.com/MuseLinn/MusePi/releases/latest) — grab the version-matched assets on the [releases page](https://github.com/MuseLinn/MusePi/releases) |
 | 📱 **Android companion** (Capacitor, LAN pairing) | `app-debug.apk` on the [releases page](https://github.com/MuseLinn/MusePi/releases) (`adb install -r app-debug.apk`) |
-| ⌨️ **Terminal TUI** | `npm i -g @musepi/pi-coding-agent` then `musepi` — or the curl installer above |
+| ⌨️ **Terminal TUI** | `musepi` via the curl installer above (macOS/Linux/WSL) — or `bun run setup && bun run musepi` from source (Windows/all platforms) |
 
 Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for all three surfaces).
 
@@ -184,7 +184,7 @@ bun run lint / fmt       # biome + rustfmt
 ### Desktop app (macOS)
 
 ```sh
-bun --cwd=packages/gui run pack          # build + electron-builder + codesign
+bun run --cwd=packages/gui pack          # build + electron-builder + codesign
 ```
 
 Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bundle so it runs locally. **Distribution builds** need a Developer ID Application certificate + notarization — macOS 26 refuses unsigned/non-notarized apps for several entitlements. See [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).

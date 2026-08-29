@@ -262,11 +262,14 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	console.log(`Updating package versions to ${version}…`);
 	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
 
-	// Filter out private packages
+	// Private packages don't publish to npm — except the release-artifact
+	// packages (gui/desktop-web/mobile) whose version drives the
+	// electron-builder / Capacitor artifact names (`MusePi-<v>-*.dmg`).
+	const RELEASE_ARTIFACT_PKGS = new Set(["@musepi/gui", "@musepi/desktop-web", "@musepi/mobile"]);
 	const publicPkgPaths: string[] = [];
 	for (const pkgPath of pkgJsonPaths) {
 		const pkgJson = await Bun.file(pkgPath).json();
-		if (pkgJson.private) {
+		if (pkgJson.private && !RELEASE_ARTIFACT_PKGS.has(pkgJson.name)) {
 			console.log(`  Skipping ${pkgJson.name} (private)`);
 			continue;
 		}
