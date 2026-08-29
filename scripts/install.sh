@@ -5,14 +5,12 @@ set -e
 # Usage: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 #
 # Options:
-#   --source       Install via bun (installs bun if needed)
-#   --binary       Always install prebuilt binary
+#   --source       Install from source (default)
+#   --binary       Not yet available (prebuilt binaries aren't attached to releases)
 #   --ref <ref>    Install specific tag/commit/branch
 #   -r <ref>       Shorthand for --ref
 
 REPO="MuseLinn/MusePi"
-PACKAGE="@musepi/pi-coding-agent"
-INSTALL_DIR="${PI_INSTALL_DIR:-$HOME/.local/bin}"
 MIN_BUN_VERSION="1.3.14"
 
 # Parse arguments
@@ -171,108 +169,51 @@ has_git_lfs() {
     command -v git-lfs >/dev/null 2>&1
 }
 
-# Install via bun (from source)
-install_via_bun() {
-    echo "Installing via bun (from source)..."
+# Install from source: clone the repo and run the workspace setup. This is the
+# only supported install path — the npm package (@musepi/pi-coding-agent) is
+# never published, and prebuilt TUI binaries are not attached to releases.
+install_from_source() {
+    echo "Installing from source..."
     if ! has_git; then
         echo "git is required to install from source"
         exit 1
     fi
 
-    TMP_DIR="$(mktemp -d)"
-    trap 'rm -rf "$TMP_DIR"' EXIT
+    CLONE_DIR="${PI_CLONE_DIR:-$HOME/.musepi/repo}"
 
-    if [ -n "$REF" ]; then
-        if git clone --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$TMP_DIR" >/dev/null 2>&1; then
-            :
+    if [ -d "$CLONE_DIR/.git" ]; then
+        echo "Using existing checkout at $CLONE_DIR"
+        if [ -n "$REF" ]; then
+            (cd "$CLONE_DIR" && git fetch --depth 1 origin "$REF" && git checkout -f "$REF") || \
+                (cd "$CLONE_DIR" && git checkout "$REF") || \
+                { echo "Failed to checkout $REF"; exit 1; }
         else
-            git clone "https://github.com/${REPO}.git" "$TMP_DIR"
-            (cd "$TMP_DIR" && git checkout "$REF")
+            (cd "$CLONE_DIR" && git pull --ff-only) || \
+                { echo "Failed to update checkout"; exit 1; }
         fi
     else
-        git clone --depth 1 "https://github.com/${REPO}.git" "$TMP_DIR"
+        if [ -n "$REF" ]; then
+            git clone --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$CLONE_DIR" 2>/dev/null || \
+                git clone "https://github.com/${REPO}.git" "$CLONE_DIR"
+        else
+            git clone --depth 1 "https://github.com/${REPO}.git" "$CLONE_DIR"
+        fi
     fi
 
-    # Pull LFS files
-    if has_git_lfs; then
-        (cd "$TMP_DIR" && git lfs pull)
-    fi
-
-    if [ ! -d "$TMP_DIR/packages/coding-agent" ]; then
-        echo "Expected package at ${TMP_DIR}/packages/coding-agent"
+    if [ ! -d "$CLONE_DIR/packages/coding-agent" ]; then
+        echo "Expected package at ${CLONE_DIR}/packages/coding-agent"
         exit 1
     fi
 
-    bun install -g "$TMP_DIR/packages/coding-agent" || {
-        echo "Failed to install from source"
+    echo "Running setup (workspace install + natives + link)..."
+    (cd "$CLONE_DIR" && bun run setup) || {
+        echo "Failed to run 'bun run setup'"
         exit 1
     }
 
     echo ""
-    echo "✓ Installed musepi via bun"
-    echo "Run 'musepi' to get started!"
-}
-
-# Install binary from GitHub releases
-install_binary() {
-    # Detect platform
-    OS="$(uname -s)"
-    ARCH="$(host_arch)"
-
-    case "$OS" in
-        Linux)  PLATFORM="linux" ;;
-        Darwin) PLATFORM="darwin" ;;
-        *)      echo "Unsupported OS: $OS"; exit 1 ;;
-    esac
-
-    case "$ARCH" in
-        x64|arm64) ;;
-        *)         echo "Unsupported architecture: $ARCH"; exit 1 ;;
-    esac
-
-    if [ "$PLATFORM" = "linux" ]; then
-        if [ -f /etc/alpine-release ] || { command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; }; then
-            PLATFORM="linux-musl"
-        fi
-    fi
-
-    BINARY="musepi-${PLATFORM}-${ARCH}"
-    # Get release tag
-    if [ -n "$REF" ]; then
-        echo "Fetching release $REF..."
-        if RELEASE_JSON=$(curl -fsSL --connect-timeout 10 --max-time 60 "https://api.github.com/repos/${REPO}/releases/tags/${REF}"); then
-            LATEST=$(echo "$RELEASE_JSON" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-        else
-            echo "Release tag not found: $REF"
-            echo "For branch/commit installs, use --source with --ref."
-            exit 1
-        fi
-    else
-        echo "Fetching latest release..."
-        RELEASE_JSON=$(curl -fsSL --connect-timeout 10 --max-time 60 "https://api.github.com/repos/${REPO}/releases/latest")
-        LATEST=$(echo "$RELEASE_JSON" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
-    fi
-
-    if [ -z "$LATEST" ]; then
-        echo "Failed to fetch release tag"
-        exit 1
-    fi
-    echo "Using version: $LATEST"
-
-    mkdir -p "$INSTALL_DIR"
-    # Download binary
-    BINARY_URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
-    echo "Downloading ${BINARY}..."
-    curl -fsSL --connect-timeout 10 --speed-limit 1024 --speed-time 30 "$BINARY_URL" -o "${INSTALL_DIR}/musepi"
-    chmod +x "${INSTALL_DIR}/musepi"
-    echo ""
-    echo "✓ Installed musepi to ${INSTALL_DIR}/musepi"
-
-    # Check if in PATH
-    case ":$PATH:" in
-        *":$INSTALL_DIR:"*) echo "Run 'musepi' to get started!" ;;
-        *) echo "Add ${INSTALL_DIR} to your PATH, then run 'musepi'" ;;
-    esac
+    echo "✓ Installed musepi from source"
+    echo "Run: cd $CLONE_DIR && bun run musepi"
 }
 
 # Main logic
@@ -289,10 +230,12 @@ case "$MODE" in
             echo "Install a native bun for your architecture, then re-run."
             exit 1
         fi
-        install_via_bun
+        install_from_source
         ;;
     binary)
-        install_binary
+        echo "Error: prebuilt TUI binaries are not yet attached to releases."
+        echo "Install from source instead (the default — no flag needed)."
+        exit 1
         ;;
     *)
         # Default: install from source. bun arch must match the host (a
@@ -306,6 +249,6 @@ case "$MODE" in
             fi
             install_bun
         fi
-        install_via_bun
+        install_from_source
         ;;
 esac
