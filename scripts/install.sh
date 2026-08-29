@@ -171,45 +171,43 @@ has_git_lfs() {
     command -v git-lfs >/dev/null 2>&1
 }
 
-# Install via bun
+# Install via bun (from source)
 install_via_bun() {
-    echo "Installing via bun..."
+    echo "Installing via bun (from source)..."
+    if ! has_git; then
+        echo "git is required to install from source"
+        exit 1
+    fi
+
+    TMP_DIR="$(mktemp -d)"
+    trap 'rm -rf "$TMP_DIR"' EXIT
+
     if [ -n "$REF" ]; then
-        if ! has_git; then
-            echo "git is required for --ref when installing from source"
-            exit 1
-        fi
-
-        TMP_DIR="$(mktemp -d)"
-        trap 'rm -rf "$TMP_DIR"' EXIT
-
         if git clone --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$TMP_DIR" >/dev/null 2>&1; then
             :
         else
             git clone "https://github.com/${REPO}.git" "$TMP_DIR"
             (cd "$TMP_DIR" && git checkout "$REF")
         fi
-
-        # Pull LFS files
-        if has_git_lfs; then
-            (cd "$TMP_DIR" && git lfs pull)
-        fi
-
-        if [ ! -d "$TMP_DIR/packages/coding-agent" ]; then
-            echo "Expected package at ${TMP_DIR}/packages/coding-agent"
-            exit 1
-        fi
-
-        bun install -g "$TMP_DIR/packages/coding-agent" || {
-            echo "Failed to install from source"
-            exit 1
-        }
     else
-        bun install -g "$PACKAGE" || {
-            echo "Failed to install $PACKAGE"
-            exit 1
-        }
+        git clone --depth 1 "https://github.com/${REPO}.git" "$TMP_DIR"
     fi
+
+    # Pull LFS files
+    if has_git_lfs; then
+        (cd "$TMP_DIR" && git lfs pull)
+    fi
+
+    if [ ! -d "$TMP_DIR/packages/coding-agent" ]; then
+        echo "Expected package at ${TMP_DIR}/packages/coding-agent"
+        exit 1
+    fi
+
+    bun install -g "$TMP_DIR/packages/coding-agent" || {
+        echo "Failed to install from source"
+        exit 1
+    }
+
     echo ""
     echo "✓ Installed musepi via bun"
     echo "Run 'musepi' to get started!"
@@ -288,7 +286,7 @@ case "$MODE" in
             echo "Error: bun reports architecture '$(bun_arch)' but this host is '$(host_arch)'."
             echo "Installing from source with this bun would produce a mismatched binary"
             echo "(e.g. x86_64 under Rosetta on Apple Silicon), causing slow startup and AVX warnings."
-            echo "Install a native bun for your architecture, or re-run without --source to fetch the prebuilt $(host_arch) binary."
+            echo "Install a native bun for your architecture, then re-run."
             exit 1
         fi
         install_via_bun
@@ -297,16 +295,17 @@ case "$MODE" in
         install_binary
         ;;
     *)
-        # Default: use bun only when it matches the host architecture, otherwise
-        # fall back to the prebuilt binary so Rosetta bun can't force an x86_64 build.
+        # Default: install from source. bun arch must match the host (a
+        # mismatched bun would build wrong-arch natives), so provision a
+        # matching bun when needed.
         if has_bun && bun_arch_matches_host; then
             require_bun_version
-            install_via_bun
         else
             if has_bun; then
-                echo "Detected bun with architecture '$(bun_arch)' on a '$(host_arch)' host; using the prebuilt binary instead."
+                echo "Detected bun with architecture '$(bun_arch)' on a '$(host_arch)' host; installing a matching bun instead."
             fi
-            install_binary
+            install_bun
         fi
+        install_via_bun
         ;;
 esac
