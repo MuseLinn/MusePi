@@ -59,6 +59,7 @@
 		"@musepi/pi-mnemopi": "catalog:",
 		"@musepi/pi-natives": "catalog:",
 		"@musepi/pi-tui": "catalog:",
+		"@musepi/pi-tool-select": "catalog:",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "catalog:",
 		"@musepi/sdk": "0.4.7",

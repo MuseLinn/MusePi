@@ -6,6 +6,7 @@
 //! natively over any UTF flavor. The regex chain ([`Splitter::Regex`]) is
 //! test-only: it is the differential oracle the scanners are validated
 //! against, and fancy-regex is a dev-dependency.
+#![allow(clippy::redundant_pub_crate, reason = "utok submodules are private; pub(crate) marks crate-internal API surface for future reuse")]
 
 use crate::utok::{scan, utf::Unit};
 

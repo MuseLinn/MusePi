@@ -13,6 +13,7 @@
 //! and the helpers below implement whole alternates that recur across
 //! families (contraction suffix, digit runs, punctuation runs, the
 //! whitespace trio).
+#![allow(clippy::redundant_pub_crate, reason = "utok submodules are private; pub(crate) marks crate-internal API surface for future reuse")]
 
 pub mod cl100k;
 pub mod deepseek;

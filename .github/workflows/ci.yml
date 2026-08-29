@@ -373,6 +373,10 @@ jobs:
       runs-on: ubuntu-22.04
       steps:
          - uses: actions/checkout@v4
+         # bazel-natives runs `bun scripts/bazel-natives.ts`; GitHub-hosted
+         # runners lack bun, so this job must install it (and validate the
+         # lockfile) exactly like the other addon jobs.
+         - uses: ./.github/actions/bun-install
          - name: Build win32 addon (bazel cross)
            uses: ./.github/actions/bazel-natives
            with:

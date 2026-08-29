@@ -29,6 +29,7 @@
 			"@musepi/pi-mnemopi": "0.4.7",
 			"@musepi/pi-natives": "0.4.7",
 			"@musepi/pi-tui": "0.4.7",
+			"@musepi/pi-tool-select": "0.4.7",
 			"@musepi/pi-utils": "0.4.7",
 			"@musepi/pi-wire": "0.4.7",
 			"@musepi/snapcompact": "0.4.7",
@@ -87,7 +88,8 @@
 		}
 	},
 	"overrides": {
-		"@ark/schema": "0.56.2"
+		"@ark/schema": "0.56.2",
+		"@types/node": "24.13.3"
 	},
 	"scripts": {
 		"setup": "bun install && bun run build:native && bun --cwd=packages/coding-agent link && sh scripts/link-omp.sh",
@@ -189,6 +191,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "catalog:",
 		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
 		"@typescript/native-preview": "catalog:",
 		"lint-staged": "catalog:",
 		"morphicons": "^1.7.0",
