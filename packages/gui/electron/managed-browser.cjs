@@ -329,10 +329,6 @@ class ManagedTab {
 				// before the panel projects a visible layout.
 				backgroundThrottling: false,
 			},
-			// Native layer sits above DOM by default; give it a low positive
-			// index so React overlays (menus, dialogs, picker UI) render on
-			// top. The host BrowserWindow's own content stays at 0.
-			zIndex: 1,
 		});
 		const wc = this.view.webContents;
 		// The initial about:blank document does not boot a debuggable

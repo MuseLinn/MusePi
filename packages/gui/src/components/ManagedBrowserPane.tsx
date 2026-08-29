@@ -49,8 +49,11 @@ function isActuallyOnScreen(el: Element): boolean {
 }
 
 function hasBlockingOverlay(): boolean {
-	const el = document.querySelector(APP_OVERLAY_SELECTOR);
-	return el !== null && isActuallyOnScreen(el);
+	// querySelector returns only the FIRST match — a permanently-mounted
+	// hidden overlay (the global-pause dialog) can sit ahead of the real
+	// popup in DOM order and mask it (user: 浏览器菜单被网页内容遮挡).
+	// Scan every candidate; any on-screen overlay blocks the native view.
+	return Array.from(document.querySelectorAll(APP_OVERLAY_SELECTOR)).some(isActuallyOnScreen);
 }
 
 /** Only portal/toast lifecycle mutations — streaming text (characterData)
