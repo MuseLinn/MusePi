@@ -1,27 +1,72 @@
 import { describe, expect, it } from "bun:test";
-import { buildRoundFolds, formatRoundDuration, isInsideFold } from "../src/components/transcript/round-collapse";
 import type { SessionEntry } from "@musepi/pi-wire";
+import { buildRoundFolds, formatRoundDuration, isInsideFold } from "../src/components/transcript/round-collapse";
 
 /** Completed-round fold contract: rounds with a frozen duration fold their
  *  working span (tools/commands) behind a header, the live tail stays
  *  expanded, counts are per-round, and the duration formats hh:mm:ss. */
 function user(ts: number): SessionEntry {
-	return { type: "message", id: `u${ts}`, parentId: null, timestamp: String(ts), message: { role: "user", content: "hi", timestamp: ts } } as SessionEntry;
+	return {
+		type: "message",
+		id: `u${ts}`,
+		parentId: null,
+		timestamp: String(ts),
+		message: { role: "user", content: "hi", timestamp: ts },
+	} as SessionEntry;
 }
 function assistant(ts: number, toolCalls = 0): SessionEntry {
 	const content: unknown[] = [];
-	for (let i = 0; i < toolCalls; i++) content.push({ type: "toolCall", id: `t${ts}-${i}`, name: "bash", arguments: "{}" });
+	for (let i = 0; i < toolCalls; i++)
+		content.push({ type: "toolCall", id: `t${ts}-${i}`, name: "bash", arguments: "{}" });
 	content.push({ type: "text", text: `reply ${ts}` });
-	return { type: "message", id: `a${ts}`, parentId: null, timestamp: String(ts), message: { role: "assistant", content, timestamp: ts } } as SessionEntry;
+	return {
+		type: "message",
+		id: `a${ts}`,
+		parentId: null,
+		timestamp: String(ts),
+		message: { role: "assistant", content, timestamp: ts },
+	} as SessionEntry;
 }
 function bash(ts: number): SessionEntry {
-	return { type: "message", id: `b${ts}`, parentId: null, timestamp: String(ts), message: { role: "bashExecution", command: "ls", output: "", exitCode: 0, cancelled: false, truncated: false, timestamp: ts } } as SessionEntry;
+	return {
+		type: "message",
+		id: `b${ts}`,
+		parentId: null,
+		timestamp: String(ts),
+		message: {
+			role: "bashExecution",
+			command: "ls",
+			output: "",
+			exitCode: 0,
+			cancelled: false,
+			truncated: false,
+			timestamp: ts,
+		},
+	} as SessionEntry;
 }
 function toolResult(ts: number): SessionEntry {
-	return { type: "message", id: `r${ts}`, parentId: null, timestamp: String(ts), message: { role: "toolResult", toolCallId: `t${ts}`, toolName: "bash", content: [{ type: "text", text: "ok" }], isError: false, timestamp: ts } } as SessionEntry;
+	return {
+		type: "message",
+		id: `r${ts}`,
+		parentId: null,
+		timestamp: String(ts),
+		message: {
+			role: "toolResult",
+			toolCallId: `t${ts}`,
+			toolName: "bash",
+			content: [{ type: "text", text: "ok" }],
+			isError: false,
+			timestamp: ts,
+		},
+	} as SessionEntry;
 }
 
-const DURATIONS = new Map<number, number>([[3, 125_000], [4, 125_000], [5, 3_660_000], [6, 3_660_000]]);
+const DURATIONS = new Map<number, number>([
+	[3, 125_000],
+	[4, 125_000],
+	[5, 3_660_000],
+	[6, 3_660_000],
+]);
 
 describe("buildRoundFolds", () => {
 	it("folds a completed round's working span, leaving the final reply outside", () => {
