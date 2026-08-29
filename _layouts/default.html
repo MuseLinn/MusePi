@@ -80,67 +80,202 @@
       revealables.forEach(function (el) { io.observe(el); });
     }
 
-    /* ── Dot-matrix π: the same dot-grid mark the app's welcome backdrop
-     *    draws, rendered live on the site hero (gold dots, sparse colored
-     *    accents, staggered entrance + gentle twinkle) ──────────────────── */
-    var GLYPH = [
-      ".#..........",
-      ".##########.",
-      ".#.#.....#..",
-      "...#.....#..",
-      "...#.....#..",
-      "...#.....#..",
-      "...#.....#..",
-      "...#.....#..",
-      "...##...##.."
-    ];
-    var ACCENTS = ["#d9a441", "#d9a441", "#d9a441", "#46a758", "#3e63dd", "#e5484d"];
-    document.querySelectorAll("canvas.mp-dots").forEach(function (canvas) {
-      var cell = 26;
-      var pad = 4;
-      var cols = GLYPH[0].length;
-      var rows = GLYPH.length;
-      var dpr = Math.min(2, window.devicePixelRatio || 1);
-      canvas.width = (cols * cell + pad * 2) * dpr;
-      canvas.height = (rows * cell + pad * 2) * dpr;
-      canvas.style.width = cols * cell + pad * 2 + "px";
-      canvas.style.height = rows * cell + pad * 2 + "px";
-      var ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.scale(dpr, dpr);
-      var dots = [];
-      for (var r = 0; r < rows; r++) {
-        for (var c = 0; c < cols; c++) {
-          if (GLYPH[r].charAt(c) !== "#") continue;
-          var pick = (r * 7 + c * 3) % 11;
-          dots.push({
-            x: pad + c * cell + cell / 2,
-            y: pad + r * cell + cell / 2,
-            color: pick < 8 ? "#d9a441" : ACCENTS[4 + (pick % 3)] === undefined ? "#d9a441" : ["#46a758", "#3e63dd", "#e5484d"][pick % 3],
-            delay: (c * 34 + r * 55) % 900
-          });
+    /* ── Dot-matrix brand mark (DotMatrixMark parity): the π is rasterized
+     *    to a full grid — background dots + gold text dots + ~2% flowing
+     *    colored accents + a feather edge + breathing + a mouse halo that
+     *    magnifies text dots + a click ripple ─────────────────────────── */
+    (function () {
+      var TEXT = "π", GRID = 6, RADIUS = 2.0, MOUSE_R = 110, ACCENT_CHANCE = 0.02, FONT_SIZE = 120;
+      var ACCENTS = ["#ff6b6b", "#51cf66", "#339af0", "#cc5de8", "#ffd43b"];
+      var TEXT_COLOR = "#d9a441", BG_COLOR = "rgba(255,255,255,0.15)", ACTIVE_COLOR = "#ffffff";
+      var RIPPLE_SPEED = 0.55, RIPPLE_WIDTH = 26, RIPPLE_MAX = 900, FEATHER = 42;
+
+      function hashStr(s) { var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+      function mulberry32(seed) { var a = seed | 0; return function () { a = (a + 0x6d2b79f5) | 0; var t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+      function hexToHsl(hex) {
+        var m = /^#([0-9a-f]{6})$/i.exec(hex); if (!m) return null;
+        var n = parseInt(m[1], 16);
+        var r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+        var mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+        if (mx === mn) return { h: 0, s: 0, l: l };
+        var d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn), h;
+        if (mx === r) h = (g - b) / d + (g < b ? 6 : 0);
+        else if (mx === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        return { h: (h / 6) % 1, s: s, l: l };
+      }
+      function hslToRgb(h, s, l) {
+        function hue2rgb(p, q, t) { if (t < 0) t += 1; if (t > 1) t -= 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; }
+        var q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+        return "rgb(" + Math.round(hue2rgb(p, q, h + 1 / 3) * 255) + "," + Math.round(hue2rgb(p, q, h) * 255) + "," + Math.round(hue2rgb(p, q, h - 1 / 3) * 255) + ")";
+      }
+
+      // Rasterize the glyph once into a sampled mask.
+      var off = document.createElement("canvas");
+      off.width = 1400; off.height = 400;
+      var octx = off.getContext("2d");
+      octx.fillStyle = "#000";
+      octx.font = "600 " + FONT_SIZE + "px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+      octx.textAlign = "center"; octx.textBaseline = "middle";
+      octx.fillText(TEXT, off.width / 2, off.height / 2);
+      var data = octx.getImageData(0, 0, off.width, off.height).data;
+      var mask = {};
+      var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      var half = GRID / 2;
+      for (var gy = 0; gy < off.height; gy += GRID) {
+        for (var gx = 0; gx < off.width; gx += GRID) {
+          var hit = false;
+          var corners = [[0, 0], [half, 0], [0, half], [half, half]];
+          for (var ci = 0; ci < 4; ci++) {
+            var px = Math.min(off.width - 1, Math.floor(gx + corners[ci][0]));
+            var py = Math.min(off.height - 1, Math.floor(gy + corners[ci][1]));
+            if (data[(py * off.width + px) * 4 + 3] > 60) { hit = true; break; }
+          }
+          if (!hit) continue;
+          mask[gx + "," + gy] = true;
+          if (gx < minX) minX = gx; if (gx > maxX) maxX = gx;
+          if (gy < minY) minY = gy; if (gy > maxY) maxY = gy;
         }
       }
-      var start = performance.now();
-      function frame(now) {
-        var t = now - start;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        for (var i = 0; i < dots.length; i++) {
-          var d = dots[i];
-          var k = reduced ? 1 : Math.min(1, Math.max(0, (t - d.delay) / 420));
-          var ease = 1 - Math.pow(1 - k, 3);
-          var tw = reduced ? 1 : 0.84 + 0.16 * Math.sin(t / 900 + d.x * 0.05 + d.y * 0.03);
-          ctx.beginPath();
-          ctx.arc(d.x, d.y, cell * 0.28 * (0.4 + 0.6 * ease) * tw, 0, Math.PI * 2);
-          ctx.fillStyle = d.color;
-          ctx.globalAlpha = 0.35 + 0.65 * ease;
-          ctx.fill();
+
+      document.querySelectorAll("canvas.mp-dots").forEach(function (canvas) {
+        var ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        var W = 0, H = 0, raf = 0, lastT = 0, time = 0, disposed = false;
+        var mouse = { x: -9999, y: -9999, active: false };
+        var dots = [], bgIdx = [], textIdx = [];
+        var fb = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+        var ripples = [];
+
+        function featherFactor(x, y) {
+          var dx = Math.max(fb.minX - x, 0, x - fb.maxX);
+          var dy = Math.max(fb.minY - y, 0, y - fb.maxY);
+          var t = Math.min(1, Math.hypot(dx, dy) / FEATHER);
+          return 1 - t * t * (3 - 2 * t);
         }
-        ctx.globalAlpha = 1;
-        requestAnimationFrame(frame);
-      }
-      requestAnimationFrame(frame);
-    });
+
+        function build() {
+          var textW = maxX - minX, textH = maxY - minY;
+          var offX = Math.round((W - textW) / 2 - minX);
+          var offY = Math.round((H - textH) / 2 - minY);
+          var pad = 30;
+          var startX = Math.floor(((W - textW) / 2 - pad) / GRID) * GRID;
+          var endX = Math.ceil(((W + textW) / 2 + pad) / GRID) * GRID;
+          var startY = Math.floor(((H - textH) / 2 - pad) / GRID) * GRID;
+          var endY = Math.ceil(((H + textH) / 2 + pad) / GRID) * GRID;
+          fb = { minX: (W - textW) / 2, maxX: (W + textW) / 2, minY: (H - textH) / 2, maxY: (H + textH) / 2 };
+          var rng = mulberry32(hashStr(TEXT));
+          dots = []; bgIdx = []; textIdx = [];
+          for (var y = startY; y <= endY; y += GRID) {
+            for (var x = startX; x <= endX; x += GRID) {
+              if (x < 0 || x > W || y < 0 || y > H) continue;
+              var mx = Math.round((x - offX) / GRID) * GRID;
+              var my = Math.round((y - offY) / GRID) * GRID;
+              var isText = mask[mx + "," + my] === true;
+              var accentHex = isText && rng() < ACCENT_CHANCE ? ACCENTS[Math.floor(rng() * ACCENTS.length)] : null;
+              var scatter = (rng() - 0.5) * 16;
+              dots.push({
+                ox: x, oy: y, x: x + scatter, y: y + scatter, vx: 0, vy: 0,
+                isText: isText, r: 0, baseR: isText ? RADIUS : RADIUS * 0.6,
+                phase: rng() * Math.PI * 2, alpha: featherFactor(x, y),
+                accent: accentHex ? hexToHsl(accentHex) : null, accentPhase: rng() * Math.PI * 2
+              });
+              (isText ? textIdx : bgIdx).push(dots.length - 1);
+            }
+          }
+        }
+
+        function drawDot(d) {
+          var bx = Math.sin(time * 0.4 + d.phase) * 0.6;
+          var by = Math.cos(time * 0.28 + d.phase) * 0.6;
+          var tx = d.ox + bx, ty = d.oy + by;
+          var mouseScale = 1;
+          if (mouse.active) {
+            var ddx = mouse.x - d.x, ddy = mouse.y - d.y;
+            var dist = Math.hypot(ddx, ddy);
+            if (dist < MOUSE_R) {
+              var t = 1 - dist / MOUSE_R;
+              d.vx += ddx * t * 0.005; d.vy += ddy * t * 0.005;
+              mouseScale = 1 + t * (d.isText ? 1.0 : 0.3);
+            }
+          }
+          var now = performance.now();
+          for (var ri = 0; ri < ripples.length; ri++) {
+            var rp = ripples[ri];
+            var wave = RIPPLE_SPEED * (now - rp.start);
+            if (wave > RIPPLE_MAX) continue;
+            var rdx = d.x - rp.x, rdy = d.y - rp.y;
+            var rdist = Math.hypot(rdx, rdy);
+            var band = Math.abs(rdist - wave);
+            if (band < RIPPLE_WIDTH) {
+              var rt = 1 - band / RIPPLE_WIDTH;
+              var falloff = Math.max(0, 1 - wave / RIPPLE_MAX);
+              var pulse = rt * 1.25 * falloff;
+              var nx = rdist > 0.01 ? rdx / rdist : 0, ny = rdist > 0.01 ? rdy / rdist : 0;
+              d.vx += nx * pulse * 5; d.vy += ny * pulse * 5;
+              if (1 + pulse * 1.5 > mouseScale) mouseScale = 1 + pulse * 1.5;
+            }
+          }
+          d.vx += (tx - d.x) * 0.08; d.vy += (ty - d.y) * 0.08;
+          d.vx *= 0.88; d.vy *= 0.88;
+          d.x += d.vx; d.y += d.vy;
+          d.r += (d.baseR * mouseScale - d.r) * 0.04;
+          d.alpha = featherFactor(d.x, d.y);
+          var inMouse = mouse.active && Math.hypot(mouse.x - d.x, mouse.y - d.y) < MOUSE_R * 0.4;
+          var color;
+          if (inMouse) color = ACTIVE_COLOR;
+          else if (d.accent) { var shift = Math.sin(time * 0.35 + d.accentPhase) * 0.12; color = hslToRgb((d.accent.h + shift + 1) % 1, d.accent.s, d.accent.l); }
+          else color = d.isText ? TEXT_COLOR : BG_COLOR;
+          ctx.globalAlpha = d.alpha;
+          ctx.beginPath(); ctx.arc(d.x, d.y, Math.max(0.2, d.r), 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+        }
+
+        function render() {
+          ctx.clearRect(0, 0, W, H);
+          for (var i = 0; i < bgIdx.length; i++) drawDot(dots[bgIdx[i]]);
+          for (var j = 0; j < textIdx.length; j++) drawDot(dots[textIdx[j]]);
+          for (var k = ripples.length - 1; k >= 0; k--) { if (RIPPLE_SPEED * (performance.now() - ripples[k].start) > RIPPLE_MAX) ripples.splice(k, 1); }
+        }
+
+        function frame(t) {
+          if (disposed) return;
+          if (!mouse.active && ripples.length === 0 && t - lastT < 33.3) { raf = requestAnimationFrame(frame); return; }
+          lastT = t; time += 0.016;
+          render();
+          raf = requestAnimationFrame(frame);
+        }
+
+        function resize() {
+          var rect = canvas.getBoundingClientRect();
+          var dpr = Math.min(2, window.devicePixelRatio || 1);
+          W = rect.width; H = rect.height;
+          if (W <= 0 || H <= 0) return;
+          canvas.width = Math.round(W * dpr);
+          canvas.height = Math.round(H * dpr);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          build();
+          if (reduced) render();
+          else if (raf === 0) raf = requestAnimationFrame(frame);
+        }
+
+        function inside(e, rect) { return e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom; }
+        function onMove(e) {
+          var rect = canvas.getBoundingClientRect();
+          if (!inside(e, rect) || (e.target && e.target.closest && e.target.closest("a,button,input,select,textarea") !== null)) { mouse.active = false; return; }
+          mouse.x = e.clientX - rect.left; mouse.y = e.clientY - rect.top; mouse.active = true;
+        }
+        function onDown(e) {
+          var rect = canvas.getBoundingClientRect();
+          if (!inside(e, rect)) return;
+          ripples.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, start: performance.now() });
+          if (ripples.length > 4) ripples.shift();
+        }
+        window.addEventListener("resize", resize);
+        window.addEventListener("mousemove", onMove, true);
+        window.addEventListener("pointerdown", onDown, true);
+        resize();
+      });
+    })();
 
     /* ── Latest release: rewrite download links + version badge from the
      *    GitHub API (CORS-enabled for public repos); the static fallbacks

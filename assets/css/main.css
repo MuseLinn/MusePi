@@ -256,6 +256,12 @@ body {
     transform: scale(1.05);
   }
 }
+.mp-dots {
+  display: block;
+  width: 200px;
+  height: 150px;
+  margin: 0 auto;
+}
 .mp-hero-mark {
   justify-self: center;
   padding: 26px 30px 14px;
