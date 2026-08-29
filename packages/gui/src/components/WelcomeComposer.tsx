@@ -10,6 +10,7 @@ import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
+import { dispatchNotification } from "../lib/notify";
 import { modLabel } from "../lib/shortcuts";
 import { rankSlashEntries } from "../lib/slash-rank";
 import {
@@ -1441,9 +1442,10 @@ export function WelcomeComposer({
 													setDictating(false);
 													setTranscribing(false);
 												},
-												() => {
+												message => {
 													setDictating(false);
 													setTranscribing(false);
+													dispatchNotification("error", { lastMessage: message });
 												},
 												rpc,
 												activity => {
@@ -1453,6 +1455,10 @@ export function WelcomeComposer({
 														setTranscribing(false);
 													} else if (activity.phase === "transcribing") {
 														setTranscribing(true);
+													} else if (activity.phase === "error") {
+														setDictating(false);
+														setTranscribing(false);
+														dispatchNotification("error", { lastMessage: activity.message });
 													}
 												},
 											);

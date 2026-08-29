@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
+import { dispatchNotification } from "../lib/notify";
 import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -434,9 +435,13 @@ export function ChatView({
 			},
 			activity => {
 				if (activity.phase === "speaking") setSpeakingId(lastId);
-				else if (activity.phase === "done" || activity.phase === "stopped" || activity.phase === "error") {
+				else if (activity.phase === "done" || activity.phase === "stopped") {
 					stopSpeakRef.current = null;
 					setSpeakingId(prev => (prev === lastId ? null : prev));
+				} else if (activity.phase === "error") {
+					stopSpeakRef.current = null;
+					setSpeakingId(prev => (prev === lastId ? null : prev));
+					dispatchNotification("error", { lastMessage: activity.message });
 				}
 			},
 		);
@@ -1428,13 +1433,13 @@ export function ChatView({
 																		},
 																		activity => {
 																			if (activity.phase === "speaking") setSpeakingId(entryId);
-																			else if (
-																				activity.phase === "done" ||
-																				activity.phase === "stopped" ||
-																				activity.phase === "error"
-																			) {
+																			else if (activity.phase === "done" || activity.phase === "stopped") {
 																				stopSpeakRef.current = null;
 																				setSpeakingId(prev => (prev === entryId ? null : prev));
+																			} else if (activity.phase === "error") {
+																				stopSpeakRef.current = null;
+																				setSpeakingId(prev => (prev === entryId ? null : prev));
+																				dispatchNotification("error", { lastMessage: activity.message });
 																			}
 																		},
 																	);

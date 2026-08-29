@@ -8,6 +8,7 @@ import { tapFeedback } from "../lib/haptic";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
+import { dispatchNotification } from "../lib/notify";
 import {
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,
@@ -1797,9 +1798,10 @@ export function Composer({
 										setDictating(false);
 										setTranscribing(false);
 									},
-									() => {
+									message => {
 										setDictating(false);
 										setTranscribing(false);
+										dispatchNotification("error", { lastMessage: message });
 									},
 									rpc,
 									activity => {
@@ -1809,6 +1811,10 @@ export function Composer({
 											setTranscribing(false);
 										} else if (activity.phase === "transcribing") {
 											setTranscribing(true);
+										} else if (activity.phase === "error") {
+											setDictating(false);
+											setTranscribing(false);
+											dispatchNotification("error", { lastMessage: activity.message });
 										}
 									},
 								);
