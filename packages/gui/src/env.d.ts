@@ -59,6 +59,10 @@ interface ManagedBrowserTab {
 	title: string;
 	loading: boolean;
 	openedByAgent: boolean;
+	/** page-favicon-updated first URL; null until declared. */
+	favicon: string | null;
+	/** <meta name="theme-color"> (#rrggbb); null when absent/non-hex. */
+	themeColor: string | null;
 }
 
 interface ManagedBrowserActivity {

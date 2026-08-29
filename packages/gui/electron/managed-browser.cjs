@@ -317,6 +317,10 @@ class ManagedTab {
 		this.visible = false;
 		this.bounds = null;
 		this.lastLayoutRevision = 0;
+		/** page-favicon-updated first URL; null until the page declares one. */
+		this.favicon = null;
+		/** <meta name="theme-color"> (#rrggbb); null when absent or non-hex. */
+		this.themeColor = null;
 		this.view = new WebContentsView({
 			webPreferences: {
 				partition: PARTITION,
@@ -364,6 +368,14 @@ class ManagedTab {
 		});
 		wc.on("page-title-updated", (_e, title) => {
 			this.title = title;
+			controller.notifyLifecycle(this);
+		});
+		wc.on("page-favicon-updated", (_e, favicons) => {
+			this.favicon = favicons && favicons.length > 0 ? favicons[0] : null;
+			controller.notifyLifecycle(this);
+		});
+		wc.on("did-change-theme-color", (_e, color) => {
+			this.themeColor = typeof color === "string" ? color : null;
 			controller.notifyLifecycle(this);
 		});
 		wc.on("destroyed", () => {
@@ -704,6 +716,8 @@ class ManagedBrowserController {
 				title: tab.title || "新建标签页",
 				loading: tab.loading,
 				openedByAgent: tab.openedByAgent,
+				favicon: tab.favicon,
+				themeColor: tab.themeColor,
 			})),
 			canGoBack: active ? this.canGoBack(active) : false,
 			canGoForward: active ? this.canGoForward(active) : false,

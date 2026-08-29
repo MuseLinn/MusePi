@@ -161,6 +161,22 @@ function faviconUrl(url: string): string | undefined {
 	}
 }
 
+/** #rgb/#rrggbb → WCAG 相对亮度 (0–1); 无效返回 null。主题色小于 ~0.42 视作
+ *  深色背景, 前景反题成白 — 让 tab badge 读取网页 theme-color 时保持对比度。 */
+function hexLuminance(color: string | null | undefined): number | null {
+	if (!color) return null;
+	const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+	if (!m) return null;
+	let hex = m[1]!;
+	if (hex.length === 3) hex = hex.split("").map(c => `${c}${c}`).join("");
+	const n = Number.parseInt(hex, 16);
+	const lin = (c: number): number => {
+		c /= 255;
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+	};
+	return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+}
+
 interface AddressDisplayParts {
 	url: string;
 	title?: string;
@@ -698,32 +714,55 @@ export function ManagedBrowserPane({
 			 * what the user sees — the agent keeps its own working tab). */}
 			{state && state.tabs.length > 0 && (
 				<div className="flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					{state.tabs.map(tab => (
-						<div
-							key={tab.id}
-							className={`gui-browser-tab${tab.id === state.activeTabId ? " gui-browser-tab--active" : ""}`}
-							title={tab.url}
-						>
-							<button
-								type="button"
-								className="gui-browser-tab-main"
-								aria-label={`${tab.title}${tab.openedByAgent ? ` (${t("agent created tab")})` : ""}`}
-								onClick={() => void api?.managedBrowserSelectTab(tab.id)}
+					{state.tabs.map(tab => {
+						const themeLum = hexLuminance(tab.themeColor);
+						const themeDark = themeLum !== null && themeLum < 0.42;
+						return (
+							<div
+								key={tab.id}
+								className={`gui-browser-tab${tab.id === state.activeTabId ? " gui-browser-tab--active" : ""}${tab.openedByAgent ? " gui-browser-tab--agent" : ""}`}
+								title={tab.url}
+								style={
+									tab.themeColor
+										? { backgroundColor: tab.themeColor, color: themeDark ? "#fff" : "#000", borderColor: "transparent" }
+										: undefined
+								}
 							>
-								<span className="max-w-[110px] truncate">{tab.title?.trim() || t("browser empty tab")}</span>
-								{tab.openedByAgent && <span className="gui-browser-tab-badge">{t("agent created tab")}</span>}
-							</button>
-							<button
-								type="button"
-								className="gui-browser-tab-close"
-								aria-label={t("browser close tab")}
-								title={t("browser close tab")}
-								onClick={() => void api?.managedBrowserCloseTab(tab.id)}
-							>
-								<Icon name="close" className="h-3 w-3" />
-							</button>
-						</div>
-					))}
+								<button
+									type="button"
+									className="gui-browser-tab-main"
+									aria-label={`${tab.title}${tab.openedByAgent ? ` (${t("agent created tab")})` : ""}`}
+									onClick={() => void api?.managedBrowserSelectTab(tab.id)}
+								>
+									{tab.loading ? (
+										<Icon name="loader-4" className="h-3 w-3 shrink-0 animate-spin opacity-70" />
+									) : tab.favicon ? (
+										<img
+											src={tab.favicon}
+											alt=""
+											className="h-3.5 w-3.5 shrink-0 rounded-[3px]"
+											onError={e => {
+												e.currentTarget.style.display = "none";
+											}}
+										/>
+									) : (
+										<Icon name="global" className="h-3 w-3 shrink-0 opacity-60" />
+									)}
+									<span className="max-w-[110px] truncate">{tab.title?.trim() || t("browser empty tab")}</span>
+									{tab.openedByAgent && <span className="gui-browser-tab-badge">{t("agent created tab")}</span>}
+								</button>
+								<button
+									type="button"
+									className="gui-browser-tab-close"
+									aria-label={t("browser close tab")}
+									title={t("browser close tab")}
+									onClick={() => void api?.managedBrowserCloseTab(tab.id)}
+								>
+									<Icon name="close" className="h-3 w-3" />
+								</button>
+							</div>
+						);
+					})}
 				</div>
 			)}
 			{/* Agent activity ledger (sanitized in main — never page text,
