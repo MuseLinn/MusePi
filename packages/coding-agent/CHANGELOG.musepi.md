@@ -4,6 +4,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Fixed
+
+- **Windows NSIS 更新后桌面快捷方式丢失**:electron-builder 默认模板的 `KeepShortcuts` 保留机制在 OTA 更新(`--updated`)时跳过桌面快捷方式重建——一旦被用户/清理工具删除,后续每次更新都不会补回。新增 `packages/gui/release/ensure-shortcuts.nsh`(`nsis.include`),通过 `customInstall` 宏在每次安装(含静默更新)后无条件重建桌面 + 开始菜单快捷方式,绕过 `keepShortcuts` 门控。
+  - EN: Windows NSIS updates no longer lose the desktop shortcut — electron-builder's KeepShortcuts retention skips desktop-shortcut recreation on `--updated` installs; a custom `customInstall` macro (`ensure-shortcuts.nsh`) now unconditionally recreates desktop + start-menu shortcuts on every install, including silent OTA updates.
+
 ## [0.4.7] - 2026-08-29
 
 ### Added
