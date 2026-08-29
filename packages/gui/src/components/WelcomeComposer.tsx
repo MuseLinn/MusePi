@@ -21,6 +21,7 @@ import {
 } from "../lib/suggestions";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
+import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { BlurText } from "./BlurText";
@@ -35,6 +36,7 @@ import {
 	type UsageReportView,
 	type UsageUnreportedAccountView,
 } from "./Composer";
+import { VoiceButton } from "./composer/action-buttons";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
@@ -251,6 +253,33 @@ export function WelcomeComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const attachId = useRef(0);
+
+	// Voice dictation (session-composer parity): the welcome composer's tips
+	// advertise the mic button, so the empty state must actually ship one.
+	// Local STT via the daemon (sherpa-ONNX) — same startDictation the session
+	// composer uses; `rpc` is session-less so transcribe works pre-session.
+	const [dictating, setDictating] = useState(false);
+	const [transcribing, setTranscribing] = useState(false);
+	const [voiceSeconds, setVoiceSeconds] = useState(0);
+	const [voiceLevel, setVoiceLevel] = useState(0);
+	const stopDict = useRef<(() => void) | null>(null);
+	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity): whether
+	// finishing a dictation auto-sends the transcript instead of filling the draft.
+	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
+	useEffect(() => {
+		const load = (): void => {
+			void rpc
+				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger"] })
+				.then(v => {
+					const t = v?.["stt.submitTrigger"];
+					if (typeof t === "string" && t !== "never") setSttSubmitTrigger(t as SttSubmitTrigger);
+				})
+				.catch(() => {});
+		};
+		load();
+		window.addEventListener("omp-settings-changed", load);
+		return () => window.removeEventListener("omp-settings-changed", load);
+	}, [rpc]);
 	// Thinking preselect: the boot snapshot (modelRoles.default suffix →
 	// defaultThinkingLevel) may arrive after first paint — apply it until the
 	// user touches the selector. undefined = no snapshot yet.
@@ -896,6 +925,37 @@ export function WelcomeComposer({
 		setAttachments(prev => [...prev, ...entries]);
 	};
 
+	// Send a trimmed prompt (shared by form submit and voice-dictation
+	// auto-submit): carries the welcome preselects (model/thinking) and armed
+	// modes into the session this first prompt creates.
+	const sendText = (trimmed: string): void => {
+		const quotePrefix =
+			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
+		const payload = quotePrefix ? `${quotePrefix}${trimmed}`.trim() : trimmed;
+		setText("");
+		setQuotes([]);
+		setAttachments([]);
+		// Re-measure after the programmatic clear (onChange doesn't fire).
+		requestAnimationFrame(() => autosize(taRef.current));
+		sfxFor("first");
+		// Armed modes apply to the session this first prompt creates; the
+		// armed chips reset either way (goal needs text to be an objective).
+		const applyGoal = goalArmed && trimmed.length > 0;
+		setGoalArmed(false);
+		setPlanArmed(false);
+		void onSubmit(payload, {
+			thinkingLevel: thinking,
+			modelId: modelTouched.current ? modelId : effectiveModelId,
+			images: attachments.map(a => ({
+				type: "image" as const,
+				data: a.dataUrl.split(",")[1] ?? "",
+				mimeType: a.mimeType,
+			})),
+			planMode: planArmed,
+			goalMode: applyGoal,
+		});
+	};
+
 	const submit = (e: FormEvent<HTMLFormElement>): void => {
 		e.preventDefault();
 		const trimmed = text.trim();
@@ -947,31 +1007,7 @@ export function WelcomeComposer({
 			sfxFor("send");
 			return;
 		}
-		const quotePrefix =
-			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-		const payload = quotePrefix ? `${quotePrefix}${trimmed}`.trim() : trimmed;
-		setText("");
-		setQuotes([]);
-		setAttachments([]);
-		// Re-measure after the programmatic clear (onChange doesn't fire).
-		requestAnimationFrame(() => autosize(taRef.current));
-		sfxFor("first");
-		// Armed modes apply to the session this first prompt creates; the
-		// armed chips reset either way (goal needs text to be an objective).
-		const applyGoal = goalArmed && trimmed.length > 0;
-		setGoalArmed(false);
-		setPlanArmed(false);
-		void onSubmit(payload, {
-			thinkingLevel: thinking,
-			modelId: modelTouched.current ? modelId : effectiveModelId,
-			images: attachments.map(a => ({
-				type: "image" as const,
-				data: a.dataUrl.split(",")[1] ?? "",
-				mimeType: a.mimeType,
-			})),
-			planMode: planArmed,
-			goalMode: applyGoal,
-		});
+		sendText(trimmed);
 	};
 
 	return (
@@ -1356,15 +1392,70 @@ export function WelcomeComposer({
 								</>
 							}
 							footerRight={
-								<button
-									type="submit"
-									ref={quotaAnchorRef}
-									className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
-									disabled={!canSend}
-									aria-label={t("send message")}
-								>
-									<Icon name="send-plane" className="h-4 w-4" />
-								</button>
+								<>
+									<VoiceButton
+										state={dictating ? (transcribing ? "transcribing" : "recording") : "idle"}
+										seconds={voiceSeconds}
+										level={voiceLevel}
+										onToggle={() => {
+											if (dictating) {
+												stopDict.current?.();
+												setDictating(false);
+												setTranscribing(false);
+												return;
+											}
+											const stop = startDictation(
+												transcript => {
+													const { submit, trimTrailing } = evaluateSubmitTrigger(
+														transcript,
+														sttSubmitTrigger,
+													);
+													if (submit) {
+														// TUI stt.submitTrigger parity: auto-send the utterance
+														// (minus a stripped "submit" tail) instead of leaving
+														// it in the draft box.
+														const trimmed = transcript.slice(0, transcript.length - trimTrailing).trim();
+														if (trimmed) sendText(trimmed);
+													} else {
+														setText(prev => (prev ? `${prev} ${transcript}` : transcript));
+														requestAnimationFrame(() => autosize(taRef.current));
+													}
+													setDictating(false);
+													setTranscribing(false);
+												},
+												() => {
+													setDictating(false);
+													setTranscribing(false);
+												},
+												rpc,
+												activity => {
+													if (activity.phase === "recording") {
+														setVoiceSeconds(activity.seconds);
+														setVoiceLevel(activity.level);
+														setTranscribing(false);
+													} else if (activity.phase === "transcribing") {
+														setTranscribing(true);
+													}
+												},
+											);
+											stopDict.current = stop;
+											if (stop) {
+												setDictating(true);
+												setVoiceSeconds(0);
+												setVoiceLevel(0);
+											}
+										}}
+									/>
+									<button
+										type="submit"
+										ref={quotaAnchorRef}
+										className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
+										disabled={!canSend}
+										aria-label={t("send message")}
+									>
+										<Icon name="send-plane" className="h-4 w-4" />
+									</button>
+								</>
 							}
 						>
 							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">

@@ -8,6 +8,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **欢迎页语音输入**:空态输入框(WelcomeComposer)补齐麦克风按钮——与会话态输入框一致,本地 sherpa-ONNX 转写(daemon `stt.transcribe`,无会话即可用),听写结束按 `stt.submitTrigger` 设置自动发送或填入草稿;消除"空态提示轮播在介绍麦克风、输入框却没有麦克风"的文案矛盾。
+  - EN: the empty-state (WelcomeComposer) input now ships the mic button its own welcome tips advertise — local sherpa-ONNX transcription via the daemon (`stt.transcribe`, session-less), honoring the `stt.submitTrigger` setting for auto-send vs draft-fill, matching the session composer.
 - **使用统计补全进阶指标与可视化**:设置 → 数据与统计 → 使用统计 补齐 CLI `musepi stats` 的指标——汇总卡新增成功率(+失败数)、平均首字延迟(TTFT)、输出速度(token/s)、缓存 token 四张卡;新增"按智能体"三段占比条(主智能体/子智能体/顾问)和"请求与错误"按日堆叠图,与终端 dashboard 对齐。
   - EN: settings → data & statistics → usage statistics now surfaces the CLI `musepi stats` metrics that were previously terminal-only — four new summary cards (success rate + failed count, avg time-to-first-token, token throughput, cache tokens), an "by agent" three-segment share bar (main/subagent/advisor), and a per-day "requests & errors" stacked chart.
 - **Widget 图表统一到零依赖 SVG 组件层**:新增 `Sparkline`(迷你趋势,含固定 `domain` y 域)、`KLine`(K线/蜡烛)、`Donut`(进度环)、`Gauge`(半圆仪表盘)四个零依赖响应式 SVG 组件,与既有 `LineChart`/`BarChart` 同契约(ResizeObserver 测容器 → 1:1 `viewBox`,淘汰手写 `preserveAspectRatio="none"` 的拉伸形变);逐个迁移 ticker / metric / indextape / fx / stocks / Kline / pomodoro / Gauge / slider 九个 widget 的手写 SVG,fx/stocks 的字符串 `dangerouslySetInnerHTML` sparkline 一并改为 JSX 组件,并清理 gauge/kline/ticker/metric 迁移后遗留的死 CSS;配色走 CSS 变量(含 fx/stocks 涨跌方向色 `var(--gui-*-dir)`、KLine 红涨绿跌 token),深浅主题热切换跟随,圆环、曲线与仪表盘不再形变。
