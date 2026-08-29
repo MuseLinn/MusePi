@@ -2547,9 +2547,10 @@ mod tests {
 			assert_eq!(code, 0, "numeric multi-process kill should succeed");
 		}
 
-		let statuses =
-			time::timeout(Duration::from_secs(15), async { tokio::join!(first.wait(), second.wait()) })
-				.await;
+		let statuses = time::timeout(Duration::from_secs(15), async {
+			tokio::join!(first.wait(), second.wait())
+		})
+		.await;
 		if statuses.is_err() {
 			let _ = first.kill().await;
 			let _ = second.kill().await;
@@ -2871,9 +2872,10 @@ mod tests {
 			.expect("kill command");
 		let code = exit_code(&result);
 
-		let statuses =
-			time::timeout(Duration::from_secs(15), async { tokio::join!(first.wait(), second.wait()) })
-				.await;
+		let statuses = time::timeout(Duration::from_secs(15), async {
+			tokio::join!(first.wait(), second.wait())
+		})
+		.await;
 		if statuses.is_err() {
 			let _ = first.start_kill();
 			let _ = second.start_kill();
