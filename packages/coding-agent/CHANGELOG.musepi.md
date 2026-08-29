@@ -22,6 +22,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Fixed
 
+- **欢迎页建议 chips 展开/折叠动画修复**:折叠时先固化当前(展开)高度再卸载多余 chips,`useLayoutEffect` 里临时抬起内联 height/overflow pin 后再读 `scrollHeight`(否则 `scrollHeight` 被 `clientHeight` 截断 → `delta < 1` → 高度 tween 直接跳过,容器卡在展开高度);消除展开即时塌陷的跳变与折叠后卡死。
+  - EN: welcome suggestion chips expand/collapse no longer jump — collapse pins the current height before unmounting the extra chips, and the layout effect lifts the inline height/overflow pin before reading `scrollHeight` (which is floored at `clientHeight`, so a pinned container read back the pinned value with `delta < 1` and skipped the tween, stranding the container at the expanded height).
 - **Windows NSIS 更新后桌面快捷方式丢失**:electron-builder 默认模板的 `KeepShortcuts` 保留机制在 OTA 更新(`--updated`)时跳过桌面快捷方式重建——一旦被用户/清理工具删除,后续每次更新都不会补回。新增 `packages/gui/release/ensure-shortcuts.nsh`(`nsis.include`),通过 `customInstall` 宏在每次安装(含静默更新)后无条件重建桌面 + 开始菜单快捷方式,绕过 `keepShortcuts` 门控。
   - EN: Windows NSIS updates no longer lose the desktop shortcut — electron-builder's KeepShortcuts retention skips desktop-shortcut recreation on `--updated` installs; a custom `customInstall` macro (`ensure-shortcuts.nsh`) now unconditionally recreates desktop + start-menu shortcuts on every install, including silent OTA updates.
 

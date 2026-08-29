@@ -455,18 +455,24 @@ export function WelcomeComposer({
 			revealTimerRef.current = null;
 		}
 		window.setTimeout(() => {
+			// Pin the CURRENT (expanded) height BEFORE the extra chips
+			// unmount: the setState below is batched to the end of this
+			// callback, so the pin is in place when they drop. The layout
+			// effect then eases from this pinned height to the collapsed
+			// natural height (no snap). Doing it the other way round — reset
+			// height first, then let the chips unmount — skipped the height
+			// transition entirely (delta < 1) and the container collapsed
+			// with a visible jump.
+			const node = suggestRevealRef.current;
+			if (node) {
+				node.style.transition = "none";
+				node.style.height = `${node.getBoundingClientRect().height}px`;
+				node.style.overflow = "hidden";
+				void node.offsetHeight;
+			}
 			setCollapsing(false);
 			setShowMore(false);
 			setRevealCount(SUGGESTIONS_COLLAPSED_COUNT);
-			// Belt and braces: release any leftover height pin so the next
-			// layout effect measures the natural collapsed height (an
-			// interrupted expand could have left height + overflow inline).
-			if (suggestRevealRef.current) {
-				const node = suggestRevealRef.current;
-				node.style.height = "auto";
-				node.style.overflow = "";
-				node.style.transition = "";
-			}
 		}, 150);
 	};
 	// Height follows each reveal stage: pin the current height, ease to the
@@ -477,7 +483,19 @@ export function WelcomeComposer({
 		const node = suggestRevealRef.current;
 		if (!node) return;
 		const current = node.getBoundingClientRect().height;
+		// Measure the natural content height with any inline pin temporarily
+		// lifted. `scrollHeight` is floored at `clientHeight`, so a pinned
+		// container (collapse sets `height:<expanded>px` + overflow:hidden)
+		// would read back the pinned value — delta < 1 — and never ease
+		// down nor settle to auto, stranding the container at the expanded
+		// height. Lift → measure → restore, then run the height tween.
+		const prevHeight = node.style.height;
+		const prevOverflow = node.style.overflow;
+		node.style.height = "auto";
+		node.style.overflow = "visible";
 		const target = node.scrollHeight;
+		node.style.height = prevHeight;
+		node.style.overflow = prevOverflow;
 		const delta = Math.abs(target - current);
 		if (delta < 1) return;
 		node.style.transition = "none";
