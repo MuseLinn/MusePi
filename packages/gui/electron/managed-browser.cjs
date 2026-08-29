@@ -5,7 +5,7 @@
  * drives:
  *
  * - Electron main owns one `WebContentsView` per tab on a persistent
- *   partition (`persist:omp-managed-browser`), so login state survives
+ *   partition (`persist:musepi-managed-browser`), so login state survives
  *   restarts and is shared between the user and the agent — one instance,
  *   two operators.
  * - A loopback HTTP+WS server impersonates Chrome's CDP discovery endpoint
@@ -33,7 +33,7 @@ const { createHash } = require("node:crypto");
 
 const DEFAULT_PORT = Number(process.env.MUSEPI_MANAGED_BROWSER_PORT || 9230);
 const MAX_PORT_TRIES = 10;
-const PARTITION = "persist:omp-managed-browser";
+const PARTITION = "persist:musepi-managed-browser";
 const MAX_ACTIVITY_ITEMS = 12;
 const CDP_ERROR_METHOD_NOT_FOUND = -32601;
 const CDP_ERROR_SERVER = -32000;

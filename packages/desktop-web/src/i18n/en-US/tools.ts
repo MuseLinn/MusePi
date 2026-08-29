@@ -193,7 +193,11 @@ export const tools = {
 	"browser relay extension description":
 		"After the extension files are written, enable Developer mode in chrome://extensions and use “Load unpacked” to select the directory",
 	"browser relay installed at {dir}": "Extension written to: {dir} (load it from chrome://extensions)",
+	"browser relay connected": "Connected — MusePi can drive your Chrome tabs",
+	"browser relay serving waiting": "Relay is running, waiting for the extension — load it unpacked in chrome://extensions",
+	"browser relay installed not loaded": "Written but not loaded — load it unpacked in chrome://extensions",
 	install: "Install",
+	uninstall: "Uninstall",
 	"shared browser": "Shared browser",
 	"shared browser running · {tabs} tabs": "Running · {tabs} tabs",
 	"shared browser idle": "Not started (auto-starts the first time the agent uses the browser)",

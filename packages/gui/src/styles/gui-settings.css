@@ -3735,7 +3735,7 @@ body.gui-resizing {
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
-	transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+	transition: background 120ms ease, color 120ms ease, transform var(--gui-motion-menu-in) var(--spring-snappy);
 }
 .gui-browser-icon-btn:hover:not(:disabled) {
 	background: var(--color-surface-raised);
@@ -3772,7 +3772,8 @@ body.gui-resizing {
 	align-items: center;
 	gap: 7px;
 	padding: 0 9px;
-	transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+	transition: background var(--gui-motion-menu-in) ease, border-color var(--gui-motion-menu-in) var(--spring),
+		box-shadow var(--gui-motion-menu-in) var(--spring);
 }
 .gui-browser-address:focus-within {
 	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
@@ -3856,7 +3857,7 @@ body.gui-resizing {
 	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
 	overflow-y: auto;
 	z-index: 220;
-	animation: gui-browser-pop 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-browser-pop var(--gui-motion-menu-in) var(--spring);
 }
 @keyframes gui-browser-pop {
 	from { opacity: 0; transform: translateY(-5px) scale(0.99); }
@@ -3923,7 +3924,7 @@ body.gui-resizing {
 	background: var(--color-surface-raised);
 	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
 	z-index: 720;
-	animation: gui-browser-pop 150ms cubic-bezier(0.22, 1, 0.36, 1);
+	animation: gui-browser-pop var(--gui-motion-menu-in) var(--spring);
 }
 .gui-browser-menu button {
 	width: 100%;
@@ -4003,6 +4004,7 @@ body.gui-resizing {
 	border: 1px solid transparent;
 	border-radius: var(--radius);
 	overflow: hidden;
+	transition: background var(--gui-motion-menu-in) var(--spring), border-color var(--gui-motion-menu-in) var(--spring);
 }
 .gui-browser-tab--active {
 	background: var(--color-surface-raised);
@@ -4046,7 +4048,8 @@ body.gui-resizing {
 	cursor: pointer;
 	margin-right: 3px;
 	opacity: 0;
-	transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+	transition: opacity var(--gui-motion-fade-in) ease, background var(--gui-motion-menu-in) ease, color
+		var(--gui-motion-menu-in) ease;
 }
 .gui-browser-tab:hover .gui-browser-tab-close,
 .gui-browser-tab--active .gui-browser-tab-close {
@@ -4178,12 +4181,17 @@ body.gui-resizing {
 	font-size: var(--ui-font-size-sm);
 	font-weight: 550;
 	white-space: nowrap;
-	transition: border-color 130ms ease, background 130ms ease, transform 130ms ease;
+	transition: border-color var(--gui-motion-menu-in) ease, background var(--gui-motion-menu-in) ease, transform
+		var(--gui-motion-menu-in) var(--spring), color var(--gui-motion-menu-in) ease;
 }
 .gui-browser-quick-card:hover {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 	color: var(--color-accent);
-	transform: translateY(-1px);
+	transform: translateY(-2px);
+	box-shadow: 0 8px 20px -8px rgb(0 0 0 / 32%);
+}
+.gui-browser-quick-card:active {
+	transform: translateY(0) scale(0.97);
 }
 .gui-browser-recent-list {
 	display: flex;

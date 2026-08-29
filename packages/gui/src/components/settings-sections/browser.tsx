@@ -27,7 +27,12 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [profileDir, setProfileDir] = useState<string | null>(null);
 	const [tabCount, setTabCount] = useState<number | null>(null);
 	const [extensions, setExtensions] = useState<BrowserExtensionInfo[] | null>(null);
-	const [relayDir, setRelayDir] = useState<string | null>(null);
+	const [relayStatus, setRelayStatus] = useState<{
+		installed: boolean;
+		serving: boolean;
+		connected: boolean;
+		extensionDir: string;
+	} | null>(null);
 	const [installing, setInstalling] = useState(false);
 	const [importing, setImporting] = useState(false);
 	const [importMsg, setImportMsg] = useState<string | null>(null);
@@ -69,6 +74,10 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			.request<{ extensions?: BrowserExtensionInfo[] }>("browser.extensions", {})
 			.then(res => setExtensions(res?.extensions ?? []))
 			.catch(() => setExtensions([]));
+		void rpc
+			.request<{ installed: boolean; serving: boolean; connected: boolean; extensionDir: string }>("browser.relayStatus", {})
+			.then(res => setRelayStatus(res))
+			.catch(() => setRelayStatus(null));
 	};
 
 	useEffect(() => {
@@ -93,8 +102,16 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		if (!rpc || installing) return;
 		setInstalling(true);
 		void rpc
-			.request<{ dir: string }>("browser.relayInstall", {})
-			.then(res => setRelayDir(res?.dir ?? null))
+			.request("browser.relayInstall", {})
+			.then(() => refresh())
+			.finally(() => setInstalling(false));
+	};
+	const uninstallRelay = (): void => {
+		if (!rpc || installing) return;
+		setInstalling(true);
+		void rpc
+			.request("browser.relayUninstall", {})
+			.then(() => refresh())
 			.finally(() => setInstalling(false));
 	};
 
@@ -168,22 +185,39 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<span className="gui-toggle-knob" />
 					</button>
 				</div>
-				{/* Relay extension install (chrome.debugger bridge — the agent
-				 * drives your own Chrome tabs, kimi webbridge 同款). */}
+				{/* Relay extension (chrome.debugger bridge — kimi webbridge 同款):
+				 * 安装/卸载 + 三层状态(文件写出 / server 在跑 / 扩展握手)。 */}
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("browser relay extension")}</div>
 						<div className="gui-settings-row-desc">
-							{relayDir ? (
-								<span className="break-all">{t("browser relay installed at {dir}", { dir: relayDir })}</span>
-							) : (
+							{relayStatus === null ? (
+								"…"
+							) : !relayStatus.installed ? (
 								t("browser relay extension description")
+							) : relayStatus.connected ? (
+								t("browser relay connected")
+							) : relayStatus.serving ? (
+								t("browser relay serving waiting")
+							) : (
+								t("browser relay installed not loaded")
 							)}
 						</div>
 					</div>
-					<button type="button" className="gui-btn gui-btn--small" disabled={installing} onClick={installRelay}>
-						{installing ? "…" : t("install")}
-					</button>
+					{relayStatus?.installed ? (
+						<button
+							type="button"
+							className="gui-btn gui-btn--small gui-btn--danger"
+							disabled={installing}
+							onClick={uninstallRelay}
+						>
+							{installing ? "…" : t("uninstall")}
+						</button>
+					) : (
+						<button type="button" className="gui-btn gui-btn--small" disabled={installing} onClick={installRelay}>
+							{installing ? "…" : t("install")}
+						</button>
+					)}
 				</div>
 			</div>
 			{/* Computer-use screen glow: full-screen edge + target highlight

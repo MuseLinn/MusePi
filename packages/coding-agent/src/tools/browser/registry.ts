@@ -411,7 +411,7 @@ async function openSharedHeadlessHandle(
 		});
 		if (!shared) {
 			throw new ToolError(
-				"Shared browser daemon unavailable (broker start or Chromium launch failed); check `hub ps` for omp.browser.* daemons and ~/.musepi/logs for details",
+				"Shared browser daemon unavailable (broker start or Chromium launch failed); check `hub ps` for musepi.browser.* daemons and ~/.musepi/logs for details",
 			);
 		}
 		const puppeteer = await loadPuppeteer();

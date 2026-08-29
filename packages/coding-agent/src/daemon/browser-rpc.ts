@@ -18,6 +18,8 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
+import { DEFAULT_RELAY_URL } from "../tools/browser/relay/kind";
+import { getBrowserRelayDir } from "@musepi/pi-utils";
 import type { Settings } from "../config/settings";
 import { ensureSharedBrowser } from "../tools/browser/shared-daemon";
 
@@ -274,10 +276,44 @@ export async function browserExtensions(
  *  and return the install dir — same output as `musepi browser-relay install`. */
 export async function browserRelayInstall(): Promise<{ dir: string; ok: boolean }> {
 	const { runBrowserRelayCommand } = await import("../cli/browser-relay-cli");
-	const { getBrowserRelayDir } = await import("@musepi/pi-utils");
 	const dir = path.join(getBrowserRelayDir(), "extension");
 	await runBrowserRelayCommand({ action: "install", port: DEFAULT_RELAY_PORT, dir });
 	return { dir, ok: true };
+}
+
+/** Relay 扩展三层状态: 文件是否写出 + server 是否在跑 + 扩展是否已连上
+ *  (200 = 扩展已连接并握手、503 = server 在跑但扩展未加载)。UI 据此区分
+ *  「未安装 / 已安装未加载 / 已连接」。 */
+export async function browserRelayStatus(): Promise<{
+	extensionDir: string;
+	installed: boolean;
+	serving: boolean;
+	connected: boolean;
+}> {
+	const extensionDir = path.join(getBrowserRelayDir(), "extension");
+	const installed = await Bun.file(path.join(extensionDir, "manifest.json")).exists();
+	let serving = false;
+	let connected = false;
+	try {
+		const res = await fetch(`${DEFAULT_RELAY_URL}/json/version`, { signal: AbortSignal.timeout(1500) });
+		if (res.ok) {
+			serving = true;
+			connected = true;
+		} else if (res.status === 503) {
+			serving = true;
+		}
+		await res.body?.cancel();
+	} catch {
+		// relay 未运行
+	}
+	return { extensionDir, installed, serving, connected };
+}
+
+/** 卸载 relay 扩展: 删除写出的扩展目录(对称于 relayInstall)。 */
+export async function browserRelayUninstall(): Promise<{ ok: boolean; dir: string }> {
+	const dir = path.join(getBrowserRelayDir(), "extension");
+	await fsp.rm(dir, { recursive: true, force: true });
+	return { ok: true, dir };
 }
 
 async function fsReaddir(dir: string): Promise<string[]> {

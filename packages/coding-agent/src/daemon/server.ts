@@ -3826,6 +3826,14 @@ export class DaemonServer {
 				const { browserRelayInstall } = await import("./browser-rpc");
 				return browserRelayInstall();
 			}
+			case "browser.relayStatus": {
+				const { browserRelayStatus } = await import("./browser-rpc");
+				return browserRelayStatus();
+			}
+			case "browser.relayUninstall": {
+				const { browserRelayUninstall } = await import("./browser-rpc");
+				return browserRelayUninstall();
+			}
 			case "browser.importChrome": {
 				const { browserImportChrome } = await import("./browser-rpc");
 				return browserImportChrome(await this.#settingsForRpc(), this.#host.cwd());

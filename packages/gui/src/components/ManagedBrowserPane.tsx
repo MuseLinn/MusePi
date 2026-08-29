@@ -43,7 +43,11 @@ const APP_OVERLAY_SELECTOR =
  */
 function isActuallyOnScreen(el: Element): boolean {
 	const style = getComputedStyle(el);
-	if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+	// NOT opacity: gui-browser-pop animates from opacity:0, so the first
+	// frame would read as hidden and keep the native view visible (the menu
+	// stays buried under the native WebContentsView). visibility/display plus
+	// a rendered box are enough — global-pause hides via visibility:hidden.
+	if (style.visibility === "hidden" || style.display === "none") return false;
 	const rect = el.getBoundingClientRect();
 	return rect.width > 0 && rect.height > 0;
 }
