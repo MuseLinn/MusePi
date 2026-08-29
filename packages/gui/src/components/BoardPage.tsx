@@ -152,25 +152,16 @@ function tickerFxPatch(data: Record<string, unknown>, cnyPerEur: number): Record
 
 /** Seed boards (first run): 每日财经 + Hello World collections. */
 function seedBoards(): BoardData[] {
-	// 每日财经 — kimi layout: 12-col × 92px grid (1104 canvas). Left
-	// column 4 cols (clock + gauge stacked), K-STATION 8 cols full-height
-	// right, heatwall + indextape 6 cols each on the bottom row.
-	// kimi REAL finance placements (92px cols × 44px rows, 12px gutter):
-	// MARKET PULSE (4×7) + K-STATION (8×14) top row, market sentiment
-	// (4×7) below the clock, heat wall + index tape (6×10) bottom row.
+	// 每日财经：左侧时钟 + 市场温度竖排，右侧全高超级图表，
+	// 底行热力墙 + 指数磁带并排。
 	const f: BoardWidget[] = [];
-	f.push(at(f, "clock", "MARKET PULSE", 0, 0, 356, 296));
-	f.push(at(f, "kline", "K-STATION", 368, 0, 724, 604));
+	f.push(at(f, "clock", t("widget clock"), 0, 0, 356, 296));
+	f.push(at(f, "kline", t("widget kline"), 368, 0, 724, 604));
 	f.push(at(f, "gauge", t("widget gauge"), 0, 308, 356, 296));
 	f.push(at(f, "heatwall", t("widget heatwall"), 0, 616, 540, 428));
 	f.push(at(f, "indextape", t("widget indextape"), 552, 616, 540, 428));
-	// kimi Hello-World parity — REAL placements from kimiwork's canvas
-	// definition (92px cols × 44px rows): fx/stocks row (6×8 each),
-	// full-width vinyl hero (12×14), promo video (7×13) + history (5×13),
-	// todo/pomodoro/clock column (4×12 each), utility tail.
-	// kimi REAL Hello-World grid (92px cols × 44px rows, 12px gutter):
-	// fx/stocks 6×8, full-width vinyl hero 12×14, promo video 7×13 +
-	// history 5×13, todo/pomodoro/clock 4×12 column, utility tail.
+	// Hello World：fx/盯盘并排，全宽黑胶播放器，视频 + 历史并排，
+	// todo/pomodoro/clock 竖排列，底部工具行。
 	const h: BoardWidget[] = [];
 	h.push(at(h, "fx", t("widget fx"), 0, 0, 540, 340));
 	h.push(at(h, "stocks", t("widget stocks"), 552, 0, 540, 340));
@@ -182,11 +173,10 @@ function seedBoards(): BoardData[] {
 	h.push(at(h, "clock", t("widget clock"), 736, 1540, 356, 516));
 	h.push(at(h, "slider", t("widget slider"), 0, 2068, 540, 252));
 	h.push(at(h, "calc", t("widget calc"), 552, 2068, 540, 252));
-	h.push(at(h, "metric", "Metric", 0, 2332, 356, 252));
+	h.push(at(h, "metric", t("widget metric"), 0, 2332, 356, 252));
 	h.push(at(h, "ticker", t("widget ticker"), 368, 2332, 356, 252));
 	h.push(at(h, "gallery", t("widget gallery"), 736, 2332, 356, 252));
-	// A runnable-task card (kimi demo: 汇率任务 — 运行 button + 查看任务
-	// modal) and a video card (kimi PROMO REEL parity).
+	// 汇率卡带一个可运行任务（运行按钮 + 查看任务弹窗）。
 	const tk = h.find(w => w.type === "ticker");
 	if (tk) {
 		tk.data.task = {
@@ -197,10 +187,8 @@ function seedBoards(): BoardData[] {
 			runs: [],
 		};
 	}
-	// A failed-run task card shows the failure state in 近期运行 (kimi demo).
-	// The task is consistent with the card's content (metric snapshot —
-	// tasks must describe what the card shows, agents must not attach
-	// unrelated jobs).
+	// 指标卡任务含一条失败记录（展示失败态）；任务须描述卡片展示的
+	// 内容，禁止挂无关作业。
 	const mt = h.find(w => w.type === "metric");
 	if (mt) {
 		mt.data.task = {
@@ -214,8 +202,7 @@ function seedBoards(): BoardData[] {
 			],
 		};
 	}
-	// PROMO REEL cover: video widget defaults (widget.ts: 凡人修仙传 /
-	// BILIBILI · 年番) show until an agent fills url/bvid.
+	// 视频卡默认封面，agent 填 url/bvid 前展示。
 	const vd = h.find(w => w.type === "video");
 	if (vd) {
 		vd.data.title = "凡人修仙传";
