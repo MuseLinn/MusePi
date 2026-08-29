@@ -23,6 +23,6 @@
 	},
 	"dependencies": {
 		"@sinclair/typebox": "^0.34.0",
-		"@musepi/pi-wire": "0.4.4"
+		"@musepi/pi-wire": "catalog:"
 	}
 }
