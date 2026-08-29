@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-tui",
-	"version": "0.4.4",
+	"version": "0.4.7",
 	"description": "Terminal User Interface library with differential rendering for efficient text-based applications",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

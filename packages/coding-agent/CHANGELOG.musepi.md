@@ -4,7 +4,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
-## [Unreleased]
+## [0.4.7] - 2026-08-29
 
 ### Added
 
@@ -319,3 +319,5 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - i18n general/settings 域 `active` key 冲突(去重)。
   - EN: Dedupe i18n `active` key conflict in general/settings domains.
 
+
+## [Unreleased]

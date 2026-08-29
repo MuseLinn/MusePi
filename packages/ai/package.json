@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-ai",
-	"version": "0.4.4",
+	"version": "0.4.7",
 	"description": "Unified LLM API with automatic model discovery and provider configuration",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",
