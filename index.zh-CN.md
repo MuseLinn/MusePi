@@ -2,7 +2,7 @@
 layout: default
 title: MusePi — 桌面优先的 AI 编程助手
 lang: zh-CN
-en_url: /MusePi/
+en_url: /
 ---
 
 <section class="mp-hero">
@@ -15,12 +15,14 @@ en_url: /MusePi/
         oh-my-pi agent 引擎之上。中文优先、磨砂玻璃、键盘驱动。
       </p>
       <div class="mp-cta-row">
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-latest-release>下载桌面客户端</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-arm64.dmg">下载 macOS</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-setup.exe">下载 Windows</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-x86_64.AppImage">下载 Linux</a>
         <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
       </div>
       <div class="mp-version">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-version-tag" data-release-version>v0.4.6</span>
+        <span class="mp-version-tag" data-release-version>v0.4.7</span>
         <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
       </div>
     </div>
@@ -47,7 +49,8 @@ en_url: /MusePi/
       <ul class="mp-dl-list">
         <li><a data-asset="MusePi-{v}-arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
         <li><a data-asset="MusePi-{v}-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
-        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage / .deb</a></li>
+        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
+        <li><a data-asset="MusePi-{v}-amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
       </ul>
     </div>
     <div class="mp-dl-card">

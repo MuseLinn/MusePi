@@ -1,5 +1,6 @@
 title: MusePi
 description: MusePi — a desktop-first AI coding agent (fork of oh-my-pi)
+baseurl: /MusePi
 lang: en
 
 # Render every docs/*.md as an HTML page. Files without explicit front

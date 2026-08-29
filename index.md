@@ -2,7 +2,7 @@
 layout: default
 title: MusePi — a desktop-first AI coding agent
 lang: en
-zh_url: /MusePi/index.zh-CN.html
+zh_url: /index.zh-CN.html
 ---
 
 <section class="mp-hero">
@@ -16,12 +16,14 @@ zh_url: /MusePi/index.zh-CN.html
         frosted-glass, keyboard-driven.
       </p>
       <div class="mp-cta-row">
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-latest-release>Download for desktop</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-arm64.dmg">Download macOS</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-setup.exe">Download Windows</a>
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="MusePi-{v}-x86_64.AppImage">Download Linux</a>
         <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
       </div>
       <div class="mp-version">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-version-tag" data-release-version>v0.4.6</span>
+        <span class="mp-version-tag" data-release-version>v0.4.7</span>
         <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
       </div>
     </div>
@@ -49,7 +51,8 @@ zh_url: /MusePi/index.zh-CN.html
       <ul class="mp-dl-list">
         <li><a data-asset="MusePi-{v}-arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
         <li><a data-asset="MusePi-{v}-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
-        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage / .deb</a></li>
+        <li><a data-asset="MusePi-{v}-x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
+        <li><a data-asset="MusePi-{v}-amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
       </ul>
     </div>
     <div class="mp-dl-card">
