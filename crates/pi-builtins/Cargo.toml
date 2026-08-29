@@ -104,7 +104,7 @@ uutils_term_grid = "0.8"
 yansi = "1.0.1"
 
 [dependencies.uucore]
-version = "0.4.7"
+version = "0.8.0"
 default-features = false
 features = [
   "backup-control",
