@@ -213,11 +213,13 @@ jobs:
               const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
               const tag = process.env.GITHUB_REF_NAME || `v${pkg.version}`;
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
-              // Take the LATEST ## [x.y.z] section (the one after the header is
-              // the oldest; sections split from "## [" puts newest LAST when the
-              // file lists oldest-first)
-              const sections = changelog.split(/^## \[/m).slice(1);
-              const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
+              // CHANGELOG.musepi.md lists newest-first (## [0.4.7] at the top);
+              // the LATEST ## [x.y.z] section is the FIRST one, and it may be
+              // followed by ## [Unreleased] at the bottom — never the last
+              // split chunk. Find the first section whose heading is a
+              // version, not "Unreleased".
+              const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
+              const notes = sectionMatch ? `## [${sectionMatch}`.trim() : "";
               const manifest = {
                 version: pkg.version,
                 url: `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.dmg`,
@@ -234,8 +236,10 @@ jobs:
               import fs from "node:fs";
               const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
-              const sections = changelog.split(/^## \[/m).slice(1);
-              const notes = sections.length ? `## [${sections[sections.length - 1]}`.trim() : "";
+              // Newest-first; take the first ## [x.y.z] section, skipping
+              // trailing ## [Unreleased] (see update-manifest notes above).
+              const sectionMatch = changelog.split(/^## \[/m).slice(1).find(s => /^\d+\.\d+\.\d+/.test(s));
+              const notes = sectionMatch ? `## [${sectionMatch}`.trim() : "";
               const dl = (name) => `https://github.com/MuseLinn/MusePi/releases/download/${process.env.GITHUB_REF_NAME}/${name}`;
               const body =
                 `# MusePi ${pkg.version}\n\n` +
