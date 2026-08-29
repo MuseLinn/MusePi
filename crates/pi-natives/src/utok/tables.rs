@@ -4,7 +4,10 @@
 //! your arm in [`bpe_for`]. Data blobs live in `data/<name>.bin.zst`
 //! (UTOK1 + zstd; see `data/families.json`). Patterns come from
 //! `data/families.json` — do not invent them.
-#![allow(clippy::redundant_pub_crate, reason = "utok submodules are private; pub(crate) marks crate-internal API surface for future reuse")]
+#![allow(
+	clippy::redundant_pub_crate,
+	reason = "utok submodules are private; pub(crate) marks crate-internal API surface"
+)]
 
 use std::sync::LazyLock;
 
