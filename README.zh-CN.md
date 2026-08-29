@@ -65,14 +65,25 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
-musepi --version
 ```
 
-安装脚本在 Bun 与宿主架构匹配时用 `bun install -g @musepi/pi-coding-agent`，否则从 GitHub Releases 拉取预编译二进制。选项：
+克隆到 `~/.musepi/repo` 并运行 `bun run setup`（workspace 安装 + natives + 链接），然后：
 
-- `--binary` — 强制拉取预编译二进制
-- `--source` — 强制用 Bun 安装（缺 Bun 则自动装）
-- `--ref <tag|commit|branch>` — 固定某个版本（source 模式）
+```sh
+cd ~/.musepi/repo && bun run musepi
+```
+
+macOS / Linux / WSL。Windows —— 或手动构建 —— 从源码安装：
+
+```sh
+git clone https://github.com/MuseLinn/MusePi.git && cd MusePi
+bun run setup && bun run musepi
+```
+
+选项：
+
+- `--ref <tag|commit|branch>` — 固定某个 checkout
+- `--source` — 从源码安装（默认；尚无预编译二进制）
 
 ## 下载（三种形态）
 

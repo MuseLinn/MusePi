@@ -34,14 +34,25 @@ Current app version **`0.4.6`** (independent of upstream versioning).
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
-musepi --version
 ```
 
-The installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when Bun matches your host architecture; otherwise it fetches the prebuilt release binary from GitHub Releases. Options:
+Clones to `~/.musepi/repo` and runs `bun run setup` (workspace install + natives + link), then run:
 
-- `--binary` — always fetch the prebuilt release binary
-- `--source` — always install via Bun (installs Bun if missing)
-- `--ref <tag|commit|branch>` — pin an exact version (source mode)
+```sh
+cd ~/.musepi/repo && bun run musepi
+```
+
+macOS / Linux / WSL. On Windows — or to build manually — install from source:
+
+```sh
+git clone https://github.com/MuseLinn/MusePi.git && cd MusePi
+bun run setup && bun run musepi
+```
+
+Options:
+
+- `--ref <tag|commit|branch>` — pin an exact checkout
+- `--source` — install from source (this is the default; no prebuilt binary is published yet)
 
 ## Download (three surfaces)
 
