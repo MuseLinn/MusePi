@@ -749,7 +749,12 @@ class ManagedBrowserController {
 		// the slot; hiding the native view lets it show through. Real pages
 		// project normally.
 		const isBlank = !tab.url || tab.url === "about:blank";
-		const show = !isBlank && visible && width > 4 && height > 4 && this.owner && !this.owner.isDestroyed() && this.owner.isVisible();
+		// `visible` (renderer-projected: slot mounted, no blocking overlay,
+		// real URL) is the authority. owner.isVisible() is NOT gated on: a
+		// window that is merely occluded/minimized mid-transition must not
+		// leave the view permanently hidden — the next projection re-shows
+		// it (user: 内置浏览器还是不显示内容, blank white slot).
+		const show = !isBlank && visible && width > 4 && height > 4 && this.owner && !this.owner.isDestroyed();
 		const zoom = this.owner?.webContents.getZoomFactor() ?? 1;
 		const adjusted = {
 			x: Math.round((Number(bounds?.x) || 0) * zoom),

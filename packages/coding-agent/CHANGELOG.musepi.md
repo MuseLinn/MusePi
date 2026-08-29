@@ -30,6 +30,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **会话列表排序修复**:working/unread 不再作为排序主键(点击打开清未读、离开时 working 翻转,行在光标下跳动)——纯按最后活跃时间排序,working/未读仅为行上视觉标记。分组/项目 tab 新增滑动胶囊指示器 + 列表 160ms 淡入;会话切换错峰动画收紧(尾延迟 210→120ms、时长 300→240ms)并删除 gui-pet.css 的冲突重复规则、补 motion-off/reduced-motion 降级;骨架屏闪烁阈值 150→250ms。
   - EN: session-list sort is pure last-activity (working/unread flips used to reorder rows under the cursor); groups/projects tab gains a sliding capsule thumb + 160ms pane fade; the switch stagger reveal tightens (tail 210→120ms, 300→240ms) with its conflicting duplicate removed and motion-off gating added; skeleton flicker threshold 150→250ms.
 
+- **内置浏览器白屏根因修复（CDP 实锤）**:常驻 `role="dialog"` 元素（gui-global-pause 暂停遮罩、mtree 会话树面板等）让 `hasBlockingOverlay()` 恒 true → renderer 恒发 visible:false → 原生视图永远隐藏 → 白屏。修复:`isActuallyOnScreen()` 只认真正可见的 overlay（visibility/display/opacity/渲染盒）。另:最大化面板背景补 `background-color:var(--bg)!important`（EOF transparent 规则因伪元素特异性 0,2,1 压过 0,2,0,面板成半透明）;`applyLayout` 不再以 `owner.isVisible()` 为门（遮挡/最小化过渡不再永久隐藏视图）。
+  - EN: built-in browser white-screen root cause — always-mounted role=dialog overlays kept hasBlockingOverlay() true forever; isActuallyOnScreen() now checks real visibility. Maximized panel gains an opaque background (!important beats the transparent EOF rule); applyLayout stops gating on owner.isVisible().
 ### Fixed
 
 - **最大化面板遮罩**:右侧面板最大化新增模态遮罩(z 840,点击还原);浮层滚动条 z 100000 → 30(此前固定定位画在最大化面板之上,前后内容重叠);最大化期间 agent 后台浏览不再强行切换视图。

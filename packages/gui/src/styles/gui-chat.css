@@ -3284,6 +3284,17 @@ body.gui-resizing .gui-pane-right {
 	z-index: 850;
 	box-shadow: -8px 0 32px rgb(0 0 0 / 16%);
 	border-left: 1px solid var(--border);
+	/* Fully opaque floating surface: the maximized panel must never read
+	 * as semi-transparent over the chat column (user: 最大化面板后是半透明
+	 * 而非磨砂毛玻璃,背景内容重叠). !important is REQUIRED: the EOF
+	 * `.gui-pane-side, .gui-pane-right--inner, .gui-header::before {
+	 * background: transparent }` rule carries a pseudo-element that lifts
+	 * its specificity to 0,2,1 — higher than this 0,2,0 — and would
+	 * otherwise paint the maximized panel transparent. `background:` alone
+	 * is also unsafe: `var(--bg)` in the shorthand is parsed as an image,
+	 * so set background-color explicitly (the `background` line is kept for
+	 * the non-color longhands only). */
+	background-color: var(--bg) !important;
 	background: var(--bg);
 	transition: width 220ms var(--spring), box-shadow 220ms ease;
 }

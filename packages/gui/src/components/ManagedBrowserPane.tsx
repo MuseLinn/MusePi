@@ -29,14 +29,28 @@ let nextLayoutRevision = 0;
  *  top of the DOM): dialogs/toasts/menus/suggestions hide the view while
  *  open. The rail overflow menu and address suggestions are DOM popups that
  *  project onto the slot region — without hiding the view they are buried
- *  under the native WebContentsView (user: 浮窗和浏览器元素层级混乱). Our
- *  dialogs mount/unmount, so presence checks (not data-state toggles) are
- *  enough. */
+ *  under the native WebContentsView (user: 浮窗和浏览器元素层级混乱). */
 const APP_OVERLAY_SELECTOR =
 	'[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-sonner-toast]';
 
+/**
+ * True when a REAL overlay is blocking the slot area. Presence alone is NOT
+ * enough: the global-pause overlay stays mounted forever with role="dialog"
+ * (hidden via visibility/opacity when not paused) — a bare querySelector
+ * would report it as blocking and keep the native view hidden forever,
+ * which read as 内置浏览器白屏 (the reported bug). Only count elements that
+ * are actually on screen (rendered box) and not visibility:hidden.
+ */
+function isActuallyOnScreen(el: Element): boolean {
+	const style = getComputedStyle(el);
+	if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) === 0) return false;
+	const rect = el.getBoundingClientRect();
+	return rect.width > 0 && rect.height > 0;
+}
+
 function hasBlockingOverlay(): boolean {
-	return document.querySelector(APP_OVERLAY_SELECTOR) !== null;
+	const el = document.querySelector(APP_OVERLAY_SELECTOR);
+	return el !== null && isActuallyOnScreen(el);
 }
 
 /** Only portal/toast lifecycle mutations — streaming text (characterData)
@@ -302,8 +316,24 @@ export function ManagedBrowserPane({
 		ro.observe(el);
 		const mo = new MutationObserver(mutations => {
 			if (mutations.some(mutationIsOverlayLifecycle)) project(true);
+			// The right panel's maximize toggle flips the panel class from
+			// .gui-pane-right--inner to .gui-pane-right--maximized —
+			// position/size change that ResizeObserver sees, but ALSO a
+			// background change that can momentarily hide the slot behind
+			// an opaque pane. Re-project so the native view follows the
+			// maximized rect immediately (user: 最大化面板后浏览器空白/重叠).
+			if (
+				mutations.some(
+					m =>
+						m.target instanceof Element &&
+						(m.target.classList?.contains("gui-pane-right--maximized") ||
+							m.target.classList?.contains("gui-pane-right--inner")),
+				)
+			) {
+				project(true);
+			}
 		});
-		mo.observe(document.body, { childList: true, subtree: true });
+		mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 		// ResizeObserver only sees SIZE changes — a position-only shift
 		// (capture-phase scrolls, minimize→restore, DPI change when the
 		// window crosses monitors) left the native view at stale bounds
