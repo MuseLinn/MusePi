@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-08-30
+
 ### Added
 
 - **欢迎页语音输入**:空态输入框(WelcomeComposer)补齐麦克风按钮——与会话态输入框一致,本地 sherpa-ONNX 转写(daemon `stt.transcribe`,无会话即可用),听写结束按 `stt.submitTrigger` 设置自动发送或填入草稿;消除"空态提示轮播在介绍麦克风、输入框却没有麦克风"的文案矛盾。

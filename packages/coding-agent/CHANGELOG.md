@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-08-30
+
 ### Added
 
 - Added `musepi serve --web-port <n>` — the daemon serves the renderer bundle (`desktop-web` dist) over loopback HTTP, the dsh-desktop-compat "runtime serves the renderer" half. Also serves the boot config at `/__daemon.json` (`{ wsUrl, token? }`) so the compat shell can connect as a host.
