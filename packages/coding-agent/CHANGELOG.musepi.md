@@ -8,17 +8,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
-- **Git 图谱表格化**:侧面板 git · 提交历史重做为 ZCode 风格表格(车道求解 SVG 图轨 + HEAD/分支/远端/tag 徽章 + 日期/作者/短哈希列,点击复制完整 hash,加载更多分页);daemon `git.log` 改结构化输出(`--topo-order` + \x1f 分隔字段),`git.status` 支持 `numstat` 行级增删汇总。
-  - EN: ZCode-style git-graph table in the side panel (lane-solved SVG rail, ref badges, date/author/hash columns, click-to-copy, load-more paging); daemon `git.log` now returns structured commits and `git.status` accepts `numstat`.
-- **浮动状态卡**:会话右上角悬浮卡栈(ZCode 悬浮卡吸收)——Git 工具卡(更改 +N/−M、分支切换、提交入口)、智能体卡(运行中子代理 + 已用时 + 已结束折叠)、待办进度卡;可折叠为药丸,空态隐藏。
+- **Git 图谱表格化**:侧面板 git · 提交历史重做为表格(车道求解 SVG 图轨 + HEAD/分支/远端/tag 徽章 + 日期/作者/短哈希列,点击复制完整 hash,加载更多分页);daemon `git.log` 改结构化输出(`--topo-order` + \x1f 分隔字段),`git.status` 支持 `numstat` 行级增删汇总。
+  - EN: git-graph table in the side panel (lane-solved SVG rail, ref badges, date/author/hash columns, click-to-copy, load-more paging); daemon `git.log` now returns structured commits and `git.status` accepts `numstat`.
+- **浮动状态卡**:会话右上角悬浮卡栈——Git 工具卡(更改 +N/−M、分支切换、提交入口)、智能体卡(运行中子代理 + 已用时 + 已结束折叠)、待办进度卡;可折叠为药丸,空态隐藏。
   - EN: floating status-card stack top-right of the chat — git tools (±counts, branch switcher, commit jump), running/ended subagents with elapsed timers, todo progress; collapses to a pill.
 - **奖励票券弹窗**:星空背景 + 3D 倾斜票券卡 + 数字滚动 + 领取成功面板(RewardOverlay),接入 what's-new 公告流——daemon 可选 `<agentDir>/reward.json` 驱动,按 id 只弹一次,设置页可重开。
   - EN: celebratory reward-ticket overlay (starry sky, 3D tilt, count-up amount, claim panel) wired into the what's-new announcement flow, driven by an optional daemon reward.json.
 - **长会话跳转修复 + 树地图定位**:Transcript 新增 jumpRequest——跳转目标在折叠窗口/压缩折叠内时先扩窗再滚动高亮(此前直接滚到顶部 spacer);会话树地图新增当前位置虚线标记 + "回到当前位置"按钮,聚焦卡标签中文化。
   - EN: Transcript jumpRequest expands the window/compaction fold until the target mounts then scroll+flashes; the session tree canvas gains a current-position marker and a locate button.
 
-- **已完成轮折叠（craft-agents TurnCard 参考）**:每轮完成后,用户消息与最终回复之间的工具活动/思考折叠进回合头——`已工作时长(hh:mm:ss) + N 个工具 · M 个命令 + 预览`,点击展开;最终回复(文本+文件卡)保持可见,末轮(live)始终展开。折叠计数含最终回复自身的 toolCall。配套纯逻辑 `round-collapse.ts` + 5 单测。
-  - EN: completed rounds fold their working span (tools/commands/thinking) behind a header — work duration hh:mm:ss + tool/command counts + preview (craft-agents TurnCard parity); the final reply stays visible and the live tail never folds.
+- **已完成轮折叠**:每轮完成后,用户消息与最终回复之间的工具活动/思考折叠进回合头——`已工作时长(hh:mm:ss) + N 个工具 · M 个命令 + 预览`,点击展开;最终回复(文本+文件卡)保持可见,末轮(live)始终展开。折叠计数含最终回复自身的 toolCall。配套纯逻辑 `round-collapse.ts` + 5 单测。
+  - EN: completed rounds fold their working span (tools/commands/thinking) behind a header — work duration hh:mm:ss + tool/command counts + preview; the final reply stays visible and the live tail never folds.
 - **压缩历史不再默认折叠**:`display.collapseCompacted` 默认改为关——压缩点保留 inline 分隔线、完整转写可见,导航树/轨迹跳转不再因折叠而缺行;需折叠时在 外观→显示 显式开启。
   - EN: display.collapseCompacted defaults to off — compaction dividers stay inline so navigation/trajectory never lose rows to the fold; opt in via Appearance → Display.
 ### Changed
@@ -40,8 +40,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: daemon git.log switched from spawnSync to async spawn with a 10s kill guard.
 - **分支切换错误静默**:WelcomeComposer 派发的 `musepi-gui-toast` 此前无监听者,现接入全局错误横幅。
   - EN: the listener-less `musepi-gui-toast` event from branch checkout now feeds the global error banner.
-- **扩展中心加载失败可见性**:列表行对 `loadError` 扩展显示红点 + "加载失败"徽章(dsh PluginInventory failed 相位对齐),状态标签以失败相位优先。
-  - EN: extension list rows show a red dot + "load failed" badge for loadError items (dsh PluginInventory parity).
+- **扩展中心加载失败可见性**:列表行对 `loadError` 扩展显示红点 + "加载失败"徽章,状态标签以失败相位优先。
+  - EN: extension list rows show a red dot + "load failed" badge for loadError items.
 - **内置浏览器投影加固**:原生视图在仅位移(捕获滚动/最小化恢复/DPI 变化)后重投影,修复页面错位/空白。
   - EN: the managed browser re-projects after position-only shifts (capture scrolls, minimize/restore, DPI change).
 - **compat 壳透明契约**:serve 的 desktop-web 渲染器此前 html/body 实心 `--bg`、无玻璃管线,Electron 壳的 acrylic/vibrancy 窗口被完全遮住(侧栏/顶栏/主体四周不透明)。新增 `lib/native-glass.ts`:compat 标记 + Electron bridge 同在时 html/body 转透明、`sh-app`/头栏/侧轨 scrim 减薄,并把主题镜像到窗口材质;纯浏览器 guest 保持不透明画法。
@@ -154,11 +154,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   卸载保留用户数据(`deleteAppDataOnUninstall=false`);electron-updater 增量更新兼容。
   - EN: Windows installer upgrade (NSIS assisted): optional install dir (default `%LOCALAPPDATA%\Programs`, per-user, no admin); upgrade detection reuses and pre-fills the installed path; desktop/Start-menu shortcuts + Chinese uninstall entry; uninstall keeps user data (`deleteAppDataOnUninstall=false`); electron-updater incremental-update compatible.
 - **GUI 长文本粘贴门控**:粘贴 >100 行或 >4000 字符时弹选择菜单(直接粘贴 / 包裹为
-  代码块 / 附加为工作区文件),TUI large-paste 菜单 parity。
-  - EN: GUI large-paste gate: paste >100 lines or >4000 chars prompts a choice menu (paste / wrap as code block / attach as workspace file), TUI large-paste parity.
-- **TUI 粘贴附件芯片**(upstream v18.0.x 吸收):粘贴文本变 chips 带、图片变
+  代码块 / 附加为工作区文件),与 TUI 大粘贴菜单一致。
+  - EN: GUI large-paste gate: paste >100 lines or >4000 chars prompts a choice menu (paste / wrap as code block / attach as workspace file), matching the TUI large-paste menu.
+- **TUI 粘贴附件芯片**:粘贴文本变 chips 带、图片变
   `🖼 img-1` 原子 token(折叠/compact/shift),`setCollapsedText` 恢复草稿原文。
-  - EN: TUI paste attachment chips (upstream v18.0.x absorbed): pasted text becomes a chip strip, images become `🖼 img-1` atomic tokens (collapse/compact/shift), `setCollapsedText` restores the draft text.
+  - EN: TUI paste attachment chips: pasted text becomes a chip strip, images become `🖼 img-1` atomic tokens (collapse/compact/shift), `setCollapsedText` restores the draft text.
 - **右侧面板 Phase 1**:surface 分组(primary/secondary/tertiary)+ rail 溢出菜单
   (diff/pr 折叠)+ 宽度上限 560→900。
   - EN: Right panel Phase 1: surface grouping (primary/secondary/tertiary) + rail overflow menu (diff/pr collapse) + width cap 560→900.
@@ -175,16 +175,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Changed
 
-- **文件面板重构**(bitfun/VS Code 规范):
+- **文件面板重构**:
   - 预览接管模式——打开文件时预览占满整个面板(原左右分栏 + 拖拽比例已移除),
     顶部返回按钮回树;窄面板下树/预览互斥,不再互相挤压。
   - 路径压缩——单子目录链(`src/components`)合并为一行显示,点开直接展开到
-    链内文件(bitfun lazyCompressFileTree parity)。
+    链内文件。
   - 工具栏新增「新建文件/新建文件夹」按钮(原仅右键可达)。
-  - 面板宽度上限 1200px(代码预览可读宽度,openchamber 380–1400 适配)。
-- **openchamber 目录选择对话框参考**:保持右面板 context/files/git/notes/browser
-  布局(与 openchamber 一致),文件树不迁移左侧。
-  - EN: OpenChamber directory-picker reference: keep the right-panel context/files/git/notes/browser layout (consistent with OpenChamber); file tree not migrated to the left.
+  - 面板宽度上限 1200px(代码预览可读宽度,窄屏自动适配)。
+- **目录选择对话框**:保持右面板 context/files/git/notes/browser
+  布局,文件树不迁移左侧。
+  - EN: directory picker keeps the right-panel context/files/git/notes/browser layout; file tree not migrated to the left.
 - **清理历史遗留 tags**:删除上游 oh-my-pi 遗留 tags(~900 本地 / ~290 远程,
   v0.5.x–v18.x),仅保留 musepi 版本线(v0.2.x + v0.4.x)。
   - EN: Clean up legacy tags: remove upstream oh-my-pi leftover tags (~900 local / ~290 remote, v0.5.x–v18.x), keep only the musepi version line (v0.2.x + v0.4.x).
@@ -204,30 +204,30 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - **移动端 MusePi(mobile)**:Capacitor Android 壳(compileSdk 36 / minSdk 24),
   连接局域网 daemon 的远程会话伴侣——三合一发送控件(点阵 bloom 反馈)、盲文
-  点阵工作指示器、会话归档(localStorage,桌面 GUI parity)、PWA 离线壳 +
+  点阵工作指示器、会话归档(localStorage)、PWA 离线壳 +
   连接码复制优化、旋转/断点几何过渡、时间感知问候与轮换提示、空态建议 chips、
   jsQR 扫码加入、沉浸式 edge-to-edge 布局。
-  - EN: Mobile MusePi: Capacitor Android shell (compileSdk 36 / minSdk 24), remote session companion connecting to a LAN daemon — three-in-one send control (dot-matrix bloom feedback), braille dot-matrix working indicator, session archive (localStorage, desktop GUI parity), PWA offline shell + connection-code copy optimization, rotation/breakpoint geometry transitions, time-aware greeting and rotating tips, empty-state suggestion chips, jsQR scan-to-join, immersive edge-to-edge layout.
-- **collab 远程会话管理**(dsh-mobile-remote parity):guest 可创建/删除/重命名
+  - EN: Mobile MusePi: Capacitor Android shell (compileSdk 36 / minSdk 24), remote session companion connecting to a LAN daemon — three-in-one send control (dot-matrix bloom feedback), braille dot-matrix working indicator, session archive (localStorage), PWA offline shell + connection-code copy optimization, rotation/breakpoint geometry transitions, time-aware greeting and rotating tips, empty-state suggestion chips, jsQR scan-to-join, immersive edge-to-edge layout.
+- **collab 远程会话管理**:guest 可创建/删除/重命名
   会话;agent 主动分享(collab tool,分级审批);`session.abort` 允许 guest
   停止远端正在运行的 turn。
-  - EN: Collab remote session management (dsh-mobile-remote parity): guests can create/delete/rename sessions; agent-initiated sharing (collab tool, tiered approval); `session.abort` lets guests stop a running turn on the remote daemon.
-- **GUI /btw 分支提升**(TUI b-branch + openchamber promote parity):/btw 提问
+  - EN: Collab remote session management: guests can create/delete/rename sessions; agent-initiated sharing (collab tool, tiered approval); `session.abort` lets guests stop a running turn on the remote daemon.
+- **GUI /btw 分支提升**(与 TUI b-branch 一致):/btw 提问
   后「分支」按钮把当前会话切到新会话,问答可见,侧栏出现新分支会话 + 树路径
   transcript 脉冲。
-  - EN: GUI /btw branch promotion (TUI b-branch + OpenChamber promote parity): after /btw, the “branch” button switches the current session into a new session, Q&A stays visible, sidebar shows the new branch session + tree-path transcript pulse.
-- **撤回语义重构**(TUI navigateTree parity):撤回改为 branchAt 树跳转——
+  - EN: GUI /btw branch promotion (matches TUI b-branch): after /btw, the “branch” button switches the current session into a new session, Q&A stays visible, sidebar shows the new branch session + tree-path transcript pulse.
+- **撤回语义重构**:撤回改为 branchAt 树跳转——
   旧回复保留为 sibling 分支、树上随时跳回;撤回悬浮卡片带 Reveal 折叠/展开
   动画;daemon 侧 revert RPC 全套移除(-1176 行)。
-  - EN: Undo semantics refactor (TUI navigateTree parity): undo is now a branchAt tree jump — the old reply stays as a sibling branch, jump back anytime from the tree; undo hover card gets Reveal collapse/expand animation; daemon-side revert RPC fully removed (-1176 lines).
+  - EN: Undo semantics refactor: undo is now a branchAt tree jump — the old reply stays as a sibling branch, jump back anytime from the tree; undo hover card gets Reveal collapse/expand animation; daemon-side revert RPC fully removed (-1176 lines).
 - **plan 批准并压缩上下文**:GUI plan 面板第二 primary 按钮,approve 后自动
-  compact(TUI "Approve and compact context" parity)。
-  - EN: Plan approve-and-compact: second primary button on the GUI plan panel, auto-compacts after approve (TUI “Approve and compact context” parity).
+  compact(与 TUI "Approve and compact context" 一致)。
+  - EN: Plan approve-and-compact: second primary button on the GUI plan panel, auto-compacts after approve (matches TUI “Approve and compact context”).
 - **浮层定位规范**:全翻转+位移、btw Esc 关闭、菜单 clamp 进视口(不截断);
   AskCard 选择取消按钮、设计语言卡片(floating ask/inspector)。
   - EN: Floating-layer positioning spec: full flip + offset, btw Esc to close, menus clamped into viewport (never clipped); AskCard select-cancel button, design-language card (floating ask/inspector).
-- **实例切换器**:连接远程 daemon(openchamber DesktopHostSwitcher parity)。
-  - EN: Instance switcher: connect to a remote daemon (OpenChamber DesktopHostSwitcher parity).
+- **实例切换器**:连接远程 daemon。
+  - EN: Instance switcher: connect to a remote daemon.
 - **HarmonyOS NEXT WebView 壳**(ArkTS Web + harmonyNative bridge)脚手架。
   - EN: HarmonyOS NEXT WebView shell (ArkTS Web + harmonyNative bridge) scaffold.
 - **Nix 发布修复**:恢复 rust-toolchain.toml、清理 collab-web/robomp-web 死
@@ -242,8 +242,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - SessionTreeCanvas 可读总览 + 正确有向流;canvas 聚焦/跳转/搜索交互 +
   轨迹分支车道。
   - EN: SessionTreeCanvas readable overview + correct directed flow; canvas focus/jump/search interactions + trajectory branch lanes.
-- rail 溢出菜单弹出动画(浏览器菜单 parity)。
-  - EN: Rail overflow menu pop animation (browser menu parity).
+- rail 溢出菜单弹出动画。
+  - EN: Rail overflow menu pop animation.
 
 ### Fixed (0.4.4 追加)
 
@@ -260,17 +260,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ### Added
 
 - **OTA 更新渠道切换**:GUI 与 daemon 的版本探测统一走 GitHub release 资产重定向
-  (`/releases/latest/download/update-manifest.json`,bitfun parity,无 api.github.com
+  (`/releases/latest/download/update-manifest.json`,无 api.github.com
   限流);repo 公开前 404 优雅降级为"尚未发布公开更新源"。
-  - EN: OTA update channel switch: GUI and daemon version probes both go through GitHub release asset redirects (`/releases/latest/download/update-manifest.json`, bitfun parity, no api.github.com rate limit); 404 before the repo is public degrades gracefully to “public update source not yet published”.
+  - EN: OTA update channel switch: GUI and daemon version probes both go through GitHub release asset redirects (`/releases/latest/download/update-manifest.json`, no api.github.com rate limit); 404 before the repo is public degrades gracefully to “public update source not yet published”.
 - **三合一发送按钮 run 级 working**:agent 工作中按钮变为胶囊 + 点阵 bloom + 「工作中」/
   「停止」双标签;`turn_end` 不再熄灭 working(每工具批次触发),只有 `agent_end` 或权威
   state 帧才复位——修复轮间 provider 准备期按钮闪回发送箭头的问题。
   - EN: Three-in-one send button run-level working state: while the agent works the button becomes a capsule + dot-matrix bloom + “working”/“stop” dual labels; `turn_end` no longer clears working (every tool batch triggers it), only `agent_end` or an authoritative state frame resets — fixes the button flashing back to the send arrow during inter-turn provider preparation.
 - **更新提示 toast**:主进程启动 12s 后自动检查,发现新版推送右下角 `UpdateToast`(版本
-  当前→最新 + 说明 + 「前往下载」/「跳过此版本」,按版本 localStorage 记忆,bitfun
-  DailyAppUpdateGate parity)。
-  - EN: Update toast: auto-check 12s after main-process startup; on a new version, push a bottom-right `UpdateToast` (current → latest + description + “go to download”/“skip this version”, remembered per version in localStorage, bitfun DailyAppUpdateGate parity).
+  当前→最新 + 说明 + 「前往下载」/「跳过此版本」,按版本 localStorage 记忆。
+  - EN: Update toast: auto-check 12s after main-process startup; on a new version, push a bottom-right `UpdateToast` (current → latest + description + “go to download”/“skip this version”, remembered per version in localStorage).
 - **设置 → 检查更新人性化**:行内显示当前版本/状态 + 手动检查按钮;发现新版展开更新说明
   摘要 + 明确「前往下载」按钮(不再自动 window.open 弹浏览器)。
   - EN: Settings → check for updates, humanized: inline current version/status + manual check button; on a new version, expand the update description summary + explicit “go to download” button (no longer auto window.open popping the browser).
@@ -278,14 +277,14 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ### Changed
 
 - **模型设置 UI**:模型选择器即时刷新 + provider 模型能力/发现对齐 + 角色卡布局与
-  project-scope 角色写入(TUI parity)+ 思考等级选项/模型切换 clamp 修正。
-  - EN: Model settings UI: model picker instant refresh + provider model capability/discovery alignment + role card layout and project-scope role writes (TUI parity) + thinking-level option/model-switch clamp fixes.
+  project-scope 角色写入+ 思考等级选项/模型切换 clamp 修正。
+  - EN: Model settings UI: model picker instant refresh + provider model capability/discovery alignment + role card layout and project-scope role writes + thinking-level option/model-switch clamp fixes.
 - **转录渲染**:tool-result 图片内联提升、diff 语言推断、async-result/advisor
   自定义消息渲染、流式 markdown 契约(见 gui-implementation.md §16)。
   - EN: Transcript rendering: inline tool-result images, diff language inference, async-result/advisor custom message rendering, streaming markdown contract (see gui-implementation.md §16).
-- **i18n**:词表按域拆分(渲染 12 域/TUI 13 域),en 侧编译级 parity;伙伴文案从
+- **i18n**:词表按域拆分(渲染 12 域/TUI 13 域),en 侧编译级一致性;伙伴文案从
   pet.ts 拆到 companion.ts。
-  - EN: i18n: vocab split by domain (12 renderer / 13 TUI), compile-level en parity; companion copy moved from pet.ts to companion.ts.
+  - EN: i18n: vocab split by domain (12 renderer / 13 TUI), compile-level en consistency; companion copy moved from pet.ts to companion.ts.
 
 ### Fixed
 
@@ -308,7 +307,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   列,与 TUI `/usage` 同源(daemon `usage.reports` 共享聚合),活跃凭据 ● 标记。
 - **slash 补全排序**:精确/前缀匹配优先,`/usage`、`/context` 等 GUI 原生命令在
   同层匹配中优先(输入 `/c` 时 `/context` 排在 `/clear`、`/compaction` 前)。
-- **i18n 词表按域拆分**(渲染端 12 域、TUI 13 域),en 侧编译级 parity(缺/多 key
+- **i18n 词表按域拆分**(渲染端 12 域、TUI 13 域),en 侧编译级一致性(缺/多 key
   编译报错),新增 `registerTranslations` 插件翻译注册 API。
 - **用量磁盘缓存**:5 分钟 TTL + 失败时 last-good 快照兜底 + 并发合并,重复查看
   用量零上游请求(daemon 重启后仍生效)。
