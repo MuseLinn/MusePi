@@ -993,31 +993,6 @@
 	min-height: 0;
 }
 
-.gui-widget-gauge-track {
-	stroke: var(--color-surface-hover);
-	stroke-width: 5;
-}
-
-.gui-widget-gauge-arc {
-	stroke: var(--color-accent);
-	stroke-width: 5;
-	stroke-linecap: round;
-}
-
-.gui-widget-gauge-needle {
-	stroke: var(--color-text);
-	stroke-width: 1.4;
-}
-
-.gui-widget-gauge-pivot {
-	fill: var(--color-text);
-}
-
-.gui-widget-gauge-scale {
-	font-size: 6px;
-	fill: var(--color-text-secondary);
-}
-
 .gui-widget-gauge-value {
 	font-size: 30px;
 	font-weight: 600;
@@ -1088,19 +1063,6 @@
 	width: 100%;
 	flex: 1;
 	min-height: 60px;
-}
-
-.gui-widget-kline-ma5 {
-	stroke: #ffb224;
-	stroke-width: 0.6;
-	fill: none;
-}
-
-.gui-widget-kline-ma20 {
-	stroke: var(--color-accent);
-	stroke-width: 0.6;
-	fill: none;
-	stroke-dasharray: 1.4 1;
 }
 
 .gui-widget-kline-foot {
@@ -1234,12 +1196,6 @@
 	width: 100%;
 	flex: 1;
 	min-height: 40px;
-}
-
-.gui-widget-indextape-line {
-	stroke: var(--color-accent);
-	stroke-width: 1.2;
-	fill: none;
 }
 
 .gui-widget-indextape-foot {
@@ -1479,12 +1435,6 @@
 	background: var(--color-surface-sunken);
 }
 
-.gui-widget-slider-line {
-	stroke: var(--color-accent);
-	stroke-width: 1.4;
-	vector-effect: non-scaling-stroke;
-}
-
 .gui-widget-calc {
 	display: flex;
 	flex-direction: column;
@@ -1669,13 +1619,6 @@
 	align-self: stretch;
 }
 
-.gui-widget-ticker-spark-line {
-	stroke: var(--color-accent);
-	stroke-width: 1.5;
-	vector-effect: non-scaling-stroke;
-	fill: none;
-}
-
 .gui-widget-ticker-actions {
 	display: flex;
 	gap: 6px;
@@ -1751,13 +1694,6 @@
 .gui-widget-metric-spark {
 	width: 90px;
 	height: 30px;
-}
-
-.gui-widget-metric-spark-line {
-	stroke: var(--color-accent);
-	stroke-width: 1.4;
-	vector-effect: non-scaling-stroke;
-	fill: none;
 }
 
 .gui-widget-todo {

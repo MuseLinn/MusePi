@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { Sparkline } from "../components/charts/Sparkline";
 import { type TranslationKey, t } from "../i18n/index.js";
 import { SendChip } from "./send";
 
@@ -31,13 +32,12 @@ export function SliderCard({
 	const freq = typeof data.freq === "number" ? data.freq : 2;
 	const amp = typeof data.amp === "number" ? data.amp : 1;
 
-	const points: string[] = [];
+	const ys: number[] = [];
 	for (let i = 0; i < 72; i++) {
 		const x = (i / 71) * Math.PI * 2 * freq;
 		const noiseV = (Math.random() - 0.5) * 2 * noise;
 		const jitterV = (Math.random() - 0.5) * jitter;
-		const y = 50 - Math.sin(x) * amp * 34 + noiseV * 34 + jitterV * 34;
-		points.push(`${((i / 71) * 200).toFixed(1)},${y.toFixed(1)}`);
+		ys.push(50 - Math.sin(x) * amp * 34 + noiseV * 34 + jitterV * 34);
 	}
 
 	return (
@@ -64,9 +64,7 @@ export function SliderCard({
 					);
 				})}
 			</div>
-			<svg viewBox="0 0 200 100" className="gui-widget-slider-plot" aria-hidden="true">
-				<polyline points={points.join(" ")} fill="none" className="gui-widget-slider-line" />
-			</svg>
+			<Sparkline data={ys} domain={[0, 100]} height={90} strokeWidth={1.4} className="gui-widget-slider-plot" />
 
 			<SendChip
 				text={`${t("widget noise")} ${noise} / ${t("widget jitter")} ${jitter} / ${t("widget frequency")} ${freq} / ${t("widget amplitude")} ${amp}`}

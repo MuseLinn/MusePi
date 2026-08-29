@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Sparkline } from "../components/charts/Sparkline";
 import { t } from "../i18n/index.js";
 import { widgetFetch } from "./fetch";
 
@@ -69,12 +70,6 @@ export function TickerCard({
 	}, [code, tick]);
 
 	const up = delta >= 0;
-	const min = Math.min(...spark);
-	const max = Math.max(...spark);
-	const range = max - min || 1;
-	const pts = spark
-		.map((v, i) => `${(i / Math.max(1, spark.length - 1)) * 100},${100 - ((v - min) / range) * 90 - 5}`)
-		.join(" ");
 
 	return (
 		<div className="gui-widget-ticker">
@@ -85,9 +80,7 @@ export function TickerCard({
 				</span>
 			</div>
 			<div className="gui-widget-ticker-value">{value}</div>
-			<svg viewBox="0 0 100 40" preserveAspectRatio="none" className="gui-widget-ticker-spark" aria-hidden="true">
-				<polyline points={pts} fill="none" className="gui-widget-ticker-spark-line" />
-			</svg>
+			<Sparkline data={spark} color="var(--color-accent)" strokeWidth={1.5} className="gui-widget-ticker-spark" />
 			<div className="gui-widget-ticker-actions">
 				<button
 					type="button"

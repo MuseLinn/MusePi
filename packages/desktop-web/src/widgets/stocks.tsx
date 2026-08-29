@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Sparkline } from "../components/charts/Sparkline";
 import { SlidingNumber } from "../lib/sliding-number.js";
 import { CharTexture } from "./texture";
 
@@ -31,30 +32,6 @@ export function stocksDefaults(): Record<string, unknown> {
 
 function fmt(n: number, d = 2): string {
 	return Number(n).toLocaleString("zh-CN", { minimumFractionDigits: d, maximumFractionDigits: d });
-}
-
-function sparkSvg(closes: number[]): string {
-	if (!Array.isArray(closes) || closes.length < 3) {
-		return '<span class="gui-stocks-spark gui-stocks-spark--empty">最新报价</span>';
-	}
-	let lo = Infinity;
-	let hi = -Infinity;
-	closes.forEach(c => {
-		lo = Math.min(lo, c);
-		hi = Math.max(hi, c);
-	});
-	const span = hi - lo || 1;
-	const pts = closes.map((c, i) => {
-		const x = (i / Math.max(1, closes.length - 1)) * 100;
-		const y = 3 + (1 - (c - lo) / span) * 22;
-		return `${x.toFixed(1)},${y.toFixed(1)}`;
-	});
-	return (
-		'<div class="gui-stocks-spark" aria-hidden="true"><svg viewBox="0 0 100 28" preserveAspectRatio="none">' +
-		`<polygon class="gui-stocks-spark-fill" points="0,28 ${pts.join(" ")} 100,28" />` +
-		`<polyline fill="none" stroke-width="1.5" vector-effect="non-scaling-stroke" points="${pts.join(" ")}" />` +
-		"</svg></div>"
-	);
 }
 
 interface Quote {
@@ -214,10 +191,13 @@ export function StocksCard({
 									</div>
 								</div>
 								{hasSpark ? (
-									<div
+									<Sparkline
+										data={q.series}
+										color="var(--gui-stocks-dir, #91d4ff)"
+										fill
+										height={28}
+										strokeWidth={1.5}
 										className="gui-stocks-spark"
-										aria-hidden="true"
-										dangerouslySetInnerHTML={{ __html: sparkSvg(q.series) }}
 									/>
 								) : null}
 								<div className="gui-stocks-pricebox">

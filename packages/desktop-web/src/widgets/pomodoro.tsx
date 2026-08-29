@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Donut } from "../components/charts/Donut";
 import { t } from "../i18n/index.js";
 import { SendChip } from "./send";
 
@@ -70,9 +71,6 @@ export function PomodoroCard({
 
 	const total = mode.minutes * 60;
 	const pct = total > 0 ? 1 - left / total : 0;
-	const radius = 52;
-	const circ = 2 * Math.PI * radius;
-	const dash = pct * circ;
 	const rounds = typeof data.rounds === "number" ? data.rounds : 0;
 	const minutes = typeof data.minutes === "number" ? data.minutes : 0;
 
@@ -91,24 +89,20 @@ export function PomodoroCard({
 				))}
 			</div>
 			<div className="gui-widget-pomodoro-ring-wrap">
-				<svg viewBox="0 0 120 120" className="gui-widget-pomodoro-ring">
-					<circle cx="60" cy="60" r={radius} fill="none" className="gui-widget-pomodoro-ring-bg" />
-					<circle
-						cx="60"
-						cy="60"
-						r={radius}
-						fill="none"
-						className="gui-widget-pomodoro-ring-fg"
-						strokeDasharray={`${dash} ${circ - dash}`}
-						transform="rotate(-90 60 60)"
-					/>
-				</svg>
-				<div className="gui-widget-pomodoro-center">
-					<span className="gui-widget-pomodoro-time">{fmt(left)}</span>
-					<span className="gui-widget-pomodoro-state">
-						{running ? t("widget pomodoro running") : t("widget pomodoro ready")}
-					</span>
-				</div>
+				<Donut
+					value={pct}
+					size={150}
+					strokeWidth={8}
+					color="var(--tv-accent, oklch(0.674 0.23 341))"
+					trackColor="var(--tv-border)"
+				>
+					<div className="gui-widget-pomodoro-center">
+						<span className="gui-widget-pomodoro-time">{fmt(left)}</span>
+						<span className="gui-widget-pomodoro-state">
+							{running ? t("widget pomodoro running") : t("widget pomodoro ready")}
+						</span>
+					</div>
+				</Donut>
 			</div>
 			<div className="gui-widget-pomodoro-actions">
 				<button

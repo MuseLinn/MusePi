@@ -10,6 +10,12 @@
  */
 
 export { AgentsPanel } from "./components/agents/AgentsPanel";
+export { BarChart, type BarChartProps, type BarChartSerie } from "./components/charts/BarChart";
+export { Donut, type DonutProps } from "./components/charts/Donut";
+export { Gauge, type GaugeProps } from "./components/charts/Gauge";
+export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KLine";
+export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
+export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
 export { ImageLightbox } from "./components/image-lightbox";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
 export { LanguageToggle } from "./components/shell/LanguageToggle";

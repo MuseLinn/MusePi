@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { Sparkline } from "../components/charts/Sparkline";
 import { SlidingNumber } from "../lib/sliding-number.js";
 import { widgetFetch } from "./fetch";
 import { CharTexture } from "./texture";
@@ -41,27 +42,6 @@ function dstr(d: Date): string {
 }
 function fmt(n: number, d: number): string {
 	return n.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
-}
-function sparkSvg(points: number[]): string {
-	if (!points || points.length < 2) return "";
-	let lo = Infinity;
-	let hi = -Infinity;
-	points.forEach(v => {
-		lo = Math.min(lo, v);
-		hi = Math.max(hi, v);
-	});
-	const span = hi - lo || hi * 0.001 || 1;
-	const pts = points.map((v, i) => {
-		const x = (i / (points.length - 1)) * 100;
-		const y = 2.5 + (1 - (v - lo) / span) * 16;
-		return `${x.toFixed(1)},${y.toFixed(1)}`;
-	});
-	return (
-		'<svg viewBox="0 0 100 22" preserveAspectRatio="none">' +
-		`<polygon class="gui-fx-spark-fill" points="0,22 ${pts.join(" ")} 100,22" />` +
-		`<polyline fill="none" stroke-width="1.4" vector-effect="non-scaling-stroke" points="${pts.join(" ")}" />` +
-		"</svg>"
-	);
 }
 
 interface FxRow {
@@ -220,10 +200,13 @@ export function FxCard({
 							<span className="gui-fx-pair">{r.code} / CNY</span>
 							<span className="gui-fx-unit">{r.note}</span>
 						</div>
-						<div
+						<Sparkline
+							data={r.series}
+							color="var(--gui-fx-dir, #91d4ff)"
+							fill
+							height={20}
+							strokeWidth={1.4}
 							className="gui-fx-spark"
-							title="近 30 日走势"
-							dangerouslySetInnerHTML={{ __html: sparkSvg(r.series) }}
 						/>
 						<div className="gui-fx-ratebox">
 							<div className="gui-fx-rate">

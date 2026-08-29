@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { Sparkline } from "../components/charts/Sparkline";
 import { t } from "../i18n/index.js";
 import { CountUp } from "./count-up";
 
@@ -29,8 +30,6 @@ export function MetricCard({
 		return String(Math.round(n));
 	};
 
-	const spark = history.map((v, i) => `${(i / Math.max(1, history.length - 1)) * 100},${100 - v * 10}`).join(" ");
-
 	return (
 		<div className="gui-widget-metric">
 			<div className="gui-widget-metric-head">
@@ -56,9 +55,13 @@ export function MetricCard({
 				<span className={`gui-widget-metric-delta${up ? "" : " gui-widget-metric-delta--down"}`}>
 					{up ? "▲" : "▼"} {Math.abs(delta * 100).toFixed(2)}%
 				</span>
-				<svg viewBox="0 0 100 40" className="gui-widget-metric-spark" aria-hidden="true">
-					<polyline points={spark} fill="none" className="gui-widget-metric-spark-line" />
-				</svg>
+				<Sparkline
+					data={history}
+					color="var(--color-accent)"
+					strokeWidth={1.4}
+					height={30}
+					className="gui-widget-metric-spark"
+				/>
 			</div>
 		</div>
 	);

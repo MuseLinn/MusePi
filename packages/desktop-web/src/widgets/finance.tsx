@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { Gauge } from "../components/charts/Gauge";
+import { KLine } from "../components/charts/KLine";
+import { Sparkline } from "../components/charts/Sparkline";
 import { t } from "../i18n/index.js";
 
 /**
@@ -19,14 +22,6 @@ export function GaugeCard({
 	const value = typeof data.value === "number" ? Math.max(0, Math.min(100, data.value)) : 70;
 	const label = typeof data.label === "string" ? data.label : "温度";
 	const status = typeof data.status === "string" ? data.status : "";
-	// Semicircle arc from -180°..0°, needle at value%.
-	const needleAngle = -180 + (value / 100) * 180;
-	const needleRad = (needleAngle * Math.PI) / 180;
-	const cx = 50;
-	const cy = 46;
-	const r = 40;
-	const nx = cx + r * 0.62 * Math.cos(needleRad);
-	const ny = cy + r * 0.62 * Math.sin(needleRad);
 	return (
 		<div className="gui-widget-gauge">
 			<div className="gui-widget-gauge-head">
@@ -34,23 +29,7 @@ export function GaugeCard({
 				<span className="gui-widget-gauge-sub">{t("widget gauge sub")}</span>
 			</div>
 			<div className="gui-widget-gauge-body">
-				<svg viewBox="0 0 100 60" className="gui-widget-gauge-svg" aria-hidden="true">
-					<path d="M 10 46 A 40 40 0 0 1 90 46" fill="none" className="gui-widget-gauge-track" />
-					<path
-						d={`M 10 46 A 40 40 0 0 1 ${nx} ${ny}`}
-						fill="none"
-						className="gui-widget-gauge-arc"
-						strokeDasharray={`${(value / 100) * 125.6} 125.6`}
-					/>
-					<line x1={cx} y1={cy} x2={nx} y2={ny} className="gui-widget-gauge-needle" />
-					<circle cx={cx} cy={cy} r={2.5} className="gui-widget-gauge-pivot" />
-					<text x={8} y={58} className="gui-widget-gauge-scale">
-						0
-					</text>
-					<text x={90} y={58} className="gui-widget-gauge-scale">
-						100
-					</text>
-				</svg>
+				<Gauge value={value} className="gui-widget-gauge-svg" />
 				<div className="gui-widget-gauge-value">{Math.round(value)}</div>
 				{status && <div className="gui-widget-gauge-status">{status}</div>}
 			</div>
@@ -125,29 +104,7 @@ export function KlineCard({
 	if (candles.length === 0) {
 		return <div className="gui-widget-kline-empty">{t("widget kline empty")}</div>;
 	}
-	// Chart geometry.
-	const n = candles.length;
-	const min = Math.min(...candles.flatMap(c => [c.l, c.o, c.c]));
-	const max = Math.max(...candles.flatMap(c => [c.h, c.o, c.c]));
-	const range = max - min || 1;
-	const W = 100;
-	const priceH = 56;
-	const volH = 14;
-	const x = (i: number): number => (i / Math.max(1, n - 1)) * W;
-	const y = (v: number): number => priceH - ((v - min) / range) * (priceH - 4) - 2;
-	const cw = (W / n) * 0.62;
-	// MA5 / MA20.
-	const ma = (win: number): string =>
-		candles
-			.map((_, i) => {
-				if (i < win - 1) return null;
-				const slice = candles.slice(i - win + 1, i + 1);
-				const avg = slice.reduce((a, c) => a + c.c, 0) / win;
-				return `${x(i).toFixed(2)},${y(avg).toFixed(2)}`;
-			})
-			.filter(Boolean)
-			.join(" ");
-	const last = candles[n - 1];
+	const last = candles[candles.length - 1];
 	return (
 		<div className="gui-widget-kline">
 			<div className="gui-widget-kline-tabs">
@@ -171,44 +128,7 @@ export function KlineCard({
 					开 {last.o.toFixed(2)} 高 {last.h.toFixed(2)} 低 {last.l.toFixed(2)} 收 {last.c.toFixed(2)}
 				</span>
 			</div>
-			<svg
-				viewBox={`0 0 ${W} ${priceH + volH}`}
-				className="gui-widget-kline-svg"
-				preserveAspectRatio="none"
-				aria-hidden="true"
-			>
-				{candles.map((c, i) => {
-					const up = c.c >= c.o;
-					const color = up ? "var(--color-danger, #e5484d)" : "var(--color-success, #30a46c)";
-					const cx = x(i);
-					return (
-						<g key={i}>
-							{/* Per-candle native tooltip (dsh-genui chart tooltip parity):
-							 * hover shows that bar's OHLC — zero JS, works on any
-							 * pointer device. */}
-							<title>{`O ${c.o.toFixed(2)}  H ${c.h.toFixed(2)}  L ${c.l.toFixed(2)}  C ${c.c.toFixed(2)}  V ${c.v}`}</title>
-							<line x1={cx} y1={y(c.h)} x2={cx} y2={y(c.l)} stroke={color} strokeWidth={0.5} />
-							<rect
-								x={cx - cw / 2}
-								y={Math.min(y(c.o), y(c.c))}
-								width={cw}
-								height={Math.max(1.2, Math.abs(y(c.o) - y(c.c)))}
-								fill={color}
-							/>
-							<rect
-								x={cx - cw / 4}
-								y={priceH + 2 + (1 - c.v / 100) * volH}
-								width={cw / 2}
-								height={(c.v / 100) * volH}
-								fill={color}
-								opacity={0.55}
-							/>
-						</g>
-					);
-				})}
-				<polyline points={ma(5)} fill="none" className="gui-widget-kline-ma5" />
-				<polyline points={ma(20)} fill="none" className="gui-widget-kline-ma20" />
-			</svg>
+			<KLine candles={candles} className="gui-widget-kline-svg" />
 			<div className="gui-widget-kline-foot">
 				<span>MA5 · MA20 · {t("widget kline vol")}</span>
 				<span>{t("widget kline range")}</span>
@@ -314,12 +234,6 @@ export function IndextapeCard({
 	const value = typeof data.value === "number" ? data.value : 0;
 	const delta = typeof data.delta === "number" ? data.delta : 0;
 	const idx = indices[active] ?? "上证";
-	const min = Math.min(...series);
-	const max = Math.max(...series);
-	const range = max - min || 1;
-	const pts = series
-		.map((v, i) => `${(i / Math.max(1, series.length - 1)) * 100},${100 - ((v - min) / range) * 88 - 6}`)
-		.join(" ");
 	return (
 		<div className="gui-widget-indextape">
 			<div className="gui-widget-indextape-tabs">
@@ -343,9 +257,7 @@ export function IndextapeCard({
 					</b>
 				</span>
 			</div>
-			<svg viewBox="0 0 100 40" preserveAspectRatio="none" className="gui-widget-indextape-svg" aria-hidden="true">
-				<polyline points={pts} fill="none" className="gui-widget-indextape-line" />
-			</svg>
+			<Sparkline data={series} height={40} strokeWidth={1.2} className="gui-widget-indextape-svg" />
 			<div className="gui-widget-indextape-foot">{t("widget indextape foot")}</div>
 		</div>
 	);

@@ -6,6 +6,14 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **使用统计补全进阶指标与可视化**:设置 → 数据与统计 → 使用统计 补齐 CLI `musepi stats` 的指标——汇总卡新增成功率(+失败数)、平均首字延迟(TTFT)、输出速度(token/s)、缓存 token 四张卡;新增"按智能体"三段占比条(主智能体/子智能体/顾问)和"请求与错误"按日堆叠图,与终端 dashboard 对齐。
+  - EN: settings → data & statistics → usage statistics now surfaces the CLI `musepi stats` metrics that were previously terminal-only — four new summary cards (success rate + failed count, avg time-to-first-token, token throughput, cache tokens), an "by agent" three-segment share bar (main/subagent/advisor), and a per-day "requests & errors" stacked chart.
+- **Widget 图表统一到零依赖 SVG 组件层**:新增 `Sparkline`(迷你趋势,含固定 `domain` y 域)、`KLine`(K线/蜡烛)、`Donut`(进度环)、`Gauge`(半圆仪表盘)四个零依赖响应式 SVG 组件,与既有 `LineChart`/`BarChart` 同契约(ResizeObserver 测容器 → 1:1 `viewBox`,淘汰手写 `preserveAspectRatio="none"` 的拉伸形变);逐个迁移 ticker / metric / indextape / fx / stocks / Kline / pomodoro / Gauge / slider 九个 widget 的手写 SVG,fx/stocks 的字符串 `dangerouslySetInnerHTML` sparkline 一并改为 JSX 组件,并清理 gauge/kline/ticker/metric 迁移后遗留的死 CSS;配色走 CSS 变量(含 fx/stocks 涨跌方向色 `var(--gui-*-dir)`、KLine 红涨绿跌 token),深浅主题热切换跟随,圆环、曲线与仪表盘不再形变。
+  - EN: Widget charts unified onto the zero-dependency SVG component layer — new `Sparkline` (fixed `domain` y-axis), `KLine` (candles), `Donut` (progress ring) and `Gauge` (semicircle dial) components share the LineChart/BarChart contract (ResizeObserver → 1:1 viewBox, replacing the stretch-distorting hand-rolled `preserveAspectRatio="none"`); nine widgets migrated (ticker/metric/indextape/fx/stocks/Kline/pomodoro/Gauge/slider), including dropping the string `dangerouslySetInnerHTML` sparklines in fx/stocks for JSX and removing the dead gauge/kline/ticker/metric CSS left behind; colors use CSS vars (fx/stocks up-down `var(--gui-*-dir)`, KLine red/green semantic tokens), so dark/light theming tracks and circles/curves/dials no longer distort.
+
+
 ### Fixed
 
 - **Windows NSIS 更新后桌面快捷方式丢失**:electron-builder 默认模板的 `KeepShortcuts` 保留机制在 OTA 更新(`--updated`)时跳过桌面快捷方式重建——一旦被用户/清理工具删除,后续每次更新都不会补回。新增 `packages/gui/release/ensure-shortcuts.nsh`(`nsis.include`),通过 `customInstall` 宏在每次安装(含静默更新)后无条件重建桌面 + 开始菜单快捷方式,绕过 `keepShortcuts` 门控。
