@@ -53,6 +53,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **轨迹分支树缩进溢出**:缩进按消息层级逐行 +14px,线性长会话每行都超面板——改为只在真实分支点(多子)加层、单子链保持父级深度,并加 6 层硬上限。
   - EN: trajectory branch-tree indent now grows only at real branch points (single-child chains keep the parent depth) with a 6-level cap — long linear sessions no longer walk off the panel.
 
+
 ## [0.4.6] - 2026-08-28
 
 ### Added
@@ -70,32 +71,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **Command Code 内置供应商**:新增 `command-code` 内置 OpenAI 兼容供应商(goat 订阅网关),动态 `/v1/models` 发现 61 个官方模型,并从 canonical 索引/models.dev 兜底注入上下文长度、输入能力、推理与思考等级;`/login command-code` 支持粘贴 API key 校验。
   - EN: Command Code (`command-code`) built-in OpenAI-compatible provider (goat subscription gateway) — dynamic `/v1/models` discovery of 61 official models, with context window / input modalities / reasoning / thinking efforts hydrated from the canonical reference index with models.dev fallback; `/login command-code` API-key paste validation.
 
-## [0.4.1] - 2026-08-16
-
-### Added
-
-- **托盘菜单用量区**:同供应商多凭据并排列(每列账户 + 进度条 + 用量/限额),最右侧
-  合计列(平均占比);供应商按用量最低优先排序;窗口固定高度(440px),内容内部滚动。
-- **GUI /usage 用量面板与上下文圆环配额块**:同供应商全部凭据合并为并排列 + 合计
-  列,与 TUI `/usage` 同源(daemon `usage.reports` 共享聚合),活跃凭据 ● 标记。
-- **slash 补全排序**:精确/前缀匹配优先,`/usage`、`/context` 等 GUI 原生命令在
-  同层匹配中优先(输入 `/c` 时 `/context` 排在 `/clear`、`/compaction` 前)。
-- **i18n 词表按域拆分**(渲染端 12 域、TUI 13 域),en 侧编译级 parity(缺/多 key
-  编译报错),新增 `registerTranslations` 插件翻译注册 API。
-- **用量磁盘缓存**:5 分钟 TTL + 失败时 last-good 快照兜底 + 并发合并,重复查看
-  用量零上游请求(daemon 重启后仍生效)。
-
-### Changed
-
-- **/usage 与托盘用量列序修复**:凭据列改为 provider 级固定列序(跨窗口平均用量
-  降序)——此前每窗口独立 worst-first 排序导致同一凭据在不同窗口"左右错位"。
-- 托盘菜单文案全量接入 i18n(中文/英文随界面语言切换)。
-
-### Fixed
-
-- 托盘用量区同供应商多凭据重复 key 警告(React `Encountered two children with
-  the same key`)。
-- 上下文圆环配额弹层丢失凭据归属(各供应商限额拍平后无法区分账户)。
 
 ## [0.4.5] - 2026-08-26
 
@@ -169,48 +144,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
     All compile clean except the two pre-existing updatedAt + collab errors.
 
 
-## [0.4.3] - 2026-08-22
 
-### Added
-
-- **OTA 更新渠道切换**:GUI 与 daemon 的版本探测统一走 GitHub release 资产重定向
-  (`/releases/latest/download/update-manifest.json`,bitfun parity,无 api.github.com
-  限流);repo 公开前 404 优雅降级为"尚未发布公开更新源"。
-  - EN: OTA update channel switch: GUI and daemon version probes both go through GitHub release asset redirects (`/releases/latest/download/update-manifest.json`, bitfun parity, no api.github.com rate limit); 404 before the repo is public degrades gracefully to “public update source not yet published”.
-- **三合一发送按钮 run 级 working**:agent 工作中按钮变为胶囊 + 点阵 bloom + 「工作中」/
-  「停止」双标签;`turn_end` 不再熄灭 working(每工具批次触发),只有 `agent_end` 或权威
-  state 帧才复位——修复轮间 provider 准备期按钮闪回发送箭头的问题。
-  - EN: Three-in-one send button run-level working state: while the agent works the button becomes a capsule + dot-matrix bloom + “working”/“stop” dual labels; `turn_end` no longer clears working (every tool batch triggers it), only `agent_end` or an authoritative state frame resets — fixes the button flashing back to the send arrow during inter-turn provider preparation.
-- **更新提示 toast**:主进程启动 12s 后自动检查,发现新版推送右下角 `UpdateToast`(版本
-  当前→最新 + 说明 + 「前往下载」/「跳过此版本」,按版本 localStorage 记忆,bitfun
-  DailyAppUpdateGate parity)。
-  - EN: Update toast: auto-check 12s after main-process startup; on a new version, push a bottom-right `UpdateToast` (current → latest + description + “go to download”/“skip this version”, remembered per version in localStorage, bitfun DailyAppUpdateGate parity).
-- **设置 → 检查更新人性化**:行内显示当前版本/状态 + 手动检查按钮;发现新版展开更新说明
-  摘要 + 明确「前往下载」按钮(不再自动 window.open 弹浏览器)。
-  - EN: Settings → check for updates, humanized: inline current version/status + manual check button; on a new version, expand the update description summary + explicit “go to download” button (no longer auto window.open popping the browser).
-
-### Changed
-
-- **模型设置 UI**:模型选择器即时刷新 + provider 模型能力/发现对齐 + 角色卡布局与
-  project-scope 角色写入(TUI parity)+ 思考等级选项/模型切换 clamp 修正。
-  - EN: Model settings UI: model picker instant refresh + provider model capability/discovery alignment + role card layout and project-scope role writes (TUI parity) + thinking-level option/model-switch clamp fixes.
-- **转录渲染**:tool-result 图片内联提升、diff 语言推断、async-result/advisor
-  自定义消息渲染、流式 markdown 契约(见 gui-implementation.md §16)。
-  - EN: Transcript rendering: inline tool-result images, diff language inference, async-result/advisor custom message rendering, streaming markdown contract (see gui-implementation.md §16).
-- **i18n**:词表按域拆分(渲染 12 域/TUI 13 域),en 侧编译级 parity;伙伴文案从
-  pet.ts 拆到 companion.ts。
-  - EN: i18n: vocab split by domain (12 renderer / 13 TUI), compile-level en parity; companion copy moved from pet.ts to companion.ts.
-
-### Fixed
-
-- 设置覆盖台账泄露秘密形状 key(`d0df8b77`);GuiSelect 在 roles tab 的无条件 hooks
-  React #300 崩溃(`a2a95708`)。
-  - EN: Fix settings overlay ledger leaking secret-shaped keys (`d0df8b77`); GuiSelect unconditional hooks crash React #300 on the roles tab (`a2a95708`).
-- 子代理面板跨会话接线 + subscribe 时 hydration;预设模式 chip(vmodes.list)
-  不再消失。
-  - EN: Fix sub-agent panel cross-session wiring + hydration on subscribe; preset mode chips (vmodes.list) no longer disappear.
-- 语音页只渲染 Speech 组而非整个交互 tab;语音模型下载流程加固(验证/去重/终止事件)。
-  - EN: Voice page renders only the Speech group instead of the whole interaction tab; voice model download flow hardened (verify/dedupe/terminate events).
 ## [0.4.4] - 2026-08-24
 
 ### Added
@@ -318,6 +252,78 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Fix session-list date grouping and canvas map semantics; daemon fork activation (title-slot head) + message-tree parent walk-up; view-key/branch-at tests clean up corrupted session dirs.
 - i18n general/settings 域 `active` key 冲突(去重)。
   - EN: Dedupe i18n `active` key conflict in general/settings domains.
+
+
+
+## [0.4.3] - 2026-08-22
+
+### Added
+
+- **OTA 更新渠道切换**:GUI 与 daemon 的版本探测统一走 GitHub release 资产重定向
+  (`/releases/latest/download/update-manifest.json`,bitfun parity,无 api.github.com
+  限流);repo 公开前 404 优雅降级为"尚未发布公开更新源"。
+  - EN: OTA update channel switch: GUI and daemon version probes both go through GitHub release asset redirects (`/releases/latest/download/update-manifest.json`, bitfun parity, no api.github.com rate limit); 404 before the repo is public degrades gracefully to “public update source not yet published”.
+- **三合一发送按钮 run 级 working**:agent 工作中按钮变为胶囊 + 点阵 bloom + 「工作中」/
+  「停止」双标签;`turn_end` 不再熄灭 working(每工具批次触发),只有 `agent_end` 或权威
+  state 帧才复位——修复轮间 provider 准备期按钮闪回发送箭头的问题。
+  - EN: Three-in-one send button run-level working state: while the agent works the button becomes a capsule + dot-matrix bloom + “working”/“stop” dual labels; `turn_end` no longer clears working (every tool batch triggers it), only `agent_end` or an authoritative state frame resets — fixes the button flashing back to the send arrow during inter-turn provider preparation.
+- **更新提示 toast**:主进程启动 12s 后自动检查,发现新版推送右下角 `UpdateToast`(版本
+  当前→最新 + 说明 + 「前往下载」/「跳过此版本」,按版本 localStorage 记忆,bitfun
+  DailyAppUpdateGate parity)。
+  - EN: Update toast: auto-check 12s after main-process startup; on a new version, push a bottom-right `UpdateToast` (current → latest + description + “go to download”/“skip this version”, remembered per version in localStorage, bitfun DailyAppUpdateGate parity).
+- **设置 → 检查更新人性化**:行内显示当前版本/状态 + 手动检查按钮;发现新版展开更新说明
+  摘要 + 明确「前往下载」按钮(不再自动 window.open 弹浏览器)。
+  - EN: Settings → check for updates, humanized: inline current version/status + manual check button; on a new version, expand the update description summary + explicit “go to download” button (no longer auto window.open popping the browser).
+
+### Changed
+
+- **模型设置 UI**:模型选择器即时刷新 + provider 模型能力/发现对齐 + 角色卡布局与
+  project-scope 角色写入(TUI parity)+ 思考等级选项/模型切换 clamp 修正。
+  - EN: Model settings UI: model picker instant refresh + provider model capability/discovery alignment + role card layout and project-scope role writes (TUI parity) + thinking-level option/model-switch clamp fixes.
+- **转录渲染**:tool-result 图片内联提升、diff 语言推断、async-result/advisor
+  自定义消息渲染、流式 markdown 契约(见 gui-implementation.md §16)。
+  - EN: Transcript rendering: inline tool-result images, diff language inference, async-result/advisor custom message rendering, streaming markdown contract (see gui-implementation.md §16).
+- **i18n**:词表按域拆分(渲染 12 域/TUI 13 域),en 侧编译级 parity;伙伴文案从
+  pet.ts 拆到 companion.ts。
+  - EN: i18n: vocab split by domain (12 renderer / 13 TUI), compile-level en parity; companion copy moved from pet.ts to companion.ts.
+
+### Fixed
+
+- 设置覆盖台账泄露秘密形状 key(`d0df8b77`);GuiSelect 在 roles tab 的无条件 hooks
+  React #300 崩溃(`a2a95708`)。
+  - EN: Fix settings overlay ledger leaking secret-shaped keys (`d0df8b77`); GuiSelect unconditional hooks crash React #300 on the roles tab (`a2a95708`).
+- 子代理面板跨会话接线 + subscribe 时 hydration;预设模式 chip(vmodes.list)
+  不再消失。
+  - EN: Fix sub-agent panel cross-session wiring + hydration on subscribe; preset mode chips (vmodes.list) no longer disappear.
+- 语音页只渲染 Speech 组而非整个交互 tab;语音模型下载流程加固(验证/去重/终止事件)。
+  - EN: Voice page renders only the Speech group instead of the whole interaction tab; voice model download flow hardened (verify/dedupe/terminate events).
+
+## [0.4.1] - 2026-08-16
+
+### Added
+
+- **托盘菜单用量区**:同供应商多凭据并排列(每列账户 + 进度条 + 用量/限额),最右侧
+  合计列(平均占比);供应商按用量最低优先排序;窗口固定高度(440px),内容内部滚动。
+- **GUI /usage 用量面板与上下文圆环配额块**:同供应商全部凭据合并为并排列 + 合计
+  列,与 TUI `/usage` 同源(daemon `usage.reports` 共享聚合),活跃凭据 ● 标记。
+- **slash 补全排序**:精确/前缀匹配优先,`/usage`、`/context` 等 GUI 原生命令在
+  同层匹配中优先(输入 `/c` 时 `/context` 排在 `/clear`、`/compaction` 前)。
+- **i18n 词表按域拆分**(渲染端 12 域、TUI 13 域),en 侧编译级 parity(缺/多 key
+  编译报错),新增 `registerTranslations` 插件翻译注册 API。
+- **用量磁盘缓存**:5 分钟 TTL + 失败时 last-good 快照兜底 + 并发合并,重复查看
+  用量零上游请求(daemon 重启后仍生效)。
+
+### Changed
+
+- **/usage 与托盘用量列序修复**:凭据列改为 provider 级固定列序(跨窗口平均用量
+  降序)——此前每窗口独立 worst-first 排序导致同一凭据在不同窗口"左右错位"。
+- 托盘菜单文案全量接入 i18n(中文/英文随界面语言切换)。
+
+### Fixed
+
+- 托盘用量区同供应商多凭据重复 key 警告(React `Encountered two children with
+  the same key`)。
+- 上下文圆环配额弹层丢失凭据归属(各供应商限额拍平后无法区分账户)。
 
 
 ## [Unreleased]
