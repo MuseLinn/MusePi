@@ -8,9 +8,9 @@ import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
+import { dispatchNotification } from "../lib/notify";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
-import { dispatchNotification } from "../lib/notify";
 import { modLabel } from "../lib/shortcuts";
 import { rankSlashEntries } from "../lib/slash-rank";
 import {

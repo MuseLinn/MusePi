@@ -38,6 +38,41 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
  * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
  * section (unconfigured placeholder — no bot backend exists).
  */
+/** 各 bot channel 的可识别 logo（discord 用内置 icon，其余内联简化 SVG）。 */
+function channelLogo(kind: string): ReactNode {
+	switch (kind) {
+		case "discord":
+			return <Icon name="discord-fill" className="h-4 w-4 text-white" />;
+		case "telegram":
+			return (
+				<svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+					<path d="M21.6 3.2 3.2 10.5c-.9.4-.9 1.6 0 1.9l4.7 1.6 1.8 5.7c.2.7 1 .9 1.5.5l2.5-2 4.7 3.5c.7.6 1.8.2 2-.7l2.7-14.5c.3-1.1-.7-2-1.8-1.8z" />
+				</svg>
+			);
+		case "wechat":
+			return (
+				<svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+					<path d="M9.2 3C5.5 3 2.7 5.3 2.7 8.3c0 1.6.9 3.1 2.4 4l-.6 2 2.3-1.2c.8.2 1.5.3 2.4.3 3.7 0 6.5-2.3 6.5-5.1S12.9 3 9.2 3zm-2.4 6c-.5 0-.9-.4-.9-.8s.4-.8.9-.8.9.4.9.8-.4.8-.9.8zm4.8 0c-.5 0-.9-.4-.9-.8s.4-.8.9-.8.9.4.9.8-.4.8-.9.8zm5.1 4.2c-2.9 0-5.2 1.9-5.2 4.3S14 21.8 16.8 21.8c.7 0 1.3-.1 1.9-.3l1.9 1-.6-1.7c1.1-.8 1.8-2 1.8-3.3 0-2.4-2.4-4.3-5.3-4.3z" />
+				</svg>
+			);
+		case "feishu":
+		case "lark":
+			return (
+				<svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+					<path d="M12 2 3 9l9 4 9-4-9-7zm-7 9.3v2.9L12 18l7-3.8v-2.9L12 15l-7-3.7z" />
+				</svg>
+			);
+		case "huawei-today":
+			return (
+				<svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true" fill="currentColor">
+					<path d="M12 2c1.4 3.2 3 6 7.5 8-4.5 2-6.1 4.8-7.5 8-1.4-3.2-3-6-7.5-8 4.5-2 6.1-4.8 7.5-8z" />
+				</svg>
+			);
+		default:
+			return null;
+	}
+}
+
 export function CollabDialog({
 	rpc,
 	sessionId,
@@ -324,7 +359,9 @@ export function CollabDialog({
 							return (
 								<div key={c.kind} className="gui-collab-bot-wrap">
 									<div className={`gui-collab-bot${on ? "" : " gui-collab-bot--off"}`}>
-										<span className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`} />
+										<span className={`gui-collab-bot-ico gui-collab-bot-ico--${c.kind}`}>
+											{channelLogo(c.kind)}
+										</span>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-2">
 												<span className="text-[13px] font-medium capitalize">{label}</span>

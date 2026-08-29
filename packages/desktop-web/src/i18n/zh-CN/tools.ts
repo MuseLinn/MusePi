@@ -188,8 +188,10 @@ export const tools = {
 		"写入扩展文件后，在 chrome://extensions 开启开发者模式并“加载已解压的扩展程序”选择目录",
 	"browser relay installed at {dir}": "扩展已写入：{dir}（去 chrome://extensions 加载）",
 	"browser relay connected": "已连接 — MusePi 可以驱动你的 Chrome 标签页",
-	"browser relay serving waiting": "中继已运行，等待扩展加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
-	"browser relay installed not loaded": "已写入但未加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
+	"browser relay serving waiting":
+		"中继已运行，等待扩展加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
+	"browser relay installed not loaded":
+		"已写入但未加载：在 chrome://extensions → 开发者模式 →「加载已解压的扩展程序」",
 	install: "安装",
 	uninstall: "卸载",
 	"shared browser": "共享浏览器",

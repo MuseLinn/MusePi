@@ -1868,12 +1868,18 @@
 	height: 28px;
 	border-radius: 8px;
 	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: #fff;
 }
 
+.gui-collab-bot-ico--discord { background: #5865f2; }
 .gui-collab-bot-ico--wechat { background: #07c160; }
 .gui-collab-bot-ico--feishu { background: #3370ff; }
 .gui-collab-bot-ico--lark { background: #00d6b9; }
 .gui-collab-bot-ico--telegram { background: #2aabee; }
+.gui-collab-bot-ico--huawei-today { background: #c7000b; }
 
 .gui-collab-bot-mgmt {
 	display: inline-flex;

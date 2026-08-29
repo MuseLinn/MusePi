@@ -17,10 +17,10 @@
 import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
-import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
-import { DEFAULT_RELAY_URL } from "../tools/browser/relay/kind";
 import { getBrowserRelayDir } from "@musepi/pi-utils";
+import { DEFAULT_RELAY_PORT } from "../cli/browser-relay-cli";
 import type { Settings } from "../config/settings";
+import { DEFAULT_RELAY_URL } from "../tools/browser/relay/kind";
 import { ensureSharedBrowser } from "../tools/browser/shared-daemon";
 
 export interface BrowserTabInfo {

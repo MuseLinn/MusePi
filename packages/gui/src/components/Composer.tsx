@@ -5,10 +5,10 @@ import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
+import { dispatchNotification } from "../lib/notify";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
-import { dispatchNotification } from "../lib/notify";
 import {
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,

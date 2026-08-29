@@ -73,6 +73,30 @@ function formatPauseElapsed(pausedAt: number): string {
  * top-right cluster (terminal, right panel, mini chat, open-in, instance
  * info, more) on the right. No divider line in the welcome state.
  */
+/** Probe a daemon ws endpoint: resolve true if it answers within the timeout. */
+function probeDaemon(url: string, timeoutMs = 2000): Promise<boolean> {
+	const { promise, resolve } = Promise.withResolvers<boolean>();
+	let settled = false;
+	let ws: WebSocket | null = null;
+	const finish = (ok: boolean): void => {
+		if (settled) return;
+		settled = true;
+		clearTimeout(timer);
+		ws?.close();
+		resolve(ok);
+	};
+	const timer = setTimeout(() => finish(false), timeoutMs);
+	try {
+		ws = new WebSocket(url);
+	} catch {
+		finish(false);
+		return promise;
+	}
+	ws.onopen = () => finish(true);
+	ws.onerror = () => finish(false);
+	return promise;
+}
+
 export function GuiHeader({
 	store,
 	rpc,
@@ -199,6 +223,20 @@ export function GuiHeader({
 	// Instance switcher add form (openchamber "Add instance" parity).
 	const [addHostOpen, setAddHostOpen] = useState(false);
 	const [hostDraft, setHostDraft] = useState({ label: "", url: "", token: "" });
+	// Host reachability (openchamber Remote Instances parity): each saved host
+	// gets a live ping when the list changes; the instance menu marks it.
+	const [hostReach, setHostReach] = useState<Record<string, boolean>>({});
+	useEffect(() => {
+		let alive = true;
+		for (const h of hosts) {
+			void probeDaemon(buildWsUrl(h)).then(ok => {
+				if (alive) setHostReach(r => ({ ...r, [h.id]: ok }));
+			});
+		}
+		return () => {
+			alive = false;
+		};
+	}, [hosts]);
 	const openInDir = store?.cwd ?? project ?? "";
 	const [devRunning, setDevRunning] = useState(false);
 	const [devStopping, setDevStopping] = useState(false);
@@ -1155,7 +1193,7 @@ export function GuiHeader({
 										}}
 									>
 										<span
-											className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-[var(--color-success)]" : "bg-[var(--color-text-faint)]"}`}
+											className={`h-2 w-2 shrink-0 rounded-full ${active ? "bg-[var(--color-success)]" : hostReach[h.id] === true ? "bg-[var(--color-warning)]" : "bg-[var(--color-text-faint)]"}`}
 										/>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-1.5">

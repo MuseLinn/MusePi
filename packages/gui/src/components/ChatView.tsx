@@ -1433,13 +1433,18 @@ export function ChatView({
 																		},
 																		activity => {
 																			if (activity.phase === "speaking") setSpeakingId(entryId);
-																			else if (activity.phase === "done" || activity.phase === "stopped") {
+																			else if (
+																				activity.phase === "done" ||
+																				activity.phase === "stopped"
+																			) {
 																				stopSpeakRef.current = null;
 																				setSpeakingId(prev => (prev === entryId ? null : prev));
 																			} else if (activity.phase === "error") {
 																				stopSpeakRef.current = null;
 																				setSpeakingId(prev => (prev === entryId ? null : prev));
-																				dispatchNotification("error", { lastMessage: activity.message });
+																				dispatchNotification("error", {
+																					lastMessage: activity.message,
+																				});
 																			}
 																		},
 																	);

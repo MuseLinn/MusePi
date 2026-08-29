@@ -75,7 +75,10 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			.then(res => setExtensions(res?.extensions ?? []))
 			.catch(() => setExtensions([]));
 		void rpc
-			.request<{ installed: boolean; serving: boolean; connected: boolean; extensionDir: string }>("browser.relayStatus", {})
+			.request<{ installed: boolean; serving: boolean; connected: boolean; extensionDir: string }>(
+				"browser.relayStatus",
+				{},
+			)
 			.then(res => setRelayStatus(res))
 			.catch(() => setRelayStatus(null));
 	};
@@ -191,17 +194,15 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div>
 						<div className="gui-settings-row-label">{t("browser relay extension")}</div>
 						<div className="gui-settings-row-desc">
-							{relayStatus === null ? (
-								"…"
-							) : !relayStatus.installed ? (
-								t("browser relay extension description")
-							) : relayStatus.connected ? (
-								t("browser relay connected")
-							) : relayStatus.serving ? (
-								t("browser relay serving waiting")
-							) : (
-								t("browser relay installed not loaded")
-							)}
+							{relayStatus === null
+								? "…"
+								: !relayStatus.installed
+									? t("browser relay extension description")
+									: relayStatus.connected
+										? t("browser relay connected")
+										: relayStatus.serving
+											? t("browser relay serving waiting")
+											: t("browser relay installed not loaded")}
 						</div>
 					</div>
 					{relayStatus?.installed ? (
