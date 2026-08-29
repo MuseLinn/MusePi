@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildMessageTree, flattenMessageTree } from "../src/lib/message-tree";
+import { buildMessageTree, flattenMessageTree, treeToolNameOf, treeVerdictOf } from "../src/lib/message-tree";
 
 // 消息树(/tree 语义)纯构建:entries 的 id/parentId → 分支树。
 
@@ -58,5 +58,39 @@ describe("buildMessageTree", () => {
 	it("空/非对象条目忽略,空输入返回空树", () => {
 		expect(buildMessageTree([])).toEqual([]);
 		expect(buildMessageTree([null, 42, "x"])).toEqual([]);
+	});
+});
+
+describe("treeVerdictOf / treeToolNameOf(工具结果判定徽标)", () => {
+	const toolResult = (opts: { isError?: boolean; content?: string; toolName?: string } = {}): unknown => ({
+		type: "message",
+		id: "tr1",
+		parentId: null,
+		timestamp: "2026-08-17T00:00:00.000Z",
+		message: {
+			role: "toolResult",
+			toolCallId: "call1",
+			toolName: opts.toolName ?? "bash",
+			isError: opts.isError ?? false,
+			content: [{ type: "text", text: opts.content ?? "ok" }],
+		},
+	});
+
+	it("isError → error;空结果 → empty;其余 → ok", () => {
+		expect(treeVerdictOf(toolResult({ isError: true }))).toBe("error");
+		expect(treeVerdictOf(toolResult({ content: "" }))).toBe("empty");
+		expect(treeVerdictOf(toolResult({}))).toBe("ok");
+	});
+
+	it("非 toolResult 返回 null(不画徽标)", () => {
+		expect(treeVerdictOf(msg("a", null))).toBeNull();
+		expect(treeVerdictOf(null)).toBeNull();
+		expect(treeVerdictOf(42)).toBeNull();
+	});
+
+	it("treeToolNameOf 读 toolName,缺失/空 → null", () => {
+		expect(treeToolNameOf(toolResult({ toolName: "bash" }))).toBe("bash");
+		expect(treeToolNameOf(toolResult({ toolName: "" }))).toBeNull();
+		expect(treeToolNameOf(msg("a", null))).toBeNull();
 	});
 });

@@ -17,6 +17,7 @@ export function FadeScroll({
 	children,
 	onMeasure,
 	onClick,
+	scrollRef,
 }: {
 	className?: string;
 	children: ReactNode;
@@ -24,11 +25,20 @@ export function FadeScroll({
 	onMeasure?: (el: HTMLElement) => void;
 	/** 透传给容器(浮层自弹窗需要 stopPropagation 时用)。 */
 	onClick?: MouseEventHandler<HTMLDivElement>;
+	/** 可选滚动容器句柄(轨迹 Overview 区间 → 列表跳转用)。 */
+	scrollRef?: (el: HTMLDivElement | null) => void;
 }): ReactNode {
 	const ref = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(ref, onMeasure);
 	return (
-		<div ref={ref} className={`gui-fade-scroll ${className ?? ""}`} onClick={onClick}>
+		<div
+			ref={el => {
+				ref.current = el;
+				scrollRef?.(el);
+			}}
+			className={`gui-fade-scroll ${className ?? ""}`}
+			onClick={onClick}
+		>
 			{children}
 		</div>
 	);

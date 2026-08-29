@@ -331,10 +331,17 @@ export function TrajectoryView({
 	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
 	// 折叠的 turn 集合(默认全部展开;点击行头折叠/展开)。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
-	// 检视器选中记录(id;null = 未选中)。
+	// 检视器选中记录(id;null = 未选中)。close 走 inspectorClosing 播退场,
+	// selectedId 只在动画结束(unmount 前的 finishClose)才清空——弹窗保持
+	// 挂载到 gui-menu-out 播完(DialogFrame/Pop 的 --closing 同款模式)。
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [inspectorClosing, setInspectorClosing] = useState(false);
 	// Overview 时间轴拖拽区间(聚焦模式;null = 全量)。
 	const [range, setRange] = useState<TimelineRange | null>(null);
+	// 区间跳转落点 turn(一次性脉冲高亮)。
+	const [flashTurn, setFlashTurn] = useState<number | null>(null);
+	// 事件列表滚动容器(区间→列表自动定位跳转)。
+	const listRef = useRef<HTMLDivElement | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
 	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
 	const treeRoots = useMemo(() => buildMessageTree(entries), [entries]);
@@ -429,7 +436,7 @@ export function TrajectoryView({
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key !== "Escape") return;
 			if (range) setRange(null);
-			else if (selectedId) setSelectedId(null);
+			else if (selectedId) beginInspectorClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
@@ -437,6 +444,48 @@ export function TrajectoryView({
 
 	const turnDurationOf = (turn: number): number | undefined => turns.find(g => g.turn === turn)?.roundDurationMs;
 	const selected = selectedId !== null ? turns.flatMap(g => g.events).find(e => e.id === selectedId) : undefined;
+
+	// 检视弹窗显隐:beginInspectorClose 只播退场,动画结束(onAnimationEnd)才
+	// 真正卸载——给 gui-menu-out 留出时长,匹配 DialogFrame 的 --closing 语义。
+	const beginInspectorClose = (): void => setInspectorClosing(true);
+	const finishInspectorClose = (): void => {
+		setInspectorClosing(false);
+		setSelectedId(null);
+	};
+	const selectEvent = (id: string | null): void => {
+		if (id === null) {
+			beginInspectorClose();
+			return;
+		}
+		setInspectorClosing(false);
+		setSelectedId(id);
+	};
+
+	// Overview 区间拖拽提交后:自动定位到第一个落在区间内的 turn——展开折叠
+	// 的 target(否则 in-range 事件不可见),平滑滚动到其行头并脉冲高亮一次。
+	useEffect(() => {
+		if (!range) return;
+		let firstTurn: number | null = null;
+		for (const group of turns) {
+			if (group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs))) {
+				firstTurn = group.turn;
+				break;
+			}
+		}
+		if (firstTurn === null) return;
+		const target = firstTurn;
+		setCollapsed(prev => {
+			if (!prev.has(target)) return prev;
+			const next = new Set(prev);
+			next.delete(target);
+			return next;
+		});
+		setFlashTurn(target);
+		setTimeout(() => setFlashTurn(cur => (cur === target ? null : cur)), 900);
+		listRef.current
+			?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`)
+			?.scrollIntoView({ block: "start", behavior: "smooth" });
+	}, [range, turns]);
 
 	const toggleTurn = (turn: number): void => {
 		setCollapsed(prev => {
@@ -448,7 +497,7 @@ export function TrajectoryView({
 	};
 
 	return (
-		<div className="relative flex h-full min-h-0 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			{/* Timeline | Tree 切换(第二层):同一棵 entry 树的两个投影轴。 */}
 			<div className="traj-mode-row">
 				<div className="traj-mode-toggle" role="tablist">
@@ -515,7 +564,7 @@ export function TrajectoryView({
 							aria-label={t("trajectory clear filter")}
 							onClick={() => {
 								setRange(null);
-								setSelectedId(null);
+								beginInspectorClose();
 							}}
 						>
 							<Icon name="close" className="h-3 w-3" />
@@ -524,17 +573,29 @@ export function TrajectoryView({
 				</div>
 			)}
 			{/* 检视面板 = 悬浮浮层(绝对定位覆盖,不挤占事件列表):
-			 * 选中即浮在列表上方(底右锚),130ms 进出,滚动独立。 */}
-			{selected && (
-				<div className="traj-inspector-overlay">
-					<InspectorCard
-						ev={selected}
-						roundDurationMs={turnDurationOf(selected.turn)}
-						onClose={() => setSelectedId(null)}
-					/>
+			 * 保持挂载到退场动画播完(inspectorClosing),进出都走 token。 */}
+			{(selected || inspectorClosing) && (
+				<div
+					className={`traj-inspector-overlay${inspectorClosing ? " traj-inspector-overlay--closing" : ""}`}
+					onAnimationEnd={() => {
+						if (inspectorClosing) finishInspectorClose();
+					}}
+				>
+					{selected && (
+						<InspectorCard
+							ev={selected}
+							roundDurationMs={turnDurationOf(selected.turn)}
+							onClose={beginInspectorClose}
+						/>
+					)}
 				</div>
 			)}
-			<FadeScroll className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3">
+			<FadeScroll
+				scrollRef={el => {
+					listRef.current = el;
+				}}
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2.5 pb-3"
+			>
 				{mode === "tree" ? (
 					treeRows.length === 0 ? (
 						<p className="px-2 py-5 text-[12px] leading-relaxed text-[var(--color-text-faint)]">
@@ -590,7 +651,11 @@ export function TrajectoryView({
 								range === null ||
 								group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs));
 							return (
-								<div key={group.turn} className={`traj-turn-group${inRange ? "" : " traj-turn-group--dim"}`}>
+								<div
+									key={group.turn}
+									data-trajectory-turn={group.turn}
+									className={`traj-turn-group${inRange ? "" : " traj-turn-group--dim"}${flashTurn === group.turn ? " traj-turn-group--flash" : ""}`}
+								>
 									<button
 										type="button"
 										className="traj-turn-head"
@@ -625,7 +690,7 @@ export function TrajectoryView({
 													dimmed={
 														range !== null && !isTrajectoryEventInRange(ev, range.startMs, range.endMs)
 													}
-													onSelect={setSelectedId}
+													onSelect={selectEvent}
 													onJumpToEntry={onJumpToEntry}
 												>
 													{ev.branch && (

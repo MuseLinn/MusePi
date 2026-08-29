@@ -2300,6 +2300,11 @@ body.gui-resizing .gui-pane-right {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
 	gap: 10px;
+	/* Same rounded boundary as the cards: the shared ChromaGroup glow
+	 * (inset 0) clips to this radius, so the RGB bloom matches the cards'
+	 * 12px corners instead of bleeding onto the pane in sharp edges. */
+	border-radius: 12px;
+	overflow: hidden;
 }
 
 .gui-provider-search {

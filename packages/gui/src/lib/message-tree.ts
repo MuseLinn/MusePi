@@ -108,7 +108,26 @@ export function treeTextOf(entry: unknown): string {
 	return typeof e.type === "string" ? e.type : "entry";
 }
 
-/** 树节点 kind → oc-icons 名(轨迹树行/地图画布共用)。 */
+/** 工具结果节点判定(dsh-maze verdict 的减化诚实版):只读 wire `isError`
+ *  + 结果文本是否为空,不按输出长度/特征猜测——空结果(检索扑空)与失败
+ *  (isError)分开,非工具结果返回 null(不画徽标)。 */
+export type ToolVerdict = "ok" | "error" | "empty";
+export function treeVerdictOf(entry: unknown): ToolVerdict | null {
+	if (!entry || typeof entry !== "object") return null;
+	const e = entry as { type?: unknown; message?: { role?: unknown; isError?: unknown; content?: unknown } };
+	if (e.type !== "message" || e.message?.role !== "toolResult") return null;
+	if (e.message.isError === true) return "error";
+	const text = treeTextOf(entry);
+	return text === "" || text === "…" ? "empty" : "ok";
+}
+
+/** 工具结果节点对应的工具名(wire ToolResultMessage.toolName;缺失回退 null)。 */
+export function treeToolNameOf(entry: unknown): string | null {
+	if (!entry || typeof entry !== "object") return null;
+	const e = entry as { type?: unknown; message?: { role?: unknown; toolName?: unknown } };
+	if (e.type !== "message" || e.message?.role !== "toolResult") return null;
+	return typeof e.message.toolName === "string" && e.message.toolName !== "" ? e.message.toolName : null;
+}
 export const TREE_ICON: Record<string, string> = {
 	user: "user",
 	toolResult: "hammer",

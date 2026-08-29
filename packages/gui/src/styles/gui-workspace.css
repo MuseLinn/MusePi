@@ -1722,6 +1722,27 @@
 .traj-turn-group--dim {
 	opacity: 0.45;
 }
+/* 区间→列表跳转落点脉冲(transcript tr-flash-highlight 同配方):一次高亮
+ * 让落地位置在长列表中可辨,落点本身不改变布局。 */
+.traj-turn-group--flash {
+	animation: traj-jump-flash 900ms var(--gui-ease-out);
+}
+@keyframes traj-jump-flash {
+	0% {
+		background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+	}
+	100% {
+		background: transparent;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.traj-turn-group--flash {
+		animation: none;
+	}
+}
+.gui-motion-off .traj-turn-group--flash {
+	animation: none;
+}
 
 .traj-tag--user {
 	color: var(--color-accent);
@@ -2114,10 +2135,12 @@
 	stroke-width: 2;
 }
 .stc-edge--off {
-	stroke: color-mix(in oklab, var(--color-text-faint) 50%, transparent);
+	/* 分支/fork 边:与主线(实线 accent)区分——紫调虚线 = 血缘以外分出的支路
+	 * (dsh-talk-map「虚线血缘 / 实线主线」的线型语义)。 */
+	stroke: color-mix(in oklab, var(--color-accent) 45%, var(--color-text-faint));
 	stroke-width: 1.5;
 	stroke-dasharray: 4 4;
-	opacity: 0.65;
+	opacity: 0.7;
 }
 .stc-arrow-head {
 	fill: var(--color-accent);
@@ -2156,6 +2179,29 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	color: var(--color-text-muted);
+}
+.stc-node-verdict {
+	flex-shrink: 0;
+	font-size: 10.5px;
+	line-height: 1;
+	font-weight: 700;
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+.stc-node-verdict--ok {
+	color: var(--color-ok);
+}
+.stc-node-verdict--error {
+	color: var(--color-danger);
+}
+.stc-node-verdict--empty {
+	color: var(--color-text-faint);
+}
+.stc-node-clock {
+	flex-shrink: 0;
+	font-size: 9.5px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+	opacity: 0.8;
 }
 .stc-node--leaf {
 	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
@@ -2272,7 +2318,21 @@
 	justify-content: center;
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
 	backdrop-filter: blur(3px);
-	animation: gui-menu-in 140ms var(--gui-ease-out);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+.stc-focus-overlay--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+	pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.stc-focus-overlay,
+	.stc-focus-overlay--closing {
+		animation: none;
+	}
+}
+.gui-motion-off .stc-focus-overlay,
+.gui-motion-off .stc-focus-overlay--closing {
+	animation: none;
 }
 .stc-focus-card {
 	width: min(520px, calc(100% - 48px));
@@ -2485,7 +2545,21 @@
 	max-height: 58%;
 	display: flex;
 	flex-direction: column;
-	animation: gui-menu-in 140ms var(--gui-ease-out);
+	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
+}
+.traj-inspector-overlay--closing {
+	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
+	pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.traj-inspector-overlay,
+	.traj-inspector-overlay--closing {
+		animation: none;
+	}
+}
+.gui-motion-off .traj-inspector-overlay,
+.gui-motion-off .traj-inspector-overlay--closing {
+	animation: none;
 }
 .traj-inspector-overlay .traj-inspector {
 	display: flex;

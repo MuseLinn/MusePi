@@ -333,6 +333,21 @@ export function ContextPanel({
 						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
 					) : view === "git" || view === "diff" || view === "pr" ? (
 						<GitPanel rpc={rpc} cwd={cwd} />
+					) : view === "trajectory" ? (
+						/* Trajectory renders OUTSIDE the feather-scroll (browser/git
+						 * parity): its root is a flex-1 column with its own scroll list —
+						 * a scroll-wrapper + percentage-height chain lets that nested
+						 * list inflate to content height and escape the chat card. */
+						<TrajectoryView
+							entries={snap?.entries ?? []}
+							modelId={snap?.state?.model?.id}
+							roundDurations={snap?.roundDurations}
+							onJumpToEntry={onJumpToEntry}
+							leafId={leafId}
+							activePathIds={activePathIds}
+							onBranchTo={onBranchTo}
+							onForkAt={onForkAt}
+						/>
 					) : (
 						<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
 							{view === "notes" ? (
@@ -341,17 +356,6 @@ export function ContextPanel({
 								<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
 							) : view === "widget" ? (
 								<WidgetSidebarTab entries={snap?.entries ?? []} />
-							) : view === "trajectory" ? (
-								<TrajectoryView
-									entries={snap?.entries ?? []}
-									modelId={snap?.state?.model?.id}
-									roundDurations={snap?.roundDurations}
-									onJumpToEntry={onJumpToEntry}
-									leafId={leafId}
-									activePathIds={activePathIds}
-									onBranchTo={onBranchTo}
-									onForkAt={onForkAt}
-								/>
 							) : view === "jobs" ? (
 								snap?.sessionId ? (
 									<JobsPane rpc={rpc} sessionId={snap.sessionId} />
@@ -1938,7 +1942,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 						<webview
 							ref={webviewRef}
 							src={current}
-							partition="persist:omp-browser"
+							partition="persist:musepi-browser"
 							allowpopups
 							webpreferences="contextIsolation=yes, sandbox=yes"
 							className="h-full w-full"
