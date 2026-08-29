@@ -505,7 +505,7 @@ export const settings = {
 	effects: "Effects",
 	"tool needs a daemon backend — coming with the desktop release":
 		"This tool needs a daemon backend; it will be available with the desktop release.",
-	browser: "Browser & desktop",
+	browser: "Browser & Computer Use",
 	"project notes": "Project notes",
 	"workspace changes": "Workspace changes",
 	"pull requests": "Pull requests",
@@ -1305,6 +1305,12 @@ export const settings = {
 	"by model": "By model",
 	"by folder": "By project",
 	requests: "Requests",
+	errors: "Errors",
+	"failed requests": "Failed requests",
+	"by agent": "By agent",
+	"main agent": "Main agent",
+	subagent: "Subagent",
+	"requests & errors": "Requests & errors",
 	"index library description":
 		"Code library: index workspace file contents for instant search (data stays local); below is historical session message search",
 	"code library": "Code library",

@@ -1,8 +1,8 @@
-import { t } from "@musepi/desktop-web";
+import { BarChart, LineChart, t } from "@musepi/desktop-web";
 import { LoaderCircle as LoaderCircleIconData, RefreshCw as RefreshCwIconData } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
@@ -53,6 +53,16 @@ interface UsageModel extends UsageAggregated {
 interface UsageFolder extends UsageAggregated {
 	folder: string;
 }
+interface UsageAgentType {
+	/** "main" | "subagent" | "advisor" */
+	agentType: string;
+	totalRequests: number;
+	totalInputTokens: number;
+	totalOutputTokens: number;
+	totalCacheReadTokens: number;
+	totalCacheWriteTokens: number;
+	totalCost: number;
+}
 interface UsagePoint {
 	timestamp: number;
 	requests: number;
@@ -71,10 +81,45 @@ interface UsageDashboard {
 	overall: UsageAggregated;
 	byModel: UsageModel[];
 	byFolder: UsageFolder[];
+	byAgentType: UsageAgentType[];
 	timeSeries: UsagePoint[];
 	modelSeries: ModelUsagePoint[];
 	sessionCount: number;
 }
+
+/** localStorage key for the persisted usage dashboard snapshot. */
+const DASHBOARD_CACHE_KEY = "musepi-gui-usage-stats";
+
+type DashboardCache = Partial<Record<"7d" | "30d", { main: UsageDashboard; yearly: UsageDashboard }>>;
+
+/** Restore the last dashboard from localStorage so a full GUI restart still
+ * renders instantly instead of blanking while stats.sync + the RPC run. */
+function loadPersistedDashboard(): DashboardCache {
+	try {
+		const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+		if (!raw) return {};
+		const parsed = JSON.parse(raw) as DashboardCache;
+		return parsed && typeof parsed === "object" ? parsed : {};
+	} catch {
+		return {};
+	}
+}
+
+/** Persist the cache for the next launch. Failure is silent — the cache only
+ * accelerates paint; correctness comes from the live dashboard fetch. */
+function persistDashboard(cache: DashboardCache): void {
+	try {
+		localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(cache));
+	} catch {
+		// localStorage unavailable (private mode / quota) — keep the in-memory
+		// cache working for this session and drop cross-launch persistence.
+	}
+}
+
+/** Module-level cache (backed by localStorage): survives tab unmount AND a
+ * full GUI restart. The settings tab renders the last snapshot immediately on
+ * re-entry, then background-refreshes in place. */
+const dashboardCache: DashboardCache = loadPersistedDashboard();
 
 /** Settings → 数据与统计 → 使用统计: daemon stats.dashboard (packages/stats
  * aggregation over every session file) + stats.sync (incremental rescan).
@@ -84,19 +129,23 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [stats, setStats] = useState<UsageDashboard | null>(null);
 	const [heatSeries, setHeatSeries] = useState<UsageDashboard["timeSeries"]>([]);
 	const [range, setRange] = useState<"7d" | "30d">("7d");
-	// Blur-morphs the trend chart on range switch (new/removed bars would
-	// otherwise pop in abruptly). Cleared on animation end.
-	const [trendMorph, setTrendMorph] = useState(false);
-	useEffect(() => {
-		setTrendMorph(true);
-	}, []);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const load = useCallback(
-		async (doSync: boolean, rng: "7d" | "30d"): Promise<void> => {
+		async (doSync: boolean, rng: "7d" | "30d", manual = false): Promise<void> => {
 			if (!rpc) return;
-			setBusy(true);
-			setError(null);
+			const cached = dashboardCache[rng];
+			// Serve the cached dashboard immediately (no blank "…" on tab
+			// re-entry), then refresh in place.
+			if (cached) {
+				setStats(cached.main);
+				setHeatSeries(cached.yearly.timeSeries ?? []);
+				setError(null);
+			}
+			// A manual refresh always shows the spinner (explicit user action
+			// expects feedback); the auto re-entry path only spins when there
+			// is no cache to show (first-ever visit).
+			if (manual || !cached) setBusy(true);
 			try {
 				if (doSync) await rpc.request("stats.sync");
 				const [main, yearly] = await Promise.all([
@@ -107,9 +156,11 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				]);
 				setStats(main);
 				setHeatSeries(yearly.timeSeries ?? []);
+				dashboardCache[rng] = { main, yearly };
+				persistDashboard(dashboardCache);
 			} catch (err) {
 				setError(err instanceof Error ? err.message : String(err));
-				setStats(null);
+				if (!cached) setStats(null);
 			} finally {
 				setBusy(false);
 			}
@@ -140,6 +191,23 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const topModel = byRequests[0];
 	const topShare =
 		topModel && overall?.totalRequests ? Math.round((topModel.totalRequests / overall.totalRequests) * 100) : 0;
+	const successRatePct =
+		overall && overall.totalRequests > 0
+			? Math.round((overall.successfulRequests / overall.totalRequests) * 1000) / 10
+			: null;
+	const cacheTokensTotal = overall ? overall.totalCacheReadTokens + overall.totalCacheWriteTokens : 0;
+	// ── By-agent token share (main / subagent / advisor) ─────────────────
+	// Fixed display order; agents absent from the range still show as 0%.
+	const AGENT_META: Record<string, { label: string; color: string }> = {
+		main: { label: t("main agent"), color: "#ed4abf" },
+		subagent: { label: t("subagent"), color: "#9b4dff" },
+		advisor: { label: t("advisor"), color: "#5ad8e6" },
+	};
+	const agentTokens = (stats?.byAgentType ?? []).map(a => {
+		const tok = a.totalInputTokens + a.totalOutputTokens + a.totalCacheReadTokens + a.totalCacheWriteTokens;
+		return { key: a.agentType, tokens: tok };
+	});
+	const agentTotalTokens = agentTokens.reduce((s, a) => s + a.tokens, 0);
 	// ── Shared calendar window ──────────────────────────────────────────
 	// Fixed 7/30 calendar days (zero-value days kept) so the heatmap grid
 	// and trend bars follow real dates. `series`/`modelSeries` are day
@@ -202,39 +270,13 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		day.set(p.model, (day.get(p.model) ?? 0) + p.tokens);
 	}
 	const days = windowDays;
-	const dayTotal = (d: number): number => [...(byDay.get(keyOf(d))?.values() ?? [])].reduce((a, b) => a + b, 0);
-	const trendMax = Math.max(1, ...days.map(dayTotal));
-	// ── Trend-bar FLIP morph ─────────────────────────────────────────────
-	// 7d↔30d switching changes bar count/width/height. Bars are keyed by
-	// day and reused across ranges, so after every render we capture their
-	// rects; when a range switch changes geometry, bars FLIP from the old
-	// rect to the new one via a transform morph (not a cross-fade).
-	const barRefs = useRef(new Map<number, HTMLDivElement>());
-	const prevBarRects = useRef(new Map<number, { x: number; y: number; w: number; h: number }>());
-	useLayoutEffect(() => {
-		const next = new Map<number, { x: number; y: number; w: number; h: number }>();
-		for (const [ts, el] of barRefs.current) {
-			const r = el.getBoundingClientRect();
-			const prev = prevBarRects.current.get(ts);
-			if (prev) {
-				const dx = prev.x - r.x;
-				const dy = prev.y - r.y;
-				const sx = r.width > 0 ? prev.w / r.width : 1;
-				const sy = r.height > 0 ? prev.h / r.height : 1;
-				if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || Math.abs(sx - 1) > 0.02 || Math.abs(sy - 1) > 0.02) {
-					el.style.transformOrigin = "bottom left";
-					el.style.transform = `translate(${dx}px, ${dy}px) scaleX(${sx}) scaleY(${sy})`;
-					el.style.transition = "none";
-					requestAnimationFrame(() => {
-						el.style.transition = "transform 260ms cubic-bezier(0.22, 1, 0.36, 1)";
-						el.style.transform = "";
-					});
-				}
-			}
-			next.set(ts, { x: r.x, y: r.y, w: r.width, h: r.height });
-		}
-		prevBarRects.current = next;
-	});
+	// One stacked serie per model, value per day (0 when the model is absent).
+	const trendSeries = trendModels.map((m, i) => ({
+		name: m,
+		color: MODEL_COLORS[i % MODEL_COLORS.length],
+		data: days.map(d => byDay.get(keyOf(d))?.get(m) ?? 0),
+	}));
+	const trendLabels = days.map(d => fmtDay(d));
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("usage statistics")}</h2>
@@ -268,7 +310,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					disabled={busy || !rpc}
 					onClick={() => {
 						tapFeedback();
-						void load(true, range);
+						void load(true, range, true);
 					}}
 				>
 					{/* MorphIcon springs refresh-cw ↔ loader-circle on state change;
@@ -301,6 +343,33 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								label: t("most used model"),
 								value: topModel ? topModel.model : "—",
 								sub: topModel ? `${t("usage share")} ${topShare}%` : null,
+							},
+							{
+								icon: "shield-check",
+								label: t("success rate"),
+								value: successRatePct == null ? "—" : `${successRatePct}%`,
+								sub: overall ? `${fmtCompact(overall.failedRequests)} ${t("failed requests")}` : null,
+							},
+							{
+								icon: "timer",
+								label: t("avg ttft"),
+								value: fmtMs(overall?.avgTtft ?? null),
+								sub: null,
+							},
+							{
+								icon: "pulse",
+								label: t("tokens per second"),
+								value:
+									overall?.avgTokensPerSecond == null
+										? "—"
+										: `${fmtCompact(overall.avgTokensPerSecond)} tok/s`,
+								sub: null,
+							},
+							{
+								icon: "database-2",
+								label: t("cache tokens"),
+								value: fmtCompact(cacheTokensTotal),
+								sub: null,
 							},
 						].map(card => (
 							<div key={card.label} className="gui-stats-card">
@@ -409,59 +478,98 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							</div>
 						</div>
 					</div>
-					{/* Daily token trend, stacked per model (ZCode parity) */}
+					{/* Token usage by agent (main / subagent / advisor) — CLI parity */}
+					{agentTotalTokens > 0 && (
+						<div className="gui-settings-section">
+							<div className="gui-settings-section-title">{t("by agent")}</div>
+							<div
+								className="mt-2 flex h-3 w-full overflow-hidden rounded-full"
+								style={{ background: "var(--border)" }}
+							>
+								{Object.keys(AGENT_META).map(k => {
+									const seg = agentTokens.find(a => a.key === k);
+									const share = seg ? seg.tokens / agentTotalTokens : 0;
+									if (share <= 0) return null;
+									return (
+										<div
+											key={k}
+											className="h-full"
+											style={{ width: `${share * 100}%`, background: AGENT_META[k].color }}
+											title={`${AGENT_META[k].label}: ${Math.round(share * 100)}%`}
+										/>
+									);
+								})}
+							</div>
+							<div className="mt-2 space-y-1.5">
+								{Object.keys(AGENT_META).map(k => {
+									const seg = agentTokens.find(a => a.key === k);
+									const tokens = seg?.tokens ?? 0;
+									const share = agentTotalTokens > 0 ? tokens / agentTotalTokens : 0;
+									return (
+										<div key={k} className="flex items-center justify-between gap-3 text-[12px]">
+											<div className="flex min-w-0 items-center gap-2">
+												<span
+													className="h-2.5 w-2.5 shrink-0 rounded-full"
+													style={{ background: AGENT_META[k].color }}
+												/>
+												<span className="truncate text-[var(--color-text-primary)]">
+													{AGENT_META[k].label}
+												</span>
+											</div>
+											<div className="flex items-center gap-3 whitespace-nowrap">
+												<span className="text-[var(--color-text-muted)]">{fmtCompact(tokens)} tok</span>
+												<span className="font-mono font-semibold tabular-nums text-[var(--color-text-primary)]">
+													{Math.round(share * 100)}%
+												</span>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						</div>
+					)}
+					{/* Requests & errors over time — now rendered by the shared
+					 * zero-dependency <LineChart> (responsive pixel-coordinate
+					 * SVG, no preserveAspectRatio stretch, CSS-var theme). */}
+					{series.length > 0 && (
+						<div className="gui-settings-section">
+							<div className="gui-settings-section-title">{t("requests & errors")}</div>
+							<LineChart
+								className="mt-2"
+								height={120}
+								yMax={Math.max(1, ...series.map(p => Math.max(p.requests, p.errors)))}
+								series={[
+									{ name: t("requests"), color: "#5ad8e6", data: series.map(p => p.requests) },
+									{ name: t("errors"), color: "#ff6b7d", data: series.map(p => p.errors) },
+								]}
+								labels={series.map(p => fmtDay(p.timestamp))}
+								formatY={n => fmtCompact(n)}
+							/>
+							<div className="mt-1.5 flex items-center gap-4 text-[10.5px] text-[var(--color-text-muted)]">
+								<span className="flex items-center gap-1.5">
+									<span className="h-2 w-2 rounded-full" style={{ background: "#5ad8e6" }} />
+									{t("requests")}
+								</span>
+								<span className="flex items-center gap-1.5">
+									<span className="h-2 w-2 rounded-full" style={{ background: "#ff6b7d" }} />
+									{t("errors")}
+								</span>
+							</div>
+						</div>
+					)}
+					{/* Daily token trend, stacked per model — shared <BarChart>.
+					 * No more hand-rolled flex bars + FLIP morph: the component
+					 * measures its container and renders stacked SVG rects. */}
 					{days.length > 0 && (
 						<div className="gui-settings-section">
 							<div className="gui-settings-section-title">{t("daily token trend")}</div>
-							<div
-								className={trendMorph ? "gui-blur-morph" : undefined}
-								onAnimationEnd={() => setTrendMorph(false)}
-							>
-								<div className="flex h-24 items-end gap-[3px] pt-2">
-									{days.map(d => (
-										<div
-											key={d}
-											ref={el => {
-												if (el) barRefs.current.set(d, el);
-												else barRefs.current.delete(d);
-											}}
-											title={`${fmtDay(d)}: ${fmtCompact(dayTotal(d))} Tokens`}
-											className="flex min-w-[3px] flex-1 flex-col justify-end gap-px overflow-hidden rounded-t-[2px]"
-											style={{ height: `${Math.max(4, (dayTotal(d) / trendMax) * 100)}%` }}
-										>
-											{trendModels.map((m, i) => {
-												const v = byDay.get(keyOf(d))?.get(m) ?? 0;
-												if (!v) return null;
-												return (
-													<div
-														key={m}
-														style={{
-															height: `${(v / dayTotal(d)) * 100}%`,
-															background: MODEL_COLORS[i % MODEL_COLORS.length],
-														}}
-													/>
-												);
-											})}
-										</div>
-									))}
-								</div>
-								<div className="mt-1 flex gap-[3px]">
-									{days.map((d, i) => {
-										// Label roughly every ceil(n/7)th day (7-8 ticks
-										// regardless of range) plus the last day.
-										const step = Math.max(1, Math.ceil(days.length / 7));
-										const show = i % step === 0 || i === days.length - 1;
-										return (
-											<div
-												key={d}
-												className="flex-1 overflow-hidden text-center text-[10px] leading-none text-[var(--color-text-muted)]"
-											>
-												{show ? fmtDay(d) : ""}
-											</div>
-										);
-									})}
-								</div>
-							</div>
+							<BarChart
+								className="mt-2"
+								height={140}
+								series={trendSeries}
+								labels={trendLabels}
+								formatY={n => fmtCompact(n)}
+							/>
 							{trendModels.length > 1 && (
 								<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
 									{trendModels.map((m, i) => (
