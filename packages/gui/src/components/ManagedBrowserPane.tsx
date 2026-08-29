@@ -261,7 +261,15 @@ export function ManagedBrowserPane({
 		const res = await api.managedBrowserPickElement().catch(() => null);
 		setPicking(false);
 		const selector = res?.selector;
-		if (selector) setPickedSelector(selector);
+		if (selector) {
+			setPickedSelector(selector);
+			// Legacy ContextPanel parity: dispatch the same window event
+			// Composer listens for — this is what inserts the selector into
+			// the chat input. Without it the picker only shows a chip and
+			// the user sees no feedback in the composer.
+			const insertion = `${t("inserted element", { tag: (res as { tag?: string }).tag ?? "", text: ((res as { text?: string }).text ?? "").slice(0, 80) })} ${t("picked element")}: ${selector}`;
+			window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
+		}
 	}, [api, picking]);
 
 	useEffect(() => {
