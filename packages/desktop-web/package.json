@@ -63,7 +63,7 @@
 		"@capacitor/local-notifications": "^8.1.1",
 		"@capacitor/status-bar": "^8.0.0",
 		"@capawesome/capacitor-badge": "^8.0.2",
-		"@musepi/collab-proto": "catalog:",
+		"@musepi/collab-proto":"0.4.7",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "workspace:*",
 		"beautiful-mermaid": "^1.1.3",

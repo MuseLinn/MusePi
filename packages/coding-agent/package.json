@@ -50,7 +50,7 @@
 	},
 	"dependencies": {
 		"@babel/parser": "catalog:",
-		"@musepi/collab-proto": "catalog:",
+		"@musepi/collab-proto": "0.4.7",
 		"@musepi/hashline": "catalog:",
 		"@musepi/musepi-stats": "catalog:",
 		"@musepi/pi-agent-core": "catalog:",
@@ -61,7 +61,7 @@
 		"@musepi/pi-tui": "catalog:",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "catalog:",
-		"@musepi/sdk": "catalog:",
+		"@musepi/sdk": "0.4.7",
 		"@musepi/snapcompact": "catalog:",
 		"@opentelemetry/api": "catalog:",
 		"@opentelemetry/api-logs": "catalog:",
