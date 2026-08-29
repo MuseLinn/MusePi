@@ -471,7 +471,10 @@ export function ModelSection({
 
 	const submitModel = async (): Promise<void> => {
 		setFormError(null);
-		if (!rpc || !sessionId) return;
+		if (!rpc) return;
+		// models.add needs no session (daemon handler only reads params.provider)
+		// — a settings page opened without an active session must not silently
+		// swallow the click (providers.login had the same guard removed).
 		// A provider needs at least one model: either the hand-typed single
 		// row or rows adopted from the endpoint interrogation.
 		if (!form.name || !form.baseUrl || (form.modelId.length === 0 && form.adopted.length === 0)) {
@@ -542,7 +545,7 @@ export function ModelSection({
 	};
 
 	const removeProvider = async (name: string): Promise<void> => {
-		if (!rpc || !sessionId) return;
+		if (!rpc) return; // models.remove needs no session either
 		try {
 			await rpc.request("models.remove", { sessionId, providerName: name });
 			onChanged();
