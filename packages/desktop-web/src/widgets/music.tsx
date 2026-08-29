@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useThemePreference } from "../lib/theme";
 
 /**
  * Vinyl music player — ported 1:1 from the kimiwork "黑胶唱片机" widget
@@ -71,6 +72,18 @@ function fmt(s: number): string {
 	return `${m}:${x < 10 ? "0" : ""}${x}`;
 }
 
+/** Parse a #rrggbb / rgb() color into [r,g,b]; null when unparseable. */
+function parseRgb(color: string): [number, number, number] | null {
+	const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
+	if (hex) {
+		const v = Number.parseInt(hex[1], 16);
+		return [(v >> 16) & 0xff, (v >> 8) & 0xff, v & 0xff];
+	}
+	const rgb = /^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/.exec(color.trim());
+	if (rgb) return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+	return null;
+}
+
 export function MusicCard({
 	data,
 	update,
@@ -96,6 +109,16 @@ export function MusicCard({
 	const [queueScroll, setQueueScroll] = useState(0);
 	const stateRef = useRef({ current: -1, playing: false, vol: 0.8, muted: false });
 	stateRef.current = { current, playing, vol, muted };
+	// 频谱色跟随 accent：canvas 无法用 var()，读 computed style 缓存到 ref，
+	// 主题/口音切换由 resolved 触发重读（不重建下文的 audio/rAF 循环）。
+	const accentRef = useRef<[number, number, number]>([145, 212, 255]);
+	const { resolved } = useThemePreference();
+	useEffect(() => {
+		const el = canvasRef.current;
+		if (!el) return;
+		const rgb = parseRgb(getComputedStyle(el).getPropertyValue("--color-accent").trim());
+		if (rgb) accentRef.current = rgb;
+	}, [resolved]);
 
 	// ── canvas spectrum (ported from the kimi viz loop) ────────────────
 	useEffect(() => {
@@ -196,6 +219,9 @@ export function MusicCard({
 				const baseY = Math.round(H * 0.8);
 				const gap = Math.max(1, W * 0.008);
 				const bw = (W - gap * (BARS - 1)) / BARS;
+				const [ar, ag, ab] = accentRef.current;
+				const accent = `${ar},${ag},${ab}`;
+				const light = `${Math.round(ar + (255 - ar) * 0.35)},${Math.round(ag + (255 - ag) * 0.35)},${Math.round(ab + (255 - ab) * 0.35)}`;
 				let bass = 0;
 				if (liveData && freq) {
 					for (let b = 0; b < 10; b++) bass += freq[b];
@@ -212,17 +238,17 @@ export function MusicCard({
 						baseY,
 						Math.max(10, W * (0.24 + bass * 0.42)),
 					);
-					glow.addColorStop(0, `rgba(145,212,255,${(0.1 + bass * 0.24).toFixed(3)})`);
-					glow.addColorStop(1, "rgba(145,212,255,0)");
+					glow.addColorStop(0, `rgba(${accent},${(0.1 + bass * 0.24).toFixed(3)})`);
+					glow.addColorStop(1, `rgba(${accent},0)`);
 					vctx.fillStyle = glow;
 					vctx.fillRect(0, 0, W, H);
 				}
 				const grad = vctx.createLinearGradient(0, baseY, 0, 0);
-				grad.addColorStop(0, "rgba(145,212,255,.5)");
-				grad.addColorStop(0.6, "#91D4FF");
-				grad.addColorStop(1, "#C4E5FF");
+				grad.addColorStop(0, `rgba(${accent},.5)`);
+				grad.addColorStop(0.6, `rgb(${accent})`);
+				grad.addColorStop(1, `rgb(${light})`);
 				vctx.save();
-				vctx.shadowColor = `rgba(145,212,255,${(0.3 + bass * 0.5).toFixed(3)})`;
+				vctx.shadowColor = `rgba(${accent},${(0.3 + bass * 0.5).toFixed(3)})`;
 				vctx.shadowBlur = 5 + bass * 16;
 				vctx.fillStyle = grad;
 				for (let i = 0; i < BARS; i++) {
@@ -235,14 +261,14 @@ export function MusicCard({
 					vctx.fill();
 				}
 				vctx.restore();
-				vctx.fillStyle = "rgba(183,227,255,.9)";
+				vctx.fillStyle = `rgba(${light},.9)`;
 				for (let i = 0; i < BARS; i++) {
 					const py = baseY - Math.max(3, peaks[i] * baseY);
 					vctx.fillRect(i * (bw + gap), Math.max(0, py - 2), bw, 2);
 				}
 				const rgrad = vctx.createLinearGradient(0, baseY, 0, H);
-				rgrad.addColorStop(0, "rgba(145,212,255,.20)");
-				rgrad.addColorStop(1, "rgba(145,212,255,0)");
+				rgrad.addColorStop(0, `rgba(${accent},.20)`);
+				rgrad.addColorStop(1, `rgba(${accent},0)`);
 				vctx.fillStyle = rgrad;
 				const refH = H - baseY;
 				for (let i = 0; i < BARS; i++) {

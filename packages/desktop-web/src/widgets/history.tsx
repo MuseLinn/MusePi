@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useThemePreference } from "../lib/theme";
 import { widgetFetch } from "./fetch";
 
 /**
@@ -48,6 +49,13 @@ function esc(s: string): string {
 	return d.innerHTML;
 }
 
+/** Resolve a CSS variable for canvas drawing — getContext("2d") needs a
+ *  concrete color string, so read the themed token from computed style. */
+function readVar(el: HTMLElement, name: string, fallback: string): string {
+	const v = getComputedStyle(el).getPropertyValue(name).trim();
+	return v || fallback;
+}
+
 export function HistoryCard({
 	data,
 }: {
@@ -71,6 +79,7 @@ export function HistoryCard({
 	const [rows, setRows] = useState<HistoryEvent[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [offline, setOffline] = useState(false);
+	const { resolved } = useThemePreference();
 
 	// ── pixel HISTORY logo (5×3 bitmap per letter) ─────────────────────
 	useEffect(() => {
@@ -85,7 +94,7 @@ export function HistoryCard({
 		c.height = 5 * (px + gap);
 		const g = c.getContext("2d");
 		if (!g) return;
-		g.fillStyle = "#FFFFFF";
+		g.fillStyle = readVar(c, "--color-text", "#FFFFFF");
 		let x0 = 0;
 		for (const ch of word) {
 			const glyph = FONT[ch];
@@ -97,7 +106,7 @@ export function HistoryCard({
 			});
 			x0 += 3 + sp;
 		}
-	}, [header]);
+	}, [header, resolved]);
 
 	// ── "+()" character texture (mulberry32 seeded, keep-out zones) ────
 	useEffect(() => {
@@ -156,12 +165,12 @@ export function HistoryCard({
 				const q = rng();
 				const ch = q < 0.6 ? TEX_CH[0] : q < 0.8 ? TEX_CH[1] : TEX_CH[2];
 				ctx.globalAlpha = 0.75 * fade;
-				ctx.fillStyle = "#002E58";
+				ctx.fillStyle = readVar(cv, "--color-text-faint", "#002E58");
 				ctx.fillText(ch, x, y);
 			}
 		}
 		ctx.globalAlpha = 1;
-	}, []);
+	}, [resolved]);
 
 	// ── data load: 60s API → yum6 fallback → seed offline ──────────────
 	const loadRef = useRef(0);

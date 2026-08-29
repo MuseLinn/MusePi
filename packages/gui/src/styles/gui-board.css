@@ -108,7 +108,7 @@
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	padding: 3px;
+	padding: 4px;
 	border-radius: 10px;
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
@@ -165,7 +165,7 @@
 	height: 26px;
 	padding: 0 2px;
 	border: none;
-	border-radius: 7px;	background: transparent;
+	border-radius: 8px;	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
 	overflow: hidden;
@@ -314,7 +314,7 @@
 	flex: 1;
 	min-width: 0;
 	resize: none;
-	padding: 7px 9px;
+	padding: 8px 8px;
 	border-radius: 8px;
 	border: 1px solid var(--border);
 	background: var(--color-surface-sunken);
@@ -335,9 +335,9 @@
 	height: 30px;
 	flex-shrink: 0;
 	border: none;
-	border-radius: 9px;
-	background: var(--color-accent);
-	color: var(--color-on-accent, #fff);
+	border-radius: 8px;
+	background: var(--color-text);
+	color: var(--color-surface);
 	cursor: pointer;
 }
 
@@ -418,7 +418,7 @@
 .gui-ask-pop-btn {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: 4px;
 	padding: 4px 10px;
 	border-radius: 999px;
 	border: 1px solid var(--border);
@@ -495,7 +495,7 @@
 	 * the collection view's create bar. */
 	height: 100%;
 	min-height: 0;
-	padding: 14px 18px 18px;
+	padding: 12px 16px 16px;
 	gap: 12px;
 	box-sizing: border-box;
 }
@@ -740,7 +740,7 @@
 	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
-	border-radius: 9px;
+	border-radius: 8px;
 	padding: 2px;
 }
 
@@ -1355,8 +1355,8 @@
 .gui-widget-clock-market {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
-	padding: 3px 9px;
+	gap: 4px;
+	padding: 4px 8px;
 	border-radius: 999px;
 	border: 1px solid var(--border);
 	background: transparent;
@@ -1398,7 +1398,7 @@
 .gui-widget-slider-params {
 	display: flex;
 	flex-direction: column;
-	gap: 5px;
+	gap: 4px;
 }
 
 .gui-widget-slider-row {
@@ -1438,7 +1438,7 @@
 .gui-widget-calc {
 	display: flex;
 	flex-direction: column;
-	gap: 9px;
+	gap: 8px;
 	padding: 2px;
 }
 
@@ -1449,8 +1449,8 @@
 
 .gui-widget-calc-toggle {
 	flex: 1;
-	padding: 5px 0;
-	border-radius: 7px;
+	padding: 4px 0;
+	border-radius: 8px;
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
@@ -1516,7 +1516,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
-	padding: 7px 9px;
+	padding: 8px 8px;
 	border-radius: 8px;
 	background: var(--color-surface-sunken);
 }
@@ -1530,11 +1530,11 @@
 }
 
 .gui-widget-calc-cell--net {
-	background: color-mix(in srgb, var(--color-ok) 12%, transparent);
+	background: color-mix(in srgb, var(--color-accent) 12%, transparent);
 }
 
 .gui-widget-calc-cell--net .gui-widget-calc-cell-val {
-	color: var(--color-ok);
+	color: var(--color-accent);
 }
 
 .gui-widget-calc-cell-label {
@@ -1551,7 +1551,7 @@
 .gui-widget-calc-rules {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 4px;
 	border-top: 1px solid var(--border);
 	padding-top: 7px;
 }
@@ -1625,7 +1625,7 @@
 }
 
 .gui-widget-ticker-btn {
-	padding: 3px 10px;
+	padding: 4px 8px;
 	border-radius: 6px;
 	border: 1px solid var(--border);
 	background: transparent;
@@ -1705,7 +1705,7 @@
 .gui-widget-todo-list {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 4px;
 	/* Fill the card's remaining height (the widget now spans the full
 	 * card — kimi immersive) and scroll internally when it overflows. */
 	flex: 1;
@@ -1724,7 +1724,7 @@
 .gui-widget-todo-item {
 	display: flex;
 	align-items: center;
-	gap: 7px;
+	gap: 8px;
 	padding: 4px 2px;
 	border-radius: 6px;
 }
@@ -1740,7 +1740,7 @@
 	width: 16px;
 	height: 16px;
 	flex-shrink: 0;
-	border-radius: 5px;
+	border-radius: 4px;
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-ok);
@@ -1792,7 +1792,7 @@
 .gui-widget-send {
 	display: inline-flex;
 	align-items: center;
-	gap: 5px;
+	gap: 4px;
 	margin-top: 8px;
 	align-self: flex-end;
 	border: 0;
@@ -1817,7 +1817,7 @@
 	flex: 1;
 	min-width: 0;
 	height: 28px;
-	border-radius: 7px;
+	border-radius: 8px;
 	border: 1px solid var(--border);
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
@@ -1834,10 +1834,10 @@
 	width: 28px;
 	height: 28px;
 	flex-shrink: 0;
-	border-radius: 7px;
+	border-radius: 8px;
 	border: none;
-	background: var(--color-accent);
-	color: var(--color-accent-fg);
+	background: var(--color-text);
+	color: var(--color-surface);
 	font-size: 15px;
 	cursor: pointer;
 }
@@ -2135,7 +2135,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	width: min(760px, 100%);
 	margin: 6px auto 0;
 	padding: 8px;
-	border-radius: 18px;
+	border-radius: 16px;
 	background: color-mix(in oklab, var(--color-surface-raised) 62%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -2189,15 +2189,15 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	flex-shrink: 0;
 	border-radius: 12px;
 	border: none;
-	background: var(--color-accent);
-	color: var(--color-accent-fg);
+	background: var(--color-text);
+	color: var(--color-surface);
 	cursor: pointer;
-	box-shadow: 0 4px 14px -4px color-mix(in oklab, var(--color-accent) 55%, transparent);
+	box-shadow: 0 4px 14px -4px color-mix(in oklab, var(--color-text) 20%, transparent);
 	transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 .gui-board-home-send:hover:not(:disabled) {
 	transform: translateY(-1px);
-	box-shadow: 0 6px 18px -4px color-mix(in oklab, var(--color-accent) 65%, transparent);
+	box-shadow: 0 6px 18px -4px color-mix(in oklab, var(--color-text) 28%, transparent);
 }
 
 .gui-board-home-send:disabled {
@@ -2304,7 +2304,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	grid-auto-rows: 1fr;
-	gap: 5px;
+	gap: 4px;
 	height: 196px;
 	min-height: 196px;
 	align-content: stretch;
@@ -2319,7 +2319,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	 * previews match the board view — previously forced to sunken, which
 	 * recolored every preview regardless of its tone. */
 	background: var(--color-surface-raised);
-	padding: 5px;
+	padding: 4px;
 	pointer-events: none;
 	/* Staggered fade-in only — the old dot-matrix mask (6px dots, then a
 	 * 60px fill that still left holes) made the previews look like a peg
@@ -2414,7 +2414,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: var(--radius-xl);
 	background: var(--color-surface-raised);
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-	padding: 14px;
+	padding: 12px;
 	display: flex;
 	flex-direction: column;
 	gap: 10px;
@@ -2442,7 +2442,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-widget-editor-field {
 	display: flex;
 	flex-direction: column;
-	gap: 5px;
+	gap: 4px;
 }
 
 /* Live card-face preview: real widget component at the card's aspect
@@ -2451,7 +2451,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 .gui-widget-editor-preview {
 	display: flex;
 	flex-direction: column;
-	gap: 5px;
+	gap: 4px;
 }
 
 .gui-widget-editor-preview-stage {
@@ -2503,7 +2503,7 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	border-radius: 8px;
 	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
 	color: var(--color-danger, #e5484d);
-	padding: 7px 10px;
+	padding: 8px 8px;
 	font-size: var(--ui-font-size-xs);
 	cursor: pointer;
 	justify-content: center;
@@ -2532,11 +2532,11 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 
 .gui-widget-editor-add-btn {
 	border: 1px solid var(--border);
-	border-radius: 7px;
+	border-radius: 8px;
 	background: var(--color-surface-sunken);
 	color: var(--color-text);
 	font-size: var(--ui-font-size-xs);
-	padding: 4px 9px;
+	padding: 4px 8px;
 	cursor: pointer;
 	transition: border-color 120ms ease, background 120ms ease;
 }
