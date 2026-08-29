@@ -1387,7 +1387,7 @@ export function ChatView({
 																hideToolActivity={displaySettings["display.hideToolActivity"] === true}
 																showTokenUsage={displaySettings["display.showTokenUsage"] === true}
 																collapseCompacted={
-																	displaySettings["display.collapseCompacted"] !== false
+																	displaySettings["display.collapseCompacted"] === true
 																}
 																taskCardStyle={
 																	displaySettings["display.taskCardStyle"] === "classic"

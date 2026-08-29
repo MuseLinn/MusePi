@@ -2991,3 +2991,65 @@ a.tr-tool-search-title:hover {
 	animation: tr-flash-highlight 1.3s ease-out;
 	border-radius: 8px;
 }
+
+/* ── Completed-round fold header (craft-agents TurnCard parity) ─────────
+ * Working entries of a finished round collapse behind this row; the final
+ * assistant message (text + artifacts) stays visible below it. */
+.tr-round-fold {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin: 6px 0 2px;
+	padding: 7px 12px;
+	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--bg-overlay, #222) 55%, transparent);
+	color: var(--text-muted, var(--fg-muted));
+	font-size: 12px;
+	text-align: left;
+	cursor: pointer;
+	transition: background 140ms ease, border-color 140ms ease;
+}
+.tr-round-fold:hover {
+	background: color-mix(in oklab, var(--bg-overlay, #222) 72%, transparent);
+	border-color: color-mix(in oklab, var(--accent, #d9a441) 45%, transparent);
+}
+.tr-round-fold-chevron {
+	flex-shrink: 0;
+	transition: transform 180ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1));
+}
+.tr-round-fold--open .tr-round-fold-chevron {
+	transform: rotate(90deg);
+}
+.tr-round-fold-duration {
+	flex-shrink: 0;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	color: var(--accent, #d9a441);
+}
+.tr-round-fold-count {
+	flex-shrink: 0;
+	padding: 1px 8px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg, #ececef) 10%, transparent);
+	font-size: 11px;
+	font-weight: 550;
+}
+.tr-round-fold-preview {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	color: var(--text-faint, var(--fg-faint));
+}
+.gui-motion-off .tr-round-fold-chevron {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.tr-round-fold-chevron {
+		transition: none;
+	}
+}

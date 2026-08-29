@@ -40,6 +40,7 @@ import { type FileCardItem, FileCards } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
+import { buildRoundFolds, formatRoundDuration, type RoundFold } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
@@ -926,6 +927,27 @@ function lastUserMessageTs(entries: readonly SessionEntry[]): number | undefined
 	return undefined;
 }
 
+/** Completed-round fold header (craft-agents TurnCard parity): chevron +
+ *  frozen work duration (hh:mm:ss) + tool/command counts + a working
+ *  preview. Clicking expands the round's tool activities back inline. */
+function RoundFoldHeader({ fold, open, onToggle }: { fold: RoundFold; open: boolean; onToggle(): void }): ReactNode {
+	return (
+		<button type="button" className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} onClick={onToggle}>
+			<ChevronRight size={12} className="tr-round-fold-chevron" />
+			<span className="tr-round-fold-duration">{formatRoundDuration(fold.durationMs)}</span>
+			{fold.toolCount > 0 && (
+				<span className="tr-round-fold-count">{t("round tools {count}", { count: String(fold.toolCount) })}</span>
+			)}
+			{fold.commandCount > 0 && (
+				<span className="tr-round-fold-count">
+					{t("round commands {count}", { count: String(fold.commandCount) })}
+				</span>
+			)}
+			<span className="tr-round-fold-preview">{fold.preview}</span>
+		</button>
+	);
+}
+
 /** TUI TtsrNotificationComponent parity: rule violation → stream rewind →
  *  rule inject warning block (warning-tinted, collapsible description). */
 function TtsrBlock({ rules }: { rules: { name: string; description?: string; content?: string }[] }): ReactNode {
@@ -1659,6 +1681,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// history"). Applies to the windowed slice — history outside the
 	// window is hidden by the windowing anyway.
 	const [compactedOpen, setCompactedOpen] = useState(false);
+	// Completed-round folds (craft-agents TurnCard parity): per-round open
+	// state, keyed by the round's user-message entry index.
+	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<number>>(() => new Set());
 	// Image preview lightbox: full-size view of clicked message images
 	// (all images of the message form the gallery).
 	const [previewImg, setPreviewImg] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
@@ -1691,6 +1716,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 
 	const hidden = Math.max(0, entries.length - visibleCount);
 	const slice = hidden > 0 ? entries.slice(hidden) : entries;
+
+	// Completed-round folds (craft-agents TurnCard parity): completed rounds
+	// (frozen duration) except the live tail fold their working span behind a
+	// header. Windowed-out rounds are handled by the window itself — never
+	// folded in the hidden span (the header would orphan rows the user can't
+	// see), so folds are filtered to those ending inside the visible window.
+	const folds = useMemo(() => {
+		const all = buildRoundFolds(entries, roundDurations);
+		return hidden > 0 ? all.filter(f => f.finalIdx >= hidden) : all;
+	}, [entries, roundDurations, hidden]);
 
 	// Extend the window when the sentinel enters the visible pane. The
 	// scroller is an ANCESTOR of .tr-root in both hosts (GUI
@@ -1927,51 +1962,80 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					}
 					if (folding && i < firstCompactionIdx - hidden) return null;
 					const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
+					const absIdx = i + hidden;
+					// Completed-round folding (craft-agents TurnCard parity): working
+					// entries between a user message and its final reply fold behind
+					// a header once the round is done and isn't the live tail. The
+					// header renders ABOVE the final assistant message; the in-span
+					// working rows render only while that fold is expanded.
+					const inFoldIdx = folds.findIndex(f => absIdx > f.startIdx && absIdx < f.finalIdx);
+					const inFold = inFoldIdx >= 0;
+					const fold = inFold ? folds[inFoldIdx] : undefined;
+					if (inFold && !roundFoldOpen.has(fold!.startIdx)) return null;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.
-					const isTail = isAssistantMessage && i + hidden === lastAssistantIdx;
+					const isTail = isAssistantMessage && absIdx === lastAssistantIdx;
 					const streamingLast = working && isTail && lastAssistantInRound;
 					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
-					const row = (
-						// Passive seam (compat slot host): the entry row carries its
-						// transcript-node kind + id as data attributes so the served
-						// renderer's injected extension host can find and augment
-						// nodes without touching the React tree.
-						<div data-entry-kind={transcriptNodeKind(entry)} data-entry-id={entry.id} className="tr-entry">
-							<EntryRow
-								key={entry.id}
-								entry={entry}
-								results={results}
-								active={activeTools}
-								host={host}
-								userGutter={userGutter}
-								agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
-								userPlain={userPlain}
-								collapseLongUserMessages={collapseLongUserMessages}
-								hideToolActivity={hideToolActivity}
-								showTokenUsage={showTokenUsage}
-								smoothStreaming={smoothStreaming}
-								taskCardStyle={taskCardStyle}
-								artifacts={turnArtifactsByFinal.get(entry.id)}
-								thinkingLevel={thinkingLevel}
-								streamingLast={streamingLast}
-								runStartTs={streamingLast ? lastUserTs : undefined}
-								roundDuration={roundDuration}
-								onQuote={onQuote}
-								onEdit={onEdit}
-								onRetry={onRetry}
-								onRevert={onRevert}
-								onFork={onFork}
-								onSpeak={onSpeak}
-								onSaveImage={onSaveImage}
-								onPreviewImage={openPreview}
-								speaking={speakingId != null && speakingId === entry.id}
-								onStopSpeak={onStopSpeak}
-								retryTarget={retryTargets.get(entry.id) ?? null}
-								renderTranscriptNode={renderTranscriptNode}
+					const foldHeader =
+						isAssistantMessage && fold !== undefined && absIdx === fold.finalIdx ? (
+							<RoundFoldHeader
+								key={`round-fold-${fold.startIdx}`}
+								fold={fold}
+								open={roundFoldOpen.has(fold.startIdx)}
+								onToggle={() =>
+									setRoundFoldOpen(prev => {
+										const next = new Set(prev);
+										if (next.has(fold.startIdx)) next.delete(fold.startIdx);
+										else next.add(fold.startIdx);
+										return next;
+									})
+								}
 							/>
-						</div>
+						) : null;
+					const row = (
+						<>
+							{/* Passive seam (compat slot host): the entry row carries its
+							 * transcript-node kind + id as data attributes so the served
+							 * renderer's injected extension host can find and augment
+							 * nodes without touching the React tree. */}
+							{foldHeader}
+							<div data-entry-kind={transcriptNodeKind(entry)} data-entry-id={entry.id} className="tr-entry">
+								<EntryRow
+									key={entry.id}
+									entry={entry}
+									results={results}
+									active={activeTools}
+									host={host}
+									userGutter={userGutter}
+									agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
+									userPlain={userPlain}
+									collapseLongUserMessages={collapseLongUserMessages}
+									hideToolActivity={hideToolActivity}
+									showTokenUsage={showTokenUsage}
+									smoothStreaming={smoothStreaming}
+									taskCardStyle={taskCardStyle}
+									artifacts={turnArtifactsByFinal.get(entry.id)}
+									thinkingLevel={thinkingLevel}
+									streamingLast={streamingLast}
+									runStartTs={streamingLast ? lastUserTs : undefined}
+									roundDuration={roundDuration}
+									onQuote={onQuote}
+									onEdit={onEdit}
+									onRetry={onRetry}
+									onRevert={onRevert}
+									onFork={onFork}
+									onSpeak={onSpeak}
+									onSaveImage={onSaveImage}
+									onPreviewImage={openPreview}
+									speaking={speakingId != null && speakingId === entry.id}
+									onStopSpeak={onStopSpeak}
+									retryTarget={retryTargets.get(entry.id) ?? null}
+									renderTranscriptNode={renderTranscriptNode}
+								/>
+							</div>
+						</>
 					);
 					// toolResult entries render no row but continue the turn.
 					if (

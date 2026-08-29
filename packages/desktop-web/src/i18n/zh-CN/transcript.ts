@@ -1,4 +1,7 @@
 export const transcript = {
+	"round tools {count}": "工具 ×{count}",
+	"round commands {count}": "命令 ×{count}",
+	"round completed": "已完成",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	" · redacted": " · 已隐去",
 	"(redacted by provider)": "（提供方已隐去）",

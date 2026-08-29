@@ -1358,13 +1358,13 @@ export const SETTINGS_SCHEMA = {
 
 	"display.collapseCompacted": {
 		type: "boolean",
-		default: true,
+		default: false,
 		ui: {
 			tab: "appearance",
 			group: "Display",
 			label: "Collapse Compacted History",
 			description:
-				"Collapse pre-compaction history behind the summary divider on the live transcript; disable to keep the full transcript inline with dividers at each compaction point",
+				"Collapse pre-compaction history behind the summary divider on the live transcript; disable (default) to keep the full transcript inline with dividers at each compaction point — folding compacted history hides entries from the navigation tree and trajectory jumps",
 		},
 	},
 

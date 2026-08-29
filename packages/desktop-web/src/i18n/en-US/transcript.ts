@@ -1,6 +1,9 @@
 import type { TranscriptKey } from "../zh-CN/transcript.js";
 
 export const transcript = {
+	"round tools {count}": "{count} tools",
+	"round commands {count}": "{count} commands",
+	"round completed": "Completed",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	" · redacted": " · redacted",
 	"(redacted by provider)": "(Redacted by provider)",

@@ -17,6 +17,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **长会话跳转修复 + 树地图定位**:Transcript 新增 jumpRequest——跳转目标在折叠窗口/压缩折叠内时先扩窗再滚动高亮(此前直接滚到顶部 spacer);会话树地图新增当前位置虚线标记 + "回到当前位置"按钮,聚焦卡标签中文化。
   - EN: Transcript jumpRequest expands the window/compaction fold until the target mounts then scroll+flashes; the session tree canvas gains a current-position marker and a locate button.
 
+- **已完成轮折叠（craft-agents TurnCard 参考）**:每轮完成后,用户消息与最终回复之间的工具活动/思考折叠进回合头——`已工作时长(hh:mm:ss) + N 个工具 · M 个命令 + 预览`,点击展开;最终回复(文本+文件卡)保持可见,末轮(live)始终展开。折叠计数含最终回复自身的 toolCall。配套纯逻辑 `round-collapse.ts` + 5 单测。
+  - EN: completed rounds fold their working span (tools/commands/thinking) behind a header — work duration hh:mm:ss + tool/command counts + preview (craft-agents TurnCard parity); the final reply stays visible and the live tail never folds.
+- **压缩历史不再默认折叠**:`display.collapseCompacted` 默认改为关——压缩点保留 inline 分隔线、完整转写可见,导航树/轨迹跳转不再因折叠而缺行;需折叠时在 外观→显示 显式开启。
+  - EN: display.collapseCompacted defaults to off — compaction dividers stay inline so navigation/trajectory never lose rows to the fold; opt in via Appearance → Display.
 ### Changed
 
 - **动效打磨**:会话切换骨架屏错落入场;上下文用量百分比改 per-digit 弹簧滚动(SlidingNumber);欢迎问候语逐字模糊渐显(BlurText)。
