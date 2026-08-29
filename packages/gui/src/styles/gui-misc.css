@@ -2473,10 +2473,15 @@
 .gui-float-scrollbar {
 	position: fixed;
 	width: 12px;
-	/* Transcript-local tier: above the transcript content (and its loading
-	 * overlay), below panes/menus/dialogs — the old 100000 painted this
-	 * fixed bar OVER the maximized right panel (前后内容重叠). */
-	z-index: 30;
+	/* Highest surface (above menus/dialogs): the rail is positioned and
+	 * sized to the LAST-SCROLLED container (update() sets left/top/height
+	 * from its rect) and only exists while that container scrolls (fades
+	 * ~1s after). So it always indicates the content actually being
+	 * scrolled — inside an open dialog, menu or maximized right panel
+	 * included — instead of painting over unrelated chrome. The old 100000
+	 * was pinned to the window edge and never hid, which is what made it
+	 * read as "over the maximized right panel (前后内容重叠)". */
+	z-index: 4200;
 	pointer-events: none;
 	opacity: 0;
 	visibility: hidden;
@@ -2530,6 +2535,15 @@
 	width: calc(var(--skin-size, 12px) * 0.55);
 	min-height: 24px;
 	border-radius: 999px;
+	/* Drag handle: the rail itself stays pointer-events:none (never eats
+	 * clicks over content); the capsule opts back in — dragging it scrolls
+	 * the indicated container (FloatingScrollbar onGummyDown). touch-action
+	 * none so a touch drag moves the thumb, not the page. Gated on
+	 * [data-visible]: the rail sits at the top of the z-ladder, so once it
+	 * fades out the thumb must not stay clickable over whatever is beneath. */
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
 	background: linear-gradient(
 		160deg,
 		color-mix(in oklab, var(--skin-accent, var(--color-accent)) 88%, white 12%),
@@ -2539,6 +2553,9 @@
 		inset 0 1px 0 rgba(255, 255, 255, 0.42),
 		inset 0 -1.5px 0 rgba(0, 0, 0, 0.28),
 		0 2px 10px color-mix(in oklab, var(--skin-accent, var(--color-accent)) 45%, transparent);
+}
+.gui-float-scrollbar[data-base="gummy"][data-visible] .gfs-gummy {
+	pointer-events: auto;
 }
 .gfs-gummy-shine {
 	position: absolute;

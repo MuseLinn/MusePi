@@ -251,7 +251,13 @@
  * clips menu content to the 12px radius. */
 .gui-menu-popup {
 	position: fixed;
-	z-index: 1000;
+	/* Top of the z-ladder: above every dialog backdrop (3000) and the
+	 * command palette (4000). Menus open from INSIDE a dialog (GuiSelect /
+	 * model pickers in the cron editor, the nested candidate picker in the
+	 * custom-provider dialog) portal to the React root — with 1000 they
+	 * painted under their own dialog's backdrop and were invisible. The
+	 * mutex means only one is open at a time, so 4100 cannot stack. */
+	z-index: 4100;
 	/* Two-phase enter: the popup paints transparent first (useFloatingMenu
 	 * adds --entered on the next frame), so Chromium composites the frosted
 	 * backdrop before the scale starts. The enter keyframes animate ONLY
