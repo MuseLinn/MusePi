@@ -203,6 +203,7 @@
 	"dependencies": {
 		"@babel/traverse": "^8.0.4",
 		"@babel/types": "^8.0.4",
+		"@huggingface/transformers": "catalog:",
 		"@types/babel__traverse": "^7.28.0",
 		"sherpa-onnx-node": "1.13.2"
 	}
