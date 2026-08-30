@@ -6,6 +6,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **Electron 主进程 EPIPE 崩溃**:从 Finder/Dock 启动(无终端)时父进程 stdio 管道关闭,主进程任意 `console.error`(如 MCP tool load failed 日志)抛 EPIPE → uncaughtException → Electron「A JavaScript error occurred in the main process」模态框 → 应用卡死、daemon 继续跑、GUI 显示 working、无法发消息。现在主进程 `console.log/warn/error` 重定向到 `~/.musepi/logs/gui-main.YYYY-MM-DD.log`,`uncaughtException`/`unhandledRejection` 全部吞掉(EPIPE 时 console 置 no-op)——任何主进程异常不再弹模态框。
+  - EN: the Electron main process no longer crashes on EPIPE — when launched from Finder/Dock (no terminal) the parent stdio pipe is already closed, so any main-process console.error (e.g. an MCP tool load failure log) threw EPIPE → uncaughtException → the "A JavaScript error occurred in the main process" modal → the app froze while the daemon kept running (GUI showed "working", messages undeliverable). Main-process console output is now redirected to a dated log file and uncaughtException/unhandledRejection are swallowed (console becomes a no-op on EPIPE), so no main-process error can pop the crash modal again.
+- **GUI 撤回/重试/分叉接线到会话树 RPC**:撤回(撤回该消息)与重试(编辑并重发)走 `session.branchAt`(非破坏性——leaf 原位移动,旧子树保留为 sibling branch),分叉(从此消息分叉新会话)走 `session.forkAt` + 自动切换到新会话;会话内消息操作不再只是本地状态,与会话树拓扑(分支/子会话)一致。
+  - EN: the chat transcript's revert/retry/fork actions are now wired to the session-tree RPCs — revert & retry go through `session.branchAt` (non-destructive: the leaf moves in place, the old subtree survives as a sibling branch) and fork creates a new session via `session.forkAt` + auto-switches to it, so in-chat message operations match the session-tree topology (branches/child sessions) instead of local state.
+- **TUI OSC 99 通知品牌残留**:`OSC99_APP_NAME` 品牌改名后终端通知测试仍期望 omp 时代的 "Oh My Pi" base64,已更新为 MusePi(修复 CI native/integration 的 notifications/streaming-scrollback 失败)。
+  - EN: TUI OSC 99 notifications — the terminal-notifications tests still expected the omp-era "Oh My Pi" app-name base64 after the MusePi rename; updated to MusePi (fixes the notifications/streaming-scrollback failures in the native/integration CI bucket).
+- **TUI tmux resize 渲染缺口**:`Text` 组件实现 `getNativeScrollbackWidthEpochRevision`(渲染行数签名),使 `setText` 改变高度时能通过 Container 的 epoch 聚合传播(修复 issue-2088 的 rendered-height 测试);TUI 现在向聚焦组件注入真实终端行数(`setViewportRowsProvider`),Editor 的 autocomplete 下拉按真实视口裁剪而非回退到 24 行假设(修复 autocomplete viewport 测试);测试 fixture 中性化 `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE`,消除 Warp 终端宿主的 resize 路径误分类。
+  - EN: TUI tmux-resize rendering gaps — `Text` now implements `getNativeScrollbackWidthEpochRevision` (rendered-line-count signature) so a `setText` height change propagates through Container's epoch aggregation (fixes the issue-2088 rendered-height test); the TUI injects its live terminal row count into focused components (`setViewportRowsProvider`), so Editor's autocomplete dropdown clamps to the real viewport instead of the 24-row fallback (fixes the autocomplete-viewport tests); test fixtures neutralize `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE` so resize classification is deterministic on Warp hosts.
+
 ## [0.4.8] - 2026-08-30
 
 ### Added
