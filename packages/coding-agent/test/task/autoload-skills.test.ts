@@ -56,6 +56,10 @@ function createMockSession(
 		abort: async () => {},
 		dispose: async () => {},
 		setIrcWakeTurnObserver: () => {},
+		subscribeRunState: () => () => {},
+		hasPendingAsyncWork: () => false,
+		getAsyncJobSnapshot: () => null,
+		settleAsyncWork: async () => {},
 	} as unknown as AgentSession;
 }
 
