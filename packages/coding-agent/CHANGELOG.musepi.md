@@ -20,6 +20,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - **advisor-toggle**:handoff 已是 in-place commit(17.4.0),测试更新为新语义(sessionFile 不变、advisor cost 清零);`commitCompactionEntry` 在 resetAdvisorRuntimes 后 clearAdvisorCost()。
   - **natives 发布清单**:`prepareNativeCorePackage` files 补 `native/clipboard.js`/`.d.ts`——发布 tarball 之前缺 clipboard,组合安装报 Cannot find module。
   - **acp-builtins**:`/btw` 已有 headless handle,从 removed-commands 测试移除;`/context` 测试 fake session 补 tokenizer。
+- **TUI binary 发布与测试 gate 解耦**:`Publish GitHub release` job 现在只依赖全部平台的 Release binary 构建成功——测试 fan-out(release_gate)是质量信号而非发布前置,一个 flaky/长期失败的测试 job 不再让 `musepi update` 更新通道停摆(npm leaf 发布保留完整 gate)。
+  - EN: the GitHub-release publish job now depends only on every platform's TUI binary building successfully — the test fan-out (release_gate) is a quality signal, not a publish prerequisite, so a flaky or long-failing test job no longer strands the `musepi update` channel (npm leaf publishing keeps its full gate).
   - EN: fixed the 5 long-failing CI test jobs — OAuth CAS race (`cas-lost` now re-resolves like `peer-rotated`), interrupted-thinking skips Anthropic-dialect targets (reasoning_extraction), context-usage tolerates undefined system-prompt sections, goal-mode accepts a bare `/goal <objective>` and forwards images, advisor-toggle tests match the 17.4.0 in-place handoff semantics (session file unchanged, cost cleared after commit), the natives publish manifest ships `clipboard.js`, and acp-builtins drops `/btw` from removed commands + gives the `/context` fake a tokenizer.
 
 ## [0.4.9] - 2026-08-30
