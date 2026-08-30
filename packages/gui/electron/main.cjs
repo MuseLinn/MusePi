@@ -22,6 +22,64 @@ const { createTrayController } = require("./tray.cjs");
 const { checkForUpdates, downloadUpdate, quitAndInstall, wireRenderer, state: updaterState } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
 
+// ── Main-process log + crash guard ───────────────────────────────────────
+// Electron main's console writes go to the parent's stdio pipe. When the GUI
+// is launched from a launcher/Finder/Dock (no attached terminal), that pipe
+// closes and ANY console.error throws EPIPE ("broken pipe") — an uncaught
+// exception that surfaces Electron's "A JavaScript error occurred in the
+// main process" modal and wedges the whole app (daemon stays busy, GUI shows
+// "working" forever, messages stop sending). Two fixes:
+//  1. Redirect console to a rotating file so writes never touch the pipe.
+//  2. Swallow EPIPE-style uncaught exceptions so a stale pipe can never
+//     turn a log line into a fatal modal; record everything else to the log.
+const HOME_LOG_DIR = path.join(os.homedir(), ".musepi", "logs");
+function mainLogPath() {
+	try {
+		fs.mkdirSync(HOME_LOG_DIR, { recursive: true });
+	} catch {}
+	const day = new Date().toISOString().slice(0, 10);
+	return path.join(HOME_LOG_DIR, `gui-main.${day}.log`);
+}
+const mainLogStream = fs.createWriteStream(mainLogPath(), { flags: "a" });
+function writeMainLog(level, args) {
+	const line = `${new Date().toISOString()} [${level}] ${args.map(a => (typeof a === "string" ? a : safeStringify(a))).join(" ")}\n`;
+	mainLogStream.write(line);
+}
+function safeStringify(value) {
+	try {
+		return typeof value === "string" ? value : JSON.stringify(value);
+	} catch {
+		return String(value);
+	}
+}
+console.log = (...args) => writeMainLog("info", args);
+console.warn = (...args) => writeMainLog("warn", args);
+console.error = (...args) => writeMainLog("error", args);
+
+process.on("uncaughtException", err => {
+	writeMainLog("fatal", [err && err.stack ? err.stack : String(err)]);
+	// Any uncaught exception in main would surface Electron's "A JavaScript
+	// error occurred in the main process" modal and wedge the app. Swallow
+	// everything (recorded above); an EPIPE specifically means the launcher
+	// closed our console pipe, so stop writing to it entirely.
+	if (err && err.code === "EPIPE") {
+		console.log = () => {};
+		console.warn = () => {};
+		console.error = () => {};
+		return;
+	}
+	// Non-EPIPE: keep the app alive; the console is already redirected to the
+	// file sink, so no further writes can reach the pipe.
+});
+process.on("unhandledRejection", reason => {
+	writeMainLog("fatal", ["unhandledRejection:", reason instanceof Error ? reason.stack || reason.message : String(reason)]);
+	if (reason && reason.code === "EPIPE") {
+		console.log = () => {};
+		console.warn = () => {};
+		console.error = () => {};
+	}
+});
+
 // ── Data-root override ────────────────────────────────────────────────────
 // The GUI can relocate the app data root (~/.musepi by default): the picked
 // parent folder gets a fixed ".musepi" child (same convention as the home
