@@ -68,7 +68,7 @@ describe("logger with no transports", () => {
 
 		let found = false;
 		for (let i = 0; i < 40 && !found; i++) {
-			for (const f of fs.readdirSync(tempDir).filter(n => n.startsWith("omp.") && n.endsWith(".log"))) {
+			for (const f of fs.readdirSync(tempDir).filter(n => n.startsWith("musepi.") && n.endsWith(".log"))) {
 				if (fs.readFileSync(path.join(tempDir, f), "utf8").includes("no-transports-resume-fixture")) {
 					found = true;
 					break;

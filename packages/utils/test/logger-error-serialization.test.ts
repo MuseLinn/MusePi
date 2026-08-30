@@ -42,7 +42,7 @@ afterAll(() => {
  */
 async function waitForLogEntry(targetMessage: string): Promise<Record<string, unknown>> {
 	for (let i = 0; i < 40; i++) {
-		const files = fs.readdirSync(tempDir).filter(f => f.startsWith("omp.") && f.endsWith(".log"));
+		const files = fs.readdirSync(tempDir).filter(f => f.startsWith("musepi.") && f.endsWith(".log"));
 		for (const f of files) {
 			const text = fs.readFileSync(path.join(tempDir, f), "utf8");
 			for (const line of text.split("\n")) {

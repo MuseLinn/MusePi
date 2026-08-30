@@ -57,7 +57,7 @@ describe("multiprocess file logging", () => {
 		seed.stdin.end();
 		expect(await seed.exited).toBe(0);
 		const seedLog = (await fs.readdir(logsDir)).find(name => name.endsWith(`.${seed.pid}.log`));
-		const seedDate = seedLog?.match(/^omp\.(\d{4}-\d{2}-\d{2})\./)?.[1];
+		const seedDate = seedLog?.match(/^musepi\.(\d{4}-\d{2}-\d{2})\./)?.[1];
 		if (!seedDate) throw new Error("probe did not create a dated log");
 		const baseDate = new Date(`${seedDate}T12:00:00`);
 		const localDate = (daysAgo: number): string => {
@@ -72,16 +72,16 @@ describe("multiprocess file logging", () => {
 		const expiredNames: string[] = [];
 		for (const pid of exitedPids) {
 			for (let daysAgo = -1; daysAgo <= 5; daysAgo++) {
-				const name = `omp.${localDate(daysAgo)}.${pid}.log`;
+				const name = `musepi.${localDate(daysAgo)}.${pid}.log`;
 				await Bun.write(path.join(logsDir, name), name);
 				await fs.utimes(path.join(logsDir, name), 2, 2);
 				(daysAgo > 0 && daysAgo < 5 ? retainedNames : expiredNames).push(name);
 			}
-			const rolloverName = `omp.${localDate(0)}.${pid}.log.1`;
+			const rolloverName = `musepi.${localDate(0)}.${pid}.log.1`;
 			await Bun.write(path.join(logsDir, rolloverName), rolloverName);
 			await fs.utimes(path.join(logsDir, rolloverName), 2, 2);
 			retainedNames.push(rolloverName);
-			await Bun.write(path.join(logsDir, `.omp.${pid}-audit.json`), "{}");
+			await Bun.write(path.join(logsDir, `.musepi.${pid}-audit.json`), "{}");
 		}
 
 		let currentPid = 0;
@@ -100,6 +100,6 @@ describe("multiprocess file logging", () => {
 		for (const expected of retainedNames) expect(entries).toContain(expected);
 		for (const expired of expiredNames) expect(entries).not.toContain(expired);
 		expect(entries.filter(name => name.endsWith(".log.1"))).toHaveLength(exitedPids.length);
-		expect(entries.filter(name => name.endsWith("-audit.json"))).toEqual([`.omp.${currentPid}-audit.json`]);
+		expect(entries.filter(name => name.endsWith("-audit.json"))).toEqual([`.musepi.${currentPid}-audit.json`]);
 	});
 });
