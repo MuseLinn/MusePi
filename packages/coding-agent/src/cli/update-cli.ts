@@ -74,7 +74,7 @@ export interface ReleasePackages {
 	natives: string;
 }
 
-/** Parsed `omp.rename` pointer: the new agent package name and optional new natives name. */
+/** Parsed `musepi.rename` pointer: the new agent package name and optional new natives name. */
 export interface ReleaseRename {
 	pkg: string;
 	natives?: string;
@@ -85,9 +85,9 @@ const CURRENT_PACKAGES: ReleasePackages = { pkg: PACKAGE, natives: NATIVES_PACKA
 export interface ReleaseInfo {
 	tag: string;
 	version: string;
-	/** Parsed `omp.dist` from the registry manifest; undefined when absent. */
+	/** Parsed `musepi.dist` from the registry manifest; undefined when absent. */
 	dist?: ReleaseDist;
-	/** npm names to install, resolved after following any `omp.rename` pointers. */
+	/** npm names to install, resolved after following any `musepi.rename` pointers. */
 	packages: ReleasePackages;
 }
 
@@ -156,7 +156,7 @@ function majorVersion(version: string): number {
 /**
  * Whether the update must bypass bun/npm and install the release binary.
  *
- \* An explicit `musepi.dist` (legacy: `omp.dist`) wins in both directions. Without one, a release with
+ \* An explicit `musepi.dist` (legacy: `musepi.dist`) wins in both directions. Without one, a release with
  * a higher major than the running build is assumed not npm-installable: the
  * runtime may have changed out from under the package layout, and the pinned
  * `@musepi/pi-natives*` companions ({@link buildBunInstallArgs}) may not
@@ -503,12 +503,12 @@ interface UpdateMethodResolutionOptions {
 	 * misrouted to npm/bun when the global bin dir overlaps the installer's
 	 * target directory.
 	 */
-	ompIsRegularFile?: boolean;
+	musepiIsRegularFile?: boolean;
 	/**
 	 * Absolute path named by the bin entry's first symlink hop. This deliberately
 	 * preserves a global package symlink instead of resolving into its checkout.
 	 */
-	ompLinkTarget?: string;
+	musepiLinkTarget?: string;
 }
 
 type UpdateTarget =
@@ -520,7 +520,7 @@ type UpdateTarget =
 	| { method: "binary"; path: string; replacesSymlink: boolean };
 
 function resolveUpdateMethod(
-	ompPath: string,
+	musepiPath: string,
 	bunBinDir: string | undefined,
 	options: UpdateMethodResolutionOptions = {},
 ): UpdateMethod {
@@ -530,16 +530,16 @@ function resolveUpdateMethod(
 		miseBinDirs = [],
 		miseDataDir,
 		npmBinDir,
-		ompIsRegularFile = false,
-		ompLinkTarget,
+		musepiIsRegularFile = false,
+		musepiLinkTarget,
 	} = options;
-	const launcherExtension = path.extname(ompPath).toLowerCase();
+	const launcherExtension = path.extname(musepiPath).toLowerCase();
 	const isWindowsScriptLauncher =
 		launcherExtension === ".cmd" || launcherExtension === ".ps1" || launcherExtension === ".bat";
-	if (isPathInDirectory(ompPath, NIX_STORE_DIR)) return "nix";
-	if (homebrewPrefix && isPathInDirectory(ompPath, path.join(homebrewPrefix, "bin"))) return "brew";
-	if (miseBinDirs.some(dir => isPathInDirectory(ompPath, dir))) return "mise";
-	if (miseDataDir && isPathInDirectory(ompPath, path.join(miseDataDir, "shims"))) return "mise";
+	if (isPathInDirectory(musepiPath, NIX_STORE_DIR)) return "nix";
+	if (homebrewPrefix && isPathInDirectory(musepiPath, path.join(homebrewPrefix, "bin"))) return "brew";
+	if (miseBinDirs.some(dir => isPathInDirectory(musepiPath, dir))) return "mise";
+	if (miseDataDir && isPathInDirectory(musepiPath, path.join(miseDataDir, "shims"))) return "mise";
 	// A plain executable file in a package-manager bin dir is the standalone
 	// binary the installer placed there, not an npm/bun-managed install (those
 	// symlink into node_modules on POSIX). When the global bin dir overlaps the
@@ -549,25 +549,25 @@ function resolveUpdateMethod(
 	// Windows is excluded: there package managers write regular-file shims
 	// (bun's .exe launcher, npm's .cmd/.ps1), so a regular file is NOT evidence
 	// of a standalone install and the override would hijack managed installs.
-	const isStandaloneRegularFile = ompIsRegularFile && process.platform !== "win32";
+	const isStandaloneRegularFile = musepiIsRegularFile && process.platform !== "win32";
 	const bunNodeModulesDir = resolveBunGlobalNodeModulesDirFromLocations({
 		globalDir: bunGlobalDir,
 		globalBinDir: bunBinDir,
 	});
 	if (
 		bunBinDir &&
-		isPathInDirectory(ompPath, bunBinDir) &&
+		isPathInDirectory(musepiPath, bunBinDir) &&
 		!isStandaloneRegularFile &&
-		isManagerOwnedBinEntry(ompLinkTarget, bunNodeModulesDir)
+		isManagerOwnedBinEntry(musepiLinkTarget, bunNodeModulesDir)
 	) {
 		return "bun";
 	}
 	const npmNodeModulesDir = resolveNpmGlobalNodeModulesDir(npmBinDir);
 	if (
 		npmBinDir &&
-		isPathInDirectory(ompPath, npmBinDir) &&
+		isPathInDirectory(musepiPath, npmBinDir) &&
 		!isStandaloneRegularFile &&
-		isManagerOwnedBinEntry(ompLinkTarget, npmNodeModulesDir)
+		isManagerOwnedBinEntry(musepiLinkTarget, npmNodeModulesDir)
 	) {
 		return "npm";
 	}
@@ -576,48 +576,48 @@ function resolveUpdateMethod(
 }
 
 export function resolveUpdateMethodForTest(
-	ompPath: string,
+	musepiPath: string,
 	bunBinDir: string | undefined,
 	options: UpdateMethodResolutionOptions = {},
 ): UpdateMethod {
-	return resolveUpdateMethod(ompPath, bunBinDir, options);
+	return resolveUpdateMethod(musepiPath, bunBinDir, options);
 }
 
 /** Resolve an update target from the concrete PATH entry selected by the shell. */
 export function resolveUpdateTargetFromPath(
-	ompPath: string,
+	musepiPath: string,
 	bunBinDir: string | undefined,
 	options: UpdateMethodResolutionOptions & { allowPackageManagers: boolean },
 ): UpdateTarget {
-	let ompIsRegularFile = false;
-	let ompIsSymlink = false;
-	let ompLinkTarget: string | undefined;
-	let ompRealpath: string | undefined;
+	let musepiIsRegularFile = false;
+	let musepiIsSymlink = false;
+	let musepiLinkTarget: string | undefined;
+	let musepiRealpath: string | undefined;
 	try {
-		const stat = fs.lstatSync(ompPath);
-		ompIsRegularFile = stat.isFile() && !stat.isSymbolicLink();
-		ompIsSymlink = stat.isSymbolicLink();
-		if (ompIsSymlink) {
-			const rawTarget = fs.readlinkSync(ompPath);
-			const linkDir = path.dirname(ompPath);
-			ompLinkTarget = path.resolve(tryRealpath(linkDir) ?? linkDir, rawTarget);
-			ompRealpath = tryRealpath(ompPath);
+		const stat = fs.lstatSync(musepiPath);
+		musepiIsRegularFile = stat.isFile() && !stat.isSymbolicLink();
+		musepiIsSymlink = stat.isSymbolicLink();
+		if (musepiIsSymlink) {
+			const rawTarget = fs.readlinkSync(musepiPath);
+			const linkDir = path.dirname(musepiPath);
+			musepiLinkTarget = path.resolve(tryRealpath(linkDir) ?? linkDir, rawTarget);
+			musepiRealpath = tryRealpath(musepiPath);
 		}
 	} catch {}
 
-	const method = resolveUpdateMethod(ompPath, bunBinDir, {
+	const method = resolveUpdateMethod(musepiPath, bunBinDir, {
 		...options,
-		ompIsRegularFile,
-		ompLinkTarget,
+		musepiIsRegularFile,
+		musepiLinkTarget,
 	});
 	if (method === "binary") {
 		// A package-manager-enabled update follows a foreign alias to replace
 		// its standalone binary. Binary-only releases intentionally replace the
 		// selected manager launcher in place.
-		const binaryPath = options.allowPackageManagers && ompIsSymlink ? (ompRealpath ?? ompPath) : ompPath;
-		return { method, path: binaryPath, replacesSymlink: ompIsSymlink && binaryPath === ompPath };
+		const binaryPath = options.allowPackageManagers && musepiIsSymlink ? (musepiRealpath ?? musepiPath) : musepiPath;
+		return { method, path: binaryPath, replacesSymlink: musepiIsSymlink && binaryPath === musepiPath };
 	}
-	if (method === "bun" || method === "npm") return { method, path: ompPath };
+	if (method === "bun" || method === "npm") return { method, path: musepiPath };
 	return { method };
 }
 /**
@@ -636,10 +636,10 @@ async function resolveUpdateTarget(options: { allowPackageManagers: boolean }): 
 	const miseAvailable = $which("mise") !== undefined;
 	const miseBinDirs = miseAvailable ? await getMiseBinDirs() : [];
 	const miseDataDir = miseAvailable ? getMiseDataDir() : undefined;
-	const ompPath = resolveOmpPath();
+	const musepiPath = resolveOmpPath();
 
-	if (ompPath) {
-		return resolveUpdateTargetFromPath(ompPath, bunBinDir, {
+	if (musepiPath) {
+		return resolveUpdateTargetFromPath(musepiPath, bunBinDir, {
 			allowPackageManagers: options.allowPackageManagers,
 			bunGlobalDir: options.allowPackageManagers ? process.env.BUN_INSTALL_GLOBAL_DIR : undefined,
 			homebrewPrefix,
@@ -654,7 +654,7 @@ async function resolveUpdateTarget(options: { allowPackageManagers: boolean }): 
 	throw new Error(`Could not resolve ${APP_NAME} binary path in PATH`);
 }
 
-/** Bound on `omp.rename` hops so a broken pointer chain cannot loop forever. */
+/** Bound on `musepi.rename` hops so a broken pointer chain cannot loop forever. */
 const MAX_RENAME_HOPS = 3;
 
 async function fetchLatestManifest(
@@ -686,7 +686,7 @@ async function fetchLatestManifest(
 }
 
 /**
- * Get the latest release info from the npm registry, following `omp.rename`
+ * Get the latest release info from the npm registry, following `musepi.rename`
  * pointers ({@link resolveReleaseRename}) when the package has moved to a new
  * npm name. Version, dist, and install names all come from the final manifest
  * in the chain. Uses npm instead of GitHub API to avoid unauthenticated rate
@@ -835,7 +835,7 @@ async function removeCacheEntries(paths: string[]): Promise<number> {
  *
  * Bun stores package cache entries as both a package marker directory
  * (`react/19.2.6@@@1`) and a materialized package directory
- * (`react@19.2.6@@@1`). Global `omp` updates can leave one full copy per
+ * (`react@19.2.6@@@1`). Global `musepi` updates can leave one full copy per
  * release. The marker and materialized entries are removed together so the
  * cache stays internally consistent.
  */
@@ -936,7 +936,7 @@ async function pruneBunCacheAfterGlobalInstall(): Promise<BunInstallCachePruneRe
 	const packageNames = globalNodeModulesDir
 		? await collectInstalledPackageNames(globalNodeModulesDir)
 		: new Set<string>();
-	if (packageNames.size === 0 && !path.basename(cacheDir).toLowerCase().includes("omp")) return undefined;
+	if (packageNames.size === 0 && !path.basename(cacheDir).toLowerCase().includes("musepi")) return undefined;
 	return await pruneBunInstallCache(cacheDir, packageNames.size === 0 ? undefined : packageNames);
 }
 
@@ -1013,7 +1013,7 @@ function getBinaryName(): string {
 }
 
 /**
- * Resolve the path that `omp` maps to in the user's PATH.
+ * Resolve the path that `musepi` maps to in the user's PATH.
  */
 function resolveOmpPath(): string | undefined {
 	return $which(APP_NAME) ?? undefined;
@@ -1027,7 +1027,7 @@ async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): 
 		const result = await $`${binaryPath} --version`.quiet().nothrow();
 		if (result.exitCode !== 0) return { ok: false, path: binaryPath };
 		const output = result.text().trim();
-		// Output format: "omp/X.Y.Z"
+		// Output format: "musepi/X.Y.Z"
 		const match = output.match(/\/(\d+\.\d+\.\d+)/);
 		const actual = match?.[1];
 		return { ok: actual === expectedVersion, actual, path: binaryPath };
@@ -1040,9 +1040,9 @@ async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): 
  * Run the PATH-resolved musepi binary and check if it reports the expected version.
  */
 async function verifyInstalledVersion(expectedVersion: string): Promise<InstalledVersionVerification> {
-	const ompPath = resolveOmpPath();
-	if (!ompPath) return { ok: false };
-	return await verifyBinaryAtPath(ompPath, expectedVersion);
+	const musepiPath = resolveOmpPath();
+	if (!musepiPath) return { ok: false };
+	return await verifyBinaryAtPath(musepiPath, expectedVersion);
 }
 
 function printVerifiedVersion(expectedVersion: string): void {
@@ -1066,7 +1066,7 @@ async function printVerification(expectedVersion: string): Promise<void> {
 		return;
 	}
 	console.log(chalk.yellow(`\nWarning: ${formatVerificationFailure(result, expectedVersion)}`));
-	console.log(chalk.yellow(`You may need to reinstall: curl -fsSL https://omp.sh/install | sh`));
+	console.log(chalk.yellow(`You may need to reinstall: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh`));
 }
 
 async function unlinkIfExists(filePath: string): Promise<void> {
@@ -1241,10 +1241,10 @@ export function buildBunInstallArgs(
 /**
  * Build the npm argv used to update npm-managed global installs.
  *
- * `force` is set only for rename migrations: npm refuses to write the `omp`
+ * `force` is set only for rename migrations: npm refuses to write the `musepi`
  * bin while the old package still owns it (`EEXIST`), and the migration
  * installs the new package BEFORE removing the old one so a failed install
- * never leaves the user without a working `omp`.
+ * never leaves the user without a working `musepi`.
  */
 export function buildNpmInstallArgs(
 	expectedVersion: string,
@@ -1295,11 +1295,11 @@ export function buildRenameCleanupPackages(
 
 /** Injectable shell steps for {@link migrateRenamedInstall}; commands return process exit codes. */
 export interface RenameMigrationSteps {
-	/** Globally install the new package names. MUST be idempotent: re-running re-links the `omp` bin. */
+	/** Globally install the new package names. MUST be idempotent: re-running re-links the `musepi` bin. */
 	install(): Promise<number>;
 	/** Remove the old-name globals. */
 	removeOld(): Promise<number>;
-	/** Check the PATH-resolved `omp` against the expected version. */
+	/** Check the PATH-resolved `musepi` against the expected version. */
 	verify(): Promise<InstalledVersionVerification>;
 }
 
@@ -1334,14 +1334,14 @@ function packageManagerMigrationSteps(manager: "bun" | "npm", release: ReleaseIn
 }
 
 /**
- * Migrate a package-manager install across an `omp.rename` hop without a
- * window where no working `omp` exists:
+ * Migrate a package-manager install across an `musepi.rename` hop without a
+ * window where no working `musepi` exists:
  *
  * 1. Install the new package FIRST. Nothing has been removed yet, so a
  *    failure here leaves the old install fully functional.
  * 2. Remove the old-name globals. Failure is non-fatal: a stale package
  *    wastes disk, but the bin already points at the new install.
- * 3. Verify the PATH-resolved `omp`. If the removal deleted the shared bin
+ * 3. Verify the PATH-resolved `musepi`. If the removal deleted the shared bin
  *    link (manager-dependent), re-run the idempotent install to restore it
  *    and verify again; only a repeated failure aborts, with a recovery hint.
  */
@@ -1369,7 +1369,7 @@ export async function migrateRenamedInstall(release: ReleaseInfo, steps: RenameM
 	}
 	if (!verification.ok) {
 		throw new Error(
-			`${formatVerificationFailure(verification, release.version)}; reinstall with: curl -fsSL https://omp.sh/install | sh`,
+			`${formatVerificationFailure(verification, release.version)}; reinstall with: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh`,
 		);
 	}
 	printVerifiedVersion(release.version);
@@ -1516,8 +1516,8 @@ export async function updateViaBinaryAt(
 /**
  * In-place forwarder bodies, by shim extension, for launchers that cannot be
  * renamed aside during a script-shim takeover; each execs the sibling exe.
- * The exe name follows the launcher's base name (`omp.cmd` → `omp.exe`), so
- * the takeover works for both legacy `omp.*` installs and current
+ * The exe name follows the launcher's base name (`musepi.cmd` → `musepi.exe`), so
+ * the takeover works for both legacy `musepi.*` installs and current
  * `musepi.*` ones. Rewriting matters for the shims that outrank `.exe` at
  * command resolution: PowerShell prefers `.ps1` and Git Bash resolves the
  * extensionless sh shim first, so leaving the old body behind would keep
@@ -1542,8 +1542,8 @@ function shimForwarderBody(ext: string, launcherBase: string): string {
  * Take over a Windows script-launcher install for a binary-only release.
  *
  * npm-managed Windows installs are launched through script shims
- * (`omp`/`omp.cmd`/`omp.ps1`) that cannot be overwritten with a native
- * executable. The release binary is installed as `omp.exe` beside them and
+ * (`musepi`/`musepi.cmd`/`musepi.ps1`) that cannot be overwritten with a native
+ * executable. The release binary is installed as `musepi.exe` beside them and
  * the shims are then renamed aside: cmd.exe would already prefer `.exe` via
  * PATHEXT, but PowerShell resolves `.ps1` first, so the takeover only sticks
  * once the shims are out of the way. A working launcher exists at every
@@ -1564,8 +1564,8 @@ export async function updateViaShimTakeover(
 ): Promise<void> {
 	const binaryName = options.binaryName ?? getBinaryName();
 	const launcherDir = path.dirname(shimPath);
-	// Follow the launcher's base name (omp.cmd → omp.exe) so the takeover works
-	// for both legacy `omp.*` installs and current `musepi.*` ones: after the
+	// Follow the launcher's base name (musepi.cmd → musepi.exe) so the takeover works
+	// for both legacy `musepi.*` installs and current `musepi.*` ones: after the
 	// shims retire, the old command must still resolve to the new exe.
 	const launcherBase = path.basename(shimPath, path.extname(shimPath));
 	const exePath = path.join(launcherDir, `${launcherBase}.exe`);
@@ -1720,7 +1720,7 @@ export async function runUpdateCommand(opts: { force: boolean; check: boolean })
 		const target = await resolveUpdateTarget({ allowPackageManagers: !forceBinary });
 		if (target.method === "nix") {
 			console.log(chalk.yellow("This installation is managed by Nix and cannot update itself."));
-			console.log(chalk.dim("Update the flake input or profile that provides omp, then rebuild."));
+			console.log(chalk.dim("Update the flake input or profile that provides musepi, then rebuild."));
 		} else if (target.method === "brew") {
 			await updateViaHomebrew(release.version, opts.force);
 		} else if (target.method === "mise") {

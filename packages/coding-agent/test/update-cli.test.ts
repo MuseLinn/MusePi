@@ -40,7 +40,7 @@ import { getThemeByName, setThemeInstance } from "../src/modes/theme/theme";
 const tempDirs: string[] = [];
 
 async function makeTempDir(): Promise<string> {
-	const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-update-test-")));
+	const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "musepi-update-test-")));
 	tempDirs.push(dir);
 	return dir;
 }
@@ -51,7 +51,7 @@ afterEach(async () => {
 	await Promise.all(tempDirs.splice(0).map(dir => removeWithRetries(dir)));
 });
 const TEST_CONFIG: CliConfig = {
-	bin: "omp",
+	bin: "musepi",
 	version: "0.0.0-test",
 	commands: new Map(),
 };
@@ -111,21 +111,21 @@ describe("update-cli libc detection", () => {
 describe("update-cli install target detection", () => {
 	it("leaves Nix store installations under Nix management", () => {
 		const method = resolveUpdateMethodForTest(
-			"/nix/store/0123456789-omp-17.2.15/bin/omp",
+			"/nix/store/0123456789-musepi-17.2.15/bin/musepi",
 			"/nix/store/9876543210-bun-1.3.14/bin",
 		);
 
 		expect(method).toBe("nix");
 	});
 
-	it("uses bun update when prioritized omp is inside bun global bin", () => {
-		const method = resolveUpdateMethodForTest("/Users/test/.bun/bin/omp", "/Users/test/.bun/bin");
+	it("uses bun update when prioritized musepi is inside bun global bin", () => {
+		const method = resolveUpdateMethodForTest("/Users/test/.bun/bin/musepi", "/Users/test/.bun/bin");
 
 		expect(method).toBe("bun");
 	});
 
-	it("uses npm update when prioritized omp is inside an npm global bin", () => {
-		const method = resolveUpdateMethodForTest("/Users/test/.npm-global/bin/omp", undefined, {
+	it("uses npm update when prioritized musepi is inside an npm global bin", () => {
+		const method = resolveUpdateMethodForTest("/Users/test/.npm-global/bin/musepi", undefined, {
 			npmBinDir: "/Users/test/.npm-global/bin",
 		});
 
@@ -133,7 +133,7 @@ describe("update-cli install target detection", () => {
 	});
 
 	it("uses npm update for Windows npm command shims even when no package-manager bin dirs were detected", () => {
-		const method = resolveUpdateMethodForTest("C:\\Users\\test\\AppData\\Roaming\\npm\\omp.cmd", undefined);
+		const method = resolveUpdateMethodForTest("C:\\Users\\test\\AppData\\Roaming\\npm\\musepi.cmd", undefined);
 
 		expect(method).toBe("npm");
 	});
@@ -143,17 +143,17 @@ describe("update-cli install target detection", () => {
 		// (~/.local), directory containment alone misclassified the standalone
 		// binary as npm-managed, so `npm install -g` failed with EEXIST refusing
 		// to overwrite the existing executable.
-		const method = resolveUpdateMethodForTest("/home/u/.local/bin/omp", undefined, {
+		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", undefined, {
 			npmBinDir: "/home/u/.local/bin",
-			ompIsRegularFile: true,
+			musepiIsRegularFile: true,
 		});
 
 		expect(method).toBe("binary");
 	});
 
 	it("uses binary update when a plain file in the bun global bin dir is the standalone binary", () => {
-		const method = resolveUpdateMethodForTest("/home/u/.local/bin/omp", "/home/u/.local/bin", {
-			ompIsRegularFile: true,
+		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", "/home/u/.local/bin", {
+			musepiIsRegularFile: true,
 		});
 
 		expect(method).toBe("binary");
@@ -169,8 +169,8 @@ describe("update-cli install target detection", () => {
 		if (!platformDescriptor) throw new Error("process.platform descriptor missing");
 		Object.defineProperty(process, "platform", { ...platformDescriptor, value: "win32" });
 		try {
-			const method = resolveUpdateMethodForTest("C:/Users/test/.bun/bin/omp.exe", "C:/Users/test/.bun/bin", {
-				ompIsRegularFile: true,
+			const method = resolveUpdateMethodForTest("C:/Users/test/.bun/bin/musepi.exe", "C:/Users/test/.bun/bin", {
+				musepiIsRegularFile: true,
 			});
 
 			expect(method).toBe("bun");
@@ -180,9 +180,9 @@ describe("update-cli install target detection", () => {
 	});
 
 	it("still uses npm update when the npm global bin entry is a package-manager symlink, not a plain file", () => {
-		const method = resolveUpdateMethodForTest("/home/u/.local/bin/omp", undefined, {
+		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", undefined, {
 			npmBinDir: "/home/u/.local/bin",
-			ompIsRegularFile: false,
+			musepiIsRegularFile: false,
 		});
 
 		expect(method).toBe("npm");
@@ -191,8 +191,8 @@ describe("update-cli install target detection", () => {
 	it("updates the standalone binary behind a foreign npm-bin alias without replacing the alias", async () => {
 		const dir = await makeTempDir();
 		const npmBinDir = path.join(dir, ".npm-global", "bin");
-		const standalonePath = path.join(dir, ".local", "bin", "omp");
-		const aliasPath = path.join(npmBinDir, "omp");
+		const standalonePath = path.join(dir, ".local", "bin", "musepi");
+		const aliasPath = path.join(npmBinDir, "musepi");
 		await fs.mkdir(npmBinDir, { recursive: true });
 		await Bun.write(standalonePath, "binary");
 		await fs.symlink(standalonePath, aliasPath);
@@ -213,7 +213,7 @@ describe("update-cli install target detection", () => {
 		const packagePath = path.join(npmPrefix, "lib", "node_modules", "@musepi", "pi-coding-agent");
 		const checkoutPath = path.join(dir, "checkout");
 		const checkoutCli = path.join(checkoutPath, "dist", "cli.js");
-		const aliasPath = path.join(npmBinDir, "omp");
+		const aliasPath = path.join(npmBinDir, "musepi");
 		await fs.mkdir(npmBinDir, { recursive: true });
 		await fs.mkdir(path.dirname(packagePath), { recursive: true });
 		await Bun.write(checkoutCli, "linked checkout");
@@ -234,8 +234,8 @@ describe("update-cli install target detection", () => {
 		const dir = await makeTempDir();
 		const bunDir = path.join(dir, ".bun");
 		const bunBinDir = path.join(bunDir, "bin");
-		const standalonePath = path.join(bunDir, "custom", "omp");
-		const aliasPath = path.join(bunBinDir, "omp");
+		const standalonePath = path.join(bunDir, "custom", "musepi");
+		const aliasPath = path.join(bunBinDir, "musepi");
 		await fs.mkdir(bunBinDir, { recursive: true });
 		await Bun.write(standalonePath, "binary");
 		await fs.symlink(path.relative(bunBinDir, standalonePath), aliasPath);
@@ -254,7 +254,7 @@ describe("update-cli install target detection", () => {
 		const packagePath = path.join(bunGlobalDir, "node_modules", "@musepi", "pi-coding-agent");
 		const checkoutPath = path.join(dir, "checkout");
 		const checkoutCli = path.join(checkoutPath, "dist", "cli.js");
-		const aliasPath = path.join(bunBinDir, "omp");
+		const aliasPath = path.join(bunBinDir, "musepi");
 		await fs.mkdir(bunBinDir, { recursive: true });
 		await fs.mkdir(path.dirname(packagePath), { recursive: true });
 		await Bun.write(checkoutCli, "linked checkout");
@@ -271,37 +271,37 @@ describe("update-cli install target detection", () => {
 		expect(await Bun.file(checkoutCli).text()).toBe("linked checkout");
 	});
 
-	it("uses binary update when prioritized omp is outside bun global bin", () => {
-		const method = resolveUpdateMethodForTest("/Users/test/.local/bin/omp", "/Users/test/.bun/bin");
+	it("uses binary update when prioritized musepi is outside bun global bin", () => {
+		const method = resolveUpdateMethodForTest("/Users/test/.local/bin/musepi", "/Users/test/.bun/bin");
 
 		expect(method).toBe("binary");
 	});
 
 	it("uses binary update when bun global bin cannot be resolved", () => {
-		const method = resolveUpdateMethodForTest("/Users/test/.local/bin/omp", undefined);
+		const method = resolveUpdateMethodForTest("/Users/test/.local/bin/musepi", undefined);
 
 		expect(method).toBe("binary");
 	});
 
-	it("uses Homebrew update when prioritized omp resolves into the Homebrew formula", async () => {
+	it("uses Homebrew update when prioritized musepi resolves into the Homebrew formula", async () => {
 		const dir = await makeTempDir();
-		const prefix = path.join(dir, "opt", "omp");
+		const prefix = path.join(dir, "opt", "musepi");
 		const linkedBin = path.join(dir, "bin");
 		await fs.mkdir(path.join(prefix, "bin"), { recursive: true });
 		await fs.mkdir(linkedBin, { recursive: true });
-		await Bun.write(path.join(prefix, "bin", "omp"), "binary");
-		await fs.symlink(path.join(prefix, "bin", "omp"), path.join(linkedBin, "omp"));
+		await Bun.write(path.join(prefix, "bin", "musepi"), "binary");
+		await fs.symlink(path.join(prefix, "bin", "musepi"), path.join(linkedBin, "musepi"));
 
-		const method = resolveUpdateMethodForTest(path.join(linkedBin, "omp"), "/Users/test/.bun/bin", {
+		const method = resolveUpdateMethodForTest(path.join(linkedBin, "musepi"), "/Users/test/.bun/bin", {
 			homebrewPrefix: prefix,
 		});
 
 		expect(method).toBe("brew");
 	});
 
-	it("uses mise update when prioritized omp is in an active mise bin path", () => {
+	it("uses mise update when prioritized musepi is in an active mise bin path", () => {
 		const method = resolveUpdateMethodForTest(
-			"/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin/omp",
+			"/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin/musepi",
 			undefined,
 			{
 				miseBinDirs: ["/Users/test/.local/share/mise/installs/github-MuseLinn-MusePi/latest/bin"],
@@ -311,8 +311,8 @@ describe("update-cli install target detection", () => {
 		expect(method).toBe("mise");
 	});
 
-	it("uses mise update when prioritized omp is a mise shim", () => {
-		const method = resolveUpdateMethodForTest("/Users/test/.local/share/mise/shims/omp", undefined, {
+	it("uses mise update when prioritized musepi is a mise shim", () => {
+		const method = resolveUpdateMethodForTest("/Users/test/.local/share/mise/shims/musepi", undefined, {
 			miseDataDir: "/Users/test/.local/share/mise",
 		});
 
@@ -365,25 +365,25 @@ describe("update-cli npm rename contract", () => {
 	});
 
 	it("installs renamed package names in lock-step, with no old-name leftovers in the argv", () => {
-		const packages = { pkg: "@new/omp", natives: "@new/natives" };
+		const packages = { pkg: "@new/musepi", natives: "@new/natives" };
 
 		const bunArgs = buildBunInstallArgs("17.0.0", "linux-x64", packages);
-		expect(bunArgs).toContain("@new/omp@17.0.0");
+		expect(bunArgs).toContain("@new/musepi@17.0.0");
 		expect(bunArgs).toContain("@new/natives@17.0.0");
 		expect(bunArgs).toContain("@new/natives-linux-x64@17.0.0");
 		expect(bunArgs.some(arg => arg.startsWith("@musepi/"))).toBe(false);
 
-		expect(buildNpmInstallArgs("17.0.0", "linux-x64", packages)).toContain("@new/omp@17.0.0");
+		expect(buildNpmInstallArgs("17.0.0", "linux-x64", packages)).toContain("@new/musepi@17.0.0");
 	});
 
 	it("adds --force to npm argv only for rename migrations so the old package's bin can be clobbered", () => {
-		const packages = { pkg: "@new/omp", natives: "@new/natives" };
+		const packages = { pkg: "@new/musepi", natives: "@new/natives" };
 		expect(buildNpmInstallArgs("17.0.0", "linux-x64", packages, { force: true })).toContain("--force");
 		expect(buildNpmInstallArgs("16.3.15", "win32-x64")).not.toContain("--force");
 	});
 
 	it("removes the old agent package and its natives companions when both names moved", () => {
-		const packages = { pkg: "@new/omp", natives: "@new/natives" };
+		const packages = { pkg: "@new/musepi", natives: "@new/natives" };
 		expect(buildRenameCleanupPackages(packages, "darwin-arm64")).toEqual([
 			"@musepi/pi-coding-agent",
 			"@musepi/pi-natives",
@@ -396,7 +396,7 @@ describe("update-cli npm rename contract", () => {
 	});
 
 	it("keeps the natives packages on an agent-only rename so cleanup cannot strip the addon the new install pinned", () => {
-		const packages = { pkg: "@new/omp", natives: "@musepi/pi-natives" };
+		const packages = { pkg: "@new/musepi", natives: "@musepi/pi-natives" };
 		expect(buildRenameCleanupPackages(packages, "darwin-arm64")).toEqual(["@musepi/pi-coding-agent"]);
 		expect(buildRenameCleanupPackages(packages, "linux-arm")).toEqual(["@musepi/pi-coding-agent"]);
 	});
@@ -406,7 +406,7 @@ describe("migrateRenamedInstall transaction", () => {
 	const release: ReleaseInfo = {
 		tag: "v999.1.0",
 		version: "999.1.0",
-		packages: { pkg: "@new/omp", natives: "@new/natives" },
+		packages: { pkg: "@new/musepi", natives: "@new/natives" },
 	};
 
 	function scriptedSteps(script: { install: number[]; removeOld?: number; verify: boolean[] }): {
@@ -430,8 +430,8 @@ describe("migrateRenamedInstall transaction", () => {
 				async verify() {
 					calls.push("verify");
 					return script.verify[verifies++]
-						? { ok: true, actual: "999.1.0", path: "/bin/omp" }
-						: { ok: false, path: "/bin/omp" };
+						? { ok: true, actual: "999.1.0", path: "/bin/musepi" }
+						: { ok: false, path: "/bin/musepi" };
 				},
 			},
 		};
@@ -477,14 +477,16 @@ describe("migrateRenamedInstall transaction", () => {
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		const { steps, calls } = scriptedSteps({ install: [0, 0], verify: [false, false] });
 
-		await expect(migrateRenamedInstall(release, steps)).rejects.toThrow("curl -fsSL https://omp.sh/install");
+		await expect(migrateRenamedInstall(release, steps)).rejects.toThrow(
+			"curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh",
+		);
 		expect(calls).toEqual(["install", "removeOld", "verify", "install", "verify"]);
 	});
 });
 
 describe("update-cli bun install command", () => {
 	it("pins the official npm registry and bypasses the manifest cache so a stale mirror or snapshot cannot mask a freshly published version", () => {
-		// Regression: omp queries https://registry.npmjs.org/<pkg>/latest directly.
+		// Regression: musepi queries https://registry.npmjs.org/<pkg>/latest directly.
 		// The install MUST hit the same registry, otherwise:
 		//   - a lagging mirror (corp proxy, Taobao, …) rejects the version with
 		//     `No version matching "X" (but package exists)`,
@@ -660,7 +662,7 @@ describe("update-cli bun cache pruning", () => {
 
 describe("update-cli release binary integrity", () => {
 	const tag = "v17.1.2";
-	const binaryName = "omp-linux-x64";
+	const binaryName = "musepi-linux-x64";
 	const url = `https://github.com/MuseLinn/MusePi/releases/download/${tag}/${binaryName}`;
 	const content = "verified binary";
 	const digest = `sha256:${createHash("sha256").update(content).digest("hex")}`;
@@ -714,7 +716,7 @@ describe("update-cli release binary integrity", () => {
 		).toThrow(`has 2 assets named ${binaryName}`);
 		expect(() =>
 			resolveReleaseBinaryAsset(
-				releaseAsset({ browser_download_url: "https://example.com/omp-linux-x64" }),
+				releaseAsset({ browser_download_url: "https://example.com/musepi-linux-x64" }),
 				tag,
 				binaryName,
 			),
@@ -821,8 +823,8 @@ describe("update-cli release binary integrity", () => {
 	it("rejects an altered version-reporting executable before replacing the installed binary", async () => {
 		const dir = await makeTempDir();
 		const targetPath = path.join(dir, binaryName);
-		const installed = "#!/bin/sh\necho omp/17.0.8\n";
-		const altered = "#!/bin/sh\necho omp/17.1.2\n";
+		const installed = "#!/bin/sh\necho musepi/17.0.8\n";
+		const altered = "#!/bin/sh\necho musepi/17.1.2\n";
 		const expectedDigest = `sha256:${createHash("sha256")
 			.update("x".repeat(Buffer.byteLength(altered)))
 			.digest("hex")}`;
@@ -886,7 +888,7 @@ describe("update-cli release binary integrity", () => {
 describe("update-cli binary replacement", () => {
 	it("restores the previous binary when the replacement fails verification", async () => {
 		const dir = await makeTempDir();
-		const targetPath = path.join(dir, "omp");
+		const targetPath = path.join(dir, "musepi");
 		const tempPath = `${targetPath}.new`;
 		const backupPath = `${targetPath}.bak`;
 		await Bun.write(targetPath, "old binary");
@@ -909,7 +911,7 @@ describe("update-cli binary replacement", () => {
 
 	it("keeps the replacement only after it reports the expected version", async () => {
 		const dir = await makeTempDir();
-		const targetPath = path.join(dir, "omp");
+		const targetPath = path.join(dir, "musepi");
 		const tempPath = `${targetPath}.new`;
 		const backupPath = `${targetPath}.bak`;
 		await Bun.write(targetPath, "old binary");
@@ -935,7 +937,7 @@ describe("update-cli binary replacement on locked backups", () => {
 		// the running process image, so unlinking it throws EPERM. That cleanup
 		// failure must not turn a verified swap into "Update failed" (issue #845).
 		const dir = await makeTempDir();
-		const targetPath = path.join(dir, "omp.exe");
+		const targetPath = path.join(dir, "musepi.exe");
 		const tempPath = `${targetPath}.new`;
 		const backupPath = `${targetPath}.1700000000000.4242.bak`;
 		await Bun.write(targetPath, "old binary");
@@ -974,7 +976,7 @@ describe("update-cli binary replacement on locked backups", () => {
 describe("update-cli stale update artifact sweep", () => {
 	it("reclaims timestamped and legacy backups and orphaned temps while sparing in-progress temps and unrelated files", async () => {
 		const dir = await makeTempDir();
-		const targetPath = path.join(dir, "omp.exe");
+		const targetPath = path.join(dir, "musepi.exe");
 		await Bun.write(targetPath, "current binary");
 		await Bun.write(`${targetPath}.bak`, "legacy backup");
 		await Bun.write(`${targetPath}.1700000000000.4242.bak`, "timestamped backup");
@@ -1021,7 +1023,7 @@ describe("update-cli binary-only release gating", () => {
 
 	it("returns undefined when the manifest carries no dist field", () => {
 		expect(resolveReleaseDist({ version: "1.2.3" })).toBeUndefined();
-		expect(resolveReleaseDist({ omp: {} })).toBeUndefined();
+		expect(resolveReleaseDist({ musepi: {} })).toBeUndefined();
 		expect(resolveReleaseDist(undefined)).toBeUndefined();
 	});
 
@@ -1046,7 +1048,7 @@ describe("update-cli binary-only release gating", () => {
 
 describe("update-cli script-shim takeover", () => {
 	const version = "18.0.0";
-	const binaryName = "omp-windows-x64.exe";
+	const binaryName = "musepi-windows-x64.exe";
 	const url = `https://github.com/MuseLinn/MusePi/releases/download/v${version}/${binaryName}`;
 
 	function makeFetch(content: string): (input: string | URL | Request) => Promise<Response> {
@@ -1077,9 +1079,9 @@ describe("update-cli script-shim takeover", () => {
 	}
 
 	const shims: Record<string, string> = {
-		omp: "#!/bin/sh\nnode omp.js\n",
-		"omp.cmd": "@node omp.js %*\n",
-		"omp.ps1": "node omp.js @args\n",
+		musepi: "#!/bin/sh\nnode musepi.js\n",
+		"musepi.cmd": "@node musepi.js %*\n",
+		"musepi.ps1": "node musepi.js @args\n",
 	};
 
 	async function writeShims(dir: string): Promise<void> {
@@ -1088,21 +1090,21 @@ describe("update-cli script-shim takeover", () => {
 		}
 	}
 
-	it("installs omp.exe beside the shims and retires them", async () => {
+	it("installs musepi.exe beside the shims and retires them", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
 		// Real executable, no injected verifier: the takeover must verify the
 		// exe by explicit path — $which cached the shim path before it was
 		// renamed away, so a PATH re-resolution would fail here.
-		const exe = `#!/bin/sh\necho omp/${version}\n`;
+		const exe = `#!/bin/sh\necho musepi/${version}\n`;
 
-		await updateViaShimTakeover(path.join(dir, "omp.cmd"), version, {
+		await updateViaShimTakeover(path.join(dir, "musepi.cmd"), version, {
 			binaryName,
 			fetchImpl: makeFetch(exe),
 			githubToken: "test-token",
 		});
 
-		expect(await Bun.file(path.join(dir, "omp.exe")).text()).toBe(exe);
+		expect(await Bun.file(path.join(dir, "musepi.exe")).text()).toBe(exe);
 		for (const name in shims) {
 			expect(await Bun.file(path.join(dir, name)).exists()).toBe(false);
 		}
@@ -1114,17 +1116,17 @@ describe("update-cli script-shim takeover", () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
 		// Executable runs but reports the previous version -> full rollback.
-		const exe = "#!/bin/sh\necho omp/17.2.12\n";
+		const exe = "#!/bin/sh\necho musepi/17.2.12\n";
 
 		await expect(
-			updateViaShimTakeover(path.join(dir, "omp.cmd"), version, {
+			updateViaShimTakeover(path.join(dir, "musepi.cmd"), version, {
 				binaryName,
 				fetchImpl: makeFetch(exe),
 				githubToken: "test-token",
 			}),
-		).rejects.toThrow(/still reports 17\.2\.12 \(expected 18\.0\.0\); restored previous omp launcher/);
+		).rejects.toThrow(/still reports 17\.2\.12 \(expected 18\.0\.0\); restored previous musepi launcher/);
 
-		expect(await Bun.file(path.join(dir, "omp.exe")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "musepi.exe")).exists()).toBe(false);
 		for (const name in shims) {
 			expect(await Bun.file(path.join(dir, name)).text()).toBe(shims[name]);
 		}
@@ -1135,7 +1137,7 @@ describe("update-cli script-shim takeover", () => {
 	function renameLockingPs1(): Mock<typeof nodeFs.promises.rename> {
 		const realRename = nodeFs.promises.rename;
 		return spyOn(nodeFs.promises, "rename").mockImplementation(async (from, to) => {
-			if (path.basename(String(from)) === "omp.ps1") {
+			if (path.basename(String(from)) === "musepi.ps1") {
 				throw Object.assign(new Error("EPERM: file is locked"), { code: "EPERM" });
 			}
 			return await realRename(from, to);
@@ -1145,10 +1147,10 @@ describe("update-cli script-shim takeover", () => {
 	it("rewrites an immovable precedence-winning shim as a forwarder to the exe", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
-		const exe = `#!/bin/sh\necho omp/${version}\n`;
+		const exe = `#!/bin/sh\necho musepi/${version}\n`;
 		const renameSpy = renameLockingPs1();
 		try {
-			await updateViaShimTakeover(path.join(dir, "omp.cmd"), version, {
+			await updateViaShimTakeover(path.join(dir, "musepi.cmd"), version, {
 				binaryName,
 				fetchImpl: makeFetch(exe),
 				githubToken: "test-token",
@@ -1157,32 +1159,32 @@ describe("update-cli script-shim takeover", () => {
 			renameSpy.mockRestore();
 		}
 
-		expect(await Bun.file(path.join(dir, "omp.exe")).text()).toBe(exe);
-		expect(await Bun.file(path.join(dir, "omp")).exists()).toBe(false);
-		expect(await Bun.file(path.join(dir, "omp.cmd")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "musepi.exe")).text()).toBe(exe);
+		expect(await Bun.file(path.join(dir, "musepi")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "musepi.cmd")).exists()).toBe(false);
 		// PowerShell resolves .ps1 before .exe: the locked shim must now exec
 		// the new binary instead of keeping its old body.
-		expect(await Bun.file(path.join(dir, "omp.ps1")).text()).toContain('& "$PSScriptRoot\\omp.exe" @args');
+		expect(await Bun.file(path.join(dir, "musepi.ps1")).text()).toContain('& "$PSScriptRoot\\musepi.exe" @args');
 	});
 
 	it("restores a forwarded shim's original body when verification fails", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
-		const exe = "#!/bin/sh\necho omp/17.2.12\n";
+		const exe = "#!/bin/sh\necho musepi/17.2.12\n";
 		const renameSpy = renameLockingPs1();
 		try {
 			await expect(
-				updateViaShimTakeover(path.join(dir, "omp.cmd"), version, {
+				updateViaShimTakeover(path.join(dir, "musepi.cmd"), version, {
 					binaryName,
 					fetchImpl: makeFetch(exe),
 					githubToken: "test-token",
 				}),
-			).rejects.toThrow("restored previous omp launcher");
+			).rejects.toThrow("restored previous musepi launcher");
 		} finally {
 			renameSpy.mockRestore();
 		}
 
-		expect(await Bun.file(path.join(dir, "omp.exe")).exists()).toBe(false);
+		expect(await Bun.file(path.join(dir, "musepi.exe")).exists()).toBe(false);
 		for (const name in shims) {
 			expect(await Bun.file(path.join(dir, name)).text()).toBe(shims[name]);
 		}
@@ -1191,7 +1193,7 @@ describe("update-cli script-shim takeover", () => {
 
 describe("update-cli concurrent binary updates", () => {
 	const version = "999.0.0";
-	const binaryName = "omp-linux-x64";
+	const binaryName = "musepi-linux-x64";
 	const url = `https://github.com/MuseLinn/MusePi/releases/download/v${version}/${binaryName}`;
 	const payload = Buffer.alloc(2048, 0x41);
 	const digest = `sha256:${createHash("sha256").update(payload).digest("hex")}`;
@@ -1220,12 +1222,12 @@ describe("update-cli concurrent binary updates", () => {
 		setThemeInstance(loadedTheme);
 		vi.spyOn(console, "log").mockImplementation(() => {});
 		const dir = await makeTempDir();
-		const targetPath = path.join(dir, "omp");
+		const targetPath = path.join(dir, "musepi");
 		await Bun.write(targetPath, "old binary");
 		return { dir, targetPath };
 	}
 
-	// Regression for #8434: two overlapping `omp update` runs must not share a
+	// Regression for #8434: two overlapping `musepi update` runs must not share a
 	// temp path. Run A downloads slowly and only finishes after run B has fully
 	// installed. With the old fixed `<binary>.new` temp name, B's pre-download
 	// unlink deleted A's temp file, so A's chmod failed with ENOENT even though
