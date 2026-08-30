@@ -14,14 +14,22 @@ import { defaultEditorTheme } from "./test-themes";
 import { VirtualTerminal } from "./virtual-terminal";
 
 const ORIGINAL_HERDR_ENV = Bun.env.HERDR_ENV;
+const ORIGINAL_TERM_PROGRAM = Bun.env.TERM_PROGRAM;
+const ORIGINAL_RESIZE_IN_PLACE = Bun.env.PI_TUI_RESIZE_IN_PLACE;
 
 beforeEach(() => {
 	delete Bun.env.HERDR_ENV;
+	delete Bun.env.TERM_PROGRAM;
+	delete Bun.env.PI_TUI_RESIZE_IN_PLACE;
 });
 
 afterEach(() => {
 	if (ORIGINAL_HERDR_ENV === undefined) delete Bun.env.HERDR_ENV;
 	else Bun.env.HERDR_ENV = ORIGINAL_HERDR_ENV;
+	if (ORIGINAL_TERM_PROGRAM === undefined) delete Bun.env.TERM_PROGRAM;
+	else Bun.env.TERM_PROGRAM = ORIGINAL_TERM_PROGRAM;
+	if (ORIGINAL_RESIZE_IN_PLACE === undefined) delete Bun.env.PI_TUI_RESIZE_IN_PLACE;
+	else Bun.env.PI_TUI_RESIZE_IN_PLACE = ORIGINAL_RESIZE_IN_PLACE;
 });
 
 // Behavioral tests for TUI.requestComponentRender: a component whose own

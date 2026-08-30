@@ -9,6 +9,11 @@ import { afterEach, beforeEach } from "bun:test";
  * path that cannot rebuild scrollback. Tests that assert the destructive
  * full-paint behavior otherwise fail for anyone running the suite inside tmux,
  * screen, Zellij or CMUX. Restores whatever was set afterwards.
+ *
+ * `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE` are also neutralized: they feed
+ * `reportsSizeOnAltScreenToggle()` (Warp takes the in-place resize path), so a
+ * developer running the suite inside Warp would see non-multiplexer resize
+ * tests misclassify as in-place and skip the destructive replay they assert.
  */
 export function withoutTerminalMultiplexer(): void {
 	const KEYS = [
@@ -20,6 +25,8 @@ export function withoutTerminalMultiplexer(): void {
 		"CMUX_SURFACE_ID",
 		"CMUX_REMOTE_TRANSPORT",
 		"TERM",
+		"TERM_PROGRAM",
+		"PI_TUI_RESIZE_IN_PLACE",
 	] as const;
 	const previous = new Map<string, string | undefined>();
 
