@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "@musepi/pi-wire";
+import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
@@ -375,6 +375,54 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 				console.error("[transcript] branchAt failed:", err);
 			});
 	};
+	// Fork (分叉): copy the session truncated at this message into a NEW
+	// session (non-destructive — original untouched). User messages re-answer
+	// via backfilled text; assistant/toolResult nodes pass includeTarget to
+	// keep the node and continue from it. The daemon returns the new session
+	// id; the GUI switches the workspace focus to it.
+	const forkAt = (messageId: string, _text: string | undefined, includeTarget?: boolean): void => {
+		if (!focusedSessionId) return;
+		void client
+			.rpc<{ sessionId?: string | null; sessionFile?: string | null }>("session.forkAt", {
+				sessionId: focusedSessionId,
+				messageId,
+				includeTarget,
+			})
+			.then(result => {
+				if (result.sessionId) client.selectWorkspaceSession(result.sessionId);
+			})
+			.catch(err => {
+				console.error("[transcript] forkAt failed:", err);
+			});
+	};
+	// Branch topology for the transcript's session-tree nav (layer-1 branch
+	// bars + sibling switching): child counts keyed by entry id from
+	// parentId links, the active path (leaf → root), and switch → branchAt.
+	const branchInfo = useMemo(() => {
+		if (!focusedSessionId || entries.length === 0) return undefined;
+		const childCount = new Map<string, number>();
+		for (const e of entries) {
+			if (e.parentId) childCount.set(e.parentId, (childCount.get(e.parentId) ?? 0) + 1);
+		}
+		const activePathIds = new Set<string>();
+		// Leaf = last entry without children; walk parentId up to the root.
+		let leaf: SessionEntry | undefined;
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (!childCount.has(entries[i].id)) {
+				leaf = entries[i];
+				break;
+			}
+		}
+		for (let cur = leaf; cur; cur = entries.find(e => e.id === cur?.parentId)) {
+			if (!cur) break;
+			activePathIds.add(cur.id);
+		}
+		return {
+			childCount,
+			activePathIds,
+			onSwitchBranch: (leafEntryId: string) => branchAt(leafEntryId),
+		};
+	}, [entries, focusedSessionId, client]);
 	return (
 		<Transcript
 			entries={entries}
@@ -387,6 +435,8 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			emptySlot={emptySlot}
 			onRevert={id => branchAt(id)}
 			onRetry={(id, text) => branchAt(id)}
+			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
+			branchInfo={branchInfo}
 		/>
 	);
 }
