@@ -527,6 +527,8 @@ const MULTIPLEXER_ENV_CASES: Array<[string, Record<string, string | undefined>]>
 const CMUX_SOCKET_ONLY_ENV: Record<string, string | undefined> = {
 	...NO_MULTIPLEXER_ENV,
 	TERM: "xterm-256color",
+	TERM_PROGRAM: undefined,
+	PI_TUI_RESIZE_IN_PLACE: undefined,
 	CMUX_SOCKET_PATH: "/tmp/cmux.sock",
 };
 // Pin TERM to a non-multiplexer value: `isMultiplexerSession()` falls back to
@@ -2621,6 +2623,7 @@ describe("multiplexer detection gates ED3 on resize", () => {
 				term.resize(80, 10);
 				await settleResize(term);
 				const out = writes.join("");
+				console.log("ED3-DEBUG socket-only out:", JSON.stringify(out.slice(0, 120)), "len:", out.length, "hasED3:", out.includes(ED3));
 				expect(out).toContain(ED3);
 				expect(visible(term)).toEqual(Array.from({ length: 10 }, (_v, i) => `line-${i + 10}`));
 			} finally {

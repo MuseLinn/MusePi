@@ -539,6 +539,11 @@ export class Editor implements Component, Focusable {
 	/** Terminal height source for clamping the autocomplete dropdown. Hosts wire this to their Terminal's rows. */
 	viewportRowsProvider?: () => number;
 
+	/** TUI seam: wires the live terminal row count into the dropdown clamp. */
+	setViewportRowsProvider(provider: () => number): void {
+		this.viewportRowsProvider = provider;
+	}
+
 	// Paste tracking for large pastes
 	#pastes: Map<number, string> = new Map();
 	#pasteCounter: number = 0;

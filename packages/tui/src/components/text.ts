@@ -93,6 +93,19 @@ export class Text implements Component {
 		this.#cachedLines = undefined;
 	}
 
+	/**
+	 * Rendered-height epoch for native-scrollback width tracking. The
+	 * multiplexer resize path asks every descendant for a revision that changes
+	 * when the component's rendered shape mutates independently of a width
+	 * reflow; a `setText` that adds rows (e.g. `"one"` → `"one\ntwo"`) must be
+	 * observable there. The rendered line count is the shape signature — it is
+	 * deterministic, cache-backed, and bumps exactly when the reflowed height
+	 * changes.
+	 */
+	getNativeScrollbackWidthEpochRevision(): number {
+		return this.#cachedLines?.length ?? 0;
+	}
+
 	render(width: number): readonly string[] {
 		// Check cache
 		if (

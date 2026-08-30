@@ -178,6 +178,13 @@ export interface Component {
 	setIgnoreTight?(ignore: boolean): any;
 
 	/**
+	 * Optional terminal-height source for components whose popovers must clamp
+	 * to the live viewport (e.g. Editor's autocomplete dropdown). The TUI wires
+	 * this to its terminal's current row count when the component is focused.
+	 */
+	setViewportRowsProvider?(provider: () => number): void;
+
+	/**
 	 * Optional teardown. Called when the component is permanently removed from
 	 * the live tree (e.g. a transcript reset). Release timers, intervals, and
 	 * subscriptions here. Must be idempotent. Containers propagate dispose to
@@ -1917,6 +1924,11 @@ export class TUI extends Container {
 			component.focused = true;
 			this.#syncTerminalCursorMode(component);
 		}
+		// Wire the live terminal height into popover components (Editor's
+		// autocomplete dropdown clamps to the viewport via viewportRowsProvider).
+		// The closure reads the current row count on every render, so resize is
+		// picked up without re-injection.
+		component.setViewportRowsProvider?.(() => this.terminal.rows);
 	}
 
 	/** Component currently receiving keyboard input, if any. */
@@ -2728,6 +2740,7 @@ export class TUI extends Container {
 	 * intent into `#deferredForcedClearScrollback` — the timer's callback
 	 * consumes that flag exactly once when it re-enters `requestRender(true)`.
 	 */
+		
 	#armMultiplexerResizeTimer(options: { clearScrollback: boolean; hasPendingRender?: boolean }): void {
 		this.#deferredForcedClearScrollback ||= options.clearScrollback;
 		this.#multiplexerResizeHasPendingRender ||= options.hasPendingRender === true;
@@ -4760,6 +4773,7 @@ export class TUI extends Container {
 	 * full paint. Reset on every SIGWINCH, so the full replay fires only once the
 	 * user stops dragging.
 	 */
+		
 	#beginResizeViewport(): void {
 		this.#resizeViewportActive = true;
 		this.#resizeViewportSettleTimer?.cancel();
