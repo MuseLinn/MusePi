@@ -789,7 +789,7 @@ describe("listClaudePluginRoots", () => {
 		});
 
 		expect(result.items.map(server => server.name)).toEqual(["context7"]);
-		expect(result.items[0]?._source.provider).toBe("native");
+		expect(result.items[0]?._source.provider).toBe("musepi-extensions");
 		expect(result.all.find(server => server.name === "context7:context7")?._shadowed).toBe(true);
 	});
 

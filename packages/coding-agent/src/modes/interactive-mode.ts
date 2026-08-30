@@ -3626,12 +3626,10 @@ export class InteractiveMode implements InteractiveModeContext {
 				this.showWarning("Resume the current goal first, or drop it before setting a new objective.");
 				return false;
 			}
-			const objective = (
-				await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true })
-			)?.trim();
-			if (!objective) return false;
-			await this.#startGoalFromObjective(objective);
-			return true;
+			// Bare `/goal` while paused opens the paused-goal menu (Resume /
+			// details / budget / drop) rather than asking for a fresh objective.
+			await this.#openGoalMenu("paused");
+			return false;
 		}
 		// No subcommand, no paused goal, goal disabled: a bare rest string is the
 		// objective — start goal mode with it directly (mirrors /goal set).

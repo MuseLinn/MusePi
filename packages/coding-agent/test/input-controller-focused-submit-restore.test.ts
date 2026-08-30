@@ -23,6 +23,9 @@ function createContext(opts: { pendingImages: ImageContent[]; pendingImageLinks?
 		setText(text: string) {
 			editorText = text;
 		},
+		setCollapsedText(text: string) {
+			editorText = text;
+		},
 		getText() {
 			return editorText;
 		},
