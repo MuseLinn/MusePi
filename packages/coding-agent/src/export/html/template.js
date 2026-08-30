@@ -739,7 +739,7 @@
       // ============================================================
       //
       // Tool calls render through the bundled <omp-tool-view> web component
-      // (tool-views.generated.js — the same React renderers collab-web uses).
+      // (tool-views.generated.js — the same React renderers desktop-web uses).
       // Payloads are handed over via a global store keyed by data-key, which
       // survives innerHTML serialization and cloneNode round trips.
 
