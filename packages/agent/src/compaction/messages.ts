@@ -10,9 +10,11 @@ import { prompt } from "@musepi/pi-utils";
 import type { AgentMessage } from "../types";
 import branchSummaryContextPrompt from "./prompts/branch-summary-context.md" with { type: "text" };
 import compactionSummaryContextPrompt from "./prompts/compaction-summary-context.md" with { type: "text" };
+import handoffSummaryContextPrompt from "./prompts/handoff-summary-context.md" with { type: "text" };
 
 const COMPACTION_SUMMARY_TEMPLATE = compactionSummaryContextPrompt;
 const BRANCH_SUMMARY_TEMPLATE = branchSummaryContextPrompt;
+const HANDOFF_SUMMARY_TEMPLATE = handoffSummaryContextPrompt;
 
 export interface CustomMessage<T = unknown> {
 	role: "custom";
@@ -90,7 +92,10 @@ export function renderBranchSummaryContext(summary: string): string {
 	return prompt.render(BRANCH_SUMMARY_TEMPLATE, { summary });
 }
 
-export function renderCompactionSummaryContext(summary: string): string {
+export function renderCompactionSummaryContext(summary: string, method?: string): string {
+	if (method === "handoff") {
+		return prompt.render(HANDOFF_SUMMARY_TEMPLATE, { summary });
+	}
 	return prompt.render(COMPACTION_SUMMARY_TEMPLATE, { summary });
 }
 
@@ -216,7 +221,7 @@ export function convertMessageToLlm(message: AgentMessage): Message | undefined 
 							: [
 									{
 										type: "text" as const,
-										text: renderCompactionSummaryContext(message.summary),
+										text: renderCompactionSummaryContext(message.summary, message.method),
 									},
 									...(message.images ?? []),
 								],
