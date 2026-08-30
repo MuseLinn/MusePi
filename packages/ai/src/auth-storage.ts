@@ -4998,10 +4998,11 @@ export class AuthStorage {
 							candidate.selection.index,
 							errorMsg,
 						);
-						// Peer-rotated means another process already refreshed the row, so the
-						// credential is no longer dead — let the final pass retry it (reload
-						// picked up the new token) instead of skipping it as a dead grant.
-						if (outcome !== "peer-rotated") preflightFailures.add(candidate);
+						// Peer-rotated or cas-lost means another process already refreshed the
+						// row (or the disable itself lost the race), so the credential is no
+						// longer dead — let the final pass retry it (reload picked up the new
+						// token) instead of skipping it as a dead grant.
+						if (outcome !== "peer-rotated" && outcome !== "cas-lost") preflightFailures.add(candidate);
 					} else if (credentialId !== undefined) {
 						// A transient refresh failure clears the session's pinned credential
 						// so the next pass can rotate to a sibling account (and the pinned row
@@ -5425,7 +5426,14 @@ export class AuthStorage {
 					if (allowFallback) return this.#resolveOAuthSelection(provider, sessionId, options);
 					return undefined;
 				}
-				if (outcome === "cas-lost") return undefined;
+				if (outcome === "cas-lost") {
+					// The disable itself lost a race against a peer rotation that landed
+					// between the pre-check and the CAS — reload already picked up the
+					// peer's fresh credential, so re-resolve to use it rather than
+					// returning undefined (issue #9331 parity with peer-rotated).
+					if (allowFallback) return this.#resolveOAuthSelection(provider, sessionId, options);
+					return undefined;
+				}
 				if (this.#getCredentialsForProvider(provider).some(credential => credential.type === "oauth")) {
 					if (allowFallback) return this.#resolveOAuthSelection(provider, sessionId, options);
 				}

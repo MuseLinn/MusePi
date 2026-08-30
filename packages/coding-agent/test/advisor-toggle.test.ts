@@ -627,47 +627,39 @@ describe("AgentSession advisor toggle", () => {
 		await session.dispose();
 		expect((await loadAdvisorTranscriptCosts(previousSessionFile)).get("")).toBeCloseTo(0.75, 8);
 	});
-	it("clears advisor cost when a handoff opens the replacement session", async () => {
+	it("clears advisor cost when a handoff commits the replacement context", async () => {
 		vi.spyOn(compactionModule, "generateHandoffFromContext").mockResolvedValue("## Goal\nContinue from here");
 		try {
 			const advisor = enableAdvisor();
 			prepareHandoffConversation(advisor);
 			const previousSessionFile = session.sessionFile;
-			const newSession = sessionManager.newSession.bind(sessionManager);
-			vi.spyOn(sessionManager, "newSession").mockImplementation(async options => {
-				const result = await newSession(options);
-				// The outgoing advisor finalizes after the replacement file is selected.
-				appendAdvisorCost(advisor, 9, 3);
-				return result;
-			});
 
 			await session.handoff();
 
-			// The handoff hands the work over to a fresh conversation, so the spend of
-			// the one it summarizes must not follow it.
-			expect(session.sessionFile).not.toBe(previousSessionFile);
+			// Handoff is an in-place commit (17.4.0): the document becomes a
+			// compaction entry on the same session, so the file stays put. The
+			// in-memory cost is reset (the summarized turns' spend is not carried
+			// forward), but the transcript recorder keeps appending to the same
+			// session file — the pre-handoff 0.5 plus the post-handoff 0.25.
+			expect(session.sessionFile).toBe(previousSessionFile);
 			expect(session.getAdvisorCost()).toBe(0);
-			const replacementSessionFile = session.sessionFile;
-			if (!replacementSessionFile) throw new Error("Expected the replacement session to be persisted");
 			appendAdvisorCost(advisor, 0.25, 4);
 			expect(session.getAdvisorCost()).toBeCloseTo(0.25, 8);
 			await session.dispose();
-			expect((await loadAdvisorTranscriptCosts(replacementSessionFile)).get("")).toBeCloseTo(0.25, 8);
+			expect((await loadAdvisorTranscriptCosts(previousSessionFile!)).get("")).toBeCloseTo(0.75, 8);
 		} finally {
 			vi.restoreAllMocks();
 		}
 	});
-	it("restores advisor recording when a handoff fails before replacing the session", async () => {
-		vi.spyOn(compactionModule, "generateHandoffFromContext").mockResolvedValue("## Goal\nContinue from here");
+	it("restores advisor recording when a handoff fails before committing", async () => {
+		vi.spyOn(compactionModule, "generateHandoffFromContext").mockRejectedValue(new Error("handoff commit failed"));
 		try {
 			const advisor = enableAdvisor();
 			prepareHandoffConversation(advisor);
 			const previousSessionFile = session.sessionFile;
 			if (!previousSessionFile) throw new Error("Expected the previous session to be persisted");
-			const failure = new Error("replacement session failed");
-			vi.spyOn(sessionManager, "newSession").mockRejectedValue(failure);
 
-			await expect(session.handoff()).rejects.toThrow(failure);
+			await expect(session.handoff()).rejects.toThrow("handoff commit failed");
 
 			expect(session.sessionFile).toBe(previousSessionFile);
 			expect(session.getAdvisorCost()).toBeCloseTo(0.5, 8);

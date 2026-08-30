@@ -282,6 +282,7 @@ export interface SessionMaintenanceHost {
 	resetPlanReference(): void;
 	syncTodoPhasesFromBranch(): void;
 	resetAdvisorRuntimes(reason?: string): void;
+	clearAdvisorCost(): void;
 	rebaseAfterCompaction(): void;
 	recordAnchoredHistoryRewrite(tokensRemoved: number): void;
 	getContextBreakdown(options?: {
@@ -1084,12 +1085,12 @@ export class SessionMaintenance {
 		const messageCount = entries.filter(e => e.type === "message").length;
 		if (messageCount < 2) throw new Error("Nothing to hand off (no messages yet)");
 		const compactionSettings = this.#host.settings.getGroup("compaction");
-		const preparation = prepareCompaction(
-			entries,
-			resolveMethodSettings(compactionSettings, "handoff"),
-			model,
-			this.#tokenizer,
-		);
+		// Handoff is a full hand-over: unlike auto-compaction it must summarize
+		// every message, so keepRecentTokens is forced to 0 — otherwise a short
+		// conversation with a large keepRecent budget yields "nothing to
+		// summarize" and the handoff refuses to run.
+		const handoffSettings = { ...resolveMethodSettings(compactionSettings, "handoff"), keepRecentTokens: 0 };
+		const preparation = prepareCompaction(entries, handoffSettings, model, this.#tokenizer);
 		if (!preparation) throw new Error("Nothing to hand off (already compacted)");
 		const result = await this.#host.generateHandoffDocument(customInstructions, options);
 		if (!result) return undefined;
@@ -1389,6 +1390,7 @@ export class SessionMaintenance {
 		// the plan from disk and re-injects it on the next turn (issue #1246).
 		this.#host.resetPlanReference();
 		this.#host.resetAdvisorRuntimes(args.advisorResetReason);
+		this.#host.clearAdvisorCost();
 		this.#host.syncTodoPhasesFromBranch();
 		if (args.codexCompaction) {
 			this.#host.resetCodexProviderAfterCompaction(args.codexCompaction);

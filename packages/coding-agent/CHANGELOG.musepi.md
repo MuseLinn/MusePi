@@ -12,6 +12,15 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: macOS GUI OTA update 404 — the electron-builder mac target emits zip + dmg + `latest-mac.yml` (zip is the primary update file), but the gui-release publish job's upload list omitted `dist/*.zip` → the zip never reached the release → macOS OTA downloads of `MusePi-*-arm64-mac.zip` returned 404 (Windows/Linux exe/AppImage were fine). The publish list now includes `dist/*.zip`; the missing zip asset was also backfilled onto the already-published release.
 - **TUI binary 发布**:`musepi update` 的自更新资产(`musepi-{linux,linux-musl,darwin,windows}-{x64,arm64}[.exe]`)现已作为 release assets 发布(7 平台),修复之前 TUI binary 构建成功但从未上传到 GitHub release、`musepi update` 找不到匹配 asset 的问题。
   - EN: TUI binary release — the self-update assets consumed by `musepi update` (`musepi-{linux,linux-musl,darwin,windows}-{x64,arm64}[.exe]`) are now published as release assets (7 platforms); previously the TUI binary built successfully but was never uploaded, so `musepi update` could not find a matching asset.
+- **CI 长期失败测试修复**(5 个 job):
+  - **OAuth CAS 竞态**(packages/ai/auth-storage):CAS disable 丢失(`cas-lost`)时与 `peer-rotated` 一致——reload 已拿到 peer 轮转凭证,re-resolve 返回它而非 `undefined`;preflight 阶段 `cas-lost` 不再把候选标记为失败。
+  - **interrupted-thinking**(agent-session):demote 跳过 Anthropic 方言——Claude 拒绝自己的推理以文本重放(reasoning_extraction),pi-ai 已在 LLM 视图剥掉未签名 run,会话层不再创建 hidden continuity。
+  - **context-usage**:before_agent_start 扩展可返回带 undefined section 的 system-prompt 数组,计数前过滤 undefined,不再抛 "Failed to measure JavaScript string"。
+  - **goal-mode**:`/goal <objective>`(无子命令)把裸文本当 objective 直接启动(镜像 `/goal set`);`/goal set` 的 images/imageLinks 正确透传(修复 1d67910ca5 biome 改名回归)。
+  - **advisor-toggle**:handoff 已是 in-place commit(17.4.0),测试更新为新语义(sessionFile 不变、advisor cost 清零);`commitCompactionEntry` 在 resetAdvisorRuntimes 后 clearAdvisorCost()。
+  - **natives 发布清单**:`prepareNativeCorePackage` files 补 `native/clipboard.js`/`.d.ts`——发布 tarball 之前缺 clipboard,组合安装报 Cannot find module。
+  - **acp-builtins**:`/btw` 已有 headless handle,从 removed-commands 测试移除;`/context` 测试 fake session 补 tokenizer。
+  - EN: fixed the 5 long-failing CI test jobs — OAuth CAS race (`cas-lost` now re-resolves like `peer-rotated`), interrupted-thinking skips Anthropic-dialect targets (reasoning_extraction), context-usage tolerates undefined system-prompt sections, goal-mode accepts a bare `/goal <objective>` and forwards images, advisor-toggle tests match the 17.4.0 in-place handoff semantics (session file unchanged, cost cleared after commit), the natives publish manifest ships `clipboard.js`, and acp-builtins drops `/btw` from removed commands + gives the `/context` fake a tokenizer.
 
 ## [0.4.9] - 2026-08-30
 

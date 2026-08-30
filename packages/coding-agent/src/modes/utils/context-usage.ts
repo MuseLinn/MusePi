@@ -92,6 +92,16 @@ export interface NonMessageTokenSource {
 }
 
 const EMPTY_STRING_PARTS: string[] = [];
+
+/**
+ * A before_agent_start extension can hand back a system-prompt array with a
+ * missing (undefined) section. Filter those out before token counting so the
+ * /context breakdown and the collapsed status-line total both tolerate the
+ * malformed shape instead of throwing (issue #9331).
+ */
+function systemPromptStrings(systemPrompt: readonly string[] | undefined): string[] {
+	return (systemPrompt ?? EMPTY_STRING_PARTS).filter((section): section is string => typeof section === "string");
+}
 const EMPTY_TOOLS: ReadonlyArray<Pick<Tool, "name" | "description" | "parameters">> = [];
 const EMPTY_SKILLS: readonly Skill[] = [];
 
@@ -210,7 +220,7 @@ function nonMessageTokenCacheEntry(session: NonMessageTokenSource, tokenizer: To
 export function computeNonMessageTokens(session: NonMessageTokenSource, tokenizer: Tokenizer): number {
 	const entry = nonMessageTokenCacheEntry(session, tokenizer);
 	if (entry.tokens !== undefined) return entry.tokens;
-	const systemPromptParts = session.systemPrompt ?? EMPTY_STRING_PARTS;
+	const systemPromptParts = systemPromptStrings(session.systemPrompt);
 	const tools = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const tokens = tokenizer.countTokens(systemPromptParts) + estimateToolSchemaTokens(tools, tokenizer);
 	entry.tokens = tokens;
@@ -237,7 +247,7 @@ export function computeNonMessageBreakdown(
 	const tools = session.agent?.state?.tools ?? EMPTY_TOOLS;
 	const skillsTokens = estimateSkillsTokens(renderedSkills(session.skills ?? EMPTY_SKILLS, tools), tokenizer);
 	const toolsTokens = estimateToolSchemaTokens(tools, tokenizer);
-	const systemPromptParts = session.systemPrompt ?? EMPTY_STRING_PARTS;
+	const systemPromptParts = systemPromptStrings(session.systemPrompt);
 	const systemContextTokens = tokenizer.countTokens(systemPromptParts.slice(1));
 	const systemPromptTokens = Math.max(0, tokenizer.countTokens(systemPromptParts[0] ?? "") - skillsTokens);
 	const breakdown = { skillsTokens, toolsTokens, systemContextTokens, systemPromptTokens };

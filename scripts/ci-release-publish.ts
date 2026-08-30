@@ -203,6 +203,8 @@ export async function prepareNativeCorePackage(pkgDir: string, write: boolean): 
 		"native/index.d.ts",
 		"native/desktop.js",
 		"native/desktop.d.ts",
+		"native/clipboard.js",
+		"native/clipboard.d.ts",
 		"native/loader-state.js",
 		"native/loader-state.d.ts",
 		"native/embedded-addon.js",

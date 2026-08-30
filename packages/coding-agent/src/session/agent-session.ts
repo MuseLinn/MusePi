@@ -80,6 +80,7 @@ import { type Effort, streamSimple } from "@musepi/pi-ai";
 import * as AIError from "@musepi/pi-ai/error";
 import { resetOpenAICodexHistoryAfterCompaction } from "@musepi/pi-ai/providers/openai-codex-responses";
 import { toolWireSchema } from "@musepi/pi-ai/utils/schema";
+import { preferredDialect } from "@musepi/pi-catalog/identity";
 import { modelsAreEqual } from "@musepi/pi-catalog/models";
 import { MacOSPowerAssertion } from "@musepi/pi-natives";
 import {
@@ -1605,6 +1606,7 @@ export class AgentSession {
 			},
 			syncTodoPhasesFromBranch: () => this.#todo.syncFromBranch(),
 			resetAdvisorRuntimes: (reason?: string) => this.#advisors.resetAllRuntimes(reason),
+			clearAdvisorCost: () => this.#advisors.clearCost(),
 			rebaseAfterCompaction: () => this.#stats.rebaseAfterCompaction(),
 			recordAnchoredHistoryRewrite: tokensRemoved => this.#stats.recordAnchoredHistoryRewrite(tokensRemoved),
 			getContextBreakdown: options => this.getContextBreakdown(options),
@@ -2465,6 +2467,11 @@ export class AgentSession {
 		message: AssistantMessage,
 	): CustomMessage<InterruptedThinkingDetails> | undefined {
 		if (message.stopReason !== "aborted" || !isUserInterruptAbort(message)) return undefined;
+		// Anthropic-dialect targets refuse inputs that reproduce their own
+		// reasoning as text ("reasoning_extraction"), and pi-ai already strips
+		// the unsigned run from the LLM view — so no hidden continuity quote is
+		// created (session-maintenance.ts:795 parity, issue #6093).
+		if (preferredDialect(message.model) === "anthropic") return undefined;
 		const demoted = demoteInterruptedThinking(message);
 		if (!demoted || demoted.reasoning.length < INTERRUPTED_THINKING_MIN_CHARS) return undefined;
 		const interruptedAt = Date.now();

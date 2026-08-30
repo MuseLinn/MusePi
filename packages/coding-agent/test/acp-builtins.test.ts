@@ -524,7 +524,6 @@ describe("ACP builtin slash commands", () => {
 			"/extensions",
 			"/agents",
 			"/copy",
-			"/btw hi",
 			"/new",
 			"/drop",
 			"/handoff",
@@ -1144,7 +1143,13 @@ describe("wave 5 — adapters and polish", () => {
 			contextWindow: 200_000,
 		};
 		(session as unknown as Record<string, unknown>).skills = [];
-		(session as unknown as Record<string, unknown>).agent = { state: { tools: [] } };
+		(session as unknown as Record<string, unknown>).agent = {
+			state: { tools: [] },
+			tokenizer: {
+				countMessages: (messages: unknown[]) => messages.length,
+				countTokens: (text: unknown) => (Array.isArray(text) ? text.length : String(text).length / 4),
+			},
+		};
 		(session as unknown as Record<string, unknown>).systemPrompt = ["You are a helpful assistant."];
 		session.messages = [
 			{ role: "user", content: "Hello, how are you?" },

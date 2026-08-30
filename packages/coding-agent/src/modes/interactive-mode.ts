@@ -3631,8 +3631,15 @@ export class InteractiveMode implements InteractiveModeContext {
 			)?.trim();
 			if (!objective) return false;
 			await this.#startGoalFromObjective(objective);
+			return true;
 		}
-		return false;
+		// No subcommand, no paused goal, goal disabled: a bare rest string is the
+		// objective — start goal mode with it directly (mirrors /goal set).
+		const objective =
+			subRest ||
+			(await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true }))?.trim();
+		if (!objective) return false;
+		return await this.#startGoalFromObjective(objective, input);
 	}
 	async handleGuidedGoalCommand(
 		rest?: string,
@@ -3887,10 +3894,10 @@ export class InteractiveMode implements InteractiveModeContext {
 			: (await this.showHookEditor(t("Goal objective"), undefined, undefined, { promptStyle: true }))?.trim();
 		if (!objective) return false;
 		if (this.goalModeEnabled) {
-			await this.#replaceGoalFromObjective(objective);
+			await this.#replaceGoalFromObjective(objective, _input);
 			return true;
 		}
-		return await this.#startGoalFromObjective(objective);
+		return await this.#startGoalFromObjective(objective, _input);
 	}
 
 	/** Manually (re-)open the plan-review overlay — bound to `/plan-review`. Lets
