@@ -195,12 +195,25 @@ export function __renderLegacyPiVirtualModule(entries: readonly BundledPiEntry[]
  */
 export async function createLegacyPiVirtualModulePlugin(): Promise<Bun.BunPlugin> {
 	const source = __renderLegacyPiVirtualModule(await collectBundledPiEntries());
+	// The generated legacy module lives in a virtual namespace, so its bare
+	// `@musepi/*` dynamic imports would resolve from the plugin's directory
+	// (scripts/), which has no workspace links — Bun.build then fails with
+	// "Could not resolve" on every workspace subpath (pi-agent-core/compaction,
+	// pi-tui/components/text, …). Resolve them eagerly to absolute paths from
+	// the coding-agent package dir, where the workspace node_modules links live.
+	const resolveFrom = path.resolve(import.meta.dir, "..");
 	return {
 		name: "omp:legacy-pi-modules",
 		setup(build) {
 			build.onResolve({ filter: /^omp-legacy-pi-modules$/ }, () => ({
 				path: LEGACY_PI_MODULES_SPECIFIER,
 				namespace: VIRTUAL_NAMESPACE,
+			}));
+			// Global (no namespace filter): the legacy module's dynamic
+			// `@musepi/*` imports resolve in Bun's default namespace, not the
+			// virtual one, so a namespace-scoped hook never fires for them.
+			build.onResolve({ filter: /^@musepi\// }, args => ({
+				path: Bun.resolveSync(args.path, resolveFrom),
 			}));
 			build.onLoad({ filter: /.*/, namespace: VIRTUAL_NAMESPACE }, () => ({ contents: source, loader: "ts" }));
 		},

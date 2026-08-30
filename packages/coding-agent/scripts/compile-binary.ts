@@ -36,7 +36,12 @@ export async function compileCodingAgent(options: CodingAgentCompileOptions): Pr
 	try {
 		const output = await Bun.build({
 			entrypoints: [options.entrypoint],
-			root: options.repoRoot,
+			// No `root`: a repo-root root makes Bun.build resolve @musepi/*
+			// from the root node_modules, where bun never links workspace
+			// packages (they live per-package) — subpath exports like
+			// `@musepi/pi-tui/components/*` then fail to resolve. Without a
+			// root, Bun resolves from the entrypoint upward through the
+			// package's own node_modules, which has the workspace links.
 			external: [...COMPILED_EXTERNAL_DEPENDENCIES],
 			define: {
 				"process.env.PI_COMPILED": JSON.stringify("true"),
