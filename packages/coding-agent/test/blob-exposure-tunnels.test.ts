@@ -54,14 +54,26 @@ function prepareFake(output: string, options: { exitCode?: number; restartOnce?:
 }
 
 async function waitForRestart(marker: string): Promise<void> {
-	if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").includes("restarted")) return;
+	// fs.watch is the fast path (zero latency on healthy filesystems), but CI
+	// runners may not deliver inotify events at all — a watch-only wait hangs
+	// the suite until the job is killed. Poll as a fallback with a hard
+	// deadline so a missing restart fails the test instead of hanging it.
+	const observed = () => fs.existsSync(marker) && fs.readFileSync(marker, "utf8").includes("restarted");
+	if (observed()) return;
 	const { promise, resolve } = Promise.withResolvers<void>();
 	const watcher = fs.watch(fakeBinDir, () => {
-		if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").includes("restarted")) resolve();
+		if (observed()) resolve();
 	});
-	if (fs.existsSync(marker) && fs.readFileSync(marker, "utf8").includes("restarted")) resolve();
+	for (let i = 0; i < 200; i++) {
+		if (observed()) {
+			resolve();
+			break;
+		}
+		await Bun.sleep(25);
+	}
 	await promise;
 	watcher.close();
+	if (!observed()) throw new Error(`tunnel restart marker never appeared: ${marker}`);
 }
 
 function recordedArgs(invocation: FakeInvocation): string[] {
@@ -70,14 +82,11 @@ function recordedArgs(invocation: FakeInvocation): string[] {
 }
 
 async function waitForSignal(invocation: FakeInvocation): Promise<void> {
-	if (fs.existsSync(invocation.signalsFile)) return;
-	const { promise, resolve } = Promise.withResolvers<void>();
-	const watcher = fs.watch(fakeBinDir, (_event, filename) => {
-		if (filename === path.basename(invocation.signalsFile) && fs.existsSync(invocation.signalsFile)) resolve();
-	});
-	if (fs.existsSync(invocation.signalsFile)) resolve();
-	await promise;
-	watcher.close();
+	for (let i = 0; i < 200; i++) {
+		if (fs.existsSync(invocation.signalsFile)) return;
+		await Bun.sleep(25);
+	}
+	throw new Error(`tunnel signal file never appeared: ${invocation.signalsFile}`);
 }
 
 async function stopAndObserve(exposure: ActiveExposure, invocation: FakeInvocation): Promise<void> {
