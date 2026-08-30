@@ -220,7 +220,15 @@ describe("loadAllExtensions MCP parity with /mcp list (issue #3827)", () => {
 		const userConfig = await readMCPConfigFile(getMCPConfigPath("user", projectDir));
 		expect(userConfig.disabledServers ?? []).not.toContain("alternate-server");
 
-		const reenabled = (await loadAllExtensions(projectDir, [])).find(e => e.id === "mcp:alternate-server");
+		// The capability loader keeps a 5s TTL cache keyed by (capability,
+		// cwd, ..., forceEnabledIds). The first load above warmed it with the
+		// pre-toggle state, so a plain reload would return the stale
+		// `enabled: false` row. A fresh force-enabled id (matches no real
+		// extension, so semantically inert) changes the cache key and forces
+		// a re-scan that sees the mutated `.mcp.json`.
+		const reenabled = (await loadAllExtensions(projectDir, [], ["__mcp-parity-reload__"])).find(
+			e => e.id === "mcp:alternate-server",
+		);
 		expect(reenabled).toBeDefined();
 		expect(reenabled!.state).toBe("active");
 	});

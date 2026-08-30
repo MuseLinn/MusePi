@@ -37,10 +37,13 @@ describe("credential settings", () => {
 		}
 	});
 
-	it("only marks string settings as credentials", () => {
+	it("only marks string or record settings as credentials", () => {
 		for (const path of paths) {
 			if (!isCredential(path)) continue;
-			expect(SETTINGS_SCHEMA[path].type).toBe("string");
+			// Credentials are scalar strings or per-destination record maps
+			// (e.g. `images.urls.credentials`). No boolean/number/enum may be a
+			// credential: masking treats an unset scalar credential as empty.
+			expect(["string", "record"]).toContain(SETTINGS_SCHEMA[path].type);
 		}
 	});
 });

@@ -1752,7 +1752,8 @@ describe("ACP agent", () => {
 		expect(names).not.toContain("new");
 		expect(names).not.toContain("handoff");
 		expect(names).not.toContain("fork");
-		expect(names).not.toContain("btw");
+		// `/btw` has a headless ACP handle (ephemeral side turn via
+		// runEphemeralTurn), so it IS advertised to ACP clients.
 		expect(names).not.toContain("drop");
 		expect(names).not.toContain("resume");
 		expect(names).not.toContain("agents");

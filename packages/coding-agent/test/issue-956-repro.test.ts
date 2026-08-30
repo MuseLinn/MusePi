@@ -90,6 +90,7 @@ describe("issue #956: interactive /mcp test", () => {
 			},
 			ui: { requestRender },
 			editor: {},
+			mcpTestEscapeHandlers: new Set(),
 			showError,
 			showStatus,
 			session: { refreshMCPTools },
