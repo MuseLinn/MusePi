@@ -2217,6 +2217,16 @@ impl<E> EntryVisitor for CollectVisitor<E> {
 	}
 }
 
+#[cfg(unix)]
+fn root_device_for_options(root: &Path, options: WalkOptions) -> Option<u64> {
+	if options.same_file_system {
+		root_device_id(root, options.follow_links)
+	} else {
+		None
+	}
+}
+
+#[cfg(not(unix))]
 const fn root_device_for_options(root: &Path, options: WalkOptions) -> Option<u64> {
 	if options.same_file_system {
 		root_device_id(root, options.follow_links)
