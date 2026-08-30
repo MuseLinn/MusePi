@@ -24,9 +24,10 @@ pub fn try_acquire(path: &str) -> io::Result<Option<PlatformFileLock>> {
 	// `bInitialOwner` only grants ownership when this call creates the mutex.
 	// Existing mutexes return `ERROR_ALREADY_EXISTS` without changing ownership,
 	// which also prevents Win32's same-thread recursive acquisition behavior.
+	// SAFETY: SetLastError is a plain Win32 call with no preconditions.
+	unsafe { SetLastError(0) };
 	// SAFETY: the attributes pointer is null, and `wide_name` is a live,
 	// NUL-terminated UTF-16 string for the duration of the call.
-	unsafe { SetLastError(0) };
 	let raw_handle = unsafe { CreateMutexW(ptr::null(), 1, wide_name.as_ptr()) };
 	if raw_handle.is_null() {
 		return Err(io::Error::last_os_error());

@@ -37,9 +37,14 @@ impl Win32Ax {
 		}
 	}
 
-	fn element(handle: &AxHandle) -> CoreResult<&UIElement> {
+	// Result is required by the test-only non-UIA branch; production always unwraps
+	// Uia.
+	#[allow(clippy::unnecessary_wraps, reason = "cfg(test) branch returns Err")]
+	const fn element(handle: &AxHandle) -> CoreResult<&UIElement> {
 		match handle {
 			AxHandle::Uia(element) => Ok(element),
+			// The non-UIA variant only exists in test fixtures; production code
+			// always constructs AxHandle::Uia.
 			#[cfg(test)]
 			_ => Err(DesktopError::ax_failed("accessibility handle does not belong to UI Automation")),
 		}
@@ -68,9 +73,9 @@ impl Win32Ax {
 				let physical_x = f64::from(display.x) * display.scale;
 				let physical_y = f64::from(display.y) * display.scale;
 				f64::from(left) >= physical_x
-					&& f64::from(left) < physical_x + f64::from(display.width) * display.scale
+					&& f64::from(left) < f64::from(display.width).mul_add(display.scale, physical_x)
 					&& f64::from(top) >= physical_y
-					&& f64::from(top) < physical_y + f64::from(display.height) * display.scale
+					&& f64::from(top) < f64::from(display.height).mul_add(display.scale, physical_y)
 			})
 			.or_else(|| displays.first())?;
 		let scale = display.scale.max(f64::EPSILON);
@@ -167,8 +172,7 @@ impl AxBackend for Win32Ax {
 		let walker = self.walker()?;
 		let child_count = walker
 			.get_children(element)
-			.map(|children| children.len().min(u32::MAX as usize) as u32)
-			.unwrap_or(0);
+			.map_or(0, |children| children.len().min(u32::MAX as usize) as u32);
 		let bounds = element.get_bounding_rectangle().ok().and_then(|rect| {
 			self.logical_bounds(rect.get_left(), rect.get_top(), rect.get_right(), rect.get_bottom())
 		});

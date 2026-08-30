@@ -21,7 +21,7 @@ fn enigo_error(error: impl std::fmt::Display) -> DesktopError {
 	DesktopError::input_failed(format!("Win32 global input failed: {error}"))
 }
 
-fn button_to_enigo(button: MouseButton) -> Button {
+const fn button_to_enigo(button: MouseButton) -> Button {
 	match button {
 		MouseButton::Left => Button::Left,
 		MouseButton::Right => Button::Right,
@@ -271,11 +271,11 @@ mod background {
 		packed_point(point.x, point.y)
 	}
 
-	fn mouse_flags(modifiers: Modifiers) -> usize {
+	const fn mouse_flags(modifiers: Modifiers) -> usize {
 		(if modifiers.ctrl { MK_CONTROL } else { 0 }) | (if modifiers.shift { MK_SHIFT } else { 0 })
 	}
 
-	fn mouse_messages(button: MouseButton) -> (u32, u32, u32, usize) {
+	const fn mouse_messages(button: MouseButton) -> (u32, u32, u32, usize) {
 		match button {
 			MouseButton::Left => (WM_LBUTTONDOWN, WM_LBUTTONUP, WM_LBUTTONDBLCLK, MK_LBUTTON),
 			MouseButton::Right => (WM_RBUTTONDOWN, WM_RBUTTONUP, WM_RBUTTONDBLCLK, MK_RBUTTON),
@@ -416,7 +416,7 @@ mod background {
 		Ok(value)
 	}
 
-	fn is_extended(vk: u16) -> bool {
+	const fn is_extended(vk: u16) -> bool {
 		matches!(
 			vk,
 			VK_INSERT
@@ -596,6 +596,7 @@ mod foreground {
 			// SAFETY: both calls access process-global foreground state; target was
 			// validated.
 			let previous = unsafe { GetForegroundWindow() };
+			// SAFETY: target is a verified HWND; SetForegroundWindow is a plain Win32 call.
 			if previous != target && unsafe { SetForegroundWindow(target) } == 0 {
 				return Err(DesktopError::input_failed(format!(
 					"SetForegroundWindow failed for window {id}"
@@ -626,7 +627,7 @@ mod foreground {
 		}
 	}
 
-	fn mouse_event(flags: u32, data: u32) -> INPUT {
+	const fn mouse_event(flags: u32, data: u32) -> INPUT {
 		INPUT {
 			r#type:    INPUT_MOUSE,
 			Anonymous: INPUT_0 {
@@ -646,8 +647,14 @@ mod foreground {
 		let (x, y) = capture::logical_to_physical(x, y)?;
 		// SAFETY: GetSystemMetrics has no preconditions.
 		let origin_x = unsafe { GetSystemMetrics(SM_XVIRTUALSCREEN) };
+		// SAFETY: GetSystemMetrics(SM_YVIRTUALSCREEN) is a plain Win32 query with no
+		// preconditions.
 		let origin_y = unsafe { GetSystemMetrics(SM_YVIRTUALSCREEN) };
+		// SAFETY: GetSystemMetrics(SM_CXVIRTUALSCREEN) is a plain Win32 query with no
+		// preconditions.
 		let width = unsafe { GetSystemMetrics(SM_CXVIRTUALSCREEN) };
+		// SAFETY: GetSystemMetrics(SM_CYVIRTUALSCREEN) is a plain Win32 query with no
+		// preconditions.
 		let height = unsafe { GetSystemMetrics(SM_CYVIRTUALSCREEN) };
 		if width <= 1 || height <= 1 {
 			return Err(DesktopError::input_failed("Win32 virtual desktop geometry is unavailable"));
@@ -661,7 +668,7 @@ mod foreground {
 		send(event)
 	}
 
-	fn button_flags(button: MouseButton) -> (u32, u32) {
+	const fn button_flags(button: MouseButton) -> (u32, u32) {
 		match button {
 			MouseButton::Left => (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
 			MouseButton::Right => (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
@@ -712,7 +719,7 @@ mod foreground {
 		}
 	}
 
-	fn key_event(vk: u16, scan: u16, flags: u32) -> INPUT {
+	const fn key_event(vk: u16, scan: u16, flags: u32) -> INPUT {
 		INPUT {
 			r#type:    INPUT_KEYBOARD,
 			Anonymous: INPUT_0 {

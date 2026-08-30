@@ -152,7 +152,7 @@ pub(super) fn displays(selector: &DisplaySelector) -> CoreResult<Vec<DesktopDisp
 	Ok(snapshots.into_iter().map(|item| item.display).collect())
 }
 
-fn hwnd_from_id(id: u32) -> *mut c_void {
+const fn hwnd_from_id(id: u32) -> *mut c_void {
 	std::ptr::with_exposed_provenance_mut(id as usize)
 }
 
@@ -188,9 +188,9 @@ pub(super) fn windows() -> CoreResult<Vec<DesktopWindow>> {
 				let left = f64::from(display.x) * display.scale;
 				let top = f64::from(display.y) * display.scale;
 				f64::from(physical_x) >= left
-					&& f64::from(physical_x) < left + f64::from(display.width) * display.scale
+					&& f64::from(physical_x) < f64::from(display.width).mul_add(display.scale, left)
 					&& f64::from(physical_y) >= top
-					&& f64::from(physical_y) < top + f64::from(display.height) * display.scale
+					&& f64::from(physical_y) < f64::from(display.height).mul_add(display.scale, top)
 			})
 			.map_or(1.0, |display| display.scale)
 			.max(f64::EPSILON);
