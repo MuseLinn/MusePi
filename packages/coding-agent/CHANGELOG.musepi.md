@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-08-30
+
 ### Fixed
 
 - **Electron 主进程 EPIPE 崩溃**:从 Finder/Dock 启动(无终端)时父进程 stdio 管道关闭,主进程任意 `console.error`(如 MCP tool load failed 日志)抛 EPIPE → uncaughtException → Electron「A JavaScript error occurred in the main process」模态框 → 应用卡死、daemon 继续跑、GUI 显示 working、无法发消息。现在主进程 `console.log/warn/error` 重定向到 `~/.musepi/logs/gui-main.YYYY-MM-DD.log`,`uncaughtException`/`unhandledRejection` 全部吞掉(EPIPE 时 console 置 no-op)——任何主进程异常不再弹模态框。
