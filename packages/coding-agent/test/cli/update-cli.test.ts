@@ -54,12 +54,12 @@ describe("getLatestRelease rename pointers", () => {
 		return urls;
 	}
 
-	it("follows omp.rename to the new package and resolves version, dist, and names from its manifest", async () => {
+	it("follows musepi.rename to the new package and resolves version, dist, and names from its manifest", async () => {
 		const urls = stubRegistry({
-			"@new/omp": { version: "999.1.0", omp: { dist: "npm" } },
+			"@new/omp": { version: "999.1.0", musepi: { dist: "npm" } },
 			"@musepi/pi-coding-agent": {
 				version: "999.0.0",
-				omp: { dist: "binary", rename: { package: "@new/omp", natives: "@new/natives" } },
+				musepi: { dist: "binary", rename: { package: "@new/omp", natives: "@new/natives" } },
 			},
 		});
 
@@ -78,7 +78,7 @@ describe("getLatestRelease rename pointers", () => {
 		const urls = stubRegistry({
 			"@musepi/pi-coding-agent": {
 				version: "999.0.0",
-				omp: { rename: { package: "@musepi/pi-coding-agent" } },
+				musepi: { rename: { package: "@musepi/pi-coding-agent" } },
 			},
 		});
 
