@@ -898,10 +898,14 @@ jobs:
               pattern: musepi-binary-*
               path: packages/coding-agent/binaries
               merge-multiple: true
-         # Dependency-free build (bun APIs + zip only), so no `bun install`
-         # is needed on this runner.
+         # Bun.build resolves the extension's imports against the workspace
+         # node_modules, so install is required even though the bundle itself
+         # uses bun APIs + zip. browser-relay has no package.json, so invoke
+         # its build script directly instead of `bun run --cwd` (which would
+         # walk up to the root workspace build).
+         - run: bun install --frozen-lockfile
          - name: Build browser relay artifacts
-           run: bun run --cwd packages/browser-relay build
+           run: bun packages/browser-relay/scripts/build-extension.ts
          # Generated after every other release asset is in place and before
          # the release is created, so SHA256SUMS.txt itself ships as an asset
          # and covers every other file uploaded alongside it.
