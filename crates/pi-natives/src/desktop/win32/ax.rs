@@ -39,8 +39,12 @@ impl Win32Ax {
 
 	// Result is required by the test-only non-UIA branch; production always unwraps
 	// Uia.
-	#[allow(clippy::unnecessary_wraps, reason = "cfg(test) branch returns Err")]
-	const fn element(handle: &AxHandle) -> CoreResult<&UIElement> {
+	#[allow(
+		clippy::missing_const_for_fn,
+		clippy::unnecessary_wraps,
+		reason = "cfg(test) branch returns Err"
+	)]
+	fn element(handle: &AxHandle) -> CoreResult<&UIElement> {
 		match handle {
 			AxHandle::Uia(element) => Ok(element),
 			// The non-UIA variant only exists in test fixtures; production code
