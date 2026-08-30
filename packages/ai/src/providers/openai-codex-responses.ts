@@ -1130,12 +1130,15 @@ function updateCodexSessionMetadataFromHeaders(
 	turnState: CodexTurnStateCell | undefined,
 	state: CodexWebSocketSessionState | undefined,
 	headers: Headers | Record<string, string> | null | undefined,
+	overwriteTurnState = false,
 ): void {
 	if ((!turnState && !state) || !headers) return;
 	const resolvedHeaders = headers instanceof Headers ? headers : new Headers(headers);
 	const responseTurnState = resolvedHeaders.get(X_CODEX_TURN_STATE_HEADER);
-	if (turnState && turnState.value === undefined && responseTurnState && responseTurnState.length > 0) {
-		turnState.value = responseTurnState;
+	if (turnState && responseTurnState && responseTurnState.length > 0) {
+		if (overwriteTurnState || turnState.value === undefined) {
+			turnState.value = responseTurnState;
+		}
 	}
 	const modelsEtag = resolvedHeaders.get(X_MODELS_ETAG_HEADER);
 	if (state && modelsEtag && modelsEtag.length > 0) {
@@ -1737,6 +1740,7 @@ function applyCodexCompactionResponseMetadata(
 		requestContext.turnState,
 		requestContext.websocketState,
 		toCodexHeaders(event.headers),
+		true,
 	);
 }
 
