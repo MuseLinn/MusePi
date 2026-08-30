@@ -34,6 +34,7 @@ type FakeEditor = {
 	pendingImages: ImageContent[];
 	pendingImageLinks: (string | undefined)[];
 	setText(text: string): void;
+	setCollapsedText(text: string): void;
 	getText(): string;
 	addToHistory(text: string): void;
 	clearDraft(historyText?: string): void;
@@ -56,6 +57,9 @@ function createContext(sessionOverride?: InteractiveModeContext["session"]) {
 		pendingImages: [] as ImageContent[],
 		pendingImageLinks: [] as (string | undefined)[],
 		setText(text: string) {
+			editorText = text;
+		},
+		setCollapsedText(text: string) {
 			editorText = text;
 		},
 		getText() {

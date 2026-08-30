@@ -193,6 +193,7 @@ function createContext(): {
 		isPythonMode: false,
 		optimisticUserMessageSignature: undefined,
 		locallySubmittedUserSignatures: new Set<string>(),
+		mcpTestEscapeHandlers: new Set<() => void>(),
 		onInputCallback,
 		addMessageToChat,
 		cancelPendingSubmission,

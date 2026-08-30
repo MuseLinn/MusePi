@@ -30,6 +30,7 @@ type FakeEditor = {
 	onChange?: (text: string) => void;
 	onSubmit?: (text: string) => Promise<void>;
 	setText(text: string): void;
+	setCollapsedText(text: string): void;
 	getText(): string;
 	getExpandedText(): string;
 	addToHistory(text: string): void;
@@ -41,6 +42,7 @@ type FakeEditor = {
 	pendingImages: ImageContent[];
 	pendingImageLinks: (string | undefined)[];
 	clearDraft(historyText?: string): void;
+	composerChips(): { kind: string; n: number }[];
 };
 
 type InputListenerResult = { consume: boolean } | undefined;
@@ -120,6 +122,9 @@ async function createContext() {
 		setText(text: string) {
 			editorText = text;
 		},
+		setCollapsedText(text: string) {
+			editorText = text;
+		},
 		getText() {
 			return editorText;
 		},
@@ -141,6 +146,9 @@ async function createContext() {
 			this.imageLinks = undefined;
 			this.pendingImages = [];
 			this.pendingImageLinks = [];
+		},
+		composerChips() {
+			return [];
 		},
 	};
 	focused = editor;
@@ -304,7 +312,7 @@ describe("InputController keybinding setup", () => {
 		expect(ctx.hideToolActivity).toBe(true);
 		expect(ctx.settings.set).toHaveBeenCalledWith("display.hideToolActivity", true);
 		expect(spies.clearInlineImages).toHaveBeenCalledTimes(1);
-		expect(spies.requestRender).toHaveBeenCalledWith(true);
+		expect(spies.resetDisplay).toHaveBeenCalled();
 		expect(ctx.chatContainer.setToolActivityVisible).toHaveBeenCalledWith(false);
 	});
 
