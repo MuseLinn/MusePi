@@ -263,6 +263,7 @@ jobs:
               prerelease: ${{ contains(github.ref_name, '-beta') }}
               files: |
                 dist/*.dmg
+                dist/*.zip
                 dist/*.AppImage
                 dist/*.deb
                 dist/*-setup.exe

@@ -6,6 +6,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **macOS GUI OTA 更新 404**:electron-builder 的 mac target 产出 zip + dmg + `latest-mac.yml`(zip 为主更新文件),但 `gui-release.yml` 发布 job 的 upload 列表漏了 `dist/*.zip` → zip 未上传 → macOS 用户 OTA 下载 `MusePi-*-arm64-mac.zip` 返回 404,更新失败(Windows/Linux 的 exe/AppImage 正常)。发布清单补上 `dist/*.zip`;已发布版本的缺 zip 资产也已手动补传。
+  - EN: macOS GUI OTA update 404 — the electron-builder mac target emits zip + dmg + `latest-mac.yml` (zip is the primary update file), but the gui-release publish job's upload list omitted `dist/*.zip` → the zip never reached the release → macOS OTA downloads of `MusePi-*-arm64-mac.zip` returned 404 (Windows/Linux exe/AppImage were fine). The publish list now includes `dist/*.zip`; the missing zip asset was also backfilled onto the already-published release.
+- **TUI binary 发布**:`musepi update` 的自更新资产(`musepi-{linux,linux-musl,darwin,windows}-{x64,arm64}[.exe]`)现已作为 release assets 发布(7 平台),修复之前 TUI binary 构建成功但从未上传到 GitHub release、`musepi update` 找不到匹配 asset 的问题。
+  - EN: TUI binary release — the self-update assets consumed by `musepi update` (`musepi-{linux,linux-musl,darwin,windows}-{x64,arm64}[.exe]`) are now published as release assets (7 platforms); previously the TUI binary built successfully but was never uploaded, so `musepi update` could not find a matching asset.
+
 ## [0.4.9] - 2026-08-30
 
 ### Fixed
