@@ -350,9 +350,31 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	const activeTools = useGuestSelector(client, s => s.activeTools);
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
+	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
 	// Mobile empty state gets the time-aware greeting + rotating tip in place
 	// of the bare "no activity yet" line (gui WelcomeComposer parity).
 	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
+	// Revert (撤回) / retry (重试) are session-tree operations: branchAt moves
+	// the leaf IN PLACE at the target node (TUI /tree parity) — the old leaf
+	// and its subtree stay reachable as a sibling branch, never truncated.
+	// For a user node the daemon backfills the text; the host re-sends it so
+	// the turn resumes at that point. (True composer pre-fill — TUI waits for
+	// the user to confirm — is a follow-up; the GUI composer has no external
+	// set-text channel yet.)
+	const branchAt = (messageId: string): void => {
+		if (!focusedSessionId) return;
+		void client
+			.rpc<{ editorText?: string | null; editorImages?: unknown[] }>("session.branchAt", {
+				sessionId: focusedSessionId,
+				messageId,
+			})
+			.then(result => {
+				if (result.editorText) host.sendPrompt?.(result.editorText);
+			})
+			.catch(err => {
+				console.error("[transcript] branchAt failed:", err);
+			});
+	};
 	return (
 		<Transcript
 			entries={entries}
@@ -363,6 +385,8 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			roundDurations={roundDurations}
 			host={host}
 			emptySlot={emptySlot}
+			onRevert={id => branchAt(id)}
+			onRetry={(id, text) => branchAt(id)}
 		/>
 	);
 }
