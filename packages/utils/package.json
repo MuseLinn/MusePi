@@ -34,7 +34,9 @@
 		"@musepi/pi-natives": "catalog:"
 	},
 	"devDependencies": {
-		"@types/bun": "catalog:"
+		"@types/bun": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:"
 	},
 	"engines": {
 		"bun": ">=1.3.14"

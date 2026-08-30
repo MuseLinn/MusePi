@@ -139,7 +139,7 @@
     },
     "packages/desktop-web": {
       "name": "@musepi/desktop-web",
-      "version": "0.4.7",
+      "version": "0.4.8",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -169,7 +169,7 @@
     },
     "packages/gui": {
       "name": "@musepi/gui",
-      "version": "0.4.7",
+      "version": "0.4.8",
       "dependencies": {
         "@lobehub/icons": "^5.16.0",
         "electron-updater": "6.4.1",
@@ -278,7 +278,7 @@
     },
     "packages/mobile": {
       "name": "@musepi/mobile",
-      "version": "0.4.7",
+      "version": "0.4.8",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -415,6 +415,8 @@
       },
       "devDependencies": {
         "@types/bun": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
       },
     },
     "packages/wire": {
