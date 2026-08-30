@@ -188,10 +188,12 @@ function isOlderReleaseVersion(candidate, current) {
 	const candidateParts = parseReleaseVersion(candidate);
 	const currentParts = parseReleaseVersion(current);
 	if (!candidateParts || !currentParts) return false;
+	// A different version line (e.g. a pre-0.4 omp cache like 15.10.11 next to
+	// 0.4.8) is stale too — the running binary will never load it. Only the
+	// exact current version (and anything fresher, whose directory mtime is
+	// protected by the cleanup grace window) survives.
 	for (let index = 0; index < candidateParts.length; index++) {
-		if (candidateParts[index] !== currentParts[index]) {
-			return candidateParts[index] < currentParts[index];
-		}
+		if (candidateParts[index] !== currentParts[index]) return true;
 	}
 	return false;
 }
