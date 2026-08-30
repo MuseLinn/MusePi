@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/musepi-stats",
-	"version": "0.4.8",
+	"version": "0.4.9",
 	"description": "Local observability dashboard for pi AI usage statistics",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

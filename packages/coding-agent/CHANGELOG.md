@@ -2,14 +2,6 @@
 
 ## [Unreleased]
 
-## [0.4.8] - 2026-08-30
-
-### Added
-
-- Added `musepi serve --web-port <n>` — the daemon serves the renderer bundle (`desktop-web` dist) over loopback HTTP, the dsh-desktop-compat "runtime serves the renderer" half. Also serves the boot config at `/__daemon.json` (`{ wsUrl, token? }`) so the compat shell can connect as a host.
-- Added the Electron compat shell entry: when `MUSEPI_GUI_COMPAT_URL` is set, the BrowserWindow loads that origin instead of the local bundle — the shell wraps the runtime-served content. The compat URL is loaded with `?shell=1` so the served renderer reserves the `titleBarOverlay` height (48px) as a drag-region titlebar (frame overlay).
-- Added the compat slot-host injection: `musepi serve --web-port` serves `?shell=1` requests with an injected script that pulls the daemon's `extensions.list`, blob-imports compiled `transcript.node` extension components, and registers them on `window.MusePiCompatHost` — the served renderer dispatches registered node kinds through the same seat an injected `renderTranscriptNode` uses, closing the "plugins target the runtime-served renderer" loop (dsh-desktop parity). Plain-browser guests never receive the injection.
-
 ## [17.3.0] - 2026-08-13
 
 ### Breaking Changes
@@ -235,7 +227,6 @@
 - Fixed persisted Agent Hub rows losing the explicit caller model role when a subagent used a model override, preserving role provenance across restarts.
 - Fixed unobserved promise rejections in browser helpers (such as `tab.waitForResponse()`) causing tab workers to hang or crash.
 
-
 ## [17.2.9] - 2026-08-05
 
 ### Breaking Changes
@@ -285,7 +276,6 @@
 - Fixed `omp setup python` to validate the same configured or discovered interpreter used by the Python eval runtime.
 - Fixed self-update misclassifying glibc Linux hosts with an installed musl loader as musl hosts, which could download an unusable musl binary instead of the glibc release.
 - Fixed a crash where opening the Agent Hub after a resume and moving the selection triggered an unbounded `ExtensionExitError` unhandled-rejection storm and exit 129. The postmortem module bound the native hard-exit at first evaluation; when the bundler deferred that evaluation into a `withHostGuard` window it froze the guard's throwing replacement, poisoning every later signal/fatal exit. The native exit is now resolved per call, and the guard stamps its replacement with the native primitive it shadows so mid-guard signals still exit ([#7393](https://github.com/can1357/oh-my-pi/issues/7393)).
-
 
 ## [17.2.8] - 2026-08-05
 
@@ -15056,3 +15046,10 @@ Initial public release.
 
 Previous releases did not maintain a changelog.
 
+## [0.4.8] - 2026-08-30
+
+### Added
+
+- Added `musepi serve --web-port <n>` — the daemon serves the renderer bundle (`desktop-web` dist) over loopback HTTP, the dsh-desktop-compat "runtime serves the renderer" half. Also serves the boot config at `/__daemon.json` (`{ wsUrl, token? }`) so the compat shell can connect as a host.
+- Added the Electron compat shell entry: when `MUSEPI_GUI_COMPAT_URL` is set, the BrowserWindow loads that origin instead of the local bundle — the shell wraps the runtime-served content. The compat URL is loaded with `?shell=1` so the served renderer reserves the `titleBarOverlay` height (48px) as a drag-region titlebar (frame overlay).
+- Added the compat slot-host injection: `musepi serve --web-port` serves `?shell=1` requests with an injected script that pulls the daemon's `extensions.list`, blob-imports compiled `transcript.node` extension components, and registers them on `window.MusePiCompatHost` — the served renderer dispatches registered node kinds through the same seat an injected `renderTranscriptNode` uses, closing the "plugins target the runtime-served renderer" loop (dsh-desktop parity). Plain-browser guests never receive the injection.

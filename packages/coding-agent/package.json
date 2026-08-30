@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-coding-agent",
-	"version": "0.4.8",
+	"version": "0.4.9",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

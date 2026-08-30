@@ -1,41 +1,5 @@
 # Changelog
 
-## [0.4.7] - 2026-08-29
-
-### Added
-
-- Git 图谱表格化:侧面板提交历史重做为 ZCode 风格表格(车道求解 SVG 图轨 + HEAD/分支/远端/tag 徽章 + 日期/作者/短哈希列,点击复制完整 hash);daemon `git.log` 结构化输出。
-- 浮动状态卡:会话右上角悬浮卡栈——Git 工具卡(更改 ±计数、分支切换、提交入口)、智能体卡(运行中/已结束子代理)、待办进度卡;可折叠为药丸,空态隐藏。
-- 奖励票券弹窗:星空背景 + 3D 倾斜票券卡 + 数字滚动 + 领取成功面板,接入 what's-new 公告流。
-- 回合折叠:完成回合折叠为摘要头,压缩分界线保持内联。
-
-### Fixed
-
-- 浏览器白屏修复:常挂载的 role=dialog 覆盖层、前端-daemon 生命周期兜底(白屏回退、Windows 强杀)。
-- 浮动菜单滚动时闪烁:重定位期间保持 entered 状态。
-
-## [0.4.6] - 2026-08-28
-
-### Added
-
-- Added host-mode session client (`HostClient`): connects to the daemon JSON-RPC WebSocket via `?token=` (bearer auth), calls `session.subscribe` for the initial snapshot + live entry/event stream, and exposes the same `GuestSnapshot` the collab guest renders. When the page is served by `musepi serve --web-port`, it auto-connects as a host (reads `/__daemon.json`) instead of showing the collab ConnectScreen — the "runtime serves the full host renderer" half of the dsh-desktop-compat chain.
-- Wired the host view's rich interactions: `ask-request`→`uiRequest` (Composer renders it, `sendUiResponse`→`session.askAnswer`), `approval-request`→`approvalRequest` (new `ApprovalCard` renders approve/deny → `tool.approve`/`tool.deny`), `recap`→notice. `GuestSnapshot`/`SessionClient` gained `approvalRequest` + `respondApproval`.
-- Added the compat-shell frame overlay: `?shell=1` (exact match via `isCompatShell`) reserves a 48px drag-region titlebar (`sh-app--compat` / `.compat-titlebar`) for the Electron compat shell's `titleBarOverlay`.
-- Added the passive compat slot-host seam: transcript rows carry `data-entry-kind`/`data-entry-id`, and `Transcript` falls back to the `window.MusePiCompatHost` registry (populated by the `musepi serve` injected compat script from the daemon's `extensions.list`) when no host injected `renderTranscriptNode` — daemon-hosted `transcript.node` extension components render in the served compat page. Plain-browser guests have no registry and keep the built-in rendering. `main.tsx` now exposes `window.MusePiReact` so blob-imported extension modules bind to the bundle's React instance.
-
-## [0.4.3] - 2026-08-23
-
-### Added
-
-- Model/thinking capsule (ModelThinkingCapsule): model and thinking selector merged into one pill with two clickable segments — model (brand icon + name) on the left, thinking effort (brain icon + level) on the right. Each segment opens its own independent floating menu (model menu with search/favorites/DEFAULT pin, thinking menu with off/auto/effort ladder). The pill collapses to icon-only at narrow composer widths via container query on the composer frame (480px thinking label first, 380px model label + divider). Segment hover highlights hug the capsule shape (rounded halves) matching the standalone model button; the pill resists button-row flex squeezing (`flex-shrink: 0`) so labels only collapse when the frame itself is narrow. Motion follows gui-design: chip 180ms spring transitions, gui-menu-in/out for menus, gui-motion-off degrades gracefully. ([#musepi](https://github.com/MuseLinn/MusePi))
-- Model brand logos: the capsule's model segment and every model-menu row render the provider's brand logo (Lobe Icons, MIT) with an oc-icons ai-agent fallback for unknown providers. ([#musepi](https://github.com/MuseLinn/MusePi))
-- Fenced code blocks now render with a header bar: language tag on the left and a copy button on the right (copied state shows 已复制 briefly). The copy source is the raw fenced text, so it stays correct after tree-sitter highlighting.
-- Composer input raised to a roomier 14px/22px with 10px radius and a soft focus ring; header gets more breathing room (10px 14px padding, 14px semibold title).
-
-### Changed
-
-- Removed upstream omp branding from index.html: canonical/OG/Twitter URLs pointed at my.omp.sh, the um.can.ac analytics script (which sent visitor data to the upstream site), and the omp structured-data block. The page is now self-contained for LAN/tunnel deployment.
-
 ## [17.2.2] - 2026-07-31
 
 ### Fixed
@@ -254,3 +218,39 @@
 ### Security
 
 - Hardened transcript Markdown rendering by escaping embedded HTML and allowing only safe link schemes
+
+## [0.4.7] - 2026-08-29
+
+### Added
+
+- Git 图谱表格化:侧面板提交历史重做为 ZCode 风格表格(车道求解 SVG 图轨 + HEAD/分支/远端/tag 徽章 + 日期/作者/短哈希列,点击复制完整 hash);daemon `git.log` 结构化输出。
+- 浮动状态卡:会话右上角悬浮卡栈——Git 工具卡(更改 ±计数、分支切换、提交入口)、智能体卡(运行中/已结束子代理)、待办进度卡;可折叠为药丸,空态隐藏。
+- 奖励票券弹窗:星空背景 + 3D 倾斜票券卡 + 数字滚动 + 领取成功面板,接入 what's-new 公告流。
+- 回合折叠:完成回合折叠为摘要头,压缩分界线保持内联。
+
+### Fixed
+
+- 浏览器白屏修复:常挂载的 role=dialog 覆盖层、前端-daemon 生命周期兜底(白屏回退、Windows 强杀)。
+- 浮动菜单滚动时闪烁:重定位期间保持 entered 状态。
+
+## [0.4.6] - 2026-08-28
+
+### Added
+
+- Added host-mode session client (`HostClient`): connects to the daemon JSON-RPC WebSocket via `?token=` (bearer auth), calls `session.subscribe` for the initial snapshot + live entry/event stream, and exposes the same `GuestSnapshot` the collab guest renders. When the page is served by `musepi serve --web-port`, it auto-connects as a host (reads `/__daemon.json`) instead of showing the collab ConnectScreen — the "runtime serves the full host renderer" half of the dsh-desktop-compat chain.
+- Wired the host view's rich interactions: `ask-request`→`uiRequest` (Composer renders it, `sendUiResponse`→`session.askAnswer`), `approval-request`→`approvalRequest` (new `ApprovalCard` renders approve/deny → `tool.approve`/`tool.deny`), `recap`→notice. `GuestSnapshot`/`SessionClient` gained `approvalRequest` + `respondApproval`.
+- Added the compat-shell frame overlay: `?shell=1` (exact match via `isCompatShell`) reserves a 48px drag-region titlebar (`sh-app--compat` / `.compat-titlebar`) for the Electron compat shell's `titleBarOverlay`.
+- Added the passive compat slot-host seam: transcript rows carry `data-entry-kind`/`data-entry-id`, and `Transcript` falls back to the `window.MusePiCompatHost` registry (populated by the `musepi serve` injected compat script from the daemon's `extensions.list`) when no host injected `renderTranscriptNode` — daemon-hosted `transcript.node` extension components render in the served compat page. Plain-browser guests have no registry and keep the built-in rendering. `main.tsx` now exposes `window.MusePiReact` so blob-imported extension modules bind to the bundle's React instance.
+
+## [0.4.3] - 2026-08-23
+
+### Added
+
+- Model/thinking capsule (ModelThinkingCapsule): model and thinking selector merged into one pill with two clickable segments — model (brand icon + name) on the left, thinking effort (brain icon + level) on the right. Each segment opens its own independent floating menu (model menu with search/favorites/DEFAULT pin, thinking menu with off/auto/effort ladder). The pill collapses to icon-only at narrow composer widths via container query on the composer frame (480px thinking label first, 380px model label + divider). Segment hover highlights hug the capsule shape (rounded halves) matching the standalone model button; the pill resists button-row flex squeezing (`flex-shrink: 0`) so labels only collapse when the frame itself is narrow. Motion follows gui-design: chip 180ms spring transitions, gui-menu-in/out for menus, gui-motion-off degrades gracefully. ([#musepi](https://github.com/MuseLinn/MusePi))
+- Model brand logos: the capsule's model segment and every model-menu row render the provider's brand logo (Lobe Icons, MIT) with an oc-icons ai-agent fallback for unknown providers. ([#musepi](https://github.com/MuseLinn/MusePi))
+- Fenced code blocks now render with a header bar: language tag on the left and a copy button on the right (copied state shows 已复制 briefly). The copy source is the raw fenced text, so it stays correct after tree-sitter highlighting.
+- Composer input raised to a roomier 14px/22px with 10px radius and a soft focus ring; header gets more breathing room (10px 14px padding, 14px semibold title).
+
+### Changed
+
+- Removed upstream omp branding from index.html: canonical/OG/Twitter URLs pointed at my.omp.sh, the um.can.ac analytics script (which sent visitor data to the upstream site), and the omp structured-data block. The page is now self-contained for LAN/tunnel deployment.
