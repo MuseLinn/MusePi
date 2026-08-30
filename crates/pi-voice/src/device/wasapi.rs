@@ -262,7 +262,10 @@ impl Drop for ComApartment {
 
 struct BaseStream {
 	client:      ComPtr<AudioClientVtable>,
+	// Kept alive: dropping the device/enumerator COM refs ends the stream's device session.
+	#[allow(dead_code, reason = "COM reference keeps the audio device session alive")]
 	device:      ComPtr<MmDeviceVtable>,
+	#[allow(dead_code, reason = "COM reference keeps the device enumerator alive")]
 	enumerator:  ComPtr<MmDeviceEnumeratorVtable>,
 	event:       Arc<OwnedEvent>,
 	buffer_size: u32,

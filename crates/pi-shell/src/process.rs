@@ -1874,7 +1874,7 @@ fn prune_exited(spawned: &mut Vec<SpawnedProcess>) {
 /// signal; `EPERM` means the group exists but is not ours to signal, which
 /// still counts as alive.
 #[must_use]
-fn process_group_alive(pgid: i32) -> bool {
+const fn process_group_alive(pgid: i32) -> bool {
 	if pgid <= 0 {
 		return false;
 	}
