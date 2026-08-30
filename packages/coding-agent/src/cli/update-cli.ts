@@ -1066,7 +1066,11 @@ async function printVerification(expectedVersion: string): Promise<void> {
 		return;
 	}
 	console.log(chalk.yellow(`\nWarning: ${formatVerificationFailure(result, expectedVersion)}`));
-	console.log(chalk.yellow(`You may need to reinstall: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh`));
+	console.log(
+		chalk.yellow(
+			`You may need to reinstall: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh`,
+		),
+	);
 }
 
 async function unlinkIfExists(filePath: string): Promise<void> {
