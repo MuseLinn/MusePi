@@ -2742,7 +2742,6 @@ export class TUI extends Container {
 	 * intent into `#deferredForcedClearScrollback` — the timer's callback
 	 * consumes that flag exactly once when it re-enters `requestRender(true)`.
 	 */
-		
 	#armMultiplexerResizeTimer(options: { clearScrollback: boolean; hasPendingRender?: boolean }): void {
 		this.#deferredForcedClearScrollback ||= options.clearScrollback;
 		this.#multiplexerResizeHasPendingRender ||= options.hasPendingRender === true;
@@ -4775,7 +4774,6 @@ export class TUI extends Container {
 	 * full paint. Reset on every SIGWINCH, so the full replay fires only once the
 	 * user stops dragging.
 	 */
-		
 	#beginResizeViewport(): void {
 		this.#resizeViewportActive = true;
 		this.#resizeViewportSettleTimer?.cancel();

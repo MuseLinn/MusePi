@@ -2623,7 +2623,6 @@ describe("multiplexer detection gates ED3 on resize", () => {
 				term.resize(80, 10);
 				await settleResize(term);
 				const out = writes.join("");
-				console.log("ED3-DEBUG socket-only out:", JSON.stringify(out.slice(0, 120)), "len:", out.length, "hasED3:", out.includes(ED3));
 				expect(out).toContain(ED3);
 				expect(visible(term)).toEqual(Array.from({ length: 10 }, (_v, i) => `line-${i + 10}`));
 			} finally {

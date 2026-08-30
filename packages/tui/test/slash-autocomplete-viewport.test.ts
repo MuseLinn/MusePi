@@ -184,11 +184,6 @@ describe("slash command autocomplete with unknown native viewport state", () => 
 				transcriptCounter += 1;
 				term.sendInput(char);
 				await settle(term);
-				if (char === "/") {
-					console.log("AUTO-PROBE viewport:", JSON.stringify(term.getViewport()));
-					console.log("AUTO-PROBE scrollbuf:", JSON.stringify(term.getScrollBuffer().slice(-12)));
-					console.log("AUTO-PROBE editorText:", JSON.stringify(editor.getText()));
-				}
 				const viewport = term.getViewport().join("\n");
 				expect(viewport).toContain(editor.getText());
 			}
