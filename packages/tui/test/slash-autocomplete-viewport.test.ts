@@ -148,7 +148,6 @@ describe("slash command autocomplete with unknown native viewport state", () => 
 				"",
 				"",
 				"",
-				"",
 			]);
 		} finally {
 			tui?.stop();

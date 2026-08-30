@@ -1928,7 +1928,9 @@ export class TUI extends Container {
 		// autocomplete dropdown clamps to the viewport via viewportRowsProvider).
 		// The closure reads the current row count on every render, so resize is
 		// picked up without re-injection.
-		component.setViewportRowsProvider?.(() => this.terminal.rows);
+		if (component !== null) {
+			component.setViewportRowsProvider?.(() => this.terminal.rows);
+		}
 	}
 
 	/** Component currently receiving keyboard input, if any. */
