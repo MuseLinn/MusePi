@@ -42,7 +42,7 @@ describe("opencode-go resolver routes 404-ing ids to openai-completions (issue #
 		expect(resolved).toEqual({ api: "openai-completions", baseUrl: OPENCODE_GO_BASE });
 	});
 
-	test("runtime /v1/models refresh preserves qwen3.7-max Anthropic transport", async () => {
+	test("runtime /v1/models refresh routes qwen3.7-max through openai-completions", async () => {
 		let requestedUrl = "";
 		const fetchMock = (async (input: string | Request | URL): Promise<Response> => {
 			requestedUrl = input instanceof Request ? input.url : String(input);
@@ -59,7 +59,7 @@ describe("opencode-go resolver routes 404-ing ids to openai-completions (issue #
 		const qwenMax = models?.find(model => model.id === "qwen3.7-max");
 
 		expect(requestedUrl).toBe("https://opencode.ai/zen/go/v1/models");
-		expect(qwenMax?.api).toBe("anthropic-messages");
-		expect(qwenMax?.baseUrl).toBe("https://opencode.ai/zen/go");
+		expect(qwenMax?.api).toBe("openai-completions");
+		expect(qwenMax?.baseUrl).toBe("https://opencode.ai/zen/go/v1");
 	});
 });
