@@ -73,7 +73,14 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 cd ~/.musepi/repo && bun run musepi
 ```
 
-macOS / Linux / WSL。Windows —— 或手动构建 —— 从源码安装：
+macOS / Linux / WSL 用上方 curl。Windows —— PowerShell：
+
+```powershell
+irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex
+```
+
+或任意平台从源码安装（手动）：
+
 
 ```sh
 git clone https://github.com/MuseLinn/MusePi.git && cd MusePi

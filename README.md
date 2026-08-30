@@ -42,7 +42,14 @@ Clones to `~/.musepi/repo` and runs `bun run setup` (workspace install + natives
 cd ~/.musepi/repo && bun run musepi
 ```
 
-macOS / Linux / WSL. On Windows — or to build manually — install from source:
+macOS / Linux / WSL use the curl line above. Windows — PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex
+```
+
+Or install from source on any platform (manual):
+
 
 ```sh
 git clone https://github.com/MuseLinn/MusePi.git && cd MusePi

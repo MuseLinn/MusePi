@@ -35,8 +35,8 @@ zh_url: /index.zh-CN.html
   <div class="mp-hero-code">
 <pre><span class="mp-c"># macOS · Linux · WSL</span>
 <span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>
-<span class="mp-c"># Windows — from source (all platforms)</span>
-<span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</span></pre>
+<span class="mp-c"># Windows · PowerShell</span>
+<span class="mp-cmd">irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</span></pre>
   </div>
 </section>
 
