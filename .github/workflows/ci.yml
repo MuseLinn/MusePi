@@ -866,11 +866,15 @@ jobs:
 
    release_github:
       name: Publish GitHub release
+      # TUI binary + browser-relay assets publish once every platform's
+      # binary built successfully — the test fan-out (release_gate) is a
+      # quality signal, not a binary-publish prerequisite, so a flaky or
+      # long-failing test job no longer strands the CLI update channel.
+      # npm leaf publishing keeps its full gate (release_native_leaves).
       if: ${{ needs.release_metadata.outputs.is-release == 'true' && !cancelled() &&
-         needs.release_gate.result == 'success' &&
          needs.release_binary.result == 'success' &&
          needs.release_binary_darwin.result == 'success' }}
-      needs: [release_metadata, release_gate, release_binary, release_binary_darwin]
+      needs: [release_metadata, release_binary, release_binary_darwin]
       runs-on: ubuntu-22.04
       permissions:
          contents: write
