@@ -48,6 +48,8 @@ function makeHarness() {
 		cwd: () => "/tmp",
 		get: () => undefined,
 		emitEvent: (_conn: DaemonConnection, event: Parameters<EventBatcher["push"]>[0]) => batcher.push(event),
+		setCollabToolProvider: () => {},
+		setOnExtensionNotification: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);
 	const conn = { id: "test" } as unknown as DaemonConnection;

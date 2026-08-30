@@ -17,6 +17,8 @@ describe("session.jobs RPC", () => {
 				sessionId: "s1",
 				agentSession: { getAsyncJobSnapshot: () => null },
 			}),
+			setCollabToolProvider: () => {},
+			setOnExtensionNotification: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);
 		const conn = { id: "test" } as unknown as DaemonConnection;
