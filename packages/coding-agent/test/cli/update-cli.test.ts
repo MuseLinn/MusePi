@@ -88,4 +88,43 @@ describe("getLatestRelease rename pointers", () => {
 		expect(release.version).toBe("999.0.0");
 		expect(release.packages).toEqual({ pkg: "@musepi/pi-coding-agent", natives: "@musepi/pi-natives" });
 	});
+
+	it("falls back to the GitHub release when the npm registry 404s (MusePi publishes binaries, not npm packages)", async () => {
+		const urls: string[] = [];
+		const fetchStub = Object.assign(
+			async (input: FetchInput) => {
+				const url = String(input);
+				urls.push(url);
+				if (url.startsWith("https://registry.npmjs.org/")) {
+					return new Response(null, { status: 404, statusText: "Not Found" });
+				}
+				if (url === "https://api.github.com/repos/MuseLinn/MusePi/releases/latest") {
+					return Response.json({ tag_name: "v0.4.11" });
+				}
+				return new Response(null, { status: 404, statusText: "Not Found" });
+			},
+			{ preconnect: globalThis.fetch.preconnect },
+		);
+		vi.spyOn(globalThis, "fetch").mockImplementation(fetchStub);
+
+		const release = await getLatestRelease();
+
+		expect(release.version).toBe("0.4.11");
+		expect(release.dist).toBe("binary");
+		expect(release.packages).toEqual({ pkg: "@musepi/pi-coding-agent", natives: "@musepi/pi-natives" });
+		expect(urls).toEqual([
+			"https://registry.npmjs.org/@musepi/pi-coding-agent/latest",
+			"https://api.github.com/repos/MuseLinn/MusePi/releases/latest",
+		]);
+	});
+
+	it("propagates non-404 registry failures without falling back to GitHub", async () => {
+		const fetchStub = Object.assign(
+			async () => new Response(null, { status: 500, statusText: "Internal Server Error" }),
+			{ preconnect: globalThis.fetch.preconnect },
+		);
+		vi.spyOn(globalThis, "fetch").mockImplementation(fetchStub);
+
+		await expect(getLatestRelease()).rejects.toThrow("Failed to fetch release info for @musepi/pi-coding-agent");
+	});
 });

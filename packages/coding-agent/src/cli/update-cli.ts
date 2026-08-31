@@ -675,7 +675,9 @@ async function fetchLatestManifest(
 		throw err;
 	}
 	if (!response.ok) {
-		throw new Error(`Failed to fetch release info for ${pkg}: ${response.statusText}`);
+		const error = new Error(`Failed to fetch release info for ${pkg}: ${response.statusText}`);
+		(error as Error & { status?: number }).status = response.status;
+		throw error;
 	}
 
 	const data: unknown = await response.json();
@@ -691,9 +693,26 @@ async function fetchLatestManifest(
  * npm name. Version, dist, and install names all come from the final manifest
  * in the chain. Uses npm instead of GitHub API to avoid unauthenticated rate
  * limiting.
+ *
+ * MusePi never publishes `@musepi/pi-coding-agent` to the registry — the
+ * distribution channel is the GitHub release binary. When the registry
+ * answers 404 (package absent), fall back to the GitHub release feed
+ * ({@link getLatestReleaseFromGitHub}), which routes the update through the
+ * standalone-binary replacement path.
  */
 export async function getLatestRelease(options: { timeoutMs?: number } = {}): Promise<ReleaseInfo> {
 	const timeoutMs = options.timeoutMs ?? RELEASE_METADATA_TIMEOUT_MS;
+	try {
+		return await getLatestNpmRelease(timeoutMs);
+	} catch (err) {
+		if (err instanceof Error && (err as Error & { status?: number }).status === 404) {
+			return getLatestReleaseFromGitHub(timeoutMs);
+		}
+		throw err;
+	}
+}
+
+async function getLatestNpmRelease(timeoutMs: number): Promise<ReleaseInfo> {
 	const packages: ReleasePackages = { ...CURRENT_PACKAGES };
 	const visited = new Set([packages.pkg]);
 	let latest = await fetchLatestManifest(packages.pkg, timeoutMs);
@@ -711,6 +730,56 @@ export async function getLatestRelease(options: { timeoutMs?: number } = {}): Pr
 		version: latest.version,
 		dist: resolveReleaseDist(latest.manifest),
 		packages,
+	};
+}
+
+/**
+ * Resolve the latest release from the GitHub releases feed. Used when the npm
+ * registry 404s (MusePi's package is not published there); the release
+ * carries `dist: "binary"` so {@link shouldForceBinaryUpdate} routes the
+ * update through the standalone-binary replacement path.
+ */
+async function getLatestReleaseFromGitHub(timeoutMs: number): Promise<ReleaseInfo> {
+	const headers: Record<string, string> = {
+		Accept: "application/vnd.github+json",
+		"X-GitHub-Api-Version": "2022-11-28",
+	};
+	const githubToken = $env.GITHUB_TOKEN || $env.GH_TOKEN;
+	if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
+
+	let response: Response;
+	try {
+		response = await fetch(`${GITHUB_API}/repos/${REPO}/releases/latest`, {
+			headers,
+			signal: withTimeoutSignal(timeoutMs),
+		});
+	} catch (err) {
+		if (isTimeoutError(err)) {
+			throw new Error(`Timed out fetching GitHub release info after ${Math.round(timeoutMs / 1000)}s`, { cause: err });
+		}
+		throw err;
+	}
+	if ((response.status === 403 && !githubToken) || response.status === 429) {
+		throw new Error(
+			"GitHub API rate limit exceeded while fetching release metadata; retry later or set GITHUB_TOKEN or GH_TOKEN",
+		);
+	}
+	if (!response.ok) {
+		throw new Error(`Failed to fetch GitHub release info: ${response.statusText}`);
+	}
+
+	const data: unknown = await response.json();
+	if (!isRecord(data) || typeof data.tag_name !== "string") {
+		throw new Error("Malformed GitHub release response: missing tag_name");
+	}
+	const tag = data.tag_name;
+	const version = tag.startsWith("v") ? tag.slice(1) : tag;
+
+	return {
+		tag,
+		version,
+		dist: "binary",
+		packages: CURRENT_PACKAGES,
 	};
 }
 
