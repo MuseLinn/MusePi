@@ -78,7 +78,7 @@ function Install-Binary {
 function Install-FromSource {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Host "git is required to install from source. Install it from https://git-scm.com/"
-        exit 1
+        return 1
     }
 
     $cloneDir = if ($env:PI_CLONE_DIR) { $env:PI_CLONE_DIR } else { Join-Path $HOME ".musepi\repo" }
@@ -138,7 +138,7 @@ function Install-FromSource {
 if (-not $sourceInstall) {
     try {
         Install-Binary
-        exit 0
+        return 0
     } catch {
         Write-Host "Prebuilt binary install failed ($($_.Exception.Message))"
         Write-Host "Falling back to from-source install. Set PI_SOURCE=1 to force source."
