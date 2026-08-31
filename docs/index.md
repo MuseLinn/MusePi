@@ -15,7 +15,7 @@ English | [中文](index.zh-CN.md)
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 ```
 
-Installer uses Bun (`bun install -g @musepi/pi-coding-agent`) when it matches your host architecture, otherwise the prebuilt release binary. `--binary` forces the binary; `--source` forces Bun; `--ref <tag>` pins a version.
+Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA256SUMS.txt` on the GitHub release). `--source` forces a from-source clone + build; `--ref <tag>` pins a version.
 
 ## GUI & Desktop
 

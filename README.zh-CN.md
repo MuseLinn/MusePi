@@ -90,7 +90,7 @@ bun run setup && bun run musepi
 选项：
 
 - `--ref <tag|commit|branch>` — 固定某个 checkout
-- `--source` — 从源码安装（默认；尚无预编译二进制）
+- `--source` — 从源码安装（克隆 + 构建；默认行为是下载预编译二进制）
 
 ## 下载（三种形态）
 

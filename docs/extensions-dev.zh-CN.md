@@ -16,7 +16,7 @@ musepi-omp 是 oh-my-pi 的 fork，扩展运行时同源，但 musepi 在**加�
 | **运行时 API** | `@musepi/pi-coding-agent` 的 `ExtensionAPI`（与上游 `pi` 同名，`pi.on/registerTool/registerCommand/...`） | 同左，`ExtensionAPI` 完全兼容 —— OMP 扩展无需改动即可在 musepi 运行 |
 | **入口形态** | 一个 TS/JS 模块，默认导出 factory `(pi: ExtensionAPI) => void` | 同左；可选携带 `package.json`（名称/描述/触发词）供 GUI 展示 |
 | **加载路径** | `src/extensibility/extensions/loader.ts`（Bun import） | 同左；另加 `discoverAndLoadExtensions` 合并 discovery provider 结果（native 优先） |
-| **发现/安装** | 无插件管理器（手动放 node_modules） | `musepi plugin install|link|uninstall|list|enable|disable`（`PluginManager` + `MarketplaceManager`），`omp-plugins.lock.json` 记录 |
+| 发现/安装 | 无插件管理器（手动放 node_modules） | `musepi plugin install|link|uninstall|list|enable|disable`（`PluginManager` + `MarketplaceManager`），`musepi-plugins.lock.json` 记录 |
 | **GUI 集成** | 无 | 设置「扩展」tab + 侧栏入口（`ExtensionsCenter.tsx`），daemon `extensions.list` RPC，TTL 10s 缓存，启停写 `settings.disabledExtensions`（`kind:name` id；`mcp:` 前缀走 mcp.json denylist） |
 | **运行时管理** | 无 | daemon 统一扫描（`extensions.list` → 树：provider → kind → item）、`extensions.setEnabled` |
 

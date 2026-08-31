@@ -14,7 +14,7 @@ lang: zh-CN
 curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 ```
 
-安装脚本在 Bun 与宿主架构匹配时用 `bun install -g @musepi/pi-coding-agent`，否则拉取预编译二进制。`--binary` 强制二进制、`--source` 强制 Bun、`--ref <tag>` 固定版本。
+安装脚本默认下载预编译二进制（`musepi-<os>-<arch>` + `SHA256SUMS.txt`，来自 GitHub Release）。`--source` 强制从源码克隆构建；`--ref <tag>` 固定版本。
 
 [English](index.md) | 中文
 

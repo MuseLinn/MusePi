@@ -76,7 +76,7 @@ skill 类型支持的 frontmatter 字段：
 
 1. **能力 provider**，通过 `loadCapability("skills")` 加载（managed/auto-learn provider 的 skills 在此跳过，留到第 3 轮处理）
 2. **自定义目录**，通过 `scanSkillsFromDir(..., { requireDescription: true })` 加载（一层目录枚举）
-3. **Managed（auto-learn）skills**（`omp-managed` provider）最后解析并遵循 first-wins 原则，因此任何同名的手写 skill——无论来自哪个 provider 或自定义目录——都会优先生效
+3. **Managed（auto-learn）skills**（`musepi-managed` provider）最后解析并遵循 first-wins 原则，因此任何同名的手写 skill——无论来自哪个 provider 或自定义目录——都会优先生效
 
 若 `skills.enabled` 为 `false`，发现结果为空。
 
@@ -95,7 +95,7 @@ provider 排序先按优先级（高者胜出），并列时按注册顺序。
    - `codex`
 5. `opencode`（priority 55）
 6. `github`（priority 30）——`.github/skills/<name>/SKILL.md`（GitHub Agent Skills 布局，仅项目级）
-7. `omp-managed`（priority 5）——位于 `~/.musepi/agent/managed-skills` 下的 auto-learn skills，注册于 `src/discovery/builtin.ts` 且无条件参与发现（只有写入/提示受 `autolearn.enabled` 门控）；总是让位于同名的手写 skill
+7. `musepi-managed`（priority 5）——位于 `~/.musepi/agent/managed-skills` 下的 auto-learn skills，注册于 `src/discovery/builtin.ts` 且无条件参与发现（只有写入/提示受 `autolearn.enabled` 门控）；总是让位于同名的手写 skill
 
 去重键是 skill 名。给定名称的第一个条目胜出。
 

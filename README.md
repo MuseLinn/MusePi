@@ -59,7 +59,7 @@ bun run setup && bun run musepi
 Options:
 
 - `--ref <tag|commit|branch>` — pin an exact checkout
-- `--source` — install from source (this is the default; no prebuilt binary is published yet)
+- `--source` — install from source (clone + build; the default is the prebuilt release binary)
 
 ## Download (three surfaces)
 
