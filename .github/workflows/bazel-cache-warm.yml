@@ -56,15 +56,28 @@ jobs:
            run: |
               set -euo pipefail
               if [ "$(ulimit -Sn)" != unlimited ] && [ "$(ulimit -Sn)" -lt 65536 ]; then ulimit -Sn 65536 || true; fi
-              bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" test //crates/...
+              # Mirrors ci.yml rust_validate's invocation set. The kill-builtin
+              # signal test is a known Linux flake (upstream v17.2.12 sync
+              # platform bug; passes on macOS) and is skipped there — this skip
+              # must match, or the seeded pi-shell test action key diverges and
+              # the archive never covers rust_validate's run.
+              bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" test //crates/... \
+                --test_arg=--skip=shell::tests::kill_builtin_signals_every_process_in_a_jobspec_pipeline
+         # Clippy scopes mirror ci.yml rust_validate exactly — strict/default
+         # split plus the clippy-ported pi-builtins config — so the seeded
+         # archive covers every clippy action rust_validate re-queries.
          - name: Clippy (workspace lint policy on opted-in crates)
            run: |
-              bazelisk query "kind('rust_library|rust_shared_library', //crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-walker/...)" \
+              bazelisk query "kind('rust_library|rust_shared_library', //crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-voice/... + //crates/pi-walker/...)" \
                 | xargs bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=clippy-strict --
          - name: Clippy (default lints elsewhere)
            run: |
-              bazelisk query "kind('rust_library|rust_shared_library', //crates/... - (//crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-walker/...) - //crates/vendor/brush-core/... - //crates/vendor/brush-builtins/...)" \
+              bazelisk query "kind('rust_library|rust_shared_library', //crates/... - (//crates/pi-ast/... + //crates/pi-iso/... + //crates/pi-natives/... + //crates/pi-shell/... + //crates/pi-voice/... + //crates/pi-walker/...) - //crates/pi-builtins/... - //crates/vendor/brush-core/...)" \
                 | xargs bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=clippy --
+         - name: Clippy (manifest allows on ported pi-builtins)
+           run: |
+              bazelisk query "kind('rust_library|rust_shared_library', //crates/pi-builtins/...)" \
+                | xargs bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=clippy-ported --
          - name: Rustfmt
            run: bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=rustfmt //crates/...
          - name: Build native addons

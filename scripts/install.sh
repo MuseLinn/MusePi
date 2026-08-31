@@ -1,12 +1,16 @@
 #!/bin/sh
 set -e
 
-# OMP Coding Agent Installer
+# MusePi TUI Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh
 #
+# Default installs the prebuilt TUI binary published by the release CICD
+# (musepi-<os>-<arch> + SHA256SUMS.txt on the GitHub release). Use --source
+# to clone and build from source instead.
+#
 # Options:
-#   --source       Install from source (default)
-#   --binary       Not yet available (prebuilt binaries aren't attached to releases)
+#   --binary       Install the prebuilt release binary (default)
+#   --source       Install from source (clone + build)
 #   --ref <ref>    Install specific tag/commit/branch
 #   -r <ref>       Shorthand for --ref
 
@@ -59,15 +63,10 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# If a ref is provided, default to source install
-if [ -n "$REF" ] && [ -z "$MODE" ]; then
-    MODE="source"
+# Default to binary install; a --ref without a mode still means binary.
+if [ -z "$MODE" ]; then
+    MODE="binary"
 fi
-
-# Check if bun is available
-has_bun() {
-    command -v bun >/dev/null 2>&1
-}
 
 # Normalized host architecture (x64|arm64). On macOS this uses
 # `sysctl hw.optional.arm64` so it stays correct inside a Rosetta session,
@@ -86,6 +85,149 @@ host_arch() {
         arm64|aarch64) echo "arm64" ;;
         *)             uname -m ;;
     esac
+}
+
+# The release asset name for this host, or empty when no prebuilt binary
+# exists (e.g. unsupported arch or non-Linux/macOS OS).
+release_asset() {
+    os="$(uname -s)"
+    arch="$(host_arch)"
+    case "$os" in
+        Linux)
+            # The release publishes glibc and musl variants for Linux; pick
+            # musl when ldd reports musl (Alpine and other musl distros).
+            if ldd --version 2>/dev/null | grep -qi musl; then
+                echo "musepi-linux-musl-$arch"
+            else
+                echo "musepi-linux-$arch"
+            fi
+            ;;
+        Darwin)
+            echo "musepi-darwin-$arch"
+            ;;
+        *)
+            echo ""
+            ;;
+    esac
+}
+
+# Check if git is available
+has_git() {
+    command -v git >/dev/null 2>&1
+}
+
+has_curl() {
+    command -v curl >/dev/null 2>&1
+}
+
+# Install the prebuilt release binary. No bun or git required.
+install_binary() {
+    asset="$(release_asset)"
+    if [ -z "$asset" ]; then
+        echo "No prebuilt musepi binary for host '$(uname -s)'/$(host_arch)."
+        echo "Install from source instead: sh install.sh --source"
+        exit 1
+    fi
+
+    if ! has_curl; then
+        echo "curl is required to download the release binary"
+        exit 1
+    fi
+
+    BIN_DIR="${PI_BIN_DIR:-$HOME/.musepi/bin}"
+    if [ -n "$REF" ]; then
+        base_url="https://github.com/${REPO}/releases/download/${REF}"
+    else
+        # GitHub's /releases/latest/download/<asset> redirects to the newest
+        # release's asset, so no tag lookup is needed.
+        base_url="https://github.com/${REPO}/releases/latest/download"
+    fi
+
+    tmp_dir="$(mktemp -d)"
+    trap 'rm -rf "$tmp_dir"' EXIT
+    echo "Downloading $asset ..."
+    curl -fsSL --retry 3 -o "$tmp_dir/$asset" "$base_url/$asset"
+
+    # Verify against the release's SHA256SUMS.txt ("<sha256>  <basename>").
+    echo "Verifying checksum ..."
+    curl -fsSL --retry 3 -o "$tmp_dir/SHA256SUMS.txt" "$base_url/SHA256SUMS.txt"
+    expected="$(awk -v name="$asset" '$2 == name { print $1 }' "$tmp_dir/SHA256SUMS.txt")"
+    if [ -z "$expected" ]; then
+        echo "SHA256SUMS.txt has no entry for $asset" >&2
+        exit 1
+    fi
+    if command -v sha256sum >/dev/null 2>&1; then
+        actual="$(sha256sum "$tmp_dir/$asset" | awk '{ print $1 }')"
+    else
+        actual="$(shasum -a 256 "$tmp_dir/$asset" | awk '{ print $1 }')"
+    fi
+    if [ "$expected" != "$actual" ]; then
+        echo "Checksum mismatch for $asset (expected $expected, got $actual)" >&2
+        exit 1
+    fi
+
+    mkdir -p "$BIN_DIR"
+    install -m 755 "$tmp_dir/$asset" "$BIN_DIR/musepi"
+    trap - EXIT
+    rm -rf "$tmp_dir"
+
+    version="$("$BIN_DIR/musepi" --version)"
+    echo ""
+    echo "✓ Installed musepi $version (TUI binary) to $BIN_DIR/musepi"
+    echo "Run: $BIN_DIR/musepi"
+}
+
+# Install from source: clone the repo and run the workspace setup.
+install_from_source() {
+    echo "Installing from source..."
+    if ! has_git; then
+        echo "git is required to install from source"
+        exit 1
+    fi
+    if ! has_bun; then
+        install_bun
+    fi
+
+    CLONE_DIR="${PI_CLONE_DIR:-$HOME/.musepi/repo}"
+
+    if [ -d "$CLONE_DIR/.git" ]; then
+        echo "Using existing checkout at $CLONE_DIR"
+        if [ -n "$REF" ]; then
+            (cd "$CLONE_DIR" && git fetch --depth 1 origin "$REF" && git checkout -f "$REF") || \
+                (cd "$CLONE_DIR" && git checkout "$REF") || \
+                { echo "Failed to checkout $REF"; exit 1; }
+        else
+            (cd "$CLONE_DIR" && git pull --ff-only) || \
+                { echo "Failed to update checkout"; exit 1; }
+        fi
+    else
+        if [ -n "$REF" ]; then
+            git clone --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$CLONE_DIR" 2>/dev/null || \
+                git clone "https://github.com/${REPO}.git" "$CLONE_DIR"
+        else
+            git clone --depth 1 "https://github.com/${REPO}.git" "$CLONE_DIR"
+        fi
+    fi
+
+    if [ ! -d "$CLONE_DIR/packages/coding-agent" ]; then
+        echo "Expected package at ${CLONE_DIR}/packages/coding-agent"
+        exit 1
+    fi
+
+    echo "Running setup (workspace install + natives + link)..."
+    (cd "$CLONE_DIR" && bun run setup) || {
+        echo "Failed to run 'bun run setup'"
+        exit 1
+    }
+
+    echo ""
+    echo "✓ Installed musepi from source"
+    echo "Run: cd $CLONE_DIR && bun run musepi"
+}
+
+# Check if bun is available
+has_bun() {
+    command -v bun >/dev/null 2>&1
 }
 
 # Bun's own architecture (x64|arm64), or empty when it can't be determined.
@@ -145,11 +287,6 @@ require_bun_version() {
     fi
 }
 
-# Check if git is available
-has_git() {
-    command -v git >/dev/null 2>&1
-}
-
 # Install bun
 install_bun() {
     echo "Installing bun..."
@@ -162,58 +299,6 @@ install_bun() {
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
     require_bun_version
-}
-
-# Check if git-lfs is available
-has_git_lfs() {
-    command -v git-lfs >/dev/null 2>&1
-}
-
-# Install from source: clone the repo and run the workspace setup. This is the
-# only supported install path — the npm package (@musepi/pi-coding-agent) is
-# never published, and prebuilt TUI binaries are not attached to releases.
-install_from_source() {
-    echo "Installing from source..."
-    if ! has_git; then
-        echo "git is required to install from source"
-        exit 1
-    fi
-
-    CLONE_DIR="${PI_CLONE_DIR:-$HOME/.musepi/repo}"
-
-    if [ -d "$CLONE_DIR/.git" ]; then
-        echo "Using existing checkout at $CLONE_DIR"
-        if [ -n "$REF" ]; then
-            (cd "$CLONE_DIR" && git fetch --depth 1 origin "$REF" && git checkout -f "$REF") || \
-                (cd "$CLONE_DIR" && git checkout "$REF") || \
-                { echo "Failed to checkout $REF"; exit 1; }
-        else
-            (cd "$CLONE_DIR" && git pull --ff-only) || \
-                { echo "Failed to update checkout"; exit 1; }
-        fi
-    else
-        if [ -n "$REF" ]; then
-            git clone --depth 1 --branch "$REF" "https://github.com/${REPO}.git" "$CLONE_DIR" 2>/dev/null || \
-                git clone "https://github.com/${REPO}.git" "$CLONE_DIR"
-        else
-            git clone --depth 1 "https://github.com/${REPO}.git" "$CLONE_DIR"
-        fi
-    fi
-
-    if [ ! -d "$CLONE_DIR/packages/coding-agent" ]; then
-        echo "Expected package at ${CLONE_DIR}/packages/coding-agent"
-        exit 1
-    fi
-
-    echo "Running setup (workspace install + natives + link)..."
-    (cd "$CLONE_DIR" && bun run setup) || {
-        echo "Failed to run 'bun run setup'"
-        exit 1
-    }
-
-    echo ""
-    echo "✓ Installed musepi from source"
-    echo "Run: cd $CLONE_DIR && bun run musepi"
 }
 
 # Main logic
@@ -233,22 +318,10 @@ case "$MODE" in
         install_from_source
         ;;
     binary)
-        echo "Error: prebuilt TUI binaries are not yet attached to releases."
-        echo "Install from source instead (the default — no flag needed)."
-        exit 1
+        install_binary
         ;;
     *)
-        # Default: install from source. bun arch must match the host (a
-        # mismatched bun would build wrong-arch natives), so provision a
-        # matching bun when needed.
-        if has_bun && bun_arch_matches_host; then
-            require_bun_version
-        else
-            if has_bun; then
-                echo "Detected bun with architecture '$(bun_arch)' on a '$(host_arch)' host; installing a matching bun instead."
-            fi
-            install_bun
-        fi
-        install_from_source
+        echo "Unknown mode: $MODE"
+        exit 1
         ;;
 esac
