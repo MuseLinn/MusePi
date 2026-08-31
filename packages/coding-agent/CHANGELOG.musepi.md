@@ -8,6 +8,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Fixed
 
+## [0.4.10] - 2026-08-31
+
+### Fixed
+
+### Fixed
 - **GUI 会话树地图长会话不可用**(220 消息 → 22k px 竖线,缩放/适配/回当前位置失效):`layoutTree` 对无分支单子链不做任何横向展开,深链画布高度爆炸且 fitView 的 fixed 0.7 scale 让全貌不可读。现在超过阈值的连续单子链折叠成"链段胶囊"(点击展开,段内节点不占画布高度,分支结构不受影响),画布高度压缩约 85%;fitView 改用自适应缩放。
   - EN: GUI session-tree map unusable on long sessions (220 messages → a 22k px vertical line; zoom/fit/locate all dead): `layoutTree` never expanded single-child chains horizontally, so deep chains exploded the canvas height and fitView's fixed 0.7 scale left the whole tree unreadable. Runs of single-child nodes beyond a threshold now fold into expandable "chain pills" (click to expand; folded nodes don't consume canvas height; branch structure is untouched), cutting canvas height ~85%; fitView now scales to fit.
 - **GUI 地图滚轮缩放失效 + console 刷 "Unable to preventDefault inside passive event listener"**:React 的 `onWheel` 在 root 上注册为 passive listener,`preventDefault()` 被浏览器吞掉且报错——滚轮既不能缩放地图又同时滚动底层页面。改为原生 `addEventListener("wheel", …, { passive: false })`。
@@ -22,11 +27,23 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: GUI lacked the "." / "c" continue shortcut (TUI parity): in the TUI, a bare dot or c is the "keep working" signal — a hidden synthetic directive (`manualContinuePrompt`, synthetic) that produces no visible user bubble; the GUI used to send "." as a plain message. The Composer now detects a bare `.`/`c` (no quotes/attachments) → `deliverAs:"continue"` → the daemon substitutes `manualContinuePrompt` for the bare `.` (same directive the TUI sends; the daemon is the single authority), `sendUserMessage` routes to `prompt(synthetic:true)` for immediate delivery (not the steer/followUp queue), no title generation, no optimistic echo.
 - **GUI 地图按轮分组堆叠 + 交互打磨**:地图节点按"轮"(User→Assistant→工具)垂直紧凑堆叠(轮内 12px、轮间 64px),长会话按轮阅读而非消息平铺;回到当前位置按钮修复(leaf 是折叠段内节点时回退到段首胶囊);单击=聚焦、按住拖动=移动卡片严格分离(拖动后不触发聚焦/双击跳转);悬停工具栏加"跳转到此消息"按钮且与聚焦隔离(pointerdown stopPropagation);右键菜单加描述文字说明每个动作效果。
   - EN: GUI map now stacks nodes by round (User→Assistant→tools) — compact within a round (12px), wide between rounds (64px), so long sessions read by turn instead of a flat message column. The locate-current button falls back to the fold head when the leaf is a folded-chain node. Click = focus, press-drag = move card, strictly separated (drag never triggers focus or double-click jump). The hover toolbar gained a jump-to-message button, isolated from focus (pointerdown stopPropagation). Context-menu items now carry descriptions explaining each action.
-  - EN: GUI lacked the "." / "c" continue shortcut (TUI parity): in the TUI, a bare dot or c is the "keep working" signal — a hidden synthetic directive (`manualContinuePrompt`, synthetic) that produces no visible user bubble; the GUI used to send "." as a plain message. The Composer now detects a bare `.`/`c` (no quotes/attachments) → `deliverAs:"continue"` → the daemon substitutes `manualContinuePrompt` for the bare `.` (same directive the TUI sends; the daemon is the single authority), `sendUserMessage` routes to `prompt(synthetic:true)` for immediate delivery (not the steer/followUp queue), no title generation, no optimistic echo.
 - **CI 失败测试修复:task-guards 7 fail**:`runSubprocess` 的 fake session 缺 executor 演进后新增的方法(`getAllToolInfos`/`getContextUsage`/`sendCustomMessage`/`setServiceTierFamily`/`setThinkingLevel`/`subscribeRunState`/`hasPendingAsyncWork`/`getAsyncJobSnapshot`/`settleAsyncWork`)——调用时 TypeError 导致事件流未建立、`result.requests` 恒 0。补全方法集后 8/8 通过。
   - EN: fixed the 7 failing task-guards tests: the fake session was missing executor methods added after the fork (`getAllToolInfos`/`getContextUsage`/`sendCustomMessage`/`setServiceTierFamily`/`setThinkingLevel`/`subscribeRunState`/`hasPendingAsyncWork`/`getAsyncJobSnapshot`/`settleAsyncWork`) — calls threw TypeError before the event stream was wired, so `result.requests` stayed 0. With the methods filled in, 8/8 pass.
 - **GUI 重连风暴触发 "Agent was replaced during session initialization"**(modes.list failed):rpc 掉线重连时 `onStatus("open")` 反复 `reopenSession`,同一 session 并发 `session.resume` 在 daemon 端撞 attachSession 竞态。现在 `openSession` 防重入——同一 sessionId 的 in-flight 打开直接丢弃。
   - EN: GUI reconnect storms tripped "Agent was replaced during session initialization" (modes.list failed): every `onStatus("open")` re-opened the active session, so concurrent `session.resume` calls raced in the daemon's attachSession. `openSession` is now re-entrancy-guarded — an in-flight open of the same sessionId is dropped.
+
+## [0.4.9] - 2026-08-30
+
+### Fixed
+
+- **Electron 主进程 EPIPE 崩溃**:从 Finder/Dock 启动(无终端)时父进程 stdio 管道关闭,主进程任意 `console.error`(如 MCP tool load failed 日志)抛 EPIPE → uncaughtException → Electron「A JavaScript error occurred in the main process」模态框 → 应用卡死、daemon 继续跑、GUI 显示 working、无法发消息。现在主进程 `console.log/warn/error` 重定向到 `~/.musepi/logs/gui-main.YYYY-MM-DD.log`,`uncaughtException`/`unhandledRejection` 全部吞掉(EPIPE 时 console 置 no-op)——任何主进程异常不再弹模态框。
+  - EN: the Electron main process no longer crashes on EPIPE — when launched from Finder/Dock (no terminal) the parent stdio pipe is already closed, so any main-process console.error (e.g. an MCP tool load failure log) threw EPIPE → uncaughtException → the "A JavaScript error occurred in the main process" modal → the app froze while the daemon kept running (GUI showed "working", messages undeliverable). Main-process console output is now redirected to a dated log file and uncaughtException/unhandledRejection are swallowed (console becomes a no-op on EPIPE), so no main-process error can pop the crash modal again.
+- **GUI 撤回/重试/分叉接线到会话树 RPC**:撤回(撤回该消息)与重试(编辑并重发)走 `session.branchAt`(非破坏性——leaf 原位移动,旧子树保留为 sibling branch),分叉(从此消息分叉新会话)走 `session.forkAt` + 自动切换到新会话;会话内消息操作不再只是本地状态,与会话树拓扑(分支/子会话)一致。
+  - EN: the chat transcript's revert/retry/fork actions are now wired to the session-tree RPCs — revert & retry go through `session.branchAt` (non-destructive: the leaf moves in place, the old subtree survives as a sibling branch) and fork creates a new session via `session.forkAt` + auto-switches to it, so in-chat message operations match the session-tree topology (branches/child sessions) instead of local state.
+- **TUI OSC 99 通知品牌残留**:`OSC99_APP_NAME` 品牌改名后终端通知测试仍期望 omp 时代的 "Oh My Pi" base64,已更新为 MusePi(修复 CI native/integration 的 notifications/streaming-scrollback 失败)。
+  - EN: TUI OSC 99 notifications — the terminal-notifications tests still expected the omp-era "Oh My Pi" app-name base64 after the MusePi rename; updated to MusePi (fixes the notifications/streaming-scrollback failures in the native/integration CI bucket).
+- **TUI tmux resize 渲染缺口**:`Text` 组件实现 `getNativeScrollbackWidthEpochRevision`(渲染行数签名),使 `setText` 改变高度时能通过 Container 的 epoch 聚合传播(修复 issue-2088 的 rendered-height 测试);TUI 现在向聚焦组件注入真实终端行数(`setViewportRowsProvider`),Editor 的 autocomplete 下拉按真实视口裁剪而非回退到 24 行假设(修复 autocomplete viewport 测试);测试 fixture 中性化 `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE`,消除 Warp 终端宿主的 resize 路径误分类。
+  - EN: TUI tmux-resize rendering gaps — `Text` now implements `getNativeScrollbackWidthEpochRevision` (rendered-line-count signature) so a `setText` height change propagates through Container's epoch aggregation (fixes the issue-2088 rendered-height test); the TUI injects its live terminal row count into focused components (`setViewportRowsProvider`), so Editor's autocomplete dropdown clamps to the real viewport instead of the 24-row fallback (fixes the autocomplete-viewport tests); test fixtures neutralize `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE` so resize classification is deterministic on Warp hosts.
 
 - **Windows 守护进程启动失败(空 PATH 条目误解析 GUI 为 daemon)**:`daemonCommand` 的 PATH 扫描把空条目当作当前工作目录——MusePi 装在 cwd 时 `musepi.exe` 存在性检查命中 **GUI 本体**(`MusePi.exe` 的副本),spawn 它当 daemon 立即退出(`child exited 0`),GUI 报「无法连接本地守护进程 / daemon exited during startup」。现在忽略空/纯空白 PATH 条目,并把每个候选 `path.resolve` 为绝对路径执行(PATH CLI → bundled daemon → dev checkout 优先级不变)。修复 #2。
   - EN: Windows daemon startup failure from empty PATH entries — `daemonCommand`'s PATH scan treated an empty entry as the current working directory, so when MusePi was installed in cwd the `musepi.exe` existence check hit the **GUI binary itself** (a copy of `MusePi.exe`), spawning it as the daemon which exited immediately (`child exited 0`) and left the GUI on "无法连接本地守护进程 / daemon exited during startup". Empty/whitespace PATH entries are now ignored and each candidate is `path.resolve`d to an absolute executable (PATH CLI → bundled daemon → dev checkout priority unchanged). Fixes #2.
@@ -49,19 +66,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **TUI binary 发布与测试 gate 解耦**:`Publish GitHub release` job 现在只依赖全部平台的 Release binary 构建成功——测试 fan-out(release_gate)是质量信号而非发布前置,一个 flaky/长期失败的测试 job 不再让 `musepi update` 更新通道停摆(npm leaf 发布保留完整 gate)。
   - EN: the GitHub-release publish job now depends only on every platform's TUI binary building successfully — the test fan-out (release_gate) is a quality signal, not a publish prerequisite, so a flaky or long-failing test job no longer strands the `musepi update` channel (npm leaf publishing keeps its full gate).
   - EN: fixed the 5 long-failing CI test jobs — OAuth CAS race (`cas-lost` now re-resolves like `peer-rotated`), interrupted-thinking skips Anthropic-dialect targets (reasoning_extraction), context-usage tolerates undefined system-prompt sections, goal-mode accepts a bare `/goal <objective>` and forwards images, advisor-toggle tests match the 17.4.0 in-place handoff semantics (session file unchanged, cost cleared after commit), the natives publish manifest ships `clipboard.js`, and acp-builtins drops `/btw` from removed commands + gives the `/context` fake a tokenizer.
-
-## [0.4.9] - 2026-08-30
-
-### Fixed
-
-- **Electron 主进程 EPIPE 崩溃**:从 Finder/Dock 启动(无终端)时父进程 stdio 管道关闭,主进程任意 `console.error`(如 MCP tool load failed 日志)抛 EPIPE → uncaughtException → Electron「A JavaScript error occurred in the main process」模态框 → 应用卡死、daemon 继续跑、GUI 显示 working、无法发消息。现在主进程 `console.log/warn/error` 重定向到 `~/.musepi/logs/gui-main.YYYY-MM-DD.log`,`uncaughtException`/`unhandledRejection` 全部吞掉(EPIPE 时 console 置 no-op)——任何主进程异常不再弹模态框。
-  - EN: the Electron main process no longer crashes on EPIPE — when launched from Finder/Dock (no terminal) the parent stdio pipe is already closed, so any main-process console.error (e.g. an MCP tool load failure log) threw EPIPE → uncaughtException → the "A JavaScript error occurred in the main process" modal → the app froze while the daemon kept running (GUI showed "working", messages undeliverable). Main-process console output is now redirected to a dated log file and uncaughtException/unhandledRejection are swallowed (console becomes a no-op on EPIPE), so no main-process error can pop the crash modal again.
-- **GUI 撤回/重试/分叉接线到会话树 RPC**:撤回(撤回该消息)与重试(编辑并重发)走 `session.branchAt`(非破坏性——leaf 原位移动,旧子树保留为 sibling branch),分叉(从此消息分叉新会话)走 `session.forkAt` + 自动切换到新会话;会话内消息操作不再只是本地状态,与会话树拓扑(分支/子会话)一致。
-  - EN: the chat transcript's revert/retry/fork actions are now wired to the session-tree RPCs — revert & retry go through `session.branchAt` (non-destructive: the leaf moves in place, the old subtree survives as a sibling branch) and fork creates a new session via `session.forkAt` + auto-switches to it, so in-chat message operations match the session-tree topology (branches/child sessions) instead of local state.
-- **TUI OSC 99 通知品牌残留**:`OSC99_APP_NAME` 品牌改名后终端通知测试仍期望 omp 时代的 "Oh My Pi" base64,已更新为 MusePi(修复 CI native/integration 的 notifications/streaming-scrollback 失败)。
-  - EN: TUI OSC 99 notifications — the terminal-notifications tests still expected the omp-era "Oh My Pi" app-name base64 after the MusePi rename; updated to MusePi (fixes the notifications/streaming-scrollback failures in the native/integration CI bucket).
-- **TUI tmux resize 渲染缺口**:`Text` 组件实现 `getNativeScrollbackWidthEpochRevision`(渲染行数签名),使 `setText` 改变高度时能通过 Container 的 epoch 聚合传播(修复 issue-2088 的 rendered-height 测试);TUI 现在向聚焦组件注入真实终端行数(`setViewportRowsProvider`),Editor 的 autocomplete 下拉按真实视口裁剪而非回退到 24 行假设(修复 autocomplete viewport 测试);测试 fixture 中性化 `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE`,消除 Warp 终端宿主的 resize 路径误分类。
-  - EN: TUI tmux-resize rendering gaps — `Text` now implements `getNativeScrollbackWidthEpochRevision` (rendered-line-count signature) so a `setText` height change propagates through Container's epoch aggregation (fixes the issue-2088 rendered-height test); the TUI injects its live terminal row count into focused components (`setViewportRowsProvider`), so Editor's autocomplete dropdown clamps to the real viewport instead of the 24-row fallback (fixes the autocomplete-viewport tests); test fixtures neutralize `TERM_PROGRAM`/`PI_TUI_RESIZE_IN_PLACE` so resize classification is deterministic on Warp hosts.
 
 ## [0.4.8] - 2026-08-30
 
@@ -145,7 +149,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **轨迹分支树缩进溢出**:缩进按消息层级逐行 +14px,线性长会话每行都超面板——改为只在真实分支点(多子)加层、单子链保持父级深度,并加 6 层硬上限。
   - EN: trajectory branch-tree indent now grows only at real branch points (single-child chains keep the parent depth) with a 6-level cap — long linear sessions no longer walk off the panel.
 
-
 ## [0.4.6] - 2026-08-28
 
 ### Added
@@ -162,7 +165,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: musepi-extensions provider always visible in GUI/TUI extension centers; onboarding floating-menu scroll-follow fix.
 - **Command Code 内置供应商**:新增 `command-code` 内置 OpenAI 兼容供应商(goat 订阅网关),动态 `/v1/models` 发现 61 个官方模型,并从 canonical 索引/models.dev 兜底注入上下文长度、输入能力、推理与思考等级;`/login command-code` 支持粘贴 API key 校验。
   - EN: Command Code (`command-code`) built-in OpenAI-compatible provider (goat subscription gateway) — dynamic `/v1/models` discovery of 61 official models, with context window / input modalities / reasoning / thinking efforts hydrated from the canonical reference index with models.dev fallback; `/login command-code` API-key paste validation.
-
 
 ## [0.4.5] - 2026-08-26
 
@@ -234,8 +236,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
     - daemon/terminal-provider.ts child.off → removeListener; bun-pty type assertion via unknown
     - test/assembly.test.ts fixture runtime field added
     All compile clean except the two pre-existing updatedAt + collab errors.
-
-
 
 ## [0.4.4] - 2026-08-24
 
@@ -345,8 +345,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - i18n general/settings 域 `active` key 冲突(去重)。
   - EN: Dedupe i18n `active` key conflict in general/settings domains.
 
-
-
 ## [0.4.3] - 2026-08-22
 
 ### Added
@@ -415,6 +413,5 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - 托盘用量区同供应商多凭据重复 key 警告(React `Encountered two children with
   the same key`)。
 - 上下文圆环配额弹层丢失凭据归属(各供应商限额拍平后无法区分账户)。
-
 
 ## [Unreleased]
