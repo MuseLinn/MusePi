@@ -82,6 +82,7 @@ import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
+import manualContinuePrompt from "../prompts/system/manual-continue.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { CompactMode } from "../session/compact-modes";
@@ -5504,6 +5505,12 @@ export class DaemonServer {
 								...images.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType })),
 							]
 						: p.text;
+				// TUI "." / "c" continue parity: the shortcut's payload is the
+				// hidden developer directive (manualContinuePrompt), not the
+				// user's literal "." — same text the TUI input-controller
+				// sends. The GUI passes the raw shortcut and the daemon is the
+				// single authority for the directive text.
+				const sendContent = p.deliverAs === "continue" ? manualContinuePrompt : content;
 				this.#host.touch(p.sessionId);
 				// TUI parity: auto-generate the session title from the first
 				// user message (input-controller calls maybeStartTitleGeneration
@@ -5511,9 +5518,13 @@ export class DaemonServer {
 				// that already has a name (or a low-signal first message, or
 				// PI_NO_TITLE) is a no-op — so calling it every send is safe.
 				// The GUI's Settings → 会话 → 自动生成会话标题 toggle gates it.
-				if (live.autoTitle) {
+				// Continue shortcuts are synthetic directives — never a title
+				// source.
+				if (live.autoTitle && p.deliverAs !== "continue") {
 					const textPart =
-						typeof content === "string" ? content : (content.find(c => c.type === "text")?.text ?? "");
+						typeof sendContent === "string"
+							? sendContent
+							: (sendContent.find(c => c.type === "text")?.text ?? "");
 					if (textPart) live.agentSession.maybeStartTitleGeneration(textPart);
 				}
 				// Fire-and-forget: prompt()'s promise only settles at end-of-turn
@@ -5522,7 +5533,7 @@ export class DaemonServer {
 				// "request timeout: session.send" banner while the agent kept
 				// working. Turn progress and errors already flow to clients via
 				// the session event stream; log background failures instead.
-				void live.agentSession.sendUserMessage(content, options).catch(err => {
+				void live.agentSession.sendUserMessage(sendContent, options).catch(err => {
 					logger.warn("session.send background delivery failed", {
 						sessionId: p.sessionId,
 						error: err instanceof Error ? err.message : String(err),
