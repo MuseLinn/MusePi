@@ -755,7 +755,9 @@ async function getLatestReleaseFromGitHub(timeoutMs: number): Promise<ReleaseInf
 		});
 	} catch (err) {
 		if (isTimeoutError(err)) {
-			throw new Error(`Timed out fetching GitHub release info after ${Math.round(timeoutMs / 1000)}s`, { cause: err });
+			throw new Error(`Timed out fetching GitHub release info after ${Math.round(timeoutMs / 1000)}s`, {
+				cause: err,
+			});
 		}
 		throw err;
 	}

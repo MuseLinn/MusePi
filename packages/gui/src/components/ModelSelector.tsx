@@ -1,6 +1,7 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { matchesModelQuery } from "../lib/fuzzy-model-match";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -272,15 +273,10 @@ export function ModelSelector({
 	// multimodal *understanding* models (e.g. deepseek-v4-flash-vision-exp):
 	// those carry vision/video input flags, not imageGen/videoGen.
 	const isGenerationModel = (m: WireModel): boolean => m.imageGen === true || m.videoGen === true;
-	const q = query.trim().toLowerCase();
-	const filtered = q
-		? models.filter(
-				m =>
-					m.id.toLowerCase().includes(q) ||
-					m.name.toLowerCase().includes(q) ||
-					m.provider.toLowerCase().includes(q),
-			)
-		: models;
+	// TUI /switch parity: search is a subsequence match ("go" finds google,
+	// "ds" finds deepseek-v4-flash) across provider + id + name, not a
+	// contiguous substring scan.
+	const filtered = query.trim() ? models.filter(m => matchesModelQuery(query, m.provider, m.id, m.name)) : models;
 	// Pinned models first, in pin order; the rest keep their listing order.
 	// Favorites are provider/id keys (legacy bare ids still rank/light up
 	// so old pins keep working).

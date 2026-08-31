@@ -6120,7 +6120,7 @@ export class DaemonServer {
 				}
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) return [];
-				return registry.getAvailable().map(modelDetailRow).slice(0, 200);
+				return registry.getAvailable().map(modelDetailRow);
 			}
 			case "session.setModel": {
 				const p = (params ?? {}) as { sessionId: string; model: { id: string; name?: string; provider?: string } };
@@ -7697,6 +7697,7 @@ export class DaemonServer {
 						},
 					});
 					await registry.refreshProvider(p.providerId, "online");
+					this.#broadcastModelsChanged();
 					return { ok: true, identity: identity ?? null };
 				} finally {
 					this.#promptResolvers.delete(p.providerId);
@@ -7726,6 +7727,7 @@ export class DaemonServer {
 				const storage = registry.authStorage;
 				await storage.importApiKey(p.providerId, p.apiKey.trim());
 				await registry.refreshProvider(p.providerId, "online");
+				this.#broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "providers.testConnection": {
@@ -7789,6 +7791,7 @@ export class DaemonServer {
 					}
 				}
 				await registry.refreshProvider(p.providerId, "online");
+				this.#broadcastModelsChanged();
 				return { ok: true, removed: p.credentialId !== undefined ? 1 : credentials.length };
 			}
 			case "models.listCustom": {
@@ -8402,7 +8405,7 @@ export class DaemonServer {
 				// exists.
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) return [];
-				return registry.getAvailable().map(modelDetailRow).slice(0, 200);
+				return registry.getAvailable().map(modelDetailRow);
 			}
 			case "models.catalog": {
 				// Full bundled catalog grouped by provider (TUI model-hub
