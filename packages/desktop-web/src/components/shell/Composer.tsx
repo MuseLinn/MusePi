@@ -5,7 +5,7 @@ import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { haptic } from "../../lib/haptics";
 import { useGuestSelector } from "../../lib/use-guest";
-import { MatrixLoader } from "./matrix-loader";
+import { MatrixLoader } from "./MatrixLoader";
 import { SuggestionChips } from "./SuggestionChips";
 
 export interface ComposerProps {
