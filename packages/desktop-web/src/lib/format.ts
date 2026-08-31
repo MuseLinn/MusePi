@@ -64,7 +64,13 @@ export function formatWhen(ts: number): string {
 	return t("{count} d ago", { count: String(Math.floor(hours / 24)) });
 }
 
-/** Home-relative, middle-elided path: "~/…/packages/desktop-web". */
+/**
+ * Home-relative, middle-elided path: "~/…/packages/desktop-web".
+ *
+ * Folds `/Users/<x>` / `/home/<x>` → `~` AND collapses middle segments
+ * when the path has >4 components. For the fold-only variant (no elision)
+ * used in tool cards, see `homePath` in `tool-render/util.ts`.
+ */
 export function shortenPath(p: string): string {
 	if (typeof p !== "string" || p.length === 0) return "";
 	let out = p.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, "~");

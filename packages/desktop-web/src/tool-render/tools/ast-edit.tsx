@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, CodeBlock, DiffBlock, InvalidArg, Note, Output, PathText, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, languageFromPath, num, shortenPath, str } from "../util";
+import { detailsRecord, homePath, isRecord, languageFromPath, num, str } from "../util";
 
 interface AstEditOp {
 	pat: string;
@@ -151,7 +151,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					{details.filesSearched != null && (
 						<Badge>{t("searched {count}", { count: String(details.filesSearched) })}</Badge>
 					)}
-					{details.scopePath && <Badge>{t("in {path}", { path: shortenPath(details.scopePath) })}</Badge>}
+					{details.scopePath && <Badge>{t("in {path}", { path: homePath(details.scopePath) })}</Badge>}
 					{details.limitReached && <Badge tone="warn">{t("limit reached")}</Badge>}
 				</span>
 			)}

@@ -29,8 +29,14 @@ export function display(value: unknown): string {
 	}
 }
 
-/** Replace `/Users/<x>` / `/home/<x>` prefix with `~` for display. */
-export function shortenPath(p: string): string {
+/**
+ * Replace `/Users/<x>` / `/home/<x>` prefix with `~` for display.
+ *
+ * Folds only the home prefix — never elides path segments (tool cards need
+ * the full path). The eliding variant lives in `lib/format.ts` (`shortenPath`,
+ * adds a `…` middle collapse for compact shell UI); keep the two distinct.
+ */
+export function homePath(p: string): string {
 	for (const prefix of ["/Users/", "/home/"]) {
 		if (p.startsWith(prefix)) {
 			const rest = p.slice(prefix.length);

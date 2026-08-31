@@ -10,7 +10,7 @@ import { t } from "../i18n/index.js";
 import { diffWords } from "./diff-words.js";
 import { diffLayoutPref } from "./parts-shared";
 import type { ToolRenderHost, ToolResultImage, ToolResultLike } from "./types";
-import { getHljs, replaceTabs, resultImagesOf, resultTextOf, shortenPath, stripAnsi } from "./util";
+import { getHljs, homePath, replaceTabs, resultImagesOf, resultTextOf, stripAnsi } from "./util";
 
 export type Tone = "accent" | "ok" | "err" | "warn";
 
@@ -52,7 +52,7 @@ export function PathText({
 	}
 	return (
 		<span className="tv-path">
-			{shortenPath(path)}
+			{homePath(path)}
 			{range && <span className="tv-lines">{range}</span>}
 			{sel && <span className="tv-lines">:{sel}</span>}
 		</span>

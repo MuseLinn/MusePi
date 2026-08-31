@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, Badges, DiffBlock, Kv, KvGrid, PathText, ResultImages, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, languageFromPath, num, resultTextOf, shortenPath, str } from "../util";
+import { detailsRecord, homePath, isRecord, languageFromPath, num, resultTextOf, str } from "../util";
 
 /** Fields of `ReadToolDetails` the web view surfaces (untrusted wire JSON). */
 interface ReadDetails {
@@ -100,7 +100,7 @@ function Body({ args, result, kind }: ToolRenderProps): ReactNode {
 							<PathText path={resolved} />
 						</Kv>
 					)}
-					{d.suffixFrom !== null && <Kv k={t("corrected from")}>{shortenPath(d.suffixFrom)}</Kv>}
+					{d.suffixFrom !== null && <Kv k={t("corrected from")}>{homePath(d.suffixFrom)}</Kv>}
 				</KvGrid>
 			)}
 			<Badges items={[conflictBadge, elidedBadge, truncatedBadge]} />

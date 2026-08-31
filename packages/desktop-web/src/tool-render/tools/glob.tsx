@@ -3,12 +3,12 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, Badges, InvalidArg, Note, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, num, scopePaths, shortenPath, str, truncate } from "../util";
+import { detailsRecord, homePath, isRecord, num, scopePaths, str, truncate } from "../util";
 
 function Summary({ args }: ToolRenderProps): ReactNode {
 	const raw = args.path ?? args.paths;
 	if (raw !== undefined && typeof raw !== "string" && !Array.isArray(raw)) return <InvalidArg what="path" />;
-	const globs = scopePaths(args).map(shortenPath).join(", ");
+	const globs = scopePaths(args).map(homePath).join(", ");
 	return <span className="tv-pattern">{truncate(globs || "*", 120)}</span>;
 }
 
@@ -41,7 +41,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 					args.hidden === false && <Badge>{t("no-hidden")}</Badge>,
 					timeout !== null && <Badge>{t("timeout={secs}s", { secs: String(timeout) })}</Badge>,
 					fileCount !== null && <Badge tone="accent">{t("{count} file(s)", { count: String(fileCount) })}</Badge>,
-					scopePath !== null && <Badge>{t("in {path}", { path: shortenPath(scopePath) })}</Badge>,
+					scopePath !== null && <Badge>{t("in {path}", { path: homePath(scopePath) })}</Badge>,
 					truncated && (
 						<Badge tone="warn">
 							{resultLimit !== null ? t("truncated at {count}", { count: String(resultLimit) }) : t("truncated")}
@@ -50,7 +50,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 				]}
 			/>
 			{missing.length > 0 && (
-				<Note tone="warn">{t("skipped missing: {path}", { path: missing.map(shortenPath).join(", ") })}</Note>
+				<Note tone="warn">{t("skipped missing: {path}", { path: missing.map(homePath).join(", ") })}</Note>
 			)}
 			{error !== null && !result?.isError && <Note tone="err">{error}</Note>}
 			<ResultText result={result} maxLines={12} />

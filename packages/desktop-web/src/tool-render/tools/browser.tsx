@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, CodeBlock, ResultImages, ResultText, type Tone } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, num, shortenPath, str, truncate } from "../util";
+import { detailsRecord, homePath, isRecord, num, str, truncate } from "../util";
 
 interface BrowserDetails {
 	action: string | null;
@@ -49,7 +49,7 @@ function actionTone(action: string): Tone | undefined {
 /** Mirrors the TUI's `describeBrowser`: explicit app args win over reported mode. */
 function describeBrowser(app: AppArg | null, details: BrowserDetails): string | null {
 	if (app?.cdpUrl) return t("connected {value}", { value: app.cdpUrl });
-	if (app?.path) return t("spawned {path}", { path: shortenPath(app.path) });
+	if (app?.path) return t("spawned {path}", { path: homePath(app.path) });
 	return details.browser;
 }
 
@@ -64,7 +64,7 @@ function Summary({ args, result }: ToolRenderProps): ReactNode {
 			<Badge tone={actionTone(action)}>{action}</Badge>
 			<span>{closeAll ? t("all tabs") : tab}</span>
 			{args.kill === true && <Badge tone="err">{t("kill")}</Badge>}
-			{url && <span className="tv-faint">{truncate(shortenPath(url), 72)}</span>}
+			{url && <span className="tv-faint">{truncate(homePath(url), 72)}</span>}
 		</>
 	);
 }
@@ -85,7 +85,7 @@ function Body({ args, result }: ToolRenderProps): ReactNode {
 		<>
 			<span className="tv-badges">
 				{tab !== null && <Badge>{t("tab {value}", { value: tab })}</Badge>}
-				{url && <Badge tone="accent">{truncate(shortenPath(url), 120)}</Badge>}
+				{url && <Badge tone="accent">{truncate(homePath(url), 120)}</Badge>}
 				{browserDesc && <Badge>{browserDesc}</Badge>}
 				{app?.target && <Badge>{t("target {value}", { value: app.target })}</Badge>}
 				{args.all === true && <Badge tone="warn">{t("all")}</Badge>}

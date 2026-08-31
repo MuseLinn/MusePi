@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Badge, InvalidArg, Kv, KvGrid, Note, Output, ResultText, Row } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
-import { detailsRecord, isRecord, normalizeWs, num, shortenPath, str, truncate } from "../util";
+import { detailsRecord, homePath, isRecord, normalizeWs, num, str, truncate } from "../util";
 
 const SUCCESS_CONCLUSIONS: Record<string, true> = { success: true, neutral: true, skipped: true };
 const FAILURE_CONCLUSIONS: Record<string, true> = {
@@ -246,7 +246,7 @@ function CheckoutRows({ checkouts }: { checkouts: readonly unknown[] }): ReactNo
 				return (
 					<Row k={prNumber !== null ? `#${prNumber}` : t("PR")} key={prNumber ?? index}>
 						<span>{str(entry.branch) ?? ""}</span>
-						{worktree && <span className="tv-muted"> {shortenPath(worktree)}</span>}
+						{worktree && <span className="tv-muted"> {homePath(worktree)}</span>}
 						{entry.reused === true && <Badge>{t("reused")}</Badge>}
 					</Row>
 				);
@@ -278,7 +278,7 @@ function DetailsGrid({ details }: { details: Record<string, unknown> }): ReactNo
 				</Kv>,
 			);
 		} else if (typeof value === "string" && value) {
-			const text = key === "worktreePath" ? shortenPath(value) : key === "headSha" ? shortSha(value) : value;
+			const text = key === "worktreePath" ? homePath(value) : key === "headSha" ? shortSha(value) : value;
 			rows.push(
 				<Kv k={key} key={key}>
 					{text}
