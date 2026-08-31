@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.11] - 2026-08-31
+
 ### Fixed
 
 - **`musepi update` 报 "Failed to fetch release info for @musepi/pi-coding-agent: Not Found"**:更新检查只查 npm registry,而 MusePi 从不发布 npm 包(`@musepi/*` 未在 registry 注册)→ 每次 `musepi update` 直接 404 失败,二进制安装(TUI standalone binary)无法自更新。现在 npm registry 404 时回退到 GitHub release feed(`/releases/latest`),返回 `dist: "binary"` 走既有二进制替换路径(下载 + SHA-256 校验 + 原子替换),npm 发布模型(rename 指针等)保持不动;非 404 错误照常抛出。
