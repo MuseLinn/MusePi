@@ -55,7 +55,7 @@ function openInLabel(app: { id: string; label: string }): string {
 }
 
 import { AgentAvatar } from "./AgentAvatar";
-import { Pop } from "./Pop";
+import { MenuPopup } from "./MenuPopup";
 
 /** "mm:ss" hold time for the paused-state hint (matches the composer's
  *  pause banner formatting). */
@@ -661,7 +661,7 @@ export function GuiHeader({
 							{t("no dev script")}
 						</div>
 					)}
-					<Pop
+					<MenuPopup
 						open={projOpen}
 						className="gui-openin-menu"
 						portal
@@ -705,7 +705,7 @@ export function GuiHeader({
 								</span>
 							)}
 						</button>
-					</Pop>
+					</MenuPopup>
 				</div>
 			</div>
 			<div className="flex min-w-0 flex-1 items-center gap-0.5">
@@ -746,7 +746,7 @@ export function GuiHeader({
 							{store ? projectLabel : project ? projectName(project) : t("local")}
 						</span>
 					</button>
-					<Pop
+					<MenuPopup
 						open={switcherOpen}
 						className="gui-header-title-menu"
 						portal
@@ -793,7 +793,7 @@ export function GuiHeader({
 								);
 							})
 						)}
-					</Pop>
+					</MenuPopup>
 				</div>
 				{/* Session-title menu (openchamber session … button): horizontal
 				 * ellipsis; rename / copy id / share / export / worktree /
@@ -811,7 +811,7 @@ export function GuiHeader({
 						>
 							<Icon name="more" className="h-3.5 w-3.5" />
 						</button>
-						<Pop
+						<MenuPopup
 							open={titleMenuOpen}
 							className="gui-overlay-menu"
 							portal
@@ -889,7 +889,7 @@ export function GuiHeader({
 								<Icon name="delete-bin" className="h-3.5 w-3.5" />
 								<span>{t("delete session")}</span>
 							</button>
-						</Pop>
+						</MenuPopup>
 					</div>
 				)}
 			</div>
@@ -1022,7 +1022,7 @@ export function GuiHeader({
 						>
 							<Icon name="arrow-down-s" className="h-3 w-3" />
 						</button>
-						<Pop
+						<MenuPopup
 							open={openInOpen}
 							className="gui-openin-menu"
 							portal
@@ -1091,7 +1091,7 @@ export function GuiHeader({
 								<Icon name="folder-open" className="h-3.5 w-3.5" />
 								<span>{t("open folder")}</span>
 							</button>
-						</Pop>
+						</MenuPopup>
 					</div>
 				)}
 				{/* Instance info (openchamber DesktopServicesMenu): real daemon
@@ -1109,7 +1109,7 @@ export function GuiHeader({
 					<span>{t("local")}</span>
 					<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 				</button>
-				<Pop
+				<MenuPopup
 					open={instanceOpen}
 					className="gui-instance-menu"
 					portal
@@ -1311,7 +1311,7 @@ export function GuiHeader({
 						<Icon name="close" className="h-3.5 w-3.5" />
 						<span>{t("quit app")}</span>
 					</button>
-				</Pop>
+				</MenuPopup>
 			</div>
 			{/* statusText mirrors the orb state for screen readers. */}
 			<span className="sr-only">{statusText}</span>

@@ -26,7 +26,7 @@ export const MENU_ANIM_MS = 130;
  * SettingsView card menus) pass their setter; the mutex then closes them
  * automatically instead of leaving two menus on screen.
  */
-export function Pop({
+export function MenuPopup({
 	open,
 	className,
 	children,

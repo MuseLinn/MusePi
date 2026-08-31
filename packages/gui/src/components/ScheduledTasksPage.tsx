@@ -4,7 +4,7 @@ import { WEEK_START_KEY } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
-import { Pop } from "./Pop";
+import { MenuPopup } from "./MenuPopup";
 import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
 
 /**
@@ -625,7 +625,14 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 				<span className="gui-calendar-field-text">{value || t("scheduled cwd placeholder")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
-			<Pop open={open} className="gui-cwd-pop" portal anchor={anchorRef.current} align="left" onOpenChange={setOpen}>
+			<MenuPopup
+				open={open}
+				className="gui-cwd-pop"
+				portal
+				anchor={anchorRef.current}
+				align="left"
+				onOpenChange={setOpen}
+			>
 				<input
 					autoFocus
 					className="gui-task-input"
@@ -651,7 +658,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 					))}
 					{matches.length === 0 && <span className="gui-cwd-empty">{t("scheduled cwd empty")}</span>}
 				</div>
-			</Pop>
+			</MenuPopup>
 		</div>
 	);
 }
@@ -703,7 +710,7 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 				<span className="gui-calendar-field-text">{selected ? fmt(selected) : t("scheduled pick date")}</span>
 				<Icon name="arrow-down-s" className="h-4 w-4" />
 			</button>
-			<Pop
+			<MenuPopup
 				open={open}
 				className="gui-calendar-pop"
 				portal
@@ -763,7 +770,7 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 						</button>
 					</div>
 				</div>
-			</Pop>
+			</MenuPopup>
 		</div>
 	);
 }

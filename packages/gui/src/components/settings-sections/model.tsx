@@ -8,8 +8,8 @@ import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
 import { GuiSelect } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
+import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
-import { Pop } from "../Pop";
 import { SpotlightCard } from "../SpotlightCard";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";
@@ -1385,7 +1385,7 @@ export function ModelSection({
 																			{t("logout")}
 																			<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 																		</button>
-																		<Pop
+																		<MenuPopup
 																			open={credsMenu === p.id}
 																			className="gui-creds-menu"
 																			anchor={cardMenuAnchors.current.get(p.id) ?? null}
@@ -1459,7 +1459,7 @@ export function ModelSection({
 																			>
 																				<span className="min-w-0 flex-1">{t("logout all")}</span>
 																			</button>
-																		</Pop>
+																		</MenuPopup>
 																	</div>
 																) : (
 																	<div className="relative shrink-0">
@@ -1479,7 +1479,7 @@ export function ModelSection({
 																		>
 																			<Icon name="more" className="h-3.5 w-3.5" />
 																		</button>
-																		<Pop
+																		<MenuPopup
 																			open={actionsMenu === p.id}
 																			className="gui-creds-menu"
 																			anchor={cardMenuAnchors.current.get(`actions-${p.id}`) ?? null}
@@ -1519,7 +1519,7 @@ export function ModelSection({
 																					</span>
 																				</button>
 																			)}
-																		</Pop>
+																		</MenuPopup>
 																	</div>
 																)}
 															</div>

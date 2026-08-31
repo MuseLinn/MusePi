@@ -7,7 +7,7 @@ import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
-import { MENU_ANIM_MS } from "./Pop";
+import { MENU_ANIM_MS } from "./MenuPopup";
 
 type PaletteTab = "all" | "actions" | "tasks";
 

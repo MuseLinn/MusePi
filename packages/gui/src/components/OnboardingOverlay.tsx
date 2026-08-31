@@ -29,7 +29,7 @@ import { DialogFrame } from "./DialogFrame";
 import { FadeScroll } from "./FadeScroll";
 import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
-import { Pop } from "./Pop";
+import { MenuPopup } from "./MenuPopup";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 200;
@@ -748,7 +748,7 @@ function ProviderSetup({
 				{t("logout")}
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
-			<Pop
+			<MenuPopup
 				open={credsMenu === id}
 				className="gui-creds-menu"
 				anchor={credsAnchors.current.get(id) ?? null}
@@ -800,7 +800,7 @@ function ProviderSetup({
 				<button type="button" className="gui-view-opt gui-view-opt--danger" onClick={() => void logoutAll(id)}>
 					<span className="min-w-0 flex-1">{t("logout all")}</span>
 				</button>
-			</Pop>
+			</MenuPopup>
 		</div>
 	);
 

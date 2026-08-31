@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon, type IconName } from "../vendor/oc-icons";
-import { MENU_ANIM_MS } from "./Pop";
+import { MENU_ANIM_MS } from "./MenuPopup";
 
 /**
  * Floating actions for in-message text selection (openchamber parity):

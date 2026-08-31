@@ -8,7 +8,7 @@ import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { CustomGroups } from "./CustomGroups";
 import { GroupedSessionList } from "./GroupedSessionList";
-import { Pop } from "./Pop";
+import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
@@ -618,7 +618,7 @@ export function SessionSidebar({
 				 * (not an inline block) so it overlays the tree like the other
 				 * menus. */}
 				{tab === "projects" && (
-					<Pop
+					<MenuPopup
 						open={viewMenu}
 						className="gui-view-menu"
 						portal
@@ -680,7 +680,7 @@ export function SessionSidebar({
 							<span>{t("created time")}</span>
 							{projSort === "created" && <Icon name="check" className="h-3 w-3 ml-auto" />}
 						</button>
-					</Pop>
+					</MenuPopup>
 				)}
 				{/* Sessions list — custom groups in groups tab; project/timeline in
 				 * projects; archived sessions in the archive view (ZCode). */}
@@ -788,7 +788,7 @@ export function SessionSidebar({
 										<Icon name="add-circle" className="h-4 w-4" />
 										<span>{t("add project or remote")}</span>
 									</button>
-									<Pop
+									<MenuPopup
 										open={projMenu}
 										className="gui-add-project-menu"
 										anchor={projMenuAnchorRef.current}
@@ -838,7 +838,7 @@ export function SessionSidebar({
 											<Icon name="download" className="h-3.5 w-3.5" />
 											<span>{t("import sessions")}</span>
 										</button>
-									</Pop>
+									</MenuPopup>
 								</div>
 								{projView === "timeline" ? (
 									<>
