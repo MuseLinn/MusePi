@@ -166,9 +166,10 @@ describe("daemon WebSocket transport", () => {
 			const meta = res.result as Record<string, unknown>;
 			expect(meta.engine).toContain("MusePi");
 			// Derived, never a stale hardcode: the app version when the bundle
-			// bakes MUSEPI_VERSION in, else the OMP engine version.
+			// bakes MUSEPI_VERSION in, else the OMP engine version. The engine
+			// string is the MusePi-branded form: `MusePi <app-or-engine version>`.
 			expect(meta.version).toBe(process.env.MUSEPI_VERSION ?? VERSION);
-			expect(meta.engine).toContain(`OMP ${VERSION}`);
+			expect(meta.engine).toBe(`MusePi ${process.env.MUSEPI_VERSION ?? VERSION}`);
 			expect(meta.dataRoot).toBeTruthy();
 			expect(meta.configDir).toBeTruthy();
 			expect(meta.runtime).toContain("Bun");

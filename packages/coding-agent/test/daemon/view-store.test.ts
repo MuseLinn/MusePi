@@ -11,14 +11,21 @@ import type { SessionSnapshot } from "@musepi/sdk";
 import { ViewStore } from "../../src/daemon/view-store";
 
 const dirs: string[] = [];
+const stores: ViewStore[] = [];
 
 function tempStore(): ViewStore {
 	const d = fs.mkdtempSync(path.join(os.tmpdir(), "vstore-test-"));
 	dirs.push(d);
-	return new ViewStore(path.join(d, "materialized.db"));
+	const store = new ViewStore(path.join(d, "materialized.db"));
+	stores.push(store);
+	return store;
 }
 
 afterEach(() => {
+	// Close SQLite handles BEFORE removing the directory: Windows refuses
+	// to delete a file that is still open (EBUSY), so an unclosed store
+	// leaves every afterEach on this platform failing with EBUSY.
+	for (const store of stores.splice(0)) store.close();
 	for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
 });
 
