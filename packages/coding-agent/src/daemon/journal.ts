@@ -124,10 +124,20 @@ export class AppendJournal {
 		// high-frequency event burst can never lose its tail. The chain
 		// awaits #fdReady so an append landing during a rewrite's
 		// close→rename→reopen window is written to the reopened fd.
+		// EBADF is tolerated: a cross-instance rewrite (forEachFdInstance
+		// closing every fd on the file) can close this instance's fd after
+		// the captured handle was resolved from #fdReady but before the
+		// actual write — the event is lost but the journal stays operational.
 		const prev = this.#pendingWrite ?? Promise.resolve();
 		this.#pendingWrite = prev
 			.then(() => this.#fdReady)
-			.then(fd => fd?.write(line))
+			.then(fd => {
+				if (!fd) return;
+				return fd.write(line).catch((err: unknown) => {
+					if (err instanceof Error && (err as NodeJS.ErrnoException).code === "EBADF") return;
+					throw err;
+				});
+			})
 			.then(() => {});
 		return seq;
 	}

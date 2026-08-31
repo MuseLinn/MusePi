@@ -306,6 +306,18 @@ if (isMainThread) {
 				await runQuit(0, "native");
 				return;
 			}
+			// EBADF from a write (`syscall: "write"`) is the closed-descriptor
+			// sibling of EPIPE: on Windows a pipe whose peer has gone away can
+			// surface as EBADF instead of EPIPE, and any in-flight async
+			// FileHandle.write() whose handle was just closed (daemon teardown
+			// racing a still-pending write, a parent process that closed our
+			// stdio) rejects with this. Like IPC-send EPIPE it comes from an
+			// optional/comms path and must never take down the whole process —
+			// the owning client recovers the subsystem. Log and continue.
+			if ("code" in err && err.code === "EBADF" && "syscall" in err && err.syscall === "write") {
+				logger.warn("Ignoring EBADF from write to a closed descriptor; subsystem will self-recover", { err });
+				return;
+			}
 			if (isExpectedCleanupError(reason)) {
 				logger.warn("Ignoring expected cleanup rejection", { err });
 				return;
