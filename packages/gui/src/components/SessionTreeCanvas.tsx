@@ -173,25 +173,27 @@ export function layoutTree(
 		}
 	}
 	// y 重排(关键):折叠段内节点被胶囊替代后,后续节点的 y 必须上移。
-	// 每节点 y = 父节点 y + (同轮?轮内紧凑间距:轮间大间距)——同一轮
+	// 每节点 y = 父节点底部 + (同轮?轮内紧凑间距:轮间大间距)——同一轮
 	// (user→assistant→toolResult)的节点垂直紧凑堆叠成簇,轮间拉开,
 	// 地图按"轮"阅读(用户: 应该以每一轮的 User/ASSISTANT 堆叠)。
+	// 注意:间距必须含 NODE_H(卡片不重叠)——同轮 12px 紧凑是"卡片间
+	// 12px 空隙",不是"起点差 12px"(后者重叠 28px,文字糊一起)。
 	// 分支子节点从父的 y 继承推进;全局 hiddenBefore 累计对多根是错的,
 	// 这里按树递归天然隔离。
 	{
 		const hiddenSet = new Set<string>();
 		for (const f of folds) for (const h of f.hiddenIds) hiddenSet.add(h);
 		const idToNode = new Map(nodes.map(n => [n.node.id, n]));
-		const walk = (node: MessageTreeNode, parentY: number | null, parentTurn: number): void => {
+		const walk = (node: MessageTreeNode, parentBottom: number | null, parentTurn: number): void => {
 			const cn = idToNode.get(node.id)!;
-			// 隐藏节点:不占位置,其子从父的 y 继承(跳过它)。
+			// 隐藏节点:不占位置,其子从父的底部继承(跳过它)。
 			if (hiddenSet.has(node.id)) {
-				for (const child of node.children) walk(child, parentY, cn.turn);
+				for (const child of node.children) walk(child, parentBottom, cn.turn);
 				return;
 			}
-			const gap = parentY === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
-			cn.y = (parentY ?? 0) + gap;
-			for (const child of node.children) walk(child, cn.y, cn.turn);
+			const gap = parentBottom === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
+			cn.y = (parentBottom ?? 0) + gap;
+			for (const child of node.children) walk(child, cn.y + NODE_H, cn.turn);
 		};
 		for (const root of roots) walk(root, null, -1);
 	}

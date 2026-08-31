@@ -29,9 +29,9 @@ describe("layoutTree 深链折叠", () => {
 		const laid = layoutTree(tree);
 		expect(laid.nodes).toHaveLength(10);
 		expect(laid.folds).toHaveLength(0);
-		// 无 entries 参数 → 全部归 turn 0,同轮紧凑堆叠(GAP_Y_TURN=12)。
-		// height = 最后节点底部(40 + 9*12) + 尾部留白(GAP_Y=64)。
-		expect(laid.height).toBe(40 + 9 * 12 + 64);
+		// 无 entries 参数 → 全部归 turn 0,同轮紧凑堆叠(卡片间 12px 空隙,
+		// 起点差 = NODE_H + 12 = 52,不重叠)。height = 最后节点底部 + 尾部留白。
+		expect(laid.height).toBe(40 + 9 * 52 + 64);
 	});
 
 	it("传 entries 时按轮分组:同轮紧凑、轮间大间距", () => {
@@ -46,11 +46,55 @@ describe("layoutTree 深链折叠", () => {
 		const laid = layoutTree(tree, entries);
 		expect(laid.nodes).toHaveLength(4);
 		const y = (id: string) => laid.nodes.find(n => n.node.id === id)!.y;
-		// 同轮:u0→a0 紧凑;u1→a1 紧凑。
-		expect(y("a0") - y("u0")).toBe(12);
-		expect(y("a1") - y("u1")).toBe(12);
-		// 轮间:u1 从 a0 大间距(GAP_Y=64)开始新轮。
-		expect(y("u1") - y("a0")).toBe(64);
+		// 同轮:u0→a0 卡片间 12px 空隙(起点差 NODE_H+12=52,不重叠)。
+		expect(y("a0") - y("u0")).toBe(52);
+		expect(y("a1") - y("u1")).toBe(52);
+		// 轮间:u1 从 a0 卡片间大间距 64px(起点差 NODE_H+64=104)。
+		expect(y("u1") - y("a0")).toBe(104);
+	});
+
+	it("任何相邻节点卡片不重叠(同轮 12px 空隙,起点差含 NODE_H)", () => {
+		// 回归:同轮间距误用 12px 作起点差 → assistant 卡片盖在 user 底部
+		// 28px,文字糊一起。布局必须保证任意可见节点卡片不重叠。
+		// 折叠段内节点(渲染时隐藏)除外——它们堆叠在段首下,不参与视觉。
+		const entries = [
+			msg("u0", null, 1, "user"),
+			msg("a0", "u0", 2, "assistant"),
+			msg("u1", "a0", 3, "user"),
+			msg("a1", "u1", 4, "assistant"),
+		];
+		const laid = layoutTree(buildMessageTree(entries), entries);
+		const hidden = new Set(laid.folds.flatMap(f => f.hiddenIds));
+		const visible = laid.nodes.filter(n => !hidden.has(n.node.id)).sort((a, b) => a.y - b.y);
+		for (let i = 1; i < visible.length; i++) {
+			expect(visible[i]!.y - visible[i - 1]!.y).toBeGreaterThanOrEqual(40);
+		}
+	});
+
+	it("60 轮长会话折叠后可见节点仍不重叠", () => {
+		// 用户实际场景:长会话(60 轮交替)触发深链折叠,折叠后可见的
+		// 段首/链尾节点必须互不重叠。
+		const entries: unknown[] = [];
+		let prev: string | null = null;
+		for (let i = 0; i < 60; i++) {
+			const uid = `u${i}`;
+			entries.push(msg(uid, prev, i * 2 + 1, "user"));
+			const aid = `a${i}`;
+			entries.push(msg(aid, uid, i * 2 + 2, "assistant"));
+			prev = aid;
+		}
+		const laid = layoutTree(buildMessageTree(entries), entries);
+		expect(laid.folds.length).toBeGreaterThan(0);
+		const hidden = new Set(laid.folds.flatMap(f => f.hiddenIds));
+		const visible = laid.nodes.filter(n => !hidden.has(n.node.id)).sort((a, b) => a.y - b.y);
+		for (let i = 1; i < visible.length; i++) {
+			expect(visible[i]!.y - visible[i - 1]!.y).toBeGreaterThanOrEqual(40);
+		}
+		// 全部在画布内。
+		for (const n of laid.nodes) {
+			expect(n.y).toBeGreaterThanOrEqual(0);
+			expect(n.y).toBeLessThan(laid.height);
+		}
 	});
 
 	it("长链(> 阈值)折叠成段,画布高度大幅缩小", () => {
