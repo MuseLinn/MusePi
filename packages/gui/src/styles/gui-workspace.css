@@ -2163,6 +2163,48 @@
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 	background: var(--color-surface-raised, var(--color-bg));
 }
+/* 折叠链段胶囊:长会话的单子链压缩成一段,点击展开/收起。
+ * 视觉 = 紧凑虚线胶囊 + 箭头 + 折叠计数,明显区别于普通节点卡。 */
+.stc-fold {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	padding: 0 10px;
+	border: 1px dashed var(--color-text-faint);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	font-size: 11px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		border-color 120ms ease,
+		background 120ms ease,
+		color 120ms ease;
+}
+.stc-fold:hover {
+	border-color: var(--color-accent);
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-surface-raised, var(--color-bg)) 92%, transparent);
+}
+.stc-fold--open {
+	border-style: solid;
+	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
+}
+.stc-fold--off {
+	opacity: 0.6;
+}
+.stc-fold-text {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.stc-edge--fold {
+	stroke-dasharray: 3 3;
+	opacity: 0.55;
+}
 .stc-node--user {
 	border-left: 2px solid color-mix(in oklab, var(--color-info, #6aa1ff) 55%, transparent);
 }

@@ -1242,7 +1242,13 @@ function AppInner(): ReactNode {
 	}, []);
 
 	// ── Session selection → subscribe ──────────────────────────────────────
-	const openSession = useCallback(
+	// 防重入:重连风暴(rpc open 反复触发 reopen)会让多个 openSession 并发,
+	// 同一 sessionId 重复 resume 会在 daemon 端撞上 "Agent was replaced" 竞态
+	// (modes.list failed 的根源)。同一 session 的重复打开直接丢弃——数据由
+	// 第一次订阅/恢复持续推送,重复激活没有增量收益。
+	const openInFlightRef = useRef<string | null>(null);
+	// 真正的打开逻辑(openSession 的防重入包装内执行)。
+	const doOpenSession = useCallback(
 		async (sessionId: string): Promise<void> => {
 			// Session switch sound (page flip) — only when another session was open.
 			if (storeRef.current) sfxFor("switch");
@@ -1437,6 +1443,21 @@ function AppInner(): ReactNode {
 		},
 		[persistReadCount, refreshSessions],
 	);
+	// 防重入包装:重连风暴(rpc open 反复触发 reopen)会让多个 openSession
+	// 并发,同一 sessionId 重复 resume 会在 daemon 端撞上 "Agent was replaced"
+	// 竞态(modes.list failed 的根源)。同一 session 的重复打开直接丢弃。
+	const openSession = useCallback(
+		async (sessionId: string): Promise<void> => {
+			if (openInFlightRef.current === sessionId) return;
+			openInFlightRef.current = sessionId;
+			try {
+				await doOpenSession(sessionId);
+			} finally {
+				openInFlightRef.current = null;
+			}
+		},
+		[doOpenSession],
+	);
 	openSessionRef.current = openSession;
 
 	const togglePause = useCallback(async (): Promise<void> => {
@@ -1615,6 +1636,14 @@ function AppInner(): ReactNode {
 			const id = sessionId ?? selectedId;
 			if (!client || !id) return;
 			setError(null);
+			// 乐观回显(TUI parity):发送瞬间把用户消息插入本地视图,不等
+			// daemon 事件流回推——否则 reactivate 历史会话 / agent 思考
+			// 准备慢时,输入框已清空但气泡要等 message_start 才出现,用户
+			// 感觉"没发送"。
+			const store = storeRef.current;
+			if (store && store.sessionId === id && !deliverAs) {
+				store.optimisticEcho(text, images);
+			}
 			try {
 				// Refresh the tree/metadata right after the daemon ACCEPTS the
 				// message — a first message creates the session, and the sidebar

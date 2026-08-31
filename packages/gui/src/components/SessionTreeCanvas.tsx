@@ -11,6 +11,7 @@ import {
 	treeVerdictOf,
 } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /**
  * 第三层:会话树地图画布(dagre 式分层布局的零依赖手写版)。
@@ -27,22 +28,54 @@ const GAP_Y = 64;
 const FIT_PADDING = 28;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 2.2;
+/** 单子链折叠阈值:连续单子节点超过此深度,折叠成"链段胶囊"(点击展开)。
+ *  长会话(220+ 消息)是纯单子链,不折叠会生成 22k px 高的竖线画布。 */
+const CHAIN_FOLD_THRESHOLD = 24;
+/** 折叠段胶囊的高度(px):比普通节点矮,标注省略的节点数。 */
+const CHAIN_FOLD_H = 28;
 
 interface CanvasNode {
 	node: MessageTreeNode;
 	depth: number;
 	x: number;
 	y: number;
+	/** 折叠链段:该节点是其所在链段的"段首"(胶囊),折叠了 [node, node+len) 的 len 个节点。 */
+	foldLen?: number;
 }
 
-/** 分层布局:返回定位节点 + 画布尺寸。 */
-function layoutTree(roots: readonly MessageTreeNode[]): { nodes: CanvasNode[]; width: number; height: number } {
+/** 折叠段:一段连续单子链被折叠成段首胶囊。 */
+export interface ChainFold {
+	/** 折叠段首节点的 id(渲染胶囊;点击展开)。 */
+	headId: string;
+	/** 折叠的节点 id 列表(不含段首),展开时恢复。 */
+	hiddenIds: string[];
+	/** 折叠段深度(段首节点深度)。 */
+	depth: number;
+	/** 折叠段在画布上的 y 坐标(px)。 */
+	y: number;
+}
+
+/**
+ * 分层布局:返回定位节点 + 画布尺寸 + 折叠链段。
+ *
+ * 布局 = 后序叶槽位分配(与之前相同),叠加"单子链折叠":遍历树时把
+ * 超过 CHAIN_FOLD_THRESHOLD 的连续单子链标记为折叠段(段首胶囊 + 段内
+ * 节点不占画布高度)。折叠段可点击展开(展开后重排),信息不丢。
+ *
+ * 折叠只作用于"无分支的纯链"——任何分支点都会打断链段,所以折叠不会
+ * 隐藏分支结构,只是压缩长会话的纵向空白。
+ */
+export function layoutTree(roots: readonly MessageTreeNode[]): {
+	nodes: CanvasNode[];
+	width: number;
+	height: number;
+	folds: ChainFold[];
+} {
 	const nodes: CanvasNode[] = [];
+	const folds: ChainFold[] = [];
 	let nextSlot = 0;
-	let maxDepth = 0;
 	// 后序:叶取新槽位,内部节点取首末子均值(紧凑无重叠)。
 	const place = (node: MessageTreeNode, depth: number): number => {
-		maxDepth = Math.max(maxDepth, depth);
 		let cx: number;
 		if (node.children.length === 0) {
 			cx = nextSlot++;
@@ -54,9 +87,100 @@ function layoutTree(roots: readonly MessageTreeNode[]): { nodes: CanvasNode[]; w
 		return cx;
 	};
 	for (const root of roots) place(root, 0);
+	// 折叠链段检测:找连续单子链(每个节点唯一父 + 唯一子),从链顶向下
+	// 把超过阈值的部分切成段。任何分支点打断链段——折叠不隐藏分支,
+	// 只压缩长链纵向空白。
+	//
+	// nodes 是后序(叶在前、根在后),遍历按深度降序;每个折叠段只处理一次
+	// (段首设 foldLen,段内节点通过 foldLen 检查跳过)。
+	const chainTopOf = (n: CanvasNode): CanvasNode => {
+		// 向上回溯到链顶(首个"唯一父 + 唯一子"断链处)。
+		let cur: CanvasNode = n;
+		while (true) {
+			const parent = nodes.find(m => m.node.children.some(c => c.id === cur.node.id));
+			const parentSingle = parent && parent.node.children.length === 1;
+			const selfSingle = cur.node.children.length === 1;
+			if (!parentSingle || !selfSingle) break; // 链在此结束
+			cur = parent!;
+		}
+		return cur;
+	};
+	for (const n of nodes) {
+		// 只从"链顶"开始折叠:自身是单子节点,且父不是单子(父不存在 =
+		// 根;父多子 = 分支点) → 一段新链的起点。
+		if (n.foldLen !== undefined) continue;
+		const parent = nodes.find(m => m.node.children.some(c => c.id === n.node.id));
+		const parentSingle = parent !== undefined && parent.node.children.length === 1;
+		const selfSingle = n.node.children.length === 1;
+		const isChainTop = selfSingle && !parentSingle;
+		if (!isChainTop) continue;
+		// 收集整条链(从链顶向下)。
+		const seg: CanvasNode[] = [];
+		let cur: CanvasNode | undefined = n;
+		while (cur && cur.node.children.length === 1) {
+			seg.push(cur);
+			cur = nodes.find(m => m.node.id === cur!.node.children[0]!.id);
+		}
+		// 切段:链上超过阈值的部分,每段段首 depth >= 阈值。
+		// 段从"第一个 depth >= 阈值的节点"开始,每段最多 CHAIN_FOLD_THRESHOLD 个。
+		const startIdx = seg.findIndex(m => m.depth >= CHAIN_FOLD_THRESHOLD);
+		if (startIdx === -1) continue;
+		for (let s = startIdx; s < seg.length; s += CHAIN_FOLD_THRESHOLD) {
+			const head = seg[s]!;
+			const hidden = seg.slice(s + 1, s + CHAIN_FOLD_THRESHOLD);
+			if (hidden.length === 0) continue; // 段尾不足一段,不折叠
+			head.foldLen = hidden.length + 1;
+			const headY = head.y;
+			folds.push({
+				headId: head.node.id,
+				hiddenIds: hidden.map(h => h.node.id),
+				depth: head.depth,
+				y: headY,
+			});
+			// 段内节点标记已处理(后序数组里它们在前,设置 foldLen 防止
+			// 它们作为链顶被再次处理——虽然段内节点不满足 isChainTop,
+			// 但保险起见显式标记)。
+			for (const h of hidden) h.foldLen = hidden.length + 1;
+		}
+	}
+	// y 重排(关键):折叠段内节点被胶囊替代后,后续节点的 y 必须上移。
+	// 每节点的视觉深度 = 从根到它的路径上"非隐藏节点"的个数;y = 视觉
+	// 深度 × 行高。折叠段内节点在路径上但被跳过(它们占的是段首那一行,
+	// 第二遍再堆叠)。分支子节点从父的视觉深度 + 1 开始,各自独立推进——
+	// 全局 hiddenBefore 累计对多根/多子树是错的(会跨子树错误压缩)。
+	{
+		const hiddenSet = new Set<string>();
+		for (const f of folds) for (const h of f.hiddenIds) hiddenSet.add(h);
+		const idToNode = new Map(nodes.map(n => [n.node.id, n]));
+		const walk = (node: MessageTreeNode, visDepth: number): void => {
+			const cn = idToNode.get(node.id)!;
+			// 隐藏节点:不占视觉深度,其子从父的 visDepth 继承(跳过它)。
+			if (hiddenSet.has(node.id)) {
+				for (const child of node.children) walk(child, visDepth);
+				return;
+			}
+			cn.y = visDepth * (NODE_H + GAP_Y);
+			for (const child of node.children) walk(child, visDepth + 1);
+		};
+		for (const root of roots) walk(root, 0);
+	}
+	// 第二遍:段内节点堆叠到"重排后的段首"下方(段首已重排)。
+	for (const n of nodes) {
+		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
+		if (!foldFor) continue;
+		const headNode = nodes.find(m => m.node.id === foldFor.headId);
+		if (headNode) n.y = headNode.y + CHAIN_FOLD_H;
+	}
+	// 画布高度:由重排后的实际节点位置决定(折叠段内节点渲染时隐藏,
+	// 不计入)。不能用 `maxDepth - totalHidden` 公式——多分支/多折叠段
+	// 场景下不同链的隐藏数不同,全局相减会算错(段首 y 超过 height 被裁剪)。
+	const visibleMaxY = nodes.reduce((acc, n) => {
+		if (folds.some(f => f.hiddenIds.includes(n.node.id))) return acc;
+		return Math.max(acc, n.y);
+	}, 0);
 	const width = Math.max(nextSlot, 1) * (NODE_W + GAP_X);
-	const height = (maxDepth + 1) * (NODE_H + GAP_Y);
-	return { nodes, width, height };
+	const height = visibleMaxY + NODE_H + GAP_Y;
+	return { nodes, width, height, folds };
 }
 
 /** 聚焦卡片的完整消息内容(文本/思考/工具调用拼接)。 */
@@ -140,8 +264,14 @@ export function SessionTreeCanvas({
 		null,
 	);
 	// 单击/双击消歧:单击 = 聚焦详情卡,双击 = 跳转 transcript。
-	const singleClickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const singleClickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const [focusedId, setFocusedId] = useState<string | null>(null);
+	// focusedId 的 ref 镜像:handleClick 的 220ms 消歧 timer 读最新值,
+	// 避免闭包捕获旧 focusedId(点 A 开卡 → 点 B 时 timer 仍拿 A,误判)。
+	const focusedIdRef = useRef<string | null>(null);
+	useEffect(() => {
+		focusedIdRef.current = focusedId;
+	}, [focusedId]);
 	// 聚焦详情卡显隐:closeFocus 只播退场,动画结束才真卸载(--closing 语义,
 	// 与 DialogFrame/Pop 一致)。
 	const [focusClosing, setFocusClosing] = useState(false);
@@ -154,6 +284,27 @@ export function SessionTreeCanvas({
 		setFocusClosing(false);
 		setFocusedId(null);
 	};
+	// 折叠链段展开/收起:展开后该段节点参与布局与交互,收起回到胶囊。
+	const toggleFold = useCallback((headId: string): void => {
+		setExpandedFolds(prev => {
+			const next = new Set(prev);
+			if (next.has(headId)) next.delete(headId);
+			else next.add(headId);
+			return next;
+		});
+	}, []);
+	// 右键菜单:节点 → 跳转/重答/分叉;空白 → 重置视图/折叠全部链段。
+	const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string | null } | null>(null);
+	const closeCtxMenu = useCallback((): void => setCtxMenu(null), []);
+	const onNodeContextMenu = useCallback((e: React.MouseEvent, nodeId: string): void => {
+		e.preventDefault();
+		e.stopPropagation();
+		setCtxMenu({ x: e.clientX, y: e.clientY, nodeId });
+	}, []);
+	const onBlankContextMenu = useCallback((e: React.MouseEvent): void => {
+		e.preventDefault();
+		setCtxMenu({ x: e.clientX, y: e.clientY, nodeId: null });
+	}, []);
 	// 搜索定位。
 	const [searchQuery, setSearchQuery] = useState("");
 	const [searchMatchIds, setSearchMatchIds] = useState<ReadonlySet<string>>(new Set());
@@ -173,7 +324,12 @@ export function SessionTreeCanvas({
 		setPositions(sessionKey ? loadPositions(sessionKey) : {});
 	}, [sessionKey]);
 
-	const { nodes, width, height } = useMemo(() => {
+	// 折叠链段的展开状态:key = fold.headId;展开后该段节点重新布局并显示。
+	// 折叠是"视觉压缩"——展开/收起只影响画布,不丢消息(与 Transcript 窗口化
+	// 同哲学:折叠是渲染层,数据全量)。初始全部折叠(长会话默认可读)。
+	const [expandedFolds, setExpandedFolds] = useState<ReadonlySet<string>>(new Set());
+
+	const { nodes, width, height, folds } = useMemo(() => {
 		const laid = layoutTree(roots);
 		let w = laid.width;
 		let h = laid.height;
@@ -182,8 +338,19 @@ export function SessionTreeCanvas({
 			w = Math.max(w, p.x + NODE_W + GAP_X);
 			h = Math.max(h, p.y + NODE_H + GAP_Y);
 		}
-		return { nodes: laid.nodes, width: w, height: h };
+		return { nodes: laid.nodes, width: w, height: h, folds: laid.folds };
 	}, [roots, positions]);
+	// 折叠段内节点:折叠时隐藏(不渲染);展开时显示。段首胶囊始终渲染。
+	const hiddenNodeIds = useMemo(() => {
+		const hidden = new Set<string>();
+		for (const f of folds) {
+			if (expandedFolds.has(f.headId)) continue;
+			for (const id of f.hiddenIds) hidden.add(id);
+		}
+		return hidden;
+	}, [folds, expandedFolds]);
+	// 折叠段内节点不参与交互定位(点击/搜索/跳转跳过它们)。
+	const interactiveNodes = useMemo(() => nodes.filter(n => !hiddenNodeIds.has(n.node.id)), [nodes, hiddenNodeIds]);
 	// 有效节点坐标 = 自由摆位覆盖 ?? 自动布局(render 用;回调走 positionsRef
 	// 以免把 positions 拖进 centerOnNode/fitView 依赖,引起拖拽中反复重建)。
 	const posOf = (n: CanvasNode): { x: number; y: number } => positions[n.node.id] ?? { x: n.x, y: n.y };
@@ -195,11 +362,14 @@ export function SessionTreeCanvas({
 		if (leafId != null && nodes.some(n => n.node.id === leafId)) return leafId;
 		let deepest: CanvasNode | undefined;
 		for (const n of nodes) {
+			// 折叠段内节点不可见,不参与"我在哪"定位(否则回到当前位置会
+			// 定到隐藏节点上)。
+			if (hiddenNodeIds.has(n.node.id)) continue;
 			if (activePathIds && !activePathIds.has(n.node.id)) continue;
 			if (!deepest || n.depth > deepest.depth || (n.depth === deepest.depth && n.x > deepest.x)) deepest = n;
 		}
 		return deepest?.node.id ?? null;
-	}, [leafId, activePathIds, nodes]);
+	}, [leafId, activePathIds, nodes, hiddenNodeIds]);
 
 	// Fit-to-viewport: runs once per canvas mount (the component only renders
 	// in canvas view mode) and re-runs when the wrap leaves a degenerate size
@@ -232,6 +402,8 @@ export function SessionTreeCanvas({
 			return;
 		}
 		// Huge tree: readable scale, centered on the current position.
+		// 用能放下整棵树的缩放(至少 0.5,不至于小到不可读)——折叠后画布
+		// 矮很多,fullScale 会明显变大,固定 0.7 反而浪费。
 		const focus =
 			(currentNodeId != null ? nodes.find(n => n.node.id === currentNodeId) : undefined) ??
 			nodes.find(n => n.depth === 0) ??
@@ -239,7 +411,9 @@ export function SessionTreeCanvas({
 			null;
 		const fx = focus ? focus.x + NODE_W / 2 : width / 2;
 		const fy = focus ? focus.y + NODE_H / 2 : height / 2;
-		setView({ scale: 0.7, x: cw / 2 - fx * 0.7, y: ch / 2 - fy * 0.7 });
+		const fitScale = Math.max(0.5, Math.min((cw - FIT_PADDING * 2) / width, (ch - FIT_PADDING * 2) / height));
+		const scale = Math.min(1, fitScale);
+		setView({ scale, x: cw / 2 - fx * scale, y: ch / 2 - fy * scale });
 	}, [width, height, nodes, currentNodeId]);
 	useEffect(() => {
 		const wrap = wrapRef.current;
@@ -272,8 +446,9 @@ export function SessionTreeCanvas({
 	const searchMatchArray = useMemo(() => {
 		if (!searchQuery.trim()) return [] as CanvasNode[];
 		const q = searchQuery.toLowerCase();
-		return nodes.filter(n => treeTextOf(n.node.entry).toLowerCase().includes(q));
-	}, [searchQuery, nodes]);
+		// 只搜可见节点(折叠段内节点不参与定位——搜到也看不见,白跳)。
+		return interactiveNodes.filter(n => treeTextOf(n.node.entry).toLowerCase().includes(q));
+	}, [searchQuery, interactiveNodes]);
 
 	useEffect(() => {
 		setSearchMatchIds(new Set(searchMatchArray.map(n => n.node.id)));
@@ -291,7 +466,8 @@ export function SessionTreeCanvas({
 		[searchCurrentIdx, searchMatchArray, centerOnNode],
 	);
 
-	const onWheel = useCallback((e: React.WheelEvent) => {
+	const onWheel = useCallback((e: WheelEvent) => {
+		// 原生非 passive 监听(preventDefault 才生效,阻止画布下方页面滚动)。
 		e.preventDefault();
 		const wrap = wrapRef.current;
 		if (!wrap) return;
@@ -305,11 +481,32 @@ export function SessionTreeCanvas({
 			return { scale, x: mx - (mx - v.x) * k, y: my - (my - v.y) * k };
 		});
 	}, []);
+	// React 的 onWheel 在 root 上注册为 passive(preventDefault 无效并报
+	// "Unable to preventDefault inside passive event listener"),所以滚轮
+	// 缩放必须走原生 addEventListener({ passive: false })。effect 挂在
+	// wrap 上,卸载时移除。
+	useEffect(() => {
+		const wrap = wrapRef.current;
+		if (!wrap) return;
+		wrap.addEventListener("wheel", onWheel, { passive: false });
+		return () => wrap.removeEventListener("wheel", onWheel);
+	}, [onWheel]);
 
 	const onPointerDown = useCallback(
 		(e: React.PointerEvent) => {
-			// 背景左键拖拽 = 平移;节点上的拖拽也平移(单击仍触发跳转,拖动超阈值则吞掉 click)。
+			// 画布拖拽只在"空白处"启动——点在任何可交互元素(节点卡片、
+			// 折叠胶囊、聚焦卡、缩放按钮、搜索框、右键菜单)上都不该平移
+			// 画布,否则拖拽抢占 pointer capture 会吞掉那些交互(用户:
+			// 进入聚焦了鼠标还是拖动,只有按 esc 能退出)。
 			if (e.button !== 0) return;
+			const target = e.target as HTMLElement;
+			if (
+				target.closest(
+					".stc-node, .stc-fold, .stc-focus-overlay, .stc-focus-card, .stc-zoom, .stc-search, .gui-context-menu",
+				)
+			) {
+				return;
+			}
 			dragRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false };
 			setDragging(true);
 			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -322,7 +519,7 @@ export function SessionTreeCanvas({
 		if (!d) return;
 		const dx = e.clientX - d.px;
 		const dy = e.clientY - d.py;
-		if (Math.abs(dx) + Math.abs(dy) > 4) d.moved = true;
+		if (Math.abs(dx) + Math.abs(dy) > 6) d.moved = true;
 		setView(v => ({ ...v, x: d.vx + dx, y: d.vy + dy }));
 	}, []);
 
@@ -333,8 +530,9 @@ export function SessionTreeCanvas({
 		setDragging(false);
 	}, []);
 
-	// 节点自由拖拽(空间记忆):节点上按下 = 拖节点(阻断背景平移),拖动
-	// 超阈值即吞掉后续 click(避免拖完又触发聚焦),松手 16px 网格吸附 + 持久化。
+	// 节点自由拖拽(空间记忆):节点上按下 = 记录起点(不立即 capture——
+	// 单击打开聚焦卡不应抢占指针,否则聚焦后鼠标移动还在拖节点);
+	// 超过阈值确认拖动后才 capture + 平移,松手 16px 网格吸附 + 持久化。
 	const onNodePointerDown = useCallback(
 		(e: React.PointerEvent, nodeId: string): void => {
 			if (e.button !== 0) return;
@@ -343,7 +541,6 @@ export function SessionTreeCanvas({
 			e.stopPropagation();
 			const p = positionsRef.current[nodeId] ?? { x: n.x, y: n.y };
 			nodeDragRef.current = { id: nodeId, px: e.clientX, py: e.clientY, ox: p.x, oy: p.y, moved: false };
-			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		},
 		[nodes],
 	);
@@ -353,7 +550,13 @@ export function SessionTreeCanvas({
 		if (!d) return;
 		const dx = e.clientX - d.px;
 		const dy = e.clientY - d.py;
-		if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+		// 超过阈值才算拖动:此刻才 capture 指针(单击不 capture,聚焦卡/其他
+		// 交互不被拖拽抢占)。
+		if (!d.moved && Math.abs(dx) + Math.abs(dy) > 6) {
+			d.moved = true;
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+		}
+		if (!d.moved) return;
 		const next = { ...positionsRef.current, [d.id]: { x: d.ox + dx, y: d.oy + dy } };
 		positionsRef.current = next;
 		setPositions(next);
@@ -375,30 +578,81 @@ export function SessionTreeCanvas({
 	}, [sessionKey]);
 
 	// 单击 = 聚焦详情;双击 = 跳转 transcript(220ms 消歧)。
-	const handleClick = useCallback(
-		(nodeId: string) => {
-			if (suppressClick.current) return;
-			if (singleClickTimer.current !== null) clearTimeout(singleClickTimer.current);
-			singleClickTimer.current = setTimeout(() => {
-				if (focusedId === nodeId) closeFocus();
-				else openFocus(nodeId);
-			}, 220);
-		},
-		[focusedId],
-	);
+	const handleClick = useCallback((nodeId: string) => {
+		// 拖拽吞掉的 click 只吞一次,消费后复位——否则拖过一次节点后
+		// 所有点击永久被吞(聚焦卡点了关不掉)。
+		const suppressed = suppressClick.current;
+		suppressClick.current = false;
+		if (suppressed) return;
+		clearTimeout(singleClickTimer.current);
+		singleClickTimer.current = setTimeout(() => {
+			singleClickTimer.current = undefined;
+			// 读 ref 而非闭包 focusedId:连续点不同节点时,比较的是"当前
+			// 打开的卡"而非 timer 创建时捕获的旧值。
+			if (focusedIdRef.current === nodeId) closeFocus();
+			else openFocus(nodeId);
+		}, 220);
+	}, []);
 
 	const handleDblClick = useCallback(
 		(nodeId: string) => {
-			if (singleClickTimer.current !== null) {
-				clearTimeout(singleClickTimer.current);
-				singleClickTimer.current = null;
-			}
-			suppressClick.current = true;
+			clearTimeout(singleClickTimer.current);
+			singleClickTimer.current = undefined;
+			suppressClick.current = false;
+			// 双击跳转:立即卸载聚焦卡(不等退场动画,跳转是即时导航)。
+			setFocusClosing(false);
 			setFocusedId(null);
 			onJump(nodeId);
 		},
 		[onJump],
 	);
+
+	// 右键菜单项:节点 → 跳转/重答/分叉;空白 → 视图控制。定义在
+	// handleDblClick/fitView 之后(它们被引用)。
+	const ctxItems = useMemo<ContextMenuItem[]>(() => {
+		if (!ctxMenu) return [];
+		if (ctxMenu.nodeId !== null) {
+			const items: ContextMenuItem[] = [
+				{
+					label: t("trajectory jump"),
+					icon: "arrow-go-forward",
+					onSelect: () => handleDblClick(ctxMenu.nodeId!),
+				},
+			];
+			if (onBranchTo) {
+				items.push({
+					label: t("branch re-answer here"),
+					icon: "git-branch",
+					onSelect: () => onBranchTo(ctxMenu.nodeId!),
+				});
+			}
+			if (onForkAt) {
+				items.push({
+					label: t("fork session here"),
+					icon: "git-fork",
+					onSelect: () => onForkAt(ctxMenu.nodeId!),
+				});
+			}
+			return items;
+		}
+		// 空白处右键:视图控制。
+		return [
+			{
+				label: t("canvas reset view"),
+				icon: "align-justify",
+				onSelect: () => {
+					needsFitRef.current = true;
+					fitView();
+				},
+			},
+			{
+				label: t("collapse all chains"),
+				icon: "arrow-up-s",
+				onSelect: () => setExpandedFolds(new Set()),
+			},
+		];
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ctxMenu, onBranchTo, onForkAt, fitView, handleDblClick]);
 
 	const focusedEntry = useMemo(() => {
 		if (focusedId === null) return null;
@@ -422,15 +676,20 @@ export function SessionTreeCanvas({
 		<div
 			ref={wrapRef}
 			className="stc-wrap"
-			onWheel={onWheel}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
 			onPointerUp={onPointerUp}
 			onPointerCancel={onPointerUp}
+			onContextMenu={onBlankContextMenu}
 			data-dragging={dragging || undefined}
 		>
 			{/* 搜索定位条 */}
-			<div className="stc-search" role="search" onClick={e => e.stopPropagation()}>
+			<div
+				className="stc-search"
+				role="search"
+				onClick={e => e.stopPropagation()}
+				onPointerDown={e => e.stopPropagation()}
+			>
 				<Icon name="search" className="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" />
 				<input
 					className="stc-search-input"
@@ -504,22 +763,25 @@ export function SessionTreeCanvas({
 							</marker>
 						</defs>
 						{nodes.flatMap(n => {
+							// 折叠段内节点不画边(它们的进出边由段首胶囊接管)。
+							if (hiddenNodeIds.has(n.node.id)) return [];
 							const p = posOf(n);
 							return n.node.children.map(c => {
 								const child = nodes.find(m => m.node.id === c.id);
 								if (!child) return null;
-								const pc = posOf(child);
+								// 子节点在折叠段内:边画到胶囊下沿即可(箭头指向折叠段)。
+								const childHidden = hiddenNodeIds.has(child.node.id);
+								const pc = childHidden ? posOf(n) : posOf(child);
 								const x1 = p.x + NODE_W / 2;
 								const y1 = p.y + NODE_H;
 								const x2 = pc.x + NODE_W / 2;
-								// Leave room so the arrowhead lands at the child top edge.
-								const y2 = pc.y + 4;
+								const y2 = childHidden ? pc.y + CHAIN_FOLD_H : pc.y + 4;
 								const my = (y1 + y2) / 2;
 								const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
 								return (
 									<path
 										key={`${n.node.id}-${c.id}`}
-										className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
+										className={`stc-edge${onPath ? "" : " stc-edge--off"}${childHidden ? " stc-edge--fold" : ""}`}
 										markerEnd={onPath ? "url(#stc-arrow)" : undefined}
 										d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
 									/>
@@ -528,6 +790,11 @@ export function SessionTreeCanvas({
 						})}
 					</svg>
 					{nodes.map(n => {
+						// 折叠段内节点:折叠时完全隐藏(不渲染)。
+						if (hiddenNodeIds.has(n.node.id)) return null;
+						const fold = folds.find(f => f.headId === n.node.id);
+						const isFoldHead = fold !== undefined;
+						const foldExpanded = isFoldHead && expandedFolds.has(n.node.id);
 						const kind = treeKindOf(n.node.entry);
 						const p = posOf(n);
 						const isLeaf = leafId != null && n.node.id === leafId;
@@ -546,6 +813,42 @@ export function SessionTreeCanvas({
 						const clockText = n.node.timestamp
 							? new Date(n.node.timestamp).toLocaleTimeString(undefined, { hour12: false })
 							: "";
+						// 折叠段首:胶囊样式 + 折叠计数 + 点击展开/收起。
+						if (isFoldHead) {
+							const hiddenCount = fold!.hiddenIds.length;
+							return (
+								<div
+									key={n.node.id}
+									className={`stc-fold${foldExpanded ? " stc-fold--open" : ""}${onPath ? " stc-fold--active" : " stc-fold--off"}`}
+									style={{ left: p.x, top: p.y, width: NODE_W, height: CHAIN_FOLD_H }}
+									onClick={e => {
+										e.stopPropagation();
+										toggleFold(n.node.id);
+									}}
+									title={
+										foldExpanded
+											? t("collapse chain segment")
+											: t("expand chain segment", { count: hiddenCount })
+									}
+									role="button"
+									tabIndex={0}
+									onKeyDown={e => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											toggleFold(n.node.id);
+										}
+									}}
+								>
+									<Icon
+										name={foldExpanded ? "arrow-up-s" : "arrow-down-s"}
+										className="h-3 w-3 flex-shrink-0"
+									/>
+									<span className="stc-fold-text">
+										{foldExpanded ? t("chain expanded") : t("chain collapsed", { count: hiddenCount })}
+									</span>
+								</div>
+							);
+						}
 						return (
 							<div
 								key={n.node.id}
@@ -556,6 +859,7 @@ export function SessionTreeCanvas({
 								onPointerUp={onNodePointerUp}
 								onClick={() => handleClick(n.node.id)}
 								onDoubleClick={() => handleDblClick(n.node.id)}
+								onContextMenu={e => onNodeContextMenu(e, n.node.id)}
 								title={treeTextOf(n.node.entry)}
 							>
 								<Icon
@@ -613,6 +917,7 @@ export function SessionTreeCanvas({
 				<div
 					className={`stc-focus-overlay${focusClosing ? " stc-focus-overlay--closing" : ""}`}
 					onClick={closeFocus}
+					onPointerDown={e => e.stopPropagation()}
 					onAnimationEnd={() => {
 						if (focusClosing) finishFocusClose();
 					}}
@@ -651,7 +956,7 @@ export function SessionTreeCanvas({
 			) : null}
 
 			{/* 右下缩放控件(滚轮之外的精确入口)。 */}
-			<div className="stc-zoom">
+			<div className="stc-zoom" onPointerDown={e => e.stopPropagation()}>
 				<button
 					type="button"
 					className="stc-zoom-btn"
@@ -711,6 +1016,9 @@ export function SessionTreeCanvas({
 					<Icon name="subtract" className="h-3 w-3" />
 				</button>
 			</div>
+
+			{/* 右键菜单(节点操作 / 空白视图控制)。 */}
+			{ctxMenu && <ContextMenu x={ctxMenu.x} y={ctxMenu.y} items={ctxItems} open onClose={closeCtxMenu} />}
 		</div>
 	);
 }

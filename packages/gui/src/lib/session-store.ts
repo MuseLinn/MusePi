@@ -133,6 +133,11 @@ export class GuiSessionStore {
 	#recap: { text: string; at: number } | null = null;
 	#roundDurations: Map<number, number>;
 	#listeners = new Set<() => void>();
+	/** 乐观回显:发送瞬间本地插入的用户消息(TUI startPendingSubmission
+	 *  parity)。daemon 的 message_start 到达时按内容签名移除,由权威
+	 *  entry 接管;turn 结束仍未匹配则清空(防幽灵)。 */
+	#optimisticUser: { text: string; images?: { type: "image"; data: string; mimeType: string }[] } | null = null;
+	#optimisticSeq = 0;
 	/** Cached snapshot — `useSyncExternalStore` requires a stable reference
 	 *  between mutations, so the snapshot is rebuilt only inside {@link apply}. */
 	#snapshot: GuiSessionState;
@@ -255,15 +260,62 @@ export class GuiSessionStore {
 		this.#emit();
 	}
 
+	/**
+	 * 乐观回显:发送后立即把用户消息插入本地视图,不等 daemon 事件流
+	 * 回推(TUI startPendingSubmission parity)。daemon 的 user
+	 * message_start 到达时按内容签名匹配并移除,由权威 entry 接管。
+	 * turn 结束(agent_end)仍未匹配则清空——发送失败/被吞时不留幽灵。
+	 */
+	optimisticEcho(text: string, images?: { type: "image"; data: string; mimeType: string }[]): void {
+		this.#optimisticUser = { text, images };
+		this.#optimisticSeq += 1;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	/** 乐观条目内容签名(与 daemon message_start 比对)。 */
+	#optimisticSignature(): string {
+		const o = this.#optimisticUser;
+		if (!o) return "";
+		return `${o.text}\u0000${o.images?.length ?? 0}`;
+	}
+
+	/** 移除乐观回显(权威条目已接管 / turn 结束清理)。 */
+	#clearOptimisticUser(): void {
+		if (!this.#optimisticUser) return;
+		this.#optimisticUser = null;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
 	getSnapshot(): GuiSessionState {
 		return this.#snapshot;
 	}
 
 	#buildSnapshot(): GuiSessionState {
 		const snap = this.#view.snapshot();
+		// 乐观回显条目:发送瞬间本地插入的用户消息,追加在 entries 尾部
+		// (daemon 权威 message_start 到达后 #applyNow 清除)。
+		let entries = snap.entries;
+		if (this.#optimisticUser) {
+			const o = this.#optimisticUser;
+			const optimisticEntry: SessionEntry = {
+				type: "message",
+				// 本地唯一 id(与 daemon 的 user:timestamp 空间隔离,绝不去重冲突)。
+				id: `user:optimistic-${this.#optimisticSeq}`,
+				parentId: null,
+				timestamp: new Date().toISOString(),
+				message: {
+					role: "user",
+					timestamp: Date.now(),
+					content: [...(o.text ? [{ type: "text" as const, text: o.text }] : []), ...(o.images ?? [])],
+				},
+			};
+			entries = [...entries, optimisticEntry];
+		}
 		return {
 			sessionId: this.#sessionId,
-			entries: snap.entries,
+			entries,
 			state: snap.state,
 			streaming: this.#streaming,
 			activeTools: this.#activeTools,
@@ -514,7 +566,24 @@ export class GuiSessionStore {
 				// never lags the bubble: agent_start / turn_start can be seconds
 				// away (auto-thinking classification + provider prep). turn_end /
 				// agent-end state frames reset it.
-				else if (ev.message.role === "user") this.#working = true;
+				else if (ev.message.role === "user") {
+					this.#working = true;
+					// 乐观回显接管:daemon 的 user message_start 到达 → 按内容
+					// 签名匹配本地乐观条目 → 移除,由权威 entry 渲染(签名
+					// 不匹配说明是历史/他处消息,乐观条目留待 turn 结束清理)。
+					const m = ev.message;
+					const text =
+						typeof m.content === "string"
+							? m.content
+							: (m.content ?? [])
+									.filter(c => c.type === "text")
+									.map(c => (c.type === "text" ? c.text : ""))
+									.join("");
+					const imageCount = Array.isArray(m.content) ? m.content.filter(c => c.type === "image").length : 0;
+					if (this.#optimisticUser && this.#optimisticSignature() === `${text}\u0000${imageCount}`) {
+						this.#clearOptimisticUser();
+					}
+				}
 				break;
 			}
 			case "message_update": {
@@ -609,6 +678,9 @@ export class GuiSessionStore {
 				// capsule; aborted runs rely on the stopReason frame below.
 				this.#working = false;
 				this.#streaming = false;
+				// Run 结束:乐观回显仍未匹配(daemon 没回推同名 user 消息)
+				// → 发送被吞/失败,清掉本地幽灵,不留占位。
+				if (this.#optimisticUser) this.#clearOptimisticUser();
 				const t = ev as { type: "agent_end"; messages?: Array<{ role?: string; stopReason?: string }> };
 				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
 				const stopReason = last?.stopReason;
