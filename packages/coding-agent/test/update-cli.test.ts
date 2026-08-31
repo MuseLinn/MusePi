@@ -151,25 +151,39 @@ describe("update-cli install target detection", () => {
 		expect(method).toBe("npm");
 	});
 
-	itPosixOnly("uses binary update when a plain file in the npm global bin dir is the standalone binary, not an npm symlink", () => {
+	it("uses binary update when a plain file in the npm global bin dir is the standalone binary, not an npm symlink", () => {
 		// Regression: with `npm prefix -g` pointed at the installer's default
 		// (~/.local), directory containment alone misclassified the standalone
 		// binary as npm-managed, so `npm install -g` failed with EEXIST refusing
 		// to overwrite the existing executable.
-		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", undefined, {
-			npmBinDir: "/home/u/.local/bin",
-			musepiIsRegularFile: true,
-		});
+		const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		if (!platformDescriptor) throw new Error("process.platform descriptor missing");
+		Object.defineProperty(process, "platform", { ...platformDescriptor, value: "linux" });
+		try {
+			const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", undefined, {
+				npmBinDir: "/home/u/.local/bin",
+				musepiIsRegularFile: true,
+			});
 
-		expect(method).toBe("binary");
+			expect(method).toBe("binary");
+		} finally {
+			Object.defineProperty(process, "platform", platformDescriptor);
+		}
 	});
 
-	itPosixOnly("uses binary update when a plain file in the bun global bin dir is the standalone binary", () => {
-		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", "/home/u/.local/bin", {
-			musepiIsRegularFile: true,
-		});
+	it("uses binary update when a plain file in the bun global bin dir is the standalone binary", () => {
+		const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+		if (!platformDescriptor) throw new Error("process.platform descriptor missing");
+		Object.defineProperty(process, "platform", { ...platformDescriptor, value: "linux" });
+		try {
+			const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", "/home/u/.local/bin", {
+				musepiIsRegularFile: true,
+			});
 
-		expect(method).toBe("binary");
+			expect(method).toBe("binary");
+		} finally {
+			Object.defineProperty(process, "platform", platformDescriptor);
+		}
 	});
 
 	it("keeps bun update for regular-file entries in the bun global bin dir on Windows, where bun writes .exe shims", () => {
