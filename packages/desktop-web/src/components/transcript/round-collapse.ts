@@ -55,7 +55,7 @@ function countWorkInside(
 	let preview = "";
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
-		if (!e || e.type !== "message") continue;
+		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "bashExecution") {
 			commandCount++;
@@ -97,7 +97,7 @@ export function buildRoundFolds(
 	let userIdx = -1;
 	for (let i = 0; i < entries.length; i++) {
 		const e = entries[i];
-		if (!e || e.type !== "message") continue;
+		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "user") {
 			userIdx = i;

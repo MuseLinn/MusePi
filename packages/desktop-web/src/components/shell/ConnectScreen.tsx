@@ -1,8 +1,8 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import { useBackLayer } from "../../lib/back-stack";
 import { useLocale } from "../../i18n/use-locale.js";
+import { useBackLayer } from "../../lib/back-stack";
 import { isNativeShell } from "../../lib/capacitor";
 import { type Connection, loadConnections, removeConnection } from "../../lib/connections";
 import { haptic } from "../../lib/haptics";

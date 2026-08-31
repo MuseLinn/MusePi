@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
+import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { GuestClient } from "../src/lib/client";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;

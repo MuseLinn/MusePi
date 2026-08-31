@@ -233,29 +233,32 @@ describe("update-cli install target detection", () => {
 		expect(await fs.readlink(aliasPath)).toBe(standalonePath);
 	});
 
-	itPosixOnly("keeps an npm-linked checkout under npm management instead of overwriting its resolved script", async () => {
-		const dir = await makeTempDir();
-		const npmPrefix = path.join(dir, ".npm-global");
-		const npmBinDir = path.join(npmPrefix, "bin");
-		const packagePath = path.join(npmPrefix, "lib", "node_modules", "@musepi", "pi-coding-agent");
-		const checkoutPath = path.join(dir, "checkout");
-		const checkoutCli = path.join(checkoutPath, "dist", "cli.js");
-		const aliasPath = path.join(npmBinDir, "musepi");
-		await fs.mkdir(npmBinDir, { recursive: true });
-		await fs.mkdir(path.dirname(packagePath), { recursive: true });
-		await Bun.write(checkoutCli, "linked checkout");
-		await fs.symlink(checkoutPath, packagePath, "junction");
-		await fs.symlink(path.relative(npmBinDir, path.join(packagePath, "dist", "cli.js")), aliasPath);
+	itPosixOnly(
+		"keeps an npm-linked checkout under npm management instead of overwriting its resolved script",
+		async () => {
+			const dir = await makeTempDir();
+			const npmPrefix = path.join(dir, ".npm-global");
+			const npmBinDir = path.join(npmPrefix, "bin");
+			const packagePath = path.join(npmPrefix, "lib", "node_modules", "@musepi", "pi-coding-agent");
+			const checkoutPath = path.join(dir, "checkout");
+			const checkoutCli = path.join(checkoutPath, "dist", "cli.js");
+			const aliasPath = path.join(npmBinDir, "musepi");
+			await fs.mkdir(npmBinDir, { recursive: true });
+			await fs.mkdir(path.dirname(packagePath), { recursive: true });
+			await Bun.write(checkoutCli, "linked checkout");
+			await fs.symlink(checkoutPath, packagePath, "junction");
+			await fs.symlink(path.relative(npmBinDir, path.join(packagePath, "dist", "cli.js")), aliasPath);
 
-		const target = resolveUpdateTargetFromPath(aliasPath, undefined, {
-			allowPackageManagers: true,
-			npmBinDir,
-		});
+			const target = resolveUpdateTargetFromPath(aliasPath, undefined, {
+				allowPackageManagers: true,
+				npmBinDir,
+			});
 
-		expect(await fs.realpath(aliasPath)).toBe(checkoutCli);
-		expect(target).toEqual({ method: "npm", path: aliasPath });
-		expect(await Bun.file(checkoutCli).text()).toBe("linked checkout");
-	});
+			expect(await fs.realpath(aliasPath)).toBe(checkoutCli);
+			expect(target).toEqual({ method: "npm", path: aliasPath });
+			expect(await Bun.file(checkoutCli).text()).toBe("linked checkout");
+		},
+	);
 
 	it("treats a Bun-bin alias into ~/.bun/custom as foreign", async () => {
 		const dir = await makeTempDir();
