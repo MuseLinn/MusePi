@@ -1,5 +1,4 @@
 import { describe, expect, it } from "bun:test";
-import { postmortem } from "@musepi/pi-utils";
 
 const childFlag = "--ebadf-child";
 const childFlagIndex = process.argv.indexOf(childFlag);
