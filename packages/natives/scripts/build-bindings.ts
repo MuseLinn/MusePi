@@ -84,6 +84,37 @@ if (!Bun.env.RUSTFLAGS) {
 		Bun.env.RUSTFLAGS = "-C target-cpu=x86-64-v2";
 	}
 }
+// Statically link the MSVC CRT for the shipped win32 addon, matching the bazel
+// release path (crates/pi-natives/BUILD.bazel: -Ctarget-feature=+crt-static +
+// static_link_msvcrt cc feature). Without it, a cargo/napi build on win32
+// links the dynamic CRT (/MD): the .node imports VCRUNTIME140.dll and
+// api-ms-win-crt-* from the Visual C++ Redistributable, which is absent on a
+// clean Windows install — the loader's dlopen then fails with error 126 and
+// the daemon dies at startup ("daemon exited during startup"). Verified on the
+// local modern addon (Aug 15): it imports VCRUNTIME140.dll; the static
+// baseline (Aug 12) does not.
+//
+// Two levers, both required:
+//  - `-C target-feature=+crt-static` via RUSTFLAGS moves rustc's own codegen
+//    to /MT. Cargo does NOT reflect RUSTFLAGS into CARGO_CFG_TARGET_FEATURE
+//    (verified with a probe build script), so this alone leaves the C deps
+//    (pcre2-sys/opus/tree-sitter/ring/...) on cc-rs's default /MD.
+//  - `CFLAGS`/`CXXFLAGS=/MT` forces every cc-rs and cmake C/C++ compile to
+//    /MT: cc-rs appends env flags AFTER its computed /MD (add_default_flags),
+//    so /MT wins; cmake builds (audiopus_sys' vendored opus) read CFLAGS too.
+//    This is the cargo-side equivalent of the bazel `static_link_msvcrt`
+//    feature (which injects /MT into the same toolchain CFLAGS/CXXFLAGS).
+// Rustc's final link then binds libcmt (static) instead of libvcruntime, and
+// the shipped .node imports no VCRUNTIME140.dll. Inert on non-windows.
+// NOTE: cargo does not track CFLAGS/CXXFLAGS changes — a local incremental
+// rebuild keeps stale /MD dependency objects. CI (fresh checkout) always
+// rebuilds; local dev should clean target/x86_64-pc-windows-msvc/local after
+// flipping this (the napi target dir) or the change appears inert.
+if (process.platform === "win32") {
+	Bun.env.RUSTFLAGS = `${Bun.env.RUSTFLAGS ?? ""} -C target-feature=+crt-static`.trim();
+	Bun.env.CFLAGS = `${Bun.env.CFLAGS ?? ""} /MT`.trim();
+	Bun.env.CXXFLAGS = `${Bun.env.CXXFLAGS ?? ""} /MT`.trim();
+}
 
 async function cleanupStaleTemps(dir: string): Promise<void> {
 	try {

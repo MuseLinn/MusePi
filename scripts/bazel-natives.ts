@@ -190,7 +190,20 @@ async function tryCargoHostBuild(hostTarget: string, destDir: string): Promise<s
 			cwd: repoRoot,
 			stdout: "inherit",
 			stderr: "pipe",
-			env: { ...Bun.env },
+			env: {
+				...Bun.env,
+				// Always build the vendored static pcre2: without this, pcre2-sys
+				// falls back to pkg-config and hard-links a host libpcre2 (e.g.
+				// /opt/homebrew/opt/pcre2 on a CI runner with Homebrew) into the
+				// shipped addon. On any clean mac without Homebrew the daemon's
+				// dlopen then fails ("Library not loaded: /opt/homebrew/opt/pcre2/
+				// lib/libpcre2-8.0.dylib") and the GUI reports "daemon exited
+				// during startup" (issue #1). Mirrors the PCRE2_SYS_STATIC=1 in
+				// MODULE.bazel (bazel path) and build-bindings.ts (cargo/N-API
+				// host path); this cargo fallback is the third release path and
+				// must carry the same pin.
+				PCRE2_SYS_STATIC: "1",
+			},
 		});
 		const decoder = new TextDecoder();
 		let stderrTail = "";
