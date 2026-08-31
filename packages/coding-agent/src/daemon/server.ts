@@ -5478,7 +5478,7 @@ export class DaemonServer {
 				const p = (params ?? {}) as {
 					sessionId: string;
 					text: string;
-					deliverAs?: "prompt" | "steer" | "followUp";
+					deliverAs?: "prompt" | "steer" | "followUp" | "continue";
 					images?: { type: "image"; data: string; mimeType: string }[];
 				};
 				// Reactivate history sessions on send so continuing an old

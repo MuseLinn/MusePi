@@ -393,4 +393,49 @@ describe("AgentSession owner-routed async delivery", () => {
 		expect(flushed).toBe(true);
 		expect(vi.getTimerCount()).toBe(baselineTimers + 1);
 	});
+
+	it("deliverAs continue routes to prompt immediately (not the steer/followUp queue)", async () => {
+		// TUI "." / "c" continue-shortcut parity: the hidden synthetic directive
+		// must reach the model right away — queued steer/followUp would wait for
+		// the current turn to yield, so "继续工作" would feel dead.
+		const model = getBundledModel("anthropic", "claude-sonnet-4-5")!;
+		const mock = createMockModel({ handler: () => ({ content: ["Done"] }) });
+		const agent = new Agent({
+			getApiKey: () => "test-key",
+			initialState: { model, systemPrompt: ["Test"], tools: [] },
+			convertToLlm,
+			streamFn: mock.stream,
+		});
+		const authStorage = await AuthStorage.create(":memory:");
+		authStorages.push(authStorage);
+		authStorage.setRuntimeApiKey("anthropic", "test-key");
+		const manager = new AsyncJobManager({});
+		AsyncJobManager.setInstance(manager);
+
+		session = new AgentSession({
+			agent,
+			sessionManager: SessionManager.inMemory(),
+			settings: Settings.isolated(),
+			modelRegistry: new ModelRegistry(authStorage),
+			agentId: "Main",
+			asyncJobManager: manager,
+		});
+
+		const callsBefore = mock.calls.length;
+		await session.sendUserMessage("continue working", { deliverAs: "continue" });
+		// The directive landed in the model context immediately (prompt path),
+		// not parked in a queue waiting for a yield.
+		const landed = mock.calls.slice(callsBefore).some(call =>
+			call.context.messages.some(message => {
+				if (typeof message.content === "string") return message.content.includes("continue working");
+				return (
+					Array.isArray(message.content) &&
+					message.content.some(content => content.type === "text" && content.text.includes("continue working"))
+				);
+			}),
+		);
+		expect(landed).toBe(true);
+		// Nothing left queued: a queue-routed message would stay pending.
+		expect(session.hasPendingAsyncWork()).toBe(false);
+	});
 });

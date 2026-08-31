@@ -87,7 +87,7 @@ export interface ComposerProps {
 	onSend(
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
-		deliverAs?: "prompt" | "steer" | "followUp",
+		deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 	): void;
 	onStop(): void;
 	rpc: RpcClient;
@@ -1236,6 +1236,11 @@ export function Composer({
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 			const finalMsg = quotePrefix ? `${quotePrefix}${payload}`.trim() : payload;
+			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
+			// quote/attachment) is the "continue working" signal — delivered
+			// as a hidden synthetic directive, not a visible user message.
+			const isContinueShortcut =
+				(finalMsg === "." || finalMsg === "c") && quotes.length === 0 && attachments.length === 0;
 			// Record the submitted prompt in the recall ring (TUI history
 			// parity): the exact message that lands on the wire, so ArrowUp
 			// recovers it verbatim. Consecutive repeats are deduped.
@@ -1248,8 +1253,9 @@ export function Composer({
 					mimeType: a.mimeType,
 				})),
 				// Working → steer (TUI Enter parity: processed immediately);
-				// "/queue"/"=>" → followUp (after the current turn yields).
-				delivery,
+				// "/queue"/"=>" → followUp (after the current turn yields);
+				// "." / "c" → continue (hidden synthetic resume, TUI parity).
+				isContinueShortcut ? "continue" : delivery,
 			);
 			if (quotes.length > 0) {
 				handledQuoteCountRef.current = 0;

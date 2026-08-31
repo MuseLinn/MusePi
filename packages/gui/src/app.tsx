@@ -1630,7 +1630,7 @@ function AppInner(): ReactNode {
 			text: string,
 			images?: { type: "image"; data: string; mimeType: string }[],
 			sessionId?: string,
-			deliverAs?: "prompt" | "steer" | "followUp",
+			deliverAs?: "prompt" | "steer" | "followUp" | "continue",
 		): Promise<void> => {
 			const client = rpcRef.current;
 			const id = sessionId ?? selectedId;

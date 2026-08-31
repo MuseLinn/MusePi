@@ -27,7 +27,7 @@ import { EventBus } from "@musepi/pi-coding-agent/utils/event-bus";
 
 interface SteerCall {
 	content: string;
-	options?: { deliverAs?: "steer" | "followUp" };
+	options?: { deliverAs?: "steer" | "followUp" | "continue" };
 }
 
 interface FakeSessionConfig {
@@ -82,7 +82,17 @@ function createFakeSession(config: FakeSessionConfig = {}): FakeSessionHandle {
 		sessionManager: { appendSessionInit: () => {} } as never,
 		getActiveToolNames: () => ["read", "yield"],
 		getEnabledToolNames: () => ["read", "yield"],
+		getAllToolInfos: () => [],
+		getContextUsage: () => ({ tokens: 0 }) as never,
 		setActiveToolsByName: async (_names: string[]) => {},
+		setServiceTierFamily: async () => {},
+		setThinkingLevel: async () => {},
+		setIrcWakeTurnObserver: () => {},
+		hasPendingAsyncWork: () => false,
+		getAsyncJobSnapshot: () => null,
+		settleAsyncWork: async () => {},
+		subscribeRunState: () => () => {},
+		sendCustomMessage: async () => true,
 		subscribe: (listener: (event: AgentSessionEvent) => void) => {
 			if (config.events?.length) {
 				const events = config.events;
@@ -108,7 +118,6 @@ function createFakeSession(config: FakeSessionConfig = {}): FakeSessionHandle {
 			releaseHang();
 		},
 		dispose: async () => {},
-		setIrcWakeTurnObserver: () => {},
 	};
 	return {
 		session: session as AgentSession,

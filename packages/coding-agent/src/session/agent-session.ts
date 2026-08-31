@@ -6566,7 +6566,7 @@ export class AgentSession {
 	 */
 	async sendUserMessage(
 		content: string | (TextContent | ImageContent)[],
-		options?: { deliverAs?: "steer" | "followUp" },
+		options?: { deliverAs?: "steer" | "followUp" | "continue" },
 	): Promise<void> {
 		// Normalize content to text string + optional images
 		let text: string;
@@ -6594,6 +6594,19 @@ export class AgentSession {
 		}
 		if (options?.deliverAs === "steer") {
 			await this.#queueUserMessage(text, images, "steer");
+			return;
+		}
+		if (options?.deliverAs === "continue") {
+			// TUI "." / "c" continue-shortcut parity: the message is a hidden
+			// developer directive (synthetic) — the agent resumes the prior
+			// intent, and no visible user bubble is produced. synthetic keeps
+			// the message out of the transcript's user-visible history.
+			await this.prompt(text, {
+				expandPromptTemplates: false,
+				images,
+				synthetic: true,
+				streamingBehavior: "steer",
+			});
 			return;
 		}
 
