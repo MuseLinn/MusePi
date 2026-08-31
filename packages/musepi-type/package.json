@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/musepi-type",
-	"version": "0.4.9",
+	"version": "0.4.10",
 	"description": "ArkType-compatible runtime schema validation with lazy JIT compilation",
 	"homepage": "https://omp.sh",
 	"author": "Can Boluk",

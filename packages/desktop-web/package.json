@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/desktop-web",
-	"version": "0.4.9",
+	"version": "0.4.10",
 	"private": true,
 	"description": "Browser guest client and local relay tools for omp collab live sessions",
 	"homepage": "https://github.com/MuseLinn/MusePi",
