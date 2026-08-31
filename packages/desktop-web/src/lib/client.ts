@@ -108,6 +108,10 @@ export interface GuestSnapshot {
 	focusedSessionId: string | null;
 	/** Pending host-side UI request (`ask` select/editor) this guest can answer. */
 	uiRequest: CollabUiRequest | null;
+	/** True while a multi-select (checkbox) ui-request awaits the host's
+	 *  re-issue after the guest toggled an option — the dialog stays mounted
+	 *  and options are disabled until the follow-up frame arrives. */
+	uiRequestPending: boolean;
 	/** Pending tool approval the host must approve/deny (daemon host-mode only;
 	 *  the collab guest never sees approvals — always null). */
 	approvalRequest: ApprovalRequest | null;
@@ -144,6 +148,11 @@ interface PendingRpc {
 export class GuestClient {
 	readonly #socket: CollabSocket<HostFrame, GuestFrame>;
 	readonly #name: string;
+	/** Invoked once when the first `welcome` frame lands — the host accepted
+	 *  the join. Used by the app shell to persist the connection (recent
+	 *  list, URL hash) only after the handshake actually succeeded; a failed
+	 *  or timed-out connect never fires it. */
+	onWelcome?: () => void;
 	/** Plaintext (no E2E) guest — browser on insecure http without crypto.subtle. */
 	readonly #plaintext: boolean;
 	/** base64url write token from a full link; absent when joined via a view link. */
@@ -176,6 +185,7 @@ export class GuestClient {
 	#workspace: readonly WorkspaceSessionInfo[] | null = null;
 	#focusedSessionId: string | null = null;
 	#uiRequest: CollabUiRequest | null = null;
+	#uiRequestPending = false;
 	#uiRequestQueue: CollabUiRequest[] = [];
 	#notices: readonly Notice[] = [];
 	#snapshot: GuestSnapshot;
@@ -249,7 +259,16 @@ export class GuestClient {
 	sendUiResponse(reqId: number, value?: CollabUiResponseValue): void {
 		this.#socket.send({ t: "ui-response", reqId, value });
 		if (this.#uiRequest?.reqId === reqId) {
-			this.#showNextUiRequest();
+			// Multi-select (checkbox) questions run a host-side toggle loop:
+			// the host re-issues a fresh request (new reqId, same title) with
+			// the updated checked set. Keep the dialog mounted in a pending
+			// state until the follow-up replaces it, so the mobile ask UI
+			// doesn't flash away mid-selection. Single-choice settles at once.
+			if (this.#uiRequest.kind === "select" && this.#uiRequest.selectionMarker === "checkbox") {
+				this.#uiRequestPending = true;
+			} else {
+				this.#showNextUiRequest();
+			}
 			this.#commit();
 		}
 	}
@@ -435,6 +454,9 @@ export class GuestClient {
 	#applyFrame(frame: HostFrame): void {
 		switch (frame.t) {
 			case "welcome":
+				// First welcome = the join handshake succeeded. Fire the shell's
+				// persistence hook once so failed/timed-out connects never record.
+				if (!this.#welcomed) this.onWelcome?.();
 				// Reset accumulator: a fresh welcome arriving mid-load (reconnect)
 				// supersedes any partially-streamed snapshot from the prior session.
 				this.#header = frame.header;
@@ -512,10 +534,19 @@ export class GuestClient {
 				}
 				break;
 			case "ui-request":
-				if (this.#uiRequest) this.#uiRequestQueue = [...this.#uiRequestQueue, frame.request];
-				else this.#uiRequest = frame.request;
+				// A host re-issue of a multi-select loop (pending checkbox) replaces
+				// the current request in place; a genuinely new request queues.
+				if (this.#uiRequest && this.#uiRequestPending && this.#uiRequest.title === frame.request.title) {
+					this.#uiRequest = frame.request;
+					this.#uiRequestPending = false;
+				} else if (this.#uiRequest) {
+					this.#uiRequestQueue = [...this.#uiRequestQueue, frame.request];
+				} else {
+					this.#uiRequest = frame.request;
+				}
 				break;
 			case "ui-request-end":
+				this.#uiRequestPending = false;
 				if (this.#uiRequest?.reqId === frame.reqId) this.#showNextUiRequest();
 				else this.#uiRequestQueue = this.#uiRequestQueue.filter(request => request.reqId !== frame.reqId);
 				break;
@@ -701,6 +732,7 @@ export class GuestClient {
 
 	#clearUiRequests(): void {
 		this.#uiRequest = null;
+		this.#uiRequestPending = false;
 		this.#uiRequestQueue = [];
 	}
 
@@ -729,6 +761,7 @@ export class GuestClient {
 			workspace: this.#workspace,
 			focusedSessionId: this.#focusedSessionId,
 			uiRequest: this.#uiRequest,
+			uiRequestPending: this.#uiRequestPending,
 			approvalRequest: null,
 			notices: this.#notices,
 		};

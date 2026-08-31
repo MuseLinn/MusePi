@@ -18,6 +18,8 @@
  * `isMobileShell()` returns true for either shell.
  */
 
+import { dispatchBack } from "./back-stack";
+
 declare global {
 	interface Window {
 		Capacitor?: {
@@ -81,21 +83,14 @@ export function isMobileShell(): boolean {
 }
 
 /**
- * DOM event dispatched when the Android system back key is pressed. The
- * shell component stack listens and calls `preventDefault()` when a layer
- * consumed the press; if nobody handles it, the app exits (native default).
- * `cancelable` lets dispatchEvent() report consumption via its return value.
- */
-export const BACK_EVENT = "musepi:back";
-
-/**
  * Wire the Android hardware back key to the app's layer stack.
  *
  * Capacitor's default back behavior pops WebView history and eventually
  * finishes the activity — which would exit the app with the agents rail,
- * a panel, or the agent drawer still open. Instead: dispatch BACK_EVENT; if
- * a layer consumed it (dispatchEvent returns false), stop here. Otherwise
- * pop hash history (deep-link entries) first, then exit.
+ * a panel, or the agent drawer still open. Instead: dispatch through the
+ * shared layer stack (`dispatchBack` in ./back-stack); if a layer consumed
+ * the press, stop here. Otherwise pop hash history (deep-link entries)
+ * first, then exit.
  *
  * Desktop web never calls this — browsers keep their own history semantics.
  * HarmonyOS shell: back is handled in ArkTS onBackPress -> accessStep().
@@ -107,9 +102,11 @@ export async function setupAndroidBackHandler(): Promise<void> {
 	// part of the desktop-web dependency tree's runtime surface).
 	const { App } = await import("@capacitor/app");
 	void App.addListener("backButton", ({ canGoBack }) => {
-		const event = new CustomEvent(BACK_EVENT, { cancelable: true });
-		const consumed = !window.dispatchEvent(event);
-		if (consumed) return;
+		// Layer-stack dispatch: every modal (agent drawer, sessions sheet,
+		// server switcher, rail, panel, QR scanner) registered its own close
+		// handler; the topmost consumes the press first. Only when no layer
+		// claims it do we fall through to history / exit.
+		if (dispatchBack()) return;
 		if (canGoBack) {
 			window.history.back();
 		} else {

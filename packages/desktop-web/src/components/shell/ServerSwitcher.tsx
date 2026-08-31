@@ -1,7 +1,8 @@
 import { Pencil, Server, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { useBackLayer } from "../../lib/back-stack";
 import { loadConnections, removeConnection, renameConnection } from "../../lib/connections";
 
 /**
@@ -28,6 +29,17 @@ export function ServerSwitcher({
 	useEffect(() => {
 		if (editing) inputRef.current?.focus();
 	}, [editing]);
+
+	// Android back key closes the switcher popover first (priority 85 —
+	// under the sessions sheet 90, above the agents rail 80).
+	useBackLayer(
+		85,
+		open,
+		useCallback(() => {
+			setOpen(false);
+			return true;
+		}, []),
+	);
 
 	const connections = open ? loadConnections() : [];
 

@@ -16,8 +16,8 @@ import { WelcomeHint } from "./components/shell/WelcomeHint";
 import { WorkspaceView } from "./components/shell/WorkspaceView";
 import { msgText, Transcript } from "./components/transcript/Transcript";
 import { t } from "./i18n/index.js";
+import { useBackLayer } from "./lib/back-stack";
 import {
-	BACK_EVENT,
 	clearBadge,
 	consumePendingDeepLink,
 	DEEP_LINK_EVENT,
@@ -28,6 +28,7 @@ import {
 import { GuestClient } from "./lib/client";
 import { isCompatShell } from "./lib/compat-shell";
 import { CompatSlotHost } from "./lib/compat-slot-host";
+import { rememberConnection } from "./lib/connections";
 import { HostClient } from "./lib/host-client";
 import { enableNativeGlass } from "./lib/native-glass";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
@@ -81,6 +82,18 @@ export function App(): ReactNode {
 			setConnectError(err instanceof Error ? err.message : String(err));
 			return;
 		}
+		// Persist the connection only after the host actually welcomed us —
+		// a failed connect (bad link, unreachable relay, 6s pair timeout)
+		// must not pollute the recent list or leave a dead deep-link in the
+		// URL that an auto-connect on reload would retry.
+		next.onWelcome = (): void => {
+			rememberConnection(link, name);
+			try {
+				window.location.hash = link;
+			} catch {
+				// non-fatal
+			}
+		};
 		next.connect();
 		try {
 			localStorage.setItem(NAME_KEY, name);
@@ -88,7 +101,6 @@ export function App(): ReactNode {
 			// storage unavailable (private mode) — non-fatal
 		}
 		credsRef.current = { link, name };
-		window.location.hash = link;
 		setConnectError(null);
 		setClient(prev => {
 			prev?.close();
@@ -512,35 +524,42 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 	const inWorkspace = workspace !== null && focusedSessionId === null;
 	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
 	const sessionCwd = state?.cwd ?? null;
-	// Android back key: close the topmost layer (agent drawer → rail → panel →
-	// workspace focus) before the shell is allowed to exit. The mobile entry
-	// dispatches `musepi:back`; preventDefault marks the press consumed so
-	// setupAndroidBackHandler won't exit the app.
-	useEffect(() => {
-		const onBack = (e: Event): void => {
-			if (selectedId !== null) {
-				setSelectedId(null);
-				e.preventDefault();
-				return;
-			}
-			if (railOpen) {
-				setRailOpen(false);
-				e.preventDefault();
-				return;
-			}
-			if (activePanel !== null) {
-				setActivePanel(null);
-				e.preventDefault();
-				return;
-			}
-			if (workspace !== null && focusedSessionId !== null) {
-				backToWorkspace();
-				e.preventDefault();
-			}
-		};
-		window.addEventListener(BACK_EVENT, onBack);
-		return () => window.removeEventListener(BACK_EVENT, onBack);
-	}, [selectedId, railOpen, activePanel, workspace, focusedSessionId, backToWorkspace]);
+	// Android back key: each layer registers its own close handler on the
+	// shared back stack (lib/back-stack). dispatchBack() walks from the
+	// topmost modal down; the first handler returning true consumes the
+	// press, so exactly one layer closes per back press (never two).
+	useBackLayer(
+		100,
+		selectedId !== null,
+		useCallback(() => {
+			setSelectedId(null);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		80,
+		railOpen,
+		useCallback(() => {
+			setRailOpen(false);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		60,
+		activePanel !== null,
+		useCallback(() => {
+			setActivePanel(null);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		40,
+		workspace !== null && focusedSessionId !== null,
+		useCallback(() => {
+			backToWorkspace();
+			return true;
+		}, [backToWorkspace]),
+	);
 
 	const hostMode = client instanceof HostClient;
 	return (

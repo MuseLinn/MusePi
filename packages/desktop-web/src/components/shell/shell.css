@@ -378,6 +378,33 @@
 	flex: none;
 }
 
+/* Collapsed panels menu (≤520px): the menu button wraps the popover, so the
+ * popover's absolute positioning anchors here. */
+.sh-header-nav {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+/* Panel menu items are buttons (the switcher popover styles expect divs). */
+.sh-panel-menu-item {
+	width: 100%;
+	min-width: 0;
+	justify-content: flex-start;
+	gap: 8px;
+	padding: 6px 8px;
+	border: none;
+	background: transparent;
+	color: var(--fg);
+	text-align: left;
+	cursor: pointer;
+	font: inherit;
+}
+.sh-panel-menu-item:hover {
+	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
+}
+
 
 /* Title as a session-switcher trigger (button reset keeps it identical to the
  * plain span; tap target ≥44px on mobile). */
@@ -682,6 +709,24 @@
 	max-width: 880px;
 	width: 100%;
 	margin: 0 auto;
+}
+
+/* Multi-select hint under the checkbox options (ask toggle loop). */
+.sh-ask-hint {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+	color: var(--fg-muted);
+	text-align: center;
+}
+
+/* Locked while the host re-issues the multi-select request (pending). */
+.sh-ask-option:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+.sh-ask-option:disabled:hover {
+	border-color: var(--border);
 }
 
 .sh-queued {
@@ -2715,6 +2760,31 @@
 	}
 }
 
+/* Exit animations: mirror the entrance (translateY down + fade) so a close
+ * never pops the sheet off screen instantly. The `ss-closing` class is set
+ * during the closing stage (SessionsSheet state machine); forwards keeps
+ * the end state until the hidden flip (280ms fallback timer). */
+.ss-backdrop.ss-closing {
+	animation: ss-backdrop-out 180ms ease-in forwards;
+}
+
+.ss-card.ss-closing {
+	animation: ss-card-out 280ms var(--spring-bouncy) forwards;
+}
+
+@keyframes ss-backdrop-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes ss-card-out {
+	to {
+		transform: translateY(60%);
+		opacity: 0;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	/* Rotation/breakpoint geometry transitions: hard switch under reduced
 	 * motion (the block near the responsive styles sets them). */
@@ -2735,6 +2805,12 @@
 	.sh-transcript,
 	.sh-content {
 		transition: none;
+	}
+	/* Sessions sheet exit: under reduced motion skip the slide-out and rely
+	 * on the 280ms fallback timer to flip the stage to hidden. */
+	.ss-backdrop.ss-closing,
+	.ss-card.ss-closing {
+		animation: none;
 	}
 }
 

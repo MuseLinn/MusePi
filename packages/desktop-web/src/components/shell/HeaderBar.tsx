@@ -1,8 +1,9 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { ArrowLeft, CalendarClock, Folder, LayoutDashboard, LogOut, MessageSquare, PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type TranslationKey, t } from "../../i18n/index.js";
+import { useBackLayer } from "../../lib/back-stack";
 import type { SessionClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
 import { useGuestSelector } from "../../lib/use-guest";
@@ -80,6 +81,39 @@ export function HeaderBar({
 	const canSwitch = sessions != null && sessions.length > 0;
 	const [sheetOpen, setSheetOpen] = useState(false);
 
+	// Narrow phones: 4 panel buttons + theme + server + rail + leave overflow
+	// a 390px header. Collapse the panel buttons into one "panels" menu
+	// (design doc §4.3: panels are core entries, kept — but folded).
+	const [narrow, setNarrow] = useState(() => {
+		if (typeof window === "undefined" || !window.matchMedia) return false;
+		return window.matchMedia("(max-width: 520px)").matches;
+	});
+	const [panelMenuOpen, setPanelMenuOpen] = useState(false);
+	// Android back key closes the collapsed panels menu before the layers
+	// beneath (rail/panel/workspace) — priority 84, under the server
+	// switcher 85, above the agents rail 80.
+	useBackLayer(
+		84,
+		panelMenuOpen,
+		useCallback(() => {
+			setPanelMenuOpen(false);
+			return true;
+		}, []),
+	);
+	useEffect(() => {
+		if (typeof window === "undefined" || !window.matchMedia) return;
+		const mq = window.matchMedia("(max-width: 520px)");
+		const onChange = (e: MediaQueryListEvent) => setNarrow(e.matches);
+		setNarrow(mq.matches);
+		mq.addEventListener("change", onChange);
+		return () => mq.removeEventListener("change", onChange);
+	}, []);
+
+	const togglePanel = (panel: GuestPanel): void => {
+		onSelectPanel(activePanel === panel ? null : panel);
+		setPanelMenuOpen(false);
+	};
+
 	return (
 		<header className="sh-header">
 			<div className="sh-header-left">
@@ -151,19 +185,56 @@ export function HeaderBar({
 					</span>
 				)}
 				<span className={`sh-dot sh-dot-${phase}`} title={phase} />
-				<span className="sh-header-nav">
-					{PANEL_BUTTONS.map(({ panel, icon, title }) => (
+				{narrow ? (
+					<span className="sh-header-nav">
 						<button
-							key={panel}
 							type="button"
-							className={activePanel === panel ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
-							onClick={() => onSelectPanel(activePanel === panel ? null : panel)}
-							title={t(title)}
+							className={activePanel !== null ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
+							onClick={() => setPanelMenuOpen(open => !open)}
+							title={t("panels")}
 						>
-							{icon}
+							<LayoutDashboard size={14} />
 						</button>
-					))}
-				</span>
+						{panelMenuOpen && (
+							<>
+								<div className="sh-switcher-overlay" onClick={() => setPanelMenuOpen(false)} />
+								<div className="sh-switcher-pop sh-panel-menu-pop" role="menu" aria-label={t("panels")}>
+									<div className="sh-switcher-title">{t("panels")}</div>
+									{PANEL_BUTTONS.map(({ panel, icon, title }) => (
+										<button
+											key={panel}
+											type="button"
+											role="menuitem"
+											className={
+												activePanel === panel
+													? "sh-switcher-item sh-panel-menu-item sh-switcher-item--cur"
+													: "sh-switcher-item sh-panel-menu-item"
+											}
+											onClick={() => togglePanel(panel)}
+										>
+											{icon}
+											<span>{t(title)}</span>
+										</button>
+									))}
+								</div>
+							</>
+						)}
+					</span>
+				) : (
+					<span className="sh-header-nav">
+						{PANEL_BUTTONS.map(({ panel, icon, title }) => (
+							<button
+								key={panel}
+								type="button"
+								className={activePanel === panel ? "sh-btn sh-btn-icon sh-btn-on" : "sh-btn sh-btn-icon"}
+								onClick={() => onSelectPanel(activePanel === panel ? null : panel)}
+								title={t(title)}
+							>
+								{icon}
+							</button>
+						))}
+					</span>
+				)}
 				<ThemeToggle />
 				<AccentToggle />
 				<LanguageToggle />

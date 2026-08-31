@@ -131,6 +131,7 @@ export class HostClient implements SessionClient {
 			workspace: null,
 			focusedSessionId: this.#sessionId,
 			uiRequest: this.#uiRequest,
+			uiRequestPending: false,
 			approvalRequest: this.#approvalRequest,
 			notices: this.#notices,
 		};

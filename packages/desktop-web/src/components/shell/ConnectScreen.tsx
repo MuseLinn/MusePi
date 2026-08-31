@@ -1,9 +1,10 @@
 import type { CSSProperties, FormEvent, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { useBackLayer } from "../../lib/back-stack";
 import { useLocale } from "../../i18n/use-locale.js";
 import { isNativeShell } from "../../lib/capacitor";
-import { type Connection, loadConnections, rememberConnection, removeConnection } from "../../lib/connections";
+import { type Connection, loadConnections, removeConnection } from "../../lib/connections";
 import { haptic } from "../../lib/haptics";
 import { secureGet, secureSet } from "../../lib/secure-store";
 import { useCollapseHeight } from "../../lib/use-collapse";
@@ -136,8 +137,9 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 	}, []);
 
 	const connect = (target: string, who: string): void => {
-		rememberConnection(target, who);
-		setRecent(loadConnections());
+		// Recording (recent list + URL hash) happens in App.connect's
+		// onWelcome hook — only after the host actually accepts the join, so
+		// a failed connect never pollutes the saved connections.
 		onConnect(target, who);
 		haptic(12);
 	};
@@ -178,6 +180,18 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 		setLocalError(null);
 		setScanning(true);
 	};
+
+	// Android back key while scanning: close the scanner overlay instead of
+	// exiting the app (scanner priority 95 — ConnectScreen has no Session
+	// layers beneath, so nothing competes).
+	useBackLayer(
+		95,
+		scanning,
+		useCallback(() => {
+			setScanning(false);
+			return true;
+		}, []),
+	);
 
 	const onScanResult = (value: string): void => {
 		setScanning(false);

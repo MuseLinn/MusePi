@@ -1,6 +1,6 @@
 # MusePi 移动端设计规范（Mobile Companion）
 
-> **状态（2026-08-25 核对）**：壳已构建（`packages/mobile` Capacitor Android + desktop-web 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在，移动端实现细节待专项核对）。
+> **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + desktop-web 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
 >
 > 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/desktop-web` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。
@@ -93,7 +93,7 @@ Session（会话）
         · ServerSwitcher popover · Toasts · Banners
 ```
 
-### 3.2 层叠模型（z-order，从底到顶）
+### 3.2 层叠模型（z-order + back 层栈，从底到顶）
 
 ```
 0   sh-app（header + main + composer 常驻骨架）
@@ -104,9 +104,24 @@ Session（会话）
 5   sh-toasts（瞬时，4 条封顶）
 ```
 
+**模态覆盖层**（覆盖于 transcript 之上，同一时刻最多一层叠加，但 drawer 可叠于 rail 上）。
+
+**返回键（Android）层栈优先级**（由 `lib/back-stack.ts` 统一调度，`dispatchBack()` 从高到低尝试，第一个消费的停止）：
+
+| 优先级 | 层 | 说明 |
+|---|---|---|
+| 100 | AgentDrawer | 最顶层，agent 详情 |
+| 95 | QrScanner | 扫码全屏覆盖（ConnectScreen） |
+| 90 | SessionsSheet | 会话切换底部 sheet |
+| 85 | ServerSwitcher | 多服务器切换 popover |
+| 84 | PanelMenu（窄屏） | ≤520px 折叠面板菜单 |
+| 80 | AgentsRail | 子代理抽屉 |
+| 60 | 面板（board/scheduled/files） | 全屏面板 |
+| 40 | Workspace 返回 | 会话聚焦 → 工作区目录 |
+
 规则：
-- 同一时刻最多一层"模态覆盖"（rail / drawer / 面板三选一在手机上互斥于 transcript 之上）；
-- **返回键顺序（Android）**：AgentDrawer → AgentsRail → 面板 → workspace 聚焦返回 → 浏览器默认；
+- 同一时刻最多一层"模态覆盖"（rail / drawer / 面板三选一互斥，但 drawer 可叠于 rail 上）；
+- 返回键按优先级从高到低处理，一次按压只关闭最上层，绝不关闭两层；
 - 手机上 workspace 与 session 是**平级切换**（header 返回按钮 + workspace 内聚焦），不叠加。
 
 ### 3.3 自适应规则（SIZE 类，非设备检测）
@@ -116,7 +131,7 @@ Session（会话）
 | > 1024px | 桌面 web 全功能（本规范不覆盖） |
 | 600–1024px | 平板/折叠屏展开：connect 卡片 480px 封顶；workspace 侧栏保留桌面形态；面板全屏 |
 | ≤ 640px | 手机：header 收窄、chips/度量隐藏、按钮标签隐藏、输入 16px、触控目标 44px |
-| ≤ 520px | 手机窄：header 装饰控件（accent/language/avatars/dot）折叠，只留核心控制 |
+| ≤ 520px | 手机窄：header 装饰控件（accent/language/avatars/dot）折叠，只留核心控制；面板按钮折叠为"面板"菜单（§4.3） |
 | ≤ 420px | 小屏：connect 卡片全宽、配对行纵向堆叠 |
 
 断点由 CSS `@media (max-width)` 驱动；`--safe-top/--safe-bottom/--mp-keyboard-inset` 由 JS/插件
@@ -130,7 +145,7 @@ Session（会话）
 
 - 头部：品牌 lockup + 主题/accent/语言切换（与桌面一致，`--order` 语义化排序）；
 - 最近连接：`secure-store` 优先、localStorage 镜像（防隐私模式空转）；删除即 `✕`，无需确认
-  （可随时重连恢复）；
+  （可随时重连恢复）；**仅成功连接（welcome 帧到达后）才记录到最近列表**，失败/超时不记录；
 - 方法卡片：QR（仅原生壳，懒加载 mlkit 保 bundle 体积）→ 配对码（纯 ws 常可用）→ 粘贴链接；
   手风琴 `useCollapseHeight` 保持挂载可动画（aria-hidden + inert 折叠态）；
 - 配对流程：6 位码 + 电脑地址 → `pair.resolve`（6s 超时，友好错误文案）→ 记住地址（secure）；
@@ -161,7 +176,7 @@ Session（会话）
 | read-only / model / thinking chips | ❌ | ❌ | 只读有 banner 兜底 |
 | context gauge | 只显示百分比数字（track 隐藏） | 百分比 ❌ | 数字即信息 |
 | avatars / dot | ✅ | ❌ | 会话状态已由 banner/dot 表达，窄屏删 |
-| 面板按钮（board/scheduled/files） | ✅ | ✅ | 核心功能入口 |
+| 面板按钮（board/scheduled/files） | ✅ 4 按钮 | ✅ 折叠为 1 个"面板"菜单 | 核心功能入口，窄屏折叠保入口控溢出 |
 | theme / accent / language 切换 | ✅ | ❌ | 装饰性；connect 屏仍可达 |
 | server switcher / rail / leave | ✅ | ✅ | 会话级操作，保留 |
 
@@ -183,6 +198,10 @@ Session（会话）
 - IME：Enter 提交必须经过 composition guard（已实现），中文输入法候选确认不触发发送；
 - ask 模式：`select` 选项大按钮（≥44px）、`editor` 预填输入框 —— 是移动端"被询问时快速回应"
   的核心路径，选项按钮必须全宽可点；
+- **ask 多选（checkbox）**：host 端是逐项 toggle 循环（每次 `ui-response` 切换一个选项，host 以
+  新 reqId 重发带更新 `checkedIndices` 的请求，直到点 "Next →" 提交）。移动端点选项后 ask 卡
+  **保持挂载**（`uiRequestPending` 期间选项禁用防双击），显示多选提示；host 重发同 title 请求
+  时无缝替换选中态。单选（radio）点选项立即提交；
 - queued 计数：`×N` 徽标（标签在 ≤640px 隐藏，数字保留）。
 
 ### 4.4 面板（board / scheduled / files）
@@ -261,10 +280,13 @@ Session（会话）
 ### 6.3 返回键分层导航（Android back）
 
 - 壳：`@capacitor/app` 的 `backButton` 事件在原生壳内拦截（`mobile.tsx`）；
-- 分发：`window.dispatchEvent(new CustomEvent("musepi:back"))` → Session 响应，按层栈关闭
-  （AgentDrawer → rail → 面板 → workspace 返回 → 允许默认退出）；
+- 分发：`lib/back-stack.ts` 层栈注册表（2026-08-31 重构）。每个模态覆盖层
+  （AgentDrawer / SessionsSheet / ServerSwitcher / 窄屏面板菜单 / AgentsRail / 面板 /
+  Workspace 返回）用 `useBackLayer(priority, active, handler)` 注册自己的关闭 handler；
+  `setupAndroidBackHandler` 调 `dispatchBack()` 从最高优先级到最低逐个尝试，第一个
+  消费的停止——**一次 back 只关一层**，不再广播 CustomEvent；
 - 桌面 web 不加载该监听，浏览器历史不受影响；
-- 边界：无任何层打开时 `preventDefault` 不调用，走系统退出/最小化。
+- 边界：无任何层打开时 `dispatchBack()` 返回 false，走 history.back() / 系统退出。
 
 ### 6.4 本地通知（无云端架构的推送等价）
 
@@ -601,3 +623,76 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 **可吸收项待办（dsh-mobile-remote 30+ API 范本）**：移动端完整会话管理/审批桥/通知悬浮球
 （见 §11.9 吸收清单），远程 daemon 连接打通后 RPC `session.*`/`jobs.*`/`subagent.*` 已可用。
+
+## 12. 交互缺陷修复（2026-08-31）
+
+2026-08-31 对移动端交互设计进行专项核对，发现并修复 6 项实现与设计文档不一致的缺陷。全部在 `packages/desktop-web/src/` 内完成，不动 wire 协议/daemon/原生壳；每项附带契约测试。
+
+### 12.1 A1 — 返回键层栈完整化（back-stack）
+
+**缺陷**：`musepi:back` 是 window CustomEvent，`Session` 组件集中监听但只处理 drawer/rail/panel/workspace 四层，SessionsSheet/QrScanner/ServerSwitcher 三个模态覆盖层未进层栈，导致"一次 back 关两层"或"扫码时按返回直接退应用"。
+
+**修复**：新建 `lib/back-stack.ts` 模块级层栈注册表。每个模态组件用 `useBackLayer(priority, active, handler)` hook 注册自己的关闭 handler。`setupAndroidBackHandler` 改调 `dispatchBack()` 从最高优先级到最低逐个尝试，第一个返回 true 的消费并停止，确保一次 back 关一层。优先级（从最上层到最下层）：AgentDrawer(100) > QrScanner(95) > SessionsSheet(90) > ServerSwitcher(85) > PanelMenu(84) > AgentsRail(80) > Panel(60) > Workspace(40)。删除原 `BACK_EVENT` CustomEvent 机制。
+
+**契约测试**：`test/back-stack.test.ts`（6 个用例：优先级排序、消费后注销、同优先顺序、跨层消费、整体重置）。
+
+### 12.2 A2 — SessionsSheet 常挂载退场动画
+
+**缺陷**：`if (!open) return null` 条件挂载，关闭时瞬间消失无退场动画。
+
+**修复**：改用 visible/closing 状态机。`stage: "hidden" | "open" | "closing"`：open → "open"（入场动画）；onClose → "closing"（退场动画，280ms fallback 定时器兜底 onAnimationEnd）；关闭后 → "hidden"（卸载 DOM）。新增 `.ss-backdrop.ss-closing` 退场 CSS（`ss-backdrop-out` 180ms + `ss-card-out` 280ms，forwards 保持终点态）。`prefers-reduced-motion` 跳过动画。
+
+**契约测试**：`test/sessions-sheet.test.tsx`（3 个用例：open 渲染、closing 未出现、hidden 卸载）。
+
+### 12.3 A3 — ask checkbox 多选语义（Design A）
+
+**缺陷**：移动端 Composer 渲染 checkbox 勾选框（暗示可多选），但点击任一选项立即 `sendUiResponse` 提交并关闭 ask UI，wire 单值承载无法完成多选。实际 host 端多选是逐项 toggle 循环（每次 `ui-response` 切换一个选项，host 以新 reqId 重发带更新 `checkedIndices` 的请求，直到点 "Nex→"），不要求 wire 变更。
+
+**修复**：`client.ts` `sendUiResponse` 中 checkbox 模式不立即 `#showNextUiRequest()`，而是保持 `#uiRequestPending = true`（ask UI 常驻不闪）。host 重发同 title 请求时替换并清除 pending。`ui-request-end` 彻底清空。`GuestSnapshot` 新增 `uiRequestPending` 字段。Composer 在 pending 时禁用选项按钮防重复点击，渲染多选提示文案。
+
+**契约测试**：`test/ask-multi.test.tsx`（5 个用例：pending 保持、host 重发替换、end 清空、hint 渲染+锁定、不同 title 入队）。
+
+### 12.4 A4 — 连接记录时机
+
+**缺陷**：`ConnectScreen.connect()` 在 `onConnect` 前调用 `rememberConnection`，失败连接（bad link、pair 超时、QR 坏链接）仍进入最近列表，用户需手动删除。
+
+**修复**：`GuestClient` 新增 `onWelcome` 回调，仅在首个 welcome 帧（首次连接成功）触发。`App.connect` 在 `onWelcome` 里调用 `rememberConnection(link, name)`。ConnectScreen 移除提前 `rememberConnection`。`#welcomed` 已 true 时重连 welcome 不重复触发。
+
+**契约测试**：`test/welcome-hook.test.ts`（4 个用例：首次 welcome 触发、重连不触发、无 welcome 不触发、坏链接构造抛异常）。
+
+### 12.5 A5 — hash 写入时机
+
+**缺陷**：`App.connect` 同步设置 `window.location.hash = link`，失败连接也污染 URL，刷新自动重连坏链接且 E2E key 留在历史中。
+
+**修复**：`window.location.hash = link` 移到 `onWelcome` 回调中（与 A4 同处）。失败连接不写 hash，`leave()` 原有 `history.replaceState` 清 hash 逻辑未变。
+
+**契约测试**：同 `test/welcome-hook.test.ts`（A4 测试覆盖）。
+
+### 12.6 B1 — ≤520px 窄屏 header 溢出
+
+**缺陷**：≤520px 时 header-right 有 4 个面板按钮（44px×4）+ theme/server/rail/leave 共约 382px + 左侧标题约 124px = 506px > 390px 基准屏，必然水平溢出。
+
+**修复**：HeaderBar 在 ≤520px 时把 4 个面板按钮折叠成 1 个"面板"菜单按钮（LayoutDashboard 图标），点击弹出 popover 列出 4 项（复用 ServerSwitcher popover 视觉）。Back 层注册优先级 84。CSS 补 `.sh-header-nav` 定位上下文、`.sh-panel-menu-item` 按钮样式。
+
+**契约测试**：`test/header-bar-narrow.test.tsx`（2 个用例：宽屏 4 按钮、窄屏折叠菜单 + 原按钮消失）。
+
+### 关键文件变更清单
+
+| 文件 | 变更 |
+|---|---|
+| `src/lib/back-stack.ts` | 新建：层栈注册表 + useBackLayer hook |
+| `src/lib/capacitor.ts` | setupAndroidBackHandler 改调 dispatchBack，删除 BACK_EVENT |
+| `src/lib/client.ts` | add onWelcome, uiRequestPending, checkbox pending 逻辑 |
+| `src/lib/host-client.ts` | snapshot 补 uiRequestPending |
+| `src/app.tsx` | Session 四层迁移到 useBackLayer；connect 改 onWelcome 写 hash+记录 |
+| `src/components/shell/Composer.tsx` | checkbox pending 禁用 + helpText |
+| `src/components/shell/SessionsSheet.tsx` | 常挂载 + visible/closing 状态机 + back 层注册 |
+| `src/components/shell/ServerSwitcher.tsx` | useBackLayer 注册 |
+| `src/components/shell/ConnectScreen.tsx` | useBackLayer scanner + 移除提前 rememberConnection |
+| `src/components/shell/HeaderBar.tsx` | ≤520px 面板折叠 + useBackLayer panelMenu |
+| `src/components/shell/shell.css` | 退场动画 keyframes + reduced-motion 豁免 + panel-menu 样式 |
+| `test/back-stack.test.ts` | 新建 |
+| `test/sessions-sheet.test.tsx` | 新建 |
+| `test/ask-multi.test.tsx` | 新建 |
+| `test/welcome-hook.test.ts` | 新建 |
+| `test/header-bar-narrow.test.tsx` | 新建 |

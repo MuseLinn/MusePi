@@ -3,6 +3,7 @@ import { Check, Loader2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { useBackLayer } from "../../lib/back-stack";
 import { formatWhen, shortenPath } from "../../lib/format";
 
 /**
@@ -45,13 +46,48 @@ export function SessionsSheet({
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [open, onClose]);
-
 	// Reset drag when the sheet (re)opens.
 	useEffect(() => {
 		if (open) setDragY(0);
 	}, [open]);
 
 	const prefersReduced = usePrefersReducedMotion();
+
+	// Always mounted; the visible/closing stage drives the CSS animations.
+	// `visible` keeps the DOM during the exit animation so a close never
+	// pops the card off screen instantly (DialogFrame convention).
+	const [stage, setStage] = useState<"hidden" | "open" | "closing">(open ? "open" : "hidden");
+	useEffect(() => {
+		setStage(prev => {
+			if (open) return "open";
+			return prev === "open" ? "closing" : "hidden";
+		});
+	}, [open]);
+	// Android back key closes the sheet first (topmost modal priority 90).
+	useBackLayer(
+		90,
+		open,
+		useCallback(() => {
+			onClose();
+			return true;
+		}, [onClose]),
+	);
+	// Exit animation is ~280ms (card `ss-card-out`); fall back to a timer so
+	// the card always hides even if animationend is swallowed (hidden tab).
+	// Under reduced motion the CSS disables the animation (`animation: none`),
+	// so animationend never fires — hide immediately instead of waiting out
+	// the full 280ms on a frozen card.
+	const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(() => {
+		if (stage !== "closing") return;
+		exitTimer.current = setTimeout(() => setStage("hidden"), prefersReduced ? 0 : 280);
+		return () => {
+			if (exitTimer.current !== null) clearTimeout(exitTimer.current);
+		};
+	}, [stage, prefersReduced]);
+	const onExitAnimEnd = useCallback((): void => {
+		if (stage === "closing") setStage("hidden");
+	}, [stage]);
 
 	const onDragStart = useCallback(
 		(e: React.PointerEvent) => {
@@ -77,10 +113,10 @@ export function SessionsSheet({
 		});
 	}, [onClose]);
 
-	if (!open) return null;
+	if (stage === "hidden") return null;
 
 	return (
-		<div className="ss-backdrop" role="presentation" onClick={onClose}>
+		<div className={`ss-backdrop${stage === "closing" ? " ss-closing" : ""}`} role="presentation" onClick={onClose}>
 			<div
 				className="ss-card"
 				role="dialog"
@@ -88,6 +124,7 @@ export function SessionsSheet({
 				aria-label={t("sessions")}
 				style={dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined}
 				onClick={e => e.stopPropagation()}
+				onAnimationEnd={onExitAnimEnd}
 			>
 				<div
 					className="ss-drag"

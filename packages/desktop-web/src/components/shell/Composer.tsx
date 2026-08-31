@@ -122,6 +122,10 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const live = useGuestSelector(client, s => s.phase) === "live";
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const uiRequest = useGuestSelector(client, s => s.uiRequest);
+	// True while a multi-select (checkbox) answer awaits the host's re-issue
+	// after an option toggle — the dialog stays mounted but options are
+	// disabled until the follow-up frame replaces it (no double-submit).
+	const uiRequestPending = useGuestSelector(client, s => s.uiRequestPending);
 	const busy = useGuestSelector(client, s => s.working);
 	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
 	// Empty-state draft suggestions (openchamber parity): show only while the
@@ -151,6 +155,11 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	};
 
 	if (uiRequest && canPrompt) {
+		// Multi-select (checkbox) questions: the host runs a toggle loop and
+		// re-issues the request after each option tap. While the re-issue is
+		// in flight (uiRequestPending) the options lock so a double-tap can't
+		// send the same label twice.
+		const multi = uiRequest.kind === "select" && uiRequest.selectionMarker === "checkbox";
 		return (
 			<div className="sh-composer sh-composer-ask">
 				<div className="sh-ask-title">{uiRequest.title}</div>
@@ -159,15 +168,17 @@ export function Composer({ client }: ComposerProps): ReactNode {
 						{uiRequest.options.map((option, index) => {
 							const label = typeof option === "string" ? option : option.label;
 							const checked = uiRequest.checkedIndices?.includes(index) ?? false;
+							const locked = multi && uiRequestPending;
 							return (
 								<button
 									key={`${uiRequest.reqId}-${index}-${label}`}
 									type="button"
 									className={`sh-ask-option${checked ? " sh-ask-option-checked" : ""}`}
+									disabled={locked}
 									onClick={() => client.sendUiResponse(uiRequest.reqId, label)}
 								>
 									<span className="sh-ask-option-marker">
-										{uiRequest.selectionMarker === "checkbox" ? (checked ? "☑" : "☐") : checked ? "◉" : "○"}
+										{multi ? (checked ? "☑" : "☐") : checked ? "◉" : "○"}
 									</span>
 									<span className="sh-ask-option-copy">
 										<span className="sh-ask-option-label">{label}</span>
@@ -178,6 +189,11 @@ export function Composer({ client }: ComposerProps): ReactNode {
 								</button>
 							);
 						})}
+						{multi && uiRequest.helpText && (
+							<p className="sh-ask-hint" role="status">
+								{t("select multiple — choose each option, then pick Next")}
+							</p>
+						)}
 					</div>
 				) : (
 					<AskEditor
@@ -187,7 +203,12 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					/>
 				)}
 				<div className="sh-composer-actions sh-ask-actions">
-					<button type="button" className="sh-btn" onClick={() => client.sendUiResponse(uiRequest.reqId)}>
+					<button
+						type="button"
+						className="sh-btn"
+						disabled={multi && uiRequestPending}
+						onClick={() => client.sendUiResponse(uiRequest.reqId)}
+					>
 						{t("Cancel")}
 					</button>
 					{busy && (

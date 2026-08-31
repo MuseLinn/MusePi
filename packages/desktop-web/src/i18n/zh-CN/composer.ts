@@ -27,6 +27,7 @@ export const composer = {
 	multi: "多选",
 	"no selection": "未选择",
 	"auto-selected after timeout — not a user choice": "超时后自动选择 — 非用户选择",
+	"select multiple — choose each option, then pick Next": "可多选 — 逐项点选，最后选 Next 提交",
 
 	// ── Slash commands (composer / TUI parity) ─────────────────────────
 	"unknown slash command": "未知命令",
