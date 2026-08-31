@@ -347,6 +347,8 @@ export const settings = {
 	"deselect all": "取消全选",
 	"enter a base URL to fetch models": "请先填写 Base URL",
 	"adopted models": "已获取的模型",
+	"add model": "添加模型",
+	"add model hint": "手动添加一个模型行，自行填写模型 ID 与名称",
 	"provider name, base URL and at least one model are required": "供应商名称、Base URL 与至少一个模型为必填",
 	"edit custom provider": "编辑自定义供应商",
 	"save changes": "保存修改",

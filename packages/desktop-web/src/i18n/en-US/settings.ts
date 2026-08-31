@@ -376,6 +376,8 @@ export const settings = {
 	"deselect all": "Deselect all",
 	"enter a base URL to fetch models": "Enter a base URL to fetch models",
 	"adopted models": "Adopted models",
+	"add model": "Add model",
+	"add model hint": "Manually add a model row and type its ID / name by hand",
 	"provider name, base URL and at least one model are required":
 		"Provider name, base URL, and at least one model are required",
 	"edit custom provider": "Edit custom provider",

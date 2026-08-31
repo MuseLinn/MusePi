@@ -175,8 +175,9 @@ export function ModelSection({
 	const [formBusy, setFormBusy] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 	// Adopted-model capability editor: which adopted row's capability
-	// override strip is expanded (null = none).
-	const [expandedCaps, setExpandedCaps] = useState<string | null>(null);
+	// override strip is expanded (null = none). Tracked by row index so a
+	// manually added row (whose id starts empty) can still expand its editor.
+	const [expandedCaps, setExpandedCaps] = useState<number | null>(null);
 	// Custom-provider add dialog: the config form lives in a DialogFrame
 	// opened from the "custom providers" tab (not a separate tab — user
 	// report: 添加自定义供应商应是有设计规范的弹窗). `addedName` is the
@@ -453,20 +454,38 @@ export function ModelSection({
 		setPicked(new Set());
 	};
 
-	/** Drop one adopted model row from the form. */
-	const removeAdopted = (id: string): void => {
-		setForm(v => ({ ...v, adopted: v.adopted.filter(m => m.id !== id) }));
+	/** Drop one adopted model row from the form (by list index, so a row
+	 *  whose id is still empty — a just-added manual row — can be removed). */
+	const removeAdopted = (index: number): void => {
+		setForm(v => ({ ...v, adopted: v.adopted.filter((_, i) => i !== index) }));
 	};
 
-	/** Patch capability overrides on one adopted model row. */
+	/** Patch one adopted model row (by list index): id, name, and the
+	 *  capability overrides. Index-based so editing a row's id never de-links
+	 *  it from its own caps/delete controls. */
 	const patchAdopted = (
-		id: string,
-		patch: Partial<{ input: string[] | null; contextWindow: number | null; maxTokens: number | null }>,
+		index: number,
+		patch: Partial<{
+			id: string;
+			name: string | undefined;
+			input: string[] | null;
+			contextWindow: number | null;
+			maxTokens: number | null;
+		}>,
 	): void => {
 		setForm(v => ({
 			...v,
-			adopted: v.adopted.map(m => (m.id === id ? { ...m, ...patch } : m)),
+			adopted: v.adopted.map((m, i) => (i === index ? { ...m, ...patch } : m)),
 		}));
+	};
+
+	/** Append a fresh, editable model row to the adopted list so the user can
+	 *  type in models by hand (that's what the "add model" button does — the
+	 *  endpoint interrogation alone is not enough when /models is unavailable
+	 *  or the provider only wants a couple of known ids). */
+	const addManualModel = (): void => {
+		setForm(v => ({ ...v, adopted: [...v.adopted, { id: "" }] }));
+		setExpandedCaps(form.adopted.length);
 	};
 
 	const submitModel = async (): Promise<void> => {
@@ -491,20 +510,22 @@ export function ModelSection({
 					...(form.apiKey ? { apiKey: form.apiKey } : {}),
 					...(form.api !== "openai" ? { api: form.api } : {}),
 					models: [
-						...form.adopted.map(m => ({
-							id: m.id,
-							...(m.name ? { name: m.name } : {}),
-							// input: explicit []/null → restore-to-auto (null deletes
-							// the models.yml override); non-empty array writes it;
-							// untouched (undefined) omits the field.
-							...(Array.isArray(m.input)
-								? { input: m.input.length > 0 ? m.input : null }
-								: m.input === null
-									? { input: null }
-									: {}),
-							...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
-							...(m.maxTokens !== undefined ? { maxTokens: m.maxTokens } : {}),
-						})),
+						...form.adopted
+							.filter(m => m.id.trim())
+							.map(m => ({
+								id: m.id,
+								...(m.name ? { name: m.name } : {}),
+								// input: explicit []/null → restore-to-auto (null deletes
+								// the models.yml override); non-empty array writes it;
+								// untouched (undefined) omits the field.
+								...(Array.isArray(m.input)
+									? { input: m.input.length > 0 ? m.input : null }
+									: m.input === null
+										? { input: null }
+										: {}),
+								...(m.contextWindow !== undefined ? { contextWindow: m.contextWindow } : {}),
+								...(m.maxTokens !== undefined ? { maxTokens: m.maxTokens } : {}),
+							})),
 						...(form.modelId
 							? [
 									{
@@ -1937,6 +1958,15 @@ export function ModelSection({
 								>
 									{fetchingModels ? t("fetching models…") : t("fetch available models")}
 								</button>
+								<button
+									type="button"
+									className="gui-btn"
+									disabled={formBusy}
+									title={t("add model hint")}
+									onClick={addManualModel}
+								>
+									{t("add model")}
+								</button>
 								{form.adopted.length > 0 && (
 									<span className="text-[12px] text-[var(--color-text-faint)]">
 										{t("adopted models")}: {form.adopted.length}
@@ -1946,18 +1976,29 @@ export function ModelSection({
 							{fetchError && <div className="text-[13px] text-[var(--color-error)]">{fetchError}</div>}
 							{form.adopted.length > 0 && (
 								<div className="flex flex-col gap-1">
-									{form.adopted.map(m => {
-										const capsOpen = expandedCaps === m.id;
+									{form.adopted.map((m, index) => {
+										const capsOpen = expandedCaps === index;
 										return (
-											<div key={m.id} className="flex flex-col gap-1">
+											<div key={index} className="flex flex-col gap-1">
 												<div className="flex items-center gap-2">
-													<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
+													<input
+														className="gui-input flex-1"
+														placeholder={t("model id")}
+														value={m.id}
+														onChange={e => patchAdopted(index, { id: e.target.value })}
+													/>
+													<input
+														className="gui-input flex-1"
+														placeholder={t("model name (optional)")}
+														value={m.name ?? ""}
+														onChange={e => patchAdopted(index, { name: e.target.value || undefined })}
+													/>
 													<button
 														type="button"
 														className="gui-btn"
 														title={t("model capabilities")}
 														aria-label={`${t("model capabilities")} ${m.id}`}
-														onClick={() => setExpandedCaps(capsOpen ? null : m.id)}
+														onClick={() => setExpandedCaps(capsOpen ? null : index)}
 													>
 														<Icon name="settings-3" className="h-3.5 w-3.5" />
 													</button>
@@ -1965,7 +2006,7 @@ export function ModelSection({
 														type="button"
 														className="gui-btn"
 														aria-label={`${t("delete")} ${m.id}`}
-														onClick={() => removeAdopted(m.id)}
+														onClick={() => removeAdopted(index)}
 													>
 														<Icon name="delete-bin" className="h-3.5 w-3.5" />
 													</button>
@@ -1981,7 +2022,7 @@ export function ModelSection({
 																className="text-[12px] text-[var(--color-accent)]"
 																title={t("restore capabilities to auto")}
 																onClick={() =>
-																	patchAdopted(m.id, {
+																	patchAdopted(index, {
 																		input: null,
 																		contextWindow: null,
 																		maxTokens: null,
@@ -1998,7 +2039,7 @@ export function ModelSection({
 																		type="checkbox"
 																		checked={(m.input ?? []).includes(modality)}
 																		onChange={() =>
-																			patchAdopted(m.id, {
+																			patchAdopted(index, {
 																				input: (m.input ?? []).includes(modality)
 																					? (m.input ?? []).filter(x => x !== modality)
 																					: [...(m.input ?? []), modality],
@@ -2017,7 +2058,7 @@ export function ModelSection({
 																min={0}
 																value={m.contextWindow ?? ""}
 																onChange={e =>
-																	patchAdopted(m.id, {
+																	patchAdopted(index, {
 																		contextWindow: e.target.value ? Number(e.target.value) : null,
 																	})
 																}
@@ -2029,7 +2070,7 @@ export function ModelSection({
 																min={0}
 																value={m.maxTokens ?? ""}
 																onChange={e =>
-																	patchAdopted(m.id, {
+																	patchAdopted(index, {
 																		maxTokens: e.target.value ? Number(e.target.value) : null,
 																	})
 																}
