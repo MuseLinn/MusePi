@@ -1,9 +1,10 @@
-import { describe, expect, it } from "bun:test";
+import { describe, expect, it, vi } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 import { Composer } from "../src/components/shell/Composer";
 import { GuestClient } from "../src/lib/client";
+import { CollabSocket } from "../src/lib/socket";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 
@@ -96,5 +97,34 @@ describe("multi-select (checkbox) ask — host toggle loop", () => {
 		client.applyFrameForTest({ t: "ui-request-end", reqId: 7 });
 		expect(client.getSnapshot().uiRequest?.reqId).toBe(9);
 		expect(client.getSnapshot().uiRequestPending).toBe(false);
+	});
+
+	it("Next submits the wire 'Next →' literal; Cancel sends an undefined value (guest cancel)", () => {
+		// Regression: the ask previously rendered a single button labeled
+		// "Cancel" that sent the cancel value — the Next/submit action did
+		// not exist on the mobile composer. The two buttons must map to the
+		// host's toggle-loop contract: "Next →" ends the loop with the
+		// current checked set, an undefined value cancels the ask.
+		const sent: { reqId: number; value?: string }[] = [];
+		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation((frame: { t: string; reqId?: number; value?: string }) => {
+			if (frame.t === "ui-response") sent.push({ reqId: frame.reqId as number, value: frame.value });
+		});
+		try {
+			const client = clientWithAsk({ title: "Pick languages", options: ["Rust", "Go"], helpText: "toggle then Next" });
+			const html = renderToStaticMarkup(<Composer client={client} />);
+			// Both actions render with distinct labels.
+			expect(html).toContain(">Next</button>");
+			expect(html).toContain(">Cancel</button>");
+			// Press the buttons through the handlers they bind: Next submits
+			// the literal, Cancel sends no value.
+			client.sendUiResponse(7, "Next →");
+			client.sendUiResponse(8);
+			expect(sent).toEqual([
+				{ reqId: 7, value: "Next →" },
+				{ reqId: 8, value: undefined },
+			]);
+		} finally {
+			sendSpy.mockRestore();
+		}
 	});
 });

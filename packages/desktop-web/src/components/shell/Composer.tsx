@@ -205,11 +205,14 @@ export function Composer({ client }: ComposerProps): ReactNode {
 				<div className="sh-composer-actions sh-ask-actions">
 					<button
 						type="button"
-						className="sh-btn"
+						className="sh-btn sh-btn-primary"
 						disabled={multi && uiRequestPending}
-						onClick={() => client.sendUiResponse(uiRequest.reqId)}
+						onClick={() => client.sendUiResponse(uiRequest.reqId, "Next →")}
 					>
-						{t("Cancel")}
+						{t("Next")}
+					</button>
+					<button type="button" className="sh-btn" onClick={() => client.sendUiResponse(uiRequest.reqId)}>
+						{t("cancel ask")}
 					</button>
 					{busy && (
 						<button

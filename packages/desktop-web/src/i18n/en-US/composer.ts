@@ -30,6 +30,8 @@ export const composer = {
 	"no selection": "No selection",
 	"auto-selected after timeout — not a user choice": "Auto-selected after timeout — not a user choice",
 	"select multiple — choose each option, then pick Next": "Select multiple — choose each option, then pick Next",
+	Next: "Next",
+	"cancel ask": "Cancel",
 
 	// ── Slash commands (composer / TUI parity) ─────────────────────────
 	"unknown slash command": "Unknown slash command",

@@ -118,7 +118,7 @@ export function SessionsSheet({
 	return (
 		<div className={`ss-backdrop${stage === "closing" ? " ss-closing" : ""}`} role="presentation" onClick={onClose}>
 			<div
-				className="ss-card"
+				className={`ss-card${stage === "closing" ? " ss-closing" : ""}`}
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("sessions")}
