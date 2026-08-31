@@ -5,6 +5,9 @@ import { Icon } from "../vendor/oc-icons";
 
 export interface ContextMenuItem {
 	label?: string;
+	/** Secondary line under the label — explains what the action does
+	 *  (right-click menus carry terse verbs; the description disambiguates). */
+	description?: string;
 	icon?: string;
 	/** Omitted only on divider items. */
 	onSelect?(): void;
@@ -97,7 +100,10 @@ export function ContextMenu({
 						) : item.icon ? (
 							<Icon name={item.icon as never} className="h-3.5 w-3.5" />
 						) : null}
-						<span className="min-w-0 flex-1 truncate">{item.label}</span>
+						<span className="flex min-w-0 flex-1 flex-col">
+							<span className="truncate">{item.label}</span>
+							{item.description && <span className="gui-context-desc">{item.description}</span>}
+						</span>
 						{item.hint && <span className="gui-context-hint">{item.hint}</span>}
 					</button>
 				</div>

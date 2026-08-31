@@ -25,6 +25,8 @@ const NODE_W = 168;
 const NODE_H = 40;
 const GAP_X = 36;
 const GAP_Y = 64;
+/** 轮内垂直间距(px):同一轮(user→assistant→toolResult)的节点紧凑堆叠。 */
+const GAP_Y_TURN = 12;
 const FIT_PADDING = 28;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 2.2;
@@ -39,6 +41,9 @@ interface CanvasNode {
 	depth: number;
 	x: number;
 	y: number;
+	/** 轮次(按 entries 顺序:每条 user 消息开新轮,assistant/toolResult 归当前轮)。
+	 *  布局用它做"轮级分组"——同轮节点垂直紧凑堆叠,轮间大间距。 */
+	turn: number;
 	/** 折叠链段:该节点是其所在链段的"段首"(胶囊),折叠了 [node, node+len) 的 len 个节点。 */
 	foldLen?: number;
 }
@@ -65,7 +70,10 @@ export interface ChainFold {
  * 折叠只作用于"无分支的纯链"——任何分支点都会打断链段,所以折叠不会
  * 隐藏分支结构,只是压缩长会话的纵向空白。
  */
-export function layoutTree(roots: readonly MessageTreeNode[]): {
+export function layoutTree(
+	roots: readonly MessageTreeNode[],
+	entries?: readonly unknown[],
+): {
 	nodes: CanvasNode[];
 	width: number;
 	height: number;
@@ -74,6 +82,21 @@ export function layoutTree(roots: readonly MessageTreeNode[]): {
 	const nodes: CanvasNode[] = [];
 	const folds: ChainFold[] = [];
 	let nextSlot = 0;
+	// 轮次表:按 entries 顺序,每条 user 消息开新轮(turn+1),assistant/
+	// toolResult 归当前轮。地图"轮级分组"用——同轮节点垂直紧凑堆叠。
+	// 无 entries(纯结构调用)时全部归 turn 0(退化为无分组)。
+	const turnById = new Map<string, number>();
+	if (entries) {
+		let turn = 0;
+		for (const raw of entries) {
+			if (!raw || typeof raw !== "object") continue;
+			const e = raw as { id?: unknown; type?: unknown; message?: { role?: unknown } };
+			if (typeof e.id !== "string" || e.type !== "message") continue;
+			const role = e.message?.role;
+			if (role === "user") turn += 1;
+			turnById.set(e.id, turn);
+		}
+	}
 	// 后序:叶取新槽位,内部节点取首末子均值(紧凑无重叠)。
 	const place = (node: MessageTreeNode, depth: number): number => {
 		let cx: number;
@@ -83,7 +106,13 @@ export function layoutTree(roots: readonly MessageTreeNode[]): {
 			const childXs = node.children.map(c => place(c, depth + 1));
 			cx = (childXs[0]! + childXs[childXs.length - 1]!) / 2;
 		}
-		nodes.push({ node, depth, x: cx * (NODE_W + GAP_X), y: depth * (NODE_H + GAP_Y) });
+		nodes.push({
+			node,
+			depth,
+			x: cx * (NODE_W + GAP_X),
+			y: depth * (NODE_H + GAP_Y),
+			turn: turnById.get(node.id) ?? 0,
+		});
 		return cx;
 	};
 	for (const root of roots) place(root, 0);
@@ -144,25 +173,27 @@ export function layoutTree(roots: readonly MessageTreeNode[]): {
 		}
 	}
 	// y 重排(关键):折叠段内节点被胶囊替代后,后续节点的 y 必须上移。
-	// 每节点的视觉深度 = 从根到它的路径上"非隐藏节点"的个数;y = 视觉
-	// 深度 × 行高。折叠段内节点在路径上但被跳过(它们占的是段首那一行,
-	// 第二遍再堆叠)。分支子节点从父的视觉深度 + 1 开始,各自独立推进——
-	// 全局 hiddenBefore 累计对多根/多子树是错的(会跨子树错误压缩)。
+	// 每节点 y = 父节点 y + (同轮?轮内紧凑间距:轮间大间距)——同一轮
+	// (user→assistant→toolResult)的节点垂直紧凑堆叠成簇,轮间拉开,
+	// 地图按"轮"阅读(用户: 应该以每一轮的 User/ASSISTANT 堆叠)。
+	// 分支子节点从父的 y 继承推进;全局 hiddenBefore 累计对多根是错的,
+	// 这里按树递归天然隔离。
 	{
 		const hiddenSet = new Set<string>();
 		for (const f of folds) for (const h of f.hiddenIds) hiddenSet.add(h);
 		const idToNode = new Map(nodes.map(n => [n.node.id, n]));
-		const walk = (node: MessageTreeNode, visDepth: number): void => {
+		const walk = (node: MessageTreeNode, parentY: number | null, parentTurn: number): void => {
 			const cn = idToNode.get(node.id)!;
-			// 隐藏节点:不占视觉深度,其子从父的 visDepth 继承(跳过它)。
+			// 隐藏节点:不占位置,其子从父的 y 继承(跳过它)。
 			if (hiddenSet.has(node.id)) {
-				for (const child of node.children) walk(child, visDepth);
+				for (const child of node.children) walk(child, parentY, cn.turn);
 				return;
 			}
-			cn.y = visDepth * (NODE_H + GAP_Y);
-			for (const child of node.children) walk(child, visDepth + 1);
+			const gap = parentY === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
+			cn.y = (parentY ?? 0) + gap;
+			for (const child of node.children) walk(child, cn.y, cn.turn);
 		};
-		for (const root of roots) walk(root, 0);
+		for (const root of roots) walk(root, null, -1);
 	}
 	// 第二遍:段内节点堆叠到"重排后的段首"下方(段首已重排)。
 	for (const n of nodes) {
@@ -330,7 +361,7 @@ export function SessionTreeCanvas({
 	const [expandedFolds, setExpandedFolds] = useState<ReadonlySet<string>>(new Set());
 
 	const { nodes, width, height, folds } = useMemo(() => {
-		const laid = layoutTree(roots);
+		const laid = layoutTree(roots, entries);
 		let w = laid.width;
 		let h = laid.height;
 		for (const [id, p] of Object.entries(positions)) {
@@ -359,7 +390,14 @@ export function SessionTreeCanvas({
 	// 时 leafId 为 null,不标记会让地图失去"我在哪"的锚点)。声明在 fitView
 	// 之前 — 智能适配以它为焦点。
 	const currentNodeId = useMemo(() => {
-		if (leafId != null && nodes.some(n => n.node.id === leafId)) return leafId;
+		// 显式 leaf:若 leaf 是折叠段内节点(不可见),回退到它的段首胶囊——
+		// 否则"回到当前位置"定位到隐藏节点,看起来没效果(用户: 似乎没有任何效果)。
+		if (leafId != null) {
+			if (nodes.some(n => n.node.id === leafId && !hiddenNodeIds.has(leafId))) return leafId;
+			const fold = folds.find(f => f.hiddenIds.includes(leafId));
+			if (fold) return fold.headId;
+			if (nodes.some(n => n.node.id === leafId)) return leafId;
+		}
 		let deepest: CanvasNode | undefined;
 		for (const n of nodes) {
 			// 折叠段内节点不可见,不参与"我在哪"定位(否则回到当前位置会
@@ -369,7 +407,7 @@ export function SessionTreeCanvas({
 			if (!deepest || n.depth > deepest.depth || (n.depth === deepest.depth && n.x > deepest.x)) deepest = n;
 		}
 		return deepest?.node.id ?? null;
-	}, [leafId, activePathIds, nodes, hiddenNodeIds]);
+	}, [leafId, activePathIds, nodes, hiddenNodeIds, folds]);
 
 	// Fit-to-viewport: runs once per canvas mount (the component only renders
 	// in canvas view mode) and re-runs when the wrap leaves a degenerate size
@@ -596,9 +634,12 @@ export function SessionTreeCanvas({
 
 	const handleDblClick = useCallback(
 		(nodeId: string) => {
+			// 拖动移动卡片后不触发双击跳转(拖动已设 suppressClick)。
+			const suppressed = suppressClick.current;
+			suppressClick.current = false;
+			if (suppressed) return;
 			clearTimeout(singleClickTimer.current);
 			singleClickTimer.current = undefined;
-			suppressClick.current = false;
 			// 双击跳转:立即卸载聚焦卡(不等退场动画,跳转是即时导航)。
 			setFocusClosing(false);
 			setFocusedId(null);
@@ -608,13 +649,15 @@ export function SessionTreeCanvas({
 	);
 
 	// 右键菜单项:节点 → 跳转/重答/分叉;空白 → 视图控制。定义在
-	// handleDblClick/fitView 之后(它们被引用)。
+	// handleDblClick/fitView 之后(它们被引用)。description 说明动作
+	// 的具体效果(右键菜单动词简短,描述消除歧义)。
 	const ctxItems = useMemo<ContextMenuItem[]>(() => {
 		if (!ctxMenu) return [];
 		if (ctxMenu.nodeId !== null) {
 			const items: ContextMenuItem[] = [
 				{
 					label: t("trajectory jump"),
+					description: t("context jump desc"),
 					icon: "arrow-go-forward",
 					onSelect: () => handleDblClick(ctxMenu.nodeId!),
 				},
@@ -622,6 +665,7 @@ export function SessionTreeCanvas({
 			if (onBranchTo) {
 				items.push({
 					label: t("branch re-answer here"),
+					description: t("context branch desc"),
 					icon: "git-branch",
 					onSelect: () => onBranchTo(ctxMenu.nodeId!),
 				});
@@ -629,6 +673,7 @@ export function SessionTreeCanvas({
 			if (onForkAt) {
 				items.push({
 					label: t("fork session here"),
+					description: t("context fork desc"),
 					icon: "git-fork",
 					onSelect: () => onForkAt(ctxMenu.nodeId!),
 				});
@@ -639,6 +684,7 @@ export function SessionTreeCanvas({
 		return [
 			{
 				label: t("canvas reset view"),
+				description: t("context reset desc"),
 				icon: "align-justify",
 				onSelect: () => {
 					needsFitRef.current = true;
@@ -647,6 +693,7 @@ export function SessionTreeCanvas({
 			},
 			{
 				label: t("collapse all chains"),
+				description: t("context collapse desc"),
 				icon: "arrow-up-s",
 				onSelect: () => setExpandedFolds(new Set()),
 			},
@@ -875,12 +922,26 @@ export function SessionTreeCanvas({
 								{clockText && <span className="stc-node-clock">{clockText}</span>}
 								{(onBranchTo || onForkAt) && (
 									<span className="traj-trow-actions">
+										<button
+											type="button"
+											className="stc-node-action"
+											title={t("trajectory jump")}
+											aria-label={t("trajectory jump")}
+											onPointerDown={e => e.stopPropagation()}
+											onClick={e => {
+												e.stopPropagation();
+												handleDblClick(n.node.id);
+											}}
+										>
+											<Icon name="arrow-go-forward" className="h-3 w-3" />
+										</button>
 										{onBranchTo && (
 											<button
 												type="button"
 												className="stc-node-action"
 												title={t("branch re-answer here")}
 												aria-label={t("branch re-answer here")}
+												onPointerDown={e => e.stopPropagation()}
 												onClick={e => {
 													e.stopPropagation();
 													onBranchTo(n.node.id);
@@ -895,6 +956,7 @@ export function SessionTreeCanvas({
 												className="stc-node-action"
 												title={t("fork session here")}
 												aria-label={t("fork session here")}
+												onPointerDown={e => e.stopPropagation()}
 												onClick={e => {
 													e.stopPropagation();
 													onForkAt(n.node.id);

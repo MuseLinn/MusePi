@@ -6,8 +6,14 @@ import { buildMessageTree } from "../src/lib/message-tree";
 // SessionTreeCanvas 的布局纯函数:深链折叠(长会话地图不塌成 22k px 竖线)。
 // 折叠只压缩"无分支单子链"的纵向空白,分支结构、段内信息都不丢(展开恢复)。
 
-function msg(id: string, parentId: string | null, ts = 1): unknown {
-	return { type: "message", id, parentId, timestamp: new Date(ts).toISOString(), message: { role: "user" } };
+function msg(id: string, parentId: string | null, ts = 1, role: string = "user"): unknown {
+	return {
+		type: "message",
+		id,
+		parentId,
+		timestamp: new Date(ts).toISOString(),
+		message: { role },
+	};
 }
 
 /** 构建一条 n 节点的线性链 entries。 */
@@ -23,8 +29,28 @@ describe("layoutTree 深链折叠", () => {
 		const laid = layoutTree(tree);
 		expect(laid.nodes).toHaveLength(10);
 		expect(laid.folds).toHaveLength(0);
-		// 高度按节点数正常增长,无折叠。
-		expect(laid.height).toBe(10 * (40 + 64));
+		// 无 entries 参数 → 全部归 turn 0,同轮紧凑堆叠(GAP_Y_TURN=12)。
+		// height = 最后节点底部(40 + 9*12) + 尾部留白(GAP_Y=64)。
+		expect(laid.height).toBe(40 + 9 * 12 + 64);
+	});
+
+	it("传 entries 时按轮分组:同轮紧凑、轮间大间距", () => {
+		// 两轮:user0→assistant0(turn1), user1→assistant1(turn2)。
+		const entries = [
+			msg("u0", null, 1, "user"),
+			msg("a0", "u0", 2, "assistant"),
+			msg("u1", "a0", 3, "user"),
+			msg("a1", "u1", 4, "assistant"),
+		];
+		const tree = buildMessageTree(entries);
+		const laid = layoutTree(tree, entries);
+		expect(laid.nodes).toHaveLength(4);
+		const y = (id: string) => laid.nodes.find(n => n.node.id === id)!.y;
+		// 同轮:u0→a0 紧凑;u1→a1 紧凑。
+		expect(y("a0") - y("u0")).toBe(12);
+		expect(y("a1") - y("u1")).toBe(12);
+		// 轮间:u1 从 a0 大间距(GAP_Y=64)开始新轮。
+		expect(y("u1") - y("a0")).toBe(64);
 	});
 
 	it("长链(> 阈值)折叠成段,画布高度大幅缩小", () => {
