@@ -108,12 +108,14 @@ function daemonCommand(port) {
 	// shellEnabled); 0 = a random loopback port the daemon persists to
 	// web.port for the compat shell to discover.
 	const webArgs = shellEnabled() ? ["--web-port", "0"] : [];
-	const inPath = (process.env.PATH ?? "")
+	const pathCli = (process.env.PATH ?? "")
 		.split(win ? ";" : ":")
-		.some(dir => fs.existsSync(path.join(dir, win ? "musepi.exe" : "musepi")));
-	if (inPath) {
+		.filter(dir => dir.trim().length > 0)
+		.map(dir => path.resolve(dir, win ? "musepi.exe" : "musepi"))
+		.find(candidate => fs.existsSync(candidate));
+	if (pathCli) {
 		return {
-			program: "musepi",
+			program: pathCli,
 			args: ["serve", "--port", String(port), ...webArgs],
 		};
 	}
