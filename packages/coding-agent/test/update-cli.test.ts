@@ -56,6 +56,19 @@ const TEST_CONFIG: CliConfig = {
 	commands: new Map(),
 };
 
+// Some update-cli tests exercise POSIX-only filesystem behaviour (symlinks,
+// mode bits, shell-script exe shims). They document the real-platform
+// contract — they are not applicable on Windows, where npm writes .cmd/.ps1
+// shims, chmod is a no-op, and a shebang script is not directly executable.
+// Wrap those tests so they still run on POSIX (CI) but are skipped on win32.
+function itPosixOnly(name: string, fn: () => void | Promise<void>): void {
+	if (process.platform === "win32") {
+		it.skip(name, fn);
+	} else {
+		it(name, fn);
+	}
+}
+
 describe("update command plugin dispatch", () => {
 	it("routes -l to plugin upgrade instead of the app updater", async () => {
 		const pluginSpy = spyOn(pluginCli, "runPluginCommand").mockResolvedValue(undefined);
@@ -138,7 +151,7 @@ describe("update-cli install target detection", () => {
 		expect(method).toBe("npm");
 	});
 
-	it("uses binary update when a plain file in the npm global bin dir is the standalone binary, not an npm symlink", () => {
+	itPosixOnly("uses binary update when a plain file in the npm global bin dir is the standalone binary, not an npm symlink", () => {
 		// Regression: with `npm prefix -g` pointed at the installer's default
 		// (~/.local), directory containment alone misclassified the standalone
 		// binary as npm-managed, so `npm install -g` failed with EEXIST refusing
@@ -151,7 +164,7 @@ describe("update-cli install target detection", () => {
 		expect(method).toBe("binary");
 	});
 
-	it("uses binary update when a plain file in the bun global bin dir is the standalone binary", () => {
+	itPosixOnly("uses binary update when a plain file in the bun global bin dir is the standalone binary", () => {
 		const method = resolveUpdateMethodForTest("/home/u/.local/bin/musepi", "/home/u/.local/bin", {
 			musepiIsRegularFile: true,
 		});
@@ -206,7 +219,7 @@ describe("update-cli install target detection", () => {
 		expect(await fs.readlink(aliasPath)).toBe(standalonePath);
 	});
 
-	it("keeps an npm-linked checkout under npm management instead of overwriting its resolved script", async () => {
+	itPosixOnly("keeps an npm-linked checkout under npm management instead of overwriting its resolved script", async () => {
 		const dir = await makeTempDir();
 		const npmPrefix = path.join(dir, ".npm-global");
 		const npmBinDir = path.join(npmPrefix, "bin");
@@ -736,7 +749,9 @@ describe("update-cli release binary integrity", () => {
 		});
 
 		expect(await Bun.file(targetPath).text()).toBe(content);
-		expect((await fs.stat(targetPath)).mode & 0o777).toBe(0o755);
+		if (process.platform !== "win32") {
+			expect((await fs.stat(targetPath)).mode & 0o777).toBe(0o755);
+		}
 	});
 
 	it("aborts the response stream as soon as it exceeds the expected size", async () => {
@@ -860,7 +875,9 @@ describe("update-cli release binary integrity", () => {
 			).rejects.toThrow("digest mismatch");
 			expect(metadataAuthorizations).toEqual(["Bearer test-token"]);
 			expect(await Bun.file(targetPath).text()).toBe(installed);
-			expect((await fs.stat(targetPath)).mode & 0o777).toBe(0o755);
+			if (process.platform !== "win32") {
+				expect((await fs.stat(targetPath)).mode & 0o777).toBe(0o755);
+			}
 			const newResidue = (await fs.readdir(dir)).filter(name => name.endsWith(".new"));
 			expect(newResidue).toEqual([]);
 		} finally {
@@ -1090,7 +1107,7 @@ describe("update-cli script-shim takeover", () => {
 		}
 	}
 
-	it("installs musepi.exe beside the shims and retires them", async () => {
+	itPosixOnly("installs musepi.exe beside the shims and retires them", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
 		// Real executable, no injected verifier: the takeover must verify the
@@ -1112,7 +1129,7 @@ describe("update-cli script-shim takeover", () => {
 		expect(residue).toEqual([]);
 	});
 
-	it("restores the shims and removes the exe when the exe reports the wrong version", async () => {
+	itPosixOnly("restores the shims and removes the exe when the exe reports the wrong version", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
 		// Executable runs but reports the previous version -> full rollback.
@@ -1144,7 +1161,7 @@ describe("update-cli script-shim takeover", () => {
 		});
 	}
 
-	it("rewrites an immovable precedence-winning shim as a forwarder to the exe", async () => {
+	itPosixOnly("rewrites an immovable precedence-winning shim as a forwarder to the exe", async () => {
 		const dir = await makeTempDir();
 		await writeShims(dir);
 		const exe = `#!/bin/sh\necho musepi/${version}\n`;
