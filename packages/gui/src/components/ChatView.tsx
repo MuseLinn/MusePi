@@ -1424,11 +1424,11 @@ export function ChatView({
 																colorBlind={displaySettings.colorBlindMode === true}
 																onQuote={text => appendQuote(text)}
 																onRevert={(id, text) => void jumpBackToMessage(id, text)}
-																/* 编辑并重发 (Transcript onEdit, previously unwired):
-																 * backfill the composer with the message text for
-																 * re-editing — same pendingEdit path as the revert
-																 * dock's 恢复到输入框 and the fork flow. */
-																onEdit={(_id, text) => setPendingEdit(text)}
+																/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
+																 * branchAt 到该消息(leaf 落父节点,旧尾部成为
+																 * sibling branch)+ 原文回填 composer——发送即在
+																 * 该位置重答。与撤回(仅移动 leaf、不回填)互补。 */
+																onEdit={(id, text) => void jumpBackToMessage(id, text)}
 																onFork={(id, text, includeTarget) =>
 																	void forkFromMessage(id, text, includeTarget)
 																}
