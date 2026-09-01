@@ -1641,7 +1641,10 @@ export type MediaProviderKind = "image" | "video";
 
 /** How a media provider resolves its credential. */
 export type MediaProviderAuth =
-	| { type: "apiKey"; /** Env var name surfaced in the settings UI hint (e.g. "STABILITY_API_KEY"). */ envVar?: string }
+	| {
+			type: "apiKey" /** Env var name surfaced in the settings UI hint (e.g. "STABILITY_API_KEY"). */;
+			envVar?: string;
+	  }
 	| { type: "oauth" };
 
 /** One generation model offered by a media provider. */
@@ -1663,7 +1666,11 @@ export interface MediaProviderConfig {
 	/** API endpoint used for generation requests and connection tests. */
 	baseUrl?: string;
 	/** Credential check + request execution. Receives the resolved key (undefined when unset). */
-	execute?: (input: { apiKey?: string; prompt: string; signal?: AbortSignal }) => Promise<{ url?: string; error?: string }>;
+	execute?: (input: {
+		apiKey?: string;
+		prompt: string;
+		signal?: AbortSignal;
+	}) => Promise<{ url?: string; error?: string }>;
 }
 
 /** Internal: one registered media provider tagged with its owning extension source. */

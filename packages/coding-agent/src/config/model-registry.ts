@@ -1,7 +1,6 @@
 import * as path from "node:path";
 import type { ApiKeyResolver, FetchImpl } from "@musepi/pi-ai";
 import { registerCustomApi, unregisterCustomApis } from "@musepi/pi-ai/api-registry";
-import { clearExtensionMediaProviders } from "../tools/image-providers";
 import { registerOAuthProvider, unregisterOAuthProvider, unregisterOAuthProviders } from "@musepi/pi-ai/oauth";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@musepi/pi-ai/oauth/types";
 import { setCodexAttestationProvider } from "@musepi/pi-ai/providers/openai-codex-responses";
@@ -38,6 +37,7 @@ import { getAgentDir, isBunTestRuntime, logger, wrapFetchForExtraCa } from "@mus
 import { resolveProviderModelReference } from "../config/model-resolver";
 import { generateCodexAttestation } from "../live/attestation";
 import type { AuthStorage } from "../session/auth-storage";
+import { clearExtensionMediaProviders } from "../tools/image-providers";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
 import type { ConfigError, ConfigFile } from "./config-file";
 import {

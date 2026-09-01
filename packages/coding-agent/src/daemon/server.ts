@@ -103,11 +103,10 @@ import { resolvePromptInput } from "../system-prompt";
 import { refreshAgentDiscovery } from "../task";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
+import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
-import { IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
-import { getExtensionMediaProviders } from "../tools/image-providers";
 import {
 	type CronRun,
 	type CronStatus,

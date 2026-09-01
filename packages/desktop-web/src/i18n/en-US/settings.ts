@@ -3096,7 +3096,7 @@ export const settings = {
 	"no image providers available": "No image generation providers available",
 	"enter api key": "Enter API key",
 	"oauth provider — manage in providers tab": "OAuth provider — sign in via Model settings → Providers",
-	"video gen note": "Video generation (agnes_video_gen) reuses the Agnes credential above; the tool toggle lives in Tools settings",
+	"video gen note":
+		"Video generation (agnes_video_gen) reuses the Agnes credential above; the tool toggle lives in Tools settings",
 	"extension providers count": "{count} media provider(s) contributed by extensions",
-
 } as const satisfies Record<SettingsKey, string>;

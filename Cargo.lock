@@ -282,9 +282,9 @@ dependencies = [
 
 [[package]]
 name = "astral-tl"
-version = "0.7.11"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d90933ffb0f97e2fc2e0de21da9d3f20597b804012d199843a6fe7c2810d28f3"
+checksum = "04d4bb5df351abb6758a04240b0193794ddaf34a7c0b9452fab3c25dcce39e88"
 dependencies = [
  "memchr",
 ]
@@ -2766,9 +2766,9 @@ checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.11.6"
+version = "3.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5fe2583aad3e87439e40d841fed327a60892bb9946da1e3a5788ee7f0f4fe3c"
+checksum = "9fd381d291246b2df83535a2f2896dc32633a4cb69a14861f29f9dc0c7fbab77"
 dependencies = [
  "ahash",
  "astral-tl",
@@ -4900,7 +4900,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -4970,7 +4970,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -5055,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "async-trait",
  "libc",
@@ -5067,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5141,7 +5141,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5169,7 +5169,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5184,7 +5184,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "0.4.11"
+version = "0.4.12"
 dependencies = [
  "dashmap",
  "globset",

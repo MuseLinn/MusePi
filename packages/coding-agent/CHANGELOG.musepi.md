@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.12] - 2026-09-01
+
 ### Added
 
 - **GUI 媒体生成设置界面(图像/视频生成供应商管理)+ 插件化媒体后端(文本生图)**:TUI 一直有 `generate_image`/`agnes_video_gen` 工具与多供应商凭证接口,但没有对应的设置管理界面。现在 GUI 设置新增「图像与视频生成」段(基础设置 → 图像与视频生成):按供应商卡片列出 8 个内置图像生成供应商(Agnes/Agnes Global/OpenAI/Codex/Antigravity/xAI/Gemini/OpenRouter)与扩展注册的媒体供应商,显示凭证状态(已配置/未配置)、apiKey 型供应商内联密钥录入、OAuth 型供应商一键登录(复用 ModelSection 登录流)、已配置供应商可移除凭证;写入走既有 `providers.importApiKey`/`providers.login`/`providers.logout` RPC,凭证立即对所有会话生效。daemon 新增 `media.providers` RPC(内置 + 扩展供应商合并视图 + 凭证状态)。扩展 API 新增 `pi.registerMediaProvider(config)` / `pi.unregisterMediaProvider(id)`(kind: image|video、auth: apiKey|oauth、models、baseUrl、execute)——加载期排队、会话初始化时并入运行时注册表,扩展卸载/回滚时按 sourceId 清理;`generate_image` 的供应商解析链开放:扩展 id 加入自动解析次序尾部,凭证从共享 auth storage 解析,带 `execute` 的扩展后端处理文本生图(纯文本 prompt 进、单张图片 URL 出;style/aspect-ratio/参考图编辑等富参数暂不透传,由扩展在 execute 内自行实现)——第三方文本生图后端无需 fork 即可同时接入设置界面与工具执行。

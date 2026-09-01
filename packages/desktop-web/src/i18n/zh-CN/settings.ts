@@ -2964,7 +2964,8 @@ export const settings = {
 	"launch at login": "开机启动",
 	"launch at login description": "登录时自动启动 MusePi 后台守护进程（无需打开应用即可保持后台功能可用）",
 	"image & video generation": "图像与视频生成",
-	"image & video gen subtitle": "管理图像生成（generate_image）与视频生成（agnes_video_gen）可用的供应商凭证；密钥保存在本地凭证库，立即对所有会话生效",
+	"image & video gen subtitle":
+		"管理图像生成（generate_image）与视频生成（agnes_video_gen）可用的供应商凭证；密钥保存在本地凭证库，立即对所有会话生效",
 	"image generation providers": "图像生成供应商",
 	"video generation providers": "视频生成供应商",
 	"no image providers available": "没有可用的图像生成供应商",
@@ -2972,7 +2973,6 @@ export const settings = {
 	"oauth provider — manage in providers tab": "OAuth 供应商 — 请在“模型设置 → 供应商”中登录",
 	"video gen note": "视频生成（agnes_video_gen）复用上方 Agnes 凭证；工具开关在“工具”设置中",
 	"extension providers count": "另有 {count} 个来自扩展的媒体供应商",
-
 } as const;
 
 /** Key union for the settings domain (source of truth). */
