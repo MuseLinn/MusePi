@@ -205,7 +205,7 @@ async function start(port, env = {}) {
 function listenerPid(port) {
 	return new Promise(resolve => {
 		if (process.platform === "win32") {
-			const netstat = spawn("netstat", ["-ano"], { stdio: ["ignore", "pipe", "ignore"] });
+			const netstat = spawn("netstat", ["-ano"], { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
 			let out = "";
 			netstat.stdout.on("data", chunk => {
 				out += chunk;

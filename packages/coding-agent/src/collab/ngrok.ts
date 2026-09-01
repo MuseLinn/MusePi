@@ -41,6 +41,9 @@ export async function startNgrokTunnel(options: NgrokTunnelOptions): Promise<Tun
 	onStatus?.(`tunnel: starting ${binary} http ${options.port}`);
 	const child = spawn(binary, ["http", String(options.port), "--log", "stdout", "--log-format", "json"], {
 		stdio: ["ignore", "pipe", "pipe"],
+		// Windows: the GUI-hosted daemon has no console; without this the
+		// ngrok child allocates a visible conhost window on share start.
+		windowsHide: true,
 	});
 	let output = "";
 	let settled = false;

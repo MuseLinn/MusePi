@@ -49,6 +49,9 @@ export async function startCloudflaredTunnel(options: TunnelOptions): Promise<Tu
 	onStatus?.(`tunnel: starting ${binary} tunnel --url ws://localhost:${options.port}`);
 	const child = spawn(binary, ["tunnel", "--url", `ws://localhost:${options.port}`, "--no-autoupdate"], {
 		stdio: ["ignore", "ignore", "pipe"],
+		// Windows: the GUI-hosted daemon has no console; without this the
+		// cloudflared child allocates a visible conhost window on share start.
+		windowsHide: true,
 	});
 	let stderr = "";
 	let settled = false;

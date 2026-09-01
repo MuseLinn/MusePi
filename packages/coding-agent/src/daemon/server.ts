@@ -36,6 +36,7 @@ import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
 import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
+import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type { SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
@@ -8974,6 +8975,16 @@ export async function startDaemon(
 	// tearing down while a session is disposed mid-turn): Bun's default
 	// handler prints and exits with code 1. Log with the stack instead so a
 	// single teardown race cannot take the whole GUI backend down.
+	// The daemon's own handler alone is not enough — postmortem.ts registers
+	// a global `unhandledRejection` listener at module load time that exits
+	// the process for any rejection not matching its known-safe patterns
+	// (IPC EPIPE, EBADF, expected cleanup, or intercepted). Register an
+	// interceptor to prevent postmortem's fatal path, keeping the daemon
+	// alive through expected teardown races.
+	interceptUnhandledRejections((reason) => {
+		logger.error("Unhandled rejection in daemon (intercepted)", { reason: String(reason) });
+		return true;
+	});
 	process.on("unhandledRejection", (reason: unknown) => {
 		logger.error("Unhandled rejection in daemon", { reason: String(reason) });
 	});

@@ -36,7 +36,12 @@ interface RunResult {
 
 function runTailscale(binary: string, args: string[]): Promise<RunResult> {
 	return new Promise(resolve => {
-		const child = spawn(binary, args, { stdio: ["ignore", "pipe", "pipe"] });
+		const child = spawn(binary, args, {
+			stdio: ["ignore", "pipe", "pipe"],
+			// Windows: the GUI-hosted daemon has no console; without this the
+			// tailscale child allocates a visible conhost window on share start.
+			windowsHide: true,
+		});
 		let stdout = "";
 		let stderr = "";
 		child.stdout.setEncoding("utf8");

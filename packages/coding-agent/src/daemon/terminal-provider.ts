@@ -91,6 +91,10 @@ async function spawnNodePtyBridge(
 	const nodeBin = await resolveNodeBinary();
 	const child = spawn(nodeBin, [bridgePath], {
 		stdio: ["pipe", "pipe", "inherit"],
+		// Windows: the daemon runs console-less (GUI-hosted); without this the
+		// `node pty-bridge.cjs` child allocates a visible conhost window on
+		// every terminal.open when bun-pty is unavailable.
+		windowsHide: true,
 		env: { ...process.env, COLUMNS: String(cols), LINES: String(rows) },
 	}) as unknown as {
 		stdin: NodeJS.WritableStream;
