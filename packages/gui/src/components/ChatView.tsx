@@ -942,6 +942,22 @@ export function ChatView({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[snap?.entries, branchTo],
 	);
+	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
+	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
+	const switchToNode = useCallback(
+		(id: string): void => {
+			const entry = (snap?.entries ?? []).find(
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+			);
+			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
+			if (typeof ts === "string") requestJump(ts);
+			void branchTo(id).then(res => {
+				if (res?.editorText) setPendingEdit(res.editorText);
+			});
+		},
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[snap?.entries, branchTo],
+	);
 
 	// Lazy history backfill (kimi/DSH parity): the transcript fires this
 	// when its tail window is fully expanded and the user scrolls up past
@@ -1328,23 +1344,9 @@ export function ChatView({
 													}}
 													onSwitch={id => {
 														// 双击/右键"轨迹跳转"切换会话节点:对齐 /tree 的
-														// branchAt 语义——移动 session leaf 到目标节点
-														// (旧回复保留为 sibling branch),并滚动到该消息。
-														const entry = (snap?.entries ?? []).find(
-															e =>
-																typeof e === "object" &&
-																e !== null &&
-																(e as { id?: unknown }).id === id,
-														);
-														const ts =
-															typeof entry === "object" && entry !== null
-																? (entry as { timestamp?: unknown }).timestamp
-																: null;
-														if (typeof ts === "string") {
-															setViewMode("chat");
-															requestJump(ts);
-														}
-														void branchTo(id);
+														// navigateTree 语义(移动 leaf + 滚动 + 草稿回填)。
+														setViewMode("chat");
+														switchToNode(id);
 													}}
 													onBranchTo={id => {
 														void branchTo(id).then(res => {
@@ -1509,10 +1511,16 @@ export function ChatView({
 													<MessageTreeButton
 														entries={snap?.entries ?? []}
 														onJump={requestJump}
+														onNavigateTo={entry =>
+															// TUI tree-selector parity: 行点击切换 leaf(而非仅
+															// 滚动),与画布双击同一入口。
+															switchToNode(entry.id)
+														}
 														onFork={(entry, text, includeTarget) =>
 															void forkFromMessage(entry.id, text, includeTarget)
 														}
 														onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
+														activePathIds={activePathIds}
 													/>
 													{/* In-message text selection actions (openchamber parity):
 													 * quote a snippet (not the whole message), copy, start a
@@ -1670,14 +1678,9 @@ export function ChatView({
 												activeLeafIsHistorical={leafChildren.length > 0}
 												activeLeafLabel={labelOf({ id: effectiveLeaf ?? "" }, t("this node"))}
 												onJump={id => {
-													const entry = (snap?.entries ?? []).find(
-														e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
-													);
-													const ts =
-														typeof entry === "object" && entry !== null
-															? (entry as { timestamp?: unknown }).timestamp
-															: null;
-													if (typeof ts === "string") requestJump(ts);
+													// /tree parity: 点击路径段 = 切换 leaf 到该节点
+													// (旧尾部保留为 sibling branch),非仅滚动。
+													switchToNode(id);
 												}}
 											/>
 										)}

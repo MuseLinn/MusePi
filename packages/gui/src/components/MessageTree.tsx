@@ -145,14 +145,21 @@ function filterTree(nodes: TurnNode[], q: string): TurnNode[] {
 export function MessageTreeButton({
 	entries,
 	onJump,
+	onNavigateTo,
 	onFork,
 	onRevertTo,
+	activePathIds,
 }: {
 	entries: readonly SessionEntry[];
 	/** Jump the transcript to this entry (Transcript jumpRequest): the
 	 *  transcript expands its window/compaction fold until the row mounts,
 	 *  then scrolls + flashes. */
 	onJump(timestamp: string): void;
+	/** Row click switches the session leaf to this node (TUI /tree parity,
+	 *  session.branchAt): user messages backfill the composer for re-answer;
+	 *  assistant/toolResult nodes continue from the node. Falls back to
+	 *  onJump (pure scroll) when absent. */
+	onNavigateTo?(entry: SessionEntry): void;
 	/** Fork a NEW session starting from this node (TUI navigateTree parity):
 	 *  user messages truncate before the node and backfill the composer with
 	 *  its text (re-answer); assistant/toolResult nodes keep the node as the
@@ -161,6 +168,9 @@ export function MessageTreeButton({
 	/** 撤回到此消息(TUI /tree 切换的 GUI 对应原语):user 节点截断该消息
 	 *  之后的会话尾部(daemon 备份,撤回 dock 可还原)。 */
 	onRevertTo?(entry: SessionEntry): void;
+	/** 活动路径 id 集(与画布/ContextPanel 同源);存在时替代"末子节点下行"
+	 *  作为"当前位置"高亮,对齐 branchAt 后的真实 leaf 位置。 */
+	activePathIds?: ReadonlySet<string>;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [q, setQ] = useState("");
@@ -170,9 +180,11 @@ export function MessageTreeButton({
 	const panelRef = useRef<HTMLDivElement | null>(null);
 	const tree = useMemo(() => buildTurnTree(entries), [entries]);
 	const filtered = useMemo(() => filterTree(applyTreeFilter(tree, filterMode), q), [tree, filterMode, q]);
-	// 当前位置链(TUI currentLeafId/activePath parity):从最后一个根节点一路
-	// 取末子节点——即 transcript 尾部所在的节点链,行上高亮显示"你在哪"。
+	// 当前位置链(TUI currentLeafId/activePath parity):优先用父组件传入的
+	// activePathIds(与画布同源,反映 branchAt 后的真实 leaf 路径);未提供时
+	// 回退到"末子节点下行"推导的线性尾部链。
 	const currentIds = useMemo(() => {
+		if (activePathIds) return new Set(activePathIds);
 		const ids = new Set<string>();
 		let node: TurnNode | undefined = tree[tree.length - 1];
 		while (node) {
@@ -180,7 +192,7 @@ export function MessageTreeButton({
 			node = node.children[node.children.length - 1];
 		}
 		return ids;
-	}, [tree]);
+	}, [tree, activePathIds]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -205,7 +217,10 @@ export function MessageTreeButton({
 	}, [open]);
 
 	const jump = (node: TurnNode): void => {
-		onJump(node.entry.timestamp);
+		// 切换节点优先(对齐 /tree):onNavigateTo 存在时行点击切换 leaf
+		// 而非仅滚动;缺省回退纯滚动跳转。
+		if (onNavigateTo) onNavigateTo(node.entry);
+		else onJump(node.entry.timestamp);
 		setOpen(false);
 	};
 
