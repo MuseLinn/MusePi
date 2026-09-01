@@ -9,7 +9,7 @@
  * exists — serve config is a single proxy tree and `serve --bg` would
  * replace it).
  */
-import { spawn } from "node:child_process";
+import { spawn } from "@musepi/pi-utils/nodespawn";
 
 // <machine>.<tailnet>.ts.net — the tailnet label is a second dotted segment.
 const TS_NET_URL_RE = /https:\/\/[a-z0-9.-]+\.ts\.net/;
@@ -38,9 +38,6 @@ function runTailscale(binary: string, args: string[]): Promise<RunResult> {
 	return new Promise(resolve => {
 		const child = spawn(binary, args, {
 			stdio: ["ignore", "pipe", "pipe"],
-			// Windows: the GUI-hosted daemon has no console; without this the
-			// tailscale child allocates a visible conhost window on share start.
-			windowsHide: true,
 		});
 		let stdout = "";
 		let stderr = "";

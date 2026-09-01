@@ -15,6 +15,7 @@
 // ============================================================
 
 import * as path from "node:path";
+import { spawn } from "@musepi/pi-utils/nodespawn";
 import type { Settings } from "../config/settings.ts";
 
 /** Explicit terminal backend selection. */
@@ -83,18 +84,12 @@ async function spawnNodePtyBridge(
 	_shellArgs: string[],
 	_env: Record<string, string>,
 ): Promise<TerminalHandle> {
-	// Bridge uses newline-delimited JSON over stdio with node-pty.
-	const { spawn } = await import("node:child_process");
 	const { createInterface } = await import("node:readline");
 	const bridgePath = path.join(import.meta.dir, "pty-bridge.cjs");
 
 	const nodeBin = await resolveNodeBinary();
 	const child = spawn(nodeBin, [bridgePath], {
 		stdio: ["pipe", "pipe", "inherit"],
-		// Windows: the daemon runs console-less (GUI-hosted); without this the
-		// `node pty-bridge.cjs` child allocates a visible conhost window on
-		// every terminal.open when bun-pty is unavailable.
-		windowsHide: true,
 		env: { ...process.env, COLUMNS: String(cols), LINES: String(rows) },
 	}) as unknown as {
 		stdin: NodeJS.WritableStream;

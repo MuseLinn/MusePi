@@ -8,7 +8,8 @@
  * relay) and the write token gating guest writes, so exposing the tunnel URL
  * is no worse than sharing through the default relay.
  */
-import { type ChildProcess, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { spawn } from "@musepi/pi-utils/nodespawn";
 
 const QUICK_TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const URL_TIMEOUT_MS = 30_000;
@@ -45,13 +46,8 @@ export async function startCloudflaredTunnel(options: TunnelOptions): Promise<Tu
 	const binary = options.binary ?? "cloudflared";
 	const onStatus = options.onStatus;
 	const { promise, resolve, reject } = Promise.withResolvers<string>();
-
-	onStatus?.(`tunnel: starting ${binary} tunnel --url ws://localhost:${options.port}`);
 	const child = spawn(binary, ["tunnel", "--url", `ws://localhost:${options.port}`, "--no-autoupdate"], {
 		stdio: ["ignore", "ignore", "pipe"],
-		// Windows: the GUI-hosted daemon has no console; without this the
-		// cloudflared child allocates a visible conhost window on share start.
-		windowsHide: true,
 	});
 	let stderr = "";
 	let settled = false;

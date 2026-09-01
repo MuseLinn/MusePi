@@ -1,30 +1,39 @@
 /**
- * Windows spawn guard — 全局消灭子进程控制台窗口弹窗。
+ * Windows spawn guard — global elimination of child-process console popups.
  *
- * 背景:Windows 上 `Bun.spawn`/`Bun.spawnSync` 默认(不带 windowsHide)会为
- * 每个子进程创建新的控制台窗口。daemon 由 GUI 以 detached+windowsHide 启动
- * (无自己的 console),它再 spawn 的每个 git/gh/shell/powershell 子进程都会
- * 弹出一个终端窗口——设置-Git 面板一次 4 个并发 probe = 4 个弹窗。
+ * Background: on Windows, `Bun.spawn`/`Bun.spawnSync` default to spawning a
+ * new console window for every child. The daemon is launched by the GUI as
+ * detached + windowsHide (no console of its own), so any spawn without the
+ * flag leaks a visible conhost window — setting-Git probing once could pop
+ * four windows.
  *
- * 修法:参考 opencode 的集中 spawn 层(cross-spawn-spawner.ts 统一注入
- * `windowsHide: process.platform === "win32"`)思路,但更进一步——直接
- * patch Bun 全局。daemon 启动时安装一次,进程内所有 spawn 调用点(包括
- * 未来新增的)自动带 windowsHide,不会再有遗漏。
+ * Fix: mirror opencode's cross-spawn-spawner.ts centralized `windowsHide`
+ * injection, but split across two layers because the two spawn APIs have
+ * very different patchability:
  *
- * 关键坑:Bun.spawn 有两种重载——
- *   1. 数组形式 `Bun.spawn(["cmd", ...], { opts })` — opts 是第二参数
- *   2. 对象形式 `Bun.spawn({ cmd: ["cmd", ...], ...opts })` — 所有选项
- *      都在第一个对象里,Bun **忽略第二参数**!
- * 所以注入必须识别对象形式,直接改第一个对象;只塞第二参数对对象形式
- * 静默失效(实测 cwd 冲突时对象里的值胜出,第二参数完全被丢弃)。
+ *  - `Bun.spawn`/`Bun.spawnSync`: Bun owns these globals, so we patch them
+ *    in-process — the guard is the single choke point for every Bun spawn
+ *    (current and future call sites), installed once at daemon bootstrap.
  *
- * 各参考实现:
- * - opencode: 集中 spawn 封装,统一 `windowsHide: process.platform === "win32"`
- * - bitfun: managed-host 每个 spawn 显式 windowsHide + Rust CREATE_NO_WINDOW
- * - proma: Electron main 每个 spawn 显式 windowsHide
+ *  - `node:child_process.spawn`/`spawnSync`: ESM builtin namespaces are
+ *    immutable bindings — they cannot be patched at runtime. Instead,
+ *    `@musepi/pi-utils/nodespawn.ts` provides `spawn`/`spawnSync` wrappers
+ *    that inject `windowsHide: true` on win32; call sites must import from
+ *    that module (see guard comment).
  *
- * 本 guard 是全局兜底;调用点已有的显式 windowsHide 保持原样(幂等,后续
- * 也允许调用点覆盖)。
+ * Key gotcha: Bun.spawn has two overloads —
+ *   1. Array form `Bun.spawn(["cmd", ...], { opts })` — opts is second arg
+ *   2. Object form `Bun.spawn({ cmd: ["cmd", ...], ...opts })` — all options
+ *      live in the first object; Bun ignores a second arg here.
+ * So injection must detect the object form and mutate the first argument.
+ *
+ * Each reference implementation:
+ * - opencode: cross-spawn-spawner.ts injects `windowsHide: process.platform === "win32"` in its single spawn layer
+ * - bitfun: managed-host each spawn explicitly sets windowsHide + Rust CREATE_NO_WINDOW
+ * - proma: Electron main each spawn explicitly sets windowsHide
+ *
+ * This guard covers Bun.*; the `node:child_process` counterpart lives in
+ * `@musepi/pi-utils/nodespawn.ts`.
  */
 
 type SpawnCmd = Parameters<typeof Bun.spawn>[0];

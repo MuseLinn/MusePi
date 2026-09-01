@@ -6,7 +6,8 @@
  * as a JSON log line on stdout; we scan for it. ngrok's free tier requires a
  * one-time `ngrok config add-authtoken <TOKEN>` (see the error message).
  */
-import { type ChildProcess, spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
+import { spawn } from "@musepi/pi-utils/nodespawn";
 import type { TunnelHandle } from "./tunnel";
 
 const NGROK_URL_RE = /https:\/\/[a-z0-9-]+\.ngrok(?:-free)?\.(?:app|io)/;
@@ -41,9 +42,6 @@ export async function startNgrokTunnel(options: NgrokTunnelOptions): Promise<Tun
 	onStatus?.(`tunnel: starting ${binary} http ${options.port}`);
 	const child = spawn(binary, ["http", String(options.port), "--log", "stdout", "--log-format", "json"], {
 		stdio: ["ignore", "pipe", "pipe"],
-		// Windows: the GUI-hosted daemon has no console; without this the
-		// ngrok child allocates a visible conhost window on share start.
-		windowsHide: true,
 	});
 	let output = "";
 	let settled = false;
