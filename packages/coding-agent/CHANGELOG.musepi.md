@@ -6,6 +6,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **后台异步 task 的子 agent 任务进度 widget 卡死"Working…"状态**:当 `task` 工具通过异步(非阻塞)方式派发子 agent 时,工具调用立即返回(返回时成员状态为 `pending`,后台作业尚未启动),`tool_execution_end` 的 `settle()` 因成员全是 `pending` 而停止 widget 的定时器、从界面移除;但 `widget` 闭包变量不受影响。稍后后台作业启动并发出 `tool_execution_update`(running)时,`update()` 因 `frameTimer===null` 却调用 `start()` 复活 widget,`start()` 把 `settled` 重置为 `false`——此后即使后台作业完成、最终状态变为 `done`,`#tick` 的 `if (this.settled) this.stop()` 因 `settled` 为 false 永不触发, widget 永久卡死在"Working…"状态,持续占用输入框上方空间。修复:1) `update()` 不再在 `frameTimer===null` 时调用 `start()`——已停止的 widget 不可复活;2) `#needsFrames()` 将 `pending` 状态视为需要帧(与 `running` 同权)——`settle()` 不会在异步作业尚未启动时过早停止 widget,从源头消除复活窗口。
+  - EN: Task-swarm widget stuck in "Working…" state for background async subagents — when the `task` tool spawns agents asynchronously (non-blocking), the tool returns immediately with members in `pending` status (the background job has not started yet). `settle()` called from `tool_execution_end` stops the widget (timer cleared, removed from UI) because all members are `pending` — but the closure variable `widget` stays non-null. Later, when the background job starts and emits `tool_execution_update(running)`, `update()` found `frameTimer===null` and called `start()`, resurrecting the widget with `settled=false`. After that, even when the job completes and the final status becomes `done`, `#tick`'s `if (this.settled) this.stop()` never fires because `settled` is false — the widget is pinned forever showing "Working…". Fix: 1) `update()` no longer calls `start()` when `frameTimer===null` — a stopped widget must not be resurrected; 2) `#needsFrames()` treats `pending` like `running` (needs frames) — `settle()` no longer stops the widget prematurely when async jobs are still queued, eliminating the resurrection window at the source.
+
 ## [0.4.12] - 2026-09-01
 
 ### Added

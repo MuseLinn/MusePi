@@ -223,8 +223,18 @@ class TaskCardWidgetController {
 
 	update(members: TaskMemberView[]): void {
 		this.members = members;
-		if (this.frameTimer === null) this.start(members);
-		else this.paint();
+		// NEVER restart a stopped widget: `settle()` or `stop()` intentionally
+		// cleared the timer and removed the widget from the UI. A late
+		// `tool_execution_update` from a background async job that arrived
+		// after the tool call ended must not resurrect it (the widget is
+		// scoped to the tool call, not the background job's extended
+		// lifecycle). If the frame timer is null, the widget is dead.
+		//
+		// This also prevents a secondary bug: `start()` resets `settled` to
+		// false, which breaks `#tick`'s stop-guard (`if (this.settled) ...`)
+		// and leaves the widget pinned forever, even when all members are
+		// terminal.
+		if (this.frameTimer !== null) this.paint();
 	}
 
 	settle(members: TaskMemberView[]): void {
@@ -253,7 +263,13 @@ class TaskCardWidgetController {
 	/** True while the spinner / growing bars / fill animation need frames. */
 	#needsFrames(nowMs: number): boolean {
 		for (const m of this.members) {
-			if (m.status === "running") return true;
+			// `pending` counts like `running`: an async spawn returns
+			// `tool_execution_end` before its background job starts, so the
+			// widget must keep its timer alive across the pending → running →
+			// done transition. Stopping on all-pending members would let a
+			// late `tool_execution_update` hit the `frameTimer === null`
+			// resurrect path in `update()`.
+			if (m.status === "running" || m.status === "pending") return true;
 			if ((m.status === "done" || m.status === "failed" || m.status === "aborted") && this.completedAt.has(m.id)) {
 				const at = this.completedAt.get(m.id) ?? 0;
 				if (nowMs - at < COMPLETE_FILL_MS) return true;
