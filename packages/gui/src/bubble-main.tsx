@@ -133,10 +133,24 @@ function BubbleApp(): ReactNode {
 				const bubble = payload.bubble;
 				const id = Date.now();
 				setBubbles(prev => {
-					const next = [
-						...prev,
-						{ id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, visible: "" },
-					];
+					const next = bubble.sessionId
+						? // Replace the prior bubble for this session — each session
+							// shows only its latest completion/error, not an ever-growing
+							// stack. Transient bubbles (no sessionId) still append.
+							prev.some(b => b.sessionId === bubble.sessionId)
+							? prev.map(b =>
+									b.sessionId === bubble.sessionId
+										? {
+												id: b.id,
+												kind: bubble.kind,
+												text: bubble.text,
+												sessionId: bubble.sessionId,
+												visible: "",
+											}
+										: b,
+								)
+							: [...prev, { id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, visible: "" }]
+						: [...prev, { id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, visible: "" }];
 					return next.length > MAX_VISIBLE_BUBBLES ? next.slice(next.length - MAX_VISIBLE_BUBBLES) : next;
 				});
 				// Completion/error bubbles persist until dismissed or the

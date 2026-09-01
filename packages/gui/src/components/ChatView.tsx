@@ -1326,6 +1326,26 @@ export function ChatView({
 															requestJump(t2);
 														}
 													}}
+													onSwitch={id => {
+														// 双击/右键"轨迹跳转"切换会话节点:对齐 /tree 的
+														// branchAt 语义——移动 session leaf 到目标节点
+														// (旧回复保留为 sibling branch),并滚动到该消息。
+														const entry = (snap?.entries ?? []).find(
+															e =>
+																typeof e === "object" &&
+																e !== null &&
+																(e as { id?: unknown }).id === id,
+														);
+														const ts =
+															typeof entry === "object" && entry !== null
+																? (entry as { timestamp?: unknown }).timestamp
+																: null;
+														if (typeof ts === "string") {
+															setViewMode("chat");
+															requestJump(ts);
+														}
+														void branchTo(id);
+													}}
 													onBranchTo={id => {
 														void branchTo(id).then(res => {
 															if (res?.editorText) setPendingEdit(res.editorText);

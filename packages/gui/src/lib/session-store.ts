@@ -650,8 +650,10 @@ export class GuiSessionStore {
 				// Tool result arrived — soft tick (effects prefs gate it).
 				sfxFor("tool");
 				if (t.isError) {
-					dispatchNotification("error", this.#notifyCtx({ lastMessage: toolName ?? "tool" }));
-					dispatchPetActivity("error", toolName ?? "tool");
+					// Tool-call errors no longer fire system notifications or
+					// pet bubbles (user-visible popups), but the error sound
+					// stays audible so the failure is still heard.
+					sfxFor("error");
 				}
 				break;
 			}

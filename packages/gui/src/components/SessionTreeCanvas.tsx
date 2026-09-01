@@ -274,6 +274,7 @@ export function SessionTreeCanvas({
 	leafId,
 	activePathIds,
 	onJump,
+	onSwitch,
 	onBranchTo,
 	onForkAt,
 }: {
@@ -282,8 +283,10 @@ export function SessionTreeCanvas({
 	leafId?: string | null;
 	/** 活动路径 id 集;路径外节点淡显。 */
 	activePathIds?: ReadonlySet<string>;
-	/** 单击节点 = 跳转 transcript。 */
+	/** 单击节点 = 聚焦详情卡片;双击/右键跳转 = 切换会话节点(对齐 /tree)。 */
 	onJump(id: string): void;
+	/** 双击/右键切换会话节点(同 /tree branchAt);缺省回退到 onJump(纯滚动)。 */
+	onSwitch?(id: string): void;
 	onBranchTo?(id: string): void;
 	onForkAt?(id: string): void;
 }): ReactNode {
@@ -645,9 +648,11 @@ export function SessionTreeCanvas({
 			// 双击跳转:立即卸载聚焦卡(不等退场动画,跳转是即时导航)。
 			setFocusClosing(false);
 			setFocusedId(null);
-			onJump(nodeId);
+			// onSwitch 优先:对齐 /tree 的 branchAt 切换节点语义;
+			// 缺省回退到 onJump(纯滚动跳转)。
+			(onSwitch ?? onJump)(nodeId);
 		},
-		[onJump],
+		[onJump, onSwitch],
 	);
 
 	// 右键菜单项:节点 → 跳转/重答/分叉;空白 → 视图控制。定义在
