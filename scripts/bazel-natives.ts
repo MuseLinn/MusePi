@@ -48,6 +48,7 @@ export const ADDON_OUTPUTS: Record<string, string> = {
 	"darwin-x64-baseline": "pi_natives.darwin-x64-baseline.node",
 	"darwin-arm64": "pi_natives.darwin-arm64.node",
 	"win32-x64-baseline": "pi_natives.win32-x64-baseline.node",
+	"win32-arm64": "pi_natives.win32-arm64.node",
 };
 
 /** Aggregate filegroups → their member addon targets (mirrors BUILD.bazel). */
@@ -58,6 +59,7 @@ export const AGGREGATE_TARGETS: Record<string, string[]> = {
 		"linux-musl-x64-baseline",
 		"linux-x64-baseline",
 		"linux-x64-modern",
+		"win32-arm64",
 		"win32-x64-baseline",
 	],
 	"darwin-all": ["darwin-arm64", "darwin-x64-baseline"],
@@ -80,6 +82,7 @@ export function hostTargetName(host: HostInfo): string {
 		if (host.arch === "x64") return host.avx2 ? "linux-x64-modern" : "linux-x64-baseline";
 	}
 	if (host.platform === "win32" && host.arch === "x64") return "win32-x64-baseline";
+	if (host.platform === "win32" && host.arch === "arm64") return "win32-arm64";
 	throw new Error(`No pi_natives addon target for host ${host.platform}-${host.arch}`);
 }
 

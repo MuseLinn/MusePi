@@ -36,4 +36,19 @@ describe("Windows release binary target", () => {
 			target: "bun-windows-x64-baseline",
 		});
 	});
+
+	it("builds arm64 Windows cross-builds with the arm64 runtime", () => {
+		expect(resolveCrossBuild("win32-arm64")).toEqual({
+			id: "win32-arm64",
+			platform: "win32",
+			arch: "arm64",
+			target: "bun-windows-arm64",
+		});
+		expect(resolveCrossBuild("windows-arm64")).toEqual({
+			id: "windows-arm64",
+			platform: "win32",
+			arch: "arm64",
+			target: "bun-windows-arm64",
+		});
+	});
 });

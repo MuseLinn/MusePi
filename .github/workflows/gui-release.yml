@@ -1,9 +1,10 @@
 name: GUI Desktop Release
 
 # MusePi Desktop (Electron) 发布：按平台并行构建 natives + daemon + 打包。
-# 平台范围：macOS(arm64) + Linux(x64/arm64) + Windows(win32-x64)。
-# Windows 通过 cargo 构建 natives(dtolnay nightly)+ electron-builder nsis；
-# Linux 走 bazel natives；macOS 走 bazel + dmg。
+# 平台范围：macOS(arm64) + Linux(x64/arm64) + Windows(win32-x64/arm64)。
+# Windows 通过 cargo 构建 natives(dtolnay nightly)+ electron-builder nsis
+# (win32-arm64 用原生 arm64 runner windows-11-arm)；Linux 走 bazel natives；
+# macOS 走 bazel + dmg。
 on:
    push:
       tags:
@@ -53,6 +54,15 @@ jobs:
                     builder: win,
                     artifact_ext: exe,
                     artifact_glob: "packages/gui/release/*.exe",
+                 }
+               - {
+                    os: windows-11-arm,
+                    target_id: win32-arm64,
+                    native_targets: win32-arm64,
+                    builder: win,
+                    artifact_ext: exe,
+                    artifact_glob: "packages/gui/release/*arm64*.exe",
+                    arch_flag: "--arm64",
                  }
       runs-on: ${{ matrix.os }}
       env:
@@ -114,9 +124,14 @@ jobs:
            # OTA-follow only beta releases (stable installs keep reading latest*.yml).
            shell: bash
            run: |
-             ARGS="--${{ matrix.builder }} --publish never"
+             ARGS="--${{ matrix.builder }} --publish never ${{ matrix.arch_flag }}"
              if [[ "${GITHUB_REF_NAME}" == *-beta* ]]; then
                ARGS="$ARGS -c.publish.channel=beta"
+             fi
+             # arm64 installer: distinct artifact name so it cannot collide with
+             # (or silently overwrite) the x64 build in the same release.
+             if [[ "${{ matrix.target_id }}" == "win32-arm64" ]]; then
+               ARGS="$ARGS -c.win.artifactName=\${productName}-\${version}-arm64-setup.\${ext}"
              fi
              bunx electron-builder $ARGS
 
@@ -246,7 +261,7 @@ jobs:
                 `| Platform | 下载 |\n` +
                 `| --- | --- |\n` +
                 `| macOS (Apple Silicon) | [MusePi-${pkg.version}-arm64.dmg](${dl(`MusePi-${pkg.version}-arm64.dmg`)}) |\n` +
-                `| Windows | [MusePi-${pkg.version}-setup.exe](${dl(`MusePi-${pkg.version}-setup.exe`)}) |\n` +
+                `| Windows | [MusePi-${pkg.version}-setup.exe](${dl(`MusePi-${pkg.version}-setup.exe`)}) · [MusePi-${pkg.version}-arm64-setup.exe](${dl(`MusePi-${pkg.version}-arm64-setup.exe`)}) |\n` +
                 `| Linux x64 | [MusePi-${pkg.version}-x86_64.AppImage](${dl(`MusePi-${pkg.version}-x86_64.AppImage`)}) · [MusePi-${pkg.version}-amd64.deb](${dl(`MusePi-${pkg.version}-amd64.deb`)}) |\n` +
                 `| Linux arm64 | [MusePi-${pkg.version}-arm64.AppImage](${dl(`MusePi-${pkg.version}-arm64.AppImage`)}) · [MusePi-${pkg.version}-arm64.deb](${dl(`MusePi-${pkg.version}-arm64.deb`)}) |\n` +
                 `| Android | [MusePi-${pkg.version}-app-debug.apk](${dl(`app-debug.apk`)}) (debug build, adb 安装) |\n\n` +

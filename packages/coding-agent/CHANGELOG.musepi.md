@@ -4,6 +4,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Added
+
+- **Windows ARM64 桌面包支持**:GUI Desktop Release 新增 win32-arm64 目标(原生 arm64 runner `windows-11-arm`),daemon 交叉编译支持 `CROSS_TARGET=win32-arm64`(bun-windows-arm64),natives 目标表/host 解析识别 win32-arm64(无 AVX2 variant 后缀),electron-builder 以 `--arm64` 产出 `MusePi-<version>-arm64-setup.exe`(与 x64 产物区分)。
+  - EN: Windows ARM64 desktop support — the GUI release matrix gains a win32-arm64 target on the native `windows-11-arm` runner; the daemon cross-build accepts `CROSS_TARGET=win32-arm64` (bun-windows-arm64); the natives target table and host resolution recognize win32-arm64 (no AVX2 variant suffix); electron-builder emits a distinct `MusePi-<version>-arm64-setup.exe` via `--arm64`.
+
 ## [0.4.13] - 2026-09-01
 
 ### Changed

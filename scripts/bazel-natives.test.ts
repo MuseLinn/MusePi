@@ -28,13 +28,14 @@ describe("hostTargetName", () => {
 		expect(hostTargetName(macArm)).toBe("darwin-arm64");
 		expect(hostTargetName({ platform: "linux", arch: "arm64", avx2: false })).toBe("linux-arm64");
 		expect(hostTargetName({ platform: "win32", arch: "x64", avx2: true })).toBe("win32-x64-baseline");
+		expect(hostTargetName({ platform: "win32", arch: "arm64", avx2: false })).toBe("win32-arm64");
 	});
 
 	test("rejects hosts without an addon target", () => {
 		expect(() => hostTargetName({ platform: "freebsd", arch: "x64", avx2: false })).toThrow(
 			/No pi_natives addon target/,
 		);
-		expect(() => hostTargetName({ platform: "win32", arch: "arm64", avx2: false })).toThrow(
+		expect(() => hostTargetName({ platform: "win32", arch: "ia32", avx2: false })).toThrow(
 			/No pi_natives addon target/,
 		);
 	});
