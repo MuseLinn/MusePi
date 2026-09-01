@@ -31,10 +31,12 @@
 		"fmt": "biome format --write ."
 	},
 	"dependencies": {
-		"@musepi/pi-natives": "catalog:"
+		"@musepi/pi-natives": "catalog:",
+		"cross-spawn": "catalog:"
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"@types/cross-spawn": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:"
 	},
