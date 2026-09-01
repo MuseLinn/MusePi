@@ -283,7 +283,9 @@ function runCommand(command, args) {
 		}
 	}
 	try {
-		const result = childProcess.spawnSync(command, args, { encoding: "utf-8" });
+		// windowsHide: Node embeds may be console-less (GUI hosts); a visible
+		// conhost for the variant probe (pwsh/powershell) would flash per launch.
+		const result = childProcess.spawnSync(command, args, { encoding: "utf-8", windowsHide: true });
 		if (result.error) return null;
 		if (result.status !== 0) return null;
 		return (result.stdout || "").trim();

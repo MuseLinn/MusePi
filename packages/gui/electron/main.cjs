@@ -1754,7 +1754,8 @@ async function importPetdexFromZip(zipPath) {
 	const dest = path.join(app.getPath("userData"), "pets", `pet-${Date.now()}`);
 	fs.mkdirSync(dest, { recursive: true });
 	await new Promise((resolve, reject) => {
-		execFile("tar", ["-xf", zipPath, "-C", dest], (err) => (err ? reject(err) : resolve()));
+		// windowsHide: GUI 主进程无控制台，tar 是控制台程序，缺它每次导入弹 conhost。
+		execFile("tar", ["-xf", zipPath, "-C", dest], { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
 	});
 	const petJsonPath = path.join(dest, "pet.json");
 	let meta;
@@ -1924,7 +1925,7 @@ async function importScrollbarSkinFromZip(zipPath) {
 	const dest = path.join(app.getPath("userData"), "scrollbar-skins", `skin-${Date.now()}`);
 	fs.mkdirSync(dest, { recursive: true });
 	await new Promise((resolve, reject) => {
-		execFile("tar", ["-xf", zipPath, "-C", dest], (err) => (err ? reject(err) : resolve()));
+		execFile("tar", ["-xf", zipPath, "-C", dest], { windowsHide: true }, (err) => (err ? reject(err) : resolve()));
 	});
 	const jsonPath = path.join(dest, "scrollbar.json");
 	let meta;
@@ -2683,7 +2684,7 @@ ipcMain.handle("open-in-apps", async () => {
 				// the renderer falls back to a letter chip).
 				let resolved = cand.exe;
 				try {
-					const hit = execFileSync("where.exe", [cand.exe], { encoding: "utf8" }).split(/\r?\n/)[0].trim();
+					const hit = execFileSync("where.exe", [cand.exe], { encoding: "utf8", windowsHide: true }).split(/\r?\n/)[0].trim();
 					if (hit) resolved = hit;
 				} catch {
 					// not on PATH — open-with will still fail later; keep bare name
