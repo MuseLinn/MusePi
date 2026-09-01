@@ -1577,6 +1577,20 @@ export interface ExtensionAPI {
 	 */
 	unregisterProvider(name: string): void;
 
+	/**
+	 * Register a media generation provider (image or video backend) contributed
+	 * by an extension. The entry appears in the media settings UI (credential
+	 * status, key entry, model picker) and becomes selectable by the matching
+	 * generation tool. Built-in providers are registered separately; extension
+	 * ids must not collide with them (registration throws).
+	 */
+	registerMediaProvider(config: MediaProviderConfig): void;
+
+	/**
+	 * Unregister a media provider previously registered by this extension.
+	 * Has no effect when the id is unknown or owned by another source.
+	 */
+	unregisterMediaProvider(id: string): void;
 	/** Shared event bus for extension communication. */
 	events: EventBus;
 }
@@ -1584,7 +1598,6 @@ export interface ExtensionAPI {
 // ============================================================================
 // Provider Registration Types
 // ============================================================================
-
 /** Configuration for registering a provider via pi.registerProvider(). */
 export interface ProviderConfig {
 	/** Base URL for the API endpoint. Required when defining models. */
@@ -1621,6 +1634,42 @@ export interface ProviderConfig {
 	 * when unauthenticated). Mutually exclusive with `models`.
 	 */
 	fetchDynamicModels?: (apiKey: string | undefined) => Promise<readonly ProviderModelConfig[]>;
+}
+
+/** Media generation backends an extension contributes via registerMediaProvider. */
+export type MediaProviderKind = "image" | "video";
+
+/** How a media provider resolves its credential. */
+export type MediaProviderAuth =
+	| { type: "apiKey"; /** Env var name surfaced in the settings UI hint (e.g. "STABILITY_API_KEY"). */ envVar?: string }
+	| { type: "oauth" };
+
+/** One generation model offered by a media provider. */
+export interface MediaProviderModel {
+	id: string;
+	label?: string;
+}
+
+/** Configuration for registering a media provider via pi.registerMediaProvider(). */
+export interface MediaProviderConfig {
+	/** Stable id in settings/tool vocabulary (kebab-case, must not collide with a built-in). */
+	id: string;
+	/** Display name in the media settings UI. */
+	label: string;
+	kind: MediaProviderKind;
+	auth: MediaProviderAuth;
+	/** Generation models this backend offers (first entry is the default). */
+	models: MediaProviderModel[];
+	/** API endpoint used for generation requests and connection tests. */
+	baseUrl?: string;
+	/** Credential check + request execution. Receives the resolved key (undefined when unset). */
+	execute?: (input: { apiKey?: string; prompt: string; signal?: AbortSignal }) => Promise<{ url?: string; error?: string }>;
+}
+
+/** Internal: one registered media provider tagged with its owning extension source. */
+export interface RegisteredMediaProvider {
+	config: MediaProviderConfig;
+	sourceId: string;
 }
 
 /** Configuration for a model within a provider. */
@@ -1785,6 +1834,16 @@ export interface ExtensionRuntimeState {
 	unregisterProvider(name: string, sourceId: string): void;
 }
 
+/** Shared state created by loader (media registry seam). */
+export interface ExtensionMediaRegistryState {
+	/** Media provider registrations queued during extension loading, processed during session initialization. */
+	pendingMediaProviderRegistrations: RegisteredMediaProvider[];
+	/** Queue a media provider registration until initialization, then apply it immediately. */
+	registerMediaProvider(config: MediaProviderConfig, sourceId: string): void;
+	/** Remove a queued or initialized media provider registration. */
+	unregisterMediaProvider(id: string, sourceId: string): void;
+}
+
 /** Action implementations for ExtensionAPI methods. */
 export interface ExtensionActions {
 	sendMessage: SendMessageHandler;
@@ -1836,7 +1895,7 @@ export interface ExtensionCommandContextActions {
 /** Full runtime = state + actions, including host-compatible service-tier fallbacks. */
 export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTier | undefined) => void;
 
-export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionActions {
+export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionMediaRegistryState, ExtensionActions {
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
 }
@@ -1927,6 +1986,9 @@ export interface Extension {
 	 *  into the theme as *new* keys only; dropped on unload so the theme
 	 *  re-renders with them removed. */
 	themeTokens: ExtensionThemeToken[];
+	/** Media providers registered by the extension (registerMediaProvider),
+	 *  in registration order; dropped on unload/reload. */
+	mediaProviders: RegisteredMediaProvider[];
 	/** Status-bar segments contributed by the extension (registerStatusBarSegment),
 	 *  rendered after the built-ins by `order`; dropped on unload. */
 	statusBarSegments: ExtensionStatusBarSegment[];

@@ -238,6 +238,7 @@ import { isMCPToolName, normalizeToolNames } from "./tools/builtin-names";
 import { ToolContextStore } from "./tools/context";
 import { isIrcEnabled } from "./tools/hub";
 import { getImageGenTools } from "./tools/image-gen";
+import { registerExtensionMediaProvider } from "./tools/image-providers";
 import { wrapToolWithMetaNotice } from "./tools/output-meta";
 import { isAutoQaEnabled } from "./tools/report-tool-issue";
 import { queueResolveHandler } from "./tools/resolve";
@@ -823,6 +824,10 @@ export async function loadCliExtensionProviders(
 		modelRegistry.registerProvider(name, config, sourceId);
 	}
 	extensionsResult.runtime.pendingProviderRegistrations = [];
+	for (const { config, sourceId } of extensionsResult.runtime.pendingMediaProviderRegistrations) {
+		registerExtensionMediaProvider(config, sourceId);
+	}
+	extensionsResult.runtime.pendingMediaProviderRegistrations = [];
 	await modelRegistry.refreshRuntimeProviders();
 }
 
@@ -2432,14 +2437,20 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			extensionsResult.runtime.pendingProviderRegistrations = [];
 		}
+		// Media provider registrations consume alongside provider registrations
+		// (both queued during extension loading).
+		if (extensionsResult.runtime.pendingMediaProviderRegistrations.length > 0) {
+			for (const { config, sourceId } of extensionsResult.runtime.pendingMediaProviderRegistrations) {
+				registerExtensionMediaProvider(config, sourceId);
+			}
+			extensionsResult.runtime.pendingMediaProviderRegistrations = [];
+		}
 		// Hydrate cached runtime (extension) provider catalogs before model
 		// resolution. Dynamic-only providers have no synchronous registration side
 		// effect, so a cold --model/provider resume must see the same fresh SQLite
 		// cache that `musepi models find` uses before the online refresh continues in
 		// the background.
 		await modelRegistry.refreshRuntimeProviders("offline");
-		// Continue runtime discovery in the background (cache-aware) so startup is
-		// only blocked on local cache reads, not provider network fetches. Stash
 		// the promise so the deferred `--model` retry below can await it instead
 		// of starting a second concurrent discovery pass (the unfiltered
 		// `refresh()` also covers runtime model managers).

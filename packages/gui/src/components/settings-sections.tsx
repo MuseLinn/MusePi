@@ -23,6 +23,7 @@ export { HooksSection } from "./settings-sections/hooks";
 export { IndexesSection } from "./settings-sections/indexes";
 export { InteractionSection } from "./settings-sections/interaction";
 export { McpSection } from "./settings-sections/mcp";
+export { MediaSection } from "./settings-sections/media";
 export { MemorySection } from "./settings-sections/memory";
 export { ModelSection } from "./settings-sections/model";
 export { ModesSection } from "./settings-sections/modes";

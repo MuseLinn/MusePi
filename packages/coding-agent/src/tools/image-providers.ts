@@ -1,3 +1,5 @@
+import type { MediaProviderConfig } from "../extensibility/extensions/types";
+
 /**
  * Image Generation Providers
  *
@@ -6,7 +8,10 @@
  * provider list, auto order, and settings choices never drift apart.
  */
 
-/** Image generation backends, in settings/tool vocabulary. */
+/** Image generation backends, in settings/tool vocabulary. Builtin ids form
+ *  the closed base union; extension-registered provider ids join the same
+ *  string space at runtime (an `(string & {})` hole keeps builtin literals
+ *  autocompleting while admitting extension ids). */
 export type ImageProvider =
 	| "agnes"
 	| "agnes-global"
@@ -15,7 +20,8 @@ export type ImageProvider =
 	| "openai"
 	| "openai-codex"
 	| "openrouter"
-	| "xai";
+	| "xai"
+	| (string & {});
 
 /** Auto-resolution fallback order when no configured entry or session provider matches. */
 export const AUTO_IMAGE_PROVIDER_ORDER: readonly ImageProvider[] = [
@@ -67,4 +73,49 @@ export const IMAGE_PROVIDER_CHOICES = [
 
 export function isImageProviderId(value: unknown): value is ImageProvider {
 	return typeof value === "string" && AUTO_IMAGE_PROVIDER_ORDER.includes(value as ImageProvider);
+}
+
+// ============================================================================
+// Extension media provider registry
+// ============================================================================
+
+/**
+ * Runtime registry of media generation providers contributed by extensions
+ * (pi.registerMediaProvider). Built-in providers live in the closed union
+ * above and never enter this map; ids that shadow a built-in are rejected at
+ * registration so the tool's built-in dispatch stays authoritative.
+ */
+const extensionMediaProviders = new Map<string, { config: MediaProviderConfig; sourceId: string }>();
+
+/** Register an extension media provider. Throws when the id shadows a built-in or an existing registration. */
+export function registerExtensionMediaProvider(config: MediaProviderConfig, sourceId: string): void {
+	if (isImageProviderId(config.id)) {
+		throw new Error(`registerMediaProvider: id "${config.id}" collides with a built-in image provider`);
+	}
+	if (extensionMediaProviders.has(config.id)) {
+		throw new Error(`registerMediaProvider: id "${config.id}" is already registered`);
+	}
+	extensionMediaProviders.set(config.id, { config, sourceId });
+}
+
+/** Remove one extension media provider registration. No-op when unknown. */
+export function unregisterExtensionMediaProvider(id: string): void {
+	extensionMediaProviders.delete(id);
+}
+
+/** Remove every extension media provider registered from one extension source. */
+export function clearExtensionMediaProviders(sourceId: string): void {
+	for (const [id, registration] of extensionMediaProviders) {
+		if (registration.sourceId === sourceId) extensionMediaProviders.delete(id);
+	}
+}
+
+/** All extension-registered media providers (registration order). */
+export function getExtensionMediaProviders(): readonly MediaProviderConfig[] {
+	return [...extensionMediaProviders.values()].map(registration => registration.config);
+}
+
+/** Look up one extension media provider by id. */
+export function getExtensionMediaProvider(id: string): MediaProviderConfig | undefined {
+	return extensionMediaProviders.get(id)?.config;
 }

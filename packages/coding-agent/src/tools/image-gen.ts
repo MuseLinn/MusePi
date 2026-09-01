@@ -27,7 +27,13 @@ import { settings } from "../config/settings";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { resolveXAIHttpCredentials } from "../lib/xai-http";
 import imageGenDescription from "../prompts/tools/image-gen.md" with { type: "text" };
-import { AUTO_IMAGE_PROVIDER_ORDER, type ImageProvider, isImageProviderId } from "./image-providers";
+import {
+	AUTO_IMAGE_PROVIDER_ORDER,
+	getExtensionMediaProvider,
+	getExtensionMediaProviders,
+	type ImageProvider,
+	isImageProviderId,
+} from "./image-providers";
 import { resolveReadPath } from "./path-utils";
 
 const DEFAULT_MODEL = "gemini-3-pro-image-preview";
@@ -465,7 +471,9 @@ export function isImageProviderPreference(value: unknown): value is ImageProvide
 export function setImageProviderOrder(providers: readonly string[]): void {
 	configuredImageProviderOrder = providers.filter(isImageProviderId);
 }
-const ASPECT_RATIOS_BY_PROVIDER: Record<ImageProvider, readonly string[]> = {
+// Extension providers don't appear in this table — the execute loop treats a
+// missing entry as "no constraint" (the extension validates its own params).
+const BUILTIN_ASPECT_RATIOS_BY_PROVIDER: Record<Exclude<ImageProvider, string & {}>, readonly string[]> = {
 	agnes: AGNES_IMAGE_ASPECT_RATIOS,
 	"agnes-global": AGNES_IMAGE_ASPECT_RATIOS,
 	antigravity: COMMON_IMAGE_ASPECT_RATIOS,
@@ -475,10 +483,14 @@ const ASPECT_RATIOS_BY_PROVIDER: Record<ImageProvider, readonly string[]> = {
 	openrouter: COMMON_IMAGE_ASPECT_RATIOS,
 	xai: XAI_IMAGE_ASPECT_RATIOS,
 };
+const ASPECT_RATIOS_BY_PROVIDER: ReadonlyMap<string, readonly string[]> = new Map(
+	Object.entries(BUILTIN_ASPECT_RATIOS_BY_PROVIDER),
+);
 
 function assertImageAspectRatioSupported(provider: ImageProvider, aspectRatio: ImageGenParams["aspect_ratio"]): void {
 	if (!aspectRatio) return;
-	const supported = ASPECT_RATIOS_BY_PROVIDER[provider];
+	const supported = ASPECT_RATIOS_BY_PROVIDER.get(provider);
+	if (!supported) return;
 	if (supported.includes(aspectRatio)) return;
 	throw new Error(
 		`Aspect ratio ${aspectRatio} is not supported by ${provider} image generation. Supported ratios: ${supported.join(", ")}.`,
@@ -679,13 +691,14 @@ function imageProviderOrder(activeModel: Model | undefined, requested?: ImagePro
 		added.add(provider);
 		providers.push(provider);
 	};
-
 	// Per-request provider wins, then the configured priority list, then the
-	// active session's provider, then the built-in auto order.
+	// active session's provider, then the built-in auto order, then any
+	// extension-registered media providers (resolved via their config.execute).
 	if (requested !== undefined && requested !== "auto") add(requested);
 	for (const provider of configuredImageProviderOrder) add(provider);
 	add(activeImageProvider(activeModel));
 	for (const provider of AUTO_IMAGE_PROVIDER_ORDER) add(provider);
+	for (const config of getExtensionMediaProviders()) add(config.id);
 	return providers;
 }
 
@@ -714,6 +727,16 @@ async function findImageApiKey(
 			// Explicit international request: force the global endpoint/key even
 			// when the active chat model is the CN provider.
 			return findAgnesImageCredentials(modelRegistry, activeModel, sessionId, "agnes-global");
+		default: {
+			// Extension-registered media provider: credential comes from the
+			// shared auth storage (the same keys the settings UI writes); the
+			// config's baseUrl routes the request when the extension declared one.
+			const config = getExtensionMediaProvider(provider);
+			if (!config) return null;
+			const apiKey = modelRegistry ? await modelRegistry.getApiKeyForProvider(provider, sessionId) : undefined;
+			if (!apiKey) return null;
+			return { provider, apiKey, baseUrl: config.baseUrl };
+		}
 	}
 }
 
@@ -1223,8 +1246,51 @@ export const imageGenTool: CustomTool<typeof imageGenSchema, ImageGenToolDetails
 											? DEFAULT_AGNES_MODEL
 											: DEFAULT_MODEL;
 					const resolvedModel = provider === "openrouter" ? resolveOpenRouterModel(model) : model;
-					if (params.aspect_ratio && !ASPECT_RATIOS_BY_PROVIDER[provider].includes(params.aspect_ratio)) {
+					if (params.aspect_ratio && !ASPECT_RATIOS_BY_PROVIDER.get(provider)?.includes(params.aspect_ratio)) {
 						unsupportedAspectRatioProvider ??= provider;
+						continue;
+					}
+					// Extension-registered provider: the extension owns request +
+					// response handling via config.execute; the tool resolves the
+					// credential (auth storage) and hands it over with the prompt.
+					const extensionConfig = getExtensionMediaProvider(provider);
+					if (extensionConfig?.execute) {
+						const result = await extensionConfig.execute({
+							apiKey: typeof apiKey.apiKey === "string" ? apiKey.apiKey : undefined,
+							prompt: assemblePrompt(params),
+							signal: requestSignal,
+						});
+						if (result.error) {
+							failures.push({
+								provider,
+								error: new ProviderHttpError(result.error, 0, {}),
+							});
+							continue;
+						}
+						if (result.url) {
+							const inline = await loadImageFromUrl(result.url, fetchImpl, requestSignal);
+							const imagePaths = await saveImagesToTemp([inline]);
+							return {
+								content: [
+									{
+										type: "text",
+										text: buildResponseSummary(
+											provider,
+											extensionConfig.models[0]?.id ?? provider,
+											imagePaths,
+											undefined,
+										),
+									},
+								],
+								details: {
+									provider,
+									model: extensionConfig.models[0]?.id ?? provider,
+									imageCount: 1,
+									imagePaths,
+									images: [inline],
+								},
+							};
+						}
 						continue;
 					}
 					if (provider === "openai" || provider === "openai-codex") {

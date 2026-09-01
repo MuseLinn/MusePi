@@ -106,6 +106,8 @@ import type { CollabToolHandle } from "../tools/collab";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+import { IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
+import { getExtensionMediaProviders } from "../tools/image-providers";
 import {
 	type CronRun,
 	type CronStatus,
@@ -7793,6 +7795,40 @@ export class DaemonServer {
 				await registry.refreshProvider(p.providerId, "online");
 				this.#broadcastModelsChanged();
 				return { ok: true, removed: p.credentialId !== undefined ? 1 : credentials.length };
+			}
+			case "media.providers": {
+				// Media generation provider status (image/video tools
+				// generate_image + agnes_video_gen): merges the built-in image
+				// provider list with extension-registered media providers and
+				// reports per-provider credential state from the shared auth
+				// storage. Session-less — the storage is host-shared.
+				const registry = await this.#host.ensureRegistry();
+				if (!registry) throw new Error("No model registry yet — create a session first");
+				const storage = registry.authStorage;
+				const builtin = IMAGE_PROVIDER_CHOICES.map(choice => {
+					const provider = choice.value;
+					const configured = storage.hasAuth(provider);
+					return {
+						id: provider,
+						label: choice.label,
+						description: choice.description,
+						kind: "image" as const,
+						source: "builtin" as const,
+						configured,
+					};
+				});
+				const extensionEntries = getExtensionMediaProviders().map(config => ({
+					id: config.id,
+					label: config.label,
+					description: config.auth.type === "apiKey" && config.auth.envVar ? `Requires ${config.auth.envVar}` : "",
+					kind: config.kind,
+					source: "extension" as const,
+					baseUrl: config.baseUrl ?? null,
+					models: config.models.map(model => model.id),
+					authType: config.auth.type,
+					configured: storage.hasAuth(config.id),
+				}));
+				return { builtin, extension: extensionEntries };
 			}
 			case "models.listCustom": {
 				// Read the current custom-provider block from models.yml (for the

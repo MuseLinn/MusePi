@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import type { ApiKeyResolver, FetchImpl } from "@musepi/pi-ai";
 import { registerCustomApi, unregisterCustomApis } from "@musepi/pi-ai/api-registry";
+import { clearExtensionMediaProviders } from "../tools/image-providers";
 import { registerOAuthProvider, unregisterOAuthProvider, unregisterOAuthProviders } from "@musepi/pi-ai/oauth";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@musepi/pi-ai/oauth/types";
 import { setCodexAttestationProvider } from "@musepi/pi-ai/providers/openai-codex-responses";
@@ -1958,6 +1959,7 @@ export class ModelRegistry {
 	clearSourceRegistrations(sourceId: string): void {
 		unregisterCustomApis(sourceId);
 		unregisterOAuthProviders(sourceId);
+		clearExtensionMediaProviders(sourceId);
 		const sourceProviders = this.#runtimeProvidersBySource.get(sourceId);
 		if (!sourceProviders || sourceProviders.size === 0) {
 			return;

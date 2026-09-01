@@ -3088,4 +3088,15 @@ export const settings = {
 	"launch at login": "Launch at login",
 	"launch at login description":
 		"Start the MusePi daemon automatically when you log in (keeps background features available without opening the app)",
+	"image & video generation": "Image & video generation",
+	"image & video gen subtitle":
+		"Manage provider credentials for image generation (generate_image) and video generation (agnes_video_gen); keys are stored in the local credential store and take effect for every session immediately",
+	"image generation providers": "Image generation providers",
+	"video generation providers": "Video generation providers",
+	"no image providers available": "No image generation providers available",
+	"enter api key": "Enter API key",
+	"oauth provider — manage in providers tab": "OAuth provider — sign in via Model settings → Providers",
+	"video gen note": "Video generation (agnes_video_gen) reuses the Agnes credential above; the tool toggle lives in Tools settings",
+	"extension providers count": "{count} media provider(s) contributed by extensions",
+
 } as const satisfies Record<SettingsKey, string>;

@@ -3845,6 +3845,7 @@ describe("ExtensionRunner", () => {
 				notificationChannels: [],
 				services: [],
 				themeTokens: [],
+				mediaProviders: [],
 				statusBarSegments: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);

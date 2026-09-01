@@ -53,9 +53,11 @@ import type {
 	ExtensionSkillDeclaration,
 	ExtensionRuntime as IExtensionRuntime,
 	LoadExtensionsResult,
+	MediaProviderConfig,
 	MessageRenderer,
 	ProviderConfig,
 	RegisteredCommand,
+	RegisteredMediaProvider,
 	ToolDefinition,
 	ToolInfo,
 } from "./types";
@@ -83,6 +85,7 @@ export class ExtensionRuntimeNotInitializedError extends Error {
 export class ExtensionRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
+	pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
 
 	registerProvider(name: string, config: ProviderConfig, sourceId: string): void {
 		this.pendingProviderRegistrations.push({ name, config, sourceId });
@@ -91,6 +94,17 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	unregisterProvider(name: string): void {
 		const remaining = this.pendingProviderRegistrations.filter(registration => registration.name !== name);
 		this.pendingProviderRegistrations.splice(0, this.pendingProviderRegistrations.length, ...remaining);
+	}
+
+	registerMediaProvider(config: MediaProviderConfig, sourceId: string): void {
+		this.pendingMediaProviderRegistrations.push({ config, sourceId });
+	}
+
+	unregisterMediaProvider(id: string, sourceId: string): void {
+		const remaining = this.pendingMediaProviderRegistrations.filter(
+			registration => registration.config.id !== id || registration.sourceId !== sourceId,
+		);
+		this.pendingMediaProviderRegistrations.splice(0, this.pendingMediaProviderRegistrations.length, ...remaining);
 	}
 
 	sendMessage(): void {
@@ -174,6 +188,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		config: ProviderConfig;
 		sourceId: string;
 	}> = [];
+	readonly pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
 
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
@@ -448,6 +463,16 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	unregisterProvider(name: string): void {
 		this.runtime.unregisterProvider(name, this.extension.path);
 	}
+
+	registerMediaProvider(config: MediaProviderConfig): void {
+		this.extension.mediaProviders.push({ config, sourceId: this.extension.path });
+		this.runtime.registerMediaProvider(config, this.extension.path);
+	}
+
+	unregisterMediaProvider(id: string): void {
+		this.extension.mediaProviders = this.extension.mediaProviders.filter(entry => entry.config.id !== id);
+		this.runtime.unregisterMediaProvider(id, this.extension.path);
+	}
 }
 
 /**
@@ -478,6 +503,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		notificationChannels: [],
 		services: [],
 		themeTokens: [],
+		mediaProviders: [],
 		statusBarSegments: [],
 	};
 }
@@ -493,6 +519,7 @@ async function runExtensionFactory(
 	runtime: IExtensionRuntime,
 ): Promise<void> {
 	const providerRegistrationCheckpoint = [...runtime.pendingProviderRegistrations];
+	const mediaProviderCheckpoint = [...runtime.pendingMediaProviderRegistrations];
 
 	try {
 		await factory(api);
@@ -501,6 +528,11 @@ async function runExtensionFactory(
 			0,
 			runtime.pendingProviderRegistrations.length,
 			...providerRegistrationCheckpoint,
+		);
+		runtime.pendingMediaProviderRegistrations.splice(
+			0,
+			runtime.pendingMediaProviderRegistrations.length,
+			...mediaProviderCheckpoint,
 		);
 		throw error;
 	}

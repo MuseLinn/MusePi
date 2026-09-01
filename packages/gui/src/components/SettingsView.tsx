@@ -29,6 +29,7 @@ type SectionId =
 	| "context"
 	| "shell"
 	| "tools"
+	| "media"
 	| "providers"
 	| "plugins"
 	| "skills"
@@ -208,6 +209,19 @@ const SECTION_SEARCH_TERMS: Record<string, string[]> = {
 		"output",
 	],
 	tools: ["工具", "tool", "权限", "permission", "批准", "approval", "审批", "自动", "auto", "确认", "confirm"],
+	media: [
+		"图像生成",
+		"image",
+		"视频生成",
+		"video",
+		"文生图",
+		"generate_image",
+		"agnes_video_gen",
+		"供应商",
+		"provider",
+		"api key",
+		"密钥",
+	],
 	files: [
 		"文件",
 		"file",
@@ -277,6 +291,7 @@ function navGroups(extTabs: ReadonlyArray<{ slot: string; label?: string }>): { 
 				{ id: "context", icon: "stack", label: t("context"), enabled: true },
 				{ id: "shell", icon: "terminal-window", label: t("shell"), enabled: true },
 				{ id: "tools", icon: "plug-2", label: t("tools"), enabled: true },
+				{ id: "media", icon: "image-download", label: t("image & video generation"), enabled: true },
 				{ id: "files", icon: "file-text", label: t("files & lsp"), enabled: true },
 				{ id: "memory", icon: "brain", label: t("memory settings"), enabled: true },
 			],
@@ -741,6 +756,9 @@ export function SettingsView({
 									sessionId={sessionId}
 								/>
 							)}
+							{section === "shell" && <ShellSection rpc={rpc} />}
+							{section === "tools" && <ToolsSection rpc={rpc} />}
+							{section === "media" && <MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />}
 							{section === "notifications" && <NotificationsSection rpc={rpc} />}
 							{section === "pet" && <PetSection />}
 							{section === "sessions" && <SessionsSection rpc={rpc} currentSessionId={sessionId} />}
@@ -749,8 +767,6 @@ export function SettingsView({
 							{section === "interaction" && <InteractionSection rpc={rpc} />}
 							{section === "voice" && <VoiceSection rpc={rpc} />}
 							{section === "context" && <ContextSection rpc={rpc} />}
-							{section === "shell" && <ShellSection rpc={rpc} />}
-							{section === "tools" && <ToolsSection rpc={rpc} />}
 							{section === "files" && <FilesLspSection rpc={rpc} />}
 							{section === "memory" && <MemorySection rpc={rpc} />}
 							{section === "skills" && <SkillsSection rpc={rpc} />}
@@ -798,6 +814,7 @@ import {
 	IndexesSection,
 	InteractionSection,
 	McpSection,
+	MediaSection,
 	MemorySection,
 	ModelSection,
 	ModesSection,
