@@ -757,9 +757,9 @@
     url = "https://registry.npmjs.org/@lobehub/streamdown/-/streamdown-1.0.0.tgz";
     hash = "sha512-XAcSVhQp6CXfluWrjr/jbpR9AwDDYMveyGZJUfHA9k+LJYAqxvITByNACt2J1H9sGSuCQ6BCnxWNgpXPdlyjGg==";
   };
-  "@lobehub/ui@5.37.0" = fetchurl {
-    url = "https://registry.npmjs.org/@lobehub/ui/-/ui-5.37.0.tgz";
-    hash = "sha512-xON/KiH3Sz7OoIend/usUzJc+3hMVzl91Lbk2It82IHUf4PdDHnVOr2N3MIgUZv3BCQAZs0PlgI7rpD5VlIGbw==";
+  "@lobehub/ui@5.38.0" = fetchurl {
+    url = "https://registry.npmjs.org/@lobehub/ui/-/ui-5.38.0.tgz";
+    hash = "sha512-o9qYFisB0ysd0V6r+9K3BybDaZ+0CrbcXNQCnWnWB0TOb2bGu+NT6brrVXcPlBtAg8UPGW+Ht8P8D9SRGOy3Uw==";
   };
   "@malept/cross-spawn-promise@2.0.0" = fetchurl {
     url = "https://registry.npmjs.org/@malept/cross-spawn-promise/-/cross-spawn-promise-2.0.0.tgz";
@@ -1815,6 +1815,10 @@
     url = "https://registry.npmjs.org/@types/cacheable-request/-/cacheable-request-6.0.3.tgz";
     hash = "sha512-IQ3EbTzGxIigb1I3qPZc1rWJnH0BmSKv5QYTalEwweFvyBDLSAe24zP0le/hyi7ecGfZVlIVAg4BZqb8WBwKqw==";
   };
+  "@types/cross-spawn@6.0.6" = fetchurl {
+    url = "https://registry.npmjs.org/@types/cross-spawn/-/cross-spawn-6.0.6.tgz";
+    hash = "sha512-fXRhhUkG4H3TQk5dBhQ7m/JDdSNHKwR2BBia62lhwEIq9xGiQKLxd6LymNhn47SjXhsUEPmxi+PKw2OkW4LLjA==";
+  };
   "@types/d3-array@3.2.2" = fetchurl {
     url = "https://registry.npmjs.org/@types/d3-array/-/d3-array-3.2.2.tgz";
     hash = "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==";
@@ -2190,6 +2194,10 @@
   "@xmldom/xmldom@0.8.15" = fetchurl {
     url = "https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.8.15.tgz";
     hash = "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==";
+  };
+  "@xmldom/xmldom@0.9.12" = fetchurl {
+    url = "https://registry.npmjs.org/@xmldom/xmldom/-/xmldom-0.9.12.tgz";
+    hash = "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A==";
   };
   "@xterm/headless@6.0.0" = fetchurl {
     url = "https://registry.npmjs.org/@xterm/headless/-/headless-6.0.0.tgz";
@@ -4583,6 +4591,10 @@
     url = "https://registry.npmjs.org/plist/-/plist-3.1.0.tgz";
     hash = "sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ==";
   };
+  "plist@3.1.1" = fetchurl {
+    url = "https://registry.npmjs.org/plist/-/plist-3.1.1.tgz";
+    hash = "sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA==";
+  };
   "points-on-curve@0.2.0" = fetchurl {
     url = "https://registry.npmjs.org/points-on-curve/-/points-on-curve-0.2.0.tgz";
     hash = "sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==";
@@ -5043,33 +5055,33 @@
     url = "https://registry.npmjs.org/shebang-regex/-/shebang-regex-3.0.0.tgz";
     hash = "sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==";
   };
-  "sherpa-onnx-darwin-arm64@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-darwin-arm64/-/sherpa-onnx-darwin-arm64-1.13.6.tgz";
-    hash = "sha512-m3QMOGUHVPUl7bAOPc7oJtmzOVdzQVQPsCuTjNuQ2N6zlYuXDZu9NdUR3Er3rxbhHa6SmWa94flUwmUsO1atow==";
+  "sherpa-onnx-darwin-arm64@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-darwin-arm64/-/sherpa-onnx-darwin-arm64-1.13.7.tgz";
+    hash = "sha512-5NCE50hAvr3n2pdett0SgfPBJXaFZE0bqHwbHyiq+IKZ8Ids0l4M0VrG+ImGYIafCwie+oC3uAJ+pKj9xg/k+w==";
   };
-  "sherpa-onnx-darwin-x64@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-darwin-x64/-/sherpa-onnx-darwin-x64-1.13.6.tgz";
-    hash = "sha512-3X5FQ9PpwlBmxLqtb2/uvl7/W2HXXzXHT0MLmB9c0TRMANLujzvIF7YbT6VW3k92ClL/1q9sbIOul0rHgxCTmw==";
+  "sherpa-onnx-darwin-x64@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-darwin-x64/-/sherpa-onnx-darwin-x64-1.13.7.tgz";
+    hash = "sha512-N3o+T+wn9WaQmsKV5DD8bTHdo+WN2+sXwmZcGJZiDjtOMR2zFz7uVCZnYCmEAMgvChC+oHcF5RvEEKcRCAu6Pw==";
   };
-  "sherpa-onnx-linux-arm64@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-linux-arm64/-/sherpa-onnx-linux-arm64-1.13.6.tgz";
-    hash = "sha512-xSzhqrGFbBrykpbEFt5dLXB3Sp3a8idNzjhf92uylDgUhupBSRHj3ISeYaL9ZZWTNSzszNXBKlM+xH36dHQjPg==";
+  "sherpa-onnx-linux-arm64@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-linux-arm64/-/sherpa-onnx-linux-arm64-1.13.7.tgz";
+    hash = "sha512-TFCVpXyTh69buhOtTS8KIfkRXOVKY4Y1qjAktSItrKS4A0chnnrlXO5bKWoNAPeI6fMxTF/uvMYbYgcvjEMfNg==";
   };
-  "sherpa-onnx-linux-x64@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-1.13.6.tgz";
-    hash = "sha512-HiR3yolQDl3WoU1zSXn8L0MSXzF9PXLQpMv+Ptozg1y/DJU8HuvoXBasOarX4cer5d9kGimnOUGm0dl47PCN1A==";
+  "sherpa-onnx-linux-x64@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-linux-x64/-/sherpa-onnx-linux-x64-1.13.7.tgz";
+    hash = "sha512-npmxn5WwmAmlthgBhmbZ33t3i2j4mJwQt46dMEb3j7d41y1/uJrjrVAfa/DkvV+vn49ZWfcQ2UEWDipaZBVhuw==";
   };
   "sherpa-onnx-node@1.13.2" = fetchurl {
     url = "https://registry.npmjs.org/sherpa-onnx-node/-/sherpa-onnx-node-1.13.2.tgz";
     hash = "sha512-uIH6SA5Or4pb8HlCYWB3K54XkMtzdef4/tkw1amtIf8GB1tt6hQLpur9p2jSFNfTYRyzZ8XrXofxefXQ0A7EUA==";
   };
-  "sherpa-onnx-win-ia32@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-win-ia32/-/sherpa-onnx-win-ia32-1.13.6.tgz";
-    hash = "sha512-CN6rNQqn0wzdSp3XRHxdmNaLUMhP+BgsWVbaASU+V9CYBdx74uutoA/43ThUfh3S3CiArpp8OJtn8dJrPeGHnw==";
+  "sherpa-onnx-win-ia32@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-win-ia32/-/sherpa-onnx-win-ia32-1.13.7.tgz";
+    hash = "sha512-sTwtpxPQ76XLn0giAbvknIDEDKD3XXi2mo2AVROEucf1pIK1DjQl+LjLkalTeFoQqbC4J3xGx/g+xgcHQD1dsw==";
   };
-  "sherpa-onnx-win-x64@1.13.6" = fetchurl {
-    url = "https://registry.npmjs.org/sherpa-onnx-win-x64/-/sherpa-onnx-win-x64-1.13.6.tgz";
-    hash = "sha512-bPMdURD1XCu1Zr3eYYlYx2obc5CMSQhEnd1GQuv7FXjdyOeMJ8jNbQEKFEIAyQdC481FgZvPBb2oSJXaLOOeVw==";
+  "sherpa-onnx-win-x64@1.13.7" = fetchurl {
+    url = "https://registry.npmjs.org/sherpa-onnx-win-x64/-/sherpa-onnx-win-x64-1.13.7.tgz";
+    hash = "sha512-wBV1o+/zgsMrOjfCFIgGrH6S28xq6CqRCLSavCOjTZ6cqr80yGc07DUHxqsHFPZvfoJU+2JF5L2l3gyWFWoWdQ==";
   };
   "shiki@4.4.3" = fetchurl {
     url = "https://registry.npmjs.org/shiki/-/shiki-4.4.3.tgz";

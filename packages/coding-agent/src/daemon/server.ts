@@ -8981,7 +8981,7 @@ export async function startDaemon(
 	// (IPC EPIPE, EBADF, expected cleanup, or intercepted). Register an
 	// interceptor to prevent postmortem's fatal path, keeping the daemon
 	// alive through expected teardown races.
-	interceptUnhandledRejections((reason) => {
+	interceptUnhandledRejections(reason => {
 		logger.error("Unhandled rejection in daemon (intercepted)", { reason: String(reason) });
 		return true;
 	});
