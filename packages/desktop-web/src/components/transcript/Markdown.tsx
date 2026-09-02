@@ -740,29 +740,61 @@ export const Markdown = memo(function Markdown({
 	useLayoutEffect(() => {
 		const root = rootRef.current;
 		if (!highlight || !root) return;
-		for (const el of Array.from(root.querySelectorAll<HTMLElement>("code[data-hl-hash]"))) {
-			const hash = el.dataset.hlHash!;
-			if (el.classList.contains("tr-code-hl")) continue;
-			const cached = highlightHtml.get(hash);
-			if (cached !== undefined) {
-				applyHighlight(el, cached);
-				continue;
+		// Defer to rAF so the DOM is stable before we scan + dispatch IPC;
+		// this batches highlights to paint cycles and avoids firing on
+		// intermediate innerHTML rebuilds during streaming.
+		const raf = requestAnimationFrame(() => {
+			const pending = new Set<string>();
+			const queue: Array<{
+				hash: string;
+				source: { code: string; lang: string };
+				el: HTMLElement;
+			}> = [];
+			for (const el of Array.from(root.querySelectorAll<HTMLElement>("code[data-hl-hash]"))) {
+				const hash = el.dataset.hlHash!;
+				if (el.classList.contains("tr-code-hl")) continue;
+				const cached = highlightHtml.get(hash);
+				if (cached !== undefined) {
+					applyHighlight(el, cached);
+					continue;
+				}
+				const source = highlightSource.get(hash);
+				if (!source) continue;
+				// Dedup: same code block can appear in multiple ticks while
+				// streaming; only queue the highlight once.
+				if (pending.has(hash)) continue;
+				pending.add(hash);
+				queue.push({ hash, source, el });
 			}
-			const source = highlightSource.get(hash);
-			if (!source) continue;
-			void Promise.resolve(highlight(source.code, source.lang)).then(highlighted => {
-				if (highlighted == null) return;
-				// The native highlighter returns ANSI-colored text (TUI parity);
-				// convert to DOM spans before it touches innerHTML — raw ESC
-				// sequences would render as visible "[38;2;…m" garbage and leak
-				// into the copy button's textContent (tool views already do this
-				// conversion; the transcript markdown path was missing it).
-				const html = highlightToCodeHtml(highlighted);
-				cacheSet(highlightHtml, hash, html);
-				// Re-renders replace block bodies; skip stale elements.
-				if (el.isConnected && el.dataset.hlHash === hash) applyHighlight(el, html);
-			});
-		}
+			if (queue.length === 0) return;
+			// Concurrency cap: the highlight worker is single-threaded and
+			// runs behind IPC; >3 in flight floods the main-process queue
+			// and makes navigation / clicks lag during long-message render.
+			const CONCURRENCY = 3;
+			let running = 0;
+			const drain = () => {
+				while (running < CONCURRENCY && queue.length > 0) {
+					const job = queue.shift()!;
+					running++;
+					void Promise.resolve(highlight(job.source.code, job.source.lang)).then(highlighted => {
+						running--;
+						if (highlighted == null) {
+							drain();
+							return;
+						}
+						const html = highlightToCodeHtml(highlighted);
+						cacheSet(highlightHtml, job.hash, html);
+						// Re-renders replace block bodies; skip stale elements.
+						if (job.el.isConnected && job.el.dataset.hlHash === job.hash) {
+							applyHighlight(job.el, html);
+						}
+						drain();
+					});
+				}
+			};
+			drain();
+		});
+		return () => cancelAnimationFrame(raf);
 	}, [text, highlight]);
 
 	// Per-character entrance effect (打字机): the streaming tail lives in a
