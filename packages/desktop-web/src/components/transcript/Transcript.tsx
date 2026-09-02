@@ -15,7 +15,7 @@ function hapticTap(): void {
 	}
 }
 
-import { memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";
@@ -1309,7 +1309,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							/>
 						) : null;
 					const row = (
-						<>
+						<Fragment key={entry.id}>
 							{/* Passive seam (compat slot host): the entry row carries its
 							 * transcript-node kind + id as data attributes so the served
 							 * renderer's injected extension host can find and augment
@@ -1349,7 +1349,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 									renderTranscriptNode={renderTranscriptNode}
 								/>
 							</div>
-						</>
+						</Fragment>
 					);
 					// toolResult entries render no row but continue the turn.
 					if (
