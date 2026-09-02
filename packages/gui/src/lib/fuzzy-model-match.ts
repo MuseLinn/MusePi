@@ -23,15 +23,24 @@ function isSubsequence(needle: string, haystack: string): boolean {
 }
 
 /**
+ * Match a picker query against a combined searchable text. Every
+ * whitespace-separated token must subsequence-match the haystack
+ * (case-folded). An empty or whitespace-only query matches everything.
+ */
+export function matchesFuzzyQuery(query: string, haystack: string): boolean {
+	const q = query.trim().toLowerCase();
+	if (q.length === 0) return true;
+	const tokens = q.split(/\s+/);
+	if (tokens.some(token => token.length === 0)) return true;
+	const h = haystack.toLowerCase();
+	return tokens.every(token => isSubsequence(token, h));
+}
+
+/**
  * Match a picker query against a model row. Every whitespace-separated token
  * must subsequence-match the combined `provider/id/name` text (case-folded).
  * An empty or whitespace-only query matches everything.
  */
 export function matchesModelQuery(query: string, provider: string, id: string, name: string): boolean {
-	const q = query.trim().toLowerCase();
-	if (q.length === 0) return true;
-	const tokens = q.split(/\s+/);
-	if (tokens.some(token => token.length === 0)) return true;
-	const haystack = `${provider} ${id} ${name}`.toLowerCase();
-	return tokens.every(token => isSubsequence(token, haystack));
+	return matchesFuzzyQuery(query, `${provider} ${id} ${name}`);
 }

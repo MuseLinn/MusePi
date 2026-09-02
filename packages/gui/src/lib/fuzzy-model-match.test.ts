@@ -1,5 +1,4 @@
-import { describe, expect, it } from "bun:test";
-import { matchesModelQuery } from "./fuzzy-model-match";
+import { matchesFuzzyQuery, matchesModelQuery } from "./fuzzy-model-match";
 
 describe("matchesModelQuery", () => {
 	it("matches everything on an empty query", () => {
@@ -48,5 +47,21 @@ describe("matchesModelQuery", () => {
 	it("is case-insensitive", () => {
 		expect(matchesModelQuery("DEEPSEEK", "b-ai", "deepseek-v4-flash", "DeepSeek V4 Flash")).toBe(true);
 		expect(matchesModelQuery("Gemini", "google", "gemini-2.5-pro", "Gemini 2.5 Pro")).toBe(true);
+	});
+});
+
+describe("matchesFuzzyQuery (session sidebar search)", () => {
+	it("matches a label + cwd haystack with subsequence semantics", () => {
+		// "ds" matches "DeepSeek 重构" — the exact gap the substring search missed.
+		expect(matchesFuzzyQuery("ds", "DeepSeek 重构 C:/Users/unive/projects/app")).toBe(true);
+		// path fragment via subsequence: "hgeng" in "harness-engineering"
+		expect(matchesFuzzyQuery("hgeng", "refactor C:/Users/unive/projects/harness-engineering")).toBe(true);
+	});
+
+	it("requires every whitespace token to match the combined haystack", () => {
+		// first token in the label, second in the cwd — same all-tokens
+		// contract the model picker applies to provider/id/name.
+		expect(matchesFuzzyQuery("重构 projects", "DeepSeek 重构 C:/Users/unive/projects/app")).toBe(true);
+		expect(matchesFuzzyQuery("重构 zzz", "DeepSeek 重构 C:/Users/unive/projects/app")).toBe(false);
 	});
 });

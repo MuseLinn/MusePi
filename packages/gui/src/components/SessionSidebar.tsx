@@ -1,6 +1,7 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { matchesFuzzyQuery } from "../lib/fuzzy-model-match";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -367,20 +368,27 @@ export function SessionSidebar({
 	const archivedIds = new Set(archived.map(a => a.sessionId));
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
 	const pinnedNodes = nodes.filter(n => pinned.includes(n.entry.id));
-	// Fixed session search: filter the tree by label (recursively — a node
-	// stays when it matches or any descendant matches). Empty → everything.
+	// Fixed session search: filter the tree by label + cwd (recursively — a
+	// node stays when it matches or any descendant matches). Empty →
+	// everything. Matching is subsequence-fuzzy (TUI /switch parity via the
+	// shared matchesFuzzyQuery): "ds" finds "DeepSeek 重构", contiguous
+	// substrings are not required.
 	const [sessionQuery, setSessionQuery] = useState("");
-	const matchTree = useCallback((list: SessionListNode[], q: string): SessionListNode[] => {
-		if (!q) return list;
-		const needle = q.toLowerCase();
-		const walk = (n: SessionListNode): SessionListNode | null => {
-			const kids = n.children.map(walk).filter((x): x is SessionListNode => x !== null);
-			const self = (n.label ?? n.entry.label ?? "").toLowerCase().includes(needle);
-			if (self || kids.length > 0) return { ...n, children: kids };
-			return null;
-		};
-		return list.map(walk).filter((x): x is SessionListNode => x !== null);
-	}, []);
+	const matchTree = useCallback(
+		(list: SessionListNode[], q: string): SessionListNode[] => {
+			if (!q) return list;
+			const walk = (n: SessionListNode): SessionListNode | null => {
+				const kids = n.children.map(walk).filter((x): x is SessionListNode => x !== null);
+				const haystack = `${n.label ?? n.entry.label ?? ""} ${sessionMeta.get(n.entry.id)?.cwd ?? ""}`;
+				if (matchesFuzzyQuery(q, haystack) || kids.length > 0) return { ...n, children: kids };
+				return null;
+			};
+			return list.map(walk).filter((x): x is SessionListNode => x !== null);
+		},
+		// sessionMeta is read inside via stable Map identity in practice, but
+		// listing it keeps the matcher honest when metadata refreshes.
+		[sessionMeta],
+	);
 	const searchedNodes = useMemo(
 		() => matchTree(visibleNodes, sessionQuery.trim()),
 		[matchTree, visibleNodes, sessionQuery],
