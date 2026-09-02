@@ -10,6 +10,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - **`musepi update` 在 `MUSEPI_VERSION` 环境变量污染下永远回滚**:开发入口 `src/musepi.ts` 会把 `process.env.MUSEPI_VERSION` 设为 package.json 版本,长期 shell 继承这个覆盖后,`--version` 恒报旧版本——update 下载新二进制、替换成功,验证却报旧版本,每次都回滚("still reports 0.4.12 (expected 0.4.13)")。现在版本验证子进程剥离 `MUSEPI_VERSION`,读编译内嵌的真实版本。
   - EN: `musepi update` rolled back forever under a polluted `MUSEPI_VERSION` env var — the dev entrypoint bakes it into the process env, long-lived shells inherit it, and every freshly-installed binary then reported the OLD version. The verification subprocess now strips the override and reads the compiled version.
+- **OTA 更新安装路径与退出守护机制解耦**:`updater-install` 先显式 kill 归属 daemon 并标记退出已处理,`quitAndInstall()` 的 quit 不再被 `before-quit` 的 preventDefault/二次 quit 周期拦下——electron-updater 在 `quit` 事件上挂安装动作,吞掉第一次 quit 有竞态风险。
+  - EN: The OTA `updater-install` path now tears down its owned daemon and flags the quit as handled before calling `quitAndInstall()`, so electron-updater's install action (registered on `quit`) is never delayed by the before-quit preventDefault/second-quit cycle.
 
 ### Changed
 
@@ -18,6 +20,10 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - **一键安装脚本不再静默 fallback 到源码编译**(install.ps1):binary 下载失败时先走 GitHub `releases/latest` 重定向重试(免 API,不受 60/hr 限流),仍失败则明确报错并退出,提示 `PI_SOURCE=1` 显式进入源码路径——不再默默用陈旧 checkout 编译 20 分钟。install.sh(Linux/macOS)本就默认 binary、无静默 fallback。
   - EN: The one-click installer no longer silently falls back to a 20-minute source build — after a binary-download failure it retries via the API-free `releases/latest` redirect, then exits with explicit instructions (`PI_SOURCE=1`) instead of compiling from a stale checkout. install.sh (Linux/macOS) already defaulted to binary with no silent fallback.
+- **Windows 关主窗口后僵尸进程**:隐藏辅助窗口(托盘菜单/发光层/伙伴/固定件)使 BrowserWindow 计数永不为零,`window-all-closed` 永不触发——窗口没了,进程和 daemon 还活着,无任何 UI。现在非 macOS 平台关主窗口即 `app.quit()`(macOS 保持关窗即隐藏的惯例)。
+  - EN: Closing the main window on Windows left a zombie process: hidden helper windows (tray menu, glow, pet, pins) kept the BrowserWindow count non-zero so `window-all-closed` never fired — window gone, process and daemon alive, no UI. Non-macOS platforms now quit the app on main-window close (macOS keeps close-to-hide).
+- **daemon 启动命令解析顺序**:解析顺序改为 打包内嵌二进制 → 源码 checkout → PATH;PATH 上残留的 bunx 垫片(全局包已卸载、只剩无 `.bunx` 兄弟的启动器)会被跳过——此前它抢在 checkout 之前被选中,spawn 瞬间退出,GUI 报"daemon exited during startup"。
+  - EN: The daemon command now resolves packaged asarUnpacked binary > dev checkout > PATH, skipping stale bunx shims on PATH (global package uninstalled, launcher .exe without a sibling .bunx) that previously won over the checkout and exited instantly — the GUI reported "daemon exited during startup".
 
 ## [0.4.14] - 2026-09-02
 
