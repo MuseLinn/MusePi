@@ -2286,10 +2286,20 @@ ipcMain.handle("updater-install", async () => {
 	// Kill the daemon sidecar BEFORE quitting so the installed app can
 	// start its own fresh daemon (openchamber killSidecar parity). The
 	// daemon holds the ws.port / journal; a live one would be orphaned.
+	// killOwnedDaemon also clears the client.pid marker and flags the
+	// before-quit handler as already-handled, so the pending quit from
+	// quitAndInstall() below is NOT held up by a preventDefault/second-quit
+	// cycle — electron-updater registers its install action on `quit`, and
+	// swallowing the first quit risks racing that handoff.
 	try {
-		const { kill, probe } = require("./daemon.cjs");
-		const port = probe();
-		if (port) await kill(port);
+		const { killOwnedDaemon, kill, probe } = require("./daemon.cjs");
+		if (killOwnedDaemon) {
+			await killOwnedDaemon().catch(() => {});
+		} else {
+			const port = probe();
+			if (port) await kill(port);
+		}
+		daemonQuitHandled = true;
 	} catch (err) {
 		console.error("[updater] daemon kill failed:", err?.message ?? err);
 	}
