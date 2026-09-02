@@ -213,67 +213,6 @@ function handleHello(name: string, proto: number, fromPeer: number): void {
 		fromPeer,
 	);
 	sendFrame({ t: "snapshot-chunk", entries: [...entries], final: true }, fromPeer);
-	// TEMP: ASK_TEST injection for browser verification (A2/A3) — sends a
-	// workspace frame (multi-session) + a checkbox ui-request after join.
-	if (Bun.env.ASK_TEST === "1") {
-		const now = Date.now();
-		sendFrame(
-			{
-				t: "workspace",
-				sessions: [
-					{
-						id: "relay-reconnect-audit",
-						title: "relay reconnect audit",
-						cwd: "/Users/kai/Projects/pi",
-						messageCount: 12,
-						working: true,
-						paused: false,
-						live: true,
-						updatedAt: now,
-					},
-					{
-						id: "bom-fetch",
-						title: "fetch digikey bom for rfm9x",
-						cwd: "/Users/kai/Projects/hw",
-						messageCount: 34,
-						working: false,
-						paused: true,
-						live: true,
-						updatedAt: now - 60_000,
-					},
-					{
-						id: "archived-notes",
-						title: null,
-						cwd: null,
-						messageCount: 3,
-						working: false,
-						paused: false,
-						live: false,
-						updatedAt: now - 3_600_000,
-					},
-				],
-			},
-			fromPeer,
-		);
-		setTimeout(() => {
-			sendFrame(
-				{
-					t: "ui-request",
-					request: {
-						reqId: 7001,
-						kind: "select",
-						title: "Which boards should ship?",
-						options: ["rfm9x", "esp32", "stm32", "pi5"],
-						selectionMarker: "checkbox",
-						markableCount: 4,
-						checkedIndices: [0],
-						helpText: "select multiple — choose each option, then pick Next",
-					},
-				},
-				fromPeer,
-			);
-		}, 1_200);
-	}
 	console.log(`mock-host: ${cleanName} joined (peer ${fromPeer})`);
 	broadcastState();
 }
