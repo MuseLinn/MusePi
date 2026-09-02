@@ -16,6 +16,9 @@ const fs = require("node:fs");
 const { spawn } = require("node:child_process");
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-daemon-test-"));
+const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
+const WS_PORT_FILE = path.join(SOCKET_DIR, "ws.port");
+const CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
 
 let passed = 0;
 let failed = 0;
@@ -37,6 +40,34 @@ function loadDaemonModule() {
 	return require("../../gui/electron/daemon.cjs");
 }
 
+function snapshotSocketFiles() {
+	return {
+		wsPort: fs.existsSync(WS_PORT_FILE) ? fs.readFileSync(WS_PORT_FILE, "utf8").trim() : null,
+		clientPid: fs.existsSync(CLIENT_PID_FILE) ? fs.readFileSync(CLIENT_PID_FILE, "utf8").trim() : null,
+	};
+}
+
+function restoreSocketFiles(snap) {
+	if (snap.wsPort !== null) {
+		fs.writeFileSync(WS_PORT_FILE, snap.wsPort, "utf8");
+	} else if (fs.existsSync(WS_PORT_FILE)) {
+		fs.unlinkSync(WS_PORT_FILE);
+	}
+	if (snap.clientPid !== null) {
+		fs.writeFileSync(CLIENT_PID_FILE, snap.clientPid, "utf8");
+	} else if (fs.existsSync(CLIENT_PID_FILE)) {
+		fs.unlinkSync(CLIENT_PID_FILE);
+	}
+}
+
+function spawnPortListener(port) {
+	const child = spawn(process.execPath, [
+		"-e",
+		`const net=require('net');const s=net.createServer();s.listen(${port},'127.0.0.1',()=>{});setInterval(()=>{},1<<30);`,
+	], { detached: false, stdio: "ignore" });
+	return child;
+}
+
 function isProcessDead(pid) {
 	try {
 		process.kill(pid, 0);
@@ -46,75 +77,75 @@ function isProcessDead(pid) {
 	}
 }
 
-function spawnPortListener(portFile) {
-	const child = spawn(process.execPath, [
-		"-e",
-		`const net=require('net');const fs=require('fs');const s=net.createServer();s.listen(0,'127.0.0.1',()=>{fs.writeFileSync(${JSON.stringify(portFile)},String(s.address().port))});setInterval(()=>{},1<<30);`,
-	], { detached: false, stdio: "ignore" });
-	return child;
-}
-
 // ── tests ────────────────────────────────────────────────────────────────
 
 function testClearDaemonOwnership() {
 	const mod = loadDaemonModule();
-	const target = mod.CLIENT_PID_FILE;
-	fs.mkdirSync(path.dirname(target), { recursive: true });
-	fs.writeFileSync(target, "12345", "utf8");
-	assert(fs.existsSync(target), "module pid file exists before clear");
+	const snap = snapshotSocketFiles();
+	try {
+		fs.mkdirSync(path.dirname(CLIENT_PID_FILE), { recursive: true });
+		fs.writeFileSync(CLIENT_PID_FILE, "12345", "utf8");
+		assert(fs.existsSync(CLIENT_PID_FILE), "module pid file exists before clear");
 
-	mod.clearDaemonOwnership();
+		mod.clearDaemonOwnership();
 
-	assert(!fs.existsSync(target), "module pid file gone after clearDaemonOwnership");
+		assert(!fs.existsSync(CLIENT_PID_FILE), "module pid file gone after clearDaemonOwnership");
+	} finally {
+		restoreSocketFiles(snap);
+	}
 }
 
 async function testKillOwnedDaemonKillsOnlyOwned() {
 	const mod = loadDaemonModule();
+	const snap = snapshotSocketFiles();
+	try {
+		// 1) Pick a random free port and spawn a child that listens on it.
+		const probeSrv = require("node:net").createServer();
+		await new Promise(r => probeSrv.listen(0, "127.0.0.1", r));
+		const port = probeSrv.address().port;
+		probeSrv.close();
 
-	// Spawn a child that binds a real port and writes it to a file.
-	const portFile = path.join(TMP, "child.port");
-	const child = spawnPortListener(portFile);
+		const child = spawnPortListener(port);
+		assert(child.pid > 0, "dummy port listener spawned");
 
-	// Wait for the port file to appear (child bound successfully).
-	const port = await new Promise((resolve, reject) => {
-		const start = Date.now();
-		const tick = () => {
-			try {
-				const p = fs.readFileSync(portFile, "utf8").trim();
-				if (p && Number.isInteger(Number(p))) return resolve(Number(p));
-			} catch {}
-			if (Date.now() - start > 3000) return reject(new Error("child did not bind in time"));
-			setTimeout(tick, 50);
-		};
-		tick();
-	});
+		// Wait for child to bind.
+		const deadline = Date.now() + 3000;
+		while (Date.now() < deadline) {
+			if (await mod.portOpen(port)) break;
+			await new Promise(r => setTimeout(r, 50));
+		}
 
-	assert(child.pid > 0, "dummy port listener spawned");
-	console.log(`  child pid=${child.pid} port=${port}`);
+		// 2) Write ws.port and client.pid = test runner pid (ownsDaemon compares to process.pid).
+		fs.mkdirSync(path.dirname(WS_PORT_FILE), { recursive: true });
+		fs.writeFileSync(WS_PORT_FILE, String(port), "utf8");
+		fs.writeFileSync(CLIENT_PID_FILE, String(process.pid), "utf8");
 
-	// Point the module at our temp dir by writing its expected port file.
-	fs.mkdirSync(path.dirname(mod.PORT_FILE), { recursive: true });
-	fs.writeFileSync(mod.PORT_FILE, String(port), "utf8");
+		// 3) Non-owner path: change client.pid to a different pid.
+		fs.writeFileSync(CLIENT_PID_FILE, "999999", "utf8");
+		assert(mod.ownsDaemon() === false, "ownsDaemon false when pid mismatches");
+		assert(await mod.killOwnedDaemon() === false, "killOwnedDaemon returns false for non-owner");
+		assert(!isProcessDead(child.pid), "dummy still alive after non-owner killOwnedDaemon");
+		assert(fs.existsSync(CLIENT_PID_FILE), "pid file preserved after non-owner killOwnedDaemon");
 
-	const target = mod.CLIENT_PID_FILE;
-	fs.mkdirSync(path.dirname(target), { recursive: true });
+		// Owner path: restore client.pid = runner pid.
+		fs.writeFileSync(CLIENT_PID_FILE, String(process.pid), "utf8");
+		assert(mod.ownsDaemon() === true, "ownsDaemon true when pid matches runner");
+		const killed = await mod.killOwnedDaemon();
+		assert(killed === true, "killOwnedDaemon returns true for owner");
 
-	// Non-owner: pid mismatch -> no kill, pid file stays.
-	fs.writeFileSync(target, "999999", "utf8");
-	assert(mod.ownsDaemon() === false, "ownsDaemon false when pid mismatches");
-	assert(await mod.killOwnedDaemon() === false, "killOwnedDaemon returns false for non-owner");
-	assert(!isProcessDead(child.pid), "dummy still alive after non-owner killOwnedDaemon");
-	assert(fs.existsSync(target), "pid file preserved after non-owner killOwnedDaemon");
-
-	// Owner: pid matches runner -> kill child via port lookup, pid file cleared.
-	fs.writeFileSync(target, String(process.pid), "utf8");
-	assert(mod.ownsDaemon() === true, "ownsDaemon true when pid matches runner");
-	const killed = await mod.killOwnedDaemon();
-	assert(killed === true, "killOwnedDaemon returns true for owner");
-
-	await new Promise(r => setTimeout(r, 500));
-	assert(isProcessDead(child.pid), "dummy process dead after owned killOwnedDaemon");
-	assert(!fs.existsSync(target), "pid file cleared after owned killOwnedDaemon");
+		// The child may take a moment to release the port after SIGTERM;
+		// poll briefly instead of assuming 500ms is enough.
+		const closeDeadline = Date.now() + 2000;
+		while (Date.now() < closeDeadline) {
+			if (!(await mod.portOpen(port))) break;
+			await new Promise(r => setTimeout(r, 100));
+		}
+		assert(!(await mod.portOpen(port)), "port closed after owned killOwnedDaemon");
+		assert(!fs.existsSync(CLIENT_PID_FILE), "pid file cleared after owned killOwnedDaemon");
+		assert(!fs.existsSync(CLIENT_PID_FILE), "pid file cleared after owned killOwnedDaemon");
+	} finally {
+		restoreSocketFiles(snap);
+	}
 }
 
 // ── run ──────────────────────────────────────────────────────────────────
