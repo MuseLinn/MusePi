@@ -84,9 +84,13 @@ function browserTargetInfo() {
 // ── minimal WebSocket frame codec (no `ws` dep in the Electron main) ──────
 
 const WS_OP_TEXT = 0x1;
+const WS_OP_BINARY = 0x2;
 const WS_OP_CLOSE = 0x8;
 const WS_OP_PING = 0x9;
 const WS_OP_PONG = 0xa;
+/** WebSocket continuation frame (opcode 0x0): payload fragments of a
+ *  split TEXT or BINARY message. */
+const WS_OP_CONTINUATION = 0x0;
 
 /** Server → client frame (unmasked). */
 function encodeWsFrame(payload) {
@@ -126,13 +130,17 @@ class WsFrameDecoder {
 		for (;;) {
 			const frame = this.tryFrame();
 			if (!frame) return;
-			if (frame.opcode === WS_OP_TEXT) {
+			if (frame.opcode === WS_OP_TEXT || frame.opcode === WS_OP_CONTINUATION) {
 				this.fragment = this.fragment === null ? frame.payload : Buffer.concat([this.fragment, frame.payload]);
 				if (frame.fin) {
 					const complete = this.fragment;
 					this.fragment = null;
 					this.onMessage(complete);
 				}
+			} else if (frame.opcode === WS_OP_BINARY) {
+				// Binary frames not expected on the CDP bridge; pass through
+				// as complete messages (binary CDP payloads are rare).
+				this.onMessage(frame.payload);
 			} else {
 				this.onControl(frame.opcode, frame.payload);
 			}
@@ -341,7 +349,9 @@ class ManagedTab {
 		wc.setWindowOpenHandler(({ url: targetUrl }) => {
 			// target=_blank / window.open become managed tabs instead of
 			// escaping the app (deny would silently drop user clicks).
-			if (/^https?:/i.test(targetUrl)) controller.createTab(targetUrl);
+			// User-initiated opens (window.open via click) are NOT agent tabs;
+			// only Target.createTarget from the CDP side sets openedByAgent=true.
+			if (/^https?:/i.test(targetUrl)) controller.createTab(targetUrl, false);
 			return { action: "deny" };
 		});
 		wc.on("will-navigate", (event, targetUrl) => {
