@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-utils",
-	"version": "0.4.14",
+	"version": "0.4.15",
 	"description": "Shared utilities for pi packages",
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn",

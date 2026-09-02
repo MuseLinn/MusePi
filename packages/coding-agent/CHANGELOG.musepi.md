@@ -4,7 +4,7 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
-## [Unreleased]
+## [0.4.15] - 2026-09-02
 
 ### Fixed
 
