@@ -26,7 +26,7 @@
  */
 
 import { setLocale, t } from "@musepi/desktop-web";
-import { type ReactNode, StrictMode, useEffect, useRef, useState } from "react";
+import { type ReactNode, StrictMode, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PetActivity } from "./lib/pet";
 import { initTooltips } from "./lib/tooltips";
@@ -117,6 +117,13 @@ function BubbleApp(): ReactNode {
 	const [sending, setSending] = useState(false);
 	const bridge = (window as unknown as { electronAPI?: BubbleBridge }).electronAPI;
 	const rootRef = useRef<HTMLDivElement>(null);
+
+	const sessionMessages = useMemo(() => {
+		if (!activeSession?.loaded || !activeSession.messages.length) return null;
+		return activeSession.messages.map((m, i) => (
+			<div key={i} className={`pet-panel__msg pet-panel__msg--${m.role}`}>{m.text}</div>
+		));
+	}, [activeSession?.loaded, activeSession?.messages]);
 
 	// pet:activity — bubbles, approvals, session state, theme/locale push.
 	useEffect(() => {
@@ -599,11 +606,7 @@ function BubbleApp(): ReactNode {
 									) : activeSession.messages.length === 0 ? (
 										<div className="pet-panel__session-empty">{t("no messages yet")}</div>
 									) : (
-										activeSession.messages.map((m, i) => (
-											<div key={i} className={`pet-panel__msg pet-panel__msg--${m.role}`}>
-												{m.text}
-											</div>
-										))
+										sessionMessages
 									)}
 								</div>
 								{/* Quick reply steers THIS session (sendReply already
