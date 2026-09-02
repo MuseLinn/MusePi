@@ -1,3 +1,4 @@
+import { describe, expect, it } from "bun:test";
 import { matchesFuzzyQuery, matchesModelQuery } from "./fuzzy-model-match";
 
 describe("matchesModelQuery", () => {
