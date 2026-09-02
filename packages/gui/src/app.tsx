@@ -1365,6 +1365,12 @@ function AppInner(): ReactNode {
 					}>("session.resume", { sessionId });
 					initial = res.snapshot;
 				}
+				// A newer user action (another session opened while this RPC was
+				// in flight) supersedes this result: mounting the stale session's
+				// store would paint the wrong transcript under the new highlight
+				// and leak its model into the composer preselect.
+				if (selectedIdRef.current !== sessionId) return;
+
 				const cwd =
 					typeof (initial as { header?: { cwd?: unknown } } | null)?.header?.cwd === "string"
 						? (initial as { header: { cwd: string } }).header.cwd
