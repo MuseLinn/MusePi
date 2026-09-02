@@ -4,6 +4,21 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Fixed
+
+- **`musepi update` 在 `MUSEPI_VERSION` 环境变量污染下永远回滚**:开发入口 `src/musepi.ts` 会把 `process.env.MUSEPI_VERSION` 设为 package.json 版本,长期 shell 继承这个覆盖后,`--version` 恒报旧版本——update 下载新二进制、替换成功,验证却报旧版本,每次都回滚("still reports 0.4.12 (expected 0.4.13)")。现在版本验证子进程剥离 `MUSEPI_VERSION`,读编译内嵌的真实版本。
+  - EN: `musepi update` rolled back forever under a polluted `MUSEPI_VERSION` env var — the dev entrypoint bakes it into the process env, long-lived shells inherit it, and every freshly-installed binary then reported the OLD version. The verification subprocess now strips the override and reads the compiled version.
+
+### Changed
+
+- **客户端正常退出时 daemon 一起退出;异常崩溃时 daemon 存活**:GUI spawn daemon 时写 `client.pid` 归属标记,`before-quit` 只 kill 本实例 spawn 的 daemon(连接的外部 daemon——另一实例/自启动/终端 `musepi serve`——不受影响);崩溃路径不经过 quit handler,detached daemon 天然存活。
+  - EN: Quitting the client now takes the daemon down with it — the GUI records ownership in `client.pid` at spawn, and `before-quit` kills only the daemon this instance spawned (foreign daemons survive); crashes never reach the quit handler, so the detached daemon stays alive.
+
+- **一键安装脚本不再静默 fallback 到源码编译**(install.ps1):binary 下载失败时先走 GitHub `releases/latest` 重定向重试(免 API,不受 60/hr 限流),仍失败则明确报错并退出,提示 `PI_SOURCE=1` 显式进入源码路径——不再默默用陈旧 checkout 编译 20 分钟。install.sh(Linux/macOS)本就默认 binary、无静默 fallback。
+  - EN: The one-click installer no longer silently falls back to a 20-minute source build — after a binary-download failure it retries via the API-free `releases/latest` redirect, then exits with explicit instructions (`PI_SOURCE=1`) instead of compiling from a stale checkout. install.sh (Linux/macOS) already defaulted to binary with no silent fallback.
+
 ## [0.4.14] - 2026-09-02
 
 ### Added

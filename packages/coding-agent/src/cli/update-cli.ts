@@ -1092,10 +1092,17 @@ function resolveOmpPath(): string | undefined {
 
 /**
  * Run a specific binary and check if it reports the expected version.
+ *
+ * The binary inherits the parent process environment, which may carry a
+ * stale `MUSEPI_VERSION` override (`src/musepi.ts` sets this from the
+ * dev package.json).  Strip it so the verification reads the compiled
+ * VERSION, not an env override that is always one release behind.
  */
 async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): Promise<InstalledVersionVerification> {
 	try {
-		const result = await $`${binaryPath} --version`.quiet().nothrow();
+		const env: Record<string, string | undefined> = { ...Bun.env };
+		delete env.MUSEPI_VERSION;
+		const result = await $`${binaryPath} --version`.env(env).quiet().nothrow();
 		if (result.exitCode !== 0) return { ok: false, path: binaryPath };
 		const output = result.text().trim();
 		// Output format: "musepi/X.Y.Z"
@@ -1106,6 +1113,9 @@ async function verifyBinaryAtPath(binaryPath: string, expectedVersion: string): 
 		return { ok: false, path: binaryPath };
 	}
 }
+
+/** Test seam for the env-sanitized version probe (see {@linkcode verifyBinaryAtPath}). */
+export const verifyBinaryAtPathForTest = verifyBinaryAtPath;
 
 /**
  * Run the PATH-resolved musepi binary and check if it reports the expected version.

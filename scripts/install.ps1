@@ -75,6 +75,47 @@ function Install-Binary {
     return $true
 }
 
+function Install-BinaryViaRedirect {
+    # Retry path when the GitHub REST API is unavailable (rate limit 60/hr
+    # unauth, corporate proxies): /releases/latest/download/<asset> is a
+    # plain HTTP redirect that needs no API call. Checksum verification is
+    # identical to Install-Binary, so a bad download still cannot install.
+    $asset = "musepi-windows-x64.exe"
+    $baseUrl = "https://github.com/$repo/releases/latest/download"
+    $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP "musepi-install") -Force
+    $tmpAsset = Join-Path $tmp $asset
+    $tmpChecksums = Join-Path $tmp "SHA256SUMS.txt"
+
+    Write-Host "Downloading musepi (latest, redirect) ..."
+    Invoke-WebRequest -Uri "$baseUrl/$asset" -OutFile $tmpAsset
+    Invoke-WebRequest -Uri "$baseUrl/SHA256SUMS.txt" -OutFile $tmpChecksums
+
+    $expectedLine = Get-Content $tmpChecksums | Where-Object { $_ -match "\s+$([regex]::Escape($asset))$" }
+    if (-not $expectedLine) {
+        throw "SHA256SUMS.txt has no entry for $asset"
+    }
+    $expected = ($expectedLine -split "\s+")[0].ToLowerInvariant()
+    $actual = (Get-FileHash $tmpAsset -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expected -ne $actual) {
+        throw "Checksum mismatch for $asset (expected $expected, got $actual)"
+    }
+
+    New-Item -ItemType Directory -Path $binDir -Force | Out-Null
+    $binPath = Join-Path $binDir "musepi.exe"
+    Move-Item -Force $tmpAsset $binPath
+    Remove-Item -Recurse -Force $tmp
+
+    Write-Host "Verifying binary ..."
+    $version = & $binPath --version
+    if ($LASTEXITCODE -ne 0) { throw "Installed musepi binary failed --version" }
+
+    Add-BinToPath $binDir
+    Write-Host ""
+    Write-Host "✓ Installed musepi $version (TUI binary)"
+    Write-Host "Run: musepi   (or $binPath if PATH is not refreshed)"
+    return $true
+}
+
 function Install-FromSource {
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         Write-Host "git is required to install from source. Install it from https://git-scm.com/"
@@ -136,12 +177,31 @@ function Install-FromSource {
 }
 
 if (-not $sourceInstall) {
+    # Default is the prebuilt binary. A failure here is NOT silently
+    # converted into a 20-minute from-source build: network/API errors would
+    # otherwise surface as "compiled from source" with no hint anything was
+    # wrong, and the from-source path would happily reuse a stale checkout.
+    # Only an explicit PI_SOURCE=1 opts into compiling.
     try {
         Install-Binary
         return 0
     } catch {
-        Write-Host "Prebuilt binary install failed ($($_.Exception.Message))"
-        Write-Host "Falling back to from-source install. Set PI_SOURCE=1 to force source."
+        Write-Host ""
+        Write-Host "Prebuilt binary install failed: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Retrying with the GitHub releases/latest redirect (no API call)..."
+        try {
+            $env:PI_REF = ""
+            Install-BinaryViaRedirect
+            return 0
+        } catch {
+            Write-Host ""
+            Write-Host "Binary download failed again: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ""
+            Write-Host "To install from source instead, run with the environment variable PI_SOURCE=1:"
+            Write-Host "  `$env:PI_SOURCE='1'; irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex"
+            exit 1
+        }
     }
 }
 

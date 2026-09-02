@@ -22,6 +22,7 @@ const { spawn } = require("node:child_process");
 const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
 const PORT_FILE = path.join(SOCKET_DIR, "ws.port");
 const WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
+const CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");
 const STARTUP_TIMEOUT_MS = 10_000;
 
 /** GUI package version (brand version for the spawned daemon). */
@@ -183,6 +184,16 @@ async function start(port, env = {}) {
 					// already gone
 				}
 			}
+			// Ownership marker: THIS GUI instance spawned the daemon. Quitting
+			// GUIs compare their pid against this file and only the owner
+			// tears the daemon down; a crash never runs the quit path, so the
+			// detached daemon survives (client.pid goes stale and is
+			// reclaimed on the next start()).
+			try {
+				fs.writeFileSync(CLIENT_PID_FILE, String(process.pid), "utf8");
+			} catch {
+				// best-effort: worst case the daemon outlives the GUI
+			}
 			return bound;
 		}
 		// The spawned process died during startup.
@@ -278,6 +289,45 @@ async function kill(port) {
 }
 
 /**
+ * True when the CURRENT GUI process owns the running daemon (it spawned
+ * it and has not yet been torn down with it). GUI quit paths consult this
+ * before killing the daemon: a daemon the GUI merely CONNECTED to (spawned
+ * by another GUI instance, launch-at-login, or a terminal `musepi serve`)
+ * must survive this GUI's exit. A crashed GUI never reaches the quit path,
+ * so its daemon survives the crash — the stale client.pid is reclaimed by
+ * the next start().
+ */
+function ownsDaemon() {
+	try {
+		return fs.readFileSync(CLIENT_PID_FILE, "utf8").trim() === String(process.pid);
+	} catch {
+		return false;
+	}
+}
+
+/** Clear the ownership marker (after killing the daemon we spawned). */
+function clearDaemonOwnership() {
+	try {
+		fs.unlinkSync(CLIENT_PID_FILE);
+	} catch {
+		// already gone
+	}
+}
+
+/**
+ * Stop the daemon IF this GUI process owns it. Returns true when the
+ * daemon was killed (owner) — quit paths await this before exiting.
+ */
+async function killOwnedDaemon() {
+	const port = probe();
+	if (!port) return false;
+	if (!ownsDaemon()) return false;
+	clearDaemonOwnership();
+	await kill(port);
+	return true;
+}
+
+/**
  * Restart the daemon (instance menu 重启 daemon): SIGTERM the current
  * listener on `port`, wait for the port to free, then spawn a fresh
  * daemon (new code) and wait for it to bind. Resolves the new port.
@@ -290,4 +340,5 @@ async function restart(port, env = {}) {
 	return start(port, env);
 }
 
-module.exports = { probe, probeWeb, start, restart, kill, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE, WEB_PORT_FILE };
+module.exports = { probe, probeWeb, start, restart, kill, killOwnedDaemon, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE, WEB_PORT_FILE };
+

@@ -31,6 +31,7 @@ import {
 	sweepStaleUpdateArtifacts,
 	updateViaBinaryAt,
 	updateViaShimTakeover,
+	verifyBinaryAtPathForTest,
 } from "@musepi/pi-coding-agent/cli/update-cli";
 import Update from "@musepi/pi-coding-agent/commands/update";
 import { removeWithRetries } from "@musepi/pi-utils";
@@ -1342,5 +1343,45 @@ describe("update-cli concurrent binary updates", () => {
 		expect(await Bun.file(targetPath).bytes()).toEqual(new Uint8Array(payload));
 		const residue = (await fs.readdir(dir)).filter(name => name.endsWith(".bak") || name.endsWith(".new"));
 		expect(residue).toEqual([]);
+	});
+});
+
+describe("verifyBinaryAtPath env sanitization", () => {
+	// Contract: the post-update version verification reads the binary's
+	// COMPILED version, never `MUSEPI_VERSION` from the surrounding
+	// environment. A stale `MUSEPI_VERSION` (dev entrypoint musepi.ts bakes
+	// it into the process env; long-lived shells inherit it) used to make
+	// every freshly-installed binary report the OLD version, so `musepi
+	// update` always rolled itself back ("still reports 0.4.12 (expected
+	// 0.4.13)"). Regression: the fake binary echoes its own MUSEPI_VERSION
+	// env when set, then a fixed version marker.
+	it("verifies the binary's real version even when MUSEPI_VERSION pollutes the environment", async () => {
+		const dir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-verify-env-"));
+		try {
+			const ext = process.platform === "win32" ? ".cmd" : "";
+			const probe = path.join(dir, `fake-musepi${ext}`);
+			// Line 1 prints whatever MUSEPI_VERSION is in the child env
+			// (unset → empty), line 2 the fixed "compiled" version the
+			// verification must match.
+			const body =
+				process.platform === "win32"
+					? `@echo off\r\necho fake-musepi/%MUSEPI_VERSION%\r\necho fake-musepi/9.9.8\r\n`
+					: `#!/bin/sh\necho "fake-musepi/$MUSEPI_VERSION"\necho "fake-musepi/9.9.8"\n`;
+			await Bun.write(probe, body);
+			if (process.platform !== "win32") await fs.chmod(probe, 0o755);
+
+			const prev = process.env.MUSEPI_VERSION;
+			process.env.MUSEPI_VERSION = "0.0.1";
+			try {
+				const result = await verifyBinaryAtPathForTest(probe, "9.9.8");
+				expect(result.ok).toBe(true);
+				expect(result.actual).toBe("9.9.8");
+			} finally {
+				if (prev === undefined) delete process.env.MUSEPI_VERSION;
+				else process.env.MUSEPI_VERSION = prev;
+			}
+		} finally {
+			await fs.rm(dir, { recursive: true, force: true });
+		}
 	});
 });

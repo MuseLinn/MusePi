@@ -157,11 +157,29 @@ if (!app.requestSingleInstanceLock()) {
 	app.quit();
 	return; // CJS top-level: skip the rest of the module, no window flash
 }
-// Explicit Cmd+Q (defensive): macOS should quit on Cmd+Q by default, but a
-// restart-in-flight (IPC awaiting kill/start) made it appear dead. A
-// before-quit log plus the standard accelerator keep the escape hatch
-// observable.
-app.on("before-quit", () => console.error("[main] before-quit"));
+// Normal exit tears the daemon down WITH the GUI. Only the daemon this GUI
+// instance SPAWNED is killed — a daemon we merely connected to (another GUI
+// instance, autostart, terminal `musepi serve`) must survive. A crash never
+// reaches this handler, so the detached daemon stays alive through crashes
+// by design. The updater-install path kills the daemon explicitly earlier.
+let daemonQuitHandled = false;
+app.on("before-quit", event => {
+	console.error("[main] before-quit");
+	if (daemonQuitHandled) return;
+	daemonQuitHandled = true;
+	// Electron does not await async quit handlers: hold the quit open while
+	// the owned daemon tears down (SIGTERM + grace window), then re-quit.
+	event.preventDefault();
+	const { killOwnedDaemon } = require("./daemon.cjs");
+	killOwnedDaemon()
+		.then(killed => {
+			console.error(`[main] daemon teardown on quit: ${killed ? "killed" : "not owned"}`);
+		})
+		.catch(err => {
+			console.error("[main] daemon teardown on quit failed:", err?.message ?? err);
+		})
+		.finally(() => app.quit());
+});
 app.on("second-instance", () => {
 	if (mainWindow && !mainWindow.isDestroyed()) {
 		if (mainWindow.isMinimized()) mainWindow.restore();
