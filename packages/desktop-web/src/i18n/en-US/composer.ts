@@ -51,6 +51,7 @@ export const composer = {
 	"Pasted {lines} lines ({chars} chars)": "Pasted {lines} lines ({chars} chars)",
 	"discard paste": "Discard paste",
 	"paste inline": "Paste inline",
+	"wrap as attachment": "Wrap as attachment",
 	"wrap as code block": "Wrap as code block",
 	"attach as file": "Attach as file",
 } as const satisfies Record<ComposerKey, string>;

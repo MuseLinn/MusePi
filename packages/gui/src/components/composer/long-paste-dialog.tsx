@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { t } from "../../i18n/index.js";
 
-export type LongPasteAction = "inline" | "code-block" | "file";
+export type LongPasteAction = "inline" | "code-block" | "attachment" | "file";
 
 /**
  * Dialog for gating a large text paste behind a user-choice menu.
@@ -46,6 +46,9 @@ export function LongPasteDialog({
 			<div className="gui-long-paste-actions">
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("inline")}>
 					{t("paste inline")}
+				</button>
+				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("attachment")}>
+					{t("wrap as attachment")}
 				</button>
 				<button type="button" className="gui-long-paste-btn" onClick={() => handleAction("code-block")}>
 					{t("wrap as code block")}

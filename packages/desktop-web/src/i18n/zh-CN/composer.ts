@@ -49,6 +49,7 @@ export const composer = {
 	"Pasted {lines} lines ({chars} chars)": "粘贴了 {lines} 行（{chars} 字符）",
 	"discard paste": "放弃粘贴",
 	"paste inline": "直接粘贴",
+	"wrap as attachment": "包裹为附件",
 	"wrap as code block": "包裹为代码块",
 	"attach as file": "附加为文件",
 } as const;
