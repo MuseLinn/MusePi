@@ -116,6 +116,13 @@ export function layoutTree(
 		return cx;
 	};
 	for (const root of roots) place(root, 0);
+	// O(1) 查找表:长会话(220+ 节点)下,折叠检测与 y 重排反复用
+	// nodes.find 做父子/按 id 查找,线性扫描叠加成 O(n²)——两份 Map 消除。
+	const idToNode = new Map(nodes.map(n => [n.node.id, n]));
+	const childIdToParent = new Map<string, CanvasNode>();
+	for (const n of nodes) {
+		for (const c of n.node.children) childIdToParent.set(c.id, n);
+	}
 	// 折叠链段检测:找连续单子链(每个节点唯一父 + 唯一子),从链顶向下
 	// 把超过阈值的部分切成段。任何分支点打断链段——折叠不隐藏分支,
 	// 只压缩长链纵向空白。
@@ -126,7 +133,7 @@ export function layoutTree(
 		// 向上回溯到链顶(首个"唯一父 + 唯一子"断链处)。
 		let cur: CanvasNode = n;
 		while (true) {
-			const parent = nodes.find(m => m.node.children.some(c => c.id === cur.node.id));
+			const parent = childIdToParent.get(cur.node.id);
 			const parentSingle = parent && parent.node.children.length === 1;
 			const selfSingle = cur.node.children.length === 1;
 			if (!parentSingle || !selfSingle) break; // 链在此结束
@@ -138,7 +145,7 @@ export function layoutTree(
 		// 只从"链顶"开始折叠:自身是单子节点,且父不是单子(父不存在 =
 		// 根;父多子 = 分支点) → 一段新链的起点。
 		if (n.foldLen !== undefined) continue;
-		const parent = nodes.find(m => m.node.children.some(c => c.id === n.node.id));
+		const parent = childIdToParent.get(n.node.id);
 		const parentSingle = parent !== undefined && parent.node.children.length === 1;
 		const selfSingle = n.node.children.length === 1;
 		const isChainTop = selfSingle && !parentSingle;
@@ -148,7 +155,7 @@ export function layoutTree(
 		let cur: CanvasNode | undefined = n;
 		while (cur && cur.node.children.length === 1) {
 			seg.push(cur);
-			cur = nodes.find(m => m.node.id === cur!.node.children[0]!.id);
+			cur = idToNode.get(cur!.node.children[0]!.id);
 		}
 		// 切段:链上超过阈值的部分,每段段首 depth >= 阈值。
 		// 段从"第一个 depth >= 阈值的节点"开始,每段最多 CHAIN_FOLD_THRESHOLD 个。
@@ -183,7 +190,6 @@ export function layoutTree(
 	{
 		const hiddenSet = new Set<string>();
 		for (const f of folds) for (const h of f.hiddenIds) hiddenSet.add(h);
-		const idToNode = new Map(nodes.map(n => [n.node.id, n]));
 		const walk = (node: MessageTreeNode, parentBottom: number | null, parentTurn: number): void => {
 			const cn = idToNode.get(node.id)!;
 			// 隐藏节点:不占位置,其子从父的底部继承(跳过它)。
@@ -201,7 +207,7 @@ export function layoutTree(
 	for (const n of nodes) {
 		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
 		if (!foldFor) continue;
-		const headNode = nodes.find(m => m.node.id === foldFor.headId);
+		const headNode = idToNode.get(foldFor.headId);
 		if (headNode) n.y = headNode.y + CHAIN_FOLD_H;
 	}
 	// 画布高度:由重排后的实际节点位置决定(折叠段内节点渲染时隐藏,
