@@ -2170,6 +2170,14 @@ async function createWindow() {
 			clearTimeout(mainBoundsTimer);
 			mainBoundsTimer = null;
 		}
+		// Non-macOS convention: closing the main window quits the app.
+		// window-all-closed cannot do this — the hidden helper windows
+		// (tray menu, glow overlay, pet, pins) keep the count non-zero, so
+		// the app used to linger as a zombie process (window gone, process
+		// + daemon alive, no UI). `show-main-window` and the tray stay
+		// available while the window is open; after a real close the tray
+		// icon dies with the app, matching every native Windows app.
+		if (process.platform !== "darwin") app.quit();
 	});
 
 	// The managed browser owns a WebContentsView child of this window. When

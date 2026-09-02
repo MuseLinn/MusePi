@@ -109,39 +109,54 @@ function daemonCommand(port) {
 	// shellEnabled); 0 = a random loopback port the daemon persists to
 	// web.port for the compat shell to discover.
 	const webArgs = shellEnabled() ? ["--web-port", "0"] : [];
-	const pathCli = (process.env.PATH ?? "")
-		.split(win ? ";" : ":")
-		.filter(dir => dir.trim().length > 0)
-		.map(dir => path.resolve(dir, win ? "musepi.exe" : "musepi"))
-		.find(candidate => fs.existsSync(candidate));
-	if (pathCli) {
-		return {
-			program: pathCli,
-			args: ["serve", "--port", String(port), ...webArgs],
-		};
-	}
-	// Packaged app: the compiled daemon binary is asarUnpacked so it can be
-	// spawned directly (asar contents are not executable).
-	const unpacked = path.join(
-		process.resourcesPath ?? "",
-		"app.asar.unpacked",
-		"vendor",
-		"daemon",
-		win ? "musepi.exe" : "musepi",
+
+	// Resolution order: packaged binary → dev checkout → PATH. A stale PATH
+	// shim (bunx launcher whose global package was uninstalled) spawns and
+	// exits instantly ("Module not found") — the GUI would report "daemon
+	// exited during startup", so the checkout the GUI actually runs from
+	// and the binary shipped inside the install must both beat PATH.
+	const candidates = [];
+	candidates.push(
+		path.join(
+			process.resourcesPath ?? "",
+			"app.asar.unpacked",
+			"vendor",
+			"daemon",
+			win ? "musepi.exe" : "musepi",
+		),
 	);
-	if (fs.existsSync(unpacked)) {
-		return { program: unpacked, args: ["serve", "--port", String(port), ...webArgs] };
-	}
-	// Dev checkout: electron/ sits at <repo>/packages/gui/electron/.
 	let dir = path.resolve(__dirname);
 	while (true) {
 		const cli = path.join(dir, "packages", "coding-agent", "src", "cli.ts");
 		if (fs.existsSync(cli)) {
-			return { program: "bun", args: [cli, "serve", "--port", String(port), ...webArgs] };
+			candidates.push({ bunCli: cli });
+			break;
 		}
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
 		dir = parent;
+	}
+	for (const pathDir of (process.env.PATH ?? "").split(win ? ";" : ":")) {
+		if (pathDir.trim().length === 0) continue;
+		candidates.push(path.resolve(pathDir, win ? "musepi.exe" : "musepi"));
+	}
+
+	for (const candidate of candidates) {
+		if (typeof candidate === "object") {
+			// Dev checkout — the cli.ts existence was already verified in the scan.
+			return { program: "bun", args: [candidate.bunCli, "serve", "--port", String(port), ...webArgs] };
+		}
+		if (candidate.length === 0 || !fs.existsSync(candidate)) continue;
+		// A bun package shim on Windows is a tiny launcher .exe paired with a
+		// sibling .bunx script; when the global package is gone the shim still
+		// exists but exits instantly. The compiled daemon is a fat binary —
+		// skip small executables whose .bunx sibling is missing.
+		const stat = fs.statSync(candidate);
+		if (stat.isFile() && stat.size < 256 * 1024) {
+			const bunxScript = candidate.replace(/\.exe$/i, ".bunx");
+			if (!fs.existsSync(bunxScript)) continue;
+		}
+		return { program: candidate, args: ["serve", "--port", String(port), ...webArgs] };
 	}
 	throw new Error("neither `musepi` nor the repo checkout is available");
 }
