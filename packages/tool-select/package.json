@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/pi-tool-select",
-	"version": "0.4.13",
+	"version": "0.4.14",
 	"description": "Progressive tool disclosure (select_tools) \u2014 keep MCP schemas out of top-level tools[], load on demand",
 	"license": "MIT",
 	"author": "MuseLinn",
