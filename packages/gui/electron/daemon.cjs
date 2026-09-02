@@ -355,5 +355,5 @@ async function restart(port, env = {}) {
 	return start(port, env);
 }
 
-module.exports = { probe, probeWeb, start, restart, kill, killOwnedDaemon, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE, WEB_PORT_FILE };
+module.exports = { probe, probeWeb, start, restart, kill, killOwnedDaemon, ownsDaemon, clearDaemonOwnership, portOpen, daemonCommand, SOCKET_DIR, PORT_FILE, WEB_PORT_FILE, CLIENT_PID_FILE };
 
