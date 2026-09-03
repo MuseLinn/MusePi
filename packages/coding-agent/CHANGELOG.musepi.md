@@ -6,11 +6,6 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
-### Added
-
-- **`musepi sessions` 命令行会话列表**:非交互列出已保存会话(按最近修改降序,含 id/标题/cwd/时间),支持 `--cwd`/`--limit`/`--json`——headless 枚举会话的补位(此前只有 TUI 交互 picker)。参考 kimi-code `session list`。
-  - EN: New `musepi sessions` command lists saved sessions non-interactively (newest first, id/title/cwd/timestamp), with `--cwd`/`--limit`/`--json` — filling the headless-enumeration gap left by the TUI-only picker. Patterned after kimi-code's `session list`.
-
 ### Removed
 
 - **macOS 发布面只保留 Apple Silicon**:`musepi-darwin-x64` CLI 二进制从发布矩阵/brew formula/natives 叶子表/运行时平台表中移除——Intel Mac 不再受支持,发布页不再出现 macos x64 资产。
@@ -18,6 +13,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **`musepi sessions` 命令行会话列表**:非交互列出已保存会话(按最近修改降序,含 id/标题/cwd/时间),支持 `--cwd`/`--limit`/`--json`——headless 枚举会话的补位(此前只有 TUI 交互 picker)。参考 kimi-code `session list`。
+  - EN: New `musepi sessions` command lists saved sessions non-interactively (newest first, id/title/cwd/timestamp), with `--cwd`/`--limit`/`--json` — filling the headless-enumeration gap left by the TUI-only picker. Patterned after kimi-code's `session list`.
 - **定时任务调度端到端支持时区**:`schedule.timezone`(IANA)现在真正生效——墙上时间、闲时窗口、cron 表达式都按任务时区求值(Intl 两步偏移,DST 安全,cron 按日历日展开、保留 Vixie dom/dow 语义);未设置/非法时回退本机时区,非法时区串由 `validateCronSchedule` 拒绝。
   - EN: Scheduled tasks now honor `schedule.timezone` end-to-end — wall-clock times, idle windows and cron expressions are evaluated in the task's IANA timezone (Intl two-step offset, DST-safe, per-calendar-day cron expansion with Vixie dom/dow semantics); unset/unknown falls back to host-local, and invalid tz strings are rejected by `validateCronSchedule`.
 - **`cron.runs` / `cron.nextRuns` RPC 与 `crons.changed` 广播**:`cron.runs { id?, limit? }` 提供按任务运行历史(新→旧,默认 50/上限 100,只读、guest 可调);`cron.nextRuns { schedule, count? }` 让编辑器预览由 daemon 自己的解析器计算(客户端副本已删);`crons.changed` 在任何变更与运行开始/结束后即时推送,GUI 订阅刷新并保留 30s 轮询兜底。
