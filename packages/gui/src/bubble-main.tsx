@@ -121,7 +121,9 @@ function BubbleApp(): ReactNode {
 	const sessionMessages = useMemo(() => {
 		if (!activeSession?.loaded || !activeSession.messages.length) return null;
 		return activeSession.messages.map((m, i) => (
-			<div key={i} className={`pet-panel__msg pet-panel__msg--${m.role}`}>{m.text}</div>
+			<div key={i} className={`pet-panel__msg pet-panel__msg--${m.role}`}>
+				{m.text}
+			</div>
 		));
 	}, [activeSession?.loaded, activeSession?.messages]);
 

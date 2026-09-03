@@ -15,7 +15,17 @@ function hapticTap(): void {
 	}
 }
 
-import { Fragment, memo, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+	Fragment,
+	memo,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";

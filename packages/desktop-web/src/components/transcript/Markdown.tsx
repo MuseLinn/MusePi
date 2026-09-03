@@ -747,7 +747,9 @@ export const Markdown = memo(function Markdown({
 			const pending = new Set<string>();
 			const queue: Array<{
 				hash: string;
-				source: { code: string; lang: string };
+				// highlightSource stores lang?: string and highlight() accepts
+				// undefined — the narrower annotation here broke tsgo.
+				source: { code: string; lang?: string };
 				el: HTMLElement;
 			}> = [];
 			for (const el of Array.from(root.querySelectorAll<HTMLElement>("code[data-hl-hash]"))) {
