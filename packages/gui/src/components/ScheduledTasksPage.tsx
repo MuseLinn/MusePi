@@ -1,6 +1,6 @@
 import { t } from "@musepi/desktop-web";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { WEEK_START_KEY } from "../lib/appearance";
+import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
@@ -80,32 +80,6 @@ interface CronRun {
 	sessionId?: string;
 }
 
-const WEEKDAY_KEYS = [
-	"scheduled sun",
-	"scheduled mon",
-	"scheduled tue",
-	"scheduled wed",
-	"scheduled thu",
-	"scheduled fri",
-	"scheduled sat",
-];
-
-/** Week start from the settings page (auto → Monday for zh locale),
- *  as a day index (0 = Sunday). Calendar grids and weekday pickers
- *  rotate to match instead of hardcoding Sunday first. */
-function weekStartIndex(): number {
-	const v = localStorage.getItem(WEEK_START_KEY);
-	if (v === "sunday") return 0;
-	if (v === "monday") return 1;
-	return 1; // auto → Monday (zh-CN)
-}
-
-/** Weekday labels ordered from the configured week start. */
-function orderedWeekdayKeys(): string[] {
-	const start = weekStartIndex();
-	return Array.from({ length: 7 }, (_, i) => WEEKDAY_KEYS[(start + i) % 7]!);
-}
-
 const TIMEZONES = [
 	"Asia/Shanghai",
 	"Asia/Tokyo",
@@ -126,7 +100,8 @@ const CRON_EXAMPLES: Array<{ expr: string; label: string }> = [
 ];
 
 function scheduleLabel(s: CronSchedule): string {
-	const tz = s.timezone && s.timezone !== "Asia/Shanghai" ? ` (${s.timezone})` : "";
+	// Any explicitly picked timezone is shown; unset → daemon host local.
+	const tz = s.timezone ? ` (${s.timezone})` : "";
 	switch (s.kind) {
 		case "once":
 			return `${s.date ?? "?"} ${s.time ?? ""}`.trim();
@@ -147,6 +122,15 @@ function fmtTime(ms?: number): string {
 	if (!ms) return "—";
 	const d = new Date(ms);
 	return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** Compact run-duration label: 42s / 3m05s / 1h12m. */
+function fmtDuration(ms: number): string {
+	const s = Math.max(1, Math.round(ms / 1000));
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m${String(s % 60).padStart(2, "0")}s`;
+	return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
 }
 
 /** Openchamber-style relative label: 刚刚 / N 分钟后 / HH:mm. */
@@ -172,7 +156,12 @@ export function ScheduledTasksPage({
 	onBack,
 	onOpenSession,
 }: {
-	rpc?: { request(method: string, params?: Record<string, unknown>): Promise<unknown> };
+	rpc?: {
+		request(method: string, params?: Record<string, unknown>): Promise<unknown>;
+		/** Daemon broadcast stream — crons.changed instant refresh. Absent
+		 *  on mock/plain clients; the 30s poll keeps working without it. */
+		addEventListener?(handler: (event: { payload?: unknown }) => void): () => void;
+	};
 	onBack(): void;
 	/** Open a session by id (openchamber scheduled-task parity: the task
 	 *  page jumps to the latest run's session). */
@@ -216,9 +205,16 @@ export function ScheduledTasksPage({
 		const timer = setInterval(() => {
 			if (aliveRef.current) refresh();
 		}, 30_000);
+		// crons.changed (upsert/delete/toggle/runNow/run finished) → instant
+		// refresh instead of waiting for the next poll tick.
+		const off = rpc?.addEventListener?.(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "crons.changed" && aliveRef.current) refresh();
+		});
 		return () => {
 			aliveRef.current = false;
 			clearInterval(timer);
+			off?.();
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- mount-once refresh
 	}, [refresh]);
@@ -229,6 +225,27 @@ export function ScheduledTasksPage({
 		if (!selectedId && tasks.length > 0) setSelectedId(tasks[0]!.id);
 		else if (selectedId && !tasks.some(x => x.id === selectedId)) setSelectedId(tasks[0]?.id ?? null);
 	}, [tasks, selectedId]);
+
+	// Per-task run history (cron.runs — newest first). Reloads whenever the
+	// task list refreshes (poll, crons.changed, mutations) so finished runs
+	// and their session links stay current.
+	const [history, setHistory] = useState<CronRun[]>([]);
+	useEffect(() => {
+		if (!rpc || !selectedId) {
+			setHistory([]);
+			return;
+		}
+		let alive = true;
+		void rpc
+			.request("cron.runs", { id: selectedId, limit: 20 })
+			.then(res => {
+				if (alive) setHistory((res as { runs?: CronRun[] } | null)?.runs ?? []);
+			})
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [rpc, selectedId, tasks]);
 
 	/** Session ids a task ever ran (last run + run history). */
 	const taskSessionIds = (task: CronTask): string[] => {
@@ -362,7 +379,7 @@ export function ScheduledTasksPage({
 								id: "",
 								name: "",
 								enabled: true,
-								schedule: { kind: "daily", times: ["09:00"], timezone: "Asia/Shanghai" },
+								schedule: { kind: "daily", times: ["09:00"] },
 								prompt: "",
 								cwd: "",
 								thinkingLevel: "default",
@@ -403,11 +420,7 @@ export function ScheduledTasksPage({
 						onSelectTask={id => setSelectedId(id)}
 						onToggle={id => {
 							const task = tasks.find(x => x.id === id);
-							if (!task || !rpc) return;
-							void rpc
-								.request("cron.update", { task: { ...task, enabled: !task.enabled } })
-								.then(() => refresh())
-								.catch(() => {});
+							if (task) toggle(task);
 						}}
 						onDelete={id => {
 							const task = tasks.find(x => x.id === id);
@@ -428,7 +441,7 @@ export function ScheduledTasksPage({
 								id: "",
 								name: "",
 								enabled: true,
-								schedule: { kind: "daily", times: ["09:00"], timezone: "Asia/Shanghai" },
+								schedule: { kind: "daily", times: ["09:00"] },
 								prompt: "",
 								cwd: "",
 								thinkingLevel: "default",
@@ -501,6 +514,12 @@ export function ScheduledTasksPage({
 										) : null}
 									</span>
 								</div>
+								{selected.state.lastStatus === "error" && selected.state.lastError && (
+									<div className="gui-scheduled-detail-error">
+										<span className="gui-scheduled-detail-status-key">{t("scheduled last error")}</span>
+										<p className="gui-scheduled-detail-error-text">{selected.state.lastError}</p>
+									</div>
+								)}
 								<div className="gui-scheduled-detail-enabled">
 									<label className="gui-cron-toggle">
 										<input type="checkbox" checked={selected.enabled} onChange={() => toggle(selected)} />
@@ -512,6 +531,38 @@ export function ScheduledTasksPage({
 									<span className="gui-scheduled-detail-status-key">{t("scheduled prompt")}</span>
 									<p className="gui-scheduled-detail-prompt-text">{selected.prompt || "—"}</p>
 								</div>
+								<details className="gui-scheduled-runs">
+									<summary className="gui-scheduled-runs-summary">{t("task run history")}</summary>
+									{history.length === 0 ? (
+										<p className="gui-scheduled-runs-empty">—</p>
+									) : (
+										<ul className="gui-scheduled-runs-list">
+											{history.map(run => (
+												<li key={run.id} className="gui-scheduled-run">
+													<span className={`gui-cron-status ${STATUS_CLASS[run.status] ?? ""}`}>
+														{t(`scheduled status ${run.status}` as never)}
+													</span>
+													<span className="gui-scheduled-run-when">
+														{fmtRelative(run.startedAt)}
+														{run.finishedAt ? ` · ${fmtDuration(run.finishedAt - run.startedAt)}` : ""}
+													</span>
+													{run.error && <span className="gui-scheduled-run-err">{run.error}</span>}
+													{run.sessionId && onOpenSession && (
+														<button
+															type="button"
+															className="gui-tool-btn"
+															onClick={() => onOpenSession(run.sessionId!)}
+															title={t("scheduled open session")}
+															aria-label={t("scheduled open session")}
+														>
+															<Icon name="external-link" className="h-3.5 w-3.5" />
+														</button>
+													)}
+												</li>
+											))}
+										</ul>
+									)}
+								</details>
 								<div className="gui-scheduled-detail-actions">
 									<button
 										type="button"
@@ -692,7 +743,8 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 		`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 	const isSel = (d: Date): boolean => selected !== null && iso(d) === iso(selected);
 	const isToday = (d: Date): boolean => iso(d) === iso(today);
-	const fmt = (d: Date): string => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+	const fmt = (d: Date): string =>
+		t("scheduled date full", { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() });
 	const pick = (date: string): void => {
 		onChange(date);
 		setOpen(false);
@@ -728,9 +780,7 @@ function CalendarPicker({ value, onChange }: { value?: string; onChange(date: st
 						>
 							<Icon name="arrow-left-s" className="h-4 w-4" />
 						</button>
-						<span className="gui-calendar-month">
-							{year}年{mon + 1}月
-						</span>
+						<span className="gui-calendar-month">{t("task calendar month", { year, month: mon + 1 })}</span>
 						<button
 							type="button"
 							className="gui-calendar-nav"
@@ -824,16 +874,36 @@ function CronEditor({
 		};
 	}, [rpc]);
 
-	// Cron next-run preview: naive 5-field expansion (matches the daemon's
-	// minimal parser; unknown tokens → no preview).
+	// Cron next-run preview: computed by the daemon's own parser via
+	// cron.nextRuns (timezone + idle-window semantics included) so the
+	// client never forks the scheduling logic. Debounced — typing an
+	// expression must not spam RPCs; epochs render as wall time in the
+	// picked timezone.
 	useEffect(() => {
 		const expr = (draft.schedule.cron ?? "").trim();
 		if (kind !== "cron" || !expr) {
 			setCronPreview([]);
 			return;
 		}
-		setCronPreview(nextCronRuns(expr, 4));
-	}, [kind, draft.schedule.cron]);
+		let alive = true;
+		if (!rpc) return;
+		const timer = setTimeout(() => {
+			void rpc
+				.request("cron.nextRuns", { schedule: { ...draft.schedule, cron: expr }, count: 4 })
+				.then(res => {
+					if (!alive) return;
+					const runs = (res as { runs?: number[] } | null)?.runs ?? [];
+					setCronPreview(runs.map(at => formatRunAt(at, draft.schedule.timezone)));
+				})
+				.catch(() => {
+					if (alive) setCronPreview([]);
+				});
+		}, 300);
+		return () => {
+			alive = false;
+			clearTimeout(timer);
+		};
+	}, [kind, draft.schedule, rpc]);
 
 	const setTimes = (next: string[]): void => {
 		patchSchedule({ times: next, time: next[0] });
@@ -1089,9 +1159,12 @@ function CronEditor({
 								<span className="gui-widget-editor-label">{t("scheduled timezone")}</span>
 								<GuiSelect
 									className="gui-settings-select"
-									value={draft.schedule.timezone ?? "Asia/Shanghai"}
-									onChange={v => patchSchedule({ timezone: v })}
-									options={TIMEZONES.map(tz => ({ value: tz, label: tz }))}
+									value={draft.schedule.timezone ?? ""}
+									onChange={v => patchSchedule({ timezone: v || undefined })}
+									options={[
+										{ value: "", label: t("scheduled tz local") },
+										...TIMEZONES.map(tz => ({ value: tz, label: tz })),
+									]}
 								/>
 							</div>
 							<div className="gui-widget-editor-field">
@@ -1146,52 +1219,42 @@ function CronEditor({
 	);
 }
 
-/** Naive 5-field cron next-run expansion — matches the daemon's minimal
- *  parser (Vixie dom/dow semantics, * step range list). */
-function nextCronRuns(expr: string, count: number): string[] {
-	const parts = expr.split(/\s+/);
-	if (parts.length !== 5) return [];
-	const field = (part: string): number[] | null => {
-		if (part === "*") return null;
-		if (/^\d+$/.test(part)) return [Number(part)];
-		if (/^\*\/(\d+)$/.test(part)) {
-			const step = Number(/^\*\/(\d+)$/.exec(part)?.[1] ?? 1);
-			return step > 0 ? Array.from({ length: Math.floor(60 / step) }, (_, i) => i * step) : null;
+/** Wall-clock "M月D日 HH:mm" (word-list formatted) of `epoch` viewed in
+ *  `tz` — host-local when unset; unknown tz strings fall back the same way. */
+function formatRunAt(epoch: number, tz: string | undefined): string {
+	let month: number | undefined;
+	let day: number | undefined;
+	let hour: number | undefined;
+	let minute: number | undefined;
+	try {
+		for (const p of new Intl.DateTimeFormat("en-US", {
+			timeZone: tz,
+			month: "2-digit",
+			day: "2-digit",
+			hour: "2-digit",
+			minute: "2-digit",
+			hourCycle: "h23",
+		}).formatToParts(epoch)) {
+			if (p.type === "month") month = Number(p.value);
+			else if (p.type === "day") day = Number(p.value);
+			else if (p.type === "hour") hour = Number(p.value);
+			else if (p.type === "minute") minute = Number(p.value);
 		}
-		if (/^\d+-\d+$/.test(part)) {
-			const [a, b] = part.split("-").map(Number);
-			if (a >= 0 && b >= a && b <= 59) return Array.from({ length: b - a + 1 }, (_, i) => a + i);
-			return null;
-		}
-		if (part.includes(",")) {
-			const vals = part.split(",").map(Number);
-			return vals.every(Number.isInteger) ? vals : null;
-		}
-		return null;
-	};
-	const mins = field(parts[0]);
-	const hours = field(parts[1]);
-	const doms = field(parts[2]);
-	const months = field(parts[3]);
-	const dows = field(parts[4]);
-	const out: string[] = [];
-	let d = new Date(Date.now() + 60_000);
-	for (let i = 0; i < 366 * 24 * 60 && out.length < count; i++) {
-		if (months && !months.includes(d.getMonth() + 1)) {
-			d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-			continue;
-		}
-		const dowMatch = !dows || dows.includes(d.getDay());
-		const domMatch = !doms || doms.includes(d.getDate());
-		const dayMatch = !doms || !dows ? domMatch || dowMatch : domMatch && dowMatch;
-		if (dayMatch && (!hours || hours.includes(d.getHours())) && (!mins || mins.includes(d.getMinutes()))) {
-			out.push(
-				`${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
-			);
-		}
-		d = new Date(d.getTime() + 60_000);
+	} catch {
+		// invalid tz → fall through to host-local parts
 	}
-	return out;
+	if (month === undefined || day === undefined || hour === undefined || minute === undefined) {
+		const d = new Date(epoch);
+		month = d.getMonth() + 1;
+		day = d.getDate();
+		hour = d.getHours();
+		minute = d.getMinutes();
+	}
+	return t("scheduled next run at", {
+		month,
+		day,
+		time: `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+	});
 }
 
 /* ── Task-delete confirm with session disposition (delete / archive /

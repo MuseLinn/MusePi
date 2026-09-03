@@ -31,9 +31,16 @@ export function ScheduledPanel({ client, cwd, readOnly }: ScheduledPanelProps): 
 
 	const load = useCallback(async (): Promise<void> => {
 		try {
-			const res = await client.rpc<{ tasks: CronTask[]; runs: CronRun[] }>("cron.list");
+			// Run history comes from the dedicated cron.runs (newest first,
+			// up to 50) — cron.list only carries the global last 20 runs.
+			const [res, runsRes] = await Promise.all([
+				client.rpc<{ tasks: CronTask[]; runs: CronRun[] }>("cron.list"),
+				client
+					.rpc<{ runs: CronRun[] }>("cron.runs", { limit: 50 })
+					.catch(() => ({ runs: undefined as CronRun[] | undefined })),
+			]);
 			setTasks(res.tasks);
-			setRuns(res.runs);
+			setRuns(runsRes.runs ?? res.runs);
 			setError(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
@@ -97,19 +104,16 @@ export function ScheduledPanel({ client, cwd, readOnly }: ScheduledPanelProps): 
 				) : (
 					<table className="sh-runs-table">
 						<tbody>
-							{[...runs]
-								.sort((a, b) => b.startedAt - a.startedAt)
-								.slice(0, 50)
-								.map(run => (
-									<tr key={run.id}>
-										<td className="sh-runs-name">{run.taskId}</td>
-										<td>
-											<span className={`sh-status sh-status-${run.status}`}>{run.status}</span>
-										</td>
-										<td className="sh-runs-time">{relTime(run.startedAt)}</td>
-										<td className="sh-runs-err">{run.error}</td>
-									</tr>
-								))}
+							{runs.map(run => (
+								<tr key={run.id}>
+									<td className="sh-runs-name">{run.taskId}</td>
+									<td>
+										<span className={`sh-status sh-status-${run.status}`}>{run.status}</span>
+									</td>
+									<td className="sh-runs-time">{relTime(run.startedAt)}</td>
+									<td className="sh-runs-err">{run.error}</td>
+								</tr>
+							))}
 						</tbody>
 					</table>
 				)}

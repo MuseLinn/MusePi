@@ -515,9 +515,16 @@ function AppInner(): ReactNode {
 		};
 		poll();
 		const timer = setInterval(poll, 20_000);
+		// crons.changed (run finished/failed, task edits) → check immediately
+		// instead of waiting for the next poll tick.
+		const off = rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "crons.changed") poll();
+		});
 		return () => {
 			alive = false;
 			clearInterval(timer);
+			off();
 			if (cronGlowTimerRef.current) clearTimeout(cronGlowTimerRef.current);
 		};
 	}, [rpc]);

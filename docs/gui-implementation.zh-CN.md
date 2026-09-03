@@ -416,3 +416,46 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - **审计结论**:gui(本地 bundle)的玻璃管线端到端完好——Electron 主进程以 `backgroundColor #00000000` + Win11 `backgroundMaterial:"acrylic"` / macOS `vibrancy` 建窗,`gui-vibrancy` 切换材质与底色,`gui-base.css` 以 `html:root, html:root body { background: transparent }`(特异性压过 desktop-web base.css 的实心 `var(--bg))` 保根层透明,`.gui-main`/`.gui-pane-side--immersive` 铺半透明 scrim。若本地 bundle 仍不透明,按序排查:设置 → 外观 → 窗口透明开关(`musepi-gui-glass-enabled`,关=强制 `--gui-glass-overlay:100%` + 不透明窗底)、Windows 个性化 → 颜色 → 透明效果(系统级关闭会让 DWM acrylic 渲染成实色,应用侧无解)、insider 构建 DWM 偶发异常。
 - **实际缺口已修复**:玻璃契约此前只存在于 gui bundle。壳加载 SERVE 的 desktop-web 渲染器时(compat 链——`MUSEPI_GUI_COMPAT_URL` 或 daemon `web.port` 发现文件且 `shell.enabled` 默认开),页面通篇实心 `--bg`:侧栏、顶栏、主体四周永远不可能透明。修复:`desktop-web/src/lib/native-glass.ts`——当 compat 标记(`?shell=1`)与 Electron bridge(`setWindowGlass`)同在,渲染器加 `sh-native-glass`(html/body 透明、`sh-app` scrim 100%→38%、头栏/侧轨混合 80%→45%,见 shell.css)并把主题镜像到窗口材质;`enableNativeGlass()` 在 app 导入时执行,首帧即玻璃。纯浏览器 guest(无 bridge/标记)保持实心画法;Android/移动壳不受影响。
+
+## 20. Windows NSIS 快捷方式持久化(2026-08-30)
+
+**症状**:OTA 更新后桌面快捷方式消失。**根因**(两层):
+
+1. **electron-builder `KeepShortcuts` 保留机制**——首次安装向 `HKCU\Software\<APP_GUID>` 写入 `KeepShortcuts=true`(GUID = appId 的 UUID v5,`multiUser.nsh` 的 `INSTALL_REGISTRY_KEY`)。后续安装时 `installSection.nsh` 读它:带 `KeepShortcuts=true` 且 exe 存在 → 走**保留分支**(仅在新旧路径不同时改名;`oldLink == newLink` 时**不重建**)。用户/清理工具删掉的桌面快捷方式,任何后续更新都不会重建。
+2. **`createDesktopShortcut:"always"` 对更新无效**:它只定义 `RECREATE_DESKTOP_SHORTCUT`(NsisTarget.js),该分支被 `${ifNot} ${isUpdated}` 门控——electron-updater 以 `--updated` 参数拉起安装器(NsisUpdater.js 参数 `["--updated","/S",...]`),所以更新永远跳过桌面重建,即便设了 "always"。
+
+**修复**(open-design custom-NSIS parity):`packages/gui/release/ensure-shortcuts.nsh` 定义 `customInstall` 宏——`installSection.nsh` 在文件安装完成后调用它(`!ifmacrodef customInstall`)。它**无条件** `CreateShortCut` 桌面 + 开始菜单快捷方式(绕过 `keepShortcuts`/`isUpdated` 门控)并通知壳。经 `packages/gui/package.json` 的 `nsis.include` 接线。
+
+**验证**(真实安装器,0.4.7):
+- 全新安装 → 桌面(本机桌面被重定向到 `D:\Desktop`;用 `[Environment]::GetFolderPath('Desktop')` 查,不是 `%USERPROFILE%\Desktop`)+ 开始菜单快捷方式均创建。
+- **OTA 路径**:删掉桌面快捷方式 → 带 `--updated` 重装(electron-updater parity)→ 桌面快捷方式重建——`KeepShortcuts=true` + `isUpdated=true` 下默认模板做不到,可归因于该宏。
+- 注册表核对:测试期间确认 `HKCU\Softwaree444d0e-2326-5f07-be39-027b4a8e8598`(APP_GUID)的 `KeepShortcuts=true`。
+
+## 21. 任务中心加固（2026-09-03）：cron 契约、时区语义、运行历史
+
+任务中心页（`gui/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`）是 daemon cron 存储（`~/.musepi/crons.json` + `crons.runs.json`；调度器在 `coding-agent/src/daemon/server.ts`，合并/校验/下次运行在 `daemon/crons.ts`）的唯一 GUI 客户端。
+
+### cron.* RPC 契约
+
+- `cron.list → { tasks, runs }` —— runs 为**全局最近 20 条**（磁盘窗口 100 条；按任务查历史用 `cron.runs`）。
+- `cron.upsert { task } → { tasks, task }` —— 校验后走 `mergeCronTask(existing|undefined, task, now, defaultCwd)`（`daemon/crons.ts`）：新建任务用显式字段白名单，**必须在此携带 `model`/`thinkingLevel`**（曾有回归在新建时把两者静默丢掉）；编辑走 spread 合并。`nextRunAt` 重算（停用时清空）。collab guest host 镜像同一调用，默认 cwd 用 `sessionManager.getCwd()`。
+- `cron.delete { id, cleanup? }` —— `cleanup:"delete"` 删除任务跑过的全部会话（journal + 行 + transcript 文件）并清空其运行记录。
+- `cron.toggle { id, enabled }` / `cron.runNow { id }`（即发即忘；`runNow` 不在 guest 可变更白名单内——只读链路不能触发运行）。
+- `cron.runs { id?, limit? } → { runs }`（新增）—— 按任务的运行历史，新→旧，默认 50 / 上限 100；只读，guest 可调用。
+- `cron.nextRuns { schedule, count? } → { runs: epoch[] }`（新增）—— 编辑器 cron 预览改由 daemon 自己的解析器计算，客户端副本（`nextCronRuns`）已删除（单一事实源）。
+
+### crons.changed 广播（新增）
+
+每次 cron 变更与运行开始/结束后，daemon 在 events.subscribe 流上广播 `{ type: "crons.changed", at }`（与 extensions.changed 同 seq 机制；payload 只带时间戳——客户端重拉 `cron.list`）。消费方：`ScheduledTasksPage`（即时刷新）与 app 级运行完成通知。两者均**保留轮询兜底**（页面 30s / app 20s）；collab guest 收不到广播，维持纯轮询。
+
+### 调度语义（crons.ts）
+
+- `schedule.timezone`（IANA）端到端生效：墙上时间、闲时窗口、cron 表达式都按该时区求值（`zonedTimeToEpoch`，Intl 两步偏移，DST 安全；cron 按日历日展开、保留 Vixie dom/dow 语义、日回溯上限 4 年）。未设置/非法时回退本机时区——全部既有行为不变。非法时区串由 `validateCronSchedule` 拒绝。
+- 运行状态：以 `agent_end` 的最后一条 assistant 消息判定——`stopReason "aborted"/"error"`（含 `errorMessage`）记 error，其余记 success。`finish` 拒绝覆盖已结算的 run（中止与 agent_end 竞态）。限制：只检查最后一条消息。
+- `constrainToIdleWindow(at, window, from, tz?)` 闲时窗口按任务时区解释。
+
+### 坑
+
+- 编辑器时区下拉曾默认 `Asia/Shanghai`，而 daemon **完全忽略该字段**（next-run 全按本机时间算）——静默错位。草稿现在默认空选项「主机时区」，显式时区会显示在调度标签里。
+- 看板视图的暂停/恢复曾调用不存在的 `cron.update` 并用 `.catch(() => {})` 吞掉拒绝——无信号的死 UI；daemon 只有 `cron.toggle`/`cron.upsert`。`rpc.request` 的方法名是不检查的字符串：接新调用方时务必 grep daemon 的 handler switch。
+- 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `gui/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。

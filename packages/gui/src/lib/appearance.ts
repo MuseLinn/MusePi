@@ -107,6 +107,33 @@ export const CODE_THEME_DARK_KEY = "musepi-gui-code-theme-dark";
 export const CODE_LINES_KEY = "musepi-gui-code-lines";
 export const CODE_WRAP_KEY = "musepi-gui-code-wrap";
 
+/** Weekday i18n keys indexed by JS day number (0 = Sunday). */
+export const WEEKDAY_KEYS = [
+	"scheduled sun",
+	"scheduled mon",
+	"scheduled tue",
+	"scheduled wed",
+	"scheduled thu",
+	"scheduled fri",
+	"scheduled sat",
+];
+
+/** Week start from the settings page (auto → Monday for zh locale), as a
+ *  day index (0 = Sunday). Calendar grids and weekday pickers rotate to
+ *  match instead of hardcoding Sunday first. */
+export function weekStartIndex(): number {
+	const v = localStorage.getItem(WEEK_START_KEY);
+	if (v === "sunday") return 0;
+	if (v === "monday") return 1;
+	return 1; // auto → Monday (zh-CN)
+}
+
+/** Weekday i18n keys ordered from the configured week start. */
+export function orderedWeekdayKeys(): string[] {
+	const start = weekStartIndex();
+	return Array.from({ length: 7 }, (_, i) => WEEKDAY_KEYS[(start + i) % 7]!);
+}
+
 const findCodeTheme = (options: CodeTheme[], id: string | null): CodeTheme =>
 	options.find(o => o.id === id) ?? options[0]!;
 

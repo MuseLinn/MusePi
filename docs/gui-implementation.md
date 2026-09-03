@@ -432,3 +432,32 @@ Gotchas: `server.port` is typed `number | undefined` under tsgo (`const port = s
 - Fresh install → desktop (`D:\Desktop` on this machine — desktop redirected; check `[Environment]::GetFolderPath('Desktop')`, not `%USERPROFILE%\Desktop`) + start-menu shortcuts created.
 - **OTA path**: delete desktop shortcut → reinstall with `--updated` (electron-updater parity) → desktop shortcut recreated — with `KeepShortcuts=true` + `isUpdated=true` the default template cannot do this, so the recreation is attributable to the macro.
 - Registry check: `HKCU\Software\fe444d0e-2326-5f07-be39-027b4a8e8598` (APP_GUID) `KeepShortcuts=true` confirmed during the test.
+
+## 21. Task center hardening (2026-09-03): cron contracts, timezone semantics, run history
+
+The 任务中心 page (`gui/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`) is the only GUI client of the daemon cron store (`~/.musepi/crons.json` + `crons.runs.json`; scheduler in `coding-agent/src/daemon/server.ts`, merge/validate/next-run in `daemon/crons.ts`).
+
+### cron.* RPC contract
+
+- `cron.list → { tasks, runs }` — runs = **global last 20** (on-disk window is 100; per-task history needs `cron.runs`).
+- `cron.upsert { task } → { tasks, task }` — validate → `mergeCronTask(existing|undefined, task, now, defaultCwd)` (`daemon/crons.ts`): NEW tasks use an explicit field whitelist and **must carry `model`/`thinkingLevel` there** (a regression silently dropped both on create); edits spread-merge. `nextRunAt` is recomputed (cleared when disabled). The collab guest host mirrors the call with `sessionManager.getCwd()` as default cwd.
+- `cron.delete { id, cleanup? }` — `cleanup:"delete"` removes every session the task ever ran (journal + row + transcript) and purges its runs.
+- `cron.toggle { id, enabled }` / `cron.runNow { id }` (fire-and-forget; `runNow` is NOT in the guest mutating allowlist — read-only links can't trigger runs).
+- `cron.runs { id?, limit? } → { runs }` (new) — per-task run history, newest first, default 50 / cap 100. Read-only, so guests may call it.
+- `cron.nextRuns { schedule, count? } → { runs: epoch[] }` (new) — editor cron preview computed by the daemon's own parser; the client-side fork (`nextCronRuns`) is deleted (single source of truth).
+
+### crons.changed broadcast (new)
+
+After every cron mutation and run start/finish the daemon broadcasts `{ type: "crons.changed", at }` on the events.subscribe stream (same seq mechanism as extensions.changed; payload is a timestamp only — clients re-pull `cron.list`). Consumers: `ScheduledTasksPage` (instant refresh) and the app-level run-completion notifications. Both KEEP polling (30s page / 20s app) as fallback; collab guests receive no broadcasts and stay poll-only.
+
+### Scheduling semantics (crons.ts)
+
+- `schedule.timezone` (IANA) is honored end-to-end: wall-clock times, idle windows and cron expressions are evaluated in that timezone (`zonedTimeToEpoch`, Intl two-step offset, DST-safe; cron expands per calendar day with Vixie dom/dow semantics, ≤4-year day walk). Unset/unknown falls back to host-local — all pre-existing behavior. Invalid tz strings are rejected by `validateCronSchedule`.
+- Run status: the LAST assistant message of `agent_end` decides — `stopReason "aborted"/"error"` (+`errorMessage`) marks the run error, anything else success. `finish` refuses to overwrite an already-settled run (abort/agent_end race). Limitation: only the final message is inspected.
+- `constrainToIdleWindow(at, window, from, tz?)` interprets the window in the task tz.
+
+### Pitfalls
+
+- The editor's timezone select defaulted to `Asia/Shanghai` while the daemon **ignored the field entirely** (next-run math was host-local) — silent mismatch. Drafts now default to the empty 主机时区 option, and any explicit tz shows in the schedule label.
+- Board-view pause/resume called a nonexistent `cron.update` and swallowed the rejection (`.catch(() => {})`) — dead UI with no signal; the daemon only has `cron.toggle`/`cron.upsert`. `rpc.request` method names are unchecked strings: always grep the daemon handler switch when wiring a new caller.
+- Calendar week-start is shared: page calendar (`TaskCalendarView`) and editor `CalendarPicker` both use `weekStartIndex()`/`orderedWeekdayKeys()` from `gui/src/lib/appearance.ts`; weekday labels come from the `scheduled sun..sat` keys — never hardcode Sunday or `["日","一",…]`.

@@ -1,6 +1,7 @@
 import { t } from "@musepi/desktop-web";
 import type { ReactNode } from "react";
 import { useState } from "react";
+import { orderedWeekdayKeys, weekStartIndex } from "../lib/appearance";
 
 /**
  * Task-center views (proma automation-calendar absorption): a calendar
@@ -58,6 +59,16 @@ export function taskScheduleLabel(s: TaskCenterTask["schedule"]): string {
 	}
 }
 
+/** "M月D日 HH:mm" (zh) via the word list — never a hardcoded locale. */
+function fmtNextRunAt(epoch: number): string {
+	const d = new Date(epoch);
+	return t("scheduled next run at", {
+		month: d.getMonth() + 1,
+		day: d.getDate(),
+		time: `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`,
+	});
+}
+
 /** Days of a month (1-based) a task is scheduled to run on. */
 function monthRunDays(task: TaskCenterTask, year: number, month: number): number[] {
 	const s = task.schedule;
@@ -107,7 +118,9 @@ function cronDowDays(task: TaskCenterTask, year: number, month: number): number[
 	return [];
 }
 
-/** Calendar month grid (proma automation-calendar parity). */
+/** Calendar month grid (proma automation-calendar parity). The grid and
+ *  weekday headers follow the settings-page week start — same rotation the
+ *  editor's CalendarPicker uses, never a hardcoded Sunday. */
 export function TaskCalendarView({
 	tasks,
 	runs,
@@ -117,11 +130,10 @@ export function TaskCalendarView({
 	runs: { taskId: string; status?: string; startedAt?: number }[];
 	onSelectTask?(id: string): void;
 }): ReactNode {
-	const [cursor, setCursor] = useStateCursor();
+	const [cursor, setCursor] = useState(new Date());
 	const year = cursor.getFullYear();
 	const month = cursor.getMonth();
-	const first = new Date(year, month, 1);
-	const startDow = first.getDay();
+	const startDow = (new Date(year, month, 1).getDay() - weekStartIndex() + 7) % 7;
 	const daysInMonth = new Date(year, month + 1, 0).getDate();
 	const today = new Date();
 	const isToday = (d: number): boolean =>
@@ -186,9 +198,7 @@ export function TaskCalendarView({
 				>
 					‹
 				</button>
-				<span className="gui-taskcal-title">
-					{new Date(year, month, 1).toLocaleDateString("zh-CN", { year: "numeric", month: "long" })}
-				</span>
+				<span className="gui-taskcal-title">{t("task calendar month", { year, month: month + 1 })}</span>
 				<button
 					type="button"
 					className="gui-taskcal-nav"
@@ -200,22 +210,15 @@ export function TaskCalendarView({
 			</div>
 			{tasks.length === 0 && <p className="gui-taskcal-empty">{t("task calendar empty")}</p>}
 			<div className="gui-taskcal-grid">
-				{["日", "一", "二", "三", "四", "五", "六"].map(w => (
-					<div key={w} className="gui-taskcal-weekday">
-						{w}
+				{orderedWeekdayKeys().map(k => (
+					<div key={k} className="gui-taskcal-weekday">
+						{t(k as never)}
 					</div>
 				))}
 				{cells}
 			</div>
 		</div>
 	);
-}
-
-function useStateCursor(): [Date, (d: Date) => void] {
-	const state = new Date();
-	// eslint-disable-next-line react-hooks/rules-of-hooks
-	const [cursor, setCursor] = useState(state);
-	return [cursor, setCursor];
 }
 
 /** Status board (看板): 待运行 / 已暂停 / 最近失败 columns. */
@@ -261,13 +264,7 @@ export function TaskBoardView({
 										<span className="gui-taskboard-card-sched">{taskScheduleLabel(task.schedule)}</span>
 										{task.state.nextRunAt && task.enabled && (
 											<span className="gui-taskboard-card-next">
-												{t("scheduled next")}{" "}
-												{new Date(task.state.nextRunAt).toLocaleString("zh-CN", {
-													month: "2-digit",
-													day: "2-digit",
-													hour: "2-digit",
-													minute: "2-digit",
-												})}
+												{t("scheduled next")} {fmtNextRunAt(task.state.nextRunAt)}
 											</span>
 										)}
 										{col.key === "failed" && task.state.lastError && (
