@@ -53,12 +53,7 @@ const NATIVES_PACKAGE = "@musepi/pi-natives";
  * `packages/natives/scripts/gen-npm-packages.ts`; kept here as the local
  * source of truth so the update path stays free of cross-package imports.
  */
-const SUPPORTED_NATIVE_TAGS: ReadonlySet<string> = new Set([
-	"linux-x64",
-	"linux-arm64",
-	"darwin-arm64",
-	"win32-x64",
-]);
+const SUPPORTED_NATIVE_TAGS: ReadonlySet<string> = new Set(["linux-x64", "linux-arm64", "darwin-arm64", "win32-x64"]);
 
 function currentNativeTag(): string {
 	return `${process.platform}-${process.arch}`;
