@@ -4,6 +4,31 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Removed
+
+- **macOS 发布面只保留 Apple Silicon**:`musepi-darwin-x64` CLI 二进制从发布矩阵/brew formula/natives 叶子表/运行时平台表中移除——Intel Mac 不再受支持,发布页不再出现 macos x64 资产。
+  - EN: macOS release surface is now Apple Silicon-only — the `musepi-darwin-x64` CLI binary is dropped from the release matrix, Homebrew formula, natives leaf table and runtime platform allowlist; Intel-Mac assets no longer appear on the release page.
+
+### Added
+
+- **定时任务调度端到端支持时区**:`schedule.timezone`(IANA)现在真正生效——墙上时间、闲时窗口、cron 表达式都按任务时区求值(Intl 两步偏移,DST 安全,cron 按日历日展开、保留 Vixie dom/dow 语义);未设置/非法时回退本机时区,非法时区串由 `validateCronSchedule` 拒绝。
+  - EN: Scheduled tasks now honor `schedule.timezone` end-to-end — wall-clock times, idle windows and cron expressions are evaluated in the task's IANA timezone (Intl two-step offset, DST-safe, per-calendar-day cron expansion with Vixie dom/dow semantics); unset/unknown falls back to host-local, and invalid tz strings are rejected by `validateCronSchedule`.
+- **`cron.runs` / `cron.nextRuns` RPC 与 `crons.changed` 广播**:`cron.runs { id?, limit? }` 提供按任务运行历史(新→旧,默认 50/上限 100,只读、guest 可调);`cron.nextRuns { schedule, count? }` 让编辑器预览由 daemon 自己的解析器计算(客户端副本已删);`crons.changed` 在任何变更与运行开始/结束后即时推送,GUI 订阅刷新并保留 30s 轮询兜底。
+  - EN: New `cron.runs` (per-task run history, newest first, default 50 / cap 100, read-only so guests may call it), `cron.nextRuns` (editor preview computed by the daemon's own parser — the client-side fork is deleted) and a `crons.changed` broadcast pushed on every mutation and run start/finish; the GUI subscribes for instant refresh and keeps its 30s poll as fallback.
+- **任务中心运行历史与失败原因**:详情面板新增可折叠运行历史(状态/耗时/错误/打开会话),任务失败时展示 daemon 记录的 `lastError`;desktop-web 访客面板历史表改走 `cron.runs`(修掉 slice 50 但上游只有 20 的错位)。
+  - EN: The task center detail panel gains a collapsible run history (status/duration/error/open-session) and surfaces the recorded `lastError` when a task fails; the desktop-web guest panel's history table now uses `cron.runs` (fixing the slice-50-from-20 mismatch).
+
+### Fixed
+
+- **看板视图暂停/恢复失效**:看板开关调用不存在的 `cron.update` 且 `.catch(() => {})` 吞掉报错——daemon 只有 `cron.toggle`,现在与列表视图共用同一切换路径。
+  - EN: Board-view pause/resume was dead: it called a nonexistent `cron.update` and swallowed the rejection; it now shares the list view's `cron.toggle` path.
+- **新建定时任务丢失模型与思考等级**:`cron.upsert` 的新建分支是显式白名单却漏掉 `model`/`thinkingLevel`——编辑器选择在创建时被静默丢弃(编辑不受影响)。合并逻辑抽为 `mergeCronTask`(daemon 与 guest host 共用)并补上两字段。
+  - EN: Creating a scheduled task silently dropped the selected model and thinking level — the create branch of `cron.upsert` (an explicit whitelist) omitted both fields. The merge logic is extracted into `mergeCronTask` (shared by daemon and guest host) with the fields carried.
+- **任务中心日历周起始与 i18n + 运行状态判定**:页面日历写死周日开头且星期表头/日期格式硬编码中文,现与编辑器日历共用设置页周起始(`weekStartIndex`/`orderedWeekdayKeys`,移至 `lib/appearance.ts`)并全部改走 `scheduled *` 词表;`agent_end` 最后一条 assistant 消息 `stopReason` 为 `aborted`/`error` 时运行记为失败(含错误信息),中止/出错的运行不再误标成功。
+  - EN: Task-center calendar week start + i18n and run-status accuracy: the page calendar hardcoded a Sunday start and Chinese-only weekday/date strings — it now shares the settings week start (`weekStartIndex`/`orderedWeekdayKeys`, moved to `lib/appearance.ts`) and the `scheduled *` word list. An `agent_end` whose final assistant message carries `stopReason "aborted"/"error"` now records a failed run (with the error message) instead of a false success.
+
 ## [0.4.15] - 2026-09-02
 
 ### Fixed

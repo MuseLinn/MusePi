@@ -56,7 +56,6 @@ const NATIVES_PACKAGE = "@musepi/pi-natives";
 const SUPPORTED_NATIVE_TAGS: ReadonlySet<string> = new Set([
 	"linux-x64",
 	"linux-arm64",
-	"darwin-x64",
 	"darwin-arm64",
 	"win32-x64",
 ]);

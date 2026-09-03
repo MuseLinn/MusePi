@@ -77,11 +77,6 @@ export function renderFormula(version: string, sums: Record<string, string>): st
           using: :nounzip
       sha256 "${sums["musepi-darwin-arm64"]}"
     end
-    on_intel do
-      url "https://github.com/${REPO}/releases/download/v#{version}/musepi-darwin-x64",
-          using: :nounzip
-      sha256 "${sums["musepi-darwin-x64"]}"
-    end
   end
 
   on_linux do
@@ -117,7 +112,7 @@ async function main(): Promise<void> {
 	const version = tag.replace(/^v/, "");
 	const assets = await fetchAssets(tag);
 
-	const targets = ["musepi-darwin-arm64", "musepi-darwin-x64", "musepi-linux-arm64", "musepi-linux-x64"];
+	const targets = ["musepi-darwin-arm64", "musepi-linux-arm64", "musepi-linux-x64"];
 	const sums: Record<string, string> = {};
 	for (const name of targets) sums[name] = sha256For(assets, name);
 

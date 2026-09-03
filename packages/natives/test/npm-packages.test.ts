@@ -52,7 +52,6 @@ describe("generated native npm leaf packages", () => {
 				"pi_natives.linux-x64-baseline.node",
 				"pi_natives.linux-x64-modern.node",
 				"pi_natives.linux-arm64.node",
-				"pi_natives.darwin-x64-baseline.node",
 				"pi_natives.darwin-arm64.node",
 				"pi_natives.win32-x64-baseline.node",
 			];
@@ -64,7 +63,6 @@ describe("generated native npm leaf packages", () => {
 			expect(leaves.map(leaf => leaf.tag)).toEqual([
 				"linux-x64",
 				"linux-arm64",
-				"darwin-x64",
 				"darwin-arm64",
 				"win32-x64",
 			]);
@@ -93,7 +91,6 @@ describe("generated native npm leaf packages", () => {
 			expect(leaves.filter(leaf => leaf.missing).map(leaf => leaf.tag)).toEqual([
 				"linux-x64",
 				"linux-arm64",
-				"darwin-x64",
 				"win32-x64",
 			]);
 			expect(await Bun.file(path.join(packageDir, "npm/darwin-arm64/package.json")).exists()).toBe(false);

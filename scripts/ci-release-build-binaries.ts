@@ -37,13 +37,6 @@ const targets: BinaryTarget[] = [
 		outfile: "packages/coding-agent/binaries/musepi-darwin-arm64",
 	},
 	{
-		id: "darwin-x64",
-		platform: "darwin",
-		arch: "x64",
-		target: "bun-darwin-x64",
-		outfile: "packages/coding-agent/binaries/musepi-darwin-x64",
-	},
-	{
 		id: "linux-x64",
 		platform: "linux",
 		arch: "x64",
