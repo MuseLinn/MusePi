@@ -102,3 +102,4 @@ musepi-session-*.html
 # Compiled daemon binary for packaged GUI (built on Windows; do not commit)
 packages/gui/vendor/
 .v2c/
+.zcode/
