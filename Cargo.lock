@@ -3824,9 +3824,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.2.2"
+version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30d65c71f1ce40ab09135ce117d742b9f8a19ff91a41a8b57ed50bc2de59c427"
+checksum = "4b18443e9c262bfe8fa82f51666e2642c53393f7e5c27b3e1aeab922cff5b9d8"
 dependencies = [
  "libc",
  "log",
@@ -4900,7 +4900,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -4970,7 +4970,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -5055,7 +5055,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "async-trait",
  "libc",
@@ -5067,7 +5067,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5141,7 +5141,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5169,7 +5169,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5184,7 +5184,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "0.4.15"
+version = "0.4.16"
 dependencies = [
  "dashmap",
  "globset",
@@ -6722,9 +6722,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "1.1.4+spec-1.1.0"
+version = "1.1.5+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aace63f4bbcdfc2c965b059de67119c89c4017a70d633be6c104910f67056f5"
+checksum = "12c0ba9680044b4ce98d391a62094047eada0d64860b80166c39f4a6b5640785"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -8853,9 +8853,9 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xutf"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a14f3ca7038796715a5f5fd1c22aac21423b4f86fd9ef5585ef1744a5cfc573e"
+checksum = "990cc0159ef1d38b900524ac2308778ce60de2d32af70f40a71517c6b299fe8a"
 
 [[package]]
 name = "xxhash-rust"
