@@ -89,6 +89,10 @@ export const sayHelp = {
 	description: "Synthesize text with the local TTS engine and play it through the speakers",
 } satisfies CommandMetadata;
 
+export const sessionsHelp = {
+	description: "List saved sessions (newest first) with id, title, and working directory",
+} satisfies CommandMetadata;
+
 export const searchHelp = { description: "Test web search providers" } satisfies CommandMetadata;
 
 export const shareHelp = {

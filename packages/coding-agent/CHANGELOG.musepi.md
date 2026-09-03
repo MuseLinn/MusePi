@@ -6,6 +6,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **`musepi sessions` 命令行会话列表**:非交互列出已保存会话(按最近修改降序,含 id/标题/cwd/时间),支持 `--cwd`/`--limit`/`--json`——headless 枚举会话的补位(此前只有 TUI 交互 picker)。参考 kimi-code `session list`。
+  - EN: New `musepi sessions` command lists saved sessions non-interactively (newest first, id/title/cwd/timestamp), with `--cwd`/`--limit`/`--json` — filling the headless-enumeration gap left by the TUI-only picker. Patterned after kimi-code's `session list`.
+
 ### Removed
 
 - **macOS 发布面只保留 Apple Silicon**:`musepi-darwin-x64` CLI 二进制从发布矩阵/brew formula/natives 叶子表/运行时平台表中移除——Intel Mac 不再受支持,发布页不再出现 macos x64 资产。
