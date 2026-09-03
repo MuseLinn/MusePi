@@ -60,12 +60,7 @@ describe("generated native npm leaf packages", () => {
 			}
 
 			const leaves = await generateNpmPackages({ packageDir });
-			expect(leaves.map(leaf => leaf.tag)).toEqual([
-				"linux-x64",
-				"linux-arm64",
-				"darwin-arm64",
-				"win32-x64",
-			]);
+			expect(leaves.map(leaf => leaf.tag)).toEqual(["linux-x64", "linux-arm64", "darwin-arm64", "win32-x64"]);
 			const linuxX64 = leaves.find(leaf => leaf.tag === "linux-x64");
 			expect(linuxX64?.files).toEqual(["pi_natives.linux-x64-baseline.node", "pi_natives.linux-x64-modern.node"]);
 			expect(await Bun.file(path.join(packageDir, "npm/linux-x64/pi_natives.linux-x64-modern.node")).text()).toBe(
