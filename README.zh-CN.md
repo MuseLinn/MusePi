@@ -24,7 +24,7 @@
 
 MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
 
-应用版本 `0.4.6`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
+应用版本 `0.4.16`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
 
 ## ✨ 特性
 
@@ -45,6 +45,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 - **丰富交互**：图片附件前置缩放（`images.autoResize` 双端生效）、图片预览灯箱（多图堆叠、缩放平移）、附件键盘删除、语音输入、会话草稿持久化、空闲 recap（`recap.enabled`）、提醒面板（`session.list` working/live 实时状态）、⌘K 命令面板、Board 看板、widget 系统（自定义 HTML widget 主题热切换）。
 - **右侧面板**：文件树（PDF/图片/文本预览、系统打开）、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器（视口预设、元素选取）、项目笔记 + 待办 + 计划文件。
 - **子智能体操作**（Agent Hub parity）：右栏 AgentsPanel 停止/复活/对话（`agents.kill/revive/chat` RPC）。
+- **任务中心（定时任务）**：cron 式调度，完整 IANA 时区支持（墙上时间、闲时窗口、cron 表达式都按任务时区求值，DST 安全）、按任务运行历史与失败原因、daemon 自身解析器计算的 next-run 预览、按任务选模型与思考等级、看板视图暂停/恢复；日历周起始与设置页一致。
 
 ### 核心引擎
 
@@ -52,6 +53,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 - **LSP** 接线每个写操作（重命名/引用/代码动作）、**DAP** 调试器驱动。
 - **task 子智能体**（并行扇出、IRC 协调、worktree 隔离、schema 验证输出）、**hashline** 内容哈希编辑、**hindsight** 会话记忆、**ACP** 编辑器驱动、**collab** 协作（含 musepi 定制：LAN/隧道/Tailscale serve 自持 relay、明文访客模式）。
 - **snapcompact** 压缩策略（对话渲染为位图帧给视觉模型）、**magic keywords**（ultrathink/orchestrate/workflowz）、**TTSR** 流式规则注入。
+- **`musepi sessions` CLI**：headless 会话列表（新→旧，`--cwd`/`--limit`/`--json`），供脚本与工具枚举会话。
 
 ## 📸 截图
 
@@ -217,4 +219,4 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.6）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.16）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。

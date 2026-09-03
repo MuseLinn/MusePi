@@ -28,7 +28,7 @@
 
 MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-Current app version **`0.4.6`** (independent of upstream versioning).
+Current app version **`0.4.16`** (independent of upstream versioning).
 
 ## Install (one command)
 
@@ -101,6 +101,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 - **Relaunch experience**: differentiated splash hold, main-window bounds restore, last-session reopen on boot.
 - **Right context panel**: file tree (PDF/image/text previews), Git changes & commits (gitmoji, GitHub device-flow auth), PR list, embedded browser, project notes + todos + plan files.
 - **Subagent operations**: stop / revive / chat from the AgentsPanel (`agents.kill` / `agents.revive` / `agents.chat`).
+- **Task center (scheduled tasks)**: cron-style scheduling with full IANA-timezone support (wall-clock times, idle windows and cron expressions evaluated in the task's timezone, DST-safe), per-task run history with failure reasons, next-run previews computed by the daemon's own parser, per-task model & thinking-level selection, board-view pause/resume — calendar week start follows the settings page.
 
 ### Core agent engine
 
@@ -108,6 +109,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 - **LSP** wired into every write (renames, references, code actions); **DAP** debugger driving.
 - **task subagents** (parallel fan-out, IRC coordination, worktree isolation), **hashline** content-hash edits, **hindsight** session memory, **ACP** editor-driven mode, **collab** sharing (self-hosted LAN/tunnel relays, plaintext guest mode).
 - **snapcompact** compaction, **magic keywords** (ultrathink / orchestrate / workflowz), **TTSR** stream rules.
+- **`musepi sessions` CLI**: headless session listing (newest first, `--cwd`/`--limit`/`--json`) for scripts and tooling.
 
 ### Tools
 

@@ -23,7 +23,7 @@ zh_url: /index.zh-CN.html
       </div>
       <div class="mp-version">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-version-tag" data-release-version>v0.4.7</span>
+        <span class="mp-version-tag" data-release-version>v0.4.16</span>
         <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
       </div>
     </div>
