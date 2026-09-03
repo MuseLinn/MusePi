@@ -123,6 +123,25 @@ describe("createAgentSession deferred model pattern resolution", () => {
 		expect(modelFallbackMessage).toBeUndefined();
 	});
 
+	test("resolves a bare modelPattern without silently falling back to the configured default role", async () => {
+		// Welcome-composer carry-in parity: a bare id arriving via
+		// session.create's modelPattern must resolve to the matching model,
+		// never silently fall back to the configured DEFAULT role — the
+		// regression a pre-0.4.16 welcome picker hit when its provider-less
+		// pattern failed daemon-side resolution.
+		const settings = Settings.isolated();
+		settings.setModelRole("default", "runtime-provider/runtime-reasoning-model");
+		const { session, modelFallbackMessage } = await createAgentSession({
+			...(await buildSessionOptions("runtime-model")),
+			settings,
+		});
+
+		expect(session.model).toBeDefined();
+		expect(session.model?.id).toBe("runtime-model");
+		expect(session.model?.provider).toBe("runtime-provider");
+		expect(modelFallbackMessage).toBeUndefined();
+	});
+
 	test("resolves explicit dynamic-only modelPattern from fresh runtime cache", async () => {
 		const authStorage = await AuthStorage.create(path.join(tempDir, "dynamic-auth.db"));
 		authStoragesToClose.push(authStorage);

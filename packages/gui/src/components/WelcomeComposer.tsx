@@ -964,6 +964,9 @@ export function WelcomeComposer({
 		setPlanArmed(false);
 		void onSubmit(payload, {
 			thinkingLevel: thinking,
+			// modelId is the provider/id composite after a pick (setModelId above);
+			// session.create forwards it as modelPattern, which resolves exactly
+			// via the daemon's provider reference match — no bare-id ambiguity.
 			modelId: modelTouched.current ? modelId : effectiveModelId,
 			images: attachments.map(a => ({
 				type: "image" as const,
@@ -1374,9 +1377,16 @@ export function WelcomeComposer({
 										thinkingLevel={thinking}
 										thinkingEfforts={thinkingEfforts}
 										allowSetDefault
-										onModelSelect={v => {
+										onModelSelect={(v, provider) => {
 											modelTouched.current = true;
-											setModelId(v);
+											// Provider/id composite, never the bare id: two
+											// providers serve the same id (opencode-go vs
+											// opencode-zen deepseek-v4-flash), and a bare id
+											// reaching session.create's modelPattern would let
+											// daemon-side preference ranking pick the wrong
+											// provider (or silently fall back to DEFAULT on a
+											// resolution miss).
+											setModelId(provider ? `${provider}/${v}` : v);
 										}}
 										onSetThinking={v => {
 											thinkingTouched.current = true;

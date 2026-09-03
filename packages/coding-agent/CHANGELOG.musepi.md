@@ -22,6 +22,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Fixed
 
+- **欢迎页空态切换模型后新建会话仍用默认模型**:欢迎输入框模型选择器把选择以裸 id 存入本地状态(onModelSelect 只收第一个参数),发消息时 `session.create` 的 modelPattern 只带裸 id——同 id 多 provider 时 daemon 按偏好排序解析可能落到别的 provider,解析失败还会静默回退 DEFAULT 角色。现在 onModelSelect 同时消费 id 与 provider,以 `provider/id` 复合引用存入并发给 daemon,精确命中所选行。
+  - EN: A model picked in the welcome (empty-state) composer still ran the new session on the DEFAULT model: the pick was stored as a bare id (onModelSelect dropped the provider arg), so session.create's modelPattern was provider-less — with several providers serving the same id the daemon's preference ranking could resolve to another provider, and a resolution miss silently fell back to the DEFAULT role. onModelSelect now consumes id+provider and stores a `provider/id` composite, so the new session exact-matches the picked row.
 - **看板视图暂停/恢复失效**:看板开关调用不存在的 `cron.update` 且 `.catch(() => {})` 吞掉报错——daemon 只有 `cron.toggle`,现在与列表视图共用同一切换路径。
   - EN: Board-view pause/resume was dead: it called a nonexistent `cron.update` and swallowed the rejection; it now shares the list view's `cron.toggle` path.
 - **新建定时任务丢失模型与思考等级**:`cron.upsert` 的新建分支是显式白名单却漏掉 `model`/`thinkingLevel`——编辑器选择在创建时被静默丢弃(编辑不受影响)。合并逻辑抽为 `mergeCronTask`(daemon 与 guest host 共用)并补上两字段。
