@@ -110,13 +110,17 @@ import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import {
 	type CronRun,
+	type CronSchedule,
 	type CronStatus,
 	type CronTask,
 	computeNextRun,
 	loadCronRuns,
 	loadCronTasks,
+	mergeCronTask,
+	nextCronScheduleRuns,
 	saveCronRuns,
 	saveCronTasks,
+	validateCronSchedule,
 	validateCronTask,
 } from "./crons";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
@@ -2959,6 +2963,7 @@ export class DaemonServer {
 		task.state.lastError = undefined;
 		task.state.nextRunAt = computeNextRun(task, startedAt) ?? undefined;
 		saveCronTasks(this.#cronTasks);
+		this.#broadcastCronsChanged();
 		let live: LiveSession | undefined;
 		try {
 			const { sessionId } = await this.#host.createSession({
@@ -2975,6 +2980,7 @@ export class DaemonServer {
 			task.state.lastSessionId = sessionId;
 			saveCronTasks(this.#cronTasks);
 			const finish = (status: CronStatus, error?: string): void => {
+				if (run.finishedAt !== undefined) return; // already settled (abort raced agent_end)
 				run.status = status;
 				run.finishedAt = Date.now();
 				run.error = error;
@@ -2983,10 +2989,19 @@ export class DaemonServer {
 				saveCronRuns(this.#cronRuns);
 				saveCronTasks(this.#cronTasks);
 				this.#cronStarting.delete(task.id);
+				this.#broadcastCronsChanged();
 			};
 			const unsubscribe = live.agentSession.subscribe(e => {
-				if (e.type === "agent_end") {
-					unsubscribe();
+				if (e.type !== "agent_end") return;
+				unsubscribe();
+				// A failed run is marked by the agent's final assistant message
+				// (stopReason "aborted"/"error" + errorMessage); any other end
+				// — including toolUse chain terminations — completed normally.
+				const lastAssistant = [...e.messages].reverse().find(m => m.role === "assistant");
+				const stop = lastAssistant?.stopReason;
+				if (stop === "aborted" || stop === "error") {
+					finish("error", lastAssistant?.errorMessage || `agent run ${stop}`);
+				} else {
 					finish("success");
 				}
 			});
@@ -3000,6 +3015,7 @@ export class DaemonServer {
 			saveCronRuns(this.#cronRuns);
 			saveCronTasks(this.#cronTasks);
 			this.#cronStarting.delete(task.id);
+			this.#broadcastCronsChanged();
 		}
 	}
 
@@ -3142,6 +3158,21 @@ export class DaemonServer {
 				kind: "event",
 				seq,
 				payload: { type: "modes.changed", at: Date.now() },
+			});
+		}
+	}
+
+	/** 广播 crons.changed(定时任务列表/运行状态变更后调用):任务中心页与
+	 *  app 级完成通知监听此事件即时刷新,否则要等下一个 30s 轮询周期。
+	 *  与 extensions.changed 同 seq 机制,payload 只带时间戳,客户端重拉
+	 *  cron.list(任务/运行数据量小,重拉比广播全量更省心)。 */
+	#broadcastCronsChanged(): void {
+		const seq = ++this.#globalEventSeq;
+		for (const conn of this.#globalEventTargets) {
+			this.#host.emitEvent(conn, {
+				kind: "event",
+				seq,
+				payload: { type: "crons.changed", at: Date.now() },
 			});
 		}
 	}
@@ -4664,26 +4695,36 @@ export class DaemonServer {
 				const t = task as CronTask;
 				const now = Date.now();
 				const existing = t.id ? this.#cronTasks.find(x => x.id === t.id) : undefined;
-				const merged: CronTask = existing
-					? { ...existing, ...t, state: { ...existing.state, ...t.state } }
-					: {
-							id: t.id && /^[a-z0-9-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
-							name: t.name,
-							enabled: t.enabled !== false,
-							schedule: t.schedule,
-							prompt: t.prompt,
-							cwd: t.cwd || process.cwd(),
-							state: { ...t.state, createdAt: now },
-						};
-				if (merged.enabled) merged.state.nextRunAt = computeNextRun(merged, now) ?? undefined;
-				else merged.state.nextRunAt = undefined;
+				const merged = mergeCronTask(existing, t, now, process.cwd());
 				if (existing) {
 					this.#cronTasks = this.#cronTasks.map(x => (x.id === existing.id ? merged : x));
 				} else {
 					this.#cronTasks.push(merged);
 				}
 				saveCronTasks(this.#cronTasks);
+				this.#broadcastCronsChanged();
 				return { tasks: this.#cronTasks, task: merged };
+			}
+			case "cron.runs": {
+				// Per-task run history (cron.list only carries the global last
+				// 20): newest-first, bounded by the on-disk 100-run window.
+				const { id, limit } = (params ?? {}) as { id?: string; limit?: number };
+				const cap = Math.min(Math.max(limit ?? 50, 1), 100);
+				const runs = (id ? this.#cronRuns.filter(r => r.taskId === id) : this.#cronRuns).slice(-cap).reverse();
+				return { runs };
+			}
+			case "cron.nextRuns": {
+				// Editor preview: the daemon's own parser (timezone +
+				// idle-window semantics) so clients don't fork the logic.
+				const { schedule, count } = (params ?? {}) as { schedule?: CronSchedule; count?: number };
+				const check = validateCronSchedule(schedule);
+				if (!check.ok) throw new Error(`cron.nextRuns: ${check.error}`);
+				const runs = nextCronScheduleRuns(
+					schedule as CronSchedule,
+					Date.now(),
+					Math.min(Math.max(count ?? 4, 1), 10),
+				);
+				return { runs };
 			}
 			case "cron.delete": {
 				const { id, cleanup } = (params ?? {}) as { id?: string; cleanup?: "none" | "archive" | "delete" };
@@ -4709,6 +4750,7 @@ export class DaemonServer {
 					this.#cronRuns = this.#cronRuns.filter(r => r.taskId !== task.id);
 					saveCronRuns(this.#cronRuns);
 				}
+				this.#broadcastCronsChanged();
 				return { tasks: this.#cronTasks };
 			}
 			case "cron.toggle": {
@@ -4718,6 +4760,7 @@ export class DaemonServer {
 				task.enabled = enabled !== false;
 				task.state.nextRunAt = task.enabled ? (computeNextRun(task, Date.now()) ?? undefined) : undefined;
 				saveCronTasks(this.#cronTasks);
+				this.#broadcastCronsChanged();
 				return { tasks: this.#cronTasks };
 			}
 			case "cron.runNow": {
@@ -4725,6 +4768,7 @@ export class DaemonServer {
 				const task = this.#cronTasks.find(t => t.id === id);
 				if (!task) throw new Error(`cron.runNow: unknown task "${id}"`);
 				void this.#cronRun(task);
+				this.#broadcastCronsChanged();
 				return { ok: true, tasks: this.#cronTasks };
 			}
 			case "widget.schema": {

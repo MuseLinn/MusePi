@@ -23,7 +23,14 @@ import type {
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
-import { computeNextRun, loadCronRuns, loadCronTasks, saveCronTasks, validateCronTask } from "../daemon/crons.js";
+import {
+	computeNextRun,
+	loadCronRuns,
+	loadCronTasks,
+	mergeCronTask,
+	saveCronTasks,
+	validateCronTask,
+} from "../daemon/crons.js";
 import {
 	createWorkspaceDir,
 	deleteWorkspaceEntry,
@@ -892,6 +899,14 @@ export class CollabHost {
 			}
 			case "cron.list":
 				return { tasks: loadCronTasks(), runs: loadCronRuns().slice(-20) };
+			case "cron.runs": {
+				// Read-only run history (mirrors the daemon's cron.runs):
+				// newest-first, bounded by the on-disk 100-run window.
+				const { id, limit } = p as { id?: string; limit?: number };
+				const cap = Math.min(Math.max(limit ?? 50, 1), 100);
+				const runs = (id ? loadCronRuns().filter(r => r.taskId === id) : loadCronRuns()).slice(-cap).reverse();
+				return { runs };
+			}
 			case "cron.upsert": {
 				const { task } = p as { task?: unknown };
 				const check = validateCronTask(task);
@@ -900,19 +915,7 @@ export class CollabHost {
 				const now = Date.now();
 				const tasks = loadCronTasks();
 				const existing = t.id ? tasks.find(x => x.id === t.id) : undefined;
-				const merged: CronTask = existing
-					? { ...existing, ...t, state: { ...existing.state, ...t.state } }
-					: {
-							id: t.id && /^[a-z0-9-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
-							name: t.name,
-							enabled: t.enabled !== false,
-							schedule: t.schedule,
-							prompt: t.prompt,
-							cwd: t.cwd || this.#ctx.sessionManager.getCwd(),
-							state: { ...t.state, createdAt: now },
-						};
-				if (merged.enabled) merged.state.nextRunAt = computeNextRun(merged, now) ?? undefined;
-				else merged.state.nextRunAt = undefined;
+				const merged = mergeCronTask(existing, t, now, this.#ctx.sessionManager.getCwd());
 				const next = existing ? tasks.map(x => (x.id === existing.id ? merged : x)) : [...tasks, merged];
 				saveCronTasks(next);
 				return { tasks: next, task: merged };

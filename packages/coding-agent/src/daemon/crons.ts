@@ -32,6 +32,10 @@ export interface CronSchedule {
 	 * (22:00–08:00) supported.
 	 */
 	idleWindow?: { start: string; end: string };
+	/**
+	 * IANA timezone the schedule's wall-clock times are interpreted in.
+	 * Unset/unknown → the daemon host's local timezone.
+	 */
 	timezone?: string;
 }
 
@@ -153,31 +157,68 @@ function sanitizeCronTask(t: unknown): CronTask | null {
 	};
 }
 
+export function validateCronSchedule(s: unknown): { ok: boolean; error?: string } {
+	if (!s || typeof s !== "object") return { ok: false, error: "schedule required" };
+	const kind = (s as Record<string, unknown>).kind;
+	if (typeof kind !== "string" || !["once", "daily", "weekly", "monthly", "cron"].includes(kind)) {
+		return { ok: false, error: `schedule.kind must be once|daily|weekly|monthly|cron` };
+	}
+	const o = s as Record<string, unknown>;
+	if (kind === "once" && typeof o.date !== "string")
+		return { ok: false, error: "once schedule needs date (YYYY-MM-DD)" };
+	if (kind === "daily") {
+		const times = Array.isArray(o.times) && o.times.length > 0 ? o.times : o.time ? [o.time] : null;
+		if (!times || times.some(x => !parseTime(x as string))) {
+			return { ok: false, error: "daily schedule needs time(s) (HH:mm)" };
+		}
+	}
+	if (kind !== "once" && kind !== "daily" && typeof o.time !== "string") {
+		return { ok: false, error: "schedule needs time (HH:mm)" };
+	}
+	if (kind === "weekly" && !Array.isArray(o.weekdays)) return { ok: false, error: "weekly schedule needs weekdays" };
+	if (kind === "monthly" && typeof o.dayOfMonth !== "number") {
+		return { ok: false, error: "monthly schedule needs dayOfMonth" };
+	}
+	if (kind === "cron" && typeof o.cron !== "string")
+		return { ok: false, error: "cron schedule needs cron expression" };
+	if (typeof o.timezone === "string" && o.timezone && !isValidTimeZone(o.timezone)) {
+		return { ok: false, error: `unknown timezone "${o.timezone}"` };
+	}
+	return { ok: true };
+}
+
 export function validateCronTask(t: unknown): { ok: boolean; error?: string } {
 	if (!t || typeof t !== "object") return { ok: false, error: "task required" };
 	const o = t as Record<string, unknown>;
 	if (typeof o.name !== "string" || !o.name.trim()) return { ok: false, error: "name required" };
 	if (typeof o.prompt !== "string" || !o.prompt.trim()) return { ok: false, error: "prompt required" };
 	if (o.prompt.length > MAX_PROMPT) return { ok: false, error: `prompt too long (> ${MAX_PROMPT})` };
-	const s = (o.schedule ?? {}) as Record<string, unknown>;
-	const kind = s.kind;
-	if (typeof kind !== "string" || !["once", "daily", "weekly", "monthly", "cron"].includes(kind)) {
-		return { ok: false, error: `schedule.kind must be once|daily|weekly|monthly|cron` };
-	}
-	if (kind === "once" && typeof s.date !== "string")
-		return { ok: false, error: "once schedule needs date (YYYY-MM-DD)" };
-	if (kind === "daily") {
-		const times = Array.isArray(s.times) && s.times.length > 0 ? s.times : s.time ? [s.time] : null;
-		if (!times || times.some(x => !parseTime(x))) return { ok: false, error: "daily schedule needs time(s) (HH:mm)" };
-	}
-	if (kind !== "once" && kind !== "daily" && typeof s.time !== "string")
-		return { ok: false, error: "schedule needs time (HH:mm)" };
-	if (kind === "weekly" && !Array.isArray(s.weekdays)) return { ok: false, error: "weekly schedule needs weekdays" };
-	if (kind === "monthly" && typeof s.dayOfMonth !== "number")
-		return { ok: false, error: "monthly schedule needs dayOfMonth" };
-	if (kind === "cron" && typeof s.cron !== "string")
-		return { ok: false, error: "cron schedule needs cron expression" };
-	return { ok: true };
+	return validateCronSchedule(o.schedule);
+}
+
+/**
+ * Create/merge path shared by the daemon and collab-host cron.upsert RPCs.
+ * NEW tasks use an explicit field whitelist — `model`/`thinkingLevel` must
+ * be carried here or the editor's selections are silently dropped on
+ * create; edits spread-merge over the stored task. `nextRunAt` is
+ * recomputed from `now` (cleared when disabled).
+ */
+export function mergeCronTask(existing: CronTask | undefined, t: CronTask, now: number, defaultCwd: string): CronTask {
+	const merged: CronTask = existing
+		? { ...existing, ...t, state: { ...existing.state, ...t.state } }
+		: {
+				id: t.id && /^[a-z0-9-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
+				name: t.name,
+				enabled: t.enabled !== false,
+				schedule: t.schedule,
+				prompt: t.prompt,
+				cwd: t.cwd || defaultCwd,
+				model: t.model,
+				thinkingLevel: t.thinkingLevel,
+				state: { ...t.state, createdAt: now },
+			};
+	merged.state.nextRunAt = merged.enabled ? (computeNextRun(merged, now) ?? undefined) : undefined;
+	return merged;
 }
 
 function parseTime(time: string): { h: number; m: number } | null {
@@ -189,28 +230,131 @@ function parseTime(time: string): { h: number; m: number } | null {
 	return { h, m: min };
 }
 
-function atLocal(date: Date, h: number, m: number): number {
-	const d = new Date(date);
-	d.setHours(h, m, 0, 0);
-	return d.getTime();
+/* ── Timezone helpers (DST-safe wall-clock ↔ epoch) ──────────────────── */
+
+const dtfCache = new Map<string, Intl.DateTimeFormat>();
+
+function zonedFormat(tz: string): Intl.DateTimeFormat {
+	let f = dtfCache.get(tz);
+	if (!f) {
+		f = new Intl.DateTimeFormat("en-US", {
+			timeZone: tz,
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+			hourCycle: "h23",
+		});
+		dtfCache.set(tz, f);
+	}
+	return f;
 }
+
+const validTzCache = new Map<string, boolean>();
+
+/** True when the string is a timezone Intl can schedule in. */
+export function isValidTimeZone(tz: string): boolean {
+	const cached = validTzCache.get(tz);
+	if (cached !== undefined) return cached;
+	let ok = false;
+	try {
+		new Intl.DateTimeFormat("en-US", { timeZone: tz });
+		ok = true;
+	} catch {
+		ok = false;
+	}
+	validTzCache.set(tz, ok);
+	return ok;
+}
+
+interface CalendarDay {
+	y: number;
+	m: number;
+	d: number;
+	dow: number;
+}
+
+/** Wall-clock Y/M/D + weekday of `at` in `tz` (host-local when undefined). */
+function zonedDayParts(at: number, tz: string | undefined): CalendarDay {
+	if (!tz) {
+		const d = new Date(at);
+		return { y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate(), dow: d.getDay() };
+	}
+	let y = 1970;
+	let m = 1;
+	let d = 1;
+	for (const p of zonedFormat(tz).formatToParts(at)) {
+		if (p.type === "year") y = Number(p.value);
+		else if (p.type === "month") m = Number(p.value);
+		else if (p.type === "day") d = Number(p.value);
+	}
+	// Weekday of the calendar date — zone-independent by definition.
+	const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+	return { y, m, d, dow };
+}
+
+/** Offset (ms east of UTC) of `tz` at `epoch`, from its formatted wall clock. */
+function zonedOffsetMs(epoch: number, tz: string): number {
+	const second = Math.floor(epoch / 1000) * 1000;
+	let y = 1970;
+	let mo = 1;
+	let d = 1;
+	let h = 0;
+	let mi = 0;
+	let s = 0;
+	for (const p of zonedFormat(tz).formatToParts(second)) {
+		if (p.type === "year") y = Number(p.value);
+		else if (p.type === "month") mo = Number(p.value);
+		else if (p.type === "day") d = Number(p.value);
+		else if (p.type === "hour") h = Number(p.value);
+		else if (p.type === "minute") mi = Number(p.value);
+		else if (p.type === "second") s = Number(p.value);
+	}
+	return Date.UTC(y, mo - 1, d, h, mi, s) - second;
+}
+
+/** Epoch ms of wall-clock Y-M-D h:mm in `tz` (host-local when undefined).
+ *  Two-step offset correction survives DST transitions; wall times inside
+ *  a spring-forward gap resolve to the nearest forward instant. */
+function zonedTimeToEpoch(y: number, m: number, d: number, h: number, min: number, tz: string | undefined): number {
+	if (!tz) return new Date(y, m - 1, d, h, min).getTime();
+	const guess = Date.UTC(y, m - 1, d, h, min);
+	const off1 = zonedOffsetMs(guess, tz);
+	let at = guess - off1;
+	const off2 = zonedOffsetMs(at, tz);
+	if (off2 !== off1) at = guess - off2;
+	return at;
+}
+
+/** Calendar day `i` days after the anchor day — a pure date computation
+ *  (Date.UTC arithmetic), so day walks never repeat or skip around DST. */
+function calendarDay(anchor: CalendarDay, i: number): CalendarDay {
+	const t = new Date(Date.UTC(anchor.y, anchor.m - 1, anchor.d + i));
+	return { y: t.getUTCFullYear(), m: t.getUTCMonth() + 1, d: t.getUTCDate(), dow: t.getUTCDay() };
+}
+
+/* ── Next-run computation ───────────────────────────────────────────── */
 
 /** Next run (epoch ms) after `from`; null when the schedule never fires again. */
-export function computeNextRun(task: CronTask, from: number): number | null {
+export function computeNextRun(task: Pick<CronTask, "schedule">, from: number): number | null {
 	// Defer a raw due run into the task's idle window (闲时任务) — the
 	// constraint applies to every schedule kind uniformly.
-	const raw = computeNextRunRaw(task, from);
+	const raw = computeNextRunRaw(task.schedule, from);
 	if (raw === null) return null;
-	return constrainToIdleWindow(raw, task.schedule.idleWindow, from);
+	return constrainToIdleWindow(raw, task.schedule.idleWindow, from, task.schedule.timezone);
 }
 
-function computeNextRunRaw(task: CronTask, from: number): number | null {
-	const s = task.schedule;
-	const t = s.time ? parseTime(s.time) : null;
+function computeNextRunRaw(s: CronSchedule, from: number): number | null {
+	const tz = s.timezone && isValidTimeZone(s.timezone) ? s.timezone : undefined;
 	if (s.kind === "once") {
 		if (!s.date) return null;
-		const target = new Date(`${s.date}T${s.time ?? "00:00"}:00`).getTime();
-		return Number.isNaN(target) ? null : target > from ? target : null;
+		const dm = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s.date);
+		const tm = parseTime(s.time ?? "00:00");
+		if (!dm || !tm) return null;
+		const target = zonedTimeToEpoch(Number(dm[1]), Number(dm[2]), Number(dm[3]), tm.h, tm.m, tz);
+		return target > from ? target : null;
 	}
 	if (s.kind === "daily") {
 		// openchamber parity: daily tasks fire at every configured time.
@@ -218,37 +362,40 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 			.map(parseTime)
 			.filter((x): x is { h: number; m: number } => x !== null);
 		if (times.length === 0) return null;
+		const anchor = zonedDayParts(from, tz);
 		for (let i = 0; i < 32; i++) {
-			const d = new Date(from + i * 24 * 60 * 60 * 1000);
+			const day = calendarDay(anchor, i);
 			for (const { h, m } of times) {
-				const at = atLocal(d, h, m);
+				const at = zonedTimeToEpoch(day.y, day.m, day.d, h, m, tz);
 				if (at > from) return at;
 			}
 		}
 		return null;
 	}
 	if (s.kind === "weekly") {
+		const t = parseTime(s.time ?? "");
 		if (!t || !Array.isArray(s.weekdays)) return null;
 		const days = new Set(s.weekdays);
-		let d = new Date(from);
+		const anchor = zonedDayParts(from, tz);
 		for (let i = 0; i < 14; i++) {
-			if (days.has(d.getDay())) {
-				const at = atLocal(d, t.h, t.m);
+			const day = calendarDay(anchor, i);
+			if (days.has(day.dow)) {
+				const at = zonedTimeToEpoch(day.y, day.m, day.d, t.h, t.m, tz);
 				if (at > from) return at;
 			}
-			d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
 		}
 		return null;
 	}
 	if (s.kind === "monthly") {
+		const t = parseTime(s.time ?? "");
 		if (!t || typeof s.dayOfMonth !== "number") return null;
-		let d = new Date(from);
+		const anchor = zonedDayParts(from, tz);
 		for (let i = 0; i < 62; i++) {
-			if (d.getDate() === s.dayOfMonth) {
-				const at = atLocal(d, t.h, t.m);
+			const day = calendarDay(anchor, i);
+			if (day.d === s.dayOfMonth) {
+				const at = zonedTimeToEpoch(day.y, day.m, day.d, t.h, t.m, tz);
 				if (at > from) return at;
 			}
-			d = new Date(d.getTime() + 24 * 60 * 60 * 1000);
 		}
 		return null;
 	}
@@ -256,7 +403,8 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 		// Minimal 5-field cron (min hour dom mon dow) — enough for the
 		// openchamber examples and common agent schedules. Full
 		// cron-parser is out of scope for the daemon bundle; unknown
-		// tokens fall back to the next day boundary.
+		// tokens fall back to wildcard. Expanded per calendar day in the
+		// task's timezone (Vixie dom/dow AND/OR semantics preserved).
 		const expr = (s.cron ?? "").trim().split(/\s+/);
 		if (expr.length !== 5) return null;
 		const field = (part: string): number[] | null => {
@@ -268,7 +416,7 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 			}
 			if (/^\d+-\d+$/.test(part)) {
 				const [a, b] = part.split("-").map(Number);
-				if (a >= 0 && b >= a && b <= 59) return Array.from({ length: b - a + 1 }, (_, i) => a + i);
+				if (a >= 0 && b >= a && b <= 59) return Array.from({ length: b - a + 1 }, (_, i) => i + a);
 				return null;
 			}
 			if (part.includes(",")) {
@@ -282,24 +430,25 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
 		const doms = field(expr[2]);
 		const months = field(expr[3]);
 		const dows = field(expr[4]);
-		let d = new Date(from + 60_000);
-		// Scan up to a full year ahead at 1-minute steps (cheap enough in
-		// JS); weekly/monthly crons need multi-day lookahead.
-		for (let i = 0; i < 366 * 24 * 60; i++) {
-			if (months && !months.includes(d.getMonth() + 1)) {
-				d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-				continue;
-			}
-			const dowMatch = !dows || dows.includes(d.getDay());
-			const domMatch = !doms || doms.includes(d.getDate());
+		const allHours = Array.from({ length: 24 }, (_, i) => i);
+		const allMins = Array.from({ length: 60 }, (_, i) => i);
+		const anchor = zonedDayParts(from, tz);
+		// Up to 4 years of days: Feb-29-only crons legitimately skip three.
+		for (let i = 0; i < 1461; i++) {
+			const day = calendarDay(anchor, i);
+			if (months && !months.includes(day.m)) continue;
+			const dowMatch = !dows || dows.includes(day.dow);
+			const domMatch = !doms || doms.includes(day.d);
 			// Vixie semantics: when BOTH dom and dow are constrained they
 			// AND; a wildcard on either side turns it into OR.
 			const dayMatch = !doms || !dows ? domMatch || dowMatch : domMatch && dowMatch;
-			if (dayMatch && (!hours || hours.includes(d.getHours())) && (!mins || mins.includes(d.getMinutes()))) {
-				const at = d.getTime();
-				if (at > from) return at;
+			if (!dayMatch) continue;
+			for (const h of hours ?? allHours) {
+				for (const m of mins ?? allMins) {
+					const at = zonedTimeToEpoch(day.y, day.m, day.d, h, m, tz);
+					if (at > from) return at;
+				}
 			}
-			d = new Date(d.getTime() + 60_000);
 		}
 		return null;
 	}
@@ -311,27 +460,28 @@ function computeNextRunRaw(task: CronTask, from: number): number | null {
  * activeWindow parity): runs outside the window move to the window's
  * start — today if it hasn't opened yet, otherwise the next occurrence.
  * A window crossing midnight (22:00–08:00) is two intervals (start→24:00
- * and 00:00→end). No window → unchanged.
+ * and 00:00→end). No window → unchanged. Window times are wall-clock in
+ * the schedule's timezone (host-local when undefined).
  */
 export function constrainToIdleWindow(
 	at: number,
 	window: CronSchedule["idleWindow"] | undefined,
 	from: number,
+	tz?: string,
 ): number {
 	if (!window) return at;
 	const start = parseTime(window.start);
 	const end = parseTime(window.end);
 	if (!start || !end) return at;
-	const atDate = new Date(at);
-	const dayStart = new Date(atDate.getFullYear(), atDate.getMonth(), atDate.getDate());
-	const startMs = dayStart.getTime() + (start.h * 60 + start.m) * 60_000;
-	const endMs = dayStart.getTime() + (end.h * 60 + end.m) * 60_000;
-	const day = 24 * 60 * 60_000;
+	const atDay = zonedDayParts(at, tz);
+	const startMs = zonedTimeToEpoch(atDay.y, atDay.m, atDay.d, start.h, start.m, tz);
+	const endMs = zonedTimeToEpoch(atDay.y, atDay.m, atDay.d, end.h, end.m, tz);
 	if (startMs <= endMs) {
 		// Same-day window (09:00–18:00).
 		if (at < startMs) return startMs;
 		if (at <= endMs) return at;
-		return startMs + day; // window closed → next occurrence's start
+		const nextDay = calendarDay(atDay, 1);
+		return zonedTimeToEpoch(nextDay.y, nextDay.m, nextDay.d, start.h, start.m, tz);
 	}
 	// Crosses midnight (22:00–08:00).
 	if (at >= startMs) return at; // 22:00–24:00 leg
@@ -339,8 +489,25 @@ export function constrainToIdleWindow(
 	// In the daytime gap: the nearest window start measured from `from`
 	// (today's opening if still ahead, else tomorrow's) — anchoring on
 	// `at`'s date would skip a same-day opening that is closer.
-	const fromDate = new Date(from);
-	const fromDayStart = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate()).getTime();
-	const fromStartMs = fromDayStart + (start.h * 60 + start.m) * 60_000;
-	return fromStartMs > from ? fromStartMs : fromStartMs + day;
+	const fromDay = zonedDayParts(from, tz);
+	const fromStartMs = zonedTimeToEpoch(fromDay.y, fromDay.m, fromDay.d, start.h, start.m, tz);
+	if (fromStartMs > from) return fromStartMs;
+	const nextDay = calendarDay(fromDay, 1);
+	return zonedTimeToEpoch(nextDay.y, nextDay.m, nextDay.d, start.h, start.m, tz);
+}
+
+/** Next `count` fire times after `from` (epoch ms, ascending) — backs the
+ *  cron.nextRuns RPC so clients preview the daemon's own parser (timezone
+ *  + idle-window semantics included) instead of forking it. */
+export function nextCronScheduleRuns(schedule: CronSchedule, from: number, count: number): number[] {
+	const out: number[] = [];
+	let cursor = from;
+	const probe = { schedule };
+	for (let i = 0; i < 2000 && out.length < count; i++) {
+		const next = computeNextRun(probe, cursor);
+		if (next === null) break;
+		out.push(next);
+		cursor = next + 1;
+	}
+	return out;
 }

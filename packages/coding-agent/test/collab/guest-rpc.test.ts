@@ -140,6 +140,15 @@ describe("collab guest rpc", () => {
 		expect(Array.isArray(data.runs)).toBe(true);
 	});
 
+	it("cron.runs serves per-task run history to read-only guests", async () => {
+		// Read-only method: must NOT be gated by the mutating allowlist.
+		const guest = await joinAsGuest(host.link, "rpc-test");
+		guestCleanups.push(() => guest.close());
+		const res = await guest.rpc("cron.runs", { limit: 5 });
+		expect(res.ok).toBe(true);
+		expect(Array.isArray((res.data as { runs?: unknown }).runs)).toBe(true);
+	});
+
 	it("workspace.tree returns a root + entries for the session cwd", async () => {
 		const guest = await joinAsGuest(host.link, "rpc-test");
 		guestCleanups.push(() => guest.close());
