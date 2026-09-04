@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { $env, $which, APP_NAME, compareVersions, isEnoent, VERSION } from "@musepi/pi-utils";
+import { $env, $which, APP_NAME, compareVersions, formatBytes, isEnoent, VERSION } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { withFileLock } from "@musepi/pi-utils/file-lock";
 import { $ } from "bun";
@@ -289,6 +289,29 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 
 	const hash = createHash("sha256");
 	let size = 0;
+	let lastRenderedPercent = -1;
+	let rendered = false;
+	const isTTY = process.stdout.isTTY === true;
+	const reportProgress = (): void => {
+		if (!isTTY || options.expectedSize <= 0) return;
+		const percent = Math.min(100, Math.floor((size / options.expectedSize) * 100));
+		if (percent <= lastRenderedPercent) return;
+		lastRenderedPercent = percent;
+		const barWidth = 30;
+		const filled = Math.round((percent / 100) * barWidth);
+		const bar = `${"█".repeat(filled)}${"░".repeat(barWidth - filled)}`;
+		const line = `Downloading ${binaryLabel} [${bar}] ${percent.toString().padStart(3, " ")}% ${formatBytes(size)}/${formatBytes(options.expectedSize)}`;
+		process.stdout.write(`\r${line.padEnd(lastLineWidth)}`);
+		lastLineWidth = line.length;
+		rendered = true;
+	};
+	let lastLineWidth = 0;
+	const binaryLabel = path.basename(options.targetPath);
+	const finishProgress = (): void => {
+		if (!rendered) return;
+		process.stdout.write("\n");
+		rendered = false;
+	};
 	const verifier = new Transform({
 		transform(chunk, _encoding, callback) {
 			size += chunk.byteLength;
@@ -300,6 +323,7 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 				);
 				return;
 			}
+			reportProgress();
 			hash.update(chunk);
 			callback(null, chunk);
 		},
@@ -307,6 +331,7 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 
 	try {
 		await pipeline(response.body, verifier, fs.createWriteStream(options.targetPath, { mode: 0o600 }));
+		finishProgress();
 		const digest = `sha256:${hash.digest("hex")}`;
 		if (size !== options.expectedSize) {
 			throw new Error(`Downloaded binary size mismatch: expected ${options.expectedSize} bytes, received ${size}`);
@@ -316,6 +341,7 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 		}
 		await fs.promises.chmod(options.targetPath, 0o755);
 	} catch (err) {
+		if (rendered) process.stdout.write("\n");
 		await unlinkIfExists(options.targetPath);
 		if (isTimeoutError(err)) {
 			throw new Error("Timed out downloading release binary after 15 minutes", { cause: err });
