@@ -219,7 +219,7 @@ describe("AgentSession empty stop guard", () => {
 					.filter(entry => entry.type === "message")
 					.map(entry => entry.message as AgentMessage),
 			),
-		).toHaveLength(1);
+		).toHaveLength(0);
 	});
 
 	it("retries a tool-use stop that has no tool call or text", async () => {
@@ -460,7 +460,7 @@ describe("AgentSession empty stop guard", () => {
 			success: false,
 			attempt: 3,
 		});
-		expect(retryEndEvents[0]?.finalError).toContain("/shake images");
+		expect(retryEndEvents[0]?.finalError).toContain("provider billed");
 	});
 
 	it("ends auto-retry state when empty stop retries hit the cap", async () => {

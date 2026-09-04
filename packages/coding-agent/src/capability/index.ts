@@ -502,6 +502,11 @@ export function getAllProvidersInfo(): ProviderInfo[] {
  */
 export function reset(): void {
 	clearFsCache();
+	// Drop the loadCapability TTL cache too — it memoizes provider scans
+	// (context files, rules, skills) for CAPABILITY_CACHE_TTL_MS and would
+	// otherwise serve stale AGENTS.md/CLAUDE.md bytes after a context reset
+	// or chdir, even though the fs content cache underneath was cleared.
+	capabilityCache.clear();
 }
 
 /**
