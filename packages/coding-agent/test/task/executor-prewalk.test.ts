@@ -54,6 +54,7 @@ function yieldEmittingSession(
 				if (index >= 0) listeners.splice(index, 1);
 			};
 		},
+		subscribeRunState: (_listener: (state: "running" | "idle") => void) => () => {},
 		prompt: async (_text: string, _options?: PromptOptions) => {
 			if (modelSwitch) {
 				session.model = modelSwitch.to;

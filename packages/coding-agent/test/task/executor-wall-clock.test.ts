@@ -42,6 +42,7 @@ function createHangingSession(): HangingSessionHandle {
 		getEnabledToolNames: () => ["read", "yield"],
 		setActiveToolsByName: async (_names: string[]) => {},
 		subscribe: (_listener: (event: AgentSessionEvent) => void) => () => {},
+		subscribeRunState: (_listener: (state: "running" | "idle") => void) => () => {},
 		prompt: async (_text: string, _options?: PromptOptions) => {
 			await hang;
 			return true;

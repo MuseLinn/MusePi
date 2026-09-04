@@ -71,6 +71,7 @@ function createMockSession(
 				if (index >= 0) listeners.splice(index, 1);
 			};
 		},
+		subscribeRunState: (_listener: (state: "running" | "idle") => void) => () => {},
 		prompt: async (text: string, options?: PromptOptions) => {
 			promptIndex += 1;
 			await onPrompt({ text, options, promptIndex, emit, state });
