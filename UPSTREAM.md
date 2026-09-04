@@ -29,7 +29,7 @@
 
 - openai-responses/completions/shared 17.4.0 化(shouldDropAutoToolChoiceForReasoning、flattenExclusiveRequiredRootUnion、reasoningSummary 用 model.compat.supportsReasoningSummary)、ai/utils/schema/{wire,strict-tool-validation}.ts、compat/openai.ts + identity/family.ts(qwenTemplateReasoningEffort)、models.json xai/xai-oauth 段整体替换(含 grok supportsReasoningSummary/supportsPenaltyAndStopParams)、opencode-go 路由器完整替换(OPENCODE_GO_API_ID_OVERRIDES/OPENCODE_ZEN_API_ID_OVERRIDES + fallbackApi 从 sibling gateway 借 routes + dropCachedModelIdsOnStaticMismatch)、types.ts 加 qwenTemplateReasoningEffort
 - 测试修复:issue-931(用 buildModel 构造)、gitlab serverName "omp"→"musepi"、openai-compat-user-agent 正则 `^omp\/`→`^musepi\/`;**openai-completions-cache-affinity.test.ts 移除 fork 定制 xAI 块**(grok-code-fast-1 已改走 openai-responses,openai-completions x-grok-conv-id 路径死)+ 顶层模型改 openAI56CompletionsModel
-- **agent-session.handoff() 漏接修复**:fork 保留了 17.3.4 的 #handoff.handoff(生成+切新会话),上游 17.4.0 为 #maintenance.handoff(文档作为 in-place compaction entry 提交)——已改接 maintenance,handoff 测试 33/35(剩 2 个上游也挂的预存在超时)
+- **agent-session.handoff() 漏接修复**:fork 保留了 17.3.4 的 #handoff.handoff(生成+切新会话),上游 17.4.0 为 #maintenance.handoff(文档作为 in-place compaction entry 提交)——已改接 maintenance,handoff 测试 33/35(剩 2 个上游也挂的预存在超时)→ **2026-09-04 已修复**:两处超时即上游 816760498d 同款缺 mock(overflow fallback 跑真实 compaction 打 fake key 401),移植 compact mock 后 **35/35 全过**
 - ai 3876/0(clean run;codex 流式 2 测试套件并行下 5s 超时为负载 flake,单跑 37/37 过);catalog 593/1(**issue-887 qwen3.7-max 上游 17.4.0 本身也失败,已实测**);agent 493/0
 
 ### 已知缺口(2026-08-26 核正:全部已关闭)
