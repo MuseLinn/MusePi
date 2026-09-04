@@ -770,8 +770,14 @@ export class UiHelpers {
 		};
 		let committed = false;
 		this.ctx.initialChatRendered = false;
+		// Upper bound on full-transcript replay restarts: a large resumed session
+		// with background-persisted entries can livelock at 100% CPU if the
+		// restart condition stays permanently true. Late entries are durable and
+		// reach the display on the next rebuild.
+		let replayAttempt = 0;
+		const MAX_REPLAY_ATTEMPTS = 5;
 		try {
-			while (true) {
+			while (++replayAttempt <= MAX_REPLAY_ATTEMPTS) {
 				if (this.ctx.viewSession.isStreaming) {
 					// Live events mutate the same component maps; keep their replay atomic so
 					// a delta cannot land halfway through rebuilding its pending tool block.
