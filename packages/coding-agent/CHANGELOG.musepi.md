@@ -13,6 +13,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **`musepi update` 下载进度条**:二进制下载(直接更新与 shim takeover 两条路径)现在实时显示进度——`[████░░░] 47% 23.5MB/50.0MB` 单行原地刷新,33ms 节流,渲染到 stderr;非 TTY(管道/CI)保持静默,只有原 `Downloading …` 提示行。`downloadVerifiedBinary` 新增可选 `onProgress(received, total)` 回调。
+  - EN: `musepi update` now shows a live single-line progress bar for binary downloads (both the direct-update and shim-takeover paths) — `[████░░░] 47% 23.5MB/50.0MB`, throttled at 33 ms, rendered to stderr; non-TTY streams stay silent behind the plain `Downloading …` line. `downloadVerifiedBinary` gains an optional `onProgress(received, total)` callback.
 - **`musepi sessions` 命令行会话列表**:非交互列出已保存会话(按最近修改降序,含 id/标题/cwd/时间),支持 `--cwd`/`--limit`/`--json`——headless 枚举会话的补位(此前只有 TUI 交互 picker)。参考 kimi-code `session list`。
   - EN: New `musepi sessions` command lists saved sessions non-interactively (newest first, id/title/cwd/timestamp), with `--cwd`/`--limit`/`--json` — filling the headless-enumeration gap left by the TUI-only picker. Patterned after kimi-code's `session list`.
 - **定时任务调度端到端支持时区**:`schedule.timezone`(IANA)现在真正生效——墙上时间、闲时窗口、cron 表达式都按任务时区求值(Intl 两步偏移,DST 安全,cron 按日历日展开、保留 Vixie dom/dow 语义);未设置/非法时回退本机时区,非法时区串由 `validateCronSchedule` 拒绝。

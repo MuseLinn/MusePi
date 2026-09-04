@@ -10,6 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { truncateToWidth } from "@musepi/pi-tui/utils";
 import { $env, $which, APP_NAME, compareVersions, formatBytes, isEnoent, VERSION } from "@musepi/pi-utils";
 import chalk from "@musepi/pi-utils/chalk";
 import { withFileLock } from "@musepi/pi-utils/file-lock";
@@ -256,12 +257,53 @@ async function getReleaseBinaryAsset(
 	return resolveReleaseBinaryAsset(await response.json(), tag, binaryName);
 }
 
+/**
+ * Single-line TTY progress bar for binary downloads, rendered to stderr so
+ * piped stdout stays clean. Non-TTY streams stay silent.
+ */
+function createDownloadProgressReporter(label: string): {
+	onProgress: (received: number, total: number) => void;
+	finish: () => void;
+} {
+	const stream = process.stderr;
+	const isTty = stream.isTTY === true;
+	let lastWidth = 0;
+	let lastRender = 0;
+	const barWidth = 30;
+	return {
+		onProgress(received, total) {
+			if (!isTty || total <= 0) return;
+			const now = Date.now();
+			if (received < total && now - lastRender < 33) return;
+			lastRender = now;
+			const ratio = Math.min(received / total, 1);
+			const filled = Math.round(ratio * barWidth);
+			const bar = `${"█".repeat(filled)}${"░".repeat(barWidth - filled)}`;
+			const pct = `${Math.floor(ratio * 100)
+				.toString()
+				.padStart(3, " ")}%`;
+			const line = `${label} [${bar}] ${pct} ${formatBytes(received)}/${formatBytes(total)}`;
+			const columns = stream.columns ?? 120;
+			const trimmed = truncateToWidth(line, columns - 1);
+			stream.write(`\r${trimmed.padEnd(lastWidth)}`);
+			lastWidth = trimmed.length;
+		},
+		finish() {
+			if (!isTty || lastWidth === 0) return;
+			stream.write(`\r${" ".repeat(lastWidth)}\r`);
+			lastWidth = 0;
+		},
+	};
+}
+
 export interface VerifiedBinaryDownloadOptions {
 	url: string;
 	targetPath: string;
 	expectedSize: number;
 	expectedDigest: string;
 	fetchImpl?: Fetch;
+	/** Invoked per chunk with bytes received so far and the expected total. */
+	onProgress?: (received: number, total: number) => void;
 }
 
 /**
@@ -286,32 +328,8 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 	if (!response.ok || !response.body) {
 		throw new Error(`Download failed: ${response.statusText}`);
 	}
-
 	const hash = createHash("sha256");
 	let size = 0;
-	let lastRenderedPercent = -1;
-	let rendered = false;
-	const isTTY = process.stdout.isTTY === true;
-	const reportProgress = (): void => {
-		if (!isTTY || options.expectedSize <= 0) return;
-		const percent = Math.min(100, Math.floor((size / options.expectedSize) * 100));
-		if (percent <= lastRenderedPercent) return;
-		lastRenderedPercent = percent;
-		const barWidth = 30;
-		const filled = Math.round((percent / 100) * barWidth);
-		const bar = `${"█".repeat(filled)}${"░".repeat(barWidth - filled)}`;
-		const line = `Downloading ${binaryLabel} [${bar}] ${percent.toString().padStart(3, " ")}% ${formatBytes(size)}/${formatBytes(options.expectedSize)}`;
-		process.stdout.write(`\r${line.padEnd(lastLineWidth)}`);
-		lastLineWidth = line.length;
-		rendered = true;
-	};
-	let lastLineWidth = 0;
-	const binaryLabel = path.basename(options.targetPath);
-	const finishProgress = (): void => {
-		if (!rendered) return;
-		process.stdout.write("\n");
-		rendered = false;
-	};
 	const verifier = new Transform({
 		transform(chunk, _encoding, callback) {
 			size += chunk.byteLength;
@@ -323,7 +341,7 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 				);
 				return;
 			}
-			reportProgress();
+			options.onProgress?.(size, options.expectedSize);
 			hash.update(chunk);
 			callback(null, chunk);
 		},
@@ -331,7 +349,6 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 
 	try {
 		await pipeline(response.body, verifier, fs.createWriteStream(options.targetPath, { mode: 0o600 }));
-		finishProgress();
 		const digest = `sha256:${hash.digest("hex")}`;
 		if (size !== options.expectedSize) {
 			throw new Error(`Downloaded binary size mismatch: expected ${options.expectedSize} bytes, received ${size}`);
@@ -341,7 +358,6 @@ export async function downloadVerifiedBinary(options: VerifiedBinaryDownloadOpti
 		}
 		await fs.promises.chmod(options.targetPath, 0o755);
 	} catch (err) {
-		if (rendered) process.stdout.write("\n");
 		await unlinkIfExists(options.targetPath);
 		if (isTimeoutError(err)) {
 			throw new Error("Timed out downloading release binary after 15 minutes", { cause: err });
@@ -1588,14 +1604,17 @@ export async function updateViaBinaryAt(
 	const tempPath = `${targetPath}.${attempt}.new`;
 	const backupPath = `${targetPath}.${attempt}.bak`;
 	const asset = await getReleaseBinaryAsset(expectedVersion, binaryName, options.fetchImpl, options.githubToken);
-	console.log(chalk.dim(`Downloading ${binaryName}…`));
+	if (!process.stderr.isTTY) console.log(chalk.dim(`Downloading ${binaryName}…`));
+	const progress = createDownloadProgressReporter(`Downloading ${binaryName}`);
 	await downloadVerifiedBinary({
 		url: asset.url,
 		targetPath: tempPath,
 		expectedSize: asset.size,
 		expectedDigest: asset.digest,
 		fetchImpl: options.fetchImpl,
+		onProgress: progress.onProgress,
 	});
+	progress.finish();
 	console.log(chalk.dim(`Verified ${asset.digest}`));
 
 	// Serialize the target swap and stale-artifact sweep per target so two
@@ -1677,14 +1696,17 @@ export async function updateViaShimTakeover(
 	const attempt = `${Date.now()}.${process.pid}.${updateAttemptSeq++}`;
 	const tempPath = `${exePath}.${attempt}.new`;
 	const asset = await getReleaseBinaryAsset(expectedVersion, binaryName, options.fetchImpl, options.githubToken);
-	console.log(chalk.dim(`Downloading ${binaryName}…`));
+	if (!process.stderr.isTTY) console.log(chalk.dim(`Downloading ${binaryName}…`));
+	const progress = createDownloadProgressReporter(`Downloading ${binaryName}`);
 	await downloadVerifiedBinary({
 		url: asset.url,
 		targetPath: tempPath,
 		expectedSize: asset.size,
 		expectedDigest: asset.digest,
 		fetchImpl: options.fetchImpl,
+		onProgress: progress.onProgress,
 	});
+	progress.finish();
 	console.log(chalk.dim(`Verified ${asset.digest}`));
 	const forwarded: Array<{ launcher: string; original: string }> = [];
 	const stuck: string[] = [];
