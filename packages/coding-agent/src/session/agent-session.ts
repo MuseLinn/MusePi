@@ -101,6 +101,7 @@ import {
 } from "@musepi/pi-utils";
 import { type AdvisorConfig, type AdvisorRuntimeStatus, loadAdvisorTranscriptCosts } from "../advisor";
 import { ASYNC_JOB_MANAGER_SHUTDOWN_REASON, type AsyncJob, AsyncJobManager } from "../async";
+import { reset as resetCapabilities } from "../capability";
 import { shouldEnableAppendOnlyContext } from "../config/append-only-context-mode";
 import type { ModelRegistry } from "../config/model-registry";
 import type { ResolvedModelRoleValue } from "../config/model-resolver";
@@ -1049,7 +1050,7 @@ export class AgentSession {
 			isDisposed: () => this.#isDisposed,
 			isStreaming: () => this.isStreaming,
 			planModeEnabled: () => this.#planModeState?.enabled === true,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			wakeForIrc: records => this.#wakeForIrc(records),
 			runEphemeralTurn: args => this.runEphemeralTurn(args),
 		};
@@ -1082,7 +1083,7 @@ export class AgentSession {
 			settings: this.settings,
 			model: () => this.model,
 			agentKind: () => this.#agentKind,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			scheduleAgentContinue: options => this.#scheduleAgentContinue(options),
 			promptGeneration: () => this.#promptGeneration,
 			hasPendingAsyncWake: () => this.#hasPendingAsyncWake(),
@@ -1110,7 +1111,7 @@ export class AgentSession {
 			clearInheritedProviderPromptCacheKey: () => this.#clearInheritedProviderPromptCacheKey(),
 			magicKeywordEnabled: keyword => this.#magicKeywordEnabled(keyword),
 			emit: event => this.#emit(event),
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			emitNotice: (level, message, source) => this.emitNotice(level, message, source),
 		};
 		this.#models = new ModelControls(modelControlsHost, {
@@ -1146,7 +1147,7 @@ export class AgentSession {
 			streamingEditAbortTriggered: () => this.#streamingEditGuard.abortTriggered,
 			promptGeneration: () => this.#promptGeneration,
 			sessionId: () => this.sessionId,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			scheduleAgentContinue: options => this.#scheduleAgentContinue(options),
 			waitForSessionMessagePersistence: message => this.#waitForSessionMessagePersistence(message),
 			appendSessionMessage: message => this.#appendSessionMessage(message),
@@ -1376,7 +1377,7 @@ export class AgentSession {
 			agent: this.agent,
 			sessionManager: this.sessionManager,
 			settings: this.settings,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			schedulePostPromptTask: (task, options) => this.#schedulePostPromptTask(task, options),
 			scheduleAgentContinue: options => this.#scheduleAgentContinue(options),
 			promptGeneration: () => this.#promptGeneration,
@@ -1521,7 +1522,7 @@ export class AgentSession {
 			allowAgentInitiatedTurns: () => this.#allowAcpAgentInitiatedTurns,
 			planModeState: () => this.#planModeState,
 			clientBridge: () => this.#clientBridge,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			emitNotice: (level, message, source) => this.emitNotice(level, message, source),
 			sendCustomMessage: (message, options) => this.sendCustomMessage(message, options),
 			extractQueuedAdvisorCards: () => this.#extractQueuedAdvisorCards(),
@@ -1585,7 +1586,7 @@ export class AgentSession {
 			planReferencePath: () => this.#planReferencePath,
 			nonMessageTokenSource: () => this,
 			memoryBackendSession: () => this,
-			emitSessionEvent: event => this.#emitSessionEvent(event),
+			emitSessionEvent: (event, options) => this.#emitSessionEvent(event, options),
 			emitNotice: (level, message, source) => this.emitNotice(level, message, source),
 			schedulePostPromptTask: (task, options) => this.#schedulePostPromptTask(task, options),
 			scheduleAgentContinue: options => this.#scheduleAgentContinue(options),
@@ -2148,7 +2149,7 @@ export class AgentSession {
 	 */
 	#subscriberEmitGate: Promise<void> = Promise.resolve();
 
-	async #emitSessionEvent(event: AgentSessionEvent): Promise<void> {
+	async #emitSessionEvent(event: AgentSessionEvent, options?: { detachExtensions?: boolean }): Promise<void> {
 		if (event.type === "message_update") {
 			this.#emit(event);
 			void this.#queueExtensionEvent(event);
@@ -2161,7 +2162,7 @@ export class AgentSession {
 		const { promise: gate, resolve: releaseGate } = Promise.withResolvers<void>();
 		this.#subscriberEmitGate = gate;
 		try {
-			await this.#emitExtensionEvent(event);
+			await this.#emitExtensionEvent(event, options?.detachExtensions === true);
 			await previousGate;
 			// Hold the wire-level agent_end until in-flight prompts unwind. Subscribers
 			// (rpc-mode, ACP, Cursor) treat agent_end as the "session is idle" signal;
@@ -3548,8 +3549,22 @@ export class AgentSession {
 	}
 
 	/** Emit extension events based on session events */
-	async #emitExtensionEvent(event: AgentSessionEvent): Promise<void> {
+	async #emitExtensionEvent(event: AgentSessionEvent, detach = false): Promise<void> {
 		if (!this.#extensionRunner) return;
+		// Detached emission (auto_compaction_end with detachPostCommit, etc.):
+		// fire the extension handler without letting a hung handler pin the
+		// mid-run loop — subscribers still get the event, extension observers
+		// just resolve whenever their handler settles. Mirror the upstream
+		// detachExtensions contract that the host bridge now forwards.
+		// Turn-bookkeeping events (agent_start/turn_*) keep the inline path:
+		// their handlers maintain `#turnIndex`, which must not run out of band.
+		const detachable = event.type !== "agent_start" && event.type !== "turn_start" && event.type !== "turn_end";
+		if (detach && detachable) {
+			this.#emitExtensionEvent(event, false).catch(error => {
+				logger.error("Detached extension emit failed", { eventType: event.type, error: String(error) });
+			});
+			return;
+		}
 		if (event.type === "agent_start") {
 			this.#turnIndex = 0;
 			await this.#extensionRunner.emit({ type: "agent_start" });
@@ -4283,6 +4298,12 @@ export class AgentSession {
 		// on-disk record and the plain `transcript:true` export path keep the full
 		// pre-reset history.
 		this.sessionManager.appendResetBoundary();
+
+		// Drop the context-file cache and rebuild the base prompt so an edited
+		// AGENTS.md (or other context file) is re-read from disk after /clear —
+		// same cache-reset newSession() performs (upstream #9273).
+		resetCapabilities();
+		await this.refreshBaseSystemPrompt();
 
 		return { droppedCount };
 	}
@@ -7056,8 +7077,14 @@ export class AgentSession {
 			this.#advisors.resetSessionState();
 			advisorRecordersDetached = false;
 			this.#reconnectToAgent();
-			// The workspace-roots block must reflect the new session's directory set,
-			// not the previous session's — refresh before the next turn goes out.
+			// Drop the process-lifetime context-file cache so the rebuild re-reads
+			// AGENTS.md and friends from disk: the user may have edited them since
+			// the previous session started, and refreshBaseSystemPrompt() re-runs
+			// discovery but would otherwise hit stale cached bytes (upstream #9273).
+			// The workspace-roots block must also reflect the new session's
+			// directory set, not the previous session's — refresh before the next
+			// turn goes out.
+			resetCapabilities();
 			await this.refreshBaseSystemPrompt();
 
 			// Emit session_switch event with reason "new" to hooks

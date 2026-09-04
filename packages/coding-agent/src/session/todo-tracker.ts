@@ -49,7 +49,7 @@ export interface TodoTrackerHost {
 	settings: Settings;
 	model(): Model | undefined;
 	agentKind(): "main" | "sub";
-	emitSessionEvent(event: AgentSessionEvent): Promise<void>;
+	emitSessionEvent(event: AgentSessionEvent, options?: { detachExtensions?: boolean }): Promise<void>;
 	scheduleAgentContinue(options: { generation?: number }): void;
 	promptGeneration(): number;
 	hasPendingAsyncWake(): boolean;

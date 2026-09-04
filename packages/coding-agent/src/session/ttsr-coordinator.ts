@@ -31,7 +31,7 @@ export interface TtsrCoordinatorHost {
 	agent: Agent;
 	sessionManager: SessionManager;
 	settings: Settings;
-	emitSessionEvent(event: AgentSessionEvent): Promise<void>;
+	emitSessionEvent(event: AgentSessionEvent, options?: { detachExtensions?: boolean }): Promise<void>;
 	schedulePostPromptTask(task: (signal: AbortSignal) => Promise<void>, options?: { delayMs?: number }): void;
 	scheduleAgentContinue(options: TtsrContinueOptions): void;
 	promptGeneration(): number;

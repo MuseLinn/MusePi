@@ -18,7 +18,7 @@ export interface IrcBridgeHost {
 	isDisposed(): boolean;
 	isStreaming(): boolean;
 	planModeEnabled(): boolean;
-	emitSessionEvent(event: AgentSessionEvent): Promise<void>;
+	emitSessionEvent(event: AgentSessionEvent, options?: { detachExtensions?: boolean }): Promise<void>;
 	wakeForIrc(records: CustomMessage[]): void;
 	runEphemeralTurn(args: { promptText: string }): Promise<{ replyText: string }>;
 }
