@@ -30,7 +30,7 @@ describe("documented-but-unregistered plugin verbs do not leak to launch (#2935)
 		expect(result).not.toHaveProperty("argv");
 		// Must point at the real command.
 		expect(result).toHaveProperty("error");
-		expect("error" in result && result.error).toContain("omp plugin list");
+		expect("error" in result && result.error).toContain("musepi plugin list");
 	});
 
 	test("bare `omp remove` hints at `omp plugin uninstall` instead of launching with 'remove' as the prompt", () => {
@@ -38,7 +38,7 @@ describe("documented-but-unregistered plugin verbs do not leak to launch (#2935)
 		expect(result).not.toEqual({ argv: ["launch", "remove"] });
 		expect(result).not.toHaveProperty("argv");
 		expect(result).toHaveProperty("error");
-		expect("error" in result && result.error).toContain("omp plugin uninstall");
+		expect("error" in result && result.error).toContain("musepi plugin uninstall");
 	});
 
 	test("genuine multi-word prompts beginning with these verbs still route to launch", () => {
@@ -62,17 +62,17 @@ describe("documented-but-unregistered plugin verbs do not leak to launch (#2935)
 		expect(result).not.toEqual({ argv: ["launch", "marketplace", "add", "xyz"] });
 		expect(result).not.toHaveProperty("argv");
 		expect(result).toHaveProperty("error");
-		expect("error" in result && result.error).toContain("omp plugin marketplace");
+		expect("error" in result && result.error).toContain("musepi plugin marketplace");
 	});
 
 	test("bare marketplace-family verbs hint at their `omp plugin` command (#4845)", () => {
 		for (const [verb, hint] of [
-			["marketplace", "omp plugin marketplace"],
-			["discover", "omp plugin discover"],
-			["upgrade", "omp plugin upgrade"],
-			["uninstall", "omp plugin uninstall"],
-			["enable", "omp plugin enable"],
-			["disable", "omp plugin disable"],
+			["marketplace", "musepi plugin marketplace"],
+			["discover", "musepi plugin discover"],
+			["upgrade", "musepi plugin upgrade"],
+			["uninstall", "musepi plugin uninstall"],
+			["enable", "musepi plugin enable"],
+			["disable", "musepi plugin disable"],
 		] as const) {
 			const result = resolveCliArgv([verb]);
 			expect(result).not.toHaveProperty("argv");

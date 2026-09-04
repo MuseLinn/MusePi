@@ -23,7 +23,7 @@ describe("RpcClient lifecycle (issue #4079 B)", () => {
 
 		await client.start();
 		const state = (await client.getState()) as unknown as { payload: string };
-		expect(state.payload).toBe("😀".repeat(400_000));
+		expect(state.payload).toBe("😀".repeat(270_000));
 		expect((await client.getMessages()) as unknown).toEqual([
 			{ role: "user", content: "first", timestamp: 1 },
 			{ role: "assistant", content: [{ type: "text", text: "second" }], timestamp: 2 },

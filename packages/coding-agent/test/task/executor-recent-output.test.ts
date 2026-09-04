@@ -186,6 +186,7 @@ function createScriptedSession(
 			emittedGate.resolve();
 		},
 		waitForIdle: async () => {},
+		subscribeRunState: (_listener: (state: "running" | "idle") => void) => () => {},
 		getLastAssistantMessage: () => undefined,
 		abort: async () => {
 			aborted = true;
