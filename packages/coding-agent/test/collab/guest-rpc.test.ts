@@ -5,7 +5,9 @@
  * that is absent in CI (no ~/.musepi boards/crons) or rejects before
  * touching disk, so the suite never mutates the user's real stores.
  */
+
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
+import * as path from "node:path";
 import { importRoomKey } from "@musepi/pi-coding-agent/collab/crypto";
 import { CollabHost } from "@musepi/pi-coding-agent/collab/host";
 import { COLLAB_PROTO, type CollabFrame, parseCollabLink } from "@musepi/pi-coding-agent/collab/protocol";
@@ -155,7 +157,7 @@ describe("collab guest rpc", () => {
 		const res = await guest.rpc("workspace.tree", { maxDepth: 1, perDirLimit: 5 });
 		expect(res.ok).toBe(true);
 		const data = res.data as { rootPath?: unknown; truncated?: unknown; entries?: unknown };
-		expect(data.rootPath).toBe("/tmp");
+		expect(data.rootPath).toBe(path.resolve("/tmp"));
 		expect(Array.isArray(data.entries)).toBe(true);
 	});
 
