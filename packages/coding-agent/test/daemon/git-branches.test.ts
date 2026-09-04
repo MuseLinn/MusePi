@@ -15,6 +15,10 @@ async function tmpRepo(): Promise<string> {
 		if (res.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${res.stderr.toString()}`);
 	};
 	run(["init", "-q", "-b", "main"]);
+	// Repo-local identity so every later commit works on CI runners that have
+	// no global user.name/email (the feature commit below relies on it).
+	run(["config", "user.email", "t@t"]);
+	run(["config", "user.name", "t"]);
 	await fs.promises.writeFile(path.join(dir, "a.txt"), "hi");
 	run(["add", "a.txt"]);
 	run(["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "init"]);
