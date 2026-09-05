@@ -34,8 +34,13 @@ describe("issue #3031 — mnemopi embeddings live in an isolated subprocess", ()
 		// Bun-test worker: the test runner owns its own IPC channel and can
 		// starve nested Bun subprocess IPC on some Bun builds.
 		const repoRoot = path.resolve(import.meta.dir, "../../..");
-		const script =
-			'const { smokeTestMnemopiEmbedWorker } = await import("@musepi/pi-coding-agent/mnemopi/embed-client"); await smokeTestMnemopiEmbedWorker({ timeoutMs: 15000 });';
+		// `bun -e` resolves package imports from the eval context, not the
+		// spawn cwd — a bare `@musepi/...` specifier fails here. Point the child
+		// at the source module by absolute path so the smoke probe actually runs.
+		const embedClient = path
+			.join(repoRoot, "packages", "coding-agent", "src", "mnemopi", "embed-client.ts")
+			.replaceAll("\\", "/");
+		const script = `const { smokeTestMnemopiEmbedWorker } = await import("${embedClient}"); await smokeTestMnemopiEmbedWorker({ timeoutMs: 15000 });`;
 		const proc = Bun.spawn([process.execPath, "-e", script], {
 			cwd: repoRoot,
 			stdout: "pipe",

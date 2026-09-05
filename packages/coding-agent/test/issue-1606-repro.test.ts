@@ -25,9 +25,14 @@ describe("issue #1606 — tiny model lives in an isolated subprocess", () => {
 		// Bun-test worker: the test runner owns its own IPC channel and can
 		// starve nested Bun subprocess IPC on some Bun builds.
 		const repoRoot = path.resolve(import.meta.dir, "../../..");
-		const script =
-			'const { smokeTestTinyTitleWorker } = await import("@musepi/pi-coding-agent/tiny/title-client"); await smokeTestTinyTitleWorker({ timeoutMs: 15000 });';
-		const proc = Bun.spawn([process.execPath, "-e", script], {
+		// `bun -e` resolves package imports from the eval context, not the
+		// spawn cwd — a bare `@musepi/...` specifier fails here. Point the child
+		// at the source module by absolute path so the smoke probe actually runs.
+		const titleClient = path
+			.join(repoRoot, "packages", "coding-agent", "src", "tiny", "title-client.ts")
+			.replaceAll("\\", "/");
+		const script = `const { smokeTestTinyTitleWorker } = await import("${titleClient}"); await smokeTestTinyTitleWorker({ timeoutMs: 15000 });`;
+		const proc = Bun.spawn([process.execPath, "--no-banner", "-e", script], {
 			cwd: repoRoot,
 			stdout: "pipe",
 			stderr: "pipe",

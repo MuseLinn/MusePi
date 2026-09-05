@@ -115,13 +115,17 @@ export const SMOKE_TEST_TIMEOUT_MS = 30_000;
  */
 export function resolveWorkerSpawnCmd(workerArg: string): WorkerSpawnCommand {
 	const executable = stripWindowsExtendedLengthPathPrefix(process.execPath);
+	// Compiled binaries don't print the banner. Source-tree bun entries do:
+	// `--no-banner` keeps the "Bun vX" startup line out of the worker's
+	// captured stderr tail, which would otherwise corrupt worker-error
+	// diagnostics (and zero-output smoke assertions).
 	if (isCompiledBinary()) return { cmd: [executable, workerArg] };
 	const hostEntry = workerHostEntry();
 	if (hostEntry) {
-		return { cmd: [executable, path.basename(hostEntry), workerArg], cwd: path.dirname(hostEntry) };
+		return { cmd: [executable, "--no-banner", path.basename(hostEntry), workerArg], cwd: path.dirname(hostEntry) };
 	}
 	const packageRoot = path.resolve(import.meta.dir, "..", "..");
-	return { cmd: [executable, "src/cli.ts", workerArg], cwd: packageRoot };
+	return { cmd: [executable, "--no-banner", "src/cli.ts", workerArg], cwd: packageRoot };
 }
 
 /**
