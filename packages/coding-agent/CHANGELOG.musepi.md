@@ -23,6 +23,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: New `cron.runs` (per-task run history, newest first, default 50 / cap 100, read-only so guests may call it), `cron.nextRuns` (editor preview computed by the daemon's own parser — the client-side fork is deleted) and a `crons.changed` broadcast pushed on every mutation and run start/finish; the GUI subscribes for instant refresh and keeps its 30s poll as fallback.
 - **任务中心运行历史与失败原因**:详情面板新增可折叠运行历史(状态/耗时/错误/打开会话),任务失败时展示 daemon 记录的 `lastError`;desktop-web 访客面板历史表改走 `cron.runs`(修掉 slice 50 但上游只有 20 的错位)。
   - EN: The task center detail panel gains a collapsible run history (status/duration/error/open-session) and surfaces the recorded `lastError` when a task fails; the desktop-web guest panel's history table now uses `cron.runs` (fixing the slice-50-from-20 mismatch).
+- **智能体中心"完成未查看"标记**:子代理在用户没看窗口时完成(隐藏/失焦),Agents Center 行会保持"新"徽标 + accent 行底 + 静止环状态点,直到真正打开该子代理抽屉才消除(toggle 关闭不吞标记);同一子代理复活重跑时旧标记自动清除。标记存 GUI 层会话注册表(跨会话切换存活,重启即清),运行中的绿色脉冲语义不受影响。
+  - EN: The Agents Center now marks subagents that completed while the user wasn't looking (window hidden/unfocused at completion) with a persistent "New" badge, accent row wash and a static status-dot ring; the marker clears only when the agent's drawer is actually opened (toggle-close does not eat it), and a revived subagent drops its stale mark when its run restarts. State lives in a GUI-lifetime registry keyed by session id — survives session switches, lost on app restart; the running pulse semantics are untouched.
 
 ### Fixed
 

@@ -77,6 +77,7 @@ import type { CustomTool } from "../extensibility/custom-tools/types";
 import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
 import { FileIndexService } from "../file-index";
+import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";
 import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
@@ -85,6 +86,9 @@ import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-fi
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import manualContinuePrompt from "../prompts/system/manual-continue.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
+import planModeCompactInstructionsPrompt from "../prompts/system/plan-mode-compact-instructions.md" with {
+	type: "text",
+};
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { CompactMode } from "../session/compact-modes";
 import {
@@ -7474,8 +7478,16 @@ export class DaemonServer {
 					feedback?: string | null;
 					content?: string | null;
 					/** TUI "Approve and compact context" parity: distill the
-					 *  planning transcript before the approved-prompt dispatch. */
+					 *  planning conversation before the approved-prompt dispatch. */
 					compact?: boolean;
+					/** Start the approved prompt in a fresh context (TUI default
+					 *  clear-then-execute parity). Falls back to context-preserved
+					 *  when the session is streaming (resetSessionContext rejects). */
+					fresh?: boolean;
+					/** Optional execution model override (provider/id) for the
+					 *  approved prompt. Passed through session.setModel before
+					 *  the prompt so the chosen model applies to execution only. */
+					executionModel?: { id: string; provider?: string };
 				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -7512,19 +7524,65 @@ export class DaemonServer {
 						g.setPlanProposalHandler(null);
 						g.setPlanModeState?.(undefined);
 						g.markPlanReferenceSent();
+
+						// Capture the pre-clear execution tool set (TUI parity):
+						// approved-plan prompts require `read` to load the durable
+						// local:// plan file, so force it into the restored set.
+						const executionTools = [...new Set([...g.getEnabledToolNames(), "read"])];
+
 						if (p.compact === true) {
-							// Distill the planning conversation first (TUI
-							// compactBeforeExecute parity): the approved prompt then
-							// lands as a fresh cache anchor on the compacted context.
-							await g.compact(undefined, {});
+							// Pin the reference path BEFORE compacting so the
+							// approved-prompt injection can find it on the
+							// post-compaction session (issue #4359).
+							g.setPlanReferencePath(planFilePath);
+							await g.compact(undefined, {
+								internalGuidance: prompt.render(planModeCompactInstructionsPrompt, {
+									planFilePath,
+								}),
+							});
 						}
-						// Context preserved (the TUI's default is a fresh session;
-						// the daemon keeps the planning conversation so the agent
-						// still sees its own discussion — the approved prompt
-						// declares the plan file authoritative either way).
+
+						if (p.fresh === true) {
+							// TUI "clear then execute" parity: drop the planning
+							// conversation so the approved prompt runs in a fresh
+							// context. resetSessionContext rejects while streaming.
+							const oldLocalRoot = resolveLocalRoot(localProtocolOptions);
+							const dropResult = await g.resetSessionContext();
+							if (dropResult === undefined) {
+								throw new Error("Wait for the current response to finish before approving in a fresh context.");
+							}
+							// Migrate the plan file into the new session's local
+							// root so the approved prompt's local:// ref still
+							// resolves (mirrors interactive-mode copyLocalArtifacts
+							// + resolveLocalUrlToPath + writeFile).
+							const newLocalRoot = resolveLocalRoot(localProtocolOptions);
+							await copyLocalArtifacts(oldLocalRoot, newLocalRoot);
+							const newPlanPath = resolveLocalUrlToPath(planFilePath, {
+								getArtifactsDir: () => sessionManager.getArtifactsDir(),
+								getSessionId: () => sessionManager.getSessionId(),
+							});
+							await fs.promises.mkdir(path.dirname(newPlanPath), { recursive: true });
+							await fs.promises.writeFile(newPlanPath, content, "utf-8");
+						}
+
+						const executionModel = p.executionModel;
+						if (executionModel?.id) {
+							const models = g.getAvailableModels();
+							const model = executionModel.provider
+								? resolveProviderModelReference(executionModel.provider, executionModel.id, models)
+								: models.find(m => m.id === executionModel.id);
+							if (!model) throw new Error(`Unknown execution model: ${executionModel.id}`);
+							await g.setModelTemporary(model);
+						}
+
+						// Restore the execution tool set (TUI parity): approved-plan
+						// prompts now require `read` to load the durable plan file.
+						await g.setActiveToolsByName(executionTools);
+
+						const contextPreserved = !p.fresh;
 						const approvePrompt = prompt.render(planModeApprovedPrompt, {
 							planFilePath,
-							contextPreserved: true,
+							contextPreserved,
 						});
 						if (g.isStreaming) {
 							await g.followUp(approvePrompt, undefined, { synthetic: true });

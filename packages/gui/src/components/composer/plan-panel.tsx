@@ -114,10 +114,20 @@ export function PlanPanel({
 							type="button"
 							className="gui-goal-btn gui-goal-btn--primary"
 							disabled={busy !== null}
-							onClick={() => run("approve")}
+							onClick={() => run("approve", { fresh: true })}
 						>
 							<Icon name="check" className="h-3.5 w-3.5" />
 							{t("plan approve execute")}
+						</button>
+						<button
+							type="button"
+							className="gui-goal-btn"
+							disabled={busy !== null}
+							title={t("plan approve keep hint")}
+							onClick={() => run("approve")}
+						>
+							<Icon name="pushpin" className="h-3.5 w-3.5" />
+							{t("plan approve keep")}
 						</button>
 						<button
 							type="button"

@@ -145,6 +145,8 @@ export const general = {
 	"plan exit": "Exit plan mode",
 	"plan approve compact": "Approve and compact context",
 	"plan approve compact hint": "Distill the planning context, then execute the plan",
+	"plan approve keep": "Approve and keep context",
+	"plan approve keep hint": "Execute the plan with the full planning context preserved",
 	"jumped back": "Jumped back",
 	"jumped back to": "Jumped back to",
 	"undo jump": "Undo jump",

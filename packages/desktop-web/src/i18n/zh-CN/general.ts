@@ -143,6 +143,8 @@ export const general = {
 	"plan exit": "退出计划模式",
 	"plan approve compact": "批准并压缩上下文",
 	"plan approve compact hint": "压缩规划上下文后执行计划",
+	"plan approve keep": "保留并执行",
+	"plan approve keep hint": "保留完整规划上下文后执行计划",
 	"jumped back": "已回退",
 	"jumped back to": "已回退到",
 	"undo jump": "撤销跳转",
