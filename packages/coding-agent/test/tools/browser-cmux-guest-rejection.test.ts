@@ -3,9 +3,17 @@ import * as path from "node:path";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../..");
 
+// `--eval` resolves imports from the eval context, not the spawn cwd — point
+// at the source modules by absolute path (same trap as the worker smoke probes).
+const cmuxTabPath = path
+	.join(repoRoot, "packages", "coding-agent", "src", "tools", "browser", "cmux", "cmux-tab.ts")
+	.replaceAll("\\", "/");
+const socketClientPath = path
+	.join(repoRoot, "packages", "coding-agent", "src", "tools", "browser", "cmux", "socket-client.ts")
+	.replaceAll("\\", "/");
 const probe = `
-import { CmuxTab, runCmuxCode } from "@musepi/pi-coding-agent/tools/browser/cmux/cmux-tab";
-import { CmuxSocketClient } from "@musepi/pi-coding-agent/tools/browser/cmux/socket-client";
+import { CmuxTab, runCmuxCode } from "${cmuxTabPath}";
+import { CmuxSocketClient } from "${socketClientPath}";
 
 const cwd = process.cwd();
 const tab = new CmuxTab({
