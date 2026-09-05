@@ -1490,6 +1490,17 @@ export class Markdown implements Component {
 	#cachedLines?: readonly string[];
 	#transientRenderCache = false;
 
+	// Native-scrollback width-epoch support (transcript resize replay): the
+	// semantic source state that produced the most recent render. Unlike #text,
+	// it does not advance when streaming updates arrive before the next paint.
+	#lastRenderedText?: string;
+	#lastRenderedTransientRenderCache = false;
+	#lastRenderedHasMutableTrailingRow = false;
+	#widthEpochBoundaries = new WeakMap<
+		object,
+		{ text: string; transientRenderCache: boolean; hasMutableTrailingRow: boolean }
+	>();
+
 	// Streaming-lex cache: the largest blank-line-bounded prefix of #text whose
 	// block tokens are frozen, plus those tokens. marked has no resumable lexer,
 	// but block tokenization is local across a "\n\n" boundary with balanced
@@ -1559,6 +1570,60 @@ export class Markdown implements Component {
 		this.#cachedText = undefined;
 		this.#cachedWidth = undefined;
 		this.#cachedLines = undefined;
+	}
+
+	// Native-scrollback width-epoch protocol (see Container in tui.ts). A
+	// streaming Markdown block is the canonical epoch source in the transcript:
+	// while the text only grows, the top rows rendered at a captured width stay
+	// byte-stable, so resize replay can commit them without re-rendering history.
+	captureNativeScrollbackWidthEpoch(): unknown {
+		if (this.#lastRenderedText === undefined) return undefined;
+		const marker = {};
+		this.#widthEpochBoundaries.set(marker, {
+			text: this.#lastRenderedText,
+			transientRenderCache: this.#lastRenderedTransientRenderCache,
+			hasMutableTrailingRow: this.#lastRenderedHasMutableTrailingRow,
+		});
+		return marker;
+	}
+
+	resolveNativeScrollbackWidthEpoch(boundary: unknown): number | undefined {
+		if (typeof boundary !== "object" || boundary === null || this.#cachedWidth === undefined) return undefined;
+		const captured = this.#widthEpochBoundaries.get(boundary);
+		if (captured === undefined) return undefined;
+		const snapshot = new Markdown(
+			captured.text,
+			this.#paddingX,
+			this.#paddingY,
+			this.#theme,
+			this.#defaultTextStyle,
+			this.#codeBlockIndent,
+		);
+		snapshot.#ignoreTight = this.#ignoreTight;
+		snapshot.#transientRenderCache = captured.transientRenderCache;
+		return Math.max(
+			0,
+			snapshot.render(this.#cachedWidth).length - this.#paddingY - (captured.hasMutableTrailingRow ? 1 : 0),
+		);
+	}
+
+	getNativeScrollbackWidthEpochRows(): number | undefined {
+		return this.#cachedLines === undefined ? undefined : this.#widthEpochRows(this.#cachedLines.length);
+	}
+
+	isNativeScrollbackWidthEpochAppendOnly(boundary: unknown): boolean {
+		if (typeof boundary !== "object" || boundary === null) return true;
+		return this.#widthEpochBoundaries.get(boundary)?.hasMutableTrailingRow !== true;
+	}
+
+	#widthEpochRows(renderedRows: number): number {
+		return Math.max(0, renderedRows - this.#paddingY - (this.#transientRenderCache ? 1 : 0));
+	}
+
+	#recordLastRenderedState(hasContentRows: boolean): void {
+		this.#lastRenderedText = this.#text;
+		this.#lastRenderedTransientRenderCache = this.#transientRenderCache;
+		this.#lastRenderedHasMutableTrailingRow = this.#transientRenderCache && hasContentRows;
 	}
 	get transientRenderCache(): boolean {
 		return this.#transientRenderCache;
@@ -1632,6 +1697,7 @@ export class Markdown implements Component {
 		// Returning the cached reference is load-bearing: parents memoize their
 		// concatenation on reference equality.
 		if (this.#cachedLines && this.#cachedText === this.#text && this.#cachedWidth === width) {
+			this.#recordLastRenderedState(this.#cachedLines.length > 0);
 			return this.#cachedLines;
 		}
 
@@ -1644,6 +1710,7 @@ export class Markdown implements Component {
 			this.#cachedText = this.#text;
 			this.#cachedWidth = width;
 			this.#cachedLines = EMPTY_RENDER_LINES;
+			this.#recordLastRenderedState(false);
 			return EMPTY_RENDER_LINES;
 		}
 
@@ -1674,6 +1741,7 @@ export class Markdown implements Component {
 				this.#cachedText = this.#text;
 				this.#cachedWidth = width;
 				this.#cachedLines = cached;
+				this.#recordLastRenderedState(cached.length > 0);
 				return cached;
 			}
 		}
@@ -1701,6 +1769,7 @@ export class Markdown implements Component {
 		this.#cachedText = this.#text;
 		this.#cachedWidth = width;
 		this.#cachedLines = result;
+		this.#recordLastRenderedState(contentLines.length > 0);
 
 		// Update L2 module-level LRU so future instances with the same key skip
 		// the marked.lexer + highlightCode (Rust FFI) work entirely.
