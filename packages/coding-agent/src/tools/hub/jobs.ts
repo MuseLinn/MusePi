@@ -88,10 +88,7 @@ export function visibleJobs(manager: AsyncJobManager, ids: string[], ownerId: st
  * already public via the peer roster, so listing ids here leaks nothing new;
  * job *control* stays owner-scoped.
  */
-export function runningAgentsOutsideJobs(
-	session: ToolSession,
-	options: { corroborate?: boolean } = {},
-): AgentActivitySnapshot[] {
+export function runningAgentsOutsideJobs(session: ToolSession): AgentActivitySnapshot[] {
 	const registry = session.agentRegistry;
 	if (!registry) return [];
 	const selfId = session.getAgentId?.() ?? undefined;
@@ -109,19 +106,19 @@ export function runningAgentsOutsideJobs(
 	const now = Date.now();
 	const out: AgentActivitySnapshot[] = [];
 	for (const ref of registry.list()) {
-		// Claimed running status by default: a re-woken agent whose session has
-		// not attached yet, or a stale claimed-running entry with no live turn,
-		// is what an operator must see in a jobs snapshot — upstream #8634.
-		// With `corroborate` (the bare-wait path) the entry must carry a live
-		// streaming session, so a detached stale claim does not read as work
-		// the wait should block on.
+		// Claimed running status, not session-corroborated: a re-woken agent
+		// whose session has not attached yet, or a stale claimed-running entry
+		// with no live turn, is exactly what an operator must see — it is the
+		// handle they have for clearing it (upstream #8634). The `live` flag
+		// distinguishes a corroborated turn from a stale claim so callers can
+		// label it.
 		if (ref.kind !== "sub" || ref.status !== "running") continue;
-		if (options.corroborate && !registry.isRunning(ref)) continue;
 		if (ref.id === selfId || covered.has(ref.id)) continue;
 		out.push({
 			id: ref.id,
 			...(ref.parentId ? { parentId: ref.parentId } : {}),
 			...(ref.activity ? { activity: ref.activity } : {}),
+			live: registry.isRunning(ref),
 			ageMs: Math.max(0, now - ref.createdAt),
 		});
 	}
@@ -134,9 +131,15 @@ function describeAgents(agents: AgentActivitySnapshot[]): string[] {
 	for (const agent of agents) {
 		const parent = agent.parentId ? ` (spawned by \`${agent.parentId}\`)` : "";
 		const activity = agent.activity ? ` — ${agent.activity}` : "";
-		lines.push(`- \`${agent.id}\`${parent} — up ${formatDuration(agent.ageMs)}${activity}`);
+		const stale = agent.live ? "" : " — no turn in flight (stale registration?)";
+		lines.push(`- \`${agent.id}\`${parent} — up ${formatDuration(agent.ageMs)}${activity}${stale}`);
 	}
 	lines.push("", "These agents have no job entry; message them via `hub` send, transcripts at `history://<id>`.");
+	if (agents.some(agent => !agent.live)) {
+		lines.push(
+			"An agent with no turn in flight cannot answer a message and never satisfies a bare `wait`; clear it with `hub` cancel.",
+		);
+	}
 	return lines;
 }
 
@@ -275,9 +278,7 @@ export function noMatchingJobsResult(session: ToolSession, ids: string[]): Agent
 	// via hub messages or owned by another agent run with no job entry.
 	// Report them so the snapshot matches the UI's running-agent count
 	// (task job ids are agent ids, so a stale id often names one).
-	// The wait path corroborates: a detached stale claim is not work to
-	// report as runnable.
-	const agents = runningAgentsOutsideJobs(session, { corroborate: true });
+	const agents = runningAgentsOutsideJobs(session);
 	const lines: string[] = [`No matching jobs found for IDs: ${ids.join(", ")}`];
 	const registry = session.agentRegistry;
 	for (const id of ids) {
@@ -304,7 +305,7 @@ export function noMatchingJobsResult(session: ToolSession, ids: string[]): Agent
 
 /** Bare `wait` with no running jobs and nobody who could message: nothing to block on. */
 export function nothingToWaitForResult(session: ToolSession): AgentToolResult<CoordinationDetails> {
-	const agents = runningAgentsOutsideJobs(session, { corroborate: true });
+	const agents = runningAgentsOutsideJobs(session);
 	const lines: string[] = ["No running background jobs to wait for."];
 	if (agents.length > 0) {
 		lines.push("", ...describeAgents(agents));

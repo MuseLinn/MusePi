@@ -74,6 +74,8 @@ export interface AgentActivitySnapshot {
 	activity?: string;
 	/** Time since the agent was registered. */
 	ageMs: number;
+	/** Whether a live streaming session corroborates the claimed running status. */
+	live: boolean;
 }
 
 /** Result details for messaging and job ops; fields are disjoint per op. */

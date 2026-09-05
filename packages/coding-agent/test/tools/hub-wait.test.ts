@@ -110,7 +110,7 @@ describe("hub unified wait", () => {
 		expect(result.useless).toBe(true);
 	});
 
-	test("bare wait ignores a detached ref whose running status is stale", async () => {
+	test("bare wait reports a detached stale-claim ref as no-turn-in-flight", async () => {
 		const registry = AgentRegistry.global();
 		registry.register({ id: SELF_ID, displayName: "main", kind: "main", session: null });
 		registry.register({
@@ -127,7 +127,10 @@ describe("hub unified wait", () => {
 		const text = result.content[0]?.type === "text" ? result.content[0].text : "";
 
 		expect(text).toContain("No running background jobs to wait for.");
-		expect(result.useless).toBe(true);
+		// The stale ref is reported (not silently dropped): it is the only handle
+		// the caller has for clearing it with `hub cancel`.
+		expect(text).toContain("Zombie");
+		expect(text).toContain("no turn in flight");
 	});
 
 	test("bare wait returns a message already queued on the bus", async () => {
