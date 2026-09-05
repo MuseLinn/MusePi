@@ -13,6 +13,17 @@
 #   $env:PI_CLONE_DIR  Source checkout directory (default ~\.musepi\repo)
 
 $ErrorActionPreference = "Stop"
+
+# Force TLS 1.2 for GitHub HTTPS calls: Windows PowerShell 5.1 defaults to
+# TLS 1.0, which GitHub deprecated — without this the download fails with a
+# "The request was aborted: Could not create SSL/TLS secure channel" error.
+# Harmless on PowerShell 7+ where TLS 1.2 is already the minimum.
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {
+    # Older .NET without Tls12 enum — let the download surface the real error.
+}
+
 $repo = "MuseLinn/MusePi"
 $ref = $env:PI_REF
 $binDir = if ($env:PI_BIN_DIR) { $env:PI_BIN_DIR } else { Join-Path $HOME ".musepi\bin" }
@@ -159,6 +170,23 @@ function Install-FromSource {
     if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
         Write-Host "Installing bun (required for from-source install)..."
         irm https://bun.sh/install.ps1 | iex
+    }
+
+    # Min Bun version gate (mirrors install.sh MIN_BUN_VERSION): bun 1.3.x
+    # reports e.g. "1.3.14"; strip any -dev suffix before comparing.
+    $minBun = [version]"1.3.14"
+    $bunVersionRaw = & bun --version 2>$null
+    if (-not $bunVersionRaw) {
+        throw "Failed to read bun version"
+    }
+    $bunVersionClean = ($bunVersionRaw -split "-")[0]
+    try {
+        $bunVersion = [version]$bunVersionClean
+    } catch {
+        throw "Could not parse bun version '$bunVersionRaw'"
+    }
+    if ($bunVersion -lt $minBun) {
+        throw "Bun $minBun or newer is required. Current version: $bunVersionClean. Upgrade at https://bun.sh/docs/installation"
     }
 
     Write-Host "Running setup (workspace install + natives + link)..."

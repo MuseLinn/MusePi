@@ -146,7 +146,7 @@ install_binary() {
     tmp_dir="$(mktemp -d)"
     trap 'rm -rf "$tmp_dir"' EXIT
     echo "Downloading $asset ..."
-    curl -fsSL --retry 3 -o "$tmp_dir/$asset" "$base_url/$asset"
+    curl -fL --progress-bar --retry 3 -o "$tmp_dir/$asset" "$base_url/$asset"
 
     # Verify against the release's SHA256SUMS.txt ("<sha256>  <basename>").
     echo "Verifying checksum ..."
