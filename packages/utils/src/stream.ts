@@ -439,7 +439,7 @@ export async function* readSseEvents(
  * const entries = parseJsonlLenient<MyType>(fileContents);
  * ```
  */
-export function parseJsonlLenient<T>(buffer: string, _options: { onMalformedRecord?: () => void } = {}): T[] {
+export function parseJsonlLenient<T>(buffer: string, options: { onMalformedRecord?: () => void } = {}): T[] {
 	let entries: T[] | undefined;
 
 	while (buffer.length > 0) {
@@ -454,11 +454,16 @@ export function parseJsonlLenient<T>(buffer: string, _options: { onMalformedReco
 		}
 		if (error) {
 			const nextNewline = buffer.indexOf("\n", read);
+			const malformedEnd = nextNewline === -1 ? buffer.length : nextNewline;
+			if (buffer.substring(read, malformedEnd).trim().length > 0) options.onMalformedRecord?.();
 			if (nextNewline === -1) break;
 			buffer = buffer.substring(nextNewline + 1);
 			continue;
 		}
-		if (read === 0) break;
+		if (read === 0) {
+			if (buffer.trim().length > 0) options.onMalformedRecord?.();
+			break;
+		}
 		buffer = buffer.substring(read);
 		if (done) break;
 	}

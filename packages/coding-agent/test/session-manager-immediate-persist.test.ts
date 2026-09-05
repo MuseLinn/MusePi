@@ -330,6 +330,21 @@ describe("SessionManager JSONL software-crash durability", () => {
 			}
 			return origWrite(...args);
 		}) as typeof fs.writeSync);
+		// The hot-path single-entry append goes through fs.writeSync (above), but
+		// a latched failure routes later appends into #rewriteSynchronously, which
+		// publishes via fs.writeFileSync (temp + rename). Mock that too, or the
+		// rewrite sails past the fault injection and lands the in-memory entries.
+		const origWriteFileSync = fs.writeFileSync.bind(fs) as typeof fs.writeFileSync;
+		const writeFileSpy = spyOn(fs, "writeFileSync").mockImplementation(((
+			...args: Parameters<typeof fs.writeFileSync>
+		) => {
+			if (failWrites) {
+				const err = new Error("ENOSPC: no space left on device") as NodeJS.ErrnoException;
+				err.code = "ENOSPC";
+				throw err;
+			}
+			return origWriteFileSync(...args);
+		}) as typeof fs.writeFileSync);
 
 		try {
 			let threw = false;
@@ -341,11 +356,19 @@ describe("SessionManager JSONL software-crash durability", () => {
 			// Unguarded turn-loop contract: appendMessage itself must not throw.
 			expect(threw).toBe(false);
 
-			// Failure is latched before return — flushSync / next append surface it.
+			// Failure is latched before return — flushSync surfaces it. Later
+			// appends stay non-throwing (turn-loop safety): they mark the file
+			// stale and rely on a full rewrite as the writability probe, so the
+			// failed entry plus anything appended after stays in memory and lands
+			// once storage pressure clears (see #appendToSessionFile).
 			expect(() => manager.flushSync()).toThrow("ENOSPC");
-			expect(() => manager.appendMessage({ role: "user", content: "next-user", timestamp: Date.now() })).toThrow(
-				"ENOSPC",
-			);
+			let secondThrew = false;
+			try {
+				manager.appendMessage({ role: "user", content: "next-user", timestamp: Date.now() });
+			} catch {
+				secondThrew = true;
+			}
+			expect(secondThrew).toBe(false);
 
 			const users = parseJsonlLenient<Record<string, unknown>>(fs.readFileSync(sessionFile, "utf8"))
 				.filter(entry => entry.type === "message" && messageRole(entry) === "user")
@@ -354,6 +377,7 @@ describe("SessionManager JSONL software-crash durability", () => {
 		} finally {
 			failWrites = false;
 			writeSpy.mockRestore();
+			writeFileSpy.mockRestore();
 		}
 	});
 });
