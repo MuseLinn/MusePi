@@ -48,7 +48,7 @@ function changelogUtilsStubPlugin(): BunPlugin {
 		setup(build) {
 			build.onResolve({ filter: /^@musepi\/pi-utils$/ }, () => ({ path: utilsStubPath }));
 			build.onResolve({ filter: /^\.\.\/config$/ }, args =>
-				args.importer.endsWith("/utils/changelog.ts") ? { path: utilsStubPath } : undefined,
+				args.importer.replace(/\\/g, "/").endsWith("/utils/changelog.ts") ? { path: utilsStubPath } : undefined,
 			);
 		},
 	};

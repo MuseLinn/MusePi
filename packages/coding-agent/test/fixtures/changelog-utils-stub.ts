@@ -6,6 +6,8 @@ export const getChangelogPath = (): string | undefined => undefined;
 export const isEnoent = (error: unknown): boolean =>
 	typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 export const logger = { error: () => {}, warn: () => {} };
+/** Config.ts is stubbed too; the probe exercises asset resolution, not paths. */
+export const getMusepiChangelogPath = (): string | undefined => undefined;
 /** Escape & < > for XML text bodies (minimal; the probe never renders XML). */
 export const escapeXmlText = (input: string): string => input;
 /** Extract an HTTP status from an error object (stub: probe never hits HTTP). */
