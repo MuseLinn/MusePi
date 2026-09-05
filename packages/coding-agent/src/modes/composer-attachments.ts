@@ -99,6 +99,10 @@ export function compactImageMarkers(text: string, imageCount: number): { text: s
 		if (n <= imageCount) referenced.add(n);
 	}
 	if (referenced.size === imageCount) return null;
+	// No markers referenced in the text at all: the images travel alongside the
+	// message (submitted as a separate `images` param), so none are orphans —
+	// return null (no compaction) rather than dropping every pending image.
+	if (referenced.size === 0) return null;
 	const keep = [...referenced].sort((a, b) => a - b);
 	const remap = new Map<number, number>(keep.map((n, i) => [n, i + 1]));
 	const rewritten = text.replace(

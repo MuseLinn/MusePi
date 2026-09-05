@@ -75,6 +75,10 @@ function makeCtx(initialQueue: CompactionQueuedMessage[] = []) {
 				editorText = text;
 			},
 			getText: () => editorText,
+			getExpandedText: () => editorText,
+			setCollapsedText: (text: string) => {
+				editorText = text;
+			},
 			imageLinks: undefined as (string | undefined)[] | undefined,
 			pendingImages: [] as ImageContent[],
 			pendingImageLinks: [] as (string | undefined)[],
@@ -197,6 +201,10 @@ describe("restoreQueuedMessagesToEditor image marker alignment", () => {
 				editorText = text;
 			},
 			getText: () => editorText,
+			getExpandedText: () => editorText,
+			setCollapsedText: (text: string) => {
+				editorText = text;
+			},
 			addToHistory: () => {},
 			clearDraft: (_historyText?: string) => {
 				editorText = "";

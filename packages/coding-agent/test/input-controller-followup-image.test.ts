@@ -14,6 +14,7 @@ interface StubEditor {
 	setText: (text: string) => void;
 	getText: () => string;
 	getExpandedText: () => string;
+	setCollapsedText: (text: string) => void;
 	addToHistory: (text: string) => void;
 	imageLinks?: unknown;
 	pendingImages: ImageContent[];
@@ -40,6 +41,9 @@ function createContext(opts: {
 		},
 		getExpandedText() {
 			return editorText;
+		},
+		setCollapsedText(text) {
+			editorText = text;
 		},
 		addToHistory: vi.fn(),
 		pendingImages: opts.pendingImages,
