@@ -16,6 +16,17 @@ export function supportsExternalThinking(model: Model | null | undefined): boole
 	if (model.reasoning && (requiresThinking || (model.thinking?.requiresEffort && !model.thinking.suppressWhenOff))) {
 		return false;
 	}
+	// Transports that reject `reasoning.effort` (xAI Grok 4 and the other
+	// reasoning-only Responses models) cannot honour `forceReasoningOff`, so the
+	// scratchpad would run alongside native reasoning instead of replacing it.
+	if (
+		model.reasoning &&
+		model.compat !== undefined &&
+		(("omitReasoningEffort" in model.compat && model.compat.omitReasoningEffort === true) ||
+			("supportsReasoningEffort" in model.compat && model.compat.supportsReasoningEffort === false))
+	) {
+		return false;
+	}
 	if (model.api === "google-generative-ai" || model.api === "google-gemini-cli" || model.api === "google-vertex") {
 		return !model.reasoning || model.thinking?.mode === "budget" || model.thinking?.suppressWhenOff === true;
 	}
