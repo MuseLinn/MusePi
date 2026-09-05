@@ -19,11 +19,30 @@ describe("pause sidecar persistence", () => {
 		return fs.mkdtempSync(path.join(os.tmpdir(), "pause-sidecar-"));
 	}
 
+	/** Poll until the sidecar file exists (fire-and-forget write landed). */
+	async function waitForSidecar(sessionId: string, dir: string): Promise<void> {
+		const p = pauseSidecarPath(sessionId, dir);
+		const deadline = Date.now() + 2_000;
+		while (!fs.existsSync(p) && Date.now() < deadline) {
+			await Bun.sleep(5);
+		}
+	}
+
+	/** Poll until the sidecar file is gone (fire-and-forget remove landed). */
+	async function waitForSidecarRemoval(sessionId: string, dir: string): Promise<void> {
+		const p = pauseSidecarPath(sessionId, dir);
+		const deadline = Date.now() + 2_000;
+		while (fs.existsSync(p) && Date.now() < deadline) {
+			await Bun.sleep(5);
+		}
+	}
+
 	test("write+read round-trips a paused state with its timestamp", async () => {
 		const dir = tempJournalDir();
 		writePauseSidecar("s-1", true, 42_000, dir);
-		// Fire-and-forget write; give the microtask a tick.
-		await new Promise(r => setTimeout(r, 20));
+		// Fire-and-forget write; poll for the file so a loaded CI runner's
+		// write latency cannot flake the read.
+		await waitForSidecar("s-1", dir);
 		const state = await readPauseSidecar("s-1", dir);
 		expect(state).toEqual({ paused: true, pausedAt: 42_000 });
 	});
@@ -38,10 +57,10 @@ describe("pause sidecar persistence", () => {
 	test("a false transition removes the sidecar (absence = running)", async () => {
 		const dir = tempJournalDir();
 		writePauseSidecar("s-2", true, 1, dir);
-		await new Promise(r => setTimeout(r, 20));
+		await waitForSidecar("s-2", dir);
 		expect(fs.existsSync(pauseSidecarPath("s-2", dir))).toBe(true);
 		writePauseSidecar("s-2", false, null, dir);
-		await new Promise(r => setTimeout(r, 20));
+		await waitForSidecarRemoval("s-2", dir);
 		expect(fs.existsSync(pauseSidecarPath("s-2", dir))).toBe(false);
 		expect(await readPauseSidecar("s-2", dir)).toEqual({ paused: false, pausedAt: null });
 	});
@@ -50,7 +69,7 @@ describe("pause sidecar persistence", () => {
 		const dir = tempJournalDir();
 		const pausedAt = Date.now() - 5_000;
 		writePauseSidecar("s-3", true, pausedAt, dir);
-		await new Promise(r => setTimeout(r, 20));
+		await waitForSidecar("s-3", dir);
 		// This is what resumeSession does on reactivation.
 		const gate = new AgentPauseGate(await readPauseSidecar("s-3", dir));
 		expect(gate.paused).toBe(true);
