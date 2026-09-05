@@ -77,11 +77,13 @@ describe("ToolExecutionComponent custom-renderer repaint seams", () => {
 
 	function makeComponent(args: unknown) {
 		const requestRender = vi.fn();
-		const ui = { requestRender, requestComponentRender() {} } as unknown as TUI;
+		const resetDisplay = vi.fn();
+		const ui = { requestRender, resetDisplay, requestComponentRender() {} } as unknown as TUI;
 		const component = new ToolExecutionComponent("fake_device", args, {}, makeFakeTool(), ui);
 		components.push(component);
 		requestRender.mockClear();
-		return { component, requestRender };
+		resetDisplay.mockClear();
+		return { component, requestRender, resetDisplay };
 	}
 
 	it("forces a viewport repaint when a painted streamed placeholder receives its first result", () => {
