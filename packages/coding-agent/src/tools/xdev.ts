@@ -284,7 +284,9 @@ export function resolveMountedXdevExecutable(state: XdevState, name: string): To
 export function listXdevTools(state: XdevState): Tool[] {
 	return [...state.mountedNames].flatMap(name => {
 		const tool = state.tools.get(name);
-		return tool ? [tool] : [];
+		// Hidden tools (sdk customTools with `hidden: true`) stay registered and
+		// dispatchable but never surface in xd:// listings or prompt templates.
+		return tool && !tool.hidden ? [tool] : [];
 	});
 }
 
