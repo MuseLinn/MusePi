@@ -492,13 +492,31 @@ export class ToolExecutionComponent extends Container implements NativeScrollbac
 	}
 
 	async #drainPreviewDiff(): Promise<void> {
+		// One microtask of deferral so a same-tick settled result (transcript
+		// rebuild: construct → updateResult within one sync replay chunk) cancels
+		// the compute before the edit engine runs instead of after. Session
+		// restore settles thousands of historical edit calls this way; without
+		// the deferral each one re-ran the full sloppy matcher + whole-file diff
+		// to produce a preview the renderer discards in favor of `details.diff`.
+		await undefined;
 		while (this.#editDiffDirty) {
 			this.#editDiffDirty = false;
 			await this.#computePreviewDiff();
 		}
 	}
 
+	/**
+	 * True once a terminal result makes the streaming preview moot: renderResult
+	 * prefers `details.diff` and renders errors from the result text, consulting
+	 * the computed preview only for a non-error result that carries no details.
+	 */
+	#previewDiffSettled(): boolean {
+		const result = this.#result;
+		return result !== undefined && !this.#isPartial && (result.isError === true || result.details != null);
+	}
+
 	async #computePreviewDiff(): Promise<void> {
+		if (this.#previewDiffSettled()) return;
 		const editMode = this.#editMode;
 		if (!editMode) return;
 		const strategy = EDIT_MODE_STRATEGIES[editMode];
