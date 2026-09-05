@@ -122,6 +122,6 @@ describe("lazy status color re-resolves on theme switch", () => {
 			.split("\n")
 			.map(line => line.trim())
 			.filter(line => line === "Update Available" || line.startsWith("New version "));
-		expect(semanticLines).toEqual(["Update Available", "New version 1.2.3 is available. Run: omp update"]);
+		expect(semanticLines).toEqual(["Update Available", "New version 1.2.3 is available. Run: musepi update"]);
 	});
 });

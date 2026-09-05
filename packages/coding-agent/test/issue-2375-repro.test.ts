@@ -45,6 +45,7 @@ function createContext() {
 		editor: {
 			pasteText,
 			insertText,
+			insertAtom: vi.fn(),
 			imageLinks: undefined,
 			pendingImages: [] as ImageContent[],
 			pendingImageLinks: [] as (string | undefined)[],

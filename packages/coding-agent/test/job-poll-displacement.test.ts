@@ -96,7 +96,9 @@ describe("hub waiting-poll block lifecycle", () => {
 		component.updateResult(pollResult(["running", "running"]), false);
 
 		expect(component.isDisplaceableBlock()).toBe(true);
-		expect(component.isTranscriptBlockFinalized()).toBe(true);
+		// A displaceable snapshot stays inside the repaintable live region so a
+		// follow-up poll can replace it — it is not finalized until sealed.
+		expect(component.isTranscriptBlockFinalized()).toBe(false);
 
 		component.seal();
 		expect(component.isDisplaceableBlock()).toBe(false);
@@ -122,7 +124,7 @@ describe("hub waiting-poll block lifecycle", () => {
 		expect(errored.isTranscriptBlockFinalized()).toBe(true);
 	});
 
-	it("keeps successful todo snapshots displaceable yet finalized", () => {
+	it("keeps successful todo snapshots displaceable yet live until sealed", () => {
 		const component = trackComponent(
 			created,
 			new ToolExecutionComponent("todo", { op: "view" }, {}, undefined, uiStub),
@@ -130,7 +132,7 @@ describe("hub waiting-poll block lifecycle", () => {
 		component.updateResult(todoResult(), false);
 
 		expect(component.isDisplaceableBlock()).toBe(true);
-		expect(component.isTranscriptBlockFinalized()).toBe(true);
+		expect(component.isTranscriptBlockFinalized()).toBe(false);
 
 		component.seal();
 		expect(component.isDisplaceableBlock()).toBe(false);
@@ -555,6 +557,7 @@ describe("UiHelpers.renderSessionContext collapses repeated todo snapshots", () 
 		expect(inheritDisplaceableTodo).toHaveBeenCalledTimes(1);
 		expect(inheritDisplaceableTodo).toHaveBeenCalledWith(todos[0]);
 		expect(todos[0].canBeDisplacedBy("todo")).toBe(true);
-		expect(todos[0].isTranscriptBlockFinalized()).toBe(true);
+		// Displaceable snapshots stay in the live region until sealed.
+		expect(todos[0].isTranscriptBlockFinalized()).toBe(false);
 	});
 });

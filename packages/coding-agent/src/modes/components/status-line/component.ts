@@ -1208,7 +1208,11 @@ export class StatusLineComponent implements Component {
 		return this.#vibeWorkerTokenRate?.() ?? null;
 	}
 
-	#formatUsageContextKey(activeProvider: string | undefined, identity: OAuthAccountIdentity | undefined): string {
+	#formatUsageContextKey(
+		activeProvider: string | undefined,
+		identity: OAuthAccountIdentity | undefined,
+		activeModelId?: string,
+	): string {
 		if (!activeProvider) return "";
 		// orgId is part of the key: rotating between two same-email Anthropic
 		// subscriptions must invalidate the cached usage immediately instead of
@@ -1219,15 +1223,20 @@ export class StatusLineComponent implements Component {
 			identity?.email ?? "",
 			identity?.projectId ?? "",
 			identity?.orgId ?? "",
+			activeModelId ?? "",
 		].join("\0");
 	}
 
 	#getUsageContextKey(session: AgentSession): string {
 		const activeProvider = session.state.model?.provider ?? session.model?.provider;
+		const activeModelId = session.state.model?.id ?? session.model?.id;
 		const identity = activeProvider
 			? session.modelRegistry?.authStorage?.getOAuthAccountIdentity(activeProvider, session.sessionId)
 			: undefined;
-		return this.#formatUsageContextKey(activeProvider, identity);
+		// Model id participates so a same-provider model switch (per-model rails)
+		// invalidates the cached scope instead of rendering the previous model's
+		// usage until the 5-min TTL expires.
+		return this.#formatUsageContextKey(activeProvider, identity, activeModelId);
 	}
 
 	/**
@@ -1290,7 +1299,8 @@ export class StatusLineComponent implements Component {
 			activeProvider && session.modelRegistry?.authStorage
 				? session.modelRegistry.authStorage.getOAuthAccountIdentity(activeProvider, session.sessionId)
 				: undefined;
-		const normalized = this.#normalizeUsageReports(reports, activeProvider, activeIdentity);
+		const activeModelId = session.state.model?.id ?? session.model?.id;
+		const normalized = this.#normalizeUsageReports(reports, activeProvider, activeIdentity, activeModelId);
 		const resetSnapshot =
 			activeProvider === "openai-codex" ? this.#normalizeCodexResetSnapshot(reports, activeIdentity) : null;
 		const usageChanged = this.#cachedUsage !== normalized;
@@ -1403,6 +1413,7 @@ export class StatusLineComponent implements Component {
 		reports: unknown,
 		activeProvider?: string,
 		activeIdentity?: OAuthAccountIdentity,
+		activeModelId?: string,
 	): {
 		tier?: string;
 		fiveHour?: { percent: number; resetMinutes?: number };
@@ -1416,6 +1427,14 @@ export class StatusLineComponent implements Component {
 		let fiveHourTier: string | undefined;
 		let sevenDayTier: string | undefined;
 		let monthlyTier: string | undefined;
+		let fiveHourModelMatched = false;
+		let sevenDayModelMatched = false;
+		const monthlyModelMatched = false;
+		// "Preferred untiered scope": once an untiered limit is observed for any
+		// window, tiered rows for other windows stop mattering (a mixed tiered +
+		// untiered line would render one ambiguous tier chip). Model-matched
+		// tiered rows are exempt — they name the active model explicitly.
+		let sawUntieredLimit = false;
 		let monthlyPriority = Number.POSITIVE_INFINITY;
 		const now = Date.now();
 		const cursorMonthlyPriority = (limitId: unknown): number => {
@@ -1440,7 +1459,7 @@ export class StatusLineComponent implements Component {
 				}
 				const l = limit as {
 					id?: string;
-					scope?: { windowId?: string; tier?: string };
+					scope?: { windowId?: string; tier?: string; modelId?: string };
 					window?: { resetsAt?: number; durationMs?: number };
 					amount?: { usedFraction?: number };
 				};
@@ -1449,6 +1468,30 @@ export class StatusLineComponent implements Component {
 				const windowId = l.scope?.windowId;
 				const tier = l.scope?.tier;
 				const resetsAt = l.window?.resetsAt;
+				// A tiered limit whose scope names a specific model only applies
+				// while that model is active (openai-codex per-model rails). A
+				// model-scoped row that does not match the active model is ignored;
+				// one that matches outranks the untiered row for the same window.
+				const scopeModelId = l.scope?.modelId;
+				const normalizedScopeModel =
+					typeof scopeModelId === "string" && scopeModelId.trim() ? scopeModelId.trim().toLowerCase() : undefined;
+				const normalizedActiveModel =
+					typeof activeModelId === "string" && activeModelId.trim()
+						? activeModelId.trim().toLowerCase()
+						: undefined;
+				const modelMatched = normalizedScopeModel !== undefined && normalizedActiveModel === normalizedScopeModel;
+				// A model-scoped row only applies while its model is active; a
+				// scoped row for another model (or with no known active model)
+				// must not leak into this model's usage line.
+				if (normalizedScopeModel !== undefined && !modelMatched) continue;
+				// Preferred untiered scope: once any untiered limit has been seen,
+				// plain tiered rows (not model-scoped) for other windows are
+				// dropped — mixing a tiered 7d with an untiered 5h would render an
+				// ambiguous tier chip. Model-matched rows stay (they name the
+				// active model and outrank untiered).
+				if (sawUntieredLimit && normalizedScopeModel === undefined && tier !== undefined) continue;
+				const isUntieredRow = normalizedScopeModel === undefined && tier === undefined;
+				if (isUntieredRow) sawUntieredLimit = true;
 				// Canonical window ids win. Fall back to the reported span (same
 				// tolerance as the 5h priority-boost check) so providers that emit
 				// non-canonical ids, and cache rows written before a provider was
@@ -1462,23 +1505,38 @@ export class StatusLineComponent implements Component {
 							: durationMs !== undefined && Math.abs(durationMs - 7 * 86_400_000) <= 60_000
 								? "7d"
 								: undefined;
-				// Accept tiered limits, but prefer untiered (backward compat with Anthropic).
-				// An untiered limit always replaces a tiered one; among same-tieredness, first wins.
-				if (windowClass === "5h" && (!fiveHour || (fiveHourTier !== undefined && !tier))) {
+				// Prefer untiered rows (backward compat with Anthropic), except a
+				// model-scoped row matching the active model outranks everything
+				// for its window. Among rows of equal standing, first wins.
+				const fiveHourShouldReplace = ((): boolean => {
+					if (!fiveHour) return true;
+					if (modelMatched && !fiveHourModelMatched) return true;
+					if (!modelMatched && fiveHourModelMatched) return false;
+					return fiveHourTier !== undefined && !tier;
+				})();
+				if (windowClass === "5h" && fiveHourShouldReplace) {
 					fiveHour = {
 						percent: fraction * 100,
 						resetMinutes:
 							typeof resetsAt === "number" ? Math.max(0, Math.round((resetsAt - now) / 60_000)) : undefined,
 					};
 					fiveHourTier = tier || undefined;
+					fiveHourModelMatched = modelMatched;
 				}
-				if (windowClass === "7d" && (!sevenDay || (sevenDayTier !== undefined && !tier))) {
+				const sevenDayShouldReplace = ((): boolean => {
+					if (!sevenDay) return true;
+					if (modelMatched && !sevenDayModelMatched) return true;
+					if (!modelMatched && sevenDayModelMatched) return false;
+					return sevenDayTier !== undefined && !tier;
+				})();
+				if (windowClass === "7d" && sevenDayShouldReplace) {
 					sevenDay = {
 						percent: fraction * 100,
 						resetHours:
 							typeof resetsAt === "number" ? Math.max(0, Math.round((resetsAt - now) / 3_600_000)) : undefined,
 					};
 					sevenDayTier = tier || undefined;
+					sevenDayModelMatched = modelMatched;
 				}
 				// Monthly rendering is gated to providers with a single monthly
 				// bucket (Cursor's priority selector picks its personal rail;

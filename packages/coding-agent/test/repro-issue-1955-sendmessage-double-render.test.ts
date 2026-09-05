@@ -85,6 +85,7 @@ function createHarness(): Harness {
 		emit: async () => undefined,
 		getMessageRenderer: () => undefined,
 		getAssistantThinkingRenderers: () => undefined,
+		getComposerShapes: () => [],
 	};
 
 	const sessionMock = {
@@ -134,6 +135,7 @@ function createHarness(): Harness {
 			getEntries: () => entries,
 		},
 		setToolUIContext: vi.fn(),
+		syncComposerShape: vi.fn(),
 		setEditorComponent: vi.fn(),
 		setWorkingMessage: vi.fn(),
 		setToolsExpanded: vi.fn(),

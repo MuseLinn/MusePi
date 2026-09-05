@@ -58,18 +58,18 @@ class ExitFaultStorage extends FileSessionStorage {
 		return { started: started.promise, release: release.resolve };
 	}
 
-	override async readTextSlices(
-		filePath: string,
-		prefixBytes: number,
-		suffixBytes: number,
-	): Promise<[string, string]> {
+	// switchSession reloads the journal through `loadSessionFile`, whose
+	// small-file path (this fixture is well under the 8 MiB streaming
+	// threshold) calls `readText` — not `readTextSlices`. Gate the method the
+	// loader actually hits so the suspend-before-read ordering holds.
+	override async readText(filePath: string): Promise<string> {
 		const gate = this.#readGate;
 		if (gate?.filePath === filePath) {
 			this.#readGate = undefined;
 			gate.started.resolve();
 			await gate.release.promise;
 		}
-		return super.readTextSlices(filePath, prefixBytes, suffixBytes);
+		return super.readText(filePath);
 	}
 
 	override async writeTextAtomic(filePath: string, content: string, options?: WriteTextAtomicOptions): Promise<void> {

@@ -29,6 +29,7 @@ type StubEditor = {
 	setText: (text: string) => void;
 	getText: () => string;
 	getExpandedText: () => string;
+	setCollapsedText: (text: string) => void;
 	clearDraft: (historyText?: string) => void;
 	addToHistory: Mock<(...args: unknown[]) => unknown>;
 	onSubmit?: (text: string) => Promise<void>;
@@ -71,6 +72,10 @@ function createStubInputControllerContext(opts: {
 		},
 		getExpandedText() {
 			return editorText;
+		},
+		setCollapsedText(text) {
+			// No atom table in the stub — a collapsed marker set is a plain set.
+			this.setText(text);
 		},
 		clearDraft(historyText?: string) {
 			if (historyText !== undefined) this.addToHistory(historyText);
@@ -635,6 +640,10 @@ function createStubInteractiveModeContextForUiHelpers(session: AgentSession) {
 		},
 		getExpandedText() {
 			return editorText;
+		},
+		setCollapsedText(text) {
+			// No atom table in the stub — a collapsed marker set is a plain set.
+			this.setText(text);
 		},
 		clearDraft(historyText?: string) {
 			if (historyText !== undefined) this.addToHistory(historyText);

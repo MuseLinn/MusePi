@@ -24,6 +24,12 @@ function createContext(options?: {
 			getText() {
 				return editorText;
 			},
+			getExpandedText() {
+				return editorText;
+			},
+			setCollapsedText(text: string) {
+				editorText = text;
+			},
 			addToHistory: vi.fn(),
 			pendingImages: options?.pendingImages ? [...options.pendingImages] : ([] as ImageContent[]),
 			pendingImageLinks:

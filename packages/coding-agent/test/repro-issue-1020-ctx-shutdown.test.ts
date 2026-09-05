@@ -29,6 +29,7 @@ describe("issue #1020 - ctx.shutdown() in interactive mode", () => {
 			): void {
 				capturedContextActions = contextActions;
 			},
+			getComposerShapes: () => [],
 		};
 
 		const ctxStub = {
@@ -65,6 +66,7 @@ describe("issue #1020 - ctx.shutdown() in interactive mode", () => {
 			},
 			onError(_handler: (error: unknown) => void): void {},
 			async emit(_event: unknown): Promise<void> {},
+			getComposerShapes: () => [],
 		};
 
 		const ctxStub = {
@@ -73,6 +75,7 @@ describe("issue #1020 - ctx.shutdown() in interactive mode", () => {
 				extensionRunner: fakeExtensionRunner,
 			},
 			setToolUIContext: () => {},
+			syncComposerShape: () => {},
 			editor: {
 				setText: () => {},
 				handleInput: () => {},
