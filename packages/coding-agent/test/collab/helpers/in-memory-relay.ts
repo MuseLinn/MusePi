@@ -138,3 +138,21 @@ export function uninstallInMemoryRelay(): void {
 	globalThis.WebSocket = RealWebSocket;
 	activeRelay = null;
 }
+
+/**
+ * Run `fn` against a fresh relay, then restore routing to the previous one.
+ * The in-memory transport is a single-active-relay singleton (each room has
+ * one host), so a test that needs a second CollabHost — e.g. one carrying a
+ * workspace provider — must isolate it: `new WebSocket(...)` inside `fn`
+ * binds the fresh relay, and sockets constructed before/after keep routing
+ * through the relay that was active in their own lifetime.
+ */
+export async function withIsolatedRelay<T>(fn: () => Promise<T>): Promise<T> {
+	const previous = activeRelay;
+	activeRelay = new InMemoryRelay();
+	try {
+		return await fn();
+	} finally {
+		activeRelay = previous;
+	}
+}
