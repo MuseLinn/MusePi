@@ -228,7 +228,11 @@ function makeRenderCtx(
 
 describe("UiHelpers.renderInitialMessages — transcript source", () => {
 	it("renders the collapsed live display transcript, never the LLM context", async () => {
-		await Settings.init({ inMemory: true });
+		// Collapse-compacted is the premise of this test; the schema default is
+		// false (keep full history inline). Settings.init is once-per-process —
+		// re-init overrides need a fresh reset first.
+		resetSettingsForTest();
+		await Settings.init({ inMemory: true, overrides: { "display.collapseCompacted": true } });
 		const { ctx, transcriptSpy, llmContextSpy, renderSessionContextSpy } = makeCtx();
 		const transcript = makeEmptyContext();
 		transcriptSpy.mockReturnValue(transcript);
