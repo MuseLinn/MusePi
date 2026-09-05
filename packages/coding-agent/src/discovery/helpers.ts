@@ -911,7 +911,9 @@ export function registerPluginCacheInvalidator(invalidator: () => void): void {
 export async function listClaudePluginRoots(
 	home: string,
 	cwd?: string,
+	options: { explicitOnly?: boolean } = {},
 ): Promise<{ roots: ClaudePluginRoot[]; warnings: string[] }> {
+	if (options.explicitOnly) return { roots: [], warnings: [] };
 	const claudeConfigDir = resolveClaudePaths(home).configDir;
 	const ompRegistryPath = path.join(getPluginsDir(home), "installed_plugins.json");
 	const resolvedProjectPath = cwd ? await resolveActiveProjectRegistryPath(cwd) : null;

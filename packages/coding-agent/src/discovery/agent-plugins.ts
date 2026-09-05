@@ -31,7 +31,7 @@ import {
 } from "./agent-plugin-format";
 import { resolveContainedPath } from "./contained-path";
 import { compareSkillOrder, createSourceMeta, listClaudePluginRoots } from "./helpers";
-import { listOmpExtensionRoots } from "./omp-extension-roots";
+import { currentOmpExtensionRootMode, listOmpExtensionRoots } from "./omp-extension-roots";
 
 const PROVIDER_ID = "agent-plugins";
 const DISPLAY_NAME = "Agent Plugins";
@@ -58,10 +58,18 @@ interface CandidateRoot {
  * package roots. First occurrence wins on duplicates.
  */
 async function listCandidateRoots(ctx: LoadContext): Promise<CandidateRoot[]> {
-	const [marketplace, extensionRoots] = await Promise.all([
-		listClaudePluginRoots(ctx.home, ctx.cwd),
-		listOmpExtensionRoots(ctx),
-	]);
+	// Explicit-only invocation scope (sdk disableExtensionDiscovery): only
+	// CLI-named roots may surface. The registry/marketplace scan (installed
+	// plugins under ~/.claude/plugins and the musepi plugins dir) is ambient
+	// and must not leak in; listOmpExtensionRoots already scopes its own
+	// settings/installed roots by the same mode.
+	const [marketplace, extensionRoots] =
+		currentOmpExtensionRootMode() === "explicit-only"
+			? await Promise.all([
+					listClaudePluginRoots(ctx.home, ctx.cwd, { explicitOnly: true }),
+					listOmpExtensionRoots(ctx),
+				])
+			: await Promise.all([listClaudePluginRoots(ctx.home, ctx.cwd), listOmpExtensionRoots(ctx)]);
 	const seen = new Set<string>();
 	const candidates: CandidateRoot[] = [];
 	for (const root of marketplace.roots) {

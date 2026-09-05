@@ -55,6 +55,11 @@ const invocationRootScope = new AsyncLocalStorage<InvocationRootScope>();
 let injectedCliRoots: InjectedRoot[] = [];
 let injectedCliRootMode: OmpExtensionRootMode = "merge";
 
+/** The extension-root mode active for this invocation (ALS scope or CLI default). */
+export function currentOmpExtensionRootMode(): OmpExtensionRootMode {
+	return invocationRootScope.getStore()?.mode ?? injectedCliRootMode;
+}
+
 export interface InjectOmpExtensionCliRootOptions {
 	/**
 	 * `explicit-only` exposes only roots named by this CLI invocation. Use it
