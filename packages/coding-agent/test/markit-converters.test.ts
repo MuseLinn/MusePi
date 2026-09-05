@@ -212,8 +212,10 @@ describe("markit converters", () => {
 			expect(outcome.exitCode).toBe(0);
 			expect(err).toBe("");
 			expect(out).toContain("Inline image tokenizer repro issue");
-			expect(out).toContain("| Name | Qty |");
-			expect(out).toContain("| Wire | 12 |");
+			// The PDF path goes through the native pdf-inspector bridge, which
+			// emits pipes unpadded (unlike the docx/epub turndown HTML path).
+			expect(out).toContain("|Name|Qty|");
+			expect(out).toContain("|Wire|12|");
 		} finally {
 			await removeWithRetries(homeDir);
 		}
