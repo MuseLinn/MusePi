@@ -2380,9 +2380,9 @@ describe("ModelRegistry", () => {
 			const registry = new ModelRegistry(authStorage, modelsJsonPath);
 
 			// GPT-5.6 bills 2x input above 272K (API tier); the Codex variant has
-			// its own 372K window with no long-context tier, so it never clamps.
+			// its own 1M window with no long-context tier, so it never clamps.
 			expect(registry.find("openai", "gpt-5.6-sol")?.contextWindow).toBe(272_000);
-			expect(registry.find("openai-codex", "gpt-5.6-sol")?.contextWindow).toBe(372_000);
+			expect(registry.find("openai-codex", "gpt-5.6-sol")?.contextWindow).toBe(1_000_000);
 			// Standard-priced 1M models (no long-context tier) keep their window.
 			expect(registry.find("anthropic", "claude-opus-4-8")?.contextWindow).toBe(1_000_000);
 		});
@@ -2399,8 +2399,8 @@ describe("ModelRegistry", () => {
 			settings.override("extendedContext", true);
 			await registry.reapplyModelPolicies();
 			expect(registry.find("openai", "gpt-5.6-terra")?.contextWindow).toBe(1_050_000);
-			// The Codex variant is a 372K model without a long-context tier.
-			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(372_000);
+			// The Codex variant is a 1M model without a long-context tier.
+			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(1_000_000);
 		});
 	});
 });
