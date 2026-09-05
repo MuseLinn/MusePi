@@ -182,9 +182,14 @@ void withHostGuard(async () => {
 	});
 
 	it("keeps postmortem.quit behind the extension exit guard", async () => {
+		const repoRoot = path.resolve(import.meta.dir, "../../..");
+		const utilsIndex = path.join(repoRoot, "packages", "utils", "src", "index.ts").replaceAll("\\", "/");
+		const hostGuard = path
+			.join(repoRoot, "packages", "coding-agent", "src", "extensibility", "utils.ts")
+			.replaceAll("\\", "/");
 		const { exitCode, stdout, stderr } = await runProbe(`
-import { postmortem } from "@musepi/pi-utils";
-import { withHostGuard } from "@musepi/pi-coding-agent/extensibility/utils";
+import { postmortem } from "${utilsIndex}";
+import { withHostGuard } from "${hostGuard}";
 
 try {
 	await withHostGuard(() => postmortem.quit(37));
@@ -198,14 +203,17 @@ try {
 		expect(stderr).toBe("");
 	});
 
-	it("lets host SIGINT exit once while a guarded callback remains pending", async () => {
-		const { exitCode, stdout, stderr } = await runGuardedShutdownProbe("sigint");
+	it.skipIf(process.platform === "win32")(
+		"lets host SIGINT exit once while a guarded callback remains pending",
+		async () => {
+			const { exitCode, stdout, stderr } = await runGuardedShutdownProbe("sigint");
 
-		expect(exitCode).toBe(130);
-		expect(stdout).toBe("guard-active\ncleanup:sigint\n");
-		expect(stderr).not.toContain("[Unhandled Rejection]");
-		expect(stderr).not.toContain("ExtensionExitError");
-	});
+			expect(exitCode).toBe(130);
+			expect(stdout).toBe("guard-active\ncleanup:sigint\n");
+			expect(stderr).not.toContain("[Unhandled Rejection]");
+			expect(stderr).not.toContain("ExtensionExitError");
+		},
+	);
 
 	it("lets fatal cleanup exit once while a guarded callback remains pending", async () => {
 		const { exitCode, stdout, stderr } = await runGuardedShutdownProbe("fatal");
@@ -217,22 +225,29 @@ try {
 		expect(stderr).not.toContain("ExtensionExitError");
 	});
 
-	it("exits cleanly on host SIGHUP when postmortem initialized inside a guard window (#7393)", async () => {
-		// Mirror the shipped bundle: postmortem's exit primitive is first resolved
-		// while withHostGuard has replaced process.reallyExit with a throwing stub.
-		// A preload swaps reallyExit before the entry's static postmortem import
-		// evaluates; the entry then restores it (as the guard's finally does) and
-		// self-SIGHUPs (the TUI terminal-disconnect path). A lazily resolved exit
-		// primitive must pick up the restored native reallyExit and exit 129
-		// instead of looping on ExtensionExitError.
-		const preload = writeModule(
-			"guard-init-preload.ts",
-			"globalThis.__ompNativeReallyExit = process.reallyExit;\n" +
-				'process.reallyExit = (() => { throw new Error("guarded during init"); });\n',
-		);
-		const { exitCode, stdout, stderr } = await runProbe(
-			`
-import { postmortem } from "@musepi/pi-utils";
+	// Windows Bun does not deliver self-killed POSIX signals (process.kill(pid,
+	// "SIGHUP") never fires the listener), so the signal path is only exercisable
+	// on POSIX hosts. Same gating as system-prompt.test.ts's Linux-only probes.
+	it.skipIf(process.platform === "win32")(
+		"exits cleanly on host SIGHUP when postmortem initialized inside a guard window (#7393)",
+		async () => {
+			// Mirror the shipped bundle: postmortem's exit primitive is first resolved
+			// while withHostGuard has replaced process.reallyExit with a throwing stub.
+			// A preload swaps reallyExit before the entry's static postmortem import
+			// evaluates; the entry then restores it (as the guard's finally does) and
+			// self-SIGHUPs (the TUI terminal-disconnect path). A lazily resolved exit
+			// primitive must pick up the restored native reallyExit and exit 129
+			// instead of looping on ExtensionExitError.
+			const preload = writeModule(
+				"guard-init-preload.ts",
+				"globalThis.__ompNativeReallyExit = process.reallyExit;\n" +
+					'process.reallyExit = (() => { throw new Error("guarded during init"); });\n',
+			);
+			const repoRoot = path.resolve(import.meta.dir, "../../..");
+			const utilsIndex = path.join(repoRoot, "packages", "utils", "src", "index.ts").replaceAll("\\", "/");
+			const { exitCode, stdout, stderr } = await runProbe(
+				`
+import { postmortem } from "${utilsIndex}";
 postmortem.register("probe", reason => process.stdout.write(\`cleanup:\${reason}\\n\`));
 process.reallyExit = globalThis.__ompNativeReallyExit;
 process.stdout.write("armed\\n");
@@ -241,14 +256,15 @@ process.kill(process.pid, "SIGHUP");
 // real signal delivery cannot be driven by fake timers.
 await Bun.sleep(10_000);
 `,
-			[preload],
-		);
+				[preload],
+			);
 
-		expect(exitCode).toBe(129);
-		expect(stdout).toBe("armed\ncleanup:sighup\n");
-		expect(stderr).not.toContain("ExtensionExitError");
-		expect(stderr).not.toContain("Unhandled Rejection");
-	});
+			expect(exitCode).toBe(129);
+			expect(stdout).toBe("armed\ncleanup:sighup\n");
+			expect(stderr).not.toContain("ExtensionExitError");
+			expect(stderr).not.toContain("Unhandled Rejection");
+		},
+	);
 
 	it("only the outermost guard restores process.exit when guards nest", async () => {
 		const originalExit = process.exit;
