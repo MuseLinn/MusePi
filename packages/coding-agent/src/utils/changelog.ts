@@ -379,7 +379,9 @@ export function selectStartupChangelog(
 		locale,
 	});
 	const summary = summarizeChangelogEntries(newEntries);
-	const latestEntry = newEntries[newEntries.length - 1] ?? newEntries[0];
+	// parseChangelog returns newest-first, so the head is the newest shown
+	// release — the version the marker advances to.
+	const latestEntry = newEntries[0] ?? newEntries[newEntries.length - 1];
 	return {
 		markdown: rendered.markdown,
 		persistCurrentVersion: true,
