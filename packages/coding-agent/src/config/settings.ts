@@ -736,6 +736,20 @@ export class Settings {
 	}
 
 	/**
+	 * Provenance of the effective `extensions` array for extension-root
+	 * sub-discovery. `"project"` only when a project settings provider owns it
+	 * and no higher user-level layer (a `--config` overlay or a runtime
+	 * override) replaces it; otherwise `"user"`. Callers pass this into
+	 * {@link setInvocationConfiguredExtensions} so discovery labels roots by the
+	 * authority that produced them.
+	 */
+	extensionsSourceLevel(): "user" | "project" {
+		if (Object.hasOwn(this.#overrides, "extensions")) return "user";
+		if (Object.hasOwn(this.#configOverlay, "extensions")) return "user";
+		return Object.hasOwn(this.#project, "extensions") ? "project" : "user";
+	}
+
+	/**
 	 * Get all settings in a group with full type safety.
 	 */
 	getGroup<G extends GroupPrefix>(prefix: G): GroupTypeMap[G] {

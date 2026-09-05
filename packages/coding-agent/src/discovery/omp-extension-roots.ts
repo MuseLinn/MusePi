@@ -48,6 +48,16 @@ interface InvocationRootScope {
 	/** Raw SDK spellings, resolved against the LoadContext that performs discovery. */
 	paths: readonly string[];
 	mode: OmpExtensionRootMode;
+	/**
+	 * Effective `extensions` setting for the owning session, captured once its
+	 * `Settings` instance is loaded. Session-local so concurrent SDK sessions
+	 * never observe each other's configured roots. `undefined` until
+	 * {@link setInvocationConfiguredExtensions} runs; discovery then falls back
+	 * to reading the persisted config from disk.
+	 */
+	configuredExtensions?: readonly string[];
+	/** Provenance of {@link configuredExtensions}, from `Settings`. Defaults to `user` when unset. */
+	configuredLevel?: "user" | "project";
 }
 
 const invocationRootScope = new AsyncLocalStorage<InvocationRootScope>();
@@ -58,6 +68,19 @@ let injectedCliRootMode: OmpExtensionRootMode = "merge";
 /** The extension-root mode active for this invocation (ALS scope or CLI default). */
 export function currentOmpExtensionRootMode(): OmpExtensionRootMode {
 	return invocationRootScope.getStore()?.mode ?? injectedCliRootMode;
+}
+
+/**
+ * Stable fingerprint of the extension-root scope state that shapes
+ * sub-discovery output (mode + configured roots). Callers of cached capability
+ * loads (skills/hooks/…) fold this into their cache key so a disable-discovery
+ * invocation and a full merge invocation on the same cwd never collide.
+ */
+export function currentOmpExtensionRootFingerprint(): string {
+	const scope = invocationRootScope.getStore();
+	const mode = scope?.mode ?? injectedCliRootMode;
+	const configured = scope?.configuredExtensions ?? [];
+	return `${mode}:${configured.join(",")}`;
 }
 
 export interface InjectOmpExtensionCliRootOptions {
@@ -83,6 +106,21 @@ export function withOmpExtensionRootScope<T>(
 	callback: () => T,
 ): T {
 	return invocationRootScope.run({ paths: [...paths], mode }, callback);
+}
+
+/**
+ * Record the owning session's effective `extensions` setting (and its
+ * `Settings`-resolved provenance) on the active invocation scope so
+ * sub-discovery honors overlays/runtime overrides and foreign project
+ * providers without reading the process-global settings singleton. No-op
+ * outside a {@link withOmpExtensionRootScope} callback.
+ */
+export function setInvocationConfiguredExtensions(paths: readonly string[], level: "user" | "project" = "user"): void {
+	const scope = invocationRootScope.getStore();
+	if (scope) {
+		scope.configuredExtensions = [...paths];
+		scope.configuredLevel = level;
+	}
 }
 
 /**
@@ -198,18 +236,36 @@ export async function listOmpExtensionRoots(ctx: LoadContext): Promise<OmpExtens
 				root.relativePath ? { ...root, path: path.resolve(ctx.cwd, root.relativePath) } : root,
 			);
 	if (rootMode === "merge") {
-		const { project, user } = scopeDirs(ctx);
-		const [projectExtensions, userExtensions, installedPlugins] = await Promise.all([
-			readSettingsExtensions(path.join(project, "settings.json")),
-			readSettingsExtensions(path.join(user, "settings.json")),
-			listInstalledPluginRoots(ctx),
-		]);
-		candidates = [
-			...candidates,
-			...projectExtensions.map((raw): InjectedRoot => ({ path: resolveAgainst(raw, ctx), level: "project" })),
-			...userExtensions.map((raw): InjectedRoot => ({ path: resolveAgainst(raw, ctx), level: "user" })),
-			...installedPlugins,
-		];
+		const installedPlugins = await listInstalledPluginRoots(ctx);
+		// Configured lane: a session-supplied effective value (invocation-scope
+		// snapshot from `Settings`) is authoritative — it merges every project
+		// provider and honors overlays — so trust its provenance verbatim. With
+		// no session value, fall back to the persisted config on disk.
+		const scopedConfigured = scopedRoots?.configuredExtensions;
+		if (scopedConfigured !== undefined) {
+			candidates = [
+				...candidates,
+				...scopedConfigured.map(
+					(raw): InjectedRoot => ({
+						path: resolveAgainst(raw, ctx),
+						level: scopedRoots?.configuredLevel ?? "user",
+					}),
+				),
+				...installedPlugins,
+			];
+		} else {
+			const { project, user } = scopeDirs(ctx);
+			const [projectExtensions, userExtensions] = await Promise.all([
+				readSettingsExtensions(path.join(project, "settings.json")),
+				readSettingsExtensions(path.join(user, "settings.json")),
+			]);
+			candidates = [
+				...candidates,
+				...projectExtensions.map((raw): InjectedRoot => ({ path: resolveAgainst(raw, ctx), level: "project" })),
+				...userExtensions.map((raw): InjectedRoot => ({ path: resolveAgainst(raw, ctx), level: "user" })),
+				...installedPlugins,
+			];
+		}
 	}
 
 	// First-seen-wins dedup preserves invocation/CLI > project-settings > user-settings > installed precedence.

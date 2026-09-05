@@ -80,7 +80,7 @@ import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
 import { initializeWithSettings } from "./discovery";
-import { withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
+import { setInvocationConfiguredExtensions, withOmpExtensionRootScope } from "./discovery/omp-extension-roots";
 import { disposeAllJuliaKernelSessions, disposeJuliaKernelSessionsByOwner } from "./eval/jl/executor";
 import { disposeVmContextsByOwner } from "./eval/js/context-manager";
 import { disposeAllKernelSessions, disposeKernelSessionsByOwner } from "./eval/py/executor";
@@ -1508,6 +1508,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		options.settingsManager ??
 		logger.time("settings", Settings.init, { cwd, agentDir }));
 	logger.time("initializeWithSettings", initializeWithSettings, settings);
+	// Snapshot this session's effective `extensions` setting onto its invocation
+	// scope so startup sub-discovery (omp-plugins sibling skills/hooks/…)
+	// honors the same complete policy that post-startup reloads and recursive
+	// children consume — including a caller-supplied in-memory Settings whose
+	// overlays never reach a settings.json on disk.
+	setInvocationConfiguredExtensions(settings.get("extensions") ?? [], settings.extensionsSourceLevel());
 	// Modes v1(§5.4/§6.1):解析会话预设 + 用户全局提示词区块。
 	// composer 统一承载:mode 区块(source=mode:<id>)+ 用户区块(source=user,
 	// 后 add 同名胜 → 用户覆盖预设,§4.3);modeId 只由顶层会话传入。

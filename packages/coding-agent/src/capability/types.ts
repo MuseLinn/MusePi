@@ -73,6 +73,14 @@ export interface LoadOptions<T = unknown> {
 	/** Explicit disabled extension IDs to apply instead of settings. */
 	disabledExtensions?: string[];
 	/**
+	 * Extra cache-key material for the capability TTL cache. Callers whose
+	 * provider output depends on invocation state not captured in the key
+	 * (cwd/repoRoot/disabled sets) — e.g. extension-root scope mode or the
+	 * session's effective `extensions` snapshot — pass a fingerprint here so
+	 * repeated loads from distinct invocations never collide.
+	 */
+	cacheKeyExtra?: string;
+	/**
 	 * 显式启用集(omp 生态智能兼容):同名去重冲突时,forceEnabled 项
 	 * 反转默认的"高优先级胜出"——它存活并反向 shadow 胜者。agent 感知层
 	 * 分析 shadowedBy 详情后可主动启用低优先级的 omp 兼容项。

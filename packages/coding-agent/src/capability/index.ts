@@ -115,7 +115,8 @@ function capabilityCacheKey(capabilityId: string, ctx: LoadContext, options: Loa
 	const ext = Array.isArray(options.disabledExtensions) ? options.disabledExtensions.sort().join(",") : "";
 	// omp 兼容 force 集参与缓存键 —— 否则 setForceEnabled 后命中旧结果。
 	const force = Array.isArray(options.forceEnabledIds) ? options.forceEnabledIds.sort().join(",") : "";
-	return `${capabilityId}|${ctx.cwd}|${ctx.repoRoot ?? ""}|${disabled}|${ext}|${force}`;
+	const extra = options.cacheKeyExtra ?? "";
+	return `${capabilityId}|${ctx.cwd}|${ctx.repoRoot ?? ""}|${disabled}|${ext}|${force}|${extra}`;
 }
 
 /**

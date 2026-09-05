@@ -9,6 +9,7 @@ import {
 import { skillCapability } from "../capability/skill";
 import type { SourceMeta } from "../capability/types";
 import type { SkillsSettings } from "../config/settings";
+import { currentOmpExtensionRootFingerprint } from "../discovery/omp-extension-roots";
 import { type Skill as CapabilitySkill, loadCapability } from "../discovery";
 import { compareSkillOrder, scanSkillsFromDir } from "../discovery/helpers";
 import autoloadTemplate from "../prompts/skills/autoload.md" with { type: "text" };
@@ -175,7 +176,14 @@ export async function loadSkills(options: LoadSkillsOptions = {}): Promise<LoadS
 	}
 
 	// Use capability API to load all skills
-	const result = await loadCapability<CapabilitySkill>(skillCapability.id, { cwd, disabledExtensions });
+	const result = await loadCapability<CapabilitySkill>(skillCapability.id, {
+		cwd,
+		disabledExtensions,
+		// Extension-root scope (mode + configured roots) changes which package
+		// skills surface; fold it in so a disable-discovery invocation and a
+		// merge invocation on the same cwd do not collide in the TTL cache.
+		cacheKeyExtra: currentOmpExtensionRootFingerprint(),
+	});
 
 	const skillMap = new Map<string, Skill>();
 	const realPathSet = new Set<string>();

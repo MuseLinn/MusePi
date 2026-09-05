@@ -11,10 +11,10 @@ import type { AgentSession } from "@musepi/pi-coding-agent/session/agent-session
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { getPluginsDir, getProjectAgentDir, removeSyncWithRetries } from "@musepi/pi-utils";
-import { getAgentDir, setAgentDir } from "@musepi/pi-utils/dirs";
+import { getAgentDir, refreshDirsFromEnv, setAgentDir } from "@musepi/pi-utils/dirs";
 import { cleanupTempHome } from "./helpers/temp-home-cleanup";
 
-function createIsolatedSkillsSettings(): Settings {
+function createIsolatedSkillsSettings(extensions: string[] = []): Settings {
 	return Settings.isolated({
 		"skills.enabled": true,
 		"skills.enableCodexUser": false,
@@ -22,6 +22,7 @@ function createIsolatedSkillsSettings(): Settings {
 		"skills.enableClaudeProject": false,
 		"skills.enablePiUser": false,
 		"skills.enablePiProject": true,
+		extensions,
 	});
 }
 
@@ -71,6 +72,12 @@ describe("createAgentSession skills option", () => {
 		originalHome = process.env.HOME;
 		tempHomeDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-sdk-home-"));
 		process.env.HOME = tempHomeDir;
+		// The dirs resolver froze at import time against the original HOME; a
+		// prior test's setAgentDir may also have left PI_CODING_AGENT_DIR set.
+		// Rebuild from the swapped HOME so getAgentDir() points into the temp
+		// home and skill discovery cannot read the real ~/.musepi skill store.
+		delete process.env.PI_CODING_AGENT_DIR;
+		refreshDirsFromEnv();
 		const nativeUserSkillsDir = path.join(getAgentDir(), "skills");
 		fs.mkdirSync(nativeUserSkillsDir, { recursive: true });
 
@@ -105,7 +112,13 @@ Loaded via symbolic link.
 		fs.symlinkSync(externalSkillDir, path.join(path.dirname(skillsDir), "symlinked-skill-link"), "dir");
 	});
 
-	afterEach(cleanupTempHome(() => ({ tempDir, tempHomeDir, originalHome })));
+	afterEach(() => {
+		cleanupTempHome(() => ({ tempDir, tempHomeDir, originalHome }))();
+		// Rebuild the resolver against the restored HOME so later suites see the
+		// real agent dir again (the beforeEach swap leaves it on the temp home).
+		delete process.env.PI_CODING_AGENT_DIR;
+		refreshDirsFromEnv();
+	});
 
 	it("should discover skills by default and expose them on session.skills", async () => {
 		const { session } = await createAgentSession({
@@ -128,10 +141,6 @@ Loaded via symbolic link.
 		createExtensionSkill(explicitPackage, "sdk-explicit-skill");
 		createExtensionSkill(settingsPackage, "sdk-settings-skill");
 		createExtensionSkill(installedPackage, "sdk-installed-skill");
-		fs.writeFileSync(
-			path.join(getProjectAgentDir(tempDir), "settings.json"),
-			JSON.stringify({ extensions: [settingsPackage] }),
-		);
 		fs.mkdirSync(getPluginsDir(tempHomeDir), { recursive: true });
 		fs.writeFileSync(
 			path.join(getPluginsDir(tempHomeDir), "package.json"),
@@ -139,10 +148,11 @@ Loaded via symbolic link.
 		);
 
 		const previousAgentDir = getAgentDir();
-		setAgentDir(getAgentDir());
+		const isolatedAgentDir = path.join(tempHomeDir, ".musepi", "agent");
+		setAgentDir(isolatedAgentDir);
 		const baseSessionOptions = {
 			cwd: tempDir,
-			agentDir: getAgentDir(),
+			agentDir: isolatedAgentDir,
 			modelRegistry: sharedModelRegistry,
 			additionalExtensionPaths: [explicitPackage],
 			enableMCP: false,
@@ -157,7 +167,7 @@ Loaded via symbolic link.
 			({ session } = await createAgentSession({
 				...baseSessionOptions,
 				sessionManager: SessionManager.inMemory(),
-				settings: createIsolatedSkillsSettings(),
+				settings: createIsolatedSkillsSettings([settingsPackage]),
 				disableExtensionDiscovery: true,
 			}));
 
@@ -170,7 +180,7 @@ Loaded via symbolic link.
 			({ session } = await createAgentSession({
 				...baseSessionOptions,
 				sessionManager: SessionManager.inMemory(),
-				settings: createIsolatedSkillsSettings(),
+				settings: createIsolatedSkillsSettings([settingsPackage]),
 			}));
 
 			const mergedSkillNames = session.skills.map(skill => skill.name);
