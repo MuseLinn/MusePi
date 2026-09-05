@@ -793,25 +793,32 @@ describe("extensions discovery", () => {
 	});
 	it("discoverExtensionPaths only invokes the native extension-module provider (#4198)", async () => {
 		// The extension-module capability has multiple providers
-		// (native, claude, codex, gemini, opencode), but discoverExtensionPaths
-		// only surfaces native-provider paths. Regression: pre-fix it still
-		// invoked every provider's load() and then dropped foreign items,
-		// running four unused directory walks per startup (worst on Windows).
+		// (musepi-extensions, claude, codex, gemini, opencode), but
+		// discoverExtensionPaths only surfaces musepi's own provider paths.
+		// Regression: pre-fix it still invoked every provider's load() and then
+		// dropped foreign items, running four unused directory walks per startup
+		// (worst on Windows).
 		const capability = getCapability<ExtensionModule>(extensionModuleCapability.id);
 		expect(capability, "extension-modules capability must be registered").toBeDefined();
 
 		const providers = capability?.providers ?? [];
-		const foreignIds = providers.map(p => p.id).filter(id => id !== "native");
+		// musepi's own extension-module provider is branded (not "native" as in
+		// upstream); the foreign set is every other provider.
+		const musepiProviderIds = providers
+			.map(p => p.id)
+			.filter(id => id !== "claude" && id !== "codex" && id !== "gemini" && id !== "opencode");
+		const foreignIds = providers.map(p => p.id).filter(id => musepiProviderIds.includes(id) === false);
 		// Guard the invariant this test is defending — without foreign providers
 		// the test would trivially pass and hide a future regression.
 		expect(foreignIds.length).toBeGreaterThan(0);
+		expect(musepiProviderIds.length).toBe(1);
 
 		const spies = providers.map(provider => vi.spyOn(provider, "load"));
 		try {
 			await discoverExtensionPaths([], tempDir.path());
 
 			const callsById = new Map(providers.map((provider, i) => [provider.id, spies[i].mock.calls.length]));
-			expect(callsById.get("native")).toBe(1);
+			expect(callsById.get(musepiProviderIds[0] ?? "")).toBe(1);
 			for (const id of foreignIds) {
 				expect(callsById.get(id), `foreign provider ${id} must not be walked`).toBe(0);
 			}

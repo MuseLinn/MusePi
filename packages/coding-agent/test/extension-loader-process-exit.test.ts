@@ -65,9 +65,16 @@ describe("extension/hook loader process.exit guard (#3680)", () => {
 			trigger === "sigint"
 				? 'process.kill(process.pid, "SIGINT");'
 				: 'void Promise.reject(new Error("probe fatal"));';
+		// `bun -e` resolves imports from the eval context, not the spawn cwd —
+		// point at the source modules by absolute path.
+		const repoRoot = path.resolve(import.meta.dir, "../../..");
+		const utilsIndex = path.join(repoRoot, "packages", "utils", "src", "index.ts").replaceAll("\\", "/");
+		const hostGuard = path
+			.join(repoRoot, "packages", "coding-agent", "src", "extensibility", "utils.ts")
+			.replaceAll("\\", "/");
 		return runProbe(`
-import { postmortem } from "@musepi/pi-utils";
-import { withHostGuard } from "@musepi/pi-coding-agent/extensibility/utils";
+import { postmortem } from "${utilsIndex}";
+import { withHostGuard } from "${hostGuard}";
 
 postmortem.register("probe-cleanup", reason => {
 	process.stdout.write(\`cleanup:\${reason}\\n\`);
