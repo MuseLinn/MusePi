@@ -24,7 +24,11 @@ async function runProbeScenario(options: {
 		const cacheRoot = path.join(tempRoot, "cache");
 		const probeCountPath = path.join(tempRoot, "probe-count");
 		await fs.mkdir(binDir, { recursive: true });
-		await fs.mkdir(path.join(cacheRoot, "omp"), { recursive: true });
+		// XDG_CACHE_HOME/<APP_NAME> — APP_NAME is "musepi" in this fork; the
+		// upstream "omp" directory name never resolves, so XDG isolation
+		// silently falls back to the real profile cache (CI runners reuse
+		// ~/.musepi between runs, poisoning the count/cached assertions).
+		await fs.mkdir(path.join(cacheRoot, "musepi"), { recursive: true });
 		const lspciPath = path.join(binDir, "lspci");
 		await Bun.write(
 			lspciPath,
