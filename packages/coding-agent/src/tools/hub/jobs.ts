@@ -106,7 +106,12 @@ export function runningAgentsOutsideJobs(session: ToolSession): AgentActivitySna
 	const now = Date.now();
 	const out: AgentActivitySnapshot[] = [];
 	for (const ref of registry.list()) {
-		if (ref.kind !== "sub" || !registry.isRunning(ref)) continue;
+		// Claimed running status, not session-corroborated `isRunning`: a
+		// re-woken agent whose session has not attached yet, or a stale
+		// claimed-running entry with no live turn, is exactly what an operator
+		// must see in the roster — upstream #8634. Corroboration is the UI's
+		// job, not the snapshot's.
+		if (ref.kind !== "sub" || ref.status !== "running") continue;
 		if (ref.id === selfId || covered.has(ref.id)) continue;
 		out.push({
 			id: ref.id,
