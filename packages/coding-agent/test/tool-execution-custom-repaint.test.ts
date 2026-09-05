@@ -87,13 +87,13 @@ describe("ToolExecutionComponent custom-renderer repaint seams", () => {
 	}
 
 	it("forces a viewport repaint when a painted streamed placeholder receives its first result", () => {
-		const { component, requestRender } = makeComponent({ __partialJson: '{"host"' });
+		const { component, resetDisplay } = makeComponent({ __partialJson: '{"host"' });
 		// A paint has to land for the placeholder to actually reach the terminal.
 		component.render(80);
 
 		component.updateResult(toolResult("partial output"), true);
 
-		expect(requestRender).toHaveBeenCalledTimes(1);
+		expect(resetDisplay).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not repaint when the streamed placeholder never reaches the terminal", () => {
@@ -116,14 +116,14 @@ describe("ToolExecutionComponent custom-renderer repaint seams", () => {
 	});
 
 	it("forces a viewport repaint when a painted provisional partial result settles", () => {
-		const { component, requestRender } = makeComponent({ host: "router", command: "uptime" });
+		const { component, resetDisplay } = makeComponent({ host: "router", command: "uptime" });
 		component.updateResult(toolResult("partial output"), true);
 		component.render(80);
-		requestRender.mockClear();
+		resetDisplay.mockClear();
 
 		component.updateResult(toolResult("final output"), false);
 
-		expect(requestRender).toHaveBeenCalledTimes(1);
+		expect(resetDisplay).toHaveBeenCalledTimes(1);
 	});
 
 	it("does not repaint when the provisional partial result never reaches the terminal", () => {
