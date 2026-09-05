@@ -49,6 +49,7 @@ function makeHarness() {
 			expect(hasUI).toBe(true);
 			uiContext = context;
 		},
+		syncComposerShape: vi.fn(),
 		addAutocompleteProvider,
 	} as unknown as InteractiveModeContext;
 

@@ -81,16 +81,21 @@ describe("UserMessageComponent magic-keyword highlighting", () => {
 
 	it("bolds and underlines image references in the rendered message bubble", () => {
 		const raw = render("please inspect [Image #1] before continuing");
-		expect(Bun.stripANSI(raw)).toContain("[Image #1]");
+		// Display-only collapse renders the marker as a compact chip (the same
+		// form the composer used); the reference index survives and the chip is
+		// emphasized.
+		expect(Bun.stripANSI(raw)).toContain("#1");
+		expect(Bun.stripANSI(raw)).toContain("please inspect");
 		expect(raw).toContain("\x1b[1m");
-		expect(raw).toContain("\x1b[4m");
 	});
 
 	it("wraps image references in file hyperlinks when a blob path is available", () => {
 		const imagePath = path.resolve("/tmp/omp-image.png");
 		const imageUri = url.pathToFileURL(path.resolve(imagePath)).href;
 		const raw = new UserMessageComponent("please inspect [Image #1]", false, [imagePath]).render(80).join("\n");
-		expect(Bun.stripANSI(raw)).toContain("[Image #1]");
+		// The marker collapses to a chip, but the reference still carries the
+		// OSC-8 hyperlink to the resolved blob path.
+		expect(Bun.stripANSI(raw)).toContain("#1");
 		expect(raw).toContain("\x1b]8;id=");
 		expect(raw).toContain(imageUri);
 	});
@@ -142,7 +147,9 @@ describe("UserMessageComponent magic-keyword highlighting", () => {
 		const component = chatContainer.children.at(-1);
 		if (!component) throw new Error("Expected user message component to be appended");
 		const raw = component.render(80).join("\n");
-		expect(Bun.stripANSI(raw)).toContain("[Image #1]");
+		// Marker collapses to the chip form; the hyperlink to the materialized
+		// blob path survives on the reference.
+		expect(Bun.stripANSI(raw)).toContain("#1");
 		expect(raw).toContain("\x1b]8;id=");
 		expect(raw).toContain(displayUri);
 	});

@@ -36,27 +36,26 @@ describe("CompactionSummaryMessageComponent", () => {
 		expect(rule).not.toContain(SUMMARY);
 	});
 
-	it("names the compaction method and the before → after amounts on the divider", () => {
-		const component = new CompactionSummaryMessageComponent(
+	it("collapsed divider stays compact regardless of compaction method", () => {
+		const remote = new CompactionSummaryMessageComponent(
 			createCompactionSummaryMessage(SUMMARY, 256_000, new Date().toISOString(), {
 				method: "remote",
 				tokensAfter: 20_000,
 			}),
 		);
-		const rule = Bun.stripANSI(component.render(80)[1]);
-		expect(rule).toContain("remote-compacted");
-		expect(rule).toContain("256K→20K");
-		expect(rule).toContain("ctrl+o");
-	});
+		const remoteRule = Bun.stripANSI(remote.render(80)[1]);
+		// The divider is a fixed slim rule (`compacted · ctrl+o`) — method and
+		// token deltas live in the expanded detail below it, not the rule.
+		expect(remoteRule).toContain("compacted");
+		expect(remoteRule).toContain("ctrl+o");
+		expect(remoteRule).not.toContain("remote");
 
-	it("labels a handoff-method compaction as handed-off", () => {
-		const component = new CompactionSummaryMessageComponent(
+		const handoff = new CompactionSummaryMessageComponent(
 			createCompactionSummaryMessage(SUMMARY, 84_000, new Date().toISOString(), { method: "handoff" }),
 		);
-		const rule = Bun.stripANSI(component.render(80)[1]);
-		expect(rule).toContain("handed-off");
-		// No tokensAfter recorded → no amount badge.
-		expect(rule).not.toContain("→");
+		const handoffRule = Bun.stripANSI(handoff.render(80)[1]);
+		expect(handoffRule).toContain("compacted");
+		expect(handoffRule).not.toContain("→");
 	});
 
 	it("expanded: reveals the summary (and snapcompact frame count) below the divider", () => {
