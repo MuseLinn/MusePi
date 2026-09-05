@@ -52,10 +52,10 @@ describe("profile alias installer", () => {
 		});
 
 		expect(command).toEqual({
-			display: "omp",
-			posix: "omp",
-			fish: "omp",
-			powerShell: "omp",
+			display: "musepi",
+			posix: "musepi",
+			fish: "musepi",
+			powerShell: "musepi",
 		});
 	});
 
@@ -266,9 +266,9 @@ describe("profile alias installer", () => {
 				"/home/me/.zshrc",
 				[
 					"before",
-					"# >>> omp profile alias: omp-work >>>",
+					"# >>> musepi profile alias: omp-work >>>",
 					"alias omp-work='command musepi --profile=old'",
-					"# <<< omp profile alias: omp-work <<<",
+					"# <<< musepi profile alias: omp-work <<<",
 					"after",
 				].join("\n"),
 			],
@@ -298,7 +298,7 @@ describe("profile alias installer", () => {
 		// was interrupted or hand-edited. Appending a fresh block would let the
 		// *next* install splice from the stale start through the new end, deleting
 		// the user config in between. Refuse and preserve the file untouched.
-		const original = ["# >>> omp profile alias: omp-work >>>", "omp-work() {", "export SECRET=keepme"].join("\n");
+		const original = ["# >>> musepi profile alias: omp-work >>>", "omp-work() {", "export SECRET=keepme"].join("\n");
 		const files = new Map<string, string>([["/home/me/.zshrc", original]]);
 		let wrote = false;
 
@@ -393,7 +393,7 @@ describe("profile alias installer", () => {
 					files.set(filePath, content);
 				},
 			}),
-		).rejects.toThrow("Invalid OMP profile");
+		).rejects.toThrow(/Invalid profile/);
 		expect(files.size).toBe(0);
 	});
 
