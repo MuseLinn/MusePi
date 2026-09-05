@@ -57,7 +57,7 @@ describe("issue #980 provider-qualified model resolution", () => {
 		});
 		expect(cliResolved.model).toBeUndefined();
 		expect(cliResolved.error).toBe(
-			'Model "anthropic/claude-3-7-sonnet" not found. Run "omp models" to see available models.',
+			'Model "anthropic/claude-3-7-sonnet" not found. Run "musepi models" to see available models.',
 		);
 	});
 });
