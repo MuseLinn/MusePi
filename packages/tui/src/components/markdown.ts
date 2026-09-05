@@ -1500,6 +1500,12 @@ export class Markdown implements Component {
 		object,
 		{ text: string; transientRenderCache: boolean; hasMutableTrailingRow: boolean }
 	>();
+	// Table-lock support: the column widths of the most recent render's table
+	// (single-table assumption matches the transcript streaming case), plus the
+	// frozen widths once rows have entered native scrollback.
+	#lastRenderTableWidths: number[] | undefined;
+	#lockedTableWidths: number[] | undefined;
+	#tableLockCommittedRows = 0;
 
 	// Streaming-lex cache: the largest blank-line-bounded prefix of #text whose
 	// block tokens are frozen, plus those tokens. marked has no resumable lexer,
@@ -1624,6 +1630,39 @@ export class Markdown implements Component {
 		this.#lastRenderedText = this.#text;
 		this.#lastRenderedTransientRenderCache = this.#transientRenderCache;
 		this.#lastRenderedHasMutableTrailingRow = this.#transientRenderCache && hasContentRows;
+	}
+
+	/**
+	 * Freeze the last rendered table's column widths once its rows enter native
+	 * scrollback: re-rendering at natural widths would reflow painted rows and
+	 * duplicate them on finalize.
+	 */
+	setNativeScrollbackCommittedRows(rows: number): void {
+		const committed = Number.isFinite(rows) ? Math.max(0, Math.trunc(rows)) : 0;
+		if (committed <= this.#tableLockCommittedRows) return;
+		this.#tableLockCommittedRows = committed;
+		// A table that contributed rows to the committed prefix must render at
+		// its painted widths from now on. Single-table messages cover the
+		// transcript streaming case; multi-table markdown locks only when the
+		// last rendered table started below the commit line (approximation).
+		if (committed > 0 && this.#lastRenderTableWidths !== undefined) {
+			if (this.#lockedTableWidths === undefined) {
+				this.#lockedTableWidths = this.#lastRenderTableWidths;
+				this.invalidate();
+			}
+		}
+	}
+
+	/** A destructive replay retires the frozen width; the next render may reflow. */
+	prepareNativeScrollbackReplay(): void {
+		this.#lockedTableWidths = undefined;
+		this.#tableLockCommittedRows = 0;
+		this.invalidate();
+	}
+
+	/** Column widths a committed table must render at, if any. */
+	get lockedTableWidths(): readonly number[] | undefined {
+		return this.#lockedTableWidths;
 	}
 	get transientRenderCache(): boolean {
 		return this.#transientRenderCache;
@@ -2304,7 +2343,13 @@ export class Markdown implements Component {
 			}
 
 			case "table": {
-				const tableLines = this.#renderTable(token as TableToken, width, nextTokenType, styleContext);
+				const tableLines = this.#renderTable(
+					token as TableToken,
+					width,
+					nextTokenType,
+					styleContext,
+					this.#lockedTableWidths,
+				);
 				for (const tableLine of tableLines) lines.push(renderedLine(tableLine));
 				break;
 			}
@@ -2782,6 +2827,7 @@ export class Markdown implements Component {
 		availableWidth: number,
 		nextTokenType?: string,
 		styleContext?: InlineStyleContext,
+		lockedColumnWidths?: readonly number[],
 	): string[] {
 		const lines: string[] = [];
 		const numCols = token.header.length;
@@ -2790,11 +2836,18 @@ export class Markdown implements Component {
 			return lines;
 		}
 
-		// Calculate border overhead: "│ " + (n-1) * " │ " + " │"
-		// = 2 + (n-1) * 3 + 2 = 3n + 1
+		// A committed table is frozen at the column widths it had when its rows
+		// entered native scrollback: re-rendering it at the current content's
+		// natural widths would reflow already-painted rows and spray duplicates
+		// on finalize. Render against the lock instead (cells wrap when the
+		// frozen width no longer fits the grown content).
+		const lockedWidths =
+			lockedColumnWidths !== undefined && lockedColumnWidths.length === numCols
+				? [...lockedColumnWidths]
+				: undefined;
 		const borderOverhead = 3 * numCols + 1;
 		const availableForCells = availableWidth - borderOverhead;
-		if (availableForCells < numCols) {
+		if (availableForCells < numCols && lockedWidths === undefined) {
 			// Too narrow to render a stable table. Fall back to raw markdown.
 			const fallbackLines = token.raw ? wrapTextWithAnsi(token.raw, availableWidth) : [];
 			if (nextTokenType && nextTokenType !== "space") {
@@ -2803,39 +2856,41 @@ export class Markdown implements Component {
 			return fallbackLines;
 		}
 
-		const maxUnbrokenWordWidth = 30;
-
-		// Calculate natural column widths (what each column needs without constraints)
-		const naturalWidths: number[] = [];
-		const minWordWidths: number[] = [];
-		for (let i = 0; i < numCols; i++) {
-			const headerText = this.#renderInlineTokens(token.header[i].tokens || [], styleContext);
-			const headerLineWidths = this.#terminalLineWidths(headerText);
-			naturalWidths[i] = Math.max(...headerLineWidths, 0);
-			minWordWidths[i] = Math.max(1, this.#getLongestWordWidth(headerText, maxUnbrokenWordWidth));
-		}
-		for (const row of token.rows) {
-			for (let i = 0; i < row.length; i++) {
-				const cellText = this.#renderInlineTokens(row[i].tokens || [], styleContext);
-				const cellLineWidths = this.#terminalLineWidths(cellText);
-				naturalWidths[i] = Math.max(naturalWidths[i] || 0, ...cellLineWidths);
-				minWordWidths[i] = Math.max(
-					minWordWidths[i] || 1,
-					this.#getLongestWordWidth(cellText, maxUnbrokenWordWidth),
-				);
+		// Natural column widths are only needed when no lock pins this table.
+		let naturalWidths: number[] | undefined;
+		let minWordWidths: number[] | undefined;
+		if (lockedWidths === undefined) {
+			naturalWidths = [];
+			minWordWidths = [];
+			const maxUnbrokenWordWidth = 30;
+			for (let i = 0; i < numCols; i++) {
+				const headerText = this.#renderInlineTokens(token.header[i].tokens || [], styleContext);
+				const headerLineWidths = this.#terminalLineWidths(headerText);
+				naturalWidths[i] = Math.max(...headerLineWidths, 0);
+				minWordWidths[i] = Math.max(1, this.#getLongestWordWidth(headerText, maxUnbrokenWordWidth));
+			}
+			for (const row of token.rows) {
+				for (let i = 0; i < row.length; i++) {
+					const cellText = this.#renderInlineTokens(row[i].tokens || [], styleContext);
+					const cellLineWidths = this.#terminalLineWidths(cellText);
+					naturalWidths[i] = Math.max(naturalWidths[i] || 0, ...cellLineWidths);
+					minWordWidths[i] = Math.max(
+						minWordWidths[i] || 1,
+						this.#getLongestWordWidth(cellText, maxUnbrokenWordWidth),
+					);
+				}
 			}
 		}
-
 		let minColumnWidths = minWordWidths;
-		let minCellsWidth = minColumnWidths.reduce((a, b) => a + b, 0);
+		let minCellsWidth = minColumnWidths?.reduce((a, b) => a + b, 0) ?? 0;
 
 		if (minCellsWidth > availableForCells) {
 			minColumnWidths = new Array(numCols).fill(1);
 			const remaining = availableForCells - numCols;
 
 			if (remaining > 0) {
-				const totalWeight = minWordWidths.reduce((total, width) => total + Math.max(0, width - 1), 0);
-				const growth = minWordWidths.map(width => {
+				const totalWeight = minWordWidths!.reduce((total, width) => total + Math.max(0, width - 1), 0);
+				const growth = minWordWidths!.map(width => {
 					const weight = Math.max(0, width - 1);
 					return totalWeight > 0 ? Math.floor((weight / totalWeight) * remaining) : 0;
 				});
@@ -2856,20 +2911,22 @@ export class Markdown implements Component {
 		}
 
 		// Calculate column widths that fit within available width
-		const totalNaturalWidth = naturalWidths.reduce((a, b) => a + b, 0) + borderOverhead;
+		const totalNaturalWidth = (naturalWidths?.reduce((a, b) => a + b, 0) ?? 0) + borderOverhead;
 		let columnWidths: number[];
 
-		if (totalNaturalWidth <= availableWidth) {
+		if (lockedWidths !== undefined) {
+			columnWidths = lockedWidths;
+		} else if (totalNaturalWidth <= availableWidth) {
 			// Everything fits naturally
-			columnWidths = naturalWidths.map((width, index) => Math.max(width, minColumnWidths[index]));
+			columnWidths = naturalWidths!.map((width, index) => Math.max(width, minColumnWidths![index]!));
 		} else {
 			// Need to shrink columns to fit
-			const totalGrowPotential = naturalWidths.reduce((total, width, index) => {
-				return total + Math.max(0, width - minColumnWidths[index]);
+			const totalGrowPotential = naturalWidths!.reduce((total, width, index) => {
+				return total + Math.max(0, width - minColumnWidths![index]!);
 			}, 0);
 			const extraWidth = Math.max(0, availableForCells - minCellsWidth);
-			columnWidths = minColumnWidths.map((minWidth, index) => {
-				const naturalWidth = naturalWidths[index];
+			columnWidths = minColumnWidths!.map((minWidth, index) => {
+				const naturalWidth = naturalWidths![index]!;
 				const minWidthDelta = Math.max(0, naturalWidth - minWidth);
 				let grow = 0;
 				if (totalGrowPotential > 0) {
@@ -2884,8 +2941,8 @@ export class Markdown implements Component {
 			while (remaining > 0) {
 				let grew = false;
 				for (let i = 0; i < numCols && remaining > 0; i++) {
-					if (columnWidths[i] < naturalWidths[i]) {
-						columnWidths[i]++;
+					if (columnWidths[i]! < naturalWidths![i]!) {
+						columnWidths[i]!++;
 						remaining--;
 						grew = true;
 					}
@@ -2946,6 +3003,10 @@ export class Markdown implements Component {
 				lines.push(separatorLine);
 			}
 		}
+
+		// Record the column widths that produced this render so a later
+		// setNativeScrollbackCommittedRows can freeze them.
+		this.#lastRenderTableWidths = columnWidths.slice();
 
 		// Render bottom border
 		const bottomBorderCells = columnWidths.map(w => h.repeat(w));
