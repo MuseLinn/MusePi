@@ -6,6 +6,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.17] - 2026-09-06
+
 ### Added
 
 - **`musepi update` 下载进度条**:二进制下载(直接更新与 shim takeover 两条路径)现在实时显示进度——`[████░░░] 47% 23.5MB/50.0MB` 单行原地刷新,33ms 节流,渲染到 stderr;非 TTY(管道/CI)保持静默,只有原 `Downloading …` 提示行。`downloadVerifiedBinary` 新增可选 `onProgress(received, total)` 回调。
