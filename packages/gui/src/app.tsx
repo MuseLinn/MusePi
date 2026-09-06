@@ -45,6 +45,7 @@ import {
 	type PetBubbleKind,
 } from "./lib/session-store";
 import { sfxFor } from "./lib/sfx";
+import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
@@ -649,6 +650,11 @@ function AppInner(): ReactNode {
 	// Bottom integrated terminal drawer (ZCode style) — independent of the
 	// right-pane terminal tool.
 	const [bottomTerminal, setBottomTerminal] = useState(false);
+	// ⌘1..8 surface jump: nonce bumps re-fire ChatView's select effect even
+	// for the same surface. Order comes from the persisted rail order so the
+	// digits match what the user sees on the rail.
+	const [panelSelect, setPanelSelect] = useState<{ id: string; nonce: number } | null>(null);
+	const panelSelectNonce = useRef(0);
 	// Focus mode (openchamber): the composer expands to fill the surface.
 	const [focusMode, setFocusMode] = useState(false);
 	// Mini chat window (Electron mini-chat-open → ?mini=1): a chat-only
@@ -2383,6 +2389,18 @@ function AppInner(): ReactNode {
 					localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 					return !v;
 				});
+			} else if (mod && !e.shiftKey && /^[1-8]$/.test(k)) {
+				// ⌘1..8: jump to the nth surface in rail order (design-doc
+				// 遗留项) — digits match the rail's visual order, selecting
+				// while collapsed expands the panel.
+				e.preventDefault();
+				const order = readSurfaceOrder(storeRef.current?.cwd || undefined).filter(id => surfaceById(id));
+				const id = order[Number(k) - 1];
+				if (id) {
+					setRightCollapsed(false);
+					localStorage.setItem("musepi-gui-right", "0");
+					setPanelSelect({ id, nonce: ++panelSelectNonce.current });
+				}
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -2827,6 +2845,7 @@ function AppInner(): ReactNode {
 										setRightCollapsed(false);
 										localStorage.setItem("musepi-gui-right", "0");
 									}}
+									panelSelectRequest={panelSelect}
 									terminalOpen={bottomTerminal}
 									onCloseTerminal={() => setBottomTerminal(false)}
 									focusMode={focusMode}

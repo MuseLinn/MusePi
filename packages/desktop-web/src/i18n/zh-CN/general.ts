@@ -278,6 +278,7 @@ export const general = {
 	"search shortcut": "搜索会话",
 	"settings shortcut": "打开设置",
 	"toggle panel shortcut": "切换右侧面板",
+	"panel surfaces shortcut": "直达右侧面板工具 1–8",
 	"toggle sidebar shortcut": "切换左侧面板",
 	"scroll transcript shortcut": "滚动到最新消息",
 	"stop agent shortcut": "停止当前回复",

@@ -236,6 +236,7 @@ export function ChatView({
 	onOpenFileInPanel,
 	onToggleRightPanel,
 	onExpandRightPanel,
+	panelSelectRequest,
 	terminalOpen,
 	onCloseTerminal,
 	focusMode,
@@ -310,6 +311,10 @@ export function ChatView({
 	/** Right-edge rail: expand the panel without toggling when a tool icon
 	 *  is picked while the panel is collapsed. */
 	onExpandRightPanel?(): void;
+	/** ⌘1..8 surface jump (design-doc遗留项落地): App turns the shortcut
+	 *  into a select request carrying a nonce; the nonce bump re-fires the
+	 *  effect even when the same surface is requested twice. */
+	panelSelectRequest?: { id: string; nonce: number } | null;
 	terminalOpen: boolean;
 	/** Last terminal tab closed → fold the dock (TerminalPanel onAllClosed). */
 	onCloseTerminal?(): void;
@@ -695,6 +700,15 @@ export function ChatView({
 		window.addEventListener("omp-open-url", onOpenUrl);
 		return () => window.removeEventListener("omp-open-url", onOpenUrl);
 	}, []);
+	// ⌘1..8 surface jump: App turns the digit into a select request; the
+	// nonce bump re-fires even when the same surface is requested twice.
+	// Selecting while collapsed expands the panel (rail-click parity).
+	useEffect(() => {
+		if (!panelSelectRequest?.id) return;
+		setActiveView(panelSelectRequest.id);
+		if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [panelSelectRequest?.nonce]);
 	const setThinking = (level: ThinkingLevel | null): void => {
 		if (!store) return;
 		void rpc

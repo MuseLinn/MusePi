@@ -1,6 +1,8 @@
 import { highlightToCodeHtml, ImageLightbox, Markdown, t } from "@musepi/desktop-web";
 import {
 	ArrowLeft,
+	ClipboardCopy,
+	ExternalLink,
 	FileCode,
 	File as FileIcon,
 	FileImage,
@@ -304,6 +306,8 @@ export function FilePane({
 	const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
 	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
 	const [htmlLiveMode, setHtmlLiveMode] = useState<"live" | "source">("live");
+	/** .md preview: rendered Markdown (default) or raw source. */
+	const [mdRender, setMdRender] = useState(true);
 	const [ctx, setCtx] = useState<MenuState | null>(null);
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 	const [query, setQuery] = useState("");
@@ -406,6 +410,7 @@ export function FilePane({
 					// Markdown previews render through the shared component;
 					// other text files highlight via the tree-sitter bridge.
 					const lang = EXT_LANG[ext];
+					if (ext === "md") setMdRender(true);
 					if (lang && ext !== "md" && highlight) {
 						try {
 							const hl = await highlight(text, lang);
@@ -790,6 +795,46 @@ export function FilePane({
 							<span className="gui-filepane-preview-name" title={preview.path}>
 								{preview.name}
 							</span>
+							{extOf(preview.name) === "md" && preview.text !== undefined && (
+								<div className="gui-filepane-preview-modes">
+									<button
+										type="button"
+										className={`gui-seg-btn${mdRender ? " gui-seg-btn--active" : ""}`}
+										onClick={() => setMdRender(true)}
+									>
+										{t("rendered view")}
+									</button>
+									<button
+										type="button"
+										className={`gui-seg-btn${mdRender ? "" : " gui-seg-btn--active"}`}
+										onClick={() => setMdRender(false)}
+									>
+										{t("source code")}
+									</button>
+								</div>
+							)}
+							<span className="gui-filepane-preview-tools">
+								<button
+									type="button"
+									className="gui-btn gui-btn-icon"
+									title={t("copy path")}
+									onClick={() => {
+										window.electronAPI?.copyText(preview.path).catch(() => {});
+									}}
+								>
+									<ClipboardCopy size={12} />
+								</button>
+								<button
+									type="button"
+									className="gui-btn gui-btn-icon"
+									title={t("open with default app")}
+									onClick={() => {
+										window.electronAPI?.openWith("", preview.path).catch(() => {});
+									}}
+								>
+									<ExternalLink size={12} />
+								</button>
+							</span>
 							<button
 								type="button"
 								className="gui-btn gui-btn-icon"
@@ -811,7 +856,7 @@ export function FilePane({
 							{preview.html !== undefined && (
 								<pre className="gui-filepane-preview-text" dangerouslySetInnerHTML={{ __html: preview.html }} />
 							)}
-							{preview.text !== undefined && extOf(preview.name) === "md" ? (
+							{preview.text !== undefined && extOf(preview.name) === "md" && mdRender ? (
 								<div className="gui-filepane-preview-md">
 									<Markdown text={preview.text} basePath={cwd} />
 								</div>

@@ -8,6 +8,7 @@ export function ShortcutsSection(): ReactNode {
 		{ keys: "⌘K", action: t("search shortcut") },
 		{ keys: "⌘,", action: t("settings shortcut") },
 		{ keys: "⌘E", action: t("toggle panel shortcut") },
+		{ keys: "⌘1–8", action: t("panel surfaces shortcut") },
 		{ keys: "⌘⇧E", action: t("focus mode shortcut") },
 		{ keys: "⌘B", action: t("toggle sidebar shortcut") },
 		{ keys: "⌘J", action: t("toggle terminal shortcut") },

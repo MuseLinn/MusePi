@@ -282,6 +282,7 @@ export const general = {
 	"search shortcut": "Search sessions",
 	"settings shortcut": "Open settings",
 	"toggle panel shortcut": "Toggle right panel",
+	"panel surfaces shortcut": "Jump to right-panel tool 1–8",
 	"toggle sidebar shortcut": "Toggle left panel",
 	"scroll transcript shortcut": "Scroll to latest message",
 	"stop agent shortcut": "Stop current reply",

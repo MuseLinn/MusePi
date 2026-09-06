@@ -1316,6 +1316,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 										return next;
 									})
 								}
+								onRevert={onRevert}
 							/>
 						) : null;
 					const row = (

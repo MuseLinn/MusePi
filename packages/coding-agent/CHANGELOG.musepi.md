@@ -8,6 +8,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **轮次折叠头聚合更改条 + 一键回退**(ZCode 更改 chip parity):已完成的轮次折叠头在「时长 · 工具 · 命令」之后新增「更改 N 文件 +A −R」着色 chip——聚合该轮内全部 `edit`/`apply_patch` 结果的 diff 统计(多文件走 `perFileResults`,错误文件不计入),无编辑的轮次不出 chip;chip 尾部撤销按钮一键回退到该轮用户消息之前(复用 `session.branchAt` 分支回退,旧分支保留)。
+  - EN: The completed-round fold header gains a ZCode-style aggregate chip ("更改 N 文件 +A −R") after the duration/tool/command counts — summing diff stats across every `edit`/`apply_patch` result in the round (multi-file via `perFileResults`, errored files excluded), omitted for rounds that edited nothing; a trailing undo button branches back to the round's user message (existing `session.branchAt` revert, old branch preserved).
+- **文件面板 Markdown 渲染预览与预览工具行**:Files 面板的 `.md` 预览头新增「渲染 | 源码」分段切换(默认渲染,与聊天内 Markdown 同源:表格/代码块/mermaid),HTML 预览原有切换不变;预览头统一补齐「复制路径」「用默认应用打开」两个工具按钮。
+  - EN: The Files pane's `.md` preview gains a Rendered|Source segment toggle (defaulting to rendered — same Markdown pipeline as chat: tables, code blocks, mermaid), leaving the HTML live|source toggle untouched; the preview head uniformly gains copy-path and open-with-default-app tool buttons.
+- **⌘1..8 右侧面板直达**(设计文档遗留项落地):按 rail 当前可见顺序直达对应 surface(files/git/browser…,与用户拖拽后的排序一致),面板折叠时自动展开;`app.tsx` 快捷键 + `ChatView.panelSelectRequest` nonce 通道,设置→快捷键列表同步,双语词条补齐。
+  - EN: ⌘1..8 jumps to the nth right-panel surface in the rail's current visual order (honoring drag-customized order), expanding the panel when collapsed — wired via an App-level shortcut plus a `panelSelectRequest` nonce channel into ChatView; the settings shortcuts list and both i18n catalogs are updated.
+- **终端 dock 标签按项目持久化**:每个项目的标签 cwd 列表(≤6)记忆在 `musepi-gui-terminal-tabs-{cwd}`,重开 dock / 重启应用后按记忆目录恢复(全新 pty);切换项目时重播种;标签现在可各自 cwd(此前共用会话目录),标签名跟随各自目录 basename。daemon RPC 无改动。
+  - EN: Terminal dock tabs persist per project — each project's tab cwd list (≤6) is remembered under `musepi-gui-terminal-tabs-{cwd}` and restored (as fresh pties) when the dock or app reopens; switching projects reseeds the tab set; tabs can now hold their own cwd (previously all shared the session dir), with labels following each tab's basename. No daemon RPC changes.
+
+## [0.4.17] - 2026-09-06
+
 - **Codex 订阅 GPT-6-Astra 接入**(吸收上游 oh-my-pi 09-03 ~ 09-05 的 5 个提交):`openai-codex` 新增 `gpt-6-astra` 模型(默认 272K 窗口、`/extended-context` 开启后 1.05M、`configuration_update` 推理)、client version pin 升至 `0.153.0`(后端按此版本门控 Astra 可用性)、全部 ChatGPT-OAuth 请求(Responses/compaction/WebSocket 握手)带 `x-codex-routing-hint`、多账号 discovery 对被后端 401/403 拒凭据的账号跳过而非整体中止、GPT-6 会话内稳定 effort 规划(`openai-configuration-update.ts`,request-level effort 恒定 + `configuration_update` input item 承载中途调整)。
   - EN: Codex-subscription GPT-6-Astra support (absorbing five upstream oh-my-pi commits, 09-03–09-05): `openai-codex` gains the `gpt-6-astra` model (default 272K window, 1.05M behind `/extended-context`, `configuration_update` reasoning), the client-version pin moves to `0.153.0` (the backend version-gates Astra availability on it), every ChatGPT-OAuth request (Responses/compaction/WebSocket handshake) carries `x-codex-routing-hint`, multi-account discovery skips accounts whose credential the backend rejected outright (401/403) instead of aborting the whole catalog, and GPT-6 gets mid-conversation stable-effort planning (`openai-configuration-update.ts`): the request-level effort stays pinned while later changes travel as `configuration_update` input items.
 

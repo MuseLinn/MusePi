@@ -9,11 +9,40 @@ import { Icon } from "../vendor/oc-icons";
 /**
  * Multi-tab integrated terminal (ZCode/openchamber style). Each tab owns
  * one daemon pty (terminal.open id); the daemon already multiplexes, so
- * tabs are just independent xterm instances.
+ * tabs are just independent xterm instances. Tab cwd lists are remembered
+ * per project — reopening the dock (or the app) restores the same tab set
+ * as fresh pties at the remembered directories.
  */
 interface TabEntry {
 	key: number;
+	/** Working dir this tab's pty spawns in (may differ per tab). */
+	cwd: string;
 	label: string;
+}
+
+const TABS_KEY_PREFIX = "musepi-gui-terminal-tabs-";
+const MAX_REMEMBERED = 6;
+
+function readRememberedCwds(cwd: string): string[] {
+	try {
+		const raw = localStorage.getItem(`${TABS_KEY_PREFIX}${cwd}`);
+		const parsed: unknown = raw ? JSON.parse(raw) : null;
+		if (Array.isArray(parsed)) {
+			const list = parsed.filter((x): x is string => typeof x === "string" && x.length > 0).slice(0, MAX_REMEMBERED);
+			if (list.length > 0) return list;
+		}
+	} catch {
+		/* ignore */
+	}
+	return [cwd];
+}
+
+function writeRememberedCwds(cwd: string, tabCwds: string[]): void {
+	try {
+		localStorage.setItem(`${TABS_KEY_PREFIX}${cwd}`, JSON.stringify(tabCwds.slice(-MAX_REMEMBERED)));
+	} catch {
+		/* ignore */
+	}
 }
 
 /** xterm palette matched to the app's light/dark scheme (CSS var strings
@@ -208,13 +237,42 @@ export function TerminalPanel({
 	 *  a fresh tab is re-seeded and survives the toggle). */
 	onAllClosed?: () => void;
 }): ReactNode {
-	const [tabs, setTabs] = useState<TabEntry[]>([{ key: 0, label: baseName(cwd) || "shell" }]);
+	// Tabs seed from the project's remembered cwd list (fresh session =
+	// same tab set as fresh pties; the pties themselves are always new).
+	const [tabs, setTabs] = useState<TabEntry[]>(() =>
+		readRememberedCwds(cwd).map((dir, i) => ({ key: i, cwd: dir, label: baseName(dir) || "shell" })),
+	);
 	const [active, setActive] = useState(0);
-	const seq = useRef(1);
+	const seq = useRef(tabs.length);
 	// Live tab count for the "last tab" check (state closures go stale on
 	// rapid successive closes — the ref never does).
-	const tabCountRef = useRef(1);
+	const tabCountRef = useRef(tabs.length);
 	tabCountRef.current = tabs.length;
+
+	// Persist the tab cwd list whenever it changes (closing the dock keeps
+	// pties alive, so this effect — not onAllClosed — is the save point).
+	const tabCwds = tabs.map(x => x.cwd).join("\u0000");
+	useEffect(() => {
+		writeRememberedCwds(cwd, tabCwds.split("\u0000"));
+	}, [cwd, tabCwds]);
+
+	// Project switch (cwd change): reseed tabs from the new project's
+	// memory — the panel is always mounted, so this is the only hook.
+	// Keys move to the 1000-range so they never collide with the seed.
+	const [seedCwd, setSeedCwd] = useState(cwd);
+	if (cwd !== seedCwd) {
+		setSeedCwd(cwd);
+		const list = readRememberedCwds(cwd);
+		setTabs(list.map((dir, i) => ({ key: 1000 + i, cwd: dir, label: baseName(dir) || "shell" })));
+		seq.current = 1000 + list.length;
+		setActive(1000);
+	}
+
+	const newTab = (dir: string): void => {
+		const key = seq.current++;
+		setTabs(ts => [...ts, { key, cwd: dir, label: baseName(dir) || "shell" }]);
+		setActive(key);
+	};
 
 	const closeTab = (key: number): void => {
 		if (tabCountRef.current <= 1) {
@@ -224,7 +282,7 @@ export function TerminalPanel({
 		}
 		setTabs(ts => {
 			const next = ts.filter(x => x.key !== key);
-			if (next.length === 0) next.push({ key: seq.current++, label: baseName(cwd) || "shell" });
+			if (next.length === 0) next.push({ key: seq.current++, cwd, label: baseName(cwd) || "shell" });
 			return next;
 		});
 		setActive(a => {
@@ -280,11 +338,7 @@ export function TerminalPanel({
 					aria-label={t("new tab")}
 					title={t("new tab")}
 					className="gui-terminal-new ml-0.5 flex h-[26px] w-6 items-center justify-center rounded-full text-[var(--color-text-faint)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
-					onClick={() => {
-						const key = seq.current++;
-						setTabs(ts => [...ts, { key, label: baseName(cwd) || "shell" }]);
-						setActive(key);
-					}}
+					onClick={() => newTab(cwd)}
 				>
 					<Icon name="add" className="h-3.5 w-3.5" />
 				</button>
@@ -295,7 +349,7 @@ export function TerminalPanel({
 					<TerminalTab
 						key={tab.key}
 						rpc={rpc}
-						cwd={cwd}
+						cwd={tab.cwd}
 						active={tab.key === active}
 						onLabel={label => setTabs(ts => ts.map(x => (x.key === tab.key ? { ...x, label } : x)))}
 					/>

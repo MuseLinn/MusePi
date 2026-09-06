@@ -1005,6 +1005,8 @@ export const settings = {
 	"widget preview empty": "暂无组件预览——对话中渲染的可视化组件会常驻显示在这里",
 	"page preview": "页面预览",
 	"source code": "源码",
+	"rendered view": "渲染",
+	"open with default app": "用默认应用打开",
 	"widget gauge": "市场温度",
 	"widget gauge desc": "A股市场温度仪表",
 	"widget gauge sub": "三指数量能",

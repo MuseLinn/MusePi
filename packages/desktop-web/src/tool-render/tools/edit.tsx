@@ -46,7 +46,9 @@ function countOps(input: string): number {
 	return count;
 }
 
-function diffStats(diff: string): { added: number; removed: number } {
+/** Count +/- diff lines in a unified-diff text (single source of truth —
+ *  the round-fold aggregate in transcript/round-collapse.ts reuses this). */
+export function diffStats(diff: string): { added: number; removed: number } {
 	let added = 0;
 	let removed = 0;
 	for (const line of diff.split("\n")) {

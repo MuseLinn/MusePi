@@ -1059,6 +1059,8 @@ export const settings = {
 	"widget preview empty": "No widget preview yet — visual widgets rendered in chat will stay here",
 	"page preview": "Page preview",
 	"source code": "Source code",
+	"rendered view": "Rendered",
+	"open with default app": "Open with default app",
 	"widget gauge": "Market temperature",
 	"widget gauge desc": "A-share market temperature gauge",
 	"widget gauge sub": "Three-index volume",

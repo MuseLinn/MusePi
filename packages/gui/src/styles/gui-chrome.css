@@ -780,6 +780,20 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+/* Preview-head context tools: md render|source seg + copy/reveal actions
+ * (ZCode preview toolbar parity). Name shrinks, tools hug the close btn. */
+.gui-filepane-preview-modes {
+	display: inline-flex;
+	flex-shrink: 0;
+	margin-left: 2px;
+}
+.gui-filepane-preview-tools {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+	margin-left: auto;
+}
 
 .gui-filepane-preview-text {
 	margin: 0;

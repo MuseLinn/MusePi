@@ -13,8 +13,8 @@
 > 核对方法：逐项 vs `packages/gui/src/`。
 
 - **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ❌。
-- **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ✅（`ContextPanel.tsx:247` `SNAP_POINTS=[300,480,800]`，释放吸附，0a51f37788）、上下文 gating ❌、Mod+1..9 ❌、pop-out ❌。
-- **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌）；Git/Diff/PR 合并为单一 `git` surface（子 tab：Changes/Commits/PR，视图内导航，rail 仍唯一导航轴）✅；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。
+- **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ✅（`ContextPanel.tsx:247` `SNAP_POINTS=[300,480,800]`，释放吸附，0a51f37788）、上下文 gating ❌、Mod+1..9 ✅（2026-09-07：⌘1..8 按 rail 可见顺序直达 surface，`app.tsx` 快捷键 + `ChatView.panelSelectRequest` nonce 通道，折叠时自动展开）、pop-out ❌。
+- **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌；.md 预览渲染态默认 + 渲染/源码切换 + 预览头复制路径/默认应用打开 ✅ 2026-09-07）；Git/Diff/PR 合并为单一 `git` surface（子 tab：Changes/Commits/PR，视图内导航，rail 仍唯一导航轴）✅；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。配套（2026-09-07）：轮次折叠头聚合更改条「更改 N 文件 +A −R」+ 一键回退到轮起点（`round-collapse.ts` 聚合 edit/apply_patch diff 统计，ZCode 更改 chip parity）；终端 dock 标签按项目持久化（`musepi-gui-terminal-tabs-{cwd}`，重开恢复为全新 pty）。
 - **结论**：核心改造主体已落地（分组/宽度/折叠），TabBar 与多实例为架构否决项，剩余为 Phase 3 面板级细化。实施下一批时更新本表。
 
 ---

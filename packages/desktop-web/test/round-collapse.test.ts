@@ -60,6 +60,23 @@ function toolResult(ts: number): SessionEntry {
 		},
 	} as SessionEntry;
 }
+function editResult(ts: number, details: Record<string, unknown>): SessionEntry {
+	return {
+		type: "message",
+		id: `e${ts}`,
+		parentId: null,
+		timestamp: String(ts),
+		message: {
+			role: "toolResult",
+			toolCallId: `t${ts}`,
+			toolName: "edit",
+			content: [{ type: "text", text: "patched" }],
+			details,
+			isError: false,
+			timestamp: ts,
+		},
+	} as SessionEntry;
+}
 
 const DURATIONS = new Map<number, number>([
 	[3, 125_000],
@@ -103,6 +120,62 @@ describe("buildRoundFolds", () => {
 		expect(buildRoundFolds(noWork, DURATIONS)).toHaveLength(0);
 		const orphanWork = [bash(1), assistant(2)];
 		expect(buildRoundFolds(orphanWork, DURATIONS)).toHaveLength(0);
+	});
+
+	it("aggregates per-round file changes from edit tool results (+added −removed, distinct files)", () => {
+		const entries = [
+			user(1),
+			editResult(2, { path: "a.ts", diff: "+one\n+two\n-gone\ncontext" }),
+			editResult(3, {
+				perFileResults: [
+					{ path: "b.ts", diff: "+x\n-y\n", isError: false },
+					{ path: "c.ts", diff: null, isError: true },
+				],
+			}),
+			assistant(4, 2),
+			user(5),
+			assistant(6),
+		];
+		const folds = buildRoundFolds(entries, DURATIONS);
+		expect(folds).toHaveLength(1);
+		const f = folds[0]!;
+		expect(f.filesChanged).toBe(2); // a.ts + b.ts; the errored c.ts counts neither
+		expect(f.added).toBe(3);
+		expect(f.removed).toBe(2);
+		expect(f.userId).toBe("u1"); // the revert anchor is the round's user message
+	});
+
+	it("reports zero changes for rounds that edited nothing — the header omits the chip", () => {
+		// trailing no-work round = the live tail, so the first round folds
+		const entries = [user(1), bash(2), toolResult(3), assistant(4, 1), user(5), assistant(6)];
+		const folds = buildRoundFolds(entries, DURATIONS);
+		expect(folds).toHaveLength(1);
+		const f = folds[0]!;
+		expect(f.filesChanged).toBe(0);
+		expect(f.added).toBe(0);
+		expect(f.removed).toBe(0);
+	});
+
+	it("does not count diff stats from non-edit tools", () => {
+		const sneaky: SessionEntry = {
+			type: "message",
+			id: "s1",
+			parentId: null,
+			timestamp: "2",
+			message: {
+				role: "toolResult",
+				toolCallId: "t1",
+				toolName: "bash",
+				content: [{ type: "text", text: "ok" }],
+				details: { path: "fake.ts", diff: "+nope\n-nope\n" },
+				isError: false,
+				timestamp: 2,
+			},
+		} as SessionEntry;
+		// trailing no-work round = the live tail, so the sneaky round folds
+		const folds = buildRoundFolds([user(1), sneaky, assistant(4, 1), user(5), assistant(6)], DURATIONS);
+		expect(folds).toHaveLength(1);
+		expect(folds[0]!.filesChanged).toBe(0);
 	});
 
 	it("formats durations as mm:ss and hh:mm:ss", () => {

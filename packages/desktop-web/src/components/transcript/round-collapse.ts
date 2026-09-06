@@ -12,6 +12,8 @@
  */
 
 import type { SessionEntry } from "@musepi/pi-wire";
+import { diffStats } from "../../tool-render/tools/edit";
+import { isRecord } from "../../tool-render/util";
 
 /** One completed round's fold descriptor. */
 export interface RoundFold {
@@ -26,6 +28,16 @@ export interface RoundFold {
 	toolCount: number;
 	/** Bash-command count inside the foldable span (bashExecution rows). */
 	commandCount: number;
+	/** File-change aggregate inside the span (ZCode 更改 chip parity): files
+	 *  touched by edit/apply_patch tool results + summed diff lines. Zero
+	 *  when the round edited nothing — the header omits the chip then. */
+	filesChanged: number;
+	added: number;
+	removed: number;
+	/** Id of the round's user message — the revert anchor for the fold
+	 *  header's undo action (session.branchAt parity with the per-message
+	 *  revert button). */
+	userId: string | null;
 	/** Fold-preview text: last non-empty working snippet, else "completed". */
 	preview: string;
 }
@@ -42,34 +54,78 @@ function toolResultSnippet(m: { content?: unknown }): string {
 	return text.replace(/\s+/g, " ");
 }
 
-/** Count tools/commands inside the foldable span and derive the preview.
- *  The final assistant message's own toolCall blocks count too (the tools
- *  the round ran live in its final reply, not just the intermediate rows). */
+/** Tools whose results carry diff details (single-source: their renderer is
+ *  tool-render/tools/edit.tsx). */
+const DIFF_TOOLS = new Set(["edit", "apply_patch"]);
+
+/** Aggregate file-change stats from one edit/apply_patch toolResult's
+ *  details — `details.diff` + `details.path` for single-file results,
+ *  `details.perFileResults[]` for multi-file ones. Error results and
+ *  erroring per-file entries contribute nothing. */
+function foldChanges(m: { details?: unknown }, state: { files: Set<string>; added: number; removed: number }): void {
+	if (!isRecord(m.details)) return;
+	const perFile = Array.isArray(m.details.perFileResults) ? m.details.perFileResults : null;
+	if (perFile && perFile.length > 0) {
+		for (const f of perFile) {
+			if (!isRecord(f) || f.isError === true) continue;
+			const diff = typeof f.diff === "string" ? f.diff : null;
+			if (diff === null) continue;
+			const path = typeof f.path === "string" && f.path.length > 0 ? f.path : "?";
+			const stats = diffStats(diff);
+			state.files.add(path);
+			state.added += stats.added;
+			state.removed += stats.removed;
+		}
+		return;
+	}
+	const diff = typeof m.details.diff === "string" ? m.details.diff : null;
+	if (diff === null) return;
+	const path = typeof m.details.path === "string" && m.details.path.length > 0 ? m.details.path : "?";
+	const stats = diffStats(diff);
+	state.files.add(path);
+	state.added += stats.added;
+	state.removed += stats.removed;
+}
+
+/** Count tools/commands/changes inside the foldable span and derive the
+ *  preview. The final assistant message's own toolCall blocks count too (the
+ *  tools the round ran live in its final reply, not just the intermediate
+ *  rows). */
 function countWorkInside(
 	entries: readonly SessionEntry[],
 	start: number,
 	end: number,
-): { toolCount: number; commandCount: number; preview: string } {
+): {
+	toolCount: number;
+	commandCount: number;
+	changes: { filesChanged: number; added: number; removed: number };
+	preview: string;
+} {
 	let toolCount = 0;
 	let commandCount = 0;
 	let preview = "";
+	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
 		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "bashExecution") {
 			commandCount++;
-			continue;
-		}
-		if (m.role === "assistant") {
+		} else if (m.role === "toolResult") {
+			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
+			if (!preview) preview = toolResultSnippet(m);
+		} else if (m.role === "assistant") {
 			for (const block of m.content) {
 				if (block.type === "toolCall") toolCount++;
 			}
-			continue;
 		}
-		if (m.role === "toolResult" && !preview) preview = toolResultSnippet(m);
 	}
-	return { toolCount, commandCount, preview };
+	return {
+		toolCount,
+		commandCount,
+		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
+		preview,
+	};
 }
 
 /**
@@ -95,12 +151,14 @@ export function buildRoundFolds(
 	}
 	const folds: RoundFold[] = [];
 	let userIdx = -1;
+	let userId: string | null = null;
 	for (let i = 0; i < entries.length; i++) {
 		const e = entries[i];
 		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "user") {
 			userIdx = i;
+			userId = e.id;
 			continue;
 		}
 		if (m.role !== "assistant") continue;
@@ -108,8 +166,19 @@ export function buildRoundFolds(
 		if (typeof dur !== "number") continue;
 		if (i === lastCompleteFinal) continue; // live tail stays expanded
 		if (userIdx < 0 || i - userIdx <= 1) continue; // nothing to fold
-		const { toolCount, commandCount, preview } = countWorkInside(entries, userIdx + 1, i);
-		folds.push({ startIdx: userIdx, finalIdx: i, durationMs: dur, toolCount, commandCount, preview });
+		const { toolCount, commandCount, changes, preview } = countWorkInside(entries, userIdx + 1, i);
+		folds.push({
+			startIdx: userIdx,
+			finalIdx: i,
+			durationMs: dur,
+			toolCount,
+			commandCount,
+			filesChanged: changes.filesChanged,
+			added: changes.added,
+			removed: changes.removed,
+			userId,
+			preview,
+		});
 	}
 	return folds;
 }

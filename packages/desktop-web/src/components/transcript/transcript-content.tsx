@@ -6,7 +6,7 @@
  * EntryRow dispatch stay there; they import from this module.
  */
 import type { AssistantMessage, ImageContent, SessionEntry, TextContent, ToolResultMessage } from "@musepi/pi-wire";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Undo2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -467,16 +467,24 @@ export function lastUserMessageTs(entries: readonly SessionEntry[]): number | un
 
 /** Completed-round fold header (craft-agents TurnCard parity): chevron +
  *  frozen work duration (hh:mm:ss) + tool/command counts + a working
- *  preview. Clicking expands the round's tool activities back inline. */
+ *  preview. Clicking expands the round's tool activities back inline. When
+ *  the round touched files, a ZCode-style aggregate chip ("更改 N +A −R")
+ *  joins the counts; its undo button branches back to the round's user
+ *  message — the same session.branchAt revert the per-message button uses. */
 export function RoundFoldHeader({
 	fold,
 	open,
 	onToggle,
+	onRevert,
 }: {
 	fold: RoundFold;
 	open: boolean;
 	onToggle(): void;
+	/** Revert anchor (messageId, text) — the round's user message id and
+	 *  text, mirroring the per-message revert affordance. */
+	onRevert?(messageId: string, text: string): void;
 }): ReactNode {
+	const changed = fold.filesChanged > 0;
 	return (
 		<button type="button" className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} onClick={onToggle}>
 			<ChevronRight size={12} className="tr-round-fold-chevron" />
@@ -489,7 +497,37 @@ export function RoundFoldHeader({
 					{t("round commands {count}", { count: String(fold.commandCount) })}
 				</span>
 			)}
+			{changed && (
+				<span className="tr-round-fold-changes">
+					<span className="tr-round-fold-changes-files">
+						{t("round changed {count}", { count: String(fold.filesChanged) })}
+					</span>
+					{fold.added > 0 && <span className="tr-round-fold-add">+{fold.added}</span>}
+					{fold.removed > 0 && <span className="tr-round-fold-remove">−{fold.removed}</span>}
+				</span>
+			)}
 			<span className="tr-round-fold-preview">{fold.preview}</span>
+			{changed && onRevert && fold.userId && (
+				<span
+					role="button"
+					tabIndex={0}
+					className="tr-round-fold-undo"
+					title={t("revert message")}
+					aria-label={t("revert message")}
+					onClick={e => {
+						e.stopPropagation();
+						onRevert(fold.userId!, "");
+					}}
+					onKeyDown={e => {
+						if (e.key !== "Enter" && e.key !== " ") return;
+						e.stopPropagation();
+						e.preventDefault();
+						onRevert(fold.userId!, "");
+					}}
+				>
+					<Undo2 size={12} />
+				</span>
+			)}
 		</button>
 	);
 }
