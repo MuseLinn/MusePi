@@ -3,23 +3,24 @@ layout: default
 title: MusePi — a desktop-first AI coding agent
 lang: en
 zh_url: /index.zh-CN.html
+mp_cta: true
 ---
 
 <section class="mp-hero">
   <div class="mp-hero-grid">
     <div class="mp-hero-copy">
       <p class="mp-kicker">Desktop-first AI coding agent</p>
-      <h1>MusePi</h1>
-      <p class="mp-tagline">
+      <h1 class="mp-hero-title">MusePi</h1>
+      <p class="mp-hero-sub">
         An Electron desktop GUI, an always-on desktop pet, a mobile companion and a
         daemon service on top of the oh-my-pi agent engine. Chinese-first,
         frosted-glass, keyboard-driven.
       </p>
       <div class="mp-cta-row">
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">Download macOS</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Download Windows</a>
-        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Download Linux</a>
-        <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
+        <a class="mp-cta mp-cta--primary" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">Download macOS</a>
+        <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Download Windows</a>
+        <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Download Linux</a>
+        <a class="mp-cta mp-cta--soft" href="{{ '/docs/' | relative_url }}">Read the docs</a>
       </div>
       <div class="mp-version">
         <span class="mp-pulse" aria-hidden="true"></span>
@@ -27,16 +28,96 @@ zh_url: /index.zh-CN.html
         <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
       </div>
     </div>
-    <div class="mp-hero-mark" aria-hidden="true">
-      <canvas class="mp-dots"></canvas>
-      <p class="mp-hero-mark-note">π — the dot-matrix brand mark, drawn live</p>
-    </div>
+    <aside class="mp-term" aria-label="Install commands">
+      <div class="mp-term-bar">
+        <span class="mp-term-lights" aria-hidden="true"><i></i><i></i><i></i></span>
+        <div class="mp-term-tabs" role="tablist">
+          <button class="mp-term-tab" type="button" data-term-tab aria-selected="true">macOS · Linux</button>
+          <button class="mp-term-tab" type="button" data-term-tab aria-selected="false">Windows</button>
+          <button class="mp-term-tab" type="button" data-term-tab aria-selected="false">From source</button>
+        </div>
+        <button class="mp-term-copy" type="button" data-term-copy data-copy="">Copy</button>
+      </div>
+      <pre data-term-pane data-copy="curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh"><span class="mp-term-prompt">$ </span>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</pre>
+      <pre data-term-pane data-copy="irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex"><span class="mp-term-prompt">$ </span>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</pre>
+      <pre data-term-pane data-copy="git clone https://github.com/MuseLinn/MusePi.git && cd MusePi && bun run setup && bun run musepi"><span class="mp-term-prompt">$ </span>git clone https://github.com/MuseLinn/MusePi.git
+<span class="mp-term-prompt">$ </span>cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</pre>
+    </aside>
   </div>
-  <div class="mp-hero-code">
-<pre><span class="mp-c"># macOS · Linux · WSL</span>
-<span class="mp-cmd">curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</span>
-<span class="mp-c"># Windows · PowerShell</span>
-<span class="mp-cmd">irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</span></pre>
+</section>
+
+<section class="mp-statement mp-reveal">
+  <h2>One engine. Every surface.</h2>
+  <p>Desktop GUI, terminal TUI, desktop pet, mobile companion — the same sessions,
+     the same daemon, the same settings, wherever you are.</p>
+</section>
+
+<section class="mp-features" id="features">
+  <article class="mp-feature mp-reveal">
+    <div class="mp-feature-copy">
+      <p class="mp-feature-kicker">Desktop GUI</p>
+      <h3>A frosted-glass cockpit for your agent</h3>
+      <p>Three-pane layout on a real frosted-glass window material (Win11 acrylic /
+         macOS vibrancy), with chat and the session-tree-map as first-class surfaces.</p>
+      <ul class="mp-feature-points">
+        <li>Every TUI setting merged into one searchable panel</li>
+        <li>Floating status cards for running tasks</li>
+        <li>Keyboard-driven throughout, Chinese-first typography</li>
+      </ul>
+    </div>
+    <figure class="mp-feature-media">
+      <img src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="MusePi welcome screen" loading="lazy">
+      <figcaption>Welcome — dot-matrix brand backdrop, time-aware greeting</figcaption>
+    </figure>
+  </article>
+
+  <article class="mp-feature mp-feature--flip mp-reveal">
+    <div class="mp-feature-copy">
+      <p class="mp-feature-kicker">Sessions as a tree</p>
+      <h3>Every answer grows on a tree</h3>
+      <p>Every message carries its parent — so history is a tree you can walk, not a
+         log you must replay.</p>
+      <ul class="mp-feature-points">
+        <li>Branch, fork, revert and re-answer from any node</li>
+        <li>The canvas map draws the whole conversation DAG</li>
+        <li>The trajectory panel projects the same tree as a timeline</li>
+      </ul>
+    </div>
+    <figure class="mp-feature-media">
+      <img src="{{ '/docs/screenshots/gui-session.png' | relative_url }}" alt="MusePi session view" loading="lazy">
+      <figcaption>Session — transcript, context donut, floating status cards</figcaption>
+    </figure>
+  </article>
+
+  <article class="mp-feature mp-reveal">
+    <div class="mp-feature-copy">
+      <p class="mp-feature-kicker">Agent engine &amp; extensions</p>
+      <h3>An engine you can rebuild mid-flight</h3>
+      <p>Everything is pluggable: model providers, tools, UI surfaces — hot-reloaded
+         while the daemon watches your extension folders.</p>
+      <ul class="mp-feature-points">
+        <li>40+ LLM providers, image &amp; video generation built in</li>
+        <li>Browser + computer-use tools, LSP/DAP, task subagents</li>
+        <li>Two extension centers with slots, tool views, RPCs, themes</li>
+      </ul>
+    </div>
+    <figure class="mp-feature-media">
+      <img src="{{ '/docs/screenshots/gui-settings.png' | relative_url }}" alt="MusePi settings panel" loading="lazy">
+      <figcaption>Settings — every TUI setting, searchable and grouped</figcaption>
+    </figure>
+  </article>
+
+  <div class="mp-grid mp-reveal">
+    <div class="mp-card">
+      <h3><span class="mp-dot"></span>Always-on pet</h3>
+      <p>An animated companion with drag positioning, click-through, hover interactions
+         and task bubbles — the agent's status at a glance.</p>
+    </div>
+    <div class="mp-card">
+      <h3><span class="mp-dot"></span>Remote &amp; mobile</h3>
+      <p>Guests manage sessions and stop running turns remotely (E2E-encrypted collab);
+         the Android companion pairs over LAN with QR join and a three-in-one send bar.</p>
+    </div>
   </div>
 </section>
 
@@ -82,64 +163,6 @@ zh_url: /index.zh-CN.html
   <p class="mp-dl-note">Every release ships an <code>update-manifest.json</code> for in-app
   auto-update; beta-channel builds publish as
   <a href="https://github.com/MuseLinn/MusePi/releases">pre-releases</a>.</p>
-</section>
-
-<section class="mp-section mp-reveal" id="features">
-  <h2>What makes MusePi different</h2>
-  <div class="mp-grid">
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Desktop GUI</h3>
-      <p>Three-pane layout, real frosted-glass window material (Win11 acrylic / macOS
-         vibrancy), chat ↔ session-tree-map surfaces, floating status cards, and every
-         TUI setting merged into a searchable panel.</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Sessions as a tree</h3>
-      <p>Every message carries its parent — branch, fork, revert and re-answer from any
-         node. The canvas map draws the whole conversation DAG; the trajectory panel
-         projects the same tree as a timeline.</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Agent engine</h3>
-      <p>40+ LLM providers, built-in image generation (multi-provider with automatic
-         fallback) and video generation, browser + computer-use tools, LSP/DAP, task
-         subagents, ACP, magic keywords.</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Extension ecosystem</h3>
-      <p>Two extension centers (OMP Extension Packages + MusePi Extensions): slot
-         components, tool views, RPCs, skills, themes, motion packs — hot-reloaded
-         while the daemon watches your extension folders.</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Always-on pet</h3>
-      <p>An animated companion with drag positioning, click-through, hover interactions
-         and task bubbles — the agent's status at a glance.</p>
-    </div>
-    <div class="mp-card">
-      <h3><span class="mp-dot"></span>Remote &amp; mobile</h3>
-      <p>Guests manage sessions and stop running turns remotely (E2E-encrypted collab);
-         the Android companion pairs over LAN with QR join and a three-in-one send bar.</p>
-    </div>
-  </div>
-</section>
-
-<section class="mp-section mp-reveal" id="screens">
-  <h2>Screens</h2>
-  <div class="mp-shots">
-    <figure class="mp-shot">
-      <img src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="Welcome" loading="lazy">
-      <figcaption>Welcome — dot-matrix brand backdrop, time-aware greeting</figcaption>
-    </figure>
-    <figure class="mp-shot">
-      <img src="{{ '/docs/screenshots/gui-session.png' | relative_url }}" alt="Session" loading="lazy">
-      <figcaption>Session — transcript, context donut, floating status cards</figcaption>
-    </figure>
-    <figure class="mp-shot">
-      <img src="{{ '/docs/screenshots/gui-settings.png' | relative_url }}" alt="Settings" loading="lazy">
-      <figcaption>Settings — every TUI setting, searchable and grouped</figcaption>
-    </figure>
-  </div>
 </section>
 
 <section class="mp-section mp-reveal" id="quick-start">

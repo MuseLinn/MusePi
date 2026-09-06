@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>{{ page.title | default: site.title }}</title>
   <meta name="description" content="{{ site.description }}">
   <meta property="og:title" content="{{ page.title | default: site.title }}">
@@ -14,57 +15,94 @@
 </head>
 <body>
   <div class="mp-bg" aria-hidden="true">
-    <div class="mp-bg-glow mp-bg-glow--a"></div>
-    <div class="mp-bg-glow mp-bg-glow--b"></div>
+    <canvas class="mp-aurora"></canvas>
+    <div class="mp-bg-grid"></div>
+    <div class="mp-bg-noise"></div>
   </div>
-  <div class="mp-wrap">
-    <header class="mp-topbar">
-      <a class="mp-brand" href="{{ '/' | relative_url }}">
-        <span class="mp-brand-pi" aria-hidden="true">π</span>
-        <span>MusePi</span>
-      </a>
-      <nav class="mp-nav">
-        {% if page.lang == 'zh-CN' %}
-        <a href="#features">特性</a>
-        <a href="#download">下载</a>
-        <a href="#screens">界面</a>
-        <a href="{{ '/docs/' | relative_url }}">文档</a>
-        <a href="#quick-start">快速开始</a>
-        <a class="mp-lang-link" href="{{ page.en_url | default: '/' | relative_url }}" hreflang="en">EN</a>
-        {% else %}
-        <a href="#features">Features</a>
-        <a href="#download">Download</a>
-        <a href="#screens">Screens</a>
-        <a href="{{ '/docs/' | relative_url }}">Docs</a>
-        <a href="#quick-start">Quick start</a>
-        <a class="mp-lang-link" href="{{ page.zh_url | default: '/' | relative_url }}" hreflang="zh-CN">中文</a>
-        {% endif %}
-      </nav>
-    </header>
 
-    <main class="mp-main">
-      {{ content }}
+  <header class="mp-topbar">
+    <a class="mp-brand" href="{{ '/' | relative_url }}">
+      <span class="mp-brand-pi" aria-hidden="true">π</span>
+      <span>MusePi</span>
+    </a>
+    <nav class="mp-nav">
+      {% if page.lang == 'zh-CN' %}
+      <a href="#features">特性</a>
+      <a href="#download">下载</a>
+      <a href="{{ '/docs/' | relative_url }}">文档</a>
+      <a href="#quick-start">快速开始</a>
+      <a class="mp-lang-link" href="{{ page.en_url | default: '/' | relative_url }}" hreflang="en">EN</a>
+      {% else %}
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="{{ '/docs/' | relative_url }}">Docs</a>
+      <a href="#quick-start">Quick start</a>
+      <a class="mp-lang-link" href="{{ page.zh_url | default: '/' | relative_url }}" hreflang="zh-CN">中文</a>
+      {% endif %}
+      <a class="mp-gh-pill" href="https://github.com/MuseLinn/MusePi" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        <span>GitHub</span>
+      </a>
+    </nav>
+  </header>
+
+  <div class="mp-wrap">
+    <main class="mp-main{% unless page.mp_cta %} mp-main--docs{% endunless %}">
+    {{ content }}
     </main>
 
-    <footer class="mp-footer">
-      <div class="mp-footer-row">
-        <span>© {{ "now" | date: "%Y" }} MusePi · <a href="https://github.com/MuseLinn/MusePi">GitHub</a></span>
-        <span class="mp-footer-links">
-          <a href="https://github.com/MuseLinn/MusePi/releases">Releases</a> ·
-          <a href="https://github.com/MuseLinn/MusePi/issues">Issues</a> ·
-          <a href="{{ '/docs/' | relative_url }}">Docs</a>
-        </span>
+    {% if page.mp_cta %}
+  <section class="mp-final" aria-label="{% if page.lang == 'zh-CN' %}开始使用{% else %}Get started{% endif %}">
+    <div class="mp-final-stage">
+      <canvas class="mp-dots" aria-hidden="true"></canvas>
+    </div>
+    <div class="mp-final-copy mp-reveal">
+      <h2>{% if page.lang == 'zh-CN' %}现在，把 Agent 请上桌面{% else %}Bring the agent to your desktop{% endif %}</h2>
+      <p>{% if page.lang == 'zh-CN' %}免费开源，几分钟装好，会话与守护进程常伴左右。{% else %}Free and open source. Minutes to install, a daemon that stays with you.{% endif %}</p>
+      <div class="mp-final-actions">
+        <a class="mp-cta" href="https://github.com/MuseLinn/MusePi/releases/latest" data-latest-release>{% if page.lang == 'zh-CN' %}下载 MusePi{% else %}Download MusePi{% endif %}</a>
+        <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi">
+          <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+          GitHub
+        </a>
       </div>
-      <p class="mp-footer-note">{% if page.lang == 'zh-CN' %}构建于 <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> 之上 · 桌面优先的 AI 编程助手{% else %}Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · a desktop-first AI coding agent{% endif %}</p>
-    </footer>
+    </div>
+  </section>
+  {% endif %}
+
+  <footer class="mp-footer">    <div class="mp-footer-row">
+      <span>© {{ "now" | date: "%Y" }} MusePi · <a href="https://github.com/MuseLinn/MusePi">GitHub</a></span>
+      <span class="mp-footer-links">
+        <a href="https://github.com/MuseLinn/MusePi/releases">Releases</a> ·
+        <a href="https://github.com/MuseLinn/MusePi/issues">Issues</a> ·
+        <a href="{{ '/docs/' | relative_url }}">Docs</a>
+      </span>
+    </div>
+    <p class="mp-footer-note">{% if page.lang == 'zh-CN' %}构建于 <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> 之上 · 桌面优先的 AI 编程助手{% else %}Built on <a href="https://github.com/can1357/oh-my-pi">oh-my-pi</a> · a desktop-first AI coding agent{% endif %}</p>
+  </footer>
   </div>
 
   <script>
   (function () {
     "use strict";
 
-    /* ── Scroll reveal (GUI Reveal parity; motion-off renders instantly) ── */
     var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* ── Capsule topbar: transparent over the hero, glass pill once scrolled ── */
+    var topbar = document.querySelector(".mp-topbar");
+    if (topbar) {
+      var barTicking = false;
+      var syncBar = function () {
+        topbar.classList.toggle("mp-topbar--scrolled", window.scrollY > 24);
+        barTicking = false;
+      };
+      window.addEventListener("scroll", function () {
+        if (!barTicking) { barTicking = true; requestAnimationFrame(syncBar); }
+      }, { passive: true });
+      syncBar();
+    }
+
+    /* ── Scroll reveal: dim + blurred sections sharpen as they enter (motion-off renders instantly) ── */
     var revealables = document.querySelectorAll(".mp-reveal");
     if (reduced || !("IntersectionObserver" in window)) {
       revealables.forEach(function (el) { el.classList.add("mp-reveal-in"); });
@@ -80,12 +118,94 @@
       revealables.forEach(function (el) { io.observe(el); });
     }
 
-    /* ── Dot-matrix brand mark (DotMatrixMark parity): the π is rasterized
-     *    to a full grid — background dots + gold text dots + ~2% flowing
-     *    colored accents + a feather edge + breathing + a mouse halo that
-     *    magnifies text dots + a click ripple ─────────────────────────── */
+    /* ── Aurora backdrop: three layered sine ribbons stroked with soft falloff,
+     *    composited "lighter" at half resolution; drifts on rAF (30fps), fades
+     *    out past the first viewport and pauses when invisible ─────────────── */
     (function () {
-      var TEXT = "π", GRID = 6, RADIUS = 2.0, MOUSE_R = 110, ACCENT_CHANCE = 0.02, FONT_SIZE = 120;
+      var canvas = document.querySelector(".mp-aurora");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var W = 0, H = 0, raf = 0, last = 0, t = 0, running = false, fade = 1;
+      var RIBBONS = [
+        { c: "217, 164, 65",  y: 0.26, k1: 5.5, k2: 11.0, s1: 0.055, s2: 0.031, a1: 0.075, a2: 0.042, p1: 0.0, p2: 1.7, thick: 0.30, alpha: 0.20 },
+        { c: "255, 236, 210", y: 0.18, k1: 4.0, k2: 9.0,  s1: 0.038, s2: 0.047, a1: 0.058, a2: 0.050, p1: 2.1, p2: 4.2, thick: 0.20, alpha: 0.15 },
+        { c: "94, 120, 231",  y: 0.44, k1: 6.5, k2: 12.0, s1: 0.026, s2: 0.041, a1: 0.066, a2: 0.038, p1: 4.4, p2: 0.6, thick: 0.26, alpha: 0.10 }
+      ];
+      var PASSES = [1.0, 0.62, 0.38, 0.18];
+      var PASS_ALPHA = [0.16, 0.13, 0.12, 0.10];
+
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        W = Math.max(320, Math.round(rect.width / 2));
+        H = Math.max(240, Math.round(rect.height / 2));
+        canvas.width = W;
+        canvas.height = H;
+      }
+
+      function drawRibbon(rb) {
+        var steps = 28;
+        ctx.lineWidth = H * rb.thick;
+        ctx.lineCap = "round";
+        ctx.strokeStyle = "rgba(" + rb.c + "," + (rb.alpha * PASS_ALPHA[0] * 3).toFixed(3) + ")";
+        for (var pi = 0; pi < PASSES.length; pi++) {
+          ctx.beginPath();
+          for (var i = 0; i <= steps; i++) {
+            var nx = i / steps;
+            var x = nx * (W + 240) - 120;
+            var y = H * rb.y
+              + Math.sin(nx * rb.k1 + t * rb.s1 * 6 + rb.p1) * H * rb.a1
+              + Math.sin(nx * rb.k2 - t * rb.s2 * 6 + rb.p2) * H * rb.a2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.lineWidth = H * rb.thick * PASSES[pi];
+          ctx.strokeStyle = "rgba(" + rb.c + "," + (rb.alpha * PASS_ALPHA[pi] * 3).toFixed(3) + ")";
+          ctx.stroke();
+        }
+      }
+
+      function render() {
+        ctx.clearRect(0, 0, W, H);
+        ctx.globalCompositeOperation = "lighter";
+        for (var i = 0; i < RIBBONS.length; i++) drawRibbon(RIBBONS[i]);
+        ctx.globalCompositeOperation = "source-over";
+      }
+
+      function frame(now) {
+        raf = 0;
+        if (!running) return;
+        if (now - last >= 33.3) { last = now; t += 0.016; render(); }
+        raf = requestAnimationFrame(frame);
+      }
+
+      function updateRunning() {
+        var should = !reduced && fade > 0.01 && !document.hidden && W > 0;
+        if (should && !running) { running = true; if (raf === 0) raf = requestAnimationFrame(frame); }
+        else if (!should) { running = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } }
+      }
+
+      function onScroll() {
+        fade = Math.max(0, 1 - window.scrollY / (window.innerHeight * 1.1));
+        canvas.style.opacity = fade.toFixed(3);
+        updateRunning();
+      }
+
+      window.addEventListener("resize", function () { resize(); if (reduced) render(); });
+      window.addEventListener("scroll", onScroll, { passive: true });
+      document.addEventListener("visibilitychange", updateRunning);
+      resize();
+      render();
+      canvas.style.opacity = "1";
+      onScroll();
+      if (reduced) { canvas.style.opacity = "0.85"; }
+    })();
+
+    /* ── Dot-matrix brand mark (DotMatrixMark parity), now the closing CTA
+     *    particle field: gold π materializes from scattered particles as the
+     *    section scrolls into view — background dots + ~2% flowing accents +
+     *    feather edge + breathing + mouse halo + click ripples ────────────── */
+    (function () {
+      var TEXT = "π", GRID = 6, RADIUS = 2.0, MOUSE_R = 110, ACCENT_CHANCE = 0.02, FONT_SIZE = 120, SCATTER = 56;
       var ACCENTS = ["#ff6b6b", "#51cf66", "#339af0", "#cc5de8", "#ffd43b"];
       var TEXT_COLOR = "#d9a441", BG_COLOR = "rgba(255,255,255,0.15)", ACTIVE_COLOR = "#ffffff";
       var RIPPLE_SPEED = 0.55, RIPPLE_WIDTH = 26, RIPPLE_MAX = 900, FEATHER = 42;
@@ -146,6 +266,7 @@
         var dots = [], bgIdx = [], textIdx = [];
         var fb = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
         var ripples = [];
+        var asm = reduced ? 1 : 0, asmTarget = reduced ? 1 : 0;
 
         function featherFactor(x, y) {
           var dx = Math.max(fb.minX - x, 0, x - fb.maxX);
@@ -156,26 +277,31 @@
 
         function build() {
           var textW = maxX - minX, textH = maxY - minY;
-          var offX = Math.round((W - textW) / 2 - minX);
-          var offY = Math.round((H - textH) / 2 - minY);
-          var pad = 30;
-          var startX = Math.floor(((W - textW) / 2 - pad) / GRID) * GRID;
-          var endX = Math.ceil(((W + textW) / 2 + pad) / GRID) * GRID;
-          var startY = Math.floor(((H - textH) / 2 - pad) / GRID) * GRID;
-          var endY = Math.ceil(((H + textH) / 2 + pad) / GRID) * GRID;
-          fb = { minX: (W - textW) / 2, maxX: (W + textW) / 2, minY: (H - textH) / 2, maxY: (H + textH) / 2 };
+          // Scale the glyph to the canvas so the mark stays legible on any stage size.
+          var scale = Math.max(1, Math.min((W * 0.42) / textW, (H * 0.72) / textH, 3.4));
+          var cx = Math.round(W / 2 - (textW * scale) / 2);
+          var cy = Math.round(H / 2 - (textH * scale) / 2);
+          var pad = 60;
+          var startX = Math.floor((cx - pad) / GRID) * GRID;
+          var endX = Math.ceil((cx + textW * scale + pad) / GRID) * GRID;
+          var startY = Math.floor((cy - pad) / GRID) * GRID;
+          var endY = Math.ceil((cy + textH * scale + pad) / GRID) * GRID;
+          fb = { minX: cx, maxX: cx + textW * scale, minY: cy, maxY: cy + textH * scale };
           var rng = mulberry32(hashStr(TEXT));
           dots = []; bgIdx = []; textIdx = [];
           for (var y = startY; y <= endY; y += GRID) {
             for (var x = startX; x <= endX; x += GRID) {
               if (x < 0 || x > W || y < 0 || y > H) continue;
-              var mx = Math.round((x - offX) / GRID) * GRID;
-              var my = Math.round((y - offY) / GRID) * GRID;
+              var mx = minX + Math.round((x - cx) / scale / GRID) * GRID;
+              var my = minY + Math.round((y - cy) / scale / GRID) * GRID;
               var isText = mask[mx + "," + my] === true;
               var accentHex = isText && rng() < ACCENT_CHANCE ? ACCENTS[Math.floor(rng() * ACCENTS.length)] : null;
-              var scatter = (rng() - 0.5) * 16;
+              var ang = rng() * Math.PI * 2, dist = SCATTER * (0.4 + rng() * 0.6);
               dots.push({
-                ox: x, oy: y, x: x + scatter, y: y + scatter, vx: 0, vy: 0,
+                ox: x, oy: y,
+                x: x + Math.cos(ang) * dist, y: y + Math.sin(ang) * dist,
+                dx0: Math.cos(ang) * dist, dy0: Math.sin(ang) * dist,
+                vx: 0, vy: 0,
                 isText: isText, r: 0, baseR: isText ? RADIUS : RADIUS * 0.6,
                 phase: rng() * Math.PI * 2, alpha: featherFactor(x, y),
                 accent: accentHex ? hexToHsl(accentHex) : null, accentPhase: rng() * Math.PI * 2
@@ -186,9 +312,11 @@
         }
 
         function drawDot(d) {
+          var ease = 1 - Math.pow(1 - asm, 3);
           var bx = Math.sin(time * 0.4 + d.phase) * 0.6;
           var by = Math.cos(time * 0.28 + d.phase) * 0.6;
-          var tx = d.ox + bx, ty = d.oy + by;
+          var tx = d.ox + bx + d.dx0 * (1 - ease);
+          var ty = d.oy + by + d.dy0 * (1 - ease);
           var mouseScale = 1;
           if (mouse.active) {
             var ddx = mouse.x - d.x, ddy = mouse.y - d.y;
@@ -220,7 +348,7 @@
           d.vx *= 0.88; d.vy *= 0.88;
           d.x += d.vx; d.y += d.vy;
           d.r += (d.baseR * mouseScale - d.r) * 0.04;
-          d.alpha = featherFactor(d.x, d.y);
+          d.alpha = featherFactor(d.x, d.y) * (0.14 + 0.86 * ease);
           var inMouse = mouse.active && Math.hypot(mouse.x - d.x, mouse.y - d.y) < MOUSE_R * 0.4;
           var color;
           if (inMouse) color = ACTIVE_COLOR;
@@ -239,9 +367,9 @@
 
         function frame(t) {
           if (disposed) return;
-          if (!mouse.active && ripples.length === 0 && t - lastT < 33.3) { raf = requestAnimationFrame(frame); return; }
-          lastT = t; time += 0.016;
-          render();
+          if (asm < asmTarget) asm = Math.min(asmTarget, asm + 0.014);
+          var idleSkip = !mouse.active && ripples.length === 0 && asm >= 1 && t - lastT < 33.3;
+          if (!idleSkip) { lastT = t; time += 0.016; render(); }
           raf = requestAnimationFrame(frame);
         }
 
@@ -273,7 +401,81 @@
         window.addEventListener("resize", resize);
         window.addEventListener("mousemove", onMove, true);
         window.addEventListener("pointerdown", onDown, true);
+
+        if (!reduced && "IntersectionObserver" in window) {
+          var asmIo = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) { asmTarget = 1; asmIo.disconnect(); }
+            });
+          }, { threshold: 0.25 });
+          asmIo.observe(canvas);
+        } else {
+          asmTarget = 1;
+        }
+
         resize();
+      });
+    })();
+
+    /* ── Terminal card: tab switching + copy-to-clipboard with feedback ──── */
+    document.querySelectorAll(".mp-term").forEach(function (term) {
+      var tabs = Array.prototype.slice.call(term.querySelectorAll("[data-term-tab]"));
+      var panes = Array.prototype.slice.call(term.querySelectorAll("[data-term-pane]"));
+      var copyBtn = term.querySelector("[data-term-copy]");
+      if (!tabs.length || !panes.length) return;
+
+      function setActive(idx) {
+        tabs.forEach(function (tab, i) {
+          tab.classList.toggle("is-active", i === idx);
+          tab.setAttribute("aria-selected", i === idx ? "true" : "false");
+        });
+        panes.forEach(function (pane, i) { pane.classList.toggle("is-active", i === idx); });
+        if (copyBtn) copyBtn.setAttribute("data-copy", panes[idx].getAttribute("data-copy") || panes[idx].textContent || "");
+      }
+      tabs.forEach(function (tab, i) {
+        tab.addEventListener("click", function () { setActive(i); });
+      });
+      setActive(0);
+
+      if (copyBtn) {
+        var resetTimer = 0;
+        copyBtn.addEventListener("click", function () {
+          var text = copyBtn.getAttribute("data-copy") || "";
+          var done = function () {
+            copyBtn.classList.add("is-copied");
+            clearTimeout(resetTimer);
+            resetTimer = setTimeout(function () { copyBtn.classList.remove("is-copied"); }, 1600);
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, done);
+          } else {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            try { document.execCommand("copy"); } catch (e) { /* best effort */ }
+            document.body.removeChild(ta);
+            done();
+          }
+        });
+      }
+    });
+
+    /* ── Hero download pills: highlight the pill matching the visitor's OS ── */
+    (function () {
+      var ua = navigator.userAgent || "";
+      var asset = /Mac/i.test(ua) && !/iPhone|iPad/i.test(ua) ? "arm64.dmg"
+        : /Win/i.test(ua) ? "setup.exe"
+        : /Linux/i.test(ua) && !/Android/i.test(ua) ? "x86_64.AppImage"
+        : null;
+      if (!asset) return;
+      var row = document.querySelector(".mp-hero .mp-cta-row");
+      if (!row) return;
+      row.querySelectorAll("[data-asset]").forEach(function (a) {
+        a.classList.toggle("mp-cta--primary", a.getAttribute("data-asset") === asset);
+        a.classList.toggle("mp-cta--soft", a.getAttribute("data-asset") !== asset);
       });
     })();
 
