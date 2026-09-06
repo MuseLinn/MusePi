@@ -135,6 +135,23 @@ jobs:
              fi
              bunx electron-builder $ARGS
 
+         - name: Rename channel feed per arch
+           if: matrix.builder == 'win'
+           working-directory: packages/gui/release
+           shell: bash
+           run: |
+              set -euo pipefail
+              # Both win jobs emit a channel file literally named latest.yml; the
+              # publish job's merge-multiple artifact download then lets the arm64
+              # copy clobber the x64 one, and every x64 OTA client downloads the
+              # ARM64 installer (the v0.4.16/v0.4.17 wrong-arch update regression:
+              # assisted install wiped the old build and the arm64 payload could
+              # not land, leaving only the uninstaller behind). Rename per arch;
+              # the publish job merges both feeds into one latest.yml.
+              suffix="${{ matrix.target_id }}"
+              suffix="${suffix#win32-}"
+              mv latest.yml "latest-win-${suffix}.yml"
+
          - name: Upload artifact
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
@@ -215,6 +232,72 @@ jobs:
               pattern: musepi-*
               path: dist
               merge-multiple: true
+
+         - name: Merge Windows OTA feeds into a single latest.yml
+           shell: bash
+           run: |
+              set -euo pipefail
+              # The per-arch feeds (renamed in the win jobs) describe the same
+              # version; electron-updater's multi-arch channel format is one
+              # latest.yml with a files[] entry per installer. The x64 entry is
+              # the top-level path (the default), arm64 rides in files[] — the
+              # updater matches the file whose url carries the client's arch.
+              node --input-type=module <<'EOF'
+              import fs from "node:fs";
+
+              function parseFeed(file) {
+                const text = fs.readFileSync(file, "utf8");
+                const feed = { files: [] };
+                let cur = null;
+                for (const line of text.split(/\r?\n/)) {
+                  if (/^  - url:/.test(line)) {
+                    cur = { url: line.slice(line.indexOf("url:") + 4).trim() };
+                    feed.files.push(cur);
+                  } else if (cur && /^    sha512:/.test(line)) {
+                    cur.sha512 = line.slice(line.indexOf("sha512:") + 7).trim();
+                  } else if (cur && /^    size:/.test(line)) {
+                    cur.size = line.slice(line.indexOf("size:") + 5).trim();
+                  } else if (/^version:/.test(line)) {
+                    feed.version = line.slice(line.indexOf("version:") + 8).trim();
+                  } else if (/^releaseDate:/.test(line)) {
+                    feed.releaseDate = line.slice(line.indexOf("releaseDate:") + 12).trim();
+                  } else if (/^path:/.test(line)) {
+                    feed.path = line.slice(line.indexOf("path:") + 5).trim();
+                  } else if (/^sha512:/.test(line)) {
+                    feed.sha512 = line.slice(line.indexOf("sha512:") + 7).trim();
+                  }
+                }
+                return feed;
+              }
+
+              const x64 = parseFeed("dist/latest-win-x64.yml");
+              let arm64 = null;
+              try {
+                arm64 = parseFeed("dist/latest-win-arm64.yml");
+              } catch {
+                arm64 = null;
+              }
+              if (arm64) {
+                const known = new Set(x64.files.map((f) => f.url));
+                for (const f of arm64.files) {
+                  if (!known.has(f.url)) x64.files.push(f);
+                }
+              }
+              x64.releaseDate = x64.releaseDate.replace(/^'|'$/g, "");
+              const lines = [
+                `version: ${x64.version}`,
+                "files:",
+                ...x64.files.map((f) => `  - url: ${f.url}\n    sha512: ${f.sha512}\n    size: ${f.size}`),
+                `path: ${x64.path}`,
+                `sha512: ${x64.sha512}`,
+                `releaseDate: '${x64.releaseDate}'`,
+                "",
+              ];
+              fs.writeFileSync("dist/latest.yml", lines.join("\n"));
+              fs.rmSync("dist/latest-win-x64.yml");
+              if (arm64) fs.rmSync("dist/latest-win-arm64.yml");
+              console.log("merged latest.yml files:", x64.files.map((f) => f.url).join(", "));
+              EOF
 
          - name: Generate OTA update-manifest
            # BitFun parity: /releases/latest/download/update-manifest.json redirects
