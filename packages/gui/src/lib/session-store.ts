@@ -61,6 +61,11 @@ export interface GuiSessionState {
 	agents: readonly AgentSnapshot[];
 	progress: ReadonlyMap<string, SubagentProgressPayload>;
 	lifecycle: ReadonlyMap<string, SubagentLifecyclePayload>;
+	/** Subagent ids that completed while the user was not looking at the GUI
+	 *  (window hidden/unfocused at completion time). Cleared when the user
+	 *  opens the agent's drawer (markAgentViewed). Ephemeral: GUI-lifetime
+	 *  registry keyed by sessionId, lost on app restart. */
+	unviewedCompleted: readonly string[];
 	/** Pending tool approvals (approval cards above the composer). */
 	approvals: readonly ApprovalRequest[];
 	/** Latest idle recap (TUI parity) — cleared on any new wire activity. */
@@ -96,6 +101,34 @@ function roundDurationsFor(sessionId: string): Map<number, number> {
 		roundDurationsBySession.set(sessionId, m);
 	}
 	return m;
+}
+
+// ── Unviewed subagent completions (GUI-lifetime registry) ──────────────────
+// Same lifecycle reasoning as roundDurationsBySession: the store is DISPOSED
+// and recreated on every session switch (app.tsx openSession), so "completed
+// while the user wasn't looking" marks live in a module-level registry keyed
+// by sessionId — they survive a session switch away and back (the exact case
+// the marker exists for). Ephemeral by scope: lost on app restart, never
+// persisted daemon-side. Pruned on session delete via clearUnviewedCompletions.
+const unviewedCompletedBySession = new Map<string, Set<string>>();
+
+function unviewedCompletedFor(sessionId: string): Set<string> {
+	let s = unviewedCompletedBySession.get(sessionId);
+	if (!s) {
+		s = new Set();
+		unviewedCompletedBySession.set(sessionId, s);
+	}
+	return s;
+}
+
+/** Drop a deleted session's unviewed-completion marks (session.delete path). */
+export function clearUnviewedCompletions(sessionId: string): void {
+	unviewedCompletedBySession.delete(sessionId);
+}
+
+/** True when the user is not looking at the GUI window right now. */
+function windowUnfocused(): boolean {
+	return typeof document === "undefined" || document.hidden || !document.hasFocus();
 }
 
 /** Drop a deleted session's recorded totals (GUI session.delete path). */
@@ -329,6 +362,7 @@ export class GuiSessionStore {
 			agents: [...this.#agents.values()],
 			progress: this.#progress,
 			lifecycle: this.#lifecycle,
+			unviewedCompleted: [...unviewedCompletedFor(this.#sessionId)],
 			approvals: [...this.#approvals.values()],
 			recap: this.#recap,
 			roundDurations: this.#roundDurations,
@@ -488,6 +522,12 @@ export class GuiSessionStore {
 			// this session's swarm visuals.
 			if (p.sessionId !== undefined && p.sessionId !== this.#sessionId) return;
 			if (p.status === "completed") {
+				// Completed while the user wasn't looking → keep the marker so
+				// the Agents Center row shows it as unviewed until opened.
+				// Focus check happens here (event arrival), NOT at render:
+				// the daemon drops the lifecycle frame after this branch, so
+				// the completion fact is only observable at this instant.
+				if (windowUnfocused()) unviewedCompletedFor(this.#sessionId).add(p.id);
 				// Sub-agent finished — notify before the frames are dropped.
 				dispatchNotification(
 					"subtask",
@@ -516,6 +556,11 @@ export class GuiSessionStore {
 			if (p.status !== "started") {
 				this.#progress.delete(p.id);
 				this.#lifecycle.delete(p.id);
+			} else {
+				// Revival / fresh run of a previously marked id: the old
+				// "completed-unviewed" fact no longer holds — drop the stale
+				// marker so the row can't show "新" while the agent re-runs.
+				unviewedCompletedFor(this.#sessionId).delete(p.id);
 			}
 			this.#snapshot = this.#buildSnapshot();
 			this.#emit();
@@ -714,6 +759,16 @@ export class GuiSessionStore {
 	/** Remove a resolved/denied approval from the pending set. */
 	dismissApproval(requestId: string): void {
 		if (this.#approvals.delete(requestId)) {
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+		}
+	}
+
+	/** Clear a subagent's unviewed-completed marker (user opened its drawer /
+	 *  actively looked at its row). No-op when the id was never marked. */
+	markAgentViewed(agentId: string): void {
+		const unviewed = unviewedCompletedFor(this.#sessionId);
+		if (unviewed.delete(agentId)) {
 			this.#snapshot = this.#buildSnapshot();
 			this.#emit();
 		}

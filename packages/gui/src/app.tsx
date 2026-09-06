@@ -37,7 +37,13 @@ import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./
 import { RpcClient, type StreamEvent } from "./lib/rpc";
 import { captureSelectionText } from "./lib/selection-capture";
 import { cleanupAction, cleanupCandidates, cleanupDays, cleanupEnabled, runCleanupOnce } from "./lib/session-cleanup";
-import { clearRoundDurations, dispatchPetActivity, GuiSessionStore, type PetBubbleKind } from "./lib/session-store";
+import {
+	clearRoundDurations,
+	clearUnviewedCompletions,
+	dispatchPetActivity,
+	GuiSessionStore,
+	type PetBubbleKind,
+} from "./lib/session-store";
 import { sfxFor } from "./lib/sfx";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
@@ -1904,8 +1910,9 @@ function AppInner(): ReactNode {
 					if (!ok) return false;
 				}
 				await client.request("session.delete", { sessionId });
-				// Drop the deleted session's frozen round totals.
+				// Drop the deleted session's frozen round totals + unviewed marks.
 				clearRoundDurations(sessionId);
+				clearUnviewedCompletions(sessionId);
 				// Refresh the tree/metadata views (delete may affect nesting).
 				await refreshSessions(client);
 				if (storeRef.current?.sessionId === sessionId) {

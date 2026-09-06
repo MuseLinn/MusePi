@@ -127,6 +127,14 @@
 	background: var(--err);
 }
 
+/* Completed-unviewed (idle in the snapshot, marker from the lifecycle
+ * branch): a distinct static ring — stateful, not an animation, and colored
+ * apart from running's pulse so "finished, unseen" never reads as "live". */
+.ag-dot--unviewed {
+	background: var(--ok);
+	box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 30%, transparent);
+}
+
 @keyframes ag-pulse {
 	0% {
 		box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent);
@@ -171,6 +179,11 @@
 	max-width: 160px;
 	color: var(--fg-faint);
 	text-overflow: ellipsis;
+}
+
+.ag-chip--unviewed {
+	border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+	color: var(--ok);
 }
 
 /* ── Drawer ───────────────────────────────────────────────────────── */

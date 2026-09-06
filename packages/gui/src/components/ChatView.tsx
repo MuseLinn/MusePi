@@ -1062,7 +1062,10 @@ export function ChatView({
 	const host = {
 		hasAgent: (id: string) => snap?.agents.some(a => a.id === id) === true,
 		openAgent: (id: string) => {
-			if (snap?.agents.some(a => a.id === id) === true) setPanelAgentId(id);
+			if (snap?.agents.some(a => a.id === id) === true) {
+				store?.markAgentViewed(id);
+				setPanelAgentId(id);
+			}
 		},
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.

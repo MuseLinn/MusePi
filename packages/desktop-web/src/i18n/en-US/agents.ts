@@ -18,4 +18,6 @@ export const agents = {
 	"open a session to view its agents": "Open a session to view its agents",
 	"{count} running · {total} total": "{count} running · {total} total",
 	"{count} agents": "{count} agents",
+	// Completed while the user wasn't looking — cleared on open.
+	new: "New",
 } as const satisfies Record<AgentsKey, string>;

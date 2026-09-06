@@ -151,3 +151,98 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 		expect(store.getSnapshot().agents.some(a => a.id === "a1")).toBe(true);
 	});
 });
+
+describe("GuiSessionStore unviewed subagent completions", () => {
+	// No document in the bun test env → windowUnfocused() is true by default,
+	// which is the "user wasn't looking" contract this feature exists for.
+	//
+	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
+	// #pending and the flush runs on a queueMicrotask. Await one microtask
+	// (registered after the flush's) to observe the settled snapshot —
+	// deterministic, no wall-clock timers.
+	function flush(): Promise<void> {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		queueMicrotask(resolve);
+		return promise;
+	}
+
+	function lifecycleEvent(id: string, status: string, sessionId: string) {
+		return {
+			kind: "agent-lifecycle",
+			payload: { id, agent: "scout", status, index: 0, sessionId },
+		} as never;
+	}
+
+	test("completed while window unfocused marks the agent unviewed", async () => {
+		const store = new GuiSessionStore("s-u1", emptySnapshot(), "/work");
+		store.apply(lifecycleEvent("a1", "completed", "s-u1"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).toContain("a1");
+	});
+
+	test("markAgentViewed clears the marker for the current session only", async () => {
+		const store = new GuiSessionStore("s-u2", emptySnapshot(), "/work");
+		store.apply(lifecycleEvent("a1", "completed", "s-u2"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).toContain("a1");
+
+		store.markAgentViewed("a1");
+		expect(store.getSnapshot().unviewedCompleted).not.toContain("a1");
+	});
+
+	test("non-completed lifecycle statuses never mark unviewed", async () => {
+		const store = new GuiSessionStore("s-u3", emptySnapshot(), "/work");
+		store.apply(lifecycleEvent("a1", "started", "s-u3"));
+		store.apply(lifecycleEvent("a2", "failed", "s-u3"));
+		store.apply(lifecycleEvent("a3", "aborted", "s-u3"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).toHaveLength(0);
+	});
+
+	test("completion tagged for another session never marks this one", async () => {
+		const store = new GuiSessionStore("s-u4", emptySnapshot(), "/work");
+		store.apply(lifecycleEvent("a1", "completed", "other-session"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).toHaveLength(0);
+	});
+
+	test("markAgentViewed on an unmarked id is a no-op and does not emit", async () => {
+		const store = new GuiSessionStore("s-u5", emptySnapshot(), "/work");
+		let emits = 0;
+		store.subscribe(() => emits++);
+
+		store.markAgentViewed("never-marked");
+		expect(store.getSnapshot().unviewedCompleted).toHaveLength(0);
+		// No registry hit → no snapshot rebuild → no listener notification.
+		expect(emits).toBe(0);
+	});
+
+	test("marks survive a session switch away and back (registry keyed by sessionId)", async () => {
+		// The store is disposed and recreated per session switch; the marker
+		// must live in the module-level registry to survive the round trip —
+		// the exact case this feature exists for.
+		const first = new GuiSessionStore("s-u6", emptySnapshot(), "/work");
+		first.apply(lifecycleEvent("a1", "completed", "s-u6"));
+		await flush();
+		first.dispose();
+
+		const second = new GuiSessionStore("s-u6", emptySnapshot(), "/work");
+		expect(second.getSnapshot().unviewedCompleted).toContain("a1");
+
+		second.markAgentViewed("a1");
+		expect(second.getSnapshot().unviewedCompleted).not.toContain("a1");
+	});
+
+	test("a revived subagent (lifecycle started) clears its stale unviewed mark", async () => {
+		const store = new GuiSessionStore("s-u7", emptySnapshot(), "/work");
+		store.apply(lifecycleEvent("a1", "completed", "s-u7"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).toContain("a1");
+
+		// Same id comes back as "started" (revival / keep-alive re-run): the
+		// completed-unviewed fact no longer holds while it runs again.
+		store.apply(lifecycleEvent("a1", "started", "s-u7"));
+		await flush();
+		expect(store.getSnapshot().unviewedCompleted).not.toContain("a1");
+	});
+});

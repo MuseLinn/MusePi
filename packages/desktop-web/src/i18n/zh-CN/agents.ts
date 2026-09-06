@@ -16,6 +16,8 @@ export const agents = {
 	"open a session to view its agents": "打开一个会话以查看其代理",
 	"{count} running · {total} total": "{count} 运行中 · 共 {total}",
 	"{count} agents": "{count} 个代理",
+	// Completed while the user wasn't looking — cleared on open.
+	new: "新",
 } as const;
 
 /** Key union for the agents domain (source of truth). */

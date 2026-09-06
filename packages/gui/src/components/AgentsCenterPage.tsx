@@ -126,18 +126,31 @@ export function AgentsCenterPage({
 					{sorted.map(agent => {
 						const p = progress.get(agent.id)?.progress;
 						const lc = lifecycle.get(agent.id);
+						const unviewed = snap?.unviewedCompleted.includes(agent.id) ?? false;
 						return (
 							<button
 								key={agent.id}
 								type="button"
 								role="row"
-								className={`gui-agents-row${selectedId === agent.id ? " gui-agents-row--selected" : ""}`}
-								onClick={() => setSelectedId(selectedId === agent.id ? null : agent.id)}
+								className={`gui-agents-row${selectedId === agent.id ? " gui-agents-row--selected" : ""}${
+									unviewed ? " gui-agents-row--unviewed" : ""
+								}`}
+								onClick={() => {
+									// Mark viewed only when the click actually OPENS the
+									// drawer — a toggle-close on the selected row must
+									// not eat the marker without showing the transcript.
+									if (unviewed && selectedId !== agent.id) store?.markAgentViewed(agent.id);
+									setSelectedId(selectedId === agent.id ? null : agent.id);
+								}}
 							>
-								<span className={`ag-dot ag-dot--${agent.status}`} role="cell" />
+								<span
+									className={`ag-dot ag-dot--${agent.status}${unviewed ? " ag-dot--unviewed" : ""}`}
+									role="cell"
+								/>
 								<span className="gui-agents-cell gui-agents-cell--name" role="cell">
 									<span className="gui-agents-name">{agent.displayName}</span>
 									<span className="ag-chip">{t(agent.kind)}</span>
+									{unviewed ? <span className="ag-chip ag-chip--unviewed">{t("new")}</span> : null}
 								</span>
 								<span className="gui-agents-cell gui-agents-cell--activity" role="cell">
 									{activityLine(agent, p, lc, now)}
