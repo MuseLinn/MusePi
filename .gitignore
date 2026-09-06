@@ -103,3 +103,6 @@ musepi-session-*.html
 packages/gui/vendor/
 .v2c/
 .zcode/
+
+# Local scratch notes (reference-repo triage etc.) — never committed
+/local/
