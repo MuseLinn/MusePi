@@ -37,6 +37,7 @@ const codexModelEntrySchema = type({
 	"id?": "unknown",
 	"display_name?": "unknown",
 	"context_window?": "unknown",
+	"max_context_window?": "unknown",
 	"default_reasoning_level?": "unknown",
 	"supported_reasoning_levels?": "unknown",
 	"input_modalities?": "unknown",
@@ -85,6 +86,13 @@ export interface CodexModelDiscoveryOptions {
 export interface CodexModelDiscoveryResult {
 	models: ModelSpec<"openai-codex-responses">[];
 	etag?: string;
+	/**
+	 * Set when the backend rejected the credential itself (401/403, e.g.
+	 * `token_revoked`); `models` is empty. A definitive per-account denial,
+	 * unlike the `null` result for transport/parse failures, so multi-account
+	 * discovery can skip the account instead of aborting.
+	 */
+	rejectedStatus?: 401 | 403;
 }
 
 /**
@@ -114,6 +122,9 @@ export async function fetchCodexModels(options: CodexModelDiscoveryOptions): Pro
 			continue;
 		}
 
+		if (response.status === 401 || response.status === 403) {
+			return { models: [], rejectedStatus: response.status };
+		}
 		if (!response.ok) {
 			continue;
 		}
@@ -243,6 +254,7 @@ function normalizeCodexModelEntry(entry: unknown, baseUrl: string): NormalizedCo
 		? Math.max(reportedContextWindow, GPT_5_6_1M_CONTEXT_WINDOW)
 		: reportedContextWindow;
 	const maxTokens = Math.min(DEFAULT_MAX_TOKENS, contextWindow);
+	const reportedMaxContextWindow = toPositiveInt(payload.max_context_window);
 	const reasoning = supportsReasoning(payload.default_reasoning_level, payload.supported_reasoning_levels);
 	const input = normalizeInputModalities(payload.input_modalities);
 	const preferWebsockets = toBoolean(payload.prefer_websockets) === true;
@@ -264,6 +276,11 @@ function normalizeCodexModelEntry(entry: unknown, baseUrl: string): NormalizedCo
 			remoteCompaction: CODEX_REMOTE_COMPACTION,
 			contextWindow,
 			maxTokens,
+			...(reportedMaxContextWindow !== null &&
+			reportedMaxContextWindow !== undefined &&
+			reportedMaxContextWindow > contextWindow
+				? { maxContextWindow: reportedMaxContextWindow }
+				: {}),
 			...(preferWebsockets ? { preferWebsockets: true } : {}),
 			...(useResponsesLite ? { useResponsesLite: true } : {}),
 			...(priority !== Number.MAX_SAFE_INTEGER ? { priority } : {}),

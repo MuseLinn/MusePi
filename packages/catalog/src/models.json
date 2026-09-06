@@ -78378,6 +78378,52 @@
 				]
 			}
 		},
+		"gpt-6-astra": {
+			"id": "gpt-6-astra",
+			"name": "GPT-6-Astra",
+			"api": "openai-codex-responses",
+			"provider": "openai-codex",
+			"baseUrl": "https://chatgpt.com/backend-api",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 10,
+				"output": 50,
+				"cacheRead": 1,
+				"cacheWrite": 0
+			},
+			"remoteCompaction": {
+				"enabled": true,
+				"api": "openai-codex-responses",
+				"v2StreamingEnabled": true
+			},
+			"contextWindow": 272000,
+			"maxContextWindow": 1050000,
+			"maxTokens": 128000,
+			"preferWebsockets": true,
+			"useResponsesLite": true,
+			"toolMode": "code_mode_only",
+			"priority": 1,
+			"applyPatchToolType": "freeform",
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"low",
+					"medium",
+					"high",
+					"xhigh",
+					"max"
+				]
+			},
+			"identity": {
+				"class": "openai",
+				"family": "gpt",
+				"revision": "6.0.0"
+			}
+		},
 		"gpt-daybreak-blue-latest": {
 			"id": "gpt-daybreak-blue-latest",
 			"name": "Daybreak Blue",

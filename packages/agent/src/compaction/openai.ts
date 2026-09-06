@@ -44,7 +44,13 @@ import {
 	stripOpenAIResponsesOutputOnlyStatusesForReplay,
 } from "@musepi/pi-ai/utils";
 import { captureOpenAIHttpError } from "@musepi/pi-ai/utils/openai-http";
-import { CODEX_BASE_URL, getCodexAccountId, OPENAI_HEADER_VALUES, OPENAI_HEADERS } from "@musepi/pi-catalog/wire/codex";
+import {
+	CODEX_BASE_URL,
+	codexRoutingHint,
+	getCodexAccountId,
+	OPENAI_HEADER_VALUES,
+	OPENAI_HEADERS,
+} from "@musepi/pi-catalog/wire/codex";
 import { $env, isRecord, logger, prompt, stringifyJson, structuredCloneJSON } from "@musepi/pi-utils";
 import { Tokenizer } from "../tokenizer";
 import contextWindowTruncatedOutputPrompt from "./prompts/context-window-truncated-output.md" with { type: "text" };
@@ -835,6 +841,8 @@ export async function requestOpenAiRemoteCompaction(
 		}
 		headers[OPENAI_HEADERS.BETA] = OPENAI_HEADER_VALUES.BETA_RESPONSES;
 		headers[OPENAI_HEADERS.ORIGINATOR] = OPENAI_HEADER_VALUES.ORIGINATOR_CODEX;
+		// This compaction request sends no `service_tier`, so the hint is model-only.
+		headers[OPENAI_HEADERS.ROUTING_HINT] = codexRoutingHint(model.id, undefined);
 		Object.assign(
 			headers,
 			createOpenAICodexCompatibilityMetadata({

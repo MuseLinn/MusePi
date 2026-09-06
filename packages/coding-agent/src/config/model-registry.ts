@@ -1717,6 +1717,12 @@ export class ModelRegistry {
 	#applyHardcodedModelPolicies(models: Model<Api>[]): Model<Api>[] {
 		const extendedContext = isExtendedContextEnabledFromSettings(this.#settings);
 		return models.map(model => {
+			if (extendedContext) {
+				const maximum = model.maxContextWindow;
+				if (maximum !== undefined && model.contextWindow !== null && maximum > model.contextWindow) {
+					model = applyModelOverride(model, { contextWindow: maximum });
+				}
+			}
 			// Extended context off: cap models with a premium long-context price
 			// tier (e.g. GPT-5.6 bills 2x input above 272K) at the standard-pricing
 			// threshold so compaction fires before a request crosses into the tier.

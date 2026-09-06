@@ -2402,5 +2402,23 @@ describe("ModelRegistry", () => {
 			// The Codex variant is a 1M model without a long-context tier.
 			expect(registry.find("openai-codex", "gpt-5.6-terra")?.contextWindow).toBe(1_000_000);
 		});
+
+		test("toggles bundled Codex gpt-6-astra between its default and maximum windows", async () => {
+			await Settings.init({ inMemory: true, overrides: { extendedContext: false } });
+			const registry = new ModelRegistry(authStorage, modelsJsonPath);
+			// Astra's deployment-advertised default stays at 272K so compaction
+			// fires before the provider rejects oversized requests.
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
+
+			settings.override("extendedContext", true);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(1_050_000);
+			// Sibling Codex models without a max-context-window are untouched.
+			expect(registry.find("openai-codex", "gpt-5.5")?.contextWindow).toBe(272_000);
+
+			settings.override("extendedContext", false);
+			await registry.reapplyModelPolicies();
+			expect(registry.find("openai-codex", "gpt-6-astra")?.contextWindow).toBe(272_000);
+		});
 	});
 });

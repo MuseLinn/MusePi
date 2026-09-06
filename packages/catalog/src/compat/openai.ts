@@ -147,6 +147,17 @@ function supportsOfficialOpenAIPromptCacheBreakpoints(provider: string, modelId:
 }
 
 /**
+ * GPT-6 Astra accepts `configuration_update` input items to change reasoning
+ * effort mid-conversation (the wire contract every other SKU 400s on). Match
+ * the bare model slug so the plain Codex route and any `-wm` worker sibling
+ * both enable it while proxies keep their per-model compat.
+ */
+function isGpt6AstraModelId(modelId: string): boolean {
+	const bare = bareModelId(modelId);
+	return bare === "gpt-6-astra" || bare === "gpt-6-astra-wm";
+}
+
+/**
  * OpenCode's gateways (https://opencode.ai/zen|go) gate `reasoning_content`
  * on the request's thinking state for every model they front (Kimi K2.x,
  * DeepSeek V4, GLM-5.x, Qwen3.x, MiMo, MiniMax, …): they 400 with `Extra
@@ -745,6 +756,13 @@ export function buildOpenAIResponsesCompat(spec: OpenAIResponsesSpecLike): Resol
 			!isXaiHost && !modelMatchesHost({ provider: spec.provider, baseUrl }, "githubCopilot"),
 		// api.x.ai rejects `reasoning.summary` (SuperGrok and paid key alike).
 		supportsReasoningSummary: !isXaiHost,
+		// GPT-6 Astra changes reasoning effort mid-conversation through a
+		// `configuration_update` input item so the request-level effort (and
+		// the cached prompt prefix) stays put; every other SKU 400s on the
+		// item type. First-party Codex backend only.
+		supportsConfigurationUpdate:
+			(spec.provider === "openai-codex" || isOfficialOpenAIEndpoint(spec.provider, baseUrl)) &&
+			isGpt6AstraModelId(id),
 		reasoningEffortMap: isXaiHost ? { ...xaiResponsesReasoningEffortMap(id) } : {},
 		supportsReasoningParams: true,
 		// OpenAI proprietary reasoning models (o-series, gpt-5+) reject explicit
@@ -850,6 +868,7 @@ function pickResponsesOnly(compat: ResolvedOpenAIResponsesCompat): ResponsesOnly
 		supportsImageDetailOriginal: compat.supportsImageDetailOriginal,
 		supportsObfuscationOptOut: compat.supportsObfuscationOptOut,
 		supportsReasoningSummary: compat.supportsReasoningSummary,
+		supportsConfigurationUpdate: compat.supportsConfigurationUpdate,
 		isVercelGatewayHost: compat.isVercelGatewayHost,
 	} satisfies ResponsesOnlyCompat;
 }
