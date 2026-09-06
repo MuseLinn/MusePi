@@ -170,13 +170,18 @@ if (!app.requestSingleInstanceLock()) {
 // reaches this handler, so the detached daemon stays alive through crashes
 // by design. The updater-install path kills the daemon explicitly earlier.
 let daemonQuitHandled = false;
-app.on("before-quit", event => {
-	console.error("[main] before-quit");
-	if (daemonQuitHandled) return;
-	daemonQuitHandled = true;
-	// Electron does not await async quit handlers: hold the quit open while
-	// the owned daemon tears down (SIGTERM + grace window), then re-quit.
-	event.preventDefault();
+	// Keep a flag so the real quit path (tray "quit" → before-quit) can
+	// close the window when we're exiting. User close on non-darwin hides
+	// to tray instead.
+	let quitting = false;
+	app.on("before-quit", event => {
+		console.error("[main] before-quit");
+		quitting = true;
+		if (daemonQuitHandled) return;
+		daemonQuitHandled = true;
+		// Electron does not await async quit handlers: hold the quit open while
+		// the owned daemon tears down (SIGTERM + grace window), then re-quit.
+		event.preventDefault();
 	const { killOwnedDaemon } = require("./daemon.cjs");
 	killOwnedDaemon()
 		.then(killed => {
@@ -2168,6 +2173,20 @@ async function createWindow() {
 		if (!mainWindow.isDestroyed()) mainWindow.webContents.reload();
 	});
 
+	// Close-to-tray on non-darwin (Discord/Slack convention): hide the window
+	// instead of quitting so the tray icon keeps the app alive and "show-main-window"
+	// / tray-click can bring it back. A real quit goes through before-quit (the
+	// tray "quit" action sets the quitting flag so the close is allowed).
+	// If the tray was never created (ensureTray failure), allow the close so
+	// the existing window-all-closed path quits instead of leaving a zombie.
+	mainWindow.on("close", (event) => {
+		if (quitting) return;
+		if (process.platform !== "darwin" && trayController && !trayClosed) {
+			event.preventDefault();
+			mainWindow.hide();
+		}
+	});
+
 	mainWindow.on("closed", () => {
 		mainWindow = null;
 		// The glow is driven by this window's session store; with the
@@ -2177,63 +2196,55 @@ async function createWindow() {
 			clearTimeout(mainBoundsTimer);
 			mainBoundsTimer = null;
 		}
-		// Non-macOS convention: closing the main window quits the app.
-		// window-all-closed cannot do this — the hidden helper windows
-		// (tray menu, glow overlay, pet, pins) keep the count non-zero, so
-		// the app used to linger as a zombie process (window gone, process
-		// + daemon alive, no UI). `show-main-window` and the tray stay
-		// available while the window is open; after a real close the tray
-		// icon dies with the app, matching every native Windows app.
-		if (process.platform !== "darwin") app.quit();
 	});
+}
 
-	// The managed browser owns a WebContentsView child of this window. When
-	// the window is recreated (show-main-window path after a close), the
-	// controller must re-point at the fresh window — a stale owner made the
-	// next navigate throw "Object has been destroyed" (managed-browser crash).
-	managedBrowser.setOwner(mainWindow);
+// The managed browser owns a WebContentsView child of this window. When
+// the window is recreated (show-main-window path after a close), the
+// controller must re-point at the fresh window — a stale owner made the
+// next navigate throw "Object has been destroyed" (managed-browser crash).
+managedBrowser.setOwner(mainWindow);
 
-	// Persist main-window bounds (debounced — drags/resizes fire move/resize
-	// continuously) so a relaunch restores the user's layout.
-	let saveBounds = () => {
-		if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
-		try {
-			fs.writeFileSync(mainWindowBoundsFile(), JSON.stringify(mainWindow.getBounds()));
-		} catch {
-			// non-fatal — bounds restore is best-effort
-		}
-	};
-	if (mainBoundsTimer) clearTimeout(mainBoundsTimer);
+// Persist main-window bounds (debounced — drags/resizes fire move/resize
+// continuously) so a relaunch restores the user's layout.
+let saveBounds = () => {
+	if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
+	try {
+		fs.writeFileSync(mainWindowBoundsFile(), JSON.stringify(mainWindow.getBounds()));
+	} catch {
+		// non-fatal — bounds restore is best-effort
+	}
+};
+if (mainBoundsTimer) clearTimeout(mainBoundsTimer);
+mainBoundsTimer = setTimeout(() => {
+	mainBoundsTimer = null;
+	saveBounds();
+}, 300);
+mainWindow.on("move", () => {
+	if (mainBoundsTimer) return;
 	mainBoundsTimer = setTimeout(() => {
 		mainBoundsTimer = null;
 		saveBounds();
 	}, 300);
-	mainWindow.on("move", () => {
-		if (mainBoundsTimer) return;
-		mainBoundsTimer = setTimeout(() => {
-			mainBoundsTimer = null;
-			saveBounds();
-		}, 300);
-	});
-	mainWindow.on("resize", () => {
-		if (mainBoundsTimer) return;
-		mainBoundsTimer = setTimeout(() => {
-			mainBoundsTimer = null;
-			saveBounds();
-		}, 300);
-	});
+});
+mainWindow.on("resize", () => {
+	if (mainBoundsTimer) return;
+	mainBoundsTimer = setTimeout(() => {
+		mainBoundsTimer = null;
+		saveBounds();
+	}, 300);
+});
 
-	// Webview popups (embedded browser): openchamber-style in-place
-	// navigation — deny new windows, load http/https targets inside the
-	// same webview so target=_blank links don't spawn orphan windows.
-	app.on("web-contents-created", (_event, contents) => {
-		if (contents.getType() !== "webview") return;
-		contents.setWindowOpenHandler(({ url }) => {
-			if (/^https?:/i.test(url)) contents.loadURL(url);
-			return { action: "deny" };
-		});
+// Webview popups (embedded browser): openchamber-style in-place
+// navigation — deny new windows, load http/https targets inside the
+// same webview so target=_blank links spawn orphan windows.
+app.on("web-contents-created", (_event, contents) => {
+	if (contents.getType() !== "webview") return;
+	contents.setWindowOpenHandler(({ url }) => {
+		if (/^https?:/i.test(url)) contents.loadURL(url);
+		return { action: "deny" };
 	});
-}
+});
 
 // ── IPC: system notifications ───────────────────────────────────────────
 // The renderer's HTML5 Notification API is NOT wired to macOS system
