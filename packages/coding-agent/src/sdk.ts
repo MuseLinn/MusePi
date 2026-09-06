@@ -1558,6 +1558,9 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 	// 与"mode 是会话级角色"语义不符,改为运行时覆盖。
 	// 填充时机:紧随初始 resolve(扩展加载完成后),见下方注入点。
 	const appliedModeSettingsKeys: string[] = [];
+	// Credential-scoped built-in catalogs (github-copilot 等) 的缓存行在构造期
+	// 无法解析,模型选择器校验前做一次本地离线水合(oh-my-pi parity)。
+	await modelRegistry.hydrateCredentialScopedModelCaches();
 	if (!options.modelRegistry) {
 		modelRegistry.refreshInBackground();
 	}

@@ -2542,13 +2542,15 @@ providers:
 		expect(registry.find("litellm-test", "deployment-id")).toBeUndefined();
 	});
 
-	test("startup restores a legacy stale-marked Copilot -1m variant via requestModelId", () => {
+	test("startup restores a legacy stale-marked Copilot -1m variant via requestModelId", async () => {
 		// Regression for #6037/#6284: a synthesized Copilot `-1m` long-context
 		// variant keeps the base model's transport headers via `requestModelId`.
 		// The v10 cache omits headers, and legacy rows written by the old id-only
 		// writer flag the variant unrestorable (its base is a different id). The
 		// startup loader must still recover the headers from the bundled base and
-		// keep the model selectable instead of dropping it.
+		// keep the model selectable instead of dropping it. Copilot's cache
+		// namespace is credential-scoped, so the row is written under the exact
+		// scoped id and hydrated through hydrateCredentialScopedModelCaches.
 		const bundledBase = getBundledModel("github-copilot", "gpt-5.6-sol");
 		if (!bundledBase?.headers) {
 			throw new Error("Expected bundled Copilot base to carry transport headers");
@@ -2562,13 +2564,15 @@ providers:
 		});
 		// Emulate a legacy write: the variant has no same-id static header source,
 		// so it is flagged unrestorable even though its base carries the headers.
-		const cacheProviderId = resolveModelCacheProviderId("github-copilot");
+		authStorage.setRuntimeApiKey("github-copilot", "ghp_test_token");
+		const cacheProviderId = resolveModelCacheProviderId("github-copilot", { apiKey: "ghp_test_token" });
 		writeModelCache(cacheProviderId, Date.now(), [cachedVariant], true, "", cacheDbPath);
 		const db = new Database(cacheDbPath);
 		db.run("UPDATE model_cache SET header_restore_version = 0 WHERE provider_id = ?", [cacheProviderId]);
 		db.close();
 
 		const registry = new ModelRegistry(authStorage, modelsJsonPath);
+		await registry.hydrateCredentialScopedModelCaches();
 
 		const restored = registry.find("github-copilot", "gpt-5.6-sol-1m");
 		expect(restored?.headers).toEqual(bundledBase.headers);

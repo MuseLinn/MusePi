@@ -173,6 +173,7 @@ export class ModelRegistry {
 	#hasFullSnapshot = false;
 	#cachedStandardModelsByProvider: Map<string, Model<Api>[]> = new Map();
 	#pendingStandardCacheProviders: Set<string> = new Set();
+	#credentialScopedCacheHydration?: Promise<void>;
 	#cachedDiscoverableModels: Model<Api>[] = [];
 	#cachedAuthoritativeProviders: Set<string> = new Set();
 	#internedStaticModels: Map<string, Model<Api>> = new Map();
@@ -295,6 +296,34 @@ export class ModelRegistry {
 		// fallback sees a populated index before the GUI lists custom models.
 		this.#primeModelsDevCatalog().catch(() => {});
 		await this.#refreshRuntimeDiscoveries(strategy);
+	}
+
+	/**
+	 * Hydrate credential-scoped built-in catalogs from their exact cache rows.
+	 *
+	 * The synchronous constructor cannot resolve credentials, so session startup
+	 * awaits this local-only, best-effort pass before validating model selectors.
+	 */
+	async hydrateCredentialScopedModelCaches(): Promise<void> {
+		if (!this.#credentialScopedCacheHydration) {
+			const providerIds = new Set<string>();
+			for (const providerId of STARTUP_MODEL_CACHE_PROVIDER_IDS) {
+				if (isCredentialScopedModelCacheProvider(providerId)) providerIds.add(providerId);
+			}
+			this.#credentialScopedCacheHydration = this.#refreshRuntimeDiscoveries("offline", providerIds).catch(error => {
+				logger.debug("credential-scoped model cache hydration failed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		}
+		const hydration = this.#credentialScopedCacheHydration;
+		try {
+			await hydration;
+		} finally {
+			if (this.#credentialScopedCacheHydration === hydration) {
+				this.#credentialScopedCacheHydration = undefined;
+			}
+		}
 	}
 
 	/** Fire once: fetch models.dev (stencil.so) into the process catalog cache. */
