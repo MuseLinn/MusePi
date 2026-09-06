@@ -60,10 +60,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	haptic: (pattern) => ipcRenderer.invoke("haptic", pattern),
 	/** OTA: check for updates (electron-updater; null result = disabled). */
 	checkUpdates: () => ipcRenderer.invoke("updater-check"),
-	/** OTA: current updater state (idle/checking/downloading/downloaded/error). */
+	/** OTA: current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState: () => ipcRenderer.invoke("updater-state"),
 	/** OTA: download the detected update (progress via onUpdateState). */
 	downloadUpdate: () => ipcRenderer.invoke("updater-download"),
+	/** OTA: release notes from update-manifest.json (main-process fetch, cached). */
+	getUpdateNotes: () => ipcRenderer.invoke("updater-notes"),
 	/** OTA: kill daemon + quitAndInstall (restart into the new version). */
 	installUpdate: () => ipcRenderer.invoke("updater-install"),
 	/** OTA: listen for an auto-checked update notice. */

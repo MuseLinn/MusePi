@@ -19,7 +19,14 @@ const os = require("node:os");
 const fs = require("node:fs");
 const { probe, probeWeb, restart, start, kill, portOpen } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
-const { checkForUpdates, downloadUpdate, quitAndInstall, wireRenderer, state: updaterState } = require("./updater.cjs");
+const {
+	checkForUpdates,
+	downloadUpdate,
+	quitAndInstall,
+	fetchManifestNotes,
+	wireRenderer,
+	state: updaterState,
+} = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
 
 // ── Main-process log + crash guard ───────────────────────────────────────
@@ -2290,6 +2297,7 @@ ipcMain.handle("notification-show", (_event, { title, body }) => {
 ipcMain.handle("updater-check", () => checkForUpdates());
 ipcMain.handle("updater-state", () => ({ ...updaterState }));
 ipcMain.handle("updater-download", () => downloadUpdate());
+ipcMain.handle("updater-notes", () => fetchManifestNotes());
 ipcMain.handle("updater-install", async () => {
 	// Kill the daemon sidecar BEFORE quitting so the installed app can
 	// start its own fresh daemon (openchamber killSidecar parity). The

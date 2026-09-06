@@ -4399,6 +4399,18 @@
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 }
 
+/* Completed while the user wasn't looking — stateful marker, NOT an
+ * animation (gui-motion-off safe): a soft accent wash + left edge keeps it
+ * visible next to the row's status dot without fighting the running pulse. */
+.gui-agents-row--unviewed {
+	background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+	box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.gui-agents-row--unviewed:hover {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
 .gui-agents-row--head {
 	padding-top: 10px;
 	padding-bottom: 6px;
@@ -4489,6 +4501,15 @@
 		transform: none;
 	}
 }
+.gui-update-toast--closing {
+	animation: gui-update-toast-out 180ms ease-in both;
+}
+@keyframes gui-update-toast-out {
+	to {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+}
 .gui-update-toast-head {
 	display: flex;
 	align-items: baseline;
@@ -4530,6 +4551,24 @@
 	line-height: 1.55;
 	color: var(--fg-muted);
 }
+.gui-update-toast-notes--expanded {
+	display: block;
+	max-height: 220px;
+	overflow-y: auto;
+}
+.gui-update-toast-notes-toggle {
+	align-self: flex-start;
+	border: none;
+	background: none;
+	padding: 0;
+	margin-top: -2px;
+	font-size: 11.5px;
+	color: var(--accent);
+	cursor: pointer;
+}
+.gui-update-toast-notes-toggle:hover {
+	text-decoration: underline;
+}
 .gui-update-toast-actions {
 	display: flex;
 	align-items: center;
@@ -4537,7 +4576,8 @@
 	margin-top: 2px;
 }
 
-/* OTA: progress bar (downloadUpdate) */
+/* OTA: preparing/downloading states (downloadUpdate). The bar renders
+ * indeterminate until the first electron-updater download-progress event. */
 .gui-update-toast-progress {
 	position: relative;
 	height: 6px;
@@ -4554,16 +4594,50 @@
 	background: var(--accent);
 	transition: width 200ms linear;
 }
-.gui-update-toast-progress-label {
-	position: absolute;
-	right: 0;
-	top: -16px;
+.gui-update-toast-progress-bar--indeterminate {
+	width: 40%;
+	animation: gui-update-progress-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes gui-update-progress-indeterminate {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(350%);
+	}
+}
+.gui-update-toast-progress-meta {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
 	font-size: 11px;
+	line-height: 1.2;
+}
+.gui-update-toast-progress-meta span:first-child {
 	color: var(--accent);
 }
-/* OTA: download error */
-.gui-update-toast-error {
+.gui-update-toast-progress-meta span:last-child {
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
+/* OTA: downloaded success feedback */
+.gui-update-toast-done {
+	display: flex;
+	align-items: center;
+	gap: 5px;
 	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-success);
+}
+/* OTA: download error (updater messages can embed long URLs — clamp) */
+.gui-update-toast-error {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 3;
+	overflow: hidden;
+	font-size: 12px;
+	line-height: 1.5;
 	color: var(--color-red);
 }
 
@@ -4585,4 +4659,9 @@
 	font-size: 12.5px;
 	line-height: 1.6;
 	color: var(--color-text-muted);
+}
+.gui-update-result-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }

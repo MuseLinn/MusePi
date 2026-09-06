@@ -3061,7 +3061,7 @@ function AppInner(): ReactNode {
 			<AnnouncementOverlay rpc={rpc} />
 			{/* Auto-checked update notice (BitFun parity toast; main.cjs
 			 * pushes update-available ~12s after boot). */}
-			<UpdateToast rpc={rpc} />
+			<UpdateToast />
 			{/* Floating pac-man scroll indicator (fixed overlay — system
 			 * scrollbars are hidden; see FloatingScrollbar.tsx). */}
 			<FloatingScrollbar />

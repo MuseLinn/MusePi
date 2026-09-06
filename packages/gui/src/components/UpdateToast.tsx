@@ -1,7 +1,8 @@
-import { getLocaleSnapshot, Markdown, subscribeLocale, t } from "@musepi/desktop-web";
-import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
+import { Markdown, t } from "@musepi/desktop-web";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	downloadUpdate,
+	getUpdateNotes,
 	installUpdate,
 	onUpdateAvailable,
 	onUpdateState,
@@ -9,22 +10,31 @@ import {
 	type UpdateCheckResult,
 	type UpdaterState,
 } from "../lib/electron";
-import type { RpcClient } from "../lib/rpc";
+import { Icon } from "../vendor/oc-icons";
 
 /**
  * OTA update notice (opencode/electron-updater parity): the Electron main
  * process silent-checks ~12s after launch and pushes "update-available" here
  * via preload's onUpdateAvailable. Flow:
  *
- *   [有新版本 vX → vY] → [下载更新] → 进度条 % → [立即重启]
+ *   [有新版本 vX → vY + notes] → [下载更新] → preparing 不确定条 → 进度条 %
+ *   → [立即重启]
  *
- * electron-updater downloads in the background (autoDownload=false, download
- * initiated by this button); updater-state events drive the progress bar.
- * On failure the toast falls back to 前往下载 (openExternal), so the old
- * manual path is never lost.
+ * Notes come from the same update-manifest.json the daemon RPC reads, fetched
+ * by the main process (updater-notes IPC, cached) — so the preview survives a
+ * not-yet-connected daemon and a disabled startup.checkUpdate. electron-updater
+ * downloads in the background (autoDownload=false, download initiated by this
+ * button); updater-state events drive the states: `preparing` covers the
+ * click → first-byte gap, `downloading` the progress events, and both revive a
+ * dismissed toast so 立即重启 is never lost. On failure the toast offers retry
+ * + 前往下载, so the old manual path is never lost.
  */
 const SKIPPED_VERSION_KEY = "musepi-update-skip-version";
 const RELEASES_PAGE = "https://github.com/MuseLinn/MusePi/releases/latest";
+/** Matches the exit animation in gui-widgets.css (prompt-dialog 180ms parity). */
+const EXIT_MS = 180;
+/** Notes longer than this get a 展开 toggle (shorter ones fit the clamp). */
+const NOTES_EXPAND_THRESHOLD = 200;
 
 function isSkipped(latest: string): boolean {
 	try {
@@ -35,18 +45,26 @@ function isSkipped(latest: string): boolean {
 	}
 }
 
-export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
+function formatMB(bytes: number): string {
+	return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+export function UpdateToast(): ReactNode {
 	const [notice, setNotice] = useState<UpdateCheckResult | null>(null);
 	const [state, setState] = useState<UpdaterState | null>(null);
 	const [notes, setNotes] = useState<string | null>(null);
-	// Current locale (re-renders on change so bilingual notes follow the UI
-	// language without a reload).
-	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, () => "en-US");
+	const [expanded, setExpanded] = useState(false);
+	const [closing, setClosing] = useState(false);
+	// Last full notice — reviving after dismissal keeps the current-version
+	// label even though the state push only carries the new version.
+	const noticeRef = useRef<UpdateCheckResult | null>(null);
+	const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Startup auto-check notice + live updater state pushes.
 	useEffect(() => {
 		const unsubNotice = onUpdateAvailable(result => {
 			if (!result?.latest || isSkipped(result.latest)) return;
+			noticeRef.current = result;
 			setNotice(result);
 		});
 		const unsubState = onUpdateState(s => {
@@ -60,6 +78,19 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					// ignore
 				}
 			}
+			// Revive a dismissed toast when a download starts or completes:
+			// `preparing` fires exactly once per user-initiated download (the
+			// settings page's 下载更新 included), and the downloaded state must
+			// stay reachable — autoInstallOnAppQuit is off, so 立即重启 is the
+			// only way the downloaded package installs.
+			if (s.status === "preparing" || s.status === "downloaded") {
+				if (closeTimer.current) {
+					clearTimeout(closeTimer.current);
+					closeTimer.current = null;
+				}
+				setClosing(false);
+				setNotice(prev => prev ?? { ...noticeRef.current, latest: s.version ?? noticeRef.current?.latest });
+			}
 		});
 		return () => {
 			unsubNotice();
@@ -67,48 +98,52 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		};
 	}, []);
 
-	// Bilingual release notes: the daemon's updates.check probes the
-	// update-manifest.json asset (version + notes {zh,en}); pick the notes
-	// for the current UI language. Never nags on network failure.
+	// Release notes: one cached main-process fetch per notice. The manifest
+	// ships a bilingual-mixed string; render as-is. Never nags on failure.
 	useEffect(() => {
-		if (!notice?.latest || !rpc) {
+		if (!notice?.latest) {
 			setNotes(null);
+			setExpanded(false);
 			return;
 		}
 		let cancelled = false;
-		void rpc
-			.request<{ latest?: string; notes?: { zh?: string; en?: string } } | null>("updates.check", {})
-			.then(res => {
-				if (cancelled) return;
-				const n = res?.notes;
-				if (!n) {
-					setNotes(null);
-					return;
-				}
-				setNotes(locale === "zh-CN" ? (n.zh ?? n.en ?? null) : (n.en ?? n.zh ?? null));
-			})
-			.catch(() => {
-				if (!cancelled) setNotes(null);
-			});
+		void getUpdateNotes().then(n => {
+			if (!cancelled) setNotes(n);
+		});
 		return () => {
 			cancelled = true;
 		};
-	}, [notice?.latest, rpc, locale]);
+	}, [notice?.latest]);
 
 	if (!notice?.latest) return null;
 
+	const preparing = state?.status === "preparing";
 	const downloading = state?.status === "downloading";
 	const downloaded = state?.status === "downloaded";
 	const failed = state?.status === "error";
+	const progress = state?.progress;
+	const percent = Math.min(100, Math.round(progress?.percent ?? 0));
+	const total = progress?.total ?? 0;
+	const speed = progress?.bytesPerSecond ?? 0;
+	const hasNotes = notes !== null && notes.trim().length > 0;
 
-	const dismiss = (): void => setNotice(null);
-	const skip = (): void => {
-		try {
-			localStorage.setItem(SKIPPED_VERSION_KEY, notice.latest ?? "");
-		} catch {
-			// ignore — dismissal still applies for this paint
+	const close = (skipVersion: boolean): void => {
+		if (skipVersion) {
+			try {
+				localStorage.setItem(SKIPPED_VERSION_KEY, notice.latest ?? "");
+			} catch {
+				// ignore — dismissal still applies for this paint
+			}
 		}
-		dismiss();
+		setClosing(true);
+		if (closeTimer.current) clearTimeout(closeTimer.current);
+		closeTimer.current = setTimeout(() => {
+			closeTimer.current = null;
+			setClosing(false);
+			setNotice(null);
+			setNotes(null);
+			setExpanded(false);
+		}, EXIT_MS);
 	};
 	const startDownload = (): void => {
 		void downloadUpdate();
@@ -118,13 +153,11 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 	const goManual = (): void => {
 		void openExternalUrl(notice.url || RELEASES_PAGE);
-		dismiss();
+		close(false);
 	};
 
-	const percent = state?.progress?.percent ?? 0;
-
 	return (
-		<div className="gui-update-toast" role="status">
+		<div className={`gui-update-toast${closing ? " gui-update-toast--closing" : ""}`} role="status">
 			<div className="gui-update-toast-head">
 				<span className="gui-update-toast-title">{t("new version")}</span>
 				<span className="gui-update-toast-versions">
@@ -133,22 +166,48 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				<button
 					type="button"
 					className="gui-update-toast-close"
-					onClick={dismiss}
+					onClick={() => close(false)}
 					title={t("close")}
 					aria-label={t("close")}
 				>
 					×
 				</button>
 			</div>
-			{notes ? (
-				<div className="gui-update-toast-notes">
+			{hasNotes && (
+				<div className={`gui-update-toast-notes${expanded ? " gui-update-toast-notes--expanded" : ""}`}>
 					<Markdown text={notes} />
 				</div>
-			) : null}
-			{downloading && (
+			)}
+			{hasNotes && notes.length > NOTES_EXPAND_THRESHOLD && (
+				<button type="button" className="gui-update-toast-notes-toggle" onClick={() => setExpanded(v => !v)}>
+					{t(expanded ? "show less" : "show more")}
+				</button>
+			)}
+			{preparing && (
 				<div className="gui-update-toast-progress">
-					<div className="gui-update-toast-progress-bar" style={{ width: `${percent}%` }} />
-					<span className="gui-update-toast-progress-label">{t("downloading {percent}%", { percent })}</span>
+					<div className="gui-update-toast-progress-bar gui-update-toast-progress-bar--indeterminate" />
+				</div>
+			)}
+			{downloading && (
+				<>
+					<div className="gui-update-toast-progress-meta">
+						<span>{t("downloading {percent}%", { percent })}</span>
+						{total > 0 && (
+							<span>
+								{formatMB(progress?.transferred ?? 0)} / {formatMB(total)}
+								{speed > 0 ? ` · ${formatMB(speed)}/s` : ""}
+							</span>
+						)}
+					</div>
+					<div className="gui-update-toast-progress">
+						<div className="gui-update-toast-progress-bar" style={{ width: `${percent}%` }} />
+					</div>
+				</>
+			)}
+			{downloaded && (
+				<div className="gui-update-toast-done">
+					<Icon name="check" className="h-3.5 w-3.5" />
+					<span>{t("download complete")}</span>
 				</div>
 			)}
 			{failed && <div className="gui-update-toast-error">{state?.error ?? t("update download failed")}</div>}
@@ -157,21 +216,22 @@ export function UpdateToast({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
 						{t("restart now")}
 					</button>
-				) : downloading ? null : (
+				) : preparing || downloading ? null : (
 					<button type="button" className="gui-btn gui-btn-primary" onClick={startDownload}>
 						{t("download update")}
 					</button>
 				)}
 				{failed ? (
-					<button type="button" className="gui-btn" onClick={goManual}>
-						{t("go to download")}
-					</button>
-				) : downloaded ? (
-					<button type="button" className="gui-btn" onClick={skip}>
-						{t("skip this version")}
-					</button>
+					<>
+						<button type="button" className="gui-btn" onClick={startDownload}>
+							{t("retry")}
+						</button>
+						<button type="button" className="gui-btn" onClick={goManual}>
+							{t("go to download")}
+						</button>
+					</>
 				) : (
-					<button type="button" className="gui-btn" onClick={skip}>
+					<button type="button" className="gui-btn" onClick={() => close(true)}>
 						{t("skip this version")}
 					</button>
 				)}

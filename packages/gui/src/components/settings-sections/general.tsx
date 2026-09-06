@@ -1,9 +1,9 @@
-import { type TranslationKey, t } from "@musepi/desktop-web";
+import { Markdown, type TranslationKey, t } from "@musepi/desktop-web";
 import { ToolView } from "@musepi/desktop-web/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/desktop-web/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { checkAppUpdates, openExternalUrl, type UpdateCheckResult } from "../../lib/electron";
+import { checkAppUpdates, downloadUpdate, openExternalUrl, type UpdateCheckResult } from "../../lib/electron";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import {
@@ -507,20 +507,33 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							{updateResult?.newer && (
 								<div className="gui-update-result">
 									{updateResult.notes ? (
-										<div className="gui-update-result-notes">{updateResult.notes}</div>
+										<div className="gui-update-result-notes">
+											<Markdown text={updateResult.notes} />
+										</div>
 									) : null}
-									<button
-										type="button"
-										className="gui-btn gui-btn-primary"
-										onClick={() =>
-											void openExternalUrl(
-												updateResult.url || "https://github.com/MuseLinn/MusePi/releases/latest",
-											)
-										}
-									>
-										<Icon name="download" className="h-3.5 w-3.5" />
-										<span>{t("go to download")}</span>
-									</button>
+									<div className="gui-update-result-actions">
+										{/* In-app download: the UpdateToast revives on the
+										 * preparing push, so progress shows there. */}
+										<button
+											type="button"
+											className="gui-btn gui-btn-primary"
+											onClick={() => void downloadUpdate()}
+										>
+											{t("download update")}
+										</button>
+										<button
+											type="button"
+											className="gui-btn"
+											onClick={() =>
+												void openExternalUrl(
+													updateResult.url || "https://github.com/MuseLinn/MusePi/releases/latest",
+												)
+											}
+										>
+											<Icon name="download" className="h-3.5 w-3.5" />
+											<span>{t("go to download")}</span>
+										</button>
+									</div>
 								</div>
 							)}
 						</div>

@@ -19,10 +19,12 @@ export interface ElectronAPI {
 	readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
 	/** OTA check (electron-updater); null result = disabled. */
 	checkUpdates(): Promise<UpdateCheckResult | null>;
-	/** Current updater state (idle/checking/downloading/downloaded/error). */
+	/** Current updater state (idle/checking/preparing/downloading/downloaded/error). */
 	getUpdateState(): Promise<UpdaterState | null>;
 	/** Download the detected update (progress via onUpdateState). */
 	downloadUpdate(): Promise<boolean>;
+	/** Release notes from update-manifest.json (main-process fetch, cached). */
+	getUpdateNotes(): Promise<string | null>;
 	/** Kill daemon + quitAndInstall (restart into the new version). */
 	installUpdate(): Promise<boolean>;
 	/** Startup auto-check notice; returns the unsubscribe function. */
@@ -31,11 +33,13 @@ export interface ElectronAPI {
 	onUpdateState(cb: (state: UpdaterState) => void): () => void;
 }
 
-/** Live updater state (main process electron-updater → renderer contract). */
+/** Live updater state (main process electron-updater → renderer contract).
+ *  `preparing` covers the click → first-byte gap (feed resolve + TTFB) where
+ *  electron-updater emits no download-progress yet. */
 export interface UpdaterState {
-	status: "idle" | "checking" | "downloading" | "downloaded" | "error";
+	status: "idle" | "checking" | "preparing" | "downloading" | "downloaded" | "error";
 	version?: string | null;
-	progress?: { percent: number; transferred: number; total: number };
+	progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number };
 	error?: string | null;
 }
 
@@ -176,7 +180,7 @@ export function onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () =
 	return electronAPI.onUpdateAvailable(cb);
 }
 
-/** Live updater state pushes (idle/checking/downloading/downloaded/error). */
+/** Live updater state pushes (idle/checking/preparing/downloading/downloaded/error). */
 export function onUpdateState(cb: (state: UpdaterState) => void): () => void {
 	if (!isElectron()) return () => {};
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
@@ -188,6 +192,18 @@ export function downloadUpdate(): Promise<boolean> {
 	if (!isElectron()) return Promise.resolve(false);
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.downloadUpdate();
+}
+
+/** Release notes from update-manifest.json (cached main-process fetch; null
+ *  when the asset is missing, offline, or the manifest ships no notes). */
+export async function getUpdateNotes(): Promise<string | null> {
+	if (!isElectron()) return null;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		return (await electronAPI.getUpdateNotes()) ?? null;
+	} catch {
+		return null;
+	}
 }
 
 /** Kill daemon + quitAndInstall (restart into the new version). */

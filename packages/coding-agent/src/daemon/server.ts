@@ -3604,13 +3604,19 @@ export class DaemonServer {
 					if (!res.ok) return { latest: null, notes: null };
 					const data = (await res.json()) as {
 						version?: unknown;
-						notes?: { zh?: string; en?: string };
+						// The release workflow ships notes as a plain string (the newest
+						// CHANGELOG.musepi section, bilingual-mixed); the {zh,en} shape
+						// is reserved for a future split manifest. Pass either through.
+						notes?: string | { zh?: string; en?: string };
 					};
 					const latest = typeof data.version === "string" ? data.version : undefined;
 					const currentVersion = process.env.MUSEPI_VERSION ?? VERSION;
-					// Bilingual release notes (update-manifest.json): the GUI
-					// picks a language by locale; daemon passes them through.
-					const notes = data.notes && typeof data.notes === "object" ? data.notes : null;
+					const notes =
+						typeof data.notes === "string"
+							? data.notes
+							: data.notes && typeof data.notes === "object"
+								? data.notes
+								: null;
 					return {
 						latest: latest && latest !== currentVersion ? latest : null,
 						notes,
