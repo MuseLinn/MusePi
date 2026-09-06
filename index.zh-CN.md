@@ -47,8 +47,32 @@ mp_cta: true
 
 <section class="mp-statement mp-reveal">
   <h2>一个引擎，所有终端面。</h2>
-  <p>桌面 GUI、终端 TUI、常驻桌宠、移动伴侣——同一批会话、同一个 daemon、
-     同一套设置，随处可用。</p>
+  <p>按场景选择终端面——每一个都连着同一个 daemon、同一批会话、同一套设置。</p>
+  <div class="mp-surfaces">
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--gui" aria-hidden="true">
+        <span class="mp-win-dots"><i></i><i></i><i></i></span>
+        <span class="mp-win-title">MusePi</span>
+      </div>
+      <h3>桌面客户端</h3>
+      <p>完整驾驶舱——磨砂玻璃 GUI、会话树画布、悬浮状态卡与常驻桌宠。</p>
+    </div>
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--tui" aria-hidden="true">
+        <span class="mp-tui-line"><span class="mp-term-prompt">$ </span>musepi</span>
+        <span class="mp-tui-cursor"></span>
+      </div>
+      <h3>终端 TUI</h3>
+      <p>同一个 Agent 落进终端——键盘优先、SSH 友好，会话与设置完全一致。</p>
+    </div>
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--phone" aria-hidden="true">
+        <span class="mp-phone"><i class="mp-phone-bubble"></i><i class="mp-phone-bubble mp-phone-bubble--me"></i></span>
+      </div>
+      <h3>移动伴侣</h3>
+      <p>Android 应用经 LAN 扫码配对——远程查看运行、发送提示、中止回合。</p>
+    </div>
+  </div>
 </section>
 
 <section class="mp-features" id="features">

@@ -48,8 +48,36 @@ mp_cta: true
 
 <section class="mp-statement mp-reveal">
   <h2>One engine. Every surface.</h2>
-  <p>Desktop GUI, terminal TUI, desktop pet, mobile companion — the same sessions,
-     the same daemon, the same settings, wherever you are.</p>
+  <p>Pick the surface that fits the moment — every one of them talks to the same
+     daemon, the same sessions, the same settings.</p>
+  <div class="mp-surfaces">
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--gui" aria-hidden="true">
+        <span class="mp-win-dots"><i></i><i></i><i></i></span>
+        <span class="mp-win-title">MusePi</span>
+      </div>
+      <h3>Desktop client</h3>
+      <p>The full cockpit — frosted-glass GUI, session-tree canvas, floating status
+         cards and the always-on pet.</p>
+    </div>
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--tui" aria-hidden="true">
+        <span class="mp-tui-line"><span class="mp-term-prompt">$ </span>musepi</span>
+        <span class="mp-tui-cursor"></span>
+      </div>
+      <h3>Terminal TUI</h3>
+      <p>The same agent in your terminal — keyboard-first, SSH-friendly, identical
+         sessions and settings.</p>
+    </div>
+    <div class="mp-surface">
+      <div class="mp-surface-visual mp-surface-visual--phone" aria-hidden="true">
+        <span class="mp-phone"><i class="mp-phone-bubble"></i><i class="mp-phone-bubble mp-phone-bubble--me"></i></span>
+      </div>
+      <h3>Mobile companion</h3>
+      <p>An Android app that pairs over LAN with a QR join — watch runs, send prompts
+         and stop turns from anywhere.</p>
+    </div>
+  </div>
 </section>
 
 <section class="mp-features" id="features">

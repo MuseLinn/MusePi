@@ -488,6 +488,137 @@ body {
   color: var(--text-muted);
 }
 
+/* ── Surfaces trio: desktop client / terminal TUI / mobile companion ──── */
+.mp-surfaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+  max-width: 1020px;
+  margin: 44px auto 0;
+  text-align: left;
+}
+.mp-surface {
+  padding: 18px 20px 22px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+  transition:
+    transform 200ms var(--spring),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.mp-surface:hover {
+  transform: translateY(-3px);
+  border-color: rgba(217, 164, 65, 0.4);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+}
+.mp-surface h3 {
+  margin: 16px 0 6px;
+  font-size: 16.5px;
+}
+.mp-surface p {
+  margin: 0;
+  max-width: none;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+.mp-surface-visual {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 78px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background:
+    radial-gradient(220px 90px at 80% -20%, rgba(217, 164, 65, 0.08), transparent 70%),
+    rgba(0, 0, 0, 0.32);
+}
+.mp-win-dots {
+  display: inline-flex;
+  gap: 6px;
+  flex: none;
+}
+.mp-win-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+}
+.mp-win-dots i:nth-child(1) {
+  background: #ff5f57;
+}
+.mp-win-dots i:nth-child(2) {
+  background: #febc2e;
+}
+.mp-win-dots i:nth-child(3) {
+  background: #28c840;
+}
+.mp-win-title {
+  padding: 2px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.mp-surface-visual--tui {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.mp-tui-line {
+  color: #e8d5ae;
+}
+.mp-tui-cursor {
+  width: 8px;
+  height: 15px;
+  background: var(--accent);
+  animation: mp-blink 1.1s steps(2, start) infinite;
+}
+@keyframes mp-blink {
+  to {
+    visibility: hidden;
+  }
+}
+.mp-surface-visual--phone {
+  justify-content: center;
+}
+.mp-phone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 52px;
+  height: 66px;
+  padding: 5px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.mp-phone::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 16px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+.mp-phone-bubble {
+  width: 26px;
+  height: 9px;
+  border-radius: 5px 5px 5px 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.mp-phone-bubble--me {
+  align-self: flex-end;
+  border-radius: 5px 5px 1px 5px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(217, 164, 65, 0.35);
+}
+
 /* ── Feature chapters: alternating text column + rounded media card ───── */
 .mp-features {
   display: flex;
@@ -948,7 +1079,8 @@ body {
   .mp-aurora {
     opacity: 0.85 !important;
   }
-  .mp-pulse {
+  .mp-pulse,
+  .mp-tui-cursor {
     animation: none !important;
   }
   .mp-cta,
