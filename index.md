@@ -19,6 +19,7 @@ mp_cta: true
       <div class="mp-cta-row">
         <a class="mp-cta mp-cta--primary" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">Download macOS</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Download Windows</a>
+        <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64-setup.exe">Windows ARM64</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Download Linux</a>
         <a class="mp-cta mp-cta--soft" href="{{ '/docs/' | relative_url }}">Read the docs</a>
       </div>

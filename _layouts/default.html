@@ -466,21 +466,14 @@
     /* ── Hero download pills: highlight the pill matching the visitor's OS ── */
     (function () {
       var ua = navigator.userAgent || "";
-      var winArm = /Win/i.test(ua) && /ARM64|aarch64/i.test(ua);
       var asset = /Mac/i.test(ua) && !/iPhone|iPad/i.test(ua) ? "arm64.dmg"
-        : winArm ? "arm64-setup.exe"
+        : /Win/i.test(ua) && /ARM64|aarch64/i.test(ua) ? "arm64-setup.exe"
         : /Win/i.test(ua) ? "setup.exe"
         : /Linux/i.test(ua) && !/Android/i.test(ua) ? "x86_64.AppImage"
         : null;
       if (!asset) return;
       var row = document.querySelector(".mp-hero .mp-cta-row");
       if (!row) return;
-      // ARM Windows: point the single "Download Windows" pill at the ARM64
-      // installer (it carries the generic "setup.exe" marker otherwise).
-      if (winArm) {
-        var winPill = row.querySelector('[data-asset="setup.exe"]');
-        if (winPill) winPill.setAttribute("data-asset", "arm64-setup.exe");
-      }
       row.querySelectorAll("[data-asset]").forEach(function (a) {
         a.classList.toggle("mp-cta--primary", a.getAttribute("data-asset") === asset);
         a.classList.toggle("mp-cta--soft", a.getAttribute("data-asset") !== asset);
