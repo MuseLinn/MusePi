@@ -15,3 +15,30 @@
   ; 通知 shell 快捷方式变更，避免资源管理器缓存旧状态
   System::Call 'Shell32::SHChangeNotify(i 0x8000000, i 0, i 0, i 0)'
 !macroend
+
+; customCheckAppRunning — override electron-builder's default running-app
+; check. The default (_CHECK_APP_RUNNING) matches the app executable by
+; IMAGE NAME (taskkill /IM MusePi.exe, case-insensitive), which also kills
+; every same-named process — including the user's terminal TUI sessions and
+; CLI daemon at ~/.musepi/bin/musepi.exe (0.4.19 regression: installing
+; while a TUI was live killed it). This override only considers processes
+; whose executable path lives under $INSTDIR — the GUI and the vendor daemon
+; this install owns — and leaves unrelated musepi.exe processes untouched.
+; Escaping follows the stock FIND_PROCESS/KILL_PROCESS macros exactly:
+; $$_ is PowerShell's $_ escaped for NSIS, $INSTDIR is single-quoted, and
+; the -Command body uses double quotes only at the PS-string level.
+!macro customCheckAppRunning
+  Push $0
+  ; Any process with an executable under $INSTDIR? (exit 0 = found)
+  nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "if ((Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase') }).Count -gt 0) { exit 0 } else { exit 1 }"`
+  Pop $0
+  ${if} $0 == 0
+    ; Graceful close first (allow the app to exit without explicit kill)
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase') } | ForEach-Object { Stop-Process -Id $$_.ProcessId -ErrorAction SilentlyContinue }"`
+    Sleep 1000
+    ; Force-close any that ignored the graceful stop (files in use)
+    nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith('$INSTDIR', 'CurrentCultureIgnoreCase') } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+    Sleep 300
+  ${endif}
+  Pop $0
+!macroend
