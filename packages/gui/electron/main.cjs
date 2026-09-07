@@ -2197,47 +2197,51 @@ async function createWindow() {
 			mainBoundsTimer = null;
 		}
 	});
+
+	// The managed browser owner wiring, bounds persistence, and webview
+	// popup handling moved back inside createWindow — at module top level
+	// mainWindow is still null and `mainWindow.on(...)` throws during load,
+	// killing the main process before any window can open (v0.4.18 startup
+	// regression).
+	managedBrowser.setOwner(mainWindow);
+
+	// Persist main-window bounds (debounced — drags/resizes fire move/resize
+	// continuously) so a relaunch restores the user's layout.
+	let saveBounds = () => {
+		if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
+		try {
+			fs.writeFileSync(mainWindowBoundsFile(), JSON.stringify(mainWindow.getBounds()));
+		} catch {
+			// non-fatal — bounds restore is best-effort
+		}
+	};
+	if (mainBoundsTimer) clearTimeout(mainBoundsTimer);
+	mainBoundsTimer = setTimeout(() => {
+		mainBoundsTimer = null;
+		saveBounds();
+	}, 300);
+	mainWindow.on("move", () => {
+		if (mainBoundsTimer) return;
+		mainBoundsTimer = setTimeout(() => {
+			mainBoundsTimer = null;
+			saveBounds();
+		}, 300);
+	});
+	mainWindow.on("resize", () => {
+		if (mainBoundsTimer) return;
+		mainBoundsTimer = setTimeout(() => {
+			mainBoundsTimer = null;
+			saveBounds();
+		}, 300);
+	});
 }
-
-// The managed browser owns a WebContentsView child of this window. When
-// the window is recreated (show-main-window path after a close), the
-// controller must re-point at the fresh window — a stale owner made the
-// next navigate throw "Object has been destroyed" (managed-browser crash).
-managedBrowser.setOwner(mainWindow);
-
-// Persist main-window bounds (debounced — drags/resizes fire move/resize
-// continuously) so a relaunch restores the user's layout.
-let saveBounds = () => {
-	if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized() || mainWindow.isFullScreen()) return;
-	try {
-		fs.writeFileSync(mainWindowBoundsFile(), JSON.stringify(mainWindow.getBounds()));
-	} catch {
-		// non-fatal — bounds restore is best-effort
-	}
-};
-if (mainBoundsTimer) clearTimeout(mainBoundsTimer);
-mainBoundsTimer = setTimeout(() => {
-	mainBoundsTimer = null;
-	saveBounds();
-}, 300);
-mainWindow.on("move", () => {
-	if (mainBoundsTimer) return;
-	mainBoundsTimer = setTimeout(() => {
-		mainBoundsTimer = null;
-		saveBounds();
-	}, 300);
-});
-mainWindow.on("resize", () => {
-	if (mainBoundsTimer) return;
-	mainBoundsTimer = setTimeout(() => {
-		mainBoundsTimer = null;
-		saveBounds();
-	}, 300);
-});
 
 // Webview popups (embedded browser): openchamber-style in-place
 // navigation — deny new windows, load http/https targets inside the
-// same webview so target=_blank links spawn orphan windows.
+// same webview so target=_blank links don't spawn orphan windows.
+// Registered once at module top level: createWindow can run again on the
+// show-main-window rebuild path, and a duplicate handler would stack
+// setWindowOpenHandlers over destroyed webContents.
 app.on("web-contents-created", (_event, contents) => {
 	if (contents.getType() !== "webview") return;
 	contents.setWindowOpenHandler(({ url }) => {
