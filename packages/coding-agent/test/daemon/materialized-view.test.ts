@@ -173,14 +173,18 @@ describe("MaterializedView persistence round-trip", () => {
 			{ type: "message_end", message: userMessage({ content: "final" }) },
 			{ type: "turn_end" },
 		];
-		// agent_start stamps agent.createdAt/lastActivity with Date.now() —
-		// freeze the clock so the incremental and replayed views agree.
+		// agent_start stamps agent.createdAt/lastActivity with Date.now() and
+		// the view constructor stamps header.timestamp with `new Date()`
+		// (independent of a Date.now freeze) — freeze the clock AND pin one
+		// createdAt so the incremental and replayed views agree even when the
+		// two constructions straddle a millisecond boundary.
 		const realNow = Date.now;
 		Date.now = () => 1_700_000_000_000;
+		const createdAt = "2023-11-14T22:13:20.000Z";
 		try {
-			const incremental = new MaterializedView(SESSION, CWD);
+			const incremental = new MaterializedView(SESSION, CWD, createdAt);
 			for (const e of events) incremental.apply(e);
-			const replayed = MaterializedView.replay(SESSION, CWD, events);
+			const replayed = MaterializedView.replay(SESSION, CWD, events, createdAt);
 			expect(replayed.snapshot()).toEqual(incremental.snapshot());
 		} finally {
 			Date.now = realNow;
