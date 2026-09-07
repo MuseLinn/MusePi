@@ -11,7 +11,7 @@
 "use strict";
 
 const { autoUpdater } = require("electron-updater");
-const { app } = require("electron");
+const { app, BrowserWindow } = require("electron");
 
 /** Current user-facing state (mirrored to the renderer via updater-state). */
 const state = {
@@ -98,6 +98,21 @@ function wireRenderer(forward) {
 	sendToRenderer = forward;
 }
 
+/** Windows taskbar download progress (openchamber parity): value ∈ [0,1]
+ *  for determinate progress, -1 for indeterminate, -2 clears (remove).
+ *  Only meaningful on Windows; no-op elsewhere. */
+function setTaskbarProgress(value) {
+	if (process.platform !== "win32") return;
+	for (const win of BrowserWindow.getAllWindows()) {
+		if (win.isDestroyed()) continue;
+		try {
+			win.setProgressBar(value);
+		} catch {
+			// window mid-teardown — best effort
+		}
+	}
+}
+
 // ── autoUpdater event wiring ─────────────────────────────────────────────
 
 autoUpdater.autoDownload = false;
@@ -106,6 +121,7 @@ autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.on("checking-for-update", () => {
 	state.status = "checking";
 	state.error = null;
+	setTaskbarProgress(-2);
 	emitState();
 });
 
@@ -126,6 +142,7 @@ autoUpdater.on("update-not-available", () => {
 autoUpdater.on("error", (err) => {
 	state.status = "error";
 	state.error = err?.message ?? String(err);
+	setTaskbarProgress(-2);
 	emitState();
 });
 
@@ -137,6 +154,7 @@ autoUpdater.on("download-progress", (progress) => {
 		total: progress.total,
 		bytesPerSecond: progress.bytesPerSecond ?? 0,
 	};
+	setTaskbarProgress(progress.percent > 0 ? Math.min(1, Math.max(0, progress.percent / 100)) : -1);
 	emitState();
 });
 
@@ -145,6 +163,9 @@ autoUpdater.on("update-downloaded", (info) => {
 	state.version = info.version;
 	state.progress = { percent: 100, transferred: 0, total: 0 };
 	state.error = null;
+	// Clear the taskbar progress once the download lands; the install
+	// phase is signaled by the app quitting, not a bar.
+	setTaskbarProgress(-2);
 	emitState();
 });
 
@@ -208,6 +229,7 @@ async function downloadUpdate() {
 	// so the renderer shows a preparing bar instead of a dead button.
 	state.status = "preparing";
 	state.error = null;
+	setTaskbarProgress(-1); // indeterminate until the first byte flows
 	emitState();
 	try {
 		await autoUpdater.downloadUpdate();
@@ -215,18 +237,63 @@ async function downloadUpdate() {
 	} catch (err) {
 		state.status = "error";
 		state.error = err?.message ?? String(err);
+		setTaskbarProgress(-2);
 		emitState();
 		return false;
 	}
 }
 
+// quitAndInstall() reports failures (rejected code signature, a Squirrel
+// session already disabled by an earlier failure) asynchronously on the
+// 'error' event, long after the call returns. Give the install that long to
+// either take the app down or report why it did not. On failure, roll the
+// quit/install state back so the UI can offer retry instead of wedging.
+const UPDATE_INSTALL_GRACE_MS = 15_000;
+
 /**
- * Quit and install the downloaded update. The caller must kill the daemon
- * sidecar before calling this.
+ * Hand the downloaded update to the NSIS installer. Resolves when the app
+ * is shutting down (grace period elapsed without an error event) or
+ * rejects if the installer reports a failure — the renderer surfaces the
+ * rejection instead of the install dying silently in the log.
  */
 function quitAndInstall() {
-	setImmediate(() => {
-		autoUpdater.quitAndInstall();
+	return new Promise((resolve, reject) => {
+		let settled = false;
+
+		const fail = (error) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(graceTimer);
+			autoUpdater.removeListener("error", fail);
+			// Roll back to the downloaded state so the UI can retry; the
+			// global error handler below also updates state, but this
+			// restores a retryable status for the install-specific path.
+			state.status = "downloaded";
+			state.error = error instanceof Error ? error.message : String(error);
+			emitState();
+			reject(error instanceof Error ? error : new Error(String(error)));
+		};
+
+		// Still running after the grace period: the install is underway and
+		// the app is shutting down, so release the pending promise.
+		const graceTimer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			autoUpdater.removeListener("error", fail);
+			resolve(null);
+		}, UPDATE_INSTALL_GRACE_MS);
+
+		autoUpdater.on("error", fail);
+
+		// Defer so the renderer's invoke channel is idle before the app
+		// starts shutting down.
+		setImmediate(() => {
+			try {
+				autoUpdater.quitAndInstall();
+			} catch (error) {
+				fail(error);
+			}
+		});
 	});
 }
 

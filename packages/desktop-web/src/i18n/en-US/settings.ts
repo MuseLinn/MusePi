@@ -566,6 +566,7 @@ export const settings = {
 	"preparing download": "Preparing download…",
 	"download complete": "Download complete",
 	"update download failed": "Update download failed",
+	"update install failed": "Update install failed",
 	"skip this version": "Skip this version",
 	"show more": "Show more",
 	"show less": "Show less",

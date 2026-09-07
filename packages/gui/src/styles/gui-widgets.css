@@ -4543,18 +4543,36 @@
 	color: var(--fg);
 }
 .gui-update-toast-notes {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 4;
-	overflow: hidden;
+	/* Collapse/expand with a smooth height transition instead of a hard
+	 * cut: the scroll wrapper's max-height animates 4 lines → content cap.
+	 * line-clamp keeps the folded text cut at 4 lines (visible preview,
+	 * not a 0-height hole), and the toggle chevron fades as it flips. */
 	font-size: 12.5px;
 	line-height: 1.55;
 	color: var(--fg-muted);
 }
-.gui-update-toast-notes--expanded {
-	display: block;
-	max-height: 220px;
+.gui-update-toast-notes-scroll {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	overflow: hidden;
+	min-height: 0;
+	max-height: 6.2em; /* 4 × 1.55 line-height */
+	opacity: 0.85;
+	transition:
+		max-height 260ms var(--spring),
+		opacity 180ms ease;
+}
+.gui-update-toast-notes--expanded .gui-update-toast-notes-scroll {
+	-webkit-line-clamp: unset;
 	overflow-y: auto;
+	max-height: 220px;
+	opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-update-toast-notes-scroll {
+		transition: none;
+	}
 }
 .gui-update-toast-notes-toggle {
 	align-self: flex-start;

@@ -55,6 +55,9 @@ export function UpdateToast(): ReactNode {
 	const [notes, setNotes] = useState<string | null>(null);
 	const [expanded, setExpanded] = useState(false);
 	const [closing, setClosing] = useState(false);
+	// Install-phase failure (quitAndInstall rejected: signature, disabled
+	// Squirrel session). Separate from `state.error` which is download-phase.
+	const [installError, setInstallError] = useState<string | null>(null);
 	// Last full notice — reviving after dismissal keeps the current-version
 	// label even though the state push only carries the new version.
 	const noticeRef = useRef<UpdateCheckResult | null>(null);
@@ -143,13 +146,22 @@ export function UpdateToast(): ReactNode {
 			setNotice(null);
 			setNotes(null);
 			setExpanded(false);
+			setInstallError(null);
 		}, EXIT_MS);
 	};
 	const startDownload = (): void => {
 		void downloadUpdate();
 	};
 	const restart = (): void => {
-		void installUpdate();
+		// quitAndInstall resolves once the app is shutting down (ok:true)
+		// or rejects with the installer error while the app is still
+		// running — surface the failure inline so a rejected install
+		// (signature, disabled Squirrel session) offers retry instead of
+		// silently doing nothing.
+		setInstallError(null);
+		void installUpdate().then(res => {
+			if (!res.ok) setInstallError(res.error ?? t("update install failed"));
+		});
 	};
 	const goManual = (): void => {
 		void openExternalUrl(notice.url || RELEASES_PAGE);
@@ -175,7 +187,9 @@ export function UpdateToast(): ReactNode {
 			</div>
 			{hasNotes && (
 				<div className={`gui-update-toast-notes${expanded ? " gui-update-toast-notes--expanded" : ""}`}>
-					<Markdown text={notes} />
+					<div className="gui-update-toast-notes-scroll">
+						<Markdown text={notes} />
+					</div>
 				</div>
 			)}
 			{hasNotes && notes.length > NOTES_EXPAND_THRESHOLD && (
@@ -211,6 +225,7 @@ export function UpdateToast(): ReactNode {
 				</div>
 			)}
 			{failed && <div className="gui-update-toast-error">{state?.error ?? t("update download failed")}</div>}
+			{installError && <div className="gui-update-toast-error">{installError}</div>}
 			<div className="gui-update-toast-actions">
 				{downloaded ? (
 					<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>

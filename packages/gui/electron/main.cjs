@@ -2334,10 +2334,18 @@ ipcMain.handle("updater-install", async () => {
 	} catch (err) {
 		console.error("[updater] daemon kill failed:", err?.message ?? err);
 	}
-	// setImmediate: let the IPC reply flush before quitAndInstall, or the
-	// renderer never sees the response (openchamber experience).
-	quitAndInstall();
-	return true;
+	// quitAndInstall resolves once the app is shutting down (install
+	// underway) or REJECTS if the installer reports a failure (rejected
+	// signature, disabled Squirrel session) — the rejection arrives while
+	// the app is still alive, so surface it to the renderer for a retry
+	// prompt instead of the install dying silently in the log.
+	try {
+		await quitAndInstall();
+		return { ok: true };
+	} catch (err) {
+		console.error("[updater] install failed:", err?.message ?? err);
+		return { ok: false, error: err instanceof Error ? err.message : String(err) };
+	}
 });
 // OTA/发布一致性:renderer 拿 GUI 版本,与 daemon 的 system.meta
 // musepiVersion 比对 —— 不一致说明运行中的 daemon 是旧进程,走
@@ -2521,18 +2529,26 @@ ipcMain.handle("gui-highlight", async (_event, code, lang, colors) => {
 	}
 });
 
-// Silent auto-check shortly after launch (silence with OMP_NO_AUTO_UPDATE).
+// Silent auto-check shortly after launch, then every UPDATE_POLL_MS
+// (openchamber parity: periodic re-checks so a release published while the
+// app idles still surfaces — a single launch-time check misses it until the
+// next app restart). Silence entirely with OMP_NO_AUTO_UPDATE. The renderer
+// owns dismissal/skip (UpdateToast), so a repeated push for an already-seen
+// or skipped version is a no-op there.
+const UPDATE_POLL_MS = 60 * 60 * 1000; // 1h
 if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
 	app.whenReady().then(() => {
-		setTimeout(() => {
+		const poll = () => {
 			checkForUpdates()
 				.then(result => {
-					if (result.enabled && result.newer && mainWindow) {
+					if (result.enabled && result.newer && mainWindow && !mainWindow.isDestroyed()) {
 						mainWindow.webContents.send("update-available", result);
 					}
 				})
 				.catch(() => {});
-		}, 12000);
+		};
+		setTimeout(poll, 12000);
+		setInterval(poll, UPDATE_POLL_MS);
 	});
 }
 

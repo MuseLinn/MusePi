@@ -26,7 +26,7 @@ export interface ElectronAPI {
 	/** Release notes from update-manifest.json (main-process fetch, cached). */
 	getUpdateNotes(): Promise<string | null>;
 	/** Kill daemon + quitAndInstall (restart into the new version). */
-	installUpdate(): Promise<boolean>;
+	installUpdate(): Promise<UpdateInstallResult>;
 	/** Startup auto-check notice; returns the unsubscribe function. */
 	onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void;
 	/** Live updater state pushes; returns the unsubscribe function. */
@@ -63,6 +63,14 @@ export interface UpdateCheckResult {
 	notes?: string | null;
 	error?: string;
 	reason?: string;
+}
+
+/** Result of updater-install: ok=true → app is restarting into the new
+ *  version; ok=false + error → the installer rejected the update (signature
+ *  failure, disabled Squirrel session) and the app is still running. */
+export interface UpdateInstallResult {
+	ok: boolean;
+	error?: string;
 }
 
 export function isElectron(): boolean {
@@ -207,8 +215,8 @@ export async function getUpdateNotes(): Promise<string | null> {
 }
 
 /** Kill daemon + quitAndInstall (restart into the new version). */
-export function installUpdate(): Promise<boolean> {
-	if (!isElectron()) return Promise.resolve(false);
+export function installUpdate(): Promise<UpdateInstallResult> {
+	if (!isElectron()) return Promise.resolve({ ok: false, error: "not in electron" });
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.installUpdate();
 }

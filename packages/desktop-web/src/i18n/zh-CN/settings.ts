@@ -526,6 +526,7 @@ export const settings = {
 	"preparing download": "正在准备下载…",
 	"download complete": "下载完成",
 	"update download failed": "更新下载失败",
+	"update install failed": "更新安装失败",
 	"skip this version": "跳过此版本",
 	"show more": "展开",
 	"show less": "收起",
