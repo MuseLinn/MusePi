@@ -466,13 +466,21 @@
     /* ── Hero download pills: highlight the pill matching the visitor's OS ── */
     (function () {
       var ua = navigator.userAgent || "";
+      var winArm = /Win/i.test(ua) && /ARM64|aarch64/i.test(ua);
       var asset = /Mac/i.test(ua) && !/iPhone|iPad/i.test(ua) ? "arm64.dmg"
+        : winArm ? "arm64-setup.exe"
         : /Win/i.test(ua) ? "setup.exe"
         : /Linux/i.test(ua) && !/Android/i.test(ua) ? "x86_64.AppImage"
         : null;
       if (!asset) return;
       var row = document.querySelector(".mp-hero .mp-cta-row");
       if (!row) return;
+      // ARM Windows: point the single "Download Windows" pill at the ARM64
+      // installer (it carries the generic "setup.exe" marker otherwise).
+      if (winArm) {
+        var winPill = row.querySelector('[data-asset="setup.exe"]');
+        if (winPill) winPill.setAttribute("data-asset", "arm64-setup.exe");
+      }
       row.querySelectorAll("[data-asset]").forEach(function (a) {
         a.classList.toggle("mp-cta--primary", a.getAttribute("data-asset") === asset);
         a.classList.toggle("mp-cta--soft", a.getAttribute("data-asset") !== asset);
@@ -495,8 +503,15 @@
           el.textContent = rel.tag_name;
         });
         document.querySelectorAll("[data-asset]").forEach(function (a) {
+          // Exact-ish match by release asset suffix. The plain x64 Windows
+          // installer is "MusePi-0.4.19-setup.exe" while ARM is
+          // "MusePi-0.4.19-arm64-setup.exe" — a bare endsWith("setup.exe")
+          // hits the arm64 build first whenever GitHub lists it earlier.
+          // Exclude the -arm64- build from the generic x64 suffix.
           var suffix = a.getAttribute("data-asset"); // e.g. "arm64.dmg", "setup.exe"
-          var hit = assets.find(function (x) { return x.name.endsWith(suffix); });
+          var hit = assets.find(function (x) {
+            return x.name.endsWith(suffix) && !(suffix === "setup.exe" && x.name.indexOf("-arm64-") !== -1);
+          });
           if (hit) a.setAttribute("href", hit.browser_download_url);
         });
       })

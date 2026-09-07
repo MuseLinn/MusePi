@@ -24,7 +24,7 @@ mp_cta: true
       </div>
       <div class="mp-version">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-version-tag" data-release-version>v0.4.16</span>
+        <span class="mp-version-tag" data-release-version>v0.4.19</span>
         <span class="mp-version-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
       </div>
     </div>
@@ -161,7 +161,8 @@ mp_cta: true
       <p class="mp-dl-sub">Electron GUI · frosted-glass window · auto-update</p>
       <ul class="mp-dl-list">
         <li><a data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon) — .dmg</a></li>
-        <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 — setup.exe</a></li>
+        <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 (x64) — setup.exe</a></li>
+        <li><a data-asset="arm64-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 11 (ARM64) — arm64-setup.exe</a></li>
         <li><a data-asset="x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .AppImage</a></li>
         <li><a data-asset="amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64 — .deb</a></li>
       </ul>
