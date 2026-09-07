@@ -28,6 +28,7 @@ import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
+import { shouldRestartDaemon } from "./lib/daemon-version";
 import { pickDirectory } from "./lib/electron";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
@@ -1162,9 +1163,11 @@ function AppInner(): ReactNode {
 						}
 					).electronAPI;
 					if (rpc && api?.getAppVersion && api.restartDaemon) {
-						const meta = await rpc.request<{ musepiVersion?: string | null }>("system.meta").catch(() => null);
+						const meta = await rpc
+							.request<{ version?: string; musepiVersion?: string | null }>("system.meta")
+							.catch(() => null);
 						const appVersion = await api.getAppVersion().catch(() => null);
-						if (meta?.musepiVersion && appVersion && meta.musepiVersion !== appVersion) {
+						if (shouldRestartDaemon(meta, appVersion)) {
 							const port = Number.parseInt(new URL(u).port, 10) || 8300;
 							await api.restartDaemon(port);
 							await connect(u);

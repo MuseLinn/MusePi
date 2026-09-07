@@ -5,6 +5,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **修复升级后设置页显示旧版本(GUI/daemon 版本不一致残留)**:版本门控原只在 daemon 报告 `musepiVersion` 且与 GUI 版本不同时才重启 daemon——CLI 安装/开机自启/其他实例启动的 daemon 不注入 `MUSEPI_VERSION`(`musepiVersion: null`),门控短路跳过,升级后旧 daemon 继续服务,设置页显示旧版。现改为 `musepiVersion ?? version` 与 GUI 版本比对(判定抽为可测纯函数 `lib/daemon-version.ts`,5 用例覆盖)。
+  - EN: Fix the settings page showing a stale version after an upgrade (GUI/daemon version mismatch residue): the boot gate only restarted the daemon when it reported `musepiVersion` differing from the GUI version — a daemon from a CLI install / launch-at-login / another instance carries no `MUSEPI_VERSION` (`musepiVersion: null`), short-circuited the gate, and kept serving after the upgrade so settings showed the old version. Now compares `musepiVersion ?? version` against the GUI version (the predicate is extracted to a testable pure helper `lib/daemon-version.ts`, 5 cases).
+
+
 ## [0.4.19] - 2026-09-07
 
 ### Fixed
