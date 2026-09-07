@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **修复 0.4.18 启动崩溃(窗口隐藏到托盘回归)**:`87071a8189` 在将主窗口绑定迁移到隐藏到托盘机制时,误把 `managedBrowser.setOwner(mainWindow)` 与 `mainWindow.on(move/resize)` 提到模块顶层——`mainWindow` 此时仍为 `null`,模块加载即抛 TypeError,Electron 主进程在窗口打开前崩溃,表现为安装后无窗口/源码 `electron .` 无反应。绑定已移回 `createWindow` 内部(webview 弹窗拦截保持在模块顶层一次性注册)。
+  - EN: Fix the 0.4.18 startup crash (hide-to-tray regression): `87071a8189` hoisted `managedBrowser.setOwner(mainWindow)` and the `mainWindow.on(move/resize)` handlers to module top level while migrating main-window wiring to the hide-to-tray mechanism — `mainWindow` is still `null` there, so module load throws a TypeError and the Electron main process dies before any window opens (installed app shows no window; source `electron .` does nothing). The wiring is back inside `createWindow` (the webview popup interception stays registered once at top level).
+
 ## [0.4.18] - 2026-09-07
 
 ### Added
