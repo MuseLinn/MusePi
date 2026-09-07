@@ -4544,9 +4544,10 @@
 }
 .gui-update-toast-notes {
 	/* Collapse/expand with a smooth height transition instead of a hard
-	 * cut: the scroll wrapper's max-height animates 4 lines → content cap.
-	 * line-clamp keeps the folded text cut at 4 lines (visible preview,
-	 * not a 0-height hole), and the toggle chevron fades as it flips. */
+	 * cut: the scroll wrapper's max-height animates 4 lines → content cap
+	 * while its opacity eases in/out. line-clamp keeps the folded text cut
+	 * at 4 lines (a visible preview, not a 0-height hole); the expanded
+	 * state drops -webkit-box entirely and scrolls. */
 	font-size: 12.5px;
 	line-height: 1.55;
 	color: var(--fg-muted);
@@ -4564,6 +4565,10 @@
 		opacity 180ms ease;
 }
 .gui-update-toast-notes--expanded .gui-update-toast-notes-scroll {
+	/* Leave -webkit-box (clamp) entirely when expanded: it must be a block
+	 * so multi-paragraph Markdown (p/ul/h3) lays out normally and the inner
+	 * scroll works. */
+	display: block;
 	-webkit-line-clamp: unset;
 	overflow-y: auto;
 	max-height: 220px;
