@@ -377,7 +377,9 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		// a `=== raw` comparison can't see that since versionCode always
 		// changes). Verify the written file actually carries the target.
 		if (!gradleNext.includes(`versionName "${version}"`)) {
-			console.error(`Error: gradle versionName did not move to "${version}" in ${gradlePath} — check the regexes.`);
+			console.error(
+				`Error: gradle versionName literal not replaced in ${gradlePath} (regex mismatch?) — expected "${version}".`,
+			);
 			process.exit(1);
 		}
 		await Bun.write(gradlePath, gradleNext);
