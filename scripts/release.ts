@@ -372,8 +372,12 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		const gradleNext = gradleRaw
 			.replace(/versionCode\s+\d+/, `versionCode ${nextGradleCode}`)
 			.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
-		if (gradleNext === gradleRaw || !gradleNext.includes(`versionName "${version}"`)) {
-			console.error(`Error: gradle version literals did not change in ${gradlePath} — check the regexes.`);
+		// The real failure mode is the versionName regex missing after a
+		// layout change (versionCode would bump while versionName stays put —
+		// a `=== raw` comparison can't see that since versionCode always
+		// changes). Verify the written file actually carries the target.
+		if (!gradleNext.includes(`versionName "${version}"`)) {
+			console.error(`Error: gradle versionName did not move to "${version}" in ${gradlePath} — check the regexes.`);
 			process.exit(1);
 		}
 		await Bun.write(gradlePath, gradleNext);
