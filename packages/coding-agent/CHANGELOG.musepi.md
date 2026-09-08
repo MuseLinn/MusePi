@@ -7,6 +7,35 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **内置 `musepi-contributing` 提交规范 skill**:按项目模板与 CONTRIBUTING
+  规范帮用户起草/提交 issue、PR、commit 与 changelog(PR body 必含用户本人
+  一句、别为自提工作开 issue、`musepi --version` 字段等),安装进用户技能列表。
+  - EN: New bundled `musepi-contributing` skill routes issue/PR/commit/release
+    submissions through the project's templates and CONTRIBUTING rules (PR
+    body must include the user's own sentence, no issue for work you will
+    implement, `musepi --version` field, …), installed into the user skills list.
+
+### Fixed
+
+- **仓库品牌本地化(清理 oh-my-pi / omp / robomp 残留)**:CONTRIBUTING 标题与
+  维护者表述、issue 模板的 `omp version` 字段(`musepi --version`)与 provider
+  说明、issue 链接与安全公告从 can1357/oh-my-pi 指回 MuseLinn/MusePi 仓库
+  docs、`OMP Nix` workflow 显示名,以及 coding-agent README 的自称与
+  `~/.omp/config.yml` 路径(`~/.musepi/agent/config.yml`)。运行时兼容路径
+  (`.omp` 项目级发现、`OMP_*` 环境变量、`omp-*` 事件)是契约,未改动。
+  - EN: Repo branding localisation (oh-my-pi / omp / robomp residue): the
+    CONTRIBUTING title and maintainer wording, the issue templates' `omp
+    version` field (now `musepi --version`) and provider copy, issue links and
+    the security advisory pointing at can1357/oh-my-pi (now MuseLinn/MusePi
+    docs), the `OMP Nix` workflow display name, and the coding-agent README
+    self-description plus its `~/.omp/config.yml` path
+    (`~/.musepi/agent/config.yml`). Runtime compat surfaces (`.omp` project
+    discovery, `OMP_*` env vars, `omp-*` events) are contracts and untouched.
+
+## [0.4.21] - 2026-09-08
+
+### Added
+
 - **Agnes 3.0 Flash 上架并设为默认**(CN + 国际站):`agnes-3.0-flash` 已加入 agnes / agnes-global 内置目录(512K ctx、text+image、刊例价同 2.5-flash、当前 promo ¥0,规格来自 wiki.agnes-ai.cn 2026-09-08),两站默认模型从 `agnes-2.5-flash` 切到 `agnes-3.0-flash`。
   - EN: Agnes 3.0 Flash is now bundled and the default on both the CN and global providers — `agnes-3.0-flash` joins the agnes / agnes-global static catalogs (512K ctx, text+image, list pricing identical to 2.5-flash, currently ¥0 promo; specs per wiki.agnes-ai.cn 2026-09-08) and both descriptors default from `agnes-2.5-flash` to `agnes-3.0-flash`.
 
