@@ -1355,6 +1355,16 @@ export function Composer({
 		});
 	}, [quotes]);
 
+	// Value-driven autosize fallback (long-paste choose, undo dock, /retry
+	// edit, element-picker insert, queue pop…): programmatic setText calls
+	// bypass the textarea onChange, so the box must re-measure after every
+	// draft commit — not just keystrokes. Typing paths already autosize in
+	// onChange; the duplicate call is a no-op at identical heights.
+	useEffect(() => {
+		const raf = requestAnimationFrame(() => autosize(taRef.current));
+		return () => cancelAnimationFrame(raf);
+	}, [text]);
+
 	// User-message edit: replace composer text (TUI /retry-edit parity),
 	// exactly once per incoming edit.
 	const handledEditRef = useRef<string | null>(null);

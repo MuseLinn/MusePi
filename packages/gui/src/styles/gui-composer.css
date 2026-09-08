@@ -431,6 +431,112 @@
 	margin-bottom: 0;
 }
 
+/* Long-text paste gate (TUI large-paste parity): a choice card above the
+ * textarea asking how to handle a paste over the gate threshold (>100 lines
+ * or >4000 chars). Sits in the same composer-note stack as the slash note
+ * and magic-keyword tip; the actions are accent pills, one per paste mode. */
+.gui-long-paste-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0 12px 6px;
+	padding: 7px 10px 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-surface-2) 70%, transparent);
+	animation: gui-composer-note-in 180ms var(--spring) both;
+}
+
+.gui-long-paste-dialog[data-dismissing] {
+	opacity: 0;
+	transform: translateY(-3px);
+	transition:
+		opacity 140ms var(--spring),
+		transform 140ms var(--spring);
+}
+
+.gui-long-paste-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-long-paste-summary {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-dim, var(--color-text-faint));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-long-paste-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+	transition:
+		background 150ms var(--spring),
+		color 150ms var(--spring);
+}
+
+.gui-long-paste-close:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-long-paste-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-long-paste-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 9px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 42%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background 150ms var(--spring),
+		border-color 150ms var(--spring),
+		transform 80ms var(--spring);
+}
+
+.gui-long-paste-btn:hover {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 58%, transparent);
+}
+
+.gui-long-paste-btn:active {
+	transform: translateY(1px);
+}
+
+.gui-long-paste-btn:focus-visible {
+	outline: 2px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
+	outline-offset: 1px;
+}
+
 /* Magic-keyword affordance tip (TUI rainbow-highlight parity): a passive
  * prose hint above the textarea when the draft contains an enabled magic
  * keyword (ultrathink / orchestrate / workflowz). Dashed border reads as

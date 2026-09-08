@@ -704,6 +704,13 @@ export function WelcomeComposer({
 	// Select-all + delete clears text AND attachments together (consumed
 	// by onChange once the textarea reports the emptied value).
 	const clearAllRef = useRef(false);
+	// Value-driven autosize fallback (long-paste choose, quote append,
+	// /retry edit…): programmatic setText bypasses onChange, so the box
+	// re-measures after every draft commit — not just keystrokes.
+	useEffect(() => {
+		const raf = requestAnimationFrame(() => autosize(taRef.current));
+		return () => cancelAnimationFrame(raf);
+	}, [text]);
 	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy;
 
 	// Completion triggers (composer parity): line-leading / @ # open the

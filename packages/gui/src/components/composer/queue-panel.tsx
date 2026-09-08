@@ -33,12 +33,12 @@ export function QueuePanel({
 					<div className="gui-queue-group">
 						{t("Steering")} · {queued.steering.length}
 					</div>
-					{/* Steering messages are ALREADY the immediate queue — a
-					 * send-now button would pull the message out only to
-					 * re-inject it as a steer (count unchanged, UI flicker on
-					 * the 3s poll reconcile). They can still be taken back. */}
-					{/* Per-item 撤回/编辑: pulls THAT message back into the
-					 * editor (daemon pops the matched entry, companions too). */}
+					{/* Steering (引导) messages are the immediate queue: they are
+					 * delivered in order while the agent runs. "Send now" still
+					 * has meaning here — it pulls THAT message out of the queue
+					 * (agent.sendQueuedMessage removes it) and delivers it as a
+					 * steer immediately, skipping whatever is queued ahead of
+					 * it. Mirrors the After-yield item actions below. */}
 					{queued.steering.map((msg, i) => (
 						<div key={`s-${i}-${msg.slice(0, 12)}`} className="gui-queue-item">
 							<span className="gui-queue-item-text" title={msg}>
@@ -52,6 +52,15 @@ export function QueuePanel({
 								onClick={() => onPop("steering", msg)}
 							>
 								<Icon name="arrow-go-back" className="h-3 w-3" />
+							</button>
+							<button
+								type="button"
+								className="gui-queue-send"
+								title={t("send now")}
+								aria-label={t("send now")}
+								onClick={() => onSend("steering", msg, i)}
+							>
+								<Icon name="arrow-up" className="h-3 w-3" />
 							</button>
 						</div>
 					))}
