@@ -1,3 +1,11 @@
+// This whole module is `#[cfg(windows)]` (see shell.rs), so the windows-sys
+// import is unconditional here. `where.exe` is a console subsystem binary:
+// spawning it from the console-less daemon without CREATE_NO_WINDOW makes
+// Windows allocate a visible conhost window for it — the 1-2 frame flash
+// every new shell session triggered on Windows (same root cause brush-core
+// fixes in tokio_process.rs via CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW).
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::{
 	collections::HashSet,
 	env,
@@ -7,17 +15,9 @@ use std::{
 
 use anyhow::{Error, Result};
 use brush_core::{Shell as BrushShell, ShellValue, ShellVariable};
-use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
-// This whole module is `#[cfg(windows)]` (see shell.rs), so the windows-sys
-// import is unconditional here. `where.exe` is a console subsystem binary:
-// spawning it from the console-less daemon without CREATE_NO_WINDOW makes
-// Windows allocate a visible conhost window for it — the 1-2 frame flash
-// every new shell session triggered on Windows (same root cause brush-core
-// fixes in tokio_process.rs via CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW).
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
 
 pub fn configure_windows_path(shell: &mut BrushShell) -> Result<()> {
 	let install_roots = find_git_install_roots();

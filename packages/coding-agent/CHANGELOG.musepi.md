@@ -5,6 +5,27 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **Agnes 3.0 Flash 上架并设为默认**(CN + 国际站):`agnes-3.0-flash` 已加入 agnes / agnes-global 内置目录(512K ctx、text+image、刊例价同 2.5-flash、当前 promo ¥0,规格来自 wiki.agnes-ai.cn 2026-09-08),两站默认模型从 `agnes-2.5-flash` 切到 `agnes-3.0-flash`。
+  - EN: Agnes 3.0 Flash is now bundled and the default on both the CN and global providers — `agnes-3.0-flash` joins the agnes / agnes-global static catalogs (512K ctx, text+image, list pricing identical to 2.5-flash, currently ¥0 promo; specs per wiki.agnes-ai.cn 2026-09-08) and both descriptors default from `agnes-2.5-flash` to `agnes-3.0-flash`.
+
+### Fixed
+
+- **Windows 冷启动闪黑窗(MCP cmd.exe/npx 包装链产生孙进程)**:`windowsHide` 只控制直接子进程——npx.cmd 走 `cmd.exe /c` 时孙进程无 console 抑制即闪窗。stdio transport 现直接解析 Windows npm 手写 batch shim(`%~dp0` 形态,区别于 cmd-shim 的 `%dp0%`)直跑 `node npx-cli.js`,不再经 cmd.exe;`where.exe` 探测补 `CREATE_NO_WINDOW`;spawn guard 安装扩展到 `runCli()` 入口,`__omp_worker_*` 子进程同享 windowsHide 注入。冷启动与 agent 执行路径均无可见 conhost 闪窗。
+  - EN: Windows cold-start console flashes (MCP cmd.exe/npx wrapper chain spawning grandchildren): `windowsHide` only governs direct children — `cmd.exe /c npx` leaked an uncontrolled grandchild console. The stdio transport now parses npm's hand-written Windows batch shims (`%~dp0` shape, distinct from cmd-shim's `%dp0%`) and runs `node npx-cli.js` directly, bypassing cmd.exe; the `where.exe` probe gained `CREATE_NO_WINDOW`; the spawn guard now installs at the `runCli()` entry so `__omp_worker_*` children get windowsHide too. No visible conhost flashes on cold start or agent execution.
+- **修复 opencode-go / opencode-zen 发消息 400 MissingSessionID**:两个网关自 2026-09-06 起强制 `x-opencode-session` 请求头——推理请求、用量轮询与模型发现现统一补发(会话 id 优先,回退 install id)。
+  - EN: Fix opencode-go / opencode-zen 400 MissingSessionID: both gateways now require the `x-opencode-session` header — inference, usage polling and model discovery all send it (session id first, install id fallback).
+- **修复 lark grammar 跨包 text-import 编译路径泄漏**:edit 引擎的 hashline grammar/prompt 改从包内相对路径加载,避免编译成 Windows 单文件后把 Bun 虚拟路径当 grammar 内容发给 codex 导致 `Invalid lark grammar`。
+  - EN: Fix lark grammar path leakage from cross-package text imports: the edit engine now loads its hashline grammar/prompt via in-package relative imports so a Windows single-file compile can't substitute a Bun virtual path for grammar text (the `Invalid lark grammar` error when talking to codex).
+- **GUI 长文本粘贴选择卡无样式(裸文字内嵌)**:`long-paste` 对话框自引入起从未配套 CSS——四个选择按钮被全局样式重置成一行文字。现补全卡片与 accent pill 按钮样式(与 slash-note/magic-tip 同系列视觉)。
+  - EN: The GUI long-paste chooser rendered unstyled (bare text inline): the dialog never shipped its CSS since introduction, so its four action buttons collapsed into a run of reset text. The card and accent-pill button styles are now defined, matching the slash-note/magic-tip family.
+- **GUI 输入框对程序性文本插入不伸缩**:粘贴选择、撤回插入等 `setText` 绕过 textarea onChange,原 autosize 只在各插入路径手动调用且粘贴分支漏调。现按值驱动兜底(文本每次提交后 rAF 重测),150 行粘贴插入后输入框正确长到 8 行上限并滚动。
+  - EN: The GUI input no longer failed to grow on programmatic inserts (paste-choose, queue pop-back…): those `setText` paths bypass the textarea onChange and autosize was only invoked per-path, with the paste branch missing it. A value-driven fallback now re-measures after every draft commit — a 150-line paste insert grows the box to its 8-row cap with scrolling.
+- **GUI 排队面板 Steering(引导)消息项补「立即发送」**:与 After-yield(排队)项对称——引导队列里的消息现可单条立即发出(`session.queuedSend` 本就支持 steering 组:从队列移除并即刻作为 steer 投递),不再只有撤回。
+  - EN: Steering queue items now have a per-item "send now" button, mirroring After-yield items — a queued steer can be delivered immediately (`session.queuedSend` already accepted the steering group: it removes the entry and delivers it as a steer right away) instead of only being takable back.
+
+
 ## [0.4.20] - 2026-09-07
 
 ### Fixed

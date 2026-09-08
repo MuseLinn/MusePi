@@ -1,12 +1,4 @@
 import { MismatchError as HashlineMismatchError } from "@musepi/hashline";
-// Cross-package `with { type: "text" }` imports (@musepi/hashline/*.lark|*.md)
-// compiled to a leaked Bun virtual path (B:/~BUN/root/grammar-*.lark) in the
-// packaged daemon, which OpenAI codex rejected as "Invalid lark grammar"
-// (the path string was sent as the grammar definition). Local copies use the
-// same relative-path text import as ./modes/apply-patch.lark, which compiles
-// inline correctly — keep these files in sync with packages/hashline/src/.
-import hashlineGrammar from "./modes/hashline-grammar.lark" with { type: "text" };
-import hashlineDescription from "./modes/hashline-prompt.md" with { type: "text" };
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@musepi/pi-agent-core";
 import type { ToolExample } from "@musepi/pi-ai";
 import { isEnoent, isEnotdir, prompt } from "@musepi/pi-utils";
@@ -26,6 +18,14 @@ import { sourceParses } from "./blackbox";
 import { executeHashlineSingle, hashlineEditParamsSchema } from "./hashline";
 import { type ApplyPatchParams, applyPatchSchema, expandApplyPatchToEntries } from "./modes/apply-patch";
 import applyPatchGrammar from "./modes/apply-patch.lark" with { type: "text" };
+// Cross-package `with { type: "text" }` imports (@musepi/hashline/*.lark|*.md)
+// compiled to a leaked Bun virtual path (B:/~BUN/root/grammar-*.lark) in the
+// packaged daemon, which OpenAI codex rejected as "Invalid lark grammar"
+// (the path string was sent as the grammar definition). Local copies use the
+// same relative-path text import as ./modes/apply-patch.lark, which compiles
+// inline correctly — keep these files in sync with packages/hashline/src/.
+import hashlineGrammar from "./modes/hashline-grammar.lark" with { type: "text" };
+import hashlineDescription from "./modes/hashline-prompt.md" with { type: "text" };
 import { executePatchSingle, type PatchEditEntry, type PatchParams, patchEditSchema } from "./modes/patch";
 import { executeReplace, type ReplaceBatchParams, type ReplaceParams, replaceEditSchema } from "./modes/replace";
 import { type EditToolDetails, type EditToolPerFileResult, getLspBatchRequest, type LspBatchRequest } from "./renderer";

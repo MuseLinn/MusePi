@@ -1,5 +1,5 @@
+import { getInstallId, USER_AGENT } from "@musepi/pi-utils";
 import { ProviderHttpError } from "../error";
-import { USER_AGENT, getInstallId } from "@musepi/pi-utils";
 import type {
 	CredentialRankingStrategy,
 	UsageFetchContext,
