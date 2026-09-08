@@ -158,7 +158,10 @@ async function resolveWindowsCommandPath(
 }
 
 function resolveWindowsShimPath(value: string, shimDir: string): string | null {
-	const match = /^%dp0%[\\/]*(.*)$/i.exec(value);
+	// cmd-shim expands `%dp0%` (percent-delimited); npm's hand-written
+	// launcher shims (npx.cmd, npm.cmd) use `%~dp0` (the %0 argument
+	// modifier — NO trailing percent). Both mean "directory of this .cmd".
+	const match = /^%~?dp0%?[\\/]*(.*)$/i.exec(value);
 	if (!match) return null;
 	const suffix = match[1];
 	if (!suffix) return shimDir;
@@ -174,11 +177,6 @@ async function resolveWindowsNpmShimCommand(
 	if (!isWindowsBatchCommand(command)) return null;
 	if (!hasPathSegment(command)) return null;
 	const commandPath = path.resolve(cwd, command);
-	const commandName = path
-		.basename(commandPath)
-		.replace(/\.cmd$/i, "")
-		.toLowerCase();
-	if (commandName === "npx") return null;
 
 	let content: string;
 	try {
@@ -193,27 +191,54 @@ async function resolveWindowsNpmShimCommand(
 	// non-%-leading SET value picks the bare PATH-fallback program name.
 	const prog = /SET\s+"_prog=([^%"][^"]*)"/i.exec(content)?.[1];
 	if (
-		!prog ||
+		prog &&
 		path
 			.basename(prog)
 			.replace(/\.exe$/i, "")
-			.toLowerCase() !== "node"
-	)
-		return null;
+			.toLowerCase() === "node"
+	) {
+		const rawTarget = /"%_prog%"\s+"([^"]+)"\s+%\*/i.exec(content)?.[1];
+		if (!rawTarget) return null;
 
-	const rawTarget = /"%_prog%"\s+"([^"]+)"\s+%\*/i.exec(content)?.[1];
-	if (!rawTarget) return null;
+		const target = resolveWindowsShimPath(rawTarget, path.dirname(commandPath));
+		if (!target) return null;
 
-	const target = resolveWindowsShimPath(rawTarget, path.dirname(commandPath));
-	if (!target) return null;
+		const siblingNode = path.join(path.dirname(commandPath), "node.exe");
+		const nodeCommand = (await fileExists(siblingNode)) ? siblingNode : "node";
+		return {
+			cmd: [nodeCommand, target, ...args],
+			windowsHide,
+			detached: false,
+		};
+	}
 
-	const siblingNode = path.join(path.dirname(commandPath), "node.exe");
-	const nodeCommand = (await fileExists(siblingNode)) ? siblingNode : "node";
-	return {
-		cmd: [nodeCommand, target, ...args],
-		windowsHide,
-		detached: false,
-	};
+	// npm's hand-written launcher shims (npx.cmd / npm.cmd — NOT cmd-shim)
+	// SET NODE_EXE + NPX_CLI_JS/NPM_CLI_JS then run `"%NODE_EXE%"
+	// "%NPX_CLI_JS%" %*`. Spawning them through `cmd.exe /c` from a
+	// console-less daemon hides only the direct cmd.exe child; the real node
+	// it launches is a console grandchild and flashes a conhost window each
+	// MCP startup (windowsHide is direct-child-only — openchamber
+	// desktop-shell rule). Bypass cmd.exe when both paths resolve inside the
+	// shim dir; otherwise fall back to the cmd.exe route below (the shim
+	// computed a prefix dynamically we cannot reproduce statically).
+	const shimDir = path.dirname(commandPath);
+	const nodeExe = /SET\s+"NODE_EXE=(%~dp0[^"]*)"/i.exec(content)?.[1];
+	const cliJs = /SET\s+"(NPX_CLI_JS|NPM_CLI_JS)=(%~dp0[^"]*)"/i.exec(content)?.[2];
+	if (nodeExe && cliJs) {
+		const nodePath = resolveWindowsShimPath(nodeExe, shimDir);
+		const cliPath = resolveWindowsShimPath(cliJs, shimDir);
+		if (nodePath && cliPath && (await fileExists(nodePath)) && (await fileExists(cliPath))) {
+			return {
+				cmd: [nodePath, cliPath, ...args],
+				windowsHide,
+				detached: false,
+			};
+		}
+	}
+
+	// npm's fallback branch `SET "NODE_EXE=node"` (no %~dp0 prefix) or a
+	// dynamically resolved prefix: let cmd.exe run its own PATHEXT logic.
+	return null;
 }
 
 function isWindowsBatchCommand(command: string): boolean {

@@ -38,6 +38,7 @@ import { LSP_MUX_WORKER_ARG } from "./lsp/mux/protocol";
 import { COMPUTER_WORKER_ARG } from "./tools/computer/protocol";
 import { smokeTestComputerWorker } from "./tools/computer/supervisor";
 import { startComputerWorker } from "./tools/computer/worker-entry";
+import { installWindowsSpawnGuard } from "./utils/windows-spawn-guard";
 
 if (Bun.semver.order(Bun.version, MIN_BUN_VERSION) < 0) {
 	process.stderr.write(
@@ -335,6 +336,11 @@ async function runTinyWorker(): Promise<void> {
 
 /** Run the CLI with the given argv (no `process.argv` prefix). */
 export async function runCli(argv: string[]): Promise<void> {
+	// Windows: patch Bun.spawn/spawnSync so every child of this process
+	// (CLI, daemon, and each `__omp_worker_*` subprocess re-entering here)
+	// inherits windowsHide without per-call-site opt-in. Idempotent; no-op
+	// off win32 and when the daemon's startDaemon already installed it.
+	installWindowsSpawnGuard();
 	let resolvedArgv = argv;
 	try {
 		const extracted = extractProfileFlags(resolvedArgv);

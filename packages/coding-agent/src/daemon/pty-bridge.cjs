@@ -90,6 +90,13 @@ function handle(msg) {
 					rows: Number(p.rows) || 30,
 					cwd,
 					env,
+					// Windows: force ConPTY (openchamber/opencode parity).
+					// ConPTY is a pseudo-console — it never allocates a visible
+					// conhost window, so no windowsHide is needed and no
+					// terminal flash can occur. Without this, node-pty can
+					// fall back to winpty, whose console host surfaces as the
+					// 1-2-frame flash reporters see.
+					...(platform === "win32" ? { useConpty: true } : {}),
 				});
 				shells.set(id, proc);
 				proc.onData(data => send({ kind: "data", id, data }));

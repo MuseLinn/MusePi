@@ -630,15 +630,17 @@ export declare function cosineSimilarityPairs(vectors: Float64Array, count: numb
  * Count tokens in `input`.
  *
  * `input` may be a single string or an array of strings; an array returns
- * the sum across all elements (encoded in parallel via rayon when the global
- * pool is available). Always returns a single token total — use this for any
+ * the sum across all elements (counted in parallel when the global rayon pool
+ * is available). Always returns a single token total — use this for any
  * aggregate budget question without paying a per-element napi crossing.
  *
- * Uses ordinary encoding (no special-token handling), which is the right
- * choice for measuring user/model content rather than wire-protocol tokens.
- * Defaults to `o200k_base`; pass `Cl100kBase` for older `OpenAI` models.
+ * Measures user/model content, not wire-protocol tokens: BPE encodings
+ * use ordinary encoding (no special-token handling) and the Claude
+ * encodings count message content without the fixed per-message frame.
+ * Defaults to `o200k_base`; pass a `Claude*` encoding for exact Claude
+ * counts, or the matching family encoding for Qwen/DeepSeek/Kimi/GLM.
  */
-export declare function countTokens(input: string | Array<string>, encoding?: Encoding | undefined | null): number
+export declare function countTokens(input: string | string[], encoding?: Encoding | undefined | null): number
 
 export interface DesktopCapabilities {
   backend: string
@@ -1549,24 +1551,14 @@ export interface MinimizerResult {
  */
 export declare function mmrRerankIndices(contents: Array<string>, scores: Float64Array, lambdaParam: number, topK: number): Uint32Array
 
-/** Parsed Kitty keyboard protocol sequence result for a Kitty input sequence. */
-export interface ParsedKittyResult {
-  /** Primary codepoint associated with the key. */
-  codepoint: number
-  /** Optional shifted key codepoint from the sequence. */
-  shiftedKey?: number
-  /** Optional base layout key codepoint from the sequence. */
-  baseLayoutKey?: number
-  /** Modifier bitmask (shift/alt/ctrl), excluding lock bits. */
-  modifier: number
-  /** Optional event type (1 = press, 2 = repeat, 3 = release). */
-  eventType?: KeyEventType
-}
-
 /**
- * Parse terminal input and return a normalized key identifier.
+ * Named-node chain containing `options.line`, innermost-first, excluding the
+ * whole-file root.
  *
- * Returns a key id like "escape" or "ctrl+c", or None if unrecognized.
+ * Single-line nodes beginning on the line (attributes, decorators) come
+ * first, followed by every enclosing construct. ERROR/MISSING recovery nodes
+ * are skipped. Returns `null` when the language is unrecognized, the line is
+ * out of range / blank, or the source fails to parse entirely.
  */
 export declare function nodeChainAt(options: BlockRangeOptions): Array<NodeSpan> | null
 
