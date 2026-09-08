@@ -49,6 +49,7 @@ import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKIL
 import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
 import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
 import bundledWidgetDesignSkill from "./bundled-skills/widget-design/SKILL.md" with { type: "text" };
+import bundledMusepiContributingSkill from "./bundled-skills/musepi-contributing/SKILL.md" with { type: "text" };
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 import { bucketRules } from "./capability/rule-buckets";
@@ -1310,6 +1311,7 @@ const BUNDLED_SKILLS = [
 	{ name: "musepi-extension-dev", content: bundledExtensionDevSkill },
 	{ name: "ui-ux-pro-max", content: bundledUiUxProMaxSkill, dir: "ui-ux-pro-max" },
 	{ name: "board-design", content: bundledBoardDesignSkill },
+	{ name: "musepi-contributing", content: bundledMusepiContributingSkill },
 ] as const;
 let bundledSkillsEnsured = false;
 
