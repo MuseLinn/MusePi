@@ -354,6 +354,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	// APK consumers adb-install also need a strictly larger code to replace).
 	console.log(`Syncing Android app version (${gradlePath})…`);
 	const gradleRaw = await Bun.file(gradlePath).text();
+	const gradleVersionName = gradleRaw.match(/versionName\s+"([^"]+)"/)?.[1];
 	const gradleVersionCode = gradleRaw.match(/versionCode\s+(\d+)/)?.[1];
 	if (gradleVersionCode === undefined) {
 		console.error(
@@ -361,16 +362,23 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		);
 		process.exit(1);
 	}
-	const nextGradleCode = Number(gradleVersionCode) + 1;
-	const gradleNext = gradleRaw
-		.replace(/versionCode\s+\d+/, `versionCode ${nextGradleCode}`)
-		.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
-	if (gradleNext === gradleRaw) {
-		console.error(`Error: gradle version literals did not change in ${gradlePath} — check the regexes.`);
-		process.exit(1);
+	if (gradleVersionName === version) {
+		// Idempotent rerun guard: a release that died after this step (e.g.
+		// lockfile EPERM) and was re-run must not bump versionCode twice.
+		// versionName already at the target means this step already ran.
+		console.log(`  already at versionName "${version}", skipping (rerun-safe)\n`);
+	} else {
+		const nextGradleCode = Number(gradleVersionCode) + 1;
+		const gradleNext = gradleRaw
+			.replace(/versionCode\s+\d+/, `versionCode ${nextGradleCode}`)
+			.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
+		if (gradleNext === gradleRaw || !gradleNext.includes(`versionName "${version}"`)) {
+			console.error(`Error: gradle version literals did not change in ${gradlePath} — check the regexes.`);
+			process.exit(1);
+		}
+		await Bun.write(gradlePath, gradleNext);
+		console.log(`  versionName "${version}", versionCode ${nextGradleCode}\n`);
 	}
-	await Bun.write(gradlePath, gradleNext);
-	console.log(`  versionName "${version}", versionCode ${nextGradleCode}\n`);
 
 	// 4. Regenerate lockfiles
 	console.log("Regenerating lockfiles...");
