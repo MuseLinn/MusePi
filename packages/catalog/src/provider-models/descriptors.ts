@@ -75,13 +75,13 @@ import { stepplanGlobalModelManagerOptions } from "./stepplan-global";
 export const CATALOG_PROVIDERS = [
 	{
 		id: "agnes",
-		defaultModel: "agnes-2.5-flash",
+		defaultModel: "agnes-3.0-flash",
 		envVars: ["AGNES_API_KEY"],
 		createModelManagerOptions: (config: ModelManagerConfig) => agnesModelManagerOptions(config),
 	},
 	{
 		id: "agnes-global",
-		defaultModel: "agnes-2.5-flash",
+		defaultModel: "agnes-3.0-flash",
 		envVars: ["AGNES_GLOBAL_API_KEY"],
 		createModelManagerOptions: (config: ModelManagerConfig) => agnesGlobalModelManagerOptions(config),
 	},

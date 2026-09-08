@@ -4486,11 +4486,21 @@ function createBundledStaticModel(
  * resolve models synchronously on fresh installs and regens without live
  * keys. The agnes `/v1/models` response returns bare IDs, so no
  * catalogDiscovery is configured and these annotated entries are the bundled
- * spec source. Specs per https://wiki.agnes-ai.cn (2026-08-04): 2.x flash =
- * 512K ctx / $0.03-$0.15 per 1M (current promo $0), 2.5 pro/alpha = 1M ctx /
- * $0.45-$0.90, all text+image.
+ * spec source. Specs per https://wiki.agnes-ai.cn (2026-09-08): flash family
+ * (2.5, 3.0) = 512K ctx / $0.03-$0.15 per 1M (current promo $0), 2.5 pro/alpha
+ * = 1M ctx / $0.45-$0.90, all text+image. 3.0-flash is the agentic/toolchain
+ * successor to 2.5-flash at identical pricing and context.
  */
 export const AGNES_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] = [
+	createBundledStaticModel(
+		"agnes",
+		"https://api.agnes-ai.cn/v1",
+		"agnes-3.0-flash",
+		"Agnes 3.0 Flash",
+		{ input: 0.03, output: 0.15 },
+		524_288,
+		["text", "image"],
+	),
 	createBundledStaticModel(
 		"agnes",
 		"https://api.agnes-ai.cn/v1",
@@ -4529,6 +4539,15 @@ export const AGNES_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] = [
 	),
 ];
 export const AGNES_GLOBAL_STATIC_MODELS: readonly ModelSpec<"openai-completions">[] = [
+	createBundledStaticModel(
+		"agnes-global",
+		"https://apihub.agnes-ai.com/v1",
+		"agnes-3.0-flash",
+		"Agnes 3.0 Flash",
+		{ input: 0.03, output: 0.15 },
+		524_288,
+		["text", "image"],
+	),
 	createBundledStaticModel(
 		"agnes-global",
 		"https://apihub.agnes-ai.com/v1",

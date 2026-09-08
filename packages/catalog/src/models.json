@@ -119,6 +119,36 @@
 					"xhigh"
 				]
 			}
+		},
+		"agnes-3.0-flash": {
+			"id": "agnes-3.0-flash",
+			"name": "Agnes 3.0 Flash",
+			"api": "openai-completions",
+			"provider": "agnes",
+			"baseUrl": "https://api.agnes-ai.cn/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.03,
+				"output": 0.15,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 524288,
+			"maxTokens": null,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			}
 		}
 	},
 	"agnes-global": {
@@ -230,6 +260,36 @@
 				"cacheWrite": 0
 			},
 			"contextWindow": 1048576,
+			"maxTokens": null,
+			"thinking": {
+				"mode": "effort",
+				"efforts": [
+					"minimal",
+					"low",
+					"medium",
+					"high",
+					"xhigh"
+				]
+			}
+		},
+		"agnes-3.0-flash": {
+			"id": "agnes-3.0-flash",
+			"name": "Agnes 3.0 Flash",
+			"api": "openai-completions",
+			"provider": "agnes-global",
+			"baseUrl": "https://apihub.agnes-ai.com/v1",
+			"reasoning": true,
+			"input": [
+				"text",
+				"image"
+			],
+			"cost": {
+				"input": 0.03,
+				"output": 0.15,
+				"cacheRead": 0,
+				"cacheWrite": 0
+			},
+			"contextWindow": 524288,
 			"maxTokens": null,
 			"thinking": {
 				"mode": "effort",
