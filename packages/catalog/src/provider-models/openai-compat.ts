@@ -1,4 +1,4 @@
-import { USER_AGENT } from "@musepi/pi-utils";
+import { getInstallId, USER_AGENT } from "@musepi/pi-utils";
 import * as logger from "@musepi/pi-utils/logger";
 import { xaiResponsesReasoningEffortMap } from "../compat/openai";
 import {
@@ -2713,6 +2713,11 @@ function openCodeModelManagerOptions(
 					provider: providerId,
 					baseUrl: discoveryBaseUrl,
 					apiKey,
+					// Live discovery hits the OpenCode gateway outside any
+					// conversation: attribute with the stable install id
+					// (x-opencode-session required from 09/06) and omp's UA
+					// instead of Bun's default.
+					headers: { "User-Agent": USER_AGENT, "x-opencode-session": getInstallId() },
 					mapModel: (entry, defaults) => {
 						const reference = references.get(defaults.id);
 						const name = toModelName(entry.name, reference?.name ?? defaults.name);

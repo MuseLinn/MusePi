@@ -25,6 +25,7 @@ import {
 	$env,
 	classifyJsonPrefix,
 	extractHttpStatusFromError,
+	getInstallId,
 	isRecord,
 	logger,
 	parseImageMetadata,
@@ -309,6 +310,16 @@ export function resolveOpenAIRequestSetup(
 	if (options.openAISessionId && model.provider === "openai") {
 		setHeaderIfAbsent(headers, "session_id", options.openAISessionId);
 		setHeaderIfAbsent(headers, "x-client-request-id", options.openAISessionId);
+	}
+	// OpenCode Go / Zen (opencode.ai/zen/go) has required `x-opencode-session`
+	// on every request since 2026-09-06 — without it the gateway answers 400
+	// "Request is missing x-opencode-session and cannot be routed efficiently"
+	// (MusePi issue #4). Prefer the conversation session id when the caller
+	// supplied one (per-conversation routing), else fall back to the stable
+	// install id exactly like the usage poll does (upstream parity).
+	if (model.provider === "opencode-go" || model.provider === "opencode-zen") {
+		setHeaderIfAbsent(headers, "User-Agent", USER_AGENT);
+		setHeaderIfAbsent(headers, "x-opencode-session", options.openAISessionId?.trim() || getInstallId());
 	}
 	if (options.promptCacheSessionId && model.compat?.promptCacheSessionHeader) {
 		setHeaderIfAbsent(headers, model.compat.promptCacheSessionHeader, options.promptCacheSessionId);

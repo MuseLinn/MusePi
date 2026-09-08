@@ -1,4 +1,5 @@
 import { ProviderHttpError } from "../error";
+import { USER_AGENT, getInstallId } from "@musepi/pi-utils";
 import type {
 	CredentialRankingStrategy,
 	UsageFetchContext,
@@ -108,6 +109,13 @@ async function fetchOpenCodeGoUsage(params: UsageFetchParams, ctx: UsageFetchCon
 			headers: {
 				accept: "application/json",
 				authorization: `Bearer ${credential.apiKey}`,
+				// Background poll outside any conversation: attribute with the
+				// stable install id so OpenCode can optimize/service the
+				// request (x-opencode-session required from 09/06). Peers
+				// (codex/zai) send USER_AGENT here; without it Bun's default
+				// UA is what upstream flags as "Bun fetch".
+				"User-Agent": USER_AGENT,
+				"x-opencode-session": getInstallId(),
 			},
 			signal: params.signal,
 		});
