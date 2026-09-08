@@ -16,6 +16,8 @@ import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 const changelogGlob = new Glob("packages/{coding-agent,desktop-web}/CHANGELOG.md");
 const packageJsonGlob = new Glob("packages/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
+/** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
+const gradlePath = "packages/mobile/android/app/build.gradle";
 /**
  * Strict explicit-version guard: three numeric dot-segments with an optional
  * leading `v` and NO prerelease suffix. Prereleases are rejected because the
@@ -342,6 +344,33 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 		process.exit(1);
 	}
 	console.log(`  sentinel: ${sentinelName}\n`);
+
+	// 3c. Sync the Android app version. packages/mobile/android/app/build.gradle
+	// hardcodes versionCode/versionName — nothing else writes it, so every
+	// release used to ship an APK whose versionName lagged the main version
+	// (0.4.20's APK still said 0.4.4; 0.4.21's said 0.4.20). The release script
+	// is the single writer that keeps it in lockstep: versionName follows the
+	// new version, versionCode bumps monotonically (required by Play; the debug
+	// APK consumers adb-install also need a strictly larger code to replace).
+	console.log(`Syncing Android app version (${gradlePath})…`);
+	const gradleRaw = await Bun.file(gradlePath).text();
+	const gradleVersionCode = gradleRaw.match(/versionCode\s+(\d+)/)?.[1];
+	if (gradleVersionCode === undefined) {
+		console.error(
+			`Error: versionCode not found in ${gradlePath} — the build.gradle layout may have changed; sync it manually before releasing.`,
+		);
+		process.exit(1);
+	}
+	const nextGradleCode = Number(gradleVersionCode) + 1;
+	const gradleNext = gradleRaw
+		.replace(/versionCode\s+\d+/, `versionCode ${nextGradleCode}`)
+		.replace(/versionName\s+"[^"]+"/, `versionName "${version}"`);
+	if (gradleNext === gradleRaw) {
+		console.error(`Error: gradle version literals did not change in ${gradlePath} — check the regexes.`);
+		process.exit(1);
+	}
+	await Bun.write(gradlePath, gradleNext);
+	console.log(`  versionName "${version}", versionCode ${nextGradleCode}\n`);
 
 	// 4. Regenerate lockfiles
 	console.log("Regenerating lockfiles...");
