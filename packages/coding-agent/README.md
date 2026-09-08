@@ -1,10 +1,10 @@
 # @musepi/pi-coding-agent
 
-Core implementation package for the `omp` coding agent in the `oh-my-pi` monorepo.
+Core implementation package for the `musepi` coding agent in the MusePi monorepo.
 
 For installation, setup, provider configuration, model roles, slash commands, and full CLI reference, see:
 - [Monorepo README (local)](../../README.md)
-- [Monorepo README (GitHub)](https://github.com/can1357/oh-my-pi#readme)
+- [Monorepo README (GitHub)](https://github.com/MuseLinn/MusePi#readme)
 
 Package-specific references:
 - [CHANGELOG](./CHANGELOG.md)
@@ -15,7 +15,7 @@ Package-specific references:
 
 ## Memory backends
 
-The agent supports three mutually-exclusive memory backends, selected via the `memory.backend` setting (Settings → Memory tab, or `~/.omp/config.yml`):
+The agent supports three mutually-exclusive memory backends, selected via the `memory.backend` setting (Settings → Memory tab, or `~/.musepi/agent/config.yml`):
 
 - `off` (default) — no memory subsystem runs.
 - `local` — existing rollout-summarisation pipeline; writes `memory_summary.md` and consolidated artifacts under the agent dir.

@@ -1,4 +1,4 @@
-name: OMP Nix
+name: MusePi Nix
 
 on:
   push:

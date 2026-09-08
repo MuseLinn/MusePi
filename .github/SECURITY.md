@@ -8,8 +8,8 @@ Only the latest release is supported with security updates.
 
 To report a security issue, either:
 
-- Email can1357 directly, or
-- Open a [private security advisory](https://github.com/can1357/oh-my-pi/security/advisories/new) on GitHub
+- Open a [private security advisory](https://github.com/MuseLinn/MusePi/security/advisories/new) on GitHub, or
+- Email the maintainer (see the repository profile)
 
 Include steps to reproduce and any relevant details. Do not open a public issue for security vulnerabilities.
 

@@ -1,4 +1,4 @@
-# Contributing to oh-my-pi
+# Contributing to MusePi
 
 Pull requests are welcome. Keep them focused, understand the work you submit,
 and be prepared to explain and maintain it.
@@ -28,8 +28,8 @@ merged.
 ### Do not open an issue for work you are about to submit
 
 If you intend to implement a change yourself, **do not create an issue for it
-first**. robomp treats actionable issues as work to pick up and may start the
-same fix in parallel, wasting compute and maintainer time.
+first**. MusePi maintainers treat actionable issues as work to pick up and may
+start the same fix in parallel, wasting compute and maintainer time.
 
 Open an issue when you are reporting a problem or proposing work that you are
 not already turning into a pull request. If a relevant issue already exists,
