@@ -58,27 +58,53 @@ function collectEntries(result: LoadExtensionsResult): ExtensionEntry[] {
 
 /**
  * Apply assembly filters to an extension path list:
- *   - disabledExtensions from settings (preserved)
+ *   - disabledExtensions from settings (preserved; hard kill-switch)
+ *   - manifest extensions.items[id].enabled (forced on/off, overrides include/exclude)
+ *   - manifest extensions.items[id].surfaces (drop when the active surface is absent)
  *   - manifest extensions.exclude (id-based globs)
  *   - manifest extensions.include (if present → whitelist)
  *   - manifest extensions.patterns (path globs)
+ *
+ * Precedence: settings.disabled > items.enabled=false > items.surfaces
+ * > items.enabled=true (bypasses exclude/include) > exclude > include > patterns.
  */
-export function filterExtensionPaths(paths: string[], manifest: AssemblyManifest | null, settings: Settings): string[] {
+export function filterExtensionPaths(
+	paths: string[],
+	manifest: AssemblyManifest | null,
+	settings: Settings,
+	surface: Surface = "headless",
+): string[] {
+	const disabled = new Set(settings.get("disabledExtensions") ?? []);
+	const items = manifest?.extensions.items ?? {};
+
+	/**
+	 * Per-extension verdict from extensions.items:
+	 *   false → drop, true → force-keep (bypasses exclude/include),
+	 *   null  → no opinion, fall through to the global filters.
+	 */
+	const byItem = (id: string): boolean | null => {
+		const item = items[id];
+		if (!item) return null;
+		if (item.enabled === false) return false;
+		if (item.surfaces && item.surfaces.length > 0 && !item.surfaces.includes(surface)) return false;
+		if (item.enabled === true) return true;
+		return null;
+	};
+
 	if (
 		!manifest ||
 		((manifest.extensions.include?.length ?? 0) === 0 &&
 			(manifest.extensions.exclude?.length ?? 0) === 0 &&
 			!manifest.extensions.patterns?.length)
 	) {
-		// No filters configured — fall back to settings.disabledExtensions only
-		const disabled = new Set(settings.get("disabledExtensions") ?? []);
+		// No filters configured — fall back to settings.disabledExtensions + items
 		return paths.filter(p => {
 			const id = extensionIdOf(p);
-			return !disabled.has(id);
+			if (disabled.has(id)) return false;
+			return byItem(id) !== false;
 		});
 	}
 
-	const disabled = new Set(settings.get("disabledExtensions") ?? []);
 	const excludeIds = new Set(manifest.extensions.exclude ?? []);
 	const excludeGlobs = (manifest.extensions.exclude ?? []).filter(e => e.includes("*"));
 	const excludeMatchers = compileGlobs(excludeGlobs);
@@ -88,7 +114,11 @@ export function filterExtensionPaths(paths: string[], manifest: AssemblyManifest
 
 	return paths.filter(p => {
 		const id = extensionIdOf(p);
-		if (disabled.has(id) || excludeIds.has(id)) return false;
+		if (disabled.has(id)) return false;
+		const verdict = byItem(id);
+		if (verdict === true) return true;
+		if (verdict === false) return false;
+		if (excludeIds.has(id)) return false;
 		if (excludeMatchers.length > 0 && excludeMatchers.some(fn => fn(id))) return false;
 		if (includeIds !== null && !includeIds.has(id)) return false;
 		if (matchedPatterns && !patternsMatch(p, matchedPatterns)) return false;

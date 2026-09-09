@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
 import { AgentsPanel } from "./components/agents/AgentsPanel";
+import { MarketplacePanel } from "./components/marketplace/MarketplacePanel";
 import { BoardPanel } from "./components/panels/BoardPanel";
 import { FilePanel } from "./components/panels/FilePanel";
 import { ScheduledPanel } from "./components/panels/ScheduledPanel";
@@ -603,6 +604,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 								<ScheduledPanel client={client} cwd={sessionCwd} readOnly={readOnly} />
 							)}
 							{activePanel === "files" && <FilePanel client={client} cwd={sessionCwd} readOnly={readOnly} />}
+							{activePanel === "marketplace" && <MarketplacePanel client={client} />}
 							{activePanel === "workbench" && (
 								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
 							)}

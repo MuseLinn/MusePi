@@ -7,8 +7,8 @@
 import { describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ToolRenderProps } from "../src/tool-render/types";
 import { generateImageRenderer } from "../src/tool-render/tools/generate-image";
+import type { ToolRenderProps } from "../src/tool-render/types";
 
 const renderBody = generateImageRenderer.Body as (props: ToolRenderProps) => ReactNode;
 
@@ -28,15 +28,13 @@ function imageResult(): ToolRenderProps["result"] {
 
 describe("generate_image renderer", () => {
 	it("shows the shimmering canvas placeholder while running (no images yet)", () => {
-		const html = renderToStaticMarkup(
-			renderBody({ args: BASE_ARGS, result: undefined, running: true } as never),
-		);
+		const html = renderToStaticMarkup(renderBody({ args: BASE_ARGS, result: undefined, running: true } as never));
 		expect(html).toContain("tr-img-placeholder");
 		expect(html).toContain("tr-img-shimmer");
 		expect(html).toContain("Generating image");
 		expect(html).toContain("a calm mountain lake at dawn");
 		// portrait aspect from args
-		expect(html).toContain('aspect-ratio:3/4');
+		expect(html).toContain("aspect-ratio:3/4");
 		// the args table is suppressed while generating
 		expect(html).not.toContain("tv-kv");
 	});

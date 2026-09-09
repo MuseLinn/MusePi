@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, it } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import { SessionsSheet } from "../src/components/shell/SessionsSheet";
 
 // The closing-stage assertions below need a real effect-driven render

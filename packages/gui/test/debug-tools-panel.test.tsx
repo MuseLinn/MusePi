@@ -1,7 +1,7 @@
 import "./dom-shim"; // MUST be first: desktop-web element classes extend HTMLElement at import time.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
 import { getLocaleSnapshot, setLocale } from "@musepi/desktop-web";
+import { renderToStaticMarkup } from "react-dom/server";
 import { DebugToolsPanelBody } from "../src/components/DebugToolsPanel";
 
 /**
@@ -22,12 +22,7 @@ afterAll(() => setLocale(INITIAL_LOCALE));
 
 function renderPanel(): string {
 	return renderToStaticMarkup(
-		<DebugToolsPanelBody
-			open
-			onClose={() => {}}
-			rpc={{ request: async <T,>() => ({}) as T }}
-			sessionId="s1"
-		/>,
+		<DebugToolsPanelBody open onClose={() => {}} rpc={{ request: async <T,>() => ({}) as T }} sessionId="s1" />,
 	);
 }
 

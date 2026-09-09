@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
-import { GuestClient } from "../src/lib/client";
+import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
+import { renderToStaticMarkup } from "react-dom/server";
 import { HeaderBar } from "../src/components/shell/HeaderBar";
+import { GuestClient } from "../src/lib/client";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 const HEADER: SessionHeader = { type: "session", id: "s1", timestamp: "2026-06-12T00:00:00Z", cwd: "/work" };

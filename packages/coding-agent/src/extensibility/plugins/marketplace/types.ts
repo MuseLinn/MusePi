@@ -86,6 +86,18 @@ export interface MarketplacePluginEntry {
 	keywords?: string[];
 	category?: string;
 	tags?: string[];
+	/**
+	 * Optional icon hint. Accepts:
+	 *   - a single emoji or short glyph ("🛠", "🧪")
+	 *   - a slash-separated lucide / tabler / mini icon name ("lucide:wrench",
+	 *     "tabler:test-pipe") rendered by the GUI grid
+	 *   - an absolute icon URI ("file:///.../icon.svg") for plugin authors
+	 *     shipping artwork inside the marketplace repo
+	 *
+	 * When absent, `resolvePluginIcon()` derives a glyph from
+	 * category/tags/keywords and falls back to a neutral default.
+	 */
+	icon?: string;
 	strict?: boolean;
 	commands?: string | string[];
 	agents?: string | string[];

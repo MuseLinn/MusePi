@@ -210,6 +210,45 @@ describe("extension path filtering", () => {
 		expect(filtered).toHaveLength(2);
 		expect(filtered.some(p => p.includes("/tmp/b/"))).toBe(false);
 	});
+
+	it("items.enabled=false forces an extension off even when included", () => {
+		const manifest: AssemblyManifest = {
+			...baseManifest,
+			extensions: { include: ["a", "b"], exclude: [], patterns: [], items: { b: { enabled: false } } },
+		};
+		const filtered = filterExtensionPaths(paths, manifest, fakeSettings() as never);
+		expect(filtered).toHaveLength(1);
+		expect(filtered[0]).toContain("/tmp/a/");
+	});
+
+	it("items.enabled=true overrides exclude", () => {
+		const manifest: AssemblyManifest = {
+			...baseManifest,
+			extensions: { include: [], exclude: ["b"], patterns: [], items: { b: { enabled: true } } },
+		};
+		const filtered = filterExtensionPaths(paths, manifest, fakeSettings() as never);
+		expect(filtered.some(p => p.includes("/tmp/b/"))).toBe(true);
+	});
+
+	it("items.surfaces drops extensions that do not support the active surface", () => {
+		const manifest: AssemblyManifest = {
+			...baseManifest,
+			extensions: { include: [], exclude: [], patterns: [], items: { a: { surfaces: ["daemon"] } } },
+		};
+		const underTui = filterExtensionPaths(paths, manifest, fakeSettings() as never, "tui");
+		expect(underTui.some(p => p.includes("/tmp/a/"))).toBe(false);
+		const underDaemon = filterExtensionPaths(paths, manifest, fakeSettings() as never, "daemon");
+		expect(underDaemon.some(p => p.includes("/tmp/a/"))).toBe(true);
+	});
+
+	it("items.surfaces is ignored when empty — all surfaces stay enabled", () => {
+		const manifest: AssemblyManifest = {
+			...baseManifest,
+			extensions: { include: [], exclude: [], patterns: [], items: { a: { surfaces: [] } } },
+		};
+		const filtered = filterExtensionPaths(paths, manifest, fakeSettings() as never, "acp");
+		expect(filtered).toHaveLength(3);
+	});
 });
 
 describe("surface mapping", () => {

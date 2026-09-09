@@ -136,7 +136,7 @@ describe("Transcript live tool rendering", () => {
 			working: true,
 		});
 
-				expect(countOccurrences(html, 'class="tv-card"')).toBe(1);
+		expect(countOccurrences(html, 'class="tv-card"')).toBe(1);
 		expect(countOccurrences(html, 'aria-label="Running"')).toBe(1);
 		expect(countOccurrences(html, TOOL_NAME)).toBe(1);
 		expect(html).not.toContain("thinking…");
@@ -366,7 +366,7 @@ describe("TTSR / IRC custom_message rendering", () => {
 			timestamp: "2026-08-09T00:00:02Z",
 			customType: "irc:incoming",
 			content:
-				"<irc>\nIncoming IRC message from agent `scoutA`:\n\nWhere is the repo?\n\nIf response expected, reply via `hub` (`op: \"send\"`, `to: \"scoutA\"`); may finish current step first. No one replies on your behalf.\n</irc>",
+				'<irc>\nIncoming IRC message from agent `scoutA`:\n\nWhere is the repo?\n\nIf response expected, reply via `hub` (`op: "send"`, `to: "scoutA"`); may finish current step first. No one replies on your behalf.\n</irc>',
 			display: true,
 			details: { id: "m2", from: "scoutA", message: "Where is the repo?" },
 		};
@@ -475,7 +475,12 @@ describe("msgText (per-message copy / edit / fork source)", () => {
 
 	it("joins ALL text blocks without truncating", () => {
 		const long = "长文本".repeat(300); // 900 chars — well past the old 200 cap
-		const joined = msgText({ content: [{ type: "text", text: long }, { type: "text", text: "尾巴" }] });
+		const joined = msgText({
+			content: [
+				{ type: "text", text: long },
+				{ type: "text", text: "尾巴" },
+			],
+		});
 		expect(joined).toBe(`${long} 尾巴`);
 		expect(joined.length).toBeGreaterThan(200);
 	});

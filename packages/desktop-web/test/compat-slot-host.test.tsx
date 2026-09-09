@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import type { ComponentType, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { CompatSlotHost } from "../src/lib/compat-slot-host";
 import type { MusePiCompatHost } from "../src/components/transcript/Transcript";
+import { CompatSlotHost } from "../src/lib/compat-slot-host";
 
 /** Compat slot host (dsh-desktop plugin parity, extended mode): the desktop
  *  web bundle reads window.MusePiCompatHost (populated by the serve-injected
@@ -18,9 +18,10 @@ describe("CompatSlotHost (extended-mode slot consumption)", () => {
 
 	function seedRegistry(slot: string, extensionId: string): void {
 		const bySlot = new Map<string, Array<{ entryKinds: string[]; Component: unknown; extensionId: string }>>();
-		const Comp = ((): ComponentType<Record<string, unknown>> => function FakeExt(): ReactNode {
-			return <span data-ext={extensionId} />;
-		})();
+		const Comp = ((): ComponentType<Record<string, unknown>> =>
+			function FakeExt(): ReactNode {
+				return <span data-ext={extensionId} />;
+			})();
 		bySlot.set(slot, [{ entryKinds: [], Component: Comp, extensionId }]);
 		(globalThis as { MusePiCompatHost?: MusePiCompatHost }).MusePiCompatHost = {
 			register(slot_: string, entryKinds: string[], Component: unknown, extensionId_: string): void {

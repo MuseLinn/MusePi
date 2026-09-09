@@ -1,0 +1,284 @@
+/* Marketplace card grid (T3). `mp-*` prefix; design-token vars only.
+ * Visual contract:
+ *   - card surface on --bg-raised with hairline --border
+ *   - hover lifts to --bg-overlay and shows accent border
+ *   - installed cards keep accent border at rest so users see what's on
+ *   - busy cards dim content + show indeterminate spinner via data-busy attr
+ */
+
+.mp-grid-shell {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 10px;
+	overflow-y: auto;
+	overflow-y: overlay;
+}
+
+.mp-grid-toolbar {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.mp-search {
+	flex: 1;
+	min-width: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	color: var(--fg);
+	font: inherit;
+	transition: border-color 120ms ease-out;
+}
+
+.mp-search:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 3px var(--ring);
+}
+
+.mp-filter-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.mp-chip {
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--fg-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: border-color 120ms ease-out, color 120ms ease-out, background 120ms ease-out;
+}
+
+.mp-chip:hover {
+	color: var(--fg);
+	border-color: var(--border-strong);
+}
+
+.mp-chip--active {
+	color: var(--accent-fg);
+	background: var(--accent-muted);
+	border-color: var(--accent-bd);
+}
+
+.mp-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mp-section-title {
+	margin: 0;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mp-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 8px;
+}
+
+.mp-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-raised);
+	transition: border-color 150ms ease-out, background 150ms ease-out;
+}
+
+.mp-card:hover {
+	border-color: var(--border-strong);
+	background: var(--bg-overlay);
+}
+
+.mp-card--installed {
+	border-color: var(--accent-bd);
+}
+
+.mp-card[data-busy="true"] {
+	opacity: 0.55;
+	pointer-events: none;
+}
+
+.mp-card-face {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+}
+
+.mp-card-face:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+.mp-card-icon {
+	flex: none;
+	font-size: 22px;
+	line-height: 1.2;
+	filter: saturate(1.05);
+}
+
+.mp-card-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.mp-card-head {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	min-width: 0;
+}
+
+.mp-card-name {
+	flex: 1;
+	min-width: 0;
+	color: var(--fg);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mp-card-version {
+	flex: none;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+}
+
+.mp-card-desc {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+}
+
+.mp-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.mp-card-meta-item {
+	white-space: nowrap;
+}
+
+.mp-card-chip {
+	padding: 1px 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--fg-muted);
+	font-family: var(--font-mono);
+	font-size: 10px;
+}
+
+.mp-card-actions {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+.mp-btn {
+	padding: 3px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition: border-color 120ms ease-out, background 120ms ease-out, color 120ms ease-out;
+}
+
+.mp-btn:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--bg-overlay);
+}
+
+.mp-btn:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.mp-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mp-btn--ghost {
+	color: var(--fg-muted);
+}
+
+.mp-btn--accent {
+	color: var(--accent);
+	border-color: var(--accent-bd);
+	background: var(--accent-muted);
+}
+
+.mp-btn--accent:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--accent-muted) 70%, transparent);
+	border-color: var(--accent);
+}
+
+.mp-btn--warn {
+	color: var(--err);
+	border-color: color-mix(in srgb, var(--err) 35%, transparent);
+}
+
+.mp-btn--warn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--err) 12%, transparent);
+	border-color: color-mix(in srgb, var(--err) 55%, transparent);
+}
+
+.mp-empty {
+	margin: 12px 0;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	font-style: italic;
+	text-align: center;
+}
+
+.mp-error {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
+	border-radius: var(--radius-sm);
+	color: var(--err);
+	font-size: var(--ui-font-size-xs);
+}

@@ -53,15 +53,20 @@ export function BtwFloatingCard({
 	const [inputFocused, setInputFocused] = useState(false);
 	const historyRef = useRef<BtwTurn[]>([]);
 	const inputRef = useRef<HTMLInputElement | null>(null);
+	// Stop abandons the in-flight request: the daemon side channel keeps
+	// running but its result must NOT paint into the card (no wire cancel).
+	const cancelledRef = useRef(false);
 
 	const ask = useCallback(
 		async (question: string): Promise<void> => {
+			cancelledRef.current = false;
 			const history = [...historyRef.current];
 			const turn: BtwTurn = { question, answer: "" };
 			setTurns([...history, turn]);
 			setAsking(true);
 			try {
 				const res = await onAsk(question, history);
+				if (cancelledRef.current) return;
 				if (res === null) {
 					const failed = { ...turn, error: t("btw unavailable — no active session") };
 					historyRef.current = [...history, failed];
@@ -72,6 +77,7 @@ export function BtwFloatingCard({
 				historyRef.current = [...history, done];
 				setTurns(historyRef.current);
 			} catch {
+				if (cancelledRef.current) return;
 				const failed = { ...turn, error: t("btw failed — check the daemon connection") };
 				historyRef.current = [...history, failed];
 				setTurns(historyRef.current);
@@ -82,15 +88,27 @@ export function BtwFloatingCard({
 		[onAsk],
 	);
 
+	// Keep the latest ask behind a stable ref so the mount/initial-question
+	// effect never re-fires on parent re-renders. A direct
+	// `[initialQuestion, ask]` dep is a bug: ChatView's onAsk is an inline
+	// arrow (new identity per render), so ask would change every render and
+	// the effect would re-ask endlessly, stacking duplicate turns.
+	const askRef = useRef(ask);
+	askRef.current = ask;
 	useEffect(() => {
-		void ask(initialQuestion);
-	}, [initialQuestion, ask]);
+		void askRef.current(initialQuestion);
+	}, [initialQuestion, askRef]);
 
 	const submitFollowUp = (): void => {
 		const q = input.trim();
 		if (!q || asking) return;
 		setInput("");
 		void ask(q);
+	};
+
+	const stop = (): void => {
+		cancelledRef.current = true;
+		setAsking(false);
 	};
 
 	return (
@@ -142,7 +160,7 @@ export function BtwFloatingCard({
 			</div>
 			<div className="gui-btw-foot">
 				{asking && (
-					<button type="button" className="gui-btw-stop" onClick={() => setAsking(false)} title={t("stop")}>
+					<button type="button" className="gui-btw-stop" onClick={stop} title={t("stop")}>
 						<StopCircle size={13} />
 						<span>{t("stop")}</span>
 					</button>

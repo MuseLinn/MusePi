@@ -12,6 +12,7 @@ import { getProjectDir, logger } from "@musepi/pi-utils";
 
 import type { Settings } from "../config/settings";
 import { clearCache as clearFsCache, findRepoRoot, cacheStats as fsCacheStats, invalidate as invalidateFs } from "./fs";
+import * as readiness from "./readiness.ts";
 import type {
 	Capability,
 	CapabilityInfo,
@@ -138,8 +139,12 @@ async function loadImpl<T>(
 	// omp 生态智能兼容:显式启用集优先于优先级去重(见 LoadOptions)。
 	const forceEnabledIds = new Set<string>(options.forceEnabledIds ?? []);
 
+	// Pre-flight: invoke each provider's optional `ready?(ctx)` hook. Providers
+	// that fail pre-flight are excluded from the load loop and reported as
+	// failed in the readiness map without ever calling `load()`.
+	const survivors = await readiness.beginLoadAttempt(capability.id, providers, ctx);
 	const results = await Promise.all(
-		providers.map(async provider => {
+		survivors.map(async provider => {
 			try {
 				const result = await logger.time(
 					`capability:${capability.id}:${provider.id}`,
@@ -157,6 +162,7 @@ async function loadImpl<T>(
 	for (const entry of results) {
 		const { provider } = entry;
 		if ("error" in entry) {
+			readiness.recordLoadFailure(capability.id, provider, entry.error);
 			allWarnings.push(`[${provider.displayName}] Failed to load: ${entry.error}`);
 			continue;
 		}
@@ -314,17 +320,33 @@ export async function loadCapability<T>(
 	const home = os.homedir();
 	const repoRoot = await findRepoRoot(cwd);
 	const ctx: LoadContext = { cwd, home, repoRoot };
+	const allProviders = capability.providers as Provider<T>[];
 	const providers = filterProviders(capability, options);
+
+	// Keep the readiness map in lockstep with the current provider set:
+	// dropped providers vanish from the panel, new ones appear as `idle`.
+	readiness.syncProviderSet(capabilityId, allProviders as Provider<unknown>[]);
+	// Providers excluded by the disabled set / explicit filter should read as
+	// `disabled`, not `idle`, so the status panel matches user intent.
+	for (const provider of allProviders) {
+		if (!providers.includes(provider)) {
+			readiness.recordDisabled(capabilityId, provider);
+		}
+	}
 
 	// TTL cache: skip the full provider scan on repeated loads from the same
 	// workspace (daemon session re-activation). See capabilityCacheKey.
 	const cacheKey = capabilityCacheKey(capabilityId, ctx, options);
 	const cached = capabilityCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < CAPABILITY_CACHE_TTL_MS) {
+		// Mark every still-active provider ready so a cache hit advances the
+		// readiness state for warm callers (slash commands, daemon reactivations).
+		for (const provider of providers) readiness.recordLoadSuccess(capabilityId, provider);
 		return (cached.result as CapabilityResult<T>) ?? { items: [], all: [], warnings: [], providers: [] };
 	}
 
 	const result = await loadImpl(capability, providers, ctx, options);
+	for (const provider of providers) readiness.recordLoadSuccess(capabilityId, provider);
 	capabilityCache.set(cacheKey, {
 		at: Date.now(),
 		result: { ...result, items: [...result.items], all: [...result.all], warnings: [...result.warnings] },
@@ -508,6 +530,9 @@ export function reset(): void {
 	// otherwise serve stale AGENTS.md/CLAUDE.md bytes after a context reset
 	// or chdir, even though the fs content cache underneath was cleared.
 	capabilityCache.clear();
+	// Drop the readiness map too — provider sets can shift across resets and
+	// stale readiness would lie about the post-reset state.
+	readiness.resetReadiness();
 }
 
 /**
@@ -530,4 +555,10 @@ export function cacheStats(): { content: number; dir: number } {
 // Re-exports
 // =============================================================================
 
+export type {
+	CapabilityReadiness,
+	ProviderReadiness,
+	ReadinessState,
+} from "./readiness.ts";
+export * as readiness from "./readiness.ts";
 export type * from "./types";

@@ -1,4 +1,10 @@
-import { type TranslationKey, t } from "@musepi/desktop-web";
+import {
+	type MarketplaceCardAction,
+	type MarketplaceCardEntry,
+	MarketplaceGrid,
+	type TranslationKey,
+	t,
+} from "@musepi/desktop-web";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -371,6 +377,20 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{t("plugins")}
 					<span className="gui-ext-tab-count">{plugins.length}</span>
 				</button>
+				{/* Marketplace tab:daemon marketplace.list 的远程插件目录
+				 * 浏览/一键安装。从 @musepi/desktop-web 复用 MarketplaceGrid,
+				 * MarketplacePanel 留在 desktop-web 自己用(SessionClient 绑定,
+				 * 这里用 RpcClient 适配)。 */}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "marketplace"}
+					className={`gui-ext-tab${tab === "marketplace" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setTab("marketplace")}
+				>
+					<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-70" />
+					{t("marketplace")}
+				</button>
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
 			<div className="gui-ext-body">
@@ -417,6 +437,8 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							</div>
 						)}
 					</div>
+				) : tab === "marketplace" ? (
+					<MarketplaceView rpc={rpc} />
 				) : (
 					<>
 						{/* Left: search + provider→kind→item tree. */}
@@ -759,6 +781,74 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{filtered.length} / {(extensions ?? []).length}
 				</span>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * Marketplace browse panel used by the GUI `marketplace` tab. Wraps the
+ * shared {@link MarketplaceGrid} from `@musepi/desktop-web` so the visual
+ * stays in lock-step with the collab guest client, and wires install /
+ * remove actions to the daemon `marketplace.install` / `marketplace.remove`
+ * RPCs. Open detail is a non-fatal no-op for now (the GUI has no plugin
+ * detail view yet); it logs so the click doesn't disappear silently.
+ */
+function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	const [entries, setEntries] = useState<readonly MarketplaceCardEntry[]>([]);
+	const [error, setError] = useState<string | null>(null);
+	const refresh = useMemo(
+		() => async (): Promise<void> => {
+			if (!rpc) return;
+			setError(null);
+			try {
+				const res = await rpc.request<{ entries: MarketplaceCardEntry[] }>("marketplace.list");
+				setEntries(res?.entries ?? []);
+			} catch (err: unknown) {
+				setError(err instanceof Error ? err.message : String(err));
+			}
+		},
+		[rpc],
+	);
+	useEffect(() => {
+		void refresh();
+	}, [refresh]);
+
+	// busy + optimistic install state lives on each entry; the grid doesn't
+	// need a parallel map because we mutate the local entries array on every
+	// state transition.
+	const handleAction = async (action: MarketplaceCardAction): Promise<void> => {
+		if (!rpc) return;
+		if (action.kind === "open") {
+			console.info("[marketplace] open detail pending:", action.entry.name);
+			return;
+		}
+		const method = action.kind === "install" ? "marketplace.install" : "marketplace.remove";
+		const idKey = `${action.entry.marketplace ?? "default"}:${action.entry.name}`;
+		setEntries(prev =>
+			prev.map(e => (`${e.marketplace ?? "default"}:${e.name}` === idKey ? { ...e, busy: true } : e)),
+		);
+		try {
+			await rpc.request(method, {
+				name: action.entry.name,
+				marketplace: action.entry.marketplace ?? "default",
+			});
+			await refresh();
+		} catch (err: unknown) {
+			setError(err instanceof Error ? err.message : String(err));
+			setEntries(prev =>
+				prev.map(e => (`${e.marketplace ?? "default"}:${e.name}` === idKey ? { ...e, busy: false } : e)),
+			);
+		}
+	};
+
+	// MarketplaceGrid's `client` prop is duck-typed `{ rpc<T>(method, params?) }`;
+	// RpcClient.request matches that signature, so a thin adapter is enough.
+	const client = rpc ? { rpc: <T,>(m: string, p?: unknown): Promise<T> => rpc.request<T>(m, p) } : null;
+
+	return (
+		<div className="gui-ext-marketplace">
+			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
+			<MarketplaceGrid client={client} entries={entries} onAction={handleAction} />
 		</div>
 	);
 }

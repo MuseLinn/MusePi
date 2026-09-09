@@ -115,9 +115,48 @@ function normalizeManifest(raw: Record<string, unknown>): AssemblyManifestValida
 	}
 	if (typeof extensions.items === "object" && extensions.items !== null) {
 		for (const [k, v] of Object.entries(extensions.items)) {
-			if (typeof k === "string" && typeof v === "object" && v !== null) {
-				items[k] = v as ManifestExtensionItem;
+			if (typeof k !== "string" || typeof v !== "object" || v === null) continue;
+			const raw = v as Record<string, unknown>;
+			const item: ManifestExtensionItem = {};
+
+			// [extensions.items.<id>] enabled
+			if (raw.enabled !== undefined) {
+				if (typeof raw.enabled === "boolean") {
+					item.enabled = raw.enabled;
+				} else {
+					validate(`extensions.items.${k}.enabled`, `expected boolean, got ${JSON.stringify(raw.enabled)}`);
+				}
 			}
+
+			// [extensions.items.<id>] surfaces
+			if (raw.surfaces !== undefined) {
+				if (Array.isArray(raw.surfaces)) {
+					const list: Surface[] = [];
+					let bad = false;
+					for (const s of raw.surfaces) {
+						if (isSurface(s)) {
+							list.push(s);
+						} else {
+							bad = true;
+							validate(
+								`extensions.items.${k}.surfaces`,
+								`expected one of ${KNOWN_SURFACES.join(", ")}, got ${JSON.stringify(s)}`,
+							);
+						}
+					}
+					if (!bad) item.surfaces = list;
+				} else {
+					validate(`extensions.items.${k}.surfaces`, `expected array, got ${JSON.stringify(raw.surfaces)}`);
+				}
+			}
+
+			for (const key of Object.keys(raw)) {
+				if (!["enabled", "surfaces"].includes(key)) {
+					validate(`extensions.items.${k}.${key}`, `unknown key — expected enabled or surfaces`);
+				}
+			}
+
+			items[k] = item;
 		}
 	}
 	if (Array.isArray(extensions.patterns)) {

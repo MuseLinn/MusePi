@@ -72,7 +72,11 @@ import { type CpuProfile, generateHeapSnapshotData, type ProfilerSession, startC
 import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-debugger";
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
-import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
+import {
+	clearPluginRootsAndCaches,
+	resolveActiveProjectRegistryPath,
+	resolveOrDefaultProjectRegistryPath,
+} from "../discovery/helpers";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
@@ -3065,6 +3069,52 @@ export class DaemonServer {
 		}[];
 	} | null = null;
 
+	/** TTL cache of the marketplace catalog browse (settings → marketplace
+	 *  tab). Combines {@link MarketplaceManager.listAvailablePlugins}
+	 *  output with per-plugin `installed`/`installedScope` flags so the GUI
+	 *  renders Install/Remove affordances without a second round-trip.
+	 *  Busted on install/remove mutations. */
+	#marketplaceCache: {
+		at: number;
+		entries: {
+			name: string;
+			marketplace: string;
+			version?: string;
+			description?: string;
+			author?: string;
+			category?: string;
+			tags?: readonly string[];
+			homepage?: string;
+			repository?: string;
+			license?: string;
+			icon?: string;
+			installed: boolean;
+			installedScope: "user" | "project" | null;
+		}[];
+	} | null = null;
+
+	/** Build a `MarketplaceManager` wired to the host's cwd and the global
+	 *  registry/cache dirs. Reused by the marketplace RPCs so the path
+	 *  resolution stays consistent with the TUI /marketplace flow. */
+	async #buildMarketplaceManager() {
+		const m = await import("../extensibility/plugins/marketplace");
+		const {
+			getInstalledPluginsRegistryPath,
+			getMarketplacesCacheDir,
+			getMarketplacesRegistryPath,
+			getPluginsCacheDir,
+			MarketplaceManager,
+		} = m;
+		return new MarketplaceManager({
+			marketplacesRegistryPath: getMarketplacesRegistryPath(),
+			installedRegistryPath: getInstalledPluginsRegistryPath(),
+			projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(this.#host.cwd()),
+			marketplacesCacheDir: getMarketplacesCacheDir(),
+			pluginsCacheDir: getPluginsCacheDir(),
+			clearPluginRootsCache: clearPluginRootsAndCaches,
+		});
+	}
+
 	/** TTL cache of the skills scan (settings → skills tab + slash
 	 *  completion). */
 	#skillsCache: {
@@ -4158,6 +4208,66 @@ export class DaemonServer {
 				this.#pluginPackagesCache = null;
 				this.#pluginsCache = null;
 				return { ok: true, enabled: Boolean(p.enabled) };
+			}
+			case "marketplace.list": {
+				// Marketplace catalog + install state for the GUI store panel.
+				// Mirrors TUI /marketplace discover output, plus an
+				// installed/installedScope pair derived from the merged
+				// installed-plugins registry so the card grid can flip its
+				// "Install"/"Remove" affordance without a second RPC.
+				// TTL-cached so flipping the marketplace tab doesn't rewalk
+				// every catalog; the install/remove handlers below bust it.
+				if (!this.#marketplaceCache || Date.now() - this.#marketplaceCache.at > 10_000) {
+					const m = await import("../extensibility/plugins/marketplace");
+					const { getMarketplacesRegistryPath, listMarketplaceEntries, readMarketplacesRegistry } = m;
+					const manager = await this.#buildMarketplaceManager();
+					const registry = await readMarketplacesRegistry(getMarketplacesRegistryPath());
+					const catalogs = new Map<string, Awaited<ReturnType<typeof manager.listAvailablePlugins>>>();
+					for (const mkt of registry.marketplaces) {
+						const plugins = await manager.listAvailablePlugins(mkt.name);
+						catalogs.set(mkt.name, plugins);
+					}
+					const userReg = await m.readInstalledPluginsRegistry(m.getInstalledPluginsRegistryPath());
+					const projectPath = await resolveOrDefaultProjectRegistryPath(this.#host.cwd());
+					const projectReg = projectPath ? await m.readInstalledPluginsRegistry(projectPath) : null;
+					const entries = listMarketplaceEntries({
+						registry,
+						catalogs,
+						userRegistry: userReg,
+						projectRegistry: projectReg,
+					});
+					this.#marketplaceCache = { at: Date.now(), entries };
+				}
+				return { entries: this.#marketplaceCache.entries };
+			}
+			case "marketplace.install": {
+				// Install a marketplace plugin (GUI store → Install button).
+				// Busts caches so the next list reflects the new state.
+				const p = (params ?? {}) as { name?: string; marketplace?: string; scope?: "user" | "project" };
+				if (!p.name) throw new Error("marketplace.install: name required");
+				if (!p.marketplace) throw new Error("marketplace.install: marketplace required");
+				const manager = await this.#buildMarketplaceManager();
+				await manager.installPlugin(p.name, p.marketplace, {
+					scope: p.scope ?? "user",
+				});
+				this.#marketplaceCache = null;
+				this.#pluginPackagesCache = null;
+				this.#pluginsCache = null;
+				return { ok: true, installed: true, scope: p.scope ?? "user" };
+			}
+			case "marketplace.remove": {
+				// Remove an installed marketplace plugin (GUI store → Remove).
+				// 拼 pluginId = "name@marketplace" 给 manager.uninstallPlugin。
+				const p = (params ?? {}) as { name?: string; marketplace?: string; scope?: "user" | "project" };
+				if (!p.name) throw new Error("marketplace.remove: name required");
+				if (!p.marketplace) throw new Error("marketplace.remove: marketplace required");
+				const { buildPluginId } = await import("../extensibility/plugins/marketplace");
+				const manager = await this.#buildMarketplaceManager();
+				await manager.uninstallPlugin(buildPluginId(p.name, p.marketplace), p.scope);
+				this.#marketplaceCache = null;
+				this.#pluginPackagesCache = null;
+				this.#pluginsCache = null;
+				return { ok: true };
 			}
 			case "skills.list": {
 				// Session-independent skill discovery (settings → skills tab).
@@ -5707,6 +5817,23 @@ export class DaemonServer {
 					this.#host.rekeySession(bp.sessionId, bnewId);
 				}
 				return { ok: true, sessionId: bnewId ?? null, sessionFile: bresult.sessionFile ?? null };
+			}
+			case "session.ephemeralAsk": {
+				// GUI /btw + ask-popover side question (TUI /btw parity): run an
+				// ephemeral side-channel turn WITHOUT touching the session
+				// transcript (the same runEphemeralTurn path the idle recap and
+				// IRC steers use). The side channel needs an active model and is
+				// safe while the main turn is mid-tool-call. There is no
+				// cross-request cancel — the GUI's stop button only discards the
+				// reply locally, the daemon turn still completes.
+				const p = (params ?? {}) as { sessionId: string; promptText: string };
+				if (typeof p.sessionId !== "string" || typeof p.promptText !== "string" || !p.promptText.trim()) {
+					throw new Error("sessionId and promptText required");
+				}
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const { replyText } = await live.agentSession.runEphemeralTurn({ promptText: p.promptText });
+				return { replyText };
 			}
 			case "session.forkAt": {
 				// Non-destructive fork (GUI 分叉): copy the parent session's

@@ -17,6 +17,13 @@ export { KLine, type KLineCandle, type KLineProps } from "./components/charts/KL
 export { LineChart, type LineChartProps, type LineChartSerie } from "./components/charts/LineChart";
 export { Sparkline, type SparklineProps } from "./components/charts/Sparkline";
 export { ImageLightbox } from "./components/image-lightbox";
+/** Marketplace plugin store (GUI ↔ desktop-web shared). The Marketplace
+ *  panel itself stays in-app (it binds to SessionClient); the Grid + Card
+ *  + Entry types are host-agnostic so the Electron GUI reuses them. */
+export { MarketplaceCard } from "./components/marketplace/MarketplaceCard";
+export { MarketplaceGrid } from "./components/marketplace/MarketplaceGrid";
+export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/marketplace/types";
+export { resolveCardIcon } from "./components/marketplace/types";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
 export { LanguageToggle } from "./components/shell/LanguageToggle";
 export { ThemeToggle } from "./components/shell/ThemeToggle";

@@ -54,6 +54,16 @@ export interface Provider<T> {
 	 * Returns items in provider's preferred order (usually project before user).
 	 */
 	load(ctx: LoadContext): Promise<LoadResult<T>>;
+
+	/**
+	 * Optional pre-flight probe. Runs before `load()` and lets providers do
+	 * setup that must succeed for the load itself to make sense (remote ping,
+	 * config schema check, sandbox unlock, …). Rejection marks the provider
+	 * failed in the readiness map without invoking `load`. Defaults to a
+	 * pass-through when absent — the capability readiness module treats
+	 * `load()`'s outcome as authoritative.
+	 */
+	ready?(ctx: LoadContext): Promise<void> | void;
 }
 
 /**

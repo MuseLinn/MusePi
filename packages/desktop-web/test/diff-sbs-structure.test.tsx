@@ -51,7 +51,9 @@ describe("DiffBlock side-by-side structure", () => {
 		const addRow = html.match(/tv-diff-sbs-row tv-diff-sbs-row--add">.*?<\/div>/s)?.[0];
 		expect(addRow).toBeDefined();
 		// The old bug produced cell > ln > cell; the fix renders cell > ln + text.
-		expect(addRow!).not.toMatch(/class="tv-diff-sbs-cell[^"]*"><span class="tv-diff-ln"[^>]*><span class="tv-diff-sbs-cell/);
+		expect(addRow!).not.toMatch(
+			/class="tv-diff-sbs-cell[^"]*"><span class="tv-diff-ln"[^>]*><span class="tv-diff-sbs-cell/,
+		);
 		expect(addRow!).toContain('class="tv-diff-ln">375</span>+import type { ExtensionAskDialogResult }');
 	});
 });

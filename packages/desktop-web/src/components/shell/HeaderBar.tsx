@@ -1,5 +1,14 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
-import { ArrowLeft, CalendarClock, Folder, LayoutDashboard, LogOut, MessageSquare, PanelRight } from "lucide-react";
+import {
+	ArrowLeft,
+	CalendarClock,
+	Folder,
+	LayoutDashboard,
+	LogOut,
+	MessageSquare,
+	Package,
+	PanelRight,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { type TranslationKey, t } from "../../i18n/index.js";
@@ -14,7 +23,7 @@ import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Guest side panels reachable from the header nav. */
-export type GuestPanel = "board" | "scheduled" | "files" | "workbench";
+export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench";
 
 export interface HeaderBarProps {
 	client: SessionClient;
@@ -42,6 +51,7 @@ const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: 
 	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "board" },
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "scheduled tasks" },
 	{ panel: "files", icon: <Folder size={14} />, title: "files" },
+	{ panel: "marketplace", icon: <Package size={14} />, title: "marketplace" },
 	{ panel: "workbench", icon: <PanelRight size={14} />, title: "workbench" },
 ];
 

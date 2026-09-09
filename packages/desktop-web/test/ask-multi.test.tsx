@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "bun:test";
-import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
+import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Composer } from "../src/components/shell/Composer";
 import { GuestClient } from "../src/lib/client";
 import { CollabSocket } from "../src/lib/socket";
@@ -11,7 +11,12 @@ const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 const HEADER: SessionHeader = { type: "session", id: "s1", timestamp: "2026-06-12T00:00:00Z", cwd: "/work" };
 const STATE: SessionState = { isStreaming: false, queuedMessageCount: 0, cwd: "/work", participants: [] };
 
-function clientWithAsk(request: { title: string; options: string[]; checkedIndices?: number[]; helpText?: string }): GuestClient {
+function clientWithAsk(request: {
+	title: string;
+	options: string[];
+	checkedIndices?: number[];
+	helpText?: string;
+}): GuestClient {
 	const client = new GuestClient(LINK, "tester");
 	client.applyFrameForTest({
 		t: "welcome",
@@ -23,7 +28,13 @@ function clientWithAsk(request: { title: string; options: string[]; checkedIndic
 	});
 	client.applyFrameForTest({
 		t: "ui-request",
-		request: { kind: "select", reqId: 7, ...request, selectionMarker: "checkbox", markableCount: request.options.length },
+		request: {
+			kind: "select",
+			reqId: 7,
+			...request,
+			selectionMarker: "checkbox",
+			markableCount: request.options.length,
+		},
 	});
 	return client;
 }
@@ -106,11 +117,17 @@ describe("multi-select (checkbox) ask — host toggle loop", () => {
 		// host's toggle-loop contract: "Next →" ends the loop with the
 		// current checked set, an undefined value cancels the ask.
 		const sent: { reqId: number; value?: string }[] = [];
-		const sendSpy = vi.spyOn(CollabSocket.prototype, "send").mockImplementation((frame: { t: string; reqId?: number; value?: string }) => {
-			if (frame.t === "ui-response") sent.push({ reqId: frame.reqId as number, value: frame.value });
-		});
+		const sendSpy = vi
+			.spyOn(CollabSocket.prototype, "send")
+			.mockImplementation((frame: { t: string; reqId?: number; value?: string }) => {
+				if (frame.t === "ui-response") sent.push({ reqId: frame.reqId as number, value: frame.value });
+			});
 		try {
-			const client = clientWithAsk({ title: "Pick languages", options: ["Rust", "Go"], helpText: "toggle then Next" });
+			const client = clientWithAsk({
+				title: "Pick languages",
+				options: ["Rust", "Go"],
+				helpText: "toggle then Next",
+			});
 			const html = renderToStaticMarkup(<Composer client={client} />);
 			// Both actions render with distinct labels.
 			expect(html).toContain(">Next</button>");

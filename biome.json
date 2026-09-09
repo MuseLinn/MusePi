@@ -62,6 +62,7 @@
 			"packages/*/src/**/*.ts",
 			"packages/*/src/**/*.tsx",
 			"packages/*/test/**/*.ts",
+			"packages/*/test/**/*.tsx",
 			"packages/*/examples/**/*.ts",
 			"packages/*/scripts/**/*.ts",
 			"packages/*/*.ts",

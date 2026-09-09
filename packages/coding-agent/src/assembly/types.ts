@@ -61,6 +61,13 @@ export interface ManifestExtensions {
 export interface ManifestExtensionItem {
 	/** True = forced enable; false = forced disable (overrides include/exclude). */
 	enabled?: boolean;
+	/**
+	 * Surfaces this extension is active on. Omitted or empty = all surfaces.
+	 * filterExtensionPaths drops an extension whose list omits the active
+	 * surface — e.g. a GUI-only panel must not load under `tui`, and a
+	 * TTY-dependent CLI connector must not load under `daemon`.
+	 */
+	surfaces?: Surface[];
 }
 
 export interface ManifestSeams {

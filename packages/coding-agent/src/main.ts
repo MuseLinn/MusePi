@@ -1640,9 +1640,14 @@ export async function runRootCommand(
 		}
 
 		const eventBus = new EventBus();
+		// Resolved before loading: the surface decides which extensions load at
+		// all (assembly.toml extensions.items.<id>.surfaces), and the same value
+		// feeds the boot verification report below. Trusted extensions bypass
+		// assembly filtering — they are an explicit user override.
+		const surface = isInteractive ? "tui" : mode === "rpc-ui" ? "daemon" : "headless";
 		const extensionsResult = parsedArgs.trustedExtensions?.length
 			? await loadTrustedSessionExtensions(sessionOptions, cwd, eventBus)
-			: await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus);
+			: await loadSessionExtensions(sessionOptions, cwd, settingsInstance, eventBus, surface);
 		const extensionFlagSink: ExtensionFlagSink = {
 			getFlags: () => ExtensionRunner.aggregateFlags(extensionsResult.extensions),
 			setFlagValue: (name, value) => {
@@ -1668,7 +1673,6 @@ export async function runRootCommand(
 		// remain soft (warn) but are surfaced via /assembly — no silent degradation.
 		try {
 			const { bootVerifyExtensions } = await import("./assembly/index.ts");
-			const surface = isInteractive ? "tui" : mode === "rpc-ui" ? "daemon" : "headless";
 			bootVerifyExtensions(cwd, home, surface, extensionsResult);
 		} catch {
 			// Boot-time verify throws only on managed errors with degraded_ok=false;

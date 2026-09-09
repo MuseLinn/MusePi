@@ -41,15 +41,16 @@ import {
 	formatAdvisorContextPrompt,
 	loadAdvisorTranscriptCosts,
 } from "./advisor";
+import type { Surface } from "./assembly/types.ts";
 import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
 import bundledBoardDesignSkill from "./bundled-skills/board-design/SKILL.md" with { type: "text" };
+import bundledMusepiContributingSkill from "./bundled-skills/musepi-contributing/SKILL.md" with { type: "text" };
 import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
 import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
 import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
 import bundledWidgetDesignSkill from "./bundled-skills/widget-design/SKILL.md" with { type: "text" };
-import bundledMusepiContributingSkill from "./bundled-skills/musepi-contributing/SKILL.md" with { type: "text" };
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 import { bucketRules } from "./capability/rule-buckets";
@@ -788,13 +789,46 @@ export async function loadSessionExtensions(
 	cwd: string,
 	settings: Settings,
 	eventBus: EventBus,
+	surface?: Surface,
 ): Promise<LoadExtensionsResult> {
-	const paths = await discoverSessionExtensionPaths(options, cwd, settings);
+	let paths = await discoverSessionExtensionPaths(options, cwd, settings);
+	if (surface) {
+		paths = await applyAssemblyFilter(paths, cwd, settings, surface);
+	}
 	const result = await logger.time("loadExtensions", loadExtensions, paths, cwd, eventBus);
 	for (const { path, error } of result.errors) {
 		logger.error("Failed to load extension", { path, error });
 	}
 	return result;
+}
+
+/**
+ * Apply assembly.toml filters (include/exclude/items.surfaces/items.enabled)
+ * to a discovered extension path list.
+ *
+ * Imported dynamically on purpose: assembly/verify.ts imports `extensionIdOf`
+ * back from this module, so a static import would close a sdk → assembly → sdk
+ * cycle at module-init time.
+ *
+ * Never throws. A missing or malformed manifest must not block extension
+ * loading — that is what bootVerifyExtensions reports separately. When no
+ * manifest exists this is a no-op beyond settings.disabledExtensions, which
+ * the discovery pass already applied (idempotent).
+ */
+async function applyAssemblyFilter(
+	paths: string[],
+	cwd: string,
+	settings: Settings,
+	surface: Surface,
+): Promise<string[]> {
+	try {
+		const { filterExtensionPaths } = await import("./assembly/verify.ts");
+		const { loadAssembly } = await import("./assembly/index.ts");
+		const { manifest } = await loadAssembly(cwd);
+		return filterExtensionPaths(paths, manifest, settings, surface);
+	} catch {
+		return paths;
+	}
 }
 
 /**

@@ -49,9 +49,7 @@ describe("SessionTreeCanvas SSR 冒烟", () => {
 	});
 
 	it("空会话渲染空态", () => {
-		const html = renderToStaticMarkup(
-			<SessionTreeCanvas entries={[]} activePathIds={new Set()} onJump={() => {}} />,
-		);
+		const html = renderToStaticMarkup(<SessionTreeCanvas entries={[]} activePathIds={new Set()} onJump={() => {}} />);
 		expect(html).toContain("stc-empty");
 	});
 });

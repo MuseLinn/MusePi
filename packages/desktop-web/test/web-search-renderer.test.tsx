@@ -7,8 +7,8 @@
 import { describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ToolRenderProps } from "../src/tool-render/types";
 import { webSearchRenderer } from "../src/tool-render/tools/web-search";
+import type { ToolRenderProps } from "../src/tool-render/types";
 
 const renderBody = webSearchRenderer.Body as (props: ToolRenderProps) => ReactNode;
 
@@ -33,9 +33,7 @@ function searchResult(answer?: string): ToolRenderProps["result"] {
 
 describe("web_search renderer", () => {
 	it("shows the shimmering search header with skeleton sources while running", () => {
-		const html = renderToStaticMarkup(
-			renderBody({ args: ARGS, result: undefined, running: true } as never),
-		);
+		const html = renderToStaticMarkup(renderBody({ args: ARGS, result: undefined, running: true } as never));
 		expect(html).toContain("tr-search-placeholder");
 		expect(html).toContain("tr-search-shimmer");
 		expect(html).toContain("Searching");
@@ -47,9 +45,7 @@ describe("web_search renderer", () => {
 	});
 
 	it("switches to the resolved source list once the response lands", () => {
-		const html = renderToStaticMarkup(
-			renderBody({ args: ARGS, result: searchResult(), running: false } as never),
-		);
+		const html = renderToStaticMarkup(renderBody({ args: ARGS, result: searchResult(), running: false } as never));
 		expect(html).not.toContain("tr-search-placeholder");
 		expect(html).toContain("tr-tool-search-row");
 		expect(html).toContain("JWT verification best practices");
@@ -84,9 +80,7 @@ describe("web_search renderer", () => {
 	});
 
 	it("numbers the source footer rows to match the markers", () => {
-		const html = renderToStaticMarkup(
-			renderBody({ args: ARGS, result: searchResult(), running: false } as never),
-		);
+		const html = renderToStaticMarkup(renderBody({ args: ARGS, result: searchResult(), running: false } as never));
 		expect(html).toContain('<span class="tr-cite-n"');
 		expect(html).toContain(">1</span>");
 		expect(html).toContain(">2</span>");

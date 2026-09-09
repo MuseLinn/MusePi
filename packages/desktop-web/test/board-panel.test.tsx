@@ -18,9 +18,7 @@ describe("BoardPanel (board.list -> shared widget registry)", () => {
 			pos: { x: 0, y: 0, w: 172, h: 88 },
 			data: { label: "Room", value: 24.5, delta: 0.3 },
 		};
-		const html = renderToStaticMarkup(
-			<BoardWidgetCard widget={widget} update={() => {}} />,
-		);
+		const html = renderToStaticMarkup(<BoardWidgetCard widget={widget} update={() => {}} />);
 		expect(html).toContain("温度");
 		// Renders through the shared registry (metric card body) + the
 		// board chrome (widget head/tone).

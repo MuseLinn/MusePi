@@ -1,11 +1,11 @@
 import { describe, expect, it } from "bun:test";
+import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
+import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
 import type { KeyboardEvent } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AgentSnapshot, SessionHeader, SessionState } from "@musepi/pi-wire";
+import { Composer, shouldSubmitOnEnter } from "../src/components/shell/Composer";
 import type { GuestSnapshot } from "../src/lib/client";
 import { GuestClient } from "../src/lib/client";
-import { Composer, shouldSubmitOnEnter } from "../src/components/shell/Composer";
-import { COLLAB_PROTO, encodeBase64Url } from "@musepi/collab-proto";
 
 const LINK = `roomroomroom1234#${encodeBase64Url(new Uint8Array(32))}`;
 

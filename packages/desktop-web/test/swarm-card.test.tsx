@@ -143,11 +143,7 @@ describe("task renderer native card body (one line per subagent)", () => {
 
 	it("falls back to the declared batch size for the chip when no frames landed", () => {
 		const html = renderToStaticMarkup(
-			<ToolView
-				name="task"
-				args={{ tasks: [{ id: "A" }, { id: "B" }] }}
-				result={{ content: [], details: {} }}
-			/>,
+			<ToolView name="task" args={{ tasks: [{ id: "A" }, { id: "B" }] }} result={{ content: [], details: {} }} />,
 		);
 		expect(html).toContain(">0 / 2<");
 	});
@@ -256,12 +252,7 @@ describe("task card style setting (display.taskCardStyle)", () => {
 
 	it("non-task tools never render the additive swarm card", () => {
 		const html = renderToStaticMarkup(
-			<ToolView
-				name="grep"
-				taskCardStyle="swarm"
-				args={{ pattern: "foo" }}
-				result={{ content: [] }}
-			/>,
+			<ToolView name="grep" taskCardStyle="swarm" args={{ pattern: "foo" }} result={{ content: [] }} />,
 		);
 		expect(html).not.toContain("tv-swarm-card");
 		expect(html).not.toContain("tv-stack");

@@ -12,6 +12,7 @@ import {
 	getPluginsCacheDir,
 	MarketplaceManager,
 } from "../extensibility/plugins/marketplace";
+import { formatPluginGrid } from "../extensibility/plugins/marketplace/grid-renderer";
 import { MCPCommandController } from "../modes/controllers/mcp-command-controller";
 import type { InteractiveModeContext } from "../modes/types";
 import { refreshAgentDiscovery } from "../task";
@@ -158,12 +159,11 @@ export const BUILTIN_MARKETPLACE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec>
 							);
 							return commandConsumed();
 						}
-						const lines = ["Available plugins:"];
-						for (const plugin of plugins) {
-							lines.push(`  - ${plugin.name}${plugin.version ? `@${plugin.version}` : ""}`);
-							if (plugin.description) lines.push(`      ${plugin.description}`);
-						}
-						await runtime.output(lines.join("\n"));
+						// ACP / TUI share the runtime; TTY hosts expose `columns`,
+						// non-TTY hosts (daemon, ACP) default to 80.
+						const width =
+							process.stdout?.isTTY && typeof process.stdout.columns === "number" ? process.stdout.columns : 80;
+						await runtime.output(formatPluginGrid(plugins, { width }));
 						return commandConsumed();
 					}
 					case "install": {
@@ -302,11 +302,7 @@ export const BUILTIN_MARKETPLACE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec>
 								runtime.ctx.showStatus("No plugins available in configured marketplaces");
 							}
 						} else {
-							const lines = plugins.map(
-								p =>
-									`  ${p.name}${p.version ? `@${p.version}` : ""}${p.description ? ` - ${p.description}` : ""}`,
-							);
-							runtime.ctx.showStatus(`Available plugins:\n${lines.join("\n")}`);
+							runtime.ctx.showStatus(formatPluginGrid(plugins));
 						}
 						break;
 					}

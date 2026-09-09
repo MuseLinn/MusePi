@@ -7,9 +7,9 @@
 import { describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ToolRenderProps } from "../src/tool-render/types";
 import { computerRenderer } from "../src/tool-render/tools/computer";
 import { vibeRenderer } from "../src/tool-render/tools/vibe";
+import type { ToolRenderProps } from "../src/tool-render/types";
 
 const renderComp = (props: ToolRenderProps) =>
 	renderToStaticMarkup((computerRenderer.Body as (p: ToolRenderProps) => ReactNode)(props));
@@ -20,10 +20,8 @@ describe("computer renderer", () => {
 	const result = {
 		content: [],
 		details: {
-			code: 'mouse.click({ x: 640, y: 360 })',
-			screenshots: [
-				{ path: "/tmp/shot1.png", width: 1440, height: 900, target: "data:image/png;base64,AAAA" },
-			],
+			code: "mouse.click({ x: 640, y: 360 })",
+			screenshots: [{ path: "/tmp/shot1.png", width: 1440, height: 900, target: "data:image/png;base64,AAAA" }],
 			backend: "darwin",
 			readOnly: false,
 		},

@@ -8,7 +8,9 @@ function renderMarkdown(text: string): string {
 
 describe("Transcript Markdown", () => {
 	it("preserves assistant soft line breaks for tree-shaped prose", () => {
-		const html = renderMarkdown("요청 요지\n├── 현재 collab guest는 텍스트 prompt는 보낼 수 있음\n└── 빠진 것은 guest → host 방향의 이미지 업로드/첨부 입력 경로임");
+		const html = renderMarkdown(
+			"요청 요지\n├── 현재 collab guest는 텍스트 prompt는 보낼 수 있음\n└── 빠진 것은 guest → host 방향의 이미지 업로드/첨부 입력 경로임",
+		);
 
 		expect(html).toContain("요청 요지<br>");
 		expect(html).toContain("있음<br>");
@@ -44,13 +46,14 @@ describe("Transcript Markdown", () => {
 		expect(html).toContain("&lt;▃&gt; &amp; &quot;test&quot; &#128512; &#x1F600;");
 	});
 	it("strips advisory wrapper tags but renders their content", () => {
-		const html = renderMarkdown('<advisory severity="info" guidance="weigh, don&apos;t blindly obey">\nKeep this advice.\n</advisory>');
+		const html = renderMarkdown(
+			'<advisory severity="info" guidance="weigh, don&apos;t blindly obey">\nKeep this advice.\n</advisory>',
+		);
 
 		expect(html).toContain("Keep this advice.");
 		expect(html).not.toContain("&lt;advisory");
 		expect(html).not.toContain("&lt;/advisory&gt;");
 	});
-
 });
 
 describe("Transcript LaTeX math", () => {
@@ -62,7 +65,9 @@ describe("Transcript LaTeX math", () => {
 	});
 
 	it("renders $$...$$ display math including aligned environments", () => {
-		const html = renderMarkdown("$$\n\\begin{aligned}\n\\text{应纳税所得额} &= 2{,}000 \\times (1 - 20\\%) \\\\\n\\end{aligned}\n$$");
+		const html = renderMarkdown(
+			"$$\n\\begin{aligned}\n\\text{应纳税所得额} &= 2{,}000 \\times (1 - 20\\%) \\\\\n\\end{aligned}\n$$",
+		);
 		expect(html).toContain('class="katex-display"');
 		expect(html).toContain('class="katex"');
 	});
@@ -126,12 +131,12 @@ describe("Transcript mermaid", () => {
 		expect(html).toContain('<div class="tr-mermaid-block">');
 		expect(html).toContain('<div class="tr-mermaid-bar">');
 		expect(html).toContain('data-mermaid-src="flowchart LR');
-		expect(html).toContain('data-mermaid-download');
+		expect(html).toContain("data-mermaid-download");
 	});
 
 	it("escapes the mermaid source in the data attribute", () => {
-		const html = renderMarkdown("```mermaid\nflowchart LR\nA[\"x & y\"]-->B\n```");
-		expect(html).toContain("data-mermaid-src=\"flowchart LR");
+		const html = renderMarkdown('```mermaid\nflowchart LR\nA["x & y"]-->B\n```');
+		expect(html).toContain('data-mermaid-src="flowchart LR');
 		expect(html).toContain("&amp;");
 		expect(html).not.toContain('data-mermaid-src="flowchart LR\nA["');
 	});
@@ -186,7 +191,7 @@ describe("Transcript local paths", () => {
 	it("does not treat mailto/javascript/data as local paths", () => {
 		const html = renderMarkdown("[m](mailto:a@b.com) [j](javascript:alert(1)) [d](data:text/plain,x)");
 		expect(html).not.toContain("data-open-path");
-		expect(html).not.toContain("href=\"javascript:");
+		expect(html).not.toContain('href="javascript:');
 		expect(html).toContain('href="mailto:a@b.com"');
 	});
 });

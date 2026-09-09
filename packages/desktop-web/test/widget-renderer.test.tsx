@@ -9,10 +9,10 @@
 import { describe, expect, it } from "bun:test";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { WidgetErrorBoundary } from "../src/widgets/error-boundary";
-import type { ToolRenderProps } from "../src/tool-render/types";
-import { widgetRenderer, widgetDataEq } from "../src/tool-render/tools/widget";
 import { collectWidgetPayloads, latestWidgetFromEntries } from "../src/components/transcript/widget-standalone";
+import { widgetDataEq, widgetRenderer } from "../src/tool-render/tools/widget";
+import type { ToolRenderProps } from "../src/tool-render/types";
+import { WidgetErrorBoundary } from "../src/widgets/error-boundary";
 import { widgetHostTheme } from "../src/widgets/html";
 
 // widgetRenderer always ships both renderers; the shared ToolRenderer type
@@ -78,7 +78,7 @@ describe("inline widget renderer", () => {
 		const html = renderToStaticMarkup(
 			renderBody({
 				args: { type: "html" },
-				result: widgetResult("html", { html: "<div class=\"plot\">档案潜行</div>", data: { plot: "起" } }),
+				result: widgetResult("html", { html: '<div class="plot">档案潜行</div>', data: { plot: "起" } }),
 			} as never),
 		);
 		expect(html).toContain("gui-widget-html");
@@ -89,7 +89,7 @@ describe("inline widget renderer", () => {
 		const html = renderToStaticMarkup(
 			renderBody({
 				args: { type: "html" },
-				result: widgetResult("html", { html: "<div class=\"plot\">x</div>", data: {} }),
+				result: widgetResult("html", { html: '<div class="plot">x</div>', data: {} }),
 			} as never),
 		);
 		// SSR has no document → the dark default; the class + global give the
@@ -107,7 +107,10 @@ describe("inline widget renderer", () => {
 				args: { type: "html" },
 				result: {
 					content: [
-						{ type: "text", text: 'Validation failed for tool "widget":\n  - data: data must be Widget data fields per type' },
+						{
+							type: "text",
+							text: 'Validation failed for tool "widget":\n  - data: data must be Widget data fields per type',
+						},
 					],
 					details: { type: "html", data: {} },
 					isError: true,
@@ -186,7 +189,10 @@ describe("widget standalone payload extraction", () => {
 	it("collects successful widget payloads from an assistant message", () => {
 		const content = [call("a", "widget"), call("b", "bash")];
 		const results = new Map([
-			[result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }).id, result("a", { type: "calc", data: { amount: 2000 }, title: "个税" })],
+			[
+				result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }).id,
+				result("a", { type: "calc", data: { amount: 2000 }, title: "个税" }),
+			],
 			[result("b", { type: "bash", data: {} }).id, result("b", { type: "bash", data: {} })],
 		] as never);
 		const payloads = collectWidgetPayloads(content as never, results as never);
@@ -218,9 +224,18 @@ describe("widget standalone payload extraction", () => {
 
 	it("finds the latest widget across session entries (sidebar tab)", () => {
 		const entries = [
-			{ type: "message", message: { role: "toolResult", toolName: "calc", details: { type: "calc", data: { amount: 1 } } } },
-			{ type: "message", message: { role: "toolResult", toolName: "widget", details: { type: "ticker", data: { label: "EUR" } } } },
-			{ type: "message", message: { role: "toolResult", toolName: "widget", details: { type: "html", data: { html: "<p>新</p>" } } } },
+			{
+				type: "message",
+				message: { role: "toolResult", toolName: "calc", details: { type: "calc", data: { amount: 1 } } },
+			},
+			{
+				type: "message",
+				message: { role: "toolResult", toolName: "widget", details: { type: "ticker", data: { label: "EUR" } } },
+			},
+			{
+				type: "message",
+				message: { role: "toolResult", toolName: "widget", details: { type: "html", data: { html: "<p>新</p>" } } },
+			},
 		];
 		const payload = latestWidgetFromEntries(entries);
 		expect(payload?.type).toBe("html");
@@ -229,7 +244,10 @@ describe("widget standalone payload extraction", () => {
 
 	it("skips errored and non-widget entries in the sidebar scan", () => {
 		const entries = [
-			{ type: "message", message: { role: "toolResult", toolName: "widget", details: { type: "html", data: {} }, isError: true } },
+			{
+				type: "message",
+				message: { role: "toolResult", toolName: "widget", details: { type: "html", data: {} }, isError: true },
+			},
 			{ type: "message", message: { role: "user", content: "hi" } },
 		];
 		expect(latestWidgetFromEntries(entries)).toBeNull();

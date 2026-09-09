@@ -88,9 +88,7 @@ describe("ToolView xd:// dispatches", () => {
 	});
 
 	it("defaults a running xd://reject to discard before details arrive", () => {
-		const html = renderToStaticMarkup(
-			<ToolView name="reject" defaultOpen running args={{ reason: "" }} />,
-		);
+		const html = renderToStaticMarkup(<ToolView name="reject" defaultOpen running args={{ reason: "" }} />);
 
 		expect(html).toContain("proposed → rejected");
 	});

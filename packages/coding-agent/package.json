@@ -507,6 +507,14 @@
 			"types": "./src/plan-mode/*.ts",
 			"import": "./src/plan-mode/*.ts"
 		},
+		"./plugin-credentials": {
+			"types": "./src/plugin-credentials/index.ts",
+			"import": "./src/plugin-credentials/index.ts"
+		},
+		"./plugin-credentials/*": {
+			"types": "./src/plugin-credentials/*.ts",
+			"import": "./src/plugin-credentials/*.ts"
+		},
 		"./prompts/composer": {
 			"types": "./src/prompts/composer.ts",
 			"import": "./src/prompts/composer.ts"
