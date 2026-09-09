@@ -18,5 +18,5 @@ bunx cap open android
 ```
 
 Build with Android Studio; the app connects to a running musepi daemon on the
-same network. Web assets are prepared from the `desktop-web` build by
+same network. Web assets are prepared from the `guest-client` build by
 `scripts/prepare-web-assets.mjs` (mobile entry only — no runtime redirect).

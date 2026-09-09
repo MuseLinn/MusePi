@@ -46,5 +46,5 @@ export const swarm = {
 		"如果不确定使用哪个模型，请调用 ask_user_question 让用户选择。",
 } as const;
 
-/** Key union for the swarm domain (mirrors the desktop-web locale split). */
+/** Key union for the swarm domain (mirrors the guest-client locale split). */
 export type SwarmKey = keyof typeof swarm;

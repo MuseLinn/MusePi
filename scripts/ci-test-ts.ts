@@ -104,7 +104,7 @@ const fastWorkspacePackages = [
 const nativeAndIntegrationPackages = [
 	"packages/natives",
 	"packages/tui",
-	"packages/desktop-web",
+	"packages/guest-client",
 	"packages/typescript-edit-benchmark",
 ];
 

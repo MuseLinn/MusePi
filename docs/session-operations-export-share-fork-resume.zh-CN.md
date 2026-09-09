@@ -45,7 +45,7 @@
 - 显式拒绝 `--copy`、`clipboard` 和 `copy` 参数，并提示改用 `/dump`。
 - 导出会嵌入会话 header/entries/leaf，以及来自 agent 状态的当前 `systemPrompt` 和 tool 描述。
 - 存储在会话文件旁的子代理 transcript（`<session>/<AgentId>.jsonl`，嵌套衍生递归）会作为 `subSessions` 嵌入（`src/export/html/index.ts` 中的 `collectSubSessions`；可用 `ExportOptions` 中的 `includeSubSessions: false` 禁用）。在页面中，task tool 卡片里的 agent id 会打开一个带面包屑的子会话覆盖层。
-- Tool 调用通过 `<omp-tool-view>` web component 渲染——即与 desktop-web 共享、按 tool 预建的 React 渲染器（`packages/desktop-web/src/tool-render/`），由 `bun run gen:tool-views` 预编译到 `src/export/html/tool-views.generated.js`。
+- Tool 调用通过 `<omp-tool-view>` web component 渲染——即与 guest-client 共享、按 tool 预建的 React 渲染器（`packages/guest-client/src/tool-render/`），由 `bun run gen:tool-views` 预编译到 `src/export/html/tool-views.generated.js`。
 - 导出期间不会追加任何会话条目。
 
 注意：

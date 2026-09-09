@@ -31,5 +31,5 @@ export const mcp = {
 	"Enter the HTTP header name:": "输入 HTTP 头名称：",
 } as const;
 
-/** Key union for the mcp domain (mirrors the desktop-web locale split). */
+/** Key union for the mcp domain (mirrors the guest-client locale split). */
 export type McpKey = keyof typeof mcp;

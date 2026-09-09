@@ -8,7 +8,7 @@ import { getPendingDeepLink } from '../entryability/EntryAbility';
  * structured data) — the javaScriptProxy contract is synchronous.
  *
  * Mirrors the Capacitor Insets/Badge plugins and the low-level deep-link
- * channel so the shared desktop-web bundle routes through whichever shell
+ * channel so the shared guest-client bundle routes through whichever shell
  * is present (see lib/capacitor.ts).
  */
 export class HarmonyNative {

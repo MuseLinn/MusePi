@@ -30,7 +30,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ### 桌面 GUI
 
-- **Electron 桌面应用**（`packages/gui`）：三栏布局（会话侧栏 + 聊天流 + 上下文面板）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
+- **Electron 桌面应用**（`packages/desktop-app`）：三栏布局（会话侧栏 + 聊天流 + 上下文面板）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
 - **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
 - **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。
 - **受管浏览器**（`browser.gui` 工具）：Electron WebContentsView + CDP 桥——agent 可直接驱动 GUI 内嵌浏览器页（投影布局 + 像素采样验证）。
@@ -119,7 +119,7 @@ bun run musepi          # 或 bun run dev
 bun --cwd=packages/coding-agent src/cli.ts serve --port 8300
 
 # 桌面 GUI（构建 + 启动 Electron）
-bun run --cwd=packages/gui desktop
+bun run --cwd=packages/desktop-app desktop
 ```
 
 `musepi` 子命令：`launch`（默认对话）、`serve`（daemon）、`acp`、`agents`、`commit`、`config`、`join`、`models`、`plugin`、`say`、`share`、`setup`、`shell`、`stats`、`update`、`completions` 等。
@@ -131,8 +131,8 @@ bun run --cwd=packages/gui desktop
 ```
 ┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
 │  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
-│  packages/gui │   WS 事件流（journal/view）    │  packages/coding-agent│
-│  + desktop-web │                               │  AgentSession 宿主    │
+│  packages/desktop-app │   WS 事件流（journal/view）    │  packages/coding-agent│
+│  + guest-client │                               │  AgentSession 宿主    │
 └──────┬───────┘                               └──────────┬───────────┘
        │                                                    │
        │  pet.html / bubble.html / pin.html                 │ agent 引擎
@@ -140,13 +140,13 @@ bun run --cwd=packages/gui desktop
        │                                         packages/agent · ai · tui
        │                                         natives（Rust N-API）
        ▼
-  desktop-web：transcript / tool-render / widget / i18n（zh-CN/en-US 域化词表）
+  guest-client：transcript / tool-render / widget / i18n（zh-CN/en-US 域化词表）
 ```
 
 | 包 | 说明 |
 |---|---|
 | `gui` | Electron 桌面应用（主界面 + 桌宠/气泡/置顶多窗口、xterm、pdf.js、受管浏览器桥） |
-| `desktop-web` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
+| `guest-client` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
 | `coding-agent` | CLI 入口（`musepi`）、daemon 服务端、slash/bash 命令、工具实现 |
 | `collab-proto` | GUI ↔ daemon 传输协议（WS 帧、加密、链接） |
 | `agent` / `ai` / `tui` / `catalog` / `wire` / `utils` / `hashline` / `snapcompact` / `mnemopi` / `stats` | 上游派生的 agent 引擎 / provider 注册表 / TUI / 模型目录 / wire 类型 / 工具库 |
@@ -176,14 +176,14 @@ bun run lint / fmt       # biome + rustfmt
 
 - 全量测试建议 `MUSEPI_TEST_CONCURRENCY=4`（默认并发 8 在本机内存吃紧）。
 - Rust bucket 需要 `cargo-nextest`，且在 `~/.cargo/bin` 前置的 PATH 下跑。
-- 改 `desktop-web` 后必须重建 GUI（`bun run --cwd=packages/gui build`）再验证——浏览器会缓存旧 bundle。
+- 改 `guest-client` 后必须重建 GUI（`bun run --cwd=packages/desktop-app build`）再验证——浏览器会缓存旧 bundle。
 - GUI/daemon E2E 隔离：`PI_CONFIG_DIR=musepi-test` 起测试 daemon（:8310）；测试 GUI 用 `--user-data-dir=/tmp/...` + `MUSEPI_MANAGED_BROWSER_PORT=9231` + `--remote-debugging-port=9223`，puppeteer 只连 **9223**（CDP 端点）。
 
 提交习惯：`git commit --no-verify`（husky/biome 基线问题）；natives 变更后需重建（`bun run build:native`，macOS LINKEDIT 对齐自动）。
 
 ## 📱 移动端壳
 
-- **Capacitor Android 应用**（`packages/mobile` + `desktop-web` 移动入口）：沉浸式 edge-to-edge（自定义 InsetsPlugin）、QR 扫码配对（jsQR，无 GMS 依赖）、时间感知问候 + 轮换提示、建议 chips、44px 触控目标、Android 返回键逐层展开、旋转过渡、三合一发送控件（点阵 bloom 反馈）、盲文点阵工作指示器、会话归档（localStorage 桌面 GUI parity）。
+- **Capacitor Android 应用**（`packages/mobile` + `guest-client` 移动入口）：沉浸式 edge-to-edge（自定义 InsetsPlugin）、QR 扫码配对（jsQR，无 GMS 依赖）、时间感知问候 + 轮换提示、建议 chips、44px 触控目标、Android 返回键逐层展开、旋转过渡、三合一发送控件（点阵 bloom 反馈）、盲文点阵工作指示器、会话归档（localStorage 桌面 GUI parity）。
 - **HarmonyOS WebView 壳**（`packages/harmony`）：ArkTS `Web` 组件加载同一 bundle（native insets、badge、`musepi://` 深链、键盘 inset）。
 - **PWA**：service worker 离线连接壳。
 - **远程会话管理**（dsh-mobile-remote parity）：guest 可创建/删除/重命名会话、停止远端正在运行的 turn（`session.abort`）；agent 可主动发起分享（collab tool，分级审批）。
@@ -193,8 +193,8 @@ bun run lint / fmt       # biome + rustfmt
 ### 桌面应用（macOS）
 
 ```sh
-bun run --cwd=packages/gui pack          # 构建 + electron-builder + 签名
-bun run --cwd=packages/gui pack:dir      # electron-builder dir 构建 + 签名（不重新构建）
+bun run --cwd=packages/desktop-app pack          # 构建 + electron-builder + 签名
+bun run --cwd=packages/desktop-app pack:dir      # electron-builder dir 构建 + 签名（不重新构建）
 ```
 
 产物：`release/mac-arm64/MusePi.app`。`pack` 脚本做 **ad-hoc 签名**（本机可运行）。**正式分发**需要 Developer ID Application 证书 + Apple 公证——macOS 26 对未签名/未公证应用的多项能力（通知等）直接拒绝。CLI 二进制的签名/公证流程见 `docs/macos-signing-notarization.md`（hardened runtime + `notarytool`）；与裸 Mach-O 不同，`.app` bundle 还可以 **staple**（公证票据内嵌，离线也能通过 Gatekeeper 校验）。
@@ -205,7 +205,7 @@ bun run --cwd=packages/gui pack:dir      # electron-builder dir 构建 + 签名�
 
 ### 移动端（Android）
 
-同一 workflow 的 `package_mobile` job 构建 Capacitor 应用：desktop-web 编译 → `cap sync` → Gradle `assembleDebug`。Debug APK 附在 Release 页；`adb install -r app-debug.apk` 安装。HarmonyOS 壳（`packages/harmony`）在 DevEco Studio 中构建。
+同一 workflow 的 `package_mobile` job 构建 Capacitor 应用：guest-client 编译 → `cap sync` → Gradle `assembleDebug`。Debug APK 附在 Release 页；`adb install -r app-debug.apk` 安装。HarmonyOS 壳（`packages/harmony`）在 DevEco Studio 中构建。
 
 ### CLI
 

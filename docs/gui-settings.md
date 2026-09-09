@@ -2,18 +2,18 @@
 
 English | [中文](gui-settings.zh-CN.md)
 
-> Status: In sync with the current implementation of `packages/gui` / `packages/desktop-web` (2026-08-04).
+> Status: In sync with the current implementation of `packages/desktop-app` / `packages/guest-client` (2026-08-04).
 > Earlier planning drafts (gui-architecture / gui-migration / gui-prototype) have been deleted — the implementation has shipped. Together with **`docs/gui-design.md`** (design spec) and **`docs/gui-implementation.md`** (implementation notes), this document is one of the three current references (split into two docs on 2026-08-06).
 
 ## 1. Desktop Shell & Entry Point
 
-- **Electron** (`packages/gui/electron/main.cjs`, loads `packages/gui/dist/index.html`) — not Tauri as planned by the early documents.
+- **Electron** (`packages/desktop-app/electron/main.cjs`, loads `packages/desktop-app/dist/index.html`) — not Tauri as planned by the early documents.
 - Launch: `bun run desktop` = `bun run build && electron .`; `bun run desktop:run` only starts Electron (**no rebuild**, so after changing code you must manually run `bun run build`).
 - The renderer connects to the daemon (`musepi serve --port`) via `RpcClient` (JSON-RPC over WebSocket).
 
 ## 2. Settings Panel Layout
 
-`SettingsView` (`packages/gui/src/components/SettingsView.tsx`) replaces the workspace full-window, in three parts:
+`SettingsView` (`packages/desktop-app/src/components/SettingsView.tsx`) replaces the workspace full-window, in three parts:
 
 ```
 gui-settings-view          ← flex:1 fills the shell (flex ROW); size does not follow tab content
@@ -34,7 +34,7 @@ gui-settings-view          ← flex:1 fills the shell (flex ROW); size does not 
 
 ## 3. Theme System (Three Orthogonal Axes)
 
-`packages/desktop-web/src/lib/theme.ts` + `packages/desktop-web/src/styles/tokens.css`:
+`packages/guest-client/src/lib/theme.ts` + `packages/guest-client/src/styles/tokens.css`:
 
 | Axis | DOM attribute | Values | Storage key |
 |---|---|---|---|
@@ -66,8 +66,8 @@ gui-settings-view          ← flex:1 fills the shell (flex ROW); size does not 
 ## 6. Code Highlighting (added 2026-08-04)
 
 - Highlights chat code blocks and settings previews on desktop by reusing the **same Rust tree-sitter as the TUI** (`@musepi/pi-natives` `highlightCode` → ANSI lines).
-- The renderer is sandboxed, so native modules load in the main process: `main.cjs` `gui-highlight` IPC handler → `preload.cjs` exposes `electronAPI.highlightCode` → `packages/gui/src/lib/highlight.ts` (`nativeHighlight`/`useChatHighlight`, GitHub-style token palettes per light/dark scheme).
-- Pure conversion functions live in desktop-web `transcript/highlight.ts` (`ansiLineToHtml`/`highlightToCodeHtml`); `Markdown` receives them via the `CodeHighlightProvider` context; browser visitors have no bridge → plain-text fallback.
+- The renderer is sandboxed, so native modules load in the main process: `main.cjs` `gui-highlight` IPC handler → `preload.cjs` exposes `electronAPI.highlightCode` → `packages/desktop-app/src/lib/highlight.ts` (`nativeHighlight`/`useChatHighlight`, GitHub-style token palettes per light/dark scheme).
+- Pure conversion functions live in guest-client `transcript/highlight.ts` (`ansiLineToHtml`/`highlightToCodeHtml`); `Markdown` receives them via the `CodeHighlightProvider` context; browser visitors have no bridge → plain-text fallback.
 - Markdown code blocks carry `data-hl-hash` (FNV-1a); an effect caches async highlights by hash, so streaming re-renders do not re-invoke the bridge.
 - Known pitfall: Electron 37 / Node 26 lacks `import.meta.dir`; the natives loader needs the `?? import.meta.dirname` fallback (fixed, 2026-08-04).
 

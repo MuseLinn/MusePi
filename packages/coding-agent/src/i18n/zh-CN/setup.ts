@@ -77,5 +77,5 @@ export const setup = {
 	"Ctrl+click to open": "Ctrl+点击打开",
 } as const;
 
-/** Key union for the setup domain (mirrors the desktop-web locale split). */
+/** Key union for the setup domain (mirrors the guest-client locale split). */
 export type SetupKey = keyof typeof setup;

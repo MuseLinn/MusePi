@@ -57,5 +57,5 @@ export const shell = {
 	"(sub)": "（子）",
 } as const;
 
-/** Key union for the shell domain (mirrors the desktop-web locale split). */
+/** Key union for the shell domain (mirrors the guest-client locale split). */
 export type ShellKey = keyof typeof shell;

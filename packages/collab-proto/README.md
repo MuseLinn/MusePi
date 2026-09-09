@@ -1,7 +1,7 @@
 # @musepi/collab-proto
 
 Collab live-session wire transport shared by the host (`coding-agent`) and
-guests (`desktop-web`): AES-256-GCM frame sealing, share-link format, wire
+guests (`guest-client`): AES-256-GCM frame sealing, share-link format, wire
 envelope, QR codes, and the relay WebSocket client. Pure transport — no
 agent/session imports, browser-safe (zero `Buffer`), generic frame types.
 

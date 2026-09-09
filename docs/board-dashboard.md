@@ -45,7 +45,7 @@ English | [中文](board-dashboard.zh-CN.md)
 ## 3. 架构
 
 ```
-┌─ GUI (packages/gui, Electron) ──────────────────────────────┐
+┌─ GUI (packages/desktop-app, Electron) ──────────────────────────────┐
 │  BoardPage (React)                                          │
 │   ├─ 看板网格（拖放/缩放：dnd-kit 或手写 pointer 状态机）       │
 │   ├─ 组件卡 = <WidgetShell> + WidgetRegistry 组件</WidgetShell>│
@@ -68,7 +68,7 @@ English | [中文](board-dashboard.zh-CN.md)
 
 | 决策点 | 选择 | 理由 |
 |---|---|---|
-| 组件运行环境 | **白名单组件注册表（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 desktop-web tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联 widget** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
+| 组件运行环境 | **白名单组件注册表（首选）**：组件编译进 GUI（reactbits + 自研 + 复用 guest-client tool-render），agent 经工具**选类型 + 填数据**；**iframe 沙箱（备选升级）**：仅当需要"AI 自由生成任意 HTML"时启用 | ①kimi 式**消息内联 widget** 用 iframe 太重（每条消息一个沙箱）——registry 组件直接渲染在消息流；②reactbits 组件全是声明式受控组件 → **白名单即类型级隔离**（无需运行沙箱）；③schema 校验的数据流比"生成任意 HTML"更可靠、可审计、可 diff |
 | 组件格式 | **registry 条目**：`{ type, schema, component }`——组件是 TSX（reactbits 源码式），agent 交互的是 **widget schema**（type + data 字段） | 比单 HTML 文件更易维护；reactbits 组件零改动直接入 registry；`widget.render` 工具按 schema 校验 |
 | 组件 SDK | `widget.render { type, data }` 工具 + daemon `widget.schema` RPC（暴露可用类型/字段给 agent） | agent 通过 schema 发现能力，**自动补全组件参数**——"封装好搭好底座暴露给 agent"正是此意 |
 | 持久化 | daemon `board.*` RPC → 会话目录 JSON（`~/.musepi/boards/`） | 跨重启、可备份；与 notes/plans 同级 |
@@ -138,7 +138,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 ```
 
 - **reactbits 角色**：**视觉组件库**（白名单来源）——每个组件是一个 registry 条目，与自研功能件并列；不做沙箱运行时（它不是为数据绑定/交互逻辑设计的——数据与状态机自研）。
-- **现有基础**：CountUp/BlurText/ShinyText/SpotlightCard 已落地 GUI（2026-08-07）；desktop-web `tool-render/registry.ts`（30+ 工具渲染器）就是消息内联 widget 的雏形——扩展它加通用 `widget.*` 渲染器即达 kimi 式内联。
+- **现有基础**：CountUp/BlurText/ShinyText/SpotlightCard 已落地 GUI（2026-08-07）；guest-client `tool-render/registry.ts`（30+ 工具渲染器）就是消息内联 widget 的雏形——扩展它加通用 `widget.*` 渲染器即达 kimi 式内联。
 - **agent 利用路径**：`widget.schema` 列出可用类型 → 工具填数据 → registry 渲染——agent 无需懂 React/动画，只需选类型填字段（schema 驱动自动补全）。
 
 ### iframe 沙箱（备选，M4 后评估）
@@ -156,7 +156,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 - **M3 编辑与持久化**：拖放/缩放、编辑模式、daemon board.* RPC + 落盘（`~/.musepi/boards/boards.json`）。~1 周 — **✅ 已落地**
 - **M4 AI 生成**：widget 工具已落地（agent 经 schema 选类型填数据渲染）；**AI 生成会话（widget.generate）+ 模板市场未做（无排期）**。~1 周 — **◐ 部分**
 - **M5 桌面常驻**：alwaysOnTop 小窗先例存在（main.cjs mini-window 族）；**看板专用小窗（board-card.html）未验证**。~0.5 周 — **◐ 部分**
-- **调度执行引擎**（§7 widget `data.task.schedule` 每小时/每天定时执行）：**GUI 侧已实现**（`desktop-web` task-run 执行引擎 + BoardPage 30s poll 定时消费 schedule；手动 run 走同一执行器刷新卡片数据而非 setTimeout 模拟）— **✅ 已落地（当前看板作用域）**
+- **调度执行引擎**（§7 widget `data.task.schedule` 每小时/每天定时执行）：**GUI 侧已实现**（`guest-client` task-run 执行引擎 + BoardPage 30s poll 定时消费 schedule；手动 run 走同一执行器刷新卡片数据而非 setTimeout 模拟）— **✅ 已落地（当前看板作用域）**
 
 ## 5. 风险与决策待定
 
@@ -166,7 +166,7 @@ Agent 工具 ──widget.render/board.*──▶ daemon RPC ──▶ GUI
 - **数据源范围**：行情接口（免费源选型：腾讯/新浪/雅虎）合规性待确认——MVP 可先
   静态示例数据 + 1 个真实源。
 - **AI 生成的组件安全**：生成后强制沙箱预览 + 人工确认（bitfun 的 permission review 流程）。
-- **与 desktop-web 关系**：看板放 GUI（desktop）——guest 只读分享暂不排期。
+- **与 guest-client 关系**：看板放 GUI（desktop）——guest 只读分享暂不排期。
 
 ## 5b. 渲染规范
 
@@ -178,14 +178,14 @@ widget 组件的视觉/排版/交互约束见 **`docs/widget-design-system.md`**
 - bitfun：`src/web-ui/src/scenes/miniapps/`（MiniAppRunner、useMiniAppBridge、MiniAppCustomizePanel）、
   `src/web-ui/src/tools/bitfun-canvas/`（CanvasRuntimeApp、runtime/sdk/*）
 - kimi work：产品截图（ui-references/，2026-08-07）
-- musepi：`packages/gui/electron/main.cjs`（miniWindow 先例）、daemon RPC 注册表
+- musepi：`packages/desktop-app/electron/main.cjs`（miniWindow 先例）、daemon RPC 注册表
   （`packages/coding-agent/src/daemon/server.ts`）
 
 ## 7. builtin bundle 定位（2026-08-08 定）
 
 **是——看板系统就是 desktop 的内置组件 bundle**，与桌宠（pet bundle）、mini 聊天窗同级：
 
-- **白名单 WidgetRegistry** 编译进 GUI（desktop-web 共享：看板卡 + 消息内联 + pin 窗三处渲染）——类型级隔离，非任意代码
+- **白名单 WidgetRegistry** 编译进 GUI（guest-client 共享：看板卡 + 消息内联 + pin 窗三处渲染）——类型级隔离，非任意代码
 - **daemon 持久化**：`board.list` / `board.save` RPC → `~/.musepi/boards/boards.json`（GUI/agent/多窗口共享一份；localStorage 为离线回退）
 - **agent 规范化调用**：
   - `widget` 工具（agent 消息内联渲染，WIDGET_TYPES 表）

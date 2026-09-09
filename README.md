@@ -81,7 +81,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ### Desktop GUI
 
-- **Electron desktop app** (`packages/gui`): three-pane layout (session sidebar + chat stream + context panel), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window.
+- **Electron desktop app** (`packages/desktop-app`): three-pane layout (session sidebar + chat stream + context panel), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window.
 - **Always-on desktop pet**: animated companion (petdex frame-animation packs, drag positioning, click-through, hover interactions, cross-window activity bridge); task progress surfaces as pet bubbles.
 - **Daemon architecture**: the GUI talks JSON-RPC to the daemon (`musepi serve`). Sessions persist via journal + materialized view; idle 30-min sessions become history snapshots and reactivate on demand. The daemon survives GUI exit; reconnecting resumes.
 - **Managed browser** (`browser.gui`): Electron `WebContentsView` + CDP bridge — drive an embedded browser page in the GUI with projected layout and pixel-sampled verification.
@@ -136,9 +136,9 @@ Three standalone lowercase words opt a turn into specialized behavior: **`ultrat
 Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
 ### Mobile shells
 
-- **Capacitor Android app** (`packages/mobile` + `desktop-web` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.
+- **Capacitor Android app** (`packages/mobile` + `guest-client` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.
 - **HarmonyOS WebView shell** (`packages/harmony`): ArkTS `Web` component loading the same bundle from rawfile — native insets (`getWindowAvoidArea`), badge, `musepi://` deep links, keyboard insets. No compat layer: immersion/camera/permissions are native.
-- **PWA**: offline connect shell via service worker (`packages/desktop-web/public/sw.js`) — cached shell opens without a network; static assets cache-first.
+- **PWA**: offline connect shell via service worker (`packages/guest-client/public/sw.js`) — cached shell opens without a network; static assets cache-first.
 - **Remote session management**: guests can create / delete / rename sessions and stop a running turn (`session.abort`) — dsh-mobile-remote parity.
 - **Instance switcher**: top-bar menu connects to remote daemons (`serve --remote-token <token>` gates with bearer auth; hosts persist in localStorage).
 - **Agent-initiated sharing**: the `collab` tool starts LAN/tunnel shares (tunnel requires explicit approval).
@@ -154,8 +154,8 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 ```
 ┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
 │  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
-│  packages/gui │   WS event stream (journal)   │  packages/coding-agent│
-│  + desktop-web │                               │  AgentSession host    │
+│  packages/desktop-app │   WS event stream (journal)   │  packages/coding-agent│
+│  + guest-client │                               │  AgentSession host    │
 └──────┬───────┘                               └──────────┬───────────┘
        │                                                    │
        │  pet.html / bubble.html / pin.html                 │ agent engine
@@ -163,13 +163,13 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
        │                                         packages/agent · ai · tui
        │                                         natives (Rust N-API)
        ▼
-  desktop-web: transcript / tool-render / widget / i18n (per-domain zh-CN/en-US maps)
+  guest-client: transcript / tool-render / widget / i18n (per-domain zh-CN/en-US maps)
 ```
 
 | Package | Role |
 |---|---|
 | `gui` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
-| `desktop-web` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI (desktop + mobile entry) |
+| `guest-client` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI (desktop + mobile entry) |
 | `mobile` | Capacitor Android shell: InsetsPlugin (edge-to-edge), native chrome wiring, APK build |
 | `harmony` | HarmonyOS NEXT WebView shell: ArkTS Web + `harmonyNative` bridge, deep links, DevEco project |
 | `coding-agent` | CLI entry (`musepi`), daemon server, slash/bash commands, tool implementations |
@@ -204,7 +204,7 @@ bun run lint / fmt       # biome + rustfmt
 ### Desktop app (macOS)
 
 ```sh
-bun run --cwd=packages/gui pack          # build + electron-builder + codesign
+bun run --cwd=packages/desktop-app pack          # build + electron-builder + codesign
 ```
 
 Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bundle so it runs locally. **Distribution builds** need a Developer ID Application certificate + notarization — macOS 26 refuses unsigned/non-notarized apps for several entitlements. See [`docs/macos-signing-notarization.md`](docs/macos-signing-notarization.md).
@@ -215,7 +215,7 @@ Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bund
 
 ### Mobile (Android)
 
-`package_mobile` in the same workflow builds the Capacitor app: desktop-web bundle → `cap sync` → Gradle `assembleDebug`. The debug APK lands on the release page; install with `adb install -r app-debug.apk`. HarmonyOS shell (`packages/harmony`) builds in DevEco Studio.
+`package_mobile` in the same workflow builds the Capacitor app: guest-client bundle → `cap sync` → Gradle `assembleDebug`. The debug APK lands on the release page; install with `adb install -r app-debug.apk`. HarmonyOS shell (`packages/harmony`) builds in DevEco Studio.
 
 ### CLI
 

@@ -20,7 +20,7 @@ const config: CapacitorConfig = {
 		Keyboard: {
 			// 'none' leaves the WebView at full height; the UI follows the
 			// keyboard itself via the --mp-keyboard-inset CSS variable (see
-			// desktop-web mobile styles). The built-in 'native' resize lands
+			// guest-client mobile styles). The built-in 'native' resize lands
 			// only after the keyboard animation finishes (visible lag).
 			resize: "none",
 			resizeOnFullScreen: true,

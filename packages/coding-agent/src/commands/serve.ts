@@ -5,7 +5,7 @@
  *
  * Options:
  *   --port <n>     also listen for browser JSON-RPC on ws://127.0.0.1:<n>
- *   --web-port <n> also serve the renderer bundle (desktop-web dist) on
+ *   --web-port <n> also serve the renderer bundle (guest-client dist) on
  *                  http://127.0.0.1:<n> — the dsh-desktop-compat "runtime
  *                  serves the web renderer" half; the Electron compat shell
  *                  loadURLs this origin (MUSEPI_GUI_COMPAT_URL).

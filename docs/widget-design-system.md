@@ -1,6 +1,6 @@
 # Widget 设计系统（看板组件 + 消息内联 widget）
 
-> **状态（2026-08-25 核对）**：registry 组件层已实现（18 种 widget，parity 测试 `desktop-web/test/widget-parity.test.ts`）；
+> **状态（2026-08-25 核对）**：registry 组件层已实现（18 种 widget，parity 测试 `guest-client/test/widget-parity.test.ts`）；
 > iframe 沙箱层部分（html widget opaque-origin sandbox + postMessage bridge 存在，缺 token CSS 预加载与沙箱 sendPrompt）；
 > 完整核对见 `docs/board-dashboard.md` 状态行。
 >

@@ -762,5 +762,5 @@ export const commands = {
 	"preset creator description": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
 } as const;
 
-/** Key union for the commands domain (mirrors the desktop-web locale split). */
+/** Key union for the commands domain (mirrors the guest-client locale split). */
 export type CommandsKey = keyof typeof commands;

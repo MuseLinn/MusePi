@@ -59,7 +59,7 @@ TUI 与核心决策面,同时保留现有更强保障:
 
 | 接缝 | 形态 | 位置 |
 |---|---|---|
-| GUI 面板 tab | `panel.tab.<id>` slot 组件 | `packages/gui/src/lib/slot-host.tsx`(前缀常量 :35-45) |
+| GUI 面板 tab | `panel.tab.<id>` slot 组件 | `packages/desktop-app/src/lib/slot-host.tsx`(前缀常量 :35-45) |
 | GUI 设置 tab / item / action | `settings.tab.` / `settings.item.` / `settings.action.` | 同上 |
 | GUI rail | `rail.<id>` | 同上 |
 | 扩展装载 | 会话级 CustomTool `extension_load/reload/status/validate/rollback`(agent 会话内自举;WS 面只有 `extensions.*` 管理 RPC) | `extension-lifecycle-tools.ts` + `server.ts:1170` |

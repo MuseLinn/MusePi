@@ -13,7 +13,7 @@ import { compareVersions } from "../packages/utils/src/version.ts";
 import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
-const changelogGlob = new Glob("packages/{coding-agent,desktop-web}/CHANGELOG.md");
+const changelogGlob = new Glob("packages/{coding-agent,guest-client}/CHANGELOG.md");
 const packageJsonGlob = new Glob("packages/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
@@ -265,9 +265,9 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	const pkgJsonPaths = await Array.fromAsync(packageJsonGlob.scan("."));
 
 	// Private packages don't publish to npm — except the release-artifact
-	// packages (gui/desktop-web/mobile) whose version drives the
+	// packages (gui/guest-client/mobile) whose version drives the
 	// electron-builder / Capacitor artifact names (`MusePi-<v>-*.dmg`).
-	const RELEASE_ARTIFACT_PKGS = new Set(["@musepi/gui", "@musepi/desktop-web", "@musepi/mobile"]);
+	const RELEASE_ARTIFACT_PKGS = new Set(["@musepi/desktop-app", "@musepi/guest-client", "@musepi/mobile"]);
 	const publicPkgPaths: string[] = [];
 	for (const pkgPath of pkgJsonPaths) {
 		const pkgJson = await Bun.file(pkgPath).json();

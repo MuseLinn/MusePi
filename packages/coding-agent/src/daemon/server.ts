@@ -479,7 +479,7 @@ export interface DaemonOptions {
 	socketPath?: string;
 	/** Optional WebSocket port (browser-reachable JSON-RPC transport). */
 	wsPort?: number;
-	/** Optional loopback HTTP port serving the renderer bundle (desktop-web
+	/** Optional loopback HTTP port serving the renderer bundle (guest-client
 	 *  dist) — the dsh-desktop-compat "runtime serves the web renderer" half.
 	 *  The Electron compat shell loadURLs this origin; the WS stays on wsPort. */
 	webPort?: number;
@@ -6113,7 +6113,7 @@ export class DaemonServer {
 				const collabMode: "session" | "workspace" =
 					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
 				const collabHost = new CollabHost(stubCtx as never, collabMode);
-				// Tunnel shares the same loopback relay as the desktop-web dist;
+				// Tunnel shares the same loopback relay as the guest-client dist;
 				// the public URL is https/wss-same-origin, so webUrl for the
 				// browser deep link is the tunnel URL itself.
 				const urls = mode === "tunnel" ? await transport.startTunnel() : await transport.startLan();
@@ -9190,12 +9190,12 @@ let sdkPrewarmed = false;
 
 /** Resolve the renderer dist dir the compat HTTP server serves. Env
  *  MUSEPI_RENDERER_DIST overrides; defaults to the workspace sibling
- *  desktop-web/dist (dev layout). A missing dist is non-fatal —
+ *  guest-client/dist (dev layout). A missing dist is non-fatal —
  *  startDaemonWeb throws and the shell falls back to its local bundle. */
 function rendererDistDir(): string {
 	const fromEnv = process.env.MUSEPI_RENDERER_DIST;
 	if (fromEnv) return fromEnv;
-	return path.resolve(import.meta.dir, "../../../desktop-web", "dist");
+	return path.resolve(import.meta.dir, "../../../guest-client", "dist");
 }
 
 export async function startDaemon(
@@ -9430,7 +9430,7 @@ const AUTOSTART_RUN_KEY = "Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\R
 function resolveDaemonBinary(): string {
 	// Packaged: look for the daemon binary relative to this script's
 	// location. The server is at <root>/packages/coding-agent/src/daemon/.
-	// The packaged binary is at <root>/packages/gui/vendor/daemon/musepi.exe
+	// The packaged binary is at <root>/packages/desktop-app/vendor/daemon/musepi.exe
 	// (or the asar-unpacked equivalent).
 	const candidates = [
 		path.join(__dirname, "..", "..", "..", "..", "..", "vendor", "daemon", "musepi.exe"),

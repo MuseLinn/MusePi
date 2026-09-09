@@ -201,7 +201,7 @@ mp_cta: true
 <pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
 <span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># install + natives + link</span>
 <span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># terminal TUI</span>
-<span class="mp-cmd">bun run --cwd=packages/gui desktop</span>   <span class="mp-c"># desktop GUI</span></pre>
+<span class="mp-cmd">bun run --cwd=packages/desktop-app desktop</span>   <span class="mp-c"># desktop GUI</span></pre>
   </div>
   <p class="mp-note">The full guide lives in <a href="{{ 'README.md' | relative_url }}">README.md</a> —
   daemon architecture, provider setup, mobile build, collab sharing.</p>

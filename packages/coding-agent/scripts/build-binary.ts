@@ -86,7 +86,7 @@ async function main(): Promise<void> {
 		// `export/html` subpath, whose source imports `tool-views.generated.js`.
 		// Rebuild it before compilation so clean checkouts that skipped install
 		// hooks still contain that generated bundle.
-		await runCommand(["bun", "--cwd=../desktop-web", "run", "gen:tool-views"]);
+		await runCommand(["bun", "--cwd=../guest-client", "run", "gen:tool-views"]);
 		await runCommand(
 			["bun", "--cwd=../natives", "run", "gen:native"],
 			crossBuild ? { ...Bun.env, TARGET_PLATFORM: crossBuild.platform, TARGET_ARCH: crossBuild.arch } : Bun.env,

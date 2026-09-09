@@ -1,5 +1,5 @@
 /**
- * Lightweight i18n for the OMP stats dashboard (mirrors desktop-web).
+ * Lightweight i18n for the OMP stats dashboard (mirrors guest-client).
  *
  * Translation keys ARE the English strings (pass-through for en-US).
  * `t()` must only be called at render time, never at module load time.
@@ -84,7 +84,7 @@ export function t(key: string, ...args: string[]): string {
 // ── Initialization ───────────────────────────────────────────────────────────
 
 // Restore a persisted locale before the first render. Runs at module import,
-// which precedes React's first paint (mirrors desktop-web's root init).
+// which precedes React's first paint (mirrors guest-client's root init).
 try {
 	const stored = globalThis.localStorage.getItem("omp.stats.locale");
 	if (stored === "zh-CN" || stored === "en-US") {

@@ -54,5 +54,5 @@ export const welcome = {
 	"Press shift+tab to cycle through reasoning effort levels": "按 shift+tab 循环切换推理投入级别",
 } as const;
 
-/** Key union for the welcome domain (mirrors the desktop-web locale split). */
+/** Key union for the welcome domain (mirrors the guest-client locale split). */
 export type WelcomeKey = keyof typeof welcome;

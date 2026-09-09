@@ -44,7 +44,7 @@ description: MusePi 代码库的文案/注释标准——写"契约"而不是写
 - **prompt 文件**：prompt 一律是静态 `.md`（AGENTS.md 规则：禁代码内拼 prompt），
   Handlebars 做动态内容。**措辞即行为**：改动 prompt 视为行为变更，需要 snapshot/
   测试佐证。
-- **i18n 文案**：走域文件（`desktop-web/src/i18n/{zh-CN,en-US}/<domain>.ts`、
+- **i18n 文案**：走域文件（`guest-client/src/i18n/{zh-CN,en-US}/<domain>.ts`、
   `coding-agent/src/i18n/zh-CN/`），zh 加 key 必须同步 en（en 域文件
   `as const satisfies Record<ZhKey, string>`，缺 key 即编译错）；插件/扩展文案走
   `registerTranslations`，GUI 另有 `tLoose`。key 是契约：不擅自改语义。

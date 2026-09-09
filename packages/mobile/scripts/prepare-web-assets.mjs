@@ -1,14 +1,14 @@
-// Prepare the Capacitor webDir from the desktop-web build: copy the shared
+// Prepare the Capacitor webDir from the guest-client build: copy the shared
 // dist, then rewrite mobile.html → index.html so the native shell always
 // launches the mobile entry (openchamber pattern — no runtime redirect, the
-// APK contains only the mobile surface). The desktop-web dist itself is left
+// APK contains only the mobile surface). The guest-client dist itself is left
 // untouched for desktop browsers.
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const collabDist = path.resolve(mobileRoot, "../desktop-web/dist");
+const collabDist = path.resolve(mobileRoot, "../guest-client/dist");
 const mobileDist = path.resolve(mobileRoot, "dist");
 
 await rm(mobileDist, { recursive: true, force: true });

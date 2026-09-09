@@ -39,5 +39,5 @@ export const selector = {
 	"[x]": "[x]",
 } as const;
 
-/** Key union for the selector domain (mirrors the desktop-web locale split). */
+/** Key union for the selector domain (mirrors the guest-client locale split). */
 export type SelectorKey = keyof typeof selector;

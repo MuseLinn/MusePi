@@ -11,7 +11,7 @@
 
 ### 第一轮(2026-08-21):版本 0.4.2 + 3 bugfix + extendedContext
 
-- **版本 0.4.2**:21 个 workspace 包统一(原 17.3.4 线 + 杂散线 collab-proto 17.2.8/desktop-web 16.3.6/tool-select 17.2.2/sdk 0.3.1 全对齐);root workspaces.catalog + Cargo.toml + MUSEPI_VERSION + gui/update-manifest + mobile + branding/productVersion;cli.ts:412/main.ts:1227 显示去 `(OMP …)` 后缀→`musepi/0.4.2`;依赖字面 pin 同步(sdk/collab-proto)
+- **版本 0.4.2**:21 个 workspace 包统一(原 17.3.4 线 + 杂散线 collab-proto 17.2.8/guest-client 16.3.6/tool-select 17.2.2/sdk 0.3.1 全对齐);root workspaces.catalog + Cargo.toml + MUSEPI_VERSION + gui/update-manifest + mobile + branding/productVersion;cli.ts:412/main.ts:1227 显示去 `(OMP …)` 后缀→`musepi/0.4.2`;依赖字面 pin 同步(sdk/collab-proto)
 - **6 个 update-cli 测试修复**(品牌漂移非环境):fixture URL can1357/oh-my-pi→MuseLinn/MusePi;错误消息按 launcher 基名;updateViaShimTakeover 从 shimPath 基名推导 exe/shim 名(兼容旧 omp.* 与 musepi.*);installerHint 改 npm 通道;sarif informationUri 改仓库。update-cli 69/69
 - **#8899** commit 拆分二进制补丁:parseFileDiffs split 改 `/^(?=diff --git )/m`(commit/git/diff.ts),commit 77/77
 - **#8891** `omp update --cwd` 崩溃:resolveCliArgv + LAUNCH_FLAG_COMMANDS{launch,acp} + stripLaunchGlobalFlags(cli-commands.ts)
@@ -71,7 +71,7 @@
 
 - 14 个 workspace 包 version 17.3.0→**17.3.4**(agent/ai/catalog/coding-agent/hashline/mnemopi/natives/omptype/snapcompact/stats/swarm-extension/tui/utils/wire);root catalog 13 条同步;sdk 的 @musepi/pi-wire 依赖同步
 - **@musepi/pi-natives 哨兵 17.3.0→17.3.4**:crates/pi-natives/src/lib.rs js_name + packages/natives/native/index.js + index.d.ts;win32 addon 本机重建(bazel-natives.ts host → 本地 napi build);darwin/linux 需对应主机/交叉构建
-- **MusePi 应用 0.4.0→0.4.1**:src/musepi.ts MUSEPI_VERSION + src/musepi/branding/index.ts productVersion + packages/gui/package.json + gui/update-manifest.json;TUI 标注 `0.4.1 (OMP 17.3.4)`(cli.ts/main.ts displayVersion 自动拼接),GUI system.meta 派生显示
+- **MusePi 应用 0.4.0→0.4.1**:src/musepi.ts MUSEPI_VERSION + src/musepi/branding/index.ts productVersion + packages/desktop-app/package.json + gui/update-manifest.json;TUI 标注 `0.4.1 (OMP 17.3.4)`(cli.ts/main.ts displayVersion 自动拼接),GUI system.meta 派生显示
 - bun.lock:workspace 版本 + catalog + sdk 依赖替换(注意:全量 sed 会误伤第三方包——`lint-staged@17.3.0` 被改成 17.3.4 后 npm 404,已还原;只应替换 @musepi 与 workspace version 行);`bun install --frozen-lockfile` 通过(748 installs 无变化)
 
 ### 测试清理与平台适配(2026-08-15)
@@ -506,7 +506,7 @@ P4 **消息渲染细节**:`<advisory>` 块(advisor 工具 note 格式)渲染为�
 - **PURE 复制(122 文件,v18 终态 + @oh-my-pi→@musepi rename)**:MCP timeout/abort 竞态(timeout.ts/transports/http.ts + 测试)、LSP index、irc/bus、ai error/flags+rate-limit+vision-guard+usage/cursor+event-stream、catalog build(glyph 标记)+discovery/gemini-cli、edit hashline/execute+normalize+modes/replace、mnemopi config/state/episodic-graph、tui autocomplete/fuzzy/markdown/select-list/text/loader/image/stdin-buffer/terminal/keybindings、utils env(dotenv 过滤)+mermaid-ascii grid、session-picker、capability fs、extensibility/tool-proxy(applyToolProxy 绑定修复)等
 - **3-way 合并(merge-file --diff3,base=v17.4.3+rename)**:110 文件干净合并;82 文件冲突手解(逐 hunk ours/theirs/混合)
 - **新特性**:session pinning(/pin + session-selector 图钉)、session title-index、glyph tokenization(Claude 系 provider,stream.ts applyGlyphCodec 全链)、task error-attribution(connect-error-detail)、多语言 workspace diagnostics、welcome 断点抖动修复(动态标签不参与 min-width)、thinking-loop 工具调用后保持武装、APC 序列零宽测量、[DONE] sentinel、Devin/Cursor trailer 诊断(flags.errorClassificationMessage)、handoff summary context(agent compaction method 字段)、bash/eval prompt auto-background 措辞
-- **版本**:全部 workspace 包(含此前遗留的 17.x/16.x 镜像号)统一为 0.4.3;root catalog 与 sdk/coding-agent/desktop-web 的精确 pin 同步刷新
+- **版本**:全部 workspace 包(含此前遗留的 17.x/16.x 镜像号)统一为 0.4.3;root catalog 与 sdk/coding-agent/guest-client 的精确 pin 同步刷新
 
 ### 明确跳过(记录备查)
 
@@ -548,7 +548,7 @@ P4 **消息渲染细节**:`<advisory>` 块(advisor 工具 note 格式)渲染为�
 - **P0 /mcp test 配置查找竞态**(fix: race /mcp test config lookup against esc abort):`mcp-command-controller.ts` 用既有 `raceAbortSignal` 包裹查找,ESC 中止不再与配置解析竞态崩溃
 - **P0 Fireworks mid-generation NaN 400**(fix: classified fireworks mid-generation nan 400 as transient):`ai/src/error/flags.ts` 加 `GENERATION_NAN_PATTERN` 分类分支 → `Transient` + retryable;`test/error-aierr.test.ts` +2 测试
 - **P1 edit 自动语法错误修复**(feat: automatic syntax error repair for edits):`edit/blackbox.ts`(sourceParses/introducedParseFailure/createEditBlackboxRecorder)+ `edit/auto-repair.ts`(computeRepairRegion/repairParseRegression/attemptEditAutoRepair)+ `edit/auto-repair.md`(Handlebars prompt)+ `edit/auto-repair.test.ts`(7 测试)+ `config/settings-schema.ts` 加 `edit.autoRepair.enabled` 布尔;`edit/index.ts` 的 `EditTool.execute` 接 post-execution parse 检查→auto-repair 调用
-- **desktop 对齐**:auto-repair notification 经 wire 协议 `result.content` 返回,desktop-web `edit.tsx` 的 `ResultText` 直接渲染——天然对齐,无需 desktop 单独改动;hub/usage 为 TUI 独有 cosmetic,desktop 有独立 renderer,保持现状
+- **desktop 对齐**:auto-repair notification 经 wire 协议 `result.content` 返回,guest-client `edit.tsx` 的 `ResultText` 直接渲染——天然对齐,无需 desktop 单独改动;hub/usage 为 TUI 独有 cosmetic,desktop 有独立 renderer,保持现状
 
 ### 明确跳过(记录备查)
 

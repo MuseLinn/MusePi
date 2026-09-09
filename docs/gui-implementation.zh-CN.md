@@ -1,7 +1,7 @@
 # MusePi GUI 实现笔记(契约与坑)
 [English](gui-implementation.md) | 中文
 
-> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/gui` / `packages/desktop-web` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/desktop-app` / `packages/guest-client` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
 >
 > 设计风格规范(布局/token/动效/组件模式)见 **`docs/gui-design.md`**。
 
@@ -38,7 +38,7 @@ TUI `recap.enabled`/`recap.idleSeconds`(schema tab `interaction`、group Notific
 
 触发:Electron 在系统睡眠时断开 renderer↔daemon 的 WebSocket(electron#19993,localhost 同受);唤醒后必须重连。恢复链三层:
 
-- **renderer keepalive**(`packages/gui/src/lib/rpc.ts`):请求 15s 超时(`REQUEST_TIMEOUT_MS`)防永挂;每 20s 发 `system.ping`(`KEEPALIVE_INTERVAL_MS`),45s(`KEEPALIVE_DEAD_MS`)无任何响应 → `ws.close()` 强制触发重连(浏览器 WS 无 ping 能力,这是标准替代)。
+- **renderer keepalive**(`packages/desktop-app/src/lib/rpc.ts`):请求 15s 超时(`REQUEST_TIMEOUT_MS`)防永挂;每 20s 发 `system.ping`(`KEEPALIVE_INTERVAL_MS`),45s(`KEEPALIVE_DEAD_MS`)无任何响应 → `ws.close()` 强制触发重连(浏览器 WS 无 ping 能力,这是标准替代)。
 - **干净恢复路径**(`app.tsx`):`onStatus("closed")` → `recoverFromDrop` = close 旧 client(停退避重试)→ `setBooting(true)` 显示 splash → `boot()` 全新重连(probe/spawn/events.subscribe/pauseStatus/settings 全量初始化)——与「重新连接」按钮同一路径(ce1c9284d 已验证;原自动原地 restore 会冻结 renderer)。`recoveringRef` 防重入。
 - **主动唤醒**:`electron/main.cjs` `powerMonitor.on("resume")`(app ready 后注册,electron#32576)→ 各窗口 `app-power-resume` → renderer 收到即触发恢复(visibilitychange/online 在 macOS 唤醒不保证触发)。
 - **兜底**:App 级 `ErrorBoundary`(components/ErrorBoundary.tsx)渲染崩溃显示「重新连接」页,不再无边界静默卸载根树(冻结特征:CPU 空闲、console 活、点击死)。
@@ -129,8 +129,8 @@ daemon RPC:
 6. **popup/浮层被祖先 overflow/transform 裁剪** → portal 到 body。
 7. **rAF 节流闩锁未在帧回调内释放** → 后续事件被吞。
 8. **SVG stroke 渐变必须 `gradientUnits="userSpaceOnUse"`**(2026-08-06 图标渲染实测):`stroke="url(#g)"` 配默认 objectBoundingBox 单位在 Chromium 渲染器(Chrome/Electron headless)整条 stroke **渲染为空白**,同渐变 fill 正常;显式坐标 + userSpaceOnUse 即恢复。涉及 app 图标 SVG 渲染(build/icon.svg)时必踩。
-9. **无层(unlayered)规则压制所有 @layer 规则**(2026-08-06 侧栏 tabstrip 贴边根因):desktop-web base.css 的 `*{margin:0}` 是 unlayered,Tailwind v4 utility 全部在 `@layer utilities`——cascade 里 **unlayered 恒胜所有 layer**,于是侧栏 `mx-2.5/mt-3/ml-auto` 等全部 margin utility 静默算成 0px(胶囊贴左边缘、右侧按钮簇紧跟胶囊、`mt-3` 间距消失),而 padding utility 正常(没有 universal padding reset),症状极具迷惑性。修复:reset 移入 `@layer base`,前置空 `@layer theme/base/components/utilities {}` 块钉死顺序(tailwind CLI 会把 `@layer a,b,c;` 语句规范成这种空块形式,构建幂等)。教训:**GUI 里 Tailwind margin utility 不生效先查 unlayered universal margin reset**。
-10. **误截断源文件的恢复路径**(2026-08-06 事故记录):`head -c <N>` 按**字节**截断大 CSS(8251 行 ≈ 370KB),git 无 WIP 提交、无 sourcemap、无 TM 快照时,唯一完整恢复源是**上次 `bun run build` 的 dist 压缩 CSS**(含全部规则):①选择器集合 diff(HEAD vs dist)枚举 WIP 规则;②从 dist 提取每条规则(压缩单行,按 `{` 平衡扫描 + 向前回溯选择器列表起点,合并逗号组合块);③`@media` 内规则记录上下文;④@keyframes 逐一比对(注意 `ag-*/tr-*/tv-*/spin` 等属 desktop-web,勿混入 gui.css);⑤格式化重排后追加,带恢复注释。恢复后功能等价,格式/注释丢失。**教训:大文件截断前先 `wc -c`;**给重要 CSS 定期 `git add`(index blob 可救)。
+9. **无层(unlayered)规则压制所有 @layer 规则**(2026-08-06 侧栏 tabstrip 贴边根因):guest-client base.css 的 `*{margin:0}` 是 unlayered,Tailwind v4 utility 全部在 `@layer utilities`——cascade 里 **unlayered 恒胜所有 layer**,于是侧栏 `mx-2.5/mt-3/ml-auto` 等全部 margin utility 静默算成 0px(胶囊贴左边缘、右侧按钮簇紧跟胶囊、`mt-3` 间距消失),而 padding utility 正常(没有 universal padding reset),症状极具迷惑性。修复:reset 移入 `@layer base`,前置空 `@layer theme/base/components/utilities {}` 块钉死顺序(tailwind CLI 会把 `@layer a,b,c;` 语句规范成这种空块形式,构建幂等)。教训:**GUI 里 Tailwind margin utility 不生效先查 unlayered universal margin reset**。
+10. **误截断源文件的恢复路径**(2026-08-06 事故记录):`head -c <N>` 按**字节**截断大 CSS(8251 行 ≈ 370KB),git 无 WIP 提交、无 sourcemap、无 TM 快照时,唯一完整恢复源是**上次 `bun run build` 的 dist 压缩 CSS**(含全部规则):①选择器集合 diff(HEAD vs dist)枚举 WIP 规则;②从 dist 提取每条规则(压缩单行,按 `{` 平衡扫描 + 向前回溯选择器列表起点,合并逗号组合块);③`@media` 内规则记录上下文;④@keyframes 逐一比对(注意 `ag-*/tr-*/tv-*/spin` 等属 guest-client,勿混入 gui.css);⑤格式化重排后追加,带恢复注释。恢复后功能等价,格式/注释丢失。**教训:大文件截断前先 `wc -c`;**给重要 CSS 定期 `git add`(index blob 可救)。
 11. **legacy keyframes 烤静态 transform 在 flow 布局下错位**(2026-08-11):面板 keyframes 烤 `translateX(-50%)`(旧 absolute 居中残留),新布局已 `transform: none`(flow + margin 居中)——动画播放时把元素左移半宽,"先露右半再突现左半"。**教训:改布局定位方式时必须同步审计 keyframes 里的静态 transform;动画与静态布局解耦用 flat keyframes(只动位移/缩放/模糊的相对量)**。
 12. **动画中 `getBoundingClientRect` 含 transform**(2026-08-11):scale(0.98) 入场动画中 rect 是缩小值——内容驱动窗口按它报告会把窗口定小,animationend 后跳变。**内容尺寸报告对动画中元素用 `offsetWidth/offsetHeight`(布局盒)**;检测 `el.getAnimations().some(a => a.playState === "running")`。
 13. **锁宽测量 `width:"auto"` 覆盖 CSS `max-content`**(2026-08-11):morph 测量目标宽度时 `style.width = "auto"` 对块级元素=撑满包含块(覆盖 CSS `width:max-content`),toW 退化为容器宽 → 宽度过渡静默跳过(高度正常,视觉"只缩高不缩宽"再跳变)。**必须 `style.width = ""`(删 inline 声明回 CSS 值)**。
@@ -209,7 +209,7 @@ daemon RPC:
 - 状态单一权威在主进程：renderer 只投影/读；layout 用单调 revision 丢晚到；URL/账本脱敏只在 main。
 - 新设置：settings-schema（ui 组 "Grep & Browser"）+ GUI 设置页 + 优先级链注释 + kind 解析测试（`browser-gui-kind.test.ts` 模式）。
 - 验证：单测（policy/kind）→ 隔离实例 E2E（open → puppeteer connect → 驱动 → 投影 → `fromSurface:false` 像素采样：投影区=页面底色、区外=GUI 主题）。
-- i18n：键先进对应域文件 `desktop-web/src/i18n/zh-CN/<domain>.ts`（英文 pass-through，en 域须同步，详见 `docs/i18n.md`），`t()` 只在 render 时，状态文案复用已有键。
+- i18n：键先进对应域文件 `guest-client/src/i18n/zh-CN/<domain>.ts`（英文 pass-through，en 域须同步，详见 `docs/i18n.md`），`t()` 只在 render 时，状态文案复用已有键。
 
 ## 12. 用量视图(usage.reports / 托盘 / ContextRing,2026-08-16)
 
@@ -247,7 +247,7 @@ daemon RPC:
 - **`TrajectoryView` 新 props**:`roundDurations?: RoundDurationMap`(即 `ReadonlyMap<number, number> | readonly (readonly [number, number])[]`;GUI store 暴露 Map 形态,持久化快照/测试以数组形态出现)。来源 = daemon `agent_end` 冻结的整轮用时,键 = 该轮**末条 assistant 消息 tsMs**(`session-store.ts` / `MaterializedView.#roundDurations` 同源)。
 - **`trajectory-data.ts`**:事件新增 `tsMs`(数值时间戳);`buildTrajectoryTree(entries, roundDurations?)` 输出的 `TrajectoryTurnGroup` 新增 `startMs`(组内首事件)/`endMs`(组内末事件;**roundDurations 命中时闭合为 `startMs + roundDurationMs`**)/`roundDurationMs`。未命中的 turn **绝不虚构**回合时长(replay/历史会话无 agent_end 即无)。
 - **`isTrajectoryEventInRange(ev, startMs, endMs)`**:闭区间判定;**无 `tsMs` 的事件永不命中**(区间模式从不误亮未知时刻)。纯函数,组件与测试共用。
-- **`usage` / `durationMs` / `ttftMs`(2026-08-21 补)**:wire `AssistantMessage` 自带 `usage(WireUsage)`/`duration`/`ttft`(settled 回合才有)——MaterializedView **整存 wire message**,所以 `snap.entries[].message` 原样携带,轨迹事件直接提取,**零 daemon 改动**;与 transcript usage 行(`desktop-web Transcript.tsx usageRow`,`display.showTokenUsage` 门控)同源。未 settled 的 assistant 事件不虚构统计。
+- **`usage` / `durationMs` / `ttftMs`(2026-08-21 补)**:wire `AssistantMessage` 自带 `usage(WireUsage)`/`duration`/`ttft`(settled 回合才有)——MaterializedView **整存 wire message**,所以 `snap.entries[].message` 原样携带,轨迹事件直接提取,**零 daemon 改动**;与 transcript usage 行(`guest-client Transcript.tsx usageRow`,`display.showTokenUsage` 门控)同源。未 settled 的 assistant 事件不虚构统计。
 - **`TimelineOverview`**:时间域 = 全部 turn 的 [最早 startMs, 最晚 endMs];无有效时刻(max ≤ min)直接返回 null 不渲染。
 
 ### 组件行为
@@ -269,7 +269,7 @@ daemon RPC:
 
 ### 验证
 
-`packages/gui/test/trajectory.test.ts` 10 用例(tsMs 提取 / turn 时序 / roundDurations Map+数组形态 / 未命中不闭合 / 范围判定 / usage·duration·ttft 提取);`tsgo -p tsconfig.json --noEmit` 全绿;`bun run build:bundle` 通过。CDP/截图验证按 §8 工作流。
+`packages/desktop-app/test/trajectory.test.ts` 10 用例(tsMs 提取 / turn 时序 / roundDurations Map+数组形态 / 未命中不闭合 / 范围判定 / usage·duration·ttft 提取);`tsgo -p tsconfig.json --noEmit` 全绿;`bun run build:bundle` 通过。CDP/截图验证按 §8 工作流。
 
 ## 15. 消息树数据 seam(/tree 语义,2026-08-21)
 
@@ -279,12 +279,12 @@ daemon RPC:
 - **已落地(向前兼容)**:
   - `wire/src/index.ts`:User/Developer/Assistant/ToolResult 四角色 message 加可选 `parentId?: string | null`(live 事件暂缺)。
   - `MaterializedView.#upsertMessage`:`parentId: message.parentId ?? null`(带即保留,缺即 null)。
-  - `packages/gui/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
+  - `packages/desktop-app/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
 - **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/tui-trace-plan.md`。
 
 ## 16. 转录自定义消息渲染 + 流式 markdown 契约(2026-08-22)
 
-`desktop-web` `components/transcript/Transcript.tsx` 的 `custom_message` 分支按 `entry.customType` 分派,已处理:
+`guest-client` `components/transcript/Transcript.tsx` 的 `custom_message` 分支按 `entry.customType` 分派,已处理:
 
 | customType | 渲染 | 数据来源 |
 |---|---|---|
@@ -317,7 +317,7 @@ daemon RPC:
 - **解析顺序**（updater.cjs `manifestUrl()`，仅 notes 拉取——electron-updater 的 feed 来自 build publish config）：`OMP_UPDATE_MANIFEST_URL` env → `package.json update.manifestUrl` → `RELEASE_MANIFEST_URL` 默认。
 - **404 优雅降级**：repo 公开前 `releases/latest` 404 → `{enabled:false, reason:"no-update-source"}`，设置页显示「尚未发布公开更新源（发布后可用）」；`updates.check` 返回 `{latest:null}`，公告面板不弹。
 - **发版契约**：`update-manifest.json`（`{version,url,notes}`）作为名为 `update-manifest.json` 的资产随每个 GitHub release 上传——`/releases/latest/download/<asset>` 自动重定向到最新拷贝，无需改分支。**url 填 dmg 直链、notes 填新功能说明、version 与 package.json 一致**。
-- **初始化不能写死 raw.githubusercontent**：旧渠道 `raw.githubusercontent.com/MuseLinn/MusePi/main/packages/gui/update-manifest.json` 在 repo 私有时必 404（等于死链），已全部切到 release 资产。
+- **初始化不能写死 raw.githubusercontent**：旧渠道 `raw.githubusercontent.com/MuseLinn/MusePi/main/packages/desktop-app/update-manifest.json` 在 repo 私有时必 404（等于死链），已全部切到 release 资产。
 
 ### 三合一发送/停止按钮：run 级 working（turn 级边界陷阱）
 
@@ -326,7 +326,7 @@ daemon RPC:
 - **`turn_end` 是每工具批次发一次，不是 run 结束**（`agent-loop.ts` `pushTurnEnd` 每个 tool batch 一次；`types.ts`: "a turn is one assistant response + any tool calls/results"）。若用 `turn_end` 清 working，**轮间 provider 准备期按钮会闪回发送箭头**（用户报告 2026-08-22）。
 - **正确定界**（`gui/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
 - **`#buildSnapshot` 的 OR 陷阱**：旧代码 `working: this.#working || snap.state.isStreaming`——view 的 turn 级 `isStreaming` 在无 turn_end 的中止路径会卡 `true`，把已复位的标志 OR 回去，stop 胶囊永不熄灭。**已改为 store 单一事实源** `working: this.#working`，构造时用 resume snapshot `state.isStreaming` 播种（中途加入正在工作的会话也正确显示）。
-- **测试**：`packages/gui/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
+- **测试**：`packages/desktop-app/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
 
 ### 更新提示 toast（bitfun DailyAppUpdateGate parity）
 
@@ -351,7 +351,7 @@ daemon RPC:
 
 ### OTA 经 electron-updater 更新（v0.4.4，2026-08-24）
 `docs/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
-- **配置**：`packages/gui/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
+- **配置**：`packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
 - **IPC**：`updater-check`（富结果 `{enabled,newer,latest,current,notes}`——updateInfo 与 `app.getVersion()` 比对，notes 与 feed 检查并行拉取）/`updater-download`/`updater-install`/`updater-notes`（renderer→main）+ `updater-state`（`checking/preparing/downloading(percent+bytes)/downloaded/error`）+ `update-available`。`autoDownload=false`、`autoInstallOnAppQuit=false`。
 - **daemon sidecar**：`updater-install` 先 `kill(daemonPort)` 再 `setImmediate(() => autoUpdater.quitAndInstall())`（setImmediate 先 flush IPC reply）；vendored daemon 随新版 app 一起生效。
 - **macOS 需 `.zip`**：MacUpdater `findFile(files,"zip",…)` 无 zip 会抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`——`mac.target` 必须含 `"zip"` 且 CI 带上传 `*.zip`（顺带赢 blockmap 差量）。Beta：`-beta` tag → `-c.publish.channel=beta` + prerelease；CI yml 通配从 `latest*.yml` 放宽为 `*.yml`（此前会丢 beta feed 的缺口）。
@@ -364,7 +364,7 @@ daemon RPC:
 - **`registerService(name,{start?,stop?})`**：长驻后台服务；`start` 在装载时跑（`startServices`），`stop` 在 unload / 会话关闭 / rollback 时跑——有守卫（必被调用、抛出被隔离），且不得残留进程。
 
 ### 看板 widget 数据代理缺口 + 调度引擎（board-dashboard.md）
-`widget.data` 代理 RPC **未实现**（行情卡为静态默认值；数据源 agent 代理是剩余 M4 工作）；**调度执行引擎已在 GUI 侧实现**（`desktop-web` task-run 执行引擎 + BoardPage 30s poll 消费 `data.task.schedule`；手动 run 走同一执行器而非 setTimeout）。
+`widget.data` 代理 RPC **未实现**（行情卡为静态默认值；数据源 agent 代理是剩余 M4 工作）；**调度执行引擎已在 GUI 侧实现**（`guest-client` task-run 执行引擎 + BoardPage 30s poll 消费 `data.task.schedule`；手动 run 走同一执行器而非 setTimeout）。
 
 ### TUI /trace + /tree
 `/tree`（结构投影）与 `/trace`（同一 entry 树的时间/成本投影）都已在 TUI 落地——`tree-selector.ts` `TreeProjection = "tree"|"trace"`、`/trace` slash 命令（`builtin-session.ts` → `showTraceSelector`）。数据源 = tree-selector 的 SessionEntry 树 + live `AssistantMessage.usage/.duration/.ttft`（零新数据依赖）。GUI 侧消息树 seam（`message-tree.ts` buildMessageTree）仍为向前兼容路径。方案：`docs/tui-trace-plan.md`。
@@ -382,17 +382,17 @@ daemon RPC:
 
 dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆绑 Electron 耦合的 UI。MusePi 的三半：
 
-- **运行时 serve 渲染器** — `musepi serve --web-port <n>` → `daemon/static-web.ts` `startDaemonWeb` 在 loopback HTTP 上 serve 构建好的 `desktop-web` SPA（仅纯 GET；JSON-RPC WS 留在 `net.createServer`/`ws-transport.ts` — `Bun.serve` 的 http 兼容层会在升级 socket 上丢字节）。同时 serve 启动配置 `GET /__daemon.json` → `{ wsUrl: "ws://127.0.0.1:<wsPort>/", token? }`（仅 `--remote-token` 时带 token）。渲染器 dist 缺失**非致命** — 壳回退到本地 bundle。
+- **运行时 serve 渲染器** — `musepi serve --web-port <n>` → `daemon/static-web.ts` `startDaemonWeb` 在 loopback HTTP 上 serve 构建好的 `guest-client` SPA（仅纯 GET；JSON-RPC WS 留在 `net.createServer`/`ws-transport.ts` — `Bun.serve` 的 http 兼容层会在升级 socket 上丢字节）。同时 serve 启动配置 `GET /__daemon.json` → `{ wsUrl: "ws://127.0.0.1:<wsPort>/", token? }`（仅 `--remote-token` 时带 token）。渲染器 dist 缺失**非致命** — 壳回退到本地 bundle。
 - **壳包装它** — Electron `main.cjs`：设置 `MUSEPI_GUI_COMPAT_URL` 时 `mainWindow.loadURL(compatUrl)`，而非本地 bundle / Vite dev server。
-- **渲染器以 host 连接** — `desktop-web/src/lib/host-client.ts` `HostClient` 实现 `SessionClient` 接口（与 collab guest 暴露的 `GuestSnapshot` 契约相同）：经 `?token=` 连 daemon WS，`session.list` → `session.subscribe`（初始快照 + `entry`/`event`/`state` 流），渲染复用 guest 的 Transcript/工具卡/composer 不动。App 在读到 `/__daemon.json` 时自动以 host 连接（无 collab 深链 + 配置存在 → `connectHost`，跳过 ConnectScreen）。
+- **渲染器以 host 连接** — `guest-client/src/lib/host-client.ts` `HostClient` 实现 `SessionClient` 接口（与 collab guest 暴露的 `GuestSnapshot` 契约相同）：经 `?token=` 连 daemon WS，`session.list` → `session.subscribe`（初始快照 + `entry`/`event`/`state` 流），渲染复用 guest 的 Transcript/工具卡/composer 不动。App 在读到 `/__daemon.json` 时自动以 host 连接（无 collab 深链 + 配置存在 → `connectHost`，跳过 ConnectScreen）。
 
-坑位：tsgo 下 `server.port` 类型为 `number | undefined`（`const port = server.port ?? options.port`）；host 视图是 **v1 最小**（`recap`/`approval-request`/`ask-request` 事件忽略、`sendUiResponse` no-op、subagent chat/kill 走 `agents.*` rpc）；`desktop-web` 绝不能 import `@musepi/gui`（分层：collab-proto ← desktop-web ← gui），故 host client 放在 desktop-web，GUI 在需要处自己供应 slot-host。
+坑位：tsgo 下 `server.port` 类型为 `number | undefined`（`const port = server.port ?? options.port`）；host 视图是 **v1 最小**（`recap`/`approval-request`/`ask-request` 事件忽略、`sendUiResponse` no-op、subagent chat/kill 走 `agents.*` rpc）；`guest-client` 绝不能 import `@musepi/desktop-app`（分层：collab-proto ← guest-client ← gui），故 host client 放在 guest-client，GUI 在需要处自己供应 slot-host。
 
-**Frame 叠加 + host 富交互（2026-08-27）：**compat 壳以 `?shell=1` 通知渲染器 — `desktop-web/src/lib/compat-shell.ts` `isCompatShell()` 精确匹配值 `"1"`；页面随即加 `.sh-app--compat`（`padding-top:48px`）+ `.compat-titlebar`（48px fixed 拖拽条，`-webkit-app-region: drag`），Electron 以 `compatUrl + "?shell=1"` 加载并沿用既有 `titleBarStyle:"hidden"` + `titleBarOverlay:{height:48}`（win32/linux）。纯浏览器中无效（无 OS 控件）。host 视图现已接线富交互：`HostClient` 把 `ask-request`→`uiRequest`（Composer 渲染，`sendUiResponse`→`session.askAnswer`，经 `#askReqIds` 桥接 daemon 字符串 id ↔ composer 数字 reqId）、`approval-request`→`approvalRequest`（`components/shell/ApprovalCard.tsx` 渲染允许/拒绝 → `tool.approve`/`tool.deny`）、`recap`→notice。`GuestSnapshot`/`SessionClient` 新增 `approvalRequest` + `respondApproval`；collab guest 两处保持 null/no-op。
+**Frame 叠加 + host 富交互（2026-08-27）：**compat 壳以 `?shell=1` 通知渲染器 — `guest-client/src/lib/compat-shell.ts` `isCompatShell()` 精确匹配值 `"1"`；页面随即加 `.sh-app--compat`（`padding-top:48px`）+ `.compat-titlebar`（48px fixed 拖拽条，`-webkit-app-region: drag`），Electron 以 `compatUrl + "?shell=1"` 加载并沿用既有 `titleBarStyle:"hidden"` + `titleBarOverlay:{height:48}`（win32/linux）。纯浏览器中无效（无 OS 控件）。host 视图现已接线富交互：`HostClient` 把 `ask-request`→`uiRequest`（Composer 渲染，`sendUiResponse`→`session.askAnswer`，经 `#askReqIds` 桥接 daemon 字符串 id ↔ composer 数字 reqId）、`approval-request`→`approvalRequest`（`components/shell/ApprovalCard.tsx` 渲染允许/拒绝 → `tool.approve`/`tool.deny`）、`recap`→notice。`GuestSnapshot`/`SessionClient` 新增 `approvalRequest` + `respondApproval`；collab guest 两处保持 null/no-op。
 
-**Compat slot host（serve 注入,2026-08-28):**desktop-web 保持被动渲染器——`musepi serve` 在 `?shell=1`(Electron compat)请求根路径时,把 `compatSlotHostScript()` 注入 `</head>` 前:脚本开自己的 daemon WS(读 `/__daemon.json`),调 `extensions.list`,过滤 `slot:"transcript.node"` 组件,blob-import 已编译 ESM(react 绑定 `window.MusePiReact`,desktop-web 入口同 GUI 一样暴露),然后 `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`。Transcript 在未注入 `renderTranscriptNode` 时(独立页/ compat 页)回退查该注册表按 kind 分派——纯浏览器 guest 无注册表,内建渲染不受影响。注入缝在 `static-web.ts`;seam 是 Transcript 条目行的 `data-entry-kind`/`data-entry-id`(被动的 DOM 锚,React 树不改)。
+**Compat slot host（serve 注入,2026-08-28):**guest-client 保持被动渲染器——`musepi serve` 在 `?shell=1`(Electron compat)请求根路径时,把 `compatSlotHostScript()` 注入 `</head>` 前:脚本开自己的 daemon WS(读 `/__daemon.json`),调 `extensions.list`,过滤 `slot:"transcript.node"` 组件,blob-import 已编译 ESM(react 绑定 `window.MusePiReact`,guest-client 入口同 GUI 一样暴露),然后 `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`。Transcript 在未注入 `renderTranscriptNode` 时(独立页/ compat 页)回退查该注册表按 kind 分派——纯浏览器 guest 无注册表,内建渲染不受影响。注入缝在 `static-web.ts`;seam 是 Transcript 条目行的 `data-entry-kind`/`data-entry-id`(被动的 DOM 锚,React 树不改)。
 
-**desktop-shell 扩展 + Shell 三模式（2026-08-28 增补）：**Electron 壳是一等扩展（`kind:"desktop-shell"`, id `desktop-shell:shell`, `builtin-registry.ts`）——`extensions.list` 顶层 `shell: { enabled, mode, webUrl }`（`shell.enabled`/`shell.mode` 设置键驱动，`webUrl` 来自 daemon `--web-port`）；`extensions.setEnabled("desktop-shell:shell", { enabled, mode })` 切换开关与模式并管理 `web.port` 发现文件（壳 `probeWeb()` 读它 loadURL compat or 本地 bundle）。注入脚本按 `registry.shell.mode` 选 slot 集合：compatibility=`transcript.node`；extended/enhanced 加 `composer.dock`/`panel.tab.workbench`/`statusbar`——desktop-web 的 `CompatSlotHost`（`lib/compat-slot-host.tsx`，memo 化）按 slot 渲染，App 挂 composer.dock（composer 上方）/statusbar（底部）/workbench 面板（HeaderBar `GuestPanel`）。桌面 host 视图标 `sh-app--host`。
+**desktop-shell 扩展 + Shell 三模式（2026-08-28 增补）：**Electron 壳是一等扩展（`kind:"desktop-shell"`, id `desktop-shell:shell`, `builtin-registry.ts`）——`extensions.list` 顶层 `shell: { enabled, mode, webUrl }`（`shell.enabled`/`shell.mode` 设置键驱动，`webUrl` 来自 daemon `--web-port`）；`extensions.setEnabled("desktop-shell:shell", { enabled, mode })` 切换开关与模式并管理 `web.port` 发现文件（壳 `probeWeb()` 读它 loadURL compat or 本地 bundle）。注入脚本按 `registry.shell.mode` 选 slot 集合：compatibility=`transcript.node`；extended/enhanced 加 `composer.dock`/`panel.tab.workbench`/`statusbar`——guest-client 的 `CompatSlotHost`（`lib/compat-slot-host.tsx`，memo 化）按 slot 渲染，App 挂 composer.dock（composer 上方）/statusbar（底部）/workbench 面板（HeaderBar `GuestPanel`）。桌面 host 视图标 `sh-app--host`。
 
 ## 19. GUI 吸收轮（2026-08-29）：git 图谱 / 浮动状态卡 / 奖励弹窗 / 最大化层级
 
@@ -409,14 +409,14 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - **会话列表点击重排修复**:`SessionList` 的 `statusTime` 排序曾以 `working(+2)/unread(+1)` 为主键——但两个标志都会因点击行而翻转(打开清未读、离开掉 working),行在光标下每次切换都上下跳动。现排序纯按最后活跃时间(`sessionSortKey` 降序 + 稳定 id 决胜);working/未读保留为纯视觉行标记(脉动点、加粗)。分组(`GroupedSessionList` 日期桶)本就按最后活跃。
 - **分组/项目 tab 动效**:胶囊新增滑动 thumb(`.gui-tab-thumb`,`data-tab` 驱动 `translateX(calc(100% + 2px))`,200ms spring——两个 pill 固定宽,几何确定无需测量),胶囊内激活 pill 自身填充转透明(类的基础 `--active` 填充保留给其他使用方)。列表容器按视图 key(`archived | groups | projects`)重挂载并 160ms 淡入(`.gui-tab-pane-in`)。
-- **切换错峰动画收紧**:错峰 reveal(desktop-web `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——gui/pet.css 以不同延迟复制了 desktop-web 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
+- **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——gui/pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
 - **骨架屏闪烁阈值 150→250ms**:快速本地切换期间旧会话内容保持可见(加载期间不卸载),只有真正慢的打开(历史会话重激活)才出骨架。
 - **发送路径审计(无需改动)**:composer 立即清空文本(`onSend` 即发即忘),store 按帧合并流事件突发(dsh Notifier.markFrameDirty 对齐)并折叠连续 `message_update`,快照尾部截断 200 条(`tailSnapshot`),`session.send` 的侧栏刷新挂在发送 ack。感知延迟在 daemon 侧,不在 GUI。
 - **dsh 上游扫描(用户已 pull)**:新提交为 code-mode→PTC 改名、Connection 自持 RPC 传输(移除 ApiProxy)与 session-export 下载路由——结构性清理,本轮对 musepi GUI 无可吸收项;此前吸收的缝(Notifier 帧脏合并、插件清单)未变。
 ### 透明审计 + compat 壳玻璃（2026-08-29，「该透明的区域仍没有透明」）
 
-- **审计结论**:gui(本地 bundle)的玻璃管线端到端完好——Electron 主进程以 `backgroundColor #00000000` + Win11 `backgroundMaterial:"acrylic"` / macOS `vibrancy` 建窗,`gui-vibrancy` 切换材质与底色,`gui-base.css` 以 `html:root, html:root body { background: transparent }`(特异性压过 desktop-web base.css 的实心 `var(--bg))` 保根层透明,`.gui-main`/`.gui-pane-side--immersive` 铺半透明 scrim。若本地 bundle 仍不透明,按序排查:设置 → 外观 → 窗口透明开关(`musepi-gui-glass-enabled`,关=强制 `--gui-glass-overlay:100%` + 不透明窗底)、Windows 个性化 → 颜色 → 透明效果(系统级关闭会让 DWM acrylic 渲染成实色,应用侧无解)、insider 构建 DWM 偶发异常。
-- **实际缺口已修复**:玻璃契约此前只存在于 gui bundle。壳加载 SERVE 的 desktop-web 渲染器时(compat 链——`MUSEPI_GUI_COMPAT_URL` 或 daemon `web.port` 发现文件且 `shell.enabled` 默认开),页面通篇实心 `--bg`:侧栏、顶栏、主体四周永远不可能透明。修复:`desktop-web/src/lib/native-glass.ts`——当 compat 标记(`?shell=1`)与 Electron bridge(`setWindowGlass`)同在,渲染器加 `sh-native-glass`(html/body 透明、`sh-app` scrim 100%→38%、头栏/侧轨混合 80%→45%,见 shell.css)并把主题镜像到窗口材质;`enableNativeGlass()` 在 app 导入时执行,首帧即玻璃。纯浏览器 guest(无 bridge/标记)保持实心画法;Android/移动壳不受影响。
+- **审计结论**:gui(本地 bundle)的玻璃管线端到端完好——Electron 主进程以 `backgroundColor #00000000` + Win11 `backgroundMaterial:"acrylic"` / macOS `vibrancy` 建窗,`gui-vibrancy` 切换材质与底色,`gui-base.css` 以 `html:root, html:root body { background: transparent }`(特异性压过 guest-client base.css 的实心 `var(--bg))` 保根层透明,`.gui-main`/`.gui-pane-side--immersive` 铺半透明 scrim。若本地 bundle 仍不透明,按序排查:设置 → 外观 → 窗口透明开关(`musepi-gui-glass-enabled`,关=强制 `--gui-glass-overlay:100%` + 不透明窗底)、Windows 个性化 → 颜色 → 透明效果(系统级关闭会让 DWM acrylic 渲染成实色,应用侧无解)、insider 构建 DWM 偶发异常。
+- **实际缺口已修复**:玻璃契约此前只存在于 gui bundle。壳加载 SERVE 的 guest-client 渲染器时(compat 链——`MUSEPI_GUI_COMPAT_URL` 或 daemon `web.port` 发现文件且 `shell.enabled` 默认开),页面通篇实心 `--bg`:侧栏、顶栏、主体四周永远不可能透明。修复:`guest-client/src/lib/native-glass.ts`——当 compat 标记(`?shell=1`)与 Electron bridge(`setWindowGlass`)同在,渲染器加 `sh-native-glass`(html/body 透明、`sh-app` scrim 100%→38%、头栏/侧轨混合 80%→45%,见 shell.css)并把主题镜像到窗口材质;`enableNativeGlass()` 在 app 导入时执行,首帧即玻璃。纯浏览器 guest(无 bridge/标记)保持实心画法;Android/移动壳不受影响。
 
 ## 20. Windows NSIS 快捷方式持久化(2026-08-30)
 
@@ -425,7 +425,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 1. **electron-builder `KeepShortcuts` 保留机制**——首次安装向 `HKCU\Software\<APP_GUID>` 写入 `KeepShortcuts=true`(GUID = appId 的 UUID v5,`multiUser.nsh` 的 `INSTALL_REGISTRY_KEY`)。后续安装时 `installSection.nsh` 读它:带 `KeepShortcuts=true` 且 exe 存在 → 走**保留分支**(仅在新旧路径不同时改名;`oldLink == newLink` 时**不重建**)。用户/清理工具删掉的桌面快捷方式,任何后续更新都不会重建。
 2. **`createDesktopShortcut:"always"` 对更新无效**:它只定义 `RECREATE_DESKTOP_SHORTCUT`(NsisTarget.js),该分支被 `${ifNot} ${isUpdated}` 门控——electron-updater 以 `--updated` 参数拉起安装器(NsisUpdater.js 参数 `["--updated","/S",...]`),所以更新永远跳过桌面重建,即便设了 "always"。
 
-**修复**(open-design custom-NSIS parity):`packages/gui/release/ensure-shortcuts.nsh` 定义 `customInstall` 宏——`installSection.nsh` 在文件安装完成后调用它(`!ifmacrodef customInstall`)。它**无条件** `CreateShortCut` 桌面 + 开始菜单快捷方式(绕过 `keepShortcuts`/`isUpdated` 门控)并通知壳。经 `packages/gui/package.json` 的 `nsis.include` 接线。
+**修复**(open-design custom-NSIS parity):`packages/desktop-app/release/ensure-shortcuts.nsh` 定义 `customInstall` 宏——`installSection.nsh` 在文件安装完成后调用它(`!ifmacrodef customInstall`)。它**无条件** `CreateShortCut` 桌面 + 开始菜单快捷方式(绕过 `keepShortcuts`/`isUpdated` 门控)并通知壳。经 `packages/desktop-app/package.json` 的 `nsis.include` 接线。
 
 **验证**(真实安装器,0.4.7):
 - 全新安装 → 桌面(本机桌面被重定向到 `D:\Desktop`;用 `[Environment]::GetFolderPath('Desktop')` 查,不是 `%USERPROFILE%\Desktop`)+ 开始菜单快捷方式均创建。

@@ -3,9 +3,9 @@ import { window, display } from '@kit.ArkUI';
 import { notificationManager } from '@kit.NotificationKit';
 
 /**
- * MusePi WebView shell — loads the desktop-web mobile bundle from rawfile and
+ * MusePi WebView shell — loads the guest-client mobile bundle from rawfile and
  * exposes the `harmonyNative` javaScriptProxy bridge (same surface the page
- * expects; see packages/desktop-web/src/lib/capacitor.ts).
+ * expects; see packages/guest-client/src/lib/capacitor.ts).
  *
  * Bridge contract (all methods synchronous, JSON-string returns):
  * - getSystemBars(): '{"top":<vp>,"bottom":<vp>}' — system bar insets

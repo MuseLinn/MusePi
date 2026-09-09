@@ -193,7 +193,7 @@ mp_cta: true
 <pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
 <span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># 安装 + natives + link</span>
 <span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># 终端 TUI</span>
-<span class="mp-cmd">bun run --cwd=packages/gui desktop</span>   <span class="mp-c"># 桌面 GUI</span></pre>
+<span class="mp-cmd">bun run --cwd=packages/desktop-app desktop</span>   <span class="mp-c"># 桌面 GUI</span></pre>
   </div>
   <p class="mp-note">完整指南见 <a href="{{ 'README.zh-CN.md' | relative_url }}">README.zh-CN.md</a>——daemon
   架构、提供商配置、移动端构建、协作共享。</p>

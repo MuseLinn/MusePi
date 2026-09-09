@@ -133,9 +133,9 @@ cp "$natives_pkg_backup" "$ROOT_DIR/packages/natives/package.json"
 [ "$core_rc" -eq 0 ] || exit "$core_rc"
 
 # 3. Pack the remaining workspace packages (natives core and coding-agent
-   #    handled separately). `desktop-web` is private but still packed here so its
+   #    handled separately). `guest-client` is private but still packed here so its
 #    prepack build and tarball file list stay release-safe.
-for pkg in utils wire hashline catalog ai mnemopi snapcompact agent tui stats desktop-web musepi-type collab-proto sdk tool-select; do
+for pkg in utils wire hashline catalog ai mnemopi snapcompact agent tui stats guest-client musepi-type collab-proto sdk tool-select; do
    (
       cd "$ROOT_DIR/packages/$pkg"
       bun pm pack --destination "$TARBALL_DIR" --quiet >/dev/null
@@ -171,7 +171,7 @@ agent_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-agent-core-*.tgz)"
 tui_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-tui-*.tgz)"
 stats_tgz="$(find_tarball "$TARBALL_DIR"/musepi-musepi-stats-*.tgz)"
 coding_agent_tgz="$(find_tarball "$TARBALL_DIR"/musepi-pi-coding-agent-*.tgz)"
-desktop_web_tgz="$(find_tarball "$TARBALL_DIR"/musepi-desktop-web-*.tgz)"
+desktop_web_tgz="$(find_tarball "$TARBALL_DIR"/musepi-guest-client-*.tgz)"
 musepi_type_tgz="$(find_tarball "$TARBALL_DIR"/musepi-musepi-type-*.tgz)"
 collab_proto_tgz="$(find_tarball "$TARBALL_DIR"/musepi-collab-proto-*.tgz)"
 sdk_tgz="$(find_tarball "$TARBALL_DIR"/musepi-sdk-*.tgz)"
@@ -201,7 +201,7 @@ mkdir -p "$TARBALL_APP_DIR"
 			'@musepi/pi-tui': '$tui_tgz',
 			'@musepi/musepi-stats': '$stats_tgz',
 			'@musepi/pi-coding-agent': '$coding_agent_tgz',
-			'@musepi/desktop-web': '$desktop_web_tgz',
+			'@musepi/guest-client': '$desktop_web_tgz',
 			'@musepi/musepi-type': '$musepi_type_tgz',
 			'@musepi/collab-proto': '$collab_proto_tgz',
 			'@musepi/sdk': '$sdk_tgz',
@@ -236,7 +236,7 @@ mkdir -p "$TARBALL_APP_DIR"
       exit 1
    }
 
-   [ -f "node_modules/@musepi/desktop-web/dist/index.html" ] || {
+   [ -f "node_modules/@musepi/guest-client/dist/index.html" ] || {
       echo "Desktop web tarball did not install built dist/index.html"
       exit 1
    }

@@ -7,7 +7,7 @@
 collab 是 **MusePi 会话共享协议**:把正在运行的 agent 会话实时共享给其他
 musepi 实例(TUI guest/终端)与 Web/移动端。它起源于上游 OMP TUI 的
 `/collab` 命令,现在同时服务 Desktop GUI 与 Mobile 客户端(经 daemon
-代理,渲染层由 `@musepi/desktop-web` 承载——该包已于 2026-08-16 更名,
+代理,渲染层由 `@musepi/guest-client` 承载——该包已于 2026-08-16 更名,
 见 `docs/i18n.md` 同期的 repo 结构变更)。
 
 ## 模块职责与依赖方向
@@ -35,8 +35,8 @@ display-name.ts · replication-shrink.ts
 2. **协议类型织入会话类型**:拆包必须先把 `protocol.ts`/`wire-guard.ts` 依赖
    的 `AgentSessionEvent`/`SessionEntry` 自持化或泛型化,连锁改动 host/guest
    的全部调用点 —— 核心功能重构,风险高。
-3. **桌面/移动经 daemon 间接消费**:desktop-web 是纯渲染,不直接碰 collab
-   协议;daemon 内的 host 服务它们。名实分离问题已由 `desktop-web` 更名解决,
+3. **桌面/移动经 daemon 间接消费**:guest-client 是纯渲染,不直接碰 collab
+   协议;daemon 内的 host 服务它们。名实分离问题已由 `guest-client` 更名解决,
    协议物理位置不影响其服务范围。
 
 ## 触发拆包的条件(满足任一再做)

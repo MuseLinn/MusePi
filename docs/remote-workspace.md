@@ -92,4 +92,4 @@ GUI ConnectDialog ──remote.* RPC──▶ daemon
 - bitfun：`src/web-ui/src/features/ssh-remote/`（SSHRemoteProvider/SSHConnectionDialog/RemoteFileBrowser/sshApi/remoteWorkspaceReconnect）、`src/apps/cli/src/agent/runtime_client.rs`（remote 字段）、`src/apps/cli/src/peer_host/workspace_dto.rs`
 - openchamber：`packages/electron/ssh-manager.mjs`（生命周期状态机）、`packages/ui/src/lib/desktopSsh.ts`、`packages/ui/src/components/sections/remote-instances/RemoteInstancesPage.tsx`
 - opencode：`packages/app/src/context/server.tsx`（ServerConnection 类型）、`packages/desktop/src/main/wsl/sidecar.ts`（WSL sidecar）、`packages/app/src/utils/server-scope.ts`
-- musepi：`packages/coding-agent/src/ssh/*`、`packages/gui/src/components/ConnectDialog.tsx`
+- musepi：`packages/coding-agent/src/ssh/*`、`packages/desktop-app/src/components/ConnectDialog.tsx`

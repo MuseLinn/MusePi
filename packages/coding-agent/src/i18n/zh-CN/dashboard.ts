@@ -56,5 +56,5 @@ export const dashboard = {
 	"(default)": "（默认）",
 } as const;
 
-/** Key union for the dashboard domain (mirrors the desktop-web locale split). */
+/** Key union for the dashboard domain (mirrors the guest-client locale split). */
 export type DashboardKey = keyof typeof dashboard;

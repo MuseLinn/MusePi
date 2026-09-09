@@ -11,7 +11,7 @@ import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallb
 import type { ToolExample } from "@musepi/pi-ai";
 import widgetDescription from "../prompts/tools/widget.md" with { type: "text" };
 
-// The widget registry lives in desktop-web (shared with the GUI board);
+// The widget registry lives in guest-client (shared with the GUI board);
 // the daemon keeps the type/field table in sync here for schema-driven
 // validation and model-facing descriptions.
 // WIDGET_TYPES: the agent-facing widget schema (also served over the

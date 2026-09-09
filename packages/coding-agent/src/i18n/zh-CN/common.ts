@@ -37,5 +37,5 @@ export const common = {
 	"Tip: Use /help to see all commands": "提示：使用 /help 查看所有命令",
 } as const;
 
-/** Key union for the common domain (mirrors the desktop-web locale split). */
+/** Key union for the common domain (mirrors the guest-client locale split). */
 export type CommonKey = keyof typeof common;

@@ -782,8 +782,8 @@
     hash = "sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==";
   };
   "@musepi/collab-proto" = copyPathToStore ../packages/collab-proto;
-  "@musepi/desktop-web" = copyPathToStore ../packages/desktop-web;
-  "@musepi/gui" = copyPathToStore ../packages/gui;
+  "@musepi/guest-client" = copyPathToStore ../packages/guest-client;
+  "@musepi/desktop-app" = copyPathToStore ../packages/desktop-app;
   "@musepi/harmony" = copyPathToStore ../packages/harmony;
   "@musepi/hashline" = copyPathToStore ../packages/hashline;
   "@musepi/mobile" = copyPathToStore ../packages/mobile;

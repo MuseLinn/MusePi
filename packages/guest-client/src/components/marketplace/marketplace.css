@@ -1,0 +1,525 @@
+/* Marketplace card grid (T3). `mp-*` prefix; design-token vars only.
+ * Visual contract:
+ *   - card surface on --bg-raised with hairline --border
+ *   - cards enter with a small rise+fade stagger (--mp-i drives delay)
+ *   - hover lifts the card (translateY + shadow) and shows a stronger border
+ *   - installed cards keep the accent border at rest with a soft glow wash
+ *   - busy cards dim content and show an indeterminate spinner overlay
+ *   - buttons give press feedback (scale) and focus rings
+ *   - every motion is disabled under prefers-reduced-motion: reduce
+ */
+
+.mp-grid-shell {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 10px;
+	overflow-y: auto;
+	overflow-y: overlay;
+}
+
+.mp-grid-toolbar {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.mp-search {
+	flex: 1;
+	min-width: 0;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-inset);
+	color: var(--fg);
+	font: inherit;
+	transition: border-color 120ms ease-out, box-shadow 120ms ease-out;
+}
+
+.mp-search::placeholder {
+	color: var(--fg-faint);
+}
+
+.mp-search:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 3px var(--ring);
+}
+
+.mp-filter-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.mp-chip {
+	padding: 2px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: transparent;
+	color: var(--fg-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition:
+		border-color 120ms ease-out,
+		color 120ms ease-out,
+		background 120ms ease-out,
+		transform 100ms ease-out;
+}
+
+.mp-chip:hover {
+	color: var(--fg);
+	border-color: var(--border-strong);
+}
+
+.mp-chip:active {
+	transform: scale(0.96);
+}
+
+.mp-chip:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.mp-chip--active {
+	color: var(--accent-fg);
+	background: var(--accent-muted);
+	border-color: var(--accent-bd);
+}
+
+.mp-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	animation: mp-fade-in 200ms ease-out both;
+}
+
+.mp-section-title {
+	margin: 0;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.mp-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 8px;
+}
+
+/* --- card -------------------------------------------------------------- */
+
+.mp-card {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-raised);
+	/* entrance stagger: parent sets --mp-i per card (0..n) */
+	animation: mp-card-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+	animation-delay: calc(min(var(--mp-i, 0), 12) * 28ms);
+	transition:
+		border-color 150ms ease-out,
+		background 150ms ease-out,
+		transform 150ms ease-out,
+		box-shadow 150ms ease-out;
+}
+
+.mp-card:hover {
+	border-color: var(--border-strong);
+	background: var(--bg-overlay);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 16px oklch(0 0 0 / 18%);
+}
+
+/* installed: accent border at rest + a soft accent wash so users see
+ * what's already on without hunting for the button label */
+.mp-card--installed {
+	border-color: var(--accent-bd);
+	box-shadow: inset 0 0 0 999px color-mix(in oklab, var(--accent-muted) 22%, transparent);
+}
+
+.mp-card--installed:hover {
+	border-color: var(--accent);
+}
+
+.mp-card[data-busy="true"] {
+	pointer-events: none;
+}
+
+.mp-card[data-busy="true"] > * {
+	opacity: 0.35;
+	transition: opacity 150ms ease-out;
+}
+
+/* indeterminate spinner overlay while installing/removing */
+.mp-card[data-busy="true"]::after {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 18px;
+	height: 18px;
+	margin: -9px 0 0 -9px;
+	border: 2px solid var(--border);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: mp-spin 700ms linear infinite;
+}
+
+.mp-card-face {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+	transition: opacity 150ms ease-out;
+}
+
+.mp-card-face:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+.mp-card-icon {
+	flex: none;
+	font-size: 22px;
+	line-height: 1.2;
+	filter: saturate(1.05);
+	transition: transform 180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.mp-card:hover .mp-card-icon {
+	transform: scale(1.12);
+}
+
+.mp-card-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.mp-card-head {
+	display: flex;
+	gap: 8px;
+	align-items: baseline;
+	min-width: 0;
+}
+
+.mp-card-name {
+	flex: 1;
+	min-width: 0;
+	color: var(--fg);
+	font-weight: 600;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.mp-card-version {
+	flex: none;
+	color: var(--fg-faint);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+}
+
+.mp-card-desc {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	color: var(--fg-muted);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+}
+
+.mp-card-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.mp-card-meta-item {
+	white-space: nowrap;
+}
+
+.mp-card-badge {
+	display: inline-flex;
+	gap: 3px;
+	align-items: center;
+	padding: 0 6px;
+	border: 1px solid var(--accent-bd);
+	border-radius: 999px;
+	background: var(--accent-muted);
+	color: var(--accent-fg);
+	font-size: 10px;
+	line-height: 16px;
+}
+
+.mp-card-chip {
+	padding: 1px 5px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	color: var(--fg-muted);
+	font-family: var(--font-mono);
+	font-size: 10px;
+}
+
+.mp-card-actions {
+	display: flex;
+	gap: 6px;
+	justify-content: flex-end;
+}
+
+/* --- buttons ----------------------------------------------------------- */
+
+.mp-btn {
+	padding: 3px 9px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	font-size: var(--ui-font-size-xs);
+	cursor: pointer;
+	transition:
+		border-color 120ms ease-out,
+		background 120ms ease-out,
+		color 120ms ease-out,
+		transform 100ms ease-out;
+}
+
+.mp-btn:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--bg-overlay);
+}
+
+.mp-btn:active:not(:disabled) {
+	transform: scale(0.97);
+}
+
+.mp-btn:focus-visible {
+	outline: none;
+	border-color: var(--accent-bd);
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.mp-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mp-btn--ghost {
+	color: var(--fg-muted);
+}
+
+.mp-btn--accent {
+	color: var(--accent);
+	border-color: var(--accent-bd);
+	background: var(--accent-muted);
+}
+
+.mp-btn--accent:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--accent-muted) 70%, transparent);
+	border-color: var(--accent);
+}
+
+.mp-btn--warn {
+	color: var(--err);
+	border-color: color-mix(in srgb, var(--err) 35%, transparent);
+}
+
+.mp-btn--warn:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--err) 12%, transparent);
+	border-color: color-mix(in srgb, var(--err) 55%, transparent);
+}
+
+/* refresh button spinner while the catalog reloads */
+.mp-btn[data-loading="true"] {
+	display: inline-flex;
+	gap: 6px;
+	align-items: center;
+	pointer-events: none;
+}
+
+.mp-btn[data-loading="true"]::before {
+	content: "";
+	width: 10px;
+	height: 10px;
+	border: 1.5px solid var(--border);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: mp-spin 700ms linear infinite;
+}
+
+/* --- states ------------------------------------------------------------ */
+
+.mp-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	align-items: center;
+	margin: 24px 0;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	text-align: center;
+	animation: mp-fade-in 200ms ease-out both;
+}
+
+.mp-empty-icon {
+	font-size: 28px;
+	line-height: 1;
+	filter: saturate(0.8);
+}
+
+.mp-error {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
+	border-radius: var(--radius-sm);
+	color: var(--err);
+	font-size: var(--ui-font-size-xs);
+	animation: mp-fade-in 160ms ease-out both;
+}
+
+/* --- skeletons (catalog loading) --------------------------------------- */
+
+.mp-skeleton-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+	gap: 8px;
+}
+
+.mp-skeleton-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	height: 118px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	background: var(--bg-raised);
+	overflow: hidden;
+}
+
+.mp-skeleton-line {
+	height: 10px;
+	border-radius: var(--radius-sm);
+	background: linear-gradient(
+		90deg,
+		var(--bg-inset) 0%,
+		var(--bg-overlay) 40%,
+		var(--bg-inset) 80%
+	);
+	background-size: 200% 100%;
+	animation: mp-shimmer 1.2s ease-in-out infinite;
+}
+
+.mp-skeleton-line--title {
+	width: 55%;
+	height: 12px;
+}
+
+.mp-skeleton-line--meta {
+	width: 70%;
+}
+
+.mp-skeleton-line--actions {
+	width: 30%;
+	margin-top: auto;
+	align-self: flex-end;
+}
+
+/* --- keyframes ---------------------------------------------------------- */
+
+@keyframes mp-card-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px) scale(0.985);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes mp-fade-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes mp-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes mp-shimmer {
+	from {
+		background-position: 200% 0;
+	}
+	to {
+		background-position: -200% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.mp-card,
+	.mp-section,
+	.mp-empty,
+	.mp-error {
+		animation: none;
+	}
+	.mp-card {
+		transition: border-color 150ms ease-out, background 150ms ease-out;
+	}
+	.mp-card:hover {
+		transform: none;
+	}
+	.mp-card-icon,
+	.mp-chip,
+	.mp-btn,
+	.mp-card-face {
+		transition: none;
+	}
+	.mp-card:hover .mp-card-icon {
+		transform: none;
+	}
+	.mp-chip:active,
+	.mp-btn:active:not(:disabled) {
+		transform: none;
+	}
+	.mp-card[data-busy="true"]::after,
+	.mp-btn[data-loading="true"]::before {
+		animation-duration: 1.5s;
+	}
+	.mp-skeleton-line {
+		animation: none;
+	}
+}

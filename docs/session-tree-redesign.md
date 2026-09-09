@@ -232,7 +232,7 @@ session.branchAt({ sessionId, messageId, includeTarget? = false })
 
 ### Phase 2: 第一层——时间线主路径（P0，3 天） （**已完成**：`b6d31253a1`）
 
-**Step 4: 分支横条**（`packages/gui/src/components/Transcript.tsx`）
+**Step 4: 分支横条**（`packages/desktop-app/src/components/Transcript.tsx`）
 - 检测每个消息的子节点数量（`buildMessageTree` 结果）
 - 多子节点时插入 `<BranchBar count={n} siblings={nodes} onSwitch={openBranch} />`
 - 点击展开兄弟节点列表，点击切换分支

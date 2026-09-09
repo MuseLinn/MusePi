@@ -1,13 +1,13 @@
 # MusePi HarmonyOS WebView Shell
 
-一等地壳（非兼容层）：ArkTS `Web` 组件加载 desktop-web 移动 bundle（rawfile），
+一等地壳（非兼容层）：ArkTS `Web` 组件加载 guest-client 移动 bundle（rawfile），
 沉浸/相机/权限全部原生，UI 与 Android 壳共享同一份 dist。
 
 ## 构建
 
 ```bash
 # 1. 构建 web bundle
-cd packages/desktop-web && bun run build
+cd packages/guest-client && bun run build
 
 # 2. 拷贝进 rawfile（mobile.html → index.html）
 cd ../harmony && node scripts/copy-web-assets.js
@@ -30,7 +30,7 @@ AppStorage）/ onNewWant（暖启动直推）。
 
 ## 旋转动效
 
-ArkWeb 与 Android WebView 同为 Chromium 内核，共享 desktop-web 的断点几何过渡
+ArkWeb 与 Android WebView 同为 Chromium 内核，共享 guest-client 的断点几何过渡
 （shell.css breakpoint/rotation transitions：320ms spring，双向 morph）。
 ArkUI 窗口旋转动画为系统级，Web 内容过渡由 CSS 承担——双层动效无冲突，壳无需额外代码。
 

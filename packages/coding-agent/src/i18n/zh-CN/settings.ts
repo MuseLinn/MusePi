@@ -2091,5 +2091,5 @@ export const settings = {
 	" │ ": " │ ",
 } as const;
 
-/** Key union for the settings domain (mirrors the desktop-web locale split). */
+/** Key union for the settings domain (mirrors the guest-client locale split). */
 export type SettingsKey = keyof typeof settings;

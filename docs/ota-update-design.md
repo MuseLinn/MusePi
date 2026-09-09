@@ -18,7 +18,7 @@
 
 ## 2. 配置
 
-### electron-builder（packages/gui/package.json build 段）
+### electron-builder（packages/desktop-app/package.json build 段）
 
 ```json
 "publish": {
@@ -33,7 +33,7 @@
 
 ### CI（gui-release.yml）
 
-- **upload-artifact** 增加 `packages/gui/release/*.yml`（三平台，含 beta 通道的
+- **upload-artifact** 增加 `packages/desktop-app/release/*.yml`（三平台，含 beta 通道的
   `beta*.yml`）与 `*.zip`（macOS OTA 必需，见 §9）
 - **publish job** 的 softprops files 增加 `dist/*.yml` 与 `dist/*.zip`
 - 保留 `update-manifest.json`（daemon changelog RPC 兼容）

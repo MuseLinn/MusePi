@@ -146,7 +146,7 @@ export default function (pi: ExtensionAPI): void {
 - **忙会话门控**：会话 streaming（`isStreaming`）时重载挂起到单槽 pending，`agent_end`（含延迟 agent_end flush）空闲时补做；不引入队列/锁。
 - **MCP 不随扩展关闭**：MCP 连接由配置层启动、`MCPManager` 按 cwd 多会话共享，`SourceMeta` 是配置来源非扩展来源 —— 扩展重载不触碰 MCP server 生命周期；扩展自行管理自有连接。
 
-**参考实现**：`examples/extension-component/`（示例）、`packages/coding-agent/src/daemon/extension-components.ts`（编译/聚合）、`packages/gui/src/lib/slot-components.tsx`（渲染）、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`（v2 会话级重载）。
+**参考实现**：`examples/extension-component/`（示例）、`packages/coding-agent/src/daemon/extension-components.ts`（编译/聚合）、`packages/desktop-app/src/lib/slot-components.tsx`（渲染）、`ExtensionRunner.reloadExtension` + `AgentSession.reloadExtension`（v2 会话级重载）。
 
 ## 7. 扩展 daemon RPC（registerRpc，2026-08-20）
 
@@ -214,12 +214,12 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 **模块契约**（与 registerComponent 同编译管线，blob import + `window.MusePiReact`）：
 - 默认导出两种合法形状之一：
   - **React 组件**：作为全卡 Card 渲染，收到 `ToolRenderProps` `{ name, args, result, running, host, kind, intent }`；
-  - **ToolRenderer 对象** `{ Summary, Body?, Card? }`（desktop-web 内置注册表同构）。
+  - **ToolRenderer 对象** `{ Summary, Body?, Card? }`（guest-client 内置注册表同构）。
 - 工具名 = wire 工具名（扩展自己 registerTool 的工具名，或覆盖内置如 `bash`）；扩展渲染器**优先于内置**（`resolveToolRenderer` 先查外部表）。
 
-**分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 desktop-web tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
+**分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 guest-client tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
 
-**参考实现**：`packages/desktop-web/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/gui/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
+**参考实现**：`packages/guest-client/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/desktop-app/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
 
 ## 10. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
 
@@ -246,18 +246,18 @@ pi.registerComponent({
 
 **防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
 
-**参考实现**：`packages/desktop-web/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/gui/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
+**参考实现**：`packages/guest-client/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/desktop-app/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
 
 ## 11. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
 
 Electron 壳本身是**一等扩展**（`kind: "desktop-shell"`, id `desktop-shell:shell`, 内置注册表 `builtin-registry.ts`）：
 - `extensions.list` 顶层返回 `shell: { enabled, mode, webUrl }` —— 壳启用状态（`shell.enabled` 设置键）、DSH 三模式、daemon serve 的渲染器 origin。
 - `extensions.setEnabled("desktop-shell:shell", { enabled, mode? })` 切换壳开关与模式（写 `shell.enabled`/`shell.mode`, 管理 `web.port` 发现文件 —— 壳进程据此决定 loadURL 运行时渲染器 or 本地 bundle）。
-- daemon `--web-port` serve 渲染器（`desktop-web/dist`）+ `/__daemon.json`（wsUrl/token）；壳 `probeWeb()` 读 `web.port` 自动发现。
+- daemon `--web-port` serve 渲染器（`guest-client/dist`）+ `/__daemon.json`（wsUrl/token）；壳 `probeWeb()` 读 `web.port` 自动发现。
 
 **Shell 三模式**（DSH compatibility/extended/enhanced）：
 - `compatibility`（默认）：注入脚本只注册 `transcript.node` —— 扩展贡献聊天节点。
-- `extended`：注入脚本额外注册 `composer.dock` / `panel.tab.workbench` / `statusbar`；desktop-web 的 `CompatSlotHost` 按 slot 渲染注册组件（composer 上方 dock、底部状态条、workbench 面板）。
+- `extended`：注入脚本额外注册 `composer.dock` / `panel.tab.workbench` / `statusbar`；guest-client 的 `CompatSlotHost` 按 slot 渲染注册组件（composer 上方 dock、底部状态条、workbench 面板）。
 - `enhanced`：渲染器侧同 extended，壳保留原生 titlebar（原生 UI 面板预留）。
 
-**注册表契约**：daemon 注入脚本（`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`）blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`；desktop-web 初始化注册表（`main.tsx`），`Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
+**注册表契约**：daemon 注入脚本（`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`）blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`；guest-client 初始化注册表（`main.tsx`），`Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。

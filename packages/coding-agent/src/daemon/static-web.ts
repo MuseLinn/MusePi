@@ -1,7 +1,7 @@
 /**
  * Loopback HTTP static server for the renderer bundle — the "runtime serves
  * the web renderer" half of the dsh-desktop-compat chain. The daemon serves
- * the built `desktop-web` SPA at http://127.0.0.1:<webPort>/; the Electron
+ * the built `guest-client` SPA at http://127.0.0.1:<webPort>/; the Electron
  * compat shell `loadURL`s it and overlays the desktop frame (the wrapper that
  * leaves the served content authoritative).
  *
@@ -17,7 +17,7 @@ export interface DaemonWebOptions {
 	port: number;
 	/** Bind host. Defaults to loopback (local GUI / compat shell). */
 	host?: string;
-	/** Absolute path to the renderer dist directory (desktop-web/dist). */
+	/** Absolute path to the renderer dist directory (guest-client/dist). */
 	distDir: string;
 	/** Daemon JSON-RPC WebSocket port — served to the renderer via
 	 *  `/__daemon.json` so the compat shell can connect as a host. */
@@ -38,7 +38,7 @@ export interface DaemonWebHandle {
 const DAEMON_CONFIG_PATH = "/__daemon.json";
 
 /** Injected compat slot host (dsh-desktop plugin parity): served only to
- *  `?shell=1` (the Electron compat shell). The desktop-web bundle stays a
+ *  `?shell=1` (the Electron compat shell). The guest-client bundle stays a
  *  passive renderer — this script is the host that pulls the daemon's
  *  compiled `transcript.node` extension components (extensions.list) and
  *  registers them on `window.MusePiCompatHost`; the bundle's Transcript then
@@ -180,7 +180,7 @@ function safeDistPath(distDir: string, urlPath: string): string {
  */
 export async function startDaemonWeb(options: DaemonWebOptions): Promise<DaemonWebHandle> {
 	if (!options.distDir || !(await Bun.file(path.join(options.distDir, "index.html")).exists())) {
-		throw new Error(`renderer dist not found at ${options.distDir} (build desktop-web first)`);
+		throw new Error(`renderer dist not found at ${options.distDir} (build guest-client first)`);
 	}
 	const server = Bun.serve({
 		hostname: options.host ?? "127.0.0.1",

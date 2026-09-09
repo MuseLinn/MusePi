@@ -7,8 +7,8 @@
 - Model-facing prompt: `packages/coding-agent/src/prompts/tools/widget.md`
 - Key collaborators:
   - `packages/coding-agent/src/tools/board.ts` — `board schema` surfaces the same `WIDGET_TYPES` table.
-  - `packages/desktop-web/src/widgets/registry.ts` — the shared widget registry (components + defaults) the renderer uses.
-  - `packages/desktop-web/src/tool-render/tools/widget.tsx` — transcript renderer: inline shell, local data state, error boundary degradation.
+  - `packages/guest-client/src/widgets/registry.ts` — the shared widget registry (components + defaults) the renderer uses.
+  - `packages/guest-client/src/tool-render/tools/widget.tsx` — transcript renderer: inline shell, local data state, error boundary degradation.
 
 ## Inputs
 

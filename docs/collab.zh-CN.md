@@ -98,7 +98,7 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<key>   → web UI 与 
 
 ## Web 客户端
 
-`packages/desktop-web` 是针对相同链接的独立浏览器客户端——访客侧无需安装 musepi。relay 在 `/` 提供它，这也是 `/collab` deep link 可点击加入的原因：`https://<relay>/#<link>` 会加载客户端并从 fragment 自动连接。它渲染实时 transcript（流式文本、thinking、工具卡片）、按需 transcripts 的 subagent 面板，以及带有相同访客能力（prompt、interrupt、hub actions）的 composer。在该包内运行 `bun run dev` 用于本地实例，运行 `bun run mock-host` 使用离线脚本化主机开发，运行 `bun run build` 输出可部署到任意地方的静态 `dist/`（WebCrypto 需要 HTTPS）。客户端只与 relay 通信，key 始终留在 i…
+`packages/guest-client` 是针对相同链接的独立浏览器客户端——访客侧无需安装 musepi。relay 在 `/` 提供它，这也是 `/collab` deep link 可点击加入的原因：`https://<relay>/#<link>` 会加载客户端并从 fragment 自动连接。它渲染实时 transcript（流式文本、thinking、工具卡片）、按需 transcripts 的 subagent 面板，以及带有相同访客能力（prompt、interrupt、hub actions）的 composer。在该包内运行 `bun run dev` 用于本地实例，运行 `bun run mock-host` 使用离线脚本化主机开发，运行 `bun run build` 输出可部署到任意地方的静态 `dist/`（WebCrypto 需要 HTTPS）。客户端只与 relay 通信，key 始终留在 i…
 
 当浏览器 UI 与 websocket relay 分开托管时，请设置 `collab.webUrl`。为空时，`/collab` 从 `collab.relayUrl` 推导 `http(s)://host[:port]`；显式 web UI URL 必须使用 `https://`，开发环境例外：仅允许 `http://localhost`。生成的浏览器 URL 仍然在 fragment 中携带 relay 专属的 collab link。
 
@@ -116,11 +116,11 @@ https://web.example/collab/#relay.example.com/r/<roomId>.<key>   → web UI 与 
 
 当前生产 relay 并未分发用于自托管：其 Go 源码和独立二进制文件未发布。下面列出的端点文档描述托管服务的网络契约，而不是可安装的发布版本。
 
-用于本地协议开发，本仓库包含一个仅 WebSocket 的源码可用替代实现，位于 [`packages/desktop-web/scripts/local-relay.ts`](../packages/desktop-web/scripts/local-relay.ts)。在 `packages/desktop-web` 中运行 `bun run relay` 监听 `ws://localhost:7466`。它实现了 `/r/<roomId>`，但不提供浏览器客户端、`/share` blob 或 `/healthz`，因此不能替代生产服务。
+用于本地协议开发，本仓库包含一个仅 WebSocket 的源码可用替代实现，位于 [`packages/guest-client/scripts/local-relay.ts`](../packages/guest-client/scripts/local-relay.ts)。在 `packages/guest-client` 中运行 `bun run relay` 监听 `ws://localhost:7466`。它实现了 `/r/<roomId>`，但不提供浏览器客户端、`/share` blob 或 `/healthz`，因此不能替代生产服务。
 
 relay 是一个小型内容无关 Go 服务。除活跃连接外不保留状态，暴露：
 
-- `GET /` — 静态 desktop-web 访客客户端（`/collab` deep link 的目标），
+- `GET /` — 静态 guest-client 访客客户端（`/collab` deep link 的目标），
 - `GET /r/<roomId>?role=host|guest` — WebSocket 升级，
 - `POST /s` / `GET /s/<id>` / `GET /s/<id>/raw` — `/share` blob 上传、viewer 页面和 blob 获取，
 - `GET /healthz` — 存活检查。

@@ -1,6 +1,6 @@
 # @musepi/collab-proto
 
-Collab 实时会话的线传输层，由宿主（`coding-agent`）与访客（`desktop-web`）共享：
+Collab 实时会话的线传输层，由宿主（`coding-agent`）与访客（`guest-client`）共享：
 AES-256-GCM 帧密封、分享链接格式、线信封、二维码与 relay WebSocket 客户端。
 纯传输层——不依赖 agent/session，浏览器安全（零 `Buffer`），帧类型通用。
 

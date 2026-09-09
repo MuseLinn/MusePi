@@ -11,7 +11,7 @@
 //     the `task` tool's `tool_execution_*` events. The native framed task
 //     card stays in the transcript.
 //   - GUI: the additive swarm member-grid card beside the native task card
-//     (desktop-web ToolView SwarmCard).
+//     (guest-client ToolView SwarmCard).
 //
 // The legacy `swarm_run` extension (braille widget + fake executor) was
 // never wired into the extension system and is removed — task tool is the

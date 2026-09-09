@@ -31,5 +31,5 @@ export const auth = {
 	"Choose next action:": "选择下一步操作：",
 } as const;
 
-/** Key union for the auth domain (mirrors the desktop-web locale split). */
+/** Key union for the auth domain (mirrors the guest-client locale split). */
 export type AuthKey = keyof typeof auth;

@@ -102,5 +102,5 @@ export const errors = {
 	"No vibe sessions. Spawn one with vibe_spawn.": "没有 Vibe 会话。请使用 vibe_spawn 创建一个。",
 } as const;
 
-/** Key union for the errors domain (mirrors the desktop-web locale split). */
+/** Key union for the errors domain (mirrors the guest-client locale split). */
 export type ErrorsKey = keyof typeof errors;

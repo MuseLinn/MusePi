@@ -16,4 +16,4 @@ bunx cap open android
 ```
 
 用 Android Studio 构建；应用连接同一网络下正在运行的 musepi daemon。Web 资源由
-`scripts/prepare-web-assets.mjs` 从 `desktop-web` 构建产出（仅移动端入口，无运行时重定向）。
+`scripts/prepare-web-assets.mjs` 从 `guest-client` 构建产出（仅移动端入口，无运行时重定向）。

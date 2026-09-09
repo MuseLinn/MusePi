@@ -31,21 +31,21 @@ jobs:
                     native_targets: darwin-arm64,
                     builder: mac,
                     artifact_ext: dmg,
-                    artifact_glob: "packages/gui/release/*.dmg",
+                    artifact_glob: "packages/desktop-app/release/*.dmg",
                  }
                - {
                     os: ubuntu-22.04,
                     target_id: linux-x64,
                     native_targets: linux-x64-baseline,
                     builder: linux,
-                    artifact_glob: "packages/gui/release/*",
+                    artifact_glob: "packages/desktop-app/release/*",
                  }
                - {
                     os: ubuntu-24.04-arm,
                     target_id: linux-arm64,
                     native_targets: linux-arm64,
                     builder: linux,
-                    artifact_glob: "packages/gui/release/*",
+                    artifact_glob: "packages/desktop-app/release/*",
                  }
                - {
                     os: windows-2022,
@@ -53,7 +53,7 @@ jobs:
                     native_targets: win32-x64-modern,
                     builder: win,
                     artifact_ext: exe,
-                    artifact_glob: "packages/gui/release/*.exe",
+                    artifact_glob: "packages/desktop-app/release/*.exe",
                  }
                - {
                     os: windows-11-arm,
@@ -61,7 +61,7 @@ jobs:
                     native_targets: win32-arm64,
                     builder: win,
                     artifact_ext: exe,
-                    artifact_glob: "packages/gui/release/*arm64*.exe",
+                    artifact_glob: "packages/desktop-app/release/*arm64*.exe",
                     arch_flag: "--arm64",
                  }
       runs-on: ${{ matrix.os }}
@@ -108,16 +108,16 @@ jobs:
          - name: Stage daemon binary into GUI vendor
            if: matrix.builder == 'mac' || matrix.builder == 'linux' || matrix.builder == 'win'
            run: |
-              mkdir -p packages/gui/vendor/daemon
-              cp packages/coding-agent/dist/musepi${{ matrix.builder == 'win' && '.exe' || '' }} packages/gui/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
-              chmod +x packages/gui/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
+              mkdir -p packages/desktop-app/vendor/daemon
+              cp packages/coding-agent/dist/musepi${{ matrix.builder == 'win' && '.exe' || '' }} packages/desktop-app/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
+              chmod +x packages/desktop-app/vendor/daemon/musepi${{ matrix.builder == 'win' && '.exe' || '' }}
 
          - name: Build GUI renderer
-           working-directory: packages/gui
+           working-directory: packages/desktop-app
            run: bun run build
 
          - name: Package (electron-builder)
-           working-directory: packages/gui
+           working-directory: packages/desktop-app
            # Beta tags (v*-beta*) build the "beta" publish channel: electron-builder
            # then writes beta.yml / beta-mac.yml / beta-linux*.yml and embeds
            # channel=beta into the installed app's app-update.yml, so beta installs
@@ -137,7 +137,7 @@ jobs:
 
          - name: Rename channel feed per arch
            if: matrix.builder == 'win'
-           working-directory: packages/gui/release
+           working-directory: packages/desktop-app/release
            shell: bash
            run: |
               set -euo pipefail
@@ -157,11 +157,11 @@ jobs:
            with:
               name: musepi-${{ matrix.target_id }}
               path: |
-                packages/gui/release/*.${{ matrix.artifact_ext }}
-                packages/gui/release/*.AppImage
-                packages/gui/release/*.deb
-                packages/gui/release/*.yml
-                packages/gui/release/*.zip
+                packages/desktop-app/release/*.${{ matrix.artifact_ext }}
+                packages/desktop-app/release/*.AppImage
+                packages/desktop-app/release/*.deb
+                packages/desktop-app/release/*.yml
+                packages/desktop-app/release/*.zip
               if-no-files-found: error
 
    package_mobile:
@@ -308,7 +308,7 @@ jobs:
               set -euo pipefail
               node --input-type=module <<'EOF'
               import fs from "node:fs";
-              const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
+              const pkg = JSON.parse(fs.readFileSync("packages/desktop-app/package.json", "utf8"));
               const tag = process.env.GITHUB_REF_NAME || `v${pkg.version}`;
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               // CHANGELOG.musepi.md lists newest-first (## [0.4.7] at the top);
@@ -323,16 +323,16 @@ jobs:
                 url: `https://github.com/MuseLinn/MusePi/releases/download/${tag}/MusePi-${pkg.version}-arm64.dmg`,
                 notes,
               };
-              fs.writeFileSync("packages/gui/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
+              fs.writeFileSync("packages/desktop-app/update-manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
               console.log("update-manifest:", manifest.version, manifest.url);
               EOF
               # Stage it beside the artifacts for the upload step
-              cp packages/gui/update-manifest.json dist/update-manifest.json
+              cp packages/desktop-app/update-manifest.json dist/update-manifest.json
               # Release page body: download instructions + the changelog section
               # (avoids GitHub's auto-generated duplicated "Full Changelog" link).
               node --input-type=module <<'EOF'
               import fs from "node:fs";
-              const pkg = JSON.parse(fs.readFileSync("packages/gui/package.json", "utf8"));
+              const pkg = JSON.parse(fs.readFileSync("packages/desktop-app/package.json", "utf8"));
               const changelog = fs.readFileSync("packages/coding-agent/CHANGELOG.musepi.md", "utf8");
               // Newest-first; take the first ## [x.y.z] section, skipping
               // trailing ## [Unreleased] (see update-manifest notes above).

@@ -1,8 +1,8 @@
 # MusePi 移动端设计规范（Mobile Companion）
 
-> **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + desktop-web 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
+> **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
 >
-> 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/desktop-web` 的
+> 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/guest-client` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。
 > 参考：openchamber `packages/mobile`（HANDOFF.md + `apps/MobileApp.tsx`）、musepi GUI 设计语言
 > （`docs/gui-design.md`）、高星移动端设计惯例（Linear / Obsidian / Arc / Material3 / iOS HIG）。
@@ -338,7 +338,7 @@ Session（会话）
 ## 9. 验收标准（回归清单）
 
 **构建**
-- [ ] `bun run check:types`（desktop-web）零错误；`bun run build` 产出 `mobile.html` 入口
+- [ ] `bun run check:types`（guest-client）零错误；`bun run build` 产出 `mobile.html` 入口
 - [ ] `bunx cap sync` 后 Android 工程 `assembleDebug` 通过；APK 内 `index.html` = mobile 入口
 
 **连接**
@@ -394,7 +394,7 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
 1. **`window.Capacitor.plugins`（小写）在真机 WebView 上恒为 undefined** —— 真实注册表是
    `window.Capacitor.Plugins`（大写），且只含 JS 模块已 import 的插件。`setupAndroidBackHandler`
    因此从未注册（返回键直接退应用）。修复：改 `await import("@capacitor/app")`（与 StatusBar/
-   LocalNotifications 同模式），desktop-web 与 mobile 各补 `@capacitor/app` 依赖。
+   LocalNotifications 同模式），guest-client 与 mobile 各补 `@capacitor/app` 依赖。
 2. **同类隐患**：`setupCapacitorKeyboardInset` 原用 `window.Capacitor?.plugins?.Keyboard`，真机上
    键盘事件从不触发，`--mp-keyboard-inset` 只靠 visualViewport 兜底（精度差）。已改模块 import
    （`@capacitor/keyboard`）。
@@ -408,7 +408,7 @@ connect / workspace / session / 面板 / rail / drawer / toasts / banners 全链
 
 验证工具（保留，供回归）：
 
-- `scripts/collab-host-stub.ts`（desktop-web）—— 固定 key 的 collab host 桩（E2E 密封），8s 后
+- `scripts/collab-host-stub.ts`（guest-client）—— 固定 key 的 collab host 桩（E2E 密封），8s 后
   推送后台通知触发消息；配合 `scripts/local-relay.ts` 使用。
 - 驱动方式：`adb forward tcp:9222 localabstract:webview_devtools_remote_<pid>` → CDP 直接操作
   WebView DOM（uiautomator 无法读 WebView 内容）。
@@ -503,7 +503,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ### 11.7 HarmonyOS WebView 壳（2026-08-25）
 
-用户诉"卓易通没沉浸"，本质是抵触兼容层。方案：`packages/harmony/` 用 ArkTS `Web` 组件加载现有 desktop-web 移动 bundle，一等地壳（非兼容层），沉浸/相机/权限全部原生。
+用户诉"卓易通没沉浸"，本质是抵触兼容层。方案：`packages/harmony/` 用 ArkTS `Web` 组件加载现有 guest-client 移动 bundle，一等地壳（非兼容层），沉浸/相机/权限全部原生。
 
 **桥接设计**：`capacitor.ts` 扩为单一桥路由器——`isMobileShell()` 同时识别 Capacitor 与 `window.harmonyNative`（ArkTS javaScriptProxy）。同一 dist 双壳通用，`mobile.tsx` 零改动（仅 insets 提取为共享 `getSystemBarInsets()`）。JavaProxy 方法同步返回 JSON 字符串。
 
@@ -511,13 +511,13 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 **深链**：`module.json5` ability skills → uris 注册 `musepi://connect?link=`；EntryAbility onCreate 存冷启动 URI、onNewWant 推热启动。
 
-**构建**：desktop-web `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 packages/harmony 运行。rawfile gitignored。
+**构建**：guest-client `bun run build`（产出 index.html=桌面 / mobile.html=移动壳）→ `node scripts/copy-web-assets.js` 把 **mobile.html** 重命名为 rawfile/index.html（桌面入口弃用）→ DevEco Studio 打开 packages/harmony 运行。rawfile gitignored。
 
 **取舍**：凭证回退 localStorage（未接 `@ohos.security.asset`，P3）；通知/语音/原生图标均为 P3。若用户要真原生体验，connect+会话列表 ArkTS 重写是后续独立工程。
 
 ### 11.8 GUI 视觉吸收（2026-08-25，持续）
 
-按"协议兼容 + 零依赖"原则把 gui 客户端组件吸收进移动壳（desktop-web 的 shell 组件），每批模拟器 CDP 实测。
+按"协议兼容 + 零依赖"原则把 gui 客户端组件吸收进移动壳（guest-client 的 shell 组件），每批模拟器 CDP 实测。
 
 **批 1（716b5bf3e4）— 品牌动效**：
 - DotMatrixMark（canvas 点阵品牌底纹）作为 connect 卡背景（masked 渐隐）；注意 canvas 必须 CSS 容器约束，否则 ResizeObserver↔bitmap attribute 反馈环撑爆像素
@@ -548,8 +548,8 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 - `packages/harmony/` DevEco 工程（API 12 / 5.0.0）：EntryAbility（musepi:// 深链冷/暖启动）+ Index.ets（Web 组件 + `harmonyNative` javaScriptProxy）
 - 桥面与 JS 侧 capacitor.ts 的类型/路由完全对齐（getSystemBars via getWindowAvoidArea px→vp、badge、consumeDeepLink、__harmonyKeyboard/__harmonyDeepLink 推送）
 - `@StorageLink + @Watch` 标准模式做暖启动深链推送；module.json5 注册 INTERNET/CAMERA + musepi:// skill（phone+tablet）
-- `scripts/copy-web-assets.js`：desktop-web dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
-- 构建路径：desktop-web build → copy-web-assets → DevEco Studio 打开签名运行（本机无 DevEco，ArkTS 未编译验证）
+- `scripts/copy-web-assets.js`：guest-client dist → rawfile（mobile.html 提升为 index.html）；rawfile gitignored
+- 构建路径：guest-client build → copy-web-assets → DevEco Studio 打开签名运行（本机无 DevEco，ArkTS 未编译验证）
 
 ### 11.10 旋转/断点过渡动效（2026-08-25，模拟器双向实测）
 
@@ -626,7 +626,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ## 12. 交互缺陷修复（2026-08-31）
 
-2026-08-31 对移动端交互设计进行专项核对，发现并修复 6 项实现与设计文档不一致的缺陷。全部在 `packages/desktop-web/src/` 内完成，不动 wire 协议/daemon/原生壳；每项附带契约测试。
+2026-08-31 对移动端交互设计进行专项核对，发现并修复 6 项实现与设计文档不一致的缺陷。全部在 `packages/guest-client/src/` 内完成，不动 wire 协议/daemon/原生壳；每项附带契约测试。
 
 ### 12.1 A1 — 返回键层栈完整化（back-stack）
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Copy the desktop-web mobile bundle into the HarmonyOS rawfile directory.
+ * Copy the guest-client mobile bundle into the HarmonyOS rawfile directory.
  *
  * Usage: node scripts/copy-web-assets.js
- * Run after `bun run build` in packages/desktop-web. mobile.html becomes
+ * Run after `bun run build` in packages/guest-client. mobile.html becomes
  * rawfile/index.html (the shell loads $rawfile('index.html')); the hashed
  * asset files sit next to it so relative references resolve.
  */
@@ -13,11 +13,11 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const harmonyRoot = join(here, "..");
-const dist = join(harmonyRoot, "..", "desktop-web", "dist");
+const dist = join(harmonyRoot, "..", "guest-client", "dist");
 const rawfile = join(harmonyRoot, "entry", "src", "main", "resources", "rawfile");
 
 if (!existsSync(join(dist, "mobile.html"))) {
-	console.error("[copy-web-assets] desktop-web dist not found — run `bun run build` in packages/desktop-web first");
+	console.error("[copy-web-assets] guest-client dist not found — run `bun run build` in packages/guest-client first");
 	process.exit(1);
 }
 
