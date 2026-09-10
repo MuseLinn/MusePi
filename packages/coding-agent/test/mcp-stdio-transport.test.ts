@@ -80,33 +80,31 @@ describe("resolveStdioSpawnCommand", () => {
 		}
 	});
 
-	it("keeps PATH-resolved npx.cmd on the cmd.exe path so npm preserves stdio semantics", async () => {
+	it("launches PATH-resolved npx.cmd through node directly so no grandchild console flashes", async () => {
 		const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-mcp-npx-"));
 		try {
 			const shim = path.join(tempDir, "npx.cmd");
+			// npm's hand-written launcher shim (the real npx.cmd shape): it
+			// SETs NODE_EXE/NPX_CLI_JS with %~dp0 prefixes and runs node —
+			// distinct from the cmd-shim %dp0% template used by global bins.
 			await Bun.write(
 				shim,
 				[
 					"@ECHO off",
-					"GOTO start",
-					":find_dp0",
-					"SET dp0=%~dp0",
-					"EXIT /b",
-					":start",
-					"SETLOCAL",
-					"CALL :find_dp0",
-					"",
-					'IF EXIST "%dp0%\\node.exe" (',
-					'  SET "_prog=%dp0%\\node.exe"',
-					") ELSE (",
-					'  SET "_prog=node"',
-					"  SET PATHEXT=%PATHEXT:;.JS;=;%",
-					")",
-					"",
-					'endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%" "%dp0%\\node_modules\\npm\\bin\\npx-cli.js" %*',
+					'SET "NODE_EXE=%~dp0\\node.exe"',
+					'IF NOT EXIST "%NODE_EXE%" SET "NODE_EXE=node"',
+					'SET "NPX_CLI_JS=%~dp0\\node_modules\\npm\\bin\\npx-cli.js"',
+					'IF NOT EXIST "%NPX_CLI_JS%" SET "NPX_CLI_JS=node_modules\\npm\\bin\\npx-cli.js"',
+					'"%NODE_EXE%" "%NPX_CLI_JS%" %*',
 					"",
 				].join("\r\n"),
 			);
+			// The direct-node route only fires when both resolved targets exist
+			// inside the shim dir — stage a dummy node.exe and CLI entry.
+			const nodeExe = path.join(tempDir, "node.exe");
+			const cliJs = path.join(tempDir, "node_modules", "npm", "bin", "npx-cli.js");
+			await Bun.write(nodeExe, "dummy");
+			await Bun.write(cliJs, "dummy");
 
 			const result = await resolveStdioSpawnCommand(
 				{ type: "stdio", command: "npx", args: ["-y", "mcp-gdb"] },
@@ -122,15 +120,9 @@ describe("resolveStdioSpawnCommand", () => {
 				},
 			);
 
-			expect(result.cmd).toEqual([
-				"C:\\Windows\\System32\\cmd.exe",
-				"/d",
-				"/e:ON",
-				"/v:OFF",
-				"/c",
-				`""${shim}" -y mcp-gdb"`,
-			]);
-			expect(result.windowsVerbatimArguments).toBe(true);
+			// Direct node spawn: no cmd.exe wrapper in the chain, so windowsHide
+			// governs the whole tree and no conhost window can flash.
+			expect(result.cmd).toEqual([nodeExe, cliJs, "-y", "mcp-gdb"]);
 			expect(result.windowsHide).toBe(false);
 			expect(result.detached).toBe(false);
 		} finally {

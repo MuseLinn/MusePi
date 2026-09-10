@@ -18,9 +18,8 @@ import {
 	SecureStorageBackend,
 } from "@musepi/pi-coding-agent/plugin-credentials";
 
-const ORIGINAL_HOME = process.env.HOME;
-const ORIGINAL_USERPROFILE = process.env.USERPROFILE;
 let testHome: string;
+let credDir: string;
 
 afterEach(() => {
 	resetPluginCredentialManager();
@@ -28,18 +27,17 @@ afterEach(() => {
 		if (key.startsWith("MUSPI_PLUGIN_CRED_")) delete process.env[key];
 	}
 	if (testHome && existsSync(testHome)) rmSync(testHome, { recursive: true, force: true });
-	process.env.HOME = ORIGINAL_HOME;
-	process.env.USERPROFILE = ORIGINAL_USERPROFILE;
 });
 
 function freshHome(): string {
 	const home = join(tmpdir(), `plugin-credentials-mgr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(home, { recursive: true, mode: 0o700 });
-	process.env.HOME = home;
-	process.env.USERPROFILE = home;
 	testHome = home;
+	credDir = join(home, ".musepi");
 	return home;
 }
+
+const freshSecureBackend = (): SecureStorageBackend => new SecureStorageBackend({ directory: credDir });
 
 describe("accountToPluginCredentialId / pluginCredentialIdToAccount", () => {
 	it("round-trips pluginId alone", () => {
@@ -61,7 +59,7 @@ describe("accountToPluginCredentialId / pluginCredentialIdToAccount", () => {
 describe("PluginCredentialManager", () => {
 	it("reads from the highest-priority backend that has the credential", async () => {
 		freshHome();
-		const secure = new SecureStorageBackend();
+		const secure = freshSecureBackend();
 		const env = new EnvBackend();
 		const mem = new InMemoryBackend();
 		const manager = new PluginCredentialManager({ backends: [secure, env, mem] });
@@ -90,7 +88,7 @@ describe("PluginCredentialManager", () => {
 
 	it("falls back to a lower-priority backend when the chosen one refuses to write", async () => {
 		freshHome();
-		const secure = new SecureStorageBackend();
+		const secure = freshSecureBackend();
 		const mem = new InMemoryBackend();
 		// Mark secure as unavailable: simulates a read-only mount.
 		const unavailable = new (class extends SecureStorageBackend {
@@ -106,7 +104,7 @@ describe("PluginCredentialManager", () => {
 
 	it("list aggregates unique ids across all backends", async () => {
 		freshHome();
-		const secure = new SecureStorageBackend();
+		const secure = freshSecureBackend();
 		const env = new EnvBackend();
 		const mem = new InMemoryBackend();
 		const manager = new PluginCredentialManager({ backends: [secure, env, mem] });
@@ -121,7 +119,7 @@ describe("PluginCredentialManager", () => {
 
 	it("delete removes from every backend that holds the id (env vars excepted)", async () => {
 		freshHome();
-		const secure = new SecureStorageBackend();
+		const secure = freshSecureBackend();
 		const env = new EnvBackend();
 		const mem = new InMemoryBackend();
 		const manager = new PluginCredentialManager({ backends: [secure, env, mem] });

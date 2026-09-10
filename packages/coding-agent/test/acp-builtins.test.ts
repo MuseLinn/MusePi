@@ -1178,7 +1178,7 @@ describe("wave 5 — adapters and polish", () => {
 	});
 
 	// /marketplace discover bulleted list
-	it("/marketplace discover: output is bulleted with '  - ' token", async () => {
+	it("/marketplace discover: renders the plugin grid with name@version tokens", async () => {
 		const { MarketplaceManager } = await import("@musepi/pi-coding-agent/extensibility/plugins/marketplace");
 		const discoverSpy = spyOn(MarketplaceManager.prototype, "listAvailablePlugins").mockResolvedValue([
 			{ name: "hello", version: "1.0.0", description: "A greeting plugin" } as never,
@@ -1188,8 +1188,9 @@ describe("wave 5 — adapters and polish", () => {
 			const { output, runtime } = createRuntime();
 			const result = await executeAcpBuiltinSlashCommand("/marketplace discover", runtime);
 			expect(result).toEqual({ consumed: true });
-			expect(output[0]).toContain("  - ");
+			expect(output[0]).toContain("Available plugins (2)");
 			expect(output[0]).toContain("hello@1.0.0");
+			expect(output[0]).toContain("world@2.0.0");
 		} finally {
 			discoverSpy.mockRestore();
 		}
