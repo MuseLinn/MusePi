@@ -73,12 +73,20 @@ export function isDashscopeCompatibleModeTextOnlyQwen(model: Model<"openai-compl
  * Used as a defensive override in `convertMessages` so misconfigured model
  * definitions or user overrides (e.g. `models.yml` claiming `input: [text, image]`)
  * do not crash the session with an unrecoverable 400.
+ *
+ * Multimodal SKUs are carved out by *name*, mirroring upstream's
+ * `compat/rules/classes/deepseek.kdl` (strip on the class, re-enable per
+ * token): `ocr` and `vision` there, plus `v4.1-flash` here — upstream carries
+ * no V4.1 entry to inherit from, and both the models.dev catalog and the
+ * command-code gateway advertise image input for it.
  */
 export function isTextOnlyDeepSeek(model: Model<"openai-completions">): boolean {
 	const id = model.id.toLowerCase();
 	const name = (model.name ?? "").toLowerCase();
-	// DeepSeek OCR is a genuinely multimodal model served by Novita.
-	if (id.includes("deepseek-ocr") || name.includes("deepseek-ocr")) return false;
+	if (id.includes("ocr") || name.includes("ocr")) return false;
+	if (id.includes("vision") || name.includes("vision")) return false;
+	const compact = `${id} ${name}`.replace(/[^a-z0-9]/g, "");
+	if (compact.includes("v41flash")) return false;
 	return (
 		modelMatchesHost(model, "deepseekFamily") ||
 		isDeepseekModelIdOrName(model.id) ||

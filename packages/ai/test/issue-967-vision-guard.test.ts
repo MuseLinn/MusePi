@@ -299,3 +299,64 @@ describe("issue #967 vision guard", () => {
 		});
 	});
 });
+
+// DeepSeek is stripped as a family (its V4/Pro SKUs reject `image_url` with an
+// unrecoverable 400), so the multimodal carve-outs are the only way a DeepSeek
+// model keeps images. Both directions are contract here: widening the family
+// guard to every DeepSeek id silently breaks vision on the SKUs below.
+describe("DeepSeek multimodal SKUs keep images", () => {
+	function makeDeepseekModel(id: string, name: string): Model<"openai-completions"> {
+		return buildModel({
+			id,
+			name,
+			api: "openai-completions",
+			provider: "command-code",
+			baseUrl: "https://api.commandcode.ai/provider/v1",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 1_000_000,
+			maxTokens: 384_000,
+		} as ModelSpec<"openai-completions">);
+	}
+
+	function imageContext(): Context {
+		return {
+			messages: [
+				{
+					role: "user",
+					content: [
+						{ type: "text", text: "describe this" },
+						{ type: "image", mimeType: "image/png", data: "ZmFrZQ==" },
+					],
+					timestamp: 1,
+				},
+			],
+		};
+	}
+
+	it("keeps images for the V4 Flash vision preview (upstream `vision` token)", () => {
+		const model = makeDeepseekModel("deepseek/deepseek-v4-flash-vision-exp", "DeepSeek V4 Flash Vision (exp)");
+		const messages = convertOpenAICompletionsMessages(model, imageContext(), compat);
+		expect(countTaggedValues(messages, "image_url")).toBe(1);
+	});
+
+	it("keeps images for DeepSeek V4.1 Flash (MusePi carve-out, no upstream entry)", () => {
+		const model = makeDeepseekModel("deepseek/deepseek-v4.1-flash", "DeepSeek V4.1 Flash");
+		const messages = convertOpenAICompletionsMessages(model, imageContext(), compat);
+		expect(countTaggedValues(messages, "image_url")).toBe(1);
+	});
+
+	it("still strips images from text-only DeepSeek SKUs", () => {
+		const model = makeDeepseekModel("deepseek/deepseek-v4-flash", "DeepSeek V4 Flash");
+		const messages = convertOpenAICompletionsMessages(model, imageContext(), compat);
+		expect(countTaggedValues(messages, "image_url")).toBe(0);
+		expect(messages[0]).toMatchObject({
+			role: "user",
+			content: [
+				{ type: "text", text: "describe this" },
+				{ type: "text", text: NON_VISION_IMAGE_PLACEHOLDER },
+			],
+		});
+	});
+});
