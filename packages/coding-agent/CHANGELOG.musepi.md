@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.23] - 2026-09-10
+
 ### Fixed
 
 - **修复 DeepSeek V4.1 Flash 发图被丢弃**:`isTextOnlyDeepSeek` 以 `id.includes("deepseek")` 一刀切、仅豁免 `ocr`,把真正接受图像输入的模型在请求转换阶段剥成了占位符。现补齐上游 KDL 的 `vision` token 豁免,并单独豁免 V4.1 Flash——models.dev 对其 8 个条目一致声明 `modalities.input: [text, image]`,且已对 command-code 网关实测:带图请求返回 200 并正确读图(能复述图中的红框与侧边栏条目)。纯文本 SKU(如 `deepseek-v4-flash`,models.dev 59 个条目一致声明纯文本)仍按原样剥离。
