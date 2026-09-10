@@ -12,8 +12,17 @@ const globals = globalThis as typeof globalThis & {
 	HTMLElement?: typeof HTMLElement;
 	document?: unknown;
 };
+// The DOM lib types `customElements` as a real CustomElementRegistry; this
+// stub deliberately is not one, so widen once through a named alias.
+const globalRegistry = globalThis as unknown as { customElements?: unknown };
 
 globals.HTMLElement ??= TestHTMLElement as unknown as typeof HTMLElement;
+// @pierre/diffs registers a `diffs-container` custom element at module load;
+// any test pulling the transcript/tool-render graph needs the registry to exist.
+globalRegistry.customElements ??= {
+	get: () => undefined,
+	define: () => {},
+};
 
 if (typeof globals.document === "undefined") {
 	const fakeElement = () => ({

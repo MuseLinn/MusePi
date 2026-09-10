@@ -5,6 +5,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **修复 DeepSeek V4.1 Flash 发图被丢弃**:`isTextOnlyDeepSeek` 以 `id.includes("deepseek")` 一刀切、仅豁免 `ocr`,把真正接受图像输入的模型在请求转换阶段剥成了占位符。现补齐上游 KDL 的 `vision` token 豁免,并单独豁免 V4.1 Flash——models.dev 对其 8 个条目一致声明 `modalities.input: [text, image]`,且已对 command-code 网关实测:带图请求返回 200 并正确读图(能复述图中的红框与侧边栏条目)。纯文本 SKU(如 `deepseek-v4-flash`,models.dev 59 个条目一致声明纯文本)仍按原样剥离。
+  - EN: Fixed images being dropped for DeepSeek V4.1 Flash: `isTextOnlyDeepSeek` matched every `deepseek` id and exempted only `ocr`, so models that genuinely accept image input had their images replaced with a placeholder during request conversion. The guard now mirrors upstream's KDL `vision` token carve-out and additionally exempts V4.1 Flash — models.dev declares `modalities.input: [text, image]` across its eight entries, and a live image request against the command-code gateway returned 200 and read the image correctly (it recited the screenshot's red box and sidebar entries). Text-only SKUs such as `deepseek-v4-flash` (declared text-only across 59 models.dev entries) are still stripped as before.
+- **修复设置页自定义供应商区块在其它标签页重复出现**:`CustomProviderPane` 原先无条件渲染,于是"角色模型/模型行为/供应商"三个标签页底部也长出整个区块(标题+列表+添加按钮),与第四个同名标签页重复。现收敛到它自己的标签页。
+  - EN: Fixed the custom-providers section appearing on every Models & Providers tab: `CustomProviderPane` rendered unconditionally, so the roles/behavior/providers tabs each grew the whole section (title, list, add button) below their own content, duplicating the dedicated tab. It now renders only on that tab.
+
 ## [0.4.22] - 2026-09-10
 
 ### Added

@@ -1579,7 +1579,12 @@ export function ModelSection({
 					 * pane body top via renderApiKeyImport() so it also works
 					 * from the roles-rail provider actions. */}
 					{apiKeyTarget && renderApiKeyImport()}
-					<CustomProviderPane custom={custom} rpc={rpc} sessionId={sessionId} onChanged={onChanged} />
+					{/* The pane owns the "custom providers" tab. Rendering it
+					 * unconditionally leaked the whole section (title, list, add
+					 * button) under the roles/behavior/providers tabs too. */}
+					{activeTab === "custom" && (
+						<CustomProviderPane custom={custom} rpc={rpc} sessionId={sessionId} onChanged={onChanged} />
+					)}
 				</HeightMorph>
 			</div>
 		</>
