@@ -1265,9 +1265,9 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.16.4"
+version = "0.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fe5f465a4f6fee88fad41b85d990f84c835335e85b5d9e6e63e0d06d28cba7c"
+checksum = "e96a4956774c13c126a8b5af4daa79384f4d826534c95a02d76afb39e2ab64e3"
 dependencies = [
  "encode_unicode",
  "libc",
@@ -5003,7 +5003,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -5073,7 +5073,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -5158,7 +5158,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "async-trait",
  "libc",
@@ -5170,7 +5170,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5244,7 +5244,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5272,7 +5272,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5287,7 +5287,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "0.4.22"
+version = "0.4.23"
 dependencies = [
  "dashmap",
  "globset",
