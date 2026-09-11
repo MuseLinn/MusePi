@@ -1761,21 +1761,28 @@ body.gui-resizing .gui-pane-right {
 
 /* Spacing density (50-200%) scales the content paddings via --gui-density
  * (a unitless factor, 1 = 100% — a percentage operand would invalidate the
- * calc() and zero the padding). openchamber 1.18 parity: centered 840px
- * column (SettingsPageLayout `mx-auto max-w-[840px]`), px-12/py-8 at 3xl —
- * generous side margins so text never touches or truncates at the edges. */
+ * calc() and zero the padding).
+ *
+ * Content column ceiling. openchamber's SettingsPageLayout pins a flat
+ * `max-w-[840px]` (still 840 at v1.22); we keep 840 as the FLOOR so narrow
+ * and mid-size windows match the reference exactly, then let the column grow
+ * with the pane up to a cap — a maximized window on a high-resolution display
+ * left the column stranded in whitespace (user report). The percentage is
+ * measured against .gui-settings-surface, i.e. the pane MINUS the 256px nav,
+ * so the nav width never eats into the column. One knob: retune the variable
+ * on .gui-settings-view. px-12/py-8 stay openchamber's 3xl padding. */
 .gui-settings-content {
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
-	/* width:100% + max-width:840px + margin auto = openchamber's
-	 * `mx-auto max-w-[840px]`: fill the pane, clamp at 840, center.
+	/* width:100% + max-width + margin auto = openchamber's
+	 * `mx-auto max-w-[840px]`: fill the pane, clamp, center.
 	 * (Auto margins alone defeat flex stretch and size to content.) */
 	width: 100%;
 	margin-inline: auto;
 	padding: calc(32px * var(--gui-density, 1)) calc(48px * var(--gui-density, 1));
-	max-width: 840px;
+	max-width: var(--gui-settings-content-max, 840px);
 }
 
 /* History viewer fill mode (设置 → 数据与统计 → 历史会话): the page-level

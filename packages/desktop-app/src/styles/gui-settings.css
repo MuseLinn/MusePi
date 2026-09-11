@@ -1059,6 +1059,12 @@
 	flex-direction: column;
 	height: 100%;
 	min-height: 0;
+	/* Content column ceiling for every settings section (consumed by
+	 * .gui-settings-content in gui-chat.css). 840px is openchamber's flat
+	 * ceiling; growing to 1080px only once the pane is wide enough keeps the
+	 * reference geometry on normal windows while giving maximized
+	 * high-resolution windows a column that fills the pane. Tune here. */
+	--gui-settings-content-max: clamp(840px, 78%, 1080px);
 	/* Same translucent surface the nav uses — the gap between the nav and
 	 * the floating config surface reads as one continuous panel (no line). */
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
