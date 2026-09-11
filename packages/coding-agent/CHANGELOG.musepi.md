@@ -5,6 +5,20 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.24] - 2026-09-11
+
+### Added
+
+- **设置页模型列表显示能力图标**:设置 → 模型与供应商的模型列表现与输入框的模型选择器一致,逐行显示文本/图片理解/视频理解/图片生成/视频生成/推理图标(同一套图标与文案,tooltip 列出全部能力)。为此 `models.catalog` 随每个模型下发能力标志。
+  - EN: The Models & Providers model list now shows the same capability icons as the composer's model picker — text / image understanding / video understanding / image generation / video generation / reasoning, per row, with a shared tooltip listing them. `models.catalog` carries the capability flags for every model to make this possible.
+
+### Fixed
+
+- **修复网关型供应商的模型能力丢失(DeepSeek V4.1 Flash 发图仍无效)**:command-code 这类网关的 `/v1/models` 只返回裸 `{id}`,能力全靠 models.dev 目录回退;而共享目录预热是 fire-and-forget,发现过程赢得竞态时同步视图尚为空,映射器于是落到"纯文本"默认值并被 ModelManager 写进缓存(2 小时 TTL)。表现是 `deepseek-v4.1-flash` 的 `input` 一直是 `[text]`——即便 0.4.23 已放宽请求转换的剥离闸门,`input` 不含 `image` 仍会在第一道判断处拦下图片,能力图标也不显示。现发现过程自行解析目录载荷(带超时,失败回退同步视图)。
+  - EN: Fixed lost capabilities for gateway-style providers (DeepSeek V4.1 Flash still could not take images): a gateway like command-code returns bare `{id}` rows from `/v1/models`, so every capability comes from the models.dev catalog fallback — but the shared catalog prime is fire-and-forget, and when discovery won that race the synchronous view was still empty, so the mapper fell through to the text-only defaults and the ModelManager cached them for the 2-hour TTL. `deepseek-v4.1-flash` thus stayed at `input: [text]`, which defeats the 0.4.23 un-stripping fix at its first check (`input` must contain `image`) and hides the capability icons too. Discovery now resolves the catalog payload itself, with a timeout and a fallback to the synchronous view.
+- **发布页 changelog 段落错位(历史遗留)**:此前正文生成器取"第一个版本段",升段晚于打包时就会嵌入上一版内容(v0.4.21/v0.4.19/v0.4.16 曾如此,均已按各自版本内容修正)。
+  - EN: Fixed misaligned changelog sections on older release pages: the body generator takes the first version section, so a promotion that lagged packaging embedded the previous release's notes (v0.4.21/v0.4.19/v0.4.16 were affected; each now carries its own version's content).
+
 ## [0.4.23] - 2026-09-10
 
 ### Fixed
