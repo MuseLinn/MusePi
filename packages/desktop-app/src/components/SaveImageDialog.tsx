@@ -49,10 +49,18 @@ export function SaveImageDialog({
 		if (!card || busy) return;
 		setBusy(true);
 		try {
-			const { toPng } = await import("html-to-image");
+			// Dynamic import on purpose: html-to-image is a large dependency
+			// pulled in only when someone actually exports a message, so it
+			// stays out of the main bundle.
+			//
+			// toBlob hands back the canvas blob directly. Going through toPng
+			// + fetch(dataUrl) needs `data:` in connect-src, which the app's
+			// CSP does not allow — the fetch was rejected, the catch below
+			// swallowed it, and the button silently did nothing.
+			const { toBlob } = await import("html-to-image");
 			const bg = getComputedStyle(card).backgroundColor || "#ffffff";
-			const dataUrl = await toPng(card, { quality: 1, pixelRatio: 2, backgroundColor: bg });
-			const blob = await (await fetch(dataUrl)).blob();
+			const blob = await toBlob(card, { pixelRatio: 2, backgroundColor: bg });
+			if (!blob) throw new Error("canvas produced no blob");
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
