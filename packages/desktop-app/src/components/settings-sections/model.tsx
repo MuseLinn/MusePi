@@ -46,7 +46,16 @@ interface CatalogProvider {
 	name: string;
 	available: boolean;
 	modelCount: number;
-	models: { id: string; name: string }[];
+	models: {
+		id: string;
+		name: string;
+		reasoning: boolean;
+		text: boolean;
+		vision: boolean;
+		video: boolean;
+		imageGen: boolean;
+		videoGen: boolean;
+	}[];
 }
 
 /** Cards per provider section before the "show all" expand (bitfun parity). */
@@ -856,14 +865,40 @@ export function ModelSection({
 		return (
 			<div className="gui-model-provider-models">
 				{shown.length > 0 ? (
-					shown.map(m => (
-						<div key={`${p.provider}/${m.id}`} className="gui-model-model-row">
-							<span className="gui-model-model-name" title={m.name}>
-								{m.name}
-							</span>
-							<span className="gui-model-model-id">{m.id}</span>
-						</div>
-					))
+					shown.map(m => {
+						// Same icon set + wording as the model picker's rows, so a
+						// model reads identically in both places.
+						const capTitle = [
+							m.text ? t("text input") : null,
+							m.vision ? t("image understanding") : null,
+							m.video ? t("video understanding") : null,
+							m.imageGen ? t("image generation") : null,
+							m.videoGen ? t("video generation") : null,
+							m.reasoning ? t("reasoning") : null,
+						]
+							.filter((label): label is string => label !== null)
+							.join(" · ");
+						return (
+							<div key={`${p.provider}/${m.id}`} className="gui-model-model-row">
+								<span className="gui-model-model-name" title={m.name}>
+									{m.name}
+								</span>
+								<span
+									className="gui-model-cap"
+									title={capTitle || undefined}
+									aria-label={capTitle || undefined}
+								>
+									{m.text && <Icon name="text" className="h-3.5 w-3.5" />}
+									{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
+									{m.video && <Icon name="file-video" className="h-3.5 w-3.5" />}
+									{m.imageGen && <Icon name="palette" className="h-3.5 w-3.5" />}
+									{m.videoGen && <Icon name="record-circle" className="h-3.5 w-3.5" />}
+									{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
+								</span>
+								<span className="gui-model-model-id">{m.id}</span>
+							</div>
+						);
+					})
 				) : (
 					<div className="text-[12px] text-[var(--color-text-faint)] italic">{t("no models")}</div>
 				)}

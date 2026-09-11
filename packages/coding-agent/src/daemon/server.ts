@@ -8691,7 +8691,21 @@ export class DaemonServer {
 				const registryNames = new Map(PROVIDER_REGISTRY.map(def => [def.id, def.name]));
 				const byProvider = new Map<
 					string,
-					{ provider: string; name: string; available: boolean; models: { id: string; name: string }[] }
+					{
+						provider: string;
+						name: string;
+						available: boolean;
+						models: {
+							id: string;
+							name: string;
+							reasoning: boolean;
+							text: boolean;
+							vision: boolean;
+							video: boolean;
+							imageGen: boolean;
+							videoGen: boolean;
+						}[];
+					}
 				>();
 				for (const model of all) {
 					let group = byProvider.get(model.provider);
@@ -8704,7 +8718,19 @@ export class DaemonServer {
 						};
 						byProvider.set(model.provider, group);
 					}
-					group.models.push({ id: model.id, name: model.name ?? model.id });
+					// Same capability mapping the model picker uses (modelDetailRow),
+					// so this pane can render the identical icon set per row.
+					const capabilities = resolveModelCapabilities(model.id, model.input);
+					group.models.push({
+						id: model.id,
+						name: model.name ?? model.id,
+						reasoning: model.reasoning === true,
+						text: capabilities.text,
+						vision: capabilities.image,
+						video: capabilities.video,
+						imageGen: capabilities.imageGen,
+						videoGen: capabilities.videoGen,
+					});
 				}
 				return [...byProvider.values()]
 					.sort((a, b) => a.name.localeCompare(b.name))
