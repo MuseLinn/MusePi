@@ -5,6 +5,7 @@ import {
 	burstStyleFor,
 	CATCHUP_FRAMES,
 	countGraphemes,
+	DRAIN_STEP,
 	FLIP_WINDOW,
 	flipStyleFor,
 	GLITCH_CHARS,
@@ -16,6 +17,7 @@ import {
 	INK_WINDOW,
 	inkStyleFor,
 	MIN_STEP,
+	nextDrainPosition,
 	nextRevealPosition,
 	nextStep,
 	RAINBOW_HUE_STEP,
@@ -387,5 +389,35 @@ describe("inkStyleFor (逐字水墨)", () => {
 
 	it("guard: 1-wide window's only grapheme is the newest → bleeds", () => {
 		expect(inkStyleFor(0, 1)).not.toBeNull();
+	});
+});
+
+/**
+ * Settle drain. Regression (2026-09-12): when the producer stopped, the hook
+ * snapped the reveal to the full text, so a long tail popped in one frame after
+ * a smooth stream. The drain advances at a FIXED rate — deliberately not the
+ * proportional catch-up step, which would eat any backlog in ~8 frames.
+ */
+describe("nextDrainPosition", () => {
+	it("advances by a fixed step regardless of backlog size", () => {
+		expect(nextDrainPosition(0, 10)).toBe(Math.min(10, DRAIN_STEP));
+		// A huge backlog still takes the fixed step, not the proportional one.
+		expect(nextDrainPosition(0, 10_000)).toBe(DRAIN_STEP);
+	});
+
+	it("a large backlog drains slower than the proportional step", () => {
+		// This is the whole point: proportional would eat 5000 chars in ~8
+		// frames; fixed-rate keeps the reading cadence.
+		expect(nextDrainPosition(0, 5000)).toBeLessThan(nextRevealPosition(0, 5000));
+	});
+
+	it("never overshoots the delivered text", () => {
+		expect(nextDrainPosition(9995, 10_000)).toBe(10_000);
+		expect(nextDrainPosition(10_000, 10_000)).toBe(10_000);
+	});
+
+	it("finishes a short tail in a couple of frames", () => {
+		// A 30-grapheme remainder must not crawl: <= 5 frames at the min step.
+		expect(Math.ceil(30 / DRAIN_STEP)).toBeLessThanOrEqual(5);
 	});
 });

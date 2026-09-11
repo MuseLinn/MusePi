@@ -2468,10 +2468,13 @@ export class DaemonSessionHost {
 	 * Structured workspace tree (file pane): native single-pass scan with
 	 * per-directory caps (recent + oldest kept when over cap). Mirrors the
 	 * TUI workspace-tree semantics without the rendered-string format.
+	 *
+	 * `gitignore: false` lists .gitignore'd paths too (the Files pane's
+	 * toggle) — callers that omit it keep the filtered default.
 	 */
 	async workspaceTree(
 		cwd: string,
-		options: { maxDepth?: number; perDirLimit?: number | null } = {},
+		options: { maxDepth?: number; perDirLimit?: number | null; gitignore?: boolean } = {},
 	): Promise<{
 		rootPath: string;
 		truncated: boolean;
@@ -2486,7 +2489,7 @@ export class DaemonSessionHost {
 				path: rootPath,
 				maxDepth,
 				hidden: true,
-				gitignore: true,
+				gitignore: options.gitignore ?? true,
 			});
 			result = { entries: scan.entries, truncated: scan.truncated };
 		} catch {
@@ -5719,8 +5722,14 @@ export class DaemonServer {
 				// position.
 				const bp = (params ?? {}) as { sessionId: string; messageId: string };
 				if (!bp.messageId) throw new Error("messageId required");
-				const blive = this.#host.get(bp.sessionId);
-				if (!blive) throw new Error("branchAt requires a live session");
+				// History sessions (idle-closed / pre-restart) reactivate on
+				// demand, exactly like session.abort / collab.start. Requiring
+				// an already-live session made every branch gesture fail on a
+				// session the user had merely opened from the list — the
+				// transcript's 撤回/编辑/重试 buttons, the message tree, the
+				// branch bar and the canvas all go through here.
+				const blive = this.#host.get(bp.sessionId) ?? (await this.#host.activate(bp.sessionId).catch(() => null));
+				if (!blive) throw new Error(`Unknown session: ${bp.sessionId}`);
 				// Resolve the view key ("role:timestamp") to the SDK entry id
 				// (same message-key matching as forkAt).
 				const bentries = (
@@ -5737,8 +5746,16 @@ export class DaemonServer {
 						const bkey = bviewKey.slice(bsep + 1);
 						const bhit = bentries.find(e => {
 							if (e.type !== "message") return false;
-							const m = e.message as { role?: string; timestamp?: number | string; toolCallId?: string };
-							if (m.role !== brole) return false;
+							// Entries of type "message" need not carry a payload:
+							// the SDK file mixes in bookkeeping records, and an
+							// unguarded `e.message.role` threw
+							// "undefined is not an object (evaluating 'message.role')"
+							// on the first one — which surfaced to the user as the
+							// 撤回/编辑/重试 buttons doing nothing at all.
+							const m = e.message as
+								| { role?: string; timestamp?: number | string; toolCallId?: string }
+								| undefined;
+							if (!m || m.role !== brole) return false;
 							return brole === "toolResult" ? m.toolCallId === bkey : String(m.timestamp) === bkey;
 						});
 						bsdkId = bhit?.id;
@@ -5754,15 +5771,47 @@ export class DaemonServer {
 					}
 				).navigateTree(bsdkId, {});
 				if (bresult.cancelled) return { ok: false };
+				// Report where the leaf landed as a VIEW key ("role:timestamp").
+				// The leaf need not be a message — model_change /
+				// thinking_level_change / title records are legitimate leaves —
+				// and `messageKey` dereferences `.message`, so reading it
+				// unguarded threw "undefined is not an object (evaluating
+				// 'message.role')" out of an otherwise successful branch. The
+				// GUI saw only a failed RPC, which is why 撤回/编辑/重试 looked
+				// like dead buttons (nothing moved, nothing backfilled).
+				// Walk up to the nearest MESSAGE ancestor — the entry the
+				// transcript tree actually keys on (same resolution as the
+				// stream-event rekey above).
 				const bsm = blive.agentSession.sessionManager as unknown as {
-					getLeafEntry(): { message: WireMessage } | undefined;
+					getLeafEntry(): SessionEntry | undefined;
 				};
-				const bleafEntry = bsm.getLeafEntry();
-				const bleafKey = bleafEntry ? messageKey(bleafEntry.message as WireMessage) : null;
+				const bById = new Map(bentries.map(e => [e.id, e]));
+				let bCursor: SessionEntry | undefined = bsm.getLeafEntry();
+				const bSeen = new Set<string>();
+				let bleafKey: string | null = null;
+				while (bCursor && typeof bCursor.id === "string" && !bSeen.has(bCursor.id)) {
+					bSeen.add(bCursor.id);
+					const bRaw = bCursor as { message?: WireMessage; parentId?: string | null };
+					if (bRaw.message) {
+						bleafKey = messageKey(bRaw.message);
+						break;
+					}
+					bCursor = bRaw.parentId ? bById.get(bRaw.parentId) : undefined;
+				}
+				// editorText is what the composer gets backfilled with. navigateTree
+				// returns it when it actually moves the leaf, but it takes an early
+				// no-op exit when the leaf is ALREADY at the target — which is
+				// exactly the state 撤回 leaves behind, so clicking 编辑 right
+				// after 撤回 backfilled nothing. Fall back to the target message's
+				// own text (the 编辑契约), rather than reporting success with an
+				// empty editor.
+				const btarget = bentries.find(e => e.id === bsdkId) as { message?: WireMessage } | undefined;
+				const btargetText =
+					btarget?.message?.role === "user" ? extractEntryText({ content: btarget.message.content }) : "";
 				return {
 					ok: true,
 					leafId: bleafKey,
-					editorText: bresult.editorText ?? null,
+					editorText: bresult.editorText ?? (btargetText || null),
 					editorImages: bresult.editorImages ?? [],
 				};
 			}
@@ -6103,7 +6152,11 @@ export class DaemonServer {
 							if (!live) {
 								throw new Error(`Cannot abort session ${sessionId} (not resumable)`);
 							}
-							await live.agentSession.abort({ reason: "user interrupt" });
+							// Canonical label: AgentSession.abort matches it exactly to
+							// flag the turn as a user interrupt (advisor auto-resume
+							// suppression + the transcript's interrupt card). A
+							// near-miss string silently degrades to a generic abort.
+							await live.agentSession.abort({ reason: USER_INTERRUPT_LABEL });
 						},
 					},
 				};
@@ -6283,7 +6336,11 @@ export class DaemonServer {
 				const p = (params ?? {}) as { sessionId: string };
 				const live = this.#host.get(p.sessionId) ?? (await this.#host.activate(p.sessionId).catch(() => null));
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				await live.agentSession.abort({ reason: "user interrupt" });
+				// Canonical label (not a "user interrupt" literal): abort() matches
+				// it exactly, so only this form sets the UserInterrupt flag — which
+				// is what suppresses advisor auto-resume and renders the transcript's
+				// interrupt card. A near-miss string reads as a generic abort.
+				await live.agentSession.abort({ reason: USER_INTERRUPT_LABEL });
 				return { ok: true };
 			}
 			case "session.cancel": {
@@ -9029,8 +9086,17 @@ export class DaemonServer {
 				return deleteWorkspaceEntry(p.cwd, p.path);
 			}
 			case "workspace.tree": {
-				const p = (params ?? {}) as { cwd?: string; maxDepth?: number; perDirLimit?: number | null };
-				return this.#host.workspaceTree(p.cwd ?? "", { maxDepth: p.maxDepth, perDirLimit: p.perDirLimit });
+				const p = (params ?? {}) as {
+					cwd?: string;
+					maxDepth?: number;
+					perDirLimit?: number | null;
+					gitignore?: boolean;
+				};
+				return this.#host.workspaceTree(p.cwd ?? "", {
+					maxDepth: p.maxDepth,
+					perDirLimit: p.perDirLimit,
+					gitignore: p.gitignore,
+				});
 			}
 			default:
 				throw new Error(`Unknown method: ${method}`);

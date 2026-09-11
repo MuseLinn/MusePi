@@ -104,18 +104,25 @@ export function SelectionToolbar({
 		};
 		const onScroll = (): void => dismiss();
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") dismiss();
+			if (e.key !== "Escape") return;
+			// Capture phase + preventDefault: this transient toolbar owns
+			// Escape while it is up. Focus sits on the selection (outside the
+			// toolbar), and the window-level bare-Escape binding interrupts
+			// the running turn for unclaimed Escape — dismissing a selection
+			// must not abort a turn.
+			e.preventDefault();
+			dismiss();
 		};
 		el.addEventListener("mouseup", onMouseUp);
 		window.addEventListener("mousedown", onDown);
 		el.addEventListener("scroll", onScroll, true);
-		window.addEventListener("keydown", onKey);
+		window.addEventListener("keydown", onKey, true);
 		return () => {
 			window.clearTimeout(hideTimer.current);
 			el.removeEventListener("mouseup", onMouseUp);
 			window.removeEventListener("mousedown", onDown);
 			el.removeEventListener("scroll", onScroll, true);
-			window.removeEventListener("keydown", onKey);
+			window.removeEventListener("keydown", onKey, true);
 		};
 	}, [containerRef, dismiss]);
 

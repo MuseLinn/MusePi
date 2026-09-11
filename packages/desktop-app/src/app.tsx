@@ -30,6 +30,7 @@ import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { shouldRestartDaemon } from "./lib/daemon-version";
 import { pickDirectory } from "./lib/electron";
+import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
@@ -2317,8 +2318,28 @@ function AppInner(): ReactNode {
 			if (!e.metaKey && !e.ctrlKey) {
 				if (e.key === "Escape") {
 					// openchamber: Escape leaves focus mode first.
-					if (focusMode) setFocusMode(false);
-					else void stop();
+					if (focusMode) {
+						setFocusMode(false);
+						return;
+					}
+					// Bare Escape interrupts the running turn (TUI parity) —
+					// but only when nothing else owns the key: a surface that
+					// closed on Escape claimed it (defaultPrevented), and an
+					// open dialog/menu or a non-composer field owns it
+					// outright. Without this, a stray Escape (dismissing a
+					// menu, a held key, a field's own Escape) aborts the turn
+					// and the transcript records "Interrupted by user" for a
+					// keypress the user aimed elsewhere.
+					if (
+						shouldEscapeStopTurn({
+							claimed: e.defaultPrevented,
+							owner: escapeOwner(e.target),
+							repeat: e.repeat,
+							working: storeRef.current?.getSnapshot().working === true,
+						})
+					) {
+						void stop();
+					}
 				}
 				return;
 			}

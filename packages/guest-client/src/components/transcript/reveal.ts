@@ -152,6 +152,25 @@ export function nextRevealPosition(revealed: number, total: number): number {
 	return Math.min(total, revealed + nextStep(total - revealed));
 }
 
+/**
+ * Settle-drain step: once the producer stops, the remaining backlog is revealed
+ * at a FIXED rate instead of the proportional catch-up step. The proportional
+ * step would eat whatever is left in ~8 frames (a visible snap for a long tail);
+ * a constant rate keeps the same reading cadence the user was already watching.
+ * Kept well above MIN_STEP so a short tail still finishes in a couple of frames.
+ */
+export const DRAIN_STEP = 6;
+
+/**
+ * Next reveal position after the stream has ENDED (the settle drain). Unlike
+ * {@link nextRevealPosition} this does not scale with backlog — a finished
+ * message must not dump its remainder in one frame, which is exactly what made
+ * the tail pop (mid-stream smooth, then everything at once).
+ */
+export function nextDrainPosition(revealed: number, total: number): number {
+	return Math.min(total, revealed + DRAIN_STEP);
+}
+
 /** Golden-angle hue walk (137.508° apart — max perceptual spacing). */
 export const RAINBOW_HUE_STEP = 137.508;
 

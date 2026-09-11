@@ -112,7 +112,15 @@ const nativeAndIntegrationPackages = [
 // cover. mnemopi's embedding suites need a ~270MB fastembed model absent from CI
 // runners (so it flakes/times out there). (Upstream also lists python/robomp/web
 // here; musepi does not sync that directory, so it would ENOENT on spawn.)
-const localOnlyWorkspacePackages = ["packages/mnemopi"];
+//
+// desktop-app was in NO bucket, so neither CI nor a local full run touched it —
+// its suite silently rotted to nine failures plus an unhandled DOM error that
+// only surfaced when someone ran `bun test` inside the package (found
+// 2026-09-12; the DOM shim was missing the `querySelectorAll`/`head` surface
+// that CSS-in-JS libraries reach for once a document exists). Local-only for
+// now: the suite has never run on the Linux CI runner, and its a11y/SSR
+// assertions should be proven there before it gates releases.
+const localOnlyWorkspacePackages = ["packages/mnemopi", "packages/desktop-app"];
 
 // Repo-level script tests. CI's `workspace` bucket only runs the merge gates:
 // the concurrency regression (the GHA-config guard) and the .d.ts extension

@@ -136,6 +136,9 @@ export function CommandPalette({
 		inputRef.current?.focus();
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") {
+				// Claim the key (lib/escape-stop): unclaimed Escape interrupts
+				// the running turn.
+				e.preventDefault();
 				onClose();
 			} else if (e.key === "ArrowDown") {
 				e.preventDefault();

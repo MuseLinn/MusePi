@@ -3075,6 +3075,8 @@ export const settings = {
 	"locate current": "Locate current position",
 	"trajectory focus": "Focus",
 	"trajectory clear filter": "Clear filter",
+	"trajectory search previous": "Previous match",
+	"trajectory search next": "Next match",
 	"trajectory close": "Close",
 	"trajectory time": "Time",
 	"trajectory round duration": "Round duration",

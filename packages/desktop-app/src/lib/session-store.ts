@@ -126,9 +126,35 @@ export function clearUnviewedCompletions(sessionId: string): void {
 	unviewedCompletedBySession.delete(sessionId);
 }
 
-/** True when the user is not looking at the GUI window right now. */
+/** The part of a document this module needs: does it say the user is looking? */
+export interface FocusReport {
+	hidden?: boolean;
+	hasFocus?: () => boolean;
+}
+
+/**
+ * True when `doc` says the user is not looking at the window.
+ *
+ * Pure, so every branch is testable without installing a DOM — the caller
+ * passes the ambient document. That matters beyond tidiness: a test that stubs
+ * a global `document` changes what libraries loaded later in the same process
+ * conclude about the environment (emotion captures `isBrowser` at import and
+ * then requires a real `querySelectorAll`).
+ *
+ * It must also never throw. It runs while handling a completion, and a throw
+ * there skips the rest of that branch — the subagent's `hasSessionFile` upgrade
+ * and the completion notification. "Cannot tell" therefore resolves to
+ * unfocused so the completion surfaces instead of being lost.
+ */
+export function documentUnfocused(doc: FocusReport | undefined): boolean {
+	if (!doc) return true;
+	if (doc.hidden) return true;
+	return typeof doc.hasFocus !== "function" || !doc.hasFocus();
+}
+
+/** The ambient window state, as {@link documentUnfocused} sees it. */
 function windowUnfocused(): boolean {
-	return typeof document === "undefined" || document.hidden || !document.hasFocus();
+	return documentUnfocused(typeof document === "undefined" ? undefined : (document as FocusReport));
 }
 
 /** Drop a deleted session's recorded totals (GUI session.delete path). */

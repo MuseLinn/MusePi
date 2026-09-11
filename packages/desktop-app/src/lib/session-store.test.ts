@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { GuiSessionStore } from "./session-store";
+import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { documentUnfocused, GuiSessionStore } from "./session-store";
 
 // Minimal snapshot shape the store needs to construct a MaterializedView.
 function emptySnapshot() {
@@ -152,14 +152,66 @@ describe("GuiSessionStore subagent hydration + ownership", () => {
 	});
 });
 
+/**
+ * The focus predicate in full — every branch, no DOM. The store reads the
+ * ambient document, so exercising these through it would mean installing a
+ * global stub, which changes what libraries loaded later in the same process
+ * infer about the environment (emotion captures `isBrowser` at import and then
+ * requires a real `querySelectorAll`). The predicate is exported precisely so
+ * its branches can be proven without that.
+ */
+describe("documentUnfocused", () => {
+	test("no document at all counts as unfocused", () => {
+		expect(documentUnfocused(undefined)).toBe(true);
+	});
+
+	test("a hidden document counts as unfocused even while focused", () => {
+		expect(documentUnfocused({ hidden: true, hasFocus: () => true })).toBe(true);
+	});
+
+	test("a focused, visible document counts as focused", () => {
+		expect(documentUnfocused({ hidden: false, hasFocus: () => true })).toBe(false);
+	});
+
+	test("a visible but unfocused document counts as unfocused", () => {
+		expect(documentUnfocused({ hidden: false, hasFocus: () => false })).toBe(true);
+	});
+
+	// A document that cannot answer the question must not throw: this runs
+	// while handling a completion, and a throw also skipped the subagent's
+	// hasSessionFile upgrade plus its notification.
+	test("a document without hasFocus is unfocused rather than a crash", () => {
+		expect(documentUnfocused({ hidden: false })).toBe(true);
+	});
+});
+
 describe("GuiSessionStore unviewed subagent completions", () => {
-	// No document in the bun test env → windowUnfocused() is true by default,
-	// which is the "user wasn't looking" contract this feature exists for.
+	// This suite's contract is "the user wasn't looking", so state that premise
+	// explicitly instead of inheriting it from the ambient environment: a
+	// sibling file's DOM shim (test/dom-shim.ts) runs in the same process, and
+	// the assertions used to depend on whether it had run yet — green alone,
+	// red in the full suite. Removing the document (restored after) is the
+	// unfocused state, and unlike installing a stub it cannot mislead a library
+	// that is still loading.
 	//
 	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
 	// #pending and the flush runs on a queueMicrotask. Await one microtask
 	// (registered after the flush's) to observe the settled snapshot —
 	// deterministic, no wall-clock timers.
+	let savedDocument: unknown;
+	beforeEach(() => {
+		savedDocument = (globalThis as { document?: unknown }).document;
+		delete (globalThis as { document?: unknown }).document;
+	});
+	afterEach(() => {
+		(globalThis as { document?: unknown }).document = savedDocument;
+	});
+
+	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
+	// #pending and the flush runs on a queueMicrotask. Await one microtask
+	// (registered after the flush's) to observe the settled snapshot —
+	// deterministic, no wall-clock timers.
+
 	function flush(): Promise<void> {
 		const { promise, resolve } = Promise.withResolvers<void>();
 		queueMicrotask(resolve);

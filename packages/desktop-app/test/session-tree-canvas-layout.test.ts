@@ -226,3 +226,58 @@ describe("layoutTree 深链折叠", () => {
 		expect(laid.height).toBeGreaterThan(0);
 	});
 });
+
+/**
+ * Expanded segments. Regression (2026-09-12): the layout only knew the
+ * collapsed state — expanding a segment released its nodes from the hidden set
+ * but left every one of them at `head.y + CHAIN_FOLD_H` (one shared
+ * coordinate), and the nodes BELOW the segment kept the space the hidden ones
+ * were supposed to not occupy. Clicking a fold therefore piled 20-odd cards on
+ * top of each other, which is the "折叠不正确" the map was reported for.
+ *
+ * Observable contract: with a head in `expandedFolds`, every node of that
+ * segment gets its own non-overlapping y, and following nodes move down.
+ */
+describe("layoutTree 展开折叠段", () => {
+	it("展开后段内节点各自有独立位置,不再堆叠在同一点", () => {
+		const tree = buildMessageTree(chainEntries(120));
+		const collapsed = layoutTree(tree);
+		const fold = collapsed.folds[0]!;
+
+		const expanded = layoutTree(tree, undefined, new Set([fold.headId]));
+		const ys = [fold.headId, ...fold.hiddenIds].map(id => expanded.nodes.find(n => n.node.id === id)!.y);
+		// Every node of the segment on its own row — no shared coordinate.
+		expect(new Set(ys).size).toBe(ys.length);
+		// And card-sized apart, so they cannot overlap.
+		const sorted = [...ys].sort((a, b) => a - b);
+		for (let i = 1; i < sorted.length; i++) {
+			expect(sorted[i]! - sorted[i - 1]!).toBeGreaterThanOrEqual(40);
+		}
+	});
+
+	it("展开后其下节点被推开,且全部仍在画布内", () => {
+		const tree = buildMessageTree(chainEntries(120));
+		const collapsed = layoutTree(tree);
+		const fold = collapsed.folds[0]!;
+		const expanded = layoutTree(tree, undefined, new Set([fold.headId]));
+
+		// The segment now occupies vertical space, so the canvas must grow.
+		expect(expanded.height).toBeGreaterThan(collapsed.height);
+		for (const n of expanded.nodes) {
+			expect(n.y).toBeGreaterThanOrEqual(0);
+			expect(n.y).toBeLessThan(expanded.height);
+		}
+	});
+
+	it("展开未涉及的段仍保持压缩", () => {
+		// Only the expanded head participates; a later segment keeps its
+		// single-coordinate stack (still collapsed).
+		const tree = buildMessageTree(chainEntries(120));
+		const collapsed = layoutTree(tree);
+		const [first, second] = collapsed.folds;
+		if (!second) return; // needs at least two segments for this contract
+		const expanded = layoutTree(tree, undefined, new Set([first!.headId]));
+		const secondYs = second!.hiddenIds.map(id => expanded.nodes.find(n => n.node.id === id)!.y);
+		expect(new Set(secondYs).size).toBe(1);
+	});
+});

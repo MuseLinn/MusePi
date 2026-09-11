@@ -3,6 +3,8 @@ import {
 	ArrowLeft,
 	ClipboardCopy,
 	ExternalLink,
+	Eye,
+	EyeOff,
 	FileCode,
 	File as FileIcon,
 	FileImage,
@@ -18,6 +20,8 @@ import {
 import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// Import order below is alphabetical by module path (biome).
+import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../lib/git-prefs";
 import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -254,6 +258,18 @@ function compressTree(nodes: TreeNode[]): TreeNode[] {
 	return out;
 }
 
+/** Every directory path in the tree — the seed for the collapsed-by-default
+ *  view. Collected from the compressed tree so the keys match what
+ *  `flattenVisible` tests. */
+function collectDirPaths(nodes: TreeNode[], out: Set<string> = new Set()): Set<string> {
+	for (const node of nodes) {
+		if (!node.entry.isDir) continue;
+		out.add(node.entry.path);
+		collectDirPaths(node.children, out);
+	}
+	return out;
+}
+
 function extOf(name: string): string {
 	const dot = name.lastIndexOf(".");
 	return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
@@ -310,6 +326,9 @@ export function FilePane({
 	const [mdRender, setMdRender] = useState(true);
 	const [ctx, setCtx] = useState<MenuState | null>(null);
 	const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+	/** List .gitignore'd paths too (shared pref with the Git tab / changes
+	 *  view; on by default — see lib/git-prefs). */
+	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
 	const [query, setQuery] = useState("");
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	const [editing, setEditing] = useState<Editing | null>(null);
@@ -335,19 +354,29 @@ export function FilePane({
 				cwd,
 				maxDepth: 4,
 				perDirLimit: 80,
+				// Respect .gitignore only while the user has it off: a tree that
+				// silently drops ignored paths reads as "my file is missing".
+				gitignore: !showIgnored,
 			});
 			setEntries(res.entries ?? []);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
 			setEntries(null);
 		}
-	}, [rpc, cwd]);
+	}, [rpc, cwd, showIgnored]);
 
 	useEffect(() => {
 		void load();
 	}, [load]);
 
-	// Track the list viewport height for virtualization.
+	// The Git tab / changes view write the same pref — follow it here.
+	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
+
+	// Track the list viewport height for virtualization. Deps deliberately
+	// include the things that (un)mount the list: the first run bails while
+	// `entries` is still null, and a once-only effect would leave viewH at its
+	// 400px default — rows past that never render, so the bottom of a taller
+	// list stays blank until a scroll event recomputes the window.
 	useEffect(() => {
 		const el = listRef.current;
 		if (!el) return;
@@ -356,7 +385,7 @@ export function FilePane({
 		const ro = new ResizeObserver(measure);
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, []);
+	}, [entries, preview]);
 
 	// Focus the inline editor when it mounts.
 	useEffect(() => {
@@ -371,6 +400,19 @@ export function FilePane({
 	}, [preview?.imageUrl]);
 
 	const tree = useMemo(() => compressTree(buildTree(entries ?? [])), [entries]);
+	// Collapsed by default (openchamber parity): a fresh Files view is a folder
+	// list, not an expanded dump — the expanded form is what reads as noise.
+	// Seeded once from the first tree that carries directories, so a later
+	// refresh (or the gitignore toggle reload) doesn't fight the user's own
+	// expansion.
+	const seededRef = useRef(false);
+	useEffect(() => {
+		if (seededRef.current || tree.length === 0) return;
+		const dirs = collectDirPaths(tree);
+		if (dirs.size === 0) return;
+		seededRef.current = true;
+		setCollapsed(dirs);
+	}, [tree]);
 	const rows = useMemo(() => flattenVisible(tree, collapsed, query.trim()), [tree, collapsed, query]);
 	const total = rows.length + (editing ? 1 : 0);
 	const start = Math.max(0, Math.floor(scrollTop / ROW_H) - ROW_BUFFER);
@@ -750,6 +792,20 @@ export function FilePane({
 							spellCheck={false}
 						/>
 					</label>
+					<button
+						className={`gui-btn gui-btn-icon${showIgnored ? " gui-btn-icon--active" : ""}`}
+						type="button"
+						title={t("show gitignored")}
+						aria-label={t("show gitignored")}
+						aria-pressed={showIgnored}
+						onClick={() => {
+							const next = !showIgnored;
+							setShowIgnored(next);
+							writeShowIgnored(next);
+						}}
+					>
+						{showIgnored ? <Eye size={12} /> : <EyeOff size={12} />}
+					</button>
 					<button className="gui-btn gui-btn-icon" type="button" onClick={() => void load()} title={t("refresh")}>
 						<RefreshCw size={12} />
 					</button>

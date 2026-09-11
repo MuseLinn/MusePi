@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
 import { solveGraphLanes } from "../lib/git-graph-lanes";
+import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../lib/git-prefs";
 import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
@@ -327,9 +328,9 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [view, setView] = useState<"flat" | "tree">(() =>
 		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
 	);
-	const [showIgnored, setShowIgnored] = useState<boolean>(
-		() => localStorage.getItem("musepi-gui-git-show-ignored") === "1",
-	);
+	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
+	// The Files pane and the Git tab write the same pref — follow it here too.
+	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
 	const [gitmojiOn, setGitmojiOn] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
 	// Git settings (Git tab) toggles this pref and dispatches
 	// omp-gitmoji-changed (same-window storage events don't fire) — keep
@@ -596,10 +597,10 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 						onClick={() => {
 							const next = !showIgnored;
 							setShowIgnored(next);
-							localStorage.setItem("musepi-gui-git-show-ignored", next ? "1" : "0");
+							writeShowIgnored(next);
 						}}
 					>
-						<Icon name="eye-off" className="h-3.5 w-3.5" />
+						<Icon name={showIgnored ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
 					</button>
 					<button
 						type="button"

@@ -216,7 +216,13 @@ export function useFloatingMenu(
 			close();
 		};
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") close();
+			if (e.key !== "Escape") return;
+			// Claim the key: the window-level bare-Escape binding only
+			// interrupts the running turn for UNCLAIMED Escape, and the
+			// popup's own focus stays on its trigger (outside this portal),
+			// so the target cannot mark it.
+			e.preventDefault();
+			close();
 		};
 		document.addEventListener("mousedown", onDocDown);
 		document.addEventListener("keydown", onKey);

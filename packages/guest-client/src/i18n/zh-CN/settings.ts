@@ -2952,6 +2952,8 @@ export const settings = {
 	"locate current": "回到当前位置",
 	"trajectory focus": "轨迹聚焦",
 	"trajectory clear filter": "清除筛选",
+	"trajectory search previous": "上一个匹配",
+	"trajectory search next": "下一个匹配",
 	"trajectory close": "关闭",
 	"trajectory time": "时间",
 	"trajectory round duration": "回合用时",

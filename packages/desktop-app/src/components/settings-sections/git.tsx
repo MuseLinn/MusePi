@@ -2,6 +2,7 @@ import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
+import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../../lib/git-prefs";
 import { useConfirm, usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
@@ -421,9 +422,9 @@ export function GitPrefsRow(): ReactNode {
 		localStorage.getItem("musepi-gui-git-view") === "tree" ? "tree" : "flat",
 	);
 	const [gitmoji, setGitmoji] = useState<boolean>(() => localStorage.getItem("musepi-gui-gitmoji") !== "0");
-	const [showIgnored, setShowIgnored] = useState<boolean>(
-		() => localStorage.getItem("musepi-gui-git-show-ignored") === "1",
-	);
+	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
+	// The Files pane and the changes view write the same pref — follow it.
+	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
 	return (
 		<>
 			<div className="gui-settings-row">
@@ -490,9 +491,8 @@ export function GitPrefsRow(): ReactNode {
 					onClick={() => {
 						const next = !showIgnored;
 						setShowIgnored(next);
-						localStorage.setItem("musepi-gui-git-show-ignored", next ? "1" : "0");
+						writeShowIgnored(next);
 					}}
-					aria-label={t("show gitignored")}
 				>
 					<span className="gui-toggle-knob" />
 				</button>

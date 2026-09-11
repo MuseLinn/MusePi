@@ -73,6 +73,12 @@ export interface ChainFold {
 export function layoutTree(
 	roots: readonly MessageTreeNode[],
 	entries?: readonly unknown[],
+	/** Fold heads the user has expanded. Their hidden nodes take part in the
+	 *  vertical flow again, so everything below them is pushed down — without
+	 *  this, expanding a segment released 20-odd cards onto ONE coordinate
+	 *  (all stacked at `head.y + CHAIN_FOLD_H`) and the rest of the tree kept
+	 *  the space they were supposed to not occupy. */
+	expandedFolds: ReadonlySet<string> = new Set(),
 ): {
 	nodes: CanvasNode[];
 	width: number;
@@ -189,7 +195,12 @@ export function layoutTree(
 	// 这里按树递归天然隔离。
 	{
 		const hiddenSet = new Set<string>();
-		for (const f of folds) for (const h of f.hiddenIds) hiddenSet.add(h);
+		for (const f of folds) {
+			// Expanded segments flow normally: their nodes occupy real vertical
+			// space and push everything below them down.
+			if (expandedFolds.has(f.headId)) continue;
+			for (const h of f.hiddenIds) hiddenSet.add(h);
+		}
 		const walk = (node: MessageTreeNode, parentBottom: number | null, parentTurn: number): void => {
 			const cn = idToNode.get(node.id)!;
 			// 隐藏节点:不占位置,其子从父的底部继承(跳过它)。
@@ -203,18 +214,20 @@ export function layoutTree(
 		};
 		for (const root of roots) walk(root, null, -1);
 	}
-	// 第二遍:段内节点堆叠到"重排后的段首"下方(段首已重排)。
+	// 第二遍:段内节点堆叠到"重排后的段首"下方(段首已重排)。仅对仍折叠的
+	// 段生效——展开段的节点保留 walk 给它们的真实 y。
 	for (const n of nodes) {
 		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
-		if (!foldFor) continue;
+		if (!foldFor || expandedFolds.has(foldFor.headId)) continue;
 		const headNode = idToNode.get(foldFor.headId);
 		if (headNode) n.y = headNode.y + CHAIN_FOLD_H;
 	}
-	// 画布高度:由重排后的实际节点位置决定(折叠段内节点渲染时隐藏,
-	// 不计入)。不能用 `maxDepth - totalHidden` 公式——多分支/多折叠段
-	// 场景下不同链的隐藏数不同,全局相减会算错(段首 y 超过 height 被裁剪)。
+	// 画布高度:由重排后的实际节点位置决定(仅仍被折叠隐藏的节点不计入)。
+	// 不能用 `maxDepth - totalHidden` 公式——多分支/多折叠段场景下不同链的
+	// 隐藏数不同,全局相减会算错(段首 y 超过 height 被裁剪)。
 	const visibleMaxY = nodes.reduce((acc, n) => {
-		if (folds.some(f => f.hiddenIds.includes(n.node.id))) return acc;
+		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
+		if (foldFor && !expandedFolds.has(foldFor.headId)) return acc;
 		return Math.max(acc, n.y);
 	}, 0);
 	const width = Math.max(nextSlot, 1) * (NODE_W + GAP_X);
@@ -370,9 +383,12 @@ export function SessionTreeCanvas({
 	// 折叠是"视觉压缩"——展开/收起只影响画布,不丢消息(与 Transcript 窗口化
 	// 同哲学:折叠是渲染层,数据全量)。初始全部折叠(长会话默认可读)。
 	const [expandedFolds, setExpandedFolds] = useState<ReadonlySet<string>>(new Set());
-
+	// Layout is a function of the expansion state: expanding a segment must give
+	// its nodes real vertical space and push the rest of the tree down. Keying
+	// the memo only on [roots, positions] is what made an expand pile 20-odd
+	// cards onto one coordinate.
 	const { nodes, width, height, folds } = useMemo(() => {
-		const laid = layoutTree(roots, entries);
+		const laid = layoutTree(roots, entries, expandedFolds);
 		let w = laid.width;
 		let h = laid.height;
 		for (const [id, p] of Object.entries(positions)) {
@@ -381,7 +397,8 @@ export function SessionTreeCanvas({
 			h = Math.max(h, p.y + NODE_H + GAP_Y);
 		}
 		return { nodes: laid.nodes, width: w, height: h, folds: laid.folds };
-	}, [roots, positions]);
+	}, [roots, positions, entries, expandedFolds]);
+
 	// 折叠段内节点:折叠时隐藏(不渲染);展开时显示。段首胶囊始终渲染。
 	const hiddenNodeIds = useMemo(() => {
 		const hidden = new Set<string>();
@@ -719,16 +736,21 @@ export function SessionTreeCanvas({
 		return entries.find(e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === focusedId);
 	}, [focusedId, entries]);
 
-	const focusedKind = useMemo(() => (focusedEntry ? treeKindOf(focusedEntry) : null), [focusedEntry]);
-
-	// Esc 关闭聚焦卡。
+	// Esc 关闭聚焦卡 —— 并且必须 CLAIM 该按键(见 lib/escape-stop):未认领
+	// 的 bare Esc 会穿透到窗口级的「中断回合」绑定,于是「按 Esc 关掉卡片」
+	// 会把正在跑的回合一起打断(用户完全没打算停)。只在卡片开着时挂监听,
+	// 免得卡片未开也去吞 Esc(那时它不拥有这个键)。
 	useEffect(() => {
+		if (focusedId === null && !focusClosing) return;
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") closeFocus();
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			closeFocus();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, []);
+	}, [focusedId, focusClosing]);
+	const focusedKind = useMemo(() => (focusedEntry ? treeKindOf(focusedEntry) : null), [focusedEntry]);
 
 	const hasSearch = searchQuery.trim().length > 0;
 
@@ -779,7 +801,7 @@ export function SessionTreeCanvas({
 								className="stc-search-nav-btn"
 								disabled={searchCurrentIdx <= 0}
 								onClick={() => scrollSearch(-1)}
-								aria-label={t("trajectory clear filter")}
+								aria-label={t("trajectory search previous")}
 							>
 								<Icon name="arrow-up-s" className="h-3 w-3" />
 							</button>
@@ -788,7 +810,7 @@ export function SessionTreeCanvas({
 								className="stc-search-nav-btn"
 								disabled={searchCurrentIdx >= searchMatchArray.length - 1}
 								onClick={() => scrollSearch(1)}
-								aria-label={t("trajectory clear filter")}
+								aria-label={t("trajectory search next")}
 							>
 								<Icon name="arrow-down-s" className="h-3 w-3" />
 							</button>

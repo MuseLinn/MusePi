@@ -633,12 +633,14 @@ export function Composer({
 	useEffect(() => {
 		if (!usagePanel.open && !contextPanel?.open && !goalOpen && !planOpen) return;
 		const onKey = (e: globalThis.KeyboardEvent): void => {
-			if (e.key === "Escape") {
-				setUsagePanel(s => ({ ...s, open: false }));
-				setContextPanel(s => (s ? { ...s, open: false } : s));
-				setGoalOpen(false);
-				setPlanOpen(false);
-			}
+			if (e.key !== "Escape") return;
+			// Claim the key (lib/escape-stop): an open popover owns Escape,
+			// and unclaimed Escape interrupts the running turn.
+			e.preventDefault();
+			setUsagePanel(s => ({ ...s, open: false }));
+			setContextPanel(s => (s ? { ...s, open: false } : s));
+			setGoalOpen(false);
+			setPlanOpen(false);
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
@@ -1367,9 +1369,19 @@ export function Composer({
 
 	// User-message edit: replace composer text (TUI /retry-edit parity),
 	// exactly once per incoming edit.
+	//
+	// The guard resets when the request clears (the parent nulls `pendingEdit`
+	// on consume), so a SECOND edit of the SAME message still lands. Comparing
+	// only by value made that a permanent no-op: the text was identical, so
+	// `handledEditRef` kept matching and every later 编辑 on that message
+	// silently did nothing — the draft stayed wherever it was.
 	const handledEditRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (pendingEdit == null || handledEditRef.current === pendingEdit) return;
+		if (pendingEdit == null) {
+			handledEditRef.current = null;
+			return;
+		}
+		if (handledEditRef.current === pendingEdit) return;
 		handledEditRef.current = pendingEdit;
 		setText(pendingEdit);
 		requestAnimationFrame(() => {

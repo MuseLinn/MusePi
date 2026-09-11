@@ -762,21 +762,40 @@ export function ChatView({
 	// rasterization; the transcript row's save button just opens it.
 	const [saveImageText, setSaveImageText] = useState<string | null>(null);
 
-	const jumpBackToMessage = async (messageId: string, text: string): Promise<void> => {
-		if (!store) return;
+	/**
+	 * Move the session leaf to `messageId` (TUI navigateTree parity). The old
+	 * tail stays on the tree as a sibling branch — nothing is truncated.
+	 *
+	 * Returns whether the branch actually moved. Both failure shapes are
+	 * reported: the daemon THROWS on an unknown message / unactivatable
+	 * session, and answers `{ok:false}` when navigateTree cancels. Swallowing
+	 * either left the action buttons looking dead — the user clicks 撤回/编辑,
+	 * nothing moves, and no reason is shown (the same silent-failure class as
+	 * the CSP-blocked copy button).
+	 */
+	const jumpBackToMessage = async (messageId: string, text: string): Promise<boolean> => {
+		if (!store) return false;
 		const fromLeafKey = effectiveLeaf;
 		try {
 			const res = await rpc.request<{ ok: boolean; leafId: string | null }>("session.branchAt", {
 				sessionId: store.sessionId,
 				messageId,
 			});
-			if (res?.ok !== true) return;
+			if (res?.ok !== true) {
+				// Route through the shared in-app banner: an OS notification is
+				// easy to miss and leaves the click looking like a no-op.
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
+				return false;
+			}
 			if (res.leafId) setCurrentLeafKey(res.leafId);
 			if (text) setPendingEdit(text);
 			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
 			pulseSwitch();
-		} catch {
-			// daemon rejected — keep the transcript as-is
+			return true;
+		} catch (err) {
+			const reason = `${t("branch failed")}: ${err instanceof Error ? err.message : String(err)}`;
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
+			return false;
 		}
 	};
 	// Undo the jump-back: branchAt back to the leaf we came from (the
@@ -1440,11 +1459,14 @@ export function ChatView({
 																}
 																colorBlind={displaySettings.colorBlindMode === true}
 																onQuote={text => appendQuote(text)}
-																onRevert={(id, text) => void jumpBackToMessage(id, text)}
+																/* 撤回: move the leaf only — nothing is
+																 * backfilled into the composer (与「编辑并
+																 * 重发」互补)。 */
+																onRevert={(id, _text) => void jumpBackToMessage(id, "")}
 																/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
 																 * branchAt 到该消息(leaf 落父节点,旧尾部成为
 																 * sibling branch)+ 原文回填 composer——发送即在
-																 * 该位置重答。与撤回(仅移动 leaf、不回填)互补。 */
+																 * 该位置重答。 */
 																onEdit={(id, text) => void jumpBackToMessage(id, text)}
 																onFork={(id, text, includeTarget) =>
 																	void forkFromMessage(id, text, includeTarget)

@@ -206,6 +206,9 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") {
+				// Claim the key (lib/escape-stop): unclaimed Escape interrupts
+				// the running turn.
+				e.preventDefault();
 				if (!closingRef.current) closeRef.current(null);
 				return;
 			}

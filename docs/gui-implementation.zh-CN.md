@@ -155,6 +155,14 @@ daemon RPC:
 - **气泡/面板逐帧验证**(2026-08-11 套路):主窗口 eval `window.electronAPI.setPetVisible(true)` → `petSetPanel(true)`(创建 bubble 窗口)→ bubble target 内 rAF 推 `{iw, panel.getBoundingClientRect()}` 采样数组 → 主窗口 `toggleBubblePanel()` 触发 → 1.5s 后读采样。断言:面板 mount 帧 `opacity:0`、窗口 resize(事件)后才出现动画、面板 rect 全程在窗口内(`l ≥ -4 && r ≤ iw+4`,排除 scale 动画的微小越界);状态变化压缩打印(相邻相同帧折叠)。面板 toggle 走 `pet-toggle-panel`(发 `pet:panel-toggle` 事件)——`pet-set-panel` 只确保窗口存在,不会开面板。
 - 注意:CDP 附加实例偶发 React onClick 委托失效(按钮无响应、键盘/直接 fiber 调用正常)——判定为环境产物,换键盘路径验证,勿当应用 bug。
 
+### Esc 归属与中断回合（2026-09-12）
+
+- **窗口级只有一个绑定，靠归属门控**：无修饰键的 Esc 中断正在跑的回合（TUI parity）。`app.tsx` 把它交给 `shouldEscapeStopTurn`（`lib/escape-stop.ts`），仅在**无人认领**（`defaultPrevented` 为假）、**无归属面**（`escapeOwner(target)` 为 null）、**非连发**、**确有回合在跑**（`storeRef.current.getSnapshot().working`）时才中断。空闲时 abort 并非无害：带用户中断标签的 `AgentSession.abort` 会锁上顾问自动续跑抑制，并把会话标记为 user-interrupted。
+- **任何自行处理 Esc 的面都必须认领该键**（`e.preventDefault()`）——只关自己的 UI 而不认领就会把按键漏给中断绑定，这正是「菜单关闭却中断了回合」的成因。结构归属由 `escapeOwner` 兜底识别：`[role="dialog"|"listbox"|"menu"|"tooltip"]`、`[aria-modal="true"]`、`[data-escape-owner]`（→ `"overlay"`），以及 `[data-chat-input="true"]` **之外**的 `input`/`textarea`/`select`/`contenteditable`（→ `"field"`）。composer 刻意不算归属面：那里的 Esc 保持中断语义。焦点在菜单触发器上（在 portal 之外），结构识别看不到已打开的弹层——这类只能靠认领。
+- **`session.abort` 必须传 `USER_INTERRUPT_LABEL`**，不能用相近字面量：`AgentSession.abort` 以 `reason === USER_INTERRUPT_LABEL`（"Interrupted by user"）严格比较来决定是否设 `AIError.Flag.UserInterrupt` 并抑制顾问自动续跑。契约由 `coding-agent/test/daemon/session-abort-rpc.test.ts` 锁定（断言该 reason 满足 `isUserInterruptAbort`，而非仅「看起来像」）。
+- **验证安全（共享 daemon）**：隔离 `--user-data-dir` 实例仍连**同一个** daemon，窗口里是同一批会话。它只要显示着你关心的会话，就绝不能向它发 Esc、点停止按钮或调 `session.abort`——按一次 Esc 已经中断了用户正在跑的回合。探针请指向临时会话，或指向它自己的 daemon（`PI_CONFIG_DIR=<临时根> musepi serve --port <n>` + 预置 `localStorage["musepi-gui-url"]`）。离线回合夹具：`scripts/fake-openai-server.mjs`（流式桩）+ 临时根 `agent/models.yml` 里的 `fake` provider，不消耗任何真实配额。驱动脚本：`scripts/verify-escape-guard.mjs`。
+- **已知隐患（此处只记录，未修）**：(1) **退出路径是安全的，启动路径不是。** `before-quit` / 更新安装走 `killOwnedDaemon()`——除非 `client.pid` 等于本进程否则返回 false（`main.cjs:177-194`；对别的实例的 daemon 退出时日志为 `daemon teardown on quit: not owned`，不会杀任何东西）。真正无归属判断的 kill 在两个 IPC handler：`daemon-start`（`main.cjs:2564`，spawn 前 `await kill(port)` 清掉陈旧监听者）与 `daemon-restart`（`main.cjs:2568`）——都按监听 pid `kill(port)`，不做 ownership 检查。而 `daemon-restart` 正是启动期版本门控触发的（`shouldRestartDaemon` → `api.restartDaemon`）：**开发实例的包版本与「由安装版或终端启动的 daemon」版本不一致时，一连上就会杀掉那个 daemon**——本轮 Esc 验证期间 :8300 上的 daemon 就是这么没的。(2) 被 SIGTERM 的 daemon 若其子进程继承了监听 socket，端口会永远接受 TCP 而背后没有进程——`connect()` 永不 settle，壳停在启动闪屏且必须手动终止（恢复：重启机器，或找出持有句柄的孤儿进程）。启动还会先试默认 `:8300` 再探测，且该次尝试不设超时。
+
 ## 9. 平台适配(2026-08-11)
 
 - **原则**:跨平台特性按平台实现,不因"当前只有 macOS 实现"就把特性/设置项砍掉;只有**硬件层面 macOS 独有**的才隐藏。

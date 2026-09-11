@@ -538,6 +538,13 @@
 	min-width: 0;
 }
 
+/* Toggled header tool (show-gitignored): a persistent on-state needs its
+ * own surface — hover alone cannot express "this filter is active". */
+.gui-filepane-actions .gui-btn-icon--active {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+}
+
 .gui-filepane-search {
 	display: flex;
 	align-items: center;

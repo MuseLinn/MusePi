@@ -199,7 +199,11 @@ export function MessageTreeButton({
 		setQ("");
 		requestAnimationFrame(() => inputRef.current?.focus());
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") setOpen(false);
+			if (e.key !== "Escape") return;
+			// Claim the key — see lib/escape-stop: unclaimed Escape belongs to
+			// the window-level interrupt-turn binding.
+			e.preventDefault();
+			setOpen(false);
 		};
 		const onPointerDown = (e: PointerEvent): void => {
 			const target = e.target as Node;

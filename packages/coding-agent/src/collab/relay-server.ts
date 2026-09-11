@@ -112,8 +112,6 @@ export class FrameDecoder {
 	#buffer = new Uint8Array(0);
 	#fragOpcode = -1;
 	#fragParts: Uint8Array[] = [];
-	// biome-ignore lint/correctness/noUnusedPrivateClassMembers: fragment length state (written by frame assembly)
-	#fragLen = 0;
 
 	push(chunk: Uint8Array): WsFrame[] {
 		this.#buffer = concatBytes(this.#buffer, chunk);
@@ -162,14 +160,12 @@ export class FrameDecoder {
 					throw new RelayProtocolError(CLOSE_PROTOCOL_ERROR, "unexpected continuation frame");
 				}
 				this.#fragParts.push(unmask(this.#buffer, payloadOffset, len, maskOffset));
-				this.#fragLen += len;
 				this.#buffer = this.#buffer.subarray(payloadOffset + len);
 				if (fin) {
 					const payload = concatBytes(...this.#fragParts);
 					frames.push({ opcode: this.#fragOpcode, payload });
 					this.#fragOpcode = -1;
 					this.#fragParts = [];
-					this.#fragLen = 0;
 				}
 				continue;
 			}
@@ -187,7 +183,6 @@ export class FrameDecoder {
 				}
 				this.#fragOpcode = opcode;
 				this.#fragParts = [payload];
-				this.#fragLen = len;
 			}
 		}
 	}
