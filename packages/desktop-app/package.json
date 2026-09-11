@@ -1,7 +1,7 @@
 {
 	"type": "module",
 	"name": "@musepi/desktop-app",
-	"version": "0.4.25",
+	"version": "0.4.24",
 	"private": true,
 	"description": "MusePi desktop GUI — React SPA over the musepi daemon JSON-RPC (daemon Phase 4)",
 	"license": "MIT",
