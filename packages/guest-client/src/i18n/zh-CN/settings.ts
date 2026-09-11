@@ -926,6 +926,7 @@ export const settings = {
 	"add to notes": "添加到笔记",
 	"save as image": "保存为图片",
 	"copy image": "复制图片",
+	"copy image failed": "复制图片失败",
 	"saving image…": "正在保存图片…",
 	border: "边框",
 	watermark: "水印",

@@ -64,8 +64,12 @@ export function SaveImageDialog({
 			await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 			setCopied(true);
 			setTimeout(() => setCopied(false), 1500);
-		} catch {
-			// clipboard / image API unavailable — keep the idle icon
+		} catch (err) {
+			// Surface the reason through the shared toast channel. Swallowing it
+			// is what made a CSP-blocked fetch read as "the button is broken"
+			// for a whole release — the user saw nothing, not even in console.
+			const detail = err instanceof Error ? err.message : String(err);
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: `${t("copy image failed")}: ${detail}` }));
 		} finally {
 			setBusy(false);
 		}

@@ -977,6 +977,7 @@ export const settings = {
 	"add to notes": "Add to notes",
 	"save as image": "Save as image",
 	"copy image": "Copy image",
+	"copy image failed": "Copying the image failed",
 	"saving image…": "Saving image…",
 	border: "Border",
 	watermark: "Watermark",
