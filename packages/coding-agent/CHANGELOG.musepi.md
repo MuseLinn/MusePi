@@ -5,6 +5,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.25] - 2026-09-11
+
+### Fixed
+
+- **修复「保存为图片」弹窗的复制按钮无反应**:复制走的是 `toPng` 生成 data URL 再 `fetch` 取 blob,而渲染层 CSP 的 `connect-src` 不含 `data:`,该 fetch 被浏览器拦截、又被空 `catch` 吞掉——点下去毫无反应(控制台可见 `Refused to connect because it violates the document's Content Security Policy`)。现改用 `toBlob` 直接拿画布 blob,不再经过 data URL,也顺带省掉一次 base64 往返。
+  - EN: Fixed the "save as image" dialog's copy button doing nothing: the copy path ran `toPng` → `fetch(dataUrl)` for the blob, but the renderer CSP's `connect-src` does not allow `data:` — the fetch was blocked and the empty `catch` swallowed it, so clicking had no visible effect (the console showed "Refused to connect because it violates the document's Content Security Policy"). It now uses `toBlob`, which returns the canvas blob directly — no data URL, and one less base64 round-trip.
+
 ## [0.4.24] - 2026-09-11
 
 ### Added
