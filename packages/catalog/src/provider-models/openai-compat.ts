@@ -1741,7 +1741,19 @@ export function commandCodeModelManagerOptions(
 				// actually runs, keeping the ModelManager cache fast path cheap.
 				const canonicalReferences = getBundledModelReferenceIndex();
 				const bundledDevSnapshot = getBundledModelsDevCapabilities();
-				const cachedModelsDevPayload = getCachedModelsDevPayload();
+				// The shared catalog prime is fire-and-forget (model-registry runs
+				// #primeModelsDevCatalog without awaiting it), so the synchronous
+				// view is still empty whenever discovery wins that race — the
+				// mapper then falls through to the text-only defaults and the
+				// ModelManager persists them for the cache TTL (deepseek-v4.1-flash
+				// was cached as input [text] / reasoning false that way, hiding its
+				// image capability in the GUI). Discovery is network-bound anyway,
+				// so resolve the payload here; a failure degrades to the sync view.
+				const cachedModelsDevPayload =
+					getCachedModelsDevPayload() ??
+					(await withCatalogDiscoveryTimeout(DEFAULT_OPENAI_COMPATIBLE_DISCOVERY_TIMEOUT_MS, signal =>
+						fetchWellKnownModels(config?.fetch, signal),
+					).catch(() => undefined));
 				return fetchOpenAICompatibleModels({
 					api: "openai-completions",
 					provider: "command-code",
