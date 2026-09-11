@@ -1068,7 +1068,7 @@ function ensureTray() {
 		// port must count as "no daemon": otherwise the tray WS never opens,
 		// update() never runs, and the tray icon is never created.
 		if (port && !(await portOpen(port))) port = null;
-		// Fall back to the renderer's DEFAULT_URL port (gui/src/app.tsx) —
+		// Fall back to the renderer's DEFAULT_URL port (packages/desktop-app/src/app.tsx) —
 		// the daemon binds it and it is the documented default.
 		if (!port && (await portOpen(8300))) port = 8300;
 		if (!port) {

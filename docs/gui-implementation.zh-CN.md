@@ -124,7 +124,7 @@ daemon RPC:
 2. **calc 长度×百分比**(`calc(28px * 100%)`)→ 非法,静默回退 0。
 3. **transform 动画 keyframes 替换静态 transform**(`translate(-50%,-50%)` + scale 关键帧)→ 动画期间锚点丢失跳位;纯 opacity 或把完整 transform 写进关键帧。
 4. **backdrop-filter 首帧闪烁** → 两阶段挂载(先 opacity 0 上屏,下一帧加动画类)。
-5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。** **全浮层统一(2026-08-11)**:共享 hook `useTwoPhaseEnter(active)`(gui/src/lib/use-two-phase-enter.ts,两 rAF 后返回 `--entered` 后缀,close 时重置)——接入此前越轨的 5 处:Board 放大/小组件任务/引导遮罩/⌘K 命令面板(改常驻挂载+退出动画)/选区工具条(补入场退场);base `opacity:0` + `--entered` 使 motion-off 自然瞬现。这些点此前是**挂载帧直接播 `gui-fade-in`(纯 opacity,无 scale)**——属本条风险类的轻度变体,未在真实屏幕实测失效,但契约上违反两阶段,统一后消除差异。
+5. **挂载即动画会杀死磨砂**(2026-08-06 实测,与 4 同根):带 `transform: scale` 的 `gui-menu-in` 若在**挂载帧直接播放**(ContextMenu/Pop 旧实现),Chromium 真实屏幕合成器**跳过 backdrop 采样,且动画结束后不重采样**——菜单永久渲染成普通半透明(背后文字直接透出,无磨砂);`useFloatingMenu` 的两阶段(挂载帧无动画类,下一帧 rAF 加 `--entered`)不受影响。**CDP 截图(offscreen 合成)仍显示模糊,是最大误导源**——曾据此误判"transparent 窗口 blur 全失效"(electron#30412 是长期未解决的独立问题,但本 GUI 的菜单 blur 一直可修),错误地用 95% scrim 覆盖全部浮层(用户立刻发现"全都不是磨砂了",已回退)。修复:ContextMenu/Pop 两阶段进入(`--pending`/`--entered` 类),Pop 调用方类移除自带 animation。**验证浮层磨砂必须真实屏幕截图(screencapture -l 窗口 ID),CDP 截图/计算样式不算数。** **全浮层统一(2026-08-11)**:共享 hook `useTwoPhaseEnter(active)`(packages/desktop-app/src/lib/use-two-phase-enter.ts,两 rAF 后返回 `--entered` 后缀,close 时重置)——接入此前越轨的 5 处:Board 放大/小组件任务/引导遮罩/⌘K 命令面板(改常驻挂载+退出动画)/选区工具条(补入场退场);base `opacity:0` + `--entered` 使 motion-off 自然瞬现。这些点此前是**挂载帧直接播 `gui-fade-in`(纯 opacity,无 scale)**——属本条风险类的轻度变体,未在真实屏幕实测失效,但契约上违反两阶段,统一后消除差异。
 5. **flex 子项缺 `min-width:0`** → 内容撑破/尺寸不一致;flex 子项 `margin-inline:auto` 会击败 stretch。
 6. **popup/浮层被祖先 overflow/transform 裁剪** → portal 到 body。
 7. **rAF 节流闩锁未在帧回调内释放** → 后续事件被吞。
@@ -219,7 +219,7 @@ daemon RPC:
 - 渲染 key 用 `provider` → React 重复 key 警告(托盘历史 bug);
 - 每凭据一个折叠区块 → 视觉上堆叠重复块(/usage 面板历史 bug)。
 
-**合并算法**(`gui/src/components/composer/usage-panel.tsx` `UsageProviderSection`,托盘 `tray-menu-main.tsx` `buildUsageRows` 同款):
+**合并算法**(`packages/desktop-app/src/components/composer/usage-panel.tsx` `UsageProviderSection`,托盘 `tray-menu-main.tsx` `buildUsageRows` 同款):
 - 按 `provider` 分组 → 一个折叠区;按 `label|windowId` 分窗口 → 每个窗口一行;
 - **列序是 provider 级固定序**:跨窗口平均用量降序、同分按标签 —— **禁止每窗口独立 worst-first 排序**(凭证会"左右乱窜",用户感知为错位)。列上限 4(`.slice(0, 4)`);
 - 最右侧 `合计` 列:该窗口各凭据分数的**均值**(TUI 聚合语义),带分隔线;provider 排序 least-pressure 升序(TUI parity);
@@ -233,7 +233,7 @@ daemon RPC:
 
 ## 13. slash 补全排序(2026-08-16)
 
-`gui/src/lib/slash-rank.ts` `rankSlashEntries(entries, query, guiNative)`(会话 Composer `use-completion.ts` + WelcomeComposer 共用):
+`packages/desktop-app/src/lib/slash-rank.ts` `rankSlashEntries(entries, query, guiNative)`(会话 Composer `use-completion.ts` + WelcomeComposer 共用):
 - 排序 tier:name 全等 > 名前缀 > 名子串 > 描述子串;层内 **GUI 原生命令优先**(usage/context —— composer 拦截开面板的命令,同层压过 `clear`/`compaction` 等 daemon 命令);
 - 空 query 保持目录序(裸 `/` 列表不重排);非匹配项沉底保序(skill: 查询的幸存者不被丢弃);
 - 纯函数 + 单测 `lib/slash-rank.test.ts`(tier/GUI 决胜/稳定序/沉底)。
@@ -310,8 +310,8 @@ daemon RPC:
 
 | 位置 | 用途 | 默认值 |
 |---|---|---|
-| `gui/electron/updater.cjs` | 主进程 OTA 检查（`checkForUpdates`）+ 更新说明拉取（`fetchManifestNotes`） | `RELEASE_MANIFEST_URL` 常量 |
-| `gui/package.json` `update.manifestUrl` | 打包时覆盖 notes 拉取默认 | 同 URL |
+| `packages/desktop-app/electron/updater.cjs` | 主进程 OTA 检查（`checkForUpdates`）+ 更新说明拉取（`fetchManifestNotes`） | `RELEASE_MANIFEST_URL` 常量 |
+| `packages/desktop-app/package.json` `update.manifestUrl` | 打包时覆盖 notes 拉取默认 | 同 URL |
 | `daemon/server.ts` `updates.check` | daemon 侧版本/notes 探测（遗留——UpdateToast 已改走 `updater-notes`；RPC 保留对等） | 同 URL（硬编码） |
 
 - **解析顺序**（updater.cjs `manifestUrl()`，仅 notes 拉取——electron-updater 的 feed 来自 build publish config）：`OMP_UPDATE_MANIFEST_URL` env → `package.json update.manifestUrl` → `RELEASE_MANIFEST_URL` 默认。
@@ -321,20 +321,20 @@ daemon RPC:
 
 ### 三合一发送/停止按钮：run 级 working（turn 级边界陷阱）
 
-`SendOrStopButton`（`gui/src/components/composer/action-buttons.tsx`）idle 显示发送箭头，working 态变胶囊 + 点阵 bloom + 两标签（「工作中」/「停止」，hover 互换）。**关键陷阱**：
+`SendOrStopButton`（`packages/desktop-app/src/components/composer/action-buttons.tsx`）idle 显示发送箭头，working 态变胶囊 + 点阵 bloom + 两标签（「工作中」/「停止」，hover 互换）。**关键陷阱**：
 
 - **`turn_end` 是每工具批次发一次，不是 run 结束**（`agent-loop.ts` `pushTurnEnd` 每个 tool batch 一次；`types.ts`: "a turn is one assistant response + any tool calls/results"）。若用 `turn_end` 清 working，**轮间 provider 准备期按钮会闪回发送箭头**（用户报告 2026-08-22）。
-- **正确定界**（`gui/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
+- **正确定界**（`packages/desktop-app/src/lib/session-store.ts`）：`agent_start`/`turn_start`/user `message_start` → `#working = true`；`turn_end` **只清 `#streaming`**；`agent_end` 才清 `#working` + `#streaming`；daemon `{kind:"state", payload:{isStreaming}}` 帧做权威纠正（中止无 turn_end 时兜底）。
 - **`#buildSnapshot` 的 OR 陷阱**：旧代码 `working: this.#working || snap.state.isStreaming`——view 的 turn 级 `isStreaming` 在无 turn_end 的中止路径会卡 `true`，把已复位的标志 OR 回去，stop 胶囊永不熄灭。**已改为 store 单一事实源** `working: this.#working`，构造时用 resume snapshot `state.isStreaming` 播种（中途加入正在工作的会话也正确显示）。
 - **测试**：`packages/desktop-app/test/session-store.test.ts` 覆盖「run 级边界不闪回 + agent_end 才熄灭 + state 帧兜底」。改按钮/指示器语义先看该文件的 switch 与 `#buildSnapshot`。
 
 ### 更新提示 toast（bitfun DailyAppUpdateGate parity）
 
 - 主进程 `main.cjs` 启动后 12s 静默检查，`checkForUpdates()` 得 `newer` 则 `webContents.send("update-available", result)`。
-- 渲染端 `UpdateToast.tsx`（`gui/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「下载更新」/「跳过此版本」。**notes 走 `updater-notes` IPC**（主进程拉 manifest，成功后缓存）——不再依赖 daemon RPC——daemon 未连上或 `startup.checkUpdate` 关闭时预览照常可用；notes 超 200 字符出「展开」toggle。
+- 渲染端 `UpdateToast.tsx`（`packages/desktop-app/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「下载更新」/「跳过此版本」。**notes 走 `updater-notes` IPC**（主进程拉 manifest，成功后缓存）——不再依赖 daemon RPC——daemon 未连上或 `startup.checkUpdate` 关闭时预览照常可用；notes 超 200 字符出「展开」toggle。
 - **下载状态**（updater-state 推送）：`preparing` 由 `updater-download` 同步置位（不确定态进度条——覆盖点击 → 首字节之间 electron-updater 尚未发 `download-progress` 的空窗；重入保护让双击安全），`downloading` 显示百分比 + 已传/总量 MB + `bytesPerSecond`，`downloaded` 显示完成行 + 立即重启。被关掉的 toast 会在 `preparing`/`downloaded` 推送时**复活**——`autoInstallOnAppQuit=false` 下立即重启是唯一安装路径，必须始终可达（设置页的应用内「下载更新」按钮同样依赖该复活）。关闭播 180ms 退出动画（close-timer + `--closing` 类，prompt-dialog parity）；下载失败提供重试 + 「前往下载」。
 - **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`，发版两处都要填。
-- 桥接统一走 `gui/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
+- 桥接统一走 `packages/desktop-app/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
 
 ### 发布产物与 CLI 关系（2026-08-23 实测确认）
 
@@ -396,11 +396,11 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 19. GUI 吸收轮（2026-08-29）：git 图谱 / 浮动状态卡 / 奖励弹窗 / 最大化层级
 
-- **`git.log` 结构化契约（对旧形状是破坏性变更）**：默认返回 `{ commits: [{ hash, shortHash, author, timestamp(ms), refs: [{kind: "head"|"local"|"remote"|"tag", name}], parents: string[], subject }], hasMore }` —— 由 `git log --all --topo-order --pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%D%x1f%P%x1f%s%x1e` 解析（`limit` 默认 100，多取一条得 `hasMore`；`skip` 翻页）。远端 ref 以 `git remote` 名单分类（本地 `feature/x` 不会误判为 `origin/...`）。参数 `{ cwd?, limit?, skip?, graph? }`；`graph: true` 保留旧 ASCII 字符串（GUI 已不再使用）。**异步 spawn + 10s kill 守卫**——不再用 spawnSync（曾冻结整个 daemon 事件循环，同 git.status 教训）。GUI：`ContextPanel` 的 `GitLogPane` 经车道求解器 `gui/src/lib/git-graph-lanes.ts`（`solveGraphLanes`，纯函数 + `gui/test/git-graph-lanes.test.ts`）渲染 ZCode 风格表格：first parent 保道、其余 parent 开道/并入、滞留列以 `kind: "join"` 汇入节点。加载更多 = 累积 commits 整表重算，跨页车道连续。行点击复制完整 hash（1.2s「已复制」反馈）。
+- **`git.log` 结构化契约（对旧形状是破坏性变更）**：默认返回 `{ commits: [{ hash, shortHash, author, timestamp(ms), refs: [{kind: "head"|"local"|"remote"|"tag", name}], parents: string[], subject }], hasMore }` —— 由 `git log --all --topo-order --pretty=format:%H%x1f%h%x1f%an%x1f%at%x1f%D%x1f%P%x1f%s%x1e` 解析（`limit` 默认 100，多取一条得 `hasMore`；`skip` 翻页）。远端 ref 以 `git remote` 名单分类（本地 `feature/x` 不会误判为 `origin/...`）。参数 `{ cwd?, limit?, skip?, graph? }`；`graph: true` 保留旧 ASCII 字符串（GUI 已不再使用）。**异步 spawn + 10s kill 守卫**——不再用 spawnSync（曾冻结整个 daemon 事件循环，同 git.status 教训）。GUI：`ContextPanel` 的 `GitLogPane` 经车道求解器 `packages/desktop-app/src/lib/git-graph-lanes.ts`（`solveGraphLanes`，纯函数 + `packages/desktop-app/test/git-graph-lanes.test.ts`）渲染 ZCode 风格表格：first parent 保道、其余 parent 开道/并入、滞留列以 `kind: "join"` 汇入节点。加载更多 = 累积 commits 整表重算，跨页车道连续。行点击复制完整 hash（1.2s「已复制」反馈）。
 - **`git.status` `numstat` 参数**：`{ numstat: true }` 额外返回 `git diff HEAD --numstat` 的增删行合计（二进制 "-" 行跳过）——浮动状态卡的 +N/−M 徽章消费。
-- **浮动状态卡**（`gui/src/components/StatusCards.tsx`，挂在 ChatView 转写包裹层，z-4 位于加载骨架之下）：Git 卡（15s `git.status` 轮询 + 分支弹层复用 `git.branches`/`git.checkout`，错误走共享 `musepi-gui-toast` 通路）、智能体卡（`snap.progress` 运行/已结束分拆；已用时按本挂载首次 sighting 计时——wire 载荷无起始时间戳）、待办卡（扫描 entries 取最新 `todo` toolResult 的 `details.phases`）。折叠态持久化在 localStorage `musepi-gui-status-cards`；全部卡片为空时整栈不渲染。
-- **Transcript `jumpRequest` prop**（`{ timestamp, nonce }`）：消息树/轨迹/画布/分支条跳转的唯一入口。先扩展尾部窗口（目标索引 − 20 行上下文）与压缩折叠（`setCompactedOpen`）直到目标行挂载，再 scrollIntoView + `tr-flash-highlight`（定义在 transcript.css，宿主无关）。旧的 `gui/lib/transcript-jump.ts`（行未挂载时回退 scrollTop 0）已删除——调用方传 `requestJump(ts)`，nonce 由 ChatView 持有。
-- **奖励弹窗**（`gui/src/components/RewardOverlay.tsx`）：`changelog.startup` 返回 `reward` 时由 AnnouncementOverlay 挂载（读可选 `<agentDir>/reward.json`：`{ id, amount` 必填，brand/label/subtitle/expires/success/primaryUrl/secondary 可选`}`）。只弹一次语义走既有公告流（force peek 可重开）。动效分层——tilt 包裹层（指针写 `--tilt-x/--tilt-y`）、idle 漂浮、一次性入场——同一 `transform` 永远只有一个动画源；数额用 CountUp 滚动；打开时 `sfxFor("complete")`；`gui-motion-off`/reduced-motion 全部降级。新增 i18n 域 `reward.ts`（zh+en，两侧 index.ts 查重守卫同步注册）。
+- **浮动状态卡**（`packages/desktop-app/src/components/StatusCards.tsx`，挂在 ChatView 转写包裹层，z-4 位于加载骨架之下）：Git 卡（15s `git.status` 轮询 + 分支弹层复用 `git.branches`/`git.checkout`，错误走共享 `musepi-gui-toast` 通路）、智能体卡（`snap.progress` 运行/已结束分拆；已用时按本挂载首次 sighting 计时——wire 载荷无起始时间戳）、待办卡（扫描 entries 取最新 `todo` toolResult 的 `details.phases`）。折叠态持久化在 localStorage `musepi-gui-status-cards`；全部卡片为空时整栈不渲染。
+- **Transcript `jumpRequest` prop**（`{ timestamp, nonce }`）：消息树/轨迹/画布/分支条跳转的唯一入口。先扩展尾部窗口（目标索引 − 20 行上下文）与压缩折叠（`setCompactedOpen`）直到目标行挂载，再 scrollIntoView + `tr-flash-highlight`（定义在 transcript.css，宿主无关）。旧的 `packages/desktop-app/src/lib/transcript-jump.ts`（行未挂载时回退 scrollTop 0）已删除——调用方传 `requestJump(ts)`，nonce 由 ChatView 持有。
+- **奖励弹窗**（`packages/desktop-app/src/components/RewardOverlay.tsx`）：`changelog.startup` 返回 `reward` 时由 AnnouncementOverlay 挂载（读可选 `<agentDir>/reward.json`：`{ id, amount` 必填，brand/label/subtitle/expires/success/primaryUrl/secondary 可选`}`）。只弹一次语义走既有公告流（force peek 可重开）。动效分层——tilt 包裹层（指针写 `--tilt-x/--tilt-y`）、idle 漂浮、一次性入场——同一 `transform` 永远只有一个动画源；数额用 CountUp 滚动；打开时 `sfxFor("complete")`；`gui-motion-off`/reduced-motion 全部降级。新增 i18n 域 `reward.ts`（zh+en，两侧 index.ts 查重守卫同步注册）。
 - **最大化层级（用户：前后内容重叠）**：三处修复——(1) `.gui-pane-maximize-backdrop` 遮罩（fixed、top 48px、z-840、点击还原）垫在 z-850 面板下；(2) `.gui-float-scrollbar` z 100000 → 30（fixed 元素此前画在最大化面板之上；层级降为转写局部）；(3) 最大化期间抑制 agent 浏览自动切视图（`onManagedBrowserState` → `onViewChange("browser")`，经 `maximizedRef` 镜像）。**坑**：fixed 定位元素进根层叠上下文——任何高于浮动面板的 z-index 都会穿透；新增浮层前先 grep 审计 `z-index`。
 - **内置浏览器重投影信号**：布局 effect 新增 `scroll`（捕获）、window `focus`、`visibilitychange` 监听——ResizeObserver 只对尺寸变化触发，最小化恢复/捕获滚动/DPI 变化曾让原生 WebContentsView 停在过期 bounds（页面错位/空白）。
 - **扩展中心加载失败相位**（dsh PluginInventory 对齐）：`stateLabel` 以 `loadError` 优先（「加载失败」），列表行（主树 + 搜索结果）显示红点（`gui-ext-dot--error`）+ `gui-ext-item-tag--err` 徽章——坏扩展不必点进详情即可见。
@@ -409,7 +409,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - **会话列表点击重排修复**:`SessionList` 的 `statusTime` 排序曾以 `working(+2)/unread(+1)` 为主键——但两个标志都会因点击行而翻转(打开清未读、离开掉 working),行在光标下每次切换都上下跳动。现排序纯按最后活跃时间(`sessionSortKey` 降序 + 稳定 id 决胜);working/未读保留为纯视觉行标记(脉动点、加粗)。分组(`GroupedSessionList` 日期桶)本就按最后活跃。
 - **分组/项目 tab 动效**:胶囊新增滑动 thumb(`.gui-tab-thumb`,`data-tab` 驱动 `translateX(calc(100% + 2px))`,200ms spring——两个 pill 固定宽,几何确定无需测量),胶囊内激活 pill 自身填充转透明(类的基础 `--active` 填充保留给其他使用方)。列表容器按视图 key(`archived | groups | projects`)重挂载并 160ms 淡入(`.gui-tab-pane-in`)。
-- **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——gui/pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
+- **切换错峰动画收紧**:错峰 reveal(guest-client `transcript.css`,`data-switched` 标记来自 ChatView)存在两份冲突阶梯——packages/desktop-app/src/styles/gui-pet.css 以不同延迟复制了 guest-client 规则,胜负取决于打包顺序。已删重复(transcript.css 单一来源),时长 300→240ms、尾延迟 210→120ms(最后一行 ~360ms 就绪,原 ~510ms),并补 motion-off/reduced-motion 全关。
 - **骨架屏闪烁阈值 150→250ms**:快速本地切换期间旧会话内容保持可见(加载期间不卸载),只有真正慢的打开(历史会话重激活)才出骨架。
 - **发送路径审计(无需改动)**:composer 立即清空文本(`onSend` 即发即忘),store 按帧合并流事件突发(dsh Notifier.markFrameDirty 对齐)并折叠连续 `message_update`,快照尾部截断 200 条(`tailSnapshot`),`session.send` 的侧栏刷新挂在发送 ack。感知延迟在 daemon 侧,不在 GUI。
 - **dsh 上游扫描(用户已 pull)**:新提交为 code-mode→PTC 改名、Connection 自持 RPC 传输(移除 ApiProxy)与 session-export 下载路由——结构性清理,本轮对 musepi GUI 无可吸收项;此前吸收的缝(Notifier 帧脏合并、插件清单)未变。
@@ -434,7 +434,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 21. 任务中心加固（2026-09-03）：cron 契约、时区语义、运行历史
 
-任务中心页（`gui/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`）是 daemon cron 存储（`~/.musepi/crons.json` + `crons.runs.json`；调度器在 `coding-agent/src/daemon/server.ts`，合并/校验/下次运行在 `daemon/crons.ts`）的唯一 GUI 客户端。
+任务中心页（`packages/desktop-app/src/components/ScheduledTasksPage.tsx` + `TaskCenterViews.tsx`）是 daemon cron 存储（`~/.musepi/crons.json` + `crons.runs.json`；调度器在 `coding-agent/src/daemon/server.ts`，合并/校验/下次运行在 `daemon/crons.ts`）的唯一 GUI 客户端。
 
 ### cron.* RPC 契约
 
@@ -459,4 +459,4 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 - 编辑器时区下拉曾默认 `Asia/Shanghai`，而 daemon **完全忽略该字段**（next-run 全按本机时间算）——静默错位。草稿现在默认空选项「主机时区」，显式时区会显示在调度标签里。
 - 看板视图的暂停/恢复曾调用不存在的 `cron.update` 并用 `.catch(() => {})` 吞掉拒绝——无信号的死 UI；daemon 只有 `cron.toggle`/`cron.upsert`。`rpc.request` 的方法名是不检查的字符串：接新调用方时务必 grep daemon 的 handler switch。
-- 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `gui/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。
+- 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `packages/desktop-app/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。
