@@ -13,14 +13,16 @@
  */
 
 import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
-import { Maximize2, X } from "lucide-react";
+import { Check, Code2, Copy, Download, Eye, ImageDown, Maximize2, MoreHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
+import { downloadBlob } from "../../lib/download";
 import { InlineWidget } from "../../tool-render/tools/widget";
 import type { ToolRenderHost } from "../../tool-render/types";
 import { widgetDef } from "../../widgets/registry";
+import { type WidgetSource, widgetSource } from "../../widgets/source";
 
 /** localStorage key for the standalone widget display. */
 export const WIDGET_STANDALONE_KEY = "musepi-gui-widget-standalone";
@@ -132,7 +134,160 @@ export function WidgetFullscreen({
 	);
 }
 
-/** One standalone widget card: shell + fullscreen affordance. */
+/**
+ * Card menu ("⋯"): 下载到本地 / 下载为图片 / 复制代码 / 查看代码.
+ *
+ * Portaled and positioned from the button's viewport rect — the card clips its
+ * own overflow, so an in-card popover is cut off on short widgets — flipping
+ * above when there is no room below. Scroll/resize re-anchor it (the
+ * transcript moves under the card). Actions the host cannot perform are simply
+ * absent: "下载为图片" needs a rasterizer (see ToolRenderHost.saveImage).
+ */
+function WidgetCardMenu({
+	source,
+	saveImage,
+	showCode,
+	onToggleCode,
+}: {
+	source: WidgetSource;
+	/** Absent when the host has no rasterizer — the item then hides. */
+	saveImage?: () => void;
+	showCode: boolean;
+	onToggleCode(): void;
+}): ReactNode {
+	const btnRef = useRef<HTMLButtonElement | null>(null);
+	const menuRef = useRef<HTMLDivElement | null>(null);
+	const [at, setAt] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
+	const [copied, setCopied] = useState(false);
+
+	// One anchoring function for the first open and every re-anchor. Identical
+	// positions keep the previous object: a fresh one each call would re-render
+	// forever through the effect below.
+	const anchor = useCallback((): void => {
+		const r = btnRef.current?.getBoundingClientRect();
+		if (!r) return;
+		const right = Math.max(8, window.innerWidth - r.right);
+		const height = menuRef.current?.offsetHeight ?? 184;
+		const next =
+			window.innerHeight - r.bottom >= height + 12
+				? { top: r.bottom + 6, right }
+				: { bottom: window.innerHeight - r.top + 6, right };
+		setAt(prev =>
+			prev && prev.top === next.top && prev.bottom === next.bottom && prev.right === next.right ? prev : next,
+		);
+	}, []);
+
+	useEffect(() => {
+		if (!at) return;
+		anchor();
+		const close = (): void => setAt(null);
+		const onDown = (event: MouseEvent): void => {
+			const inside = event
+				.composedPath()
+				.some(n => n instanceof HTMLElement && (n === btnRef.current || n === menuRef.current));
+			if (!inside) close();
+		};
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") close();
+		};
+		document.addEventListener("mousedown", onDown, true);
+		document.addEventListener("keydown", onKey);
+		document.addEventListener("scroll", anchor, true);
+		window.addEventListener("resize", anchor);
+		return () => {
+			document.removeEventListener("mousedown", onDown, true);
+			document.removeEventListener("keydown", onKey);
+			document.removeEventListener("scroll", anchor, true);
+			window.removeEventListener("resize", anchor);
+		};
+	}, [at, anchor]);
+
+	const copySource = (): void => {
+		void navigator.clipboard.writeText(source.text).then(() => {
+			setCopied(true);
+			// Hold the menu open long enough to show the flip, then dismiss.
+			window.setTimeout(() => setAt(null), 1200);
+		});
+	};
+
+	return (
+		<span className="tv-widget-menu-wrap">
+			<button
+				ref={btnRef}
+				type="button"
+				className="tv-widget-fs-btn"
+				title={t("widget actions")}
+				aria-label={t("widget actions")}
+				aria-expanded={at !== null}
+				onClick={() => {
+					if (at) {
+						setAt(null);
+						return;
+					}
+					const r = btnRef.current?.getBoundingClientRect();
+					if (r) setAt({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+				}}
+			>
+				<MoreHorizontal size={12} />
+			</button>
+			{at &&
+				createPortal(
+					<div
+						ref={menuRef}
+						className="tv-widget-menu"
+						role="menu"
+						style={{ top: at.top, bottom: at.bottom, right: at.right }}
+					>
+						<button
+							type="button"
+							role="menuitem"
+							onClick={() => {
+								downloadBlob(
+									source.filename,
+									source.text,
+									source.lang === "html" ? "text/html" : "application/json",
+								);
+								setAt(null);
+							}}
+						>
+							<Download size={13} />
+							{t("download")}
+						</button>
+						{saveImage && (
+							<button
+								type="button"
+								role="menuitem"
+								onClick={() => {
+									saveImage();
+									setAt(null);
+								}}
+							>
+								<ImageDown size={13} />
+								{t("widget download image")}
+							</button>
+						)}
+						<button type="button" role="menuitem" onClick={copySource}>
+							{copied ? <Check size={13} /> : <Copy size={13} />}
+							{copied ? t("copied") : t("copy")}
+						</button>
+						<button
+							type="button"
+							role="menuitem"
+							onClick={() => {
+								onToggleCode();
+								setAt(null);
+							}}
+						>
+							{showCode ? <Eye size={13} /> : <Code2 size={13} />}
+							{showCode ? t("widget view ui") : t("widget view code")}
+						</button>
+					</div>,
+					document.body,
+				)}
+		</span>
+	);
+}
+/** One standalone widget card: shell + card menu + fullscreen affordance. */
 export function WidgetCard({
 	payload,
 	host,
@@ -143,26 +298,46 @@ export function WidgetCard({
 	className?: string;
 }): ReactNode {
 	const [fullscreen, setFullscreen] = useState(false);
+	const [showCode, setShowCode] = useState(false);
+	const cardRef = useRef<HTMLDivElement | null>(null);
 	const def = widgetDef(payload.type);
 	if (!def) return null;
 	const title = payload.title ?? t(def.nameKey as never);
+	const source = widgetSource(payload);
+	// "下载为图片" rides a host capability, so the item is absent in hosts that
+	// have no rasterizer (plain browser, HTML export) rather than dead.
+	const saveImage = host?.saveImage
+		? () => {
+				const element = cardRef.current;
+				if (element) void host.saveImage?.(element, source.imageFilename);
+			}
+		: undefined;
 	return (
-		<div className={className ?? ""}>
+		<div ref={cardRef} className={className ?? ""}>
 			<InlineWidget
 				type={payload.type}
 				data={payload.data}
 				title={title}
 				sendPrompt={host?.sendPrompt}
+				codeView={showCode ? source : null}
 				actions={
-					<button
-						type="button"
-						className="tv-widget-fs-btn"
-						title={t("widget fullscreen")}
-						aria-label={t("widget fullscreen")}
-						onClick={() => setFullscreen(true)}
-					>
-						<Maximize2 size={12} />
-					</button>
+					<>
+						<WidgetCardMenu
+							source={source}
+							saveImage={saveImage}
+							showCode={showCode}
+							onToggleCode={() => setShowCode(v => !v)}
+						/>
+						<button
+							type="button"
+							className="tv-widget-fs-btn"
+							title={t("widget fullscreen")}
+							aria-label={t("widget fullscreen")}
+							onClick={() => setFullscreen(true)}
+						>
+							<Maximize2 size={12} />
+						</button>
+					</>
 				}
 			/>
 			{fullscreen && <WidgetFullscreen payload={payload} host={host} onClose={() => setFullscreen(false)} />}

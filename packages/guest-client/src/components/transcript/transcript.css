@@ -2586,6 +2586,62 @@ a.tr-tool-search-title:hover {
 	color: var(--color-text);
 }
 
+/* Widget card menu ("⋯"): 下载到本地 / 下载为图片 / 复制代码 / 查看代码.
+ * Portaled to <body> — the card clips its own overflow, so an in-card popover
+ * would be cut off on short widgets — which is why the popover carries its
+ * own surface instead of inheriting the card's --tv-* bridge. */
+.tv-widget-menu-wrap {
+	position: relative;
+	display: inline-flex;
+}
+
+.tv-widget-menu {
+	position: fixed;
+	z-index: 60;
+	min-width: 172px;
+	padding: 4px;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
+	border-radius: 10px;
+	background: var(--color-surface-raised);
+	box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
+}
+
+.tv-widget-menu button {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: 7px;
+	color: var(--color-text);
+	font-size: 12px;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.tv-widget-menu button:hover {
+	background: var(--color-hover);
+}
+
+.tv-widget-menu button svg {
+	color: var(--color-text-muted);
+	flex-shrink: 0;
+}
+
+/* Source view ("查看代码"): the body shows the widget's payload instead of the
+ * rendered face — the HTML a generated face runs, else the {type,data} JSON. */
+.tv-widget-code {
+	margin: 0;
+	max-height: 420px;
+	overflow: auto;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.55;
+	white-space: pre;
+	color: var(--color-text);
+}
+
 /* Fullscreen overlay (image-lightbox parity): dark frosted, content
  * centered, NO white top bar — the title rides a floating pill, the close
  * button floats top-right, so nothing occludes the app's own top edge. */

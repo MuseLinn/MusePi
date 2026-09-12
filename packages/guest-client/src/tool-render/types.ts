@@ -48,6 +48,11 @@ export interface ToolRenderHost {
 	 *  (kimi sendPrompt parity — inline widgets hand results back to the
 	 *  agent). Absent in board-only hosts. */
 	sendPrompt?(text: string): void;
+	/** Rasterize a card element to an image file ("下载为图片" — the widget
+	 *  card's menu). Hosts that own a rasterizer (the desktop renderer, which
+	 *  already ships html-to-image) provide it; plain-browser and HTML-export
+	 *  hosts omit it and the card hides that action. */
+	saveImage?(element: HTMLElement, filename: string): void | Promise<void>;
 }
 
 /**

@@ -1,5 +1,6 @@
 import {
 	CodeHighlightProvider,
+	downloadBlob,
 	punkAvatarUri,
 	relTime,
 	Transcript,
@@ -1103,6 +1104,28 @@ export function ChatView({
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => sendAndCloseJump(text),
+		// Widget card "下载为图片": rasterize the card and hand the blob to the
+		// shared download helper. html-to-image is imported dynamically on
+		// purpose (same as SaveImageDialog): a static import would pull a large
+		// dependency into the main bundle for a rarely used action. Failures
+		// surface through the toast channel — a silent catch is what once made a
+		// blocked export read as a dead button.
+		saveImage: (element: HTMLElement, filename: string): void => {
+			void (async () => {
+				try {
+					const { toBlob } = await import("html-to-image");
+					const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
+					const blob = await toBlob(element, { pixelRatio: 2, backgroundColor });
+					if (!blob) throw new Error("canvas produced no blob");
+					downloadBlob(filename, blob);
+				} catch (err) {
+					const detail = err instanceof Error ? err.message : String(err);
+					window.dispatchEvent(
+						new CustomEvent("musepi-gui-toast", { detail: `${t("widget download image")}: ${detail}` }),
+					);
+				}
+			})();
+		},
 	};
 	const fetchThinkingInfo = useCallback((): void => {
 		if (!rpc || !store) return;
@@ -1771,6 +1794,7 @@ export function ChatView({
 									browserOpenRequest={openBrowserReq}
 									view={activeView}
 									onViewChange={setActiveView}
+									onExpandPanel={onExpandRightPanel}
 									extTabs={extTabs}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;

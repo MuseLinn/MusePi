@@ -101,3 +101,26 @@
   `window.sendPrompt(text)` 推回意图
 - bitfun：`src/web-ui/src/tools/bitfun-canvas/`（data-display/charts/hooks SDK）
 - musepi：`docs/board-dashboard.md`（架构立项）、`docs/gui-design.md`（主设计规范）
+
+## 9. 卡片操作菜单（下载 / 图片 / 复制 / 查看代码）
+
+独立展示的 widget 卡片（`WidgetCard`，聊天消息内联与右栏「组件预览」同一组件）在卡片头右侧带
+「⋯」菜单，四项：
+
+| 菜单项 | 行为 |
+|---|---|
+| 下载到本地 | 把**源**写成文件：`html` 面 → `<slug>.html`（可独立打开）；其余类型 → `<slug>.json` |
+| 下载为图片 | 把卡片光栅化成 `<slug>.png`（`pixelRatio: 2`） |
+| 复制代码 | 复制同一份源文本，菜单项翻成「已复制」并在 1.2s 后自动收起 |
+| 查看代码 / 显示 UI | 卡片头不动，**卡片体**在渲染结果与源文本之间切换 |
+
+**源的定义是一处契约**（`widgets/source.ts` 的 `widgetSource`）：`html` 面给生成面自己的标记，
+其余类型给 `{ type, title?, data }` 的 JSON——即 `widget` 工具被调用时的载荷，粘回对话就能让
+agent 改这张卡。查看器、剪贴板、下载文件都读这一份，三者不会漂移。
+
+**能力门**：`ToolRenderHost.saveImage` 只有带光栅器的宿主提供（桌面端复用 html-to-image 管线）；
+纯浏览器与 HTML 导出宿主不提供 → 「下载为图片」**不渲染**，而不是点了没反应。文本下载走共享
+`lib/download.ts` 的 `downloadBlob`（blob + `<a download>`），因此各宿主都有。
+
+**菜单形态**：portal 到 `<body>` 的浮层（卡片自带 `overflow: hidden`，内联浮层在矮卡片上会被裁），
+按锚点视口 rect 定位、下方不够时上翻，滚动/窗口变化重新锚定，Esc 与外部点击关闭。

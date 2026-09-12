@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { WidgetErrorBoundary } from "../../widgets/error-boundary";
 import { widgetDef } from "../../widgets/registry";
+import type { WidgetSource } from "../../widgets/source";
 import { ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, str } from "../util";
@@ -27,20 +28,25 @@ export function widgetDataEq(a: Record<string, unknown>, b: Record<string, unkno
  *  todo) without persisting anything back to the agent or the board.
  *  When the host wires `sendPrompt` (chat only), interactive widgets can
  *  hand results back to the conversation (kimi sendPrompt parity).
- *  `actions` renders at the head's right edge (fullscreen affordance on
- *  the standalone display). */
+ *  `actions` renders at the head's right edge (fullscreen + the card menu on
+ *  the standalone display), and `codeView` swaps the BODY for the widget's
+ *  source while the head stays put ("查看代码"). */
 export function InlineWidget({
 	type,
 	data,
 	title,
 	sendPrompt,
 	actions,
+	codeView = null,
 }: {
 	type: string;
 	data: Record<string, unknown>;
 	title: string;
 	sendPrompt?: (text: string) => void;
 	actions?: ReactNode;
+	/** Source view: when set, the body renders this text instead of the
+	 *  registry component (null = normal UI view). */
+	codeView?: WidgetSource | null;
 }): ReactNode {
 	const [local, setLocal] = useState<Record<string, unknown>>(data);
 	// The card mounts while the tool is still running — the result (and
@@ -63,13 +69,19 @@ export function InlineWidget({
 				{actions && <span className="tv-widget-actions">{actions}</span>}
 			</div>
 			<div className="tv-widget-body">
-				<WidgetErrorBoundary>
-					<def.Component
-						data={local}
-						update={patch => setLocal(prev => ({ ...prev, ...patch }))}
-						sendPrompt={sendPrompt}
-					/>
-				</WidgetErrorBoundary>
+				{codeView ? (
+					<pre className="tv-widget-code" data-lang={codeView.lang} aria-label={t("widget source")}>
+						{codeView.text}
+					</pre>
+				) : (
+					<WidgetErrorBoundary>
+						<def.Component
+							data={local}
+							update={patch => setLocal(prev => ({ ...prev, ...patch }))}
+							sendPrompt={sendPrompt}
+						/>
+					</WidgetErrorBoundary>
+				)}
 			</div>
 		</div>
 	);

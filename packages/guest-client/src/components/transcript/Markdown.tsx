@@ -3,6 +3,7 @@ import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
+import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
@@ -184,18 +185,6 @@ function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][
 	const sep = `| ${headers.map(() => "---").join(" | ")} |`;
 	const line = (row: string[]): string => `| ${row.join(" | ")} |`;
 	return [line(headers), sep, ...rows.map(line)].join("\n");
-}
-
-function downloadBlob(name: string, content: string, mime: string): void {
-	const blob = new Blob([content], { type: mime });
-	const url = URL.createObjectURL(blob);
-	const link = document.createElement("a");
-	link.href = url;
-	link.download = name;
-	document.body.appendChild(link);
-	link.click();
-	document.body.removeChild(link);
-	URL.revokeObjectURL(url);
 }
 
 /**

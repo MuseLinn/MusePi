@@ -84,6 +84,7 @@ export {
 	t,
 	tLoose,
 } from "./i18n/index.js";
+export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
 export {

@@ -1055,6 +1055,11 @@ export const settings = {
 		"Visual widgets render as standalone cards in the message stream (like file preview cards); tool calls stay collapsed by default",
 	"widget fullscreen": "Fullscreen view",
 	"widget preview": "Widget preview",
+	"widget actions": "Widget actions",
+	"widget view code": "View code",
+	"widget view ui": "Show UI",
+	"widget download image": "Download as image",
+	"widget source": "Widget source",
 	"maximize panel": "Maximize panel",
 	"watch the agent's browser live": "Watch the agent\u2019s browser live",
 	"the agent is using its own hidden browser \u2014 enable the managed browser to watch it in the side panel and share login state":

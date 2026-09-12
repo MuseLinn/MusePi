@@ -1001,6 +1001,11 @@ export const settings = {
 	"widget standalone description": "可视化组件以独立卡片展示在对话消息流中（类似文件预览卡片），工具调用处默认折叠",
 	"widget fullscreen": "全屏查看",
 	"widget preview": "组件预览",
+	"widget actions": "组件操作",
+	"widget view code": "查看代码",
+	"widget view ui": "显示 UI",
+	"widget download image": "下载为图片",
+	"widget source": "组件源码",
 	"maximize panel": "最大化面板",
 	"watch the agent's browser live": "实时查看 agent 的浏览器操作",
 	"the agent is using its own hidden browser — enable the managed browser to watch it in the side panel and share login state":
