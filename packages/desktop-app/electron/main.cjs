@@ -2244,6 +2244,11 @@ async function createWindow() {
 // setWindowOpenHandlers over destroyed webContents.
 app.on("web-contents-created", (_event, contents) => {
 	if (contents.getType() !== "webview") return;
+	// The managed in-app browser runs its own popup policy on this same
+	// `webview` type: control-click / target=_blank becomes a new managed tab
+	// (managed-browser.cjs binds the handler when the guest is reported).
+	// Loading the target in place here would swallow that and hijack the tab.
+	if (contents.session === session.fromPartition("persist:musepi-managed-browser")) return;
 	contents.setWindowOpenHandler(({ url }) => {
 		if (/^https?:/i.test(url)) contents.loadURL(url);
 		return { action: "deny" };
@@ -2910,11 +2915,12 @@ app.whenReady().then(async () => {
 	// file:// resources (the old Tauri webview cached them and confused us).
 	await session.defaultSession.clearCache();
 	await createWindow();
-	// Managed in-app browser (right-pane tool): WebContentsView tabs + the
-	// loopback CDP bridge the browser tool attaches to (browser.gui). The
-	// controller needs the main window as its view owner. Async: the CDP
-	// server binds with a port-retry (managed-browser.cjs) — fire and
-	// forget, the renderer learns the bound port from pushed state.
+	// Managed in-app browser (right-pane tool): the renderer mounts the
+	// `<webview>` guests; main holds the partition policy and the loopback CDP
+	// bridge the browser tool attaches to (browser.gui). The controller needs
+	// the main window as its owner. Async: the CDP server binds with a
+	// port-retry (managed-browser.cjs) — fire and forget, the renderer learns
+	// the bound port from pushed state.
 	void managedBrowser.start(mainWindow);
 	// Menu-bar tray: session quick-switcher (openchamber parity). Lives
 	// past window close on macOS, so create it once at boot.

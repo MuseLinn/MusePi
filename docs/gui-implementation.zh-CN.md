@@ -173,10 +173,10 @@ daemon RPC:
 
 ## 10. 受管浏览器（Proma 吸收，2026-08-11）
 
-右侧 Browser 工具从"独立 webview"升级为**受管浏览器**：Electron 主进程持有 `WebContentsView`（每 tab 一个），agent 的 browser 工具通过本地 CDP 桥**驱动同一个实例**——用户在面板里看到的页面就是 agent 操作的页面，登录状态天然共享（Proma browser-controller 模式）。
+右侧 Browser 工具是**受管浏览器**:页面是渲染进程持有的 DOM `<webview>`(每 tab 一个,跑在持久分区上),agent 的 browser 工具通过本地 CDP 桥**驱动同一批页面**——用户在面板里看到的就是 agent 操作的页面,登录状态天然共享(Proma browser-controller 模式)。当前架构、guest 生命周期协议与 `<webview>` 的实测约束见 §23。
 
 ### 架构
-- `electron/managed-browser.cjs`：`ManagedBrowserController` —— tab 生命周期（`persist:omp-managed-browser` 持久分区，凭据跨重启留存）、导航/加载状态、**活动账本**（脱敏：不含页面文本/Cookie/脚本全文）、布局投影（renderer 报 slot rect → 乘 zoomFactor → `view.setBounds`）、权限 deny-all、`agentActivity` 事件（agent 驱动隐藏 tab 时自动唤起面板）。
+- `electron/managed-browser.cjs`:`ManagedBrowserController` —— tab 簿记 + guest 绑定(渲染端上报 `guest-ready`/`guest-gone`)、导航/加载状态、**活动账本**(脱敏:不含页面文本/Cookie/脚本全文)、分区守卫(`persist:musepi-managed-browser`:权限 deny-all、`omp-file://` 预览)、loopback CDP 桥,以及 `agentActivity` 事件(agent 驱动隐藏 tab 时自动唤起面板)。
 - **CDP 桥**：loopback HTTP+WS，仿真 Chrome `/json/version` + browser 级 `Target.*`（relay bridge 子集：setDiscoverTargets / setAutoAttach / attachToTarget / createTarget / closeTarget / getTargets）。每个 tab 一个 `webContents.debugger` 会话，puppeteer 多连接复用。WS 帧编解码手写（无 `ws` 依赖）：mask/unmask、分片、ping/pong/close。
 - 桥只暴露受管 tabs（`TAB<n>`/`PAGE<n>` 目标 id），**不暴露 GUI 自身窗口**；upgrade 拒绝带 Origin 的请求（网页无法驱动）。
 - 前端 `ManagedBrowserPane.tsx`：占位 div + `useLayoutEffect` 投影（ResizeObserver + overlay 生命周期 MutationObserver，流式文本不触发 IPC）+ 工具栏/标签条（Agent 徽标）/活动行；`ContextPanel` 监听 `agentActivity` 自动切到浏览器工具。非 Electron 构建回退旧 iframe pane（`LegacyBrowserPane`）。
@@ -306,7 +306,7 @@ daemon RPC:
 **铁律**:模型-facing 模板(`<system-notice>`、`<advisory severity=…>`)只存在于 `content`(给 LLM 的 payload),GUI 渲染器**只读 `details.*` 干净文本,绝不把模板正文渲染给用户**——`async-result`/`advisor` 都是 2026-08-22 补上 GUI 渲染(此前落入默认 `tr-custom`,把 `<system-notice>`/`<advisory>` XML 原样显示,与 TUI 的 `buildAsyncResultBlock`/`createAdvisorMessageCard` 不对齐)。
 
 **流式 markdown 时机**(答「是不是结束后才渲染」——**不是**):
-- `Markdown.tsx` `renderStreamingMarkdown`:流式时,已闭合的 `\n\n` 边界块立即渲染成 markdown(跨帧复用),**未定稿的尾块以 RAW TEXT 逐字累积**(单次入场动画);`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。
+- `Markdown.tsx` `renderStreamingMarkdown`:流式时 head **随流增长**——每帧把「刚刚成立」的平衡 `\n\n` 块提升为 markdown(段落、列表、以及围栏一闭合即成的代码块),内容是边到边成形;**最后一个**平衡边界之后仍是 RAW TEXT(逐字单次入场动画——切点只能停在平衡边界上正因如此,未闭合围栏保持字面量同理)。`streaming:false` 时只把尾块重解析为真 markdown(复用 head 块,避免整条 `md.parse` 的「卡一下才都渲染」)。切点前移由尾段 DOM pass 处理(清空并重挂,已显示字符不会重播)。
 - 思考块按句过 `Markdown`(`tr-think-sentence--live` 入场)。
 - DSH(`deepseek-harness`)同款增量:冻结除末尾两块外的全部为缓存 React 元素,尾块每 chunk 经 `IncrementalMarkdownParser` 重解析;已知偏差——跨冻结边界的 reference-style link/footnote 定义流式期字面显示,settle 全量解析自愈。
 
@@ -410,7 +410,7 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **Transcript `jumpRequest` prop**（`{ timestamp, nonce }`）：消息树/轨迹/画布/分支条跳转的唯一入口。先扩展尾部窗口（目标索引 − 20 行上下文）与压缩折叠（`setCompactedOpen`）直到目标行挂载，再 scrollIntoView + `tr-flash-highlight`（定义在 transcript.css，宿主无关）。旧的 `packages/desktop-app/src/lib/transcript-jump.ts`（行未挂载时回退 scrollTop 0）已删除——调用方传 `requestJump(ts)`，nonce 由 ChatView 持有。
 - **奖励弹窗**（`packages/desktop-app/src/components/RewardOverlay.tsx`）：`changelog.startup` 返回 `reward` 时由 AnnouncementOverlay 挂载（读可选 `<agentDir>/reward.json`：`{ id, amount` 必填，brand/label/subtitle/expires/success/primaryUrl/secondary 可选`}`）。只弹一次语义走既有公告流（force peek 可重开）。动效分层——tilt 包裹层（指针写 `--tilt-x/--tilt-y`）、idle 漂浮、一次性入场——同一 `transform` 永远只有一个动画源；数额用 CountUp 滚动；打开时 `sfxFor("complete")`；`gui-motion-off`/reduced-motion 全部降级。新增 i18n 域 `reward.ts`（zh+en，两侧 index.ts 查重守卫同步注册）。
 - **最大化层级（用户：前后内容重叠）**：三处修复——(1) `.gui-pane-maximize-backdrop` 遮罩（fixed、top 48px、z-840、点击还原）垫在 z-850 面板下；(2) `.gui-float-scrollbar` z 100000 → 30（fixed 元素此前画在最大化面板之上；层级降为转写局部）；(3) 最大化期间抑制 agent 浏览自动切视图（`onManagedBrowserState` → `onViewChange("browser")`，经 `maximizedRef` 镜像）。**坑**：fixed 定位元素进根层叠上下文——任何高于浮动面板的 z-index 都会穿透；新增浮层前先 grep 审计 `z-index`。
-- **内置浏览器重投影信号**：布局 effect 新增 `scroll`（捕获）、window `focus`、`visibilitychange` 监听——ResizeObserver 只对尺寸变化触发，最小化恢复/捕获滚动/DPI 变化曾让原生 WebContentsView 停在过期 bounds（页面错位/空白）。
+- **原生视图的布局/遮挡机制已整体删除**(随 2026-09-12 的 `<webview>` 迁移,见 §23):slot 投影、重投影信号(scroll/focus/visibilitychange)、几何遮挡判定(`lib/overlay-block.ts`)、页面加载 epoch/revision 水位线、4px 手柄让位——它们存在的唯一理由都是「页面是恒定画在 DOM 之上的原生视图」。dev 主进程仍带 `--remote-debugging-port=9224`(与管理浏览器自己的 CDP 桥 9230 是两个不同服务)。
 - **扩展中心加载失败相位**（dsh PluginInventory 对齐）：`stateLabel` 以 `loadError` 优先（「加载失败」），列表行（主树 + 搜索结果）显示红点（`gui-ext-dot--error`）+ `gui-ext-item-tag--err` 徽章——坏扩展不必点进详情即可见。
 
 ### 侧栏排序 / tab 动效 / 切换卡顿打磨（2026-08-29，用户反馈第二轮）
@@ -468,3 +468,25 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - 编辑器时区下拉曾默认 `Asia/Shanghai`，而 daemon **完全忽略该字段**（next-run 全按本机时间算）——静默错位。草稿现在默认空选项「主机时区」，显式时区会显示在调度标签里。
 - 看板视图的暂停/恢复曾调用不存在的 `cron.update` 并用 `.catch(() => {})` 吞掉拒绝——无信号的死 UI；daemon 只有 `cron.toggle`/`cron.upsert`。`rpc.request` 的方法名是不检查的字符串：接新调用方时务必 grep daemon 的 handler switch。
 - 日历周起始是共享逻辑：页面日历（`TaskCalendarView`）与编辑器 `CalendarPicker` 都用 `packages/desktop-app/src/lib/appearance.ts` 的 `weekStartIndex()`/`orderedWeekdayKeys()`；星期文案来自 `scheduled sun..sat` 词表——禁止硬编码周日开头或 `["日","一",…]`。
+
+## 22. 底部终端面板 + 浏览器地址栏打磨（2026-09-12）
+
+- **终端 ANSI 调色板**：`TerminalPanel.tsx` 的 `xtermTheme()` 现在提供完整 16 色 ANSI 集，全部为**具体 hex** —— xterm 的 canvas 渲染器无法解析 `var()`/`oklch` 字符串，CSS 变量字符串会静默回落到 xterm 内置调色板（浅色主题下 `ls`/`git status` 对比度差）。取值由 `tokens.css` 的 oklch token 解析而来（oklch→sRGB 换算；见各槽位的 `note` 注释）。无 token 的槽位（blue、浅色的 `black`/`white`/`brightWhite`）选 WCAG 对比度合格值并在注释里注明来源。bright 系列复用基础值（对齐 openchamber `convertThemeToXterm`）。
+- **终端回滚缓冲为 10,000**（openchamber 同值）；长构建输出必须能滚回去。`scrollback` 是 xterm 构造器状态——对已打开的终端**不生效**；主题色可以（`term.options.theme` + `refresh`）。
+- **终端选区 → 对话输入框**：xterm `onSelectionChange` 状态驱动宿主上方的「附加到对话」小按钮；点击后通过**共享的** `musepi-gui-insert-text` window 事件（元素选择器/ContextPanel 同一通道）把选中文本送进输入框——不新建第二条插入通路。
+- **浏览器地址栏键盘导航**：`onAddressKeyDown`（`ManagedBrowserPane.tsx`）用纯函数 `stepSuggestionIndex`（`src/lib/suggestion-nav.ts`）处理 ↑/↓；两个方向都**穿过 -1（"未选中"）回绕**，保证输入中的地址始终一键可达；Enter 打开高亮建议。高亮索引与鼠标 hover 共用同一个 `suggestionIndex` 状态（同时驱动 `aria-selected` 与 `.gui-browser-suggestion--active` 样式），键盘与指针永远不会不一致。建议列表变化时重置索引（`useLayoutEffect` 监听 `addressValue`/`suggestionsOpen`）。
+
+## 23. 右面板拖宽 + 托管浏览器 `<webview>` 架构（2026-09-12）
+
+- **右面板拖宽**(`ContextPanel.tsx`,手柄 `.gui-pane-resize-x`)现走 `lib/use-pointer-drag.ts`(capture + 过 4px 阈值后 `preventDefault` + pointerId 过滤)。两条踩过的规则:(1) 释放回调**绝不能读 render 闭包里的 `width`**——它持有 pointerdown 那次 render 的值,于是旧的吸附用的是拖拽**起点**宽度,每次拖完都弹回;起止宽度改存 ref。(2) 手势期间必须加 `body.gui-resizing`——它是 `user-select: none`(gui-settings.css)与面板 220ms 宽度过渡逃逸(gui-chat.css)的唯一开关;不加则拖拽会选中沿途文本、且每一跟随帧都变成动画。吸附点(300/480/800)需 ≤24px 半径,否则其它宽度根本不可达。`app.tsx` `startResize` 的 `"right"` 分支是死码(只有侧栏在调),已删。
+- **托管浏览器已是 DOM 里的 `<webview>`,不再是原生视图**(2026-09-12 迁移):`ManagedBrowserHost`(在 `app.tsx` 挂载一次)为每个标签持有一个 `<webview partition="persist:musepi-managed-browser">`,并用 fixed 定位浮在面板槽位 rect 上;`ManagedBrowserPane` 只渲染 chrome 并上报该 rect。原生视图强加的一切都消失了:没有 `set-layout` 投影、没有遮挡探测(`lib/overlay-block.ts` 已删除)、没有 4px 让位——拖拽手柄、rail 悬浮提示、菜单与弹窗直接按普通 z-index/命中测试获胜,因为页面就在 DOM 里。
+- **两条实测约束决定了这里的形状,勿「顺手简化」掉**(Electron 43 隔离 harness):(1) **在 DOM 中移动元素会销毁 guest**(元素留在原地成为死壳),故所有 guest 挂在同一个稳定父节点下、永不 reparent/卸载——切标签只切 `opacity` + `pointer-events`。(2) **guest 处于 `display:none`/移出视口/零尺寸时 `capturePage()` 永不 settle**(`opacity:0` 与被遮挡仍可截),故隐藏只用 `opacity`:面板关闭时宿主仍按最后 rect 挂载,这正是 agent 无需展开面板也能对后台标签截图的原因。`electron/managed-browser.cjs` 另把截图限时 1.5s 并重试一次(冷启动 guest 可能错过首帧)。
+- **迁移后的所有权划分**:渲染端拥有标签元素、导航与选择;主进程拥有分区策略(权限 deny-all、`omp-file://` 预览)、9230 上的 loopback CDP 桥与活动台账。协议:渲染端→主进程 `guest-ready`/`guest-gone`/`active-tab`/`visibility`;主进程→渲染端 `create-tab`/`select-tab`/`close-tab`(另有收窄后的 `state` 与同意门)。`managed-browser.cjs` 只在**校验 session 属于托管分区之后**才用 `webContents.fromId` 绑定 guest —— 这道校验就是安全边界(被攻陷的渲染端不得把手边的任意 guest 塞进桥)。
+- **guest-ready 的判据是 `dom-ready`,不是 `did-attach`**:在 dom-ready 之前,webview 的所有方法(含 `getWebContentsId()`)都会抛「The WebView must be attached to the DOM and the dom-ready event emitted」(实测;失败形态是标签静默绑定不上,15s 后 `Target.createTarget` 超时)。`reportGuestReady` 幂等,宿主另在挂载时探测一次,覆盖「监听器注册前 guest 已 attach」的情况。
+- **浮动状态卡**:分支触发器必须**切换**(`setBranchOpen(v => !v)`)——`useFloatingMenu` 刻意跳过落在锚点上的 mousedown,并假定调用方自己的 click 负责关闭,所以只开不关的处理函数会让菜单无法从打开它的按钮收起。工作区更改的文件列表改用共享 `Reveal`,不再用裸 `{cond && …}`。
+- **测试基建坑(给 desktop-app 加组件测试前必读)**:本包用 happy-dom 做纯 DOM 探针;但**挂载 React** 的测试(`createRoot` + `act` + happy-dom)在**失败路径**会挂死 runner——Bun 1.3.14 不打印任何结果,进程 RSS 涨过 3GB 且永不退出(已复现两次;通过路径正常,约 1.6s)。desktop-app 的测试请限制在纯逻辑 + DOM 探针;浏览器面板改用隔离 Electron harness(配方:`/tmp/wvapp`,真 `managed-browser.cjs` + `MUSEPI_MANAGED_BROWSER_PORT` + 最小协议渲染端)或 §8 的 CDP 流程。
+- **`src` 每个元素只给一次**(别绑到会被导航更新的 URL state):guest 报回导航后宿主会重渲染,活绑的 `src` 会重设元素、重载页面并**顶掉在途加载**——表现就是那条红色 `ERR_ABORTED (-3) loading '<url>'` 横幅(已在 harness 复现)。`entrySrc(tabId, url)` 固定创建时的 URL 并带回归测试;之后的导航只走 `loadURL`/主进程。主进程另把「被顶掉」的加载视作「正在加载」而非错误。
+- **宿主的 rect 必须在「纯位移」时也复测**:ResizeObserver 只在槽位**尺寸**变化时触发,于是侧栏折叠、面板拖动、视图切换都会让宿主停在旧 rect(页面看起来变大/被裁,点击坐标整体错位)。现面板按 200ms 低频 + `transitionend`/resize/scroll 复测,且 `setPaneRect` 对相同 rect 直接返回,复测不产生重渲染。
+- **隐藏的宿主必须不可命中**:外层设 `pointerEvents: "none"` 时,标签层若写 `"auto"` 会**在 `none` 父级内部重新开启命中测试**(CSS 语义),透明 guest 便继续吞掉本属于起始页的点击。标签层的条件是 `visible && active`。
+- **视口预设缩放的是宿主要不是槽位盒子**(`lib/browser-viewport.ts` 的 `fitViewport`,openchamber parity):页面必须保留预设的**布局**宽度——只在槽位上写 `max-width` 会让 flex 把它收缩回面板宽度,于是「1440 预设 + 420 面板」跟没设预设一样(还被裁)。现由面板按内容区算出 `scale = min(1, 可用宽/预设宽)` 并随槽位 rect 一起上报,宿主按预设尺寸渲染 + `transform: scale(...)`。宿主放在 `z-index: 900`:高于最大化面板(850)、低于应用的弹层/菜单/提示(更高),所以最大化时页面不再被埋。
+- **面板宽度是「窗口相对预算」,且组合器底栏必须可换行**:拖拽上限 = 「面板右缘 − 会话列左缘 − 会话列最小宽(420px)」(拖拽起点量取;两条边在该手势期间固定),窗口 resize 时连持久化宽度一起重新钳制(`lib/panel-width.ts`)。输入框底栏(`.gui-composer-row`)必须允许 `flex-wrap`:两侧都是固定尺寸图标按钮,不换行时窄组合器下必然相撞;右组还需要 `min-width: 0`(chip 截断)与 `margin-left: auto`(换行后仍靠右)。

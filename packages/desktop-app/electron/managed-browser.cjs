@@ -1,21 +1,27 @@
 /**
  * Managed in-app browser (Proma 吸收, browser-controller.ts + browser-policy).
  *
- * The desktop GUI's right-pane browser becomes the SAME instance the agent
- * drives:
+ * The desktop GUI's right-pane browser is the SAME instance the agent
+ * drives, but the page itself is a DOM `<webview>` guest owned by the
+ * renderer:
  *
- * - Electron main owns one `WebContentsView` per tab on a persistent
+ * - The renderer mounts one `<webview>` per tab on an Electron-managed
  *   partition (`persist:musepi-managed-browser`), so login state survives
  *   restarts and is shared between the user and the agent — one instance,
- *   two operators.
- * - A loopback HTTP+WS server impersonates Chrome's CDP discovery endpoint
- *   (the relay bridge's emulation, minus extension/grouping machinery) so
- *   the browser tool's `connected` kind (`browser.gui` setting) attaches via
- *   plain `puppeteer.connect({ browserURL })` and drives the same views the
- *   user sees. Web contents and CDP never leave the main process.
- * - The renderer only projects layout (`managed-browser:set-layout`) and
- *   reads projected state; it never touches WebContents/CDP directly
- *   (Proma's `assertMainRenderer` posture).
+ *   two operators. Because the guest is a DOM element, menus, tooltips,
+ *   drag handles and overlays layer normally over it (no more "native view
+ *   always above the DOM").
+ * - Main keeps what the renderer cannot own: the partition policy (deny-all
+ *   permissions, `omp-file://` previews), the CDP bridge, and the sanitized
+ *   activity ledger. A loopback HTTP+WS server impersonates Chrome's CDP
+ *   discovery endpoint (the relay bridge's emulation, minus
+ *   extension/grouping machinery) so the browser tool's `connected` kind
+ *   (`browser.gui` setting) attaches via plain
+ *   `puppeteer.connect({ browserURL })` and drives the same guests the user
+ *   sees. Guests are bound by webContents id; CDP never leaves main.
+ * - Renderer → main: guest lifecycle (`guest-ready` / `guest-gone`), active
+ *   tab, panel visibility. Main → renderer: `create-tab` / `select-tab` /
+ *   `close-tab` (CDP-driven), consent prompts, projected state.
  *
  * Safety: loopback-only bind, ws Origin rejected (a web page cannot drive
  * the managed browser), permission requests denied outright, URL bar
@@ -25,7 +31,7 @@
  */
 "use strict";
 
-const { BrowserWindow, ipcMain, net, protocol, session: electronSession, shell, WebContentsView } = require("electron");
+const { ipcMain, net, protocol, session: electronSession, webContents } = require("electron");
 const http = require("node:http");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
@@ -44,6 +50,13 @@ const INELIGIBLE_URL = /^(chrome|devtools|edge|view-source|chrome-extension|chro
 const LOCAL_PREVIEW_SCHEME = "omp-file";
 /** Timeout for the renderer's risky-navigation consent dialog (auto-deny). */
 const CONFIRM_TIMEOUT_MS = 30_000;
+/** Renderer guest-attach deadline for a main-initiated tab (10s renderer-side
+ *  attach timeout + margin); a miss fails the CDP call instead of hanging. */
+const GUEST_READY_TIMEOUT_MS = 15_000;
+/** capturePage() never settles for an uncomposited guest — cap the wait. */
+const CAPTURE_TIMEOUT_MS = 1_500;
+/** Gap before the single screenshot retry (cold guest first-frame miss). */
+const CAPTURE_RETRY_MS = 220;
 
 // Must run before app ready (main.cjs requires this module at top level).
 // registerSchemesAsPrivileged can only be called once per process.
@@ -182,11 +195,15 @@ class WsFrameDecoder {
 	}
 }
 
-/** Reverse of tabTargetId/pageTargetId; null for foreign ids. */
+/** Reverse of tabTargetId/pageTargetId; null for foreign ids.
+ *
+ *  Tab ids are opaque: main mints numeric ones for tabs it creates (agent
+ *  lanes) and adopts the renderer's own ids (`local-N`) for tabs the user
+ *  opened — the id only has to round-trip through `this.tabs`. */
 function parseTargetId(targetId) {
-	const match = /^(TAB|PAGE)(\d+)$/.exec(String(targetId));
+	const match = /^(TAB|PAGE)(.+)$/.exec(String(targetId));
 	if (!match) return null;
-	return { kind: match[1] === "TAB" ? "tab" : "page", tabId: Number(match[2]) };
+	return { kind: match[1] === "TAB" ? "tab" : "page", tabId: match[2] };
 }
 
 /** Strip credentials from a URL for display/state (never leak user:pass). */
@@ -235,123 +252,59 @@ function normalizeAddressBarUrl(input) {
 	}
 }
 
-/** One managed tab: an Electron WebContentsView + its CDP debugger session. */
-/**
- * Element-picker page script (injected via executeJavaScript). Hover shows a
- * highlight overlay; click captures the target's unique CSS selector; Esc
- * cancels. Resolves with the selector string (or null on cancel). Cleanup
- * is stashed on window.__ompPickerCleanup so a host-side timeout can sweep
- * it even when the promise never settles.
- */
-const PICK_ELEMENT_SCRIPT = `(() => {
-	if (window.__ompPickerActive) return null;
-	window.__ompPickerActive = true;
-	let overlay = null;
-	const cleanup = () => {
-		window.__ompPickerActive = false;
-		document.removeEventListener("mousemove", onMove, true);
-		document.removeEventListener("mouseout", onOut, true);
-		document.removeEventListener("click", onClick, true);
-		document.removeEventListener("keydown", onKey, true);
-		if (overlay) { overlay.remove(); overlay = null; }
-		window.__ompPickerCleanup = null;
-	};
-	window.__ompPickerCleanup = cleanup;
-	const showOverlay = (el) => {
-		if (!overlay) {
-			overlay = document.createElement("div");
-			overlay.style.cssText = "position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #8b5cf6;background:rgba(139,92,246,.14);border-radius:2px;transition:left 90ms ease,top 90ms ease,width 90ms ease,height 90ms ease;";
-			document.documentElement.appendChild(overlay);
-		}
-		const r = el.getBoundingClientRect();
-		overlay.style.display = "block";
-		overlay.style.left = r.left + "px";
-		overlay.style.top = r.top + "px";
-		overlay.style.width = r.width + "px";
-		overlay.style.height = r.height + "px";
-	};
-	const cssPath = (el) => {
-		if (!(el instanceof Element) || el === document.documentElement || el === document.body) return null;
-		if (el.id) return "#" + CSS.escape(el.id);
-		const parts = [];
-		let node = el;
-		while (node && node.nodeType === 1 && node !== document.body && node !== document.documentElement) {
-			if (node.id) { parts.unshift("#" + CSS.escape(node.id)); break; }
-			let sel = node.tagName.toLowerCase();
-			const cls = Array.from(node.classList).slice(0, 2).map((c) => "." + CSS.escape(c)).join("");
-			if (cls) sel += cls;
-			const sameTag = Array.from(node.parentElement ? node.parentElement.children : []).filter((s) => s.tagName === node.tagName);
-			if (sameTag.length > 1) sel += ":nth-child(" + (sameTag.indexOf(node) + 1) + ")";
-			parts.unshift(sel);
-			node = node.parentElement;
-		}
-		return parts.join(" > ");
-	};
-	const onMove = (e) => {
-		const el = e.target;
-		if (el && el.nodeType === 1 && el !== document.documentElement && el !== document.body) showOverlay(el);
-	};
-	const onOut = () => { if (overlay) overlay.style.display = "none"; };
-	const onClick = (e) => {
-		e.preventDefault();
-		e.stopPropagation();
-		const selector = cssPath(e.target);
-		cleanup();
-		if (window.__ompPickerResolve) { window.__ompPickerResolve(selector); window.__ompPickerResolve = null; }
-	};
-	const onKey = (e) => {
-		if (e.key === "Escape") {
-			cleanup();
-			if (window.__ompPickerResolve) { window.__ompPickerResolve(null); window.__ompPickerResolve = null; }
-		}
-	};
-	document.addEventListener("mousemove", onMove, true);
-	document.addEventListener("mouseout", onOut, true);
-	document.addEventListener("click", onClick, true);
-	document.addEventListener("keydown", onKey, true);
-	return new Promise((resolve) => {
-		window.__ompPickerResolve = resolve;
+/** Minimal deferred (`Promise.withResolvers()` without a runtime floor). */
+function deferred() {
+	let resolve;
+	const promise = new Promise((r) => {
+		resolve = r;
 	});
-})()`;
+	return { promise, resolve };
+}
 
+/**
+ * One managed tab: metadata + the renderer-owned `<webview>` guest it binds
+ * to once the renderer reports the element attached (`guest-ready`). Main
+ * never owns the view — only the guest webContents' CDP debugger session and
+ * the partition policy that governs it.
+ */
 class ManagedTab {
-	constructor(controller, url, openedByAgent) {
+	constructor(controller, url, openedByAgent, explicitId) {
 		this.controller = controller;
-		this.id = ++controller.tabSeq;
+		/** Opaque tab id: main mints numeric ones for the tabs it creates
+		 *  (agent lanes, prewarm), the renderer's own (`local-N`) for tabs the
+		 *  user opened. It only has to round-trip through `tabs`. */
+		this.id = explicitId ?? ++controller.tabSeq;
 		this.openedByAgent = openedByAgent;
 		this.url = "about:blank";
 		this.title = "";
 		this.loading = false;
-		this.visible = false;
-		this.bounds = null;
-		this.lastLayoutRevision = 0;
-		/** page-favicon-updated first URL; null until the page declares one. */
-		this.favicon = null;
-		/** <meta name="theme-color"> (#rrggbb); null when absent or non-hex. */
-		this.themeColor = null;
-		this.view = new WebContentsView({
-			webPreferences: {
-				partition: PARTITION,
-				nodeIntegration: false,
-				contextIsolation: true,
-				sandbox: true,
-				// A hidden, idle view's renderer is background-throttled and
-				// never becomes CDP-debuggable until a navigation forces it
-				// to run. Keep it alive so the agent can drive the tab even
-				// before the panel projects a visible layout.
-				backgroundThrottling: false,
-			},
-		});
-		const wc = this.view.webContents;
-		// The initial about:blank document does not boot a debuggable
-		// renderer on its own; loadURL forces it up.
-		void wc.loadURL("about:blank").catch(() => {});
+		/** Guest webContents; null until the renderer's element attaches. */
+		this.wc = null;
+		/** Guest-ready handshake: resolves with this tab on bind, null when the
+		 *  tab dies (or is disposed) first. */
+		this.guestReady = deferred();
+		/** CDP debugger attached (lazily, after the initial load finishes). */
+		this.cdpOk = false;
+	}
+
+	/**
+	 * Bind the renderer's guest. The session check is the security boundary:
+	 * a webContents outside the managed partition must never join the CDP
+	 * bridge (the renderer could otherwise hand us an arbitrary guest).
+	 */
+	bindGuest(wc) {
+		if (!wc || wc.isDestroyed()) return false;
+		if (wc.session !== electronSession.fromPartition(PARTITION)) return false;
+		if (this.wc && this.wc !== wc) this.detachDebugger();
+		this.wc = wc;
 		wc.setWindowOpenHandler(({ url: targetUrl }) => {
 			// target=_blank / window.open become managed tabs instead of
 			// escaping the app (deny would silently drop user clicks).
 			// User-initiated opens (window.open via click) are NOT agent tabs;
 			// only Target.createTarget from the CDP side sets openedByAgent=true.
-			if (/^https?:/i.test(targetUrl)) controller.createTab(targetUrl, false);
+			if (/^https?:/i.test(targetUrl)) {
+				void this.controller.createTab(targetUrl, false).catch(() => {});
+			}
 			return { action: "deny" };
 		});
 		wc.on("will-navigate", (event, targetUrl) => {
@@ -360,53 +313,49 @@ class ManagedTab {
 		wc.on("did-start-loading", () => {
 			this.loading = true;
 			this.refreshState();
-			controller.notifyLifecycle(this);
+			this.controller.notifyLifecycle(this);
 		});
 		wc.on("did-stop-loading", () => {
 			this.loading = false;
 			this.refreshState();
-			controller.notifyLifecycle(this);
-			controller.markActivityComplete(this);
+			this.controller.notifyLifecycle(this);
+			this.controller.markActivityComplete(this);
 		});
 		wc.on("did-navigate", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
-			controller.notifyLifecycle(this);
+			this.controller.notifyLifecycle(this);
 		});
 		wc.on("did-navigate-in-page", (_e, targetUrl) => {
 			this.refreshState(targetUrl);
-			controller.notifyLifecycle(this);
+			this.controller.notifyLifecycle(this);
 		});
 		wc.on("page-title-updated", (_e, title) => {
 			this.title = title;
-			controller.notifyLifecycle(this);
-		});
-		wc.on("page-favicon-updated", (_e, favicons) => {
-			this.favicon = favicons && favicons.length > 0 ? favicons[0] : null;
-			controller.notifyLifecycle(this);
-		});
-		wc.on("did-change-theme-color", (_e, color) => {
-			this.themeColor = typeof color === "string" ? color : null;
-			controller.notifyLifecycle(this);
+			this.controller.notifyLifecycle(this);
 		});
 		wc.on("destroyed", () => {
-			controller.handleTabDestroyed(this);
+			this.guestReady.resolve(null);
+			this.controller.handleTabDestroyed(this);
 		});
-		this.view.setVisible(false);
-		controller.owner.contentView.addChildView(this.view);
 		// CDP: the debugger is attached LAZILY after the renderer finishes its
 		// initial load (attaching to a booting renderer wedges it — every
 		// command hangs until a navigation). whenDebuggerReady() bridges the
 		// remaining race for clients that attach mid-load.
-		this.cdpOk = false;
 		wc.once("did-finish-load", () => this.ensureDebugger());
-		if (url && url !== "about:blank") void this.navigate(url);
+		// `did-attach` can reach main after a fast local page already
+		// finished loading — attach now instead of waiting for an event that
+		// will never fire again.
+		if (!wc.isLoading()) this.ensureDebugger();
+		this.refreshState();
+		this.guestReady.resolve(this);
+		return true;
 	}
 
 	/** Attach the CDP debugger on demand; true once commands can flow. */
 	ensureDebugger() {
 		if (this.cdpOk) return true;
-		const wc = this.view.webContents;
-		if (wc.isDestroyed()) return false;
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return false;
 		try {
 			wc.debugger.attach("1.3");
 			this.cdpOk = true;
@@ -423,34 +372,60 @@ class ManagedTab {
 		}
 	}
 
+	detachDebugger() {
+		const wc = this.wc;
+		if (wc && !wc.isDestroyed()) {
+			try {
+				if (wc.debugger.isAttached()) wc.debugger.detach();
+			} catch {
+				// already detached
+			}
+		}
+		this.cdpOk = false;
+	}
+
+	/** True once the renderer's guest is bound (waits out the attach report). */
+	async waitForGuest(timeoutMs = GUEST_READY_TIMEOUT_MS) {
+		if (this.wc && !this.wc.isDestroyed()) return true;
+		let timer;
+		try {
+			const bound = await Promise.race([
+				this.guestReady.promise.then((tab) => tab !== null),
+				new Promise((resolve) => {
+					timer = setTimeout(() => resolve(false), timeoutMs);
+				}),
+			]);
+			return bound === true && this.wc !== null && !this.wc.isDestroyed();
+		} finally {
+			clearTimeout(timer);
+		}
+	}
+
 	/** Resolve once the debugger is attachable (waits out the initial load). */
-	whenDebuggerReady(timeoutMs = 4000) {
-		if (this.cdpOk) return Promise.resolve(true);
-		const wc = this.view.webContents;
-		if (wc.isDestroyed()) return Promise.resolve(false);
+	async whenDebuggerReady(timeoutMs = 4000) {
+		if (this.cdpOk) return true;
+		if ((!this.wc || this.wc.isDestroyed()) && !(await this.waitForGuest(timeoutMs))) return false;
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return false;
 		if (!wc.isLoading()) {
 			this.ensureDebugger();
-			return Promise.resolve(this.cdpOk);
+			return this.cdpOk;
 		}
-		return new Promise((resolve) => {
+		return await new Promise((resolve) => {
 			const done = () => {
 				clearTimeout(timer);
 				wc.removeListener("did-finish-load", done);
 				this.ensureDebugger();
 				resolve(this.cdpOk);
 			};
-			const timer = setTimeout(() => {
-				wc.removeListener("did-finish-load", done);
-				this.ensureDebugger();
-				resolve(this.cdpOk);
-			}, timeoutMs);
+			const timer = setTimeout(done, timeoutMs);
 			wc.once("did-finish-load", done);
 		});
 	}
 
 	refreshState(navigatedUrl) {
-		const wc = this.view.webContents;
-		if (wc.isDestroyed()) return;
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return;
 		if (navigatedUrl) this.url = redactUrl(navigatedUrl);
 		else this.url = redactUrl(wc.getURL()) || this.url;
 		this.title = wc.getTitle() || this.title;
@@ -459,91 +434,35 @@ class ManagedTab {
 	async navigate(url) {
 		const target = normalizeAddressBarUrl(url);
 		if (!target) return { ok: false, error: "Only http/https or omp-file:// URLs are allowed" };
+		const wc = this.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
 		try {
-			await this.view.webContents.loadURL(target);
+			await wc.loadURL(target);
 			return { ok: true, url: target };
 		} catch (error) {
-			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+			const message = error instanceof Error ? error.message : String(error);
+			// ERR_ABORTED (-3) is not a failure: the load was superseded (redirect
+			// chain, a newer navigation winning) and the page IS loading. Reporting
+			// it put a red banner over a perfectly good page.
+			if (/ERR_ABORTED/.test(message)) return { ok: true, url: target };
+			return { ok: false, error: message };
 		}
 	}
 
-	async goBack() {
-		const wc = this.view.webContents;
-		if (wc.navigationHistory?.canGoBack()) wc.navigationHistory.goBack();
-		else if (wc.canGoBack()) wc.goBack();
-	}
-
-	async goForward() {
-		const wc = this.view.webContents;
-		if (wc.navigationHistory?.canGoForward()) wc.navigationHistory.goForward();
-		else if (wc.canGoForward()) wc.goForward();
-	}
-
-	async reload() {
-		this.view.webContents.reload();
-	}
-
-	/** Hard reload: bypass caches (ReloadIgnoringCache). */
-	async hardReload() {
-		const wc = this.view.webContents;
-		if (wc.isDestroyed()) return;
-		if (wc.reloadIgnoringCache) wc.reloadIgnoringCache();
-		else wc.reload();
-	}
-
-	/**
-	 * Element picker: inject a capture-mode script (hover highlight + click
-	 * to select + Esc to cancel). resolve with the unique CSS selector, or
-	 * null on cancel/timeout. The script is self-cleaning — a timeout leaves
-	 * `__ompPickerCleanup` behind so the next pick (or the cleanup pass in
-	 * `pickElement`) removes its overlay/listeners.
-	 */
-	async pickElement(timeoutMs = 60000) {
-		const wc = this.view.webContents;
-		if (wc.isDestroyed()) return { cancelled: true };
-		let timer;
-		try {
-			const result = await Promise.race([
-				wc.executeJavaScript(PICK_ELEMENT_SCRIPT, true).then(selector => ({
-					selector: typeof selector === "string" && selector.length > 0 ? selector : null,
-				})),
-				new Promise(resolve => {
-					timer = setTimeout(() => resolve({ cancelled: true }), timeoutMs);
-				}),
-			]);
-			return result;
-		} catch {
-			return { cancelled: true };
-		} finally {
-			clearTimeout(timer);
-			// Sweep any picker state left behind (timeout path).
+	/** Release the guest. The renderer unmounts its element on the matching
+	 *  `close-tab` push; closing here also covers tabs whose renderer is gone. */
+	dispose() {
+		this.guestReady.resolve(null);
+		this.detachDebugger();
+		const wc = this.wc;
+		this.wc = null;
+		if (wc && !wc.isDestroyed()) {
 			try {
-				if (!wc.isDestroyed()) {
-					await wc
-						.executeJavaScript(
-							`if (window.__ompPickerCleanup) { window.__ompPickerCleanup(); window.__ompPickerCleanup = null; }`,
-							true,
-						)
-						.catch(() => {});
-				}
+				wc.close();
 			} catch {
-				// webContents gone — nothing to sweep
+				// already closing
 			}
 		}
-	}
-
-	dispose() {
-		try {
-			if (this.view.webContents.debugger.isAttached()) this.view.webContents.debugger.detach();
-		} catch {
-			// already destroyed
-		}
-		try {
-			this.controller.owner.contentView.removeChildView(this.view);
-		} catch {
-			// owner gone
-		}
-		if (!this.view.webContents.isDestroyed()) this.view.webContents.close();
 	}
 }
 
@@ -559,8 +478,10 @@ class ManagedBrowserController {
 		this.ledger = [];
 		this.server = null;
 		this.port = DEFAULT_PORT;
-		this.layoutRevision = 0;
 		this.partitionGuarded = false;
+		/** Renderer-reported browser-pane visibility (agent activity on a
+		 *  hidden tab must surface the pane). */
+		this.panelVisible = false;
 		/** Dedicated tab the agent drives (browser.gui); user tabs untouched. */
 		this.agentTabId = null;
 		/** In-flight risky-navigation consent request ({requestId, timer, resolve}). */
@@ -573,26 +494,35 @@ class ManagedBrowserController {
 	/**
 	 * Re-point the controller at the current main window. The GUI can
 	 * recreate the window (show-main-window path: pet/tray reopen after a
-	 * close), and the old owner stays destroyed — a stale `this.owner`
-	 * makes the next `createTab()` throw "Object has been destroyed" at
-	 * `owner.contentView.addChildView` (the managed-browser:navigate crash
-	 * the user hit). Same window: no-op; a different window drops the old
-	 * tabs and re-arms the closed handler.
+	 * close), and the old owner stays destroyed — a stale `this.owner` made
+	 * the old native-view code throw "Object has been destroyed" (the
+	 * managed-browser:navigate crash the user hit). Same window: no-op; a
+	 * different window drops the old tab records and re-arms the handlers.
 	 */
 	setOwner(ownerWindow) {
 		if (this.owner === ownerWindow) return;
+		this.releaseTabs();
+		this.owner = ownerWindow;
+		this.owner.on("closed", () => {
+			this.releaseTabs();
+			this.closeServer();
+		});
+		// A main-frame load replaces the whole renderer: every guest is a DOM
+		// element of the page being torn down, so the old records can never
+		// bind again. Reset before the fresh page reports its restored tabs
+		// (`guest-ready` then rebuilds clean records with live guests).
+		this.owner.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
+			if (isMainFrame && !isInPlace) this.releaseTabs();
+		});
+	}
+
+	/** Drop every tab record without renderer pushes — the owner window (and
+	 *  with it every guest) is gone, so there is nobody left to notify. */
+	releaseTabs() {
 		for (const tab of [...this.tabs.values()]) tab.dispose();
 		this.tabs.clear();
 		this.activeTabId = null;
 		this.agentTabId = null;
-		this.owner = ownerWindow;
-		this.owner.on("closed", () => {
-			for (const tab of [...this.tabs.values()]) tab.dispose();
-			this.tabs.clear();
-			this.activeTabId = null;
-			this.agentTabId = null;
-			this.closeServer();
-		});
 	}
 
 	async start(ownerWindow) {
@@ -634,174 +564,162 @@ class ManagedBrowserController {
 
 	// ── tabs ─────────────────────────────────────────────────────────────
 
-	createTab(url = "about:blank", openedByAgent = false) {
+	/** Create a tab: mint the record, ask the renderer to mount the guest,
+	 *  then wait for its `guest-ready` report. Resolves to null when the tab
+	 *  could not be created (no owner, guest never attached) — callers turn
+	 *  that into a CDP error rather than a silent no-op. */
+	async createTab(url = "about:blank", openedByAgent = false) {
 		if (!this.owner || this.owner.isDestroyed()) return null;
 		const tab = new ManagedTab(this, url, openedByAgent);
-		this.tabs.set(String(tab.id), tab);
-		if (!this.activeTabId) this.activeTabId = String(tab.id);
+		const id = String(tab.id);
+		this.tabs.set(id, tab);
+		if (!this.activeTabId) this.activeTabId = id;
+		this.recordActivity(tab, "open", url, "opened");
+		this.sendToRenderer("managed-browser:create-tab", { tabId: id, url });
+		// The agent's work must stay visible: creating an agent tab selects it
+		// (and pushes agentActivity so the closed pane re-opens).
+		if (openedByAgent) this.selectTab(id, { agentActivity: true });
+		else this.emitState({});
+		if (!(await tab.waitForGuest())) {
+			// No guest ever attached: drop the record so `/json/list` and
+			// Target.* never advertise a target that cannot be driven.
+			tab.dispose();
+			this.handleTabDestroyed(tab);
+			return null;
+		}
 		void this.announceTabCreated(tab);
-		this.recordActivity(tab, "open", tab.url, "opened");
-		this.emitState({ agentActivity: openedByAgent });
-		// The agent's work must stay visible: creating an agent tab shows it.
-		if (openedByAgent) this.activateDisplayTab(tab);
 		return tab;
 	}
 
 	/** The dedicated agent tab; creates it on first use. */
-	ensureAgentTab() {
+	async ensureAgentTab() {
 		const existing = this.agentTabId ? this.tabs.get(this.agentTabId) : null;
 		if (existing) return existing;
-		const tab = this.createTab("about:blank", true);
+		const tab = await this.createTab("about:blank", true);
+		if (!tab) return null;
 		this.agentTabId = String(tab.id);
 		return tab;
 	}
 
-	ensureTab(url = "about:blank", openedByAgent = false) {
+	async ensureTab(url = "about:blank", openedByAgent = false) {
 		if (!this.owner || this.owner.isDestroyed()) return null;
-		if (this.tabs.size > 0) return this.tabs.get(this.activeTabId);
-		return this.createTab(url, openedByAgent);
+		if (this.tabs.size > 0) return this.tabs.get(this.activeTabId) ?? null;
+		return await this.createTab(url, openedByAgent);
+	}
+
+	/**
+	 * Renderer reports a mounted guest (`did-attach`). Binds it, or adopts
+	 * the tab id outright — tabs the user opened are minted renderer-side
+	 * (`local-N`) and main only ever learns about them here.
+	 */
+	handleGuestReady(input) {
+		const tabId = typeof input?.tabId === "string" && input.tabId ? input.tabId : null;
+		const webContentsId = Number(input?.webContentsId);
+		if (!tabId || !Number.isInteger(webContentsId)) return { ok: false };
+		const wc = webContents.fromId(webContentsId);
+		if (!wc) return { ok: false };
+		let tab = this.tabs.get(tabId);
+		const adopted = !tab;
+		if (!tab) {
+			tab = new ManagedTab(this, "about:blank", false, tabId);
+			this.tabs.set(tabId, tab);
+			if (!this.activeTabId) this.activeTabId = tabId;
+		}
+		if (!tab.bindGuest(wc)) {
+			// Foreign partition — never bridge an arbitrary guest into CDP.
+			if (adopted) {
+				this.tabs.delete(tabId);
+				if (this.activeTabId === tabId) this.activeTabId = null;
+			}
+			return { ok: false };
+		}
+		if (adopted) void this.announceTabCreated(tab);
+		return { ok: true };
+	}
+
+	/** Renderer reports a guest gone (element unmounted, crash, tab closed):
+	 *  drop the record, its CDP targets and its ledger rows. */
+	handleGuestGone(tabId) {
+		const id = String(tabId ?? "");
+		const tab = this.tabs.get(id);
+		if (tab) {
+			tab.dispose();
+			this.handleTabDestroyed(tab);
+		}
+		if (this.ledger.some((entry) => entry.tabId === id)) {
+			this.ledger = this.ledger.filter((entry) => entry.tabId !== id);
+			this.emitState({});
+		}
+		return { ok: true };
 	}
 
 	handleTabDestroyed(tab) {
-		if (!this.tabs.has(String(tab.id))) return;
-		this.tabs.delete(String(tab.id));
-		if (this.agentTabId === String(tab.id)) this.agentTabId = null;
-		if (this.activeTabId === String(tab.id)) {
+		const id = String(tab.id);
+		if (!this.tabs.has(id)) return;
+		this.tabs.delete(id);
+		if (this.agentTabId === id) this.agentTabId = null;
+		if (this.activeTabId === id) {
 			const next = [...this.tabs.values()][0];
 			this.activeTabId = next ? String(next.id) : null;
-			if (next) this.activateDisplayTab(next);
 		}
 		this.announceTabDestroyed(tab);
 		this.emitState({});
 	}
 
-	selectTab(tabId) {
+	/** Make `tabId` the active tab (CDP `Target.activateTarget`, new agent
+	 *  tabs). The renderer owns selection; this pushes the intent to it. */
+	selectTab(tabId, extra) {
 		const tab = this.tabs.get(String(tabId));
 		if (!tab) return null;
-		this.activateDisplayTab(tab);
-		this.emitState({});
+		const id = String(tab.id);
+		this.activeTabId = id;
+		this.sendToRenderer("managed-browser:select-tab", { tabId: id });
+		this.emitState(extra ?? {});
 		return this.state();
 	}
 
-	activateDisplayTab(tab) {
-		for (const other of this.tabs.values()) {
-			if (other !== tab && other.visible) {
-				other.visible = false;
-				other.view.setVisible(false);
-			}
-		}
-		this.activeTabId = String(tab.id);
-		if (tab.bounds) {
-			tab.view.setBounds(tab.bounds);
-			tab.view.setVisible(true);
-			tab.visible = true;
-		}
-	}
-
+	/** Close a tab (CDP `Target.closeTarget`, stopOp). The renderer unmounts
+	 *  the element on the push; closing the guest here also covers a renderer
+	 *  that is already gone. */
 	closeTab(tabId) {
 		const tab = this.tabs.get(String(tabId));
 		if (!tab) return null;
+		this.sendToRenderer("managed-browser:close-tab", { tabId: String(tab.id) });
 		tab.dispose();
 		this.handleTabDestroyed(tab);
 		return this.state();
 	}
 
 	closeAll() {
-		for (const tab of [...this.tabs.values()]) tab.dispose();
+		for (const tab of [...this.tabs.values()]) {
+			this.sendToRenderer("managed-browser:close-tab", { tabId: String(tab.id) });
+			tab.dispose();
+			this.announceTabDestroyed(tab);
+		}
 		this.tabs.clear();
 		this.activeTabId = null;
+		this.agentTabId = null;
 		this.emitState({});
 	}
 
-	// ── renderer-facing state + layout ───────────────────────────────────
+	// ── renderer-facing state ────────────────────────────────────────────
 
+	/** Projected state: the CDP port and the ledger's latest entry. Tab
+	 *  metadata stays in the renderer — it owns the elements. */
 	state() {
-		const active = this.activeTabId ? this.tabs.get(this.activeTabId) : null;
 		return {
 			port: this.server ? this.port : null,
-			activeTabId: this.activeTabId,
-			tabs: [...this.tabs.values()].map((tab) => ({
-				id: String(tab.id),
-				url: tab.url,
-				title: tab.title || "新建标签页",
-				loading: tab.loading,
-				openedByAgent: tab.openedByAgent,
-				favicon: tab.favicon,
-				themeColor: tab.themeColor,
-			})),
-			canGoBack: active ? this.canGoBack(active) : false,
-			canGoForward: active ? this.canGoForward(active) : false,
 			activity: this.ledger[this.ledger.length - 1] ?? null,
 		};
 	}
 
-	canGoBack(tab) {
-		try {
-			const wc = tab.view.webContents;
-			return wc.navigationHistory?.canGoBack() ?? wc.canGoBack();
-		} catch {
-			return false;
-		}
-	}
-
-	canGoForward(tab) {
-		try {
-			const wc = tab.view.webContents;
-			return wc.navigationHistory?.canGoForward() ?? wc.canGoForward();
-		} catch {
-			return false;
-		}
-	}
-
 	emitState(extra) {
-		if (!this.owner || this.owner.isDestroyed()) return;
-		const payload = { ...this.state(), ...extra };
-		this.owner.webContents.send("managed-browser:state", payload);
+		this.sendToRenderer("managed-browser:state", { ...this.state(), ...extra });
 	}
 
-	/** Renderer-projected layout: the slot's CSS rect (× zoom) becomes the
-	 *  native view bounds; stale revisions are dropped (React cleanup and a
-	 *  new slot's IPC can interleave). */
-	applyLayout({ tabId, bounds, visible, revision }) {
-		if (!Number.isSafeInteger(revision) || revision <= this.layoutRevision) return;
-		this.layoutRevision = revision;
-		const tab = tabId ? this.tabs.get(String(tabId)) : this.tabs.get(this.activeTabId);
-		if (!tab) return;
-		const width = Number(bounds?.width) || 0;
-		const height = Number(bounds?.height) || 0;
-		// Blank tabs (about:blank, no URL yet) render a React start page in
-		// the slot; hiding the native view lets it show through. Real pages
-		// project normally.
-		const isBlank = !tab.url || tab.url === "about:blank";
-		// `visible` (renderer-projected: slot mounted, no blocking overlay,
-		// real URL) is the authority. owner.isVisible() is NOT gated on: a
-		// window that is merely occluded/minimized mid-transition must not
-		// leave the view permanently hidden — the next projection re-shows
-		// it (user: 内置浏览器还是不显示内容, blank white slot).
-		const show = !isBlank && visible && width > 4 && height > 4 && this.owner && !this.owner.isDestroyed();
-		const zoom = this.owner?.webContents.getZoomFactor() ?? 1;
-		const adjusted = {
-			x: Math.round((Number(bounds?.x) || 0) * zoom),
-			y: Math.round((Number(bounds?.y) || 0) * zoom),
-			width: Math.round(width * zoom),
-			height: Math.round(height * zoom),
-		};
-		for (const other of this.tabs.values()) {
-			if (other !== tab && other.visible) {
-				other.visible = false;
-				other.view.setVisible(false);
-			}
-		}
-		if (show && (!tab.bounds || Object.entries(adjusted).some(([key, value]) => tab.bounds?.[key] !== value))) {
-			tab.view.setBounds(adjusted);
-			tab.bounds = adjusted;
-		}
-		tab.view.setVisible(show);
-		tab.visible = show;
-		if (show && this.activeTabId !== String(tab.id)) {
-			this.activeTabId = String(tab.id);
-			this.emitState({});
-		}
+	sendToRenderer(channel, payload) {
+		if (!this.owner || this.owner.isDestroyed()) return;
+		this.owner.webContents.send(channel, payload);
 	}
 
 	// ── activity ledger (sanitized — never page text, cookies or scripts) ─
@@ -930,16 +848,18 @@ class ManagedBrowserController {
 	stopOp(tabId) {
 		const tab = tabId ? this.tabs.get(String(tabId)) : this.tabs.get(this.activeTabId);
 		if (!tab) return null;
-		const wc = tab.view.webContents;
-		if (!wc.isDestroyed()) {
+		const wc = tab.wc;
+		if (wc && !wc.isDestroyed()) {
 			try {
 				wc.stop();
 			} catch {
 				// already stopped/destroyed
 			}
 		}
-		if (tab.openedByAgent) this.closeTab(String(tab.id));
+		// Mark before closing: the close path drops the tab record and its
+		// ledger rows, so a terminal status must land on the entry first.
 		this.markOpStatus(String(tab.id), "canceled");
+		if (tab.openedByAgent) this.closeTab(String(tab.id));
 		this.emitState({});
 		return this.state();
 	}
@@ -964,14 +884,6 @@ class ManagedBrowserController {
 		} catch {
 			return { ok: false };
 		}
-	}
-
-	/** Open a URL in the user's default system browser (shell.openExternal). */
-	openExternal(url) {
-		const target = String(url || "").trim();
-		if (!/^https?:/i.test(target)) return { ok: false };
-		void shell.openExternal(target).catch(() => {});
-		return { ok: true };
 	}
 
 	// ── CDP lifecycle announcements ──────────────────────────────────────
@@ -1166,9 +1078,15 @@ class ManagedBrowserController {
 		socket.on("error", () => this.handleClose(conn));
 		// The browser tool expects at least one page target on connect
 		// (pickElectronTarget / browser.pages()); mirror a real Chrome that
-		// always has a tab. The debugger attaches once the renderer is up
-		// (whenDebuggerReady in the attach paths).
-		this.ensureTab("about:blank", false);
+		// always has a tab. The renderer mounts the guest and reports back —
+		// a miss is not fatal (the agent lane creates its own tab through
+		// ManagedBrowser.ensureAgentTab) but must not pass silently.
+		void this.ensureTab("about:blank", false).catch((error) => {
+			console.warn(
+				"[managed-browser] prewarm tab failed:",
+				error instanceof Error ? error.message : error,
+			);
+		});
 	}
 
 	handleClose(conn) {
@@ -1311,7 +1229,11 @@ class ManagedBrowserController {
 					this.replyError(conn, msg, "Navigation blocked by the user");
 					return;
 				}
-				const tab = this.createTab(url, true);
+				const tab = await this.createTab(url, true);
+				if (!tab) {
+					this.replyError(conn, msg, "The managed browser did not provide a tab");
+					return;
+				}
 				// The agent's working tab is the one it created last.
 				this.agentTabId = String(tab.id);
 				this.recordActivity(tab, "navigate", url, "dispatched");
@@ -1326,10 +1248,7 @@ class ManagedBrowserController {
 			}
 			case "Target.activateTarget": {
 				const parsed = typeof msg.params?.targetId === "string" ? parseTargetId(msg.params.targetId) : null;
-				if (parsed) {
-					const tab = this.tabs.get(String(parsed.tabId));
-					if (tab) this.activateDisplayTab(tab);
-				}
+				if (parsed) this.selectTab(String(parsed.tabId));
 				this.reply(conn, msg, {});
 				return;
 			}
@@ -1360,7 +1279,11 @@ class ManagedBrowserController {
 				// Daemon-side contract (tab-supervisor requestAgentTabTargetId):
 				// return the DEDICATED agent tab's page target id, creating it
 				// on first use so the agent never adopts the user's tab.
-				const tab = this.ensureAgentTab();
+				const tab = await this.ensureAgentTab();
+				if (!tab) {
+					this.replyError(conn, msg, "The managed browser did not provide an agent tab");
+					return;
+				}
 				this.reply(conn, msg, { targetId: pageTargetId(tab.id) });
 				return;
 			}
@@ -1428,25 +1351,59 @@ class ManagedBrowserController {
 			// Electron's webContents debugger does not answer
 			// Page.captureScreenshot (puppeteer's screenshot path times
 			// out); capturePage() is the supported route (Proma parity).
-			try {
-				const image = await tab.view.webContents.capturePage();
-				const params = msg.params ?? {};
-				const format = params.format === "jpeg" ? "jpeg" : "png";
-				const quality = typeof params.quality === "number" ? params.quality : 80;
-				const buffer = format === "jpeg" ? image.toJPEG(quality) : image.toPNG();
-				this.reply(conn, msg, { data: buffer.toString("base64") });
-			} catch (error) {
+			// On a guest with no composited surface it never settles, and a
+			// freshly attached guest can miss its first frame — so the wait is
+			// capped AND retried once: puppeteer still gets an error instead of
+			// hanging, but a cold-start screenshot succeeds.
+			const wc = tab.wc;
+			if (!wc || wc.isDestroyed()) {
+				this.replyError(conn, msg, "Managed tab is not attached");
+				return;
+			}
+			let image = null;
+			let lastError = null;
+			for (let attempt = 0; attempt < 2 && image === null; attempt++) {
+				let timer;
+				try {
+					image = await Promise.race([
+						wc.capturePage(),
+						new Promise((_resolve, reject) => {
+							timer = setTimeout(
+								() => reject(new Error("Page.captureScreenshot timed out (no composited surface)")),
+								CAPTURE_TIMEOUT_MS,
+							);
+						}),
+					]);
+				} catch (error) {
+					lastError = error;
+					await new Promise((resolve) => setTimeout(resolve, CAPTURE_RETRY_MS));
+				} finally {
+					clearTimeout(timer);
+				}
+			}
+			if (image === null) {
 				this.replyError(
 					conn,
 					msg,
-					error instanceof Error ? error.message : String(error),
-					typeof error?.code === "number" ? error.code : CDP_ERROR_SERVER,
+					lastError instanceof Error ? lastError.message : String(lastError),
+					typeof lastError?.code === "number" ? lastError.code : CDP_ERROR_SERVER,
 				);
+				return;
 			}
+			const params = msg.params ?? {};
+			const format = params.format === "jpeg" ? "jpeg" : "png";
+			const quality = typeof params.quality === "number" ? params.quality : 80;
+			const buffer = format === "jpeg" ? image.toJPEG(quality) : image.toPNG();
+			this.reply(conn, msg, { data: buffer.toString("base64") });
 			return;
 		}
 		if (!tab.ensureDebugger()) {
 			this.replyError(conn, msg, "Managed tab debugger is unavailable (DevTools may be attached)");
+			return;
+		}
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) {
+			this.replyError(conn, msg, "Managed tab is not attached");
 			return;
 		}
 		// The CDP path is the agent's lane: record sanitized activity and
@@ -1462,10 +1419,10 @@ class ManagedBrowserController {
 		}
 		if (activityAction) {
 			this.recordActivity(tab, activityAction, tab.url, "dispatched");
-			if (!tab.visible) this.emitState({ agentActivity: true });
+			if (!this.panelVisible) this.emitState({ agentActivity: true });
 		}
 		try {
-			const result = (await tab.view.webContents.debugger.sendCommand(msg.method, msg.params)) ?? {};
+			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
 			// of rejecting — do not overwrite the canceled mark the stop applied.
 			if (this.tabs.has(String(tab.id))) this.markOpStatus(String(tab.id), "completed");
@@ -1573,25 +1530,16 @@ class ManagedBrowserController {
 		}
 	}
 
-	// ── IPC (renderer projection + controls) ─────────────────────────────
+	// ── IPC (renderer guest lifecycle + controls) ────────────────────────
 
 	registerIpc() {
-		ipcMain.handle("managed-browser:open", () => {
-			this.ensureTab("about:blank", false);
-			return this.state();
-		});
-		ipcMain.handle("managed-browser:close", () => {
-			this.closeAll();
-			return {};
-		});
 		ipcMain.handle("managed-browser:get-state", () => this.state());
-		ipcMain.handle("managed-browser:set-layout", (_e, layout) => {
-			this.applyLayout(layout ?? {});
-			return {};
-		});
 		ipcMain.handle("managed-browser:navigate", async (_e, input) => {
-			const tab = this.ensureTab();
-			if (!tab) return { ok: false, error: "browser window unavailable" };
+			// Address-bar navigation drives the ACTIVE tab's guest; the
+			// renderer owns the elements, so an unbound tab is a real failure
+			// (never a silent no-op).
+			const tab = this.tabs.get(this.activeTabId);
+			if (!tab) return { ok: false, error: "no active browser tab" };
 			const result = await tab.navigate(input?.url ?? "");
 			// Do NOT record user-initiated navigation into the agent activity
 			// ledger — that ledger is the agent's browser lane (user: 浏览器里
@@ -1599,43 +1547,9 @@ class ManagedBrowserController {
 			this.emitState({});
 			return result;
 		});
-		ipcMain.handle("managed-browser:go-back", async () => {
-			const tab = this.tabs.get(this.activeTabId);
-			if (tab) await tab.goBack();
-			return {};
-		});
-		ipcMain.handle("managed-browser:go-forward", async () => {
-			const tab = this.tabs.get(this.activeTabId);
-			if (tab) await tab.goForward();
-			return {};
-		});
-		ipcMain.handle("managed-browser:reload", async () => {
-			const tab = this.tabs.get(this.activeTabId);
-			if (tab) await tab.reload();
-			return {};
-		});
-		ipcMain.handle("managed-browser:reload-hard", async () => {
-			const tab = this.tabs.get(this.activeTabId);
-			if (tab) await tab.hardReload();
-			return {};
-		});
 		ipcMain.handle("managed-browser:clear-data", (_e, input) =>
 			this.clearBrowserData(input?.mode),
 		);
-		ipcMain.handle("managed-browser:open-external", (_e, input) =>
-			this.openExternal(input?.url),
-		);
-		ipcMain.handle("managed-browser:pick-element", async () => {
-			const tab = this.tabs.get(this.activeTabId);
-			if (!tab) return { cancelled: true };
-			return tab.pickElement();
-		});
-		ipcMain.handle("managed-browser:new-tab", () => {
-			this.createTab("about:blank", false);
-			return this.state();
-		});
-		ipcMain.handle("managed-browser:select-tab", (_e, tabId) => this.selectTab(tabId));
-		ipcMain.handle("managed-browser:close-tab", (_e, tabId) => this.closeTab(tabId));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {
 			const pending = this.pendingConfirm;
@@ -1643,6 +1557,25 @@ class ManagedBrowserController {
 			clearTimeout(pending.timer);
 			this.pendingConfirm = null;
 			pending.resolve(Boolean(input.allow));
+			return { ok: true };
+		});
+		// Guest lifecycle: the renderer owns the elements, so it is the only
+		// source of truth for which webContents belongs to which tab.
+		ipcMain.handle("managed-browser:guest-ready", (_e, input) => this.handleGuestReady(input));
+		ipcMain.handle("managed-browser:guest-gone", (_e, tabId) => this.handleGuestGone(tabId));
+		ipcMain.handle("managed-browser:active-tab", (_e, tabId) => {
+			// The renderer is the selection authority and may report a tab
+			// before its guest attaches — adopt the id unconditionally. No
+			// state push: nothing in the projection (port/activity) changed.
+			if (typeof tabId !== "string" || !tabId) return { ok: false };
+			this.activeTabId = tabId;
+			return { ok: true };
+		});
+		ipcMain.handle("managed-browser:visibility", (_e, input) => {
+			this.panelVisible = input?.visible === true;
+			// The pane is showing: a pending agent-activity flag has done its
+			// job (the renderer auto-opens the browser view on it).
+			this.emitState({ agentActivity: false });
 			return { ok: true };
 		});
 	}

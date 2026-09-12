@@ -46,7 +46,7 @@ MusePi 移动端是 **桌面 agent 的"随身遥控器"**，不是桌面客户�
 | 返回键 | 分层关闭：plan → surface → drawer → chat | ✅ 已实现（capacitor.ts setupAndroidBackHandler + app.tsx onBack 分层） |
 | 推送 | APNs/FCM + relay + presence 抑制 | ⏳ 本架构无云端：本地通知（§6.4） |
 | 深链 | `openchamber://` 意图词汇表（通知/小组件/Control Center 复用） | ✅ 原生 `musepi://` 深链（§11.3）+ 通知点击跳会话 |
-| QR 配对 | mlkit 捆绑 barcode 模型离线扫描 | ✅ 同款（`@capacitor-mlkit/barcode-scanning`） |
+| QR 配对 | mlkit 捆绑 barcode 模型离线扫描 | ⚠️ 改用手写实现：`getUserMedia` + `jsQR`（纯 JS 解码，`QrScanner.tsx`）。mlkit 需要 Google Play Services barcode 模块，在卓易通 / 鸿蒙兼容层与无 GMS 设备上不可用，故不采用 |
 | 安全存储 | `@aparajita/capacitor-secure-storage` 存连接 token | ✅ 同款（`secure-store.ts`） |
 
 ### 2.2 高星项目移动端惯例（采纳项）
@@ -146,7 +146,7 @@ Session（会话）
 - 头部：品牌 lockup + 主题/accent/语言切换（与桌面一致，`--order` 语义化排序）；
 - 最近连接：`secure-store` 优先、localStorage 镜像（防隐私模式空转）；删除即 `✕`，无需确认
   （可随时重连恢复）；**仅成功连接（welcome 帧到达后）才记录到最近列表**，失败/超时不记录；
-- 方法卡片：QR（仅原生壳，懒加载 mlkit 保 bundle 体积）→ 配对码（纯 ws 常可用）→ 粘贴链接；
+- 方法卡片：QR（仅原生壳；`getUserMedia` + jsQR 纯 JS 解码，无插件）→ 配对码（纯 ws 常可用）→ 粘贴链接；
   手风琴 `useCollapseHeight` 保持挂载可动画（aria-hidden + inert 折叠态）；
 - 配对流程：6 位码 + 电脑地址 → `pair.resolve`（6s 超时，友好错误文案）→ 记住地址（secure）；
 - 跳过态：`sh-connect-card--empty` 空态 + "connect to a computer" 返回引导；`SKIP_KEY` 持久化；
@@ -299,7 +299,8 @@ Session（会话）
 
 ### 6.5 QR 配对
 
-- `@capacitor-mlkit/barcode-scanning`，barcode 模型捆绑进 APK（离线可用，无 Google Play 依赖）；
+- `getUserMedia` + `jsQR`（纯 JS 解码）——**不用 `@capacitor-mlkit/barcode-scanning`**：该插件依赖 Google Play
+  Services 的 barcode 模块，在卓易通 / 鸿蒙兼容层与无 GMS 设备上不可用（早期文档曾写 mlkit，与实现不符，2026-09-12 修正）；
 - `CAMERA` 权限 manifest 声明（`uses-permission` + 可选 `uses-feature`）；
 - 结果 `displayValue` 即 collab 链接 → 直接 connect；异常 → 友好错误 + 配对码兜底。
 
@@ -332,7 +333,7 @@ Session（会话）
 | 连接后 transcript 首帧 | < 300ms（快照 10k 消息） | 快照分块 + 进度超时（30s）；行渲染 memo |
 | 流式帧 | ≤ 16ms 批量（BATCH_WINDOW_MS） | guest 协议帧合并；message 平面隔离（TranscriptPane 独占订阅） |
 | 后台（通知） | 零轮询 | 事件驱动；`document.hidden` 前台抑制 |
-| 包体 | 原生插件全部懒加载（mlkit / notifications / status-bar / keyboard） | `import()` 动态导入，桌面 bundle 不含 |
+| 包体 | 原生插件全部懒加载（notifications / status-bar / keyboard；扫码为纯 JS 无插件） | `import()` 动态导入，桌面 bundle 不含 |
 | 内存 | transcript 封顶（MAX_NOTICES=50 等） | 已有 caps |
 
 ## 9. 验收标准（回归清单）

@@ -303,6 +303,7 @@ export const general = {
 	"run dev server": "运行开发服务器",
 	"stop dev server": "停止开发服务器",
 	"new tab": "新标签页",
+	"attach selection to chat": "附加到对话",
 	"project actions": "项目操作",
 	finder: "访达",
 	"add new action": "添加新操作",

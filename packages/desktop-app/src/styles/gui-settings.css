@@ -3901,6 +3901,11 @@ body.gui-resizing {
 .gui-browser-suggestions button:hover {
 	background: var(--color-surface-sunken);
 }
+/* Keyboard-navigated highlight shares the same visual as mouse hover
+ * (suggestionIndex drives both), so the two affordances never diverge. */
+.gui-browser-suggestions button.gui-browser-suggestion--active {
+	background: var(--color-surface-sunken);
+}
 .gui-browser-suggestion-icon {
 	width: 26px;
 	height: 26px;
@@ -4109,6 +4114,18 @@ body.gui-resizing {
 	border-radius: var(--radius);
 	border: 1px solid var(--border);
 	background: #fff;
+}
+/* Blank tab: the start page covers the about:blank guest. The guest stays
+ * mounted (the agent keeps driving the same tab) and the host hides itself
+ * while the tab is blank — it sits at the root stacking level, so it would
+ * otherwise paint over this overlay. */
+.gui-browser-start-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	display: flex;
+	min-height: 0;
+	background: var(--color-surface);
 }
 /* ---- Start page (quick links + recent visits) ---- */
 .gui-browser-start {

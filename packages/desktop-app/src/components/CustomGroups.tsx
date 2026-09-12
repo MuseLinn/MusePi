@@ -50,6 +50,7 @@ export function CustomGroups({
 	workingIds,
 	statuses,
 	manualTags,
+	searchQuery,
 }: {
 	groups: CustomGroup[];
 	/** Session tree for rendering each group's members. */
@@ -83,6 +84,8 @@ export function CustomGroups({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	/** Active session-search query — forwarded so matched titles are marked. */
+	searchQuery?: string;
 }): ReactNode {
 	const dropSession = (index: number) => (e: DragEvent<HTMLDivElement>) => {
 		e.preventDefault();
@@ -135,6 +138,7 @@ export function CustomGroups({
 					workingIds={workingIds}
 					statuses={statuses}
 					manualTags={manualTags}
+					searchQuery={searchQuery}
 				/>
 			))}
 		</div>
@@ -164,6 +168,7 @@ function GroupBlock({
 	workingIds,
 	statuses,
 	manualTags,
+	searchQuery,
 }: {
 	group: CustomGroup;
 	index: number;
@@ -195,6 +200,8 @@ function GroupBlock({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	/** Active session-search query — forwarded so matched titles are marked. */
+	searchQuery?: string;
 }): ReactNode {
 	const [localOpen, setLocalOpen] = useStateOpen(group.name);
 	const open = openOverride ?? localOpen;
@@ -358,6 +365,7 @@ function GroupBlock({
 							workingIds={workingIds}
 							statuses={statuses}
 							manualTags={manualTags}
+							searchQuery={searchQuery}
 							sort="none"
 						/>
 					</div>

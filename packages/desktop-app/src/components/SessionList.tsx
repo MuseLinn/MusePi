@@ -1,5 +1,5 @@
 import { t } from "@musepi/guest-client";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-shared";
@@ -67,6 +67,60 @@ export interface SessionListNode {
 	label?: string;
 }
 
+/** Accent wash for a matched title fragment — the same palette language as
+ *  `.gui-settings-match`, inline so row titles need no new stylesheet rule.
+ *  `color` is pinned to the inherited title color because the UA `mark` style
+ *  would otherwise paint the fragment black. */
+const SEARCH_HIT_STYLE: CSSProperties = {
+	background: "color-mix(in oklab, var(--color-accent) 22%, transparent)",
+	color: "inherit",
+};
+
+/**
+ * Split `text` into plain/marked segments around the first occurrence of each
+ * whitespace token (case-insensitive). The filter itself is subsequence-fuzzy,
+ * so a row that only matches as a scattered subsequence renders unmarked
+ * instead of marking noise.
+ */
+function searchSegments(text: string, query: string): Array<{ text: string; hit: boolean }> {
+	const q = query.trim().toLowerCase();
+	if (!q || !text) return [{ text, hit: false }];
+	const lower = text.toLowerCase();
+	const marks = new Array<boolean>(text.length).fill(false);
+	let any = false;
+	for (const token of q.split(/\s+/)) {
+		if (!token) continue;
+		const at = lower.indexOf(token);
+		if (at < 0) continue;
+		any = true;
+		for (let i = at; i < at + token.length; i++) marks[i] = true;
+	}
+	if (!any) return [{ text, hit: false }];
+	const segments: Array<{ text: string; hit: boolean }> = [];
+	let start = 0;
+	let hit = marks[0]!;
+	for (let i = 1; i <= text.length; i++) {
+		const next = i < text.length ? marks[i]! : !hit;
+		if (next === hit) continue;
+		segments.push({ text: text.slice(start, i), hit });
+		start = i;
+		hit = next;
+	}
+	return segments;
+}
+
+/** Row title with the matched fragments marked. */
+function SearchHitText({ text, query }: { text: string; query: string }): ReactNode {
+	return searchSegments(text, query).map((segment, index) =>
+		segment.hit ? (
+			<mark key={index} className="rounded-[3px]" style={SEARCH_HIT_STYLE}>
+				{segment.text}
+			</mark>
+		) : (
+			segment.text
+		),
+	);
+}
 /** Build the prefix (indent + connectors) for one flat node. */
 function treePrefix(indent: number, showConnector: boolean, isLast: boolean): string {
 	let prefix = "";
@@ -85,6 +139,7 @@ export function SessionList({
 	workingIds,
 	statuses,
 	manualTags,
+	searchQuery = "",
 	sort = "statusTime",
 }: {
 	nodes: SessionListNode[];
@@ -112,6 +167,8 @@ export function SessionList({
 	 *  reorder rows under the cursor, see note above); "none" preserves the
 	 *  caller's order (groups keep manual drag-reorder order). */
 	sort?: "statusTime" | "none";
+	/** Active session-search query — matched title fragments are marked. */
+	searchQuery?: string;
 }): ReactNode {
 	// Hierarchical sort FIRST (roots + each sibling group by last-activity,
 	// with a stable id tiebreak), THEN flatten. Sorting the flattened array
@@ -184,7 +241,13 @@ export function SessionList({
 							<span className="gui-tree-prefix">
 								{treePrefix(flatProps.indent, flatProps.showConnector, flatProps.isLast)}
 							</span>
-							<span className="gui-session-title">{node.entry.label ?? t("untitled session")}</span>
+							<span className="gui-session-title">
+								{searchQuery.trim() ? (
+									<SearchHitText text={node.entry.label ?? t("untitled session")} query={searchQuery} />
+								) : (
+									(node.entry.label ?? t("untitled session"))
+								)}
+							</span>
 							{pausedIds?.has(node.entry.id) && (
 								<span className="gui-tree-pause" role="img" aria-label={t("paused")} title={t("paused")}>
 									<Icon name="pause" className="h-3 w-3" />

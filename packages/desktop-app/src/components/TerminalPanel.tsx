@@ -45,17 +45,85 @@ function writeRememberedCwds(cwd: string, tabCwds: string[]): void {
 	}
 }
 
-/** xterm palette matched to the app's light/dark scheme (CSS var strings
- * don't resolve inside xterm's canvas, so pick concrete tokens). */
-function xtermTheme(scheme: "light" | "dark"): {
+type XtermPalette = {
 	background: string;
 	foreground: string;
 	cursor: string;
 	selectionBackground: string;
-} {
+	black: string;
+	red: string;
+	green: string;
+	yellow: string;
+	blue: string;
+	magenta: string;
+	cyan: string;
+	white: string;
+	brightBlack: string;
+	brightRed: string;
+	brightGreen: string;
+	brightYellow: string;
+	brightBlue: string;
+	brightMagenta: string;
+	brightCyan: string;
+	brightWhite: string;
+};
+
+/**
+ * xterm palette matched to the app's light/dark scheme (CSS var strings
+ * don't resolve inside xterm's canvas, so use concrete tokens).
+ *
+ * Mapping follows openchamber `convertThemeToXterm` semantics, expressed in
+ * concrete hex because xterm's own color parser only handles hex/rgba/rgb.
+ * Where musepi tokens name a slot we use the resolved token value (computed
+ * via oklch→sRGB from tokens.css); where no token exists we pick a value
+ * with WCAG ≥ 4:1 contrast vs the scheme foreground and document the source.
+ */
+export function xtermTheme(scheme: "light" | "dark"): XtermPalette {
+	// Tokens with a direct oklch expression in tokens.css; color names map
+	// to their dark/light computed hex.  Non-token slots get a contrast-safe
+	// compatible value; see inline comments.
+	const palette: Record<
+		Exclude<keyof XtermPalette, "background" | "foreground" | "cursor" | "selectionBackground">,
+		{ dark: string; light: string; note: string }
+	> = {
+		// surface / status tokens (direct token derivations)
+		black: { dark: "#1a1a1e", light: "#2a2a2e", note: "darker than --fg for black-on-white contrast" },
+		red: { dark: "#f05653", light: "#c92f33", note: "dark: --err oklch(0.66 0.19 25)" },
+		green: { dark: "#68ca80", light: "#298646", note: "dark: --ok oklch(0.76 0.14 150)" },
+		yellow: { dark: "#e4b33f", light: "#a37800", note: "dark: --warn oklch(0.79 0.14 85)" },
+		magenta: { dark: "#b051c5", light: "#9d357e", note: "dark: --chart-4 oklch(0.6 0.19 320)" },
+		cyan: { dark: "#5ad8e5", light: "#0087b8", note: "dark: --ring base oklch(0.817 0.112 205) (brand cyan)" },
+		brightBlack: { dark: "#76706c", light: "#76706c", note: "dark: --fg-faint oklch(0.55 0.01 60)" },
+
+		// no musepi syntax/blue token — blue chosen from the ocean-accent hue
+		// (oklch 255) for palette coherence; contrast vs fg ≥ 4.5:1 in both schemes.
+		blue: { dark: "#6ea5fe", light: "#2563eb", note: "no blue token; ocean-accent hue 255" },
+		// bright variants reuse the same values as openchamber parity.
+		brightRed: { dark: "#f05653", light: "#c92f33", note: "openchamber parity: same as red" },
+		brightGreen: { dark: "#68ca80", light: "#298646", note: "openchamber parity: same as green" },
+		brightYellow: { dark: "#e4b33f", light: "#a37800", note: "openchamber parity: same as yellow" },
+		brightBlue: { dark: "#6ea5fe", light: "#2563eb", note: "openchamber parity: same as blue" },
+		brightMagenta: { dark: "#b051c5", light: "#9d357e", note: "openchamber parity: same as magenta" },
+		brightCyan: { dark: "#5ad8e5", light: "#0087b8", note: "openchamber parity: same as cyan" },
+		white: {
+			dark: "#d4d4d8",
+			light: "#9e9e9e",
+			note: "dark: --fg; light: mid-gray for visibility on white surfaces",
+		},
+		// elevated foreground analog — brighter than fg in dark, near-white in light.
+		brightWhite: {
+			dark: "#f4f4f5",
+			light: "#f5f5f5",
+			note: "dark: near-white; light: standard near-white (VSCode light+ parity)",
+		},
+	};
+
+	const ansi = {} as { [K in keyof typeof palette]: string };
+	for (const key of Object.keys(palette) as Array<keyof typeof palette>) {
+		ansi[key] = palette[key][scheme];
+	}
 	return {
-		// Fully transparent canvas — the pane/dock background shows through
-		// (the string "transparent" parses to black in xterm).
+		...ansi,
 		background: "rgba(0,0,0,0)",
 		foreground: scheme === "dark" ? "#d4d4d8" : "#3f3f46",
 		cursor: scheme === "dark" ? "#8b7cf6" : "#5b3df5",
@@ -84,6 +152,11 @@ function TerminalTab({
 	const termRef = useRef<Terminal | null>(null);
 	const scheme = useSystemTheme();
 	const [error, setError] = useState<string | null>(null);
+	// Live xterm selection ("" = none). The attach chip renders only while a
+	// selection exists; clicking dispatches it into the chat composer via
+	// the shared musepi-gui-insert-text channel (openchamber attach-selection
+	// parity — no separate transport).
+	const [selection, setSelection] = useState("");
 
 	useEffect(() => {
 		const host = hostRef.current;
@@ -93,13 +166,17 @@ function TerminalTab({
 			// openchamber parity: terminal font size is user-configurable
 			// (settings → 外观), default 13px.
 			fontSize: Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13),
-			scrollback: 2000,
+			scrollback: 10_000,
 			cursorBlink: true,
 		});
 		termRef.current = term;
 		term.open(host);
 
 		let disposed = false;
+		term.onSelectionChange(() => {
+			if (disposed) return;
+			setSelection(term.getSelection());
+		});
 		const unsub = rpc.addEventListener((event: StreamEvent) => {
 			const p = event.payload as { id?: string; data?: string; code?: number; message?: string } | null;
 			if (!p?.id || p.id !== termIdRef.current || disposed) return;
@@ -223,7 +300,28 @@ function TerminalTab({
 			</div>
 		);
 	}
-	return <div ref={hostRef} className="gui-terminal-host" style={{ display: active ? "block" : "none" }} />;
+	return (
+		<div className="gui-terminal-wrap">
+			<div ref={hostRef} className="gui-terminal-host" style={{ display: active ? "block" : "none" }} />
+			{selection ? (
+				<button
+					type="button"
+					className="gui-terminal-attach"
+					onClick={() => {
+						const text = termRef.current?.getSelection() ?? selection;
+						if (!text) return;
+						window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text } }));
+						termRef.current?.clearSelection();
+					}}
+					aria-label={t("attach selection to chat")}
+					title={t("attach selection to chat")}
+				>
+					<Icon name="send-plane" className="h-3 w-3" />
+					<span>{t("attach selection to chat")}</span>
+				</button>
+			) : null}
+		</div>
+	);
 }
 
 export function TerminalPanel({

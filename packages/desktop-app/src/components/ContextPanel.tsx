@@ -1,12 +1,15 @@
 import { AgentsPanel, latestWidgetFromEntries, type TranslationKey, t, WidgetCard } from "@musepi/guest-client";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
 import { surfaceById } from "../lib/surfaces/registry";
+import { usePointerDrag } from "../lib/use-pointer-drag";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FadeScroll } from "./FadeScroll";
@@ -214,8 +217,11 @@ export function ContextPanel({
 		if (!api || typeof api.onManagedBrowserState !== "function") return;
 		return api.onManagedBrowserState(next => {
 			if (maximizedRef.current) return;
-			if (next.agentActivity === true && next.activeTabId && agentBrowserTabRef.current !== next.activeTabId) {
-				agentBrowserTabRef.current = next.activeTabId;
+			// Dedupe on the ledger row: every state push for the same agent
+			// operation must not switch the view again.
+			const key = next.activity?.id ?? null;
+			if (next.agentActivity === true && key !== null && agentBrowserTabRef.current !== key) {
+				agentBrowserTabRef.current = key;
 				onViewChange("browser");
 			}
 		});
@@ -239,39 +245,81 @@ export function ContextPanel({
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const [maximized, setMaximized] = useState(false);
 	maximizedRef.current = maximized;
-	const resizeRef = useRef<{ startX: number; startW: number } | null>(null);
-	/** Snap points for right-panel width (px). Drag snaps on release. */
+	// Width drag runs on the normalised pointer-drag primitive (capture +
+	// preventDefault + pointerId filtering) rather than window listeners: the
+	// ad-hoc version had no capture, so the pointer left the 4px strip and the
+	// gesture kept selecting whatever text it crossed.
+	const resizeStartRef = useRef(0);
+	const resizeWidthRef = useRef(0);
+	/** Snap points for right-panel width (px), taken only when the drag ends
+	 *  within SNAP_RADIUS. The old rule snapped EVERY release to the nearest
+	 *  point, so no other width was reachable (260–300 all landed on 300). */
 	const SNAP_POINTS = [300, 480, 800];
+	const SNAP_RADIUS = 24;
 	const snapWidth = (w: number): number => {
-		let best = SNAP_POINTS[0];
+		// Points are further apart than the radius, so at most one can match.
 		for (const sp of SNAP_POINTS) {
-			if (Math.abs(sp - w) < Math.abs(best - w)) best = sp;
+			if (Math.abs(sp - w) <= SNAP_RADIUS) return sp;
 		}
-		return best;
+		return w;
 	};
-	const onResizeStart = (e: React.PointerEvent<HTMLDivElement>): void => {
-		resizeRef.current = { startX: e.clientX, startW: width };
-		const move = (ev: PointerEvent): void => {
-			const s = resizeRef.current;
-			if (!s) return;
-			const next = Math.min(1200, Math.max(260, s.startW + (s.startX - ev.clientX)));
+	// Width budget: the panel stops growing while the CHAT column keeps
+	// MIN_CHAT_WIDTH. Both edges used to compute it are fixed during the drag
+	// (the panel's right edge and the chat column's left edge), so the cap is
+	// stable — and a fixed 1200 let the panel squeeze the chat out entirely.
+	const panelRef = useRef<HTMLElement | null>(null);
+	const maxWidthRef = useRef(MAX_PANEL_WIDTH);
+	const measureCap = useCallback((): number => {
+		const panel = panelRef.current?.getBoundingClientRect();
+		// No transcript (welcome screen): there is no chat column to protect.
+		const chat = document.querySelector(".gui-transcript")?.getBoundingClientRect();
+		if (!panel || !chat) return MAX_PANEL_WIDTH;
+		return maxPanelWidth(panel.right, chat.left);
+	}, []);
+	// Both endpoints ride refs. Reading a render-closure `width` on release
+	// meant the snap used the value from the render that STARTED the drag, so
+	// every drag snapped back to where it began (user: 拖拽会回弹).
+	const resizeDrag = usePointerDrag({
+		onDragStart: () => {
+			resizeStartRef.current = width;
+			resizeWidthRef.current = width;
+			maxWidthRef.current = measureCap();
+			// body.gui-resizing freezes text selection (the drag used to select
+			// everything it passed over) and disables the pane's width
+			// transition, so the panel follows the pointer instead of animating
+			// towards it.
+			document.body.classList.add("gui-resizing");
+		},
+		onDragMove: ctx => {
+			const budget = maxWidthRef.current;
+			const next = Math.min(budget, Math.max(MIN_PANEL_WIDTH, resizeStartRef.current + (ctx.startX - ctx.x)));
+			resizeWidthRef.current = next;
 			setWidth(next);
-		};
-		const up = (): void => {
-			resizeRef.current = null;
-			window.removeEventListener("pointermove", move);
-			window.removeEventListener("pointerup", up);
-			const snapped = snapWidth(width);
-			setWidth(snapped);
+		},
+		onDragEnd: () => {
+			document.body.classList.remove("gui-resizing");
+			// Snap first, then re-clamp: a snap point must not push the chat
+			// below its minimum on a narrow window.
+			const settled = Math.min(maxWidthRef.current, snapWidth(resizeWidthRef.current));
+			setWidth(settled);
 			try {
-				localStorage.setItem("musepi-gui-right-width", String(snapped));
+				localStorage.setItem("musepi-gui-right-width", String(settled));
 			} catch {
 				// storage unavailable
 			}
+		},
+	});
+	// The window drives the budget: shrinking it squeezes the panel, never the
+	// chat column (and a persisted width from a wide window is clamped too).
+	useEffect(() => {
+		const clamp = (): void => {
+			maxWidthRef.current = measureCap();
+			setWidth(w => Math.min(w, maxWidthRef.current));
 		};
-		window.addEventListener("pointermove", move);
-		window.addEventListener("pointerup", up);
-	};
+		clamp();
+		window.addEventListener("resize", clamp);
+		return () => window.removeEventListener("resize", clamp);
+	}, [measureCap]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
 	// Header chrome title (nav unification): the rail owns navigation;
 	// the header labels the active view.
@@ -292,10 +340,14 @@ export function ContextPanel({
 			{maximized && open && (
 				<div className="gui-pane-maximize-backdrop" onClick={() => setMaximized(false)} aria-hidden />
 			)}
-			<aside className={panelClass} style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}>
+			<aside
+				ref={panelRef}
+				className={panelClass}
+				style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}
+			>
 				{/* Left-edge drag handle for width (pointer capture on the 4px
 				 * strip; cursor col-resize over it). */}
-				<div className="gui-pane-resize-x" onPointerDown={maximized ? undefined : onResizeStart} aria-hidden />
+				<div className="gui-pane-resize-x" {...(maximized ? {} : resizeDrag)} aria-hidden />
 				<div className="flex h-full min-h-0 w-full flex-col">
 					{/* View-local chrome (nav unification): the RightRail owns
 					 * navigation; the header shows the current view's title plus the
@@ -686,102 +738,6 @@ function JobsPane({ rpc, sessionId }: { rpc: RpcClient; sessionId: string }): Re
 	);
 }
 
-/** Injected element-picker (bitfun/openchamber parity): hover highlight +
- *  click capture inside the webview; resolves {tag, text, selector,
- *  outerHTML} via executeJavaScript (cross-origin safe). */
-const BROWSER_INSPECT_SCRIPT = `(() => {
-	const { promise, resolve } = Promise.withResolvers();
-	const overlay = document.createElement("div");
-	overlay.style.cssText =
-		"position:fixed;pointer-events:none;z-index:2147483647;background:rgba(66,133,244,0.15);outline:2px solid #4285f4;display:none;";
-	const tip = document.createElement("div");
-	tip.style.cssText =
-		"position:fixed;pointer-events:none;z-index:2147483647;background:#1a1a1a;color:#fff;font:11px monospace;padding:2px 6px;border-radius:3px;display:none;";
-	document.documentElement.appendChild(overlay);
-	document.documentElement.appendChild(tip);
-	const cssPath = el => {
-		if (el.id) return "#" + el.id;
-		const parts = [];
-		let node = el;
-		while (node && node.nodeType === 1 && parts.length < 6) {
-			let part = node.tagName.toLowerCase();
-			if (node.className && typeof node.className === "string") {
-				part += "." + node.className.trim().split(/\\s+/).slice(0, 3).join(".");
-			}
-			const parent = node.parentElement;
-			if (parent) {
-				const same = Array.from(parent.children).filter(c => c.tagName === node.tagName);
-				if (same.length > 1) part += ":nth-of-type(" + (same.indexOf(node) + 1) + ")";
-			}
-			parts.unshift(part);
-			node = parent;
-		}
-		return parts.join(" > ");
-	};
-	let current = null;
-	const cleanup = () => {
-		document.removeEventListener("mousemove", onMove, true);
-		document.removeEventListener("click", onClick, true);
-		document.removeEventListener("keydown", onKey, true);
-		overlay.remove();
-		tip.remove();
-	};
-	const onMove = e => {
-		const el = document.elementFromPoint(e.clientX, e.clientY);
-		if (!el || el === overlay || el === tip) return;
-		current = el;
-		const r = el.getBoundingClientRect();
-		overlay.style.display = "block";
-		overlay.style.left = r.left + "px";
-		overlay.style.top = r.top + "px";
-		overlay.style.width = r.width + "px";
-		overlay.style.height = r.height + "px";
-		tip.textContent = el.tagName.toLowerCase() + (el.id ? "#" + el.id : "");
-		tip.style.display = "block";
-		tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 160) + "px";
-		tip.style.top = e.clientY + 12 + "px";
-	};
-	const onClick = e => {
-		e.preventDefault();
-		e.stopPropagation();
-		const el = current || document.elementFromPoint(e.clientX, e.clientY);
-		cleanup();
-		if (!el) return resolve(null);
-		resolve({
-			tag: el.tagName.toLowerCase(),
-			text: (el.innerText || el.textContent || "").replace(/\\s+/g, " ").trim().slice(0, 500),
-			selector: cssPath(el),
-			outerHTML: el.outerHTML.slice(0, 2000),
-		});
-	};
-	const onKey = e => {
-		if (e.key !== "Escape") return;
-		e.preventDefault();
-		cleanup();
-		resolve(null);
-	};
-	document.addEventListener("mousemove", onMove, true);
-	document.addEventListener("click", onClick, true);
-	document.addEventListener("keydown", onKey, true);
-	return promise;
-})()`;
-
-interface PickedElement {
-	tag: string;
-	text: string;
-	selector: string;
-	outerHTML: string;
-}
-
-/** Read the webview page's current text selection (cross-origin safe via
- *  <webview> executeJavaScript) for the selection→ask popover. */
-const BROWSER_ASK_SELECTION_SCRIPT = `(() => {
-	const sel = window.getSelection();
-	const text = sel && sel.rangeCount > 0 && !sel.isCollapsed ? sel.toString().replace(/\\r\\n?/g, "\\n").trim() : "";
-	if (!text) return null;
-	return { text, title: document.title || "" };
-})()`;
-
 const BROWSER_VIEWPORTS = [
 	{ labelKey: "viewport fit", width: null },
 	{ labelKey: "viewport phone", width: 393 },
@@ -802,8 +758,9 @@ function BrowserPane({
 	rpc: RpcClient;
 	browserOpenRequest?: { url: string; nonce: number } | null;
 }): ReactNode {
-	const managed = typeof window.electronAPI?.managedBrowserOpen === "function";
-	if (managed) return <ManagedBrowserPane openRequest={browserOpenRequest} />;
+	// Electron shell → the managed browser (shared with the agent's browser tool);
+	// plain-browser builds keep the iframe fallback.
+	if (isElectron()) return <ManagedBrowserPane openRequest={browserOpenRequest} />;
 	return <LegacyBrowserPane rpc={rpc} />;
 }
 

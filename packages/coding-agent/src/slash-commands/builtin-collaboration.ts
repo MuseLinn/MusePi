@@ -98,6 +98,126 @@ function showCollabLink(
 	showCollabQrCode(ctx, qrWebLink ?? (view ? host.webViewLink : host.webLink));
 }
 
+interface LocalShareStart {
+	host: CollabHost;
+	transport: LocalShareManager;
+	urls: LanShareUrls;
+}
+
+/**
+ * Start a self-hosted share — a LAN relay or a cloudflared tunnel — and register
+ * it as the session's collab host. Shared by `/collab lan|tunnel` and `/pair`,
+ * which differ only in what they show afterwards. Returns null when startup
+ * failed; the error has already been surfaced.
+ */
+async function startLocalShare(
+	ctx: InteractiveModeContext,
+	options: { port?: number; tunnelProvider?: "cloudflared" | "ngrok" } = {},
+): Promise<LocalShareStart | null> {
+	const { port, tunnelProvider } = options;
+	const transport = new LocalShareManager({
+		port,
+		onStatus: line => ctx.showStatus(line, { dim: true }),
+	});
+	const host = new CollabHost(ctx);
+	let urls: LanShareUrls;
+	try {
+		urls = tunnelProvider ? await transport.startTunnel(tunnelProvider) : await transport.startLan();
+		await host.start(urls.joinUrl, urls.webUrl, urls.webJoinUrl);
+	} catch (err) {
+		await transport.stop().catch(() => {});
+		const message = errorMessage(err);
+		// EADDRINUSE from a previous share that never got torn down, or a
+		// missing cloudflared binary (both common setup mistakes).
+		const hint = /Failed to listen/i.test(message)
+			? t(" (port already in use — stop a previous collab session first)")
+			: /is not installed/i.test(message)
+				? t(" (cloudflared is not installed — see the error above for install instructions)")
+				: "";
+		ctx.showError(
+			tunnelProvider
+				? t("Failed to start tunnel collab: {0}", message + hint)
+				: t("Failed to start LAN collab: {0}", message + hint),
+		);
+		return null;
+	}
+	ctx.collabHost = host;
+	ctx.collabTransport = transport;
+	return { host, transport, urls };
+}
+
+/**
+ * Show how other devices reach a LAN share: the phone-scannable QR, one https
+ * link per NIC (Tailscale first when a cert-free serve URL exists), the
+ * plaintext fallback for browsers that refuse the self-signed cert, and the
+ * host machine's own localhost link.
+ */
+function presentLanShare(ctx: InteractiveModeContext, started: LocalShareStart, heading: string): void {
+	const { host, transport, urls } = started;
+	let alt: AltLinkInfo[] = [];
+	let qrWebLink: string | undefined;
+	let certHint: string | undefined;
+	// Other devices need the https link (insecure http cannot run WebCrypto);
+	// the host machine itself joins over plaintext localhost instead.
+	const lanIp = findLanIpv4();
+	if (lanIp && transport.relay) {
+		const local = `http://localhost:${transport.relay.port}/#${host.link.split(lanIp).join("localhost")}`;
+		ctx.showStatus(`${t("On this machine, open:")} ${collabWebLinkClickable(local)}`, { dim: true });
+		const webLink = host.webLink;
+		// A tailnet serve URL carries a real Let's Encrypt cert — no browser
+		// warning — and supersedes the raw Tailscale IP link.
+		let serveWebLink: string | undefined;
+		if (urls.tailnetServeUrl) {
+			const parsed = parseCollabLink(host.link);
+			if (!("error" in parsed)) {
+				const serveHost = new URL(urls.tailnetServeUrl).hostname;
+				serveWebLink = formatCollabWebLink(
+					`wss://${serveHost}`,
+					parsed.roomId,
+					parsed.key,
+					parsed.writeToken,
+					urls.tailnetServeUrl,
+				);
+			}
+		}
+		alt = (urls.alt ?? [])
+			.filter(u => u.joinUrl !== urls.joinUrl)
+			.map(u => {
+				const ip = new URL(u.joinUrl).hostname;
+				// The browser deep link is what matters for a phone; the terminal
+				// join link is derivable from it. The raw Tailscale IP stays listed
+				// even when serve is up: the MagicDNS name is unresolvable on hosts
+				// whose manual DNS shadows Tailscale's split-DNS, so the 100.x
+				// direct link is the reliable fallback.
+				return {
+					label: isTailscaleIpv4(ip) ? t("Tailscale IP") : ip,
+					webLink: webLink.split(lanIp).join(ip),
+				};
+			});
+		if (serveWebLink) {
+			alt.unshift({ label: t("Tailscale (no cert warning)"), webLink: serveWebLink });
+		}
+		// No-encryption fallback: plain http is a non-secure context (no
+		// crypto.subtle), so the guest degrades to plaintext frames — zero
+		// warning, zero E2E.
+		alt.push({
+			label: t("Plaintext http (no encryption)"),
+			webLink: `http://${lanIp}:${transport.relay.port}/#${host.link}`,
+		});
+		// QR is scanned by phones: prefer the zero-warning serve link, else the
+		// Tailscale IP, else the LAN link.
+		qrWebLink = serveWebLink ?? alt.find(a => isTailscaleIpv4(new URL(a.webLink).hostname))?.webLink ?? webLink;
+		// Raw-LAN / Tailscale-IP https links carry the self-signed cert; warn up
+		// front because the browser's certificate interstitial appears before any
+		// in-page guidance can load. (Serve links end in .ts.net and carry a real
+		// Let's Encrypt cert — excluded.)
+		certHint = [webLink, ...alt.map(a => a.webLink)].some(isSelfSignedWebLink)
+			? t("First visit shows a self-signed certificate warning — click Advanced → Continue")
+			: undefined;
+	}
+	showCollabLink(ctx, host, heading, false, alt, qrWebLink, certHint);
+}
+
 /**
  * Render a "<Prefix>: <state>" autocomplete status line, translating both
  * parts at render time (the locale is applied after this module loads and can
@@ -436,112 +556,13 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 				const provider = providerArg ?? "cloudflared";
 				const portArg = providerArg ? arg1 : arg0;
 				const port = parseInt(portArg ?? "", 10) || undefined;
-				const transport = new LocalShareManager({
-					port,
-					onStatus: line => ctx.showStatus(line, { dim: true }),
-				});
-				const host = new CollabHost(ctx);
-				let urls: LanShareUrls;
-				try {
-					urls = isTunnel ? await transport.startTunnel(provider) : await transport.startLan();
-					await host.start(urls.joinUrl, urls.webUrl, urls.webJoinUrl);
-				} catch (err) {
-					await transport.stop().catch(() => {});
-					const message = errorMessage(err);
-					// EADDRINUSE from a previous share that never got torn down, or a
-					// missing cloudflared binary (both common setup mistakes).
-					const hint = /Failed to listen/i.test(message)
-						? t(" (port already in use — stop a previous collab session first)")
-						: /is not installed/i.test(message)
-							? t(" (cloudflared is not installed — see the error above for install instructions)")
-							: "";
-					ctx.showError(
-						isTunnel
-							? t("Failed to start tunnel collab: {0}", message + hint)
-							: t("Failed to start LAN collab: {0}", message + hint),
-					);
+				if (isTunnel) {
+					const started = await startLocalShare(ctx, { port, tunnelProvider: provider });
+					if (started) showCollabLink(ctx, started.host, t("Collab session started (tunnel)!"), false);
 					return;
 				}
-				ctx.collabHost = host;
-				ctx.collabTransport = transport;
-				let alt: AltLinkInfo[] = [];
-				let qrWebLink: string | undefined;
-				let certHint: string | undefined;
-				if (!isTunnel) {
-					// Other devices need the https link (insecure http cannot run
-					// WebCrypto); the host machine itself joins over plaintext
-					// localhost instead. Extra NICs (Tailscale 100.64/10, second
-					// adapter) each get their own reachable link set.
-					const lanIp = findLanIpv4();
-					if (lanIp && transport.relay) {
-						const local = `http://localhost:${transport.relay.port}/#${host.link.split(lanIp).join("localhost")}`;
-						ctx.showStatus(`${t("On this machine, open:")} ${collabWebLinkClickable(local)}`, { dim: true });
-						const webLink = host.webLink;
-						// A tailnet serve URL carries a real Let's Encrypt cert — no
-						// browser warning — and supersedes the raw Tailscale IP link.
-						let serveWebLink: string | undefined;
-						if (urls.tailnetServeUrl) {
-							const parsed = parseCollabLink(host.link);
-							if (!("error" in parsed)) {
-								const serveHost = new URL(urls.tailnetServeUrl).hostname;
-								serveWebLink = formatCollabWebLink(
-									`wss://${serveHost}`,
-									parsed.roomId,
-									parsed.key,
-									parsed.writeToken,
-									urls.tailnetServeUrl,
-								);
-							}
-						}
-						alt = (urls.alt ?? [])
-							.filter(u => u.joinUrl !== urls.joinUrl)
-							.map(u => {
-								const ip = new URL(u.joinUrl).hostname;
-								// The browser deep link is what matters for a phone;
-								// the terminal join link is derivable from it. The raw
-								// Tailscale IP stays listed even when serve is up: the
-								// MagicDNS name is unresolvable on hosts whose manual DNS
-								// shadows Tailscale's split-DNS, so the 100.x direct link
-								// is the reliable fallback.
-								return {
-									label: isTailscaleIpv4(ip) ? t("Tailscale IP") : ip,
-									webLink: webLink.split(lanIp).join(ip),
-								};
-							});
-						if (serveWebLink) {
-							alt.unshift({ label: t("Tailscale (no cert warning)"), webLink: serveWebLink });
-						}
-						// No-encryption fallback for browsers that refuse the self-signed
-						// cert: plain http is a non-secure context (no crypto.subtle) so
-						// the guest degrades to plaintext frames — zero warning, zero E2E.
-						if (transport.relay) {
-							alt.push({
-								label: t("Plaintext http (no encryption)"),
-								webLink: `http://${lanIp}:${transport.relay.port}/#${host.link}`,
-							});
-						}
-						// QR is scanned by phones: prefer the zero-warning serve link,
-						// else the Tailscale IP, else the LAN link.
-						qrWebLink =
-							serveWebLink ?? alt.find(a => isTailscaleIpv4(new URL(a.webLink).hostname))?.webLink ?? webLink;
-						// Raw-LAN / Tailscale-IP https links carry the self-signed cert;
-						// warn up front because the browser's certificate interstitial
-						// appears before any in-page guidance can load. (Serve links end
-						// in .ts.net and carry a real Let's Encrypt cert — excluded.)
-						certHint = [webLink, ...alt.map(a => a.webLink)].some(isSelfSignedWebLink)
-							? t("First visit shows a self-signed certificate warning — click Advanced → Continue")
-							: undefined;
-					}
-				}
-				showCollabLink(
-					ctx,
-					host,
-					isTunnel ? t("Collab session started (tunnel)!") : t("Collab session started (LAN)!"),
-					false,
-					alt,
-					qrWebLink,
-					certHint,
-				);
+				const started = await startLocalShare(ctx, { port });
+				if (started) presentLanShare(ctx, started, t("Collab session started (LAN)!"));
 				return;
 			}
 			const knownStartVerb = verb === "start" || verb === "view";
@@ -575,6 +596,30 @@ export const BUILTIN_COLLABORATION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpe
 			}
 			ctx.collabHost = host;
 			showCollabLink(ctx, host, t("Collab session started!"), view);
+		},
+	},
+	{
+		name: "pair",
+		icon: "broadcast",
+		description: "Pair the MusePi mobile app with this machine (shows a QR to scan)",
+		getTuiAutocompleteDescription: runtime => {
+			if (runtime.ctx.collabHost) return statusLine("Pair", t("ready to scan"));
+			return statusLine("Pair", t("not sharing yet"));
+		},
+		// Guests never reach this handler: the dispatcher keeps every command
+		// outside COLLAB_GUEST_ALLOWED_COMMANDS host-only, and pairing starts a
+		// host share (see executeBuiltinSlashCommand).
+		handleTui: async (_command, runtime) => {
+			const ctx = runtime.ctx;
+			ctx.editor.setText("");
+			// The app reaches this machine through a LAN share, so pairing implies
+			// one: reuse the running share, otherwise start it.
+			if (ctx.collabHost) {
+				showCollabLink(ctx, ctx.collabHost, t("Scan this QR with the MusePi app"), false);
+				return;
+			}
+			const started = await startLocalShare(ctx, {});
+			if (started) presentLanShare(ctx, started, t("Scan this QR with the MusePi app"));
 		},
 	},
 	{

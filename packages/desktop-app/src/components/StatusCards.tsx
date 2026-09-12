@@ -5,9 +5,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
+import { Reveal } from "./Reveal";
 
 /** Collapse preference (renderer-local): "1" → slim pill stack. */
 const COLLAPSE_KEY = "musepi-gui-status-cards";
+
+/** One working-tree row from `git.status` (`status` is the porcelain code:
+ *  `M`/`A`/`D`/`R` staged, `??` untracked, …). */
+interface GitFile {
+	path: string;
+	status: string;
+}
+
+/** Files listed before the "+N more" rollup. */
+const CHANGED_FILES_CAP = 6;
 
 /** Latest todo-tool snapshot from the transcript (result details carry
  *  `{ phases: [{ name, tasks: [{ content, status }] }] }`). Returns null
@@ -75,10 +86,24 @@ export function StatusCards({
 		});
 	}, []);
 
-	// ── Git: 15s poll (branch + change counts + numstat sums) ──────────────
-	const [git, setGit] = useState<{ branch: string | null; changed: number; added: number; deleted: number } | null>(
-		null,
-	);
+	// ── Git: 15s poll (branch + ahead/behind + per-file lists + numstat) ───
+	const [git, setGit] = useState<{
+		branch: string | null;
+		ahead: number;
+		behind: number;
+		staged: GitFile[];
+		unstaged: GitFile[];
+		untracked: GitFile[];
+		added: number;
+		deleted: number;
+	} | null>(null);
+	// A checkout invalidates every readout at once: the numbers already on
+	// screen describe the branch we just left. Hide them until the next
+	// status lands instead of flashing the old diff under the new name
+	// (openchamber's stale-dirty gate).
+	const [gitStale, setGitStale] = useState(false);
+	const gitLoadRef = useRef<(() => void) | null>(null);
+	const [changesOpen, setChangesOpen] = useState(false);
 	useEffect(() => {
 		if (!rpc || !cwd) return;
 		let cancelled = false;
@@ -86,9 +111,11 @@ export function StatusCards({
 			void rpc
 				.request<{
 					branch?: string | null;
-					staged?: unknown[];
-					unstaged?: unknown[];
-					untracked?: unknown[];
+					ahead?: number;
+					behind?: number;
+					staged?: GitFile[];
+					unstaged?: GitFile[];
+					untracked?: GitFile[];
 					added?: number;
 					deleted?: number;
 					error?: string;
@@ -97,24 +124,56 @@ export function StatusCards({
 					if (cancelled) return;
 					if (res?.error) {
 						setGit(null);
+						setGitStale(false);
 						return;
 					}
 					setGit({
 						branch: res.branch ?? null,
-						changed: (res.staged?.length ?? 0) + (res.unstaged?.length ?? 0) + (res.untracked?.length ?? 0),
+						ahead: res.ahead ?? 0,
+						behind: res.behind ?? 0,
+						staged: res.staged ?? [],
+						unstaged: res.unstaged ?? [],
+						untracked: res.untracked ?? [],
 						added: res.added ?? 0,
 						deleted: res.deleted ?? 0,
 					});
+					setGitStale(false);
 				})
 				.catch(() => {});
 		};
+		gitLoadRef.current = load;
 		load();
 		const id = window.setInterval(load, 15_000);
 		return () => {
 			cancelled = true;
+			gitLoadRef.current = null;
 			window.clearInterval(id);
 		};
 	}, [rpc, cwd]);
+	// Flat, staged-first file list for the disclosure (a path can appear in
+	// both lists — staged and then edited again; show the marker that matters
+	// most, staged).
+	const changedFiles = useMemo((): GitFile[] => {
+		if (!git) return [];
+		const seen = new Set<string>();
+		const out: GitFile[] = [];
+		for (const f of git.staged) {
+			if (seen.has(f.path)) continue;
+			seen.add(f.path);
+			out.push(f);
+		}
+		for (const f of git.unstaged) {
+			if (seen.has(f.path)) continue;
+			seen.add(f.path);
+			out.push(f);
+		}
+		for (const f of git.untracked) {
+			if (seen.has(f.path)) continue;
+			seen.add(f.path);
+			out.push(f);
+		}
+		return out;
+	}, [git]);
 
 	// Branch switcher inside the git card (session-scene parity with the
 	// welcome composer's popup — checkout errors surface the shared toast).
@@ -122,7 +181,15 @@ export function StatusCards({
 	const [branches, setBranches] = useState<string[]>([]);
 	const [switching, setSwitching] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(branchOpen, setBranchOpen, { align: "right" });
+	// Toggle: useFloatingMenu skips a mousedown that lands on the anchor (it
+	// expects the caller's own click to close), so an open-only handler left
+	// the menu impossible to dismiss from the button that opened it.
 	const openBranches = useCallback((): void => {
+		if (branchOpen) {
+			setBranchOpen(false);
+			return;
+		}
+		setBranchOpen(true);
 		if (!rpc || !cwd) return;
 		void rpc
 			.request<{ current?: string | null; branches?: string[]; error?: string }>("git.branches", { cwd })
@@ -131,8 +198,7 @@ export function StatusCards({
 				setBranches((res?.branches ?? []).filter(b => b !== res?.current));
 			})
 			.catch(() => {});
-		setBranchOpen(true);
-	}, [rpc, cwd]);
+	}, [branchOpen, rpc, cwd]);
 	const switchBranch = useCallback(
 		async (branch: string): Promise<void> => {
 			if (!rpc || !cwd || switching) return;
@@ -144,7 +210,9 @@ export function StatusCards({
 				if (res?.error) {
 					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: res.error }));
 				} else if (res?.ok) {
-					setGit(prev => (prev ? { ...prev, branch } : prev));
+					// Every readout below describes the branch we just left.
+					setGitStale(true);
+					gitLoadRef.current?.();
 					setBranchOpen(false);
 				}
 			} catch {
@@ -195,28 +263,89 @@ export function StatusCards({
 			<div className="gui-status-card-head">
 				<span className="gui-status-card-title">Git</span>
 			</div>
-			<button type="button" className="gui-status-row" onClick={() => onOpenSurface("git")}>
-				<Icon name="file-check" className="gui-status-row-icon" />
-				<span className="min-w-0 flex-1 truncate text-left">{t("workspace changes")}</span>
-				{git.changed > 0 && (
-					<span className="gui-status-nums">
-						{git.added > 0 && <span className="gui-status-num-add">+{git.added}</span>}
-						{git.deleted > 0 && <span className="gui-status-num-del">−{git.deleted}</span>}
-						{git.added === 0 && git.deleted === 0 && <span className="gui-status-num-add">{git.changed}</span>}
-					</span>
-				)}
-			</button>
 			<div className="gui-status-row" ref={anchorRef}>
 				<button type="button" className="gui-status-branch" onClick={openBranches} disabled={switching}>
 					<Icon name="git-branch" className="gui-status-row-icon" />
 					<span className="min-w-0 flex-1 truncate text-left">{git.branch ?? "—"}</span>
+					{/* Tracking position vs upstream — the readout that makes a
+					    "nothing to commit" state interpretable (openchamber
+					    work-status parity). Hidden at 0/0. */}
+					{!gitStale && (git.ahead > 0 || git.behind > 0) && (
+						<span className="gui-status-tracks">
+							{git.ahead > 0 && (
+								<span className="gui-status-track-up" title={t("commits to push")}>
+									↑{git.ahead}
+								</span>
+							)}
+							{git.behind > 0 && (
+								<span className="gui-status-track-down" title={t("commits to pull")}>
+									↓{git.behind}
+								</span>
+							)}
+						</span>
+					)}
 					<Icon name="arrow-down-s" className="gui-status-caret" />
 				</button>
 			</div>
+			<button
+				type="button"
+				className="gui-status-row"
+				onClick={() => setChangesOpen(v => !v)}
+				disabled={!gitStale && changedFiles.length === 0}
+				aria-expanded={changesOpen}
+			>
+				<Icon name="file-check" className="gui-status-row-icon" />
+				<span className="min-w-0 flex-1 truncate text-left">{t("workspace changes")}</span>
+				{!gitStale && changedFiles.length > 0 && (
+					<span className="gui-status-nums">
+						{git.added > 0 && <span className="gui-status-num-add">+{git.added}</span>}
+						{git.deleted > 0 && <span className="gui-status-num-del">−{git.deleted}</span>}
+						{git.added === 0 && git.deleted === 0 && (
+							<span className="gui-status-num-add">{changedFiles.length}</span>
+						)}
+					</span>
+				)}
+				{/* Stale window (a checkout just landed): the counts on screen
+				    describe the branch we left, so this row waits instead. */}
+				{gitStale ? (
+					<Icon name="loader-4" className="gui-status-row-icon gui-status-spin" />
+				) : (
+					changedFiles.length > 0 && (
+						<Icon name={changesOpen ? "arrow-down-s" : "arrow-right-s"} className="gui-status-caret" />
+					)
+				)}
+			</button>
+			<Reveal open={changesOpen && changedFiles.length > 0}>
+				<div className="gui-status-files">
+					{changedFiles.slice(0, CHANGED_FILES_CAP).map(f => (
+						<button
+							key={`${f.status}:${f.path}`}
+							type="button"
+							className="gui-status-file"
+							onClick={() => onOpenSurface("git")}
+							title={f.path}
+						>
+							<span className={`gui-status-file-badge${f.status === "??" ? " gui-status-file-badge--new" : ""}`}>
+								{f.status.trim() || "M"}
+							</span>
+							<span className="min-w-0 flex-1 truncate text-left">{f.path}</span>
+						</button>
+					))}
+					{changedFiles.length > CHANGED_FILES_CAP && (
+						<button
+							type="button"
+							className="gui-status-file gui-status-file--more"
+							onClick={() => onOpenSurface("git")}
+						>
+							{t("and more files", { count: changedFiles.length - CHANGED_FILES_CAP })}
+						</button>
+					)}
+				</div>
+			</Reveal>
 			<button type="button" className="gui-status-row" onClick={() => onOpenSurface("git")}>
 				<Icon name="git-commit" className="gui-status-row-icon" />
 				<span className="min-w-0 flex-1 truncate text-left">{t("commit or push")}</span>
-				{(git.added > 0 || git.deleted > 0) && <Icon name="arrow-right-s" className="gui-status-caret" />}
+				{!gitStale && changedFiles.length > 0 && <Icon name="arrow-right-s" className="gui-status-caret" />}
 			</button>
 			{renderMenu(
 				<div className="gui-status-branch-menu">
@@ -307,16 +436,26 @@ export function StatusCards({
 		return (
 			<div className="gui-status-cards gui-status-cards--pill">
 				<button type="button" className="gui-status-pill" onClick={toggleCollapsed} title={t("commit or push")}>
-					{git && <Icon name="git-branch" className="h-3.5 w-3.5" />}
+					{/* Labelled segments: a lone glyph + number is unreadable at a
+					    glance (openchamber work-status panel documents the same
+					    rule for its rows). */}
+					{git && (
+						<span className="gui-status-pill-seg">
+							<Icon name="git-branch" className="h-3.5 w-3.5" />
+							{live.length === 0 && !todo && <span className="gui-status-pill-label">{git.branch ?? "—"}</span>}
+						</span>
+					)}
 					{live.length > 0 && (
-						<span className="flex items-center gap-0.5">
+						<span className="gui-status-pill-seg">
 							<Icon name="ai-agent" className="h-3.5 w-3.5" />
+							<span className="gui-status-pill-label">{t("agents")}</span>
 							{live.length}
 						</span>
 					)}
 					{todo && todo.done < todo.total && (
-						<span className="flex items-center gap-0.5">
+						<span className="gui-status-pill-seg">
 							<Icon name="list-check-2" className="h-3.5 w-3.5" />
+							<span className="gui-status-pill-label">{t("todo progress")}</span>
 							{todo.done}/{todo.total}
 						</span>
 					)}

@@ -28,18 +28,31 @@ describe("renderStreamingMarkdown", () => {
 		expect(html).toContain("<p>说明</p>");
 	});
 
-	it("does not structurally jump when the fence closes mid-stream", () => {
+	it("promotes a code block the moment its fence closes while streaming", () => {
 		const first = renderStreamingMarkdown("说明\n\n```ts\nconst x = 1;\n", true, null);
-		// Fence closes + a following paragraph arrives. The cut only advances
-		// to a balanced "\n\n" boundary INSIDE the previous text — the fence
-		// was open there, so the whole region stays a raw plain tail (same
-		// rendering class as the previous frame); the completed "说明" head
-		// block is reused verbatim. No code block snaps in mid-stream.
+		// An OPEN fence stays literal — the region after the last balanced
+		// boundary is the plain text the per-character spans need.
+		expect(first.tail).toBe("```ts\nconst x = 1;\n");
+		expect(first.html).not.toContain('<div class="tr-code">');
+
+		// The fence closes and a blank line completes the block, so it is
+		// promoted to markdown NOW instead of at settle: code takes shape while
+		// the message streams, which is the point of promoting per frame. Only
+		// the still-unsettled region stays plain.
 		const second = renderStreamingMarkdown("说明\n\n```ts\nconst x = 1;\n```\n\n完毕", true, first.state);
-		expect(second.state?.blocks.length).toBeGreaterThan(0);
-		expect(second.tail).toBe("```ts\nconst x = 1;\n```\n\n完毕");
+		expect(second.html).toContain('<div class="tr-code">');
+		expect(second.html).toContain("const x = 1;");
 		expect(second.html).toContain("<p>说明</p>");
-		expect(second.html).not.toContain('<div class="tr-code">');
+		expect(second.tail).toBe("完毕");
+	});
+
+	it("promotes each paragraph as it completes, leaving only the last one plain", () => {
+		const first = renderStreamingMarkdown("甲", true, null);
+		expect(first.tail).toBe("甲");
+
+		const second = renderStreamingMarkdown("甲\n\n乙", true, first.state);
+		expect(second.html).toContain("<p>甲</p>");
+		expect(second.tail).toBe("乙");
 	});
 
 	it("returns the plain-text tail raw (the caller appends it as text nodes)", () => {

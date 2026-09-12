@@ -22,6 +22,9 @@ function fmtTokens(n: number): string {
  *  分层级关系)。 */
 const TRAJ_MAX_INDENT = 6;
 
+/** 时间轴跳转落点的顶部内缩(回合卡不贴列表上沿,避免被浮动层压住)。 */
+const TURN_JUMP_INSET = 12;
+
 /** 单条轨迹事件行(折叠树展开后 + 无 onJumpToEntry 时的平铺回退)。
  *  点击行 = 选中进检视器;右上跳转按钮 = 跳转 transcript(事件不冒泡)。 */
 function EventRow({
@@ -482,9 +485,19 @@ export function TrajectoryView({
 		});
 		setFlashTurn(target);
 		setTimeout(() => setFlashTurn(cur => (cur === target ? null : cur)), 900);
-		listRef.current
-			?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`)
-			?.scrollIntoView({ block: "start", behavior: "smooth" });
+		const scroller = listRef.current;
+		const row = scroller?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
+		if (scroller && row) {
+			// Scroll ONLY this list: `scrollIntoView` walks every scrollable
+			// ancestor, which pushed the whole panel up out of place, and the row
+			// landed flush against the edge.
+			const offset =
+				row.getBoundingClientRect().top -
+				scroller.getBoundingClientRect().top +
+				scroller.scrollTop -
+				TURN_JUMP_INSET;
+			scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+		}
 	}, [range, turns]);
 
 	const toggleTurn = (turn: number): void => {

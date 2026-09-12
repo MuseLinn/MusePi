@@ -56,6 +56,7 @@ import {
 import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
+import { PairCodes } from "../collab/pair-codes";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
 import { isWireAgentEvent, toWireAgentEvent } from "../collab/wire-guard";
 import { findConfigFile } from "../config";
@@ -608,8 +609,6 @@ function estimateSnapcompactSavings(session: AgentSession): SnapcompactSavingsEs
 
 /** Live sessions with no activity (send or event) for this long are auto-closed. */
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
-/** Mobile pair-code lifetime (10 min). */
-const PAIR_CODE_TTL_MS = 10 * 60 * 1000;
 /** Mobile pair endpoint port — resolves pair codes only (LAN). */
 const PAIR_PORT = 8301;
 /**
@@ -2793,11 +2792,10 @@ export class DaemonServer {
 	/** Active GUI collab share (ZCode remote-control dialog). */
 	#collab: { host: CollabHost; transport: LocalShareManager } | null = null;
 
-	/** Mobile pair codes: 6-digit code → the shared webLink + expiry. The
-	 *  GUI displays the code; the mobile app resolves it against the LAN
-	 *  pair endpoint (pair.resolve) to obtain the full collab link without
-	 *  typing it. Pruned lazily on generate/resolve. */
-	#pairCodes = new Map<string, { webLink: string; expiresAt: number }>();
+	/** Mobile pair codes: 6-digit code → the shared webLink. The GUI displays
+	 *  the code; the mobile app resolves it against the LAN pair endpoint
+	 *  (pair.resolve) to obtain the full collab link without typing it. */
+	#pairCodes = new PairCodes();
 	/** LAN pair endpoint (ws://0.0.0.0:8301) — resolves pair codes only. */
 	#pairWs: DaemonWsHandle | null = null;
 
@@ -2857,13 +2855,13 @@ export class DaemonServer {
 						return;
 					}
 					const code = typeof req.params?.code === "string" ? req.params.code : "";
-					const entry = this.#pairCodes.get(code);
-					if (!entry || entry.expiresAt < Date.now()) {
-						this.#pairCodes.delete(code);
+					// Spent, not merely read: a resolved code is gone (see PairCodes).
+					const webLink = this.#pairCodes.spend(code);
+					if (!webLink) {
 						conn.send({ error: { message: "invalid or expired pair code" } });
 						return;
 					}
-					conn.send({ result: { webLink: entry.webLink } });
+					conn.send({ result: { webLink } });
 				},
 				onClose: () => {},
 			});
@@ -2874,12 +2872,6 @@ export class DaemonServer {
 		}
 	}
 
-	#prunePairCodes(): void {
-		const now = Date.now();
-		for (const [code, entry] of this.#pairCodes) {
-			if (entry.expiresAt < now) this.#pairCodes.delete(code);
-		}
-	}
 	/**
 	 * Agent `collab` tool handle: a thin shell over the daemon RPC surface.
 	 * The collab.* RPC cases never write to the connection, so a dummy conn
@@ -6194,6 +6186,14 @@ export class DaemonServer {
 				if (!this.#collab) return { hosting: false };
 				return {
 					hosting: true,
+					// Who is actually watching: the share panel renders this list,
+					// which is the only way to tell an idle share from one with a
+					// guest connected (and whether that guest may prompt).
+					participants: this.#collab.host.participants.map(p => ({
+						name: p.name,
+						role: p.role,
+						readOnly: p.readOnly === true,
+					})),
 					link: this.#collab.host.link,
 					webLink: this.#collab.host.webLink,
 					viewLink: this.#collab.host.viewLink,
@@ -6206,15 +6206,9 @@ export class DaemonServer {
 				if (!this.#collab) throw new Error("start sharing first (collab.start)");
 				const webLink = this.#collab.host.webLink;
 				if (!webLink) throw new Error("no collab link yet — refresh the share");
-				this.#prunePairCodes();
-				let code = "";
-				do {
-					code = String(Math.floor(100000 + Math.random() * 900000));
-				} while (this.#pairCodes.has(code));
-				const expiresAt = Date.now() + PAIR_CODE_TTL_MS;
-				this.#pairCodes.set(code, { webLink, expiresAt });
+				const { code, expiresAt } = this.#pairCodes.mint(webLink);
 				await this.#ensurePairServer();
-				return { code, expiresInSeconds: PAIR_CODE_TTL_MS / 1000, lanPort: PAIR_PORT };
+				return { code, expiresInSeconds: Math.round((expiresAt - Date.now()) / 1000), lanPort: PAIR_PORT };
 			}
 			case "channels.list": {
 				return this.#channels.list();

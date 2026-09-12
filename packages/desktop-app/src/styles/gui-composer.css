@@ -157,19 +157,33 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 6px;
+	/* Narrow surfaces: the action group drops to its own line instead of
+	 * overlapping the left group — both groups hold fixed 26px icon buttons, so
+	 * without wrapping they cannot shrink and simply collide (user: 宽度较小时
+	 * 按钮重叠). */
+	flex-wrap: wrap;
+	row-gap: 4px;
 }
-
 .gui-composer-left {
 	display: flex;
 	align-items: center;
 	gap: 4px;
 	min-width: 0;
+	flex-wrap: wrap;
+	row-gap: 4px;
 }
-
 .gui-composer-right {
 	display: flex;
 	align-items: center;
 	gap: 4px;
+	/* Chips truncate rather than pushing the row wider than the composer, and a
+	 * wrapped line keeps the group right-aligned (space-between leaves a lone
+	 * wrapped item at the start). */
+	margin-left: auto;
+	min-width: 0;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	row-gap: 4px;
 }
 
 /* Round soft icon button (aicss iconBtn). */

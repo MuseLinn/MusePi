@@ -240,36 +240,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	searchScrollbarSkins: () => ipcRenderer.invoke("scrollbar-skin-search"),
 	/** Scrollbar skin market install (reserved skeleton). */
 	installScrollbarSkinUrl: (zipUrl) => ipcRenderer.invoke("scrollbar-skin-install-url", zipUrl),
-	/** Managed in-app browser (right-pane tool): open the panel browser
-	 *  (WebContentsView tabs owned by main) and return its projected state. */
-	managedBrowserOpen: () => ipcRenderer.invoke("managed-browser:open"),
-	/** Close + destroy all managed browser tabs (panel close button). */
-	managedBrowserClose: () => ipcRenderer.invoke("managed-browser:close"),
-	/** Projected state snapshot (port/tabs/active/activity). */
+	/** Managed in-app browser (right-pane tool): the page is a DOM <webview>
+	 *  owned by the renderer (menus/tooltips/handles layer normally); main owns
+	 *  the persistent partition + the loopback CDP bridge the agent drives. */
 	managedBrowserGetState: () => ipcRenderer.invoke("managed-browser:get-state"),
-	/** Project the panel slot's CSS rect onto the native view
-	 *  ({ tabId, bounds: {x,y,width,height}, visible, revision }). */
-	managedBrowserSetLayout: (layout) => ipcRenderer.invoke("managed-browser:set-layout", layout),
-	/** Address-bar navigation of the active tab ({ url }). */
+	/** Address-bar navigation (main normalizes the address + applies policy). */
 	managedBrowserNavigate: (input) => ipcRenderer.invoke("managed-browser:navigate", input),
-	managedBrowserGoBack: () => ipcRenderer.invoke("managed-browser:go-back"),
-	managedBrowserGoForward: () => ipcRenderer.invoke("managed-browser:go-forward"),
-	managedBrowserReload: () => ipcRenderer.invoke("managed-browser:reload"),
-	/** Bypass-cache reload of the active tab. */
-	managedBrowserHardReload: () => ipcRenderer.invoke("managed-browser:reload-hard"),
 	/** Clear managed-browser cookies ("cookies") or all data ("all"). */
 	managedBrowserClearData: (mode) => ipcRenderer.invoke("managed-browser:clear-data", { mode }),
-	/** Open a URL in the user's default system browser. */
-	managedBrowserOpenExternal: (url) => ipcRenderer.invoke("managed-browser:open-external", { url }),
-	managedBrowserPickElement: () => ipcRenderer.invoke("managed-browser:pick-element"),
-	managedBrowserNewTab: () => ipcRenderer.invoke("managed-browser:new-tab"),
-	managedBrowserSelectTab: (tabId) => ipcRenderer.invoke("managed-browser:select-tab", tabId),
-	managedBrowserCloseTab: (tabId) => ipcRenderer.invoke("managed-browser:close-tab", tabId),
 	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
-	/** Managed browser state pushed on any change. */
+	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */
+	managedBrowserGuestReady: (input) => ipcRenderer.invoke("managed-browser:guest-ready", input),
+	managedBrowserGuestGone: (tabId) => ipcRenderer.invoke("managed-browser:guest-gone", tabId),
+	managedBrowserActiveTab: (tabId) => ipcRenderer.invoke("managed-browser:active-tab", tabId),
+	managedBrowserVisibility: (visible) => ipcRenderer.invoke("managed-browser:visibility", { visible }),
+	/** Managed browser state pushed on any change (port/activity/agentActivity). */
 	onManagedBrowserState: (cb) => {
 		const listener = (_e, state) => cb(state);
 		ipcRenderer.on("managed-browser:state", listener);
@@ -280,6 +268,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		const listener = (_e, payload) => cb(payload);
 		ipcRenderer.on("managed-browser:confirm", listener);
 		return () => ipcRenderer.removeListener("managed-browser:confirm", listener);
+	},
+	/** Agent-created tab (CDP Target.createTarget / popup): mount a <webview>. */
+	onManagedBrowserCreateTab: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:create-tab", listener);
+		return () => ipcRenderer.removeListener("managed-browser:create-tab", listener);
+	},
+	onManagedBrowserSelectTab: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:select-tab", listener);
+		return () => ipcRenderer.removeListener("managed-browser:select-tab", listener);
+	},
+	onManagedBrowserCloseTab: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("managed-browser:close-tab", listener);
+		return () => ipcRenderer.removeListener("managed-browser:close-tab", listener);
 	},
 	/** Self-drawn frosted tray menu (tray-menu.html) bridge. */
 	trayMenu: {

@@ -80,13 +80,28 @@ const WINDOW_JUMP = 500;
 // message rows (text + padding) run 60-100px, so 64 is closer than 44.
 const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
 
+/** Top inset for a jump landing: the row must not sit flush against the
+ *  scroller's edge (floating status cards / masks live there). */
+const JUMP_TOP_INSET = 12;
+
 /** Scroll the entry row carrying `title=<timestamp>` into view and flash it
  *  (jump feedback for the request path and the post-expansion path; the
- *  caller releases bottom-follow before invoking). */
+ *  caller releases bottom-follow before invoking).
+ *
+ *  Scrolls ONLY the transcript's own scroller: `scrollIntoView` walks every
+ *  scrollable ancestor, so a jump used to push the whole shell up and leave the
+ *  target half-hidden under the top chrome (user: 轨迹跳转后界面上移被遮挡). */
 function jumpFlashRow(root: HTMLElement | null, timestamp: string): void {
 	const el = root?.querySelector<HTMLElement>(`[title="${CSS.escape(timestamp)}"]`);
 	if (!el) return;
-	el.scrollIntoView({ block: "start", behavior: "smooth" });
+	const scroller = root?.closest<HTMLElement>(".gui-transcript") ?? null;
+	if (scroller) {
+		const offset =
+			el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - JUMP_TOP_INSET;
+		scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+	} else {
+		el.scrollIntoView({ block: "start", behavior: "smooth" });
+	}
 	el.classList.remove("tr-flash-highlight");
 	// rAF so the class re-add restarts the animation on consecutive jumps.
 	requestAnimationFrame(() => {

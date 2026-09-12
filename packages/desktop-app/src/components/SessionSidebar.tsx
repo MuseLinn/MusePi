@@ -1,7 +1,6 @@
 import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { matchesFuzzyQuery } from "../lib/fuzzy-model-match";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -12,6 +11,8 @@ import { GroupedSessionList } from "./GroupedSessionList";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import { SessionSearchBar } from "./SessionSearchBar";
+import { filterSessionTree, isRecentlyActive } from "./session-list-shared";
 
 /**
  * Left pane — ZCode-style: menu (new/search/scheduled/skills), a group/
@@ -367,32 +368,51 @@ export function SessionSidebar({
 	}, []);
 	const archivedIds = new Set(archived.map(a => a.sessionId));
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
-	const pinnedNodes = nodes.filter(n => pinned.includes(n.entry.id));
-	// Fixed session search: filter the tree by label + cwd (recursively — a
-	// node stays when it matches or any descendant matches). Empty →
-	// everything. Matching is subsequence-fuzzy (TUI /switch parity via the
-	// shared matchesFuzzyQuery): "ds" finds "DeepSeek 重构", contiguous
-	// substrings are not required.
+	// Session search (openchamber sidebar parity): the tree is filtered by
+	// label + cwd through the shared filterSessionTree, which also reports how
+	// many sessions the query kept — the box's count and the filtered list come
+	// from the same pass and so can never disagree.
 	const [sessionQuery, setSessionQuery] = useState("");
-	const matchTree = useCallback(
-		(list: SessionListNode[], q: string): SessionListNode[] => {
-			if (!q) return list;
-			const walk = (n: SessionListNode): SessionListNode | null => {
-				const kids = n.children.map(walk).filter((x): x is SessionListNode => x !== null);
-				const haystack = `${n.label ?? n.entry.label ?? ""} ${sessionMeta.get(n.entry.id)?.cwd ?? ""}`;
-				if (matchesFuzzyQuery(q, haystack) || kids.length > 0) return { ...n, children: kids };
-				return null;
-			};
-			return list.map(walk).filter((x): x is SessionListNode => x !== null);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searchInputRef = useRef<HTMLInputElement | null>(null);
+	const { nodes: searchedNodes, matched: searchMatchCount } = useMemo(
+		() =>
+			filterSessionTree(
+				visibleNodes,
+				sessionQuery,
+				n => `${n.label ?? n.entry.label ?? ""} ${sessionMeta.get(n.entry.id)?.cwd ?? ""}`,
+			),
+		[visibleNodes, sessionQuery, sessionMeta],
+	);
+	const searchActive = sessionQuery.trim().length > 0;
+	const pinnedNodes = searchedNodes.filter(n => pinned.includes(n.entry.id));
+	// Closing the box clears the query with it: a filtered list must never
+	// outlive the control that explains it.
+	const closeSearch = useCallback((): void => {
+		setSearchOpen(false);
+		setSessionQuery("");
+	}, []);
+	const handleSearchOpenChange = useCallback(
+		(next: boolean): void => {
+			if (next) setSearchOpen(true);
+			else closeSearch();
 		},
-		// sessionMeta is read inside via stable Map identity in practice, but
-		// listing it keeps the matcher honest when metadata refreshes.
-		[sessionMeta],
+		[closeSearch],
 	);
-	const searchedNodes = useMemo(
-		() => matchTree(visibleNodes, sessionQuery.trim()),
-		[matchTree, visibleNodes, sessionQuery],
-	);
+	// Sidebar-search accelerator: ⌘F (Ctrl+F elsewhere). ⌘K belongs to the app
+	// command palette, so the two entry points never fight; a collapsed pane
+	// leaves the key alone.
+	useEffect(() => {
+		if (collapsed) return;
+		const onKey = (event: KeyboardEvent): void => {
+			if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+			if (event.key.toLowerCase() !== "f") return;
+			event.preventDefault();
+			setSearchOpen(true);
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [collapsed]);
 	// Scheduled-task sessions get their own section (定时任务) instead of
 	// cluttering the regular session flow. Pinned wins (pinned section
 	// owns them while pinned).
@@ -414,6 +434,48 @@ export function SessionSidebar({
 				workingIds={workingIds}
 				statuses={statuses}
 				manualTags={manualTags}
+				searchQuery={sessionQuery}
+			/>
+		</div>
+	);
+	// 近期 projection (openchamber deriveRecentSessions parity): root sessions
+	// that are live right now, unread, or were touched inside the retention
+	// window. Pinned and scheduled runs keep their own sections, and forked
+	// children stay inside their parent's subtree — promoted flat they would
+	// render twice. Members remain in their groups below; 近期 only leads with
+	// them.
+	const recentNodes = useMemo(() => {
+		const now = Date.now();
+		return searchedNodes.filter(
+			n =>
+				!n.entry.parentId &&
+				n.entry.source !== "cron" &&
+				!pinned.includes(n.entry.id) &&
+				isRecentlyActive(n.entry, {
+					working: sessionMeta.get(n.entry.id)?.working === true,
+					unread: unread?.has(n.entry.id) === true,
+					now,
+				}),
+		);
+	}, [searchedNodes, pinned, sessionMeta, unread]);
+	/** Shared 近期 section block (used by groups + projects tabs). */
+	const recentSection = recentNodes.length > 0 && (
+		<div className="mb-1.5">
+			<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
+				<Icon name="history" className="h-3.5 w-3.5" />
+				{t("recent")}
+			</div>
+			<SessionList
+				nodes={recentNodes}
+				selectedId={selectedId}
+				onSelect={onSelect}
+				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+				unread={unread}
+				pausedIds={pausedIds}
+				workingIds={workingIds}
+				statuses={statuses}
+				manualTags={manualTags}
+				searchQuery={sessionQuery}
 			/>
 		</div>
 	);
@@ -559,6 +621,23 @@ export function SessionSidebar({
 					 * the toggle/add/archive buttons stay fully visible at any pane
 					 * width and always sit flush to the strip's right edge. */}
 					<div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
+						{/* Session search toggle: keyboard reachable (Tab → Enter) and
+						 * the ⌘F accelerator; `data-search-toggle` keeps the box's
+						 * outside-dismiss from swallowing the closing click. */}
+						<button
+							type="button"
+							className="gui-tab-action"
+							data-search-toggle="true"
+							title={`${t("search sessions…")} (${shortcutLabel("⌘F")})`}
+							aria-label={t("search sessions…")}
+							aria-expanded={searchOpen}
+							onClick={() => {
+								if (searchOpen) closeSearch();
+								else setSearchOpen(true);
+							}}
+						>
+							<Icon name="search" className="h-3.5 w-3.5" />
+						</button>
 						<button
 							type="button"
 							className="gui-tab-action"
@@ -693,27 +772,14 @@ export function SessionSidebar({
 				{/* Sessions list — custom groups in groups tab; project/timeline in
 				 * projects; archived sessions in the archive view (ZCode). */}
 				<div className="gui-sessions-tab mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
-					<div className="gui-session-search">
-						<Icon name="search" className="h-3.5 w-3.5 flex-none" />
-						<input
-							className="gui-input min-w-0 flex-1"
-							value={sessionQuery}
-							onChange={e => setSessionQuery(e.target.value)}
-							placeholder={t("search sessions…")}
-							aria-label={t("search sessions…")}
-						/>
-						{sessionQuery && (
-							<button
-								type="button"
-								className="rounded-md p-0.5 text-[var(--color-text-faint)] hover:text-[var(--color-text)]"
-								onClick={() => setSessionQuery("")}
-								title={t("clear")}
-								aria-label={t("clear")}
-							>
-								<Icon name="close" className="h-3 w-3" />
-							</button>
-						)}
-					</div>
+					<SessionSearchBar
+						open={searchOpen}
+						query={sessionQuery}
+						matchCount={searchMatchCount}
+						inputRef={searchInputRef}
+						onQueryChange={setSessionQuery}
+						onOpenChange={handleSearchOpenChange}
+					/>
 					<div className="flex items-center justify-end px-4 py-1.5">
 						{archivedView && (
 							<button
@@ -781,7 +847,7 @@ export function SessionSidebar({
 									);
 								})
 							)
-						) : tab === "projects" ? (
+						) : searchActive && searchMatchCount === 0 ? null : tab === "projects" ? (
 							<>
 								{/* Add-project button lives above BOTH view modes (the
 								 * timeline default hid it before — ZCode parity: 项目 tab
@@ -862,9 +928,11 @@ export function SessionSidebar({
 													workingIds={workingIds}
 													statuses={statuses}
 													manualTags={manualTags}
+													searchQuery={sessionQuery}
 												/>
 											</div>
 										)}
+										{recentSection}
 										{cronNodes.length > 0 && cronSection}
 										<GroupedSessionList
 											nodes={regularNodes}
@@ -876,6 +944,7 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											searchQuery={sessionQuery}
 										/>
 									</>
 								) : (
@@ -925,9 +994,11 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
+															searchQuery={sessionQuery}
 														/>
 													</div>
 												)}
+												{recentSection}
 												{cronNodes.length > 0 && cronSection}
 												{order.map(path => {
 													const list = byCwd.get(path) ?? [];
@@ -1000,6 +1071,7 @@ export function SessionSidebar({
 																		workingIds={workingIds}
 																		statuses={statuses}
 																		manualTags={manualTags}
+																		searchQuery={sessionQuery}
 																	/>
 																)}
 															</ProjectCollapse>
@@ -1025,6 +1097,7 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
+															searchQuery={sessionQuery}
 														/>
 													</div>
 												)}
@@ -1049,9 +1122,11 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											searchQuery={sessionQuery}
 										/>
 									</div>
 								)}
+								{recentSection}
 								{/* ZCode: the groups tab lists sessions too — custom
 								 * groups on top, then the time-grouped session tree. */}
 								<CustomGroups
@@ -1060,7 +1135,7 @@ export function SessionSidebar({
 									onOverrideClear={() => setGroupsAll(null)}
 									// Pinned sessions leave their groups (mutually exclusive): the
 									// pinned section above owns them while pinned.
-									nodes={visibleNodes.filter(n => !pinned.includes(n.entry.id))}
+									nodes={searchedNodes.filter(n => !pinned.includes(n.entry.id))}
 									selectedId={selectedId}
 									onSelect={onSelect}
 									onSessionContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
@@ -1114,6 +1189,7 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									searchQuery={sessionQuery}
 								/>
 								{cronNodes.length > 0 && cronSection}
 								<GroupedSessionList
@@ -1126,6 +1202,7 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									searchQuery={sessionQuery}
 								/>
 							</>
 						)}

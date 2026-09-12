@@ -73,6 +73,39 @@
 .gui-terminal-host {
 	background: transparent;
 }
+/* Selection-attach chip (terminal → chat composer). Anchored to the
+ * wrapper, not the xterm viewport, so it stays clear of xterm's own
+ * inline chrome. */
+.gui-terminal-wrap {
+	position: relative;
+	height: 100%;
+	min-height: 0;
+}
+.gui-terminal-attach {
+	position: absolute;
+	top: 10px;
+	right: 16px;
+	z-index: 5;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 32%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised));
+	color: var(--color-text);
+	font-size: 11px;
+	line-height: 1;
+	cursor: pointer;
+	transition: background 120ms ease;
+}
+.gui-terminal-attach:hover {
+	background: color-mix(in oklab, var(--color-accent) 24%, var(--color-surface-raised));
+}
+.gui-terminal-attach .oc-icon {
+	color: var(--color-accent);
+}
 
 .gui-terminal-tab {
 	color: var(--color-text-faint);
@@ -1430,6 +1463,70 @@ body.gui-resizing .gui-pane-right {
 	font-size: 11px;
 	font-weight: 650;
 	font-variant-numeric: tabular-nums;
+}
+/* Branch row: tracking position vs upstream (openchamber work-status). */
+.gui-status-tracks {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	flex-shrink: 0;
+	font-size: 10.5px;
+	font-weight: 650;
+	font-variant-numeric: tabular-nums;
+}
+.gui-status-track-up {
+	color: var(--color-ok);
+}
+.gui-status-track-down {
+	color: var(--color-warning);
+}
+/* Changed-files disclosure: one row per path, badge + path, opening the git
+ * surface (the card stays a launcher). */
+.gui-status-files {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 2px 0 2px 6px;
+}
+.gui-status-file {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	padding: 3px 6px;
+	border-radius: 7px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-status-file:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+.gui-status-file-badge {
+	flex-shrink: 0;
+	min-width: 15px;
+	text-align: center;
+	font-size: 10px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-faint);
+}
+.gui-status-file-badge--new {
+	color: var(--color-ok);
+}
+.gui-status-file--more {
+	color: var(--color-text-faint);
+	font-style: italic;
+}
+/* Collapsed pill: labelled segments (never a bare glyph + number). */
+.gui-status-pill-seg {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+.gui-status-pill-label {
+	color: var(--color-text-faint);
+	font-weight: 500;
 }
 .gui-status-num-add {
 	color: var(--color-ok);

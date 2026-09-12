@@ -285,11 +285,12 @@ export interface StreamingRenderState {
 /**
  * Streaming markdown renderer. The settled render (`streaming: false`)
  * parses the complete text once — the stable final layout (what a reload
- * shows). While streaming, completed blocks render as markdown (reused
- * verbatim across frames) and the not-yet-settled TAIL is returned as RAW
- * TEXT (`tail`) — the caller appends it incrementally as per-character
- * spans (each new char's entrance animation plays ONCE; a plain tail only
- * grows, and the full markdown renders once on settle).
+ * shows). While streaming, every COMPLETE block renders as markdown: the
+ * head grows as balanced "\n\n" boundaries appear, so the message takes
+ * shape as it arrives. The region after the last balanced boundary is
+ * returned as RAW TEXT (`tail`) — only a plain region can host the
+ * per-character span effects, which is also why an unclosed fence stays
+ * literal until it closes.
  */
 export function renderStreamingMarkdown(
 	text: string,
@@ -313,16 +314,37 @@ export function renderStreamingMarkdown(
 	}
 	try {
 		if (prev && text.length > prev.text.length && text.startsWith(prev.text)) {
-			// Append-only growth: the plain-tail start NEVER advances during
-			// streaming. Re-parsing the region that was shown as plain text
-			// as markdown mid-stream is exactly the structural jump the
-			// plain-tail contract forbids — the region stays plain (kept in
-			// the stable DOM container) until settle re-parses everything.
-			// The frozen markdown head blocks are reused verbatim.
+			// Append-only growth: the frozen head ADVANCES by promoting every
+			// block that has just become complete — a balanced "\n\n" boundary
+			// that did not exist on the previous frame. Promoting it now is what
+			// lets markdown take shape while the message streams (paragraphs,
+			// lists, and a code fence from the moment it closes) instead of
+			// waiting for settle.
+			//
+			// The region AFTER the last balanced boundary stays RAW TEXT: that is
+			// what keeps the per-character span effects working (a stable plain
+			// node the DOM pass can append spans to), and why an OPEN fence is
+			// still shown literally. `blocks` is mutated in place — the caller
+			// replaces its cached state with the object returned here, so the
+			// previous entry is discarded. The tail DOM pass clears and re-appends
+			// when the cut moves past its own prefix, so promoted text is not
+			// re-animated.
+			const blocks = prev.blocks;
+			let tailStart = prev.tailStart ?? 0;
+			for (let i = tailStart; i < text.length; i++) {
+				if (text[i] !== "\n" || text[i + 1] !== "\n") continue;
+				if (!fencesBalanced(text.slice(0, i + 2))) continue;
+				blocks.push({
+					start: tailStart,
+					html: decorateTables(md.parse(text.slice(tailStart, i + 2), { async: false })),
+				});
+				tailStart = i + 2;
+				i += 1;
+			}
 			return {
-				html: prev.blocks.map(b => b.html).join(""),
-				tail: text.slice(prev.tailStart ?? 0),
-				state: { text, blocks: prev.blocks, tailStart: prev.tailStart ?? 0 },
+				html: blocks.map(b => b.html).join(""),
+				tail: text.slice(tailStart),
+				state: { text, blocks, tailStart },
 			};
 		}
 		// First streaming frame / non-append growth: parse once, split into

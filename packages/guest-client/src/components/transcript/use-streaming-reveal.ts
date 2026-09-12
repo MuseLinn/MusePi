@@ -5,6 +5,11 @@ import { BlockUnitCounter, nextDrainPosition, nextRevealPosition } from "./revea
  * Character-level reveal for a streaming text block (the 平滑流式渲染
  * setting). Returns the prefix of `text` to display right now.
  *
+ * - Mounting reveals nothing: the block starts at the end of the text it was
+ *   mounted with. A block that mounts settled (history message, session
+ *   switch) shows in full — it was never animated text from this component's
+ *   point of view — and one that mounts mid-stream shows its current text in
+ *   full, animating only what arrives afterwards.
  * - `text` grows as model chunks arrive → the counter re-segments only the
  *   appended tail and the reveal catches up over ~8 rAF frames (proportional
  *   drain — a token burst is absorbed smoothly, never popped whole, and a
@@ -17,10 +22,16 @@ import { BlockUnitCounter, nextDrainPosition, nextRevealPosition } from "./revea
  * - `resetKey` change → reveal restarts from 0 (preview loops).
  */
 export function useStreamingReveal(text: string, streaming: boolean, enabled: boolean, resetKey = 0): string {
-	const [revealed, setRevealed] = useState(0);
 	const counterRef = useRef<BlockUnitCounter | null>(null);
 	if (counterRef.current === null) counterRef.current = new BlockUnitCounter();
-	const revealedRef = useRef(0);
+	// Mount starts at the END of this block's text. The text existed before the
+	// component did — a history message, or a live message re-mounted by a
+	// session switch — so revealing from 0 re-types text the user has already
+	// read, and the settle drain below then treats the whole committed message
+	// as backlog. Only text that GROWS after mount animates; previews still
+	// replay from 0 via `resetKey`.
+	const [revealed, setRevealed] = useState(() => counterRef.current!.count(0, text));
+	const revealedRef = useRef(revealed);
 	const textRef = useRef(text);
 	const streamingRef = useRef(streaming);
 	const enabledRef = useRef(enabled);
@@ -39,8 +50,13 @@ export function useStreamingReveal(text: string, streaming: boolean, enabled: bo
 		}
 	};
 
-	// Restart on resetKey (preview loop).
+	// Restart on a resetKey CHANGE (preview loops). The effect's first run is the
+	// mount itself — resetting there would undo the mount rule above and re-type
+	// the whole block, so only a real key change restarts the reveal.
+	const resetKeyRef = useRef(resetKey);
 	useEffect(() => {
+		if (resetKeyRef.current === resetKey) return;
+		resetKeyRef.current = resetKey;
 		revealedRef.current = 0;
 		setRevealed(0);
 		textRef.current = text;

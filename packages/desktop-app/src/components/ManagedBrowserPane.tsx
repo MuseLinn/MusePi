@@ -2,71 +2,44 @@
  * Managed in-app browser pane (Proma 吸收 + open-design DesignBrowserPanel
  * UI/UX 吸收).
  *
- * Electron path: the panel content is a plain div slot; the REAL page is an
- * Electron `WebContentsView` owned by the main process (managed-browser.cjs),
- * which projects the slot's CSS rect onto the native view via
- * `managed-browser:set-layout`. The renderer only reads projected state and
- * drives navigation controls over IPC — it never touches WebContents/CDP.
+ * 页面是 DOM 里的 `<webview>`,由常驻的 `ManagedBrowserHost` 持有 —— 本组件只渲染
+ * chrome(地址栏/标签条/菜单/台账/起始页),并把内容槽位的 rect 报给宿主定位。
+ * 因为页面参与 DOM 层叠,菜单、悬浮提示与右侧面板的 4px 拖拽手柄都按普通 z-index
+ * 正常显示;原生 `WebContentsView` 时代的「让位 4px」「有浮层就隐藏页面」规避
+ * 全部删除。
  *
- * Blank tabs (about:blank / no URL yet) hide the native view in main
- * (applyLayout skips blank tabs) so a React start page shows through:
- * quick links + recent visits, absorbing open-design's Reference Board
- * start page (`isBlank ? <DesignBrowserStart/> : <webview/>` pattern).
+ * 空白标签显示 React 起始页(快速链接 + 最近访问),它盖在 about:blank 的 guest
+ * 之上 —— guest 不因此卸载,agent 仍可继续驱动它。
  *
- * The agent's browser tool drives the SAME views through the loopback CDP
- * bridge (`browser.gui`), so user and agent share one browser instance and
- * its persistent login state; agent operations surface in the activity line
- * and auto-open the panel (ContextPanel listens for agentActivity).
+ * The agent's browser tool drives the SAME guests through the loopback CDP
+ * bridge (`browser.gui`), so user and agent share one browser instance and its
+ * persistent login state; agent operations surface in the activity line and
+ * auto-open the panel (ContextPanel listens for agentActivity).
  */
 import { t } from "@musepi/guest-client";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
+import { fitViewport } from "../lib/browser-viewport";
+import { openExternalUrl } from "../lib/electron";
+import {
+	answerConfirm,
+	clearData as clearBrowserDataInStore,
+	closeTab,
+	createTab,
+	getHostState,
+	goBack,
+	goForward,
+	navigate as navigateInStore,
+	pickElement as pickElementInPage,
+	reload,
+	selectTab,
+	setPaneRect,
+	stopAgentOp,
+	subscribeHost,
+} from "../lib/managed-browser-host";
+import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { Icon } from "../vendor/oc-icons";
-
-let nextLayoutRevision = 0;
-
-/** App overlays that must render ABOVE the native view (it always sits on
- *  top of the DOM): dialogs/toasts/menus/suggestions hide the view while
- *  open. The rail overflow menu and address suggestions are DOM popups that
- *  project onto the slot region — without hiding the view they are buried
- *  under the native WebContentsView (user: 浮窗和浏览器元素层级混乱). */
-const APP_OVERLAY_SELECTOR =
-	'[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [data-sonner-toast]';
-
-/**
- * True when a REAL overlay is blocking the slot area. Presence alone is NOT
- * enough: the global-pause overlay stays mounted forever with role="dialog"
- * (hidden via visibility/opacity when not paused) — a bare querySelector
- * would report it as blocking and keep the native view hidden forever,
- * which read as 内置浏览器白屏 (the reported bug). Only count elements that
- * are actually on screen (rendered box) and not visibility:hidden.
- */
-function isActuallyOnScreen(el: Element): boolean {
-	const style = getComputedStyle(el);
-	// NOT opacity: gui-browser-pop animates from opacity:0, so the first
-	// frame would read as hidden and keep the native view visible (the menu
-	// stays buried under the native WebContentsView). visibility/display plus
-	// a rendered box are enough — global-pause hides via visibility:hidden.
-	if (style.visibility === "hidden" || style.display === "none") return false;
-	const rect = el.getBoundingClientRect();
-	return rect.width > 0 && rect.height > 0;
-}
-
-function hasBlockingOverlay(): boolean {
-	// querySelector returns only the FIRST match — a permanently-mounted
-	// hidden overlay (the global-pause dialog) can sit ahead of the real
-	// popup in DOM order and mask it (user: 浏览器菜单被网页内容遮挡).
-	// Scan every candidate; any on-screen overlay blocks the native view.
-	return Array.from(document.querySelectorAll(APP_OVERLAY_SELECTOR)).some(isActuallyOnScreen);
-}
-
-/** Only portal/toast lifecycle mutations — streaming text (characterData)
- *  must never trigger a layout IPC. */
-function mutationIsOverlayLifecycle(mutation: MutationRecord): boolean {
-	if (mutation.type !== "childList") return false;
-	const nodes = [...mutation.addedNodes, ...mutation.removedNodes];
-	return nodes.some(node => node instanceof Element && node.closest(APP_OVERLAY_SELECTOR) !== null);
-}
 
 const statusLabel = (status: string): string => {
 	switch (status) {
@@ -231,10 +204,9 @@ export function ManagedBrowserPane({
 	 *  AgentBrowserLinkProvider parity). */
 	openRequest?: { url: string; nonce: number } | null;
 } = {}): ReactNode {
-	const api = window.electronAPI;
-	const [state, setState] = useState<ManagedBrowserState | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [confirm, setConfirm] = useState<ManagedBrowserConfirmRequest | null>(null);
+	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
+	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
+	const host = useSyncExternalStore(subscribeHost, getHostState);
 	const [picking, setPicking] = useState(false);
 	const [pickedSelector, setPickedSelector] = useState<string | null>(null);
 	// Address omnibox state (open-design parity): editing shows the raw URL,
@@ -242,6 +214,7 @@ export function ManagedBrowserPane({
 	const [addressValue, setAddressValue] = useState("");
 	const [addressEditing, setAddressEditing] = useState(false);
 	const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+	const [suggestionIndex, setSuggestionIndex] = useState(-1);
 	const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadHistory());
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [viewport, setViewport] = useState<number | null>(null);
@@ -250,9 +223,9 @@ export function ManagedBrowserPane({
 	const urlRef = useRef<HTMLInputElement | null>(null);
 	const chromeRef = useRef<HTMLDivElement | null>(null);
 
-	const activeTab = state?.tabs.find(tab => tab.id === state.activeTabId) ?? null;
+	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
-	const isBlank = !activeTab || activeUrl === EMPTY_URL || activeUrl === "";
+	const isBlank = !activeTab || activeTab.blank || activeUrl === EMPTY_URL || activeUrl === "";
 
 	// Persist history (debounced, open-design parity).
 	useEffect(() => {
@@ -279,121 +252,78 @@ export function ManagedBrowserPane({
 		});
 	}, [activeTab]);
 
-	/** Element picker (bitfun/openchamber parity): capture a page element's
-	 *  unique CSS selector for the user to hand to the agent. */
+	/** Element picker (bitfun/openchamber parity): the inspecting script runs
+	 *  INSIDE the guest, so cross-origin pages can be picked as well. */
 	const pickElement = useCallback(async (): Promise<void> => {
-		if (!api || picking) return;
+		if (picking) return;
 		setPicking(true);
 		setPickedSelector(null);
 		try {
-			const res = await api.managedBrowserPickElement();
-			const selector = res?.selector;
-			if (selector) {
-				setPickedSelector(selector);
-				const pickResult = res as { tag?: string; text?: string };
-				const insertion = `${t("inserted element", { tag: pickResult?.tag ?? "", text: (pickResult?.text ?? "").slice(0, 80) })} ${t("picked element")}: ${selector}`;
+			const picked = (await pickElementInPage(BROWSER_INSPECT_SCRIPT)) as PickedElement | null;
+			if (picked?.selector) {
+				setPickedSelector(picked.selector);
+				const insertion = `${t("inserted element", { tag: picked.tag, text: picked.text.slice(0, 80) })} ${t("picked element")}: ${picked.selector}`;
 				window.dispatchEvent(new CustomEvent("musepi-gui-insert-text", { detail: { text: insertion } }));
 			}
 		} finally {
 			setPicking(false);
 		}
-	}, [api, picking]);
+	}, [picking]);
 
+	// First open with no tabs: give the host one to mount (main learns about it
+	// through guest-ready, so no IPC call is needed here).
 	useEffect(() => {
-		if (!api) return;
-		let alive = true;
-		void api.managedBrowserGetState().then(snapshot => {
-			if (!alive) return;
-			setState(snapshot);
-			// First open: create the initial tab (main owns all state).
-			if (snapshot.tabs.length === 0)
-				void api
-					.managedBrowserOpen()
-					.then(setState)
-					.catch(() => {});
-		});
-		const off = api.onManagedBrowserState(snapshot => {
-			if (!alive) return;
-			setState(snapshot);
-		});
-		const offConfirm = api.onManagedBrowserConfirm(request => {
-			if (!alive) return;
-			setConfirm(request);
-		});
-		return () => {
-			alive = false;
-			off();
-			offConfirm();
-		};
-	}, []);
+		if (host.tabs.length === 0) void createTab(EMPTY_URL).catch(() => {});
+	}, [host.tabs.length]);
 
-	// Layout projection: slot rect → native view bounds. Re-project on
-	// resize + overlay lifecycle; hide the view when the slot unmounts.
-	// Blank tabs are skipped in main (start page shows), so project
-	// `visible: false` when blank to keep the native view hidden.
+	// 内容槽位是宿主的「定位靶」:页面元素在同级常驻宿主里,这里只把槽位 rect 交给
+	// store,由宿主用 fixed 定位浮上来(纯 DOM,无 IPC)。槽位卸载 = 面板关闭;宿主
+	// 保持挂载并转不可见 —— agent 仍可继续驱动并截图。
 	useLayoutEffect(() => {
-		if (!api) return;
 		const el = slotRef.current;
 		if (!el) return;
-		let cancelled = false;
-		const project = (visible: boolean): void => {
-			if (cancelled) return;
-			const rect = el.getBoundingClientRect();
-			nextLayoutRevision += 1;
-			void api.managedBrowserSetLayout({
-				bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-				visible: visible && !hasBlockingOverlay() && !isBlank,
-				revision: nextLayoutRevision,
-			});
-		};
-		project(true);
-		const ro = new ResizeObserver(() => project(true));
-		ro.observe(el);
-		const mo = new MutationObserver(mutations => {
-			if (mutations.some(mutationIsOverlayLifecycle)) project(true);
-			// The right panel's maximize toggle flips the panel class from
-			// .gui-pane-right--inner to .gui-pane-right--maximized —
-			// position/size change that ResizeObserver sees, but ALSO a
-			// background change that can momentarily hide the slot behind
-			// an opaque pane. Re-project so the native view follows the
-			// maximized rect immediately (user: 最大化面板后浏览器空白/重叠).
-			if (
-				mutations.some(
-					m =>
-						m.target instanceof Element &&
-						(m.target.classList?.contains("gui-pane-right--maximized") ||
-							m.target.classList?.contains("gui-pane-right--inner")),
-				)
-			) {
-				project(true);
+		const report = (): void => {
+			if (viewport) {
+				// Preset active: the page must LAY OUT at the preset width (that is
+				// what makes a responsive check meaningful) and be scaled down to
+				// fit — `max-width` alone let flex shrink it instead, so the preset
+				// did nothing (user: 网页显示尺寸不正常).
+				const avail = el.getBoundingClientRect();
+				const fit = fitViewport(viewport, avail.width);
+				const visualWidth = fit.width * fit.scale;
+				setPaneRect({
+					x: avail.x + Math.max(0, (avail.width - visualWidth) / 2),
+					y: avail.y,
+					width: fit.width,
+					height: avail.height / fit.scale,
+					scale: fit.scale,
+				});
+				return;
 			}
-		});
-		mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
-		// ResizeObserver only sees SIZE changes — a position-only shift
-		// (capture-phase scrolls, minimize→restore, DPI change when the
-		// window crosses monitors) left the native view at stale bounds
-		// (user: 页面内容显示错位). Re-project on those signals too.
-		const onReproject = (): void => project(true);
-		window.addEventListener("resize", onReproject);
-		window.addEventListener("scroll", onReproject, true);
-		window.addEventListener("focus", onReproject);
-		document.addEventListener("visibilitychange", onReproject);
-		return () => {
-			cancelled = true;
-			ro.disconnect();
-			mo.disconnect();
-			window.removeEventListener("resize", onReproject);
-			window.removeEventListener("scroll", onReproject, true);
-			window.removeEventListener("focus", onReproject);
-			document.removeEventListener("visibilitychange", onReproject);
-			nextLayoutRevision += 1;
-			void api.managedBrowserSetLayout({
-				bounds: { x: 0, y: 0, width: 0, height: 0 },
-				visible: false,
-				revision: nextLayoutRevision,
-			});
+			const rect = el.getBoundingClientRect();
+			setPaneRect({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
 		};
-	}, [isBlank]);
+		report();
+		const ro = new ResizeObserver(report);
+		ro.observe(el);
+		// A layout shift that MOVES the slot without resizing it (sidebar
+		// collapse, side-panel drag, transcript reflow, panel maximize) fires no
+		// ResizeObserver event and no window event — the host then keeps the old
+		// rect, so the page looks oversized/clipped and clicks land off-target.
+		// Re-measure on a cheap interval while the pane is mounted.
+		const timer = window.setInterval(report, 200);
+		window.addEventListener("resize", report);
+		window.addEventListener("scroll", report, true);
+		window.addEventListener("transitionend", report, true);
+		return () => {
+			window.clearInterval(timer);
+			ro.disconnect();
+			window.removeEventListener("resize", report);
+			window.removeEventListener("scroll", report, true);
+			window.removeEventListener("transitionend", report, true);
+			setPaneRect(null);
+		};
+	}, [viewport]);
 
 	const commitVisit = useCallback((url: string): void => {
 		if (!isHistoryUrl(url)) return;
@@ -409,20 +339,17 @@ export function ManagedBrowserPane({
 
 	const navigateTo = useCallback(
 		async (target: string): Promise<void> => {
-			if (!api || !target.trim()) return;
 			const trimmed = target.trim();
-			// If it has no scheme, the main process normalizes it (localhost,
-			// omp-file paths, etc.) — pass it through as-is.
-			const result = await api.managedBrowserNavigate({ url: trimmed }).catch(() => null);
-			setError(result && !result.ok ? (result.error ?? t("public http https only")) : null);
-			if (result?.ok) {
-				commitVisit(result.url ?? trimmed);
-				setAddressValue(result.url ?? trimmed);
-				setAddressEditing(false);
-				setSuggestionsOpen(false);
-			}
+			if (!trimmed) return;
+			// Main normalizes the address (localhost / omp-file paths) and owns the
+			// risk policy, then loads the guest; failures land in the host store.
+			const ok = await navigateInStore(trimmed);
+			if (!ok) return;
+			commitVisit(trimmed);
+			setAddressEditing(false);
+			setSuggestionsOpen(false);
 		},
-		[api, commitVisit],
+		[commitVisit],
 	);
 
 	const handleAddressSubmit = (e: React.FormEvent): void => {
@@ -484,28 +411,46 @@ export function ManagedBrowserPane({
 		setMenuOpen(false);
 	}, []);
 
-	const clearBrowserData = useCallback(
-		async (mode: "cookies" | "all"): Promise<void> => {
-			if (!api) return;
-			await api.managedBrowserClearData(mode).catch(() => null);
-			setMenuOpen(false);
-		},
-		[api],
-	);
+	const clearBrowserData = useCallback(async (mode: "cookies" | "all"): Promise<void> => {
+		await clearBrowserDataInStore(mode);
+		setMenuOpen(false);
+	}, []);
 
 	const openInSystem = useCallback((): void => {
-		if (!api || !/^https?:\/\//i.test(activeUrl)) return;
-		void api.managedBrowserOpenExternal(activeUrl).catch(() => {});
+		if (!/^https?:\/\//i.test(activeUrl)) return;
+		void openExternalUrl(activeUrl).catch(() => {});
 		setMenuOpen(false);
-	}, [api, activeUrl]);
+	}, [activeUrl]);
 
 	const onAddressKeyDown = (e: KeyboardEvent<HTMLInputElement>): void => {
 		if (e.key === "Escape") {
 			setAddressEditing(false);
 			setSuggestionsOpen(false);
+			setSuggestionIndex(-1);
 			e.currentTarget.blur();
+			return;
+		}
+		if (!suggestionsOpen || suggestions.length === 0) return;
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			// Narrow outside the setState callback — narrowing does not survive
+			// into a closure that runs after the event handler returns.
+			const step: SuggestionStepKey = e.key;
+			e.preventDefault();
+			setSuggestionIndex(current => stepSuggestionIndex(current, step, suggestions.length));
+			return;
+		}
+		if (e.key === "Enter" && suggestionIndex >= 0) {
+			e.preventDefault();
+			const chosen = suggestions[suggestionIndex];
+			if (chosen) void navigateTo(chosen.url);
 		}
 	};
+
+	// A new list is a new choice; keep stale index from highlighting whatever
+	// happens to sit at that position now.
+	useLayoutEffect(() => {
+		setSuggestionIndex(-1);
+	}, [addressValue, suggestionsOpen]);
 
 	const activeTabLoading = Boolean(activeTab?.loading);
 
@@ -519,8 +464,8 @@ export function ManagedBrowserPane({
 						className="gui-browser-icon-btn"
 						aria-label={t("back")}
 						title={t("back")}
-						disabled={!state?.canGoBack}
-						onClick={() => void api?.managedBrowserGoBack()}
+						disabled={!activeTab?.canGoBack}
+						onClick={() => goBack()}
 					>
 						<Icon name="arrow-go-back" className="h-4 w-4" />
 					</button>
@@ -529,8 +474,8 @@ export function ManagedBrowserPane({
 						className="gui-browser-icon-btn"
 						aria-label={t("forward")}
 						title={t("forward")}
-						disabled={!state?.canGoForward}
-						onClick={() => void api?.managedBrowserGoForward()}
+						disabled={!activeTab?.canGoForward}
+						onClick={() => goForward()}
 					>
 						<Icon name="arrow-go-forward" className="h-4 w-4" />
 					</button>
@@ -541,8 +486,8 @@ export function ManagedBrowserPane({
 						title={activeTabLoading ? t("stop agent operation") : t("refresh")}
 						disabled={isBlank}
 						onClick={() => {
-							if (activeTabLoading) void api?.managedBrowserStop(activeTab?.id);
-							else void api?.managedBrowserReload();
+							if (activeTabLoading) void stopAgentOp(activeTab?.id);
+							else reload();
 						}}
 					>
 						<Icon name={activeTabLoading ? "close" : "refresh"} className="h-4 w-4" />
@@ -596,8 +541,20 @@ export function ManagedBrowserPane({
 					</div>
 					{suggestionsOpen && suggestions.length > 0 ? (
 						<div className="gui-browser-suggestions" role="listbox">
-							{suggestions.map(item => (
-								<button key={item.key} type="button" role="option" onClick={() => void navigateTo(item.url)}>
+							{suggestions.map((item, index) => (
+								<button
+									key={item.key}
+									type="button"
+									role="option"
+									aria-selected={index === suggestionIndex}
+									className={index === suggestionIndex ? "gui-browser-suggestion--active" : ""}
+									onClick={() => {
+										setSuggestionIndex(-1);
+										void navigateTo(item.url);
+									}}
+									onMouseEnter={() => setSuggestionIndex(index)}
+									onMouseLeave={() => setSuggestionIndex(-1)}
+								>
 									<span className="gui-browser-suggestion-icon">
 										<Icon name={item.icon} className="h-3.5 w-3.5" />
 									</span>
@@ -680,7 +637,7 @@ export function ManagedBrowserPane({
 									role="menuitem"
 									disabled={isBlank}
 									onClick={() => {
-										void api?.managedBrowserHardReload();
+										reload(true);
 										setMenuOpen(false);
 									}}
 								>
@@ -708,7 +665,7 @@ export function ManagedBrowserPane({
 						className="gui-browser-icon-btn"
 						aria-label={t("browser new tab")}
 						title={t("browser new tab")}
-						onClick={() => void api?.managedBrowserNewTab()}
+						onClick={() => void createTab(EMPTY_URL).catch(() => {})}
 					>
 						<Icon name="add" className="h-4 w-4" />
 					</button>
@@ -716,15 +673,15 @@ export function ManagedBrowserPane({
 			</div>
 			{/* Tab strip (Agent-created tabs are badged; selecting only changes
 			 * what the user sees — the agent keeps its own working tab). */}
-			{state && state.tabs.length > 0 && (
+			{host.tabs.length > 0 && (
 				<div className="flex items-center gap-1 overflow-x-auto px-1 pb-1">
-					{state.tabs.map(tab => {
+					{host.tabs.map(tab => {
 						const themeLum = hexLuminance(tab.themeColor);
 						const themeDark = themeLum !== null && themeLum < 0.42;
 						return (
 							<div
 								key={tab.id}
-								className={`gui-browser-tab${tab.id === state.activeTabId ? " gui-browser-tab--active" : ""}${tab.openedByAgent ? " gui-browser-tab--agent" : ""}`}
+								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}`}
 								title={tab.url}
 								style={
 									tab.themeColor
@@ -739,8 +696,8 @@ export function ManagedBrowserPane({
 								<button
 									type="button"
 									className="gui-browser-tab-main"
-									aria-label={`${tab.title}${tab.openedByAgent ? ` (${t("agent created tab")})` : ""}`}
-									onClick={() => void api?.managedBrowserSelectTab(tab.id)}
+									aria-label={`${tab.title}${tab.agent ? ` (${t("agent created tab")})` : ""}`}
+									onClick={() => selectTab(tab.id)}
 								>
 									{tab.loading ? (
 										<Icon name="loader-4" className="h-3 w-3 shrink-0 animate-spin opacity-70" />
@@ -757,16 +714,14 @@ export function ManagedBrowserPane({
 										<Icon name="global" className="h-3 w-3 shrink-0 opacity-60" />
 									)}
 									<span className="max-w-[110px] truncate">{tab.title?.trim() || t("browser empty tab")}</span>
-									{tab.openedByAgent && (
-										<span className="gui-browser-tab-badge">{t("agent created tab")}</span>
-									)}
+									{tab.agent && <span className="gui-browser-tab-badge">{t("agent created tab")}</span>}
 								</button>
 								<button
 									type="button"
 									className="gui-browser-tab-close"
 									aria-label={t("browser close tab")}
 									title={t("browser close tab")}
-									onClick={() => void api?.managedBrowserCloseTab(tab.id)}
+									onClick={() => closeTab(tab.id)}
 								>
 									<Icon name="close" className="h-3 w-3" />
 								</button>
@@ -777,27 +732,25 @@ export function ManagedBrowserPane({
 			)}
 			{/* Agent activity ledger (sanitized in main — never page text,
 			 * cookies or script source). */}
-			{state?.activity?.status === "dispatched" && (
+			{host.activity?.status === "dispatched" && (
 				<div
 					className="flex min-h-6 items-center gap-2 border-b border-[var(--border)] bg-[var(--color-accent)]/[0.04] px-2 py-0.5 text-[11px]"
 					role="status"
 					aria-live="polite"
 				>
 					<span className="flex-shrink-0 font-medium text-[var(--color-accent)]">{t("agent activity")}</span>
-					<span className="flex-shrink-0 text-[var(--color-text-faint)]">
-						{statusLabel(state.activity.status)}
-					</span>
+					<span className="flex-shrink-0 text-[var(--color-text-faint)]">{statusLabel(host.activity.status)}</span>
 					<span className="truncate text-[var(--color-text-muted)]">
-						{state.activity.summary}
-						{state.activity.domain ? ` · ${state.activity.domain}` : ""}
+						{host.activity.summary}
+						{host.activity.domain ? ` · ${host.activity.domain}` : ""}
 					</span>
-					{state.activity.status === "dispatched" && (
+					{host.activity.status === "dispatched" && (
 						<button
 							type="button"
 							className="gui-pane-action ml-auto !w-auto px-1.5"
 							aria-label={t("stop agent operation")}
 							title={t("stop agent operation")}
-							onClick={() => void api?.managedBrowserStop(state.activity?.tabId)}
+							onClick={() => void stopAgentOp(host.activity?.tabId)}
 						>
 							<Icon name="stop" className="h-3 w-3" />
 						</button>
@@ -834,45 +787,44 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 			)}
-			{error && (
+			{host.error && (
 				<div className="border-b border-[var(--border)] px-2 py-1 text-[11px] text-[var(--color-danger)]">
-					{error}
+					{host.error}
 				</div>
 			)}
-			{/* Content: blank tabs show the React start page (native view is
-			 * hidden in main); real pages project onto the slot. Viewport
-			 * presets constrain the slot width, centered. */}
+			{/* Content: the slot is the host's positioning target (the page itself
+			 * lives in the always-mounted host); a viewport preset is applied by
+			 * scaling the host, not by constraining this box. */}
 			<div className="gui-browser-content">
-				{isBlank ? (
-					<BrowserStartPage
-						history={history}
-						onNavigate={(url: string) => void navigateTo(url)}
-						onFocusAddress={() => {
-							setAddressEditing(true);
-							setAddressValue("");
-							urlRef.current?.focus();
-						}}
-					/>
-				) : viewport ? (
-					<div className="gui-browser-viewport-wrap" style={{ maxWidth: viewport }}>
-						<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
+				<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
+				{/* Blank tab: the start page layers OVER the about:blank guest — the
+				 * guest stays mounted, so the agent keeps driving the same tab. */}
+				{isBlank && (
+					<div className="gui-browser-start-overlay">
+						<BrowserStartPage
+							history={history}
+							onNavigate={(url: string) => void navigateTo(url)}
+							onFocusAddress={() => {
+								setAddressEditing(true);
+								setAddressValue("");
+								urlRef.current?.focus();
+							}}
+						/>
 					</div>
-				) : (
-					<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
 				)}
 			</div>
 			{/* Local-only login note (Proma parity) */}
 			<div className="flex items-center justify-between px-2 pb-1 pt-0.5">
 				<span className="text-[10.5px] text-[var(--color-text-faint)]">{t("managed browser local only")}</span>
-				{state?.port ? (
+				{host.port ? (
 					<span className="text-[10.5px] text-[var(--color-text-faint)]">
-						{t("managed browser port", { port: String(state.port) })}
+						{t("managed browser port", { port: String(host.port) })}
 					</span>
 				) : null}
 			</div>
-			{/* Risky-navigation consent gate (role=dialog → the overlay lifecycle
-			 * watcher hides the native view while this is open). */}
-			{confirm && (
+			{/* Risky-navigation consent gate (DOM dialog — it layers over the page
+			 * like any other overlay now). */}
+			{host.confirm && (
 				<div
 					role="dialog"
 					aria-modal="true"
@@ -885,26 +837,20 @@ export function ManagedBrowserPane({
 							{t("risky navigation description")}
 						</div>
 						<div className="mb-3 break-all rounded-md bg-[var(--color-surface-sunken)] px-2 py-1 font-mono text-[11px] text-[var(--color-text)]">
-							{confirm.url}
+							{host.confirm.url}
 						</div>
 						<div className="flex justify-end gap-2">
 							<button
 								type="button"
 								className="gui-pane-action !w-auto px-2.5 py-1"
-								onClick={() => {
-									void api?.managedBrowserConfirmResult({ requestId: confirm.requestId, allow: false });
-									setConfirm(null);
-								}}
+								onClick={() => void answerConfirm(host.confirm?.requestId ?? "", false)}
 							>
 								{t("deny")}
 							</button>
 							<button
 								type="button"
 								className="gui-pane-action !w-auto bg-[var(--color-accent)] px-2.5 py-1 text-[var(--color-on-accent)]"
-								onClick={() => {
-									void api?.managedBrowserConfirmResult({ requestId: confirm.requestId, allow: true });
-									setConfirm(null);
-								}}
+								onClick={() => void answerConfirm(host.confirm?.requestId ?? "", true)}
 							>
 								{t("allow")}
 							</button>

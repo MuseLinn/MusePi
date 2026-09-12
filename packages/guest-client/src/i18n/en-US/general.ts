@@ -307,6 +307,7 @@ export const general = {
 	"run dev server": "Run dev server",
 	"stop dev server": "Stop dev server",
 	"new tab": "New tab",
+	"attach selection to chat": "Attach selection to chat",
 	"project actions": "Project actions",
 	finder: "Finder",
 	"add new action": "Add new action",

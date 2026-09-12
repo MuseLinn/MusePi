@@ -352,6 +352,10 @@ export const settings = {
 	"search providers…": "Search providers…",
 	"search sessions…": "Search sessions…",
 	"search settings…": "Search settings…",
+	"search match count": "{count} matching sessions",
+	"esc to clear or close": "Esc to clear, again to close",
+	"no matching sessions": "No matching sessions",
+	recent: "Recent",
 	clear: "Clear",
 	"no matching providers": "No matching providers",
 	configured: "Configured",
@@ -1262,6 +1266,10 @@ export const settings = {
 	"or use MusePi Mobile pair code": "or use MusePi Mobile pair code",
 	"get code": "Get code",
 	"enter the 6-digit code in MusePi Mobile (same network)": "Enter the 6-digit code in MusePi Mobile (same network)",
+	"copy watch-only link": "Copy watch-only link",
+	"{name} (watch-only)": "{name} (watch-only)",
+	"single use · expires in {seconds}s": "Single use · expires in {seconds}s",
+	"this code has expired — get a new one": "This code has expired — get a new one",
 	"scan qr code": "Scan QR code",
 	"or pair with a code": "Or pair with a code",
 	"computer address (192.168.x.x)": "Computer address (192.168.x.x)",
@@ -1494,7 +1502,7 @@ export const settings = {
 	"row actions description": "Edit / retry / quote / read aloud",
 	"smooth streaming": "Streaming rendering",
 	"onboarding step7":
-		"Personalize your experience: pick the agent avatar style, the streaming effect and the desktop-pet theme — all changeable in settings later.",
+		"Personalize your experience: pick the agent avatar style, the streaming output effect and the desktop-pet theme — all changeable in settings later.",
 	"onboarding step8":
 		"Import sessions from other agents — pick sessions from omp/pi/opencode/grok/kimi/claude/codex to bring them into MusePi.",
 	"pet theme": "Pet theme",
@@ -1503,7 +1511,7 @@ export const settings = {
 	"pet mode desktop": "On desktop",
 	"pet theme description": "Appearance theme for the desktop pet",
 	"smooth streaming description":
-		"Renders replies character by character (uses the Streaming effect chosen below when enabled)",
+		"Renders replies character by character (uses the streaming output effect chosen below when enabled)",
 	"message font size": "Message font size",
 	"message font size description":
 		"Adjust the font size of chat message text; headings and code scale with it. Independent of the interface font size.",
@@ -1513,7 +1521,7 @@ export const settings = {
 	"output style default": "MusePi default",
 	"output style kimi": "Kimi compact",
 	"output style zcode": "ZCode reading",
-	"typing effect": "Streaming effect",
+	"typing effect": "Streaming output effect",
 	"typing effect description":
 		"Visual effect while characters stream in: typewriter (characters fade in with a caret that disappears when done) / burst (rainbow burst that settles) / shimmer (gloss sweep) / glitch (glitchy characters settling) / 3D flip (characters flip in) / ink (ink blooms in)",
 	"typing effect typewriter": "Typewriter",

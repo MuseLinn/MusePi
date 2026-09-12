@@ -6,11 +6,18 @@ import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
 
+interface CollabGuest {
+	name: string;
+	role: string;
+	readOnly: boolean;
+}
+
 interface CollabInfo {
 	hosting: boolean;
 	link?: string;
 	webLink?: string;
 	viewLink?: string;
+	participants?: CollabGuest[];
 }
 
 /** Draw a QR symbol (collab-proto encoder, byte mode) onto a canvas. */
@@ -36,7 +43,7 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
 /**
  * ZCode 移动端远程控制 dialog: scan-to-join a live collab share of the
  * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
- * section (unconfigured placeholder — no bot backend exists).
+ * section (live daemon state — channels.list/start/stop).
  */
 /** 各 bot channel 的可识别 logo（discord 用内置 icon，其余内联简化 SVG）。 */
 function channelLogo(kind: string): ReactNode {
@@ -94,6 +101,12 @@ export function CollabDialog({
 	const [webLink, setWebLink] = useState<string | null>(null);
 	const [mode, setMode] = useState<"session" | "workspace" | "tunnel">("session");
 	const [pairCode, setPairCode] = useState<string | null>(null);
+	/** When the live pair code dies; null until one is minted. */
+	const [pairCodeExpiresAt, setPairCodeExpiresAt] = useState<number | null>(null);
+	/** 1s clock driving the pair-code countdown; only ticks while a code is live. */
+	const [now, setNow] = useState(() => Date.now());
+	/** Watch-only link copy feedback (mirrors `copied`). */
+	const [copiedView, setCopiedView] = useState(false);
 	const [channels, setChannels] = useState<
 		{ kind: string; state: string; detail?: string; config: Record<string, unknown> }[] | null
 	>(null);
@@ -161,8 +174,11 @@ export function CollabDialog({
 		try {
 			const res = await rpc.request<{ code: string; expiresInSeconds: number }>("collab.pair.generate", {});
 			setPairCode(res.code);
+			setPairCodeExpiresAt(Date.now() + res.expiresInSeconds * 1000);
+			setNow(Date.now());
 		} catch {
 			setPairCode(null);
+			setPairCodeExpiresAt(null);
 		}
 	};
 
@@ -189,6 +205,14 @@ export function CollabDialog({
 	useEffect(() => {
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
 	}, [webLink]);
+
+	// Countdown clock for the pair code, bounded to the code's lifetime so an
+	// idle dialog schedules no timers.
+	useEffect(() => {
+		if (pairCodeExpiresAt === null) return;
+		const timer = window.setInterval(() => setNow(Date.now()), 1000);
+		return () => window.clearInterval(timer);
+	}, [pairCodeExpiresAt]);
 
 	const startShare = async (): Promise<void> => {
 		if (!rpc || (mode === "session" && !sessionId)) return;
@@ -230,7 +254,21 @@ export function CollabDialog({
 		}
 	};
 
+	const copyViewLink = async (): Promise<void> => {
+		const viewLink = info?.viewLink;
+		if (!viewLink) return;
+		try {
+			await navigator.clipboard.writeText(viewLink);
+			setCopiedView(true);
+			setTimeout(() => setCopiedView(false), 1500);
+		} catch {
+			// clipboard unavailable
+		}
+	};
+
 	const hosting = info?.hosting ?? false;
+	/** Seconds until the live pair code dies; null when none was minted. */
+	const pairSecondsLeft = pairCodeExpiresAt === null ? null : Math.max(0, Math.ceil((pairCodeExpiresAt - now) / 1000));
 	// Tunnel mode needs no session: it shares the workspace when no session
 	// is open (daemon treats tunnel-without-sessionId as workspace mode).
 	const canShare = !busy && rpc !== null && (mode === "workspace" || mode === "tunnel" || sessionId !== null);
@@ -265,6 +303,20 @@ export function CollabDialog({
 							</button>
 						)}
 					</div>
+					{/* Who is watching right now — the only way to tell an idle share
+					 * from one with a guest attached (and whether they may prompt). */}
+					{hosting && (info?.participants?.length ?? 0) > 0 ? (
+						<div className="mt-1 flex flex-wrap gap-1">
+							{(info?.participants ?? []).map(p => (
+								<span
+									key={`${p.role}:${p.name}`}
+									className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[11px] text-[var(--color-text-muted)]"
+								>
+									{p.readOnly ? t("{name} (watch-only)", { name: p.name }) : p.name}
+								</span>
+							))}
+						</div>
+					) : null}
 					{error && <div className="gui-collab-error">{error}</div>}
 					{hosting && webLink ? (
 						<>
@@ -274,12 +326,20 @@ export function CollabDialog({
 							<div className="gui-collab-actions">
 								<button type="button" className="gui-btn" onClick={() => void refresh()}>
 									<Icon name="refresh" className="h-3.5 w-3.5" />
-									<span>{t("refresh qr code")}</span>
+									<span>{t("refresh")}</span>
 								</button>
 								<button type="button" className="gui-btn" onClick={() => void copyLink()}>
 									<Icon name="external-link" className="h-3.5 w-3.5" />
 									<span>{copied ? t("copied") : t("copy link")}</span>
 								</button>
+								{/* Watch-only links are minted alongside the write link; the
+								 * pane never showed them, so read-only sharing was TUI-only. */}
+								{info?.viewLink ? (
+									<button type="button" className="gui-btn" onClick={() => void copyViewLink()}>
+										<Icon name="eye" className="h-3.5 w-3.5" />
+										<span>{copiedView ? t("copied") : t("copy watch-only link")}</span>
+									</button>
+								) : null}
 							</div>
 							{/* MusePi Mobile pair code: no-camera fallback to the QR. */}
 							<div className="gui-collab-pair">
@@ -294,7 +354,11 @@ export function CollabDialog({
 									</button>
 								</div>
 								<span className="text-[11px] text-[var(--color-text-faint)]">
-									{t("enter the 6-digit code in MusePi Mobile (same network)")}
+									{pairSecondsLeft === null
+										? t("enter the 6-digit code in MusePi Mobile (same network)")
+										: pairSecondsLeft > 0
+											? t("single use · expires in {seconds}s", { seconds: String(pairSecondsLeft) })
+											: t("this code has expired — get a new one")}
 								</span>
 							</div>
 						</>

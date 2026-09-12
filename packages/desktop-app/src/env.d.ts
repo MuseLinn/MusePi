@@ -19,28 +19,29 @@ interface Window {
 		/** Computer-use overlay target: highlight one desktop input action
 		 *  (window/element frame + action point) on the glow overlay. */
 		glowTarget(event: unknown): Promise<unknown>;
-		/** Managed in-app browser (right-pane tool): WebContentsView tabs
-		 *  owned by main; the browser tool drives the same views via the
-		 *  loopback CDP bridge (`browser.gui` setting). */
-		managedBrowserOpen(): Promise<ManagedBrowserState>;
-		managedBrowserClose(): Promise<unknown>;
+		/** Managed in-app browser (right-pane tool): the page is a DOM
+		 *  `<webview>` owned by the renderer (so menus/tooltips/handles layer
+		 *  normally); main keeps the persistent partition and the loopback CDP
+		 *  bridge the agent drives via `browser.gui`. */
 		managedBrowserGetState(): Promise<ManagedBrowserState>;
-		managedBrowserSetLayout(layout: ManagedBrowserLayout): Promise<unknown>;
+		/** Address-bar navigation: main normalizes the address and applies the
+		 *  risk policy, then loads it in the target guest. */
 		managedBrowserNavigate(input: { url: string }): Promise<{ ok: boolean; url?: string; error?: string }>;
-		managedBrowserGoBack(): Promise<unknown>;
-		managedBrowserGoForward(): Promise<unknown>;
-		managedBrowserReload(): Promise<unknown>;
-		managedBrowserHardReload(): Promise<unknown>;
 		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean }>;
-		managedBrowserOpenExternal(url: string): Promise<{ ok: boolean }>;
-		managedBrowserPickElement(): Promise<{ selector: string | null; cancelled?: boolean }>;
-		managedBrowserNewTab(): Promise<ManagedBrowserState>;
-		managedBrowserSelectTab(tabId: string): Promise<ManagedBrowserState | null>;
-		managedBrowserCloseTab(tabId: string): Promise<ManagedBrowserState | null>;
-		managedBrowserStop(tabId?: string): Promise<ManagedBrowserState | null>;
+		/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
+		managedBrowserStop(tabId?: string): Promise<unknown>;
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
+		/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId`. */
+		managedBrowserGuestReady(input: { tabId: string; webContentsId: number }): Promise<unknown>;
+		managedBrowserGuestGone(tabId: string): Promise<unknown>;
+		managedBrowserActiveTab(tabId: string): Promise<unknown>;
+		managedBrowserVisibility(visible: boolean): Promise<unknown>;
 		onManagedBrowserState(cb: (state: ManagedBrowserState) => void): () => void;
 		onManagedBrowserConfirm(cb: (input: ManagedBrowserConfirmRequest) => void): () => void;
+		/** Agent-created tab (CDP `Target.createTarget`): mount a `<webview>`. */
+		onManagedBrowserCreateTab(cb: (input: { tabId: string; url: string }) => void): () => void;
+		onManagedBrowserSelectTab(cb: (input: { tabId: string }) => void): () => void;
+		onManagedBrowserCloseTab(cb: (input: { tabId: string }) => void): () => void;
 		/** Main-process powerMonitor "resume" (system sleep/wake): fires reliably
 		 *  on wake where renderer visibilitychange/online may not. The renderer
 		 *  uses it to recover the daemon connection proactively. */
@@ -53,18 +54,6 @@ interface ManagedBrowserConfirmRequest {
 	url: string;
 }
 
-interface ManagedBrowserTab {
-	id: string;
-	url: string;
-	title: string;
-	loading: boolean;
-	openedByAgent: boolean;
-	/** page-favicon-updated first URL; null until declared. */
-	favicon: string | null;
-	/** <meta name="theme-color"> (#rrggbb); null when absent/non-hex. */
-	themeColor: string | null;
-}
-
 interface ManagedBrowserActivity {
 	id: string;
 	action: string;
@@ -74,20 +63,10 @@ interface ManagedBrowserActivity {
 	tabId: string;
 }
 
+/** Everything main still owns about the panel: the CDP port, the running agent
+ *  operation, and whether that operation should surface the panel. */
 interface ManagedBrowserState {
 	port: number | null;
-	activeTabId: string | null;
-	tabs: ManagedBrowserTab[];
-	canGoBack: boolean;
-	canGoForward: boolean;
 	activity: ManagedBrowserActivity | null;
-	/** Set on the push that follows an agent-driven tab create (auto-open). */
 	agentActivity?: boolean;
-}
-
-interface ManagedBrowserLayout {
-	tabId?: string;
-	bounds: { x: number; y: number; width: number; height: number };
-	visible: boolean;
-	revision: number;
 }

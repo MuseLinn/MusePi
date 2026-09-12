@@ -1,3 +1,4 @@
+import { matchesFuzzyQuery } from "../lib/fuzzy-model-match";
 import type { SessionListNode } from "./SessionList";
 
 interface FlatNode {
@@ -71,4 +72,53 @@ export function flattenTree(roots: SessionListNode[]): FlatNode[] {
 		}
 	}
 	return result;
+}
+
+/** Window for the sidebar's 近期 projection (openchamber
+ *  `RECENT_SESSION_MAX_AGE_MS` parity). */
+export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * 近期 membership: a session is recent while a turn is running, while it is
+ * unread, or while its last activity (updatedAt, falling back to the creation
+ * timestamp) is inside the window. Invalid timestamps only qualify through the
+ * flags — a row never floats into 近期 on a parse failure.
+ */
+export function isRecentlyActive(
+	entry: { updatedAt?: string; timestamp?: string },
+	flags: { working?: boolean; unread?: boolean; now?: number; windowMs?: number } = {},
+): boolean {
+	if (flags.working === true || flags.unread === true) return true;
+	const now = flags.now ?? Date.now();
+	const windowMs = flags.windowMs ?? RECENT_WINDOW_MS;
+	const raw = entry.updatedAt ?? entry.timestamp;
+	if (!raw) return false;
+	const ts = Date.parse(raw);
+	return Number.isFinite(ts) && now - ts < windowMs;
+}
+
+/**
+ * Filter a session tree by free text matched against each node's searchable
+ * text (label + cwd, fuzzy subsequence — TUI /switch parity). A node survives
+ * when it matches itself or any descendant does, so a matched session stays
+ * reachable inside its subtree. `matched` counts only the sessions that matched
+ * on their own: the number the search box reports, and the count the filtered
+ * list is built around. An empty query returns the input list untouched.
+ */
+export function filterSessionTree(
+	roots: SessionListNode[],
+	query: string,
+	textOf: (node: SessionListNode) => string,
+): { nodes: SessionListNode[]; matched: number } {
+	const q = query.trim();
+	if (!q) return { nodes: roots, matched: 0 };
+	let matched = 0;
+	const walk = (node: SessionListNode): SessionListNode | null => {
+		const children = node.children.map(walk).filter((child): child is SessionListNode => child !== null);
+		const hit = matchesFuzzyQuery(q, textOf(node));
+		if (hit) matched += 1;
+		return hit || children.length > 0 ? { ...node, children } : null;
+	};
+	const nodes = roots.map(walk).filter((node): node is SessionListNode => node !== null);
+	return { nodes, matched };
 }

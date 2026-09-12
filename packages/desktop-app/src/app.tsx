@@ -17,6 +17,7 @@ import { FloatingScrollbar } from "./components/FloatingScrollbar";
 import { GlobalPauseOverlay } from "./components/GlobalPauseOverlay";
 import { GuiHeader } from "./components/GuiHeader";
 import { ImportSessionsSetup } from "./components/ImportSessionsSetup";
+import { ManagedBrowserHost } from "./components/ManagedBrowserHost";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import type { ReminderRow } from "./components/RemindersPanel";
 import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
@@ -395,13 +396,13 @@ function AppInner(): ReactNode {
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
-	const startResize = (which: "side" | "right", startX: number, startW: number, min: number, max: number): void => {
+	// Side-rail width drag. (The right panel has its own drag on the normalized
+	// pointer-drag primitive — see ContextPanel.)
+	const startResize = (startX: number, startW: number, min: number, max: number): void => {
 		const onMove = (e: MouseEvent): void => {
-			const w = Math.min(max, Math.max(min, startW + (e.clientX - startX) * (which === "side" ? 1 : -1)));
-			if (which === "side") {
-				setSideWidth(w);
-				localStorage.setItem("musepi-gui-side-w", String(w));
-			}
+			const w = Math.min(max, Math.max(min, startW + (e.clientX - startX)));
+			setSideWidth(w);
+			localStorage.setItem("musepi-gui-side-w", String(w));
 		};
 		const onUp = (): void => {
 			document.removeEventListener("mousemove", onMove);
@@ -2724,7 +2725,7 @@ function AppInner(): ReactNode {
 							style={{ left: sideWidth - 3 }}
 							onMouseDown={e => {
 								e.preventDefault();
-								startResize("side", e.clientX, sideWidth, 180, 420);
+								startResize(e.clientX, sideWidth, 180, 420);
 							}}
 						/>
 					)}
@@ -3102,6 +3103,10 @@ function AppInner(): ReactNode {
 			{/* What's-new release notes (daemon changelog.startup; settings
 			 * footer 新功能 reopens via omp-open-announcement). */}
 			<AnnouncementOverlay rpc={rpc} />
+			{/* Managed browser guests (right-pane tool): the <webview> elements live
+			 * here so they survive panel close/switch — the pane only positions
+			 * itself over them, and the agent keeps driving the same pages. */}
+			<ManagedBrowserHost />
 			{/* Auto-checked update notice (BitFun parity toast; main.cjs
 			 * pushes update-available ~12s after boot). */}
 			<UpdateToast />

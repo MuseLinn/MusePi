@@ -158,6 +158,10 @@ export const commands = {
 	"Joined collab session{0}": "已加入协作会话{0}",
 	"Not in a collab session": "当前不在协作会话中",
 	"On this machine, open:": "本机打开：",
+	"Pair the MusePi mobile app with this machine (shows a QR to scan)": "配对 MusePi 手机端（显示二维码供扫描）",
+	"Scan this QR with the MusePi app": "用 MusePi 手机端扫描此二维码",
+	"ready to scan": "可扫描",
+	"not sharing yet": "尚未开启分享",
 
 	"Stop hosting first (/collab stop)": "请先停止托管（/collab stop）",
 	"Already in a collab session (/leave first)": "已在协作会话中（先 /leave）",

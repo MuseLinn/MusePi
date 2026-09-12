@@ -36,6 +36,7 @@ export function GroupedSessionList({
 	workingIds,
 	statuses,
 	manualTags,
+	searchQuery,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -48,6 +49,8 @@ export function GroupedSessionList({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
+	/** Active session-search query — forwarded so matched titles are marked. */
+	searchQuery?: string;
 }): ReactNode {
 	const groups = new Map<string, SessionListNode[]>();
 	for (const n of nodes) {
@@ -64,6 +67,10 @@ export function GroupedSessionList({
 		[...groups.keys()].filter(g => !GROUP_ORDER.includes(g)),
 	);
 	if (ordered.length === 0) {
+		// An active search already states its own result (count / no-match copy),
+		// and its matches may sit in other sections (pinned, 定时任务) — the
+		// empty-workspace fallback would contradict that.
+		if (searchQuery?.trim()) return null;
 		return <p className="px-2 py-4 text-[13px] text-[var(--color-text-faint)]">{t("no sessions yet")}</p>;
 	}
 	return (
@@ -83,6 +90,7 @@ export function GroupedSessionList({
 						workingIds={workingIds}
 						statuses={statuses}
 						manualTags={manualTags}
+						searchQuery={searchQuery}
 					/>
 				</div>
 			))}
