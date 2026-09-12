@@ -3863,20 +3863,16 @@ body.gui-resizing {
 	flex: 1 1 auto;
 }
 /* ---- Suggestions dropdown ---- */
+/* Rendered through useFloatingMenu: the shell (.gui-menu-popup) owns the
+ * fixed positioning, the enter/exit and the dismissal — and it is the only
+ * tier that can paint over the page, because the pane sits inside the chat
+ * surface's stacking context while the page host is a root-level element. */
 .gui-browser-suggestions {
-	position: absolute;
-	top: calc(100% + 6px);
-	left: 0;
-	right: 0;
+	min-width: 300px;
+	max-width: min(440px, calc(100vw - 24px));
 	max-height: min(340px, calc(100vh - 160px));
 	padding: 6px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	background: var(--color-surface-raised);
-	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
 	overflow-y: auto;
-	z-index: 220;
-	animation: gui-browser-pop var(--gui-motion-menu-in) var(--spring);
 }
 @keyframes gui-browser-pop {
 	from { opacity: 0; transform: translateY(-5px) scale(0.99); }
@@ -3937,18 +3933,11 @@ body.gui-resizing {
 	font-size: var(--ui-font-size-xs);
 }
 /* ---- Overflow menu ---- */
+/* Portaled through useFloatingMenu — same tier rule as the suggestions
+ * above; this class keeps the menu layout only. */
 .gui-browser-menu {
-	position: absolute;
-	top: calc(100% + 6px);
-	right: 0;
 	width: 236px;
 	padding: 6px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius);
-	background: var(--color-surface-raised);
-	box-shadow: 0 14px 32px rgba(0, 0, 0, 0.22);
-	z-index: 720;
-	animation: gui-browser-pop var(--gui-motion-menu-in) var(--spring);
 }
 .gui-browser-menu button {
 	width: 100%;
@@ -4110,6 +4099,11 @@ body.gui-resizing {
 	flex: 1 1 auto;
 	min-width: 0;
 	min-height: 0;
+	/* Page card inset. The width handle lives at the panel's left edge
+	 * inside the panel (`overflow: hidden` there forbids moving it out) and
+	 * the page host is positioned at THIS rect — so the inset is what keeps
+	 * the page off the handle. */
+	margin: 6px;
 	overflow: hidden;
 	border-radius: var(--radius);
 	border: 1px solid var(--border);

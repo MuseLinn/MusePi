@@ -39,6 +39,7 @@ import {
 	subscribeHost,
 } from "../lib/managed-browser-host";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
+import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
 const statusLabel = (status: string): string => {
@@ -221,7 +222,6 @@ export function ManagedBrowserPane({
 	const [copied, setCopied] = useState(false);
 	const slotRef = useRef<HTMLDivElement | null>(null);
 	const urlRef = useRef<HTMLInputElement | null>(null);
-	const chromeRef = useRef<HTMLDivElement | null>(null);
 
 	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
@@ -381,18 +381,22 @@ export function ManagedBrowserPane({
 		return historySuggestions.filter(item => `${item.label} ${item.detail}`.toLocaleLowerCase().includes(query));
 	}, [addressEditing, addressValue, history]);
 
-	// Close the menu/suggestions on outside pointerdown (open-design parity).
-	useEffect(() => {
-		if (!menuOpen && !suggestionsOpen) return;
-		const onPointerDown = (event: PointerEvent): void => {
-			const chrome = chromeRef.current;
-			if (chrome && event.target instanceof Node && chrome.contains(event.target)) return;
-			setMenuOpen(false);
-			setSuggestionsOpen(false);
-		};
-		document.addEventListener("pointerdown", onPointerDown);
-		return () => document.removeEventListener("pointerdown", onPointerDown);
-	}, [menuOpen, suggestionsOpen]);
+	// Both dropdowns render through the app's single floating-menu primitive:
+	// its portal is the only tier that can paint over the page (the pane sits
+	// inside the chat surface's stacking context while the page host is a
+	// root-level element), and it owns positioning, enter/exit and dismissal.
+	const suggestionsVisible = suggestionsOpen && suggestions.length > 0;
+	const { anchorRef: addressAnchorRef, renderMenu: renderSuggestions } = useFloatingMenu(
+		suggestionsVisible,
+		open => {
+			if (!open) setSuggestionsOpen(false);
+		},
+		{ className: "gui-browser-suggestions" },
+	);
+	const { anchorRef: actionsAnchorRef, renderMenu: renderActionsMenu } = useFloatingMenu(menuOpen, setMenuOpen, {
+		className: "gui-browser-menu",
+		align: "right",
+	});
 
 	const addressDisplayParts = addressEditing ? { url: "" } : formatAddressDisplayParts(activeUrl, activeTab?.title);
 	const shownAddressValue = addressEditing ? addressValue : "";
@@ -457,7 +461,7 @@ export function ManagedBrowserPane({
 	return (
 		<div className="relative flex min-h-0 flex-1 flex-col">
 			{/* Chrome bar: nav / address omnibox / actions (open-design db-chrome) */}
-			<div ref={chromeRef} className="gui-browser-chrome">
+			<div className="gui-browser-chrome">
 				<div className="gui-browser-nav">
 					<button
 						type="button"
@@ -501,7 +505,7 @@ export function ManagedBrowserPane({
 							<Icon name="compass-3" className="h-4 w-4" />
 						)}
 					</span>
-					<div className="gui-browser-address-field">
+					<div ref={addressAnchorRef} className="gui-browser-address-field">
 						<input
 							ref={urlRef}
 							value={shownAddressValue}
@@ -517,7 +521,12 @@ export function ManagedBrowserPane({
 								window.requestAnimationFrame(() => e.currentTarget.select());
 							}}
 							onBlur={e => {
-								if (e.currentTarget.form?.contains(e.relatedTarget as Node | null)) return;
+								const next = e.relatedTarget as Node | null;
+								// The suggestions are portaled outside this form (useFloatingMenu),
+								// so focus moving into that popup must not close the list before
+								// the click lands.
+								const intoPopup = next instanceof HTMLElement && next.closest(".gui-menu-popup") !== null;
+								if (!intoPopup && e.currentTarget.form?.contains(next)) return;
 								setSuggestionsOpen(false);
 								window.setTimeout(() => setAddressEditing(false), 80);
 							}}
@@ -539,8 +548,8 @@ export function ManagedBrowserPane({
 							</span>
 						) : null}
 					</div>
-					{suggestionsOpen && suggestions.length > 0 ? (
-						<div className="gui-browser-suggestions" role="listbox">
+					{renderSuggestions(
+						<div role="listbox">
 							{suggestions.map((item, index) => (
 								<button
 									key={item.key}
@@ -564,8 +573,8 @@ export function ManagedBrowserPane({
 									</span>
 								</button>
 							))}
-						</div>
-					) : null}
+						</div>,
+					)}
 				</form>
 				<div className="gui-browser-actions">
 					<button
@@ -578,7 +587,7 @@ export function ManagedBrowserPane({
 					>
 						<Icon name="target" className="h-4 w-4" />
 					</button>
-					<div className="gui-browser-action-item">
+					<div ref={actionsAnchorRef} className="gui-browser-action-item">
 						<button
 							type="button"
 							className={`gui-browser-icon-btn${menuOpen ? " gui-browser-icon-btn--active" : ""}`}
@@ -591,8 +600,8 @@ export function ManagedBrowserPane({
 						>
 							<Icon name="more-2" className="h-4 w-4" />
 						</button>
-						{menuOpen ? (
-							<div className="gui-browser-menu" role="menu">
+						{renderActionsMenu(
+							<div role="menu">
 								{/* Viewport presets */}
 								<span className="gui-browser-menu-label">{t("browser viewport fit")}</span>
 								<div className="gui-browser-menu-viewports">
@@ -657,8 +666,8 @@ export function ManagedBrowserPane({
 									<Icon name="delete-bin" className="h-3.5 w-3.5" />
 									{t("browser clear all data")}
 								</button>
-							</div>
-						) : null}
+							</div>,
+						)}
 					</div>
 					<button
 						type="button"

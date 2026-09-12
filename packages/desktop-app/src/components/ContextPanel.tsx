@@ -1,6 +1,7 @@
 import { AgentsPanel, latestWidgetFromEntries, type TranslationKey, t, WidgetCard } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
@@ -9,7 +10,7 @@ import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
 import { surfaceById } from "../lib/surfaces/registry";
-import { usePointerDrag } from "../lib/use-pointer-drag";
+import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { Icon } from "../vendor/oc-icons";
 import { AgentControls } from "./AgentControls";
 import { FadeScroll } from "./FadeScroll";
@@ -279,6 +280,11 @@ export function ContextPanel({
 	// Both endpoints ride refs. Reading a render-closure `width` on release
 	// meant the snap used the value from the render that STARTED the drag, so
 	// every drag snapped back to where it began (user: 拖拽会回弹).
+	// Gesture shield (see .gui-drag-shield): armed on pointerdown — i.e. BEFORE
+	// the 4px threshold — because the page is an OOPIF guest and a captured
+	// pointer alone loses the moves that leave the handle, so the drag would
+	// stall the moment it crossed onto the page.
+	const [gestureShield, setGestureShield] = useState(false);
 	const resizeDrag = usePointerDrag({
 		onDragStart: () => {
 			resizeStartRef.current = width;
@@ -298,6 +304,7 @@ export function ContextPanel({
 		},
 		onDragEnd: () => {
 			document.body.classList.remove("gui-resizing");
+			setGestureShield(false);
 			// Snap first, then re-clamp: a snap point must not push the chat
 			// below its minimum on a narrow window.
 			const settled = Math.min(maxWidthRef.current, snapWidth(resizeWidthRef.current));
@@ -308,7 +315,17 @@ export function ContextPanel({
 				// storage unavailable
 			}
 		},
+		onTap: () => setGestureShield(false),
 	});
+	const resizeHandleHandlers: PointerDragHandlers | null = maximized
+		? null
+		: {
+				...resizeDrag,
+				onPointerDown: e => {
+					setGestureShield(true);
+					resizeDrag.onPointerDown(e);
+				},
+			};
 	// The window drives the budget: shrinking it squeezes the panel, never the
 	// chat column (and a persisted width from a wide window is clamped too).
 	useEffect(() => {
@@ -340,14 +357,30 @@ export function ContextPanel({
 			{maximized && open && (
 				<div className="gui-pane-maximize-backdrop" onClick={() => setMaximized(false)} aria-hidden />
 			)}
+			{/* Gesture shield: owns the move/up half of an edge drag while the
+			 * pointer is held (see .gui-drag-shield). Pointer capture alone does
+			 * not retarget moves that leave the handle for the page's guest, and
+			 * that is what killed these drags. */}
+			{gestureShield &&
+				createPortal(
+					<div
+						className="gui-drag-shield"
+						onPointerMove={resizeDrag.onPointerMove}
+						onPointerUp={resizeDrag.onPointerUp}
+						onPointerCancel={resizeDrag.onPointerCancel}
+						aria-hidden
+					/>,
+					document.getElementById("root") ?? document.body,
+				)}
 			<aside
 				ref={panelRef}
 				className={panelClass}
 				style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}
 			>
-				{/* Left-edge drag handle for width (pointer capture on the 4px
-				 * strip; cursor col-resize over it). */}
-				<div className="gui-pane-resize-x" {...(maximized ? {} : resizeDrag)} aria-hidden />
+				{/* Left-edge drag handle for width: pointer capture on the 4px
+				 * strip plus the gesture shield (the page guest swallows captured
+				 * moves that leave the strip). */}
+				<div className="gui-pane-resize-x" {...(resizeHandleHandlers ?? {})} aria-hidden />
 				<div className="flex h-full min-h-0 w-full flex-col">
 					{/* View-local chrome (nav unification): the RightRail owns
 					 * navigation; the header shows the current view's title plus the

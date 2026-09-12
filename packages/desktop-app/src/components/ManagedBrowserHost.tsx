@@ -59,6 +59,11 @@ export function ManagedBrowserHost(): ReactNode {
 				height: rect.height,
 				opacity: visible ? 1 : 0,
 				pointerEvents: visible ? "auto" : "none",
+				// The page fills the pane's rounded slot card, and the guest paints a
+				// square surface — so the corners come from clipping HERE (same radius
+				// as .gui-browser-slot).
+				borderRadius: "var(--radius)",
+				overflow: "hidden",
 				// Above the right panel (z-850 when maximized) but below the app's
 				// dialogs/menus/tooltips — the page is a DOM element now, so a plain
 				// z-index is all the maximize case needs.
@@ -88,13 +93,21 @@ export function ManagedBrowserHost(): ReactNode {
 							pointerEvents: visible && active ? "auto" : "none",
 						}}
 					>
+						{/* Never set `display` on the element: Electron's shadow style is
+						 * `:host { display: flex }` and the guest's inner iframe takes its
+						 * height ONLY from that flex context (`flex: 1 1 auto`, no height
+						 * of its own). An inline `display: block` kills the flex layout and
+						 * collapses the guest to the 150px replaced-element default — the
+						 * element keeps its full box, so the page lays out short over blank
+						 * white. Width survives the override (the iframe sets `width: 100%`);
+						 * height does not. */}
 						<webview
 							src={entrySrc(tab.id, tab.url)}
 							partition={MANAGED_BROWSER_PARTITION}
 							allowpopups
 							webpreferences="backgroundThrottling=false"
 							ref={el => attachElement(tab.id, el as unknown as HostWebview | null)}
-							style={{ width: "100%", height: "100%", border: 0, display: "block", background: "#fff" }}
+							style={{ width: "100%", height: "100%", border: 0, background: "#fff" }}
 						/>
 					</div>
 				);

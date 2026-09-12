@@ -297,20 +297,39 @@
 	color: var(--color-accent);
 }
 
-/* Right-pane width drag handle (left edge). */
+/* Right-pane width drag handle (left edge). Sits above the pane's own chrome
+ * (500) so the whole edge drags, and the browser page never reaches it — the
+ * pane's slot keeps a 6px inset (gui-settings.css .gui-browser-slot) because
+ * the page host, positioned at that slot rect, is a root-level element the
+ * panel's `overflow: hidden` cannot move this handle out from under. */
 .gui-pane-resize-x {
 	position: absolute;
 	left: 0;
 	top: 0;
 	bottom: 0;
 	width: 4px;
-	z-index: 30;
+	z-index: 600;
 	cursor: col-resize;
 	touch-action: none;
 }
 
 .gui-pane-resize-x:hover {
 	background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+}
+
+/* Gesture shield for the edge drags above. The page in the right pane is an
+ * OOPIF guest: a captured pointer in the main frame does NOT keep receiving
+ * moves once the pointer is over it, so a drag died the moment it left the
+ * handle box (and a rightward drag could not even cross the 4px threshold).
+ * While the edge is held this overlay is the hit-test target, so every move
+ * and the release stay in the renderer that owns the gesture. Tier: above the
+ * page host (900), below the app's dialogs/menus. */
+.gui-drag-shield {
+	position: fixed;
+	inset: 0;
+	z-index: 950;
+	cursor: col-resize;
+	touch-action: none;
 }
 
 /* Notes pane height drag handle (bottom edge of the note editor). */
