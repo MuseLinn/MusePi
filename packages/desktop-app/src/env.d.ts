@@ -30,6 +30,17 @@ interface Window {
 		managedBrowserClearData(mode: "cookies" | "all"): Promise<{ ok: boolean }>;
 		/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 		managedBrowserStop(tabId?: string): Promise<unknown>;
+		/** Device preset for a tab: "phone"/"tablet" set a device UA (plus
+		 *  client hints and touch) so the SITE serves its mobile document;
+		 *  "fit"/"desktop" clear the identity. `viewport` emulates the layout
+		 *  size (the host is transform-scaled, so the element's own size never
+		 *  reaches the guest); `reload` re-requests the page so it re-serves. */
+		managedBrowserSetDevice(input: {
+			tabId: string;
+			preset: string;
+			reload?: boolean;
+			viewport?: { width: number; height: number };
+		}): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
 		/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId`. */
 		managedBrowserGuestReady(input: { tabId: string; webContentsId: number }): Promise<unknown>;

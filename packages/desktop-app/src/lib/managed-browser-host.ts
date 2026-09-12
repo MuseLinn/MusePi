@@ -355,6 +355,18 @@ export function setPaneRect(rect: HostRect | null): void {
 		void window.electronAPI?.managedBrowserVisibility(false).catch(() => {});
 		return;
 	}
+	// A folded panel keeps the pane mounted and animates its width to 0, so the
+	// measured rect exists but is degenerate. Main must hear that as hidden:
+	// otherwise its `panelVisible` stays true, the agent-activity reveal never
+	// fires, and the agent's work (highlight included) stays unseen. The rect
+	// itself is kept — the guest keeps its composited surface (capturePage
+	// parity), only the visibility report changes.
+	if (rect.width < 1 || rect.height < 1) {
+		if (!state.paneVisible) return;
+		set({ paneVisible: false });
+		void window.electronAPI?.managedBrowserVisibility(false).catch(() => {});
+		return;
+	}
 	// The pane re-measures on an interval; an unchanged rect must not re-render
 	// the host (and its webviews) several times a second.
 	const current = state.rect;

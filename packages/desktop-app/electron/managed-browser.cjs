@@ -58,6 +58,17 @@ const CAPTURE_TIMEOUT_MS = 1_500;
 /** Gap before the single screenshot retry (cold guest first-frame miss). */
 const CAPTURE_RETRY_MS = 220;
 
+/** Agent-action highlight lifetime (proma parity: a blue box on the element
+ *  the agent is about to act on, cleared automatically). */
+const AGENT_HIGHLIGHT_MS = 900;
+/** Translucent fill + border drawn by Blink's inspector overlay — nothing is
+ *  injected into the page. */
+const AGENT_HIGHLIGHT_CONFIG = {
+	contentColor: { r: 59, g: 130, b: 246, a: 0.16 },
+	borderColor: { r: 59, g: 130, b: 246, a: 0.95 },
+	showInfo: false,
+};
+
 // Must run before app ready (main.cjs requires this module at top level).
 // registerSchemesAsPrivileged can only be called once per process.
 if (!process.env.MUSEPI_MANAGED_BROWSER_SCHEMES_REGISTERED) {
@@ -262,6 +273,69 @@ function deferred() {
 }
 
 /**
+ * Device identity for the pane's viewport presets.
+ *
+ * Identity, not layout: the pane already sizes the box to the preset, but a
+ * phone-width box leaves UA-sniffing sites on their desktop document
+ * (measured: bing.com at 393px, desktop UA), so a preset has to carry a
+ * device user agent (plus client hints and touch) — which only main can
+ * apply, on the guest's debugger session.
+ */
+function deviceIdentity(preset) {
+	if (preset !== "phone" && preset !== "tablet") return null;
+	const mobile = preset === "phone";
+	return {
+		mobile,
+		model: mobile ? "Pixel 8" : "Pixel Tablet",
+		platformVersion: mobile ? "14.0.0" : "13.0.0",
+		android: mobile ? "Android 14" : "Android 13",
+	};
+}
+
+function deviceUserAgent(identity, chromeMajor) {
+	const mobileToken = identity.mobile ? "Mobile " : "";
+	return `Mozilla/5.0 (Linux; ${identity.android}; ${identity.model}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor}.0.0.0 ${mobileToken}Safari/537.36`;
+}
+
+/** Client hints: sites increasingly read `Sec-CH-UA-*` / `userAgentData`
+ *  instead of the UA string, so the override has to carry the same identity. */
+function deviceUserAgentMetadata(identity, chromeMajor) {
+	const version = `${chromeMajor}.0.0.0`;
+	return {
+		brands: [
+			{ brand: "Chromium", version: chromeMajor },
+			{ brand: "Google Chrome", version: chromeMajor },
+		],
+		fullVersionList: [
+			{ brand: "Chromium", version },
+			{ brand: "Google Chrome", version },
+		],
+		fullVersion: version,
+		platform: "Android",
+		platformVersion: identity.platformVersion,
+		architecture: "",
+		model: identity.model,
+		mobile: identity.mobile,
+	};
+}
+
+/** The engine's own Chromium major, so the emulated UA stays consistent with
+ *  the renderer behind it (feature detection then agrees with the UA). */
+function chromeMajorVersion() {
+	const major = String(process.versions.chrome ?? "").split(".")[0];
+	return major === "" ? "130" : major;
+}
+
+/** Where an agent action lands, when it is worth flashing. Press only: the
+ *  matching release carries the same point, and a hover probe would flash
+ *  constantly. */
+function agentHighlightPoint(method, params) {
+	if (method !== "Input.dispatchMouseEvent" || params?.type !== "mousePressed") return null;
+	if (typeof params.x !== "number" || typeof params.y !== "number") return null;
+	return { x: params.x, y: params.y };
+}
+
+/**
  * One managed tab: metadata + the renderer-owned `<webview>` guest it binds
  * to once the renderer reports the element attached (`guest-ready`). Main
  * never owns the view — only the guest webContents' CDP debugger session and
@@ -285,6 +359,10 @@ class ManagedTab {
 		this.guestReady = deferred();
 		/** CDP debugger attached (lazily, after the initial load finishes). */
 		this.cdpOk = false;
+		/** Device preset currently applied to the guest (null = engine default). */
+		this.devicePreset = null;
+		/** Pending agent-highlight auto-hide. */
+		this.highlightTimer = null;
 	}
 
 	/**
@@ -453,6 +531,8 @@ class ManagedTab {
 	 *  `close-tab` push; closing here also covers tabs whose renderer is gone. */
 	dispose() {
 		this.guestReady.resolve(null);
+		clearTimeout(this.highlightTimer);
+		this.highlightTimer = null;
 		this.detachDebugger();
 		const wc = this.wc;
 		this.wc = null;
@@ -474,6 +554,8 @@ class ManagedBrowserController {
 		this.tabSeq = 0;
 		this.conns = new Map();
 		this.connSeq = 0;
+		/** IPC handlers registered (start is re-entrant — see start()). */
+		this.ipcRegistered = false;
 		this.sessionSeq = 0;
 		this.ledger = [];
 		this.server = null;
@@ -529,7 +611,15 @@ class ManagedBrowserController {
 		this.setOwner(ownerWindow);
 		this.guardPartition();
 		this.registerIpc();
+		// Re-entrant by design: a second boot in the same process (window
+		// recreation, a relaunch hook) must not re-register the IPC channels —
+		// Electron throws on a duplicate channel, and that rejection used to
+		// abort start() BEFORE the bridge existed. Measured symptom: the CDP
+		// port never bound, every pane call answered "unknown tab", and agent
+		// browsing had no lane at all.
+		if (this.server) return this.port;
 		await this.startServer();
+		if (this.port === null) console.warn("[managed-browser] CDP bridge could not bind any port 9230-9239");
 		return this.port;
 	}
 
@@ -1421,6 +1511,8 @@ class ManagedBrowserController {
 			this.recordActivity(tab, activityAction, tab.url, "dispatched");
 			if (!this.panelVisible) this.emitState({ agentActivity: true });
 		}
+		const highlightPoint = agentHighlightPoint(msg.method, msg.params);
+		if (highlightPoint) this.flashAgentTarget(tab, highlightPoint);
 		try {
 			const result = (await wc.debugger.sendCommand(msg.method, msg.params)) ?? {};
 			// Detach (e.g. a stopOp tab close) resolves pending commands instead
@@ -1450,7 +1542,6 @@ class ManagedBrowserController {
 				return "observe";
 			case "Input.dispatchMouseEvent":
 				return "click";
-			case "Input.insertText":
 			case "Input.dispatchKeyEvent":
 				return "fill";
 			case "Runtime.evaluate":
@@ -1459,6 +1550,118 @@ class ManagedBrowserController {
 			default:
 				return null;
 		}
+	}
+
+	/**
+	 * Apply (or clear) a device-identity preset on one tab's guest.
+	 *
+	 * `reload` re-requests the page so it re-serves under the new identity; the
+	 * renderer sends it only when the preset itself changed, so switching tabs
+	 * re-applies silently instead of reloading a page the user just opened.
+	 */
+	async applyDevicePreset(tabId, preset, reload, viewport) {
+		const tab = this.tabs.get(String(tabId));
+		if (!tab) return { ok: false, error: "unknown tab" };
+		if (!(await tab.whenDebuggerReady())) return { ok: false, error: "browser tab is not ready" };
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
+		const identity = deviceIdentity(preset);
+		const changed = tab.devicePreset !== preset;
+		try {
+			// Layout size first. The guest's viewport has to be the PRESET's, not
+			// the element's: the host is transform-scaled to fit the pane, and a
+			// scaled element shrinks the guest's viewport with it (measured: a
+			// 1440-wide host under scale(0.227) left the page a 327px viewport,
+			// so every wide preset only zoomed the desktop layout out instead of
+			// giving it room). Emulating the viewport is the reliable lever, and
+			// it is also what makes the page's own viewport meta behave.
+			const size = viewport && Number.isFinite(viewport.width) ? { width: Math.round(viewport.width), height: Math.round(viewport.height) } : null;
+			if (size && size.width > 0 && size.height > 0) {
+				await wc.debugger.sendCommand("Emulation.setDeviceMetricsOverride", {
+					width: size.width,
+					height: size.height,
+					deviceScaleFactor: 0,
+					mobile: identity !== null,
+				});
+			} else {
+				await wc.debugger.sendCommand("Emulation.clearDeviceMetricsOverride");
+			}
+			if (identity) {
+				const major = chromeMajorVersion();
+				await wc.debugger.sendCommand("Emulation.setUserAgentOverride", {
+					userAgent: deviceUserAgent(identity, major),
+					acceptLanguage: "",
+					platform: "Android",
+					userAgentMetadata: deviceUserAgentMetadata(identity, major),
+				});
+				await wc.debugger.sendCommand("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
+			} else {
+				// An empty userAgent clears the override: Chromium's emulation
+				// agent resets to the engine's own identity AND client hints.
+				// The metadata argument must be OMITTED here rather than passed
+				// as null — the CDP parser rejects a null object, and the whole
+				// clear then fails silently, leaving the page on the phone UA.
+				await wc.debugger.sendCommand("Emulation.setUserAgentOverride", { userAgent: "" });
+				await wc.debugger.sendCommand("Emulation.setTouchEmulationEnabled", { enabled: false });
+			}
+			tab.devicePreset = preset;
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+		if (reload && changed) {
+			try {
+				wc.reload();
+			} catch {
+				// a reload racing a navigation is not a failure
+			}
+		}
+		return { ok: true };
+	}
+
+	/**
+	 * Flash the element an agent action is about to hit (proma parity): a user
+	 * watching the panel sees WHERE the click lands. Drawn through Blink's
+	 * inspector overlay (Overlay domain) — nothing is injected into the page —
+	 * and a second action moves the box instead of stacking highlights.
+	 * Best effort by construction: a failed highlight must never fail the
+	 * agent's action.
+	 */
+	flashAgentTarget(tab, point) {
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return;
+		void (async () => {
+			try {
+				// DOM.getNodeForLocation needs the DOM domain on THIS debugger
+				// session — the agent's connection is its own session, so the
+				// renderer lane enabling it does not carry over.
+				await wc.debugger.sendCommand("DOM.enable");
+				const node = await wc.debugger.sendCommand("DOM.getNodeForLocation", {
+					x: Math.round(point.x),
+					y: Math.round(point.y),
+					includeUserAgentShadowDOM: false,
+				});
+				const { backendNodeId } = node ?? {};
+				if (typeof backendNodeId !== "number") return;
+				await wc.debugger.sendCommand("Overlay.enable");
+				await wc.debugger.sendCommand("Overlay.highlightNode", {
+					backendNodeId,
+					highlightConfig: AGENT_HIGHLIGHT_CONFIG,
+				});
+				clearTimeout(tab.highlightTimer);
+				tab.highlightTimer = setTimeout(() => {
+					tab.highlightTimer = null;
+					try {
+						void wc.debugger.sendCommand("Overlay.hideHighlight");
+					} catch {
+						// tab gone
+					}
+				}, AGENT_HIGHLIGHT_MS);
+			} catch (error) {
+				// Best effort, but never silent: a dead highlight is a UX bug
+				// someone will ask about.
+				console.warn("[managed-browser] agent highlight failed:", error instanceof Error ? error.message : error);
+			}
+		})();
 	}
 
 	/** Debugger event from one tab → fan out to every page session on it. */
@@ -1533,6 +1736,8 @@ class ManagedBrowserController {
 	// ── IPC (renderer guest lifecycle + controls) ────────────────────────
 
 	registerIpc() {
+		if (this.ipcRegistered) return;
+		this.ipcRegistered = true;
 		ipcMain.handle("managed-browser:get-state", () => this.state());
 		ipcMain.handle("managed-browser:navigate", async (_e, input) => {
 			// Address-bar navigation drives the ACTIVE tab's guest; the
@@ -1547,8 +1752,8 @@ class ManagedBrowserController {
 			this.emitState({});
 			return result;
 		});
-		ipcMain.handle("managed-browser:clear-data", (_e, input) =>
-			this.clearBrowserData(input?.mode),
+		ipcMain.handle("managed-browser:set-device", async (_e, input) =>
+			this.applyDevicePreset(input?.tabId, input?.preset, input?.reload === true, input?.viewport ?? null),
 		);
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {

@@ -66,6 +66,7 @@ export function ContextPanel({
 	extTabs = [],
 	view,
 	onViewChange,
+	onExpandPanel,
 	leafId,
 	activePathIds,
 	onBranchTo,
@@ -96,6 +97,9 @@ export function ContextPanel({
 	 *  (context/files/…), tool panes (git/browser/…) and ext:* slots. */
 	view: string | null;
 	onViewChange(view: string | null): void;
+	/** Expand a folded panel. The agent-activity reveal needs it (and only
+	 *  it): the rail and ⌘-shortcut paths expand for the same reason. */
+	onExpandPanel?(): void;
 	/** Jump the transcript to an entry id (trajectory rows; provided by
 	 *  ChatView — absent = trajectory rows render without jump action). */
 	onJumpToEntry?(entryId: string): void;
@@ -213,6 +217,13 @@ export function ContextPanel({
 	// agent browsing in the background must not yank the maximized view.
 	const agentBrowserTabRef = useRef<string | null>(null);
 	const maximizedRef = useRef(false);
+	// Mirrors for the mount-only subscription below (the same reason
+	// maximizedRef exists): the reveal has to know whether the panel is
+	// actually on screen, and call an expand callback that stays fresh.
+	const openRef = useRef(open);
+	openRef.current = open;
+	const expandRef = useRef(onExpandPanel);
+	expandRef.current = onExpandPanel;
 	useEffect(() => {
 		const api = window.electronAPI;
 		if (!api || typeof api.onManagedBrowserState !== "function") return;
@@ -224,6 +235,9 @@ export function ContextPanel({
 			if (next.agentActivity === true && key !== null && agentBrowserTabRef.current !== key) {
 				agentBrowserTabRef.current = key;
 				onViewChange("browser");
+				// Reveal, not just select: on a folded panel the view switch is
+				// invisible, so the agent's work would stay unseen.
+				if (!openRef.current) expandRef.current?.();
 			}
 		});
 	}, []);
@@ -406,7 +420,7 @@ export function ContextPanel({
 						 * the native WebContentsView projects the slot's exact CSS
 						 * rect — a padded/scrollable wrapper breaks the height chain
 						 * and clips the projection. */
-						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} />
+						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} />
 					) : view === "git" || view === "diff" || view === "pr" ? (
 						<GitPanel rpc={rpc} cwd={cwd} />
 					) : view === "trajectory" ? (
@@ -785,15 +799,17 @@ const BROWSER_VIEWPORTS = [
  * webview/iframe pane.
  */
 function BrowserPane({
+	open,
 	rpc,
 	browserOpenRequest = null,
 }: {
+	open: boolean;
 	rpc: RpcClient;
 	browserOpenRequest?: { url: string; nonce: number } | null;
 }): ReactNode {
 	// Electron shell → the managed browser (shared with the agent's browser tool);
 	// plain-browser builds keep the iframe fallback.
-	if (isElectron()) return <ManagedBrowserPane openRequest={browserOpenRequest} />;
+	if (isElectron()) return <ManagedBrowserPane open={open} openRequest={browserOpenRequest} />;
 	return <LegacyBrowserPane rpc={rpc} />;
 }
 

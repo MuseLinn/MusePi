@@ -250,6 +250,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserClearData: (mode) => ipcRenderer.invoke("managed-browser:clear-data", { mode }),
 	/** Interrupt the agent's in-flight operation on a tab (optional tabId). */
 	managedBrowserStop: (tabId) => ipcRenderer.invoke("managed-browser:stop", tabId),
+	/** Device preset + emulated viewport for the active tab
+	 *  ("fit" clears the identity and the metrics override). */
+	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
 	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */

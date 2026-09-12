@@ -176,10 +176,10 @@ function isHistoryUrl(url: string): boolean {
 // ── viewport presets (legacy pane parity, moved into the managed pane) ─
 
 const VIEWPORTS = [
-	{ key: "browser viewport fit", width: null as number | null },
-	{ key: "browser viewport phone", width: 393 },
-	{ key: "browser viewport tablet", width: 768 },
-	{ key: "browser viewport desktop", width: 1440 },
+	{ key: "browser viewport fit", width: null as number | null, device: "fit" },
+	{ key: "browser viewport phone", width: 393, device: "phone" },
+	{ key: "browser viewport tablet", width: 768, device: "tablet" },
+	{ key: "browser viewport desktop", width: 1440, device: "desktop" },
 ] as const;
 
 // ── quick links (start page 快速链接) ─────────────────────────────────
@@ -198,12 +198,16 @@ const QUICK_LINKS: Array<{
 ];
 
 export function ManagedBrowserPane({
+	open = true,
 	openRequest = null,
 }: {
 	/** External reveal (chat link click / agent browser open): navigate the
 	 *  active tab to this URL when the nonce advances (proma
 	 *  AgentBrowserLinkProvider parity). */
 	openRequest?: { url: string; nonce: number } | null;
+	/** Panel fold state. A closed panel keeps this pane mounted at width 0, so
+	 *  the pane cannot infer visibility from its own geometry. */
+	open?: boolean;
 } = {}): ReactNode {
 	// 页面状态在宿主 store 里(`<webview>` 元素由常驻的 ManagedBrowserHost 持有);
 	// 本组件只渲染 chrome,并把内容槽位的 rect 报给宿主定位。
@@ -218,7 +222,11 @@ export function ManagedBrowserPane({
 	const [suggestionIndex, setSuggestionIndex] = useState(-1);
 	const [history, setHistory] = useState<BrowserHistoryEntry[]>(() => loadHistory());
 	const [menuOpen, setMenuOpen] = useState(false);
-	const [viewport, setViewport] = useState<number | null>(null);
+	// Preset KEY, not its width: the key also carries the device identity the
+	// page is served under (see the device-preset effect below), while the
+	// width drives the fit-scaling.
+	const [viewportKey, setViewportKey] = useState<(typeof VIEWPORTS)[number]["key"]>("browser viewport fit");
+	const viewport = VIEWPORTS.find(v => v.key === viewportKey)?.width ?? null;
 	const [copied, setCopied] = useState(false);
 	const slotRef = useRef<HTMLDivElement | null>(null);
 	const urlRef = useRef<HTMLInputElement | null>(null);
@@ -226,6 +234,67 @@ export function ManagedBrowserPane({
 	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
 	const isBlank = !activeTab || activeTab.blank || activeUrl === EMPTY_URL || activeUrl === "";
+
+	// Device identity: a preset has to change what the SITE serves, not just
+	// the box — at phone width with a desktop UA, UA-sniffing sites (bing.com,
+	// google.com) keep sending their desktop document. Main applies the
+	// UA/client-hints/touch override on the active tab; switching the preset
+	// reloads so the page re-serves, while a tab switch re-applies silently.
+	const device = VIEWPORTS.find(v => v.key === viewportKey)?.device ?? "fit";
+	// Identity AND emulated layout size ride one channel, because main owns the
+	// guest's debugger. Both matter: the preset decides what the SITE serves
+	// (UA + client hints + touch), and the page's viewport has to be emulated
+	// (the host is transform-scaled to fit the pane, which shrinks the guest's
+	// viewport with it — measured: a 1440-wide host under scale(0.227) left the
+	// page a 327px viewport, so wide presets only zoomed the desktop layout out
+	// instead of giving it room).
+	const deviceSyncRef = useRef<{ tabId: string; device: string; width: number; height: number } | null>(null);
+	const syncContextRef = useRef({ tabId: host.activeId, device });
+	syncContextRef.current = { tabId: host.activeId, device };
+	const syncDevice = useCallback(
+		(tabId: string, deviceKey: string, size: { width: number; height: number } | null, reload: boolean): void => {
+			const api = window.electronAPI;
+			if (!api?.managedBrowserSetDevice || !tabId) return;
+			const width = size?.width ?? 0;
+			const height = size?.height ?? 0;
+			const last = deviceSyncRef.current;
+			// The re-measure loop reports size changes too, so dedupe with a small
+			// tolerance: an IPC per pixel of a window drag is not free.
+			const unchanged =
+				last?.tabId === tabId &&
+				last.device === deviceKey &&
+				Math.abs(last.width - width) <= 4 &&
+				Math.abs(last.height - height) <= 4;
+			if (unchanged && !reload) return;
+			deviceSyncRef.current = { tabId, device: deviceKey, width, height };
+			void api
+				.managedBrowserSetDevice({ tabId, preset: deviceKey, reload, viewport: size ?? undefined })
+				.then(result => {
+					// A silent failure leaves the page on the wrong identity/size
+					// with no trace: both are invisible until the next load.
+					if (result?.ok === false) console.warn("[managed-browser] device preset failed:", result.error);
+				})
+				.catch(() => {});
+		},
+		[],
+	);
+	/** Emulated layout size for the active preset (null while the pane fills the
+	 *  slot: there is nothing to emulate). */
+	const deviceSize = useCallback((): { width: number; height: number } | null => {
+		const el = slotRef.current;
+		if (!el || viewport === null) return null;
+		const avail = el.getBoundingClientRect();
+		if (avail.width <= 0 || avail.height <= 0) return null;
+		const fit = fitViewport(viewport, avail.width);
+		return { width: fit.width, height: Math.round(avail.height / fit.scale) };
+	}, [viewport]);
+	useEffect(() => {
+		if (!host.activeId) return;
+		const previous = deviceSyncRef.current;
+		// Reload only when the IDENTITY changed on the tab already on screen: a
+		// tab switch re-applies silently instead of yanking the page.
+		syncDevice(host.activeId, device, deviceSize(), previous?.tabId === host.activeId && previous.device !== device);
+	}, [host.activeId, device, deviceSize, syncDevice]);
 
 	// Persist history (debounced, open-design parity).
 	useEffect(() => {
@@ -298,7 +367,18 @@ export function ManagedBrowserPane({
 					height: avail.height / fit.scale,
 					scale: fit.scale,
 				});
-				return;
+				// Keep the emulated viewport in step with the pane (a window or
+				// panel drag changes the height the guest may lay out into);
+				// syncDevice dedupes.
+				const { tabId: syncedTabId, device: syncedDevice } = syncContextRef.current;
+				if (syncedTabId) {
+					syncDevice(
+						syncedTabId,
+						syncedDevice,
+						{ width: fit.width, height: Math.round(avail.height / fit.scale) },
+						false,
+					);
+				}
 			}
 			const rect = el.getBoundingClientRect();
 			setPaneRect({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
@@ -323,7 +403,15 @@ export function ManagedBrowserPane({
 			window.removeEventListener("transitionend", report, true);
 			setPaneRect(null);
 		};
-	}, [viewport]);
+	}, [viewport, syncDevice]);
+
+	// Report the fold itself: main's `panelVisible` gates the agent-activity
+	// reveal, and a folded panel keeps this pane mounted (width 0) with a
+	// non-degenerate rect — the reveal then never fires and the agent's work
+	// stays unseen.
+	useEffect(() => {
+		void window.electronAPI?.managedBrowserVisibility(open).catch(() => {});
+	}, [open]);
 
 	const commitVisit = useCallback((url: string): void => {
 		if (!isHistoryUrl(url)) return;
@@ -609,9 +697,9 @@ export function ManagedBrowserPane({
 										<button
 											key={v.key}
 											type="button"
-											className={viewport === v.width ? "gui-browser-menu-chip--active" : ""}
+											className={viewportKey === v.key ? "gui-browser-menu-chip--active" : ""}
 											onClick={() => {
-												setViewport(v.width);
+												setViewportKey(v.key);
 												setMenuOpen(false);
 											}}
 										>
