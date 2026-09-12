@@ -2823,9 +2823,9 @@ checksum = "c9356095b4b41197bba32173600e1582792cda618f65d12f68e2e77d273413c5"
 
 [[package]]
 name = "html-to-markdown-rs"
-version = "3.12.3"
+version = "3.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92a0c610a5780d769f7e2e0c3e7e36003582f688d5648ea8263d11161561f461"
+checksum = "b23a554b38b32ad84fb055c794ca2e36824a15a43efda8e549766e3a99c80a9b"
 dependencies = [
  "ahash",
  "astral-tl",
@@ -5003,7 +5003,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -5073,7 +5073,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -5158,7 +5158,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "async-trait",
  "libc",
@@ -5170,7 +5170,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5244,7 +5244,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5272,7 +5272,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5287,7 +5287,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "0.4.26"
+version = "0.4.27"
 dependencies = [
  "dashmap",
  "globset",

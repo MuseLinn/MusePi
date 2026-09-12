@@ -761,9 +761,9 @@
     url = "https://registry.npmjs.org/@lobehub/streamdown/-/streamdown-1.3.1.tgz";
     hash = "sha512-QJXrx4k0AtjvDU8viAjLPJhYtf6bx725Q2HxiU8GXpyXN9OPDaRBe6DyvExlz7L14SlEeJzPd2tQRjt7SwK+OA==";
   };
-  "@lobehub/ui@5.42.8" = fetchurl {
-    url = "https://registry.npmjs.org/@lobehub/ui/-/ui-5.42.8.tgz";
-    hash = "sha512-XyjarV0y5jaSAVAClHhc5Yg8jBpXMtXzeG2FxILBGz7STRjfZ9Q602ZCuwIXm40wMz0EINAkEFz2ClvAermeuQ==";
+  "@lobehub/ui@5.43.1" = fetchurl {
+    url = "https://registry.npmjs.org/@lobehub/ui/-/ui-5.43.1.tgz";
+    hash = "sha512-Up3+eTS7J4VUNtJgVjADdNCS9ztGS3rmMkBcp4D5L8Nvqu8hjbzoO71FvchCT6bzgxRAAEyWRR9VNQB9hEsPaQ==";
   };
   "@malept/cross-spawn-promise@2.0.0" = fetchurl {
     url = "https://registry.npmjs.org/@malept/cross-spawn-promise/-/cross-spawn-promise-2.0.0.tgz";
