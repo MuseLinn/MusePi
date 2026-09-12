@@ -2385,6 +2385,14 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	 * overflowed the window by the header height, clipping the bottom
 	 * of every view's rounded surface (board create bar was cut off). */
 	flex: 1;
+	/* The wrapper is a flex item in .gui-shell, so its automatic minimum was
+	 * its content's min-content width: one wide child (the extension center's
+	 * provider tabs) widened the WHOLE page — the settings view measured
+	 * 2430px in a 1568px window, with the detail pane and half the tab strip
+	 * off-screen (user: 扩展设置面板右偏移出界面). min-width:0 lets the wrapper
+	 * take the available width and leaves the overflow to the child's own
+	 * scroll container. */
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
