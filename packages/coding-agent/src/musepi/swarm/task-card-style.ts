@@ -18,7 +18,7 @@
 // real executor.
 // ============================================================
 
-import { truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import { padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
 import { settings } from "../../config/settings";
 import type { ExtensionAPI, ExtensionFactory, ExtensionUIContext } from "../../extensibility/extensions/types";
 import type { Theme, ThemeColor } from "../../modes/theme/theme";
@@ -126,11 +126,18 @@ function gridLayout(
 	count: number,
 	availableWidth: number,
 	availableHeight: number,
+	idWidth: number,
 ): { columns: number; rows: number; cellWidth: number; barCells: number } {
 	if (count <= 0) return { columns: 1, rows: 0, cellWidth: 0, barCells: 1 };
 	const gapWidth = visibleWidth(CELL_GAP);
-	const idWidth = Math.max(3, String(count).length);
-	const minCellWidth = idWidth + 1 + BRAILLE_BAR_MAX_WIDTH + 2 + MIN_LABEL_WIDTH + 2;
+	// The id column is as wide as the longest member id, not the member count:
+	// counting (`String(count).length` = 1 for four agents) under-sized every
+	// cell, so the bar and label were budgeted against a column that could not
+	// hold them — ids like `OnboardingWiring` left the label at MIN_LABEL_WIDTH
+	// ("◉ Re…") and pushed the row past the cell (user: 排版没优化好).
+	// Floor at 3 so a grid of `1`/`2` style ids still gets a readable column.
+	const idCols = Math.max(3, idWidth);
+	const minCellWidth = idCols + 1 + BRAILLE_BAR_MAX_WIDTH + 2 + MIN_LABEL_WIDTH + 2;
 	const columns = Math.max(
 		1,
 		Math.min(count, Math.floor((availableWidth + gapWidth) / (Math.max(1, minCellWidth) + gapWidth))),
@@ -326,7 +333,12 @@ class TaskCardWidgetController {
 		lines.push(truncateToWidth(header, width));
 
 		// Kimi-style braille member grid: `id [braille-bar] ◉ action`.
-		const grid = gridLayout(total, width - 2, GRID_HEIGHT);
+		// The id column takes the longest member id so every cell has the same
+		// label budget — per-member budgets left the bars and labels of a row
+		// unaligned whenever the ids differed in length (kimi parity: fit the
+		// widest, then pad).
+		const idWidth = members.reduce((w, m) => Math.max(w, visibleWidth(m.id)), 0);
+		const grid = gridLayout(total, width - 2, GRID_HEIGHT, idWidth);
 		for (let row = 0; row < grid.rows; row++) {
 			const cells: string[] = [];
 			for (let col = 0; col < grid.columns; col++) {
@@ -340,12 +352,14 @@ class TaskCardWidgetController {
 					this.completedAt.get(m.id),
 					nowMs,
 				);
-				const labelMaxWidth = Math.max(
-					MIN_LABEL_WIDTH,
-					grid.cellWidth - visibleWidth(m.id) - visibleWidth(bar) - 2,
-				);
+				const labelMaxWidth = Math.max(MIN_LABEL_WIDTH, grid.cellWidth - idWidth - visibleWidth(bar) - 2);
 				const label = this.cellLabel(m, labelMaxWidth, theme);
-				cells.push(`${theme.fg("muted", m.id)} ${this.colorBar(bar, m.status, theme)} ${label}`);
+				// Pad to the widest id so a row's bars and labels start at the same
+				// column (kimi parity: fit the widest, then pad) — padding in
+				// visible width, not code units.
+				cells.push(
+					`${theme.fg("muted", m.id + padding(idWidth - visibleWidth(m.id)))} ${this.colorBar(bar, m.status, theme)} ${label}`,
+				);
 			}
 			lines.push(LEFT_INDENT + cells.join(CELL_GAP));
 		}
@@ -505,6 +519,11 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 				return true; // settings not initialized yet — default swarm
 			}
 		};
+		// The widget key is global but the data is per-call: without this, a
+		// second `task` call (or a late update from one that already ended)
+		// overwrote the live members and the panel alternated between the two
+		// member lists on every frame (user: 加了子 agent 后 0/3 与 0/4 同时在刷新).
+		let widgetCallId: string | null = null;
 		api.on("tool_execution_start", (event, ctx) => {
 			if (event.toolName !== "task" || !wantSwarm() || !ctx.ui) return;
 			// Start event args are the raw tool params (tasks array); prime
@@ -525,16 +544,19 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 			}));
 			if (members.length === 0) return;
 			widget ??= new TaskCardWidgetController(ctx.ui);
+			widgetCallId = event.toolCallId;
 			widget.start(members);
 		});
 		api.on("tool_execution_update", (event, ctx) => {
 			if (event.toolName !== "task" || !wantSwarm() || !ctx.ui || widget === null) return;
+			if (event.toolCallId !== widgetCallId) return;
 			const details = (event.partialResult as { details?: unknown } | null | undefined)?.details;
 			const members = taskMembersFromDetails(details);
 			if (members) widget.update(members);
 		});
 		api.on("tool_execution_end", (event, ctx) => {
 			if (event.toolName !== "task" || !ctx.ui || widget === null) return;
+			if (event.toolCallId !== widgetCallId) return;
 			const details = (event.result as { details?: unknown } | null | undefined)?.details;
 			const members = taskMembersFromDetails(details);
 			if (members) widget.settle(members);
@@ -550,6 +572,7 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 			if (widget === null) return;
 			widget.stop();
 			widget = null;
+			widgetCallId = null;
 		};
 		api.on("agent_end", () => {
 			dropWidget();
