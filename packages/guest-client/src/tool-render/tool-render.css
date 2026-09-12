@@ -1291,6 +1291,11 @@
 	height: 100%;
 	border-radius: 2px;
 	transition: width 0.3s ease;
+	/* Default fill: the running phase. It used to carry NO background, so a
+	 * live member's bar painted an invisible block (the only visible phases
+	 * were ok/warn/err) — the bar read as missing entirely (user: 客户端的
+	 * swarm 卡片没有 TUI 那种进度条). */
+	background: var(--tv-accent, oklch(0.674 0.23 341));
 }
 
 .tv-swarm-bar-fill--ok {

@@ -89,6 +89,20 @@ function progressPhase(p: Record<string, unknown>): "ok" | "run" | "err" {
 }
 
 /**
+ * Progress fraction for one live member's bar. The daemon streams no
+ * estimated total, so the bar grows on tool calls via a soft asymptote
+ * instead of inventing a percentage — the TUI task card uses the same rule
+ * (coding-agent `computeProgress`), and both surfaces must read the same.
+ */
+export function agentProgressFraction(p: { status?: unknown; toolCount?: unknown }): number {
+	const status = typeof p.status === "string" ? p.status : "running";
+	if (status === "completed" || status === "failed" || status === "aborted") return 1;
+	const toolCount = typeof p.toolCount === "number" ? p.toolCount : 0;
+	if (status === "pending" || toolCount <= 0) return 0;
+	return Math.min(1, toolCount / (toolCount + 2));
+}
+
+/**
  * Swarm-wide phase counts (Kimi parity: done/total chip + segmented bar).
  * Finished results take precedence; while the swarm is still running the
  * live progress frames are counted instead (the two never mix — Body only
@@ -411,7 +425,7 @@ function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?:
 	const description = str(p.description);
 	const intent = str(p.lastIntent) ?? str(p.currentTool);
 	const bits: string[] = [];
-	const toolCount = num(p.toolCount);
+	const toolCount = num(p.toolCount) ?? 0;
 	if (toolCount) bits.push(t("{count} tools", { count: String(toolCount) }));
 	const tokens = num(p.tokens);
 	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
@@ -437,7 +451,14 @@ function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?:
 					{bits.length > 0 && <div className="tv-swarm-member-stats">{bits.join(" · ")}</div>}
 					{status === "running" && (
 						<div className="tv-swarm-bar" aria-hidden="true">
-							<span className="tv-swarm-bar-fill tv-swarm-bar-fill--run tv-swarm-bar-fill--live" />
+							{/* Determinate once the agent has run a tool (TUI parity);
+							 * indeterminate only while it has not started working yet. */}
+							<span
+								className={`tv-swarm-bar-fill tv-swarm-bar-fill--run${
+									toolCount > 0 ? "" : " tv-swarm-bar-fill--live"
+								}`}
+								style={toolCount > 0 ? { width: `${Math.round(agentProgressFraction(p) * 100)}%` } : undefined}
+							/>
 						</div>
 					)}
 				</div>
@@ -559,7 +580,7 @@ function AgentProgressRow({
 	const description = str(p.description);
 	const intent = str(p.lastIntent) ?? str(p.currentTool);
 	const bits: string[] = [];
-	const toolCount = num(p.toolCount);
+	const toolCount = num(p.toolCount) ?? 0;
 	if (toolCount) bits.push(t("{count} tools", { count: String(toolCount) }));
 	const tokens = num(p.tokens);
 	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
