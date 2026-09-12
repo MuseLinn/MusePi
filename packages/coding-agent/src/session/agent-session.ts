@@ -6230,6 +6230,7 @@ export class AgentSession {
 		text: string,
 		images: ImageContent[] | undefined,
 		mode: "steer" | "followUp",
+		options?: { prepend?: boolean },
 	): Promise<void> {
 		// A queued user message (RPC/SDK/collab steer or follow-up, or a typed message
 		// while streaming) is a deliberate resume; re-enable advisor auto-resume that
@@ -6254,6 +6255,19 @@ export class AgentSession {
 				attribution: "user",
 				timestamp: Date.now(),
 			});
+		} else if (options?.prepend) {
+			// 立即发出插到队首:steering 默认 one-at-a-time、循环每个注入边界只取队首
+			// 一条,追加到队尾会排到所有已排队消息之后(逐个边界才轮到),点击"立即发出"
+			// 反而最后送达、面板上该行一直不消失。notice 先插,保持图片说明紧贴其消息之前。
+			const userMessage: AgentMessage = {
+				role: "user",
+				content,
+				steering: true,
+				attribution: "user",
+				timestamp: Date.now(),
+			};
+			const head = imageDescriptionNotice ? [imageDescriptionNotice, userMessage] : [userMessage];
+			this.agent.replaceQueues([...head, ...this.agent.peekSteeringQueue()], [...this.agent.peekFollowUpQueue()]);
 		} else {
 			if (imageDescriptionNotice) this.agent.steer(imageDescriptionNotice);
 			this.agent.steer({
@@ -6642,9 +6656,10 @@ export class AgentSession {
 	}
 
 	/**
-	 * 立即发出指定排队消息（TUI 引导消息回车即发 parity）：把该条从队列取出并
-	 * 立即重新注入为 steer（唤醒等待中的注入点，等同 GUI 主输入框"立即引导发送"）。
-	 * 按文本匹配 user 消息（重复文本取第一条）；图片消息按其原内容重发。找不到返回 false。
+	 * 立即发出指定排队消息（TUI 引导消息回车即发 parity）：把该条从原队列取出，
+	 * 作为 steer 注入 steer 队列**队首**——下一个注入边界就发出它，跳过前面已排队的
+	 * 消息；该条随之离开队列（面板里本组的行消失）。按文本匹配 user 消息（重复文本取
+	 * 第一条）；图片消息按其原内容重发。找不到返回 false。
 	 */
 	async sendQueuedMessage(group: "steering" | "followUp", text: string): Promise<boolean> {
 		const queue = group === "steering" ? this.agent.peekSteeringQueue() : this.agent.peekFollowUpQueue();
@@ -6655,14 +6670,7 @@ export class AgentSession {
 		else this.agent.replaceQueues([...this.agent.peekSteeringQueue()], rest);
 		this.#reconcileQueuedMessageDrain();
 		const restored = toRestoredQueuedMessage(queue[index]);
-		const content =
-			restored.images && restored.images.length > 0
-				? [
-						...(restored.text ? [{ type: "text" as const, text: restored.text }] : []),
-						...restored.images.map(img => ({ type: "image" as const, data: img.data, mimeType: img.mimeType })),
-					]
-				: restored.text;
-		await this.sendUserMessage(content, { deliverAs: "steer" });
+		await this.#queueUserMessage(restored.text, restored.images, "steer", { prepend: true });
 		return true;
 	}
 

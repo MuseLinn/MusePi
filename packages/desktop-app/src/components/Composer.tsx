@@ -794,29 +794,6 @@ export function Composer({
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
-	// 立即发出: pull one queued message out and inject it as an immediate
-	// steer (TUI 引导消息回车即发 parity). Drop it from the local snapshot
-	// right away; the 3s poll reconciles anything the daemon re-queues.
-	const sendQueued = useCallback(
-		(group: "steering" | "followUp", text: string, index: number): Promise<void> => {
-			if (!rpc || !sessionId) return Promise.resolve();
-			return rpc
-				.request("session.queuedSend", { sessionId, group, text })
-				.then(() => {
-					setQueued(prev =>
-						prev
-							? {
-									...prev,
-									count: Math.max(0, prev.count - 1),
-									[group]: prev[group].filter((_, i) => i !== index),
-								}
-							: prev,
-					);
-				})
-				.catch(() => {});
-		},
-		[rpc, sessionId],
-	);
 	// Immediate snapshot refresh — called right after a busy-time send so an
 	// enqueued message shows in the chip/panel NOW instead of on the next
 	// 3s poll tick.
@@ -836,6 +813,34 @@ export function Composer({
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
+	// 立即发出: pull one queued message out and inject it as an immediate
+	// steer (TUI 引导消息回车即发 parity). Drop the row from this group
+	// locally, then re-read the authoritative snapshot — the daemon placed
+	// the item at the head of the steer queue, so the panel shows where it
+	// actually sits until the agent takes it at the next injection boundary.
+	// Without the refresh the panel kept the optimistic guess until the 3s
+	// poll and the click read as inert.
+	const sendQueued = useCallback(
+		(group: "steering" | "followUp", text: string, index: number): Promise<void> => {
+			if (!rpc || !sessionId) return Promise.resolve();
+			return rpc
+				.request("session.queuedSend", { sessionId, group, text })
+				.then(() => {
+					setQueued(prev =>
+						prev
+							? {
+									...prev,
+									count: Math.max(0, prev.count - 1),
+									[group]: prev[group].filter((_, i) => i !== index),
+								}
+							: prev,
+					);
+					refreshQueued();
+				})
+				.catch(() => {});
+		},
+		[rpc, sessionId, refreshQueued],
+	);
 	useEffect(() => {
 		if (!rpc || !sessionId || !working) return;
 		let disposed = false;

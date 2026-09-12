@@ -123,39 +123,65 @@ describe("AgentSession steer idle drain", () => {
 		expect(continueSpy).toHaveBeenCalledTimes(1);
 	});
 
-	it("sendQueuedMessage pulls one queued steer out and re-injects it immediately", async () => {
+	it("sendQueuedMessage promotes the popped steer to the queue head", async () => {
 		await createSession([{ role: "user", content: "hello", timestamp: Date.now() }, createAssistantMessage()]);
 		// Queue directly on the agent core (no idle-drain side effects); the
-		// steer path's timers would hang under the suite's fake clock, so the
-		// re-inject is observed via a sendUserMessage spy instead.
+		// steer path's timers would hang under the suite's fake clock.
 		session.agent.steer({ role: "user", content: "first", timestamp: 1 });
 		session.agent.steer({ role: "user", content: "second", timestamp: 2 });
 		expect(session.getQueuedMessages().steering).toEqual(["first", "second"]);
 
-		const sendSpy = vi.spyOn(session, "sendUserMessage").mockImplementation(async () => {});
-		const sent = await session.sendQueuedMessage("steering", "first");
+		// The idle drain 立即发出 schedules runs as a 0-delay post-prompt task —
+		// the suite's fake clock cannot hold it back — and would call the real
+		// agent.continue(), starting a real provider stream on this streamFn-less
+		// Agent. Mock it like the drain tests above; what is asserted here is
+		// queue ORDER, not delivery.
+		// 立即发出 on this idle session arms the queue drain: a 0-delay post-prompt
+		// task (immune to the suite's fake clock) that calls the REAL
+		// agent.continue() — a provider stream on this streamFn-less Agent.
+		// Capture what the next injection boundary delivers instead, and clear the
+		// queues inside the mock: a no-op continue leaves them non-empty and the
+		// drain re-arms forever.
+		const deliveredAt: string[][] = [];
+		vi.spyOn(session.agent, "continue").mockImplementation(async () => {
+			deliveredAt.push(session.getQueuedMessages().steering);
+			session.agent.clearAllQueues();
+		});
+
+		const sent = await session.sendQueuedMessage("steering", "second");
 		expect(sent).toBe(true);
-		// Removed from its slot; the re-inject is handed to sendUserMessage as
-		// an immediate steer (queue tail / GUI send-now parity).
-		expect(session.getQueuedMessages().steering).toEqual(["second"]);
-		expect(sendSpy).toHaveBeenCalledWith("first", { deliverAs: "steer" });
+		await session.waitForIdle();
+		// 立即发出 = skip ahead: the popped message rides the NEXT injection
+		// boundary, ahead of the message queued in front of it — appending behind
+		// would deliver it only after that message took its own boundary.
+		expect(deliveredAt[0]).toEqual(["second", "first"]);
+		expect(session.getQueuedMessages()).toEqual({ steering: [], followUp: [] });
 	});
 
-	it("sendQueuedMessage moves a followUp out and rejects unknown text", async () => {
+	it("sendQueuedMessage promotes a followUp to the steer head and rejects unknown text", async () => {
 		await createSession([{ role: "user", content: "hello", timestamp: Date.now() }, createAssistantMessage()]);
-		session.agent.followUp({ role: "user", content: "later", timestamp: 1 });
-		expect(session.getQueuedMessages().followUp).toEqual(["later"]);
+		session.agent.steer({ role: "user", content: "guide", timestamp: 1 });
+		session.agent.followUp({ role: "user", content: "later", timestamp: 2 });
+		expect(session.getQueuedMessages()).toEqual({ steering: ["guide"], followUp: ["later"] });
 
-		const sendSpy = vi.spyOn(session, "sendUserMessage").mockImplementation(async () => {});
+		// Same real-continue drain hazard as the steer test above: capture at the
+		// injection boundary and clear inside the mock.
+		const deliveredAt: { steering: string[]; followUp: string[] }[] = [];
+		vi.spyOn(session.agent, "continue").mockImplementation(async () => {
+			deliveredAt.push(session.getQueuedMessages());
+			session.agent.clearAllQueues();
+		});
+
 		const sent = await session.sendQueuedMessage("followUp", "later");
 		expect(sent).toBe(true);
-		// Re-injected as an immediate steer, so the followUp group is now empty.
-		expect(session.getQueuedMessages().followUp).toEqual([]);
-		expect(sendSpy).toHaveBeenCalledWith("later", { deliverAs: "steer" });
+		await session.waitForIdle();
+		// Leaves 本轮后 and becomes the NEXT steer — ahead of the steer queued
+		// before it (send now = skip ahead, not queue behind).
+		expect(deliveredAt[0]).toEqual({ steering: ["later", "guide"], followUp: [] });
 
-		// Unknown text: no match, nothing sent, queue untouched.
+		// Unknown text: no match, nothing sent, nothing re-queued.
 		expect(await session.sendQueuedMessage("steering", "not queued")).toBe(false);
-		expect(session.getQueuedMessages().steering).toEqual([]);
+		expect(session.getQueuedMessages()).toEqual({ steering: [], followUp: [] });
 	});
 
 	it("popQueuedMessage removes one specific queued message without re-injecting", async () => {
