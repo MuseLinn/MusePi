@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "bun:test";
-import { getLatestRelease, runUpdateCommand } from "../../src/cli/update-cli";
+import { getLatestRelease, releaseBinaryName, runUpdateCommand } from "../../src/cli/update-cli";
 
 type FetchInput = string | URL | Request;
 type FetchInit = RequestInit | BunFetchRequestInit;
@@ -126,5 +126,31 @@ describe("getLatestRelease rename pointers", () => {
 		vi.spyOn(globalThis, "fetch").mockImplementation(fetchStub);
 
 		await expect(getLatestRelease()).rejects.toThrow("Failed to fetch release info for @musepi/pi-coding-agent");
+	});
+});
+
+/**
+ * The name the updater asks the release for. Windows ARM64 is the contract
+ * that broke: `process.arch` reports `arm64` there while no
+ * `musepi-windows-arm64.exe` is ever published, so every ARM Windows
+ * self-update died with `has 0 assets named musepi-windows-arm64.exe`
+ * (user: arm Windows 找不到可执行程序).
+ */
+describe("releaseBinaryName", () => {
+	it("takes the published x64 asset on Windows ARM64", () => {
+		expect(releaseBinaryName("win32", "arm64", false)).toBe("musepi-windows-x64.exe");
+		expect(releaseBinaryName("win32", "x64", false)).toBe("musepi-windows-x64.exe");
+	});
+
+	it("names the published asset for every other supported target", () => {
+		expect(releaseBinaryName("darwin", "arm64", false)).toBe("musepi-darwin-arm64");
+		expect(releaseBinaryName("linux", "x64", false)).toBe("musepi-linux-x64");
+		expect(releaseBinaryName("linux", "x64", true)).toBe("musepi-linux-musl-x64");
+		expect(releaseBinaryName("linux", "arm64", true)).toBe("musepi-linux-musl-arm64");
+	});
+
+	it("rejects platforms and architectures the release does not serve", () => {
+		expect(() => releaseBinaryName("freebsd" as NodeJS.Platform, "x64", false)).toThrow("Unsupported platform");
+		expect(() => releaseBinaryName("linux", "ia32", false)).toThrow("Unsupported architecture");
 	});
 });

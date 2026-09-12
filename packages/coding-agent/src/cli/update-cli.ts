@@ -1080,16 +1080,21 @@ export function isMuslLinuxForTest(options: Required<MuslDetectionOptions>): boo
 }
 
 /**
- * Get the appropriate binary name for this platform.
+ * Release asset name for a platform/arch pair.
+ *
+ * Windows ARM64 has no published asset — the release matrix builds Windows
+ * x64 only — while `process.arch` reports `arm64` on Windows 11 ARM. Naming
+ * `musepi-windows-arm64.exe` therefore failed every ARM Windows self-update
+ * with `GitHub release <tag> has 0 assets named musepi-windows-arm64.exe`.
+ * Windows runs x64 binaries under emulation, so ARM Windows takes the x64
+ * asset; publishing a native win32-arm64 build is a release-pipeline change
+ * (windows-11-arm job) and would supersede this fallback.
  */
-function getBinaryName(): string {
-	const platform = process.platform;
-	const arch = process.arch;
-
+export function releaseBinaryName(platform: NodeJS.Platform, arch: string, muslLinux: boolean): string {
 	let os: string;
 	switch (platform) {
 		case "linux":
-			os = isMuslLinux() ? "linux-musl" : "linux";
+			os = muslLinux ? "linux-musl" : "linux";
 			break;
 		case "darwin":
 			os = "darwin";
@@ -1113,10 +1118,13 @@ function getBinaryName(): string {
 			throw new Error(`Unsupported architecture: ${arch}`);
 	}
 
-	if (os === "windows") {
-		return `${APP_NAME}-${os}-${archName}.exe`;
-	}
+	if (os === "windows") return `${APP_NAME}-${os}-${archName === "arm64" ? "x64" : archName}.exe`;
 	return `${APP_NAME}-${os}-${archName}`;
+}
+
+/** Release asset for the running process. */
+function getBinaryName(): string {
+	return releaseBinaryName(process.platform, process.arch, isMuslLinux());
 }
 
 /**

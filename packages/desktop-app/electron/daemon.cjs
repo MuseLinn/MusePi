@@ -211,10 +211,12 @@ async function start(port, env = {}) {
 			}
 			return bound;
 		}
-		// The spawned process died during startup.
+		// A quarantine/stale/arch-mismatched `musepi.exe` shows up here as an
+		// instant exit, and "daemon exited during startup" alone left the user
+		// with nothing to act on (ARM Windows report: 找不到可执行程序).
 		if (child.exitCode !== null || child.signalCode !== null) {
-			console.error("[daemon] child exited", child.exitCode, child.signalCode);
-			throw new Error("daemon exited during startup");
+			console.error("[daemon] child exited", child.exitCode, child.signalCode, "program:", program);
+			throw new Error(`daemon exited during startup (${program})`);
 		}
 		await new Promise(r => setTimeout(r, 100));
 	}
