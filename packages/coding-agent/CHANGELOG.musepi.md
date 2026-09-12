@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.27] - 2026-09-12
+
 ### Added
 
 - **对话内联 widget 卡片支持下载/复制/查看代码(对齐 WorkBuddy 卡片菜单)**:独立展示的卡片(聊天消息内联与右栏「组件预览」同一组件)在卡片头右侧新增「⋯」菜单,四项:**下载到本地**(把源写成文件)、**下载为图片**(卡片光栅化为 PNG,`pixelRatio: 2`)、**复制代码**(菜单项翻成「已复制」后自动收起)、**查看代码 / 显示 UI**(卡片头不动,卡片体在渲染结果与源文本间切换)。源的定义收在一处(`widgets/source.ts` 的 `widgetSource`):`html` 面给生成面自己的标记(下载 `.html` 可独立打开),其余类型给 `{type,title?,data}` 的 JSON——即 `widget` 工具被调用时的载荷,粘回对话就能让 agent 改这张卡;查看器/剪贴板/下载文件同读一份,不会漂移。「下载为图片」走宿主能力 `ToolRenderHost.saveImage`:只有带光栅器的宿主(桌面端复用既有 html-to-image 管线)提供,纯浏览器与 HTML 导出宿主**不渲染该项**(实测右栏组件页签只有 3 项)而非点了没反应;文本下载走新抽出的共享 `lib/download.ts`(Markdown 表格导出改用同一实现)。菜单为 portal 到 body 的浮层(卡片自带 `overflow: hidden`,内联浮层在矮卡片上会被裁),按锚点 rect 定位、下方不够时上翻、滚动/窗口变化重新锚定、Esc 与外部点击关闭。实测(真 GUI + 手造会话):metric 卡查看代码得到 `{type,title,data}` JSON、切回显示 UI 恢复、复制翻转标签、下载得到 `metric.json` 与 `metric.png`;html 卡得到原始标记与 `html.html`。
