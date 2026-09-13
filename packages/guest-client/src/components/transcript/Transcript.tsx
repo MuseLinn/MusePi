@@ -1,4 +1,4 @@
-import type { AssistantMessage, SessionEntry, ToolResultMessage } from "@musepi/pi-wire";
+import type { AssistantMessage, CustomMessageEntry, SessionEntry, ToolResultMessage } from "@musepi/pi-wire";
 import { play } from "cuelume";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
 import { GitFork, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
@@ -46,6 +46,7 @@ import {
 	modelLevelMeta,
 	msgText,
 	RoundFoldHeader,
+	readLiveCustomMessage,
 	type TranscriptNodeInjection,
 	TtsrBlock,
 	transcriptNodeKind,
@@ -596,6 +597,162 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	return true;
 }
 
+/**
+ * Body of a session custom message — advisor cards, TTSR warnings, async-job
+ * results, IRC relay, collab prompts, and the generic chip fallback. Shared by
+ * persisted `custom_message` entries and the live message seam, where the same
+ * notes arrive as a message with a custom role.
+ *
+ * A plain render helper, not a component: a hidden body must surface as `null`
+ * so the caller can skip the row's wrapper entirely.
+ */
+function renderCustomMessage({
+	customType,
+	content,
+	details,
+	display,
+	timestamp,
+	onPreviewImage,
+}: {
+	customType: string;
+	content: CustomMessageEntry["content"];
+	details: unknown;
+	display: boolean;
+	timestamp: string;
+	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+}): ReactNode {
+	if (customType === "collab-prompt") {
+		const from =
+			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"
+				? details.from
+				: t("guest");
+		return (
+			<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={timestamp}>
+				<MsgContent content={content} onPreviewImage={onPreviewImage} />
+			</Row>
+		);
+	}
+	if (customType === "ttsr") {
+		const rules =
+			details !== null && typeof details === "object" && "rules" in details && Array.isArray(details.rules)
+				? (details.rules as { name: string; description?: string; content?: string }[])
+				: [];
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<TtsrBlock rules={rules} />
+			</Row>
+		);
+	}
+	if (customType === "advisor") {
+		// Advisor notes (customType "advisor", display:true): renders the
+		// details.notes[] as a distinct-voice card (severity rail + badge).
+		// The message content is the model-facing `<advisory>` XML — never
+		// surface it; only the clean note text from details.
+		const notes =
+			details !== null && typeof details === "object" && "notes" in details && Array.isArray(details.notes)
+				? (details.notes as AdvisorNote[])
+				: [];
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<AdvisorBlock notes={notes} />
+			</Row>
+		);
+	}
+	if (customType === "async-result") {
+		// Background job completion (async-result custom message) —
+		// renders as compact "Background job completed" rows, NOT the
+		// raw `<system-notice>` content template (the LLM-facing
+		// prompt text must never surface to the user). Mirrors the TUI
+		// buildAsyncResultBlock: one row per job with id + duration.
+		const jobs = asyncResultJobs(details);
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<div className="tr-async-result" role="status">
+					{jobs.map((job, i) => (
+						<div key={i} className="tr-async-result-row">
+							<span className="tr-async-result-done" aria-hidden>
+								✓
+							</span>
+							<span className="tr-async-result-text">{t("Background job completed")}</span>
+							{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
+							<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
+							{typeof job.durationMs === "number" ? (
+								<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
+							) : null}
+						</div>
+					))}
+				</div>
+			</Row>
+		);
+	}
+	if (customType.startsWith("irc:")) {
+		const from =
+			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"
+				? details.from
+				: "irc";
+		// irc:incoming content is the rendered LLM prompt template
+		// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
+		// reply instructions that must not reach the UI. The clean
+		// body lives in details.message (mirror the TUI card, which
+		// renders card.body = details.message); fall back to content
+		// with the wrapper stripped for snapshots without details.
+		// relay/autoreply content is already display-shaped
+		// ([IRC a → b] header + body), so keep it verbatim.
+		const body =
+			details !== null && typeof details === "object" && "message" in details && typeof details.message === "string"
+				? details.message
+				: undefined;
+		const shown =
+			customType === "irc:incoming"
+				? (body ??
+					msgText({ content })
+						.replace(/^\s*<irc>\s*/i, "")
+						.replace(/\s*<\/irc>\s*$/i, ""))
+				: content;
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<div className="tr-irc">
+					<span className="tr-irc-from">{from}</span>
+					<MsgContent content={shown} onPreviewImage={onPreviewImage} />
+				</div>
+			</Row>
+		);
+	}
+	if (!display) return null;
+	return (
+		<Row kind="custom" gutter="" title={timestamp}>
+			<div className="tr-custom">
+				<span className="tr-chip">{customType}</span>
+				<MsgContent content={content} onPreviewImage={onPreviewImage} />
+			</div>
+		</Row>
+	);
+}
+
+/** One row of the `async-result` card: a job id + optional kind/label/duration. */
+interface AsyncResultJobRow {
+	jobId?: string;
+	type?: "bash" | "task" | "agnes-video";
+	label?: string;
+	durationMs?: number;
+}
+
+/** Async-job rows carried by an `async-result` custom message (single job on
+ *  older frames, `jobs[]` on batched ones). */
+function asyncResultJobs(details: unknown): AsyncResultJobRow[] {
+	if (details === null || typeof details !== "object") return [{}];
+	const jobs = "jobs" in details && Array.isArray(details.jobs) ? details.jobs : undefined;
+	if (jobs && jobs.length > 0) return jobs as AsyncResultJobRow[];
+	const one: AsyncResultJobRow = {};
+	if ("jobId" in details && typeof details.jobId === "string") one.jobId = details.jobId;
+	if ("label" in details && typeof details.label === "string") one.label = details.label;
+	if ("durationMs" in details && typeof details.durationMs === "number") one.durationMs = details.durationMs;
+	if ("type" in details && (details.type === "bash" || details.type === "task" || details.type === "agnes-video")) {
+		one.type = details.type;
+	}
+	return [one];
+}
+
 const EntryRow = memo(function EntryRow({
 	entry,
 	results,
@@ -631,6 +788,20 @@ const EntryRow = memo(function EntryRow({
 		switch (entry.type) {
 			case "message": {
 				const msg = entry.message;
+				// Live custom messages (advisor cards, async-job results, IRC
+				// relay) ride the message seam with a custom role and render as
+				// the same card a persisted `custom_message` entry does.
+				const custom = readLiveCustomMessage(msg);
+				if (custom) {
+					return renderCustomMessage({
+						customType: custom.customType,
+						content: custom.content,
+						details: custom.details,
+						display: custom.display,
+						timestamp: new Date(custom.timestamp).toISOString(),
+						onPreviewImage,
+					});
+				}
 				switch (msg.role) {
 					case "user":
 						return (
@@ -702,133 +873,15 @@ const EntryRow = memo(function EntryRow({
 						return null;
 				}
 			}
-			case "custom_message": {
-				if (entry.customType === "collab-prompt") {
-					const details = entry.details;
-					const from =
-						details !== null &&
-						typeof details === "object" &&
-						typeof (details as Record<string, unknown>).from === "string"
-							? ((details as Record<string, unknown>).from as string)
-							: t("guest");
-					return (
-						<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={entry.timestamp}>
-							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
-						</Row>
-					);
-				}
-				if (entry.customType === "ttsr") {
-					const details = entry.details as
-						| { rules?: { name: string; description?: string; content?: string }[] }
-						| null
-						| undefined;
-					return (
-						<Row kind="custom" gutter="" title={entry.timestamp}>
-							<TtsrBlock rules={details?.rules ?? []} />
-						</Row>
-					);
-				}
-				if (entry.customType === "advisor") {
-					// Advisor notes (customType "advisor", display:true): renders the
-					// details.notes[] as a distinct-voice card (severity rail + badge).
-					// The message content is the model-facing `<advisory>` XML — never
-					// surface it; only the clean note text from details.
-					const details = entry.details as { notes?: AdvisorNote[] } | null | undefined;
-					return (
-						<Row kind="custom" gutter="" title={entry.timestamp}>
-							<AdvisorBlock notes={details?.notes ?? []} />
-						</Row>
-					);
-				}
-				if (entry.customType === "async-result") {
-					// Background job completion (async-result custom message) —
-					// renders as compact "Background job completed" rows, NOT the
-					// raw `<system-notice>` content template (the LLM-facing
-					// prompt text must never surface to the user). Mirrors the TUI
-					// buildAsyncResultBlock: one row per job with id + duration.
-					const details = entry.details as
-						| {
-								jobId?: string;
-								type?: "bash" | "task" | "agnes-video";
-								label?: string;
-								durationMs?: number;
-								jobs?: Array<{
-									jobId?: string;
-									type?: "bash" | "task" | "agnes-video";
-									label?: string;
-									durationMs?: number;
-								}>;
-						  }
-						| null
-						| undefined;
-					const jobs =
-						details?.jobs && details.jobs.length > 0
-							? details.jobs
-							: [
-									{
-										jobId: details?.jobId,
-										type: details?.type,
-										label: details?.label,
-										durationMs: details?.durationMs,
-									},
-								];
-					return (
-						<Row kind="custom" gutter="" title={entry.timestamp}>
-							<div className="tr-async-result" role="status">
-								{jobs.map((job, i) => (
-									<div key={i} className="tr-async-result-row">
-										<span className="tr-async-result-done" aria-hidden>
-											✓
-										</span>
-										<span className="tr-async-result-text">{t("Background job completed")}</span>
-										{job.type ? <span className="tr-async-result-tag">[{job.type}]</span> : null}
-										<span className="tr-async-result-id">{job.jobId ?? "unknown"}</span>
-										{typeof job.durationMs === "number" ? (
-											<span className="tr-async-result-dur">({fmtDuration(job.durationMs)})</span>
-										) : null}
-									</div>
-								))}
-							</div>
-						</Row>
-					);
-				}
-				if (entry.customType.startsWith("irc:")) {
-					const details = entry.details as { from?: string; message?: string; body?: string } | null | undefined;
-					const from = details?.from ?? "irc";
-					// irc:incoming content is the rendered LLM prompt template
-					// (irc-incoming.md) — literal <irc>…</irc> scaffolding plus
-					// reply instructions that must not reach the UI. The clean
-					// body lives in details.message (mirror the TUI card, which
-					// renders card.body = details.message); fall back to content
-					// with the wrapper stripped for snapshots without details.
-					// relay/autoreply content is already display-shaped
-					// ([IRC a → b] header + body), so keep it verbatim.
-					const content =
-						entry.customType === "irc:incoming"
-							? (details?.message ??
-								msgText(entry)
-									.replace(/^\s*<irc>\s*/i, "")
-									.replace(/\s*<\/irc>\s*$/i, ""))
-							: entry.content;
-					return (
-						<Row kind="custom" gutter="" title={entry.timestamp}>
-							<div className="tr-irc">
-								<span className="tr-irc-from">{from}</span>
-								<MsgContent content={content} onPreviewImage={onPreviewImage} />
-							</div>
-						</Row>
-					);
-				}
-				if (!entry.display) return null;
-				return (
-					<Row kind="custom" gutter="" title={entry.timestamp}>
-						<div className="tr-custom">
-							<span className="tr-chip">{entry.customType}</span>
-							<MsgContent content={entry.content} onPreviewImage={onPreviewImage} />
-						</div>
-					</Row>
-				);
-			}
+			case "custom_message":
+				return renderCustomMessage({
+					customType: entry.customType,
+					content: entry.content,
+					details: entry.details,
+					display: entry.display,
+					timestamp: entry.timestamp,
+					onPreviewImage,
+				});
 			case "compaction":
 				return (
 					<div className="tr-divider" title={entry.shortSummary ?? entry.summary}>
@@ -856,16 +909,22 @@ const EntryRow = memo(function EntryRow({
 				return null;
 		}
 	})();
+	// No row → no wrapper: daemon-internal bookkeeping entries (tool execution
+	// markers, session exit) and the marker-less model/thinking switches must
+	// not leave a blank `.tr-entry` line in the transcript.
+	if (row == null) return null;
 	const kind = transcriptNodeKind(entry);
 	// Passive compat slot-host dispatch: when the GUI does not inject
 	// renderTranscriptNode (guest-client standalone / served compat page),
 	// fall back to the daemon-hosted extension registry that the serve
 	// entry's compat script populated on window.MusePiCompatHost. Guests in
 	// a plain browser have no such registry — built-in rendering stays.
-	const compatRenderer = compatHostRenderer(kind);
-	return (renderTranscriptNode ?? compatRenderer) && row != null
-		? (renderTranscriptNode ?? compatRenderer)!({ entry, kind, children: row })
-		: row;
+	const compat = renderTranscriptNode ?? compatHostRenderer(kind);
+	return (
+		<div data-entry-kind={kind} data-entry-id={entry.id} className="tr-entry">
+			{compat ? compat({ entry, kind, children: row }) : row}
+		</div>
+	);
 }, entryRowEqual);
 
 export const Transcript = memo(function Transcript(props: TranscriptProps): ReactNode {
@@ -1336,45 +1395,38 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						) : null;
 					const row = (
 						<Fragment key={entry.id}>
-							{/* Passive seam (compat slot host): the entry row carries its
-							 * transcript-node kind + id as data attributes so the served
-							 * renderer's injected extension host can find and augment
-							 * nodes without touching the React tree. */}
 							{foldHeader}
-							<div data-entry-kind={transcriptNodeKind(entry)} data-entry-id={entry.id} className="tr-entry">
-								<EntryRow
-									key={entry.id}
-									entry={entry}
-									results={results}
-									active={activeTools}
-									host={host}
-									userGutter={userGutter}
-									agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
-									userPlain={userPlain}
-									collapseLongUserMessages={collapseLongUserMessages}
-									hideToolActivity={hideToolActivity}
-									showTokenUsage={showTokenUsage}
-									smoothStreaming={smoothStreaming}
-									taskCardStyle={taskCardStyle}
-									artifacts={turnArtifactsByFinal.get(entry.id)}
-									thinkingLevel={thinkingLevel}
-									streamingLast={streamingLast}
-									runStartTs={streamingLast ? lastUserTs : undefined}
-									roundDuration={roundDuration}
-									onQuote={onQuote}
-									onEdit={onEdit}
-									onRetry={onRetry}
-									onRevert={onRevert}
-									onFork={onFork}
-									onSpeak={onSpeak}
-									onSaveImage={onSaveImage}
-									onPreviewImage={openPreview}
-									speaking={speakingId != null && speakingId === entry.id}
-									onStopSpeak={onStopSpeak}
-									retryTarget={retryTargets.get(entry.id) ?? null}
-									renderTranscriptNode={renderTranscriptNode}
-								/>
-							</div>
+							<EntryRow
+								entry={entry}
+								results={results}
+								active={activeTools}
+								host={host}
+								userGutter={userGutter}
+								agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
+								userPlain={userPlain}
+								collapseLongUserMessages={collapseLongUserMessages}
+								hideToolActivity={hideToolActivity}
+								showTokenUsage={showTokenUsage}
+								smoothStreaming={smoothStreaming}
+								taskCardStyle={taskCardStyle}
+								artifacts={turnArtifactsByFinal.get(entry.id)}
+								thinkingLevel={thinkingLevel}
+								streamingLast={streamingLast}
+								runStartTs={streamingLast ? lastUserTs : undefined}
+								roundDuration={roundDuration}
+								onQuote={onQuote}
+								onEdit={onEdit}
+								onRetry={onRetry}
+								onRevert={onRevert}
+								onFork={onFork}
+								onSpeak={onSpeak}
+								onSaveImage={onSaveImage}
+								onPreviewImage={openPreview}
+								speaking={speakingId != null && speakingId === entry.id}
+								onStopSpeak={onStopSpeak}
+								retryTarget={retryTargets.get(entry.id) ?? null}
+								renderTranscriptNode={renderTranscriptNode}
+							/>
 						</Fragment>
 					);
 					// toolResult entries render no row but continue the turn.

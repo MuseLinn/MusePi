@@ -128,6 +128,41 @@ export function msgText(msg: { content?: unknown }): string {
 	return "";
 }
 
+/** A custom-role message on the live message seam. `WireMessage` declares
+ *  provider roles only, but the daemon forwards every agent message — advisor
+ *  cards, async-job results, IRC relay, hook notices — on the same
+ *  message_start/update/end events, and persists them as `custom_message`
+ *  entries. */
+export interface LiveCustomMessage {
+	customType: string;
+	content: string | (TextContent | ImageContent)[];
+	display: boolean;
+	details?: unknown;
+	timestamp: number;
+}
+
+/** Narrow an untyped live message to its custom-role shape, or undefined when
+ *  it is an ordinary provider message. */
+export function readLiveCustomMessage(message: unknown): LiveCustomMessage | undefined {
+	if (typeof message !== "object" || message === null) return undefined;
+	const customType = "customType" in message ? message.customType : undefined;
+	if (typeof customType !== "string") return undefined;
+	const content = "content" in message ? message.content : undefined;
+	if (typeof content !== "string" && !Array.isArray(content)) return undefined;
+	const display = "display" in message ? message.display : undefined;
+	const details = "details" in message ? message.details : undefined;
+	const timestamp = "timestamp" in message ? message.timestamp : undefined;
+	return {
+		customType,
+		// Per-block validation belongs to the renderer (MsgContent switches on
+		// each block type); the seam guarantees only string-or-block-array.
+		content: content as LiveCustomMessage["content"],
+		display: typeof display === "boolean" ? display : true,
+		...(details !== undefined ? { details } : {}),
+		timestamp: typeof timestamp === "number" ? timestamp : Date.now(),
+	};
+}
+
 /** transcript.node seat 派发键 (DSH `conversation.chat.node` entryKey 类比):
  *  entry / message role -> 稳定渲染器 kind 字符串。宿主(调用方)按此派发到
  *  注册的 seat 渲染器;内置类型(a message/compaction/…) 走内建渲染,扩展可
@@ -135,6 +170,12 @@ export function msgText(msg: { content?: unknown }): string {
 export function transcriptNodeKind(entry: SessionEntry): string {
 	switch (entry.type) {
 		case "message": {
+			// Custom-role messages cross the live message seam (advisor cards,
+			// async results, IRC relay) even though the wire type declares only
+			// provider roles. They render through the custom-message body, so
+			// they dispatch on customType exactly like `custom_message` entries.
+			const custom = readLiveCustomMessage(entry.message);
+			if (custom) return `custom_message:${custom.customType}`;
 			const role = entry.message.role;
 			switch (role) {
 				case "user":
@@ -338,12 +379,47 @@ const USER_COLLAPSE_MIN_CHARS = 240;
 
 export function UserText({ text, plain, collapse }: { text: string; plain: boolean; collapse: boolean }): ReactNode {
 	const [open, setOpen] = useState(false);
+	// The clamp preview is the settled closed state only: it comes OFF when
+	// expanding (the morph grows out of the preview height with the full
+	// body clipped underneath) and back ON once a collapse settles (the
+	// body shrinks INTO the preview instead of snapping to 2 lines).
+	const [clamped, setClamped] = useState(true);
+	const bodyRef = useRef<HTMLDivElement | null>(null);
+	// Preview height cache for the morph endpoints — the hook measures after
+	// the clamp class already flipped, so a live read there sees the other
+	// state; this only measures while the clamp is actually mounted.
+	const previewHRef = useRef(0);
+	useEffect(() => {
+		if (clamped && bodyRef.current) previewHRef.current = bodyRef.current.clientHeight;
+	});
+	useCollapseHeight(open, bodyRef, {
+		closedHeight: () => previewHRef.current,
+		onSettled: isOpen => {
+			if (!isOpen) setClamped(true);
+		},
+	});
 	const body = plain ? <span className="tr-md tr-user-plain">{text}</span> : <Markdown text={text} />;
 	if (!collapse || text.length <= USER_COLLAPSE_MIN_CHARS) return body;
 	return (
-		<div className={`tr-md tr-user-collapse${open ? " tr-user-collapse--open" : ""}`}>
-			<div className="tr-user-collapse-body">{body}</div>
-			<button type="button" className="tr-user-collapse-toggle" onClick={() => setOpen(v => !v)}>
+		<div className={`tr-md tr-user-collapse${clamped ? " tr-user-collapse--clamped" : ""}`}>
+			<div ref={bodyRef} className="tr-user-collapse-body">
+				{body}
+			</div>
+			<button
+				type="button"
+				className="tr-user-collapse-toggle"
+				aria-expanded={open}
+				onClick={() => {
+					if (open) {
+						// Clamp reapplies when the collapse settles (onSettled).
+						setOpen(false);
+					} else {
+						// Unclamp first so the morph starts from the preview.
+						setClamped(false);
+						setOpen(true);
+					}
+				}}
+			>
 				{t(open ? "collapse" : "expand")}
 			</button>
 		</div>

@@ -547,3 +547,98 @@ describe("Transcript compat seam (data-entry attributes)", () => {
 		expect(countElements(html, "[data-entry-id]")).toBe(2);
 	});
 });
+
+describe("live custom-role message rendering", () => {
+	/** The daemon forwards custom messages (advisor cards, async results, IRC
+	 *  relay) as `message` entries carrying a custom role — the same notes a
+	 *  persisted session stores as `custom_message`. */
+	function liveCustomEntry(message: object, id = "custom:1000"): SessionEntry {
+		return {
+			type: "message",
+			id,
+			parentId: null,
+			timestamp: "2026-09-12T00:00:00Z",
+			message,
+		} as unknown as SessionEntry;
+	}
+
+	it("renders an advisor card for a live custom-role message", () => {
+		const html = renderTranscript({
+			entries: [
+				liveCustomEntry({
+					role: "custom",
+					customType: "advisor",
+					content: '<advisory severity="nit">prefer a smaller diff</advisory>',
+					display: true,
+					details: { notes: [{ note: "prefer a smaller diff", severity: "nit" }] },
+					attribution: "agent",
+					timestamp: 1000,
+				}),
+			],
+			working: false,
+		});
+
+		expect(countElements(html, ".tr-advisor")).toBe(1);
+		expect(countElements(html, ".tr-advisor-note--nit")).toBe(1);
+		expect(html).toContain("prefer a smaller diff");
+		// The model-facing <advisory> template must never surface.
+		expect(html).not.toContain("<advisory");
+	});
+
+	it("renders the generic custom chip for an unregistered customType", () => {
+		const html = renderTranscript({
+			entries: [
+				liveCustomEntry({
+					role: "hookMessage",
+					customType: "hook:notice",
+					content: "noticed something",
+					display: true,
+					timestamp: 1001,
+				}),
+			],
+			working: false,
+		});
+
+		expect(countElements(html, ".tr-custom")).toBe(1);
+		expect(html).toContain("hook:notice");
+		expect(html).toContain("noticed something");
+	});
+
+	it("drops a live custom message whose display is false", () => {
+		const html = renderTranscript({
+			entries: [
+				liveCustomEntry({
+					role: "custom",
+					customType: "mid-run-todo-nudge",
+					content: "hidden nudge",
+					display: false,
+					timestamp: 1002,
+				}),
+			],
+			working: false,
+		});
+
+		expect(countElements(html, "[data-entry-id]")).toBe(0);
+		expect(html).not.toContain("hidden nudge");
+	});
+});
+
+describe("daemon trace entries render no empty row", () => {
+	it("skips bookkeeping entries without leaving a blank tr-entry line", () => {
+		const trace: SessionEntry = {
+			id: "a5d47148",
+			parentId: null,
+			timestamp: "2026-09-12T00:00:00Z",
+			type: "custom",
+			customType: "tool_execution_start",
+			data: { toolCallId: "call_1", toolName: "edit", startedAt: "2026-09-12T00:00:00Z" },
+		} as unknown as SessionEntry;
+		const html = renderTranscript({ entries: [trace, userEntry(200)], working: false });
+
+		// The trace row contributes neither a row nor its wrapper; the real
+		// message row is still there.
+		expect(countElements(html, ".tr-entry")).toBe(1);
+		expect(countElements(html, '[data-entry-kind="message:user"]')).toBe(1);
+		expect(countElements(html, '[data-entry-kind="unknown"]')).toBe(0);
+	});
+});

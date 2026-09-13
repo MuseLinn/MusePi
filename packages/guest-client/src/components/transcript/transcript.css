@@ -150,21 +150,30 @@
 
 /* Long user messages (chat settings → 折叠较长的用户消息): clamp the body
  * to two lines with a gradient fade + expand toggle. The bubble stays on
- * the outer .tr-md so the direct-child selector keeps its styling. */
+ * the outer .tr-md so the direct-child selector keeps its styling.
+ *
+ * Expand/collapse morphs the height (useCollapseHeight, the transcript's
+ * 220ms spring collapse — same language as tr-think/tr-advisor bodies)
+ * between the preview height and the full body. The clamp itself is only
+ * the SETTLED closed state (`--clamped`, applied on mount and re-applied
+ * once a collapse settles): during a morph the body renders unclamped and
+ * the shrinking/growing height does the clipping, so content never snaps. */
 .tr-user-collapse-body {
+	height: var(--h, auto);
+	overflow: hidden;
+	transition: height 220ms var(--spring);
+}
+
+.tr-user-collapse--clamped .tr-user-collapse-body {
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
 	-webkit-box-orient: vertical;
-	overflow: hidden;
+	/* The clamp bounds the height (ignores any px left in --h by the morph).
+	 * Auto (not var(--h)) also keeps re-renders honest when the preview
+	 * rewraps. */
+	height: auto;
 	mask-image: linear-gradient(to bottom, black 72%, transparent);
 	-webkit-mask-image: linear-gradient(to bottom, black 72%, transparent);
-}
-
-.tr-user-collapse--open .tr-user-collapse-body {
-	display: block;
-	overflow: visible;
-	mask-image: none;
-	-webkit-mask-image: none;
 }
 
 .tr-user-collapse-toggle {

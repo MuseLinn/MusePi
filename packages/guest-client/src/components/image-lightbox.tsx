@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
@@ -241,6 +241,39 @@ export function ImageLightbox({
 		setDragging(false);
 	};
 
+	// Download the shown image (ZCode preview parity): refetch the src into
+	// a blob so both data URLs and remote URLs save, name from the mime
+	// type with a timestamp stamp; a failed fetch falls back to opening the
+	// source in a new tab rather than doing nothing.
+	const downloadImage = (item: { src: string; alt?: string }): void => {
+		void (async () => {
+			try {
+				const res = await fetch(item.src);
+				const blob = await res.blob();
+				const ext = blob.type.includes("jpeg")
+					? "jpg"
+					: blob.type.includes("webp")
+						? "webp"
+						: blob.type.includes("gif")
+							? "gif"
+							: blob.type.includes("svg")
+								? "svg"
+								: "png";
+				const d = new Date();
+				const p2 = (n: number): string => String(n).padStart(2, "0");
+				const stamp = `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+				const url = URL.createObjectURL(blob);
+				const a = document.createElement("a");
+				a.href = url;
+				a.download = `musepi-image-${stamp}.${ext}`;
+				a.click();
+				setTimeout(() => URL.revokeObjectURL(url), 4000);
+			} catch {
+				window.open(item.src, "_blank");
+			}
+		})();
+	};
+
 	// Content to show: live while open, otherwise the held exit frame.
 	const shown = open ? { items, index: index as number } : lastOpenRef.current;
 	if (!shown || shown.items[shown.index] === undefined) return null;
@@ -261,15 +294,28 @@ export function ImageLightbox({
 			aria-label={t("preview image")}
 			onMouseDown={isClosing ? undefined : onClose}
 		>
-			<button
-				type="button"
-				className="tr-img-lb-x"
-				aria-label={t("close")}
-				onMouseDown={e => e.stopPropagation()}
-				onClick={annotateMode ? cancelAnnotate : onClose}
-			>
-				<X size={16} />
-			</button>
+			{/* Download + close as one group (ZCode preview parity), inset
+			    from the corner so the pair clears the window chrome and reads
+			    as a row rather than a lone floating X. */}
+			<div className="tr-img-lb-actions" onMouseDown={e => e.stopPropagation()}>
+				<button
+					type="button"
+					className="tr-img-lb-x"
+					aria-label={t("download image")}
+					title={t("download image")}
+					onClick={() => downloadImage(shownItem)}
+				>
+					<Download size={16} />
+				</button>
+				<button
+					type="button"
+					className="tr-img-lb-x"
+					aria-label={t("close")}
+					onClick={annotateMode ? cancelAnnotate : onClose}
+				>
+					<X size={16} />
+				</button>
+			</div>
 			{onAnnotate && (
 				<div className="tr-img-lb-tools" onMouseDown={e => e.stopPropagation()}>
 					{annotateMode ? (

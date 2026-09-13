@@ -44,6 +44,21 @@ describe("transcriptNodeKind dispatch", () => {
 		).toBe("custom_message:irc:incoming");
 	});
 
+	test("live custom-role messages dispatch on customType, not the role", () => {
+		// The daemon forwards custom messages (advisor cards, async results, IRC
+		// relay) as `message` entries carrying a custom role; they render through
+		// the custom-message body, so their seat key must match a persisted
+		// `custom_message` entry's.
+		expect(
+			transcriptNodeKind(msg({ role: "custom", customType: "advisor", content: "x", display: true, timestamp: 1 })),
+		).toBe("custom_message:advisor");
+		expect(
+			transcriptNodeKind(
+				msg({ role: "hookMessage", customType: "hook:notice", content: "x", display: true, timestamp: 1 }),
+			),
+		).toBe("custom_message:hook:notice");
+	});
+
 	test("non-message entry types dispatch on their own discriminant", () => {
 		expect(
 			transcriptNodeKind({

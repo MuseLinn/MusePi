@@ -61,14 +61,20 @@
 	box-shadow: 0 24px 64px oklch(0 0 0 / 50%);
 }
 
-.tr-img-lb-x {
+/* Download + close group (ZCode preview parity): one row, inset a step
+ * further from the corner than the lone X used to be — clears the window
+ * chrome and reads as a button pair. */
+.tr-img-lb-actions {
 	position: absolute;
-	/* Below the window header row (48px) + breathing room: keeps the
-	 * close button clear of the Windows titleBarOverlay buttons (which
-	 * occupy the top-right 48px) and reads better on macOS too. */
-	top: 64px;
-	right: 14px;
+	top: 76px;
+	right: 16px;
 	z-index: 10;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.tr-img-lb-x {
 	display: grid;
 	place-items: center;
 	width: 32px;
