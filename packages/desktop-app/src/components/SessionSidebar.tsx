@@ -12,7 +12,7 @@ import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
-import { filterSessionTree, isRecentlyActive } from "./session-list-shared";
+import { filterSessionTree } from "./session-list-shared";
 
 /**
  * Left pane — ZCode-style: menu (new/search/scheduled/skills), a group/
@@ -297,6 +297,21 @@ export function SessionSidebar({
 	useEffect(() => {
 		localStorage.setItem("musepi-gui-groups", JSON.stringify(groups));
 	}, [groups]);
+	// Import-created groups (ImportSessionsSetup merges into the same store
+	// and dispatches this) — the storage event is same-document-deaf, so a
+	// custom event re-reads them live.
+	useEffect(() => {
+		const onExternal = (): void => {
+			try {
+				const raw = localStorage.getItem("musepi-gui-groups");
+				setGroups(raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : []);
+			} catch {
+				// ignore malformed storage
+			}
+		};
+		window.addEventListener("musepi-gui-groups-changed", onExternal);
+		return () => window.removeEventListener("musepi-gui-groups-changed", onExternal);
+	}, []);
 	useEffect(() => {
 		localStorage.setItem("musepi-gui-archived", JSON.stringify(archived));
 	}, [archived]);
@@ -430,47 +445,6 @@ export function SessionSidebar({
 				selectedId={selectedId}
 				onSelect={onSelect}
 				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
-				pausedIds={pausedIds}
-				workingIds={workingIds}
-				statuses={statuses}
-				manualTags={manualTags}
-				searchQuery={sessionQuery}
-			/>
-		</div>
-	);
-	// 近期 projection (openchamber deriveRecentSessions parity): root sessions
-	// that are live right now, unread, or were touched inside the retention
-	// window. Pinned and scheduled runs keep their own sections, and forked
-	// children stay inside their parent's subtree — promoted flat they would
-	// render twice. Members remain in their groups below; 近期 only leads with
-	// them.
-	const recentNodes = useMemo(() => {
-		const now = Date.now();
-		return searchedNodes.filter(
-			n =>
-				!n.entry.parentId &&
-				n.entry.source !== "cron" &&
-				!pinned.includes(n.entry.id) &&
-				isRecentlyActive(n.entry, {
-					working: sessionMeta.get(n.entry.id)?.working === true,
-					unread: unread?.has(n.entry.id) === true,
-					now,
-				}),
-		);
-	}, [searchedNodes, pinned, sessionMeta, unread]);
-	/** Shared 近期 section block (used by groups + projects tabs). */
-	const recentSection = recentNodes.length > 0 && (
-		<div className="mb-1.5">
-			<div className="gui-group-label flex items-center gap-1 px-2 pb-1 pt-2.5">
-				<Icon name="history" className="h-3.5 w-3.5" />
-				{t("recent")}
-			</div>
-			<SessionList
-				nodes={recentNodes}
-				selectedId={selectedId}
-				onSelect={onSelect}
-				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
-				unread={unread}
 				pausedIds={pausedIds}
 				workingIds={workingIds}
 				statuses={statuses}
@@ -645,6 +619,8 @@ export function SessionSidebar({
 							aria-label={t("expand or collapse all")}
 							onClick={() => {
 								if (tab === "groups") {
+									// Custom groups only (import-created groups included):
+									// null/true → collapse all, false → expand all.
 									setGroupsAll(prev => prev === false);
 								} else {
 									// Toggle: any collapsed → expand all; all expanded → collapse all.
@@ -932,7 +908,6 @@ export function SessionSidebar({
 												/>
 											</div>
 										)}
-										{recentSection}
 										{cronNodes.length > 0 && cronSection}
 										<GroupedSessionList
 											nodes={regularNodes}
@@ -998,7 +973,6 @@ export function SessionSidebar({
 														/>
 													</div>
 												)}
-												{recentSection}
 												{cronNodes.length > 0 && cronSection}
 												{order.map(path => {
 													const list = byCwd.get(path) ?? [];
@@ -1126,7 +1100,6 @@ export function SessionSidebar({
 										/>
 									</div>
 								)}
-								{recentSection}
 								{/* ZCode: the groups tab lists sessions too — custom
 								 * groups on top, then the time-grouped session tree. */}
 								<CustomGroups

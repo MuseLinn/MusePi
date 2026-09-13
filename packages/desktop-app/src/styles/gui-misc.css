@@ -1,13 +1,24 @@
-/* ── Session "in progress" indicator (kimi 进行中 parity) ───────────── */
-/* Pulsing accent dot on sidebar rows + reminder rows for live sessions
- * with a running agent turn. */
+/* ── Session "in progress" indicator ──────────────────────────────────── */
+/* Sidebar rows: an 8-ray starburst spinning while the agent turn runs
+ * (ZCode parity — was a breathing dot); welcome reminder rows keep the
+ * pulsing accent dot. */
 .gui-tree-working {
 	display: inline-flex;
 	align-items: center;
 	flex-shrink: 0;
 }
 
-.gui-tree-working-dot,
+.gui-tree-working-spin {
+	width: 12px;
+	height: 12px;
+	color: var(--color-accent);
+	animation: gui-spin 1.1s linear infinite;
+}
+
+.gui-motion-off .gui-tree-working-spin {
+	animation: none;
+}
+
 .gui-reminder-dot {
 	width: 6px;
 	height: 6px;
@@ -28,7 +39,6 @@
 	}
 }
 
-.gui-motion-off .gui-tree-working-dot,
 .gui-motion-off .gui-reminder-dot {
 	animation: none;
 }
@@ -2468,6 +2478,8 @@
  *            ratio, stretches while scrolling and springs back.
  *   pacman — hairline thread + a string of beads at 7px pitch; a pac-man
  *            rides the thread, beads above it are "eaten" (dimmed).
+ * Both thumbs are drag handles (onThumbDown); idle does not hide the
+ * rail — it fades to a faint ghost so progress stays grabbable.
  * Bead colors come from the active skin (--skin-accent / --skin-track /
  * --skin-eaten) injected inline by the component. */
 .gui-float-scrollbar {
@@ -2475,17 +2487,31 @@
 	width: 12px;
 	/* Highest surface (above menus/dialogs): the rail is positioned and
 	 * sized to the LAST-SCROLLED container (update() sets left/top/height
-	 * from its rect) and only exists while that container scrolls (fades
-	 * ~1s after). So it always indicates the content actually being
-	 * scrolled — inside an open dialog, menu or maximized right panel
-	 * included — instead of painting over unrelated chrome. The old 100000
-	 * was pinned to the window edge and never hid, which is what made it
-	 * read as "over the maximized right panel (前后内容重叠)". */
+	 * from its rect) and only exists while that container scrolls. So it
+	 * always indicates the content actually being scrolled — inside an open
+	 * dialog, menu or maximized right panel included — instead of painting
+	 * over unrelated chrome. */
 	z-index: 4200;
 	pointer-events: none;
+	/* Visibility is attribute-driven (FloatingScrollbar): data-visible once
+	 * a container scrolls, data-idle ~1s after scrolling stops. Idle does
+	 * NOT hide the rail any more — it fades to a faint ghost (user callout:
+	 * the ghost is the drag affordance), and hovering the thumb restores
+	 * full opacity. The rail line itself is pointer-events:none; only the
+	 * thumbs opt back in, so the strip never eats clicks over content. */
 	opacity: 0;
 	visibility: hidden;
 	transition: opacity 240ms ease, visibility 240ms ease;
+}
+.gui-float-scrollbar[data-visible] {
+	opacity: 1;
+	visibility: visible;
+}
+.gui-float-scrollbar[data-idle] {
+	opacity: 0.3;
+}
+.gui-float-scrollbar[data-idle]:hover {
+	opacity: 1;
 }
 .gfs-track {
 	position: absolute;
@@ -2520,6 +2546,26 @@
 	width: calc(var(--skin-size, 12px));
 	height: calc(var(--skin-size, 12px));
 }
+
+/* Pac thumb: same drag-handle contract as the gummy capsule — the rail
+ * stays pointer-events:none, the pac opts back in while visible (idle
+ * included: the ghost pac is grabbable) and drags the indicated container
+ * (FloatingScrollbar onThumbDown). Enlarged hit area via a transparent
+ * ring: a 12px glyph is a tiny grab target. */
+.gui-float-scrollbar[data-base="pacman"][data-visible] .gfs-pac {
+	pointer-events: auto;
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+}
+.gui-float-scrollbar[data-base="pacman"][data-visible] .gfs-pac::after {
+	content: "";
+	position: absolute;
+	inset: -6px;
+}
+.gfs-pac:active {
+	cursor: grabbing;
+}
 .gfs-pac svg {
 	display: block;
 }
@@ -2537,10 +2583,12 @@
 	border-radius: 999px;
 	/* Drag handle: the rail itself stays pointer-events:none (never eats
 	 * clicks over content); the capsule opts back in — dragging it scrolls
-	 * the indicated container (FloatingScrollbar onGummyDown). touch-action
+	 * the indicated container (FloatingScrollbar onThumbDown). touch-action
 	 * none so a touch drag moves the thumb, not the page. Gated on
-	 * [data-visible]: the rail sits at the top of the z-ladder, so once it
-	 * fades out the thumb must not stay clickable over whatever is beneath. */
+	 * [data-visible]: before the first scroll the rail has no container to
+	 * indicate and must not be clickable; once visible it stays interactive
+	 * even in the idle-faint state — the ghost thumb IS the drag
+	 * affordance. */
 	cursor: grab;
 	touch-action: none;
 	user-select: none;
@@ -2672,12 +2720,66 @@
  * surface's 8px inset. Re-anchor the drawer to the chat surface card:
  * header 48 + surface margin 8 = top 56px, inset 8px right/bottom, same
  * rounded-2xl radius as the surface. Collab-web keeps the full-height
- * default (this override lives in the GUI-only stylesheet). */
+ * default (this override lives in the GUI-only stylesheet).
+ * Both hosts render the detail inside .gui-agent-dock, which resets this
+ * recipe for the in-pane layer — keep it for a standalone/collab host that
+ * mounts the drawer chrome directly. */
 .ag-drawer {
 	top: 56px;
 	right: 8px;
 	bottom: 8px;
 	border-radius: 16px;
+}
+
+/* ── Docked subagent detail (gui-agent-dock) ─────────────────────────────
+ * In-pane layer for the trajectory detail (right-panel agents view +
+ * Agents Center page), NOT a viewport drawer: it stays inside its host's
+ * stacking context, so the managed-browser page host (root z 900) can never
+ * cover it. Hosts keep it mounted and the wrapper's --open class drives the
+ * slide both ways (MessageTree parity) — conditional mounting would kill the
+ * exit animation. Motion follows the pane's own transitions. */
+.gui-agent-dock {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	transform: translateX(100%);
+	visibility: hidden;
+	pointer-events: none;
+	transition:
+		transform 200ms var(--spring),
+		visibility 0s linear 200ms;
+}
+
+.gui-agent-dock--open {
+	transform: none;
+	visibility: visible;
+	pointer-events: auto;
+	transition:
+		transform 200ms var(--spring),
+		visibility 0s linear 0s;
+}
+
+/* Inside the dock the shared drawer chrome is just the fill: the wrapper owns
+ * position and motion (the fixed inset / radius / enter animation stay for
+ * the standalone collab drawer). */
+.gui-agent-dock .ag-drawer {
+	position: absolute;
+	inset: 0;
+	width: auto;
+	border: 0;
+	border-radius: 0;
+	box-shadow: none;
+	animation: none;
+}
+
+.gui-motion-off .gui-agent-dock {
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-agent-dock {
+		transition: none !important;
+	}
 }
 
 /* ── /btw floating card (TUI side-question parity) ─────────────────────── */

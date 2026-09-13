@@ -7,15 +7,15 @@ import { GroupedSessionList } from "../src/components/GroupedSessionList";
 import { SessionList, type SessionListNode } from "../src/components/SessionList";
 import { SessionSearchBar } from "../src/components/SessionSearchBar";
 import { SessionSidebar } from "../src/components/SessionSidebar";
-import { filterSessionTree, isRecentlyActive } from "../src/components/session-list-shared";
+import { filterSessionTree } from "../src/components/session-list-shared";
 
 /**
- * Sidebar session panel contracts (search + 近期 projection):
+ * Sidebar session panel contracts (search + groups-tab structure):
  * - the search box reports the sessions a query kept, marks the matched
  *   fragments in row titles, and states an empty result instead of letting a
  *   section's "no sessions yet" fallback read as an empty workspace;
- * - 近期 projects only sessions with activity inside the 48h retention window
- *   (or a live turn / unread mark), without removing them from their groups.
+ * - the groups tab has NO 近期 duplication block, and sessions not in a
+ *   manual group auto-group by project folder (ZCode 空间 parity).
  */
 
 const HOUR = 60 * 60 * 1000;
@@ -88,60 +88,26 @@ function listHtml(searchQuery?: string): string {
 	);
 }
 
-describe("近期 projection", () => {
-	test("lists only sessions active inside the 48h window, plus live/unread ones", () => {
-		const html = sidebarHtml({
-			nodes: [
-				node("fresh", "Fresh task", ago(1 * HOUR)),
-				node("working", "Working old task", ago(5 * 24 * HOUR)),
-				node("unread", "Unread old task", ago(5 * 24 * HOUR)),
-				node("stale", "Stale task", ago(5 * 24 * HOUR)),
-			],
-			sessionMeta: new Map([["working", { working: true }]]),
-			unread: new Set(["unread"]),
-		});
-		const start = html.indexOf(t("recent"));
-		expect(start).toBeGreaterThanOrEqual(0);
-		// The next block owns the list (empty custom groups → the 新建分组 button).
-		const end = html.indexOf(t("new group"), start);
-		expect(end).toBeGreaterThan(start);
-		const recentBlock = html.slice(start, end);
-		expect(recentBlock).toContain("Fresh task");
-		expect(recentBlock).toContain("Working old task");
-		expect(recentBlock).toContain("Unread old task");
-		expect(recentBlock).not.toContain("Stale task");
-	});
-
-	test("keeps its members in their date groups (projection, not a move)", () => {
+describe("分组 tab: 无近期重复区,底栏仍为日期分组", () => {
+	test("renders each session exactly once — no 近期 block duplicating the groups below", () => {
 		const html = sidebarHtml({ nodes: [node("fresh", "Fresh task", ago(1 * HOUR))] });
+		// One row renders the label exactly twice: the title attribute and the
+		// visible text. A duplicated 近期 block would push this to 4.
 		const occurrences = html.split("Fresh task").length - 1;
-		expect(occurrences).toBeGreaterThan(1);
+		expect(occurrences).toBe(2);
 	});
 
-	test("stays hidden when nothing is recent", () => {
-		const html = sidebarHtml({ nodes: [node("stale", "Stale task", ago(5 * 24 * HOUR))] });
-		expect(html).not.toContain(t("recent"));
-		expect(html).toContain("Stale task");
-	});
-});
-
-describe("isRecentlyActive", () => {
-	test("treats a running or unread session as recent regardless of age", () => {
-		const old = { updatedAt: ago(5 * 24 * HOUR) };
-		expect(isRecentlyActive(old, { working: true })).toBe(true);
-		expect(isRecentlyActive(old, { unread: true })).toBe(true);
-		expect(isRecentlyActive(old)).toBe(false);
-	});
-
-	test("keeps activity inside the window and drops what ages out", () => {
-		expect(isRecentlyActive({ updatedAt: ago(47 * HOUR) })).toBe(true);
-		expect(isRecentlyActive({ updatedAt: ago(49 * HOUR) })).toBe(false);
-	});
-
-	test("falls back to the creation timestamp and ignores unparseable values", () => {
-		expect(isRecentlyActive({ timestamp: ago(2 * HOUR) })).toBe(true);
-		expect(isRecentlyActive({})).toBe(false);
-		expect(isRecentlyActive({ timestamp: "not-a-date" })).toBe(false);
+	test("the groups tab stays date-grouped — no folder blocks duplicating the projects tab", () => {
+		// The auto "spaces" folder grouping was reverted (design overlap with
+		// the projects tab; imports auto-group into EDITABLE custom groups at
+		// import time instead), so a session with a cwd must render only in
+		// the date buckets here — no gui-project-block.
+		const html = sidebarHtml({
+			nodes: [node("a", "Alpha task", ago(1 * HOUR))],
+			sessionMeta: new Map([["a", { cwd: "C:/repo/musepi-omp" }]]),
+		});
+		expect(html).not.toContain("gui-project-block");
+		expect(html).toContain("Alpha task");
 	});
 });
 

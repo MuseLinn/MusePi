@@ -1014,14 +1014,13 @@
 }
 
 /* ── 扩展控制中心 (CCEC 形态: provider tabs + 分类列表 + 详情面板) ── */
-/* The section wrapper (.gui-skills-section) is height:100% of the settings
- * viewport; the center flexes to fill it, so the two panes scroll
+/* The section wrapper is the fill column's remaining space (gui-chat.css
+ * `--fill`); the center flexes to fill it, so the two panes scroll
  * internally (TUI /extensions panel parity) instead of scrolling the
  * whole settings page. */
 .gui-skills-section {
 	display: flex;
 	flex-direction: column;
-	height: 100%;
 	min-height: 0;
 }
 .gui-ext-center {
@@ -1069,6 +1068,17 @@
 	gap: 10px;
 	min-height: 0;
 	flex: 1;
+}
+/* 插件 / marketplace panes take the same grid cell as the skill list: with
+ * no flex context of their own the scroll container inside them cannot bound
+ * itself, and the automatic minimum size of a grid item lets the pane grow to
+ * its content — the list then runs under the slot-registry row and drags the
+ * whole page into scroll. */
+.gui-ext-plugins,
+.gui-ext-marketplace {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
 }
 .gui-ext-list {
 	display: flex;
@@ -1215,7 +1225,13 @@
 	color: var(--color-text-muted);
 }
 .gui-ext-item-tag {
-	flex-shrink: 0;
+	/* Shrinkable with an ellipsis: a row whose badges are all rigid pushes
+	 * its trailing controls (hover ops, toggle) past the pane's right edge,
+	 * where the list clips them. */
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 10px;
 	padding: 0 6px;
 	border-radius: 999px;
@@ -2147,14 +2163,15 @@
 }
 .stc-node {
 	position: absolute;
+	/* 两行式卡片:标题行(角色/工具名 + 时刻 + 悬浮操作)+ 摘要行。摘要独占
+	 * 一行才读得出内容——与时刻/操作同排时会被压成省略号。 */
 	display: flex;
-	align-items: center;
-	gap: 6px;
-	padding: 0 8px;
+	flex-direction: column;
+	gap: 4px;
+	padding: 7px 9px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: var(--color-surface-sunken, var(--color-surface));
-	font-size: 11.5px;
 	color: var(--color-text);
 	cursor: pointer;
 	transition: border-color 120ms ease, background 120ms ease;
@@ -2163,47 +2180,36 @@
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 	background: var(--color-surface-raised, var(--color-bg));
 }
-/* 折叠链段胶囊:长会话的单子链压缩成一段,点击展开/收起。
- * 视觉 = 紧凑虚线胶囊 + 箭头 + 折叠计数,明显区别于普通节点卡。 */
-.stc-fold {
-	position: absolute;
+/* 悬浮操作(跳转/重答/分叉):默认隐形,悬停浮在卡片右上角——内联会跟标题
+ * 抢宽度,把「角色 · 工具名」挤成省略号。 */
+.stc-node:hover .traj-trow-actions {
+	opacity: 1;
+	background: var(--color-surface-raised, var(--color-bg));
+	border-radius: 6px;
+}
+.stc-node-head {
 	display: flex;
 	align-items: center;
-	justify-content: center;
 	gap: 6px;
-	padding: 0 10px;
-	border: 1px dashed var(--color-text-faint);
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
-	font-size: 11px;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	color: var(--color-text-muted);
-	cursor: pointer;
-	transition:
-		border-color 120ms ease,
-		background 120ms ease,
-		color 120ms ease;
+	/* 固定行高:18px 悬浮按钮不撑高卡片,摘要两行的位置也稳定。 */
+	height: 18px;
+	flex-shrink: 0;
 }
-.stc-fold:hover {
-	border-color: var(--color-accent);
-	color: var(--color-text);
-	background: color-mix(in oklab, var(--color-surface-raised, var(--color-bg)) 92%, transparent);
+.stc-node-head .traj-trow-actions {
+	position: absolute;
+	top: 6px;
+	right: 8px;
 }
-.stc-fold--open {
-	border-style: solid;
-	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
-}
-.stc-fold--off {
-	opacity: 0.6;
-}
-.stc-fold-text {
+.stc-node-title {
+	min-width: 0;
+	flex: 1;
 	overflow: hidden;
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-}
-.stc-edge--fold {
-	stroke-dasharray: 3 3;
-	opacity: 0.55;
+	color: var(--color-text-muted);
 }
 .stc-node--user {
 	border-left: 2px solid color-mix(in oklab, var(--color-info, #6aa1ff) 55%, transparent);
@@ -2215,11 +2221,14 @@
 	border-left: 2px solid color-mix(in oklab, var(--color-text-faint) 50%, transparent);
 }
 .stc-node-text {
-	min-width: 0;
-	flex: 1;
 	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	font-size: 11.5px;
+	line-height: 1.35;
+	word-break: break-word;
 	color: var(--color-text-muted);
 }
 .stc-node-verdict {
@@ -2270,9 +2279,6 @@
 .stc-node--off {
 	opacity: 0.75;
 }
-.stc-node--off .stc-node-text {
-	color: var(--color-text-muted);
-}
 .stc-node--off .gui-mtree-icon {
 	opacity: 0.5;
 }
@@ -2292,6 +2298,9 @@
 	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 .stc-node--active .stc-node-text {
+	color: var(--color-text);
+}
+.stc-node--active .stc-node-title {
 	color: var(--color-text);
 }
 .stc-node-badge {

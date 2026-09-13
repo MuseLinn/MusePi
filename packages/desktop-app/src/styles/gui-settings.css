@@ -3491,6 +3491,127 @@ body.gui-resizing {
 	overflow-y: auto;
 }
 
+/* ── Workspace memory (settings → memory, ZCode 记忆面板 parity) ──────── */
+/* Title + desc head, then the per-workspace memory directory browser:
+ * selector + count + search bar, refreshable file list, row click reads
+ * into the shared viewer below. (The backend on/off lives in the schema
+ * select — no duplicate toggle.) */
+.gui-memory-workspace-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 6px;
+}
+.gui-memory-workspace-title {
+	font-size: 12px;
+	font-weight: 650;
+	color: var(--color-text-muted);
+}
+.gui-memory-workspace-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 2px 0 10px;
+}
+.gui-memory-workspace-bar .gui-settings-select {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 360px;
+}
+.gui-memory-workspace-count {
+	flex-shrink: 0;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	font-variant-numeric: tabular-nums;
+}
+.gui-memory-workspace-search {
+	flex: 1;
+	min-width: 120px;
+	max-width: 320px;
+	margin-left: auto;
+}
+.gui-memory-workspace-refresh {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-memory-workspace-refresh:hover {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+	color: var(--color-text);
+}
+.gui-memory-workspace-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.gui-memory-workspace-row {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 1px 4px 1px 1px;
+	border-radius: 8px;
+}
+.gui-memory-workspace-row:hover {
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+.gui-memory-workspace-open {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1;
+	min-width: 0;
+	padding: 6px 8px;
+	text-align: left;
+}
+.gui-memory-workspace-fileicon {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 700;
+}
+.gui-memory-workspace-filemeta {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+.gui-memory-workspace-filename {
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+.gui-memory-workspace-filetime {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+.gui-memory-workspace-reveal {
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 7px;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.gui-memory-workspace-row:hover .gui-memory-workspace-reveal {
+	opacity: 1;
+}
+.gui-memory-workspace-reveal:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
 /* Usage-statistics summary card (ZCode parity): vertical layout — the
  * value sits on top in a large mono face, the label (icon + caption) and
  * optional sub-metric (e.g. 占比) bottom row. Fixed min-height keeps all

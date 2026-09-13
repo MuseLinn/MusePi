@@ -3,8 +3,14 @@ import { describe, expect, it } from "bun:test";
 import { layoutTree } from "../src/components/SessionTreeCanvas";
 import { buildMessageTree } from "../src/lib/message-tree";
 
-// SessionTreeCanvas 的布局纯函数:深链折叠(长会话地图不塌成 22k px 竖线)。
-// 折叠只压缩"无分支单子链"的纵向空白,分支结构、段内信息都不丢(展开恢复)。
+// SessionTreeCanvas 的布局纯函数:分层排布 + 轮级分组。
+// 地图不折叠链段(折叠是线性 transcript 的压缩手段):每个条目都占自己的
+// 行位,长会话靠缩放/平移读。
+
+/** 卡片高度 / 轮内·轮间间距(与组件常量同值:布局断言直接算出来)。 */
+const NODE_H = 76;
+const GAP_Y = 64;
+const GAP_Y_TURN = 12;
 
 function msg(id: string, parentId: string | null, ts = 1, role: string = "user"): unknown {
 	return {
@@ -12,7 +18,7 @@ function msg(id: string, parentId: string | null, ts = 1, role: string = "user")
 		id,
 		parentId,
 		timestamp: new Date(ts).toISOString(),
-		message: { role },
+		message: { role, content: [{ type: "text", text: `${role} ${id}` }] },
 	};
 }
 
@@ -23,15 +29,15 @@ function chainEntries(n: number, prefix = "m"): unknown[] {
 	return entries;
 }
 
-describe("layoutTree 深链折叠", () => {
-	it("短链(< 阈值)不折叠,全节点可见", () => {
-		const tree = buildMessageTree(chainEntries(10));
-		const laid = layoutTree(tree);
+describe("layoutTree 分层布局", () => {
+	it("线性链每个节点都有自己的行位(同轮 12px 空隙)", () => {
+		const laid = layoutTree(buildMessageTree(chainEntries(10)));
 		expect(laid.nodes).toHaveLength(10);
-		expect(laid.folds).toHaveLength(0);
-		// 无 entries 参数 → 全部归 turn 0,同轮紧凑堆叠(卡片间 12px 空隙,
-		// 起点差 = NODE_H + 12 = 52,不重叠)。height = 最后节点底部 + 尾部留白。
-		expect(laid.height).toBe(40 + 9 * 52 + 64);
+		// 无 entries 参数 → 全部归 turn 0,同轮紧凑堆叠:起点差 = NODE_H + 12。
+		const ys = laid.nodes.map(n => n.y).sort((a, b) => a - b);
+		expect(ys).toEqual([...Array(10).keys()].map(i => i * (NODE_H + GAP_Y_TURN)));
+		// height = 末节点底部 + 尾部留白。
+		expect(laid.height).toBe(9 * (NODE_H + GAP_Y_TURN) + NODE_H + GAP_Y);
 	});
 
 	it("传 entries 时按轮分组:同轮紧凑、轮间大间距", () => {
@@ -42,21 +48,18 @@ describe("layoutTree 深链折叠", () => {
 			msg("u1", "a0", 3, "user"),
 			msg("a1", "u1", 4, "assistant"),
 		];
-		const tree = buildMessageTree(entries);
-		const laid = layoutTree(tree, entries);
+		const laid = layoutTree(buildMessageTree(entries), entries);
 		expect(laid.nodes).toHaveLength(4);
-		const y = (id: string) => laid.nodes.find(n => n.node.id === id)!.y;
-		// 同轮:u0→a0 卡片间 12px 空隙(起点差 NODE_H+12=52,不重叠)。
-		expect(y("a0") - y("u0")).toBe(52);
-		expect(y("a1") - y("u1")).toBe(52);
-		// 轮间:u1 从 a0 卡片间大间距 64px(起点差 NODE_H+64=104)。
-		expect(y("u1") - y("a0")).toBe(104);
+		const y = new Map(laid.nodes.map(n => [n.node.id, n.y]));
+		// 同轮:u0→a0 卡片间 12px 空隙(起点差 NODE_H+12,不重叠)。
+		expect(y.get("a0")! - y.get("u0")!).toBe(NODE_H + GAP_Y_TURN);
+		expect(y.get("a1")! - y.get("u1")!).toBe(NODE_H + GAP_Y_TURN);
+		// 轮间:u1 与 a0 之间大间距(起点差 NODE_H+64)。
+		expect(y.get("u1")! - y.get("a0")!).toBe(NODE_H + GAP_Y);
 	});
 
-	it("任何相邻节点卡片不重叠(同轮 12px 空隙,起点差含 NODE_H)", () => {
-		// 回归:同轮间距误用 12px 作起点差 → assistant 卡片盖在 user 底部
-		// 28px,文字糊一起。布局必须保证任意可见节点卡片不重叠。
-		// 折叠段内节点(渲染时隐藏)除外——它们堆叠在段首下,不参与视觉。
+	it("任何相邻节点卡片不重叠(起点差至少 NODE_H)", () => {
+		// 回归:同轮间距误用 12px 作起点差 → 卡片互相盖住,文字糊一起。
 		const entries = [
 			msg("u0", null, 1, "user"),
 			msg("a0", "u0", 2, "assistant"),
@@ -64,16 +67,14 @@ describe("layoutTree 深链折叠", () => {
 			msg("a1", "u1", 4, "assistant"),
 		];
 		const laid = layoutTree(buildMessageTree(entries), entries);
-		const hidden = new Set(laid.folds.flatMap(f => f.hiddenIds));
-		const visible = laid.nodes.filter(n => !hidden.has(n.node.id)).sort((a, b) => a.y - b.y);
-		for (let i = 1; i < visible.length; i++) {
-			expect(visible[i]!.y - visible[i - 1]!.y).toBeGreaterThanOrEqual(40);
+		const sorted = [...laid.nodes].sort((a, b) => a.y - b.y);
+		for (let i = 1; i < sorted.length; i++) {
+			expect(sorted[i]!.y - sorted[i - 1]!.y).toBeGreaterThanOrEqual(NODE_H);
 		}
 	});
 
-	it("60 轮长会话折叠后可见节点仍不重叠", () => {
-		// 用户实际场景:长会话(60 轮交替)触发深链折叠,折叠后可见的
-		// 段首/链尾节点必须互不重叠。
+	it("长会话(120 节点)不隐藏任何节点,且全部落在画布内", () => {
+		// 用户实际场景:长会话不折叠 → 每个条目都有自己的卡片与行位。
 		const entries: unknown[] = [];
 		let prev: string | null = null;
 		for (let i = 0; i < 60; i++) {
@@ -84,200 +85,51 @@ describe("layoutTree 深链折叠", () => {
 			prev = aid;
 		}
 		const laid = layoutTree(buildMessageTree(entries), entries);
-		expect(laid.folds.length).toBeGreaterThan(0);
-		const hidden = new Set(laid.folds.flatMap(f => f.hiddenIds));
-		const visible = laid.nodes.filter(n => !hidden.has(n.node.id)).sort((a, b) => a.y - b.y);
-		for (let i = 1; i < visible.length; i++) {
-			expect(visible[i]!.y - visible[i - 1]!.y).toBeGreaterThanOrEqual(40);
-		}
-		// 全部在画布内。
+		expect(laid.nodes).toHaveLength(120);
+		// 行位两两不同(没有节点被藏起来或堆在同一坐标)。
+		expect(new Set(laid.nodes.map(n => n.y)).size).toBe(120);
 		for (const n of laid.nodes) {
 			expect(n.y).toBeGreaterThanOrEqual(0);
 			expect(n.y).toBeLessThan(laid.height);
 		}
 	});
 
-	it("长链(> 阈值)折叠成段,画布高度大幅缩小", () => {
-		const tree = buildMessageTree(chainEntries(120));
-		const laid = layoutTree(tree);
-		expect(laid.nodes).toHaveLength(120);
-		// 至少产生一个折叠段。
-		expect(laid.folds.length).toBeGreaterThan(0);
-		// 折叠后画布高度显著小于不折叠的 120 层高度。
-		const unfoldedH = 120 * (40 + 64);
-		expect(laid.height).toBeLessThan(unfoldedH * 0.6);
-	});
-
-	it("折叠段内节点不占画布高度,但段信息完整", () => {
-		const tree = buildMessageTree(chainEntries(100));
-		const laid = layoutTree(tree);
-		const fold = laid.folds[0];
-		expect(fold).toBeDefined();
-		// 段首在画布上,段内节点被隐藏(不参与高度)。
-		const head = laid.nodes.find(n => n.node.id === fold!.headId);
-		expect(head).toBeDefined();
-		// 段内节点全部记录在 hiddenIds,数量 = 段长 - 1。
-		expect(fold!.hiddenIds.length).toBeGreaterThan(0);
-		for (const hid of fold!.hiddenIds) {
-			expect(laid.nodes.some(n => n.node.id === hid)).toBe(true);
-		}
-	});
-
-	it("分支打断链段:分支点之后的节点不被折叠隐藏", () => {
-		// 100 节点链,中间(50)处岔出兄弟 → 链段在分支处断开。
+	it("分支场景:分支点与分支链全部可见", () => {
+		// 100 节点链,中间(m49)岔出兄弟 → 两条链各自排布,谁都不被折叠隐藏。
 		const entries: unknown[] = chainEntries(100);
 		entries.push(msg("fork", "m49", 200), msg("fork-child", "fork", 201));
-		const tree = buildMessageTree(entries);
-		const laid = layoutTree(tree);
-		// 折叠段不应包含分支点 m49 之后的节点(fork/fork-child 一定可见)。
-		const hiddenIds = new Set<string>();
-		for (const f of laid.folds) for (const h of f.hiddenIds) hiddenIds.add(h);
-		expect(hiddenIds.has("fork")).toBe(false);
-		expect(hiddenIds.has("fork-child")).toBe(false);
-	});
-
-	it("折叠段首是胶囊且保留交互语义(段首节点仍在 nodes)", () => {
-		const tree = buildMessageTree(chainEntries(80));
-		const laid = layoutTree(tree);
-		expect(laid.folds.length).toBeGreaterThan(0);
-		// 每个折叠段的 headId 都对应一个真实节点。
-		for (const f of laid.folds) {
-			expect(laid.nodes.some(n => n.node.id === f.headId)).toBe(true);
-		}
-	});
-
-	it("折叠后所有节点 y 都在画布内(段首依次堆叠,不越界裁剪)", () => {
-		// 回归:折叠只压缩了 height,段首 y 仍按真实深度算 → 后段全部
-		// 画在画布外被裁剪("地图只显示一小段")。修复后视觉 y 上移,
-		// 每个节点(含段内堆叠)必须落在 [0, height) 内。
-		const tree = buildMessageTree(chainEntries(120));
-		const laid = layoutTree(tree);
-		expect(laid.folds.length).toBeGreaterThan(1);
+		const laid = layoutTree(buildMessageTree(entries));
+		expect(laid.nodes).toHaveLength(102);
+		const y = new Map(laid.nodes.map(n => [n.node.id, n.y]));
+		// 分支从父下方继续推进。
+		expect(y.get("fork")!).toBeGreaterThan(y.get("m49")!);
+		expect(y.get("fork-child")!).toBeGreaterThan(y.get("fork")!);
 		for (const n of laid.nodes) {
-			expect(n.y).toBeGreaterThanOrEqual(0);
 			expect(n.y).toBeLessThan(laid.height);
 		}
-		// 段首依次堆叠:相邻折叠段的段首 y 单调递增且都在画布内。
-		const heads = laid.folds.map(f => laid.nodes.find(n => n.node.id === f.headId)!.y).sort((a, b) => a - b);
-		for (let i = 1; i < heads.length; i++) {
-			expect(heads[i]!).toBeGreaterThan(heads[i - 1]!);
-		}
 	});
 
-	it("多根独立折叠互不影响(不跨子树错误压缩)", () => {
-		// 回归:全局 hiddenBefore 累计会把 A 根的折叠隐藏数算进 B 根的
-		// 段首 → B 段首 y 变负数被裁剪。视觉深度游标法按根独立推进。
+	it("多根各自从 y=0 起排,横向分列互不挤压", () => {
 		const entries: unknown[] = chainEntries(100, "a");
 		for (let i = 0; i < 100; i++) {
 			entries.push(msg(`b${i}`, i === 0 ? null : `b${i - 1}`, 500 + i));
 		}
 		const laid = layoutTree(buildMessageTree(entries));
-		expect(laid.folds.length).toBeGreaterThan(1);
-		for (const n of laid.nodes) {
-			expect(n.y).toBeGreaterThanOrEqual(0);
-			expect(n.y).toBeLessThan(laid.height);
-		}
-		// B 根的段首必须 >= 0(旧实现会压成负数)。
-		for (const f of laid.folds) {
-			if (!f.headId.startsWith("b")) continue;
-			const head = laid.nodes.find(n => n.node.id === f.headId)!;
-			expect(head.y).toBeGreaterThanOrEqual(0);
-		}
-	});
-
-	it("分支混合场景:分支点后继续的深链仍折叠且全部在画布内", () => {
-		// 200 链在 m100 岔出 20 深分支——分支点打断链段,分支后主链
-		// 继续深链折叠;分支链独立折叠。全部节点必须在画布内。
-		const entries: unknown[] = [msg("r", null, 1)];
-		for (let i = 1; i < 200; i++) entries.push(msg(`m${i}`, i === 1 ? "r" : `m${i - 1}`, i + 1));
-		let prev = "fork0";
-		entries.push(msg(prev, "m100", 300));
-		for (let i = 1; i < 20; i++) {
-			const id = `fork${i}`;
-			entries.push(msg(id, prev, 300 + i));
-			prev = id;
-		}
-		const laid = layoutTree(buildMessageTree(entries));
-		// 分支点与分支链不被折叠隐藏。
-		const hidden = new Set<string>();
-		for (const f of laid.folds) for (const h of f.hiddenIds) hidden.add(h);
-		expect(hidden.has("m100")).toBe(false);
-		expect(hidden.has("fork0")).toBe(false);
+		const a0 = laid.nodes.find(n => n.node.id === "a0")!;
+		const b0 = laid.nodes.find(n => n.node.id === "b0")!;
+		expect(a0.y).toBe(0);
+		expect(b0.y).toBe(0);
+		expect(a0.x).not.toBe(b0.x);
 		for (const n of laid.nodes) {
 			expect(n.y).toBeGreaterThanOrEqual(0);
 			expect(n.y).toBeLessThan(laid.height);
 		}
 	});
 
-	it("多段折叠:超长链拆成多段,每段独立展开", () => {
-		const tree = buildMessageTree(chainEntries(300));
-		const laid = layoutTree(tree);
-		expect(laid.folds.length).toBeGreaterThan(1);
-		// 各段 headId 互不重叠。
-		const heads = laid.folds.map(f => f.headId);
-		expect(new Set(heads).size).toBe(heads.length);
-	});
-
-	it("空树:零节点零折叠", () => {
+	it("空树:零节点,画布仍有尺寸", () => {
 		const laid = layoutTree([]);
 		expect(laid.nodes).toHaveLength(0);
-		expect(laid.folds).toHaveLength(0);
 		expect(laid.width).toBeGreaterThan(0);
 		expect(laid.height).toBeGreaterThan(0);
-	});
-});
-
-/**
- * Expanded segments. Regression (2026-09-12): the layout only knew the
- * collapsed state — expanding a segment released its nodes from the hidden set
- * but left every one of them at `head.y + CHAIN_FOLD_H` (one shared
- * coordinate), and the nodes BELOW the segment kept the space the hidden ones
- * were supposed to not occupy. Clicking a fold therefore piled 20-odd cards on
- * top of each other, which is the "折叠不正确" the map was reported for.
- *
- * Observable contract: with a head in `expandedFolds`, every node of that
- * segment gets its own non-overlapping y, and following nodes move down.
- */
-describe("layoutTree 展开折叠段", () => {
-	it("展开后段内节点各自有独立位置,不再堆叠在同一点", () => {
-		const tree = buildMessageTree(chainEntries(120));
-		const collapsed = layoutTree(tree);
-		const fold = collapsed.folds[0]!;
-
-		const expanded = layoutTree(tree, undefined, new Set([fold.headId]));
-		const ys = [fold.headId, ...fold.hiddenIds].map(id => expanded.nodes.find(n => n.node.id === id)!.y);
-		// Every node of the segment on its own row — no shared coordinate.
-		expect(new Set(ys).size).toBe(ys.length);
-		// And card-sized apart, so they cannot overlap.
-		const sorted = [...ys].sort((a, b) => a - b);
-		for (let i = 1; i < sorted.length; i++) {
-			expect(sorted[i]! - sorted[i - 1]!).toBeGreaterThanOrEqual(40);
-		}
-	});
-
-	it("展开后其下节点被推开,且全部仍在画布内", () => {
-		const tree = buildMessageTree(chainEntries(120));
-		const collapsed = layoutTree(tree);
-		const fold = collapsed.folds[0]!;
-		const expanded = layoutTree(tree, undefined, new Set([fold.headId]));
-
-		// The segment now occupies vertical space, so the canvas must grow.
-		expect(expanded.height).toBeGreaterThan(collapsed.height);
-		for (const n of expanded.nodes) {
-			expect(n.y).toBeGreaterThanOrEqual(0);
-			expect(n.y).toBeLessThan(expanded.height);
-		}
-	});
-
-	it("展开未涉及的段仍保持压缩", () => {
-		// Only the expanded head participates; a later segment keeps its
-		// single-coordinate stack (still collapsed).
-		const tree = buildMessageTree(chainEntries(120));
-		const collapsed = layoutTree(tree);
-		const [first, second] = collapsed.folds;
-		if (!second) return; // needs at least two segments for this contract
-		const expanded = layoutTree(tree, undefined, new Set([first!.headId]));
-		const secondYs = second!.hiddenIds.map(id => expanded.nodes.find(n => n.node.id === id)!.y);
-		expect(new Set(secondYs).size).toBe(1);
 	});
 });

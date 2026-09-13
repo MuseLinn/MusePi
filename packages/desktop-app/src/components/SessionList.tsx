@@ -260,7 +260,33 @@ export function SessionList({
 									aria-label={t("in progress")}
 									title={t("in progress")}
 								>
-									<span className="gui-tree-working-dot" aria-hidden />
+									{/* ZCode parity: an 8-ray starburst spinning while the
+									 * agent turn runs (was a breathing dot) — opacity ramps
+									 * around the ring so the rotation reads at 12px. */}
+									<svg
+										className="gui-tree-working-spin"
+										viewBox="0 0 16 16"
+										width="12"
+										height="12"
+										aria-hidden="true"
+									>
+										{Array.from({ length: 8 }, (_, i) => {
+											const a = (i * Math.PI) / 4;
+											return (
+												<line
+													key={i}
+													x1={8 + Math.cos(a) * 2.4}
+													y1={8 + Math.sin(a) * 2.4}
+													x2={8 + Math.cos(a) * 6.6}
+													y2={8 + Math.sin(a) * 6.6}
+													stroke="currentColor"
+													strokeWidth="1.5"
+													strokeLinecap="round"
+													opacity={0.3 + (i / 7) * 0.7}
+												/>
+											);
+										})}
+									</svg>
 								</span>
 							)}
 							{parent && (

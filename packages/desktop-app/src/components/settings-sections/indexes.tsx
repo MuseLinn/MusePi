@@ -146,7 +146,9 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 							return next;
 						});
 					}}
-				/>
+				>
+					<span className="gui-toggle-knob" />
+				</button>
 			</div>
 			<div className="gui-settings-row">
 				<div>
@@ -159,7 +161,9 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 					aria-checked={idxEnabled}
 					className={`gui-toggle${idxEnabled ? " gui-toggle--on" : ""}`}
 					onClick={() => toggleIndex(!idxEnabled)}
-				/>
+				>
+					<span className="gui-toggle-knob" />
+				</button>
 			</div>
 			<div className="gui-settings-row text-[12px] text-[var(--color-text-muted)]">
 				{idxStatus

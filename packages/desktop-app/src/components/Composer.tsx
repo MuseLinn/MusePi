@@ -250,7 +250,7 @@ export function Composer({
 		onHashInput,
 		insertHash,
 	} = useCompletion({ rpc, cwd, setText });
-	useDraftPersistence({ sessionId, rpc, text, setText });
+	useDraftPersistence({ sessionId, rpc, text, setText, attachments, setAttachments });
 	const { history, historyIndex, draftBackupRef, setHistoryIndex, pushHistory } = useInputHistory(cwd);
 	const spellcheckEnabled = (): boolean => {
 		try {

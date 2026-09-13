@@ -54,7 +54,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [scanned, setScanned] = useState<ImportSource[] | null>(null);
 	const [selected, setSelected] = useState<Record<string, Set<string>>>({});
 	const [busy, setBusy] = useState(false);
-	const [done, setDone] = useState<{ ok: number; failed: number } | null>(null);
+	const [done, setDone] = useState<{ ok: number; failed: number; grouped?: number } | null>(null);
 
 	// Agent list only — deliberately cheap, no session store scan.
 	useEffect(() => {
@@ -160,21 +160,56 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		setDone(null);
 		let ok = 0;
 		let failed = 0;
+		// Imported session ids per workspace — the 引导归纳 below folds them
+		// into editable custom groups (one per workspace) after the copy loop.
+		const byCwd = new Map<string, string[]>();
 		for (const [key, ids] of Object.entries(selected)) {
 			const source = key.split("\u0000")[0] ?? "";
+			const cwd = key.split("\u0000")[1] ?? "";
 			for (const id of ids) {
 				try {
 					// No cwd param: the daemon keeps the session's original
 					// workspace directory (fallbackCwd = daemon cwd).
-					await rpc.request("import.session", { source, id });
+					const res = await rpc.request<{ sessionId?: string }>("import.session", { source, id });
 					ok += 1;
+					if (res?.sessionId) {
+						const list = byCwd.get(cwd) ?? [];
+						list.push(res.sessionId);
+						byCwd.set(cwd, list);
+					}
 				} catch {
 					failed += 1;
 				}
 			}
 		}
+		// Auto-group the imports (引导归纳): one custom group per workspace,
+		// folder-basename named, merged into the sidebar's persisted group
+		// store — a plain editable group the user can rename/recolor/drag,
+		// NOT a separate "spaces" section (that would duplicate the projects
+		// tab). Regular (non-imported) sessions are never auto-grouped.
+		let grouped = 0;
+		if (byCwd.size > 0) {
+			try {
+				const raw = localStorage.getItem("musepi-gui-groups");
+				const groups = raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : [];
+				for (const [cwd, ids] of byCwd) {
+					const name = cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd) : t("no workspace");
+					const existing = groups.find(g => g.name === name);
+					if (existing) {
+						for (const id of ids) if (!existing.sessions.includes(id)) existing.sessions.push(id);
+					} else {
+						groups.push({ name, sessions: [...ids] });
+					}
+					grouped += 1;
+				}
+				localStorage.setItem("musepi-gui-groups", JSON.stringify(groups));
+				window.dispatchEvent(new CustomEvent("musepi-gui-groups-changed"));
+			} catch {
+				// storage unavailable — imports still succeeded, grouping skipped
+			}
+		}
 		setBusy(false);
-		setDone({ ok, failed });
+		setDone({ ok, failed, grouped });
 		setSelected({});
 	};
 
@@ -282,6 +317,7 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 						<div className="text-[12px] text-[var(--color-text-faint)]">
 							{t("import done", { count: done.ok })}
 							{done.failed > 0 ? ` · ${t("import failed", { count: done.failed })}` : ""}
+							{done.grouped ? ` · ${t("import grouped", { count: done.grouped })}` : ""}
 						</div>
 					)}
 					<div className="flex items-center justify-between">

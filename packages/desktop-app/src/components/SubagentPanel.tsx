@@ -5,7 +5,7 @@ import { decideTranscriptPoll } from "@musepi/guest-client/src/lib/transcript-po
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useFocusTrap } from "../lib/use-focus-trap";
 
@@ -17,15 +17,24 @@ const POLL_MS = 1200;
 type TranscriptResult = { kind: "rows"; text: string; newSize: number } | { kind: "error"; message: string };
 
 /**
- * Desktop subagent trajectory panel (kimiwork parity: click a swarm-card
- * member → this slides out on the right showing the subagent's own
- * transcript). RPC-backed — the daemon's agents.transcript incremental read
- * mirrors the collab host's fetch-transcript frame, and the same pure
- * polling decision (transcript-poll.ts) drives the cursor. kill/revive/chat
- * go through the existing agents.* RPCs (same semantics as AgentControls).
+ * Subagent trajectory detail (kimiwork parity: a swarm-card member row or an
+ * agents-roster row opens the subagent's own transcript). RPC-backed — the
+ * daemon's agents.transcript incremental read mirrors the collab host's
+ * fetch-transcript frame, and the same pure polling decision
+ * (transcript-poll.ts) drives the cursor. kill/revive/chat go through the
+ * existing agents.* RPCs.
+ *
+ * Hosts dock this layer and keep it mounted, driving it with `open` (the
+ * DialogFrame rule): closing plays the same slide as opening. Because the
+ * host clears its selection on close, the last snapshot is retained here so
+ * the exiting layer never blanks.
  */
 export function SubagentPanel(props: {
-	agent: AgentSnapshot;
+	/** null while the host is closed — the previous snapshot is retained. */
+	agent: AgentSnapshot | null;
+	/** Drives the transcript poll, Esc and the focus trap; position/motion
+	 *  live in the host's .gui-agent-dock wrapper. */
+	open: boolean;
 	rpc: RpcClient;
 	progress?: {
 		tokens: number;
@@ -40,27 +49,41 @@ export function SubagentPanel(props: {
 	host?: TranscriptProps["host"];
 	onClose(): void;
 }): ReactNode {
-	const { agent, rpc, progress: p, host, onClose } = props;
+	const { agent, open, rpc, progress: p, host, onClose } = props;
 	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
+	// Written during render (not in an effect) so the snapshot is already
+	// retained in the commit that clears it.
+	const retained = useRef<{ agent: AgentSnapshot; progress: typeof p } | null>(null);
+	if (agent !== null) retained.current = { agent, progress: p };
+	const shownAgent = agent ?? retained.current?.agent ?? null;
+	const shownProgress = agent !== null ? p : (retained.current?.progress ?? null);
 
+	// Esc closes the layer (modal panel parity with TaskModal) — gated on
+	// open, since the layer stays mounted through the exit animation.
 	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
+		if (!open) return;
+		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") onClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [open, onClose]);
 
 	// Live transcript: poll the daemon's agents.transcript RPC while the
-	// panel is open, appending parsed JSONL entries. Same cursor semantics
+	// layer is open, appending parsed JSONL entries. Same cursor semantics
 	// as the collab drawer — a terminal `error` reply stops polling and
-	// surfaces the message (retrying would loop hot).
+	// surfaces the message (retrying would loop hot). Closing keeps the
+	// entries: clearing them here would blank the exit animation.
+	const shownId = shownAgent?.id ?? null;
+	const shownHasSessionFile = shownAgent?.hasSessionFile === true;
 	useEffect(() => {
+		if (!open || shownId === null || !shownHasSessionFile) return;
+		// The RPC closure outlives this render's narrowing — capture the id.
+		const agentId = shownId;
 		setEntries([]);
 		setFetchError(null);
-		if (!agent.hasSessionFile) return;
 		let disposed = false;
 		let inFlight = false;
 		let cursor = 0;
@@ -78,7 +101,7 @@ export function SubagentPanel(props: {
 			inFlight = true;
 			try {
 				const res = await rpc.request<{ text: string; newSize: number; error?: string }>("agents.transcript", {
-					agentId: agent.id,
+					agentId,
 					fromByte: cursor,
 				});
 				if (disposed) return;
@@ -116,56 +139,48 @@ export function SubagentPanel(props: {
 			disposed = true;
 			stopPolling();
 		};
-	}, [agent.id, agent.hasSessionFile, rpc]);
+	}, [open, shownId, shownHasSessionFile, rpc]);
 
 	const sendChat = (): void => {
 		const text = draft.trim();
-		if (!text) return;
-		void rpc.request("agents.chat", { agentId: agent.id, text }).catch(() => {});
+		if (!text || shownAgent === null) return;
+		void rpc.request("agents.chat", { agentId: shownAgent.id, text }).catch(() => {});
 		setDraft("");
 	};
 
-	const model = p?.resolvedModel;
+	const model = shownProgress?.resolvedModel;
 	const ctxPct =
-		p?.contextTokens !== undefined && p.contextWindow
-			? Math.min(100, (p.contextTokens / p.contextWindow) * 100)
+		shownProgress?.contextTokens !== undefined && shownProgress.contextWindow
+			? Math.min(100, (shownProgress.contextTokens / shownProgress.contextWindow) * 100)
 			: null;
 
-	// Esc closes the drawer (modal panel parity with TaskModal).
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") onClose();
-		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
-
-	// Focus trap: Tab stays inside the trajectory drawer while open.
-	const trapRef = useFocusTrap<HTMLElement>(true);
+	// Focus trap: Tab stays inside the layer while it is open.
+	const trapRef = useFocusTrap<HTMLElement>(open);
+	if (shownAgent === null) return null;
 	return (
-		<aside ref={trapRef} className="ag-drawer" role="dialog" aria-modal="true" aria-label={agent.displayName}>
+		<aside ref={trapRef} className="ag-drawer" role="dialog" aria-hidden={!open} aria-label={shownAgent.displayName}>
 			<header className="ag-drawer-head">
 				<div className="ag-drawer-title">
-					<span className="ag-drawer-name">{agent.displayName}</span>
-					<span className={`ag-chip ag-chip--${agent.status}`}>{agent.status}</span>
+					<span className="ag-drawer-name">{shownAgent.displayName}</span>
+					<span className={`ag-chip ag-chip--${shownAgent.status}`}>{shownAgent.status}</span>
 					{model ? <span className="ag-chip ag-chip--model">{model}</span> : null}
 				</div>
 				<div className="ag-drawer-actions">
-					{agent.status === "running" ? (
+					{shownAgent.status === "running" ? (
 						<button
 							type="button"
 							className="ag-btn ag-btn--danger"
-							onClick={() => void rpc.request("agents.kill", { agentId: agent.id }).catch(() => {})}
+							onClick={() => void rpc.request("agents.kill", { agentId: shownAgent.id }).catch(() => {})}
 						>
 							<OctagonX size={13} aria-hidden />
 							{t("kill")}
 						</button>
 					) : null}
-					{agent.status === "parked" || agent.status === "aborted" ? (
+					{shownAgent.status === "parked" || shownAgent.status === "aborted" ? (
 						<button
 							type="button"
 							className="ag-btn"
-							onClick={() => void rpc.request("agents.revive", { agentId: agent.id }).catch(() => {})}
+							onClick={() => void rpc.request("agents.revive", { agentId: shownAgent.id }).catch(() => {})}
 						>
 							<RotateCcw size={13} aria-hidden />
 							{t("revive")}
@@ -176,14 +191,17 @@ export function SubagentPanel(props: {
 					</button>
 				</div>
 			</header>
-			{p ? (
+			{shownProgress ? (
 				<div className="ag-stats">
 					<span className="ag-stat">
 						<span className="ag-stat-label">{t("tok")}</span>
-						<span className="ag-stat-value">{fmtTokens(p.tokens)}</span>
+						<span className="ag-stat-value">{fmtTokens(shownProgress.tokens)}</span>
 					</span>
 					{ctxPct !== null ? (
-						<span className="ag-stat" title={t("context {count}", { count: fmtTokens(p.contextTokens ?? 0) })}>
+						<span
+							className="ag-stat"
+							title={t("context {count}", { count: fmtTokens(shownProgress.contextTokens ?? 0) })}
+						>
 							<span className="ag-stat-label">{t("ctx")}</span>
 							<span className="ag-gauge">
 								<span
@@ -195,19 +213,19 @@ export function SubagentPanel(props: {
 					) : null}
 					<span className="ag-stat">
 						<span className="ag-stat-label">{t("cost")}</span>
-						<span className="ag-stat-value">{fmtCost(p.cost)}</span>
+						<span className="ag-stat-value">{fmtCost(shownProgress.cost)}</span>
 					</span>
 					<span className="ag-stat">
 						<span className="ag-stat-label">{t("tools")}</span>
-						<span className="ag-stat-value">{p.toolCount}</span>
+						<span className="ag-stat-value">{shownProgress.toolCount}</span>
 					</span>
 					<span className="ag-stat">
-						<span className="ag-stat-value">{fmtDuration(p.durationMs)}</span>
+						<span className="ag-stat-value">{fmtDuration(shownProgress.durationMs)}</span>
 					</span>
 				</div>
 			) : null}
 			<div className="ag-drawer-body">
-				{agent.hasSessionFile ? (
+				{shownAgent.hasSessionFile ? (
 					<>
 						<Transcript
 							compact
@@ -215,7 +233,7 @@ export function SubagentPanel(props: {
 							stream={null}
 							streamDone={false}
 							activeTools={EMPTY_TOOLS}
-							working={agent.status === "running" && fetchError === null}
+							working={shownAgent.status === "running" && fetchError === null}
 							host={host}
 						/>
 						{fetchError !== null ? (
@@ -238,7 +256,7 @@ export function SubagentPanel(props: {
 				<input
 					className="ag-chat-input"
 					value={draft}
-					placeholder={t("message {name}…", { name: agent.displayName })}
+					placeholder={t("message {name}…", { name: shownAgent.displayName })}
 					onChange={e => setDraft(e.target.value)}
 				/>
 				<button type="submit" className="ag-iconbtn" aria-label={t("send")} disabled={draft.trim().length === 0}>

@@ -410,71 +410,85 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							</div>
 						</div>
 						<div className="mt-2">
-							{/* Month labels: shown when a column's data first rolls into a
-							 * new month (GitHub contribution-graph style). */}
-							<div className="flex gap-[2px] pl-[13px]">
-								{heatGrid.map((_col, ci) => {
-									// GitHub rule: the column containing the 1st of a month
-									// shows that month — independent of data, so all 12
-									// months label the year view.
-									const firstOfMonth = Array.from(
-										{ length: 7 },
-										(_, r) => gridStart + (ci * 7 + r) * DAY_MS,
-									).find(ts => new Date(ts).getDate() === 1);
-									const label = firstOfMonth ? `${new Date(firstOfMonth).getMonth() + 1}月` : "";
-									return (
-										<div
-											key={ci}
-											className="w-[11px] whitespace-nowrap text-center text-[8.5px] leading-[11px] text-[var(--color-text-faint)]"
-										>
-											{label}
-										</div>
-									);
-								})}
-							</div>
-							<div className="mt-[2px] flex gap-[2px]">
-								{/* Weekday row labels: Mon / Wed / Fri (GitHub parity). */}
-								<div
-									className="grid pr-[4px] text-[8.5px] leading-none text-[var(--color-text-faint)]"
-									style={{ gridTemplateRows: "repeat(7, 11px)", gap: "2px" }}
-								>
-									<span className="flex items-center">{heatRowLabels[0]}</span>
-									<span />
-									<span className="flex items-center">{heatRowLabels[1]}</span>
-									<span />
-									<span className="flex items-center">{heatRowLabels[2]}</span>
-								</div>
-								{heatGrid.map((col, ci) => (
-									<div key={ci} className="flex flex-col gap-[2px]">
-										{col.map((d, ri) =>
-											d === undefined ? (
-												// Future day (beyond today) — no cell at all.
-												<div key={ri} className="h-[11px] w-[11px]" />
-											) : (
+							{/* Fluid graph (user callout: the fixed 11px grid left the
+							 * wide settings pane mostly empty): the graph is a centered
+							 * column capped at ~920px (53 cols × 15px + labels); below
+							 * the cap columns share the free width (`flex-1`), cells
+							 * track their column via aspect-square, so the grid fills
+							 * narrow panes and centers wide ones. Month + weekday
+							 * labels mirror the column geometry to stay aligned. */}
+							<div className="flex justify-center">
+								<div className="flex min-w-0 w-full max-w-[920px] flex-col">
+									{/* Month labels: shown when a column's data first rolls
+									 * into a new month (GitHub contribution-graph style). */}
+									<div className="flex gap-[2px]">
+										<div className="w-[13px] shrink-0" />
+										{heatGrid.map((_col, ci) => {
+											// GitHub rule: the column containing the 1st of a month
+											// shows that month — independent of data, so all 12
+											// months label the year view.
+											const firstOfMonth = Array.from(
+												{ length: 7 },
+												(_, r) => gridStart + (ci * 7 + r) * DAY_MS,
+											).find(ts => new Date(ts).getDate() === 1);
+											const label = firstOfMonth ? `${new Date(firstOfMonth).getMonth() + 1}月` : "";
+											return (
 												<div
-													key={ri}
-													title={
-														d
-															? `${fmtDay(d.timestamp)}: ${fmtCompact(d.tokens)} Tokens · ${d.requests} 轮`
-															: undefined
-													}
-													className="h-[11px] w-[11px] rounded-[2px] hover:scale-110"
-													style={{
-														background: d
-															? d.requests > 0
-																? `color-mix(in oklab, var(--color-accent) ${Math.max(12, (d.tokens / heatMax) * 100)}%, transparent)`
-																: "color-mix(in oklab, var(--color-text) 6%, transparent)"
-															: "color-mix(in oklab, var(--color-text) 3%, transparent)",
-														// Selected range (last 7/30 days) stays full color; older
-														// history dims — the 7d↔30d switch morphs which days are lit.
-														opacity: d && !inWindow(d.timestamp) ? 0.35 : 1,
-														transition: "background 200ms ease, opacity 200ms ease, transform 100ms ease",
-													}}
-												/>
-											),
-										)}
+													key={ci}
+													className="min-w-0 max-w-[15px] flex-1 overflow-visible whitespace-nowrap text-center text-[8.5px] leading-[11px] text-[var(--color-text-faint)]"
+												>
+													{label}
+												</div>
+											);
+										})}
 									</div>
-								))}
+									<div className="mt-[2px] flex gap-[2px]">
+										{/* Weekday row labels: Mon / Wed / Fri (GitHub parity).
+										 * 1fr rows stretch with the fluid columns above. */}
+										<div
+											className="grid w-[13px] shrink-0 self-stretch pr-[4px] text-[8.5px] leading-none text-[var(--color-text-faint)]"
+											style={{ gridTemplateRows: "repeat(7, 1fr)", gap: "2px" }}
+										>
+											<span className="flex items-center">{heatRowLabels[0]}</span>
+											<span />
+											<span className="flex items-center">{heatRowLabels[1]}</span>
+											<span />
+											<span className="flex items-center">{heatRowLabels[2]}</span>
+										</div>
+										{heatGrid.map((col, ci) => (
+											<div key={ci} className="flex min-w-0 max-w-[15px] flex-1 flex-col gap-[2px]">
+												{col.map((d, ri) =>
+													d === undefined ? (
+														// Future day (beyond today) — no cell at all.
+														<div key={ri} className="aspect-square w-full" />
+													) : (
+														<div
+															key={ri}
+															title={
+																d
+																	? `${fmtDay(d.timestamp)}: ${fmtCompact(d.tokens)} Tokens · ${d.requests} 轮`
+																	: undefined
+															}
+															className="aspect-square w-full rounded-[2px] hover:scale-110"
+															style={{
+																background: d
+																	? d.requests > 0
+																		? `color-mix(in oklab, var(--color-accent) ${Math.max(12, (d.tokens / heatMax) * 100)}%, transparent)`
+																		: "color-mix(in oklab, var(--color-text) 6%, transparent)"
+																	: "color-mix(in oklab, var(--color-text) 3%, transparent)",
+																// Selected range (last 7/30 days) stays full color; older
+																// history dims — the 7d↔30d switch morphs which days are lit.
+																opacity: d && !inWindow(d.timestamp) ? 0.35 : 1,
+																transition:
+																	"background 200ms ease, opacity 200ms ease, transform 100ms ease",
+															}}
+														/>
+													),
+												)}
+											</div>
+										))}
+									</div>
+								</div>
 							</div>
 						</div>
 					</div>

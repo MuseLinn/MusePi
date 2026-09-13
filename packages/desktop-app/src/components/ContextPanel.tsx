@@ -1,6 +1,13 @@
-import { AgentsPanel, latestWidgetFromEntries, type TranslationKey, t, WidgetCard } from "@musepi/guest-client";
+import {
+	AgentsPanel,
+	latestWidgetFromEntries,
+	type ToolRenderHost,
+	type TranslationKey,
+	t,
+	WidgetCard,
+} from "@musepi/guest-client";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
@@ -12,12 +19,12 @@ import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/
 import { surfaceById } from "../lib/surfaces/registry";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { Icon } from "../vendor/oc-icons";
-import { AgentControls } from "./AgentControls";
 import { FadeScroll } from "./FadeScroll";
 import { FilePane } from "./FilePane";
 import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
+import { SubagentPanel } from "./SubagentPanel";
 import { TrajectoryView } from "./TrajectoryView";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
@@ -67,6 +74,9 @@ export function ContextPanel({
 	view,
 	onViewChange,
 	onExpandPanel,
+	agentId,
+	onAgentSelect,
+	agentHost,
 	leafId,
 	activePathIds,
 	onBranchTo,
@@ -100,6 +110,14 @@ export function ContextPanel({
 	/** Expand a folded panel. The agent-activity reveal needs it (and only
 	 *  it): the rail and ⌘-shortcut paths expand for the same reason. */
 	onExpandPanel?(): void;
+	/** Selected swarm subagent (swarm-card member row / roster row): its
+	 *  trajectory detail docks over the pane as a layer — same panel, not a
+	 *  second navigation surface. */
+	agentId: string | null;
+	onAgentSelect(id: string | null): void;
+	/** Drill-down host for the docked detail (a nested task card opens
+	 *  another subagent's transcript in place). */
+	agentHost?: ToolRenderHost;
 	/** Jump the transcript to an entry id (trajectory rows; provided by
 	 *  ChatView — absent = trajectory rows render without jump action). */
 	onJumpToEntry?(entryId: string): void;
@@ -152,11 +170,11 @@ export function ContextPanel({
 			clearInterval(t);
 		};
 	}, [rpc, snap?.sessionId, snap?.working]);
-	// Selected subagent (TUI Agent Hub parity): click a roster row to open
-	// its kill/revive/chat controls beneath the panel.
-	const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-	const selectedAgent =
-		selectedAgentId !== null ? ((snap?.agents ?? []).find(a => a.id === selectedAgentId) ?? null) : null;
+	// Docked detail snapshots: the selection is owned by ChatView (the
+	// swarm-card member row in the transcript opens it too), so the layer
+	// resolves against the live snapshot here.
+	const agent = agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null;
+	const agentProgress = agentId !== null ? (snap?.progress.get(agentId)?.progress ?? null) : null;
 	// Session-hygiene actions (会话维护): shake / fresh / reset-context —
 	// each daemon RPC returns counts rendered into a shared status line.
 	// The clear action asks for confirmation first (destructive).
@@ -351,6 +369,35 @@ export function ContextPanel({
 		window.addEventListener("resize", clamp);
 		return () => window.removeEventListener("resize", clamp);
 	}, [measureCap]);
+	// Maximized geometry: the panel takes the chat surface's box — the rounded
+	// container the conversation occupies, same insets and radius — instead of
+	// a viewport-relative overlay. The surface is not a box the panel can anchor
+	// to (`.gui-scene-chat` is its nearest positioned ancestor), so its rect is
+	// measured onto --pane-max-* and re-measured on every surface resize: a
+	// window resize, sidebar toggle or rail drag keeps the panel flush instead
+	// of leaving it off the container's insets.
+	useLayoutEffect(() => {
+		const panel = panelRef.current;
+		const surface = panel?.closest<HTMLElement>(".gui-chat-surface");
+		if (!maximized || !open || !panel || !surface) return;
+		const measure = (): void => {
+			const r = surface.getBoundingClientRect();
+			panel.style.setProperty("--pane-max-left", `${r.left}px`);
+			panel.style.setProperty("--pane-max-top", `${r.top}px`);
+			panel.style.setProperty("--pane-max-width", `${r.width}px`);
+			panel.style.setProperty("--pane-max-height", `${r.height}px`);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(surface, { box: "border-box" });
+		return () => {
+			observer.disconnect();
+			panel.style.removeProperty("--pane-max-left");
+			panel.style.removeProperty("--pane-max-top");
+			panel.style.removeProperty("--pane-max-width");
+			panel.style.removeProperty("--pane-max-height");
+		};
+	}, [maximized, open]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
 	// Header chrome title (nav unification): the rail owns navigation;
 	// the header labels the active view.
@@ -386,11 +433,7 @@ export function ContextPanel({
 					/>,
 					document.getElementById("root") ?? document.body,
 				)}
-			<aside
-				ref={panelRef}
-				className={panelClass}
-				style={{ width: maximized ? "min(1280px, calc(100vw - 80px))" : width }}
-			>
+			<aside ref={panelRef} className={panelClass} style={maximized ? undefined : { width }}>
 				{/* Left-edge drag handle for width: pointer capture on the 4px
 				 * strip plus the gesture shield (the page guest swallows captured
 				 * moves that leave the strip). */}
@@ -457,6 +500,26 @@ export function ContextPanel({
 										<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
 										<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
 									</div>
+								)
+							) : view === "agents" ? (
+								/* Agents hub (TUI Agent Hub parity): the session's live
+								 * roster; a row opens the docked trajectory detail that
+								 * slides in over this view (layer at the aside level). */
+								(snap?.agents ?? []).length === 0 ? (
+									<div className="gui-pane-tab-empty">
+										<span className="gui-pane-tab-empty-icon">
+											<Icon name="ai-agent" />
+										</span>
+										<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
+									</div>
+								) : (
+									<AgentsPanel
+										agents={snap?.agents ?? []}
+										progress={snap?.progress ?? new Map()}
+										lifecycle={snap?.lifecycle ?? new Map()}
+										selectedId={agentId}
+										onSelect={onAgentSelect}
+									/>
 								)
 							) : typeof view === "string" && view.startsWith("ext:") ? (
 								(() => {
@@ -544,27 +607,6 @@ export function ContextPanel({
 											<span>{t("copy workspace path")}</span>
 										</button>
 									</div>
-									{/* Swarm visual parity (TUI subagent HUD): live agent rows —
-									 * status dot, activity line, token/cost meta — fed from
-									 * the session stream (agent-progress/lifecycle). Click a
-									 * row to open its kill/revive/chat controls. */}
-									<div className="gui-group-label px-2 pb-1 pt-3">{t("agents")}</div>
-									<div className="px-2">
-										<AgentsPanel
-											agents={snap?.agents ?? []}
-											progress={snap?.progress ?? new Map()}
-											lifecycle={snap?.lifecycle ?? new Map()}
-											selectedId={selectedAgentId}
-											onSelect={setSelectedAgentId}
-										/>
-										{selectedAgent && (
-											<AgentControls
-												agent={selectedAgent}
-												rpc={rpc}
-												onClose={() => setSelectedAgentId(null)}
-											/>
-										)}
-									</div>
 									{/* Session hygiene (会话维护): shake context / reset
 									 * provider stream / clear session context — each RPC
 									 * reports counts into the status line below. */}
@@ -621,6 +663,22 @@ export function ContextPanel({
 							</div>
 						</FadeScroll>
 					)}
+				</div>
+				{/* Subagent trajectory detail (agents-view drill-down): an in-pane
+				 * layer, always mounted so the slide plays both ways — the dock
+				 * wrapper's --open class drives it (MessageTree parity). It never
+				 * leaves the pane's stacking context, and while it is open the view
+				 * is the agents surface, so the managed-browser page host has no
+				 * slot to project onto. */}
+				<div className={`gui-agent-dock${agentId !== null ? " gui-agent-dock--open" : ""}`}>
+					<SubagentPanel
+						agent={agent}
+						open={agentId !== null}
+						rpc={rpc}
+						progress={agentProgress}
+						host={agentHost}
+						onClose={() => onAgentSelect(null)}
+					/>
 				</div>
 			</aside>
 		</>

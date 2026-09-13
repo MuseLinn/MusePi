@@ -1386,9 +1386,11 @@ body.gui-resizing .gui-pane-right {
 	animation: gui-loading-fadein 200ms ease-out;
 }
 
-/* ── Floating status-card stack (ZCode 悬浮卡 parity) ──────────────────── */
-/* Pinned to the transcript's top-right; each card is a compact launcher
- * (git state / running subagents / todo progress). Collapsed → slim pill. */
+/* ── Floating status panel (ZCode 悬浮卡 parity) ───────────────────────── */
+/* Pinned to the transcript's top-right: ONE frosted card with collapsible
+ * sections (git state / running subagents / todo progress). Collapses to a
+ * slim capsule on the SAME element (HeightMorph drives the height morph,
+ * the class flip eases radius/background/shadow). */
 .gui-status-cards {
 	position: absolute;
 	/* Below the 对话/地图 surface-mode toggle (top 8px + ~28px row) — both
@@ -1396,38 +1398,128 @@ body.gui-resizing .gui-pane-right {
 	top: 46px;
 	right: 12px;
 	z-index: 4;
+	/* Narrow-chat guard: the stack shrink-wraps its card, so the viewport
+	 * relative cap lives HERE (percentages on the shrink-wrapped card would
+	 * resolve against its own content width — no constraint at all). */
+	max-width: calc(100% - 24px);
 	display: flex;
 	flex-direction: column;
 	align-items: flex-end;
 	gap: 8px;
 }
 .gui-status-card {
-	width: 248px;
-	padding: 8px 6px;
+	position: relative;
+	width: 288px;
+	max-width: 100%;
 	border: 1px solid var(--border);
 	border-radius: 14px;
 	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
 	backdrop-filter: blur(14px) saturate(140%);
 	-webkit-backdrop-filter: blur(14px) saturate(140%);
 	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-	animation: gui-menu-in 130ms var(--spring);
 	display: flex;
 	flex-direction: column;
-	gap: 1px;
+	/* The pill⇄panel class flip eases what interpolates; height itself is
+	 * the HeightMorph inline transition. Width snaps (auto↔288px), masked
+	 * by the morph's 160ms content fade — same trade ZCode makes. */
+	transition:
+		border-radius 240ms cubic-bezier(0.22, 1, 0.36, 1),
+		background-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+		box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.gui-status-card-head {
+.gui-status-card--mini {
+	width: auto;
+	border-radius: 12px;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+/* Panel controls (collapse-to-capsule), pinned to the card's top-right so
+ * they survive the body scrolling underneath (ZCode right-3 top-3 spot). */
+.gui-status-tools {
+	position: absolute;
+	top: 4px;
+	right: 5px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+.gui-status-tool {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 6px;
+	color: var(--color-text-faint);
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-status-tool:hover {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+	color: var(--color-text);
+}
+/* Scrollable section stack; the card caps like ZCode's panel
+ * (min(64dvh, 32rem)) so three live sections can't overrun the chat. */
+.gui-status-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 3px 5px 5px;
+	max-height: min(64dvh, 32rem);
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+.gui-status-section {
+	min-width: 0;
+}
+/* Section head: subtle title + hover-surfaced chevron (CSS-only reveal);
+ * the right padding reserves the tools button's spot for the first
+ * section's header line. */
+.gui-status-section-head {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 2px 8px 5px;
+	width: 100%;
+	padding: 5px 30px 3px 8px;
+	border-radius: 8px;
+	text-align: left;
+	transition: background 120ms ease;
 }
-.gui-status-card-title {
+.gui-status-section-head:hover {
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+.gui-status-section-title {
 	flex: 1;
 	min-width: 0;
 	font-size: 11px;
 	font-weight: 650;
 	letter-spacing: 0.02em;
 	color: var(--color-text-muted);
+}
+.gui-status-section-count {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+.gui-status-section-chev {
+	width: 12px;
+	height: 12px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 120ms ease, transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.gui-status-section-head:hover .gui-status-section-chev,
+.gui-status-section-head:focus-visible .gui-status-section-chev {
+	opacity: 1;
+}
+.gui-status-section-chev--closed {
+	transform: rotate(-90deg);
+}
+.gui-status-section-body {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 0 2px 2px;
 }
 .gui-status-count {
 	display: inline-flex;
@@ -1537,16 +1629,6 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 	font-style: italic;
 }
-/* Collapsed pill: labelled segments (never a bare glyph + number). */
-.gui-status-pill-seg {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-}
-.gui-status-pill-label {
-	color: var(--color-text-faint);
-	font-weight: 500;
-}
 .gui-status-num-add {
 	color: var(--color-ok);
 }
@@ -1568,14 +1650,97 @@ body.gui-resizing .gui-pane-right {
 .gui-status-branch:hover {
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 }
+/* Branch menu (ZCode branch-popover parity): search field, section label,
+ * current-branch block with the dirty-file count, filtered list, and the
+ * create-and-checkout action. */
 .gui-status-branch-menu {
 	display: flex;
 	flex-direction: column;
-	padding: 4px;
+	padding: 6px;
 	gap: 1px;
-	max-height: 240px;
+	min-width: 236px;
+	max-width: 320px;
+	max-height: 340px;
 	overflow-y: auto;
-	min-width: 180px;
+}
+.gui-status-branch-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 0 6px 6px;
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 3px;
+}
+.gui-status-branch-search-ico {
+	width: 13px;
+	height: 13px;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+}
+/* Compact inline field (house inline-edit language: transparent bg, thin
+ * accent border only where the field must read as active). */
+.gui-status-branch-input {
+	flex: 1;
+	min-width: 0;
+	padding: 4px 2px;
+	border: none;
+	background: none;
+	outline: none;
+	font-size: 12.5px;
+	color: var(--color-text);
+}
+.gui-status-branch-input::placeholder {
+	color: var(--color-text-faint);
+}
+.gui-status-branch-new {
+	margin: 0 4px;
+	padding: 5px 8px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+	border-radius: 8px;
+}
+.gui-status-branch-section {
+	padding: 2px 8px 3px;
+	font-size: 10.5px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}
+.gui-status-branch-current {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+	margin-bottom: 2px;
+}
+.gui-status-branch-current-main {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	flex: 1;
+	min-width: 0;
+}
+.gui-status-branch-name {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-status-branch-sub {
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+.gui-status-branch-check {
+	width: 13px;
+	height: 13px;
+	flex-shrink: 0;
+	color: var(--color-ok);
+}
+.gui-status-branch-sep {
+	height: 1px;
+	flex-shrink: 0;
+	margin: 4px 6px;
+	background: var(--border);
 }
 .gui-status-branch-item {
 	display: flex;
@@ -1600,53 +1765,100 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text-faint);
 	font-variant-numeric: tabular-nums;
 }
+/* Per-agent progress bar in a status row. The track is this app's layout (the
+ * row is one line tall); the fill is the shared `.tv-swarm-bar-fill` language,
+ * so the phase colors stay in one place (tool-render.css). Without an explicit
+ * width the fill collapses to zero and the row reads as "no progress at all"
+ * (user: 客户端的 swarm 卡片没有 TUI 那种进度条). */
+.gui-status-bar {
+	/* Bridge the shared fill's accent to this app's token (tool-render.css
+	 * falls back to the guest default otherwise). */
+	--tv-accent: var(--color-accent);
+	width: 54px;
+	height: 4px;
+	flex-shrink: 0;
+	border-radius: 2px;
+	overflow: hidden;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
 .gui-status-spin {
 	animation: gui-loading-pulse 1.1s ease-in-out infinite;
 }
-.gui-status-collapse {
-	position: absolute;
-	top: -7px;
-	left: -14px;
+/* Collapsed mini card (ZCode folded panel): a compact one-row CARD —
+ * section label + git diff stats inline, expand control at the right. */
+.gui-status-mini {
 	display: flex;
 	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
+	justify-content: space-between;
+	gap: 2px;
+	padding: 3px 4px 3px 6px;
+}
+.gui-status-mini-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 4px 6px;
+	border-radius: 8px;
+	text-align: left;
+	transition: background 120ms ease;
+}
+.gui-status-mini-main:hover {
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+}
+.gui-status-mini-label {
+	flex-shrink: 0;
+	font-size: 11.5px;
+	font-weight: 650;
+	color: var(--color-text-muted);
+}
+.gui-status-mini-sub {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+/* Collapsed capsule (the manual fold): the round pill — icon + 更改 +
+ * colored diff stats, nothing else (ZCode 胶囊). Shape and wording are the
+ * distinction from the folded header card above. */
+.gui-status-card--pill {
+	width: auto;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: var(--color-surface);
-	color: var(--color-text-faint);
-	transition: color 120ms ease;
-}
-.gui-status-collapse:hover {
-	color: var(--color-text);
-}
-.gui-status-cards--pill {
-	align-items: flex-end;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
 }
 .gui-status-pill {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	padding: 6px 9px;
-	border: 1px solid var(--border);
+	max-width: 320px;
+	padding: 6px 12px;
 	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
-	backdrop-filter: blur(14px) saturate(140%);
-	-webkit-backdrop-filter: blur(14px) saturate(140%);
-	font-size: 11px;
-	font-weight: 650;
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--color-text);
+	text-align: left;
+	transition: background 120ms ease;
+}
+.gui-status-pill:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+.gui-status-pill-label {
 	color: var(--color-text-muted);
-	box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+}
+.gui-status-pill-ico {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
+	color: var(--color-text);
 }
 .gui-motion-off .gui-status-card,
-.gui-motion-off .gui-status-pill,
 .gui-motion-off .gui-status-spin {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
 	.gui-status-card,
-	.gui-status-pill,
 	.gui-status-spin {
 		animation: none;
 	}
@@ -1921,6 +2133,32 @@ body.gui-resizing .gui-pane-right {
 	grid-template-rows: minmax(0, 1fr);
 }
 
+/* Extensions center fill (设置 → 智能体 → 扩展): the section is the column's
+ * remaining space (the page title/desc live inside it, so it is the only
+ * flex item that grows) and the panes' grid row is pinned by the rule above
+ * — the list and the detail pane scroll inside themselves while the bottom
+ * rows (slot registry, extension-settings cards, status bar) stay inside the
+ * same bounded column instead of scrolling away with the page. */
+.gui-settings-content--fill .gui-skills-section {
+	flex: 1;
+	min-height: 0;
+}
+
+/* The empty-detail placeholder centres in the PANE: a 300px floor would
+ * overflow a shorter pane and pin the text to the top of it. */
+.gui-settings-content--fill .gui-ext-detail-empty {
+	min-height: 0;
+}
+
+/* Extension-settings cards are chrome below the panes: capped so their
+ * natural height can never take the panes' space, scrolling internally
+ * instead (unbounded they squeezed the panes to a few pixels). */
+.gui-settings-content--fill .gui-ext-itemcards {
+	min-height: 0;
+	max-height: 40%;
+	overflow-y: auto;
+}
+
 /* Model pane fill (设置 → 模型与供应商): the pane card fills the settings
  * viewport; the roles tab's rail wrap takes the remaining body height with
  * BOTH columns scrolling internally (rail + rail body), while the
@@ -2089,6 +2327,16 @@ body.gui-resizing .gui-pane-right {
 	 * own line below — without wrap, basis-full squeezes the label column to
 	 * near-zero and CJK descriptions wrap into a vertical strip. */
 	flex-wrap: wrap;
+	/* Row SPEC: the first child is always the label+description block and
+	 * must own the free width (`flex: 1` + `min-width: 0`). A bare <div>
+	 * sizes to the description's max-content, which overflows the line on
+	 * long CJK copy and — with wrap on — drops the toggle to its own line
+	 * below (browser & Computer Use rows, user report). Rows may still opt
+	 * out with an explicit flex utility on the wrapper. */
+	> div:first-child {
+		flex: 1 1 0%;
+		min-width: 0;
+	}
 }
 
 /* Full-width extra (custom control previews): force it to its own line
@@ -3401,17 +3649,26 @@ body.gui-resizing .gui-pane-right {
 	animation: gui-fade-in 160ms ease;
 }
 
-/* Maximized mode (openchamber fullscreen-surface parity): the panel floats
- * over the chat column — fixed position, full window height, near-full
- * width, top shadow, and the drag-handle turns off. */
+/* Maximized mode: the panel takes the chat surface's box — the rounded
+ * container the conversation occupies, same insets and same radius — instead
+ * of the old viewport-relative overlay. ContextPanel measures that box onto
+ * --pane-max-* (the surface is not a box the panel can anchor to) and
+ * re-measures it on every surface resize, so the panel stays flush with the
+ * container. The fallbacks below are the overlay geometry for the frame before
+ * the first measurement. z-850 stays under the page host (900); the app's
+ * dialogs/menus sit higher. */
 .gui-pane-right--maximized {
 	position: fixed;
-	top: 48px; /* below .gui-header h-12 — never cover the title bar */
 	right: 0;
-	height: calc(100vh - 48px);
+	left: var(--pane-max-left, auto);
+	top: var(--pane-max-top, 48px);
+	width: var(--pane-max-width, min(1280px, calc(100vw - 80px)));
+	height: var(--pane-max-height, calc(100vh - 48px));
 	z-index: 850;
-	box-shadow: -8px 0 32px rgb(0 0 0 / 16%);
-	border-left: 1px solid var(--border);
+	/* The surface cannot clip the panel (fixed escapes its overflow), so the
+	 * panel carries the container's own curve and drops the docked edge. */
+	border-radius: var(--radius-2xl);
+	border-left: 0;
 	/* Fully opaque floating surface: the maximized panel must never read
 	 * as semi-transparent over the chat column (user: 最大化面板后是半透明
 	 * 而非磨砂毛玻璃,背景内容重叠). !important is REQUIRED: the EOF
@@ -3421,10 +3678,13 @@ body.gui-resizing .gui-pane-right {
 	 * otherwise paint the maximized panel transparent. `background:` alone
 	 * is also unsafe: `var(--bg)` in the shorthand is parsed as an image,
 	 * so set background-color explicitly (the `background` line is kept for
-	 * the non-color longhands only). */
-	background-color: var(--bg) !important;
-	background: var(--bg);
-	transition: width 220ms var(--spring), box-shadow 220ms ease;
+	 * the non-color longhands only). Painted with the surface's own colour so
+	 * the panel and the container it fills read as one card. */
+	background-color: var(--color-surface) !important;
+	background: var(--color-surface);
+	/* No transition: the box is measured from the surface, so animating it
+	 * would let the panel lag the container mid-resize. */
+	transition: none;
 }
 
 /* ── Mini chat window (?mini=1): chat-only shell ─────────────────────── */

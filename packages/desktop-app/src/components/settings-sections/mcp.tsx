@@ -43,7 +43,9 @@ export function McpSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								tapFeedback();
 								toggle(m, m.state !== "active");
 							}}
-						/>
+						>
+							<span className="gui-toggle-knob" />
+						</button>
 					</div>
 				))
 			)}

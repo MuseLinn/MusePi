@@ -27,7 +27,7 @@ function msg(id: string, parentId: string | null, ts: number, role = "user"): un
 	};
 }
 
-/** A conversation long enough to produce a fold segment and a search bar. */
+/** A conversation long enough to fill the map with content cards. */
 function longChain(n: number): unknown[] {
 	const entries: unknown[] = [msg("m0", null, 1)];
 	for (let i = 1; i < n; i++) entries.push(msg(`m${i}`, `m${i - 1}`, i + 1, i % 2 === 0 ? "assistant" : "user"));
@@ -51,11 +51,13 @@ describe("SessionTreeCanvas markup contracts", () => {
 		expect(next).not.toBe(t("trajectory clear filter"));
 	});
 
-	it("renders fold capsules as keyboard-reachable buttons", () => {
+	it("节点卡渲染角色标题与摘要文字,且没有链段折叠胶囊", () => {
 		const html = render(longChain(120));
-		// The capsule is the only affordance that expands a compressed segment,
-		// so it must not be pointer-only.
-		const capsule = /class="stc-fold[^"]*"[\s\S]{0,400}?role="button"/.exec(html);
-		expect(capsule).not.toBeNull();
+		// 标题来自角色词表,摘要来自条目文本——卡片不是只有时刻的窄条。
+		expect(html).toContain(t("trajectory user"));
+		expect(html).toContain(t("trajectory assistant"));
+		expect(html).toContain("user m0");
+		// 「链段折叠」是线性 transcript 的手段,地图不渲染该胶囊。
+		expect(html).not.toContain("stc-fold");
 	});
 });

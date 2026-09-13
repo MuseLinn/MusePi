@@ -96,6 +96,18 @@ export const SURFACES: SurfaceDescriptor[] = [
 		availability: "always",
 		defaultWidthFraction: 0.6,
 	},
+	/* Agents hub (TUI Agent Hub parity): the session's roster; a swarm-card
+	 * member row / roster row drills the trajectory detail into THIS view.
+	 * Appended after the panes so the ⌘1..8 rail-order jump only shifts at
+	 * the tail (widget preview folds into the rail overflow anyway). */
+	{
+		id: "agents",
+		label: "agents",
+		icon: "ai-agent",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
 	// Niche: widget preview folds into the overflow menu.
 	{
 		id: "widget",

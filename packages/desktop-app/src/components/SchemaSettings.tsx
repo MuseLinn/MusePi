@@ -261,6 +261,51 @@ export function SchemaSettings({
 														value={typeof value === "number" ? value : 0}
 														onChange={e => commit(item.key, Number(e.target.value))}
 													/>
+												) : item.type === "array" &&
+													Array.isArray(item.ui?.options) &&
+													item.ui.options.length > 0 ? (
+													// Declared-membership array (TUI MultiSelectSubmenu
+													// parity): one pressed chip per choice, click flips
+													// membership. Stored values outside the declared set
+													// keep a fallback chip so nothing is silently dropped.
+													<span className="flex flex-wrap items-center gap-1">
+														{(() => {
+															const current = Array.isArray(value)
+																? value.filter((v): v is string => typeof v === "string")
+																: [];
+															const opts = item.ui.options.map(opt => ({
+																value: opt.value,
+																label: t(opt.label as TranslationKey),
+																description: opt.description,
+															}));
+															for (const v of current) {
+																if (!opts.some(o => o.value === v))
+																	opts.push({ value: v, label: v, description: undefined });
+															}
+															return opts.map(opt => {
+																const on = current.includes(opt.value);
+																return (
+																	<button
+																		key={opt.value}
+																		type="button"
+																		className={`gui-seg-btn${on ? " gui-seg-btn--active" : ""}`}
+																		aria-pressed={on}
+																		title={opt.description}
+																		onClick={() =>
+																			commit(
+																				item.key,
+																				on
+																					? current.filter(v => v !== opt.value)
+																					: [...current, opt.value],
+																			)
+																		}
+																	>
+																		{opt.label}
+																	</button>
+																);
+															});
+														})()}
+													</span>
 												) : item.type === "array" ? (
 													<input
 														type="text"

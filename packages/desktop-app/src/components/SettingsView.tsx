@@ -707,7 +707,9 @@ export function SettingsView({
 							morphKey={section}
 							innerRef={settingsContentRef}
 							className={`gui-settings-content${
-								section === "history" || section === "model" ? " gui-settings-content--fill" : ""
+								section === "history" || section === "model" || section === "skills"
+									? " gui-settings-content--fill"
+									: ""
 							}`}
 						>
 							{section === "general" && (

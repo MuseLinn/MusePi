@@ -50,7 +50,6 @@ import { SelectionToolbar } from "./SelectionToolbar";
 import { SessionTreeCanvas } from "./SessionTreeCanvas";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { StatusCards } from "./StatusCards";
-import { SubagentPanel } from "./SubagentPanel";
 import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -1080,26 +1079,36 @@ export function ChatView({
 	})();
 	// /btw floating card: null = closed, string = active question.
 	const [btwQuestion, setBtwQuestion] = useState<string | null>(null);
-	// Subagent trajectory panel (kimiwork parity): opening an agent from a
-	// swarm-card member row or the right rail slides the panel out over the
-	// chat column; the selected agent resolves against the live snapshot.
+	// Docked subagent detail (kimiwork parity: a swarm-card member row, the
+	// composer's swarm chip or the agents roster). The detail belongs to the
+	// right panel's agents view — the rail is the single navigation axis, so
+	// selecting an agent opens THAT surface (expanding a folded panel)
+	// instead of a standalone drawer, which the managed-browser page host
+	// could cover.
 	const [panelAgentId, setPanelAgentId] = useState<string | null>(null);
-	// Session switch: the drawer belongs to the session whose member row
+	// Session switch: the detail belongs to the session whose member row
 	// opened it — a stale id must never resolve against another session's
 	// agent list. (The store is disposed+recreated per openSession, so
 	// without this reset the panel would linger across sessions.)
 	useEffect(() => {
 		setPanelAgentId(null);
 	}, [store]);
-	const panelAgent = panelAgentId !== null ? (snap?.agents.find(a => a.id === panelAgentId) ?? null) : null;
-	const panelProgress = panelAgentId !== null ? (snap?.progress.get(panelAgentId)?.progress ?? null) : null;
+	// Leaving the agents surface drops the docked detail: the layer lives in
+	// the pane, and no other surface may end up underneath it.
+	useEffect(() => {
+		if (activeView !== "agents") setPanelAgentId(null);
+	}, [activeView]);
+	const selectAgent = (id: string | null): void => {
+		if (id !== null) store?.markAgentViewed(id);
+		setPanelAgentId(id);
+	};
 	const host = {
 		hasAgent: (id: string) => snap?.agents.some(a => a.id === id) === true,
 		openAgent: (id: string) => {
-			if (snap?.agents.some(a => a.id === id) === true) {
-				store?.markAgentViewed(id);
-				setPanelAgentId(id);
-			}
+			if (snap?.agents.some(a => a.id === id) !== true) return;
+			selectAgent(id);
+			setActiveView("agents");
+			if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 		},
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
@@ -1795,6 +1804,9 @@ export function ChatView({
 									view={activeView}
 									onViewChange={setActiveView}
 									onExpandPanel={onExpandRightPanel}
+									agentId={panelAgentId}
+									onAgentSelect={selectAgent}
+									agentHost={host}
 									extTabs={extTabs}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
@@ -1849,9 +1861,6 @@ export function ChatView({
 						</div>
 					)}
 				</div>
-				{/* Subagent trajectory drawer (kimiwork parity): slides over the
-				 * chat column when a swarm-card member row / right-rail agent
-				 * is opened; the same ag-drawer chrome as the collab guest. */}
 				{btwQuestion !== null && !focusMode && (
 					<BtwFloatingCard
 						initialQuestion={btwQuestion}
@@ -1891,15 +1900,6 @@ export function ChatView({
 							return true;
 						}}
 						onClose={() => setBtwQuestion(null)}
-					/>
-				)}
-				{panelAgent !== null && !focusMode && (
-					<SubagentPanel
-						agent={panelAgent}
-						rpc={rpc}
-						progress={panelProgress}
-						host={host}
-						onClose={() => setPanelAgentId(null)}
 					/>
 				)}
 				{/* Terminal dock: stays MOUNTED so open/close animates (height

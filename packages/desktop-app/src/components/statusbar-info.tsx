@@ -4,8 +4,12 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useExtensionRegistry } from "../lib/slot-host";
 
-/** localStorage switch (settings → 外观 → 信息状态条). */
+/** localStorage switch (settings → 外观 → 信息状态条). Flips dispatch the
+ *  same-document `musepi-statusbar-info-changed` event — the storage event
+ *  only fires cross-tab, so without it the bar would not react until a
+ *  reload (house pattern: musepi-dotmatrix-changed). */
 const STATUSBAR_KEY = "musepi-gui-statusbar-info";
+const STATUSBAR_EVENT = "musepi-statusbar-info-changed";
 
 export function statusBarEnabled(): boolean {
 	try {
@@ -13,6 +17,14 @@ export function statusBarEnabled(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+/** Write the switch and notify same-document listeners. */
+export function setStatusBarEnabled(next: boolean): void {
+	try {
+		localStorage.setItem(STATUSBAR_KEY, next ? "1" : "0");
+	} catch {}
+	window.dispatchEvent(new CustomEvent(STATUSBAR_EVENT));
 }
 
 function fmtTokens(n: number): string {
@@ -109,9 +121,13 @@ export function SessionStatusBar({
 	const [enabled, setEnabled] = useState(statusBarEnabled);
 
 	useEffect(() => {
-		const onStorage = (): void => setEnabled(statusBarEnabled());
-		window.addEventListener("storage", onStorage);
-		return () => window.removeEventListener("storage", onStorage);
+		const onChange = (): void => setEnabled(statusBarEnabled());
+		window.addEventListener("storage", onChange);
+		window.addEventListener(STATUSBAR_EVENT, onChange);
+		return () => {
+			window.removeEventListener("storage", onChange);
+			window.removeEventListener(STATUSBAR_EVENT, onChange);
+		};
 	}, []);
 
 	if (!enabled) return null;

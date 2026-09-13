@@ -74,29 +74,6 @@ export function flattenTree(roots: SessionListNode[]): FlatNode[] {
 	return result;
 }
 
-/** Window for the sidebar's 近期 projection (openchamber
- *  `RECENT_SESSION_MAX_AGE_MS` parity). */
-export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
-
-/**
- * 近期 membership: a session is recent while a turn is running, while it is
- * unread, or while its last activity (updatedAt, falling back to the creation
- * timestamp) is inside the window. Invalid timestamps only qualify through the
- * flags — a row never floats into 近期 on a parse failure.
- */
-export function isRecentlyActive(
-	entry: { updatedAt?: string; timestamp?: string },
-	flags: { working?: boolean; unread?: boolean; now?: number; windowMs?: number } = {},
-): boolean {
-	if (flags.working === true || flags.unread === true) return true;
-	const now = flags.now ?? Date.now();
-	const windowMs = flags.windowMs ?? RECENT_WINDOW_MS;
-	const raw = entry.updatedAt ?? entry.timestamp;
-	if (!raw) return false;
-	const ts = Date.parse(raw);
-	return Number.isFinite(ts) && now - ts < windowMs;
-}
-
 /**
  * Filter a session tree by free text matched against each node's searchable
  * text (label + cwd, fuzzy subsequence — TUI /switch parity). A node survives

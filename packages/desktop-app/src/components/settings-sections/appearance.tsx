@@ -58,9 +58,9 @@ import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { Icon } from "../../vendor/oc-icons";
 import { AgentAvatar } from "../AgentAvatar";
 import { ColorPickerPanel } from "../ColorPicker";
-
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
+import { setStatusBarEnabled } from "../statusbar-info";
 import {
 	TURN_RAIL_CHANGED_EVENT,
 	TURN_RAIL_SIDE_KEY,
@@ -821,12 +821,15 @@ export function AppearanceSection({
 						role="switch"
 						aria-checked={statusBarInfo}
 						className={`gui-toggle${statusBarInfo ? " gui-toggle--on" : ""}`}
+						aria-label={t("info status bar")}
 						onClick={() => {
 							const next = !statusBarInfo;
 							setStatusBarInfo(next);
-							localStorage.setItem("musepi-gui-statusbar-info", next ? "1" : "0");
+							setStatusBarEnabled(next);
 						}}
-					/>
+					>
+						<span className="gui-toggle-knob" />
+					</button>
 				</div>
 				<div className="gui-settings-row">
 					<div>
@@ -878,6 +881,16 @@ export function AppearanceSection({
 				<div className="gui-settings-section-title">{t("effects preview")}</div>
 				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
 				<div className="gui-effect-preview">
+					{/* 信息状态条 on → the preview carries the same bar above the
+					 * mock composer (real gui-statusbar-info classes, sample
+					 * segments — model / plan / context tokens), so the toggle
+					 * reads here exactly as it lands in the chat. */}
+					{statusBarInfo && (
+						<div className="gui-statusbar-info" role="presentation">
+							<span className="gui-statusbar-info-seg">{t("preview statusbar model")}</span>
+							<span className="gui-statusbar-info-seg">{t("preview statusbar context")}</span>
+						</div>
+					)}
 					<div className="tr-row">
 						<div className="tr-gutter">{showAvatars && <AgentAvatar state="working" size={64} />}</div>
 						<div className="tr-body">

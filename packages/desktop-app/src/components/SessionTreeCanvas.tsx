@@ -15,26 +15,31 @@ import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 
 /**
  * 第三层:会话树地图画布(dagre 式分层布局的零依赖手写版)。
- * 节点 = 消息卡片(kind 图标 + 预览),边 = 父→子贝塞尔曲线;
- * 分层 = 深度(根 0),层内 x = 叶槽位中序分配(内部节点取首末子均值)
+ * 节点 = 内容卡片(角色/工具标题 + 两行摘要 + 相对时刻),边 = 父→子贝塞尔
+ * 曲线;分层 = 深度(根 0),层内 x = 叶槽位中序分配(内部节点取首末子均值)
  * —— 树无环,无需交叉最小化。滚轮缩放(光标锚定)+ 背景拖拽平移 +
- * 右下 +/−/复位。节点:单击跳转 transcript,悬停 branchAt/forkAt 动作。
+ * 右下 +/−/复位。节点:单击打开详情卡,双击/右键跳转 transcript,
+ * 悬停 branchAt/forkAt 动作。
+ *
+ * 地图不折叠链段:每个条目都渲染成自己的卡片,长会话靠缩放/平移读
+ * (「链段折叠」是线性 transcript 的压缩手段,不是地图的节点表示)。
  */
 
-const NODE_W = 168;
-const NODE_H = 40;
+const NODE_W = 208;
+/** 节点卡高度(px):标题行 + 两行摘要。高度固定才能让分层网格对齐,而宽度
+ *  必须容下摘要的全宽——摘要曾与时刻/悬浮操作挤在同一行,被压成省略号,
+ *  节点看起来就只是一条只有时刻的宽条。 */
+const NODE_H = 76;
 const GAP_X = 36;
 const GAP_Y = 64;
 /** 轮内垂直间距(px):同一轮(user→assistant→toolResult)的节点紧凑堆叠。 */
 const GAP_Y_TURN = 12;
 const FIT_PADDING = 28;
+/** 大树自适应缩放的下限:宁可纵向超出一屏(可平移、可滚轮缩放),也不把
+ *  卡片缩到字看不清——地图要读的就是卡片内容。 */
+const MIN_FIT_SCALE = 0.75;
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 2.2;
-/** 单子链折叠阈值:连续单子节点超过此深度,折叠成"链段胶囊"(点击展开)。
- *  长会话(220+ 消息)是纯单子链,不折叠会生成 22k px 高的竖线画布。 */
-const CHAIN_FOLD_THRESHOLD = 24;
-/** 折叠段胶囊的高度(px):比普通节点矮,标注省略的节点数。 */
-const CHAIN_FOLD_H = 28;
 
 interface CanvasNode {
 	node: MessageTreeNode;
@@ -44,49 +49,33 @@ interface CanvasNode {
 	/** 轮次(按 entries 顺序:每条 user 消息开新轮,assistant/toolResult 归当前轮)。
 	 *  布局用它做"轮级分组"——同轮节点垂直紧凑堆叠,轮间大间距。 */
 	turn: number;
-	/** 折叠链段:该节点是其所在链段的"段首"(胶囊),折叠了 [node, node+len) 的 len 个节点。 */
-	foldLen?: number;
 }
 
-/** 折叠段:一段连续单子链被折叠成段首胶囊。 */
-export interface ChainFold {
-	/** 折叠段首节点的 id(渲染胶囊;点击展开)。 */
-	headId: string;
-	/** 折叠的节点 id 列表(不含段首),展开时恢复。 */
-	hiddenIds: string[];
-	/** 折叠段深度(段首节点深度)。 */
-	depth: number;
-	/** 折叠段在画布上的 y 坐标(px)。 */
-	y: number;
+/** 节点标题:消息按角色(词表),其余条目用自身 type(数据,不译)。 */
+function nodeTitleOf(kind: "user" | "assistant" | "toolResult" | "other", entry: unknown): string {
+	if (kind === "user") return t("trajectory user");
+	if (kind === "assistant") return t("trajectory assistant");
+	if (kind === "toolResult") return t("trajectory tool");
+	const type = (entry as { type?: unknown } | null | undefined)?.type;
+	return typeof type === "string" && type !== "" ? type : t("trajectory system");
 }
 
 /**
- * 分层布局:返回定位节点 + 画布尺寸 + 折叠链段。
+ * 分层布局:返回定位节点 + 画布尺寸。
  *
- * 布局 = 后序叶槽位分配(与之前相同),叠加"单子链折叠":遍历树时把
- * 超过 CHAIN_FOLD_THRESHOLD 的连续单子链标记为折叠段(段首胶囊 + 段内
- * 节点不占画布高度)。折叠段可点击展开(展开后重排),信息不丢。
- *
- * 折叠只作用于"无分支的纯链"——任何分支点都会打断链段,所以折叠不会
- * 隐藏分支结构,只是压缩长会话的纵向空白。
+ * 布局 = 后序叶槽位分配(叶取新槽位,内部节点取首末子均值),叠加 y 重排:
+ * 每节点 y = 父节点底部 + 同轮 12px / 轮间 64px——同一轮紧凑成簇,地图按轮
+ * 阅读。每个节点都参与排布,没有隐藏节点。
  */
 export function layoutTree(
 	roots: readonly MessageTreeNode[],
 	entries?: readonly unknown[],
-	/** Fold heads the user has expanded. Their hidden nodes take part in the
-	 *  vertical flow again, so everything below them is pushed down — without
-	 *  this, expanding a segment released 20-odd cards onto ONE coordinate
-	 *  (all stacked at `head.y + CHAIN_FOLD_H`) and the rest of the tree kept
-	 *  the space they were supposed to not occupy. */
-	expandedFolds: ReadonlySet<string> = new Set(),
 ): {
 	nodes: CanvasNode[];
 	width: number;
 	height: number;
-	folds: ChainFold[];
 } {
 	const nodes: CanvasNode[] = [];
-	const folds: ChainFold[] = [];
 	let nextSlot = 0;
 	// 轮次表:按 entries 顺序,每条 user 消息开新轮(turn+1),assistant/
 	// toolResult 归当前轮。地图"轮级分组"用——同轮节点垂直紧凑堆叠。
@@ -116,123 +105,35 @@ export function layoutTree(
 			node,
 			depth,
 			x: cx * (NODE_W + GAP_X),
-			y: depth * (NODE_H + GAP_Y),
+			y: 0,
 			turn: turnById.get(node.id) ?? 0,
 		});
 		return cx;
 	};
 	for (const root of roots) place(root, 0);
-	// O(1) 查找表:长会话(220+ 节点)下,折叠检测与 y 重排反复用
-	// nodes.find 做父子/按 id 查找,线性扫描叠加成 O(n²)——两份 Map 消除。
+	// O(1) 查找表:长会话(220+ 节点)下按 id 找父子节点,线性扫描叠加成 O(n²)。
 	const idToNode = new Map(nodes.map(n => [n.node.id, n]));
-	const childIdToParent = new Map<string, CanvasNode>();
-	for (const n of nodes) {
-		for (const c of n.node.children) childIdToParent.set(c.id, n);
-	}
-	// 折叠链段检测:找连续单子链(每个节点唯一父 + 唯一子),从链顶向下
-	// 把超过阈值的部分切成段。任何分支点打断链段——折叠不隐藏分支,
-	// 只压缩长链纵向空白。
-	//
-	// nodes 是后序(叶在前、根在后),遍历按深度降序;每个折叠段只处理一次
-	// (段首设 foldLen,段内节点通过 foldLen 检查跳过)。
-	const chainTopOf = (n: CanvasNode): CanvasNode => {
-		// 向上回溯到链顶(首个"唯一父 + 唯一子"断链处)。
-		let cur: CanvasNode = n;
-		while (true) {
-			const parent = childIdToParent.get(cur.node.id);
-			const parentSingle = parent && parent.node.children.length === 1;
-			const selfSingle = cur.node.children.length === 1;
-			if (!parentSingle || !selfSingle) break; // 链在此结束
-			cur = parent!;
+	// y 重排(关键):每节点 y = 父节点底部 + (同轮?轮内紧凑间距:轮间大间距)。
+	// 注意:间距必须含 NODE_H(卡片不重叠)——同轮 12px 是"卡片间 12px 空隙",
+	// 不是"起点差 12px"(后者重叠 64px,文字糊一起)。分支子节点从父的 y 继承
+	// 推进;按树递归天然隔离多根,不用全局累计。
+	const walk = (cn: CanvasNode, parentBottom: number | null, parentTurn: number): void => {
+		const gap = parentBottom === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
+		cn.y = (parentBottom ?? 0) + gap;
+		for (const child of cn.node.children) {
+			const childNode = idToNode.get(child.id);
+			if (childNode) walk(childNode, cn.y + NODE_H, cn.turn);
 		}
-		return cur;
 	};
-	for (const n of nodes) {
-		// 只从"链顶"开始折叠:自身是单子节点,且父不是单子(父不存在 =
-		// 根;父多子 = 分支点) → 一段新链的起点。
-		if (n.foldLen !== undefined) continue;
-		const parent = childIdToParent.get(n.node.id);
-		const parentSingle = parent !== undefined && parent.node.children.length === 1;
-		const selfSingle = n.node.children.length === 1;
-		const isChainTop = selfSingle && !parentSingle;
-		if (!isChainTop) continue;
-		// 收集整条链(从链顶向下)。
-		const seg: CanvasNode[] = [];
-		let cur: CanvasNode | undefined = n;
-		while (cur && cur.node.children.length === 1) {
-			seg.push(cur);
-			cur = idToNode.get(cur!.node.children[0]!.id);
-		}
-		// 切段:链上超过阈值的部分,每段段首 depth >= 阈值。
-		// 段从"第一个 depth >= 阈值的节点"开始,每段最多 CHAIN_FOLD_THRESHOLD 个。
-		const startIdx = seg.findIndex(m => m.depth >= CHAIN_FOLD_THRESHOLD);
-		if (startIdx === -1) continue;
-		for (let s = startIdx; s < seg.length; s += CHAIN_FOLD_THRESHOLD) {
-			const head = seg[s]!;
-			const hidden = seg.slice(s + 1, s + CHAIN_FOLD_THRESHOLD);
-			if (hidden.length === 0) continue; // 段尾不足一段,不折叠
-			head.foldLen = hidden.length + 1;
-			const headY = head.y;
-			folds.push({
-				headId: head.node.id,
-				hiddenIds: hidden.map(h => h.node.id),
-				depth: head.depth,
-				y: headY,
-			});
-			// 段内节点标记已处理(后序数组里它们在前,设置 foldLen 防止
-			// 它们作为链顶被再次处理——虽然段内节点不满足 isChainTop,
-			// 但保险起见显式标记)。
-			for (const h of hidden) h.foldLen = hidden.length + 1;
-		}
+	for (const root of roots) {
+		const rootNode = idToNode.get(root.id);
+		if (rootNode) walk(rootNode, null, -1);
 	}
-	// y 重排(关键):折叠段内节点被胶囊替代后,后续节点的 y 必须上移。
-	// 每节点 y = 父节点底部 + (同轮?轮内紧凑间距:轮间大间距)——同一轮
-	// (user→assistant→toolResult)的节点垂直紧凑堆叠成簇,轮间拉开,
-	// 地图按"轮"阅读(用户: 应该以每一轮的 User/ASSISTANT 堆叠)。
-	// 注意:间距必须含 NODE_H(卡片不重叠)——同轮 12px 紧凑是"卡片间
-	// 12px 空隙",不是"起点差 12px"(后者重叠 28px,文字糊一起)。
-	// 分支子节点从父的 y 继承推进;全局 hiddenBefore 累计对多根是错的,
-	// 这里按树递归天然隔离。
-	{
-		const hiddenSet = new Set<string>();
-		for (const f of folds) {
-			// Expanded segments flow normally: their nodes occupy real vertical
-			// space and push everything below them down.
-			if (expandedFolds.has(f.headId)) continue;
-			for (const h of f.hiddenIds) hiddenSet.add(h);
-		}
-		const walk = (node: MessageTreeNode, parentBottom: number | null, parentTurn: number): void => {
-			const cn = idToNode.get(node.id)!;
-			// 隐藏节点:不占位置,其子从父的底部继承(跳过它)。
-			if (hiddenSet.has(node.id)) {
-				for (const child of node.children) walk(child, parentBottom, cn.turn);
-				return;
-			}
-			const gap = parentBottom === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
-			cn.y = (parentBottom ?? 0) + gap;
-			for (const child of node.children) walk(child, cn.y + NODE_H, cn.turn);
-		};
-		for (const root of roots) walk(root, null, -1);
-	}
-	// 第二遍:段内节点堆叠到"重排后的段首"下方(段首已重排)。仅对仍折叠的
-	// 段生效——展开段的节点保留 walk 给它们的真实 y。
-	for (const n of nodes) {
-		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
-		if (!foldFor || expandedFolds.has(foldFor.headId)) continue;
-		const headNode = idToNode.get(foldFor.headId);
-		if (headNode) n.y = headNode.y + CHAIN_FOLD_H;
-	}
-	// 画布高度:由重排后的实际节点位置决定(仅仍被折叠隐藏的节点不计入)。
-	// 不能用 `maxDepth - totalHidden` 公式——多分支/多折叠段场景下不同链的
-	// 隐藏数不同,全局相减会算错(段首 y 超过 height 被裁剪)。
-	const visibleMaxY = nodes.reduce((acc, n) => {
-		const foldFor = folds.find(f => f.hiddenIds.includes(n.node.id));
-		if (foldFor && !expandedFolds.has(foldFor.headId)) return acc;
-		return Math.max(acc, n.y);
-	}, 0);
+	// 画布尺寸:由实际节点位置决定(所有节点都可见)。
+	const maxY = nodes.reduce((acc, n) => Math.max(acc, n.y), 0);
 	const width = Math.max(nextSlot, 1) * (NODE_W + GAP_X);
-	const height = visibleMaxY + NODE_H + GAP_Y;
-	return { nodes, width, height, folds };
+	const height = maxY + NODE_H + GAP_Y;
+	return { nodes, width, height };
 }
 
 /** 聚焦卡片的完整消息内容(文本/思考/工具调用拼接)。 */
@@ -339,15 +240,6 @@ export function SessionTreeCanvas({
 		setFocusClosing(false);
 		setFocusedId(null);
 	};
-	// 折叠链段展开/收起:展开后该段节点参与布局与交互,收起回到胶囊。
-	const toggleFold = useCallback((headId: string): void => {
-		setExpandedFolds(prev => {
-			const next = new Set(prev);
-			if (next.has(headId)) next.delete(headId);
-			else next.add(headId);
-			return next;
-		});
-	}, []);
 	// 右键菜单:节点 → 跳转/重答/分叉;空白 → 重置视图/折叠全部链段。
 	const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: string | null } | null>(null);
 	const closeCtxMenu = useCallback((): void => setCtxMenu(null), []);
@@ -379,16 +271,8 @@ export function SessionTreeCanvas({
 		setPositions(sessionKey ? loadPositions(sessionKey) : {});
 	}, [sessionKey]);
 
-	// 折叠链段的展开状态:key = fold.headId;展开后该段节点重新布局并显示。
-	// 折叠是"视觉压缩"——展开/收起只影响画布,不丢消息(与 Transcript 窗口化
-	// 同哲学:折叠是渲染层,数据全量)。初始全部折叠(长会话默认可读)。
-	const [expandedFolds, setExpandedFolds] = useState<ReadonlySet<string>>(new Set());
-	// Layout is a function of the expansion state: expanding a segment must give
-	// its nodes real vertical space and push the rest of the tree down. Keying
-	// the memo only on [roots, positions] is what made an expand pile 20-odd
-	// cards onto one coordinate.
-	const { nodes, width, height, folds } = useMemo(() => {
-		const laid = layoutTree(roots, entries, expandedFolds);
+	const { nodes, width, height } = useMemo(() => {
+		const laid = layoutTree(roots, entries);
 		let w = laid.width;
 		let h = laid.height;
 		for (const [id, p] of Object.entries(positions)) {
@@ -396,20 +280,9 @@ export function SessionTreeCanvas({
 			w = Math.max(w, p.x + NODE_W + GAP_X);
 			h = Math.max(h, p.y + NODE_H + GAP_Y);
 		}
-		return { nodes: laid.nodes, width: w, height: h, folds: laid.folds };
-	}, [roots, positions, entries, expandedFolds]);
+		return { nodes: laid.nodes, width: w, height: h };
+	}, [roots, positions, entries]);
 
-	// 折叠段内节点:折叠时隐藏(不渲染);展开时显示。段首胶囊始终渲染。
-	const hiddenNodeIds = useMemo(() => {
-		const hidden = new Set<string>();
-		for (const f of folds) {
-			if (expandedFolds.has(f.headId)) continue;
-			for (const id of f.hiddenIds) hidden.add(id);
-		}
-		return hidden;
-	}, [folds, expandedFolds]);
-	// 折叠段内节点不参与交互定位(点击/搜索/跳转跳过它们)。
-	const interactiveNodes = useMemo(() => nodes.filter(n => !hiddenNodeIds.has(n.node.id)), [nodes, hiddenNodeIds]);
 	// 有效节点坐标 = 自由摆位覆盖 ?? 自动布局(render 用;回调走 positionsRef
 	// 以免把 positions 拖进 centerOnNode/fitView 依赖,引起拖拽中反复重建)。
 	const posOf = (n: CanvasNode): { x: number; y: number } => positions[n.node.id] ?? { x: n.x, y: n.y };
@@ -418,24 +291,14 @@ export function SessionTreeCanvas({
 	// 时 leafId 为 null,不标记会让地图失去"我在哪"的锚点)。声明在 fitView
 	// 之前 — 智能适配以它为焦点。
 	const currentNodeId = useMemo(() => {
-		// 显式 leaf:若 leaf 是折叠段内节点(不可见),回退到它的段首胶囊——
-		// 否则"回到当前位置"定位到隐藏节点,看起来没效果(用户: 似乎没有任何效果)。
-		if (leafId != null) {
-			if (nodes.some(n => n.node.id === leafId && !hiddenNodeIds.has(leafId))) return leafId;
-			const fold = folds.find(f => f.hiddenIds.includes(leafId));
-			if (fold) return fold.headId;
-			if (nodes.some(n => n.node.id === leafId)) return leafId;
-		}
+		if (leafId != null && nodes.some(n => n.node.id === leafId)) return leafId;
 		let deepest: CanvasNode | undefined;
 		for (const n of nodes) {
-			// 折叠段内节点不可见,不参与"我在哪"定位(否则回到当前位置会
-			// 定到隐藏节点上)。
-			if (hiddenNodeIds.has(n.node.id)) continue;
 			if (activePathIds && !activePathIds.has(n.node.id)) continue;
 			if (!deepest || n.depth > deepest.depth || (n.depth === deepest.depth && n.x > deepest.x)) deepest = n;
 		}
 		return deepest?.node.id ?? null;
-	}, [leafId, activePathIds, nodes, hiddenNodeIds, folds]);
+	}, [leafId, activePathIds, nodes]);
 
 	// Fit-to-viewport: runs once per canvas mount (the component only renders
 	// in canvas view mode) and re-runs when the wrap leaves a degenerate size
@@ -467,9 +330,9 @@ export function SessionTreeCanvas({
 			});
 			return;
 		}
-		// Huge tree: readable scale, centered on the current position.
-		// 用能放下整棵树的缩放(至少 0.5,不至于小到不可读)——折叠后画布
-		// 矮很多,fullScale 会明显变大,固定 0.7 反而浪费。
+		// Huge tree: readable scale, centered on the current position. 纵向超出
+		// 一屏就交给平移——按高度强行适配会把卡片缩成看不清的细条。宽度适配
+		// (分支多到横向也放不下时)才真正压小,并保底 MIN_FIT_SCALE。
 		const focus =
 			(currentNodeId != null ? nodes.find(n => n.node.id === currentNodeId) : undefined) ??
 			nodes.find(n => n.depth === 0) ??
@@ -477,8 +340,8 @@ export function SessionTreeCanvas({
 			null;
 		const fx = focus ? focus.x + NODE_W / 2 : width / 2;
 		const fy = focus ? focus.y + NODE_H / 2 : height / 2;
-		const fitScale = Math.max(0.5, Math.min((cw - FIT_PADDING * 2) / width, (ch - FIT_PADDING * 2) / height));
-		const scale = Math.min(1, fitScale);
+		const widthFit = (cw - FIT_PADDING * 2) / width;
+		const scale = Math.min(1, Math.max(MIN_FIT_SCALE, widthFit));
 		setView({ scale, x: cw / 2 - fx * scale, y: ch / 2 - fy * scale });
 	}, [width, height, nodes, currentNodeId]);
 	useEffect(() => {
@@ -512,9 +375,8 @@ export function SessionTreeCanvas({
 	const searchMatchArray = useMemo(() => {
 		if (!searchQuery.trim()) return [] as CanvasNode[];
 		const q = searchQuery.toLowerCase();
-		// 只搜可见节点(折叠段内节点不参与定位——搜到也看不见,白跳)。
-		return interactiveNodes.filter(n => treeTextOf(n.node.entry).toLowerCase().includes(q));
-	}, [searchQuery, interactiveNodes]);
+		return nodes.filter(n => treeTextOf(n.node.entry).toLowerCase().includes(q));
+	}, [searchQuery, nodes]);
 
 	useEffect(() => {
 		setSearchMatchIds(new Set(searchMatchArray.map(n => n.node.id)));
@@ -560,16 +422,13 @@ export function SessionTreeCanvas({
 
 	const onPointerDown = useCallback(
 		(e: React.PointerEvent) => {
-			// 画布拖拽只在"空白处"启动——点在任何可交互元素(节点卡片、
-			// 折叠胶囊、聚焦卡、缩放按钮、搜索框、右键菜单)上都不该平移
-			// 画布,否则拖拽抢占 pointer capture 会吞掉那些交互(用户:
-			// 进入聚焦了鼠标还是拖动,只有按 esc 能退出)。
+			// 画布拖拽只在"空白处"启动——点在任何可交互元素(节点卡片、聚焦卡、
+			// 缩放按钮、搜索框、右键菜单)上都不该平移画布,否则拖拽抢占 pointer
+			// capture 会吞掉那些交互(用户: 进入聚焦了鼠标还是拖动,只有按 esc 能退出)。
 			if (e.button !== 0) return;
 			const target = e.target as HTMLElement;
 			if (
-				target.closest(
-					".stc-node, .stc-fold, .stc-focus-overlay, .stc-focus-card, .stc-zoom, .stc-search, .gui-context-menu",
-				)
+				target.closest(".stc-node, .stc-focus-overlay, .stc-focus-card, .stc-zoom, .stc-search, .gui-context-menu")
 			) {
 				return;
 			}
@@ -721,12 +580,6 @@ export function SessionTreeCanvas({
 					fitView();
 				},
 			},
-			{
-				label: t("collapse all chains"),
-				description: t("context collapse desc"),
-				icon: "arrow-up-s",
-				onSelect: () => setExpandedFolds(new Set()),
-			},
 		];
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ctxMenu, onBranchTo, onForkAt, fitView, handleDblClick]);
@@ -845,25 +698,21 @@ export function SessionTreeCanvas({
 							</marker>
 						</defs>
 						{nodes.flatMap(n => {
-							// 折叠段内节点不画边(它们的进出边由段首胶囊接管)。
-							if (hiddenNodeIds.has(n.node.id)) return [];
 							const p = posOf(n);
 							return n.node.children.map(c => {
 								const child = nodes.find(m => m.node.id === c.id);
 								if (!child) return null;
-								// 子节点在折叠段内:边画到胶囊下沿即可(箭头指向折叠段)。
-								const childHidden = hiddenNodeIds.has(child.node.id);
-								const pc = childHidden ? posOf(n) : posOf(child);
+								const pc = posOf(child);
 								const x1 = p.x + NODE_W / 2;
 								const y1 = p.y + NODE_H;
 								const x2 = pc.x + NODE_W / 2;
-								const y2 = childHidden ? pc.y + CHAIN_FOLD_H : pc.y + 4;
+								const y2 = pc.y + 4;
 								const my = (y1 + y2) / 2;
 								const onPath = !activePathIds || (activePathIds.has(n.node.id) && activePathIds.has(c.id));
 								return (
 									<path
 										key={`${n.node.id}-${c.id}`}
-										className={`stc-edge${onPath ? "" : " stc-edge--off"}${childHidden ? " stc-edge--fold" : ""}`}
+										className={`stc-edge${onPath ? "" : " stc-edge--off"}`}
 										markerEnd={onPath ? "url(#stc-arrow)" : undefined}
 										d={`M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`}
 									/>
@@ -872,11 +721,6 @@ export function SessionTreeCanvas({
 						})}
 					</svg>
 					{nodes.map(n => {
-						// 折叠段内节点:折叠时完全隐藏(不渲染)。
-						if (hiddenNodeIds.has(n.node.id)) return null;
-						const fold = folds.find(f => f.headId === n.node.id);
-						const isFoldHead = fold !== undefined;
-						const foldExpanded = isFoldHead && expandedFolds.has(n.node.id);
 						const kind = treeKindOf(n.node.entry);
 						const p = posOf(n);
 						const isLeaf = leafId != null && n.node.id === leafId;
@@ -886,51 +730,17 @@ export function SessionTreeCanvas({
 						const searchMatch = hasSearch && searchMatchIds.has(n.node.id);
 						const isSearchCurrent = hasSearch && searchMatchArray[searchCurrentIdx]?.node.id === n.node.id;
 						const searchDim = hasSearch && !searchMatch;
-						// 工具结果节点:工名作主标签 + 判定徽标(✓/✗/·),结果全文在详情
-						// 卡(talk-map「卡片简历面」+ maze「确定性判定」的并集);其余节
-						// 点沿用文本预览。相对时刻统一右缀(HH:MM:SS)。
+						// 卡片 = 标题行(角色 · 工具名 + 判定徽标 + 时刻)+ 两行摘要;
+						// 摘要单独占一行才能读——与时刻/悬浮操作挤在同一行时会被
+						// 压成省略号,节点看起来只剩时刻。全文在详情卡(talk-map
+						// 「卡片简历面」+ maze「确定性判定」的并集)。
 						const toolName = kind === "toolResult" ? treeToolNameOf(n.node.entry) : null;
 						const verdict = kind === "toolResult" ? treeVerdictOf(n.node.entry) : null;
-						const label = kind === "toolResult" ? (toolName ?? "tool") : treeTextOf(n.node.entry);
+						const summary = treeTextOf(n.node.entry);
+						const title = `${nodeTitleOf(kind, n.node.entry)}${toolName ? ` · ${toolName}` : ""}`;
 						const clockText = n.node.timestamp
 							? new Date(n.node.timestamp).toLocaleTimeString(undefined, { hour12: false })
 							: "";
-						// 折叠段首:胶囊样式 + 折叠计数 + 点击展开/收起。
-						if (isFoldHead) {
-							const hiddenCount = fold!.hiddenIds.length;
-							return (
-								<div
-									key={n.node.id}
-									className={`stc-fold${foldExpanded ? " stc-fold--open" : ""}${onPath ? " stc-fold--active" : " stc-fold--off"}`}
-									style={{ left: p.x, top: p.y, width: NODE_W, height: CHAIN_FOLD_H }}
-									onClick={e => {
-										e.stopPropagation();
-										toggleFold(n.node.id);
-									}}
-									title={
-										foldExpanded
-											? t("collapse chain segment")
-											: t("expand chain segment", { count: hiddenCount })
-									}
-									role="button"
-									tabIndex={0}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											toggleFold(n.node.id);
-										}
-									}}
-								>
-									<Icon
-										name={foldExpanded ? "arrow-up-s" : "arrow-down-s"}
-										className="h-3 w-3 flex-shrink-0"
-									/>
-									<span className="stc-fold-text">
-										{foldExpanded ? t("chain expanded") : t("chain collapsed", { count: hiddenCount })}
-									</span>
-								</div>
-							);
-						}
 						return (
 							<div
 								key={n.node.id}
@@ -942,67 +752,70 @@ export function SessionTreeCanvas({
 								onClick={() => handleClick(n.node.id)}
 								onDoubleClick={() => handleDblClick(n.node.id)}
 								onContextMenu={e => onNodeContextMenu(e, n.node.id)}
-								title={treeTextOf(n.node.entry)}
+								title={summary}
 							>
-								<Icon
-									name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
-									className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
-								/>
-								<span className="stc-node-text">{label}</span>
-								{verdict && (
-									<span className={`stc-node-verdict stc-node-verdict--${verdict}`} aria-hidden="true">
-										{verdict === "error" ? "✗" : verdict === "empty" ? "·" : "✓"}
-									</span>
-								)}
-								{clockText && <span className="stc-node-clock">{clockText}</span>}
-								{(onBranchTo || onForkAt) && (
-									<span className="traj-trow-actions">
-										<button
-											type="button"
-											className="stc-node-action"
-											title={t("trajectory jump")}
-											aria-label={t("trajectory jump")}
-											onPointerDown={e => e.stopPropagation()}
-											onClick={e => {
-												e.stopPropagation();
-												handleDblClick(n.node.id);
-											}}
-										>
-											<Icon name="arrow-go-forward" className="h-3 w-3" />
-										</button>
-										{onBranchTo && (
+								<div className="stc-node-head">
+									<Icon
+										name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
+										className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
+									/>
+									<span className="stc-node-title">{title}</span>
+									{childCount > 1 && <span className="stc-node-badge">{childCount}</span>}
+									{verdict && (
+										<span className={`stc-node-verdict stc-node-verdict--${verdict}`} aria-hidden="true">
+											{verdict === "error" ? "✗" : verdict === "empty" ? "·" : "✓"}
+										</span>
+									)}
+									{clockText && <span className="stc-node-clock">{clockText}</span>}
+									{(onBranchTo || onForkAt) && (
+										<span className="traj-trow-actions">
 											<button
 												type="button"
 												className="stc-node-action"
-												title={t("branch re-answer here")}
-												aria-label={t("branch re-answer here")}
+												title={t("trajectory jump")}
+												aria-label={t("trajectory jump")}
 												onPointerDown={e => e.stopPropagation()}
 												onClick={e => {
 													e.stopPropagation();
-													onBranchTo(n.node.id);
+													handleDblClick(n.node.id);
 												}}
 											>
-												<Icon name="git-branch" className="h-3 w-3" />
+												<Icon name="arrow-go-forward" className="h-3 w-3" />
 											</button>
-										)}
-										{onForkAt && (
-											<button
-												type="button"
-												className="stc-node-action"
-												title={t("fork session here")}
-												aria-label={t("fork session here")}
-												onPointerDown={e => e.stopPropagation()}
-												onClick={e => {
-													e.stopPropagation();
-													onForkAt(n.node.id);
-												}}
-											>
-												<Icon name="git-fork" className="h-3 w-3" />
-											</button>
-										)}
-									</span>
-								)}
-								{childCount > 1 && <span className="stc-node-badge">{childCount}</span>}
+											{onBranchTo && (
+												<button
+													type="button"
+													className="stc-node-action"
+													title={t("branch re-answer here")}
+													aria-label={t("branch re-answer here")}
+													onPointerDown={e => e.stopPropagation()}
+													onClick={e => {
+														e.stopPropagation();
+														onBranchTo(n.node.id);
+													}}
+												>
+													<Icon name="git-branch" className="h-3 w-3" />
+												</button>
+											)}
+											{onForkAt && (
+												<button
+													type="button"
+													className="stc-node-action"
+													title={t("fork session here")}
+													aria-label={t("fork session here")}
+													onPointerDown={e => e.stopPropagation()}
+													onClick={e => {
+														e.stopPropagation();
+														onForkAt(n.node.id);
+													}}
+												>
+													<Icon name="git-fork" className="h-3 w-3" />
+												</button>
+											)}
+										</span>
+									)}
+								</div>
+								<div className="stc-node-text">{summary}</div>
 							</div>
 						);
 					})}

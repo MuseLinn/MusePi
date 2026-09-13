@@ -175,14 +175,20 @@ export function AgentsCenterPage({
 				</div>
 			)}
 
-			{selected && rpc && (
-				<SubagentPanel
-					agent={selected}
-					rpc={rpc}
-					progress={progress.get(selected.id)?.progress}
-					onClose={() => setSelectedId(null)}
-				/>
-			)}
+			{/* Detail layer, docked in the page card and always mounted so the
+			 * row's open/close plays the same slide both ways (the --open class
+			 * drives it; the panel retains the last snapshot while closing). */}
+			<div className={`gui-agent-dock${selectedId !== null ? " gui-agent-dock--open" : ""}`}>
+				{rpc ? (
+					<SubagentPanel
+						agent={selected}
+						open={selectedId !== null}
+						rpc={rpc}
+						progress={selected !== null ? progress.get(selected.id)?.progress : undefined}
+						onClose={() => setSelectedId(null)}
+					/>
+				) : null}
+			</div>
 		</div>
 	);
 }

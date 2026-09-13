@@ -33,8 +33,11 @@ import { PacMan } from "../vendor/pac-man";
  * - `scroll` events (capture phase — every scrollable container dispatches
  *   them) stretch the rail to the scrolled element's full visible height
  *   and move the indicator along it.
- * - It appears on the first scroll and fades out ~1s after scrolling
- *   stops; the pac-man mouth chomps while visible.
+ * - It appears on the first scroll; ~1s after scrolling stops it fades to
+ *   a faint idle rail instead of disappearing (user callout: the ghost
+ *   rail is the drag affordance — both thumbs stay grabbable while idle;
+ *   hovering the rail restores full opacity), and the pac-man mouth
+ *   chomps the whole time.
  * - Zero React re-renders during scrolling: everything is driven through
  *   refs/direct style writes; skin selection is the only state change.
  */
@@ -82,24 +85,52 @@ export function FloatingScrollbar(): ReactNode {
 		bar.style.width = `${size}px`;
 		bar.dataset.base = skin.base;
 
-		const hide = (): void => {
-			bar.style.opacity = "0";
-			// data-visible gates the drag handle: once hidden, the gummy
-			// capsule loses pointer-events (CSS [data-visible] selector) so
-			// the top-of-ladder rail can never intercept clicks while faded.
+		// Visibility is attribute-driven (gui-misc.css): data-visible once the
+		// rail has something to indicate, data-idle after scrolling stops.
+		// Idle does NOT hide the rail any more — it fades to a faint rail
+		// (user callout: the ghost rail is the drag affordance); the thumbs
+		// stay interactive while idle so progress can be grabbed and dragged
+		// at any time. The rail line itself is pointer-events:none (never
+		// eats clicks); only the thumbs opt back in.
+		// BUT a rail whose container is GONE (view switch unmounted it —
+		// e.g. entering settings while a list's ghost is up) must fully
+		// hide: an idle ghost over unrelated UI reads as a rendering bug.
+		const targetGone = (): boolean => {
+			const el = st.target;
+			if (!el) return true;
+			if (!el.isConnected) return true;
+			const r = el.getBoundingClientRect();
+			return r.width === 0 || r.height === 0;
+		};
+		const hideForGood = (): void => {
+			st.target = null;
 			delete bar.dataset.visible;
+			delete bar.dataset.idle;
+		};
+		const hide = (): void => {
+			if (targetGone()) {
+				hideForGood();
+				return;
+			}
+			bar.dataset.idle = "1";
 		};
 		const show = (): void => {
-			bar.style.opacity = "1";
-			bar.style.visibility = "visible";
 			bar.dataset.visible = "1";
+			delete bar.dataset.idle;
 		};
 		const scheduleHide = (): void => {
 			window.clearTimeout(st.timer);
 			window.clearTimeout(st.settle);
 			// Scroll stopped: gummy springs back (squash-and-stretch
-			// releases), then the whole rail fades out.
+			// releases), then the whole rail fades to its idle faint. The
+			// settle pass also re-checks the container — a view switch right
+			// after a scroll must not leave a solid rail hanging for the
+			// full idle second.
 			st.settle = window.setTimeout(() => {
+				if (targetGone()) {
+					hideForGood();
+					return;
+				}
 				const g = gummyRef.current;
 				if (g) {
 					g.style.transition = "transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1)";
@@ -159,33 +190,48 @@ export function FloatingScrollbar(): ReactNode {
 		};
 
 		window.addEventListener("scroll", onScroll, true);
+		// Liveness watch: the idle ghost has no pending timer, so a view
+		// switch AFTER the fade-to-faint would otherwise leave the ghost
+		// hanging over unrelated UI forever (user: 会话列表的滚动条在进入
+		// 设置后仍在). A ~600ms connectivity probe while the rail is
+		// visible costs two getBoundingClientRect calls a second and
+		// retracts the rail the moment its container unmounts or collapses.
+		const watcher = window.setInterval(() => {
+			if (bar.dataset.visible === "1" && targetGone()) hideForGood();
+		}, 600);
 		return () => {
 			window.removeEventListener("scroll", onScroll, true);
+			window.clearInterval(watcher);
 			window.clearTimeout(st.timer);
 			window.clearTimeout(st.settle);
 			if (st.raf) window.cancelAnimationFrame(st.raf);
 		};
 	}, [skinId, skin, size]);
 
-	// Drag: the gummy capsule is a real scrollbar thumb — dragging it
-	// scrolls the last-scrolled container (the one the rail indicates).
-	const onGummyDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
-		const g = gummyRef.current;
+	// Drag: both thumbs (gummy capsule / pac-man) are real scrollbar thumbs
+	// — dragging either scrolls the last-scrolled container (the one the
+	// rail indicates). Pressing also wakes the rail out of its idle faint.
+	const onThumbDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+		const thumb = e.currentTarget;
 		const bar = barRef.current;
 		const target = stRef.current.target;
-		if (!g || !bar || !target) return;
+		if (!bar || !target) return;
 		const range = target.scrollHeight - target.clientHeight;
 		if (range <= 0) return;
 		e.preventDefault();
-		(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+		thumb.setPointerCapture(e.pointerId);
+		// Wake: a grab on the idle-faint rail snaps it back to full opacity
+		// immediately (the scroll events below keep it awake while dragging).
+		bar.dataset.visible = "1";
+		delete bar.dataset.idle;
 		// Drag keeps the thumb's grab offset (standard scrollbars don't jump
 		// the scroll position to the thumb center on press). The scroll
 		// events the drag emits re-run update() → scheduleHide(), which
-		// resets the hide timers — the rail stays out while dragging and
-		// fades ~1s after release.
-		const dragMax = Math.max(1, bar.offsetHeight - g.offsetHeight);
+		// resets the idle timers — the rail stays solid while dragging and
+		// fades back to faint ~1s after release.
+		const dragMax = Math.max(1, bar.offsetHeight - thumb.offsetHeight);
 		const startY = e.clientY;
-		const startTop = g.offsetTop;
+		const startTop = thumb.offsetTop;
 		const onMove = (ev: PointerEvent): void => {
 			const ratio = Math.min(1, Math.max(0, (startTop + ev.clientY - startY) / dragMax));
 			target.scrollTop = Math.round(ratio * range);
@@ -200,8 +246,8 @@ export function FloatingScrollbar(): ReactNode {
 				// capture already released — nothing to do
 			}
 		};
-		g.addEventListener("pointermove", onMove);
-		g.addEventListener("pointerup", onUp);
+		thumb.addEventListener("pointermove", onMove);
+		thumb.addEventListener("pointerup", onUp);
 	};
 
 	return (
@@ -220,7 +266,7 @@ export function FloatingScrollbar(): ReactNode {
 			}
 		>
 			{skin.base === "gummy" ? (
-				<div ref={gummyRef} className="gfs-gummy" onPointerDown={onGummyDown} aria-hidden="true">
+				<div ref={gummyRef} className="gfs-gummy" onPointerDown={onThumbDown} aria-hidden="true">
 					<span className="gfs-gummy-shine" />
 				</div>
 			) : (
@@ -228,7 +274,7 @@ export function FloatingScrollbar(): ReactNode {
 					<div className="gfs-track" />
 					<div className="gfs-beads" />
 					<div ref={eatenRef} className="gfs-beads-eaten" />
-					<div ref={pacRef} className="gfs-pac">
+					<div ref={pacRef} className="gfs-pac" onPointerDown={onThumbDown} aria-hidden="true">
 						{skin.pacGlyph ? (
 							<img src={skin.pacGlyph} alt="" width={size} height={size} />
 						) : (

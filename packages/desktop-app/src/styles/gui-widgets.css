@@ -4184,132 +4184,14 @@
 	-webkit-text-fill-color: initial;
 }
 
-/* ── AgentControls: selected-subagent kill/revive/chat (TUI Agent Hub parity) ── */
-
-.gui-agent-controls {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	margin: 6px 2px 2px;
-	padding: 8px;
-	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.2));
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--color-bg-inset, rgba(128, 128, 128, 0.12)) 60%, transparent);
-}
-
-.gui-agent-controls-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	min-width: 0;
-}
-
-.gui-agent-controls-close {
-	flex: none;
-	margin-left: auto;
-	width: 18px;
-	height: 18px;
-	border: 0;
-	border-radius: 4px;
-	background: transparent;
-	color: var(--color-text-faint, inherit);
-	font-size: var(--ui-font-size);
-	line-height: 1;
-	cursor: pointer;
-}
-
-.gui-agent-controls-close:hover {
-	background: rgba(128, 128, 128, 0.18);
-	color: var(--color-text, inherit);
-}
-
-.gui-agent-controls-row {
-	display: flex;
-	gap: 6px;
-}
-
-.gui-agent-controls-btn {
-	padding: 3px 10px;
-	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.3));
-	border-radius: 6px;
-	background: transparent;
-	color: var(--color-text, inherit);
-	font-size: var(--ui-font-size-xs);
-	cursor: pointer;
-	transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.gui-agent-controls-btn:hover:not(:disabled) {
-	background: rgba(128, 128, 128, 0.14);
-}
-
-.gui-agent-controls-btn:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
-.gui-agent-controls-btn--danger {
-	border-color: color-mix(in srgb, var(--color-danger, #e05d5d) 45%, transparent);
-	color: var(--color-danger, #e05d5d);
-}
-
-.gui-agent-controls-btn--danger:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--color-danger, #e05d5d) 12%, transparent);
-}
-
-.gui-agent-controls-chat {
-	display: flex;
-	gap: 6px;
-	align-items: center;
-}
-
-.gui-agent-controls-input {
-	flex: 1;
-	min-width: 0;
-	padding: 4px 8px;
-	border: 1px solid var(--color-border, rgba(128, 128, 128, 0.3));
-	border-radius: 6px;
-	background: var(--color-bg-input, rgba(128, 128, 128, 0.1));
-	color: var(--color-text, inherit);
-	font-size: var(--ui-font-size-xs);
-	outline: none;
-}
-
-.gui-agent-controls-input:focus {
-	border-color: var(--color-accent, rgba(120, 160, 255, 0.7));
-}
-
-.gui-agent-controls-send {
-	flex: none;
-	width: 24px;
-	height: 24px;
-	border: 0;
-	border-radius: 6px;
-	background: var(--color-accent, rgba(120, 160, 255, 0.85));
-	color: #fff;
-	font-size: var(--ui-font-size-xs);
-	line-height: 1;
-	cursor: pointer;
-}
-
-.gui-agent-controls-send:disabled {
-	opacity: 0.45;
-	cursor: default;
-}
-
-.gui-agent-controls-error {
-	color: var(--color-danger, #e05d5d);
-	font-size: 11px;
-	overflow-wrap: anywhere;
-}
-
-
 /* ── Agents Center (智能体中心 full page) ───────────────────────────── */
 .gui-agents-center {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
 	flex: 1;
+	/* Anchor for the docked subagent detail layer (.gui-agent-dock). */
+	position: relative;
 }
 
 .gui-agents-center-head {
