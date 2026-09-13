@@ -104,3 +104,89 @@ describe("MaterializedView parentId 保留(/tree 消息树数据契约)", () => 
 		expect(restored?.snapshot().entries.map(e => e.parentId)).toEqual([null, "msg-1"]);
 	});
 });
+
+describe("MaterializedView custom-role message projection", () => {
+	// The wire AgentEvent type declares provider message roles only, yet the
+	// daemon forwards custom messages (advisor cards, async results, IRC relay)
+	// on the same message_* seam — the projection is the boundary that has to
+	// tolerate the wider runtime shape.
+	function messageEvent(type: "message_start" | "message_end", message: unknown): AgentEvent {
+		return { type, message } as unknown as AgentEvent;
+	}
+
+	function advisorMessage(timestamp: number): unknown {
+		return {
+			role: "custom",
+			customType: "advisor",
+			content: '<advisory severity="nit">prefer a smaller diff</advisory>',
+			display: true,
+			details: { notes: [{ note: "prefer a smaller diff", severity: "nit" }] },
+			attribution: "agent",
+			timestamp,
+		};
+	}
+
+	test("a custom-role message_* pair projects into one custom_message entry", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		const message = advisorMessage(1000);
+		view.apply(messageEvent("message_start", message));
+		view.apply(messageEvent("message_end", message));
+
+		const entries = view.snapshot().entries;
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			type: "custom_message",
+			id: "custom:1000",
+			parentId: null,
+			customType: "advisor",
+			display: true,
+			details: { notes: [{ note: "prefer a smaller diff", severity: "nit" }] },
+		});
+	});
+
+	test("hookMessage rides the same projection", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(
+			messageEvent("message_end", {
+				role: "hookMessage",
+				customType: "hook:notice",
+				content: "noticed",
+				display: true,
+				timestamp: 7,
+			}),
+		);
+
+		expect(view.snapshot().entries[0]).toMatchObject({
+			type: "custom_message",
+			customType: "hook:notice",
+			content: "noticed",
+		});
+	});
+
+	test("provider messages still project into message entries", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(9));
+		expect(view.snapshot().entries[0]).toMatchObject({ type: "message", id: "user:9" });
+	});
+
+	test("an IRC record announced and injected renders as one card", () => {
+		// irc-bridge both announces the record (irc_message) and queues it as an
+		// aside, whose injection emits message_start/end for the same record.
+		const record = {
+			role: "custom",
+			customType: "irc:incoming",
+			content: "sub: 我查一下",
+			display: true,
+			details: { from: "sub", message: "我查一下" },
+			timestamp: 1700000100000,
+		};
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply({ type: "irc_message", message: record } as AgentEvent);
+		view.apply(messageEvent("message_start", record));
+		view.apply(messageEvent("message_end", record));
+
+		const entries = view.snapshot().entries;
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({ type: "custom_message", customType: "irc:incoming" });
+	});
+});

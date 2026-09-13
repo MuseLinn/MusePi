@@ -142,7 +142,7 @@ describe("AgentSession steer idle drain", () => {
 		// Capture what the next injection boundary delivers instead, and clear the
 		// queues inside the mock: a no-op continue leaves them non-empty and the
 		// drain re-arms forever.
-		const deliveredAt: string[][] = [];
+		const deliveredAt: Array<readonly string[]> = [];
 		vi.spyOn(session.agent, "continue").mockImplementation(async () => {
 			deliveredAt.push(session.getQueuedMessages().steering);
 			session.agent.clearAllQueues();
@@ -166,7 +166,7 @@ describe("AgentSession steer idle drain", () => {
 
 		// Same real-continue drain hazard as the steer test above: capture at the
 		// injection boundary and clear inside the mock.
-		const deliveredAt: { steering: string[]; followUp: string[] }[] = [];
+		const deliveredAt: { steering: readonly string[]; followUp: readonly string[] }[] = [];
 		vi.spyOn(session.agent, "continue").mockImplementation(async () => {
 			deliveredAt.push(session.getQueuedMessages());
 			session.agent.clearAllQueues();

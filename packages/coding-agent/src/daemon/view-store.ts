@@ -176,6 +176,18 @@ export class ViewStore {
 						? String((snapshot.header as { timestamp?: string }).timestamp ?? "")
 						: "",
 				) || Date.now();
+			// Last-ACTIVITY stamp (openchamber `time.updated` parity): the newest
+			// entry timestamp, NOT the persist wall-clock. Persisting happens on
+			// VIEW too (activate, idle-close dispose), and a view-stamped
+			// updated_at re-ranks the session for merely being opened (bitfun's
+			// nav list documents the same trap: "rows do not jump to the top on
+			// click"). Entries are ISO-stamped at append; max() is robust to any
+			// out-of-order replay, and an empty session falls back to createdAt.
+			let lastActivity = createdAt;
+			for (const entry of snapshot.entries) {
+				const ts = Date.parse(entry.timestamp);
+				if (Number.isFinite(ts) && ts > lastActivity) lastActivity = ts;
+			}
 			this.#db
 				.query(
 					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id)
@@ -187,7 +199,7 @@ export class ViewStore {
 					   model = excluded.model,
 					   message_count = excluded.message_count`,
 				)
-				.run(sessionId, snapshot.cursor, createdAt, Date.now(), state?.cwd ?? "", model, messageCount, parentId);
+				.run(sessionId, snapshot.cursor, createdAt, lastActivity, state?.cwd ?? "", model, messageCount, parentId);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
 			let seq = 0;

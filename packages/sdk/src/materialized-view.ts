@@ -22,6 +22,10 @@
  * Projection rules (V1 — wire events only, per the wire-format decision):
  * - message_start/update/end → MessageEntry (deduped by message id; end
  *   carries the final message). Entries keep first-appearance order.
+ * - A message_* event whose message carries a custom role (advisor cards,
+ *   async-job results, IRC relay, hook notices) → CustomMessageEntry: the
+ *   shape persisted sessions store, so a live transcript and a reloaded one
+ *   project identically.
  * - thinking_level_changed → ThinkingLevelChangeEntry
  * - agent_start/end → main-agent lifecycle in `agents` (wire events carry no
  *   agent id, so the session's main agent is "main")
@@ -38,12 +42,29 @@ import type {
 	SessionEntry,
 	SessionState,
 	ThinkingLevelChangeEntry,
+	WireCustomMessage,
 	WireMessage,
 } from "@musepi/pi-wire";
 import type { SessionSnapshot } from "./events";
 
+/**
+ * A message that rides the message_* seam with a custom role. `WireMessage`
+ * declares only provider roles, but the daemon forwards every agent message it
+ * receives — and a session persists these as `custom_message` entries.
+ */
+type CustomRoleMessage = Omit<WireCustomMessage, "role" | "display"> & {
+	role: "custom" | "hookMessage";
+	display?: boolean;
+};
+
+function isCustomRoleMessage(message: WireMessage | CustomRoleMessage): message is CustomRoleMessage {
+	// `customType` exists only on custom-role messages — provider roles never
+	// carry it — so the in-operator is the whole discrimination.
+	return "customType" in message;
+}
+
 /** Stable identity of a wire message across start/update/end evolution. */
-export function messageKey(message: WireMessage): string {
+export function messageKey(message: WireMessage | CustomRoleMessage): string {
 	if (message.role === "toolResult") return `toolResult:${message.toolCallId}`;
 	return `${message.role}:${message.timestamp}`;
 }
@@ -54,6 +75,9 @@ export class MaterializedView {
 	#cursor = 0;
 	readonly #createdAt: string;
 	readonly #messages = new Map<string, MessageEntry>();
+	/** Custom-message entries by {@link messageKey} — the same dedupe contract
+	 *  as {@link #messages}: a start/end pair for one note yields one entry. */
+	readonly #customMessages = new Map<string, CustomMessageEntry>();
 	#entries: SessionEntry[] = [];
 	#mainAgent: AgentSnapshot | null = null;
 	#isStreaming = false;
@@ -128,6 +152,8 @@ export class MaterializedView {
 		for (const entry of snap.entries as SessionEntry[]) {
 			if (entry.type === "message" && entry.message) {
 				view.#messages.set(entry.id, entry);
+			} else if (entry.type === "custom_message") {
+				view.#customMessages.set(entry.id, entry);
 			}
 			view.#entries.push(entry);
 		}
@@ -184,20 +210,12 @@ export class MaterializedView {
 				break;
 			}
 			case "irc_message": {
-				// Peer/agent coordination message (irc-bridge): render as a
-				// custom row so inter-agent chatter is visible in the GUI.
-				const m = event.message;
-				const entry: CustomMessageEntry = {
-					type: "custom_message",
-					id: `irc-${this.#cursor}`,
-					parentId: null,
-					timestamp: new Date(m.timestamp).toISOString(),
-					customType: m.customType,
-					content: m.content,
-					display: m.display,
-					details: m.details,
-				};
-				this.#entries.push(entry);
+				// Peer/agent coordination message (irc-bridge): render as a custom
+				// row so inter-agent chatter is visible in the GUI. It shares the
+				// custom-message key with the same record's message_* projection —
+				// an IRC record is announced here AND injected into the run as an
+				// aside, and one note must not render as two cards.
+				this.#upsertCustomMessage(event.message);
 				break;
 			}
 			case "agent_start": {
@@ -258,7 +276,11 @@ export class MaterializedView {
 		}
 	}
 
-	#upsertMessage(message: WireMessage): void {
+	#upsertMessage(message: WireMessage | CustomRoleMessage): void {
+		if (isCustomRoleMessage(message)) {
+			this.#upsertCustomMessage(message);
+			return;
+		}
 		const key = messageKey(message);
 		const existing = this.#messages.get(key);
 		if (existing) {
@@ -286,6 +308,35 @@ export class MaterializedView {
 		this.#entries.push(entry);
 	}
 
+	/**
+	 * Custom messages are finalized before they cross the seam (no streaming
+	 * update), so the key only pairs the start/end frames one note emits —
+	 * otherwise the same advisor card would render twice.
+	 */
+	#upsertCustomMessage(message: CustomRoleMessage): void {
+		const key = messageKey(message);
+		const entry: CustomMessageEntry = {
+			type: "custom_message",
+			id: key,
+			parentId: null,
+			timestamp: new Date(message.timestamp).toISOString(),
+			customType: message.customType,
+			content: message.content,
+			display: message.display ?? true,
+			...(message.details !== undefined ? { details: message.details } : {}),
+		};
+		const existing = this.#customMessages.get(key);
+		this.#customMessages.set(key, entry);
+		if (existing) {
+			const idx = this.#entries.indexOf(existing);
+			if (idx !== -1) {
+				this.#entries[idx] = entry;
+				return;
+			}
+		}
+		this.#entries.push(entry);
+	}
+
 	/** Current cursor (= last applied event seq). */
 	get cursor(): number {
 		return this.#cursor;
@@ -303,8 +354,11 @@ export class MaterializedView {
 		if (older.length === 0) return;
 		for (const e of older) {
 			// Key exactly like #upsertMessage (messageKey, not entry.id) so a
-			// streamed update to a backfilled message still replaces it.
+			// streamed update to a backfilled message still replaces it. Custom
+			// entries are keyed by their own id — a re-emitted note whose live
+			// key matches the backfilled one must not render twice.
 			if (e.type === "message") this.#messages.set(messageKey(e.message), e);
+			else if (e.type === "custom_message") this.#customMessages.set(e.id, e);
 		}
 		this.#entries = [...older, ...this.#entries];
 	}

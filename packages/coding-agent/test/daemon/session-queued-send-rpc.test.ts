@@ -27,8 +27,8 @@ describe("session.queuedSend RPC", () => {
 	let session: AgentSession;
 	let authStorage: AuthStorage;
 	let server: DaemonServer;
-	let started: Promise.WithResolvers<void>;
-	let running: Promise<void>;
+	let started: PromiseWithResolvers<void>;
+	let running: Promise<boolean>;
 
 	async function createSession(): Promise<void> {
 		const model = getBundledModel("anthropic", "claude-sonnet-4-5");

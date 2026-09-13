@@ -4946,6 +4946,18 @@ export const SETTINGS_SCHEMA = {
 			group: "Modes",
 			label: "Goal Continuation Modes",
 			description: "Run modes where active goals may auto-continue between turns",
+			// Declared membership (TUI MultiSelectSubmenu parity): without it the
+			// key is config-file-only in the TUI and renders as a free-form comma
+			// input in the GUI. "interactive" is the only mode the runtime
+			// consults today (interactive-mode #scheduleGoalContinuation);
+			// unchecking it disables goal auto-continuation.
+			options: [
+				{
+					value: "interactive",
+					label: "Interactive sessions",
+					description: "Auto-continue active goals in terminal/GUI sessions",
+				},
+			],
 		},
 	},
 

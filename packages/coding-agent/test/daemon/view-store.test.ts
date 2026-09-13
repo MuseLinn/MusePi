@@ -69,19 +69,20 @@ function snapshot(
 describe("ViewStore cross-session tables", () => {
 	test("upsert populates sessions/messages/agents; list returns metadata", () => {
 		const store = tempStore();
+		const now = Date.now();
 		store.upsert(
 			"s1",
 			snapshot(
 				"s1",
 				[
-					{ role: "user", content: "hello world", timestamp: 100 },
-					{ role: "user", content: "second message", timestamp: 200 },
+					{ role: "user", content: "hello world", timestamp: now - 5000 },
+					{ role: "user", content: "second message", timestamp: now - 4000 },
 				],
 				2,
 				"claude-3",
 			),
 		);
-		store.upsert("s2", snapshot("s2", [{ role: "user", content: "another hello", timestamp: 300 }], 1));
+		store.upsert("s2", snapshot("s2", [{ role: "user", content: "another hello", timestamp: now - 1000 }], 1));
 
 		const list = store.list();
 		expect(list).toHaveLength(2);
@@ -95,14 +96,14 @@ describe("ViewStore cross-session tables", () => {
 
 	test("upsert replaces the message projection (no duplicates across persists)", () => {
 		const store = tempStore();
-		store.upsert("s1", snapshot("s1", [{ role: "user", content: "v1", timestamp: 1 }], 1));
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "v1", timestamp: Date.now() - 2000 }], 1));
 		store.upsert(
 			"s1",
 			snapshot(
 				"s1",
 				[
-					{ role: "user", content: "v1", timestamp: 1 },
-					{ role: "user", content: "v2", timestamp: 2 },
+					{ role: "user", content: "v1", timestamp: Date.now() - 2000 },
+					{ role: "user", content: "v2", timestamp: Date.now() - 1000 },
 				],
 				2,
 			),
@@ -111,20 +112,54 @@ describe("ViewStore cross-session tables", () => {
 		expect(list.find(r => r.sessionId === "s1")!.messageCount).toBe(2);
 	});
 
-	test("search matches message text across sessions, newest first", () => {
+	test("updated_at is the last-entry time, not the persist wall-clock (open must not re-rank)", () => {
 		const store = tempStore();
+		const now = Date.now();
+		const day = 86_400_000;
+		const old = snapshot("s1", [{ role: "user", content: "old talk", timestamp: now - 5 * day }], 1);
+		store.upsert("s1", old);
+		const afterOpen = store.list().find(r => r.sessionId === "s1")!.updatedAt;
+		// Opening a history session persists its snapshot (activate + idle-close
+		// dispose) — neither may stamp "now", or the session jumps to the top of
+		// the sidebar for merely being viewed (bitfun: "rows do not jump to the
+		// top on click"; openchamber time.updated = last data change).
+		expect(Math.abs(afterOpen - (now - 5 * day))).toBeLessThan(2000);
+		store.upsert("s1", old);
+		expect(store.list().find(r => r.sessionId === "s1")!.updatedAt).toBe(afterOpen);
+		// A genuinely new message DOES bump it.
 		store.upsert(
 			"s1",
 			snapshot(
 				"s1",
 				[
-					{ role: "user", content: "fix the login bug", timestamp: 100 },
-					{ role: "user", content: "unrelated", timestamp: 110 },
+					{ role: "user", content: "old talk", timestamp: now - 5 * day },
+					{ role: "user", content: "fresh talk", timestamp: now - 1000 },
 				],
 				2,
 			),
 		);
-		store.upsert("s2", snapshot("s2", [{ role: "user", content: "login flow broken", timestamp: 200 }], 1));
+		expect(Math.abs(store.list().find(r => r.sessionId === "s1")!.updatedAt - (now - 1000))).toBeLessThan(2000);
+		// An empty session (no entries yet) falls back to the header timestamp.
+		const fresh = snapshot("s2", [], 0);
+		store.upsert("s2", fresh);
+		expect(store.list().find(r => r.sessionId === "s2")!.updatedAt).toBe(Date.parse("2026-08-02T00:00:00.000Z"));
+	});
+
+	test("search matches message text across sessions, newest first", () => {
+		const store = tempStore();
+		const now = Date.now();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[
+					{ role: "user", content: "fix the login bug", timestamp: now - 2000 },
+					{ role: "user", content: "unrelated", timestamp: now - 1900 },
+				],
+				2,
+			),
+		);
+		store.upsert("s2", snapshot("s2", [{ role: "user", content: "login flow broken", timestamp: now - 1000 }], 1));
 
 		const hits = store.search("login");
 		expect(hits).toHaveLength(2);

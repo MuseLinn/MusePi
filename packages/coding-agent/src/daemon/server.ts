@@ -3199,6 +3199,31 @@ export class DaemonServer {
 		return $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
 	}
 
+	/** Resolve a workspace-memory request to its per-cwd memory directory
+	 *  (settings → memory workspace card). `slug` must be an existing
+	 *  directory name under the memories root — the GUI only ever echoes
+	 *  names this RPC itself handed out, but the check is enforced here:
+	 *  no separators, no `..`, must exist. */
+	async #memoryWorkspaceDir(p: {
+		cwd?: unknown;
+		slug?: unknown;
+	}): Promise<{ rootDir: string; slug: string; dir: string }> {
+		const { getMemoryRoot } = await import("../memories");
+		const { getMemoriesDir } = await import("@musepi/pi-utils");
+		const agentDir = getAgentDir();
+		const rootDir = getMemoriesDir(agentDir);
+		const cwd = typeof p.cwd === "string" && p.cwd.length > 0 ? path.resolve(p.cwd) : this.#host.cwd();
+		const slug =
+			typeof p.slug === "string" &&
+			p.slug.startsWith("--") &&
+			p.slug.endsWith("--") &&
+			!p.slug.includes("..") &&
+			fs.existsSync(path.join(rootDir, p.slug))
+				? p.slug
+				: path.basename(getMemoryRoot(agentDir, cwd));
+		return { rootDir, slug, dir: path.join(rootDir, slug) };
+	}
+
 	/** 广播 modes.changed(设置页/输入框 chip 即时刷新;与 extensions.changed 同 seq 机制)。 */
 	#broadcastModesChanged(): void {
 		const seq = ++this.#globalEventSeq;
@@ -5298,15 +5323,17 @@ export class DaemonServer {
 				};
 			}
 			case "git.checkout": {
-				// Switch the repo's branch (welcome branch selector). Caller's
-				// cwd; uncommitted changes are git's problem (checkout fails
-				// with a clear stderr, surfaced to the GUI toast).
-				const p = (params ?? {}) as { cwd?: unknown; branch?: unknown };
+				// Switch the repo's branch (welcome branch selector, status-card
+				// branch menu). Caller's cwd; uncommitted changes are git's
+				// problem (checkout fails with a clear stderr, surfaced to the
+				// GUI toast). `create` → `checkout -b` (create + check out in
+				// one step, status-card "create branch" parity).
+				const p = (params ?? {}) as { cwd?: unknown; branch?: unknown; create?: unknown };
 				const branch = typeof p.branch === "string" && p.branch.length > 0 ? p.branch : "";
 				if (!branch) throw new Error("branch required");
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
 				const proc = Bun.spawnSync({
-					cmd: ["git", "checkout", branch],
+					cmd: p.create === true ? ["git", "checkout", "-b", branch] : ["git", "checkout", branch],
 					cwd,
 					stdout: "pipe",
 					stderr: "pipe",
@@ -6305,9 +6332,12 @@ export class DaemonServer {
 					suppressBreadcrumb: true,
 				});
 				const sessionFile = imported.getSessionFile();
+				const sessionId = imported.getSessionId();
 				await imported.close();
 				if (!sessionFile) throw new Error("failed to persist imported session");
-				return { ok: true, sessionFile, source, sourceId: match.id };
+				// sessionId: the GUI's import dialog groups imported sessions by
+				// workspace into editable custom groups — it needs the NEW id.
+				return { ok: true, sessionId, sessionFile, source, sourceId: match.id };
 			}
 			case "migrate.dirs": {
 				// Data-migration tab: surface the directories a backup must cover.
@@ -7450,6 +7480,83 @@ export class DaemonServer {
 				const { resolveMemoryBackend } = await import("../memory-backend/resolve");
 				const backend = await resolveMemoryBackend(settings);
 				await backend.enqueue(getAgentDir(), this.#host.cwd());
+				return { ok: true };
+			}
+			case "memory.workspace": {
+				// 设置 → 记忆的工作区记忆卡(ZCode 记忆面板 parity):记忆根下的
+				// 各工作区目录 + 选中工作区的 .md 记忆文件列表(mtime 降序)。
+				// 目录缺失时列出空集(该工作区还没有记忆产物)。
+				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown };
+				const { rootDir, slug, dir } = await this.#memoryWorkspaceDir(p);
+				const workspaces: string[] = [];
+				try {
+					for (const e of fs.readdirSync(rootDir, { withFileTypes: true })) {
+						if (e.isDirectory() && e.name.startsWith("--") && e.name.endsWith("--")) workspaces.push(e.name);
+					}
+				} catch (err) {
+					if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+				}
+				const files: Array<{ name: string; size: number; mtimeMs: number }> = [];
+				try {
+					for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+						if (!e.isFile() || !e.name.toLowerCase().endsWith(".md")) continue;
+						const st = fs.statSync(path.join(dir, e.name));
+						files.push({ name: e.name, size: st.size, mtimeMs: st.mtimeMs });
+					}
+				} catch (err) {
+					if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+				}
+				files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+				return { root: dir, slug, workspaces: workspaces.sort(), files };
+			}
+			case "memory.workspaceRead": {
+				// 读取一个记忆 .md 供面板内查看。name 只接受根内裸文件名,
+				// 上限 512KB(面板阅读用,不是编辑器)。
+				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown; name?: unknown };
+				const { dir } = await this.#memoryWorkspaceDir(p);
+				const name = typeof p.name === "string" ? p.name : "";
+				if (
+					!name ||
+					name.includes("/") ||
+					name.includes("\\") ||
+					name.includes("..") ||
+					!name.toLowerCase().endsWith(".md")
+				) {
+					throw new Error("invalid memory file name");
+				}
+				const target = path.join(dir, name);
+				const st = fs.statSync(target);
+				if (!st.isFile()) throw new Error("not a file");
+				if (st.size > 512 * 1024) throw new Error("memory file too large to display");
+				return { name, content: fs.readFileSync(target, "utf8"), mtimeMs: st.mtimeMs };
+			}
+			case "memory.workspaceReveal": {
+				// 在文件管理器中显示一个记忆文件(缺省显示工作区记忆目录)。
+				// daemon 宿主侧执行 —— 远程 daemon 的 GUI 会在远程机器上打开,
+				// 与其它 daemon 侧路径语义一致。
+				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown; name?: unknown };
+				const { dir } = await this.#memoryWorkspaceDir(p);
+				let target = dir;
+				if (typeof p.name === "string" && p.name) {
+					const name = p.name;
+					if (
+						name.includes("/") ||
+						name.includes("\\") ||
+						name.includes("..") ||
+						!name.toLowerCase().endsWith(".md")
+					) {
+						throw new Error("invalid memory file name");
+					}
+					target = path.join(dir, name);
+					if (!fs.existsSync(target)) throw new Error(`Unknown memory file: ${name}`);
+				}
+				if (process.platform === "win32") {
+					Bun.spawn(["explorer.exe", `/select,${target}`], { stdout: "ignore", stderr: "ignore" });
+				} else if (process.platform === "darwin") {
+					Bun.spawn(["open", "-R", target], { stdout: "ignore", stderr: "ignore" });
+				} else {
+					Bun.spawn(["xdg-open", path.dirname(target)], { stdout: "ignore", stderr: "ignore" });
+				}
 				return { ok: true };
 			}
 			case "session.shake": {
