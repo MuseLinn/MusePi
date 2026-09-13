@@ -98,6 +98,7 @@ export function WelcomeComposer({
 	onSubmit,
 	busy,
 	rpc,
+	onAddProvider,
 	project,
 	onProject,
 	focused,
@@ -130,6 +131,8 @@ export function WelcomeComposer({
 	busy?: boolean;
 	/** Daemon client for the session-less model catalog (preselect). */
 	rpc: RpcClient;
+	/** 添加新提供商 menu action — opens the settings providers page. */
+	onAddProvider?(): void;
 	/** Current project (workspace folder), if any. */
 	project?: string | null;
 	/** 打开文件夹 / 远程连接 / 不在项目中 project actions. */
@@ -1384,6 +1387,7 @@ export function WelcomeComposer({
 										thinkingLevel={thinking}
 										thinkingEfforts={thinkingEfforts}
 										allowSetDefault
+										onAddProvider={onAddProvider}
 										onModelSelect={(v, provider) => {
 											modelTouched.current = true;
 											// Provider/id composite, never the bare id: two

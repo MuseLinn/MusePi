@@ -88,6 +88,48 @@ function toggleFavModel(id: string, provider?: string): void {
 	for (const l of favListeners) l();
 }
 
+// ── Recently used models (openchamber 最近 section) ───────────────────────
+// provider/id keys, most-recent-first, capped. Same external-store shape as
+// favorites; pushed on every real pick so the menu's 最近 section mirrors
+// what the user actually runs.
+const RECENT_MODELS_KEY = "musepi-gui-recent-models";
+const RECENT_MODELS_CAP = 5;
+
+let recentModelsCache: string[] | null = null;
+
+function readRecentModels(): string[] {
+	if (recentModelsCache) return recentModelsCache;
+	try {
+		const raw = localStorage.getItem(RECENT_MODELS_KEY);
+		const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+		recentModelsCache = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+	} catch {
+		recentModelsCache = [];
+	}
+	return recentModelsCache;
+}
+
+const recentListeners = new Set<() => void>();
+
+function subscribeRecentModels(listener: () => void): () => void {
+	recentListeners.add(listener);
+	return () => {
+		recentListeners.delete(listener);
+	};
+}
+
+function pushRecentModel(id: string, provider?: string): void {
+	const key = provider ? `${provider}/${id}` : id;
+	const next = [key, ...readRecentModels().filter(x => x !== key && x !== id)].slice(0, RECENT_MODELS_CAP);
+	try {
+		localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(next));
+	} catch {
+		/* storage unavailable */
+	}
+	recentModelsCache = next;
+	for (const l of recentListeners) l();
+}
+
 /**
  * Live model selector — with a session it lists the session's available
  * models (daemon models.list) and switches ONLY that session via
@@ -106,6 +148,7 @@ export function ModelSelector({
 	allowSetDefault = false,
 	currentModelId = null,
 	capsule = false,
+	onAddProvider,
 }: {
 	rpc: RpcClient;
 	sessionId: string | null;
@@ -129,6 +172,9 @@ export function ModelSelector({
 	 *  container/button to the `.gui-model-capsule-seg(-btn)` classes and
 	 *  anchor the menu on the button (ThinkingSelector parity). */
 	capsule?: boolean;
+	/** Top-menu action (openchamber 添加新提供商): opens the settings
+	 *  providers page; omitted where no settings opener is reachable. */
+	onAddProvider?(): void;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [models, setModels] = useState<WireModel[]>([]);
@@ -261,6 +307,7 @@ export function ModelSelector({
 	const label = current ? (current.name || current.id).replace(/^[^/]*\//, "") : t("model");
 
 	const favs = useSyncExternalStore(subscribeFavs, readFavModels);
+	const recents = useSyncExternalStore(subscribeRecentModels, readRecentModels);
 
 	// Pure generation endpoints (agnes-image-*, gpt-image-*, dall-e, flux,
 	// / agnes-video-*, veo, sora, …) cannot run the agent's chat/messages
@@ -277,20 +324,53 @@ export function ModelSelector({
 	// "ds" finds deepseek-v4-flash) across provider + id + name, not a
 	// contiguous substring scan.
 	const filtered = query.trim() ? models.filter(m => matchesModelQuery(query, m.provider, m.id, m.name)) : models;
-	// Pinned models first, in pin order; the rest keep their listing order.
-	// Favorites are provider/id keys (legacy bare ids still rank/light up
-	// so old pins keep working).
-	const favRank = new Map(favs.map((key, i) => [key, i] as const));
+	// Favorites are provider/id keys (legacy bare ids still rank/light up so
+	// old pins keep working).
 	const favKeyOf = (m: WireModel): string => `${m.provider}/${m.id}`;
-	const rankOf = (m: WireModel): number | undefined => favRank.get(favKeyOf(m)) ?? favRank.get(m.id);
-	const sorted = [...filtered].sort((a, b) => {
-		const ra = rankOf(a);
-		const rb = rankOf(b);
-		if (ra !== undefined && rb !== undefined) return ra - rb;
-		if (ra !== undefined) return -1;
-		if (rb !== undefined) return 1;
-		return 0;
-	});
+	const isFav = (m: WireModel): boolean => favs.includes(favKeyOf(m)) || favs.includes(m.id);
+	// Sectioned listing (openchamber 收藏/最近 parity): favorites in pin
+	// order, then recents in use order (favorites excluded — a row renders
+	// once), then the remaining catalog in listing order.
+	const favRows = filtered.filter(isFav);
+	const recentRank = new Map(recents.map((key, i) => [key, i] as const));
+	const recentRows = filtered
+		.filter(m => !isFav(m) && (recentRank.has(favKeyOf(m)) || recentRank.has(m.id)))
+		.sort(
+			(a, b) =>
+				(recentRank.get(favKeyOf(a)) ?? recentRank.get(a.id) ?? 99) -
+				(recentRank.get(favKeyOf(b)) ?? recentRank.get(b.id) ?? 99),
+		);
+	const restRows = filtered.filter(m => !isFav(m) && !recentRows.includes(m));
+	// Collapsible sections (chevron per header, per-menu session state).
+	const [secClosed, setSecClosed] = useState<Record<string, boolean>>({});
+	// Keyboard navigation (openchamber footer hints): ↑↓ moves the active
+	// row through the VISIBLE rows (collapsed sections skipped), Enter
+	// selects. The active index resets whenever the list content changes.
+	const sections: Array<{ key: string; label: string | null; rows: WireModel[] }> = [];
+	if (favRows.length > 0) sections.push({ key: "fav", label: t("favorite models"), rows: favRows });
+	if (recentRows.length > 0) sections.push({ key: "recent", label: t("recent models"), rows: recentRows });
+	if (restRows.length > 0) sections.push({ key: "rest", label: null, rows: restRows });
+	const flatRows = sections.flatMap(s => (secClosed[s.key] ? [] : s.rows));
+	const [kbd, setKbd] = useState(-1);
+	useEffect(() => {
+		setKbd(-1);
+	}, [query, open, models]);
+	const onMenuKeyDown = (e: React.KeyboardEvent): void => {
+		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+			e.preventDefault();
+			if (flatRows.length === 0) return;
+			setKbd(prev => {
+				const delta = e.key === "ArrowDown" ? 1 : -1;
+				return (prev + delta + flatRows.length) % flatRows.length;
+			});
+		} else if (e.key === "Enter") {
+			const row = flatRows[kbd];
+			if (row) {
+				e.preventDefault();
+				select(row);
+			}
+		}
+	};
 
 	const select = (m: WireModel): void => {
 		// Generation endpoints can't be the session model — the row is disabled,
@@ -307,6 +387,7 @@ export function ModelSelector({
 		tapFeedback(1);
 		// Lock the seeding chain: a real pick always wins from now on.
 		userPicked.current = true;
+		pushRecentModel(selected.id, selected.provider);
 		// Selection state is the provider/id composite: two providers serving
 		// the same bare id (opencode-go vs opencode-zen both offer
 		// deepseek-v4-flash) must highlight only the picked row.
@@ -348,7 +429,13 @@ export function ModelSelector({
 				<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 			</button>
 			{renderMenu(
-				<div className="gui-model-menu">
+				<div className="gui-model-menu" onKeyDown={onMenuKeyDown}>
+					{onAddProvider && (
+						<button type="button" className="gui-model-add" onClick={onAddProvider}>
+							<Icon name="add" className="h-3.5 w-3.5" />
+							<span>{t("add provider")}</span>
+						</button>
+					)}
 					<div className="gui-model-menu-search">
 						<Icon name="search" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
 						<input
@@ -357,104 +444,138 @@ export function ModelSelector({
 							placeholder={t("search models…")}
 							className="gui-model-menu-input"
 							aria-label={t("search models…")}
+							/* Focused on open so ↑↓/Enter navigation works without a
+							 * pointing-device detour (openchamber menu parity). */
+							autoFocus
 						/>
 					</div>
 					<div className="gui-model-list" ref={listRef}>
 						{filtered.length === 0 && <div className="gui-model-empty">{t("no matching models")}</div>}
-						{sorted.map(m => {
-							const favKey = favKeyOf(m);
-							const fav = favs.includes(favKey) || favs.includes(m.id);
-							const isDefault = `${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
-							const genModel = isGenerationModel(m);
-							const capTitle = [
-								m.text !== false ? t("text input") : null,
-								m.vision ? t("image understanding") : null,
-								m.video ? t("video understanding") : null,
-								m.imageGen ? t("image generation") : null,
-								m.videoGen ? t("video generation") : null,
-								m.reasoning ? t("reasoning") : null,
-							]
-								.filter((label): label is string => label !== null)
-								.join(" · ");
-							// Generation endpoints are not chat models: gray the row,
-							// refuse selection, and explain why on hover.
-							const genNote = genModel
-								? m.imageGen
-									? t("image generation model — use the generate_image tool")
-									: t("video generation model — use the video generation tool")
-								: undefined;
+						{sections.map(sec => {
+							const closed = secClosed[sec.key] === true;
 							return (
-								// Row is a div (role=button) so the favorite star can be a
-								// real <button> inside it — nested buttons are invalid HTML.
-								<div
-									key={`${m.provider}/${m.id}`}
-									role="button"
-									tabIndex={genModel ? -1 : 0}
-									aria-disabled={genModel || undefined}
-									title={genNote}
-									className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}${genModel ? " gui-model-opt--gen" : ""}`}
-									onClick={() => select(m)}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											select(m);
-										}
-									}}
-								>
-									<span className="gui-model-opt-line">
-										<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
-										<span
-											className="gui-model-cap"
-											title={capTitle || undefined}
-											aria-label={capTitle || undefined}
-										>
-											{m.text !== false && <Icon name="text" className="h-3.5 w-3.5" />}
-											{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
-											{m.video && <Icon name="file-video" className="h-3.5 w-3.5" />}
-											{m.imageGen && <Icon name="palette" className="h-3.5 w-3.5" />}
-											{m.videoGen && <Icon name="record-circle" className="h-3.5 w-3.5" />}
-											{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
-										</span>
+								<div key={sec.key} className="gui-model-sec">
+									{sec.label && (
 										<button
 											type="button"
-											className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
-											title={fav ? t("unfavorite model") : t("favorite model")}
-											aria-label={fav ? t("unfavorite model") : t("favorite model")}
-											onClick={e => {
-												e.stopPropagation();
-												toggleFavModel(m.id, m.provider);
-											}}
+											className="gui-model-sec-head"
+											aria-expanded={!closed}
+											onClick={() => setSecClosed(prev => ({ ...prev, [sec.key]: !closed }))}
 										>
-											<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
+											<Icon
+												name="arrow-down-s"
+												className={`h-3 w-3 transition-transform${closed ? " -rotate-90" : ""}`}
+											/>
+											<span>{sec.label}</span>
+											<span className="gui-model-sec-count">{sec.rows.length}</span>
 										</button>
-										{allowSetDefault && (
-											<button
-												type="button"
-												className={`gui-model-fav${isDefault ? " gui-model-fav--on" : ""}`}
-												title={isDefault ? t("default model") : t("set as default model")}
-												aria-label={isDefault ? t("default model") : t("set as default model")}
-												onClick={e => {
-													e.stopPropagation();
-													setAsDefault(m.id, m.provider);
-												}}
-											>
-												<Icon name={isDefault ? "target-fill" : "target"} className="h-3.5 w-3.5" />
-											</button>
-										)}
-										{`${m.provider}/${m.id}` === modelId && (
-											<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
-										)}
-									</span>
-									<span className="gui-model-opt-meta">
-										<span className="gui-provider-chip">{m.provider}</span>
-										{formatContextWindow(m.contextWindow) && (
-											<span className="gui-model-ctx">{formatContextWindow(m.contextWindow)}</span>
-										)}
-									</span>
+									)}
+									{!closed &&
+										sec.rows.map(m => {
+											const fav = isFav(m);
+											const isDefault =
+												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
+											const genModel = isGenerationModel(m);
+											const capTitle = [
+												m.text !== false ? t("text input") : null,
+												m.vision ? t("image understanding") : null,
+												m.video ? t("video understanding") : null,
+												m.imageGen ? t("image generation") : null,
+												m.videoGen ? t("video generation") : null,
+												m.reasoning ? t("reasoning") : null,
+											]
+												.filter((rowLabel): rowLabel is string => rowLabel !== null)
+												.join(" · ");
+											// Generation endpoints are not chat models: gray the row,
+											// refuse selection, and explain why on hover.
+											const genNote = genModel
+												? m.imageGen
+													? t("image generation model — use the generate_image tool")
+													: t("video generation model — use the video generation tool")
+												: undefined;
+											const kbdIndex = flatRows.indexOf(m);
+											return (
+												// Row is a div (role=button) so the favorite star can be a
+												// real <button> inside it — nested buttons are invalid HTML.
+												<div
+													key={`${m.provider}/${m.id}`}
+													role="button"
+													tabIndex={genModel ? -1 : 0}
+													aria-disabled={genModel || undefined}
+													title={genNote}
+													className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}${genModel ? " gui-model-opt--gen" : ""}${kbdIndex >= 0 && kbdIndex === kbd ? " gui-model-opt--kbd" : ""}`}
+													onClick={() => select(m)}
+													onMouseMove={() => setKbd(kbdIndex)}
+													onKeyDown={e => {
+														if (e.key === "Enter" || e.key === " ") {
+															e.preventDefault();
+															select(m);
+														}
+													}}
+												>
+													<span className="gui-model-opt-line">
+														<span className="min-w-0 flex-1 truncate">{m.name || m.id}</span>
+														<span
+															className="gui-model-cap"
+															title={capTitle || undefined}
+															aria-label={capTitle || undefined}
+														>
+															{m.text !== false && <Icon name="text" className="h-3.5 w-3.5" />}
+															{m.vision && <Icon name="file-image" className="h-3.5 w-3.5" />}
+															{m.video && <Icon name="file-video" className="h-3.5 w-3.5" />}
+															{m.imageGen && <Icon name="palette" className="h-3.5 w-3.5" />}
+															{m.videoGen && <Icon name="record-circle" className="h-3.5 w-3.5" />}
+															{m.reasoning && <Icon name="brain-ai-3" className="h-3.5 w-3.5" />}
+														</span>
+														<button
+															type="button"
+															className={`gui-model-fav${fav ? " gui-model-fav--on" : ""}`}
+															title={fav ? t("unfavorite model") : t("favorite model")}
+															aria-label={fav ? t("unfavorite model") : t("favorite model")}
+															onClick={e => {
+																e.stopPropagation();
+																toggleFavModel(m.id, m.provider);
+															}}
+														>
+															<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
+														</button>
+														{allowSetDefault && (
+															<button
+																type="button"
+																className={`gui-model-fav${isDefault ? " gui-model-fav--on" : ""}`}
+																title={isDefault ? t("default model") : t("set as default model")}
+																aria-label={isDefault ? t("default model") : t("set as default model")}
+																onClick={e => {
+																	e.stopPropagation();
+																	setAsDefault(m.id, m.provider);
+																}}
+															>
+																<Icon
+																	name={isDefault ? "target-fill" : "target"}
+																	className="h-3.5 w-3.5"
+																/>
+															</button>
+														)}
+														{`${m.provider}/${m.id}` === modelId && (
+															<Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />
+														)}
+													</span>
+													<span className="gui-model-opt-meta">
+														<span className="gui-provider-chip">{m.provider}</span>
+														{formatContextWindow(m.contextWindow) && (
+															<span className="gui-model-ctx">
+																{formatContextWindow(m.contextWindow)}
+															</span>
+														)}
+													</span>
+												</div>
+											);
+										})}
 								</div>
 							);
 						})}
 					</div>
+					<div className="gui-model-menu-foot">{t("model menu hint")}</div>
 				</div>,
 			)}
 		</div>

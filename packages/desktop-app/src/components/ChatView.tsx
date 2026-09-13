@@ -234,6 +234,7 @@ export function ChatView({
 	onSubmitNewSession,
 	rightPanelOpen,
 	onOpenFileInPanel,
+	onAddProvider,
 	onToggleRightPanel,
 	onExpandRightPanel,
 	panelSelectRequest,
@@ -305,6 +306,9 @@ export function ChatView({
 	/** Reveal a file in the right panel: the caller (App) opens the panel;
 	 *  ChatView relays the path into the ContextPanel/FilePane preview. */
 	onOpenFileInPanel?(path: string): void;
+	/** 添加新提供商 menu action (composer model menu) — opens the
+	 *  settings providers page. */
+	onAddProvider?(): void;
 	/** Right-edge rail (RightRail) fold toggle — expands/collapses the
 	 *  ContextPanel (app owns the persisted state). */
 	onToggleRightPanel?(): void;
@@ -1283,6 +1287,7 @@ export function ChatView({
 								modes={modes}
 								modeId={modeId}
 								onModeChange={onModeChange}
+								onAddProvider={onAddProvider}
 							/>
 						</div>
 					)}
@@ -1771,6 +1776,7 @@ export function ChatView({
 											thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
 											onSetThinking={setThinking}
 											onModelChange={onComposerModelChange}
+											onAddProvider={onAddProvider}
 											thinkingCeiling={thinkingCeiling}
 											thinkingEfforts={thinkingEfforts}
 											presetModelId={presetModelId}

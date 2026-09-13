@@ -29,6 +29,7 @@ export function ModelThinkingCapsule({
 	thinkingCeiling,
 	thinkingEfforts,
 	allowSetDefault = false,
+	onAddProvider,
 }: {
 	rpc: RpcClient;
 	sessionId: string | null;
@@ -43,6 +44,9 @@ export function ModelThinkingCapsule({
 	thinkingCeiling?: string | null;
 	thinkingEfforts?: readonly string[] | null;
 	allowSetDefault?: boolean;
+	/** Top-menu 添加新提供商 action (openchamber parity) — opens the
+	 *  settings providers page; omitted where no opener is reachable. */
+	onAddProvider?(): void;
 }): ReactNode {
 	return (
 		<div className="gui-model-capsule">
@@ -52,6 +56,7 @@ export function ModelThinkingCapsule({
 				presetId={presetModelId}
 				currentModelId={currentModelId}
 				allowSetDefault={allowSetDefault}
+				onAddProvider={onAddProvider}
 				onSelect={onModelSelect}
 				capsule
 			/>

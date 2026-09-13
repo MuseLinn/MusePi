@@ -12,6 +12,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The image lightbox gains a download button, and the actions move down: download + close render as one row in the top-right (a step lower than the lone close key, clearing the window chrome like ZCode's preview header). Download refetches the image into a blob (works for `data:` and remote URLs), names it `musepi-image-<stamp>.<ext>` from the mime, and falls back to opening the source in a new tab.
 
 ### Changed
+- **输入框模型菜单对齐 openchamber 结构**:收藏与最近使用渲染为可折叠分区(标题带 chevron 与计数),新增「最近」存储(provider/id 键、上限 5、真实选择时压入);菜单打开即聚焦搜索框,↑↓ 在可见行间巡游高亮、回车选择,底部钉住「↑↓ 导航 · ↵ 选择」提示;搜索框上方新增「添加供应商」动作行直达设置供应商页(无设置入口的选择器自动省略)。
+  - EN: The composer model menu matches openchamber's structure: favorites and recently-used render as collapsible sections (chevron + count headers), with a new recency store (provider/id keys, cap 5, pushed on every real pick); the search input autofocuses on open, ↑↓ moves a roving highlight through the visible rows and Enter selects, with a pinned `↑↓ navigate · ↵ select` footer; and an 添加供应商 action above the search opens the settings providers page (omitted on selectors without an opener).
 - **会话侧栏对齐 ZCode 列表**:运行中会话的指示器从呼吸圆点改为旋转八芒星标(ZCode ✳ 同款);分组与项目 tab 顶部的「近期」重复区块移除(会话本就在下方分组/文件夹里,不再列两遍)。
   - EN: The session sidebar aligns with the ZCode list: the running-session indicator is now a spinning 8-ray starburst (ZCode ✳ style, was a breathing dot); the duplicate 近期 block is gone from the groups and projects tabs (sessions already render in their groups/folders below).
 - **目标继续模式在设置面板渲染为多选列表**:该设置是数组(运行模式集合),TUI 对无选项声明的数组直接隐藏,GUI 则渲染成了逗号分隔的自由文本框。现 schema 声明成员选项(当前为 interactive —— 运行时唯一消费的模式,取消勾选即关闭目标自动继续),GUI 将带选项的数组渲染为按压芯片多选(TUI MultiSelectSubmenu 同构);无选项的数组(扩展路径等自由列表)维持文本输入。

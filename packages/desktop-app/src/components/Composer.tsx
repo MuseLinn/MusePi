@@ -116,6 +116,8 @@ export interface ComposerProps {
 	 *  per-model thinking info (ceiling/ladder) that the wire event can't
 	 *  drive (the session store reference is stable across model changes). */
 	onModelChange?(modelId: string): void;
+	/** 添加新提供商 menu action — opens the settings providers page. */
+	onAddProvider?(): void;
 	/** Model preselect carried from the welcome composer. */
 	presetModelId?: string | null;
 	/** welcome 空态(会话态不传)。 */
@@ -180,6 +182,7 @@ export function Composer({
 	thinkingConfigLevel,
 	onSetThinking,
 	onModelChange,
+	onAddProvider,
 	thinkingCeiling,
 	thinkingEfforts,
 	quotes,
@@ -1616,6 +1619,7 @@ export function Composer({
 							thinkingCeiling={thinkingCeiling}
 							thinkingEfforts={thinkingEfforts}
 							allowSetDefault
+							onAddProvider={onAddProvider}
 							onModelSelect={id => {
 								if (id) onModelChange?.(id);
 								// The daemon finished the switch before this

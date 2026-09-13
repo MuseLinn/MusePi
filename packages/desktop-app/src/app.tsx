@@ -2620,6 +2620,7 @@ function AppInner(): ReactNode {
 					<ChatView
 						store={store}
 						rpc={rpc}
+						onAddProvider={openSettings}
 						onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
 						onStop={stop}
 						onDecideApproval={decideApproval}
@@ -2860,6 +2861,7 @@ function AppInner(): ReactNode {
 									onOpenFileInPanel={() => {
 										setRightCollapsed(false);
 									}}
+									onAddProvider={openSettings}
 									onToggleRightPanel={() => {
 										setRightCollapsed(v => {
 											localStorage.setItem("musepi-gui-right", v ? "1" : "0");

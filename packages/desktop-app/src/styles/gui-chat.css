@@ -29,6 +29,61 @@
 	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
 }
 
+/* 添加新提供商 action (openchamber menu header): a quiet full-width row
+ * above the search; opens the settings providers page via the host. */
+.gui-model-add {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 6px 8px 2px;
+	padding: 5px 8px;
+	border-radius: 8px;
+	color: var(--color-text-muted);
+	font-size: 12.5px;
+	text-align: left;
+	transition: background 120ms ease, color 120ms ease;
+}
+.gui-model-add:hover {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	color: var(--color-text);
+}
+
+/* Collapsible 收藏/最近 sections (openchamber parity): subtle header row
+ * with a chevron and a count; the body renders the normal option rows. */
+.gui-model-sec-head {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	width: 100%;
+	padding: 4px 10px 2px;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-weight: 650;
+	text-align: left;
+}
+.gui-model-sec-count {
+	color: var(--color-text-faint);
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Keyboard-active row (↑↓ navigation): the same accent wash as :hover so
+ * a driven highlight reads identically to a pointed one. */
+.gui-model-opt--kbd {
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+/* Footer keybind hint (openchamber parity): one muted line pinned under
+ * the list. */
+.gui-model-menu-foot {
+	flex-shrink: 0;
+	padding: 4px 12px 5px;
+	border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+	color: var(--color-text-faint);
+	font-size: 10.5px;
+	user-select: none;
+}
+
 .gui-model-menu-input {
 	flex: 1;
 	min-width: 0;
