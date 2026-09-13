@@ -1480,6 +1480,13 @@ export function ChatView({
 																		return true;
 																	}
 																})()}
+																defaultRoundFoldExpanded={(() => {
+																	try {
+																		return localStorage.getItem("musepi-gui-chat-roundfold") === "1";
+																	} catch {
+																		return false;
+																	}
+																})()}
 																/* TUI display-settings parity: the daemon
 																 * settings drive the transcript (unflagged
 																 * from tuiOnly 2026-08-12). */

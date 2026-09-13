@@ -2,6 +2,7 @@ import type { TranscriptKey } from "../zh-CN/transcript.js";
 
 export const transcript = {
 	"round tools {count}": "{count} tools",
+	"explored the codebase": "explored the codebase",
 	"round commands {count}": "{count} commands",
 	"round changed {count}": "{count} files changed",
 	"round completed": "Completed",

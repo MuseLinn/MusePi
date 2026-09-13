@@ -1,5 +1,6 @@
 export const transcript = {
 	"round tools {count}": "工具 ×{count}",
+	"explored the codebase": "探索了代码库",
 	"round commands {count}": "命令 ×{count}",
 	"round changed {count}": "更改 {count} 文件",
 	"round completed": "已完成",

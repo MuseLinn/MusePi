@@ -1496,6 +1496,9 @@ export const settings = {
 	markdown: "Markdown",
 	"plain text": "Plain text",
 	"collapse long user messages": "Collapse long user messages",
+	"activity default expanded": "Activities expanded by default",
+	"activity default expanded description":
+		"Completed rounds show their tool activity expanded by default; when off, each round folds into a one-line activity summary.",
 	"collapse long user messages description": "Overly long messages collapse to two lines by default; click to expand",
 	"show reasoning traces": "Show reasoning traces",
 	"show reasoning traces description": "Show the model's thinking process in replies",

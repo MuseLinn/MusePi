@@ -213,6 +213,11 @@ export function ChatSection(): ReactNode {
 					storageKey="musepi-gui-chat-collapseuser"
 				/>
 				<PrefToggle
+					label={t("activity default expanded")}
+					description={t("activity default expanded description")}
+					storageKey="musepi-gui-chat-roundfold"
+				/>
+				<PrefToggle
 					label={t("show reasoning traces")}
 					description={t("show reasoning traces description")}
 					storageKey="musepi-gui-chat-thinking"

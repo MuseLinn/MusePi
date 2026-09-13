@@ -3057,9 +3057,12 @@ a.tr-tool-search-title:hover {
 	border-radius: 8px;
 }
 
-/* ── Completed-round fold header (craft-agents TurnCard parity) ─────────
+/* ── Completed-round fold header (openchamber 活动 header parity) ───────
  * Working entries of a finished round collapse behind this row; the final
- * assistant message (text + artifacts) stays visible below it. */
+ * assistant message (text + artifacts) stays visible below it. The header
+ * is an ACTIVITY SUMMARY — 活动 + 更改了 N 文件 · 探索了代码库 · 运行了 N
+ * 条命令 — not a duration (the frozen 已工作 timer already lives under the
+ * final reply). */
 .tr-round-fold {
 	display: flex;
 	align-items: center;
@@ -3087,20 +3090,16 @@ a.tr-tool-search-title:hover {
 .tr-round-fold--open .tr-round-fold-chevron {
 	transform: rotate(90deg);
 }
-.tr-round-fold-duration {
+/* 活动 label: the section's name, bold like openchamber's. */
+.tr-round-fold-label {
 	flex-shrink: 0;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	font-variant-numeric: tabular-nums;
-	font-weight: 600;
-	color: var(--accent, #d9a441);
+	font-weight: 650;
+	color: var(--text, var(--fg));
 }
-.tr-round-fold-count {
+/* Inter-segment dot for the 更改 · 探索 · 命令 chain. */
+.tr-round-fold-sep {
 	flex-shrink: 0;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--fg, #ececef) 10%, transparent);
-	font-size: 11px;
-	font-weight: 550;
+	color: var(--text-faint, var(--fg-faint));
 }
 .tr-round-fold-preview {
 	min-width: 0;
@@ -3117,11 +3116,7 @@ a.tr-tool-search-title:hover {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	padding: 1px 8px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--fg, #ececef) 10%, transparent);
-	font-size: 11px;
-	font-weight: 550;
+	font-size: 11.5px;
 	font-variant-numeric: tabular-nums;
 }
 .tr-round-fold-add {

@@ -140,6 +140,10 @@ export interface TranscriptProps {
 	/** Long user messages clamp to two lines with an expand toggle
 	 *  (openchamber collapsibleUserMessages parity). */
 	collapseLongUserMessages?: boolean;
+	/** Completed-round activity folds default EXPANDED (openchamber
+	 *  activityDefaultState "expanded" parity) — default false (collapsed,
+	 *  ZCode behavior). User toggles per round still win either way. */
+	defaultRoundFoldExpanded?: boolean;
 	/** TUI display.smoothStreaming parity: false renders streamed text
 	 *  without the character-level reveal (also applied via the
 	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
@@ -943,6 +947,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		emptySlot,
 		userPlain = false,
 		collapseLongUserMessages = false,
+		defaultRoundFoldExpanded = false,
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
@@ -1079,8 +1084,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// history"). Applies to the windowed slice — history outside the
 	// window is hidden by the windowing anyway.
 	const [compactedOpen, setCompactedOpen] = useState(false);
-	// Completed-round folds (craft-agents TurnCard parity): per-round open
-	// state, keyed by the round's user-message entry index.
+	// Completed-round folds (craft-agents TurnCard parity): per-round toggle
+	// state, keyed by the round's user-message entry index. The set stores
+	// DEVIATIONS from the default (openchamber activityDefaultState): when
+	// the default is collapsed it holds OPEN rounds; when expanded, CLOSED
+	// ones — so a settings flip re-reads existing rounds without migration.
 	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<number>>(() => new Set());
 	// Image preview lightbox: full-size view of clicked message images
 	// (all images of the message form the gallery).
@@ -1369,7 +1377,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const inFoldIdx = folds.findIndex(f => absIdx > f.startIdx && absIdx < f.finalIdx);
 					const inFold = inFoldIdx >= 0;
 					const fold = inFold ? folds[inFoldIdx] : undefined;
-					if (inFold && !roundFoldOpen.has(fold!.startIdx)) return null;
+					const foldOpen = fold !== undefined && roundFoldOpen.has(fold.startIdx) !== defaultRoundFoldExpanded;
+					if (inFold && !foldOpen) return null;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.
@@ -1381,7 +1390,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							<RoundFoldHeader
 								key={`round-fold-${fold.startIdx}`}
 								fold={fold}
-								open={roundFoldOpen.has(fold.startIdx)}
+								open={foldOpen}
 								onToggle={() =>
 									setRoundFoldOpen(prev => {
 										const next = new Set(prev);

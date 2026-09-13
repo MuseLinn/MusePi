@@ -1427,6 +1427,8 @@ export const settings = {
 	markdown: "Markdown",
 	"plain text": "纯文本",
 	"collapse long user messages": "折叠较长的用户消息",
+	"activity default expanded": "活动默认展开",
+	"activity default expanded description": "已完成轮次的活动摘要默认展开显示工具过程；关闭时折叠为一行活动摘要。",
 	"collapse long user messages description": "超长消息默认收起为两行，点击展开",
 	"show reasoning traces": "显示推理轨迹",
 	"show reasoning traces description": "在回复中显示模型思考过程",

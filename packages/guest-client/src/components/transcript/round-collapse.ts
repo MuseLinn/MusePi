@@ -28,6 +28,9 @@ export interface RoundFold {
 	toolCount: number;
 	/** Bash-command count inside the foldable span (bashExecution rows). */
 	commandCount: number;
+	/** Read/search/browse tool calls inside the span (openchamber's
+	 *  探索了代码库 segment): read/grep/glob/fetch/web-search/inspect. */
+	exploreCount: number;
 	/** File-change aggregate inside the span (ZCode 更改 chip parity): files
 	 *  touched by edit/apply_patch tool results + summed diff lines. Zero
 	 *  when the round edited nothing — the header omits the chip then. */
@@ -57,6 +60,11 @@ function toolResultSnippet(m: { content?: unknown }): string {
 /** Tools whose results carry diff details (single-source: their renderer is
  *  tool-render/tools/edit.tsx). */
 const DIFF_TOOLS = new Set(["edit", "apply_patch"]);
+
+/** Read/search/browse tools — the openchamber 活动 header's 探索了代码库
+ *  segment counts these (the round looked at the codebase instead of only
+ *  running commands or editing). */
+const EXPLORE_TOOLS = new Set(["read", "grep", "glob", "ast-grep", "fetch", "web-search", "inspect-image"]);
 
 /** Aggregate file-change stats from one edit/apply_patch toolResult's
  *  details — `details.diff` + `details.path` for single-file results,
@@ -98,11 +106,13 @@ function countWorkInside(
 ): {
 	toolCount: number;
 	commandCount: number;
+	exploreCount: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
 } {
 	let toolCount = 0;
 	let commandCount = 0;
+	let exploreCount = 0;
 	let preview = "";
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
 	for (let i = start; i <= end; i++) {
@@ -113,6 +123,7 @@ function countWorkInside(
 			commandCount++;
 		} else if (m.role === "toolResult") {
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
+			if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
 			if (!preview) preview = toolResultSnippet(m);
 		} else if (m.role === "assistant") {
 			for (const block of m.content) {
@@ -123,6 +134,7 @@ function countWorkInside(
 	return {
 		toolCount,
 		commandCount,
+		exploreCount,
 		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
 		preview,
 	};
@@ -166,13 +178,14 @@ export function buildRoundFolds(
 		if (typeof dur !== "number") continue;
 		if (i === lastCompleteFinal) continue; // live tail stays expanded
 		if (userIdx < 0 || i - userIdx <= 1) continue; // nothing to fold
-		const { toolCount, commandCount, changes, preview } = countWorkInside(entries, userIdx + 1, i);
+		const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(entries, userIdx + 1, i);
 		folds.push({
 			startIdx: userIdx,
 			finalIdx: i,
 			durationMs: dur,
 			toolCount,
 			commandCount,
+			exploreCount,
 			filesChanged: changes.filesChanged,
 			added: changes.added,
 			removed: changes.removed,

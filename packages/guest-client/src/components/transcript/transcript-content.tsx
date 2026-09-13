@@ -17,7 +17,7 @@ import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
-import { formatRoundDuration, type RoundFold } from "./round-collapse";
+import type { RoundFold } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
@@ -541,12 +541,14 @@ export function lastUserMessageTs(entries: readonly SessionEntry[]): number | un
 	return undefined;
 }
 
-/** Completed-round fold header (craft-agents TurnCard parity): chevron +
- *  frozen work duration (hh:mm:ss) + tool/command counts + a working
- *  preview. Clicking expands the round's tool activities back inline. When
- *  the round touched files, a ZCode-style aggregate chip ("更改 N +A −R")
- *  joins the counts; its undo button branches back to the round's user
- *  message — the same session.branchAt revert the per-message button uses. */
+/** Completed-round fold header (openchamber 活动 header parity): an activity
+ *  glyph + 活动 label + a WHAT-HAPPENED summary — 更改了 N 个文件 +A/−R ·
+ *  探索了代码库 · 运行了 N 条命令 — instead of the old duration + bare
+ *  counts (the duration stays in the frozen 已工作 line under the final
+ *  reply, so the header and the timer no longer duplicate). Clicking expands
+ *  the round's tool activities back inline. The undo button branches back to
+ *  the round's user message — the same session.branchAt revert the
+ *  per-message button uses. */
 export function RoundFoldHeader({
 	fold,
 	open,
@@ -561,27 +563,40 @@ export function RoundFoldHeader({
 	onRevert?(messageId: string, text: string): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
+	// Summary segments (openchamber wording): changes · explored · commands,
+	// falling back to the bare tool count for rounds with neither signal.
+	const segments: ReactNode[] = [];
+	if (changed) {
+		segments.push(
+			<span key="changes" className="tr-round-fold-changes">
+				<span className="tr-round-fold-changes-files">
+					{t("round changed {count}", { count: String(fold.filesChanged) })}
+				</span>
+				{fold.added > 0 && <span className="tr-round-fold-add">+{fold.added}</span>}
+				{fold.removed > 0 && <span className="tr-round-fold-remove">−{fold.removed}</span>}
+			</span>,
+		);
+	}
+	if (fold.exploreCount > 0) segments.push(<span key="explore">{t("explored the codebase")}</span>);
+	if (fold.commandCount > 0) {
+		segments.push(<span key="cmds">{t("round commands {count}", { count: String(fold.commandCount) })}</span>);
+	}
+	if (segments.length === 0 && fold.toolCount > 0) {
+		segments.push(<span key="tools">{t("round tools {count}", { count: String(fold.toolCount) })}</span>);
+	}
 	return (
 		<button type="button" className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} onClick={onToggle}>
 			<ChevronRight size={12} className="tr-round-fold-chevron" />
-			<span className="tr-round-fold-duration">{formatRoundDuration(fold.durationMs)}</span>
-			{fold.toolCount > 0 && (
-				<span className="tr-round-fold-count">{t("round tools {count}", { count: String(fold.toolCount) })}</span>
-			)}
-			{fold.commandCount > 0 && (
-				<span className="tr-round-fold-count">
-					{t("round commands {count}", { count: String(fold.commandCount) })}
-				</span>
-			)}
-			{changed && (
-				<span className="tr-round-fold-changes">
-					<span className="tr-round-fold-changes-files">
-						{t("round changed {count}", { count: String(fold.filesChanged) })}
-					</span>
-					{fold.added > 0 && <span className="tr-round-fold-add">+{fold.added}</span>}
-					{fold.removed > 0 && <span className="tr-round-fold-remove">−{fold.removed}</span>}
-				</span>
-			)}
+			<span className="tr-round-fold-label">{t("activity")}</span>
+			{segments.map((seg, i) => (
+				// segments are authored above, each with its own stable key —
+				// the wrapper re-keys positionally only for the separator
+				// pairing (React reconciles the inner span by its own key).
+				<Fragment key={i}>
+					{i > 0 && <span className="tr-round-fold-sep">·</span>}
+					{seg}
+				</Fragment>
+			))}
 			<span className="tr-round-fold-preview">{fold.preview}</span>
 			{changed && onRevert && fold.userId && (
 				<span
