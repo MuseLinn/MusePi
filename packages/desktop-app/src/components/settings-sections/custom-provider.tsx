@@ -16,8 +16,24 @@ import { GuiSelect } from "../GuiSelect";
 
 export interface CustomProvider {
 	name: string;
-	models: { id: string; name?: string; input?: string[]; contextWindow?: number; maxTokens?: number }[];
+	models: {
+		id: string;
+		name?: string;
+		api?: string;
+		supportsTools?: boolean;
+		input?: string[];
+		contextWindow?: number;
+		maxTokens?: number;
+	}[];
 }
+
+const MODEL_API_OPTIONS = [
+	{ value: "", label: "inherit provider protocol" },
+	{ value: "openai-completions", label: "Chat Completions (/chat/completions)" },
+	{ value: "openai-responses", label: "Responses (/responses)" },
+	{ value: "anthropic-messages", label: "Anthropic Messages (/messages)" },
+	{ value: "google-generative-ai", label: "Google Generative AI" },
+];
 
 const EMPTY_FORM = {
 	name: "",
@@ -30,9 +46,13 @@ const EMPTY_FORM = {
 	modelInput: undefined as string[] | undefined,
 	modelContextWindow: null as number | null,
 	modelMaxTokens: null as number | null,
+	modelApi: undefined as string | undefined,
+	modelSupportsTools: undefined as boolean | undefined,
 	adopted: [] as {
 		id: string;
 		name?: string;
+		api?: string | null;
+		supportsTools?: boolean | null;
 		input?: string[] | null;
 		contextWindow?: number | null;
 		maxTokens?: number | null;
@@ -137,6 +157,8 @@ export function CustomProviderPane({
 		patch: Partial<{
 			id: string;
 			name: string | undefined;
+			api: string | null;
+			supportsTools: boolean | null;
 			input: string[] | null;
 			contextWindow: number | null;
 			maxTokens: number | null;
@@ -184,6 +206,12 @@ export function CustomProviderPane({
 							.map(m => ({
 								id: m.id,
 								...(m.name ? { name: m.name } : {}),
+								...(m.api === null ? { api: null } : m.api ? { api: m.api } : {}),
+								...(m.supportsTools === null
+									? { supportsTools: null }
+									: m.supportsTools !== undefined
+										? { supportsTools: m.supportsTools }
+										: {}),
 								// input: explicit []/null → restore-to-auto (null deletes
 								// the models.yml override); non-empty array writes it;
 								// untouched (undefined) omits the field.
@@ -206,6 +234,10 @@ export function CustomProviderPane({
 										// delete the override; checked → write the array.
 										...(form.modelInput !== undefined
 											? { input: form.modelInput.length > 0 ? form.modelInput : null }
+											: {}),
+										...(form.modelApi !== undefined ? { api: form.modelApi || null } : {}),
+										...(form.modelSupportsTools !== undefined
+											? { supportsTools: form.modelSupportsTools }
 											: {}),
 										...(form.modelContextWindow !== undefined
 											? { contextWindow: form.modelContextWindow }
@@ -256,6 +288,8 @@ export function CustomProviderPane({
 						models?: {
 							id: string;
 							name?: string;
+							api?: string;
+							supportsTools?: boolean;
 							input?: string[];
 							contextWindow?: number;
 							maxTokens?: number;
@@ -277,6 +311,8 @@ export function CustomProviderPane({
 				modelInput: hand?.input && hand.input.length > 0 ? hand.input : undefined,
 				modelContextWindow: hand?.contextWindow ?? null,
 				modelMaxTokens: hand?.maxTokens ?? null,
+				modelApi: hand?.api,
+				modelSupportsTools: hand?.supportsTools,
 				adopted: models.slice(0, models.length - 1),
 			});
 			setEditingProvider(name);
@@ -493,6 +529,48 @@ export function CustomProviderPane({
 														</label>
 													))}
 												</div>
+												<div className="flex flex-wrap items-center gap-2">
+													<GuiSelect
+														className="gui-settings-select !w-auto min-w-[210px]"
+														value={m.api ?? ""}
+														onChange={api => patchAdopted(index, { api: api || null })}
+														options={MODEL_API_OPTIONS}
+													/>
+													<label className="flex items-center gap-1 text-[12px]">
+														<input
+															type="checkbox"
+															checked={m.supportsTools !== false}
+															onChange={() =>
+																patchAdopted(index, {
+																	supportsTools: m.supportsTools === false ? null : false,
+																})
+															}
+														/>
+														{t("model supports tools")}
+													</label>
+												</div>
+												<div className="flex flex-wrap items-center gap-2">
+													<GuiSelect
+														className="gui-settings-select !w-auto min-w-[210px]"
+														value={form.modelApi ?? ""}
+														onChange={api => setForm(v => ({ ...v, modelApi: api || undefined }))}
+														options={MODEL_API_OPTIONS}
+													/>
+													<label className="flex items-center gap-1 text-[12px]">
+														<input
+															type="checkbox"
+															checked={form.modelSupportsTools !== false}
+															onChange={() =>
+																setForm(v => ({
+																	...v,
+																	modelSupportsTools:
+																		v.modelSupportsTools === false ? undefined : false,
+																}))
+															}
+														/>
+														{t("model supports tools")}
+													</label>
+												</div>
 												<div className="flex gap-2">
 													<input
 														className="gui-input flex-1"
@@ -579,6 +657,8 @@ export function CustomProviderPane({
 										modelInput: [],
 										modelContextWindow: null,
 										modelMaxTokens: null,
+										modelApi: undefined,
+										modelSupportsTools: undefined,
 									}))
 								}
 							>

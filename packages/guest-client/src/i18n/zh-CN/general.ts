@@ -480,6 +480,10 @@ export const general = {
 	"advisor notes": "{count} 条提醒",
 	"advisor blockers": "{count} 条阻塞",
 	"advisor more": "+{count} 条",
+	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
+	"model error": "模型错误",
+	"retry attempt {count}": "重试第 {count} 次",
+	"model supports tools": "模型支持工具调用",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

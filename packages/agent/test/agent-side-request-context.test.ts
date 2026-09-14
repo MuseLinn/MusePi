@@ -179,6 +179,37 @@ describe("Agent — buildSideRequestContext", () => {
 		expect(context.systemPrompt).toEqual(["system"]);
 	});
 
+	it("omits the tool catalog when the active model advertises supportsTools: false", async () => {
+		await withNativeDialectEnv(async () => {
+			const noToolsModel = { ...cursorModel, supportsTools: false };
+			let mainContext: Context | undefined;
+			const agent = new Agent({
+				initialState: {
+					model: noToolsModel,
+					systemPrompt: ["system"],
+					tools: [tool],
+				},
+				streamFn: (_model, context) => {
+					mainContext = context;
+					const stream = new AssistantMessageEventStream();
+					queueMicrotask(() => {
+						const message = testAssistantMessage("ok");
+						stream.push({ type: "text_delta", contentIndex: 0, delta: "ok", partial: message });
+						stream.push({ type: "done", reason: "stop", message });
+					});
+					return stream;
+				},
+			});
+
+			await agent.prompt("Q?");
+
+			// The active model's explicit capability wins: tools are omitted, so a
+			// lossy OpenAI-compatible gateway never receives a tool schema that it
+			// would silently truncate into an empty-stop retry loop.
+			expect(mainContext?.tools).toEqual([]);
+		});
+	});
+
 	it("invokes transformProviderContext filter if present", async () => {
 		const transformSpy = mock((ctx: Context): Context => {
 			return {

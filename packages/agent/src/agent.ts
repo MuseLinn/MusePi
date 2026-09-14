@@ -1467,7 +1467,15 @@ export class Agent {
 					await Bun.sleep(0);
 				}
 				context.systemPrompt = this.#state.systemPrompt;
-				context.tools = this.#toolsForModel(this.#state.model ?? model);
+				const activeModel = this.#state.model ?? model;
+				// Explicit model capability wins over the session's global tool
+				// registry. Some OpenAI-compatible gateways accept a normal chat
+				// stream but silently truncate into empty SSE chunks as soon as a
+				// `tools` schema is present; advertising tools to such a model
+				// turns a usable text model into a retrying empty-stop loop. An
+				// explicit [] tells providers to OMIT tools (not undefined, which
+				// may inject a tool-history sentinel).
+				context.tools = activeModel.supportsTools === false ? [] : this.#toolsForModel(activeModel);
 			},
 			beforeModelCall:
 				this.#beforeModelCall || this.#additionalBeforeModelCalls.size > 0

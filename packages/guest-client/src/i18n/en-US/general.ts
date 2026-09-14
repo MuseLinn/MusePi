@@ -485,4 +485,8 @@ export const general = {
 	"advisor notes": "{count} note(s)",
 	"advisor blockers": "{count} blocker(s)",
 	"advisor more": "+{count} more",
+	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
+	"model error": "Model error",
+	"retry attempt {count}": "Retry attempt {count}",
+	"model supports tools": "Model supports tools",
 } as const satisfies Record<GeneralKey, string>;

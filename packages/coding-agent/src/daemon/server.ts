@@ -8936,6 +8936,8 @@ export class DaemonServer {
 						models: {
 							id: string;
 							name?: string;
+							api?: string | null;
+							supportsTools?: boolean | null;
 							compactionModel?: string;
 							input?: string[] | null;
 							contextWindow?: number | null;
@@ -8976,6 +8978,10 @@ export class DaemonServer {
 				for (const m of p.provider.models) {
 					const row: Record<string, unknown> = { ...(byId.get(m.id) ?? {}), id: m.id };
 					if (m.name) row.name = m.name;
+					if (m.api === null) delete row.api;
+					else if (m.api) row.api = m.api;
+					if (m.supportsTools === null) delete row.supportsTools;
+					else if (m.supportsTools !== undefined) row.supportsTools = m.supportsTools;
 					if (m.compactionModel) row.compactionModel = m.compactionModel;
 					if (m.input === null) delete row.input;
 					else if (Array.isArray(m.input) && m.input.length > 0) row.input = m.input;
