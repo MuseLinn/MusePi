@@ -216,6 +216,9 @@ export function ChatSection(): ReactNode {
 					label={t("activity default expanded")}
 					description={t("activity default expanded description")}
 					storageKey="musepi-gui-chat-roundfold"
+					onChange={expanded =>
+						window.dispatchEvent(new CustomEvent("musepi-roundfold-default-changed", { detail: expanded }))
+					}
 				/>
 				<PrefToggle
 					label={t("show reasoning traces")}

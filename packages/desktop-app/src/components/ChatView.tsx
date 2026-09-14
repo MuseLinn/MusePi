@@ -350,6 +350,25 @@ export function ChatView({
 	// Pause banner hold timer: tick every second while the freeze is engaged
 	// so the "paused · mm:ss" clock advances.
 	const [, setPauseTick] = useState(0);
+	// Round-activity fold default (settings → 聊天). localStorage events do
+	// not fire in the same document, so PrefToggle dispatches the companion
+	// event; re-rendering here lets the Transcript reinterpret ALL existing
+	// round deviations immediately (no reload / no migration).
+	const [defaultRoundFoldExpanded, setDefaultRoundFoldExpanded] = useState(() => {
+		try {
+			return localStorage.getItem("musepi-gui-chat-roundfold") === "1";
+		} catch {
+			return false;
+		}
+	});
+	useEffect(() => {
+		const onChanged = (e: Event): void => {
+			const detail = (e as CustomEvent<boolean>).detail;
+			setDefaultRoundFoldExpanded(detail === true);
+		};
+		window.addEventListener("musepi-roundfold-default-changed", onChanged);
+		return () => window.removeEventListener("musepi-roundfold-default-changed", onChanged);
+	}, []);
 	/** TTS read-aloud 播放状态:行级指示 + 停止句柄。 */
 	const [speakingId, setSpeakingId] = useState<string | null>(null);
 	const stopSpeakRef = useRef<(() => void) | null>(null);
@@ -1480,13 +1499,7 @@ export function ChatView({
 																		return true;
 																	}
 																})()}
-																defaultRoundFoldExpanded={(() => {
-																	try {
-																		return localStorage.getItem("musepi-gui-chat-roundfold") === "1";
-																	} catch {
-																		return false;
-																	}
-																})()}
+																defaultRoundFoldExpanded={defaultRoundFoldExpanded}
 																/* TUI display-settings parity: the daemon
 																 * settings drive the transcript (unflagged
 																 * from tuiOnly 2026-08-12). */
