@@ -9,6 +9,8 @@ import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
 const ANNOUNCEMENT_EXIT_MS = 200;
+/** Cap for the advisory network probes on the boot path (see withTimeout). */
+const UPDATE_CHECK_TIMEOUT_MS = 4000;
 
 /** changelog.startup payload — release notes plus an optional campaign
  *  reward (rendered as the celebratory ticket overlay instead). */
@@ -30,6 +32,19 @@ interface StartupChangelog {
  * so this panel shows once per upgrade. The settings-footer 查看新功能
  * button re-opens it with force=true (peek, marker untouched).
  */
+/** Boot must never wait on a network probe: the update check is advisory
+ * (it only feeds the "latest version" line), so cap it — measured at >8s with
+ * a cold/blocked network, and Promise.all below would otherwise hold the
+ * what's-new card hostage to it. Resolves null on timeout or failure. */
+function withTimeout<T>(p: Promise<T | null>, ms: number): Promise<T | null> {
+	return Promise.race([
+		p.catch(() => null),
+		new Promise<null>(resolve => {
+			setTimeout(() => resolve(null), ms);
+		}),
+	]);
+}
+
 export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const [markdown, setMarkdown] = useState<string | null>(null);
@@ -59,7 +74,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					rpc.request<StartupChangelog | null>("changelog.startup", {
 						locale: getLocaleSnapshot(),
 					}),
-					rpc.request<{ latest?: string } | null>("updates.check", {}),
+					withTimeout(rpc.request<{ latest?: string } | null>("updates.check", {}), UPDATE_CHECK_TIMEOUT_MS),
 				]);
 				if (cancelled) return;
 				const md = changelog?.markdown ?? null;

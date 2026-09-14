@@ -940,8 +940,12 @@
 	 * a slow brand pulse. gui-motion-off kills both (static logo). */
 	animation:
 		gui-splash-logo-in 620ms var(--spring) both,
-		gui-splash-blink 1.8s ease-in-out 700ms infinite;
+		gui-splash-blink 1.8s ease-in-out 700ms 3 both;
 }
+
+/* Splash animations MUST be finite — see the tagline rule below for why:
+ * the splash can outlive its intro (cold daemon, fresh profile, failed
+ * connect) and an infinite glow pulse repaints the logo every frame. */
 
 @keyframes gui-splash-logo-in {
 	from {
@@ -981,6 +985,19 @@
 	font-size: var(--ui-font-size-sm);
 	letter-spacing: 0.04em;
 	color: var(--color-text-faint);
+}
+
+/* The splash's shine must be FINITE. ShinyText sweeps `background-position`
+ * on a background-clip:text gradient — a per-frame MAIN-THREAD paint (not
+ * compositable), and the splash can be on screen far longer than its intro
+ * (cold daemon / failed connect). Measured 2026-09-14: with software raster
+ * that infinite paint wedges the renderer permanently — no JS involved, so no
+ * stack to catch (V8 never pauses; Runtime.evaluate stops answering; the main
+ * process and tray stay healthy). Forcing prefers-reduced-motion recovers, and
+ * so does capping the iterations: the intro still plays, then the frame
+ * settles into a static one. */
+.gui-splash .gui-shiny-text {
+	animation: gui-shiny-sweep var(--shiny-speed, 2.8s) linear 2 both;
 }
 
 .gui-connect-wrap {
