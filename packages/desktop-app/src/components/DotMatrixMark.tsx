@@ -49,7 +49,10 @@ export function DotMatrixMark({
 		let raf = 0;
 		let lastFrameT = 0;
 		let disposed = false;
-		const mouse = { x: -9999, y: -9999, active: true };
+		// Starts FALSE: the idle throttle only engages once the first
+		// non-interactive mousemove flips it — starting true ran the full-grid
+		// redraw at display refresh from mount.
+		const mouse = { x: -9999, y: -9999, active: false };
 		let time = 0;
 
 		// Theme-aware colors; re-read when <html> data-theme flips.
@@ -516,18 +519,41 @@ export function DotMatrixMark({
 			ripples.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, start: performance.now() });
 			if (ripples.length > 4) ripples.shift();
 		};
+		// Reduced-motion and the app's 动效=关闭 preference stop the rAF loop
+		// entirely: a static dot field renders once and stays. (The canvas had
+		// no motion-off path at all — every other animated surface does.)
+		const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+		const motionOff = (): boolean =>
+			reduceMotionQuery.matches || document.documentElement.classList.contains("gui-motion-off");
+		const syncMotion = (): void => {
+			if (disposed) return;
+			const shouldRun = !motionOff();
+			if (shouldRun && raf === 0) {
+				lastFrameT = 0;
+				raf = requestAnimationFrame(frame);
+			} else if (!shouldRun && raf !== 0) {
+				cancelAnimationFrame(raf);
+				raf = 0;
+			}
+		};
 		window.addEventListener("resize", resize);
 		window.addEventListener("mousemove", onMove, true);
 		window.addEventListener("pointerdown", onDown, true);
+		reduceMotionQuery.addEventListener("change", syncMotion);
+		const motionObserver = new MutationObserver(syncMotion);
+		motionObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 		resize();
-		raf = requestAnimationFrame(frame);
+		syncMotion();
 
 		return () => {
 			disposed = true;
-			cancelAnimationFrame(raf);
+			if (raf !== 0) cancelAnimationFrame(raf);
+			raf = 0;
 			io.disconnect();
 			ro.disconnect();
 			themeObserver.disconnect();
+			motionObserver.disconnect();
+			reduceMotionQuery.removeEventListener("change", syncMotion);
 			window.removeEventListener("resize", resize);
 			window.removeEventListener("mousemove", onMove, true);
 			window.removeEventListener("pointerdown", onDown, true);

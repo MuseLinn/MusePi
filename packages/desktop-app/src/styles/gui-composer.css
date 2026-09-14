@@ -940,7 +940,7 @@
 	 * a slow brand pulse. gui-motion-off kills both (static logo). */
 	animation:
 		gui-splash-logo-in 620ms var(--spring) both,
-		gui-splash-blink 1.8s ease-in-out 700ms 3 both;
+		gui-splash-blink 1.8s ease-in-out 700ms 30 both;
 }
 
 /* Splash animations MUST be finite — see the tagline rule below for why:
@@ -997,7 +997,7 @@
  * so does capping the iterations: the intro still plays, then the frame
  * settles into a static one. */
 .gui-splash .gui-shiny-text {
-	animation: gui-shiny-sweep var(--shiny-speed, 2.8s) linear 2 both;
+	animation: gui-shiny-sweep var(--shiny-speed, 2.8s) linear 20 both;
 }
 
 .gui-connect-wrap {
