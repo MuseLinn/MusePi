@@ -261,25 +261,117 @@ function decorateTables(html: string): string {
 }
 
 /**
- * Incremental streaming-markdown cache: `blocks` are frozen "\n\n"-bounded
+ * Incremental streaming-markdown cache: `blocks` are frozen boundary-bounded
  * chunks; a later append reuses everything before the cut verbatim.
+ *
+ * STRONG boundaries are blank lines ("\n\n") — block structure is stable, so
+ * a strong block's html is reusable on settle. WEAK boundaries are a single
+ * "\n" whose inline markers are all closed (see {@link streamingBoundaryAt}):
+ * they let markdown take shape on prose with no blank lines (the common
+ * Chinese-model case) instead of staying raw text the whole stream, but a
+ * soft-wrapped paragraph renders as two `<p>`s while streaming — settle
+ * re-parses past the last STRONG boundary so the final layout matches a
+ * reload, never permanently split.
  */
 export interface StreamingRenderState {
 	text: string;
-	blocks: Array<{ start: number; html: string }>;
+	blocks: Array<{ start: number; end: number; html: string; weak?: boolean }>;
 	/** Code-unit offset where the plain-text tail begins in `text`. */
 	tailStart: number;
+}
+
+/** Are emphasis, links, inline code and autolinks closed before `s` ends?
+ *  When yes, a single "\n" in `s` is a safe streaming cut: parse(prefix) +
+ *  parse(rest) matches parse(whole) except for soft-wrapped paragraphs (which
+ *  settle merges back). Conservative by design — a stray marker just keeps
+ *  the region in the plain-text tail one more line.
+ *
+ *  Emphasis uses a run stack: consecutive `*`/`_` are one marker, and a
+ *  same-length run closes the open one. CommonMark's real pairing rules are
+ *  context-sensitive (`**a*b**` is valid), so the stack is an approximation
+ *  that errs toward "unbalanced" — which only delays a weak cut, never
+ *  mis-parses. Backtick runs count as code spans because those CAN span a
+ *  newline; an open one must block the cut. */
+export function inlineMarkersBalanced(s: string): boolean {
+	let ticks = 0;
+	let run = 0;
+	const runStack: number[] = [];
+	let brackets = 0;
+	let parens = 0;
+	let angle = 0;
+	const closeRun = (): void => {
+		if (run === 0) return;
+		const top = runStack[runStack.length - 1];
+		if (top === run) runStack.pop();
+		else runStack.push(run);
+		run = 0;
+	};
+	for (let i = 0; i < s.length; i++) {
+		const c = s[i];
+		if (c === "\\") {
+			i++; // escaped char carries no marker
+			continue;
+		}
+		switch (c) {
+			case "`":
+				ticks++;
+				continue;
+			case "*":
+			case "_":
+				run++;
+				continue;
+			case "[":
+				brackets++;
+				continue;
+			case "]":
+				brackets--;
+				continue;
+			case "(":
+				parens++;
+				continue;
+			case ")":
+				parens--;
+				continue;
+			case "<":
+				angle++;
+				continue;
+			case ">":
+				angle--;
+				continue;
+			default:
+				closeRun();
+		}
+	}
+	closeRun();
+	return ticks % 2 === 0 && runStack.length === 0 && brackets === 0 && parens === 0 && angle === 0;
+}
+
+/** A streaming cut at the "\n" ending at index `i`. A blank line is a strong
+ *  (block) boundary; a lone "\n" is a weak one, allowed only when fences are
+ *  balanced and inline markers are closed so the split cannot break emphasis,
+ *  a link, or an open code span. Returns the end offset of the block (the cut
+ *  itself is included) or null when the position is not a cut. */
+function streamingBoundaryAt(text: string, i: number): { end: number; weak: boolean } | null {
+	if (text[i] !== "\n") return null;
+	if (text[i + 1] === "\n") {
+		if (!fencesBalanced(text.slice(0, i + 2))) return null;
+		return { end: i + 2, weak: false };
+	}
+	const prefix = text.slice(0, i + 1);
+	if (!fencesBalanced(prefix)) return null;
+	if (!inlineMarkersBalanced(prefix)) return null;
+	return { end: i + 1, weak: true };
 }
 
 /**
  * Streaming markdown renderer. The settled render (`streaming: false`)
  * parses the complete text once — the stable final layout (what a reload
  * shows). While streaming, every COMPLETE block renders as markdown: the
- * head grows as balanced "\n\n" boundaries appear, so the message takes
- * shape as it arrives. The region after the last balanced boundary is
- * returned as RAW TEXT (`tail`) — only a plain region can host the
- * per-character span effects, which is also why an unclosed fence stays
- * literal until it closes.
+ * head grows as boundaries appear (blank lines strongly, closed inline
+ * lines weakly), so the message takes shape as it arrives. The region after
+ * the last boundary is returned as RAW TEXT (`tail`) — only a plain region
+ * can host the per-character span effects, which is also why an unclosed
+ * fence stays literal until it closes.
  */
 export function renderStreamingMarkdown(
 	text: string,
@@ -287,15 +379,22 @@ export function renderStreamingMarkdown(
 	prev: StreamingRenderState | null,
 ): { html: string; tail: string | null; state: StreamingRenderState | null } {
 	if (!streaming) {
-		// Settle: the streaming head blocks were parsed at balanced "\n\n"
-		// boundaries and are COMPLETE markdown — reuse them verbatim and
-		// re-parse only the plain-text tail as real markdown (a fence now
-		// closed, a list complete). Avoids the full-message synchronous
-		// md.parse on settle — the user-visible "卡一下才都渲染" stall on
-		// long messages.
+		// Settle: the STRONG head blocks before the first weak one are complete
+		// markdown — reuse them verbatim and re-parse only the rest. WEAK cuts
+		// (single newlines) are streaming-only: a soft-wrapped paragraph splits
+		// into two <p>s across them, and that split poisons the parse context
+		// of every later block too, so settle re-parses from the FIRST weak
+		// block onward. The final layout then matches a fresh full parse (what
+		// a reload shows); the cost is one parse of the weak region, paid once
+		// at settle.
 		if (prev && prev.blocks.length > 0 && text.startsWith(prev.text)) {
-			const head = prev.blocks.map(b => b.html).join("");
-			const tailText = text.slice(prev.tailStart);
+			const firstWeak = prev.blocks.findIndex(b => b.weak);
+			const keep = firstWeak === -1 ? prev.blocks.length : firstWeak;
+			const head = prev.blocks
+				.slice(0, keep)
+				.map(b => b.html)
+				.join("");
+			const tailText = text.slice(keep > 0 ? prev.blocks[keep - 1].end : 0);
 			const tailHtml = decorateTables(md.parse(tailText, { async: false }));
 			return { html: head + tailHtml, tail: null, state: null };
 		}
@@ -304,31 +403,33 @@ export function renderStreamingMarkdown(
 	try {
 		if (prev && text.length > prev.text.length && text.startsWith(prev.text)) {
 			// Append-only growth: the frozen head ADVANCES by promoting every
-			// block that has just become complete — a balanced "\n\n" boundary
-			// that did not exist on the previous frame. Promoting it now is what
-			// lets markdown take shape while the message streams (paragraphs,
-			// lists, and a code fence from the moment it closes) instead of
-			// waiting for settle.
+			// region that has just reached a boundary — a cut that did not
+			// exist on the previous frame. Promoting it now is what lets
+			// markdown take shape while the message streams (paragraphs,
+			// lists, prose lines, and a code fence from the moment it closes)
+			// instead of waiting for settle.
 			//
-			// The region AFTER the last balanced boundary stays RAW TEXT: that is
-			// what keeps the per-character span effects working (a stable plain
+			// The region AFTER the last boundary stays RAW TEXT: that is what
+			// keeps the per-character span effects working (a stable plain
 			// node the DOM pass can append spans to), and why an OPEN fence is
 			// still shown literally. `blocks` is mutated in place — the caller
 			// replaces its cached state with the object returned here, so the
-			// previous entry is discarded. The tail DOM pass clears and re-appends
-			// when the cut moves past its own prefix, so promoted text is not
-			// re-animated.
+			// previous entry is discarded. The tail DOM pass clears and
+			// re-appends when the cut moves past its own prefix, so promoted
+			// text is not re-animated.
 			const blocks = prev.blocks;
 			let tailStart = prev.tailStart ?? 0;
 			for (let i = tailStart; i < text.length; i++) {
-				if (text[i] !== "\n" || text[i + 1] !== "\n") continue;
-				if (!fencesBalanced(text.slice(0, i + 2))) continue;
+				const b = streamingBoundaryAt(text, i);
+				if (b === null) continue;
 				blocks.push({
 					start: tailStart,
-					html: decorateTables(md.parse(text.slice(tailStart, i + 2), { async: false })),
+					end: b.end,
+					weak: b.weak,
+					html: decorateTables(md.parse(text.slice(tailStart, b.end), { async: false })),
 				});
-				tailStart = i + 2;
-				i += 1;
+				tailStart = b.end;
+				if (!b.weak) i += 1; // skip the second \n of a blank-line cut
 			}
 			return {
 				html: blocks.map(b => b.html).join(""),
@@ -337,19 +438,23 @@ export function renderStreamingMarkdown(
 			};
 		}
 		// First streaming frame / non-append growth: parse once, split into
-		// frozen "\n\n"-bounded blocks so later appends can reuse everything
-		// before the cut. Everything after the final balanced boundary is an
-		// unfinished tail — returned raw, same as the incremental path, so
-		// an open fence never snaps into a code block on the very first
-		// frame.
-		const blocks: Array<{ start: number; html: string }> = [];
+		// frozen boundary-bounded blocks so later appends can reuse everything
+		// before the cut. Everything after the final boundary is an unfinished
+		// tail — returned raw, same as the incremental path, so an open fence
+		// never snaps into a code block on the very first frame.
+		const blocks: Array<{ start: number; end: number; html: string; weak?: boolean }> = [];
 		let from = 0;
 		for (let i = 0; i < text.length; i++) {
-			if (text[i] === "\n" && text[i + 1] === "\n" && fencesBalanced(text.slice(0, i + 2))) {
-				blocks.push({ start: from, html: decorateTables(md.parse(text.slice(from, i + 2), { async: false })) });
-				from = i + 2;
-				i += 1;
-			}
+			const b = streamingBoundaryAt(text, i);
+			if (b === null) continue;
+			blocks.push({
+				start: from,
+				end: b.end,
+				weak: b.weak,
+				html: decorateTables(md.parse(text.slice(from, b.end), { async: false })),
+			});
+			from = b.end;
+			if (!b.weak) i += 1;
 		}
 		return {
 			html: blocks.map(b => b.html).join(""),

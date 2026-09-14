@@ -8,7 +8,7 @@
 import type { AssistantMessage, ImageContent, SessionEntry, TextContent, ToolResultMessage } from "@musepi/pi-wire";
 import { ChevronRight, Undo2 } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
-import { createElement, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
@@ -705,6 +705,46 @@ export function AdvisorBlock({ notes }: { notes: AdvisorNote[] }): ReactNode {
 	);
 }
 
+/**
+ * Block-level liveness for a streaming text block. The `pending` flag is
+ * message-scoped — it stays true while the whole turn runs (tool calls,
+ * subagents, …) long after THIS block stopped growing. Without block-level
+ * tracking the finished block keeps `streaming` on, so its tail stays raw
+ * plain text and only renders markdown when the next event flips `pending`
+ * (user: "正文直到下一次工具调用或思考才一次性渲染 markdown"). The block is
+ * treated as settled once it has been idle past {@link STREAM_IDLE_MS}, and
+ * re-animates if it grows again. Model token gaps under the threshold keep
+ * the per-char effect running; the pause at the end of a block is what
+ * freezes it.
+ */
+const STREAM_IDLE_MS = 700;
+
+function StreamingTextBlock({
+	text,
+	live,
+	smoothStreaming,
+}: {
+	text: string;
+	/** This block is the message's last text block and the message is
+	 *  pending — the only case where the block can still be growing. */
+	live: boolean;
+	smoothStreaming?: boolean;
+}): ReactNode {
+	const [streaming, setStreaming] = useState(live);
+	// useLayoutEffect so the resume lands before paint (an idle → growing
+	// transition would otherwise flash one settled frame).
+	useLayoutEffect(() => {
+		if (!live) {
+			setStreaming(false);
+			return;
+		}
+		setStreaming(true);
+		const timer = setTimeout(() => setStreaming(false), STREAM_IDLE_MS);
+		return () => clearTimeout(timer);
+	}, [text, live]);
+	return <Markdown text={text} streaming={streaming} smoothStreaming={smoothStreaming} />;
+}
+
 export function AssistantBody({
 	message,
 	results,
@@ -790,10 +830,10 @@ export function AssistantBody({
 				return <ThinkingBlock key={`k${i}`} text="" redacted />;
 			case "text":
 				return (
-					<Markdown
+					<StreamingTextBlock
 						key={`t${i}`}
 						text={block.text}
-						streaming={pending && i === lastTextIdx}
+						live={pending && i === lastTextIdx}
 						smoothStreaming={smoothStreaming}
 					/>
 				);
