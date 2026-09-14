@@ -106,3 +106,9 @@ packages/desktop-app/vendor/
 
 # Local scratch notes (reference-repo triage etc.) — never committed
 /local/
+
+# i18n split scratch (split(1) output from a one-off migration)
+.tmp-i18n-rem-part-*
+
+# WorkBuddy agent session state (memory, outputs) — never committed
+.workbuddy/
