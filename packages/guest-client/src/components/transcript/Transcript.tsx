@@ -689,6 +689,25 @@ function renderCustomMessage({
 			</Row>
 		);
 	}
+	if (customType === "retry_failure") {
+		const attempt =
+			details !== null && typeof details === "object" && "attempt" in details && typeof details.attempt === "number"
+				? details.attempt
+				: undefined;
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<div className="tr-retry-failure" role="alert">
+					<span className="tr-retry-failure-chip">{t("model error")}</span>
+					<span className="tr-retry-failure-message">{msgText({ content })}</span>
+					{attempt !== undefined && (
+						<span className="tr-retry-failure-attempt">
+							{t("retry attempt {count}", { count: String(attempt) })}
+						</span>
+					)}
+				</div>
+			</Row>
+		);
+	}
 	if (customType.startsWith("irc:")) {
 		const from =
 			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"

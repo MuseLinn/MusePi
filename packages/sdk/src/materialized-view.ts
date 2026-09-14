@@ -218,6 +218,34 @@ export class MaterializedView {
 				this.#upsertCustomMessage(event.message);
 				break;
 			}
+			case "auto_retry_end": {
+				// Terminal retries previously had no transcript projection: recovery
+				// removes the empty assistant turn, and this event used to be
+				// ignored, leaving GUI clients with a blank/branch-shaped shell
+				// instead of the actual provider failure. Surface the final error
+				// as a display-only custom message; session-context excludes the
+				// matching persisted entry from future model context.
+				if (event.success !== false || !event.finalError) break;
+				// A terminal retry failure must surface exactly once. turn-recovery
+				// also persists a durable `retry_failure` custom message (replayed
+				// from the snapshot on reload), so skip if one already exists to
+				// avoid a duplicate error card.
+				const existing = this.#entries.find(e => e.type === "custom_message" && e.customType === "retry_failure");
+				if (existing) break;
+				const entry: CustomMessageEntry = {
+					type: "custom_message",
+					id: "retry-failure",
+					parentId: null,
+					timestamp: new Date().toISOString(),
+					customType: "retry_failure",
+					content: event.finalError,
+					display: true,
+					details: { attempt: event.attempt },
+				};
+				this.#customMessages.set(entry.id, entry);
+				this.#entries.push(entry);
+				break;
+			}
 			case "agent_start": {
 				if (!this.#mainAgent) {
 					this.#mainAgent = {

@@ -148,6 +148,62 @@ describe("MaterializedView message projection", () => {
 	});
 });
 
+describe("MaterializedView retry_failure projection", () => {
+	test("auto_retry_end (failure) projects exactly one retry_failure card and no branch_summary", () => {
+		const view = new MaterializedView(SESSION, CWD);
+		view.apply({ type: "agent_start" });
+		view.apply({ type: "message_start", message: userMessage() });
+		view.apply({
+			type: "auto_retry_end",
+			success: false,
+			attempt: 3,
+			finalError: "Assistant returned empty stop after retry cap",
+		});
+
+		const snap = view.snapshot();
+		const retryFailures = snap.entries.filter(e => e.type === "custom_message" && e.customType === "retry_failure");
+		expect(retryFailures).toHaveLength(1);
+		const entry = retryFailures[0] as {
+			content: string;
+			display: boolean;
+			details: { attempt: number };
+		};
+		expect(entry.content).toBe("Assistant returned empty stop after retry cap");
+		expect(entry.display).toBe(true);
+		expect(entry.details.attempt).toBe(3);
+		// The failed round must never leave a branch_summary shell behind.
+		expect(snap.entries.some(e => e.type === "branch_summary")).toBe(false);
+	});
+
+	test("auto_retry_end projection is idempotent (no duplicate card on replay)", () => {
+		const view = new MaterializedView(SESSION, CWD);
+		const evt: AgentEvent = {
+			type: "auto_retry_end",
+			success: false,
+			attempt: 2,
+			finalError: "empty stop",
+		};
+		view.apply(evt);
+		view.apply(evt);
+
+		const snap = view.snapshot();
+		const retryFailures = snap.entries.filter(e => e.type === "custom_message" && e.customType === "retry_failure");
+		expect(retryFailures).toHaveLength(1);
+	});
+
+	test("auto_retry_end (success) does not project a failure card", () => {
+		const view = new MaterializedView(SESSION, CWD);
+		view.apply({ type: "auto_retry_end", success: true, attempt: 1 });
+
+		const snap = view.snapshot();
+		expect(
+			snap.entries.some(
+				e => e.type === "custom_message" && (e as { customType?: string }).customType === "retry_failure",
+			),
+		).toBe(false);
+	});
+});
+
 describe("MaterializedView persistence round-trip", () => {
 	test("fromSnapshot restores entries, agents, streaming and cursor", () => {
 		const view = new MaterializedView(SESSION, CWD);

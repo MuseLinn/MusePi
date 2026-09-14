@@ -719,6 +719,19 @@ export class TurnRecovery {
 			this.#clearPendingRetryErrors();
 			this.#retryAttempt = 0;
 			this.resolveRetry();
+			// A terminal retry failure still needs a durable USER-VISIBLE
+			// transcript record. Previously we dropped the empty assistant turn
+			// and wrote nothing, so the GUI showed a spinner/blank branch shell
+			// while the TUI alone printed the error. This display-only custom
+			// message is excluded from future model context in session-context;
+			// it exists solely to explain why the round stopped across reloads.
+			this.#host.sessionManager.appendCustomMessageEntry(
+				"retry_failure",
+				finalError,
+				true,
+				{ attempt: this.#retryAttempt > 0 ? this.#retryAttempt : attempts, providerEmptyOutput, outputTokens },
+				"agent",
+			);
 			// A turn with no actionable output carries no transcript value, while its
 			// provider usage can anchor the next prompt at the full failed-request size
 			// and re-trigger compaction at the same boundary. Remove every capped

@@ -338,7 +338,16 @@ export function buildSessionContext(
 			}
 			pushMessage(entry.message);
 		} else if (entry.type === "custom_message") {
-			if (!options?.transcript && entry.customType === PREWALK_PLAN_MESSAGE_TYPE) return;
+			// Display-only recovery failures explain a terminal provider error to
+			// the human; they must never become a developer message on the NEXT
+			// turn (otherwise the model wastes tokens responding to its own
+			// failed retry). Prewalk plans have the same display/context split.
+			if (
+				!options?.transcript &&
+				(entry.customType === PREWALK_PLAN_MESSAGE_TYPE || entry.customType === "retry_failure")
+			) {
+				return;
+			}
 			if (!isCustomMessageContent(entry.content)) return;
 			const normalized = normalizeCustomMessagePayload(entry);
 			const attribution = entry.attribution === undefined ? undefined : normalized.attribution;

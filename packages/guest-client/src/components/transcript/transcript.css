@@ -250,6 +250,46 @@
 	color: var(--fg-faint);
 }
 
+/* ---- retry_failure (terminal auto-retry gave up; display-only error card) ---- */
+/* Mirrors the async-result card chrome; uses --error so the failure reads as a
+ * hard stop rather than a neutral status. */
+
+.tr-retry-failure {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	padding: 8px 10px;
+	border: 0.5px solid color-mix(in oklab, var(--error, #f85149) 40%, transparent);
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--error, #f85149) 10%, transparent);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--fg);
+}
+
+.tr-retry-failure-chip {
+	flex: none;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--error, #f85149) 22%, transparent);
+	color: var(--error, #f85149);
+	font-weight: 600;
+	font-size: 11px;
+}
+
+.tr-retry-failure-message {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.tr-retry-failure-attempt {
+	flex: none;
+	color: var(--fg-faint);
+}
+
 /* ---- advisor notes (TUI createAdvisorMessageCard parity) ---- */
 /* Distinct voice so notes never blend into thinking output: a header tag, a
  * severity-tinted rail per note, and the clean note body. Content stays the
