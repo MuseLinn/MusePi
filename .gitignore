@@ -62,7 +62,10 @@ pi-*.html
 .close_issue.sh
 
 # Generated files
-packages/coding-agent/src/export/html/tool-views.generated.js
+# NOTE: packages/coding-agent/src/export/html/tool-views.generated.js is intentionally
+# TRACKED despite being generated — src/export/html/index.ts imports it at runtime
+# (`with { type: "file" }`) and docs/porting-from-pi-mono.md requires keeping it in repo.
+# Do not gitignore it; regenerate with `bun run gen:tool-views` after touching guest-client tool-render.
 packages/natives/npm/
 packages/coding-agent/src/utils/mupdf-wasm.wasm
 /runs/
