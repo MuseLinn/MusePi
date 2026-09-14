@@ -1129,9 +1129,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// folded in the hidden span (the header would orphan rows the user can't
 	// see), so folds are filtered to those ending inside the visible window.
 	const folds = useMemo(() => {
-		const all = buildRoundFolds(entries, roundDurations);
+		const all = buildRoundFolds(entries, working);
 		return hidden > 0 ? all.filter(f => f.finalIdx >= hidden) : all;
-	}, [entries, roundDurations, hidden]);
+	}, [entries, working, hidden]);
 
 	// Extend the window when the sentinel enters the visible pane. The
 	// scroller is an ANCESTOR of .tr-root in both hosts (GUI

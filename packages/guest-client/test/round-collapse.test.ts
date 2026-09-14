@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionEntry } from "@musepi/pi-wire";
-import { buildRoundFolds, formatRoundDuration, isInsideFold } from "../src/components/transcript/round-collapse";
+import { buildRoundFolds, isInsideFold } from "../src/components/transcript/round-collapse";
 
-/** Completed-round fold contract: rounds with a frozen duration fold their
- *  working span (tools/commands) behind a header, the live tail stays
- *  expanded, counts are per-round, and the duration formats hh:mm:ss. */
+/** Completed-round fold contract (openchamber projectTurnRecords parity):
+ *  folds are STRUCTURAL — any round (user → its last assistant) containing
+ *  tool/command work folds, including the LAST completed round; while the
+ *  session is working, the in-flight round after the last user message
+ *  streams live and never folds; no duration data is involved. */
 function user(ts: number): SessionEntry {
 	return {
 		type: "message",
@@ -78,22 +80,16 @@ function editResult(ts: number, details: Record<string, unknown>): SessionEntry 
 	} as SessionEntry;
 }
 
-const DURATIONS = new Map<number, number>([
-	[3, 125_000],
-	[4, 125_000],
-	[5, 3_660_000],
-	[6, 3_660_000],
-]);
-
 describe("buildRoundFolds", () => {
 	it("folds a completed round's working span, leaving the final reply outside", () => {
 		const entries = [user(1), bash(2), toolResult(3), assistant(4, 2), user(5), assistant(6)];
-		const folds = buildRoundFolds(entries, DURATIONS);
+		// The trailing user→assistant pair has no work between them — nothing
+		// to summarize, so only the first round folds.
+		const folds = buildRoundFolds(entries, false);
 		expect(folds).toHaveLength(1);
 		const f = folds[0]!;
 		expect(f.startIdx).toBe(0);
 		expect(f.finalIdx).toBe(3);
-		expect(f.durationMs).toBe(125_000);
 		expect(f.toolCount).toBe(2);
 		expect(f.commandCount).toBe(1);
 		expect(isInsideFold(folds, 1)).toBe(true);
@@ -101,25 +97,42 @@ describe("buildRoundFolds", () => {
 		expect(isInsideFold(folds, 3)).toBe(false); // final reply stays visible
 	});
 
-	it("never folds the live tail (last complete round stays expanded)", () => {
-		const entries = [user(1), bash(2), assistant(3, 1), user(4), bash(5), assistant(6, 3)]; // timestamps 3 and 6
-		const folds = buildRoundFolds(entries, DURATIONS);
+	it("folds the LAST completed round too once the session is idle", () => {
+		const entries = [user(1), bash(2), assistant(3, 1), user(4), bash(5), assistant(6, 3)];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(2);
+		expect(folds[1]!.startIdx).toBe(3);
+		expect(folds[1]!.finalIdx).toBe(5);
+	});
+
+	it("while working, the in-flight round after the last user message never folds", () => {
+		const entries = [user(1), bash(2), assistant(3, 1), user(4), bash(5)];
+		const folds = buildRoundFolds(entries, true);
 		expect(folds).toHaveLength(1);
-		expect(folds[0]!.startIdx).toBe(0);
+		expect(folds[0]!.startIdx).toBe(0); // only the earlier completed round
+		expect(isInsideFold(folds, 4)).toBe(false); // in-flight work streams live
 	});
 
 	it("counts tools and commands per round only inside its span", () => {
 		const entries = [user(1), bash(2), assistant(3, 4), user(4), assistant(5)];
-		const folds = buildRoundFolds(entries, DURATIONS);
+		const folds = buildRoundFolds(entries, false);
 		expect(folds[0]!.toolCount).toBe(4);
 		expect(folds[0]!.commandCount).toBe(1);
 	});
 
 	it("skips rounds with no working span and work without a user message", () => {
 		const noWork = [user(1), assistant(2)];
-		expect(buildRoundFolds(noWork, DURATIONS)).toHaveLength(0);
+		expect(buildRoundFolds(noWork, false)).toHaveLength(0);
 		const orphanWork = [bash(1), assistant(2)];
-		expect(buildRoundFolds(orphanWork, DURATIONS)).toHaveLength(0);
+		expect(buildRoundFolds(orphanWork, false)).toHaveLength(0);
+	});
+
+	it("works on sessions with NO duration data (old snapshots fold structurally)", () => {
+		// The old condition required a frozen duration per round, which old
+		// sessions lack — nothing ever folded. Structural folding has no such
+		// dependency.
+		const entries = [user(1), bash(2), toolResult(3), assistant(4, 1), user(5), bash(6), assistant(7, 1)];
+		expect(buildRoundFolds(entries, false)).toHaveLength(2);
 	});
 
 	it("aggregates per-round file changes from edit tool results (+added −removed, distinct files)", () => {
@@ -136,8 +149,8 @@ describe("buildRoundFolds", () => {
 			user(5),
 			assistant(6),
 		];
-		const folds = buildRoundFolds(entries, DURATIONS);
-		expect(folds).toHaveLength(1);
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(1); // trailing work-less round doesn't fold
 		const f = folds[0]!;
 		expect(f.filesChanged).toBe(2); // a.ts + b.ts; the errored c.ts counts neither
 		expect(f.added).toBe(3);
@@ -146,14 +159,12 @@ describe("buildRoundFolds", () => {
 	});
 
 	it("reports zero changes for rounds that edited nothing — the header omits the chip", () => {
-		// trailing no-work round = the live tail, so the first round folds
 		const entries = [user(1), bash(2), toolResult(3), assistant(4, 1), user(5), assistant(6)];
-		const folds = buildRoundFolds(entries, DURATIONS);
+		const folds = buildRoundFolds(entries, false);
 		expect(folds).toHaveLength(1);
-		const f = folds[0]!;
-		expect(f.filesChanged).toBe(0);
-		expect(f.added).toBe(0);
-		expect(f.removed).toBe(0);
+		expect(folds[0]!.filesChanged).toBe(0);
+		expect(folds[0]!.added).toBe(0);
+		expect(folds[0]!.removed).toBe(0);
 	});
 
 	it("does not count diff stats from non-edit tools", () => {
@@ -172,14 +183,26 @@ describe("buildRoundFolds", () => {
 				timestamp: 2,
 			},
 		} as SessionEntry;
-		// trailing no-work round = the live tail, so the sneaky round folds
-		const folds = buildRoundFolds([user(1), sneaky, assistant(4, 1), user(5), assistant(6)], DURATIONS);
-		expect(folds).toHaveLength(1);
+		const folds = buildRoundFolds([user(1), sneaky, assistant(4, 1), user(5), assistant(6)], false);
 		expect(folds[0]!.filesChanged).toBe(0);
 	});
 
-	it("formats durations as mm:ss and hh:mm:ss", () => {
-		expect(formatRoundDuration(125_000)).toBe("02:05");
-		expect(formatRoundDuration(3_660_000)).toBe("1:01:00");
+	it("counts read/search tools as explored (openchamber 探索了代码库 segment)", () => {
+		const read: SessionEntry = {
+			type: "message",
+			id: "rd1",
+			parentId: null,
+			timestamp: "2",
+			message: {
+				role: "toolResult",
+				toolCallId: "t1",
+				toolName: "read",
+				content: [{ type: "text", text: "file body" }],
+				isError: false,
+				timestamp: 2,
+			},
+		} as SessionEntry;
+		const folds = buildRoundFolds([user(1), read, assistant(3, 1), user(4), assistant(5)], false);
+		expect(folds[0]!.exploreCount).toBe(1);
 	});
 });

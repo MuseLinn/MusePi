@@ -22,8 +22,6 @@ export interface RoundFold {
 	/** Absolute entry index of the final assistant message (the foldable
 	 *  span is `(startIdx, finalIdx)`). */
 	finalIdx: number;
-	/** Frozen round duration (ms) — from roundDurations. */
-	durationMs: number;
 	/** Tool-call count inside the foldable span (assistant toolCall blocks). */
 	toolCount: number;
 	/** Bash-command count inside the foldable span (bashExecution rows). */
@@ -145,20 +143,27 @@ function countWorkInside(
  * when its final assistant message has a frozen duration; the LAST complete
  * round is excluded (it is the live tail and stays expanded). Work without a
  * preceding user message in the window is not folded.
+/**
+ * Compute the completed-round folds for a transcript (openchamber
+ * projectTurnRecords parity — STRUCTURAL, no duration data involved): a
+ * round is a user message through its last assistant reply, and any round
+ * containing tool/command work folds, INCLUDING the last completed one
+ * (the 活动 header then sits directly above the final reply). The only
+ * exempt span is the IN-FLIGHT round — while `working`, entries after the
+ * last user message stream live and stay expanded; once the agent stops,
+ * that round folds like every other.
  */
-export function buildRoundFolds(
-	entries: readonly SessionEntry[],
-	roundDurations: ReadonlyMap<number, number> | undefined,
-): RoundFold[] {
-	// Locate the last complete round's final assistant index (skip it).
-	let lastCompleteFinal = -1;
-	for (let i = entries.length - 1; i >= 0; i--) {
-		const e = entries[i];
-		if (e?.type !== "message" || e.message.role !== "assistant") continue;
-		const dur = roundDurations?.get(e.message.timestamp);
-		if (typeof dur === "number") {
-			lastCompleteFinal = i;
-			break;
+export function buildRoundFolds(entries: readonly SessionEntry[], working: boolean): RoundFold[] {
+	// While a turn is in flight, its entries (after the last user message)
+	// stream live — find that boundary so the in-flight round never folds.
+	let inFlightFrom = -1;
+	if (working) {
+		for (let i = entries.length - 1; i >= 0; i--) {
+			const e = entries[i];
+			if (e?.type === "message" && e.message.role === "user") {
+				inFlightFrom = i;
+				break;
+			}
 		}
 	}
 	const folds: RoundFold[] = [];
@@ -169,44 +174,58 @@ export function buildRoundFolds(
 		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "user") {
+			// Close out the previous round at its last assistant reply — the
+			// span (prevUser, this user) folds as one if it has any work.
+			if (userIdx >= 0 && i - userIdx > 1 && lastAssistantIdx(entries, userIdx, i) > userIdx + 1) {
+				pushFold(folds, entries, userIdx, userId, lastAssistantIdx(entries, userIdx, i));
+			}
 			userIdx = i;
 			userId = e.id;
-			continue;
 		}
-		if (m.role !== "assistant") continue;
-		const dur = roundDurations?.get(m.timestamp);
-		if (typeof dur !== "number") continue;
-		if (i === lastCompleteFinal) continue; // live tail stays expanded
-		if (userIdx < 0 || i - userIdx <= 1) continue; // nothing to fold
-		const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(entries, userIdx + 1, i);
-		folds.push({
-			startIdx: userIdx,
-			finalIdx: i,
-			durationMs: dur,
-			toolCount,
-			commandCount,
-			exploreCount,
-			filesChanged: changes.filesChanged,
-			added: changes.added,
-			removed: changes.removed,
-			userId,
-			preview,
-		});
+	}
+	// Trailing round: everything after the last user message. While working
+	// it is the in-flight turn (exempt); once idle, its last assistant reply
+	// closes it and it folds like the rest.
+	if (!working && userIdx >= 0) {
+		const lastAssistant = lastAssistantIdx(entries, userIdx, entries.length);
+		if (lastAssistant > userIdx + 1) pushFold(folds, entries, userIdx, userId, lastAssistant);
 	}
 	return folds;
+}
+
+/** Last assistant-message index in `(from, to)`; -1 when none. */
+function lastAssistantIdx(entries: readonly SessionEntry[], from: number, to: number): number {
+	for (let i = to - 1; i > from; i--) {
+		const e = entries[i];
+		if (e?.type === "message" && e.message.role === "assistant") return i;
+	}
+	return -1;
+}
+
+function pushFold(
+	folds: RoundFold[],
+	entries: readonly SessionEntry[],
+	startIdx: number,
+	userId: string | null,
+	finalIdx: number,
+): void {
+	const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(entries, startIdx + 1, finalIdx);
+	if (toolCount === 0 && commandCount === 0) return; // no activity — nothing to summarize
+	folds.push({
+		startIdx,
+		finalIdx,
+		toolCount,
+		commandCount,
+		exploreCount,
+		filesChanged: changes.filesChanged,
+		added: changes.added,
+		removed: changes.removed,
+		userId,
+		preview,
+	});
 }
 
 /** True when the entry at `idx` belongs inside a fold's foldable span. */
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	return folds.some(f => idx > f.startIdx && idx < f.finalIdx);
-}
-
-/** Format a duration as hh:mm:ss (kimiwork 已工作 parity). */
-export function formatRoundDuration(ms: number): string {
-	const total = Math.max(0, Math.floor(ms / 1000));
-	const h = Math.floor(total / 3600);
-	const m = Math.floor((total % 3600) / 60);
-	const s = total % 60;
-	const pad = (n: number): string => String(n).padStart(2, "0");
-	return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }

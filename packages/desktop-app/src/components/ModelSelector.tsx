@@ -8,6 +8,7 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ModelBrandIcon } from "./model-brand-icon";
+import { Reveal } from "./Reveal";
 
 export interface WireModel {
 	id: string;
@@ -330,7 +331,10 @@ export function ModelSelector({
 	const isFav = (m: WireModel): boolean => favs.includes(favKeyOf(m)) || favs.includes(m.id);
 	// Sectioned listing (openchamber 收藏/最近 parity): favorites in pin
 	// order, then recents in use order (favorites excluded — a row renders
-	// once), then the remaining catalog in listing order.
+	// once), then the remaining catalog in listing order. While SEARCHING
+	// the list goes flat (openchamber search behavior — section headers
+	// would just repeat over a short filtered set).
+	const searching = query.trim().length > 0;
 	const favRows = filtered.filter(isFav);
 	const recentRank = new Map(recents.map((key, i) => [key, i] as const));
 	const recentRows = filtered
@@ -347,11 +351,20 @@ export function ModelSelector({
 	// row through the VISIBLE rows (collapsed sections skipped), Enter
 	// selects. The active index resets whenever the list content changes.
 	const sections: Array<{ key: string; label: string | null; rows: WireModel[] }> = [];
-	if (favRows.length > 0) sections.push({ key: "fav", label: t("favorite models"), rows: favRows });
-	if (recentRows.length > 0) sections.push({ key: "recent", label: t("recent models"), rows: recentRows });
-	if (restRows.length > 0) sections.push({ key: "rest", label: null, rows: restRows });
+	if (!searching) {
+		if (favRows.length > 0) sections.push({ key: "fav", label: t("favorite models"), rows: favRows });
+		if (recentRows.length > 0) sections.push({ key: "recent", label: t("recent models"), rows: recentRows });
+	}
+	if (restRows.length > 0 || searching) sections.push({ key: "rest", label: null, rows: filtered });
 	const flatRows = sections.flatMap(s => (secClosed[s.key] ? [] : s.rows));
 	const [kbd, setKbd] = useState(-1);
+	// Keep the keyboard-highlighted row in view (openchamber parity): the
+	// roving highlight scrolls with ↑↓ instead of running off-list.
+	useEffect(() => {
+		if (kbd < 0) return;
+		const el = listRef.current?.querySelector<HTMLElement>(`[data-kbd-idx="${kbd}"]`);
+		el?.scrollIntoView({ block: "nearest" });
+	}, [kbd]);
 	useEffect(() => {
 		setKbd(-1);
 	}, [query, open, models]);
@@ -470,8 +483,10 @@ export function ModelSelector({
 											<span className="gui-model-sec-count">{sec.rows.length}</span>
 										</button>
 									)}
-									{!closed &&
-										sec.rows.map(m => {
+									{/* Standard height-collapse (§3 motion): the section body
+									 * eases instead of snapping — matches every other fold. */}
+									<Reveal open={!closed}>
+										{sec.rows.map(m => {
 											const fav = isFav(m);
 											const isDefault =
 												`${m.provider}/${m.id}` === defaultRoleModel || m.id === defaultRoleModel;
@@ -503,6 +518,7 @@ export function ModelSelector({
 													tabIndex={genModel ? -1 : 0}
 													aria-disabled={genModel || undefined}
 													title={genNote}
+													data-kbd-idx={kbdIndex}
 													className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}${genModel ? " gui-model-opt--gen" : ""}${kbdIndex >= 0 && kbdIndex === kbd ? " gui-model-opt--kbd" : ""}`}
 													onClick={() => select(m)}
 													onMouseMove={() => setKbd(kbdIndex)}
@@ -571,6 +587,7 @@ export function ModelSelector({
 												</div>
 											);
 										})}
+									</Reveal>
 								</div>
 							);
 						})}

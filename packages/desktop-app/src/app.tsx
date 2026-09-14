@@ -608,23 +608,29 @@ function AppInner(): ReactNode {
 	};
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
-	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | undefined>(undefined);
+	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | "providers" | undefined>(
+		undefined,
+	);
 	// Settings open/close rides the same blur transition as the board /
 	// scheduled / chat swaps: the outgoing surface blurs out (150ms), then
 	// the settings view (or the workspace) enters with its 300ms blur-in.
 	const [leavingSettings, setLeavingSettings] = useState(false);
 	const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const openSettings = useCallback((): void => {
-		if (settingsOpen) return;
-		// Blur the current surface out first (leavingView keeps it mounted).
-		setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat");
-		clearTimeout(settingsTimerRef.current ?? undefined);
-		settingsTimerRef.current = setTimeout(() => {
-			settingsTimerRef.current = null;
-			setLeavingView(null);
-			setSettingsOpen(true);
-		}, 150);
-	}, [boardOpen, scheduledOpen, settingsOpen]);
+	const openSettings = useCallback(
+		(section?: "skills" | "suggestions" | "providers"): void => {
+			if (settingsOpen) return;
+			// Blur the current surface out first (leavingView keeps it mounted).
+			setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat");
+			clearTimeout(settingsTimerRef.current ?? undefined);
+			settingsTimerRef.current = setTimeout(() => {
+				settingsTimerRef.current = null;
+				setLeavingView(null);
+				setSettingsSection(section);
+				setSettingsOpen(true);
+			}, 150);
+		},
+		[boardOpen, scheduledOpen, settingsOpen],
+	);
 	const closeSettings = useCallback((): void => {
 		if (!settingsOpen || leavingSettings) return;
 		setLeavingSettings(true);
@@ -2620,7 +2626,7 @@ function AppInner(): ReactNode {
 					<ChatView
 						store={store}
 						rpc={rpc}
-						onAddProvider={openSettings}
+						onAddProvider={() => openSettings("providers")}
 						onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
 						onStop={stop}
 						onDecideApproval={decideApproval}
@@ -2861,7 +2867,7 @@ function AppInner(): ReactNode {
 									onOpenFileInPanel={() => {
 										setRightCollapsed(false);
 									}}
-									onAddProvider={openSettings}
+									onAddProvider={() => openSettings("providers")}
 									onToggleRightPanel={() => {
 										setRightCollapsed(v => {
 											localStorage.setItem("musepi-gui-right", v ? "1" : "0");
