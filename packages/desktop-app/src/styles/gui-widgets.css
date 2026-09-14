@@ -2628,6 +2628,46 @@
 	margin-top: auto;
 	padding-top: 22px;
 }
+/* Done-step optional branches (3+3 restructure): single-open accordion of
+ * collapsed Reveal panes — visually quieter than the main step controls so
+ * the spine (dots + next button) stays the loudest element. */
+.gui-obo-branches {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.gui-obo-branch {
+	border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
+	overflow: hidden;
+}
+.gui-obo-branch-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 9px 12px;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	color: var(--fg);
+	cursor: pointer;
+	background: transparent;
+	border: none;
+	transition: background 120ms ease-out;
+}
+.gui-obo-branch-head:hover {
+	background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.gui-obo-branch-head .rotate-180 {
+	transform: rotate(180deg);
+	transition: transform 160ms ease-out;
+}
+/* Inner spacing for the expanded branch pane (Reveal renders
+ * .gui-collapse > .gui-collapse-inner). */
+.gui-obo-branch .gui-collapse-inner {
+	padding: 0 12px 12px;
+}
 .gui-onboarding-dot {
 	width: 6px;
 	height: 6px;

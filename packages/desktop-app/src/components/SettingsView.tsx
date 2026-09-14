@@ -2,6 +2,7 @@ import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
+import { resolveActiveSection, type SectionId, type SectionRequest } from "../lib/settings-nav";
 import {
 	SETTINGS_ACTION_SLOT_PREFIX,
 	SETTINGS_TAB_SLOT_PREFIX,
@@ -13,37 +14,12 @@ import { Icon, type IconName } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
 import { MigrationSection } from "./MigrationSection";
 
-type SectionId =
-	| "general"
-	| "appearance"
-	| "model"
-	| "files"
-	| "memory"
-	| "notifications"
-	| "pet"
-	| "sessions"
-	| "git"
-	| "shortcuts"
-	| "interaction"
-	| "voice"
-	| "context"
-	| "shell"
-	| "tools"
-	| "media"
-	| "providers"
-	| "plugins"
-	| "skills"
-	| "subagents"
-	| "commands"
-	| "mcp"
-	| "hooks"
-	| "indexes"
-	| "usage"
-	| "migration"
-	| "history"
-	| "browser"
-	| "suggestions"
-	| "modes";
+/** Entry points address a section by CAPABILITY, the nav addresses it by
+ *  PAGE — `providers`/`plugins` are resolved through SECTION_ALIAS (see
+ *  lib/settings-nav.ts, which owns the contract + its unit test) so the nav
+ *  row highlight and the content branch always agree on one id. Landing on an
+ *  alias verbatim used to render a BLANK pane (`providers` has no content
+ *  branch) that only a nav click could fill in. */
 
 /** Conditional settings fields animate in/out per the shared standard —
  * see components/Reveal.tsx (useCollapse px height + outer fade). */
@@ -380,8 +356,10 @@ export function SettingsView({
 	sessionId: string | null;
 	providerEvent: StreamEvent | null;
 	onBack(): void;
-	/** Section to land on when the pane opens (sidebar 技能 entry). */
-	initialSection?: SectionId;
+	/** Section to land on when the pane opens (sidebar 技能 entry, composer
+	 *  添加供应商 entry). A capability alias is accepted and resolved to its
+	 *  page — see lib/settings-nav.ts. */
+	initialSection?: SectionRequest;
 	/** Open a session from the 索引库 search results (app layer owns openSession). */
 	onOpenSession?: (sessionId: string) => void;
 	/** DSH creation-flow entry: settings preset 新建 sends a natural-language
@@ -390,12 +368,23 @@ export function SettingsView({
 	/** Active session's workspace dir — the 代码库 index scans this. */
 	cwd?: string | null;
 }): ReactNode {
-	const [section, setSection] = useState<SectionId | string>(initialSection ?? "appearance");
+	const [section, setSection] = useState<SectionRequest>(initialSection ?? "appearance");
 	// 内核级 slot(P1):`settings.tab.<id>` 槽位组件自动挂载为设置页导航项
 	// (扩展声明即出现——设置面板=宿主壳,内容由插件贡献)。
 	const extSettingsTabs = useSlotComponentsByPrefix(rpc, SETTINGS_TAB_SLOT_PREFIX);
 	// 单行偏好槽:settings.action.<id> 组件。
 	const actionItems = useSlotComponentsByPrefix(rpc, SETTINGS_ACTION_SLOT_PREFIX);
+	// Nav groups are the single source of truth for "which section ids exist":
+	// resolved ONCE per render (the nav below AND the id validation read it) so
+	// a section can never be active without a nav row — and every nav row is
+	// guaranteed to have a content branch.
+	const groups = navGroups(extSettingsTabs);
+	const navSectionIds = new Set(groups.flatMap(g => g.items.map(i => i.id)));
+	// The id actually rendered: aliases resolve to their page, anything unknown
+	// (a DOM event that reached `initialSection` through `onX={openSettings}`,
+	// a retired id) falls back to the default section instead of rendering an
+	// empty content pane. Contract + tests: lib/settings-nav.ts.
+	const activeSection = resolveActiveSection(section, navSectionIds);
 	// Fixed settings search: filters the nav by section label (live).
 	const [settingsQuery, setSettingsQuery] = useState("");
 	// Settings search highlight: with an active query, imperatively mark the
@@ -407,7 +396,7 @@ export function SettingsView({
 	// component unaware of the search state.
 	const prevSearchRef = useRef<{ q: string; section: SectionId | string }>({
 		q: "",
-		section: section ?? "appearance",
+		section: activeSection,
 	});
 	useEffect(() => {
 		const content = settingsContentRef.current;
@@ -424,10 +413,10 @@ export function SettingsView({
 			el.classList.add("gui-settings-match");
 		});
 		const prev = prevSearchRef.current;
-		const scroll = q !== prev.q || section !== prev.section;
-		prevSearchRef.current = { q, section };
+		const scroll = q !== prev.q || activeSection !== prev.section;
+		prevSearchRef.current = { q, section: activeSection };
 		if (scroll && rows.length > 0) rows[0].scrollIntoView({ block: "center", behavior: "smooth" });
-	}, [settingsQuery, section]);
+	}, [settingsQuery, activeSection]);
 	const [showAvatars, setShowAvatars] = useState(() => localStorage.getItem("musepi-gui-avatars") !== "0");
 	const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
 	const [apiProviders, setApiProviders] = useState<ApiProviderInfo[]>([]);
@@ -642,7 +631,7 @@ export function SettingsView({
 						data-top-scroll="false"
 						data-bottom-scroll="false"
 					>
-						{navGroups(extSettingsTabs)
+						{groups
 							.map(group => ({
 								...group,
 								items: settingsQuery.trim()
@@ -663,9 +652,9 @@ export function SettingsView({
 											key={item.id}
 											type="button"
 											title={item.enabled ? item.label : `${item.label} · ${t("coming soon")}`}
-											className={`gui-settings-nav${section === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
+											className={`gui-settings-nav${activeSection === item.id ? " gui-settings-nav--active" : ""}${!item.enabled ? " gui-settings-nav--disabled" : ""}`}
 											onClick={() => {
-												if (item.enabled) setSection(item.id as SectionId | string);
+												if (item.enabled) setSection(item.id as SectionRequest);
 											}}
 										>
 											<Icon name={item.icon} className="h-4 w-4" />
@@ -680,7 +669,7 @@ export function SettingsView({
 						<button
 							type="button"
 							className="gui-settings-nav"
-							onClick={() => window.dispatchEvent(new CustomEvent("omp-open-onboarding"))}
+							onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-onboarding"))}
 						>
 							<Icon name="rocket" className="h-4 w-4" />
 							<span className="gui-settings-nav-label">{t("onboarding")}</span>
@@ -688,7 +677,7 @@ export function SettingsView({
 						<button
 							type="button"
 							className="gui-settings-nav"
-							onClick={() => window.dispatchEvent(new CustomEvent("omp-open-announcement"))}
+							onClick={() => window.dispatchEvent(new CustomEvent("musepi-open-announcement"))}
 						>
 							<Icon name="sparkling" className="h-4 w-4" />
 							<span className="gui-settings-nav-label">{t("what's new")}</span>
@@ -704,15 +693,15 @@ export function SettingsView({
 						 * the keyed inner supplies the standard 160ms fade-in
 						 * instead of an abrupt content swap. */}
 						<HeightMorph
-							morphKey={section}
+							morphKey={activeSection}
 							innerRef={settingsContentRef}
 							className={`gui-settings-content${
-								section === "history" || section === "model" || section === "skills"
+								activeSection === "history" || activeSection === "model" || activeSection === "skills"
 									? " gui-settings-content--fill"
 									: ""
 							}`}
 						>
-							{section === "general" && (
+							{activeSection === "general" && (
 								<>
 									<GeneralSection rpc={rpc} />
 									{/* 单行偏好槽:settings.action.<id> 组件挂到通用分区末尾 —— 功能插件
@@ -730,7 +719,7 @@ export function SettingsView({
 									)}
 								</>
 							)}
-							{section === "appearance" && (
+							{activeSection === "appearance" && (
 								<AppearanceSection
 									rpc={rpc}
 									showAvatars={showAvatars}
@@ -741,7 +730,7 @@ export function SettingsView({
 									}}
 								/>
 							)}
-							{section === "model" && (
+							{activeSection === "model" && (
 								<ModelSection
 									providers={providers}
 									apiProviders={apiProviders}
@@ -756,25 +745,30 @@ export function SettingsView({
 									onChanged={loadProviders}
 									rpc={rpc}
 									sessionId={sessionId}
+									// Only the capability entry (`providers`) opens the add
+									// form — arriving from the nav is a plain visit.
+									openAddProvider={section === "providers"}
 								/>
 							)}
-							{section === "shell" && <ShellSection rpc={rpc} />}
-							{section === "tools" && <ToolsSection rpc={rpc} />}
-							{section === "media" && <MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />}
-							{section === "notifications" && <NotificationsSection rpc={rpc} />}
-							{section === "pet" && <PetSection />}
-							{section === "sessions" && <SessionsSection rpc={rpc} currentSessionId={sessionId} />}
-							{section === "git" && <GitSection rpc={rpc} />}
-							{section === "shortcuts" && <ShortcutsSection />}
-							{section === "interaction" && <InteractionSection rpc={rpc} />}
-							{section === "voice" && <VoiceSection rpc={rpc} />}
-							{section === "context" && <ContextSection rpc={rpc} />}
-							{section === "files" && <FilesLspSection rpc={rpc} />}
-							{section === "memory" && <MemorySection rpc={rpc} />}
-							{section === "skills" && <SkillsSection rpc={rpc} />}
-							{typeof section === "string" && section.startsWith("ext:")
+							{activeSection === "shell" && <ShellSection rpc={rpc} />}
+							{activeSection === "tools" && <ToolsSection rpc={rpc} />}
+							{activeSection === "media" && (
+								<MediaSection rpc={rpc} onLogin={login} pendingLogins={pendingLogins} />
+							)}
+							{activeSection === "notifications" && <NotificationsSection rpc={rpc} />}
+							{activeSection === "pet" && <PetSection />}
+							{activeSection === "sessions" && <SessionsSection rpc={rpc} currentSessionId={sessionId} />}
+							{activeSection === "git" && <GitSection rpc={rpc} />}
+							{activeSection === "shortcuts" && <ShortcutsSection />}
+							{activeSection === "interaction" && <InteractionSection rpc={rpc} />}
+							{activeSection === "voice" && <VoiceSection rpc={rpc} />}
+							{activeSection === "context" && <ContextSection rpc={rpc} />}
+							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
+							{activeSection === "memory" && <MemorySection rpc={rpc} />}
+							{activeSection === "skills" && <SkillsSection rpc={rpc} />}
+							{activeSection.startsWith("ext:")
 								? (() => {
-										const item = extSettingsTabs.find(x => `ext:${x.slot}` === section);
+										const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
 										return item ? (
 											<div className="px-3 py-2">
 												<SlotComponentMount item={item} rpc={rpc} />
@@ -782,17 +776,17 @@ export function SettingsView({
 										) : null;
 									})()
 								: null}
-							{section === "suggestions" && <PromptsSection />}
-							{section === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
-							{section === "migration" && <MigrationSection rpc={rpc} />}
-							{section === "subagents" && <SubagentsSection rpc={rpc} />}
-							{section === "commands" && <CommandsSection rpc={rpc} />}
-							{section === "mcp" && <McpSection rpc={rpc} />}
-							{section === "hooks" && <HooksSection rpc={rpc} />}
-							{section === "browser" && <BrowserSection rpc={rpc} />}
-							{section === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
-							{section === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
-							{section === "usage" && <UsageSection rpc={rpc} />}
+							{activeSection === "suggestions" && <PromptsSection />}
+							{activeSection === "modes" && <ModesSection rpc={rpc} onCreateChat={onCreateChat} />}
+							{activeSection === "migration" && <MigrationSection rpc={rpc} />}
+							{activeSection === "subagents" && <SubagentsSection rpc={rpc} />}
+							{activeSection === "commands" && <CommandsSection rpc={rpc} />}
+							{activeSection === "mcp" && <McpSection rpc={rpc} />}
+							{activeSection === "hooks" && <HooksSection rpc={rpc} />}
+							{activeSection === "browser" && <BrowserSection rpc={rpc} />}
+							{activeSection === "indexes" && <IndexesSection rpc={rpc} cwd={cwd} />}
+							{activeSection === "history" && <HistorySection rpc={rpc} onOpenSession={onOpenSession} />}
+							{activeSection === "usage" && <UsageSection rpc={rpc} />}
 						</HeightMorph>
 					</div>
 				</div>

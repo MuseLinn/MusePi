@@ -11,8 +11,8 @@ import { useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { DialogFrame } from "../DialogFrame";
-import { FadeScroll } from "../FadeScroll";
 import { GuiSelect } from "../GuiSelect";
+import { EndpointCandidatesDialog, QuickProviderChips, useEndpointModels } from "../provider-setup-shared";
 
 export interface CustomProvider {
 	name: string;
@@ -64,21 +64,24 @@ export function CustomProviderPane({
 	rpc,
 	sessionId,
 	onChanged,
+	initialAddOpen = false,
 }: {
 	custom: CustomProvider[];
 	rpc: RpcClient | null;
 	sessionId: string | null;
 	onChanged(): void;
+	/** Land with the add dialog already open. The composer's 添加供应商 entry
+	 *  jumps into settings to ADD one — openchamber parity: it selects its
+	 *  `ADD_PROVIDER_ID` sentinel so the providers page shows the add form
+	 *  itself, not just the provider list the user then has to scan for a
+	 *  button. Seeded once (pane mounts fresh per settings open). */
+	initialAddOpen?: boolean;
 }): ReactNode {
 	const [form, setForm] = useState(EMPTY_FORM);
-	// Candidate models an endpoint reported, while the picker dialog is open.
-	const [candidates, setCandidates] = useState<{ id: string; name?: string }[] | null>(null);
-	// Model ids checked in the candidate picker.
-	const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-	// "Fetch available models" in flight, and its failure reason (shown next
-	// to the form so the user can still fill models in by hand).
-	const [fetchingModels, setFetchingModels] = useState(false);
-	const [fetchError, setFetchError] = useState<string | null>(null);
+	// "Fetch available models" + quick-fill chips — shared with the onboarding
+	// ProviderSetup custom form (single authoritative flow,
+	// provider-setup-shared): the hook owns the candidates picker state.
+	const ep = useEndpointModels(rpc, { name: form.name, baseUrl: form.baseUrl, apiKey: form.apiKey, api: form.api });
 	const [formBusy, setFormBusy] = useState(false);
 	const [formError, setFormError] = useState<string | null>(null);
 	// Adopted-model capability editor: which adopted row's capability
@@ -89,58 +92,19 @@ export function CustomProviderPane({
 	// opened from the "custom providers" tab (not a separate tab — user
 	// report: 添加自定义供应商应是有设计规范的弹窗). `addedName` is the
 	// transient success feedback after a save.
-	const [addOpen, setAddOpen] = useState(false);
+	const [addOpen, setAddOpen] = useState(initialAddOpen);
 	const [addedName, setAddedName] = useState<string | null>(null);
 	// When non-null, the dialog is editing this EXISTING custom provider:
 	// the form is seeded from its models.yml row and submit merges back via
 	// models.add (same RPC — daemon merges by provider name).
 	const [editingProvider, setEditingProvider] = useState<string | null>(null);
 
-	/**
-	 * Ask the endpoint the form currently shows which models it serves. The
-	 * draft — including a key typed but not yet saved — is sent as-is; the
-	 * reply is candidates the user picks from, never configuration written
-	 * behind them. A protocol with no readable listing or a dead endpoint is
-	 * not a dead end: the failure shows next to the form's rows.
-	 */
-	const fetchModels = async (): Promise<void> => {
-		if (!rpc) return;
-		setFetchError(null);
-		setFetchingModels(true);
-		try {
-			const result = await rpc.request<{ models?: { id: string; name?: string }[] }>("models.discover", {
-				baseUrl: form.baseUrl,
-				api: form.api,
-				provider: form.name,
-				...(form.apiKey ? { apiKey: form.apiKey } : {}),
-			});
-			const models = result?.models ?? [];
-			if (models.length === 0) {
-				setFetchError(t("no models found at this endpoint"));
-				return;
-			}
-			setCandidates(models);
-			setPicked(new Set(models.map(m => m.id)));
-		} catch (err) {
-			setFetchError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setFetchingModels(false);
-		}
-	};
-
-	/** Adopt the checked candidates into the form's model list. */
+	/** Adopt the checked candidates into the form's model list — shared
+	 *  discovery (useEndpointModels); adopted rows keep their capability
+	 *  shape (extra fields stay undefined until the user edits them). */
 	const adoptSelected = (): void => {
-		if (!candidates) return;
-		const ids = new Set(form.adopted.map(m => m.id));
-		const next = [...form.adopted];
-		for (const candidate of candidates) {
-			if (picked.has(candidate.id) && !ids.has(candidate.id)) {
-				next.push({ id: candidate.id, ...(candidate.name ? { name: candidate.name } : {}) });
-			}
-		}
-		setForm(v => ({ ...v, adopted: next }));
-		setCandidates(null);
-		setPicked(new Set());
+		setForm(v => ({ ...v, adopted: [...v.adopted, ...ep.pickedNew(v.adopted.map(m => m.id))] }));
+		ep.closePicker();
 	};
 
 	/** Drop one adopted model row from the form (by list index, so a row
@@ -318,7 +282,7 @@ export function CustomProviderPane({
 			setEditingProvider(name);
 			setAddOpen(true);
 			setFormError(null);
-			setFetchError(null);
+			ep.setFetchError(null);
 		} catch {
 			// keep the row; the daemon error is non-fatal for the list
 		}
@@ -385,16 +349,17 @@ export function CustomProviderPane({
 			<DialogFrame
 				open={addOpen}
 				onClose={() => {
-					if (candidates !== null) {
-						setCandidates(null);
-						setPicked(new Set());
+					if (ep.candidates !== null) {
+						// Escape with the candidate picker open: dismiss only the
+						// picker — one Escape must not nuke a filled form.
+						ep.closePicker();
 						return;
 					}
 					setAddOpen(false);
 					setEditingProvider(null);
 					setFormError(null);
 					setForm(EMPTY_FORM);
-					setFetchError(null);
+					ep.setFetchError(null);
 				}}
 				className="gui-dialog--settings"
 				label={editingProvider ? t("edit custom provider") : t("add custom provider")}
@@ -405,6 +370,10 @@ export function CustomProviderPane({
 					</div>
 				</div>
 				<div className="flex flex-col gap-2 p-4">
+					{/* Quick-fill chips — shared with onboarding (same four
+					 * providers, same fill semantics: name + baseUrl, key stays
+					 * user-typed). */}
+					<QuickProviderChips onPick={(name, baseUrl) => setForm(v => ({ ...v, name, baseUrl }))} />
 					<input
 						className="gui-input"
 						placeholder={t("provider name")}
@@ -431,11 +400,11 @@ export function CustomProviderPane({
 						<button
 							type="button"
 							className="gui-btn"
-							disabled={!form.baseUrl || fetchingModels || formBusy}
+							disabled={!form.baseUrl || ep.fetchingModels || formBusy}
 							title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
-							onClick={() => void fetchModels()}
+							onClick={() => void ep.fetchModels()}
 						>
-							{fetchingModels ? t("fetching models…") : t("fetch available models")}
+							{ep.fetchingModels ? t("fetching models…") : t("fetch available models")}
 						</button>
 						<button
 							type="button"
@@ -452,7 +421,7 @@ export function CustomProviderPane({
 							</span>
 						)}
 					</div>
-					{fetchError && <div className="text-[13px] text-[var(--color-error)]">{fetchError}</div>}
+					{ep.fetchError && <div className="text-[13px] text-[var(--color-error)]">{ep.fetchError}</div>}
 					{form.adopted.length > 0 && (
 						<div className="flex flex-col gap-1">
 							{form.adopted.map((m, index) => {
@@ -724,65 +693,19 @@ export function CustomProviderPane({
 						{formBusy ? `${t("saving")}…` : editingProvider ? t("save changes") : t("add provider")}
 					</button>
 				</div>
-				{/* Candidate picker for "fetch available models": the endpoint's
-				 * reply as a checkbox list the user adopts from. Rendered
-				 * inside the dialog frame so it portals to body independently. */}
-				<DialogFrame
-					open={candidates !== null}
-					onClose={() => {
-						setCandidates(null);
-						setPicked(new Set());
-					}}
-					className="gui-dialog--confirm"
-					label={t("available models")}
-				>
-					<div className="gui-dialog-head">
-						<div className="text-[14px] font-medium">{t("available models")}</div>
-						<button type="button" className="gui-btn" onClick={() => void adoptSelected()}>
-							{t("adopt selected")}
-						</button>
-					</div>
-					<div className="p-3">
-						<div className="mb-2 flex items-center justify-between">
-							<span className="text-[13px] text-[var(--color-text-faint)]">{t("select models to add")}</span>
-							<button
-								type="button"
-								className="text-[12px] text-[var(--color-accent)]"
-								onClick={() => {
-									if (candidates && picked.size === candidates.length) {
-										setPicked(new Set());
-									} else if (candidates) {
-										setPicked(new Set(candidates.map(m => m.id)));
-									}
-								}}
-							>
-								{picked.size > 0 && candidates && picked.size === candidates.length
-									? t("deselect all")
-									: t("select all")}
-							</button>
-						</div>
-						<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
-							{(candidates ?? []).map(m => (
-								<label key={m.id} className="flex cursor-pointer items-center gap-2">
-									<input
-										type="checkbox"
-										checked={picked.has(m.id)}
-										onChange={() => {
-											const next = new Set(picked);
-											if (next.has(m.id)) next.delete(m.id);
-											else next.add(m.id);
-											setPicked(next);
-										}}
-									/>
-									<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
-									{m.name && m.name !== m.id && (
-										<span className="truncate text-[12px] text-[var(--color-text-faint)]">{m.name}</span>
-									)}
-								</label>
-							))}
-						</FadeScroll>
-					</div>
-				</DialogFrame>
+				{/* Candidate picker for "fetch available models" — shared with
+				 * the onboarding ProviderSetup custom form
+				 * (provider-setup-shared). Rendered inside the dialog frame so
+				 * it portals to body independently. */}
+				<EndpointCandidatesDialog
+					candidates={ep.candidates}
+					picked={ep.picked}
+					allSelected={ep.allSelected}
+					onToggleOne={ep.toggleOne}
+					onToggleAll={ep.toggleAll}
+					onAdopt={() => void adoptSelected()}
+					onClose={ep.closePicker}
+				/>
 			</DialogFrame>
 		</>
 	);

@@ -6787,6 +6787,54 @@ export class AgentSession {
 		return toRestoredQueuedMessage(queue[index]);
 	}
 
+	/**
+	 * Reorder a queued user message within ONE group (GUI queue-panel drag
+	 * parity, openchamber messageQueueStore.reorderQueue): text-matched like
+	 * popQueuedMessage (first match wins); the message travels with its
+	 * preceding hidden companions and lands right before the target user
+	 * message. Cross-group moves are refused — steering vs follow-up is a
+	 * delivery-timing change, not a sort. Returns false when either text
+	 * is unmatched or the move is a no-op.
+	 */
+	reorderQueuedMessage(group: "steering" | "followUp", fromText: string, toText: string): boolean {
+		const steering = this.agent.peekSteeringQueue();
+		const followUp = this.agent.peekFollowUpQueue();
+		const queue = group === "steering" ? steering : followUp;
+		const userIndex = (text: string): number => {
+			for (let i = 0; i < queue.length; i++) {
+				if (isUserQueuedMessage(queue[i]) && queueChipText(queue[i]) === text) return i;
+			}
+			return -1;
+		};
+		const from = userIndex(fromText);
+		if (from < 0 || fromText === toText) return false;
+		const to = userIndex(toText);
+		if (to < 0) return false;
+		// Dragged block: the user message plus its contiguous hidden
+		// companions (same rule as the pop paths).
+		let start = from;
+		while (start > 0 && isHiddenUserCompanion(queue[start - 1])) start--;
+		const block = queue.slice(start, from + 1);
+		const rest = queue.slice();
+		rest.splice(start, block.length);
+		// Target index in the array WITHOUT the dragged block; insert before
+		// it so a downward move lands above the target (openchamber semantics).
+		let target = -1;
+		for (let i = 0; i < rest.length; i++) {
+			if (isUserQueuedMessage(rest[i]) && queueChipText(rest[i]) === toText) {
+				target = i;
+				break;
+			}
+		}
+		if (target < 0) return false;
+		const next = rest.slice();
+		next.splice(target, 0, ...block);
+		if (group === "steering") this.agent.replaceQueues(next, followUp.slice());
+		else this.agent.replaceQueues(steering.slice(), next);
+		this.#reconcileQueuedMessageDrain();
+		return true;
+	}
+
 	get skillsSettings(): SkillsSettings | undefined {
 		return this.#tools.skillsSettings;
 	}

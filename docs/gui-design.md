@@ -202,6 +202,26 @@ Built-in design assets are organized around **tokens + an override mechanism**; 
 - **Persistent floating cards (non-popups)**: fixed corner cards like the btw ask-card/badge cards must clamp themselves to the viewport (`maxWidth: calc(100vw − 48px)` + `max-height: min(60vh,520px)` + body scrolling); bare boundary-less fixed is forbidden.
 - **Keyboard**: floating cards/menus must wire their Esc promises (e.g. the btw card's "Esc closes" hint ↔ onKeyDown Escape); hints and behavior must not diverge.
 
+> **Scope clarification (2026-09-14)**: the "hand-write the same semantics, no dependency" rule applies **only to float-layer positioning** — floating-ui's flip/shift/clamp semantics are small enough to reproduce exactly with CSS + measurement, and are deeply coupled to the `gui-menu-in/out` two-phase entry. **Drag-and-drop sorting is NOT covered by that rule**: choose **pragmatically** — `@dnd-kit`'s sensor arbitration (pointer/keyboard activation thresholds), collision detection, accessibility (screen-reader reorder announcements) and nested containers are a genuine state machine; when a dependency solves that well, use it (openchamber aligns all 14 of its drag sites on it, section below); hand-write **only** when the interaction is so simple that a dependency would be dead weight (no ordering semantics, a one-off placement, pure one-axis pointer motion). Rule of thumb: the drag encodes an **order** that must persist → `@dnd-kit`; it just moves **this thing over there** → hand-written pointer capture.
+
+### Drag-reorder spec (2026-09-14, openchamber parity)
+
+Every openchamber drag (14 sites: model favorites/providers, context-rail surfaces, session tabs, draft-starter chips, queued-message chips, session folders/projects, TodosSection, mobile project/session sheets) uses `@dnd-kit`. Our order-encoding drags align on the same library:
+
+- **Dependencies**: `@dnd-kit/core@6` + `@dnd-kit/sortable@10` + `@dnd-kit/utilities@3` (`@dnd-kit/modifiers@9` as needed), installed in `packages/desktop-app`.
+- **Sensor conventions**: visible reorder uses `PointerSensor` with `activationConstraint: { distance: 8 }` (drag starts only after ≥8px of motion, so clicks never trigger it); whole-header drag uses `MouseSensor` distance 8; when keyboard sorting matters add `KeyboardSensor` + `sortableKeyboardCoordinates`.
+- **Structure**: `DndContext` (sensors + `closestCenter` + `onDragEnd`) wrapping a `SortableContext` (`verticalListSortingStrategy` / `rectSortingStrategy`); rows via `useSortable` + `CSS.Transform.toString(transform)`; the drag handle is its own `<button>` carrying `attributes`/`listeners`, never the whole row — whole-row drag hijacks clicks when the row contains buttons/inputs. **Exception**: a bare icon button (the right-rail icon) holds no nested controls and may be the activator itself — the 8px threshold keeps a click a click.
+- **Completion**: onDragEnd applies `arrayMove` and writes the **whole array** back to storage (localStorage or RPC); visual-only reorder that diverges from the backing store is forbidden.
+- **Disabling**: when there is ≤1 item, set `draggable={false}` / skip rendering the handle; while a search filter is active, resolve by id against the **full array** (never splice the filtered subset — hidden items would be dropped).
+
+### Right-rail interactions (openchamber ContextPanelRail parity, 2026-09-14)
+
+- **Drag reorder**: full `@dnd-kit` stack (PointerSensor distance 8 + TouchSensor delay 200/tolerance 6); `arrayMove` resolves against the **full order** and writes it back to localStorage (`writeSurfaceOrder`). Extension-slot tabs (`ext:`) stay outside the SortableContext.
+- **⌘/Ctrl hold reveals order numbers**: hold the modifier 500ms → the rail icons paint 1..N (matching the ⌘1..8 jump); releasing, losing focus, or actually pressing a digit consumes and dismisses them until the next hold. app.tsx owns the jump itself; the rail only visualizes the mapping.
+- **Badges**: a live count (currently git changed-files, capped at 99+) takes precedence over the order number, which only appears during the modifier hold. The count is read into `aria-label` so screen readers announce it.
+- **Rich tooltip**: every registry entry may carry a `description` (i18n key); after a 150ms hover a tooltip opens to the icon's left (label + description + badge line). One portal, owned by the rail (`RailTooltip`), suppressed while dragging. The rail is a fixed-width column flush against the viewport edge — constant geometry, no floating-ui flip/shift needed.
+- **Not done**: the surface show/hide configuration dialog (openchamber's equalizer entry) — musepi's has-content auto-hide covers it and nobody asked.
+
 ### Model selector (provider compound key)
 
 - **Model identity = `provider/id`**, never the bare id — two providers can expose the same bare id (opencode-go / opencode-zen both ship `deepseek-v4-flash`): favorites (`musepi-gui-fav-models`), the DEFAULT pin (`modelRoles.default`), selection state, and role-row assignment are all keyed by `provider/id` (legacy bare-id entries match compatibly and are cleaned up on toggle); `session.setModel` carries `provider` so the daemon resolves precisely (daemon-side provider-scoped lookup added).

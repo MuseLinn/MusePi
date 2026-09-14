@@ -4637,6 +4637,43 @@ export class DaemonServer {
 					sessionId: p.sessionId,
 				});
 			}
+			case "setup.status": {
+				// 上手就绪态聚合（欢迎页状态感知空态的数据源）：供应商/模式/扩展
+				// 配置状态的只读汇总。纯读、零新增写路径；扩展数复用
+				// #getExtensions 的 10s 缓存不触发扫描，模式数复用
+				// ensureModeTemplates 既有幂等初始化。GUI 侧刷新走既有
+				// providers/extensions/modes 广播事件重拉，无需新事件。
+				const registry = await this.#host.ensureRegistry();
+				const storage = registry?.authStorage;
+				const oauthLoggedIn = storage
+					? getOAuthProviders().some(info => storage.has(info.storeCredentialsAs ?? info.id))
+					: false;
+				const apiConfigured = storage ? getBundledProviders().some(id => storage.has(id)) : false;
+				// 自定义供应商（models.yml providers 块）与 models.listCustom 同源
+				// 读取；文件缺失/损坏按 0 处理——就绪态不做诊断，只回答"有没有"。
+				let customCount = 0;
+				try {
+					const raw = fs.readFileSync(ModelsConfigFile.path(), "utf8");
+					const parsed = YAML.parse(raw) as { providers?: Record<string, unknown> } | null;
+					customCount = Object.keys(parsed?.providers ?? {}).length;
+				} catch {
+					// no models.yml yet
+				}
+				const model: "ready" | "none" = oauthLoggedIn || apiConfigured || customCount > 0 ? "ready" : "none";
+				const { listModeIds, ensureModeTemplates } = await import("../presets/resolve");
+				const modesDir = this.#modesDir();
+				ensureModeTemplates(modesDir);
+				const modeCount = listModeIds(modesDir).length;
+				const extensions = await this.#getExtensions();
+				const active = extensions.filter(e => e.state === "active").length;
+				const disabled = extensions.filter(e => e.state !== "active").length;
+				return {
+					model,
+					providers: { oauthLoggedIn, apiConfigured, customCount },
+					modes: { count: modeCount },
+					extensions: { active, disabled },
+				};
+			}
 			case "modes.list": {
 				// 预设中心数据源(docs/modes-plan.md §7):摘要列表,含继承链与
 				// 结构信息;扩展 id 存在性校验在 save/validate 层做。
@@ -8654,6 +8691,34 @@ export class DaemonServer {
 				const sent = await agent.sendQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.text);
 				if (!sent) throw new Error("Queued message not found");
 				return { sent: true };
+			}
+			case "session.queuedReorder": {
+				// Drag-reorder a queued message within one group (GUI queue
+				// panel parity, openchamber messageQueueStore.reorderQueue).
+				// Same-group only — steering↔follow-up is a timing change,
+				// not a sort. Returns the moved flag; unmatched/no-op → false.
+				const p = (params ?? {}) as {
+					sessionId: string;
+					group?: "steering" | "followUp";
+					from?: string;
+					to?: string;
+				};
+				if (
+					typeof p.sessionId !== "string" ||
+					typeof p.from !== "string" ||
+					!p.from ||
+					typeof p.to !== "string" ||
+					!p.to
+				) {
+					throw new Error("sessionId, from and to required");
+				}
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
+				const agent = live.agentSession as unknown as {
+					reorderQueuedMessage(group: "steering" | "followUp", from: string, to: string): boolean;
+				};
+				const moved = agent.reorderQueuedMessage(p.group === "followUp" ? "followUp" : "steering", p.from, p.to);
+				return { moved };
 			}
 			case "notes.list": {
 				// Project notes (right-panel 项目知识, openchamber v1.19 parity):

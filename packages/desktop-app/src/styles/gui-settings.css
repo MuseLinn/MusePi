@@ -1444,6 +1444,32 @@
 	color: var(--color-danger);
 }
 
+/* Drag reorder (openchamber TodosSection parity, hand-written HTML5 DnD). */
+.gui-notes-todo-grip {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 12px;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 0.12s ease;
+	cursor: grab;
+}
+
+.gui-notes-todo-row--sortable:hover .gui-notes-todo-grip,
+.gui-notes-todo-row--dragging .gui-notes-todo-grip {
+	opacity: 1;
+}
+
+.gui-notes-todo-row--dragging {
+	opacity: 0.5;
+}
+
+.gui-notes-todo-row--over {
+	box-shadow: inset 0 1px 0 var(--color-accent);
+}
+
 /* Saved plans (项目笔记 计划, openchamber parity). */
 .gui-notes-plan-open {
 	margin-top: 6px;
@@ -1615,6 +1641,43 @@
 	pointer-events: none;
 	user-select: none;
 	-webkit-user-select: none;
+}
+
+/* 恢复引导卡（就绪态 P0，欢迎页状态感知空态）：模型未配置时出现在
+ * 输入框上方。视觉弱于 composer 本体（raised surface + 细边框），
+ * 不抢首条消息的主角地位；按钮跳引导的服务商配置步。 */
+.gui-welcome-setup {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg, 12px);
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-surface-raised) 72%, transparent);
+}
+
+.gui-welcome-setup-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+	flex: 1;
+}
+
+.gui-welcome-setup-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.gui-welcome-setup-desc {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-welcome-setup-btn {
+	flex-shrink: 0;
 }
 
 /* ZCode welcome project chip (workspace picker). */
@@ -2177,6 +2240,42 @@
 .gui-queue-send:hover {
 	color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+/* Drag reorder (openchamber QueuedMessageChips parity, @dnd-kit). The grip
+ * mirrors the send buttons' hover-only reveal so a resting list stays
+ * scannable. */
+.gui-queue-grip {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex: none;
+	padding: 0;
+	border: none;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: grab;
+	opacity: 0;
+	transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.gui-queue-item:hover .gui-queue-grip,
+.gui-queue-grip:focus-visible,
+.gui-queue-item--dragging .gui-queue-grip {
+	opacity: 1;
+}
+
+.gui-queue-grip:hover {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+}
+
+.gui-queue-item--dragging {
+	opacity: 0.5;
+	box-shadow: inset 0 1px 0 var(--color-accent);
 }
 
 .gui-queue-panel-actions {

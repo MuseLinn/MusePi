@@ -118,6 +118,7 @@ export function ModelSection({
 	onChanged,
 	rpc,
 	sessionId,
+	openAddProvider = false,
 }: {
 	providers: ProviderInfo[] | null;
 	apiProviders: ApiProviderInfo[];
@@ -142,6 +143,9 @@ export function ModelSection({
 	onChanged(): void;
 	rpc: RpcClient | null;
 	sessionId: string | null;
+	/** The pane was opened BY the 添加供应商 entry — land with the custom
+	 *  provider add dialog already open (see CustomProviderPane). */
+	openAddProvider?: boolean;
 }): ReactNode {
 	// Section collapse (bitfun parity): show the first few cards, expand on
 	// demand — 70 login providers + the full catalog is too much for a grid.
@@ -305,7 +309,7 @@ export function ModelSection({
 	const visibleProviders = filteredProviders.slice(0, showAll ? undefined : PROVIDER_COLLAPSE_LIMIT);
 	// /model-style split pane: active tab id (default | session | roles |
 	// providers | custom | add).
-	const [activeTab, setActiveTab] = useState<string>("roles");
+	const [activeTab, setActiveTab] = useState<string>(openAddProvider ? "custom" : "roles");
 	// Canonical role list (built-ins + configured extras) — TUI /model
 	// knownRoleIds parity.
 	const [knownRoleIds, setKnownRoleIds] = useState<string[] | null>(null);
@@ -1618,7 +1622,13 @@ export function ModelSection({
 					 * unconditionally leaked the whole section (title, list, add
 					 * button) under the roles/behavior/providers tabs too. */}
 					{activeTab === "custom" && (
-						<CustomProviderPane custom={custom} rpc={rpc} sessionId={sessionId} onChanged={onChanged} />
+						<CustomProviderPane
+							custom={custom}
+							rpc={rpc}
+							sessionId={sessionId}
+							onChanged={onChanged}
+							initialAddOpen={openAddProvider}
+						/>
 					)}
 				</HeightMorph>
 			</div>

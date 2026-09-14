@@ -617,7 +617,18 @@ function AppInner(): ReactNode {
 	const [leavingSettings, setLeavingSettings] = useState(false);
 	const settingsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const openSettings = useCallback(
-		(section?: "skills" | "suggestions" | "providers"): void => {
+		// `section` is deliberately `unknown`, not the section union: several
+		// call sites hand this function straight to an event prop
+		// (`onSettings={openSettings}`, `onClick={onOpenSettings}`), so React
+		// passes a MouseEvent. It used to be stored as the active section
+		// verbatim — SettingsView's content switch has no branch for an event
+		// object, so the pane opened BLANK and only a nav click (a real id)
+		// filled it in. Only the three known section names are accepted;
+		// everything else (DOM event, undefined, retired id) means "land on
+		// the default section".
+		(section?: unknown): void => {
+			const target =
+				section === "skills" || section === "suggestions" || section === "providers" ? section : undefined;
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
 			setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat");
@@ -625,7 +636,7 @@ function AppInner(): ReactNode {
 			settingsTimerRef.current = setTimeout(() => {
 				settingsTimerRef.current = null;
 				setLeavingView(null);
-				setSettingsSection(section);
+				setSettingsSection(target);
 				setSettingsOpen(true);
 			}, 150);
 		},
@@ -3109,7 +3120,7 @@ function AppInner(): ReactNode {
 			{/* First-launch primer (settings footer 引导 reopens it via event). */}
 			<OnboardingOverlay rpc={rpc} providerEvent={providerEvent} />
 			{/* What's-new release notes (daemon changelog.startup; settings
-			 * footer 新功能 reopens via omp-open-announcement). */}
+			 * footer 新功能 reopens via musepi-open-announcement). */}
 			<AnnouncementOverlay rpc={rpc} />
 			{/* Managed browser guests (right-pane tool): the <webview> elements live
 			 * here so they survive panel close/switch — the pane only positions

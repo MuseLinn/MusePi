@@ -198,6 +198,26 @@
 - **常驻浮卡(非弹出)**:btw 侧问卡/角标卡等 fixed 角卡必须自带视口 clamp(`maxWidth: calc(100vw − 48px)` + `max-height: min(60vh,520px)` + body 滚动),禁止裸 fixed 无边界。
 - **键盘**:浮卡/浮菜单的 Esc 承诺必须接线(如 btw 卡 hint「Esc closes」↔ onKeyDown Escape),不许提示与行为脱节。
 
+> **范围澄清(2026-09-14)**:「手写同语义、不相依」只适用于**浮层定位**这一域——floating-ui 的 flip/shift/clamp 语义量小、CSS + 尺寸测量足以精确复刻,且与 `gui-menu-in/out` 两阶段入场深度耦合。**拖拽排序不适用此原则**:**务实选型**——`@dnd-kit` 的传感器仲裁(指针/键盘激活阈值)、碰撞检测、可访问性(屏幕阅读器 reorder announcement)、嵌套容器是实打实的状态机,依赖能很好解决这类需求,就用依赖(openchamber 全线 14 处拖拽同库对齐,见下节);**只有**当交互简单到依赖反而是累赘(无排序语义的一次性拖放、纯指针的一维位移)时才手写。判断标准:涉及"顺序"且需持久化 → `@dnd-kit`;单纯"把这个东西放到那里" → 手写 pointer capture。
+
+### 拖拽排序规范(2026-09-14 定稿,openchamber 对照)
+
+openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、会话标签页、起始提示词 chips、排队消息 chips、会话文件夹/项目排序、TodosSection、移动端项目/会话)统一用 `@dnd-kit`。需要排序的拖拽我们对齐同库:
+
+- **依赖**:`@dnd-kit/core@6` + `@dnd-kit/sortable@10` + `@dnd-kit/utilities@3`(`@dnd-kit/modifiers@9` 按需),装在 `packages/desktop-app`。
+- **传感器约定**:可见排序用 `PointerSensor` + `activationConstraint: { distance: 8 }`(移动 ≥8px 才启动拖拽,避免误触点击);整行 header 拖拽用 `MouseSensor` distance 8;需键盘排序时加 `KeyboardSensor` + `sortableKeyboardCoordinates`。
+- **结构**:`DndContext`(sensors + `closestCenter` + `onDragEnd`)包 `SortableContext`(`verticalListSortingStrategy` / `rectSortingStrategy`);行用 `useSortable` + `CSS.Transform.toString(transform)`;拖拽手柄是独立 `<button>`(带 `attributes`/`listeners`),不是整行可拖——行内有按钮/输入框时整行拖会劫持点击。**例外**:纯图标按钮(右栏 rail icon)自身不含嵌套控件,可直接当 activator,8px 阈值已保证点击不被劫持。
+- **完成态**:onDragEnd 里 `arrayMove` 后**整表回写**存储(localStorage 或 RPC),不允许只改本地可视顺序与后端不一致。
+- **禁用条件**:条目 ≤1 时整块 `draggable={false}`/不渲染手柄;搜索过滤态下按 id 在**完整数组**上重排(不能在过滤子集上 splice,否则丢隐藏项)。
+
+### 右栏 rail 交互(openchamber ContextPanelRail parity,2026-09-14 定稿)
+
+- **拖拽排序**:`@dnd-kit` 全套(PointerSensor distance 8 + TouchSensor delay 200/tolerance 6),在**完整 order** 上 arrayMove 后整表回写 localStorage(`writeSurfaceOrder`)。扩展槽 tab(`ext:`)不进 SortableContext。
+- **⌘/Ctrl 长按揭示序号**:按住修饰键 500ms → rail 图标右上角显示 1..N(对应 ⌘1..8 跳转);松开、失焦、或真的按了数字键即消费并消除,下次按住才回来。app.tsx 的 ⌘1..8 处理器不变,这边只负责可视化。
+- **角标**:live 计数(当前仅 git 变更文件数,99+ 封顶)优先于序号;序号只在修饰键长按时出现。a11y 标签把计数读进 `aria-label`(「git,3 个已更改文件」)。
+- **富 tooltip**:registry 每项带可选 `description`(i18n key);hover 150ms 后在图标左侧弹出(label + description + 角标描述行),单个 portal 由 rail 层托管(`RailTooltip`),拖拽中抑制。rail 是贴视口右缘的定宽列,几何恒定,不需要 floating-ui 的 flip/shift。
+- **不做**:surface 显示/隐藏配置弹窗(openchamber 的 equalizer 入口)——musepi 的 has-content 自动隐藏已够用,用户未提需求。
+
 ### 模型选择器(provider 复合键)
 
 - **模型身份 = `provider/id`**,绝不是裸 id——两个供应商可提供同裸 id(opencode-go / opencode-zen 都出 `deepseek-v4-flash`):收藏(`musepi-gui-fav-models`)、DEFAULT 图钉(`modelRoles.default`)、选中态、角色行赋值全部按 `provider/id` 键控(旧裸 id 条目兼容匹配、toggle 时清理);`session.setModel` 携带 `provider` 让 daemon 精确解析(daemon 侧 provider 限定查找已加)。

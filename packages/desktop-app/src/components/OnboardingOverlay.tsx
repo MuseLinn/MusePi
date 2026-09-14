@@ -17,7 +17,7 @@
  */
 
 import { setLocale, type TranslationKey, t, useAccentPreference, useThemePreference } from "@musepi/guest-client";
-import { Download, KeyRound, Languages, MessagesSquare, Palette, Settings2, Sparkles, SquareTerminal } from "lucide";
+import { KeyRound, Languages, Sparkles } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
@@ -25,11 +25,12 @@ import { DONE_KEY, onboardingPending } from "../lib/onboarding";
 import { usePrompt } from "../lib/prompt-dialog";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { ColorPickerPanel } from "./ColorPicker";
-import { DialogFrame } from "./DialogFrame";
-import { FadeScroll } from "./FadeScroll";
 import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
+import { PersonalizeSetup } from "./PersonalizeSetup";
+import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointModels } from "./provider-setup-shared";
+import { Reveal } from "./Reveal";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
 const ONBOARDING_EXIT_MS = 200;
@@ -39,30 +40,37 @@ import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
-import { PersonalizeSetup } from "./PersonalizeSetup";
 import { PetSprite } from "./PetSprite";
 
 const STEPS = [
 	{ icon: Languages, key: "onboarding step1" },
-	{ icon: Palette, key: "onboarding step2" },
-	{ icon: MessagesSquare, key: "onboarding step3" },
-	{ icon: SquareTerminal, key: "onboarding step4" },
-	{ icon: Settings2, key: "onboarding step5" },
 	{ icon: KeyRound, key: "onboarding step6" },
-	{ icon: Download, key: "onboarding step8" },
-	{ icon: Sparkles, key: "onboarding step7" },
+	{ icon: Sparkles, key: "onboarding done" },
 ] as const;
+
+/** Provider setup step (0-based index into STEPS — the one rendering
+ *  `<ProviderSetup>`). The welcome recovery card jumps here via the
+ *  `musepi-open-onboarding` event's `detail.step`. */
+export const ONBOARDING_PROVIDER_STEP = 1;
+
+/** Main-spine step → right-pane demo index (DemoContent still speaks the
+ *  original 8-step vocabulary): 语言/外观 merged → appearance demo,
+ *  model setup → provider demo, done → chat demo. */
+const DEMO_STEP: readonly number[] = [1, 5, 3];
 
 /** Per-step title — each page carries its own heading, not "Welcome". */
 const STEP_TITLES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
-	"onboarding step1": "onboarding title1",
-	"onboarding step2": "onboarding title2",
-	"onboarding step3": "onboarding title3",
-	"onboarding step4": "onboarding title4",
-	"onboarding step5": "onboarding title5",
+	"onboarding step1": "onboarding title main1",
 	"onboarding step6": "onboarding title6",
-	"onboarding step7": "onboarding title7",
-	"onboarding step8": "onboarding title8",
+	"onboarding done": "onboarding title done",
+};
+
+/** Per-step body copy (the merged/done steps carry their own wording; the
+ *  provider step reuses the original step6 copy). */
+const STEP_BODIES: Record<(typeof STEPS)[number]["key"], TranslationKey> = {
+	"onboarding step1": "onboarding step main1",
+	"onboarding step6": "onboarding step6",
+	"onboarding done": "onboarding step done",
 };
 
 /** Feature bullets per promo step (steps 3–5) — each page carries real
@@ -72,27 +80,6 @@ const PROMO_FEATURES = {
 	"onboarding step4": ["onboarding feat c1", "onboarding feat c2", "onboarding feat c3"],
 	"onboarding step5": ["onboarding feat t1", "onboarding feat t2", "onboarding feat t3", "onboarding feat t4"],
 } as const;
-
-/** One-tap fills for common OpenAI-compatible providers — the object of the
- *  step is "开箱即用": pick a chip, drop in the API key, go. */
-const QUICK_PROVIDERS = [
-	{ name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
-	{ name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
-	{ name: "Moonshot", baseUrl: "https://api.moonshot.cn/v1" },
-	{ name: "智谱 GLM", baseUrl: "https://open.bigmodel.cn/api/paas/v4" },
-] as const;
-
-/** Base-URL placeholder per API protocol — the hint must match the
- *  endpoint shape the selected protocol actually talks to (Google
- *  /v1beta vs the OpenAI /v1 chat-completions shape). Anthropic keeps
- *  the `/v1` suffix: the SDK strips it before appending `/v1/messages`
- *  (model-discovery.ts:929 — a `/v1/messages` baseUrl would double up). */
-const URL_HINTS: Record<string, string> = {
-	"openai-completions": "https://api.example.com/v1",
-	"openai-responses": "https://api.example.com/v1",
-	"anthropic-messages": "https://api.anthropic.com/v1",
-	"google-generative-ai": "https://generativelanguage.googleapis.com/v1beta",
-};
 
 /** Wire shapes from daemon providers.list (SettingsView parity). */
 interface BuiltinProviderInfo {
@@ -349,13 +336,9 @@ function ProviderSetup({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [added, setAdded] = useState<{ name: string } | null>(null);
-	// "Fetch available models" interrogation (settings custom-provider
-	// parity): candidates the user adopts into the form, never config
-	// written behind their back.
-	const [candidates, setCandidates] = useState<{ id: string; name?: string }[] | null>(null);
-	const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
-	const [fetchingModels, setFetchingModels] = useState(false);
-	const [fetchError, setFetchError] = useState<string | null>(null);
+	// "Fetch available models" + quick-fill chips — shared with the settings
+	// custom-provider dialog (single authoritative flow, provider-setup-shared).
+	const ep = useEndpointModels(rpc, { name: form.name, baseUrl: form.baseUrl, apiKey: form.apiKey, api: form.api });
 	// Connection test.
 	const [testing, setTesting] = useState(false);
 	const [testOk, setTestOk] = useState(false);
@@ -439,6 +422,10 @@ function ProviderSetup({
 			const next: Record<string, CredentialInfo[]> = {};
 			for (const [id, list] of entries) next[id] = list;
 			setCredsByProvider(next);
+			// Provider state changed (login/logout/import/add) — notify the
+			// welcome recovery card (and any other readiness listener) so it
+			// re-evaluates setup.status without waiting for a window refocus.
+			window.dispatchEvent(new Event("musepi-gui-providers-changed"));
 		} catch {
 			setBuiltins([]);
 		}
@@ -595,49 +582,12 @@ function ProviderSetup({
 		}
 	};
 
-	/** Ask the endpoint the form currently shows which models it serves. The
-	 *  draft — including a key typed but not yet saved — is sent as-is; the
-	 *  reply is candidates the user picks from, never configuration written
-	 *  behind them. A protocol with no readable listing or a dead endpoint
-	 *  is not a dead end: the failure shows next to the form's rows. */
-	const fetchModels = async (): Promise<void> => {
-		if (!rpc) return;
-		setFetchError(null);
-		setFetchingModels(true);
-		try {
-			const result = await rpc.request<{ models?: { id: string; name?: string }[] }>("models.discover", {
-				baseUrl: form.baseUrl,
-				api: form.api,
-				provider: form.name,
-				...(form.apiKey ? { apiKey: form.apiKey } : {}),
-			});
-			const models = result?.models ?? [];
-			if (models.length === 0) {
-				setFetchError(t("no models found at this endpoint"));
-				return;
-			}
-			setCandidates(models);
-			setPicked(new Set(models.map(m => m.id)));
-		} catch (err) {
-			setFetchError(err instanceof Error ? err.message : String(err));
-		} finally {
-			setFetchingModels(false);
-		}
-	};
-
-	/** Adopt the checked candidates into the form's model list. */
+	/** Ask the endpoint the form currently shows which models it serves —
+	 *  shared implementation (useEndpointModels). Adoption here merges the
+	 *  picked candidates into the onboarding form's simple rows. */
 	const adoptSelected = (): void => {
-		if (!candidates) return;
-		const ids = new Set(form.adopted.map(m => m.id));
-		const next = [...form.adopted];
-		for (const candidate of candidates) {
-			if (picked.has(candidate.id) && !ids.has(candidate.id)) {
-				next.push({ id: candidate.id, ...(candidate.name ? { name: candidate.name } : {}) });
-			}
-		}
-		setForm(v => ({ ...v, adopted: next }));
-		setCandidates(null);
-		setPicked(new Set());
+		setForm(v => ({ ...v, adopted: [...v.adopted, ...ep.pickedNew(v.adopted.map(m => m.id))] }));
+		ep.closePicker();
 	};
 
 	/** Drop one adopted model row from the form. */
@@ -948,24 +898,7 @@ function ProviderSetup({
 				</div>
 			) : (
 				<div className="gui-obo-custom">
-					<div className="gui-obo-quick">
-						<span className="gui-obo-quick-label">{t("quick providers")}</span>
-						<div className="gui-obo-quick-chips">
-							{QUICK_PROVIDERS.map(qp => (
-								<button
-									type="button"
-									key={qp.name}
-									className="gui-obo-quick-chip"
-									onClick={() => {
-										tapFeedback();
-										setForm(v => ({ ...v, name: qp.name, baseUrl: qp.baseUrl }));
-									}}
-								>
-									{qp.name}
-								</button>
-							))}
-						</div>
-					</div>
+					<QuickProviderChips onPick={(name, baseUrl) => setForm(v => ({ ...v, name, baseUrl }))} />
 					<input
 						className="gui-input"
 						placeholder={t("provider name")}
@@ -992,11 +925,11 @@ function ProviderSetup({
 						<button
 							type="button"
 							className="gui-btn"
-							disabled={!form.baseUrl || fetchingModels || busy}
+							disabled={!form.baseUrl || ep.fetchingModels || busy}
 							title={form.baseUrl ? undefined : t("enter a base URL to fetch models")}
-							onClick={() => void fetchModels()}
+							onClick={() => void ep.fetchModels()}
 						>
-							{fetchingModels ? t("fetching models…") : t("fetch available models")}
+							{ep.fetchingModels ? t("fetching models…") : t("fetch available models")}
 						</button>
 						{form.adopted.length > 0 && (
 							<span className="text-[12px] text-[var(--color-text-faint)]">
@@ -1004,7 +937,7 @@ function ProviderSetup({
 							</span>
 						)}
 					</div>
-					{fetchError && <div className="gui-obo-provider-error">{fetchError}</div>}
+					{ep.fetchError && <div className="gui-obo-provider-error">{ep.fetchError}</div>}
 					{form.adopted.length > 0 && (
 						<div className="flex flex-col gap-1">
 							{form.adopted.map(m => (
@@ -1075,65 +1008,17 @@ function ProviderSetup({
 				</div>
 			)}
 
-			{/* Candidate picker for "fetch available models": the endpoint's
-			 * reply as a checkbox list the user adopts from. Nothing here
-			 * writes configuration — adopted rows land in the form only. */}
-			<DialogFrame
-				open={candidates !== null}
-				onClose={() => {
-					setCandidates(null);
-					setPicked(new Set());
-				}}
-				className="gui-dialog--confirm"
-				label={t("available models")}
-			>
-				<div className="gui-dialog-head">
-					<div className="text-[14px] font-medium">{t("available models")}</div>
-					<button type="button" className="gui-btn" onClick={() => void adoptSelected()}>
-						{t("adopt selected")}
-					</button>
-				</div>
-				<div className="p-3">
-					<div className="mb-2 flex items-center justify-between">
-						<span className="text-[13px] text-[var(--color-text-faint)]">{t("select models to add")}</span>
-						<button
-							type="button"
-							className="text-[12px] text-[var(--color-accent)]"
-							onClick={() => {
-								if (candidates && picked.size === candidates.length) {
-									setPicked(new Set());
-								} else if (candidates) {
-									setPicked(new Set(candidates.map(m => m.id)));
-								}
-							}}
-						>
-							{picked.size > 0 && candidates && picked.size === candidates.length
-								? t("deselect all")
-								: t("select all")}
-						</button>
-					</div>
-					<FadeScroll className="flex max-h-[260px] flex-col gap-1 overflow-y-auto">
-						{(candidates ?? []).map(m => (
-							<label key={m.id} className="flex cursor-pointer items-center gap-2">
-								<input
-									type="checkbox"
-									checked={picked.has(m.id)}
-									onChange={() => {
-										const next = new Set(picked);
-										if (next.has(m.id)) next.delete(m.id);
-										else next.add(m.id);
-										setPicked(next);
-									}}
-								/>
-								<span className="flex-1 truncate font-mono text-[13px]">{m.id}</span>
-								{m.name && m.name !== m.id && (
-									<span className="truncate text-[12px] text-[var(--color-text-faint)]">{m.name}</span>
-								)}
-							</label>
-						))}
-					</FadeScroll>
-				</div>
-			</DialogFrame>
+			{/* Candidate picker for "fetch available models" — shared with the
+			 * settings custom-provider dialog (provider-setup-shared). */}
+			<EndpointCandidatesDialog
+				candidates={ep.candidates}
+				picked={ep.picked}
+				allSelected={ep.allSelected}
+				onToggleOne={ep.toggleOne}
+				onToggleAll={ep.toggleAll}
+				onAdopt={() => void adoptSelected()}
+				onClose={ep.closePicker}
+			/>
 
 			{loginState && (
 				<div className="gui-obo-login" role="dialog">
@@ -1365,6 +1250,11 @@ export function OnboardingOverlay({
 }): ReactNode {
 	const [open, setOpen] = useState(onboardingPending);
 	const [step, setStep] = useState(0);
+	// Done-step optional branches (3+3 restructure): the completion step
+	// hosts import / personalize / feature-tour as a single-open accordion.
+	// Collapsed by default — the Enter spine (next/finish) never routes
+	// through them; a focused branch control keeps its own Enter.
+	const [branch, setBranch] = useState<"import" | "personalize" | "features" | null>(null);
 	// Pet display mode shared by the personalize step's controls (left) and
 	// the chat preview (right): "desktop" hides the pet from the preview's
 	// composer — it lives in its own desktop window there.
@@ -1391,18 +1281,33 @@ export function OnboardingOverlay({
 		}, ONBOARDING_EXIT_MS);
 	}, []);
 
-	// Settings footer 引导 button reopens the primer on demand.
+	// Settings footer 引导 button reopens the primer on demand. Optional
+	// `detail.step` (0-based) lands directly on one step — the welcome
+	// recovery card uses it to jump straight to provider setup.
 	useEffect(() => {
-		const onOpen = (): void => {
-			setStep(0);
+		const onOpen = (e: Event): void => {
+			const raw = (e as CustomEvent<{ step?: number }>).detail?.step;
+			const step = typeof raw === "number" && Number.isInteger(raw) && raw >= 0 && raw < STEPS.length ? raw : 0;
+			setStep(step);
 			setClosing(false);
 			setOpen(true);
 		};
-		window.addEventListener("omp-open-onboarding", onOpen);
-		return () => window.removeEventListener("omp-open-onboarding", onOpen);
+		window.addEventListener("musepi-open-onboarding", onOpen);
+		return () => window.removeEventListener("musepi-open-onboarding", onOpen);
 	}, []);
 
 	const finish = useCallback((): void => {
+		// First-run detection BEFORE writing DONE_KEY: a brand-new user has
+		// no "previous version" to compare — the what's-new announcement is
+		// meaningless noise right after onboarding, so the event carries
+		// firstRun and AnnouncementOverlay skips this session (it shows
+		// normally from the next launch onward).
+		let firstRun = false;
+		try {
+			firstRun = localStorage.getItem(DONE_KEY) === null;
+		} catch {
+			// ignore
+		}
 		try {
 			localStorage.setItem(DONE_KEY, "1");
 		} catch {
@@ -1412,7 +1317,10 @@ export function OnboardingOverlay({
 		// First-run flow continues into the what's-new announcement when one
 		// is pending (AnnouncementOverlay listens for this) — after the exit
 		// animation, so the announcement fades in over the settled screen.
-		setTimeout(() => window.dispatchEvent(new CustomEvent("omp-onboarding-finished")), ONBOARDING_EXIT_MS + 40);
+		setTimeout(
+			() => window.dispatchEvent(new CustomEvent("musepi-onboarding-finished", { detail: { firstRun } })),
+			ONBOARDING_EXIT_MS + 40,
+		);
 	}, [requestClose]);
 
 	// Keyboard priority: while the primer is up, Enter advances (next step /
@@ -1492,23 +1400,107 @@ export function OnboardingOverlay({
 							{t(STEP_TITLES[current.key])}
 						</div>
 						<div className="gui-onboarding-body" key={`body-${step}`}>
-							{t(current.key)}
+							{t(STEP_BODIES[current.key])}
 						</div>
-						{/* Step content scrolls inside the pane (provider config and
-						 * personalization are tall); dots + actions stay pinned. */}
+						{/* Step content scrolls inside the pane (provider config is
+						 * tall); dots + actions stay pinned. Main spine = 3 steps;
+						 * the optional branches (import/personalize/feature tour)
+						 * live in the done step's accordion and never block Enter. */}
 						<div className="gui-obo-step-body">
-							{step >= 2 && step <= 4 && (
-								<FeatureList
-									key={`feat-${step}`}
-									keys={PROMO_FEATURES[current.key as keyof typeof PROMO_FEATURES] ?? []}
-								/>
+							{step === 0 && (
+								<>
+									<LanguageSetup />
+									<AppearanceSetup />
+								</>
 							)}
-							{step === 0 && <LanguageSetup />}
-							{step === 1 && <AppearanceSetup />}
-							{step === 5 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
-							{step === 6 && <ImportSessionsSetup rpc={rpc} />}
-							{step === 7 && (
-								<PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />
+							{step === 1 && <ProviderSetup rpc={rpc} providerEvent={providerEvent} />}
+							{step === 2 && (
+								<div className="gui-obo-branches">
+									<div className="gui-obo-branch">
+										<button
+											type="button"
+											className="gui-obo-branch-head"
+											aria-expanded={branch === "import"}
+											onClick={() => {
+												tapFeedback();
+												setBranch(b => (b === "import" ? null : "import"));
+											}}
+										>
+											<Icon name="download" className="h-4 w-4" />
+											<span className="flex-1 text-left">{t("onboarding branch import")}</span>
+											<Icon
+												name="arrow-down-s"
+												className={`h-4 w-4 opacity-60${branch === "import" ? " rotate-180" : ""}`}
+											/>
+										</button>
+										<Reveal open={branch === "import"}>
+											<ImportSessionsSetup rpc={rpc} />
+										</Reveal>
+									</div>
+									<div className="gui-obo-branch">
+										<button
+											type="button"
+											className="gui-obo-branch-head"
+											aria-expanded={branch === "personalize"}
+											onClick={() => {
+												tapFeedback();
+												setBranch(b => (b === "personalize" ? null : "personalize"));
+											}}
+										>
+											<Icon name="robot-2" className="h-4 w-4" />
+											<span className="flex-1 text-left">{t("onboarding branch personalize")}</span>
+											<Icon
+												name="arrow-down-s"
+												className={`h-4 w-4 opacity-60${branch === "personalize" ? " rotate-180" : ""}`}
+											/>
+										</button>
+										<Reveal open={branch === "personalize"}>
+											<PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />
+										</Reveal>
+									</div>
+									<div className="gui-obo-branch">
+										<button
+											type="button"
+											className="gui-obo-branch-head"
+											aria-expanded={branch === "features"}
+											onClick={() => {
+												tapFeedback();
+												setBranch(b => (b === "features" ? null : "features"));
+											}}
+										>
+											<Icon name="sparkling" className="h-4 w-4" />
+											<span className="flex-1 text-left">{t("onboarding branch features")}</span>
+											<Icon
+												name="arrow-down-s"
+												className={`h-4 w-4 opacity-60${branch === "features" ? " rotate-180" : ""}`}
+											/>
+										</button>
+										<Reveal open={branch === "features"}>
+											<div className="flex flex-col gap-3">
+												{(["onboarding title3", "onboarding title4", "onboarding title5"] as const).map(
+													k => (
+														<div key={k}>
+															<div className="mb-1 text-[13px] font-medium">{t(k)}</div>
+															<FeatureList
+																keys={
+																	PROMO_FEATURES[
+																		(
+																			{
+																				"onboarding title3": "onboarding step3",
+																				"onboarding title4": "onboarding step4",
+																				"onboarding title5": "onboarding step5",
+																			} as const
+																		)[k]
+																	] ?? []
+																}
+															/>
+														</div>
+													),
+												)}
+											</div>
+										</Reveal>
+									</div>
+								</div>
 							)}
 						</div>
 						<div className="gui-onboarding-dots">
@@ -1547,7 +1539,10 @@ export function OnboardingOverlay({
 						</div>
 					</div>
 					<div className="gui-onboarding-visual">
-						<StepDemo step={step} petMode={persPetMode} />
+						{/* Demo index remap (DEMO_STEP): the demo vocabulary still
+						 * speaks the original 8 steps — appearance for the merged
+						 * first step, provider for model setup, chat for done. */}
+						<StepDemo step={DEMO_STEP[step] ?? 0} petMode={persPetMode} />
 					</div>
 				</div>
 			</div>

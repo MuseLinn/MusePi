@@ -844,6 +844,34 @@ export function Composer({
 		},
 		[rpc, sessionId, refreshQueued],
 	);
+	const reorderQueued = useCallback(
+		(group: "steering" | "followUp", from: string, to: string): Promise<void> => {
+			if (!rpc || !sessionId || from === to) return Promise.resolve();
+			// Optimistic local reorder so the row follows the cursor; the
+			// daemon is authoritative and the next poll confirms.
+			setQueued(prev =>
+				prev
+					? {
+							...prev,
+							[group]: (() => {
+								const next = [...prev[group]];
+								const fi = next.indexOf(from);
+								const ti = next.indexOf(to);
+								if (fi === -1 || ti === -1) return next;
+								const [moved] = next.splice(fi, 1);
+								next.splice(ti, 0, moved);
+								return next;
+							})(),
+						}
+					: prev,
+			);
+			return rpc
+				.request("session.queuedReorder", { sessionId, group, from, to })
+				.then(() => refreshQueued())
+				.catch(() => refreshQueued());
+		},
+		[rpc, sessionId, refreshQueued],
+	);
 	useEffect(() => {
 		if (!rpc || !sessionId || !working) return;
 		let disposed = false;
@@ -1559,6 +1587,7 @@ export function Composer({
 														onSend={sendQueued}
 														onPop={popQueued}
 														onClear={clearQueued}
+														onReorder={reorderQueued}
 													/>,
 												)}
 											</>

@@ -67,6 +67,60 @@
 	font-variant-numeric: tabular-nums;
 }
 
+/* 收藏 grip handle (openchamber drag parity): quiet dot-pairs that surface
+ * on row hover; the drag itself is native HTML5 DnD from this handle only,
+ * so there is no dnd-kit dependency. */
+.gui-model-grip {
+	display: inline-flex;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: grab;
+	opacity: 0;
+	transition: opacity 120ms ease, color 120ms ease;
+}
+.gui-model-opt:hover .gui-model-grip,
+.gui-model-grip:focus-visible {
+	opacity: 1;
+}
+.gui-model-grip:active {
+	cursor: grabbing;
+}
+
+/* Dragging state (@dnd-kit transform animates the row; this is the
+ * visual affordance while it is in flight). */
+.gui-model-opt--dragging {
+	opacity: 0.5;
+	box-shadow: inset 0 1px 0 var(--color-accent);
+}
+
+/* "not selected" clearing row (openchamber includeNotSelected parity). */
+.gui-model-none {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 6px 10px;
+	border: none;
+	border-radius: 7px;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	text-align: left;
+}
+.gui-model-none:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+.gui-model-sep {
+	height: 1px;
+	margin: 4px 8px;
+	background: color-mix(in oklab, var(--border) 60%, transparent);
+}
+
 /* Keyboard-active row (↑↓ navigation): the same accent wash as :hover so
  * a driven highlight reads identically to a pointed one. */
 .gui-model-opt--kbd {
@@ -293,6 +347,7 @@
 }
 
 .gui-right-rail-btn {
+	position: relative;
 	width: 32px;
 	height: 32px;
 	display: flex;
@@ -301,6 +356,9 @@
 	border-radius: 8px;
 	color: var(--color-text-muted);
 	transition: background 140ms ease, color 140ms ease;
+	/* @dnd-kit drag: the button is the activator, but the wrapper carries
+	 * the transform. Touch action none keeps a vertical drag from scrolling. */
+	touch-action: none;
 }
 
 .gui-right-rail-btn:hover {
@@ -311,6 +369,67 @@
 .gui-right-rail-btn--active {
 	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
 	color: var(--color-accent);
+}
+
+/* Sortable wrapper (openchamber ContextPanelRail parity): the dragged icon
+ * lifts above its neighbours while the list makes room. */
+.gui-right-rail-item--dragging {
+	z-index: 10;
+	opacity: 0.7;
+}
+
+/* Corner badge shared by the changed-files count and the ⌘N order digit. */
+.gui-right-rail-badge {
+	position: absolute;
+	right: 0;
+	top: 0;
+	display: flex;
+	height: 15px;
+	min-width: 15px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 9999px;
+	padding: 0 3px;
+	font-size: 0.625rem;
+	font-weight: 600;
+	line-height: 1;
+	pointer-events: none;
+}
+.gui-right-rail-badge--count {
+	background: color-mix(in oklab, var(--color-accent) 88%, white);
+	color: var(--color-surface);
+}
+.gui-right-rail-badge--order {
+	background: var(--color-surface-sunken);
+	color: var(--color-text-faint);
+	font-weight: 500;
+}
+
+/* Hover tooltip (openchamber Tooltip parity, hand-written — see
+ * RailTooltip.tsx; the rail's fixed geometry needs no collision lib). */
+.gui-rail-tooltip {
+	position: fixed;
+	z-index: 70;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-width: 260px;
+	padding: 7px 9px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: var(--color-surface);
+	box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+	animation: gui-browser-pop 130ms cubic-bezier(0.22, 1, 0.36, 1);
+	pointer-events: none;
+}
+.gui-rail-tooltip-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: var(--color-text);
+}
+.gui-rail-tooltip-desc {
+	font-size: 0.6875rem;
+	color: var(--color-text-faint);
 }
 
 /* Secondary-surface overflow menu ("…" button) — rail 过载治理 */

@@ -43,6 +43,7 @@ import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-pas
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
+import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
 import { type SlashEntry, SlashRow } from "./SlashRow";
@@ -283,6 +284,38 @@ export function WelcomeComposer({
 		load();
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
+	}, [rpc]);
+	// 上手就绪态（setup.status，欢迎页状态感知空态）：null = 未加载；
+	// true = 模型未配置 → 渲染恢复引导卡。刷新源 = 挂载 + onboarding 内
+	// 供应商动作广播（musepi-gui-providers-changed）+ onboarding 完成 +
+	// settings 变更 + 窗口重新聚焦（OAuth 浏览器跳转回来）。RPC 不可达时
+	// fail-open（不显示卡片，不拦输入）——就绪态是引导，不是门禁。
+	const [modelMissing, setModelMissing] = useState<boolean | null>(null);
+	useEffect(() => {
+		let cancelled = false;
+		const load = (): void => {
+			void rpc
+				.request<{ model?: "ready" | "none" } | null>("setup.status", {})
+				.then(status => {
+					if (!cancelled) setModelMissing(status?.model === "none");
+				})
+				.catch(() => {
+					if (!cancelled) setModelMissing(false);
+				});
+		};
+		load();
+		const reload = (): void => load();
+		window.addEventListener("musepi-gui-providers-changed", reload);
+		window.addEventListener("musepi-onboarding-finished", reload);
+		window.addEventListener("omp-settings-changed", reload);
+		window.addEventListener("focus", reload);
+		return () => {
+			cancelled = true;
+			window.removeEventListener("musepi-gui-providers-changed", reload);
+			window.removeEventListener("musepi-onboarding-finished", reload);
+			window.removeEventListener("omp-settings-changed", reload);
+			window.removeEventListener("focus", reload);
+		};
 	}, [rpc]);
 	// Thinking preselect: the boot snapshot (modelRoles.default suffix →
 	// defaultThinkingLevel) may arrive after first paint — apply it until the
@@ -1136,6 +1169,31 @@ export function WelcomeComposer({
 					<p className="gui-welcome-greet pointer-events-none mb-4">
 						<BlurText text={greeting(hour)} stepMs={38} />
 					</p>
+					{/* 恢复引导卡（就绪态 P0）：模型未配置时在输入框上方提示，
+					 * 一键跳引导的服务商配置步（musepi-open-onboarding detail.step，
+					 * OnboardingOverlay 支持可选定位）。ready 时零渲染——就绪态是
+					 * 引导不是门禁，专注模式下也不显示（输入优先）。 */}
+					{modelMissing && !focused && (
+						<div className="gui-welcome-setup mb-3" role="status">
+							<div className="gui-welcome-setup-text">
+								<span className="gui-welcome-setup-title">{t("set up a model to start")}</span>
+								<span className="gui-welcome-setup-desc">
+									{t("connect a provider or add an api key — it takes a minute")}
+								</span>
+							</div>
+							<button
+								type="button"
+								className="gui-btn gui-btn-primary gui-welcome-setup-btn"
+								onClick={() =>
+									window.dispatchEvent(
+										new CustomEvent("musepi-open-onboarding", { detail: { step: ONBOARDING_PROVIDER_STEP } }),
+									)
+								}
+							>
+								{t("add a model")}
+							</button>
+						</div>
+					)}
 					{/* Project target — an independent row above the composer,
 					 * left-aligned (openchamber DraftTargetSelectors). */}
 					{onProject && (

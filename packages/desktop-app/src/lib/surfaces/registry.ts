@@ -32,6 +32,9 @@ export interface SurfaceDescriptor {
 	id: SurfaceId;
 	/** i18n key（用 t() 取 display） */
 	label: string;
+	/** i18n key — rail hover tooltip 的第二行（openchamber descriptionKey
+	 * parity）。省略时 tooltip 只显示 label。 */
+	description?: string;
 	/** oc-icons 的 IconName */
 	icon: string;
 	/** 分组：primary 显式图标、secondary 折叠菜单、tertiary 不占 rail */
@@ -52,21 +55,39 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "context",
 		label: "context",
+		description: "surface description context",
 		icon: "donut-chart",
 		group: "primary",
 		availability: "always",
 		defaultWidthFraction: 0.5,
 	},
-	{ id: "files", label: "files", icon: "folder", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{
+		id: "files",
+		label: "files",
+		description: "surface description files",
+		icon: "folder",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
 	{
 		id: "trajectory",
 		label: "trajectory",
+		description: "surface description trajectory",
 		icon: "list-unordered",
 		group: "primary",
 		availability: "always",
 		defaultWidthFraction: 0.5,
 	},
-	{ id: "jobs", label: "jobs", icon: "task", group: "primary", availability: "always", defaultWidthFraction: 0.5 },
+	{
+		id: "jobs",
+		label: "jobs",
+		description: "surface description jobs",
+		icon: "task",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.5,
+	},
 	// Workbench tool panes.
 	// Git is a single rail entry (Phase 3 merge): the panel opens with a
 	// view-local sub-tab bar switching workspace changes / commit history /
@@ -75,6 +96,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "git",
 		label: "git",
+		description: "surface description git",
 		icon: "git-branch",
 		group: "primary",
 		availability: "always",
@@ -83,6 +105,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "notes",
 		label: "project knowledge",
+		description: "surface description notes",
 		icon: "book-open",
 		group: "primary",
 		availability: "always",
@@ -91,6 +114,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "browser",
 		label: "browser",
+		description: "surface description browser",
 		icon: "global",
 		group: "primary",
 		availability: "always",
@@ -103,6 +127,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "agents",
 		label: "agents",
+		description: "surface description agents",
 		icon: "ai-agent",
 		group: "primary",
 		availability: "always",
@@ -112,6 +137,7 @@ export const SURFACES: SurfaceDescriptor[] = [
 	{
 		id: "widget",
 		label: "widget preview",
+		description: "surface description widget",
 		icon: "sparkling",
 		group: "secondary",
 		availability: "always",

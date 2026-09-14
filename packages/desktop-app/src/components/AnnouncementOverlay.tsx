@@ -79,17 +79,21 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 			}
 		})();
 		// The primer finishing mid-session releases the announcement we
-		// deferred earlier (first launch → onboarding → what's new).
-		const onPrimerDone = (): void => {
+		// deferred earlier (first launch → onboarding → what's new) — EXCEPT
+		// on the very first run: a brand-new user has no "previous version",
+		// so the what's-new card is skipped this session (it shows normally
+		// from the next launch, when the primer no longer owns the flow).
+		const onPrimerDone = (e: Event): void => {
+			if ((e as CustomEvent<{ firstRun?: boolean }>).detail?.firstRun) return;
 			if ((markdownRef.current || rewardRef.current) && !openRef.current) {
 				openRef.current = true;
 				setOpen(true);
 			}
 		};
-		window.addEventListener("omp-onboarding-finished", onPrimerDone);
+		window.addEventListener("musepi-onboarding-finished", onPrimerDone);
 		return () => {
 			cancelled = true;
-			window.removeEventListener("omp-onboarding-finished", onPrimerDone);
+			window.removeEventListener("musepi-onboarding-finished", onPrimerDone);
 		};
 	}, [rpc]);
 
@@ -111,8 +115,8 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 				})
 				.catch(() => {});
 		};
-		window.addEventListener("omp-open-announcement", onOpen);
-		return () => window.removeEventListener("omp-open-announcement", onOpen);
+		window.addEventListener("musepi-open-announcement", onOpen);
+		return () => window.removeEventListener("musepi-open-announcement", onOpen);
 	}, [rpc]);
 
 	// Keyboard priority: Escape closes the announcement — the page behind

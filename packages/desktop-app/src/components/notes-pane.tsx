@@ -1,3 +1,20 @@
+import {
+	closestCenter,
+	DndContext,
+	type DragEndEvent,
+	KeyboardSensor,
+	PointerSensor,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
+	arrayMove,
+	SortableContext,
+	sortableKeyboardCoordinates,
+	useSortable,
+	verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -330,6 +347,43 @@ function NotesSection({
 	);
 }
 
+function SortableTodoRow({
+	todo,
+	sortable,
+	children,
+}: {
+	todo: TodoItem;
+	sortable: boolean;
+	children: ReactNode;
+}): ReactNode {
+	const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+		id: todo.id,
+		disabled: !sortable,
+	});
+	return (
+		<li
+			ref={setNodeRef}
+			className={`gui-notes-todo-row${sortable ? " gui-notes-todo-row--sortable" : ""}${isDragging ? " gui-notes-todo-row--dragging" : ""}`}
+			style={transform ? { transform: CSS.Transform.toString(transform), transition } : undefined}
+		>
+			{sortable && (
+				<button
+					type="button"
+					ref={setActivatorNodeRef}
+					className="gui-notes-todo-grip"
+					{...attributes}
+					{...listeners}
+					title={t("drag to reorder todo")}
+					aria-label={t("drag to reorder todo")}
+				>
+					<Icon name="draggable" className="h-3 w-3" />
+				</button>
+			)}
+			{children}
+		</li>
+	);
+}
+
 function TodosSection({
 	todos,
 	query,
@@ -373,6 +427,25 @@ function TodosSection({
 	const clearDone = (): void => {
 		onPersist(todos.filter(t => !t.done));
 	};
+	// ── Drag reorder (openchamber TodosSection parity, @dnd-kit — same
+	// library as every openchamber drag site). arrayMove + completed-last
+	// re-sort runs on the FULL list, so reordering while a search filter is
+	// active cannot drop hidden items.
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+	);
+	const onDragEnd = (e: DragEndEvent): void => {
+		const from = String(e.active.id);
+		const over = e.over;
+		if (!over || from === String(over.id)) return;
+		const fromIndex = todos.findIndex(t => t.id === from);
+		const toIndex = todos.findIndex(t => t.id === String(over.id));
+		if (fromIndex === -1 || toIndex === -1) return;
+		const next = arrayMove(todos, fromIndex, toIndex);
+		next.sort((a, b) => Number(a.done) - Number(b.done));
+		onPersist(next);
+	};
 
 	return (
 		<div className="gui-notes-todos flex flex-col">
@@ -414,31 +487,35 @@ function TodosSection({
 				</p>
 			) : (
 				<div className="mt-1 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--color-surface-sunken)]/40">
-					<ul className="gui-notes-todo-list">
-						{filtered.map(todo => (
-							<li key={todo.id} className="gui-notes-todo-row">
-								<button
-									type="button"
-									className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
-									onClick={() => toggleTodo(todo.id)}
-									title={todo.done ? t("mark undone") : t("mark done")}
-								>
-									{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
-								</button>
-								<span className={`gui-notes-todo-text${todo.done ? " gui-notes-todo-text--done" : ""}`}>
-									{todo.text}
-								</span>
-								<button
-									type="button"
-									className="gui-notes-todo-remove"
-									onClick={() => removeTodo(todo.id)}
-									title={t("remove todo")}
-								>
-									✕
-								</button>
-							</li>
-						))}
-					</ul>
+					<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+						<SortableContext items={filtered.map(t => t.id)} strategy={verticalListSortingStrategy}>
+							<ul className="gui-notes-todo-list">
+								{filtered.map(todo => (
+									<SortableTodoRow key={todo.id} todo={todo} sortable={todos.length > 1}>
+										<button
+											type="button"
+											className={`gui-notes-todo-check${todo.done ? " gui-notes-todo-check--done" : ""}`}
+											onClick={() => toggleTodo(todo.id)}
+											title={todo.done ? t("mark undone") : t("mark done")}
+										>
+											{todo.done && <Icon name="check" className="h-2.5 w-2.5" />}
+										</button>
+										<span className={`gui-notes-todo-text${todo.done ? " gui-notes-todo-text--done" : ""}`}>
+											{todo.text}
+										</span>
+										<button
+											type="button"
+											className="gui-notes-todo-remove"
+											onClick={() => removeTodo(todo.id)}
+											title={t("remove todo")}
+										>
+											✕
+										</button>
+									</SortableTodoRow>
+								))}
+							</ul>
+						</SortableContext>
+					</DndContext>
 				</div>
 			)}
 		</div>
