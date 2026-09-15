@@ -3116,11 +3116,11 @@ a.tr-tool-search-title:hover {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	/* Align with the MESSAGE column, not the avatar: the row lives beside the
-	 * 40px gutter the way openchamber's TurnActivity renders inside the message
-	 * body (user: 活动摘要应该左对齐消息而不是 agent 头像). */
-	width: calc(100% - 40px);
-	margin: 6px 0 2px 40px;
+	/* No gutter offset needed: the header now renders INSIDE the row's content
+	 * column (openchamber puts TurnActivity in the message body), so it inherits
+	 * the message alignment for free. */
+	width: 100%;
+	margin: 6px 0 2px;
 	padding: 5px 10px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
 	border-radius: 8px;

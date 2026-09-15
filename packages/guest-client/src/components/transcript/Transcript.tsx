@@ -560,6 +560,11 @@ interface EntryRowProps {
 	userPlain?: boolean;
 	collapseLongUserMessages?: boolean;
 	hideToolActivity?: boolean;
+	/** 活动 header rendered INSIDE this row's content column (openchamber puts
+	 *  TurnActivity in the message body): it inherits the message alignment and
+	 *  the row's gutter, so a collapsed turn shows orb + 活动 + answer on ONE line
+	 *  instead of the orb floating on a blank row of its own. */
+	foldHeader?: ReactNode;
 	/** Collapsed 活动 fold: render this row's TEXT blocks only (see AssistantBody). */
 	textOnly?: boolean;
 	showTokenUsage?: boolean;
@@ -814,6 +819,7 @@ const EntryRow = memo(function EntryRow({
 	runStartTs,
 	roundDuration,
 	hideToolActivity = false,
+	foldHeader,
 	textOnly = false,
 	showTokenUsage = false,
 	smoothStreaming = true,
@@ -891,6 +897,7 @@ const EntryRow = memo(function EntryRow({
 								quoteText={msgText(msg)}
 								retryTarget={retryTarget}
 							>
+								{foldHeader}
 								<AssistantBody
 									message={msg}
 									results={results}
@@ -1417,16 +1424,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const isTail = isAssistantMessage && absIdx === lastAssistantIdx;
 					const streamingLast = working && isTail && lastAssistantInRound;
 					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
+					// Closed: the header rides the REPLY row (hoisted into its content column) so
+					// orb + 活动 + answer share one line, while the turn's own first row renders
+					// nothing — no pixel-less row, no floating avatar.
 					const foldHeader =
-						headerFold !== undefined ? (
+						(headerFold !== undefined && !foldClosed) || (foldClosed && isReplyRow) ? (
 							<RoundFoldHeader
-								key={`round-fold-${headerFold.startIdx}`}
-								fold={headerFold}
-								open={foldOpenOf(headerFold)}
+								key={`round-fold-${headerFold?.startIdx}`}
+								fold={headerFold as RoundFold}
+								open={headerFold ? foldOpenOf(headerFold) : false}
 								onToggle={() =>
 									setRoundFoldOpen(prev => {
 										const next = new Set(prev);
-										const start = headerFold.startIdx;
+										const start = headerFold?.startIdx ?? 0;
 										if (next.has(start)) next.delete(start);
 										else next.add(start);
 										return next;
@@ -1443,22 +1453,20 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const row = (
 						<Fragment key={entry.id}>
 							{foldHeader}
-							{hideRowContent ? (
-								// Collapsed turn whose first content row is not the reply: the row
-								// still mounts so its GUTTER survives — the agent orb stays pinned
-								// at the turn's top instead of folding away with the process
-								// (user: 头像应始终动态挂靠在顶部).
-								<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
-									{null}
-								</Row>
-							) : (
+							{hideRowContent ? null : (
 								<EntryRow
 									entry={entry}
+									foldHeader={foldClosed && isReplyRow ? foldHeader : undefined}
 									results={results}
 									active={activeTools}
 									host={host}
 									userGutter={userGutter}
-									agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
+									agentGutter={
+										// The reply of a COLLAPSED turn owns the orb: its predecessor is the
+										// hidden header row, so the usual "consecutive assistant rows drop the
+										// avatar" rule must not apply here.
+										isAssistantMessage && prevIsAssistant && !(foldClosed && isReplyRow) ? "" : agentGutter
+									}
 									userPlain={userPlain}
 									collapseLongUserMessages={collapseLongUserMessages}
 									hideToolActivity={rowHideTools || rowTextOnly}
