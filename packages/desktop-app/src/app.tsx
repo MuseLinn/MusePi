@@ -840,47 +840,56 @@ function AppInner(): ReactNode {
 
 	const refreshSessions = useCallback(
 		async (client: RpcClient): Promise<void> => {
-			// Session tree (OMP /tree) — non-fatal on daemons without it.
+			// The two reads are independent: issuing them together saves one
+			// round trip, so the sidebar's first list is ready sooner
+			// (openchamber 1.23.2 "app becomes ready sooner" parity). Both keep
+			// their own sequence guard, so a newer refresh still wins per lane.
 			const tSeq = ++treeRefreshSeqRef.current;
-			try {
-				const nodes = await client.request<SessionListNode[]>("session.tree");
-				if (tSeq !== treeRefreshSeqRef.current) return;
-				setTree(nodes ?? []);
-			} catch {
-				if (tSeq !== treeRefreshSeqRef.current) return;
-				setTree([]);
-			}
+			const mSeq = ++metaRefreshSeqRef.current;
+			// Session tree (OMP /tree) — non-fatal on daemons without it.
+			const treeTask = (async (): Promise<void> => {
+				try {
+					const nodes = await client.request<SessionListNode[]>("session.tree");
+					if (tSeq !== treeRefreshSeqRef.current) return;
+					setTree(nodes ?? []);
+				} catch {
+					if (tSeq !== treeRefreshSeqRef.current) return;
+					setTree([]);
+				}
+			})();
 			// Metadata (cwd/model/status per session) — powers the archive
 			// folder column, pause chips, and the working/unread derivation.
-			const mSeq = ++metaRefreshSeqRef.current;
-			try {
-				const rows = await client.request<Array<SessionMetaRow & { id: string }>>("session.list");
-				const list = rows ?? [];
-				if (mSeq !== metaRefreshSeqRef.current) return;
-				setSessionMeta(
-					new Map(
-						list.map(r => [
-							r.id,
-							{
-								cwd: r.cwd,
-								model: r.model,
-								paused: r.paused === true,
-								working: r.working === true,
-								live: r.live === true,
-								messageCount: r.messageCount ?? 0,
-								title: r.title,
-								timestamp: r.timestamp,
-								updatedAt: r.updatedAt,
-								status: r.status,
-							},
-						]),
-					),
-				);
-				applyReadStatus(list);
-			} catch {
-				if (mSeq !== metaRefreshSeqRef.current) return;
-				setSessionMeta(new Map());
-			}
+			const metaTask = (async (): Promise<void> => {
+				try {
+					const rows = await client.request<Array<SessionMetaRow & { id: string }>>("session.list");
+					const list = rows ?? [];
+					if (mSeq !== metaRefreshSeqRef.current) return;
+					setSessionMeta(
+						new Map(
+							list.map(r => [
+								r.id,
+								{
+									cwd: r.cwd,
+									model: r.model,
+									paused: r.paused === true,
+									working: r.working === true,
+									live: r.live === true,
+									messageCount: r.messageCount ?? 0,
+									title: r.title,
+									timestamp: r.timestamp,
+									updatedAt: r.updatedAt,
+									status: r.status,
+								},
+							]),
+						),
+					);
+					applyReadStatus(list);
+				} catch {
+					if (mSeq !== metaRefreshSeqRef.current) return;
+					setSessionMeta(new Map());
+				}
+			})();
+			await Promise.all([treeTask, metaTask]);
 		},
 		[applyReadStatus],
 	);
@@ -1533,6 +1542,14 @@ function AppInner(): ReactNode {
 		[doOpenSession],
 	);
 	openSessionRef.current = openSession;
+	// Stable sidebar row handler: rows are memoized, so an inline arrow at the
+	// call site would re-render every row on each app render.
+	const selectSession = useCallback(
+		(sessionId: string): void => {
+			void openSession(sessionId);
+		},
+		[openSession],
+	);
 
 	const togglePause = useCallback(async (): Promise<void> => {
 		const client = rpcRef.current;
@@ -2797,7 +2814,7 @@ function AppInner(): ReactNode {
 						nodes={tree}
 						sessionMeta={sessionMeta}
 						selectedId={selectedId}
-						onSelect={id => void openSession(id)}
+						onSelect={selectSession}
 						onNewSession={startNewTask}
 						status={status === "open" ? "open" : "closed"}
 						onDisconnect={disconnect}

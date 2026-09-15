@@ -1,5 +1,6 @@
 import { t } from "@musepi/guest-client";
 import type { CSSProperties, ReactNode } from "react";
+import { memo } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-shared";
@@ -121,6 +122,25 @@ function SearchHitText({ text, query }: { text: string; query: string }): ReactN
 		),
 	);
 }
+/** The 8-ray starburst for a running turn — built once at module scope so a
+ *  memoized row never rebuilds 8 `<line>` elements on re-render. */
+const WORKING_RAYS = Array.from({ length: 8 }, (_, i) => {
+	const a = (i * Math.PI) / 4;
+	return (
+		<line
+			key={i}
+			x1={8 + Math.cos(a) * 2.4}
+			y1={8 + Math.sin(a) * 2.4}
+			x2={8 + Math.cos(a) * 6.6}
+			y2={8 + Math.sin(a) * 6.6}
+			stroke="currentColor"
+			strokeWidth="1.5"
+			strokeLinecap="round"
+			opacity={0.3 + (i / 7) * 0.7}
+		/>
+	);
+});
+
 /** Build the prefix (indent + connectors) for one flat node. */
 function treePrefix(indent: number, showConnector: boolean, isLast: boolean): string {
 	let prefix = "";
@@ -128,6 +148,118 @@ function treePrefix(indent: number, showConnector: boolean, isLast: boolean): st
 	if (showConnector) prefix += isLast ? "└─ " : "├─ ";
 	return prefix;
 }
+
+/**
+ * One session row. Memoized on **primitives only** (the parent resolves the
+ * Set/Map lookups to booleans before rendering), so a sidebar re-render —
+ * a 5s status poll, a streaming update, a pinned/tag change — re-renders only
+ * the rows whose own props actually changed instead of the whole list.
+ * `onSelect` / `onContextMenu` must be stable (useCallback) at the call site
+ * for the memo to hold.
+ */
+const SessionRow = memo(function SessionRow({
+	id,
+	label,
+	parentLabel,
+	timestamp,
+	selected,
+	unread,
+	paused,
+	working,
+	status,
+	untitled,
+	indent,
+	showConnector,
+	isLast,
+	searchQuery,
+	onSelect,
+	onContextMenu,
+}: {
+	id: string;
+	label: string;
+	/** Fork source label, or null when the session is not a fork. */
+	parentLabel: string | null;
+	timestamp: string;
+	selected: boolean;
+	unread: boolean;
+	paused: boolean;
+	working: boolean;
+	status?: SessionStatus;
+	untitled: boolean;
+	indent: number;
+	showConnector: boolean;
+	isLast: boolean;
+	searchQuery: string;
+	onSelect(id: string): void;
+	onContextMenu?(sessionId: string, x: number, y: number): void;
+}): ReactNode {
+	const fill = status ? STATUS_COLOR[status] : undefined;
+	return (
+		<li>
+			<button
+				type="button"
+				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${unread ? " gui-session-row--unread" : ""}`}
+				onClick={() => {
+					tapFeedback();
+					onSelect(id);
+				}}
+				onContextMenu={e => {
+					e.preventDefault();
+					e.stopPropagation();
+					onContextMenu?.(id, e.clientX, e.clientY);
+				}}
+				title={parentLabel ? `${t("forked from")}: ${parentLabel} · ${id}` : label}
+				{...(untitled ? { "data-untitled": "1" } : {})}
+				draggable
+				onDragStart={e => {
+					e.dataTransfer.setData("text/plain", id);
+					e.dataTransfer.effectAllowed = "copy";
+				}}
+			>
+				{/* Lifecycle status square (TUI session-list parity): a
+				 * per-session color chip that survives without grouping —
+				 * interrupted (warning) / complete (success) / error /
+				 * aborted / pending, or the user's manual color. */}
+				<span
+					className="gui-session-status"
+					aria-hidden="true"
+					style={fill ? { background: fill } : undefined}
+					title={status ? t(`session status ${status}` as const) : undefined}
+				/>
+				<span className="gui-tree-prefix">{treePrefix(indent, showConnector, isLast)}</span>
+				<span className="gui-session-title">
+					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
+				</span>
+				{paused && (
+					<span className="gui-tree-pause" role="img" aria-label={t("paused")} title={t("paused")}>
+						<Icon name="pause" className="h-3 w-3" />
+					</span>
+				)}
+				{working && (
+					<span className="gui-tree-working" role="img" aria-label={t("in progress")} title={t("in progress")}>
+						{/* ZCode parity: an 8-ray starburst spinning while the
+						 * agent turn runs (was a breathing dot) — opacity ramps
+						 * around the ring so the rotation reads at 12px. */}
+						<svg className="gui-tree-working-spin" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+							{WORKING_RAYS}
+						</svg>
+					</span>
+				)}
+				{parentLabel && (
+					<span
+						className="gui-tree-fork"
+						role="img"
+						aria-label={t("forked session")}
+						title={t("forked from {name}", { name: parentLabel })}
+					>
+						<Icon name="git-branch" className="h-3 w-3" />
+					</span>
+				)}
+				<span className="gui-session-time">{rowTime(timestamp)}</span>
+			</button>
+		</li>
+	);
+});
 
 export function SessionList({
 	nodes,
@@ -196,112 +328,31 @@ export function SessionList({
 	const byId = new Map(flat.map(f => [f.node.entry.id, f.node]));
 	return (
 		<ul className="gui-session-list">
-			{flat.map(({ node, ...flatProps }) => {
+			{flat.map(({ node, indent, showConnector, isLast }) => {
 				const parent = node.entry.parentId ? byId.get(node.entry.parentId) : null;
 				// Manual status tag wins over the derived one — same precedence
 				// as `statusFill`, so the chip's tooltip always matches its color.
 				const status = manualTags?.get(node.entry.id) ?? statuses?.get(node.entry.id);
-				const fill = status ? STATUS_COLOR[status] : undefined;
 				return (
-					<li key={node.entry.id}>
-						<button
-							type="button"
-							className={`gui-session-row${node.entry.id === selectedId ? " gui-session-row-active" : ""}${unread?.has(node.entry.id) ? " gui-session-row--unread" : ""}`}
-							onClick={() => {
-								tapFeedback();
-								onSelect(node.entry.id);
-							}}
-							onContextMenu={e => {
-								e.preventDefault();
-								e.stopPropagation();
-								onContextMenu?.(node.entry.id, e.clientX, e.clientY);
-							}}
-							title={
-								parent
-									? `${t("forked from")}: ${parent.entry.label ?? t("untitled session")} · ${node.entry.id}`
-									: (node.entry.label ?? t("untitled session"))
-							}
-							{...((node.entry.label ?? "").trim() ? {} : { "data-untitled": "1" })}
-							draggable
-							onDragStart={e => {
-								e.dataTransfer.setData("text/plain", node.entry.id);
-								e.dataTransfer.effectAllowed = "copy";
-							}}
-						>
-							{/* Lifecycle status square (TUI session-list parity): a
-							 * per-session color chip that survives without grouping —
-							 * interrupted (warning) / complete (success) / error /
-							 * aborted / pending, or the user's manual color. */}
-							<span
-								className="gui-session-status"
-								aria-hidden="true"
-								style={fill ? { background: fill } : undefined}
-								title={status ? t(`session status ${status}` as const) : undefined}
-							/>
-							<span className="gui-tree-prefix">
-								{treePrefix(flatProps.indent, flatProps.showConnector, flatProps.isLast)}
-							</span>
-							<span className="gui-session-title">
-								{searchQuery.trim() ? (
-									<SearchHitText text={node.entry.label ?? t("untitled session")} query={searchQuery} />
-								) : (
-									(node.entry.label ?? t("untitled session"))
-								)}
-							</span>
-							{pausedIds?.has(node.entry.id) && (
-								<span className="gui-tree-pause" role="img" aria-label={t("paused")} title={t("paused")}>
-									<Icon name="pause" className="h-3 w-3" />
-								</span>
-							)}
-							{workingIds?.has(node.entry.id) && (
-								<span
-									className="gui-tree-working"
-									role="img"
-									aria-label={t("in progress")}
-									title={t("in progress")}
-								>
-									{/* ZCode parity: an 8-ray starburst spinning while the
-									 * agent turn runs (was a breathing dot) — opacity ramps
-									 * around the ring so the rotation reads at 12px. */}
-									<svg
-										className="gui-tree-working-spin"
-										viewBox="0 0 16 16"
-										width="12"
-										height="12"
-										aria-hidden="true"
-									>
-										{Array.from({ length: 8 }, (_, i) => {
-											const a = (i * Math.PI) / 4;
-											return (
-												<line
-													key={i}
-													x1={8 + Math.cos(a) * 2.4}
-													y1={8 + Math.sin(a) * 2.4}
-													x2={8 + Math.cos(a) * 6.6}
-													y2={8 + Math.sin(a) * 6.6}
-													stroke="currentColor"
-													strokeWidth="1.5"
-													strokeLinecap="round"
-													opacity={0.3 + (i / 7) * 0.7}
-												/>
-											);
-										})}
-									</svg>
-								</span>
-							)}
-							{parent && (
-								<span
-									className="gui-tree-fork"
-									role="img"
-									aria-label={t("forked session")}
-									title={t("forked from {name}", { name: parent.entry.label ?? t("untitled session") })}
-								>
-									<Icon name="git-branch" className="h-3 w-3" />
-								</span>
-							)}
-							<span className="gui-session-time">{rowTime(node.entry.timestamp)}</span>
-						</button>
-					</li>
+					<SessionRow
+						key={node.entry.id}
+						id={node.entry.id}
+						label={node.entry.label ?? t("untitled session")}
+						parentLabel={parent ? (parent.entry.label ?? t("untitled session")) : null}
+						timestamp={node.entry.timestamp}
+						selected={node.entry.id === selectedId}
+						unread={unread?.has(node.entry.id) ?? false}
+						paused={pausedIds?.has(node.entry.id) ?? false}
+						working={workingIds?.has(node.entry.id) ?? false}
+						status={status}
+						untitled={!(node.entry.label ?? "").trim()}
+						indent={indent}
+						showConnector={showConnector}
+						isLast={isLast}
+						searchQuery={searchQuery}
+						onSelect={onSelect}
+						onContextMenu={onContextMenu}
+					/>
 				);
 			})}
 		</ul>

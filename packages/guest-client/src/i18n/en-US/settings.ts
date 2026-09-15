@@ -355,6 +355,7 @@ export const settings = {
 	"search match count": "{count} matching sessions",
 	"esc to clear or close": "Esc to clear, again to close",
 	"no matching sessions": "No matching sessions",
+	"press enter to search": "Press Enter to search",
 	recent: "Recent",
 	clear: "Clear",
 	"no matching providers": "No matching providers",
