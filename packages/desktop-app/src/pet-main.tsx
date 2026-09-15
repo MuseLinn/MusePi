@@ -46,7 +46,7 @@ import "./styles/gui.css";
 interface PetBridge {
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
 	onPetHover?(cb: (hovering: boolean) => void): () => void;
-	movePetWindowByClient?(clientX: number, clientY: number): Promise<unknown>;
+	movePetWindowByClient?(clientX: number, clientY: number, screenX: number, screenY: number): Promise<unknown>;
 	petDragArm?(): Promise<unknown>;
 	petDragEnd?(): Promise<unknown>;
 	focusMainWindow?(): Promise<unknown>;
@@ -102,7 +102,7 @@ function PetApp(): ReactNode {
 	// One move per animation frame with the LATEST client point (Clawd's
 	// queueDragMove pattern) keeps the window glued to the cursor.
 	const dragMoveRafRef = useRef<number | null>(null);
-	const pendingMoveRef = useRef<{ clientX: number; clientY: number } | null>(null);
+	const pendingMoveRef = useRef<{ clientX: number; clientY: number; screenX: number; screenY: number } | null>(null);
 	// Click-vs-double-click discrimination: the first click's panel toggle
 	// is deferred; if a second click lands within DOUBLE_CLICK_MS it is
 	// cancelled and the main window is toggled instead.
@@ -386,14 +386,14 @@ function PetApp(): ReactNode {
 		void bridge?.petDragArm?.();
 	};
 	const queueDragMove = (clientX: number, clientY: number): void => {
-		pendingMoveRef.current = { clientX, clientY };
+		pendingMoveRef.current = { clientX, clientY, screenX: window.screenX, screenY: window.screenY };
 		if (dragMoveRafRef.current !== null) return;
 		dragMoveRafRef.current = requestAnimationFrame(() => {
 			dragMoveRafRef.current = null;
 			const p = pendingMoveRef.current;
 			pendingMoveRef.current = null;
 			if (!p || !dragRef.current.dragging) return;
-			void bridge?.movePetWindowByClient?.(p.clientX, p.clientY);
+			void bridge?.movePetWindowByClient?.(p.clientX, p.clientY, p.screenX, p.screenY);
 		});
 	};
 

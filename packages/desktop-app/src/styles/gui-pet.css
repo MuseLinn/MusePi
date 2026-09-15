@@ -482,6 +482,12 @@
 	image-rendering: pixelated;
 }
 
+/* Vector-style sheets (musepi.webp): pixelated downscaling would alias
+ * them badly — bilinear is the whole point of the smooth treatment. */
+.gui-petdex-sprite--smooth {
+	image-rendering: auto;
+}
+
 @keyframes gui-petdex-cycle {
 	from {
 		background-position-x: 0;

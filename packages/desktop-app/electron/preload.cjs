@@ -82,9 +82,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	/** Agent companion pet window (伙伴): show/hide the floating pet. */
 	setPetVisible: (visible) => ipcRenderer.invoke("pet-toggle", visible),
-	/** Pet window drag (renderer client coords → main converts to screen
-	 *  deltas with the window position; window moves cancel out). */
-	movePetWindowByClient: (clientX, clientY) => ipcRenderer.invoke("pet-drag-client", { clientX, clientY }),
+	/** Pet window drag: window-relative client coords + the window's
+	 *  on-screen position (screenX/Y — the renderer is the DIP ground
+	 *  truth the main process calibrates the drag spaces against). */
+	movePetWindowByClient: (clientX, clientY, screenX, screenY) =>
+		ipcRenderer.invoke("pet-drag-client", { clientX, clientY, screenX, screenY }),
 	/** Pointer down on the pet: keep the window interactive until the drag
 	 *  ends (click-through poll must not flip ignore mid-gesture). */
 	petDragArm: () => ipcRenderer.invoke("pet-drag-arm"),

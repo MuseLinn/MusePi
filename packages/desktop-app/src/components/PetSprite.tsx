@@ -279,6 +279,7 @@ export function PetdexSprite({
 	contentH,
 	scale = 1,
 	frozen = false,
+	smooth = false,
 }: {
 	mood: PetdexMood;
 	src: string;
@@ -292,6 +293,9 @@ export function PetdexSprite({
 	 *  not as running — the hover row's frames are a walk cycle on most
 	 *  packs, and stepping them reads as motion with no direction context. */
 	frozen?: boolean;
+	/** Smooth (bilinear) downscaling for vector-style sheets — the pixel-art
+	 *  `image-rendering: pixelated` treatment would alias them badly. */
+	smooth?: boolean;
 }): ReactNode {
 	const frameW = width / PETDEX_COLUMNS;
 	const frameH = height / PETDEX_ROWS;
@@ -314,7 +318,13 @@ export function PetdexSprite({
 			: `gui-petdex-cycle ${anim.cycleMs}ms steps(${valid}) infinite, gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`,
 		...(frozen ? {} : { "--gui-petdex-cycle-end": `${-(frameW * valid * k)}px` }),
 	} as CSSProperties;
-	return <div className={`gui-petdex-sprite gui-petdex-sprite--${mood}`} style={style} aria-hidden />;
+	return (
+		<div
+			className={`gui-petdex-sprite gui-petdex-sprite--${mood}${smooth ? " gui-petdex-sprite--smooth" : ""}`}
+			style={style}
+			aria-hidden
+		/>
+	);
 }
 
 /** Unified pet renderer: builtin or petdex, sized via CSS font-size scale.
@@ -334,7 +344,14 @@ export function PetSprite({
 		| { kind: "builtin"; id: string }
 		| {
 				kind: "petdex";
-				pkg: { spritesheet: string; width: number; height: number; rows?: readonly number[]; contentH?: number };
+				pkg: {
+					spritesheet: string;
+					width: number;
+					height: number;
+					rows?: readonly number[];
+					contentH?: number;
+					smooth?: boolean;
+				};
 		  };
 	size?: number;
 	scale?: number;
@@ -353,6 +370,7 @@ export function PetSprite({
 				contentH={pet.pkg.contentH}
 				scale={s}
 				frozen={frozen}
+				smooth={pet.pkg.smooth}
 			/>
 		);
 	}

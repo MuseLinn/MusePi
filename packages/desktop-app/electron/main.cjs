@@ -268,14 +268,19 @@ function loadPetPosition() {
 		const raw = fs.readFileSync(petPosFile(), "utf8");
 		const pos = JSON.parse(raw);
 		if (pos.dock === true || pos.dock === false) petDockEnabled = pos.dock;
+		// Restore the measured spaces so restore/clamp/poll are consistent
+		// with what was saved (before the window exists — no re-measure).
+		petPosPhysical = pos.posPhysical === true;
+		petCursorPhysical = pos.cursorPhysical === true;
+		petPosScaleF = Number.isFinite(pos.scale) && pos.scale > 0 ? pos.scale : 1;
 		if (Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-			// The persisted position must be fully inside some display's work
-			// area — macOS clamps out-of-bounds frames at show time, which
-			// desyncs the stored position from the real one (and, worse,
-			// makes the window jump back to the stale frame when the
-			// click-through toggles). Fall back to the default otherwise.
-			// Validate against the SAVED size: the window may have been
-			// taller than the base (panel/bubbles open when it was saved).
+			// Coordinates are stored in DIP (converted at persist time when
+			// the environment speaks physical). The stored rect must be fully
+			// inside some display's DIP work area — macOS clamps out-of-bounds
+			// frames at show time, which desyncs the stored position from the
+			// real one (and makes the window jump back to the stale frame
+			// when the click-through toggles). Fall back to the default
+			// otherwise.
 			const w = Number.isFinite(pos.w) && pos.w > 0 ? pos.w : PET_WINDOW_SIZE.width;
 			const h = Number.isFinite(pos.h) && pos.h > 0 ? pos.h : PET_WINDOW_SIZE.height;
 			const visible = screen.getAllDisplays().some(d => {
@@ -292,7 +297,7 @@ function loadPetPosition() {
 	} catch {
 		// first run — default below
 	}
-	// Default: bottom-right of the primary display's work area.
+	// Default: bottom-right of the primary display's work area (DIP).
 	const work = screen.getPrimaryDisplay().workArea;
 	return { x: work.x + work.width - PET_WINDOW_SIZE.width - 16, y: work.y + work.height - PET_WINDOW_SIZE.height - 16 };
 }
@@ -300,10 +305,13 @@ function loadPetPosition() {
 function createPetWindow() {
 	if (petWindow && !petWindow.isDestroyed()) return petWindow;
 	const pos = loadPetPosition();
+	// Stored coordinates are DIP; convert into the environment's position
+	// space (measured at the last drag / restored from pet-pos.json).
+	const dipToPos = petPosPhysical ? petPosScaleF : 1;
 	petWindow = new BrowserWindow({
 		...PET_WINDOW_SIZE,
-		x: pos.x,
-		y: pos.y,
+		x: Math.round(pos.x * dipToPos),
+		y: Math.round(pos.y * dipToPos),
 		title: "MusePi Pet",
 		frame: false,
 		// Pure transparent (no vibrancy): vibrancy + transparent:true
@@ -407,6 +415,73 @@ let petDragArmed = false;
 // a drag is in flight — also gates the click-through poll (F1).
 let petDragLast = null;
 
+// ── Drag-space calibration (renderer as ground truth, 2026-09-16) ───────
+// Electron's DIP contract does NOT hold on every Windows environment
+// (RDP / virtualized sessions / per-monitor DPI setups: the cursor API
+// and/or the window APIs report physical px) — the old startup probes
+// tried to detect this per machine, and the pure-DIP rewrite assumed the
+// contract; both guess, and a wrong guess accumulates: the pet lags the
+// cursor by (1 − 1/scale) per unit of travel, so "the farther you drag,
+// the farther it falls behind". This measures instead.
+//
+// The pet renderer reports window.screenX/screenY alongside clientX/Y —
+// Chromium's own on-screen position, DIP-true by construction and immune
+// to whatever the OS window APIs do. While the window is stationary at
+// drag start, one comparison each pins both spaces exactly:
+//   cursorDIP = screenX + clientX           (window DIP + pointer-in-window DIP)
+//   |raw − cursorDIP| small   → cursor API speaks DIP
+//   |raw − cursorDIP×F| small → cursor API speaks physical (F = display scale)
+//   getPosition vs screenX    → same test for the window position APIs
+// The ratio (cursor-space units per position-space unit) then converts
+// cursor travel into position space for the anchored drag; settle and the
+// click-through poll convert CSS-px offsets the same way; persistence
+// stores DIP so restore is space-consistent. No startup probes — the
+// measurement happens at drag start, when the window is stationary and
+// all three readings are mutually consistent.
+let petCursorPhysical = false;
+let petPosPhysical = false;
+/** Display scale captured at the last calibration (persisted for restore). */
+let petPosScaleF = 1;
+
+/** CSS px (renderer DIP) → window-position space. */
+function cssToPos(css) {
+	return petPosPhysical ? css * petPosScaleF : css;
+}
+
+/** Cursor-space point → window-position space. */
+function cursorToPos(point) {
+	const k = (petCursorPhysical ? petPosScaleF : 1) / (petPosPhysical ? petPosScaleF : 1);
+	return { x: point.x * k, y: point.y * k };
+}
+
+function calibrateDragSpace(clientX, clientY, screenX, screenY) {
+	if (!petWindow || petWindow.isDestroyed()) return;
+	if (!Number.isFinite(screenX) || !Number.isFinite(screenY) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+		return;
+	}
+	const disp = screen.getDisplayMatching(petWindow.getBounds());
+	const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+	const raw = screen.getCursorScreenPoint();
+	// The pointer has travelled the 8px drag threshold since pointerdown,
+	// so the DIP estimate carries a small (~≤15px) baseline offset — orders
+	// of magnitude below the ×F error a wrong hypothesis produces at any
+	// real screen coordinate (e.g. ×1.25 at x=600 → 150px).
+	const curDipX = screenX + clientX;
+	const curDipY = screenY + clientY;
+	const errCurDip = Math.abs(raw.x - curDipX) + Math.abs(raw.y - curDipY);
+	const errCurPhys = Math.abs(raw.x - curDipX * scale) + Math.abs(raw.y - curDipY * scale);
+	petCursorPhysical = errCurPhys < errCurDip;
+	const [wx, wy] = petWindow.getPosition();
+	const errPosDip = Math.abs(wx - screenX) + Math.abs(wy - screenY);
+	const errPosPhys = Math.abs(wx - screenX * scale) + Math.abs(wy - screenY * scale);
+	petPosPhysical = errPosPhys < errPosDip;
+	petPosScaleF = scale;
+	console.log(
+		"[pet] drag-space calibrated:",
+		JSON.stringify({ scale, cursorPhysical: petCursorPhysical, posPhysical: petPosPhysical }),
+	);
+}
+
 // Dock-to-edge preference (settings → 宠物 → 挂靠左右侧): when enabled,
 // dropping the pet within a margin of a screen edge snaps it flush to the
 // work-area edge (with a visual dock indicator); when disabled, an
@@ -467,27 +542,43 @@ function safeSetPosition(win, x, y) {
 function settlePetWindow() {
 	if (!petWindow || petWindow.isDestroyed()) return;
 	cancelPetSettle();
-	const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
+	const waRaw = screen.getDisplayMatching(petWindow.getBounds()).workArea;
 	const [wx, wy] = petWindow.getPosition();
 	// Use the ACTUAL window size — a stale 320×290 assumption would let a
 	// 340-wide (panel-open) window hang 20px past the right edge.
 	const { width: w, height: h } = petWindow.getBounds();
+	// Work-area space detection: window APIs should share one space, but
+	// virtualized environments disagree. If the position sits outside the
+	// unscaled work area yet inside the ×F one, scale the area to match —
+	// otherwise the clamp would shove the pet to a wrong edge.
+	const insideArea = a => wx >= a.x && wy >= a.y && wx <= a.x + a.width && wy <= a.y + a.height;
+	let wa = waRaw;
+	if (!insideArea(wa) && petPosScaleF !== 1) {
+		const scaled = {
+			x: waRaw.x * petPosScaleF,
+			y: waRaw.y * petPosScaleF,
+			width: waRaw.width * petPosScaleF,
+			height: waRaw.height * petPosScaleF,
+		};
+		if (insideArea(scaled)) wa = scaled;
+	}
+	// Sprite offsets are renderer CSS px — convert to position space so the
+	// dock alignment aligns the CHARACTER flush to the edge on every
+	// environment (the sprite is centered, so window-edge alignment would
+	// leave the pet visibly ~90px off the edge).
+	const cssK = petPosPhysical ? petPosScaleF : 1;
+	const charL = petCharLeft() * cssK;
+	const charR = petCharRight() * cssK;
 	let x = wx;
 	let y = wy;
 	let side = null;
 	if (petDockEnabled) {
-		const MARGIN = 32;
-		// Judge and align by the CHARACTER's edge (sprite rect), not the
-		// window's — the 320×290 window is much wider than the centered
-		// sprite, so window-edge tests would snap the window flush while
-		// the pet still floats ~90px off the screen edge.
-		const leftEdge = wx + petCharLeft();
-		const rightEdge = wx + petCharRight();
-		if (leftEdge <= wa.x + MARGIN) {
-			x = wa.x - petCharLeft();
+		const MARGIN = 32 * cssK;
+		if (wx + charL <= wa.x + MARGIN) {
+			x = wa.x - charL;
 			side = "left";
-		} else if (rightEdge >= wa.x + wa.width - MARGIN) {
-			x = wa.x + wa.width - petCharRight();
+		} else if (wx + charR >= wa.x + wa.width - MARGIN) {
+			x = wa.x + wa.width - charR;
 			side = "right";
 		}
 		y = Math.min(Math.max(wy, wa.y), wa.y + wa.height - h);
@@ -539,13 +630,18 @@ function updatePetClickThrough() {
 	if (petDragArmed || petDragLast !== null) {
 		ignore = false;
 	} else if (petHitbox) {
-		const cursor = screen.getCursorScreenPoint();
+		// All three spaces (cursor / window position / renderer CSS px) are
+		// converted into window-position space before comparing — on a
+		// contract-holding machine every factor is 1 (zero cost).
+		const cursor = cursorToPos(screen.getCursorScreenPoint());
 		const [wx, wy] = petWindow.getPosition();
+		const hx = wx + cssToPos(petHitbox.x);
+		const hy = wy + cssToPos(petHitbox.y);
 		ignore = !(
-			cursor.x >= wx + petHitbox.x &&
-			cursor.x <= wx + petHitbox.x + petHitbox.width &&
-			cursor.y >= wy + petHitbox.y &&
-			cursor.y <= wy + petHitbox.y + petHitbox.height
+			cursor.x >= hx &&
+			cursor.x <= hx + cssToPos(petHitbox.width) &&
+			cursor.y >= hy &&
+			cursor.y <= hy + cssToPos(petHitbox.height)
 		);
 	}
 	if (ignore !== petIgnoreState) {
@@ -640,11 +736,26 @@ let petPosDirty = false;
 function persistPetPos() {
 	if (!petWindow || petWindow.isDestroyed()) return;
 	try {
-		// Persist the FULL rect (DIP + size): the restore validates
-		// containment against the saved size, not a stale 320×290 guess.
+		// Persist the FULL rect, converted to DIP (position space → DIP via
+		// the measured environment factor) plus the space flags — the
+		// restore validates in DIP and converts back on placement, so the
+		// stored file is space-consistent across environments.
+		const dip = petPosPhysical ? petPosScaleF : 1;
 		const [x, y] = petWindow.getPosition();
 		const [w, h] = petWindow.getSize();
-		fs.writeFileSync(petPosFile(), JSON.stringify({ x, y, w, h }));
+		fs.writeFileSync(
+			petPosFile(),
+			JSON.stringify({
+				x: x / dip,
+				y: y / dip,
+				w: w / dip,
+				h: h / dip,
+				dock: petDockEnabled,
+				posPhysical: petPosPhysical,
+				cursorPhysical: petCursorPhysical,
+				scale: petPosScaleF,
+			}),
+		);
 	} catch {
 		// position persistence is best-effort
 	}
@@ -1084,24 +1195,22 @@ ipcMain.handle("pet-drag-arm", () => {
 	petDragArmed = true;
 	return { ok: true };
 });
-// Drag via window-relative client coords (anchor declared above with the
-// click-through state — the poll reads it every tick).
+// Drag via window-relative client coords + the renderer's screenX/Y
+// ground truth (anchor declared above with the click-through state).
 //
-// ANCHOR-ONLY DRAG (rewritten 2026-09-16): the anchor {cursor, window} is
-// pinned ONCE per drag; every frame sets the window to anchor-window +
-// (cursor − anchor-cursor). No getPosition() readback mid-drag (async
-// setPosition feedback loop — the old "keeps moving after the mouse
-// stops"), no scale multiplication (the deleted startup probes guessed
-// DIP vs physical and were wrong on virtualized sessions — the old
-// non-100%-scaling drift). Everything is DIP per Electron's contract, so
-// the window tracks the cursor 1:1 at ANY scaling, including RDP. The
-// 500px coordinate-flip guard stays: a monitor change mid-drag can jump
-// the cursor space; re-anchoring preserves the window↔cursor offset.
-ipcMain.handle("pet-drag-client", (_event, _payload) => {
+// ANCHORED DRAG + MEASURED SPACES: the anchor {cursor, window} is pinned
+// ONCE per drag; every frame sets the window to anchor-window + cursor-
+// travel × (measured cursor→position ratio). No getPosition() readback
+// mid-drag (async setPosition feedback loop — the old "keeps moving after
+// the mouse stops"), no guessed scale — the spaces are measured at drag
+// start via calibrateDragSpace. The 500px coordinate-flip guard re-anchors
+// AND re-calibrates (a monitor change mid-drag can change the spaces).
+ipcMain.handle("pet-drag-client", (_event, { clientX, clientY, screenX, screenY }) => {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return { ok: true };
 	cancelPetSettle();
 	const cursor = screen.getCursorScreenPoint();
 	if (petDragLast === null) {
+		calibrateDragSpace(clientX, clientY, screenX, screenY);
 		petDragLast = {
 			cx: cursor.x,
 			cy: cursor.y,
@@ -1124,15 +1233,22 @@ ipcMain.handle("pet-drag-client", (_event, _payload) => {
 		return { ok: true };
 	}
 	if (Math.abs(deltaX) > 500 || Math.abs(deltaY) > 500) {
+		// Space flip mid-drag: re-anchor AND re-measure (the display under
+		// the window — and its scaleFactor — may have changed).
+		calibrateDragSpace(clientX, clientY, screenX, screenY);
 		petDragLast = {
 			cx: cursor.x,
 			cy: cursor.y,
-			wx: petDragLast.wx + deltaX,
-			wy: petDragLast.wy + deltaY,
+			wx: petWindow.getPosition()[0],
+			wy: petWindow.getPosition()[1],
 		};
 		return { ok: true };
 	}
-	safeSetPosition(petWindow, petDragLast.wx + deltaX, petDragLast.wy + deltaY);
+	// Cursor travel → position space, applied to the ANCHOR (never chained
+	// to a fresh read — the anchor makes any residual calibration error a
+	// constant offset the next re-anchor corrects, not a cumulative drift).
+	const k = (petCursorPhysical ? petPosScaleF : 1) / (petPosPhysical ? petPosScaleF : 1);
+	safeSetPosition(petWindow, petDragLast.wx + deltaX * k, petDragLast.wy + deltaY * k);
 	// Persist (throttled) — at most one write per 150ms during a drag.
 	const now = Date.now();
 	if (now - petLastPosWrite >= 150) {
@@ -1263,14 +1379,18 @@ ipcMain.handle("pet-context-menu", () => {
 					// A toggle must visibly do something: snap straight to
 					// the nearer horizontal edge. Align the CHARACTER flush
 					// to the edge (the window is bigger than the sprite);
-					// subsequent drops near an edge keep snapping.
+					// subsequent drops near an edge keep snapping. Sprite
+					// offsets are CSS px — convert to position space.
 					const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
 					const [wx, wy] = petWindow.getPosition();
 					const { width: w } = petWindow.getBounds();
-					const leftDist = wx + petCharLeft() - wa.x;
-					const rightDist = wa.x + wa.width - (wx + petCharRight());
+					const cssK = petPosPhysical ? petPosScaleF : 1;
+					const charL = petCharLeft() * cssK;
+					const charR = petCharRight() * cssK;
+					const leftDist = wx + charL - wa.x;
+					const rightDist = wa.x + wa.width - (wx + charR);
 					const toLeft = leftDist <= rightDist;
-					const x = toLeft ? wa.x - petCharLeft() : wa.x + wa.width - petCharRight();
+					const x = toLeft ? wa.x - charL : wa.x + wa.width - charR;
 					safeSetPosition(petWindow, x, wy);
 					const side = toLeft ? "left" : "right";
 					if (side !== petDockSide && !petWindow.isDestroyed()) {
@@ -1278,9 +1398,7 @@ ipcMain.handle("pet-context-menu", () => {
 						petWindow.webContents.send("pet:dock", { side });
 					}
 					try {
-						const f = petPosFile();
-						const raw = JSON.parse(fs.readFileSync(f, "utf8"));
-						fs.writeFileSync(f, JSON.stringify({ ...raw, x, y: wy, dock: true }));
+						persistPetPos(); // docked position, space-consistent (DIP + flags)
 					} catch {
 						// best-effort persistence
 					}

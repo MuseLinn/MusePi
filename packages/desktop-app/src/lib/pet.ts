@@ -68,10 +68,13 @@ export const PET_DISPLAY_MODES: readonly PetDisplayMode[] = ["input", "desktop"]
 export const BUILTIN_PET_ID = "musepi";
 
 /**
- * Builtin presets — spritesheets vendored from BitFun (MIT, Copyright 2026
- * CWing) public/agent-companion-pets, downscaled to 768×936 (8×9 grid,
- * 96×104 frames). Ids/descriptions match the upstream pet.json metadata;
- * loaded by relative path from dist/pets/.
+ * Builtin presets — the MusePi brand pet (AI-designed smooth art,
+ * 2026-09-16) first, then spritesheets vendored from BitFun (MIT,
+ * Copyright 2026 CWing) public/agent-companion-pets, downscaled to 768×936
+ * (8×9 grid, 96×104 frames). Ids/descriptions match the upstream pet.json
+ * metadata; loaded by relative path from dist/pets/. `smooth` opts a sheet
+ * out of the pixel-art `image-rendering: pixelated` treatment (musepi.webp
+ * is smooth vector-style art and must downscale bilinearly).
  */
 export const BUILTIN_PETDEX: readonly {
 	id: string;
@@ -85,7 +88,22 @@ export const BUILTIN_PETDEX: readonly {
 	 *  sheets — normalizes visual size across pets with different frame
 	 *  sizes (Doraemon imports are 192×208 vs builtin 96×104). */
 	contentH: number;
+	/** Render with smooth (bilinear) downscaling instead of pixelated. */
+	smooth?: boolean;
 }[] = [
+	{
+		id: "musepi",
+		displayName: "MusePi",
+		description: "builtin pet description",
+		spritesheetPath: "./pets/musepi.webp",
+		width: 2048,
+		height: 2304,
+		// rest 6 (breathe ping-pong + blink), hover/dragging/error/waiting/
+		// working/analyzing 4 (ping-pong); rows 3/4 map to no mood.
+		rows: [6, 4, 4, 0, 0, 4, 4, 4, 4],
+		contentH: 201,
+		smooth: true,
+	},
 	{
 		id: "boxcat",
 		displayName: "Boxcat",
@@ -236,6 +254,8 @@ export interface PetdexPackage {
 	contentH?: number;
 	/** pet.json description, when the package carries one. */
 	description?: string;
+	/** Smooth (bilinear) rendering instead of pixel-art pixelated. */
+	smooth?: boolean;
 	importedAt: number;
 }
 
@@ -319,6 +339,7 @@ export function petForId(id: string): { kind: "builtin"; id: string } | { kind: 
 				height: builtin.height,
 				rows: builtin.rows ?? PETDEX_ROW_FRAMES_DEFAULT,
 				contentH: builtin.contentH,
+				smooth: builtin.smooth,
 				importedAt: 0,
 			},
 		};

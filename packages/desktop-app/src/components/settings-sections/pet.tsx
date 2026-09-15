@@ -2,7 +2,6 @@ import { type TranslationKey, t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-	BUILTIN_PET_ID,
 	BUILTIN_PETDEX,
 	DEFAULT_PET_ID,
 	loadPetdex,
@@ -39,6 +38,7 @@ interface PetGridEntry {
 	height: number;
 	rows?: readonly number[];
 	contentH?: number;
+	smooth?: boolean;
 	source: "preset" | "user";
 }
 
@@ -82,6 +82,7 @@ export function PetCard({
 						height={entry.height}
 						rows={entry.rows}
 						contentH={entry.contentH}
+						smooth={entry.smooth}
 					/>
 				</span>
 				<span className="gui-pet-card__body">
@@ -468,6 +469,7 @@ export function PetSection(): ReactNode {
 		height: p.height,
 		rows: p.rows,
 		contentH: p.contentH,
+		smooth: p.smooth,
 		source: "preset",
 	}));
 	const userEntries: PetGridEntry[] = petdex.map(p => ({
@@ -652,6 +654,7 @@ export function PetSection(): ReactNode {
 										height={selectedEntry.height}
 										rows={selectedEntry.rows}
 										contentH={selectedEntry.contentH}
+										smooth={selectedEntry.smooth}
 									/>
 								) : (
 									<BuiltinPetSprite mood="rest" />
@@ -665,37 +668,6 @@ export function PetSection(): ReactNode {
 						</button>
 						<Reveal open={expanded}>
 							<div className="gui-pet-grid" role="radiogroup" aria-label={t("companion appearance")}>
-								<div className="gui-pet-group-label">{t("builtin pet")}</div>
-								<SpotlightCard
-									className={`gui-pet-card${selectedPetId === BUILTIN_PET_ID ? " gui-pet-card--selected" : ""}`}
-									spotlightColor="rgba(255, 255, 255, 0.09)"
-								>
-									<div
-										role="radio"
-										aria-checked={selectedPetId === BUILTIN_PET_ID}
-										tabIndex={0}
-										onClick={() => pickPet(BUILTIN_PET_ID)}
-										onKeyDown={e => {
-											if (e.key === "Enter" || e.key === " ") {
-												e.preventDefault();
-												pickPet(BUILTIN_PET_ID);
-											}
-										}}
-									>
-										<span className="gui-pet-card__thumb">
-											<BuiltinPetSprite mood="rest" />
-										</span>
-										<span className="gui-pet-card__body">
-											<span className="gui-pet-card__name">
-												{t("builtin pet")}
-												{selectedPetId === BUILTIN_PET_ID && (
-													<Icon name="check" className="gui-pet-card__check" />
-												)}
-											</span>
-											<span className="gui-pet-card__desc">{t("builtin pet description")}</span>
-										</span>
-									</div>
-								</SpotlightCard>
 								{userEntries.length > 0 && <div className="gui-pet-group-label">{t("pet imported")}</div>}
 								{userEntries.map(entry => (
 									<PetCard
