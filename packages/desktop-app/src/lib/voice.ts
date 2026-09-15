@@ -150,7 +150,33 @@ export function startDictation(
 	rpc: RpcClient | null,
 	onState?: (activity: VoiceActivity) => void,
 ): (() => void) | null {
-	return startDictationOpts({ rpc, onFinal, onError, onState });
+	// Pick up the microphone chosen in Settings → 语音 for EVERY dictation entry
+	// point (composer, welcome composer, settings test): the plumbing accepted
+	// `deviceId` from the start, but nothing ever supplied it, so the picker had
+	// no effect. Callers that pass their own opts still win.
+	return startDictationOpts({ rpc, onFinal, onError, onState, deviceId: getVoiceInputDevice() ?? undefined });
+}
+
+/** Chosen microphone (deviceId). localStorage, not a schema setting: the value
+ *  is machine-local (a device id is meaningless on another host) and the
+ *  picker lives next to the live mic test. */
+const VOICE_INPUT_DEVICE_KEY = "musepi-voice-input-device";
+
+export function getVoiceInputDevice(): string | null {
+	try {
+		return localStorage.getItem(VOICE_INPUT_DEVICE_KEY);
+	} catch {
+		return null;
+	}
+}
+
+export function setVoiceInputDevice(deviceId: string | null): void {
+	try {
+		if (deviceId) localStorage.setItem(VOICE_INPUT_DEVICE_KEY, deviceId);
+		else localStorage.removeItem(VOICE_INPUT_DEVICE_KEY);
+	} catch {
+		// storage unavailable — the default device stays in use
+	}
 }
 
 export function startDictationOpts(opts: DictateOptions): (() => void) | null {

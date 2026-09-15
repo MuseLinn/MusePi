@@ -509,18 +509,41 @@
 	left: 0;
 	top: 0;
 	bottom: 0;
-	/* 8px, not 4px: the workspace split put an 8px gap between the chat card and
+	/* 12px, not 4px: the workspace split put an 8px gap between the chat card and
 	 * this panel, so the perceived boundary is the gap — a 4px strip tucked
 	 * inside the card was easy to miss and read as "the width cannot be
-	 * adjusted any more". */
-	width: 8px;
+	 * adjusted any more" (user: 光标变了但难拖,区域很小). */
+	width: 12px;
 	z-index: 600;
 	cursor: col-resize;
 	touch-action: none;
 }
 
-.gui-pane-resize-x:hover {
-	background: color-mix(in oklab, var(--color-accent) 25%, transparent);
+/* Drag affordance (side-pane `.gui-resize-x::after` parity). The old border-left
+ * divider that marked this edge went away with the workspace split, so the edge
+ * had no indicator at all: one hairline appears on hover and turns accent —
+ * thicker — for the whole drag. */
+.gui-pane-resize-x::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 1px;
+	width: 2px;
+	border-radius: 1px;
+	background: transparent;
+	transition:
+		background 120ms ease-out,
+		width 120ms ease-out;
+}
+
+.gui-pane-resize-x:hover::after {
+	background: var(--color-accent-bd);
+}
+
+body.gui-resizing .gui-pane-resize-x::after {
+	background: var(--color-accent);
+	width: 3px;
 }
 
 /* Gesture shield for the edge drags above. The page in the right pane is an

@@ -11,7 +11,14 @@ import { t } from "@musepi/guest-client";
 import { isSttDownloadEvent, type SttModelRow, type SttModelStatusResponse } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
-import { enumerateMicDevices, speak, startDictation, type VoiceActivity } from "../../lib/voice";
+import {
+	enumerateMicDevices,
+	getVoiceInputDevice,
+	setVoiceInputDevice,
+	speak,
+	startDictation,
+	type VoiceActivity,
+} from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
 import { SchemaTabSection } from "./schema";
 
@@ -266,6 +273,9 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// Schema keys render via SchemaTabSection below. Local state covers
 	// only the live mic test (device enumeration + dictation round-trip).
 	const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([]);
+	// Selected microphone (deviceId, null = system default). Seeded from the
+	// same machine-local key the dictation entry points read.
+	const [deviceId, setDeviceId] = useState<string | null>(() => getVoiceInputDevice());
 	const [dictating, setDictating] = useState(false);
 	const [dictated, setDictated] = useState<string | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
@@ -312,9 +322,31 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div>
 						<div className="gui-settings-row-label">{t("voice input device")}</div>
 						<div className="gui-settings-row-desc">
-							{devices.length > 0 ? devices.map(d => d.label).join(" · ") : t("voice input test description")}
+							{devices.length > 0 ? t("voice input device hint") : t("voice input test description")}
 						</div>
 					</div>
+					{/* A PICKER, not a list: this row used to print the enumerated
+					 *  labels as one joined string, so the microphone could not be
+					 *  chosen at all. The value is stored under a machine-local key
+					 *  and is picked up by every dictation entry point. */}
+					<select
+						className="gui-settings-select"
+						aria-label={t("voice input device")}
+						value={deviceId ?? ""}
+						disabled={devices.length === 0}
+						onChange={e => {
+							const next = e.target.value || null;
+							setDeviceId(next);
+							setVoiceInputDevice(next);
+						}}
+					>
+						<option value="">{t("system default")}</option>
+						{devices.map(d => (
+							<option key={d.deviceId} value={d.deviceId}>
+								{d.label}
+							</option>
+						))}
+					</select>
 				</div>
 				<div className="gui-settings-row">
 					<div>

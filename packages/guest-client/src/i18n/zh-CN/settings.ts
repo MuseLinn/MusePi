@@ -759,6 +759,8 @@ export const settings = {
 	voice: "语音",
 	"voice input language": "输入语言",
 	"voice input device": "输入设备",
+	"voice input device hint": "用于听写与语音输入测试的麦克风。",
+	"system default": "系统默认",
 	"voice input vad": "静音自动结束",
 	"voice input vad ms": "静音判定毫秒",
 	"voice input submit": "口述提交",
