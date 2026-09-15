@@ -109,7 +109,7 @@ describe("buildRoundFolds", () => {
 			parentId: null,
 			timestamp: "99",
 			message: { role: "assistant", content: [{ type: "thinking", text: "…" }], timestamp: 99 },
-		} as SessionEntry;
+		} as unknown as SessionEntry;
 		const entries = [user(1), assistant(2, 1), toolResult(3), thinkingOnly];
 		const folds = buildRoundFolds(entries, false);
 		expect(folds).toHaveLength(1);

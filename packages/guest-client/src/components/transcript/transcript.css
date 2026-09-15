@@ -3091,6 +3091,27 @@ a.tr-tool-search-title:hover {
  * by the mobile/web shell (where `--fg` / `--bg-overlay` exist) AND by the
  * desktop GUI (where they do not — the hardcoded #222 fallback painted a dark
  * row into a light transcript). */
+/* Folded turn rows: kept MOUNTED inside this slot and collapsed to height 0, so
+ * the 活动 row expands and collapses with an animation instead of popping
+ * (returning null unmounted them instantly). `interpolate-size: allow-keywords`
+ * is what makes height:auto ↔ 0 animatable (Chromium 129+); where it is not
+ * supported the transition simply does not run and the toggle stays instant. */
+.tr-fold-slot {
+	height: 0;
+	overflow: hidden;
+	opacity: 0;
+	interpolate-size: allow-keywords;
+	transition:
+		height 220ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1)),
+		opacity 150ms ease;
+}
+.tr-fold-slot--open {
+	height: auto;
+	opacity: 1;
+	/* Tool cards inside an expanded turn can open hover popovers. */
+	overflow: visible;
+}
+
 .tr-round-fold {
 	display: flex;
 	align-items: center;

@@ -597,7 +597,9 @@ export function RoundFoldHeader({
 					{seg}
 				</Fragment>
 			))}
-			<span className="tr-round-fold-preview">{fold.preview}</span>
+			{/* No raw preview: openchamber's row is label + summary segments only.
+			 * Printing the last tool snippet here turned the one-line activity row
+			 * into a multi-line block of command output. */}
 			{changed && onRevert && fold.userId && (
 				<span
 					role="button"
@@ -754,6 +756,7 @@ export function AssistantBody({
 	roundDuration,
 	host,
 	hideToolActivity = false,
+	textOnly = false,
 	showTokenUsage = false,
 	smoothStreaming = true,
 	taskCardStyle = "swarm",
@@ -781,6 +784,10 @@ export function AssistantBody({
 	host?: ToolRenderHost;
 	/** display.hideToolActivity parity: drop toolCall cards. */
 	hideToolActivity?: boolean;
+	/** Collapsed 活动 fold's reply row: render TEXT blocks only. The turn's
+	 *  process (thinking + tool calls) folds into the activity row, so the
+	 *  closed turn reads as "活动 … " + the answer, openchamber's model. */
+	textOnly?: boolean;
 	/** display.showTokenUsage parity: gate the per-turn usage row. */
 	showTokenUsage?: boolean;
 	/** display.smoothStreaming parity: false disables the reveal. */
@@ -803,6 +810,7 @@ export function AssistantBody({
 	const blocks = message.content.map((block, i) => {
 		switch (block.type) {
 			case "thinking": {
+				if (textOnly) return null;
 				// openchamber ReasoningPart parity: never render an EMPTY
 				// thinking block once the message is complete — but while
 				// streaming, an empty block means the model is thinking with no
@@ -827,6 +835,7 @@ export function AssistantBody({
 				return <ThinkingBlock key={`k${i}`} text={block.thinking} streaming={pending} />;
 			}
 			case "redactedThinking":
+				if (textOnly) return null;
 				return <ThinkingBlock key={`k${i}`} text="" redacted />;
 			case "text":
 				return (
@@ -843,7 +852,7 @@ export function AssistantBody({
 				// the setting still hides it everywhere else (including the live
 				// round). Suppressing the row outright — the old behaviour — left
 				// the process unreachable whenever the round produced no fold.
-				if (hideToolActivity) return null;
+				if (hideToolActivity || textOnly) return null;
 				const act = active.get(block.id);
 				const result = results.get(block.id);
 				const args = act?.args ?? block.arguments;

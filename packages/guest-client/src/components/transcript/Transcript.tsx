@@ -560,6 +560,8 @@ interface EntryRowProps {
 	userPlain?: boolean;
 	collapseLongUserMessages?: boolean;
 	hideToolActivity?: boolean;
+	/** Collapsed 活动 fold: render this row's TEXT blocks only (see AssistantBody). */
+	textOnly?: boolean;
 	showTokenUsage?: boolean;
 	smoothStreaming?: boolean;
 	/** display.taskCardStyle parity: "classic" swaps the swarm member grid
@@ -812,6 +814,7 @@ const EntryRow = memo(function EntryRow({
 	runStartTs,
 	roundDuration,
 	hideToolActivity = false,
+	textOnly = false,
 	showTokenUsage = false,
 	smoothStreaming = true,
 	taskCardStyle = "swarm",
@@ -897,6 +900,7 @@ const EntryRow = memo(function EntryRow({
 									roundDuration={roundDuration}
 									host={host}
 									hideToolActivity={hideToolActivity}
+									textOnly={textOnly}
 									showTokenUsage={showTokenUsage}
 									smoothStreaming={smoothStreaming}
 									taskCardStyle={taskCardStyle}
@@ -1396,10 +1400,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					// 活动 → process → reply (openchamber's order).
 					const headerFold = folds.find(f => absIdx === f.headerIdx);
 					const foldOpen = hidingFold ? foldOpenOf(hidingFold) : headerFold ? foldOpenOf(headerFold) : false;
-					// The header row sits INSIDE its own hidden span (it IS the turn's
-					// first content row), so closing the fold returned null for it and
-					// the 活动 row never rendered — the row has to survive its own span.
-					if (hidingFold && !foldOpen && absIdx !== hidingFold.headerIdx) return null;
+					const foldClosed = (hidingFold ?? headerFold) !== undefined && !foldOpen;
+					// Rows in the hidden span stay MOUNTED and collapse to height 0
+					// (.tr-fold-slot, animatable via interpolate-size) so folding
+					// animates both ways instead of popping in and out.
+					const collapsible = hidingFold !== undefined && absIdx !== hidingFold.headerIdx;
+					// Collapsed turn = 活动 row + the answer: the reply row renders its
+					// TEXT only (thinking/tool parts fold into the activity row), and a
+					// header row that is NOT the reply contributes no content at all.
+					const isReplyRow = (hidingFold ?? headerFold)?.finalIdx === absIdx;
+					const rowTextOnly = foldClosed && isReplyRow;
+					const hideRowContent = foldClosed && headerFold !== undefined && !isReplyRow;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.
@@ -1432,39 +1443,47 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const row = (
 						<Fragment key={entry.id}>
 							{foldHeader}
-							<EntryRow
-								entry={entry}
-								results={results}
-								active={activeTools}
-								host={host}
-								userGutter={userGutter}
-								agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
-								userPlain={userPlain}
-								collapseLongUserMessages={collapseLongUserMessages}
-								hideToolActivity={rowHideTools}
-								showTokenUsage={showTokenUsage}
-								smoothStreaming={smoothStreaming}
-								taskCardStyle={taskCardStyle}
-								artifacts={turnArtifactsByFinal.get(entry.id)}
-								thinkingLevel={thinkingLevel}
-								streamingLast={streamingLast}
-								runStartTs={streamingLast ? lastUserTs : undefined}
-								roundDuration={roundDuration}
-								onQuote={onQuote}
-								onEdit={onEdit}
-								onRetry={onRetry}
-								onRevert={onRevert}
-								onFork={onFork}
-								onSpeak={onSpeak}
-								onSaveImage={onSaveImage}
-								onPreviewImage={openPreview}
-								speaking={speakingId != null && speakingId === entry.id}
-								onStopSpeak={onStopSpeak}
-								retryTarget={retryTargets.get(entry.id) ?? null}
-								renderTranscriptNode={renderTranscriptNode}
-							/>
+							{hideRowContent ? null : (
+								<EntryRow
+									entry={entry}
+									results={results}
+									active={activeTools}
+									host={host}
+									userGutter={userGutter}
+									agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
+									userPlain={userPlain}
+									collapseLongUserMessages={collapseLongUserMessages}
+									hideToolActivity={rowHideTools || rowTextOnly}
+									textOnly={rowTextOnly}
+									showTokenUsage={showTokenUsage}
+									smoothStreaming={smoothStreaming}
+									taskCardStyle={taskCardStyle}
+									artifacts={turnArtifactsByFinal.get(entry.id)}
+									thinkingLevel={thinkingLevel}
+									streamingLast={streamingLast}
+									runStartTs={streamingLast ? lastUserTs : undefined}
+									roundDuration={roundDuration}
+									onQuote={onQuote}
+									onEdit={onEdit}
+									onRetry={onRetry}
+									onRevert={onRevert}
+									onFork={onFork}
+									onSpeak={onSpeak}
+									onSaveImage={onSaveImage}
+									onPreviewImage={openPreview}
+									speaking={speakingId != null && speakingId === entry.id}
+									onStopSpeak={onStopSpeak}
+									retryTarget={retryTargets.get(entry.id) ?? null}
+									renderTranscriptNode={renderTranscriptNode}
+								/>
+							)}
 						</Fragment>
 					);
+					// Rows inside a fold's hidden span stay MOUNTED and collapse to
+					// height 0 while the fold is closed, so folding animates both ways
+					// (returning null — the old behaviour — popped rows in and out).
+					const slotClass = `tr-fold-slot${foldOpen ? " tr-fold-slot--open" : ""}`;
+					const slot = collapsible ? <div className={slotClass}>{row}</div> : row;
 					// toolResult entries render no row but continue the turn.
 					if (
 						entry.type === "message" &&
@@ -1486,7 +1505,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						}));
 						return (
 							<div key={entry.id} className="tr-branch-wrap">
-								{row}
+								{slot}
 								<BranchBar
 									count={childCount}
 									childrenLabels={kids}
@@ -1496,7 +1515,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							</div>
 						);
 					}
-					return row;
+					return slot;
 				});
 			})()}
 			{/* Model-response gap (working but no assistant entry yet): the
