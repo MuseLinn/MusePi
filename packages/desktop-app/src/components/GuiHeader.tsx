@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t, archiveSession as writeArchivedSession } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -503,25 +503,13 @@ export function GuiHeader({
 	};
 
 	/** Archive the active session (openchamber bulkActions.archive parity):
-	 *  same localStorage archive the sidebar reads, broadcast so the
-	 *  sidebar's in-memory list follows without a reload. */
+	 *  the shared session-archive store the sidebar reads, so the sidebar and
+	 *  the guest/mobile shell follow without a reload (2026-09-15: this used to
+	 *  write `musepi-gui-archived` directly while the guest shell wrote its own
+	 *  key, leaving the two clients with unrelated archives). */
 	const archiveActiveSession = (): void => {
 		if (!store) return;
-		let archived: { sessionId: string; archivedAt: number; cwd?: string }[] = [];
-		try {
-			archived = JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as typeof archived;
-		} catch {
-			// fresh archive
-		}
-		if (!archived.some(a => a.sessionId === store.sessionId)) {
-			archived.push({ sessionId: store.sessionId, archivedAt: Date.now(), cwd: store.cwd ?? undefined });
-		}
-		try {
-			localStorage.setItem("musepi-gui-archived", JSON.stringify(archived));
-		} catch {
-			// storage unavailable
-		}
-		window.dispatchEvent(new CustomEvent("musepi-gui-sessions-archived"));
+		writeArchivedSession(store.sessionId, store.cwd ?? undefined);
 		onNewSession();
 	};
 
@@ -531,6 +519,50 @@ export function GuiHeader({
 	const deleteActiveSession = (): void => {
 		if (!store) return;
 		void onDeleteSession(store.sessionId);
+	};
+
+	const toast = (text: string): void => {
+		window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: text }));
+	};
+
+	/** Move this session into a fresh isolated git worktree (openchamber's
+	 *  "move to new worktree"). Two existing pieces do the work: the
+	 *  `worktree.create` RPC builds the tree under `~/.musepi/wt`
+	 *  (`worktree.base` aware), and the `/move` slash command re-roots the live
+	 *  session — `SessionManager.moveSession` plus its settings/plugin reloads,
+	 *  so nothing about the cwd change is re-implemented here.
+	 *
+	 *  A killed/streaming session cannot move: `/move` refuses while streaming
+	 *  and the handler reports it, which the toast surfaces. */
+	const moveToNewWorktree = async (): Promise<void> => {
+		if (!rpc || !store) return;
+		const suggested = `musepi/session-${Date.now().toString(36)}`;
+		const branch = await prompt({
+			title: t("move to new worktree"),
+			defaultValue: suggested,
+			placeholder: t("branch name"),
+		});
+		if (!branch) return;
+		const created = await rpc
+			.request<{ path?: string; error?: string }>("worktree.create", { cwd: store.cwd, branch })
+			.catch((err: unknown): { path?: string; error?: string } => ({
+				error: err instanceof Error ? err.message : String(err),
+			}));
+		if (!created?.path) {
+			toast(created?.error || t("worktree failed"));
+			return;
+		}
+		const moved = await rpc
+			.request<{ consumed?: boolean; reason?: string }>("session.slashCommand", {
+				sessionId: store.sessionId,
+				text: `/move ${created.path}`,
+			})
+			.catch(() => null);
+		if (!moved?.consumed) {
+			toast(t("worktree failed"));
+			return;
+		}
+		toast(t("moved to worktree"));
 	};
 
 	// Outside click / Escape closes every open header popup (base-ui
@@ -862,7 +894,14 @@ export function GuiHeader({
 								<Icon name="download" className="h-3.5 w-3.5" />
 								<span>{t("export markdown")}</span>
 							</button>
-							<button type="button" className="gui-view-opt" disabled title={t("worktree unavailable")}>
+							<button
+								type="button"
+								className="gui-view-opt"
+								onClick={() => {
+									setTitleMenuOpen(false);
+									void moveToNewWorktree();
+								}}
+							>
 								<Icon name="folder-shared" className="h-3.5 w-3.5" />
 								<span>{t("move to new worktree")}</span>
 							</button>

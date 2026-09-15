@@ -4,7 +4,7 @@ export const composer = {
 	// ── Composer ──────────────────────────────────────────────────────────────
 	"type your response…": "Type your response…",
 	"read-only session — watching only": "Read-only session — watching only",
-	"prompt the host agent…": "Prompt the host agent…",
+	"ask anything, / for commands, @ for context…": "Ask anything, / for commands, @ for context…",
 	"waiting for session…": "Waiting for session…",
 	"submit response": "Submit response",
 	"send (Enter)": "Send (Enter)",
@@ -54,4 +54,24 @@ export const composer = {
 	"wrap as attachment": "Wrap as attachment",
 	"wrap as code block": "Wrap as code block",
 	"attach as file": "Attach as file",
+
+	// ── Image attachments (collab prompt.images; design 「Session 附件流」) ──
+	// "add images" lives in the general domain already.
+	"take photo": "Take photo",
+	"choose from library": "Choose from library",
+	"remove attachment": "Remove attachment",
+	"attach images hint": "Images resize to a 1568px long edge · JPEG 80% (under 1.5MB sent as-is)",
+	"model & thinking": "Model & thinking",
+	"host session model": "Current model of the host session",
+
+	// ── Voice input (daemon stt.transcribe; design 「语音四帧」) ──────────────
+	// "voice input" / "voice recording stop" / "voice transcribing" /
+	// "recording…" live in the settings domain already — reuse, don't duplicate.
+	"voice done": "Done",
+	"voice discard": "Discard recording",
+	"voice failed: {reason}": "Voice input failed: {reason}",
+	"voice needs daemon backend": "Voice input needs the daemon backend",
+	"voice needs daemon body": "collab-direct sessions can't transcribe voice — connect through the daemon to use it",
+	"voice guide ok": "Got it",
+	"tts needs daemon backend": "Read-aloud needs the daemon backend",
 } as const satisfies Record<ComposerKey, string>;

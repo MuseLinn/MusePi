@@ -1,12 +1,13 @@
 import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AgentDrawer } from "./components/agents/AgentDrawer";
 import { AgentsPanel } from "./components/agents/AgentsPanel";
 import { MarketplacePanel } from "./components/marketplace/MarketplacePanel";
 import { BoardPanel } from "./components/panels/BoardPanel";
-import { FilePanel } from "./components/panels/FilePanel";
 import { ScheduledPanel } from "./components/panels/ScheduledPanel";
+import { VoicePanel } from "./components/panels/VoicePanel";
+import { WorkspacePanel } from "./components/panels/WorkspacePanel";
 import { ApprovalCard } from "./components/shell/ApprovalCard";
 import { Banners } from "./components/shell/Banners";
 import { Composer } from "./components/shell/Composer";
@@ -32,6 +33,7 @@ import { CompatSlotHost } from "./lib/compat-slot-host";
 import { rememberConnection } from "./lib/connections";
 import { HostClient } from "./lib/host-client";
 import { enableNativeGlass } from "./lib/native-glass";
+import { useTts } from "./lib/tts";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
 import "./components/shell/shell.css";
@@ -364,6 +366,16 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
 	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	// Read-aloud wiring (design 「语音输出四帧」): the Transcript's onSpeak slot
+	// was always there — this is the shell side that was never connected. The
+	// controller is shared with the composer mini-player/barge-in via the
+	// per-client singleton; only the speaking id subscribes here.
+	const tts = useTts(client);
+	const speakingId = useSyncExternalStore(
+		tts.subscribe,
+		() => tts.getSnapshot().speakingId,
+		() => tts.getSnapshot().speakingId,
+	);
 	// Mobile empty state gets the time-aware greeting + rotating tip in place
 	// of the bare "no activity yet" line (gui WelcomeComposer parity).
 	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
@@ -449,6 +461,9 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			onRevert={id => branchAt(id)}
 			onRetry={(id, text) => branchAt(id)}
 			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
+			onSpeak={(text, id) => tts.speak(text, id)}
+			speakingId={speakingId}
+			onStopSpeak={() => tts.stop()}
 			branchInfo={branchInfo}
 		/>
 	);
@@ -603,11 +618,14 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 							{activePanel === "scheduled" && (
 								<ScheduledPanel client={client} cwd={sessionCwd} readOnly={readOnly} />
 							)}
-							{activePanel === "files" && <FilePanel client={client} cwd={sessionCwd} readOnly={readOnly} />}
+							{activePanel === "files" && (
+								<WorkspacePanel client={client} cwd={sessionCwd} readOnly={readOnly} />
+							)}
 							{activePanel === "marketplace" && <MarketplacePanel client={client} />}
 							{activePanel === "workbench" && (
 								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
 							)}
+							{activePanel === "voice" && <VoicePanel client={client} />}
 						</div>
 					</section>
 				) : (

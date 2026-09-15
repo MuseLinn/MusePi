@@ -212,6 +212,9 @@ function Menu({ snap }: { snap: TraySnapshot }): ReactNode {
 												sessionId: a.sessionId,
 												approved: true,
 												remember: true,
+												// The policy key for the persisted
+												// "always allow" rule (see main.cjs).
+												tool: a.tool,
 											})
 										}
 									>

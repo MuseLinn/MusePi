@@ -75,7 +75,7 @@ export const WEB_EXPORT_PALETTES = {
 		"--fg-muted": "#a49faa",
 		"--fg-faint": "#6e6974",
 		"--accent": "#34d399",
-		"--accent-muted": "oklch(0.72 0.16 162 / 18%)",
+		"--accent-muted": "oklch(0.773 0.1538 163 / 18%)",
 		"--ok": "#68ca80",
 		"--err": "#f05653",
 		"--warn": "#e4b33f",

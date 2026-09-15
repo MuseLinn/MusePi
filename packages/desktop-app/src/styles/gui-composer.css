@@ -987,6 +987,27 @@
 	color: var(--color-text-faint);
 }
 
+/* Boot stall recovery (dsh-desktop immediate-window parity, 2026-09-15):
+ * fades nothing, moves nothing — it appears only after BOOT_STALL_MS of an
+ * in-flight boot attempt, so reduced-motion needs no special case here. */
+.gui-splash-stall {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 10px;
+	margin-top: 28px;
+}
+
+.gui-splash-stall-text {
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+	text-align: center;
+}
+
+.gui-splash-stall .gui-btn {
+	min-width: 96px;
+}
+
 /* The splash's shine must be FINITE. ShinyText sweeps `background-position`
  * on a background-clip:text gradient — a per-frame MAIN-THREAD paint (not
  * compositable), and the splash can be on screen far longer than its intro

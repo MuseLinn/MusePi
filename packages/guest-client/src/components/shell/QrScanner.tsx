@@ -22,6 +22,8 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 	const [error, setError] = useState<string | null>(null);
 	const [torch, setTorch] = useState(false);
 	const [found, setFound] = useState(false);
+	const [facing, setFacing] = useState<"environment" | "user">("environment");
+	const [hasMultiCam, setHasMultiCam] = useState(false);
 
 	useEffect(() => {
 		let alive = true;
@@ -68,7 +70,13 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 		const start = async (): Promise<void> => {
 			try {
 				stream = await navigator.mediaDevices.getUserMedia({
-					video: { facingMode: "environment" },
+					video: {
+						facingMode: { ideal: facing },
+						// Ask for a sharp feed — QR decode quality on phones
+						// collapses badly at 640×480 defaults.
+						width: { ideal: 1920 },
+						height: { ideal: 1080 },
+					},
 					audio: false,
 				});
 				if (!alive) {
@@ -80,9 +88,29 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 				// cameras (facingMode=environment) must NOT be mirrored — the
 				// previous blanket scaleX(-1) flipped the rear feed.
 				const settings = stream.getVideoTracks()[0]?.getSettings();
-				const facing = settings?.facingMode;
-				video.style.transform = facing === "user" ? "scaleX(-1)" : "none";
+				const facingMode = settings?.facingMode;
+				video.style.transform = facingMode === "user" ? "scaleX(-1)" : "none";
 				await video.play();
+				// Continuous autofocus: many Android WebViews default to a
+				// fixed/one-shot focus that never re-racks on the QR code.
+				// Apply post-start (some cameras only honour it once live);
+				// unsupported cameras reject silently and keep their default.
+				const track = stream.getVideoTracks()[0];
+				const caps = track?.getCapabilities?.() as (MediaTrackCapabilities & { focusMode?: string[] }) | undefined;
+				if (caps?.focusMode?.includes("continuous")) {
+					track
+						.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
+						.catch(() => {
+							// focusMode unsupported — keep the camera default
+						});
+				}
+				// Flip affordance only when the device actually has >1 camera.
+				navigator.mediaDevices
+					.enumerateDevices?.()
+					.then(devices => {
+						if (alive) setHasMultiCam(devices.filter(d => d.kind === "videoinput").length > 1);
+					})
+					.catch(() => {});
 				raf = requestAnimationFrame(tick);
 			} catch {
 				if (alive) setError(t("camera unavailable — use the pair code instead"));
@@ -95,7 +123,13 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 			cancelAnimationFrame(raf);
 			stream?.getTracks().forEach(track => track.stop());
 		};
-	}, [onResult]);
+	}, [onResult, facing]);
+
+	const flipCamera = (): void => {
+		haptic(8);
+		setTorch(false);
+		setFacing(f => (f === "environment" ? "user" : "environment"));
+	};
 
 	const toggleTorch = (): void => {
 		const track = (videoRef.current?.srcObject as MediaStream | null)?.getVideoTracks()?.[0];
@@ -137,6 +171,11 @@ export function QrScanner({ onCancel, onResult }: QrScannerProps): React.JSX.Ele
 				<button type="button" className="qr-torch" onClick={() => void toggleTorch()} aria-pressed={torch}>
 					{torch ? "💡" : "🔦"} <span>{t("torch")}</span>
 				</button>
+				{hasMultiCam && (
+					<button type="button" className="qr-flip" onClick={flipCamera} aria-label={t("switch camera")}>
+						🔄 <span>{t("switch camera")}</span>
+					</button>
+				)}
 				<p className="qr-hint">{error ?? t("align the QR code in the frame")}</p>
 			</footer>
 		</div>

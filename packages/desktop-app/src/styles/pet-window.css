@@ -13,7 +13,7 @@
 }
 
 :root {
-	--color-accent: oklch(0.72 0.16 162);
+	--color-accent: oklch(0.773 0.1538 163);
 	--color-text: oklch(0.93 0.008 60);
 	--color-danger: oklch(0.66 0.19 25);
 	--font-mono: ui-monospace, "SF Mono", Menlo, monospace;

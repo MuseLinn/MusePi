@@ -37,7 +37,14 @@ import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@
 import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
-import type { SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
+import type {
+	SessionEntry,
+	SessionHeader,
+	SessionState,
+	SttModelRow,
+	SttModelStatusResponse,
+	WireMessage,
+} from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
@@ -112,11 +119,13 @@ import { parseSlashCommand } from "../slash-commands/helpers/parse";
 import { resolvePromptInput } from "../system-prompt";
 import { refreshAgentDiscovery } from "../task";
 import type { ConfiguredThinkingLevel } from "../thinking";
+import { parseConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
 import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+import { createSessionWorktree } from "../utils/session-worktree";
 import {
 	type CronRun,
 	type CronSchedule,
@@ -5379,6 +5388,32 @@ export class DaemonServer {
 				if (proc.exitCode !== 0) return { error: proc.stderr.toString().trim() || "git checkout failed" };
 				return { ok: true };
 			}
+			case "worktree.create": {
+				// Create (or reuse) an isolated git worktree for the caller's repo
+				// and return its path. The client then re-roots the session there
+				// with the existing `/move` slash command — that pairing is the
+				// GUI's "move to new worktree" action. Layout follows the other
+				// agent-managed worktrees (~/.musepi/wt, `worktree.base` aware).
+				const p = (params ?? {}) as {
+					cwd?: unknown;
+					branch?: unknown;
+					startPoint?: unknown;
+					createBranch?: unknown;
+				};
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				try {
+					return await createSessionWorktree({
+						cwd,
+						...(typeof p.branch === "string" && p.branch.trim() ? { branch: p.branch } : {}),
+						...(typeof p.startPoint === "string" && p.startPoint.trim() ? { startPoint: p.startPoint } : {}),
+						...(typeof p.createBranch === "boolean" ? { createBranch: p.createBranch } : {}),
+					});
+				} catch (err) {
+					// Surfaced verbatim (not a git repo / branch exists / path
+					// collision) — the dialog shows it as-is.
+					return { error: err instanceof Error ? err.message : String(err) };
+				}
+			}
 			case "remote.hosts":
 				return listRemoteHosts();
 			case "remote.hostAdd":
@@ -5690,6 +5725,20 @@ export class DaemonServer {
 					snapshot: tailSnapshot(snapshot),
 					compactedThrough: compacted,
 				};
+			}
+			case "session.thinking": {
+				// Mobile parity of the TUI thinking selector: sanitize through
+				// the same parser as --thinking, apply to the live session.
+				// The resulting thinking_level_change event re-reaches clients
+				// through the normal session event stream.
+				const p = (params ?? {}) as { sessionId?: unknown; level?: unknown };
+				if (typeof p.sessionId !== "string") throw new Error("sessionId required");
+				const live = this.#host.get(p.sessionId);
+				if (!live) throw new Error("unknown session");
+				live.agentSession.setThinkingLevel(
+					parseConfiguredThinkingLevel(typeof p.level === "string" ? p.level : undefined),
+				);
+				return { ok: true };
 			}
 			case "session.setDraft": {
 				// GUI composer un-sent draft state — the daemon-side analogue
@@ -6534,10 +6583,13 @@ export class DaemonServer {
 				// renders its progress row immediately, not after the next tick.
 				const { isSttModelCached } = await import("../stt/downloader");
 				const { STT_MODELS } = await import("../stt/models");
-				const models = await Promise.all(
+				// `satisfies` (not `:`) — the wire contract in @musepi/pi-wire
+				// is the single source of truth for both shells; if the shape
+				// here drifts, typecheck fails instead of the UI breaking.
+				const models: SttModelRow[] = await Promise.all(
 					STT_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isSttModelCached(m.key) })),
 				);
-				return { models, downloads: [...this.#sttDownloads.keys()] };
+				return { models, downloads: [...this.#sttDownloads.keys()] } satisfies SttModelStatusResponse;
 			}
 			case "stt.modelDownload": {
 				// Kick off a speech-model download WITHOUT awaiting it: the

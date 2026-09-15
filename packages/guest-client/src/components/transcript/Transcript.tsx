@@ -629,7 +629,7 @@ function renderCustomMessage({
 		const from =
 			details !== null && typeof details === "object" && "from" in details && typeof details.from === "string"
 				? details.from
-				: t("guest");
+				: t("unnamed device");
 		return (
 			<Row kind="user" gutter={<span className="tr-badge">{from}</span>} title={timestamp}>
 				<MsgContent content={content} onPreviewImage={onPreviewImage} />

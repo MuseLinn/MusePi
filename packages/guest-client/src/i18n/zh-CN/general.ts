@@ -163,6 +163,11 @@ export const general = {
 	"undo jump": "撤销跳转",
 	"jump back hint": "原回复保留为树上的分支——撤销可跳回原节点，或发送新消息提交新分支。",
 	"branch failed": "分支切换失败",
+	"boot is taking longer than usual": "启动时间过长 — 本地 daemon 可能卡住了",
+	"branch name": "分支名",
+	"move to new worktree": "移至新工作树",
+	"worktree failed": "工作树创建失败（该会话需空闲，且目录需是 Git 仓库）",
+	"moved to worktree": "已移至新工作树",
 	"plan not written yet": "尚未写计划 — 让智能体先写一份",
 	"plan mode off": "计划模式已关闭",
 	"guided goal mode": "引导式目标",
@@ -335,8 +340,6 @@ export const general = {
 	"no apps": "未检测到可打开的应用",
 	share: "分享",
 	"export markdown": "导出 Markdown",
-	"move to new worktree": "移至新工作树",
-	"worktree unavailable": "需要 Git 工作树支持",
 	"delete session": "删除会话",
 	"delete session?": "删除这个会话？该操作不可撤销。",
 	reconnect: "重新连接",
@@ -346,6 +349,7 @@ export const general = {
 	"open preview": "打开预览",
 	"open image viewer": "打开图片查看器",
 	"open with app": "在应用中打开",
+	"no in-app editor hint": "GUI 无内置编辑器 — 用该行右键菜单的「在应用中打开」编辑",
 	"files created": "本次产出文件",
 	"preview in right panel": "在右侧面板预览",
 	"opened in default app": "已在默认应用中打开",
@@ -499,6 +503,10 @@ export const general = {
 	"model error": "模型错误",
 	"retry attempt {count}": "重试第 {count} 次",
 	"model supports tools": "模型支持工具调用",
+	// Surface tab strip close button (files pane multi-instance tabs).
+	"close tab": "关闭标签页",
+	// Tab-primary right panel empty state.
+	"start here": "从这里开始",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

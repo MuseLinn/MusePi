@@ -250,6 +250,59 @@ export type AgentEvent =
 	| { type: "thinking_level_changed"; thinkingLevel?: string };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Daemon global events (events.subscribe — NOT session events)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Speech models (stt.modelStatus / stt.modelDownload)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One speech-model tier as reported by `stt.modelStatus`. */
+export interface SttModelRow {
+	key: string;
+	label: string;
+	cached: boolean;
+}
+
+/**
+ * `stt.modelStatus` payload. `downloads` lists tiers mid-fetch so a window
+ * mounted mid-download can render its progress row immediately instead of
+ * waiting for the next progress tick.
+ */
+export interface SttModelStatusResponse {
+	models: SttModelRow[];
+	downloads?: string[];
+}
+
+/**
+ * Speech-model download events. These ride the daemon's **global** event
+ * stream (`events.subscribe`), not the session stream — `stt.modelDownload`
+ * is fire-and-forget (GB-scale fetches outlive the 15s RPC timeout), so
+ * progress AND both terminal outcomes are delivered here. A consumer that
+ * only awaits the RPC will never see a download failure.
+ */
+export type SttDownloadEvent =
+	| {
+			type: "stt.downloadProgress";
+			modelKey: string;
+			percent: number;
+			loaded?: number;
+			total?: number;
+			label?: string;
+	  }
+	| { type: "stt.downloadDone"; modelKey: string }
+	| { type: "stt.downloadError"; modelKey: string; message: string };
+
+/** Runtime guard: the daemon sends these as untyped `payload` bags. */
+export function isSttDownloadEvent(value: unknown): value is SttDownloadEvent {
+	if (typeof value !== "object" || value === null) return false;
+	const v = value as { type?: unknown; modelKey?: unknown; percent?: unknown };
+	if (typeof v.type !== "string" || !v.type.startsWith("stt.download")) return false;
+	if (v.type === "stt.downloadProgress") return typeof v.percent === "number";
+	return v.type === "stt.downloadDone" || v.type === "stt.downloadError";
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // State & agents
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -400,6 +453,11 @@ export type GuestFrame =
 			writeToken?: string;
 	  }
 	| { t: "prompt"; text: string; images?: ImageContent[] }
+	/** Session-level config from a writable guest (thinking ladder; design 二期 F2).
+	 *  The host sanitizes via parseConfiguredThinkingLevel and mirrors the new
+	 *  state back through the regular `state` broadcast — the UI never
+	 *  assumes the change took effect until it sees the round-trip. */
+	| { t: "config"; thinkingLevel?: string }
 	| { t: "ui-response"; reqId: number; value?: CollabUiResponseValue }
 	| { t: "abort" }
 	| { t: "agent-cmd"; cmd: "chat" | "kill" | "revive"; agentId: string; text?: string }

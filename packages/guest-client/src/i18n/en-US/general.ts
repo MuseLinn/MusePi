@@ -166,6 +166,11 @@ export const general = {
 	"jump back hint":
 		"The original reply stays on the tree as a sibling branch — undo jumps back, or send a new message to commit the new branch.",
 	"branch failed": "Could not move the branch",
+	"boot is taking longer than usual": "Boot is taking longer than usual — the local daemon may be stuck",
+	"branch name": "Branch name",
+	"move to new worktree": "Move to new worktree",
+	"worktree failed": "Could not create the worktree (the session must be idle and the folder a Git repo)",
+	"moved to worktree": "Moved to the new worktree",
 	"plan not written yet": "No plan written yet — ask the agent to write one",
 	"plan mode off": "Plan mode is off",
 	"guided goal mode": "Guided goal",
@@ -340,8 +345,6 @@ export const general = {
 	"no apps": "No openable apps detected",
 	share: "Share",
 	"export markdown": "Export Markdown",
-	"move to new worktree": "Move to new worktree",
-	"worktree unavailable": "Requires git worktree support",
 	"delete session": "Delete session",
 	"delete session?": "Delete this session? This action cannot be undone.",
 	reconnect: "Reconnect",
@@ -351,6 +354,7 @@ export const general = {
 	"open preview": "Open preview",
 	"open image viewer": "Open image viewer",
 	"open with app": "Open with app",
+	"no in-app editor hint": "No in-app editor — edit it via the row menu's Open with app",
 	"files created": "Files produced this run",
 	"preview in right panel": "Preview in right panel",
 	"opened in default app": "Opened in the default app",
@@ -505,4 +509,8 @@ export const general = {
 	"model error": "Model error",
 	"retry attempt {count}": "Retry attempt {count}",
 	"model supports tools": "Model supports tools",
+	// Surface tab strip close button (files pane multi-instance tabs).
+	"close tab": "Close tab",
+	// Tab-primary right panel empty state.
+	"start here": "Start here",
 } as const satisfies Record<GeneralKey, string>;

@@ -8,35 +8,21 @@
  * dictation test, and the TTS test card.
  */
 import { t } from "@musepi/guest-client";
+import { isSttDownloadEvent, type SttModelRow, type SttModelStatusResponse } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { enumerateMicDevices, speak, startDictation, type VoiceActivity } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
 import { SchemaTabSection } from "./schema";
 
-/* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ── */
-interface SttModelRow {
-	key: string;
-	label: string;
-	cached: boolean;
-}
-/** stt.modelStatus payload; `downloads` lists tiers mid-fetch so a window
- *  mounted mid-download renders its progress row immediately. */
-interface SttStatusResponse {
-	models: SttModelRow[];
-	downloads?: string[];
-}
-/** Events broadcast by the daemon on the global stream: live progress plus
- *  BOTH terminal outcomes (done / error), each carrying the tier key. */
-interface SttStreamEvent {
-	type: string;
-	modelKey?: string;
-	percent?: number;
-	loaded?: number;
-	total?: number;
-	label?: string;
-	message?: string;
-}
+/* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ──
+ *  The RPC contract (`SttModelRow` / `SttModelStatusResponse` / the
+ *  `SttDownloadEvent` union + its guard) lives in @musepi/pi-wire so the
+ *  desktop and guest shells can never drift apart. Only the renderer's own
+ *  row state stays local. */
+/** Active-download row. The event shape itself lives in @musepi/pi-wire
+ *  (`SttDownloadEvent` + `isSttDownloadEvent`) — shared with the guest
+ *  client so both shells narrow the daemon's untyped payload the same way. */
 interface ActiveDownload {
 	modelKey: string;
 	percent: number;
@@ -67,7 +53,7 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const refresh = useCallback(() => {
 		void rpc
-			?.request<SttStatusResponse>("stt.modelStatus", {})
+			?.request<SttModelStatusResponse>("stt.modelStatus", {})
 			.then(res => {
 				setModels(res.models);
 				// Window mounted mid-download: seed a 0% row from the daemon's
@@ -88,12 +74,11 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		refresh();
 		if (!rpc) return;
 		const off = rpc.addEventListener(event => {
-			const p = event.payload as SttStreamEvent | undefined;
-			if (!p?.type.startsWith("stt.download")) return;
+			const p = event.payload;
+			if (!isSttDownloadEvent(p)) return;
 			if (p.type === "stt.downloadProgress") {
-				if (typeof p.percent !== "number") return;
 				setActive({
-					modelKey: p.modelKey ?? "",
+					modelKey: p.modelKey,
 					percent: p.percent,
 					loaded: p.loaded ?? 0,
 					total: p.total ?? 0,
@@ -111,13 +96,17 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				}, 1200);
 				return;
 			}
-			if (p.type === "stt.downloadError") {
-				// Fire-and-forget request means the RPC itself never rejects —
-				// the failure only arrives here. Keep the tier key so the row
-				// can be named; other models' UI state is untouched.
-				setError({ modelKey: p.modelKey ?? "", message: p.message ?? "download failed" });
-				refresh();
-			}
+			// p.type === "stt.downloadError": fire-and-forget request means
+			// the RPC itself never rejects — the failure only arrives here.
+			// Keep the tier key so the row can be named; other models' UI
+			// state is untouched.
+			// Guard checks `type` only, so the text fields still get a
+			// runtime fallback (an untyped daemon could omit them).
+			setError({ modelKey: p.modelKey ?? "", message: p.message ?? "download failed" });
+			// Retire the stuck row: without this the tier stays on a progress
+			// bar that will never advance (guest parity).
+			setActive(null);
+			refresh();
 		});
 		return () => {
 			off();

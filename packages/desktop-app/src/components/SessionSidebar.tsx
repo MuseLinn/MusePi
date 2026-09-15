@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t, useArchivedSessions } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
@@ -210,17 +210,12 @@ export function SessionSidebar({
 	});
 	// Inline group-name editing (double-click the block / context menu).
 	const [groupEditIdx, setGroupEditIdx] = useState<number | null>(null);
-	// Archived sessions (ZCode archive view): archivedAt is display time;
-	// cwd is captured at archive time from session.list so the archive row
-	// can show the folder (tree nodes carry no cwd).
-	const [archived, setArchived] = useState<{ sessionId: string; archivedAt: number; cwd?: string }[]>(() => {
-		try {
-			const raw = localStorage.getItem("musepi-gui-archived");
-			return raw ? (JSON.parse(raw) as { sessionId: string; archivedAt: number }[]) : [];
-		} catch {
-			return [];
-		}
-	});
+	// Archived sessions (ZCode archive view). Shared with the guest/mobile shell
+	// through guest-client's session-archive module — one localStorage key, one
+	// event, and it migrates the two legacy keys (2026-09-15). archivedAt is
+	// display time; cwd is captured at archive time from session.list so the
+	// archive row can show the folder (tree nodes carry no cwd).
+	const { archived, ids: archivedIds, archive: archiveSession, unarchive: unarchiveSession } = useArchivedSessions();
 	const [archivedView, setArchivedView] = useState(false);
 	// Content-boundary feather (transcript parity): the session list scrolls
 	// inside the sidebar — data-top-scroll / data-bottom-scroll flip the
@@ -289,10 +284,10 @@ export function SessionSidebar({
 			// row when the RPC confirmed the data is gone.
 			const ok = await onDeleteArchived(id);
 			if (ok) {
-				setArchived(prev => prev.filter(a => a.sessionId !== id));
+				unarchiveSession(id);
 			}
 		},
-		[onDeleteArchived],
+		[onDeleteArchived, unarchiveSession],
 	);
 	useEffect(() => {
 		localStorage.setItem("musepi-gui-groups", JSON.stringify(groups));
@@ -312,9 +307,6 @@ export function SessionSidebar({
 		window.addEventListener("musepi-gui-groups-changed", onExternal);
 		return () => window.removeEventListener("musepi-gui-groups-changed", onExternal);
 	}, []);
-	useEffect(() => {
-		localStorage.setItem("musepi-gui-archived", JSON.stringify(archived));
-	}, [archived]);
 	useEffect(() => {
 		try {
 			localStorage.setItem("musepi-gui-projects", JSON.stringify(projects));
@@ -368,20 +360,9 @@ export function SessionSidebar({
 			return missing.length === 0 ? prev : [...prev, ...missing];
 		});
 	}, [sessionMeta, dismissedProjects]);
-	// The header's session ⋯ menu can archive the active session — re-read
-	// the shared archive list so this component's in-memory copy follows.
-	useEffect(() => {
-		const onArchived = (): void => {
-			try {
-				setArchived(JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as typeof archived);
-			} catch {
-				// storage unavailable
-			}
-		};
-		window.addEventListener("musepi-gui-sessions-archived", onArchived);
-		return () => window.removeEventListener("musepi-gui-sessions-archived", onArchived);
-	}, []);
-	const archivedIds = new Set(archived.map(a => a.sessionId));
+	// The header's session ⋯ menu (and the task center) can archive sessions —
+	// useArchivedSessions subscribes to the shared store, so this component's
+	// copy follows every writer without a reload.
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
 	// Session search (openchamber sidebar parity): the tree is filtered by
 	// label + cwd through the shared filterSessionTree, which also reports how
@@ -453,35 +434,6 @@ export function SessionSidebar({
 			/>
 		</div>
 	);
-	const archiveSession = (id: string): void => {
-		setArchived(prev => [
-			...prev.filter(a => a.sessionId !== id),
-			{ sessionId: id, archivedAt: Date.now(), cwd: sessionMeta.get(id)?.cwd },
-		]);
-	};
-	// Scheduled-task deletes can archive their sessions (ScheduledTasksPage
-	// writes localStorage + dispatches this event) — re-read so the archive
-	// view reflects the change without a full reload.
-	useEffect(() => {
-		const onArchivedChanged = (): void => {
-			try {
-				setArchived(
-					JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as {
-						sessionId: string;
-						archivedAt: number;
-					}[],
-				);
-			} catch {
-				// ignore malformed storage
-			}
-		};
-		window.addEventListener("musepi-gui-archived-changed", onArchivedChanged);
-		return () => window.removeEventListener("musepi-gui-archived-changed", onArchivedChanged);
-	}, []);
-
-	const unarchiveSession = (id: string): void => {
-		setArchived(prev => prev.filter(a => a.sessionId !== id));
-	};
 	const toggleProject = (path: string): void => {
 		setCollapsedProjects(prev => (prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]));
 	};
@@ -1244,7 +1196,8 @@ export function SessionSidebar({
 								{
 									label: t("archive task"),
 									icon: "archive",
-									onSelect: () => archiveSession(sessionCtx.id),
+									// cwd rides along so the archive row can show the folder.
+									onSelect: () => archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd),
 								},
 								{
 									label: unread?.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),

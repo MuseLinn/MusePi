@@ -16,9 +16,18 @@
  *    spawned Electron against the STALE dev server — fixes never loaded.
  *    The probe now verifies the listener is OUR vite (it dies with it);
  *    a foreign occupant is a hard error telling the user to free the port.
+ *
+ * Dev data isolation (dsh-desktop parity, 2026-09-15): the dev GUI runs with
+ * its OWN daemon data root (PI_CONFIG_DIR), daemon socket dir
+ * (MUSEPI_DAEMON_DIR) and Electron userData (MUSEPI_GUI_USER_DATA), all under
+ * .desktop-build/development/ — so it never reuses the user's running daemon
+ * via the shared tmpdir ws.port discovery and never reads/writes their real
+ * sessions/settings. An explicit PI_CONFIG_DIR etc. from the caller wins;
+ * MUSEPI_GUI_DEV_SHARED_DATA=1 opts out entirely.
  */
 import { execFileSync, spawn } from "node:child_process";
-import net from "node:net";
+import fs from "node:fs";
+import path from "node:path";
 
 const VITE_PORT = 5173;
 const argv = process.argv.slice(2);
@@ -137,9 +146,27 @@ if (!ok) {
 	process.exit(1);
 }
 
+// Dev data isolation: see the header note. Caller-provided values win; the
+// whole block is skippable with MUSEPI_GUI_DEV_SHARED_DATA=1.
+const repoRoot = path.resolve(import.meta.dirname, "../..");
+const devDirs = {
+	home: path.join(repoRoot, ".desktop-build", "development", "home"),
+	userData: path.join(repoRoot, ".desktop-build", "development", "electron-user-data"),
+	socket: path.join(repoRoot, ".desktop-build", "development", "daemon-socket"),
+};
+const devDataEnv =
+	process.env.MUSEPI_GUI_DEV_SHARED_DATA === "1"
+		? {}
+		: {
+				...(process.env.PI_CONFIG_DIR ? {} : { PI_CONFIG_DIR: devDirs.home }),
+				...(process.env.MUSEPI_GUI_USER_DATA ? {} : { MUSEPI_GUI_USER_DATA: devDirs.userData }),
+				...(process.env.MUSEPI_DAEMON_DIR ? {} : { MUSEPI_DAEMON_DIR: devDirs.socket }),
+			};
+for (const dir of Object.values(devDirs)) fs.mkdirSync(dir, { recursive: true });
+
 const electron = spawn(electronBin, [ELECTRON_MAIN, ...argv], {
 	stdio: "inherit",
-	env: { ...process.env, MUSEPI_GUI_DEV: "1" },
+	env: { ...process.env, MUSEPI_GUI_DEV: "1", ...devDataEnv },
 });
 electron.on("exit", () => {
 	vite.kill();

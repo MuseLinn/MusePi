@@ -260,4 +260,46 @@ describe("HostClient", () => {
 		expect(client.getSnapshot().notices[0]?.level).toBe("info");
 		client.close();
 	});
+
+	it("subscribes to daemon global events and forwards stt.download* payloads", async () => {
+		globalThis.WebSocket = FakeWebSocket as unknown as typeof WebSocket;
+		const client = new HostClient("ws://127.0.0.1:1234/");
+		client.connect();
+		const { ws, calls } = connectToDaemon("ws://127.0.0.1:1234/", defaultHandler());
+		await onceSnapshot(client, s => s.phase === "live");
+
+		const seen: Array<Record<string, unknown>> = [];
+		const off = client.onDaemonEvent(payload => seen.push(payload));
+		await flushMicrotasks();
+		// One subscribe per client — a second listener must not re-request.
+		client.onDaemonEvent(() => {});
+		await flushMicrotasks();
+		expect(calls.filter(c => c.method === "events.subscribe").length).toBe(1);
+
+		ws.onmessage?.({
+			data: JSON.stringify({
+				kind: "event",
+				seq: 1,
+				payload: { type: "stt.downloadProgress", modelKey: "base", percent: 42, loaded: 420, total: 1000 },
+			}),
+		});
+		ws.onmessage?.({
+			data: JSON.stringify({
+				kind: "event",
+				seq: 2,
+				payload: { type: "stt.downloadError", modelKey: "base", message: "disk full" },
+			}),
+		});
+		expect(seen.length).toBe(2);
+		expect(seen[0]?.type).toBe("stt.downloadProgress");
+		expect(seen[0]?.percent).toBe(42);
+		expect(seen[1]?.message).toBe("disk full");
+
+		off();
+		ws.onmessage?.({
+			data: JSON.stringify({ kind: "event", seq: 3, payload: { type: "stt.downloadDone", modelKey: "base" } }),
+		});
+		expect(seen.length).toBe(2);
+		client.close();
+	});
 });

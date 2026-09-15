@@ -17,13 +17,18 @@
 	--fg-muted: oklch(0.72 0.01 60);
 	--fg-faint: oklch(0.55 0.01 60);
 
-	/* one accent: brand emerald (#34d399) */
-	--accent: oklch(0.72 0.16 162);
-	--accent-fg: oklch(0.25 0.08 162);
-	--accent-muted: oklch(0.72 0.16 162 / 18%);
-	/* hover + border variants of the accent — derived from the same hue. */
-	--accent-hover: oklch(0.8 0.16 162);
-	--accent-bd: oklch(0.72 0.16 162 / 35%);
+	/* one accent: brand emerald. These oklch numbers ARE #34d399 — the same
+	 * green the TUI theme (theme/defaults/musepi.json), the HTML export
+	 * palette (export/html/web-palette.ts) and --brand-mark-gradient all
+	 * use. Do not retune them by eye: any value whose sRGB round-trip is not
+	 * #34d399 re-introduces the logo-vs-accent split this block fixes. */
+	--accent: oklch(0.773 0.1538 163);
+	--accent-fg: oklch(0.24 0.075 163);
+	--accent-muted: oklch(0.773 0.1538 163 / 18%);
+	/* hover + border variants of the accent — derived from the same hue
+	 * (hover = accent L + 0.08, the existing relationship). */
+	--accent-hover: oklch(0.853 0.1538 163);
+	--accent-bd: oklch(0.773 0.1538 163 / 35%);
 
 	/* brand lockup */
 	--brand-mark-gradient: linear-gradient(135deg, #34d399 0%, #10b981 50%, #2dd4bf 100%);
@@ -191,11 +196,11 @@
 	--fg-muted: oklch(0.46 0.03 60);
 	--fg-faint: oklch(0.58 0.025 60);
 
-	--accent: oklch(0.62 0.16 162);
-	--accent-fg: oklch(0.99 0.01 162);
-	--accent-muted: oklch(0.62 0.16 162 / 14%);
-	--accent-hover: oklch(0.55 0.16 162);
-	--accent-bd: oklch(0.62 0.16 162 / 30%);
+	--accent: oklch(0.62 0.153 163);
+	--accent-fg: oklch(0.99 0.01 163);
+	--accent-muted: oklch(0.62 0.153 163 / 14%);
+	--accent-hover: oklch(0.55 0.1538 163);
+	--accent-bd: oklch(0.62 0.153 163 / 30%);
 
 	--ok: oklch(0.55 0.13 150);
 	--warn: oklch(0.6 0.13 85);
@@ -257,11 +262,11 @@
 		--fg-muted: oklch(0.46 0.03 60);
 		--fg-faint: oklch(0.58 0.025 60);
 
-		--accent: oklch(0.62 0.16 162);
-		--accent-fg: oklch(0.99 0.01 162);
-		--accent-muted: oklch(0.62 0.16 162 / 14%);
-		--accent-hover: oklch(0.55 0.16 162);
-		--accent-bd: oklch(0.62 0.16 162 / 30%);
+		--accent: oklch(0.62 0.1538 163);
+		--accent-fg: oklch(0.99 0.01 163);
+		--accent-muted: oklch(0.62 0.1538 163 / 14%);
+		--accent-hover: oklch(0.55 0.1538 163);
+		--accent-bd: oklch(0.62 0.1538 163 / 30%);
 
 		--ok: oklch(0.55 0.13 150);
 		--warn: oklch(0.6 0.13 85);

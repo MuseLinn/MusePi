@@ -235,7 +235,15 @@ function createTrayController({ onAction, onSnapshot }) {
 			},
 			{
 				label: "始终允许",
-				click: () => onAction({ type: "respond-approval", id: approval.id, approved: true, remember: true }),
+				click: () =>
+					onAction({
+						type: "respond-approval",
+						id: approval.id,
+						approved: true,
+						remember: true,
+						// Policy key for the persisted rule (main.cjs).
+						tool: approval.tool,
+					}),
 			},
 			{ type: "separator" },
 			{

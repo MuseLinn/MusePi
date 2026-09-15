@@ -16,6 +16,7 @@ import type {
 	CollabUiResponseValue,
 	GuestFrame,
 	HostFrame,
+	ImageContent,
 	SessionEntry,
 	SessionHeader,
 	SessionState,
@@ -63,13 +64,25 @@ export interface ApprovalRequest {
 export interface SessionClient {
 	subscribe(listener: () => void): () => void;
 	getSnapshot(): GuestSnapshot;
-	sendPrompt(text: string): void;
+	sendPrompt(text: string, images?: ImageContent[]): void;
+
+	/** Session-level config (thinking ladder) — sanitized host-side; the UI
+	 *  updates from the returned `state` broadcast, never optimistically. */
+	sendThinkingLevel(level: string | undefined): void;
 	sendAbort(): void;
 	selectWorkspaceSession(sessionId: string | null): void;
 	sendUiResponse(reqId: number, value?: CollabUiResponseValue): void;
 	sendAgentCmd(cmd: "chat" | "kill" | "revive", agentId: string, text?: string): void;
 	fetchTranscript(agentId: string, fromByte: number): Promise<TranscriptResult | null>;
 	rpc<T>(method: string, params?: unknown): Promise<T>;
+	/**
+	 * Daemon **global** event stream (`events.subscribe` — extensions.changed,
+	 * stt.downloadProgress / Done / Error). Only the host transport carries
+	 * these: a collab link has no `stt.*` RPC and its `t:"event"` frames are
+	 * session-scoped, so the collab guest hands back an inert unsubscribe.
+	 * Payloads are untyped daemon bags — narrow with `isSttDownloadEvent`.
+	 */
+	onDaemonEvent(listener: (payload: Record<string, unknown>) => void): () => void;
 	/** Pending tool approval for the host to approve/deny (see
 	 *  {@link ApprovalRequest}); null when none. The collab guest never sees
 	 *  approvals — always null. */
@@ -252,8 +265,16 @@ export class GuestClient {
 		return this.#plaintext;
 	}
 
-	sendPrompt(text: string): void {
-		this.#socket.send({ t: "prompt", text });
+	sendPrompt(text: string, images?: ImageContent[]): void {
+		this.#socket.send({
+			t: "prompt",
+			text,
+			images: images && images.length > 0 ? images : undefined,
+		});
+	}
+
+	sendThinkingLevel(level: string | undefined): void {
+		this.#socket.send({ t: "config", thinkingLevel: level });
 	}
 
 	sendUiResponse(reqId: number, value?: CollabUiResponseValue): void {
@@ -352,6 +373,16 @@ export class GuestClient {
 		});
 		this.#socket.send({ t: "rpc-request", reqId, method, params });
 		return promise;
+	}
+
+	/**
+	 * Collab links never carry daemon global events: `CollabHost`#rpcDispatch
+	 * is a closed whitelist (no `stt.*`), and its `t:"event"` frames are
+	 * session-scoped. Inert by contract — callers fall back to polling or to
+	 * the "voice needs daemon backend" guide.
+	 */
+	onDaemonEvent(_listener: (payload: Record<string, unknown>) => void): () => void {
+		return () => {};
 	}
 
 	/** Test seam: apply a synthetic host frame through the real apply path. */

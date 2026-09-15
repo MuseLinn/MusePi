@@ -2,7 +2,7 @@ export const composer = {
 	// ── Composer ──────────────────────────────────────────────────────────────
 	"type your response…": "输入您的回复…",
 	"read-only session — watching only": "只读会话 — 仅观看",
-	"prompt the host agent…": "向宿主代理发送提示…",
+	"ask anything, / for commands, @ for context…": "问任何事，/ 命令，@ 上下文…",
 	"waiting for session…": "等待会话…",
 	"submit response": "提交回复",
 	"send (Enter)": "发送（回车）",
@@ -52,6 +52,26 @@ export const composer = {
 	"wrap as attachment": "包裹为附件",
 	"wrap as code block": "包裹为代码块",
 	"attach as file": "附加为文件",
+
+	// ── Image attachments (collab prompt.images; design 「Session 附件流」) ──
+	// "add images" lives in the general domain already.
+	"take photo": "拍照",
+	"choose from library": "从相册选择",
+	"remove attachment": "移除附件",
+	"attach images hint": "图片长边压到 1568px · JPEG 80%（小于 1.5MB 原样发送）",
+	"model & thinking": "模型与思考",
+	"host session model": "宿主会话当前模型",
+
+	// ── Voice input (daemon stt.transcribe; design 「语音四帧」) ──────────────
+	// "voice input" / "voice recording stop" / "voice transcribing" /
+	// "recording…" live in the settings domain already — reuse, don't duplicate.
+	"voice done": "完成",
+	"voice discard": "放弃录音",
+	"voice failed: {reason}": "语音输入失败：{reason}",
+	"voice needs daemon backend": "语音输入需要 daemon 后端",
+	"voice needs daemon body": "collab 直连会话暂不支持语音转写，通过 daemon 连接后可用",
+	"voice guide ok": "知道了",
+	"tts needs daemon backend": "朗读需要 daemon 后端",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

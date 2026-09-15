@@ -15,9 +15,9 @@
   --text: oklch(0.92 0.01 307);
   --muted: oklch(0.71 0.016 307);
   --dim: oklch(0.53 0.018 307);
-  --accent: oklch(0.72 0.16 162);          /* brand emerald #34d399 */
-  --accent-fg: oklch(0.25 0.08 162);         /* ink on accent fills */
-  --accent-muted: oklch(0.72 0.16 162 / 18%);
+  --accent: oklch(0.773 0.1538 163);          /* brand emerald #34d399 */
+  --accent-fg: oklch(0.24 0.075 163);         /* ink on accent fills */
+  --accent-muted: oklch(0.773 0.1538 163 / 18%);
   --link: oklch(0.817 0.112 205);           /* brand cyan #5ad8e6 */
   --success: oklch(0.76 0.14 150);
   --danger: oklch(0.66 0.19 25);

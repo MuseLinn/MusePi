@@ -88,6 +88,20 @@ export * from "./lib/download";
 export { fmtCost, fmtDuration, fmtPercent, fmtTokens, messageText, relTime, shortenPath } from "./lib/format";
 export { hashSeed, punkAvatarUri } from "./lib/punk-gen";
 export {
+	type ArchivedSession,
+	archivedSessionIds,
+	archiveSession,
+	clearArchivedSessions,
+	isSessionArchived,
+	onArchivedSessionsChanged,
+	readArchivedSessions,
+	SESSION_ARCHIVE_EVENT,
+	toggleArchivedSession,
+	unarchiveSession,
+	useArchivedSessions,
+	writeArchivedSessions,
+} from "./lib/session-archive";
+export {
 	ACCENT_PRESETS,
 	type AccentPreference,
 	DARK_THEME_PRESETS,

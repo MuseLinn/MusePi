@@ -629,13 +629,356 @@
 	font-weight: 600;
 	line-height: 1;
 	white-space: nowrap;
+	/* Truncate instead of blowing the pill into the textarea. */
+	max-width: 120px;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 .sh-composer-actions {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	flex: none;
+	/* Shrink before the textarea is crushed: when the actions row runs out
+	 * of width (narrow phones + long "working" label + queued counter), the
+	 * pill degrades label-first instead of overlapping the input. */
+	flex: 0 1 auto;
+	min-width: 0;
 	padding-bottom: 1px;
+}
+
+/* ── Voice input (daemon stt.transcribe; design 「语音四帧」) ───────────────
+ * The voice slot replaces the textarea inside the composer card while a
+ * capture/transcription is live; the actions row (mic · + · capsule · ring ·
+ * send) stays put so the switch never reflows the chrome. */
+.sh-voice {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+	border-radius: 12px;
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+	animation: sh-voice-in 240ms var(--spring) both;
+}
+
+@keyframes sh-voice-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+}
+
+.sh-voice-pulse {
+	position: relative;
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	color: var(--accent-fg);
+	background: var(--accent);
+	border-radius: 50%;
+}
+
+.sh-voice-pulse::before,
+.sh-voice-pulse::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border: 2px solid color-mix(in oklab, var(--accent) 55%, transparent);
+	border-radius: 50%;
+	animation: sh-voice-ring 1.6s ease-out infinite;
+}
+
+.sh-voice-pulse::after {
+	animation-delay: 0.8s;
+}
+
+@keyframes sh-voice-ring {
+	from {
+		opacity: 0.9;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(1.55);
+	}
+}
+
+.sh-voice-wave {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: 3px;
+	height: 24px;
+}
+
+.sh-voice-wave span {
+	width: 3px;
+	height: 5px;
+	background: var(--accent);
+	border-radius: 1.5px;
+	animation: sh-voice-bar 1s ease-in-out infinite;
+}
+
+@keyframes sh-voice-bar {
+	0%,
+	100% {
+		height: 5px;
+	}
+	50% {
+		height: 20px;
+	}
+}
+
+.sh-voice-timer {
+	flex: none;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	color: var(--fg);
+}
+
+.sh-voice-flex {
+	flex: 1;
+	min-width: 0;
+}
+
+.sh-voice-label {
+	font-size: 13px;
+	color: var(--fg);
+}
+
+.sh-voice-btn {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 32px;
+	height: 32px;
+	color: var(--fg-faint);
+	background: var(--bg-raised);
+	border: 1px solid var(--border);
+	border-radius: 50%;
+	transition: background 150ms var(--spring-snappy);
+}
+
+.sh-voice-btn:active {
+	background: var(--bg-overlay);
+}
+
+.sh-voice-btn--danger {
+	color: var(--err);
+}
+
+.sh-voice-stop {
+	display: inline-flex;
+	flex: none;
+	gap: 6px;
+	align-items: center;
+	padding: 8px 12px;
+	color: var(--accent-fg);
+	background: var(--accent);
+	border-radius: 10px;
+	font-size: 12.5px;
+	font-weight: 600;
+	transition: filter 150ms var(--spring-snappy);
+}
+
+.sh-voice-stop:active {
+	filter: brightness(1.05);
+}
+
+.sh-voice--transcribing,
+.sh-voice--error {
+	padding: 9px 12px;
+	background: var(--bg-raised);
+	border-color: var(--border);
+}
+
+.sh-voice-spinner {
+	flex: none;
+	width: 16px;
+	height: 16px;
+	border: 2px solid color-mix(in oklab, var(--accent) 25%, transparent);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: sh-voice-spin 0.8s linear infinite;
+}
+
+@keyframes sh-voice-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.sh-voice--error {
+	background: var(--color-danger-soft);
+	border-color: var(--color-danger-bd);
+}
+
+.sh-voice-err {
+	color: var(--err);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Guide state (collab-direct): replaces the whole input slot. */
+.sh-voice-guide {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 14px 16px 12px;
+	color: var(--fg-faint);
+	background: var(--bg-raised);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	text-align: center;
+	animation: sh-voice-in 240ms var(--spring) both;
+}
+
+.sh-voice-guide-title {
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.sh-voice-guide-sub {
+	font-size: 12px;
+	line-height: 17px;
+	color: var(--fg-faint);
+}
+
+.sh-voice-guide-btn {
+	margin-top: 2px;
+	padding: 6px 16px;
+	color: var(--accent);
+	background: var(--color-accent-soft);
+	border: 1px solid var(--accent-bd);
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 500;
+	transition: background 150ms var(--spring-snappy);
+}
+
+.sh-voice-guide-btn:active {
+	background: color-mix(in oklab, var(--accent) 26%, transparent);
+}
+
+/* ── Voice output strip (design frames 「迷你播放器/合成中/打断降级」) ──────
+ * Sits above the composer card; shares the controller with the transcript's
+ * per-message speak buttons. */
+.sh-tts {
+	display: flex;
+	width: 100%;
+	max-width: 880px;
+	margin: 0 auto 8px;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 10px;
+	background: var(--bg-raised);
+	border: 1px solid var(--accent-bd);
+	border-radius: 12px;
+	animation: sh-voice-in 240ms var(--spring) both;
+}
+
+.sh-tts--guide,
+.sh-tts--error {
+	border-color: var(--border);
+}
+
+.sh-tts--error {
+	background: var(--color-danger-soft);
+	border-color: var(--color-danger-bd);
+}
+
+.sh-tts-chip {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	color: var(--accent);
+	background: var(--color-accent-soft);
+	border-radius: 50%;
+}
+
+.sh-tts-chip--pulse {
+	animation: sh-tts-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes sh-tts-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.12);
+	}
+}
+
+.sh-tts-track {
+	display: block;
+	flex: 1;
+	min-width: 0;
+	height: 4px;
+	background: color-mix(in oklab, var(--fg) 9%, transparent);
+	border-radius: 2px;
+	overflow: hidden;
+}
+
+.sh-tts-fill {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+	border-radius: 2px;
+	transition: width 250ms linear;
+}
+
+.sh-tts-time {
+	flex: none;
+	font-family: var(--font-mono);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--fg-faint);
+}
+
+.sh-tts-label {
+	font-size: 12.5px;
+	color: var(--fg);
+}
+
+.sh-tts-label--muted {
+	color: var(--fg-muted);
+}
+
+.sh-tts-btn-stop {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	color: var(--fg);
+	background: var(--bg-overlay);
+	border: 1px solid var(--border);
+	border-radius: 50%;
+}
+
+.sh-tts-btn-stop:active {
+	filter: brightness(1.15);
+}
+
+/* Auto-read toggle lit state (composer volume button). */
+.sh-tts-toggle--on {
+	color: var(--accent);
+	background: var(--color-accent-soft);
+	border-color: var(--accent-bd);
 }
 
 .sh-composer-ask {
@@ -894,14 +1237,10 @@
 	}
 }
 
-.sh-boot-splash-mark {
-	width: 76px;
-	height: 76px;
-	display: grid;
-	place-items: center;
-	border-radius: 20px;
-	background: var(--brand-mark-gradient);
-	box-shadow: 0 12px 32px oklch(0 0 0 / 40%);
+/* Dot-matrix brand mark on the boot splash (DotMatrixMark canvas, mobile
+ * parity with the desktop welcome backdrop). The canvas carries the brand
+ * moment; the word itself is rasterized, so no separate label needed. */
+.sh-boot-splash-dots {
 	animation: sh-boot-mark 700ms var(--spring-bouncy) both;
 }
 
@@ -913,30 +1252,6 @@
 	to {
 		transform: none;
 		opacity: 1;
-	}
-}
-
-.sh-boot-splash-pi {
-	font: 700 34px / 1 var(--font-mono);
-	color: oklch(0.2 0.05 160);
-}
-
-.sh-boot-splash-word {
-	font: 600 15px / 1 var(--font-mono);
-	letter-spacing: 0.22em;
-	text-transform: uppercase;
-	color: var(--fg-muted);
-	animation: sh-boot-word 500ms 200ms var(--spring) both;
-}
-
-@keyframes sh-boot-word {
-	from {
-		opacity: 0;
-		transform: translateY(4px);
-	}
-	to {
-		opacity: 1;
-		transform: none;
 	}
 }
 
@@ -1637,6 +1952,16 @@
 	.sh-composer-actions .sh-btn {
 		min-width: 44px;
 		min-height: 44px;
+	}
+	/* Squeeze fix: the working pill keeps its 44px touch floor via
+	 * min-height only — min-width is dropped so a long label + the queued
+	 * counter can never crowd the input out of the row. */
+	.sh-composer-actions .sh-btn-send-work {
+		min-width: 0;
+		padding: 8px 10px;
+	}
+	.sh-send-label {
+		max-width: 64px;
 	}
 	.sh-composer-input,
 	.sh-input,
@@ -2812,6 +3137,11 @@
 	.ss-card.ss-closing {
 		animation: none;
 	}
+	/* QR scanner: skip the iris/fade entrances under reduced motion. */
+	.qr-overlay,
+	.qr-video {
+		animation: none;
+	}
 }
 
 /* ---- QR scanner overlay (connect guide, jsQR + getUserMedia) ---- */
@@ -3012,15 +3342,18 @@
 	left: 0;
 	right: 0;
 	display: flex;
-	flex-direction: column;
-	align-items: center;
-	gap: 10px;
+	flex-direction: row;
+	flex-wrap: wrap;
+	justify-content: center;
+	column-gap: 10px;
+	row-gap: 10px;
 	padding: 14px 20px calc(20px + var(--safe-bottom, 0px));
 	z-index: 5;
 	background: linear-gradient(transparent, oklch(0 0 0 / 55%));
 }
 
-.qr-torch {
+.qr-torch,
+.qr-flip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
@@ -3034,7 +3367,8 @@
 	transition: background 150ms var(--spring-snappy), transform 120ms var(--spring-snappy);
 }
 
-.qr-torch:active {
+.qr-torch:active,
+.qr-flip:active {
 	transform: scale(0.96);
 }
 
@@ -3044,6 +3378,7 @@
 }
 
 .qr-hint {
+	flex-basis: 100%;
 	margin: 0;
 	font-size: var(--ui-font-size-xs);
 	color: oklch(1 0 0 / 85%);
@@ -3245,4 +3580,744 @@
 		opacity: 0;
 		filter: blur(6px);
 	}
+}
+
+/* ---- context ring (SessionState.contextUsage; design 二期 F1) ----
+ * 22px usage dial at the right of the composer control row. Amber past 80%. */
+.sh-ctx-ring {
+	display: inline-flex;
+	flex: none;
+	width: 22px;
+	height: 22px;
+}
+
+.sh-ctx-ring-track {
+	stroke: oklch(1 0 0 / 9%);
+}
+
+.sh-ctx-ring-fill {
+	stroke: var(--accent);
+	transition: stroke-dasharray 400ms var(--spring-snappy, cubic-bezier(0.22, 1, 0.36, 1)), stroke 200ms ease;
+}
+
+.sh-ctx-ring--warn .sh-ctx-ring-fill {
+	stroke: var(--warn);
+}
+
+/* ---- model/thinking capsule (design 二期 F1/F2) ----
+ * Two-segment pill after the attach button: model name (read-only, opens the
+ * sheet) | separator | brain + level. Never grows past its share — the model
+ * name truncates with ellipsis; queued/send controls keep priority. */
+.sh-mt-capsule {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 1 auto;
+	min-width: 0;
+	height: 26px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 6%, transparent);
+	overflow: hidden;
+}
+
+.sh-mt-seg {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	height: 26px;
+	padding: 0 9px;
+	border: 0;
+	background: none;
+	color: var(--fg-muted);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.sh-mt-model {
+	max-width: 108px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-mt-caret {
+	flex: none;
+	opacity: 0.6;
+}
+
+.sh-mt-sep {
+	flex: none;
+	width: 1px;
+	height: 14px;
+	border-radius: 0.5px;
+	background: color-mix(in oklab, var(--fg) 12%, transparent);
+}
+
+.sh-mt-row--active {
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+/* model info block + divider + ladder rows inside the sheet */
+.sh-mt-info {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 2px 18px 10px;
+}
+
+.sh-mt-info-name {
+	font-size: 14px;
+	font-weight: 500;
+	color: var(--fg);
+}
+
+.sh-mt-info-meta {
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+.sh-mt-divider {
+	margin: 4px 18px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--fg-faint);
+}
+
+.sh-mt-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	padding: 0 10px 10px;
+}
+
+.sh-mt-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding: 10px 12px;
+	border: 0;
+	border-radius: 12px;
+	background: none;
+	color: var(--fg);
+	font-size: 14px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.sh-mt-row:active {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+}
+
+/* ---- workspace panel: five tabs (design frame 「工作区五标签」) ---- */
+.sh-wspanel {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-height: 0;
+	flex: 1;
+}
+
+.sh-wspanel-tabs {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 0 2px 6px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.sh-wspanel-tab {
+	appearance: none;
+	border: 0;
+	background: none;
+	padding: 7px 10px;
+	border-radius: 8px;
+	font-size: 12px;
+	color: var(--fg-muted);
+	white-space: nowrap;
+	transition: background 150ms var(--spring-snappy);
+}
+
+.sh-wspanel-tab:active {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+}
+
+.sh-wspanel-tab--on {
+	background: color-mix(in oklab, var(--accent) 14%, transparent);
+	color: var(--accent);
+	font-weight: 600;
+}
+
+/* disabled tabs stay visible but inert — honest UI, no fake buttons */
+.sh-wspanel-tab--off {
+	opacity: 0.45;
+}
+
+.sh-wspanel-body {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	-webkit-overflow-scrolling: touch;
+}
+
+.sh-wspanel-guide {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 48px 24px;
+	color: var(--fg-muted);
+	text-align: center;
+}
+
+.sh-wspanel-guide--off {
+	opacity: 0.55;
+}
+
+.sh-wspanel-guide-sub {
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+}
+
+.sh-changes {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-bottom: 12px;
+}
+
+.sh-changes-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 2px 4px 6px;
+}
+
+.sh-changes-branch {
+	font: 600 12px / 1 var(--font-mono);
+	color: var(--fg);
+}
+
+.sh-changes-numstat {
+	display: inline-flex;
+	gap: 6px;
+	font: 600 12px / 1 var(--font-mono);
+}
+
+.sh-diff-add {
+	color: var(--accent);
+}
+
+.sh-diff-del {
+	color: var(--err);
+}
+
+.sh-changes-reload {
+	appearance: none;
+	border: 0;
+	background: none;
+	color: var(--fg-faint);
+	padding: 4px;
+	margin-left: auto;
+	cursor: pointer;
+	border-radius: 6px;
+}
+
+.sh-changes-empty {
+	padding: 32px 0;
+	text-align: center;
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-sm);
+}
+
+.sh-changes-group {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.sh-changes-group-title {
+	margin: 6px 4px 2px;
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--fg-faint);
+}
+
+.sh-changes-file {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	appearance: none;
+	border: 0;
+	background: none;
+	text-align: left;
+	padding: 8px 10px;
+	border-radius: 10px;
+	color: var(--fg);
+	font-size: 13px;
+	transition: background 150ms var(--spring-snappy);
+}
+
+.sh-changes-file:active {
+	background: color-mix(in oklab, var(--fg) 8%, transparent);
+}
+
+.sh-changes-x {
+	font: 600 11px / 1 var(--font-mono);
+	color: var(--fg-muted);
+}
+
+.sh-changes-x--m,
+.sh-changes-x--d {
+	color: var(--err);
+}
+
+.sh-changes-x--a {
+	color: var(--accent);
+}
+
+.sh-changes-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.sh-changes-diff {
+	margin: 2px 0 6px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+	font: 11px / 1.55 var(--font-mono);
+	overflow-x: auto;
+	white-space: pre;
+	color: var(--fg-muted);
+}
+
+.sh-changes-differr {
+	margin: 2px 0 6px;
+	padding: 0 12px;
+	font-size: 11px;
+	color: var(--fg-faint);
+}
+
+/* ---- session swipe actions (design 二期 F4) ----
+ * Trailing action pair behind each session row; the row content translates
+ * over it. Delete demands an inline confirm state (solid red) instead of a
+ * system dialog. */
+.ss-swipe {
+	position: relative;
+	overflow: hidden;
+	border-radius: 12px;
+}
+
+.ss-swipe-actions {
+	position: absolute;
+	inset: 0 0 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 6px;
+}
+
+.ss-swipe-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 5px;
+	width: 68px;
+	height: 40px;
+	border: 0;
+	border-radius: 10px;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.ss-swipe-btn--rename {
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 18%, transparent);
+}
+
+.ss-swipe-btn--delete {
+	color: var(--err);
+	background: color-mix(in oklab, var(--err) 16%, transparent);
+}
+
+.ss-swipe-btn--confirm {
+	color: var(--accent-fg);
+	background: var(--err);
+}
+
+.ss-rename {
+	padding: 6px 10px;
+}
+
+.ss-rename-input {
+	width: 100%;
+	height: 36px;
+	padding: 0 10px;
+	border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--bg-raised) 80%, transparent);
+	color: var(--fg);
+	font-size: 14px;
+	outline: none;
+}
+
+/* ---- image attachments (composer chips + source sheet) ----
+ * Design frame 「Session 附件流」: a plus button opens the frosted source
+ * sheet (camera / library), picks land as 44px thumbnails between the
+ * suggestion chips and the input card, each with a floating remove dot. */
+
+.sh-attach-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	background: none;
+	color: var(--fg-muted);
+	border-radius: var(--radius);
+	cursor: pointer;
+	transition:
+		background 150ms var(--spring-snappy),
+		color 150ms var(--spring-snappy),
+		transform 120ms var(--spring-snappy);
+}
+
+.sh-attach-btn:hover {
+	color: var(--fg);
+	background: color-mix(in oklab, var(--fg) 10%, transparent);
+}
+
+.sh-attach-btn:active {
+	transform: scale(0.94);
+}
+
+.sh-attach-chips {
+	display: flex;
+	gap: 10px;
+	padding: 2px 2px 4px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.sh-attach-chips::-webkit-scrollbar {
+	display: none;
+}
+
+.sh-attach-chip {
+	position: relative;
+	flex: none;
+}
+
+.sh-attach-thumb {
+	display: block;
+	width: 44px;
+	height: 44px;
+	object-fit: cover;
+	border-radius: 10px;
+	border: 0.5px solid var(--border);
+}
+
+.sh-attach-remove {
+	position: absolute;
+	top: -5px;
+	right: -5px;
+	display: grid;
+	place-items: center;
+	width: 17px;
+	height: 17px;
+	padding: 0;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-full);
+	background: var(--bg-inset);
+	color: var(--fg-muted);
+	cursor: pointer;
+	transition: color 150ms var(--spring-snappy), transform 120ms var(--spring-snappy);
+}
+
+.sh-attach-remove:hover {
+	color: var(--fg);
+}
+
+.sh-attach-remove:active {
+	transform: scale(0.9);
+}
+
+.sh-attach-card {
+	max-width: 420px;
+}
+
+.sh-attach-options {
+	display: flex;
+	flex-direction: column;
+	padding: 4px 10px 6px;
+}
+
+.sh-attach-option {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px;
+	border: none;
+	background: none;
+	color: var(--fg);
+	font-size: var(--ui-font-size);
+	text-align: left;
+	border-radius: var(--radius);
+	cursor: pointer;
+	transition: background 150ms var(--spring-snappy);
+}
+
+.sh-attach-option:hover {
+	background: var(--bg-inset);
+}
+
+.sh-attach-option:active {
+	transform: scale(0.99);
+}
+
+.sh-attach-option svg {
+	color: var(--fg-muted);
+	flex: none;
+}
+
+.sh-attach-hint {
+	margin: 0;
+	padding: 6px 18px 12px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-faint);
+	text-align: center;
+}
+
+/* ---- voice panel (语音) + native speech badge ---- */
+
+.sh-vp {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.sh-vp-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: color-mix(in oklab, var(--fg) 3%, transparent);
+}
+
+.sh-vp-section-title {
+	margin: 0;
+	font-size: var(--ui-font-size-sm);
+	font-weight: 600;
+	color: var(--fg);
+}
+
+.sh-vp-section-desc {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-vp-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.sh-vp-row-label {
+	font-size: var(--ui-font-size-sm);
+	color: var(--fg);
+}
+
+.sh-vp-row-desc {
+	margin-top: 2px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-vp-chip {
+	flex: none;
+	padding: 3px 8px;
+	border-radius: 999px;
+	font-size: 11px;
+}
+
+.sh-vp-chip--ok {
+	color: var(--ok);
+	border: 1px solid color-mix(in oklab, var(--ok) 40%, transparent);
+	background: color-mix(in oklab, var(--ok) 10%, transparent);
+}
+
+.sh-vp-chip--no {
+	color: var(--fg-muted);
+	border: 1px solid var(--border);
+}
+
+.sh-vp-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.sh-vp-note {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-vp-note--ok {
+	color: var(--ok);
+}
+
+.sh-vp-note--err {
+	color: var(--err);
+}
+
+.sh-vp-toggle--on {
+	border-color: var(--accent);
+	color: var(--accent);
+}
+
+.sh-voice-native {
+	flex: none;
+	padding: 2px 6px;
+	border-radius: 999px;
+	font-size: 10px;
+	color: var(--accent);
+	border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.sh-voice-guide-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+}
+
+/* ---- voice panel v2: engine / voices / rate / language ---- */
+
+.sh-vp-seg {
+	display: flex;
+	gap: 4px;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--fg) 4%, transparent);
+}
+
+.sh-vp-seg-btn {
+	flex: 1;
+	padding: 7px 4px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	font-size: var(--ui-font-size-xs);
+	color: var(--fg-muted);
+}
+
+.sh-vp-seg-btn--on {
+	background: var(--accent);
+	color: var(--bg, #fff);
+	font-weight: 600;
+}
+
+.sh-vp-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.sh-vp-voice {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 5px 8px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	font-size: 11.5px;
+	color: var(--fg-muted);
+	cursor: pointer;
+	user-select: none;
+}
+
+.sh-vp-voice--on {
+	color: var(--accent);
+	border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+	background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+
+.sh-vp-voice-label {
+	max-width: 150px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.sh-vp-voice-play {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--accent) 15%, transparent);
+	color: var(--accent);
+	flex: none;
+}
+
+.sh-vp-voice-play:active {
+	transform: scale(0.92);
+}
+
+.sh-vp-rate-value {
+	flex: none;
+	font-size: var(--ui-font-size-xs);
+	color: var(--accent);
+	font-variant-numeric: tabular-nums;
+}
+
+.sh-vp-range {
+	width: 100%;
+	accent-color: var(--accent);
+}
+
+.sh-vp-dl {
+	padding: 4px 10px;
+	font-size: var(--ui-font-size-xs);
+}
+
+/* Speech-model download progress (driven by stt.downloadProgress events). */
+.sh-vp-prog {
+	margin-top: 5px;
+	height: 4px;
+	width: 100%;
+	border-radius: 999px;
+	background: var(--border);
+	overflow: hidden;
+}
+
+.sh-vp-prog-bar {
+	height: 100%;
+	border-radius: inherit;
+	background: var(--accent);
+	/* Percent ticks arrive as a stream — ease so it reads as progress, not jumps. */
+	transition: width 0.25s linear;
 }

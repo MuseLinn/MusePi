@@ -13,6 +13,7 @@ import type {
 	AgentSnapshot,
 	AssistantMessage,
 	CollabUiRequest,
+	ImageContent,
 	SessionEntry,
 	SessionHeader,
 	SessionState,
@@ -56,6 +57,10 @@ export class HostClient implements SessionClient {
 	#rpcSeq = 0;
 	#pending = new Map<number, PendingRpc>();
 	#listeners = new Set<() => void>();
+	/** Daemon global-event subscribers (`events.subscribe`). Registered
+	 *  lazily so a shell that never opens the voice panel costs nothing. */
+	#daemonListeners = new Set<(payload: Record<string, unknown>) => void>();
+	#daemonSubscribed = false;
 
 	// Session state (mirrors GuestClient's internal state).
 	#sessionId: string | null = null;
@@ -137,9 +142,19 @@ export class HostClient implements SessionClient {
 		};
 	}
 
-	sendPrompt(text: string): void {
+	sendPrompt(text: string, images?: ImageContent[]): void {
 		if (!this.#sessionId) return;
-		void this.#rpc("session.send", { sessionId: this.#sessionId, text, deliverAs: "prompt" });
+		void this.#rpc("session.send", {
+			sessionId: this.#sessionId,
+			text,
+			images: images && images.length > 0 ? images : undefined,
+			deliverAs: "prompt",
+		});
+	}
+
+	sendThinkingLevel(level: string | undefined): void {
+		if (!this.#sessionId) return;
+		void this.#rpc("session.thinking", { sessionId: this.#sessionId, level });
 	}
 
 	sendAbort(): void {
@@ -196,6 +211,25 @@ export class HostClient implements SessionClient {
 
 	rpc<T>(method: string, params?: unknown): Promise<T> {
 		return this.#rpc(method, params) as Promise<T>;
+	}
+
+	/**
+	 * Daemon global stream (`events.subscribe`): extensions.changed plus
+	 * `stt.download*` — the only channel that reports speech-model download
+	 * progress and failures. The first subscriber triggers the subscribe RPC;
+	 * later ones reuse it, so an N-panel shell opens exactly one.
+	 */
+	onDaemonEvent(listener: (payload: Record<string, unknown>) => void): () => void {
+		this.#daemonListeners.add(listener);
+		if (!this.#daemonSubscribed) {
+			this.#daemonSubscribed = true;
+			// Fire-and-forget: an older daemon without events.subscribe just
+			// leaves us event-less, and consumers fall back to polling.
+			void this.#rpc("events.subscribe", {}).catch(() => {});
+		}
+		return () => {
+			this.#daemonListeners.delete(listener);
+		};
 	}
 
 	get plaintext(): boolean {
@@ -333,6 +367,10 @@ export class HostClient implements SessionClient {
 			case "event": {
 				const record = asRecord(payload);
 				if (!record) return;
+				// Fan out to global-event subscribers first: session events and
+				// daemon events share this `kind`, and #applyEvent drops the
+				// types it does not model (stt.download* among them).
+				for (const listener of [...this.#daemonListeners]) listener(record);
 				this.#applyEvent(record);
 				break;
 			}

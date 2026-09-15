@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
+import { useArchivedSessions } from "../../lib/session-archive";
 
 /**
  * Multi-session workspace: a directory of session cards so remote guests can
@@ -37,22 +38,13 @@ export function WorkspaceView({
 	const [sidebarOpen, setSidebarOpen] = useState(true);
 	// Collapsed project groups (keyed by cwd; "" = no folder).
 	const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
-	// Archive (localStorage, same concept as the desktop GUI SessionSidebar).
-	const ARCHIVE_KEY = "musepi-collab-archived";
-	const [archived, setArchived] = useState<Set<string>>(() => {
-		try {
-			return new Set(JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]"));
-		} catch {
-			return new Set();
-		}
-	});
+	// Archive: the shared session-archive store, so the desktop GUI and this
+	// guest/mobile shell see ONE archive (they used to keep separate keys,
+	// `musepi-gui-archived` vs `musepi-collab-archived` — 2026-09-15).
+	const { ids: archived, toggle: toggleArchived } = useArchivedSessions();
 	const [archivedView, setArchivedView] = useState(false);
 	const toggleArchive = (id: string): void => {
-		const next = new Set(archived);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		setArchived(next);
-		localStorage.setItem(ARCHIVE_KEY, JSON.stringify([...next]));
+		toggleArchived(id);
 	};
 	const visibleSessions = useMemo(
 		() => (archivedView ? sessions : sessions.filter(s => !archived.has(s.id))),

@@ -152,7 +152,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 			return;
 		}
 		setLocalError(null);
-		connect(trimmed, name.trim() || t("guest"));
+		connect(trimmed, name.trim() || t("my phone"));
 	};
 
 	const skip = (): void => {
@@ -195,7 +195,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 
 	const onScanResult = (value: string): void => {
 		setScanning(false);
-		connect(value, name.trim() || t("guest"));
+		connect(value, name.trim() || t("my phone"));
 	};
 
 	const onScanCancel = (): void => {
@@ -216,7 +216,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 			const webLink = await resolvePairCodeOnLan(code, host);
 			localStorage.setItem(PAIR_HOST_KEY, host);
 			void secureSet(PAIR_HOST_KEY, host);
-			connect(webLink, name.trim() || t("guest"));
+			connect(webLink, name.trim() || t("my phone"));
 		} catch (err) {
 			setLocalError(err instanceof Error ? err.message : String(err));
 			haptic([20, 60, 20]);
@@ -463,7 +463,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									type="text"
 									value={name}
 									onChange={e => setName(e.target.value)}
-									placeholder={t("guest")}
+									placeholder={t("my phone")}
 									spellCheck={false}
 									autoComplete="off"
 									maxLength={32}

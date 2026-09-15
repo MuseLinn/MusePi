@@ -139,6 +139,19 @@ const DEV = !app.isPackaged;
 const DIST_DIR = path.resolve(__dirname, "..", "dist");
 const ICON_PATH = path.resolve(__dirname, "..", "build", "icon.png");
 
+// Dev data isolation (dsh-desktop parity; set by dev-desktop.mjs): point
+// userData at .desktop-build/development/ BEFORE anything resolves it —
+// requestSingleInstanceLock's lock file lives there, so this also gives the
+// dev instance its own lock and lets it run beside the user's real install.
+if (process.env.MUSEPI_GUI_USER_DATA) {
+	try {
+		fs.mkdirSync(process.env.MUSEPI_GUI_USER_DATA, { recursive: true });
+		app.setPath("userData", process.env.MUSEPI_GUI_USER_DATA);
+	} catch (err) {
+		console.error("[dev] failed to isolate userData:", err?.message ?? err);
+	}
+}
+
 /**
  * Windows 11 (build 10.0.22000+): native Mica/Acrylic window materials are
  * available via backgroundMaterial (DWM compositor). Windows 10 falls back
@@ -994,6 +1007,62 @@ function trayFetchState() {
 	traySend("tray.state", {});
 }
 
+// Request/reply on the same tray socket. `traySend` above is fire-and-forget
+// under the shared "tray" id (state pushes use it); the "always allow" write
+// below needs the answer (read-modify-write of the approval policy record), so
+// it takes a unique id and settles through this map. The onmessage handler
+// resolves pending ids first and only then treats "tray" frames as state.
+let trayRequestSeq = 0;
+const trayPending = new Map();
+
+function trayRequest(method, params, timeoutMs = 4000) {
+	if (!trayWs || trayWs.readyState !== 1 /* OPEN */) return Promise.resolve(null);
+	const id = `tray-r${++trayRequestSeq}`;
+	return new Promise((resolve) => {
+		const timer = setTimeout(() => {
+			trayPending.delete(id);
+			resolve(null);
+		}, timeoutMs);
+		trayPending.set(id, (result) => {
+			clearTimeout(timer);
+			resolve(result);
+		});
+		try {
+			trayWs.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+		} catch {
+			clearTimeout(timer);
+			trayPending.delete(id);
+			resolve(null);
+		}
+	});
+}
+
+/**
+ * Tray "always allow": persist `tools.approval.<tool> = "allow"` so the next
+ * call of the same tool skips the prompt. The approval wrapper reads the
+ * record live on every call (`wrapper.ts` `settings.get("tools.approval")`),
+ * so no relaunch is needed. Read-modify-write: `settings.set` replaces the
+ * whole record, so the other tools' policies must survive.
+ *
+ * Best-effort by design — a failure leaves the one-off approval that was
+ * already sent, which is strictly better than silently dropping the click.
+ */
+async function rememberToolApproval(tool) {
+	try {
+		const current = await trayRequest("settings.get", { keys: ["tools.approval"] });
+		const existing = current?.["tools.approval"];
+		const record = existing && typeof existing === "object" && !Array.isArray(existing) ? { ...existing } : {};
+		if (record[tool] === "allow") return;
+		record[tool] = "allow";
+		const res = await trayRequest("settings.set", { key: "tools.approval", value: record });
+		if (!res || res.error) {
+			console.error(`[tray] remember approval for ${tool} failed:`, res?.error ?? "no response");
+		}
+	} catch (err) {
+		console.error(`[tray] remember approval for ${tool} failed:`, err?.message ?? err);
+	}
+}
+
 // Shared action router for tray + self-drawn tray menu (win32): the
 // tray click, the native menu (mac/linux) and the frosted menu window
 // all land here so the two surfaces cannot drift apart.
@@ -1017,6 +1086,14 @@ function handleTrayAction(action) {
 					sessionId: action.sessionId,
 					requestId: action.id,
 				});
+				// "Always allow" additionally remembers the policy. Both tray
+				// surfaces ("始终允许" in tray.cjs, "always allow" in
+				// tray-menu-main.tsx) set `remember`; they must also send the
+				// tool name for the policy key. Previously the flag was
+				// silently dropped and the button behaved as "allow once".
+				if (action.approved === true && action.remember === true && typeof action.tool === "string" && action.tool) {
+					void rememberToolApproval(action.tool);
+				}
 			}
 			break;
 		case "new-session":
@@ -1087,6 +1164,12 @@ function ensureTray() {
 			trayWs.onmessage = (event) => {
 				try {
 					const frame = JSON.parse(event.data);
+					const settle = frame && frame.id ? trayPending.get(frame.id) : undefined;
+					if (settle) {
+						trayPending.delete(frame.id);
+						settle(frame.error ? null : (frame.result ?? null));
+						return;
+					}
 					if (frame && frame.id === "tray" && frame.result && typeof frame.result === "object") {
 						trayController.update(frame.result);
 					}

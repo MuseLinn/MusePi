@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { archiveSession, t } from "@musepi/guest-client";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
@@ -291,27 +291,13 @@ export function ScheduledTasksPage({
 	const remove = (id: string, cleanup: "none" | "archive" | "delete"): void => {
 		if (!rpc) return;
 		const task = deleteTarget ?? tasks.find(t => t.id === id);
-		// Archive is GUI-side (archived sessions live in localStorage);
-		// "delete" additionally tells the daemon to remove the sessions.
+		// Archive is GUI-side: archived sessions live in the shared
+		// session-archive store (guest-client), so the sidebar and the
+		// guest/mobile shell see the same archive as this cleanup does.
 		if (cleanup === "archive" && task) {
 			const ids = taskSessionIds(task);
-			if (ids.length > 0) {
-				try {
-					const raw = JSON.parse(localStorage.getItem("musepi-gui-archived") ?? "[]") as {
-						sessionId: string;
-						archivedAt: number;
-						cwd?: string;
-					}[];
-					for (const sid of ids) {
-						if (!raw.some(a => a.sessionId === sid)) {
-							raw.push({ sessionId: sid, archivedAt: Date.now(), cwd: task.cwd || undefined });
-						}
-					}
-					localStorage.setItem("musepi-gui-archived", JSON.stringify(raw));
-					window.dispatchEvent(new CustomEvent("musepi-gui-archived-changed"));
-				} catch {
-					// storage unavailable — keep the task delete going
-				}
+			for (const sid of ids) {
+				archiveSession(sid, task.cwd || undefined);
 			}
 		}
 		void rpc.request("cron.delete", cleanup === "delete" ? { id, cleanup } : { id }).then(res => {

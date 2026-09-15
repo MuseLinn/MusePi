@@ -23,6 +23,7 @@ import type {
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
+import { parseConfiguredThinkingLevel } from "../thinking.js";
 import {
 	computeNextRun,
 	loadCronRuns,
@@ -394,6 +395,9 @@ export class CollabHost {
 			case "prompt":
 				this.#handlePrompt(frame.text, frame.images, fromPeer);
 				break;
+			case "config":
+				this.#handleConfig(frame.thinkingLevel, fromPeer);
+				break;
 			case "abort":
 				this.#handleAbort(fromPeer);
 				break;
@@ -635,8 +639,22 @@ export class CollabHost {
 		this.#pendingUi.get(reqId)?.settle({ kind: "answered", value });
 	}
 
-	#handlePrompt(text: string, images: ImageContent[] | undefined, fromPeer: number): void {
+	/** Guest session-config: currently the thinking ladder only. The level is
+	 *  sanitized through the same parser the CLI flag uses, applied to the
+	 *  live session, and the change reaches every peer through the debounced
+	 *  `state` broadcast (thinkingLevel is part of SessionState). */
+	#handleConfig(thinkingLevel: string | undefined, fromPeer: number): void {
 		const peer = this.#peers.get(fromPeer);
+		if (!peer?.canWrite) {
+			this.#rejectReadOnly("configuring the session", fromPeer);
+			return;
+		}
+		const level = parseConfiguredThinkingLevel(thinkingLevel);
+		this.#ctx.session.setThinkingLevel(level);
+		this.#scheduleStateBroadcast();
+	}
+
+	#handlePrompt(text: string, images: ImageContent[] | undefined, fromPeer: number): void {		const peer = this.#peers.get(fromPeer);
 		if (!peer?.canWrite) {
 			this.#rejectReadOnly("prompting", fromPeer);
 			return;

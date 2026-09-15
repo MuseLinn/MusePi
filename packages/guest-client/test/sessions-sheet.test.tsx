@@ -5,6 +5,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SessionsSheet } from "../src/components/shell/SessionsSheet";
+import type { SessionClient } from "../src/lib/client";
 
 // The closing-stage assertions below need a real effect-driven render
 // (bun:test has no DOM), so register happy-dom globally for this file.
@@ -30,8 +31,22 @@ const SESSIONS: WorkspaceSessionInfo[] = [
 
 function render(open: boolean): string {
 	return renderToStaticMarkup(
-		<SessionsSheet sessions={SESSIONS} currentId="s1" onSelect={() => {}} open={open} onClose={() => {}} />,
+		<SessionsSheet
+			client={fakeClient()}
+			sessions={SESSIONS}
+			currentId="s1"
+			onSelect={() => {}}
+			open={open}
+			onClose={() => {}}
+		/>,
 	);
+}
+
+/** Minimal SessionClient stand-in — swipe actions only ever call `rpc`. */
+function fakeClient(): SessionClient {
+	return {
+		rpc: async () => ({ ok: true }),
+	} as unknown as SessionClient;
 }
 
 describe("SessionsSheet always-mounted close path", () => {
@@ -60,6 +75,7 @@ describe("SessionsSheet always-mounted close path", () => {
 			await act(async () => {
 				root?.render(
 					createElement(SessionsSheet, {
+						client: fakeClient(),
 						sessions: SESSIONS,
 						currentId: "s1",
 						onSelect: () => {},

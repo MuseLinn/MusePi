@@ -57,6 +57,15 @@ import "./styles/gui-taskcenter.css";
 
 const DEFAULT_URL = "ws://127.0.0.1:8300";
 
+/**
+ * Splash → recovery affordance threshold (dsh-desktop immediate-window
+ * parity, 2026-09-15): a boot attempt still in flight after this long grows
+ * a diagnosis line + retry on the splash instead of holding it forever. A
+ * cold start pays daemon spawn + the ~8s prewarm wait, so the bar must sit
+ * ABOVE the worst legitimate cold boot, not above the animation.
+ */
+const BOOT_STALL_MS = 20_000;
+
 /** Transient RPC-error banner: how long a failure stays visible before
  *  auto-dismissing. Reconnect and the next successful session op clear it
  *  sooner. Long enough to read, short enough that a stale failure never
@@ -384,6 +393,23 @@ function AppInner(): ReactNode {
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
+	// Boot stall recovery (dsh-desktop immediate-window parity): the splash
+	// must never be a dead end. When a boot attempt exceeds BOOT_STALL_MS the
+	// splash grows a diagnosis line + retry, while `booting` itself stays in
+	// charge of the transition (a slow but eventually-successful boot still
+	// lands in the app — the stall block only ADDS affordance, it never gates).
+	// bootSeq re-arms the timer on every attempt: `booting` alone cannot, since
+	// a retry keeps it true and would never retrigger this effect.
+	const [bootStalled, setBootStalled] = useState(false);
+	const [bootSeq, setBootSeq] = useState(0);
+	useEffect(() => {
+		if (!booting) {
+			setBootStalled(false);
+			return;
+		}
+		const timer = setTimeout(() => setBootStalled(true), BOOT_STALL_MS);
+		return () => clearTimeout(timer);
+	}, [booting, bootSeq]);
 	// Session-open loading overlay (React-Bits-style skeleton): armed by
 	// openSession with a 250ms flicker threshold, cleared when the store
 	// lands (or the open fails). MUST sit above the booting/connect early
@@ -1124,6 +1150,7 @@ function AppInner(): ReactNode {
 	// fails does the error page (with manual entry as advanced option) appear.
 	const boot = useCallback(async (): Promise<void> => {
 		setBooting(true);
+		setBootSeq(seq => seq + 1); // re-arms the boot-stall timer (see bootStalled)
 		setConnectError(null);
 		// Splash hold: the entrance animation (logo settle 620ms + wordmark
 		// blur-in ~330ms ≈ 950ms) should always be seen, and a COLD start
@@ -2472,6 +2499,17 @@ function AppInner(): ReactNode {
 							shineColor="var(--color-accent)"
 						/>
 					</div>
+					{/* Boot stall recovery (dsh-desktop parity): appears only after
+					 * BOOT_STALL_MS of an in-flight attempt — a slow boot still
+					 * lands in the app; this adds an exit, it never gates one. */}
+					{bootStalled && (
+						<div className="gui-splash-stall">
+							<p className="gui-splash-stall-text">{t("boot is taking longer than usual")}</p>
+							<button className="gui-btn gui-btn-primary" type="button" onClick={() => void boot()}>
+								{t("retry")}
+							</button>
+						</div>
+					)}
 				</div>
 			</div>
 		);

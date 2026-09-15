@@ -1,8 +1,9 @@
 import type { WorkspaceSessionInfo } from "@musepi/pi-wire";
 import {
 	ArrowLeft,
+	AudioLines,
 	CalendarClock,
-	Folder,
+	FolderGit2,
 	LayoutDashboard,
 	LogOut,
 	MessageSquare,
@@ -23,7 +24,7 @@ import { SessionsSheet } from "./SessionsSheet";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Guest side panels reachable from the header nav. */
-export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench";
+export type GuestPanel = "board" | "scheduled" | "files" | "marketplace" | "workbench" | "voice";
 
 export interface HeaderBarProps {
 	client: SessionClient;
@@ -50,9 +51,10 @@ export interface HeaderBarProps {
 const PANEL_BUTTONS: ReadonlyArray<{ panel: GuestPanel; icon: ReactNode; title: TranslationKey }> = [
 	{ panel: "board", icon: <LayoutDashboard size={14} />, title: "board" },
 	{ panel: "scheduled", icon: <CalendarClock size={14} />, title: "scheduled tasks" },
-	{ panel: "files", icon: <Folder size={14} />, title: "files" },
+	{ panel: "files", icon: <FolderGit2 size={14} />, title: "workspace" },
 	{ panel: "marketplace", icon: <Package size={14} />, title: "marketplace" },
 	{ panel: "workbench", icon: <PanelRight size={14} />, title: "workbench" },
+	{ panel: "voice", icon: <AudioLines size={14} />, title: "voice" },
 ];
 
 export function HeaderBar({
@@ -264,6 +266,7 @@ export function HeaderBar({
 			</div>
 			{sessions != null && (
 				<SessionsSheet
+					client={client}
 					sessions={sessions}
 					currentId={focusedSessionId}
 					onSelect={onSelectSession}

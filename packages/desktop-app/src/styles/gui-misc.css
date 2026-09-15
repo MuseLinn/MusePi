@@ -346,7 +346,7 @@
 	background: oklch(0.66 0.13 160);
 }
 .gui-obo-accent-swatch[data-accent="brand"] {
-	background: oklch(0.72 0.16 162);
+	background: oklch(0.773 0.1538 163);
 }
 /* Feature bullets under promo-step bodies. */
 .gui-obo-features {

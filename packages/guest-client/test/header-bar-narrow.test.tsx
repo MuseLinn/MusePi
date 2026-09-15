@@ -61,7 +61,7 @@ describe("HeaderBar narrow-phone panel collapse (≤520px)", () => {
 		// Four panel entries render as separate icon buttons (each with a title).
 		expect(html).toContain('title="Board"');
 		expect(html).toContain('title="Task Center"');
-		expect(html).toContain('title="Files"');
+		expect(html).toContain('title="Workspace"');
 		expect(html).toContain('title="Workbench"');
 		// No collapsed menu.
 		expect(html).not.toContain("sh-panel-menu-pop");

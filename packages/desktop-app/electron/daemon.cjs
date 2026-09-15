@@ -19,7 +19,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 
-const SOCKET_DIR = path.join(os.tmpdir(), "musepi-daemon");
+// Socket/port discovery dir. MUSEPI_DAEMON_DIR (dev-desktop data isolation)
+// keeps a dev GUI's ws.port discovery away from the user's running daemon —
+// the daemon (coding-agent server.ts) honors the same variable when writing.
+const SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
 const PORT_FILE = path.join(SOCKET_DIR, "ws.port");
 const WEB_PORT_FILE = path.join(SOCKET_DIR, "web.port");
 const CLIENT_PID_FILE = path.join(SOCKET_DIR, "client.pid");

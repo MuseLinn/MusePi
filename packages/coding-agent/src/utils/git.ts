@@ -1937,11 +1937,19 @@ export const worktree = {
 		cwd: string,
 		worktreePath: string,
 		refName: string,
-		options: { detach?: boolean; signal?: AbortSignal } = {},
+		options: { detach?: boolean; createBranch?: boolean; startPoint?: string; signal?: AbortSignal } = {},
 	): Promise<void> {
 		const args = ["worktree", "add"];
 		if (options.detach) args.push("--detach");
-		args.push(worktreePath, refName);
+		// `-b <name> <path> <start-point>`: the new branch and the ref it starts
+		// from are different strings, so a branch-creating add must NOT reuse
+		// refName as the start point (that would try to check out a branch that
+		// does not exist yet).
+		if (options.createBranch) {
+			args.push("-b", refName, worktreePath, options.startPoint ?? "HEAD");
+		} else {
+			args.push(worktreePath, refName);
+		}
 		await runEffect(cwd, args, { signal: options.signal });
 	},
 

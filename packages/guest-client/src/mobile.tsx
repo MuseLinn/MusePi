@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app";
+import { DotMatrixMark } from "./components/shell/DotMatrixMark";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/mobile.css";
@@ -106,23 +107,23 @@ void setupAndroidBackHandler();
 void setupDeepLinkHandler();
 void setupNotificationTapHandler();
 
-/** Launch splash — brief brand animation before the connect guide. The
- *  spring curve mirrors the shell tokens; clicking skips straight in. */
+/** Launch splash — the brand dot-matrix mark breathes/flows for a beat
+ *  before the connect guide; tapping (or waiting) skips straight in. The
+ *  spring curve mirrors the shell tokens. */
 function BootSplash({ onDone }: { onDone: () => void }): React.JSX.Element {
 	const [leaving, setLeaving] = useState(false);
 	useEffect(() => {
 		const timer = setTimeout(() => {
 			setLeaving(true);
 			setTimeout(onDone, 260);
-		}, 900);
+		}, 1400);
 		return () => clearTimeout(timer);
 	}, [onDone]);
 	return (
 		<div className={`sh-boot-splash${leaving ? " sh-boot-splash--leave" : ""}`} onClick={onDone} role="presentation">
-			<div className="sh-boot-splash-mark">
-				<span className="sh-boot-splash-pi">π</span>
+			<div className="sh-boot-splash-dots">
+				<DotMatrixMark text="MusePi" fontSize={48} gridGap={6} dotRadius={1.6} />
 			</div>
-			<div className="sh-boot-splash-word">MusePi</div>
 		</div>
 	);
 }

@@ -115,3 +115,7 @@ packages/desktop-app/vendor/
 
 # WorkBuddy agent session state (memory, outputs) — never committed
 .workbuddy/
+
+# Dev desktop data isolation (dev-desktop.mjs): isolated daemon home, socket
+# dir and Electron userData for `bun run desktop:dev` — never committed.
+packages/desktop-app/.desktop-build/
