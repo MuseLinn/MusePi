@@ -95,7 +95,14 @@ packages/coding-agent/bench/boot-baseline.json
 /bazel-oh-my-pi
 /bazel-musepi-omp
 /.bazelrc.user
-packages/desktop-app/release/
+# Build output — but the NSIS include is a SOURCE file that electron-builder
+# resolves from this path (packages/desktop-app/package.json "include"), so it
+# must stay tracked. The pattern is `release/*` plus a negation rather than
+# `release/`: git never descends into an excluded directory, so a negation
+# could not re-include a file inside one. (This file was silently dropped from
+# the index during a history rebuild and broke the Windows release job.)
+packages/desktop-app/release/*
+!packages/desktop-app/release/ensure-shortcuts.nsh
 packages/desktop-app/dist/
 
 # macOS haptic helper (compiled from electron/haptic-helper.m by build:haptic)
