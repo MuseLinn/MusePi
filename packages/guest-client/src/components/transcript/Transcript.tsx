@@ -63,21 +63,13 @@ export {
 
 import "./transcript.css";
 
-// Windowed rendering for long sessions: only the tail WINDOW_INITIAL
-// entries mount as DOM rows; older entries collapse into a top spacer
-// with a "show earlier" affordance. An IntersectionObserver sentinel in
-// the spacer extends the window by WINDOW_STEP as the user scrolls up,
-// so mounted rows stay bounded (~100) no matter how long the session
-// gets — without this a 1k-message session kept 1k rows mounted and
-// re-rendered the whole list on every snapshot.
-const WINDOW_INITIAL = 80;
-const WINDOW_STEP = 80;
-const WINDOW_JUMP = 500;
-
-// Initial row-height estimate for the folded spacer. Refined by
-// measurement once rows mount, but the STARTING value matters: too low
-// and the spacer underrepresents the folded region — the scrollbar
-// compresses and expanding the window shifts content (jump). Real
+// NO windowed truncation. Rows used to be capped to the tail WINDOW_INITIAL
+// with the rest collapsed into a top spacer behind a 显示更早消息 button: opening
+// a session then showed its latest messages above a BLANK gap until the button
+// was clicked, even though every row was already in memory (user report). The
+// transcript now renders every loaded entry; the top sentinel below only drives
+// the daemon-side paging of genuinely older history.
+// Initial row-height estimate (kept for the read-time spinner metrics). Real
 // message rows (text + padding) run 60-100px, so 64 is closer than 44.
 const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
 
@@ -1158,8 +1150,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const rootRef = useRef<HTMLDivElement | null>(null);
 	const lockRef = useRef(true);
 	const prevLenRef = useRef(entries.length);
-	const [visibleCount, setVisibleCount] = useState(WINDOW_INITIAL);
-	const [avgRowH, setAvgRowH] = useState(AVG_ROW_HEIGHT);
+	// Every loaded entry renders (see the header note on truncation).
+	const visibleCount = entries.length;
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 
 	// The scrolling host differs per consumer: the desktop GUI scrolls an
@@ -1172,6 +1164,20 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		scrollerRef.current = rootRef.current?.closest<HTMLElement>(".gui-transcript") ?? rootRef.current;
 	}, []);
 
+	// In-flight round boundary: entries after the last user message while the
+	// agent works. That span is never suppressed — watching the agent work IS
+	// the transcript (user: 执行过程中活动应该都可见, 结束后才折叠进摘要行).
+	// Without a user message there is no round to exempt, so the display
+	// setting applies as before (the parity test pins that case).
+	const liveFromIdx = useMemo(() => {
+		if (!working) return Number.MAX_SAFE_INTEGER;
+		for (let i = entries.length - 1; i >= 0; i--) {
+			const e = entries[i];
+			if (e?.type === "message" && e.message.role === "user") return i + 1;
+		}
+		return Number.MAX_SAFE_INTEGER;
+	}, [entries, working]);
+
 	// Session switch → land on the latest message (see `sessionKey`).
 	useEffect(() => {
 		void sessionKey;
@@ -1181,7 +1187,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionKey]);
 
-	const hidden = Math.max(0, entries.length - visibleCount);
+	// No hidden prefix: kept as a constant so the fold/jump paths stay simple.
+	const hidden = 0;
 	const slice = hidden > 0 ? entries.slice(hidden) : entries;
 
 	// Completed-round folds (craft-agents TurnCard parity): completed rounds
@@ -1211,21 +1218,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const scroller = el.closest<HTMLElement>(".gui-transcript") ?? undefined;
 		const obs = new IntersectionObserver(
 			([entry]) => {
-				if (entry?.isIntersecting && !lockRef.current) {
-					if (hidden > 0) {
-						setVisibleCount(c => Math.min(entries.length, c + WINDOW_STEP));
-						// Game-style streaming prefetch: when the expanded
-						// window is within two pages of its top edge, start
-						// paging the next older chunk BEFORE the user hits
-						// the end — by the time they scroll there, the rows
-						// are already mounted (no blank-then-pop).
-						if (hidden <= WINDOW_STEP * 2) onLoadOlder?.();
-					} else {
-						// Fully expanded and still scrolling up — page the
-						// next chunk. The caller guards concurrency.
-						onLoadOlder?.();
-					}
-				}
+				// Reaching the top pages the next older chunk; the caller guards
+				// concurrency. (This used to also grow the render window first.)
+				if (entry?.isIntersecting && !lockRef.current) onLoadOlder?.();
 			},
 			// Large lookahead: expansion must finish BEFORE the user reaches
 			// the new rows. At 1200px headroom a fast scroll (~1500px/s) has
@@ -1235,7 +1230,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		);
 		obs.observe(el);
 		return () => obs.disconnect();
-	}, [hidden > 0, entries.length, onLoadOlder]);
+	}, [entries.length, onLoadOlder]);
 
 	// Jump requests (message tree / trajectory / canvas / branch bar): the
 	// target row may live in the folded window or behind the compaction
@@ -1243,45 +1238,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// expansion a jump into folded history just hit the top spacer and the
 	// target stayed unmounted (user: 滚动和导航条、轨迹跳转不能合理处理).
 	const lastJumpNonceRef = useRef(0);
-	const pendingJumpRef = useRef<string | null>(null);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
 		const idx = entries.findIndex(e => e.timestamp === jumpRequest.timestamp);
 		if (idx < 0) return;
 		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
-		if (idx < hidden) {
-			// Keep ~20 rows of context above the target so it doesn't land
-			// flush against the "show earlier" spacer.
-			setVisibleCount(entries.length - Math.max(0, idx - 20));
-			pendingJumpRef.current = jumpRequest.timestamp;
-		} else {
-			jumpFlashRow(rootRef.current, jumpRequest.timestamp);
-		}
-	}, [jumpRequest, entries, hidden, visibleCount, folding, firstCompactionIdx]);
-
-	// A jump that expanded the window: scroll once the target row mounts.
-	useLayoutEffect(() => {
-		const ts = pendingJumpRef.current;
-		if (!ts) return;
-		const root = rootRef.current;
-		if (!root?.querySelector(`[title="${CSS.escape(ts)}"]`)) return;
-		pendingJumpRef.current = null;
-		lockRef.current = false; // jumped away from the tail — release follow
-		jumpFlashRow(root, ts);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [visibleCount, entries.length]);
-
-	// Refine the spacer's row-height estimate from the mounted rows.
-	useLayoutEffect(() => {
-		const root = rootRef.current;
-		if (!root || slice.length === 0) return;
-		const sentinelH = sentinelRef.current?.getBoundingClientRect().height ?? 0;
-		const perRow = (root.scrollHeight - sentinelH) / slice.length;
-		if (Number.isFinite(perRow) && perRow > 8 && Math.abs(perRow - avgRowH) > 4) {
-			setAvgRowH(perRow);
-		}
-	}, [slice.length]);
+		// Every row is mounted now, so a jump never has to open a window first:
+		// expand the compaction fold if needed and scroll straight to the row.
+		jumpFlashRow(rootRef.current, jumpRequest.timestamp);
+	}, [jumpRequest, entries, folding, firstCompactionIdx]);
 
 	// Follow the tail while bottom-locked; releasing/re-arming happens in
 	// the scroll listener below (moved off the JSX onScroll attribute —
@@ -1370,26 +1336,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				stream === null &&
 				!working &&
 				(emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>)}
-			{hidden > 0 && (
-				<div ref={sentinelRef} className="tr-window-more" style={{ height: Math.round(hidden * avgRowH) }}>
-					<button
-						type="button"
-						className="tr-window-more-btn"
-						onClick={() => setVisibleCount(c => Math.min(entries.length, c + WINDOW_JUMP))}
-					>
-						{t("show earlier messages")} ({hidden})
-					</button>
-					{loadingOlder && (
-						<div className="tr-window-loading" aria-hidden="true">
-							<span className="tr-window-loading-bar" />
-						</div>
-					)}
-				</div>
-			)}
-			{hidden === 0 && loadingOlder && (
-				// Fully expanded + paging: the spacer collapsed, but the fetch
-				// is in flight — keep a slim loading line so the top edge
-				// reads as "more is coming" instead of an empty end.
+			{/* Slim sentinel at the top of the list: paging trigger only, never
+			 *  a spacer — hidden history is not a thing any more. */}
+			<div ref={sentinelRef} className="tr-window-top" aria-hidden="true" />
+			{loadingOlder && (
 				<div className="tr-window-loading" aria-hidden="true">
 					<span className="tr-window-loading-bar" />
 				</div>
@@ -1466,11 +1416,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								onRevert={onRevert}
 							/>
 						) : null;
-					// 隐藏工具活动 hides the process EXCEPT behind an expanded 活动
-					// row: the user asking to expand it outranks the setting, and
-					// outside a fold (the live round) the suppression still applies
-					// exactly as before.
-					const rowHideTools = hideToolActivity && !foldOpen;
+					// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
+					// 活动 row — asking to expand it outranks the setting — and
+					// (b) during the live round, where the activity is the point.
+					// Completed rounds are what the fold + the setting govern.
+					const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
 					const row = (
 						<Fragment key={entry.id}>
 							{foldHeader}

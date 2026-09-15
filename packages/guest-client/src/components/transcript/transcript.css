@@ -25,28 +25,12 @@
  * height is an estimate (set inline from measured avg row height), so
  * the scrollbar is approximate across the collapsed band — it converges
  * on real content once the window extends. */
-.tr-window-more {
-	display: flex;
-	align-items: flex-start;
-	justify-content: center;
-	overflow: hidden;
-}
-.tr-window-more-btn {
-	margin-top: 10px;
-	padding: 3px 10px;
-	border: 0.5px solid color-mix(in oklab, var(--fg-faint) 30%, transparent);
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--fg) 4%, transparent);
-	color: var(--fg-faint);
-	font-family: var(--font-ui);
-	font-size: var(--ui-font-size-xs);
-	cursor: pointer;
-	white-space: nowrap;
-	transition: background 120ms ease, color 120ms ease;
-}
-.tr-window-more-btn:hover {
-	background: color-mix(in oklab, var(--fg) 9%, transparent);
-	color: var(--fg);
+/* Paging sentinel at the top of the row list. It replaces the old
+ * .tr-window-more spacer + 显示更早消息 button, which left a blank gap above the
+ * tail of a freshly opened session (every row was already in memory). Keep it
+ * non-zero so the IntersectionObserver has a real box to intersect. */
+.tr-window-top {
+	height: 1px;
 }
 
 /* ---- rows ---- */
@@ -3103,6 +3087,10 @@ a.tr-tool-search-title:hover {
  * is an ACTIVITY SUMMARY — 活动 + 更改了 N 文件 · 探索了代码库 · 运行了 N
  * 条命令 — not a duration (the frozen 已工作 timer already lives under the
  * final reply). */
+/* Colours go through the shared `--color-*` tokens first: this sheet is used
+ * by the mobile/web shell (where `--fg` / `--bg-overlay` exist) AND by the
+ * desktop GUI (where they do not — the hardcoded #222 fallback painted a dark
+ * row into a light transcript). */
 .tr-round-fold {
 	display: flex;
 	align-items: center;
@@ -3112,16 +3100,16 @@ a.tr-tool-search-title:hover {
 	padding: 7px 12px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
 	border-radius: 10px;
-	background: color-mix(in oklab, var(--bg-overlay, #222) 55%, transparent);
-	color: var(--text-muted, var(--fg-muted));
+	background: color-mix(in oklab, var(--color-surface-raised, var(--bg-overlay, #222)) 80%, transparent);
+	color: var(--color-text-muted, var(--text-muted, var(--fg-muted)));
 	font-size: 12px;
 	text-align: left;
 	cursor: pointer;
 	transition: background 140ms ease, border-color 140ms ease;
 }
 .tr-round-fold:hover {
-	background: color-mix(in oklab, var(--bg-overlay, #222) 72%, transparent);
-	border-color: color-mix(in oklab, var(--accent, #d9a441) 45%, transparent);
+	background: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 10%, var(--color-surface-raised, var(--bg-overlay, #222)));
+	border-color: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 45%, transparent);
 }
 .tr-round-fold-chevron {
 	flex-shrink: 0;
@@ -3134,12 +3122,12 @@ a.tr-tool-search-title:hover {
 .tr-round-fold-label {
 	flex-shrink: 0;
 	font-weight: 650;
-	color: var(--text, var(--fg));
+	color: var(--color-text, var(--text, var(--fg)));
 }
 /* Inter-segment dot for the 更改 · 探索 · 命令 chain. */
 .tr-round-fold-sep {
 	flex-shrink: 0;
-	color: var(--text-faint, var(--fg-faint));
+	color: var(--color-text-faint, var(--text-faint, var(--fg-faint)));
 }
 .tr-round-fold-preview {
 	min-width: 0;
