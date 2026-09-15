@@ -226,6 +226,16 @@ export interface TranscriptProps {
 	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
 }
 
+/** Clock stamp for a branch-switch row. Sibling attempts of one prompt share
+ *  a label ("谢谢" ×4), so the switcher needs a second axis to tell them
+ *  apart — the entry's own local time does exactly that. */
+function branchClock(ts: unknown): string | undefined {
+	if (typeof ts !== "string" || ts.length === 0) return undefined;
+	const d = new Date(ts);
+	if (Number.isNaN(d.getTime())) return undefined;
+	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
 /** Layer-1 branch bar: rendered under a message that has MULTIPLE
  *  children in the entry tree. Collapsed: a thin divider line with the
  *  branch count; expanded (click): sibling switch buttons. The active
@@ -237,7 +247,7 @@ export function BranchBar({
 	onPick,
 }: {
 	count: number;
-	childrenLabels: Array<{ id: string; label: string }>;
+	childrenLabels: Array<{ id: string; label: string; time?: string }>;
 	activeChildId?: string | null;
 	onPick(childId: string): void;
 }): ReactNode {
@@ -265,6 +275,7 @@ export function BranchBar({
 						>
 							<GitFork size={11} />
 							<span className="tr-branch-item-text">{c.label || "…"}</span>
+							{c.time && <span className="tr-branch-item-time">{c.time}</span>}
 							{c.id === activeChildId && <span className="tr-branch-active-dot" aria-hidden />}
 						</button>
 					))}
@@ -1483,6 +1494,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
 							id: c.id,
 							label: entryLabelOf(c),
+							time: branchClock((c as { timestamp?: unknown }).timestamp),
 						}));
 						return (
 							<div key={entry.id} className="tr-branch-wrap">

@@ -2891,6 +2891,16 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* Sibling attempts of one prompt carry the same text ("谢谢" ×6) — the clock
+ * is the only thing that tells them apart in the switcher. */
+.tr-branch-item-time {
+	flex-shrink: 0;
+	font-family: var(--font-mono);
+	font-size: 10px;
+	color: var(--color-text-faint);
+	font-variant-numeric: tabular-nums;
+}
 .tr-branch-active-dot {
 	width: 5px;
 	height: 5px;

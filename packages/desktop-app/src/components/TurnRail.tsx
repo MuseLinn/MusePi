@@ -7,6 +7,9 @@ interface TurnMarker {
 	/** Content-space top of the user row (valid as the transcript scrolls). */
 	top: number;
 	summary: string;
+	/** Entry id — present only in the canvas-mode (data-driven) source, where
+	 *  a click hands the node id back to the caller instead of scrolling. */
+	id?: string;
 }
 
 export type TurnRailSide = "right" | "left";
@@ -69,10 +72,21 @@ function loadPref(key: string, fallback: string): string {
 export function TurnRail({
 	rootRef,
 	entryCount,
+	nodeTurns,
+	activeTurnIndex,
+	onSelectNode,
 }: {
 	rootRef: RefObject<HTMLDivElement | null>;
 	/** Re-measure when the transcript grows (entries append). */
 	entryCount: number;
+	/** Canvas mode: the transcript scroller is NOT mounted there, so the rail
+	 *  is data-driven instead of DOM-measured — one marker per USER message on
+	 *  the active path, in path order. Supplying it disables measurement and
+	 *  the scroll-spy, and clicks go through onSelectNode. */
+	nodeTurns?: readonly { id: string; summary: string }[];
+	/** Index into nodeTurns of the turn the active leaf belongs to. */
+	activeTurnIndex?: number | null;
+	onSelectNode?(nodeId: string): void;
 }): ReactNode {
 	const [turns, setTurns] = useState<TurnMarker[]>([]);
 	const [hover, setHover] = useState<number | null>(null);
@@ -129,6 +143,19 @@ export function TurnRail({
 		setActive(idx >= 0 ? idx : null);
 	}, [rootRef]);
 
+	// Canvas-mode source: no transcript DOM to measure, so the markers ARE the
+	// active-path user messages and the active tick comes from the leaf. This
+	// is what made the rail a dead control in the map — it kept measuring a
+	// scroller that does not exist there, so it showed nothing and every click
+	// was a no-op.
+	useEffect(() => {
+		if (!nodeTurns) return;
+		const measured = nodeTurns.map((t, i) => ({ top: i, summary: t.summary, id: t.id }));
+		turnsRef.current = measured;
+		setTurns(measured);
+		setActive(activeTurnIndex ?? null);
+	}, [nodeTurns, activeTurnIndex]);
+
 	// Re-measure turn positions (entryCount is only a re-measure trigger;
 	// the measurement is stateless). Tops are content-space values: the
 	// viewport-relative top plus the current scroll offset, so they stay
@@ -138,6 +165,7 @@ export function TurnRail({
 	// alone leaves the rail stale mid-stream.
 	useEffect(() => {
 		void entryCount;
+		if (nodeTurns) return; // data-driven (canvas mode): nothing to measure
 		const root = rootRef.current;
 		if (!root) return;
 		const measure = (): void => {
@@ -167,7 +195,7 @@ export function TurnRail({
 			mo.disconnect();
 			if (timer !== 0) cancelAnimationFrame(timer);
 		};
-	}, [rootRef, entryCount, computeActive]);
+	}, [rootRef, entryCount, computeActive, nodeTurns]);
 
 	// Scroll-spy updates, rAF-throttled (the latch releases inside the
 	// frame so a burst of scroll events collapses into one compute).
@@ -248,9 +276,15 @@ export function TurnRail({
 		(index: number): void => {
 			const m = turnsRef.current[index];
 			if (!m) return;
+			// Canvas mode: the caller owns the move (switch the node + recenter
+			// the map); there is no transcript to scroll.
+			if (m.id && onSelectNode) {
+				onSelectNode(m.id);
+				return;
+			}
 			rootRef.current?.scrollTo({ top: Math.max(0, m.top - 12), behavior: "smooth" });
 		},
-		[rootRef],
+		[rootRef, onSelectNode],
 	);
 
 	const relativeFromY = useCallback((clientY: number, el: HTMLElement): number | null => {

@@ -1021,6 +1021,35 @@ export function ChatView({
 		}
 		return path;
 	}, [effectiveLeaf, snap?.entries]);
+	// Canvas-mode rail source: the map has no transcript scroller (the rail's
+	// normal source is DOM measurement), so it is driven by the ACTIVE PATH —
+	// one marker per user message on it, active = the turn the leaf sits in —
+	// and a click switches the node instead of scrolling.
+	const canvasRail = useMemo(() => {
+		const byId = new Map<string, { content?: unknown }>();
+		for (const e of snap?.entries ?? []) {
+			const id = (e as { id?: unknown }).id;
+			const m = (e as { message?: { content?: unknown } }).message;
+			if (typeof id === "string" && m) byId.set(id, m);
+		}
+		const turns: { id: string; summary: string }[] = [];
+		let activeIdx: number | null = null;
+		for (const p of leafPath) {
+			if (p.kind !== "user") continue;
+			const content = byId.get(p.id)?.content;
+			const blocks = Array.isArray(content) ? (content as Array<{ type?: string; text?: string }>) : [];
+			const text =
+				typeof content === "string"
+					? content
+					: blocks
+							.filter(b => b?.type === "text")
+							.map(b => b.text ?? "")
+							.join(" ");
+			turns.push({ id: p.id, summary: text.replace(/\s+/g, " ").trim().slice(0, 90) });
+			activeIdx = turns.length - 1;
+		}
+		return { turns, activeIdx };
+	}, [snap?.entries, leafPath]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
 	// Transcript input: the visible conversation is the ACTIVE PATH only —
@@ -1807,8 +1836,17 @@ export function ChatView({
 										</div>
 										{/* Turn-position rail (openchamber PromptNavigatorRail
 										 * parity): a marker per user message — hover previews
-										 * the prompt, click jumps to that turn. */}
-										<TurnRail rootRef={transcriptRef} entryCount={snap?.entries.length ?? 0} />
+										 * the prompt, click jumps to that turn. In canvas mode
+										 * the transcript scroller does not exist, so the rail
+										 * switches to the active-path source below and clicks
+										 * hand the node over to the map. */}
+										<TurnRail
+											rootRef={transcriptRef}
+											entryCount={snap?.entries.length ?? 0}
+											nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
+											activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
+											onSelectNode={switchToNode}
+										/>
 									</div>
 									<div
 										ref={composerWrapRef}

@@ -381,6 +381,22 @@ export function SessionTreeCanvas({
 		[nodes],
 	);
 
+	// Follow EXTERNAL node switches. The leaf moves from outside this component
+	// all the time — the branch bar, the prompt rail, a breadcrumb, the map
+	// jump — and without this the map stayed put, so "navigate to that message"
+	// changed the data and the transcript but moved nothing on screen. The
+	// first observed leaf is the mount value (fitView already owned that
+	// framing), so only later changes recenter.
+	const followedLeafRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!leafId) return;
+		const previous = followedLeafRef.current;
+		followedLeafRef.current = leafId;
+		if (previous === null || previous === leafId) return;
+		if (!nodes.some(n => n.node.id === leafId)) return;
+		centerOnNode(leafId);
+	}, [leafId, nodes, centerOnNode]);
+
 	// 搜索匹配集 + 首个匹配定位。
 	const searchMatchArray = useMemo(() => {
 		if (!searchQuery.trim()) return [] as CanvasNode[];
@@ -405,10 +421,19 @@ export function SessionTreeCanvas({
 	);
 
 	const onWheel = useCallback((e: WheelEvent) => {
-		// 原生非 passive 监听(preventDefault 才生效,阻止画布下方页面滚动)。
-		e.preventDefault();
+		// Native non-passive listener (so preventDefault can stop the page
+		// scrolling behind the canvas).
 		const wrap = wrapRef.current;
 		if (!wrap) return;
+		// Scrollable content INSIDE the canvas owns its wheel: the focused
+		// node's card (long thinking text / tool output) and any overflowing
+		// node body must scroll, not zoom the map. Walking the ancestors up to
+		// the wrap means new scrollable surfaces are covered automatically.
+		for (let el = e.target as HTMLElement | null; el && el !== wrap; el = el.parentElement) {
+			const overflowY = getComputedStyle(el).overflowY;
+			if (/(auto|scroll|overlay)/.test(overflowY) && el.scrollHeight > el.clientHeight + 1) return;
+		}
+		e.preventDefault();
 		const rect = wrap.getBoundingClientRect();
 		const mx = e.clientX - rect.left;
 		const my = e.clientY - rect.top;
