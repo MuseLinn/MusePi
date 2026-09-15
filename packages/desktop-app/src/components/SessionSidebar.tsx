@@ -258,6 +258,12 @@ export function SessionSidebar({
 		}
 	});
 	const [sessionCtx, setSessionCtx] = useState<{ id: string; x: number; y: number } | null>(null);
+	// Stable row callback: session rows are memoized, so an inline arrow at each
+	// call site would defeat the memo on every sidebar render (5s status poll,
+	// streaming updates, pinned/tag edits) and re-render the whole list.
+	const openSessionCtx = useCallback((id: string, x: number, y: number): void => {
+		setSessionCtx({ id, x, y });
+	}, []);
 	const [groupCtx, setGroupCtx] = useState<{ index: number; x: number; y: number } | null>(null);
 	const [projectCtx, setProjectCtx] = useState<{ path: string; x: number; y: number } | null>(null);
 	// Paused sessions (per-session freeze) — rendered as a pause chip on rows.
@@ -425,7 +431,7 @@ export function SessionSidebar({
 				nodes={cronNodes}
 				selectedId={selectedId}
 				onSelect={onSelect}
-				onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+				onContextMenu={openSessionCtx}
 				pausedIds={pausedIds}
 				workingIds={workingIds}
 				statuses={statuses}
@@ -851,7 +857,7 @@ export function SessionSidebar({
 													nodes={pinnedNodes}
 													selectedId={selectedId}
 													onSelect={onSelect}
-													onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+													onContextMenu={openSessionCtx}
 													pausedIds={pausedIds}
 													workingIds={workingIds}
 													statuses={statuses}
@@ -865,7 +871,7 @@ export function SessionSidebar({
 											nodes={regularNodes}
 											selectedId={selectedId}
 											onSelect={onSelect}
-											onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+											onContextMenu={openSessionCtx}
 											unread={unread}
 											pausedIds={pausedIds}
 											workingIds={workingIds}
@@ -916,7 +922,7 @@ export function SessionSidebar({
 															nodes={pinnedNodes}
 															selectedId={selectedId}
 															onSelect={onSelect}
-															onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+															onContextMenu={openSessionCtx}
 															pausedIds={pausedIds}
 															workingIds={workingIds}
 															statuses={statuses}
@@ -991,7 +997,7 @@ export function SessionSidebar({
 																		nodes={list}
 																		selectedId={selectedId}
 																		onSelect={onSelect}
-																		onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+																		onContextMenu={openSessionCtx}
 																		unread={unread}
 																		pausedIds={pausedIds}
 																		workingIds={workingIds}
@@ -1017,7 +1023,7 @@ export function SessionSidebar({
 															nodes={noFolder}
 															selectedId={selectedId}
 															onSelect={onSelect}
-															onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+															onContextMenu={openSessionCtx}
 															unread={unread}
 															pausedIds={pausedIds}
 															workingIds={workingIds}
@@ -1043,7 +1049,7 @@ export function SessionSidebar({
 											nodes={pinnedNodes}
 											selectedId={selectedId}
 											onSelect={onSelect}
-											onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+											onContextMenu={openSessionCtx}
 											pausedIds={pausedIds}
 											workingIds={workingIds}
 											statuses={statuses}
@@ -1063,7 +1069,7 @@ export function SessionSidebar({
 									nodes={searchedNodes.filter(n => !pinned.includes(n.entry.id))}
 									selectedId={selectedId}
 									onSelect={onSelect}
-									onSessionContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+									onSessionContextMenu={openSessionCtx}
 									onAddGroup={() =>
 										setGroups(g => [
 											...g,
@@ -1121,7 +1127,7 @@ export function SessionSidebar({
 									nodes={regularNodes}
 									selectedId={selectedId}
 									onSelect={onSelect}
-									onContextMenu={(id, x, y) => setSessionCtx({ id, x, y })}
+									onContextMenu={openSessionCtx}
 									unread={unread}
 									pausedIds={pausedIds}
 									workingIds={workingIds}
