@@ -280,7 +280,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
- "synstructure",
+ "synstructure 0.13.2",
 ]
 
 [[package]]
@@ -5028,7 +5028,7 @@ dependencies = [
 
 [[package]]
 name = "pi-ast"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "anyhow",
  "ast-grep-core",
@@ -5098,7 +5098,7 @@ dependencies = [
 
 [[package]]
 name = "pi-builtins"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "ansi-width",
  "anyhow",
@@ -5183,7 +5183,7 @@ dependencies = [
 
 [[package]]
 name = "pi-iso"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "async-trait",
  "libc",
@@ -5195,7 +5195,7 @@ dependencies = [
 
 [[package]]
 name = "pi-natives"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5269,7 +5269,7 @@ dependencies = [
 
 [[package]]
 name = "pi-shell"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "anyhow",
  "brush-core",
@@ -5297,7 +5297,7 @@ dependencies = [
 
 [[package]]
 name = "pi-voice"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "audiopus_sys",
  "bytes",
@@ -5312,7 +5312,7 @@ dependencies = [
 
 [[package]]
 name = "pi-walker"
-version = "0.4.28"
+version = "0.4.29"
 dependencies = [
  "dashmap",
  "globset",
@@ -6579,6 +6579,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "synstructure"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -9036,14 +9047,14 @@ dependencies = [
 
 [[package]]
 name = "yoke-derive"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
+checksum = "33811428bee40dbceb6d545e95754741d17a6aef9a4849f0fd62e2ba4f412a78"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
- "synstructure",
+ "syn 3.0.5",
+ "synstructure 0.14.0",
 ]
 
 [[package]]
@@ -9190,14 +9201,14 @@ dependencies = [
 
 [[package]]
 name = "zerofrom-derive"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1"
+checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
- "synstructure",
+ "syn 3.0.5",
+ "synstructure 0.14.0",
 ]
 
 [[package]]

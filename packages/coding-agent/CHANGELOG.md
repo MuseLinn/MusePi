@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.29] - 2026-09-15
+
 ### Added
 
 - GUI Settings → 语音: speech model cards (label + SoTA/轻量 badge, on-disk size, accuracy/speed bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
