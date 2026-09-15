@@ -34,7 +34,7 @@ import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
-import { buildRoundFolds } from "./round-collapse";
+import { buildRoundFolds, type RoundFold } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import {
 	AdvisorBlock,
@@ -1385,14 +1385,18 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					// a header once the round is done and isn't the live tail. The
 					// header renders ABOVE the final assistant message; the in-span
 					// working rows render only while that fold is expanded.
-					const inFoldIdx = folds.findIndex(f => absIdx > f.startIdx && absIdx < f.finalIdx);
-					const inFold = inFoldIdx >= 0;
-					const fold = inFold ? folds[inFoldIdx] : undefined;
 					// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
 					// process so nothing becomes unreachable.
 					const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
-					const foldOpen = fold !== undefined && roundFoldOpen.has(fold.startIdx) !== foldsExpanded;
-					if (inFold && !foldOpen) return null;
+					const foldOpenOf = (f: RoundFold): boolean => roundFoldOpen.has(f.startIdx) !== foldsExpanded;
+					// Hidden span = the turn's process rows, EXCEPT its reply (the
+					// reply always reads) — see pushFold/isInsideFold.
+					const hidingFold = folds.find(f => absIdx > f.startIdx && absIdx < f.endIdx && absIdx !== f.finalIdx);
+					// Header row = the turn's first content row, so expanding reads
+					// 活动 → process → reply (openchamber's order).
+					const headerFold = folds.find(f => absIdx === f.headerIdx);
+					const foldOpen = hidingFold ? foldOpenOf(hidingFold) : headerFold ? foldOpenOf(headerFold) : false;
+					if (hidingFold && !foldOpen) return null;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.
@@ -1400,16 +1404,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const streamingLast = working && isTail && lastAssistantInRound;
 					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
 					const foldHeader =
-						isAssistantMessage && fold !== undefined && absIdx === fold.finalIdx ? (
+						headerFold !== undefined ? (
 							<RoundFoldHeader
-								key={`round-fold-${fold.startIdx}`}
-								fold={fold}
-								open={foldOpen}
+								key={`round-fold-${headerFold.startIdx}`}
+								fold={headerFold}
+								open={foldOpenOf(headerFold)}
 								onToggle={() =>
 									setRoundFoldOpen(prev => {
 										const next = new Set(prev);
-										if (next.has(fold.startIdx)) next.delete(fold.startIdx);
-										else next.add(fold.startIdx);
+										const start = headerFold.startIdx;
+										if (next.has(start)) next.delete(start);
+										else next.add(start);
 										return next;
 									})
 								}

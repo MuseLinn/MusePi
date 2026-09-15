@@ -19,9 +19,20 @@ import { isRecord } from "../../tool-render/util";
 export interface RoundFold {
 	/** Absolute entry index of the round's user message. */
 	startIdx: number;
-	/** Absolute entry index of the final assistant message (the foldable
-	 *  span is `(startIdx, finalIdx)`). */
+	/** Absolute entry index of the final assistant message — the turn's visible
+	 *  reply, kept out of the hidden span so it always reads. */
 	finalIdx: number;
+	/** Absolute index of the LAST row belonging to this turn. openchamber's
+	 *  model is `turn = user message + its direct assistant children`, i.e. the
+	 *  turn runs to the NEXT user message — command/tool rows emitted AFTER the
+	 *  final reply are part of it. Spanning only up to the reply left such
+	 *  turns with an empty span, so no 活动 row was produced at all
+	 *  (user: 单轮消息还是没有显示摘要行折叠块). */
+	endIdx: number;
+	/** Absolute index the 活动 header renders at: the turn's FIRST content row,
+	 *  so expanding yields 活动 → process → reply (openchamber's order; it hangs
+	 *  the header on the turn's first assistant message). */
+	headerIdx: number;
 	/** Tool-call count inside the foldable span (assistant toolCall blocks). */
 	toolCount: number;
 	/** Bash-command count inside the foldable span (bashExecution rows). */
@@ -174,21 +185,16 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
 		if (e?.type !== "message") continue;
 		const m = e.message;
 		if (m.role === "user") {
-			// Close out the previous round at its last assistant reply — the
-			// span (prevUser, this user) folds as one if it has any work.
-			if (userIdx >= 0 && i - userIdx > 1 && lastAssistantIdx(entries, userIdx, i) > userIdx + 1) {
-				pushFold(folds, entries, userIdx, userId, lastAssistantIdx(entries, userIdx, i));
-			}
+			// Close the previous turn: it runs up to the row BEFORE this prompt.
+			if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1);
 			userIdx = i;
 			userId = e.id;
 		}
 	}
 	// Trailing round: everything after the last user message. While working
-	// it is the in-flight turn (exempt); once idle, its last assistant reply
-	// closes it and it folds like the rest.
+	// it is the in-flight turn (exempt); once idle it folds like the rest.
 	if (!working && userIdx >= 0) {
-		const lastAssistant = lastAssistantIdx(entries, userIdx, entries.length);
-		if (lastAssistant > userIdx + 1) pushFold(folds, entries, userIdx, userId, lastAssistant);
+		pushFold(folds, entries, userIdx, userId, entries.length - 1);
 	}
 	return folds;
 }
@@ -207,13 +213,25 @@ function pushFold(
 	entries: readonly SessionEntry[],
 	startIdx: number,
 	userId: string | null,
-	finalIdx: number,
+	endIdx: number,
 ): void {
-	const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(entries, startIdx + 1, finalIdx);
-	if (toolCount === 0 && commandCount === 0) return; // no activity — nothing to summarize
+	// The turn must have something between the prompt and its end.
+	if (endIdx <= startIdx + 1) return;
+	const replyIdx = lastAssistantIdx(entries, startIdx, endIdx + 1);
+	if (replyIdx <= startIdx) return; // no reply → no anchor for the header
+	// Work is counted over the WHOLE turn (process rows may sit after the
+	// reply — that ordering used to count as "no activity" and produced no row).
+	const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(
+		entries,
+		startIdx + 1,
+		endIdx + 1,
+	);
+	if (toolCount === 0 && commandCount === 0) return; // text-only round
 	folds.push({
 		startIdx,
-		finalIdx,
+		endIdx,
+		finalIdx: replyIdx,
+		headerIdx: startIdx + 1,
 		toolCount,
 		commandCount,
 		exploreCount,
@@ -227,5 +245,7 @@ function pushFold(
 
 /** True when the entry at `idx` belongs inside a fold's foldable span. */
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
-	return folds.some(f => idx > f.startIdx && idx < f.finalIdx);
+	// The reply row is never hidden (see finalIdx): expanding a fold must not
+	// swallow the answer the turn produced.
+	return folds.some(f => idx > f.startIdx && idx < f.endIdx && idx !== f.finalIdx);
 }
