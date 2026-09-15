@@ -50,6 +50,17 @@ function formatBytes(n: number): string {
  * outcomes ride the global event stream (`stt.downloadProgress` /
  * `stt.downloadDone` / `stt.downloadError`), so state survives page
  * remounts and stays in sync across every open window. */
+/** Per-tier presentation metadata (openchamber model-card parity): accuracy /
+ *  speed are 0-100 bars derived from the Open ASR Leaderboard positioning in
+ *  `stt/models.ts`; size mirrors that file's sizeHint. Local UI data only — the
+ *  wire row stays { key, label, cached }. */
+const TIER_META: Record<string, { accuracy: number; speed: number; size: string; badge?: string }> = {
+	fast: { accuracy: 35, speed: 92, size: "~60 MB", badge: "轻量" },
+	balanced: { accuracy: 55, speed: 72, size: "~190 MB" },
+	turbo: { accuracy: 85, speed: 45, size: "~600 MB" },
+	parakeet: { accuracy: 97, speed: 96, size: "~680 MB", badge: "SoTA" },
+};
+
 function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [models, setModels] = useState<SttModelRow[] | null>(null);
 	const [active, setActive] = useState<ActiveDownload | null>(null);
@@ -143,29 +154,44 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			) : (
 				models.map(m => {
 					const isActive = active?.modelKey === m.key;
+					const meta = TIER_META[m.key] ?? { accuracy: 50, speed: 50, size: "" };
 					return (
-						<div key={m.key} className="gui-settings-row">
-							<div>
-								<div className="gui-settings-row-label">{m.label}</div>
+						<div key={m.key} className="gui-stt-card">
+							<div className="gui-stt-card-main">
+								<div className="gui-stt-card-head">
+									<span className="gui-stt-card-label">{m.label}</span>
+									{meta.badge && <span className="gui-stt-card-badge">{meta.badge}</span>}
+									<span className="gui-stt-card-size">{meta.size}</span>
+									{m.cached && <span className="gui-stt-card-ready">✓ {t("model ready offline")}</span>}
+								</div>
+								<div className="gui-stt-card-bars">
+									<span className="gui-stt-card-metric">
+										<span className="gui-stt-card-metric-label">{t("accuracy")}</span>
+										<span className="gui-stt-card-bar">
+											<span className="gui-stt-card-bar-fill" style={{ width: `${meta.accuracy}%` }} />
+										</span>
+									</span>
+									<span className="gui-stt-card-metric">
+										<span className="gui-stt-card-metric-label">{t("speed")}</span>
+										<span className="gui-stt-card-bar">
+											<span
+												className="gui-stt-card-bar-fill gui-stt-card-bar-fill--speed"
+												style={{ width: `${meta.speed}%` }}
+											/>
+										</span>
+									</span>
+								</div>
 								{isActive ? (
-									<div className="gui-settings-row-desc" aria-live="polite">
-										{active.label} {formatBytes(active.loaded)}
-										{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+									<div className="gui-stt-card-progress" aria-live="polite">
+										<progress max={100} value={active.percent} aria-label={`${m.label} ${active.percent}%`} />
+										<span>
+											{active.percent}% · {active.label} {formatBytes(active.loaded)}
+											{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+										</span>
 									</div>
-								) : m.cached ? (
-									<div className="gui-settings-row-desc">{t("model ready offline")}</div>
 								) : null}
 							</div>
-							{isActive ? (
-								<div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-									<progress max={100} value={active.percent} aria-label={`${m.label} ${active.percent}%`} />
-									<span>{active.percent}%</span>
-								</div>
-							) : m.cached ? (
-								<span title={t("model ready offline")} aria-label={t("model ready offline")}>
-									✓
-								</span>
-							) : (
+							{!isActive && !m.cached ? (
 								<button
 									type="button"
 									className="gui-btn"
@@ -175,7 +201,7 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									<Icon name="download" className="h-3.5 w-3.5" />
 									{t("download")}
 								</button>
-							)}
+							) : null}
 						</div>
 					);
 				})

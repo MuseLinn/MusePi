@@ -4712,3 +4712,99 @@ body.gui-resizing {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
 	color: var(--color-accent);
 }
+
+/* ---- 语音 → 语音识别模型卡（openchamber model-card parity）---- */
+.gui-stt-card {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: color-mix(in oklab, var(--color-surface) 92%, transparent);
+}
+.gui-stt-card + .gui-stt-card {
+	margin-top: 8px;
+}
+.gui-stt-card-main {
+	min-width: 0;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.gui-stt-card-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.gui-stt-card-label {
+	font-weight: 600;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-stt-card-badge {
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+	font-size: 10.5px;
+}
+.gui-stt-card-size {
+	flex-shrink: 0;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-family: var(--font-mono, monospace);
+}
+.gui-stt-card-ready {
+	flex-shrink: 0;
+	color: var(--color-success, var(--color-accent));
+	font-size: 11px;
+}
+.gui-stt-card-bars {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.gui-stt-card-metric {
+	display: grid;
+	grid-template-columns: 44px 1fr;
+	align-items: center;
+	gap: 8px;
+}
+.gui-stt-card-metric-label {
+	color: var(--color-text-muted);
+	font-size: 11px;
+}
+.gui-stt-card-bar {
+	display: block;
+	height: 4px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	overflow: hidden;
+}
+.gui-stt-card-bar-fill {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--color-accent);
+}
+.gui-stt-card-bar-fill--speed {
+	background: var(--color-text-muted);
+}
+.gui-stt-card-progress {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--color-text-muted);
+	font-size: 11px;
+}
+.gui-stt-card-progress progress {
+	flex: 1;
+	height: 4px;
+}

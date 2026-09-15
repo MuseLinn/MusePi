@@ -810,6 +810,8 @@ export const settings = {
 	voice: "Voice",
 	"voice input language": "Input language",
 	"voice input device": "Input device",
+	accuracy: "Accuracy",
+	speed: "Speed",
 	"voice input device hint": "Microphone used for dictation and the voice-input test.",
 	"system default": "System default",
 	"voice input vad": "Stop on silence",
