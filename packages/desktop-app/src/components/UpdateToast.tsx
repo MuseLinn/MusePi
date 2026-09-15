@@ -1,6 +1,7 @@
 import { Markdown, t } from "@musepi/guest-client";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
+	downloadInstaller,
 	downloadUpdate,
 	getUpdateNotes,
 	installUpdate,
@@ -124,6 +125,8 @@ export function UpdateToast(): ReactNode {
 	const downloading = state?.status === "downloading";
 	const downloaded = state?.status === "downloaded";
 	const failed = state?.status === "error";
+	/** The downloaded artifact is a standalone installer, not an OTA package. */
+	const installerDone = downloaded && state?.mode === "installer";
 	const progress = state?.progress;
 	const percent = Math.min(100, Math.round(progress?.percent ?? 0));
 	const total = progress?.total ?? 0;
@@ -149,7 +152,19 @@ export function UpdateToast(): ReactNode {
 			setInstallError(null);
 		}, EXIT_MS);
 	};
+	// Manual-install build: an ad-hoc signed macOS app can never install an
+	// OTA package (Squirrel validates against the running app's cdhash), so the
+	// primary action downloads the release installer and opens it instead of
+	// offering a restart that would silently do nothing.
+	const manualOnly = notice.otaCapable === false && !!notice.url;
 	const startDownload = (): void => {
+		setInstallError(null);
+		if (manualOnly) {
+			void downloadInstaller(notice.url ?? "").then(res => {
+				if (!res.ok) setInstallError(res.error ?? t("update download failed"));
+			});
+			return;
+		}
 		void downloadUpdate();
 	};
 	const restart = (): void => {
@@ -224,16 +239,21 @@ export function UpdateToast(): ReactNode {
 					<span>{t("download complete")}</span>
 				</div>
 			)}
+			{installerDone && <div className="gui-update-toast-hint">{t("installer ready hint")}</div>}
 			{failed && <div className="gui-update-toast-error">{state?.error ?? t("update download failed")}</div>}
 			{installError && <div className="gui-update-toast-error">{installError}</div>}
 			<div className="gui-update-toast-actions">
 				{downloaded ? (
-					<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
-						{t("restart now")}
-					</button>
+					// An installer download has nothing to restart into — the
+					// user finishes it in Finder.
+					installerDone ? null : (
+						<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
+							{t("restart now")}
+						</button>
+					)
 				) : preparing || downloading ? null : (
 					<button type="button" className="gui-btn gui-btn-primary" onClick={startDownload}>
-						{t("download update")}
+						{t(manualOnly ? "download installer" : "download update")}
 					</button>
 				)}
 				{failed ? (

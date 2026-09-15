@@ -3,7 +3,13 @@ import { ToolView } from "@musepi/guest-client/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/guest-client/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { checkAppUpdates, downloadUpdate, openExternalUrl, type UpdateCheckResult } from "../../lib/electron";
+import {
+	checkAppUpdates,
+	downloadInstaller,
+	downloadUpdate,
+	openExternalUrl,
+	type UpdateCheckResult,
+} from "../../lib/electron";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import {
@@ -513,13 +519,23 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 									) : null}
 									<div className="gui-update-result-actions">
 										{/* In-app download: the UpdateToast revives on the
-										 * preparing push, so progress shows there. */}
+										 * preparing push, so progress shows there.
+										 * On builds that cannot OTA (ad-hoc signed macOS)
+										 * the primary action grabs the installer instead. */}
 										<button
 											type="button"
 											className="gui-btn gui-btn-primary"
-											onClick={() => void downloadUpdate()}
+											onClick={() =>
+												void (updateResult.otaCapable === false && updateResult.url
+													? downloadInstaller(updateResult.url)
+													: downloadUpdate())
+											}
 										>
-											{t("download update")}
+											{t(
+												updateResult.otaCapable === false && updateResult.url
+													? "download installer"
+													: "download update",
+											)}
 										</button>
 										<button
 											type="button"

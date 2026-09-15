@@ -356,6 +356,8 @@ export const settings = {
 	"esc to clear or close": "Esc to clear, again to close",
 	"no matching sessions": "No matching sessions",
 	"press enter to search": "Press Enter to search",
+	"download installer": "Download installer",
+	"installer ready hint": "The installer is downloaded and open — drag MusePi to Applications to replace it",
 	recent: "Recent",
 	clear: "Clear",
 	"no matching providers": "No matching providers",

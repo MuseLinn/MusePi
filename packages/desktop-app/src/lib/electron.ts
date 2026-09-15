@@ -23,6 +23,10 @@ export interface ElectronAPI {
 	getUpdateState(): Promise<UpdaterState | null>;
 	/** Download the detected update (progress via onUpdateState). */
 	downloadUpdate(): Promise<boolean>;
+	/** Manual install fallback: download + open the release installer. */
+	downloadInstaller(url: string): Promise<UpdateInstallerResult>;
+	/** Whether this build can install through electron-updater at all. */
+	updaterOtaCapable(): Promise<boolean>;
 	/** Release notes from update-manifest.json (main-process fetch, cached). */
 	getUpdateNotes(): Promise<string | null>;
 	/** Kill daemon + quitAndInstall (restart into the new version). */
@@ -38,9 +42,13 @@ export interface ElectronAPI {
  *  electron-updater emits no download-progress yet. */
 export interface UpdaterState {
 	status: "idle" | "checking" | "preparing" | "downloading" | "downloaded" | "error";
+	/** "ota" = Squirrel/electron-updater; "installer" = manual dmg/exe download. */
+	mode?: "ota" | "installer";
 	version?: string | null;
 	progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number };
 	error?: string | null;
+	/** Absolute path of a downloaded manual installer (mode "installer"). */
+	installerPath?: string | null;
 }
 
 /** An app the current folder can be opened with (openchamber open-in). */
@@ -60,9 +68,23 @@ export interface UpdateCheckResult {
 	latest?: string;
 	/** Direct download URL from the release manifest (may be empty). */
 	url?: string;
+	/**
+	 * false ⇒ this build cannot install an update through electron-updater
+	 * (macOS ad-hoc signature: Squirrel's cdhash requirement never matches a
+	 * freshly built update). The UI must offer the manual installer instead.
+	 */
+	otaCapable?: boolean;
 	notes?: string | null;
 	error?: string;
 	reason?: string;
+}
+
+/** Result of the manual installer download. */
+export interface UpdateInstallerResult {
+	ok: boolean;
+	/** Absolute path of the downloaded installer (when ok). */
+	path?: string;
+	error?: string;
 }
 
 /** Result of updater-install: ok=true → app is restarting into the new
@@ -200,6 +222,30 @@ export function downloadUpdate(): Promise<boolean> {
 	if (!isElectron()) return Promise.resolve(false);
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.downloadUpdate();
+}
+
+/**
+ * Manual install fallback: download the release installer (dmg on macOS) into
+ * the Downloads folder and open it. Used when the running build cannot OTA —
+ * an ad-hoc signed macOS app's designated requirement is a cdhash that no
+ * freshly built update matches, so Squirrel always refuses to install.
+ */
+export function downloadInstaller(url: string): Promise<UpdateInstallerResult> {
+	if (!isElectron() || !url) return Promise.resolve({ ok: false, error: "not in electron" });
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	return electronAPI.downloadInstaller(url);
+}
+
+/** Whether this build can install updates through electron-updater at all. */
+export async function updaterOtaCapable(): Promise<boolean> {
+	if (!isElectron()) return false;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		return (await electronAPI.updaterOtaCapable()) === true;
+	} catch {
+		// Unknown ⇒ keep the OTA path (never remove a working button on a probe failure).
+		return true;
+	}
 }
 
 /** Release notes from update-manifest.json (cached main-process fetch; null

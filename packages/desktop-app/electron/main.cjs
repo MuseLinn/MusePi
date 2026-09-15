@@ -22,9 +22,12 @@ const { createTrayController } = require("./tray.cjs");
 const {
 	checkForUpdates,
 	downloadUpdate,
+	downloadInstaller,
 	quitAndInstall,
 	fetchManifestNotes,
 	wireRenderer,
+	otaCapable,
+	log: logUpdater,
 	state: updaterState,
 } = require("./updater.cjs");
 const { ManagedBrowserController } = require("./managed-browser.cjs");
@@ -2251,6 +2254,12 @@ ipcMain.handle("updater-check", () => checkForUpdates());
 ipcMain.handle("updater-state", () => ({ ...updaterState }));
 ipcMain.handle("updater-download", () => downloadUpdate());
 ipcMain.handle("updater-notes", () => fetchManifestNotes());
+/** Manual install fallback: download the release installer (dmg/exe) to
+ *  Downloads and open it. Used when the running build cannot OTA (ad-hoc
+ *  signed macOS app — Squirrel's cdhash requirement never matches). */
+ipcMain.handle("updater-download-installer", (_event, url) => downloadInstaller(url));
+/** Whether electron-updater/Squirrel can install on this build at all. */
+ipcMain.handle("updater-ota-capable", () => otaCapable());
 ipcMain.handle("updater-install", async () => {
 	// Kill the daemon sidecar BEFORE quitting so the installed app can
 	// start its own fresh daemon (openchamber killSidecar parity). The
@@ -2476,6 +2485,9 @@ ipcMain.handle("gui-highlight", async (_event, code, lang, colors) => {
 const UPDATE_POLL_MS = 60 * 60 * 1000; // 1h
 if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
 	app.whenReady().then(() => {
+		// One line per launch is enough to answer "did the check even run, and
+		// can this build install an update?" without attaching a debugger.
+		logUpdater("startup: version", app.getVersion(), "otaCapable", otaCapable(), "signing", require("./updater.cjs").detectSigning());
 		const poll = () => {
 			checkForUpdates()
 				.then(result => {

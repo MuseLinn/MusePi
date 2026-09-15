@@ -4575,6 +4575,12 @@
 	font-weight: 600;
 	color: var(--color-success);
 }
+/* Manual install: what to do with the installer the app just opened. */
+.gui-update-toast-hint {
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--color-text-faint);
+}
 /* OTA: download error (updater messages can embed long URLs — clamp) */
 .gui-update-toast-error {
 	display: -webkit-box;

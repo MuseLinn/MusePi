@@ -11,14 +11,54 @@
 "use strict";
 
 const { autoUpdater } = require("electron-updater");
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, session, shell } = require("electron");
+const fs = require("node:fs");
+const nodePath = require("node:path");
+
+// ── File log ─────────────────────────────────────────────────────────────
+// Everything the updater does also lands in ~/Library/Logs/MusePi/updater.log
+// (Windows: %USERPROFILE%\AppData\Roaming\MusePi\logs). Console output is
+// invisible once the app is packaged, and a Squirrel install failure happens
+// in a child process AFTER the app quit — without a file log this whole class
+// of "restarted, still the old version" bug is undiagnosable.
+const LOG_DIR = (() => {
+	try {
+		return app.getPath("logs");
+	} catch {
+		return "";
+	}
+})();
+let logStream = null;
+
+/** Append one line to updater.log (best effort — never throws into the flow). */
+function log(...args) {
+	const line = `[${new Date().toISOString()}] ${args
+		.map(a => (typeof a === "string" ? a : (() => { try { return JSON.stringify(a); } catch { return String(a); } })()))
+		.join(" ")}\n`;
+	try {
+		if (LOG_DIR) {
+			if (!logStream) {
+				fs.mkdirSync(LOG_DIR, { recursive: true });
+				logStream = fs.createWriteStream(nodePath.join(LOG_DIR, "updater.log"), { flags: "a" });
+			}
+			logStream.write(line);
+		}
+	} catch {
+		// logging must never break the update flow
+	}
+	console.log("[updater]", ...args);
+}
 
 /** Current user-facing state (mirrored to the renderer via updater-state). */
 const state = {
 	status: "idle", // idle | checking | preparing | downloading | downloaded | error
+	/** "ota" = electron-updater/Squirrel path; "installer" = manual dmg/exe. */
+	mode: "ota",
 	version: null,
 	progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 },
 	error: null,
+	/** Path of a downloaded manual installer (mode "installer"). */
+	installerPath: null,
 };
 
 /** Release notes asset on the latest GitHub release (same redirect the daemon
@@ -46,27 +86,86 @@ function manifestUrl() {
  * Success is cached (shared by the enriched checkForUpdates result and the
  * updater-notes IPC); failures are not, so an offline first ask retries.
  */
-let notesCache;
-let notesInFlight = null;
+let manifestCache;
+let manifestInFlight = null;
 
-function fetchManifestNotes() {
-	if (notesCache !== undefined) return Promise.resolve(notesCache);
-	if (!notesInFlight) {
-		notesInFlight = (async () => {
+/** Fetch and cache the release manifest ({notes, url}). */
+function fetchManifest() {
+	if (manifestCache !== undefined) return Promise.resolve(manifestCache);
+	if (!manifestInFlight) {
+		manifestInFlight = (async () => {
 			try {
 				const res = await fetch(manifestUrl(), { signal: AbortSignal.timeout(8_000) });
-				if (!res.ok) return null;
+				if (!res.ok) {
+					log("manifest fetch failed:", res.status);
+					return null;
+				}
 				const data = await res.json();
-				notesCache = typeof data?.notes === "string" && data.notes ? data.notes : null;
-				return notesCache;
-			} catch {
+				manifestCache = {
+					notes: typeof data?.notes === "string" && data.notes ? data.notes : null,
+					// Direct installer URL (dmg on macOS) — the manual install path
+					// uses it when OTA cannot work.
+					url: typeof data?.url === "string" && data.url ? data.url : "",
+				};
+				return manifestCache;
+			} catch (err) {
+				log("manifest fetch error:", err?.message ?? err);
 				return null;
 			} finally {
-				notesInFlight = null;
+				manifestInFlight = null;
 			}
 		})();
 	}
-	return notesInFlight;
+	return manifestInFlight;
+}
+
+function fetchManifestNotes() {
+	return fetchManifest().then(meta => meta?.notes ?? null);
+}
+
+/** Cached manifest metadata ({notes, url}) — resolves null when unavailable. */
+function fetchManifestMeta() {
+	return fetchManifest();
+}
+
+// ── Signing probe (macOS OTA capability) ─────────────────────────────────
+// Squirrel.Mac validates an update against the RUNNING app's designated
+// requirement. An ad-hoc signed app has a cdhash-only requirement, which no
+// freshly built update can ever match, so OTA is impossible — the download
+// and the quit-and-install silently do nothing. Detect that once and let the
+// renderer offer the manual installer instead of a button that cannot work.
+let signingCache = null;
+
+function detectSigning() {
+	if (signingCache) return signingCache;
+	if (process.platform !== "darwin") {
+		signingCache = "n/a";
+		return signingCache;
+	}
+	try {
+		const exeDir = nodePath.dirname(app.getPath("exe")); // …/Contents/MacOS
+		const bundlePath = nodePath.resolve(exeDir, "..", ".."); // …/MusePi.app
+		const res = require("node:child_process").spawnSync("/usr/bin/codesign", ["-d", "-r-", bundlePath], {
+			encoding: "utf8",
+		});
+		const out = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+		if (/cdhash/.test(out)) signingCache = "adhoc";
+		else if (/anchor apple/.test(out)) signingCache = "developer-id";
+		else if (out.trim()) signingCache = "self-signed";
+		else signingCache = "unknown";
+		log("signing probe:", signingCache, "path:", bundlePath);
+	} catch (err) {
+		log("signing probe failed:", err?.message ?? err);
+		signingCache = "unknown";
+	}
+	return signingCache;
+}
+
+/** True when electron-updater/Squirrel can actually install an update here. */
+function otaCapable() {
+	// "unknown" keeps the previous behaviour (attempt OTA) so a probe failure
+	// never removes the working path on Windows/Linux.
+	return detectSigning() !== "adhoc";
 }
 
 /** Base-version compare ("0.4.16" vs "0.4.9"); prerelease suffix stripped —
@@ -127,8 +226,10 @@ autoUpdater.on("checking-for-update", () => {
 
 autoUpdater.on("update-available", (info) => {
 	state.status = "idle";
+	state.mode = "ota";
 	state.version = info.version;
 	state.error = null;
+	log("update available:", info.version);
 	emitState();
 	emitUpdateAvailable(info.version);
 });
@@ -142,6 +243,7 @@ autoUpdater.on("update-not-available", () => {
 autoUpdater.on("error", (err) => {
 	state.status = "error";
 	state.error = err?.message ?? String(err);
+	log("autoUpdater error:", state.error);
 	setTaskbarProgress(-2);
 	emitState();
 });
@@ -160,9 +262,11 @@ autoUpdater.on("download-progress", (progress) => {
 
 autoUpdater.on("update-downloaded", (info) => {
 	state.status = "downloaded";
+	state.mode = "ota";
 	state.version = info.version;
 	state.progress = { percent: 100, transferred: 0, total: 0 };
 	state.error = null;
+	log("update downloaded:", info.version);
 	// Clear the taskbar progress once the download lands; the install
 	// phase is signaled by the app quitting, not a bar.
 	setTaskbarProgress(-2);
@@ -193,26 +297,34 @@ function emitUpdateAvailable(version) {
  * machine; the renderer listens to updater-state for live updates.
  */
 async function checkForUpdates() {
-	// Kick the notes fetch beside the feed check so the enriched result rarely
+	// Kick the manifest fetch beside the feed check so the enriched result rarely
 	// waits on a second round-trip (and the toast's updater-notes ask hits cache).
-	const notesPromise = fetchManifestNotes();
+	const manifestPromise = fetchManifest();
 	try {
 		const result = await autoUpdater.checkForUpdates();
 		const latest = result?.updateInfo?.version ?? null;
 		const current = app.getVersion();
-		const notes = await notesPromise;
+		const meta = await manifestPromise;
+		const newer = isNewerVersion(latest, current);
+		log("check: current", current, "latest", latest, "newer", newer, "otaCapable", otaCapable());
 		return {
 			enabled: true,
-			newer: isNewerVersion(latest, current),
+			newer,
 			latest,
 			current,
-			notes,
+			notes: meta?.notes ?? null,
+			/** Manual-install fallback (dmg/exe) from the release manifest. */
+			url: meta?.url ?? "",
+			/** false ⇒ Squirrel cannot install here (ad-hoc signed macOS build);
+			 *  the renderer must offer the manual installer instead. */
+			otaCapable: otaCapable(),
 		};
 	} catch (err) {
 		state.status = "error";
 		state.error = err?.message ?? String(err);
+		log("check failed:", state.error);
 		emitState();
-		return { enabled: true, error: state.error };
+		return { enabled: true, error: state.error, url: "", otaCapable: otaCapable() };
 	}
 }
 
@@ -228,6 +340,7 @@ async function downloadUpdate() {
 	// fires once bytes flow (latest.yml + release-asset TTFB can take seconds),
 	// so the renderer shows a preparing bar instead of a dead button.
 	state.status = "preparing";
+	state.mode = "ota";
 	state.error = null;
 	setTaskbarProgress(-1); // indeterminate until the first byte flows
 	emitState();
@@ -241,6 +354,102 @@ async function downloadUpdate() {
 		emitState();
 		return false;
 	}
+}
+
+/**
+ * Download the standalone installer (dmg on macOS, exe on Windows) into the
+ * user's Downloads folder and open it. This is the fallback for builds where
+ * Squirrel cannot install anything — an ad-hoc signed macOS app has a
+ * cdhash-only designated requirement that no freshly built update matches, so
+ * OTA can never land. Downloading through the Chromium session gives real
+ * progress events for the existing toast and handles GitHub's redirects.
+ */
+function downloadInstaller(url) {
+	const targetUrl = typeof url === "string" ? url.trim() : "";
+	if (!targetUrl) {
+		log("downloadInstaller: no url");
+		return Promise.resolve({ ok: false, error: "no installer url" });
+	}
+	let fileName = "";
+	try {
+		fileName = nodePath.basename(new URL(targetUrl).pathname) || "MusePi.dmg";
+	} catch {
+		fileName = "MusePi.dmg";
+	}
+	let target = "";
+	try {
+		target = nodePath.join(app.getPath("downloads"), fileName);
+	} catch {
+		target = nodePath.join(app.getPath("userData"), fileName);
+	}
+
+	state.status = "preparing";
+	state.mode = "installer";
+	state.error = null;
+	state.installerPath = null;
+	state.progress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 };
+	log("installer download start:", targetUrl, "→", target);
+	emitState();
+
+	return new Promise(resolve => {
+		const ses = session.defaultSession;
+		let claimed = false;
+		const onWillDownload = (event, item) => {
+			if (claimed) return;
+			claimed = true;
+			item.setSavePath(target);
+			item.on("updated", () => {
+				const received = item.getReceivedBytes();
+				const total = item.getTotalBytes();
+				state.status = "downloading";
+				state.mode = "installer";
+				state.progress = {
+					percent: total > 0 ? Math.round((received / total) * 100) : 0,
+					transferred: received,
+					total,
+					bytesPerSecond: 0,
+				};
+				emitState();
+			});
+			item.on("done", (_event, doneState) => {
+				ses.removeListener("will-download", onWillDownload);
+				if (doneState !== "completed") {
+					state.status = "error";
+					state.error = `download ${doneState}`;
+					log("installer download failed:", doneState);
+					emitState();
+					resolve({ ok: false, error: `download ${doneState}` });
+					return;
+				}
+				state.status = "downloaded";
+				state.mode = "installer";
+				state.installerPath = target;
+				state.progress = { percent: 100, transferred: 0, total: 0, bytesPerSecond: 0 };
+				log("installer download done:", target);
+				emitState();
+				// Open (mount) it so the user only has to drag MusePi over
+				// Applications — no Finder hunting for the file.
+				shell
+					.openPath(target)
+					.then(result => {
+						if (result) log("openPath returned:", result);
+					})
+					.catch(err => log("openPath failed:", err?.message ?? err));
+				resolve({ ok: true, path: target });
+			});
+		};
+		ses.on("will-download", onWillDownload);
+		try {
+			ses.downloadURL(targetUrl);
+		} catch (err) {
+			ses.removeListener("will-download", onWillDownload);
+			state.status = "error";
+			state.error = err?.message ?? String(err);
+			log("downloadURL threw:", state.error);
+			emitState();
+			resolve({ ok: false, error: state.error });
+		}
+	});
 }
 
 // quitAndInstall() reports failures (rejected code signature, a Squirrel
@@ -297,4 +506,16 @@ function quitAndInstall() {
 	});
 }
 
-module.exports = { checkForUpdates, downloadUpdate, quitAndInstall, fetchManifestNotes, wireRenderer, state };
+module.exports = {
+	checkForUpdates,
+	downloadUpdate,
+	downloadInstaller,
+	quitAndInstall,
+	fetchManifestNotes,
+	fetchManifestMeta,
+	otaCapable,
+	detectSigning,
+	log,
+	wireRenderer,
+	state,
+};

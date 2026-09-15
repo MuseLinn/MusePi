@@ -327,6 +327,8 @@ export const settings = {
 	"esc to clear or close": "Esc 清空，再按关闭",
 	"no matching sessions": "没有匹配的会话",
 	"press enter to search": "回车搜索",
+	"download installer": "下载安装包",
+	"installer ready hint": "安装包已下载并打开：把 MusePi 拖到「应用程序」覆盖即可完成升级",
 	recent: "近期",
 	clear: "清除",
 	"no matching providers": "没有匹配的供应商",

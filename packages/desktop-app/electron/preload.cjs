@@ -64,6 +64,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	getUpdateState: () => ipcRenderer.invoke("updater-state"),
 	/** OTA: download the detected update (progress via onUpdateState). */
 	downloadUpdate: () => ipcRenderer.invoke("updater-download"),
+	/**
+	 * Manual install fallback: download the release installer (dmg on macOS,
+	 * exe on Windows) into Downloads and open it. Used when the running build
+	 * cannot OTA (ad-hoc signed macOS app).
+	 */
+	downloadInstaller: (url) => ipcRenderer.invoke("updater-download-installer", url),
+	/** Whether this build can install an update through electron-updater at all. */
+	updaterOtaCapable: () => ipcRenderer.invoke("updater-ota-capable"),
 	/** OTA: release notes from update-manifest.json (main-process fetch, cached). */
 	getUpdateNotes: () => ipcRenderer.invoke("updater-notes"),
 	/** OTA: kill daemon + quitAndInstall (restart into the new version). */
