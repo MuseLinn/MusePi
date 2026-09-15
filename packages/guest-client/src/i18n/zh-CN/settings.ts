@@ -1560,6 +1560,7 @@ export const settings = {
 	"pet import failed": "导入失败：文件损坏或格式不受支持，请换一个 Petdex 包重试",
 	"desktop pet needs desktop app": "悬浮桌面宠物与导入需要桌面版 MusePi",
 	"builtin pet": "内置 MusePi",
+	"builtin pet description": "MusePi 品牌伙伴 · 音符机器人，纯矢量动画，丝滑流畅",
 	"delete pet": "删除形象",
 	"pet presets": "预设",
 	"pet imported": "已导入",

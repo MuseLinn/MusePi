@@ -255,8 +255,9 @@ export function petMode(): PetDisplayMode {
 	}
 }
 
-/** Default active pet — the chiikawa-style Usagi (BitFun vendored). */
-export const DEFAULT_PET_ID = "usagi";
+/** Default active pet — the MusePi brand note-bot (builtin, silky vector
+ *  animation; 2026-09-16, formerly the vendored Usagi spritesheet). */
+export const DEFAULT_PET_ID = BUILTIN_PET_ID;
 
 export function petId(): string {
 	try {

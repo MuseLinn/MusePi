@@ -1638,6 +1638,7 @@ export const settings = {
 	"pet import failed": "Import failed: the file is corrupt or in an unsupported format. Try another Petdex package.",
 	"desktop pet needs desktop app": "Floating desktop pets and imports require the desktop version of MusePi",
 	"builtin pet": "Built-in MusePi",
+	"builtin pet description": "The MusePi brand companion — a note-bot animated in pure vector, silky smooth",
 	"delete pet": "Delete character",
 	"pet presets": "Presets",
 	"pet imported": "Imported",
