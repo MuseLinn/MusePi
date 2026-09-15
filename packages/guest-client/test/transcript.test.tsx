@@ -398,6 +398,55 @@ describe("TTSR / IRC custom_message rendering", () => {
 });
 
 describe("Transcript display-settings parity (TUI)", () => {
+	it("renders the 活动 header for a turn whose process sits after the reply", () => {
+		// Real journal shape (round-collapse's regression fixture, rendered):
+		// user → assistant[thinking, text, toolCall] → toolResult → assistant[thinking].
+		// The header row IS the reply row here, so this exercises the in-body
+		// header + the collapsed slot together.
+		const msg = (id: string, ts: number, content: unknown[]): SessionEntry =>
+			({
+				type: "message",
+				id,
+				parentId: null,
+				timestamp: String(ts),
+				message: { role: "assistant", content, timestamp: ts },
+			}) as unknown as SessionEntry;
+		const entries: SessionEntry[] = [
+			{
+				type: "message",
+				id: "u1",
+				parentId: null,
+				timestamp: "1",
+				message: { role: "user", content: "hi", timestamp: 1 },
+			} as unknown as SessionEntry,
+			msg("a2", 2, [
+				{ type: "thinking", text: "t" },
+				{ type: "toolCall", id: "c1", name: "bash", arguments: "{}" },
+				{ type: "text", text: "reply 2" },
+			]),
+			{
+				type: "message",
+				id: "r3",
+				parentId: null,
+				timestamp: "3",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "bash",
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 3,
+				},
+			} as unknown as SessionEntry,
+			msg("a99", 99, [{ type: "thinking", text: "…" }]),
+		];
+		const html = renderTranscript({ entries, working: false });
+		expect(countElements(html, ".tr-round-fold")).toBe(1);
+		expect(html).toContain("reply 2"); // the answer always reads
+		// Hidden process rows stay mounted inside the animation slot.
+		expect(countElements(html, ".tr-fold-slot")).toBeGreaterThanOrEqual(1);
+	});
+
 	it("hideToolActivity drops toolCall cards and running tail tools", () => {
 		const html = renderTranscript({
 			entries: [committedAssistantToolCall()],
