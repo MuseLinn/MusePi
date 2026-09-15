@@ -9147,17 +9147,23 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "tool.approve": {
-				const p = (params ?? {}) as { sessionId: string; requestId: string };
+				// `note` = the operator's free-text reason (TUI ask-dialog "✎
+				// note" parity). On a denial it reaches the agent as the
+				// rejection reason; on an approval it is recorded only.
+				const p = (params ?? {}) as { sessionId: string; requestId: string; note?: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				if (!live.approvals.resolve(p.requestId, true)) throw new Error(`Unknown approval request: ${p.requestId}`);
+				const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
+				if (!live.approvals.resolve(p.requestId, true, note))
+					throw new Error(`Unknown approval request: ${p.requestId}`);
 				return { ok: true };
 			}
 			case "tool.deny": {
-				const p = (params ?? {}) as { sessionId: string; requestId: string };
+				const p = (params ?? {}) as { sessionId: string; requestId: string; note?: string };
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				if (!live.approvals.resolve(p.requestId, false))
+				const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
+				if (!live.approvals.resolve(p.requestId, false, note))
 					throw new Error(`Unknown approval request: ${p.requestId}`);
 				return { ok: true };
 			}

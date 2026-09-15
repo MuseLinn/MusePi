@@ -263,7 +263,7 @@ export function ChatView({
 		deliverAs?: "prompt" | "steer" | "followUp",
 	): void;
 	onStop(): void;
-	onDecideApproval(requestId: string, approved: boolean): void;
+	onDecideApproval(requestId: string, approved: boolean, note?: string): void;
 	/** Reload the active session snapshot (revert/edit truncation). */
 	onReloadSession?(): Promise<void> | void;
 	/** Open a forked session (session.forkAt result) — switches the UI to

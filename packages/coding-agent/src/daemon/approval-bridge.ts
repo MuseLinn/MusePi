@@ -24,7 +24,11 @@ export interface PendingApproval {
 	requestId: string;
 	tool: string;
 	prompt: string;
-	resolve(approved: boolean): void;
+	/** `note` is the operator's free-text reason (TUI ask-dialog "✎ note"
+	 *  parity). On DENY it becomes part of the denial the agent sees;
+	 *  on approve it is recorded on the request only (the approval label
+	 *  contract has no room for it — see the throw path in `select`). */
+	resolve(approved: boolean, note?: string): void;
 }
 
 /** Multi-question ask dialog answer (TUI askDialog parity): submit carries
@@ -51,8 +55,9 @@ export interface ApprovalBridge {
 	uiContext: ExtensionUIContext;
 	/** Active approval requests keyed by requestId. */
 	pending: Map<string, PendingApproval>;
-	/** Answer a pending request. Returns false when unknown/already resolved. */
-	resolve(requestId: string, approved: boolean): boolean;
+	/** Answer a pending request. Returns false when unknown/already resolved.
+	 *  `note` is the operator's free-text reason. */
+	resolve(requestId: string, approved: boolean, note?: string): boolean;
 	/** Active ask requests keyed by requestId. */
 	pendingAsks: Map<string, PendingAsk>;
 	/** Answer a pending ask. Returns false when unknown/already resolved.
@@ -99,7 +104,7 @@ export function createApprovalBridge(
 				return await promise;
 			}
 			const requestId = `daemon-approval-${Date.now()}-${++counter}`;
-			const { promise, resolve } = Promise.withResolvers<boolean>();
+			const { promise, resolve } = Promise.withResolvers<{ approved: boolean; note?: string }>();
 			// The rendered prompt starts with `Allow tool: <name>` (approval.ts
 			// formatApprovalPrompt) — parse the tool name for the contract.
 			const toolMatch = /^Allow tool: (\S+)/.exec(title);
@@ -107,15 +112,23 @@ export function createApprovalBridge(
 				requestId,
 				tool: toolMatch?.[1] ?? "unknown",
 				prompt: title,
-				resolve: (approved: boolean) => {
+				resolve: (approved: boolean, note?: string) => {
 					if (!pending.has(requestId)) return;
 					pending.delete(requestId);
-					resolve(approved);
+					resolve(note ? { approved, note } : { approved });
 				},
 			};
 			pending.set(requestId, record);
 			onRequest(record);
-			return (await promise) ? "Approve" : "Deny";
+			const answer = await promise;
+			if (!answer.approved && answer.note) {
+				// The label contract has no room for a reason, so a noted denial
+				// travels as the rejection error instead: the wrapper's catch
+				// emits it as the resolved reason and rethrows it, which is the
+				// message the agent actually reads.
+				throw new Error(`Tool call denied by user: ${record.tool}\n\nUser note: ${answer.note}`);
+			}
+			return answer.approved ? "Approve" : "Deny";
 		},
 		confirm: () => Promise.resolve(false),
 		// Generic ask path: `ui.input` (custom text for "Other", direct
@@ -192,12 +205,12 @@ export function createApprovalBridge(
 	return {
 		uiContext,
 		pending,
-		resolve(requestId, approved) {
+		resolve(requestId, approved, note) {
 			const record = pending.get(requestId);
 			if (!record) return false;
 			// The record's own resolve() deletes from pending before settling
 			// the select promise (double-resolve guard lives there).
-			record.resolve(approved);
+			record.resolve(approved, note);
 			return true;
 		},
 		pendingAsks,

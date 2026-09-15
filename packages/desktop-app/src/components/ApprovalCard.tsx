@@ -1,6 +1,6 @@
 import { t } from "@musepi/guest-client";
 import { ShieldAlert } from "lucide-react";
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { haptic } from "../lib/haptic";
 import { sfxFor } from "../lib/sfx";
 import { BorderBeam } from "../vendor/border-beam";
@@ -13,6 +13,13 @@ import { BorderBeam } from "../vendor/border-beam";
  *
  * Pending state carries a pulse border beam + a soft chime so an
  * incoming approval interrupts without a modal.
+ *
+ * The note field (TUI ask-dialog "✎ note" parity) is a free-text reason:
+ * on a DENIAL the daemon turns it into the rejection reason the agent
+ * reads; on an approval it is recorded only. Multiline on purpose —
+ * Enter inserts a newline (ZCode 权限反馈换行输入 parity), submission is
+ * button-driven (⌘/Ctrl+Enter approves), and beyond five lines the field
+ * scrolls internally.
  */
 export function ApprovalCard({
 	requestId,
@@ -24,7 +31,7 @@ export function ApprovalCard({
 	tool: string;
 	/** Full approval prompt body (Allow tool / Reason / command+args). */
 	prompt?: string;
-	onDecide(requestId: string, approved: boolean): void;
+	onDecide(requestId: string, approved: boolean, note?: string): void;
 }): ReactNode {
 	// Notify once per pending card (browser blocks audio before a gesture).
 	// requestId is the per-card identity — the effect must re-run when the
@@ -32,6 +39,8 @@ export function ApprovalCard({
 	useEffect(() => {
 		sfxFor("approval");
 	}, [requestId]);
+	// Note is per-card: a fresh approval starts with an empty field.
+	const [note, setNote] = useState("");
 	// The prompt's first line ("Allow tool: <name>") duplicates the tool
 	// chip — show the detail lines (Reason / command+args / safety checks).
 	const details = prompt
@@ -51,6 +60,23 @@ export function ApprovalCard({
 						<span className="gui-approval-tool">{tool}</span>
 						{details.length > 0 && <pre className="gui-approval-prompt">{details}</pre>}
 					</div>
+					<div className="gui-approval-note">
+						<textarea
+							value={note}
+							rows={2}
+							placeholder={t("add a note (optional)")}
+							onChange={e => setNote(e.target.value)}
+							onKeyDown={e => {
+								if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+									e.preventDefault();
+									sfxFor("approval-ok");
+									haptic(1);
+									onDecide(requestId, true, note);
+								}
+							}}
+							spellCheck={false}
+						/>
+					</div>
 					<div className="gui-approval-actions">
 						<button
 							type="button"
@@ -58,7 +84,7 @@ export function ApprovalCard({
 							onClick={() => {
 								sfxFor("approval-ok");
 								haptic(1);
-								onDecide(requestId, true);
+								onDecide(requestId, true, note);
 							}}
 						>
 							{t("Approve")}
@@ -69,7 +95,7 @@ export function ApprovalCard({
 							onClick={() => {
 								sfxFor("approval-deny");
 								haptic(2);
-								onDecide(requestId, false);
+								onDecide(requestId, false, note);
 							}}
 						>
 							{t("Deny")}

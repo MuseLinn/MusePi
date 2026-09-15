@@ -513,4 +513,6 @@ export const general = {
 	"close tab": "Close tab",
 	// Tab-primary right panel empty state.
 	"start here": "Start here",
+	// Approval card note field (TUI ask-dialog "✎ note" parity).
+	"add a note (optional)": "Add a note (optional)",
 } as const satisfies Record<GeneralKey, string>;

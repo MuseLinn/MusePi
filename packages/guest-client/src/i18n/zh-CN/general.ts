@@ -507,6 +507,8 @@ export const general = {
 	"close tab": "关闭标签页",
 	// Tab-primary right panel empty state.
 	"start here": "从这里开始",
+	// Approval card note field (TUI ask-dialog "✎ note" parity).
+	"add a note (optional)": "添加备注（可选）",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

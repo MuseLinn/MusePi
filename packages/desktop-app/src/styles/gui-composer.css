@@ -57,6 +57,37 @@
 	flex-shrink: 0;
 }
 
+/* Approval note (TUI ask-dialog "✎ note" parity): multiline on purpose —
+ * Enter inserts a newline; beyond five lines the field scrolls internally
+ * instead of growing the card (ZCode 权限反馈换行输入 parity). */
+.gui-approval-note {
+	flex-shrink: 0;
+	width: 100%;
+	margin-top: 6px;
+}
+
+.gui-approval-note textarea {
+	display: block;
+	width: 100%;
+	min-height: 3.6em;
+	max-height: 5.6em; /* ≈5 行，超出内部滚动 */
+	overflow-y: auto;
+	resize: none;
+	padding: 5px 8px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-family: inherit;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+}
+
+.gui-approval-note textarea:focus {
+	outline: none;
+	border-color: var(--color-accent);
+}
+
 .gui-btn-approve {
 	background: var(--color-ok);
 	border-color: transparent;

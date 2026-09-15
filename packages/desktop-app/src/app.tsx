@@ -1893,14 +1893,22 @@ function AppInner(): ReactNode {
 	);
 
 	const decideApproval = useCallback(
-		async (requestId: string, approved: boolean): Promise<void> => {
+		async (requestId: string, approved: boolean, note?: string): Promise<void> => {
 			const client = rpcRef.current;
 			const id = selectedId;
 			const current = storeRef.current;
 			if (!client || !id || !current) return;
 			setError(null);
 			try {
-				await client.request(approved ? "tool.approve" : "tool.deny", { sessionId: id, requestId });
+				// note = the operator's free-text reason (TUI ask-dialog "✎ note"
+				// parity). On a denial the daemon turns it into the rejection
+				// reason the agent reads; on an approval it is recorded only.
+				const trimmed = note?.trim();
+				await client.request(approved ? "tool.approve" : "tool.deny", {
+					sessionId: id,
+					requestId,
+					...(trimmed ? { note: trimmed } : {}),
+				});
 				current.dismissApproval(requestId);
 			} catch (err) {
 				setError(fmtError(approved ? "tool.approve" : "tool.deny", err));
