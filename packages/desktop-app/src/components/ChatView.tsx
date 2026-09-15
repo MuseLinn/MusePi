@@ -801,6 +801,11 @@ export function ChatView({
 			deliverAs?: "prompt" | "steer" | "followUp",
 		): void => {
 			setJumpBack(null);
+			// Sending from a branch point commits it: drop the explicit leaf so
+			// the view follows the new tip. Without this the transcript filter
+			// (visibleEntries, anchored on the leaf) would hide the very answer
+			// the send just produced.
+			setCurrentLeafKey(null);
 			onSend(text, images, deliverAs);
 		},
 		[onSend],
@@ -992,6 +997,22 @@ export function ChatView({
 	}, [effectiveLeaf, snap?.entries]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
+	// Transcript input: with an explicit branch leaf the visible conversation
+	// is the ACTIVE PATH only — sibling branches and the tail beyond the leaf
+	// stay on the tree (map / trajectory / session tree keep the full list) but
+	// leave the transcript. Entries without a parent chain (round markers,
+	// synthetic rows) always stay: they hang off the session root, not off a
+	// branch point. Linear sessions (no leaf override) show everything.
+	const visibleEntries = useMemo(() => {
+		const entries = snap?.entries ?? [];
+		if (!currentLeafKey) return entries;
+		return entries.filter(entry => {
+			const e = entry as { id?: unknown; parentId?: unknown };
+			if (typeof e.id !== "string") return true;
+			if (typeof e.parentId !== "string") return true;
+			return activePathIds.has(e.id);
+		});
+	}, [snap?.entries, currentLeafKey, activePathIds]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -1368,7 +1389,7 @@ export function ChatView({
 								 * right panel sits BESIDE this column (same level), so
 								 * opening it pushes the composer left (openchamber
 								 * MainLayout main | ContextPanel). */}
-								<div className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col">
+								<div className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]">
 									{/* Maximize anchor (docs §3.3.2): the floated panel and
 									 * its backdrop measure THIS column — the old target
 									 * (.gui-chat-surface) also contains the panel and the
@@ -1518,7 +1539,7 @@ export function ChatView({
 													>
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
-																entries={snap?.entries ?? []}
+																entries={visibleEntries}
 																/* No stream ghost: the view folds the assistant message into
 																 * entries at message_start, so the entry row IS the live
 																 * stream renderer (immutable upserts re-render it). */
