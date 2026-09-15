@@ -838,6 +838,11 @@ export function AssistantBody({
 					/>
 				);
 			case "toolCall": {
+				// Caller-decided: Transcript passes `hideToolActivity && !foldOpen`
+				// per row, so an EXPANDED 活动 row always shows its process while
+				// the setting still hides it everywhere else (including the live
+				// round). Suppressing the row outright — the old behaviour — left
+				// the process unreachable whenever the round produced no fold.
 				if (hideToolActivity) return null;
 				const act = active.get(block.id);
 				const result = results.get(block.id);

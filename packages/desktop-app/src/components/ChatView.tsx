@@ -1067,6 +1067,22 @@ export function ChatView({
 		}
 		return { turns, activeIdx };
 	}, [snap?.entries, leafPath]);
+	// A session only HAS off-path rows when some node has more than one child.
+	// Without this, a linear session whose chain happens to look "complete"
+	// (the daemon clears a link it cannot resolve, so the walk can stop at what
+	// looks like a root) was filtered down to that one node — an old session
+	// opened as an EMPTY transcript with nothing but 显示更早消息 (user report).
+	const branched = useMemo(() => {
+		const children = new Map<string, number>();
+		for (const entry of snap?.entries ?? []) {
+			const parent = (entry as { parentId?: unknown }).parentId;
+			if (typeof parent !== "string") continue;
+			const n = (children.get(parent) ?? 0) + 1;
+			if (n > 1) return true;
+			children.set(parent, n);
+		}
+		return false;
+	}, [snap?.entries]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
 	// Path handed to the tree/map/trajectory for dimming. With a cut chain the
@@ -1083,16 +1099,17 @@ export function ChatView({
 	// without a parent chain (round markers, synthetic rows) always stay: they
 	// hang off the session root, not off a branch point.
 	const visibleEntries = useMemo(() => {
-		// Untrustworthy topology (see leafWalk): hiding anything would hide the
-		// session itself, so show the plain list.
-		if (!leafWalk.complete) return snap?.entries ?? [];
+		// Nothing to hide in a linear session, and an untrustworthy topology
+		// (see leafWalk) must never be used to hide rows: both cases show the
+		// plain list.
+		if (!branched || !leafWalk.complete) return snap?.entries ?? [];
 		return (snap?.entries ?? []).filter(entry => {
 			const e = entry as { id?: unknown; parentId?: unknown };
 			if (typeof e.id !== "string") return true;
 			if (typeof e.parentId !== "string") return true;
 			return activePathIds.has(e.id);
 		});
-	}, [snap?.entries, activePathIds, leafWalk.complete]);
+	}, [snap?.entries, activePathIds, leafWalk.complete, branched]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {

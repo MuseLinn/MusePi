@@ -1438,7 +1438,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const inFoldIdx = folds.findIndex(f => absIdx > f.startIdx && absIdx < f.finalIdx);
 					const inFold = inFoldIdx >= 0;
 					const fold = inFold ? folds[inFoldIdx] : undefined;
-					const foldOpen = fold !== undefined && roundFoldOpen.has(fold.startIdx) !== defaultRoundFoldExpanded;
+					// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
+					// process so nothing becomes unreachable.
+					const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
+					const foldOpen = fold !== undefined && roundFoldOpen.has(fold.startIdx) !== foldsExpanded;
 					if (inFold && !foldOpen) return null;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
@@ -1463,6 +1466,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								onRevert={onRevert}
 							/>
 						) : null;
+					// 隐藏工具活动 hides the process EXCEPT behind an expanded 活动
+					// row: the user asking to expand it outranks the setting, and
+					// outside a fold (the live round) the suppression still applies
+					// exactly as before.
+					const rowHideTools = hideToolActivity && !foldOpen;
 					const row = (
 						<Fragment key={entry.id}>
 							{foldHeader}
@@ -1475,7 +1483,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								agentGutter={isAssistantMessage && prevIsAssistant ? "" : agentGutter}
 								userPlain={userPlain}
 								collapseLongUserMessages={collapseLongUserMessages}
-								hideToolActivity={hideToolActivity}
+								hideToolActivity={rowHideTools}
 								showTokenUsage={showTokenUsage}
 								smoothStreaming={smoothStreaming}
 								taskCardStyle={taskCardStyle}
