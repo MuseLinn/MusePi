@@ -297,13 +297,20 @@ function getStableMachineId(): string {
 			const out = execSync("ioreg -rd1 -c IOPlatformExpertDevice | grep IOPlatformUUID", {
 				encoding: "utf-8",
 				stdio: ["pipe", "pipe", "pipe"],
+				windowsHide: true,
 			});
 			const m = out.match(/"IOPlatformUUID"\s*=\s*"([^"]+)"/);
 			if (m?.[1]) return m[1];
 		} else if (process.platform === "win32") {
+			// windowsHide is mandatory here: this is node:child_process.execSync,
+			// which the daemon's global spawn guard (utils/windows-spawn-guard.ts)
+			// cannot patch — ESM builtins are immutable bindings. Without it every
+			// credential read/write pops a conhost window on Windows. macOS keeps
+			// the flag too so both branches read the same.
 			const out = execSync("reg query HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Cryptography /v MachineGuid", {
 				encoding: "utf-8",
 				stdio: ["pipe", "pipe", "pipe"],
+				windowsHide: true,
 			});
 			const m = out.match(/MachineGuid\s+REG_SZ\s+(\S+)/);
 			if (m?.[1]) return m[1];

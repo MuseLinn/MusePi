@@ -320,13 +320,23 @@ export function SessionTreeCanvas({
 		if (fullScale >= 0.55) {
 			const scaledW = width * fullScale;
 			const scaledH = height * fullScale;
-			const rootX = nodes.find(n => n.depth === 0)?.x ?? 0;
+			// Whole map fits on an axis → center that axis. When an axis
+			// OVERFLOWS, center on the CURRENT node instead of the root: this
+			// branch used to snap to the root (the docstring above promised the
+			// current node), so on a wide tree the highlighted node — often the
+			// one in a bottom branch row — sat outside the viewport. The offset
+			// is clamped so centering cannot scroll past the map edges.
+			const focus =
+				(currentNodeId != null ? nodes.find(n => n.node.id === currentNodeId) : undefined) ??
+				nodes.find(n => n.depth === 0) ??
+				null;
+			const fx = (focus?.x ?? 0) + NODE_W / 2;
+			const fy = (focus?.y ?? 0) + NODE_H / 2;
+			const clamp = (value: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, value));
 			setView({
 				scale: fullScale,
-				// Whole map fits → center it; else center on the ROOT (the flow
-				// start) so it's always in view and branches grow rightward.
-				x: scaledW > cw ? cw / 2 - (rootX + NODE_W / 2) * fullScale : (cw - scaledW) / 2,
-				y: scaledH > ch ? FIT_PADDING : (ch - scaledH) / 2,
+				x: scaledW > cw ? clamp(cw / 2 - fx * fullScale, cw - scaledW, 0) : (cw - scaledW) / 2,
+				y: scaledH > ch ? clamp(ch / 2 - fy * fullScale, ch - scaledH, 0) : (ch - scaledH) / 2,
 			});
 			return;
 		}
