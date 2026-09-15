@@ -1391,12 +1391,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const foldOpenOf = (f: RoundFold): boolean => roundFoldOpen.has(f.startIdx) !== foldsExpanded;
 					// Hidden span = the turn's process rows, EXCEPT its reply (the
 					// reply always reads) — see pushFold/isInsideFold.
-					const hidingFold = folds.find(f => absIdx > f.startIdx && absIdx < f.endIdx && absIdx !== f.finalIdx);
+					const hidingFold = folds.find(f => absIdx > f.startIdx && absIdx <= f.endIdx && absIdx !== f.finalIdx);
 					// Header row = the turn's first content row, so expanding reads
 					// 活动 → process → reply (openchamber's order).
 					const headerFold = folds.find(f => absIdx === f.headerIdx);
 					const foldOpen = hidingFold ? foldOpenOf(hidingFold) : headerFold ? foldOpenOf(headerFold) : false;
-					if (hidingFold && !foldOpen) return null;
+					// The header row sits INSIDE its own hidden span (it IS the turn's
+					// first content row), so closing the fold returned null for it and
+					// the 活动 row never rendered — the row has to survive its own span.
+					if (hidingFold && !foldOpen && absIdx !== hidingFold.headerIdx) return null;
 					// Per-round work timer: the live tail row ticks from the
 					// round start (last user message); completed rounds show
 					// their frozen total under the final message.

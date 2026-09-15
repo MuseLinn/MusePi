@@ -97,6 +97,33 @@ describe("buildRoundFolds", () => {
 		expect(isInsideFold(folds, 3)).toBe(false); // final reply stays visible
 	});
 
+	it("folds a turn whose process rows land AFTER the reply (real session shape)", () => {
+		// Verbatim shape of a real journal turn: user → assistant[thinking, text,
+		// toolCall] → toolResult → assistant[thinking only]. Spanning only up to
+		// the reply counted no work and produced NO fold, so the transcript never
+		// showed a 活动 row; the reply anchor must also be the TEXT row, not the
+		// trailing thinking-only one.
+		const thinkingOnly: SessionEntry = {
+			type: "message",
+			id: "a99",
+			parentId: null,
+			timestamp: "99",
+			message: { role: "assistant", content: [{ type: "thinking", text: "…" }], timestamp: 99 },
+		} as SessionEntry;
+		const entries = [user(1), assistant(2, 1), toolResult(3), thinkingOnly];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(1);
+		const f = folds[0]!;
+		expect(f.startIdx).toBe(0);
+		expect(f.endIdx).toBe(3);
+		expect(f.finalIdx).toBe(1); // the TEXT row, not the trailing thinking row
+		expect(f.headerIdx).toBe(1); // header renders on the turn's first content row
+		expect(f.toolCount).toBe(1);
+		expect(isInsideFold(folds, 2)).toBe(true); // toolResult folds away
+		expect(isInsideFold(folds, 3)).toBe(true); // trailing thinking row too
+		expect(isInsideFold(folds, 1)).toBe(false); // the reply never hides
+	});
+
 	it("folds the LAST completed round too once the session is idle", () => {
 		const entries = [user(1), bash(2), assistant(3, 1), user(4), bash(5), assistant(6, 3)];
 		const folds = buildRoundFolds(entries, false);

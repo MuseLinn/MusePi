@@ -199,6 +199,25 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
 	return folds;
 }
 
+/** Last assistant index in `(from, to)` whose content carries non-empty TEXT —
+ *  the turn's REPLY. The last assistant message overall is not it: a turn can
+ *  end on a thinking-only (or tool-call-only) assistant row, and anchoring there
+ *  hid the row that actually holds the answer (real session: user → [thinking,
+ *  text, toolCall] → toolResult → [thinking]). Falls back to the last assistant
+ *  when no text block exists. */
+function lastReplyIdx(entries: readonly SessionEntry[], from: number, to: number): number {
+	for (let i = to - 1; i > from; i--) {
+		const e = entries[i];
+		if (e?.type !== "message" || e.message.role !== "assistant") continue;
+		const content = (e.message as { content?: unknown }).content;
+		const blocks = Array.isArray(content) ? (content as Array<{ type?: string; text?: string }>) : [];
+		if (blocks.some(b => b?.type === "text" && typeof b.text === "string" && b.text.trim().length > 0)) {
+			return i;
+		}
+	}
+	return lastAssistantIdx(entries, from, to);
+}
+
 /** Last assistant-message index in `(from, to)`; -1 when none. */
 function lastAssistantIdx(entries: readonly SessionEntry[], from: number, to: number): number {
 	for (let i = to - 1; i > from; i--) {
@@ -217,7 +236,7 @@ function pushFold(
 ): void {
 	// The turn must have something between the prompt and its end.
 	if (endIdx <= startIdx + 1) return;
-	const replyIdx = lastAssistantIdx(entries, startIdx, endIdx + 1);
+	const replyIdx = lastReplyIdx(entries, startIdx, endIdx + 1);
 	if (replyIdx <= startIdx) return; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
@@ -247,5 +266,6 @@ function pushFold(
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	// The reply row is never hidden (see finalIdx): expanding a fold must not
 	// swallow the answer the turn produced.
-	return folds.some(f => idx > f.startIdx && idx < f.endIdx && idx !== f.finalIdx);
+	// endIdx is INCLUSIVE (it is the turn's last row).
+	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx);
 }
