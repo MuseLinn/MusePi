@@ -882,7 +882,16 @@ export function ChatView({
 	// like revertTo, NOT copied like forkAt). The new turn re-answers the
 	// user message and forks a parallel branch.
 	const branchTo = useCallback(
-		async (messageId: string): Promise<{ leafId: string | null; editorText: string | null } | null> => {
+		async (
+			messageId: string,
+			/** Pin the transcript to THIS node instead of the daemon's returned
+			 *  leaf. session.branchAt maps a USER message to its parent (the
+			 *  message is re-answered by the next send), so navigation that
+			 *  follows the returned leaf landed on the parent and the
+			 *  active-path filter collapsed the transcript onto the branch
+			 *  divider — "clicking a sibling made everything disappear". */
+			pinTo?: string,
+		): Promise<{ leafId: string | null; editorText: string | null } | null> => {
 			if (!store) return null;
 			try {
 				const res = await rpc.request<{
@@ -891,7 +900,8 @@ export function ChatView({
 					editorText: string | null;
 				}>("session.branchAt", { sessionId: store.sessionId, messageId });
 				if (res?.ok !== true) return null;
-				if (res.leafId) setCurrentLeafKey(res.leafId);
+				const pinned = pinTo ?? res.leafId;
+				if (pinned) setCurrentLeafKey(pinned);
 				pulseSwitch();
 				return { leafId: res.leafId ?? null, editorText: res.editorText ?? null };
 			} catch {
@@ -1013,22 +1023,22 @@ export function ChatView({
 	}, [effectiveLeaf, snap?.entries]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
-	// Transcript input: with an explicit branch leaf the visible conversation
-	// is the ACTIVE PATH only — sibling branches and the tail beyond the leaf
-	// stay on the tree (map / trajectory / session tree keep the full list) but
-	// leave the transcript. Entries without a parent chain (round markers,
-	// synthetic rows) always stay: they hang off the session root, not off a
-	// branch point. Linear sessions (no leaf override) show everything.
+	// Transcript input: the visible conversation is the ACTIVE PATH only —
+	// sibling branches and the tail beyond the leaf stay on the tree (map /
+	// trajectory / session tree keep the full list) but leave the transcript.
+	// This applies to LINEAR sessions too: the fallback leaf is the last entry,
+	// and in a branched session "last appended" is NOT "the branch in view", so
+	// skipping the filter on re-entry rendered every sibling at once. Entries
+	// without a parent chain (round markers, synthetic rows) always stay: they
+	// hang off the session root, not off a branch point.
 	const visibleEntries = useMemo(() => {
-		const entries = snap?.entries ?? [];
-		if (!currentLeafKey) return entries;
-		return entries.filter(entry => {
+		return (snap?.entries ?? []).filter(entry => {
 			const e = entry as { id?: unknown; parentId?: unknown };
 			if (typeof e.id !== "string") return true;
 			if (typeof e.parentId !== "string") return true;
 			return activePathIds.has(e.id);
 		});
-	}, [snap?.entries, currentLeafKey, activePathIds]);
+	}, [snap?.entries, activePathIds]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -1062,20 +1072,40 @@ export function ChatView({
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[leafPath],
 	);
+	// Deepest node of the branch starting at `id` (newest-child chain). The
+	// branch switcher navigates to this TIP, not to the picked node: picking a
+	// USER-message sibling would otherwise be re-answered in place (branchAt
+	// maps user messages to their parent) and its reply would fall off the
+	// active path.
+	const branchTipOf = useCallback(
+		(id: string): string => {
+			let cursor = id;
+			const seen = new Set<string>([id]);
+			for (;;) {
+				const kids = branchChildren.get(cursor);
+				const next = kids && kids.length > 0 ? kids[kids.length - 1]?.id : undefined;
+				if (!next || seen.has(next)) return cursor;
+				seen.add(next);
+				cursor = next;
+			}
+		},
+		[branchChildren],
+	);
 	const switchBranch = useCallback(
 		(childId: string): void => {
 			// Jump the transcript to the picked sibling first, then move the
 			// session leaf there (branchAt) so continuing forks from it.
+			const target = branchTipOf(childId);
 			const entry = (snap?.entries ?? []).find(
-				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === childId,
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === target,
 			);
 			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
 			if (typeof ts === "string") requestJump(ts);
-			setCurrentLeafKey(childId);
-			void branchTo(childId);
+			setCurrentLeafKey(target);
+			void branchTo(target, target);
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[snap?.entries, branchTo],
+		[snap?.entries, branchTo, branchTipOf],
 	);
 	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
@@ -1086,7 +1116,10 @@ export function ChatView({
 			);
 			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
 			if (typeof ts === "string") requestJump(ts);
-			void branchTo(id).then(res => {
+			// Pin the clicked node itself: branchAt answers a USER message by
+			// positioning at its parent, and following that leaf hid the node
+			// the user just navigated to.
+			void branchTo(id, id).then(res => {
 				if (res?.editorText) setPendingEdit(res.editorText);
 			});
 		},
@@ -1530,7 +1563,10 @@ export function ChatView({
 														switchToNode(id);
 													}}
 													onBranchTo={id => {
-														void branchTo(id).then(res => {
+														// Pin the node itself: branchAt answers a USER
+														// message at its parent, which would drop this
+														// node off the active path.
+														void branchTo(id, id).then(res => {
 															if (res?.editorText) setPendingEdit(res.editorText);
 														});
 													}}
@@ -1934,7 +1970,9 @@ export function ChatView({
 									leafId={effectiveLeaf}
 									activePathIds={activePathIds}
 									onBranchTo={id => {
-										void branchTo(id).then(res => {
+										// Pin the clicked canvas node (see the trajectory
+										// handler: branchAt maps user messages to parents).
+										void branchTo(id, id).then(res => {
 											if (res?.editorText) setPendingEdit(res.editorText);
 										});
 									}}
