@@ -30,7 +30,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ### 桌面 GUI
 
-- **Electron 桌面应用**（`packages/desktop-app`）：三栏布局（会话侧栏 + 聊天流 + 上下文面板）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
+- **Electron 桌面应用**（`packages/desktop-app`）：独立卡片式工作区（会话侧栏、聊天列、Side Pane、终端 dock 是浮在玻璃基底上的各自圆角面板，不再共用一张卡片 + 竖线分割）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
 - **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
 - **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。
 - **受管浏览器**（`browser.gui` 工具）：Electron WebContentsView + CDP 桥——agent 可直接驱动 GUI 内嵌浏览器页（投影布局 + 像素采样验证）。
@@ -38,12 +38,13 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 - **完整命令面（TUI parity）**：
   - `/` 斜杠命令：daemon 复用 ACP headless 执行器（同一 builtin registry），`//` 转义为纯文本；欢迎页创建会话后同样执行（结果走桌宠气泡 + 桌面通知）。
   - `!cmd` / `!!cmd`：shell 命令执行（结果进模型上下文；`!!` 排除上下文），转录内渲染终端风格 bash 卡片（exit 徽章、输出折叠展开）。
-  - `@` 文件引用：workspace 树补全，daemon 侧 `extractFileMentions` 注入文件内容。
+  - `@` 文件引用：workspace 树补全，daemon 侧 `extractFileMentions` 注入文件内容；**中文正文或标点紧邻 @ 也能唤起面板**（「请看@文件」可用，`foo@bar` 邮箱形态不触发）。
+- **带理由的审批**：审批卡内嵌多行备注框（⌘/Ctrl+Enter 直接批准，超 5 行内部滚动）。**带备注的拒绝**会把理由作为拒绝原因传给 agent —— 它知道「为什么被拒」而不只是「denied by user」（TUI ask 对话框 `✎ note` parity）。
   - `#` 会话引用：会话列表补全，插入 `history://<id>`（read 工具可解析的 internal URL）。
 - **上下文管理**：上下文圆环（`session.contextUsage` 实时使用率）、`/compact` parity 手动压缩、snapcompact 节省量估算（与 TUI `/context` 同一 planner）。
 - **设置面板**：TUI 全部 336 项配置并入桌面设置（schema 驱动 `settings.schema` RPC，与 TUI 同源），10+ tab；控件复用（开关/分段/选择/凭据掩码）。
 - **丰富交互**：图片附件前置缩放（`images.autoResize` 双端生效）、图片预览灯箱（多图堆叠、缩放平移）、附件键盘删除、语音输入、会话草稿持久化、空闲 recap（`recap.enabled`）、提醒面板（`session.list` working/live 实时状态）、⌘K 命令面板、Board 看板、widget 系统（自定义 HTML widget 主题热切换）。
-- **右侧面板**：文件树（PDF/图片/文本预览、系统打开）、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器（视口预设、元素选取）、项目笔记 + 待办 + 计划文件。
+- **右侧面板：一条 tab 条承载全部视图**（openchamber ContextPanel parity）：面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**（文件树 + PDF/图片/文本预览）、项目笔记、待办与计划文件、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为启动器（打开或聚焦对应 tab）。零 tab 时显示「从这里开始」空态导航页而非默认视图；关闭 tab 激活邻居、tab 可拖拽排序、布局恢复只存标签（内容由所属 surface 重新物化）。
 - **子智能体操作**（Agent Hub parity）：右栏 AgentsPanel 停止/复活/对话（`agents.kill/revive/chat` RPC）。
 - **任务中心（定时任务）**：cron 式调度，完整 IANA 时区支持（墙上时间、闲时窗口、cron 表达式都按任务时区求值，DST 安全）、按任务运行历史与失败原因、daemon 自身解析器计算的 next-run 预览、按任务选模型与思考等级、看板视图暂停/恢复；日历周起始与设置页一致。
 

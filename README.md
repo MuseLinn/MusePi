@@ -81,16 +81,17 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ### Desktop GUI
 
-- **Electron desktop app** (`packages/desktop-app`): three-pane layout (session sidebar + chat stream + context panel), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window.
+- **Electron desktop app** (`packages/desktop-app`): independent-card workspace (session sidebar, chat column, side pane and terminal dock are separate rounded surfaces on the glass base — no shared card with divider lines), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window.
 - **Always-on desktop pet**: animated companion (petdex frame-animation packs, drag positioning, click-through, hover interactions, cross-window activity bridge); task progress surfaces as pet bubbles.
 - **Daemon architecture**: the GUI talks JSON-RPC to the daemon (`musepi serve`). Sessions persist via journal + materialized view; idle 30-min sessions become history snapshots and reactivate on demand. The daemon survives GUI exit; reconnecting resumes.
 - **Managed browser** (`browser.gui`): Electron `WebContentsView` + CDP bridge — drive an embedded browser page in the GUI with projected layout and pixel-sampled verification.
 - **Integrated terminal**: xterm + bun-pty with tabs (middle-click close), hardened env (strips `ELECTRON_RUN_AS_NODE` etc.).
-- **Full command surface (TUI parity)**: `/` slash commands (headless ACP executor), `!cmd`/`!!cmd` shell, `@` file mentions, `#` session references.
+- **Full command surface (TUI parity)**: `/` slash commands (headless ACP executor), `!cmd`/`!!cmd` shell, `@` file mentions (the panel opens after CJK body text and punctuation too — `请看@文件` works, `foo@bar` does not), `#` session references.
+- **Approvals with a reason**: the inline approval card carries a multiline note field (⌘/Ctrl+Enter approves, >5 lines scroll internally). A noted **denial** reaches the agent as the rejection reason, so it learns *why* instead of just "denied by user" (TUI ask-dialog `✎ note` parity).
 - **Context management**: context donut (`session.contextUsage`), `/compact`-parity manual compaction, snapcompact savings estimate.
 - **Settings panel**: all 336 TUI settings merged into the desktop settings (schema-driven via `settings.schema`), 10+ tabs; sidebar search matches actual setting rows.
 - **Rich interactions**: image attachments & lightbox, voice input (dictation / read-aloud / `tts.autoRead`), per-session draft persistence, idle recap, reminders panel, ⌘K command palette, Board kanban (auto-scaling canvas, ChromaGrid-style group glow), widget system (custom HTML widgets with theme hot-swap).
-- **Branching (TUI parity)**: 撤回 (jump back) = `branchAt` tree navigation — old replies stay reachable as sibling branches with an animated undo dock; `/btw` questions can be promoted into a new branched session; plan approval offers an "approve and compact context" path.
+- **Branching (TUI parity)**: 撤回 (jump back) = `branchAt` tree navigation — **rewind targets the node *before* the message** so the message itself leaves the active path, retry re-answers the same node, and edit-and-resend backfills the composer; old replies stay reachable as sibling branches with an animated undo dock; `/btw` questions can be promoted into a new branched session; plan approval offers an "approve and compact context" path.
 - **Instance switcher**: connect remote daemons from the top bar (bearer-token gated, openchamber parity).
 - **Presets (modes)**: named presets = extension whitelist + prompt sections + settings overrides (`~/.musepi/modes/<id>.json`); managed in Settings → 智能体 → 预设.
 - **Session lifecycle status**: sidebar rows carry colored status squares (complete / interrupted / aborted / error / pending) with manual tag overrides.
@@ -99,7 +100,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 - **Model picker**: provider-qualified (`provider/id`) so two providers serving the same bare id never cross-light; session-scoped like the TUI `/switch`.
 - **Dialogs & keyboard priority**: every confirm dialog plays enter/exit animations; modals own the keyboard while open (Escape closes, Enter confirms).
 - **Relaunch experience**: differentiated splash hold, main-window bounds restore, last-session reopen on boot.
-- **Right context panel**: file tree (PDF/image/text previews), Git changes & commits (gitmoji, GitHub device-flow auth), PR list, embedded browser, project notes + todos + plan files.
+- **Right panel — one tab strip, every surface** (openchamber ContextPanel parity): a single panel-level tab strip hosts each open view — multi-instance **file tabs** (file tree with PDF/image/text previews), notes, project todos & plan files, Git changes & commits (gitmoji, GitHub device-flow auth), PR list, embedded browser, board and extension `panel.tab.*` slots — while the rail becomes a launcher that opens or focuses a tab. Zero tabs shows a start-here page instead of a default view; closing a tab activates its neighbour, tabs drag-reorder, and a layout restore keeps labels only (content re-materialises from its surface).
 - **Subagent operations**: stop / revive / chat from the AgentsPanel (`agents.kill` / `agents.revive` / `agents.chat`).
 - **Task center (scheduled tasks)**: cron-style scheduling with full IANA-timezone support (wall-clock times, idle windows and cron expressions evaluated in the task's timezone, DST-safe), per-task run history with failure reasons, next-run previews computed by the daemon's own parser, per-task model & thinking-level selection, board-view pause/resume — calendar week start follows the settings page.
 
