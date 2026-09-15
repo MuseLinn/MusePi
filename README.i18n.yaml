@@ -1,5 +1,5 @@
 # Consistency record for README.md / README.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write README
-README.md: b4e5605e259d81306e06b2b658d04147c8659e3e
-README.zh-CN.md: c9bf37e0cb6bc0654a26133b2c4c38fd163d3ce1
+README.md: f6d3fc3fe58131a8e82a9619a3df995b02c59d6a
+README.zh-CN.md: 36a7fa6d9eb4f4ba74bddc382d199e196c32732a
