@@ -994,9 +994,17 @@ export function ChatView({
 		const lastId = typeof last === "object" && last !== null ? (last as { id?: unknown }).id : undefined;
 		return currentLeafKey ?? (typeof lastId === "string" ? lastId : null);
 	}, [currentLeafKey, snap?.entries]);
-	// Walk root → leaf via parentId (breadcrumb path).
-	const leafPath = useMemo(() => {
+	// Walk root → leaf via parentId (breadcrumb path). `complete` records WHY the
+	// walk stopped: at a genuine root (an entry with no parentId — the topology
+	// is trustworthy) or on a parentId that is not in the loaded window (the
+	// chain is cut). The daemon rewrites SDK hex ids to message keys and clears
+	// a link it cannot resolve, so a history session opened fresh can hand us a
+	// chain whose start is outside the window — and filtering the transcript
+	// against such a partial path dropped nearly every row (user: 打开旧会话只
+	// 显示到最开始那条, 会话树也没亮).
+	const leafWalk = useMemo(() => {
 		const byId = new Map<string, { id: string; kind: string }>();
+		const byKey = new Map<string, { id?: unknown; parentId?: unknown; type?: string }>();
 		for (const entry of snap?.entries ?? []) {
 			const e = entry as { id?: string; type?: string; message?: { role?: string } };
 			if (typeof e.id !== "string") continue;
@@ -1004,23 +1012,29 @@ export function ChatView({
 				id: e.id,
 				kind: e.type === "message" ? (e.message?.role ?? "message") : (e.type ?? "entry"),
 			});
+			byKey.set(e.id, e);
 		}
 		const path: { id: string; kind: string }[] = [];
 		const seen = new Set<string>();
 		let cursor = effectiveLeaf;
+		let complete = false;
 		while (cursor && !seen.has(cursor)) {
 			seen.add(cursor);
 			const node = byId.get(cursor);
-			if (!node) break;
+			if (!node) break; // parentId outside the window → chain cut
 			path.unshift(node);
-			const entry = (snap?.entries ?? []).find(
-				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === cursor,
-			);
-			const parent = typeof entry === "object" && entry !== null ? (entry as { parentId?: unknown }).parentId : null;
-			cursor = typeof parent === "string" ? parent : null;
+			const entry = byKey.get(cursor);
+			const parent = entry?.parentId;
+			if (typeof parent !== "string") {
+				complete = true; // reached a root
+				break;
+			}
+			if (!byKey.has(parent)) break; // next hop is missing → chain cut
+			cursor = parent;
 		}
-		return path;
+		return { path, complete };
 	}, [effectiveLeaf, snap?.entries]);
+	const leafPath = leafWalk.path;
 	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
 	// change, so it hands the canvas a node to center + highlight.
 	const [canvasFocus, setCanvasFocus] = useState<{ id: string; nonce: number } | null>(null);
@@ -1055,6 +1069,11 @@ export function ChatView({
 	}, [snap?.entries, leafPath]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
+	// Path handed to the tree/map/trajectory for dimming. With a cut chain the
+	// partial path would dim almost every node (the map's "where am I" anchor
+	// and the off-path fade read as "nothing is lit"), so an untrustworthy walk
+	// passes nothing and those views fall back to leaf-based highlighting.
+	const trustedPathIds = leafWalk.complete ? activePathIds : undefined;
 	// Transcript input: the visible conversation is the ACTIVE PATH only —
 	// sibling branches and the tail beyond the leaf stay on the tree (map /
 	// trajectory / session tree keep the full list) but leave the transcript.
@@ -1064,13 +1083,16 @@ export function ChatView({
 	// without a parent chain (round markers, synthetic rows) always stay: they
 	// hang off the session root, not off a branch point.
 	const visibleEntries = useMemo(() => {
+		// Untrustworthy topology (see leafWalk): hiding anything would hide the
+		// session itself, so show the plain list.
+		if (!leafWalk.complete) return snap?.entries ?? [];
 		return (snap?.entries ?? []).filter(entry => {
 			const e = entry as { id?: unknown; parentId?: unknown };
 			if (typeof e.id !== "string") return true;
 			if (typeof e.parentId !== "string") return true;
 			return activePathIds.has(e.id);
 		});
-	}, [snap?.entries, activePathIds]);
+	}, [snap?.entries, activePathIds, leafWalk.complete]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -1571,7 +1593,7 @@ export function ChatView({
 													entries={snap?.entries ?? []}
 													leafId={effectiveLeaf}
 													focusRequest={canvasFocus}
-													activePathIds={activePathIds}
+													activePathIds={trustedPathIds}
 													onJump={id => {
 														const ts = (snap?.entries ?? []).find(
 															e =>
@@ -1625,6 +1647,7 @@ export function ChatView({
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
 																entries={visibleEntries}
+																sessionKey={store?.sessionId ?? ""}
 																/* The branch bar lists siblings that are OFF the
 																 * active path, so it needs the full tree while the
 																 * transcript renders the path. */
@@ -1778,7 +1801,7 @@ export function ChatView({
 															void forkFromMessage(entry.id, text, includeTarget)
 														}
 														onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
-														activePathIds={activePathIds}
+														activePathIds={trustedPathIds}
 													/>
 													{/* In-message text selection actions (openchamber parity):
 													 * quote a snippet (not the whole message), copy, start a
@@ -2010,7 +2033,7 @@ export function ChatView({
 										if (ts) requestJump(ts);
 									}}
 									leafId={effectiveLeaf}
-									activePathIds={activePathIds}
+									activePathIds={trustedPathIds}
 									onBranchTo={id => {
 										// Pin the clicked canvas node (see the trajectory
 										// handler: branchAt maps user messages to parents).

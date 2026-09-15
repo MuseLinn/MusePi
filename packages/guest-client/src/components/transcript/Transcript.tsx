@@ -156,6 +156,11 @@ export interface TranscriptProps {
 	 *  without the character-level reveal (also applied via the
 	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
 	smoothStreaming?: boolean;
+	/** Session identity. A CHANGE re-locks the bottom and jumps to the latest
+	 *  position: the transcript stays mounted across sessions, and `lockRef`
+	 *  only ever loosens on user scrolling, so an opened session used to inherit
+	 *  the previous scroll offset and render at its very first rows. */
+	sessionKey?: string;
 	/** TUI display.hideToolActivity parity: suppress model-initiated tool
 	 *  call cards and running tail tools from the transcript. */
 	hideToolActivity?: boolean;
@@ -997,6 +1002,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
+		sessionKey,
 		showTokenUsage = false,
 		collapseCompacted = false,
 		colorBlind = false,
@@ -1165,6 +1171,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	useLayoutEffect(() => {
 		scrollerRef.current = rootRef.current?.closest<HTMLElement>(".gui-transcript") ?? rootRef.current;
 	}, []);
+
+	// Session switch → land on the latest message (see `sessionKey`).
+	useEffect(() => {
+		void sessionKey;
+		lockRef.current = true;
+		const el = scrollerRef.current;
+		if (el) el.scrollTop = el.scrollHeight;
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [sessionKey]);
 
 	const hidden = Math.max(0, entries.length - visibleCount);
 	const slice = hidden > 0 ? entries.slice(hidden) : entries;
