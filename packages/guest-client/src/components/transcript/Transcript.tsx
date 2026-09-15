@@ -1443,7 +1443,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const row = (
 						<Fragment key={entry.id}>
 							{foldHeader}
-							{hideRowContent ? null : (
+							{hideRowContent ? (
+								// Collapsed turn whose first content row is not the reply: the row
+								// still mounts so its GUTTER survives — the agent orb stays pinned
+								// at the turn's top instead of folding away with the process
+								// (user: 头像应始终动态挂靠在顶部).
+								<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+									{null}
+								</Row>
+							) : (
 								<EntryRow
 									entry={entry}
 									results={results}

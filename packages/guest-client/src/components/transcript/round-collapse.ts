@@ -182,14 +182,13 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
 	let userId: string | null = null;
 	for (let i = 0; i < entries.length; i++) {
 		const e = entries[i];
-		if (e?.type !== "message") continue;
-		const m = e.message;
-		if (m.role === "user") {
-			// Close the previous turn: it runs up to the row BEFORE this prompt.
-			if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1);
-			userIdx = i;
-			userId = e.id;
-		}
+		if (!isTurnStart(e)) continue;
+		// Close the previous turn: it runs up to the row BEFORE this one.
+		if (userIdx >= 0) pushFold(folds, entries, userIdx, userId, i - 1);
+		userIdx = i;
+		// Revert anchors on a real user message only (an advisor has no text to
+		// put back in the composer).
+		userId = e?.type === "message" ? (e.id ?? null) : null;
 	}
 	// Trailing round: everything after the last user message. While working
 	// it is the in-flight turn (exempt); once idle it folds like the rest.
@@ -197,6 +196,21 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
 		pushFold(folds, entries, userIdx, userId, entries.length - 1);
 	}
 	return folds;
+}
+
+/** A turn can start at a prompt OR at an advisor note: an advisory that lands
+ *  mid-run triggers its own stretch of agent work (custom_message entries with
+ *  customType "advisor", display: true), and that work has to fold under an
+ *  活动 row like any other turn. Matches the transcript, which renders advisor
+ *  notes as first-class rows. */
+function isTurnStart(e: SessionEntry | undefined): boolean {
+	if (!e) return false;
+	if (e.type === "message") return e.message.role === "user";
+	if (e.type === "custom_message") {
+		const c = e as { customType?: unknown; display?: unknown };
+		return c.customType === "advisor" && c.display === true;
+	}
+	return false;
 }
 
 /** Last assistant index in `(from, to)` whose content carries non-empty TEXT —

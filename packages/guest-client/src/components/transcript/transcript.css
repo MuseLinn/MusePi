@@ -3116,11 +3116,16 @@ a.tr-tool-search-title:hover {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	width: 100%;
-	margin: 6px 0 2px;
-	padding: 7px 12px;
+	/* Align with the MESSAGE column, not the avatar: the row lives beside the
+	 * 40px gutter the way openchamber's TurnActivity renders inside the message
+	 * body (user: 活动摘要应该左对齐消息而不是 agent 头像). */
+	width: calc(100% - 40px);
+	margin: 6px 0 2px 40px;
+	padding: 5px 10px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
-	border-radius: 10px;
+	border-radius: 8px;
+	white-space: nowrap;
+	overflow: hidden;
 	background: color-mix(in oklab, var(--color-surface-raised, var(--bg-overlay, #222)) 80%, transparent);
 	color: var(--color-text-muted, var(--text-muted, var(--fg-muted)));
 	font-size: 12px;
@@ -3132,12 +3137,31 @@ a.tr-tool-search-title:hover {
 	background: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 10%, var(--color-surface-raised, var(--bg-overlay, #222)));
 	border-color: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 45%, transparent);
 }
-.tr-round-fold-chevron {
+/* Boxed glyph, openchamber parity: the box IS the expand affordance. */
+.tr-round-fold-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	flex-shrink: 0;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 14%, transparent));
+	border-radius: 5px;
+	background: color-mix(in oklab, var(--color-text, var(--fg)) 6%, transparent);
+}
+.tr-round-fold-icon svg {
 	transition: transform 180ms var(--spring, cubic-bezier(0.22, 1, 0.36, 1));
 }
-.tr-round-fold--open .tr-round-fold-chevron {
+.tr-round-fold--open .tr-round-fold-icon svg {
 	transform: rotate(90deg);
+}
+/* Hairline between the label and the summary segments (openchamber's `|`). */
+.tr-round-fold-bar {
+	flex-shrink: 0;
+	width: 1px;
+	align-self: stretch;
+	margin: 1px 2px;
+	background: color-mix(in oklab, var(--color-text, var(--fg)) 18%, transparent);
 }
 /* 活动 label: the section's name, bold like openchamber's. */
 .tr-round-fold-label {

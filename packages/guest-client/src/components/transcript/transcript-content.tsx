@@ -586,8 +586,13 @@ export function RoundFoldHeader({
 	}
 	return (
 		<button type="button" className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} onClick={onToggle}>
-			<ChevronRight size={12} className="tr-round-fold-chevron" />
+			{/* Boxed glyph (openchamber's TurnActivity header): the box carries the
+			 *  expand affordance, so there is no separate free-standing chevron. */}
+			<span className="tr-round-fold-icon" aria-hidden>
+				<ChevronRight size={12} />
+			</span>
 			<span className="tr-round-fold-label">{t("activity")}</span>
+			<span className="tr-round-fold-bar" aria-hidden />
 			{segments.map((seg, i) => (
 				// segments are authored above, each with its own stable key —
 				// the wrapper re-keys positionally only for the separator
