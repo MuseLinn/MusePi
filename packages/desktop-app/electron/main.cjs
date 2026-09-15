@@ -13,7 +13,7 @@
  */
 "use strict";
 
-const { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, session, shell } = require("electron");
+const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, net, Notification, powerMonitor, screen, session, shell } = require("electron");
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
@@ -236,10 +236,17 @@ const managedBrowser = new ManagedBrowserController();
 // A frameless, transparent, always-on-top companion window hosting pet.html.
 // Created lazily on first show; the renderer drives it via IPC:
 //   pet-toggle {visible}        show/hide (create on first show)
-//   pet-drag  {dx, dy}          move by delta (renderer pointer drag)
+//   pet-drag-client {clientX}   anchor drag (renderer pointer drag)
 //   pet-click                    focus the main window
 //   pet-activity {mood, bubble}  main-window store → pet window
 //   pet-import                   pick a Petdex zip, unpack, return package
+// SINGLE WINDOW (merged 2026-09-16, killing the 双窗口 drift): the sprite,
+// the activity bubbles and the interaction panel all live in THIS window —
+// "bubble follows pet" positioning bugs are structurally impossible, there
+// is one coordinate space and one window to move. The window is 320 wide
+// and grows UPWARD (bottom edge fixed, so the sprite never moves on screen)
+// when bubbles/panel need room (pet-set-content-size); it shrinks back to
+// the 290 base height when they close.
 // Height 290: the pet anchors at bottom:52px in pet-window.css with 52px of
 // transparent room below — rest shadow (0 6px 16px ≈ 22px) and hover shadow
 // (0 10px 22px ≈ 32px, + bump ≈ 2px) all fade inside the window instead of
@@ -247,6 +254,10 @@ const managedBrowser = new ManagedBrowserController();
 const PET_WINDOW_SIZE = { width: 320, height: 290 };
 let petWindow = null;
 let petVisible = false;
+/** Last pet:activity payload — replayed to the pet window when it loads
+ *  (the first bubble can arrive before the window's renderer subscribed;
+ *  without the replay it is silently dropped). */
+let lastPetActivity = null;
 
 function petPosFile() {
 	return path.join(app.getPath("userData"), "pet-pos.json");
@@ -263,13 +274,17 @@ function loadPetPosition() {
 			// desyncs the stored position from the real one (and, worse,
 			// makes the window jump back to the stale frame when the
 			// click-through toggles). Fall back to the default otherwise.
+			// Validate against the SAVED size: the window may have been
+			// taller than the base (panel/bubbles open when it was saved).
+			const w = Number.isFinite(pos.w) && pos.w > 0 ? pos.w : PET_WINDOW_SIZE.width;
+			const h = Number.isFinite(pos.h) && pos.h > 0 ? pos.h : PET_WINDOW_SIZE.height;
 			const visible = screen.getAllDisplays().some(d => {
 				const b = d.workArea;
 				return (
 					pos.x >= b.x &&
-					pos.x + PET_WINDOW_SIZE.width <= b.x + b.width &&
+					pos.x + w <= b.x + b.width &&
 					pos.y >= b.y &&
-					pos.y + PET_WINDOW_SIZE.height <= b.y + b.height
+					pos.y + h <= b.y + b.height
 				);
 			});
 			if (visible) return { x: pos.x, y: pos.y };
@@ -316,17 +331,19 @@ function createPetWindow() {
 	});
 	petWindow.setAlwaysOnTop(true, "floating");
 	petWindow.loadFile(path.join(DIST_DIR, "pet.html"));
-	watchPetMove();
-	// Windows: probe whether setPosition speaks DIP or physical px (see
-	// probeSetPositionSpace) — safeSetPosition multiplies by scaleFactor
-	// when physical, so drag travel matches the cursor at any scaling.
-	void probeSetPositionSpace();
 	// Any renderer navigation (reload, crash-reload) resets the drag
 	// anchor — the fresh renderer starts with no pressed state, so a
 	// stale petDragLast would make its first hover move drag the window
-	// (openpets' resetForNavigation pattern).
+	// (openpets' resetForNavigation pattern). Also replay the last
+	// activity: the merged window consumes bubbles/approvals/state too,
+	// and a first bubble can arrive before this window is ever created.
 	petWindow.webContents.on("did-finish-load", () => {
 		petDragLast = null;
+		if (lastPetActivity) {
+			setTimeout(() => {
+				if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:activity", lastPetActivity);
+			}, 150);
+		}
 	});
 	// Click-through by default (transparent widget pattern): the 320×290
 	// window must not block the desktop — the pet occupies only the bottom.
@@ -346,6 +363,7 @@ function createPetWindow() {
 		petVisible = false;
 		petDragLast = null;
 		stopPetClickThroughPoll();
+		petSyncApprovalHotkeys(); // pet gone → unregister the approval hotkeys
 	});
 	return petWindow;
 }
@@ -422,34 +440,19 @@ function intCoord(v) {
  *  NaN, ±Infinity, fractions (Retina .5 DIP positions, e.g. -279.5), -0
  *  and beyond-±2^31 values (garbage from macOS multi-display coordinate
  *  flips) all throw the main-process "conversion failure from" dialog.
- *  Round + normalize here, drop the call when still not int32-safe. */
-//
-// Windows DPI-awareness: whether setPosition() speaks DIP or PHYSICAL
-// pixels is not contractual (per-monitor DPI awareness / virtualized
-// sessions disagree; Electron issue #10862 family). Probe once after the
-// pet window exists: nudge +7px, read back 150ms later (win setPosition is
-// async), restore. read == set+7 → DIP; read ≈ (set+7)×scale → PHYSICAL.
-let petSetPositionIsPhysical = false;
-async function probeSetPositionSpace() {
-	const win = petWindow;
-	if (!win || win.isDestroyed()) return;
-	try {
-		const [bx, by] = win.getPosition();
-		win.setPosition(bx + 7, by);
-		await new Promise(r => setTimeout(r, 150));
-		const [ax] = win.getPosition();
-		win.setPosition(bx, by); // restore
-		const disp = screen.getDisplayMatching(win.getBounds());
-		const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
-		petSetPositionIsPhysical = Math.abs(ax - (bx + 7) * scale) < Math.abs(ax - (bx + 7));
-		console.log(
-			"[dpi] setPosition probe: set=", bx + 7, "read=", ax, "scale=", scale,
-			petSetPositionIsPhysical ? "→ PHYSICAL (×scale before set)" : "→ DIP",
-		);
-	} catch (err) {
-		console.error("[dpi] setPosition probe failed:", err?.message || err);
-	}
-}
+ *  Round + normalize here, drop the call when still not int32-safe.
+ *
+ *  COORDINATE CONTRACT (DIP everywhere, no runtime probes — 2026-09-16):
+ *  Electron's documented contract on Windows is DIP for getPosition /
+ *  setPosition / getCursorScreenPoint / workArea alike. The old code ran
+ *  startup probes guessing DIP vs physical and multiplied by scaleFactor
+ *  when a probe "detected" physical — a wrong guess (RDP, virtualized
+ *  sessions, per-monitor DPI) scaled the whole drag loop and produced the
+ *  non-100%-scaling drift. There are no probes anymore: every coordinate
+ *  in this file is DIP, and the drag loop never reads the position back
+ *  mid-drag (the old same-value guard read getPosition on every frame,
+ *  feeding the async-setPosition feedback loop behind "keeps drifting
+ *  while I hold the mouse still"). */
 function safeSetPosition(win, x, y) {
 	const nx = intCoord(x);
 	const ny = intCoord(y);
@@ -457,28 +460,7 @@ function safeSetPosition(win, x, y) {
 		console.error("[pet] dropped invalid setPosition:", { x, y });
 		return;
 	}
-	// Same-value guard: on Windows setPosition of an identical coordinate
-	// still walks the window (WM_WINDOWPOSCHANGING), which feeds back into
-	// the drag loop — window micro-move → synthetic pointermove in the
-	// renderer → new pet-drag-client frame → setPosition again — reading as
-	// "keeps drifting while I hold the mouse still". Skip the write when
-	// the window is already exactly there.
-	const [cx, cy] = win.getPosition();
-	if (cx === nx && cy === ny) return;
-	// Windows DPI-awareness quirk (probed at startup): setPosition() can
-	// interpret its args as PHYSICAL pixels while getCursorScreenPoint()
-	// returns DIP — dragging then scales the window's travel by 1/scaleFactor
-	// ("lags / overruns at non-100% scaling", observed at 125% on the local
-	// machine). Multiply DIP targets by the window display's scaleFactor.
-	let sx = nx;
-	let sy = ny;
-	if (petSetPositionIsPhysical) {
-		const disp = screen.getDisplayMatching(win.getBounds());
-		const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
-		sx = Math.round(nx * scale);
-		sy = Math.round(ny * scale);
-	}
-	win.setPosition(sx, sy);
+	win.setPosition(nx, ny);
 }
 
 /** Dock or clamp the pet window inside the work area after a drag. */
@@ -643,12 +625,9 @@ function setPetVisible(visible) {
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
 	}
-	// The bubble window follows the pet's visibility (and its content is
-	// cleared by the next state push).
-	if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-		if (visible) syncBubbleWindow();
-		else if (bubbleWindow.isVisible()) bubbleWindow.hide();
-	}
+	// Approval hotkeys follow the pet's visibility (registered only while
+	// the pet window is showing AND an approval is pending).
+	petSyncApprovalHotkeys();
 }
 
 // Position persistence is throttled: a sync fs write per pointermove
@@ -661,25 +640,13 @@ let petPosDirty = false;
 function persistPetPos() {
 	if (!petWindow || petWindow.isDestroyed()) return;
 	try {
-		fs.writeFileSync(petPosFile(), JSON.stringify({ x: petWindow.getPosition()[0], y: petWindow.getPosition()[1] }));
+		// Persist the FULL rect (DIP + size): the restore validates
+		// containment against the saved size, not a stale 320×290 guess.
+		const [x, y] = petWindow.getPosition();
+		const [w, h] = petWindow.getSize();
+		fs.writeFileSync(petPosFile(), JSON.stringify({ x, y, w, h }));
 	} catch {
 		// position persistence is best-effort
-	}
-}
-
-function movePetWindow(dx, dy) {
-	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
-	// safeSetPosition drops NaN/garbage (multi-display coordinate flips)
-	// instead of crashing — the drag simply skips that frame.
-	const [x, y] = petWindow.getPosition();
-	safeSetPosition(petWindow, x + Math.round(dx), y + Math.round(dy));
-	const now = Date.now();
-	if (now - petLastPosWrite >= 150) {
-		petLastPosWrite = now;
-		petPosDirty = false;
-		persistPetPos();
-	} else {
-		petPosDirty = true;
 	}
 }
 
@@ -875,118 +842,13 @@ ipcMain.on("tray-menu:action", (_event, payload) => {
 	if (type !== "quit") hideTrayMenu();
 });
 
-let bubbleWindow = null;
-let bubbleSize = null;
-/** Last pet:activity payload — replayed to the bubble window when it
- *  loads (the first bubble can arrive before the window's renderer
- *  subscribed; without the replay it is silently dropped). */
-let lastPetActivity = null;
-
-function createBubbleWindow() {
-	if (bubbleWindow && !bubbleWindow.isDestroyed()) return bubbleWindow;
-	bubbleWindow = new BrowserWindow({
-		width: 220,
-		height: 120,
-		title: "MusePi Bubbles",
-		frame: false,
-		// TRANSPARENT per-pixel window on every platform. The window body
-		// must stay fully transparent (no base color) — only the rounded
-		// panel/bubble cards paint their own surface:
-		// - macOS: native under-window vibrancy would paint the WHOLE
-		//   window rect as a frosted glass rectangle (a visible base tint
-		//   around the panel corners and in the transparent margin room —
-		//   the exact "window body has a background" complaint). vibrancy
-		//   + transparent:true renders the whole window as an opaque panel
-		//   instead, so neither combination works here.
-		// - Win/Linux: DWM Acrylic (backgroundMaterial) only works on
-		//   opaque windows, which would paint a full RECTANGLE of frosted
-		//   glass around the rounded cards (observed: visible glass band
-		//   outside the panel corners).
-		// The cards self-draw their glass (translucent surface + highlight
-		// edge + hairline, the clawd-on-desk double-layer pattern) so the
-		// window shape hugs the content exactly and everything outside
-		// stays transparent.
-		transparent: true,
-		backgroundColor: "#00000000",
-		alwaysOnTop: true,
-		skipTaskbar: true,
-		resizable: false,
-		fullscreenable: false,
-		// Window shadow: on a transparent window macOS-style rectangle
-		// shadows are unavailable/ugly — the cards draw their own rounded
-		// shadow (CSS box-shadow).
-		hasShadow: false,
-		show: false,
-		webPreferences: {
-			preload: path.join(__dirname, "preload.cjs"),
-			contextIsolation: true,
-			nodeIntegration: false,
-			sandbox: true,
-			backgroundThrottling: false,
-		},
-	});
-	bubbleWindow.setAlwaysOnTop(true, "floating");
-	bubbleWindow.loadFile(path.join(DIST_DIR, "bubble.html"));
-	// Replay the last activity (bubbles/approvals/state/recent) once the
-	// renderer is listening — the window may be created BY an activity
-	// push. webContents.send is dropped when it races the React effect
-	// subscription (module scripts + passive effects run after
-	// did-finish-load), so delay the replay a beat past load.
-	bubbleWindow.webContents.on("did-finish-load", () => {
-		if (!lastPetActivity) return;
-		setTimeout(() => {
-			if (!bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:activity", lastPetActivity);
-		}, 150);
-	});
-	bubbleWindow.on("closed", () => {
-		bubbleWindow = null;
-		bubbleSize = null;
-	});
-	return bubbleWindow;
-}
-
-/** Park the bubble window above the sprite, horizontally centered on it. */
-function syncBubbleWindow() {
-	if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
-	if (!petWindow || petWindow.isDestroyed() || !petVisible || bubbleSize === null) {
-		if (bubbleWindow.isVisible()) bubbleWindow.hide();
-		return;
-	}
-	const [px, py] = petWindow.getPosition();
-	const [bw, bh] = bubbleWindow.getSize();
-	// Anchor on the SPRITE, not the window: the 320×290 window is much
-	// wider than the centered sprite and hangs off-screen when docked —
-	// window-centering would clip the bubble at the screen edge and park
-	// it ~140px above the character's head.
-	const cx = px + (petRect ? petRect.x + petRect.width / 2 : PET_WINDOW_SIZE.width / 2);
-	const cy = py + (petRect ? petRect.y : 0);
-	// The bubble content sits at PAD=24px inside the window (renderer's
-	// .pet-bubble-window margin; bubble-set-size reports content + PAD*2).
-	// Anchor the CONTENT 6px above the sprite, not the window box — with
-	// the margin the window is 48px taller/wider than the card.
-	const BUBBLE_WINDOW_PAD = 24;
-	let x = Math.round(cx - bw / 2);
-	let y = Math.round(cy - bh - 6 + BUBBLE_WINDOW_PAD);
-	// Clamp inside the work area: at a docked edge the bubble is wider
-	// than the sprite, so pure centering would push it off-screen.
-	const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
-	x = Math.min(Math.max(x, wa.x + 4), wa.x + wa.width - bw - 4);
-	y = Math.max(y, wa.y + 4);
-	safeSetPosition(bubbleWindow, x, y);
-	if (!bubbleWindow.isVisible()) bubbleWindow.showInactive();
-}
-
-// Pet window moves must drag the bubble window along (drag, snap, settle).
-function watchPetMove() {
-	if (!petWindow || petWindow.isDestroyed()) return;
-	petWindow.on("move", syncBubbleWindow);
-}
-
-function syncBubbleVisibility() {
-	if (!bubbleWindow || bubbleWindow.isDestroyed()) return;
-	if (petVisible && bubbleSize !== null) syncBubbleWindow();
-	else if (bubbleWindow.isVisible()) bubbleWindow.hide();
-}
+// ── Single-window content sizing (merged 2026-09-16) ────────────────────
+// Bubbles and the interaction panel used to live in their own window that
+// chased the pet window on every move (syncBubbleWindow) — the source of
+// the relative-drift bug family. They now render INSIDE the pet window;
+// the only main-process job left is growing/shrinking the window upward
+// (bottom edge fixed → the sprite never moves on screen) via pet-set-
+// content-size, handled next to the other pet IPC handlers below.
 
 // ── Menu-bar tray (openchamber tray parity) ─────────────────────────────
 // Sessions are polled from the daemon (session.list over the daemon
@@ -1215,10 +1077,6 @@ ipcMain.handle("pet-toggle", (_event, visible) => {
 	setPetVisible(visible === true);
 	return { ok: true };
 });
-ipcMain.handle("pet-drag", (_event, { dx, dy }) => {
-	movePetWindow(Number(dx) || 0, Number(dy) || 0);
-	return { ok: true };
-});
 // Renderer pointerdown: keep the window interactive (no click-through
 // flip) until the drag ends — the 120ms poll would otherwise drop the
 // pointer stream between down and the first move, or after a click.
@@ -1229,53 +1087,20 @@ ipcMain.handle("pet-drag-arm", () => {
 // Drag via window-relative client coords (anchor declared above with the
 // click-through state — the poll reads it every tick).
 //
-// Windows DPI: under a virtualized session (UU remote / RDP) at non-100%
-// scaling, screen.getCursorScreenPoint() can report PHYSICAL pixels while
-// setPosition() talks DIP — the pet then drifts while the mouse holds
-// still (user-observed at 175% scaling). The renderer's clientX is a
-// Chromium window coordinate (always DIP), so winPos + client = screen-DIP
-// is ground truth to probe the cursor API's coordinate space with. Probed
-// once per anchor (window is stationary then, so getPosition is reliable);
-// re-probed on re-anchor, which the 500px coordinate-flip guard triggers.
-let petCursorIsPhysical = false;
-let petCursorScale = 1;
-function probeCursorSpace(clientX) {
-	if (!Number.isFinite(clientX)) return;
-	const raw = screen.getCursorScreenPoint();
-	const disp = screen.getDisplayMatching(petWindow.getBounds());
-	const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
-	const winPos = petWindow.getPosition();
-	const expectedDip = winPos[0] + clientX;
-	const errDip = Math.abs(raw.x - expectedDip);
-	const errPhys = Math.abs(raw.x - expectedDip * scale);
-	petCursorIsPhysical = errPhys < errDip;
-	petCursorScale = scale;
-	console.log(
-		"[dpi] raw=", raw.x, raw.y, "scale=", scale,
-		"win=", winPos[0], winPos[1], "client=", clientX,
-		"errDip=", errDip.toFixed(1), "errPhys=", errPhys.toFixed(1),
-		petCursorIsPhysical ? "→ PHYSICAL (÷scale)" : "→ DIP",
-	);
-}
-function petDragCursor() {
-	const raw = screen.getCursorScreenPoint();
-	return petCursorIsPhysical
-		? { x: raw.x / petCursorScale, y: raw.y / petCursorScale }
-		: { x: raw.x, y: raw.y };
-}
-ipcMain.handle("pet-drag-client", (_event, { clientX, clientY }) => {
+// ANCHOR-ONLY DRAG (rewritten 2026-09-16): the anchor {cursor, window} is
+// pinned ONCE per drag; every frame sets the window to anchor-window +
+// (cursor − anchor-cursor). No getPosition() readback mid-drag (async
+// setPosition feedback loop — the old "keeps moving after the mouse
+// stops"), no scale multiplication (the deleted startup probes guessed
+// DIP vs physical and were wrong on virtualized sessions — the old
+// non-100%-scaling drift). Everything is DIP per Electron's contract, so
+// the window tracks the cursor 1:1 at ANY scaling, including RDP. The
+// 500px coordinate-flip guard stays: a monitor change mid-drag can jump
+// the cursor space; re-anchoring preserves the window↔cursor offset.
+ipcMain.handle("pet-drag-client", (_event, _payload) => {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return { ok: true };
-	// Anchor-based drag: pin the window to the (DPI-normalized) cursor. The
-	// window is set DIRECTLY to anchor-position + cursor-travel, never
-	// diffed against a fresh getPosition() read: on Windows setPosition is
-	// asynchronous, so getPosition() right after returns the OLD position
-	// and dx = next - old repeats the same travel every frame, overrunning
-	// the cursor and making the pet "keep moving after the mouse stops".
 	cancelPetSettle();
-	if (petDragLast === null) {
-		probeCursorSpace(clientX);
-	}
-	const cursor = petDragCursor();
+	const cursor = screen.getCursorScreenPoint();
 	if (petDragLast === null) {
 		petDragLast = {
 			cx: cursor.x,
@@ -1298,12 +1123,6 @@ ipcMain.handle("pet-drag-client", (_event, { clientX, clientY }) => {
 		petDragLast = null;
 		return { ok: true };
 	}
-	// A drag moves the window by (roughly) the cursor's travel since the
-	// anchor — at most a few hundred px per frame. A delta far larger
-	// (observed +1680px, a full display width, when the window straddles
-	// two differently-scaled displays) is the coordinate-space flip:
-	// re-anchor instead, preserving the window↔cursor offset so the drag
-	// continues seamlessly.
 	if (Math.abs(deltaX) > 500 || Math.abs(deltaY) > 500) {
 		petDragLast = {
 			cx: cursor.x,
@@ -1314,7 +1133,7 @@ ipcMain.handle("pet-drag-client", (_event, { clientX, clientY }) => {
 		return { ok: true };
 	}
 	safeSetPosition(petWindow, petDragLast.wx + deltaX, petDragLast.wy + deltaY);
-	// Persist (throttled) — same cadence movePetWindow used.
+	// Persist (throttled) — at most one write per 150ms during a drag.
 	const now = Date.now();
 	if (now - petLastPosWrite >= 150) {
 		petLastPosWrite = now;
@@ -1379,26 +1198,18 @@ ipcMain.handle("pet-set-rect", (_event, rect) => {
 	return { ok: true };
 });
 ipcMain.handle("pet-activity", (_event, payload) => {
-	// Cache for bubble-window replay (the window may load after this push).
+	// Cache for replay when the pet window loads after this push.
 	lastPetActivity = payload;
-	// Both windows consume pet:activity: the pet window uses mood/scale/
-	// unread/theme; the bubble window uses bubble/approval/state/recent
-	// sessions/theme.
+	// Single window since the merge: the pet window consumes everything —
+	// mood/scale/unread/theme AND bubbles/approvals/state/recent sessions.
+	// Track pending approvals for the global Allow/Deny hotkeys.
+	if (payload && typeof payload === "object" && payload.approval?.requestId) {
+		const id = payload.approval.requestId;
+		if (!petPendingApprovals.includes(id)) petPendingApprovals.push(id);
+		petSyncApprovalHotkeys();
+	}
 	if (petWindow && !petWindow.isDestroyed() && petVisible) {
 		petWindow.webContents.send("pet:activity", payload);
-	}
-	// If the payload carries bubble/panel content, make sure the bubble
-	// window exists — a first bubble arriving before any interaction must
-	// not be dropped.
-	const needsBubble =
-		payload &&
-		typeof payload === "object" &&
-		Boolean(payload.bubble || payload.approval || Array.isArray(payload.recentSessions));
-	if (needsBubble && petWindow && !petWindow.isDestroyed() && petVisible) {
-		createBubbleWindow();
-	}
-	if (bubbleWindow && !bubbleWindow.isDestroyed()) {
-		bubbleWindow.webContents.send("pet:activity", payload);
 	}
 	return { ok: true };
 });
@@ -1430,7 +1241,7 @@ ipcMain.handle("pet-context-menu", () => {
 		{
 			label: "显示/隐藏面板",
 			click: () => {
-				if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:panel-toggle");
+				if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:panel-toggle");
 			},
 		},
 		{ type: "separator" },
@@ -1615,11 +1426,12 @@ ipcMain.handle("pet-get-session-content", (_event, sessionId) => {
 	}
 	return { ok: true };
 });
-// Main-window renderer → bubble window: transcript for the requested
-// session (the panel lives in the bubble window now).
+// Main-window renderer → pet window: transcript for the requested
+// session (the panel lives in the pet window since the single-window
+// merge).
 ipcMain.handle("pet-session-content", (_event, payload) => {
-	if (bubbleWindow && !bubbleWindow.isDestroyed() && payload && typeof payload.sessionId === "string") {
-		bubbleWindow.webContents.send("pet:session-content", payload);
+	if (petWindow && !petWindow.isDestroyed() && payload && typeof payload.sessionId === "string") {
+		petWindow.webContents.send("pet:session-content", payload);
 	}
 	return { ok: true };
 });
@@ -1627,6 +1439,9 @@ ipcMain.handle("pet-approve", (_event, { requestId, approved }) => {
 	if (mainWindow && !mainWindow.isDestroyed() && typeof requestId === "string") {
 		mainWindow.webContents.send("pet:command", { type: "approve", requestId, approved: approved === true });
 	}
+	// The approval is decided — drop it from the hotkey queue.
+	petPendingApprovals = petPendingApprovals.filter(id => id !== requestId);
+	petSyncApprovalHotkeys();
 	return { ok: true };
 });
 // Pet bubble ×: the user acknowledged that notification — clear the
@@ -1806,17 +1621,43 @@ ipcMain.handle("widget-pin-top", (event) => {
 	}
 	return { ok: false };
 });
-ipcMain.handle("pet-set-panel", (_event, open) => {
-	// The panel now lives in the BUBBLE window (双窗口) — this IPC is kept
-	// for the bubble renderer's toggle; the window itself is sized by the
-	// bubble-set-size content reports. Just make sure the bubble window
-	// exists so an open panel is never dropped.
-	if (open === true) {
-		createBubbleWindow();
-		syncBubbleWindow();
+// ── Global approval hotkeys (clawd-on-desk parity, 2026-09-16) ──────────
+// While the pet window shows a pending tool approval, Ctrl/Cmd+Shift+Y
+// allows and Ctrl/Cmd+Shift+N denies the OLDEST pending request — the
+// pet panel no longer requires focusing a window to answer. Registered
+// only while an approval is actually pending and the pet is visible.
+let petPendingApprovals = [];
+function resolvePetApprovalHotkey(approved) {
+	const requestId = petPendingApprovals.shift();
+	if (!requestId) return;
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send("pet:command", { type: "approve", requestId, approved });
 	}
-	return { ok: true };
-});
+	// The pet renderer owns the approval card list — tell it the request
+	// was decided so the card is removed without an activity round-trip.
+	if (petWindow && !petWindow.isDestroyed()) {
+		petWindow.webContents.send("pet:approval-resolved", { requestId, approved });
+	}
+	petSyncApprovalHotkeys();
+}
+function petSyncApprovalHotkeys() {
+	const want = petVisible && petPendingApprovals.length > 0 && petWindow !== null && !petWindow.isDestroyed();
+	for (const [accel, handler] of [
+		["CmdOrCtrl+Shift+Y", () => resolvePetApprovalHotkey(true)],
+		["CmdOrCtrl+Shift+N", () => resolvePetApprovalHotkey(false)],
+	]) {
+		try {
+			if (want) {
+				globalShortcut.register(accel, handler);
+			} else {
+				globalShortcut.unregister(accel);
+			}
+		} catch {
+			// accelerator owned by another app — the panel buttons still work
+		}
+	}
+}
+
 // Pet window asks the main window's renderer for a fresh activity snapshot
 // when it (re)appears — the renderer answers via pet-activity on mount.
 ipcMain.handle("pet-request-state", () => {
@@ -1825,35 +1666,44 @@ ipcMain.handle("pet-request-state", () => {
 	}
 	return { ok: true };
 });
-// Pet window single click → toggle the BUBBLE window's interaction panel.
+// Pet window single click → toggle the interaction panel. Since the
+// single-window merge the panel lives in the PET window's renderer.
 ipcMain.handle("pet-toggle-panel", () => {
-	if (!bubbleWindow || bubbleWindow.isDestroyed()) return { ok: true };
-	if (bubbleWindow.webContents.isLoading()) {
+	if (!petWindow || petWindow.isDestroyed()) return { ok: true };
+	if (petWindow.webContents.isLoading()) {
 		// The window is still loading (first click after creation): a send
 		// now would race the React subscription and be dropped. Replay once
 		// it settles — same delay as the activity replay.
 		setTimeout(() => {
-			if (bubbleWindow && !bubbleWindow.isDestroyed()) bubbleWindow.webContents.send("pet:panel-toggle");
+			if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:panel-toggle");
 		}, 200);
 	} else {
-		bubbleWindow.webContents.send("pet:panel-toggle");
+		petWindow.webContents.send("pet:panel-toggle");
 	}
 	return { ok: true };
 });
-// Bubble window reports its content box (CSS px) → size the OS window to
-// exactly that (a glass card), parked above the pet.
-ipcMain.handle("bubble-set-size", (_event, rect) => {
-	if (rect && Number.isFinite(rect.width) && Number.isFinite(rect.height)) {
-		bubbleSize = { width: Math.max(8, Math.round(rect.width)), height: Math.max(8, Math.round(rect.height)) };
-	} else {
-		bubbleSize = null;
+// The merged pet window reports the height it needs (bubbles/panel grow
+// upward). The bottom edge stays fixed — the sprite is anchored to the
+// window bottom, so growing never moves the pet on screen. Width is
+// pinned to PET_WINDOW_SIZE (panel 316px + bubbles 280px both fit).
+ipcMain.handle("pet-set-content-size", (_event, size) => {
+	if (!petWindow || petWindow.isDestroyed()) return { ok: true };
+	const requested = size && Number.isFinite(size.height) ? Math.round(size.height) : PET_WINDOW_SIZE.height;
+	const nextH = Math.min(1200, Math.max(PET_WINDOW_SIZE.height, requested));
+	const [wx, wy] = petWindow.getPosition();
+	const [, curH] = petWindow.getSize();
+	if (curH === nextH) return { ok: true };
+	let y = wy + curH - nextH;
+	let h = nextH;
+	// Growing must not poke past the top of the work area: clamp the top
+	// edge and shrink the height instead (content clips at the top — the
+	// pet stays visible, the bubble stack may lose its head).
+	const wa = screen.getDisplayMatching(petWindow.getBounds()).workArea;
+	if (y < wa.y) {
+		h = Math.max(PET_WINDOW_SIZE.height, wy + curH - wa.y);
+		y = wa.y;
 	}
-	if (!bubbleWindow || bubbleWindow.isDestroyed()) return { ok: true };
-	const [bw, bh] = bubbleWindow.getSize();
-	if (bubbleSize && (bw !== bubbleSize.width || bh !== bubbleSize.height)) {
-		bubbleWindow.setSize(bubbleSize.width, bubbleSize.height);
-	}
-	syncBubbleWindow();
+	petWindow.setBounds({ x: wx, y, width: PET_WINDOW_SIZE.width, height: h });
 	return { ok: true };
 });
 

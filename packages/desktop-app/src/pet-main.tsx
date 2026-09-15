@@ -1,29 +1,27 @@
 /**
  * Pet window entry (pet.html) — the floating desktop companion (伙伴),
- * now in its OWN window, split from the bubbles/panel (双窗口):
+ * SINGLE window (merged 2026-09-16; the former 双窗口 split was the root
+ * cause of the pet↔bubble coordinate drift on non-100% scaling):
  *
- *   - pet window (pet.html, THIS file): the active pet (builtin SVG or
- *     Petdex spritesheet) with a mood driven by the main window's session
- *     store, unread badge, and a drag/hover/dock gesture surface. Fully
- *     transparent, click-through outside the sprite — the pet floats on
- *     the desktop.
- *   - bubble window (bubble.html): activity bubbles + interaction panel,
- *     in a fully transparent per-pixel window — the cards self-draw
- *     their frosted-glass surface (bubble-main.tsx).
+ *   - the active pet (builtin SVG or Petdex spritesheet) with a mood
+ *     driven by the main window's session store, unread badge, and a
+ *     drag/hover/dock gesture surface
+ *   - the activity bubbles + interaction panel (pet-bubbles.tsx) layered
+ *     ABOVE the sprite in the same window — their relative position is
+ *     CSS, structurally immune to DPI/scaling; the window grows upward
+ *     (bottom edge fixed) when they need room
  *
  * Pointer handling:
- *   - drag beyond 8px moves the OS window (pet-drag delta IPC)
- *   - a click (below threshold) toggles the interaction panel — the panel
- *     lives in the BUBBLE window, so a click routes through the main
- *     process (pet-toggle-panel → bubble:panel-toggle)
+ *   - drag beyond 8px moves the OS window (pet-drag-client; the main
+ *     process anchors ONCE per drag and tracks the DIP cursor — no
+ *     readback, no scale math, exact 1:1 at any scaling)
+ *   - a click (below threshold) toggles the interaction panel
  *   - a double-click toggles the main window (visible → minimize)
  *   - hover/dragging switch the petdex sprite to rows 1/2 (BitFun parity);
  *     hover is driven by the MAIN process (it knows when the cursor is in
  *     the interactive hitbox, including when the window is click-through)
- *
- * The bubble/panel data (bubbles, approvals, session state, recent
- * sessions) flows to the bubble window; this window consumes only
- * mood/scale/unread/theme from pet:activity.
+ *   - 60s idle at rest → sleep state (dimmed + zzz, CSS-only); any
+ *     gesture or mood change wakes it
  */
 
 import { setLocale, t } from "@musepi/guest-client";
@@ -32,6 +30,7 @@ import { createRoot } from "react-dom/client";
 import { PetSprite, usePet } from "./components/PetSprite";
 import { type PetActivity, type PetMood, petScale } from "./lib/pet";
 import { initTooltips } from "./lib/tooltips";
+import { PetBubbles } from "./pet-bubbles";
 
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
  *  walk frames — absorbs the ±1–2px per-move jitter of real mouse deltas. */
@@ -90,6 +89,11 @@ function PetApp(): ReactNode {
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
 	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
 	const [unreadCount, setUnreadCount] = useState(0);
+	// Sleep state (clawd-on-desk parity): after 60s of no interaction AND
+	// no task activity, the pet dims and shows a "zzz" (CSS-only — no new
+	// sprite rows needed for imported sheets). Any gesture or mood change
+	// wakes it.
+	const [sleeping, setSleeping] = useState(false);
 	const bridge = (window as unknown as { electronAPI?: PetBridge }).electronAPI;
 	const bumpRef = useRef<HTMLDivElement>(null);
 	// RAF-coalesced drag move: pointermove can fire 120Hz+, and firing one
@@ -210,6 +214,19 @@ function PetApp(): ReactNode {
 		};
 	}, [mood, hovering, dragging, pet]);
 
+	// Sleep scheduler: 60s with no gesture and no task activity (mood at
+	// rest) → asleep. Any change to mood/hover/drag re-runs this effect,
+	// which both wakes the pet and restarts the timer.
+	useEffect(() => {
+		if (mood !== "rest" || hovering || dragging) {
+			setSleeping(state => (state ? false : state));
+			return;
+		}
+		const SLEEP_AFTER_MS = 60_000;
+		const timer = window.setTimeout(() => setSleeping(true), SLEEP_AFTER_MS);
+		return () => window.clearTimeout(timer);
+	}, [mood, hovering, dragging]);
+
 	// Light/dark scheme: mirror the main app's scheme (local pref +
 	// system default); the main window's petActivity push overrides it.
 	useEffect(() => {
@@ -241,9 +258,10 @@ function PetApp(): ReactNode {
 		return () => mq.removeEventListener("change", onMq);
 	}, []);
 
-	// Report the interactive rect (pet + unread badge) whenever the layout
-	// changes. The MAIN process resizes this window's click-through state;
-	// re-measure on window resize too.
+	// Report the interactive rect (pet + badge + bubbles + panel) whenever
+	// the layout changes. The MAIN process resizes this window's click-
+	// through state; re-measure on window resize too (the window grows
+	// upward when bubbles/panel open, which fires resize).
 	useEffect(() => {
 		if (!bridge?.setPetHitbox) return;
 		const report = (): void => {
@@ -266,7 +284,12 @@ function PetApp(): ReactNode {
 			void bridge.setPetRect?.(petRect);
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			const union: Record<string, number> = {};
-			for (const el of [pet, badge]) {
+			// Single-window union: the overlay cards are interactive too —
+			// include the bubbles (and their × overhang) and the panel, or
+			// the click-through poll would flip ignore while the cursor is
+			// over a card.
+			const overlay = document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubble__dismiss, .pet-panel");
+			for (const el of [pet, badge, ...overlay]) {
 				if (!el) continue;
 				const r = el.getBoundingClientRect();
 				if (r.width <= 0 || r.height <= 0) continue;
@@ -341,6 +364,9 @@ function PetApp(): ReactNode {
 			window.clearTimeout(clickTimerRef.current);
 			clickTimerRef.current = null;
 		}
+		// A gesture wakes the sleeper (and restarts the 60s timer via the
+		// hover state this pointerdown is about to produce).
+		setSleeping(false);
 		// Drag uses clientX/Y (window-relative logical pixels — unit-stable,
 		// unlike screenX which flips between logical/physical across
 		// down/move on macOS Retina). The main process converts to screen
@@ -453,6 +479,12 @@ function PetApp(): ReactNode {
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
+			{/* Bubbles + interaction panel (merged, pet-bubbles.tsx): DOM
+			 * layered above the sprite in the SAME window — the relative
+			 * position is CSS, structurally immune to DPI/scaling. The
+			 * component reports the window height it needs and the main
+			 * process grows the window upward (bottom edge fixed). */}
+			<PetBubbles />
 			{/* Stage: centers the sprite AND anchors the unread badge to it —
 			 * a badge anchored to the WINDOW (top/right) floats ~70px right
 			 * of the centered ~104px sprite in the 320px window. The stage
@@ -475,7 +507,7 @@ function PetApp(): ReactNode {
 				)}
 				<div
 					ref={bumpRef}
-					className="pet-window__pet"
+					className={`pet-window__pet${sleeping ? " pet-window__pet--sleeping" : ""}`}
 					onPointerDown={onPointerDown}
 					onPointerMove={onPointerMove}
 					onPointerUp={onPointerUp}
@@ -501,6 +533,13 @@ function PetApp(): ReactNode {
 							frozen={displayMood === "hover"}
 						/>
 					</div>
+					{sleeping && (
+						// Sleep indicator (CSS-only): floats up from the
+						// sprite's head, aria-hidden — purely decorative.
+						<span className="pet-window__zzz" aria-hidden="true">
+							z z z
+						</span>
+					)}
 				</div>
 			</div>
 		</div>

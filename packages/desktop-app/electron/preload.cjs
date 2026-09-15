@@ -194,14 +194,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	petSessionContent: (payload) => ipcRenderer.invoke("pet-session-content", payload),
 	/** Pet window: answer a tool approval (pet panel 批准/拒绝). */
 	petApprove: (requestId, approved) => ipcRenderer.invoke("pet-approve", { requestId, approved }),
-	/** Pet window: expand/collapse the interaction panel (window resize). */
-	petSetPanel: (open) => ipcRenderer.invoke("pet-set-panel", open),
-	/** Pet window single click → toggle the BUBBLE window's interaction
-	 *  panel (the panel moved to its own glass window). */
+	/** Pet window single click → toggle the interaction panel (the panel
+	 *  lives in the pet window since the single-window merge). */
 	toggleBubblePanel: () => ipcRenderer.invoke("pet-toggle-panel"),
-	/** Bubble window: report its content bounding box (CSS px) so the main
-	 *  process sizes the OS window to exactly the bubbles/panel. */
-	setBubbleSize: (rect) => ipcRenderer.invoke("bubble-set-size", rect),
+	/** Pet window: report the height it needs (bubbles/panel grow the
+	 *  window upward, bottom edge fixed). */
+	setPetContentSize: (size) => ipcRenderer.invoke("pet-set-content-size", size),
+	/** Pet window: a global hotkey (Ctrl/Cmd+Shift+Y / N) decided a tool
+	 *  approval — drop the card without an activity round-trip. */
+	onPetApprovalResolved: (cb) => {
+		const listener = (_e, payload) => cb(payload);
+		ipcRenderer.on("pet:approval-resolved", listener);
+		return () => ipcRenderer.removeListener("pet:approval-resolved", listener);
+	},
 	/** Board card 固定至桌面: opens a small always-on-top window with the
 	 *  card payload (kimi parity, M5 skeleton). */
 	pinWidget: (payload) => ipcRenderer.invoke("widget-pin", payload),

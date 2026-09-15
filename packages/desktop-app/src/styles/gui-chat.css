@@ -3837,6 +3837,11 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
+	/* Give the trailing gap back. The workspace row is gap-2, so a collapsed
+	 * panel left TWO 8px gaps (chat→panel→rail) with zero width between them:
+	 * the chat card ended 16px from the rail when closed versus 8px when open
+	 * (user: 折叠时会话卡片和 rail 之间的空白比展开时大). */
+	margin-right: -8px;
 }
 
 /* Maximize modal scrim: dims the chat column behind the floated panel
@@ -3878,8 +3883,11 @@ body.gui-resizing .gui-pane-right {
 	height: var(--pane-max-height, calc(100vh - 48px));
 	z-index: 850;
 	/* The surface cannot clip the panel (fixed escapes its overflow), so the
-	 * panel carries the container's own curve and drops the docked edge. */
-	border-radius: var(--radius-2xl);
+	 * panel carries the container's own curve and drops the docked edge.
+	 * Fallback included: an unresolvable var() would make the whole
+	 * declaration invalid and silently square the float (user: 最大化时其左侧
+	 * 圆角都没有了). */
+	border-radius: var(--radius-2xl, 16px);
 	border-left: 0;
 	/* Fully opaque floating surface: the maximized panel must never read
 	 * as semi-transparent over the chat column (user: 最大化面板后是半透明
@@ -3894,6 +3902,14 @@ body.gui-resizing .gui-pane-right {
 	 * the panel and the container it fills read as one card. */
 	background-color: var(--color-surface) !important;
 	background: var(--color-surface);
+	/* The float is painted with the surface colour so it reads as one card
+	 * with the container it fills — but that also erases the card's own
+	 * outline: over a same-coloured base the rounded left corners have no
+	 * contrast and read as square (user: 最大化时其左侧圆角都没有了). A hairline
+	 * border restores the curve without re-introducing the transparency the
+	 * opaque paint exists to prevent. */
+	border: 1px solid var(--border);
+	box-shadow: 0 16px 44px oklch(0 0 0 / 42%);
 	/* No transition: the box is measured from the surface, so animating it
 	 * would let the panel lag the container mid-resize. */
 	transition: none;
