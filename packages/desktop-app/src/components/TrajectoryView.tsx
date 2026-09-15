@@ -485,9 +485,14 @@ export function TrajectoryView({
 		});
 		setFlashTurn(target);
 		setTimeout(() => setFlashTurn(cur => (cur === target ? null : cur)), 900);
-		const scroller = listRef.current;
-		const row = scroller?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
-		if (scroller && row) {
+		// Measure AFTER React commits the expansion: `setCollapsed` above is
+		// async, so measuring in this tick reads the still-collapsed layout and
+		// the scroll lands short (the rows that just opened shift the target
+		// down). A double rAF waits for commit + layout.
+		const scrollToTarget = (): void => {
+			const scroller = listRef.current;
+			const row = scroller?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
+			if (!scroller || !row) return;
 			// Scroll ONLY this list: `scrollIntoView` walks every scrollable
 			// ancestor, which pushed the whole panel up out of place, and the row
 			// landed flush against the edge.
@@ -497,7 +502,8 @@ export function TrajectoryView({
 				scroller.scrollTop -
 				TURN_JUMP_INSET;
 			scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
-		}
+		};
+		requestAnimationFrame(() => requestAnimationFrame(scrollToTarget));
 	}, [range, turns]);
 
 	const toggleTurn = (turn: number): void => {

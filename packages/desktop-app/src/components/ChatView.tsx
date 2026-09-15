@@ -682,6 +682,14 @@ export function ChatView({
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
 	// Declared AFTER extTabs: its dependency array reads extTabs, and that
 	// array is evaluated during render (a TDZ reference would crash here).
+	// extTabs feeds the tab-label lookup only. Keep it in a ref so
+	// setActiveView's identity stays stable: ContextPanel's reveal effects
+	// depend on that callback, and an unstable identity made the browser
+	// reveal re-fire on EVERY render (browserOpenRequest is sticky — it is
+	// never cleared — so the panel was yanked back to the browser tab
+	// continuously, which read as "the + button does nothing").
+	const extTabsRef = useRef(extTabs);
+	extTabsRef.current = extTabs;
 	const setActiveView = useCallback(
 		(view: string | null): void => {
 			// null = "nothing selected"; the empty state owns that, the rail and
@@ -690,11 +698,11 @@ export function ChatView({
 			// Strip label: registry display name for built-ins, the slot's own
 			// label for extension tabs (openchamber tab-label parity) — a raw
 			// surface id like "ext:settings" must never reach the tab title.
-			const ext = view.startsWith("ext:") ? extTabs.find(x => `ext:${x.slot}` === view) : undefined;
+			const ext = view.startsWith("ext:") ? extTabsRef.current.find(x => `ext:${x.slot}` === view) : undefined;
 			const label = ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
 			panelTabs.open({ surface: view, label });
 		},
-		[panelTabs.open, extTabs],
+		[panelTabs.open],
 	);
 	// transcript.node seat dispatch (DSH `conversation.chat.node` entryKey
 	// analog): extensions register renderers for specific node kinds

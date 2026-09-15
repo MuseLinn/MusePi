@@ -319,8 +319,15 @@
 	 * border-left divider against the chat column. */
 	border-radius: var(--radius-2xl);
 	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
-	/* Transparent over the workspace glass layer (.gui-main). */
-	background: transparent;
+	/* Same surface colour as the chat card so the pane reads as an
+	 * independent panel instead of dissolving into the base (the user's
+	 * "no radius, no colour difference" report). !important is REQUIRED: the
+	 * EOF glass rule `.gui-pane-side, .gui-pane-right--inner,
+	 * .gui-header::before { background: transparent }` sits later in this file
+	 * at equal specificity and would otherwise win. `background:` shorthand is
+	 * unsafe here (var() in the shorthand parses as an image), so set the
+	 * colour longhand — the same reason the maximized rule does. */
+	background-color: var(--color-surface) !important;
 }
 
 /* ── Right-edge 44px icon rail (openchamber ContextPanelRail parity) ── */

@@ -224,15 +224,23 @@ export function ContextPanel({
 			setMaintenanceBusy(null);
 		}
 	};
-	// Relay external reveal requests into the FilePane preview.
+	// Relay external reveal requests into the FilePane preview. One-shot per
+	// nonce: the request object stays non-null forever (it is only ever
+	// re-issued with a higher nonce), so an effect that re-runs for any other
+	// reason must not re-navigate. That is exactly what happened to the
+	// browser relay below — a re-render snapped the panel back to the browser
+	// tab, so "open a new tab" looked broken.
+	const revealedNonceRef = useRef({ file: 0, browser: 0 });
 	useEffect(() => {
-		if (!openRequest) return;
+		if (!openRequest || openRequest.nonce === revealedNonceRef.current.file) return;
+		revealedNonceRef.current.file = openRequest.nonce;
 		onViewChange("files");
-	}, [openRequest]);
+	}, [openRequest, onViewChange]);
 	// Relay external browser reveals: switch to the browser view (the rail
 	// selects it; ManagedBrowserPane navigates on the nonce).
 	useEffect(() => {
-		if (!browserOpenRequest) return;
+		if (!browserOpenRequest || browserOpenRequest.nonce === revealedNonceRef.current.browser) return;
+		revealedNonceRef.current.browser = browserOpenRequest.nonce;
 		onViewChange("browser");
 	}, [browserOpenRequest, onViewChange]);
 	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
