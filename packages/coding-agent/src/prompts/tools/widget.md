@@ -28,26 +28,26 @@
 widget { type, data, title? }
 ```
 
-| type | data 字段 | 说明 |
+|type|data 字段|说明|
 |---|---|---|
-| `calc` | `mode: "pre"\|"post"`, `amount: number` | 劳务费个税计算器（≤4000 元规则：收入−800，税率 20%） |
-| `slider` | `noise/jitter/freq/amp: number` | 参数滑杆 + 实时波形 |
-| `ticker` | `label: string`, `value: string`, `delta: number` | 行情卡（值 + 涨跌 + 迷你图） |
-| `metric` | `label: string`, `value: number`, `delta: number` | 指标卡（数字滚动 + 涨跌色） |
-| `todo` | `items: [{id, text, done}]` | 待办清单 |
-| `clock` | `market: "cn"\|"us"\|"eu"` | 数字时钟 + CN/US/EU 市场状态 |
-| `gallery` | `items: [string]` | 手风琴画廊 |
-| `pomodoro` | `mode: "focus"\|"short"\|"long"` | 番茄钟（圆环 + 轮次统计） |
-| `video` | `url`, `bvid`, `title`, `subtitle` | 视频卡：`bvid` 填 B站视频号（如 `BV1vT411d7QE` 凡人修仙传）→ 封面点击 B站播放器内联播放；`url` 填 mp4 直链 → 自绘控制条（播放/进度/静音/全屏）；都空则装饰封面占位 |
-| `music` | `queue: [{id, year, title, artist, file}]` | 黑胶播放器：真音频（Internet Archive 公版录音）+ 频谱 + 播放队列 |
-| `history` | `header`, `date`, `events: [{year, text}]` | 历史上的今天：实时数据源 + 8-bit 像素标题 + 可滚动事件列表 |
-| `fx` | `chip`, `title`, `pairs: [{code, unit, note}]` | 实时汇率（60s 自动刷新 + 30 日走势） |
-| `stocks` | `chip`, `title`, `rows: [{code, label, badge, name}]` | 实时 A 股盯盘（腾讯行情 + 30 日 K 线迷你图） |
-| `gauge` | `value`, `status` | 仪表盘读数 |
-| `kline` | `candles: [{o, h, l, c, v}]` | K 线图（蜡烛 + 均线）：`candles` 每根为 `{o,h,l,c,v}`（开/高/低/收/量），缺 `v` 可省略；`price`/`delta`/`stocks` 可选 |
-| `heatwall` | `tiles: [{name, delta}]` | 涨跌热力墙 |
-| `indextape` | `indices: [...]` | 指数磁带（三市指数） |
-| `html` | `html: string`, `data: object` | 自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.__WIDGET_DATA__`；当前深浅色经 `window.__WIDGET_THEME__`（"dark"\|"light"）与 `<html class="omp-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用） |
+|`calc`|`mode: "pre"\|"post"`, `amount: number`|劳务费个税计算器（≤4000 元规则：收入−800，税率 20%）|
+|`slider`|`noise/jitter/freq/amp: number`|参数滑杆 + 实时波形|
+|`ticker`|`label: string`, `value: string`, `delta: number`|行情卡（值 + 涨跌 + 迷你图）|
+|`metric`|`label: string`, `value: number`, `delta: number`|指标卡（数字滚动 + 涨跌色）|
+|`todo`|`items: [{id, text, done}]`|待办清单|
+|`clock`|`market: "cn"\|"us"\|"eu"`|数字时钟 + CN/US/EU 市场状态|
+|`gallery`|`items: [string]`|手风琴画廊|
+|`pomodoro`|`mode: "focus"\|"short"\|"long"`|番茄钟（圆环 + 轮次统计）|
+|`video`|`url`, `bvid`, `title`, `subtitle`|视频卡：`bvid` 填 B站视频号（如 `BV1vT411d7QE` 凡人修仙传）→ 封面点击 B站播放器内联播放；`url` 填 mp4 直链 → 自绘控制条（播放/进度/静音/全屏）；都空则装饰封面占位|
+|`music`|`queue: [{id, year, title, artist, file}]`|黑胶播放器：真音频（Internet Archive 公版录音）+ 频谱 + 播放队列|
+|`history`|`header`, `date`, `events: [{year, text}]`|历史上的今天：实时数据源 + 8-bit 像素标题 + 可滚动事件列表|
+|`fx`|`chip`, `title`, `pairs: [{code, unit, note}]`|实时汇率（60s 自动刷新 + 30 日走势）|
+|`stocks`|`chip`, `title`, `rows: [{code, label, badge, name}]`|实时 A 股盯盘（腾讯行情 + 30 日 K 线迷你图）|
+|`gauge`|`value`, `status`|仪表盘读数|
+|`kline`|`candles: [{o, h, l, c, v}]`|K 线图（蜡烛 + 均线）：`candles` 每根为 `{o,h,l,c,v}`（开/高/低/收/量），缺 `v` 可省略；`price`/`delta`/`stocks` 可选|
+|`heatwall`|`tiles: [{name, delta}]`|涨跌热力墙|
+|`indextape`|`indices: […]`|指数磁带（三市指数）|
+|`html`|`html: string`, `data: object`|自定义 HTML 面（sandbox 内运行；数据经 `data` 注入 `window.__WIDGET_DATA__`；当前深浅色经 `window.__WIDGET_THEME__`（"dark"\|"light"）与 `<html class="omp-theme-dark\|light">` 注入；禁第三方 fetch——远程数据先取好再注入；`<img src>` 可用）|
 
 - `data` 可省略字段——缺省值自动补齐（如 `calc` 缺 `mode` 默认 `post`）。
 - `title` 可选，默认组件名。

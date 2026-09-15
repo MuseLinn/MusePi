@@ -15,12 +15,12 @@
 board { action, id?, board? }
 ```
 
-| action | 参数 | 说明 |
+|action|参数|说明|
 |---|---|---|
-| `list` | — | 全部看板（id + 标题 + 组件数） |
-| `get` | `id` | 单个看板完整内容（含每个 widget 的 data/pos） |
-| `schema` | — | widget 类型表：fields + defaults + tones |
-| `save` | `id` + `board` | 整板替换/新建（**校验**：类型必须已知、pos 必须整数像素） |
+|`list`|—|全部看板（id + 标题 + 组件数）|
+|`get`|`id`|单个看板完整内容（含每个 widget 的 data/pos）|
+|`schema`|—|widget 类型表：fields + defaults + tones|
+|`save`|`id` + `board`|整板替换/新建（**校验**：类型必须已知、pos 必须整数像素）|
 
 ## 何时使用
 
@@ -32,24 +32,24 @@ board { action, id?, board? }
 
 `schema` 返回的 widget 类型各有适用场景——**不同数据用不同卡面**，避免整板都是同一种数字卡：
 
-| 数据 | 组件 |
+|数据|组件|
 |---|---|
-| 单个大数字 + 涨跌（温度/湿度/卡路里/步数/心率） | `metric` |
-| 市场/汇率行情（label + 数值 + 波动） | `ticker` |
-| 时间/市场状态（CN/US/EU 开收盘） | `clock` |
-| 仪表盘读数（市场温度、进度） | `gauge` |
-| K 线/分时（行情主图） | `kline` |
-| 板块涨跌墙（一堆股票/币种涨跌幅） | `heatwall` |
-| 指数磁带（上证/深证/恒生滚动） | `indextape` |
-| 待办/清单 | `todo` |
-| 番茄钟 | `pomodoro` |
-| 滑块（噪声/振幅调节） | `slider` |
-| 计算器 | `calc` |
-| 媒体播放列表（黑胶播放器：队列/波形/进度/音量） | `music`（queue 数组：title/artist/year/disc/dur） |
-| 历史上的今天（8-bit 头 + 年份事件列表） | `history`（events 数组：year/text） |
-| 视频（有源播放 / 无源封面 + title/subtitle/duration） | `video` |
-| 图库 | `gallery` |
-| 自定义 HTML（sandbox 内联） | `html` |
+|单个大数字 + 涨跌（温度/湿度/卡路里/步数/心率）|`metric`|
+|市场/汇率行情（label + 数值 + 波动）|`ticker`|
+|时间/市场状态（CN/US/EU 开收盘）|`clock`|
+|仪表盘读数（市场温度、进度）|`gauge`|
+|K 线/分时（行情主图）|`kline`|
+|板块涨跌墙（一堆股票/币种涨跌幅）|`heatwall`|
+|指数磁带（上证/深证/恒生滚动）|`indextape`|
+|待办/清单|`todo`|
+|番茄钟|`pomodoro`|
+|滑块（噪声/振幅调节）|`slider`|
+|计算器|`calc`|
+|媒体播放列表（黑胶播放器：队列/波形/进度/音量）|`music`（queue 数组：title/artist/year/disc/dur）|
+|历史上的今天（8-bit 头 + 年份事件列表）|`history`（events 数组：year/text）|
+|视频（有源播放 / 无源封面 + title/subtitle/duration）|`video`|
+|图库|`gallery`|
+|自定义 HTML（sandbox 内联）|`html`|
 
 - **tone 决定卡壳底色**（dark/blue/light/default——见 schema）：每个组件自带卡面（行情/时钟类深色渐变、工具/清单类浅色磨砂、番茄钟蓝色——自动匹配），tone 是透明组件（html）的兜底壳 + 合集预览配色；混搭 2–3 种 tone 更接近真实产品（参考内置示例「每日财经」深色 + 「一块活的看板」混合）。
 - 主题相近的卡（行情/财经）用 `dark`；工具/日常卡（计算器/番茄钟）用 `light`/`blue`。

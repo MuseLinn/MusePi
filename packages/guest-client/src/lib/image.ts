@@ -84,7 +84,7 @@ export async function processImageFile(file: File): Promise<PendingAttachment> {
 		ctx.drawImage(bmp, 0, 0, w, h);
 		const blob: Blob | null = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
 		if (!blob) throw new Error("encode failed");
-		return await blobToAttachment(blob, file.name.replace(/\.[^.]+$/, "") + ".jpg", "image/jpeg");
+		return await blobToAttachment(blob, `${file.name.replace(/\.[^.]+$/, "")}.jpg`, "image/jpeg");
 	} finally {
 		bmp.close();
 	}

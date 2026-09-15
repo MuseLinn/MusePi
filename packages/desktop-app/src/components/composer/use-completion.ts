@@ -164,36 +164,36 @@ export function useCompletion({
 		requestAnimationFrame(() => autosize(taRef.current));
 	};
 
-/**
- * A "@" opens a mention when it is not glued to ASCII word characters: line
- * start, whitespace, CJK body text ("请看@文件") and punctuation ("（@组件" /
- * ",@x") all trigger — ZCode「中文正文或标点紧邻 @ 也能唤起面板」parity. An
- * email-ish `foo@bar` must NOT open the file panel.
- */
-function isAtTrigger(line: string, at: number): boolean {
-	if (at <= 0) return true; // line start
-	return !/[A-Za-z0-9_]/.test(line[at - 1] ?? "");
-}
+	/**
+	 * A "@" opens a mention when it is not glued to ASCII word characters: line
+	 * start, whitespace, CJK body text ("请看@文件") and punctuation ("（@组件" /
+	 * ",@x") all trigger — ZCode「中文正文或标点紧邻 @ 也能唤起面板」parity. An
+	 * email-ish `foo@bar` must NOT open the file panel.
+	 */
+	function isAtTrigger(line: string, at: number): boolean {
+		if (at <= 0) return true; // line start
+		return !/[A-Za-z0-9_]/.test(line[at - 1] ?? "");
+	}
 
-const onAtInput = (value: string): void => {
-	// Trigger on the LAST "@" of the current line — the mention token is the
-	// text after it. The old rule required a line-leading "@", so typing
-	// "请看@文件" (Chinese body text before the @) never opened the panel.
-	const lineStart = value.lastIndexOf("\n") + 1;
-	const line = value.slice(lineStart);
-	const at = line.lastIndexOf("@");
-	if (at >= 0 && isAtTrigger(line, at)) {
-		const query = line.slice(at + 1);
-		// A mention token never contains whitespace (otherwise "a @b c" and
-		// addresses would keep the panel open).
-		if (!/^\S*$/.test(query)) {
-			setAtOpen(false);
-			return;
-		}
-		setAtQuery(query);
-		setAtAnchor(lineStart + at);
-		setAtOpen(true);
-		setAtIdx(0);
+	const onAtInput = (value: string): void => {
+		// Trigger on the LAST "@" of the current line — the mention token is the
+		// text after it. The old rule required a line-leading "@", so typing
+		// "请看@文件" (Chinese body text before the @) never opened the panel.
+		const lineStart = value.lastIndexOf("\n") + 1;
+		const line = value.slice(lineStart);
+		const at = line.lastIndexOf("@");
+		if (at >= 0 && isAtTrigger(line, at)) {
+			const query = line.slice(at + 1);
+			// A mention token never contains whitespace (otherwise "a @b c" and
+			// addresses would keep the panel open).
+			if (!/^\S*$/.test(query)) {
+				setAtOpen(false);
+				return;
+			}
+			setAtQuery(query);
+			setAtAnchor(lineStart + at);
+			setAtOpen(true);
+			setAtIdx(0);
 			if (!atEntries && rpc) {
 				void rpc
 					.request<{

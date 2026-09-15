@@ -3,8 +3,8 @@ import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
-import type { SessionClient } from "../../lib/client";
 import { useBackLayer } from "../../lib/back-stack";
+import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
 import { haptic } from "../../lib/haptics";
 
@@ -151,22 +151,22 @@ export function SessionsSheet({
 				<div className="ss-list">
 					{sessions.length === 0 && <p className="ss-empty">{t("no sessions yet")}</p>}
 					{sessions.map(session => {
-					const active = session.id === currentId;
-					return (
-						<SwipeableRow
-							key={session.id}
-							client={client}
-							session={session}
-							active={active}
-							anySwiped={swipedId !== null && swipedId !== session.id}
-							onSwiped={setSwipedId}
-							onSelect={() => {
-								onSelect(session.id);
-								onClose();
-							}}
-						/>
-					);
-				})}
+						const active = session.id === currentId;
+						return (
+							<SwipeableRow
+								key={session.id}
+								client={client}
+								session={session}
+								active={active}
+								anySwiped={swipedId !== null && swipedId !== session.id}
+								onSwiped={setSwipedId}
+								onSelect={() => {
+									onSelect(session.id);
+									onClose();
+								}}
+							/>
+						);
+					})}
 				</div>
 			</div>
 		</div>
@@ -228,12 +228,15 @@ function SwipeableRow({
 		}
 	}, [anySwiped]);
 
-	const onPointerDown = useCallback((e: React.PointerEvent) => {
-		startX.current = e.clientX;
-		baseAtStart.current = offset;
-		moved.current = false;
-		setDragging(true);
-	}, [offset]);
+	const onPointerDown = useCallback(
+		(e: React.PointerEvent) => {
+			startX.current = e.clientX;
+			baseAtStart.current = offset;
+			moved.current = false;
+			setDragging(true);
+		},
+		[offset],
+	);
 
 	const onPointerMove = useCallback(
 		(e: React.PointerEvent) => {

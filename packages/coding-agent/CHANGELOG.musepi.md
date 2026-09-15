@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.28] - 2026-09-16
+
 ### Added
 - **右侧面板改为 tab-primary:一条 tab 条承载全部视图(对齐 openchamber ContextPanel)**:面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**、笔记、待办/计划、Git、浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为**启动器**(点 rail = 打开或聚焦该 surface 的 tab,不再排他切换面板体)。零 tab 时显示「从这里开始」空态导航页而非默认视图;tab 可拖拽排序、关闭激活邻居(先右后左);布局按 cwd 持久化(`musepi-gui-panel-tabs-{cwd}`),**只存标签与地址、恢复时重派生 id**,内容由所属 surface 重新物化;按 surface 分配 12 个 tab 配额,淘汰最久未触碰且非激活者(宁超预算不丢正在看的)。文件实例 tab 归面板条所有(FilePane 改受控:`activeFile` 装载 + `onOpenFile` 注册),不再有双层 tab;占位替换语义 —— rail 先开 `files::` 占位,首个真实文件打开时替换它。
   - EN: The right panel becomes tab-primary — one tab strip hosts every open view (multi-instance file tabs, notes, todos/plans, git, browser, board, extension `panel.tab.*` slots) while the rail degrades to a launcher (a rail click opens or focuses that surface's tab instead of swapping the panel body). Zero tabs shows a start-here page instead of a default view; tabs drag-reorder, closing activates the neighbour (right then left), the layout persists per cwd (`musepi-gui-panel-tabs-{cwd}`) storing labels and addresses only — ids are re-derived on restore and content re-materialises from its surface — and each surface gets a 12-tab budget that spends the oldest non-active tab (one over budget beats losing the tab in use). File instances belong to the panel strip now (FilePane is controlled: `activeFile` loads, `onOpenFile` registers), so there are no double tab rows, and the placeholder contract holds: the rail opens a `files::` placeholder that the first real file replaces.

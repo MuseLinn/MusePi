@@ -17,12 +17,7 @@ export function ContextRing({ client }: { client: SessionClient }): ReactNode {
 	const warn = clamped > 80;
 	const title = `${t("context usage")} ${Math.round(clamped)}%`;
 	return (
-		<span
-			className={`sh-ctx-ring${warn ? " sh-ctx-ring--warn" : ""}`}
-			role="img"
-			aria-label={title}
-			title={title}
-		>
+		<span className={`sh-ctx-ring${warn ? " sh-ctx-ring--warn" : ""}`} role="img" aria-label={title} title={title}>
 			<svg width={22} height={22} viewBox="0 0 22 22" aria-hidden="true">
 				<circle className="sh-ctx-ring-track" cx={11} cy={11} r={9} fill="none" strokeWidth={2.5} />
 				<circle

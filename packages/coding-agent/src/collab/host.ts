@@ -23,7 +23,6 @@ import type {
 	SessionEntry as WireSessionEntry,
 } from "@musepi/pi-wire";
 import { type BoardRecord, readBoards, validateBoards, writeBoards } from "../daemon/boards.js";
-import { parseConfiguredThinkingLevel } from "../thinking.js";
 import {
 	computeNextRun,
 	loadCronRuns,
@@ -47,6 +46,7 @@ import type { AgentSessionEvent } from "../session/agent-session";
 import { stripImagesFromMessage, USER_INTERRUPT_LABEL } from "../session/messages";
 import type { SessionEntry as StoredSessionEntry } from "../session/session-entries";
 import { TASK_SUBAGENT_LIFECYCLE_CHANNEL, TASK_SUBAGENT_PROGRESS_CHANNEL } from "../task/types";
+import { parseConfiguredThinkingLevel } from "../thinking.js";
 import { WIDGET_TYPES } from "../tools/widget.js";
 import { generateRoomKey, generateWriteToken, importRoomKey } from "./crypto";
 import { collabDisplayName } from "./display-name";
@@ -654,7 +654,8 @@ export class CollabHost {
 		this.#scheduleStateBroadcast();
 	}
 
-	#handlePrompt(text: string, images: ImageContent[] | undefined, fromPeer: number): void {		const peer = this.#peers.get(fromPeer);
+	#handlePrompt(text: string, images: ImageContent[] | undefined, fromPeer: number): void {
+		const peer = this.#peers.get(fromPeer);
 		if (!peer?.canWrite) {
 			this.#rejectReadOnly("prompting", fromPeer);
 			return;
