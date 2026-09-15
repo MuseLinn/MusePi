@@ -192,6 +192,7 @@ function savePositions(sessionKey: string, positions: CanvasPositions): void {
 export function SessionTreeCanvas({
 	entries,
 	leafId,
+	focusRequest,
 	activePathIds,
 	onJump,
 	onSwitch,
@@ -201,6 +202,11 @@ export function SessionTreeCanvas({
 	entries: readonly unknown[];
 	/** 当前叶子(view key id;null = 尾部)。 */
 	leafId?: string | null;
+	/** External "focus this node" request (map-mode prompt rail): center the
+	 *  viewport on the node and open its focus card — a NAVIGATION gesture, so
+	 *  it must not touch the session leaf (branchAt belongs to the branch
+	 *  switcher and the tree navigations, which intentionally move it). */
+	focusRequest?: { id: string; nonce: number } | null;
 	/** 活动路径 id 集;路径外节点淡显。 */
 	activePathIds?: ReadonlySet<string>;
 	/** 单击节点 = 聚焦详情卡片;双击/右键跳转 = 切换会话节点(对齐 /tree)。 */
@@ -396,6 +402,21 @@ export function SessionTreeCanvas({
 		if (!nodes.some(n => n.node.id === leafId)) return;
 		centerOnNode(leafId);
 	}, [leafId, nodes, centerOnNode]);
+
+	// Prompt-rail focus (map mode): center on the requested node and open its
+	// focus card. Deliberately NOT a branch change — the rail is a "take me
+	// there" control, while moving the leaf belongs to the branch switcher and
+	// the tree navigations (which branchAt on purpose).
+	useEffect(() => {
+		if (!focusRequest) return;
+		if (!nodes.some(n => n.node.id === focusRequest.id)) return;
+		setFocusClosing(false);
+		setFocusedId(focusRequest.id);
+		centerOnNode(focusRequest.id);
+		// Keyed on the request nonce: a repeat click on the same row must
+		// re-focus, and unrelated re-renders must not.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [focusRequest?.nonce]);
 
 	// 搜索匹配集 + 首个匹配定位。
 	const searchMatchArray = useMemo(() => {

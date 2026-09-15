@@ -1021,6 +1021,9 @@ export function ChatView({
 		}
 		return path;
 	}, [effectiveLeaf, snap?.entries]);
+	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
+	// change, so it hands the canvas a node to center + highlight.
+	const [canvasFocus, setCanvasFocus] = useState<{ id: string; nonce: number } | null>(null);
 	// Canvas-mode rail source: the map has no transcript scroller (the rail's
 	// normal source is DOM measurement), so it is driven by the ACTIVE PATH —
 	// one marker per user message on it, active = the turn the leaf sits in —
@@ -1567,6 +1570,7 @@ export function ChatView({
 												<SessionTreeCanvas
 													entries={snap?.entries ?? []}
 													leafId={effectiveLeaf}
+													focusRequest={canvasFocus}
 													activePathIds={activePathIds}
 													onJump={id => {
 														const ts = (snap?.entries ?? []).find(
@@ -1845,7 +1849,7 @@ export function ChatView({
 											entryCount={snap?.entries.length ?? 0}
 											nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
 											activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
-											onSelectNode={switchToNode}
+											onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}
 										/>
 									</div>
 									<div

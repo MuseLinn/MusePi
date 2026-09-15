@@ -259,28 +259,35 @@ export function BranchBar({
 				<span className="tr-branch-count">{t("this node has {count} branches", { count: String(count) })}</span>
 				<span className="tr-branch-line" aria-hidden />
 			</button>
-			{open && (
-				<div className="tr-branch-list" role="listbox" aria-label={t("switch branch")}>
-					{childrenLabels.map(c => (
-						<button
-							key={c.id}
-							type="button"
-							role="option"
-							aria-selected={c.id === activeChildId}
-							className={`tr-branch-item${c.id === activeChildId ? " tr-branch-item--active" : ""}`}
-							onClick={() => {
-								setOpen(false);
-								onPick(c.id);
-							}}
-						>
-							<GitFork size={11} />
-							<span className="tr-branch-item-text">{c.label || "…"}</span>
-							{c.time && <span className="tr-branch-item-time">{c.time}</span>}
-							{c.id === activeChildId && <span className="tr-branch-active-dot" aria-hidden />}
-						</button>
-					))}
-				</div>
-			)}
+			{/* Kept mounted while closed so BOTH directions animate (the list is
+			 *  max-height driven in CSS); `inert` keeps the hidden rows out of
+			 *  the tab order. */}
+			<div
+				className={`tr-branch-list${open ? " tr-branch-list--open" : ""}`}
+				role="listbox"
+				aria-label={t("switch branch")}
+				aria-hidden={!open}
+				inert={!open}
+			>
+				{childrenLabels.map(c => (
+					<button
+						key={c.id}
+						type="button"
+						role="option"
+						aria-selected={c.id === activeChildId}
+						className={`tr-branch-item${c.id === activeChildId ? " tr-branch-item--active" : ""}`}
+						onClick={() => {
+							setOpen(false);
+							onPick(c.id);
+						}}
+					>
+						<GitFork size={11} />
+						<span className="tr-branch-item-text">{c.label || "…"}</span>
+						{c.time && <span className="tr-branch-item-time">{c.time}</span>}
+						{c.id === activeChildId && <span className="tr-branch-active-dot" aria-hidden />}
+					</button>
+				))}
+			</div>
 		</div>
 	);
 }

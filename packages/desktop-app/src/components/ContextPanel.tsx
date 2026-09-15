@@ -364,15 +364,18 @@ export function ContextPanel({
 		},
 		onTap: () => setGestureShield(false),
 	});
-	const resizeHandleHandlers: PointerDragHandlers | null = maximized
-		? null
-		: {
-				...resizeDrag,
-				onPointerDown: e => {
-					setGestureShield(true);
-					resizeDrag.onPointerDown(e);
-				},
-			};
+	// The handle stays live while MAXIMIZED too: it used to be nulled there, so
+	// the edge looked (and was) inert — the panel is the widest it ever gets in
+	// that state, which is exactly when a user grabs it (user: 拆分后宽度无法调节).
+	// Grabbing it drops out of maximize and keeps dragging the docked width.
+	const resizeHandleHandlers: PointerDragHandlers = {
+		...resizeDrag,
+		onPointerDown: e => {
+			if (maximized) setMaximized(false);
+			setGestureShield(true);
+			resizeDrag.onPointerDown(e);
+		},
+	};
 	// The window drives the budget: shrinking it squeezes the panel, never the
 	// chat column (and a persisted width from a wide window is clamped too).
 	useEffect(() => {

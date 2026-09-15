@@ -509,7 +509,11 @@
 	left: 0;
 	top: 0;
 	bottom: 0;
-	width: 4px;
+	/* 8px, not 4px: the workspace split put an 8px gap between the chat card and
+	 * this panel, so the perceived boundary is the gap — a 4px strip tucked
+	 * inside the card was easy to miss and read as "the width cannot be
+	 * adjusted any more". */
+	width: 8px;
 	z-index: 600;
 	cursor: col-resize;
 	touch-action: none;

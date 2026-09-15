@@ -2859,6 +2859,24 @@
 	display: flex;
 	flex-direction: column;
 	gap: 2px;
+	/* Collapse/expand animation: the list stays mounted and is max-height
+	 * driven, so BOTH directions animate (mount/unmount only animated the
+	 * open). 260px cap keeps a long sibling list scrollable instead of
+	 * pushing the transcript. */
+	overflow: hidden;
+	max-height: 0;
+	opacity: 0;
+	transform: translateY(-3px);
+	transition:
+		max-height 200ms var(--spring),
+		opacity 150ms ease,
+		transform 200ms var(--spring);
+}
+.tr-branch-list--open {
+	max-height: 260px;
+	opacity: 1;
+	transform: none;
+	overflow-y: auto;
 }
 .tr-branch-item {
 	display: flex;
