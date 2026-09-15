@@ -16,15 +16,18 @@ import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionState } from "../lib/session-store";
 import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/slot-host";
-import { surfaceById } from "../lib/surfaces/registry";
+import { SURFACES } from "../lib/surfaces/registry";
+import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
-import { Icon } from "../vendor/oc-icons";
+import { Icon, type IconName } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { FilePane } from "./FilePane";
 import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
+import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
 import { SubagentPanel } from "./SubagentPanel";
+import { SurfaceTabStrip } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
@@ -71,8 +74,8 @@ export function ContextPanel({
 	openRequest = null,
 	browserOpenRequest = null,
 	extTabs = [],
-	view,
 	onViewChange,
+	panelTabs,
 	onExpandPanel,
 	agentId,
 	onAgentSelect,
@@ -102,11 +105,15 @@ export function ContextPanel({
 	/** Extension panel-tab slots (panel.tab.*); nav items live in the
 	 *  RightRail — the panel only renders their content. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
-	/** Active view — controlled from ChatView; the RightRail is the single
-	 *  navigation axis (nav unification), so this covers session tabs
-	 *  (context/files/…), tool panes (git/browser/…) and ext:* slots. */
-	view: string | null;
+	/** Active view — DERIVED from the active panel tab inside this component
+	 *  (tab-primary, docs §3.3.2): the panel body switches on the active
+	 *  tab's surface, so a view/tab disagreement is unrepresentable.
+	 *  onViewChange remains the navigation request channel (effects here
+	 *  reveal files/browser; the rail and shortcuts land via ChatView). */
 	onViewChange(view: string | null): void;
+	/** Panel-level tab state (tab-primary model, docs §3.3.2): the strip at
+	 *  the top of the panel hosts every open surface; the rail launches tabs. */
+	panelTabs: UsePanelTabsResult;
 	/** Expand a folded panel. The agent-activity reveal needs it (and only
 	 *  it): the rail and ⌘-shortcut paths expand for the same reason. */
 	onExpandPanel?(): void;
@@ -376,37 +383,46 @@ export function ContextPanel({
 	// measured onto --pane-max-* and re-measured on every surface resize: a
 	// window resize, sidebar toggle or rail drag keeps the panel flush instead
 	// of leaving it off the container's insets.
+	// Maximize geometry: measure the SESSION COLUMN (.gui-chat-column), not
+	// .gui-chat-surface — the surface card also contains this panel and the
+	// rail, so the old surface rect maximized the panel OVER the rail and the
+	// backdrop dimmed the whole window. The same vars drive the backdrop, so
+	// the dim covers exactly the chat column and the sidebar/rail stay live.
+	const backdropRef = useRef<HTMLDivElement | null>(null);
 	useLayoutEffect(() => {
 		const panel = panelRef.current;
-		const surface = panel?.closest<HTMLElement>(".gui-chat-surface");
-		if (!maximized || !open || !panel || !surface) return;
+		const column = panel?.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
+		if (!maximized || !open || !panel || !column) return;
+		const targets = [panel, backdropRef.current].filter((el): el is HTMLElement => el !== null);
 		const measure = (): void => {
-			const r = surface.getBoundingClientRect();
-			panel.style.setProperty("--pane-max-left", `${r.left}px`);
-			panel.style.setProperty("--pane-max-top", `${r.top}px`);
-			panel.style.setProperty("--pane-max-width", `${r.width}px`);
-			panel.style.setProperty("--pane-max-height", `${r.height}px`);
+			const r = column.getBoundingClientRect();
+			for (const el of targets) {
+				el.style.setProperty("--pane-max-left", `${r.left}px`);
+				el.style.setProperty("--pane-max-top", `${r.top}px`);
+				el.style.setProperty("--pane-max-width", `${r.width}px`);
+				el.style.setProperty("--pane-max-height", `${r.height}px`);
+			}
 		};
 		measure();
 		const observer = new ResizeObserver(measure);
-		observer.observe(surface, { box: "border-box" });
+		observer.observe(column, { box: "border-box" });
 		return () => {
 			observer.disconnect();
-			panel.style.removeProperty("--pane-max-left");
-			panel.style.removeProperty("--pane-max-top");
-			panel.style.removeProperty("--pane-max-width");
-			panel.style.removeProperty("--pane-max-height");
+			for (const el of targets) {
+				el.style.removeProperty("--pane-max-left");
+				el.style.removeProperty("--pane-max-top");
+				el.style.removeProperty("--pane-max-width");
+				el.style.removeProperty("--pane-max-height");
+			}
 		};
 	}, [maximized, open]);
 	const panelClass = `gui-pane-right gui-pane-right--inner${open ? "" : " gui-pane-right--inner--closed"}${maximized ? " gui-pane-right--maximized" : ""}${className ? ` ${className}` : ""}`;
 	// Header chrome title (nav unification): the rail owns navigation;
-	// the header labels the active view.
-	const headerTitle = useMemo(() => {
-		if (!view) return t("context");
-		const ext = view.startsWith("ext:") ? extTabs.find(x => `ext:${x.slot}` === view) : undefined;
-		if (ext) return ext.label ?? ext.slot;
-		return t((surfaceById(view)?.label ?? "context") as TranslationKey);
-	}, [view, extTabs]);
+	// the strip labels the active view. `view` is derived from the active
+	// PANEL TAB (tab-primary, docs §3.3.2) — the body switch and the strip
+	// read one source, so they cannot disagree.
+	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
+	const view = activePanelTab?.surface ?? null;
 
 	return (
 		<>
@@ -416,7 +432,12 @@ export function ContextPanel({
 			 * Click-through restores the docked width. Starts below the 48px
 			 * header so the title bar stays live. */}
 			{maximized && open && (
-				<div className="gui-pane-maximize-backdrop" onClick={() => setMaximized(false)} aria-hidden />
+				<div
+					ref={backdropRef}
+					className="gui-pane-maximize-backdrop"
+					onClick={() => setMaximized(false)}
+					aria-hidden
+				/>
 			)}
 			{/* Gesture shield: owns the move/up half of an edge drag while the
 			 * pointer is held (see .gui-drag-shield). Pointer capture alone does
@@ -439,14 +460,37 @@ export function ContextPanel({
 				 * moves that leave the strip). */}
 				<div className="gui-pane-resize-x" {...(resizeHandleHandlers ?? {})} aria-hidden />
 				<div className="flex h-full min-h-0 w-full flex-col">
-					{/* View-local chrome (nav unification): the RightRail owns
-					 * navigation; the header shows the current view's title plus the
-					 * panel-level maximize toggle. */}
-					<div className="flex h-9 flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-3">
-						<span className="gui-pane-title truncate text-[12px] font-medium text-[var(--color-text-muted)]">
-							{headerTitle}
-						</span>
-						<div className="ml-auto flex items-center gap-0.5">
+					{/* Tab strip row (tab-primary, docs §3.3.2): the strip replaces
+					 * the old title bar — the active tab IS the title. Maximize
+					 * lives here now; `+` opens a blank placeholder tab of the
+					 * active instance-capable surface (Files fallback, whose body
+					 * doubles as the picker). */}
+					<div className="flex flex-shrink-0 items-start gap-1 px-2 pt-1.5">
+						<div className="min-w-0 flex-1">
+							{panelTabs.tabs.length > 0 && (
+								<SurfaceTabStrip
+									tabs={panelTabs.tabs.map(t => ({ id: t.id, title: t.label }))}
+									activeId={panelTabs.activeId}
+									closeLabel={t("close tab")}
+									onActivate={panelTabs.activate}
+									onClose={panelTabs.close}
+									onReorder={panelTabs.reorder}
+								/>
+							)}
+						</div>
+						<div className="flex items-center gap-0.5 pt-0.5">
+							<button
+								type="button"
+								title={t("new tab")}
+								aria-label={t("new tab")}
+								className="gui-pane-tool"
+								onClick={() => {
+									const surf = activePanelTab?.surface;
+									onViewChange(surf === "notes" || surf === "browser" ? surf : "files");
+								}}
+							>
+								<Icon name="add" className="h-3.5 w-3.5" />
+							</button>
 							<button
 								type="button"
 								title={maximized ? t("restore panel") : t("maximize panel")}
@@ -458,7 +502,19 @@ export function ContextPanel({
 							</button>
 						</div>
 					</div>
-					{view === "browser" ? (
+					{panelTabs.tabs.length === 0 ? (
+						/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
+						 * parity): the rail's primary surfaces as launchable entries. */
+						<PanelTabsEmptyState
+							heading={t("start here")}
+							items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(s => ({
+								id: s.id,
+								label: t(s.label as TranslationKey),
+								icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
+								onSelect: () => onViewChange(s.id),
+							}))}
+						/>
+					) : view === "browser" ? (
 						/* Browser pane renders OUTSIDE the feather-scroll container:
 						 * the native WebContentsView projects the slot's exact CSS
 						 * rect — a padded/scrollable wrapper breaks the height chain
@@ -486,7 +542,16 @@ export function ContextPanel({
 							{view === "notes" ? (
 								<NotesPane rpc={rpc} cwd={cwd} />
 							) : view === "files" && cwd ? (
-								<FilePane rpc={rpc} cwd={cwd} openRequest={openRequest} />
+								<FilePane
+									rpc={rpc}
+									cwd={cwd}
+									openRequest={openRequest}
+									// File instances live in the PANEL strip (tab-primary):
+									// the pane loads whatever file tab is active and
+									// registers tree clicks back into the strip.
+									activeFile={activePanelTab?.surface === "files" ? activePanelTab.target : null}
+									onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
+								/>
 							) : view === "widget" ? (
 								<WidgetSidebarTab entries={snap?.entries ?? []} />
 							) : view === "jobs" ? (

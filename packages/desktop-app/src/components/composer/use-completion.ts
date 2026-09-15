@@ -77,6 +77,9 @@ export function useCompletion({
 	// workspace tree scan (workspace.tree), NOT agents.
 	const [atOpen, setAtOpen] = useState(false);
 	const [atQuery, setAtQuery] = useState("");
+	/** Index (in the full textarea value) of the "@" that opened the mention
+	 *  token — the completion must replace from HERE, not from line start. */
+	const [atAnchor, setAtAnchor] = useState<number | null>(null);
 	const [atEntries, setAtEntries] = useState<AtCompletionEntry[] | null>(null);
 	const [atIdx, setAtIdx] = useState(0);
 	// "#" completion (insert a session reference): lists session.list, with
@@ -161,14 +164,36 @@ export function useCompletion({
 		requestAnimationFrame(() => autosize(taRef.current));
 	};
 
-	const onAtInput = (value: string): void => {
-		// Trigger when the current line starts with "@" (TUI file mention).
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("@") && line.length >= 1) {
-			setAtQuery(line.length > 1 ? line.slice(1) : "");
-			setAtOpen(true);
-			setAtIdx(0);
+/**
+ * A "@" opens a mention when it is not glued to ASCII word characters: line
+ * start, whitespace, CJK body text ("请看@文件") and punctuation ("（@组件" /
+ * ",@x") all trigger — ZCode「中文正文或标点紧邻 @ 也能唤起面板」parity. An
+ * email-ish `foo@bar` must NOT open the file panel.
+ */
+function isAtTrigger(line: string, at: number): boolean {
+	if (at <= 0) return true; // line start
+	return !/[A-Za-z0-9_]/.test(line[at - 1] ?? "");
+}
+
+const onAtInput = (value: string): void => {
+	// Trigger on the LAST "@" of the current line — the mention token is the
+	// text after it. The old rule required a line-leading "@", so typing
+	// "请看@文件" (Chinese body text before the @) never opened the panel.
+	const lineStart = value.lastIndexOf("\n") + 1;
+	const line = value.slice(lineStart);
+	const at = line.lastIndexOf("@");
+	if (at >= 0 && isAtTrigger(line, at)) {
+		const query = line.slice(at + 1);
+		// A mention token never contains whitespace (otherwise "a @b c" and
+		// addresses would keep the panel open).
+		if (!/^\S*$/.test(query)) {
+			setAtOpen(false);
+			return;
+		}
+		setAtQuery(query);
+		setAtAnchor(lineStart + at);
+		setAtOpen(true);
+		setAtIdx(0);
 			if (!atEntries && rpc) {
 				void rpc
 					.request<{
@@ -201,10 +226,12 @@ export function useCompletion({
 	const insertAt = (path: string): void => {
 		const ta = taRef.current;
 		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + atQuery.length + 1);
-		setText(`${prefix}@${path} ${rest}`);
+		// Replace the "@query" token in place: the @ may sit mid-line after
+		// Chinese text or punctuation, so the split runs through its anchor.
+		const anchor = atAnchor ?? ta.value.lastIndexOf("\n");
+		const prefix = ta.value.slice(0, anchor + 1); // up to and including "@"
+		const rest = ta.value.slice(anchor + 1 + atQuery.length);
+		setText(`${prefix}${path} ${rest}`);
 		setAtOpen(false);
 		requestAnimationFrame(() => autosize(taRef.current));
 	};

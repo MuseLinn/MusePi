@@ -152,6 +152,11 @@
 .gui-terminal-dock {
 	min-width: 0;
 	width: 100%;
+	/* Own card (workspace split): the dock floats separately from the chat
+	 * card above it instead of sharing the surface's bottom edge. */
+	border-radius: var(--radius-2xl);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	overflow: hidden;
 	background: color-mix(in oklab, var(--color-surface-sunken) 96%, transparent);
 	/* Open/close animation: height animates 0 ↔ dockHeight; the border
 	 * fades in with it so a closed dock leaves no hairline. */
@@ -292,6 +297,16 @@
 }
 
 /* ── Session-bound right panel nested under the transcript ──────────── */
+/* Independent floating card (ZCode 工作区拆分 parity): the session column,
+ * the side pane and the terminal dock are each their own rounded card on the
+ * glass base — 样式与设置页统一 (same chrome as the settings cards). The
+ * background stays with each region's own glass/surface mechanism. */
+.gui-float-card {
+	border-radius: var(--radius-2xl);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	overflow: hidden;
+}
+
 .gui-pane-right--inner {
 	width: 288px;
 	flex-shrink: 0;
@@ -300,7 +315,10 @@
 	flex-direction: column;
 	position: relative;
 	overflow: hidden;
-	border-left: 1px solid var(--border);
+	/* Own card (workspace split): rounded + shadow instead of the old
+	 * border-left divider against the chat column. */
+	border-radius: var(--radius-2xl);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 	/* Transparent over the workspace glass layer (.gui-main). */
 	background: transparent;
 }
@@ -313,8 +331,11 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	border-left: 1px solid var(--border);
-	background: transparent;
+	/* Own slim card (workspace split): no divider against the panel card. */
+	border-radius: var(--radius-2xl);
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	overflow: hidden;
+	background: var(--color-surface);
 }
 
 .gui-right-rail-group {
@@ -3814,10 +3835,13 @@ body.gui-resizing .gui-pane-right {
  * chrome can no longer read as panel content (前后内容重叠 fix). */
 .gui-pane-maximize-backdrop {
 	position: fixed;
-	top: 48px;
-	right: 0;
-	bottom: 0;
-	left: 0;
+	/* Same box as the floated panel: the measured .gui-chat-column rect, NOT
+	 * the whole window — the old viewport-wide dim also covered the session
+	 * sidebar and the rail (read as a stray "shadow mask" / pane tint). */
+	left: var(--pane-max-left, 0px);
+	top: var(--pane-max-top, 48px);
+	width: var(--pane-max-width, 100vw);
+	height: var(--pane-max-height, 100vh);
 	z-index: 840;
 	background: color-mix(in oklab, var(--color-bg) 48%, transparent);
 	animation: gui-fade-in 160ms ease;
@@ -3833,9 +3857,12 @@ body.gui-resizing .gui-pane-right {
  * dialogs/menus sit higher. */
 .gui-pane-right--maximized {
 	position: fixed;
-	right: 0;
 	left: var(--pane-max-left, auto);
 	top: var(--pane-max-top, 48px);
+	/* Exact column box (docs §3.3.2): the measured .gui-chat-column rect.
+	 * left+width+right is over-constrained (right loses in LTR), so right is
+	 * not declared — the panel must never extend past the column into the
+	 * rail. */
 	width: var(--pane-max-width, min(1280px, calc(100vw - 80px)));
 	height: var(--pane-max-height, calc(100vh - 48px));
 	z-index: 850;

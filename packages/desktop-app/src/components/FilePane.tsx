@@ -198,6 +198,14 @@ function matchesQuery(entry: WorkspaceEntry, query: string): boolean {
 	return entry.name.toLowerCase().includes(q) || entry.path.toLowerCase().includes(q);
 }
 
+/** A minimal entry for a tab whose file is not in the current scan — restored
+ *  from a previous session, hidden by the gitignored filter, or deleted.
+ *  openPreview only needs path/name/isDir to fetch content; the scan-derived
+ *  fields are zeroed and never rendered for this path. */
+function syntheticEntry(path: string): WorkspaceEntry {
+	return { path, name: path.split("/").pop() ?? path, isDir: false, size: 0, mtime: 0, depth: 0 };
+}
+
 /** Flatten visible rows honoring collapse state + search query. In query
  *  mode, collapse is ignored: the whole tree is walked (cheap — a few
  *  hundred string matches) and every node whose path OR a descendant
@@ -309,12 +317,19 @@ export function FilePane({
 	rpc,
 	cwd,
 	openRequest = null,
+	activeFile = null,
+	onOpenFile,
 }: {
 	rpc: RpcClient;
 	cwd: string;
 	/** External reveal (artifact cards / transcript paths): preview this
 	 *  path via the same pipeline as a tree click. */
 	openRequest?: { path: string; nonce: number } | null;
+	/** Tab-primary model (docs §3.3.2): file instances live in the PANEL
+	 *  strip. The pane loads whatever file tab the panel activated. */
+	activeFile?: string | null;
+	/** Tree clicks / previews register back into the panel strip. */
+	onOpenFile?: (path: string, name: string) => void;
 }): ReactNode {
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -339,6 +354,10 @@ export function FilePane({
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
 	const highlight = useChatHighlight();
+
+	// File instances live in the PANEL tab strip (tab-primary, docs §3.3.2):
+	// this pane is the body of whichever `files:<path>` tab is active, so it
+	// loads on activeFile changes and registers tree clicks via onOpenFile.
 
 	// pdf.js worker: copied next to index.html by the build script
 	// (scripts/build copies node_modules/pdfjs-dist/build/pdf.worker.min.mjs
@@ -423,6 +442,9 @@ export function FilePane({
 		async (entry: WorkspaceEntry): Promise<void> => {
 			if (entry.isDir) return;
 			setSelectedPath(entry.path);
+			// Register in the panel tab strip (idempotent: re-opening an
+			// already open file just activates its tab).
+			onOpenFile?.(entry.path, entry.name);
 			// workspace.tree paths are relative to the session cwd; external
 			// reveals (artifact cards) may carry absolute paths — don't join.
 			const absPath = entry.path.startsWith("/") ? entry.path : `${cwd}/${entry.path}`;
@@ -513,8 +535,25 @@ export function FilePane({
 				});
 			}
 		},
-		[rpc, cwd, highlight],
+		[rpc, cwd, highlight, onOpenFile],
 	);
+
+	// Load whichever file tab the panel strip activated. Skipped when the
+	// preview already shows that path (the tab was opened by this pane, so
+	// openPreview already ran and re-running would reload the same bytes).
+	const lastLoadedRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!activeFile) {
+			lastLoadedRef.current = null;
+			return;
+		}
+		if (activeFile === lastLoadedRef.current) return;
+		lastLoadedRef.current = activeFile;
+		void openPreview(syntheticEntry(activeFile));
+		// Deliberately key on activeFile only: preview changes are an OUTCOME
+		// of this effect, and openPreview is stable (useCallback above).
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [activeFile]);
 
 	// Scroll the inline editor into the virtual window (it may sit outside
 	// the visible slice otherwise and never mount). Declared after `rows`.
@@ -597,8 +636,15 @@ export function FilePane({
 		const rel = parentDir ? `${parentDir}/${name}` : name;
 		setEditing(null);
 		try {
-			if (editing.kind === "new-file") await rpc.request("fs.write", { cwd, path: rel, content: "" });
-			else if (editing.kind === "new-dir") await rpc.request("fs.mkdir", { cwd, path: rel });
+			if (editing.kind === "new-file") {
+				await rpc.request("fs.write", { cwd, path: rel, content: "" });
+				// The GUI has no code editor, so a fresh empty file is a dead end
+				// unless we point at the row's "open with app" exit (the same
+				// `openWith` bridge that menu item uses).
+				window.dispatchEvent(
+					new CustomEvent("musepi-gui-toast", { detail: `${rel} — ${t("no in-app editor hint")}` }),
+				);
+			} else if (editing.kind === "new-dir") await rpc.request("fs.mkdir", { cwd, path: rel });
 			else await rpc.request("fs.rename", { cwd, from: target!.path, to: rel });
 			await load();
 		} catch (err) {

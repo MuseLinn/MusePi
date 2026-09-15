@@ -3108,6 +3108,183 @@ body.gui-resizing {
 	font-weight: 600;
 }
 
+/* Surface-scoped multi-instance tab strip (surface-tabs.tsx): multiple live
+ * instances INSIDE one surface (docs / canvas / browser), WorkBuddy doc-tabs
+ * parity. The rail stays the navigation axis — this switches instances within
+ * the surface, the same boundary as .gui-pane-subtabs above, plus drag
+ * reorder and close. Shares the sub-tab visual language and tokens. */
+.gui-surface-tabs {
+	display: flex;
+	align-items: stretch;
+	gap: 2px;
+	height: 30px;
+	padding: 0 2px 6px;
+	border-bottom: 1px solid var(--border);
+	margin-bottom: 6px;
+	overflow-x: auto;
+	scrollbar-width: none;
+}
+
+.gui-surface-tabs::-webkit-scrollbar {
+	display: none;
+}
+
+.gui-surface-tab {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1 1 auto;
+	min-width: 96px;
+	max-width: 200px;
+	height: 26px;
+	padding: 0 8px;
+	border-radius: 7px;
+	border: none;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 12px;
+	font-family: inherit;
+	cursor: pointer;
+	user-select: none;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-surface-tab:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-surface-tab--active {
+	background: var(--color-accent-soft);
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-surface-tab--dragging {
+	z-index: 10;
+	opacity: 0.85;
+}
+
+.gui-surface-tab-title {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: left;
+}
+
+.gui-surface-tab-dirty {
+	flex: none;
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--color-accent);
+}
+
+.gui-surface-tab-close {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	opacity: 0;
+	transition: opacity 120ms ease-out, background 120ms ease-out;
+}
+
+.gui-surface-tab:hover .gui-surface-tab-close,
+.gui-surface-tab--active .gui-surface-tab-close {
+	opacity: 0.65;
+}
+
+.gui-surface-tab-close:hover {
+	background: var(--color-surface-raised);
+	opacity: 1;
+}
+
+.gui-surface-tabpanel {
+	min-height: 0;
+	flex: 1 1 auto;
+}
+
+/* Panel-level empty state (panel-tabs-empty-state.tsx): shown by the
+ * tab-primary right panel when zero tabs are open (Kimi Work "从这里开始"
+ * parity). Entries mirror the rail's launcher role. */
+.gui-panel-empty {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-sm, 12px);
+	padding: 24px 20px;
+	overflow-y: auto;
+}
+
+.gui-panel-empty-heading {
+	margin: 0 0 4px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-panel-empty-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.gui-panel-empty-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-text);
+	font-size: 13px;
+	font-family: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition: background 120ms ease-out;
+}
+
+.gui-panel-empty-item:hover {
+	background: var(--color-surface-raised);
+}
+
+.gui-panel-empty-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	color: var(--color-text-muted);
+}
+
+.gui-panel-empty-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.gui-panel-empty-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-panel-empty-hint {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+
 .gui-tool-placeholder {
 	display: flex;
 	flex-direction: column;

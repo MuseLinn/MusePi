@@ -5,6 +5,7 @@ import {
 	relTime,
 	Transcript,
 	type TranscriptNodeInjection,
+	type TranslationKey,
 	t,
 } from "@musepi/guest-client";
 import type { SessionEntry } from "@musepi/pi-wire";
@@ -26,6 +27,8 @@ import {
 	useSlotComponents,
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
+import { surfaceById } from "../lib/surfaces/registry";
+import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
@@ -659,10 +662,15 @@ export function ChatView({
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
 	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
-	// Active right-panel view — the single navigation axis (nav
-	// unification): RightRail renders every surface (session tabs, tool
-	// panes, ext:* slots) and this state drives the ContextPanel body.
-	const [activeView, setActiveView] = useState<string | null>("context");
+	// Active right-panel view — TAB-PRIMARY (docs/gui-right-panel-redesign.md
+	// §3.3.2, supersedes the "single navigation axis" model): one panel-level
+	// tab strip hosts every open surface, and the rail opens-or-focuses tabs
+	// instead of swapping the panel body. `activeView` is DERIVED from the
+	// active tab's surface so every existing setActiveView call site keeps its
+	// exact meaning — it now upserts a tab rather than mutating one variable.
+	const panelTabs = usePanelTabs(`musepi-gui-panel-tabs-${store?.cwd ?? ""}`);
+	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
+	const activeView = activePanelTab?.surface ?? null;
 	// Layer-1 session-tree leaf: null = follow the tip (linear session);
 	// a branchAt / branch switch sets it to a historical node so sending
 	// forks a new branch under it (TUI navigateTree parity).
@@ -672,6 +680,22 @@ export function ChatView({
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
+	// Declared AFTER extTabs: its dependency array reads extTabs, and that
+	// array is evaluated during render (a TDZ reference would crash here).
+	const setActiveView = useCallback(
+		(view: string | null): void => {
+			// null = "nothing selected"; the empty state owns that, the rail and
+			// the strip never navigate to it.
+			if (!view) return;
+			// Strip label: registry display name for built-ins, the slot's own
+			// label for extension tabs (openchamber tab-label parity) — a raw
+			// surface id like "ext:settings" must never reach the tab title.
+			const ext = view.startsWith("ext:") ? extTabs.find(x => `ext:${x.slot}` === view) : undefined;
+			const label = ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
+			panelTabs.open({ surface: view, label });
+		},
+		[panelTabs.open, extTabs],
+	);
 	// transcript.node seat dispatch (DSH `conversation.chat.node` entryKey
 	// analog): extensions register renderers for specific node kinds
 	// (transcriptNodeKind). A matched renderer OWNS the entry's rendering
@@ -867,6 +891,24 @@ export function ChatView({
 		const res = await branchTo(messageId);
 		if (res?.editorText) onSend(res.editorText);
 		else if (res) onSend(text);
+	};
+	// Rewind (撤回, the ⤺ action under a USER message): branch to the user
+	// message's PARENT — the node BEFORE it — so the user message itself also
+	// drops out of the active path (user-reported semantics, 2026-09-15).
+	// Distinct from onEdit, which keeps the node and backfills its text, and
+	// from retry, which keeps the node and re-answers it. The dropped tail
+	// stays on the tree (map/trajectory) as a sibling branch; nothing is
+	// truncated.
+	const rewindFromUserMessage = async (messageId: string): Promise<void> => {
+		const entry = (snap?.entries ?? []).find(e => (e as { id?: string }).id === messageId) as
+			| { parentId?: string | null }
+			| undefined;
+		const parentId = entry?.parentId;
+		if (!parentId) {
+			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
+			return;
+		}
+		await jumpBackToMessage(parentId, "");
 	};
 	// Pending composer prefill: message text sent back for re-editing
 	// (jump-back 回填 + transcript inline edit). null = no pending edit.
@@ -1274,9 +1316,15 @@ export function ChatView({
 			 * plus the header's blank areas stay draggable (openchamber
 			 * app-region-drag header); every button inside is no-drag. */}
 			<div className="gui-drag-strip" aria-hidden />
-			{/* The single rounded floating app surface — both scenes live in it.
-			 * The window header (GuiHeader) is a separate container ABOVE it. */}
-			<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+			{/* Workspace split (ZCode 工作区面板改版 parity): the session column,
+			 * the side pane and the terminal dock are INDEPENDENT rounded cards
+			 * floating on the glass base (docs/gui-right-panel-redesign.md
+			 * §3.3.2 / zcode-absorption-todos #工作区面板拆分) — no more single
+			 * card with a vertical divider. This wrapper is layout-only now;
+			 * each region carries its own card chrome. `gui-chat-surface` stays
+			 * as the JS anchor for the maximize measurement query. The window
+			 * header (GuiHeader) is a separate container ABOVE it. */}
+			<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col gap-2">
 				{/* Scene stack: both scenes mount during the 420ms overlap window,
 				 * each absolute-filling this wrapper (so they cross-fade/morph
 				 * full-surface). The wrapper itself is IN FLOW — the terminal
@@ -1315,12 +1363,16 @@ export function ChatView({
 							ref={chatSceneRef}
 							className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
 						>
-							<div className="flex min-h-0 flex-1">
+							<div className="flex min-h-0 flex-1 gap-2">
 								{/* Session column: transcript + composer + dock — the
 								 * right panel sits BESIDE this column (same level), so
 								 * opening it pushes the composer left (openchamber
 								 * MainLayout main | ContextPanel). */}
-								<div className="flex min-h-0 min-w-0 flex-1 flex-col">
+								<div className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col">
+									{/* Maximize anchor (docs §3.3.2): the floated panel and
+									 * its backdrop measure THIS column — the old target
+									 * (.gui-chat-surface) also contains the panel and the
+									 * rail, so maximizing swallowed the rail. */}
 									{/* Focus mode hides the whole transcript column (not just the
 									 * scroll container): the wrapper also carries flex:1, so
 									 * leaving it mounted would split the surface in half and
@@ -1519,7 +1571,7 @@ export function ChatView({
 																/* 撤回: move the leaf only — nothing is
 																 * backfilled into the composer (与「编辑并
 																 * 重发」互补)。 */
-																onRevert={(id, _text) => void jumpBackToMessage(id, "")}
+																onRevert={id => void rewindFromUserMessage(id)}
 																/* 编辑并重发 (TUI navigateTree 选用户消息 parity):
 																 * branchAt 到该消息(leaf 落父节点,旧尾部成为
 																 * sibling branch)+ 原文回填 composer——发送即在
@@ -1827,8 +1879,8 @@ export function ChatView({
 									open={rightPanelOpen && !focusMode}
 									openRequest={openFileReq}
 									browserOpenRequest={openBrowserReq}
-									view={activeView}
 									onViewChange={setActiveView}
+									panelTabs={panelTabs}
 									onExpandPanel={onExpandRightPanel}
 									agentId={panelAgentId}
 									onAgentSelect={selectAgent}

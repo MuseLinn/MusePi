@@ -5,6 +5,30 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ContextPanel } from "../src/components/ContextPanel";
 import type { RpcClient } from "../src/lib/rpc";
 import type { GuiSessionState } from "../src/lib/session-store";
+import type { UsePanelTabsResult } from "../src/lib/use-panel-tabs";
+
+// 面板级 tab 状态替身（tab-primary 接线后 ContextPanel 从 panelTabs 派生 view，
+// 不再收 view prop）：agents 视图只有在 agents tab 处于激活时才可达，所以替身
+// 必须带上一个激活的 agents tab —— 空的 tabs 会渲染成零 tab 空态导航页。
+const agentsPanelTabs: UsePanelTabsResult = {
+	tabs: [
+		{
+			id: "agents::",
+			surface: "agents",
+			target: null,
+			label: "Agents",
+			readOnly: false,
+			touchedAt: 1,
+			dedupeKey: null,
+		},
+	],
+	activeId: "agents::",
+	open: () => {},
+	close: () => {},
+	closeMany: () => {},
+	activate: () => {},
+	reorder: () => {},
+};
 
 // 右面板 agents 视图 SSR 冒烟:swarm 子 agent 的详情层必须渲染在面板内部(不是独立
 // 浮层),且关着也保持挂载 —— 进出动效由 .gui-agent-dock--open 驱动,条件挂载会
@@ -46,8 +70,8 @@ function render(agents: readonly AgentSnapshot[], agentId: string | null): strin
 		<ContextPanel
 			snap={snapshot(agents)}
 			rpc={rpc}
-			view="agents"
 			onViewChange={() => {}}
+			panelTabs={agentsPanelTabs}
 			agentId={agentId}
 			onAgentSelect={() => {}}
 		/>,

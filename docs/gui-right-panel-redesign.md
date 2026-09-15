@@ -12,10 +12,10 @@
 
 > 核对方法：逐项 vs `packages/desktop-app/src/`。
 
-- **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ❌。
+- **Phase 1 核心改造 — ◐**：registry `group` 字段 ✅（`surfaces/registry.ts:27-57`）；Rail 分组+溢出折叠 ✅（`RightRail.tsx:96-261`，但保持 44px 纯图标、secondary 不折叠，作者偏好）；宽度 260–1200 ✅（超出规格，`ContextPanel.tsx:229-244`）+ maximize。**TabBar 第二 tab 条 ❌ — 已架构否决**（`ContextPanel.tsx:283-284`、`RightRail.tsx:42-44`："rail is the single navigation axis — no second tab row"）；多实例 tab ◐ **（2026-09-15）**：通用组件已落地 ✅（`components/surface-tabs.tsx`：`SurfaceTabStrip` / `useSurfaceTabs` / `SurfaceTabPanels` + `test/surface-tabs.test.tsx` 17 用例），**files surface 已接入**（`FilePane.tsx`：树节点点击注册 tab、激活跟随已加载预览、关闭跟随邻居、按 cwd 持久化 `musepi-gui-file-tabs-{cwd}`）；其余 surface 接入时必须走「surface 内实例 tab」形态（见 §3.3 边界修订），不得做成面板头部的全局导航条。
 - **Phase 2 体验优化 — ◐**：⌘E 面板开关 ✅、⌘⇧E=focus mode ✅（语义与文档不同，属设计漂移）；关闭动画 ✅（220ms 宽度折叠，非 proma overlay）。snap points ✅（`ContextPanel.tsx:247` `SNAP_POINTS=[300,480,800]`，释放吸附，0a51f37788）、上下文 gating ❌、Mod+1..9 ✅（2026-09-07：⌘1..8 按 rail 可见顺序直达 surface，`app.tsx` 快捷键 + `ChatView.panelSelectRequest` nonce 通道，折叠时自动展开）、pop-out ❌。
 - **Phase 3 面板细化 — ◐ 持续**：Context（用量环+维护 ✅，跨会话切换 ❌）；Files（搜索+预览 ✅，二级 tabbar ❌；.md 预览渲染态默认 + 渲染/源码切换 + 预览头复制路径/默认应用打开 ✅ 2026-09-07）；Git/Diff/PR 合并为单一 `git` surface（子 tab：Changes/Commits/PR，视图内导航，rail 仍唯一导航轴）✅；Notes/Browser 单实例；Usage 浮动卡 ✅（composer 侧，非 openchamber 形态）；Pet 独立窗口 ✅；Agents 轨迹 ✅。配套（2026-09-07）：轮次折叠头聚合更改条「更改 N 文件 +A −R」+ 一键回退到轮起点（`round-collapse.ts` 聚合 edit/apply_patch diff 统计，ZCode 更改 chip parity）；终端 dock 标签按项目持久化（`musepi-gui-terminal-tabs-{cwd}`，重开恢复为全新 pty）。
-- **结论**：核心改造主体已落地（分组/宽度/折叠），TabBar 与多实例为架构否决项，剩余为 Phase 3 面板级细化。实施下一批时更新本表。
+- **结论**：核心改造主体已落地（分组/宽度/折叠），TabBar（作为第二导航轴）仍为架构否决项；surface 内多实例 tab 通用组件已落地（2026-09-15，`surface-tabs.tsx`；files surface 已接入），剩余为 Phase 3 面板级细化。实施下一批时更新本表。
 
 ---
 
@@ -173,6 +173,66 @@ settings、sessions、mcp、roles、computer、updates、search、board、friend
   - `instance` tab（文件/浏览器/聊天）：多实例，可拖拽排序
   - `preview` tab（临时文件预览）：自动关闭，不持久化
 - **Tab 操作**：关闭（×）/ 拖拽排序 / 弹出为新窗口 / 固定
+
+#### 3.3.1 边界修订（2026-09-15，实施回写）
+
+原 3.3 把 `surface` tab（导航职责）和 `instance` tab（内容职责）放进**同一条** tab 条——这正是 Phase 1 被架构否决的根因：那会让面板头部出现第二导航轴。
+
+修订后的边界（与 `RightRail.tsx:57`、`git-panel.tsx:807` 的既有注释一致）：
+
+| 形态 | 职责 | 归属 | 状态 |
+|---|---|---|---|
+| rail 图标 | 切换 surface（导航轴，唯一） | `RightRail.tsx` | ✅ 已落地，**不变** |
+| surface 内实例 tab 条 | 同一 surface 的多个实例（WorkBuddy 文档 tab / openchamber file tabs） | surface 组件内部 | ✅ 组件已落地并接入 files surface（`FilePane.tsx`）；notes/browser 待接入 |
+| 视图内子 tab（Changes/Commits/PR） | 单实例内的视图切换 | `git-panel.tsx` `gui-pane-subtabs` | ✅ 已落地（既有先例） |
+
+落地组件（`packages/desktop-app/src/components/surface-tabs.tsx`）：
+
+- `SurfaceTabStrip`：水平可拖拽排序 + 关闭（含中键关闭）+ dirty 标记 + 溢出滚动 + 激活 tab 自动 `scrollIntoView`；roving tabindex + `role="tablist"/"tab"`，左右方向键切换（键盘拖拽走 dnd-kit KeyboardSensor）
+- `useSurfaceTabs(storageKey)`：状态 + `localStorage` 持久化（key 约定 `musepi-gui-<surface>-tabs-{cwd}`，对齐终端 tabs 惯例）；序列化**只存标签不存内容**，带 `v1` schema 版本，未知版本/未知 id 丢弃而非误恢复
+- `SurfaceTabPanels`：面板体渲染，**默认 keep-mounted**（`display:none` 隐藏，保光标/滚动/iframe 状态），`unmountIds` 显式列出可安全卸载的实例——终端/画布/文档都必须 keep-mounted
+
+接入顺序建议：notes（同项目多笔记，低风险）→ files（多文件，需与 `openFileReq` 通道打通）→ browser。dnd-kit 传感器配置与 `RightRail.tsx:112` 保持一致（distance 8 / touch delay 200），复用 `@dnd-kit/*`（已在 desktop-app 依赖内，无新增包）。
+
+### 3.3.2 架构决策修订（2026-09-15，**取代本节此前的「无第二 tab 条」否决**）
+
+产品决策（作者拍板）：右侧面板升级为 **tab-primary 模型**——openchamber `ContextPanelMode` 形态（生产验证）：
+
+- **一条面板级 tab 条承载全部已开视图**，异构共存：files / notes / browser / git / board / context…（Kimi Work 与 WorkBuddy 的实际形态）
+- **rail 从「切换 surface」降级为「打开或聚焦该 surface 的 tab」**——快捷启动器，不再是排他导航轴
+- **零 tab 空态**：显示导航页（Kimi「从这里开始」parity：浏览器 / 打开文件 / 看板 / 应用），由 rail 同款入口组成
+- 旧否决的根因（surface tab 与 instance tab 混进同一条、形成第二导航轴）在 tab-primary 模型下**不再是问题**：tab 条就是导航本体，rail 不再承担排他切换职责
+
+参考实现取证（openchamber `stores/useUIStore.ts`）：
+
+- tab 描述符 `{ mode, targetPath?, dedupeKey?, label?, readOnly? }`，id 由 mode+target（或 dedupeKey）派生 → 天然去重
+- **空占位 tab**：rail 可先开无 target 的 `file` tab；第一个真实文件打开时**替换**占位而非并存
+- **`reveal:false` 后台注册**：agent 替用户打开页面时不抢焦点、不强制展开面板，tab 保持挂载待手动聚焦
+- `CONTEXT_PANEL_MAX_TABS = 12` **按 mode 分配配额**；淘汰取该 mode 内 `touchedAt` 最老且非激活者；若只剩激活 tab 可牺牲，则宁超预算不丢正在看的
+- 状态按目录分桶（`contextPanelByDirectory`），根数 clamp 20
+
+已落地（本轮，零接线）：
+
+- `packages/desktop-app/src/lib/panel-tabs.ts`：纯逻辑库——`panelTabId` / `upsertPanelTab`（含占位替换、reveal 语义、按 surface 配额淘汰）/ `closePanelTab(s)`（右邻优先）/ `serialize/restorePanelTabs`（v1，id 在恢复时重派生，dedupeKey 随行保留）
+- `packages/desktop-app/src/components/panel-tabs-empty-state.tsx`：空态导航页（props 驱动，无 i18n/registry 耦合）
+- `packages/desktop-app/test/panel-tabs.test.ts`：17 用例
+
+**接线状态（2026-09-15，已落地核心）**：
+
+1. ✅ `ChatView.activeView` 改为**从 `usePanelTabs` 派生**（activePanelTab.surface）；`setActiveView(x)` 语义不变但改为 `upsertPanelTab({surface:x})` —— 全部既有调用点（panelSelectRequest、agents、StatusCards、rail、BrowserGuiHint）零改动直通
+2. ✅ `ContextPanel` 收 `panelTabs` prop，**`view` prop 已删除**（内部从 activePanelTab 派生，view/tab 不一致在类型上不可表达）；面板顶部渲染 tab 条（复用 `SurfaceTabStrip`）
+3. ✅ 零 tab 空态挂载 `PanelTabsEmptyState`，入口 = registry primary + always surfaces
+4. ✅ files surface 收敛：`FilePane` 改受控（`activeFile` / `onOpenFile`），文件实例 tab 由面板条承载，**无双层 tab**；`openRequest` 中继链 = `onViewChange("files")`（占位）→ FilePane 载入 → `onOpenFile(path)`（真实 tab 替换占位）
+5. ⏳→✅ **extension `panel.tab.*` 槽迁移为 tab —— 由设计达成，无需迁移代码**：rail 的 ext 项 id 本就是 `ext:<slot>`（`RightRail.tsx:90`），tab-primary 后 `setActiveView("ext:<slot>")` 直接 upsert 成面板 tab；面板体的 `ext:` 分发分支（`ContextPanel.tsx`）按 view 渲染槽内容。rail 项保留 = 启动器角色，符合模型
+6. ⏳→**有意例外（不改）**：**终端 dock tabs 不并入面板条**。取证：终端是 ChatView 的独立 dock（`ChatView.tsx` `<TerminalPanel>`），不在右面板 surface 体系内；每个内部 tab 拥有一条 daemon pty + xterm 实例，带 resize 观察者（隐藏 tab 0×0 跳过）与命令广播语义。强行并入 = 终端失去底部全宽 dock 的形态（UX 倒退）+ 需对 pty 生命周期做运行时验证。dock 内部 tab 条是承重结构，保留
+7. ✅ tab 标签本地化：`setActiveView` 解析 registry display name / ext 槽 label，裸 surface id（如 `ext:settings`）不会出现在 tab 标题上
+
+注意：面板初始为空（空态导航页），不再默认打开 context —— 这是 tab-primary 的预期行为。
+
+**UI 修订（2026-09-15 晚，运行时反馈）**：
+
+- **旧标题栏移除**：激活 tab 本身就是标题，标题栏成为重复。最大化按钮移入 tab 条右侧控制区，tab 条右侧加「+」按钮 —— 新建空白占位 tab（激活 surface 为 notes/browser 时开其占位，否则开 Files，其文件树即选择器）
+- **最大化显示修复**：`.gui-pane-right--maximized` 原本同时声明 `left + width + right`（超约束，LTR 下 `right` 被忽略），且 width 取自 surface 矩形 —— 而 surface 矩形含外壳内边距，导致最大化面板右缘停在 surface 右边界，**右侧露出一条约 20px 的底下聊天列缝隙**（滚动条 + 头部按钮透出，用户报告的「显示有问题」）。修复：最大化时宽高直接顶到窗口右/下缘（`calc(100vw - --pane-max-left)` / `calc(100vh - --pane-max-top)`），left/top 仍取 surface 矩形，侧栏与聊天头部保持可见
 
 ### 3.4 显示模式（Phase 2 — 体验优化）
 
