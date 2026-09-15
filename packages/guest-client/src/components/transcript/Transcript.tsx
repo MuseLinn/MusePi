@@ -113,6 +113,14 @@ function jumpFlashRow(root: HTMLElement | null, timestamp: string): void {
 
 export interface TranscriptProps {
 	entries: readonly SessionEntry[];
+	/** Branch-tree source, when it differs from `entries`. The GUI renders the
+	 *  ACTIVE PATH only (off-path siblings and the tail beyond the branch leaf
+	 *  leave the transcript but stay on the tree), while the layer-1 branch bar
+	 *  must still list those off-path siblings — deriving its children from the
+	 *  rendered rows left the expanded switcher empty: the bar showed
+	 *  "4 branches" (the count comes from the caller's full map) and opened to
+	 *  nothing. Defaults to `entries` for callers that render everything. */
+	branchEntries?: readonly SessionEntry[];
 	stream: AssistantMessage | null;
 	streamDone: boolean;
 	activeTools: ReadonlyMap<string, ActiveTool>;
@@ -953,6 +961,7 @@ const EntryRow = memo(function EntryRow({
 export const Transcript = memo(function Transcript(props: TranscriptProps): ReactNode {
 	const {
 		entries,
+		branchEntries,
 		stream,
 		streamDone,
 		activeTools,
@@ -1024,7 +1033,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const branchChildren = useMemo(() => {
 		const map = new Map<string, SessionEntry[]>();
 		if (!branchInfo) return map;
-		for (const entry of entries) {
+		for (const entry of branchEntries ?? entries) {
 			const pid = entry.parentId ?? "";
 			if (!pid) continue;
 			const bucket = map.get(pid);
@@ -1032,7 +1041,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			else map.set(pid, [entry]);
 		}
 		return map;
-	}, [entries, branchInfo]);
+	}, [entries, branchEntries, branchInfo]);
 	// Short label for a branch-switch button (first text line of a message).
 	const entryLabelOf = useCallback((e: SessionEntry): string => {
 		if (e.type !== "message") return e.type;

@@ -902,6 +902,14 @@ export function ChatView({
 	);
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
 		const res = await branchTo(messageId);
+		// session.branchAt positions a USER message at its PARENT (the node is
+		// re-answered by the send that follows), so the pinned leaf sits at the
+		// branch point — and the transcript, which renders the active path,
+		// would hide the very attempt we are about to create (the user saw only
+		// the "此节点有 N 个分支" divider while the map showed the new branch).
+		// Release the pin so the view follows the new tip, exactly like the
+		// composer's own send path.
+		setCurrentLeafKey(null);
 		if (res?.editorText) onSend(res.editorText);
 		else if (res) onSend(text);
 	};
@@ -1548,6 +1556,10 @@ export function ChatView({
 														<CodeHighlightProvider highlight={chatHighlight}>
 															<Transcript
 																entries={visibleEntries}
+																/* The branch bar lists siblings that are OFF the
+																 * active path, so it needs the full tree while the
+																 * transcript renders the path. */
+																branchEntries={snap?.entries ?? []}
 																/* No stream ghost: the view folds the assistant message into
 																 * entries at message_start, so the entry row IS the live
 																 * stream renderer (immutable upserts re-render it). */
