@@ -1445,6 +1445,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								onRevert={onRevert}
 							/>
 						) : null;
+					// A header row is the turn's first content row, which is frequently a
+					// toolResult / custom row — EntryRow mounts no Row for those, so the
+					// header has to be mounted by this loop instead (it vanished entirely
+					// when it could only ride an assistant body).
+					const headerStandalone = foldHeader !== null && !isAssistantMessage;
 					// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
 					// 活动 row — asking to expand it outranks the setting — and
 					// (b) during the live round, where the activity is the point.
@@ -1452,11 +1457,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
 					const row = (
 						<Fragment key={entry.id}>
-							{foldHeader}
+							{headerStandalone ? (
+								// Inside the message column, so it aligns with the reply.
+								<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+									{foldHeader}
+								</Row>
+							) : null}
 							{hideRowContent ? null : (
 								<EntryRow
 									entry={entry}
-									foldHeader={foldClosed && isReplyRow ? foldHeader : undefined}
+									foldHeader={isAssistantMessage ? (foldHeader ?? undefined) : undefined}
 									results={results}
 									active={activeTools}
 									host={host}
