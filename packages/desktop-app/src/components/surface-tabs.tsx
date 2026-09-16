@@ -191,6 +191,9 @@ export interface SurfaceTabStripProps {
 	onActivate(id: string): void;
 	onClose(id: string): void;
 	onReorder(fromId: string, toId: string): void;
+	/** Right-click on a tab (viewport coords). The host owns the menu — the
+	 *  strip stays a pure tab widget. */
+	onTabContextMenu?(id: string, x: number, y: number): void;
 	/** Localized "close" verb for the close button's aria-label. */
 	closeLabel?: string;
 	ariaLabel?: string;
@@ -205,6 +208,7 @@ export function SurfaceTabStrip({
 	onActivate,
 	onClose,
 	onReorder,
+	onTabContextMenu,
 	closeLabel = "close",
 	ariaLabel,
 }: SurfaceTabStripProps): ReactNode {
@@ -234,6 +238,7 @@ export function SurfaceTabStrip({
 							closeLabel={closeLabel}
 							onActivate={onActivate}
 							onClose={onClose}
+							onTabContextMenu={onTabContextMenu}
 						/>
 					))}
 				</SortableContext>
@@ -248,12 +253,14 @@ function SurfaceTabButton({
 	closeLabel,
 	onActivate,
 	onClose,
+	onTabContextMenu,
 }: {
 	tab: SurfaceTab;
 	active: boolean;
 	closeLabel: string;
 	onActivate(id: string): void;
 	onClose(id: string): void;
+	onTabContextMenu?(id: string, x: number, y: number): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: tab.id });
 	const ref = useRef<HTMLButtonElement | null>(null);
@@ -283,6 +290,11 @@ function SurfaceTabButton({
 			className={`gui-surface-tab${active ? " gui-surface-tab--active" : ""}${isDragging ? " gui-surface-tab--dragging" : ""}`}
 			style={{ transform: CSS.Transform.toString(transform), transition }}
 			onClick={() => onActivate(tab.id)}
+			onContextMenu={e => {
+				if (!onTabContextMenu) return;
+				e.preventDefault();
+				onTabContextMenu(tab.id, e.clientX, e.clientY);
+			}}
 			// Middle-click closes (browser default would start autoscroll).
 			onAuxClick={e => {
 				if (e.button === 1) {

@@ -513,6 +513,8 @@ export const general = {
 	"retry attempt {count}": "Retry attempt {count}",
 	"model supports tools": "Model supports tools",
 	// Surface tab strip close button (files pane multi-instance tabs).
+	"close other tabs": "Close other tabs",
+	"close all tabs": "Close all tabs",
 	"close tab": "Close tab",
 	// Tab-primary right panel empty state.
 	"start here": "Start here",

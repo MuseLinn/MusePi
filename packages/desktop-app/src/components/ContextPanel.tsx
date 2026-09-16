@@ -26,6 +26,7 @@ import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SubagentPanel } from "./SubagentPanel";
 import { SurfaceTabStrip } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -187,6 +188,8 @@ export function ContextPanel({
 	// The clear action asks for confirmation first (destructive).
 	const { confirm } = useConfirm();
 	const [maintenanceBusy, setMaintenanceBusy] = useState<"shake" | "fresh" | "clear" | null>(null);
+	// Surface-tab context menu (right-click): close / close others / close all.
+	const [tabMenu, setTabMenu] = useState<{ id: string; x: number; y: number } | null>(null);
 	const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
 	const runMaintenance = async (op: "shake" | "fresh" | "clear"): Promise<void> => {
 		if (!rpc || !snap?.sessionId || maintenanceBusy) return;
@@ -436,6 +439,39 @@ export function ContextPanel({
 
 	return (
 		<>
+			{/* Surface-tab context menu (right-click on a panel tab): close /
+			 * close others / close all (openchamber tab-menu parity). */}
+			{tabMenu !== null && (
+				<ContextMenu
+					open
+					x={tabMenu.x}
+					y={tabMenu.y}
+					items={[
+						{
+							label: t("close tab"),
+							icon: "close",
+							onSelect: () => panelTabs.close(tabMenu.id),
+						},
+						{
+							label: t("close other tabs"),
+							icon: "close",
+							divider: true,
+							disabled: panelTabs.tabs.length <= 1,
+							onSelect: () =>
+								panelTabs.closeMany(
+									panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id),
+								),
+						},
+						{
+							label: t("close all tabs"),
+							icon: "close",
+							disabled: panelTabs.tabs.length === 0,
+							onSelect: () => panelTabs.closeMany(panelTabs.tabs.map(tb => tb.id)),
+						},
+					]}
+					onClose={() => setTabMenu(null)}
+				/>
+			)}
 			{/* Maximize: NO scrim (user 2026-09-16 — 最大化不要遮罩，正常缩放卡片尺寸即可).
 			 * The panel floats exactly over the measured chat-column card; the
 			 * surrounding gutters stay live and the chat keeps working behind it. */}
@@ -475,6 +511,7 @@ export function ContextPanel({
 									onActivate={panelTabs.activate}
 									onClose={panelTabs.close}
 									onReorder={panelTabs.reorder}
+									onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 								/>
 							)}
 						</div>

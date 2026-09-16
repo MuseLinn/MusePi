@@ -3122,6 +3122,10 @@ body.gui-resizing {
 	border-bottom: 1px solid var(--border);
 	margin-bottom: 6px;
 	overflow-x: auto;
+	/* Tabs must never scroll vertically: the drag handles' dashed tails
+	 * overflowed the 30px strip and a vertical scrollbar appeared (user
+	 * report 2026-09-16). Horizontal-only. */
+	overflow-y: hidden;
 	scrollbar-width: none;
 }
 

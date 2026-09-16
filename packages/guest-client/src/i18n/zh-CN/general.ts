@@ -507,6 +507,8 @@ export const general = {
 	"retry attempt {count}": "重试第 {count} 次",
 	"model supports tools": "模型支持工具调用",
 	// Surface tab strip close button (files pane multi-instance tabs).
+	"close other tabs": "关闭其他标签页",
+	"close all tabs": "关闭所有标签页",
 	"close tab": "关闭标签页",
 	// Tab-primary right panel empty state.
 	"start here": "从这里开始",
