@@ -161,6 +161,7 @@ jobs:
                 packages/desktop-app/release/*.AppImage
                 packages/desktop-app/release/*.deb
                 packages/desktop-app/release/*.yml
+                !packages/desktop-app/release/builder-debug.yml
                 packages/desktop-app/release/*.zip
               if-no-files-found: error
 
@@ -210,11 +211,24 @@ jobs:
               chmod +x ./android/gradlew
               ./android/gradlew -p android assembleDebug --no-daemon
 
+         - name: Rename APK to the release asset name
+           working-directory: packages/mobile/android/app/build/outputs/apk/debug
+           # The publish job downloads artifacts with merge-multiple, so the file
+           # name here IS the release asset name. gradle always emits
+           # `app-debug.apk`, which shipped an unlabelled asset whose version only
+           # the body table revealed (and collided with every other APK a user
+           # already had on disk). Name it like every other artifact; the version
+           # comes from the same mobile package.json the release script writes.
+           run: |
+              set -euo pipefail
+              version="$(node -p "require('../../../../../../package.json').version")"
+              mv app-debug.apk "MusePi-${version}-app-debug.apk"
+
          - name: Upload artifact
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: musepi-mobile
-              path: packages/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+              path: packages/mobile/android/app/build/outputs/apk/debug/MusePi-*-app-debug.apk
               if-no-files-found: error
 
    publish:
@@ -347,7 +361,7 @@ jobs:
                 `| Windows | [MusePi-${pkg.version}-setup.exe](${dl(`MusePi-${pkg.version}-setup.exe`)}) · [MusePi-${pkg.version}-arm64-setup.exe](${dl(`MusePi-${pkg.version}-arm64-setup.exe`)}) |\n` +
                 `| Linux x64 | [MusePi-${pkg.version}-x86_64.AppImage](${dl(`MusePi-${pkg.version}-x86_64.AppImage`)}) · [MusePi-${pkg.version}-amd64.deb](${dl(`MusePi-${pkg.version}-amd64.deb`)}) |\n` +
                 `| Linux arm64 | [MusePi-${pkg.version}-arm64.AppImage](${dl(`MusePi-${pkg.version}-arm64.AppImage`)}) · [MusePi-${pkg.version}-arm64.deb](${dl(`MusePi-${pkg.version}-arm64.deb`)}) |\n` +
-                `| Android | [MusePi-${pkg.version}-app-debug.apk](${dl(`app-debug.apk`)}) (debug build, adb 安装) |\n\n` +
+                `| Android | [MusePi-${pkg.version}-app-debug.apk](${dl(`MusePi-${pkg.version}-app-debug.apk`)}) (debug build, adb 安装) |\n\n` +
                 notes;
               fs.writeFileSync("dist/RELEASE_NOTES.md", body);
               console.log("release notes written");
