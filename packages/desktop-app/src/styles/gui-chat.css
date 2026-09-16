@@ -5053,7 +5053,17 @@ body.gui-resizing .gui-pane-right {
 /* Folded/closed states must leave NO trace: the sliver and the closed dock
  * drop their margins too (the hairline report). */
 .gui-pane-right--inner--closed,
-.gui-right-rail--closed,
 .gui-terminal-dock:not(.gui-terminal-dock--open) {
 	margin: 0;
+}
+
+/* NOTE: .gui-right-rail--closed is NOT above — that class means "the PANEL is
+ * closed"; the rail itself stays visible and keeps its gutter margin. Zeroing
+ * it stretched the rail edge-to-edge (user report 2026-09-16). */
+
+/* The panel's fixed width is CONTENT + its own margins: a bare 288px ate the
+ * margins out of the content box and the tab strip clipped its first label
+ * (user: 左侧有些被截取). */
+.gui-pane-right--inner:not(.gui-pane-right--maximized) {
+	width: calc(288px + var(--gui-card-gutter) * 2);
 }
