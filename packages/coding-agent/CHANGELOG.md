@@ -2,24 +2,6 @@
 
 ## [Unreleased]
 
-## [0.4.29] - 2026-09-15
-
-### Added
-
-- GUI Settings → 语音: speech model cards (label + SoTA/轻量 badge, on-disk size, accuracy/speed bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
-
-### Changed
-
-- Transcript activity fold reworked to openchamber's turn model: a turn spans from its prompt (or an advisor note) to the next prompt, the 活动 header rides the reply row (orb + 活动 + answer on one line when collapsed), closed turns show only the header + the answer, and folding animates both ways.
-- Transcript windowing removed: opening a session renders every loaded entry (no 显示更早消息 gap), and a session switch re-locks the bottom.
-- Session sidebar search commits on Enter (IME-safe) with memoized rows and concurrent first-paint RPCs (openchamber 1.23.2 parity). #5
-- macOS: ad-hoc–signed builds now fall back to a manual installer download (dmg opened after fetch) instead of a silently rejected OTA, with updater logs on disk. #5
-
-### Fixed
-
-- Panel width is adjustable again in every state, including maximized; collapsed-panel gap matches the expanded one; the maximized float keeps its curve.
-- Map-mode prompt rail focuses (centers + highlights) instead of silently moving the session leaf; branch list animates both ways.
-
 ## [17.3.0] - 2026-08-13
 
 ### Breaking Changes
@@ -15063,6 +15045,24 @@ Initial public release.
 ## [0.7.6] - 2025-11-13
 
 Previous releases did not maintain a changelog.
+
+## [0.4.29] - 2026-09-15
+
+### Added
+
+- GUI Settings → 语音: speech model cards (label + SoTA/轻量 badge, on-disk size, accuracy/speed bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
+
+### Changed
+
+- Transcript activity fold reworked to openchamber's turn model: a turn spans from its prompt (or an advisor note) to the next prompt, the 活动 header rides the reply row (orb + 活动 + answer on one line when collapsed), closed turns show only the header + the answer, and folding animates both ways.
+- Transcript windowing removed: opening a session renders every loaded entry (no 显示更早消息 gap), and a session switch re-locks the bottom.
+- Session sidebar search commits on Enter (IME-safe) with memoized rows and concurrent first-paint RPCs (openchamber 1.23.2 parity). #5
+- macOS: ad-hoc–signed builds now fall back to a manual installer download (dmg opened after fetch) instead of a silently rejected OTA, with updater logs on disk. #5
+
+### Fixed
+
+- Panel width is adjustable again in every state, including maximized; collapsed-panel gap matches the expanded one; the maximized float keeps its curve.
+- Map-mode prompt rail focuses (centers + highlights) instead of silently moving the session leaf; branch list animates both ways.
 
 ## [0.4.8] - 2026-08-30
 
