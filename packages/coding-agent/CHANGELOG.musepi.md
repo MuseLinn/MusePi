@@ -10,6 +10,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - 文件面板内嵌文本编辑器：文本文件（≤2 MiB）在预览头 ✎ 进入编辑，⌘S / Ctrl+S 保存，未保存修改在 tab 上显示圆点，切换或关闭前确认丢弃；新建文件直接进入编辑器（取代旧的「无内置编辑器」提示）。
 - Office 文档预览（只读）：`.docx` 用 docx-preview 内嵌渲染，`.xlsx` / `.xls` / `.csv` 用 SheetJS 渲染为转义表格（1000 行上限 + sheet 切换），损坏文件自动回退系统默认应用。
 
+### Fixed
+
+- Antigravity / Gemini CLI：默认系统提示、顾问提示与 Live 指令把 `<system-conventions>` 改成 `<conventions>`，避免 Cloud Code Assist 网关把开场 XML 块判成滥用并立刻返回假 `429 RESOURCE_EXHAUSTED`（30 分钟退避）。#7
+  EN: Default system, advisor, and Live prompts now open with `<conventions>` instead of `<system-conventions>` (omp 18.2.1), so Cloud Code Assist no longer false-429s the first turn. #7
+
 ## [0.4.29] - 2026-09-16
 
 ### Added
