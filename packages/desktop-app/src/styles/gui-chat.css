@@ -1,3 +1,12 @@
+/* One shadow recipe for EVERY floating workspace card (chat, welcome,
+* right pane, terminal dock, settings surface). The old 0.25-alpha shadow
+* was tuned for a SINGLE card: the workspace split puts several cards 8px
+* apart, and adjacent 24px shadows stacked into a muddy gutter (user:/n* 边距和阴影还是不自然统一). Softer spread + one token keeps them coherent
+* AND lets the settings view stay pixel-identical to the workspace. */
+:root {
+	--gui-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.14);
+}
+
 .gui-terminal-host {
 	height: 100%;
 	min-height: 0;
@@ -155,7 +164,7 @@
 	/* Own card (workspace split): the dock floats separately from the chat
 	 * card above it instead of sharing the surface's bottom edge. */
 	border-radius: var(--radius-2xl);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 	overflow: hidden;
 	background: color-mix(in oklab, var(--color-surface-sunken) 96%, transparent);
 	/* Open/close animation: height animates 0 ↔ dockHeight; the border
@@ -314,7 +323,7 @@
  * background stays with each region's own glass/surface mechanism. */
 .gui-float-card {
 	border-radius: var(--radius-2xl);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 	overflow: hidden;
 }
 
@@ -329,7 +338,7 @@
 	/* Own card (workspace split): rounded + shadow instead of the old
 	 * border-left divider against the chat column. */
 	border-radius: var(--radius-2xl);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 	/* Same surface colour as the chat card so the pane reads as an
 	 * independent panel instead of dissolving into the base (the user's
 	 * "no radius, no colour difference" report). !important is REQUIRED: the
@@ -351,7 +360,7 @@
 	align-items: stretch;
 	/* Own slim card (workspace split): no divider against the panel card. */
 	border-radius: var(--radius-2xl);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 	overflow: hidden;
 	background: var(--color-surface);
 }
@@ -2313,7 +2322,7 @@ body.gui-resizing .gui-pane-right {
 	border-radius: 16px;
 	overflow: hidden;
 	background: var(--color-surface);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 }
 
 .gui-settings-drag {
@@ -2708,7 +2717,7 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	border-radius: 14px;
 	background: var(--color-surface);
-	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+	box-shadow: var(--gui-card-shadow);
 }
 
 .gui-model-tabs {
