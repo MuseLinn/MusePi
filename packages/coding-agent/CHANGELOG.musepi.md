@@ -13,7 +13,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ### Fixed
 
 - Antigravity / Gemini CLI：默认系统提示、顾问提示与 Live 指令把 `<system-conventions>` 改成 `<conventions>`，避免 Cloud Code Assist 网关把开场 XML 块判成滥用并立刻返回假 `429 RESOURCE_EXHAUSTED`（30 分钟退避）。#7
-  EN: Default system, advisor, and Live prompts now open with `<conventions>` instead of `<system-conventions>` (omp 18.2.1), so Cloud Code Assist no longer false-429s the first turn. #7
+  - EN: Default system, advisor, and Live prompts now open with `<conventions>` instead of `<system-conventions>` (omp 18.2.1), so Cloud Code Assist no longer false-429s the first turn. #7
+- 编辑器视图：预览体补上缺失的 flex 列布局（编辑器列/文档背景/表格/图片包装都按 flex 父容器设计），textarea 不再把保存工具栏推出面板；编辑中隐藏 ✎ 与「渲染/源码」死控件，保存按钮接入真实 saving 状态。
+- #6 Windows 任务栏缩略图全白：BrowserWindow 未设 backgroundColor，DWM 初始表面为白色；补上与应用一致的深色底色。
+- #9 听写录音立即返回空 PCM：recordPcm 改为等待录音真正结束（VAD 静音 / 15s 上限 / 手动停止）才交付完整缓冲，settings 的 vadEndMs 真正生效；取消竞态下麦克风即时关闭。
+- #12 「已退回到」横幅：头部新增 ✕ 关闭（保持当前回退位置，分支仍可从面包屑回去）；切换会话时清空横幅（旧 undo 目标跨会话发送外会话节点 id 触发 branch failed）；面包屑/树切换节点时同步清空。
 
 ## [0.4.29] - 2026-09-16
 
