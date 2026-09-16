@@ -335,7 +335,9 @@
 .gui-pane-right--inner {
 	width: 288px;
 	flex-shrink: 0;
-	height: 100%;
+	/* No height:100% — as a stretched flex item the margin box already fills
+	 * the row; an explicit 100% ADDED the gutter margins on top and the panel
+	 * overflowed the chat card at both ends (user report 2026-09-16). */
 	display: flex;
 	flex-direction: column;
 	position: relative;
@@ -359,7 +361,7 @@
 .gui-right-rail {
 	width: 44px;
 	flex-shrink: 0;
-	height: 100%;
+	/* No height:100% — same stretch reasoning as the right pane above. */
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
