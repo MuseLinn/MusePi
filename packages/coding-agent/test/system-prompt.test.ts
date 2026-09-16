@@ -238,3 +238,24 @@ describe("non-Linux system prompt CPU model", () => {
 		}
 	});
 });
+
+describe("default system prompt conventions tag", () => {
+	it("opens with <conventions> instead of <system-conventions>", async () => {
+		const { systemPrompt } = await buildSystemPrompt({
+			contextFiles: [],
+			skills: [],
+			rules: [],
+			workspaceTree: {
+				rootPath: import.meta.dir,
+				rendered: "",
+				truncated: false,
+				totalLines: 0,
+				agentsMdFiles: [],
+			},
+			activeRepoContext: null,
+		});
+		const joined = systemPrompt.join("\n");
+		expect(joined).toContain("<conventions>");
+		expect(joined).not.toContain("<system-conventions>");
+	});
+});
