@@ -1540,10 +1540,7 @@ export function ChatView({
 							 * settings main view: the welcome scene used to sit
 							 * directly on the glass, so it read as "not a rounded
 							 * container" (user report 2026-09-16). */}
-							<div
-								className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
-								style={{ margin: "var(--gui-card-gutter)" }}
-							>
+							<div className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]">
 								<WelcomeComposer
 									busy={busy}
 									rpc={rpc}
