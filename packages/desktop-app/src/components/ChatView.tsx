@@ -1540,7 +1540,10 @@ export function ChatView({
 							 * settings main view: the welcome scene used to sit
 							 * directly on the glass, so it read as "not a rounded
 							 * container" (user report 2026-09-16). */}
-							<div className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]">
+							<div
+								className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
+								style={{ margin: "var(--gui-card-gutter)" }}
+							>
 								<WelcomeComposer
 									busy={busy}
 									rpc={rpc}
@@ -1567,7 +1570,7 @@ export function ChatView({
 							ref={chatSceneRef}
 							className={`gui-scene gui-scene-chat flex min-h-0 flex-1 flex-col${chatLeaving ? " gui-scene--leaving" : ""}${showWelcome ? " gui-scene-chat--direct" : ""}`}
 						>
-							<div className="flex min-h-0 flex-1 gap-2">
+							<div className="flex min-h-0 flex-1">
 								{/* Session column: transcript + composer + dock — the
 								 * right panel sits BESIDE this column (same level), so
 								 * opening it pushes the composer left (openchamber

@@ -5036,3 +5036,22 @@ body.gui-resizing .gui-pane-right {
 	line-height: 1.4;
 	color: var(--color-text-faint);
 }
+
+/* ── Workspace card gutters (user: 会话卡、右面板、rail 都拥有空态卡的
+ * 那一层外距) — every card carries the gutter margin so card-to-card and
+ * card-to-window spacing read as one uniform breath. Appended last so the
+ * margin wins over the base rules above. */
+.gui-chat-column,
+.gui-pane-right--inner,
+.gui-right-rail,
+.gui-terminal-dock {
+	margin: var(--gui-card-gutter);
+}
+
+/* Folded/closed states must leave NO trace: the sliver and the closed dock
+ * drop their margins too (the hairline report). */
+.gui-pane-right--inner--closed,
+.gui-right-rail--closed,
+.gui-terminal-dock:not(.gui-terminal-dock--open) {
+	margin: 0;
+}
