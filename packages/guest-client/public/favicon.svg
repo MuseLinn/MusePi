@@ -1,11 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MusePi favicon — derived from the dot-matrix pi brand anchor
+       (desktop-app/build/icon.svg). Small-size adaptation: the matrix dots
+       merge into a solid rounded-join pi silhouette with the anchor's
+       proportions (bar 8 deep, legs 8 wide, gap 20 on a 36x44 glyph).
+       Regenerate the raster family with scripts/regen-brand-icons.py. -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ed4abf" />
-      <stop offset=".5" stop-color="#9b4dff" />
-      <stop offset="1" stop-color="#5ad8e6" />
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#242128"/>
+      <stop offset="1" stop-color="#1b191f"/>
     </linearGradient>
+    <pattern id="dots" x="10.5" y="10.5" width="1.5" height="1.5" patternUnits="userSpaceOnUse">
+      <circle cx="0.5" cy="0.5" r="0.2625" fill="rgba(236,232,233,0.09)"/>
+    </pattern>
   </defs>
-  <rect width="64" height="64" rx="12" fill="#0f0a14" />
-  <path fill="url(#g)" d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />
+  <rect width="64" height="64" rx="12" fill="url(#bg)"/>
+  <rect x="11" y="11" width="42" height="42" fill="url(#dots)"/>
+  <path d="M14 10h36v8h-8v36h-8V18h-12v36h-8V10z" fill="#ece8e9" stroke="#ece8e9" stroke-width="3" stroke-linejoin="round"/>
 </svg>

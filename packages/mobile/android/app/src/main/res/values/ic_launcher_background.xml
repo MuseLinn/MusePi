@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FFFFFF</color>
+    <!-- Flat fallback of the adaptive-icon background gradient (#242128 →
+         #1B191F). mipmap-anydpi-v26 now points at the gradient drawable; this
+         color stays for tools that read it by name. -->
+    <color name="ic_launcher_background">#1B191F</color>
 </resources>

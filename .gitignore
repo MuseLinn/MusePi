@@ -126,3 +126,7 @@ packages/desktop-app/vendor/
 # Dev desktop data isolation (dev-desktop.mjs): isolated daemon home, socket
 # dir and Electron userData for `bun run desktop:dev` — never committed.
 packages/desktop-app/.desktop-build/
+
+# Brand glyph intermediates from scripts/regen-brand-icons.py (manually pasted
+# into tray.cjs) — never committed
+.tray-glyph-*.b64

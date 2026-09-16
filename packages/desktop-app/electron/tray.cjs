@@ -2,13 +2,19 @@
 //
 // Surfaces MusePi's live state in the macOS menu bar (and Windows/Linux
 // tray):
-//  1. an activity indicator in the icon: idle (π outline), busy (breathing
-//     fill animation), unseen (static fill). All monochrome template images
-//     — macOS tints them with the menu bar, so light/dark mode needs no
-//     variants. EVERY frame is the same 18pt size and NO title is ever set,
-//     so the status-item button never resizes and the icons around it stay
-//     put (a 36pt unseen frame / approval-count title both measured ~18px
-//     of horizontal shove).
+//  1. an activity indicator in the icon: idle (hollow π), busy (breathing
+//     fill animation), unseen (solid fill). macOS uses monochrome template
+//     images — the menu bar tints them, so light/dark mode needs no
+//     variants there. Windows does NOT tint template images and partial
+//     alpha is unreliable in Shell_NotifyIcon, so Windows frames are fully
+//     opaque and carry state by SHAPE (hollow idle / solid unseen); the
+//     glyph COLOR flips with the taskbar theme (white on the dark
+//     taskbar, near-black on the light one — a hardcoded white glyph is
+//     invisible on light Windows themes).
+//     EVERY frame is the same 18pt size and NO title is ever set, so the
+//     status-item button never resizes and the icons around it stay put
+//     (a 36pt unseen frame / approval-count title both measured ~18px of
+//     horizontal shove).
 //  2. pending approvals (permission requests blocking agents) with inline
 //     Allow/Deny actions;
 //  3. the recent session list (title + relative time, paused marker), click
@@ -23,7 +29,8 @@
 // Menu labels are Chinese, matching the pet context menu convention.
 "use strict";
 
-const { Tray, Menu, nativeImage } = require("electron");
+const childProcess = require("child_process");
+const { Tray, Menu, nativeImage, nativeTheme } = require("electron");
 
 const MAX_SESSIONS = 8;
 const MAX_APPROVALS = 10;
@@ -49,28 +56,28 @@ function timeLabel(iso) {
 	return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// Monochrome π glyph (36×36 physical = 18pt @2x, black on transparent),
-// pre-rendered with Pillow (Georgia serif). nativeImage does NOT decode
-// SVG data URLs on macOS — the earlier SVG version rendered as a blank
-// icon. Frames are derived at runtime by scaling the premultiplied alpha
-// channel (the glyph is pure black, so RGB stays constant).
-const PI_PNG_BASE64 =
-	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABBUlEQVR4nO2VsWoCQRBAHyoGRMHGRtJIQPAPDChY2vsNfoB9hIBtPsDCL7C2sLKwSyCdiK2NWlhp0hiI4WCE4/CO3LLrWcyDY5i7Ye/dMTsLiqIoiuKUJvAOnIBzzKtuW6YCfBuIOBN6k4X7QAEoS94J1K3k/t7kJZkYtY/AFBhIng1EK8QROgIfvjwl8TcpoW4gz0v0+soal680oSjRqFdcCD1JXHMnQlXgAOzuRegZ+JQtnrhQGmgAMyxjKtSWph5feWb1j0XxCnwBS5nGk5C6uUh5592DS6Gt71zyxGohdS++uiFQijnv/k1PdtUCaEXU5YCRzKcfYCNHjhMpRVEUhRvzB0SWRr2frJYxAAAAAElFTkSuQmCC";
+// Monochrome π frames (36×36 physical = 18pt @2x, black on transparent),
+// derived from the brand's dot-matrix mark via scripts/regen-brand-icons.py:
+// a solid silhouette and a hollow outline sharing the anchor's proportions.
+// nativeImage does NOT decode SVG data URLs on macOS — the earlier SVG
+// version rendered as a blank icon — so these ship as PNG data URLs. Frames
+// are recolored at runtime by rewriting RGB (the glyph is pure black; the
+// alpha channel carries the shape).
+const TRAY_GLYPH_SOLID_B64 =
+	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABV0lEQVR4nO1XsWrDMBB9cjIWmhJKh9ChUMjYtXt+KR/UL2pI56Rdu5SQOVguglM4XFmns0RJQA8OmfhJ9+757EjAhcEkcJrCOTuK6zDCJEx+BjApIKKjfN8AjnSd7JQhEU8ADgAsRZcRLa2xA3BPOVIMOfeMc+ZQQAgPv9aKcvxxfhoR5u7N6NqS0NxmtNKjignyVXFrkyyOwM8fJSgmwFWq+URYNk5jeSVBpb5NDRu/AHxQsTZXUEcLrQFsWF+5eATw1uNx/js1sZv3o3ntfTXLwNvR0vgamLdQ8E3pR3ZD1U6YgNtE/imnqYdgqXowQa2C/29/nNmogiRUhyRUhyRUhyRUhyRUhyRUh3Ic8vucPvxuMJevFuQ2bw07tfpoBjZ2Wn4y/DlsDmAfOH1+AnhgPC1fTD70u1vsDsBL76C4DZwatPzRTmnuafmjiCbQZ7Em1fIvH79Vg4nLUf4jewAAAABJRU5ErkJggg==";
+const TRAY_GLYPH_HOLLOW_B64 =
+	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABw0lEQVR4nNWXv07DMBDGf7lSFYm/L8BSAQLxCkzMDIiBHSSegJUH4AFYmGBlYESCkRHBxsLKAIyoEhQoTYMsXSUTksYOqXA/yXJy/uL77uwkZwgMkQNnbAh+YyAZhtjKEQ2wmwhMdvaA8Qp8JTrvM3AMdC27k9AJoKkPVN32fbZDn3QIvADtCoW8a2au1IfkOc/CNDCrG9Ck+R5o6X1Rdme0b1liloElFfFVlI0smEjMRDXgHNgFtoBVdRbl7JFb4ERtm8Cajs0VBFIoyHZqlm0dOHWZFJgEHoCzlP1TA6yXEWSjoymPNd15b92HOltQTprf0P5Ge7N8vTKCIiu6/qt7aWWxp0vZVCcdbTb/QscegQO1x3/5CkdWVHfAdmr8CJi3uGn+DkP8LdT1WdHWtZajiN8b9OsoKyhREbagxJH/Y8+k8evD9N8QAoMQGITAIAQGITAIgUEIDEJgEAKDEBiEwCCMqCDxFO/L9xbUBl495vXlO9VD/frG1C8bwJteS07t48v3FmSqvK62FYdTgy/fe8muVbB9wmiozT41lOU7ZyjWAt0U7VPAopVyY3/KODX48kcHUcFYLWcs69Tgyx8NfAOmgpBC37QXygAAAABJRU5ErkJggg==";
 
-const PI_SCALE_FACTOR = 2;
-
-/** π glyph at the given fill opacity (0..1), as a macOS template image.
- * EVERY frame goes through createFromBitmap(scaleFactor: PI_SCALE_FACTOR)
- * — the raw data-URL image has no scale metadata and would otherwise
- * render as 36pt (the unseen frame used to return it directly, doubling
- * the tray button width and shoving every status item when an approval
- * arrived: 52px vs 34px measured). */
-function piImage(fillOpacity, color = [0, 0, 0]) {
-	const base = nativeImage.createFromDataURL(`data:image/png;base64,${PI_PNG_BASE64}`);
-	// Windows tray draws nativeImage at PHYSICAL pixels — the 36×36 @2x
-	// bitmap (18pt DIP, right for the macOS menu bar) is oversized for the
-	// tray cell. 20×20 reads clearly at 1.75× DPI while staying inside the
-	// 24px tray cell; macOS keeps the @2x path.
+/** π frame at the given fill opacity (0..1) in the given RGB. EVERY frame
+ * goes through createFromBitmap from the same base geometry so all frames
+ * render at the identical size — returning the raw data-URL image instead
+ * renders at 36pt on macOS (the unseen frame used to do exactly that,
+ * doubling the tray button width and shoving every status item: 52px vs
+ * 34px measured). Windows tray draws at PHYSICAL pixels, so the 36×36 @2x
+ * bitmap (18pt DIP, right for the macOS menu bar) is resized to 20×20
+ * there — reads clearly at 1.75× DPI while staying inside the 24px cell. */
+function piImage({ glyph, color = [0, 0, 0], fillOpacity = 1 }) {
+	const base = nativeImage.createFromDataURL(`data:image/png;base64,${glyph}`);
 	let img = base;
 	if (process.platform === "win32") {
 		img = base.resize({ width: 20, height: 20 });
@@ -78,20 +85,11 @@ function piImage(fillOpacity, color = [0, 0, 0]) {
 	const size = img.getSize();
 	const raw = img.toBitmap();
 	const buf = Buffer.from(raw);
-	// macOS template images tint with the menu bar, so the glyph must stay
-	// black. Windows/Linux do NOT tint — a black glyph is invisible on the
-	// dark tray, so paint white there (visible on dark AND light taskbars).
 	for (let i = 0; i < buf.length; i += 4) {
 		buf[i] = color[0];
 		buf[i + 1] = color[1];
 		buf[i + 2] = color[2];
 		if (fillOpacity < 0.999 && process.platform !== "win32") {
-			// Windows: the dark taskbar swallows faint glyphs AND partial
-			// alpha is unreliable in Shell_NotifyIcon rendering (the old
-			// 0.35→0.84 white π never appeared while a fully-opaque test
-			// block did). Paint Windows frames fully opaque — the breath
-			// animation stays a macOS menu-bar nicety; Windows gets a
-			// static, clearly visible π.
 			buf[i + 3] = Math.min(255, Math.round(buf[i + 3] * fillOpacity));
 		}
 	}
@@ -104,11 +102,64 @@ function withTemplate(img) {
 	return img;
 }
 
+// Windows taskbar color follows the "Windows mode" personalization setting
+// (SystemUsesLightTheme), NOT the app mode behind nativeTheme
+// .shouldUseDarkColors — a hardcoded white glyph vanished on light
+// taskbars. Read the registry directly; fall back to nativeTheme (close
+// enough on old Win10 builds without the key).
+const TASKBAR_THEME_REG = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+const LIGHT_TASKBAR_RGB = [24, 24, 27];
+const DARK_TASKBAR_RGB = [255, 255, 255];
+
+/** true = light taskbar, false = dark taskbar, null = unknown. */
+function windowsTaskbarPrefersLight() {
+	try {
+		const out = childProcess.execFileSync("reg", ["query", TASKBAR_THEME_REG, "/v", "SystemUsesLightTheme"], {
+			timeout: 1500,
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		return /SystemUsesLightTheme\s+REG_DWORD\s+0x1/.test(String(out));
+	} catch {
+		return null;
+	}
+}
+
+/** Glyph color for the Windows tray, from the live taskbar theme. */
+function windowsTrayRgb() {
+	const light = windowsTaskbarPrefersLight();
+	if (light === null) return nativeTheme.shouldUseDarkColors ? DARK_TASKBAR_RGB : LIGHT_TASKBAR_RGB;
+	return light ? LIGHT_TASKBAR_RGB : DARK_TASKBAR_RGB;
+}
+
+// Opacity states on the macOS menu bar (template images tint with the bar,
+// so only alpha varies). Eased breathing frames: dense near the extremes
+// (openchamber parity) so the fill fades in/out with a calm glow.
 const IDLE_OPACITY = 0.35;
 const UNSEEN_OPACITY = 1.0;
-// Eased breathing frames: dense near the extremes (openchamber parity) so
-// the fill fades in/out with a calm, continuous glow.
 const BREATH_OPACITIES = [0.35, 0.5, 0.72, 0.9, 1.0, 0.9, 0.72, 0.5];
+
+/** Frame set for one tray color. macOS keeps template images (opacity
+ * carries the state). Windows does NOT tint and partial alpha never showed
+ * up reliably in Shell_NotifyIcon (the old 0.35→0.84 white π was invisible
+ * while a fully-opaque test block appeared), so Windows frames are fully
+ * opaque and the state is carried by SHAPE: idle = hollow outline,
+ * unseen/busy = solid. */
+function buildFrameSet(color) {
+	if (process.platform === "win32") {
+		const solid = piImage({ glyph: TRAY_GLYPH_SOLID_B64, color });
+		return {
+			idle: piImage({ glyph: TRAY_GLYPH_HOLLOW_B64, color }),
+			unseen: solid,
+			breath: [solid],
+		};
+	}
+	return {
+		idle: piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: IDLE_OPACITY }),
+		unseen: piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: UNSEEN_OPACITY }),
+		breath: BREATH_OPACITIES.map(o => piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: o })),
+	};
+}
 
 /**
  * Create the tray controller. `update(snapshot)` takes
@@ -124,13 +175,13 @@ function createTrayController({ onAction, onSnapshot }) {
 	let animTimer = null;
 	let animIndex = 0;
 	let animDir = 1;
+	let themeTimer = null;
 
-	// Windows/Linux tray has no template tinting: white glyph is visible on
-	// both dark and light taskbars (black would vanish on the dark tray).
-	const TRAY_RGB = process.platform === "win32" ? [255, 255, 255] : [0, 0, 0];
-	const idleFrame = piImage(IDLE_OPACITY, TRAY_RGB);
-	const unseenFrame = piImage(UNSEEN_OPACITY, TRAY_RGB);
-	const breathFrames = BREATH_OPACITIES.map(o => piImage(o, TRAY_RGB));
+	// macOS template images ignore the glyph color (the menu bar tints
+	// them); Windows picks white/black from the live taskbar theme.
+	const initialRgb = process.platform === "win32" ? windowsTrayRgb() : [0, 0, 0];
+	let frameRgb = initialRgb;
+	let frames = buildFrameSet(initialRgb);
 
 	const stopAnim = () => {
 		if (animTimer) {
@@ -141,16 +192,16 @@ function createTrayController({ onAction, onSnapshot }) {
 
 	const startAnim = () => {
 		if (animTimer || !tray || tray.isDestroyed?.()) return;
-		if (breathFrames.length < 2) return;
+		if (frames.breath.length < 2) return;
 		animIndex = 0;
 		animDir = 1;
 		animTimer = setInterval(() => {
 			if (!tray || tray.isDestroyed?.()) return;
-			tray.setImage(breathFrames[animIndex] || idleFrame);
+			tray.setImage(frames.breath[animIndex] || frames.idle);
 			// Ping-pong for a seamless, infinite in-and-out breath.
 			animIndex += animDir;
-			if (animIndex >= breathFrames.length - 1) {
-				animIndex = breathFrames.length - 1;
+			if (animIndex >= frames.breath.length - 1) {
+				animIndex = frames.breath.length - 1;
 				animDir = -1;
 			} else if (animIndex <= 0) {
 				animIndex = 0;
@@ -164,20 +215,37 @@ function createTrayController({ onAction, onSnapshot }) {
 		iconState = nextState;
 		if (!tray || tray.isDestroyed?.()) return;
 		if (nextState === "busy") {
-			if (breathFrames.length > 1) startAnim();
-			else tray.setImage(breathFrames[0] || idleFrame);
+			if (frames.breath.length > 1) startAnim();
+			else tray.setImage(frames.breath[0] || frames.idle);
 		} else if (nextState === "unseen") {
 			stopAnim();
-			tray.setImage(unseenFrame);
+			tray.setImage(frames.unseen);
 		} else {
 			stopAnim();
-			tray.setImage(idleFrame);
+			tray.setImage(frames.idle);
 		}
+	};
+
+	// Rebuild the Windows frames when the taskbar flips between light and
+	// dark, then re-apply the current state against the new frames.
+	const refreshThemeFrames = () => {
+		if (process.platform !== "win32") return;
+		const rgb = windowsTrayRgb();
+		if (rgb[0] === frameRgb[0] && rgb[1] === frameRgb[1] && rgb[2] === frameRgb[2]) return;
+		frameRgb = rgb;
+		frames = buildFrameSet(rgb);
+		if (animTimer) {
+			stopAnim();
+			if (iconState === "busy") startAnim();
+		}
+		const state = iconState;
+		iconState = null; // force applyIconState past its early return
+		if (state) applyIconState(state);
 	};
 
 	const ensureTray = () => {
 		if (tray && !tray.isDestroyed?.()) return tray;
-		tray = new Tray(idleFrame);
+		tray = new Tray(frames.idle);
 		tray.setIgnoreDoubleClickEvents(true);
 		tray.setToolTip("MusePi");
 		// macOS: click opens the menu (default); Linux: left-click shows the
@@ -217,14 +285,25 @@ function createTrayController({ onAction, onSnapshot }) {
 				n += 1;
 				if (n >= 6) {
 					clearInterval(blink);
-					if (tray && !tray.isDestroyed?.()) tray.setImage(idleFrame);
+					if (tray && !tray.isDestroyed?.()) tray.setImage(frames.idle);
 					return;
 				}
-				tray?.setImage(n % 2 === 0 ? idleFrame : nativeImage.createEmpty());
+				tray?.setImage(n % 2 === 0 ? frames.idle : nativeImage.createEmpty());
 			}, 400);
 		}
 		return tray;
 	};
+
+	// Windows: watch theme flips. nativeTheme "updated" fires when the
+	// Personalize registry key changes (Electron observes the key, so a
+	// SystemUsesLightTheme flip triggers it even though shouldUseDarkColors
+	// tracks the app mode); the slow interval is a safety net for changes
+	// the watcher can miss (e.g. while the machine was suspended).
+	if (process.platform === "win32") {
+		nativeTheme.on("updated", refreshThemeFrames);
+		themeTimer = setInterval(refreshThemeFrames, 60_000);
+		themeTimer.unref?.();
+	}
 
 	const approvalItem = (approval) => ({
 		label: truncate(`${approval.tool}: ${approval.prompt}`, 48),
@@ -370,7 +449,8 @@ function createTrayController({ onAction, onSnapshot }) {
 		};
 		// NO setTitle: a variable-width title (approval count) resizes the
 		// status-item button and shoves every icon left of it. The unseen
-		// state (filled π) + the menu's approval section carry the signal.
+		// state (solid π / badge shape) + the menu's approval section carry
+		// the signal.
 		applyIconState(counts.busy > 0 ? "busy" : counts.approvals > 0 ? "unseen" : "idle");
 		if (process.platform === "win32" || process.platform === "darwin") {
 			// Self-drawn frosted menu window renders the snapshot (the
@@ -389,6 +469,11 @@ function createTrayController({ onAction, onSnapshot }) {
 
 	const destroy = () => {
 		stopAnim();
+		if (themeTimer) {
+			clearInterval(themeTimer);
+			themeTimer = null;
+		}
+		if (process.platform === "win32") nativeTheme.removeListener("updated", refreshThemeFrames);
 		if (tray && !tray.isDestroyed?.()) tray.destroy();
 		tray = null;
 		lastKey = null;
