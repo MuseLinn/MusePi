@@ -2114,6 +2114,10 @@ async function createWindow() {
 		// Native app icon (macOS Dock uses the bundle/Dock icon; this covers
 		// Linux/Windows chrome and packaged macOS resources).
 		icon: ICON_PATH,
+		// #6: without a backgroundColor the DWM window surface starts white,
+		// and the Windows taskbar thumbnail (Aero peek) renders that white
+		// initial surface instead of the page. Match the dark app backdrop.
+		backgroundColor: "#1e1c1a",
 		// macOS native traffic lights, full-bleed content. Plain 'hidden'
 		// (NOT hiddenInset — that adds its own inset and leaves the controls
 		// visibly lower than the app header), traffic lights at the same
