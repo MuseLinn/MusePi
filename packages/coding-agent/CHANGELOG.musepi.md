@@ -20,6 +20,21 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - 面板宽度在最大化态也可调；折叠时间距与展开一致；最大化浮层保留圆角。
 - 地图模式导航轨改为聚焦定位（不再悄悄改变会话节点）；分支列表展开/收起有动效。
 
+### English
+
+**Added**
+
+- Voice settings maturity: speech model cards (name + SoTA/lightweight badge, download size, accuracy/speed tier bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
+- macOS: auto-update on ad-hoc–signed builds fails silently; it now falls back to a manual installer download (dmg opened after fetch) with updater logs on disk. #5
+- Session sidebar search commits on Enter (IME-safe), with memoized rows and concurrent first-paint RPCs. #5
+
+**Changed**
+
+- Transcript activity fold aligned with openchamber's turn model: a turn spans from its prompt (or an advisor note) to the next prompt; a collapsed turn renders orb + activity + answer on ONE line, the process folds into the activity row, and folding animates both ways.
+- Opening a session renders every loaded message (no more "show earlier messages" gap), and a session switch lands on the latest position.
+- Panel width is adjustable again in every state, including maximized; the collapsed-panel gap matches the expanded one; the maximized float keeps its curve.
+- Map-mode prompt rail now focuses (centers + highlights) instead of silently moving the session leaf; the branch list animates both ways.
+
 ## [0.4.28] - 2026-09-16
 
 ### Added
