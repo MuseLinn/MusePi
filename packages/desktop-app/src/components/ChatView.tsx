@@ -1519,7 +1519,10 @@ export function ChatView({
 			 * each region carries its own card chrome. `gui-chat-surface` stays
 			 * as the JS anchor for the maximize measurement query. The window
 			 * header (GuiHeader) is a separate container ABOVE it. */}
-			<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col gap-2">
+			<div
+				className="gui-chat-surface flex min-h-0 flex-1 flex-col"
+				style={{ margin: "var(--gui-card-gutter)", gap: "var(--gui-card-gutter)" }}
+			>
 				{/* Scene stack: both scenes mount during the 420ms overlap window,
 				 * each absolute-filling this wrapper (so they cross-fade/morph
 				 * full-surface). The wrapper itself is IN FLOW — the terminal
@@ -1537,7 +1540,10 @@ export function ChatView({
 							 * settings main view: the welcome scene used to sit
 							 * directly on the glass, so it read as "not a rounded
 							 * container" (user report 2026-09-16). */}
-							<div className="gui-float-card gui-welcome-card m-2 flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]">
+							<div
+								className="gui-float-card gui-welcome-card flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]"
+								style={{ margin: "var(--gui-card-gutter)" }}
+							>
 								<WelcomeComposer
 									busy={busy}
 									rpc={rpc}

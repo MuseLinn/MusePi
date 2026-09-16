@@ -4,7 +4,12 @@
 * apart, and adjacent 24px shadows stacked into a muddy gutter (user:/n* 边距和阴影还是不自然统一). Softer spread + one token keeps them coherent
 * AND lets the settings view stay pixel-identical to the workspace. */
 :root {
-	--gui-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 6px 18px rgba(0, 0, 0, 0.14);
+	--gui-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.16);
+	/* One gutter for EVERY floating card, in every scene: the session card and
+	 * the welcome card must share the same left/top/bottom margins (user:
+	 * 会话圆角容器要和空态主视图一样的边距). Tailwind m-2/gap-2 literals drift
+	 * apart when one scene is tuned; the token cannot. */
+	--gui-card-gutter: 8px;
 }
 
 .gui-terminal-host {
@@ -271,7 +276,7 @@
 	 * `clip` + a clip-margin keeps the morph clipping but lets the shadow
 	 * spill into the gutters like the settings view. */
 	overflow: clip;
-	overflow-clip-margin: 28px;
+	overflow-clip-margin: 14px;
 }
 
 .gui-scene-welcome {
