@@ -1889,7 +1889,7 @@ function AppInner(): ReactNode {
 			const trimmed = text.trim();
 			if (!trimmed) return;
 			closeSettings();
-			const prompt = `${trimmed}。请设计并保存这个预设：遵循 docs/modes-plan.md 契约（extends 继承、promptComplete、settings 覆盖），完成后用 modes.validate 自检，再用 modes.save 保存到模式目录。`;
+			const prompt = `${trimmed}。请设计并保存这个预设：遵循 docs/archive/modes-plan.md 契约（extends 继承、promptComplete、settings 覆盖），完成后用 modes.validate 自检，再用 modes.save 保存到模式目录。`;
 			void createAndSend(prompt, "creator");
 		},
 		[createAndSend, closeSettings],

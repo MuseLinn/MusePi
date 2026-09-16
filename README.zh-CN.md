@@ -159,7 +159,7 @@ bun run --cwd=packages/desktop-app desktop
 
 - **GUI 设计规范**：`docs/gui-design.md`（布局/token/动效/组件模式/桌宠视觉风格）
 - **GUI 实现笔记**：`docs/gui-implementation.md`（daemon RPC 形状、IPC、踩坑、验证工作流）
-- **widget 设计系统**：`docs/widget-design-system.md`
+- **widget 设计系统**：`docs/archive/widget-design-system.md`
 - **协作**：`docs/collab.md`（含 musepi LAN/隧道定制）
 - **上游同步**：`UPSTREAM.md`（同步基线 v17.2.12、PURE/THREE_WAY/NEW/MANUAL 分类、验证记录）
 

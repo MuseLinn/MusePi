@@ -1281,7 +1281,7 @@ export class DaemonSessionHost {
 		autoTitle?: boolean;
 		modelPattern?: string;
 		thinkingLevel?: ConfiguredThinkingLevel;
-		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings;docs/modes-plan.md)。 */
+		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings;docs/archive/modes-plan.md)。 */
 		modeId?: string;
 	}): Promise<{ sessionId: string }> {
 		const cwd = path.resolve(params.cwd ?? this.#options.cwd ?? process.cwd());
@@ -4684,7 +4684,7 @@ export class DaemonServer {
 				};
 			}
 			case "modes.list": {
-				// 预设中心数据源(docs/modes-plan.md §7):摘要列表,含继承链与
+				// 预设中心数据源(docs/archive/modes-plan.md §7):摘要列表,含继承链与
 				// 结构信息;扩展 id 存在性校验在 save/validate 层做。
 				const { listModeIds, loadModeFile, ensureModeTemplates, BUILTIN_MODE_TEMPLATES } = await import(
 					"../presets/resolve"
@@ -4966,7 +4966,7 @@ export class DaemonServer {
 				return { types: WIDGET_TYPES, tones: WIDGET_TONES };
 			}
 			case "widget.data": {
-				// Daemon-side data-source proxy (docs/board-dashboard.md §4
+				// Daemon-side data-source proxy (docs/archive/board-dashboard.md §4
 				// 数据源代理): widgets never fetch the network directly — the
 				// daemon fetches each feed once per TTL and caches it
 				// in-process. First feed: FX rates (open.er-api.com, base CNY).

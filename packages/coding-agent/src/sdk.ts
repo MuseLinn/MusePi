@@ -609,7 +609,7 @@ export interface CreateAgentSessionOptions {
 	/** Settings instance. Default: Settings.init({ cwd, agentDir }) */
 	settings?: Settings;
 
-	/** 会话预设(mode)id:v1 会话创建时应用(扩展白名单/提示词注入/settings 覆盖;docs/modes-plan.md §6.1)。 */
+	/** 会话预设(mode)id:v1 会话创建时应用(扩展白名单/提示词注入/settings 覆盖;docs/archive/modes-plan.md §6.1)。 */
 	modeId?: string;
 
 	/** 预设目录(测试/嵌入可覆盖;默认 <home>/.musepi/modes,决策 #5)。 */

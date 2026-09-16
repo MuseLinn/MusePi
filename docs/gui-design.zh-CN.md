@@ -27,7 +27,7 @@
 | **会话列表** | 左侧栏上按 分组/项目/日期/定时任务 聚合的**会话**(可多选/置顶/标记状态) | `SessionTree.tsx`(文件名沿旧称,职责是列表) | 不要叫它"会话树";改文档/注释用「会话列表」 |
 | **会话/消息树** | **会话内条目树**:entry 的 id/parentId 层级、fork 分支、叶导航(TUI `/tree` 的语义) | TUI `tree-selector.ts` + 会话级 `session-manager.ts`;GUI 侧载体 `lib/message-tree.ts`(`buildMessageTree`) | 与「会话列表」是两层数据:列表管"选哪个会话",消息树管"会话里怎么分支" |
 | **轨迹** | 当前会话的**事件时间线**:turn 分组 + Overview 时间轴 + 检视 + 跳转 | 右侧 ContextPanel「轨迹」tab(`TrajectoryView` + `TimelineOverview`) | 时间投影轴;与消息树同源(都是同批 entries)但投影维度不同 |
-| **/trace(规划)** | TUI 中消息树×轨迹的融合视图:树结构上叠加时间/成本/令牌列 | TUI 新命令(复用 tree-selector 数据源) | 方案见 `docs/tui-trace-plan.md`;`/tree` 保持纯结构投影 |
+| **/trace(规划)** | TUI 中消息树×轨迹的融合视图:树结构上叠加时间/成本/令牌列 | TUI 新命令(复用 tree-selector 数据源) | 方案见 `docs/archive/tui-trace-plan.md`;`/tree` 保持纯结构投影 |
 
 **命名铁律**:写代码/文档/UI 文案时,「会话树」只准指消息树(/tree 语义);会话语义的树一律叫「会话列表」;时间轴一律叫「轨迹」。
 
@@ -248,11 +248,11 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 
 早期章节之后落地的设计决策与模式;实现契约与坑在 `docs/gui-implementation.md` §18,分特性规格见所列文档。
 
-- **右栏改造 Phase 1–2**(`docs/gui-right-panel-redesign.md`):右栏 ContextPanel 改为**分组 44px 图标 rail**——surface 注册表(`surfaces/registry.ts`)新增 `group` 字段(primary/secondary/tertiary);高频图标固定,secondary 收进 rail 底部「…」溢出;宽度 clamp 放宽到 **260–1200px**(+ maximize 态);**⌘E** 切换面板,**⌘⇧E** 为 focus mode(输入框铺满);关闭动画为 **220ms 宽度折叠**(非 proma overlay)。第二条 TabBar 行与多实例 tab **已被架构否决**("rail 是唯一导航轴");Phase 3 面板级细化继续。
-- **看板/widget 画布**(`docs/board-dashboard.md`、`docs/widget-design-system.md`):`BoardPage` + 白名单 `WidgetRegistry`(18 种 widget)——同一 registry 渲染看板网格、transcript 内联卡与 pin 窗,一个 widget 写一处三处复用。画布固定布局(BASE_W 1092)缩放适配窗口(`transform: scale(窗口宽/1092)`),`overflow-x:hidden` + `overflow-y:auto`;ChromaGroup 辉光(`components/ChromaGroup.tsx`)以单份共享 RGB 偏移径向渐变点亮整组(`mix-blend-mode: screen`,`gui-motion-off` 隐藏)。
+- **右栏改造 Phase 1–2**(`docs/archive/gui-right-panel-redesign.md`):右栏 ContextPanel 改为**分组 44px 图标 rail**——surface 注册表(`surfaces/registry.ts`)新增 `group` 字段(primary/secondary/tertiary);高频图标固定,secondary 收进 rail 底部「…」溢出;宽度 clamp 放宽到 **260–1200px**(+ maximize 态);**⌘E** 切换面板,**⌘⇧E** 为 focus mode(输入框铺满);关闭动画为 **220ms 宽度折叠**(非 proma overlay)。第二条 TabBar 行与多实例 tab **已被架构否决**("rail 是唯一导航轴");Phase 3 面板级细化继续。
+- **看板/widget 画布**(`docs/archive/board-dashboard.md`、`docs/archive/widget-design-system.md`):`BoardPage` + 白名单 `WidgetRegistry`(18 种 widget)——同一 registry 渲染看板网格、transcript 内联卡与 pin 窗,一个 widget 写一处三处复用。画布固定布局(BASE_W 1092)缩放适配窗口(`transform: scale(窗口宽/1092)`),`overflow-x:hidden` + `overflow-y:auto`;ChromaGroup 辉光(`components/ChromaGroup.tsx`)以单份共享 RGB 偏移径向渐变点亮整组(`mix-blend-mode: screen`,`gui-motion-off` 隐藏)。
 - **Composer 与状态行设置**(daemon schema,设置「交互」/「Shell」tab 中呈现,§4 TUI 设置同步):`composer.shape`(string,默认 `"box"`)选 composer 形态;`statusLine.contextLine`(enum `CONTEXT_LINE_MODE_VALUES`,默认 `"embedded"`)驱动状态行 gauge——`off`(纯 accent 实线)、`percentage`(已用段 accent、其余 border)、`annotated`/`embedded`(百分比 + 窗口标签)。
 - **win32 磨砂玻璃修复(2026-08-26)**:显式 `html:root, html:root body { background: transparent }`——`html` 是被忽略的一层,带着不透明 `var(--bg)` 挡住 DWM Acrylic(Windows)/vibrancy(macOS)透出半透明 scrim。`[data-platform="win32"] .gui-main` 关掉页面 `backdrop-filter`(模糊来自窗口材质,更省 GPU);`[data-platform="win32"][data-theme="light"]` 用薄 22–58% scrim(Acrylic 是亮材质,默认 58–76% 浅色 scrim 会冲掉磨砂)。
-- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4)——`docs/ota-update-design.md`;toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
+- **OTA 更新 UI**:「检查更新」(§4)从「前往下载」(openExternal)升级为 **下载 → 进度 → 重启**(electron-updater,v0.4.4)——`docs/archive/ota-update-design.md`;toast 现在显示百分比 + 「立即重启」。notes 双通道不变:toast 读 `update-manifest.json.notes`、「What's new」读 `CHANGELOG.musepi.md`。
 - **双语文档约定**(`docs/i18n/README.md`):范围内 `docs/**` 每个 markdown 成对 `foo.md` + `foo.zh-CN.md` + `foo.i18n.yaml`(blob 哈希一致性记录);标题后语言切换行(`English | [中文](foo.zh-CN.md)` / `[English](foo.md) | 中文`);`bun run verify-translation-pairing` 执行(`--write` 记录哈希,具名 pair 严格校验);两语言地位平等、结构镜像。
 
 ## 5h. 吸收轮增补(2026-08-29)

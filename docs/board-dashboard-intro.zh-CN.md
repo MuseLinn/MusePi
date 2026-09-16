@@ -3,7 +3,7 @@
 [English](board-dashboard-intro.md) | 中文
 
 > 本文是看板（Board/Dashboard）组件平台的通俗介绍文档，面向使用与理解系统的人。
-> 架构立项见 `docs/board-dashboard.md`，组件渲染规范见 `docs/widget-design-system.md`。
+> 架构立项见 `docs/archive/board-dashboard.md`，组件渲染规范见 `docs/archive/widget-design-system.md`。
 
 MusePi 看板是 musepi-omp 在 2026 年 8 月立项的"组件看板"平台——它不是传统意义上的仪表盘，而是一块可交互、可编辑、可常驻桌面的组件画布，用户既可以直接使用，也可以让 AI 代理（agent）通过工具亲手为你排版、填数据、甚至生成新组件。它参考了 Kimi Work 的产品形态（可交互可编辑的看板卡片、消息内联 widget）与 BitFun Canvas 的技术范式（Agentic Mini Apps、iframe 沙箱桥接），但最终走出了一条属于自己的路线：**白名单组件注册表 + schema 驱动的数据流**。
 

@@ -57,7 +57,7 @@ type FilterMode = TreeFilterMode;
 /** Rendering projection of the shared entry tree: structural (/tree) or trajectory (/trace). */
 export type TreeProjection = "tree" | "trace";
 
-/** Absolute-scale cost bar glyphs (8 levels, docs/tui-trace-plan.md §2). */
+/** Absolute-scale cost bar glyphs (8 levels, docs/archive/tui-trace-plan.md §2). */
 const TRACE_BAR_CHARS = "▁▂▃▄▅▆▇█";
 
 /** Message fields the trace columns read off a persisted session message. */
@@ -883,7 +883,7 @@ class TreeList implements Component {
 		return 0;
 	}
 
-	/** Session-wide max token magnitude — all nodes share one absolute scale (docs/tui-trace-plan.md §2). */
+	/** Session-wide max token magnitude — all nodes share one absolute scale (docs/archive/tui-trace-plan.md §2). */
 	#computeTraceMax(): number {
 		let max = 0;
 		for (const flat of this.#flatNodes) {

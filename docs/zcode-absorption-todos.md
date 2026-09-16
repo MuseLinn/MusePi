@@ -268,7 +268,7 @@
 
 - **Markdown 预览选中正文加入对话**：MusePi 无独立 Markdown 预览面板。
 - **登录失败取消按钮/渠道列表、Start Plan、BigModel 购买页、飞书机器人、Repo Wiki、access_token 401**：ZCode 特有账号/商业体系。
-- **工作区面板拆分（会话/终端/Side Pane 独立面板）**：✅ **已落地（2026-09-15）**。会话列 / Side Pane（面板+rail）/ 终端 dock 拆为独立圆角卡片（`.gui-float-card` + `.gui-pane-right--inner` / `.gui-right-rail` / `.gui-terminal-dock` 各自 radius+shadow），去竖线分割，间隙露出玻璃基底；样式与设置页卡片统一。前置障碍已消除：原「TabBar 架构否决」已被 tab-primary 模型取代（`docs/gui-right-panel-redesign.md` §3.3.2）。最大化锚点同步改为会话列（`.gui-chat-column`），rail 不再被吞。**待实跑复验**：场景过渡（welcome↔chat 交叉淡入时卡片轮廓）、玻璃模式下 rail/面板/会话卡片的材质一致性。
+- **工作区面板拆分（会话/终端/Side Pane 独立面板）**：✅ **已落地（2026-09-15）**。会话列 / Side Pane（面板+rail）/ 终端 dock 拆为独立圆角卡片（`.gui-float-card` + `.gui-pane-right--inner` / `.gui-right-rail` / `.gui-terminal-dock` 各自 radius+shadow），去竖线分割，间隙露出玻璃基底；样式与设置页卡片统一。前置障碍已消除：原「TabBar 架构否决」已被 tab-primary 模型取代（`docs/archive/gui-right-panel-redesign.md` §3.3.2）。最大化锚点同步改为会话列（`.gui-chat-column`），rail 不再被吞。**待实跑复验**：场景过渡（welcome↔chat 交叉淡入时卡片轮廓）、玻璃模式下 rail/面板/会话卡片的材质一致性。
 - **统一「问题上报」文案**：MusePi 入口已按自身品牌命名（`tools/report-tool-issue.ts` 已有）。
 - **PDF 文件读取恢复、旧 Coding Plan 历史迁移**：MusePi 未引入对应缺陷。
 - **Chromium 结束页面进程导致主进程崩溃**：待确认 MusePi 是否有同类 `<webview>` 崩溃监听缺口（低优先级核查项）。可核对的现成锚点：`electron/main.cjs:2170-2174` 已有 `render-process-gone` 处理（会 reload），但要确认托管浏览器 guest 的崩溃是否走同一通道（`managed-browser.cjs:661-682` 的 `handleTabDestroyed` 是另一条）。

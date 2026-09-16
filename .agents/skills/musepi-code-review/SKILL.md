@@ -15,8 +15,9 @@ description: 按 MusePi 仓库标准评审 PR/改动——AGENTS.md 代码质量
   Generated Files、Logging、TUI Sanitization、测试规则、Changelog、Releasing。
 - `docs/gui-design.md`、`docs/gui-implementation.md` —— GUI 视觉/交互标准与
   daemon RPC 契约；改 GUI 行为必须同步更新。
-- `docs/i18n.md`、`docs/extensions-dev.md`、`docs/skills.md`、`docs/modes-plan.md`
-  —— i18n 词表、扩展 API、skills 运行时、预设体系。
+- `docs/i18n.md`、`docs/extensions-dev.md`、`docs/skills.md` —— i18n 词表、扩展 API、skills 运行时。
+- `docs/archive/modes-plan.md` —— 预设体系的历史设计（v1+v2 均已实现，实现在
+  `packages/coding-agent/src/presets/`）；同类已完结计划文档都在 `docs/archive/`。
 - `skill://musepi-prose-standard` —— 注释/文档/prompt/字符串的编辑标准；
   `skill://musepi-trim-cot-leakage` —— 清理思维链泄漏。
 

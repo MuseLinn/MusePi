@@ -3165,7 +3165,7 @@ export const settings = {
 	"trajectory rate": "Throughput",
 	"extensions state disabled": "Disabled",
 	"{count} settings": "{count} settings",
-	// Welcome-composer starter chips — distinct from named presets (modes), see docs/modes-plan.md
+	// Welcome-composer starter chips — distinct from named presets (modes), see docs/archive/modes-plan.md
 	"starter prompts": "Starter prompts",
 	"starter prompts hint":
 		"Manage the quick prompt chips below the empty-state composer: click to fill, edits apply immediately.",

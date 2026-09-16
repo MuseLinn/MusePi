@@ -180,7 +180,7 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 | `natives` | Rust N-API bindings (Bazel/cargo builds, macOS LINKEDIT alignment post-processing) |
 | `swarm-core` / `swarm-extension` / `tool-select` / `browser-relay` / `metaharness` | Subagent orchestration / tool selection / browser relay / harness tooling |
 
-Key contract docs: [`gui-design.md`](docs/gui-design.md) · [`gui-implementation.md`](docs/gui-implementation.md) · [`widget-design-system.md`](docs/widget-design-system.md) · [`mobile-design.md`](docs/mobile-design.md) · [`collab.md`](docs/collab.md) · [`UPSTREAM.md`](UPSTREAM.md).
+Key contract docs: [`gui-design.md`](docs/gui-design.md) · [`gui-implementation.md`](docs/gui-implementation.md) · [`widget-design-system.md`](docs/archive/widget-design-system.md) · [`mobile-design.md`](docs/mobile-design.md) · [`collab.md`](docs/collab.md) · [`UPSTREAM.md`](UPSTREAM.md).
 
 ## Entry points
 

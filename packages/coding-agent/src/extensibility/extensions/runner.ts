@@ -1152,7 +1152,7 @@ export class ExtensionRunner {
 	 * tool name is re-fired through them — the owning session's tool registry
 	 * picks the new tools up the same way an initial load does.
 	 *
-	 * Contract (docs/modes-plan.md §1.2 / §6.2):
+	 * Contract (docs/archive/modes-plan.md §1.2 / §6.2):
 	 * - `addedTools` are the tool names the new module registered; the caller
 	 *   does not need to activate them (the re-fired listeners already do).
 	 * - A failed load returns `errors` and leaves `extensions[]` untouched.

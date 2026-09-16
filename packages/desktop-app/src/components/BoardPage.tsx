@@ -45,7 +45,7 @@ import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";
 
 /**
- * BoardPage — kimi-work-style widget boards (docs/board-dashboard.md).
+ * BoardPage — kimi-work-style widget boards (docs/archive/board-dashboard.md).
  * Two levels: board HOME (collection list) + collection canvas. Cards are
  * absolutely positioned in PIXELS on a free canvas, snapped to an 8px grid
  * (kimi pixel-precise resize: 356×252 readouts, a few px of adjustment).
@@ -646,7 +646,7 @@ export function BoardPage({
 	};
 	const taskModalWidget = taskModalId ? (active?.widgets.find(w => w.id === taskModalId) ?? null) : null;
 	// Auto-execute due hourly/daily tasks — the real schedule consumer
-	// (docs/board-dashboard.md §4 调度执行引擎). Polls the active board,
+	// (docs/archive/board-dashboard.md §4 调度执行引擎). Polls the active board,
 	// baselines first-sight tasks, and fires each due task through the same
 	// executor as a manual run. A 30s poll keeps hourly/daily cadence
 	// accurate without burning a 1s timer.
@@ -673,7 +673,7 @@ export function BoardPage({
 		return () => window.clearInterval(timer);
 	}, [activeId, boardsReady]);
 
-	// Live FX ticks via the daemon widget.data RPC (docs/board-dashboard.md
+	// Live FX ticks via the daemon widget.data RPC (docs/archive/board-dashboard.md
 	// §4 数据源代理): the daemon proxies open.er-api.com so the ticker card
 	// never fetches the network directly. On board open + a 60s cadence (the
 	// daemon's FX cache TTL) ticker cards on the active board refresh from the

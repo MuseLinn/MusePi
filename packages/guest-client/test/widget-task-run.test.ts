@@ -1,5 +1,5 @@
 /**
- * Widget task execution engine (docs/board-dashboard.md §4 调度执行引擎):
+ * Widget task execution engine (docs/archive/board-dashboard.md §4 调度执行引擎):
  * the executor genuinely refreshes a card's data (not a fake setTimeout
  * success) and the schedule consumers (hourly/daily) are pure + testable.
  */

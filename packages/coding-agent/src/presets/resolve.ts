@@ -1,6 +1,6 @@
 /**
  * Modes(命名预设)聚合层:继承展开、结构校验、mtime 缓存。
- * 契约:docs/modes-plan.md §3/§4/§11(决策 #1/#5/#9/#10/#15/#16)。
+ * 契约:docs/archive/modes-plan.md §3/§4/§11(决策 #1/#5/#9/#10/#15/#16)。
  *
  * 纯逻辑,零运行时依赖 —— v1 会话创建时消费;v2 热切换复用同一展开结果。
  */
@@ -294,7 +294,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 			{
 				name: "mode:creator:role",
 				order: 25,
-				text: "你是一名 MusePi 扩展与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				text: "你是一名 MusePi 扩展与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 			},
 		],
 	},

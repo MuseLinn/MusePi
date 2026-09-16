@@ -293,7 +293,7 @@ Naming normalization in `docs/gui-design.md` §0 (session list / message tree / 
   - `wire/src/index.ts`: User/Developer/Assistant/ToolResult four role messages gain optional `parentId?: string | null` (live events still lack it).
   - `MaterializedView.#upsertMessage`: `parentId: message.parentId ?? null` (keep when present, null when absent).
   - `packages/desktop-app/src/lib/message-tree.ts`: `buildMessageTree(entries)` / `flattenMessageTree` — builds a branching tree from entries' id/parentId (orphans become roots, cycles safe, siblings ordered); immediately usable on historical snapshots, 6 test cases.
-- **Remaining seam for live message trees**: the daemon emitter stamps message events (`agentSession.sessionManager.leafEntry()?.parentId` at the forwarding point in server.ts's `agentSession.subscribe`) — once landed, the GUI trajectory panel can add a timeline/branch-tree toggle (reusing `buildMessageTree`). TUI `/trace` plan in `docs/tui-trace-plan.md`.
+- **Remaining seam for live message trees**: the daemon emitter stamps message events (`agentSession.sessionManager.leafEntry()?.parentId` at the forwarding point in server.ts's `agentSession.subscribe`) — once landed, the GUI trajectory panel can add a timeline/branch-tree toggle (reusing `buildMessageTree`). TUI `/trace` plan in `docs/archive/tui-trace-plan.md`.
 
 ## 16. Transcript custom-message rendering + streaming markdown contract (2026-08-22)
 
@@ -363,7 +363,7 @@ Three sites, one source, all via `/releases/latest/download/update-manifest.json
 Contracts, RPC shapes and pitfalls for work landed after the earlier sections; design intent in `docs/gui-design.md` §5g, per-feature specs in the referenced docs.
 
 ### OTA update via electron-updater (v0.4.4, 2026-08-24)
-`docs/ota-update-design.md`. Replaces §17's "Go to download" with **download → verify → install → restart** (electron-updater v6.4.1 + GitHub provider):
+`docs/archive/ota-update-design.md`. Replaces §17's "Go to download" with **download → verify → install → restart** (electron-updater v6.4.1 + GitHub provider):
 - **Config**: `packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}` (emits `latest*.yml`). Never set `allowPrerelease` — 6.4.1 derives it (prerelease version → beta channel; stable → `/releases/latest`, prereleases ignored).
 - **IPC**: `updater-check` (enriched result `{enabled,newer,latest,current,notes}` — updateInfo vs `app.getVersion()`, notes fetched beside the feed check)/`updater-download`/`updater-install`/`updater-notes` (renderer→main) + `updater-state` (`checking/preparing/downloading(percent+bytes)/downloaded/error`) + `update-available`. `autoDownload=false`, `autoInstallOnAppQuit=false`.
 - **Daemon sidecar**: `updater-install` awaits `kill(daemonPort)` then `setImmediate(() => autoUpdater.quitAndInstall())` (setImmediate flushes the IPC reply first); the vendored daemon lands with the new app.
@@ -380,7 +380,7 @@ Landed since the 2026-08-25 audit (P3 ❌ / P4 service ❌). In `extensibility/e
 `widget.data` proxy RPC is **implemented for the fx-rates feed** — daemon `server.ts` `widget.data` handler → `getFxRates` (open.er-api.com, 60s in-process cache). The renderer market cards (`fx.tsx`, `stocks.tsx`) currently fetch **directly** via `widgetFetch` (open.er-api.com / Tencent JSONP) — the proxy is **not yet a renderer consumer**. Migrating the market cards onto `widget.data` (§4 数据源代理) is a **whole-card** architectural decision (fx + stocks + ticker together), not a per-card change — a single-card routing would leave a half-migrated, inconsistent data path. The **scheduling engine is implemented GUI-side** (`guest-client` task-run engine + BoardPage 30s poll runs `data.task.schedule`; a manual run uses the same executor, not a setTimeout).
 
 ### TUI /trace + /tree
-`/tree` (structural) and `/trace` (time/cost projection) both landed in the TUI — `tree-selector.ts` `TreeProjection = "tree"|"trace"`, `/trace` slash command (`builtin-session.ts` → `showTraceSelector`). Data = tree-selector's SessionEntry tree + live `AssistantMessage.usage/.duration/.ttft` (no new data dependency). GUI-side message-tree seam (`message-tree.ts` buildMessageTree) stays the forward-compatible path. Plan: `docs/tui-trace-plan.md`.
+`/tree` (structural) and `/trace` (time/cost projection) both landed in the TUI — `tree-selector.ts` `TreeProjection = "tree"|"trace"`, `/trace` slash command (`builtin-session.ts` → `showTraceSelector`). Data = tree-selector's SessionEntry tree + live `AssistantMessage.usage/.duration/.ttft` (no new data dependency). GUI-side message-tree seam (`message-tree.ts` buildMessageTree) stays the forward-compatible path. Plan: `docs/archive/tui-trace-plan.md`.
 
 ### musepi ps CLI
 `cli-commands.ts` registers `ps` → `commands/ps.ts` (`runPsCommand`): actions `list|info|logs|stop|kill|restart`; flags `-a/--all`, `-j/--json`, `--plain`, `--dir`, `--global`, `-f/--follow`, `--head`, `-n/--lines`, `--grep`, `--timeout`. Inspects/controls daemon-broker supervised processes from outside the harness (machine-global `--global` scope, e.g. browser-relay).

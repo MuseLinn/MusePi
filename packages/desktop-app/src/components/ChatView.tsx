@@ -669,7 +669,7 @@ export function ChatView({
 	// External browser reveal (chat link click → managed browser, proma
 	// AgentBrowserLinkProvider parity). nonce re-triggers the same URL.
 	const [openBrowserReq, setOpenBrowserReq] = useState<{ url: string; nonce: number } | null>(null);
-	// Active right-panel view — TAB-PRIMARY (docs/gui-right-panel-redesign.md
+	// Active right-panel view — TAB-PRIMARY (docs/archive/gui-right-panel-redesign.md
 	// §3.3.2, supersedes the "single navigation axis" model): one panel-level
 	// tab strip hosts every open surface, and the rail opens-or-focuses tabs
 	// instead of swapping the panel body. `activeView` is DERIVED from the
@@ -1523,7 +1523,7 @@ export function ChatView({
 			<div className="gui-drag-strip" aria-hidden />
 			{/* Workspace split (ZCode 工作区面板改版 parity): the session column,
 			 * the side pane and the terminal dock are INDEPENDENT rounded cards
-			 * floating on the glass base (docs/gui-right-panel-redesign.md
+			 * floating on the glass base (docs/archive/gui-right-panel-redesign.md
 			 * §3.3.2 / zcode-absorption-todos #工作区面板拆分) — no more single
 			 * card with a vertical divider. This wrapper is layout-only now;
 			 * each region carries its own card chrome. `gui-chat-surface` stays

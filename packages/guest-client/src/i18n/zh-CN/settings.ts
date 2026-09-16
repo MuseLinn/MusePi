@@ -3040,7 +3040,7 @@ export const settings = {
 	"trajectory rate": "速率",
 	"extensions state disabled": "已禁用",
 	"{count} settings": "{count} 项设置",
-	// 空态快捷提示词(与「预设/modes」无关 —— 避免与命名预设混淆,见 docs/modes-plan.md)
+	// 空态快捷提示词(与「预设/modes」无关 —— 避免与命名预设混淆,见 docs/archive/modes-plan.md)
 	"starter prompts": "快捷提示词",
 	"starter prompts hint": "管理空态输入框下方的快捷提示词：点击填入输入框，修改即时生效。",
 

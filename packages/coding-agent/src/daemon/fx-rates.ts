@@ -1,5 +1,5 @@
 /**
- * widget.data FX feed (docs/board-dashboard.md §4 数据源代理): the daemon
+ * widget.data FX feed (docs/archive/board-dashboard.md §4 数据源代理): the daemon
  * proxies open.er-api.com so widgets never fetch the network directly.
  * One shared in-process fetch per base currency, cached for 60s; the
  * caller passes an injectable `fetch` (and `now`) for tests.

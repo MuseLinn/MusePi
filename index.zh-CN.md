@@ -205,9 +205,9 @@ mp_cta: true
     <li><a href="{{ 'docs/gui-design.md' | relative_url }}">GUI 设计规范 — 布局 / 令牌 / 动效 / 组件</a></li>
     <li><a href="{{ 'docs/gui-implementation.md' | relative_url }}">GUI 实现 — daemon RPC 契约、坑位、验证</a></li>
     <li><a href="{{ 'docs/mobile-design.md' | relative_url }}">移动端设计规范 — 屏幕 / 动效 / 原生框架</a></li>
-    <li><a href="{{ 'docs/plugin-design.md' | relative_url }}">插件化设计 — MusePi 插件化（pi ↔ dsh 接缝映射）</a></li>
+    <li><a href="{{ 'docs/archive/plugin-design.md' | relative_url }}">插件化设计 — MusePi 插件化（pi ↔ dsh 接缝映射）</a></li>
     <li><a href="{{ 'docs/extensions-dev.md' | relative_url }}">扩展开发 — 槽位 / HMR / API</a></li>
-    <li><a href="{{ 'docs/board-dashboard.md' | relative_url }}">看板与组件设计系统</a></li>
+    <li><a href="{{ 'docs/archive/board-dashboard.md' | relative_url }}">看板与组件设计系统</a></li>
     <li><a href="{{ 'UPSTREAM.md' | relative_url }}">上游同步追踪</a></li>
   </ul>
 </section>

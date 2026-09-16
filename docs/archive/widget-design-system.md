@@ -2,7 +2,7 @@
 
 > **状态（2026-08-25 核对）**：registry 组件层已实现（18 种 widget，parity 测试 `guest-client/test/widget-parity.test.ts`）；
 > iframe 沙箱层部分（html widget opaque-origin sandbox + postMessage bridge 存在，缺 token CSS 预加载与沙箱 sendPrompt）；
-> 完整核对见 `docs/board-dashboard.md` 状态行。
+> 完整核对见 `docs/archive/board-dashboard.md` 状态行。
 >
 > 2026-08-07 建立。来源：kimi 官方 widget 设计系统（`~/Downloads/kimi-widget-skill/`，
 > 用户从 kimi 对话中取得）提炼 + 映射到 MusePi GUI token。适用范围：**白名单 registry 组件**
@@ -100,7 +100,7 @@
 - kimi 运行时机制（用户对话确认）：沙箱 iframe + 预加载设计系统 + 内联自包含内容；
   `window.sendPrompt(text)` 推回意图
 - bitfun：`src/web-ui/src/tools/bitfun-canvas/`（data-display/charts/hooks SDK）
-- musepi：`docs/board-dashboard.md`（架构立项）、`docs/gui-design.md`（主设计规范）
+- musepi：`docs/archive/board-dashboard.md`（架构立项）、`docs/gui-design.md`（主设计规范）
 
 ## 9. 卡片操作菜单（下载 / 图片 / 复制 / 查看代码）
 

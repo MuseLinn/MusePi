@@ -213,9 +213,9 @@ mp_cta: true
     <li><a href="{{ 'docs/gui-design.md' | relative_url }}">GUI design spec — layout / tokens / motion / components</a></li>
     <li><a href="{{ 'docs/gui-implementation.md' | relative_url }}">GUI implementation — daemon RPC shapes, pitfalls, verification</a></li>
     <li><a href="{{ 'docs/mobile-design.md' | relative_url }}">Mobile design spec — screens / motion / native chrome</a></li>
-    <li><a href="{{ 'docs/plugin-design.md' | relative_url }}">Plugin design — MusePi 插件化 (pi ↔ dsh seam mapping)</a></li>
+    <li><a href="{{ 'docs/archive/plugin-design.md' | relative_url }}">Plugin design — MusePi 插件化 (pi ↔ dsh seam mapping)</a></li>
     <li><a href="{{ 'docs/extensions-dev.md' | relative_url }}">Extension development — slots / HMR / API</a></li>
-    <li><a href="{{ 'docs/board-dashboard.md' | relative_url }}">Board dashboard &amp; widget design system</a></li>
+    <li><a href="{{ 'docs/archive/board-dashboard.md' | relative_url }}">Board dashboard &amp; widget design system</a></li>
     <li><a href="{{ 'UPSTREAM.md' | relative_url }}">Upstream sync tracking</a></li>
   </ul>
 </section>

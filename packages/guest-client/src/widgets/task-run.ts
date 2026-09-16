@@ -1,5 +1,5 @@
 /**
- * Widget task execution engine (docs/board-dashboard.md §4 调度执行引擎).
+ * Widget task execution engine (docs/archive/board-dashboard.md §4 调度执行引擎).
  *
  * Consumes the widget's `data.task.schedule` (manual/hourly/daily) by
  * EXECUTING the task: the engine runs a per-type refresh strategy that

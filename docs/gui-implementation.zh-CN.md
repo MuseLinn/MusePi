@@ -291,7 +291,7 @@ daemon RPC:
   - `wire/src/index.ts`:User/Developer/Assistant/ToolResult 四角色 message 加可选 `parentId?: string | null`(live 事件暂缺)。
   - `MaterializedView.#upsertMessage`:`parentId: message.parentId ?? null`(带即保留,缺即 null)。
   - `packages/desktop-app/src/lib/message-tree.ts`:`buildMessageTree(entries)` / `flattenMessageTree`——从 entry 的 id/parentId 建分支树(孤儿作根、自环安全、兄弟保序);历史快照立即可用,测试 6 用例。
-- **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/tui-trace-plan.md`。
+- **live 消息树的剩余 seam**:daemon 发射端在 message 事件上打标(`agentSession.sessionManager.leafEntry()?.parentId` 于转发点 server.ts `agentSession.subscribe` 处)——落实后 GUI 轨迹面板即可加「时间线/分支树」切换(复用 `buildMessageTree`)。TUI `/trace` 方案见 `docs/archive/tui-trace-plan.md`。
 
 ## 16. 转录自定义消息渲染 + 流式 markdown 契约(2026-08-22)
 
@@ -361,7 +361,7 @@ daemon RPC:
 早期章节之后落地的契约、RPC 形状与坑；设计意图在 `docs/gui-design.md` §5g，分特性规格见所列文档。
 
 ### OTA 经 electron-updater 更新（v0.4.4，2026-08-24）
-`docs/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
+`docs/archive/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
 - **配置**：`packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
 - **IPC**：`updater-check`（富结果 `{enabled,newer,latest,current,notes}`——updateInfo 与 `app.getVersion()` 比对，notes 与 feed 检查并行拉取）/`updater-download`/`updater-install`/`updater-notes`（renderer→main）+ `updater-state`（`checking/preparing/downloading(percent+bytes)/downloaded/error`）+ `update-available`。`autoDownload=false`、`autoInstallOnAppQuit=false`。
 - **daemon sidecar**：`updater-install` 先 `kill(daemonPort)` 再 `setImmediate(() => autoUpdater.quitAndInstall())`（setImmediate 先 flush IPC reply）；vendored daemon 随新版 app 一起生效。
@@ -378,7 +378,7 @@ daemon RPC:
 `widget.data` 代理 RPC **未实现**（行情卡为静态默认值；数据源 agent 代理是剩余 M4 工作）；**调度执行引擎已在 GUI 侧实现**（`guest-client` task-run 执行引擎 + BoardPage 30s poll 消费 `data.task.schedule`；手动 run 走同一执行器而非 setTimeout）。
 
 ### TUI /trace + /tree
-`/tree`（结构投影）与 `/trace`（同一 entry 树的时间/成本投影）都已在 TUI 落地——`tree-selector.ts` `TreeProjection = "tree"|"trace"`、`/trace` slash 命令（`builtin-session.ts` → `showTraceSelector`）。数据源 = tree-selector 的 SessionEntry 树 + live `AssistantMessage.usage/.duration/.ttft`（零新数据依赖）。GUI 侧消息树 seam（`message-tree.ts` buildMessageTree）仍为向前兼容路径。方案：`docs/tui-trace-plan.md`。
+`/tree`（结构投影）与 `/trace`（同一 entry 树的时间/成本投影）都已在 TUI 落地——`tree-selector.ts` `TreeProjection = "tree"|"trace"`、`/trace` slash 命令（`builtin-session.ts` → `showTraceSelector`）。数据源 = tree-selector 的 SessionEntry 树 + live `AssistantMessage.usage/.duration/.ttft`（零新数据依赖）。GUI 侧消息树 seam（`message-tree.ts` buildMessageTree）仍为向前兼容路径。方案：`docs/archive/tui-trace-plan.md`。
 
 ### musepi ps CLI
 `cli-commands.ts` 注册 `ps` → `commands/ps.ts`（`runPsCommand`）：action `list|info|logs|stop|kill|restart`；flag `-a/--all`、`-j/--json`、`--plain`、`--dir`、`--global`、`-f/--follow`、`--head`、`-n/--lines`、`--grep`、`--timeout`。从 harness 外部查看/控制 daemon-broker 托管进程（机器全局 `--global` 作用域，如 browser-relay）。

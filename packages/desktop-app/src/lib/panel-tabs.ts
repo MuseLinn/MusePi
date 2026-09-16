@@ -2,7 +2,7 @@
  * Panel-level heterogeneous tab model (openchamber ContextPanel parity).
  *
  * Architecture note (2026-09-15 decision, supersedes the earlier "no second
- * tab row" veto — see docs/gui-right-panel-redesign.md §3.3.2): the right
+ * tab row" veto — see docs/archive/gui-right-panel-redesign.md §3.3.2): the right
  * panel adopts a tab-primary model. ONE tab strip hosts every open view
  * regardless of surface (files / notes / browser / git / board …); the rail
  * becomes a launcher — selecting a rail item opens-or-focuses that surface's

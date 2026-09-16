@@ -82,7 +82,7 @@ GUI daemon 的每个会话额外注入 5 个**会话级 CustomTool**（`extensio
 - **快照回滚**：每次 load/reload 成功即快照到 `~/.musepi/extension-backups/<sha1(入口)12>/<ts>/`，保留最近 5 份；rollback 用最新快照覆盖扩展产物 + 重载会话，是损坏新版本的修复路径。
 - **沙箱**：扩展宿主半体跑在 `node:vm` 受限 realm（`extension-sandbox.ts`；process/require/globalThis 天然缺席，async 悬挂由宿主 `Promise.race` 竞速超时）——行为约束，非安全边界。
 - **注**：这些是 agent 会话工具（由模型调用），**不是** daemon WS RPC。WS 面的扩展管理 RPC 只有 `extensions.list/raw/setEnabled/setForceEnabled/setProviderEnabled` 与 `ext.call`（设置「扩展」tab 用）。
-- 方向文档：核心边界与接缝清单见 `docs/plugin-design.md`。
+- 方向文档：核心边界与接缝清单见 `docs/archive/plugin-design.md`。
 
 ## Quick start
 

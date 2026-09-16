@@ -1,7 +1,7 @@
 /**
  * Surface-scoped multi-instance tab strip.
  *
- * Scope note (architecture boundary, see docs/gui-right-panel-redesign.md):
+ * Scope note (architecture boundary, see docs/archive/gui-right-panel-redesign.md):
  * the RightRail is the single navigation axis — a panel-header tab row that
  * duplicates that role was architecturally vetoed. What this component
  * provides is the *other* tab shape: multiple live instances INSIDE one

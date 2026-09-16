@@ -616,7 +616,7 @@ export class AgentSession {
 	#extensionLoadPending: string | undefined = undefined;
 	/**
 	 * Modes v2: session-level mode hot-switch, wired by the SDK session
-	 * factory (docs/modes-plan.md §6.2). Undefined for sessions without a
+	 * factory (docs/archive/modes-plan.md §6.2). Undefined for sessions without a
 	 * mode-capable factory (embedded SDK consumers, subagents).
 	 */
 	#modeSwitcher:
@@ -4741,7 +4741,7 @@ export class AgentSession {
 	}
 
 	/**
-	 * Hot-switch this session's mode (Modes v2, docs/modes-plan.md §6.2).
+	 * Hot-switch this session's mode (Modes v2, docs/archive/modes-plan.md §6.2).
 	 *
 	 * Busy gate: while the session is streaming the switch is parked in a
 	 * single pending slot (last-wins) and applied at the next idle `agent_end`

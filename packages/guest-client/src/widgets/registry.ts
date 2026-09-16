@@ -34,7 +34,7 @@ import { VideoCard, videoDefaults } from "./video";
 
 /**
  * Widget registry — the whitelist of board/inline widget types (see
- * docs/board-dashboard.md + docs/widget-design-system.md). Each entry
+ * docs/archive/board-dashboard.md + docs/archive/widget-design-system.md). Each entry
  * declares its data schema (fields drive agent autocomplete via
  * widget.schema in a later milestone) and its renderer. M1: six
  * self-built interactive components; reactbits visual components
