@@ -921,12 +921,28 @@ export function ChatView({
 	// look running (or vice versa) while waiting to re-branch.
 	const snapRef = useRef(snap);
 	snapRef.current = snap;
-	const waitWorkingCleared = useCallback(async (timeoutMs = 6000): Promise<void> => {
-		const start = Date.now();
-		while (snapRef.current?.working === true && Date.now() - start < timeoutMs) {
-			await new Promise(resolve => setTimeout(resolve, 60));
-		}
-	}, []);
+	const waitWorkingCleared = useCallback(
+		(timeoutMs = 6000): Promise<void> =>
+			new Promise(resolve => {
+				// Event-driven: the store emits on every applied daemon frame, so the
+				// stop unwinds within ONE emission. Polling would busy-wait between
+				// frames and still lag an emission behind (user preference: no
+				// polling unless necessary). The timeout only guards a stuck run.
+				let unsub: (() => void) | undefined;
+				const done = (): void => {
+					unsub?.();
+					clearTimeout(timer);
+					resolve();
+				};
+				const check = (): void => {
+					if (store?.getSnapshot().working !== true) done();
+				};
+				const timer = setTimeout(done, timeoutMs);
+				unsub = store?.subscribe(check);
+				check();
+			}),
+		[store],
+	);
 	const confirmTreeOpWhileWorking = useCallback(async (): Promise<boolean> => {
 		if (snap?.working !== true) return true;
 		return confirm(`${t("agent is running")}\n\n${t("tree op interrupts work")}`, t("interrupt and continue"));

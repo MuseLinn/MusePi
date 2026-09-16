@@ -17,6 +17,12 @@ const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, ne
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
+// GUI verification harness: set MUSEPI_CDP_PORT to expose a CDP endpoint so
+// external tooling can screenshot/inspect the renderer (visual regression
+// work). Off by default — no switch, no port.
+if (process.env.MUSEPI_CDP_PORT) {
+	app.commandLine.appendSwitch("remote-debugging-port", process.env.MUSEPI_CDP_PORT);
+}
 const { probe, probeWeb, restart, start, kill, portOpen } = require("./daemon.cjs");
 const { createTrayController } = require("./tray.cjs");
 const {
