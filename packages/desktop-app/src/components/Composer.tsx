@@ -1216,6 +1216,18 @@ export function Composer({
 	);
 
 	const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+		// Self-healing composition latch (see the textarea's onBlur/onFocus):
+		// Chromium tags every key INSIDE a live composition with keyCode 229,
+		// so a keydown that is neither 229 nor marked composing means the latch
+		// went stale — an aborted composition (window switch, IME cancel, Esc)
+		// never fires compositionend and used to leave it true forever, which
+		// returned early below for the rest of the app's lifetime: Enter sent
+		// nothing while the mouse-only Send button kept working. Enter stays
+		// exempt because WebKit dispatches the confirming Enter keyCode 13
+		// AFTER compositionend, where the latch must still hold.
+		if (composingRef.current && !e.nativeEvent.isComposing && e.keyCode !== 229 && e.key !== "Enter") {
+			composingRef.current = false;
+		}
 		// IME composition: every key (including the confirming Enter) belongs
 		// to the editor — never run completion or submit while composing.
 		if (composingRef.current || e.nativeEvent.isComposing || e.keyCode === 229) {
@@ -1899,12 +1911,27 @@ export function Composer({
 					onCompositionStart={() => {
 						composingRef.current = true;
 					}}
+					onCompositionUpdate={() => {
+						composingRef.current = true;
+					}}
 					onCompositionEnd={() => {
 						// Deferred a tick: WebKit dispatches the confirming Enter
 						// after compositionend, when isComposing is already false.
 						setTimeout(() => {
 							composingRef.current = false;
 						}, 0);
+					}}
+					onBlur={() => {
+						// A composition can end WITHOUT compositionend — an IME
+						// cancel, a window switch, Esc, a renderer reload. Losing
+						// focus always terminates it, so this is the safe reset
+						// for the latch that would otherwise stay true forever
+						// (Enter silently stops sending until restart).
+						composingRef.current = false;
+					}}
+					onFocus={() => {
+						// Nothing can still be composing when focus arrives.
+						composingRef.current = false;
 					}}
 					onKeyDown={onKeyDown}
 					placeholder={
