@@ -396,15 +396,14 @@ export function ContextPanel({
 	// of leaving it off the container's insets.
 	// Maximize geometry: measure the SESSION COLUMN (.gui-chat-column), not
 	// .gui-chat-surface — the surface card also contains this panel and the
-	// rail, so the old surface rect maximized the panel OVER the rail and the
-	// backdrop dimmed the whole window. The same vars drive the backdrop, so
-	// the dim covers exactly the chat column and the sidebar/rail stay live.
-	const backdropRef = useRef<HTMLDivElement | null>(null);
+	// rail, so the old surface rect maximized the panel OVER the rail. The
+	// measured vars now position ONLY the panel: there is no scrim to drive
+	// (user 2026-09-16 — 最大化不要遮罩，正常缩放卡片尺寸即可).
 	useLayoutEffect(() => {
 		const panel = panelRef.current;
 		const column = panel?.closest<HTMLElement>(".gui-chat-surface")?.querySelector<HTMLElement>(".gui-chat-column");
 		if (!maximized || !open || !panel || !column) return;
-		const targets = [panel, backdropRef.current].filter((el): el is HTMLElement => el !== null);
+		const targets = [panel].filter((el): el is HTMLElement => el !== null);
 		const measure = (): void => {
 			const r = column.getBoundingClientRect();
 			for (const el of targets) {
@@ -437,19 +436,9 @@ export function ContextPanel({
 
 	return (
 		<>
-			{/* Maximize modal scrim (user: 最大化没有遮罩、前后内容重叠): dims the
-			 * chat column behind the floated panel — the fixed transcript float
-			 * scrollbar and hover chrome must not read as part of the panel.
-			 * Click-through restores the docked width. Starts below the 48px
-			 * header so the title bar stays live. */}
-			{maximized && open && (
-				<div
-					ref={backdropRef}
-					className="gui-pane-maximize-backdrop"
-					onClick={() => setMaximized(false)}
-					aria-hidden
-				/>
-			)}
+			{/* Maximize: NO scrim (user 2026-09-16 — 最大化不要遮罩，正常缩放卡片尺寸即可).
+			 * The panel floats exactly over the measured chat-column card; the
+			 * surrounding gutters stay live and the chat keeps working behind it. */}
 			{/* Gesture shield: owns the move/up half of an edge drag while the
 			 * pointer is held (see .gui-drag-shield). Pointer capture alone does
 			 * not retarget moves that leave the handle for the page's guest, and
