@@ -566,3 +566,13 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **撤回（⤺，用户消息下方）现在定位到父节点**（`ChatView.tsx` `rewindFromUserMessage`）：此前 `session.branchAt` 传的是用户消息**自身**，该消息仍留在激活路径上。用户反馈的语义是「回退到撤回处的上一节点」——对用户消息即其父节点，消息本身也随之退出激活路径（区别于 onEdit：保留节点并回填文本；也区别于重试：保留节点并重新作答）。被弃用的尾段作为兄弟分支留在树上（地图/轨迹仍显示），不做截断。重试（重试＝对同一用户消息节点发起新一轮尝试）语义原本就正确，未改动。
 - **最大化锚点改为会话列而非 surface**（`ChatView.tsx` `.gui-chat-column` + `ContextPanel.tsx` 测量副作用）：`.gui-chat-surface` 是整张圆角应用卡片，**内部还包含面板与 rail**，所以用它的矩形做最大化会把 rail 一并吞掉；而 `.gui-pane-maximize-backdrop` 原本是 `fixed` 全窗口（顶栏以下）的 48% 变暗层，把会话侧栏和 rail 一起压暗（即用户反馈的「除顶栏外一层阴影遮罩」/「左面板与顶栏色差」）。现在浮起的面板与遮罩都取测量到的会话列矩形（`--pane-max-*` 同时写到两个元素，遮罩加 ref），最大化只压暗聊天卡片，侧栏与 rail 保持可见可点。
 - 仍待实跑复验：开多个 tab 后最大化（rail 可见可点、变暗只覆盖聊天卡片）；树中部用户消息上点撤回（其后消息从会话消失、地图/轨迹节点数不变、撤销跳回可恢复）。
+
+## 34. 输入与窗口陷阱：输入法合成态、任务栏缩略图、听写、回退横幅（2026-09-17）
+
+- **输入框的合成状态标志必须能自愈**（`packages/desktop-app/src/components/Composer.tsx` 的 `composingRef`）：合成期间 `onKeyDown` 对任何按键都提前返回，该标志在 `compositionend` 释放——但合成被**中断**时这个事件根本不会触发（切窗、取消候选、Esc、渲染进程重载）。于是标志永久为真：之后再按 Enter 全都石沉大海，而鼠标点「发送」绕开键盘路径照常可用，只有重启能恢复（用户报的「挂后台一会儿 Enter 就失效」）。现在三层兜底：失焦/获得焦点即清零（失焦必然终止合成）、`compositionupdate` 负责续期、而一个既不是 `keyCode 229`（Chromium 对合成中按键的标记）又不在 `isComposing` 的按键判定标志过期并清零。Enter 不参与最后这条规则，因为 WebKit 会在 `compositionend` **之后**补发 keyCode 13 的确认 Enter。
+- **未闭合项——中文输入开头吞字**：尚无复现，未定案。已排除：受控值滞后（无 `useDeferredValue`/防抖，`onChange` 里 `value={text}` 同步更新）、草稿回填（`use-draft-persistence.ts` 的还原只以 `sessionId` 为键）、全局按键监听（app.tsx 只处理 ⌘/Ctrl 组合）、按住空格讲话（不存在该功能）。要想钉死，需要提供：用的是哪款输入法（微软拼音/搜狗等）、是否只在**冷启动后的首次**合成出现、丢的是**拼音字母**（从未上屏）还是**已上屏的汉字**。
+- **Windows 任务栏缩略图全白**（`electron/main.cjs` 的 BrowserWindow）：不设 `backgroundColor` 时 DWM 窗口初始表面是白色，Aero peek 画的就是这层初始表面而非页面内容；现设为 `#1e1c1a`，与应用的深色背景一致。（#6）
+- **听写返回空 PCM——「要点两次」**（`lib/voice.ts` 的 `recordPcm`）：它一开始录音就 resolve，调用方拿到的只是最初几毫秒缓冲的内容（通常是空的），设置里的 `vadEndMs` 也从未生效。现在 VAD 静音、时长上限、手动停止三条路径统一汇入一个 `finish()`：组装完整 PCM、断开音频图、关闭麦克风后才 resolve；在 `getUserMedia` 尚未返回时就取消的场景由 `onaudioprocess` 内部关流，麦克风指示灯必定熄灭。（#9）
+- **回退横幅属于会话状态**（`ChatView.tsx` 的 `jumpBack`/`jumpDockOpen`）：它的 undo 目标是**上一个会话**的叶子，切换会话后再撤销会把外来节点 id 发给 `session.branchAt`（"branch failed"）。现在会话切换与任何显式节点跳转（面包屑/树）都会清空它（其 undo 目标正是刚被跳走的叶子），并新增 ✕ 关闭：只收起横幅、**停留在当前回退位置**，兄弟分支仍可从面包屑与行内动作回到。（#12）
+- **含糊的 issue 先分诊、不臆测**：不少条目开头只是一句话现象（#7 最初报「第一条消息就 429」，实为 Cloud Code Assist 网关把开场的 `<system-conventions>` XML 块判成滥用；上面那条中文吞字也是同一形态）。先记录假设、补齐能区分根因的事实，再动手——没复现就补补丁，正是把回归带进版本的常见方式。
+- **文件编辑器要点**：预览体必须保持子块所依赖的 flex 列布局（`gui-chrome.css` 的 `.gui-filepane-preview-body` → `display:flex; flex-direction:column; flex:1; min-height:0`），否则自动撑高的 textarea 会把保存工具栏顶出面板；保存按钮还必须接 `FilePane.tsx` 里真实的 `saving` 状态，而不是常量 `false`。
