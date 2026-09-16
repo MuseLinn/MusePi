@@ -64,66 +64,42 @@ export async function enumerateMicDevices(): Promise<MicDevice[]> {
 }
 
 /* ── 录音（16kHz mono float PCM + 能量端点 VAD） ───────────────── */
-async function recordPcm(opts: {
+// #9: recordPcm used to return the moment the mic opened, handing the
+// caller a snapshot of an EMPTY chunk list — dictation transcribed
+// nothing, and vadEndMs "did nothing" because nobody ever waited for the
+// VAD/timer/stop path. The contract now: `done` resolves once recording
+// actually FINISHES (VAD end, max-seconds timer, or an external stop)
+// with the FULL buffer; `stop` lets a cancel button finish it early.
+function recordPcm(opts: {
 	maxSeconds?: number;
 	deviceId?: string;
 	vadEndMs?: number;
 	onLevel?: (rms: number) => void;
-}): Promise<{ pcm: Float32Array; stop(): void } | null> {
-	const maxSeconds = opts.maxSeconds ?? 15;
-	const vadEndMs = opts.vadEndMs ?? 0;
-	try {
-		const stream = await navigator.mediaDevices.getUserMedia({
-			audio: opts.deviceId ? { deviceId: { exact: opts.deviceId } } : true,
-		});
-		const ctx = new AudioContext();
-		const source = ctx.createMediaStreamSource(stream);
-		const node = ctx.createScriptProcessor(4096, 1, 1);
-		const chunks: Float32Array[] = [];
-		let stopped = false;
-		// VAD：自适应噪声底 + 静音计数器
-		let noiseFloor = 0.02;
-		let silenceMs = 0;
-		let lastVoiceAt = Date.now();
+	/** Polled after the mic opens and on every audio frame: a cancel that
+	 *  raced ahead of getUserMedia still closes the stream immediately. */
+	isCancelled?: () => boolean;
+}): { done: Promise<{ pcm: Float32Array } | null>; stop(): void } {
+	let requestStop: (() => void) | null = null;
+	const done = (async (): Promise<{ pcm: Float32Array } | null> => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: opts.deviceId ? { deviceId: { exact: opts.deviceId } } : true,
+			});
+			const ctx = new AudioContext();
+			const source = ctx.createMediaStreamSource(stream);
+			const node = ctx.createScriptProcessor(4096, 1, 1);
+			const chunks: Float32Array[] = [];
+			// VAD：自适应噪声底 + 静音计数器
+			let noiseFloor = 0.02;
+			let silenceMs = 0;
+			let lastVoiceAt = Date.now();
+			let finished = false;
+			let resolve!: (value: { pcm: Float32Array }) => void;
+			const finishedPromise = new Promise<{ pcm: Float32Array }>(res => {
+				resolve = res;
+			});
 
-		const stop = (): void => {
-			if (stopped) return;
-			stopped = true;
-			node.disconnect();
-			source.disconnect();
-			stream.getTracks().forEach(t => t.stop());
-			void ctx.close();
-		};
-
-		node.onaudioprocess = e => {
-			if (stopped) return;
-			const data = e.inputBuffer.getChannelData(0);
-			chunks.push(new Float32Array(data));
-			let sum = 0;
-			for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
-			const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
-			if (opts.onLevel) opts.onLevel(rms);
-			if (vadEndMs > 0) {
-				// 短时能量低 → 视为静音；累计超过 vadEndMs 则自动结束
-				if (rms < noiseFloor * 1.15) {
-					silenceMs += (data.length / ctx.sampleRate) * 1000;
-					if (silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) {
-						stop();
-						return;
-					}
-				} else {
-					silenceMs = 0;
-					lastVoiceAt = Date.now();
-					// 缓慢抬升噪声底（背景缓慢变吵）
-					noiseFloor = Math.max(0.01, Math.min(0.3, noiseFloor * 0.999 + rms * 0.001));
-				}
-			}
-		};
-		source.connect(node);
-		node.connect(ctx.destination);
-		setTimeout(stop, maxSeconds * 1000);
-		return {
-			pcm: (() => {
+			const assemble = (): Float32Array => {
 				const total = chunks.reduce((n, c) => n + c.length, 0);
 				const out = new Float32Array(total);
 				let off = 0;
@@ -132,12 +108,58 @@ async function recordPcm(opts: {
 					off += c.length;
 				}
 				return out;
-			})(),
-			stop,
-		};
-	} catch {
-		return null;
-	}
+			};
+			const finish = (): void => {
+				if (finished) return;
+				finished = true;
+				node.onaudioprocess = null;
+				node.disconnect();
+				source.disconnect();
+				stream.getTracks().forEach(t => t.stop());
+				void ctx.close();
+				requestStop = null;
+				resolve({ pcm: assemble() });
+			};
+
+			node.onaudioprocess = e => {
+				if (finished) return;
+				if (opts.isCancelled?.()) {
+					finish();
+					return;
+				}
+				const data = e.inputBuffer.getChannelData(0);
+				chunks.push(new Float32Array(data));
+				let sum = 0;
+				for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+				const rms = Math.min(1, Math.sqrt(sum / data.length) * 4);
+				if (opts.onLevel) opts.onLevel(rms);
+				const vadEndMs = opts.vadEndMs ?? 0;
+				if (vadEndMs > 0) {
+					// 短时能量低 → 视为静音；累计超过 vadEndMs 则自动结束
+					if (rms < noiseFloor * 1.15) {
+						silenceMs += (data.length / ctx.sampleRate) * 1000;
+						if (silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) {
+							finish();
+							return;
+						}
+					} else {
+						silenceMs = 0;
+						lastVoiceAt = Date.now();
+						// 缓慢抬升噪声底（背景缓慢变吵）
+						noiseFloor = Math.max(0.01, Math.min(0.3, noiseFloor * 0.999 + rms * 0.001));
+					}
+				}
+			};
+			source.connect(node);
+			node.connect(ctx.destination);
+			requestStop = finish;
+			setTimeout(finish, (opts.maxSeconds ?? 15) * 1000);
+			return await finishedPromise;
+		} catch {
+			return null;
+		}
+	})();
+	return { done, stop: () => requestStop?.() };
 }
 
 /* ── 打断：记录当前活跃 TTS，口述时 duck / pause ───────────────── */
@@ -195,10 +217,14 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	}
 
 	void (async () => {
-		const recorded = await recordPcm({
+		// #9: `done` resolves when the recording FINISHES (VAD end / 15s cap /
+		// stop button) — the transcribe call below now receives the full
+		// buffer, and settings' vadEndMs actually gates the auto-stop.
+		const recording = recordPcm({
 			maxSeconds: 15,
 			deviceId: opts.deviceId,
 			vadEndMs: opts.vadEndMs,
+			isCancelled: () => cancelled,
 			onLevel: level => {
 				if (cancelled) return;
 				const now = Date.now();
@@ -207,17 +233,17 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 				onState?.({ phase: "recording", seconds: Math.round((now - startedAt) / 1000), level });
 			},
 		});
+		// Register the cancel handle BEFORE awaiting: the composer's stop
+		// button must be able to finish the recording while it runs.
+		rec = recording;
+		const recorded = await recording.done;
 		if (!recorded) {
 			onState?.({ phase: "error", message: "microphone unavailable" });
 			const stop = webSpeechFallback(onFinal, onError, opts.language);
 			if (stop) rec = { stop };
 			return;
 		}
-		rec = recorded;
-		if (cancelled) {
-			recorded.stop();
-			return;
-		}
+		if (cancelled) return;
 		onState?.({ phase: "transcribing" });
 		try {
 			const res = await rpc.request<{ text: string }>("stt.transcribe", {
@@ -231,8 +257,6 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 			if (cancelled) return;
 			onError(err instanceof Error ? err.message : String(err));
 			onState?.({ phase: "error", message: err instanceof Error ? err.message : String(err) });
-		} finally {
-			recorded.stop();
 		}
 	})();
 
