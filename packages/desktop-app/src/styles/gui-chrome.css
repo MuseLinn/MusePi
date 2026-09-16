@@ -912,6 +912,120 @@
 	filter: brightness(1.04);
 }
 
+/* Inline text editor: the preview body swaps to an editor column — a bar
+ * (file name + exit), the textarea, and a save footer. The textarea owns
+ * the flex so it scrolls with the pane, not the page. */
+.gui-filepane-editor {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+	background: var(--color-bg);
+}
+.gui-filepane-editor-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 8px;
+	border-bottom: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	flex-shrink: 0;
+}
+.gui-filepane-editor-name {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	margin-left: 2px;
+}
+.gui-filepane-editor-text {
+	flex: 1;
+	min-height: 0;
+	resize: none;
+	margin: 0;
+	padding: 8px;
+	border: none;
+	outline: none;
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	white-space: pre;
+	overflow: auto;
+	background: var(--color-bg);
+	color: var(--color-text);
+	tab-size: 2;
+}
+.gui-filepane-editor-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-top: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	flex-shrink: 0;
+}
+.gui-filepane-editor-foot .gui-panel-muted {
+	font-size: var(--ui-font-size-xs);
+}
+
+/* .docx preview (docx-preview renders into the container). The wrapper
+ * centers page-like output on a neutral backdrop, like a print preview. */
+.gui-filepane-docx-wrap {
+	flex: 1;
+	overflow: auto;
+	padding: 12px;
+	background: var(--color-bg);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+.gui-filepane-docx-wrap > div {
+	max-width: 100%;
+}
+.gui-filepane-docx {
+	background: #fff;
+	color: #000;
+	padding: 24px;
+	box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+	max-width: 100%;
+	overflow: hidden;
+}
+
+/* Spreadsheet preview: sheets switch via the seg buttons (md-modes parity);
+ *  the table scrolls in both axes with sticky headers. */
+.gui-filepane-sheets {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+.gui-filepane-sheet {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 8px;
+	background: var(--color-bg);
+}
+.gui-filepane-sheet-table {
+	border-collapse: collapse;
+	width: max-content;
+	min-width: 100%;
+	font-size: var(--ui-font-size-xs);
+}
+.gui-filepane-sheet-table td {
+	border: 1px solid var(--border);
+	padding: 3px 6px;
+	white-space: pre;
+	vertical-align: top;
+}
+.gui-filepane-sheet-table tr:first-child td {
+	position: sticky;
+	top: 0;
+	background: var(--color-surface-raised);
+	font-weight: 600;
+}
+
 
 .gui-filepane-preview-note {
 	margin: 0;

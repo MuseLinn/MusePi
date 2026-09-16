@@ -16,6 +16,7 @@ import {
 	reorderPanelTabs,
 	restorePanelTabs,
 	serializePanelTabs,
+	setPanelTabDirty,
 	type UpsertPanelTabOptions,
 	upsertPanelTab,
 } from "./panel-tabs";
@@ -26,6 +27,7 @@ export interface UsePanelTabsResult extends PanelTabState {
 	closeMany(ids: readonly string[]): void;
 	activate(id: string): void;
 	reorder(fromId: string, toId: string): void;
+	setDirty(id: string, dirty: boolean): void;
 }
 
 function readPanelTabs(storageKey: string): PanelTabState {
@@ -73,6 +75,10 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 			}),
 		[],
 	);
+	const setDirty = useCallback(
+		(id: string, dirty: boolean): void => setState(s => setPanelTabDirty(s, id, dirty)),
+		[],
+	);
 
-	return { ...state, open, close, closeMany, activate, reorder };
+	return { ...state, open, close, closeMany, activate, reorder, setDirty };
 }

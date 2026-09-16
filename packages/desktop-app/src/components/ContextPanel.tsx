@@ -11,6 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { panelTabId } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -20,13 +21,13 @@ import { SURFACES } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { ContextMenu } from "./ContextMenu";
 import { FadeScroll } from "./FadeScroll";
 import { FilePane } from "./FilePane";
 import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
-import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { SubagentPanel } from "./SubagentPanel";
 import { SurfaceTabStrip } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -437,6 +438,46 @@ export function ContextPanel({
 	const activePanelTab = panelTabs.tabs.find(t => t.id === panelTabs.activeId) ?? null;
 	const view = activePanelTab?.surface ?? null;
 
+	// Close a tab whose file has unsaved in-app edits only after the user
+	// confirms — discarding is destructive and silent. Declining keeps it.
+	const closeTabWithGuard = useCallback(
+		async (id: string): Promise<void> => {
+			const tab = panelTabs.tabs.find(t => t.id === id);
+			if (tab?.dirty && !(await confirm(t("discard unsaved changes?"), t("close anyway")))) return;
+			panelTabs.close(id);
+		},
+		[panelTabs, confirm],
+	);
+
+	// Mirror the inline editor's dirty state onto the file tab: the dot
+	// comes from `dirty` on PanelTab, and `setDirty` finds the tab by the
+	// path the FilePane registered (target is relative to cwd).
+	const onFileDirty = useCallback(
+		(path: string, dirty: boolean): void => {
+			const id = panelTabId({ surface: "files", target: path });
+			panelTabs.setDirty(id, dirty);
+		},
+		[panelTabs],
+	);
+
+	/** Close a batch (close others / close all): confirm once for every dirty
+	 *  tab, then close only the ones the user accepted. Tab strips do not
+	 *  name individual files, so each dirty tab gets its own confirm. */
+	const closeManyWithGuard = useCallback(
+		async (ids: readonly string[]): Promise<void> => {
+			const keep = new Set<string>();
+			for (const id of ids) {
+				const tab = panelTabs.tabs.find(t => t.id === id);
+				if (tab?.dirty && !(await confirm(t("discard unsaved changes?"), t("close anyway")))) {
+					keep.add(id);
+				}
+			}
+			const closing = ids.filter(id => !keep.has(id));
+			if (closing.length > 0) panelTabs.closeMany(closing);
+		},
+		[panelTabs, confirm],
+	);
+
 	return (
 		<>
 			{/* Surface-tab context menu (right-click on a panel tab): close /
@@ -450,7 +491,7 @@ export function ContextPanel({
 						{
 							label: t("close tab"),
 							icon: "close",
-							onSelect: () => panelTabs.close(tabMenu.id),
+							onSelect: () => void closeTabWithGuard(tabMenu.id),
 						},
 						{
 							label: t("close other tabs"),
@@ -458,15 +499,13 @@ export function ContextPanel({
 							divider: true,
 							disabled: panelTabs.tabs.length <= 1,
 							onSelect: () =>
-								panelTabs.closeMany(
-									panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id),
-								),
+								void closeManyWithGuard(panelTabs.tabs.filter(tb => tb.id !== tabMenu.id).map(tb => tb.id)),
 						},
 						{
 							label: t("close all tabs"),
 							icon: "close",
 							disabled: panelTabs.tabs.length === 0,
-							onSelect: () => panelTabs.closeMany(panelTabs.tabs.map(tb => tb.id)),
+							onSelect: () => void closeManyWithGuard(panelTabs.tabs.map(tb => tb.id)),
 						},
 					]}
 					onClose={() => setTabMenu(null)}
@@ -505,11 +544,15 @@ export function ContextPanel({
 						<div className="min-w-0 flex-1">
 							{panelTabs.tabs.length > 0 && (
 								<SurfaceTabStrip
-									tabs={panelTabs.tabs.map(t => ({ id: t.id, title: t.label }))}
+									tabs={panelTabs.tabs.map(t => ({
+										id: t.id,
+										title: t.label,
+										dirty: t.dirty,
+									}))}
 									activeId={panelTabs.activeId}
 									closeLabel={t("close tab")}
 									onActivate={panelTabs.activate}
-									onClose={panelTabs.close}
+									onClose={closeTabWithGuard}
 									onReorder={panelTabs.reorder}
 									onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 								/>
@@ -588,6 +631,7 @@ export function ContextPanel({
 									// registers tree clicks back into the strip.
 									activeFile={activePanelTab?.surface === "files" ? activePanelTab.target : null}
 									onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
+									onDirty={onFileDirty}
 								/>
 							) : view === "widget" ? (
 								<WidgetSidebarTab entries={snap?.entries ?? []} />

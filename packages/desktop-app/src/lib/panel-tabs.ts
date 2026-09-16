@@ -45,6 +45,8 @@ export interface PanelTab {
 	touchedAt: number;
 	/** Preserved so a restored layout can re-derive ids after rule changes. */
 	dedupeKey: string | null;
+	/** Unsaved-content marker (file editor). Runtime-only — never serialized. */
+	dirty: boolean;
 }
 
 export interface PanelTabState {
@@ -73,6 +75,7 @@ function toTab(descriptor: PanelTabDescriptor, now: number): PanelTab {
 		readOnly: descriptor.readOnly ?? false,
 		touchedAt: now,
 		dedupeKey: descriptor.dedupeKey ?? null,
+		dirty: false,
 	};
 }
 
@@ -174,6 +177,15 @@ export function closePanelTabs(state: PanelTabState, ids: readonly string[]): Pa
 		current = after === current ? current : after;
 	}
 	return current;
+}
+
+/** Mark a tab's unsaved-content state. Reference-stable when the value is
+ *  unchanged — the file editor re-reports dirty on every parent render, so
+ *  a fresh array here would loop the re-render it reports from. */
+export function setPanelTabDirty(state: PanelTabState, id: string, dirty: boolean): PanelTabState {
+	const tab = state.tabs.find(t => t.id === id);
+	if (!tab || tab.dirty === dirty) return state;
+	return { ...state, tabs: state.tabs.map(t => (t.id === id ? { ...t, dirty } : t)) };
 }
 
 /** Drag reorder. Reference-stable when either id is unknown or equal. */

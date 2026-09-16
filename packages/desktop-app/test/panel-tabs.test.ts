@@ -8,6 +8,7 @@ import {
 	panelTabId,
 	restorePanelTabs,
 	serializePanelTabs,
+	setPanelTabDirty,
 	upsertPanelTab,
 } from "../src/lib/panel-tabs";
 
@@ -115,6 +116,7 @@ describe("closePanelTab / closePanelTabs", () => {
 			readOnly: false,
 			touchedAt: 1,
 			dedupeKey: null,
+			dirty: false,
 		})),
 		"files::/b.md",
 	);
@@ -172,5 +174,31 @@ describe("serializePanelTabs / restorePanelTabs", () => {
 			activeId: "files::/ghost.md",
 		};
 		expect(restorePanelTabs(raw).activeId).toBe("files::/a.md");
+	});
+});
+
+describe("setPanelTabDirty", () => {
+	// The unsaved-content dot drives the close guard: the strip must reflect
+	// the editor's buffer exactly, and a no-op report must not churn the tab
+	// array (the editor reports on every parent render).
+	it("marks the tab and is reference-stable on a repeated identical report", () => {
+		const s = upsertPanelTab(state([], null), desc("files", "/a.md"));
+		const marked = setPanelTabDirty(s, "files::/a.md", true);
+		expect(marked.tabs[0]!.dirty).toBe(true);
+		expect(setPanelTabDirty(marked, "files::/a.md", true)).toBe(marked);
+		expect(setPanelTabDirty(marked, "files::/a.md", false).tabs[0]!.dirty).toBe(false);
+	});
+
+	it("leaves other tabs and an unknown id untouched", () => {
+		const s = upsertPanelTab(upsertPanelTab(state([], null), desc("files", "/a.md")), desc("files", "/b.md"));
+		const marked = setPanelTabDirty(s, "files::/a.md", true);
+		expect(marked.tabs.find(t => t.id === "files::/b.md")!.dirty).toBe(false);
+		expect(setPanelTabDirty(s, "files::/ghost.md", true)).toBe(s);
+	});
+
+	it("never persists dirty — a restored layout starts clean", () => {
+		const s = setPanelTabDirty(upsertPanelTab(state([], null), desc("files", "/a.md")), "files::/a.md", true);
+		const restored = restorePanelTabs(serializePanelTabs(s));
+		expect(restored.tabs[0]!.dirty).toBe(false);
 	});
 });

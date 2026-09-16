@@ -20,6 +20,7 @@ const agentsPanelTabs: UsePanelTabsResult = {
 			readOnly: false,
 			touchedAt: 1,
 			dedupeKey: null,
+			dirty: false,
 		},
 	],
 	activeId: "agents::",
@@ -28,6 +29,7 @@ const agentsPanelTabs: UsePanelTabsResult = {
 	closeMany: () => {},
 	activate: () => {},
 	reorder: () => {},
+	setDirty: () => {},
 };
 
 // 右面板 agents 视图 SSR 冒烟:swarm 子 agent 的详情层必须渲染在面板内部(不是独立
