@@ -630,11 +630,18 @@ export function ChatView({
 	useEffect(() => {
 		if (!store) return;
 		const el = transcriptRef.current;
-		if (!el) return;
-		el.dataset.switched = "1";
-		el.scrollTop = el.scrollHeight;
+		if (el) {
+			el.dataset.switched = "1";
+			el.scrollTop = el.scrollHeight;
+		}
+		// #12: the revert dock is session state — its undo target (fromLeafKey)
+		// belongs to the PREVIOUS session, and acting on it in the new session
+		// sends a foreign node id to session.branchAt ("branch failed"). Clear
+		// it on every session switch.
+		setJumpBack(null);
+		setJumpDockOpen(false);
 		const timer = setTimeout(() => {
-			delete el.dataset.switched;
+			if (el) delete el.dataset.switched;
 		}, 700);
 		return () => clearTimeout(timer);
 	}, [store?.sessionId, store]);
@@ -1241,6 +1248,9 @@ export function ChatView({
 			);
 			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
 			if (typeof ts === "string") requestJump(ts);
+			// #12: an explicit node switch supersedes the revert dock — its undo
+			// target is the leaf we CAME FROM, which this jump just replaced.
+			setJumpBack(null);
 			// Pin the clicked node itself: branchAt answers a USER message by
 			// positioning at its parent, and following that leaf hid the node
 			// the user just navigated to.
@@ -2010,6 +2020,22 @@ export function ChatView({
 														}}
 													>
 														<Icon name="arrow-go-forward" className="h-3 w-3" />
+													</button>
+													<button
+														type="button"
+														className="gui-pane-action !w-auto px-1.5"
+														title={t("close")}
+														onClick={e => {
+															// #12: dismiss the dock but STAY at the reverted
+															// position — the sibling branch stays on the tree,
+															// reachable again via the breadcrumb or the row
+															// buttons. The undo button above keeps its role.
+															e.stopPropagation();
+															setJumpBack(null);
+															setJumpDockOpen(false);
+														}}
+													>
+														<Icon name="close" className="h-3 w-3" />
 													</button>
 													<Icon
 														name="arrow-down-s"
