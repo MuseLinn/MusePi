@@ -463,6 +463,9 @@ export const general = {
 	"drag to reorder queued message": "Drag to reorder queued message",
 	"take back": "Take back",
 	// Session-control round: terminate confirm + revert history.
+	"agent is running": "The agent is running",
+	"tree op interrupts work": "This operation interrupts the current work and re-anchors the branch. Continue?",
+	"interrupt and continue": "Interrupt and continue",
 	"terminate current turn?": "Terminate the current turn?",
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
 		"The agent will stop current work; queued messages are kept and run when you send your next message (Esc in the TUI interrupts the same way)",

@@ -14,6 +14,11 @@ import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
 const changelogGlob = new Glob("packages/{coding-agent,guest-client}/CHANGELOG.md");
+/** The GUI what's-new panel, the OTA manifest notes and the release page all
+ *  read THIS file (parseChangelog prefers it over the upstream OMP one), so it
+ *  must be renamed in lockstep — v0.4.29 shipped with the previous version's
+ *  notes because only CHANGELOG.md was renamed. */
+const musepiChangelogPath = "packages/coding-agent/CHANGELOG.musepi.md";
 const packageJsonGlob = new Glob("packages/*/package.json");
 const cargoTomlGlob = new Glob("crates/*/Cargo.toml");
 /** Android app manifest — versionName/versionCode live here, hardcoded (see 3c). */
@@ -177,6 +182,24 @@ async function updateChangelogsForRelease(version: string): Promise<void> {
 
 		await Bun.write(changelog, content);
 		console.log(`  Updated ${changelog}`);
+	}
+
+	// The MusePi what's-new file rides the same rename (see musepiChangelogPath).
+	const musepi = Bun.file(musepiChangelogPath);
+	if (await musepi.exists()) {
+		let content = await musepi.text();
+		if (!content.includes("## [Unreleased]")) {
+			console.log(`  Skipping ${musepiChangelogPath}: no [Unreleased] section`);
+		} else if (hasUnreleasedContent(content)) {
+			content = content.replace("## [Unreleased]", `## [${version}] - ${date}`);
+			// Its header line is "# MusePi Changelog", not "# Changelog".
+			content = content.replace(/^(# MusePi Changelog\n\n)/, `$1## [Unreleased]\n\n`);
+			content = removeEmptyVersionEntries(content);
+			await Bun.write(musepiChangelogPath, content);
+			console.log(`  Updated ${musepiChangelogPath}`);
+		} else {
+			console.log(`  Skipping ${musepiChangelogPath}: empty [Unreleased]`);
+		}
 	}
 }
 

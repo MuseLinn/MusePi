@@ -458,6 +458,9 @@ export const general = {
 	"drag to reorder queued message": "拖拽以重新排序排队消息",
 	"take back": "取回",
 	// Session-control round: terminate confirm + revert history.
+	"agent is running": "Agent 正在运行",
+	"tree op interrupts work": "该操作会中断当前工作并改变分支锚点，是否继续？",
+	"interrupt and continue": "中断并继续",
 	"terminate current turn?": "终止当前回合?",
 	"the agent will stop current work; queued messages are kept and run on your next message (Esc in the TUI interrupts the same way)":
 		"agent 将停止当前工作;已排队的消息会保留,并在你发送下一条消息时执行(TUI 中 Esc 中断的语义相同)",

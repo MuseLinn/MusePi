@@ -910,7 +910,19 @@ export function ChatView({
 		},
 		[rpc, store],
 	);
+	const { confirm } = useConfirm();
+	// Tree mutation while the agent runs (user report 2026-09-16): retrying from a
+	// non-tip node re-anchors the pinned leaf under the in-flight run, and the
+	// fresh reply was appended under the WRONG node. All four mutation entries
+	// (retry / rewind / switchBranch / switchToNode) confirm + stop the run first;
+	// pure navigation (jump) stays free.
+	const confirmTreeOpWhileWorking = useCallback(async (): Promise<boolean> => {
+		if (snap?.working !== true) return true;
+		return confirm(`${t("agent is running")}\n\n${t("tree op interrupts work")}`, t("interrupt and continue"));
+	}, [confirm, snap?.working, t]);
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
+		if (!(await confirmTreeOpWhileWorking())) return;
+		if (snap?.working) onStop();
 		const res = await branchTo(messageId);
 		// session.branchAt positions a USER message at its PARENT (the node is
 		// re-answered by the send that follows), so the pinned leaf sits at the
@@ -931,6 +943,8 @@ export function ChatView({
 	// stays on the tree (map/trajectory) as a sibling branch; nothing is
 	// truncated.
 	const rewindFromUserMessage = async (messageId: string): Promise<void> => {
+		if (!(await confirmTreeOpWhileWorking())) return;
+		if (snap?.working) onStop();
 		const entry = (snap?.entries ?? []).find(e => (e as { id?: string }).id === messageId) as
 			| { parentId?: string | null }
 			| undefined;
@@ -1163,7 +1177,10 @@ export function ChatView({
 		[branchChildren],
 	);
 	const switchBranch = useCallback(
-		(childId: string): void => {
+		async (childId: string): Promise<void> => {
+			if (!(await confirmTreeOpWhileWorking())) return;
+			if (snap?.working) onStop();
+
 			// Jump the transcript to the picked sibling first, then move the
 			// session leaf there (branchAt) so continuing forks from it.
 			const target = branchTipOf(childId);
@@ -1181,7 +1198,9 @@ export function ChatView({
 	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
 	const switchToNode = useCallback(
-		(id: string): void => {
+		async (id: string): Promise<void> => {
+			if (!(await confirmTreeOpWhileWorking())) return;
+
 			const entry = (snap?.entries ?? []).find(
 				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
 			);
@@ -1396,7 +1415,7 @@ export function ChatView({
 	const onComposerModelChange = useCallback((): void => {
 		fetchThinkingInfo();
 	}, [fetchThinkingInfo]);
-	const { confirm } = useConfirm();
+
 	// Terminate confirmation (openchamber parity): the stop button asks
 	// before aborting — the dialog explains what abort means (same
 	// semantics as TUI Esc: current turn stops, queued messages stay).
