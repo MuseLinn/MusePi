@@ -365,6 +365,7 @@ export function FilePane({
 	const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
 	/** Inline editor buffer: null = view mode; text/saved drive the dirty dot. */
 	const [edit, setEdit] = useState<{ text: string; saved: string } | null>(null);
+	const [saving, setSaving] = useState(false);
 	/** .html preview: "live" (rendered page) or "source" (highlighted text). */
 	const [htmlLiveMode, setHtmlLiveMode] = useState<"live" | "source">("live");
 	/** .md preview: rendered Markdown (default) or raw source. */
@@ -821,8 +822,9 @@ export function FilePane({
 	/** Persist the edited buffer. fs.write takes cwd-relative paths; the
 	 *  preview joined cwd already, so split the tail back off. */
 	const saveEdit = useCallback(async (): Promise<void> => {
-		if (!edit || !preview) return;
+		if (!edit || !preview || saving) return;
 		const rel = preview.path.startsWith(`${cwd}/`) ? preview.path.slice(cwd.length + 1) : preview.path;
+		setSaving(true);
 		try {
 			await rpc.request("fs.write", { cwd, path: rel, content: edit.text });
 			setEdit(cur => (cur ? { ...cur, saved: cur.text } : cur));
@@ -830,8 +832,10 @@ export function FilePane({
 			await load();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : String(err));
+		} finally {
+			setSaving(false);
 		}
-	}, [edit, preview, cwd, rpc, load]);
+	}, [edit, preview, cwd, rpc, load, saving]);
 
 	const menuItems = useMemo(() => {
 		if (!ctx) return [];
@@ -1065,7 +1069,7 @@ export function FilePane({
 							<span className="gui-filepane-preview-name" title={preview.path}>
 								{preview.name}
 							</span>
-							{extOf(preview.name) === "md" && preview.text !== undefined && (
+							{extOf(preview.name) === "md" && preview.text !== undefined && !edit && (
 								<div className="gui-filepane-preview-modes">
 									<button
 										type="button"
@@ -1084,7 +1088,7 @@ export function FilePane({
 								</div>
 							)}
 							<span className="gui-filepane-preview-tools">
-								{preview.raw !== undefined && (
+								{preview.raw !== undefined && !edit && (
 									<button
 										type="button"
 										className="gui-btn gui-btn-icon"
@@ -1147,7 +1151,7 @@ export function FilePane({
 								<FileEditor
 									value={edit.text}
 									name={preview.name}
-									saving={false}
+									saving={saving}
 									onChange={text =>
 										setEdit(cur => {
 											const next = cur ? { ...cur, text } : null;

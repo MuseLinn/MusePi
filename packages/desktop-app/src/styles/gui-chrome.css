@@ -806,8 +806,15 @@
 	flex-shrink: 0;
 }
 
+/* Flex column (openchamber h-full parity): every child below carries
+ * flex:1 and assumes a constrained flex parent — the editor column, the
+ * docx backdrop, the sheet grid and the img wrap all pin their own
+ * chrome and scroll their own content. A block parent would let the
+ * textarea grow to content height and push the save footer off-pane. */
 .gui-filepane-preview-body {
-	overflow-y: auto;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
 	flex: 1;
 	min-height: 0;
 }
