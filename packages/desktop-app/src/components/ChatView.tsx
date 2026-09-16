@@ -916,13 +916,28 @@ export function ChatView({
 	// fresh reply was appended under the WRONG node. All four mutation entries
 	// (retry / rewind / switchBranch / switchToNode) confirm + stop the run first;
 	// pure navigation (jump) stays free.
+	// Async handlers must read the LATEST working flag: the closure's `snap`
+	// is frozen at render time, so a stop issued a moment ago would still
+	// look running (or vice versa) while waiting to re-branch.
+	const snapRef = useRef(snap);
+	snapRef.current = snap;
+	const waitWorkingCleared = useCallback(async (timeoutMs = 6000): Promise<void> => {
+		const start = Date.now();
+		while (snapRef.current?.working === true && Date.now() - start < timeoutMs) {
+			await new Promise(resolve => setTimeout(resolve, 60));
+		}
+	}, []);
 	const confirmTreeOpWhileWorking = useCallback(async (): Promise<boolean> => {
 		if (snap?.working !== true) return true;
 		return confirm(`${t("agent is running")}\n\n${t("tree op interrupts work")}`, t("interrupt and continue"));
 	}, [confirm, snap?.working, t]);
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
 		if (!(await confirmTreeOpWhileWorking())) return;
-		if (snap?.working) onStop();
+		if (snapRef.current?.working) onStop();
+		// Converged path: branchAt AFTER the run actually unwinds, otherwise the
+		// re-anchor races the in-flight run and the reply lands under the wrong
+		// node (user report 2026-09-16).
+		await waitWorkingCleared();
 		const res = await branchTo(messageId);
 		// session.branchAt positions a USER message at its PARENT (the node is
 		// re-answered by the send that follows), so the pinned leaf sits at the
@@ -944,7 +959,11 @@ export function ChatView({
 	// truncated.
 	const rewindFromUserMessage = async (messageId: string): Promise<void> => {
 		if (!(await confirmTreeOpWhileWorking())) return;
-		if (snap?.working) onStop();
+		if (snapRef.current?.working) onStop();
+		// Converged path: branchAt AFTER the run actually unwinds, otherwise the
+		// re-anchor races the in-flight run and the reply lands under the wrong
+		// node (user report 2026-09-16).
+		await waitWorkingCleared();
 		const entry = (snap?.entries ?? []).find(e => (e as { id?: string }).id === messageId) as
 			| { parentId?: string | null }
 			| undefined;
@@ -1498,24 +1517,30 @@ export function ChatView({
 							ref={welcomeSceneRef}
 							className={`gui-scene gui-scene-welcome relative min-h-0 flex-1${welcomeLeaving ? " gui-scene--leaving" : ""}`}
 						>
-							<WelcomeComposer
-								busy={busy}
-								rpc={rpc}
-								project={project}
-								onProject={onProject}
-								focused={focusMode}
-								onToggleFocus={onToggleFocus}
-								presetModelId={defaultModelId}
-								presetThinkingLevel={presetThinkingLevel}
-								onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
-								reminders={reminders}
-								onSelectReminder={onSelectReminder}
-								onMarkAllRead={onMarkAllRead}
-								modes={modes}
-								modeId={modeId}
-								onModeChange={onModeChange}
-								onAddProvider={onAddProvider}
-							/>
+							{/* Same rounded floating card as the chat scene and the
+							 * settings main view: the welcome scene used to sit
+							 * directly on the glass, so it read as "not a rounded
+							 * container" (user report 2026-09-16). */}
+							<div className="gui-float-card gui-welcome-card m-2 flex min-h-0 flex-1 flex-col bg-[var(--color-surface)]">
+								<WelcomeComposer
+									busy={busy}
+									rpc={rpc}
+									project={project}
+									onProject={onProject}
+									focused={focusMode}
+									onToggleFocus={onToggleFocus}
+									presetModelId={defaultModelId}
+									presetThinkingLevel={presetThinkingLevel}
+									onSubmit={(text, opts) => onSubmitNewSession(text, opts)}
+									reminders={reminders}
+									onSelectReminder={onSelectReminder}
+									onMarkAllRead={onMarkAllRead}
+									modes={modes}
+									modeId={modeId}
+									onModeChange={onModeChange}
+									onAddProvider={onAddProvider}
+								/>
+							</div>
 						</div>
 					)}
 					{showChat && store && (

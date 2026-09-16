@@ -171,7 +171,12 @@
 }
 
 .gui-terminal-dock:not(.gui-terminal-dock--open) {
-	border-top-color: transparent;
+	/* The JSX carries a tailwind `border-t`: at height 0 its 1px WIDTH still
+	 * took layout space — the "thin line" raising the main view's bottom edge
+	 * (user report). Zero the width, not just the color, and kill the shadow
+	 * smear a closed dock painted under the chat card. */
+	border-top-width: 0;
+	box-shadow: none;
 }
 
 .gui-terminal-dock .gui-terminal-host {
@@ -251,7 +256,13 @@
 .gui-scenes > .gui-scene-chat {
 	position: absolute;
 	inset: 0;
-	overflow: hidden;
+	/* The floating cards' 24px shadow needs to escape the scene bounds:
+	 * plain `hidden` clipped it at the header/sidebar edges (user: 圆角容器
+	 * 外的阴影被左侧面板和顶栏遮挡, settings 不受影响因为它没有场景裁剪).
+	 * `clip` + a clip-margin keeps the morph clipping but lets the shadow
+	 * spill into the gutters like the settings view. */
+	overflow: clip;
+	overflow-clip-margin: 28px;
 }
 
 .gui-scene-welcome {
