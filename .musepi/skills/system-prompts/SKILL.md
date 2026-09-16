@@ -15,7 +15,7 @@ Tags: authoritative, literal structural markers; meaning exactly matches name. N
 
 |Tag|Purpose|
 |---|---|
-|`<system-conventions>`|Tag/RFC-keyword interpretation; contract.|
+|`<conventions>`|Tag/RFC-keyword interpretation; contract.|
 |`<stakes>`|Correctness importance; domain framing.|
 |`<communication>`|Voice, tone, response shape.|
 |`<critical>`|Inviolable rules; place at START and END.|
@@ -37,7 +37,7 @@ RFC 2119: full caps, no bold; all-caps form is the marker.
 
 Aliases: prefer `NEVER` to `MUST NOT`; `AVOID` to `SHOULD NOT`. Both: single-token in cl100k/o200k; identical authority.
 
-Near top, inside `<system-conventions>`, state once:
+Near top, inside `<conventions>`, state once:
 
 > RFC 2119 applies to MUST, REQUIRED, SHOULD, RECOMMENDED, MAY, OPTIONAL. `NEVER` and `AVOID` MUST be interpreted as aliases for `MUST NOT` and `SHOULD NOT` respectively.
 
@@ -89,7 +89,7 @@ Negation: pair positive alternative when non-obvious; otherwise `NEVER X.` alone
 
 Front matter:
 1. Role + agency one-liner (`You are THE staff engineer…`).
-2. `<system-conventions>` — RFC contract, tag semantics.
+2. `<conventions>` — RFC contract, tag semantics.
 3. `<stakes>` — importance.
 4. `<communication>` — style.
 5. `<critical>` — top-priority rules.
@@ -128,7 +128,7 @@ Live-system-prompt patterns:
 ## Checklist
 
 - Tags match content; no ornamental tags.
-- `<system-conventions>` defines `NEVER`/`AVOID` aliases.
+- `<conventions>` defines `NEVER`/`AVOID` aliases.
 - Critical rules at START and END.
 - Prescriptive prose: uppercase RFC 2119 keywords.
 - Tactical bullets ≤12 words unless distinct subclaims justify more.

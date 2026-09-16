@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- Antigravity / Gemini CLI：默认系统提示、顾问提示与 Live 指令把 `<system-conventions>` 改成 `<conventions>`，避免 Cloud Code Assist 网关把开场 XML 块判成滥用并立刻返回假 `429 RESOURCE_EXHAUSTED`（30 分钟退避）。#7
+  EN: Default system, advisor, and Live prompts now open with `<conventions>` instead of `<system-conventions>` (omp 18.2.1), so Cloud Code Assist no longer false-429s the first turn. #7
+
 ## [0.4.29] - 2026-09-16
 
 ### Added
