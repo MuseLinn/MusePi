@@ -19,14 +19,14 @@
  * quietly demotes `grep` or drops the "search the raw file first" constraints.
  */
 import { describe, expect, it } from "bun:test";
+import { ESSENTIAL_BUILTIN_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/essential-tools";
+import { getEvalToolDescription } from "@musepi/pi-coding-agent/tools/eval";
+import { GrepTool } from "@musepi/pi-coding-agent/tools/grep";
+import { isMountableUnderXdev } from "@musepi/pi-coding-agent/tools/xdev";
 import { prompt } from "@musepi/pi-utils";
+import systemPromptTemplate from "../src/prompts/system/system-prompt.md" with { type: "text" };
 import bashDescription from "../src/prompts/tools/bash.md" with { type: "text" };
 import grepDescription from "../src/prompts/tools/grep.md" with { type: "text" };
-import systemPromptTemplate from "../src/prompts/system/system-prompt.md" with { type: "text" };
-import { ESSENTIAL_BUILTIN_TOOL_NAMES } from "@musepi/pi-coding-agent/tools/essential-tools";
-import { GrepTool } from "@musepi/pi-coding-agent/tools/grep";
-import { getEvalToolDescription } from "@musepi/pi-coding-agent/tools/eval";
-import { isMountableUnderXdev } from "@musepi/pi-coding-agent/tools/xdev";
 
 const ALL_TOOLS = ["read", "write", "bash", "edit", "glob", "grep", "eval", "task", "todo", "ask"];
 

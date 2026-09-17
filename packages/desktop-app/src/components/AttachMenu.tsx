@@ -36,7 +36,8 @@ export function AttachMenu({
 	/** Opens the image file picker (attachment entry). */
 	onPickImages(files: File[]): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
-	onInsert(token: string): void;}): ReactNode {
+	onInsert(token: string): void;
+}): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	const fileRef = useRef<HTMLInputElement | null>(null);
