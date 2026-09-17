@@ -5,10 +5,28 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- GUI 显示提示缓存命中率与本次会话花费：上下文环弹层与 GUI 原生 /context 卡片新增「缓存命中」与「会话花费」两行。命中率算法与 TUI 状态行的 `cache_hit` 段共用同一份实现（分母是整个 prompt：cacheRead + cacheWrite + input —— 只算已命中会恒为 ~100%，正好掩盖这个功能要暴露的回归），且完全没有缓存读取时留空而不显示误导性的 0%；花费仅在模型目录有价格时出现。此前 GUI 里唯一的缓存数据是轨迹检查器中的一个原始 ☍ token 计数。#8
+  - EN: The GUI now shows prompt-cache hit rate and session spend, in the context-ring popover and the native /context card. The rate comes from the same helper the TUI `cache_hit` segment uses (the denominator is the whole prompt: cacheRead + cacheWrite + input — counting only hits would sit at ~100% and hide exactly the regression), and a session with no cache reads shows nothing rather than a misleading 0%; spend appears only when the catalog carries a price. The only cache number in the GUI used to be a raw ☍ token count in the trajectory inspector. #8
+- 会话内用自然语言创建定时 / 闲时任务：新增 `schedule_task` 工具（`action: create|list`，覆盖 once/daily/weekly/monthly/cron、一天多时间点、闲时窗口与时区；创建走写权限审批），会话流里渲染富卡片（任务名、调度摘要、闲时窗口、下次执行时间）并提供「前往任务中心」按钮直达并选中该任务。工具不直接写任务存储，而是经 daemon 注入的句柄写入——daemon 在内存持有任务列表并整体覆写文件，工具自行写盘会被静默吞掉。#11
+  - EN: Scheduled and quiet-hours tasks can now be created from the conversation: a `schedule_task` tool (`action: create|list`, covering once/daily/weekly/monthly/cron, several times a day, idle windows and timezones; creation is write-approval gated) renders a rich card in the transcript (name, schedule summary, idle window, next run) with an "open task center" button that jumps to and selects that task. The tool never writes the task store itself — it goes through a daemon-injected handle, because the daemon owns the list in memory and rewrites the file wholesale, so a tool write would be silently clobbered. #11
+
 ### Changed
 
 - 品牌色换金：默认 accent 从翡翠绿 #34d399 换成 π 品牌金 #d9a441（GUI tokens、TUI musepi.json 主题、HTML 导出调色板、stats 面板、lightbox 主按钮全部同步），预设更名「品牌金 / Brand gold」，语义成功状态与桌宠角色保留绿色。
   - EN: Brand re-gilded: the default accent moves from emerald #34d399 to the π brand gold #d9a441 across GUI tokens, the TUI musepi.json theme, the HTML export palette, the stats dashboard and lightbox primary actions; the preset is renamed "Brand gold", while semantic success states and the pet mascot keep their green.
+
+### Fixed
+
+- 侧栏项目文件夹右键菜单在「复制路径」和「移除项目」之间多出一行空白可点项：不带标签/图标/动作的 `divider` 现在渲染为独立的 `role="separator"` 线，而不再同时画出分隔线和一行空按钮。#13
+  - EN: The project folder context menu showed a blank clickable row between "copy path" and "remove project": a `divider` carrying no label/icon/action now renders as a standalone `role="separator"` rule instead of drawing the line and an empty button. #13
+- 开启通知后真实工作仍收不到桌面提示：判定把「窗口可见」当成「用户就在眼前」，而切到浏览器/编辑器时窗口恰恰是可见的（现按焦点判断：隐藏或失去焦点），并且只有纯文本结束才派发 completion —— 带工具调用的一轮结束从不通知。现在每个完成的运行都会发一次桌面提示。#14
+  - EN: Turning notifications on still produced nothing for real work: the gate treated a merely visible window as "the user is right here", yet switching to a browser or editor is exactly when the window stays visible (it now keys on focus: hidden or unfocused), and only a text-only `message_end` dispatched "completion" — a turn that ended with tool calls never notified. Every finished run now produces one desktop toast. #14
+- 不同路径的同名文件夹被显示成同一个项目空间：项目块只渲染目录名，会话导入按名字分组更把两个工作区的会话真的合并成一组（两组还共用一个折叠状态）。标签与分组现在都按完整路径区分。#15
+  - EN: Two folders sharing a name were shown as one project space: project blocks rendered only the directory name, and session import grouped by name — genuinely merging two workspaces' sessions into one group that also shared a single collapse flag. Labels and grouping now disambiguate by full path. #15
+- 后台长任务被 30 分钟空闲回收杀掉：`lastActivity` 只记录用户交互，回收路径从不看会话真实状态——扫描器无视正在跑的工具 / Goal 循环直接关闭，紧邻的 LRU 分支反而已有忙判定，工具与流事件也从不刷新时钟。现在「会话是否忙碌」是两条回收路径共用的唯一判据。#16
+  - EN: Long-running background work was killed by the 30-minute idle reaper: `lastActivity` only tracked user interaction and the path never consulted the session's real state — the scan closed anything past the timeout regardless of a tool mid-flight or a Goal loop, while the LRU branch right below it did check, and tool/stream events never refreshed the clock at all. One shared "is this session busy" predicate now guards both reclamation paths. #16
 
 ## [0.4.30] - 2026-09-16
 
