@@ -1,6 +1,7 @@
 Runs commands in a persistent shell.
 
 Use ONLY for one binary or a short pipeline that computes a fact (`wc -l`, `sort | uniq -c`, `diff`).
+Running a checked-in entry point (`python path/to/pipeline.py`, `pytest`, `make <target>`, a task's own script) is ALWAYS bash — even with flags or a short argument list.
 {{#if hasEval}}Inline scripts, heredocs, `$(…)`, complex control flow/quoting, and non-trivial pipelines → `eval`.{{else}}Inline scripts, heredocs, `$(…)`, and complex control flow → a purpose-built tool or checked-in script.{{/if}}
 
 <instruction>

@@ -26,6 +26,12 @@ export const ESSENTIAL_BUILTIN_TOOL_NAMES: Record<string, true> = {
 	bash: true,
 	edit: true,
 	glob: true,
+	// `grep` is the file-layer retrieval primitive. Leaving it discoverable (and
+	// relying on XDEV_KEEP_TOP_LEVEL to keep it callable) is not enough: models
+	// that pick tools from the schema treat a top-level-but-discoverable tool as
+	// second-class and route data exploration into `eval` instead, missing facts
+	// that only exist as raw text in the source file (issue #22).
+	grep: true,
 	computer: true,
 	eval: true,
 	task: true,

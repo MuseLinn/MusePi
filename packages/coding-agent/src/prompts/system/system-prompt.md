@@ -124,6 +124,12 @@ MUST use specialized tool over shell equivalent:
 {{#has tools "glob"}}- Structure mapping/globbing → `{{toolRefs.glob}}`, not `ls **/*.ext` or `fd`.{{/has}}
 {{#has tools "bash"}}- `{{toolRefs.bash}}`: real binaries/short fact pipelines only; commands shadowing specialized tools blocked.{{/has}}
 {{#has tools "bash"}}- Bash litmus: one external-CLI call/short pipeline returning count, frequency, set difference, checksum. For merely moving, paging, trimming fetchable bytes: tool.{{/has}}
+{{#has tools "grep"}}
+# Data Sources
+Text-retrieve BEFORE semantic query. For `.ttl`/`.owl`/`.rq`/`.json`/`.csv`/`.xml`/logs/schemas, `{{toolRefs.grep}}` the file for the identifier or literal you need, THEN parse or query it.
+- A parser/query that returns `None`/empty is NOT evidence the field is missing — search the raw file for the entity and check for a different encoding (WKT, alias, nested key) before concluding.
+- Specialized query engines (SPARQL, pandas, an in-memory graph) see only what the library exposes; a fact stated as plain text in the source is invisible to them.
+{{/has}}
 
 {{#if autoQaEnabled}}
 {{#has tools "write"}}

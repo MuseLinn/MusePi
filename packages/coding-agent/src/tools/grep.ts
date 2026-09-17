@@ -913,7 +913,7 @@ export class GrepTool implements AgentTool<typeof searchSchema, GrepToolDetails>
 		return toPathList(a.path ?? a.paths).some(pathTargetsSsh) ? "exec" : "read";
 	};
 	readonly label = "Grep";
-	readonly loadMode = "discoverable";
+	readonly loadMode = "essential";
 	readonly summary = "Grep file contents using ripgrep (fast regex search)";
 	get description(): string {
 		const displayMode = resolveFileDisplayMode(this.session);

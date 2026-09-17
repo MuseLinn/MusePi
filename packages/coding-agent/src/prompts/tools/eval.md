@@ -9,6 +9,13 @@ Parallelize *within* a cell with `parallel(thunks)`, not by batching.
 
 On error, fix and re-run only the failing step.
 
+<critical>
+`eval` is a COMPUTE kernel, not a search engine or a data browser.
+- Finding a string, identifier, field name, coordinate, or literal (including in `.ttl`/`.owl`/`.json`/`.csv`/logs) → `grep`/`read` the source file FIRST. NEVER open a file with a parser to answer a lookup.
+- Parsing a data source is a follow-up step, allowed only after you have seen the raw text that defines its shape. A loader that "succeeds" while a queried attribute is `None` proves nothing — `grep` the entity ID in the file and decide whether the field is absent or merely encoded differently (WKT vs lat/lon, alias, nested object).
+- Deliverable verification: run the command the USER would run (project script, test entry point, CLI) and read its stdout / output files. A query passing in this kernel is NOT the artifact passing.
+</critical>
+
 <prelude>
 {{#ifAll py js}}Python: sync, kwargs. JS: async, ONE trailing object literal, never positional.{{else}}{{#if py}}Sync; kwargs.{{/if}}{{#if js}}Async; ONE trailing object literal, never positional.{{/if}}{{/ifAll}}{{#if rb}} Ruby: sync, kwargs.{{/if}}{{#if jl}} Julia: sync, kwargs.{{/if}}
 ```
