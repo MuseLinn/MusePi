@@ -123,9 +123,10 @@ const nativeAndIntegrationPackages = [
 const localOnlyWorkspacePackages = ["packages/mnemopi", "packages/desktop-app"];
 
 // Repo-level script tests. CI's `workspace` bucket only runs the merge gates:
-// the concurrency regression (the GHA-config guard) and the .d.ts extension
-// rewrite (guards published-type resolution; hermetic temp-dir suite). A local
-// full run also exercises the release-notes tests. (A
+// the concurrency regression (the GHA-config guard), the cache-prune planner
+// (destructive rules: a bad predicate deletes caches CI still needs) and the
+// .d.ts extension rewrite (guards published-type resolution; hermetic temp-dir
+// suite). A local full run also exercises the release-notes tests. (A
 // `ci-test-ts.test.ts` entry used to sit here but the file never existed — bun
 // silently ignores unmatched filters when at least one other filter matches.)
 const repoScriptTests = [
@@ -134,6 +135,7 @@ const repoScriptTests = [
 	"./scripts/ci-release-notes.test.ts",
 	"./scripts/ci-release-publish.test.ts",
 	"./scripts/fix-dts-extensions.test.ts",
+	"./scripts/prune-caches.test.ts",
 ];
 
 const codingAgentNativePathPatterns = [
@@ -366,6 +368,7 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 						"./scripts/bazel-natives.test.ts",
 						"./scripts/ci-release-publish.test.ts",
 						"./scripts/fix-dts-extensions.test.ts",
+						"./scripts/prune-caches.test.ts",
 					],
 				},
 			];
