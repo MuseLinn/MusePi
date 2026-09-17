@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { idleDisposePlan, isLiveSessionBusy, type IdleCandidate } from "../../src/daemon/server";
+import { type IdleCandidate, idleDisposePlan, isLiveSessionBusy } from "../../src/daemon/server";
 
 /**
  * Issue #16 — background sessions were disposed mid-turn. The scanner closed
