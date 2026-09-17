@@ -313,32 +313,41 @@
       window.addEventListener("resize", resize);
     })();
 
-    /* ── Wave-push particle simulation: a crest sweeps across the page and
-     *    physically shoves the motes — each particle gets excited as the
-     *    front passes (lifted, thrown forward, lit gold), then springs back
-     *    to its home spot and dims. The wave carries the particles. ────── */
+    /* ── Particle water body: a dense grid of motes forms one continuous
+     *    fluid. The whole body rides the swell (multi-wave field), and the
+     *    cursor acts like a ball dropped into water — motes within its
+     *    radius are displaced outward and spring back when it moves on.
+     *    Constant per-particle brightness; all life is in the motion. ── */
     (function () {
       var canvas = document.querySelector("canvas.mp-bg-sand");
       if (!canvas) return;
       var ctx = canvas.getContext("2d");
       if (!ctx) return;
       var W = 0, H = 0, parts = [];
-      var FRONT_SPEED = 0.14;      // px per ms — one crossing in ~11s
-      var FRONT_WIDTH = 190;       // excitation band around the front (px)
+      var CELL = 20;
+      var mouse = { x: -9999, y: -9999, active: false };
+      var RADIUS = 130, PUSH = 52;
+      // Pre-baked swatch ladder: fillStyle strings are built once, not
+      // concatenated 3000+ times per frame.
+      var SWATCH = [], SW_N = 14;
+      for (var si = 0; si < SW_N; si++) {
+        var lum = Math.round(88 + (si / (SW_N - 1)) * 78);
+        SWATCH.push("rgba(" + lum + "," + Math.round(lum * 0.92) + "," + Math.round(lum * 0.74) + ",0.34)");
+      }
 
       function seed() {
         parts = [];
-        var n = Math.max(90, Math.min(190, Math.round((W * H) / 12000)));
-        for (var i = 0; i < n; i++) {
-          parts.push({
-            hx: Math.random() * W,          // home position
-            hy: Math.random() * H,
-            ox: 0, oy: 0,                   // displacement from the push
-            e: 0,                           // excitement 0..1 (decays)
-            r: 0.9 + Math.random() * 1.1,
-            amp: 9 + Math.random() * 14,    // throw height when excited
-            tw: Math.random() * Math.PI * 2,
-          });
+        var cols = Math.ceil(W / CELL) + 1, rows = Math.ceil(H / CELL) + 1;
+        for (var gy = 0; gy < rows; gy++) {
+          for (var gx = 0; gx < cols; gx++) {
+            parts.push({
+              hx: gx * CELL + (gy % 2) * (CELL / 2), // staggered rows, denser feel
+              hy: gy * CELL,
+              ox: 0, oy: 0,
+              gold: Math.random() < 0.06,
+              tint: 0.85 + Math.random() * 0.3,
+            });
+          }
         }
       }
 
@@ -350,43 +359,68 @@
         seed();
       }
 
+      // The swell: three travelling waves, spatially smooth and temporally
+      // smooth — the entire body rises and falls with it. No random terms.
+      function swell(x, y, t) {
+        return (
+          Math.sin(x * 0.0055 - t * 0.5) * 0.55 +
+          Math.sin(y * 0.004 - t * 0.3) * 0.25 +
+          Math.sin((x + y) * 0.0026 - t * 0.38) * 0.20
+        );
+      }
+
       function draw(now) {
         if (canvas.clientWidth !== W || canvas.width === 0) resize();
         if (!W) return;
         ctx.clearRect(0, 0, W, H);
-        var span = W + FRONT_WIDTH * 4;
-        var front = ((now * FRONT_SPEED) % span) - FRONT_WIDTH * 2; // sweeps, wraps
         var t = now * 0.001;
+        var mx = mouse.x, my = mouse.y, mAct = mouse.active;
+        var R2 = RADIUS * RADIUS;
         for (var i = 0; i < parts.length; i++) {
           var p = parts[i];
-          // excitement: gaussian around the moving front
-          var d = (p.hx + p.ox - front) / FRONT_WIDTH;
-          var hit = Math.exp(-d * d);
-          if (hit > p.e) p.e = hit; // the front excites; only decay lowers it
-          p.e *= 0.975;             // gentle decay -> long settle-back tail
-          // displacement: thrown forward+up while excited, springing home
-          p.ox += (p.e * 26 - p.ox) * 0.10;
-          p.oy += (-p.e * p.amp - p.oy) * 0.10;
-          var x = p.hx + p.ox + Math.sin(t * 0.6 + p.tw) * 1.2;
-          var y = p.hy + p.oy;
-          var a = 0.07 + p.e * 0.42;
-          var r = p.r * (0.9 + p.e * 0.6);
-          if (p.e > 0.3) {
-            ctx.fillStyle = "rgba(217,164,65," + Math.min(0.75, a * 1.3).toFixed(3) + ")";
-          } else {
-            ctx.fillStyle = "rgba(206,200,188," + a.toFixed(3) + ")";
+          // swell displacement (the sea itself)
+          var s = swell(p.hx, p.hy, t);
+          var tox = s * 5;
+          var toy = s * 9;
+          // ball-in-water displacement: push motes radially out of the cursor
+          if (mAct) {
+            var dx = p.hx - mx, dy = p.hy - my;
+            var d2 = dx * dx + dy * dy;
+            if (d2 < R2 && d2 > 0.01) {
+              var dd = Math.sqrt(d2);
+              var f = (1 - dd / RADIUS);
+              f = f * f * PUSH / dd;
+              tox += dx * f;
+              toy += dy * f;
+            }
           }
-          ctx.beginPath();
-          ctx.arc(x, y, r, 0, Math.PI * 2);
-          ctx.fill();
+          // spring toward the target — smooth, never flickery
+          p.ox += (tox - p.ox) * 0.085;
+          p.oy += (toy - p.oy) * 0.085;
+          var x = p.hx + p.ox, y = p.hy + p.oy;
+          var si = Math.max(0, Math.min(SW_N - 1, Math.round((s * 0.5 + 0.5) * (SW_N - 1))));
+          if (p.gold) {
+            ctx.fillStyle = "rgba(217,164,65,0.5)";
+          } else {
+            ctx.fillStyle = SWATCH[si];
+          }
+          ctx.fillRect(x - 1.1, y - 1.1, 2.2, 2.2);
         }
       }
+
+      function onMove(x, y) { mouse.x = x; mouse.y = y; mouse.active = true; }
+      function onLeave() { mouse.active = false; }
+      window.addEventListener("mousemove", function (e) { onMove(e.clientX, e.clientY); }, { passive: true });
+      window.addEventListener("touchmove", function (e) {
+        if (e.touches && e.touches[0]) onMove(e.touches[0].clientX, e.touches[0].clientY);
+      }, { passive: true });
+      window.addEventListener("mouseout", onLeave);
 
       var lastFrame = 0;
       function loop(now) {
         requestAnimationFrame(loop);
         if (document.hidden) return;
-        if (reduced) { draw(30000); return; } // one resting arrangement
+        if (reduced) { draw(30000); return; } // resting water, no cursor push
         if (now - lastFrame < 33) return;
         lastFrame = now;
         draw(now);
