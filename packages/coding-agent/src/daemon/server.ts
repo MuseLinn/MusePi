@@ -124,6 +124,7 @@ import { parseConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
 import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
+import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
@@ -1048,6 +1049,13 @@ export class DaemonSessionHost {
 	setCollabToolProvider(provider: () => CollabToolHandle): void {
 		this.#collabToolProvider = provider;
 	}
+	/** Scheduled-task bridge for the `schedule_task` tool (issue #11). The
+	 *  cron store lives on DaemonServer, so the host gets a provider rather
+	 *  than reaching into another instance's state. */
+	#scheduledTaskProvider: (() => ScheduledTaskHandle) | null = null;
+	setScheduledTaskProvider(provider: () => ScheduledTaskHandle): void {
+		this.#scheduledTaskProvider = provider;
+	}
 	setOnExtensionNotification(handler: (channel: string, message: ExtensionNotificationMessage) => void): void {
 		this.#onExtensionNotification = handler;
 	}
@@ -1380,6 +1388,7 @@ export class DaemonSessionHost {
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			collabTool: this.#collabToolProvider?.(),
+			scheduledTasks: this.#scheduledTaskProvider?.() ?? undefined,
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
@@ -1459,6 +1468,7 @@ export class DaemonSessionHost {
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			collabTool: this.#collabToolProvider?.(),
+			scheduledTasks: this.#scheduledTaskProvider?.() ?? undefined,
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -2833,6 +2843,7 @@ export class DaemonServer {
 
 	constructor(host: DaemonSessionHost) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
+		host.setScheduledTaskProvider(() => this.scheduledTaskHandle());
 		host.setOnExtensionNotification((channel, message) => {
 			this.#broadcastExtensionNotification(channel, message);
 		});
@@ -3345,6 +3356,49 @@ export class DaemonServer {
 	 *  app 级完成通知监听此事件即时刷新,否则要等下一个 30s 轮询周期。
 	 *  与 extensions.changed 同 seq 机制,payload 只带时间戳,客户端重拉
 	 *  cron.list(任务/运行数据量小,重拉比广播全量更省心)。 */
+	/**
+	 * Create/merge one scheduled task into the daemon-owned list and persist it
+	 * (issue #11). Shared by the `cron.upsert` RPC and the in-session
+	 * `schedule_task` tool — the daemon owns `#cronTasks` in memory, so a tool
+	 * writing crons.json directly would be clobbered by the next save.
+	 */
+	#upsertCronTask(task: CronTask): CronTask {
+		const now = Date.now();
+		const existing = task.id ? this.#cronTasks.find(x => x.id === task.id) : undefined;
+		const merged = mergeCronTask(existing, task, now, process.cwd());
+		if (existing) this.#cronTasks = this.#cronTasks.map(x => (x.id === existing.id ? merged : x));
+		else this.#cronTasks.push(merged);
+		saveCronTasks(this.#cronTasks);
+		this.#broadcastCronsChanged();
+		return merged;
+	}
+
+	/** Bridge handed to the `schedule_task` tool on every session create. */
+	scheduledTaskHandle(): ScheduledTaskHandle {
+		return {
+			upsert: async input => {
+				const candidate = {
+					id: input.id ?? "",
+					name: input.name,
+					enabled: true,
+					schedule: input.schedule,
+					prompt: input.prompt,
+					cwd: input.cwd ?? process.cwd(),
+					...(input.model ? { model: input.model } : {}),
+					...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
+					state: { createdAt: Date.now() },
+				};
+				// Same validator the RPC path uses — a bad schedule must fail
+				// here with a clear message, not arm a task that never fires.
+				const check = validateCronTask(candidate);
+				if (!check.ok) throw new Error(check.error ?? "invalid schedule");
+				return this.#upsertCronTask(candidate as CronTask);
+			},
+			list: async () => this.#cronTasks,
+			defaultCwd: () => process.cwd(),
+		};
+	}
+
 	#broadcastCronsChanged(): void {
 		const seq = ++this.#globalEventSeq;
 		for (const conn of this.#globalEventTargets) {
@@ -4974,17 +5028,7 @@ export class DaemonServer {
 				const { task } = (params ?? {}) as { task?: unknown };
 				const check = validateCronTask(task);
 				if (!check.ok) throw new Error(`cron.upsert: ${check.error}`);
-				const t = task as CronTask;
-				const now = Date.now();
-				const existing = t.id ? this.#cronTasks.find(x => x.id === t.id) : undefined;
-				const merged = mergeCronTask(existing, t, now, process.cwd());
-				if (existing) {
-					this.#cronTasks = this.#cronTasks.map(x => (x.id === existing.id ? merged : x));
-				} else {
-					this.#cronTasks.push(merged);
-				}
-				saveCronTasks(this.#cronTasks);
-				this.#broadcastCronsChanged();
+				const merged = this.#upsertCronTask(task as CronTask);
 				return { tasks: this.#cronTasks, task: merged };
 			}
 			case "cron.runs": {

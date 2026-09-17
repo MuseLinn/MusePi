@@ -78,6 +78,7 @@ import { CursorExecHandlers, type CursorMcpResourceAdapter } from "./cursor";
 import { createBridgeEditTool, createBridgeGrepFactory } from "./cursor-bridge-tools";
 import { createTaskCardStyleExtension } from "./musepi/swarm/task-card-style";
 import { type CollabToolHandle, collabTool } from "./tools/collab";
+import { type ScheduledTaskHandle, scheduleTaskTool } from "./tools/schedule-task";
 import "./discovery";
 import { createImageUrlServiceFromSettings } from "./blob-broker/service";
 import { wrapStreamFnWithBlobUrlFallback } from "./blob-broker/stream-fallback";
@@ -475,6 +476,8 @@ export interface CreateAgentSessionOptions {
 	 * own session; absent in standalone TUI/CLI sessions.
 	 */
 	collabTool?: CollabToolHandle;
+	/** Daemon-provided scheduled-task bridge for the `schedule_task` tool. */
+	scheduledTasks?: ScheduledTaskHandle;
 	/** Inline extensions (merged with discovery). */
 	extensions?: ExtensionFactory[];
 	/** Additional extension paths to load (merged with discovery). */
@@ -2282,6 +2285,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// remote sharing of the current session. Absent when no daemon
 			// injects a collab handle — the tool reports "unavailable" at use.
 			customTools.push(collabTool as unknown as CustomTool);
+			if (options.scheduledTasks) customTools.push(scheduleTaskTool as unknown as CustomTool);
 
 			// Add web search tools
 			if (options.toolNames?.includes("web_search")) {
@@ -3021,6 +3025,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			localProtocolOptions,
 			autoApprove: options.autoApprove ?? false,
 			...(options.collabTool ? { collab: options.collabTool } : {}),
+			...(options.scheduledTasks ? { scheduledTasks: options.scheduledTasks } : {}),
 		});
 		const toolContextStore = new ToolContextStore(getSessionContext);
 		const setSessionActiveToolNames = (names: Iterable<string>): void => {

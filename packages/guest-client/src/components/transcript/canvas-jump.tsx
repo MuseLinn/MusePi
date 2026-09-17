@@ -65,3 +65,14 @@ export function CanvasJumpCard({ block }: { block: CanvasJumpBlock }): ReactNode
 		</button>
 	);
 }
+
+/** Open-scheduled-task card dispatched to the desktop shell (issue #11): the
+ *  agent created or listed a scheduled task in chat, and the card's button
+ *  hops to the 任务中心 with that task selected in the editor. */
+export function openScheduledTaskFromChat(taskId: string, name?: string): void {
+	window.dispatchEvent(
+		new CustomEvent("omp-open-scheduled-task", {
+			detail: { id: taskId, name: name ?? "" },
+		}),
+	);
+}

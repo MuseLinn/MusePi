@@ -502,6 +502,8 @@ function AppInner(): ReactNode {
 	};
 	// daimon-canvas jump from chat: board id to open after the view swap.
 	const [boardJumpId, setBoardJumpId] = useState<string | null>(null);
+	/** 任务中心跳转目标任务 id（会话内 schedule_task 卡片 → 任务中心）。 */
+	const [scheduledJumpId, setScheduledJumpId] = useState<string | null>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
@@ -518,16 +520,19 @@ function AppInner(): ReactNode {
 		let alive = true;
 		const poll = (): void => {
 			void rpc
-				.request<{ runs?: { id: string; taskId: string; status: string; startedAt: number; error?: string }[] }>(
-					"cron.list",
-					{},
-				)
+				.request<{
+					tasks?: { id: string; name?: string }[];
+					runs?: { id: string; taskId: string; status: string; startedAt: number; error?: string }[];
+				}>("cron.list", {})
 				.then(res => {
 					if (!alive) return;
+					// Notify with the task's NAME, not its id — "cron-abc finished"
+					// tells the user nothing.
+					const nameById = new Map((res?.tasks ?? []).map(t => [t.id, t.name]));
 					for (const run of res?.runs ?? []) {
 						if (run.status === "running" || cronNotifiedRef.current.has(run.id)) continue;
 						cronNotifiedRef.current.add(run.id);
-						const taskName = run.taskId ?? t("scheduled tasks");
+						const taskName = nameById.get(run.taskId) ?? run.taskId ?? t("scheduled tasks");
 						if (run.status === "error") {
 							dispatchNotification("error", {
 								lastMessage: `${taskName}${run.error ? ` · ${run.error}` : ""}`,
@@ -607,7 +612,18 @@ function AppInner(): ReactNode {
 			viewSwapRef.current("board");
 		};
 		window.addEventListener("omp-open-board", onOpenBoard);
-		return () => window.removeEventListener("omp-open-board", onOpenBoard);
+		// 会话内 schedule_task 卡片（issue #11）：跳到任务中心并选中该任务。
+		const onOpenScheduledTask = (e: Event) => {
+			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+			if (!id) return;
+			setScheduledJumpId(id);
+			viewSwapRef.current("scheduled");
+		};
+		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
+		return () => {
+			window.removeEventListener("omp-open-board", onOpenBoard);
+			window.removeEventListener("omp-open-scheduled-task", onOpenScheduledTask);
+		};
 	}, []);
 	viewSwapRef.current = (to: "board" | "scheduled" | "agents" | "chat"): void => {
 		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat";
@@ -3026,6 +3042,7 @@ function AppInner(): ReactNode {
 										rpc={rpc}
 										onBack={() => viewSwapRef.current("chat")}
 										onOpenSession={id => void openSession(id)}
+										initialTaskId={scheduledJumpId}
 									/>
 								</ChatSurfaceShell>
 							) : scheduledOpen ? (
@@ -3035,6 +3052,7 @@ function AppInner(): ReactNode {
 										rpc={rpc}
 										onBack={() => viewSwapRef.current("chat")}
 										onOpenSession={id => void openSession(id)}
+										initialTaskId={scheduledJumpId}
 									/>
 								</ChatSurfaceShell>
 							) : leavingView === "agents" ? (

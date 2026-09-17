@@ -30,6 +30,7 @@ import { retainRenderer } from "./tools/memory-retain";
 import { readRenderer } from "./tools/read";
 import { reportToolIssueRenderer } from "./tools/report-tool-issue";
 import { resolveRenderer } from "./tools/resolve";
+import { scheduleTaskRenderer } from "./tools/schedule-task";
 import { taskRenderer } from "./tools/task";
 import { todoRenderer } from "./tools/todo";
 import { vibeRenderer } from "./tools/vibe";
@@ -74,6 +75,7 @@ const RENDERERS: Record<string, ToolRenderer> = {
 	retain: retainRenderer,
 	read: readRenderer,
 	report_tool_issue: reportToolIssueRenderer,
+	schedule_task: scheduleTaskRenderer,
 	resolve: resolveRenderer,
 	reject: resolveRenderer,
 	propose: resolveRenderer,

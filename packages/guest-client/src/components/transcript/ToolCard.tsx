@@ -51,7 +51,10 @@ export interface ToolCardProps {
  *  turn *artifacts*, so they never auto-collapse when the turn completes
  *  (process tools fold away, the artifact stays). */
 function isArtifactCard(name: string): boolean {
-	return name === "widget" || name === "board";
+	// `schedule_task` joins them (issue #11): the card is the deliverable the
+	// user asked for (a structured task summary + the jump to the task
+	// center), not process noise to fold away when the turn ends.
+	return name === "widget" || name === "board" || name === "schedule_task";
 }
 
 function widgetDefaultOpen(): boolean {

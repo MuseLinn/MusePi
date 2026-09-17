@@ -1066,6 +1066,13 @@ export const settings = {
 	"board create placeholder":
 		"Type the widget you want below and let MusePi add it to your board (e.g. pomodoro, K-line chart, exchange rates)…",
 	"board open": "Open board",
+	"scheduled task": "Scheduled task",
+	"scheduled task created": "Created",
+	"schedule pending": "Computing schedule…",
+	"next run": "Next run",
+	"not scheduled": "Not scheduled",
+	"open task center": "Open task center",
+	"no scheduled tasks": "No scheduled tasks",
 	"board saved": "Saved",
 	"board generate": "AI-generate widget",
 	"board generate placeholder":

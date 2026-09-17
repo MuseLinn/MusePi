@@ -155,6 +155,7 @@ export function ScheduledTasksPage({
 	rpc,
 	onBack,
 	onOpenSession,
+	initialTaskId = null,
 }: {
 	rpc?: {
 		request(method: string, params?: Record<string, unknown>): Promise<unknown>;
@@ -166,6 +167,10 @@ export function ScheduledTasksPage({
 	/** Open a session by id (openchamber scheduled-task parity: the task
 	 *  page jumps to the latest run's session). */
 	onOpenSession?(id: string): void;
+	/** Preselect this task on open — set when the chat's `schedule_task`
+	 *  card jumps here (issue #11), so the editor is already on the task the
+	 *  agent just created instead of the top of the list. */
+	initialTaskId?: string | null;
 }): ReactNode {
 	const [view, setView] = useState<"calendar" | "board" | "tasks">("tasks");
 	const [tasks, setTasks] = useState<CronTask[]>([]);
@@ -222,9 +227,15 @@ export function ScheduledTasksPage({
 	// Default selection: first task (openchamber selects the top row).
 	const selected = tasks.find(x => x.id === selectedId) ?? null;
 	useEffect(() => {
+		// A chat jump (schedule_task card) preselects its task once the list
+		// has it — the task may still be in flight when the view swaps.
+		if (initialTaskId && tasks.some(x => x.id === initialTaskId)) {
+			setSelectedId(initialTaskId);
+			return;
+		}
 		if (!selectedId && tasks.length > 0) setSelectedId(tasks[0]!.id);
 		else if (selectedId && !tasks.some(x => x.id === selectedId)) setSelectedId(tasks[0]?.id ?? null);
-	}, [tasks, selectedId]);
+	}, [tasks, selectedId, initialTaskId]);
 
 	// Per-task run history (cron.runs — newest first). Reloads whenever the
 	// task list refreshes (poll, crons.changed, mutations) so finished runs

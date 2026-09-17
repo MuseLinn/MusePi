@@ -2,6 +2,7 @@ import type { AgentToolContext, ToolCallContext } from "@musepi/pi-agent-core";
 import type { CustomToolContext } from "../extensibility/custom-tools/types";
 import type { ExtensionUIContext } from "../extensibility/extensions/types";
 import type { CollabToolHandle } from "./collab";
+import type { ScheduledTaskHandle } from "./schedule-task";
 
 declare module "@musepi/pi-agent-core" {
 	interface AgentToolContext extends CustomToolContext {
@@ -22,6 +23,12 @@ declare module "@musepi/pi-agent-core" {
 		/** Daemon-injected collab share handle for the `collab` tool. Absent in
 		 *  standalone TUI/CLI sessions (no daemon to share through). */
 		collab?: CollabToolHandle;
+		/** Daemon-injected scheduled-task handle for the `schedule_task` tool.
+		 *  Injected rather than file-backed because the daemon owns the task
+		 *  list in memory and rewrites crons.json on every change — a tool
+		 *  writing that file itself would be clobbered. Absent in standalone
+		 *  TUI/CLI sessions (no scheduler to register with). */
+		scheduledTasks?: ScheduledTaskHandle;
 	}
 }
 
