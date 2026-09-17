@@ -137,6 +137,29 @@
 	--blur-2xl: 20px;
 	--blur-3xl: 24px;
 
+	/* liquid-glass elevation — the specular "water" pass layered on top of
+	 * the blur ladder: translucent fill, a bright inner top edge with a dim
+	 * bottom echo (the refractive rim), a diagonal sheen wash, and a lifted
+	 * shadow. Pair with --spring-liquid (overshoot spring) for entrances,
+	 * menus and presses so surfaces feel fluid instead of linear. */
+	--glass-bg: oklch(1 0 0 / 7%);
+	--glass-bg-strong: oklch(1 0 0 / 11%);
+	--glass-border: oklch(1 0 0 / 15%);
+	--glass-edge-hi: oklch(1 0 0 / 30%);
+	--glass-edge-lo: oklch(1 0 0 / 7%);
+	--glass-sheen: linear-gradient(
+		165deg,
+		oklch(1 0 0 / 14%) 0%,
+		oklch(1 0 0 / 4%) 30%,
+		oklch(1 0 0 / 0%) 58%
+	);
+	--glass-shadow:
+		0 24px 60px oklch(0 0 0 / 45%),
+		inset 0 1px 0 oklch(1 0 0 / 30%),
+		inset 0 -1px 0 oklch(1 0 0 / 7%);
+	/* overshoot spring — the liquid motion curve (menu/pane/press) */
+	--spring-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
+
 	/* type ladder — base follows the GUI's --gui-font-scale (set on the
 	 * document root by the desktop settings stepper); plain web/guest pages
 	 * fall back to 15px (openchamber text parity) */
@@ -215,6 +238,24 @@
 	--shadow-overlay: 0 12px 32px oklch(0 0 0 / 14%), 0 2px 8px oklch(0 0 0 / 10%);
 	--rail-mobile-shadow: -4px 0 16px oklch(0 0 0 / 14%);
 	--backdrop: oklch(0.55 0.02 60 / 28%);
+
+	/* liquid-glass elevation, light scheme: glass fills run denser on light
+	 * surfaces or the specular rim reads as noise instead of water. */
+	--glass-bg: oklch(1 0 0 / 55%);
+	--glass-bg-strong: oklch(1 0 0 / 72%);
+	--glass-border: oklch(1 0 0 / 65%);
+	--glass-edge-hi: oklch(1 0 0 / 92%);
+	--glass-edge-lo: oklch(0.4 0.02 60 / 10%);
+	--glass-sheen: linear-gradient(
+		165deg,
+		oklch(1 0 0 / 70%) 0%,
+		oklch(1 0 0 / 22%) 32%,
+		oklch(1 0 0 / 0%) 58%
+	);
+	--glass-shadow:
+		0 24px 60px oklch(0.3 0.02 60 / 18%),
+		inset 0 1px 0 oklch(1 0 0 / 92%),
+		inset 0 -1px 0 oklch(0.4 0.02 60 / 10%);
 }
 
 /* mono accent, explicit light scheme */
@@ -281,6 +322,23 @@
 		--shadow-overlay: 0 12px 32px oklch(0 0 0 / 14%), 0 2px 8px oklch(0 0 0 / 10%);
 		--backdrop: oklch(0.55 0.02 60 / 28%);
 		--rail-mobile-shadow: -4px 0 16px oklch(0 0 0 / 14%);
+
+		/* liquid-glass elevation, system-light fallback (same as above) */
+		--glass-bg: oklch(1 0 0 / 55%);
+		--glass-bg-strong: oklch(1 0 0 / 72%);
+		--glass-border: oklch(1 0 0 / 65%);
+		--glass-edge-hi: oklch(1 0 0 / 92%);
+		--glass-edge-lo: oklch(0.4 0.02 60 / 10%);
+		--glass-sheen: linear-gradient(
+			165deg,
+			oklch(1 0 0 / 70%) 0%,
+			oklch(1 0 0 / 22%) 32%,
+			oklch(1 0 0 / 0%) 58%
+		);
+		--glass-shadow:
+			0 24px 60px oklch(0.3 0.02 60 / 18%),
+			inset 0 1px 0 oklch(1 0 0 / 92%),
+			inset 0 -1px 0 oklch(0.4 0.02 60 / 10%);
 	}
 
 	/* mono accent, system-light fallback */

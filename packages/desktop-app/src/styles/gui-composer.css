@@ -1374,11 +1374,11 @@
 
 .gui-dialog--pending {
 	opacity: 0;
-	transform: scale(0.96) translateY(6px);
+	transform: scale(0.94) translateY(8px);
 }
 
 .gui-dialog--entered {
-	animation: gui-dialog-in 160ms var(--spring);
+	animation: gui-dialog-in 240ms var(--spring-liquid, var(--spring));
 }
 
 .gui-dialog--closing {
@@ -1400,7 +1400,7 @@
 @keyframes gui-dialog-in {
 	from {
 		opacity: 0;
-		transform: scale(0.96) translateY(6px);
+		transform: scale(0.94) translateY(8px);
 	}
 }
 
@@ -1414,13 +1414,33 @@
 .gui-dialog {
 	display: flex;
 	flex-direction: column;
+	position: relative;
 	width: min(600px, 90vw);
 	height: min(420px, 80vh);
-	border-radius: 16px;
-	border: 1px solid var(--border);
-	background: var(--color-surface);
-	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+	border-radius: 20px;
+	border: 1px solid var(--glass-border, var(--border));
+	/* Liquid glass: translucent surface over the dimmed backdrop, saturated
+	 * backdrop blur, specular rim + sheen (tokens.css --glass-*). */
+	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
+	box-shadow: var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
 	overflow: hidden;
+}
+
+/* Diagonal specular wash — the refractive "water" highlight. Sits under the
+ * dialog content (::before is unclaimed on .gui-dialog). */
+.gui-dialog::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background: var(--glass-sheen);
+}
+.gui-dialog > * {
+	position: relative;
+	z-index: 1;
 }
 
 .gui-dialog-head {

@@ -1945,3 +1945,75 @@ body {
     transition: none !important;
   }
 }
+
+/* ── Pass 4: liquid-glass pass — specular rims, hotter saturation, fluid
+ * motion. The site's own token set mirrors guest-client's --glass-* ladder
+ * (single-file site, tokens live inline in :root below). ── */
+:root {
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-edge-hi: rgba(255, 255, 255, 0.3);
+  --glass-edge-lo: rgba(255, 255, 255, 0.07);
+  --spring-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Hero install card + demo preview: raise the blur, add the bright top rim
+ * and its dim bottom echo — the refractive edge that reads as "water". */
+.mp-term,
+.mp-demo-preview {
+  border-color: var(--glass-border);
+  backdrop-filter: blur(14px) saturate(170%);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--glass-edge-hi),
+    inset 0 -1px 0 var(--glass-edge-lo);
+}
+.mp-demo-preview {
+  backdrop-filter: blur(16px) saturate(175%);
+  -webkit-backdrop-filter: blur(16px) saturate(175%);
+}
+
+/* Capsule topbar (scrolled): the floating glass pill gets the same rim. */
+.mp-topbar--scrolled {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    0 10px 36px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 var(--glass-edge-hi),
+    inset 0 -1px 0 var(--glass-edge-lo);
+}
+
+/* Dropdown menu: rim + liquid entrance curve. */
+.mp-cta-menu {
+  border-color: var(--glass-border);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 var(--glass-edge-hi),
+    inset 0 -1px 0 var(--glass-edge-lo);
+  animation: mp-demo-in 300ms var(--spring-liquid);
+}
+
+/* Fluid motion: pane/panel morphs and press states run on the overshoot
+ * spring; every CTA compresses like a liquid droplet when pressed. */
+.mp-demo-view > .is-active,
+.mp-demo-panel.is-active {
+  animation: mp-demo-in 420ms var(--spring-liquid);
+}
+.mp-cta:active,
+.mp-demo-tab:active,
+.mp-term-copy:active {
+  transform: scale(0.95);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-cta-menu,
+  .mp-demo-view > .is-active,
+  .mp-demo-panel.is-active {
+    animation: none !important;
+  }
+  .mp-cta,
+  .mp-demo-tab,
+  .mp-term-copy {
+    transition: none !important;
+  }
+}
