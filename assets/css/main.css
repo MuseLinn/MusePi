@@ -2017,3 +2017,201 @@ body {
     transition: none !important;
   }
 }
+
+/* ── Pass 5: liquid ambience — living background, cursor reactivity,
+ * flowing rim light on the glass surfaces. Backdrop displacement is not
+ * available to Chromium (backdrop-filter: url() unsupported), so the
+ * "refraction" is performed by rim light, sheen tracking and blob
+ * parallax instead — everything GPU-cheap and reduced-motion aware. ── */
+
+/* Whole-page liquid blob field: three morphing gradient blobs drift and
+ * breathe behind every section (the aurora canvas stays hero-only). */
+.mp-bg-liquid {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.mp-blob {
+  position: absolute;
+  width: 560px;
+  height: 560px;
+  filter: blur(90px);
+  will-change: transform, border-radius;
+  transition: translate 700ms var(--spring);
+}
+.mp-blob--a {
+  top: -10%;
+  right: -8%;
+  background: radial-gradient(circle at 36% 36%, rgba(217, 164, 65, 0.3), transparent 66%);
+  translate: calc(var(--par-x, 0) * 36px) calc(var(--par-y, 0) * 26px);
+  animation: mp-blob-a 26s ease-in-out infinite alternate;
+}
+.mp-blob--b {
+  top: 46%;
+  left: -14%;
+  width: 640px;
+  height: 640px;
+  background: radial-gradient(circle at 60% 40%, rgba(94, 120, 231, 0.22), transparent 66%);
+  translate: calc(var(--par-x, 0) * -28px) calc(var(--par-y, 0) * -18px);
+  animation: mp-blob-b 34s ease-in-out infinite alternate;
+}
+.mp-blob--c {
+  bottom: -16%;
+  right: 6%;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 236, 210, 0.13), transparent 64%);
+  translate: calc(var(--par-x, 0) * 20px) calc(var(--par-y, 0) * -30px);
+  animation: mp-blob-c 22s ease-in-out infinite alternate;
+}
+/* Border-radius morphing — the blob silhouettes never hold a shape. */
+@keyframes mp-blob-a {
+  0% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 58% 42% 55% 45% / 52% 48% 56% 44%;
+  }
+  50% {
+    transform: scale(1.1) rotate(8deg);
+    border-radius: 44% 56% 40% 60% / 56% 42% 58% 42%;
+  }
+  100% {
+    transform: scale(0.94) rotate(-6deg);
+    border-radius: 52% 48% 62% 38% / 46% 58% 44% 56%;
+  }
+}
+@keyframes mp-blob-b {
+  0% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 46% 54% 58% 42% / 54% 44% 56% 46%;
+  }
+  50% {
+    transform: scale(0.92) rotate(-9deg);
+    border-radius: 60% 40% 46% 54% / 42% 60% 40% 58%;
+  }
+  100% {
+    transform: scale(1.08) rotate(5deg);
+    border-radius: 42% 58% 52% 48% / 58% 40% 54% 46%;
+  }
+}
+@keyframes mp-blob-c {
+  0% {
+    transform: scale(1) rotate(0deg);
+    border-radius: 54% 46% 44% 56% / 48% 56% 42% 58%;
+  }
+  50% {
+    transform: scale(1.12) rotate(10deg);
+    border-radius: 44% 56% 60% 40% / 56% 44% 58% 42%;
+  }
+  100% {
+    transform: scale(0.96) rotate(-4deg);
+    border-radius: 58% 42% 48% 52% / 44% 54% 46% 56%;
+  }
+}
+
+/* Cursor light: a soft gold halo that follows the pointer across the page. */
+.mp-cursor-glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    360px circle at var(--mx, 50%) var(--my, 28%),
+    rgba(217, 164, 65, 0.075),
+    transparent 68%
+  );
+  mix-blend-mode: screen;
+}
+
+/* Glass surfaces react to the pointer: a light sheen tracks the cursor
+ * inside the card, and a gold rim light orbits the border on hover. */
+@property --rim {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.mp-term,
+.mp-demo-preview {
+  position: relative;
+  transition:
+    transform 340ms var(--spring-liquid, var(--spring)),
+    box-shadow 340ms ease,
+    border-color 340ms ease;
+}
+.mp-term::before,
+.mp-demo-preview::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--rim),
+    transparent 0 68%,
+    rgba(217, 164, 65, 0.55) 80%,
+    rgba(255, 255, 255, 0.4) 87%,
+    transparent 95%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity 320ms ease;
+  pointer-events: none;
+}
+.mp-term::after,
+.mp-demo-preview::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    300px circle at var(--mx, 50%) var(--my, 0%),
+    rgba(255, 255, 255, 0.09),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+.mp-term:hover::before,
+.mp-demo-preview:hover::before {
+  opacity: 1;
+  animation: mp-rim 3.4s linear infinite;
+}
+.mp-term:hover::after,
+.mp-demo-preview:hover::after {
+  opacity: 1;
+}
+.mp-term:hover,
+.mp-demo-preview:hover {
+  transform: translateY(-3px);
+  border-color: rgba(217, 164, 65, 0.28);
+}
+@keyframes mp-rim {
+  to {
+    --rim: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-blob {
+    animation: none !important;
+    transition: none !important;
+  }
+  .mp-cursor-glow {
+    display: none;
+  }
+  .mp-term::before,
+  .mp-demo-preview::before {
+    animation: none !important;
+  }
+  .mp-term,
+  .mp-demo-preview {
+    transition: none !important;
+  }
+}
