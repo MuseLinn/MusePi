@@ -49,6 +49,7 @@ function makeHarness() {
 		get: () => undefined,
 		emitEvent: (_conn: DaemonConnection, event: Parameters<EventBatcher["push"]>[0]) => batcher.push(event),
 		setCollabToolProvider: () => {},
+		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);

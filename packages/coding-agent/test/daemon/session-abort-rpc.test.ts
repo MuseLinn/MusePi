@@ -26,6 +26,7 @@ describe("session.abort RPC", () => {
 				},
 			}),
 			setCollabToolProvider: () => {},
+			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);

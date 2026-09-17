@@ -50,6 +50,7 @@ function makeHarness() {
 		}),
 		// DaemonServer wires these on construction; the stub host ignores both.
 		setCollabToolProvider: () => {},
+		setScheduledTaskProvider: () => {},
 		setOnExtensionNotification: () => {},
 	} as unknown as DaemonSessionHost;
 	const server = new DaemonServer(host);

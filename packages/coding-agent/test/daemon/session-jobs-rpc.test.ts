@@ -18,6 +18,7 @@ describe("session.jobs RPC", () => {
 				agentSession: { getAsyncJobSnapshot: () => null },
 			}),
 			setCollabToolProvider: () => {},
+			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
 		} as unknown as DaemonSessionHost;
 		const server = new DaemonServer(host);

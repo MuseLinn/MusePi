@@ -60,6 +60,7 @@ describe("session.queuedReorder RPC", () => {
 			cwd: () => tempDir.path(),
 			get: () => ({ sessionId: "s1", agentSession: session }),
 			setCollabToolProvider: () => {},
+			setScheduledTaskProvider: () => {},
 			setOnExtensionNotification: () => {},
 		} as unknown as DaemonSessionHost;
 		server = new DaemonServer(host);
