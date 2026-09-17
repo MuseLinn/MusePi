@@ -17,7 +17,7 @@
    - 输入框 placeholder 与桌面端对齐：`ask anything, / for commands, @ for context…`（zh：`问任何事，/ 命令，@ 上下文…`）。
    - 连接屏设备名默认值 / placeholder：`my phone`（zh：`我的手机`）。
    - transcript 中无署名 collab 消息的徽标兜底：`unnamed device`（zh：`未命名设备`）。
-2. **品牌绿只有一个。** `--accent` = `oklch(0.773 0.1538 163)` = `#34d399`，与 TUI 主题（`musepi.json`）、web 导出调色板、`--brand-mark-gradient` 一致。旧的 `oklch(0.72 0.16 162)`（`#00C385`）是换算错误，已在全部包退役（`guest-client`、`desktop-app`、`stats`、`web-palette`）。
+2. **品牌金只有一个。** `--accent` = `oklch(0.7507 0.1295 79.85)` = `#d9a441`（π 品牌金），与 TUI 主题（`musepi.json`）、web 导出调色板、`--brand-mark-gradient` 一致。旧的翡翠绿 `oklch(0.773 0.1538 163)`（`#34d399`）已在 2026-09 品牌换色中从全部包退役（`guest-client`、`desktop-app`、`stats`、`web-palette`）；语义成功状态与桌宠角色保留绿色。
 3. **先复用再发明。** 控件在桌面 GUI 已存在（如 `ModelSelector`、思考档位），必须镜像其结构、token 和文案，不许手绘尺寸或自造叫法。
 4. **i18n key 全局唯一。** 一个 key 只能存在于一个域文件（`i18n/zh-CN/<domain>.ts`）；跨域重复会在 barrel 加载时抛错。en 文件必须 `as const satisfies Record<ZhKey, string>`。
 

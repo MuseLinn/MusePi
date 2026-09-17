@@ -1385,9 +1385,6 @@ body {
 .mp-demo-view > .is-active {
   display: block;
 }
-.mp-demo-view img {
-  display: block;
-}
 .mp-demo-caption {
   padding: 10px 16px;
   border-top: 1px solid var(--border);
@@ -1769,5 +1766,94 @@ body {
   .mp-demo-tui {
     font-size: 11.5px;
     padding: 18px 16px 28px;
+  }
+}
+
+/* ── Pass 2: micro-interactions + polish ──────────────────────────────── */
+@keyframes mp-demo-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Demo panes + context panels fade-slide on tab switch */
+.mp-demo-view > .is-active,
+.mp-demo-panel.is-active {
+  animation: mp-demo-in 380ms var(--spring);
+}
+
+/* Tabs: press feedback + active shadow (Apple-style scale press) */
+.mp-demo-tab {
+  transition:
+    color 140ms ease,
+    background 140ms ease,
+    transform 160ms var(--spring),
+    box-shadow 200ms ease;
+}
+.mp-demo-tab:active {
+  transform: scale(0.96);
+}
+.mp-demo-tab.is-active {
+  box-shadow: 0 6px 18px rgba(217, 164, 65, 0.28);
+}
+
+/* Stats count-in stagger, triggered by the section's scroll reveal */
+.mp-stats.mp-reveal-in .mp-stat {
+  animation: mp-demo-in 560ms var(--spring) both;
+}
+.mp-stats.mp-reveal-in .mp-stat:nth-child(2) {
+  animation-delay: 70ms;
+}
+.mp-stats.mp-reveal-in .mp-stat:nth-child(3) {
+  animation-delay: 140ms;
+}
+.mp-stats.mp-reveal-in .mp-stat:nth-child(4) {
+  animation-delay: 210ms;
+}
+
+/* Bento cards get the gold hover the other cards already have */
+.mp-bento .mp-card:hover {
+  border-color: rgba(217, 164, 65, 0.4);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
+}
+
+/* Golden pulse on the hero badge already exists via .mp-pulse; make the
+ * install-card hint breathe once on load to draw the eye to the copy row */
+@keyframes mp-hint-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mp-term-hint {
+  animation: mp-hint-in 520ms var(--spring) 320ms both;
+}
+
+/* Typography polish: center the download footnote and keep it readable */
+.mp-dl-note {
+  max-width: 46em;
+  margin-left: auto;
+  margin-right: auto;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mp-demo-view > .is-active,
+  .mp-demo-panel.is-active,
+  .mp-stats.mp-reveal-in .mp-stat,
+  .mp-term-hint {
+    animation: none !important;
+  }
+  .mp-demo-tab {
+    transition: none !important;
   }
 }

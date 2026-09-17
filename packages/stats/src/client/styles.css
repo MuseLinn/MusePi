@@ -5,8 +5,8 @@
    ========================================================================== */
 :root {
   color-scheme: dark;
-  /* OMP brand palette — packages/guest-client/src/styles/tokens.css:
-     deep-purple surfaces (hue 307), emerald accent #34d399, cyan focus ring #5ad8e6. *
+  /* MusePi brand palette — packages/guest-client/src/styles/tokens.css:
+     warm-dark surfaces, gold accent #d9a441, cyan focus ring #5ad8e6. *
   --page: oklch(0.16 0.02 307);
   --surface: oklch(0.19 0.022 307);
   --surface-2: oklch(0.235 0.026 307);
@@ -15,9 +15,9 @@
   --text: oklch(0.92 0.01 307);
   --muted: oklch(0.71 0.016 307);
   --dim: oklch(0.53 0.018 307);
-  --accent: oklch(0.773 0.1538 163);          /* brand emerald #34d399 */
-  --accent-fg: oklch(0.24 0.075 163);         /* ink on accent fills */
-  --accent-muted: oklch(0.773 0.1538 163 / 18%);
+  --accent: oklch(0.7507 0.1295 79.85);       /* brand gold #d9a441 */
+  --accent-fg: oklch(0.26 0.06 80);           /* ink on accent fills */
+  --accent-muted: oklch(0.7507 0.1295 79.85 / 18%);
   --link: oklch(0.817 0.112 205);           /* brand cyan #5ad8e6 */
   --success: oklch(0.76 0.14 150);
   --danger: oklch(0.66 0.19 25);

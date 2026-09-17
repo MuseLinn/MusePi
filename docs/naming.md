@@ -17,7 +17,7 @@
    - Composer placeholder uses the desktop parity string: `ask anything, / for commands, @ for context…` (zh: `问任何事，/ 命令，@ 上下文…`).
    - Device-name default / placeholder on the connect screen: `my phone` (zh: `我的手机`).
    - Transcript badge fallback for an unattributed collab prompt: `unnamed device` (zh: `未命名设备`).
-2. **One brand green.** `--accent` is `oklch(0.773 0.1538 163)` = `#34d399`, matching the TUI theme (`musepi.json`), the web export palette and `--brand-mark-gradient`. The old `oklch(0.72 0.16 162)` (`#00C385`) was a conversion bug and is retired everywhere (`guest-client`, `desktop-app`, `stats`, `web-palette`).
+2. **One brand gold.** `--accent` is `oklch(0.7507 0.1295 79.85)` = `#d9a441` (the π brand gold), matching the TUI theme (`musepi.json`), the web export palette and `--brand-mark-gradient`. The old emerald `oklch(0.773 0.1538 163)` (`#34d399`) was retired everywhere (`guest-client`, `desktop-app`, `stats`, `web-palette`) in the 2026-09 rebrand; semantic success states and the pet mascot keep their green.
 3. **Parity before invention.** When a control exists on desktop GUI (e.g. `ModelSelector`, thinking ladder), mirror its structure, tokens and copy. Do not hand-draw sizes or invent labels.
 4. **i18n keys are global.** A key may live in exactly one domain file (`i18n/zh-CN/<domain>.ts`); duplicating it across domains throws at barrel load. en files must `as const satisfies Record<ZhKey, string>`.
 

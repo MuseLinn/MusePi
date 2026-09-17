@@ -3,6 +3,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 `/changelog` 展示。上游 oh-my-pi 的变更记录在 `CHANGELOG.md`(本文件存在时
 优先读取本文件)。
 
+## [Unreleased]
+
+### Changed
+
+- 品牌色换金：默认 accent 从翡翠绿 #34d399 换成 π 品牌金 #d9a441（GUI tokens、TUI musepi.json 主题、HTML 导出调色板、stats 面板、lightbox 主按钮全部同步），预设更名「品牌金 / Brand gold」，语义成功状态与桌宠角色保留绿色。
+  - EN: Brand re-gilded: the default accent moves from emerald #34d399 to the π brand gold #d9a441 across GUI tokens, the TUI musepi.json theme, the HTML export palette, the stats dashboard and lightbox primary actions; the preset is renamed "Brand gold", while semantic success states and the pet mascot keep their green.
+
 ## [0.4.30] - 2026-09-16
 
 ### Added

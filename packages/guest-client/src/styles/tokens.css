@@ -1,5 +1,6 @@
-/* Design tokens — omp brand palette: deep-purple surfaces, emerald accent,
- * cyan focus ring. Dark is the default; `[data-theme="light"]` / `[data-color-scheme="light"]`
+/* Design tokens — MusePi brand palette: warm near-black surfaces, gold accent,
+ * cyan focus ring (kept distinct from the accent by design). Dark is the
+ * default; `[data-theme="light"]` / `[data-color-scheme="light"]`
  * and the prefers-color-scheme light fallback flip to light surfaces.
  * The ONLY file allowed to contain raw color values. */
 :root {
@@ -17,21 +18,22 @@
 	--fg-muted: oklch(0.72 0.01 60);
 	--fg-faint: oklch(0.55 0.01 60);
 
-	/* one accent: brand emerald. These oklch numbers ARE #34d399 — the same
-	 * green the TUI theme (theme/defaults/musepi.json), the HTML export
-	 * palette (export/html/web-palette.ts) and --brand-mark-gradient all
-	 * use. Do not retune them by eye: any value whose sRGB round-trip is not
-	 * #34d399 re-introduces the logo-vs-accent split this block fixes. */
-	--accent: oklch(0.773 0.1538 163);
-	--accent-fg: oklch(0.24 0.075 163);
-	--accent-muted: oklch(0.773 0.1538 163 / 18%);
+	/* one accent: brand gold. These oklch numbers ARE #d9a441 (the π brand
+	 * gold) — the same gold the TUI theme (theme/defaults/musepi.json), the
+	 * HTML export palette (export/html/web-palette.ts) and
+	 * --brand-mark-gradient all use. Do not retune them by eye: any value
+	 * whose sRGB round-trip is not #d9a441 re-introduces the
+	 * logo-vs-accent split this block fixes. */
+	--accent: oklch(0.7507 0.1295 79.85);
+	--accent-fg: oklch(0.26 0.06 80);
+	--accent-muted: oklch(0.7507 0.1295 79.85 / 18%);
 	/* hover + border variants of the accent — derived from the same hue
 	 * (hover = accent L + 0.08, the existing relationship). */
-	--accent-hover: oklch(0.853 0.1538 163);
-	--accent-bd: oklch(0.773 0.1538 163 / 35%);
+	--accent-hover: oklch(0.8307 0.1295 79.85);
+	--accent-bd: oklch(0.7507 0.1295 79.85 / 35%);
 
 	/* brand lockup */
-	--brand-mark-gradient: linear-gradient(135deg, #34d399 0%, #10b981 50%, #2dd4bf 100%);
+	--brand-mark-gradient: linear-gradient(135deg, #d9a441 0%, #b8862f 50%, #966400 100%);
 
 	/* status — used sparingly */
 	--ok: oklch(0.76 0.14 150);
@@ -196,11 +198,11 @@
 	--fg-muted: oklch(0.46 0.03 60);
 	--fg-faint: oklch(0.58 0.025 60);
 
-	--accent: oklch(0.62 0.153 163);
-	--accent-fg: oklch(0.99 0.01 163);
-	--accent-muted: oklch(0.62 0.153 163 / 14%);
-	--accent-hover: oklch(0.55 0.1538 163);
-	--accent-bd: oklch(0.62 0.153 163 / 30%);
+	--accent: oklch(0.62 0.115 79.85);
+	--accent-fg: oklch(0.99 0.01 80);
+	--accent-muted: oklch(0.62 0.115 79.85 / 14%);
+	--accent-hover: oklch(0.55 0.115 79.85);
+	--accent-bd: oklch(0.62 0.115 79.85 / 30%);
 
 	--ok: oklch(0.55 0.13 150);
 	--warn: oklch(0.6 0.13 85);
@@ -262,11 +264,11 @@
 		--fg-muted: oklch(0.46 0.03 60);
 		--fg-faint: oklch(0.58 0.025 60);
 
-		--accent: oklch(0.62 0.1538 163);
-		--accent-fg: oklch(0.99 0.01 163);
-		--accent-muted: oklch(0.62 0.1538 163 / 14%);
-		--accent-hover: oklch(0.55 0.1538 163);
-		--accent-bd: oklch(0.62 0.1538 163 / 30%);
+		--accent: oklch(0.62 0.115 79.85);
+		--accent-fg: oklch(0.99 0.01 80);
+		--accent-muted: oklch(0.62 0.115 79.85 / 14%);
+		--accent-hover: oklch(0.55 0.115 79.85);
+		--accent-bd: oklch(0.62 0.115 79.85 / 30%);
 
 		--ok: oklch(0.55 0.13 150);
 		--warn: oklch(0.6 0.13 85);

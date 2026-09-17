@@ -331,7 +331,7 @@ function predictAccent(targetAccent: AccentPreference): string {
 	root.dataset.accent = targetAccent;
 	const value = getComputedStyle(root).getPropertyValue("--accent").trim();
 	restoreDataset("accent", prev);
-	return value || "#34d399";
+	return value || "#d9a441";
 }
 
 type ThemeOverlayOpts = {
@@ -369,7 +369,7 @@ function withColorTransition(fn: () => void, icon: keyof typeof MORPH_ICONS, opt
 	const fromIcon = opts.fromIcon && MORPH_ICONS[opts.fromIcon] ? opts.fromIcon : icon;
 	const fromColor = opts.fromColor ?? readVar("--bg", "#17151a");
 	const toColor = opts.toColor ?? fromColor;
-	const fromAccent = opts.fromAccent ?? readVar("--accent", "#34d399");
+	const fromAccent = opts.fromAccent ?? readVar("--accent", "#d9a441");
 	const toAccent = opts.toAccent ?? fromAccent;
 	defineMorphIcon(); // idempotent per tag — registers <morph-icon>
 	const overlay = document.createElement("div");
@@ -483,8 +483,8 @@ function readStoredAccent(): AccentPreference {
 	}
 }
 
-/** Default custom accent = the brand emerald, so the picker never opens empty. */
-const DEFAULT_CUSTOM_ACCENT = "#34d399";
+/** Default custom accent = the brand gold, so the picker never opens empty. */
+const DEFAULT_CUSTOM_ACCENT = "#d9a441";
 
 function normalizeHex(input: string): string | null {
 	const match = /^#?([0-9a-f]{6})$/i.exec(input.trim());
@@ -598,7 +598,7 @@ export function setAccentPreference(next: AccentPreference): void {
 		},
 		"palette",
 		{
-			fromAccent: readVar("--accent", "#34d399"),
+			fromAccent: readVar("--accent", "#d9a441"),
 			toAccent: predictAccent(next),
 		},
 	);
@@ -646,7 +646,7 @@ export function applyCustomAccent(input: string): void {
 		},
 		"palette",
 		{
-			fromAccent: readVar("--accent", "#34d399"),
+			fromAccent: readVar("--accent", "#d9a441"),
 			toAccent: hex,
 		},
 	);
@@ -685,7 +685,7 @@ export function useAccentPreference(): {
 }
 
 export const ACCENT_PRESETS: ReadonlyArray<{ id: AccentPreference; label: string }> = [
-	{ id: "brand", label: "Brand pink" },
+	{ id: "brand", label: "Brand gold" },
 	{ id: "mono", label: "Mono" },
 	{ id: "ocean", label: "Ocean blue" },
 	{ id: "jade", label: "Jade green" },

@@ -208,9 +208,9 @@
 }
 
 .tr-img-lb-tool--primary {
-	background: #34d399;
+	background: #d9a441;
 	border-color: transparent;
-	color: #06281c;
+	color: #2a2008;
 	font-weight: 600;
 }
 
@@ -242,8 +242,8 @@
 	transform: translate(-50%, -50%);
 	border-radius: 999px;
 	border: 2px solid #fff;
-	background: #34d399;
-	color: #06281c;
+	background: #d9a441;
+	color: #2a2008;
 	font-size: 11px;
 	font-weight: 700;
 	font-family: inherit;
@@ -277,5 +277,5 @@
 }
 
 .tr-img-lb-note-input:focus {
-	border-color: #34d399;
+	border-color: #d9a441;
 }

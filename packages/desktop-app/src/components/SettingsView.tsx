@@ -796,7 +796,7 @@ export function SettingsView({
 }
 
 /** Accent preset → swatch color (display tints readable on both schemes;
- *  the tokens own the real values: brand = emerald #34d399). */
+ *  the tokens own the real values: brand = gold #d9a441). */
 import {
 	AppearanceSection,
 	BrowserSection,

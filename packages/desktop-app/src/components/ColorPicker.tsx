@@ -111,8 +111,8 @@ function cssColorToHex(css: string): string {
 }
 
 /** Quick-pick dots: the four preset accent colors (same values as the
- *  settings swatch row — brand emerald / mono / ocean / jade). */
-const PRESET_HEXES = ["#34d399", "#8a8a93", "#38bdf8", "#44b782"] as const;
+ *  settings swatch row — brand gold / mono / ocean / jade). */
+const PRESET_HEXES = ["#d9a441", "#8a8a93", "#38bdf8", "#44b782"] as const;
 
 export function ColorPickerPanel({
 	value,

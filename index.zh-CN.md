@@ -11,9 +11,9 @@ mp_cta: true
     <div class="mp-hero-copy">
       <div class="mp-hero-badge">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-hero-badge-ver" data-release-version>v0.4.29</span>
+        <span class="mp-hero-badge-ver" data-release-version>v0.4.30</span>
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
-        <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
+        <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
       <h1 class="mp-hero-title">一个 Agent。<br>处处都是它的主场。</h1>
       <p class="mp-hero-sub">
@@ -87,7 +87,7 @@ mp_cta: true
         <img data-demo-pane="gui" class="is-active" src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="MusePi 桌面欢迎页" loading="lazy">
         <div data-demo-pane="tui" class="mp-demo-tui" aria-hidden="true">
           <p><span class="mp-term-prompt">$ </span>musepi</p>
-          <p class="mp-demo-tui-dim">✦ musepi v0.4.29 — oh-my-pi 引擎 · 会话 <span class="mp-demo-tui-tag">main</span></p>
+          <p class="mp-demo-tui-dim">✦ musepi v0.4.30 — oh-my-pi 引擎 · 会话 <span class="mp-demo-tui-tag">main</span></p>
           <p><span class="mp-demo-tui-you">› </span>把 FilePane 重构成 flex column 并加自动保存</p>
           <p><span class="mp-demo-tui-ai">● </span>正在读取 packages/guest-client/src/FilePane.tsx …</p>
           <p><span class="mp-demo-tui-ai">● </span>补丁已应用 — 3 个文件变更，测试全绿 <span class="mp-demo-tui-ok">✓</span></p>

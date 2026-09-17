@@ -33,7 +33,7 @@ export const shell = {
 	"{name} — click to switch": "{name} — 点击切换",
 
 	// ── Accent toggle ─────────────────────────────────────────────────────────
-	"Brand pink": "品牌粉",
+	"Brand gold": "品牌金",
 	Monochrome: "单色",
 	"Ocean blue": "海洋蓝",
 	"Jade green": "翡翠绿",

@@ -73,7 +73,7 @@ import { SchemaTabSection } from "./schema";
 import { NumberStepper } from "./shared";
 
 const ACCENT_SWATCH: Record<string, string> = {
-	brand: "#34d399",
+	brand: "#d9a441",
 	mono: "#8a8a93",
 	ocean: "#38bdf8",
 	jade: "#44b782",

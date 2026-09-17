@@ -11,9 +11,9 @@ mp_cta: true
     <div class="mp-hero-copy">
       <div class="mp-hero-badge">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-hero-badge-ver" data-release-version>v0.4.29</span>
+        <span class="mp-hero-badge-ver" data-release-version>v0.4.30</span>
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
-        <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android · HarmonyOS</span>
+        <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
       <h1 class="mp-hero-title">One agent.<br>Every surface you work&nbsp;on.</h1>
       <p class="mp-hero-sub">
@@ -88,7 +88,7 @@ mp_cta: true
         <img data-demo-pane="gui" class="is-active" src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="MusePi desktop welcome screen" loading="lazy">
         <div data-demo-pane="tui" class="mp-demo-tui" aria-hidden="true">
           <p><span class="mp-term-prompt">$ </span>musepi</p>
-          <p class="mp-demo-tui-dim">✦ musepi v0.4.29 — oh-my-pi engine · session <span class="mp-demo-tui-tag">main</span></p>
+          <p class="mp-demo-tui-dim">✦ musepi v0.4.30 — oh-my-pi engine · session <span class="mp-demo-tui-tag">main</span></p>
           <p><span class="mp-demo-tui-you">› </span>refactor FilePane to flex column and add autosave</p>
           <p><span class="mp-demo-tui-ai">● </span>Reading packages/guest-client/src/FilePane.tsx …</p>
           <p><span class="mp-demo-tui-ai">● </span>Patch applied — 3 files changed, tests green <span class="mp-demo-tui-ok">✓</span></p>

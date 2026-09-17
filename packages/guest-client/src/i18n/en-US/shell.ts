@@ -35,7 +35,7 @@ export const shell = {
 	"{name} — click to switch": "{name} — click to switch",
 
 	// ── Accent toggle ─────────────────────────────────────────────────────────
-	"Brand pink": "Brand pink",
+	"Brand gold": "Brand gold",
 	Monochrome: "Monochrome",
 	"Ocean blue": "Ocean blue",
 	"Jade green": "Jade green",
