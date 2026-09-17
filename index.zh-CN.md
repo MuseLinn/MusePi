@@ -319,7 +319,7 @@ mp_cta: true
       <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
   </div>
-  <div class="mp-quick mp-quick-code">
+  <div class="mp-quick-code">
 <pre><span class="mp-cmd">git clone https://github.com/MuseLinn/MusePi.git &amp;&amp; cd MusePi</span>
 <span class="mp-cmd">bun run setup</span>                  <span class="mp-c"># 安装 + 原生依赖 + link</span>
 <span class="mp-cmd">bun run musepi</span>                 <span class="mp-c"># 终端 TUI</span>

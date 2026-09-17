@@ -961,7 +961,9 @@ body {
   margin: 0 0 10px;
   font-size: clamp(30px, 4.5vw, 50px);
   letter-spacing: -0.03em;
-  line-height: 1.08;
+  /* 1.08 clipped gradient-text descenders (g/y/p) at the line box bottom. */
+  line-height: 1.18;
+  padding-bottom: 0.08em;
   background: linear-gradient(180deg, #fff 30%, #c9c9d2 100%);
   -webkit-background-clip: text;
   background-clip: text;
@@ -2258,9 +2260,12 @@ body {
  * in-page instead of bitmap screenshots, so brand/theme changes propagate
  * and the mocks inherit the site's motion language. ── */
 
-/* Welcome mock: app rail + dot-matrix mark + greeting + composer */
+/* Welcome mock: app rail + dot-matrix mark + greeting + composer.
+ * NOTE: no `display` here — `.mp-demo-view > *` owns visibility
+ * (display:none), and `.mp-demo-view > .mp-demo-gui.is-active` restores
+ * flex when the pane activates. A bare `display:flex` on this class would
+ * out-specify the hide rule and leak the pane over every other tab. */
 .mp-demo-gui {
-  display: flex;
   min-height: 430px;
   background:
     radial-gradient(560px 300px at 68% 0%, rgba(217, 164, 65, 0.05), transparent 70%),
