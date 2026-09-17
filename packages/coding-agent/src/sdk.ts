@@ -2285,7 +2285,10 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			// remote sharing of the current session. Absent when no daemon
 			// injects a collab handle — the tool reports "unavailable" at use.
 			customTools.push(collabTool as unknown as CustomTool);
-			if (options.scheduledTasks) customTools.push(scheduleTaskTool as unknown as CustomTool);
+			// Scheduled-task tool: mounted like collab (not settings-gated) so
+			// the roster is stable; without a daemon-injected handle it says so
+			// at use instead of vanishing from the tool list.
+			customTools.push(scheduleTaskTool as unknown as CustomTool);
 
 			// Add web search tools
 			if (options.toolNames?.includes("web_search")) {
