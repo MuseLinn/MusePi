@@ -28,4 +28,26 @@ describe("resolveDaemonSpawnOptions", () => {
 			}),
 		).toEqual({ detached: true });
 	});
+
+	it("detaches a survive-parent daemon from its Windows spawner", () => {
+		// Bun kills non-detached children when the parent exits on Windows, so a
+		// broker that must outlive its spawner cannot share the spawner's console.
+		expect(
+			resolveDaemonSpawnOptions({
+				platform: "win32",
+				hostHasInheritableConsole: true,
+				surviveParent: true,
+			}),
+		).toEqual({ detached: true, windowsHide: true });
+	});
+
+	it("treats survive-parent as a no-op on POSIX", () => {
+		expect(
+			resolveDaemonSpawnOptions({
+				platform: "linux",
+				hostHasInheritableConsole: true,
+				surviveParent: true,
+			}),
+		).toEqual({ detached: true });
+	});
 });

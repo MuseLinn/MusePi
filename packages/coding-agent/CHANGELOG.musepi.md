@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows 上「启动 daemon broker 的那个进程」退出会连带杀死整个 broker，连另一个项目仍在使用的全局浏览器 relay 一起带走：broker 以 `detached: false` 被拉起，而 Bun 在 Windows 上会随父进程退出终止非 detached 子进程，于是「一个项目退出不得拆掉仍被他人持有的机器级单例」这条契约被打破（relay 端口消失，另一个项目的浏览器工具随即失效）。broker 现在显式声明必须比启动它的客户端活得更久；POSIX 行为不变（那里子进程本就会被 init 收养）。#24
+  - EN: On Windows, the process that happened to start the daemon broker killed the whole broker when it exited — taking the machine-global browser relay with it even while another project was still using it. The broker was spawned `detached: false`, and Bun terminates non-detached children when their parent exits, which broke the contract that one project exiting must not tear down a singleton others still hold (the relay port vanished and the other project's browser tooling broke). The broker now declares that it must outlive the client that spawned it; POSIX behaviour is unchanged, since orphans are re-parented to init there. #24
+
 ## [0.4.31] - 2026-09-17
 
 ### Added

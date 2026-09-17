@@ -3,7 +3,6 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getGlobalDaemonRuntimeDir, isEexist, isEisdir, isEnoent, logger, postmortem } from "@musepi/pi-utils";
-import { hostHasInheritableConsole } from "../eval/py/spawn-options";
 import { resolveWorkerSpawnCmd, workerEnvFromParent } from "../subprocess/worker-client";
 import { daemonBrokerEndpoint, daemonRuntimeDir } from "./paths";
 import {
@@ -23,9 +22,12 @@ import { resolveDaemonSpawnOptions } from "./spawn-options";
 const CONNECT_TIMEOUT_MS = 10_000;
 const CONNECT_RETRY_MS = 50;
 const TOKEN_FILE = "broker.token";
+// The broker outlives the client that happened to start it: another client may
+// already hold a lease on it, and on Windows a non-detached child is killed
+// when its parent exits (see `surviveParent`).
 const BROKER_SPAWN_OPTIONS = resolveDaemonSpawnOptions({
 	platform: process.platform,
-	hostHasInheritableConsole: hostHasInheritableConsole(),
+	surviveParent: true,
 });
 
 interface PendingRequest {
