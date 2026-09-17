@@ -22,7 +22,7 @@ export interface DictateOptions {
 	language?: string;
 	/** 设备 id（来自 enumerateMicDevices） */
 	deviceId?: string;
-	/** VAD 静音判停（毫秒）；缺省则用 15s 上限 */
+	/** VAD 静音判停（毫秒）；缺省则读设置 `stt.vadEndMs`，设置也不可用时用 15s 上限 */
 	vadEndMs?: number;
 	/** 打断已播放 TTS：duck(降到 25%) 或 pause */
 	bargeIn?: "duck" | "pause";
@@ -70,6 +70,42 @@ export async function enumerateMicDevices(): Promise<MicDevice[]> {
 // VAD/timer/stop path. The contract now: `done` resolves once recording
 // actually FINISHES (VAD end, max-seconds timer, or an external stop)
 // with the FULL buffer; `stop` lets a cancel button finish it early.
+//
+// #23: the desktop capture ran at the AudioContext's default rate (48 kHz on
+// Windows) and shipped the raw floats, so Parakeet — which the daemon worker
+// feeds at a hardcoded 16 kHz — heard 3× speed and usually returned an empty
+// transcript, and a 15 s buffer blew the daemon's 4 MiB request cap. Capture
+// at 16 kHz like guest-client does, resample when the engine ignores the
+// request, and quantise the payload so it always fits the wire limit.
+
+/** 16 kHz mono — the format `stt.transcribe` expects (guest-client parity). */
+export const TARGET_SAMPLE_RATE = 16_000;
+
+/** Linear-interpolation resample to {@link TARGET_SAMPLE_RATE}; no-op when the
+ *  capture already ran at 16 kHz (guest-client parity). */
+export function resampleToTargetRate(input: Float32Array, fromRate: number): Float32Array {
+	if (fromRate === TARGET_SAMPLE_RATE || input.length === 0) return input;
+	const ratio = fromRate / TARGET_SAMPLE_RATE;
+	const outLen = Math.floor(input.length / ratio);
+	const out = new Float32Array(outLen);
+	for (let i = 0; i < outLen; i++) {
+		const pos = i * ratio;
+		const left = Math.floor(pos);
+		const right = Math.min(left + 1, input.length - 1);
+		const frac = pos - left;
+		out[i] = input[left]! * (1 - frac) + input[right]! * frac;
+	}
+	return out;
+}
+
+/** Wire-size guard for #23 C: `stt.transcribe` takes float JSON, and the daemon
+ *  rejects requests over 4 MiB. A 15 s buffer at 16 kHz is ~240 k samples, which
+ *  fits only if each sample prints short — 5 decimals keeps ~13 bits of
+ *  mantissa (well inside what 16-bit ASR audio carries) at ~8 bytes/sample. */
+export function quantiseForWire(pcm: Float32Array): number[] {
+	return Array.from(pcm, v => Math.round(v * 1e5) / 1e5);
+}
+
 function recordPcm(opts: {
 	maxSeconds?: number;
 	deviceId?: string;
@@ -85,7 +121,16 @@ function recordPcm(opts: {
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: opts.deviceId ? { deviceId: { exact: opts.deviceId } } : true,
 			});
-			const ctx = new AudioContext();
+			// #23 B: ask for 16 kHz explicitly (Chromium honours it); engines that
+			// ignore the request fall back to the default rate and are resampled
+			// on finish, so the PCM that reaches the daemon is always 16 kHz.
+			const Ctor = window.AudioContext;
+			let ctx: AudioContext;
+			try {
+				ctx = new Ctor({ sampleRate: TARGET_SAMPLE_RATE });
+			} catch {
+				ctx = new AudioContext();
+			}
 			const source = ctx.createMediaStreamSource(stream);
 			const node = ctx.createScriptProcessor(4096, 1, 1);
 			const chunks: Float32Array[] = [];
@@ -93,6 +138,13 @@ function recordPcm(opts: {
 			let noiseFloor = 0.02;
 			let silenceMs = 0;
 			let lastVoiceAt = Date.now();
+			// #23 A: the VAD path had never actually run (no caller passed
+			// vadEndMs before), so its first real users would have hit this:
+			// `silenceMs` accumulates from the very first frame, so a user who
+			// takes a second to start talking got cut off before saying a word.
+			// Silence may only END a recording once some speech was heard;
+			// before that, the 15 s cap stays the only stop condition.
+			let hasVoice = false;
 			let finished = false;
 			let resolve!: (value: { pcm: Float32Array }) => void;
 			const finishedPromise = new Promise<{ pcm: Float32Array }>(res => {
@@ -107,7 +159,8 @@ function recordPcm(opts: {
 					out.set(c, off);
 					off += c.length;
 				}
-				return out;
+				// #23 B: whatever rate the engine actually ran at, hand the daemon 16 kHz.
+				return resampleToTargetRate(out, ctx.sampleRate);
 			};
 			const finish = (): void => {
 				if (finished) return;
@@ -115,6 +168,7 @@ function recordPcm(opts: {
 				node.onaudioprocess = null;
 				node.disconnect();
 				source.disconnect();
+				sink.disconnect();
 				stream.getTracks().forEach(t => t.stop());
 				void ctx.close();
 				requestStop = null;
@@ -138,11 +192,12 @@ function recordPcm(opts: {
 					// 短时能量低 → 视为静音；累计超过 vadEndMs 则自动结束
 					if (rms < noiseFloor * 1.15) {
 						silenceMs += (data.length / ctx.sampleRate) * 1000;
-						if (silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) {
+						if (hasVoice && silenceMs >= vadEndMs && Date.now() - lastVoiceAt >= 300) {
 							finish();
 							return;
 						}
 					} else {
+						hasVoice = true;
 						silenceMs = 0;
 						lastVoiceAt = Date.now();
 						// 缓慢抬升噪声底（背景缓慢变吵）
@@ -150,8 +205,17 @@ function recordPcm(opts: {
 					}
 				}
 			};
+			// #23 E: the processor only pulls while something consumes its output,
+			// but `node.connect(ctx.destination)` played the mic straight back out
+			// of the speakers — feedback that raises the noise floor and makes the
+			// VAD's silence detection harder. Route through a zero-gain sink
+			// (guest-client parity): the graph stays alive, nothing is audible.
+			const sink = ctx.createGain();
+			sink.gain.value = 0;
 			source.connect(node);
-			node.connect(ctx.destination);
+			node.connect(sink);
+			sink.connect(ctx.destination);
+			void ctx.resume().catch(() => {});
 			requestStop = finish;
 			setTimeout(finish, (opts.maxSeconds ?? 15) * 1000);
 			return await finishedPromise;
@@ -217,13 +281,31 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	}
 
 	void (async () => {
+		// #23 A: `stt.vadEndMs` was a dead setting — every entry point goes
+		// through startDictation(), which only ever passed `deviceId`, so
+		// recordPcm never saw a positive vadEndMs, the VAD auto-stop never
+		// engaged and dictation always rode the full 15 s cap (the 0.4.30
+		// changelog only held for callers that already passed a value). Resolve
+		// it here — one place, every entry point — unless the caller overrode it.
+		let vadEndMs = opts.vadEndMs;
+		if (vadEndMs === undefined) {
+			try {
+				const v = await rpc.request<Record<string, unknown> | null>("settings.get", {
+					keys: ["stt.vadEndMs"],
+				});
+				const parsed = Number(v?.["stt.vadEndMs"]);
+				if (Number.isFinite(parsed) && parsed > 0) vadEndMs = parsed;
+			} catch {
+				// settings unavailable — keep the 15 s cap behaviour
+			}
+		}
 		// #9: `done` resolves when the recording FINISHES (VAD end / 15s cap /
 		// stop button) — the transcribe call below now receives the full
 		// buffer, and settings' vadEndMs actually gates the auto-stop.
 		const recording = recordPcm({
 			maxSeconds: 15,
 			deviceId: opts.deviceId,
-			vadEndMs: opts.vadEndMs,
+			vadEndMs,
 			isCancelled: () => cancelled,
 			onLevel: level => {
 				if (cancelled) return;
@@ -247,7 +329,7 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		onState?.({ phase: "transcribing" });
 		try {
 			const res = await rpc.request<{ text: string }>("stt.transcribe", {
-				audio: Array.from(recorded.pcm),
+				audio: quantiseForWire(recorded.pcm),
 				...(opts.language ? { language: opts.language } : {}),
 			});
 			if (cancelled) return;
@@ -261,8 +343,14 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	})();
 
 	return () => {
-		cancelled = true;
-		rec?.stop();
+		// #23 D: a second mic press used to set `cancelled` before stopping, so
+		// the whole buffer was discarded and nothing was transcribed — a user
+		// who stopped early lost everything they had said. `stop` already
+		// resolves `done` with the full buffer (the #9 contract), so finish
+		// early and let it transcribe. Only a stop racing ahead of the
+		// recording start has nothing to submit and stays a cancel.
+		if (rec) rec.stop();
+		else cancelled = true;
 	};
 }
 
