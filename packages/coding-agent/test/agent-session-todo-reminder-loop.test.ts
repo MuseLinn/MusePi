@@ -274,4 +274,46 @@ describe("AgentSession todo reminder self-continuation suppression", () => {
 		// 1/3 fires, agent does work, 2/3 fires, agent acks → suppressed, no 3/3.
 		expect(reminderAttempts).toEqual([1, 2]);
 	});
+
+	/**
+	 * oh-my-pi #11879: once the empty-response recovery cap is reached
+	 * (`empty-stop-retry-cap`), the turn is terminal — the built-in completion
+	 * reminders must NOT restart the model. An empty assistant stop is usually
+	 * `stopReason: "stop"` rather than `"error"`, so the `stopReason !== "error"`
+	 * guard alone let a capped turn keep going through `#todo.checkCompletion`,
+	 * and the user saw "it already gave up but is still spinning".
+	 *
+	 * The cap is exceeded on the 4th consecutive empty stop (MAX_RETRIES = 3).
+	 */
+	it("does not fire a todo reminder after the empty-stop retry cap is reached", async () => {
+		// Mirror the recovery loop's own continuation: each retry emits another
+		// empty stop, which is exactly the run-away shape from the issue.
+		const continueSpy = vi.spyOn(session.agent, "continue").mockImplementation(async () => {
+			emitTextOnlyStop("");
+		});
+
+		// 4 empty stops: the first three schedule a retry each, the fourth hits
+		// the cap and turns terminal. `emitTextOnlyStop` drives the retry chain
+		// through the mocked continue().
+		emitTextOnlyStop("");
+		await session.waitForIdle();
+		await session.waitForIdle();
+
+		// With the bug, a capped turn still ran `#todo.checkCompletion` and fired
+		// reminder 1/3, opening another model request. With the fix the turn is
+		// terminal, so no reminder may have been recorded.
+		expect(reminderAttempts).toEqual([]);
+		expect(todoReminderTranscriptEntry()).toBeUndefined();
+		void continueSpy;
+	});
+
+	it("still reminds on an ordinary text-only stop (guard rail for the cap test)", async () => {
+		// Guard rail for the test above: a normal text-only stop DOES fire the
+		// todo reminder, so its absence at the cap is the gate, not dead seeding.
+		vi.spyOn(session.agent, "continue").mockResolvedValue();
+		emitTextOnlyStop();
+		await withTimeout(firstReminderPromise, 1000, "todo_reminder never fired");
+		await session.waitForIdle();
+		expect(reminderAttempts).toEqual([1]);
+	});
 });

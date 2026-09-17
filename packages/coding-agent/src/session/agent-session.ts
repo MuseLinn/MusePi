@@ -2961,7 +2961,15 @@ export class AgentSession {
 				await emitAgentEndNotification({ willContinue: true });
 				return;
 			}
-			if (emptyOutputRecovery === "terminal") {
+			// The empty-response retry budget is spent: this settle is terminal for
+			// the turn (oh-my-pi #11879). Remember it so the built-in completion
+			// reminders below (rewind / plan-mode / todo) do NOT restart the model —
+			// an empty stop is usually `stopReason: "stop"`, not `"error"`, so the
+			// `stopReason !== "error"` guard alone let a cap'd turn keep going and
+			// the user saw "it already gave up but is still spinning".
+			// `session_stop` hooks and an explicit user prompt still resume normally.
+			const emptyStopRetryExhausted = emptyOutputRecovery === "terminal";
+			if (emptyStopRetryExhausted) {
 				// The cap already closed retry state and made provider-empty errors
 				// non-retryable. Continue through terminal maintenance so session_stop
 				// hooks and queued follow-up handling retain their normal contract.
@@ -3109,7 +3117,7 @@ export class AgentSession {
 				await emitAgentEndNotification(compactionResult.continuationScheduled ? { willContinue: true } : undefined);
 				return;
 			}
-			if (msg.stopReason !== "error") {
+			if (msg.stopReason !== "error" && !emptyStopRetryExhausted) {
 				if (this.#enforceRewindBeforeYield()) {
 					await emitAgentEndNotification({ willContinue: true });
 					return;
