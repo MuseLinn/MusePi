@@ -61,7 +61,7 @@
 - **密度**:`--gui-density` 是**无单位系数**(如 `1`/`0.85`),CSS 用 `calc(32px * var(--gui-density, 1))`。
 - **圆角**:`--radius-lg` 等阶梯;卡片统一 `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`。
 - **字体**:UI 默认 serif + 打包的 Maple Mono NF CN(等宽);变量字体 Inter/JetBrains Mono 在 `@fontsource-variable/*`。代码块字号走 `--gui-code-size`。
-- **玻璃**:`gui-vibrancy` IPC + CSS `--gui-glass-overlay` 透明度;窗口透明度开关关=100% overlay 覆盖所有半透明规则。
+- **玻璃**:`gui-vibrancy` IPC + CSS `--gui-glass-overlay` 透明度;窗口透明度开关关=100% overlay 覆盖所有半透明规则。 **液态玻璃(2026-09-17)**:在 vibrancy 窗口之上,高层玻璃面(对话框、shell 侧栏/顶栏、lightbox 主按钮)渲染为液态玻璃——tokens.css 的 `--glass-*` 阶梯(半透明填充、内侧顶部镜面亮边 `--glass-edge-hi` + 底部暗回声、对角 `--glass-sheen` 走未被占用的 ::before、抬升 `--glass-shadow`),入场/菜单/按压用 `--spring-liquid`(过冲弹簧 cubic-bezier(.34,1.56,.64,1))。`.gui-dialog` 是参考实现(72% 半透明面 + blur(3xl) saturate(170%);::before 是 sheen 层——内容 z-index 必须在其上)。强调色换色不影响玻璃阶梯;语义绿(成功态/桌宠)保留绿色。
 
 ## 3. 动效规范(核心标准,2026-08-06 定稿)
 

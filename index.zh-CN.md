@@ -17,7 +17,7 @@ mp_cta: true
       </div>
       <h1 class="mp-hero-title">一个 Agent。<br>处处都是它的主场。</h1>
       <p class="mp-hero-sub">
-        MusePi 把磨砂玻璃桌面驾驶舱、常驻桌宠与移动伴侣接到同一个 daemon
+        MusePi 把液态玻璃桌面驾驶舱、常驻桌宠与移动伴侣接到同一个 daemon
         上——会话、设置与历史记录，从 GUI 到终端到手机一路随行。
       </p>
       <div class="mp-cta-row">
@@ -148,8 +148,8 @@ mp_cta: true
     <aside class="mp-demo-panels">
       <article class="mp-demo-panel is-active" data-demo-panel="gui">
         <h3>桌面客户端</h3>
-        <p>完整驾驶舱——真实的磨砂玻璃窗口材质（Win11 亚克力 / macOS vibrancy），
-           聊天与会话树都是一等公民。</p>
+        <p>完整驾驶舱——在窗口原生材质（Win11 亚克力 / macOS vibrancy）之上叠液态玻璃：
+           镜面描边、液态弹簧动效，聊天与会话树都是一等公民。</p>
         <ul>
           <li>所有 TUI 设置合并进一个可搜索面板</li>
           <li>浮动状态卡让运行中的任务一目了然</li>
@@ -276,7 +276,7 @@ mp_cta: true
     <div class="mp-dl-card">
       <div class="mp-dl-icon mp-dl-icon--desktop" aria-hidden="true"></div>
       <h3>桌面客户端</h3>
-      <p class="mp-dl-sub">Electron GUI · 磨砂玻璃窗口 · 自动更新</p>
+      <p class="mp-dl-sub">Electron GUI · 液态玻璃界面 · 自动更新</p>
       <ul class="mp-dl-list">
         <li><a data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS（Apple Silicon）</a><span class="mp-dl-fmt">.dmg</span></li>
         <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11（x64）</a><span class="mp-dl-fmt">setup.exe</span></li>

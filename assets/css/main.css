@@ -101,6 +101,16 @@ body {
   mask-image: linear-gradient(180deg, #000 42%, transparent 94%);
   will-change: opacity;
 }
+/* ── Dot-matrix sand: flowing dot grid under the glass (z: above blobs,
+ *    below the grid), fading at the top/bottom edges. ── */
+.mp-bg-sand {
+  position: absolute;
+  inset: 0;
+  display: block;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 72%, transparent 96%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 72%, transparent 96%);
+}
+
 .mp-bg-grid {
   position: absolute;
   inset: 0;

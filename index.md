@@ -17,7 +17,7 @@ mp_cta: true
       </div>
       <h1 class="mp-hero-title">One agent.<br>Every surface you work&nbsp;on.</h1>
       <p class="mp-hero-sub">
-        MusePi pairs a frosted-glass desktop cockpit, an always-on pet and a mobile
+        MusePi pairs a liquid-glass desktop cockpit, an always-on pet and a mobile
         companion with one shared daemon — sessions, settings and history follow you
         from GUI to terminal to phone.
       </p>
@@ -149,8 +149,9 @@ mp_cta: true
     <aside class="mp-demo-panels">
       <article class="mp-demo-panel is-active" data-demo-panel="gui">
         <h3>Desktop client</h3>
-        <p>The full cockpit — a real frosted-glass window material (Win11 acrylic /
-           macOS vibrancy) with chat and the session tree as first-class citizens.</p>
+        <p>The full cockpit — liquid-glass surfaces over the real window material
+           (Win11 acrylic / macOS vibrancy): specular rims, fluid spring motion,
+           with chat and the session tree as first-class citizens.</p>
         <ul>
           <li>Every TUI setting merged into one searchable panel</li>
           <li>Floating status cards keep running tasks at a glance</li>
@@ -281,7 +282,7 @@ mp_cta: true
     <div class="mp-dl-card">
       <div class="mp-dl-icon mp-dl-icon--desktop" aria-hidden="true"></div>
       <h3>Desktop client</h3>
-      <p class="mp-dl-sub">Electron GUI · frosted-glass window · auto-update</p>
+      <p class="mp-dl-sub">Electron GUI · liquid-glass surfaces · auto-update</p>
       <ul class="mp-dl-list">
         <li><a data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS (Apple Silicon)</a><span class="mp-dl-fmt">.dmg</span></li>
         <li><a data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11 (x64)</a><span class="mp-dl-fmt">setup.exe</span></li>

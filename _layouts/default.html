@@ -21,6 +21,7 @@
       <i class="mp-blob mp-blob--b"></i>
       <i class="mp-blob mp-blob--c"></i>
     </div>
+    <canvas class="mp-bg-sand"></canvas>
     <div class="mp-bg-grid"></div>
     <div class="mp-bg-noise"></div>
     <div class="mp-cursor-glow"></div>
@@ -302,6 +303,67 @@
       }
       var isZh = document.documentElement.lang === "zh-CN";
       requestAnimationFrame(render);
+      window.addEventListener("resize", resize);
+    })();
+
+    /* ── Dot-matrix sand: a low-density dot grid whose brightness rides a
+     *    travelling wave field — gold crests, faint neutral troughs. The
+     *    DotMatrixMark language, flowing under the glass. ──────────────── */
+    (function () {
+      var canvas = document.querySelector("canvas.mp-bg-sand");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var CELL = 34, BASE = 1.4, CREST = 2.2;
+      var W = 0, H = 0, dpr = 1, last = 0, cols = 0, rows = 0;
+
+      function resize() {
+        var d = Math.min(2, window.devicePixelRatio || 1);
+        W = window.innerWidth; H = window.innerHeight;
+        canvas.width = Math.round(W * d); canvas.height = Math.round(H * d);
+        ctx.setTransform(d, 0, 0, d, 0, 0);
+        cols = Math.ceil(W / CELL) + 1; rows = Math.ceil(H / CELL) + 1;
+      }
+
+      function wave(x, y, t) {
+        var v = Math.sin(x * 0.011 + t) + Math.sin(y * 0.017 - t * 0.7) + Math.sin((x + y) * 0.006 + t * 0.45);
+        return 0.5 + 0.5 * (v / 3);
+      }
+
+      function draw(now) {
+        if (canvas.clientWidth !== W || canvas.width === 0) resize();
+        if (!W) return;
+        ctx.clearRect(0, 0, W, H);
+        var t = now * 0.00045;
+        for (var gy = 0; gy < rows; gy++) {
+          for (var gx = 0; gx < cols; gx++) {
+            var x = gx * CELL + CELL / 2, y = gy * CELL + CELL / 2;
+            var w = wave(x, y, t);
+            var a = 0.028 + w * 0.075;
+            if (w > 0.86) {
+              // crest — a gold grain, slightly larger
+              ctx.fillStyle = "rgba(217,164,65," + ((w - 0.86) * 2.2 + 0.10).toFixed(3) + ")";
+              var r = CREST * (0.8 + w * 0.3);
+              ctx.fillRect(x - r / 2, y - r / 2, r, r);
+            } else {
+              ctx.fillStyle = "rgba(210,200,180," + a.toFixed(3) + ")";
+              ctx.fillRect(x - BASE / 2, y - BASE / 2, BASE, BASE);
+            }
+          }
+        }
+      }
+
+      var lastFrame = 0;
+      function loop(now) {
+        requestAnimationFrame(loop);
+        if (document.hidden) return;
+        if (reduced) { draw(0); return; } // resting frame, fixed t=0
+        if (now - lastFrame < 33) return;
+        lastFrame = now;
+        draw(now);
+      }
+      resize();
+      requestAnimationFrame(loop);
       window.addEventListener("resize", resize);
     })();
 

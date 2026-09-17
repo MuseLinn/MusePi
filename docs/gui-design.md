@@ -63,7 +63,7 @@ The top of TrajectoryView in the right ContextPanel's "Trajectory" tab = a **fix
 - **Density**: `--gui-density` is a **unitless factor** (e.g. `1`/`0.85`); CSS uses `calc(32px * var(--gui-density, 1))`.
 - **Radii**: `--radius-lg` ladder etc.; cards uniformly `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`.
 - **Fonts**: UI defaults to serif plus bundled Maple Mono NF CN (monospace); variable fonts Inter/JetBrains Mono under `@fontsource-variable/*`. Code block font size follows `--gui-code-size`.
-- **Glass**: `gui-vibrancy` IPC + CSS `--gui-glass-overlay` opacity; transparency toggle off = 100% overlay covers all semi-transparent rules.
+- **Glass**: `gui-vibrancy` IPC + CSS `--gui-glass-overlay` opacity; transparency toggle off = 100% overlay covers all semi-transparent rules. **Liquid glass (2026-09-17)**: on top of the vibrancy window, elevated glass surfaces (dialogs, shell rail/header, lightbox primaries) render as liquid glass — tokens.css `--glass-*` ladder (translucent fill, specular inner top rim `--glass-edge-hi` + dim bottom echo, diagonal `--glass-sheen` via unclaimed ::before, lifted `--glass-shadow`) and `--spring-liquid` (overshoot cubic-bezier(.34,1.56,.64,1)) for entrances/menus/presses. `.gui-dialog` is the reference implementation (translucent 72% surface + blur(3xl) saturate(170%); ::before is the sheen layer — keep content z-index above it). Accent-color changes do NOT affect the glass ladder; the semantic greens (success/pet) stay green.
 
 ## 3. Motion standard (core standard, finalized 2026-08-06)
 
