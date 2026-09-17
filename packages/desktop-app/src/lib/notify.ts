@@ -155,18 +155,50 @@ export function renderTemplate(template: string, ctx: NotifyContext): string {
 	});
 }
 
+/** Minimal document surface the focus gate reads (SSR / test friendly). */
+export interface FocusReport {
+	hidden?: boolean;
+	hasFocus?: () => boolean;
+}
+
+/**
+ * Whether the window no longer has the user's attention — i.e. whether a
+ * toast can still surprise them.
+ *
+ * `hidden` covers minimized / another virtual desktop / background tab.
+ * `hasFocus` covers the far more common case the old gate missed (issue #14):
+ * the window is VISIBLE but the user clicked away to a browser or editor.
+ * `visibilityState !== "hidden"` treated that as "the user is right here" and
+ * suppressed the notification, so "enable notifications" produced no desktop
+ * toast for exactly the sessions the user walked away from.
+ */
+export function documentUnfocused(doc: FocusReport | undefined): boolean {
+	if (!doc) return true;
+	if (doc.hidden) return true;
+	return typeof doc.hasFocus !== "function" || !doc.hasFocus();
+}
+
 /** Event gating: master switch + event toggle + focus mode. */
-export function shouldNotify(event: NotifyEvent): boolean {
+export function shouldNotify(event: NotifyEvent, doc?: FocusReport): boolean {
 	if (!notifyEnabled() || !eventEnabled(event)) return false;
-	if (typeof document !== "undefined" && document.visibilityState !== "hidden" && !notifyWhileFocused()) {
-		return false;
-	}
+	// Suppress only when the window really holds focus (issue #14) — a
+	// visible-but-unfocused window still delivers.
+	if (!notifyWhileFocused() && !documentUnfocused(doc ?? ambientDocument())) return false;
 	return true;
 }
 
+function ambientDocument(): FocusReport | undefined {
+	if (typeof document === "undefined") return undefined;
+	return document as unknown as FocusReport;
+}
+
 /** Build the title/body for an event, or null when gated out. */
-export function buildNotification(event: NotifyEvent, ctx: NotifyContext): { title: string; body: string } | null {
-	if (!shouldNotify(event)) return null;
+export function buildNotification(
+	event: NotifyEvent,
+	ctx: NotifyContext,
+	doc?: FocusReport,
+): { title: string; body: string } | null {
+	if (!shouldNotify(event, doc)) return null;
 	const tpl = loadNotifyTemplates()[event];
 	const title = renderTemplate(tpl.title || defaultTemplate(event, "title"), ctx);
 	const body = renderTemplate(tpl.message || defaultTemplate(event, "message"), ctx);
@@ -189,14 +221,19 @@ function electronNotifier(): ElectronNotifier | undefined {
  *  surface on macOS, so notifications route through the main process
  *  (preload → ipcMain). Plain browsers fall back to the Web API.
  *  A matching activity sound plays alongside (Settings → 通知与音效联动):
- *  completion→complete, error→error, question→approval, subtask→tool. */
-export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext): void {
+ *  completion→complete, error→error, question→approval, subtask→tool.
+ *  Pass `{ silent: true }` when the caller already plays the cue — agent_end
+ *  plays the completion sound itself so it survives the notification master
+ *  switch being off, and must not double up with this one. */
+export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext, options?: { silent?: boolean }): void {
 	// Notification–sound coupling: the same activity is heard and seen.
 	// Silent when the user disabled sounds (sfxFor gates on soundEnabled).
-	if (event === "completion") sfxFor("complete");
-	else if (event === "error") sfxFor("error");
-	else if (event === "question") sfxFor("approval");
-	else if (event === "subtask") sfxFor("tool");
+	if (!options?.silent) {
+		if (event === "completion") sfxFor("complete");
+		else if (event === "error") sfxFor("error");
+		else if (event === "question") sfxFor("approval");
+		else if (event === "subtask") sfxFor("tool");
+	}
 	if (typeof window === "undefined") return;
 	const built = buildNotification(event, ctx);
 	if (!built) return;

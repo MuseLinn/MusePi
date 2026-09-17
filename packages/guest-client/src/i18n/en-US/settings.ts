@@ -1607,9 +1607,10 @@ export const settings = {
 	"notifications settings": "Desktop notifications and sounds",
 	"notification delivery": "Notification delivery",
 	"enable notifications": "Enable notifications",
-	"enable notifications description": "Show system notifications when the window is hidden",
+	"enable notifications description": "Show system notifications once focus leaves the window",
 	"notify when focused": "Notify when focused",
-	"notify when focused description": "Also send notifications when the window is visible (default: only when hidden)",
+	"notify when focused description":
+		"Also notify while the window holds focus (default: notify once focus leaves the window)",
 	"send test notification": "Send test notification",
 	"send test notification description": "Immediately send a test notification",
 	"notification sent": "Notification sent",

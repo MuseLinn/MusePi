@@ -19,7 +19,7 @@ import type {
 	SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import { MaterializedView } from "@musepi/sdk";
-import { dispatchNotification, type NotifyContext } from "./notify";
+import { dispatchNotification, documentUnfocused, type FocusReport, type NotifyContext } from "./notify";
 import type { StreamEvent } from "./rpc";
 import { sfxFor } from "./sfx";
 
@@ -126,35 +126,32 @@ export function clearUnviewedCompletions(sessionId: string): void {
 	unviewedCompletedBySession.delete(sessionId);
 }
 
-/** The part of a document this module needs: does it say the user is looking? */
-export interface FocusReport {
-	hidden?: boolean;
-	hasFocus?: () => boolean;
-}
-
+export type { FocusReport } from "./notify";
 /**
- * True when `doc` says the user is not looking at the window.
- *
- * Pure, so every branch is testable without installing a DOM — the caller
- * passes the ambient document. That matters beyond tidiness: a test that stubs
- * a global `document` changes what libraries loaded later in the same process
- * conclude about the environment (emotion captures `isBrowser` at import and
- * then requires a real `querySelectorAll`).
- *
- * It must also never throw. It runs while handling a completion, and a throw
- * there skips the rest of that branch — the subagent's `hasSessionFile` upgrade
- * and the completion notification. "Cannot tell" therefore resolves to
- * unfocused so the completion surfaces instead of being lost.
+ * Focus reporting now lives in `./notify` — the notification focus gate is its
+ * primary consumer (issue #14). Re-exported so existing imports keep working;
+ * the pure `doc` argument is what makes it testable without stubbing a global
+ * `document` (a global stub changes what libraries loaded later in the same
+ * process conclude about the environment — emotion captures `isBrowser` at
+ * import and then requires a real `querySelectorAll`).
  */
-export function documentUnfocused(doc: FocusReport | undefined): boolean {
-	if (!doc) return true;
-	if (doc.hidden) return true;
-	return typeof doc.hasFocus !== "function" || !doc.hasFocus();
+export { documentUnfocused } from "./notify";
+
+/** The ambient document, as {@link documentUnfocused} sees it. */
+function ambientDoc(): FocusReport | undefined {
+	return typeof document === "undefined" ? undefined : (document as unknown as FocusReport);
 }
 
-/** The ambient window state, as {@link documentUnfocused} sees it. */
-function windowUnfocused(): boolean {
-	return documentUnfocused(typeof document === "undefined" ? undefined : (document as FocusReport));
+/** Concatenated assistant text of a message, trimmed for notify/pet payloads. */
+function assistantText(
+	message: { content?: ReadonlyArray<{ type?: string; text?: string }> } | undefined,
+	limit = 140,
+): string {
+	return (message?.content ?? [])
+		.filter(b => b?.type === "text")
+		.map(b => b.text ?? "")
+		.join(" ")
+		.slice(0, limit);
 }
 
 /** Drop a deleted session's recorded totals (GUI session.delete path). */
@@ -553,7 +550,7 @@ export class GuiSessionStore {
 				// Focus check happens here (event arrival), NOT at render:
 				// the daemon drops the lifecycle frame after this branch, so
 				// the completion fact is only observable at this instant.
-				if (windowUnfocused()) unviewedCompletedFor(this.#sessionId).add(p.id);
+				if (documentUnfocused(ambientDoc())) unviewedCompletedFor(this.#sessionId).add(p.id);
 				// Sub-agent finished — notify before the frames are dropped.
 				dispatchNotification(
 					"subtask",
@@ -671,12 +668,12 @@ export class GuiSessionStore {
 					const hasText = blocks.some(b => b.type === "text");
 					const hasTools = blocks.some(b => b.type === "toolCall");
 					if (hasText && !hasTools) {
-						const text = blocks
-							.filter(b => b.type === "text")
-							.map(b => (b as { text?: string }).text ?? "")
-							.join(" ")
-							.slice(0, 140);
-						dispatchNotification("completion", this.#notifyCtx({ lastMessage: text }));
+						// NOTE: no completion NOTIFICATION here any more (issue
+						// #14) — a run that used tools ended with no toast at
+						// all, and a text-only reply double-fired with
+						// agent_end. Completion is dispatched once at
+						// agent_end; the pet activity still trails the reply.
+						const text = assistantText(m);
 						dispatchPetActivity("completed", text, undefined, this.#sessionId);
 					}
 				}
@@ -754,10 +751,25 @@ export class GuiSessionStore {
 				// Run 结束:乐观回显仍未匹配(daemon 没回推同名 user 消息)
 				// → 发送被吞/失败,清掉本地幽灵,不留占位。
 				if (this.#optimisticUser) this.#clearOptimisticUser();
-				const t = ev as { type: "agent_end"; messages?: Array<{ role?: string; stopReason?: string }> };
+				const t = ev as {
+					type: "agent_end";
+					messages?: Array<{
+						role?: string;
+						stopReason?: string;
+						content?: ReadonlyArray<{ type?: string; text?: string }>;
+					}>;
+				};
 				const last = [...(t.messages ?? [])].reverse().find(m => m.role === "assistant");
 				const stopReason = last?.stopReason;
-				if (stopReason !== "aborted" && stopReason !== "error") sfxFor("complete");
+				if (stopReason !== "aborted" && stopReason !== "error") {
+					sfxFor("complete");
+					// One desktop completion toast per finished run (issue
+					// #14). `silent` because the cue just played: the sound
+					// must survive the notification master switch being off.
+					dispatchNotification("completion", this.#notifyCtx({ lastMessage: assistantText(last) }), {
+						silent: true,
+					});
+				}
 				// Freeze this run's total into the GUI-lifetime registry: the
 				// store is recreated on every session switch, so without this
 				// the totals would die with the disposed instance. (The daemon
