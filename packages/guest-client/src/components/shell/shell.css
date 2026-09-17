@@ -82,7 +82,7 @@
 	overflow: auto;
 	padding: 14px 16px;
 	border: 1px solid rgba(255, 255, 255, 0.12);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: rgba(24, 26, 32, 0.96);
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 	z-index: 900;
@@ -330,7 +330,7 @@
 	text-align: center;
 	color: var(--accent-fg);
 	background: var(--accent);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 }
 
 /* Accent-axis toggle glyph: a live swatch of the current accent. */
@@ -562,7 +562,7 @@
 	 * shadow instead of a flat strip (AI Agent Input pattern). */
 	padding: 8px 10px;
 	border: 0.5px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	box-shadow: var(--shadow-overlay);
 	transition:
@@ -587,7 +587,7 @@
 	color: var(--fg);
 	background: transparent;
 	border: none;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	resize: none;
 }
 
@@ -663,7 +663,7 @@
 	gap: 10px;
 	padding: 8px 10px;
 	border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--accent) 10%, transparent);
 	animation: sh-voice-in 240ms var(--spring) both;
 }
@@ -786,7 +786,7 @@
 	padding: 8px 12px;
 	color: var(--accent-fg);
 	background: var(--accent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	font-size: 12.5px;
 	font-weight: 600;
 	transition: filter 150ms var(--spring-snappy);
@@ -843,7 +843,7 @@
 	color: var(--fg-faint);
 	background: var(--bg-raised);
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	text-align: center;
 	animation: sh-voice-in 240ms var(--spring) both;
 }
@@ -889,7 +889,7 @@
 	padding: 8px 10px;
 	background: var(--bg-raised);
 	border: 1px solid var(--accent-bd);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	animation: sh-voice-in 240ms var(--spring) both;
 }
 
@@ -934,7 +934,7 @@
 	min-width: 0;
 	height: 4px;
 	background: color-mix(in oklab, var(--fg) 9%, transparent);
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	overflow: hidden;
 }
 
@@ -942,7 +942,7 @@
 	display: block;
 	height: 100%;
 	background: var(--accent);
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	transition: width 250ms linear;
 }
 
@@ -1302,7 +1302,7 @@
 	-webkit-backdrop-filter: blur(28px) saturate(160%);
 	border: 0.5px solid var(--border-strong);
 	border-top-color: color-mix(in oklab, var(--fg) 16%, transparent);
-	border-radius: 20px;
+	border-radius: var(--radius-2xl);
 	box-shadow:
 		0 32px 64px oklch(0 0 0 / 38%),
 		0 6px 18px oklch(0 0 0 / 22%),
@@ -1362,7 +1362,7 @@
 	height: 22px;
 	flex: none;
 	background: var(--brand-mark-gradient);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 25%, transparent);
 }
 
@@ -1388,7 +1388,7 @@
 	gap: 4px;
 	padding: 6px 6px 6px 10px;
 	border: 0.5px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--bg) 60%, transparent);
 }
 
@@ -1438,7 +1438,7 @@
 	text-align: left;
 	background: color-mix(in oklab, var(--bg-inset) 55%, transparent);
 	border: 0.5px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	/* Entry cascade: --order is set inline per method (0/1/2). */
 	animation: sh-rise 340ms var(--spring) both;
 	animation-delay: calc(var(--order, 0) * 70ms);
@@ -1485,7 +1485,7 @@
 	font-size: 17px;
 	color: var(--fg-muted);
 	background: color-mix(in oklab, var(--bg-raised) 80%, transparent);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--fg) 6%, transparent);
 }
 
@@ -1582,7 +1582,7 @@
 	margin-top: 2px;
 	padding: 12px;
 	background: color-mix(in oklab, var(--bg-inset) 40%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 }
 
 /* Adaptive widths: the 6-digit code keeps a compact fixed track; the host
@@ -1688,7 +1688,7 @@
 	color: var(--err);
 	background: color-mix(in oklab, var(--err) 10%, transparent);
 	border: 0.5px solid color-mix(in oklab, var(--err) 32%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	animation: sh-shake 340ms ease-out;
 }
 
@@ -1699,7 +1699,7 @@
 	color: var(--fg-muted);
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
 	border: 0.5px solid color-mix(in oklab, var(--fg) 16%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 }
 
 @keyframes sh-shake {
@@ -1746,7 +1746,7 @@
 	backdrop-filter: blur(18px) saturate(150%);
 	-webkit-backdrop-filter: blur(18px) saturate(150%);
 	border: 0.5px solid var(--border-strong);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	box-shadow: 0 16px 32px oklch(0 0 0 / 35%), inset 0 1px 0 color-mix(in oklab, var(--fg) 8%, transparent);
 	animation: sh-connect-in 160ms var(--spring) both;
 }
@@ -1769,7 +1769,7 @@
 	align-items: center;
 	gap: 4px;
 	padding: 4px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 .sh-switcher-item:hover {
@@ -1815,7 +1815,7 @@
 	flex: none;
 	font-size: 10px;
 	padding: 2px 6px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 }
@@ -1829,7 +1829,7 @@
 	padding: 10px 14px;
 	margin-top: 8px;
 	min-height: 44px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
 	box-shadow:
@@ -2074,7 +2074,7 @@
 	max-height: calc(100vh - 32px);
 	overflow: hidden auto;
 	border: 1px solid color-mix(in oklab, var(--fg-muted, var(--muted)) 18%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg-muted, var(--muted)) 4%, transparent);
 	padding: 8px;
 }
@@ -2091,7 +2091,7 @@
 	width: 26px;
 	height: 26px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--fg-muted, var(--muted));
 	cursor: pointer;
@@ -2125,7 +2125,7 @@
 	width: 100%;
 	padding: 4px 6px;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	text-align: left;
 	cursor: pointer;
@@ -2152,7 +2152,7 @@
 	font-weight: 600;
 	color: var(--fg-faint, var(--dim));
 	background: color-mix(in oklab, var(--fg-muted, var(--muted)) 10%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	padding: 1px 6px;
 	flex: 0 0 auto;
 }
@@ -2170,7 +2170,7 @@
 	width: 100%;
 	padding: 5px 6px;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	text-align: left;
 	cursor: pointer;
@@ -2289,7 +2289,7 @@
 	flex-direction: column;
 	gap: 8px;
 	padding: 14px 16px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border, oklch(1 0 0 / 9%));
 	background: var(--bg-raised, oklch(1 0 0 / 4%));
 	box-shadow: 0 1px 2px color-mix(in oklab, var(--fg, oklch(0.4 0 0)) 4%, transparent);
@@ -2348,7 +2348,7 @@
 	justify-content: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--border, oklch(1 0 0 / 9%));
 	background: var(--bg-raised, oklch(1 0 0 / 3%));
 	color: var(--fg-muted, var(--muted));
@@ -2365,7 +2365,7 @@
 	width: 100%;
 	min-width: 0;
 	padding: 2px 6px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--accent, oklch(0.674 0.23 341));
 	background: var(--bg, oklch(1 0 0 / 6%));
 	color: inherit;
@@ -2379,7 +2379,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 6px 12px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--accent, oklch(0.674 0.23 341));
 	background: color-mix(in oklab, var(--accent, oklch(0.674 0.23 341)) 12%, transparent);
 	color: var(--accent, oklch(0.674 0.23 341));
@@ -2888,7 +2888,7 @@
 	width: 100%;
 	max-width: 640px;
 	margin: 0 10px calc(10px + var(--safe-bottom, 0px));
-	border-radius: 24px;
+	border-radius: var(--radius-2xl);
 	background: color-mix(in oklab, var(--bg-raised) 78%, transparent);
 	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
 	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
@@ -3223,7 +3223,7 @@
 	left: 0;
 	border-right: none;
 	border-bottom: none;
-	border-radius: 6px 0 0 0;
+	border-radius: var(--radius-md) 0 0 0;
 }
 
 .qr-corner--tr {
@@ -3231,7 +3231,7 @@
 	right: 0;
 	border-left: none;
 	border-bottom: none;
-	border-radius: 0 6px 0 0;
+	border-radius: 0 var(--radius-md) 0 0;
 }
 
 .qr-corner--bl {
@@ -3239,7 +3239,7 @@
 	left: 0;
 	border-right: none;
 	border-top: none;
-	border-radius: 0 0 0 6px;
+	border-radius: 0 0 0 var(--radius-md);
 }
 
 .qr-corner--br {
@@ -3247,7 +3247,7 @@
 	right: 0;
 	border-left: none;
 	border-top: none;
-	border-radius: 0 0 6px 0;
+	border-radius: 0 0 var(--radius-md) 0;
 }
 
 /* Sweeping scan line inside the finder. */
@@ -3315,7 +3315,7 @@
 	width: 40px;
 	height: 40px;
 	border: none;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: oklch(0 0 0 / 45%);
 	backdrop-filter: blur(8px);
 	color: #fff;
@@ -3485,7 +3485,7 @@
 	pointer-events: none;
 	z-index: 0;
 	overflow: hidden;
-	border-radius: 20px 20px 0 0;
+	border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
 	opacity: 0.55;
 	mask-image: linear-gradient(to bottom, #000 45%, transparent);
 	-webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent);
@@ -3705,7 +3705,7 @@
 	width: 100%;
 	padding: 10px 12px;
 	border: 0;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: none;
 	color: var(--fg);
 	font-size: 14px;
@@ -3740,7 +3740,7 @@
 	border: 0;
 	background: none;
 	padding: 7px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: 12px;
 	color: var(--fg-muted);
 	white-space: nowrap;
@@ -3833,7 +3833,7 @@
 	padding: 4px;
 	margin-left: auto;
 	cursor: pointer;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 
 .sh-changes-empty {
@@ -3866,7 +3866,7 @@
 	background: none;
 	text-align: left;
 	padding: 8px 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	color: var(--fg);
 	font-size: 13px;
 	transition: background 150ms var(--spring-snappy);
@@ -3903,7 +3903,7 @@
 .sh-changes-diff {
 	margin: 2px 0 6px;
 	padding: 10px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 5%, transparent);
 	font: 11px / 1.55 var(--font-mono);
 	overflow-x: auto;
@@ -3925,7 +3925,7 @@
 .ss-swipe {
 	position: relative;
 	overflow: hidden;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 }
 
 .ss-swipe-actions {
@@ -3945,7 +3945,7 @@
 	width: 68px;
 	height: 40px;
 	border: 0;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	font-size: 12px;
 	cursor: pointer;
 }
@@ -3974,7 +3974,7 @@
 	height: 36px;
 	padding: 0 10px;
 	border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--bg-raised) 80%, transparent);
 	color: var(--fg);
 	font-size: 14px;
@@ -4032,7 +4032,7 @@
 	width: 44px;
 	height: 44px;
 	object-fit: cover;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 0.5px solid var(--border);
 }
 
@@ -4121,7 +4121,7 @@
 	gap: 8px;
 	padding: 14px;
 	border: 1px solid var(--border);
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 }
 
@@ -4222,7 +4222,7 @@
 	gap: 4px;
 	padding: 3px;
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
 }
 
@@ -4230,7 +4230,7 @@
 	flex: 1;
 	padding: 7px 4px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	font-size: var(--ui-font-size-xs);
 	color: var(--fg-muted);

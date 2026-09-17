@@ -59,7 +59,7 @@
 
 - **三条正交轴**(DOM 层永远是已解析值,无 "system"):`data-theme`(light/dark 已解析)+ `data-accent`(强调色预设)+ `data-ui-theme`(独立浅/深主题预设)。
 - **密度**:`--gui-density` 是**无单位系数**(如 `1`/`0.85`),CSS 用 `calc(32px * var(--gui-density, 1))`。
-- **圆角**:`--radius-lg` 等阶梯;卡片统一 `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`。
+- **圆角——6 步阶梯(2026-09-17)**:`--radius-xs 2` / `sm 4` / `md 6` / `lg 8` / `xl 12` / `2xl 16`(+胶囊 `999px`、圆 `50%`)。同心规则:子圆角 = 父圆角 − 父内边距(16−4→12−4→8−2→6),出现「外圆内方」即同心被破坏。手写 CSS 禁止字面 px 圆角(`scripts/check-radius-tokens.ts` 已进 `check:tools`;生成的 `tailwind.out.css` 豁免)——卡片/面板用 `lg`,对话框/抽屉/浮层用 `xl`,全屏 sheet 用 `2xl`。卡片统一保留 `border: 1px solid var(--border)` + `background: var(--color-surface-raised|sunken)`。
 - **字体**:UI 默认 serif + 打包的 Maple Mono NF CN(等宽);变量字体 Inter/JetBrains Mono 在 `@fontsource-variable/*`。代码块字号走 `--gui-code-size`。
 - **玻璃**:`gui-vibrancy` IPC + CSS `--gui-glass-overlay` 透明度;窗口透明度开关关=100% overlay 覆盖所有半透明规则。 **液态玻璃(2026-09-17)**:在 vibrancy 窗口之上,高层玻璃面(对话框、shell 侧栏/顶栏、lightbox 主按钮)渲染为液态玻璃——tokens.css 的 `--glass-*` 阶梯(半透明填充、内侧顶部镜面亮边 `--glass-edge-hi` + 底部暗回声、对角 `--glass-sheen` 走未被占用的 ::before、抬升 `--glass-shadow`),入场/菜单/按压用 `--spring-liquid`(过冲弹簧 cubic-bezier(.34,1.56,.64,1))。`.gui-dialog` 是参考实现(72% 半透明面 + blur(3xl) saturate(170%);::before 是 sheen 层——内容 z-index 必须在其上)。强调色换色不影响玻璃阶梯;语义绿(成功态/桌宠)保留绿色。
 

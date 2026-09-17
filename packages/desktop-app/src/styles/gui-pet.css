@@ -579,7 +579,7 @@
 }
 .gui-btn--small
 {
-	border-radius:8px;
+	border-radius: var(--radius-lg);
 	height:24px;
 	padding:0 10px;
 	font-size: var(--ui-font-size-xs);
@@ -616,7 +616,7 @@
 	animation:pi-border-spin 1.1s linear infinite;
 	pointer-events:none;
 	border:1px solid #0000;
-	border-radius:14.5px;
+	border-radius: var(--radius-xl);
 	inset:-.5px;
 }
 .gui-composer-ico:before
@@ -671,7 +671,7 @@
 	font:inherit;
 	outline:none;
 	border:1px solid #0000;
-	border-radius:6px;
+	border-radius: var(--radius-md);
 	padding:1px 4px;
 	font-size: var(--ui-font-size-sm);
 	font-weight:500;
@@ -709,7 +709,7 @@
 	display:flex;
 	border:1px solid var(--border);
 	background:var(--color-surface-sunken);
-	border-radius:12px;
+	border-radius: var(--radius-xl);
 	flex-direction:column;
 	align-items: center;
 	gap:6px;
@@ -749,7 +749,7 @@
 	display:flex;
 	background:var(--color-surface-raised);
 	overflow:hidden;
-	border-radius:10px;
+	border-radius: var(--radius-lg);
 	justify-content:center;
 	align-items: flex-end;
 	width:64px;
@@ -780,7 +780,7 @@
 }
 .gui-pet-market__search
 {
-	border-radius:8px;
+	border-radius: var(--radius-lg);
 	flex:1;
 	min-width:0;
 	height:30px;
@@ -822,7 +822,7 @@
 	content:"";
 	position:absolute;
 	background:var(--color-accent);
-	border-radius:2px;
+	border-radius: var(--radius-xs);
 	width:2px;
 	height:60%;
 	transition:transform .16s ease-out;
@@ -839,7 +839,7 @@
 	content:"";
 	position:absolute;
 	background:var(--color-accent);
-	border-radius:1px;
+	border-radius: var(--radius-xs);
 	height:2px;
 	bottom:-4px;
 	left:12px;

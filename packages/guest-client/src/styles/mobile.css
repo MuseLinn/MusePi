@@ -14,7 +14,7 @@
 
 	.sh-connect-card {
 		max-width: 100%;
-		border-radius: 18px;
+		border-radius: var(--radius-2xl);
 	}
 }
 

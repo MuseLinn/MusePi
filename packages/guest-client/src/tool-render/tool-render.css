@@ -11,7 +11,7 @@
 	flex-direction: column;
 	gap: 4px;
 	border: 1px solid var(--tv-border, var(--border, oklch(0.92 0.01 307)));
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	padding: 8px 10px;
 	background: var(--tv-inset, var(--surface, transparent));
 }
@@ -31,7 +31,7 @@
 	--tv-mono: var(--font-mono, ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace);
 
 	border: 1px solid var(--tv-border);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	font-family: var(--tv-mono);
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.5;
@@ -170,7 +170,7 @@
 .tv-badge {
 	display: inline-block;
 	padding: 0 5px;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: var(--tv-raised);
 	font-size: 10px;
 	line-height: 16px;
@@ -293,7 +293,7 @@
 .tv-pre {
 	margin: 0;
 	padding: 7px 9px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: var(--tv-inset);
 	font-family: var(--tv-mono);
 	font-size: 11.5px;
@@ -344,7 +344,7 @@
 .tv-expand:focus-visible {
 	outline: 2px solid var(--tv-ring);
 	outline-offset: 1px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 }
 
 /* ---- command line (bash/ssh) ---- */
@@ -375,7 +375,7 @@
 
 .tv-diff {
 	margin: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: var(--tv-inset);
 	font-size: 11.5px;
 	line-height: 1.5;
@@ -531,7 +531,7 @@
 /* Intra-line change marks (TUI renderDiff parity): changed tokens get a
  * deeper tint than the row so a same-line replacement reads at a glance. */
 .tv-diff-word {
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	padding: 0 1px;
 }
 
@@ -678,7 +678,7 @@
 
 .tv-note {
 	padding: 6px 9px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: var(--tv-raised);
 	font-size: 11.5px;
 	color: var(--tv-muted);
@@ -711,7 +711,7 @@
 .tv-img {
 	max-height: 180px;
 	max-width: 100%;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--tv-border);
 	cursor: zoom-in;
 	background: var(--tv-inset);
@@ -827,7 +827,7 @@
  * the shared widget registry components. */
 .tv-widget {
 	border: 1px solid var(--tv-border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: var(--tv-inset);
 	overflow: hidden;
 }
@@ -969,7 +969,7 @@
 
 .gui-widget-pomodoro-btn {
 	padding: 5px 18px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--tv-border);
 	background: transparent;
 	color: var(--tv-fg);
@@ -1031,7 +1031,7 @@
 	margin-top: 2px;
 	padding: 5px 12px;
 	border: 1px solid rgba(128, 128, 128, 0.3);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: inherit;
 	font-size: var(--ui-font-size-xs);
@@ -1056,7 +1056,7 @@
 	margin: 4px 0 6px;
 	padding: 6px 8px;
 	border: 1px solid var(--tv-border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--tv-inset);
 }
 
@@ -1081,7 +1081,7 @@
 	gap: 2px;
 	height: 4px;
 	margin: 6px 0 7px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	overflow: hidden;
 }
 
@@ -1176,7 +1176,7 @@
 
 .tv-swarm-member {
 	border: 1px solid var(--tv-border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--tv-inset);
 	padding: 6px 8px;
 	min-width: 0;
@@ -1204,7 +1204,7 @@
 	justify-content: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	font-family: var(--font-mono);
 	font-size: 11px;
 	font-weight: 700;
@@ -1215,7 +1215,7 @@
 .tv-swarm-avatar-img {
 	width: 20px;
 	height: 20px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	display: block;
 }
 
@@ -1281,7 +1281,7 @@
 .tv-swarm-bar {
 	height: 4px;
 	margin-top: 3px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--tv-fg) 10%, transparent);
 	overflow: hidden;
 }
@@ -1289,7 +1289,7 @@
 .tv-swarm-bar-fill {
 	display: block;
 	height: 100%;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	transition: width 0.3s ease;
 	/* Default fill: the running phase. It used to carry NO background, so a
 	 * live member's bar painted an invisible block (the only visible phases
@@ -1328,7 +1328,7 @@
 	flex: none;
 	padding: 2px 4px;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--tv-faint);
 	cursor: pointer;
@@ -1373,7 +1373,7 @@
 .tv-vibe-message {
 	margin-bottom: 8px;
 	padding: 10px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--surface, #fff) 60%, transparent);
 	border: 1px solid color-mix(in oklab, var(--border, #000) 30%, transparent);
 	font-size: var(--ui-font-size-sm);

@@ -51,7 +51,7 @@
 	text-align: left;
 	/* Card container: rounded surface so the list scrolls INSIDE the card —
 	 * unread growth never pushes the composer input off-screen. */
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
 	box-shadow:
@@ -80,7 +80,7 @@
 	min-width: 0;
 	padding: 2px 4px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
@@ -135,7 +135,7 @@
 	border: none;
 	background: none;
 	padding: 2px 6px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	cursor: pointer;
 	transition: color 140ms ease, background 140ms ease;
 	flex-shrink: 0;
@@ -192,7 +192,7 @@
 	gap: 8px;
 	width: 100%;
 	padding: 7px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: none;
 	background: transparent;
 	color: var(--color-text);
@@ -303,7 +303,7 @@
 	flex: 1;
 	min-width: 0;
 	padding: 9px 8px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	font-size: 12.5px;
@@ -389,7 +389,7 @@
 }
 .gui-obo-lang-bubble {
 	padding: 5px 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	font-size: 11px;
 	color: var(--fg);
 	background: color-mix(in oklab, var(--accent) 16%, transparent);
@@ -405,7 +405,7 @@
 	height: 12px;
 	width: 40%;
 	margin-top: 10px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 40%, transparent));
 	animation: gui-obo-accent-in 520ms var(--spring) 620ms both;
 }
@@ -434,7 +434,7 @@
 	gap: 8px;
 	width: 100%;
 	padding: 8px 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-text) 4%, transparent);
 	color: var(--color-text-muted);
@@ -591,7 +591,7 @@
 	width: 22px;
 	height: 22px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
@@ -619,7 +619,7 @@
 	flex-wrap: wrap;
 	width: 100%;
 	padding: 8px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-text) 4%, transparent);
 	color: var(--color-text);
@@ -753,7 +753,7 @@
 	align-items: center;
 	padding: 0 4px;
 	height: 16px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-text) 5%, transparent);
 	color: var(--color-text-muted);
@@ -806,7 +806,7 @@
 	align-items: center;
 	gap: 4px;
 	padding: 3px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid transparent;
 	background: transparent;
 	color: var(--color-text-faint);
@@ -847,7 +847,7 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 8px 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-text) 3%, transparent);
 }
@@ -911,7 +911,7 @@
 	gap: 1px;
 	width: 100%;
 	padding: 6px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid transparent;
 	background: transparent;
 	text-align: left;
@@ -961,7 +961,7 @@
 	margin-top: 14px;
 	width: 100%;
 	height: 170px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 6%, transparent), transparent 40%),
@@ -1061,7 +1061,7 @@
 	left: 26%;
 	width: 210px;
 	height: 96px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--color-accent) 60%, transparent);
 	background: color-mix(in oklab, var(--color-surface) 88%, var(--color-surface-raised));
 	box-shadow: 0 6px 20px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 0 0 3px color-mix(in oklab, var(--color-accent) 14%, transparent);
@@ -1094,7 +1094,7 @@
 
 .gui-cgp-finder-side {
 	width: 44px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-text) 7%, transparent);
 }
 
@@ -1106,7 +1106,7 @@
 }
 
 .gui-cgp-finder-files i {
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 }
 
@@ -1181,7 +1181,7 @@
 	display: inline-flex;
 	gap: 4px;
 	padding: 9px 12px;
-	border-radius: 11px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--fg) 10%, transparent);
 }
 
@@ -1257,14 +1257,14 @@
 .gui-obo-provider-dot {
 	width: 14px;
 	height: 14px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--fg) 14%, transparent);
 }
 
 .gui-obo-provider-skel {
 	flex: 1;
 	height: 8px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--fg) 16%, transparent);
 }
 
@@ -1447,7 +1447,7 @@
 	gap: 10px;
 	padding: 14px 16px;
 	border: 1px solid var(--border-strong);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: var(--bg-overlay);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1489,7 +1489,7 @@
 	overflow-y: auto;
 	padding: 8px 10px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 	font-size: var(--ui-font-size-xs);
 	font-family: var(--font-mono);
@@ -1515,7 +1515,7 @@
 .gui-plan-refine textarea {
 	width: 100%;
 	padding: 6px 9px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 	color: var(--color-text);
@@ -1546,7 +1546,7 @@
 	gap: 10px;
 	padding: 14px 16px;
 	border: 1px solid var(--border-strong);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: var(--bg-overlay);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1622,7 +1622,7 @@
 	align-items: center;
 	gap: 5px;
 	padding: 4px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 	color: var(--color-text-muted);
@@ -1656,7 +1656,7 @@
 	flex: 1;
 	min-width: 0;
 	padding: 4px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 	color: var(--color-text);
@@ -1695,7 +1695,7 @@
 	justify-content: center;
 	width: 22px;
 	height: 22px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: 0;
 	background: transparent;
 	color: var(--fg-faint);
@@ -1786,7 +1786,7 @@
 	width: 100%;
 	padding: 2px 0;
 	border: none;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: none;
 	cursor: pointer;
 	color: var(--fg);
@@ -1986,7 +1986,7 @@
 	gap: 1px;
 	padding: 8px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 2.5%, transparent);
 }
 
@@ -2092,7 +2092,7 @@
 	gap: 5px;
 	padding: 8px;
 	border: 1.5px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: none;
 	font: inherit;
 	color: inherit;
@@ -2133,7 +2133,7 @@
 	flex-direction: column;
 	gap: 6px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	padding: 7px;
 	background: color-mix(in oklab, var(--surface) 82%, transparent);
 	backdrop-filter: blur(6px);
@@ -2184,7 +2184,7 @@
 
 .gui-ar-meta-chip {
 	padding: 2px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 	font-size: 11.5px;
 	opacity: 0.85;
@@ -2222,7 +2222,7 @@
 .gui-ar-run {
 	padding: 6px 8px;
 	border: 1px solid color-mix(in oklab, var(--color-border) 45%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	margin-bottom: 6px;
 }
 
@@ -2236,7 +2236,7 @@
 .gui-ar-run-seg {
 	flex-shrink: 0;
 	padding: 0 6px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 	font-size: 11px;
 	font-weight: 600;
@@ -2322,7 +2322,7 @@
 	justify-content: center;
 	width: 24px;
 	height: 24px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--fg);
 	opacity: 0.7;
 }
@@ -2341,7 +2341,7 @@
 .gui-dbg-row {
 	padding: 6px 8px;
 	border: 1px solid color-mix(in oklab, var(--color-border) 45%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 .gui-dbg-row-main {
@@ -2367,7 +2367,7 @@
 
 .gui-dbg-tag {
 	padding: 1px 6px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	font-size: 10px;
 	font-weight: 600;
@@ -2399,7 +2399,7 @@
 .gui-dbg-row-action {
 	margin-top: 6px;
 	padding: 3px 10px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	font-size: 11.5px;
 	font-weight: 600;
@@ -2414,7 +2414,7 @@
 .gui-dbg-pre {
 	margin-top: 6px;
 	padding: 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
 	font-family: ui-monospace, monospace;
 	font-size: 11px;
@@ -2455,14 +2455,14 @@
 	width: 100%;
 	max-height: 240px;
 	object-fit: contain;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
 }
 
 .gui-dbg-error {
 	margin-top: 6px;
 	padding: 6px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, #e5484d 12%, transparent);
 	color: #f87171;
 	font-size: 11.5px;
@@ -2728,7 +2728,7 @@
 	top: 56px;
 	right: 8px;
 	bottom: 8px;
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 }
 
 /* ── Docked subagent detail (gui-agent-dock) ─────────────────────────────
@@ -2786,7 +2786,7 @@
 .gui-btw-card {
 	display: flex;
 	flex-direction: column;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--surface) 92%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -2821,7 +2821,7 @@
 	justify-content: center;
 	width: 22px;
 	height: 22px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-muted);
 	transition: background 120ms ease, color 120ms ease;
 }
@@ -2909,7 +2909,7 @@
 	flex: 1;
 	min-width: 0;
 	height: 28px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--surface);
 	color: var(--color-text);
@@ -2931,7 +2931,7 @@
 .gui-btw-send {
 	height: 28px;
 	padding: 0 12px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: none;
 	background: var(--color-accent);
 	color: var(--color-on-accent, #fff);
@@ -2952,7 +2952,7 @@
 	align-self: flex-start;
 	margin-top: 2px;
 	padding: 4px 9px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 	color: var(--color-accent);
@@ -2977,7 +2977,7 @@
 	gap: 4px;
 	height: 26px;
 	padding: 0 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);

@@ -52,10 +52,19 @@
 	--font-ui: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
 	--font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
 
-	/* radii */
-	--radius-sm: 3px;
+	/* radii — 6-step ladder (design spec 2026-09-17, docs/gui-design.md §1b).
+	 * Concentric rule: childRadius = parentRadius − parentPadding
+	 * (2xl16 −4→ xl12 −4→ lg8 −2→ md6). Literal px radii are banned in
+	 * CSS (scripts/check-radius-tokens.ts); reference these tokens only.
+	 * sm moved 3→4 so the ladder steps evenly; the 29 existing refs shift
+	 * +1px by design. */
+	--radius-xs: 2px;
+	--radius-sm: 4px;
 	--radius: 6px;
+	--radius-md: 6px;
 	--radius-lg: 8px;
+	--radius-xl: 12px;
+	--radius-2xl: 16px;
 
 	/* non-pinned helpers (kept here so no raw colors leak outside this file) */
 	--shadow-overlay: 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%);

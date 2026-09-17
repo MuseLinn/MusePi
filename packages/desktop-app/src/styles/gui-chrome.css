@@ -126,7 +126,7 @@
 	justify-content: center;
 	width: 20px;
 	height: 20px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-danger);
 	opacity: 0.75;
 	cursor: pointer;
@@ -374,7 +374,7 @@
 	transform: translateY(-50%) scaleY(0);
 	width: 2px;
 	height: 60%;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: var(--color-accent);
 	transition: transform 160ms ease-out;
 }
@@ -387,7 +387,7 @@
 	flex: none;
 	width: 8px;
 	height: 8px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: transparent;
 	margin-left: 2px;
 }
@@ -475,7 +475,7 @@
 	background: color-mix(in oklab, var(--color-accent) 13%, transparent) !important;
 	outline: 1px solid color-mix(in oklab, var(--color-accent) 24%, transparent);
 	outline-offset: 2px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 }
 
 /* ── Details pane (right column, 300px) ────────────────────────────── */

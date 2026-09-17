@@ -187,7 +187,7 @@
 	box-sizing: border-box;
 	padding: 8px 12px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	/* Glass-look surface: a translucent tint + top highlight gradient +
 	 * inner hairline fake the frosted sheen. The window is fully
 	 * transparent (per-pixel alpha), so the body behind the card is
@@ -315,7 +315,7 @@
 	gap: 8px;
 	padding: 6px 10px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
 		color-mix(in oklab, var(--pet-panel-bg) 85%, transparent);
@@ -404,7 +404,7 @@
 	height: auto;
 	max-height: calc(100vh - 180px);
 	box-sizing: border-box;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
 	/* Self-drawn glass (same recipe as .pet-bubble): translucent tint +
 	 * top highlight + inner hairline fake the frosted sheen. The window
@@ -471,7 +471,7 @@
 	top: 44px;
 	bottom: 44px;
 	width: 2.5px;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: var(--color-accent);
 	box-shadow: 0 0 10px color-mix(in oklab, var(--color-accent) 70%, transparent);
 	animation: pet-dock-glow 1.6s ease-in-out infinite;
@@ -509,7 +509,7 @@
 	width: 20px;
 	height: 20px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: color-mix(in oklab, var(--color-text) 55%, transparent);
 	font-size: 13px;
@@ -575,7 +575,7 @@
 	width: 20px;
 	height: 20px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: color-mix(in oklab, var(--color-text) 55%, transparent);
 	font-size: 14px;
@@ -680,7 +680,7 @@
 	justify-content: space-between;
 	gap: 8px;
 	padding: 7px 9px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
 	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
 }
@@ -702,7 +702,7 @@
 
 .pet-panel__btn {
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 4px 10px;
 	font-size: 11px;
 	font-weight: 600;
@@ -739,7 +739,7 @@
 	box-sizing: border-box;
 	height: 28px;
 	padding: 0 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
 	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 	color: var(--color-text);
@@ -767,7 +767,7 @@
 	height: 28px;
 	flex-shrink: 0;
 	border: none;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--color-accent);
 	color: #fff;
 	font-size: 13px;
@@ -804,7 +804,7 @@
 	gap: 8px;
 	width: 100%;
 	padding: 4px 6px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	text-align: left;
 	transition: background 120ms ease-out;
 }
@@ -854,7 +854,7 @@
 	width: 20px;
 	height: 20px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text);
 	font-size: 13px;
@@ -896,7 +896,7 @@
 	line-height: 1.55;
 	white-space: pre-wrap;
 	word-break: break-word;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	padding: 6px 9px;
 	max-width: 92%;
 }

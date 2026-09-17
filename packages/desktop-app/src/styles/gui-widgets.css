@@ -71,7 +71,7 @@
 .gui-task-input {
 	background: var(--color-surface-sunken);
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	padding: 7px 10px;
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-text);
@@ -351,7 +351,7 @@
 	color: #0b0d12;
 	font-weight: 600;
 	border: none;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	padding: 6px 12px;
 	cursor: pointer;
 	/* Same hover family as the other accent buttons: the generic
@@ -401,7 +401,7 @@
 	gap: 14px;
 	padding: 12px 14px;
 	border: 1px solid rgba(128, 128, 128, 0.22);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: rgba(128, 128, 128, 0.05);
 }
 .gui-scheduled-item--off {
@@ -533,7 +533,7 @@
 	flex: 1;
 	padding: 5px 0;
 	border: 1px solid rgba(128, 128, 128, 0.3);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: inherit;
 	font-size: var(--ui-font-size-xs);
@@ -573,7 +573,7 @@
 }
 .gui-scheduled-ws-block {
 	border: 1px solid rgba(128, 128, 128, 0.18);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 	background: rgba(128, 128, 128, 0.04);
 }
@@ -631,7 +631,7 @@
 	gap: 14px;
 	padding: 16px 20px;
 	border: 1px solid rgba(128, 128, 128, 0.18);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	overflow-y: auto;
 	overflow-x: hidden;
 }
@@ -835,7 +835,7 @@
 	gap: 4px;
 	background: none;
 	border: 1px dashed rgba(128, 128, 128, 0.4);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 4px 9px;
 	font-size: 12.5px;
 	color: var(--color-accent, #7aa2ff);
@@ -861,7 +861,7 @@
 	gap: 8px;
 	background: none;
 	border: 1px solid rgba(128, 128, 128, 0.2);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 4px 8px;
 	font-size: var(--ui-font-size-xs);
 	color: inherit;
@@ -886,7 +886,7 @@
 	flex-direction: column;
 	gap: 6px;
 	border: 1px solid rgba(128, 128, 128, 0.2);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	padding: 8px;
 	background: rgba(128, 128, 128, 0.03);
 }
@@ -906,7 +906,7 @@
 	opacity: 0.6;
 	cursor: pointer;
 	padding: 3px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	display: inline-flex;
 }
 .gui-calendar-nav:hover {
@@ -1024,7 +1024,7 @@
 	padding: 6px 8px;
 	background: none;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	color: inherit;
 	font: inherit;
 	font-size: var(--ui-font-size-sm);
@@ -1092,7 +1092,7 @@
 	gap: 9px;
 	padding: 8px 10px;
 	border: 1px solid rgba(128, 128, 128, 0.22);
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	cursor: pointer;
 	font-size: var(--ui-font-size-sm);
 }
@@ -1157,7 +1157,7 @@
 	position: relative;
 	width: 100%;
 	height: 100%;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	padding: 14px;
 	overflow: hidden;
 	background:
@@ -1174,7 +1174,7 @@
 	position: relative;
 	width: 100%;
 	height: 100%;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	padding: 14px;
 	overflow: hidden;
 	background: linear-gradient(160deg, #fbfbf9 0%, #f3f3f0 100%);
@@ -1187,7 +1187,7 @@
 	position: relative;
 	width: 100%;
 	height: 100%;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	padding: 14px;
 	overflow: hidden;
 	background:
@@ -1215,7 +1215,7 @@
 	width: 100%;
 	height: 100%;
 	padding: clamp(10px, 1.4vw, 16px);
-	border-radius: 18px;
+	border-radius: var(--radius-2xl);
 	background:
 		radial-gradient(120% 90% at 18% 0%, rgba(145, 212, 255, 0.1), rgba(145, 212, 255, 0) 46%),
 		linear-gradient(158deg, #1c1e23 0%, #141519 40%, #0e0f12 100%);
@@ -1251,7 +1251,7 @@
 	display: flex;
 	flex-direction: column;
 	padding: clamp(10px, 1.4vw, 18px);
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	background:
 		radial-gradient(90% 70% at 50% 34%, rgba(145, 212, 255, 0.1), rgba(145, 212, 255, 0) 60%),
 		radial-gradient(120% 120% at 50% 120%, #16171b 0%, #050506 60%),
@@ -1387,7 +1387,7 @@
 	align-items: center;
 	gap: 5px;
 	padding: 4px 9px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	background: linear-gradient(160deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03));
@@ -1445,7 +1445,7 @@
 	width: 28px;
 	height: 28px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: rgba(255, 255, 255, 0.55);
 	cursor: pointer;
@@ -1526,7 +1526,7 @@
 	justify-content: center;
 	gap: 8px;
 	padding: 11px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	cursor: pointer;
 	font: inherit;
 	font-weight: 600;
@@ -1559,7 +1559,7 @@
 	cursor: pointer;
 	font: inherit;
 	padding: 10px;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 0;
 	color: inherit;
 	background: linear-gradient(160deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015));
@@ -1585,7 +1585,7 @@
 	flex: none;
 	width: 44px;
 	height: 44px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	object-fit: cover;
 	background: linear-gradient(135deg, #2a2c30, #404247);
 	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.6);
@@ -1632,7 +1632,7 @@
 .gui-widget-music-eq i {
 	width: 2.5px;
 	background: #91d4ff;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	animation: gui-music-eq 0.9s ease-in-out infinite;
 }
 .gui-widget-music-eq i:nth-child(2) { animation-delay: 0.2s; }
@@ -1688,7 +1688,7 @@
 	padding: clamp(10px, 1.8vw, 16px);
 	/* Footer hugs the card bottom (kimi parity — no dead band). */
 	padding-bottom: 8px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	overflow: hidden;
 	background:
 		radial-gradient(90% 85% at 6% 0%, rgba(255, 255, 255, 0.07), transparent 54%),
@@ -1745,7 +1745,7 @@
 	width: 14px;
 	height: 8px;
 	background: #007cff;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 }
 .gui-fx-title,
 .gui-stocks-title {
@@ -2156,7 +2156,7 @@
 .gui-widget-video {
 	position: relative;
 	background: #000;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 	box-shadow: inset 0 0 0 1px rgba(145, 212, 255, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5);
 }
@@ -2322,7 +2322,7 @@
 	flex: none;
 	width: 30px;
 	height: 30px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 0;
 	cursor: pointer;
 	background: rgba(255, 255, 255, 0.14);
@@ -2429,7 +2429,7 @@
 	resize: vertical;
 	min-height: 84px;
 	padding: 10px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
 	background: color-mix(in oklab, var(--color-surface) 80%, var(--color-text) 4%);
 	color: var(--color-text);
@@ -2522,7 +2522,7 @@
 	width: min(1000px, calc(100vw - 160px));
 	height: min(620px, calc(100vh - 160px));
 	border: 1px solid var(--border);
-	border-radius: 20px;
+	border-radius: var(--radius-2xl);
 	background: var(--bg-raised);
 	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 	overflow: hidden;
@@ -2551,7 +2551,7 @@
 	justify-content: center;
 	width: 28px;
 	height: 28px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	color: var(--fg-faint);
 	transition: background 120ms ease, color 120ms ease;
 }
@@ -2600,7 +2600,7 @@
 	justify-content: center;
 	width: 60px;
 	height: 60px;
-	border-radius: 18px;
+	border-radius: var(--radius-2xl);
 	background: color-mix(in oklab, var(--accent) 14%, transparent);
 	color: var(--accent);
 }
@@ -2638,7 +2638,7 @@
 }
 .gui-obo-branch {
 	border: 1px solid color-mix(in oklab, var(--fg) 12%, transparent);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
 	overflow: hidden;
 }
@@ -2796,7 +2796,7 @@
 }
 .gui-announcement-body code {
 	padding: 1px 5px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	font-family: var(--font-mono);
 	font-size: var(--ui-font-size-xs);
 	background: color-mix(in oklab, var(--fg) 8%, transparent);
@@ -2815,7 +2815,7 @@
 	z-index: 210;
 	width: min(520px, calc(100vw - 120px));
 	border: 1px solid var(--border);
-	border-radius: 20px;
+	border-radius: var(--radius-2xl);
 	background: var(--bg-raised);
 	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
 	overflow: hidden;
@@ -2904,7 +2904,7 @@
 	justify-content: center;
 	width: 28px;
 	height: 28px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	color: rgb(255 255 255 / 0.75);
 	background: rgb(255 255 255 / 0.08);
 	transition:
@@ -2943,7 +2943,7 @@
 	width: 340px;
 	max-width: calc(100vw - 200px);
 	padding: 18px 22px 12px;
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	color: #17203a;
 	text-align: left;
 	background: linear-gradient(160deg, #fff 0%, #eef3fd 100%);
@@ -2981,7 +2981,7 @@
 	place-items: center;
 	width: 20px;
 	height: 20px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: #101828;
 	font-size: 11px;
 	font-weight: 800;
@@ -3078,7 +3078,7 @@
 	width: 100%;
 	height: 40px;
 	margin-top: 16px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	font-size: 14px;
 	font-weight: 650;
 	background: var(--fg);
@@ -3096,7 +3096,7 @@
 	width: 100%;
 	height: 38px;
 	margin-top: 10px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	font-size: 13px;
 	color: var(--fg-muted);
 	background: color-mix(in oklab, var(--fg) 7%, transparent);
@@ -3132,7 +3132,7 @@
 	align-items: center;
 	justify-content: center;
 	min-height: 296px;
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
 	background:
 		radial-gradient(120% 100% at 85% 0%, color-mix(in oklab, var(--accent) 20%, transparent), transparent 62%),
@@ -3161,7 +3161,7 @@
 	flex-direction: column;
 	width: 280px;
 	height: 190px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
@@ -3215,7 +3215,7 @@
 
 .gui-obo-morph-side-item {
 	height: 16px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 18%, transparent);
 	transition: background 260ms var(--spring);
 }
@@ -3265,7 +3265,7 @@
 	display: flex;
 	width: 280px;
 	height: 190px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
@@ -3282,7 +3282,7 @@
 }
 .gui-obo-sidebar-item {
 	height: 16px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 18%, transparent);
 	animation: gui-obo-item-in 380ms var(--spring) both;
 }
@@ -3311,13 +3311,13 @@
 .gui-obo-main-bar {
 	height: 10px;
 	width: 68%;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--fg) 14%, transparent);
 	animation: gui-obo-item-in 380ms var(--spring) 380ms both;
 }
 .gui-obo-main-lines {
 	flex: 1;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
 	animation: gui-obo-item-in 380ms var(--spring) 640ms both;
 }
@@ -3331,14 +3331,14 @@
 	width: 280px;
 	height: 190px;
 	padding: 16px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
 }
 .gui-obo-bubble {
 	height: 34px;
-	border-radius: 11px;
+	border-radius: var(--radius-xl);
 	animation: gui-obo-bubble-in 360ms var(--spring) both;
 }
 .gui-obo-bubble--user {
@@ -3384,7 +3384,7 @@
 	width: 280px;
 	height: 190px;
 	padding: 16px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
 	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
@@ -3408,7 +3408,7 @@
 .gui-obo-setting-label {
 	width: 58%;
 	height: 12px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--fg) 16%, transparent);
 }
 .gui-obo-toggle {
@@ -3445,7 +3445,7 @@
 }
 .gui-obo-setting-expand {
 	height: 42px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
 	animation: gui-obo-expand-in 520ms var(--spring) 960ms both;
 }
@@ -3569,13 +3569,13 @@
 	display: flex;
 	gap: 4px;
 	padding: 3px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 6%, transparent);
 }
 .gui-obo-tab {
 	flex: 1;
 	padding: 5px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: 12.5px;
 	font-weight: 500;
 	color: var(--fg-muted);
@@ -3602,7 +3602,7 @@
 	flex: none;
 	padding: 3px 8px;
 	border: 1px solid var(--border);
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	color: var(--fg-faint);
 }
@@ -3637,7 +3637,7 @@
 	justify-content: space-between;
 	gap: 8px;
 	padding: 4px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	transition: background 120ms ease;
 }
 .gui-obo-provider-row:hover {
@@ -3678,7 +3678,7 @@
 	flex-direction: column;
 	gap: 8px;
 	padding: 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
 	background: color-mix(in oklab, var(--accent) 6%, transparent);
 }
@@ -3761,7 +3761,7 @@
 	width: 100%;
 	margin-top: 16px;
 	padding: 18px 14px;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
 	background: color-mix(in oklab, var(--color-success) 8%, transparent);
 	text-align: center;
@@ -3792,7 +3792,7 @@
 	flex-direction: column;
 	gap: 8px;
 	padding: 12px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
 	background: color-mix(in oklab, var(--accent) 6%, transparent);
 }
@@ -3820,7 +3820,7 @@
 	font-size: 11.5px;
 	color: var(--accent);
 	background: color-mix(in oklab, var(--accent) 12%, transparent);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 3px 9px;
 }
 .gui-obo-login-copy:hover {
@@ -3886,7 +3886,7 @@
 	width: 100%;
 	margin-top: 16px;
 	padding: 18px 14px;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--color-success) 38%, transparent);
 	background: color-mix(in oklab, var(--color-success) 8%, transparent);
 	text-align: center;
@@ -3925,7 +3925,7 @@
 	justify-content: center;
 	width: 58px;
 	height: 58px;
-	border-radius: 18px;
+	border-radius: var(--radius-2xl);
 }
 .gui-obo-connect-node--app {
 	background: color-mix(in oklab, var(--accent) 82%, transparent);
@@ -4066,7 +4066,7 @@
 	left: 50%;
 	transform: translateX(-50%) translateY(2px);
 	padding: 4px 8px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: var(--color-text);
 	color: var(--color-bg);
 	font-size: 11.5px;
@@ -4092,7 +4092,7 @@
 	margin-top: 6px;
 	padding: 12px 16px;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: var(--color-surface-raised);
 	overflow: hidden;
 	/* Body text mirrors the transcript: --tr-font-size (消息字号), not the
@@ -4137,7 +4137,7 @@
 	height: 1.05em;
 	margin-left: 2px;
 	vertical-align: text-bottom;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	background: var(--color-text, #c9d1d9);
 	animation: tr-caret-blink 1s step-end infinite;
 }
@@ -4306,7 +4306,7 @@
 	align-items: center;
 	gap: 10px;
 	padding: 8px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	text-align: left;
 	background: transparent;
 	border: none;
@@ -4405,7 +4405,7 @@
 	gap: 8px;
 	width: 320px;
 	padding: 14px 16px;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background:
 		linear-gradient(180deg, color-mix(in oklab, var(--accent) 6%, transparent), transparent 120px),
@@ -4526,7 +4526,7 @@
 .gui-update-toast-progress {
 	position: relative;
 	height: 6px;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: var(--bg-mod);
 	overflow: hidden;
 }
@@ -4535,7 +4535,7 @@
 	left: 0;
 	top: 0;
 	height: 100%;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	background: var(--accent);
 	transition: width 200ms linear;
 }

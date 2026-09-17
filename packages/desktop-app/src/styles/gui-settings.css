@@ -12,7 +12,7 @@
 	width: 100%;
 	/* openchamber SettingsSidebarItem: compact rounded row, subtle hover. */
 	padding: 5px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -269,7 +269,7 @@
 	 * motion. */
 	opacity: 0;
 	pointer-events: none;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	overflow: hidden;
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -319,7 +319,7 @@
 .gui-pin {
 	width: 100vw;
 	height: 100vh;
-	border-radius: 18px;
+	border-radius: var(--radius-2xl);
 	overflow: hidden;
 	background: var(--color-surface-raised);
 	/* Desktop-card entrance: resolves from a soft blur (kimi 固定至桌面). */
@@ -396,7 +396,7 @@
 	justify-content: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-secondary);
@@ -465,7 +465,7 @@
 	gap: 8px;
 	width: 100%;
 	padding: 6px 8px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -531,7 +531,7 @@
 	flex-shrink: 0;
 	padding: 2px;
 	border: none;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
@@ -562,7 +562,7 @@
 	width: 100%;
 	margin-bottom: 6px;
 	padding: 7px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px dashed var(--border-strong);
 	background: transparent;
 	color: var(--color-text-muted);
@@ -590,7 +590,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 8px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px dashed var(--border-strong);
 	background: transparent;
 	color: var(--color-text-muted);
@@ -605,7 +605,7 @@
 }
 
 .gui-group {
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	/* No card fill: groups float directly on the sidebar glass like the
 	 * date-grouped sections (a raised card read as a bright patch in
 	 * light mode). Hover feedback lives on the head row. */
@@ -625,7 +625,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	color: var(--color-text-muted);
 	transition: background 120ms ease-out;
 }
@@ -640,7 +640,7 @@
 	color: var(--color-text-faint);
 	cursor: pointer;
 	padding: 2px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 }
 
 .gui-group-act:hover {
@@ -674,7 +674,7 @@
 	width: 22px;
 	height: 22px;
 	border: none;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
@@ -691,7 +691,7 @@
 	gap: 7px;
 	width: 100%;
 	padding: 5px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -726,7 +726,7 @@
 	width: 26px;
 	align-items: center;
 	justify-content: center;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: none;
 	background: transparent;
 	color: var(--color-text-faint);
@@ -747,7 +747,7 @@
 .gui-login-panel {
 	margin-bottom: 16px;
 	padding: 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--color-accent-bd);
 	background: var(--color-surface-raised);
 	display: flex;
@@ -791,7 +791,7 @@
 	height: 44px;
 	padding: 0;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-raised) 80%, transparent);
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
@@ -864,7 +864,7 @@
 	justify-content: center;
 	width: 32px;
 	height: 32px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	color: var(--color-text-muted);
 	transition: background 120ms ease-out, color 120ms ease-out;
 }
@@ -942,7 +942,7 @@
 	width: 100%;
 	padding: 5px 8px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text);
 	font-size: var(--ui-font-size-sm);
@@ -979,7 +979,7 @@
 	gap: 8px;
 	padding: 10px 12px;
 	border: 1px solid color-mix(in oklab, var(--color-warning) 40%, var(--border));
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-warning) 9%, var(--color-surface));
 	font-size: 12px;
 	line-height: 1.55;
@@ -1009,7 +1009,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 .gui-archive-row:hover {
@@ -1023,7 +1023,7 @@
 	width: 24px;
 	height: 24px;
 	border: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
@@ -1278,7 +1278,7 @@
 	width: 100%;
 	padding: 5px 7px;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);
@@ -1323,7 +1323,7 @@
 	flex-direction: column;
 	gap: 4px;
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	padding: 7px 9px;
 	transition:
@@ -1398,7 +1398,7 @@
 	height: 14px;
 	flex-shrink: 0;
 	border: 1px solid var(--color-border);
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: none;
 	padding: 0;
 	color: var(--color-accent);
@@ -1652,7 +1652,7 @@
 	gap: 12px;
 	width: 100%;
 	padding: 10px 12px;
-	border-radius: var(--radius-lg, 12px);
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface-raised) 72%, transparent);
 }
@@ -1724,7 +1724,7 @@
 	position: relative;
 	width: 56px;
 	height: 56px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
@@ -1795,7 +1795,7 @@
 .gui-settings-select {
 	height: 34px;
 	padding: 0 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	color: var(--color-text);
@@ -1819,7 +1819,7 @@
 	width: min(760px, 92vw);
 	height: auto;
 	max-height: 84vh;
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	border: 1px solid var(--border);
 	background: var(--color-surface);
 	box-shadow:
@@ -1887,7 +1887,7 @@
 .gui-collab-qr canvas {
 	width: 200px;
 	height: 200px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: #fff;
 }
@@ -1900,7 +1900,7 @@
 
 .gui-collab-error {
 	padding: 6px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-error) 12%, transparent);
 	color: var(--color-error);
 	font-size: 12.5px;
@@ -1930,7 +1930,7 @@
 	align-items: center;
 	gap: 10px;
 	padding: 10px 12px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 }
@@ -1942,7 +1942,7 @@
 .gui-collab-bot-ico {
 	width: 28px;
 	height: 28px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
@@ -1964,7 +1964,7 @@
 	gap: 8px;
 	margin-top: auto;
 	padding: 8px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: transparent;
 	color: var(--color-text-muted);
@@ -2038,7 +2038,7 @@
 	width: 100%;
 	padding: 8px 10px;
 	border: none;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--color-text);
 	font-family: inherit;
@@ -2066,7 +2066,7 @@
 	height: 26px;
 	flex-shrink: 0;
 	margin-top: 1px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
 	color: var(--color-accent);
 }
@@ -2191,7 +2191,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 4px 6px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-text) 5%, transparent);
 }
 
@@ -2222,7 +2222,7 @@
 	height: 20px;
 	flex: none;
 	padding: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -2254,7 +2254,7 @@
 	flex: none;
 	padding: 0;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: grab;
@@ -2312,7 +2312,7 @@
 	padding: 4px 10px;
 	margin-bottom: 8px;
 	border: 1px solid color-mix(in oklab, var(--color-warning) 45%, var(--border));
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface-sunken);
 	width: fit-content;
 }
@@ -2330,7 +2330,7 @@
 	height: 18px;
 	margin-left: 2px;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
 	color: var(--color-danger);
 	cursor: pointer;
@@ -2404,7 +2404,7 @@
 
 .gui-group-head--dragover {
 	box-shadow: inset 0 0 0 1.5px var(--color-accent-bd);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 /* Segmented option selectors (ZCode appearance settings). Two-option
@@ -2418,7 +2418,7 @@
 	max-width: 260px;
 	gap: 2px;
 	padding: 2px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-text) 7%, transparent);
 }
 
@@ -2426,7 +2426,7 @@
 	flex: 1 1 0;
 	min-width: 0;
 	padding: 4px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -2487,7 +2487,7 @@
 	position: relative;
 	width: 100%;
 	height: 130px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	overflow: hidden;
 	cursor: crosshair;
 	touch-action: none;
@@ -2565,7 +2565,7 @@
 	width: 100%;
 	min-width: 0;
 	padding: 4px 6px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--border);
 	background: var(--bg-inset);
 	color: var(--color-text);
@@ -2638,7 +2638,7 @@
 }
 .gui-cp-btn {
 	padding: 5px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border-strong);
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	color: var(--color-text);
@@ -2673,7 +2673,7 @@
 	height: 28px;
 	padding: 0;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	cursor: pointer;
 }
@@ -2761,7 +2761,7 @@
 	max-height: min(70vh, 560px);
 	display: flex;
 	flex-direction: column;
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	background: var(--color-surface-raised);
 	box-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
@@ -2880,7 +2880,7 @@
 	gap: 10px;
 	padding: 7px 10px;
 	border: none;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--color-text-muted);
 	font-size: 13.5px;
@@ -2917,7 +2917,7 @@
 	gap: 6px;
 	padding: 4px 8px;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-faint);
 	font-size: 12.5px;
@@ -2969,7 +2969,7 @@ body.gui-resizing {
 	width: 28px;
 	height: 28px;
 	padding: 0;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -3025,7 +3025,7 @@ body.gui-resizing {
 	justify-content: center;
 	width: 34px;
 	height: 34px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-text) 6%, transparent);
 	color: var(--color-text-muted);
 	margin-bottom: 2px;
@@ -3052,7 +3052,7 @@ body.gui-resizing {
 	justify-content: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-faint);
@@ -3087,7 +3087,7 @@ body.gui-resizing {
 	align-items: center;
 	height: 26px;
 	padding: 0 10px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -3143,7 +3143,7 @@ body.gui-resizing {
 	max-width: 200px;
 	height: 26px;
 	padding: 0 8px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -3193,7 +3193,7 @@ body.gui-resizing {
 	justify-content: center;
 	width: 18px;
 	height: 18px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	opacity: 0;
 	transition: opacity 120ms ease-out, background 120ms ease-out;
 }
@@ -3246,7 +3246,7 @@ body.gui-resizing {
 	width: 100%;
 	padding: 8px 10px;
 	border: none;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--color-text);
 	font-size: 13px;
@@ -3338,7 +3338,7 @@ body.gui-resizing {
 	justify-content: center;
 	width: 38px;
 	height: 38px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
@@ -3380,7 +3380,7 @@ body.gui-resizing {
 	align-items: center;
 	gap: 6px;
 	padding: 6px 9px;
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	color: var(--fg-muted);
@@ -3413,7 +3413,7 @@ body.gui-resizing {
 	margin: 0 10px 4px;
 	padding: 3px 8px;
 	border: 1px solid var(--border);
-	border-radius: 9px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 3%, transparent);
 	color: var(--fg-faint);
 }
@@ -3499,7 +3499,7 @@ body.gui-resizing {
 	inset: auto 0 -2px 0;
 	height: 2px;
 	background: var(--color-danger);
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	transition: width 100ms linear;
 }
 
@@ -3679,7 +3679,7 @@ body.gui-resizing {
 	justify-content: center;
 	min-width: 44px;
 	padding: 3px 9px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: 1px solid var(--border);
 	border-bottom-width: 2px;
 	background: var(--color-surface-raised);
@@ -3815,7 +3815,7 @@ body.gui-resizing {
 	place-items: center;
 	width: 24px;
 	height: 24px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-faint);
 	transition: background 120ms ease, color 120ms ease;
 }
@@ -3833,7 +3833,7 @@ body.gui-resizing {
 	align-items: center;
 	gap: 4px;
 	padding: 1px 4px 1px 1px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 .gui-memory-workspace-row:hover {
 	background: color-mix(in oklab, var(--color-text) 4%, transparent);
@@ -3853,7 +3853,7 @@ body.gui-resizing {
 	place-items: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 	color: var(--color-accent);
 	font-size: 10px;
@@ -3879,7 +3879,7 @@ body.gui-resizing {
 	place-items: center;
 	width: 26px;
 	height: 26px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-faint);
 	opacity: 0;
 	transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
@@ -3965,7 +3965,7 @@ body.gui-resizing {
 	padding: 0 8px;
 	width: auto;
 	height: 28px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
 }
@@ -3998,7 +3998,7 @@ body.gui-resizing {
 	display: flex;
 	flex-direction: column;
 	border: 1px solid var(--border);
-	border-radius: 16px;
+	border-radius: var(--radius-2xl);
 	background: var(--color-surface-raised);
 	box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
 	overflow: hidden;
@@ -4018,7 +4018,7 @@ body.gui-resizing {
 	margin: 0 14px 10px;
 	padding: 7px 10px;
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-sunken) 55%, transparent);
 }
 
@@ -4052,7 +4052,7 @@ body.gui-resizing {
 	width: 100%;
 	padding: 8px 10px;
 	border: none;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	cursor: pointer;
 }
@@ -4725,7 +4725,7 @@ body.gui-resizing {
 	gap: 12px;
 	padding: 10px 12px;
 	border: 1px solid var(--border);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface) 92%, transparent);
 }
 .gui-stt-card + .gui-stt-card {

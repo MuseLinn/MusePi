@@ -27,7 +27,7 @@
 	gap: 6px;
 	padding: 5px 9px;
 	border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: 11px;
 	line-height: 1.45;
 	color: var(--color-danger);
@@ -191,7 +191,7 @@
 	max-height: 320px;
 	overflow-y: auto;
 	padding: 10px 12px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -212,7 +212,7 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 12px 14px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: var(--color-surface);
 	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
@@ -318,7 +318,7 @@
 	height: 18px;
 	padding: 0;
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
@@ -366,7 +366,7 @@
 .gui-diff-status {
 	margin: 0 0 8px;
 	padding: 6px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--color-surface-sunken);
 	font-size: 11.5px;
@@ -386,7 +386,7 @@
 	font-size: 11.5px;
 	color: var(--color-text);
 	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 
 /* ── Workspace-changes TREE (openchamber ChangesPanel parity) ────────── */
@@ -397,7 +397,7 @@
 	gap: 7px;
 	padding: 3px 6px;
 	border: none;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text);
 	font-family: inherit;
@@ -421,7 +421,7 @@
 	width: 16px;
 	height: 16px;
 	flex-shrink: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	font-size: 10px;
 	font-weight: 700;
 	line-height: 1;
@@ -453,7 +453,7 @@
 	width: 20px;
 	height: 20px;
 	flex-shrink: 0;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-faint);
 	opacity: 0;
 	transition: opacity 110ms ease-out, background 110ms ease-out, color 110ms ease-out;
@@ -489,7 +489,7 @@
 	align-items: center;
 	padding: 0 7px;
 	border: 1px solid var(--border);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
@@ -668,7 +668,7 @@
 	transform: translateY(-50%);
 	width: min(20rem, calc(100vw - 6rem));
 	overflow: hidden;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	pointer-events: auto;
 	z-index: 30;
 	/* Frosted glass (same recipe as the floating menus). */
@@ -721,7 +721,7 @@
 	display: flex;
 	align-items: center;
 	height: 100%;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in oklab, var(--border) 45%, transparent);
 	padding: 0 8px;
 	transition: background 100ms ease-out, border-color 100ms ease-out;
@@ -830,7 +830,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 3px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-faint);
 	cursor: pointer;
 	opacity: 0;
@@ -1203,7 +1203,7 @@
 	margin-top: 8px;
 	padding: 6px 9px;
 	border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: 11px;
 	line-height: 1.45;
 	color: var(--color-danger);
@@ -1494,7 +1494,7 @@
 	flex-direction: column;
 	gap: 2px;
 	padding: 8px 10px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-raised) 70%, transparent);
 }
 .gui-ctx-stat-v {
@@ -1513,7 +1513,7 @@
 	gap: 6px;
 	width: 100%;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: var(--ui-font-size-sm);
 	color: var(--color-text-muted);
 	text-align: left;
@@ -1551,7 +1551,7 @@
 	letter-spacing: 0.04em;
 	color: var(--color-text-faint);
 	border: 1px solid var(--border);
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	padding: 1px 5px;
 	/* 与事件行 tag 同宽(62px),使 turn 摘要列与事件内容列对齐。 */
 	min-width: 62px;
@@ -1590,7 +1590,7 @@
 	font-size: 9px;
 	font-weight: 700;
 	letter-spacing: 0.06em;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	padding: 1px 5px;
 	min-width: 62px;
 	justify-content: center;
@@ -1673,7 +1673,7 @@
 	padding: 5px 2px;
 	text-align: left;
 	color: var(--color-text);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 .traj-turn-head:hover {
 	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
@@ -1707,7 +1707,7 @@
 	margin-top: 6px;
 	margin-left: 2px;
 	flex-shrink: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	opacity: 0;
 	transition: opacity 140ms var(--gui-ease-out, ease), background 140ms var(--gui-ease-out, ease);
@@ -1728,7 +1728,7 @@
 /* ── 轨迹选中/聚焦态(2026-08-21:Overview 时间轴 + 选择检视) ────── */
 .traj-event--selected {
 	outline: 1px solid color-mix(in oklab, var(--color-accent) 45%, transparent);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
 }
 .traj-event--dim {
@@ -1773,7 +1773,7 @@
 	position: relative;
 	height: 54px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface-sunken, color-mix(in oklab, var(--color-text-faint) 5%, transparent));
 	cursor: crosshair;
 	touch-action: none;
@@ -1839,7 +1839,7 @@
 	position: absolute;
 	top: 4px;
 	height: 46px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 	transition: background 140ms var(--gui-ease-out, ease);
 	min-width: 3px;
@@ -1885,7 +1885,7 @@
 	z-index: 5;
 	background: var(--color-surface-raised, var(--color-bg));
 	border: 1px solid var(--border);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 4px 8px;
 	box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
 	white-space: nowrap;
@@ -1911,7 +1911,7 @@
 	max-width: 100%;
 	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 3px 6px;
 	font-size: 10.5px;
 	color: var(--color-text);
@@ -1929,7 +1929,7 @@
 	justify-content: center;
 	width: 16px;
 	height: 16px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	background: transparent;
 	flex-shrink: 0;
@@ -1950,7 +1950,7 @@
 	align-items: center;
 	gap: 2px;
 	border: 1px solid var(--border);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	padding: 1px;
 	background: color-mix(in oklab, var(--color-text-faint) 5%, transparent);
 }
@@ -1959,7 +1959,7 @@
 	align-items: center;
 	gap: 4px;
 	padding: 3px 8px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	font-size: 10.5px;
 	color: var(--color-text-muted);
 	background: transparent;
@@ -1991,7 +1991,7 @@
 	padding: 4px 6px;
 	text-align: left;
 	color: var(--color-text);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 .traj-trow-main:hover {
 	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
@@ -2037,7 +2037,7 @@
 	min-width: 15px;
 	height: 15px;
 	padding: 0 4px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	font-size: 9.5px;
 	line-height: 1;
 	color: var(--color-text);
@@ -2066,7 +2066,7 @@
 	justify-content: center;
 	width: 18px;
 	height: 18px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	background: transparent;
 	flex-shrink: 0;
@@ -2086,7 +2086,7 @@
 	align-items: center;
 	gap: 2px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	padding: 2px;
 	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
 	backdrop-filter: blur(8px);
@@ -2097,7 +2097,7 @@
 	align-items: center;
 	gap: 4px;
 	padding: 3px 9px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	font-size: 11px;
 	color: var(--color-text-muted);
 	background: transparent;
@@ -2185,7 +2185,7 @@
 .stc-node:hover .traj-trow-actions {
 	opacity: 1;
 	background: var(--color-surface-raised, var(--color-bg));
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 .stc-node-head {
 	display: flex;
@@ -2310,7 +2310,7 @@
 	min-width: 15px;
 	height: 15px;
 	padding: 0 4px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	font-size: 9.5px;
 	line-height: 1;
 	color: var(--color-text);
@@ -2323,7 +2323,7 @@
 	justify-content: center;
 	width: 18px;
 	height: 18px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	background: transparent;
 	flex-shrink: 0;
@@ -2348,7 +2348,7 @@
 	width: 24px;
 	height: 24px;
 	border: 1px solid var(--border);
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-muted);
 	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
 	backdrop-filter: blur(8px);
@@ -2418,7 +2418,7 @@
 	height: 22px;
 	margin-left: auto;
 	border: none;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	background: transparent;
 	color: var(--color-text-muted);
 }
@@ -2448,7 +2448,7 @@
 	height: 28px;
 	padding: 0 8px;
 	border: 1px solid var(--border);
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
 	backdrop-filter: blur(8px);
 }
@@ -2484,7 +2484,7 @@
 	justify-content: center;
 	width: 18px;
 	height: 18px;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 }
 .stc-search-nav-btn:hover {
@@ -2570,7 +2570,7 @@
 	padding: 0 5px;
 	font-size: 9px;
 	font-weight: 600;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
 	margin-left: 4px;
@@ -2649,7 +2649,7 @@
 	width: 18px;
 	height: 18px;
 	flex-shrink: 0;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	color: var(--color-text-muted);
 	background: transparent;
 }
@@ -2746,7 +2746,7 @@
 	align-self: flex-start;
 	max-width: 100%;
 	padding: 3px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	font-size: 10.5px;
 	color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
@@ -2785,7 +2785,7 @@
 	display: inline-block;
 	max-width: 220px;
 	padding: 2px 7px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	font-size: 11px;
 	color: var(--color-text-muted);
 	border: 1px solid transparent;
@@ -2883,7 +2883,7 @@
 	align-items: center;
 	gap: 6px;
 	padding: 4px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	font-size: 11px;
 	color: var(--color-text-muted);
 	border: 1px solid transparent;

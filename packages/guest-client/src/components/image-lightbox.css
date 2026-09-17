@@ -57,7 +57,7 @@
 	max-height: calc(100vh - 120px);
 	object-fit: contain;
 	transform-origin: center center;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	box-shadow: 0 24px 64px oklch(0 0 0 / 50%);
 }
 
@@ -194,7 +194,7 @@
 .tr-img-lb-tool {
 	padding: 5px 12px;
 	border: 1px solid rgba(255, 255, 255, 0.25);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: rgba(24, 24, 28, 0.85);
 	backdrop-filter: blur(10px);
 	color: #fff;
@@ -268,7 +268,7 @@
 	width: 220px;
 	padding: 6px 10px;
 	border: 1px solid rgba(255, 255, 255, 0.3);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: rgba(24, 24, 28, 0.92);
 	color: #fff;
 	font-size: 12.5px;

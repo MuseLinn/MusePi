@@ -117,7 +117,7 @@
 	align-self: auto;
 	max-width: min(70%, 620px);
 	padding: 9px 14px;
-	border-radius: 16px 16px 4px 16px;
+	border-radius: var(--radius-2xl) var(--radius-2xl) var(--radius-sm) var(--radius-2xl);
 	background: color-mix(in oklab, var(--accent) 13%, var(--bg-raised));
 	border: 1px solid color-mix(in oklab, var(--accent) 16%, transparent);
 	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -195,7 +195,7 @@
 	max-width: 100%;
 	padding: 8px 10px;
 	border: 0.5px solid color-mix(in oklab, var(--fg) 14%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
 }
 
@@ -246,7 +246,7 @@
 	max-width: 100%;
 	padding: 8px 10px;
 	border: 0.5px solid color-mix(in oklab, var(--error, #f85149) 40%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--error, #f85149) 10%, transparent);
 	font-family: var(--font-mono);
 	font-size: 12px;
@@ -284,7 +284,7 @@
 	flex-direction: column;
 	max-width: 100%;
 	border: 0.5px solid color-mix(in oklab, var(--fg) 14%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
 }
 
@@ -345,7 +345,7 @@
 	flex: none;
 	width: 3px;
 	align-self: stretch;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--fg) 30%, transparent);
 }
 
@@ -955,7 +955,7 @@
 	margin: 8px 0;
 	overflow: auto;
 	overflow: overlay;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--bg);
 	padding: 6px;
 	/* P3 zoom: scale animates on the wrapper; the container scrolls when
@@ -979,7 +979,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px dashed var(--border);
 	background: var(--bg-inset);
 	color: var(--fg-muted);
@@ -1011,7 +1011,7 @@
 .tr-mermaid-ascii {
 	margin: 8px 0;
 	padding: 8px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--bg-inset);
 	color: var(--fg);
 	font-family: var(--font-mono);
@@ -1112,7 +1112,7 @@
 	overflow: overlay;
 	max-height: 82vh;
 	background: oklch(1 0 0 / 0.04);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, #fff 12%, transparent);
 	padding: 16px;
 }
@@ -1154,7 +1154,7 @@
 	/* aicss data-table style: card container + hairline row/column
 	 * separators instead of a full grid. */
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	overflow: hidden;
 	background: var(--color-surface-raised);
 }
@@ -1240,7 +1240,7 @@
 
 .tr-table-menu button {
 	border: 0;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	padding: 3px 8px;
 	background: transparent;
 	color: var(--fg-muted);
@@ -1262,7 +1262,7 @@
 	padding: 8px 12px;
 	border: 1px solid var(--border);
 	border-left-width: 3px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--bg-inset);
 }
 
@@ -1678,7 +1678,7 @@
 	bottom: 0;
 	left: 6px;
 	width: 3px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 }
 
 .tr-card--diff .tv-diff-row--add {
@@ -1763,7 +1763,7 @@ a.tr-tool-search-title:hover {
 
 .tr-card--image .tv-img {
 	max-height: 260px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border-strong, var(--border, oklch(1 0 0 / 9%)));
 	box-shadow:
 		0 1px 2px oklch(0 0 0 / 12%),
@@ -1795,7 +1795,7 @@ a.tr-tool-search-title:hover {
 	padding: 28px 20px;
 	text-align: center;
 	overflow: hidden;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border-strong, var(--border, oklch(1 0 0 / 9%)));
 	background:
 		linear-gradient(oklch(0 0 0 / 0.04), oklch(0 0 0 / 0.04)),
@@ -1861,7 +1861,7 @@ a.tr-tool-search-title:hover {
 	gap: 6px;
 	padding: 14px 16px;
 	overflow: hidden;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border-strong, var(--border, oklch(1 0 0 / 9%)));
 }
 
@@ -1915,7 +1915,7 @@ a.tr-tool-search-title:hover {
 .tr-search-ph-line {
 	width: 72%;
 	height: 10px;
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--fg-muted) 16%, transparent);
 	animation: tr-img-shimmer 1.7s linear infinite;
 }
@@ -2117,7 +2117,7 @@ a.tr-tool-search-title:hover {
 	margin: 8px 0 4px;
 	padding: 10px 12px;
 	border: 1px solid var(--tr-border, rgba(128, 128, 128, 0.25));
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--tr-surface, rgba(128, 128, 128, 0.08));
 	color: inherit;
 	text-align: left;
@@ -2168,7 +2168,7 @@ a.tr-tool-search-title:hover {
 	height: 1.05em;
 	margin-left: 2px;
 	vertical-align: text-bottom;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	background: var(--color-text, #c9d1d9);
 	animation: tr-caret-blink 1s step-end infinite;
 }
@@ -2350,7 +2350,7 @@ a.tr-tool-search-title:hover {
 	min-width: 0;
 	padding: 5px 8px 6px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--bg-overlay) 45%, transparent);
 }
 
@@ -2369,7 +2369,7 @@ a.tr-tool-search-title:hover {
 	min-width: 26px;
 	height: 20px;
 	padding: 0 5px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	font-size: 10px;
 	font-weight: 600;
 	letter-spacing: 0.02em;
@@ -2412,7 +2412,7 @@ a.tr-tool-search-title:hover {
 	font-weight: 500;
 	color: var(--color-text-muted);
 	padding: 2px 6px;
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	border: 1px solid transparent;
 	transition: background 120ms ease-out, color 120ms ease-out;
 }
@@ -2466,7 +2466,7 @@ a.tr-tool-search-title:hover {
 .tr-ttsr {
 	margin: 6px 0;
 	border: 1px solid color-mix(in oklab, var(--color-warning, #d9a13b) 45%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-warning, #d9a13b) 8%, transparent);
 	overflow: hidden;
 }
@@ -2608,7 +2608,7 @@ a.tr-tool-search-title:hover {
 	justify-content: center;
 	width: 22px;
 	height: 22px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	color: var(--color-text-muted);
 	border: 1px solid transparent;
 	transition: background 120ms ease-out, color 120ms ease-out;
@@ -2636,7 +2636,7 @@ a.tr-tool-search-title:hover {
 	display: flex;
 	flex-direction: column;
 	border: 1px solid color-mix(in srgb, var(--color-text) 16%, transparent);
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface-raised);
 	box-shadow: 0 12px 28px rgb(0 0 0 / 24%);
 }
@@ -2646,7 +2646,7 @@ a.tr-tool-search-title:hover {
 	align-items: center;
 	gap: 8px;
 	padding: 6px 8px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	color: var(--color-text);
 	font-size: 12px;
 	text-align: left;
@@ -2785,7 +2785,7 @@ a.tr-tool-search-title:hover {
 
 .tr-bash {
 	border: 0.5px solid color-mix(in oklab, var(--fg) 14%, transparent);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--fg) 4%, transparent);
 	overflow: hidden;
 	font-family: var(--font-mono);
@@ -2902,7 +2902,7 @@ a.tr-tool-search-title:hover {
 	margin: 6px 0;
 	padding: 12px 14px;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--fg) 2.5%, transparent);
 	font-family: var(--font-ui);
 }
@@ -3078,7 +3078,7 @@ a.tr-tool-search-title:hover {
 }
 .tr-flash-highlight {
 	animation: tr-flash-highlight 1.3s ease-out;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 /* ── Completed-round fold header (openchamber 活动 header parity) ───────
@@ -3123,7 +3123,7 @@ a.tr-tool-search-title:hover {
 	margin: 6px 0 2px;
 	padding: 5px 10px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 12%, transparent));
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	white-space: nowrap;
 	overflow: hidden;
 	background: color-mix(in oklab, var(--color-surface-raised, var(--bg-overlay, #222)) 80%, transparent);
@@ -3146,7 +3146,7 @@ a.tr-tool-search-title:hover {
 	width: 18px;
 	height: 18px;
 	border: 1px solid var(--border, color-mix(in oklab, var(--fg) 14%, transparent));
-	border-radius: 5px;
+	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--color-text, var(--fg)) 6%, transparent);
 }
 .tr-round-fold-icon svg {
@@ -3210,7 +3210,7 @@ a.tr-tool-search-title:hover {
 	width: 22px;
 	height: 22px;
 	margin: -3px -4px -3px 0;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	color: var(--text-faint, var(--fg-faint));
 	cursor: pointer;
 	transition: background 140ms ease, color 140ms ease;

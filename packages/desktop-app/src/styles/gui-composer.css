@@ -75,7 +75,7 @@
 	resize: none;
 	padding: 5px 8px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: var(--color-surface);
 	color: var(--color-text);
 	font-family: inherit;
@@ -109,7 +109,7 @@
 	gap: 6px;
 	padding: 8px 10px 8px;
 	border: 0.5px solid transparent;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	/* Frosted glass: translucent enough that the brand watermark blurs
 	 * through the card (visible frosted effect over the π backdrop). */
 	background: color-mix(in oklab, var(--color-surface-raised) 42%, transparent);
@@ -129,7 +129,7 @@
 	content: "";
 	position: absolute;
 	inset: -0.5px;
-	border-radius: 14.5px;
+	border-radius: var(--radius-xl);
 	border: 1px solid transparent;
 	background: conic-gradient(
 			from var(--pi-angle),
@@ -259,7 +259,7 @@
 	width: 100%;
 	padding: 7px 9px;
 	border: 0;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
@@ -353,7 +353,7 @@
 	min-width: 180px;
 	padding: 10px 12px;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface) 92%, var(--color-bg));
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
@@ -390,7 +390,7 @@
 	margin-top: 8px;
 	padding: 5px 8px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-text) 4%, transparent);
 	color: var(--color-text);
 	font-size: var(--ui-font-size-xs);
@@ -440,7 +440,7 @@
 	margin: 0 12px 6px;
 	padding: 6px 10px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.45;
 	background: color-mix(in oklab, var(--color-surface-2) 70%, transparent);
@@ -487,7 +487,7 @@
 	margin: 0 12px 6px;
 	padding: 7px 10px 8px;
 	border: 1px solid var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-2) 70%, transparent);
 	animation: gui-composer-note-in 180ms var(--spring) both;
 }
@@ -593,7 +593,7 @@
 	margin: 0 12px 6px;
 	padding: 5px 10px;
 	border: 1px dashed var(--border);
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	font-size: var(--ui-font-size-xs);
 	line-height: 1.4;
 	background: color-mix(in oklab, var(--color-surface-2) 55%, transparent);
@@ -845,7 +845,7 @@
 	z-index: 10000;
 	max-width: 340px;
 	padding: 4px 9px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: 1px solid color-mix(in oklab, var(--color-text-faint) 22%, transparent);
 	background: color-mix(in oklab, var(--color-bg) 88%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1189,7 +1189,7 @@
 	gap: 8px;
 	width: 100%;
 	padding: 6px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -1252,7 +1252,7 @@
 	flex: 1;
 	justify-content: center;
 	padding: 4px 8px;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -1300,7 +1300,7 @@
 	position: relative;
 	z-index: 5;
 	margin: 0 8px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1318,7 +1318,7 @@
 	justify-content: center;
 	width: 28px;
 	height: 28px;
-	border-radius: 7px;
+	border-radius: var(--radius-md);
 	border: none;
 	background: transparent;
 	color: var(--color-text-muted);
@@ -1417,7 +1417,7 @@
 	position: relative;
 	width: min(600px, 90vw);
 	height: min(420px, 80vh);
-	border-radius: 20px;
+	border-radius: var(--radius-2xl);
 	border: 1px solid var(--glass-border, var(--border));
 	/* Liquid glass: translucent surface over the dimmed backdrop, saturated
 	 * backdrop blur, specular rim + sheen (tokens.css --glass-*). */
@@ -1459,7 +1459,7 @@
 	height: auto;
 	max-width: 380px;
 	padding: 22px 24px;
-	border-radius: 14px;
+	border-radius: var(--radius-xl);
 	box-shadow:
 		0 0 0 1px rgba(0, 0, 0, 0.25),
 		0 4px 12px rgba(0, 0, 0, 0.25),
@@ -1502,7 +1502,7 @@
 	position: relative;
 	max-height: 50vh;
 	overflow: auto;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--color-surface) 55%, var(--color-bg));
 	border: 1px solid var(--border);
 	flex-shrink: 1;
@@ -1521,7 +1521,7 @@
 
 .gui-saveimg-card--border {
 	border-color: var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 }
 
 .gui-saveimg-card-title {
@@ -1549,7 +1549,7 @@
 	gap: 10px 14px;
 	padding: 10px 12px;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: var(--color-surface-sunken, color-mix(in oklab, var(--color-bg) 55%, var(--color-surface)));
 	flex-shrink: 0;
 }
@@ -1602,7 +1602,7 @@
 	gap: 6px;
 	flex: 1;
 	padding: 18px 12px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	border: 1px solid var(--border);
 	background: var(--color-surface-raised);
 	color: var(--color-text);
@@ -1632,7 +1632,7 @@
 
 .gui-field-input {
 	padding: 7px 10px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--color-bg);
 	color: var(--color-text);
@@ -1711,7 +1711,7 @@
 .gui-mode-toggle-popover {
 	min-width: 230px;
 	padding: 6px;
-	border-radius: 12px;
+	border-radius: var(--radius-xl);
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -1728,7 +1728,7 @@
 	justify-content: space-between;
 	gap: 10px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-lg);
 }
 
 .gui-mode-toggle-row:hover {

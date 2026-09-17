@@ -16,7 +16,7 @@
 	aspect-ratio: 4 / 3;
 	max-height: 240px;
 	overflow: hidden;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	border: 1px solid var(--border);
 	background: var(--bg-inset);
 	box-shadow: 1px 3px 8px oklch(0 0 0 / 28%);
