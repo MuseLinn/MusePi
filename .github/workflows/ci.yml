@@ -212,6 +212,11 @@ jobs:
    native_addons_x64:
       name: Build native addons (x64 gnu)
       runs-on: ubuntu-22.04
+      # Main pushes no longer cancel an in-flight run, so a wedged addon build
+      # would hold the whole CI-refs/heads/main concurrency group for the 6h
+      # default and starve every later push. The slowest observed build is arm64
+      # at 22-27 min; 60 min is >2x that and still bounds the damage.
+      timeout-minutes: 60
       steps:
          - uses: actions/checkout@v4
 
@@ -307,6 +312,11 @@ jobs:
    native_addons_arm:
       name: Build native addons (arm64)
       runs-on: ubuntu-22.04
+      # Main pushes no longer cancel an in-flight run, so a wedged addon build
+      # would hold the whole CI-refs/heads/main concurrency group for the 6h
+      # default and starve every later push. The slowest observed build is arm64
+      # at 22-27 min; 60 min is >2x that and still bounds the damage.
+      timeout-minutes: 60
       steps:
          - uses: actions/checkout@v4
          - id: cache
@@ -343,6 +353,11 @@ jobs:
    native_addons_musl:
       name: Build native addons (musl-x64)
       runs-on: ubuntu-22.04
+      # Main pushes no longer cancel an in-flight run, so a wedged addon build
+      # would hold the whole CI-refs/heads/main concurrency group for the 6h
+      # default and starve every later push. The slowest observed build is arm64
+      # at 22-27 min; 60 min is >2x that and still bounds the damage.
+      timeout-minutes: 60
       steps:
          - uses: actions/checkout@v4
          - id: cache
@@ -383,6 +398,11 @@ jobs:
    native_addons_win:
       name: Build native addons (win32)
       runs-on: ubuntu-22.04
+      # Main pushes no longer cancel an in-flight run, so a wedged addon build
+      # would hold the whole CI-refs/heads/main concurrency group for the 6h
+      # default and starve every later push. The slowest observed build is arm64
+      # at 22-27 min; 60 min is >2x that and still bounds the damage.
+      timeout-minutes: 60
       steps:
          - uses: actions/checkout@v4
          # bazel-natives runs `bun scripts/bazel-natives.ts`; GitHub-hosted
