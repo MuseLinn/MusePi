@@ -1536,22 +1536,29 @@ body {
   line-height: 1.6;
 }
 
-/* Context panels beside the preview */
+/* Context panels beside the preview: stacked in one grid cell so the
+ * container heights to the TALLEST panel — absolute stacking pinned the
+ * container to a fixed min-height and long text overflowed the rounded
+ * card. Hidden panels keep their slot via visibility (not display) so the
+ * container still measures them. */
 .mp-demo-panels {
-  position: relative;
-  min-height: 280px;
+  display: grid;
+  align-items: start;
 }
 .mp-demo-panel {
-  display: none;
-  position: absolute;
-  inset: 0;
+  grid-area: 1 / 1;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
   padding: 24px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: linear-gradient(165deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
 }
 .mp-demo-panel.is-active {
-  display: block;
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 .mp-demo-panel h3 {
   margin: 0 0 10px;
@@ -1747,12 +1754,6 @@ body {
   }
   .mp-demo-stage {
     grid-template-columns: 1fr;
-  }
-  .mp-demo-panels {
-    min-height: 0;
-  }
-  .mp-demo-panel {
-    position: static;
   }
   .mp-bento {
     grid-template-columns: 1fr 1fr;

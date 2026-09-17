@@ -230,12 +230,16 @@
         if (disposed) return;
         requestAnimationFrame(render);
         if (document.hidden) return;
-        if (!reduced) {
-          if (!visible || now - lastFrame < 33) return; // 30fps — same tick as the terminal
-          lastFrame = now;
-        }
+        // Size check FIRST: the pane starts display:none (rect 0), so the
+        // canvas only becomes measurable after its tab is activated. Any
+        // `!visible` early-return above this line would skip resize forever
+        // and leave the pane black.
         if (canvas.clientWidth !== W || canvas.clientHeight !== H || canvas.width === 0) resize();
         if (!visible) return;
+        if (!reduced) {
+          if (now - lastFrame < 33) return; // 30fps — same tick as the terminal
+          lastFrame = now;
+        }
         drawFrame(reduced ? RESTING_NOW : now, 0);
       }
       function drawFrame(now, _unused) {
