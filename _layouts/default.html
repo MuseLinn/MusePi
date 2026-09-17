@@ -309,8 +309,10 @@
       window.addEventListener("resize", resize);
     })();
 
-    /* ── Ambient particles: drifting glow motes (deepseek-harness style) —
-     *    slow wander + sinusoidal sway, breathing alpha, a few gold. ──── */
+    /* ── Wave particles: ocean-swell field — brightness comes from WHERE a
+     *    particle is in the travelling wave (a broad front sweeping across
+     *    the page), never from per-particle random breathing, so nothing
+     *    flickers. Crests glow gold and float a few px higher. ─────────── */
     (function () {
       var canvas = document.querySelector("canvas.mp-bg-sand");
       if (!canvas) return;
@@ -320,20 +322,15 @@
 
       function seed() {
         parts = [];
-        var n = Math.max(48, Math.min(120, Math.round((W * H) / 22000)));
+        var n = Math.max(70, Math.min(150, Math.round((W * H) / 16000)));
         for (var i = 0; i < n; i++) {
-          var gold = Math.random() < 0.34;
           parts.push({
-            x: Math.random() * W,
-            y: Math.random() * H,
-            vx: (Math.random() - 0.5) * 0.12,
-            vy: (Math.random() - 0.5) * 0.09,
-            r: 0.8 + Math.random() * 1.6,
-            ph: Math.random() * Math.PI * 2,
-            sway: 0.2 + Math.random() * 0.5,
-            speed: 0.00018 + Math.random() * 0.00035,
-            gold: gold,
-            a: gold ? 0.28 + Math.random() * 0.3 : 0.10 + Math.random() * 0.16,
+            bx: Math.random() * W,
+            by: Math.random() * H,
+            vx: 0.05 + Math.random() * 0.08, // slow rightward drift, like current
+            r: 0.9 + Math.random() * 1.1,
+            amp: 4 + Math.random() * 5,      // swell float amplitude (px)
+            ph: Math.random() * Math.PI * 2, // only offsets the swell float
           });
         }
       }
@@ -346,26 +343,39 @@
         seed();
       }
 
+      // Travelling swell: a broad front moving left->right (wavelength ~900px,
+      // period ~14s), modulated by a slower vertical cross-wave. Pure function
+      // of (position, time) — spatially smooth, temporally smooth, no flicker.
+      function swell(x, y, t) {
+        var v =
+          Math.sin(x * 0.007 - t * 0.45) * 0.62 +
+          Math.sin(y * 0.005 - t * 0.16) * 0.24 +
+          Math.sin((x + y) * 0.0028 - t * 0.26) * 0.14;
+        return 0.5 + 0.5 * v;
+      }
+
       function draw(now) {
         if (canvas.clientWidth !== W || canvas.width === 0) resize();
         if (!W) return;
         ctx.clearRect(0, 0, W, H);
+        var t = now * 0.001;
         for (var i = 0; i < parts.length; i++) {
           var p = parts[i];
-          p.x += p.vx + Math.sin(now * p.speed * 7 + p.ph) * p.sway * 0.06;
-          p.y += p.vy + Math.cos(now * p.speed * 5 + p.ph * 1.7) * p.sway * 0.05;
-          // wrap around the edges
-          if (p.x < -8) p.x = W + 8; else if (p.x > W + 8) p.x = -8;
-          if (p.y < -8) p.y = H + 8; else if (p.y > H + 8) p.y = -8;
-          var breathe = 0.55 + 0.45 * Math.sin(now * p.speed * 2.2 + p.ph);
-          var a = p.a * breathe;
-          if (p.gold) {
-            ctx.fillStyle = "rgba(217,164,65," + a.toFixed(3) + ")";
+          p.bx += p.vx;
+          if (p.bx > W + 10) p.bx = -10;
+          var v = swell(p.bx, p.by, t);
+          var lift = v * v * p.amp; // crests float higher (quadratic = sharp crest)
+          var x = p.bx;
+          var y = p.by - lift;
+          var a = 0.05 + v * v * 0.30;
+          var r = p.r * (0.85 + v * 0.5);
+          if (v > 0.68) {
+            ctx.fillStyle = "rgba(217,164,65," + (a * 1.25).toFixed(3) + ")";
           } else {
-            ctx.fillStyle = "rgba(214,208,196," + a.toFixed(3) + ")";
+            ctx.fillStyle = "rgba(206,200,188," + a.toFixed(3) + ")";
           }
           ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.arc(x, y, r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -374,7 +384,7 @@
       function loop(now) {
         requestAnimationFrame(loop);
         if (document.hidden) return;
-        if (reduced) { draw(60000); return; } // one resting arrangement
+        if (reduced) { draw(30000); return; } // one resting arrangement
         if (now - lastFrame < 33) return;
         lastFrame = now;
         draw(now);
