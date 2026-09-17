@@ -5,6 +5,17 @@
 // the signal), so this test re-implements the small subset of GitHub
 // expression semantics the block uses and asserts the resolved group / cancel
 // flag for every event shape we care about.
+//
+// Second policy, added with the starvation fix: a regular main push must NOT
+// cancel an in-flight run either. A main run is what validates main, and the
+// old "only PRs and non-release main pushes cancel" rule combined with every
+// test bucket queuing behind the four-platform addon aggregate meant a run was
+// routinely killed during the ~25 min arm64 leg — before a single test bucket
+// started. Main then shipped untested while the required check stayed green
+// (the test buckets are not required checks). PRs still cancel: a superseded
+// PR revision is dead weight, and the group is per-ref. Superseded PENDING main
+// runs are still dropped by GitHub itself, so the newest commit is what gets
+// validated; only a run that has already started is protected.
 
 import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
@@ -293,10 +304,14 @@ describe("ci.yml concurrency", () => {
 		expect(GhaEval.template(cancelTemplate, ctx)).toBe("false");
 	});
 
-	it("regular main push: branch-wide group, cancel-in-progress enabled", () => {
+	it("regular main push: branch-wide group, cancellation DISABLED so the test fan-out survives", () => {
 		const ctx = baseCtx({ event: { head_commit: { message: "fix(ux): theme tweak" } } });
 		expect(GhaEval.template(groupTemplate, ctx)).toBe("CI-refs/heads/main");
-		expect(GhaEval.template(cancelTemplate, ctx)).toBe("true");
+		// Killing this run mid-flight is how main shipped untested: the test
+		// buckets queue behind the arm64 addon build, so a cancel during that
+		// leg reaches zero tests. A newer push still supersedes this one while
+		// it is PENDING (GitHub drops the older pending run in the group).
+		expect(GhaEval.template(cancelTemplate, ctx)).toBe("false");
 	});
 
 	it("pull_request (no head_commit): branch-wide group, cancel enabled", () => {
@@ -313,12 +328,13 @@ describe("ci.yml concurrency", () => {
 
 	it("benign commit subject that merely contains the release prefix is not a release", () => {
 		// startsWith is anchored, so `revert: chore: bump version to 15.12.6` (a
-		// follow-up commit) keeps the cancel-on-newer-push behavior — it has no
-		// tag to publish.
+		// follow-up commit) takes the plain main-push branch — no tag to publish,
+		// so it stays out of the per-sha release group. Cancellation is off
+		// there too, for the same reason as any other main push.
 		const ctx = baseCtx({
 			event: { head_commit: { message: `revert: ${RELEASE_SUBJECT}` } },
 		});
 		expect(GhaEval.template(groupTemplate, ctx)).toBe("CI-refs/heads/main");
-		expect(GhaEval.template(cancelTemplate, ctx)).toBe("true");
+		expect(GhaEval.template(cancelTemplate, ctx)).toBe("false");
 	});
 });
