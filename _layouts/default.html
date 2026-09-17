@@ -219,7 +219,11 @@
         if (rect.width < 4 || rect.height < 4) { visible = false; return; }
         visible = true;
         var dpr = Math.min(2, window.devicePixelRatio || 1);
-        W = rect.width; H = rect.height;
+        // Store the INTEGER client size, not rect.width (a fraction): the
+        // per-frame guard compares against clientWidth, and a fractional W
+        // never equals it — resize (buffer reallocation + clear) then fired
+        // every single frame, which was the violent flicker.
+        W = canvas.clientWidth; H = canvas.clientHeight;
         canvas.width = Math.round(W * dpr);
         canvas.height = Math.round(H * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

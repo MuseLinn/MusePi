@@ -2593,6 +2593,9 @@ body {
   .mp-demo-gui {
     min-height: 340px;
   }
+  .mp-demo-panel {
+    padding: 16px;
+  }
   .mp-demo-app-rail {
     display: none;
   }
