@@ -245,11 +245,13 @@
       }
       function drawFrame(now, _unused) {
         var cols = Math.ceil(W / cw), rows = Math.ceil(H / ch);
-        var frame = Math.floor(now / 33);
-        var progress = (now % (SPLASH_MS * 2)) / SPLASH_MS; // splash plays, rests, repeats
-        var phase = (Math.min(1, progress) * 1.8) % 1.8;
-        var shinePos = (Math.min(1, progress) * 2.5) % 1;
-        var shineStrength = Math.max(0, 1 - Math.min(1, progress) * 0.35);
+        // Continuous-time phase — the old `now % 5200` snap-backed the whole
+        // frame every 5.2s, which read as flicker. The modulo of a continuous
+        // ramp is still continuous, so these never jump.
+        var t = now * 0.001;
+        var phase = (t * 0.32) % 1.8;
+        var shinePos = (t * 0.42) % 1;
+        var shineStrength = 0.75;
         var cx = Math.floor(cols / 2);
         var logoRow0 = Math.max(2, Math.floor(rows * 0.14));
         var waterTop = logoRow0 + LARGE.length;
@@ -259,10 +261,11 @@
         ctx.font = "13px 'JetBrains Mono', ui-monospace, monospace";
         ctx.textBaseline = "middle";
 
-        // starfield above the water
+        // starfield above the water — slow twinkle (~1s steps, was 264ms)
+        var sframe = Math.floor(now / 1056);
         for (var ry = 0; ry < waterTop - 1; ry++) {
           for (var rx = 0; rx < cols; rx++) {
-            var star = starGlyph(rx, ry, frame >> 3);
+            var star = starGlyph(rx, ry, sframe >> 2);
             if (star) {
               ctx.fillStyle = star[1] ? "rgba(217,164,65,0.9)" : "rgba(160,160,166,0.5)";
               ctx.fillText(star[0], rx * cw + 1, ry * ch + ch / 2 + 2);
@@ -270,7 +273,7 @@
           }
         }
         // rippling water sharing the screen-wide gradient
-        var surfaceTime = frame * 0.13;
+        var surfaceTime = now * 0.0042;
         for (var wy = waterTop; wy < rows; wy++) {
           for (var wx = 0; wx < cols; wx++) {
             var amp = waterAmp(wx, wy, cx, waterTop, waterH, cols, surfaceTime) + (jitter(wx, wy) - 0.5) * 0.06;
@@ -306,50 +309,64 @@
       window.addEventListener("resize", resize);
     })();
 
-    /* ── Dot-matrix sand: a low-density dot grid whose brightness rides a
-     *    travelling wave field — gold crests, faint neutral troughs. The
-     *    DotMatrixMark language, flowing under the glass. ──────────────── */
+    /* ── Ambient particles: drifting glow motes (deepseek-harness style) —
+     *    slow wander + sinusoidal sway, breathing alpha, a few gold. ──── */
     (function () {
       var canvas = document.querySelector("canvas.mp-bg-sand");
       if (!canvas) return;
       var ctx = canvas.getContext("2d");
       if (!ctx) return;
-      var CELL = 34, BASE = 1.4, CREST = 2.2;
-      var W = 0, H = 0, dpr = 1, last = 0, cols = 0, rows = 0;
+      var W = 0, H = 0, parts = [];
+
+      function seed() {
+        parts = [];
+        var n = Math.max(48, Math.min(120, Math.round((W * H) / 22000)));
+        for (var i = 0; i < n; i++) {
+          var gold = Math.random() < 0.34;
+          parts.push({
+            x: Math.random() * W,
+            y: Math.random() * H,
+            vx: (Math.random() - 0.5) * 0.12,
+            vy: (Math.random() - 0.5) * 0.09,
+            r: 0.8 + Math.random() * 1.6,
+            ph: Math.random() * Math.PI * 2,
+            sway: 0.2 + Math.random() * 0.5,
+            speed: 0.00018 + Math.random() * 0.00035,
+            gold: gold,
+            a: gold ? 0.28 + Math.random() * 0.3 : 0.10 + Math.random() * 0.16,
+          });
+        }
+      }
 
       function resize() {
         var d = Math.min(2, window.devicePixelRatio || 1);
         W = window.innerWidth; H = window.innerHeight;
         canvas.width = Math.round(W * d); canvas.height = Math.round(H * d);
         ctx.setTransform(d, 0, 0, d, 0, 0);
-        cols = Math.ceil(W / CELL) + 1; rows = Math.ceil(H / CELL) + 1;
-      }
-
-      function wave(x, y, t) {
-        var v = Math.sin(x * 0.011 + t) + Math.sin(y * 0.017 - t * 0.7) + Math.sin((x + y) * 0.006 + t * 0.45);
-        return 0.5 + 0.5 * (v / 3);
+        seed();
       }
 
       function draw(now) {
         if (canvas.clientWidth !== W || canvas.width === 0) resize();
         if (!W) return;
         ctx.clearRect(0, 0, W, H);
-        var t = now * 0.00045;
-        for (var gy = 0; gy < rows; gy++) {
-          for (var gx = 0; gx < cols; gx++) {
-            var x = gx * CELL + CELL / 2, y = gy * CELL + CELL / 2;
-            var w = wave(x, y, t);
-            var a = 0.028 + w * 0.075;
-            if (w > 0.86) {
-              // crest — a gold grain, slightly larger
-              ctx.fillStyle = "rgba(217,164,65," + ((w - 0.86) * 2.2 + 0.10).toFixed(3) + ")";
-              var r = CREST * (0.8 + w * 0.3);
-              ctx.fillRect(x - r / 2, y - r / 2, r, r);
-            } else {
-              ctx.fillStyle = "rgba(210,200,180," + a.toFixed(3) + ")";
-              ctx.fillRect(x - BASE / 2, y - BASE / 2, BASE, BASE);
-            }
+        for (var i = 0; i < parts.length; i++) {
+          var p = parts[i];
+          p.x += p.vx + Math.sin(now * p.speed * 7 + p.ph) * p.sway * 0.06;
+          p.y += p.vy + Math.cos(now * p.speed * 5 + p.ph * 1.7) * p.sway * 0.05;
+          // wrap around the edges
+          if (p.x < -8) p.x = W + 8; else if (p.x > W + 8) p.x = -8;
+          if (p.y < -8) p.y = H + 8; else if (p.y > H + 8) p.y = -8;
+          var breathe = 0.55 + 0.45 * Math.sin(now * p.speed * 2.2 + p.ph);
+          var a = p.a * breathe;
+          if (p.gold) {
+            ctx.fillStyle = "rgba(217,164,65," + a.toFixed(3) + ")";
+          } else {
+            ctx.fillStyle = "rgba(214,208,196," + a.toFixed(3) + ")";
           }
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
 
@@ -357,7 +374,7 @@
       function loop(now) {
         requestAnimationFrame(loop);
         if (document.hidden) return;
-        if (reduced) { draw(0); return; } // resting frame, fixed t=0
+        if (reduced) { draw(60000); return; } // one resting arrangement
         if (now - lastFrame < 33) return;
         lastFrame = now;
         draw(now);
