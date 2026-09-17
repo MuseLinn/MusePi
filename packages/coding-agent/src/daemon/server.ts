@@ -632,6 +632,66 @@ const PAIR_PORT = 8301;
 const MAX_LIVE_SESSIONS = 8;
 
 /**
+ * Whether a live session is doing work the user never asked to stop.
+ * Idle disposal must never reap one of these (issue #16): the LRU cap already
+ * skipped streaming/compacting sessions, but the 30-minute idle timeout and the
+ * per-session idleTimer did not — so a Goal-mode session left running in the
+ * background was disposed mid-tool (`session_exit reason=dispose`,
+ * pendingToolCalls=1) and came back as "previous process exited … will not
+ * continue automatically". Switching GUI sessions must not cancel background
+ * work; only genuinely idle runtimes are reclaimable.
+ */
+export function isLiveSessionBusy(live: {
+	agentSession?: { isStreaming?: boolean; isCompacting?: boolean } | null;
+	activeToolCalls?: { size: number };
+}): boolean {
+	if (live.agentSession?.isStreaming === true) return true;
+	if (live.agentSession?.isCompacting === true) return true;
+	if ((live.activeToolCalls?.size ?? 0) > 0) return true;
+	return false;
+}
+
+/** Minimal live-session shape the idle-dispose policy reads. */
+export interface IdleCandidate {
+	agentSession?: { isStreaming?: boolean; isCompacting?: boolean } | null;
+	activeToolCalls?: { size: number };
+	lastActivity: number;
+}
+
+/**
+ * Which live sessions the idle scanner should close, in close order.
+ * Pure (clock passed in) so the policy is testable without waiting 30
+ * minutes: a busy session is never a candidate for either the timeout or
+ * the LRU cap — only genuinely idle runtimes are reclaimable.
+ */
+export function idleDisposePlan(
+	sessions: Iterable<readonly [string, IdleCandidate]>,
+	now: number,
+	idleTimeoutMs: number = IDLE_TIMEOUT_MS,
+	maxLive: number = MAX_LIVE_SESSIONS,
+): string[] {
+	const entries = [...sessions];
+	// 1. Idle timeout — skipped entirely for working sessions (issue #16).
+	const timedOut: string[] = [];
+	const survivors: (readonly [string, IdleCandidate])[] = [];
+	for (const entry of entries) {
+		if (!isLiveSessionBusy(entry[1]) && now - entry[1].lastActivity > idleTimeoutMs) timedOut.push(entry[0]);
+		else survivors.push(entry);
+	}
+	// 2. LRU cap over what is left: oldest idle first, never a working one.
+	if (survivors.length > maxLive) {
+		const excess = survivors.length - maxLive;
+		const oldest = survivors
+			.filter(([, live]) => !isLiveSessionBusy(live))
+			.sort((a, b) => a[1].lastActivity - b[1].lastActivity)
+			.slice(0, excess)
+			.map(([id]) => id);
+		timedOut.push(...oldest);
+	}
+	return timedOut;
+}
+
+/**
  * Tail-window the initial snapshot: the GUI opens a
  * session showing the LATEST messages and pages older history up as the
  * user scrolls (session.history) — the full transcript is never shipped
@@ -1685,7 +1745,7 @@ export class DaemonSessionHost {
 					break;
 			}
 		};
-		live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);
+		live.idleTimer = setTimeout(() => this.#onIdleTimeout(sessionId), IDLE_TIMEOUT_MS);
 		live.idleTimer.unref?.();
 		// Subagent progress/lifecycle (task tool) rides the GUI stream. The
 		// EventBus channels are per-daemon shared: session-scoped emitters
@@ -1752,6 +1812,18 @@ export class DaemonSessionHost {
 			// journal, the live stream and the SDK contract share one format.
 			if (!isWireAgentEvent(event)) return;
 			trackActiveToolCall(event);
+			// Real agent work refreshes the idle-dispose clock (issue #16): a
+			// 20-minute bash run or an autonomous Goal round is activity even
+			// though the user never sent another message.
+			if (
+				event.type === "agent_start" ||
+				event.type === "turn_start" ||
+				event.type === "agent_end" ||
+				event.type === "tool_execution_start" ||
+				event.type === "tool_execution_end"
+			) {
+				this.#noteActivity(sessionId);
+			}
 			// New activity cancels the idle recap (TUI parity: a fresh turn,
 			// user message or compaction supersedes it). Passive frames —
 			// streaming updates, tool progress, notices, retries — do NOT,
@@ -2044,11 +2116,44 @@ export class DaemonSessionHost {
 		if (!live) return;
 		live.lastActivity = Date.now();
 		this.#cancelIdleRecap(live);
-		if (live.idleTimer) {
-			clearTimeout(live.idleTimer);
-			live.idleTimer = setTimeout(() => this.close(sessionId), IDLE_TIMEOUT_MS);
+		this.#rearmIdleTimer(sessionId, live);
+	}
+
+	/**
+	 * Activity ping from the agent loop (issue #16). Keeps the idle-dispose
+	 * clock honest — a long tool call or an autonomous Goal round is real
+	 * activity — WITHOUT cancelling a pending idle recap, which `touch` does.
+	 */
+	#noteActivity(sessionId: string): void {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return;
+		live.lastActivity = Date.now();
+		this.#rearmIdleTimer(sessionId, live);
+	}
+
+	#rearmIdleTimer(sessionId: string, live: LiveSession): void {
+		if (!live.idleTimer) return;
+		clearTimeout(live.idleTimer);
+		live.idleTimer = setTimeout(() => this.#onIdleTimeout(sessionId), IDLE_TIMEOUT_MS);
+		live.idleTimer.unref?.();
+	}
+
+	/**
+	 * Idle-timer expiry (issue #16): a session still running tools / streaming
+	 * is NOT idle — re-arm instead of disposing. Without this the per-session
+	 * timer killed background work on a fixed 30-minute schedule regardless of
+	 * what the session was doing.
+	 */
+	#onIdleTimeout(sessionId: string): void {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return;
+		if (isLiveSessionBusy(live)) {
+			live.lastActivity = Date.now();
+			live.idleTimer = setTimeout(() => this.#onIdleTimeout(sessionId), IDLE_TIMEOUT_MS);
 			live.idleTimer.unref?.();
+			return;
 		}
+		this.close(sessionId);
 	}
 
 	/** Report the GUI composer's un-sent draft (recap editor-draft guard).
@@ -2080,19 +2185,9 @@ export class DaemonSessionHost {
 
 	#scanIdle(): void {
 		const now = Date.now();
-		for (const [id, live] of this.#sessions) {
-			if (now - live.lastActivity > IDLE_TIMEOUT_MS) this.close(id);
-		}
-		// LRU cap: close the oldest idle sessions past MAX_LIVE_SESSIONS.
-		// lastActivity is touched on resume/send, so a session the user just
-		// switched away from ages naturally while active ones stay live.
-		if (this.#sessions.size > MAX_LIVE_SESSIONS) {
-			const excess = this.#sessions.size - MAX_LIVE_SESSIONS;
-			const candidates = [...this.#sessions.entries()]
-				.filter(([, live]) => !live.agentSession?.isStreaming && !live.agentSession?.isCompacting)
-				.sort((a, b) => a[1].lastActivity - b[1].lastActivity);
-			for (const [id] of candidates.slice(0, excess)) this.close(id);
-		}
+		// Policy lives in `idleDisposePlan` (pure, clock injected) — a working
+		// session is never reaped here (issue #16).
+		for (const id of idleDisposePlan(this.#sessions, now)) this.close(id);
 	}
 
 	/** Cancel the idle-recap timer and any in-flight recap turn. */
