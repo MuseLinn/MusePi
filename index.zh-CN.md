@@ -24,7 +24,7 @@ mp_cta: true
         <a class="mp-cta mp-cta--primary" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">下载 macOS 版</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Windows · x64</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Linux</a>
-        <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
+        <a class="mp-cta mp-cta-ghost" href="https://github.com/MuseLinn/MusePi/tree/main/docs">阅读文档</a>
         <div class="mp-cta-more">
           <button class="mp-cta mp-cta--soft mp-cta-more-btn" type="button" data-dl-more aria-haspopup="menu" aria-expanded="false">
             其他版本
@@ -315,7 +315,7 @@ mp_cta: true
     <p class="mp-demo-kicker">从源码开始</p>
     <h2>三条命令跑起来</h2>
     <p>完整指南在 README.md——daemon 架构、提供商配置、移动端构建与协作分享。</p>
-    <a class="mp-arrow-link" href="{{ 'README.md' | relative_url }}">阅读 README.md
+    <a class="mp-arrow-link" href="https://github.com/MuseLinn/MusePi/blob/main/README.md">阅读 README.md
       <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
   </div>
@@ -329,28 +329,29 @@ mp_cta: true
 
 <section class="mp-section mp-reveal" id="docs">
   <h2>文档</h2>
+  <p class="mp-section-desc">全部文档随仓库更新——每张卡片都指向 GitHub 上的最新版本，看到的永远是最新的。</p>
   <div class="mp-docs-grid">
-    <a class="mp-doc-card" href="{{ 'docs/gui-design.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/gui-design.md">
       <span class="mp-doc-title">GUI 设计规范</span>
       <span class="mp-doc-desc">布局 · 令牌 · 动效 · 组件</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/gui-implementation.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/gui-implementation.md">
       <span class="mp-doc-title">GUI 实现</span>
       <span class="mp-doc-desc">daemon RPC 契约 · 坑位 · 验证流程</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/mobile-design.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/mobile-design.md">
       <span class="mp-doc-title">移动端设计规范</span>
       <span class="mp-doc-desc">界面 · 动效 · 原生外壳</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/extensions-dev.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/extensions-dev.md">
       <span class="mp-doc-title">扩展开发</span>
       <span class="mp-doc-desc">slots · HMR · API</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/archive/board-dashboard.md' | relative_url }}">
-      <span class="mp-doc-title">看板与组件系统</span>
-      <span class="mp-doc-desc">widget 设计系统 · registry</span>
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md">
+      <span class="mp-doc-title">更新日志与发布说明</span>
+      <span class="mp-doc-desc">每个版本的新变化，中英双语</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'UPSTREAM.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">
       <span class="mp-doc-title">上游同步追踪</span>
       <span class="mp-doc-desc">oh-my-pi 上游 · 合并策略</span>
     </a>

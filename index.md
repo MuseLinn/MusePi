@@ -25,7 +25,7 @@ mp_cta: true
         <a class="mp-cta mp-cta--primary" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="arm64.dmg">Download for macOS</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Windows · x64</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Linux</a>
-        <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">Read the docs</a>
+        <a class="mp-cta mp-cta-ghost" href="https://github.com/MuseLinn/MusePi/tree/main/docs">Read the docs</a>
         <div class="mp-cta-more">
           <button class="mp-cta mp-cta--soft mp-cta-more-btn" type="button" data-dl-more aria-haspopup="menu" aria-expanded="false">
             Other versions
@@ -322,7 +322,7 @@ mp_cta: true
     <h2>Up and running in three commands</h2>
     <p>The full guide lives in README.md — daemon architecture, provider setup,
        mobile build and collab sharing.</p>
-    <a class="mp-arrow-link" href="{{ 'README.md' | relative_url }}">Read README.md
+    <a class="mp-arrow-link" href="https://github.com/MuseLinn/MusePi/blob/main/README.md">Read README.md
       <svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </a>
   </div>
@@ -336,28 +336,29 @@ mp_cta: true
 
 <section class="mp-section mp-reveal" id="docs">
   <h2>Documentation</h2>
+  <p class="mp-section-desc">Every doc lives in the repository — each card opens the latest revision on GitHub, so what you read is always current.</p>
   <div class="mp-docs-grid">
-    <a class="mp-doc-card" href="{{ 'docs/gui-design.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/gui-design.md">
       <span class="mp-doc-title">GUI design spec</span>
       <span class="mp-doc-desc">Layout · tokens · motion · components</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/gui-implementation.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/gui-implementation.md">
       <span class="mp-doc-title">GUI implementation</span>
       <span class="mp-doc-desc">Daemon RPC shapes · pitfalls · verification</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/mobile-design.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/mobile-design.md">
       <span class="mp-doc-title">Mobile design spec</span>
       <span class="mp-doc-desc">Screens · motion · native chrome</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/extensions-dev.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/docs/extensions-dev.md">
       <span class="mp-doc-title">Extension development</span>
       <span class="mp-doc-desc">Slots · HMR · API</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'docs/archive/board-dashboard.md' | relative_url }}">
-      <span class="mp-doc-title">Board dashboard &amp; widgets</span>
-      <span class="mp-doc-desc">Widget design system · registry</span>
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md">
+      <span class="mp-doc-title">Changelog &amp; release notes</span>
+      <span class="mp-doc-desc">What's new in every release, bilingual</span>
     </a>
-    <a class="mp-doc-card" href="{{ 'UPSTREAM.md' | relative_url }}">
+    <a class="mp-doc-card" href="https://github.com/MuseLinn/MusePi/blob/main/UPSTREAM.md">
       <span class="mp-doc-title">Upstream sync tracking</span>
       <span class="mp-doc-desc">oh-my-pi upstream · merge policy</span>
     </a>
