@@ -719,7 +719,13 @@ function tailSnapshot<T extends { entries?: readonly unknown[] }>(snap: T): T & 
 	};
 }
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
-export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
+/** Single JSON-RPC request cap. Raised 4→16 MiB (2026-09-18, #23 follow-up):
+ *  `stt.transcribe` ships 16 kHz mono float JSON (~127 KB/s after the client
+ *  quantises to 5 decimals), so 4 MiB capped dictation at ~30 s and mobile
+ *  recording had no headroom. 16 MiB gives ~2 min at the same rate and matches
+ *  collab/relay-server.ts's DEFAULT_MAX_FRAME_BYTES, so the two transports no
+ *  longer disagree about what "too large" means. */
+export const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 /** Journal catch-up pages: flush + yield every N records so a huge replay
  *  (long idle gap) interleaves with other traffic instead of flooding. */
 const CATCHUP_PAGE_SIZE = 500;

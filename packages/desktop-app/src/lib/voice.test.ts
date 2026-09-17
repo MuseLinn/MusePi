@@ -36,14 +36,15 @@ describe("resampleToTargetRate (#23 B)", () => {
 });
 
 describe("quantiseForWire (#23 C)", () => {
-	test("stays inside the daemon's 4 MiB request cap for a full 15 s buffer", () => {
+	test("stays well inside the daemon's 16 MiB request cap for a full 15 s buffer", () => {
 		// 15 s at 16 kHz mono, worst-case amplitudes everywhere. The daemon
-		// rejects requests over MAX_REQUEST_BYTES = 4 * 1024 * 1024, and this
-		// exact payload is what stt.transcribe receives.
+		// rejects requests over MAX_REQUEST_BYTES = 16 * 1024 * 1024 (raised
+		// from 4 MiB in the #23 follow-up), and this exact payload is what
+		// stt.transcribe receives.
 		const pcm = new Float32Array(TARGET_SAMPLE_RATE * 15);
 		for (let i = 0; i < pcm.length; i++) pcm[i] = Math.sin(i * 0.01) * (i % 2 ? 1 : -1);
 		const payload = JSON.stringify({ audio: quantiseForWire(pcm) });
-		expect(payload.length).toBeLessThan(4 * 1024 * 1024);
+		expect(payload.length).toBeLessThan(16 * 1024 * 1024);
 	});
 
 	test("loses at most 1e-5 of amplitude (inaudible for 16-bit ASR audio)", () => {

@@ -74,9 +74,9 @@ export async function enumerateMicDevices(): Promise<MicDevice[]> {
 // #23: the desktop capture ran at the AudioContext's default rate (48 kHz on
 // Windows) and shipped the raw floats, so Parakeet — which the daemon worker
 // feeds at a hardcoded 16 kHz — heard 3× speed and usually returned an empty
-// transcript, and a 15 s buffer blew the daemon's 4 MiB request cap. Capture
-// at 16 kHz like guest-client does, resample when the engine ignores the
-// request, and quantise the payload so it always fits the wire limit.
+// transcript, and a 15 s buffer blew the daemon's request cap (4 MiB at the
+// time). Capture at 16 kHz like guest-client does, resample when the engine
+// ignores the request, and quantise the payload so long recordings stay small.
 
 /** 16 kHz mono — the format `stt.transcribe` expects (guest-client parity). */
 export const TARGET_SAMPLE_RATE = 16_000;
@@ -98,10 +98,11 @@ export function resampleToTargetRate(input: Float32Array, fromRate: number): Flo
 	return out;
 }
 
-/** Wire-size guard for #23 C: `stt.transcribe` takes float JSON, and the daemon
- *  rejects requests over 4 MiB. A 15 s buffer at 16 kHz is ~240 k samples, which
- *  fits only if each sample prints short — 5 decimals keeps ~13 bits of
- *  mantissa (well inside what 16-bit ASR audio carries) at ~8 bytes/sample. */
+/** Wire-size guard for #23 C: `stt.transcribe` takes float JSON. The daemon
+ *  cap is 16 MiB (2026-09-18), but float JSON prints ~20 bytes/sample — a
+ *  minute of 16 kHz audio would be ~115 MB raw. 5 decimals keeps ~13 bits of
+ *  mantissa (well inside what 16-bit ASR audio carries) at ~8 bytes/sample,
+ *  so long recordings stay well inside the cap. */
 export function quantiseForWire(pcm: Float32Array): number[] {
 	return Array.from(pcm, v => Math.round(v * 1e5) / 1e5);
 }

@@ -74,14 +74,19 @@ export async function startVoiceCapture(): Promise<VoiceCapture> {
 
 /** Transcribe recorded floats through the daemon's local ASR stack.
  *  `language` (BCP 47 hint) rides through to the worker like the desktop's
- *  startDictationOpts; undefined lets the daemon auto-detect. */
+ *  startDictationOpts; undefined lets the daemon auto-detect.
+ *
+ *  Payload is quantised exactly like the desktop's `quantiseForWire` (#23 C):
+ *  float JSON prints ~20 bytes/sample, so a raw minute of 16 kHz audio would
+ *  be ~115 MB — 5 decimals (~8 bytes/sample, inaudible for 16-bit ASR) keeps
+ *  long recordings comfortably inside the daemon's 16 MiB request cap. */
 export async function transcribeAudio(
 	client: { rpc<T>(method: string, params?: unknown): Promise<T> },
 	audio: Float32Array,
 	language?: string,
 ): Promise<string> {
 	const res = await client.rpc<{ text: string }>("stt.transcribe", {
-		audio: Array.from(audio),
+		audio: Array.from(audio, v => Math.round(v * 1e5) / 1e5),
 		...(language ? { language } : {}),
 	});
 	return res?.text ?? "";
