@@ -160,6 +160,24 @@ function removeEmptyVersionEntries(content: string): string {
 	return content.replace(/## \[\d+\.\d+\.\d+\] - \d{4}-\d{2}-\d{2}\s*\n(?=## \[|\s*$)/g, "");
 }
 
+/**
+ * Re-create the empty `## [Unreleased]` heading that a release just consumed.
+ *
+ * Anchored on the first `## [` heading rather than on the file's title line:
+ * CHANGELOG.musepi.md carries a description paragraph between its title and the
+ * first section, so the old `# MusePi Changelog\n\n` anchor never matched. The
+ * file came out of the release with no [Unreleased] section at all, the NEXT
+ * release then skipped it silently ("no [Unreleased] section"), and the
+ * what's-new panel kept serving the previous version's notes — which is how
+ * v0.4.31 (2026-09-17) shipped.
+ */
+export function insertFreshUnreleased(content: string): string {
+	if (content.includes("## [Unreleased]")) return content;
+	const idx = content.search(/^## \[/m);
+	if (idx === -1) return `${content.trimEnd()}\n\n## [Unreleased]\n\n`;
+	return `${content.slice(0, idx)}## [Unreleased]\n\n${content.slice(idx)}`;
+}
+
 async function updateChangelogsForRelease(version: string): Promise<void> {
 	const date = new Date().toISOString().split("T")[0];
 
@@ -174,7 +192,7 @@ async function updateChangelogsForRelease(version: string): Promise<void> {
 		// Only create version entry if [Unreleased] has content
 		if (hasUnreleasedContent(content)) {
 			content = content.replace("## [Unreleased]", `## [${version}] - ${date}`);
-			content = content.replace(/^(# Changelog\n\n)/, `$1## [Unreleased]\n\n`);
+			content = insertFreshUnreleased(content);
 		}
 
 		// Clean up any existing empty version entries
@@ -192,8 +210,7 @@ async function updateChangelogsForRelease(version: string): Promise<void> {
 			console.log(`  Skipping ${musepiChangelogPath}: no [Unreleased] section`);
 		} else if (hasUnreleasedContent(content)) {
 			content = content.replace("## [Unreleased]", `## [${version}] - ${date}`);
-			// Its header line is "# MusePi Changelog", not "# Changelog".
-			content = content.replace(/^(# MusePi Changelog\n\n)/, `$1## [Unreleased]\n\n`);
+			content = insertFreshUnreleased(content);
 			content = removeEmptyVersionEntries(content);
 			await Bun.write(musepiChangelogPath, content);
 			console.log(`  Updated ${musepiChangelogPath}`);
