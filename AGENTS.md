@@ -339,6 +339,20 @@ Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's rele
 - Never modify already-released sections (e.g., `## [0.4.5]`) — they are immutable.
 - Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.
 
+**Bilingual entries (MusePi-only, mandatory):**
+
+`CHANGELOG.musepi.md` is the single source for the GUI "what's-new" panel, `/changelog`, the OTA `update-manifest.json` notes, and the GitHub release page body — they all slice the released section verbatim, so a missing translation ships a half-Chinese release page. Every entry in this file MUST carry its English translation, and `CHANGELOG.musepi.md` only — upstream's `CHANGELOG.md` and `guest-client/CHANGELOG.md` stay English-only.
+
+- The translation is a **nested `- EN:` child line** directly under the Chinese bullet, indented two spaces:
+  ```markdown
+  - 文件面板内嵌文本编辑器：预览头 ✎ 进入编辑，⌘S 保存。
+    - EN: Built-in text editor inside the file panel: ✎ in the preview header enters edit mode, ⌘S saves.
+  ```
+- One `- EN:` per Chinese bullet — the parity script indexes them by bullet position, so a missing or extra child line is a hard failure.
+- Never use a trailing `### English` / `### 中文` block instead of inline children (0.4.29 did; the release page lost its translation). Those blocks are not parsed.
+- A multi-line Chinese bullet keeps a single `- EN:` child holding the whole translation in one (possibly long) line — do not spread the English across several children.
+- The rule accepts only this exact shape; `bun run check:changelog-i18n` enforces it and names the offending bullet. Released sections are immutable (see above), so the only way to repair an already-shipped one is a deliberate one-off edit — do that rather than leaving the release page broken.
+
 **Attribution:**
 
 - Internal (from issues): `Fixed foo bar ([#123](https://github.com/can1357/oh-my-pi/issues/123))`.
@@ -350,3 +364,5 @@ Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's rele
 2. Run `bun run release`.
 
 The script handles version bump, CHANGELOG finalization, commit, tag, publish, and adding new `[Unreleased]` sections.
+
+The release page body is sliced verbatim from the version's `CHANGELOG.musepi.md` section, so confirm `bun run check:changelog-i18n` is green before releasing — a missing `- EN:` line ships a half-Chinese release page, and released sections are immutable afterwards.

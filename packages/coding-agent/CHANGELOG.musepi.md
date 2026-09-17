@@ -8,47 +8,46 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 ### Added
 
 - 文件面板内嵌文本编辑器：文本文件（≤2 MiB）在预览头 ✎ 进入编辑，⌘S / Ctrl+S 保存，未保存修改在 tab 上显示圆点，切换或关闭前确认丢弃；新建文件直接进入编辑器（取代旧的「无内置编辑器」提示）。
+  - EN: Built-in text editor inside the file panel: text files (≤2 MiB) enter edit mode via ✎ in the preview header, ⌘S / Ctrl+S saves, unsaved changes show a dot on the tab, and switching or closing asks before discarding; a new file opens straight in the editor (replacing the old "no built-in editor" notice).
 - Office 文档预览（只读）：`.docx` 用 docx-preview 内嵌渲染，`.xlsx` / `.xls` / `.csv` 用 SheetJS 渲染为转义表格（1000 行上限 + sheet 切换），损坏文件自动回退系统默认应用。
+  - EN: Read-only Office preview: `.docx` renders inline via docx-preview; `.xlsx` / `.xls` / `.csv` render as an escaped table via SheetJS (1000-row cap + sheet switcher); corrupt files fall back to the system default app.
 
 ### Fixed
 
 - Antigravity / Gemini CLI：默认系统提示、顾问提示与 Live 指令把 `<system-conventions>` 改成 `<conventions>`，避免 Cloud Code Assist 网关把开场 XML 块判成滥用并立刻返回假 `429 RESOURCE_EXHAUSTED`（30 分钟退避）。#7
   - EN: Default system, advisor, and Live prompts now open with `<conventions>` instead of `<system-conventions>` (omp 18.2.1), so Cloud Code Assist no longer false-429s the first turn. #7
 - 编辑器视图：预览体补上缺失的 flex 列布局（编辑器列/文档背景/表格/图片包装都按 flex 父容器设计），textarea 不再把保存工具栏推出面板；编辑中隐藏 ✎ 与「渲染/源码」死控件，保存按钮接入真实 saving 状态。
+  - EN: Editor view: the preview body regained its missing flex-column layout (the editor column, document background, tables and image wrappers all assume a flex parent), so the textarea no longer pushes the save toolbar out of the panel; while editing, the ✎ and the dead render/source controls are hidden and the save button is wired to real saving state.
 - #6 Windows 任务栏缩略图全白：BrowserWindow 未设 backgroundColor，DWM 初始表面为白色；补上与应用一致的深色底色。
+  - EN: #6 Windows taskbar thumbnail rendered all white: the BrowserWindow set no backgroundColor, so the DWM surface started white; it now carries the app's dark base colour.
 - #9 听写录音立即返回空 PCM：recordPcm 改为等待录音真正结束（VAD 静音 / 15s 上限 / 手动停止）才交付完整缓冲，settings 的 vadEndMs 真正生效；取消竞态下麦克风即时关闭。
+  - EN: #9 Dictation returned empty PCM immediately: recordPcm now waits for the recording to actually finish (VAD silence / 15s cap / manual stop) before delivering the complete buffer, settings' vadEndMs takes effect, and a cancelled race closes the microphone at once.
 - #12 「已退回到」横幅：头部新增 ✕ 关闭（保持当前回退位置，分支仍可从面包屑回去）；切换会话时清空横幅（旧 undo 目标跨会话发送外会话节点 id 触发 branch failed）；面包屑/树切换节点时同步清空。
+  - EN: #12 The "rewound to" banner gains an ✕ in its header (keeps the current rewind position — the branch is still reachable from the breadcrumb); the banner clears when switching sessions (a stale undo target sent a foreign session's node id across sessions and tripped branch failed), and the breadcrumb/tree node switches clear it in sync.
 - 输入框卡键：合成（输入法）状态标志以前只在 `compositionend` 复位，切走窗口、取消候选、渲染进程重载都不会触发该事件，标志就此永久为真，之后每次按键都被当成「合成中」提前返回——表现为挂久了 Enter 毫无反应（点发送正常，重启才恢复）。现在失焦与获得焦点都会复位，且 Chromium 合成中的按键恒为 keyCode 229，因此一个「非 229 且非 isComposing」的按键即可判定标志过期并自愈；候选确认键仍受保护（WebKit 在 `compositionend` 之后补发 Enter）。
+  - EN: Composer stuck keys: the IME composing flag was only reset on `compositionend`, which never fires when the window loses focus, the candidate list is dismissed, or the renderer reloads — so the flag stayed true forever and every later keystroke returned early as "composing" (Enter went dead after a long session; clicking send still worked and only a restart recovered). Blur and focus now reset it too, and since Chromium always reports keyCode 229 while composing, any key that is neither 229 nor `isComposing` proves the flag stale and self-heals; the candidate-confirm key stays protected (WebKit re-sends Enter after `compositionend`).
 
 ## [0.4.29] - 2026-09-16
 
 ### Added
 
 - 语音设置成熟化：语音模型卡（名称 + SoTA/轻量 标签、体积、准确度/速度分档条、卡内下载进度）与可用的麦克风选择——所选设备对听写的所有入口生效。
+  - EN: Voice settings maturity: speech model cards (name + SoTA/lightweight badge, download size, accuracy/speed tier bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
 - macOS：ad-hoc 签名构建的自动更新会静默失败，现在回退为手动下载安装包（dmg）并落盘更新日志。#5
+  - EN: macOS: auto-update on ad-hoc–signed builds fails silently; it now falls back to a manual installer download (dmg opened after fetch) with updater logs on disk. #5
 - 会话侧栏搜索改为回车提交（输入法安全），行级 memo 与首屏 RPC 并发。#5
+  - EN: Session sidebar search commits on Enter (IME-safe), with memoized rows and concurrent first-paint RPCs. #5
 
 ### Changed
 
 - 会话转写活动折叠对齐 openchamber 的 turn 模型：一轮从 prompt（或顾问条目）延伸到下一条 prompt；折叠后一行显示「orb + 活动 + 答案」，过程收进活动摘要；展开/收起有动效。
+  - EN: Transcript activity fold aligned with openchamber's turn model: a turn spans from its prompt (or an advisor note) to the next prompt; a collapsed turn renders orb + activity + answer on ONE line, the process folds into the activity row, and folding animates both ways.
 - 打开会话直接渲染全部已加载消息（不再有「显示更早消息」的空档），切换会话自动落在最新位置。
+  - EN: Opening a session renders every loaded message (no more "show earlier messages" gap), and a session switch lands on the latest position.
 - 面板宽度在最大化态也可调；折叠时间距与展开一致；最大化浮层保留圆角。
+  - EN: Panel width is adjustable again in every state, including maximized; the collapsed-panel gap matches the expanded one; the maximized float keeps its curve.
 - 地图模式导航轨改为聚焦定位（不再悄悄改变会话节点）；分支列表展开/收起有动效。
-
-### English
-
-**Added**
-
-- Voice settings maturity: speech model cards (name + SoTA/lightweight badge, download size, accuracy/speed tier bars, in-card download progress) and a working microphone picker — the chosen device feeds every dictation entry point.
-- macOS: auto-update on ad-hoc–signed builds fails silently; it now falls back to a manual installer download (dmg opened after fetch) with updater logs on disk. #5
-- Session sidebar search commits on Enter (IME-safe), with memoized rows and concurrent first-paint RPCs. #5
-
-**Changed**
-
-- Transcript activity fold aligned with openchamber's turn model: a turn spans from its prompt (or an advisor note) to the next prompt; a collapsed turn renders orb + activity + answer on ONE line, the process folds into the activity row, and folding animates both ways.
-- Opening a session renders every loaded message (no more "show earlier messages" gap), and a session switch lands on the latest position.
-- Panel width is adjustable again in every state, including maximized; the collapsed-panel gap matches the expanded one; the maximized float keeps its curve.
-- Map-mode prompt rail now focuses (centers + highlights) instead of silently moving the session leaf; the branch list animates both ways.
+  - EN: Map-mode prompt rail now focuses (centers + highlights) instead of silently moving the session leaf; the branch list animates both ways.
 
 ## [0.4.28] - 2026-09-16
 
