@@ -10,6 +10,10 @@ export interface CustomGroup {
 	sessions: string[];
 	/** Accent color token (right-click → 更改颜色). */
 	color?: string;
+	/** Stable identity for a workspace-derived group (issue #15): the full
+	 *  cwd. Two folders named `demo` under different parents get one group
+	 *  each; groups created by hand (no workspace) match by name as before. */
+	cwd?: string;
 }
 
 /** Folder-icon tints, one per GROUP_COLORS token (same values as gui-dot-*). */
@@ -203,7 +207,10 @@ function GroupBlock({
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 }): ReactNode {
-	const [localOpen, setLocalOpen] = useStateOpen(group.name);
+	// Issue #15: collapse state keys on the group's identity, not its (possibly
+	// duplicated) display name — two `demo` groups used to share one open/closed
+	// flag.
+	const [localOpen, setLocalOpen] = useStateOpen(group.cwd ?? group.name);
 	const open = openOverride ?? localOpen;
 	const [dragOver, setDragOver] = useState(false);
 	// Inline rename: a draft input replaces the name span while editing.
@@ -380,7 +387,9 @@ function GroupBlock({
 	);
 }
 
-/** Per-group collapse state persisted by group name (musepi-gui-group-open). */
+/** Per-group collapse state, persisted per group identity
+ *  (musepi-gui-group-open). The identity is the group's cwd when it has one,
+ *  else its name — never the display name alone (issue #15). */
 function useStateOpen(name: string): [boolean, (v: (prev: boolean) => boolean) => void] {
 	const key = `musepi-gui-group-open:${name}`;
 	const [open, setOpen] = useState(() => {

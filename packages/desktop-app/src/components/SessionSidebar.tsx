@@ -1,12 +1,13 @@
 import { t, useArchivedSessions } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
-import { CustomGroups } from "./CustomGroups";
+import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { GroupedSessionList } from "./GroupedSessionList";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
@@ -200,10 +201,11 @@ export function SessionSidebar({
 	const projMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
 	const [projView, setProjView] = useState<"project" | "timeline">("project");
 	const [projSort, setProjSort] = useState<"updated" | "created">("updated");
-	const [groups, setGroups] = useState<{ name: string; sessions: string[]; color?: string }[]>(() => {
+	// `cwd` is a workspace-derived group's stable identity (issue #15).
+	const [groups, setGroups] = useState<CustomGroup[]>(() => {
 		try {
 			const raw = localStorage.getItem("musepi-gui-groups");
-			return raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : [];
+			return raw ? (JSON.parse(raw) as CustomGroup[]) : [];
 		} catch {
 			return [];
 		}
@@ -444,7 +446,9 @@ export function SessionSidebar({
 		setCollapsedProjects(prev => (prev.includes(path) ? prev.filter(p => p !== path) : [...prev, path]));
 	};
 	const removeProject = (path: string): void => {
-		void confirm(`${t("remove project")} ${baseName(path)}?`, t("remove")).then(ok => {
+		// Disambiguated too (issue #15) — "remove demo?" is ambiguous when two
+		// different folders are both called demo.
+		void confirm(`${t("remove project")} ${projectLabel(path, projects)}?`, t("remove")).then(ok => {
 			if (!ok) return;
 			setProjects(prev => prev.filter(p => p !== path));
 			setCollapsedProjects(prev => prev.filter(p => p !== path));
@@ -913,6 +917,10 @@ export function SessionSidebar({
 												new Date(la[0]!.entry.timestamp).getTime()
 											);
 										});
+										// Issue #15: identity stays the full path; only the
+										// LABEL widens when two folders share a basename
+										// (`a/demo` vs `b/demo`).
+										const labels = projectLabels(order);
 										return (
 											<>
 												{pinnedNodes.length > 0 && (
@@ -981,7 +989,9 @@ export function SessionSidebar({
 																	}}
 																>
 																	<Icon name="folder" className="h-3 w-3" />
-																	<span className="min-w-0 flex-1 truncate">{baseName(path)}</span>
+																	<span className="min-w-0 flex-1 truncate">
+																		{labels.get(path) ?? baseName(path)}
+																	</span>
 																	<span className="gui-project-count">{list.length}</span>
 																	<Icon
 																		name="arrow-down-s"

@@ -3,13 +3,14 @@ import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigger";
 import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
 import { dispatchNotification } from "../lib/notify";
+import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
@@ -684,6 +685,9 @@ export function WelcomeComposer({
 			return [];
 		}
 	});
+	// Issue #15: two saved workspaces can share a folder name — widen the
+	// LABEL (`a/demo`) while the path stays the identity.
+	const savedLabels = useMemo(() => projectLabels(savedProjects), [savedProjects]);
 	// Keep the picker list in sync with the sidebar: folder picks dispatch
 	// musepi-gui-project-added, and other windows (mini chat) write storage.
 	useEffect(() => {
@@ -1228,7 +1232,7 @@ export function WelcomeComposer({
 								>
 									<Icon name="folder" className="h-3.5 w-3.5" />
 									<span className="max-w-[200px] truncate">
-										{project ? projectName(project) : t("not in a project")}
+										{project ? (savedLabels.get(project) ?? projectName(project)) : t("not in a project")}
 									</span>
 									<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 								</button>
@@ -1241,7 +1245,9 @@ export function WelcomeComposer({
 												onClick={() => setProjOpen(false)}
 											>
 												<Icon name="folder" className="h-3.5 w-3.5" />
-												<span className="min-w-0 flex-1 truncate">{projectName(project)}</span>
+												<span className="min-w-0 flex-1 truncate">
+													{savedLabels.get(project) ?? projectName(project)}
+												</span>
 												<Icon name="check" className="h-3 w-3 flex-shrink-0" />
 											</button>
 										)}
@@ -1265,7 +1271,9 @@ export function WelcomeComposer({
 															}}
 														>
 															<Icon name="folder" className="h-3.5 w-3.5" />
-															<span className="min-w-0 flex-1 truncate">{projectName(p)}</span>
+															<span className="min-w-0 flex-1 truncate">
+																{savedLabels.get(p) ?? projectName(p)}
+															</span>
 														</button>
 													))}
 												<div className="gui-proj-menu-sep" />

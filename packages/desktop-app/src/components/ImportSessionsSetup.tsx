@@ -1,7 +1,9 @@
 import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
+import type { CustomGroup } from "./CustomGroups";
 import { FadeScroll } from "./FadeScroll";
 
 interface AgentSource {
@@ -191,14 +193,22 @@ export function ImportSessionsSetup({ rpc }: { rpc: RpcClient | null }): ReactNo
 		if (byCwd.size > 0) {
 			try {
 				const raw = localStorage.getItem("musepi-gui-groups");
-				const groups = raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : [];
+				const groups = raw ? (JSON.parse(raw) as CustomGroup[]) : [];
+				// Issue #15: group identity is the WORKSPACE, not its folder
+				// name. Two folders both called `demo` under different parents
+				// used to land in one shared group (and shared its open/closed
+				// state); the label is disambiguated separately.
+				const cwds = [...byCwd.keys()].filter((p): p is string => typeof p === "string" && p.length > 0);
+				const labels = projectLabels(cwds);
 				for (const [cwd, ids] of byCwd) {
-					const name = cwd ? (cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd) : t("no workspace");
-					const existing = groups.find(g => g.name === name);
+					const name = cwd
+						? (labels.get(cwd) ?? cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd)
+						: t("no workspace");
+					const existing = cwd ? groups.find(g => g.cwd === cwd) : groups.find(g => !g.cwd && g.name === name);
 					if (existing) {
 						for (const id of ids) if (!existing.sessions.includes(id)) existing.sessions.push(id);
 					} else {
-						groups.push({ name, sessions: [...ids] });
+						groups.push(cwd ? { name, cwd, sessions: [...ids] } : { name, sessions: [...ids] });
 					}
 					grouped += 1;
 				}
