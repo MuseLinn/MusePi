@@ -1857,3 +1857,91 @@ body {
     transition: none !important;
   }
 }
+
+/* ── Pass 3: "Other versions" dropdown in the hero CTA row ────────────── */
+.mp-cta-more {
+  position: relative;
+  display: inline-flex;
+}
+.mp-cta-more-btn {
+  gap: 7px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mp-cta-more-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+.mp-cta-more-chevron {
+  transition: transform 180ms var(--spring);
+}
+.mp-cta-more-btn[aria-expanded="true"] .mp-cta-more-chevron {
+  transform: rotate(180deg);
+}
+.mp-cta-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 60;
+  min-width: 288px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(170deg, rgba(28, 28, 32, 0.96), rgba(13, 13, 15, 0.98));
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: mp-demo-in 260ms var(--spring);
+}
+.mp-cta-menu-label {
+  margin: 8px 8px 4px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mp-cta-menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  color: var(--text);
+  font-size: 13.5px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+}
+.mp-cta-menu a:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.mp-cta-menu a span {
+  flex: none;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.mp-cta-menu a:hover span {
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .mp-cta-menu {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .mp-cta-menu a {
+    white-space: normal;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mp-cta-menu,
+  .mp-cta-more-chevron {
+    animation: none !important;
+    transition: none !important;
+  }
+}

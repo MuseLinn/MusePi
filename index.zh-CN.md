@@ -25,6 +25,27 @@ mp_cta: true
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="setup.exe">Windows · x64</a>
         <a class="mp-cta mp-cta--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" data-asset="x86_64.AppImage">Linux</a>
         <a class="mp-cta mp-cta-ghost" href="{{ '/docs/' | relative_url }}">阅读文档</a>
+        <div class="mp-cta-more">
+          <button class="mp-cta mp-cta--soft mp-cta-more-btn" type="button" data-dl-more aria-haspopup="menu" aria-expanded="false">
+            其他版本
+            <svg class="mp-cta-more-chevron" viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" fill="none"><path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="mp-cta-menu" role="menu" data-dl-menu hidden>
+            <p class="mp-cta-menu-label">桌面端</p>
+            <a role="menuitem" data-asset="arm64.dmg" href="https://github.com/MuseLinn/MusePi/releases/latest">macOS（Apple Silicon）<span>.dmg</span></a>
+            <a role="menuitem" data-asset="setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 10/11（x64）<span>setup.exe</span></a>
+            <a role="menuitem" data-asset="arm64-setup.exe" href="https://github.com/MuseLinn/MusePi/releases/latest">Windows 11（ARM64）<span>arm64-setup.exe</span></a>
+            <a role="menuitem" data-asset="x86_64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64<span>.AppImage</span></a>
+            <a role="menuitem" data-asset="amd64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux x64<span>.deb</span></a>
+            <a role="menuitem" data-asset="arm64.AppImage" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux ARM64<span>.AppImage</span></a>
+            <a role="menuitem" data-asset="arm64.deb" href="https://github.com/MuseLinn/MusePi/releases/latest">Linux ARM64<span>.deb</span></a>
+            <p class="mp-cta-menu-label">移动端</p>
+            <a role="menuitem" data-asset="app-debug.apk" href="https://github.com/MuseLinn/MusePi/releases/latest">Android arm64<span>.apk</span></a>
+            <p class="mp-cta-menu-label">校验</p>
+            <a role="menuitem" data-asset="SHA256SUMS.txt" href="https://github.com/MuseLinn/MusePi/releases/latest">SHA256SUMS.txt<span>校验文件</span></a>
+            <a role="menuitem" href="https://github.com/MuseLinn/MusePi/releases">全部版本与 beta 构建</a>
+          </div>
+        </div>
       </div>
     </div>
     <aside class="mp-term" aria-label="安装命令">

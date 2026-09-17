@@ -467,6 +467,45 @@
       });
     })();
 
+    /* ── "Other versions" dropdown: toggle, outside-click and Escape close ── */
+    (function () {
+      var buttons = document.querySelectorAll("[data-dl-more]");
+      if (!buttons.length) return;
+      function closeAll(except) {
+        document.querySelectorAll("[data-dl-menu]").forEach(function (menu) {
+          if (menu !== except) {
+            menu.hidden = true;
+            var owner = menu.parentElement.querySelector("[data-dl-more]");
+            if (owner) owner.setAttribute("aria-expanded", "false");
+          }
+        });
+      }
+      buttons.forEach(function (btn) {
+        var menu = btn.parentElement.querySelector("[data-dl-menu]");
+        if (!menu) return;
+        btn.addEventListener("click", function (event) {
+          event.stopPropagation();
+          var open = !menu.hidden;
+          closeAll(menu);
+          menu.hidden = open;
+          btn.setAttribute("aria-expanded", open ? "false" : "true");
+        });
+        document.addEventListener("click", function (event) {
+          if (!btn.parentElement.contains(event.target)) {
+            menu.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+          }
+        });
+        document.addEventListener("keydown", function (event) {
+          if (event.key === "Escape" && !menu.hidden) {
+            menu.hidden = true;
+            btn.setAttribute("aria-expanded", "false");
+            btn.focus();
+          }
+        });
+      });
+    })();
+
     /* ── Terminal card: tab switching + copy-to-clipboard with feedback ──── */
     document.querySelectorAll(".mp-term").forEach(function (term) {
       var tabs = Array.prototype.slice.call(term.querySelectorAll("[data-term-tab]"));
