@@ -69,7 +69,7 @@ mp_cta: true
 
 <section class="mp-stats mp-reveal" aria-label="MusePi 一览">
   <div class="mp-stat">
-    <span class="mp-stat-num mp-stat-num--accent">40+</span>
+    <span class="mp-stat-num mp-stat-num--accent">60+</span>
     <span class="mp-stat-label">LLM 提供商</span>
   </div>
   <div class="mp-stat">
@@ -223,7 +223,7 @@ mp_cta: true
       <p>一切皆可插拔：模型提供商、工具、UI 表面——daemon 盯着你的扩展目录，
          热重载随时生效。</p>
       <ul class="mp-feature-points">
-        <li>40+ LLM 提供商，图像与视频生成内置</li>
+        <li>60+ LLM 提供商，图像与视频生成内置</li>
         <li>浏览器 + computer-use 工具、LSP/DAP、任务子代理</li>
         <li>两个扩展中心——slots、工具视图、RPC、主题</li>
       </ul>

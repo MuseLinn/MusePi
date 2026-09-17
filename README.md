@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@musepi/pi-coding-agent"><img src="https://img.shields.io/npm/v/@musepi/pi-coding-agent?style=flat&colorA=222222&colorB=CB3837" alt="npm version"></a>
-  <a href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-keep-E05735?style=flat&colorA=222222" alt="Changelog"></a>
+  <a href="https://github.com/MuseLinn/MusePi/blob/main/packages/coding-agent/CHANGELOG.musepi.md"><img src="https://img.shields.io/badge/changelog-keep-E05735?style=flat&colorA=222222" alt="Changelog"></a>
   <a href="https://github.com/MuseLinn/MusePi/actions"><img src="https://img.shields.io/github/actions/workflow/status/MuseLinn/MusePi/ci.yml?style=flat&colorA=222222&colorB=3FB950" alt="CI"></a>
   <a href="https://github.com/MuseLinn/MusePi/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MuseLinn/MusePi?style=flat&colorA=222222&colorB=58A6FF" alt="License"></a>
   <a href="https://www.typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat&colorA=222222&logo=typescript&logoColor=white" alt="TypeScript"></a>
@@ -28,7 +28,7 @@
 
 MusePi is a **standalone coding-agent platform** with an **Electron desktop GUI, a daemon service, and an always-on desktop pet**. It shares an agent-engine lineage and keeps its own TUI command surface (`/` commands, `!`/`!!` shell, `@` file mentions, `#` references) wired into the GUI. **MusePi is its own upstream** — oh-my-pi / Pi / DSH / opencode etc. are reference sources absorbed on demand (see [UPSTREAM.md](UPSTREAM.md)).
 
-Current app version **`0.4.16`** (independent of upstream versioning).
+Releases are independent of upstream versioning — see the [releases page](https://github.com/MuseLinn/MusePi/releases) for the current version.
 
 ## Install (one command)
 
@@ -73,15 +73,13 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ## Screenshots
 
-| Welcome | Session | Settings |
-|---|---|---|
-| <img src="docs/screenshots/gui-welcome.png" width="420" alt="Welcome"> | <img src="docs/screenshots/gui-session.png" width="420" alt="Session with bash card"> | <img src="docs/screenshots/gui-settings.png" width="420" alt="Settings"> |
+Skip the stale bitmaps — the [website's live tour](https://muselinn.github.io/MusePi/#demo) renders the actual app surfaces (welcome, terminal splash, mobile) in-page, so it never goes out of date.
 
 ## Features
 
 ### Desktop GUI
 
-- **Electron desktop app** (`packages/desktop-app`): independent-card workspace (session sidebar, chat column, side pane and terminal dock are separate rounded surfaces on the glass base — no shared card with divider lines), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window.
+- **Electron desktop app** (`packages/desktop-app`): independent-card workspace (session sidebar, chat column, side pane and terminal dock are separate rounded surfaces on the glass base — no shared card with divider lines), Chinese-first UI, three-axis design tokens (theme / accent / density), frosted-glass vibrancy window with liquid-glass dialogs and chrome (specular rims, fluid spring motion).
 - **Always-on desktop pet**: animated companion (petdex frame-animation packs, drag positioning, click-through, hover interactions, cross-window activity bridge); task progress surfaces as pet bubbles.
 - **Daemon architecture**: the GUI talks JSON-RPC to the daemon (`musepi serve`). Sessions persist via journal + materialized view; idle 30-min sessions become history snapshots and reactivate on demand. The daemon survives GUI exit; reconnecting resumes.
 - **Managed browser** (`browser.gui`): Electron `WebContentsView` + CDP bridge — drive an embedded browser page in the GUI with projected layout and pixel-sampled verification.
@@ -106,7 +104,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ### Core agent engine
 
-- **40+ LLM providers**, 32 built-in tools, `xd://` device extensions.
+- **60+ LLM providers**, 32 built-in tools, `xd://` device extensions.
 - **LSP** wired into every write (renames, references, code actions); **DAP** debugger driving.
 - **task subagents** (parallel fan-out, IRC coordination, worktree isolation), **hashline** content-hash edits, **hindsight** session memory, **ACP** editor-driven mode, **collab** sharing (self-hosted LAN/tunnel relays, plaintext guest mode).
 - **snapcompact** compaction, **magic keywords** (ultrathink / orchestrate / workflowz), **TTSR** stream rules.
@@ -114,7 +112,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ### Tools
 
-31 tools live in the same namespace as `read` and `bash`. Pin the active set with `--tools read,edit,bash,…`; rarely used discoverable tools stay behind `xd://` devices (`read xd://` lists them).
+32 tools live in the same namespace as `read` and `bash`. Pin the active set with `--tools read,edit,bash,…`; rarely used discoverable tools stay behind `xd://` devices (`read xd://` lists them).
 
 **Files & search** — `read` (files, dirs, archives, SQLite, PDFs, notebooks, URLs, `ssh://`, internal `://` schemes) · `write` · `edit` (hashline patches) · `ast_edit` · `ast_grep` · `grep` · `glob`.
 
@@ -169,7 +167,7 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 
 | Package | Role |
 |---|---|
-| `gui` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
+| `desktop-app` | Electron desktop app (main window + pet/bubble/pinned windows, xterm, pdf.js, managed-browser bridge) |
 | `guest-client` | GUI rendering core (transcript, tool cards, widget system, i18n) and the collab web UI (desktop + mobile entry) |
 | `mobile` | Capacitor Android shell: InsetsPlugin (edge-to-edge), native chrome wiring, APK build |
 | `harmony` | HarmonyOS NEXT WebView shell: ArkTS Web + `harmonyNative` bridge, deep links, DevEco project |
@@ -224,10 +222,10 @@ Produces `release/mac-arm64/MusePi.app`. The `pack` scripts ad-hoc sign the bund
 
 ## Documentation
 
-- `docs/`: 95+ documents (GUI, providers, tools, hooks/extensions/skills, LSP/DAP, collab, compaction, ACP, settings, i18n, …)
+- `docs/`: 100+ documents, bilingual zh-CN/en-US (GUI, providers, tools, hooks/extensions/skills, LSP/DAP, collab, compaction, ACP, settings, i18n, …)
 - [`docs/gui-design.md`](docs/gui-design.md) / [`docs/gui-implementation.md`](docs/gui-implementation.md): GUI living docs (keep in sync with code changes)
 - [`UPSTREAM.md`](UPSTREAM.md): archived oh-my-pi sync notes (reference-absorption history)
 
 ## Lineage & references
 
-- [Upstream sync notes](UPSTREAM.md) · [Changelog](CHANGELOG.md) · [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent) · [Discord](https://discord.gg/4NMW9cdXZa)
+- [Upstream sync notes](UPSTREAM.md) · [Changelog](packages/coding-agent/CHANGELOG.musepi.md) · [npm](https://www.npmjs.com/package/@musepi/pi-coding-agent) · [Discord](https://discord.gg/4NMW9cdXZa)

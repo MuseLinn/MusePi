@@ -70,7 +70,7 @@ mp_cta: true
 
 <section class="mp-stats mp-reveal" aria-label="MusePi at a glance">
   <div class="mp-stat">
-    <span class="mp-stat-num mp-stat-num--accent">40+</span>
+    <span class="mp-stat-num mp-stat-num--accent">60+</span>
     <span class="mp-stat-label">LLM providers</span>
   </div>
   <div class="mp-stat">
@@ -226,7 +226,7 @@ mp_cta: true
       <p>Everything is pluggable: model providers, tools, UI surfaces — hot-reloaded
          while the daemon watches your extension folders.</p>
       <ul class="mp-feature-points">
-        <li>40+ LLM providers, image &amp; video generation built in</li>
+        <li>60+ LLM providers, image &amp; video generation built in</li>
         <li>Browser + computer-use tools, LSP/DAP, task subagents</li>
         <li>Two extension centers — slots, tool views, RPCs, themes</li>
       </ul>

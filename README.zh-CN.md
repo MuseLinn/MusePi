@@ -22,15 +22,15 @@
 
 ---
 
-MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（40+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
+MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + daemon 服务 + 常驻桌宠**，保留完整 agent 引擎（60+ provider、32 内置工具、LSP/DAP、子智能体、hashline、hindsight、ACP、collab），并将 TUI 的命令面（`/` 命令、`!`/`!!` shell、`@` 文件引用、`#` 引用）逐一接进 GUI。**MusePi 是上游之一**——oh-my-pi / Pi / DSH / opencode 等按需吸收为参考源（见 [UPSTREAM.md](UPSTREAM.md)）。
 
-应用版本 `0.4.16`（独立于上游版本号，见 [UPSTREAM.md](UPSTREAM.md) 版本说明）。
+发版独立于上游版本号——当前版本见 [Releases 页](https://github.com/MuseLinn/MusePi/releases)。
 
 ## ✨ 特性
 
 ### 桌面 GUI
 
-- **Electron 桌面应用**（`packages/desktop-app`）：独立卡片式工作区（会话侧栏、聊天列、Side Pane、终端 dock 是浮在玻璃基底上的各自圆角面板，不再共用一张卡片 + 竖线分割）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口。
+- **Electron 桌面应用**（`packages/desktop-app`）：独立卡片式工作区（会话侧栏、聊天列、Side Pane、终端 dock 是浮在玻璃基底上的各自圆角面板，不再共用一张卡片 + 竖线分割）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口，对话框与界面浮层已升级为液态玻璃（镜面描边、液态弹簧动效）。
 - **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
 - **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。
 - **受管浏览器**（`browser.gui` 工具）：Electron WebContentsView + CDP 桥——agent 可直接驱动 GUI 内嵌浏览器页（投影布局 + 像素采样验证）。
@@ -50,7 +50,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ### 核心引擎
 
-- **40+ LLM provider**、32 内置工具、`xd://` 设备扩展、prompt 工程持续调优。
+- **60+ LLM provider**、32 内置工具、`xd://` 设备扩展、prompt 工程持续调优。
 - **LSP** 接线每个写操作（重命名/引用/代码动作）、**DAP** 调试器驱动。
 - **task 子智能体**（并行扇出、IRC 协调、worktree 隔离、schema 验证输出）、**hashline** 内容哈希编辑、**hindsight** 会话记忆、**ACP** 编辑器驱动、**collab** 协作（含 musepi 定制：LAN/隧道/Tailscale serve 自持 relay、明文访客模式）。
 - **snapcompact** 压缩策略（对话渲染为位图帧给视觉模型）、**magic keywords**（ultrathink/orchestrate/workflowz）、**TTSR** 流式规则注入。
@@ -58,9 +58,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ## 📸 截图
 
-| 欢迎页 | 会话（bash 卡片） | 设置 |
-|---|---|---|
-| <img src="docs/screenshots/gui-welcome.png" width="420" alt="欢迎页"> | <img src="docs/screenshots/gui-session.png" width="420" alt="会话与 bash 卡片"> | <img src="docs/screenshots/gui-settings.png" width="420" alt="设置面板"> |
+不再放会过期的位图——[官网实况演示](https://muselinn.github.io/MusePi/#demo)在页面里直接绘制真实应用界面（欢迎页、终端开屏、移动端），永远与产品同步。
 
 ## 🚀 快速开始
 
@@ -146,7 +144,7 @@ bun run --cwd=packages/desktop-app desktop
 
 | 包 | 说明 |
 |---|---|
-| `gui` | Electron 桌面应用（主界面 + 桌宠/气泡/置顶多窗口、xterm、pdf.js、受管浏览器桥） |
+| `desktop-app` | Electron 桌面应用（主界面 + 桌宠/气泡/置顶多窗口、xterm、pdf.js、受管浏览器桥） |
 | `guest-client` | GUI 渲染核心（transcript、工具卡、widget 系统、i18n）兼协作 Web UI |
 | `coding-agent` | CLI 入口（`musepi`）、daemon 服务端、slash/bash 命令、工具实现 |
 | `collab-proto` | GUI ↔ daemon 传输协议（WS 帧、加密、链接） |
@@ -214,10 +212,10 @@ npm/GitHub 发布流水线继承上游（`ci:release:*` 脚本）；`musepi upda
 
 ## 📚 文档
 
-- `docs/`：95+ 篇（GUI、provider、工具、hook/扩展/技能、LSP/DAP、collab、compaction、ACP、设置、i18n 等）
+- `docs/`：100+ 篇，中英双语（GUI、provider、工具、hook/扩展/技能、LSP/DAP、collab、compaction、ACP、设置、i18n 等）
 - `docs/gui-design.md` / `docs/gui-implementation.md`：GUI 活文档（改实现时同步）
 - `UPSTREAM.md`：上游同步备忘（版本涟漪、手动解决、踩坑）
 
 ## 上游同步
 
-MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，musepi 应用版本 0.4.16）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
+MusePi 跟踪 OMP 上游（当前基线 **v17.2.12**，发版独立于上游）。同步按 `git diff -M` 分类为 PURE（重命名复制）/ THREE_WAY（三方合并）/ NEW / MANUAL，包名 `@musepi` → `@musepi` 重命名；musepi 定制文件（GUI、daemon、i18n、collab LAN/隧道、computer-use 事件透出、settings locale 等）按 OVERLAP 保留 ours + 并入 theirs。完整流程见 `UPSTREAM.md`。
