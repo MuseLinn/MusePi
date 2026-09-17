@@ -15,6 +15,13 @@ async function waitUntil(condition: () => boolean | Promise<boolean>, timeoutMs:
 	return condition();
 }
 
+/**
+ * A consumer that ignores its stdin close would hang the whole test past its own
+ * timeout, replacing the real verdict with a bare "timed out after Nms". Bound
+ * every process wait so the failure names the process that misbehaved.
+ */
+const CONSUMER_EXIT_TIMEOUT_MS = 10_000;
+
 describe("browser relay daemon", () => {
 	it("stays alive while a consumer in another project holds the global broker lease", async () => {
 		const home = await fs.mkdtemp(path.join(os.tmpdir(), "omp-relay-global-"));
@@ -66,6 +73,12 @@ try {
 				stderr: "pipe",
 			});
 
+		const exitWithin = async (consumer: ReturnType<typeof spawnConsumer>, label: string): Promise<number> => {
+			const exited = await Promise.race([consumer.exited, Bun.sleep(CONSUMER_EXIT_TIMEOUT_MS).then(() => null)]);
+			if (exited === null) throw new Error(`${label} did not exit within ${CONSUMER_EXIT_TIMEOUT_MS}ms`);
+			return exited;
+		};
+
 		const first = spawnConsumer(firstProject, "profile-a", firstMarker);
 		try {
 			expect(await waitUntil(() => Bun.file(firstMarker).exists(), 15_000)).toBeTrue();
@@ -75,7 +88,7 @@ try {
 			try {
 				expect(await waitUntil(() => Bun.file(secondMarker).exists(), 15_000)).toBeTrue();
 				first.stdin.end();
-				const firstExit = await first.exited;
+				const firstExit = await exitWithin(first, "first consumer");
 				if (firstExit !== 0) throw new Error(await new Response(first.stderr).text());
 
 				// The global broker's real idle clock must pass while the second client remains connected.
@@ -83,16 +96,16 @@ try {
 				expect(await probeRelayServer(cdpUrl)).toBeTrue();
 
 				second.stdin.end();
-				const secondExit = await second.exited;
+				const secondExit = await exitWithin(second, "second consumer");
 				if (secondExit !== 0) throw new Error(await new Response(second.stderr).text());
 				expect(await waitUntil(async () => !(await probeRelayServer(cdpUrl)), 5_000)).toBeTrue();
 			} finally {
 				if (second.exitCode === null) second.kill();
-				await second.exited;
+				await exitWithin(second, "second consumer after kill");
 			}
 		} finally {
 			if (first.exitCode === null) first.kill();
-			await first.exited;
+			await exitWithin(first, "first consumer after kill");
 			const rescue = await createDaemonBrokerClient(globalRuntimeDir, {
 				runtimeDir: globalRuntimeDir,
 				idleGraceMs: 200,
@@ -105,5 +118,5 @@ try {
 			rescue.close();
 			await fs.rm(home, { recursive: true, force: true });
 		}
-	}, 30_000);
+	}, 60_000);
 });
