@@ -1281,6 +1281,11 @@
 	padding: 14px;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	/* L1 elevated surface (docs/gui-design.md radius/glass ladder): the detail
+	 * pane floats one level above the list — solid raised fill + a restrained
+	 * contact shadow, no glass (its backdrop is a flat settings page). */
+	background: var(--color-surface-raised);
+	box-shadow: 0 2px 8px color-mix(in srgb, #000 14%, transparent);
 	overflow-y: auto;
 	overflow-x: hidden;
 }

@@ -122,7 +122,9 @@
 	gap: 6px;
 	padding: 10px 12px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius);
+	/* Cards sit one step above compact controls on the radius ladder
+	 * (docs/gui-design.md): md is for buttons/inputs, lg for card surfaces. */
+	border-radius: var(--radius-lg);
 	background: var(--bg-raised);
 	/* entrance stagger: parent sets --mp-i per card (0..n) */
 	animation: mp-card-in 260ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
