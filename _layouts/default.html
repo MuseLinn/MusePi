@@ -27,12 +27,14 @@
     </a>
     <nav class="mp-nav">
       {% if page.lang == 'zh-CN' %}
+      <a href="#demo">演示</a>
       <a href="#features">特性</a>
       <a href="#download">下载</a>
       <a href="{{ '/docs/' | relative_url }}">文档</a>
       <a href="#quick-start">快速开始</a>
       <a class="mp-lang-link" href="{{ page.en_url | default: '/' | relative_url }}" hreflang="en">EN</a>
       {% else %}
+      <a href="#demo">Demo</a>
       <a href="#features">Features</a>
       <a href="#download">Download</a>
       <a href="{{ '/docs/' | relative_url }}">Docs</a>
@@ -414,6 +416,54 @@
         }
 
         resize();
+      });
+    })();
+
+    /* ── Live demo: tabs switch preview pane + context panel + captions ──── */
+    (function () {
+      var tabs = document.querySelectorAll("[data-demo-tab]");
+      if (!tabs.length) return;
+      var chromeTitles = {
+        gui: { en: "MusePi — Welcome", zh: "MusePi — 欢迎页" },
+        tui: { en: "musepi — terminal", zh: "musepi — 终端" },
+        mobile: { en: "MusePi — companion", zh: "MusePi — 移动伴侣" }
+      };
+      var captions = {
+        gui: {
+          en: "Welcome — dot-matrix brand backdrop, time-aware greeting",
+          zh: "欢迎页——点阵品牌背景，按时段变化的问候"
+        },
+        tui: {
+          en: "TUI — /tree, slash commands, identical sessions",
+          zh: "TUI——/tree、斜杠命令，会话完全一致"
+        },
+        mobile: {
+          en: "Companion — QR join, three-in-one send bar",
+          zh: "移动伴侣——扫码配对，三合一发送条"
+        }
+      };
+      var isZh = document.documentElement.lang === "zh-CN";
+      var chrome = document.querySelector("[data-demo-chrome]");
+      var caption = document.querySelector("[data-demo-caption]");
+      function activate(key) {
+        tabs.forEach(function (tab) {
+          var on = tab.getAttribute("data-demo-tab") === key;
+          tab.classList.toggle("is-active", on);
+          tab.setAttribute("aria-selected", on ? "true" : "false");
+        });
+        document.querySelectorAll("[data-demo-pane]").forEach(function (pane) {
+          pane.classList.toggle("is-active", pane.getAttribute("data-demo-pane") === key);
+        });
+        document.querySelectorAll("[data-demo-panel]").forEach(function (panel) {
+          panel.classList.toggle("is-active", panel.getAttribute("data-demo-panel") === key);
+        });
+        if (chrome) chrome.textContent = chromeTitles[key][isZh ? "zh" : "en"];
+        if (caption) caption.textContent = captions[key][isZh ? "zh" : "en"];
+      }
+      tabs.forEach(function (tab) {
+        tab.addEventListener("click", function () {
+          activate(tab.getAttribute("data-demo-tab"));
+        });
       });
     })();
 
