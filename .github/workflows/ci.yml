@@ -57,10 +57,20 @@ on:
 # time via the release-script commit subject (`chore: bump version to vX.Y.Z`),
 # via `v*` tag-ref dispatches, and via manual dispatches whose tag-on-HEAD
 # status is only known after checkout; scope them to a per-sha group with no
-# cancellation. Every other event keeps branch-wide cancellation for PR/main churn.
+# cancellation. PRs keep branch-wide cancellation (a superseded PR revision is
+# dead weight, and the group is per-ref so a force-push replaces its own run).
+#
+# A push to MAIN no longer cancels an in-flight run. It did, and that — combined
+# with every test job queuing behind the four-platform addon aggregate — is why
+# main shipped untested for a whole session: a run killed during the arm64 addon
+# build never reached a single test bucket. Queued main runs still supersede each
+# other (GitHub cancels the older PENDING run for the same group when a newer one
+# queues), so the newest commit is the one that gets validated, and a run that has
+# already started is allowed to finish. Release runs keep their per-sha group and
+# are never cancelled by either rule.
 concurrency:
    group: "${{ github.workflow }}-${{ (startsWith(github.event.head_commit.message, 'chore: bump version to ') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') && format('release-{0}', github.sha) || github.ref }}"
-   cancel-in-progress: "${{ !(startsWith(github.event.head_commit.message, 'chore: bump version to ') || startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch') }}"
+   cancel-in-progress: "${{ github.event_name == 'pull_request' }}"
 
 env:
    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -192,6 +202,13 @@ jobs:
    # 盘，6 平台 bazel 冷构建累积产物爆盘（No space left on device）。拆组后
    # 各 job 独立 VM、磁盘减半；依赖共享分组（x64 gnu / arm / musl-x64+win32）。
    # PR 只取 x64（npm release addons），arm/musl/win 仅 main 构建。
+   # Provides the native addons the TS jobs install. Every TS job installs only
+   # `linux-x64-baseline/-modern` and therefore `needs: [native_addons_x64]`, NOT
+   # the four-platform `native_addons` aggregate below — the aggregate also waits
+   # on arm64, the slowest addon leg, and queuing the whole test fan-out behind it
+   # left main effectively untested (a run cancelled during that build reached
+   # zero test buckets). The aggregate still exists for the release path, whose
+   # binaries do need the other platforms.
    native_addons_x64:
       name: Build native addons (x64 gnu)
       runs-on: ubuntu-22.04
@@ -431,8 +448,9 @@ jobs:
    test_workspace:
       name: Test TS workspace fast
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 20
       steps:
          - uses: actions/checkout@v4
@@ -440,6 +458,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test workspace packages and repo scripts (TS)
            env:
@@ -454,8 +473,9 @@ jobs:
    test_coding_agent_singleton:
       name: Test coding-agent singleton/global-state (TS)
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 20
       steps:
          - uses: actions/checkout@v4
@@ -463,6 +483,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent singleton/global-state bucket
            # Keep global Settings/env/fake-timer tests serial; native addon
@@ -472,8 +493,9 @@ jobs:
    test_ts_native:
       name: Test TS native/integration packages
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 25
       steps:
          - uses: actions/checkout@v4
@@ -481,6 +503,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test native/TUI/browser-ish packages (TS)
            env:
@@ -490,8 +513,9 @@ jobs:
    test_coding_agent_ui:
       name: Test coding-agent UI/TUI (TS)
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 25
       steps:
          - uses: actions/checkout@v4
@@ -499,6 +523,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent UI/TUI bucket
            env:
@@ -508,8 +533,9 @@ jobs:
    test_coding_agent_runtime:
       name: Test coding-agent runtime/session (TS)
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 25
       steps:
          - uses: actions/checkout@v4
@@ -517,6 +543,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent runtime bucket
            # Runtime/session tests import native-backed barrels too; keep this
@@ -528,8 +555,9 @@ jobs:
    test_coding_agent_native:
       name: Test coding-agent native/unit (TS)
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 25
       steps:
          - uses: actions/checkout@v4
@@ -537,6 +565,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Test coding-agent native/unit bucket
            env:
@@ -552,8 +581,9 @@ jobs:
    test_smoke:
       name: Test CLI smoke (TS)
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       timeout-minutes: 15
       steps:
          - uses: actions/checkout@v4
@@ -561,6 +591,7 @@ jobs:
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: CLI smoke test
            run: bun run ci:test:smoke
@@ -568,14 +599,16 @@ jobs:
    install_methods:
       name: Install method smoke tests
       runs-on: ubuntu-22.04
-      needs: [native_addons]
-      if: ${{ !cancelled() && needs.native_addons.result == 'success' }}
+      # x64 addons only — see native_addons_x64 for why this is not the aggregate.
+      needs: [native_addons_x64]
+      if: ${{ !cancelled() && needs.native_addons_x64.result == 'success' }}
       steps:
          - uses: actions/checkout@v4
          - uses: ./.github/actions/setup-system-deps
          - uses: ./.github/actions/bun-install
          - uses: ./.github/actions/native-artifacts
            with:
+              artifact: native-addons-x64
               targets: linux-x64-baseline linux-x64-modern
          - name: Install method smoke tests
            env:
