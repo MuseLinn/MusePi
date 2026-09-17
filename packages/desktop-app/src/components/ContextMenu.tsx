@@ -9,17 +9,30 @@ export interface ContextMenuItem {
 	 *  (right-click menus carry terse verbs; the description disambiguates). */
 	description?: string;
 	icon?: string;
-	/** Omitted only on divider items. */
+	/** Omitted on divider-only items (no label / no icon / no action). */
 	onSelect?(): void;
 	/** Shortcut hint shown right-aligned (⌘N style). */
 	hint?: string;
-	/** Renders a divider before this item. */
+	/** Renders a divider before this item. An item with `divider` and no
+	 *  `label`/`onSelect`/`icon` is a standalone separator — it renders the
+	 *  line only, never an empty menu row. */
 	divider?: boolean;
 	danger?: boolean;
 	/** Disabled item (grayed, not clickable). */
 	disabled?: boolean;
 	/** Accent color name for the leading dot (group color picker). */
 	color?: string;
+}
+
+/**
+ * A `divider` item carrying no label / description / icon / action is a
+ * standalone separator — it must render the line alone. Rendering it as a row
+ * too produced the blank clickable menu item between "copy path" and "remove
+ * project" (issue #13): the project menu passes a bare `{ divider: true }`
+ * while the group menus hang `divider` on the following real item.
+ */
+export function isDividerOnly(item: ContextMenuItem): boolean {
+	return item.divider === true && !item.label && !item.description && !item.onSelect && !item.icon;
 }
 
 /**
@@ -80,34 +93,41 @@ export function ContextMenu({
 				}
 			}}
 		>
-			{items.map((item, i) => (
+			{items.map((item, i) => {
 				// Menu rows are static call-site arrays — the index is the identity.
-				<div key={i}>
-					{item.divider && <div className="gui-context-divider" />}
-					<button
-						type="button"
-						disabled={item.disabled}
-						className={`gui-context-item${item.danger ? " gui-context-item--danger" : ""}${item.disabled ? " gui-context-item--disabled" : ""}`}
-						role="menuitem"
-						onClick={() => {
-							tapFeedback();
-							onClose();
-							item.onSelect?.();
-						}}
-					>
-						{item.color ? (
-							<span className={`gui-dot gui-dot-${item.color}`} />
-						) : item.icon ? (
-							<Icon name={item.icon as never} className="h-3.5 w-3.5" />
-						) : null}
-						<span className="flex min-w-0 flex-1 flex-col">
-							<span className="truncate">{item.label}</span>
-							{item.description && <span className="gui-context-desc">{item.description}</span>}
-						</span>
-						{item.hint && <span className="gui-context-hint">{item.hint}</span>}
-					</button>
-				</div>
-			))}
+				// A `divider` with nothing to show is a standalone separator: render
+				// the line by itself, or it becomes a blank clickable menu row.
+				if (isDividerOnly(item)) {
+					return <div key={i} className="gui-context-divider" role="separator" />;
+				}
+				return (
+					<div key={i}>
+						{item.divider && <div className="gui-context-divider" role="separator" />}
+						<button
+							type="button"
+							disabled={item.disabled}
+							className={`gui-context-item${item.danger ? " gui-context-item--danger" : ""}${item.disabled ? " gui-context-item--disabled" : ""}`}
+							role="menuitem"
+							onClick={() => {
+								tapFeedback();
+								onClose();
+								item.onSelect?.();
+							}}
+						>
+							{item.color ? (
+								<span className={`gui-dot gui-dot-${item.color}`} />
+							) : item.icon ? (
+								<Icon name={item.icon as never} className="h-3.5 w-3.5" />
+							) : null}
+							<span className="flex min-w-0 flex-1 flex-col">
+								<span className="truncate">{item.label}</span>
+								{item.description && <span className="gui-context-desc">{item.description}</span>}
+							</span>
+							{item.hint && <span className="gui-context-hint">{item.hint}</span>}
+						</button>
+					</div>
+				);
+			})}
 		</div>,
 	);
 }
