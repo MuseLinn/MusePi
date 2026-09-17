@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import type { CSSProperties, FormEvent, ReactNode } from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { currentLine, lastTokenIndex, tokenQuery } from "../lib/completion-trigger";
 import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
@@ -606,17 +607,22 @@ export function WelcomeComposer({
 	// and the active-row highlight depends on them — refs never re-render,
 	// so the highlight only moved on unrelated renders (typing/streaming).
 	const [slashIdx, setSlashIdx] = useState(0);
+	// Absolute caret offsets of the token that opened each menu — the
+	// selected entry replaces exactly that range (see insertCompletion).
+	const [slashAnchor, setSlashAnchor] = useState<number | null>(null);
 	const [atOpen, setAtOpen] = useState(false);
 	const [atQuery, setAtQuery] = useState("");
 	const [atEntries, setAtEntries] = useState<{ name: string; path: string; isDir: boolean; depth: number }[] | null>(
 		null,
 	);
 	const [atIdx, setAtIdx] = useState(0);
+	const [atAnchor, setAtAnchor] = useState<number | null>(null);
 	const [hashOpen, setHashOpen] = useState(false);
 	const [hashQuery, setHashQuery] = useState("");
 	const [hashSessions, setHashSessions] = useState<{ id: string; cwd?: string }[] | null>(null);
 	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
 	const [hashIdx, setHashIdx] = useState(0);
+	const [hashAnchor, setHashAnchor] = useState<number | null>(null);
 	const slashFilter = (() => {
 		const q = slashQuery.toLowerCase();
 		// /skill, /skills, /skill: — surface every skill command (the
@@ -749,13 +755,17 @@ export function WelcomeComposer({
 	}, [text]);
 	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy;
 
-	// Completion triggers (composer parity): line-leading / @ # open the
-	// floating preview lists; Enter/click inserts the token.
+	// Completion triggers (composer parity): a / @ # that is not glued to ASCII
+	// word characters opens the floating preview lists; Enter/click inserts the
+	// token. The rule is shared with the session composer (lib/completion-trigger)
+	// — it used to demand a LINE-LEADING token here, so the empty state and an
+	// open session disagreed about the same keystroke.
 	const onCompletionInput = (value: string): void => {
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("/") && line.length >= 1) {
-			setSlashQuery(line.length > 1 ? line.slice(1) : "");
+		const { line, lineStart } = currentLine(value);
+		const slash = tokenQuery(line, "/");
+		if (slash) {
+			setSlashQuery(slash.query);
+			setSlashAnchor(lineStart + slash.anchor);
 			setSlashOpen(true);
 			setSlashIdx(0);
 			if (!slashCmds && rpc) {
@@ -767,8 +777,10 @@ export function WelcomeComposer({
 		} else {
 			setSlashOpen(false);
 		}
-		if (line.startsWith("@") && line.length >= 1) {
-			setAtQuery(line.length > 1 ? line.slice(1) : "");
+		const at = tokenQuery(line, "@");
+		if (at) {
+			setAtQuery(at.query);
+			setAtAnchor(lineStart + at.anchor);
 			setAtOpen(true);
 			setAtIdx(0);
 			if (!atEntries && rpc) {
@@ -787,8 +799,10 @@ export function WelcomeComposer({
 		} else {
 			setAtOpen(false);
 		}
-		if (line.startsWith("#") && line.length >= 1) {
-			setHashQuery(line.length > 1 ? line.slice(1) : "");
+		const hash = tokenQuery(line, "#");
+		if (hash) {
+			setHashQuery(hash.query);
+			setHashAnchor(lineStart + hash.anchor);
 			setHashOpen(true);
 			setHashIdx(0);
 			if (!hashSessions && rpc) {
@@ -819,13 +833,20 @@ export function WelcomeComposer({
 	const insertCompletion = (type: "slash" | "at" | "hash", value: string): void => {
 		const ta = taRef.current;
 		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		const line = ta.value.slice(lineStart);
 		const token = type === "slash" ? "/" : type === "at" ? "@" : "#";
-		const qlen = line.startsWith(token) ? line.length - 1 : 0;
-		const prefix = ta.value.slice(0, lineStart);
-		const next = `${prefix}${token}${value} ${ta.value.slice(lineStart + qlen + 1)}`;
-		setText(next);
+		// Replace the token the user actually typed (its absolute offset was
+		// recorded when the menu opened), falling back to the last
+		// trigger-position occurrence if that offset went stale. A line-leading
+		// anchor is wrong here: the token may sit anywhere in the line.
+		const anchor = type === "slash" ? slashAnchor : type === "at" ? atAnchor : hashAnchor;
+		const { line, lineStart } = currentLine(ta.value);
+		const fallback = lastTokenIndex(line, token);
+		const at = anchor ?? (fallback >= 0 ? lineStart + fallback : null);
+		const start = at ?? ta.value.length;
+		const query = ta.value.slice(start + 1);
+		const end = /^\S*$/.test(query) ? start + 1 + query.length : start + 1;
+		ta.setRangeText(`${token}${value} `, start, end, "end");
+		setText(ta.value);
 		if (type === "slash") setSlashOpen(false);
 		if (type === "at") setAtOpen(false);
 		if (type === "hash") setHashOpen(false);

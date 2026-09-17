@@ -1637,8 +1637,16 @@ export function Composer({
 								const start = ta.selectionStart ?? text.length;
 								const end = ta.selectionEnd ?? text.length;
 								ta.setRangeText(token, start, end, "end");
-								setText(ta.value);
+								const next = ta.value;
+								setText(next);
 								autosize(ta);
+								// The completion panels are driven off textarea onChange,
+								// which a programmatic setRangeText never fires — so
+								// "+ → insert command" landed a bare "/" with no menu.
+								// Re-run the same parsers the change handler uses.
+								onSlashInput(next);
+								onAtInput(next);
+								onHashInput(next);
 							}}
 						/>
 						{/* 会话扩展状态卡(DSH Cordis Plugin 卡片参考吸收):运行中扩展数 +

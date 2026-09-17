@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { currentLine, tokenQuery } from "../../lib/completion-trigger";
 import type { RpcClient } from "../../lib/rpc";
 import { rankSlashEntries } from "../../lib/slash-rank";
 import { autosize } from "../composer-autosize";
@@ -68,6 +69,10 @@ export function useCompletion({
 	// builtin registry; Enter/click inserts the command token.
 	const [slashOpen, setSlashOpen] = useState(false);
 	const [slashQuery, setSlashQuery] = useState("");
+	/** Index (in the full textarea value) of the "/" that opened the command
+	 *  token — with a mid-line trigger the completion must replace from HERE,
+	 *  not from line start (mirrors atAnchor). */
+	const [slashAnchor, setSlashAnchor] = useState<number | null>(null);
 	const [slashCmds, setSlashCmds] = useState<SlashEntry[] | null>(null);
 	// Selection index must be STATE: arrow keys set it inside onKeyDown and
 	// the active-row highlight depends on it — a ref never re-renders, so
@@ -86,6 +91,9 @@ export function useCompletion({
 	// titles resolved from session.tree labels (fallback: cwd basename).
 	const [hashOpen, setHashOpen] = useState(false);
 	const [hashQuery, setHashQuery] = useState("");
+	/** Index (in the full textarea value) of the "#" that opened the session
+	 *  token — mirrors slashAnchor/atAnchor so a mid-line "#" splices in place. */
+	const [hashAnchor, setHashAnchor] = useState<number | null>(null);
 	const [hashSessions, setHashSessions] = useState<HashCompletionEntry[] | null>(null);
 	const [hashLabels, setHashLabels] = useState<Map<string, string>>(new Map());
 	const [hashIdx, setHashIdx] = useState(0);
@@ -132,12 +140,19 @@ export function useCompletion({
 		);
 	})();
 
+	/**
+	 * A "/" opens command completion when it is not glued to ASCII word
+	 * characters — the same rule "@" already follows (see lib/completion-trigger).
+	 * The old check demanded a line-leading "/", so a "/" typed after body text
+	 * ("请继续/" or even "/请继续", where the query then became the whole sentence
+	 * and ranked to zero entries) never opened the menu.
+	 */
 	const onSlashInput = (value: string): void => {
-		// Trigger when the current line starts with "/".
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("/") && line.length >= 1) {
-			setSlashQuery(line.length > 1 ? line.slice(1) : "");
+		const { line, lineStart } = currentLine(value);
+		const hit = tokenQuery(line, "/");
+		if (hit) {
+			setSlashQuery(hit.query);
+			setSlashAnchor(lineStart + hit.anchor);
 			setSlashOpen(true);
 			setSlashIdx(0);
 			if (!slashCmds && rpc) {
@@ -154,44 +169,30 @@ export function useCompletion({
 	const insertSlash = (name: string): void => {
 		const ta = taRef.current;
 		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		// Replace the "/query" token with "/name ".
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + slashQuery.length + 1);
+		// Replace the anchored "/query" token with "/name " — the anchor is
+		// recorded when the menu opens, so a "/" typed mid-line splices there
+		// instead of clobbering the start of the line.
+		const anchor = slashAnchor ?? ta.value.lastIndexOf("\n") + 1;
+		const prefix = ta.value.slice(0, anchor);
+		const rest = ta.value.slice(anchor + slashQuery.length + 1);
 		const next = `${prefix}/${name} ${rest}`;
 		setText(next);
 		setSlashOpen(false);
 		requestAnimationFrame(() => autosize(taRef.current));
 	};
 
-	/**
-	 * A "@" opens a mention when it is not glued to ASCII word characters: line
-	 * start, whitespace, CJK body text ("请看@文件") and punctuation ("（@组件" /
-	 * ",@x") all trigger — ZCode「中文正文或标点紧邻 @ 也能唤起面板」parity. An
-	 * email-ish `foo@bar` must NOT open the file panel.
-	 */
-	function isAtTrigger(line: string, at: number): boolean {
-		if (at <= 0) return true; // line start
-		return !/[A-Za-z0-9_]/.test(line[at - 1] ?? "");
-	}
-
 	const onAtInput = (value: string): void => {
-		// Trigger on the LAST "@" of the current line — the mention token is the
-		// text after it. The old rule required a line-leading "@", so typing
-		// "请看@文件" (Chinese body text before the @) never opened the panel.
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		const at = line.lastIndexOf("@");
-		if (at >= 0 && isAtTrigger(line, at)) {
-			const query = line.slice(at + 1);
-			// A mention token never contains whitespace (otherwise "a @b c" and
-			// addresses would keep the panel open).
-			if (!/^\S*$/.test(query)) {
-				setAtOpen(false);
-				return;
-			}
+		// Trigger on the LAST triggering "@" of the current line — the mention
+		// token is the text after it. The old rule required a line-leading "@", so
+		// typing "请看@文件" (Chinese body text before the @) never opened the
+		// panel; the shared rule (lib/completion-trigger) also makes that
+		// consistent with the welcome composer and with "/".
+		const { line, lineStart } = currentLine(value);
+		const hit = tokenQuery(line, "@");
+		if (hit) {
+			const query = hit.query;
 			setAtQuery(query);
-			setAtAnchor(lineStart + at);
+			setAtAnchor(lineStart + hit.anchor);
 			setAtOpen(true);
 			setAtIdx(0);
 			if (!atEntries && rpc) {
@@ -237,11 +238,12 @@ export function useCompletion({
 	};
 
 	const onHashInput = (value: string): void => {
-		// Trigger when the current line starts with "#" (insert a session).
-		const lineStart = value.lastIndexOf("\n") + 1;
-		const line = value.slice(lineStart);
-		if (line.startsWith("#") && line.length >= 1) {
-			setHashQuery(line.length > 1 ? line.slice(1) : "");
+		// Same shared trigger rule as "/" and "@" (lib/completion-trigger).
+		const { line, lineStart } = currentLine(value);
+		const hit = tokenQuery(line, "#");
+		if (hit) {
+			setHashQuery(hit.query);
+			setHashAnchor(lineStart + hit.anchor);
 			setHashOpen(true);
 			setHashIdx(0);
 			if (!hashSessions && rpc) {
@@ -292,9 +294,10 @@ export function useCompletion({
 	const insertHash = (id: string): void => {
 		const ta = taRef.current;
 		if (!ta) return;
-		const lineStart = ta.value.lastIndexOf("\n") + 1;
-		const prefix = ta.value.slice(0, lineStart);
-		const rest = ta.value.slice(lineStart + hashQuery.length + 1);
+		// Splice through the recorded "#" anchor (it may sit mid-line).
+		const anchor = hashAnchor ?? ta.value.lastIndexOf("\n") + 1;
+		const prefix = ta.value.slice(0, anchor);
+		const rest = ta.value.slice(anchor + hashQuery.length + 1);
 		// Insert a read-tool-resolvable internal URL (TUI parity: the "#"
 		// GitHub-ref completion rewrites to issue://pr:// URLs). The model
 		// can `read history://<id>` to inspect the referenced session.
