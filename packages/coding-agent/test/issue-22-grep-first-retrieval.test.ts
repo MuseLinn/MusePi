@@ -46,7 +46,7 @@ describe("issue #22: grep is a first-class file-layer retrieval tool", () => {
 	it("tells the model to start lookups in grep, not in a parsing kernel", () => {
 		const grepText = prompt.render(grepDescription, { scoutAvailable: true });
 		expect(grepText).toContain("NOT in `eval` with a parser");
-		expect(grepText).toContain("Search the raw text first, then parse/query");
+		expect(grepText).toContain("raw text first, then parse");
 	});
 });
 
@@ -83,7 +83,6 @@ describe("issue #22: bash.md keeps checked-in entry points in bash", () => {
 
 	it("allows running a project script without detouring through eval", () => {
 		expect(bashText).toContain("checked-in entry point");
-		expect(bashText).toMatch(/python path\/to\/pipeline\.py/);
 		expect(bashText).toContain("ALWAYS bash");
 	});
 

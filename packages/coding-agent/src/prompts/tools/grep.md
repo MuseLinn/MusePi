@@ -9,6 +9,6 @@ Searches files/internal URLs: Rust regex, PCRE2 fallback.
 
 <critical>
 - MUST use instead of shell `grep`/`rg`.
-- Lookups (identifier, field name, literal, coordinate) in any file — code, data, config, logs — start here, NOT in `eval` with a parser. Search the raw text first, then parse/query.
+- Lookups (identifier, field, literal, coordinate) in any file start here, NOT in `eval` with a parser: raw text first, then parse.
 - Open-ended multi-round search MUST use {{#if scoutAvailable}}Task + scout,{{else}}Task,{{/if}} not chained calls.
 </critical>
