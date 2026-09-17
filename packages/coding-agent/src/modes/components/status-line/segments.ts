@@ -9,6 +9,7 @@ import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../../tools/r
 import { fileHyperlink } from "../../../tui/hyperlink";
 import { getSessionAccentAnsi, getSessionAccentHex } from "../../../utils/session-color";
 import { sanitizeStatusText } from "../../shared";
+import { cacheHitRate } from "../../utils/cache-hit";
 import { formatContextUsage, getContextUsageLevel, getContextUsageThemeColor } from "./context-thresholds";
 import type { RenderedSegment, SegmentContext, StatusLineSegment, StatusLineSegmentId } from "./types";
 
@@ -593,17 +594,10 @@ const cacheWriteSegment: StatusLineSegment = {
 const cacheHitSegment: StatusLineSegment = {
 	id: "cache_hit",
 	render(ctx) {
-		const { cacheRead, cacheWrite, input } = ctx.usageStats;
-		if (!cacheRead) return { content: "", visible: false };
-
-		// Hit rate = cacheRead / total prompt tokens. The prompt is the sum of
-		// cacheRead (served from cache), cacheWrite (newly cached this turn) and
-		// input (uncached). Including uncached input keeps the denominator honest
-		// for Anthropic/OpenRouter; DeepSeek reports its miss as input with
-		// cacheWrite 0, so this still yields hit/(hit+miss).
-		const total = cacheRead + cacheWrite + input;
-
-		const rate = (cacheRead / total) * 100;
+		// Shared with the daemon's session.contextUsage (GUI parity) — see
+		// modes/utils/cache-hit.ts for the denominator rationale.
+		const rate = cacheHitRate(ctx.usageStats);
+		if (rate === null) return { content: "", visible: false };
 		const rateStr = rate.toFixed(2);
 
 		const parts: string[] = [theme.icon.cache];

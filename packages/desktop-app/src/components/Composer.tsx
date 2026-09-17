@@ -20,7 +20,7 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
-import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView } from "./ContextRing";
+import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
 import {
 	EnhanceButton,
 	type EnhanceState,
@@ -293,6 +293,7 @@ export function Composer({
 		model?: string | null;
 		snapcompact?: SnapcompactSavingsView | null;
 		breakdown?: ContextBreakdownView | null;
+		usage?: UsageSummaryView | null;
 	} | null>(null);
 	// Shared by the 3s poll and the model-switch immediate refresh — the
 	// ring/card must follow a model change without waiting for the next tick.
@@ -306,6 +307,7 @@ export function Composer({
 				model?: string | null;
 				snapcompact?: SnapcompactSavingsView | null;
 				breakdown?: ContextBreakdownView | null;
+				usage?: UsageSummaryView | null;
 				autoCompactBufferTokens?: number;
 				freeTokens?: number;
 			} | null>("session.contextUsage", {
@@ -321,18 +323,25 @@ export function Composer({
 				// composer's model selector seeds from it, and an external
 				// switch (auto downshift, same-window-size model) must not
 				// leave the displayed model stale.
-				setContextUsage(prev =>
-					usage &&
-					prev &&
-					prev.tokens === usage.tokens &&
-					prev.percent === usage.percent &&
-					prev.contextWindow === usage.contextWindow &&
-					prev.model === usage.model
-						? prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
-							? prev
-							: usage
-						: usage,
-				);
+				setContextUsage(prev => {
+					if (!usage || !prev) return usage;
+					// The cost / cache-hit block moves independently of the
+					// token counts, so it is part of the identity too —
+					// otherwise the spend line freezes until the next
+					// context-window change.
+					const usageSame =
+						prev.usage?.cost === usage.usage?.cost &&
+						prev.usage?.cacheRead === usage.usage?.cacheRead &&
+						prev.usage?.cacheHitRate === usage.usage?.cacheHitRate;
+					return prev.tokens === usage.tokens &&
+						prev.percent === usage.percent &&
+						prev.contextWindow === usage.contextWindow &&
+						prev.model === usage.model &&
+						usageSame &&
+						prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
+						? prev
+						: usage;
+				});
 				// Keep the /context card in step with the live session:
 				// model switches change contextWindow/percent and the
 				// card must follow instead of freezing at open time.
@@ -579,6 +588,7 @@ export function Composer({
 			model?: string | null;
 			snapcompact?: SnapcompactSavingsView | null;
 			breakdown?: ContextBreakdownView | null;
+			usage?: UsageSummaryView | null;
 			autoCompactBufferTokens?: number;
 			freeTokens?: number;
 		} | null;
@@ -598,6 +608,7 @@ export function Composer({
 				model?: string | null;
 				snapcompact?: SnapcompactSavingsView | null;
 				breakdown?: ContextBreakdownView | null;
+				usage?: UsageSummaryView | null;
 				autoCompactBufferTokens?: number;
 				freeTokens?: number;
 			} | null>("session.contextUsage", { sessionId })
@@ -1731,6 +1742,7 @@ export function Composer({
 								compacting={compacting}
 								compactFailed={compactFailed}
 								snapcompact={contextUsage.snapcompact ?? null}
+								usage={contextUsage.usage ?? null}
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}

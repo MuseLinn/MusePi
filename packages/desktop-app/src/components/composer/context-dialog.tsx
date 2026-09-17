@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import type { ContextBreakdownView } from "../../lib/context-command";
 import { Icon } from "../../vendor/oc-icons";
-import type { SnapcompactSavingsView } from "../ContextRing";
+import { formatSpend, type SnapcompactSavingsView, type UsageSummaryView } from "../ContextRing";
 
 /** Compact token count (K/M) for the context dialog. */
 function fmtTokens(n: number): string {
@@ -176,6 +176,8 @@ export interface ContextUsageData {
 	model?: string | null;
 	snapcompact?: SnapcompactSavingsView | null;
 	breakdown?: ContextBreakdownView | null;
+	/** Session tokens + cost + cache hit rate (issue #8, TUI cache_hit parity). */
+	usage?: UsageSummaryView | null;
 	autoCompactBufferTokens?: number;
 	freeTokens?: number;
 }
@@ -211,6 +213,20 @@ export function ContextUsageCard({
 						</span>
 					</div>
 					{data.breakdown && renderContextGrid(data.breakdown, data.autoCompactBufferTokens ?? 0)}
+					{data.usage && (data.usage.cacheHitRate != null || data.usage.cost > 0) && (
+						<div className="gui-context-snap">
+							{data.usage.cacheHitRate != null && (
+								<div className="gui-context-snap-line">
+									{t("cache hit")}: {data.usage.cacheHitRate.toFixed(1)}%
+								</div>
+							)}
+							{data.usage.cost > 0 && (
+								<div className="gui-context-snap-line">
+									{t("session spend")}: {formatSpend(data.usage.cost)}
+								</div>
+							)}
+						</div>
+					)}
 					{data.snapcompact && (
 						<div className="gui-context-snap">
 							<div className="gui-context-snap-title">

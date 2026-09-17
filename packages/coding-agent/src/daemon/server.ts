@@ -92,6 +92,7 @@ import { FileIndexService } from "../file-index";
 import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";
 import type { MCPManager } from "../mcp";
 import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } from "../mcp/startup-events";
+import { cacheHitRate } from "../modes/utils/cache-hit";
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
@@ -7456,12 +7457,32 @@ export class DaemonServer {
 					autoCompactBufferTokens = Math.min(autoCompactBufferTokens, Math.max(0, cw - used));
 					freeTokens = Math.max(0, cw - used - autoCompactBufferTokens);
 				}
-				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0
+				// Session token/cost summary + prompt-cache hit rate (issue #8,
+				// TUI `cache_hit` segment parity). The GUI has no other source
+				// for either: the context ring is window-percentage only, and
+				// settings → agent stats is easy to miss. Hit rate is computed
+				// here with the TUI's own helper so the two cannot disagree.
+				const tokenStats = live.agentSession.sessionManager?.getUsageStatistics?.() ?? null;
+				const hitRate = cacheHitRate(tokenStats);
+				const tokenSummary =
+					tokenStats || hitRate !== null
+						? {
+								input: tokenStats?.input ?? 0,
+								output: tokenStats?.output ?? 0,
+								cacheRead: tokenStats?.cacheRead ?? 0,
+								cacheWrite: tokenStats?.cacheWrite ?? 0,
+								totalTokens: tokenStats?.totalTokens ?? 0,
+								cost: tokenStats?.cost ?? 0,
+								cacheHitRate: hitRate,
+							}
+						: null;
+				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0 || tokenSummary
 					? {
 							...usage,
 							...(modelRef ? { model: modelRef } : {}),
 							...(snapcompact ? { snapcompact } : {}),
 							...(breakdown ? { breakdown } : {}),
+							...(tokenSummary ? { usage: tokenSummary } : {}),
 							autoCompactBufferTokens,
 							freeTokens,
 						}

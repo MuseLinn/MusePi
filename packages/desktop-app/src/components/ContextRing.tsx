@@ -47,6 +47,28 @@ export interface UsageQuotaView {
 	}>;
 }
 
+/** Session token/cost summary (issue #8) — wire shape of the `usage` block
+ *  served by session.contextUsage. `cacheHitRate` is computed daemon-side with
+ *  the TUI's own helper, so the GUI cannot drift from the terminal. */
+export interface UsageSummaryView {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+	totalTokens: number;
+	/** Estimated spend in USD; 0 when the catalog has no price. */
+	cost: number;
+	/** null when there have been no cache reads at all. */
+	cacheHitRate: number | null;
+}
+
+/** USD with sub-cent precision kept visible — session totals are small. */
+export function formatSpend(cost: number): string {
+	if (cost >= 1) return `$${cost.toFixed(2)}`;
+	if (cost >= 0.01) return `$${cost.toFixed(3)}`;
+	return `$${cost.toFixed(4)}`;
+}
+
 /** Bar tone for the popover quota meters (err ≥85%, warn ≥50%). */
 function quotaTone(usedPercent: number): string {
 	if (usedPercent >= 85) return "gui-usage-bar--err";
@@ -69,6 +91,7 @@ export function ContextRing({
 	compacting = false,
 	compactFailed = false,
 	snapcompact = null,
+	usage = null,
 	fetchQuota,
 }: {
 	percent: number | null | undefined;
@@ -82,6 +105,8 @@ export function ContextRing({
 	compactFailed?: boolean;
 	/** Snapcompact estimated wire savings (TUI /context parity); null/undefined hides the block. */
 	snapcompact?: SnapcompactSavingsView | null;
+	/** Session tokens + cost + cache hit rate; null/undefined hides the block. */
+	usage?: UsageSummaryView | null;
 	/** Provider subscription quota (TUI /usage parity) — fetched lazily
 	 *  when the popover opens; null/undefined hides the block. */
 	fetchQuota?: () => Promise<UsageQuotaView | null>;
@@ -182,6 +207,27 @@ export function ContextRing({
 							<SlidingNumber value={Math.round(pct)} />%
 						</span>
 					</div>
+					{/* Prompt-cache hit rate + session spend (issue #8, TUI
+					 *  `cache_hit` status-line parity). A silent cache miss
+					 *  otherwise just reads as "the model got slower and more
+					 *  expensive" with nothing to look at. */}
+					{usage?.cacheHitRate != null && (
+						<div className="gui-context-pop-row">
+							<span>{t("cache hit")}</span>
+							<span className="gui-context-pop-val">{usage.cacheHitRate.toFixed(1)}%</span>
+						</div>
+					)}
+					{usage != null && usage.cost > 0 && (
+						<div className="gui-context-pop-row">
+							<span>{t("session spend")}</span>
+							<span className="gui-context-pop-val">{formatSpend(usage.cost)}</span>
+						</div>
+					)}
+					{usage != null && usage.cacheRead > 0 && (
+						<div className="gui-context-pop-note">
+							{t("cache read tokens")} {fmtTokens(usage.cacheRead)}
+						</div>
+					)}
 					{pct > 100 && (
 						<div className="gui-context-pop-note" style={{ color: "var(--color-danger)" }}>
 							{t("context over window")} — {t("over window: compact or switch to a larger-context model")}
