@@ -80,6 +80,7 @@ import type {
 import type { CompactOptions } from "../extensibility/extensions/types";
 import type { Skill } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
+import { fingerprintToolEvidence, shouldSuppressContinuation, type ToolEvidence } from "../goals/continuation-evidence";
 import type { Goal, GoalModeState } from "../goals/state";
 import { t } from "../i18n/index.js";
 import { copyLocalArtifacts, resolveLocalUrlToPath } from "../internal-urls";
@@ -634,9 +635,12 @@ export class InteractiveMode implements InteractiveModeContext {
 	#vibeModeOwnerScope: VibeOwnerScope | undefined;
 	#vibeScopeSuspendedForSwitch = false;
 	#goalContinuationTimer: NodeJS.Timeout | undefined;
-	#goalTurnHadToolCalls = false;
 	#goalContinuationTurnInFlight = false;
 	#goalSuppressNextContinuation = false;
+	/** Model-visible tool evidence collected during the current round. */
+	#goalTurnEvidence: ToolEvidence[] = [];
+	/** Fingerprint of the previous continuation round's evidence; null until one has run. */
+	#goalPreviousEvidenceFingerprint: string | null = null;
 	#planModePreviousModelState: { model: Model; thinkingLevel?: ConfiguredThinkingLevel } | undefined;
 	#pendingModelSwitch: { model: Model; thinkingLevel?: ConfiguredThinkingLevel } | undefined;
 	/** Whether #pendingModelSwitch was queued by the live plan-role reconciler. */
@@ -2391,6 +2395,10 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	#resetGoalContinuationSuppression(): void {
 		this.#goalSuppressNextContinuation = false;
+		// A real user turn (or any non-continuation activity) opens a fresh
+		// evidence baseline: the next continuation must not be judged against
+		// the previous continuation's fingerprint.
+		this.#goalPreviousEvidenceFingerprint = null;
 	}
 
 	#getPausedGoalState(): GoalModeState | undefined {
@@ -2430,15 +2438,27 @@ export class InteractiveMode implements InteractiveModeContext {
 
 	async #handleGoalSessionEvent(event: AgentSessionEvent): Promise<void> {
 		if (event.type === "agent_start") {
-			this.#goalTurnHadToolCalls = false;
+			this.#goalTurnEvidence = [];
 			this.#cancelGoalContinuation();
 			return;
 		}
 		if (event.type === "tool_execution_start") {
-			this.#goalTurnHadToolCalls = true;
 			if (!this.#goalContinuationTurnInFlight) {
 				this.#resetGoalContinuationSuppression();
 			}
+			return;
+		}
+		if (event.type === "tool_execution_end") {
+			// Record what the MODEL saw, not merely that a tool ran: consecutive
+			// continuation rounds that return identical evidence (a `todo view`
+			// snapshot that does not change, a re-read of an unchanged file) must
+			// not keep re-prompting the model forever (oh-my-pi #11819 / #11822).
+			this.#goalTurnEvidence.push({
+				toolName: event.toolName,
+				args: (event as { args?: unknown }).args,
+				result: event.result,
+				isError: event.isError,
+			});
 			return;
 		}
 		if (event.type === "message_start" && event.message.role === "user" && !event.message.synthetic) {
@@ -2464,7 +2484,18 @@ export class InteractiveMode implements InteractiveModeContext {
 			return;
 		}
 		if (this.#goalContinuationTurnInFlight) {
-			this.#goalSuppressNextContinuation = !this.#goalTurnHadToolCalls;
+			// Idle when this round added no NEW model-visible evidence. A round
+			// with no tool calls never continues (unchanged); a round whose tool
+			// evidence fingerprints identically to the previous continuation round
+			// also idles, because the model saw the same thing twice — that is the
+			// #11819 loop. Any change to the fingerprint still allows the next
+			// continuation.
+			const fingerprint = fingerprintToolEvidence(this.#goalTurnEvidence);
+			this.#goalSuppressNextContinuation = shouldSuppressContinuation(
+				fingerprint,
+				this.#goalPreviousEvidenceFingerprint,
+			);
+			this.#goalPreviousEvidenceFingerprint = fingerprint === "" ? null : fingerprint;
 			this.#goalContinuationTurnInFlight = false;
 		}
 		if (this.session.getGoalModeState()?.mode === "exiting") {
@@ -2595,7 +2626,6 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.goalModeEnabled = false;
 			this.goalModePaused = false;
 			this.#goalModePreviousTools = undefined;
-			this.#goalTurnHadToolCalls = false;
 			this.#goalContinuationTurnInFlight = false;
 			this.#goalSuppressNextContinuation = false;
 			this.#cancelGoalContinuation();
@@ -3291,6 +3321,10 @@ export class InteractiveMode implements InteractiveModeContext {
 					undefined,
 					outcome => this.#applyDeferredPlanModelTransition(outcome, options.executionModel),
 					compactionPrompt,
+					// Plan approval hands control back to the user with the execution
+					// model armed — it must NOT auto-resume the aborted turn the way a
+					// plain mid-turn `/compact` does (oh-my-pi #11873).
+					true,
 				);
 			}
 		} finally {
@@ -4931,8 +4965,15 @@ export class InteractiveMode implements InteractiveModeContext {
 		mode?: CompactMode,
 		beforeFlush?: (outcome: CompactionOutcome) => void | Promise<void>,
 		internalGuidance?: string,
+		suppressContinuation = false,
 	): Promise<CompactionOutcome> {
-		return this.#commandController.handleCompactCommand(customInstructions, mode, beforeFlush, internalGuidance);
+		return this.#commandController.handleCompactCommand(
+			customInstructions,
+			mode,
+			beforeFlush,
+			internalGuidance,
+			suppressContinuation,
+		);
 	}
 
 	handleHandoffCommand(customInstructions?: string): Promise<void> {

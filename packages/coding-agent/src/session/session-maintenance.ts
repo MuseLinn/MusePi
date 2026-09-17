@@ -682,11 +682,27 @@ export class SessionMaintenance {
 		// double-bill the summarizer and race the commit.
 		this.cancelSpeculation();
 
+		// A manual compaction ABORTS the live turn before summarizing. Unlike the
+		// automatic context-full path, nothing rescheduled it afterwards, so a
+		// half-finished tool loop just stopped and the user had to type "continue"
+		// (oh-my-pi #11873). Remember whether we cut a turn short, and resume it
+		// once the summary commits — but never start a turn on an idle session.
+		// The generation is captured AFTER the abort (see the finally block): an
+		// abort bumps the generation, and scheduling with the pre-abort value
+		// would make the continuation look stale and be skipped.
+		const interruptedTurn = ownsCompactionController && this.#host.agent.state.isStreaming;
+		let resumeGeneration = 0;
+
 		try {
 			if (ownsCompactionController) {
 				this.#host.disconnectFromAgent();
 				await this.#host.abort({ goalReason: "internal", preserveCompaction: true });
 			}
+			// Read the generation AFTER the abort: abort() bumps it, and a
+			// continuation scheduled against the pre-abort value is treated as
+			// stale by the post-prompt queue and silently skipped — which is
+			// exactly the hang this fix removes.
+			resumeGeneration = this.#host.promptGeneration();
 			const activeModel = this.#model;
 			if (!activeModel) {
 				throw new Error("No model selected");
@@ -1019,6 +1035,26 @@ export class SessionMaintenance {
 				// queues, so nothing else resumes them: re-drain now that the listener is back
 				// and `isCompacting` is false, or the queued turn hangs until the next prompt.
 				this.#host.drainStrandedQueuedMessages();
+				// Resume the turn this compaction cut short (oh-my-pi #11873). Only when a
+				// turn was actually in flight and the summary committed: an idle `/compact`
+				// must not fabricate a turn, and a failed/cancelled compaction leaves the
+				// session as the user interrupted it. Queued steer/follow-up wins over the
+				// developer nudge inside the host hook; `compaction.autoContinue: false`
+				// and plan mode's `suppressContinuation` still opt out.
+				if (interruptedTurn && compactionCommitted) {
+					try {
+						this.#host.scheduleCompactionContinuation({
+							generation: resumeGeneration,
+							autoContinue: options?.suppressContinuation !== true,
+							// The aborted turn never produced a terminal answer, so the
+							// terminal-answer guard must not apply here.
+							terminalTextAnswer: false,
+							suppressContinuation: options?.suppressContinuation === true,
+						});
+					} catch (err) {
+						logger.debug("Failed to schedule post-compaction continuation", { err: String(err) });
+					}
+				}
 			}
 		}
 	}

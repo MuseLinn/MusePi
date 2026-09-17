@@ -1364,6 +1364,7 @@ export class CommandController {
 		mode?: CompactMode,
 		beforeFlush?: (outcome: CompactionOutcome) => void | Promise<void>,
 		internalGuidance?: string,
+		suppressContinuation = false,
 	): Promise<CompactionOutcome> {
 		const entries = this.ctx.sessionManager.getEntries();
 		const messageCount = entries.filter(e => e.type === "message").length;
@@ -1379,8 +1380,18 @@ export class CommandController {
 		// hook — extensions treat that field as user focus and would otherwise
 		// bias the summary toward the plan boilerplate (issue #4359). Ride it
 		// through as a CompactOptions field instead.
-		if (internalGuidance) {
-			return this.executeCompaction({ internalGuidance, ...(mode ? { mode } : {}) }, false, beforeFlush, mode);
+		//
+		// `suppressContinuation` rides the same channel: plan-mode approval is the
+		// one compaction that must NOT auto-resume the aborted turn (it hands
+		// control back to the user with the execution model armed), whereas a
+		// plain `/compact` mid-turn should resume it (oh-my-pi #11873).
+		const options: CompactOptions = {
+			...(internalGuidance ? { internalGuidance } : {}),
+			...(mode ? { mode } : {}),
+			...(suppressContinuation ? { suppressContinuation: true } : {}),
+		};
+		if (Object.keys(options).length > 0) {
+			return this.executeCompaction(options, false, beforeFlush, mode);
 		}
 		return this.executeCompaction(customInstructions, false, beforeFlush, mode);
 	}

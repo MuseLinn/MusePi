@@ -413,6 +413,17 @@ export interface CompactOptions {
 	 * `customInstructions`.
 	 */
 	internalGuidance?: string;
+	/**
+	 * Opt out of the post-compaction continuation for this invocation.
+	 *
+	 * A manual compaction aborts whatever turn is running, so a long tool loop
+	 * would otherwise be silently cut in half; the default is therefore to
+	 * auto-resume the interrupted turn once the summary commits (matching the
+	 * automatic context-full path). Plan mode's "Approve and compact" is the
+	 * one caller that wants the turn to stay stopped — it exits plan mode and
+	 * hands control back to the user. oh-my-pi #11873.
+	 */
+	suppressContinuation?: boolean;
 }
 
 /**

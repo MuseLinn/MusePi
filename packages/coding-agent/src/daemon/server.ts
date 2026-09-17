@@ -7919,6 +7919,11 @@ export class DaemonServer {
 								internalGuidance: prompt.render(planModeCompactInstructionsPrompt, {
 									planFilePath,
 								}),
+								// Plan approval hands control back to the user with the
+								// execution model armed — it must NOT auto-resume the
+								// aborted turn the way a plain mid-turn `/compact` does
+								// (oh-my-pi #11873). TUI parity with #approvePlan.
+								suppressContinuation: true,
 							});
 						}
 
