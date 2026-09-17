@@ -35,6 +35,12 @@ export interface ModeDefinition {
 	runtimeContext?: boolean;
 	/** 覆盖片段,展开合并进会话有效 settings(冲突用户全局赢,§4.3)。 */
 	settings?: Record<string, unknown>;
+	/**
+	 * 内置模板修订号 —— 由 ensureModeTemplates 写入,仅用于判断"这个 preset 文件
+	 * 是否还是原样内置模板"(是则可安全升级)。用户自建预设不需要它。
+	 * 与 BUILTIN_TEMPLATE_REVISION 不一致且内容已改 = 用户改过,永不覆盖。
+	 */
+	builtinRevision?: number;
 }
 
 /** 展开后的预设(继承链折叠)。 */
@@ -277,12 +283,33 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 	design: {
 		id: "design",
 		label: "Design",
-		description: "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
+		description: "设计模式:视觉方案优先 —— 简报 → 结构判断 → 视觉方案 → 可预览产物 → 交付(落地代码切回 work 模式)",
+		// 不设 extensions 白名单是刻意的:设计要读代码库、看现有样式、改文件,收窄工具集只会让设计脱离工程现实。
 		prompt: [
 			{
 				name: "mode:design:role",
 				order: 25,
 				text: "你是一名资深 UI/UX 设计师。优先给出视觉方案而非代码;涉及布局时先做结构判断,再给实现细节。",
+			},
+			{
+				name: "mode:design:workflow",
+				order: 30,
+				text: "五步工作流:① 对齐简报(目标/平台/风格基准/参考/交付物)② 先做结构判断——信息层级与主导区域,不先挑颜色 ③ 给视觉方案(版式/节奏/层级)④ 产出可预览产物,并配 manifest ⑤ 交付:要落地实现代码时明确建议切回 work 模式,不要在本模式里顺手写实现。",
+			},
+			{
+				name: "mode:design:brief",
+				order: 35,
+				text: "简报协议:开工前若目标、平台、风格基准、交付物有任何一项未知,先问最少必要的问题再动手,不要臆造需求。已有简报就沿用它,并在会话里保持可修改。",
+			},
+			{
+				name: "mode:design:artifact",
+				order: 40,
+				text: "产物契约:每个可预览产物都要写一份 sidecar manifest,声明 entry 文件、kind(页面/组件/海报/幻灯片)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。没有 manifest 的产物无法被预览面板识别。",
+			},
+			{
+				name: "mode:design:boundary",
+				order: 45,
+				text: "风格边界:客户端样式改动一律走设计 token —— 圆角只用 --radius-xs/sm/md/lg/xl/2xl(2/4/6/8/12/16),禁止字面 px 圆角;玻璃效果只用 --glass-* 阶梯(背景/模糊/内高光/外阴影四件套齐备),且只有背后有内容的悬浮层才允许用玻璃。任何偏离都要先说明理由。",
 			},
 		],
 	},
@@ -300,15 +327,57 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 	},
 };
 
-/** 首次使用时把内置模板写入 modeDir(缺失才写,不覆盖已有文件)。 */
+/** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
+export const BUILTIN_TEMPLATE_REVISION = 2;
+
+/**
+ * v1 形状的 design 模板 —— 只用于升级比对。
+ *
+ * 为什么需要:ensureModeTemplates 原来只写"缺失的文件",所以内置模板一旦改内容,
+ * 老用户磁盘上的旧 preset 永远不会被替换(revision 1 的 design 只有一条 persona)。
+ * 但预设是用户可编辑的,无条件覆盖会抹掉人家的修改 —— 于是只在"文件内容仍等于
+ * 旧内置模板"时才升级,改动过的文件一律保留。其余 id 本次没变,v1 = 当前 def。
+ */
+const LEGACY_TEMPLATE_V1: Record<string, ModeDefinition> = {
+	design: {
+		id: "design",
+		label: "Design",
+		description: "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
+		prompt: [
+			{
+				name: "mode:design:role",
+				order: 25,
+				text: "你是一名资深 UI/UX 设计师。优先给出视觉方案而非代码;涉及布局时先做结构判断,再给实现细节。",
+			},
+		],
+	},
+};
+
+/** 首次使用时把内置模板写入 modeDir;已存在的文件只在"仍是旧内置模板"时升级。 */
 export function ensureModeTemplates(dir: string): void {
 	mkdirSync(dir, { recursive: true });
 	for (const [id, def] of Object.entries(BUILTIN_MODE_TEMPLATES)) {
 		const file = modeFilePath(dir, id);
+		const stamped: ModeDefinition = { ...def, builtinRevision: BUILTIN_TEMPLATE_REVISION };
+		let raw: string;
 		try {
-			statSync(file); // 已存在 → 用户编辑过/已初始化,跳过
+			raw = readFileSync(file, "utf8");
 		} catch {
-			writeFileSync(file, `${JSON.stringify(def, null, 2)}\n`, "utf8");
+			writeFileSync(file, `${JSON.stringify(stamped, null, 2)}\n`, "utf8");
+			continue;
+		}
+		let parsed: Record<string, unknown>;
+		try {
+			parsed = JSON.parse(raw) as Record<string, unknown>;
+		} catch {
+			continue; // 坏 JSON 不动 —— 交给 modes.validate 报告,别在这里自作主张
+		}
+		if (parsed.builtinRevision === BUILTIN_TEMPLATE_REVISION) continue;
+		// 内容仍等于旧内置模板 → 安全升级;否则说明用户改过,保留原样。
+		const { builtinRevision: _drop, ...withoutRevision } = parsed;
+		const legacy = LEGACY_TEMPLATE_V1[id] ?? def;
+		if (JSON.stringify(withoutRevision, null, 2) === JSON.stringify(legacy, null, 2)) {
+			writeFileSync(file, `${JSON.stringify(stamped, null, 2)}\n`, "utf8");
 		}
 	}
 }

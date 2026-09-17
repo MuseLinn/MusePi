@@ -5,6 +5,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- 设计模式（预设 `design`，TUI 与 GUI 都可用）从「一条 persona」补成完整设计工作流：新增工作流、简报协议、产物契约、风格边界四个提示词区块——现在会先对齐简报（目标/平台/风格基准/参考/交付物）、先做结构与主导区域判断再谈视觉、产出物带 sidecar manifest 以便预览面板识别、需要落地实现代码时明确建议切回 work 模式。风格边界把设计规范接进了 agent 行为：圆角只用 `--radius-*` 阶梯、禁止字面 px，玻璃只用 `--glass-*` 四件套且只有背后有内容的悬浮层才允许。刻意不收窄工具白名单——设计要读代码库、看现有样式、改文件。
+  - EN: The design mode (preset `design`, available in both TUI and GUI) grew from a single persona line into a complete design workflow: four new prompt sections cover workflow, brief protocol, artifact contract and style boundaries. It now aligns on a brief (goal / platform / style baseline / references / deliverable) before drawing, judges structure and the dominant region before picking colours, emits a sidecar manifest so the preview panel can recognise artifacts, and explicitly recommends switching back to work mode when implementation code is needed. The style-boundary section wires the design system into agent behaviour: radii come only from the `--radius-*` ladder (literal px banned), glass only from the `--glass-*` four-piece set, and only on floating layers that have content behind them. The tool whitelist is deliberately not narrowed — design needs to read the codebase, inspect existing styles and edit files.
+
+### Changed
+
+- 内置预设模板现在带修订号，且只在「文件内容仍等于旧内置模板」时才升级——此前模板只在文件缺失时写入，内置模板改内容后老用户磁盘上的 preset 永远不会被替换（本次 design 就是这样被卡住的）；无条件覆盖又会抹掉用户改过的预设，所以改动过的文件一律保留，坏 JSON 也不动（交给 `modes.validate` 报告）。
+  - EN: Built-in preset templates now carry a revision number and are upgraded only when the file still matches the old built-in template. Previously templates were written only when missing, so any content change to a built-in template never reached existing users (exactly what blocked the `design` upgrade here); overwriting unconditionally would instead destroy user-edited presets, so modified files are always left alone and malformed JSON is left untouched (reported by `modes.validate`).
+
 ### Fixed
 
 - 桌面口述（麦克风输入）四条产品级失败一次修掉：①「静音阈值」设置从未接到录音入口——所有入口只传麦克风 id，说完停 2 秒仍要等满 15 秒上限，现在在 voice 层统一读 `stt.vadEndMs` 并真正驱动 VAD 判停，且静音判停只在听到过语音后才武装（否则开口前的短暂停顿会被当成「说完了」）；②桌面录音用 AudioContext 默认采样率（Windows 常为 48 kHz）且不重采样，Parakeet 按 16 kHz 解码等于三倍速、常常返回空串、输入框永不回填——现在显式请求 16 kHz 并在引擎忽略时线性重采样（对齐 guest-client 本就正确的实现）；③再点麦克风会把整段缓冲丢弃不转写——现在改为提前收音并提交转写，急着停也不再白录；④麦克风经扬声器回放抬高噪声底、干扰判停——现在经零增益节点接线（图谱仍活着但无声音）；⑤16 kHz × 15 s 的裸 float JSON 仍可能撞上 daemon 4 MiB 请求上限（`Request too large`）——现在量化到 5 位小数（约 13 bit，对 16-bit 级别的 ASR 输入无感）。#23
