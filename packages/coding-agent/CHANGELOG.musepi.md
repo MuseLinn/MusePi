@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.32] - 2026-09-17
+
 ### Added
 
 - 设计模式（预设 `design`，TUI 与 GUI 都可用）从「一条 persona」补成完整设计工作流：新增工作流、简报协议、产物契约、风格边界四个提示词区块——现在会先对齐简报（目标/平台/风格基准/参考/交付物）、先做结构与主导区域判断再谈视觉、产出物带 sidecar manifest 以便预览面板识别、需要落地实现代码时明确建议切回 work 模式。风格边界把设计规范接进了 agent 行为：圆角只用 `--radius-*` 阶梯、禁止字面 px，玻璃只用 `--glass-*` 四件套且只有背后有内容的悬浮层才允许。刻意不收窄工具白名单——设计要读代码库、看现有样式、改文件。
@@ -19,6 +21,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 - 桌面口述（麦克风输入）四条产品级失败一次修掉：①「静音阈值」设置从未接到录音入口——所有入口只传麦克风 id，说完停 2 秒仍要等满 15 秒上限，现在在 voice 层统一读 `stt.vadEndMs` 并真正驱动 VAD 判停，且静音判停只在听到过语音后才武装（否则开口前的短暂停顿会被当成「说完了」）；②桌面录音用 AudioContext 默认采样率（Windows 常为 48 kHz）且不重采样，Parakeet 按 16 kHz 解码等于三倍速、常常返回空串、输入框永不回填——现在显式请求 16 kHz 并在引擎忽略时线性重采样（对齐 guest-client 本就正确的实现）；③再点麦克风会把整段缓冲丢弃不转写——现在改为提前收音并提交转写，急着停也不再白录；④麦克风经扬声器回放抬高噪声底、干扰判停——现在经零增益节点接线（图谱仍活着但无声音）；⑤16 kHz × 15 s 的裸 float JSON 仍可能撞上 daemon 4 MiB 请求上限（`Request too large`）——现在量化到 5 位小数（约 13 bit，对 16-bit 级别的 ASR 输入无感）。#23
   - EN: Four product-level failures of desktop dictation (microphone input) fixed at once: (1) the "silence threshold" setting was never wired into the recorder — every entry point passed only a microphone id, so speech followed by a 2 s pause still waited out the full 15 s cap; the voice layer now reads `stt.vadEndMs` itself and actually drives the VAD, which only arms after some speech was heard (otherwise the pause before you start talking ends the recording). (2) The desktop capture ran at the AudioContext's default rate (48 kHz on Windows) without resampling, so Parakeet — fed at a hardcoded 16 kHz — heard 3× speed and usually returned an empty string, leaving the input box unfilled; capture now requests 16 kHz explicitly and linearly resamples when an engine ignores it (matching the guest-client implementation that was already correct). (3) Pressing the mic a second time discarded the whole buffer without transcribing; it now finishes early and submits what was said. (4) The mic was played straight back out of the speakers, raising the noise floor against the VAD; the graph now runs through a zero-gain sink. (5) Even at 16 kHz, 15 s of raw-float JSON could still exceed the daemon's 4 MiB request cap ("Request too large"); the payload is now quantised to 5 decimals (~13 bits, inaudible for 16-bit-class ASR input). #23
+- 移动端口述撞上 daemon 的 4 MiB 请求上限（`Request too large`）：上限提高到 16 MiB（与 collab relay 的 16 MiB 帧上限对齐，两个传输层不再各说各话），guest-client 的转写 payload 同步量化到 5 位小数——原先裸 float JSON 约 320 KB/s，十几秒就会失败，现在约 130 KB/s，手机上较长时间的口述也能正常转写。#23
+  - EN: Mobile dictation hit the daemon's 4 MiB request cap ("Request too large"). The cap is now 16 MiB (aligned with the collab relay's 16 MiB frame limit, so the two transports finally agree), and the guest-client transcription payload is quantised to 5 decimals like the desktop — raw float JSON was ~320 KB/s and failed within seconds, now ~130 KB/s, so longer dictation on the phone transcribes normally. #23
 
 ### Fixed
 
