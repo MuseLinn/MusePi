@@ -2198,6 +2198,16 @@ body {
   }
 }
 
+/* True refraction on the hero install card — Chromium only (SVG filters as
+ * backdrop-filter, gated by the UA sniff in default.html). The SVG chain
+ * blurs + saturates the backdrop, then runs two displacement passes over
+ * bezel maps, so the card edges bend the content behind them like a lens.
+ * Other engines never see this rule and keep the blur glass above. */
+.is-chromium .mp-term {
+  backdrop-filter: url(#mp-lens);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mp-blob {
     animation: none !important;
