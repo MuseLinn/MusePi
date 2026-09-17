@@ -490,17 +490,20 @@ export class WelcomeComponent implements Component {
 
 export const PI_LOGO = ["▀██████████▀", " ╘██    ██  ", "  ██    ██  ", "  ██    ██  ", " ▄██▄  ▄██▄ "];
 
-/** Multi-stop palette for the diagonal gradient. */
+/** Multi-stop palette for the diagonal gradient — the brand-gold ladder
+ *  (deep bronze → brand gold → warm champagne), matching the site and the
+ *  --brand-mark-gradient token. The retired OMP pink/violet/cyan ramp was
+ *  the last pre-rebrand holdout in the TUI. */
 const GRADIENT_STOPS: ReadonlyArray<readonly [number, number, number]> = [
-	[255, 92, 200], // hot pink
-	[200, 110, 255], // violet
-	[120, 130, 255], // periwinkle
-	[60, 200, 255], // bright cyan
-	[120, 255, 220], // mint
+	[150, 100, 10], // deep bronze
+	[184, 134, 47], // bronze gold
+	[217, 164, 65], // brand gold (#d9a441)
+	[237, 183, 86], // light gold
+	[255, 232, 180], // warm champagne
 ];
 
-/** 256-color ramp fallback when truecolor isn't available. */
-const GRADIENT_RAMP_256 = [199, 171, 135, 99, 75, 51, 87];
+/** 256-color ramp fallback when truecolor isn't available (dark → bright gold). */
+const GRADIENT_RAMP_256 = [58, 94, 136, 178, 214, 220];
 
 /** Half-width of the shine highlight band, expressed in gradient-t units. */
 const SHINE_HALF_WIDTH = 0.18;

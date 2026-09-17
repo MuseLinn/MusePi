@@ -149,6 +149,158 @@
       });
     })();
 
+    /* ── TUI startup-splash replica: a faithful canvas port of
+     *    modes/setup-wizard/scenes/splash.ts — the brand-gold diagonal
+     *    gradient, shine sweep, rippling water and twinkling starfield the
+     *    terminal plays on every new session. Loops on the site. ───────── */
+    (function () {
+      var canvas = document.querySelector("canvas.mp-splash");
+      if (!canvas) return;
+      var ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      var LOGO = ["▀██████████▀", " ╘██    ██  ", "  ██    ██  ", "  ██    ██  ", " ▄██▄  ▄██▄ "];
+      var LARGE = LOGO.map(function (line) {
+        var wide = "";
+        for (var i = 0; i < line.length; i++) wide += line[i] === " " ? "  " : line[i] + line[i];
+        return [wide, wide];
+      }).reduce(function (acc, pair) { return acc.concat(pair); }, []);
+      var LOGO_COLS = Math.max.apply(null, LARGE.map(function (l) { return l.length; }));
+      var STOPS = [[150,100,10],[184,134,47],[217,164,65],[237,183,86],[255,232,180]];
+      var RAMP_CHARS = ["█", "▓", "▒", "░"];
+      var RAMP_MIN = [0.62, 0.5, 0.36, 0.24];
+      var SPLASH_MS = 2600;
+
+      function gradientColor(t, shinePos, shineStrength) {
+        var seg = Math.min(0.9999, Math.max(0, t)) * (STOPS.length - 1);
+        var i = Math.min(STOPS.length - 2, Math.floor(seg));
+        var f = seg - i;
+        var a = STOPS[i], b = STOPS[i + 1];
+        var r = a[0] + (b[0] - a[0]) * f, g = a[1] + (b[1] - a[1]) * f, bl = a[2] + (b[2] - a[2]) * f;
+        if (shineStrength > 0) {
+          var dist = Math.abs(t - shinePos);
+          var intensity = Math.max(0, 1 - dist / 0.18) * shineStrength;
+          r += (255 - r) * intensity; g += (255 - g) * intensity; bl += (255 - bl) * intensity;
+        }
+        return "rgb(" + Math.round(r) + "," + Math.round(g) + "," + Math.round(bl) + ")";
+      }
+      function screenT(x, y, w, h, phase) {
+        var span = Math.max(1, w + h - 1);
+        var base = (x + (h - 1 - y)) / span;
+        return (((base + phase) % 1) + 1) % 1;
+      }
+      function jitter(x, y) {
+        var h = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        h ^= h >>> 16;
+        return (h >>> 0) / 4294967296;
+      }
+      function waterAmp(x, y, cx, top, hh, w, t) {
+        var dx = (x - cx) / 2, dy = y - top;
+        var dist = Math.sqrt(dx * dx + dy * dy);
+        var wave = 0.5 * Math.sin(dist * 0.55 - t) + 0.3 * Math.sin(x * 0.22 + y * 0.45 - t * 0.7) + 0.2 * Math.sin(Math.abs(dx) * 0.8 + dy * 0.5 - t * 1.4);
+        var level = 0.5 + 0.5 * wave;
+        var edge = Math.max(0, 1 - Math.abs(x - cx) / (w * 0.5));
+        var fade = Math.max(0, 1 - (dy / Math.max(1, hh)) * 0.55);
+        return level * Math.pow(edge, 0.7) * fade;
+      }
+      function starGlyph(x, y, frame) {
+        var hash = (x * 73856093) ^ (y * 19349663) ^ (frame * 83492791);
+        var bucket = Math.abs(hash) % 150;
+        if (bucket === 0) return ["✦", true];
+        if (bucket === 1) return ["✧", false];
+        if (bucket === 2) return ["·", false];
+        return null;
+      }
+
+      var W = 0, H = 0, cw = 9, ch = 16, visible = false, disposed = false;
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        if (rect.width < 4 || rect.height < 4) { visible = false; return; }
+        visible = true;
+        var dpr = Math.min(2, window.devicePixelRatio || 1);
+        W = rect.width; H = rect.height;
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      }
+
+      var lastFrame = 0;
+      var RESTING_NOW = 1300; // fixed mid-splash timestamp for reduced motion
+      function render(now) {
+        if (disposed) return;
+        requestAnimationFrame(render);
+        if (document.hidden) return;
+        if (!reduced) {
+          if (!visible || now - lastFrame < 33) return; // 30fps — same tick as the terminal
+          lastFrame = now;
+        }
+        if (canvas.clientWidth !== W || canvas.clientHeight !== H || canvas.width === 0) resize();
+        if (!visible) return;
+        drawFrame(reduced ? RESTING_NOW : now, 0);
+      }
+      function drawFrame(now, _unused) {
+        var cols = Math.ceil(W / cw), rows = Math.ceil(H / ch);
+        var frame = Math.floor(now / 33);
+        var progress = (now % (SPLASH_MS * 2)) / SPLASH_MS; // splash plays, rests, repeats
+        var phase = (Math.min(1, progress) * 1.8) % 1.8;
+        var shinePos = (Math.min(1, progress) * 2.5) % 1;
+        var shineStrength = Math.max(0, 1 - Math.min(1, progress) * 0.35);
+        var cx = Math.floor(cols / 2);
+        var logoRow0 = Math.max(2, Math.floor(rows * 0.14));
+        var waterTop = logoRow0 + LARGE.length;
+        var waterH = Math.max(1, rows - waterTop);
+
+        ctx.clearRect(0, 0, W, H);
+        ctx.font = "13px 'JetBrains Mono', ui-monospace, monospace";
+        ctx.textBaseline = "middle";
+
+        // starfield above the water
+        for (var ry = 0; ry < waterTop - 1; ry++) {
+          for (var rx = 0; rx < cols; rx++) {
+            var star = starGlyph(rx, ry, frame >> 3);
+            if (star) {
+              ctx.fillStyle = star[1] ? "rgba(217,164,65,0.9)" : "rgba(160,160,166,0.5)";
+              ctx.fillText(star[0], rx * cw + 1, ry * ch + ch / 2 + 2);
+            }
+          }
+        }
+        // rippling water sharing the screen-wide gradient
+        var surfaceTime = frame * 0.13;
+        for (var wy = waterTop; wy < rows; wy++) {
+          for (var wx = 0; wx < cols; wx++) {
+            var amp = waterAmp(wx, wy, cx, waterTop, waterH, cols, surfaceTime) + (jitter(wx, wy) - 0.5) * 0.06;
+            for (var ri = 0; ri < RAMP_CHARS.length; ri++) {
+              if (amp > RAMP_MIN[ri]) {
+                ctx.fillStyle = gradientColor(screenT(wx, wy, cols, rows, phase), shinePos, shineStrength);
+                ctx.fillText(RAMP_CHARS[ri], wx * cw + 1, wy * ch + ch / 2 + 2);
+                break;
+              }
+            }
+          }
+        }
+        // the brand mark with the live gradient + shine sweep
+        ctx.font = "bold 13px 'JetBrains Mono', ui-monospace, monospace";
+        var hx = Math.max(0, Math.floor((cols - LOGO_COLS) / 2));
+        LARGE.forEach(function (line, row) {
+          for (var i = 0; i < line.length; i++) {
+            if (line[i] !== " ") {
+              ctx.fillStyle = gradientColor(screenT(hx + i, logoRow0 + row, cols, rows, phase), shinePos, shineStrength);
+              ctx.fillText(line[i], (hx + i) * cw + 1, (logoRow0 + row) * ch + ch / 2 + 2);
+            }
+          }
+        });
+        // skip hint, as the terminal renders it
+        ctx.font = "11px 'JetBrains Mono', ui-monospace, monospace";
+        ctx.fillStyle = "rgba(120,120,125,0.85)";
+        ctx.textAlign = "center";
+        ctx.fillText(isZh ? "按 Enter 跳过" : "press enter to skip", W / 2, H - 14);
+        ctx.textAlign = "left";
+      }
+      var isZh = document.documentElement.lang === "zh-CN";
+      requestAnimationFrame(render);
+      window.addEventListener("resize", resize);
+    })();
+
     /* ── Capsule topbar: transparent over the hero, glass pill once scrolled ── */
     var topbar = document.querySelector(".mp-topbar");
     if (topbar) {
@@ -484,7 +636,7 @@
       if (!tabs.length) return;
       var chromeTitles = {
         gui: { en: "MusePi — Welcome", zh: "MusePi — 欢迎页" },
-        tui: { en: "musepi — terminal", zh: "musepi — 终端" },
+        tui: { en: "musepi — startup splash", zh: "musepi — 开屏" },
         mobile: { en: "MusePi — companion", zh: "MusePi — 移动伴侣" }
       };
       var captions = {
@@ -493,8 +645,8 @@
           zh: "欢迎页——点阵品牌背景，按时段变化的问候"
         },
         tui: {
-          en: "TUI — /tree, slash commands, identical sessions",
-          zh: "TUI——/tree、斜杠命令，会话完全一致"
+          en: "TUI — the startup splash plays on every new session",
+          zh: "TUI——每次新会话都会播放的开屏"
         },
         mobile: {
           en: "Companion — QR join, three-in-one send bar",

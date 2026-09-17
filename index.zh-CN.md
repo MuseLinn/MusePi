@@ -129,13 +129,8 @@ mp_cta: true
             </div>
           </div>
         </div>
-        <div data-demo-pane="tui" class="mp-demo-tui" aria-hidden="true">
-          <p><span class="mp-term-prompt">$ </span>musepi</p>
-          <p class="mp-demo-tui-dim">✦ musepi v0.4.30 — oh-my-pi 引擎 · 会话 <span class="mp-demo-tui-tag">main</span></p>
-          <p><span class="mp-demo-tui-you">› </span>把 FilePane 重构成 flex column 并加自动保存</p>
-          <p><span class="mp-demo-tui-ai">● </span>正在读取 packages/guest-client/src/FilePane.tsx …</p>
-          <p><span class="mp-demo-tui-ai">● </span>补丁已应用 — 3 个文件变更，测试全绿 <span class="mp-demo-tui-ok">✓</span></p>
-          <p><span class="mp-term-prompt">$ </span><span class="mp-demo-tui-caret"></span></p>
+        <div data-demo-pane="tui" class="mp-demo-tui-canvas" aria-hidden="true">
+          <canvas class="mp-splash"></canvas>
         </div>
         <div data-demo-pane="mobile" class="mp-demo-mobile" aria-hidden="true">
           <div class="mp-demo-phone">
