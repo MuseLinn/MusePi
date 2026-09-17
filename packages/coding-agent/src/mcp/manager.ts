@@ -102,6 +102,21 @@ const RECONNECT_BURST_WINDOW_MS = 30_000;
 const RECONNECT_BURST_LIMIT = 5;
 
 /**
+ * Quiet background reconnect ladder for a server that WAS connected and whose
+ * short burst ladder failed (oh-my-pi #11803).
+ *
+ * Without this, an `http`/`sse` server that restarts or a laptop that wakes
+ * left the subscription and server-push notifications dead until some tool call
+ * happened to hit it or the user ran `/mcp reconnect` — an idle session never
+ * healed itself. The burst ladder stays short so tool calls fail fast; this
+ * ladder runs in the background, starting at {@link QUIET_RECONNECT_BASE_MS}
+ * and doubling to {@link QUIET_RECONNECT_MAX_MS}, until the server answers or
+ * the connection is torn down / reconfigured.
+ */
+const QUIET_RECONNECT_BASE_MS = 15_000;
+const QUIET_RECONNECT_MAX_MS = 300_000;
+
+/**
  * Bounded buffer for notifications received before any listener attaches.
  * Mirrors {@link IrcBus}'s `MAILBOX_CAP` — drop-oldest on overflow. Drained
  * into the first {@link MCPManager.addNotificationListener} subscriber, then
@@ -231,6 +246,13 @@ export class MCPManager {
 	 * crash-storm circuit breaker (see {@link RECONNECT_BURST_LIMIT}).
 	 */
 	#reconnectHistory = new Map<string, number[]>();
+	/**
+	 * Pending quiet-reconnect timers, one per server (oh-my-pi #11803). Armed
+	 * only after the short burst ladder failed for a server that had been
+	 * connected; cleared when the server reconnects, is disconnected, or the
+	 * manager tears down.
+	 */
+	#quietReconnects = new Map<string, NodeJS.Timeout>();
 	/** Monotonic epoch incremented on disconnectAll to invalidate stale reconnections. */
 	#epoch = 0;
 
@@ -916,6 +938,8 @@ export class MCPManager {
 		this.#serverConfigs.delete(name);
 		this.#pendingResourceRefresh.delete(name);
 		this.#reconnectHistory.delete(name);
+		// A deliberate disconnect must stop the background probe (oh-my-pi #11803).
+		this.#cancelQuietReconnect(name);
 
 		const connection = this.#connections.get(name);
 
@@ -957,6 +981,7 @@ export class MCPManager {
 		this.#tools = [];
 		this.#subscribedResources.clear();
 		this.#reconnectHistory.clear();
+		this.#cancelAllQuietReconnects();
 	}
 
 	/**
@@ -989,7 +1014,15 @@ export class MCPManager {
 
 		const attempt = this.#doReconnect(name, options?.authChallenge);
 		this.#pendingReconnections.set(name, attempt);
-		return attempt.finally(() => this.#pendingReconnections.delete(name));
+		// A successful reconnect (manual `/mcp reconnect`, tool retry, or the
+		// onClose path) satisfies any pending background probe; leave it armed
+		// only if this attempt still fails, where `#doReconnect` re-arms it.
+		return attempt
+			.then(connection => {
+				if (connection) this.#cancelQuietReconnect(name);
+				return connection;
+			})
+			.finally(() => this.#pendingReconnections.delete(name));
 	}
 
 	/**
@@ -1030,11 +1063,94 @@ export class MCPManager {
 		return false;
 	}
 
+	/**
+	 * Arm (or re-arm) the quiet background reconnect probe for a server whose
+	 * burst ladder failed. Each probe retries the full short ladder; if that
+	 * fails again the next probe doubles its delay, capped at
+	 * {@link QUIET_RECONNECT_MAX_MS} (oh-my-pi #11803).
+	 *
+	 * Quiet means quiet: no `failed` status event, no crash-breaker entry (the
+	 * breaker is for user-visible storms, and this ladder can run for hours on
+	 * a server someone deliberately stopped), and no overlap with a manual or
+	 * tool-triggered reconnect — `reconnectServer` de-dupes via
+	 * `#pendingReconnections`.
+	 */
+	#scheduleQuietReconnect(name: string, epoch: number, delayMs: number): void {
+		if (this.#quietReconnects.has(name)) return;
+		const timer = setTimeout(() => {
+			this.#quietReconnects.delete(name);
+			void this.#runQuietReconnect(name, epoch, delayMs);
+		}, delayMs);
+		// Do not hold the event loop open for a probe.
+		timer.unref?.();
+		this.#quietReconnects.set(name, timer);
+	}
+
+	async #runQuietReconnect(name: string, epoch: number, delayMs: number): Promise<void> {
+		// Configuration changed or the manager tore down while we waited.
+		if (this.#epoch !== epoch) return;
+		// The user (or a tool call) already reconnected or disconnected it.
+		if (!this.#serverConfigs.get(name) && !this.#connections.get(name)) return;
+		if (this.#connections.get(name)) return;
+
+		logger.debug("MCP quiet reconnect probe", { path: `mcp:${name}`, delayMs });
+		const previousWasConnected = this.#serverConfigs.has(name);
+		try {
+			const connection = await this.#doReconnectQuietly(name, epoch);
+			if (connection) {
+				logger.debug("MCP quiet reconnect succeeded", { path: `mcp:${name}` });
+				return;
+			}
+		} catch (error) {
+			logger.debug("MCP quiet reconnect probe failed", { path: `mcp:${name}`, error: String(error) });
+		}
+		if (this.#epoch !== epoch) return;
+		// Still down: back off, doubling to the ceiling. Only keep probing a
+		// server that still has a config to reconnect with.
+		if (!this.#serverConfigs.has(name) && !previousWasConnected) return;
+		const next = Math.min(delayMs * 2, QUIET_RECONNECT_MAX_MS);
+		this.#scheduleQuietReconnect(name, epoch, next);
+	}
+
+	/**
+	 * Reconnect WITHOUT touching the crash breaker or `#pendingReconnections`,
+	 * so a quiet probe cannot consume the budget a user-driven retry needs and
+	 * cannot be mistaken for an interactive attempt.
+	 */
+	async #doReconnectQuietly(name: string, epoch: number): Promise<MCPServerConnection | null> {
+		const config = this.#serverConfigs.get(name);
+		if (!config) return null;
+		return await this.#connectAndWireServer(name, config, this.#sources.get(name), epoch);
+	}
+
+	/** Cancel a pending quiet probe (server reconnected, was disconnected, or reconfigured). */
+	#cancelQuietReconnect(name: string): void {
+		const timer = this.#quietReconnects.get(name);
+		if (timer) {
+			clearTimeout(timer);
+			this.#quietReconnects.delete(name);
+		}
+	}
+
+	/** Cancel every pending quiet probe (manager teardown / disconnectAll). */
+	#cancelAllQuietReconnects(): void {
+		for (const timer of this.#quietReconnects.values()) {
+			clearTimeout(timer);
+		}
+		this.#quietReconnects.clear();
+	}
+
 	async #doReconnect(name: string, authChallenge?: MCPAuthChallenge): Promise<MCPServerConnection | null> {
 		const oldConnection = this.#connections.get(name);
 		let config = oldConnection?.config ?? this.#serverConfigs.get(name);
 		const source = this.#sources.get(name) ?? oldConnection?._source;
 		if (!config) return null;
+
+		// A server we had actually connected once and have now lost: if the short
+		// burst ladder below fails, keep probing in the background instead of
+		// giving up (oh-my-pi #11803). A server that never connected gets no
+		// background noise — the burst ladder's verdict stands for it.
+		const wasConnected = oldConnection !== undefined;
 
 		if (authChallenge) {
 			if (!this.#authHandler) {
@@ -1107,6 +1223,13 @@ export class MCPManager {
 					// remain selected. Calls will fail with MCP errors, which
 					// triggers the tool-level reconnect, or the user can run
 					// /mcp reconnect <name> manually.
+					//
+					// A server we HAD connected gets one more chance off the hot
+					// path: an idle session would otherwise never notice it came
+					// back (oh-my-pi #11803).
+					if (wasConnected) {
+						this.#scheduleQuietReconnect(name, reconnectEpoch, QUIET_RECONNECT_BASE_MS);
+					}
 				}
 			}
 		}
