@@ -105,7 +105,30 @@ mp_cta: true
         <span class="mp-demo-chrome-title" data-demo-chrome>MusePi — 欢迎页</span>
       </div>
       <div class="mp-demo-view">
-        <img data-demo-pane="gui" class="is-active" src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="MusePi 桌面欢迎页" loading="lazy">
+        <div data-demo-pane="gui" class="mp-demo-gui is-active" aria-hidden="true">
+          <aside class="mp-demo-app-rail">
+            <span class="mp-demo-rail-head"></span>
+            <span class="mp-demo-rail-row is-active"></span>
+            <span class="mp-demo-rail-row"></span>
+            <span class="mp-demo-rail-row"></span>
+            <span class="mp-demo-rail-row is-dim"></span>
+            <span class="mp-demo-rail-row is-dim"></span>
+          </aside>
+          <div class="mp-demo-app-main">
+            <canvas class="mp-dots" aria-hidden="true"></canvas>
+            <div class="mp-demo-greet">
+              <p class="mp-demo-greet-hi">晚上好</p>
+              <p class="mp-demo-greet-sub">三个会话空闲中——daemon 正在值守。</p>
+            </div>
+            <div class="mp-demo-composer">
+              <span class="mp-demo-composer-ph">随便问——/ 唤起命令，@ 引用文件</span>
+              <span class="mp-demo-composer-model">deepseek-v4-flash</span>
+              <span class="mp-demo-composer-send">
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" fill="none"><path d="M6 10V2M2.5 5.5L6 2l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
         <div data-demo-pane="tui" class="mp-demo-tui" aria-hidden="true">
           <p><span class="mp-term-prompt">$ </span>musepi</p>
           <p class="mp-demo-tui-dim">✦ musepi v0.4.30 — oh-my-pi 引擎 · 会话 <span class="mp-demo-tui-tag">main</span></p>
@@ -177,8 +200,25 @@ mp_cta: true
       </ul>
     </div>
     <figure class="mp-feature-media">
-      <img src="{{ '/docs/screenshots/gui-session.png' | relative_url }}" alt="MusePi 会话视图" loading="lazy">
-      <figcaption>会话——对话记录、上下文圆环、浮动状态卡</figcaption>
+      <div class="mp-feature-mock" aria-hidden="true">
+        <aside class="mp-mock-side">
+          <span class="mp-mock-side-title">会话</span>
+          <span class="mp-mock-tree is-active"></span>
+          <span class="mp-mock-tree mp-mock-tree--branch"></span>
+          <span class="mp-mock-tree mp-mock-tree--branch2"></span>
+          <span class="mp-mock-tree"></span>
+          <div class="mp-mock-donut"><i></i></div>
+          <span class="mp-mock-donut-label">上下文 72%</span>
+        </aside>
+        <div class="mp-mock-chat">
+          <div class="mp-mock-bubble mp-mock-bubble--user">把 FilePane 重构成 flex column 并加自动保存</div>
+          <div class="mp-mock-tool"><span class="mp-mock-tool-name">grep</span><span class="mp-mock-tool-arg">autosave · FilePane</span><span class="mp-mock-tool-ok">14 个文件</span></div>
+          <div class="mp-mock-tool"><span class="mp-mock-tool-name">edit</span><span class="mp-mock-tool-arg">FilePane.tsx + autosave.ts</span><span class="mp-mock-tool-ok">+96 −41</span></div>
+          <div class="mp-mock-ai">三个文件已改完——编辑器列保持 flex 链路，未保存修改现在会在 tab 上打点，切换或关闭前会先确认。</div>
+          <div class="mp-mock-input">回复，或调整计划…<span class="mp-mock-input-send"></span></div>
+        </div>
+      </div>
+      <figcaption>会话——对话记录、带实时结果的工具行、树上的上下文环</figcaption>
     </figure>
   </article>
   <article class="mp-feature mp-feature--flip">
@@ -194,7 +234,24 @@ mp_cta: true
       </ul>
     </div>
     <figure class="mp-feature-media">
-      <img src="{{ '/docs/screenshots/gui-settings.png' | relative_url }}" alt="MusePi 设置面板" loading="lazy">
+      <div class="mp-feature-mock mp-feature-mock--settings" aria-hidden="true">
+        <aside class="mp-mock-side">
+          <span class="mp-mock-side-title">设置</span>
+          <span class="mp-mock-set-row">通用</span>
+          <span class="mp-mock-set-row is-active">模型</span>
+          <span class="mp-mock-set-row">API 密钥</span>
+          <span class="mp-mock-set-row">外观</span>
+          <span class="mp-mock-set-row">扩展</span>
+        </aside>
+        <div class="mp-mock-chat">
+          <div class="mp-mock-search">搜索所有 TUI 设置…</div>
+          <div class="mp-mock-pref"><span>默认模型</span><b>deepseek-v4-flash</b></div>
+          <div class="mp-mock-pref"><span>思考档位</span><b>high</b></div>
+          <div class="mp-mock-pref"><span>桌面通知</span><i class="mp-mock-toggle is-on"></i></div>
+          <div class="mp-mock-pref"><span>常驻桌宠</span><i class="mp-mock-toggle is-on"></i></div>
+          <div class="mp-mock-pref"><span>遥测</span><i class="mp-mock-toggle"></i></div>
+        </div>
+      </div>
       <figcaption>设置——所有 TUI 设置，可搜索、已分组</figcaption>
     </figure>
   </article>

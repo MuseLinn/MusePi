@@ -106,7 +106,30 @@ mp_cta: true
         <span class="mp-demo-chrome-title" data-demo-chrome>MusePi — Welcome</span>
       </div>
       <div class="mp-demo-view">
-        <img data-demo-pane="gui" class="is-active" src="{{ '/docs/screenshots/gui-welcome.png' | relative_url }}" alt="MusePi desktop welcome screen" loading="lazy">
+        <div data-demo-pane="gui" class="mp-demo-gui is-active" aria-hidden="true">
+          <aside class="mp-demo-app-rail">
+            <span class="mp-demo-rail-head"></span>
+            <span class="mp-demo-rail-row is-active"></span>
+            <span class="mp-demo-rail-row"></span>
+            <span class="mp-demo-rail-row"></span>
+            <span class="mp-demo-rail-row is-dim"></span>
+            <span class="mp-demo-rail-row is-dim"></span>
+          </aside>
+          <div class="mp-demo-app-main">
+            <canvas class="mp-dots" aria-hidden="true"></canvas>
+            <div class="mp-demo-greet">
+              <p class="mp-demo-greet-hi">Good evening</p>
+              <p class="mp-demo-greet-sub">Three sessions idle — the daemon is watching.</p>
+            </div>
+            <div class="mp-demo-composer">
+              <span class="mp-demo-composer-ph">Ask anything — / for commands, @ for files</span>
+              <span class="mp-demo-composer-model">deepseek-v4-flash</span>
+              <span class="mp-demo-composer-send">
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" fill="none"><path d="M6 10V2M2.5 5.5L6 2l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
         <div data-demo-pane="tui" class="mp-demo-tui" aria-hidden="true">
           <p><span class="mp-term-prompt">$ </span>musepi</p>
           <p class="mp-demo-tui-dim">✦ musepi v0.4.30 — oh-my-pi engine · session <span class="mp-demo-tui-tag">main</span></p>
@@ -180,8 +203,25 @@ mp_cta: true
       </ul>
     </div>
     <figure class="mp-feature-media">
-      <img src="{{ '/docs/screenshots/gui-session.png' | relative_url }}" alt="MusePi session view" loading="lazy">
-      <figcaption>Session — transcript, context donut, floating status cards</figcaption>
+      <div class="mp-feature-mock" aria-hidden="true">
+        <aside class="mp-mock-side">
+          <span class="mp-mock-side-title">Sessions</span>
+          <span class="mp-mock-tree is-active"></span>
+          <span class="mp-mock-tree mp-mock-tree--branch"></span>
+          <span class="mp-mock-tree mp-mock-tree--branch2"></span>
+          <span class="mp-mock-tree"></span>
+          <div class="mp-mock-donut"><i></i></div>
+          <span class="mp-mock-donut-label">72% ctx</span>
+        </aside>
+        <div class="mp-mock-chat">
+          <div class="mp-mock-bubble mp-mock-bubble--user">Refactor FilePane to a flex column and add autosave</div>
+          <div class="mp-mock-tool"><span class="mp-mock-tool-name">grep</span><span class="mp-mock-tool-arg">autosave · FilePane</span><span class="mp-mock-tool-ok">14 files</span></div>
+          <div class="mp-mock-tool"><span class="mp-mock-tool-name">edit</span><span class="mp-mock-tool-arg">FilePane.tsx + autosave.ts</span><span class="mp-mock-tool-ok">+96 −41</span></div>
+          <div class="mp-mock-ai">Applied across three files — the editor column keeps its flex chain, unsaved changes now badge the tab and ask before switching or closing.</div>
+          <div class="mp-mock-input">Reply, or shift the plan…<span class="mp-mock-input-send"></span></div>
+        </div>
+      </div>
+      <figcaption>Session — transcript, tools with live results, context ring on the tree</figcaption>
     </figure>
   </article>
   <article class="mp-feature mp-feature--flip">
@@ -197,7 +237,24 @@ mp_cta: true
       </ul>
     </div>
     <figure class="mp-feature-media">
-      <img src="{{ '/docs/screenshots/gui-settings.png' | relative_url }}" alt="MusePi settings panel" loading="lazy">
+      <div class="mp-feature-mock mp-feature-mock--settings" aria-hidden="true">
+        <aside class="mp-mock-side">
+          <span class="mp-mock-side-title">Settings</span>
+          <span class="mp-mock-set-row">General</span>
+          <span class="mp-mock-set-row is-active">Models</span>
+          <span class="mp-mock-set-row">API keys</span>
+          <span class="mp-mock-set-row">Appearance</span>
+          <span class="mp-mock-set-row">Extensions</span>
+        </aside>
+        <div class="mp-mock-chat">
+          <div class="mp-mock-search">Search every TUI setting…</div>
+          <div class="mp-mock-pref"><span>Default model</span><b>deepseek-v4-flash</b></div>
+          <div class="mp-mock-pref"><span>Thinking effort</span><b>high</b></div>
+          <div class="mp-mock-pref"><span>Desktop notifications</span><i class="mp-mock-toggle is-on"></i></div>
+          <div class="mp-mock-pref"><span>Always-on pet</span><i class="mp-mock-toggle is-on"></i></div>
+          <div class="mp-mock-pref"><span>Telemetry</span><i class="mp-mock-toggle"></i></div>
+        </div>
+      </div>
       <figcaption>Settings — every TUI setting, searchable and grouped</figcaption>
     </figure>
   </article>

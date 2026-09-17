@@ -943,6 +943,16 @@ body {
   pointer-events: auto;
   cursor: crosshair;
 }
+/* Demo-pane instance of the dot-matrix mark (welcome mock). */
+.mp-demo-app-main .mp-dots {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  cursor: crosshair;
+}
 .mp-final-copy {
   position: relative;
   padding: 26px 0 0;
@@ -1384,6 +1394,10 @@ body {
 }
 .mp-demo-view > .is-active {
   display: block;
+}
+/* The drawn welcome mock is a flex two-pane — keep flex when active. */
+.mp-demo-view > .mp-demo-gui.is-active {
+  display: flex;
 }
 .mp-demo-caption {
   padding: 10px 16px;
@@ -2223,5 +2237,354 @@ body {
   .mp-term,
   .mp-demo-preview {
     transition: none !important;
+  }
+}
+
+/* ── Pass 6: drawn UI mocks (zcode-style) — the app surfaces are rendered
+ * in-page instead of bitmap screenshots, so brand/theme changes propagate
+ * and the mocks inherit the site's motion language. ── */
+
+/* Welcome mock: app rail + dot-matrix mark + greeting + composer */
+.mp-demo-gui {
+  display: flex;
+  min-height: 430px;
+  background:
+    radial-gradient(560px 300px at 68% 0%, rgba(217, 164, 65, 0.05), transparent 70%),
+    #0c0c0e;
+}
+.mp-demo-app-rail {
+  flex: none;
+  width: 104px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mp-demo-rail-head {
+  height: 12px;
+  width: 56%;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.14);
+  margin-bottom: 8px;
+}
+.mp-demo-rail-row {
+  height: 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.mp-demo-rail-row.is-active {
+  background: rgba(217, 164, 65, 0.55);
+}
+.mp-demo-rail-row.is-dim {
+  background: rgba(255, 255, 255, 0.045);
+}
+.mp-demo-app-main {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  padding: 24px 28px 26px;
+  overflow: hidden;
+}
+.mp-demo-greet {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  margin-bottom: auto;
+  padding-top: 6px;
+}
+.mp-demo-greet-hi {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #fff 30%, #c9c9d2 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mp-demo-greet-sub {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+.mp-demo-composer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(480px, 100%);
+  padding: 12px 12px 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.85);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+}
+.mp-demo-composer-ph {
+  flex: 1;
+  color: var(--text-faint);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-demo-composer-model {
+  flex: none;
+  padding: 4px 11px;
+  border: 1px solid rgba(217, 164, 65, 0.35);
+  border-radius: 999px;
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 10.5px;
+}
+.mp-demo-composer-send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #14100a;
+}
+
+/* Session / settings mocks: rail + content two-pane on a glass card */
+.mp-feature-mock {
+  display: grid;
+  grid-template-columns: 148px minmax(0, 1fr);
+  min-height: 340px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(170deg, rgba(24, 24, 28, 0.9), rgba(13, 13, 15, 0.95));
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.mp-mock-side {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 16px 14px;
+  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.mp-mock-side-title {
+  margin-bottom: 4px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.mp-mock-tree {
+  height: 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.mp-mock-tree.is-active {
+  background: rgba(217, 164, 65, 0.55);
+}
+.mp-mock-tree--branch {
+  margin-left: 16px;
+  width: 78%;
+}
+.mp-mock-tree--branch2 {
+  margin-left: 32px;
+  width: 60%;
+}
+.mp-mock-donut {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  margin: 16px auto 0;
+  border-radius: 999px;
+  background: conic-gradient(var(--accent) 0 72%, rgba(255, 255, 255, 0.09) 72% 100%);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 15px, #000 15.5px);
+  mask: radial-gradient(circle at 50% 50%, transparent 0 15px, #000 15.5px);
+}
+.mp-mock-donut-label {
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.mp-mock-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+}
+.mp-mock-bubble {
+  max-width: 82%;
+  padding: 8px 13px;
+  border-radius: 13px 13px 13px 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.mp-mock-bubble--user {
+  align-self: flex-end;
+  border-radius: 13px 13px 4px 13px;
+  background: rgba(217, 164, 65, 0.18);
+}
+.mp-mock-tool {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.mp-mock-tool-name {
+  flex: none;
+  color: var(--accent);
+  font-weight: 650;
+}
+.mp-mock-tool-arg {
+  flex: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-mock-tool-ok {
+  flex: none;
+  color: var(--ok);
+}
+.mp-mock-ai {
+  max-width: 92%;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.mp-mock-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+  padding: 10px 40px 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.mp-mock-input-send {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid rgba(217, 164, 65, 0.4);
+}
+.mp-mock-search {
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.mp-mock-pref {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12.5px;
+}
+.mp-mock-pref span {
+  color: var(--text);
+}
+.mp-mock-pref b {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+}
+.mp-mock-toggle {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 17px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 200ms ease;
+}
+.mp-mock-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: #8a8a93;
+  transition: transform 200ms var(--spring), background 200ms ease;
+}
+.mp-mock-toggle.is-on {
+  background: rgba(217, 164, 65, 0.4);
+}
+.mp-mock-toggle.is-on::after {
+  transform: translateX(13px);
+  background: var(--accent);
+}
+/* Settings mock: rail rows are text rows instead of skeleton bars */
+.mp-feature-mock--settings .mp-mock-set-row {
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.mp-feature-mock--settings .mp-mock-set-row.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .mp-demo-gui {
+    min-height: 340px;
+  }
+  .mp-demo-app-rail {
+    display: none;
+  }
+  .mp-demo-composer-ph {
+    font-size: 11.5px;
+  }
+  .mp-feature-mock {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .mp-mock-side {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .mp-mock-side-title {
+    width: 100%;
+  }
+  .mp-mock-donut,
+  .mp-mock-donut-label {
+    display: none;
   }
 }
