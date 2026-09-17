@@ -24,6 +24,10 @@ const RESTRUCTURE_KEYS = [
 	"onboarding branch import",
 	"onboarding branch personalize",
 	"onboarding branch features",
+	// Design mode branch (2026-09-18): new capability, must exist in both locales.
+	"onboarding branch design",
+	"onboarding branch design body",
+	"onboarding branch design entries",
 	// Provider step reuses the original copy; the feature tour reuses the
 	// three promo feature pages — all four must stay present.
 	"onboarding title6",

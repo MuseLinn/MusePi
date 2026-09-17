@@ -156,6 +156,8 @@ mp_cta: true
           <li>Every TUI setting merged into one searchable panel</li>
           <li>Floating status cards keep running tasks at a glance</li>
           <li>Keyboard-driven throughout, Chinese-first typography</li>
+          <li>Design mode: the agent drafts interfaces — brief first, then
+              structure, then a previewable artifact — instead of writing code</li>
         </ul>
       </article>
       <article class="mp-demo-panel" data-demo-panel="tui">

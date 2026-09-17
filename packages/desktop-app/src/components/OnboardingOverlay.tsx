@@ -1254,7 +1254,7 @@ export function OnboardingOverlay({
 	// hosts import / personalize / feature-tour as a single-open accordion.
 	// Collapsed by default — the Enter spine (next/finish) never routes
 	// through them; a focused branch control keeps its own Enter.
-	const [branch, setBranch] = useState<"import" | "personalize" | "features" | null>(null);
+	const [branch, setBranch] = useState<"import" | "personalize" | "features" | "design" | null>(null);
 	// Pet display mode shared by the personalize step's controls (left) and
 	// the chat preview (right): "desktop" hides the pet from the preview's
 	// composer — it lives in its own desktop window there.
@@ -1456,6 +1456,36 @@ export function OnboardingOverlay({
 										</button>
 										<Reveal open={branch === "personalize"}>
 											<PersonalizeSetup rpc={rpc} petMode={persPetMode} onPetModeChange={setPersPetMode} />
+										</Reveal>
+									</div>
+									{/* Design mode — the newest capability: tell people it exists and how
+									 *  to reach it, before they conclude MusePi only writes code. */}
+									<div className="gui-obo-branch">
+										<button
+											type="button"
+											className="gui-obo-branch-head"
+											aria-expanded={branch === "design"}
+											onClick={() => {
+												tapFeedback();
+												setBranch(b => (b === "design" ? null : "design"));
+											}}
+										>
+											<Icon name="sparkling" className="h-4 w-4" />
+											<span className="flex-1 text-left">{t("onboarding branch design")}</span>
+											<Icon
+												name="arrow-down-s"
+												className={`h-4 w-4 opacity-60${branch === "design" ? " rotate-180" : ""}`}
+											/>
+										</button>
+										<Reveal open={branch === "design"}>
+											<div className="flex flex-col gap-2">
+												<p className="text-[13px] leading-5 text-[var(--color-text-muted)]">
+													{t("onboarding branch design body")}
+												</p>
+												<p className="text-[13px] leading-5 text-[var(--color-text-muted)]">
+													{t("onboarding branch design entries")}
+												</p>
+											</div>
 										</Reveal>
 									</div>
 									<div className="gui-obo-branch">

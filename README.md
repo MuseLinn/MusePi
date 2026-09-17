@@ -133,6 +133,8 @@ Setting-gated, off by default: `github`, `security_scan`, `generate_image`, `tts
 Three standalone lowercase words opt a turn into specialized behavior: **`ultrathink`** (careful multi-step reasoning), **`orchestrate`** (parallel subagents, verified phases), **`workflowz`** (deterministic multi-subagent workflow). See [Magic keywords](docs/magic-keywords.md).
 
 Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
+
+**Presets (modes)** stamp model role + extension scope + prompt blocks onto a session at creation: `work` (default), `chat` (minimal), **`design`** (design mode — brief → structure → visual → previewable artifact, with the radius/glass token rules wired into the agent's behaviour), `creator` (authoring extensions and presets). Pick one on the welcome screen, pass `--preset <id>`, or switch with `/preset`. See [`docs/gui-design.md`](docs/gui-design.md) for the design system the `design` preset enforces.
 ### Mobile shells
 
 - **Capacitor Android app** (`packages/mobile` + `guest-client` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.

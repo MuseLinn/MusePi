@@ -1367,6 +1367,11 @@ export const settings = {
 	"onboarding branch import": "导入会话",
 	"onboarding branch personalize": "个性化",
 	"onboarding branch features": "功能速览",
+	"onboarding branch design": "设计模式（新）",
+	"onboarding branch design body":
+		"设计模式让 agent 变成 UI 设计师：先对齐简报（目标、平台、风格基准、参考、交付物），先判断结构再谈配色，产出的是带 manifest 的可预览设计稿，而不是实现代码。要落地实现时切回 Work 模式。",
+	"onboarding branch design entries":
+		"三种入口：欢迎页选「Design」再开始 · 命令行 --preset design · 会话内输入 /design。",
 	"onboarding title1": "选择语言",
 	"onboarding title2": "外观与主题",
 	"onboarding title3": "会话管理",

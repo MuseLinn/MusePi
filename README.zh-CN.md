@@ -156,6 +156,7 @@ bun run --cwd=packages/desktop-app desktop
 关键契约文档：
 
 - **GUI 设计规范**：`docs/gui-design.md`（布局/token/动效/组件模式/桌宠视觉风格）
+- **设计模式（preset `design`）**：agent 先对齐简报（目标/平台/风格基准/参考/交付物）、先判断结构再谈配色，产出带 manifest 的可预览设计稿而非实现代码；圆角只用 `--radius-*`、玻璃只用 `--glass-*` 四件套。三种入口：欢迎页选 Design、`--preset design`、会话内 `/design`。
 - **GUI 实现笔记**：`docs/gui-implementation.md`（daemon RPC 形状、IPC、踩坑、验证工作流）
 - **widget 设计系统**：`docs/archive/widget-design-system.md`
 - **协作**：`docs/collab.md`（含 musepi LAN/隧道定制）

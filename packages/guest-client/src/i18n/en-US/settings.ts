@@ -1433,6 +1433,11 @@ export const settings = {
 	"onboarding branch import": "Import sessions",
 	"onboarding branch personalize": "Personalize",
 	"onboarding branch features": "Feature tour",
+	"onboarding branch design": "Design mode (new)",
+	"onboarding branch design body":
+		"Design mode turns the agent into a UI designer: it aligns on a brief first (goal, platform, style baseline, references, deliverable), judges structure before colours, and produces a previewable design artifact with a manifest instead of writing implementation code. Switch back to Work mode when you want it built.",
+	"onboarding branch design entries":
+		"Three ways in: pick “Design” on the welcome screen before you start · launch with --preset design · type /design inside a session.",
 	"onboarding title1": "Choose your language",
 	"onboarding title2": "Appearance & theme",
 	"onboarding title3": "Sessions",

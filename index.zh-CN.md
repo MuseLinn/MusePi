@@ -154,6 +154,7 @@ mp_cta: true
           <li>所有 TUI 设置合并进一个可搜索面板</li>
           <li>浮动状态卡让运行中的任务一目了然</li>
           <li>全程键盘驱动，中文排版优先</li>
+          <li>设计模式：agent 先对齐简报、再判结构、最后产出可预览设计稿，而不是直接写代码</li>
         </ul>
       </article>
       <article class="mp-demo-panel" data-demo-panel="tui">
