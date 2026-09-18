@@ -59,6 +59,26 @@ describe("writeWorkspaceFile", () => {
 		expect(res.error).toContain("escapes");
 		expect(fs.existsSync(path.join(path.dirname(dir), "escape.txt"))).toBe(false);
 	});
+
+	it("decodes base64 content into binary bytes (GUI file attachments)", () => {
+		// A PNG header + payload: writing the base64 TEXT would corrupt the
+		// file — encoding:"base64" must land the decoded bytes on disk.
+		const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0x00, 0xbe]);
+		const b64 = Buffer.from(bytes).toString("base64");
+		const res = writeWorkspaceFile(dir, "attachments/shot.png", b64, "base64");
+		expect(res.ok).toBe(true);
+		const onDisk = new Uint8Array(fs.readFileSync(path.join(dir, "attachments/shot.png")));
+		expect(Array.from(onDisk)).toEqual(Array.from(bytes));
+	});
+
+	it("writes base64 payloads that are not valid UTF-8 as-is", () => {
+		// 0xFF 0xFE alone is invalid UTF-8; a text write would mangle it.
+		const bytes = new Uint8Array([0xff, 0xfe, 0x00, 0x01, 0x02]);
+		const b64 = Buffer.from(bytes).toString("base64");
+		expect(writeWorkspaceFile(dir, "blob.bin", b64, "base64").ok).toBe(true);
+		const onDisk = new Uint8Array(fs.readFileSync(path.join(dir, "blob.bin")));
+		expect(Array.from(onDisk)).toEqual(Array.from(bytes));
+	});
 });
 
 describe("createWorkspaceDir + renameWorkspaceEntry + deleteWorkspaceEntry", () => {

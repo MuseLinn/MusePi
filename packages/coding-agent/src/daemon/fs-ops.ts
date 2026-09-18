@@ -27,13 +27,17 @@ export interface FsOpResult {
 	error?: string;
 }
 
-/** Create a file (overwrites) with the given text content. */
-export function writeWorkspaceFile(cwd: string, rel: string, content: string): FsOpResult {
+/** Create/overwrite a file INSIDE the workspace (relative path only; `..`
+ *  escapes rejected). Content is UTF-8 text by default; `encoding: "base64"`
+ *  decodes to binary bytes first (GUI composer file attachments ride in as
+ *  base64 — a PDF must not hit the disk as its base64 text). */
+export function writeWorkspaceFile(cwd: string, rel: string, content: string, encoding?: string): FsOpResult {
 	const abs = resolveInCwd(cwd, rel);
 	if (!abs) return { ok: false, error: "path escapes workspace" };
 	try {
 		fs.mkdirSync(path.dirname(abs), { recursive: true });
-		fs.writeFileSync(abs, content, "utf8");
+		if (encoding === "base64") fs.writeFileSync(abs, Buffer.from(content, "base64"));
+		else fs.writeFileSync(abs, content, "utf8");
 		return { ok: true };
 	} catch (err) {
 		return { ok: false, error: err instanceof Error ? err.message : String(err) };

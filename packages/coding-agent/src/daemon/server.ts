@@ -9482,12 +9482,14 @@ export class DaemonServer {
 				}
 			}
 			case "fs.write": {
-				// Create/overwrite a text file INSIDE the session workspace
-				// (relative path only; `..` escapes rejected). Backs the GUI
-				// file pane's 新建文件. Content is UTF-8 text.
-				const p = (params ?? {}) as { cwd?: string; path?: string; content?: string };
+				// Create/overwrite a file INSIDE the session workspace (relative
+				// path only; `..` escapes rejected). Backs the GUI file pane's
+				// 新建文件 and the composer's file attachments. Content is UTF-8
+				// text, or base64-decoded bytes when encoding:"base64" (binary
+				// attachments — a PDF must not hit the disk as its base64 text).
+				const p = (params ?? {}) as { cwd?: string; path?: string; content?: string; encoding?: string };
 				if (!p.cwd || !p.path) return { error: "missing cwd/path" };
-				return writeWorkspaceFile(p.cwd, p.path, p.content ?? "");
+				return writeWorkspaceFile(p.cwd, p.path, p.content ?? "", p.encoding);
 			}
 			case "fs.mkdir": {
 				const p = (params ?? {}) as { cwd?: string; path?: string };

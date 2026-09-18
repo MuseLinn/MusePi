@@ -1713,17 +1713,20 @@
 	/* animation moved to .gui-menu-popup--entered (two-phase enter) */
 }
 
-/* Image attachments (paste/drag, openchamber parity). */
+/* Attachment chips (paste/drag/pick; 72px square cards, screenshot parity):
+ * images render as object-cover thumbnails, other files as an icon card
+ * with the truncated filename, plus a dashed "+" card at the row end. */
 .gui-attach-row {
 	display: flex;
 	flex-wrap: wrap;
+	align-items: center;
 	gap: 8px;
 }
 
 .gui-attach-chip {
 	position: relative;
-	width: 56px;
-	height: 56px;
+	width: 72px;
+	height: 72px;
 	border-radius: var(--radius-lg);
 	overflow: hidden;
 	border: 1px solid var(--border);
@@ -1743,6 +1746,64 @@
 	outline-offset: 1px;
 }
 
+/* File card: extension icon + one-line truncated name. */
+.gui-attach-chip--file {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	padding: 8px 6px;
+}
+
+.gui-attach-file-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--accent) 12%, transparent);
+	color: var(--accent);
+	flex: none;
+}
+
+.gui-attach-file-name {
+	max-width: 100%;
+	font-size: 11px;
+	line-height: 1.3;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Send-time upload ring: a thin spinning arc centered on the (hidden)
+ * icon while the fs.write upload is in flight. Icon geometry: the
+ * 26px icon sits 14px from the top of the 72px card. */
+.gui-attach-chip--uploading .gui-attach-file-icon > svg {
+	visibility: hidden;
+}
+
+.gui-attach-ring {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	width: 30px;
+	height: 30px;
+	margin-left: -15px;
+	border-radius: 50%;
+	border: 2px solid color-mix(in oklab, var(--accent) 25%, transparent);
+	border-top-color: var(--accent);
+	animation: gui-attach-spin 0.8s linear infinite;
+}
+
+@keyframes gui-attach-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
 .gui-attach-x {
 	position: absolute;
 	top: 2px;
@@ -1757,6 +1818,35 @@
 	background: rgba(0, 0, 0, 0.55);
 	color: #fff;
 	cursor: pointer;
+}
+
+/* Trailing "+" card: same 72px footprint, dashed affordance. */
+.gui-attach-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 72px;
+	height: 72px;
+	border-radius: var(--radius-lg);
+	border: 1.5px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition:
+		border-color 150ms var(--spring),
+		color 150ms var(--spring),
+		background 150ms var(--spring);
+}
+
+.gui-attach-add:hover {
+	border-color: var(--accent);
+	color: var(--accent);
+	background: color-mix(in oklab, var(--accent) 6%, transparent);
+}
+
+.gui-attach-add:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
 }
 
 /* ZCode-style switch (avatar toggle etc). */

@@ -53,7 +53,7 @@ import type {
 	UsageUnreportedAccountView,
 } from "./composer/usage-panel";
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
-import { useAttachments } from "./composer/use-attachments";
+import { attachmentWorkspacePath, readFileAsBase64, useAttachments } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
@@ -216,12 +216,16 @@ export function Composer({
 	}, []);
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
-	const { attachments, setAttachments, addImageFiles, onPaste, onDrop } = useAttachments(rpc);
+	const { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop } = useAttachments(rpc);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
 	const [dictating, setDictating] = useState(false);
 	const [transcribing, setTranscribing] = useState(false);
 	const [voiceSeconds, setVoiceSeconds] = useState(0);
 	const [voiceLevel, setVoiceLevel] = useState(0);
+
+	// Trailing "+" card in the attachment row (composer-frame): opens the
+	// all-types picker directly, skipping the attach menu.
+	const anyPickRef = useRef<HTMLInputElement | null>(null);
 
 	// ── Completion machinery + draft persistence (extracted to
 	// composer/use-completion + composer/use-draft-persistence): the
@@ -1169,40 +1173,103 @@ export function Composer({
 			// Record the submitted prompt in the recall ring (TUI history
 			// parity): the exact message that lands on the wire, so ArrowUp
 			// recovers it verbatim. Consecutive repeats are deduped.
-			pushHistory(finalMsg);
-			onSend(
-				finalMsg,
-				attachments.map(a => ({
+			const imageParts = attachments
+				.filter(a => a.kind !== "file")
+				.map(a => ({
 					type: "image" as const,
 					data: a.dataUrl.split(",")[1] ?? "",
 					mimeType: a.mimeType,
-				})),
+				}));
+			const fileChips = attachments.filter(a => a.kind === "file");
+			// Shared send tail: everything after the wire send (quote cards
+			// clear, queue chip refresh, composer reset) — both the plain
+			// path and the file-upload path run this once.
+			const finishSend = (): void => {
+				if (quotes.length > 0) {
+					handledQuoteCountRef.current = 0;
+					onQuotesChange([]);
+				}
+				// Busy-time send just enqueued (steer/followUp) — surface it in the
+				// queue chip/panel immediately instead of waiting for the next
+				// poll tick; the delayed re-check settles daemon-side async.
+				if (working || delivery) {
+					refreshQueued();
+					setTimeout(refreshQueued, 400);
+				}
+				setText("");
+				setAttachments([]);
+				setEnhance("idle");
+				// Clear re-measures: the controlled value="", onChange never fires for
+				// the programmatic clear, so the stretched inline height would stick
+				// (send with a multi-line draft leaves the box tall). rAF runs after
+				// React commits the empty value.
+				requestAnimationFrame(() => autosize(taRef.current));
+				sfxFor("send");
+				tapFeedback();
+			};
+			if (fileChips.length > 0) {
+				// File attachments (fs.write channel): write every non-image chip
+				// into the session workspace (base64) BEFORE the message goes
+				// out, then reference the workspace paths in the prompt so the
+				// agent can open them with its file tools. Any failure aborts
+				// the send (chips stay, a notice explains) — a message whose
+				// attachments never landed would just confuse the agent.
+				void (async () => {
+					setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: true } : a)));
+					const refs: string[] = [];
+					const usedPaths = new Set<string>();
+					try {
+						for (const chip of fileChips) {
+							if (!chip.file) throw new Error(t("attachment expired re-add"));
+							if (!cwd) throw new Error(t("no workspace for attachments"));
+							let wsPath = attachmentWorkspacePath(chip.name);
+							// Same-name collisions get -2/-3 suffixes instead of
+							// silently overwriting an earlier attachment.
+							const dot = wsPath.lastIndexOf(".");
+							const sep = wsPath.lastIndexOf("/");
+							const stem = dot > sep ? wsPath.slice(0, dot) : wsPath;
+							const ext = dot > sep ? wsPath.slice(dot) : "";
+							let n = 2;
+							while (usedPaths.has(wsPath)) {
+								wsPath = `${stem}-${n}${ext}`;
+								n++;
+							}
+							usedPaths.add(wsPath);
+							const b64 = await readFileAsBase64(chip.file);
+							const res = await rpc.request<{ ok?: boolean; error?: string }>("fs.write", {
+								cwd,
+								path: wsPath,
+								content: b64,
+								encoding: "base64",
+							});
+							if (res && res.ok === false) throw new Error(res.error ?? "fs.write failed");
+							refs.push(`[Attachment] ${wsPath}`);
+						}
+					} catch (err) {
+						setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: false } : a)));
+						showSlashNotice(
+							"error",
+							`${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+						);
+						return;
+					}
+					const wireText = refs.length > 0 ? `${refs.join("\n")}\n\n${finalMsg}`.trim() : finalMsg;
+					pushHistory(wireText);
+					onSend(wireText, imageParts, delivery);
+					finishSend();
+				})();
+				return;
+			}
+			pushHistory(finalMsg);
+			onSend(
+				finalMsg,
+				imageParts,
 				// Working → steer (TUI Enter parity: processed immediately);
 				// "/queue"/"=>" → followUp (after the current turn yields);
 				// "." / "c" → continue (hidden synthetic resume, TUI parity).
 				isContinueShortcut ? "continue" : delivery,
 			);
-			if (quotes.length > 0) {
-				handledQuoteCountRef.current = 0;
-				onQuotesChange([]);
-			}
-			// Busy-time send just enqueued (steer/followUp) — surface it in the
-			// queue chip/panel immediately instead of waiting for the next
-			// poll tick; the delayed re-check settles daemon-side async.
-			if (working || delivery) {
-				refreshQueued();
-				setTimeout(refreshQueued, 400);
-			}
-			setText("");
-			setAttachments([]);
-			setEnhance("idle");
-			// Clear re-measures: the controlled value="", onChange never fires for
-			// the programmatic clear, so the stretched inline height would stick
-			// (send with a multi-line draft leaves the box tall). rAF runs after
-			// React commits the empty value.
-			requestAnimationFrame(() => autosize(taRef.current));
-			sfxFor("send");
-			tapFeedback();
+			finishSend();
 		},
 		[
 			text,
@@ -1538,6 +1605,7 @@ export function Composer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+				onAddAttachment={() => anyPickRef.current?.click()}
 				// Todo/queue chips + extension dock hang ABOVE the input card
 				// (user direction: the status row belongs above the input,
 				// not inside the framed box).
@@ -1640,7 +1708,8 @@ export function Composer({
 								const objective = text.trim() || undefined;
 								void rpc.request("session.goal", { sessionId, op: "guided", objective }).catch(() => {});
 							}}
-							onPickImages={files => void addImageFiles(files)}
+							onPickImages={files => void addFiles(files)}
+							onPickFiles={files => void addFiles(files)}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;
@@ -1896,6 +1965,19 @@ export function Composer({
 						}}
 					/>
 				)}
+				{/* Attachment-row "+" card target: all-types picker (openchamber
+				 *  parity — no accept restriction; files ride via fs.write). */}
+				<input
+					ref={anyPickRef}
+					type="file"
+					multiple
+					hidden
+					onChange={e => {
+						const files = e.target.files ? [...e.target.files] : [];
+						if (files.length > 0) void addFiles(files);
+						e.target.value = "";
+					}}
+				/>
 				<textarea
 					ref={el => {
 						taRef.current = el;
@@ -1912,6 +1994,7 @@ export function Composer({
 							requestLongPaste(pastedText);
 						}
 					}}
+					onDragOver={onDragOver}
 					onDrop={onDrop}
 					onChange={e => {
 						setText(e.target.value);

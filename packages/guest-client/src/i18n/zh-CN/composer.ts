@@ -59,6 +59,12 @@ export const composer = {
 	"choose from library": "从相册选择",
 	"remove attachment": "移除附件",
 	"attach images hint": "图片长边压到 1568px · JPEG 80%（小于 1.5MB 原样发送）",
+
+	// ── General file attachments (fs.write channel; openchamber parity) ─────
+	"add attachments": "添加附件",
+	"attachment upload failed": "附件上传失败",
+	"attachment expired re-add": "附件已失效，请重新添加",
+	"no workspace for attachments": "会话还没有工作区，无法上传附件",
 	"model & thinking": "模型与思考",
 	"host session model": "宿主会话当前模型",
 

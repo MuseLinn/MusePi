@@ -20,6 +20,7 @@ export function AttachMenu({
 	onTogglePlan,
 	onGuidedGoal,
 	onPickImages,
+	onPickFiles,
 	onInsert,
 }: {
 	goalMode: boolean;
@@ -35,12 +36,17 @@ export function AttachMenu({
 	onGuidedGoal(): void;
 	/** Opens the image file picker (attachment entry). */
 	onPickImages(files: File[]): void;
+	/** Opens the all-types file picker (general attachment entry). Optional:
+	 *  the welcome composer has no workspace yet, so file attachments have
+	 *  nowhere to land — the menu item is hidden until a session exists. */
+	onPickFiles?(files: File[]): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
 	onInsert(token: string): void;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	const fileRef = useRef<HTMLInputElement | null>(null);
+	const anyFileRef = useRef<HTMLInputElement | null>(null);
 
 	return (
 		<div className="gui-model" ref={anchorRef}>
@@ -68,6 +74,19 @@ export function AttachMenu({
 						<Icon name="file-image" className="h-4 w-4" />
 						<span className="min-w-0 flex-1 truncate">{t("add images")}</span>
 					</button>
+					{onPickFiles && (
+						<button
+							type="button"
+							className="gui-attach-opt"
+							role="menuitem"
+							onClick={() => {
+								anyFileRef.current?.click();
+							}}
+						>
+							<Icon name="file" className="h-4 w-4" />
+							<span className="min-w-0 flex-1 truncate">{t("add attachments")}</span>
+						</button>
+					)}
 					<button
 						type="button"
 						className="gui-attach-opt"
@@ -206,6 +225,20 @@ export function AttachMenu({
 						onChange={e => {
 							const files = e.target.files ? [...e.target.files] : [];
 							if (files.length > 0) onPickImages(files);
+							e.target.value = "";
+						}}
+					/>
+					{/* General attachment entry (openchamber parity): NO accept
+					 *  restriction — any file the OS picker allows becomes a chip;
+					 *  the send path routes it through fs.write into the workspace. */}
+					<input
+						ref={anyFileRef}
+						type="file"
+						multiple
+						hidden
+						onChange={e => {
+							const files = e.target.files ? [...e.target.files] : [];
+							if (files.length > 0) onPickFiles?.(files);
 							e.target.value = "";
 						}}
 					/>

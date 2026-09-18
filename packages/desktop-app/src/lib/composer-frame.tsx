@@ -1,7 +1,7 @@
 import { ImageLightbox, t } from "@musepi/guest-client";
 import { type ReactNode, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
-import { Icon } from "../vendor/oc-icons";
+import { Icon, type IconName } from "../vendor/oc-icons";
 
 /**
  * Shared composer container (welcome + in-session parity): one frame shell
@@ -12,11 +12,62 @@ import { Icon } from "../vendor/oc-icons";
  * `flipAnchor` marks the frame for the morph measurement; the incoming
  * frame animates from the outgoing frame's rect via gui-flip-morph.
  */
+/** Icon name for a file chip by extension (icon-set parity: the same
+ *  mapping the workspace tree uses for its entries). */
+function fileIconFor(name: string): IconName {
+	const ext = name.includes(".") ? (name.split(".").pop() ?? "").toLowerCase() : "";
+	if (ext === "pdf") return "file-pdf";
+	if (["md", "txt", "rtf", "doc", "docx", "pages"].includes(ext)) return "file-text";
+	if (
+		[
+			"js",
+			"ts",
+			"tsx",
+			"jsx",
+			"py",
+			"go",
+			"rs",
+			"java",
+			"c",
+			"h",
+			"cpp",
+			"cs",
+			"rb",
+			"php",
+			"sh",
+			"bat",
+			"ps1",
+			"json",
+			"yaml",
+			"yml",
+			"toml",
+			"xml",
+			"html",
+			"css",
+			"sql",
+		].includes(ext)
+	)
+		return "file-code";
+	if (["mp3", "wav", "flac", "ogg", "m4a", "aac"].includes(ext)) return "file-music";
+	if (["mp4", "mov", "avi", "mkv", "webm"].includes(ext)) return "file-video";
+	if (["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "heic"].includes(ext)) return "file-image";
+	return "file";
+}
+
+/** "1.2 MB"-style size label (openchamber parity). */
+function attachSizeLabel(bytes: number | undefined): string {
+	if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "";
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function ComposerFrame({
 	className = "",
 	children,
 	attachments,
 	onRemoveAttachment,
+	onAddAttachment,
 	onAnnotated,
 	aboveRow,
 	footerLeft,
@@ -31,8 +82,20 @@ export function ComposerFrame({
 	className?: string;
 	/** Textarea + any floating menus the composer needs (absolute). */
 	children: ReactNode;
-	attachments: { id: number; dataUrl: string; mimeType: string; name: string }[];
+	attachments: {
+		id: number;
+		kind?: "image" | "file";
+		dataUrl: string;
+		mimeType: string;
+		name: string;
+		size?: number;
+		/** Send-time upload in flight → progress ring overlay (file chips). */
+		uploading?: boolean;
+	}[];
 	onRemoveAttachment(id: number): void;
+	/** Render the trailing "+" card in the attachment row (opens the
+	 *  all-types picker). Omitted on scenes without attachment intake. */
+	onAddAttachment?(): void;
 	/** Annotation text from the attachment lightbox (open-science parity):
 	 *  pins + notes formatted for the composer/agent. */
 	onAnnotated?(text: string): void;
@@ -61,9 +124,16 @@ export function ComposerFrame({
 	 *  what is being typed. */
 	chatInput?: boolean;
 }): ReactNode {
-	// Click-to-preview lightbox for attachment thumbnails (before send;
-	// all pending attachments form the gallery).
+	// Click-to-preview lightbox for image attachment thumbnails (before
+	// send); the gallery covers image chips only — file chips are inert
+	// icon cards with nothing to zoom.
 	const [preview, setPreview] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
+	const imageChips = attachments.filter(a => a.kind !== "file" && a.dataUrl);
+	const openPreview = (chipId: number) =>
+		setPreview({
+			items: imageChips.map(x => ({ src: x.dataUrl, alt: x.name })),
+			index: imageChips.findIndex(x => x.id === chipId),
+		});
 	const frame = (
 		<div
 			className={`${className} gui-composer-frame`}
@@ -76,43 +146,71 @@ export function ComposerFrame({
 		>
 			{pet && <div className="gui-composer-pet">{pet}</div>}
 			{children}
-			{attachments.length > 0 && (
+			{(attachments.length > 0 || onAddAttachment) && (
 				<div className="gui-attach-row px-4 pb-2">
-					{attachments.map((a, idx) => (
-						<div key={a.id} className="gui-attach-chip">
-							<img
-								src={a.dataUrl}
-								alt={a.name}
-								className="gui-attach-thumb"
-								role="button"
-								tabIndex={0}
-								title={t("preview image")}
-								onClick={() =>
-									setPreview({
-										items: attachments.map(x => ({ src: x.dataUrl, alt: x.name })),
-										index: idx,
-									})
-								}
-								onKeyDown={e => {
-									if (e.key === "Enter" || e.key === " ") {
-										e.preventDefault();
-										setPreview({
-											items: attachments.map(x => ({ src: x.dataUrl, alt: x.name })),
-											index: idx,
-										});
-									}
-								}}
-							/>
-							<button
-								type="button"
-								className="gui-attach-x"
-								aria-label={t("remove attachment")}
-								onClick={() => onRemoveAttachment(a.id)}
+					{attachments.map(a =>
+						a.kind === "file" ? (
+							// File card: extension icon + truncated name (screenshot
+							// parity), X top-right, progress ring while the send-time
+							// fs.write upload is in flight.
+							<div
+								key={a.id}
+								className={`gui-attach-chip gui-attach-chip--file${a.uploading ? " gui-attach-chip--uploading" : ""}`}
+								title={`${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}`}
 							>
-								<Icon name="close" className="h-3 w-3" />
-							</button>
-						</div>
-					))}
+								<span className="gui-attach-file-icon">
+									<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
+								</span>
+								<span className="gui-attach-file-name">{a.name}</span>
+								{a.uploading && <span className="gui-attach-ring" aria-hidden />}
+								<button
+									type="button"
+									className="gui-attach-x"
+									aria-label={t("remove attachment")}
+									onClick={() => onRemoveAttachment(a.id)}
+								>
+									<Icon name="close" className="h-3 w-3" />
+								</button>
+							</div>
+						) : (
+							<div key={a.id} className="gui-attach-chip">
+								<img
+									src={a.dataUrl}
+									alt={a.name}
+									className="gui-attach-thumb"
+									role="button"
+									tabIndex={0}
+									title={t("preview image")}
+									onClick={() => openPreview(a.id)}
+									onKeyDown={e => {
+										if (e.key === "Enter" || e.key === " ") {
+											e.preventDefault();
+											openPreview(a.id);
+										}
+									}}
+								/>
+								<button
+									type="button"
+									className="gui-attach-x"
+									aria-label={t("remove attachment")}
+									onClick={() => onRemoveAttachment(a.id)}
+								>
+									<Icon name="close" className="h-3 w-3" />
+								</button>
+							</div>
+						),
+					)}
+					{onAddAttachment && (
+						<button
+							type="button"
+							className="gui-attach-add"
+							aria-label={t("add attachments")}
+							title={t("add attachments")}
+							onClick={onAddAttachment}
+						>
+							<Icon name="add" className="h-5 w-5" />
+						</button>
+					)}
 				</div>
 			)}
 			<div className="gui-composer-row px-4 pb-3">

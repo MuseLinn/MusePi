@@ -61,6 +61,12 @@ export const composer = {
 	"choose from library": "Choose from library",
 	"remove attachment": "Remove attachment",
 	"attach images hint": "Images resize to a 1568px long edge · JPEG 80% (under 1.5MB sent as-is)",
+
+	// ── General file attachments (fs.write channel; openchamber parity) ─────
+	"add attachments": "Add attachments",
+	"attachment upload failed": "Attachment upload failed",
+	"attachment expired re-add": "Attachment needs re-attaching (session was switched)",
+	"no workspace for attachments": "No workspace yet — file attachments need a session workspace",
 	"model & thinking": "Model & thinking",
 	"host session model": "Current model of the host session",
 
