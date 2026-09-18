@@ -20,6 +20,7 @@ import {
 	type VoiceActivity,
 } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
+import { StateIconN } from "../StateIcon";
 import { SchemaTabSection } from "./schema";
 
 /* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ──
@@ -284,10 +285,9 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 			</div>
 			<button type="button" className="gui-btn" disabled={!rpc} onClick={toggle}>
-				{/* TODO(P1): 3-way StateIcon switch — loading/speaking/idle is a
-				 *  tri-state, not a pair. */}
-				<Icon
-					name={state === "loading" ? "download" : state === "speaking" ? "stop" : "play"}
+				<StateIconN
+					value={state}
+					options={{ loading: "download", speaking: "stop", idle: "play" }}
 					className="h-3.5 w-3.5"
 				/>
 				{state === "speaking" || state === "loading" ? t("stop") : t("voice output test")}

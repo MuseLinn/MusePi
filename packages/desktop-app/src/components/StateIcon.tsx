@@ -46,3 +46,36 @@ export function StateIcon({
 		</span>
 	);
 }
+
+/**
+ * N-ary variant: the value-keyed switch (tri-state kind icons —
+ * calendar/board/list, loading/speaking/idle, all/actions/list — don't fit a
+ * pair). Every option stays mounted; the active one stands upright while the
+ * others hold the collapsed pose, so switching rolls one glyph into the next
+ * with the same spring. Binary `StateIcon` keeps its richer two-directional
+ * pairing; use this when there are 3+ states.
+ */
+export function StateIconN({
+	value,
+	options,
+	className,
+	...rest
+}: {
+	/** The active option key. */
+	value: string;
+	/** `optionKey → oc-icon name`; every entry renders as a layer. */
+	options: Record<string, IconName>;
+	className?: string;
+} & Omit<React.HTMLAttributes<HTMLSpanElement>, "children">): React.JSX.Element {
+	return (
+		<span
+			aria-hidden={true}
+			className={"gui-icon-morph gui-icon-morph--nary".concat(className ? ` ${className}` : "")}
+			{...rest}
+		>
+			{Object.entries(options).map(([key, name]) => (
+				<Icon key={key} name={name} className={`gui-icon-morph__shape${key === value ? " is-active" : ""}`} />
+			))}
+		</span>
+	);
+}

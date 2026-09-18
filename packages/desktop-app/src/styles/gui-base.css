@@ -270,6 +270,19 @@ html.gui-glass-adaptive {
 	transform: scale(1.4) rotate(90deg);
 }
 
+/* N-ary switch (StateIconN): every non-active layer holds the collapsed
+ * pose, the active one stands upright — switching rolls one glyph into the
+ * next. No exit-pairing here (that's the binary component's trick). */
+.gui-icon-morph--nary > .gui-icon-morph__shape {
+	opacity: 0;
+	transform: scale(0.4) rotate(-90deg);
+}
+
+.gui-icon-morph--nary > .gui-icon-morph__shape.is-active {
+	opacity: 1;
+	transform: none;
+}
+
 /* ── Pac-man chomp animation (vendor/pac-man.tsx) ─────────────────────
  * The glyph renders a rest sector plus three chomp frames; while
  * .pac-chomp is present the frames cycle (open → mid → closed) with

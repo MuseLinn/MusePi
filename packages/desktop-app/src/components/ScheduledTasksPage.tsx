@@ -5,6 +5,7 @@ import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
 import { GuiSelect } from "./GuiSelect";
 import { MenuPopup } from "./MenuPopup";
+import { StateIconN } from "./StateIcon";
 import { TaskBoardView, TaskCalendarView } from "./TaskCenterViews";
 
 /**
@@ -352,10 +353,9 @@ export function ScheduledTasksPage({
 							className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
 							onClick={() => setView(v)}
 						>
-							{/* TODO(P1): 3-way StateIcon switch once StateIcon grows an
-							 *  n-ary variant — calendar/board/list can't fit a pair. */}
-							<Icon
-								name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"}
+							<StateIconN
+								value={v}
+								options={{ calendar: "calendar", board: "list-check-2", list: "calendar-schedule" }}
 								className="h-4 w-4"
 							/>
 							<span>

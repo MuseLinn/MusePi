@@ -8,6 +8,7 @@ import { shortcutLabel } from "../lib/shortcuts";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { MENU_ANIM_MS } from "./MenuPopup";
+import { StateIconN } from "./StateIcon";
 
 type PaletteTab = "all" | "actions" | "tasks";
 
@@ -230,10 +231,9 @@ export function CommandPalette({
 								setActive(0);
 							}}
 						>
-							{/* TODO(P1): n-ary StateIcon switch — all/actions/list is a
-							 *  3-way kind icon, not a pair. */}
-							<Icon
-								name={id === "all" ? "menu-2" : id === "actions" ? "rocket" : "list-check-2"}
+							<StateIconN
+								value={id}
+								options={{ all: "menu-2", actions: "rocket", list: "list-check-2" }}
 								className="h-3.5 w-3.5"
 							/>
 							<span>{id === "all" ? t("all") : id === "actions" ? t("actions") : t("tasks")}</span>
