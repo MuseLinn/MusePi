@@ -18,6 +18,7 @@ import {
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
+import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
@@ -66,6 +67,17 @@ import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
 import { SketchPad } from "./SketchPad";
 import type { ThinkingLevel } from "./ThinkingSelector";
+
+/** Design style chips (设计稿 08): baseline presets the design-mode
+ *  composer offers. Labels are i18n keys; picking one writes the
+ *  brief-update sentence into the composer (edit & send). */
+const DESIGN_STYLES = [
+	{ id: "minimal", labelKey: "design style minimal" },
+	{ id: "glass", labelKey: "design style glass" },
+	{ id: "editorial", labelKey: "design style editorial" },
+	{ id: "neubrutalism", labelKey: "design style neubrutalism" },
+	{ id: "darkneon", labelKey: "design style darkneon" },
+] as const;
 
 export type {
 	UsageActiveAccountView,
@@ -335,6 +347,25 @@ export function Composer({
 		appendText,
 		setAppendText,
 	} = useModes(rpc, sessionId);
+	// ── Design-session style chips (设计稿 08) ────────────────────────────
+	// session.modes.modeId === "design" gates the row; picking a style lands
+	// the brief-update sentence in the composer (edit & send, per the design
+	// brief protocol — the agent keeps the brief in-session).
+	const isDesignSession = modes?.modeId === "design";
+	const [designStyle, setDesignStyle] = useState<string | null>(null);
+	const pickDesignStyle = useCallback(
+		(id: string | null): void => {
+			setDesignStyle(id);
+			if (!id) return;
+			const style = DESIGN_STYLES.find(s => s.id === id);
+			if (!style) return;
+			const sentence = t("design style brief update {style}", { style: t(style.labelKey) });
+			setText(prev => (prev && prev.trim().length > 0 ? `${prev.trimEnd()}\n${sentence}` : sentence));
+			requestAnimationFrame(() => autosize(taRef.current));
+			taRef.current?.focus();
+		},
+		[setText],
+	);
 	const stopDict = useRef<(() => void) | null>(null);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
@@ -1664,6 +1695,36 @@ export function Composer({
 				// not inside the framed box).
 				aboveRow={
 					<div className="gui-composer-above">
+						{isDesignSession && (
+							/* Design-session style chips (设计稿 08 composer 风格选择):
+							 * pick a style baseline → the brief-update text lands in
+							 * the composer for the user to edit & send. */
+							<div className="gui-design-chips">
+								<span className="gui-design-chips-label">
+									<Icon name="palette" className="h-3 w-3" />
+									{t("design style")}
+								</span>
+								<button
+									type="button"
+									className={`gui-design-chip${designStyle === null ? " gui-design-chip--on" : ""}`}
+									title={t("design style hint")}
+									onClick={() => pickDesignStyle(null)}
+								>
+									{t("design style inherit")}
+								</button>
+								{DESIGN_STYLES.map(s => (
+									<button
+										key={s.id}
+										type="button"
+										className={`gui-design-chip${designStyle === s.id ? " gui-design-chip--on" : ""}`}
+										title={t("design style hint")}
+										onClick={() => pickDesignStyle(s.id)}
+									>
+										{t(s.labelKey)}
+									</button>
+								))}
+							</div>
+						)}
 						{composerDockItems.length > 0 ||
 						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
 						activeTask ? (

@@ -46,6 +46,15 @@ const IFRAME_RENDERERS = new Set(["html", "deck-html"]);
 /** Renderers that show source instead of a live preview. */
 const SOURCE_RENDERERS = new Set(["react-component"]);
 
+/** Preview viewport widths (设计板 08 设计板 frame: 桌面/平板/移动). */
+const VIEWPORTS = [
+	{ id: "desktop", width: 0 },
+	{ id: "tablet", width: 768 },
+	{ id: "mobile", width: 390 },
+] as const;
+
+type ViewportId = (typeof VIEWPORTS)[number]["id"];
+
 function kindLabel(kind: string): string {
 	// kind/renderer are contract enums (page/component/poster/deck) — shown
 	// verbatim like file extensions, not run through i18n.
@@ -60,6 +69,8 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 	const [selected, setSelected] = useState<ArtifactRow | null>(null);
 	const [content, setContent] = useState<{ text: string; truncated: boolean } | null>(null);
 	const [contentError, setContentError] = useState<string | null>(null);
+	/** Live-iframe preview width (设计板 frame: 桌面/平板/移动). */
+	const [viewport, setViewport] = useState<ViewportId>("desktop");
 
 	const load = useCallback(async (): Promise<void> => {
 		if (!rpc || !cwd) return;
@@ -156,12 +167,36 @@ export function ArtifactsPanel({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 					<>
 						{content.truncated && <div className="gui-art-note">{t("artifact truncated")}</div>}
 						{live ? (
-							<iframe
-								className="gui-art-frame"
-								title={selected.title}
-								sandbox="allow-scripts"
-								srcDoc={content.text}
-							/>
+							<>
+								{/* Viewport switch (设计板 frame: 桌面/平板/移动) — the
+								 * iframe clamps to the device width, centered. */}
+								<div className="gui-art-viewport-row">
+									{VIEWPORTS.map(v => (
+										<button
+											key={v.id}
+											type="button"
+											className={`gui-art-viewport${viewport === v.id ? " gui-art-viewport--on" : ""}`}
+											title={t(`artifacts viewport ${v.id}`)}
+											onClick={() => setViewport(v.id)}
+										>
+											{t(`artifacts viewport ${v.id}`)}
+										</button>
+									))}
+								</div>
+								<div className="gui-art-frame-wrap">
+									<iframe
+										className="gui-art-frame"
+										title={selected.title}
+										sandbox="allow-scripts"
+										srcDoc={content.text}
+										style={
+											viewport === "desktop"
+												? undefined
+												: { width: VIEWPORTS.find(v => v.id === viewport)?.width, maxWidth: "100%" }
+										}
+									/>
+								</div>
+							</>
 						) : markdown ? (
 							<div className="gui-art-markdown">
 								<Markdown text={content.text} />

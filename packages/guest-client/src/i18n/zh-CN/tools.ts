@@ -568,6 +568,9 @@ export const tools = {
 	"artifact code view hint": "该渲染器暂不支持实时预览——正在显示源码",
 	"artifact truncated": "文件较大——仅显示前 512 KB",
 	"artifacts scan truncated": "扫描在第 4 层截断——更深的产物目录未访问",
+	"artifacts viewport desktop": "桌面",
+	"artifacts viewport tablet": "平板",
+	"artifacts viewport mobile": "移动",
 } as const;
 
 /** Key union for the tools domain (source of truth). */

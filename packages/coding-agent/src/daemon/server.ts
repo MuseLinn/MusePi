@@ -128,6 +128,7 @@ import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
+import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import {
 	type CronRun,
 	type CronSchedule,
@@ -145,7 +146,6 @@ import {
 } from "./crons";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
-import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
@@ -7567,8 +7567,7 @@ export class DaemonServer {
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
 				const base = modesOf(live.agentSession);
-				// 会话模式开关(TUI /fast /computer /vision /prewalk parity):
-				// 只读快照,写入走 session.setFastMode 等。
+				// 会话预设 id（design 等模式驱动的 composer UI 依赖它判型）。
 				const mc = live.agentSession as unknown as {
 					isFastModeEnabled?(): boolean;
 					isFastModeActive?(): boolean;
@@ -7581,6 +7580,7 @@ export class DaemonServer {
 					this.#host.settings()?.getRaw("computer.enabled") === true;
 				return {
 					...base,
+					modeId: live.modeId ?? null,
 					fastModeEnabled: mc.isFastModeEnabled?.() ?? false,
 					fastModeActive: mc.isFastModeActive?.() ?? false,
 					computerEnabled,

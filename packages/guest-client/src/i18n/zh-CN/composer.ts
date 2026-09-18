@@ -92,6 +92,16 @@ export const composer = {
 	"sketch done": "完成",
 	"sketch discard title": "放弃这次绘画？",
 	"sketch discard confirm": "画布上有未发送的内容，丢弃后无法恢复。",
+	// ── Design session style chips (设计稿 08) ────────────────────────────
+	"design style": "设计风格",
+	"design style inherit": "跟随既有",
+	"design style minimal": "极简留白",
+	"design style glass": "玻璃拟态",
+	"design style editorial": "编辑杂志",
+	"design style neubrutalism": "新粗野",
+	"design style darkneon": "暗黑霓虹",
+	"design style hint": "把风格基准写入设计简报，发送后由 agent 沿用",
+	"design style brief update {style}": "请把设计简报的风格基准调整为「{style}」，其余简报保持不变。",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

@@ -581,4 +581,7 @@ export const tools = {
 	"artifact code view hint": "This renderer has no live preview — showing the source",
 	"artifact truncated": "Large file — showing the first 512 KB",
 	"artifacts scan truncated": "Scan stopped at depth 4 — deeper artifact directories were not visited",
+	"artifacts viewport desktop": "Desktop",
+	"artifacts viewport tablet": "Tablet",
+	"artifacts viewport mobile": "Mobile",
 } as const satisfies Record<ToolsKey, string>;

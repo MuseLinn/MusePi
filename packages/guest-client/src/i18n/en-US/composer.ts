@@ -94,4 +94,15 @@ export const composer = {
 	"sketch done": "Done",
 	"sketch discard title": "Discard this sketch?",
 	"sketch discard confirm": "The canvas has unsent content — discarding cannot be undone.",
+	// ── Design session style chips (设计稿 08) ────────────────────────────
+	"design style": "Design style",
+	"design style inherit": "Follow the brief",
+	"design style minimal": "Minimal",
+	"design style glass": "Glassmorphism",
+	"design style editorial": "Editorial",
+	"design style neubrutalism": "Neo-brutalism",
+	"design style darkneon": "Dark neon",
+	"design style hint": "Writes the style baseline into the design brief — send and the agent keeps it",
+	"design style brief update {style}":
+		"Please update the design brief's style baseline to \"{style}\" and keep the rest of the brief unchanged.",
 } as const satisfies Record<ComposerKey, string>;
