@@ -573,6 +573,17 @@ export function deriveCustomAccent(hex: string, scheme: SystemTheme): Record<str
 	};
 }
 
+/** Best-case WCAG contrast of on-accent text for a candidate accent — the
+ *  grade the accent's own foreground will get (the picker surfaces it next to
+ *  the accent-vs-background grade; the sRGB derivation bug this guards
+ *  against produced 2.2:1 on the brand gold). Uses chroma.contrast, the
+ *  standard WCAG implementation. */
+export function accentInkContrast(hex: string): number {
+	const inkDark = "#17151a";
+	const inkPaper = "#fdfdfd";
+	return Math.max(chromaJs.contrast(inkDark, hex), chromaJs.contrast(inkPaper, hex));
+}
+
 const ACCENT_INLINE_VARS = [
 	"--accent",
 	"--accent-fg",

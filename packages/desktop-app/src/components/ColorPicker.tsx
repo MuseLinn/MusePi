@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { accentInkContrast, t } from "@musepi/guest-client";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 /**
@@ -187,6 +187,10 @@ export function ColorPickerPanel({
 		return css ? cssColorToHex(css) : "#17181c";
 	}, []);
 	const ratio = useMemo(() => contrastRatio(value, bgHex), [value, bgHex]);
+	// On-accent text grade: what the derived --accent-fg will read at (WCAG,
+	// via guest-client/chroma). Bad grade means the accent is too mid-tone for
+	// either ink — deriveCustomAccent still picks the better one.
+	const onAccentRatio = useMemo(() => accentInkContrast(value), [value]);
 
 	return (
 		// Card surface lives HERE — the useFloatingMenu call sites must NOT
@@ -283,6 +287,18 @@ export function ColorPickerPanel({
 					className={`gui-cp-contrast-grade${ratio >= 4.5 ? " gui-cp-contrast-grade--ok" : " gui-cp-contrast-grade--bad"}`}
 				>
 					{ratio >= 7 ? "AAA" : ratio >= 4.5 ? "AA" : t("contrast low")} · {ratio.toFixed(1)}:1
+				</span>
+			</div>
+			<div className="gui-cp-contrast">
+				{/* The grade the accent's own foreground will get — the pairing the
+				 *  old sRGB derivation broke (2.2:1 on the brand gold). Gate is the
+				 *  same WCAG AA 4.5:1; deriveCustomAccent picks the better ink. */}
+				<span>{t("on-accent contrast")}</span>
+				<span
+					className={`gui-cp-contrast-grade${onAccentRatio >= 4.5 ? " gui-cp-contrast-grade--ok" : " gui-cp-contrast-grade--bad"}`}
+				>
+					{onAccentRatio >= 7 ? "AAA" : onAccentRatio >= 4.5 ? "AA" : t("contrast low")} ·{" "}
+					{onAccentRatio.toFixed(1)}:1
 				</span>
 			</div>
 			{onApply && (

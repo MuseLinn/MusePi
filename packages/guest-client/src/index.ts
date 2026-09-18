@@ -106,6 +106,7 @@ export {
 	type AccentPreference,
 	DARK_THEME_PRESETS,
 	LIGHT_THEME_PRESETS,
+	accentInkContrast,
 	type SystemTheme,
 	setAccentPreference,
 	type ThemePreference,
