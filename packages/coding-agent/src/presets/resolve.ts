@@ -304,7 +304,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 			{
 				name: "mode:design:artifact",
 				order: 40,
-				text: "产物契约:每个可预览产物都要写一份 sidecar manifest,声明 entry 文件、kind(页面/组件/海报/幻灯片)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。没有 manifest 的产物无法被预览面板识别。",
+				text: "产物契约:每个可预览产物都要在产物目录写一份 sidecar manifest,文件名固定为 artifact.manifest.json,声明 entry 文件(相对路径,不得越出产物目录)、kind(page/component/poster/deck)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。没有 manifest 的产物无法被预览面板识别。",
 			},
 			{
 				name: "mode:design:boundary",
@@ -328,32 +328,50 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 2;
+export const BUILTIN_TEMPLATE_REVISION = 3;
 
 /**
- * v1 形状的 design 模板 —— 只用于升级比对。
+ * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
+ * 某个历史内置模板"时升级,改动过的文件一律保留。
  *
  * 为什么需要:ensureModeTemplates 原来只写"缺失的文件",所以内置模板一旦改内容,
- * 老用户磁盘上的旧 preset 永远不会被替换(revision 1 的 design 只有一条 persona)。
- * 但预设是用户可编辑的,无条件覆盖会抹掉人家的修改 —— 于是只在"文件内容仍等于
- * 旧内置模板"时才升级,改动过的文件一律保留。其余 id 本次没变,v1 = 当前 def。
+ * 老用户磁盘上的旧 preset 永远不会被替换。但预设是用户可编辑的,无条件覆盖会
+ * 抹掉人家的修改 —— 于是按修订链逐级比对:v1(persona)→ v2(五区块)→ 当前。
+ * 未列出的 id 该修订 = 当前 def(内容从未变过)。
  */
-const LEGACY_TEMPLATE_V1: Record<string, ModeDefinition> = {
-	design: {
-		id: "design",
-		label: "Design",
-		description: "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
-		prompt: [
-			{
-				name: "mode:design:role",
-				order: 25,
-				text: "你是一名资深 UI/UX 设计师。优先给出视觉方案而非代码;涉及布局时先做结构判断,再给实现细节。",
-			},
-		],
+const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
+	1: {
+		design: {
+			id: "design",
+			label: "Design",
+			description: "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
+			prompt: [
+				{
+					name: "mode:design:role",
+					order: 25,
+					text: "你是一名资深 UI/UX 设计师。优先给出视觉方案而非代码;涉及布局时先做结构判断,再给实现细节。",
+				},
+			],
+		},
+	},
+	2: {
+		design: {
+			...BUILTIN_MODE_TEMPLATES.design,
+			prompt: (BUILTIN_MODE_TEMPLATES.design.prompt ?? []).map(p =>
+				typeof p === "string"
+					? p
+					: p.name === "mode:design:artifact"
+						? {
+								...p,
+								text: "产物契约:每个可预览产物都要写一份 sidecar manifest,声明 entry 文件、kind(页面/组件/海报/幻灯片)、renderer(html/markdown/react-component/deck-html)、exports(导出格式)。没有 manifest 的产物无法被预览面板识别。",
+							}
+						: p,
+			),
+		},
 	},
 };
 
-/** 首次使用时把内置模板写入 modeDir;已存在的文件只在"仍是旧内置模板"时升级。 */
+/** 首次使用时把内置模板写入 modeDir;已存在的文件只在"仍是历史内置模板"时升级。 */
 export function ensureModeTemplates(dir: string): void {
 	mkdirSync(dir, { recursive: true });
 	for (const [id, def] of Object.entries(BUILTIN_MODE_TEMPLATES)) {
@@ -373,10 +391,14 @@ export function ensureModeTemplates(dir: string): void {
 			continue; // 坏 JSON 不动 —— 交给 modes.validate 报告,别在这里自作主张
 		}
 		if (parsed.builtinRevision === BUILTIN_TEMPLATE_REVISION) continue;
-		// 内容仍等于旧内置模板 → 安全升级;否则说明用户改过,保留原样。
+		// 内容仍等于某个历史内置模板 → 安全升级;否则说明用户改过,保留原样。
 		const { builtinRevision: _drop, ...withoutRevision } = parsed;
-		const legacy = LEGACY_TEMPLATE_V1[id] ?? def;
-		if (JSON.stringify(withoutRevision, null, 2) === JSON.stringify(legacy, null, 2)) {
+		const serialized = JSON.stringify(withoutRevision, null, 2);
+		const isLegacy = Object.values(LEGACY_TEMPLATES).some(rev => {
+			const legacy = rev[id] ?? def;
+			return serialized === JSON.stringify(legacy, null, 2);
+		});
+		if (isLegacy) {
 			writeFileSync(file, `${JSON.stringify(stamped, null, 2)}\n`, "utf8");
 		}
 	}
