@@ -45,6 +45,13 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
  * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
  * section (live daemon state — channels.list/start/stop).
  */
+/** The wechat iLink API returns `qrcode_img_content` as raw base64 PNG (not a
+ *  URL) — wrap it in a data URI so `<img>` can render it. data:/http(s) pass
+ *  through untouched for adapters that do expose a real URL. */
+function channelQrSrc(raw: string): string {
+	if (raw.startsWith("data:") || /^https?:\/\//i.test(raw)) return raw;
+	return `data:image/png;base64,${raw}`;
+}
 /** 各 bot channel 的可识别 logo（discord 用内置 icon，其余内联简化 SVG）。 */
 function channelLogo(kind: string): ReactNode {
 	switch (kind) {
@@ -112,6 +119,9 @@ export function CollabDialog({
 	>(null);
 	const [expandedKind, setExpandedKind] = useState<string | null>(null);
 	const [configDraft, setConfigDraft] = useState<Record<string, string>>({});
+	/** Per-kind start failure — silently swallowing channels.start errors left
+	 *  users clicking "start" with zero feedback (QR never appeared). */
+	const [startErrors, setStartErrors] = useState<Record<string, string>>({});
 	const [plugins, setPlugins] = useState<
 		{ kind: string; label: string; origin: string; registered: boolean }[] | null
 	>(null);
@@ -139,12 +149,17 @@ export function CollabDialog({
 
 	const saveConfig = async (kind: string): Promise<void> => {
 		if (!rpc) return;
-		await rpc
-			.request("channels.configure", { kind, config: configDraft })
-			.then(() => rpc.request("channels.start", { kind }))
-			.then(() => refreshChannels())
-			.catch(() => refreshChannels());
-		setExpandedKind(null);
+		setStartErrors(e => ({ ...e, [kind]: "" }));
+		try {
+			await rpc.request("channels.configure", { kind, config: configDraft });
+			await rpc.request("channels.start", { kind });
+			// Only collapse on success — keep the form open on failure so the
+			// error lands next to the fields the user just filled.
+			setExpandedKind(null);
+		} catch (err) {
+			setStartErrors(e => ({ ...e, [kind]: err instanceof Error ? err.message : String(err) }));
+		}
+		await refreshChannels();
 		setConfigDraft({});
 	};
 
@@ -208,6 +223,17 @@ export function CollabDialog({
 	useEffect(() => {
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
 	}, [webLink]);
+
+	// While a channel is mid-login (connecting / waiting_scan) poll its status
+	// so the QR appears and a completed scan flips the row to "connected"
+	// without manual refresh. Idle channels schedule nothing.
+	const pendingChannel = (channels ?? []).some(c => c.state === "connecting" || c.state === "waiting_scan");
+	useEffect(() => {
+		if (!pendingChannel || !rpc) return;
+		const timer = window.setInterval(() => void refreshChannels(), 2000);
+		return () => window.clearInterval(timer);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [pendingChannel, rpc]);
 
 	// Countdown clock for the pair code, bounded to the code's lifetime so an
 	// idle dialog schedules no timers.
@@ -458,13 +484,15 @@ export function CollabDialog({
 									</div>
 									{/* QR login (issue #28): the backend exposes the WeChat login
 									 *  QR via status().config.qrUrl while waiting for a scan —
-									 *  render it inline so the user can actually scan it. */}
+									 *  render it inline so the user can actually scan it.
+									 *  iLink returns raw base64 PNG → channelQrSrc wraps it. */}
 									{c.state === "waiting_scan" && typeof c.config?.qrUrl === "string" && c.config.qrUrl && (
 										<div className="gui-collab-channel-qr">
-											<img src={c.config.qrUrl} alt="WeChat login QR" />
+											<img src={channelQrSrc(c.config.qrUrl)} alt="WeChat login QR" />
 											<span>{c.detail ?? t("scan the QR code")}</span>
 										</div>
 									)}
+									{startErrors[c.kind] && <div className="gui-collab-error">{startErrors[c.kind]}</div>}
 									{expandedKind === c.kind && fields && (
 										<div className="gui-collab-channel-config">
 											{fields.map(f => (

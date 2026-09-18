@@ -1933,6 +1933,39 @@
 	gap: 8px;
 }
 
+/* Expanded per-channel config form (token input + save button). Lives under
+ * the bot row; stacked column so the button can never overlap the input. */
+.gui-collab-channel-config {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 8px 12px 2px;
+	padding: 12px;
+	border-radius: var(--radius-xl);
+	border: 1px solid var(--border);
+	background: var(--color-surface);
+}
+
+.gui-collab-channel-config .gui-btn {
+	align-self: flex-end;
+}
+
+.gui-collab-channel-input {
+	width: 100%;
+	padding: 8px 10px;
+	font-size: 12px;
+	color: var(--color-text);
+	background: var(--color-surface-raised);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	outline: none;
+	transition: border-color var(--transition-fast);
+}
+
+.gui-collab-channel-input:focus {
+	border-color: var(--color-accent);
+}
+
 /* QR login (issue #28): WeChat login QR surfaced from status().config.qrUrl
  * while the channel waits for a scan. Centered under the bot row. */
 .gui-collab-channel-qr {

@@ -56,10 +56,16 @@ export class ChannelRegistry {
 		return kinds.map(kind => {
 			const adapter = this.#adapter(kind);
 			if (!adapter) throw new Error(`no adapter factory for ${kind}`);
+			const st = adapter.status();
 			return {
-				...adapter.status(),
+				...st,
+				// Merge persisted user config UNDER the live status config:
+				// status() carries runtime fields the GUI renders (wechat qrUrl)
+				// and masks secrets (token → ••••1234); persisted config keeps
+				// raw user input that must never surface over RPC.
 				config: {
 					...(persisted.get(kind)?.config ?? {}),
+					...st.config,
 					enabled: persisted.get(kind)?.enabled ?? false,
 				},
 			};

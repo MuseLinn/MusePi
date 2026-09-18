@@ -131,6 +131,30 @@ describe("channel registry", () => {
 		await registry.startAll();
 		expect(fake.started).toBe(3);
 	});
+
+	it("list() merges runtime status config over persisted config", async () => {
+		// Regression (wechat QR never rendered): the runtime config returned by
+		// status() — qrUrl, masked secrets — must survive list(); persisted
+		// raw user config must not leak over it.
+		const fake = new FakeAdapter("discord");
+		fake.status = () => ({
+			kind: "discord",
+			state: "connected",
+			config: { token: "••••9876", qrUrl: "data:image/png;base64,QQ==" },
+		});
+		const host: ChannelHost = { handleIncoming: async () => {} };
+		const registry = new ChannelRegistry({
+			configPath: `${import.meta.dir}/.channels-test-list.json`,
+			host,
+			factories: { discord: () => fake },
+		});
+		registry.configure("discord", { token: "raw-secret-token", note: "user note" });
+		const [st] = registry.list();
+		expect(st.config.qrUrl).toBe("data:image/png;base64,QQ==");
+		expect(st.config.token).toBe("••••9876"); // masked wins — raw secret never surfaces
+		expect(st.config.note).toBe("user note"); // non-conflicting persisted fields survive
+		expect(st.config.enabled).toBe(false);
+	});
 });
 
 describe("huawei today channel", () => {
