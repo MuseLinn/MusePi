@@ -543,6 +543,17 @@ export const tools = {
 	"overlay later": "稍后再说",
 	"computer permissions missing": "权限不足,Computer 功能不可用",
 	"computer permissions later hint": "稍后可在「设置 → 工具 → Computer 权限」中操作",
+	// ── Artifacts panel (design-preset product contract viewer) ─────────
+	artifacts: "产物",
+	"surface description artifacts": "预览设计模式通过 artifact.manifest.json 声明的产物",
+	"artifacts empty": "还没有产物",
+	"artifacts empty hint": "设计模式产出的、带 artifact.manifest.json 的产物会出现在这里",
+	"artifact manifest invalid": "清单无效",
+	"back to artifacts": "全部产物",
+	"exports label": "支持的导出格式",
+	"artifact code view hint": "该渲染器暂不支持实时预览——正在显示源码",
+	"artifact truncated": "文件较大——仅显示前 512 KB",
+	"artifacts scan truncated": "扫描在第 4 层截断——更深的产物目录未访问",
 } as const;
 
 /** Key union for the tools domain (source of truth). */

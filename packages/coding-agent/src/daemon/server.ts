@@ -145,6 +145,7 @@ import {
 } from "./crons";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
+import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
@@ -9520,6 +9521,22 @@ export class DaemonServer {
 					perDirLimit: p.perDirLimit,
 					gitignore: p.gitignore,
 				});
+			}
+			case "artifact.list": {
+				// Artifacts-panel discovery: scan the workspace for
+				// artifact.manifest.json sidecars (design-preset contract) and
+				// validate each through the shared manifest module.
+				const p = (params ?? {}) as { cwd?: string };
+				if (!p.cwd) return { error: "missing cwd" };
+				return scanWorkspaceArtifacts(p.cwd);
+			}
+			case "artifact.read": {
+				// Artifacts-panel viewer: entry file text for the validated
+				// manifest's renderer (html/markdown/react-component are all
+				// text). Path escape guards live in artifact-scan.ts.
+				const p = (params ?? {}) as { cwd?: string; dir?: string; entry?: string };
+				if (!p.cwd || !p.dir || !p.entry) return { error: "missing cwd/dir/entry" };
+				return readArtifactEntryText(p.cwd, p.dir, p.entry);
 			}
 			default:
 				throw new Error(`Unknown method: ${method}`);

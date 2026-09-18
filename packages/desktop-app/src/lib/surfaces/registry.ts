@@ -10,6 +10,7 @@ export type SurfaceAvailability = "always" | "has-content";
 export type SurfaceId =
 	| "context"
 	| "files"
+	| "artifacts"
 	| "widget"
 	| "trajectory"
 	| "jobs"
@@ -69,6 +70,17 @@ export const SURFACES: SurfaceDescriptor[] = [
 		group: "primary",
 		availability: "always",
 		defaultWidthFraction: 0.5,
+	},
+	// Artifacts panel (设计板 W3): discovered artifact.manifest.json sidecars
+	// in the workspace, with the entry-file viewer behind each card.
+	{
+		id: "artifacts",
+		label: "artifacts",
+		description: "surface description artifacts",
+		icon: "stack",
+		group: "primary",
+		availability: "always",
+		defaultWidthFraction: 0.55,
 	},
 	{
 		id: "trajectory",

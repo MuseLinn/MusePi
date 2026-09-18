@@ -3325,3 +3325,231 @@
 	background: var(--color-accent);
 	flex-shrink: 0;
 }
+
+/* ── Artifacts panel (设计板 W3) — artifact.manifest.json sidecar viewer ──
+ * List: one card per scanned artifact; invalid manifests render as cards
+ * with their validation errors so a broken agent-written manifest is
+ * fixable instead of invisible. Viewer: entry file rendered by renderer
+ * (html/deck-html iframe, markdown, react-component source). */
+.gui-art-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-top: 2px;
+}
+
+.gui-art-list-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-art-cards {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+	gap: 10px;
+}
+
+.gui-art-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	cursor: pointer;
+	text-align: left;
+	transition:
+		border-color 150ms var(--spring),
+		transform 150ms var(--spring),
+		box-shadow 150ms var(--spring);
+}
+
+.gui-art-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md, 0 4px 12px rgb(0 0 0 / 0.08));
+}
+
+.gui-art-card--invalid {
+	cursor: default;
+	border-color: color-mix(in oklab, var(--color-danger) 35%, var(--border));
+}
+
+.gui-art-card--invalid:hover {
+	transform: none;
+	box-shadow: none;
+	border-color: color-mix(in oklab, var(--color-danger) 35%, var(--border));
+}
+
+.gui-art-card-top {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-art-card-name {
+	flex: 1;
+	min-width: 0;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-art-card-desc {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-dim, var(--color-text-faint));
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.gui-art-card-meta {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	color: var(--color-text-faint);
+	min-width: 0;
+}
+
+.gui-art-card-meta > span:first-child {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-art-card-errors {
+	margin: 0;
+	padding: 6px 8px 6px 22px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+	color: var(--color-danger);
+	font-size: 11px;
+	line-height: 1.5;
+}
+
+.gui-art-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1.6;
+}
+
+.gui-art-badge--muted {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text-muted);
+}
+
+.gui-art-badge--danger {
+	background: color-mix(in oklab, var(--color-danger) 14%, transparent);
+	color: var(--color-danger);
+}
+
+.gui-art-note {
+	padding: 6px 10px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-text) 5%, transparent);
+	color: var(--color-text-muted);
+	font-size: 12px;
+}
+
+.gui-art-note--error {
+	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+	color: var(--color-danger);
+}
+
+.gui-art-spinning {
+	animation: gui-art-rotate 0.9s linear infinite;
+}
+
+@keyframes gui-art-rotate {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Viewer: header (back + title + badges) over the rendered entry. */
+.gui-art-viewer {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding-top: 2px;
+}
+
+.gui-art-viewer-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-art-viewer-heading {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+
+.gui-art-viewer-title {
+	min-width: 0;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-art-exports {
+	flex-shrink: 0;
+	font-size: 10px;
+	color: var(--color-text-faint);
+}
+
+.gui-art-frame {
+	width: 100%;
+	height: min(72vh, 720px);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-bg);
+}
+
+.gui-art-markdown {
+	padding: 4px 2px;
+	font-size: 13px;
+}
+
+.gui-art-source {
+	margin: 0;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--color-text);
+	max-height: min(60vh, 640px);
+	overflow: auto;
+}

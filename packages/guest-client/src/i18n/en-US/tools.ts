@@ -556,4 +556,15 @@ export const tools = {
 	"overlay later": "Later",
 	"computer permissions missing": "Insufficient permissions — Computer Use is unavailable",
 	"computer permissions later hint": "You can manage these later in Settings → Tools → Computer Permissions",
+	// ── Artifacts panel (design-preset product contract viewer) ─────────
+	artifacts: "Artifacts",
+	"surface description artifacts": "Preview products the design mode declared via artifact.manifest.json",
+	"artifacts empty": "No artifacts yet",
+	"artifacts empty hint": "Design-mode products carrying an artifact.manifest.json sidecar show up here",
+	"artifact manifest invalid": "invalid",
+	"back to artifacts": "All artifacts",
+	"exports label": "Supported export formats",
+	"artifact code view hint": "This renderer has no live preview — showing the source",
+	"artifact truncated": "Large file — showing the first 512 KB",
+	"artifacts scan truncated": "Scan stopped at depth 4 — deeper artifact directories were not visited",
 } as const satisfies Record<ToolsKey, string>;

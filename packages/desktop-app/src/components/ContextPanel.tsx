@@ -21,6 +21,7 @@ import { SURFACES } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
 import { FadeScroll } from "./FadeScroll";
 import { FilePane } from "./FilePane";
@@ -634,6 +635,11 @@ export function ContextPanel({
 									onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
 									onDirty={onFileDirty}
 								/>
+							) : view === "artifacts" ? (
+								/* Artifacts panel (设计板 W3): artifact.manifest.json
+								 * sidecars discovered by the daemon, each card opening
+								 * the entry-file viewer (iframe/markdown/source). */
+								<ArtifactsPanel rpc={rpc} cwd={cwd} />
 							) : view === "widget" ? (
 								<WidgetSidebarTab entries={snap?.entries ?? []} />
 							) : view === "jobs" ? (
