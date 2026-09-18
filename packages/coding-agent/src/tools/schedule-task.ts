@@ -1,5 +1,4 @@
 import { type } from "@musepi/musepi-type";
-import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { prompt } from "@musepi/pi-utils";
 import type { CronSchedule, CronTask } from "../daemon/crons";
 
@@ -142,9 +141,9 @@ export const scheduleTaskTool: CustomTool<typeof scheduleTaskSchema, ScheduleTas
 	),
 	parameters: scheduleTaskSchema,
 	async execute(_toolCallId, params, _onUpdate, ctx) {
-		// Declaration merging in tools/context.ts carries the handle; the
-		// CustomTool execute signature only exposes CustomToolContext.
-		const handle = (ctx as AgentToolContext).scheduledTasks;
+		// Daemon-injected handle; carried on CustomToolContext since the
+		// #25 fix (createCustomToolContext passes it through).
+		const handle = ctx.scheduledTasks;
 		if (!handle) {
 			return {
 				content: [

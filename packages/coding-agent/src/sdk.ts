@@ -991,7 +991,14 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 
 // Internal Helpers
 
-function createCustomToolContext(ctx: ExtensionContext): CustomToolContext {
+function createCustomToolContext(
+	ctx: ExtensionContext & { scheduledTasks?: ScheduledTaskHandle; collab?: CollabToolHandle },
+): CustomToolContext {
+	// The runtime object is the agent tool context (getToolContext()), which
+	// carries the daemon-injected handles via declaration merging — but the
+	// static ExtensionContext type omits them, hence the intersection above.
+	// Dropping the two fields here made `schedule_task` / `collab` report
+	// "(no daemon)" even when the desktop daemon was connected (issue #25).
 	return {
 		sessionManager: ctx.sessionManager,
 		modelRegistry: ctx.modelRegistry,
@@ -1000,6 +1007,8 @@ function createCustomToolContext(ctx: ExtensionContext): CustomToolContext {
 		hasQueuedMessages: ctx.hasPendingMessages,
 		abort: ctx.abort,
 		localProtocolOptions: ctx.localProtocolOptions,
+		scheduledTasks: ctx.scheduledTasks,
+		collab: ctx.collab,
 	};
 }
 

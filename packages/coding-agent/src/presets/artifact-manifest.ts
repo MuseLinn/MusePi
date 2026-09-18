@@ -95,11 +95,7 @@ export function validateArtifactManifest(
 	const entryNorm = typeof entry === "string" ? entry.replace(/\\/g, "/") : "";
 	if (typeof entry !== "string" || entry.length === 0) {
 		errors.push("entry is required (relative path to the preview entry file)");
-	} else if (
-		path.isAbsolute(entryNorm) ||
-		path.win32.isAbsolute(entryNorm) ||
-		entryNorm.split("/").includes("..")
-	) {
+	} else if (path.isAbsolute(entryNorm) || path.win32.isAbsolute(entryNorm) || entryNorm.split("/").includes("..")) {
 		errors.push(`entry must stay inside the artifact directory (got "${entry}")`);
 	}
 	const entryPath = typeof entry === "string" ? path.join(dir, entry) : "";
