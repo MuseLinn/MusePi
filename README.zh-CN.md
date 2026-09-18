@@ -47,6 +47,8 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 - **右侧面板：一条 tab 条承载全部视图**（openchamber ContextPanel parity）：面板顶部一条 tab 条承载所有已打开的视图 —— 多实例**文件 tab**（文件树 + PDF/图片/文本预览）、项目笔记、待办与计划文件、Git 变更/提交（gitmoji、身份注入、GitHub device-flow 认证）、PR 列表、内嵌浏览器、看板、扩展 `panel.tab.*` 槽 —— rail 降级为启动器（打开或聚焦对应 tab）。零 tab 时显示「从这里开始」空态导航页而非默认视图；关闭 tab 激活邻居、tab 可拖拽排序、布局恢复只存标签（内容由所属 surface 重新物化）。
 - **子智能体操作**（Agent Hub parity）：右栏 AgentsPanel 停止/复活/对话（`agents.kill/revive/chat` RPC）。
 - **任务中心（定时任务）**：cron 式调度，完整 IANA 时区支持（墙上时间、闲时窗口、cron 表达式都按任务时区求值，DST 安全）、按任务运行历史与失败原因、daemon 自身解析器计算的 next-run 预览、按任务选模型与思考等级、看板视图暂停/恢复；日历周起始与设置页一致。
+- **Windows 托盘（Win32 惯例）**：左键/双击唤出主窗口，右键弹出快捷菜单。
+- **技能安装（daemon RPC）**：GitHub `owner/repo` 或 https git URL 一键落入用户技能目录（`skills.install`——SKILL.md 自动定位、frontmatter 命名、覆盖需显式确认）；列表/读取/删除在 GUI 内完成，agent 侧创作经 `manage_skill`。
 
 ### 核心引擎
 
@@ -156,7 +158,7 @@ bun run --cwd=packages/desktop-app desktop
 关键契约文档：
 
 - **GUI 设计规范**：`docs/gui-design.md`（布局/token/动效/组件模式/桌宠视觉风格）
-- **设计模式（preset `design`）**：agent 先对齐简报（目标/平台/风格基准/参考/交付物）、先判断结构再谈配色，产出带 manifest 的可预览设计稿而非实现代码；圆角只用 `--radius-*`、玻璃只用 `--glass-*` 四件套。三种入口：欢迎页选 Design、`--preset design`、会话内 `/design`。
+- **设计模式（preset `design`）**：agent 先对齐简报（目标/平台/风格基准/参考/交付物）、先判断结构再谈配色，产出带 manifest 的可预览设计稿而非实现代码（可预览产物遵循 artifact manifest 契约：`artifact.manifest.json` sidecar，schema 见 `packages/coding-agent/src/presets/artifact-manifest.ts`）；圆角只用 `--radius-*`、玻璃只用 `--glass-*` 四件套。三种入口：欢迎页选 Design、`--preset design`、会话内 `/design`。
 - **GUI 实现笔记**：`docs/gui-implementation.md`（daemon RPC 形状、IPC、踩坑、验证工作流）
 - **widget 设计系统**：`docs/archive/widget-design-system.md`
 - **协作**：`docs/collab.md`（含 musepi LAN/隧道定制）
@@ -187,6 +189,7 @@ bun run lint / fmt       # biome + rustfmt
 - **HarmonyOS WebView 壳**（`packages/harmony`）：ArkTS `Web` 组件加载同一 bundle（native insets、badge、`musepi://` 深链、键盘 inset）。
 - **PWA**：service worker 离线连接壳。
 - **远程会话管理**（dsh-mobile-remote parity）：guest 可创建/删除/重命名会话、停止远端正在运行的 turn（`session.abort`）；agent 可主动发起分享（collab tool，分级审批）。
+- **机器人渠道**：桌面「移动端远程控制」弹窗支持 Discord / WeChat / 华为今天推送；WeChat 支持**免 Token 扫码登录**——等待扫码时登录二维码直接内联渲染在弹窗里（来自渠道 `status().config.qrUrl`）。
 
 ## 📦 打包与发布
 

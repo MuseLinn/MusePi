@@ -101,6 +101,8 @@ Skip the stale bitmaps — the [website's live tour](https://muselinn.github.io/
 - **Right panel — one tab strip, every surface** (openchamber ContextPanel parity): a single panel-level tab strip hosts each open view — multi-instance **file tabs** (file tree with PDF/image/text previews), notes, project todos & plan files, Git changes & commits (gitmoji, GitHub device-flow auth), PR list, embedded browser, board and extension `panel.tab.*` slots — while the rail becomes a launcher that opens or focuses a tab. Zero tabs shows a start-here page instead of a default view; closing a tab activates its neighbour, tabs drag-reorder, and a layout restore keeps labels only (content re-materialises from its surface).
 - **Subagent operations**: stop / revive / chat from the AgentsPanel (`agents.kill` / `agents.revive` / `agents.chat`).
 - **Task center (scheduled tasks)**: cron-style scheduling with full IANA-timezone support (wall-clock times, idle windows and cron expressions evaluated in the task's timezone, DST-safe), per-task run history with failure reasons, next-run previews computed by the daemon's own parser, per-task model & thinking-level selection, board-view pause/resume — calendar week start follows the settings page.
+- **Windows tray (Win32 convention)**: left-click / double-click restore the main window; right-click toggles the quick menu.
+- **Skill install (daemon RPC)**: land a skill from a GitHub `owner/repo` slug or an https git URL straight into your user skills dir (`skills.install` — SKILL.md auto-located, frontmatter-named, overwrite-gated); listing / reading / deletion stay in the GUI, agent-side authoring via `manage_skill`.
 
 ### Core agent engine
 
@@ -134,7 +136,7 @@ Three standalone lowercase words opt a turn into specialized behavior: **`ultrat
 
 Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`, `/fresh`, `/preset`, `/changelog`, …).
 
-**Presets (modes)** stamp model role + extension scope + prompt blocks onto a session at creation: `work` (default), `chat` (minimal), **`design`** (design mode — brief → structure → visual → previewable artifact, with the radius/glass token rules wired into the agent's behaviour), `creator` (authoring extensions and presets). Pick one on the welcome screen, pass `--preset <id>`, or switch with `/preset`. See [`docs/gui-design.md`](docs/gui-design.md) for the design system the `design` preset enforces.
+**Presets (modes)** stamp model role + extension scope + prompt blocks onto a session at creation: `work` (default), `chat` (minimal), **`design`** (design mode — brief → structure → visual → previewable artifact, with the radius/glass token rules wired into the agent's behaviour), `creator` (authoring extensions and presets). Pick one on the welcome screen, pass `--preset <id>`, or hot-switch with `/preset` / the `/design` shortcut. Previewable products follow the artifact manifest contract (`artifact.manifest.json` sidecar; schema in `packages/coding-agent/src/presets/artifact-manifest.ts`). See [`docs/gui-design.md`](docs/gui-design.md) for the design system the `design` preset enforces.
 ### Mobile shells
 
 - **Capacitor Android app** (`packages/mobile` + `guest-client` mobile entry): first-class phone UI sharing the collab web components — immersive edge-to-edge (custom `InsetsPlugin` for true status/nav bar heights), QR pairing via jsQR (no GMS dependency), time-aware greeting + rotating tips, suggestion chips, 44px tap targets, Android back-key layer unwinding, rotation transitions, three-in-one send control with dot-matrix bloom, braille dot-matrix working indicator, session archiving.
@@ -143,6 +145,7 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 - **Remote session management**: guests can create / delete / rename sessions and stop a running turn (`session.abort`) — dsh-mobile-remote parity.
 - **Instance switcher**: top-bar menu connects to remote daemons (`serve --remote-token <token>` gates with bearer auth; hosts persist in localStorage).
 - **Agent-initiated sharing**: the `collab` tool starts LAN/tunnel shares (tunnel requires explicit approval).
+- **Bot channels**: the desktop remote-control dialog wires Discord / WeChat / Huawei-Today push; WeChat supports **tokenless QR login** — while the channel waits for the scan, the login QR renders inline in the dialog (surfaced from the channel's `status().config.qrUrl`).
 - **Pairing surface**: host shares via `/collab` (TUI slash: view / workspace / lan / tunnel / status / stop) or `collab.start` RPC; guests join with the collab link in any browser, the Android app, or `musepi join "<link>"` from the CLI. E2E-encrypted; workspace mode shares the whole session directory.
 - Design spec: [`mobile-design.md`](docs/mobile-design.md).
 
