@@ -62,9 +62,10 @@ export function findArtifactManifest(dir: string): string | undefined {
 }
 
 /** Read + validate a manifest file. Returns error strings; empty = valid. */
-export function validateArtifactManifestFile(
-	manifestPath: string,
-): { errors: string[]; value?: ValidatedArtifactManifest } {
+export function validateArtifactManifestFile(manifestPath: string): {
+	errors: string[];
+	value?: ValidatedArtifactManifest;
+} {
 	let parsed: unknown;
 	try {
 		// Lazy require keeps this module importable from the browser-ish side.
@@ -101,9 +102,7 @@ export function validateArtifactManifest(
 		errors.push(`kind must be one of ${ARTIFACT_KINDS.join(" | ")} (got ${JSON.stringify(m.kind)})`);
 	}
 	if (!ARTIFACT_RENDERERS.includes(m.renderer as ArtifactRenderer)) {
-		errors.push(
-			`renderer must be one of ${ARTIFACT_RENDERERS.join(" | ")} (got ${JSON.stringify(m.renderer)})`,
-		);
+		errors.push(`renderer must be one of ${ARTIFACT_RENDERERS.join(" | ")} (got ${JSON.stringify(m.renderer)})`);
 	}
 
 	if (m.exports !== undefined) {

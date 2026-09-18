@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validateArtifactManifest, validateArtifactManifestFile } from "@musepi/pi-coding-agent/presets/artifact-manifest";
+import {
+	validateArtifactManifest,
+	validateArtifactManifestFile,
+} from "@musepi/pi-coding-agent/presets/artifact-manifest";
 
 let dir: string;
 
