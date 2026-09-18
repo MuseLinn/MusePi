@@ -1,10 +1,25 @@
 /** `web_search` — provider-backed web search with synthesized answer and sources. */
 import { type ReactNode, useMemo } from "react";
-import { escapeHtml } from "../../components/transcript/highlight.js";
+import { renderStreamingMarkdown } from "../../components/transcript/Markdown.js";
 import { t } from "../../i18n/index.js";
-import { Badge, Badges, InvalidArg, Kv, KvGrid, Note, ResultText, useHighlight } from "../parts";
+import { Badge, Badges, InvalidArg, Kv, KvGrid, Note, ResultText } from "../parts";
 import type { ToolRenderer, ToolRenderProps } from "../types";
 import { detailsRecord, isRecord, normalizeWs, num, resultTextOf, str, truncate } from "../util";
+
+/**
+ * Chat-link routing (Markdown.tsx onCopy parity): http(s) links open in the
+ * managed in-app browser (the desktop GUI listens for `omp-open-url`), not
+ * the system browser. Modifier clicks keep the default external behavior.
+ */
+function handleSearchLinkClick(e: React.MouseEvent<HTMLElement>): void {
+	const linkEl = (e.target as HTMLElement).closest<HTMLElement>("a[href]");
+	if (!linkEl || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+	const href = linkEl.getAttribute("href") ?? "";
+	if (/^https?:\/\//i.test(href)) {
+		e.preventDefault();
+		window.dispatchEvent(new CustomEvent("omp-open-url", { detail: { url: href } }));
+	}
+}
 
 function getDomain(url: string): string {
 	try {
@@ -56,7 +71,13 @@ function SourceRow({ source, n }: { source: Record<string, unknown>; n: number }
 			</span>
 			<span className="tr-tool-search-row-main">
 				{url ? (
-					<a className="tr-tool-search-title" href={url} rel="noreferrer" target="_blank">
+					<a
+						className="tr-tool-search-title"
+						href={url}
+						rel="noreferrer"
+						target="_blank"
+						onClick={handleSearchLinkClick}
+					>
 						{title}
 					</a>
 				) : (
@@ -72,23 +93,31 @@ function SourceRow({ source, n }: { source: Record<string, unknown>; n: number }
 }
 
 /**
- * aicss inline-citations: the synthesized answer renders markdown-highlighted
- * (same as before), then `[N]` markers that fall within the source list are
- * wrapped in superscript citation chips linking to the numbered footer.
- * Markers outside the range (log noise, array indices…) stay plain text.
+ * aicss inline-citations: the synthesized answer renders as REAL markdown
+ * (same pipeline as chat messages — the old syntax-highlighted <pre> showed
+ * raw `**bold**` markers), then `[N]` markers that fall within the source
+ * list are wrapped in superscript citation chips linking to the numbered
+ * footer. Markers outside the range (log noise, array indices…) stay plain
+ * text. Links route to the managed browser (handleSearchLinkClick).
  */
 function SearchAnswer({ text, sourceCount }: { text: string; sourceCount: number }): ReactNode {
-	const html = useHighlight(text, "markdown");
 	const cited = useMemo(() => {
-		const base = html ?? escapeHtml(text);
-		if (sourceCount === 0) return null;
-		return base.replace(/\[(\d{1,2})\]/g, (match, d: string) => {
+		const base = renderStreamingMarkdown(text, false, null).html;
+		if (sourceCount === 0) return base;
+		return base.replace(/\[(\d{1,2})\](?![(<])/g, (match, d: string) => {
 			const n = Number(d);
 			return n >= 1 && n <= sourceCount ? `<sup class="tr-cite">${d}</sup>` : match;
 		});
-	}, [html, text, sourceCount]);
-	if (cited === null) return null;
-	return <pre className="tv-pre tv-pre--wrap" dangerouslySetInnerHTML={{ __html: cited }} />;
+	}, [text, sourceCount]);
+	return (
+		<div
+			className="tr-md tr-tool-search-answer"
+			// Same trusted pipeline as chat messages (marked parse, no external
+			// sanitizer anywhere in the transcript).
+			dangerouslySetInnerHTML={{ __html: cited }}
+			onClick={handleSearchLinkClick}
+		/>
+	);
 }
 
 function Body({ args, result, running }: ToolRenderProps): ReactNode {

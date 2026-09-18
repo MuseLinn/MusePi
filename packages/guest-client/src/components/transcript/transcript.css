@@ -1865,6 +1865,21 @@ a.tr-tool-search-title:hover {
 	border: 1px solid var(--border-strong, var(--border, oklch(1 0 0 / 9%)));
 }
 
+/* The synthesized answer renders as real markdown (tr-md) inside the tool
+ * card — tighten the message-level block margins so the answer reads as
+ * part of the card instead of a standalone message. */
+.tr-tool-search-answer {
+	font-size: var(--ui-font-size-sm, 13px);
+}
+
+.tr-tool-search-answer > :first-child {
+	margin-top: 0;
+}
+
+.tr-tool-search-answer > :last-child {
+	margin-bottom: 0;
+}
+
 .tr-search-shimmer {
 	position: absolute;
 	inset: 0;
@@ -2728,7 +2743,9 @@ a.tr-tool-search-title:hover {
 
 .tr-widget-fs-x {
 	position: absolute;
-	top: 12px;
+	/* Below the app's 48px drag header — at 12px the button sat under the
+	 * header controls (on Windows, under the native close button). */
+	top: 60px;
 	right: 12px;
 	display: flex;
 	align-items: center;

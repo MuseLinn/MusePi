@@ -1414,7 +1414,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					const foldClosed = fold !== undefined && !foldOpen;
 					const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
 					const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
-					const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow;
+					// Widget rows (successful widget toolCalls, see round-collapse
+					// exempt) stay mounted while the fold is closed: the standalone
+					// card is the turn's artifact, not process noise.
+					const isExemptRow = fold?.exempt.includes(absIdx) === true;
+					const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
 					// Rows in the hidden span stay MOUNTED and collapse to height 0
 					// (.tr-fold-slot, animatable via interpolate-size) so folding
 					// animates both ways instead of popping in and out.
@@ -1422,10 +1426,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					// Collapsed turn = 活动 row + the answer: the reply row renders its
 					// TEXT only (thinking/tool parts fold into the activity row).
 					const rowTextOnly = foldClosed && isReplyRow;
-					// A closed fold shows ONLY the header + the reply: every other row of
-					// the turn loses its body, and the header row (when it is not the
-					// reply) disappears entirely — its header rides the reply row instead.
-					const hideRowContent = foldClosed && !isReplyRow;
+					// A closed fold shows ONLY the header + the reply (+ exempt widget
+					// rows): every other row of the turn loses its body, and the header
+					// row (when it is not the reply) disappears entirely — its header
+					// rides the reply row instead.
+					const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
 					const hoistHeaderHere = foldClosed && isReplyRow;
 					const renderHeaderHere = (isHeaderRow && !foldClosed) || hoistHeaderHere;
 					// Per-round work timer: the live tail row ticks from the

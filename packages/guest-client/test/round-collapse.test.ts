@@ -233,3 +233,66 @@ describe("buildRoundFolds", () => {
 		expect(folds[0]!.exploreCount).toBe(1);
 	});
 });
+
+describe("widget exemption", () => {
+	function widgetAssistant(ts: number, callId: string): SessionEntry {
+		const content: unknown[] = [{ type: "toolCall", id: callId, name: "widget", arguments: "{}" }];
+		return {
+			type: "message",
+			id: `a${ts}`,
+			parentId: null,
+			timestamp: String(ts),
+			message: { role: "assistant", content, timestamp: ts },
+		} as SessionEntry;
+	}
+	function widgetResult(ts: number, callId: string, isError = false): SessionEntry {
+		return {
+			type: "message",
+			id: `r${ts}`,
+			parentId: null,
+			timestamp: String(ts),
+			message: {
+				role: "toolResult",
+				toolCallId: callId,
+				toolName: "widget",
+				content: [{ type: "text", text: "ok" }],
+				details: { type: "metric", data: {} },
+				isError,
+				timestamp: ts,
+			},
+		} as SessionEntry;
+	}
+
+	it("keeps the assistant row carrying a successful widget call outside the fold", () => {
+		const entries = [
+			user(1),
+			bash(2),
+			widgetAssistant(3, "w1"),
+			widgetResult(4, "w1"),
+			assistant(5, 1),
+			user(6),
+			assistant(7),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(1);
+		expect(folds[0]!.exempt).toEqual([2]); // absolute idx of the widget row
+		expect(isInsideFold(folds, 1)).toBe(true); // bash stays folded
+		expect(isInsideFold(folds, 2)).toBe(false); // the widget artifact stays visible
+		expect(isInsideFold(folds, 4)).toBe(false); // the reply never hides
+	});
+
+	it("does not exempt rows whose widget call failed", () => {
+		const entries = [
+			user(1),
+			widgetAssistant(2, "w1"),
+			widgetResult(3, "w1", true),
+			assistant(4, 1),
+			user(5),
+			assistant(6),
+		];
+		const folds = buildRoundFolds(entries, false);
+		expect(folds).toHaveLength(1);
+		expect(folds[0]!.exempt).toEqual([]);
+		expect(isInsideFold(folds, 1)).toBe(true);
+	});
+});

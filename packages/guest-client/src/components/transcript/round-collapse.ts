@@ -52,6 +52,12 @@ export interface RoundFold {
 	userId: string | null;
 	/** Fold-preview text: last non-empty working snippet, else "completed". */
 	preview: string;
+	/** Absolute indexes of entries that must stay visible even while the
+	 *  fold is closed: assistant messages carrying SUCCESSFUL widget tool
+	 *  calls. The standalone widget card is the turn's artifact — folding
+	 *  it behind 活动 forced users to expand the round (or open the right
+	 *  panel) just to see the product (user request 2026-09-18). */
+	exempt: number[];
 }
 
 /** Last non-empty text snippet of a toolResult, for the fold preview. */
@@ -118,12 +124,17 @@ function countWorkInside(
 	exploreCount: number;
 	changes: { filesChanged: number; added: number; removed: number };
 	preview: string;
+	/** Assistant-message indexes whose widget calls produced a successful
+	 *  result — those rows stay visible while the fold is closed. */
+	exempt: number[];
 } {
 	let toolCount = 0;
 	let commandCount = 0;
 	let exploreCount = 0;
 	let preview = "";
 	const changeState = { files: new Set<string>(), added: 0, removed: 0 };
+	const exempt: number[] = [];
+	const widgetCalls = new Map<string, number>();
 	for (let i = start; i <= end; i++) {
 		const e = entries[i];
 		if (e?.type !== "message") continue;
@@ -133,10 +144,20 @@ function countWorkInside(
 		} else if (m.role === "toolResult") {
 			if (DIFF_TOOLS.has(m.toolName)) foldChanges(m, changeState);
 			if (EXPLORE_TOOLS.has(m.toolName)) exploreCount++;
+			// A settled successful widget result promotes its assistant row
+			// (the one carrying the matching toolCall block) out of the fold —
+			// the standalone card is the deliverable, not process noise.
+			if (m.toolName === "widget" && m.isError !== true) {
+				const owner = widgetCalls.get((m as { toolCallId?: string }).toolCallId ?? "");
+				if (owner !== undefined && !exempt.includes(owner)) exempt.push(owner);
+			}
 			if (!preview) preview = toolResultSnippet(m);
 		} else if (m.role === "assistant") {
 			for (const block of m.content) {
-				if (block.type === "toolCall") toolCount++;
+				if (block.type === "toolCall") {
+					toolCount++;
+					if (block.name === "widget") widgetCalls.set(block.id, i);
+				}
 			}
 		}
 	}
@@ -146,6 +167,7 @@ function countWorkInside(
 		exploreCount,
 		changes: { filesChanged: changeState.files.size, added: changeState.added, removed: changeState.removed },
 		preview,
+		exempt,
 	};
 }
 
@@ -254,7 +276,7 @@ function pushFold(
 	if (replyIdx <= startIdx) return; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
-	const { toolCount, commandCount, exploreCount, changes, preview } = countWorkInside(
+	const { toolCount, commandCount, exploreCount, changes, preview, exempt } = countWorkInside(
 		entries,
 		startIdx + 1,
 		endIdx + 1,
@@ -273,13 +295,15 @@ function pushFold(
 		removed: changes.removed,
 		userId,
 		preview,
+		exempt,
 	});
 }
 
 /** True when the entry at `idx` belongs inside a fold's foldable span. */
 export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean {
 	// The reply row is never hidden (see finalIdx): expanding a fold must not
-	// swallow the answer the turn produced.
+	// swallow the answer the turn produced. Widget rows (see exempt) stay
+	// visible too — the standalone card IS the artifact.
 	// endIdx is INCLUSIVE (it is the turn's last row).
-	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx);
+	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx && !f.exempt.includes(idx));
 }
