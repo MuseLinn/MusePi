@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.33] - 2026-09-18
+
 ### Added
 
 - `/design` 斜杠命令（别名 `/ds`）：会话内一键热切换到设计预设——补齐引导页承诺的第三把入口（欢迎页 chip、`--preset design`、`/design`），复用 modes v2 switcher 与现有提示文案，预设缺失时走既有报错而非静默无操作。

@@ -31,7 +31,7 @@
     },
     "packages/agent": {
       "name": "@musepi/pi-agent-core",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-ai": "catalog:",
         "@musepi/pi-catalog": "catalog:",
@@ -50,7 +50,7 @@
     },
     "packages/ai": {
       "name": "@musepi/pi-ai",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@musepi/musepi-type": "catalog:",
@@ -65,7 +65,7 @@
     },
     "packages/catalog": {
       "name": "@musepi/pi-catalog",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@musepi/musepi-type": "catalog:",
@@ -78,7 +78,7 @@
     },
     "packages/coding-agent": {
       "name": "@musepi/pi-coding-agent",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "bin": {
         "musepi": "src/musepi.ts",
       },
@@ -136,14 +136,14 @@
     },
     "packages/collab-proto": {
       "name": "@musepi/collab-proto",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-wire": "workspace:*",
       },
     },
     "packages/desktop-app": {
       "name": "@musepi/desktop-app",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/modifiers": "^9.0.0",
@@ -184,7 +184,7 @@
     },
     "packages/guest-client": {
       "name": "@musepi/guest-client",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -222,7 +222,7 @@
     },
     "packages/hashline": {
       "name": "@musepi/hashline",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "@musepi/pi-utils": "catalog:",
@@ -266,7 +266,7 @@
     },
     "packages/mnemopi": {
       "name": "@musepi/pi-mnemopi",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "bin": {
         "mnemopi": "src/cli.ts",
       },
@@ -292,7 +292,7 @@
     },
     "packages/mobile": {
       "name": "@musepi/mobile",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -309,7 +309,7 @@
     },
     "packages/musepi-type": {
       "name": "@musepi/musepi-type",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "devDependencies": {
         "@ark/attest": "0.56.3",
         "@ark/schema": "0.56.2",
@@ -322,7 +322,7 @@
     },
     "packages/natives": {
       "name": "@musepi/pi-natives",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "devDependencies": {
         "@napi-rs/cli": "catalog:",
         "@types/bun": "catalog:",
@@ -330,7 +330,7 @@
     },
     "packages/sdk": {
       "name": "@musepi/sdk",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-wire": "catalog:",
         "@sinclair/typebox": "^0.34.0",
@@ -338,7 +338,7 @@
     },
     "packages/snapcompact": {
       "name": "@musepi/snapcompact",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-ai": "catalog:",
         "@musepi/pi-catalog": "catalog:",
@@ -352,7 +352,7 @@
     },
     "packages/stats": {
       "name": "@musepi/musepi-stats",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "bin": {
         "musepi-stats": "./src/index.ts",
       },
@@ -379,14 +379,14 @@
     },
     "packages/tool-select": {
       "name": "@musepi/pi-tool-select",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "devDependencies": {
         "@types/bun": "^1.3.14",
       },
     },
     "packages/tui": {
       "name": "@musepi/pi-tui",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "@musepi/pi-utils": "catalog:",
@@ -423,7 +423,7 @@
     },
     "packages/utils": {
       "name": "@musepi/pi-utils",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "cross-spawn": "catalog:",
@@ -437,7 +437,7 @@
     },
     "packages/wire": {
       "name": "@musepi/pi-wire",
-      "version": "0.4.32",
+      "version": "0.4.33",
       "devDependencies": {
         "@types/bun": "catalog:",
       },
@@ -460,20 +460,20 @@
     "@bufbuild/protobuf": "^2.12.1",
     "@bufbuild/protoc-gen-es": "^2.12.1",
     "@huggingface/transformers": "^4.2.0",
-    "@musepi/hashline": "0.4.32",
-    "@musepi/musepi-stats": "0.4.32",
-    "@musepi/musepi-type": "0.4.32",
-    "@musepi/pi-agent-core": "0.4.32",
-    "@musepi/pi-ai": "0.4.32",
-    "@musepi/pi-catalog": "0.4.32",
-    "@musepi/pi-coding-agent": "0.4.32",
-    "@musepi/pi-mnemopi": "0.4.32",
-    "@musepi/pi-natives": "0.4.32",
-    "@musepi/pi-tool-select": "0.4.32",
-    "@musepi/pi-tui": "0.4.32",
-    "@musepi/pi-utils": "0.4.32",
-    "@musepi/pi-wire": "0.4.32",
-    "@musepi/snapcompact": "0.4.32",
+    "@musepi/hashline": "0.4.33",
+    "@musepi/musepi-stats": "0.4.33",
+    "@musepi/musepi-type": "0.4.33",
+    "@musepi/pi-agent-core": "0.4.33",
+    "@musepi/pi-ai": "0.4.33",
+    "@musepi/pi-catalog": "0.4.33",
+    "@musepi/pi-coding-agent": "0.4.33",
+    "@musepi/pi-mnemopi": "0.4.33",
+    "@musepi/pi-natives": "0.4.33",
+    "@musepi/pi-tool-select": "0.4.33",
+    "@musepi/pi-tui": "0.4.33",
+    "@musepi/pi-utils": "0.4.33",
+    "@musepi/pi-wire": "0.4.33",
+    "@musepi/snapcompact": "0.4.33",
     "@napi-rs/cli": "3.7.2",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.220.0",
@@ -1590,7 +1590,7 @@
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@6.1.1", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0", "babel-plugin-react-compiler": "^1.0.0", "oxc-transform-react": "^0.145.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler", "oxc-transform-react"] }, "sha512-yxLaQV9gkhS8ezJqCM6+ndU7mDY6gqAg75NQ+0IjwEI8IYOmQCgkRwHKVSfWXW076DsqMo0Dk+0FK1U+M5RgFw=="],
 
-    "@xmldom/xmldom": ["@xmldom/xmldom@0.8.15", "", {}, "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA=="],
+    "@xmldom/xmldom": ["@xmldom/xmldom@0.9.12", "", {}, "sha512-5AXjrcMClTryPe9LgZrygpB1lj7s0S9E0+W+AHaVKAVyHanafK86iPSvG5xHVSp/jC+VH1UXu0TAEmY279xH7A=="],
 
     "@xterm/headless": ["@xterm/headless@6.0.0", "", {}, "sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw=="],
 
@@ -1944,7 +1944,7 @@
 
     "ejs": ["ejs@3.1.10", "", { "dependencies": { "jake": "^10.8.5" }, "bin": { "ejs": "bin/cli.js" } }, "sha512-UeJmFfOrAQS8OJWPZ4qtgHyWExa088/MtK5UEyoJGFH67cDEXkZSviOiKRCZ4Xij0zxI3JECgYs3oKx+AizQBA=="],
 
-    "electron": ["electron@43.7.1", "", { "dependencies": { "@electron-internal/extract-zip": "^1.0.1", "@electron/get": "^5.0.0", "@types/node": "^24.9.0" }, "bin": { "electron": "cli.js", "install-electron": "install.js" } }, "sha512-+637qklMfTs0gF6/W2HX9rLT/c9G9aFDeAgMeMbMEPkrIXclYqTAAWBE7owERECvcf0vwUu3Sn2e/Xdy+14vEg=="],
+    "electron": ["electron@43.7.2", "", { "dependencies": { "@electron-internal/extract-zip": "^1.0.1", "@electron/get": "^5.0.0", "@types/node": "^24.9.0" }, "bin": { "electron": "cli.js", "install-electron": "install.js" } }, "sha512-xUvboWe2LuBPFHucVrAFA9V4Z1ywdnP+B7imE59gsOxnFmQtumuicyjOOxOq1gyT6MbnuhGeM2wNBMh1xKs5VA=="],
 
     "electron-builder": ["electron-builder@26.15.3", "", { "dependencies": { "app-builder-lib": "26.15.3", "builder-util": "26.15.3", "builder-util-runtime": "9.7.0", "chalk": "^4.1.2", "ci-info": "^4.2.0", "dmg-builder": "26.15.3", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "simple-update-notifier": "2.0.0", "yargs": "^17.6.2" }, "bin": { "electron-builder": "./cli.js", "install-app-deps": "./install-app-deps.js" } }, "sha512-a1KM5heqS3gQCZzizXEI8RjJy3QVogULPdeSknt76uLDpBIW/HDGsMg/XgP0riP6PI9COsRvFITKKGDqA8fJxA=="],
 
@@ -1952,7 +1952,7 @@
 
     "electron-publish": ["electron-publish@26.15.3", "", { "dependencies": { "@types/fs-extra": "^9.0.11", "aws4": "^1.13.2", "builder-util": "26.15.3", "builder-util-runtime": "9.7.0", "chalk": "^4.1.2", "form-data": "^4.0.5", "fs-extra": "^10.1.0", "lazy-val": "^1.0.5", "mime": "^2.5.2" } }, "sha512-g/2bn8YTavY4cuS5F+jOS7zmZbXXBV8KZ8yHKfJjFPoKtzBqrpCdNPxBd3tqdBwP7BVd0lGzf7Bk2s0KesWZ4Q=="],
 
-    "electron-to-chromium": ["electron-to-chromium@1.5.430", "", {}, "sha512-e1QEj72Y4zd8RlNZVmoTg+iCOSVwpk05IOiiQwdrkwCSVlZfPthevErhE+nckGd2YbsXfp1SkisznhGVIXP2NQ=="],
+    "electron-to-chromium": ["electron-to-chromium@1.5.431", "", {}, "sha512-AAVihz2YwJeOdAynX8MUtqpvjY0gaiARp/7+r4kwqgzqXMrfG1qDN7vwT80uxAoOQRPcZH8t73EI+CA/1OJN8A=="],
 
     "electron-updater": ["electron-updater@6.4.1", "", { "dependencies": { "builder-util-runtime": "9.3.1", "fs-extra": "^10.1.0", "js-yaml": "^4.1.0", "lazy-val": "^1.0.5", "lodash.escaperegexp": "^4.1.2", "lodash.isequal": "^4.5.0", "semver": "^7.6.3", "tiny-typed-emitter": "^2.1.0" } }, "sha512-copPdR81tUcUEFrtI19rz07dVG55B1FkURjEet3KxOC/PZ1ueEIpFRqJXzeW6S0SoHrZFCbAuYfxjDcJrwOBbg=="],
 
@@ -2632,7 +2632,7 @@
 
     "platform": ["platform@1.3.6", "", {}, "sha512-fnWVljUchTro6RiCFvCXBbNhJc2NijN7oIQxbwsyL0buWJPG85v81ehlHI9fXrJsMNgTofEoWIQeClKpgxFLrg=="],
 
-    "plist": ["plist@3.1.0", "", { "dependencies": { "@xmldom/xmldom": "^0.8.8", "base64-js": "^1.5.1", "xmlbuilder": "^15.1.1" } }, "sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ=="],
+    "plist": ["plist@3.1.1", "", { "dependencies": { "@xmldom/xmldom": "^0.9.10", "base64-js": "^1.5.1", "xmlbuilder": "^15.1.1" } }, "sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA=="],
 
     "points-on-curve": ["points-on-curve@0.2.0", "", {}, "sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A=="],
 
@@ -2644,7 +2644,7 @@
 
     "postject": ["postject@1.0.0-alpha.6", "", { "dependencies": { "commander": "^9.4.0" }, "bin": { "postject": "dist/cli.js" } }, "sha512-b9Eb8h2eVqNE8edvKdwqkrY6O7kAwmI8kcnBv1NScolYJbo59XUF0noFq+lxbC1yN20bmC0WBEbDC5H/7ASb0A=="],
 
-    "prettier": ["prettier@3.9.7", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-T3mF5P7HFzZVLDQuCUNtJj6WK1pcpLMweMNUVwGb01bLNkH9AkKxtZvmInw8K6bnn2O3d6/5RHl6zSHiBAD0Og=="],
+    "prettier": ["prettier@3.9.8", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-WRFq3Wn3WId7LLROfMLdH7xaFr2jR62wU8nLO6rQUOLOxNZUviyJQs1M0iIhLexSFy+L+w0ch66wtoO2jRjG0A=="],
 
     "proc-log": ["proc-log@6.1.0", "", {}, "sha512-iG+GYldRf2BQ0UDUAd6JQ/RwzaQy6mXmsk/IzlYyal4A4SNFw54MeH4/tLkF4I5WoWG9SQwuqWzS99jaFQHBuQ=="],
 
@@ -3280,6 +3280,8 @@
 
     "app-builder-lib/minimatch": ["minimatch@10.2.6", "", { "dependencies": { "brace-expansion": "^5.0.8" } }, "sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A=="],
 
+    "app-builder-lib/plist": ["plist@3.1.0", "", { "dependencies": { "@xmldom/xmldom": "^0.8.8", "base64-js": "^1.5.1", "xmlbuilder": "^15.1.1" } }, "sha512-uysumyrvkUX0rX/dEVqt8gC3sTBzd4zoWfLeS29nb53imdaXVvLINYXTI2GNqzaMuvacNx4uJQ8+b3zXR0pkgQ=="],
+
     "app-builder-lib/semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 
     "app-builder-lib/which": ["which@5.0.0", "", { "dependencies": { "isexe": "^3.1.1" }, "bin": { "node-which": "bin/which.js" } }, "sha512-JEdGzHwwkrbWoGOlIHqQ5gtprKGOenpDHpxE9zVR1bWbOtYRyPPHMe9FaP6x61CmNaTThSkb0DAJte5jD+DmzQ=="],
@@ -3497,6 +3499,8 @@
     "app-builder-lib/@electron/get/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
     "app-builder-lib/minimatch/brace-expansion": ["brace-expansion@5.0.12", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="],
+
+    "app-builder-lib/plist/@xmldom/xmldom": ["@xmldom/xmldom@0.8.15", "", {}, "sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA=="],
 
     "app-builder-lib/which/isexe": ["isexe@3.1.5", "", {}, "sha512-6B3tLtFqtQS4ekarvLVMZ+X+VlvQekbe4taUkf/rhVO3d/h0M2rfARm/pXLcPEsjjMsFgrFgSrhQIxcSVrBz8w=="],
 
