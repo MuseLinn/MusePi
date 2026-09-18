@@ -1112,6 +1112,7 @@ export const settings = {
 	"widget view code": "View code",
 	"widget view ui": "Show UI",
 	"widget download image": "Download as image",
+	"copy as image": "Copy as image",
 	"widget source": "Widget source",
 	"maximize panel": "Maximize panel",
 	"watch the agent's browser live": "Watch the agent\u2019s browser live",

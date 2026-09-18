@@ -13,7 +13,7 @@
  */
 
 import type { AssistantContent, ToolResultMessage } from "@musepi/pi-wire";
-import { Check, Code2, Copy, Download, Eye, ImageDown, Maximize2, MoreHorizontal, X } from "lucide-react";
+import { Check, Code2, Copy, Download, Eye, ImageDown, Images, Maximize2, MoreHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -135,23 +135,26 @@ export function WidgetFullscreen({
 }
 
 /**
- * Card menu ("⋯"): 下载到本地 / 下载为图片 / 复制代码 / 查看代码.
+ * Card menu ("⋯"): 下载到本地 / 下载为图片 / 复制为图片 / 复制代码 / 查看代码.
  *
  * Portaled and positioned from the button's viewport rect — the card clips its
  * own overflow, so an in-card popover is cut off on short widgets — flipping
  * above when there is no room below. Scroll/resize re-anchor it (the
  * transcript moves under the card). Actions the host cannot perform are simply
- * absent: "下载为图片" needs a rasterizer (see ToolRenderHost.saveImage).
+ * absent: "下载为图片"/"复制为图片" need a rasterizer (see ToolRenderHost
+ * .saveImage / .copyImage).
  */
 function WidgetCardMenu({
 	source,
 	saveImage,
+	copyImage,
 	showCode,
 	onToggleCode,
 }: {
 	source: WidgetSource;
 	/** Absent when the host has no rasterizer — the item then hides. */
 	saveImage?: () => void;
+	copyImage?: () => void;
 	showCode: boolean;
 	onToggleCode(): void;
 }): ReactNode {
@@ -266,6 +269,19 @@ function WidgetCardMenu({
 								{t("widget download image")}
 							</button>
 						)}
+						{copyImage && (
+							<button
+								type="button"
+								role="menuitem"
+								onClick={() => {
+									copyImage();
+									setAt(null);
+								}}
+							>
+								<Images size={13} />
+								{t("copy as image")}
+							</button>
+						)}
 						<button type="button" role="menuitem" onClick={copySource}>
 							{copied ? <Check size={13} /> : <Copy size={13} />}
 							{copied ? t("copied") : t("copy")}
@@ -304,12 +320,19 @@ export function WidgetCard({
 	if (!def) return null;
 	const title = payload.title ?? t(def.nameKey as never);
 	const source = widgetSource(payload);
-	// "下载为图片" rides a host capability, so the item is absent in hosts that
-	// have no rasterizer (plain browser, HTML export) rather than dead.
+	// "下载为图片"/"复制为图片" ride host capabilities, so those items are
+	// absent in hosts that have no rasterizer (plain browser, HTML export)
+	// rather than dead.
 	const saveImage = host?.saveImage
 		? () => {
 				const element = cardRef.current;
 				if (element) void host.saveImage?.(element, source.imageFilename);
+			}
+		: undefined;
+	const copyImage = host?.copyImage
+		? () => {
+				const element = cardRef.current;
+				if (element) void host.copyImage?.(element);
 			}
 		: undefined;
 	return (
@@ -325,6 +348,7 @@ export function WidgetCard({
 						<WidgetCardMenu
 							source={source}
 							saveImage={saveImage}
+							copyImage={copyImage}
 							showCode={showCode}
 							onToggleCode={() => setShowCode(v => !v)}
 						/>

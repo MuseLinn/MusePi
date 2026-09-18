@@ -16,6 +16,7 @@ import { useChatHighlight } from "../lib/highlight";
 import { dispatchNotification } from "../lib/notify";
 import { moodFromState } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
+import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import {
@@ -1383,24 +1384,39 @@ export function ChatView({
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => sendAndCloseJump(text),
-		// Widget card "下载为图片": rasterize the card and hand the blob to the
-		// shared download helper. html-to-image is imported dynamically on
-		// purpose (same as SaveImageDialog): a static import would pull a large
-		// dependency into the main bundle for a rarely used action. Failures
-		// surface through the toast channel — a silent catch is what once made a
-		// blocked export read as a dead button.
+		// Widget card "下载为图片"/"复制为图片": rasterize the card and hand
+		// the blob to the download/clipboard helper. html-to-image is imported
+		// dynamically inside rasterizeToBlob on purpose (same as
+		// SaveImageDialog): a static import would pull a large dependency into
+		// the main bundle for a rarely used action. The rasterizer rebuilds
+		// sandboxed iframe faces as same-origin shadows — a plain toBlob clones
+		// the opaque-origin frames as EMPTY boxes, which is what exported blank
+		// widget images. Failures surface through the toast channel — a silent
+		// catch is what once made a blocked export read as a dead button.
 		saveImage: (element: HTMLElement, filename: string): void => {
 			void (async () => {
 				try {
-					const { toBlob } = await import("html-to-image");
 					const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
-					const blob = await toBlob(element, { pixelRatio: 2, backgroundColor });
-					if (!blob) throw new Error("canvas produced no blob");
+					const blob = await rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
 					downloadBlob(filename, blob);
 				} catch (err) {
 					const detail = err instanceof Error ? err.message : String(err);
 					window.dispatchEvent(
 						new CustomEvent("musepi-gui-toast", { detail: `${t("widget download image")}: ${detail}` }),
+					);
+				}
+			})();
+		},
+		copyImage: (element: HTMLElement): void => {
+			void (async () => {
+				try {
+					const backgroundColor = getComputedStyle(element).backgroundColor || "#ffffff";
+					const blob = await rasterizeToBlob(element, { pixelRatio: 2, backgroundColor });
+					await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+				} catch (err) {
+					const detail = err instanceof Error ? err.message : String(err);
+					window.dispatchEvent(
+						new CustomEvent("musepi-gui-toast", { detail: `${t("copy as image")}: ${detail}` }),
 					);
 				}
 			})();

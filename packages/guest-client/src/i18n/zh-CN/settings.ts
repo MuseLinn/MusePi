@@ -1057,6 +1057,7 @@ export const settings = {
 	"widget view code": "查看代码",
 	"widget view ui": "显示 UI",
 	"widget download image": "下载为图片",
+	"copy as image": "复制为图片",
 	"widget source": "组件源码",
 	"maximize panel": "最大化面板",
 	"watch the agent's browser live": "实时查看 agent 的浏览器操作",

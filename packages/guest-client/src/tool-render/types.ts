@@ -53,6 +53,10 @@ export interface ToolRenderHost {
 	 *  already ships html-to-image) provide it; plain-browser and HTML-export
 	 *  hosts omit it and the card hides that action. */
 	saveImage?(element: HTMLElement, filename: string): void | Promise<void>;
+	/** Rasterize a card element straight onto the clipboard as a PNG
+	 *  ("复制为图片" — the widget card's menu). Same rasterizer contract as
+	 *  saveImage; hosts without it hide the item. */
+	copyImage?(element: HTMLElement): void | Promise<void>;
 }
 
 /**
