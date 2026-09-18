@@ -387,6 +387,27 @@ export const tools = {
 	"{count} tasks": "{count} 个任务",
 	"(no label)": "（无标签）",
 
+	// ── Capability center (two screens + skill drawer + diagnostics) ─────────
+	"capability center": "能力中心",
+	"installed capabilities": "已安装",
+	"acquire capabilities": "获取能力",
+	"install from git": "从 Git 安装技能",
+	"git url hint": "https Git 链接或 owner/repo",
+	"optional name override": "技能名称（可选）",
+	"install skill": "安装",
+	installing: "安装中…",
+	"skill installed {name}": "已安装 {name}",
+	"overwrite install": "覆盖安装",
+	"skills marketplace": "技能市场",
+	"toggle skill ignore": "切换 {name} 的忽略状态",
+	"no skills installed": "还没有安装技能",
+	"install one from git or the marketplace": "可以从 Git 或技能市场安装",
+	"diagnostics all clear": "未发现问题",
+	"diag load errors": "加载失败项",
+	"diag shadowed": "被遮蔽项",
+	"diag warnings": "技能发现警告",
+	"diag disabled providers": "已关闭来源",
+
 	// ── Tool renderer labels ──────────────────────────────────────────────────
 	Report: "报告",
 	Untitled: "无标题",

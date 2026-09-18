@@ -12,6 +12,7 @@ import {
 	useUnhostedSlots,
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
+import { CapabilityCenter, DiagnosticsView } from "./CapabilityCenter";
 import { HeightMorph } from "./HeightMorph";
 import { StateIcon } from "./StateIcon";
 
@@ -386,12 +387,39 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-70" />
 					{t("marketplace")}
 				</button>
+				{/* 能力中心 tab:两屏(已安装 / 获取)+ 技能详情抽屉 ——
+				 * skills.list / skills.install / marketplace.list 的采集面。 */}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "capability"}
+					className={`gui-ext-tab${tab === "capability" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setTab("capability")}
+				>
+					<Icon name="star" className="h-3.5 w-3.5 shrink-0 opacity-70" />
+					{t("capability center")}
+				</button>
+				{/* 诊断 tab:加载失败 / 遮蔽 / 技能发现警告 / 已关闭来源 ——
+				 * 一个回答"为什么没生效"的健康视图。 */}
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "diagnostics"}
+					className={`gui-ext-tab${tab === "diagnostics" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setTab("diagnostics")}
+				>
+					<Icon name="pulse" className="h-3.5 w-3.5 shrink-0 opacity-70" />
+					{t("diagnostics")}
+				</button>
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
 			<div className="gui-ext-body">
-				{/* 插件 tab:daemon plugins.list 渲染。
-				 * 独立数据源,不走 provider 树 —— 插件是会话无关扩展扫描。 */}
-				{tab === "plugins" ? (
+				{/* 能力中心:两屏 + 技能详情抽屉(独立组件)。 */}
+				{tab === "capability" ? (
+					<CapabilityCenter rpc={rpc} />
+				) : tab === "diagnostics" ? (
+					<DiagnosticsView rpc={rpc} />
+				) : tab === "plugins" ? (
 					<div className="gui-ext-plugins">
 						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 						{plugins.length === 0 && !pluginsError ? (

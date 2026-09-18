@@ -1080,6 +1080,400 @@
 	flex-direction: column;
 	min-height: 0;
 }
+
+/* ── Capability center (extensions → capability tab): two screens
+ * (installed / acquire) + skill detail drawer + diagnostics. Sits beside
+ * the gui-ext family — same surface, acquisition focus. ───────────────── */
+.gui-cap {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.gui-cap-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 2px 2px 8px;
+	flex-shrink: 0;
+}
+
+.gui-cap-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+	padding: 7px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+}
+
+.gui-cap-acquire-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 6px 12px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 42%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-accent);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	flex-shrink: 0;
+	transition:
+		background 150ms var(--spring),
+		border-color 150ms var(--spring);
+}
+
+.gui-cap-acquire-btn:hover {
+	background: color-mix(in oklab, var(--color-accent) 20%, transparent);
+}
+
+.gui-cap-back {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.gui-cap-back:hover {
+	border-color: var(--color-accent);
+	color: var(--color-accent);
+}
+
+.gui-cap-head-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+/* Screen 1: installed-skills card grid. */
+.gui-cap-grid-wrap {
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-cap-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+	gap: 10px;
+}
+
+.gui-cap-card {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	cursor: pointer;
+	transition:
+		border-color 150ms var(--spring),
+		transform 150ms var(--spring),
+		box-shadow 150ms var(--spring);
+}
+
+.gui-cap-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	transform: translateY(-1px);
+	box-shadow: var(--shadow-md, 0 4px 12px rgb(0 0 0 / 0.08));
+}
+
+.gui-cap-card-top {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.gui-cap-card-name {
+	flex: 1;
+	min-width: 0;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-cap-card-desc {
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-dim, var(--color-text-faint));
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	min-height: 2.9em;
+}
+
+.gui-cap-card-foot {
+	display: flex;
+	gap: 4px;
+	min-height: 18px;
+}
+
+.gui-cap-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	padding: 48px 16px;
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-cap-empty-hint {
+	font-size: var(--ui-font-size-xs);
+}
+
+/* Screen 2: acquire — git install card + marketplace grid. */
+.gui-cap-acquire {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-cap-install-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.gui-cap-install-head,
+.gui-cap-mkt-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--color-text);
+}
+
+.gui-cap-install-input {
+	width: 100%;
+	padding: 7px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	outline: none;
+}
+
+.gui-cap-install-input:focus {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-cap-install-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.gui-cap-install-msg {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-danger, #e5484d);
+}
+
+.gui-cap-install-msg--ok {
+	color: var(--color-success, #30a46c);
+}
+
+.gui-cap-mkt {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-height: 0;
+}
+
+/* Skill detail drawer (right slide-over, ESC / backdrop click closes). */
+.gui-cap-drawer-root {
+	position: fixed;
+	inset: 0;
+	z-index: 90;
+}
+
+.gui-cap-drawer-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgb(0 0 0 / 0.35);
+	animation: gui-fade-in 160ms var(--spring) both;
+}
+
+.gui-cap-drawer {
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: min(440px, 86vw);
+	display: flex;
+	flex-direction: column;
+	background: var(--color-surface);
+	border-left: 1px solid var(--border);
+	box-shadow: -12px 0 32px rgb(0 0 0 / 0.18);
+	animation: gui-cap-drawer-in 220ms var(--spring) both;
+}
+
+@keyframes gui-cap-drawer-in {
+	from {
+		transform: translateX(24px);
+		opacity: 0;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+.gui-cap-drawer-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 14px 14px 10px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-cap-drawer-titles {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.gui-cap-drawer-name {
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-cap-drawer-meta {
+	display: flex;
+	gap: 4px;
+	flex-wrap: wrap;
+}
+
+.gui-cap-drawer-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+}
+
+.gui-cap-drawer-close:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-cap-drawer-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 12px 14px;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-cap-drawer-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 14px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-cap-drawer-actions-label {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-cap-drawer-delete {
+	margin-left: auto;
+}
+
+/* Diagnostics: grouped health report. */
+.gui-cap-diag {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	overflow-y: auto;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-cap-diag-clear {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 40px 16px;
+	color: var(--color-success, #30a46c);
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-cap-diag-section {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.gui-cap-diag-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: var(--color-text);
+}
+
+.gui-cap-diag-row {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 6px 8px;
+	border-radius: 8px;
+	background: color-mix(in oklab, var(--color-warning, #f5a623) 8%, transparent);
+}
+
+.gui-cap-diag-title {
+	font-size: var(--ui-font-size-sm);
+	font-weight: 500;
+	color: var(--color-text);
+}
+
+.gui-cap-diag-detail {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-dim, var(--color-text-faint));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
 .gui-ext-list {
 	display: flex;
 	flex-direction: column;

@@ -397,6 +397,27 @@ export const tools = {
 	"{count} tasks": "{count} tasks",
 	"(no label)": "(no label)",
 
+	// ── Capability center (two screens + skill drawer + diagnostics) ─────────
+	"capability center": "Capability center",
+	"installed capabilities": "Installed",
+	"acquire capabilities": "Get capabilities",
+	"install from git": "Install skill from Git",
+	"git url hint": "https Git URL or owner/repo",
+	"optional name override": "Skill name (optional)",
+	"install skill": "Install",
+	installing: "Installing…",
+	"skill installed {name}": "Installed {name}",
+	"overwrite install": "Overwrite",
+	"skills marketplace": "Marketplace",
+	"toggle skill ignore": "Toggle ignore for {name}",
+	"no skills installed": "No skills installed yet",
+	"install one from git or the marketplace": "Install one from Git or the marketplace",
+	"diagnostics all clear": "No issues detected",
+	"diag load errors": "Load errors",
+	"diag shadowed": "Shadowed items",
+	"diag warnings": "Skill discovery warnings",
+	"diag disabled providers": "Disabled sources",
+
 	// ── Tool renderer labels ──────────────────────────────────────────────────
 	Report: "Report",
 	Untitled: "Untitled",
