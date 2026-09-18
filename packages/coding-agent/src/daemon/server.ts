@@ -4495,6 +4495,26 @@ export class DaemonServer {
 				this.#broadcastExtensionsChanged();
 				return { ok: true };
 			}
+			case "skills.install": {
+				// Capability-center install flow (issue follow-up: skills were
+				// list/read/delete only — the user had no way to add one from the
+				// GUI). Installs into the user-level skills dir; local-path sources
+				// stay disabled (parseGitUrl is the fetch-and-write gate).
+				const p = (params ?? {}) as { url?: string; subdir?: string; name?: string; overwrite?: boolean };
+				if (!p.url) throw new Error("url is required (https git URL or owner/repo)");
+				const { installSkillFromGit } = await import("../skills/install");
+				const result = await installSkillFromGit({
+					url: p.url,
+					subdir: p.subdir,
+					name: p.name,
+					overwrite: p.overwrite,
+					destRoot: path.join(getAgentDir(), "skills"),
+				});
+				this.#skillsCache = null;
+				this.#extensionsCache = null;
+				this.#broadcastExtensionsChanged();
+				return { ok: true, name: result.name, dir: result.dir };
+			}
 			case "skills.read": {
 				// SKILL.md source for the skill detail pane (OpenCode parity).
 				const p = (params ?? {}) as { name: string };
