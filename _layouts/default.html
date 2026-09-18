@@ -16,15 +16,9 @@
 <body>
   <div class="mp-bg" aria-hidden="true">
     <canvas class="mp-aurora"></canvas>
-    <div class="mp-bg-liquid">
-      <i class="mp-blob mp-blob--a"></i>
-      <i class="mp-blob mp-blob--b"></i>
-      <i class="mp-blob mp-blob--c"></i>
-    </div>
     <canvas class="mp-bg-sand"></canvas>
     <div class="mp-bg-grid"></div>
     <div class="mp-bg-noise"></div>
-    <div class="mp-cursor-glow"></div>
   </div>
 
   {% if page.mp_cta %}
@@ -124,23 +118,11 @@
       document.documentElement.classList.add("is-chromium");
     }
 
-    /* ── Liquid ambience: cursor spotlight, blob parallax, in-card sheen.
-     * All rAF-throttled; skipped entirely under reduced motion. ─────────── */
+    /* ── Liquid ambience: in-card sheen. The page-wide cursor glow and blob
+     * parallax were removed as visually redundant (they duplicated the base
+     * gradients and the aurora); only the per-card sheen tracking remains. ── */
     (function () {
       if (reduced) return;
-      var root = document.documentElement;
-      var ticking = false, cx = 0, cy = 0;
-      function apply() {
-        ticking = false;
-        root.style.setProperty("--mx", cx.toFixed(1) + "px");
-        root.style.setProperty("--my", cy.toFixed(1) + "px");
-        root.style.setProperty("--par-x", ((cx / window.innerWidth - 0.5) * 2).toFixed(3));
-        root.style.setProperty("--par-y", ((cy / window.innerHeight - 0.5) * 2).toFixed(3));
-      }
-      window.addEventListener("mousemove", function (event) {
-        cx = event.clientX; cy = event.clientY;
-        if (!ticking) { ticking = true; requestAnimationFrame(apply); }
-      }, { passive: true });
       document.querySelectorAll(".mp-term, .mp-demo-preview").forEach(function (card) {
         card.addEventListener("mousemove", function (event) {
           var rect = card.getBoundingClientRect();
