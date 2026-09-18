@@ -10,6 +10,18 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - Windows 下左键单击任务栏托盘图标不弹出主窗口：修复 `tray.cjs` 将 `win32` 与 macOS 菜单栏混淆、将左键点击误绑定为 `toggle-tray-menu` 的问题。现在 Windows 下左键单击与双击均触发唤出/恢复主窗口（`show-main-window`），右键单击弹出浮动快捷菜单，对齐 Windows 平台交互规范与源码注释意图。#26
   - EN: Windows tray icon click not showing main window: fixed `tray.cjs` incorrectly treating Windows like macOS menu bar by routing left-clicks to `toggle-tray-menu`. Left-click and double-click now bring up/restore the main window (`show-main-window`), while right-click toggles the shortcut menu, matching Windows UX conventions and code comments. #26
 
+## [0.4.33] - 2026-09-18
+
+### Added
+
+- `/design` 斜杠命令（别名 `/ds`）：会话内一键热切换到设计预设——补齐引导页承诺的第三把入口（欢迎页 chip、`--preset design`、`/design`），复用 modes v2 switcher 与现有提示文案，预设缺失时走既有报错而非静默无操作。
+  - EN: A `/design` slash command (alias `/ds`) hot-switches the session to the design preset — completing the third entry the onboarding advertises (welcome chip, `--preset design`, `/design`). Reuses the modes-v2 switcher and existing copy; a missing preset surfaces the existing failure message instead of a silent no-op.
+- Artifact manifest 契约（`presets/artifact-manifest.ts`）：把设计模式的产物承诺固化成 schema + 校验——entry 相对路径（禁止绝对路径与 `..` 越出产物目录）、kind(page/component/poster/deck)、renderer(html/markdown/react-component/deck-html)、exports、可选 title/description。7 个测试覆盖越权路径拒绝与坏 JSON。设计预设模板同步点名 sidecar 文件名 `artifact.manifest.json`（模板修订 2→3，升级链支持跨版本逐级比对 v1→v2→v3，用户改过的预设仍永不覆盖）。
+  - EN: The artifact manifest contract (`presets/artifact-manifest.ts`) turns the design preset's sidecar promise into schema + validation — relative entry (no absolute paths, no `..` escapes), kind, renderer, exports, optional title/description; 7 tests cover path-escape rejection and malformed JSON. The design template now names the sidecar file `artifact.manifest.json` (template revision 2→3; the upgrade chain compares across versions v1→v2→v3 and still never overwrites a user-edited preset).
+- ColorPicker 新增「强调色上的文字」对比度等级（`accentInkContrast`，chroma.contrast 标准 WCAG）：与既有背景对比徽章并列，实时显示派生 `--accent-fg` 将获得的可读性——旧 sRGB 派生在品牌金上只有 2.2:1 的那类问题从此在挑选时就能看见。
+  - EN: The ColorPicker now shows an "on-accent text" contrast grade next to the background grade (`accentInkContrast`, standard WCAG via chroma.contrast) — the readability the derived `--accent-fg` will get, visible at pick time. The old sRGB derivation scored 2.2:1 on the brand gold itself.
+- `StateIconN` n-ary 图标切换：三态类别图标（日历/看板/列表、加载/朗读/空闲、全部/动作/任务）从普通 Icon 升级为同款弹簧形变——3 处 TODO(P1) 清零，gui-design.md 图标 morph 规则三则与色彩管线判定随文落档（中英双语）。
+  - EN: `StateIconN`, an n-ary icon switch, upgrades the three tri-state kind icons (calendar/board/list, loading/speaking/idle, all/actions/list) to the same spring morph — the 3 TODO(P1) sites are cleared, and the icon-morph rules + color-pipeline verdicts land in docs/gui-design.md (bilingual).
 
 ## [0.4.32] - 2026-09-17
 

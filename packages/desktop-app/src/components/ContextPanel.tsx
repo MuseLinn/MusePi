@@ -28,6 +28,7 @@ import { GitPanel } from "./git-panel";
 import { ManagedBrowserPane } from "./ManagedBrowserPane";
 import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
+import { StateIcon } from "./StateIcon";
 import { SubagentPanel } from "./SubagentPanel";
 import { SurfaceTabStrip } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
@@ -578,7 +579,7 @@ export function ContextPanel({
 								className="gui-pane-tool"
 								onClick={() => setMaximized(v => !v)}
 							>
-								<Icon name={maximized ? "fullscreen-exit" : "fullscreen"} className="h-3.5 w-3.5" />
+								<StateIcon on={maximized} pair={["fullscreen-exit", "fullscreen"]} className="h-3.5 w-3.5" />
 							</button>
 						</div>
 					</div>

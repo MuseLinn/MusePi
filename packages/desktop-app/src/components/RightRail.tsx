@@ -26,6 +26,7 @@ import {
 } from "../lib/surfaces/registry";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { RailTooltip } from "./RailTooltip";
+import { StateIcon } from "./StateIcon";
 
 /**
  * RightRail — the right-edge 44px icon rail, driven by the surface registry:
@@ -408,7 +409,7 @@ export function RightRail({
 					aria-label={rightPanelOpen ? "collapse right panel" : "expand right panel"}
 					onClick={() => onToggleRightPanel?.()}
 				>
-					<Icon name={rightPanelOpen ? "arrow-right" : "arrow-left"} className="h-4 w-4" />
+					<StateIcon on={rightPanelOpen} pair={["arrow-right", "arrow-left"]} className="h-4 w-4" />
 				</button>
 				<SlotComponentHost rpc={rpc} slot={RIGHT_RAIL_SLOT} sessionId={sessionId} cwd={cwd} />
 			</div>

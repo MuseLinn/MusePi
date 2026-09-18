@@ -41,6 +41,7 @@ import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
 import { SpotlightCard } from "./SpotlightCard";
+import { StateIcon } from "./StateIcon";
 import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";
 
@@ -1179,7 +1180,7 @@ export function BoardPage({
 						aria-label={t("board generate")}
 						onClick={() => setGenOpen(true)}
 					>
-						<Icon name={genBusy ? "loader" : "robot"} className="h-4 w-4" />
+						<StateIcon on={genBusy} pair={["loader", "robot"]} className="h-4 w-4" />
 						<span>{t("board generate")}</span>
 					</button>
 					<button type="button" className="gui-btn" onClick={onBack}>
@@ -1236,7 +1237,11 @@ export function BoardPage({
 													onPointerDown={e => e.stopPropagation()}
 													onClick={() => runTask(w)}
 												>
-													<Icon name={runningId === w.id ? "loader" : "play"} className="h-3.5 w-3.5" />
+													<StateIcon
+														on={runningId === w.id}
+														pair={["loader", "play"]}
+														className="h-3.5 w-3.5"
+													/>
 												</button>
 											)}
 											<button
@@ -1374,7 +1379,11 @@ export function BoardPage({
 										aria-label={t("widget run")}
 										onClick={() => runTask(focusWidget)}
 									>
-										<Icon name={runningId === focusWidget.id ? "loader" : "play"} className="h-3.5 w-3.5" />
+										<StateIcon
+											on={runningId === focusWidget.id}
+											pair={["loader", "play"]}
+											className="h-3.5 w-3.5"
+										/>
 									</button>
 								)}
 								<button

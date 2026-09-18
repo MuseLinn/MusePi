@@ -553,6 +553,7 @@ export const settings = {
 	hue: "色相",
 	"preset colors": "预设颜色",
 	"background contrast": "背景对比度",
+	"on-accent contrast": "强调色上的文字",
 	"contrast low": "对比不足",
 	"interface settings": "界面设置",
 	"interface settings description": "设置应用主题和界面文字大小。",

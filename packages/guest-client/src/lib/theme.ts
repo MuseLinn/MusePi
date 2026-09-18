@@ -1,3 +1,4 @@
+import chromaJs from "chroma-js";
 import { Monitor, Moon, Palette, Sun } from "lucide";
 import type { IconInput } from "morphicons";
 import { defineMorphIcon } from "morphicons/element";
@@ -525,25 +526,62 @@ function relativeLuminance(r: number, g: number, b: number): number {
 }
 
 /**
- * Derive the full accent family from a single custom color. Mirrors the
- * preset blocks in tokens.css: muted = 18% alpha, border = 35%, hover
- * lightens in the dark scheme / darkens in light (presets do the same),
- * and the on-accent foreground flips by luminance so it stays readable.
+ * Derive the full accent family from a single custom color — in OKLCH via
+ * chroma-js, so custom accents follow the same perceptual derivation the
+ * hand-tuned presets encode (hover = L±0.07 away from the resting state,
+ * foreground picked by contrast, not by a bare luminance flip).
+ *
+ * Why this matters (chroma.js PoC, 设计板「色彩管线」): the previous sRGB
+ * derivation produced accent-fg contrasts as low as 2.2:1 for the brand gold
+ * itself and 1.2:1 for pale accents; the OKLCH derivation keeps every tested
+ * accent ≥ 4.5:1. Gamut: out-of-sRGB hover targets drop chroma (hue and the
+ * lightness intent survive).
+ *
+ * `muted`/`bd` stay alpha variants (18% / 35%) and the brand-mark gradient
+ * keeps its 135° two-stop shape — those were never the problem.
  */
-function deriveCustomAccent(hex: string, scheme: SystemTheme): Record<string, string> {
-	const [r, g, b] = hexToRgb(hex);
-	const hover =
-		scheme === "dark"
-			? rgbToHex(r + (255 - r) * 0.12, g + (255 - g) * 0.12, b + (255 - b) * 0.12)
-			: rgbToHex(r * 0.85, g * 0.85, b * 0.85);
+export function deriveCustomAccent(hex: string, scheme: SystemTheme): Record<string, string> {
+	const [L, C, H] = chromaJs(hex).oklch();
+	// Hover steps ~0.07 along the lightness axis away from the resting state
+	// (matches the preset blocks: brand dark 0.75→0.83, ocean light 0.50→0.44).
+	// Accents already near-white (L > 0.85, e.g. a user-picked near-mono) step
+	// back toward mid-tones instead — same direction the mono preset encodes.
+	const step = 0.07;
+	let hoverL = L > 0.85 ? L - step : scheme === "dark" ? L + step : L - step;
+	hoverL = Math.min(0.98, Math.max(0.02, hoverL));
+	// Gamut: reduce chroma until the target lightness survives sRGB clamping
+	// (hue and the lightness intent survive; only saturation gives).
+	let hover = chromaJs.oklch(hoverL, C, H);
+	for (let guard = 0; guard < 40; guard++) {
+		const back = hover.oklch();
+		if (Math.abs(back[0] - hoverL) < 0.02) break;
+		hover = chromaJs.oklch(hoverL, Math.max(0, C - 0.02 * (guard + 1)), H);
+	}
+	const fgInk = "#17151a";
+	const fgPaper = "#fdfdfd";
+	const accentHex = chromaJs(hex).hex();
+	const accentFg = chromaJs.contrast(fgInk, accentHex) >= chromaJs.contrast(fgPaper, accentHex) ? fgInk : fgPaper;
 	return {
-		"--accent": hex,
-		"--accent-fg": relativeLuminance(r, g, b) > 0.45 ? "#17151a" : "#fdfdfd",
-		"--accent-muted": withAlphaHex(hex, 0.18),
-		"--accent-hover": hover,
-		"--accent-bd": withAlphaHex(hex, 0.35),
-		"--brand-mark-gradient": `linear-gradient(135deg, ${hex} 0%, ${rgbToHex(r * 0.72, g * 0.72, b * 0.72)} 100%)`,
+		"--accent": accentHex,
+		"--accent-fg": accentFg,
+		"--accent-muted": withAlphaHex(accentHex, 0.18),
+		"--accent-hover": hover.hex(),
+		"--accent-bd": withAlphaHex(accentHex, 0.35),
+		"--brand-mark-gradient": `linear-gradient(135deg, ${accentHex} 0%, ${chromaJs
+			.oklch(Math.max(0.05, L - 0.1), C, H)
+			.hex()} 100%)`,
 	};
+}
+
+/** Best-case WCAG contrast of on-accent text for a candidate accent — the
+ *  grade the accent's own foreground will get (the picker surfaces it next to
+ *  the accent-vs-background grade; the sRGB derivation bug this guards
+ *  against produced 2.2:1 on the brand gold). Uses chroma.contrast, the
+ *  standard WCAG implementation. */
+export function accentInkContrast(hex: string): number {
+	const inkDark = "#17151a";
+	const inkPaper = "#fdfdfd";
+	return Math.max(chromaJs.contrast(inkDark, hex), chromaJs.contrast(inkPaper, hex));
 }
 
 const ACCENT_INLINE_VARS = [

@@ -269,3 +269,20 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **卡中卡布局(2026-08-06 实测 kimi 对齐)**:图标 = 深色卡占 tile **80.5%(824/1024,四周对称 100px 透明边距)** + 卡角 superellipse n=5 圆角——与 Kimi 桌面 app(`/Applications/Kimi.app` 的 icon.icns 实测 alpha bbox x100-923,80.5%)完全一致。**Dock 里"我们图标比 kimi 大"的根因**:此前全出血 100%,kimi 卡中卡 80.5%;92% 内缩版仍 >80.5%("始终大一点")。全出血 1024 + 系统遮罩是 Apple HIG 基线,但**与邻位 app 视觉统一优先于 HIG 抽象规范**——kimi 实际就是卡中卡,我们要并排同大。
 - **三处同步**:`build/icon.png`(打包源)+ `build/icon-dock.png`(dev Dock setIcon)+ `src/vendor/logo.png`(splash/内嵌,512 同参数);打包版 icns 同样带 80.5% 卡边距(不重打包则 bundle icns 手动同步)。
 - **改动流程**:改点阵参数(网格/π 形状/点径/配色)→ Chrome headless 渲染 1024 PNG → 套 80.5% 卡中卡 + superellipse 切角 → 重生成 iconset + `iconutil -c icns` → 替换 build/icon.png + icon.icns + icon-dock.png + src/vendor/logo.png(+ release bundle 的 icns)→ **手动同步 bundle icns 后必须重签**(`codesign --force --deep --sign - release/mac-arm64/MusePi.app`——签名后改资源会失效,CSDN 4.3 坑)→ `bun run pack:dir` 重打包(dev 模式 Dock 图标走 `app.dock.setIcon(build/icon-dock.png)`,打包版用 bundle icns——**只换 png 不重打包,打包版 Dock 仍是旧图标**)。
+
+## 7. 图标 morph 与色彩管线（定稿 2026-09-18）
+
+### 图标 morph 三则（StateIcon，规范板「图标 morph 规范与缺口清零」）
+
+- **形状互换 → `<StateIcon on pair>`**（`components/StateIcon.tsx`）：凡随运行时状态翻转的图标对（play/pause、eye/eye-off、展开/收起、已存/下载、面板方向、全屏切换）一律弹簧交叉形变而非硬切换。两个形状常驻 inline-grid，出场收缩（scale .4 / −90° / 120ms fade）同时入场从对侧长出，`--spring` 计时。纯 CSS 是刻意的：`.gui-motion-off` / `prefers-reduced-motion` 全局降级零接线。已迁移 29 处（commit d55086d6d）；三态类别图标保持普通 `<Icon>` + TODO(P1) n-ary 变体。
+- **同形旋转 → 保持 transform**：chevron 旋转 180° 不是图标变化——旋转本身是最短路径。只旋转的不 morph。
+- **渲染期选型 → 普通 `<Icon>`**：按静态事实（条目类型、配置）选的图标永不 morph——没有状态翻转可言。
+- **为什么 sprite 世界不直接用 MorphIcon**：`MorphIcon`（morphicons）渲染单条 stroke 插值路径（lucide 语言）；全应用 sprite 是 fill 造型（Remix 系 `<use>` 形状）。路径形变会把实心图标变描边轮廓——StateIcon 是 sprite 世界的同读感等价物。stroke 图标（引导页步骤图标）直接用 `MorphIcon`。
+- API：`<StateIcon on={cond} pair={["开时图标", "关时图标"]} className="h-4 w-4" />` —— `on` 为真显示 `pair[0]`。
+
+### 色彩管线判定（chroma.js PoC，规范板「色彩管线 · chroma.js 评估」）
+
+- **chroma-js（guest-client）负责**：自定义强调色派生（`theme.ts deriveCustomAccent` —— OKLCH hover ±0.07 远离静止态、降 chroma 色域钳制、按对比度选前景）与 ColorPicker 未来的对比度门禁（chroma.contrast，WCAG）。冷路径：仅 accent 偏好变更时调用（约 19KB gzip，一次调用，非逐帧）。
+- **CSS `color-mix(in oklab, …)` 负责**：全部逐帧运行时混色——原生零成本，已有 60+ 处。那里永远不要上 JS 库。
+- **tokens.css 手调 oklch 值负责**：静态真相（预设、表面、图表色）。不要用脚本生成它们——这些值本身就是设计决策。
+- **回归锁**：`packages/guest-client/test/derive-custom-accent.test.ts` —— 8 组强调色 × 双主题 accent-fg ≥ 4.5:1；旧 sRGB 派生在品牌金上只有 2.2:1。

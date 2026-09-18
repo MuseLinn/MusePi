@@ -270,14 +270,17 @@ jobs:
                 echo "::notice title=Native sources changed::PR CI tests against the latest release addons by design; native changes are validated post-merge on main and at release."
               fi
 
+         # PRs DO build x64: the required TS test buckets install these addons,
+         # so a fork PR with no build could never go green (its uploads were
+         # skipped → download-artifact failed → tests skipped → red forever).
+         # Fork PRs can restore the default-branch bazel cache, so this stays
+         # cheap. arm/musl/win remain main-only (disk + time, see job notes).
          # ---- main path: bazel build of all Linux-hosted targets ----
          - id: cache
-           if: github.event_name != 'pull_request'
            uses: ./.github/actions/bazel-cache
            with:
               scope: linux
          - name: Build native addons (x64 gnu)
-           if: github.event_name != 'pull_request'
            run: |
               set -eo pipefail
               if [ "$(ulimit -Sn)" != unlimited ] && [ "$(ulimit -Sn)" -lt 65536 ]; then ulimit -Sn 65536 || true; fi
@@ -343,6 +346,7 @@ jobs:
               echo "::notice title=Bazel build summary (arm)::${summary:-no process summary found}"
 
          - name: Upload native addon artifacts
+           if: github.event_name != 'pull_request'
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: native-addons-arm
@@ -383,6 +387,7 @@ jobs:
               echo "::notice title=Bazel build summary (musl)::${summary:-no process summary found}"
 
          - name: Upload native addon artifacts
+           if: github.event_name != 'pull_request'
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: native-addons-musl
@@ -428,6 +433,7 @@ jobs:
               echo "win32 addon OK ($(stat -c %s "$f") bytes)"
 
          - name: Upload native addon artifacts
+           if: github.event_name != 'pull_request'
            uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
            with:
               name: native-addons-win

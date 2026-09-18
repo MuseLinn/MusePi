@@ -1,5 +1,4 @@
 import { type } from "@musepi/musepi-type";
-import type { AgentToolContext } from "@musepi/pi-agent-core";
 import { prompt } from "@musepi/pi-utils";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 
@@ -40,7 +39,7 @@ interface CollabToolDetails {
 	readonly mode?: string;
 }
 
-/** Shape of the daemon-injected collab handle on AgentToolContext. */
+/** Shape of the daemon-injected collab handle (CustomToolContext.collab). */
 export interface CollabToolHandle {
 	start(opts: { mode?: "lan" | "tunnel" | "workspace"; sessionId?: string }): Promise<{
 		link?: string;
@@ -88,10 +87,9 @@ export const collabTool: CustomTool<typeof collabSchema, CollabToolDetails> = {
 	),
 	parameters: collabSchema,
 	async execute(_toolCallId, params, _onUpdate, ctx) {
-		// The daemon injects the collab handle on AgentToolContext (declaration
-		// merging in tools/context.ts); the CustomTool execute signature only
-		// sees CustomToolContext, so narrow through the extended interface.
-		const collab = (ctx as AgentToolContext).collab;
+		// Daemon-injected handle; carried on CustomToolContext since the
+		// #25 fix (createCustomToolContext passes it through).
+		const collab = ctx.collab;
 		if (!collab) {
 			return {
 				content: [

@@ -3,8 +3,8 @@ import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
-import { Icon } from "../vendor/oc-icons";
 import { AVATAR_PRESETS, avatarPresetId } from "./avatar-presets";
+import { StateIcon } from "./StateIcon";
 
 /**
  * Onboarding personalization step (post-provider setup): pick the agent
@@ -169,7 +169,11 @@ export function PersonalizeSetup({
 							aria-pressed={selectedPet === p.id}
 							onClick={() => pickPet(p.id)}
 						>
-							<Icon name={selectedPet === p.id ? "checkbox-circle" : "checkbox-blank"} className="h-3.5 w-3.5" />
+							<StateIcon
+								on={selectedPet === p.id}
+								pair={["checkbox-circle", "checkbox-blank"]}
+								className="h-3.5 w-3.5"
+							/>
 							<span className="gui-obo-pet-name">{p.displayName}</span>
 						</button>
 					))}

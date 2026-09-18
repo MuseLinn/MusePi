@@ -13,6 +13,7 @@ import {
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
+import { StateIcon } from "./StateIcon";
 
 /**
  * 扩展控制中心 (extension control center) — TUI /extensions parity in the
@@ -458,8 +459,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												tabIndex={0}
 												onClick={() => toggleKind(providerKey)}
 											>
-												<Icon
-													name={providerCollapsed ? "arrow-right-s" : "arrow-down-s"}
+												<StateIcon
+													on={providerCollapsed}
+													pair={["arrow-right-s", "arrow-down-s"]}
 													className="h-3.5 w-3.5 shrink-0 opacity-60"
 												/>
 												<span className={`gui-ext-dot${node.enabled ? "" : " gui-ext-dot--off"}`} />
@@ -496,8 +498,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																	tabIndex={0}
 																	onClick={() => toggleKind(kindKey)}
 																>
-																	<Icon
-																		name={kindCollapsed ? "arrow-right-s" : "arrow-down-s"}
+																	<StateIcon
+																		on={kindCollapsed}
+																		pair={["arrow-right-s", "arrow-down-s"]}
 																		className="h-3 w-3 shrink-0 opacity-50"
 																	/>
 																	<span className="min-w-0 flex-1 truncate text-[11.5px]">
@@ -693,7 +696,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											onClick={loadRaw}
 											aria-expanded={rawOpen}
 										>
-											<Icon name={rawOpen ? "arrow-down-s" : "arrow-right-s"} className="h-3.5 w-3.5" />
+											<StateIcon
+												on={rawOpen}
+												pair={["arrow-down-s", "arrow-right-s"]}
+												className="h-3.5 w-3.5"
+											/>
 											{t("raw data")}
 										</button>
 										<HeightMorph morphKey={rawOpen ? "raw-open" : "raw-closed"}>

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
+import { StateIcon } from "../StateIcon";
 
 /** Goal-mode chip (openchamber parity): armed state (one tap with no live
  *  goal arms goal mode — the NEXT SENT MESSAGE becomes the objective),
@@ -35,7 +36,7 @@ export function GoalChip({
 			}
 			onClick={armed ? onToggle : onOpen}
 		>
-			<Icon name={paused ? "pause" : "target"} className="h-3 w-3" />
+			<StateIcon on={paused} pair={["pause", "target"]} className="h-3 w-3" />
 			<span className="max-w-[200px] truncate">{armed ? t("goal") : objective || t("goal")}</span>
 			{!armed && <Icon name="more" className="h-2.5 w-2.5 opacity-60" />}
 		</button>

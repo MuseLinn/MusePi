@@ -593,6 +593,7 @@ export const settings = {
 	hue: "Hue",
 	"preset colors": "Preset colors",
 	"background contrast": "Background contrast",
+	"on-accent contrast": "On-accent text",
 	"contrast low": "Low contrast",
 	"interface settings": "Interface settings",
 	"interface settings description": "Set the app theme and interface text size.",

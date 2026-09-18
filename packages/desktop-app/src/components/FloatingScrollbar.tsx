@@ -140,7 +140,7 @@ export function FloatingScrollbar(): ReactNode {
 			st.timer = window.setTimeout(hide, HIDE_MS);
 		};
 
-		const update = (target: HTMLElement): void => {
+		let update = (target: HTMLElement): void => {
 			const oy = getComputedStyle(target).overflowY;
 			if (oy !== "auto" && oy !== "scroll" && oy !== "overlay") return;
 			if (target.scrollHeight <= target.clientHeight + 1) return;
@@ -199,8 +199,65 @@ export function FloatingScrollbar(): ReactNode {
 		const watcher = window.setInterval(() => {
 			if (bar.dataset.visible === "1" && targetGone()) hideForGood();
 		}, 600);
+
+		// Geometry watch (issue #29): the rail only re-measures on `scroll`,
+		// so a window resize/maximize or a sidebar/drawer toggle left the idle
+		// ghost stranded at the pre-resize X — stuck mid-content. On geometry
+		// change: re-measure silently (no show(), no scaleY stretch — idle
+		// stays idle), or retract when the container no longer overflows.
+		const remeasure = (): void => {
+			if (bar.dataset.visible !== "1") return;
+			const target = st.target;
+			if (!target || !target.isConnected) {
+				hideForGood();
+				return;
+			}
+			// Window grew enough to fit everything → the rail is a ghost over
+			// static content; retract fully (same trigger as targetGone).
+			if (target.scrollHeight <= target.clientHeight + 1) {
+				hideForGood();
+				return;
+			}
+			const r = target.getBoundingClientRect();
+			if (r.width === 0 || r.height === 0) {
+				hideForGood();
+				return;
+			}
+			const range = target.scrollHeight - target.clientHeight;
+			const ratio = range > 0 ? target.scrollTop / range : 0;
+			const barH = r.height;
+			bar.style.left = `${r.right - 13}px`;
+			bar.style.top = `${Math.round(r.top)}px`;
+			bar.style.height = `${Math.round(barH)}px`;
+			if (skin.base === "gummy") {
+				const g = gummyRef.current;
+				if (g) {
+					const thumbH = Math.min(
+						barH,
+						Math.max(24, Math.round(barH * (target.clientHeight / target.scrollHeight))),
+					);
+					g.style.height = `${Math.round(thumbH)}px`;
+					g.style.top = `${Math.round(ratio * Math.max(0, barH - thumbH))}px`;
+				}
+			} else {
+				const pacTop = Math.round(ratio * Math.max(0, barH - size));
+				if (pacRef.current) pacRef.current.style.top = `${pacTop}px`;
+				if (eatenRef.current) eatenRef.current.style.height = `${pacTop}px`;
+			}
+		};
+		// Observe the container the rail currently indicates — sidebar
+		// collapse / drawer toggle change its width without a window resize.
+		const ro = new ResizeObserver(() => remeasure());
+		const originalUpdate = update;
+		update = (target: HTMLElement): void => {
+			originalUpdate(target);
+			if (st.target === target) ro.observe(target);
+		};
+		window.addEventListener("resize", remeasure);
 		return () => {
 			window.removeEventListener("scroll", onScroll, true);
+			window.removeEventListener("resize", remeasure);
+			ro.disconnect();
 			window.clearInterval(watcher);
 			window.clearTimeout(st.timer);
 			window.clearTimeout(st.settle);

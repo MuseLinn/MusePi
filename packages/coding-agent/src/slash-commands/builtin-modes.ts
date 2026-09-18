@@ -689,6 +689,24 @@ export const BUILTIN_MODE_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		},
 	},
 	{
+		name: "design",
+		aliases: ["ds"],
+		description: "Hot-switch this session to the design preset (alias of /preset use design)",
+		allowArgs: false,
+		handle: async (_command, runtime) => {
+			// The onboarding "Design mode (new)" branch advertises `/design` as
+			// one of the three entries into design mode — this is that entry.
+			// Reuses the preset-use keys; no new i18n surface.
+			const result = await runtime.session.setMode("design", { hot: true });
+			if (result.ok) {
+				await runtime.output(t("preset use ok", "design"));
+			} else {
+				await runtime.output(t("preset use fail", "design", result.error ?? "unknown error"));
+			}
+			return commandConsumed();
+		},
+	},
+	{
 		name: "modes",
 		aliases: ["mode"],
 		description: "Validate a preset (mode) file without saving",

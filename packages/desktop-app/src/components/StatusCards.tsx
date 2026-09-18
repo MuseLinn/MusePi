@@ -8,6 +8,7 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 import { HeightMorph } from "./HeightMorph";
 import { Reveal } from "./Reveal";
+import { StateIcon } from "./StateIcon";
 
 /** Collapse preference (renderer-local): "1" → slim pill. */
 const COLLAPSE_KEY = "musepi-gui-status-cards";
@@ -385,8 +386,9 @@ export function StatusCards({
 									<Icon name="loader-4" className="gui-status-row-icon gui-status-spin" />
 								) : (
 									changedFiles.length > 0 && (
-										<Icon
-											name={changesOpen ? "arrow-down-s" : "arrow-right-s"}
+										<StateIcon
+											on={changesOpen}
+											pair={["arrow-down-s", "arrow-right-s"]}
 											className="gui-status-caret"
 										/>
 									)
@@ -488,7 +490,11 @@ export function StatusCards({
 							})}
 							{endedCount > 0 && (
 								<button type="button" className="gui-status-row" onClick={() => setEndedOpen(v => !v)}>
-									<Icon name={endedOpen ? "arrow-down-s" : "arrow-right-s"} className="gui-status-row-icon" />
+									<StateIcon
+										on={endedOpen}
+										pair={["arrow-down-s", "arrow-right-s"]}
+										className="gui-status-row-icon"
+									/>
 									<span className="min-w-0 flex-1 truncate text-left">{t("ended")}</span>
 									<span className="gui-status-count">{endedCount}</span>
 								</button>
