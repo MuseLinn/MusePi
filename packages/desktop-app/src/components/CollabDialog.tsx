@@ -148,9 +148,12 @@ export function CollabDialog({
 		setConfigDraft({});
 	};
 
-	const channelFields: Record<string, { key: string; label: string; secret: boolean }[]> = {
+	const channelFields: Record<string, { key: string; label: string; secret: boolean; optional?: boolean }[]> = {
 		discord: [{ key: "token", label: "Bot token", secret: true }],
-		wechat: [{ key: "token", label: "Token (optional — QR login if empty)", secret: true }],
+		// token optional: empty → the channel falls back to QR login (wechat.ts
+		// start(): #fetchQr + waiting_scan). The save button must not lock on it
+		// (issue #28) — the QR itself is rendered from status().config.qrUrl.
+		wechat: [{ key: "token", label: "Token (optional — QR login if empty)", secret: true, optional: true }],
 		"huawei-today": [
 			{ key: "apiKey", label: "PERSONAL-API-KEY", secret: true },
 			{ key: "uid", label: "PERSONAL-UID", secret: false },
@@ -453,6 +456,15 @@ export function CollabDialog({
 											{on ? t("stop") : t("start")}
 										</button>
 									</div>
+									{/* QR login (issue #28): the backend exposes the WeChat login
+									 *  QR via status().config.qrUrl while waiting for a scan —
+									 *  render it inline so the user can actually scan it. */}
+									{c.state === "waiting_scan" && typeof c.config?.qrUrl === "string" && c.config.qrUrl && (
+										<div className="gui-collab-channel-qr">
+											<img src={c.config.qrUrl} alt="WeChat login QR" />
+											<span>{c.detail ?? t("scan the QR code")}</span>
+										</div>
+									)}
 									{expandedKind === c.kind && fields && (
 										<div className="gui-collab-channel-config">
 											{fields.map(f => (
@@ -469,7 +481,7 @@ export function CollabDialog({
 											<button
 												type="button"
 												className="gui-btn gui-btn-primary gui-btn-sm"
-												disabled={!fields.every(f => (configDraft[f.key] ?? "").trim())}
+												disabled={!fields.every(f => f.optional || (configDraft[f.key] ?? "").trim())}
 												onClick={() => void saveConfig(c.kind)}
 											>
 												{t("save and start")}
