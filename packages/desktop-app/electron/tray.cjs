@@ -246,13 +246,12 @@ function createTrayController({ onAction, onSnapshot }) {
 	const ensureTray = () => {
 		if (tray && !tray.isDestroyed?.()) return tray;
 		tray = new Tray(frames.idle);
-		tray.setIgnoreDoubleClickEvents(true);
 		tray.setToolTip("MusePi");
 		// macOS: click opens the menu (default); Linux: left-click shows the
-		// main window; Windows: the native Menu is a classic Win32 menu (no
-		// acrylic) so the click toggles the self-drawn frosted menu window
-		// (main.cjs) instead — the native menu is never set there.
-		if (process.platform === "darwin" || process.platform === "win32") {
+		// main window; Windows: left-click / double-click shows the main
+		// window, right-click toggles the self-drawn frosted menu window.
+		if (process.platform === "darwin") {
+			tray.setIgnoreDoubleClickEvents(true);
 			// macOS: the click event's `bounds` is NOT provided (unlike
 			// Windows) — tray.getBounds() returns the status-item frame on
 			// both platforms, so it is the reliable fallback. Without it the
@@ -272,7 +271,21 @@ function createTrayController({ onAction, onSnapshot }) {
 			tray.on("right-click", (event) =>
 				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
 			);
+		} else if (process.platform === "win32") {
+			tray.setIgnoreDoubleClickEvents(false);
+			const iconBounds = () => {
+				try {
+					if (tray && !tray.isDestroyed()) return tray.getBounds();
+				} catch {}
+				return null;
+			};
+			tray.on("click", () => onAction({ type: "show-main-window" }));
+			tray.on("double-click", () => onAction({ type: "show-main-window" }));
+			tray.on("right-click", (event) =>
+				onAction({ type: "toggle-tray-menu", bounds: event.bounds ?? iconBounds() }),
+			);
 		} else {
+			tray.setIgnoreDoubleClickEvents(true);
 			tray.on("click", () => onAction({ type: "show-main-window" }));
 		}
 		// Windows: blink the π 3× at startup (proma setTrayFlash parity) so

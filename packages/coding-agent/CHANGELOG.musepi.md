@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows 下左键单击任务栏托盘图标不弹出主窗口：修复 `tray.cjs` 将 `win32` 与 macOS 菜单栏混淆、将左键点击误绑定为 `toggle-tray-menu` 的问题。现在 Windows 下左键单击与双击均触发唤出/恢复主窗口（`show-main-window`），右键单击弹出浮动快捷菜单，对齐 Windows 平台交互规范与源码注释意图。#26
+  - EN: Windows tray icon click not showing main window: fixed `tray.cjs` incorrectly treating Windows like macOS menu bar by routing left-clicks to `toggle-tray-menu`. Left-click and double-click now bring up/restore the main window (`show-main-window`), while right-click toggles the shortcut menu, matching Windows UX conventions and code comments. #26
+
 ## [0.4.33] - 2026-09-18
 
 ### Added
