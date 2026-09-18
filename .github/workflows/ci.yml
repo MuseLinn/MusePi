@@ -190,12 +190,12 @@ jobs:
          - name: Rustfmt
            run: bazelisk --bazelrc="${{ steps.cache.outputs.rc }}" build --config=rustfmt //crates/...
 
-   # Provides the native addons every downstream TS job installs. PRs never
-   # build: they fetch the latest release's Linux x64 pair from the
-   # @musepi/pi-natives-linux-x64 npm leaf instead. The workspace loader
-   # skips its version sentinel for workspace loads, so release addons load
-   # fine under a newer checkout; a PR whose TS tests depend on changed
-   # native behavior fails visibly and the native side lands via main.
+   # Provides the native addons every downstream TS job installs. PRs build
+   # the linux-x64 pair locally (the @musepi/pi-natives-* npm leaves were
+   # never published — E404 — see the win32 job for the same migration);
+   # fork runs restore the default-branch bazel cache. A PR whose TS tests
+   # depend on changed native behavior fails visibly and the native side
+   # lands via main.
    # Main (kata, cluster remote cache) builds all Linux-hosted targets with
    # bazel. Job name says "bazel" for continuity with required checks.
    # Native addons 拆 3 个并行 job（2026-08-12）：hosted ubuntu-22.04 仅 14GB
@@ -220,18 +220,13 @@ jobs:
       steps:
          - uses: actions/checkout@v4
 
-         # ---- PR path: latest release addons from npm ----
-         - name: Fetch release native addons (npm)
-           if: github.event_name == 'pull_request'
-           shell: bash
-           run: |
-              set -euo pipefail
-              tarball="$(npm view @musepi/pi-natives-linux-x64@latest dist.tarball)"
-              echo "Fetching $tarball"
-              curl -fsSL --retry 3 "$tarball" | tar -xz -C "$RUNNER_TEMP"
-              mkdir -p bazel-bin/natives-linux-x64-baseline bazel-bin/natives-linux-x64-modern
-              cp "$RUNNER_TEMP/package/pi_natives.linux-x64-baseline.node" bazel-bin/natives-linux-x64-baseline/
-              cp "$RUNNER_TEMP/package/pi_natives.linux-x64-modern.node" bazel-bin/natives-linux-x64-modern/
+         # ---- PR + main path: bazel build of the linux-x64 pair ----
+         # (2026-09-18) PRs used to fetch release addons from the
+         # @musepi/pi-natives-linux-x64 npm leaf, but those packages were
+         # never published (E404 forever) — same dead end win32 already
+         # migrated away from. PRs now build locally like main does; fork
+         # runs can restore the default-branch bazel cache, so it stays
+         # cheap. arm/musl/win remain main-only (disk + time, see job notes).
          # A corrupt download must fail here, not as a confusing dlopen error
          # in every downstream test shard.
          - name: Smoke release addons
