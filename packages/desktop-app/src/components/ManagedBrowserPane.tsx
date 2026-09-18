@@ -41,6 +41,7 @@ import {
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
+import { StateIcon } from "./StateIcon";
 
 const statusLabel = (status: string): string => {
 	switch (status) {
@@ -582,7 +583,7 @@ export function ManagedBrowserPane({
 							else reload();
 						}}
 					>
-						<Icon name={activeTabLoading ? "close" : "refresh"} className="h-4 w-4" />
+						<StateIcon on={activeTabLoading} pair={["close", "refresh"]} className="h-4 w-4" />
 					</button>
 				</div>
 				<form className="gui-browser-address" onSubmit={handleAddressSubmit}>

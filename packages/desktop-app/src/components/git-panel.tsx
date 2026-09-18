@@ -13,6 +13,7 @@ import { useChatHighlight } from "../lib/highlight";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
+import { StateIcon } from "./StateIcon";
 
 /** Structured commit row from the daemon git.log RPC (parsed from
  *  `git log --all --topo-order` with \x1f fields). */
@@ -260,7 +261,7 @@ function GitLogPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								disabled={loadingMore}
 								onClick={() => load("more")}
 							>
-								<Icon name={loadingMore ? "loader-4" : "arrow-down"} className="h-3.5 w-3.5" />
+								<StateIcon on={loadingMore} pair={["loader-4", "arrow-down"]} className="h-3.5 w-3.5" />
 								<span>{loadingMore ? t("loading…") : t("load more")}</span>
 							</button>
 						)}
@@ -475,8 +476,9 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 								<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
 							</span>
 						))}
-					<Icon
-						name={open ? "arrow-down" : "arrow-right"}
+					<StateIcon
+						on={open}
+						pair={["arrow-down", "arrow-right"]}
 						className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
 					/>
 				</button>
@@ -536,8 +538,9 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							<Icon name="folder" className="h-3.5 w-3.5 text-[var(--color-text-faint)]" />
 							<span className="min-w-0 flex-1 truncate text-left font-medium">{dir}/</span>
 							<span className="text-[11px] text-[var(--color-text-faint)]">{entries.length}</span>
-							<Icon
-								name={open ? "arrow-down" : "arrow-right"}
+							<StateIcon
+								on={open}
+								pair={["arrow-down", "arrow-right"]}
 								className="h-3 w-3 flex-shrink-0 text-[var(--color-text-faint)]"
 							/>
 						</button>
@@ -600,7 +603,7 @@ function DiffPane({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 							writeShowIgnored(next);
 						}}
 					>
-						<Icon name={showIgnored ? "eye" : "eye-off"} className="h-3.5 w-3.5" />
+						<StateIcon on={showIgnored} pair={["eye", "eye-off"]} className="h-3.5 w-3.5" />
 					</button>
 					<button
 						type="button"

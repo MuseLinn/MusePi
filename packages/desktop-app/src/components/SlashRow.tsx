@@ -1,6 +1,6 @@
 import { type TranslationKey, t } from "@musepi/guest-client";
 import type { ReactElement } from "react";
-import { Icon } from "../vendor/oc-icons";
+import { StateIcon } from "./StateIcon";
 import { slashDisplayName } from "./slash-row-shared";
 
 /**
@@ -38,7 +38,7 @@ export function SlashRow({
 			onClick={onClick}
 		>
 			<span className={`gui-slash-row-icon${isSkill ? " gui-slash-row-icon--skill" : ""}`}>
-				<Icon name={isSkill ? "lightbulb" : "command"} className="h-4 w-4" />
+				<StateIcon on={isSkill} pair={["lightbulb", "command"]} className="h-4 w-4" />
 			</span>
 			<span className="gui-slash-row-body">
 				<span className="gui-slash-row-line1">

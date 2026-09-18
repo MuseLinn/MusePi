@@ -35,6 +35,7 @@ import {
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { Reveal } from "../Reveal";
+import { StateIcon } from "../StateIcon";
 
 /** One configurable activity row (opencode per-category sounds parity):
  *  activity name + trigger desc, a preview button for the current choice,
@@ -434,7 +435,7 @@ export function NotificationsSection({ rpc }: { rpc: RpcClient | null }): ReactN
 								setAuditionTimer([...ids, stop]);
 							}}
 						>
-							<Icon name={auditionTimer !== null ? "stop" : "play"} className="h-3.5 w-3.5" />
+							<StateIcon on={auditionTimer !== null} pair={["stop", "play"]} className="h-3.5 w-3.5" />
 							{auditionTimer !== null ? t("stop") : t("audition all")}
 						</button>
 					</div>

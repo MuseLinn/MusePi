@@ -230,6 +230,8 @@ export function CommandPalette({
 								setActive(0);
 							}}
 						>
+							{/* TODO(P1): n-ary StateIcon switch — all/actions/list is a
+							 *  3-way kind icon, not a pair. */}
 							<Icon
 								name={id === "all" ? "menu-2" : id === "actions" ? "rocket" : "list-check-2"}
 								className="h-3.5 w-3.5"

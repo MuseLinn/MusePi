@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
+import { StateIcon } from "./StateIcon";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import {
 	buildTrajectoryTree,
@@ -681,8 +682,9 @@ export function TrajectoryView({
 										aria-expanded={!isCollapsed}
 										onClick={() => toggleTurn(group.turn)}
 									>
-										<Icon
-											name={isCollapsed ? "arrow-right-s" : "arrow-down-s"}
+										<StateIcon
+											on={isCollapsed}
+											pair={["arrow-right-s", "arrow-down-s"]}
 											className="h-3.5 w-3.5 shrink-0 opacity-60"
 										/>
 										<span className="traj-turn-tag">

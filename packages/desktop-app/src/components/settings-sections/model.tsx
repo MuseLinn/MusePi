@@ -11,6 +11,7 @@ import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
 import { SpotlightCard } from "../SpotlightCard";
+import { StateIcon } from "../StateIcon";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";
 
@@ -1590,7 +1591,11 @@ export function ModelSection({
 												{showAll
 													? t("collapse")
 													: t("show all {count}", { count: String(filteredProviders.length) })}
-												<Icon name={showAll ? "arrow-up-s" : "arrow-down-s"} className="h-3.5 w-3.5" />
+												<StateIcon
+													on={showAll}
+													pair={["arrow-up-s", "arrow-down-s"]}
+													className="h-3.5 w-3.5"
+												/>
 											</button>
 										)}
 										{providerQ && filteredProviders.length === 0 && (

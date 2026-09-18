@@ -352,6 +352,8 @@ export function ScheduledTasksPage({
 							className={`gui-taskcenter-tab${view === v ? " gui-taskcenter-tab--active" : ""}`}
 							onClick={() => setView(v)}
 						>
+							{/* TODO(P1): 3-way StateIcon switch once StateIcon grows an
+							 *  n-ary variant — calendar/board/list can't fit a pair. */}
 							<Icon
 								name={v === "calendar" ? "calendar" : v === "board" ? "list-check-2" : "calendar-schedule"}
 								className="h-4 w-4"

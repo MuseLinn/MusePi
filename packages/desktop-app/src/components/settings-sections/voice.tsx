@@ -284,6 +284,8 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				</div>
 			</div>
 			<button type="button" className="gui-btn" disabled={!rpc} onClick={toggle}>
+				{/* TODO(P1): 3-way StateIcon switch — loading/speaking/idle is a
+				 *  tri-state, not a pair. */}
 				<Icon
 					name={state === "loading" ? "download" : state === "speaking" ? "stop" : "play"}
 					className="h-3.5 w-3.5"

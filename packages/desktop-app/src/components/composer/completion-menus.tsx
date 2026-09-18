@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 import { type SlashEntry, SlashRow } from "../SlashRow";
+import { StateIcon } from "../StateIcon";
 
 /** One "@" workspace-tree completion row (workspace.tree shape). */
 export interface AtCompletionEntry {
@@ -36,7 +37,7 @@ export function SlashNotice({
 }): ReactNode {
 	return (
 		<div className={`gui-composer-slash-note gui-composer-slash-note--${level}`} role="status" aria-live="polite">
-			<Icon name={level === "error" ? "close-circle" : "information"} className="h-3.5 w-3.5 shrink-0" />
+			<StateIcon on={level === "error"} pair={["close-circle", "information"]} className="h-3.5 w-3.5 shrink-0" />
 			{markdown ? (
 				<div className="min-w-0 flex-1 gui-composer-slash-note-md">
 					<Markdown text={text} />

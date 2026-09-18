@@ -226,6 +226,50 @@ html.gui-glass-adaptive {
 }
 
 
+/* ── Icon morph (StateIcon.tsx): spring cross-morph for state-paired sprite
+ *    icons — the sprite-world equivalent of the onboarding step icon's
+ *    path-level MorphIcon. Both shapes stay mounted in an inline grid; the
+ *    outgoing shape collapses, the incoming one grows in from the opposite
+ *    side, timed by --spring. Pure CSS so .gui-motion-off degrades it
+ *    globally (see the reduced-motion block below). ───────────────────── */
+.gui-icon-morph {
+	display: inline-grid;
+	place-items: center;
+	/* Same footprint as a bare <Icon> so it drops into existing layouts. */
+	line-height: 0;
+}
+
+.gui-icon-morph > .gui-icon-morph__shape {
+	grid-area: 1 / 1;
+	transition:
+		transform var(--spring),
+		opacity 120ms ease-out;
+}
+
+/* `off` shape is the resting state: visible, upright. */
+.gui-icon-morph__shape--off {
+	opacity: 1;
+	transform: none;
+}
+
+/* `on` shape enters from the far side… */
+.gui-icon-morph__shape--on {
+	opacity: 0;
+	transform: scale(0.4) rotate(-90deg);
+}
+
+/* …and the `off` shape exits to the near side, so the pair reads as one
+ * glyph rolling into the other rather than two icons cross-fading. */
+.gui-icon-morph.is-on .gui-icon-morph__shape--on {
+	opacity: 1;
+	transform: none;
+}
+
+.gui-icon-morph.is-on .gui-icon-morph__shape--off {
+	opacity: 0;
+	transform: scale(1.4) rotate(90deg);
+}
+
 /* ── Pac-man chomp animation (vendor/pac-man.tsx) ─────────────────────
  * The glyph renders a rest sector plus three chomp frames; while
  * .pac-chomp is present the frames cycle (open → mid → closed) with

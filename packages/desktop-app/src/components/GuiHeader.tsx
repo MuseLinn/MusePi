@@ -18,6 +18,7 @@ import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
 import type { OrbState } from "../vendor/thinking-orbs";
+import { StateIcon } from "./StateIcon";
 
 /** Known open-in app ids → built-in oc-icon fallback (shown when the
  *  shell couldn't extract a real icon, e.g. WindowsApps aliases like
@@ -630,7 +631,7 @@ export function GuiHeader({
 					aria-label={sideCollapsed ? t("open sidebar") : t("close sidebar")}
 					onClick={onToggleSidebar}
 				>
-					<Icon name={sideCollapsed ? "layout-right" : "layout-left"} className="h-4 w-4" />
+					<StateIcon on={sideCollapsed} pair={["layout-right", "layout-left"]} className="h-4 w-4" />
 				</button>
 				<div className="gui-openin-capsule">
 					<button
@@ -815,7 +816,11 @@ export function GuiHeader({
 											onSelectSession(s.id);
 										}}
 									>
-										<Icon name={active ? "chat-thread" : "chat-1"} className="h-3.5 w-3.5 flex-shrink-0" />
+										<StateIcon
+											on={active}
+											pair={["chat-thread", "chat-1"]}
+											className="h-3.5 w-3.5 flex-shrink-0"
+										/>
 										<span className="min-w-0 flex-1 truncate">{s.label.trim() || t("untitled session")}</span>
 										{active && <Icon name="check" className="h-3 w-3 flex-shrink-0" />}
 										<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
@@ -961,7 +966,7 @@ export function GuiHeader({
 						disabled={pauseDisabled === true}
 						onClick={() => onTogglePause()}
 					>
-						<Icon name={paused ? "play" : "pause"} className="h-3.5 w-3.5" />
+						<StateIcon on={paused} pair={["play", "pause"]} className="h-3.5 w-3.5" />
 					</button>
 				)}
 				{onToggleGlobalPause && (
@@ -974,7 +979,7 @@ export function GuiHeader({
 						aria-pressed={globalPaused === true}
 						onClick={() => onToggleGlobalPause()}
 					>
-						<Icon name={globalPaused ? "play" : "stop"} className="h-3.5 w-3.5" />
+						<StateIcon on={globalPaused} pair={["play", "stop"]} className="h-3.5 w-3.5" />
 					</button>
 				)}
 				<button

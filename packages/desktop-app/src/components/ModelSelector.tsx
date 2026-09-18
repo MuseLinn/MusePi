@@ -12,6 +12,7 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { ModelBrandIcon } from "./model-brand-icon";
 import { Reveal } from "./Reveal";
+import { StateIcon } from "./StateIcon";
 
 export interface WireModel {
 	id: string;
@@ -799,7 +800,7 @@ function ModelRow({
 						onToggleFav(m.id, m.provider);
 					}}
 				>
-					<Icon name={fav ? "star-fill" : "star"} className="h-3.5 w-3.5" />
+					<StateIcon on={fav} pair={["star-fill", "star"]} className="h-3.5 w-3.5" />
 				</button>
 				{allowSetDefault && (
 					<button
@@ -812,7 +813,7 @@ function ModelRow({
 							onSetDefault(m.id, m.provider);
 						}}
 					>
-						<Icon name={isDefault ? "target-fill" : "target"} className="h-3.5 w-3.5" />
+						<StateIcon on={isDefault} pair={["target-fill", "target"]} className="h-3.5 w-3.5" />
 					</button>
 				)}
 				{`${m.provider}/${m.id}` === modelId && <Icon name="check" className="h-3.5 w-3.5 flex-shrink-0" />}

@@ -22,6 +22,7 @@ import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { StateIcon } from "./StateIcon";
 
 /**
  * Project knowledge panel (right-panel 项目知识, openchamber v1.19
@@ -631,7 +632,7 @@ function PlanEditor({
 					aria-label={t("new plan title")}
 				/>
 				<button type="button" className="gui-btn gui-btn-icon" onClick={() => void save()} title={t("save")}>
-					<Icon name={saved ? "check" : "download"} className="h-3.5 w-3.5" />
+					<StateIcon on={saved} pair={["check", "download"]} className="h-3.5 w-3.5" />
 					<span className="text-[12px]">{saved ? t("saved") : t("save")}</span>
 				</button>
 			</div>
