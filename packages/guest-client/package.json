@@ -67,6 +67,7 @@
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "workspace:*",
 		"beautiful-mermaid": "^1.1.3",
+		"chroma-js": "^3.2.0",
 		"cuelume": "^0.2.1",
 		"jsqr": "^1.4.0",
 		"katex": "^0.17.0",
@@ -80,6 +81,7 @@
 	"devDependencies": {
 		"@happy-dom/global-registrator": "^20.12.0",
 		"@types/bun": "^1.3.14",
+		"@types/chroma-js": "^3.1.2",
 		"@types/react": "^19.2.17",
 		"@types/react-dom": "^19.2.3",
 		"happy-dom": "^20.12.0"
