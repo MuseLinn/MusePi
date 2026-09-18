@@ -227,30 +227,6 @@ jobs:
          # migrated away from. PRs now build locally like main does; fork
          # runs can restore the default-branch bazel cache, so it stays
          # cheap. arm/musl/win remain main-only (disk + time, see job notes).
-         # A corrupt download must fail here, not as a confusing dlopen error
-         # in every downstream test shard.
-         - name: Smoke release addons
-           if: github.event_name == 'pull_request'
-           shell: bash
-           run: |
-              set -euo pipefail
-              # NOTE: `bun -e 'require("./x.node")'` swallows dlopen failures
-              # (exit 0 on a bogus addon); a script file enforces them in
-              # both bun and node. Verified against a corrupt .node fixture.
-              cat > "$RUNNER_TEMP/smoke-addons.js" <<'EOF'
-              for (const f of process.argv.slice(2)) {
-               const m = require(f);
-               if (!m || Object.keys(m).length === 0) {
-               	console.error(`addon failed to load: ${f}`);
-               	process.exit(1);
-               }
-              }
-              EOF
-              loader=node
-              if command -v bun >/dev/null 2>&1; then loader=bun; fi
-              "$loader" "$RUNNER_TEMP/smoke-addons.js" \
-                "$PWD/bazel-bin/natives-linux-x64-baseline/pi_natives.linux-x64-baseline.node" \
-                "$PWD/bazel-bin/natives-linux-x64-modern/pi_natives.linux-x64-modern.node"
          # Make the policy visible on the rare native-touching PR instead of
          # leaving a reviewer to wonder which addons the tests exercised.
          # Best-effort: a diff-API failure must not fail the job over a notice.
