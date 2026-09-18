@@ -73,7 +73,8 @@ export const STT_MODELS = [
 		dtype: "q8",
 		englishOnly: false,
 		label: "Balanced (Whisper small)",
-		description: "Whisper small, multilingual. More accurate than Fast, still light on CPU/RAM.",
+		description:
+			"Whisper small, multilingual (Chinese/Japanese/Korean ready). Default tier — more accurate than Fast, still light on CPU/RAM.",
 		sizeHint: "~190 MB",
 	},
 	{
@@ -100,16 +101,19 @@ export const STT_MODELS = [
 		englishOnly: false,
 		label: "Parakeet TDT v3 (SoTA)",
 		description:
-			"NVIDIA Parakeet TDT 0.6B v3, 25 languages. Open ASR Leaderboard leader — best accuracy and far fastest decoding. Default.",
+			"NVIDIA Parakeet TDT 0.6B v3 — 25 European languages only (no Chinese/Japanese/Korean; the worker ignores `language`, so CJK speech transcribes to empty). Open ASR Leaderboard leader for accuracy and speed; pick it for English/European dictation.",
 		sizeHint: "~680 MB",
 	},
 ] as const satisfies readonly SttModelSpec[];
 
 /**
- * SoTA default — NVIDIA Parakeet TDT 0.6B v3 (sherpa-onnx). Tops the Open ASR
- * Leaderboard on accuracy while decoding ~20× faster than Whisper large-v3.
+ * Default tier: Whisper small (multilingual). Was the SoTA Parakeet — but
+ * Parakeet TDT v3's 25 languages are all European and the sherpa worker
+ * cannot switch language, so Chinese (the app's primary audience) silently
+ * transcribed to empty text. English-first users who want the leaderboard
+ * leader can still pick Parakeet in settings (downloaded on first use).
  */
-export const DEFAULT_STT_MODEL_KEY = "parakeet";
+export const DEFAULT_STT_MODEL_KEY = "balanced";
 
 export type SttModelKey = (typeof STT_MODELS)[number]["key"];
 

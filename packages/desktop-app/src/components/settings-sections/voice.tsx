@@ -57,9 +57,12 @@ function formatBytes(n: number): string {
  *  wire row stays { key, label, cached }. */
 const TIER_META: Record<string, { accuracy: number; speed: number; size: string; badge?: string }> = {
 	fast: { accuracy: 35, speed: 92, size: "~60 MB", badge: "轻量" },
-	balanced: { accuracy: 55, speed: 72, size: "~190 MB" },
+	balanced: { accuracy: 55, speed: 72, size: "~190 MB", badge: "多语言 · 默认" },
 	turbo: { accuracy: 85, speed: 45, size: "~600 MB" },
-	parakeet: { accuracy: 97, speed: 96, size: "~680 MB", badge: "SoTA" },
+	// Parakeet TDT v3's 25 languages are all European — the sherpa worker
+	// cannot switch language, so CJK speech transcribes to empty. The badge
+	// must say so: zh users picking the SoTA badge blindly got silence.
+	parakeet: { accuracy: 97, speed: 96, size: "~680 MB", badge: "SoTA · 英文/欧语" },
 };
 
 function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {

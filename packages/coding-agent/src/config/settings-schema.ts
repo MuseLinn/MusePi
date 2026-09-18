@@ -2510,7 +2510,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Speech Model",
 			description:
-				"Local on-device speech model. Parakeet TDT v3 (sherpa-onnx) is the SoTA default; Whisper base/small/large-v3-turbo tiers (transformers.js) trade size for multilingual coverage. Downloaded on first use.",
+				"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
 			options: STT_MODEL_OPTIONS,
 		},
 	},
