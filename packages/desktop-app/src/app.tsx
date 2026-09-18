@@ -7,6 +7,7 @@ import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BlurText } from "./components/BlurText";
 import { BoardPage } from "./components/BoardPage";
+import { CapabilityCenterPage } from "./components/CapabilityCenterPage";
 import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
@@ -508,6 +509,7 @@ function AppInner(): ReactNode {
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
 	const [agentsOpen, setAgentsOpen] = useState(false);
+	const [capabilityOpen, setCapabilityOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
 	// and the sidebar 定时任务 button glows for a while (visible without any
@@ -601,9 +603,11 @@ function AppInner(): ReactNode {
 	}, [rpc]);
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
-	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "agents" | "chat" | null>(null);
+	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "agents" | "capability" | "chat" | null>(
+		null,
+	);
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const viewSwapRef = useRef((_to: "board" | "scheduled" | "agents" | "chat"): void => {});
+	const viewSwapRef = useRef((_to: "board" | "scheduled" | "agents" | "capability" | "chat"): void => {});
 	useEffect(() => {
 		const onOpenBoard = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -620,13 +624,25 @@ function AppInner(): ReactNode {
 			viewSwapRef.current("scheduled");
 		};
 		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
+		// 设置 → 扩展控制中心概览的 CTA（设计稿 07 底部互跳）：开一级能力中心。
+		const onOpenCapability = (): void => viewSwapRef.current("capability");
+		window.addEventListener("omp-open-capability", onOpenCapability);
 		return () => {
 			window.removeEventListener("omp-open-board", onOpenBoard);
 			window.removeEventListener("omp-open-scheduled-task", onOpenScheduledTask);
+			window.removeEventListener("omp-open-capability", onOpenCapability);
 		};
 	}, []);
-	viewSwapRef.current = (to: "board" | "scheduled" | "agents" | "chat"): void => {
-		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat";
+	viewSwapRef.current = (to: "board" | "scheduled" | "agents" | "capability" | "chat"): void => {
+		const from = boardOpen
+			? "board"
+			: scheduledOpen
+				? "scheduled"
+				: agentsOpen
+					? "agents"
+					: capabilityOpen
+						? "capability"
+						: "chat";
 		// A same-target call must still clear any stale leave state — a
 		// leftover leavingView keeps the leave frame mounted at opacity 0
 		// (forwards fill) and the surface appears blank.
@@ -646,6 +662,7 @@ function AppInner(): ReactNode {
 			setBoardOpen(to === "board");
 			setScheduledOpen(to === "scheduled");
 			setAgentsOpen(to === "agents");
+			setCapabilityOpen(to === "capability");
 		}, 150);
 	};
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
@@ -673,7 +690,17 @@ function AppInner(): ReactNode {
 				section === "skills" || section === "suggestions" || section === "providers" ? section : undefined;
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
-			setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : agentsOpen ? "agents" : "chat");
+			setLeavingView(
+				boardOpen
+					? "board"
+					: scheduledOpen
+						? "scheduled"
+						: agentsOpen
+							? "agents"
+							: capabilityOpen
+								? "capability"
+								: "chat",
+			);
 			clearTimeout(settingsTimerRef.current ?? undefined);
 			settingsTimerRef.current = setTimeout(() => {
 				settingsTimerRef.current = null;
@@ -2842,6 +2869,8 @@ function AppInner(): ReactNode {
 						cronGlow={cronGlow}
 						onOpenAgents={() => viewSwapRef.current("agents")}
 						agentsActive={agentsOpen}
+						onOpenCapability={() => viewSwapRef.current("capability")}
+						capabilityActive={capabilityOpen}
 						onOpenSettings={openSettings}
 						onOpenCollab={() => setCollabOpen(true)}
 						onRenameSession={renameSession}
@@ -3065,6 +3094,17 @@ function AppInner(): ReactNode {
 								<ChatSurfaceShell>
 									<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
 								</ChatSurfaceShell>
+							) : leavingView === "capability" ? (
+								/* Leaving capability center → chat: blur out first. */
+								<ChatSurfaceShell leave>
+									<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+								</ChatSurfaceShell>
+							) : capabilityOpen ? (
+								/* Capability center (设计稿 05: sidebar first-class entry —
+								 * skills / plugins / marketplace over one card language). */
+								<ChatSurfaceShell>
+									<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+								</ChatSurfaceShell>
 							) : leavingView === "chat" ? (
 								/* Leaving chat → board: chat blurs out first. */
 								<div className="gui-view-leave">{chatSurface}</div>
@@ -3190,6 +3230,7 @@ function AppInner(): ReactNode {
 				}}
 				onSelectSession={id => void openSession(id)}
 				onOpenAgents={() => viewSwapRef.current("agents")}
+				onOpenCapability={() => viewSwapRef.current("capability")}
 			/>
 			{/* Process-global freeze overlay: covers the entire window
 			 * (settings dialogs included) with a frosted-glass scrim. */}

@@ -54,6 +54,8 @@ export function SessionSidebar({
 	cronGlow,
 	onOpenAgents,
 	agentsActive,
+	onOpenCapability,
+	capabilityActive,
 	onOpenSettings,
 	onPickFolder,
 	onCreateProject,
@@ -97,6 +99,10 @@ export function SessionSidebar({
 	/** Agents center view is the active scene — its nav item renders selected. */
 	onOpenAgents?(): void;
 	agentsActive?: boolean;
+	/** 能力中心 (设计稿 05): sidebar first-class entry — opens the full-page
+	 *  capability center (skills / plugins / marketplace). */
+	onOpenCapability?(): void;
+	capabilityActive?: boolean;
 	onOpenSettings(): void;
 	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -517,6 +523,17 @@ export function SessionSidebar({
 						>
 							<Icon name="ai-agent-fill" className="h-4 w-4" />
 							<span>{t("agents center")}</span>
+						</button>
+					)}
+					{onOpenCapability && (
+						<button
+							type="button"
+							className={`gui-menu-item${capabilityActive ? " gui-menu-item--active" : ""}`}
+							onClick={onOpenCapability}
+							title={t("capability center")}
+						>
+							<Icon name="star" className="h-4 w-4" />
+							<span>{t("capability center")}</span>
 						</button>
 					)}
 					<button type="button" className="gui-menu-item" onClick={onOpenSkills} title={t("extensions")}>

@@ -3553,3 +3553,141 @@
 	max-height: min(60vh, 640px);
 	overflow: auto;
 }
+
+/* ── 扩展控制中心·概览 tab (设计稿 07): stats cards + needs-attention +
+ * provider health rows + the capability-center CTA. ── */
+.gui-ext-overview {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	width: 100%;
+	max-width: 640px;
+	margin: 0 auto;
+	padding: 16px 4px;
+	overflow-y: auto;
+}
+
+.gui-ext-stat-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	gap: 10px;
+}
+
+.gui-ext-stat-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 12px 14px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+}
+
+.gui-ext-stat-card--err {
+	border-color: color-mix(in oklab, var(--color-danger) 40%, var(--border));
+}
+
+.gui-ext-stat-value {
+	font-size: 22px;
+	font-weight: 650;
+	color: var(--color-text);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.1;
+}
+
+.gui-ext-stat-label {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-ext-overview-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.gui-ext-overview-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.gui-ext-overview-rows {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	overflow: hidden;
+}
+
+.gui-ext-overview-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+}
+
+.gui-ext-overview-row + .gui-ext-overview-row {
+	border-top: 1px solid var(--border);
+}
+
+.gui-ext-overview-cta {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, var(--border));
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 7%, var(--color-surface-raised));
+	color: var(--color-text);
+	text-align: left;
+	transition:
+		border-color 150ms var(--spring),
+		background 150ms var(--spring);
+}
+
+.gui-ext-overview-cta:hover {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, var(--color-surface-raised));
+}
+
+/* ── Capability center first-class page (设计稿 05): header tabs +
+ * body under the gui-agents-center shell. ── */
+.gui-capability-tabs {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 2px 20px 0;
+}
+
+.gui-capability-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 12px;
+	border-radius: var(--radius-md) var(--radius-md) 0 0;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+	border-bottom: 2px solid transparent;
+	transition:
+		color 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-capability-tab:hover {
+	color: var(--color-text);
+}
+
+.gui-capability-tab--on {
+	color: var(--color-accent);
+	border-bottom-color: var(--color-accent);
+}
+
+.gui-capability-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 14px 20px 20px;
+}

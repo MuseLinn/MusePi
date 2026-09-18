@@ -12,7 +12,7 @@ import {
 	useUnhostedSlots,
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
-import { CapabilityCenter, DiagnosticsView } from "./CapabilityCenter";
+import { DiagnosticsView } from "./CapabilityCenter";
 import { HeightMorph } from "./HeightMorph";
 import { StateIcon } from "./StateIcon";
 
@@ -90,6 +90,111 @@ function isGuiKind(e: ExtensionItem): boolean {
 	return e.kind === "gui-motion" || e.kind === "style";
 }
 
+/**
+ * 概览 tab (设计稿 07): stats cards → needs-attention (load errors +
+ * shadowed, with a jump into the slot diagnostics) → provider health
+ * (per-source enable switches) → the capability-center CTA. The
+ * CONFIG/diagnosis perspective; discovery & install live in the
+ * first-class CapabilityCenterPage this CTA opens.
+ */
+function OverviewView({
+	extensions,
+	providers,
+	unhosted,
+	onOpenDiagnostics,
+	onOpenCapabilityCenter,
+	onToggleProvider,
+}: {
+	extensions: ExtensionItem[];
+	providers: ProviderInfo[];
+	unhosted: string[];
+	onOpenDiagnostics(): void;
+	onOpenCapabilityCenter(): void;
+	onToggleProvider(p: ProviderInfo): void;
+}): ReactNode {
+	const failed = extensions.filter(e => e.loadError);
+	const shadowed = extensions.filter(e => e.state === "shadowed");
+	const attention = [...failed, ...shadowed].slice(0, 6);
+	const stats: { label: string; value: number; tone?: "err" }[] = [
+		{ label: t("ext stat total"), value: extensions.length },
+		{
+			label: t("ext stat active"),
+			value: extensions.filter(e => e.state === "active" && !e.loadError).length,
+		},
+		{ label: t("ext stat failed"), value: failed.length, tone: failed.length > 0 ? "err" : undefined },
+		{ label: t("ext stat unhosted"), value: unhosted.length },
+	];
+	return (
+		<div className="gui-ext-overview">
+			<div className="gui-ext-stat-row">
+				{stats.map(s => (
+					<div key={s.label} className={`gui-ext-stat-card${s.tone === "err" ? " gui-ext-stat-card--err" : ""}`}>
+						<span className="gui-ext-stat-value">{s.value}</span>
+						<span className="gui-ext-stat-label">{s.label}</span>
+					</div>
+				))}
+			</div>
+			<div className="gui-ext-overview-section">
+				<div className="gui-ext-overview-head">
+					<span className="gui-group-label">{t("ext needs attention")}</span>
+					<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
+						{t("ext open diagnostics")}
+					</button>
+				</div>
+				{attention.length === 0 ? (
+					<div className="gui-ext-empty">{t("ext needs attention empty")}</div>
+				) : (
+					<div className="gui-ext-overview-rows">
+						{attention.map(e => (
+							<div key={e.id} className="gui-ext-overview-row">
+								<span
+									className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : " gui-ext-dot--shadowed"}`}
+								/>
+								<span className="min-w-0 flex-1 truncate text-[12.5px]">{e.displayName ?? e.name}</span>
+								<span className={`gui-ext-item-tag${e.loadError ? " gui-ext-item-tag--err" : ""}`}>
+									{e.loadError ? t("ext load failed") : t("ext shadowed")}
+								</span>
+							</div>
+						))}
+					</div>
+				)}
+			</div>
+			<div className="gui-ext-overview-section">
+				<div className="gui-ext-overview-head">
+					<span className="gui-group-label">{t("ext provider health")}</span>
+				</div>
+				<div className="gui-ext-overview-rows">
+					{providers.map(p => (
+						<div key={p.id} className="gui-ext-overview-row">
+							<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
+							<span className="min-w-0 flex-1 truncate text-[12.5px]">{p.displayName}</span>
+							<button
+								type="button"
+								role="switch"
+								aria-checked={p.enabled}
+								aria-label={`${t("ext provider")} ${p.displayName}`}
+								className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
+								onClick={() => onToggleProvider(p)}
+							/>
+						</div>
+					))}
+				</div>
+			</div>
+			{/* CTA (设计稿 07 底部):配置与诊断看完了 → 去能力中心发现/安装。 */}
+			<button type="button" className="gui-ext-overview-cta" onClick={onOpenCapabilityCenter}>
+				<Icon name="star" className="h-4 w-4" />
+				<span className="min-w-0 flex-1 text-left">
+					<span className="block text-[13px] font-medium">{t("capability center")}</span>
+					<span className="block truncate text-[12px] text-[var(--color-text-faint)]">
+						{t("ext open capability hint")}
+					</span>
+				</span>
+				<Icon name="arrow-right-s" className="h-4 w-4 shrink-0 opacity-60" />
+			</button>
+		</div>
+	);
+}
+
 export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const data = useExtensionRegistry(rpc);
 	const extensions = data?.extensions ?? null;
@@ -97,6 +202,10 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	const providers = data?.providers ?? [];
 	const unhosted = useUnhostedSlots(rpc);
 	const [error, setError] = useState<string | null>(null);
+	// 设计稿 07 五 tab：概览 / 能力清单 / 插件 / 市场 / 槽位诊断 —— 配置与
+	// 诊断视角；发现与安装（消费者视角）在一级「能力中心」（CapabilityCenterPage）。
+	const [view, setView] = useState<"overview" | "inventory" | "plugins" | "marketplace" | "diagnostics">("overview");
+	// 能力清单内部的 provider 子 tab（ALL + provider tabs，TUI buildProviderTabs 顺序）。
 	const [tab, setTab] = useState("all");
 	const [query, setQuery] = useState("");
 	const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -332,43 +441,38 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	return (
 		<div className="gui-ext-center">
-			{/* Top tabs: ALL + provider tabs (TUI buildProviderTabs order).
-			 * Disabled providers render greyed but stay clickable. */}
+			{/* Top tabs (设计稿 07): 概览 / 能力清单 / 插件 / 市场 / 槽位诊断.
+			 * Provider tabs live INSIDE the inventory view. */}
 			<div className="gui-ext-tabs" role="tablist">
 				<button
 					type="button"
 					role="tab"
-					aria-selected={tab === "all"}
-					className={`gui-ext-tab${tab === "all" ? " gui-ext-tab--active" : ""}`}
-					onClick={() => setTab("all")}
+					aria-selected={view === "overview"}
+					className={`gui-ext-tab${view === "overview" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setView("overview")}
 				>
-					ALL
+					<Icon name="layout-column" className="h-3.5 w-3.5 shrink-0 opacity-70" />
+					{t("ext overview")}
+				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={view === "inventory"}
+					className={`gui-ext-tab${view === "inventory" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setView("inventory")}
+				>
+					{t("ext inventory")}
 					<span className="gui-ext-tab-count">{(extensions ?? []).length}</span>
 				</button>
-				{tabs
-					.filter(t => t.id !== "all")
-					.map(tr => (
-						<button
-							key={tr.id}
-							type="button"
-							role="tab"
-							aria-selected={tab === tr.id}
-							className={`gui-ext-tab${tab === tr.id ? " gui-ext-tab--active" : ""}${tr.enabled ? "" : " gui-ext-tab--off"}`}
-							onClick={() => setTab(tr.id)}
-						>
-							{tr.label}
-							<span className="gui-ext-tab-count">{tr.count}</span>
-						</button>
-					))}
 				{/* 插件 tab:daemon plugins.list 的
 				 * 会话无关扩展扫描(path/label/tools/commands/handlers/errors),
 				 * 与扩展中心并排 —— marketplace/plugin 生态的 GUI 面。 */}
 				<button
 					type="button"
 					role="tab"
-					aria-selected={tab === "plugins"}
-					className={`gui-ext-tab${tab === "plugins" ? " gui-ext-tab--active" : ""}`}
-					onClick={() => setTab("plugins")}
+					aria-selected={view === "plugins"}
+					className={`gui-ext-tab${view === "plugins" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setView("plugins")}
 				>
 					{t("plugins")}
 					<span className="gui-ext-tab-count">{plugins.length}</span>
@@ -380,46 +484,41 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				<button
 					type="button"
 					role="tab"
-					aria-selected={tab === "marketplace"}
-					className={`gui-ext-tab${tab === "marketplace" ? " gui-ext-tab--active" : ""}`}
-					onClick={() => setTab("marketplace")}
+					aria-selected={view === "marketplace"}
+					className={`gui-ext-tab${view === "marketplace" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setView("marketplace")}
 				>
 					<Icon name="plug-2" className="h-3.5 w-3.5 shrink-0 opacity-70" />
 					{t("marketplace")}
 				</button>
-				{/* 能力中心 tab:两屏(已安装 / 获取)+ 技能详情抽屉 ——
-				 * skills.list / skills.install / marketplace.list 的采集面。 */}
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "capability"}
-					className={`gui-ext-tab${tab === "capability" ? " gui-ext-tab--active" : ""}`}
-					onClick={() => setTab("capability")}
-				>
-					<Icon name="star" className="h-3.5 w-3.5 shrink-0 opacity-70" />
-					{t("capability center")}
-				</button>
-				{/* 诊断 tab:加载失败 / 遮蔽 / 技能发现警告 / 已关闭来源 ——
+				{/* 槽位诊断 tab:加载失败 / 遮蔽 / 技能发现警告 / 已关闭来源 ——
 				 * 一个回答"为什么没生效"的健康视图。 */}
 				<button
 					type="button"
 					role="tab"
-					aria-selected={tab === "diagnostics"}
-					className={`gui-ext-tab${tab === "diagnostics" ? " gui-ext-tab--active" : ""}`}
-					onClick={() => setTab("diagnostics")}
+					aria-selected={view === "diagnostics"}
+					className={`gui-ext-tab${view === "diagnostics" ? " gui-ext-tab--active" : ""}`}
+					onClick={() => setView("diagnostics")}
 				>
 					<Icon name="pulse" className="h-3.5 w-3.5 shrink-0 opacity-70" />
-					{t("diagnostics")}
+					{t("ext slot diagnostics")}
 				</button>
 			</div>
 			{error && <div className="px-1 pb-1 text-[12.5px] text-[var(--color-warning)]">{error}</div>}
 			<div className="gui-ext-body">
-				{/* 能力中心:两屏 + 技能详情抽屉(独立组件)。 */}
-				{tab === "capability" ? (
-					<CapabilityCenter rpc={rpc} />
-				) : tab === "diagnostics" ? (
+				{/* 概览:统计卡 + 需要处理 + 来源健康度 + 能力中心 CTA(设计稿 07)。 */}
+				{view === "overview" ? (
+					<OverviewView
+						extensions={extensions ?? []}
+						providers={providers}
+						unhosted={unhosted}
+						onOpenDiagnostics={() => setView("diagnostics")}
+						onOpenCapabilityCenter={() => window.dispatchEvent(new CustomEvent("omp-open-capability"))}
+						onToggleProvider={toggleProvider}
+					/>
+				) : view === "diagnostics" ? (
 					<DiagnosticsView rpc={rpc} />
-				) : tab === "plugins" ? (
+				) : view === "plugins" ? (
 					<div className="gui-ext-plugins">
 						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
 						{plugins.length === 0 && !pluginsError ? (
@@ -460,10 +559,40 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 							</div>
 						)}
 					</div>
-				) : tab === "marketplace" ? (
+				) : view === "marketplace" ? (
 					<MarketplaceView rpc={rpc} />
 				) : (
 					<>
+						{/* Inventory-internal provider tabs (TUI buildProviderTabs
+						 * order): ALL + one per provider. Disabled providers render
+						 * greyed but stay clickable. */}
+						<div className="gui-ext-tabs" role="tablist">
+							<button
+								type="button"
+								role="tab"
+								aria-selected={tab === "all"}
+								className={`gui-ext-tab${tab === "all" ? " gui-ext-tab--active" : ""}`}
+								onClick={() => setTab("all")}
+							>
+								ALL
+								<span className="gui-ext-tab-count">{(extensions ?? []).length}</span>
+							</button>
+							{tabs
+								.filter(t => t.id !== "all")
+								.map(tr => (
+									<button
+										key={tr.id}
+										type="button"
+										role="tab"
+										aria-selected={tab === tr.id}
+										className={`gui-ext-tab${tab === tr.id ? " gui-ext-tab--active" : ""}${tr.enabled ? "" : " gui-ext-tab--off"}`}
+										onClick={() => setTab(tr.id)}
+									>
+										{tr.label}
+										<span className="gui-ext-tab-count">{tr.count}</span>
+									</button>
+								))}
+						</div>
 						{/* Left: search + provider→kind→item tree. */}
 						<div className="gui-ext-list">
 							<div className="gui-ext-search">

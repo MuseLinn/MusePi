@@ -39,6 +39,7 @@ export function CommandPalette({
 	onTogglePreview,
 	onSelectSession,
 	onOpenAgents,
+	onOpenCapability,
 }: {
 	open: boolean;
 	onClose(): void;
@@ -53,6 +54,8 @@ export function CommandPalette({
 	onTogglePreview(): void;
 	onSelectSession(id: string): void;
 	onOpenAgents(): void;
+	/** 能力中心 (设计稿 05): optional — the palette item hides when absent. */
+	onOpenCapability?(): void;
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<PaletteTab>("all");
@@ -170,6 +173,7 @@ export function CommandPalette({
 		{ icon: "terminal-box", label: t("toggle terminal"), hint: "⌘J", fn: onToggleTerminal },
 		{ icon: "equalizer-2", label: t("toggle preview"), hint: "⌘E", fn: onTogglePreview },
 		{ icon: "ai-agent-fill", label: t("agents center"), fn: onOpenAgents },
+		...(onOpenCapability ? [{ icon: "star", label: t("capability center"), fn: onOpenCapability }] : []),
 	];
 	const taskRows = (rows ?? sessions.slice(0, 8)).map<{
 		icon: string;
