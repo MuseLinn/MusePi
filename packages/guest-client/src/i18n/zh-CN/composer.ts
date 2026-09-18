@@ -78,6 +78,20 @@ export const composer = {
 	"voice needs daemon body": "collab 直连会话暂不支持语音转写，通过 daemon 连接后可用",
 	"voice guide ok": "知道了",
 	"tts needs daemon backend": "朗读需要 daemon 后端",
+	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────
+	sketch: "绘画",
+	"sketch tool pen": "画笔",
+	"sketch tool eraser": "橡皮",
+	"sketch tool line": "直线",
+	"sketch tool arrow": "箭头",
+	"sketch tool rect": "矩形",
+	"sketch tool ellipse": "椭圆",
+	"sketch undo": "撤销",
+	"sketch redo": "重做",
+	"sketch clear": "清空",
+	"sketch done": "完成",
+	"sketch discard title": "放弃这次绘画？",
+	"sketch discard confirm": "画布上有未发送的内容，丢弃后无法恢复。",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

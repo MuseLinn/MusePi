@@ -28,6 +28,9 @@ export interface ComposerAttachment {
 	file?: File;
 	/** Send-time upload in flight → progress ring overlay. */
 	uploading?: boolean;
+	/** Board-drawn chip (SketchPad): clicking it reopens the canvas for
+	 *  editing instead of the plain image lightbox (Codex parity). */
+	sketch?: boolean;
 }
 
 /** One module sequence for chip ids: a restored draft re-seeds chips into a
@@ -87,6 +90,13 @@ export function attachmentWorkspacePath(name: string): string {
 		.replace(/[^\w.\-()\u4e00-\u9fa5 ]+/g, "_")
 		.trim();
 	return `attachments/${safe.length > 0 ? safe : "file"}`;
+}
+
+/** Board/lightbox PNG → File so a finished sketch reuses the normal
+ *  image-attachment pipeline (addFiles → data URL chip → send images). */
+export async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
+	const blob = await (await fetch(dataUrl)).blob();
+	return new File([blob], name, { type: blob.type || "image/png" });
 }
 
 /**

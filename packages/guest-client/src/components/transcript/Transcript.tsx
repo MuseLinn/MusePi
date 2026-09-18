@@ -148,6 +148,10 @@ export interface TranscriptProps {
 	 *  without the character-level reveal (also applied via the
 	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
 	smoothStreaming?: boolean;
+	/** Codex 编辑预览 parity: open an image in the host's drawing board
+	 *  (the transcript lightbox's edit button). Optional — hides the
+	 *  button in hosts without a board. */
+	onEditImage?(src: string): void;
 	/** Session identity. A CHANGE re-locks the bottom and jumps to the latest
 	 *  position: the transcript stays mounted across sessions, and `lockRef`
 	 *  only ever loosens on user scrolling, so an opened session used to inherit
@@ -1019,6 +1023,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		jumpRequest = null,
 		onSpeak,
 		onSaveImage,
+		onEditImage,
 		speakingId,
 		onStopSpeak,
 		branchInfo,
@@ -1631,6 +1636,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				index={previewImg?.index ?? null}
 				onClose={() => setPreviewImg(null)}
 				onIndexChange={i => setPreviewImg(prev => (prev ? { ...prev, index: i } : prev))}
+				onEdit={onEditImage}
 			/>
 		</div>
 	);

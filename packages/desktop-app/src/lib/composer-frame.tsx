@@ -67,6 +67,8 @@ export function ComposerFrame({
 	children,
 	attachments,
 	onRemoveAttachment,
+	onEditSketch,
+	onEditImage,
 	onAddAttachment,
 	onAnnotated,
 	aboveRow,
@@ -91,8 +93,17 @@ export function ComposerFrame({
 		size?: number;
 		/** Send-time upload in flight → progress ring overlay (file chips). */
 		uploading?: boolean;
+		/** Board-drawn chip: click reopens the sketch canvas for editing. */
+		sketch?: boolean;
 	}[];
 	onRemoveAttachment(id: number): void;
+	/** Reopen the sketch board for a board-drawn chip (Codex parity:
+	 *  clicking the drawn image falls back into the canvas). Optional —
+	 *  omitted on scenes without a sketch board. */
+	onEditSketch?(id: number): void;
+	/** Edit an image in the sketch board from the attachment lightbox
+	 *  (Codex 编辑预览 parity). Receives the image source. */
+	onEditImage?(src: string): void;
 	/** Render the trailing "+" card in the attachment row (opens the
 	 *  all-types picker). Omitted on scenes without attachment intake. */
 	onAddAttachment?(): void;
@@ -180,12 +191,13 @@ export function ComposerFrame({
 									className="gui-attach-thumb"
 									role="button"
 									tabIndex={0}
-									title={t("preview image")}
-									onClick={() => openPreview(a.id)}
+									title={a.sketch ? t("sketch") : t("preview image")}
+									onClick={() => (a.sketch ? onEditSketch?.(a.id) : openPreview(a.id))}
 									onKeyDown={e => {
 										if (e.key === "Enter" || e.key === " ") {
 											e.preventDefault();
-											openPreview(a.id);
+											if (a.sketch) onEditSketch?.(a.id);
+											else openPreview(a.id);
 										}
 									}}
 								/>
@@ -225,6 +237,14 @@ export function ComposerFrame({
 			index={preview?.index ?? null}
 			onClose={() => setPreview(null)}
 			onIndexChange={i => setPreview(prev => (prev ? { ...prev, index: i } : prev))}
+			onEdit={
+				onEditImage
+					? src => {
+							setPreview(null);
+							onEditImage(src);
+						}
+					: undefined
+			}
 			onAnnotate={notes => {
 				const text = notes
 					.map(n => `标注 #${n.index}(${n.x.toFixed(1)}%, ${n.y.toFixed(1)}%): ${n.note || "（无说明）"}`)

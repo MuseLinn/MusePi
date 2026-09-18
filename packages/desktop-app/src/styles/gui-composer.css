@@ -1788,3 +1788,181 @@
 .gui-mode-toggle-arm--armed:hover {
 	border-color: var(--color-accent);
 }
+
+/* ── SketchPad (Codex 绘画 parity) — board overlay launched from the
+ * composer attach menu / image lightbox edit button. Completing plays a
+ * scale-out toward the composer row (the "回落" half of the zoom). ── */
+.gui-sketch-veil {
+	position: fixed;
+	inset: 0;
+	z-index: 2500;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 48px;
+	background: color-mix(in oklab, #000 55%, transparent);
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	animation: gui-sketch-in 160ms ease-out;
+}
+
+@keyframes gui-sketch-in {
+	from {
+		opacity: 0;
+	}
+}
+
+.gui-sketch-board {
+	display: flex;
+	flex-direction: column;
+	width: min(880px, 92vw);
+	height: min(640px, 82vh);
+	border-radius: var(--radius-xl);
+	overflow: hidden;
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+	/* The close/complete animation reads as the board falling back into
+	 * the composer (origin at the bottom center). */
+	transform-origin: 50% 100%;
+	transition:
+		transform 180ms var(--spring),
+		opacity 180ms var(--spring);
+}
+
+.gui-sketch-veil--closing .gui-sketch-board {
+	transform: scale(0.82) translateY(48px);
+	opacity: 0;
+}
+
+.gui-sketch-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-sketch-toolbar-sep {
+	width: 1px;
+	height: 16px;
+	background: var(--border);
+	margin: 0 4px;
+	flex-shrink: 0;
+}
+
+.gui-sketch-tool {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms var(--spring),
+		color 120ms var(--spring);
+}
+
+.gui-sketch-tool:hover {
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	color: var(--color-text);
+}
+
+.gui-sketch-tool--on {
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-sketch-tool:disabled {
+	opacity: 0.4;
+	pointer-events: none;
+}
+
+.gui-sketch-canvas {
+	flex: 1;
+	min-height: 0;
+	position: relative;
+}
+
+.gui-sketch-canvas canvas {
+	position: absolute;
+	inset: 0;
+}
+
+.gui-sketch-palette {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 12px;
+	border-top: 1px solid var(--border);
+}
+
+.gui-sketch-color {
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	border: 2px solid color-mix(in oklab, var(--color-text) 14%, transparent);
+	transition:
+		transform 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-sketch-color:hover {
+	transform: scale(1.12);
+}
+
+.gui-sketch-color--on {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent);
+}
+
+.gui-sketch-size {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	flex-shrink: 0;
+	border-radius: var(--radius-md);
+	border: 1px solid transparent;
+	transition: border-color 120ms var(--spring);
+}
+
+.gui-sketch-size span {
+	border-radius: 50%;
+	background: var(--color-text-muted);
+}
+
+.gui-sketch-size--on {
+	border-color: var(--color-accent);
+}
+
+.gui-sketch-size--on span {
+	background: var(--color-accent);
+}
+
+.gui-sketch-spacer {
+	flex: 1;
+}
+
+.gui-sketch-done {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--color-accent);
+	color: var(--color-accent-fg, #fff);
+	transition: transform 120ms var(--spring);
+}
+
+.gui-sketch-done:hover {
+	transform: scale(1.06);
+}
+
+.gui-sketch-done:active {
+	transform: scale(0.94);
+}

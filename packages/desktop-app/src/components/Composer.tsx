@@ -53,7 +53,7 @@ import type {
 	UsageUnreportedAccountView,
 } from "./composer/usage-panel";
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
-import { attachmentWorkspacePath, readFileAsBase64, useAttachments } from "./composer/use-attachments";
+import { attachmentWorkspacePath, dataUrlToFile, readFileAsBase64, useAttachments } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
@@ -64,6 +64,7 @@ import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ExtensionStatusCard } from "./ExtensionStatusCard";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { PetSprite, usePet } from "./PetSprite";
+import { SketchPad } from "./SketchPad";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
 export type {
@@ -217,6 +218,53 @@ export function Composer({
 	const [enhance, setEnhance] = useState<EnhanceState>("idle");
 	// Image paste/drop attachments (extracted: composer/use-attachments).
 	const { attachments, setAttachments, addFiles, onPaste, onDragOver, onDrop } = useAttachments(rpc);
+	// SketchPad (Codex 绘画 parity): open from the attach menu, from clicking
+	// a sketch chip (re-edit), or from an image lightbox's edit button
+	// (musepi-gui-sketch-open, wired by ChatView). editId targets an existing
+	// chip — finishing replaces it in place instead of adding a new one.
+	const [sketch, setSketch] = useState<{ open: boolean; editId: number | null; initial: string | null }>({
+		open: false,
+		editId: null,
+		initial: null,
+	});
+	useEffect(() => {
+		const onOpen = (e: Event): void => {
+			const detail = (e as CustomEvent<{ dataUrl?: string }>).detail;
+			const dataUrl = detail?.dataUrl;
+			if (typeof dataUrl !== "string" || dataUrl.length === 0) return;
+			setSketch({ open: true, editId: null, initial: dataUrl });
+		};
+		window.addEventListener("musepi-gui-sketch-open", onOpen);
+		return () => window.removeEventListener("musepi-gui-sketch-open", onOpen);
+	}, []);
+	const closeSketch = useCallback((): void => {
+		setSketch(prev => ({ open: false, editId: null, initial: null }));
+	}, []);
+	const onSketchDone = useCallback(
+		(dataUrl: string): void => {
+			const editId = sketch.editId;
+			closeSketch();
+			if (editId !== null) {
+				// Re-edit: swap the chip's pixels in place (position, size and
+				// the rest of the draft survive).
+				setAttachments(prev =>
+					prev.map(a =>
+						a.id === editId
+							? { ...a, dataUrl, size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75) }
+							: a,
+					),
+				);
+				return;
+			}
+			void (async () => {
+				const file = await dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`);
+				await addFiles([file]);
+				// Mark the fresh chip so clicking it reopens the board.
+				setAttachments(prev => prev.map(a => (a.name.startsWith("sketch-") ? { ...a, sketch: true } : a)));
+			})();
+		},
+		[sketch.editId, closeSketch, setAttachments, addFiles],
+	);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
 	const [dictating, setDictating] = useState(false);
 	const [transcribing, setTranscribing] = useState(false);
@@ -1605,6 +1653,11 @@ export function Composer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+				onEditSketch={id => {
+					const chip = attachments.find(x => x.id === id);
+					if (chip) setSketch({ open: true, editId: id, initial: chip.dataUrl });
+				}}
+				onEditImage={src => setSketch({ open: true, editId: null, initial: src })}
 				onAddAttachment={() => anyPickRef.current?.click()}
 				// Todo/queue chips + extension dock hang ABOVE the input card
 				// (user direction: the status row belongs above the input,
@@ -1710,6 +1763,7 @@ export function Composer({
 							}}
 							onPickImages={files => void addFiles(files)}
 							onPickFiles={files => void addFiles(files)}
+							onSketch={() => setSketch({ open: true, editId: null, initial: null })}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;
@@ -2050,6 +2104,7 @@ export function Composer({
 					/>,
 				)}
 			</ComposerFrame>
+			{sketch.open && <SketchPad initialImage={sketch.initial} onClose={closeSketch} onDone={onSketchDone} />}
 		</div>
 	);
 }

@@ -80,4 +80,18 @@ export const composer = {
 	"voice needs daemon body": "collab-direct sessions can't transcribe voice — connect through the daemon to use it",
 	"voice guide ok": "Got it",
 	"tts needs daemon backend": "Read-aloud needs the daemon backend",
+	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────
+	sketch: "Sketch",
+	"sketch tool pen": "Pen",
+	"sketch tool eraser": "Eraser",
+	"sketch tool line": "Line",
+	"sketch tool arrow": "Arrow",
+	"sketch tool rect": "Rectangle",
+	"sketch tool ellipse": "Ellipse",
+	"sketch undo": "Undo",
+	"sketch redo": "Redo",
+	"sketch clear": "Clear",
+	"sketch done": "Done",
+	"sketch discard title": "Discard this sketch?",
+	"sketch discard confirm": "The canvas has unsent content — discarding cannot be undone.",
 } as const satisfies Record<ComposerKey, string>;

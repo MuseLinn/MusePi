@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Pencil, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
@@ -29,6 +29,7 @@ export function ImageLightbox({
 	onClose,
 	onIndexChange,
 	onAnnotate,
+	onEdit,
 }: {
 	items: readonly { src: string; alt?: string }[];
 	/** Currently shown item; null hides the lightbox (no portal). */
@@ -39,6 +40,9 @@ export function ImageLightbox({
 	 * note, delivered back to the host (forwarded to the agent / pasted
 	 * into the composer). Optional — omit for plain preview. */
 	onAnnotate?(annotations: { index: number; x: number; y: number; note: string }[]): void;
+	/** Codex 编辑预览 parity: open the shown image in a drawing board.
+	 * Optional — the edit button hides when absent. */
+	onEdit?(src: string): void;
 }): ReactNode {
 	const open = index !== null && index >= 0 && index < items.length;
 	const hasNav = items.length > 1;
@@ -298,6 +302,20 @@ export function ImageLightbox({
 			    from the corner so the pair clears the window chrome and reads
 			    as a row rather than a lone floating X. */}
 			<div className="tr-img-lb-actions" onMouseDown={e => e.stopPropagation()}>
+				{onEdit && (
+					<button
+						type="button"
+						className="tr-img-lb-x"
+						aria-label={t("sketch")}
+						title={t("sketch")}
+						onClick={() => {
+							onClose();
+							onEdit(shownItem.src);
+						}}
+					>
+						<Pencil size={16} />
+					</button>
+				)}
 				<button
 					type="button"
 					className="tr-img-lb-x"

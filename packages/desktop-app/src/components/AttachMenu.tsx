@@ -21,6 +21,7 @@ export function AttachMenu({
 	onGuidedGoal,
 	onPickImages,
 	onPickFiles,
+	onSketch,
 	onInsert,
 }: {
 	goalMode: boolean;
@@ -40,6 +41,10 @@ export function AttachMenu({
 	 *  the welcome composer has no workspace yet, so file attachments have
 	 *  nowhere to land — the menu item is hidden until a session exists. */
 	onPickFiles?(files: File[]): void;
+	/** Opens the sketch board (Codex 绘画 parity). Works on the welcome
+	 *  composer too — the PNG rides the normal image-attachment pipeline,
+	 *  no workspace needed. */
+	onSketch?(): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
 	onInsert(token: string): void;
 }): ReactNode {
@@ -74,6 +79,20 @@ export function AttachMenu({
 						<Icon name="file-image" className="h-4 w-4" />
 						<span className="min-w-0 flex-1 truncate">{t("add images")}</span>
 					</button>
+					{onSketch && (
+						<button
+							type="button"
+							className="gui-attach-opt"
+							role="menuitem"
+							onClick={() => {
+								onSketch();
+								setOpen(false);
+							}}
+						>
+							<Icon name="palette" className="h-4 w-4" />
+							<span className="min-w-0 flex-1 truncate">{t("sketch")}</span>
+						</button>
+					)}
 					{onPickFiles && (
 						<button
 							type="button"

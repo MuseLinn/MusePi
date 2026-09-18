@@ -1773,6 +1773,17 @@ export function ChatView({
 																thinkingLevel={resolvedThinkingLevel ?? undefined}
 																host={host}
 																renderTranscriptNode={renderTranscriptNode}
+																/* Codex 编辑预览 parity: the lightbox edit button
+																 * opens the composer's sketch board with the image
+																 * as its base layer (event channel — the board
+																 * state lives inside the Composer). */
+																onEditImage={src => {
+																	window.dispatchEvent(
+																		new CustomEvent("musepi-gui-sketch-open", {
+																			detail: { dataUrl: src },
+																		}),
+																	);
+																}}
 																/* Chat settings (openchamber parity): user message
 																 * markdown/plain + long-message collapse. */
 																userPlain={(() => {

@@ -41,6 +41,7 @@ import {
 } from "./Composer";
 import { VoiceButton } from "./composer/action-buttons";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
+import { dataUrlToFile } from "./composer/use-attachments";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -48,6 +49,7 @@ import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
+import { SketchPad } from "./SketchPad";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
@@ -260,6 +262,13 @@ export function WelcomeComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const attachId = useRef(0);
+	// Sketch board (Codex 绘画 parity): welcome-side sketching rides the same
+	// image-attachment pipeline (no workspace needed). `initial` mounts an
+	// image from the lightbox edit action as the base layer.
+	const [sketch, setSketch] = useState<{ open: boolean; initial: string | null }>({
+		open: false,
+		initial: null,
+	});
 
 	// Voice dictation (session-composer parity): the welcome composer's tips
 	// advertise the mic button, so the empty state must actually ship one.
@@ -1426,6 +1435,7 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+							onEditImage={src => setSketch({ open: true, initial: src })}
 							footerLeft={
 								<>
 									<AttachMenu
@@ -1442,6 +1452,7 @@ export function WelcomeComposer({
 										// the goal row is already disabled there.
 										onGuidedGoal={() => {}}
 										onPickImages={files => void addImageFiles(files)}
+										onSketch={() => setSketch({ open: true, initial: null })}
 										onInsert={token => {
 											const ta = taRef.current;
 											if (!ta) return;
@@ -1923,6 +1934,18 @@ export function WelcomeComposer({
 					)}
 				</div>
 			</div>
+			{sketch.open && (
+				<SketchPad
+					initialImage={sketch.initial}
+					onClose={() => setSketch({ open: false, initial: null })}
+					onDone={dataUrl => {
+						setSketch({ open: false, initial: null });
+						void (async () => {
+							await addImageFiles([await dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`)]);
+						})();
+					}}
+				/>
+			)}
 		</>
 	);
 }
