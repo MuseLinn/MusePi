@@ -88,9 +88,18 @@ export function validateArtifactManifest(
 	const m = value as Record<string, unknown>;
 
 	const entry = m.entry;
+	// Normalize backslashes first: on POSIX hosts `path.isAbsolute("C:\\evil")`
+	// is false (backslash is not a separator there), but the manifest may be
+	// written by a Windows client — treat both separators and both platform
+	// absolute forms as absolute.
+	const entryNorm = typeof entry === "string" ? entry.replace(/\\/g, "/") : "";
 	if (typeof entry !== "string" || entry.length === 0) {
 		errors.push("entry is required (relative path to the preview entry file)");
-	} else if (path.isAbsolute(entry) || entry.split(/[\\/]/).includes("..")) {
+	} else if (
+		path.isAbsolute(entryNorm) ||
+		path.win32.isAbsolute(entryNorm) ||
+		entryNorm.split("/").includes("..")
+	) {
 		errors.push(`entry must stay inside the artifact directory (got "${entry}")`);
 	}
 	const entryPath = typeof entry === "string" ? path.join(dir, entry) : "";
