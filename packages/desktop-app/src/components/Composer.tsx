@@ -1914,29 +1914,16 @@ export function Composer({
 							const start = ta.selectionStart ?? ta.value.length;
 							const end = ta.selectionEnd ?? ta.value.length;
 							if (action === "file") {
-								void (async () => {
-									// Save into the session workspace (fs.write is
-									// cwd-scoped) — a session with no cwd yet falls
-									// back to an inline attachment instead of silently
-									// dropping the paste.
-									try {
-										if (!cwd) throw new Error("no workspace");
-										const name = `paste-${Date.now()}.md`;
-										await rpc.request("fs.write", { cwd, path: name, content: pendingPaste.text });
-										const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
-										setText(newText);
-										requestAnimationFrame(() =>
-											ta.setSelectionRange(start + name.length, start + name.length),
-										);
-									} catch {
-										const insertion = `<attachment>\n${pendingPaste.text}\n</attachment>`;
-										const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
-										setText(newText);
-										requestAnimationFrame(() =>
-											ta.setSelectionRange(start + insertion.length, start + insertion.length),
-										);
-									}
-								})();
+								// Unified attachment flow (composer file chips): the
+								// paste becomes a markdown FILE CHIP in the attachment
+								// row — send-time uploads it into <cwd>/attachments/
+								// and references it, same as any picked file. A no-cwd
+								// session fails visibly at send (inline notice) instead
+								// of the old silent inline fallback.
+								const file = new File([pendingPaste.text], `paste-${Date.now()}.md`, {
+									type: "text/markdown",
+								});
+								void addFiles([file]);
 								dismissLongPaste();
 								return;
 							}
