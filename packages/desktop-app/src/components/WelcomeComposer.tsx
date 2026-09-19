@@ -1940,9 +1940,7 @@ export function WelcomeComposer({
 					onClose={() => setSketch({ open: false, initial: null })}
 					onDone={dataUrl => {
 						setSketch({ open: false, initial: null });
-						void (async () => {
-							await addImageFiles([await dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`)]);
-						})();
+						void addImageFiles([dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`)]);
 					}}
 				/>
 			)}

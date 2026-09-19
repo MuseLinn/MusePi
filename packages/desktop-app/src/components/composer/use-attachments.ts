@@ -63,6 +63,9 @@ export function parseAttachmentDraft(raw: string | null): ComposerAttachment[] {
 			mimeType: entry.mimeType,
 			name: typeof entry.name === "string" ? entry.name : kind === "file" ? "file" : "image",
 			size: typeof entry.size === "number" ? entry.size : 0,
+			// Preserve the board-drawn marker so a restored chip still opens
+			// the sketch pad rather than the plain lightbox.
+			...(entry.sketch === true ? { sketch: true } : {}),
 		});
 	}
 	return out;
@@ -93,10 +96,24 @@ export function attachmentWorkspacePath(name: string): string {
 }
 
 /** Board/lightbox PNG → File so a finished sketch reuses the normal
- *  image-attachment pipeline (addFiles → data URL chip → send images). */
-export async function dataUrlToFile(dataUrl: string, name: string): Promise<File> {
-	const blob = await (await fetch(dataUrl)).blob();
-	return new File([blob], name, { type: blob.type || "image/png" });
+ *  image-attachment pipeline (addFiles → data URL chip → send images).
+ *
+ *  Decoded by hand rather than `fetch(dataUrl)`: fetch on a data: URL is
+ *  governed by the renderer CSP's connect-src, which lists ws/wss/http/
+ *  https/file but NOT data:. The fetch was therefore blocked, the await
+ *  threw, and a finished sketch silently produced no chip ("confirm does
+ *  nothing") in both composers. atob is not CSP-governed, so this form
+ *  cannot be broken by a policy edit. */
+export function dataUrlToFile(dataUrl: string, name: string): File {
+	const comma = dataUrl.indexOf(",");
+	const header = comma >= 0 ? dataUrl.slice(0, comma) : "";
+	const body = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+	const mimeType = /^data:([^;,]+)/.exec(header)?.[1] ?? "application/octet-stream";
+	// base64 payload → bytes; a non-base64 data URL falls back to its raw text.
+	const bytes = header.includes(";base64")
+		? Uint8Array.from(atob(body), ch => ch.charCodeAt(0))
+		: new TextEncoder().encode(decodeURIComponent(body));
+	return new File([bytes], name, { type: mimeType });
 }
 
 /**

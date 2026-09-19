@@ -269,7 +269,7 @@ export function Composer({
 				return;
 			}
 			void (async () => {
-				const file = await dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`);
+				const file = dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`);
 				await addFiles([file]);
 				// Mark the fresh chip so clicking it reopens the board.
 				setAttachments(prev => prev.map(a => (a.name.startsWith("sketch-") ? { ...a, sketch: true } : a)));

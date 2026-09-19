@@ -114,7 +114,12 @@ export function useDraftPersistence({
 	const attachmentPayload = useMemo(
 		() =>
 			attachments.length > 0
-				? JSON.stringify(attachments.map(({ dataUrl, mimeType, name }) => ({ dataUrl, mimeType, name })))
+				? JSON.stringify(
+						// `sketch` must round-trip: without it a board-drawn chip
+						// comes back from a restored draft as a plain image, so
+						// clicking it opens the lightbox instead of the board.
+						attachments.map(({ dataUrl, mimeType, name, sketch }) => ({ dataUrl, mimeType, name, sketch })),
+					)
 				: "",
 		[attachments],
 	);

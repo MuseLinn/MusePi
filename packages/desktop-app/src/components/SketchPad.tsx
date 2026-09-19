@@ -391,7 +391,15 @@ export function SketchPad({
 				setPreview({ ...draw, points: [...draw.points] });
 				return;
 			}
-			setPreview({ ...draw, points: [draw.points[0], draw.points[1], pos.x, pos.y] });
+			// Shapes must write the moving corner back onto the draft in place:
+			// onPointerUp commits `drawRef.current`, not the preview copy. When
+			// this only built a preview object, the committed shape kept its
+			// pointerdown corner on both ends → zero width/height → a rect or
+			// ellipse you watched during the drag vanished the moment you let
+			// go. (Pen never hit this because it mutates `draw.points` above.)
+			draw.points[2] = pos.x;
+			draw.points[3] = pos.y;
+			setPreview({ ...draw, points: [...draw.points] });
 		},
 		[tool, dropStroke],
 	);
@@ -411,6 +419,12 @@ export function SketchPad({
 		setPreview(null);
 		// A tap with the pen (no movement) still commits — a dot is content.
 		if (draw.tool === "pen" && draw.points.length < 6) return;
+		// A tap with a shape tool draws nothing: committing it would leave an
+		// invisible zero-size node that still eats undo steps and hit-tests.
+		if (draw.tool !== "pen") {
+			const [sx, sy, ex, ey] = draw.points;
+			if (Math.abs(ex - sx) < 2 && Math.abs(ey - sy) < 2) return;
+		}
 		commit(draw);
 	}, [commit, strokes, commitMove]);
 

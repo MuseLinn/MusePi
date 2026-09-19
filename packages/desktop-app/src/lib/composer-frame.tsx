@@ -157,7 +157,13 @@ export function ComposerFrame({
 		>
 			{pet && <div className="gui-composer-pet">{pet}</div>}
 			{children}
-			{(attachments.length > 0 || onAddAttachment) && (
+			{/* The attach row exists to hold chips. With no attachments it used
+			 * to still render — and with `onAddAttachment` always wired by the
+			 * session composer, that meant a permanent empty 72×72 dashed box
+			 * floating in the input (redundant: the attach menu in the footer
+			 * already owns "+ add"). Show the row only when it has chips, and
+			 * the trailing "+" only once there are chips to append to. */}
+			{attachments.length > 0 && (
 				<div className="gui-attach-row px-4 pb-2">
 					{attachments.map(a =>
 						a.kind === "file" ? (
