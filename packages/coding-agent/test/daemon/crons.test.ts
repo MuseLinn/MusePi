@@ -204,6 +204,38 @@ describe("mergeCronTask", () => {
 		expect(merged.state.lastStatus).toBe("success");
 		expect(merged.state.nextRunAt).toBeUndefined();
 	});
+
+	// Issue #31: externally-authored crons.json uses ids like
+	// `cron_za3ejcxj`; the underscore-only charset silently rewrote them to
+	// `cron-<ts>`, breaking the file↔UI correspondence (and idempotency of a
+	// subsequent upsert).
+	test("underscored id survives merge instead of being rewritten", () => {
+		const t: CronTask = {
+			id: "cron_za3ejcxj",
+			name: "n",
+			enabled: true,
+			schedule: { kind: "cron", cron: "0 * * * *" },
+			prompt: "p",
+			cwd: "",
+			state: { createdAt: 0 },
+		};
+		expect(mergeCronTask(undefined, t, NOW, "/def").id).toBe("cron_za3ejcxj");
+	});
+
+	test("id with unsafe characters is still replaced", () => {
+		const t: CronTask = {
+			id: "bad id/../x",
+			name: "n",
+			enabled: true,
+			schedule: { kind: "daily", time: "09:00" },
+			prompt: "p",
+			cwd: "",
+			state: { createdAt: 0 },
+		};
+		const merged = mergeCronTask(undefined, t, NOW, "/def");
+		expect(merged.id).not.toBe("bad id/../x");
+		expect(merged.id.startsWith("cron-")).toBe(true);
+	});
 });
 
 describe("validateCronSchedule", () => {
@@ -213,6 +245,24 @@ describe("validateCronSchedule", () => {
 
 	test("valid IANA timezone passes", () => {
 		expect(validateCronSchedule({ kind: "daily", time: "09:00", timezone: "Asia/Shanghai" }).ok).toBe(true);
+	});
+
+	// Issue #31: `kind: "cron"` fell into the time-bearing branch and was
+	// rejected with "schedule needs time (HH:mm)" even with a valid 5-field
+	// expression — so the task center could not create cron tasks over RPC
+	// at all (only `daily` + 24 hourly `times` worked around it).
+	test("cron expression passes without a clock time", () => {
+		expect(validateCronSchedule({ kind: "cron", cron: "0 * * * *" }).ok).toBe(true);
+	});
+
+	test("cron kind with a blank expression is rejected", () => {
+		expect(validateCronSchedule({ kind: "cron", cron: "  " }).ok).toBe(false);
+		expect(validateCronSchedule({ kind: "cron" }).ok).toBe(false);
+	});
+
+	test("weekly/monthly still require a clock time", () => {
+		expect(validateCronSchedule({ kind: "weekly", weekdays: [1] }).ok).toBe(false);
+		expect(validateCronSchedule({ kind: "monthly", dayOfMonth: 1 }).ok).toBe(false);
 	});
 });
 

@@ -286,6 +286,8 @@ export const general = {
 	"no prompts yet": "暂无提示词",
 	"forked session": "分叉会话",
 	"forked from": "分叉自",
+	"last active": "最后活跃",
+	"created at": "创建于",
 	"default mode": "默认模式",
 	"copy workspace path": "复制工作区路径",
 	"notes placeholder": "在此记录项目的笔记…",

@@ -132,7 +132,25 @@ export function SessionSidebar({
 	/** Open the session-import dialog (projects tab entry). */
 	onImportSessions?(): void;
 }): ReactNode {
-	const [tab, setTab] = useState<"groups" | "projects">("groups");
+	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
+	// this whole subtree, so in-memory state silently reset to "groups" on
+	// every return. Lazy-init from storage + write on change keeps the user's
+	// chosen view across settings round-trips and restarts.
+	const [tab, setTab] = useState<"groups" | "projects">(() => {
+		try {
+			return localStorage.getItem("musepi-gui-sidebar-tab") === "projects" ? "projects" : "groups";
+		} catch {
+			return "groups";
+		}
+	});
+	const pickTab = (next: "groups" | "projects"): void => {
+		setTab(next);
+		try {
+			localStorage.setItem("musepi-gui-sidebar-tab", next);
+		} catch {
+			// storage unavailable
+		}
+	};
 	const [projMenu, setProjMenu] = useState(false);
 	// Tab-row quick toggle: null = per-group state, true = all open, false = all closed.
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
@@ -556,7 +574,7 @@ export function SessionSidebar({
 						<button
 							type="button"
 							className={`gui-tab-pill gui-tab-pill--fixed${tab === "groups" ? " gui-tab-pill--active" : ""}`}
-							onClick={() => setTab("groups")}
+							onClick={() => pickTab("groups")}
 						>
 							<Icon name="folder-3" className="h-3.5 w-3.5" />
 							<span>{t("groups")}</span>
@@ -564,7 +582,7 @@ export function SessionSidebar({
 						<button
 							type="button"
 							className={`gui-tab-pill gui-tab-pill--fixed${tab === "projects" ? " gui-tab-pill--active" : ""}`}
-							onClick={() => setTab("projects")}
+							onClick={() => pickTab("projects")}
 						>
 							<Icon name="folder" className="h-3.5 w-3.5" />
 							<span>{t("projects")}</span>

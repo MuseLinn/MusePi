@@ -172,15 +172,21 @@ export function validateCronSchedule(s: unknown): { ok: boolean; error?: string 
 			return { ok: false, error: "daily schedule needs time(s) (HH:mm)" };
 		}
 	}
-	if (kind !== "once" && kind !== "daily" && typeof o.time !== "string") {
+	// `cron` carries a 5-field expression instead of a wall-clock time, so it
+	// must not fall into the time-bearing branch below (issue #31: every
+	// cron-expression upsert was rejected with "schedule needs time (HH:mm)"
+	// even though the expression was valid).
+	if (kind === "cron") {
+		if (typeof o.cron !== "string" || !o.cron.trim()) {
+			return { ok: false, error: "cron schedule needs cron expression" };
+		}
+	} else if (kind !== "once" && kind !== "daily" && typeof o.time !== "string") {
 		return { ok: false, error: "schedule needs time (HH:mm)" };
 	}
 	if (kind === "weekly" && !Array.isArray(o.weekdays)) return { ok: false, error: "weekly schedule needs weekdays" };
 	if (kind === "monthly" && typeof o.dayOfMonth !== "number") {
 		return { ok: false, error: "monthly schedule needs dayOfMonth" };
 	}
-	if (kind === "cron" && typeof o.cron !== "string")
-		return { ok: false, error: "cron schedule needs cron expression" };
 	if (typeof o.timezone === "string" && o.timezone && !isValidTimeZone(o.timezone)) {
 		return { ok: false, error: `unknown timezone "${o.timezone}"` };
 	}
@@ -207,7 +213,10 @@ export function mergeCronTask(existing: CronTask | undefined, t: CronTask, now: 
 	const merged: CronTask = existing
 		? { ...existing, ...t, state: { ...existing.state, ...t.state } }
 		: {
-				id: t.id && /^[a-z0-9-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
+				// `_` is allowed (issue #31): externally-written crons.json uses
+				// ids like `cron_za3ejcxj`, and silently rewriting them broke
+				// the file↔UI correspondence.
+				id: t.id && /^[a-z0-9_-]+$/i.test(t.id) ? t.id : `cron-${now.toString(36)}`,
 				name: t.name,
 				enabled: t.enabled !== false,
 				schedule: t.schedule,

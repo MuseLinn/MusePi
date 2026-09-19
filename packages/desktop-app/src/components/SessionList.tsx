@@ -62,6 +62,14 @@ function rowTime(ts: string): string {
 		: d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+/** Full timestamp for the row tooltip — keeps both readings so the compact
+ *  label can be last-activity without losing the creation date. */
+function fullTime(ts: string): string {
+	const d = new Date(ts);
+	if (Number.isNaN(d.getTime())) return "";
+	return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+}
+
 export interface SessionListNode {
 	entry: SessionListEntry;
 	children: SessionListNode[];
@@ -162,6 +170,7 @@ const SessionRow = memo(function SessionRow({
 	label,
 	parentLabel,
 	timestamp,
+	updatedAt,
 	selected,
 	unread,
 	paused,
@@ -180,6 +189,8 @@ const SessionRow = memo(function SessionRow({
 	/** Fork source label, or null when the session is not a fork. */
 	parentLabel: string | null;
 	timestamp: string;
+	/** Last-activity time; the row's compact label prefers it over `timestamp`. */
+	updatedAt?: string;
 	selected: boolean;
 	unread: boolean;
 	paused: boolean;
@@ -255,7 +266,19 @@ const SessionRow = memo(function SessionRow({
 						<Icon name="git-branch" className="h-3 w-3" />
 					</span>
 				)}
-				<span className="gui-session-time">{rowTime(timestamp)}</span>
+				{/* Last activity beats creation time: a session resumed today
+				 *  should not still read "3 days ago". The tooltip carries
+				 *  both readings so the creation date is never lost. */}
+				<span
+					className="gui-session-time"
+					title={
+						updatedAt && updatedAt !== timestamp
+							? `${t("last active")}: ${fullTime(updatedAt)} · ${t("created at")}: ${fullTime(timestamp)}`
+							: fullTime(timestamp)
+					}
+				>
+					{rowTime(updatedAt ?? timestamp)}
+				</span>
 			</button>
 		</li>
 	);
@@ -340,6 +363,7 @@ export function SessionList({
 						label={node.entry.label ?? t("untitled session")}
 						parentLabel={parent ? (parent.entry.label ?? t("untitled session")) : null}
 						timestamp={node.entry.timestamp}
+						updatedAt={node.entry.updatedAt}
 						selected={node.entry.id === selectedId}
 						unread={unread?.has(node.entry.id) ?? false}
 						paused={pausedIds?.has(node.entry.id) ?? false}

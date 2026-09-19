@@ -291,6 +291,8 @@ export const general = {
 	"no prompts yet": "No prompts yet",
 	"forked session": "Forked session",
 	"forked from": "Forked from",
+	"last active": "Last active",
+	"created at": "Created",
 	"default mode": "Default mode",
 	"copy workspace path": "Copy workspace path",
 	"notes placeholder": "Note project notes here…",
