@@ -301,6 +301,11 @@ describe("MaterializedView TTSR / IRC projection", () => {
 	});
 
 	test("replay reproduces ttsr/irc entries", () => {
+		// The projection stamps entries with wall time, so an incremental
+		// build and a replay done 1ms apart would differ on timestamps
+		// alone — pin the clock instead of comparing loosely (CI caught
+		// exactly this: .595Z vs .596Z).
+		const now = (): string => "2026-01-01T00:00:00.000Z";
 		const events: AgentEvent[] = [
 			{ type: "turn_start" },
 			{ type: "ttsr_triggered", rules: [{ name: "no-console" }] },
@@ -309,9 +314,15 @@ describe("MaterializedView TTSR / IRC projection", () => {
 				message: { role: "custom", customType: "irc:incoming", content: "hi", display: true, timestamp: 5 },
 			},
 		];
-		const incremental = new MaterializedView(SESSION, CWD);
+		const incremental = new MaterializedView(SESSION, CWD, undefined, undefined, now);
 		for (const e of events) incremental.apply(e);
-		const replayed = MaterializedView.replay(SESSION, CWD, events);
+		const replayed = MaterializedView.replay(SESSION, CWD, events, undefined, false, now);
 		expect(replayed.snapshot()).toEqual(incremental.snapshot());
+		// Guard: the projection really read the injected clock (a wall-clock
+		// read here is exactly what made the comparison flaky).
+		const ttsr = incremental
+			.snapshot()
+			.entries.find(e => e.type === "custom_message" && (e as { customType?: string }).customType === "ttsr");
+		expect((ttsr as { timestamp: string }).timestamp).toBe(now());
 	});
 });

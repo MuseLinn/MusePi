@@ -83,6 +83,9 @@ export class MaterializedView {
 	#isStreaming = false;
 	// Extra header fields (user-picked model/thinking/title for history
 	// sessions) survive the round-trip: snapshot() re-emits them.
+	/** Wall-clock source for entry timestamps; overridable via the
+	 *  constructor for deterministic replay (see above). */
+	readonly #now: () => string;
 	readonly #headerExtra: { title?: string; model?: string; thinkingLevel?: string } = {};
 	/** Completed-round totals: final assistant message ts → duration ms,
 	 *  recorded at agent_end (the round spans the last user message to the
@@ -96,10 +99,17 @@ export class MaterializedView {
 		cwd: string,
 		createdAt?: string,
 		headerExtra?: { title?: string; model?: string; thinkingLevel?: string },
+		now?: () => string,
 	) {
 		this.#sessionId = sessionId;
 		this.#cwd = cwd;
-		this.#createdAt = createdAt ?? new Date().toISOString();
+		// Clock injection: entry timestamps default to wall time, but a
+		// caller (tests, deterministic replay) can pin them so two views
+		// built from the same events compare equal — otherwise a replay
+		// taken 1ms later than the incremental build fails the snapshot
+		// comparison for no behavioural reason.
+		this.#now = now ?? (() => new Date().toISOString());
+		this.#createdAt = createdAt ?? this.#now();
 		this.#headerExtra = headerExtra ?? {};
 	}
 
@@ -126,8 +136,9 @@ export class MaterializedView {
 		events: AgentEvent[],
 		createdAt?: string,
 		recordRoundDurations = false,
+		now?: () => string,
 	): MaterializedView {
-		const view = new MaterializedView(sessionId, cwd, createdAt);
+		const view = new MaterializedView(sessionId, cwd, createdAt, undefined, now);
 		for (const event of events) view.apply(event, { recordRoundDurations });
 		return view;
 	}
@@ -187,7 +198,7 @@ export class MaterializedView {
 					type: "thinking_level_change",
 					id: `tlc-${this.#cursor}`,
 					parentId: null,
-					timestamp: new Date().toISOString(),
+					timestamp: this.#now(),
 					thinkingLevel: event.thinkingLevel ?? null,
 				};
 				this.#entries.push(entry);
@@ -200,7 +211,7 @@ export class MaterializedView {
 					type: "custom_message",
 					id: `ttsr-${this.#cursor}`,
 					parentId: null,
-					timestamp: new Date().toISOString(),
+					timestamp: this.#now(),
 					customType: "ttsr",
 					content: event.rules.map(r => r.name).join("、"),
 					display: true,
@@ -236,7 +247,7 @@ export class MaterializedView {
 					type: "custom_message",
 					id: "retry-failure",
 					parentId: null,
-					timestamp: new Date().toISOString(),
+					timestamp: this.#now(),
 					customType: "retry_failure",
 					content: event.finalError,
 					display: true,
