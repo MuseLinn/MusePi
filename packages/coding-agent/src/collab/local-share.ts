@@ -175,8 +175,15 @@ export class LocalShareManager {
 	 * derives the browser base (same origin), so webUrl is left empty here.
 	 * Provider mirrors OpenChamber's choice: cloudflared quick tunnel by
 	 * default, ngrok as an explicit alternative.
+	 *
+	 * `verifyReachable` is forwarded to the provider so the tunnel is probed
+	 * before the link is handed out (#36); tests driving a fake provider URL
+	 * pass false.
 	 */
-	async startTunnel(provider: "cloudflared" | "ngrok" = "cloudflared"): Promise<LanShareUrls> {
+	async startTunnel(
+		provider: "cloudflared" | "ngrok" = "cloudflared",
+		options: { verifyReachable?: boolean } = {},
+	): Promise<LanShareUrls> {
 		await this.stop();
 		this.relay = await startRelayServer({
 			port: this.#port,
@@ -184,16 +191,19 @@ export class LocalShareManager {
 			staticDir: this.webDistAvailable ? COLLAB_WEB_DIST : undefined,
 			onStatus: this.#onStatus,
 		});
+		const verifyReachable = options.verifyReachable;
 		try {
 			this.tunnel =
 				provider === "ngrok"
 					? await startNgrokTunnel({
 							port: this.relay.port,
 							onStatus: this.#onStatus,
+							verifyReachable,
 						})
 					: await startCloudflaredTunnel({
 							port: this.relay.port,
 							onStatus: this.#onStatus,
+							verifyReachable,
 						});
 		} catch (err) {
 			await this.stop();

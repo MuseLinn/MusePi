@@ -14,6 +14,8 @@ import { spawn } from "@musepi/pi-utils/nodespawn";
 const QUICK_TUNNEL_URL_RE = /https:\/\/[a-z0-9-]+\.trycloudflare\.com/;
 const URL_TIMEOUT_MS = 30_000;
 const STOP_TIMEOUT_MS = 5_000;
+/** Reachability probe budget; short, since a blocked edge node fails fast. */
+const PROBE_TIMEOUT_MS = 8_000;
 
 export interface TunnelOptions {
 	/** Local port the relay server listens on. */
@@ -23,17 +25,68 @@ export interface TunnelOptions {
 	onStatus?: (line: string) => void;
 	/** Abort while waiting for the tunnel URL; kills the child and rejects. */
 	signal?: AbortSignal;
+	/**
+	 * Verify the advertised public URL is actually reachable before resolving.
+	 * cloudflared prints the URL it *assigned*, not proof that this machine can
+	 * reach that edge node, so on a blocked network the tunnel looks ready and
+	 * only fails later at the host WebSocket with a bare `Failed to connect`
+	 * (#36). Defaults to true.
+	 */
+	verifyReachable?: boolean;
+}
+
+/**
+ * Raised when the tunnel URL was obtained but the public endpoint could not be
+ * reached from this machine. Carries an actionable message instead of the
+ * driver-level `Failed to connect`, which tells the user nothing they can act on.
+ */
+export class TunnelUnreachableError extends Error {
+	constructor(
+		readonly url: string,
+		readonly host: string,
+		override readonly cause?: unknown,
+	) {
+		super(
+			`Public tunnel is not reachable from this machine (${host}). ` +
+				"This network is likely blocking the tunnel edge node — in some regions " +
+				"trycloudflare.com is filtered. If the phone and this computer are on the same " +
+				"network, use LAN sharing instead of the public tunnel.",
+		);
+		this.name = "TunnelUnreachableError";
+	}
+}
+
+/**
+ * Confirm the tunnel host answers before we hand the link to the user.
+ *
+ * Deliberately lenient: ANY HTTP response proves the host is reachable (the
+ * relay needs the upgraded WebSocket, so a plain GET legitimately 4xx/5xx).
+ * Only a transport-level failure means the tunnel is unusable.
+ */
+export async function probeTunnelReachable(url: string, timeoutMs = PROBE_TIMEOUT_MS): Promise<void> {
+	const host = new URL(url).host;
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), timeoutMs);
+	timer.unref?.();
+	try {
+		// A response at all means the path to the edge node works.
+		await fetch(`https://${host}/`, { method: "GET", signal: controller.signal, redirect: "manual" });
+	} catch (err) {
+		throw new TunnelUnreachableError(url, host, err);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/** Extract the quick-tunnel URL from cloudflared's stderr; null until it appears. */
+export function extractQuickTunnelUrl(output: string): string | null {
+	return QUICK_TUNNEL_URL_RE.exec(output)?.[0] ?? null;
 }
 
 export interface TunnelHandle {
 	/** Public base URL (https/wss origin), e.g. https://abc123.trycloudflare.com */
 	url: string;
 	close: () => Promise<void>;
-}
-
-/** Extract the quick-tunnel URL from cloudflared's stderr; null until it appears. */
-export function extractQuickTunnelUrl(output: string): string | null {
-	return QUICK_TUNNEL_URL_RE.exec(output)?.[0] ?? null;
 }
 
 /**
@@ -88,6 +141,20 @@ export async function startCloudflaredTunnel(options: TunnelOptions): Promise<Tu
 	const url = await Promise.race([promise, delayReject(URL_TIMEOUT_MS)]);
 	options.signal?.removeEventListener("abort", abortHandler);
 	onStatus?.(`tunnel: public URL ${url}`);
+
+	// The URL existing is not the same as the tunnel working (#36). Probe it so a
+	// blocked edge node surfaces here as a diagnosable error, rather than later as
+	// a bare WebSocket `Failed to connect` with no way forward.
+	if (options.verifyReachable !== false) {
+		try {
+			onStatus?.(`tunnel: checking ${url} is reachable`);
+			await probeTunnelReachable(url);
+		} catch (err) {
+			await stopChild(child, onStatus);
+			throw err;
+		}
+	}
+
 	return {
 		url,
 		close: () => stopChild(child, onStatus),

@@ -8,7 +8,7 @@
  */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "@musepi/pi-utils/nodespawn";
-import type { TunnelHandle } from "./tunnel";
+import { probeTunnelReachable, type TunnelHandle } from "./tunnel";
 
 const NGROK_URL_RE = /https:\/\/[a-z0-9-]+\.ngrok(?:-free)?\.(?:app|io)/;
 const URL_TIMEOUT_MS = 30_000;
@@ -22,6 +22,8 @@ export interface NgrokTunnelOptions {
 	onStatus?: (line: string) => void;
 	/** Abort while waiting for the tunnel URL; kills the child and rejects. */
 	signal?: AbortSignal;
+	/** Verify the public URL is reachable before resolving; see {@link probeTunnelReachable}. */
+	verifyReachable?: boolean;
 }
 
 /** Extract the ngrok public URL from its JSON log output; null until it appears. */
@@ -86,6 +88,17 @@ export async function startNgrokTunnel(options: NgrokTunnelOptions): Promise<Tun
 	const url = await Promise.race([promise, delayReject(URL_TIMEOUT_MS)]);
 	options.signal?.removeEventListener("abort", abortHandler);
 	onStatus?.(`tunnel: public URL ${url}`);
+
+	if (options.verifyReachable !== false) {
+		try {
+			onStatus?.(`tunnel: checking ${url} is reachable`);
+			await probeTunnelReachable(url);
+		} catch (err) {
+			await stopChild(child, onStatus);
+			throw err;
+		}
+	}
+
 	return {
 		url,
 		close: () => stopChild(child, onStatus),

@@ -10,7 +10,12 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractQuickTunnelUrl, startCloudflaredTunnel } from "@musepi/pi-coding-agent/collab/tunnel";
+import {
+	extractQuickTunnelUrl,
+	probeTunnelReachable,
+	startCloudflaredTunnel,
+	TunnelUnreachableError,
+} from "@musepi/pi-coding-agent/collab/tunnel";
 
 const FAKE_DIR = mkdtempSync(join(tmpdir(), "cfd-fake-"));
 
@@ -68,27 +73,87 @@ describe("extractQuickTunnelUrl", () => {
 
 describe("startCloudflaredTunnel", () => {
 	it("resolves with the public URL and close() stops the child", async () => {
-		const handle = await startCloudflaredTunnel({ port: 7654, binary: SLOW_OK });
+		const handle = await startCloudflaredTunnel({ port: 7654, binary: SLOW_OK, verifyReachable: false });
 		expect(handle.url).toBe("https://abc123.trycloudflare.com");
 		await handle.close();
 	});
 
 	it("rejects when the binary exits before providing a URL", async () => {
-		await expect(startCloudflaredTunnel({ port: 7654, binary: DIES })).rejects.toThrow(/exited with code 1/);
+		await expect(startCloudflaredTunnel({ port: 7654, binary: DIES, verifyReachable: false })).rejects.toThrow(
+			/exited with code 1/,
+		);
 	});
 
 	it("rejects after the URL timeout when nothing appears", async () => {
 		// Use a 50ms timeout via the race with a custom short delay is not
 		// injectable; exercise the real 30s path through abort instead.
 		const controller = new AbortController();
-		const pending = startCloudflaredTunnel({ port: 7654, binary: SILENT, signal: controller.signal });
+		const pending = startCloudflaredTunnel({
+			port: 7654,
+			binary: SILENT,
+			signal: controller.signal,
+			verifyReachable: false,
+		});
 		setTimeout(() => controller.abort(), 100);
 		await expect(pending).rejects.toThrow(/aborted/);
 	});
 
 	it("close() waits for the child to exit gracefully", async () => {
-		const handle = await startCloudflaredTunnel({ port: 7654, binary: EXITS_ON_SIGTERM });
+		const handle = await startCloudflaredTunnel({ port: 7654, binary: EXITS_ON_SIGTERM, verifyReachable: false });
 		expect(handle.url).toBe("https://bye.trycloudflare.com");
 		await handle.close(); // SIGTERM handled -> clean exit, no SIGKILL path
+	});
+});
+
+// Issue #36: cloudflared prints the URL it ASSIGNED, which is not proof this
+// machine can reach that edge node. Reporting success there produced a bare
+// `Failed to connect` later, with nothing the user could act on.
+describe("tunnel reachability probe", () => {
+	it("resolves when the tunnel host answers", async () => {
+		const original = globalThis.fetch;
+		globalThis.fetch = (async () => new Response("", { status: 404 })) as unknown as typeof fetch;
+		try {
+			// Any HTTP status proves the path works; a 404 here is a pass.
+			await expect(probeTunnelReachable("https://example.trycloudflare.com")).resolves.toBeUndefined();
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
+	it("throws a diagnosable TunnelUnreachableError when the connection fails", async () => {
+		const original = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			throw new Error("Failed to connect");
+		}) as unknown as typeof fetch;
+		try {
+			const probe = probeTunnelReachable("https://dead.trycloudflare.com");
+			await expect(probe).rejects.toBeInstanceOf(TunnelUnreachableError);
+			// The message must name the LAN fallback — the user's actual way out.
+			await probe.catch((err: Error) => {
+				expect(err.message).toContain("dead.trycloudflare.com");
+				expect(err.message).toMatch(/same network/i);
+			});
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
+	it("startCloudflaredTunnel rejects instead of reporting a ready-but-dead tunnel", async () => {
+		const original = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			throw new Error("Failed to connect");
+		}) as unknown as typeof fetch;
+		try {
+			const attempt = startCloudflaredTunnel({ port: 7654, binary: SLOW_OK });
+			await expect(attempt).rejects.toBeInstanceOf(TunnelUnreachableError);
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
+	it("the probe can be skipped for tests and offline setups", async () => {
+		const handle = await startCloudflaredTunnel({ port: 7654, binary: SLOW_OK, verifyReachable: false });
+		expect(handle.url).toBe("https://abc123.trycloudflare.com");
+		await handle.close();
 	});
 });
