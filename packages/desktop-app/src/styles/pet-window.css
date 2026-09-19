@@ -45,6 +45,22 @@
 	 * window a vw width feeds back into the reported window size and
 	 * converges to nothing. */
 	--pet-stack-width: 280px;
+	/* ── Bubble kind accents ─────────────────────────────────────────────
+	 * Every notification used to render identically apart from `error`
+	 * getting a red border — a finished task, a failure, a question that
+	 * BLOCKS the agent until you answer, and a background subtask note all
+	 * looked the same. The kind is now carried by a left rule + a tinted
+	 * kind label, so severity reads at a glance without repainting the
+	 * card (a full color wash on four kinds would turn the stack into a
+	 * traffic-light wall and wreck text contrast on the frosted surface).
+	 *
+	 * `question` intentionally borrows the BRAND accent rather than a new
+	 * color: it is the one kind that wants something from you, and the
+	 * product already means "attention" with this gold. */
+	--pet-kind-completed: var(--color-accent);
+	--pet-kind-error: var(--color-danger);
+	--pet-kind-question: var(--color-accent);
+	--pet-kind-subtask: color-mix(in oklab, var(--color-text) 42%, transparent);
 }
 
 /* Light scheme (main window writes data-theme="light" — the pet window
@@ -353,8 +369,66 @@
 	max-height: 88px;
 }
 
+/* ── Kind accents ───────────────────────────────────────────────────────
+ * `error` is the only kind that used to be styled (a red border), which
+ * left completed / question / subtask visually identical. Each kind now
+ * carries a 2.5px left rule in its accent, plus a short tag. The rule is an
+ * inset ::before rather than a border-left so it can round with the card
+ * and not shift the text box between kinds. */
+.pet-bubble::before {
+	content: "";
+	position: absolute;
+	top: 9px;
+	bottom: 9px;
+	left: 0;
+	width: 2.5px;
+	border-radius: 999px;
+	/* background-color, not the `background` shorthand: with a var() whose
+	 * value is a color-mix() result, the shorthand is dropped at parse time
+	 * in Chromium and the rule paints nothing (measured: the pseudo-element
+	 * kept its 2.5px x 48px box but resolved background-image: none). */
+	background-color: var(--pet-kind, transparent);
+}
+
+.pet-bubble--completed {
+	--pet-kind: var(--pet-kind-completed);
+}
+
 .pet-bubble--error {
+	--pet-kind: var(--pet-kind-error);
 	border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
+}
+
+.pet-bubble--question {
+	--pet-kind: var(--pet-kind-question);
+	/* The one kind that blocks the agent until you answer, so it also gets
+	 * the accent border: `question` should be the loudest card in the stack. */
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+.pet-bubble--subtask {
+	--pet-kind: var(--pet-kind-subtask);
+}
+
+/* Kind tag — quiet, upper-case, beside the copy. Kept small and
+ * letter-spaced so it reads as a label rather than as part of the message
+ * (the message itself is user-facing prose). */
+.pet-bubble__kind {
+	display: block;
+	margin-top: 4px;
+	color: var(--pet-kind, color-mix(in oklab, var(--color-text) 55%, transparent));
+	font-size: 9.5px;
+	font-weight: 700;
+	line-height: 1;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	opacity: 0.9;
+}
+
+/* Padded past the left rule so the tag never sits under it. */
+.pet-bubble__kind,
+.pet-bubble .pet-bubble__text {
+	padding-left: 4px;
 }
 
 .pet-bubble__text {

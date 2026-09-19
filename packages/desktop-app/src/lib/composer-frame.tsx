@@ -1,5 +1,5 @@
 import { ImageLightbox, t } from "@musepi/guest-client";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
 
@@ -60,6 +60,93 @@ function attachSizeLabel(bytes: number | undefined): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * The composer-docked pet, made tangible.
+ *
+ * The slot used to be `pointer-events: none` — a decoration the mouse passed
+ * straight through, which read as a rendering bug the moment anyone tried to
+ * poke it. It is now a real target: hovering perks it up, clicking makes it
+ * hop.
+ *
+ * Three rules keep it from fighting the input it sits on:
+ *   - the wrapper takes pointer events, the SVG art does not, so the hit box
+ *     is the pet's own rect rather than its transparent bounding square;
+ *   - it PRESERVES the caret. Not taking focus is not enough: a mousedown on a
+ *     non-focusable element blurs whatever was focused, so clicking the pet
+ *     used to drop the textarea out from under the user mid-sentence
+ *     (measured — activeElement went from the textarea to body). Cancelling
+ *     the default on pointerdown suppresses that focus shift while leaving the
+ *     click itself intact;
+ *   - it is a presentational toggle, not a control — no ARIA button role and
+ *     no tab stop, because a companion that appears in the tab order ahead of
+ *     the message box is worse than one that is simply pettable.
+ *
+ * `children` may be a render prop so the caller can reflect the interaction in
+ * the pet's own face (hover perk, post-poke chirp) rather than only in CSS.
+ *
+ * Sizing lives entirely in CSS (`.gui-composer-pet` + `--gui-composer-pet-size`):
+ * the box must stay above the legibility floor where the eye capsule is still
+ * a capsule, and that floor is a function of the composer's width, not of a
+ * constant baked in here. The `--micro` flag is the one exception — the
+ * stylesheet owns what it does, this component only mirrors the resolved width
+ * onto the node so the CSS has something to react to.
+ */
+export interface ComposerPetState {
+	hovered: boolean;
+	/** True for the duration of the poke animation. */
+	hopping: boolean;
+}
+
+/** Box width under which the mouth stroke stops resolving (see gui-pet.css). */
+const MICRO_BOX_PX = 46;
+
+function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState) => ReactNode) }): ReactNode {
+	const [hovered, setHovered] = useState(false);
+	const [hopping, setHopping] = useState(false);
+	const ref = useRef<HTMLDivElement | null>(null);
+	const [micro, setMicro] = useState(false);
+
+	useEffect(() => {
+		const el = ref.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(entries => {
+			const w = entries[0]?.contentRect.width ?? 0;
+			setMicro(w > 0 && w < MICRO_BOX_PX);
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, []);
+
+	return (
+		<div
+			ref={ref}
+			className={`gui-composer-pet${micro ? " gui-composer-pet--micro" : ""}${
+				hovered ? " gui-composer-pet--hover" : ""
+			}${hopping ? " gui-composer-pet--hop" : ""}`}
+			aria-hidden
+			onPointerEnter={() => setHovered(true)}
+			onPointerLeave={() => setHovered(false)}
+			onPointerDown={e => {
+				// A mousedown on any non-focusable element blurs the focused
+				// element — clicking the pet would drop the caret out of the
+				// composer (measured: activeElement goes from #ta to <body>).
+				// Cancelling pointerdown suppresses the compatibility mouse
+				// events the browser derives from it, so the blur never runs;
+				// `click` still fires, so the poke action is unaffected.
+				e.preventDefault();
+				setHopping(true);
+			}}
+			onAnimationEnd={e => {
+				// Only the hop's own animation should clear the flag; the
+				// ambient antenna/beacon keyframes bubble here too.
+				if (e.animationName === "gui-pet-composer-hop") setHopping(false);
+			}}
+		>
+			{typeof children === "function" ? children({ hovered, hopping }) : children}
+		</div>
+	);
 }
 
 export function ComposerFrame({
@@ -133,8 +220,9 @@ export function ComposerFrame({
 	flipAnchor?: "welcome" | "session";
 	/** Companion pet, docked outside the input's top edge, right-aligned
 	 *  (input mode). Rendered absolutely against the frame so welcome and
-	 *  session scenes share one placement. */
-	pet?: ReactNode;
+	 *  session scenes share one placement. Pass a function to react to the
+	 *  user poking it. */
+	pet?: ReactNode | ((s: ComposerPetState) => ReactNode);
 	/** Mark the frame as the chat-input host ([data-chat-input="true"],
 	 *  openchamber parity) so global selection capture never re-quotes
 	 *  what is being typed. */
@@ -160,7 +248,7 @@ export function ComposerFrame({
 			// the shadow + beam, not the frame inside it.
 			data-flip-anchor={flipAnchor && !hero ? flipAnchor : undefined}
 		>
-			{pet && <div className="gui-composer-pet">{pet}</div>}
+			{pet && <ComposerPet>{pet}</ComposerPet>}
 			{children}
 			{/* The attach row exists to hold chips. With no attachments it used
 			 * to still render — and with `onAddAttachment` always wired by the

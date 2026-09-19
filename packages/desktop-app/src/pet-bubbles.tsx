@@ -63,6 +63,27 @@ interface Bubble {
 	visible: string;
 }
 
+/** Short tag shown on each card so the four notification kinds are
+ *  distinguishable at a glance. The KIND is the severity signal — a finished
+ *  task and a question that blocks the agent used to render identically
+ *  (only `error` carried any styling at all). Unknown kinds get no tag
+ *  rather than a misleading one: the daemon may add kinds before this
+ *  window learns about them. */
+function bubbleKindLabel(kind: string): string | null {
+	switch (kind) {
+		case "completed":
+			return t("pet bubble kind completed");
+		case "error":
+			return t("pet bubble kind error");
+		case "question":
+			return t("pet bubble kind question");
+		case "subtask":
+			return t("pet bubble kind subtask");
+		default:
+			return null;
+	}
+}
+
 interface PendingApproval {
 	requestId: string;
 	tool: string;
@@ -694,6 +715,7 @@ export function PetBubbles(): ReactNode {
 						×
 					</button>
 					<div className="pet-bubble__text">{b.visible}</div>
+					{bubbleKindLabel(b.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(b.kind)}</span>}
 				</div>
 			))}
 		</div>
@@ -731,6 +753,7 @@ export function PetBubbles(): ReactNode {
 							×
 						</button>
 						<div className="pet-bubble__text">{top.visible}</div>
+						{bubbleKindLabel(top.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(top.kind)}</span>}
 					</div>
 				);
 			})()}

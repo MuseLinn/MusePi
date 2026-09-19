@@ -450,16 +450,139 @@
 {
 	position:relative;
 }
+/* Docked on the input's top edge. The wrapper is a real hit target (it used
+ * to be `pointer-events: none`, so the mouse fell straight through it); the
+ * SVG inside does NOT take events, which keeps the hit box to the pet's own
+ * silhouette instead of its transparent bounding square.
+ *
+ * ── Sizing is a legibility decision, not a taste one ─────────────────────
+ * The face is authored inside a FACE_BOX square that *is* the ball, and the
+ * SVG viewBox pads it with HEADROOM/SIDE/FLOOR. That means only ~77% of the
+ * rendered box is ball, and of the ball only ~25% is the eye capsule. At the
+ * old fixed `size={30}` the contract was: ball 24px, eye capsule 3.3x6.2px,
+ * mouth stroke 0.80px — the mouth was literally sub-pixel, so the pet drew
+ * as a dark ball with two gold specks.
+ *
+ * The pet therefore sizes against the COMPOSER'S OWN WIDTH (`--gui-composer-pet-size`),
+ * which is what actually varies across the welcome hero and the session
+ * composer. The clamp floor is the legibility floor: 0.75px of mouth stroke
+ * and a >=4px eye capsule, i.e. a ~44px box / ~34px ball. Below that we stop
+ * pretending it is a face and let the silhouette carry it (see
+ * `.gui-composer-pet--micro`). */
 .gui-composer-pet
 {
 	position:absolute;
 	z-index:1;
-	pointer-events:none;
+	cursor:pointer;
 	display:flex;
+	width:var(--gui-composer-pet-size, clamp(44px, 4.6cqw + 26px, 60px));
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
+	justify-content:flex-end;
 	bottom:calc(100% + 4px);
 	right:10px;
+	/* The antenna is suppressed at composer scale (see below), but its slot
+	 * in the SVG viewBox is not: HEADROOM reserves the mast's space above the
+	 * ball. Hiding the mast while keeping the box leaves ~6px of dead space,
+	 * which reads as the pet floating detached from the edge it is perched
+	 * on. Pull the box up by that same fraction so the ball lands flush.
+	 * (HEADROOM 40 / VIEW_H 298.5.) */
+	margin-bottom:calc(var(--gui-composer-pet-size, 44px) * -40 / 298.5);
+	transform-origin:50% 100%;
+	transition:transform .18s cubic-bezier(.22,1,.36,1),filter .18s cubic-bezier(.22,1,.36,1);
+	-webkit-tap-highlight-color:transparent;
+}
+/* The pet SVG fills the wrapper; the wrapper owns the size. */
+.gui-composer-pet .gui-pet
+{
+	width:100% !important;
+	height:auto !important;
+	aspect-ratio:auto;
+}
+.gui-composer-pet .gui-pet svg
+{
+	display:block;
+	width:100%;
+	height:auto;
+}
+.gui-composer-pet>*
+{
+	pointer-events:none;
+}
+.gui-composer-pet--hover
+{
+	transform:translateY(-2px) scale(1.06);
+	filter:drop-shadow(0 4px 10px #00000059);
+}
+.gui-composer-pet--hop
+{
+	animation:gui-pet-composer-hop .5s cubic-bezier(.34,1.56,.64,1);
+}
+@keyframes gui-pet-composer-hop
+{
+	0%{transform:translateY(0) scale(1)}
+	22%{transform:translateY(-8px) scale(1.04,1.08)}
+	45%{transform:translateY(0) scale(1.07,.93)}
+	68%{transform:translateY(-3px) scale(1,.99)}
+	100%{transform:translateY(0) scale(1)}
+}
+/* Very narrow composers (mobile, split panes): the box can no longer carry a
+ * legible face, so drop the mouth and thin the eye — a clean silhouette with
+ * two lights reads better than a smudge of tiny geometry. */
+@container (max-width: 380px)
+{
+	.gui-composer-pet
+	{
+		width:var(--gui-composer-pet-size, 40px);
+	}
+}
+/* ── Micro variant ────────────────────────────────────────────────────────
+ * Below roughly a 46px box the mascot's fine detail stops resolving:
+ *   - the antenna mast is stroke-width 4 in face units, so at a 33px ball it
+ *     lands at ~0.58px and renders as a disconnected gold speck floating over
+ *     the crown rather than as a mast with a beacon;
+ *   - the mouth drops under ~1.2px of stroke and greys out.
+ * Rather than ship half-resolved geometry, the micro variant sheds both and
+ * keeps the two eye lights — the smallest thing that still reads as "a
+ * creature looking at you".
+ *
+ * The antenna is suppressed for every docked pet, not just the micro one: at
+ * any composer size the mast lands under a pixel and the beacon becomes a
+ * speck, and the composed silhouette is stronger without it. The standalone
+ * desktop pet keeps its antenna — it has real estate to spend. */
+.gui-composer-pet .gui-pet-svg__antenna-group
+{
+	display:none;
+}
+/* The floor layers describe a body hovering over the ground: a neutral ground
+ * shadow plus a gold thrust glow, both anchored BELOW the silhouette. Docked
+ * on the composer the ball is perched ON an edge, so there is no floor for
+ * them to fall on — they spill into the gap and read as a gold smear floating
+ * under the input. (Measured: both extend ~4.7px past the ball's bottom at a
+ * 42px ball.) The wrapper's own drop-shadow does the grounding instead, which
+ * is the physically honest cue for something resting on a lit surface. */
+.gui-composer-pet .gui-pet-svg__ground,
+.gui-composer-pet .gui-pet-svg__thrust
+{
+	display:none;
+}
+/* Bounce light is the gold the sphere throws back off the ground it sits on.
+ * Same story as the floor layers — with the ground shadow gone the ellipse
+ * has nothing to bounce off, so it reads as a stray gold band under the ball
+ * rather than as rim light. */
+.gui-composer-pet .gui-pet-svg__bounce
+{
+	display:none;
+}
+.gui-composer-pet--micro .gui-pet-svg__mouth
+{
+	display:none;
+}
+/* At this scale the glow is invisible but still pays for a filter pass on
+ * every morphing path — drop it and let the flat gold carry the read. */
+.gui-composer-pet--micro .gui-pet-svg__eye
+{
+	filter:none;
 }
 .gui-composer-pill:before
 {
