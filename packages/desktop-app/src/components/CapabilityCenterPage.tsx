@@ -1,6 +1,6 @@
 import { type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { CapabilityCenter } from "./CapabilityCenter";
@@ -46,17 +46,18 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 	// 自己拉取(它有 warnings/来源过滤等更完整的模型)。
 	const [installedCount, setInstalledCount] = useState(0);
 
-	useEffect(() => {
-		if (!rpc || tab !== "skills") return;
-		let alive = true;
+	const loadInstalledCount = useCallback((): void => {
+		if (!rpc) return;
 		void rpc
 			.request<{ skills: unknown[] }>("skills.list", {})
-			.then(res => alive && setInstalledCount(res?.skills?.length ?? 0))
+			.then(res => setInstalledCount(res?.skills?.length ?? 0))
 			.catch(() => {});
-		return () => {
-			alive = false;
-		};
-	}, [rpc, tab]);
+	}, [rpc]);
+
+	useEffect(() => {
+		if (tab !== "skills") return;
+		loadInstalledCount();
+	}, [tab, loadInstalledCount]);
 
 	useEffect(() => {
 		if (!rpc || tab !== "plugins") return;
@@ -140,7 +141,11 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 								</button>
 							))}
 						</div>
-						{skillPane === "discover" ? <SkillMarketView rpc={rpc} /> : <CapabilityCenter rpc={rpc} />}
+						{skillPane === "discover" ? (
+							<SkillMarketView rpc={rpc} onInstalled={loadInstalledCount} />
+						) : (
+							<CapabilityCenter rpc={rpc} />
+						)}
 					</>
 				) : tab === "plugins" ? (
 					<div className="gui-ext-plugins">

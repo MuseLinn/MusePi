@@ -61,23 +61,44 @@ function fmtCount(n: number): string {
 	return n.toLocaleString("en-US");
 }
 
-export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; onInstalled?(): void }): ReactNode {
 	const [source, setSource] = useState<SourceFilter>("all");
 	const [category, setCategory] = useState<string>("");
 	const [sortBy, setSortBy] = useState<SortKey>("downloads");
 	const [keyword, setKeyword] = useState("");
 	const [page, setPage] = useState(1);
+	const [addOpen, setAddOpen] = useState(false);
 
 	const [pageData, setPageData] = useState<MarketPage | null>(null);
 	const [featured, setFeatured] = useState<SkillEntry[]>([]);
 	const [categories, setCategories] = useState<SkillCategory[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
+	// 底部状态栏 (设计稿 01): 已启用 / 已停用 / 来源市场数。
+	const [installed, setInstalled] = useState({ enabled: 0, disabled: 0 });
 	// 换一批 rotates the featured window: the daemon returns a ranked list
 	// and the UI shows FEATURED_SIZE of it starting at this offset.
 	const [featuredOffset, setFeaturedOffset] = useState(0);
 
+	const refreshInstalled = useCallback((): void => {
+		if (!rpc) return;
+		void rpc
+			.request<{ skills: { disabled?: boolean }[] }>("skills.list", {})
+			.then(res => {
+				const rows = res?.skills ?? [];
+				setInstalled({
+					enabled: rows.filter(s => !s.disabled).length,
+					disabled: rows.filter(s => s.disabled).length,
+				});
+			})
+			.catch(() => {});
+	}, [rpc]);
+
 	// Categories + featured load once; they are catalog-level, not query-level.
+	useEffect(() => {
+		refreshInstalled();
+	}, [refreshInstalled]);
+
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
@@ -145,6 +166,7 @@ export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<div className="gui-skill-market">
+			{/* 工具行 (设计稿 01):搜索 → 全部来源下拉 → 热门优先下拉 → + 添加技能 */}
 			<div className="gui-skill-market-bar">
 				<label className="gui-skill-market-search">
 					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -158,32 +180,24 @@ export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						}}
 					/>
 				</label>
-				<div className="gui-skill-market-seg" role="group" aria-label={t("skill market source")}>
-					{(
-						[
-							["all", t("skill market source all")],
-							["skillhub", t("skill market source skillhub")],
-							["skills.sh", t("skill market source skills.sh")],
-						] as [SourceFilter, string][]
-					).map(([id, label]) => (
-						<button
-							key={id}
-							type="button"
-							className={`gui-skill-market-segbtn${source === id ? " gui-skill-market-segbtn--on" : ""}`}
-							aria-pressed={source === id}
-							onClick={() => {
-								setSource(id);
-								setPage(1);
-							}}
-						>
-							{label}
-						</button>
-					))}
-				</div>
 				<label className="gui-skill-market-select">
-					<span>{t("skill market sort")}</span>
+					<select
+						value={source}
+						aria-label={t("skill market source")}
+						onChange={ev => {
+							setSource(ev.target.value as SourceFilter);
+							setPage(1);
+						}}
+					>
+						<option value="all">{t("skill market source all")}</option>
+						<option value="skillhub">{t("skill market source skillhub")}</option>
+						<option value="skills.sh">{t("skill market source skills.sh")}</option>
+					</select>
+				</label>
+				<label className="gui-skill-market-select">
 					<select
 						value={sortBy}
+						aria-label={t("skill market sort")}
 						onChange={ev => {
 							setSortBy(ev.target.value as SortKey);
 							setPage(1);
@@ -194,37 +208,60 @@ export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<option value="installs">{t("skill market sort installs")}</option>
 					</select>
 				</label>
+				<button type="button" className="gui-skill-market-add" onClick={() => setAddOpen(true)}>
+					<Icon name="add" className="h-3.5 w-3.5 shrink-0" />
+					{t("add skill")}
+				</button>
 			</div>
 
 			{failures ? <div className="gui-skill-market-warn">{t("skill market offline", { msg: failures })}</div> : null}
 			{loadError ? <div className="gui-skill-market-warn">{loadError}</div> : null}
-			{loading ? <div className="gui-skill-market-note">{t("skill market loading")}</div> : null}
 
 			{shownFeatured.length > 0 ? (
 				<section className="gui-skill-market-section">
 					<div className="gui-skill-market-section-h">
 						<Icon name="sparkling" className="h-3.5 w-3.5 shrink-0 text-[var(--color-accent)]" />
-						<span>{t("skill market featured")}</span>
+						<span className="gui-skill-market-section-title">{t("skill market featured")}</span>
 						<button
 							type="button"
 							className="gui-skill-market-link"
 							onClick={() => setFeaturedOffset(o => (o + FEATURED_SIZE) % Math.max(featured.length, 1))}
 						>
-							<Icon name="refresh" className="h-3 w-3 shrink-0" />
 							{t("skill market shuffle")}
 						</button>
 					</div>
 					<div className="gui-skill-market-featured">
 						{shownFeatured.map(e => (
-							<FeaturedCard key={e.id} entry={e} />
+							<FeaturedCard key={e.id} entry={e} onOpen={() => setAddOpen(true)} />
 						))}
 					</div>
 				</section>
 			) : null}
 
 			<section className="gui-skill-market-section">
+				{/* 推荐套件行:左侧来源 pill,右侧 来自 N 个市场 · 共 M 个技能 */}
 				<div className="gui-skill-market-section-h">
 					<span className="gui-skill-market-section-title">{t("skill market recommended")}</span>
+					<div className="gui-skill-market-pills">
+						{(
+							[
+								["all", t("skill market source skillhub")],
+								["skills.sh", t("skill market source skills.sh")],
+							] as [SourceFilter, string][]
+						).map(([id, label]) => (
+							<button
+								key={id}
+								type="button"
+								className={`gui-skill-market-pill${source === id ? " gui-skill-market-pill--on" : ""}`}
+								onClick={() => {
+									setSource(id);
+									setPage(1);
+								}}
+							>
+								{label}
+							</button>
+						))}
+					</div>
 					<span className="gui-skill-market-count">
 						{t("skill market summary", {
 							sources: String(pageData?.liveSources?.length ?? 0),
@@ -262,7 +299,7 @@ export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				) : (
 					<div className="gui-skill-market-grid">
 						{entries.map(e => (
-							<SkillCard key={e.id} entry={e} />
+							<SkillCard key={e.id} entry={e} onOpen={() => setAddOpen(true)} />
 						))}
 					</div>
 				)}
@@ -290,6 +327,17 @@ export function SkillMarketView({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					</div>
 				) : null}
 			</section>
+
+			{/* 底部状态栏 (设计稿 01):已启用 N · 已停用 M · 来源 K 个市场 */}
+			<div className="gui-skill-market-status">
+				{t("skill market status", {
+					enabled: String(installed.enabled),
+					disabled: String(installed.disabled),
+					sources: String(pageData?.liveSources?.length ?? 0),
+				})}
+			</div>
+
+			{addOpen ? <AddSkillDialog rpc={rpc} onClose={() => setAddOpen(false)} onDone={onInstalled} /> : null}
 		</div>
 	);
 }
@@ -320,9 +368,12 @@ function SkillGlyph({ entry }: { entry: SkillEntry }): ReactNode {
 	);
 }
 
-function FeaturedCard({ entry }: { entry: SkillEntry }): ReactNode {
+function FeaturedCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }): ReactNode {
 	return (
 		<article className="gui-skill-market-fcard">
+			<button type="button" className="gui-skill-market-plus" title={t("add skill")} onClick={onOpen}>
+				<Icon name="add" className="h-3.5 w-3.5" />
+			</button>
 			<div className="gui-skill-market-fcard-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-fcard-name">{entry.name}</span>
@@ -332,13 +383,16 @@ function FeaturedCard({ entry }: { entry: SkillEntry }): ReactNode {
 	);
 }
 
-function SkillCard({ entry }: { entry: SkillEntry }): ReactNode {
+function SkillCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }): ReactNode {
 	const meta: string[] = [];
 	if (typeof entry.stars === "number") meta.push(`★ ${fmtCount(entry.stars)}`);
 	if (typeof entry.downloads === "number") meta.push(`↓ ${fmtCount(entry.downloads)}`);
 	if (entry.version) meta.push(`v${entry.version}`);
 	return (
 		<article className="gui-skill-market-card">
+			<button type="button" className="gui-skill-market-plus" title={t("add skill")} onClick={onOpen}>
+				<Icon name="add" className="h-3.5 w-3.5" />
+			</button>
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-card-name">{entry.name}</span>
@@ -347,18 +401,94 @@ function SkillCard({ entry }: { entry: SkillEntry }): ReactNode {
 			<p className="gui-skill-market-card-desc">{entry.descriptionZh || entry.description}</p>
 			<footer className="gui-skill-market-card-f">
 				<span className="gui-skill-market-meta">{meta.join(" · ")}</span>
-				{entry.homepage ? (
-					<a
-						className="gui-skill-market-open"
-						href={entry.homepage}
-						target="_blank"
-						rel="noreferrer"
-						title={entry.homepage}
-					>
-						<Icon name="external-link" className="h-3 w-3" />
-					</a>
-				) : null}
 			</footer>
 		</article>
+	);
+}
+
+/**
+ * 「+ 添加技能」与卡片上的 `+` 共用这一个对话框 (设计稿 01 的按钮落点):
+ * 两条路径都要落进 `~/.musepi/skills/<slug>/`,所以入口不同、动作同源。
+ * 目录来源二选一 —— 直接填 skillhub slug,或给一个 Git 仓库地址。
+ */
+function AddSkillDialog({
+	rpc,
+	onClose,
+	onDone,
+}: {
+	rpc: RpcClient | null;
+	onClose(): void;
+	onDone(): void;
+}): ReactNode {
+	const [tab, setTab] = useState<"skillhub" | "git">("skillhub");
+	const [value, setValue] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [err, setErr] = useState<string | null>(null);
+
+	const submit = (): void => {
+		if (!rpc || !value.trim()) return;
+		setBusy(true);
+		setErr(null);
+		const params = tab === "skillhub" ? { slug: value.trim() } : { url: value.trim() };
+		void rpc
+			.request("skills.install", params)
+			.then(() => {
+				onDone();
+				onClose();
+			})
+			.catch((e: unknown) => {
+				setErr(e instanceof Error ? e.message : String(e));
+				setBusy(false);
+			});
+	};
+
+	return (
+		<div className="gui-skill-market-dialog-backdrop" role="presentation" onClick={onClose}>
+			<div
+				className="gui-skill-market-dialog"
+				role="dialog"
+				aria-label={t("add skill")}
+				onClick={ev => ev.stopPropagation()}
+			>
+				<div className="gui-skill-market-dialog-h">{t("add skill")}</div>
+				<div className="gui-capability-subtabs">
+					{(
+						[
+							["skillhub", t("skill market source skillhub")],
+							["git", t("skill market add git")],
+						] as ["skillhub" | "git", string][]
+					).map(([id, label]) => (
+						<button
+							key={id}
+							type="button"
+							className={`gui-capability-subtab${tab === id ? " gui-capability-subtab--on" : ""}`}
+							onClick={() => setTab(id)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<input
+					className="gui-skill-market-dialog-input"
+					value={value}
+					autoFocus
+					placeholder={tab === "skillhub" ? t("skill market add slug") : t("skill market add url")}
+					onChange={ev => setValue(ev.target.value)}
+					onKeyDown={ev => {
+						if (ev.key === "Enter") submit();
+						if (ev.key === "Escape") onClose();
+					}}
+				/>
+				{err ? <div className="gui-skill-market-warn">{err}</div> : null}
+				<div className="gui-skill-market-dialog-f">
+					<button type="button" className="gui-skill-market-page" onClick={onClose}>
+						{t("cancel")}
+					</button>
+					<button type="button" className="gui-skill-market-add" disabled={busy || !value.trim()} onClick={submit}>
+						{busy ? t("skill market loading") : t("add skill")}
+					</button>
+				</div>
+			</div>
+		</div>
 	);
 }
