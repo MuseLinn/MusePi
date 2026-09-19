@@ -64,6 +64,40 @@ function fmtTokens(n: number): string {
 	return String(n);
 }
 
+/** Shape of the mode fields the daemon injects into `snap.state`. */
+type SessionModes = {
+	goalMode?: { enabled?: boolean; objective?: string };
+	planMode?: boolean;
+	/** Session preset id (`work` | `chat` | `creator` | `design` | …). */
+	modeId?: string | null;
+};
+
+/**
+ * Name the session's current mode for the right-pane header.
+ *
+ * Previously any session that was neither goal- nor plan-mode fell through
+ * to a literal "默认模式", which told the user nothing — picking 设计模式 in
+ * the empty-state chips still read 默认模式. Precedence is goal > plan >
+ * preset id, and an unknown/absent preset still degrades to 默认模式 rather
+ * than printing a raw id.
+ */
+function sessionModeLabel(modes: SessionModes | null | undefined): string {
+	if (!modes) return t("default mode");
+	if (modes.goalMode?.enabled === true) {
+		const objective = modes.goalMode.objective?.trim();
+		return objective ? `${t("goal mode")}: ${objective}` : t("goal mode");
+	}
+	if (modes.planMode === true) return t("plan mode");
+	const id = (modes.modeId ?? "").trim();
+	if (!id) return t("default mode");
+	// `t()` echoes the key back when there is no translation — that's the
+	// signal the preset is unknown (a plugin-supplied mode, say), so fall
+	// back instead of rendering "mode somewhere".
+	const key = `mode ${id}` as TranslationKey;
+	const label = t(key);
+	return label === key ? t("default mode") : label;
+}
+
 /**
  * Right pane — ZCode-style session tools: 上下文 / 文件 tabs plus a tool
  * rail (git graph, PRs, diff, notes, browser). The file tree and context
@@ -140,7 +174,10 @@ export function ContextPanel({
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
-	const modes = snap?.state as { goalMode?: { enabled?: boolean; objective?: string }; planMode?: boolean } | null;
+	// modeId rides on the snapshot too (daemon: `snap.state.modeId = live.modeId`),
+	// so the panel can name the session preset instead of flattening every
+	// non-goal/non-plan session into "默认模式".
+	const modes = snap?.state as SessionModes | null;
 	// Session stats: message count + wall-clock run time.
 	const messageCount = (snap?.entries ?? []).filter(e => e.type === "message").length;
 	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
@@ -700,13 +737,7 @@ export function ContextPanel({
 										{modes && (
 											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
 												<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-												<span className="truncate">
-													{modes.goalMode?.enabled === true
-														? `${t("goal mode")}: ${modes.goalMode.objective ?? ""}`
-														: modes.planMode === true
-															? t("plan mode")
-															: t("default mode")}
-												</span>
+												<span className="truncate">{sessionModeLabel(modes)}</span>
 											</div>
 										)}
 									</div>

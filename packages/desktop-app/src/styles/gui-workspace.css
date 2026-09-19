@@ -3561,7 +3561,11 @@
 	flex-direction: column;
 	gap: 14px;
 	width: 100%;
-	max-width: 640px;
+	/* No 640px cap: the stat row is `auto-fit minmax(120px,1fr)`, so a
+	 * narrow container forced the four cards into a single vertical stack
+	 * inside a wide pane (the design shows them side by side). Let the
+	 * grid breathe and keep only a generous readability ceiling. */
+	max-width: 1080px;
 	margin: 0 auto;
 	padding: 16px 4px;
 	overflow-y: auto;
@@ -3690,6 +3694,342 @@
 	min-height: 0;
 	overflow-y: auto;
 	padding: 14px 20px 20px;
+}
+
+/* 技能 tab 的子分段条（发现 / 我安装的 N）:pill 形,与分类 chips 同一语言。 */
+.gui-capability-subtabs {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-bottom: 12px;
+}
+
+.gui-capability-subtab {
+	padding: 4px 12px;
+	border: 1px solid transparent;
+	border-radius: 999px;
+	background: transparent;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		color 120ms var(--spring),
+		background 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-capability-subtab:hover {
+	color: var(--color-text);
+}
+
+.gui-capability-subtab--on {
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+/* ── 技能市场 · 发现 (设计稿 frame 01) ──
+ * 远程目录（SkillHub 主源 + skills.sh 补充搜索）的浏览视图:搜索 / 来源
+ * 分段 / 排序、精选四卡 + 换一批、分类 chips、12 卡网格与分页。 */
+.gui-skill-market {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.gui-skill-market-bar {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.gui-skill-market-search {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1 1 220px;
+	min-width: 160px;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+}
+
+.gui-skill-market-search input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font-size: 12px;
+	color: var(--color-text);
+}
+
+.gui-skill-market-seg {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+}
+
+.gui-skill-market-segbtn {
+	padding: 5px 10px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		color 120ms var(--spring),
+		background 120ms var(--spring);
+}
+
+.gui-skill-market-segbtn--on {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+
+.gui-skill-market-select {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-skill-market-select select {
+	height: 30px;
+	padding: 0 8px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+	font-size: 11.5px;
+	color: var(--color-text);
+}
+
+.gui-skill-market-warn {
+	padding: 8px 10px;
+	border: 1px solid color-mix(in oklab, var(--color-warning, #d9a441) 40%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-warning, #d9a441) 12%, transparent);
+	font-size: 11.5px;
+	color: var(--color-text);
+}
+
+.gui-skill-market-note {
+	padding: 18px 0;
+	text-align: center;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.gui-skill-market-section {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-skill-market-section-h {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+}
+
+.gui-skill-market-section-title {
+	flex: 0 0 auto;
+}
+
+.gui-skill-market-count {
+	margin-left: auto;
+	font-size: 11.5px;
+	font-weight: 400;
+	color: var(--color-text-faint);
+}
+
+.gui-skill-market-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font-size: 11.5px;
+	color: var(--color-accent);
+	cursor: pointer;
+}
+
+.gui-skill-market-featured,
+.gui-skill-market-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 12px;
+}
+
+.gui-skill-market-fcard,
+.gui-skill-market-card {
+	display: flex;
+	flex-direction: column;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
+	transition:
+		border-color 140ms var(--spring),
+		transform 140ms var(--spring);
+}
+
+.gui-skill-market-fcard:hover,
+.gui-skill-market-card:hover {
+	border-color: var(--color-accent);
+	transform: translateY(-1px);
+}
+
+.gui-skill-market-fcard {
+	gap: 8px;
+	padding: 12px 14px;
+}
+
+.gui-skill-market-fcard-h,
+.gui-skill-market-card-h {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-skill-market-fcard-name,
+.gui-skill-market-card-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-skill-market-fcard-desc,
+.gui-skill-market-card-desc {
+	margin: 0;
+	font-size: 11.5px;
+	line-height: 16px;
+	color: var(--color-text-muted);
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.gui-skill-market-card {
+	gap: 8px;
+	padding: 12px 14px;
+}
+
+.gui-skill-market-card-f {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: auto;
+}
+
+.gui-skill-market-meta {
+	font-size: 11px;
+	color: var(--color-text-faint);
+}
+
+.gui-skill-market-open {
+	margin-left: auto;
+	color: var(--color-text-faint);
+	transition: color 120ms var(--spring);
+}
+
+.gui-skill-market-open:hover {
+	color: var(--color-accent);
+}
+
+.gui-skill-market-badge {
+	flex: 0 0 auto;
+	padding: 1px 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	font-size: 10px;
+	color: var(--color-accent);
+}
+
+.gui-skill-market-glyph {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border-radius: var(--radius-md);
+	object-fit: cover;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-skill-market-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.gui-skill-market-chip {
+	padding: 4px 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: 999px;
+	background: transparent;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		color 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-skill-market-chip--on {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-skill-market-pager {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding-top: 2px;
+}
+
+.gui-skill-market-page {
+	padding: 4px 12px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+	font-size: 11.5px;
+	color: var(--color-text);
+	cursor: pointer;
+}
+
+.gui-skill-market-page:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.gui-skill-market-page-n {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
 }
 
 /* ── Artifact viewer viewport switch (设计板 frame: 桌面/平板/移动) ── */

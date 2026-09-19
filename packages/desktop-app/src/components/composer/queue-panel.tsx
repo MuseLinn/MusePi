@@ -23,12 +23,19 @@ export function QueuePanel({
 	queued,
 	onSend,
 	onPop,
+	onEdit,
+	onDelete,
 	onClear,
 	onReorder,
 }: {
 	queued: QueueSnapshot;
 	onSend(group: Group, text: string, index: number): void;
 	onPop(group?: Group, text?: string): void;
+	/** Per-row ✎: same daemon path as 取回 (pop into the editor) — the user
+	 *  lands in the textarea able to amend before re-sending. */
+	onEdit(group: Group, text: string): void;
+	/** Per-row 🗑: drop just this message (pop + discard, never re-queued). */
+	onDelete(group: Group, text: string): void;
 	onClear(): void;
 	onReorder(group: Group, from: string, to: string): void;
 }): ReactNode {
@@ -67,6 +74,8 @@ export function QueuePanel({
 									id={textToId("steering", msg)}
 									msg={msg}
 									onPop={() => onPop("steering", msg)}
+									onEdit={() => onEdit("steering", msg)}
+									onDelete={() => onDelete("steering", msg)}
 									onSend={() => onSend("steering", msg, i)}
 								/>
 							))}
@@ -90,6 +99,8 @@ export function QueuePanel({
 									id={textToId("followUp", msg)}
 									msg={msg}
 									onPop={() => onPop("followUp", msg)}
+									onEdit={() => onEdit("followUp", msg)}
+									onDelete={() => onDelete("followUp", msg)}
 									onSend={() => onSend("followUp", msg, i)}
 								/>
 							))}
@@ -124,11 +135,15 @@ function SortableQueueItem({
 	id,
 	msg,
 	onPop,
+	onEdit,
+	onDelete,
 	onSend,
 }: {
 	id: string;
 	msg: string;
 	onPop(): void;
+	onEdit(): void;
+	onDelete(): void;
 	onSend(): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
@@ -162,6 +177,18 @@ function SortableQueueItem({
 				onClick={onPop}
 			>
 				<Icon name="arrow-go-back" className="h-3 w-3" />
+			</button>
+			<button type="button" className="gui-queue-send" title={t("edit")} aria-label={t("edit")} onClick={onEdit}>
+				<Icon name="edit-2" className="h-3 w-3" />
+			</button>
+			<button
+				type="button"
+				className="gui-queue-send"
+				title={t("delete")}
+				aria-label={t("delete")}
+				onClick={onDelete}
+			>
+				<Icon name="delete-bin" className="h-3 w-3" />
 			</button>
 			<button
 				type="button"

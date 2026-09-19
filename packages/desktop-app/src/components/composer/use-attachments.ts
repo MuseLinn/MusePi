@@ -71,6 +71,41 @@ export function parseAttachmentDraft(raw: string | null): ComposerAttachment[] {
 	return out;
 }
 
+/**
+ * Rebuild image chips from the wire images a popped queued message carries.
+ *
+ * `session.queuedPop` returns the attachments that were queued alongside the
+ * text (`{ type, data, mimeType }`, `data` = bare base64). Dropping them made
+ * 取回 silently lose the user's images — the text came back, the files did
+ * not — so every re-edit had to be re-attached by hand.
+ *
+ * The data URL is assembled by string concatenation rather than
+ * `fetch(dataUrl)`: the renderer CSP's connect-src has no `data:`, so a
+ * fetch on one is blocked and throws.
+ */
+export function attachmentsFromWireImages(
+	images: readonly { type?: string; data?: string; mimeType?: string }[] | undefined | null,
+): ComposerAttachment[] {
+	if (!images) return [];
+	const out: ComposerAttachment[] = [];
+	for (const img of images) {
+		if (typeof img?.data !== "string" || img.data.length === 0) continue;
+		const mimeType = typeof img.mimeType === "string" && img.mimeType ? img.mimeType : "application/octet-stream";
+		out.push({
+			id: attachSeq++,
+			kind: "image",
+			dataUrl: `data:${mimeType};base64,${img.data}`,
+			mimeType,
+			name: mimeType.startsWith("image/") ? `image.${mimeType.slice(6)}` : "attachment",
+			// Byte length of the base64 payload (3 bytes per 4 chars) — the
+			// chip only shows it, so an estimate is enough and avoids
+			// decoding the whole payload just to size the label.
+			size: Math.floor((img.data.length * 3) / 4),
+		});
+	}
+	return out;
+}
+
 /** Read a File as bare base64 (no data-URL prefix) for the fs.write
  *  upload path — FileReader.readAsDataURL + prefix strip, no manual
  *  byte-loop (btoa would choke on multi-MB binaries). */

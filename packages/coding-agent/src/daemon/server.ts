@@ -846,7 +846,9 @@ interface LiveSession {
 	/** When false, the session-tree title never falls back to the first
 	 *  user message (Settings → 会话 → 自动生成会话标题 off). */
 	autoTitle: boolean;
-	/** 会话预设(mode)id,取自 SDK 会话 header(Modes v1;create 写入,activate 读回)。 */
+	/** 会话预设(mode)id:adopt 时取 SDK 会话 header,缺失回落守护进程快照头;
+	 *  创建路径由 createSession 显式补写(SDK 的 create 不写 header)。
+	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板模式名。 */
 	modeId?: string;
 	/** Incrementing event sequence for the stream contract. */
 	seq: number;
@@ -1422,6 +1424,18 @@ export class DaemonSessionHost {
 			}
 		}
 		live.autoTitle = params.autoTitle !== false;
+		// 落创建时的预设:SDK 的 create 只把 modeId 用于 resolve(提示词/
+		// settings/扩展白名单),不写会话头,而 live.modeId 是 adopt 时从 SDK
+		// 头读的 —— 于是从空态 chip 选"设计模式"进的会话 modeId 恒为
+		// undefined,session.modes 返回 null,Composer 的 design 风格 chip
+		// 永远不显示。这里补 live + 快照头两级,兼顾当次会话与重激活。
+		if (params.modeId) {
+			live.modeId = params.modeId;
+			// schedulePersist 只在首个事件后才落盘,这里先 upsert 一次,
+			// 否则 persistHeaderPatch 的 load() 拿到空、写入静默失败。
+			this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
+			this.persistHeaderPatch(live.sessionId, { modeId: params.modeId });
+		}
 		return { sessionId: live.sessionId };
 	}
 
@@ -1656,7 +1670,11 @@ export class DaemonSessionHost {
 			agentSession,
 			extensionSettings: new Map(),
 			autoTitle: true,
-			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? undefined,
+			// 预设 id:SDK 头优先(热切换 setMode 的落盘值),缺失时回落到
+			// 守护进程快照头 —— SDK 的 create 只 resolve 提示词/settings,
+			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
+			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
+			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? persisted?.header?.modeId ?? undefined,
 			seq: viewFinal.cursor,
 			journal,
 			view: viewFinal,
@@ -4558,6 +4576,61 @@ export class DaemonServer {
 					filePath: skill.filePath,
 					content: content.length > 64 * 1024 ? `${content.slice(0, 64 * 1024)}\n… (truncated)` : content,
 				};
+			}
+			case "skills.marketplace.query": {
+				// Remote skill catalog (capability center → 发现). Public
+				// SkillHub + skills.sh; no registry entry required, which is
+				// why this is NOT routed through plugins/marketplace (that one
+				// only serves user-added plugin sources and was empty).
+				const p = (params ?? {}) as {
+					keyword?: string;
+					category?: string;
+					sources?: ("skillhub" | "skills.sh")[];
+					sortBy?: "downloads" | "stars" | "installs";
+					pageSize?: number;
+					/** 1-indexed; the grid pages with it (SkillHub rejects 0). */
+					page?: number;
+				};
+				const { querySkillMarket } = await import("../skills/marketplace-client");
+				return await querySkillMarket({
+					keyword: p.keyword,
+					category: p.category,
+					sources: p.sources,
+					sortBy: p.sortBy,
+					pageSize: p.pageSize,
+					page: p.page,
+				});
+			}
+			case "skills.marketplace.categories": {
+				// Chip row source (SkillHub first-level categories).
+				const { listSkillHubCategories } = await import("../skills/marketplace-client");
+				try {
+					return { categories: await listSkillHubCategories(), failures: [] as string[] };
+				} catch (e: unknown) {
+					// A dead catalog must not blank the chips: fall back to
+					// empty and let the UI show the failure line.
+					return {
+						categories: [],
+						failures: [e instanceof Error ? e.message : String(e)],
+					};
+				}
+			}
+			case "skills.marketplace.featured": {
+				// 精选 (design spec frame 01): the ranked top of the catalog.
+				const p = (params ?? {}) as { pageSize?: number };
+				const { topSkillHub } = await import("../skills/marketplace-client");
+				try {
+					return { entries: await topSkillHub(p.pageSize ?? 8), failures: [] as string[] };
+				} catch (e: unknown) {
+					return { entries: [], failures: [e instanceof Error ? e.message : String(e)] };
+				}
+			}
+			case "skills.marketplace.detail": {
+				// Drawer detail (frame 03): version + file tree + audit.
+				const p = (params ?? {}) as { slug?: string };
+				if (!p.slug) throw new Error("skills.marketplace.detail: slug required");
+				const { skillHubDetail } = await import("../skills/marketplace-client");
+				return await skillHubDetail(p.slug);
 			}
 			case "context.list": {
 				// Context files (AGENTS.md / CLAUDE.md …) for the extensions

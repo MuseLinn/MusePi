@@ -143,6 +143,9 @@ export interface SessionHeader {
 	model?: string;
 	/** User-picked thinking effort for a history session (setThinkingLevel). */
 	thinkingLevel?: string;
+	/** 会话预设(mode)id:`session.setMode` 与创建路径落盘,session.modes
+	 *  读回 —— GUI 用它决定 design 风格 chip 与上下文面板的模式名。 */
+	modeId?: string | null;
 }
 
 export interface EntryBase {

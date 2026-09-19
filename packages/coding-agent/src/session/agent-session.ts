@@ -6766,10 +6766,15 @@ export class AgentSession {
 	}
 
 	/**
-	 * Pop a SPECIFIC queued user message (GUI per-item 取回/编辑 parity):
+	 * Pop a SPECIFIC queued user message (GUI per-item 取回/编辑/删除 parity):
 	 * text-matched like sendQueuedMessage (first match wins); hidden
 	 * companions queued directly before it are dropped with it. Returns
 	 * undefined when no matching user message is queued in that group.
+	 *
+	 * Callers decide what the removal MEANS — 取回/编辑 re-inject the payload
+	 * into the composer (and even the images come back: see
+	 * `RestoredQueuedMessage`), while 删除 discards it outright. The queue
+	 * surgery is identical, so there is one path to keep correct.
 	 */
 	popQueuedMessage(group: "steering" | "followUp", text: string): RestoredQueuedMessage | undefined {
 		const steering = this.agent.peekSteeringQueue();

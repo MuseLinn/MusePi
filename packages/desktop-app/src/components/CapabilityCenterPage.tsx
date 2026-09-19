@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { CapabilityCenter } from "./CapabilityCenter";
+import { SkillMarketView } from "./SkillMarketView";
 
 /**
  * 能力中心 (capability center) — the FIRST-CLASS sidebar page (设计稿 05:
@@ -30,11 +31,32 @@ interface PluginEntry {
 }
 
 type Tab = "skills" | "plugins" | "marketplace";
+/** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
+type SkillPane = "discover" | "installed";
 
 export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; onBack(): void }): ReactNode {
 	const [tab, setTab] = useState<Tab>("skills");
+	// The design spec puts the remote catalog INSIDE 技能 as a 发现 sub-pane
+	// (我安装的 is the other half). 市场 stays as its own tab because the
+	// settings-side 扩展控制中心 still links here for plugin sources.
+	const [skillPane, setSkillPane] = useState<SkillPane>("discover");
 	const [plugins, setPlugins] = useState<PluginEntry[]>([]);
 	const [pluginsError, setPluginsError] = useState<string | null>(null);
+	// 「我安装的 N」的计数:只为标签上的数字,列表本身由 CapabilityCenter
+	// 自己拉取(它有 warnings/来源过滤等更完整的模型)。
+	const [installedCount, setInstalledCount] = useState(0);
+
+	useEffect(() => {
+		if (!rpc || tab !== "skills") return;
+		let alive = true;
+		void rpc
+			.request<{ skills: unknown[] }>("skills.list", {})
+			.then(res => alive && setInstalledCount(res?.skills?.length ?? 0))
+			.catch(() => {});
+		return () => {
+			alive = false;
+		};
+	}, [rpc, tab]);
 
 	useEffect(() => {
 		if (!rpc || tab !== "plugins") return;
@@ -98,7 +120,28 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 			</div>
 			<div className="gui-capability-body">
 				{tab === "skills" ? (
-					<CapabilityCenter rpc={rpc} />
+					<>
+						<div className="gui-capability-subtabs" role="tablist">
+							{(
+								[
+									["discover", t("discover")],
+									["installed", t("installed {count}", { count: installedCount })],
+								] as [SkillPane, string][]
+							).map(([id, label]) => (
+								<button
+									key={id}
+									type="button"
+									role="tab"
+									aria-selected={skillPane === id}
+									className={`gui-capability-subtab${skillPane === id ? " gui-capability-subtab--on" : ""}`}
+									onClick={() => setSkillPane(id)}
+								>
+									{label}
+								</button>
+							))}
+						</div>
+						{skillPane === "discover" ? <SkillMarketView rpc={rpc} /> : <CapabilityCenter rpc={rpc} />}
+					</>
 				) : tab === "plugins" ? (
 					<div className="gui-ext-plugins">
 						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}

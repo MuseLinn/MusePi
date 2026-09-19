@@ -136,6 +136,10 @@ export const general = {
 	"swarm hint": "并行运行多个智能体，适合大范围探索",
 	"goal mode hint": "点一下启用 — 下一条消息将成为目标",
 	"goal mode": "目标模式",
+	"mode work": "工作模式",
+	"mode chat": "对话模式",
+	"mode creator": "创作模式",
+	"mode design": "设计模式",
 	"goal status active": "进行中",
 	"goal status paused": "已暂停",
 	"goal status complete": "已完成",
@@ -519,6 +523,30 @@ export const general = {
 	"start here": "从这里开始",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).
 	"add a note (optional)": "添加备注（可选）",
+	// 技能市场 · 发现（能力中心 → 技能 tab）:SkillHub + skills.sh。
+	"prev page": "上一页",
+	"next page": "下一页",
+	"skill market search": "搜索技能…",
+	"skill market source": "来源",
+	"skill market source all": "全部来源",
+	"skill market source skillhub": "SkillHub 套件",
+	"skill market source skills.sh": "skills.sh 热门",
+	"skill market sort": "排序",
+	"skill market sort downloads": "下载最多",
+	"skill market sort stars": "收藏最多",
+	"skill market sort installs": "安装最多",
+	"skill market featured": "精选技能",
+	"skill market shuffle": "换一批",
+	"skill market recommended": "推荐套件",
+	"skill market all categories": "全部",
+	"skill market summary": "来自 {sources} 个市场 · 共 {total} 个技能",
+	"skill market loading": "正在加载技能市场…",
+	"skill market empty": "没有匹配的技能",
+	"skill market offline": "部分市场暂时不可用：{msg}",
+	"skill market verified": "官方认证",
+	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
+	discover: "发现",
+	"installed {count}": "我安装的 {count}",
 } as const;
 
 /** Key union for the general settings domain (source of truth). */

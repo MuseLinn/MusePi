@@ -55,6 +55,7 @@ import type {
 } from "./composer/usage-panel";
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
 import {
+	attachmentsFromWireImages,
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
@@ -884,6 +885,12 @@ export function Composer({
 						});
 						taRef.current?.focus();
 					}
+					// 取回 must bring the ATTACHMENTS back too, not just the
+					// text: the daemon returns the queued images with the
+					// popped message and dropping them forced the user to
+					// re-attach before every re-send.
+					const restored = attachmentsFromWireImages(res?.images);
+					if (restored.length > 0) setAttachments(prev => [...prev, ...restored]);
 					// Optimistic removal — the next poll confirms.
 					if (group && text) {
 						setQueued(prev =>
@@ -913,6 +920,38 @@ export function Composer({
 			})
 			.catch(() => {});
 	}, [rpc, sessionId]);
+	// 队列行 ✎编辑:同一个 daemon 出口(queuedPop),只是把载荷送进输入框
+	// 而不是丢弃 —— 用户落地即可改字、改附件,再发一次。附件同样要回来,
+	// 否则"编辑"会变成"编辑并丢图"。
+	const editQueued = useCallback(
+		(group: "steering" | "followUp", text: string): void => {
+			void popQueued(group, text);
+		},
+		[popQueued],
+	);
+	// 队列行 🗑删除:仍然走 queuedPop(队列表没有独立的 remove RPC),但把
+	// 弹出的载荷直接丢掉 —— 文本不回输入框、附件不回芯片。乐观移除 + 下一
+	// 次轮询确认。
+	const deleteQueued = useCallback(
+		(group: "steering" | "followUp", text: string): void => {
+			if (!rpc || !sessionId) return;
+			void rpc
+				.request("session.queuedPop", { sessionId, group, text })
+				.then(() => {
+					setQueued(prev =>
+						prev
+							? {
+									...prev,
+									count: Math.max(0, prev.count - 1),
+									[group]: prev[group].filter(m => m !== text),
+								}
+							: prev,
+					);
+				})
+				.catch(() => {});
+		},
+		[rpc, sessionId],
+	);
 	// Immediate snapshot refresh — called right after a busy-time send so an
 	// enqueued message shows in the chip/panel NOW instead of on the next
 	// 3s poll tick.
@@ -1788,6 +1827,8 @@ export function Composer({
 														queued={queued}
 														onSend={sendQueued}
 														onPop={popQueued}
+														onEdit={editQueued}
+														onDelete={deleteQueued}
 														onClear={clearQueued}
 														onReorder={reorderQueued}
 													/>,
