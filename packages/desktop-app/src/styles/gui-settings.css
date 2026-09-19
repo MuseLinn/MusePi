@@ -1746,6 +1746,12 @@
 	outline-offset: 1px;
 }
 
+/* A board-drawn chip opens the sketch board, not the zoom lightbox — the
+ * cursor has to say so (zoom-in would promise a preview). */
+.gui-attach-chip--sketch .gui-attach-thumb {
+	cursor: pointer;
+}
+
 /* File card: extension icon + one-line truncated name. */
 .gui-attach-chip--file {
 	display: flex;

@@ -54,7 +54,13 @@ import type {
 	UsageUnreportedAccountView,
 } from "./composer/usage-panel";
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
-import { attachmentWorkspacePath, dataUrlToFile, readFileAsBase64, useAttachments } from "./composer/use-attachments";
+import {
+	dataUrlToFile,
+	markSketchChip,
+	nextSketchFileName,
+	uploadAttachmentFiles,
+	useAttachments,
+} from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
@@ -258,21 +264,37 @@ export function Composer({
 			closeSketch();
 			if (editId !== null) {
 				// Re-edit: swap the chip's pixels in place (position, size and
-				// the rest of the draft survive).
+				// the rest of the draft survive). `sketch` must survive the
+				// spread too, or the chip stops reopening the board after the
+				// first re-edit — this branch is reached precisely because the
+				// chip carries the flag.
 				setAttachments(prev =>
 					prev.map(a =>
 						a.id === editId
-							? { ...a, dataUrl, size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75) }
+							? {
+									...a,
+									dataUrl,
+									mimeType: dataUrl.slice(5, dataUrl.indexOf(";")) || a.mimeType,
+									size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75),
+									sketch: true,
+								}
 							: a,
 					),
 				);
 				return;
 			}
+			// Board-drawn chips are identified by NAME (see nextSketchFileName):
+			// the name has to be unique per finish, and `sketch-` alone is not.
+			const fileName = nextSketchFileName();
 			void (async () => {
-				const file = dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`);
-				await addFiles([file]);
-				// Mark the fresh chip so clicking it reopens the board.
-				setAttachments(prev => prev.map(a => (a.name.startsWith("sketch-") ? { ...a, sketch: true } : a)));
+				await addFiles([dataUrlToFile(dataUrl, fileName)]);
+				// Mark the fresh chip so clicking it reopens the board. This
+				// must run AFTER addFiles settles: addFiles awaits the daemon
+				// settings read before appending, and marking first meant
+				// mapping the pre-add (empty) array — the flag was dropped and
+				// the chip fell back to the plain image preview ("clicking it
+				// just previews the picture").
+				setAttachments(prev => markSketchChip(prev, fileName));
 			})();
 		},
 		[sketch.editId, closeSketch, setAttachments, addFiles],
@@ -1293,37 +1315,12 @@ export function Composer({
 				// agent can open them with its file tools. Any failure aborts
 				// the send (chips stay, a notice explains) — a message whose
 				// attachments never landed would just confuse the agent.
+				// (Same helper the empty-state composer uses post-create.)
 				void (async () => {
 					setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: true } : a)));
-					const refs: string[] = [];
-					const usedPaths = new Set<string>();
+					let refs: string[];
 					try {
-						for (const chip of fileChips) {
-							if (!chip.file) throw new Error(t("attachment expired re-add"));
-							if (!cwd) throw new Error(t("no workspace for attachments"));
-							let wsPath = attachmentWorkspacePath(chip.name);
-							// Same-name collisions get -2/-3 suffixes instead of
-							// silently overwriting an earlier attachment.
-							const dot = wsPath.lastIndexOf(".");
-							const sep = wsPath.lastIndexOf("/");
-							const stem = dot > sep ? wsPath.slice(0, dot) : wsPath;
-							const ext = dot > sep ? wsPath.slice(dot) : "";
-							let n = 2;
-							while (usedPaths.has(wsPath)) {
-								wsPath = `${stem}-${n}${ext}`;
-								n++;
-							}
-							usedPaths.add(wsPath);
-							const b64 = await readFileAsBase64(chip.file);
-							const res = await rpc.request<{ ok?: boolean; error?: string }>("fs.write", {
-								cwd,
-								path: wsPath,
-								content: b64,
-								encoding: "base64",
-							});
-							if (res && res.ok === false) throw new Error(res.error ?? "fs.write failed");
-							refs.push(`[Attachment] ${wsPath}`);
-						}
+						refs = await uploadAttachmentFiles(rpc, cwd, fileChips);
 					} catch (err) {
 						setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: false } : a)));
 						showSlashNotice(

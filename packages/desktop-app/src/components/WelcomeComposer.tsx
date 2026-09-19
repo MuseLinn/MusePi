@@ -41,7 +41,7 @@ import {
 } from "./Composer";
 import { VoiceButton } from "./composer/action-buttons";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
-import { dataUrlToFile } from "./composer/use-attachments";
+import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -94,10 +94,32 @@ function nextTip(current: (typeof TIP_KEYS)[number]): (typeof TIP_KEYS)[number] 
 	return pool[Math.floor(Math.random() * pool.length)] ?? TIP_KEYS[0]!;
 }
 
+/** One chip in the empty-state composer. Shape-compatible with the session
+ *  composer's ComposerAttachment (composer-frame renders both), plus the raw
+ *  handle for non-image files — the welcome has no workspace, so the bytes
+ *  ride here until the host writes them into the session it creates. */
+interface WelcomeAttachment {
+	id: number;
+	kind: "image" | "file";
+	dataUrl: string;
+	mimeType: string;
+	name: string;
+	size: number;
+	file?: File;
+	/** Board-drawn chip (SketchPad): clicking it reopens the canvas. */
+	sketch?: boolean;
+}
+
 /**
  * Empty-state composer (opencode/ZCode style): large centered input with a
  * border-beam accent, a faint brand watermark, a time-aware greeting, and a
  * rotating tip line that refreshes with a shimmer.
+ *
+ * ONE composer, two states: the attachment surface here is the session
+ * composer's, verbatim — same chips, same attach menu (images / sketch /
+ * files), same click-to-extend board. The empty state used to ship a
+ * reduced copy (images only, no file entry, chips that could not be
+ * reopened), which read as an unfinished feature rather than a state.
  */
 export function WelcomeComposer({
 	onSubmit,
@@ -129,6 +151,13 @@ export function WelcomeComposer({
 			thinkingLevel?: ThinkingLevel | null;
 			modelId?: string | null;
 			images?: { type: "image"; data: string; mimeType: string }[];
+			/** Non-image chips picked in the empty state. The welcome surface
+			 *  has no session (and therefore no workspace) yet, so the host
+			 *  resolves the project — or reports that one is needed — when the
+			 *  session it creates is ready. Without this the file entry would
+			 *  have to be hidden, which is exactly the empty/session asymmetry
+			 *  we are removing. */
+			files?: File[];
 			planMode?: boolean;
 			goalMode?: boolean;
 		},
@@ -251,9 +280,7 @@ export function WelcomeComposer({
 		return () => window.removeEventListener("musepi-gui-quote-append", onQuoteAppend);
 	}, []);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
-	const [attachments, setAttachments] = useState<{ id: number; dataUrl: string; mimeType: string; name: string }[]>(
-		[],
-	);
+	const [attachments, setAttachments] = useState<WelcomeAttachment[]>([]);
 	// Armed plan/goal (openchamber parity): one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
 	// its shape. The first sent message applies the mode (goal: the
@@ -262,11 +289,17 @@ export function WelcomeComposer({
 	const [planArmed, setPlanArmed] = useState(false);
 	const [goalArmed, setGoalArmed] = useState(false);
 	const attachId = useRef(0);
+	/** Attach chip clicked → open the same attach menu the paperclip opens
+	 *  (the frame owns no picker of its own; the menu does). */
+	const openAttachMenu = useRef<(() => void) | null>(null);
 	// Sketch board (Codex 绘画 parity): welcome-side sketching rides the same
 	// image-attachment pipeline (no workspace needed). `initial` mounts an
-	// image from the lightbox edit action as the base layer.
-	const [sketch, setSketch] = useState<{ open: boolean; initial: string | null }>({
+	// image from the lightbox edit action as the base layer; `editId` targets
+	// an existing chip so finishing replaces it in place (session-composer
+	// parity — an extended board must not pile up a second chip).
+	const [sketch, setSketch] = useState<{ open: boolean; editId: number | null; initial: string | null }>({
 		open: false,
+		editId: null,
 		initial: null,
 	});
 
@@ -1001,24 +1034,76 @@ export function WelcomeComposer({
 		};
 	}, []);
 
-	const addImageFiles = async (files: File[]): Promise<void> => {
+	/** Attachment intake — the session composer's `addFiles`, mirrored for the
+	 *  session-less state: images become data-URL chips (front-resized,
+	 *  `images.autoResize`-governed), every other file becomes a file chip
+	 *  whose raw handle rides in state until the host writes it into the
+	 *  session this first prompt creates. */
+	const addFiles = async (files: File[]): Promise<void> => {
+		if (files.length === 0) return;
 		const imgs = files.filter(f => f.type.startsWith("image/"));
-		if (imgs.length === 0) return;
+		const others = files.filter(f => !f.type.startsWith("image/"));
 		// Front-resize large images (TUI parity, images.autoResize-governed).
-		const autoResize = await readAutoResizeImages(rpc);
-		const entries = await Promise.all(
-			imgs.map(async f => {
+		const autoResize = imgs.length > 0 ? await readAutoResizeImages(rpc) : false;
+		const entries = await Promise.all([
+			...imgs.map(async (f): Promise<WelcomeAttachment> => {
 				const dataUrl = await readFileAsDataURL(f);
 				const resized = autoResize ? await resizeImageDataUrl(dataUrl, f.type) : null;
 				return {
 					id: attachId.current++,
+					kind: "image",
 					dataUrl: resized?.dataUrl ?? dataUrl,
 					mimeType: resized?.mimeType ?? f.type,
 					name: f.name,
+					size: f.size,
 				};
 			}),
-		);
+			...others.map(
+				(f): WelcomeAttachment => ({
+					id: attachId.current++,
+					kind: "file",
+					dataUrl: "",
+					mimeType: f.type || "application/octet-stream",
+					name: f.name,
+					size: f.size,
+					file: f,
+				}),
+			),
+		]);
 		setAttachments(prev => [...prev, ...entries]);
+	};
+
+	// Board → chip, one path for every entry point (attach menu, chip click,
+	// lightbox edit). `sketch.editId` decides whether this extends an existing
+	// chip or mints one — the session composer's rule, so a board opened from a
+	// chip never leaves a duplicate behind.
+	const onSketchDone = (dataUrl: string): void => {
+		const editId = sketch.editId;
+		setSketch({ open: false, editId: null, initial: null });
+		if (editId !== null) {
+			setAttachments(prev =>
+				prev.map(a =>
+					a.id === editId
+						? {
+								...a,
+								dataUrl,
+								mimeType: dataUrl.slice(5, dataUrl.indexOf(";")) || a.mimeType,
+								size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75),
+								sketch: true,
+							}
+						: a,
+				),
+			);
+			return;
+		}
+		const fileName = nextSketchFileName();
+		void (async () => {
+			await addFiles([dataUrlToFile(dataUrl, fileName)]);
+			// AFTER the add settles: addFiles awaits the settings read before
+			// appending, so marking first would map the pre-add array and drop
+			// the flag (the chip would then open the plain preview).
+			setAttachments(prev => markSketchChip(prev, fileName));
+		})();
 	};
 
 	// Send a trimmed prompt (shared by form submit and voice-dictation
@@ -1045,11 +1130,17 @@ export function WelcomeComposer({
 			// session.create forwards it as modelPattern, which resolves exactly
 			// via the daemon's provider reference match — no bare-id ambiguity.
 			modelId: modelTouched.current ? modelId : effectiveModelId,
-			images: attachments.map(a => ({
-				type: "image" as const,
-				data: a.dataUrl.split(",")[1] ?? "",
-				mimeType: a.mimeType,
-			})),
+			images: attachments
+				.filter(a => a.kind !== "file" && a.dataUrl)
+				.map(a => ({
+					type: "image" as const,
+					data: a.dataUrl.split(",")[1] ?? "",
+					mimeType: a.mimeType,
+				})),
+			// Non-image chips (the attach menu's file entry). The host owns the
+			// workspace decision: it writes these into the session it creates,
+			// or asks for a project when there is none.
+			files: attachments.map(a => a.file).filter((f): f is File => f !== undefined),
 			planMode: planArmed,
 			goalMode: applyGoal,
 		});
@@ -1435,10 +1526,18 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-							onEditImage={src => setSketch({ open: true, initial: src })}
+							onEditImage={src => setSketch({ open: true, editId: null, initial: src })}
+							onEditSketch={id => {
+								const chip = attachments.find(x => x.id === id);
+								if (chip) setSketch({ open: true, editId: id, initial: chip.dataUrl });
+							}}
+							onAddAttachment={() => openAttachMenu.current?.()}
 							footerLeft={
 								<>
 									<AttachMenu
+										onReady={open => {
+											openAttachMenu.current = open;
+										}}
 										goalMode={goalArmed}
 										planMode={planArmed}
 										// Welcome toggles ARM the mode chip only — no popup
@@ -1451,8 +1550,12 @@ export function WelcomeComposer({
 										// runs in chat); the welcome state has none, and
 										// the goal row is already disabled there.
 										onGuidedGoal={() => {}}
-										onPickImages={files => void addImageFiles(files)}
-										onSketch={() => setSketch({ open: true, initial: null })}
+										onPickImages={files => void addFiles(files)}
+										// Same entry set as the session composer: the empty
+										// state is not a reduced product. File chips wait in
+										// state until the session this prompt creates exists.
+										onPickFiles={files => void addFiles(files)}
+										onSketch={() => setSketch({ open: true, editId: null, initial: null })}
 										onInsert={token => {
 											const ta = taRef.current;
 											if (!ta) return;
@@ -1732,13 +1835,16 @@ export function WelcomeComposer({
 									data-focused={focused ? "1" : "0"}
 									value={text}
 									onPaste={e => {
+										// Any pasted file becomes a chip (session-composer
+										// parity); plain text falls through to the
+										// textarea / long-paste gate.
 										const files = [...e.clipboardData.items]
-											.filter(i => i.type.startsWith("image/"))
+											.filter(i => i.kind === "file")
 											.map(i => i.getAsFile())
 											.filter((f): f is File => f !== null);
 										if (files.length > 0) {
 											e.preventDefault();
-											void addImageFiles(files);
+											void addFiles(files);
 											return;
 										}
 										const pastedText = e.clipboardData.getData("text");
@@ -1749,9 +1855,9 @@ export function WelcomeComposer({
 									}}
 									onDrop={e => {
 										const files = [...e.dataTransfer.files];
-										if (files.some(f => f.type.startsWith("image/"))) {
+										if (files.length > 0) {
 											e.preventDefault();
-											void addImageFiles(files);
+											void addFiles(files);
 										}
 									}}
 									onChange={e => {
@@ -1937,11 +2043,8 @@ export function WelcomeComposer({
 			{sketch.open && (
 				<SketchPad
 					initialImage={sketch.initial}
-					onClose={() => setSketch({ open: false, initial: null })}
-					onDone={dataUrl => {
-						setSketch({ open: false, initial: null });
-						void addImageFiles([dataUrlToFile(dataUrl, `sketch-${Date.now()}.png`)]);
-					}}
+					onClose={() => setSketch({ open: false, editId: null, initial: null })}
+					onDone={onSketchDone}
 				/>
 			)}
 		</>

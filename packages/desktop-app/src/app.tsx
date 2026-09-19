@@ -12,6 +12,7 @@ import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { FloatingScrollbar } from "./components/FloatingScrollbar";
@@ -1824,6 +1825,11 @@ function AppInner(): ReactNode {
 				thinkingLevel?: ThinkingLevel | null;
 				modelId?: string | null;
 				images?: { type: "image"; data: string; mimeType: string }[];
+				/** Non-image chips from the empty-state composer. They have no
+				 *  workspace at pick time, so we write them into the session we
+				 *  just created — the same fs.write channel the session composer
+				 *  uses — and prefix the prompt with the resulting paths. */
+				files?: File[];
 				planMode?: boolean;
 				goalMode?: boolean;
 			},
@@ -1905,7 +1911,35 @@ function AppInner(): ReactNode {
 					.catch(() => {});
 				return;
 			}
-			await sendPrompt(text, opts?.images, id);
+			// Empty-state file chips: the welcome surface has no workspace yet,
+			// so the upload happens HERE, against the session we just created.
+			// The session composer does the same work up front (it has a cwd);
+			// same helper, so channel / sanitizing / collision rules can't drift.
+			let prompt = text;
+			if (opts?.files && opts.files.length > 0) {
+				const client = rpcRef.current;
+				try {
+					const refs = client
+						? await uploadAttachmentFiles(
+								client,
+								// The new session's workspace is `project` — the same
+								// value createSession just received. Fall back to the
+								// composer's own pick when there is no project yet.
+								project ?? null,
+								opts.files.map(f => ({ file: f, name: f.name })),
+							)
+						: [];
+					if (refs.length > 0) prompt = `${refs.join("\n")}\n\n${text}`.trim();
+				} catch (err) {
+					// Same contract as the session composer: a message whose
+					// attachments never landed would just confuse the agent.
+					const msg = `${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
+					dispatchPetActivity("error", msg);
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: msg }));
+					return;
+				}
+			}
+			await sendPrompt(prompt, opts?.images, id);
 		},
 		[createSession, project, sendPrompt],
 	);

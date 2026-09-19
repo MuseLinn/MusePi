@@ -97,10 +97,15 @@ export function ComposerFrame({
 		sketch?: boolean;
 	}[];
 	onRemoveAttachment(id: number): void;
-	/** Reopen the sketch board for a board-drawn chip (Codex parity:
-	 *  clicking the drawn image falls back into the canvas). Optional —
-	 *  omitted on scenes without a sketch board. */
-	onEditSketch?(id: number): void;
+	/** Board-drawn chip clicked: reopen the sketch board for editing (Codex
+	 *  parity — clicking the drawn image falls back into the canvas).
+	 *
+	 *  Deliberately NOT optional: making it optional let a host that renders
+	 *  chips omit it, and the click then silently degraded to the plain image
+	 *  lightbox with nothing failing loudly. The marker was in fact being
+	 *  dropped upstream, but "no handler" is the failure mode this signature
+	 *  now makes unrepresentable. Hosts that render chips must wire it. */
+	onEditSketch(id: number): void;
 	/** Edit an image in the sketch board from the attachment lightbox
 	 *  (Codex 编辑预览 parity). Receives the image source. */
 	onEditImage?(src: string): void;
@@ -190,7 +195,7 @@ export function ComposerFrame({
 								</button>
 							</div>
 						) : (
-							<div key={a.id} className="gui-attach-chip">
+							<div key={a.id} className={`gui-attach-chip${a.sketch ? " gui-attach-chip--sketch" : ""}`}>
 								<img
 									src={a.dataUrl}
 									alt={a.name}
@@ -198,11 +203,11 @@ export function ComposerFrame({
 									role="button"
 									tabIndex={0}
 									title={a.sketch ? t("sketch") : t("preview image")}
-									onClick={() => (a.sketch ? onEditSketch?.(a.id) : openPreview(a.id))}
+									onClick={() => (a.sketch ? onEditSketch(a.id) : openPreview(a.id))}
 									onKeyDown={e => {
 										if (e.key === "Enter" || e.key === " ") {
 											e.preventDefault();
-											if (a.sketch) onEditSketch?.(a.id);
+											if (a.sketch) onEditSketch(a.id);
 											else openPreview(a.id);
 										}
 									}}

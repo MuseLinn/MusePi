@@ -1,6 +1,6 @@
 import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
@@ -12,6 +12,7 @@ import { Icon } from "../vendor/oc-icons";
  * status chips above the composer reflect the live state.
  */
 export function AttachMenu({
+	onReady,
 	goalMode,
 	planMode,
 	planDisabled = false,
@@ -47,11 +48,20 @@ export function AttachMenu({
 	onSketch?(): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
 	onInsert(token: string): void;
+	/** Hands the host a way to open this menu — the composer frame's
+	 *  trailing "+" chip routes here so there is exactly ONE attach surface
+	 *  (the anchor and the pickers live in this component; a second picker
+	 *  in the frame would drift from this one). */
+	onReady?(open: () => void): void;
 }): ReactNode {
 	const [open, setOpen] = useState(false);
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	const fileRef = useRef<HTMLInputElement | null>(null);
 	const anyFileRef = useRef<HTMLInputElement | null>(null);
+	// Hand the opener up once (stable identity — `setOpen` never changes).
+	// Effect, not render: emitting during render would be a side effect in
+	// the render phase.
+	useEffect(() => onReady?.(() => setOpen(true)), [onReady]);
 
 	return (
 		<div className="gui-model" ref={anchorRef}>

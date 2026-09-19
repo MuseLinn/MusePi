@@ -95,6 +95,51 @@ export function attachmentWorkspacePath(name: string): string {
 	return `attachments/${safe.length > 0 ? safe : "file"}`;
 }
 
+/** Write one batch of non-image files into `cwd` via fs.write(base64) and
+ *  return the `[Attachment] <path>` reference lines for the prompt.
+ *
+ *  ONE implementation for both composers: the session composer has a cwd at
+ *  send time, the empty-state composer only gets one after the session it
+ *  creates exists — but the channel, the sanitizing rule and the same-name
+ *  suffixing must not drift between them. Throws on the first failure so the
+ *  caller can abort the send (a message whose attachments never landed just
+ *  confuses the agent). */
+export async function uploadAttachmentFiles(
+	rpc: RpcClient,
+	cwd: string | null | undefined,
+	files: readonly { file?: File; name: string }[],
+): Promise<string[]> {
+	const refs: string[] = [];
+	const usedPaths = new Set<string>();
+	for (const chip of files) {
+		if (!chip.file) throw new Error("attachment expired re-add");
+		if (!cwd) throw new Error("no workspace for attachments");
+		let wsPath = attachmentWorkspacePath(chip.name);
+		// Same-name collisions get -2/-3 suffixes instead of silently
+		// overwriting an earlier attachment.
+		const dot = wsPath.lastIndexOf(".");
+		const sep = wsPath.lastIndexOf("/");
+		const stem = dot > sep ? wsPath.slice(0, dot) : wsPath;
+		const ext = dot > sep ? wsPath.slice(dot) : "";
+		let n = 2;
+		while (usedPaths.has(wsPath)) {
+			wsPath = `${stem}-${n}${ext}`;
+			n++;
+		}
+		usedPaths.add(wsPath);
+		const b64 = await readFileAsBase64(chip.file);
+		const res = await rpc.request<{ ok?: boolean; error?: string }>("fs.write", {
+			cwd,
+			path: wsPath,
+			content: b64,
+			encoding: "base64",
+		});
+		if (res && res.ok === false) throw new Error(res.error ?? "fs.write failed");
+		refs.push(`[Attachment] ${wsPath}`);
+	}
+	return refs;
+}
+
 /** Board/lightbox PNG → File so a finished sketch reuses the normal
  *  image-attachment pipeline (addFiles → data URL chip → send images).
  *
@@ -114,6 +159,32 @@ export function dataUrlToFile(dataUrl: string, name: string): File {
 		? Uint8Array.from(atob(body), ch => ch.charCodeAt(0))
 		: new TextEncoder().encode(decodeURIComponent(body));
 	return new File([bytes], name, { type: mimeType });
+}
+
+/** Sequence for board-drawn chip names. Board chips are identified by name
+ *  across two awaits (addFiles → setAttachments), so the name must be unique
+ *  per finish: two sketches saved in the same millisecond would otherwise be
+ *  marked together and a re-edit would target the wrong one. */
+let sketchSeq = 0;
+
+/** Name for the chip a finished board will produce. */
+export function nextSketchFileName(now: number = Date.now()): string {
+	return `sketch-${now.toString(36)}-${sketchSeq++}.png`;
+}
+
+/**
+ * Mark ONE image chip — identified by its exact filename — as board-drawn.
+ *
+ * The name argument is not a convenience. Matching on the `sketch-` prefix
+ * (the original form) marked *every* so-named chip: a re-edit ran against
+ * several chips at once and every later sketch re-flagged older ones. Exact
+ * name + image kind keeps the call idempotent and single-target.
+ */
+export function markSketchChip<T extends { kind: "image" | "file"; name: string }>(
+	chips: readonly T[],
+	fileName: string,
+): (T & { sketch?: boolean })[] {
+	return chips.map(c => (c.kind !== "file" && c.name === fileName ? { ...c, sketch: true } : c));
 }
 
 /**
