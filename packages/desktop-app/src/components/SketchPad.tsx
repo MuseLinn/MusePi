@@ -1,6 +1,19 @@
 import { t } from "@musepi/guest-client";
 import type Konva from "konva";
-import { Check, Circle, Eraser, MousePointer2, Pencil, Redo2, Slash, Square, Trash2, Undo2, X } from "lucide-react";
+import {
+	ArrowUpRight,
+	Check,
+	Circle,
+	Eraser,
+	MousePointer2,
+	Pencil,
+	Redo2,
+	Slash,
+	Square,
+	Trash2,
+	Undo2,
+	X,
+} from "lucide-react";
 import { getStroke } from "perfect-freehand";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -27,7 +40,7 @@ import { useConfirm } from "../lib/prompt-dialog";
  * simplified to a 180ms transform toward the composer row).
  */
 
-type Tool = "pen" | "eraser" | "line" | "arrow" | "rect" | "ellipse";
+type Tool = "select" | "pen" | "eraser" | "line" | "arrow" | "rect" | "ellipse";
 
 interface Stroke {
 	id: number;
@@ -38,8 +51,12 @@ interface Stroke {
 	points: number[];
 }
 
-/** Undo/redo ops: single-stroke adds and batch clears keep the stacks small. */
-type Op = { kind: "add"; stroke: Stroke } | { kind: "clear"; strokes: Stroke[] };
+/** Undo/redo ops: single-stroke adds, batch clears, and moves all keep the
+ *  stacks small. A move records `from`/`to` deltas so undo is exact. */
+type Op =
+	| { kind: "add"; stroke: Stroke }
+	| { kind: "clear"; strokes: Stroke[] }
+	| { kind: "move"; id: number; from: number[]; to: number[] };
 
 const PALETTE = [
 	"#1f2328",
@@ -57,10 +74,11 @@ const PALETTE = [
 const SIZES = [2, 4, 8, 14];
 
 const TOOL_ITEMS = [
+	["select", MousePointer2, "sketch tool select"],
 	["pen", Pencil, "sketch tool pen"],
 	["eraser", Eraser, "sketch tool eraser"],
 	["line", Slash, "sketch tool line"],
-	["arrow", MousePointer2, "sketch tool arrow"],
+	["arrow", ArrowUpRight, "sketch tool arrow"],
 	["rect", Square, "sketch tool rect"],
 	["ellipse", Circle, "sketch tool ellipse"],
 ] as const;
@@ -105,6 +123,33 @@ function inkOutline(points: number[], size: number): number[] {
 	return flat;
 }
 
+/** Bounding box of a stroke, padded for line width — the select tool draws
+ *  its dashed frame from this. */
+function strokeBox(s: Stroke): { x: number; y: number; w: number; h: number } {
+	let minX = Number.POSITIVE_INFINITY;
+	let minY = Number.POSITIVE_INFINITY;
+	let maxX = Number.NEGATIVE_INFINITY;
+	let maxY = Number.NEGATIVE_INFINITY;
+	if (s.tool === "pen") {
+		for (let i = 0; i + 1 < s.points.length; i += 3) {
+			const x = s.points[i];
+			const y = s.points[i + 1];
+			if (x < minX) minX = x;
+			if (y < minY) minY = y;
+			if (x > maxX) maxX = x;
+			if (y > maxY) maxY = y;
+		}
+	} else {
+		const [x0, y0, x1, y1] = s.points;
+		minX = Math.min(x0, x1);
+		minY = Math.min(y0, y1);
+		maxX = Math.max(x0, x1);
+		maxY = Math.max(y0, y1);
+	}
+	const pad = s.size * 1.8 + 4;
+	return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+}
+
 /** Contain-fit an image into the stage box, centered. */
 function fitImage(
 	img: { width: number; height: number },
@@ -118,6 +163,24 @@ function fitImage(
 		width: img.width * scale,
 		height: img.height * scale,
 	};
+}
+
+/** Translate a stroke's points by (dx,dy). Pen points are [x,y,pressure,…],
+ *  shapes are [x0,y0,x1,y1] — both carry x at even and y at odd indices, so
+ *  the same stride rule shifts either. Committing moves through this instead
+ *  of walking raw arrays at every call site. */
+function shiftPoints(points: number[], dx: number, dy: number): number[] {
+	return points.map((v, i) => (i % 3 === 2 ? v : v + (i % 2 === 0 ? dx : dy)));
+}
+
+/** perfect-freehand emits a closed outline; Konva needs an explicit closing
+ *  segment or the ink renders as an open sliver. */
+function inkPathLength(flat: number[]): number {
+	let sum = 0;
+	for (let i = 2; i + 1 < flat.length; i += 2) {
+		sum += Math.hypot(flat[i] - flat[i - 2], flat[i + 1] - flat[i - 1]);
+	}
+	return sum;
 }
 
 export function SketchPad({
@@ -151,6 +214,9 @@ export function SketchPad({
 	 *  shared/sent images stay readable outside the app. */
 	const [lightExport, setLightExport] = useState(false);
 	const [forceWhite, setForceWhite] = useState(false);
+	/** Select tool: the picked stroke renders a dashed frame, drag moves it. */
+	const [selectedId, setSelectedId] = useState<number | null>(null);
+	const moveRef = useRef<{ id: number; from: number[]; start: { x: number; y: number } } | null>(null);
 	const { confirm } = useConfirm();
 
 	// Track the overlay's available box; the stage fills it.
@@ -181,17 +247,25 @@ export function SketchPad({
 		});
 	}, []);
 
+	const commitMove = useCallback((id: number, from: number[], to: number[]): void => {
+		setStrokes(prev => prev.map(s => (s.id === id ? { ...s, points: to } : s)));
+		setPast(prev => [...prev.slice(-99), { kind: "move", id, from, to }]);
+		setFuture([]);
+		setDirty(true);
+	}, []);
+
 	const undo = useCallback((): void => {
 		const op = past[past.length - 1];
 		if (!op) return;
 		setPast(prev => prev.slice(0, -1));
 		if (op.kind === "add") {
 			setStrokes(s => s.filter(x => x.id !== op.stroke.id));
-			setFuture(f => [...f, op]);
+		} else if (op.kind === "move") {
+			setStrokes(s => s.map(x => (x.id === op.id ? { ...x, points: op.from } : x)));
 		} else {
 			setStrokes(op.strokes);
-			setFuture(f => [...f, op]);
 		}
+		setFuture(f => [...f, op]);
 	}, [past]);
 
 	const redo = useCallback((): void => {
@@ -200,6 +274,9 @@ export function SketchPad({
 		setFuture(prev => prev.slice(0, -1));
 		if (op.kind === "add") {
 			setStrokes(s => [...s, op.stroke]);
+			setPast(p => [...p, op]);
+		} else if (op.kind === "move") {
+			setStrokes(s => s.map(x => (x.id === op.id ? { ...x, points: op.to } : x)));
 			setPast(p => [...p, op]);
 		} else {
 			setPast(p => [...p, { kind: "clear", strokes: op.strokes }]);
@@ -247,6 +324,20 @@ export function SketchPad({
 			const stage = stageRef.current;
 			const pos = stage?.getPointerPosition();
 			if (!stage || !pos) return;
+			if (tool === "select") {
+				const hit = stage.getIntersection(pos);
+				const id = Number(hit?.name() === "sk-stroke" ? hit.id() : NaN);
+				if (Number.isNaN(id)) {
+					setSelectedId(null);
+					return;
+				}
+				setSelectedId(id);
+				const victim = strokes.find(s => s.id === id);
+				if (victim) {
+					moveRef.current = { id, from: victim.points, start: pos };
+				}
+				return;
+			}
 			if (tool === "eraser") {
 				erasingRef.current = true;
 				const hit = stage.getIntersection(pos);
@@ -265,7 +356,7 @@ export function SketchPad({
 			drawRef.current = stroke;
 			setPreview(stroke);
 		},
-		[tool, color, size, dropStroke],
+		[tool, color, size, dropStroke, strokes],
 	);
 
 	const onPointerMove = useCallback(
@@ -275,6 +366,16 @@ export function SketchPad({
 			if (!stage) return;
 			const pos = stage.getPointerPosition();
 			if (!pos) return;
+			if (tool === "select") {
+				const mv = moveRef.current;
+				if (!mv) return;
+				setStrokes(prev =>
+					prev.map(s =>
+						s.id === mv.id ? { ...s, points: shiftPoints(mv.from, pos.x - mv.start.x, pos.y - mv.start.y) } : s,
+					),
+				);
+				return;
+			}
 			if (tool === "eraser") {
 				// Drag-erase (while the pointer is down — onPointerDown gated
 				// the start): sweep-delete every stroke the pointer crosses.
@@ -297,6 +398,13 @@ export function SketchPad({
 
 	const onPointerUp = useCallback((): void => {
 		erasingRef.current = false;
+		const mv = moveRef.current;
+		if (mv) {
+			moveRef.current = null;
+			const after = strokes.find(s => s.id === mv.id)?.points;
+			if (after && after !== mv.from) commitMove(mv.id, mv.from, after);
+			return;
+		}
 		const draw = drawRef.current;
 		drawRef.current = null;
 		if (!draw) return;
@@ -304,7 +412,7 @@ export function SketchPad({
 		// A tap with the pen (no movement) still commits — a dot is content.
 		if (draw.tool === "pen" && draw.points.length < 6) return;
 		commit(draw);
-	}, [commit]);
+	}, [commit, strokes, commitMove]);
 
 	const finish = (): void => {
 		const stage = stageRef.current;
@@ -333,14 +441,21 @@ export function SketchPad({
 			key: isPreview ? "sk-preview" : s.id,
 			...(isPreview ? {} : { id: String(s.id), name: "sk-stroke" as const }),
 			perfectDrawEnabled: false,
+			// Thin pen ink (size 2 → outline 4.4px) is a miserable click
+			// target; widen the hit region without touching the rendering.
+			hitStrokeWidth: Math.max(14, s.size * 2.5),
 		};
 		if (s.tool === "pen") {
+			const outline = inkOutline(s.points, s.size);
 			return (
 				<Line
 					{...common}
-					points={inkOutline(s.points, s.size)}
+					points={outline}
 					closed
 					fill={s.color}
+					lineJoin="round"
+					lineCap="round"
+					pathLength={inkPathLength(outline)}
 					opacity={isPreview ? 0.92 : 1}
 				/>
 			);
@@ -392,6 +507,8 @@ export function SketchPad({
 	const bg = themeCanvasColor();
 	const canUndo = past.length > 0;
 	const canRedo = future.length > 0;
+	const selected = selectedId === null ? undefined : strokes.find(s => s.id === selectedId);
+	const box = selected ? strokeBox(selected) : null;
 
 	return (
 		<div className={`gui-sketch-veil${closing ? " gui-sketch-veil--closing" : ""}`} role="dialog" aria-modal="true">
@@ -409,7 +526,10 @@ export function SketchPad({
 							title={t(labelKey)}
 							aria-label={t(labelKey)}
 							aria-pressed={tool === key}
-							onClick={() => setTool(key)}
+							onClick={() => {
+								setTool(key);
+								if (key !== "select") setSelectedId(null);
+							}}
 						>
 							<IconCmp size={14} />
 						</button>
@@ -456,7 +576,10 @@ export function SketchPad({
 							onPointerMove={onPointerMove}
 							onPointerUp={onPointerUp}
 							onPointerLeave={onPointerUp}
-							style={{ cursor: tool === "eraser" ? "cell" : "crosshair", touchAction: "none" }}
+							style={{
+								cursor: tool === "eraser" ? "cell" : tool === "select" ? "default" : "crosshair",
+								touchAction: "none",
+							}}
 						>
 							<Layer listening={false}>
 								<Rect x={0} y={0} width={stageSize.w} height={stageSize.h} fill={forceWhite ? "#ffffff" : bg} />
@@ -467,25 +590,21 @@ export function SketchPad({
 							<Layer>
 								{strokes.map(s => renderStroke(s))}
 								{preview && renderStroke(preview, true)}
-								{/* Center-line hit targets under pen strokes keep the
-								    drag-eraser reliable on thin ink (fill-only hit tests
-								    miss at the stroke's ends). */}
-								{tool === "eraser" &&
-									strokes
-										.filter(s => s.tool === "pen")
-										.map(s => (
-											<Line
-												key={`hit-${s.id}`}
-												id={String(s.id)}
-												name="sk-stroke"
-												points={s.points.filter((_, i) => i % 3 !== 2)}
-												stroke="transparent"
-												strokeWidth={Math.max(12, s.size * 2)}
-												tension={0.35}
-												lineCap="round"
-												lineJoin="round"
-											/>
-										))}
+							</Layer>
+							<Layer listening={false}>
+								{box && (
+									<Rect
+										x={box.x}
+										y={box.y}
+										width={box.w}
+										height={box.h}
+										stroke="var(--accent)"
+										strokeWidth={1.5}
+										dash={[6, 4]}
+										cornerRadius={4}
+										perfectDrawEnabled={false}
+									/>
+								)}
 							</Layer>
 						</Stage>
 					)}

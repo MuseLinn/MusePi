@@ -80,6 +80,7 @@ export const composer = {
 	"tts needs daemon backend": "朗读需要 daemon 后端",
 	// ── SketchPad (Codex 绘画 parity) ─────────────────────────────────────
 	sketch: "绘画",
+	"sketch tool select": "选择",
 	"sketch tool pen": "画笔",
 	"sketch tool eraser": "橡皮",
 	"sketch tool line": "直线",
