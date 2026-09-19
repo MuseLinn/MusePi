@@ -136,6 +136,7 @@ const repoScriptTests = [
 	"./scripts/ci-release-publish.test.ts",
 	"./scripts/fix-dts-extensions.test.ts",
 	"./scripts/prune-caches.test.ts",
+	"./scripts/check-peer-compat.test.ts",
 ];
 
 const codingAgentNativePathPatterns = [
@@ -369,6 +370,7 @@ async function commandsForMode(mode: Mode): Promise<TestCommand[]> {
 						"./scripts/ci-release-publish.test.ts",
 						"./scripts/fix-dts-extensions.test.ts",
 						"./scripts/prune-caches.test.ts",
+						"./scripts/check-peer-compat.test.ts",
 					],
 				},
 			];
