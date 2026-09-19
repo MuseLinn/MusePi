@@ -17,6 +17,11 @@ const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, ne
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");
+// win32 desktop integration (foreground-fullscreen probe, per-monitor DPI,
+// DWM cloak recovery) over koffi FFI. Instantiates to a fail-open stub off
+// Windows or when koffi is unavailable — every caller can use it unguarded.
+const { createWindowsNative, CLOAK_APP } = require("./win32-native.cjs");
+const win32Native = createWindowsNative({ log: msg => console.log(`[pet] ${msg}`) });
 // GUI verification harness: set MUSEPI_CDP_PORT to expose a CDP endpoint so
 // external tooling can screenshot/inspect the renderer (visual regression
 // work). Off by default — no switch, no port.
@@ -261,6 +266,23 @@ const managedBrowser = new ManagedBrowserController();
 // (0 10px 22px ≈ 32px, + bump ≈ 2px) all fade inside the window instead of
 // being hard-cut at the bottom edge.
 const PET_WINDOW_SIZE = { width: 320, height: 290 };
+
+// ── win32 topmost upkeep: level (2026-09-19) ────────────────────────────
+// setAlwaysOnTop(true, "floating") is a one-shot z-order assertion. On win32
+// the band is not sticky: the window manager demotes the window when another
+// topmost window claims the band, when the pet is dragged against or snapped
+// to a work-area edge, and across sleep/wake -- after which the pet silently
+// sinks behind normal windows for the rest of the session.
+//
+// "pop-up-menu" sits above taskbar-level UI (clawd-on-desk uses the same level
+// for the same reason); "floating" only clears ordinary windows.
+//
+// Declared HERE, next to PET_WINDOW_SIZE and above its first use in
+// createPetWindow: a `const` read before its declaration is a TDZ throw, and
+// the call chain that reaches it is long enough that the ordering would
+// otherwise be an invisible trap.
+const PET_TOPMOST_LEVEL = process.platform === "win32" ? "pop-up-menu" : "floating";
+
 let petWindow = null;
 let petVisible = false;
 /** Last pet:activity payload — replayed to the pet window when it loads
@@ -346,7 +368,7 @@ function createPetWindow() {
 			backgroundThrottling: false,
 		},
 	});
-	petWindow.setAlwaysOnTop(true, "floating");
+	petWindow.setAlwaysOnTop(true, PET_TOPMOST_LEVEL);
 	petWindow.loadFile(path.join(DIST_DIR, "pet.html"));
 	// Any renderer navigation (reload, crash-reload) resets the drag
 	// anchor — the fresh renderer starts with no pressed state, so a
@@ -380,6 +402,7 @@ function createPetWindow() {
 		petVisible = false;
 		petDragLast = null;
 		stopPetClickThroughPoll();
+		stopPetTopmostWatchdog();
 		petSyncApprovalHotkeys(); // pet gone → unregister the approval hotkeys
 	});
 	return petWindow;
@@ -468,8 +491,26 @@ function calibrateDragSpace(clientX, clientY, screenX, screenY) {
 	if (!Number.isFinite(screenX) || !Number.isFinite(screenY) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
 		return;
 	}
-	const disp = screen.getDisplayMatching(petWindow.getBounds());
-	const scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+	// Scale precedence: the window's MEASURED DPI (win32, GetDpiForWindow)
+	// beats Electron's display-matching guess. The guess has to pick a display
+	// from the window rect and can land on a neighbour when the pet straddles
+	// a boundary; the measured value is the factor Windows actually applies to
+	// this window. Probing DPI *inside* an event (rather than on a timer) keeps
+	// it on the same turn as the reading it will be compared against, so a
+	// mid-drag DPI change cannot pair a stale factor with a fresh pointer.
+	let scale = 0;
+	let scaleRung = "measured";
+	try {
+		const dpi = win32Native.dpiForWindow(petWindow);
+		if (Number.isFinite(dpi) && dpi > 0) scale = dpi / 96;
+	} catch {
+		// fall through to the display guess
+	}
+	if (!(scale > 0)) {
+		const disp = screen.getDisplayMatching(petWindow.getBounds());
+		scale = disp && disp.scaleFactor > 0 ? disp.scaleFactor : 1;
+		scaleRung = "display-guess";
+	}
 	const raw = screen.getCursorScreenPoint();
 	// The pointer has travelled the 8px drag threshold since pointerdown,
 	// so the DIP estimate carries a small (~≤15px) baseline offset — orders
@@ -487,7 +528,12 @@ function calibrateDragSpace(clientX, clientY, screenX, screenY) {
 	petPosScaleF = scale;
 	console.log(
 		"[pet] drag-space calibrated:",
-		JSON.stringify({ scale, cursorPhysical: petCursorPhysical, posPhysical: petPosPhysical }),
+		JSON.stringify({
+			scale,
+			scaleSource: scaleRung,
+			cursorPhysical: petCursorPhysical,
+			posPhysical: petPosPhysical,
+		}),
 	);
 }
 
@@ -536,15 +582,192 @@ function intCoord(v) {
  *  in this file is DIP, and the drag loop never reads the position back
  *  mid-drag (the old same-value guard read getPosition on every frame,
  *  feeding the async-setPosition feedback loop behind "keeps drifting
- *  while I hold the mouse still"). */
-function safeSetPosition(win, x, y) {
-	const nx = intCoord(x);
-	const ny = intCoord(y);
-	if (!Number.isFinite(nx) || !Number.isFinite(ny) || Math.abs(nx) > 1e7 || Math.abs(ny) > 1e7) {
-		console.error("[pet] dropped invalid setPosition:", { x, y });
+ *  while I hold the mouse still").
+ *
+ *  Update 2026-09-19: the contract above is still the point of departure, but
+ *  the POSITION WRITE now reconciles (see setPetBounds). The contract tells us
+ *  which units to speak; reconciliation handles the rounding the compositor
+ *  applies when it converts DIP to physical pixels — the two are complementary,
+ *  not alternatives. That subtlety is why setPetBounds is the ONLY position
+ *  writer left: it reads the live rect before deciding to write, so an OS-side
+ *  correction is never silently overwritten from a stale anchor.
+ *
+ *  int32-only: gin accepts nothing else. NaN, ±Infinity, fractions (Retina
+ *  .5 DIP positions, e.g. -279.5), -0 and beyond-±2^31 values (garbage from
+ *  macOS multi-display coordinate flips) all throw the main-process
+ *  "conversion failure from" dialog. intCoord() rounds + normalizes;
+ *  setPetBounds drops the write when the result is still not int32-safe. */
+
+// ── Write choke point with read-back reconciliation (2026-09-19) ────────
+// win32's SetWindowPos converts DIP → physical pixels per-monitor and rounds;
+// the desktop window manager may additionally snap or clamp near edges. Writing
+// the position alone leaves every one of those corrections UNAPPLIED to the
+// anchor the drag loop works from — the delta is re-derived from a stale
+// assumption on the next frame, so the error accumulates and the pet ends up
+// permanently offset from the cursor by the time the user releases.
+//
+// setPetBounds() therefore reads the live rect first and only writes when it
+// actually differs (clawd-on-desk's applyPetWindowBounds pattern) — a no-op
+// frame costs one getBounds() and no native write, and a frame that DID get
+// corrected by the OS is immediately visible to the next delta.
+//
+// setBounds() (not setPosition()) so width/height travel with the write: the
+// content-driven height path changes the rect's height and y together, and
+// splitting that into setPosition + setSize gives the compositor an
+// intermediate frame at the wrong size.
+//
+// Every coordinate here is DIP (see the contract note above). This function
+// does NOT convert spaces — it only normalizes to int32-safe values.
+function setPetBounds(win, rect) {
+	if (!win || win.isDestroyed()) return false;
+	const x = intCoord(rect.x);
+	const y = intCoord(rect.y);
+	const w = intCoord(rect.width);
+	const h = intCoord(rect.height);
+	if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) {
+		console.error("[pet] dropped invalid setBounds:", rect);
+		return false;
+	}
+	if (Math.abs(x) > 1e7 || Math.abs(y) > 1e7 || w <= 0 || h <= 0 || w > 1e5 || h > 1e5) {
+		console.error("[pet] dropped out-of-range setBounds:", rect);
+		return false;
+	}
+	const cur = win.getBounds();
+	if (cur.x === x && cur.y === y && cur.width === w && cur.height === h) return false;
+	win.setBounds({ x, y, width: w, height: h });
+	return true;
+}
+
+/** Move the pet window, preserving its current size. Position-only callers go
+ *  through the same reconciliation choke point as the rect callers. */
+function setPetPosition(x, y) {
+	if (!petWindow || petWindow.isDestroyed()) return false;
+	const b = petWindow.getBounds();
+	return setPetBounds(petWindow, { x, y, width: b.width, height: b.height });
+}
+
+// ── win32 topmost upkeep: watchdog (2026-09-19) ─────────────────────────
+// 5s watchdog: cheap (one setAlwaysOnTop call), and the z-order loss it
+// repairs is otherwise permanent. Runs only while the pet is visible.
+const PET_TOPMOST_WATCHDOG_MS = 5000;
+let petTopmostWatchdog = null;
+
+/** True when `b` touches (or crosses) an edge of the work area containing its
+ *  center. Tolerance 2 covers the rounding of a flush dock. Displays can be
+ *  unavailable mid-topology-change, so a failure reads as "not near an edge"
+ *  — the watchdog is the backstop for that case. */
+function isNearWorkAreaEdge(b) {
+	if (!b) return false;
+	try {
+		const wa = screen.getDisplayMatching(b).workArea;
+		const T = 2;
+		return (
+			b.x <= wa.x + T ||
+			b.y <= wa.y + T ||
+			b.x + b.width >= wa.x + wa.width - T ||
+			b.y + b.height >= wa.y + wa.height - T
+		);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Whether to stand down from the topmost band this tick.
+ *
+ * The foreground probe is a native call (win32-native.cjs, koffi → user32):
+ * Electron's BrowserWindow.isFullScreen() only reports OUR OWN windows, so it
+ * cannot see a fullscreen game. Without the probe the 5s watchdog claws the
+ * z-order band back over a fullscreen app on every tick — the classic
+ * desktop-pet annoyance.
+ *
+ * The probe fails open to "not fullscreen", i.e. the pet keeps its pre-FFI
+ * behaviour if koffi or a DLL is unavailable.
+ */
+function shouldStandDownForFullscreen() {
+	// Ours first: cheap, and always authoritative for our own windows.
+	const ours = [mainWindow, miniWindow];
+	if (ours.some(w => w && !w.isDestroyed() && w.isFullScreen && w.isFullScreen())) return true;
+	return win32Native.isForegroundFullscreen();
+}
+
+function reassertPetTopmost() {
+	if (process.platform !== "win32") return;
+	if (!petWindow || petWindow.isDestroyed()) return;
+	petWindow.setAlwaysOnTop(true, PET_TOPMOST_LEVEL);
+}
+
+function startPetTopmostWatchdog() {
+	if (process.platform !== "win32") return;
+	if (petTopmostWatchdog !== null) return;
+	petTopmostWatchdog = setInterval(() => {
+		if (!petVisible || !petWindow || petWindow.isDestroyed()) return;
+		// DWM cloak runs FIRST and independently of the stand-down: a cloaked
+		// pet is invisible while every JS-visible signal (isVisible,
+		// WS_VISIBLE) stays green, so this is the only place it can be caught.
+		// Sleep/wake and RDP reconnects are the prime cloak moments.
+		recoverCloakedPet();
+		// Never fight a fullscreen app for the z-order band.
+		if (shouldStandDownForFullscreen()) return;
+		reassertPetTopmost();
+	}, PET_TOPMOST_WATCHDOG_MS);
+}
+
+/** Self-heal state for the cloak probe. */
+let petCloakFailStreak = 0;
+const PET_CLOAK_BACKOFF_BASE_MS = 10000;
+const PET_CLOAK_BACKOFF_MAX_MS = 120000;
+
+/**
+ * Repair a DWM-cloaked pet window.
+ *
+ * Only APP (self-inflicted) cloaks are cleared. A SHELL cloak is frequently
+ * legitimate — the user parked the window on another virtual desktop — and
+ * un-cloaking it would drag the pet onto the desktop the user is looking at,
+ * which is not our call. Without the IVirtualDesktopManager COM query that
+ * distinguishes the two (clawd-on-desk does this via manual vtable dispatch)
+ * we cannot tell them apart, so we recover conservatively: APP and
+ * APP|INHERITED only.
+ *
+ * Backs off exponentially after a failure so a persistently-cloaked window
+ * does not get hammered every tick.
+ */
+function recoverCloakedPet() {
+	if (!petWindow || petWindow.isDestroyed()) return;
+	if (petCloakCooldownUntil > Date.now()) return;
+	const flag = win32Native.readCloakState(petWindow);
+	if (flag === 0) {
+		petCloakFailStreak = 0;
 		return;
 	}
-	win.setPosition(nx, ny);
+	if ((flag & CLOAK_APP) === 0) return; // SHELL-only: likely another desktop
+	console.log(`[pet] DWM cloak detected (flag=${flag}); attempting un-cloak`);
+	if (!win32Native.uncloak(petWindow)) {
+		petCloakFailStreak += 1;
+		petCloakCooldownUntil =
+			Date.now() + Math.min(PET_CLOAK_BACKOFF_BASE_MS * 2 ** petCloakFailStreak, PET_CLOAK_BACKOFF_MAX_MS);
+		return;
+	}
+	// DWM accepted it; re-show and re-top. showInactive so we never steal focus.
+	petWindow.showInactive();
+	reassertPetTopmost();
+	if (win32Native.readCloakState(petWindow) === 0) {
+		petCloakFailStreak = 0;
+		petCloakCooldownUntil = 0;
+		console.log("[pet] DWM cloak cleared");
+	} else {
+		petCloakFailStreak += 1;
+		petCloakCooldownUntil =
+			Date.now() + Math.min(PET_CLOAK_BACKOFF_BASE_MS * 2 ** petCloakFailStreak, PET_CLOAK_BACKOFF_MAX_MS);
+	}
+}
+let petCloakCooldownUntil = 0;
+
+function stopPetTopmostWatchdog() {
+	if (petTopmostWatchdog !== null) {
+		clearInterval(petTopmostWatchdog);
+		petTopmostWatchdog = null;
+	}
 }
 
 /** Dock or clamp the pet window inside the work area after a drag. */
@@ -597,13 +820,17 @@ function settlePetWindow() {
 	}
 	if (x !== wx || y !== wy) {
 		// Short ease-out bounce to the settle position (180ms, 8 frames).
-		// safeSetPosition drops any frame whose value is not int32-safe
-		// (coordinate-flip garbage) instead of crashing the main process.
+		// setPetPosition drops any frame whose value is not int32-safe
+		// (coordinate-flip garbage) instead of crashing the main process,
+		// and skips the native write when the rect already matches.
 		// Windows: no glide — the release slide reads as "keeps moving
 		// after I stopped" (the OS window move is less tight than macOS's,
 		// so the bounce is far more visible); snap to the settle position.
 		if (process.platform === "win32") {
-			safeSetPosition(petWindow, x, y);
+			setPetPosition(x, y);
+			// The snapped rect may straddle a work-area edge, which is
+			// exactly where win32 drops the topmost band.
+			reassertPetTopmost();
 		} else {
 			const fromX = wx;
 			const fromY = wy;
@@ -612,7 +839,7 @@ function settlePetWindow() {
 				frame += 1;
 				const t = frame / 8;
 				const ease = 1 - Math.pow(1 - t, 3);
-				safeSetPosition(petWindow, fromX + (x - fromX) * ease, fromY + (y - fromY) * ease);
+				setPetPosition(fromX + (x - fromX) * ease, fromY + (y - fromY) * ease);
 				if (frame >= 8) {
 					clearInterval(petSettleTimer);
 					petSettleTimer = null;
@@ -625,6 +852,126 @@ function settlePetWindow() {
 		petWindow.webContents.send("pet:dock", { side });
 	}
 }
+
+// ── Topology / wake self-heal (2026-09-19) ──────────────────────────────
+// Three ways the pet strands itself off-screen or at the wrong size, none of
+// which any single event covers:
+//
+//  1. display-removed — the saved/window rect lives in a coordinate space that
+//     no longer exists (the monitor is unplugged; on win32 its origin can be
+//     negative, or overlap another display's). The pet is simply unreachable
+//     until restart, because loadPetPosition() rejects the stale rect next
+//     launch and silently falls back to the default corner.
+//  2. display-metrics-changed — DPI change / RDP reconnect. Arrives in BURSTS;
+//     clamping on every event makes the pet visibly jitter mid-transition, so
+//     the geometry work is debounced to the settled state (clawd-on-desk does
+//     exactly this, and it is why removed/added stay immediate below).
+//  3. sleep/wake — the DPI flux on resume can leave the HWND with a stale size
+//     (repeatedly re-writing the drifted size "ratchets" it larger each cycle:
+//     clawd's #408, "the longer it sleeps, the bigger it gets"). We pin the
+//     size back to PET_WINDOW_SIZE instead of trusting the current one.
+//
+// Everything here is best-effort and must never throw into an event handler.
+const PET_METRICS_DEBOUNCE_MS = 400;
+let petMetricsTimer = null;
+
+/** Nearest work area to a point, with a primary-display fallback. Displays can
+ *  be momentarily empty during a topology change (clawd #93: reading
+ *  displays[0] on an empty array crashes), so this never assumes an array. */
+function petNearestWorkArea(x, y) {
+	try {
+		return screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) }).workArea;
+	} catch {
+		// fall through
+	}
+	try {
+		return screen.getPrimaryDisplay().workArea;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Pull the pet back into a real work area and restore its expected size.
+ *
+ * Deliberately positional-only when the rect is still valid: a user who
+ * parked the pet in a specific spot must not be moved to the center by a
+ * routine DPI event. Only a rect that is genuinely unreachable (its center
+ * falls outside EVERY display) gets relocated.
+ */
+function reconcilePetWindow(reason) {
+	if (!petWindow || petWindow.isDestroyed()) return;
+	let b;
+	try {
+		b = petWindow.getBounds();
+	} catch {
+		return;
+	}
+	// Is the window reachable at all? Test the CENTER: a window half-off a
+	// screen is still findable by the user, a center outside every work area
+	// means truly gone.
+	let displays = [];
+	try {
+		displays = screen.getAllDisplays();
+	} catch {
+		// leave empty — treated as "unknown", never as "gone"
+	}
+	const cx = b.x + b.width / 2;
+	const cy = b.y + b.height / 2;
+	const reachable =
+		displays.length === 0 ||
+		displays.some(d => {
+			const wa = d.workArea;
+			return cx >= wa.x && cx < wa.x + wa.width && cy >= wa.y && cy < wa.y + wa.height;
+		});
+
+	// Size is ALWAYS restored: the wake DPI flux is what ratchets it, and
+	// PET_WINDOW_SIZE is the single source of truth for the desired width.
+	const needsSize = b.width !== PET_WINDOW_SIZE.width || b.height !== PET_WINDOW_SIZE.height;
+
+	if (!reachable) {
+		const wa = petNearestWorkArea(
+			Number.isFinite(cx) ? cx : 0,
+			Number.isFinite(cy) ? cy : 0,
+		);
+		if (wa) {
+			const x = wa.x + Math.max(0, Math.round((wa.width - PET_WINDOW_SIZE.width) / 2));
+			const y = wa.y + Math.max(0, Math.round((wa.height - PET_WINDOW_SIZE.height) / 2));
+			console.log(`[pet] reconcile (${reason}): rect unreachable, recentering`);
+			setPetBounds(petWindow, { x, y, ...PET_WINDOW_SIZE });
+			petPosDirty = true;
+		}
+	} else if (needsSize) {
+		// Keep the bottom edge fixed: the sprite is anchored to the window
+		// bottom, so growing upward never moves the pet on screen.
+		const y = b.y + b.height - PET_WINDOW_SIZE.height;
+		console.log(`[pet] reconcile (${reason}): size ${b.width}x${b.height} → PET_WINDOW_SIZE`);
+		setPetBounds(petWindow, { x: b.x, y, ...PET_WINDOW_SIZE });
+		petPosDirty = true;
+	}
+	reassertPetTopmost();
+}
+
+function scheduleReconcileAfterMetrics() {
+	if (petMetricsTimer !== null) clearTimeout(petMetricsTimer);
+	petMetricsTimer = setTimeout(() => {
+		petMetricsTimer = null;
+		reconcilePetWindow("display-metrics-changed");
+	}, PET_METRICS_DEBOUNCE_MS);
+}
+
+function installPetDisplayListeners() {
+	if (petDisplayListenersInstalled) return;
+	petDisplayListenersInstalled = true;
+	// Immediate: these rescue the pet off a display that just vanished or
+	// appeared, and must not wait out the metrics debounce.
+	screen.on("display-removed", () => reconcilePetWindow("display-removed"));
+	screen.on("display-added", () => reconcilePetWindow("display-added"));
+	// Debounced: DPI changes and RDP reconnects fire in bursts, and clamping
+	// on each event jitters the pet through the whole transition.
+	screen.on("display-metrics-changed", scheduleReconcileAfterMetrics);
+}
+let petDisplayListenersInstalled = false;
 
 function updatePetClickThrough() {
 	if (!petWindow || petWindow.isDestroyed() || !petVisible) return;
@@ -721,11 +1068,14 @@ function setPetVisible(visible) {
 		const win = createPetWindow();
 		win.showInactive();
 		petVisible = true;
+		installPetDisplayListeners();
 		startPetClickThroughPoll();
+		startPetTopmostWatchdog();
 	} else if (petWindow && !petWindow.isDestroyed()) {
 		petWindow.hide();
 		petVisible = false;
 		stopPetClickThroughPoll();
+		stopPetTopmostWatchdog();
 		// A hide mid-drag can drop the pointerup; a stale anchor would
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
@@ -740,6 +1090,9 @@ function setPetVisible(visible) {
 // write per 150ms while dragging; the final position is flushed by
 // pet-drag-end (and pet-drag-client's anchor lives in petDragLast).
 let petLastPosWrite = 0;
+/** Set when a throttled write was skipped, so drag-end can flush it. Resolved
+ *  lazily at use sites (`let` hoisting would otherwise TDZ-reject an early
+ *  reconcile during startup display events). */
 let petPosDirty = false;
 
 function persistPetPos() {
@@ -1257,7 +1610,19 @@ ipcMain.handle("pet-drag-client", (_event, { clientX, clientY, screenX, screenY 
 	// to a fresh read — the anchor makes any residual calibration error a
 	// constant offset the next re-anchor corrects, not a cumulative drift).
 	const k = (petCursorPhysical ? petPosScaleF : 1) / (petPosPhysical ? petPosScaleF : 1);
-	safeSetPosition(petWindow, petDragLast.wx + deltaX * k, petDragLast.wy + deltaY * k);
+	// setPetPosition reads the live rect and skips a redundant native write.
+	// That read-back is what keeps an OS-side correction (DIP→physical
+	// rounding, edge snap) from silently accumulating across frames: a frame
+	// the OS nudged is visible to the next comparison instead of being
+	// overwritten from the anchor's stale assumption.
+	setPetPosition(petDragLast.wx + deltaX * k, petDragLast.wy + deltaY * k);
+	// win32 drops the topmost band when a drag runs up against a work-area
+	// edge (the window manager reshuffles z-order on the snap); re-assert
+	// while the pointer is still down so the pet does not sink mid-gesture.
+	if (process.platform === "win32") {
+		const b = petWindow.getBounds();
+		if (isNearWorkAreaEdge(b)) reassertPetTopmost();
+	}
 	// Persist (throttled) — at most one write per 150ms during a drag.
 	const now = Date.now();
 	if (now - petLastPosWrite >= 150) {
@@ -1400,7 +1765,10 @@ ipcMain.handle("pet-context-menu", () => {
 					const rightDist = wa.x + wa.width - (wx + charR);
 					const toLeft = leftDist <= rightDist;
 					const x = toLeft ? wa.x - charL : wa.x + wa.width - charR;
-					safeSetPosition(petWindow, x, wy);
+					setPetPosition(x, wy);
+					// Docking parks the window flush on a work-area edge — the
+					// exact position where win32 demotes the topmost band.
+					if (process.platform === "win32") reassertPetTopmost();
 					const side = toLeft ? "left" : "right";
 					if (side !== petDockSide && !petWindow.isDestroyed()) {
 						petDockSide = side;
@@ -1880,6 +2248,16 @@ app.whenReady().then(() => {
 		for (const win of BrowserWindow.getAllWindows()) {
 			if (!win.isDestroyed()) win.webContents.send("app-power-resume");
 		}
+		// Wake is the single worst moment for the pet's geometry: the DPI flux
+		// around resume is what ratchets the window size on Windows, and a
+		// display that was detached while asleep comes back at its old
+		// coordinates. Re-assert BOTH the size and the topmost rung — the
+		// watchdog alone would take up to 5s to notice the latter.
+		// Deferred one tick: the metrics-changed burst lands right after the
+		// event, and reconciling into the middle of it re-clamps repeatedly.
+		setTimeout(() => {
+			reconcilePetWindow("resume");
+		}, PET_METRICS_DEBOUNCE_MS);
 	});
 });
 ipcMain.handle("pet-import", async () => {

@@ -79,12 +79,16 @@
 			"electron/**/*",
 			"vendor/**/*",
 			"node_modules/@musepi/pi-natives/**/*",
-			"!node_modules/@musepi/pi-natives/bench/**"
+			"!node_modules/@musepi/pi-natives/bench/**",
+			"node_modules/koffi/**/*",
+			"node_modules/@koromix/**/*"
 		],
 		"asarUnpack": [
 			"**/*.node",
 			"electron/haptic-helper",
-			"vendor/daemon/**"
+			"vendor/daemon/**",
+			"node_modules/koffi/**/*",
+			"node_modules/@koromix/**/*"
 		],
 		"npmRebuild": false,
 		"mac": {
@@ -150,9 +154,18 @@
 		"@dnd-kit/utilities": "^3.2.2",
 		"@lobehub/icons": "^5.16.0",
 		"electron-updater": "6.4.1",
+		"koffi": "^3.3.1",
 		"konva": "^10.5.0",
 		"perfect-freehand": "^1.2.3",
 		"react-konva": "19.2.7"
+	},
+	"optionalDependencies": {
+		"@koromix/koffi-darwin-arm64": "3.3.1",
+		"@koromix/koffi-darwin-x64": "3.3.1",
+		"@koromix/koffi-linux-arm64": "3.3.1",
+		"@koromix/koffi-linux-x64": "3.3.1",
+		"@koromix/koffi-win32-arm64": "3.3.1",
+		"@koromix/koffi-win32-x64": "3.3.1"
 	},
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn"
