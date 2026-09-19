@@ -91,9 +91,12 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 	const current = MODES.find(m => m.value === mode) ?? MODES[2]!;
 	return (
 		<div ref={anchorRef} className="gui-approval">
+			{/* Borderless chip (own base class, NOT .gui-mode-toggle-arm whose
+				hairline ring read as a stray background): states tint a soft
+				fill and colour the text — no border ring in any state. */}
 			<button
 				type="button"
-				className={`gui-mode-toggle-arm gui-approval-btn${mode === "write" ? " gui-mode-toggle-arm--armed" : ""}${
+				className={`gui-approval-btn${mode === "write" ? " gui-approval-btn--write" : ""}${
 					mode === "yolo" ? " gui-approval-btn--yolo" : ""
 				}${open ? " gui-approval-btn--open" : ""}`}
 				title={t("approval mode")}

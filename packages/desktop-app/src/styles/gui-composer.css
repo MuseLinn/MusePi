@@ -2191,56 +2191,6 @@
 	animation: none;
 }
 
-/* ── Design-session style chips (设计稿 08): one row above the input card,
- * gated to sessions whose preset is design. ── */
-.gui-design-chips {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	padding: 0 4px 6px;
-	overflow-x: auto;
-	scrollbar-width: none;
-}
-
-.gui-design-chips::-webkit-scrollbar {
-	display: none;
-}
-
-.gui-design-chips-label {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	flex-shrink: 0;
-	padding-right: 2px;
-	font-size: 11.5px;
-	color: var(--color-text-faint);
-}
-
-.gui-design-chip {
-	flex-shrink: 0;
-	padding: 3px 10px;
-	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-	transition:
-		color 120ms var(--spring),
-		border-color 120ms var(--spring),
-		background 120ms var(--spring);
-}
-
-.gui-design-chip:hover {
-	color: var(--color-text);
-	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
-}
-
-.gui-design-chip--on {
-	color: var(--color-accent);
-	border-color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-}
-
 /* ── In-input token highlighting (TUI editor rainbow parity) ────────────
  * The textarea's own text turns transparent and a mirrored overlay paints
  * line-leading slash commands + standalone magic keywords in accent. The
@@ -2313,15 +2263,75 @@
 	max-height: none;
 }
 
-/* ── Approval-mode button (openchamber input permission picker parity) ── */
-.gui-approval-btn--yolo {
-	color: var(--color-danger, #e5484d);
-	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, transparent);
+/* ── Approval-mode button (openchamber input permission picker parity) ──
+ * Borderless chip: states colour the text and tint a soft fill, never a
+ * hairline ring — the ring read as a stray background circle. */
+.gui-approval-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: color 120ms ease-out, background-color 120ms ease-out;
 }
 
+.gui-approval-btn:hover,
 .gui-approval-btn--open {
 	color: var(--color-text);
-	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	background-color: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-approval-btn--write {
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-approval-btn--yolo {
+	color: var(--color-danger, #e5484d);
+	background-color: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
+}
+
+/* Design-style select (设计稿 08, WorkBuddy footer-pill parity): same
+ * borderless chip family as the approval button — a chosen style tints the
+ * pill accent, the caret hints the dropdown; no hairline ring in any state. */
+.gui-style-select-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: color 120ms ease-out, background-color 120ms ease-out;
+}
+
+.gui-style-select-btn:hover,
+.gui-style-select-btn--open {
+	color: var(--color-text);
+	background-color: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.gui-style-select-btn--set {
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.gui-style-select-caret {
+	color: var(--color-text-faint);
+}
+
+.gui-style-select-menu {
+	min-width: 220px;
 }
 
 .gui-approval-menu {

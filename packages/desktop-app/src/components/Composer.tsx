@@ -33,7 +33,7 @@ import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
-import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
+import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
@@ -1813,12 +1813,6 @@ export function Composer({
 				// not inside the framed box).
 				aboveRow={
 					<div className="gui-composer-above">
-						{isDesignSession && (
-							/* Design-session style chips (设计稿 08 composer 风格选择):
-							 * pick a style baseline → the brief-update text lands in
-							 * the composer for the user to edit & send. */
-							<DesignStyleChips selected={designStyle} onPick={pickDesignStyle} />
-						)}
 						{composerDockItems.length > 0 ||
 						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
 						activeTask ? (
@@ -1971,6 +1965,10 @@ export function Composer({
 							}}
 							onSetThinking={onSetThinking}
 						/>
+						{/* Design-style select (设计稿 08 composer 风格选择, WorkBuddy
+						 * footer-pill parity): pick a style baseline → the
+						 * brief-update text lands in the composer to edit & send. */}
+						{isDesignSession && <DesignStyleSelect selected={designStyle} onPick={pickDesignStyle} />}
 						{/* Session mode toggles (TUI /fast /computer /vision /prewalk
 						 * parity): a compact popover in the action row, session-only
 						 * (hidden in the welcome scene). */}
@@ -2251,7 +2249,9 @@ export function Composer({
 						placeholder={
 							working
 								? t("agent working — send steers the agent now, /queue waits for the turn to end…")
-								: t("ask anything, / for commands, @ for context…")
+								: isDesignSession
+									? t("design empty placeholder")
+									: t("ask anything, / for commands, @ for context…")
 						}
 						spellCheck={spellcheckEnabled()}
 						autoComplete="off"

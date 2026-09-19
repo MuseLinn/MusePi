@@ -765,6 +765,12 @@ function AppInner(): ReactNode {
 	const [welcomeModeId, setWelcomeModeId] = useState<string | null>(
 		() => localStorage.getItem("musepi-gui-default-mode") ?? "work",
 	);
+	/** Mirror for the create-session handler: its useCallback deps don't
+	 *  include the state (it must not re-subscribe per render), so the body
+	 *  reads the ref — otherwise a welcome-chip pick (e.g. design) armed the
+	 *  composer UI but the created session still landed on the STALE id
+	 *  (hover card said "work mode", design style chips never appeared). */
+	const welcomeModeIdRef = useRef<string | null>(welcomeModeId);
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
@@ -795,6 +801,7 @@ function AppInner(): ReactNode {
 	// Keep refs for event handlers that must not re-subscribe per render.
 	rpcRef.current = rpc;
 	storeRef.current = store;
+	welcomeModeIdRef.current = welcomeModeId;
 
 	// ── Connect to the daemon ──────────────────────────────────────────────
 	/** Persist the per-session read cursors (best-effort; storage can be
@@ -1734,7 +1741,9 @@ function AppInner(): ReactNode {
 					// Welcome 预设 chip 选择 / 创作流覆盖:modeId 随 create 一次应用
 					// (daemon 侧白名单/提示词/settings 覆盖);显式 modeId(创作流
 					// creator)优先,否则用 welcome chip 选择;无选择 = 默认(Standard)。
-					...((opts?.modeId ?? welcomeModeId) ? { modeId: opts?.modeId ?? welcomeModeId } : {}),
+					...((opts?.modeId ?? welcomeModeIdRef.current)
+						? { modeId: opts?.modeId ?? welcomeModeIdRef.current }
+						: {}),
 				});
 				// Carry the welcome-composer model seed so the composer never
 				// flashes a stale model from a previous session while

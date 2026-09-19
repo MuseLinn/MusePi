@@ -41,7 +41,7 @@ import {
 } from "./Composer";
 import { VoiceButton } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
-import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
+import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
@@ -1543,11 +1543,6 @@ export function WelcomeComposer({
 						onFocus={() => setBeamOn(true)}
 						onBlur={() => setBeamOn(false)}
 					>
-						{isDesignArmed && (
-							/* Design preset armed (设计稿 08 空态): the same style
-							 * chips the session composer shows, above the input. */
-							<DesignStyleChips selected={designStyle} onPick={pickDesignStyle} />
-						)}
 						<ComposerFrame
 							className="gui-welcome-input"
 							hero
@@ -1674,6 +1669,10 @@ export function WelcomeComposer({
 											setThinking(v);
 										}}
 									/>
+									{/* Design style select (设计稿 08 空态, WorkBuddy footer-pill
+									 * parity): the old chips row above the input becomes a
+									 * button-row pill — same brief-update contract on pick. */}
+									{isDesignArmed && <DesignStyleSelect selected={designStyle} onPick={pickDesignStyle} />}
 									{/* Armed mode chips (plan/goal): shown IN the button row
 									 * right of the thinking selector so the armed state is
 									 * visible without opening the attach menu. */}
