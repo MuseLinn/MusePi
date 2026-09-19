@@ -1,7 +1,8 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -63,20 +64,15 @@ function fullTime(ts: string): string {
 	return d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
 }
 
-/**
- * 模式名:与 ContextPanel.sessionModeLabel 同一条命名链 — `mode {id}` 词表
- * 命中即用,回显 key 本身说明是未知预设(插件注册的自定义模式),回落
- * "default mode",绝不把裸 id 打给用户。
- */
-function modeName(modeId: string | undefined): string {
-	const id = (modeId ?? "").trim();
-	if (!id) return t("default mode");
-	const key = `mode ${id}` as TranslationKey;
-	const label = t(key);
-	return label === key ? t("default mode") : label;
-}
-
-export function SessionHoverCard({ meta }: { meta: Map<string, { cwd?: string; modeId?: string }> }): ReactNode {
+export function SessionHoverCard({
+	meta,
+	modeCatalog,
+}: {
+	meta: Map<string, { cwd?: string; modeId?: string }>;
+	/** modes.list catalog — 命名链尾段：用户创建的预设没有 `mode {id}` 词表
+	 *  键，真名只在 catalog 里（与 ContextPanel 共用 lib/mode-label.ts）。 */
+	modeCatalog?: readonly ModeLabelEntry[] | null;
+}): ReactNode {
 	const [hover, setHover] = useState<SessionHoverPayload | null>(null);
 	const [entered, setEntered] = useState(false);
 	const visibleRef = useRef(false);
@@ -184,7 +180,7 @@ export function SessionHoverCard({ meta }: { meta: Map<string, { cwd?: string; m
 			)}
 			<div className="gui-session-hover-card-row gui-session-hover-card-mode">
 				<Icon name="stack" className="gui-session-hover-card-icon" />
-				<span className="gui-session-hover-card-text">{modeName(metaRow?.modeId)}</span>
+				<span className="gui-session-hover-card-text">{resolveModeLabel(metaRow?.modeId, modeCatalog)}</span>
 			</div>
 			{cwd && (
 				<div className="gui-session-hover-card-row" title={cwd}>

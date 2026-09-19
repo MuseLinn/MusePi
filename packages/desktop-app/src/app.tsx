@@ -2960,6 +2960,7 @@ function AppInner(): ReactNode {
 						}}
 						onCreateProject={() => setNewProjectOpen(true)}
 						onImportSessions={() => setImportOpen(true)}
+						modeCatalog={welcomeModes}
 						collapsed={sideCollapsed}
 						width={sideWidth}
 						onDeleteArchived={deleteSession}

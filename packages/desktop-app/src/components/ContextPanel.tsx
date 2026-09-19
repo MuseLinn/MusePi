@@ -11,6 +11,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { createPortal } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { panelTabId } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -78,24 +79,19 @@ type SessionModes = {
  * Previously any session that was neither goal- nor plan-mode fell through
  * to a literal "默认模式", which told the user nothing — picking 设计模式 in
  * the empty-state chips still read 默认模式. Precedence is goal > plan >
- * preset id, and an unknown/absent preset still degrades to 默认模式 rather
- * than printing a raw id.
+ * preset id; the preset id goes through the shared naming chain
+ * (lib/mode-label.ts): `mode {id}` i18n first (builtin presets), then the
+ * modes.list catalog (user-created presets — their real label lives only
+ * there), finally 默认模式 instead of a raw id.
  */
-function sessionModeLabel(modes: SessionModes | null | undefined): string {
+function sessionModeLabel(modes: SessionModes | null | undefined, catalog?: readonly ModeLabelEntry[] | null): string {
 	if (!modes) return t("default mode");
 	if (modes.goalMode?.enabled === true) {
 		const objective = modes.goalMode.objective?.trim();
 		return objective ? `${t("goal mode")}: ${objective}` : t("goal mode");
 	}
 	if (modes.planMode === true) return t("plan mode");
-	const id = (modes.modeId ?? "").trim();
-	if (!id) return t("default mode");
-	// `t()` echoes the key back when there is no translation — that's the
-	// signal the preset is unknown (a plugin-supplied mode, say), so fall
-	// back instead of rendering "mode somewhere".
-	const key = `mode ${id}` as TranslationKey;
-	const label = t(key);
-	return label === key ? t("default mode") : label;
+	return resolveModeLabel(modes.modeId, catalog);
 }
 
 /**
@@ -123,6 +119,7 @@ export function ContextPanel({
 	onBranchTo,
 	onForkAt,
 	onJumpToEntry,
+	modeCatalog,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
@@ -171,6 +168,10 @@ export function ContextPanel({
 	activePathIds?: ReadonlySet<string>;
 	onBranchTo?(id: string): void;
 	onForkAt?(id: string): void;
+	/** modes.list catalog (builtin + user-created presets) — the last link
+	 *  of the shared mode naming chain: user-created session presets carry
+	 *  no `mode {id}` i18n key, so their real label can only come from here. */
+	modeCatalog?: readonly ModeLabelEntry[] | null;
 }): ReactNode {
 	const cwd = snap?.state?.cwd ?? "";
 	// Live mode chips (daemon injects goalMode/planMode into the snapshot).
@@ -737,7 +738,7 @@ export function ContextPanel({
 										{modes && (
 											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
 												<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-												<span className="truncate">{sessionModeLabel(modes)}</span>
+												<span className="truncate">{sessionModeLabel(modes, modeCatalog)}</span>
 											</div>
 										)}
 									</div>

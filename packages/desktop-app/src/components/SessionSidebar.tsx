@@ -1,6 +1,7 @@
 import { t, useArchivedSessions } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ModeLabelEntry } from "../lib/mode-label";
 import { projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
 import { shortcutLabel } from "../lib/shortcuts";
@@ -70,6 +71,7 @@ export function SessionSidebar({
 	unread,
 	onToggleUnread,
 	onImportSessions,
+	modeCatalog,
 }: {
 	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -134,6 +136,9 @@ export function SessionSidebar({
 	onToggleUnread?(sessionId: string): void;
 	/** Open the session-import dialog (projects tab entry). */
 	onImportSessions?(): void;
+	/** modes.list catalog (builtin + user-created presets) — forwarded to the
+	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
+	modeCatalog?: readonly ModeLabelEntry[] | null;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -1387,7 +1392,7 @@ export function SessionSidebar({
 			 *  report through the module bus (SessionHoverCard.tsx), the card
 			 *  portals to document.body so the sidebar's glass/transform
 			 *  ancestors can't hijack its fixed positioning. */}
-			<SessionHoverCard meta={sessionMeta} />
+			<SessionHoverCard meta={sessionMeta} modeCatalog={modeCatalog} />
 		</aside>
 	);
 }

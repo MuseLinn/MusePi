@@ -2170,6 +2170,7 @@ export function ChatView({
 									}}
 									leafId={effectiveLeaf}
 									activePathIds={trustedPathIds}
+									modeCatalog={modes}
 									onBranchTo={id => {
 										// Pin the clicked canvas node (see the trajectory
 										// handler: branchAt maps user messages to parents).
