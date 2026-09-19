@@ -1883,6 +1883,11 @@ function AppInner(): ReactNode {
 			const isSlash = text.startsWith("/") && !text.startsWith("//");
 			const bangBody = text.startsWith("!") ? (text.startsWith("!!") ? text.slice(2) : text.slice(1)).trim() : "";
 			const isBang = text.startsWith("!") && bangBody.length > 0;
+			// Typed "/guided-goal [objective]" on the welcome surface (TUI
+			// /guided-goal parity): the generic slash dispatch would reject it
+			// as tui-only, so it routes to the guided kickoff below — inline
+			// args become the rough objective, welcome image chips ride along.
+			const guidedMatch = isSlash ? /^\/guided-goal(?:\s+([\s\S]+))?$/.exec(text.trim()) : null;
 			const client = rpcRef.current;
 			// The prompt is committed the moment the user hits send — leave
 			// the welcome surface before the create RPC (1–7s) instead of
@@ -1929,6 +1934,28 @@ function AppInner(): ReactNode {
 					.catch(() => dispatchPetActivity("error", t("bash command failed")));
 				return;
 			}
+			if (guidedMatch) {
+				// Typed "/guided-goal [objective]": fire the guided kickoff on
+				// the fresh session — inline args are the rough objective and
+				// welcome image chips ride on it (TUI input.images parity).
+				// The daemon's pre-checks (plan/vibe/goal states) reject with
+				// their own wording; surface it instead of failing silently.
+				if (!client) return;
+				try {
+					await client.request("session.goal", {
+						sessionId: id,
+						op: "guided",
+						objective: (guidedMatch[1] ?? "").trim() || null,
+						...(opts?.images && opts.images.length > 0 ? { images: opts.images } : {}),
+					});
+				} catch (err) {
+					dispatchPetActivity(
+						"error",
+						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+					);
+				}
+				return;
+			}
 			if (isSlash) {
 				if (!client) return;
 				void client
@@ -1971,9 +1998,13 @@ function AppInner(): ReactNode {
 						sessionId: id,
 						op: "guided",
 						objective: text.trim() || null,
+						...(opts.images && opts.images.length > 0 ? { images: opts.images } : {}),
 					});
-				} catch {
-					dispatchPetActivity("error", t("guided goal failed"));
+				} catch (err) {
+					dispatchPetActivity(
+						"error",
+						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+					);
 				}
 				return;
 			}

@@ -1181,6 +1181,70 @@ export function Composer({
 		[rpc, sessionId, showSlashNotice],
 	);
 
+	// Guided goal (TUI /guided-goal parity): one path for the typed
+	// "/guided-goal [objective]" command AND the + menu entry. Assembles the
+	// rough objective exactly like a normal send (quotes → "> " prefix, file
+	// chips → uploaded workspace refs, images → wire parts) so nothing staged
+	// in the composer is lost, then fires the guided RPC. The draft survives
+	// a failed start — clearing happens only after the daemon accepts, and
+	// the daemon's pre-check rejections (plan/vibe/goal states) surface with
+	// their wording in the slash notice.
+	const startGuidedGoal = useCallback(
+		(objective: string): void => {
+			if (!rpc || !sessionId) return;
+			const imageParts = attachments
+				.filter(a => a.kind !== "file")
+				.map(a => ({
+					type: "image" as const,
+					data: a.dataUrl.split(",")[1] ?? "",
+					mimeType: a.mimeType,
+				}));
+			const fileChips = attachments.filter(a => a.kind === "file");
+			const quotePrefix =
+				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
+			const baseObjective = `${quotePrefix}${objective}`.trim();
+			void (async () => {
+				let refs: string[] = [];
+				if (fileChips.length > 0) {
+					setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: true } : a)));
+					try {
+						refs = await uploadAttachmentFiles(rpc, cwd, fileChips);
+					} catch (err) {
+						setAttachments(prev => prev.map(a => (a.kind === "file" ? { ...a, uploading: false } : a)));
+						showSlashNotice(
+							"error",
+							`${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+						);
+						return;
+					}
+				}
+				const fullObjective = refs.length > 0 ? `${refs.join("\n")}\n\n${baseObjective}`.trim() : baseObjective;
+				try {
+					await rpc.request("session.goal", {
+						sessionId,
+						op: "guided",
+						objective: fullObjective || null,
+						...(imageParts.length > 0 ? { images: imageParts } : {}),
+					});
+				} catch (err) {
+					showSlashNotice(
+						"error",
+						`${t("guided goal failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`,
+					);
+					return;
+				}
+				handledQuoteCountRef.current = 0;
+				onQuotesChange([]);
+				setText("");
+				setAttachments([]);
+				requestAnimationFrame(() => autosize(taRef.current));
+				sfxFor("send");
+				tapFeedback();
+			})();
+		},
+		[rpc, sessionId, attachments, quotes, cwd, onQuotesChange, setText, showSlashNotice],
+	);
+
 	const send = useCallback(
 		(accelerated = false): void => {
 			const trimmed = text.trim();
@@ -1229,6 +1293,16 @@ export function Composer({
 				onBtw?.(question);
 				setText("");
 				sfxFor("send");
+				return;
+			}
+			// GUI-native /guided-goal (TUI parity): the typed command starts
+			// the guided interview with the inline args as the rough
+			// objective. Intercepted BEFORE the slash dispatch (which reports
+			// it tui-only) and before the no-attachments guard, so staged
+			// quotes/images/file chips ride along exactly like a send.
+			const ggMatch = /^\/guided-goal(?:\s+([\s\S]+))?$/.exec(trimmed);
+			if (ggMatch) {
+				startGuidedGoal((ggMatch[1] ?? "").trim());
 				return;
 			}
 			// Delivery semantics MUST match the TUI:
@@ -1400,6 +1474,7 @@ export function Composer({
 			showSlashNotice,
 			refreshQueued,
 			pushHistory,
+			startGuidedGoal,
 		],
 	);
 
@@ -1835,23 +1910,14 @@ export function Composer({
 							onToggleGoal={toggleGoalMode}
 							onTogglePlan={togglePlanMode}
 							onGuidedGoal={() => {
-								// TUI /guided-goal parity: the agent interviews
-								// the user in chat, then creates the goal. The
-								// current draft rides along as the rough
-								// objective when present — cleared only after
-								// the RPC accepts (a failed start must not eat
-								// the draft), and failures surface in the
-								// slash notice instead of dying silently.
-								if (!rpc || !sessionId) return;
-								const draft = text.trim();
-								void rpc
-									.request("session.goal", { sessionId, op: "guided", objective: draft || undefined })
-									.then(() => {
-										if (!draft) return;
-										setText("");
-										requestAnimationFrame(() => autosize(taRef.current));
-									})
-									.catch(() => showSlashNotice("error", t("guided goal failed")));
+								// TUI /guided-goal parity: the agent interviews the
+								// user in chat, then creates the goal. The current
+								// draft — plus any staged quotes/attachments — rides
+								// along as the rough objective via the shared
+								// startGuidedGoal path (the typed /guided-goal
+								// command lands there too); a failed start keeps
+								// the draft and surfaces the daemon's wording.
+								startGuidedGoal(text.trim());
 							}}
 							onPickImages={files => void addFiles(files)}
 							onPickFiles={files => void addFiles(files)}

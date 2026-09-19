@@ -8,14 +8,24 @@ import type { SessionListNode } from "../SessionList";
 import type { SlashEntry } from "../SlashRow";
 import type { AtCompletionEntry, HashCompletionEntry } from "./completion-menus";
 
-/** Composer-intercepted slash commands (open GUI panels instead of hitting
- *  the agent) — they win ties in the / completion ranking. */
-const SLASH_GUI_NATIVE: ReadonlySet<string> = new Set(["usage", "context"]);
+/** Composer-intercepted slash commands (open GUI panels or fire GUI-owned
+ *  RPCs instead of hitting the agent) — they win ties in the / completion
+ *  ranking. */
+const SLASH_GUI_NATIVE: ReadonlySet<string> = new Set(["usage", "context", "guided-goal"]);
 
-/** TUI-only daemon commands the GUI intercepts with its own panel — the
- *  only tuiOnly entries allowed to stay in the / menu (everything else
+/** TUI-only daemon commands the GUI intercepts with its own handling — own
+ *  panels (usage/context/debug/btw/autoresearch) or the guided-goal RPC
+ *  (startGuidedGoal, TUI /guided-goal parity with inline args). These are
+ *  the only tuiOnly entries allowed to stay in the / menu (everything else
  *  tuiOnly can only answer "该命令仅在终端中可用", so it is hidden). */
-const GUI_PANEL_INTERCEPTS: ReadonlySet<string> = new Set(["usage", "context", "debug", "btw", "autoresearch"]);
+const GUI_PANEL_INTERCEPTS: ReadonlySet<string> = new Set([
+	"usage",
+	"context",
+	"debug",
+	"btw",
+	"autoresearch",
+	"guided-goal",
+]);
 
 /**
  * "@"/"#"/"//" completion machinery (TUI parity): the three completion
@@ -127,9 +137,9 @@ export function useCompletion({
 			category: "GUI",
 		};
 		const list = [
-			// Hide TUI-only daemon commands the GUI has no panel for — they
+			// Hide TUI-only daemon commands the GUI has no handling for — they
 			// can only answer "该命令仅在终端中可用" when sent. GUI-intercepted
-			// names (panel parity) and skill commands stay visible.
+			// names (panel or guided-RPC parity) and skill commands stay visible.
 			...(slashCmds ?? []).filter(
 				c =>
 					c.name !== "usage" && c.name !== "context" && !(c.tuiOnly === true && !GUI_PANEL_INTERCEPTS.has(c.name)),

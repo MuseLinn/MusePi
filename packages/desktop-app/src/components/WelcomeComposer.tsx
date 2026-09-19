@@ -1606,6 +1606,17 @@ export function WelcomeComposer({
 												thinkingLevel: thinking,
 												modelId: modelTouched.current ? modelId : effectiveModelId,
 												guidedGoal: true,
+												// Image chips ride along into the interview
+												// kickoff (TUI /guided-goal input.images
+												// parity); the daemon attaches them to the
+												// hidden synthetic kickoff.
+												images: attachments
+													.filter(a => a.kind !== "file" && a.dataUrl)
+													.map(a => ({
+														type: "image" as const,
+														data: a.dataUrl.split(",")[1] ?? "",
+														mimeType: a.mimeType,
+													})),
 											});
 										}}
 										onPickImages={files => void addFiles(files)}

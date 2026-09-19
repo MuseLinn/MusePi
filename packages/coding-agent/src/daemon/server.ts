@@ -8010,6 +8010,9 @@ export class DaemonServer {
 					op: "show" | "pause" | "resume" | "drop" | "budget" | "guided";
 					objective?: string | null;
 					budget?: string | null;
+					// Guided kickoff image attachments (same wire shape as
+					// session.send): they ride on the synthetic interview kickoff.
+					images?: { type: "image"; data: string; mimeType: string }[];
 				};
 				const live = this.#host.get(p.sessionId);
 				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
@@ -8062,6 +8065,19 @@ export class DaemonServer {
 						// TUI /guided-goal parity: a hidden kickoff starts a
 						// normal conversation in which the agent interviews the
 						// user, then calls the `goal create` tool to finish.
+						// Pre-checks mirror the TUI's handleGuidedGoalCommand in
+						// the same order (plan → vibe → goal.enabled →
+						// active/paused goal) so both entry points reject the
+						// same states with the same wording.
+						if (g.getPlanModeState?.()?.enabled === true) {
+							throw new Error("Exit plan mode first.");
+						}
+						if (g.getVibeModeState?.()?.enabled === true) {
+							throw new Error("Exit vibe mode first.");
+						}
+						if (!g.settings.get("goal.enabled")) {
+							throw new Error("Goal mode is disabled. Enable it in settings (goal.enabled).");
+						}
 						if (g.getGoalModeState()?.enabled) {
 							throw new Error("Goal mode is already active.");
 						}
@@ -8073,17 +8089,20 @@ export class DaemonServer {
 						const kickoff = prompt.render(guidedGoalInterviewPrompt, {
 							initial: p.objective?.trim() || undefined,
 						});
+						// Image attachments (welcome/session composer chips) ride
+						// on the kickoff — TUI input.images parity.
+						const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
 						try {
 							if (g.isStreaming) {
-								await g.followUp(kickoff, undefined, { synthetic: true });
+								await g.followUp(kickoff, images, { synthetic: true });
 							} else {
-								await g.prompt(kickoff, { synthetic: true });
+								await g.prompt(kickoff, images ? { synthetic: true, images } : { synthetic: true });
 							}
 						} catch (error) {
 							// AgentBusyError during the race between the streaming
 							// check and prompt(): queue instead of failing.
 							if (!(error instanceof AgentBusyError)) throw error;
-							await g.followUp(kickoff, undefined, { synthetic: true });
+							await g.followUp(kickoff, images, { synthetic: true });
 						}
 						return { ok: true };
 					}
