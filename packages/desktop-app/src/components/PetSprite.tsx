@@ -40,7 +40,6 @@ import {
 	mouthStroke,
 	springStep,
 	toPath,
-	visorPath,
 } from "../lib/pet-face";
 import { gazeDrift, MOOD_MOTION, motionTransform } from "../lib/pet-motion";
 
@@ -68,7 +67,6 @@ export function usePet(): { enabled: boolean; mode: PetDisplayMode; pet: ReturnT
  *  in a ref: a morph is ~50 points changing per frame, and routing that
  *  through React state would re-render the whole composer 60× a second. */
 interface MascotRefs {
-	visorRef: RefObject<SVGPathElement | null>;
 	eyeRefs: [RefObject<SVGPathElement | null>, RefObject<SVGPathElement | null>];
 	mouthRef: RefObject<SVGPathElement | null>;
 	shellRef: RefObject<SVGGElement | null>;
@@ -99,7 +97,6 @@ const BLINK_UP_MS = 150;
  *           ground shadow in counter-phase, so the orb reads as floating.
  */
 function useMascotEngine(mood: PetdexMood): MascotRefs {
-	const visorRef = useRef<SVGPathElement | null>(null);
 	const eye0 = useRef<SVGPathElement | null>(null);
 	const eye1 = useRef<SVGPathElement | null>(null);
 	const mouthRef = useRef<SVGPathElement | null>(null);
@@ -130,8 +127,7 @@ function useMascotEngine(mood: PetdexMood): MascotRefs {
 		let blinkT = 1;
 		let nextBlink = clock.start + 900;
 		let raf = 0;
-		// A blank visor path is invalid SVG on the very first frame — seed it.
-		visorRef.current?.setAttribute("d", visorPath(prepped.base));
+		// Seed the paths so the first frame never paints an invalid empty d.
 		eye0.current?.setAttribute("d", toPath(prepped.base[0]));
 		eye1.current?.setAttribute("d", toPath(prepped.base[1]));
 
@@ -182,24 +178,18 @@ function useMascotEngine(mood: PetdexMood): MascotRefs {
 
 			eye0.current?.setAttribute("d", toPath(face[0]));
 			eye1.current?.setAttribute("d", toPath(face[1]));
-			visorRef.current?.setAttribute("d", visorPath(face));
 			const frame = mouthFrame(face, spec);
 			mouthRef.current?.setAttribute("d", mouthPath(frame, spec));
 			mouthRef.current?.setAttribute("stroke-width", mouthStroke(spec).toFixed(2));
 
-			// ── body. Face units → the view box, then the mood's motion on top
-			// in view-box space so the spec's numbers stay in face units.
+			// ── body. The face already lives in the orb's own coordinate space,
+			// so the rig carries only the mood's motion. The motion helper
+			// pivots around the box it is given, so it gets the orb box and the
+			// rig keeps its padding shift in front of the motion.
 			const shell = shellRef.current;
 			if (shell) {
-				const k = FACE_ANCHOR.scale;
-				shell.setAttribute(
-					"transform",
-					`translate(${FACE_ANCHOR.x} ${FACE_ANCHOR.y}) scale(${k}) ` +
-						`translate(${-FACE_BOX / 2} ${-FACE_BOX / 2})`,
-				);
 				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX);
-				const rig = shell.parentNode;
-				if (rig instanceof SVGGElement) rig.setAttribute("transform", motion);
+				shell.setAttribute("transform", `translate(${SIDE} ${HEADROOM}) ${motion}`.trim());
 			}
 			raf = requestAnimationFrame(tick);
 		};
@@ -207,7 +197,7 @@ function useMascotEngine(mood: PetdexMood): MascotRefs {
 		return () => cancelAnimationFrame(raf);
 	}, [prepped]);
 
-	return { visorRef, eyeRefs: [eye0, eye1], mouthRef, shellRef };
+	return { eyeRefs: [eye0, eye1], mouthRef, shellRef };
 }
 
 /** Blend two mouth specs. All four numbers are independent, so a plain
@@ -234,13 +224,25 @@ function mixSpec(a: number[], b: number[], t: number): number[] {
  * with red appearing exactly once, on the error face. A limited palette is
  * what makes a mascot read as designed rather than assembled. */
 
-const VIEW_W = 320;
-const VIEW_H = 248;
+/** The orb plus the breathing room the antenna, orbit ring and ground shadow
+ *  need. The engine authors the face in a FACE_BOX square and the silhouette
+ *  *is* that square, so the face paints at scale 1 straight onto the ball with
+ *  no anchor scale to keep in sync — the rig only needs headroom above and a
+ *  floor below.
+ *
+ *  Everything inside the rig is authored around the sphere centre (FACE_BOX/2,
+ *  matching the engine's own SPHERE_C); the rig itself is shifted down by
+ *  PAD_TOP once, in the frame loop, so the padding never leaks into the art. */
+const HEADROOM = 40;
+const SIDE = 26;
+const FLOOR = 30;
+const VIEW_W = FACE_BOX + SIDE * 2;
+const VIEW_H = FACE_BOX + HEADROOM + FLOOR;
 
-/** Where the orb's face sits in the view box. The engine emits face-space
- *  coordinates (a FACE_BOX square centred on the sphere); this maps them onto
- *  the shell at the size the silhouette was drawn for. */
-const FACE_ANCHOR = { x: 160, y: 116, scale: 0.61 };
+/** Sphere centre in orb-local coordinates — the engine's own SPHERE_C. The
+ *  rig shifts this down by HEADROOM and right by SIDE into the padded view. */
+const ORB_C = FACE_BOX / 2;
+const ORB_R = FACE_BOX / 2;
 
 function Mascot({ mood }: { mood: PetdexMood }): ReactNode {
 	const refs = useMascotEngine(mood);
@@ -259,7 +261,7 @@ function Mascot({ mood }: { mood: PetdexMood }): ReactNode {
 /** The silhouette, the materials and the mounting points the engine drives.
  *  Order matters: the orbit ring is drawn in two halves so it reads as one
  *  loop passing around the body rather than a band stuck on its front. */
-function Silhouette({ visorRef, eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
+function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 	return (
 		<g aria-hidden className="gui-pet-svg__silhouette">
 			<defs>
@@ -270,13 +272,6 @@ function Silhouette({ visorRef, eyeRefs, mouthRef, shellRef }: MascotRefs): Reac
 					<stop offset="0" stopColor="var(--gui-pet-shell-a, #4a5768)" />
 					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, #26303d)" />
 					<stop offset="1" stopColor="var(--gui-pet-shell-c, #0e141c)" />
-				</radialGradient>
-				{/* Visor: near-black glass with a vertical falloff, so the face
-				 * panel reads recessed into the shell instead of painted on. */}
-				<radialGradient id="gui-pet-grad-visor" cx="0.42" cy="0.22" r="0.92">
-					<stop offset="0" stopColor="#141d2a" />
-					<stop offset="0.6" stopColor="#0a1018" />
-					<stop offset="1" stopColor="#05080d" />
 				</radialGradient>
 				{/* Orbit ring: brand gold, brightest where it crosses the light
 				 * (top-left) and dimmest at the far side. */}
@@ -317,72 +312,83 @@ function Silhouette({ visorRef, eyeRefs, mouthRef, shellRef }: MascotRefs): Reac
 				</radialGradient>
 			</defs>
 			{/* Ground shadow + hover thrust stay on the ground while the shell
-			 * drifts above them — deliberately outside the motion group. */}
-			<ellipse className="gui-pet-svg__ground" cx="160" cy="230" rx="52" ry="7.5" />
-			<ellipse className="gui-pet-svg__thrust" cx="160" cy="225" rx="44" ry="12" />
+			 * drifts above them — deliberately outside the motion group, and in
+			 * view coordinates because they do not move with the orb. */}
+			<ellipse className="gui-pet-svg__ground" cx={SIDE + ORB_C} cy={HEADROOM + ORB_C + ORB_R + 20} rx="58" ry="8" />
+			<ellipse
+				className="gui-pet-svg__thrust"
+				cx={SIDE + ORB_C}
+				cy={HEADROOM + ORB_C + ORB_R + 14}
+				rx="50"
+				ry="13"
+			/>
 			<g className="gui-pet-svg__body">
-				<g ref={shellRef}>
+				{/* The rig. Orb-local coordinates; shifted into the padded view
+				 * and then driven by the frame loop for mood motion. */}
+				<g ref={shellRef} transform={`translate(${SIDE} ${HEADROOM})`}>
 					{/* Orbit ring, back half — behind the shell, so the front arc
 					 * reads as the same loop coming round. */}
 					<ellipse
 						className="gui-pet-svg__ring gui-pet-svg__ring--back"
-						cx="160"
-						cy="114"
-						rx="90"
-						ry="31"
-						transform="rotate(-18 160 114)"
+						cx={ORB_C}
+						cy={ORB_C + 3}
+						rx="104"
+						ry="34"
+						transform={`rotate(-18 ${ORB_C} ${ORB_C + 3})`}
 					/>
-					{/* Shell */}
-					<circle className="gui-pet-svg__shell" cx="160" cy="114" r="64" />
+					{/* Shell — the orb itself, which is also the face's sphere. */}
+					<circle className="gui-pet-svg__shell" cx={ORB_C} cy={ORB_C} r={ORB_R} />
 					{/* Crown gloss + secondary catch-light: cheap sphericity. */}
 					<ellipse
 						className="gui-pet-svg__gloss"
-						cx="136"
-						cy="80"
-						rx="24"
-						ry="11.5"
-						transform="rotate(-22 136 80)"
+						cx={ORB_C - 34}
+						cy={ORB_C - 57}
+						rx="31"
+						ry="14"
+						transform={`rotate(-22 ${ORB_C - 34} ${ORB_C - 57})`}
 					/>
 					<ellipse
 						className="gui-pet-svg__gloss-dot"
-						cx="119"
-						cy="98"
-						rx="5.5"
-						ry="3.2"
-						transform="rotate(-22 119 98)"
+						cx={ORB_C - 56}
+						cy={ORB_C - 30}
+						rx="7"
+						ry="4"
+						transform={`rotate(-22 ${ORB_C - 56} ${ORB_C - 30})`}
 					/>
-					{/* Bounce light along the bottom + rim down the right edge. */}
-					<ellipse className="gui-pet-svg__bounce" cx="157" cy="172" rx="40" ry="9" />
-					<path className="gui-pet-svg__rim" d="M220 122 A64 64 0 0 1 133 172" />
+					{/* Bounce light along the bottom + rim down the right edge.
+					 * Both sit just inside the silhouette so they read as light
+					 * on the sphere, not as a stroke around it. */}
+					<ellipse className="gui-pet-svg__bounce" cx={ORB_C - 2} cy={ORB_C + 78} rx="48" ry="11" />
+					<path
+						className="gui-pet-svg__rim"
+						d={`M${ORB_C + 74} ${ORB_C + 82} A${ORB_R - 3} ${ORB_R - 3} 0 0 0 ${ORB_C + 92} ${ORB_C + 8}`}
+					/>
 					{/* Specular sweep drifting across the crown. */}
 					<ellipse
 						className="gui-pet-svg__sweep"
-						cx="147"
-						cy="74"
-						rx="12"
-						ry="4.6"
-						transform="rotate(-22 147 74)"
+						cx={ORB_C - 20}
+						cy={ORB_C - 64}
+						rx="15"
+						ry="5.6"
+						transform={`rotate(-22 ${ORB_C - 20} ${ORB_C - 64})`}
 					/>
-					{/* The face: dark panel, two eyes, mouth. All four paths are
-					 * rewritten every frame by the engine. */}
+					{/* The face, in the engine's own coordinates — no offset needed,
+					 * because the rig already sits on the sphere centre. All three
+					 * paths are rewritten every frame. */}
 					<g className="gui-pet-svg__face">
-						<path className="gui-pet-svg__visor" ref={visorRef} />
 						<path className="gui-pet-svg__eye" ref={eyeRefs[0]} />
 						<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
 						<path className="gui-pet-svg__mouth" ref={mouthRef} />
 					</g>
-					{/* π brand mark, etched low on the shell. */}
-					<g className="gui-pet-svg__crest">
-						<path d="M151 161 H169" />
-						<path d="M157 161 V172" />
-						<path d="M165 161 V172" />
-					</g>
 					{/* Beacon mast on the crown: idle sway, fast pulse while
 					 * working. Drawn over the shell so it reads as mounted. */}
 					<g className="gui-pet-svg__antenna-group">
-						<path className="gui-pet-svg__antenna" d="M160 50 L160 34" />
-						<circle className="gui-pet-svg__antenna-halo" cx="160" cy="28" r="9" />
-						<circle className="gui-pet-svg__antenna-tip" cx="160" cy="28" r="5" />
+						<path
+							className="gui-pet-svg__antenna"
+							d={`M${ORB_C} ${ORB_C - ORB_R + 6} L${ORB_C} ${ORB_C - ORB_R - 16}`}
+						/>
+						<circle className="gui-pet-svg__antenna-halo" cx={ORB_C} cy={ORB_C - ORB_R - 22} r="11" />
+						<circle className="gui-pet-svg__antenna-tip" cx={ORB_C} cy={ORB_C - ORB_R - 22} r="6" />
 					</g>
 				</g>
 			</g>

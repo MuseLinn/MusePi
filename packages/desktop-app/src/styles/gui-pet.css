@@ -32,15 +32,6 @@
 	stroke-width: 1.6;
 }
 
-/* The face panel sits *on* the shell: a dark glass blob whose outline is a
- * hairline of gold picking up the light from the ring. */
-.gui-pet-svg__visor {
-	fill: url(#gui-pet-grad-visor);
-	stroke: var(--gui-pet-gold-c, #8a6420);
-	stroke-width: 1.1;
-	stroke-opacity: 0.55;
-}
-
 /* Eyes: the emissive gold. `--gui-pet-eye` lets the error/strained faces
  * swap to red without a second rule per mood. */
 .gui-pet-svg__eye {
@@ -120,16 +111,6 @@
 .gui-pet-svg__sweep {
 	fill: rgba(255, 255, 255, 0.6);
 	animation: gui-pet-sweep 7s ease-in-out infinite;
-}
-
-/* π crest etched low on the shell — brand mark, drawn as strokes so it
- * survives down to the 30px composer size. */
-.gui-pet-svg__crest {
-	fill: none;
-	stroke: url(#gui-pet-grad-ring);
-	stroke-width: 2.4;
-	stroke-linecap: round;
-	opacity: 0.5;
 }
 
 /* ── Antenna (mood beacon) ─────────────────────────────────────────────
