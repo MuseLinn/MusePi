@@ -1,5 +1,5 @@
 # Consistency record for gui-implementation.md / gui-implementation.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/gui-implementation
-gui-implementation.md: b0dc1e102f6e49599e9ddfe66b8fd9be66447d09
-gui-implementation.zh-CN.md: 020f7af5ef7f9730ab3d973beffde975aba921cb
+gui-implementation.md: d64a72ffc12ce533120abc635b98997995dd7236
+gui-implementation.zh-CN.md: 85d67d33256659ae2995358862b2495623ed7d2b
