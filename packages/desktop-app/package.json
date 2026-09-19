@@ -152,7 +152,7 @@
 		"electron-updater": "6.4.1",
 		"konva": "^10.5.0",
 		"perfect-freehand": "^1.2.3",
-		"react-konva": "^19.3.0"
+		"react-konva": "19.2.7"
 	},
 	"homepage": "https://github.com/MuseLinn/MusePi",
 	"author": "MuseLinn"
