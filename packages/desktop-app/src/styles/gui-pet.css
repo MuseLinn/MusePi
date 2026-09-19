@@ -15,461 +15,294 @@
 	overflow: visible;
 }
 
-/* Color-block palette for the builtin note-bot (no accent purple —
- * mint/teal head, teal band, amber→rose cups, gold→orange note body).
- * Overridable via --gui-pet-* for theme/custom skins. */
-.gui-pet-svg__band {
-	fill: url(#gui-pet-grad-band);
-}
-.gui-pet-svg__cup {
-	fill: url(#gui-pet-grad-cup);
-}
-.gui-pet-svg__head {
-	fill: url(#gui-pet-grad-head);
-}
-.gui-pet-svg__blush {
-	fill: var(--gui-pet-blush, #fb7185);
-	opacity: 0.45;
-}
-.gui-pet-svg__body {
-	fill: url(#gui-pet-grad-body);
-}
-.gui-pet-svg__stem {
-	fill: var(--gui-pet-stem, #b45309);
+/* ── orb-bot v7 material ───────────────────────────────────────────────
+ * Two families and nothing else: graphite shell, brand gold light. Volume
+ * comes from gradients and stacked highlights, never from filters (a blur on
+ * a 30px composer pet costs more than the whole frame).
+ *
+ * The face is engine-drawn: three paths whose `d` is rewritten every frame,
+ * so the styling here is deliberately only fill / stroke / glow. Anything
+ * positional would be fighting the engine.
+ *
+ * Overridable via --gui-pet-*. */
+
+.gui-pet-svg__shell {
+	fill: url(#gui-pet-grad-shell);
+	stroke: var(--gui-pet-outline, rgba(8, 12, 20, 0.5));
+	stroke-width: 1.6;
 }
 
-.gui-pet-svg__face {
-	stroke: var(--color-text);
-	stroke-width: 4;
-	stroke-linecap: round;
+/* The face panel sits *on* the shell: a dark glass blob whose outline is a
+ * hairline of gold picking up the light from the ring. */
+.gui-pet-svg__visor {
+	fill: url(#gui-pet-grad-visor);
+	stroke: var(--gui-pet-gold-c, #8a6420);
+	stroke-width: 1.1;
+	stroke-opacity: 0.55;
+}
+
+/* Eyes: the emissive gold. `--gui-pet-eye` lets the error/strained faces
+ * swap to red without a second rule per mood. */
+.gui-pet-svg__eye {
+	fill: var(--gui-pet-eye, url(#gui-pet-grad-eye));
+	stroke: none;
+	/* A tight glow, not a bloom: drop-shadow on a morphing path is cheap
+	 * (it is a filter on one small path, not the whole SVG). */
+	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(217, 168, 63, 0.55)));
+}
+
+.gui-pet-svg__mouth {
 	fill: none;
+	stroke: var(--gui-pet-eye, url(#gui-pet-grad-eye));
+	stroke-linecap: round;
+	stroke-width: 7.5;
+	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(217, 168, 63, 0.45)));
 }
 
-.gui-pet-svg__pupil {
-	fill: var(--color-text);
-	stroke: none;
+/* Error is the only place the palette leaves gold. */
+.gui-pet-svg--error {
+	--gui-pet-eye: url(#gui-pet-grad-eye-err);
+	--gui-pet-glow: color-mix(in oklab, var(--color-danger) 55%, transparent);
 }
 
-.gui-pet-svg__pip,
-.gui-pet-svg__dot {
-	fill: var(--color-text);
-	stroke: none;
-	opacity: 0.55;
+.gui-pet-svg__ring {
+	fill: none;
+	stroke: url(#gui-pet-grad-ring);
+	stroke-linecap: round;
 }
 
-/* ── note-bot v2 parts (2026-09-16) ───────────────────────────────────── */
-/* Ground shadow — counter-phase with the breathe lift (see gui-pet-float). */
+/* The front arc is thicker and brighter — that asymmetry is what makes a
+ * ring read as passing around the body rather than lying flat on it. */
+.gui-pet-svg__ring--back {
+	stroke-width: 4.5;
+	opacity: 0.62;
+}
+
+.gui-pet-svg__ring--front {
+	stroke-width: 6.5;
+}
+
+/* Ground: soft radial falloff (a hard-edged ellipse reads as a sticker). The
+ * thrust layer underneath is the hover glow; both are animated by the mood
+ * motion, the thrust in counter-phase so the orb lifts off its own light. */
 .gui-pet-svg__ground {
-	fill: rgba(0, 0, 0, 0.22);
+	fill: url(#gui-pet-grad-ground);
 }
 
-/* Head gloss + cup sheen: static volume cues, no animation (cheap). */
+.gui-pet-svg__thrust {
+	fill: url(#gui-pet-grad-thrust);
+}
+
+/* Lower-right edge shade: on a dark shell the "3D" cue is a cool rim, so the
+ * sphere separates from the background instead of dissolving into it. */
+.gui-pet-svg__rim {
+	fill: none;
+	stroke: rgba(150, 196, 255, 0.26);
+	stroke-width: 3.2;
+	stroke-linecap: round;
+}
+
+/* Bounce light along the bottom — gold thrown back up from the surface. */
+.gui-pet-svg__bounce {
+	fill: url(#gui-pet-grad-bounce);
+}
+
 .gui-pet-svg__gloss {
-	fill: rgba(255, 255, 255, 0.28);
+	fill: rgba(255, 255, 255, 0.42);
 }
 
-.gui-pet-svg__cup-sheen {
-	fill: rgba(255, 255, 255, 0.32);
+.gui-pet-svg__gloss-dot {
+	fill: rgba(255, 255, 255, 0.7);
 }
 
-/* Antenna beacon: gentle idle blink; .gui-pet-svg--working speeds it up
- * (below). The glow is a second shadow — no blur filters (cheap). */
+/* Specular sweep: drifts across the crown on a slow cycle (7s) — a light
+ * source passing over polished hardware. */
+.gui-pet-svg__sweep {
+	fill: rgba(255, 255, 255, 0.6);
+	animation: gui-pet-sweep 7s ease-in-out infinite;
+}
+
+/* π crest etched low on the shell — brand mark, drawn as strokes so it
+ * survives down to the 30px composer size. */
+.gui-pet-svg__crest {
+	fill: none;
+	stroke: url(#gui-pet-grad-ring);
+	stroke-width: 2.4;
+	stroke-linecap: round;
+	opacity: 0.5;
+}
+
+/* ── Antenna (mood beacon) ─────────────────────────────────────────────
+ * Three layers: a stalk that sways on its own 4.2s rhythm, a tip that
+ * pulses, and a halo blooming with the tip. Working speeds the pulse up,
+ * error droops the whole stalk.
+ *
+ * This is the only remaining CSS-driven motion on the builtin pet — the
+ * face and body are engine-driven (lib/pet-motion.ts), because a face that
+ * morphs between two dozen expressions cannot be expressed as keyframes. */
+
+.gui-pet-svg__antenna-group {
+	transform-box: fill-box;
+	transform-origin: 50% 100%;
+	animation: gui-pet-antenna 4.2s ease-in-out infinite;
+}
+
 .gui-pet-svg__antenna {
-	stroke: var(--gui-pet-band-b, #0f766e);
-	stroke-width: 3.5;
+	stroke: url(#gui-pet-grad-ring);
+	stroke-width: 4;
 	stroke-linecap: round;
 	fill: none;
 }
 
 .gui-pet-svg__antenna-tip {
-	fill: var(--gui-pet-head-a, #34d399);
+	fill: var(--gui-pet-gold-a, #f7dd93);
 	animation: gui-pet-beacon 2.8s ease-in-out infinite;
 }
 
-@keyframes gui-pet-beacon {
-	0%,
-	100% {
-		opacity: 0.35;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-
-/* Open rounded eyes (blink group) + white sparkle dot each. */
-.gui-pet-svg__eye-open {
-	fill: var(--color-text);
-	stroke: none;
-}
-
-.gui-pet-svg__sparkle-dot {
-	fill: rgba(255, 255, 255, 0.9);
-	stroke: none;
-}
-
-.gui-pet-svg__sparkle-dot--big {
-	fill: rgba(255, 255, 255, 0.95);
-}
-
-/* Blink: transform-box fill-box so scaleY collapses around the eye pair.
- * A 4.6s cycle with TWO blinks at uneven offsets reads organic (a single
- * metronome blink reads mechanical). */
-.gui-pet-svg__blink {
-	transform-box: fill-box;
-	transform-origin: center 82%;
-	animation: gui-pet-blink 4.6s ease-in-out infinite;
-}
-
-@keyframes gui-pet-blink {
-	0%,
-	38%,
-	44%,
-	78%,
-	84%,
-	100% {
-		transform: scaleY(1);
-	}
-	41%,
-	81% {
-		transform: scaleY(0.08);
-	}
-}
-
-/* Analyzing: the pupil pair scans a slow look-around path. */
-.gui-pet-svg__scan {
-	animation: gui-pet-scan 3.6s ease-in-out infinite;
-}
-
-@keyframes gui-pet-scan {
-	0%,
-	100% {
-		transform: translate(0, -2px);
-	}
-	30% {
-		transform: translate(7px, -3px);
-	}
-	55% {
-		transform: translate(-6px, -1px);
-	}
-	80% {
-		transform: translate(2px, 1px);
-	}
-}
-
-/* Working: focused pupils flick side-to-side at typing cadence. */
-.gui-pet-svg__type {
-	animation: gui-pet-type 0.9s ease-in-out infinite;
-}
-
-@keyframes gui-pet-type {
-	0%,
-	100% {
-		transform: translateX(-1.5px);
-	}
-	50% {
-		transform: translateX(1.5px);
-	}
-}
-
-/* Hover: twinkle pluses pop around the head. */
-.gui-pet-svg__twinkle {
-	stroke: var(--color-text);
-	stroke-width: 3;
-	stroke-linecap: round;
-	fill: none;
-	opacity: 0;
-}
-
-.gui-pet-svg__twinkle--a {
-	animation: gui-pet-twinkle 1.6s ease-in-out infinite;
-}
-
-.gui-pet-svg__twinkle--b {
-	animation: gui-pet-twinkle 1.6s ease-in-out 0.35s infinite;
-}
-
-.gui-pet-svg__twinkle--c {
-	animation: gui-pet-twinkle 1.6s ease-in-out 0.7s infinite;
-}
-
-@keyframes gui-pet-twinkle {
-	0%,
-	100% {
-		opacity: 0;
-		transform: scale(0.6);
-	}
-	50% {
-		opacity: 0.9;
-		transform: scale(1);
-	}
-}
-
-/* Dragging: open mouth + wind streaks sweeping past. */
-.gui-pet-svg__mouth--open {
-	fill: var(--color-text);
-	stroke: none;
-}
-
-.gui-pet-svg__mouth-o {
-	fill: color-mix(in oklab, var(--color-text) 80%, transparent);
-	stroke: none;
-}
-
-.gui-pet-svg__xeye--drag {
-	stroke-width: 4;
-}
-
-.gui-pet-svg__wind {
-	stroke: var(--color-text);
-	stroke-width: 3.5;
-	stroke-linecap: round;
-	opacity: 0;
-}
-
-.gui-pet-svg__wind--a {
-	animation: gui-pet-wind 0.7s linear infinite;
-}
-
-.gui-pet-svg__wind--b {
-	animation: gui-pet-wind 0.7s linear 0.12s infinite;
-}
-
-.gui-pet-svg__wind--c {
-	animation: gui-pet-wind 0.7s linear 0.24s infinite;
-}
-
-@keyframes gui-pet-wind {
-	0% {
-		opacity: 0;
-		transform: translateX(14px);
-	}
-	35% {
-		opacity: 0.65;
-	}
-	100% {
-		opacity: 0;
-		transform: translateX(-26px);
-	}
-}
-
-/* Shared decals: sweat (working) + X eyes (error/dragging). */
-.gui-pet-svg__sweat {
-	fill: color-mix(in oklab, var(--color-text) 45%, transparent);
-	stroke: none;
-}
-
-.gui-pet-svg__xeye {
-	stroke: var(--color-danger);
-	stroke-width: 5;
-}
-
-/* Rest: gentle breathing + counter-phase ground shadow (float cue) + a
- * lazy stem sway, all on the one silhouette element's children. */
-.gui-pet-svg--rest .gui-pet-svg__silhouette {
-	animation: gui-pet-breathe 3.2s ease-in-out infinite;
-	transform-origin: 160px 150px;
-}
-
-.gui-pet-svg--rest .gui-pet-svg__ground {
-	animation: gui-pet-ground 3.2s ease-in-out infinite;
+.gui-pet-svg__antenna-halo {
+	fill: var(--gui-pet-gold-b, #d9a83f);
 	transform-box: fill-box;
 	transform-origin: center;
+	animation: gui-pet-halo 2.8s ease-in-out infinite;
 }
 
-.gui-pet-svg--rest .gui-pet-svg__stem {
-	animation: gui-pet-stem 4.4s ease-in-out infinite;
-	transform-box: fill-box;
-	transform-origin: 10% 90%;
-}
-
-@keyframes gui-pet-breathe {
-	0%,
-	100% {
-		transform: scale(1);
-	}
-	50% {
-		transform: scale(1.025);
-	}
-}
-
-@keyframes gui-pet-ground {
-	0%,
-	100% {
-		transform: scale(1);
-		opacity: 1;
-	}
-	50% {
-		transform: scale(0.94);
-		opacity: 0.7;
-	}
-}
-
-@keyframes gui-pet-stem {
-	0%,
-	100% {
-		transform: rotate(0deg);
-	}
-	50% {
-		transform: rotate(7deg);
-	}
-}
-
-/* Analyzing: think pips ladder up */
-.gui-pet-svg--analyzing .gui-pet-svg__pip--a {
-	animation: gui-pet-pip 1.4s ease-in-out infinite;
-}
-
-.gui-pet-svg--analyzing .gui-pet-svg__pip--b {
-	animation: gui-pet-pip 1.4s ease-in-out 0.25s infinite;
-}
-
-.gui-pet-svg--analyzing .gui-pet-svg__pip--c {
-	animation: gui-pet-pip 1.4s ease-in-out 0.5s infinite;
-}
-
-@keyframes gui-pet-pip {
-	0%,
-	100% {
-		transform: translateY(0);
-		opacity: 0.55;
-	}
-	50% {
-		transform: translateY(-5px);
-		opacity: 1;
-	}
-}
-
-/* Waiting: dots bob + head sways */
-.gui-pet-svg--waiting .gui-pet-svg__dot--a {
-	animation: gui-pet-dot 1s ease-in-out infinite;
-}
-
-.gui-pet-svg--waiting .gui-pet-svg__dot--b {
-	animation: gui-pet-dot 1s ease-in-out 0.2s infinite;
-}
-
-.gui-pet-svg--waiting .gui-pet-svg__dot--c {
-	animation: gui-pet-dot 1s ease-in-out 0.4s infinite;
-}
-
-.gui-pet-svg--waiting .gui-pet-svg__silhouette {
-	animation: gui-pet-sway 2.6s ease-in-out infinite;
-	transform-origin: 160px 150px;
-}
-
-@keyframes gui-pet-dot {
-	0%,
-	100% {
-		transform: translateY(0);
-		opacity: 0.55;
-	}
-	50% {
-		transform: translateY(-4px);
-		opacity: 1;
-	}
-}
-
-@keyframes gui-pet-sway {
-	0%,
-	100% {
-		transform: rotate(0deg);
-	}
-	50% {
-		transform: rotate(3deg);
-	}
-}
-
-/* Working: micro-shake + sweat trickle */
-.gui-pet-svg--working .gui-pet-svg__silhouette {
-	animation: gui-pet-shake 0.5s linear infinite;
-	transform-origin: 160px 150px;
-}
-
-.gui-pet-svg--working .gui-pet-svg__sweat {
-	animation: gui-pet-sweat 1.2s ease-in infinite;
-}
-
-@keyframes gui-pet-shake {
-	0%,
-	100% {
-		transform: translate(0, 0);
-	}
-	25% {
-		transform: translate(1px, 0);
-	}
-	75% {
-		transform: translate(-1px, 0);
-	}
-}
-
-@keyframes gui-pet-sweat {
-	0% {
-		transform: translate(0, 0);
-		opacity: 0;
-	}
-	30% {
-		opacity: 0.9;
-	}
-	100% {
-		transform: translate(3px, 10px);
-		opacity: 0;
-	}
-}
-
-/* Working: the antenna beacon goes urgent (fast pulse). */
-.gui-pet-svg--working .gui-pet-svg__antenna-tip {
-	animation: gui-pet-beacon 0.6s ease-in-out infinite;
-}
-
-/* Hover: an eager lean-up on the whole body (the window's own lift does
- * the big move — this adds the personality). */
-.gui-pet-svg--hover .gui-pet-svg__silhouette {
-	animation: gui-pet-lean 1.4s ease-in-out infinite;
-	transform-origin: 160px 170px;
-}
-
-@keyframes gui-pet-lean {
-	0%,
-	100% {
-		transform: rotate(0deg) translateY(0);
-	}
-	50% {
-		transform: rotate(-2.5deg) translateY(-2px);
-	}
-}
-
-/* Dragging: full-body wiggle (frames can't do this — vector can). */
-.gui-pet-svg--dragging .gui-pet-svg__silhouette {
-	animation: gui-pet-wiggle 0.55s ease-in-out infinite;
-	transform-origin: 160px 170px;
-}
-
-@keyframes gui-pet-wiggle {
+@keyframes gui-pet-antenna {
 	0%,
 	100% {
 		transform: rotate(-3deg);
 	}
 	50% {
-		transform: rotate(3deg);
+		transform: rotate(3.5deg);
 	}
 }
 
-/* Error: a helpless wobble. */
-.gui-pet-svg--error .gui-pet-svg__silhouette {
-	animation: gui-pet-wobble 1.1s ease-in-out infinite;
-	transform-origin: 160px 170px;
-}
-
-@keyframes gui-pet-wobble {
+@keyframes gui-pet-beacon {
 	0%,
 	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+@keyframes gui-pet-halo {
+	0%,
+	100% {
+		opacity: 0;
+		transform: scale(0.7);
+	}
+	50% {
+		opacity: 0.26;
+		transform: scale(1.15);
+	}
+}
+
+@keyframes gui-pet-sweep {
+	0%,
+	100% {
+		transform: translateX(-9px) rotate(-20deg);
+		opacity: 0;
+	}
+	22% {
+		opacity: 0.75;
+	}
+	55% {
+		transform: translateX(9px) rotate(-20deg);
+		opacity: 0;
+	}
+}
+
+/* ── Mood-level modifiers ──────────────────────────────────────────────
+ * The engine already gives each mood its own body motion and face. What is
+ * left for CSS is the *lighting*: how the orb's own glow responds to what it
+ * is doing. Keeping that here means the mood vocabulary stays declarative. */
+
+/* Working: the beacon pulses at a work cadence and the ring spins up, so
+ * effort is legible at a glance from across the screen. */
+.gui-pet-svg--working .gui-pet-svg__antenna-tip {
+	animation: gui-pet-beacon 0.62s ease-in-out infinite;
+}
+
+.gui-pet-svg--working .gui-pet-svg__antenna-halo {
+	animation: gui-pet-halo 0.62s ease-in-out infinite;
+}
+
+.gui-pet-svg--working .gui-pet-svg__ring {
+	animation: gui-pet-ring-spin 2.6s linear infinite;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+/* Analyzing: the same ring, faster and in the other direction — reading
+ * rather than writing. */
+.gui-pet-svg--analyzing .gui-pet-svg__ring {
+	animation: gui-pet-ring-spin 1.7s linear infinite reverse;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+/* Hover: the orb perks up and the eye light brightens. */
+.gui-pet-svg--hover .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 5px var(--gui-pet-glow, rgba(217, 168, 63, 0.8)));
+}
+
+.gui-pet-svg--hover .gui-pet-svg__thrust {
+	opacity: 1.35;
+}
+
+/* Dragging: caught in hand — full thrust, ring tilted with the motion. */
+.gui-pet-svg--dragging .gui-pet-svg__thrust {
+	opacity: 1.6;
+}
+
+/* Waiting: the light dims and the beacon slows to a drowsy breath. */
+.gui-pet-svg--waiting .gui-pet-svg__antenna-tip {
+	animation-duration: 4.6s;
+}
+
+.gui-pet-svg--waiting .gui-pet-svg__eye {
+	opacity: 0.82;
+}
+
+/* Error: the beacon stalls and the orb runs cold — the mood is carried by
+ * the red face plus a collapsed glow, not by extra motion. */
+.gui-pet-svg--error .gui-pet-svg__antenna-tip {
+	animation: none;
+	opacity: 0.5;
+}
+
+.gui-pet-svg--error .gui-pet-svg__antenna-group {
+	animation: gui-pet-droop 2.4s ease-in-out infinite;
+}
+
+.gui-pet-svg--error .gui-pet-svg__thrust {
+	opacity: 0.4;
+}
+
+.gui-pet-svg--error .gui-pet-svg__ring {
+	opacity: 0.5;
+}
+
+@keyframes gui-pet-ring-spin {
+	0% {
 		transform: rotate(0deg);
 	}
-	25% {
-		transform: rotate(-2deg);
+	100% {
+		transform: rotate(360deg);
 	}
-	75% {
-		transform: rotate(2deg);
+}
+
+@keyframes gui-pet-droop {
+	0%,
+	100% {
+		transform: rotate(6deg);
+	}
+	45% {
+		transform: rotate(24deg);
+	}
+	70% {
+		transform: rotate(14deg);
 	}
 }
 

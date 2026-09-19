@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	BUILTIN_PETDEX,
+	BUILTIN_SVG_ID,
 	DEFAULT_PET_ID,
 	loadPetdex,
 	measurePetdex,
@@ -39,6 +40,9 @@ interface PetGridEntry {
 	rows?: readonly number[];
 	contentH?: number;
 	smooth?: boolean;
+	/** Rendered by the builtin vector note-bot (BuiltinPetSprite), not a
+	 *  spritesheet — `src`/`width`/`height` are unused for this entry. */
+	builtin?: boolean;
 	source: "preset" | "user";
 }
 
@@ -75,15 +79,19 @@ export function PetCard({
 				}}
 			>
 				<span className="gui-pet-card__thumb">
-					<PetdexSprite
-						mood="rest"
-						src={entry.src}
-						width={entry.width}
-						height={entry.height}
-						rows={entry.rows}
-						contentH={entry.contentH}
-						smooth={entry.smooth}
-					/>
+					{entry.builtin ? (
+						<BuiltinPetSprite mood="rest" />
+					) : (
+						<PetdexSprite
+							mood="rest"
+							src={entry.src}
+							width={entry.width}
+							height={entry.height}
+							rows={entry.rows}
+							contentH={entry.contentH}
+							smooth={entry.smooth}
+						/>
+					)}
 				</span>
 				<span className="gui-pet-card__body">
 					<span className="gui-pet-card__name">
@@ -460,18 +468,35 @@ export function PetSection(): ReactNode {
 	// Preset names/descriptions are i18n keys (English source strings,
 	// localized via guest-client zh-CN); imported packages keep their own
 	// pet.json text.
-	const presetEntries: PetGridEntry[] = BUILTIN_PETDEX.map(p => ({
-		id: p.id,
-		name: t(p.displayName as TranslationKey),
-		description: t(p.description as TranslationKey),
-		src: p.spritesheetPath,
-		width: p.width,
-		height: p.height,
-		rows: p.rows,
-		contentH: p.contentH,
-		smooth: p.smooth,
+	// The hand-drawn vector note-bot leads the preset grid — it is the
+	// code-owned brand mascot; the AI-generated sheet presets follow.
+	const builtinSvgEntry: PetGridEntry = {
+		id: BUILTIN_SVG_ID,
+		name: t("builtin pet"),
+		description: t("builtin pet description"),
+		src: "",
+		width: 0,
+		height: 0,
+		builtin: true,
 		source: "preset",
-	}));
+	};
+	const presetEntries: PetGridEntry[] = [
+		builtinSvgEntry,
+		...BUILTIN_PETDEX.map(
+			(p): PetGridEntry => ({
+				id: p.id,
+				name: t(p.displayName as TranslationKey),
+				description: t(p.description as TranslationKey),
+				src: p.spritesheetPath,
+				width: p.width,
+				height: p.height,
+				rows: p.rows,
+				contentH: p.contentH,
+				smooth: p.smooth,
+				source: "preset",
+			}),
+		),
+	];
 	const userEntries: PetGridEntry[] = petdex.map(p => ({
 		id: p.id,
 		name: p.displayName,
@@ -646,7 +671,7 @@ export function PetSection(): ReactNode {
 							onClick={() => setExpanded(v => !v)}
 						>
 							<span className="gui-pet-trigger__thumb">
-								{selectedEntry ? (
+								{selectedEntry && !selectedEntry.builtin ? (
 									<PetdexSprite
 										mood="rest"
 										src={selectedEntry.src}

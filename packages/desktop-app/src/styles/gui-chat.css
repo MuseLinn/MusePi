@@ -3506,6 +3506,12 @@ body.gui-resizing .gui-pane-right {
 	zoom: 0.66;
 }
 
+/* Builtin vector note-bot card (no spritesheet — the SVG fills the thumb). */
+.gui-pet-card__thumb svg {
+	width: 68px;
+	height: auto;
+}
+
 .gui-pet-card__body {
 	display: flex;
 	flex-direction: column;

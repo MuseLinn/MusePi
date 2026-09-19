@@ -67,6 +67,12 @@ export const PET_DISPLAY_MODES: readonly PetDisplayMode[] = ["input", "desktop"]
 
 export const BUILTIN_PET_ID = "musepi";
 
+/** Builtin vector note-bot id (PetSprite's hand-drawn SVG mascot). The
+ *  "musepi" id belongs to the AI-generated spritesheet preset below, so
+ *  the vector bot carries its own id — without it petForId would always
+ *  resolve "musepi" to the sheet and the SVG branch would be dead code. */
+export const BUILTIN_SVG_ID = "musepi-note-bot";
+
 /**
  * Builtin presets — the MusePi brand pet (AI-designed smooth art,
  * 2026-09-16) first, then spritesheets vendored from BitFun (MIT,
@@ -325,6 +331,8 @@ export function savePetdex(pets: PetdexPackage[]): void {
 /** Resolve any pet id to a renderable descriptor (preset grid previews,
  *  unknown ids → the note-bot SVG fallback). */
 export function petForId(id: string): { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage } {
+	// The vector note-bot is rendered by PetSprite directly (no sheet).
+	if (id === BUILTIN_SVG_ID) return { kind: "builtin", id: BUILTIN_SVG_ID };
 	const pkg = loadPetdex().find(p => p.id === id);
 	if (pkg) return { kind: "petdex", pkg };
 	const builtin = BUILTIN_PETDEX.find(p => p.id === id);

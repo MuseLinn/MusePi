@@ -9,7 +9,7 @@
  *    CSS background-position; mood selects the row, columns cycle frames.
  */
 
-import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
+import { type CSSProperties, type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import {
 	activePet,
 	migratePetdexContent,
@@ -25,6 +25,24 @@ import {
 	petMode,
 	petScale,
 } from "../lib/pet";
+import {
+	applyYaw,
+	FACE_BOX,
+	type Face,
+	faceFor,
+	GAZE_TRAVEL,
+	gazeYaw,
+	lerpFace,
+	moodDirection,
+	mouthFrame,
+	mouthPath,
+	mouthSpecFor,
+	mouthStroke,
+	springStep,
+	toPath,
+	visorPath,
+} from "../lib/pet-face";
+import { gazeDrift, MOOD_MOTION, motionTransform } from "../lib/pet-motion";
 
 /** Live pet prefs: re-resolves when settings change (the settings page
  *  dispatches "omp-pet-changed" after saving; storage events cover other
@@ -46,209 +64,186 @@ export function usePet(): { enabled: boolean; mode: PetDisplayMode; pet: ReturnT
 	return state;
 }
 
-/* ── Builtin SVG mascot (note-bot v2, brand default) ─────────────────────
- * Geometry is original (MusePi = music + π): round head with headphones,
- * a quarter-note body, and mood-driven face layers. v2 (2026-09-16) adds
- * the delicacy pass: ground shadow, head gloss, antenna with mood pulse,
- * native hover/dragging faces, blinking, wandering pupils — all pure
- * transform/opacity keyframes (GPU-composited, no steps() → silky at any
- * window scale, unlike spritesheet frame stepping). The silhouette is
- * theme-agnostic (accent-tinted); the mood decals use currentColor so
- * they read on both light and dark surfaces. */
+/* ── Refs the engine writes to. Every value the frame clock touches lives
+ *  in a ref: a morph is ~50 points changing per frame, and routing that
+ *  through React state would re-render the whole composer 60× a second. */
+interface MascotRefs {
+	visorRef: RefObject<SVGPathElement | null>;
+	eyeRefs: [RefObject<SVGPathElement | null>, RefObject<SVGPathElement | null>];
+	mouthRef: RefObject<SVGPathElement | null>;
+	shellRef: RefObject<SVGGElement | null>;
+}
+
+/** Blend weight of the mood's `drift` face during idle — subtle on purpose.
+ *  The face should feel like it keeps finding new poses to rest in, not like
+ *  it is cycling a slideshow. */
+const DRIFT_MAX = 0.18;
+
+/** Morph duration constants (ms). Down-blink is fast, up-blink is slower —
+ *  a symmetric blink reads mechanical. */
+const MORPH_MS = 420;
+const BLINK_DOWN_MS = 90;
+const BLINK_UP_MS = 150;
+
+/**
+ * The mascot frame loop. Three systems run on one clock so they stay
+ * coherent:
+ *
+ *   FACE    A spring-eased morph between the face we came from, this mood's
+ *           face, its drift face, and the blink lash. Because every ring has
+ *           the same point count, the morph is point-by-point interpolation
+ *           rather than a cut.
+ *   MOUTH   Re-derived every frame from the *current* eye positions, which is
+ *           why it tracks the morph instead of lagging behind it.
+ *   BODY    The mood's motion numbers evaluated at the clock. Also drives the
+ *           ground shadow in counter-phase, so the orb reads as floating.
+ */
+function useMascotEngine(mood: PetdexMood): MascotRefs {
+	const visorRef = useRef<SVGPathElement | null>(null);
+	const eye0 = useRef<SVGPathElement | null>(null);
+	const eye1 = useRef<SVGPathElement | null>(null);
+	const mouthRef = useRef<SVGPathElement | null>(null);
+	const shellRef = useRef<SVGGElement | null>(null);
+
+	// Static per-mood face data — decoded once per mood, never per frame.
+	const prepped = useMemo(() => {
+		const dir = moodDirection(mood);
+		const base = faceFor(dir.eyes);
+		return {
+			base,
+			drift: faceFor(dir.drift ?? dir.eyes),
+			lash: faceFor("closed"),
+			mouth: mouthSpecFor(dir.eyes),
+			mouthDrift: mouthSpecFor(dir.drift ?? dir.eyes),
+			blinkMs: dir.blinkMs,
+			look: dir.look,
+			motion: MOOD_MOTION[mood] ?? {},
+		};
+	}, [mood]);
+
+	useEffect(() => {
+		const clock = { start: performance.now(), last: performance.now() };
+		// Morph + blink phase live in the effect closure, so changing mood
+		// never restarts the body clock (an entrance animation would replay).
+		const from: Face = prepped.base;
+		let morphT = 1;
+		let blinkT = 1;
+		let nextBlink = clock.start + 900;
+		let raf = 0;
+		// A blank visor path is invalid SVG on the very first frame — seed it.
+		visorRef.current?.setAttribute("d", visorPath(prepped.base));
+		eye0.current?.setAttribute("d", toPath(prepped.base[0]));
+		eye1.current?.setAttribute("d", toPath(prepped.base[1]));
+
+		const tick = (now: number): void => {
+			const dt = Math.min(now - clock.last, 64);
+			clock.last = now;
+			const elapsed = now - clock.start;
+
+			// ── blink: fast close, slower open, on the mood's cadence.
+			if (prepped.blinkMs > 0 && blinkT >= 1 && now >= nextBlink) {
+				blinkT = 0;
+				nextBlink = now + prepped.blinkMs;
+			}
+			if (blinkT < 1) blinkT = Math.min(1, blinkT + dt / (blinkT < 0.5 ? BLINK_DOWN_MS : BLINK_UP_MS));
+
+			// ── face morph.
+			if (morphT < 1) morphT = Math.min(1, morphT + dt / MORPH_MS);
+			const base = lerpFace(from, prepped.base, springStep(morphT));
+			// The drift face eases in on a slow sine once the morph has landed,
+			// so a long idle keeps making new faces without ever looking busy.
+			const driftT = morphT >= 1 ? (Math.sin(elapsed / 3400) * 0.5 + 0.5) * DRIFT_MAX : 0;
+			let rings = lerpFace(base, prepped.drift, driftT);
+			let spec = mixSpec(prepped.mouth, prepped.mouthDrift, morphT >= 1 ? driftT / DRIFT_MAX : 0);
+			if (blinkT < 1) {
+				// Ease toward the lash on both halves of the blink. `blinkT`
+				// runs 0→1 across close-then-open, so the bell is the weight.
+				const w = blinkT < 0.5 ? blinkT * 2 : (1 - blinkT) * 2;
+				rings = lerpFace(rings, prepped.lash, w * 0.96);
+				spec = mixSpec(spec, prepped.mouth, w * 0.6);
+			}
+
+			// ── gaze: authored look bias plus an idle saccade, applied as a yaw
+			// so the eyes slide across the sphere and compress at the limb.
+			const gaze = gazeDrift(elapsed, prepped.look);
+			const gx = gaze.x * GAZE_TRAVEL.x;
+			const gy = gaze.y * GAZE_TRAVEL.y;
+			const yaw = gazeYaw(gx);
+			const face: Face = [
+				applyYaw(
+					rings[0].map(([x, y]) => [x + gx, y + gy] as [number, number]),
+					yaw,
+				),
+				applyYaw(
+					rings[1].map(([x, y]) => [x + gx, y + gy] as [number, number]),
+					yaw,
+				),
+			];
+
+			eye0.current?.setAttribute("d", toPath(face[0]));
+			eye1.current?.setAttribute("d", toPath(face[1]));
+			visorRef.current?.setAttribute("d", visorPath(face));
+			const frame = mouthFrame(face, spec);
+			mouthRef.current?.setAttribute("d", mouthPath(frame, spec));
+			mouthRef.current?.setAttribute("stroke-width", mouthStroke(spec).toFixed(2));
+
+			// ── body. Face units → the view box, then the mood's motion on top
+			// in view-box space so the spec's numbers stay in face units.
+			const shell = shellRef.current;
+			if (shell) {
+				const k = FACE_ANCHOR.scale;
+				shell.setAttribute(
+					"transform",
+					`translate(${FACE_ANCHOR.x} ${FACE_ANCHOR.y}) scale(${k}) ` +
+						`translate(${-FACE_BOX / 2} ${-FACE_BOX / 2})`,
+				);
+				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX);
+				const rig = shell.parentNode;
+				if (rig instanceof SVGGElement) rig.setAttribute("transform", motion);
+			}
+			raf = requestAnimationFrame(tick);
+		};
+		raf = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(raf);
+	}, [prepped]);
+
+	return { visorRef, eyeRefs: [eye0, eye1], mouthRef, shellRef };
+}
+
+/** Blend two mouth specs. All four numbers are independent, so a plain
+ *  per-slot lerp is exactly right here. */
+function mixSpec(a: number[], b: number[], t: number): number[] {
+	if (t <= 0) return a;
+	if (t >= 1) return b;
+	return a.map((v, i) => v + ((b[i] ?? v) - v) * t);
+}
+
+/* ── Builtin SVG mascot (orb-bot v7, brand default) ──────────────────────
+ * A levitating tech orb — the floating-desktop-pet archetype the GrokBot
+ * companion mascots share: one dominant silhouette (the sphere), one
+ * signature feature (the tilted gold orbit ring), one emissive face.
+ *
+ * This is an ENGINE, not an illustration. The face is authored as control
+ * numbers in lib/pet-face.ts (two eye rings plus four mouth numbers per
+ * shape) and rendered through a sphere projection with a spring morph, so it
+ * eases between expressions instead of cutting. Body motion is a data table
+ * (lib/pet-motion.ts) read by a frame clock, which is how a mood can bob AND
+ * squash AND sway at once.
+ *
+ * Palette is deliberately two families — graphite shell and brand gold —
+ * with red appearing exactly once, on the error face. A limited palette is
+ * what makes a mascot read as designed rather than assembled. */
 
 const VIEW_W = 320;
-const VIEW_H = 204;
+const VIEW_H = 248;
 
-function Silhouette(): ReactNode {
-	return (
-		<g aria-hidden className="gui-pet-svg__silhouette">
-			<defs>
-				{/* Color-block gradient palette (no accent purple): mint→teal
-				 * head, teal band, amber→rose cups, gold→orange note body. */}
-				<linearGradient id="gui-pet-grad-head" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-head-a, #34d399)" />
-					<stop offset="1" stopColor="var(--gui-pet-head-b, #0ea5a5)" />
-				</linearGradient>
-				<linearGradient id="gui-pet-grad-band" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-band-a, #14b8a6)" />
-					<stop offset="1" stopColor="var(--gui-pet-band-b, #0f766e)" />
-				</linearGradient>
-				<linearGradient id="gui-pet-grad-cup" x1="0" y1="0" x2="1" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-cup-a, #fdba74)" />
-					<stop offset="1" stopColor="var(--gui-pet-cup-b, #fb7185)" />
-				</linearGradient>
-				<linearGradient id="gui-pet-grad-body" x1="0" y1="0" x2="0" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-body-a, #fbbf24)" />
-					<stop offset="1" stopColor="var(--gui-pet-body-b, #f97316)" />
-				</linearGradient>
-			</defs>
-			{/* Ground shadow: breathes in counter-phase with the body lift so
-			 * the pet reads as floating, not sliding. */}
-			<ellipse className="gui-pet-svg__ground" cx="160" cy="193" rx="56" ry="7" />
-			{/* Headphones: band + two cups */}
-			<path
-				className="gui-pet-svg__band"
-				d="M95 78 A75 75 0 0 1 225 78 L225 92 A8 8 0 0 1 209 92 L209 84 A55 55 0 0 0 111 84 L111 92 A8 8 0 0 1 95 92 Z"
-			/>
-			<rect className="gui-pet-svg__cup" x="78" y="84" width="30" height="42" rx="12" />
-			<rect className="gui-pet-svg__cup" x="212" y="84" width="30" height="42" rx="12" />
-			{/* Cup inner detail: a soft inset sheen so the cups read rounded. */}
-			<rect className="gui-pet-svg__cup-sheen" x="83" y="90" width="9" height="30" rx="4.5" />
-			<rect className="gui-pet-svg__cup-sheen" x="217" y="90" width="9" height="30" rx="4.5" />
-			{/* Head */}
-			<circle className="gui-pet-svg__head" cx="160" cy="100" r="52" />
-			{/* Gloss: a soft top-left highlight gives the head volume. */}
-			<ellipse className="gui-pet-svg__gloss" cx="141" cy="76" rx="24" ry="13" />
-			{/* Antenna: mood beacon on the band — gentle idle blink, rapid
-			 * pulse while working. */}
-			<path className="gui-pet-svg__antenna" d="M160 52 L160 34" />
-			<circle className="gui-pet-svg__antenna-tip" cx="160" cy="29" r="5" />
-			{/* Rosy cheeks (color-block accent over the head) */}
-			<ellipse className="gui-pet-svg__blush" cx="137" cy="120" rx="11" ry="6.5" />
-			<ellipse className="gui-pet-svg__blush" cx="183" cy="120" rx="11" ry="6.5" />
-			{/* Body: rounded note flag */}
-			<path
-				className="gui-pet-svg__body"
-				d="M118 152 C118 130 202 130 202 152 L202 178 C202 190 118 190 118 178 Z"
-			/>
-			<path
-				className="gui-pet-svg__stem"
-				d="M178 158 C186 142 198 136 210 134 L210 148 C200 150 190 156 186 168 Z"
-			/>
-		</g>
-	);
-}
+/** Where the orb's face sits in the view box. The engine emits face-space
+ *  coordinates (a FACE_BOX square centred on the sphere); this maps them onto
+ *  the shell at the size the silhouette was drawn for. */
+const FACE_ANCHOR = { x: 160, y: 116, scale: 0.61 };
 
-/** Open rounded-rect eyes inside a blink group (blink keyframes live in
- *  gui-pet.css on .gui-pet-svg__blink), with a white sparkle dot each so
- *  the gaze reads alive. `dx` shifts the pair for looking-around moods. */
-function OpenEyes(): ReactNode {
-	return (
-		<g className="gui-pet-svg__blink" aria-hidden>
-			<rect className="gui-pet-svg__eye-open" x="142.5" y="90" width="8" height="15" rx="4" />
-			<rect className="gui-pet-svg__eye-open" x="170.5" y="90" width="8" height="15" rx="4" />
-			<circle className="gui-pet-svg__sparkle-dot" cx="145" cy="94" r="1.8" />
-			<circle className="gui-pet-svg__sparkle-dot" cx="173" cy="94" r="1.8" />
-		</g>
-	);
-}
-
-function FaceRest(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			<OpenEyes />
-			<path className="gui-pet-svg__mouth" d="M154 112 Q160 117 166 112" />
-		</g>
-	);
-}
-
-function FaceHover(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			{/* Wide, delighted eyes — bigger sparkles, lifted brows omitted
-			 * (the window's hover lift already reads as anticipation). */}
-			<g className="gui-pet-svg__blink" aria-hidden>
-				<rect className="gui-pet-svg__eye-open" x="142" y="88" width="9" height="17" rx="4.5" />
-				<rect className="gui-pet-svg__eye-open" x="170" y="88" width="9" height="17" rx="4.5" />
-				<circle className="gui-pet-svg__sparkle-dot gui-pet-svg__sparkle-dot--big" cx="144.5" cy="93" r="2.4" />
-				<circle className="gui-pet-svg__sparkle-dot gui-pet-svg__sparkle-dot--big" cx="172.5" cy="93" r="2.4" />
-			</g>
-			{/* Open happy mouth */}
-			<path className="gui-pet-svg__mouth gui-pet-svg__mouth--open" d="M152 112 Q160 122 168 112 Z" />
-			{/* Twinkle pluses around the head */}
-			<path className="gui-pet-svg__twinkle gui-pet-svg__twinkle--a" d="M108 62 L108 74 M102 68 L114 68" />
-			<path className="gui-pet-svg__twinkle gui-pet-svg__twinkle--b" d="M218 54 L218 66 M212 60 L224 60" />
-			<path className="gui-pet-svg__twinkle gui-pet-svg__twinkle--c" d="M238 92 L238 102 M233 97 L243 97" />
-		</g>
-	);
-}
-
-function FaceDragging(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			{/* Squeezed-shut "> <" eyes — the wheee face */}
-			<path className="gui-pet-svg__xeye gui-pet-svg__xeye--drag" d="M140 92 L152 100 M152 92 L140 100" />
-			<path className="gui-pet-svg__xeye gui-pet-svg__xeye--drag" d="M168 92 L180 100 M180 92 L168 100" />
-			<ellipse className="gui-pet-svg__mouth-o" cx="160" cy="116" rx="7" ry="5.5" />
-			{/* Wind streaks: the world rushing past while carried */}
-			<path className="gui-pet-svg__wind gui-pet-svg__wind--a" d="M60 96 L92 96" />
-			<path className="gui-pet-svg__wind gui-pet-svg__wind--b" d="M48 112 L84 112" />
-			<path className="gui-pet-svg__wind gui-pet-svg__wind--c" d="M64 128 L96 128" />
-		</g>
-	);
-}
-
-function FaceAnalyzing(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			{/* Pupils wander a slow scan path (up-left → up-right) — the
-			 * keyframes in gui-pet.css move the whole eye group. */}
-			<g className="gui-pet-svg__scan" aria-hidden>
-				<circle className="gui-pet-svg__pupil" cx="146" cy="98" r="4" />
-				<circle className="gui-pet-svg__pupil" cx="174" cy="98" r="4" />
-			</g>
-			<path className="gui-pet-svg__mouth" d="M150 114 Q160 121 170 114" />
-			{/* Think pips ladder up */}
-			<circle className="gui-pet-svg__pip gui-pet-svg__pip--a" cx="218" cy="86" r="4" />
-			<circle className="gui-pet-svg__pip gui-pet-svg__pip--b" cx="230" cy="72" r="4" />
-			<circle className="gui-pet-svg__pip gui-pet-svg__pip--c" cx="242" cy="58" r="4" />
-		</g>
-	);
-}
-
-function FaceWaiting(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			<OpenEyes />
-			<path className="gui-pet-svg__mouth" d="M154 112 Q160 117 166 112" />
-			{/* Wait dots bob */}
-			<circle className="gui-pet-svg__dot gui-pet-svg__dot--a" cx="210" cy="150" r="3" />
-			<circle className="gui-pet-svg__dot gui-pet-svg__dot--b" cx="222" cy="150" r="3" />
-			<circle className="gui-pet-svg__dot gui-pet-svg__dot--c" cx="234" cy="150" r="3" />
-		</g>
-	);
-}
-
-function FaceWorking(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			{/* Focused pupils flick side-to-side (reading/typing cadence). */}
-			<g className="gui-pet-svg__type" aria-hidden>
-				<circle className="gui-pet-svg__pupil gui-pet-svg__pupil--tense" cx="146" cy="98" r="3.5" />
-				<circle className="gui-pet-svg__pupil gui-pet-svg__pupil--tense" cx="174" cy="98" r="3.5" />
-			</g>
-			<path className="gui-pet-svg__mouth" d="M152 116 Q160 112 168 116" />
-			{/* Sweat drop trickles */}
-			<path className="gui-pet-svg__sweat" d="M96 92 Q92 100 96 104 Q100 100 96 92 Z" />
-		</g>
-	);
-}
-
-function FaceError(): ReactNode {
-	return (
-		<g className="gui-pet-svg__face" aria-hidden>
-			{/* X eyes */}
-			<path className="gui-pet-svg__xeye" d="M140 92 L152 104 M152 92 L140 104" />
-			<path className="gui-pet-svg__xeye" d="M168 92 L180 104 M180 92 L168 104" />
-			<path className="gui-pet-svg__mouth" d="M152 116 Q160 124 168 116" />
-		</g>
-	);
-}
-
-const FACE_BY_MOOD: Record<PetdexMood, () => ReactNode> = {
-	rest: FaceRest,
-	hover: FaceHover,
-	dragging: FaceDragging,
-	working: FaceWorking,
-	waiting: FaceWaiting,
-	analyzing: FaceAnalyzing,
-	error: FaceError,
-};
-
-/** Builtin SVG pet (note-bot v2) — natively speaks every PetdexMood,
- *  including the floating desktop pet's hover/dragging rows. */
-export function BuiltinPetSprite({ mood }: { mood: PetdexMood }): ReactNode {
-	const Face = FACE_BY_MOOD[mood];
+function Mascot({ mood }: { mood: PetdexMood }): ReactNode {
+	const refs = useMascotEngine(mood);
 	return (
 		<svg
 			className={`gui-pet-svg gui-pet-svg--${mood}`}
@@ -256,10 +251,149 @@ export function BuiltinPetSprite({ mood }: { mood: PetdexMood }): ReactNode {
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden
 		>
-			<Silhouette />
-			<Face />
+			<Silhouette {...refs} />
 		</svg>
 	);
+}
+
+/** The silhouette, the materials and the mounting points the engine drives.
+ *  Order matters: the orbit ring is drawn in two halves so it reads as one
+ *  loop passing around the body rather than a band stuck on its front. */
+function Silhouette({ visorRef, eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
+	return (
+		<g aria-hidden className="gui-pet-svg__silhouette">
+			<defs>
+				{/* Shell: a graphite sphere lit from the upper left — lit crown,
+				 * body, terminator. Dark reads as hardware, and it lets the gold
+				 * light do the talking. */}
+				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, #4a5768)" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, #26303d)" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, #0e141c)" />
+				</radialGradient>
+				{/* Visor: near-black glass with a vertical falloff, so the face
+				 * panel reads recessed into the shell instead of painted on. */}
+				<radialGradient id="gui-pet-grad-visor" cx="0.42" cy="0.22" r="0.92">
+					<stop offset="0" stopColor="#141d2a" />
+					<stop offset="0.6" stopColor="#0a1018" />
+					<stop offset="1" stopColor="#05080d" />
+				</radialGradient>
+				{/* Orbit ring: brand gold, brightest where it crosses the light
+				 * (top-left) and dimmest at the far side. */}
+				<linearGradient id="gui-pet-grad-ring" x1="0" y1="0" x2="1" y2="1">
+					<stop offset="0" stopColor="var(--gui-pet-gold-a, #f7dd93)" />
+					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, #d9a83f)" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-c, #8a6420)" />
+				</linearGradient>
+				{/* Bounce: warm gold thrown back up from the surface the orb hovers
+				 * over — the cue that sells "floating". */}
+				<radialGradient id="gui-pet-grad-bounce" cx="0.5" cy="0.5" r="0.5">
+					<stop offset="0" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.5" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0" />
+				</radialGradient>
+				{/* Thrust: the hover glow under the shell. */}
+				<radialGradient id="gui-pet-grad-thrust" cx="0.5" cy="0.5" r="0.5">
+					<stop offset="0" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.44" />
+					<stop offset="0.6" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.14" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0" />
+				</radialGradient>
+				{/* Ground shadow: neutral falloff, cooler than the gold. */}
+				<radialGradient id="gui-pet-grad-ground" cx="0.5" cy="0.5" r="0.5">
+					<stop offset="0" stopColor="#0b1220" stopOpacity="0.4" />
+					<stop offset="0.62" stopColor="#0b1220" stopOpacity="0.17" />
+					<stop offset="1" stopColor="#0b1220" stopOpacity="0" />
+				</radialGradient>
+				{/* Eye light: gold with a hot core. A flat fill reads as paint;
+				 * a gradient reads as something emitting. */}
+				<radialGradient id="gui-pet-grad-eye" cx="0.5" cy="0.3" r="0.78">
+					<stop offset="0" stopColor="#fffaf0" />
+					<stop offset="0.4" stopColor="var(--gui-pet-gold-a, #f7dd93)" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" />
+				</radialGradient>
+				<radialGradient id="gui-pet-grad-eye-err" cx="0.5" cy="0.3" r="0.78">
+					<stop offset="0" stopColor="#ffd9d5" />
+					<stop offset="0.45" stopColor="var(--color-danger)" />
+					<stop offset="1" stopColor="color-mix(in oklab, var(--color-danger) 60%, #000)" />
+				</radialGradient>
+			</defs>
+			{/* Ground shadow + hover thrust stay on the ground while the shell
+			 * drifts above them — deliberately outside the motion group. */}
+			<ellipse className="gui-pet-svg__ground" cx="160" cy="230" rx="52" ry="7.5" />
+			<ellipse className="gui-pet-svg__thrust" cx="160" cy="225" rx="44" ry="12" />
+			<g className="gui-pet-svg__body">
+				<g ref={shellRef}>
+					{/* Orbit ring, back half — behind the shell, so the front arc
+					 * reads as the same loop coming round. */}
+					<ellipse
+						className="gui-pet-svg__ring gui-pet-svg__ring--back"
+						cx="160"
+						cy="114"
+						rx="90"
+						ry="31"
+						transform="rotate(-18 160 114)"
+					/>
+					{/* Shell */}
+					<circle className="gui-pet-svg__shell" cx="160" cy="114" r="64" />
+					{/* Crown gloss + secondary catch-light: cheap sphericity. */}
+					<ellipse
+						className="gui-pet-svg__gloss"
+						cx="136"
+						cy="80"
+						rx="24"
+						ry="11.5"
+						transform="rotate(-22 136 80)"
+					/>
+					<ellipse
+						className="gui-pet-svg__gloss-dot"
+						cx="119"
+						cy="98"
+						rx="5.5"
+						ry="3.2"
+						transform="rotate(-22 119 98)"
+					/>
+					{/* Bounce light along the bottom + rim down the right edge. */}
+					<ellipse className="gui-pet-svg__bounce" cx="157" cy="172" rx="40" ry="9" />
+					<path className="gui-pet-svg__rim" d="M220 122 A64 64 0 0 1 133 172" />
+					{/* Specular sweep drifting across the crown. */}
+					<ellipse
+						className="gui-pet-svg__sweep"
+						cx="147"
+						cy="74"
+						rx="12"
+						ry="4.6"
+						transform="rotate(-22 147 74)"
+					/>
+					{/* The face: dark panel, two eyes, mouth. All four paths are
+					 * rewritten every frame by the engine. */}
+					<g className="gui-pet-svg__face">
+						<path className="gui-pet-svg__visor" ref={visorRef} />
+						<path className="gui-pet-svg__eye" ref={eyeRefs[0]} />
+						<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
+						<path className="gui-pet-svg__mouth" ref={mouthRef} />
+					</g>
+					{/* π brand mark, etched low on the shell. */}
+					<g className="gui-pet-svg__crest">
+						<path d="M151 161 H169" />
+						<path d="M157 161 V172" />
+						<path d="M165 161 V172" />
+					</g>
+					{/* Beacon mast on the crown: idle sway, fast pulse while
+					 * working. Drawn over the shell so it reads as mounted. */}
+					<g className="gui-pet-svg__antenna-group">
+						<path className="gui-pet-svg__antenna" d="M160 50 L160 34" />
+						<circle className="gui-pet-svg__antenna-halo" cx="160" cy="28" r="9" />
+						<circle className="gui-pet-svg__antenna-tip" cx="160" cy="28" r="5" />
+					</g>
+				</g>
+			</g>
+		</g>
+	);
+}
+
+/** Builtin SVG pet (orb-bot v7) — natively speaks every PetdexMood,
+ *  including the floating desktop pet's hover/dragging rows. */
+export function BuiltinPetSprite({ mood }: { mood: PetdexMood }): ReactNode {
+	return <Mascot mood={mood} />;
 }
 
 /** Petdex spritesheet pet — CSS background-position frame animation with a
@@ -374,7 +508,7 @@ export function PetSprite({
 			/>
 		);
 	}
-	// The builtin v2 speaks hover/dragging natively — no face mapping.
+	// The builtin orb speaks hover/dragging natively — no face mapping.
 	return (
 		<div className="gui-pet" style={{ width: size * s, height: size * s * (VIEW_H / VIEW_W) }}>
 			<BuiltinPetSprite mood={mood} />
