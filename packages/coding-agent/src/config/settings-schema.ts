@@ -4722,9 +4722,16 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			group: "Execution",
 			label: "Max Tool Timeout",
-			description: "Maximum timeout in seconds the agent can set for any tool (0 = no limit)",
+			// Issue #32: this also shortens the DEFAULT when the agent omits
+			// `timeout` — not just explicit per-call values — which is exactly
+			// how a user caps the eval kernel's built-in 30s. Say so, or the
+			// one lever that solves their problem reads as irrelevant.
+			description:
+				"Ceiling in seconds for every tool, applied to the agent's explicit timeout AND to the tool's default when it omits one (0 = no limit). Lowering it is how you cut the eval kernel's 30s default; raise it for long-running Python/Julia cells (per-session, no restart).",
 			options: [
 				{ value: "0", label: "No limit" },
+				{ value: "5", label: "5 seconds" },
+				{ value: "10", label: "10 seconds" },
 				{ value: "30", label: "30 seconds" },
 				{ value: "60", label: "60 seconds" },
 				{ value: "120", label: "120 seconds" },

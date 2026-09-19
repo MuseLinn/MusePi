@@ -20,7 +20,7 @@ import { upsertStatusEvent } from "./eval-render";
 import { resolveOutputMaxColumns, resolveOutputSinkHeadBytes } from "./output-meta";
 import { ToolAbortError, ToolError } from "./tool-errors";
 import { toolResult } from "./tool-result";
-import { clampTimeout } from "./tool-timeouts";
+import { clampTimeout, TOOL_TIMEOUTS } from "./tool-timeouts";
 
 export { EVAL_DEFAULT_PREVIEW_LINES, evalToolRenderer } from "./eval-render";
 
@@ -85,7 +85,9 @@ function enabledEvalLanguages(backends: EvalBackendsAllowance): EvalLanguageToke
 
 const evalCellCommonFields = {
 	"title?": type("string").describe('short label shown in transcript (e.g. "imports", "load config")'),
-	"timeout?": type("number").describe("timeout for this eval call in seconds; 0 disables the cell timeout"),
+	"timeout?": type("number").describe(
+		`timeout for this eval call in seconds; 0 disables the cell timeout. Defaults to ${TOOL_TIMEOUTS.eval.default}s — pass a larger value up front for slow work (big imports, file parsing, model loading) instead of letting the cell hit the default and get killed.`,
+	),
 	"reset?": type("boolean").describe("wipe this language's kernel before running. Other languages are untouched."),
 };
 
@@ -420,7 +422,10 @@ export class EvalTool implements AgentTool<typeof evalSchema> {
 				index: 0,
 				title: params.title,
 				code: params.code,
-				timeoutMs: (params.timeout ?? 30) * 1000,
+				// Single source of truth for the default (issue #32): the old
+				// inline `?? 30` duplicated TOOL_TIMEOUTS.eval.default, so the
+				// schema text and the real budget could drift apart.
+				timeoutMs: (params.timeout ?? TOOL_TIMEOUTS.eval.default) * 1000,
 				reset: params.reset ?? false,
 				resolved,
 			},
