@@ -2,9 +2,13 @@
 // per project working directory. Before the fix, a single global job key
 // caused all projects' stage1 outputs to be merged into whichever project
 // triggered consolidation first.
+//
+// Issue #41 extended the same requirement one phase earlier: Stage 1 extraction
+// reads per-thread rollouts, so its candidate scan must also be workspace-scoped.
 
 import { describe, expect, it } from "bun:test";
 import {
+	claimStage1Jobs,
 	closeMemoryDb,
 	enqueueGlobalWatermark,
 	listStage1OutputsForGlobal,
@@ -15,6 +19,33 @@ import {
 
 const CWD_A = "/projects/alpha";
 const CWD_B = "/projects/beta";
+
+const NOW_SEC = 1_800_000_000;
+
+/** Claim defaults shared by the Stage-1 scope tests below. */
+function claimParams(cwd?: string) {
+	return {
+		nowSec: NOW_SEC,
+		threadScanLimit: 100,
+		maxRolloutsPerStartup: 10,
+		maxRolloutAgeDays: 30,
+		minRolloutIdleHours: 1,
+		leaseSeconds: 60,
+		runningConcurrencyCap: 4,
+		workerId: "test-worker",
+		...(cwd === undefined ? {} : { cwd }),
+	};
+}
+
+/** Two threads, one per project, both old enough and idle enough to be claimed. */
+function seedTwoProjects(): ReturnType<typeof openMemoryDb> {
+	const db = openMemoryDb(":memory:");
+	upsertThreads(db, [
+		{ id: "thread-a", updatedAt: NOW_SEC - 7200, rolloutPath: "/a.jsonl", cwd: CWD_A, sourceKind: "cli" },
+		{ id: "thread-b", updatedAt: NOW_SEC - 7200, rolloutPath: "/b.jsonl", cwd: CWD_B, sourceKind: "cli" },
+	]);
+	return db;
+}
 
 describe("memory project isolation", () => {
 	it("listStage1OutputsForGlobal filters by cwd", () => {
@@ -98,6 +129,86 @@ describe("memory project isolation", () => {
 			});
 
 			expect(resultAAgain.kind).toBe("skipped_running");
+		} finally {
+			closeMemoryDb(db);
+		}
+	});
+});
+
+describe("issue #41 — Stage 1 extraction is workspace-scoped", () => {
+	it("a scoped claim returns only the requested project's threads", () => {
+		const db = seedTwoProjects();
+		try {
+			const forA = claimStage1Jobs(db, claimParams(CWD_A));
+			expect(forA).toHaveLength(1);
+			expect(forA[0].threadId).toBe("thread-a");
+			expect(forA[0].cwd).toBe(CWD_A);
+		} finally {
+			closeMemoryDb(db);
+		}
+	});
+
+	it("each project claims its own thread and neither sees the other's", () => {
+		const db = seedTwoProjects();
+		try {
+			const forA = claimStage1Jobs(db, claimParams(CWD_A));
+			const forB = claimStage1Jobs(db, claimParams(CWD_B));
+
+			expect(forA.map(c => c.threadId)).toEqual(["thread-a"]);
+			expect(forB.map(c => c.threadId)).toEqual(["thread-b"]);
+		} finally {
+			closeMemoryDb(db);
+		}
+	});
+
+	it("a project with no threads claims nothing even when others have plenty", () => {
+		const db = seedTwoProjects();
+		try {
+			// The neighbour's threads must not be substituted for this project's.
+			expect(claimStage1Jobs(db, claimParams("/projects/empty"))).toEqual([]);
+		} finally {
+			closeMemoryDb(db);
+		}
+	});
+
+	it("an unscoped claim still scans every project (back-compat)", () => {
+		const db = seedTwoProjects();
+		try {
+			// Omitting `cwd` preserves the previous behaviour for callers that
+			// genuinely operate across workspaces.
+			const all = claimStage1Jobs(db, claimParams());
+			expect(all.map(c => c.threadId).sort()).toEqual(["thread-a", "thread-b"]);
+		} finally {
+			closeMemoryDb(db);
+		}
+	});
+
+	it("a busy neighbour cannot starve this project of its own rollouts", () => {
+		const db = openMemoryDb(":memory:");
+		try {
+			// The neighbour's threads are strictly more recent, so under the old
+			// unscoped `ORDER BY updated_at DESC LIMIT` scan they filled the window
+			// and this project's older thread was never reached.
+			const neighbour = Array.from({ length: 5 }, (_, i) => ({
+				id: `busy-${i}`,
+				updatedAt: NOW_SEC - 3600 + i,
+				rolloutPath: `/busy-${i}.jsonl`,
+				cwd: CWD_B,
+				sourceKind: "cli",
+			}));
+			upsertThreads(db, [
+				...neighbour,
+				{
+					id: "mine",
+					updatedAt: NOW_SEC - 7200,
+					rolloutPath: "/mine.jsonl",
+					cwd: CWD_A,
+					sourceKind: "cli",
+				},
+			]);
+
+			const scoped = claimStage1Jobs(db, { ...claimParams(CWD_A), threadScanLimit: 3 });
+			expect(scoped.map(c => c.threadId)).toEqual(["mine"]);
 		} finally {
 			closeMemoryDb(db);
 		}

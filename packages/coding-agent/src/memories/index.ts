@@ -151,7 +151,11 @@ export function startMemoryStartupTask(options: {
 }
 
 interface MemoryInstructionSession {
-	sessionManager: Pick<AgentSession["sessionManager"], "getSessionFile">;
+	// `getCwd` is optional: it is only consulted to scope the Stage-1 thread scan
+	// (#41). Callers that omit it fall back to the settings cwd, which keeps the
+	// narrower stubs used across the test suite valid.
+	sessionManager: Pick<AgentSession["sessionManager"], "getSessionFile"> &
+		Partial<Pick<AgentSession["sessionManager"], "getCwd">>;
 }
 
 interface MemoryToolDeveloperInstructionsSnapshot {
@@ -161,6 +165,14 @@ interface MemoryToolDeveloperInstructionsSnapshot {
 
 interface CachedMemoryToolDeveloperInstructions {
 	sessionFile: string | undefined;
+	/**
+	 * The memory root this snapshot was read from. Cached alongside the value so
+	 * a workspace switch invalidates it: the same session can be re-pointed at a
+	 * different project (`reloadForCwd` / `switchToResumedProject`) without its
+	 * session file changing, and serving the previous project's `memory_summary.md`
+	 * would leak foreign rules into the new workspace (#41).
+	 */
+	root: string;
 	snapshot: MemoryToolDeveloperInstructionsSnapshot | undefined;
 	value: string | undefined;
 }
@@ -232,9 +244,15 @@ function cacheMemoryToolDeveloperInstructions(
 	sessionFile: string | undefined,
 	snapshot: MemoryToolDeveloperInstructionsSnapshot | undefined,
 	settings: Settings,
+	agentDir: string,
 ): string | undefined {
 	const value = renderMemoryToolDeveloperInstructionsSnapshot(snapshot, settings);
-	memoryToolDeveloperInstructionsBySession.set(session, { sessionFile, snapshot, value });
+	memoryToolDeveloperInstructionsBySession.set(session, {
+		sessionFile,
+		root: getMemoryInstructionRoot(agentDir, settings),
+		snapshot,
+		value,
+	});
 	return value;
 }
 
@@ -265,10 +283,14 @@ export async function refreshMemoryToolDeveloperInstructionsCacheAfterStartup(
 	const current = await readMemoryToolDeveloperInstructionsSnapshot(agentDir, settings);
 	const root = getMemoryInstructionRoot(agentDir, settings);
 	const baseline = memoryToolDeveloperInstructionsByRoot.get(root);
-	const cachedLearned = cached && cached.sessionFile === sessionFile ? cached.snapshot?.learned : undefined;
+	// Only carry `learned` forward when the cache belongs to THIS root; after a
+	// workspace switch the cached lessons are the previous project's and must not
+	// be merged into the new project's snapshot.
+	const cachedLearned =
+		cached && cached.sessionFile === sessionFile && cached.root === root ? cached.snapshot?.learned : undefined;
 	const learned = cachedLearned ?? baseline?.learned ?? "";
 	const snapshot = current ? { summary: current.summary, learned } : undefined;
-	cacheMemoryToolDeveloperInstructions(session, sessionFile, snapshot, settings);
+	cacheMemoryToolDeveloperInstructions(session, sessionFile, snapshot, settings, agentDir);
 }
 
 /**
@@ -287,10 +309,14 @@ export async function buildMemoryToolDeveloperInstructions(
 
 	const sessionFile = getMemoryInstructionSessionFile(session);
 	const cached = memoryToolDeveloperInstructionsBySession.get(session);
-	if (cached && cached.sessionFile === sessionFile) return cached.value;
+	// The root is part of the hit test, so re-pointing this session at another
+	// workspace re-reads instead of serving the previous project's snapshot (#41).
+	if (cached && cached.sessionFile === sessionFile && cached.root === getMemoryInstructionRoot(agentDir, settings)) {
+		return cached.value;
+	}
 
 	const snapshot = await readMemoryToolDeveloperInstructionsSnapshot(agentDir, settings);
-	return cacheMemoryToolDeveloperInstructions(session, sessionFile, snapshot, settings);
+	return cacheMemoryToolDeveloperInstructions(session, sessionFile, snapshot, settings, agentDir);
 }
 
 /**
@@ -385,6 +411,13 @@ async function runPhase1(options: MemoryStartupOptions): Promise<void> {
 			runningConcurrencyCap: config.stage1Concurrency,
 			workerId,
 			excludeThreadIds: currentThreadId ? [currentThreadId] : [],
+			// Scope extraction to this session's workspace (#41): Stage 1 reads
+			// per-thread rollouts, so claiming another project's threads pulls
+			// foreign experience into this project's summary — and can crowd this
+			// project's own history out of the scan limit entirely. The session's
+			// own cwd is authoritative; settings is only a fallback for callers
+			// whose settings object is not bound to this workspace.
+			cwd: session.sessionManager.getCwd?.() || options.settings.getCwd(),
 		});
 		if (claims.length === 0) return;
 

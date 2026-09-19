@@ -146,6 +146,17 @@ export function claimStage1Jobs(
 		runningConcurrencyCap: number;
 		workerId: string;
 		excludeThreadIds?: string[];
+		/**
+		 * Scope the scan to one workspace. Stage 1 extracts per-thread memory, and
+		 * a thread's rollout belongs to the project it ran in — so a session in
+		 * workspace B must not claim workspace A's rollouts. Leaving this unset
+		 * made every startup scan the whole `threads` table by recency, so a busy
+		 * neighbouring project's rollouts were the ones that got extracted, and the
+		 * current project's own history could be starved behind the scan limit.
+		 * Phase 2 already carries the same scope via `globalJobKey` (issue #369);
+		 * this closes the matching gap one phase earlier.
+		 */
+		cwd?: string;
 	},
 ): Stage1Claim[] {
 	const {
@@ -158,9 +169,13 @@ export function claimStage1Jobs(
 		runningConcurrencyCap,
 		workerId,
 		excludeThreadIds = [],
+		cwd,
 	} = params;
 	const maxAgeSec = maxRolloutAgeDays * 24 * 60 * 60;
 	const minIdleSec = minRolloutIdleHours * 60 * 60;
+	// The concurrency cap protects a global worker budget, so it intentionally
+	// counts running jobs across every project. Only the candidate scan below is
+	// workspace-scoped.
 	const runningCountRow = db
 		.prepare(
 			"SELECT COUNT(*) AS count FROM jobs WHERE kind = ? AND status = 'running' AND lease_until IS NOT NULL AND lease_until > ?",
@@ -168,9 +183,19 @@ export function claimStage1Jobs(
 		.get(STAGE1_KIND, nowSec) as { count?: number } | undefined;
 	let runningCount = runningCountRow?.count ?? 0;
 	if (runningCount >= runningConcurrencyCap) return [];
-	const candidateRows = db
-		.prepare("SELECT id, updated_at, rollout_path, cwd, source_kind FROM threads ORDER BY updated_at DESC LIMIT ?")
-		.all(threadScanLimit) as Array<{
+	const candidateRows = (
+		cwd === undefined
+			? db
+					.prepare(
+						"SELECT id, updated_at, rollout_path, cwd, source_kind FROM threads ORDER BY updated_at DESC LIMIT ?",
+					)
+					.all(threadScanLimit)
+			: db
+					.prepare(
+						"SELECT id, updated_at, rollout_path, cwd, source_kind FROM threads WHERE cwd = ? ORDER BY updated_at DESC LIMIT ?",
+					)
+					.all(cwd, threadScanLimit)
+	) as Array<{
 		id: string;
 		updated_at: number;
 		rollout_path: string;
