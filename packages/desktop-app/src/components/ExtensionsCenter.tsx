@@ -91,46 +91,77 @@ function isGuiKind(e: ExtensionItem): boolean {
 }
 
 /**
- * 概览 tab (设计稿 07): stats cards → needs-attention (load errors +
- * shadowed, with a jump into the slot diagnostics) → provider health
- * (per-source enable switches) → the capability-center CTA. The
- * CONFIG/diagnosis perspective; discovery & install live in the
+ * 概览 tab (设计稿 2:1427): stats cards (数字 + 副文案) → needs-attention
+ * (load errors + shadowed,每行带描述与动作按钮) → provider health
+ * (per-source enable switches + 项数副行) → the capability-center CTA.
+ * The CONFIG/diagnosis perspective; discovery & install live in the
  * first-class CapabilityCenterPage this CTA opens.
  */
 function OverviewView({
 	extensions,
 	providers,
 	unhosted,
+	slots,
 	onOpenDiagnostics,
 	onOpenCapabilityCenter,
 	onToggleProvider,
+	onForceEnable,
 }: {
-	extensions: ExtensionItem[];
-	providers: ProviderInfo[];
+	extensions: Array<{
+		id: string;
+		kind: string;
+		name: string;
+		displayName?: string;
+		loadError?: string | null;
+		state: string;
+		source: { provider: string };
+	}>;
+	providers: Array<{ id: string; displayName: string; enabled: boolean }>;
 	unhosted: string[];
+	slots: { exact: readonly string[]; prefixes: readonly string[] } | null;
 	onOpenDiagnostics(): void;
 	onOpenCapabilityCenter(): void;
-	onToggleProvider(p: ProviderInfo): void;
+	onToggleProvider(p: { id: string; displayName: string; enabled: boolean }): void;
+	onForceEnable(e: { id: string }): void;
 }): ReactNode {
 	const failed = extensions.filter(e => e.loadError);
 	const shadowed = extensions.filter(e => e.state === "shadowed");
 	const attention = [...failed, ...shadowed].slice(0, 6);
-	const stats: { label: string; value: number; tone?: "err" }[] = [
-		{ label: t("ext stat total"), value: extensions.length },
+	const activeCount = extensions.filter(e => e.state === "active" && !e.loadError).length;
+	const kindCount = new Set(extensions.map(e => e.kind)).size;
+	const totalSlots = (slots?.exact.length ?? 0) + (slots?.prefixes.length ?? 0);
+	const stats: { label: string; value: number; tone?: "err"; sub?: string }[] = [
+		{
+			label: t("ext stat total"),
+			value: extensions.length,
+			sub: t("ext stat total sub {kinds} {sources}", { kinds: kindCount, sources: providers.length }),
+		},
 		{
 			label: t("ext stat active"),
-			value: extensions.filter(e => e.state === "active" && !e.loadError).length,
+			value: activeCount,
+			sub: t("ext stat active sub {n}", { n: extensions.length - activeCount }),
 		},
-		{ label: t("ext stat failed"), value: failed.length, tone: failed.length > 0 ? "err" : undefined },
-		{ label: t("ext stat unhosted"), value: unhosted.length },
+		{
+			label: t("ext stat failed"),
+			value: failed.length,
+			tone: failed.length > 0 ? "err" : undefined,
+			sub: failed[0]?.displayName ?? failed[0]?.name,
+		},
+		{
+			label: t("ext stat unhosted"),
+			value: unhosted.length,
+			sub: unhosted.length > 0 ? unhosted.join(", ") : t("ext stat unhosted sub ok {total}", { total: totalSlots }),
+		},
 	];
+	const providerCount = (p: { id: string }): number => extensions.filter(e => e.source.provider === p.id).length;
 	return (
 		<div className="gui-ext-overview">
 			<div className="gui-ext-stat-row">
 				{stats.map(s => (
 					<div key={s.label} className={`gui-ext-stat-card${s.tone === "err" ? " gui-ext-stat-card--err" : ""}`}>
-						<span className="gui-ext-stat-value">{s.value}</span>
 						<span className="gui-ext-stat-label">{s.label}</span>
+						<span className="gui-ext-stat-value">{s.value}</span>
+						{s.sub && <span className="gui-ext-stat-sub">{s.sub}</span>}
 					</div>
 				))}
 			</div>
@@ -150,10 +181,25 @@ function OverviewView({
 								<span
 									className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : " gui-ext-dot--shadowed"}`}
 								/>
-								<span className="min-w-0 flex-1 truncate text-[12.5px]">{e.displayName ?? e.name}</span>
-								<span className={`gui-ext-item-tag${e.loadError ? " gui-ext-item-tag--err" : ""}`}>
-									{e.loadError ? t("ext load failed") : t("ext shadowed")}
+								<span className="gui-ext-overview-row-text">
+									<span className="gui-ext-overview-row-title">{e.displayName ?? e.name}</span>
+									{e.loadError && <span className="gui-ext-overview-row-sub">{e.loadError}</span>}
 								</span>
+								{e.loadError ? (
+									<>
+										<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>
+										<button type="button" className="gui-btn" onClick={onOpenDiagnostics}>
+											{t("ext view details")}
+										</button>
+									</>
+								) : (
+									<>
+										<span className="gui-ext-item-tag">{t("ext shadowed")}</span>
+										<button type="button" className="gui-btn" onClick={() => onForceEnable(e)}>
+											{t("force enable")}
+										</button>
+									</>
+								)}
 							</div>
 						))}
 					</div>
@@ -167,7 +213,12 @@ function OverviewView({
 					{providers.map(p => (
 						<div key={p.id} className="gui-ext-overview-row">
 							<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
-							<span className="min-w-0 flex-1 truncate text-[12.5px]">{p.displayName}</span>
+							<span className="gui-ext-overview-row-text">
+								<span className="gui-ext-overview-row-title">{p.displayName}</span>
+								<span className="gui-ext-overview-row-sub">
+									{t("ext provider items {n}", { n: providerCount(p) })}
+								</span>
+							</span>
 							<button
 								type="button"
 								role="switch"
@@ -180,7 +231,7 @@ function OverviewView({
 					))}
 				</div>
 			</div>
-			{/* CTA (设计稿 07 底部):配置与诊断看完了 → 去能力中心发现/安装。 */}
+			{/* CTA (设计稿 2:1427 底部):配置与诊断看完了 → 去能力中心发现/安装。 */}
 			<button type="button" className="gui-ext-overview-cta" onClick={onOpenCapabilityCenter}>
 				<Icon name="star" className="h-4 w-4" />
 				<span className="min-w-0 flex-1 text-left">
@@ -441,6 +492,26 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	return (
 		<div className="gui-ext-center">
+			{/* 标题区 (设计稿 2:1427):大标题 + 副标题 + 右上槽位挂载胶囊。 */}
+			<div className="gui-ext-head">
+				<div className="gui-ext-head-text">
+					<div className="gui-ext-head-title">{t("ext center title")}</div>
+					<div className="gui-ext-head-sub">{t("ext center subtitle")}</div>
+				</div>
+				{unhosted.length > 0 ? (
+					<span className="gui-ext-head-pill gui-ext-head-pill--warn">
+						<Icon name="alert" className="h-3 w-3" />
+						{t("slot unhosted {slot}", { slot: unhosted.join(", ") })}
+					</span>
+				) : (
+					extensions !== null && (
+						<span className="gui-ext-head-pill gui-ext-head-pill--ok">
+							<Icon name="check" className="h-3 w-3" />
+							{t("all slots hosted")}
+						</span>
+					)
+				)}
+			</div>
 			{/* Top tabs (设计稿 07): 概览 / 能力清单 / 插件 / 市场 / 槽位诊断.
 			 * Provider tabs live INSIDE the inventory view. */}
 			<div className="gui-ext-tabs" role="tablist">
@@ -515,9 +586,11 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						onOpenDiagnostics={() => setView("diagnostics")}
 						onOpenCapabilityCenter={() => window.dispatchEvent(new CustomEvent("omp-open-capability"))}
 						onToggleProvider={toggleProvider}
+						slots={data?.slots ?? null}
+						onForceEnable={e => forceToggle(e as ExtensionItem, true)}
 					/>
 				) : view === "diagnostics" ? (
-					<DiagnosticsView rpc={rpc} />
+					<DiagnosticsView rpc={rpc} extensions={extensions} tabs={tabs} />
 				) : view === "plugins" ? (
 					<div className="gui-ext-plugins">
 						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
@@ -562,7 +635,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				) : view === "marketplace" ? (
 					<MarketplaceView rpc={rpc} />
 				) : (
-					<>
+					<div className="gui-ext-inventory">
 						{/* Inventory-internal provider tabs (TUI buildProviderTabs
 						 * order): ALL + one per provider. Disabled providers render
 						 * greyed but stay clickable. */}
@@ -593,319 +666,303 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 									</button>
 								))}
 						</div>
-						{/* Left: search + provider→kind→item tree. */}
-						<div className="gui-ext-list">
-							<div className="gui-ext-search">
-								<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-								<input
-									className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
-									placeholder={t("search skills...")}
-									value={query}
-									onChange={e => setQuery(e.target.value)}
-								/>
-							</div>
-							<div className="gui-ext-list-scroll">
-								{tree.nodes.map(node => {
-									const providerKey = `p:${node.provider.id}`;
-									const providerCollapsed = collapsedKinds.has(providerKey);
-									return (
-										<div key={node.provider.id} className="gui-ext-provider">
-											<div
-												className="gui-ext-provider-h"
-												role="button"
-												tabIndex={0}
-												onClick={() => toggleKind(providerKey)}
-											>
-												<StateIcon
-													on={providerCollapsed}
-													pair={["arrow-right-s", "arrow-down-s"]}
-													className="h-3.5 w-3.5 shrink-0 opacity-60"
-												/>
-												<span className={`gui-ext-dot${node.enabled ? "" : " gui-ext-dot--off"}`} />
-												<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-													{node.provider.displayName}
-												</span>
-												<span className="gui-ext-group-count">({node.count})</span>
-												{node.provider.id !== "native" && (
-													<button
-														type="button"
-														role="switch"
-														aria-checked={node.enabled}
-														aria-label={`${t("ext provider")} ${node.provider.displayName}`}
-														className={`gui-toggle gui-toggle--sm${node.enabled ? " gui-toggle--on" : ""}`}
-														onClick={e => {
-															e.stopPropagation();
-															toggleProvider(node.provider);
-														}}
-													>
-														<span className="gui-toggle-knob" />
-													</button>
-												)}
-											</div>
-											{!providerCollapsed && (
-												<div className="gui-ext-provider-children">
-													{node.kinds.map(k => {
-														const kindKey = `${node.provider.id}:${k.kind}`;
-														const kindCollapsed = collapsedKinds.has(kindKey);
-														return (
-															<div key={kindKey}>
-																<div
-																	className="gui-ext-kind-h"
-																	role="button"
-																	tabIndex={0}
-																	onClick={() => toggleKind(kindKey)}
-																>
-																	<StateIcon
-																		on={kindCollapsed}
-																		pair={["arrow-right-s", "arrow-down-s"]}
-																		className="h-3 w-3 shrink-0 opacity-50"
-																	/>
-																	<span className="min-w-0 flex-1 truncate text-[11.5px]">
-																		{kindLabel(k.kind)}
-																	</span>
-																	<span className="gui-ext-group-count">{k.count}</span>
-																</div>
-																{!kindCollapsed &&
-																	k.items.map(e => (
-																		<div
-																			key={e.id}
-																			role="button"
-																			tabIndex={0}
-																			className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
-																			onClick={() => setSelectedId(e.id)}
-																			onKeyDown={ev => {
-																				if (ev.key === "Enter" || ev.key === " ") {
-																					ev.preventDefault();
-																					setSelectedId(e.id);
-																				}
-																			}}
-																		>
-																			<span
-																				className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
-																			/>
-																			<span className="min-w-0 flex-1 truncate">{e.name}</span>
-																			{e.loadError && (
-																				<span className="gui-ext-item-tag gui-ext-item-tag--err">
-																					{t("ext load failed")}
-																				</span>
-																			)}
-																			{isGuiKind(e) && (
-																				<span className="gui-ext-item-tag gui-ext-item-tag--gui">
-																					GUI
-																				</span>
-																			)}
-																			<span className="gui-ext-item-tag">{levelLabel(e)}</span>
-																			<span className="gui-ext-item-ops">
-																				{isDeletable(e) && (
-																					<button
-																						type="button"
-																						className="gui-icon-btn"
-																						onClick={ev => {
-																							ev.stopPropagation();
-																							remove(e);
-																						}}
-																						title={t("delete skill")}
-																						aria-label={t("delete skill")}
-																					>
-																						<Icon name="delete-bin" className="h-3 w-3" />
-																					</button>
-																				)}
-																				<button
-																					type="button"
-																					role="switch"
-																					aria-checked={e.state === "active"}
-																					aria-label={
-																						e.state === "active"
-																							? t("disable skill")
-																							: t("enable skill")
-																					}
-																					className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-																					onClick={ev => {
-																						ev.stopPropagation();
-																						toggle(e, e.state !== "active");
-																					}}
-																				>
-																					<span className="gui-toggle-knob" />
-																				</button>
-																			</span>
-																		</div>
-																	))}
-															</div>
-														);
-													})}
-												</div>
-											)}
-										</div>
-									);
-								})}
-								{tree.nativeItems.length > 0 && (
-									<div className="gui-ext-provider">
-										<div className="gui-ext-provider-h">
-											<span className="gui-ext-dot" />
-											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-												{t("ext builtin")}
-											</span>
-											<span className="gui-ext-group-count">({tree.nativeItems.length})</span>
-										</div>
-										<div className="gui-ext-provider-children">
-											{tree.nativeItems.map(e => (
+						<div className="gui-ext-inventory-split">
+							{/* Left: search + provider→kind→item tree. */}
+							<div className="gui-ext-list">
+								<div className="gui-ext-search">
+									<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-60" />
+									<input
+										className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
+										placeholder={t("search skills...")}
+										value={query}
+										onChange={e => setQuery(e.target.value)}
+									/>
+								</div>
+								<div className="gui-ext-list-scroll">
+									{tree.nodes.map(node => {
+										const providerKey = `p:${node.provider.id}`;
+										const providerCollapsed = collapsedKinds.has(providerKey);
+										return (
+											<div key={node.provider.id} className="gui-ext-provider">
 												<div
-													key={e.id}
+													className="gui-ext-provider-h"
 													role="button"
 													tabIndex={0}
-													className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
-													onClick={() => setSelectedId(e.id)}
+													onClick={() => toggleKind(providerKey)}
 												>
-													<span
-														className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+													<StateIcon
+														on={providerCollapsed}
+														pair={["arrow-right-s", "arrow-down-s"]}
+														className="h-3.5 w-3.5 shrink-0 opacity-60"
 													/>
-													<span className="min-w-0 flex-1 truncate">{e.name}</span>
-													{e.loadError && (
-														<span className="gui-ext-item-tag gui-ext-item-tag--err">
-															{t("ext load failed")}
-														</span>
+													<span className={`gui-ext-dot${node.enabled ? "" : " gui-ext-dot--off"}`} />
+													<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+														{node.provider.displayName}
+													</span>
+													<span className="gui-ext-group-count">({node.count})</span>
+													{node.provider.id !== "native" && (
+														<button
+															type="button"
+															role="switch"
+															aria-checked={node.enabled}
+															aria-label={`${t("ext provider")} ${node.provider.displayName}`}
+															className={`gui-toggle gui-toggle--sm${node.enabled ? " gui-toggle--on" : ""}`}
+															onClick={e => {
+																e.stopPropagation();
+																toggleProvider(node.provider);
+															}}
+														>
+															<span className="gui-toggle-knob" />
+														</button>
 													)}
 												</div>
-											))}
-										</div>
-									</div>
-								)}
-								{filtered.length === 0 && <div className="gui-ext-empty">{t("no skills found")}</div>}
-							</div>
-						</div>
-						{/* Right: detail pane (name / type / description / trigger /
-						 * source / path / state / instructions / raw inspector). */}
-						<div className="gui-ext-detail">
-							{selected ? (
-								<>
-									<div className="gui-ext-detail-name">{selected.displayName}</div>
-									<div className="gui-ext-detail-meta">
-										{t("extension type")}: {kindLabel(selected.kind)}
-										{isGuiKind(selected) && (
-											<span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>
-										)}
-									</div>
-									{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
-									{selected.trigger && (
-										<div className="gui-ext-detail-section">
-											<div className="gui-ext-detail-label">{t("trigger")}</div>
-											<div className="gui-ext-detail-path">{selected.trigger}</div>
-										</div>
-									)}
-									<div className="gui-ext-detail-section">
-										<div className="gui-ext-detail-label">{t("source")}</div>
-										<div className="gui-ext-detail-value">
-											{t("via {provider} ({level})", {
-												provider: selected.source.providerName,
-												level: levelLabel(selected),
-											})}
-										</div>
-										<div className="gui-ext-detail-path">{selected.path}</div>
-									</div>
-									<div className="gui-ext-detail-section">
-										<div className="gui-ext-detail-label">{t("status")}</div>
-										<div
-											className={`gui-ext-detail-status${selected.state === "active" ? " gui-ext-detail-status--active" : selected.state === "shadowed" ? " gui-ext-detail-status--shadowed" : ""}`}
-										>
-											<span
-												className={`gui-ext-dot${selected.state === "active" ? "" : selected.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
-											/>
-											{stateLabel(selected)}
-											{selected.state === "shadowed" && selected.shadowedBy && (
-												<span className="gui-ext-detail-shadowed">
-													{t("shadowed by {name}", { name: selected.shadowedBy })}
-												</span>
-											)}
-										</div>
-										{selected.loadError && (
-											<div className="gui-ext-detail-loaderror" title={selected.loadError}>
-												<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
-												<span className="min-w-0 truncate">{selected.loadError}</span>
-											</div>
-										)}
-									</div>
-									{selected.state === "shadowed" && (
-										<div className="gui-ext-detail-actions">
-											<button type="button" className="gui-btn" onClick={() => forceToggle(selected, true)}>
-												<Icon name="plug" className="h-3.5 w-3.5" />
-												{t("force enable")}
-											</button>
-										</div>
-									)}
-									{(selected.kind === "skill" || selected.kind === "context-file") && (
-										<div className="gui-ext-detail-section">
-											<div className="gui-ext-detail-label">{t("instructions")}</div>
-											<div className="gui-ext-detail-code">
-												{detail ? (
-													<pre>{detail.content}</pre>
-												) : (
-													<div className="text-[12px] text-[var(--color-text-faint)]">
-														{t("no content")}
+												{!providerCollapsed && (
+													<div className="gui-ext-provider-children">
+														{node.kinds.map(k => {
+															const kindKey = `${node.provider.id}:${k.kind}`;
+															const kindCollapsed = collapsedKinds.has(kindKey);
+															return (
+																<div key={kindKey}>
+																	<div
+																		className="gui-ext-kind-h"
+																		role="button"
+																		tabIndex={0}
+																		onClick={() => toggleKind(kindKey)}
+																	>
+																		<StateIcon
+																			on={kindCollapsed}
+																			pair={["arrow-right-s", "arrow-down-s"]}
+																			className="h-3 w-3 shrink-0 opacity-50"
+																		/>
+																		<span className="min-w-0 flex-1 truncate text-[11.5px]">
+																			{kindLabel(k.kind)}
+																		</span>
+																		<span className="gui-ext-group-count">{k.count}</span>
+																	</div>
+																	{!kindCollapsed &&
+																		k.items.map(e => (
+																			<div
+																				key={e.id}
+																				role="button"
+																				tabIndex={0}
+																				className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
+																				onClick={() => setSelectedId(e.id)}
+																				onKeyDown={ev => {
+																					if (ev.key === "Enter" || ev.key === " ") {
+																						ev.preventDefault();
+																						setSelectedId(e.id);
+																					}
+																				}}
+																			>
+																				<span
+																					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+																				/>
+																				<span className="min-w-0 flex-1 truncate">{e.name}</span>
+																				{e.loadError && (
+																					<span className="gui-ext-item-tag gui-ext-item-tag--err">
+																						{t("ext load failed")}
+																					</span>
+																				)}
+																				{isGuiKind(e) && (
+																					<span className="gui-ext-item-tag gui-ext-item-tag--gui">
+																						GUI
+																					</span>
+																				)}
+																				<span className="gui-ext-item-tag">{levelLabel(e)}</span>
+																				<span className="gui-ext-item-ops">
+																					{isDeletable(e) && (
+																						<button
+																							type="button"
+																							className="gui-icon-btn"
+																							onClick={ev => {
+																								ev.stopPropagation();
+																								remove(e);
+																							}}
+																							title={t("delete skill")}
+																							aria-label={t("delete skill")}
+																						>
+																							<Icon name="delete-bin" className="h-3 w-3" />
+																						</button>
+																					)}
+																					<button
+																						type="button"
+																						role="switch"
+																						aria-checked={e.state === "active"}
+																						aria-label={
+																							e.state === "active"
+																								? t("disable skill")
+																								: t("enable skill")
+																						}
+																						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+																						onClick={ev => {
+																							ev.stopPropagation();
+																							toggle(e, e.state !== "active");
+																						}}
+																					>
+																						<span className="gui-toggle-knob" />
+																					</button>
+																				</span>
+																			</div>
+																		))}
+																</div>
+															);
+														})}
 													</div>
 												)}
 											</div>
+										);
+									})}
+									{tree.nativeItems.length > 0 && (
+										<div className="gui-ext-provider">
+											<div className="gui-ext-provider-h">
+												<span className="gui-ext-dot" />
+												<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
+													{t("ext builtin")}
+												</span>
+												<span className="gui-ext-group-count">({tree.nativeItems.length})</span>
+											</div>
+											<div className="gui-ext-provider-children">
+												{tree.nativeItems.map(e => (
+													<div
+														key={e.id}
+														role="button"
+														tabIndex={0}
+														className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
+														onClick={() => setSelectedId(e.id)}
+													>
+														<span
+															className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+														/>
+														<span className="min-w-0 flex-1 truncate">{e.name}</span>
+														{e.loadError && (
+															<span className="gui-ext-item-tag gui-ext-item-tag--err">
+																{t("ext load failed")}
+															</span>
+														)}
+													</div>
+												))}
+											</div>
 										</div>
 									)}
-									<div className="gui-ext-detail-section">
-										<button
-											type="button"
-											className="gui-ext-detail-raw-toggle"
-											onClick={loadRaw}
-											aria-expanded={rawOpen}
-										>
-											<StateIcon
-												on={rawOpen}
-												pair={["arrow-down-s", "arrow-right-s"]}
-												className="h-3.5 w-3.5"
-											/>
-											{t("raw data")}
-										</button>
-										<HeightMorph morphKey={rawOpen ? "raw-open" : "raw-closed"}>
-											{rawOpen && (
-												<div className="gui-ext-detail-code">
-													<pre>{raw ?? "…"}</pre>
+									{filtered.length === 0 && <div className="gui-ext-empty">{t("no skills found")}</div>}
+								</div>
+							</div>
+							{/* Right: detail pane (name / type / description / trigger /
+							 * source / path / state / instructions / raw inspector). */}
+							<div className="gui-ext-detail">
+								{selected ? (
+									<>
+										<div className="gui-ext-detail-name">{selected.displayName}</div>
+										<div className="gui-ext-detail-meta">
+											{t("extension type")}: {kindLabel(selected.kind)}
+											{isGuiKind(selected) && (
+												<span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>
+											)}
+										</div>
+										{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
+										{selected.trigger && (
+											<div className="gui-ext-detail-section">
+												<div className="gui-ext-detail-label">{t("trigger")}</div>
+												<div className="gui-ext-detail-path">{selected.trigger}</div>
+											</div>
+										)}
+										<div className="gui-ext-detail-section">
+											<div className="gui-ext-detail-label">{t("source")}</div>
+											<div className="gui-ext-detail-value">
+												{t("via {provider} ({level})", {
+													provider: selected.source.providerName,
+													level: levelLabel(selected),
+												})}
+											</div>
+											<div className="gui-ext-detail-path">{selected.path}</div>
+										</div>
+										<div className="gui-ext-detail-section">
+											<div className="gui-ext-detail-label">{t("status")}</div>
+											<div
+												className={`gui-ext-detail-status${selected.state === "active" ? " gui-ext-detail-status--active" : selected.state === "shadowed" ? " gui-ext-detail-status--shadowed" : ""}`}
+											>
+												<span
+													className={`gui-ext-dot${selected.state === "active" ? "" : selected.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+												/>
+												{stateLabel(selected)}
+												{selected.state === "shadowed" && selected.shadowedBy && (
+													<span className="gui-ext-detail-shadowed">
+														{t("shadowed by {name}", { name: selected.shadowedBy })}
+													</span>
+												)}
+											</div>
+											{selected.loadError && (
+												<div className="gui-ext-detail-loaderror" title={selected.loadError}>
+													<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+													<span className="min-w-0 truncate">{selected.loadError}</span>
 												</div>
 											)}
-										</HeightMorph>
-									</div>
-									{isDeletable(selected) && (
-										<div className="gui-ext-detail-actions">
-											<button type="button" className="gui-btn" onClick={() => remove(selected)}>
-												<Icon name="delete-bin" className="h-3.5 w-3.5" />
-												{t("delete skill")}
-											</button>
 										</div>
-									)}
-								</>
-							) : (
-								<div className="gui-ext-detail-empty">{t("select an extension")}</div>
-							)}
+										{selected.state === "shadowed" && (
+											<div className="gui-ext-detail-actions">
+												<button
+													type="button"
+													className="gui-btn"
+													onClick={() => forceToggle(selected, true)}
+												>
+													<Icon name="plug" className="h-3.5 w-3.5" />
+													{t("force enable")}
+												</button>
+											</div>
+										)}
+										{(selected.kind === "skill" || selected.kind === "context-file") && (
+											<div className="gui-ext-detail-section">
+												<div className="gui-ext-detail-label">{t("instructions")}</div>
+												<div className="gui-ext-detail-code">
+													{detail ? (
+														<pre>{detail.content}</pre>
+													) : (
+														<div className="text-[12px] text-[var(--color-text-faint)]">
+															{t("no content")}
+														</div>
+													)}
+												</div>
+											</div>
+										)}
+										<div className="gui-ext-detail-section">
+											<button
+												type="button"
+												className="gui-ext-detail-raw-toggle"
+												onClick={loadRaw}
+												aria-expanded={rawOpen}
+											>
+												<StateIcon
+													on={rawOpen}
+													pair={["arrow-down-s", "arrow-right-s"]}
+													className="h-3.5 w-3.5"
+												/>
+												{t("raw data")}
+											</button>
+											<HeightMorph morphKey={rawOpen ? "raw-open" : "raw-closed"}>
+												{rawOpen && (
+													<div className="gui-ext-detail-code">
+														<pre>{raw ?? "…"}</pre>
+													</div>
+												)}
+											</HeightMorph>
+										</div>
+										{isDeletable(selected) && (
+											<div className="gui-ext-detail-actions">
+												<button type="button" className="gui-btn" onClick={() => remove(selected)}>
+													<Icon name="delete-bin" className="h-3.5 w-3.5" />
+													{t("delete skill")}
+												</button>
+											</div>
+										)}
+									</>
+								) : (
+									<div className="gui-ext-detail-empty">{t("select an extension")}</div>
+								)}
+							</div>
 						</div>
-					</>
+						{/* /.gui-ext-inventory-split */}
+					</div>
 				)}
-			</div>
-			{/* 槽位注册表(单一权威 collab-proto):daemon 声明 vs 桌面端挂载。
-			 * 差集为空 = 全部有宿主;未来新增槽位时警告自动出现。 */}
-			<div className="gui-ext-slots">
-				<div className="gui-ext-slots-head">
-					<Icon name="layout-column" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-					<span className="text-[12px] font-medium">{t("slot registry")}</span>
-					{unhosted.length > 0 ? (
-						<span className="gui-ext-slots-warn">
-							<Icon name="alert" className="h-3 w-3" />
-							{t("slot unhosted {slot}", { slot: unhosted.join(", ") })}
-						</span>
-					) : (
-						<span className="gui-ext-slots-ok">
-							<Icon name="check" className="h-3 w-3" />
-							{t("all slots hosted")}
-						</span>
-					)}
-				</div>
-				<div className="gui-ext-slots-detail">
-					{t("slot declaration")}:{" "}
-					{[...(data?.slots?.exact ?? []), ...(data?.slots?.prefixes ?? []).map(p => `${p}*`)].join(", ") || "—"}
-				</div>
 			</div>
 			{/* 扩展设置卡片(`settings.item.<extId>`
 			 * 组件按扩展分组渲染在此 —— 插件的运行时配置随插件 inventory 展示,

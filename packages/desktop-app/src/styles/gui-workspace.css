@@ -1062,7 +1062,28 @@
 	font-size: 10.5px;
 	background: color-mix(in oklab, var(--color-text-faint) 18%, transparent);
 }
+/* body 是所有视图的公共壳层:默认单列纵向 —— 之前硬编码 240px/1fr 双列
+ * 网格,概览/诊断/插件/市场这类单子元素视图被整个塞进 240px 列,显示只剩
+ * 一条窄缝 (投诉④⑤)。双栏只是能力清单 (inventory) 的内部布局。 */
 .gui-ext-body {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+	flex: 1;
+}
+
+/* 能力清单 (inventory):provider tabs 横排在顶部,list 树 + detail 面板
+ * 双栏分列。 */
+.gui-ext-inventory {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	min-height: 0;
+	flex: 1;
+}
+
+.gui-ext-inventory-split {
 	display: grid;
 	grid-template-columns: 240px minmax(0, 1fr);
 	gap: 10px;
@@ -1305,9 +1326,22 @@
 	min-height: 0;
 }
 
-/* Skill detail drawer (right slide-over, ESC / backdrop click closes). */
+/* Skill detail drawer (设计稿 2:665) —— 页面内右侧面板,不是全屏覆盖:
+ * 顶栏/工具行留在遮罩之外 (定位容器 .gui-skill-installed-rest)。
+ * 四面内缩留出圆角 (之前贴边 + 无 radius,圆角自然"不生效");
+ * 液态玻璃表面走全局 --gui-glass-* 规范;唤入/收起一对弹簧动画,
+ * 收起由 --closing 态先播 out 再 onAnimationEnd 卸载。 */
+.gui-skill-installed-rest {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	flex: 1;
+	min-height: 0;
+}
+
 .gui-cap-drawer-root {
-	position: fixed;
+	position: absolute;
 	inset: 0;
 	z-index: 90;
 }
@@ -1315,27 +1349,39 @@
 .gui-cap-drawer-backdrop {
 	position: absolute;
 	inset: 0;
-	background: rgb(0 0 0 / 0.35);
-	animation: gui-fade-in 160ms var(--spring) both;
+	background: rgb(0 0 0 / 0.4);
+	animation: gui-fade-in 200ms var(--spring) both;
 }
 
 .gui-cap-drawer {
 	position: absolute;
-	top: 0;
-	right: 0;
-	bottom: 0;
-	width: min(440px, 86vw);
+	top: 12px;
+	right: 16px;
+	bottom: 12px;
+	width: min(480px, calc(100% - 32px));
 	display: flex;
 	flex-direction: column;
-	background: var(--color-surface);
-	border-left: 1px solid var(--border);
-	box-shadow: -12px 0 32px rgb(0 0 0 / 0.18);
-	animation: gui-cap-drawer-in 220ms var(--spring) both;
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	box-shadow: -12px 0 40px rgb(0 0 0 / 0.28);
+	overflow: hidden;
+	animation: gui-cap-drawer-in 320ms var(--spring) both;
+}
+
+.gui-cap-drawer-root--closing .gui-cap-drawer {
+	animation: gui-cap-drawer-out 200ms ease-in both;
+}
+
+.gui-cap-drawer-root--closing .gui-cap-drawer-backdrop {
+	animation: gui-cap-drawer-backdrop-out 200ms ease-in both;
 }
 
 @keyframes gui-cap-drawer-in {
 	from {
-		transform: translateX(24px);
+		transform: translateX(36px) scale(0.98);
 		opacity: 0;
 	}
 	to {
@@ -1344,12 +1390,40 @@
 	}
 }
 
+@keyframes gui-cap-drawer-out {
+	from {
+		transform: none;
+		opacity: 1;
+	}
+	to {
+		transform: translateX(36px) scale(0.98);
+		opacity: 0;
+	}
+}
+
+@keyframes gui-cap-drawer-backdrop-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-cap-drawer,
+	.gui-cap-drawer-root--closing .gui-cap-drawer,
+	.gui-cap-drawer-backdrop,
+	.gui-cap-drawer-root--closing .gui-cap-drawer-backdrop {
+		animation-duration: 1ms;
+	}
+}
+
 .gui-cap-drawer-head {
 	display: flex;
 	align-items: flex-start;
-	gap: 8px;
-	padding: 14px 14px 10px;
-	border-bottom: 1px solid var(--border);
+	gap: 10px;
+	padding: 16px 16px 12px;
 }
 
 .gui-cap-drawer-titles {
@@ -1357,7 +1431,7 @@
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 4px;
 }
 
 .gui-cap-drawer-name {
@@ -1368,8 +1442,14 @@
 
 .gui-cap-drawer-meta {
 	display: flex;
-	gap: 4px;
+	align-items: center;
+	gap: 6px;
 	flex-wrap: wrap;
+}
+
+.gui-cap-drawer-meta-text {
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
 }
 
 .gui-cap-drawer-close {
@@ -1390,29 +1470,150 @@
 	color: var(--color-text);
 }
 
-.gui-cap-drawer-body {
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
-	padding: 12px 14px;
-	font-size: var(--ui-font-size-sm);
-}
-
+/* 动作行:金色主 CTA + 次级按钮 + 危险按钮,与设计稿 2:665 同排。 */
 .gui-cap-drawer-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 10px 14px;
-	border-top: 1px solid var(--border);
+	padding: 0 16px 12px;
 }
 
-.gui-cap-drawer-actions-label {
+.gui-cap-drawer-actions .gui-btn {
+	flex: 1;
+	justify-content: center;
+}
+
+.gui-cap-drawer-primary {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	background: var(--color-accent);
+	color: var(--color-accent-fg, #1a1a1a);
+}
+
+.gui-cap-drawer-primary:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-accent) 86%, white);
+}
+
+.gui-cap-drawer-delete {
+	color: var(--color-danger, #e5484d);
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 40%, transparent);
+}
+
+.gui-cap-drawer-delete:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 60%, transparent);
+}
+
+/* 3 tab (概览 / SKILL.md / 版本记录):选中项文字转白 + 金色底线。 */
+.gui-cap-drawer-tabs {
+	display: flex;
+	gap: 2px;
+	padding: 0 16px;
+	border-bottom: 1px solid var(--border);
+}
+
+.gui-cap-drawer-tab {
+	appearance: none;
+	position: relative;
+	border: none;
+	background: transparent;
+	padding: 8px 10px 9px;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition: color 150ms var(--spring);
+}
+
+.gui-cap-drawer-tab:hover {
+	color: var(--color-text);
+}
+
+.gui-cap-drawer-tab--on {
+	color: var(--color-text);
+	font-weight: 500;
+}
+
+.gui-cap-drawer-tab--on::after {
+	content: "";
+	position: absolute;
+	left: 10px;
+	right: 10px;
+	bottom: -1px;
+	height: 2px;
+	border-radius: 999px;
+	background: var(--color-accent);
+}
+
+.gui-cap-drawer-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 12px 16px 16px;
+	font-size: var(--ui-font-size-sm);
+}
+
+.gui-cap-drawer-overview {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.gui-cap-drawer-section {
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text-faint);
+	letter-spacing: 0.02em;
+}
+
+.gui-cap-drawer-section-text {
+	margin: 0;
+	color: var(--color-text);
+	line-height: 1.6;
+}
+
+/* 来源与版本键值组:左列灰色键,右列内容,路径走等宽。 */
+.gui-cap-drawer-kv {
+	display: grid;
+	grid-template-columns: auto 1fr;
+	gap: 6px 14px;
+	align-items: baseline;
+}
+
+.gui-cap-drawer-kv-key {
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-faint);
 }
 
-.gui-cap-drawer-delete {
-	margin-left: auto;
+.gui-cap-drawer-kv-val {
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text);
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.gui-cap-drawer-kv-val--mono {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-cap-drawer-versions-empty {
+	padding: 14px;
+	text-align: center;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+/* 卸载风险块:暗红玻璃卡 (设计稿 2:665 底部)。 */
+.gui-cap-drawer-risk {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	margin-top: 4px;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-danger, #e5484d) 10%, transparent);
+	color: var(--color-danger, #e5484d);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.6;
 }
 
 /* Diagnostics: grouped health report. */
@@ -2092,42 +2293,13 @@
 	color: var(--color-text-faint);
 	flex-shrink: 0;
 }
-/* 槽位注册表(扩展中心底部全宽诊断区块):daemon 声明 vs 桌面端挂载。 */
-.gui-ext-slots {
-	margin-top: 8px;
-	padding: 6px 10px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-text-faint) 3%, transparent);
-	flex-shrink: 0;
-}
+/* 槽位注册表 footer 已移除 (无实际操作,信息冗余):未托管告警并入概览
+ * 标题胶囊 + 槽位未挂载统计卡。仅保留 .gui-ext-slots-head —— 扩展设置
+ * 卡片组的节头还在复用它。 */
 .gui-ext-slots-head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-}
-.gui-ext-slots-ok,
-.gui-ext-slots-warn {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	margin-left: auto;
-	font-size: 11.5px;
-}
-.gui-ext-slots-ok {
-	color: #34d399;
-}
-.gui-ext-slots-warn {
-	color: var(--color-warning, #fbbf24);
-}
-.gui-ext-slots-detail {
-	margin-top: 3px;
-	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
-	font-size: 10.5px;
-	color: var(--color-text-faint);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 /* 扩展设置卡片(settings.item 槽位组件宿主):一张卡片 = 一个启用扩展。 */
 .gui-ext-settings-card {
@@ -3914,6 +4086,119 @@
 .gui-ext-stat-label {
 	font-size: 11.5px;
 	color: var(--color-text-faint);
+}
+
+.gui-ext-stat-sub {
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 标题区 (设计稿 2:1427):大标题 + 副标题,右上槽位挂载胶囊。 */
+.gui-ext-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 2px 2px 0;
+	flex-shrink: 0;
+}
+
+.gui-ext-head-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-ext-head-title {
+	font-size: 16px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-ext-head-sub {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-ext-head-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 11.5px;
+	flex-shrink: 0;
+}
+
+.gui-ext-head-pill--ok {
+	background: color-mix(in oklab, #34d399 14%, transparent);
+	color: #34d399;
+}
+
+.gui-ext-head-pill--warn {
+	background: color-mix(in oklab, var(--color-warning, #fbbf24) 14%, transparent);
+	color: var(--color-warning, #fbbf24);
+}
+
+/* 需要处理 / 来源健康度行:标题 + 副行描述 (loadError 文案、来源项数)。 */
+.gui-ext-overview-row-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.gui-ext-overview-row-title {
+	font-size: 12.5px;
+	color: var(--color-text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-ext-overview-row-sub {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* 诊断骨架:registry 首拉未就绪的占位 —— 之前此态整块空白。 */
+.gui-cap-diag-skeleton {
+	height: 58px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background:
+		linear-gradient(
+			90deg,
+			color-mix(in oklab, var(--color-text-faint) 6%, transparent) 0%,
+			color-mix(in oklab, var(--color-text-faint) 14%, transparent) 40%,
+			color-mix(in oklab, var(--color-text-faint) 6%, transparent) 80%
+		)
+		0 0 / 200% 100%;
+	animation: gui-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes gui-skeleton-pulse {
+	from {
+		background-position: 120% 0;
+	}
+	to {
+		background-position: -80% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-cap-diag-skeleton {
+		animation: none;
+	}
 }
 
 .gui-ext-overview-section {

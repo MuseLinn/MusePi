@@ -31,7 +31,7 @@ import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
-import { shouldRestartDaemon } from "./lib/daemon-version";
+import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
 import { pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
@@ -1242,6 +1242,11 @@ function AppInner(): ReactNode {
 			const h = new URL(u).hostname;
 			return h === "127.0.0.1" || h === "localhost" || h === "::1";
 		};
+		// Capability-restart guard: one restart attempt per URL per boot. The
+		// probe path below recurses through connect → tryUrl, so without this
+		// a daemon that STILL lacks the methods after a restart (spawn fell
+		// back to an old binary) would restart-loop forever.
+		const capabilityRestarted = new Set<string>();
 		const tryUrl = async (u: string): Promise<boolean> => {
 			try {
 				await connect(u);
@@ -1251,7 +1256,15 @@ function AppInner(): ReactNode {
 				// daemon 会看不到新功能(2026-08-17 实测)。daemon.cjs
 				// spawn 时注入 MUSEPI_VERSION=GUI 版本,这里与当前 GUI
 				// 版本比对:不一致 → daemon-restart(kill+spawn 新代码)
-				// 后重连。dev 迭代(版本号不变)不触发,发布/OTA 必触发。
+				// 后重连。
+				//
+				// 版本比对有个盲区:**dev / 工作区自建场景版本号不变**,
+				// 代码却已经前进 —— 旧 daemon 与全新 GUI 报同一个
+				// musepiVersion,版本门判定"最新",于是新 RPC 在界面上
+				// 直接变成 `Unknown method`。所以再加一道能力探测:探
+				// REQUIRED_DAEMON_METHODS 里的方法,有缺失就同样重启。
+				// 探测失败(方法不存在)与其它错误区分开 —— 只有"确实
+				// 答不上来"才算缺失,避免把参数错/权限错误判成陈旧。
 				// Token-bearing URLs are user-configured remote instances (the
 				// instance switcher): the version gate must NOT restart them.
 				if (isElectron() && isLocalUrl(u) && !new URL(u).searchParams.has("token")) {
@@ -1261,12 +1274,27 @@ function AppInner(): ReactNode {
 							electronAPI?: { getAppVersion?(): Promise<string>; restartDaemon?(port: number): Promise<number> };
 						}
 					).electronAPI;
-					if (rpc && api?.getAppVersion && api.restartDaemon) {
-						const meta = await rpc
-							.request<{ version?: string; musepiVersion?: string | null }>("system.meta")
-							.catch(() => null);
-						const appVersion = await api.getAppVersion().catch(() => null);
-						if (shouldRestartDaemon(meta, appVersion)) {
+					if (rpc && api?.restartDaemon) {
+						const meta = api.getAppVersion
+							? await rpc
+									.request<{ version?: string; musepiVersion?: string | null }>("system.meta")
+									.catch(() => null)
+							: null;
+						const appVersion = api.getAppVersion ? await api.getAppVersion().catch(() => null) : null;
+						let stale = shouldRestartDaemon(meta, appVersion);
+						if (!stale && !capabilityRestarted.has(u)) {
+							const answered: string[] = [];
+							for (const method of REQUIRED_DAEMON_METHODS) {
+								const ok = await rpc
+									.request(method, method === "skills.marketplace.query" ? { pageSize: 1 } : {})
+									.then(() => true)
+									.catch(() => false);
+								if (ok) answered.push(method);
+							}
+							stale = shouldRestartForMissingMethods(answered);
+						}
+						if (stale) {
+							capabilityRestarted.add(u);
 							const port = Number.parseInt(new URL(u).port, 10) || 8300;
 							await api.restartDaemon(port);
 							await connect(u);

@@ -119,124 +119,142 @@ interface DiagSection {
 }
 
 /** 扩展健康诊断:一个聚合视图回答"为什么 X 没生效" —— 加载失败 / 遮蔽 /
- *  技能发现警告 / 已关闭来源,全部来自现有 extensions.list + skills.list。 */
-function DiagnosticsView({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [rows, setRows] = useState<DiagRow[] | null>(null);
+ *  技能发现警告 / 已关闭来源。extensions/tabs 直接吃父级 registry 单例
+ *  (数据已在内存,切 tab 即渲染);只自拉 skills.list 的警告(轻量 TTL 缓存)。
+ *  之前这个视图自己重拉 extensions.list + skills.list —— 全量扩展扫描慢,
+ *  且 rows===null 时整块空白,与"全部健康"无法区分,用户看到的是"空白 +
+ *  转半天";registry 就绪前渲染骨架占位。 */
+function DiagnosticsView({
+	rpc,
+	extensions,
+	tabs,
+}: {
+	rpc: RpcClient | null;
+	extensions: Array<{
+		id: string;
+		name: string;
+		displayName?: string;
+		loadError?: string | null;
+		state: string;
+		shadowedBy?: string | null;
+	}> | null;
+	tabs: Array<{ id: string; enabled: boolean }>;
+}): ReactNode {
+	const [warnings, setWarnings] = useState<string[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
-		void (async () => {
-			try {
-				const [ext, skills] = await Promise.all([
-					rpc.request<{
-						extensions: Array<{
-							id: string;
-							name: string;
-							displayName?: string;
-							kind: string;
-							loadError?: string | null;
-							state: string;
-							shadowedBy?: string | null;
-						}>;
-						tabs?: Array<{ id: string; enabled: boolean }>;
-					}>("extensions.list", {}),
-					rpc.request<{ skills: unknown[]; warnings: string[] }>("skills.list", {}),
-				]);
-				if (!alive) return;
-				const out: DiagRow[] = [];
-				for (const e of ext?.extensions ?? []) {
-					if (e.loadError) {
-						out.push({ id: e.id, kind: "load-error", title: e.displayName ?? e.name, detail: e.loadError });
-						continue;
-					}
-					if (e.state === "shadowed") {
-						out.push({
-							id: e.id,
-							kind: "shadowed",
-							title: e.displayName ?? e.name,
-							detail: e.shadowedBy ? t("shadowed by {name}", { name: e.shadowedBy }) : undefined,
-						});
-					}
-				}
-				for (const w of skills?.warnings ?? []) {
-					out.push({ id: `w:${out.length}`, kind: "warning", title: w });
-				}
-				for (const tab of ext?.tabs ?? []) {
-					if (!tab.enabled) {
-						out.push({ id: `t:${tab.id}`, kind: "provider-off", title: tab.id });
-					}
-				}
-				setRows(out);
-			} catch (e: unknown) {
-				if (alive) setError(e instanceof Error ? e.message : String(e));
-			}
-		})();
+		void rpc
+			.request<{ skills: unknown[]; warnings: string[] }>("skills.list", {})
+			.then(res => {
+				if (alive) setWarnings(res?.warnings ?? []);
+			})
+			.catch((e: unknown) => alive && setError(e instanceof Error ? e.message : String(e)));
 		return () => {
 			alive = false;
 		};
 	}, [rpc]);
 
+	const rows: DiagRow[] = useMemo(() => {
+		const out: DiagRow[] = [];
+		for (const e of extensions ?? []) {
+			if (e.loadError) {
+				out.push({ id: e.id, kind: "load-error", title: e.displayName ?? e.name, detail: e.loadError });
+				continue;
+			}
+			if (e.state === "shadowed") {
+				out.push({
+					id: e.id,
+					kind: "shadowed",
+					title: e.displayName ?? e.name,
+					detail: e.shadowedBy ? t("shadowed by {name}", { name: e.shadowedBy }) : undefined,
+				});
+			}
+		}
+		for (const w of warnings ?? []) {
+			out.push({ id: `w:${out.length}`, kind: "warning", title: w });
+		}
+		for (const tab of tabs) {
+			if (!tab.enabled) out.push({ id: `t:${tab.id}`, kind: "provider-off", title: tab.id });
+		}
+		return out;
+	}, [extensions, warnings, tabs]);
+
+	const loading = extensions === null;
+
 	const sections: DiagSection[] = [
-		{ kind: "load-error", label: t("diag load errors"), rows: (rows ?? []).filter(r => r.kind === "load-error") },
-		{ kind: "shadowed", label: t("diag shadowed"), rows: (rows ?? []).filter(r => r.kind === "shadowed") },
-		{ kind: "warning", label: t("diag warnings"), rows: (rows ?? []).filter(r => r.kind === "warning") },
+		{ kind: "load-error", label: t("diag load errors"), rows: rows.filter(r => r.kind === "load-error") },
+		{ kind: "shadowed", label: t("diag shadowed"), rows: rows.filter(r => r.kind === "shadowed") },
+		{ kind: "warning", label: t("diag warnings"), rows: rows.filter(r => r.kind === "warning") },
 		{
 			kind: "provider-off",
 			label: t("diag disabled providers"),
-			rows: (rows ?? []).filter(r => r.kind === "provider-off"),
+			rows: rows.filter(r => r.kind === "provider-off"),
 		},
 	];
 
 	return (
 		<div className="gui-cap-diag">
 			{error && <div className="gui-ext-plugins-error">{error}</div>}
-			{rows !== null && rows.length === 0 && (
-				<div className="gui-cap-diag-clear">
-					<Icon name="shield-check" className="h-4 w-4" />
-					<span>{t("diagnostics all clear")}</span>
-				</div>
-			)}
-			{sections.map(
-				sec =>
-					sec.rows.length > 0 && (
-						<div key={sec.kind} className="gui-cap-diag-section">
-							<div className="gui-cap-diag-head">
-								<Icon
-									name={
-										sec.kind === "load-error"
-											? "alert"
-											: sec.kind === "shadowed"
-												? "eye"
-												: sec.kind === "warning"
-													? "alert"
-													: "pause"
-									}
-									className="h-3.5 w-3.5 shrink-0 opacity-70"
-								/>
-								<span className="text-[12px] font-medium">{sec.label}</span>
-								<span className="gui-ext-group-count">({sec.rows.length})</span>
-							</div>
-							{sec.rows.map(r => (
-								<div key={r.id} className="gui-cap-diag-row">
-									<span className="gui-cap-diag-title">{r.title}</span>
-									{r.detail && (
-										<span className="gui-cap-diag-detail" title={r.detail}>
-											{r.detail}
-										</span>
-									)}
-								</div>
-							))}
+			{loading ? (
+				// 骨架:registry 首拉未就绪 —— 占位节奏与概览统计卡同宽。
+				[0, 1, 2].map(i => <div key={i} className="gui-cap-diag-skeleton" aria-hidden />)
+			) : (
+				<>
+					{rows.length === 0 && (
+						<div className="gui-cap-diag-clear">
+							<Icon name="shield-check" className="h-4 w-4" />
+							<span>{t("diagnostics all clear")}</span>
 						</div>
-					),
+					)}
+					{sections.map(
+						sec =>
+							sec.rows.length > 0 && (
+								<div key={sec.kind} className="gui-cap-diag-section">
+									<div className="gui-cap-diag-head">
+										<Icon
+											name={
+												sec.kind === "load-error"
+													? "alert"
+													: sec.kind === "shadowed"
+														? "eye"
+														: sec.kind === "warning"
+															? "alert"
+															: "pause"
+											}
+											className="h-3.5 w-3.5 shrink-0 opacity-70"
+										/>
+										<span className="text-[12px] font-medium">{sec.label}</span>
+										<span className="gui-ext-group-count">({sec.rows.length})</span>
+									</div>
+									{sec.rows.map(r => (
+										<div key={r.id} className="gui-cap-diag-row">
+											<span className="gui-cap-diag-title">{r.title}</span>
+											{r.detail && (
+												<span className="gui-cap-diag-detail" title={r.detail}>
+													{r.detail}
+												</span>
+											)}
+										</div>
+									))}
+								</div>
+							),
+					)}
+				</>
 			)}
 		</div>
 	);
 }
 
-/** 技能详情抽屉:右侧滑出,渲染 skills.read 的 SKILL.md(相对路径以技能
- *  文件目录为 basePath),头部带 ignore 开关 + 删除(user 级文件技能)。 */
+/** 技能详情抽屉 (设计稿 2:665):右侧滑出的页面内面板 —— 不盖顶栏/工具行,
+ *  四面圆角 + 液态玻璃。头部字形图标 + meta 行,动作行(在会话中调用 =
+ *  复制 /skill-name、停用 = ignore 开关、卸载 = user 级文件技能),3 tab
+ *  (概览 / SKILL.md / 版本记录),概览底部挂卸载风险块。
+ *  收起走退场动画:closing 态先播 gui-cap-drawer-out,onAnimationEnd 再
+ *  真正卸载 —— React 直接卸载是不会有退场动画的;prefers-reduced-motion
+ *  时跳过动画立即关。 */
 function SkillDrawer({
 	rpc,
 	skill,
@@ -252,6 +270,9 @@ function SkillDrawer({
 }): ReactNode {
 	const [detail, setDetail] = useState<{ content: string; filePath: string } | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [tab, setTab] = useState<"overview" | "skillmd" | "versions">("overview");
+	const [closing, setClosing] = useState(false);
+	const [copied, setCopied] = useState(false);
 	const { confirm } = useConfirm();
 
 	useEffect(() => {
@@ -277,13 +298,29 @@ function SkillDrawer({
 		};
 	}, [rpc, skill.name, skill.content]);
 
+	const requestClose = useCallback((): void => {
+		if (closing) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			onClose();
+			return;
+		}
+		setClosing(true);
+	}, [closing, onClose]);
+
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") onClose();
+			if (e.key === "Escape") requestClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [requestClose]);
+
+	// 「已复制」反馈自动消退(按钮图标回位,不弹 toast —— 抽屉内就地反馈)。
+	useEffect(() => {
+		if (!copied) return;
+		const id = window.setTimeout(() => setCopied(false), 1800);
+		return () => window.clearTimeout(id);
+	}, [copied]);
 
 	const canDelete = skill.filePath !== "" && skill._source?.level === "user" && !skill.source.startsWith("managed");
 
@@ -316,55 +353,129 @@ function SkillDrawer({
 				.request("skills.delete", { name: skill.name })
 				.then(() => {
 					onDeleted(skill.name);
-					onClose();
+					requestClose();
 				})
 				.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
 		});
 	};
 
+	// 能力中心在设置窗口,没有会话可注入 —— 「在会话中调用」诚实落地为
+	// 复制 slash 命令,用户粘贴到会话即触发。
+	const invokeSkill = (): void => {
+		void navigator.clipboard
+			.writeText(`/${skill.name}`)
+			.then(() => setCopied(true))
+			.catch(() => {});
+	};
+
 	const basePath = detail?.filePath ? detail.filePath.replace(/[/\\]SKILL\.md$/i, "") : undefined;
+	const metaText = [skillOriginLabel(skill), skillVersionLabel(skill), skillLevelLabel(skill)].join(" · ");
 
 	return (
-		<div className="gui-cap-drawer-root" role="dialog" aria-modal>
-			<div className="gui-cap-drawer-backdrop" onClick={onClose} />
-			<div className="gui-cap-drawer">
+		<div className={`gui-cap-drawer-root${closing ? " gui-cap-drawer-root--closing" : ""}`} role="dialog" aria-modal>
+			<div className="gui-cap-drawer-backdrop" onClick={requestClose} />
+			<div
+				className="gui-cap-drawer"
+				onAnimationEnd={e => {
+					if (closing && e.animationName === "gui-cap-drawer-out") onClose();
+				}}
+			>
 				<div className="gui-cap-drawer-head">
+					<SkillGlyph skill={skill} size={40} />
 					<div className="gui-cap-drawer-titles">
 						<div className="gui-cap-drawer-name">{skill.name}</div>
 						<div className="gui-cap-drawer-meta">
-							<span className="gui-ext-item-tag">{skillLevelLabel(skill)}</span>
-							{skill.ignored && <span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ignored")}</span>}
+							<span className="gui-cap-drawer-meta-text">{metaText}</span>
+							{skill.ignored && (
+								<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("skill disabled")}</span>
+							)}
 						</div>
 					</div>
-					<button type="button" className="gui-cap-drawer-close" aria-label={t("close")} onClick={onClose}>
+					<button type="button" className="gui-cap-drawer-close" aria-label={t("close")} onClick={requestClose}>
 						<Icon name="close" className="h-4 w-4" />
 					</button>
 				</div>
-				{error && <div className="gui-ext-plugins-error">{error}</div>}
-				<div className="gui-cap-drawer-body">
-					{detail ? (
-						<Markdown text={detail.content} basePath={basePath} />
-					) : (
-						<div className="text-[12px] text-[var(--color-text-faint)]">{t("no content")}</div>
-					)}
-				</div>
 				<div className="gui-cap-drawer-actions">
-					<button
-						type="button"
-						role="switch"
-						aria-checked={skill.ignored}
-						className={`gui-toggle gui-toggle--sm${skill.ignored ? " gui-toggle--on" : ""}`}
-						aria-label={t("toggle skill ignore", { name: skill.name })}
-						onClick={toggleIgnored}
-					/>
-					<span className="gui-cap-drawer-actions-label">
-						{skill.ignored ? t("ignored") : t("extension active")}
-					</span>
+					<button type="button" className="gui-btn gui-cap-drawer-primary" onClick={invokeSkill}>
+						<Icon name={copied ? "check" : "external-link"} className="h-3.5 w-3.5" />
+						{copied ? t("skill invoke copied") : t("skill invoke")}
+					</button>
+					<button type="button" className="gui-btn" onClick={toggleIgnored}>
+						{skill.ignored ? t("skill enabled") : t("skill disable")}
+					</button>
 					{canDelete && (
 						<button type="button" className="gui-btn gui-cap-drawer-delete" onClick={removeSkill}>
-							<Icon name="delete-bin" className="h-3.5 w-3.5" />
-							{t("delete skill")}
+							{t("uninstall")}
 						</button>
+					)}
+				</div>
+				{error && <div className="gui-ext-plugins-error">{error}</div>}
+				<div className="gui-cap-drawer-tabs" role="tablist">
+					{(
+						[
+							["overview", t("skill tab overview")],
+							["skillmd", t("skill tab skillmd")],
+							["versions", t("skill tab versions")],
+						] as const
+					).map(([id, label]) => (
+						<button
+							key={id}
+							type="button"
+							role="tab"
+							aria-selected={tab === id}
+							className={`gui-cap-drawer-tab${tab === id ? " gui-cap-drawer-tab--on" : ""}`}
+							onClick={() => setTab(id)}
+						>
+							{label}
+						</button>
+					))}
+				</div>
+				<div className="gui-cap-drawer-body">
+					{tab === "overview" && (
+						<div className="gui-cap-drawer-overview">
+							{skill.description && (
+								<>
+									<div className="gui-cap-drawer-section">{t("skill overview summary")}</div>
+									<p className="gui-cap-drawer-section-text">{skill.description}</p>
+								</>
+							)}
+							<div className="gui-cap-drawer-section">{t("skill kv source group")}</div>
+							<div className="gui-cap-drawer-kv">
+								<span className="gui-cap-drawer-kv-key">{t("skill kv source")}</span>
+								<span className="gui-cap-drawer-kv-val">{skillOriginLabel(skill)}</span>
+								<span className="gui-cap-drawer-kv-key">{t("skill kv level")}</span>
+								<span className="gui-cap-drawer-kv-val">{skillLevelLabel(skill)}</span>
+								<span className="gui-cap-drawer-kv-key">{t("version")}</span>
+								<span className="gui-cap-drawer-kv-val">{skillVersionLabel(skill)}</span>
+								<span className="gui-cap-drawer-kv-key">{t("skill kv path")}</span>
+								<span className="gui-cap-drawer-kv-val gui-cap-drawer-kv-val--mono">
+									{skill.filePath || t("skill kv path virtual")}
+								</span>
+							</div>
+							{canDelete && (
+								<div className="gui-cap-drawer-risk">
+									<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+									<span>{t("skill risk body")}</span>
+								</div>
+							)}
+						</div>
+					)}
+					{tab === "skillmd" &&
+						(detail ? (
+							<Markdown text={detail.content} basePath={basePath} />
+						) : (
+							<div className="text-[12px] text-[var(--color-text-faint)]">{t("no content")}</div>
+						))}
+					{tab === "versions" && (
+						<div className="gui-cap-drawer-overview">
+							<div className="gui-cap-drawer-kv">
+								<span className="gui-cap-drawer-kv-key">{t("version")}</span>
+								<span className="gui-cap-drawer-kv-val">{skillVersionLabel(skill)}</span>
+								<span className="gui-cap-drawer-kv-key">{t("skill kv source")}</span>
+								<span className="gui-cap-drawer-kv-val">{skillOriginLabel(skill)}</span>
+							</div>
+							<div className="gui-cap-drawer-versions-empty">{t("skill versions empty")}</div>
+						</div>
 					)}
 				</div>
 			</div>
@@ -666,241 +777,249 @@ function InstalledSkillsPane({
 				</button>
 			</div>
 
-			{/* 级别筛选 chips。 */}
-			<div className="gui-skill-market-chips">
-				{levelChips.map(c => (
-					<button
-						key={c.id}
-						type="button"
-						className={`gui-skill-market-chip${level === c.id ? " gui-skill-market-chip--on" : ""}`}
-						onClick={() => setLevel(c.id)}
-					>
-						{c.label}
-					</button>
-				))}
-			</div>
-
-			{error && <div className="gui-ext-plugins-error">{error}</div>}
-
-			{/* 标题行:`全部技能 · N` + 网格/列表切换。 */}
-			<div className="gui-cap-row">
-				<span className="gui-cap-row-title">{t("skill all title")}</span>
-				<span className="gui-cap-row-count">· {filtered.length}</span>
-				<div className="gui-cap-viewtoggle">
-					<button
-						type="button"
-						className={`gui-cap-viewbtn${view === "grid" ? " gui-cap-viewbtn--on" : ""}`}
-						aria-label={t("skill view grid")}
-						aria-pressed={view === "grid"}
-						onClick={() => setView("grid")}
-					>
-						<Icon name="split-cells-horizontal" className="h-4 w-4" />
-					</button>
-					<button
-						type="button"
-						className={`gui-cap-viewbtn${view === "list" ? " gui-cap-viewbtn--on" : ""}`}
-						aria-label={t("skill view list")}
-						aria-pressed={view === "list"}
-						onClick={() => setView("list")}
-					>
-						<Icon name="list-check-2" className="h-4 w-4" />
-					</button>
+			{/* 工具行以下的全部内容:详情抽屉的定位容器。抽屉 absolute 覆盖
+			 *  这一壳层 —— 顶栏/工具行保持在遮罩之外 (设计稿 2:665)。 */}
+			<div className="gui-skill-installed-rest">
+				{/* 级别筛选 chips。 */}
+				<div className="gui-skill-market-chips">
+					{levelChips.map(c => (
+						<button
+							key={c.id}
+							type="button"
+							className={`gui-skill-market-chip${level === c.id ? " gui-skill-market-chip--on" : ""}`}
+							onClick={() => setLevel(c.id)}
+						>
+							{c.label}
+						</button>
+					))}
 				</div>
-			</div>
 
-			<div className="gui-cap-grid-wrap">
-				{skills === null ? (
-					<div className="gui-cap-empty">{t("skill market loading")}</div>
-				) : filtered.length === 0 ? (
-					<div className="gui-cap-empty">
-						<Icon name="star" className="h-5 w-5 opacity-50" />
-						<div>{t("no skills installed")}</div>
-						<div className="gui-cap-empty-hint">{t("install one from git or the marketplace")}</div>
-						<button type="button" className="gui-btn" onClick={onAcquire}>
-							<Icon name="download" className="h-3.5 w-3.5" />
-							{t("acquire capabilities")}
+				{error && <div className="gui-ext-plugins-error">{error}</div>}
+
+				{/* 标题行:`全部技能 · N` + 网格/列表切换。 */}
+				<div className="gui-cap-row">
+					<span className="gui-cap-row-title">{t("skill all title")}</span>
+					<span className="gui-cap-row-count">· {filtered.length}</span>
+					<div className="gui-cap-viewtoggle">
+						<button
+							type="button"
+							className={`gui-cap-viewbtn${view === "grid" ? " gui-cap-viewbtn--on" : ""}`}
+							aria-label={t("skill view grid")}
+							aria-pressed={view === "grid"}
+							onClick={() => setView("grid")}
+						>
+							<Icon name="split-cells-horizontal" className="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							className={`gui-cap-viewbtn${view === "list" ? " gui-cap-viewbtn--on" : ""}`}
+							aria-label={t("skill view list")}
+							aria-pressed={view === "list"}
+							onClick={() => setView("list")}
+						>
+							<Icon name="list-check-2" className="h-4 w-4" />
 						</button>
 					</div>
-				) : view === "grid" ? (
-					<div className="gui-cap-grid">
-						{filtered.map(s => {
-							const picked = selected.has(s.name);
-							return (
-								<div
-									key={s.name}
-									role="button"
-									tabIndex={0}
-									className={`gui-cap-card${picked ? " gui-cap-card--picked" : ""}${s.ignored ? " gui-cap-card--off" : ""}`}
-									onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											if (manage) toggleSelected(s.name);
-											else setDrawerName(s.name);
-										}
-									}}
-								>
-									{manage && (
-										<span className={`gui-cap-pick${picked ? " gui-cap-pick--on" : ""}`} aria-hidden>
-											{picked && <Icon name="check" className="h-3 w-3" />}
+				</div>
+
+				<div className="gui-cap-grid-wrap">
+					{skills === null ? (
+						<div className="gui-cap-empty">{t("skill market loading")}</div>
+					) : filtered.length === 0 ? (
+						<div className="gui-cap-empty">
+							<Icon name="star" className="h-5 w-5 opacity-50" />
+							<div>{t("no skills installed")}</div>
+							<div className="gui-cap-empty-hint">{t("install one from git or the marketplace")}</div>
+							<button type="button" className="gui-btn" onClick={onAcquire}>
+								<Icon name="download" className="h-3.5 w-3.5" />
+								{t("acquire capabilities")}
+							</button>
+						</div>
+					) : view === "grid" ? (
+						<div className="gui-cap-grid">
+							{filtered.map(s => {
+								const picked = selected.has(s.name);
+								return (
+									<div
+										key={s.name}
+										role="button"
+										tabIndex={0}
+										className={`gui-cap-card${picked ? " gui-cap-card--picked" : ""}${s.ignored ? " gui-cap-card--off" : ""}`}
+										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
+										onKeyDown={e => {
+											if (e.key === "Enter" || e.key === " ") {
+												e.preventDefault();
+												if (manage) toggleSelected(s.name);
+												else setDrawerName(s.name);
+											}
+										}}
+									>
+										{manage && (
+											<span className={`gui-cap-pick${picked ? " gui-cap-pick--on" : ""}`} aria-hidden>
+												{picked && <Icon name="check" className="h-3 w-3" />}
+											</span>
+										)}
+										<div className="gui-cap-card-top">
+											<SkillGlyph skill={s} size={30} />
+											<span className="gui-cap-card-name">{s.name}</span>
+											<button
+												type="button"
+												className="gui-cap-card-menu"
+												aria-label={t("skill row actions")}
+												onClick={e => {
+													e.stopPropagation();
+													setDrawerName(s.name);
+												}}
+											>
+												<Icon name="more-2" className="h-3.5 w-3.5" />
+											</button>
+										</div>
+										<div className="gui-cap-card-desc">{s.description || "—"}</div>
+										<div className="gui-cap-card-meta">
+											{skillLevelLabel(s)} · {skillOriginLabel(s)} · {skillVersionLabel(s)}
+										</div>
+										<div className="gui-cap-card-foot">
+											{s.ignored ? (
+												<span className="gui-ext-item-tag gui-ext-item-tag--err">
+													{t("skill disabled")}
+												</span>
+											) : (
+												<span className="gui-ext-item-tag gui-ext-item-tag--gui">{t("skill enabled")}</span>
+											)}
+											{!uninstallable(s) &&
+												skillLevel(s) === "builtin" &&
+												s.source.startsWith("managed") && (
+													<span className="gui-cap-card-note">{t("skill bundled no uninstall")}</span>
+												)}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					) : (
+						<div className="gui-cap-list">
+							{filtered.map(s => {
+								const picked = selected.has(s.name);
+								return (
+									<div
+										key={s.name}
+										role="button"
+										tabIndex={0}
+										className={`gui-cap-listrow${picked ? " gui-cap-card--picked" : ""}`}
+										onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
+										onKeyDown={e => {
+											if (e.key === "Enter" || e.key === " ") {
+												e.preventDefault();
+												if (manage) toggleSelected(s.name);
+												else setDrawerName(s.name);
+											}
+										}}
+									>
+										{manage && (
+											<span className={`gui-cap-pick${picked ? " gui-cap-pick--on" : ""}`} aria-hidden>
+												{picked && <Icon name="check" className="h-3 w-3" />}
+											</span>
+										)}
+										<SkillGlyph skill={s} size={24} />
+										<span className="gui-cap-listrow-name">{s.name}</span>
+										<span className="gui-cap-listrow-desc">{s.description || "—"}</span>
+										<span className="gui-cap-listrow-meta">
+											{skillLevelLabel(s)} · {skillOriginLabel(s)}
 										</span>
-									)}
-									<div className="gui-cap-card-top">
-										<SkillGlyph skill={s} size={30} />
-										<span className="gui-cap-card-name">{s.name}</span>
-										<button
-											type="button"
-											className="gui-cap-card-menu"
-											aria-label={t("skill row actions")}
-											onClick={e => {
-												e.stopPropagation();
-												setDrawerName(s.name);
-											}}
-										>
-											<Icon name="more-2" className="h-3.5 w-3.5" />
-										</button>
-									</div>
-									<div className="gui-cap-card-desc">{s.description || "—"}</div>
-									<div className="gui-cap-card-meta">
-										{skillLevelLabel(s)} · {skillOriginLabel(s)} · {skillVersionLabel(s)}
-									</div>
-									<div className="gui-cap-card-foot">
-										{s.ignored ? (
+										{s.ignored && (
 											<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("skill disabled")}</span>
-										) : (
-											<span className="gui-ext-item-tag gui-ext-item-tag--gui">{t("skill enabled")}</span>
-										)}
-										{!uninstallable(s) && skillLevel(s) === "builtin" && s.source.startsWith("managed") && (
-											<span className="gui-cap-card-note">{t("skill bundled no uninstall")}</span>
 										)}
 									</div>
-								</div>
-							);
-						})}
-					</div>
-				) : (
-					<div className="gui-cap-list">
-						{filtered.map(s => {
-							const picked = selected.has(s.name);
-							return (
-								<div
-									key={s.name}
-									role="button"
-									tabIndex={0}
-									className={`gui-cap-listrow${picked ? " gui-cap-card--picked" : ""}`}
-									onClick={() => (manage ? toggleSelected(s.name) : setDrawerName(s.name))}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											if (manage) toggleSelected(s.name);
-											else setDrawerName(s.name);
-										}
-									}}
-								>
-									{manage && (
-										<span className={`gui-cap-pick${picked ? " gui-cap-pick--on" : ""}`} aria-hidden>
-											{picked && <Icon name="check" className="h-3 w-3" />}
-										</span>
-									)}
-									<SkillGlyph skill={s} size={24} />
-									<span className="gui-cap-listrow-name">{s.name}</span>
-									<span className="gui-cap-listrow-desc">{s.description || "—"}</span>
-									<span className="gui-cap-listrow-meta">
-										{skillLevelLabel(s)} · {skillOriginLabel(s)}
-									</span>
-									{s.ignored && (
-										<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("skill disabled")}</span>
-									)}
-								</div>
-							);
-						})}
+								);
+							})}
+						</div>
+					)}
+				</div>
+
+				{/* 底部批量操作条 (设计稿 2:250):仅批量管理开启时出现。 */}
+				{manage && (
+					<div className="gui-cap-batch">
+						<span className="gui-cap-batch-info">
+							{selected.size > 0 ? (
+								<>
+									<Icon name="checkbox-circle" className="h-3.5 w-3.5" />
+									{t("skill selected {n}", { n: selected.size })}
+									<span className="gui-cap-batch-sep">·</span>
+									{t("skill total hint {total}", { total: counts.total })}
+									<span className="gui-cap-batch-sep">·</span>
+									{t("skill batch hint")}
+								</>
+							) : (
+								<>
+									<Icon name="checkbox-blank" className="h-3.5 w-3.5" />
+									{t("skill total hint {total}", { total: counts.total })}
+									<span className="gui-cap-batch-sep">·</span>
+									{t("skill batch hint")}
+								</>
+							)}
+						</span>
+						<div className="gui-cap-batch-actions">
+							<button
+								type="button"
+								className="gui-btn"
+								disabled={filtered.length === 0}
+								onClick={() => setSelected(allSelected ? new Set() : new Set(filtered.map(s => s.name)))}
+							>
+								{t("skill select all")}
+							</button>
+							<button
+								type="button"
+								className="gui-btn gui-cap-uninstall"
+								disabled={busy || selectedUninstallable === 0}
+								onClick={() => void uninstallSelected()}
+							>
+								{t("uninstall")}
+							</button>
+							<button
+								type="button"
+								className="gui-btn"
+								disabled={busy || selected.size === 0}
+								onClick={() => void setIgnoredBatch([...selected], true)}
+							>
+								{t("skill batch disable")}
+							</button>
+							<button
+								type="button"
+								className="gui-btn gui-cap-batch-primary"
+								disabled={busy || selected.size === 0}
+								onClick={() => void setIgnoredBatch([...selected], false)}
+							>
+								{t("skill batch enable")}
+							</button>
+						</div>
 					</div>
 				)}
-			</div>
 
-			{/* 底部批量操作条 (设计稿 2:250):仅批量管理开启时出现。 */}
-			{manage && (
-				<div className="gui-cap-batch">
-					<span className="gui-cap-batch-info">
-						{selected.size > 0 ? (
-							<>
-								<Icon name="checkbox-circle" className="h-3.5 w-3.5" />
-								{t("skill selected {n}", { n: selected.size })}
-								<span className="gui-cap-batch-sep">·</span>
-								{t("skill total hint {total}", { total: counts.total })}
-								<span className="gui-cap-batch-sep">·</span>
-								{t("skill batch hint")}
-							</>
-						) : (
-							<>
-								<Icon name="checkbox-blank" className="h-3.5 w-3.5" />
-								{t("skill total hint {total}", { total: counts.total })}
-								<span className="gui-cap-batch-sep">·</span>
-								{t("skill batch hint")}
-							</>
-						)}
-					</span>
-					<div className="gui-cap-batch-actions">
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={filtered.length === 0}
-							onClick={() => setSelected(allSelected ? new Set() : new Set(filtered.map(s => s.name)))}
-						>
-							{t("skill select all")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn gui-cap-uninstall"
-							disabled={busy || selectedUninstallable === 0}
-							onClick={() => void uninstallSelected()}
-						>
-							{t("uninstall")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn"
-							disabled={busy || selected.size === 0}
-							onClick={() => void setIgnoredBatch([...selected], true)}
-						>
-							{t("skill batch disable")}
-						</button>
-						<button
-							type="button"
-							className="gui-btn gui-cap-batch-primary"
-							disabled={busy || selected.size === 0}
-							onClick={() => void setIgnoredBatch([...selected], false)}
-						>
-							{t("skill batch enable")}
-						</button>
-					</div>
+				{/* 贴底状态条 —— 与"发现"页同一条线索 (设计稿 2:250 页脚)。 */}
+				<div className="gui-skill-market-status">
+					{t("installed skills status {enabled} {disabled} {total}", {
+						enabled: counts.total - counts.disabled,
+						disabled: counts.disabled,
+						total: counts.total,
+					})}
 				</div>
-			)}
 
-			{/* 贴底状态条 —— 与"发现"页同一条线索 (设计稿 2:250 页脚)。 */}
-			<div className="gui-skill-market-status">
-				{t("installed skills status {enabled} {disabled} {total}", {
-					enabled: counts.total - counts.disabled,
-					disabled: counts.disabled,
-					total: counts.total,
-				})}
+				{rpc && drawer && (
+					<SkillDrawer
+						rpc={rpc}
+						skill={drawer}
+						onClose={() => setDrawerName(null)}
+						onChanged={reload}
+						onDeleted={name =>
+							setSelected(prev => {
+								const next = new Set(prev);
+								next.delete(name);
+								return next;
+							})
+						}
+					/>
+				)}
 			</div>
-
-			{rpc && drawer && (
-				<SkillDrawer
-					rpc={rpc}
-					skill={drawer}
-					onClose={() => setDrawerName(null)}
-					onChanged={reload}
-					onDeleted={name =>
-						setSelected(prev => {
-							const next = new Set(prev);
-							next.delete(name);
-							return next;
-						})
-					}
-				/>
-			)}
 		</div>
 	);
 }
