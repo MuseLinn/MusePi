@@ -28,9 +28,13 @@ import { Arrow, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text } f
 import { useConfirm } from "../lib/prompt-dialog";
 import {
 	acceptsShapeDrag,
+	MIN_DRAG,
 	outlinePoints,
 	type ShapeTool,
+	scalePoints,
+	shiftPoints,
 	strokeBox,
+	strokeExtent,
 	textFontSize,
 	textLabelBox,
 } from "../lib/sketch-geometry";
@@ -133,6 +137,24 @@ function themeCanvasColor(): string {
 	return scheme === "dark" ? "#1c1d21" : "#ffffff";
 }
 
+/** Resolve the app accent to a concrete color value. Konva paints through
+ *  the canvas 2D API, where `var(--accent)` is an invalid fillStyle that is
+ *  silently dropped (the previous style sticks) — CSS variables never reach
+ *  the canvas, so selection chrome must be resolved to a real value. */
+function themeAccentColor(): string {
+	if (typeof document === "undefined") return "#d9a441";
+	const v = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+	return v || "#d9a441";
+}
+
+/** Default ink for a fresh board. The palette's first swatch is a dark ink
+ *  meant for light ground; on the dark canvas it lands at ~1.04:1 contrast
+ *  — strokes and typed labels go in invisible. Dark boards therefore open
+ *  on the palette's light grey instead. */
+function defaultInk(): string {
+	return themeCanvasColor() === "#ffffff" ? PALETTE[0] : "#a1a1aa";
+}
+
 /** Load a data/remote URL into an HTMLImageElement for the base layer. */
 function useLoadedImage(src: string | null): HTMLImageElement | null {
 	const [img, setImg] = useState<HTMLImageElement | null>(null);
@@ -182,14 +204,6 @@ function fitImage(
 	};
 }
 
-/** Translate a stroke's points by (dx,dy). Pen points are [x,y,pressure,…],
- *  shapes are [x0,y0,x1,y1] and text is [x,y]; all carry x at even and y at
- *  odd indices, so the same stride rule shifts any of them. Committing moves
- *  through this instead of walking raw arrays at every call site. */
-function shiftPoints(points: number[], dx: number, dy: number): number[] {
-	return points.map((v, i) => (i % 3 === 2 ? v : v + (i % 2 === 0 ? dx : dy)));
-}
-
 /** perfect-freehand emits a closed outline; Konva needs an explicit closing
  *  segment or the ink renders as an open sliver. */
 function inkPathLength(flat: number[]): number {
@@ -214,7 +228,7 @@ export function SketchPad({
 	const stageRef = useRef<Konva.Stage | null>(null);
 	const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
 	const [tool, setTool] = useState<Tool>("pen");
-	const [color, setColor] = useState(PALETTE[0]);
+	const [color, setColor] = useState(defaultInk);
 	const [size, setSize] = useState(4);
 	const [strokes, setStrokes] = useState<Stroke[]>([]);
 	const [past, setPast] = useState<Op[]>([]);
@@ -230,10 +244,36 @@ export function SketchPad({
 	/** 浅色底导出 (user request): dark-theme sketches export on white so
 	 *  shared/sent images stay readable outside the app. */
 	const [lightExport, setLightExport] = useState(false);
-	const [forceWhite, setForceWhite] = useState(false);
+	/** Non-null while a snapshot is in flight: the live board stays
+	 *  transparent (it reads as the same glass as the chrome around it),
+	 *  so every export paints its background on just for the shot. */
+	const [exportBg, setExportBg] = useState<string | null>(null);
+	/** The imported base image is not a stroke — it has no undo history —
+	 *  but clearing must still be able to remove it, or a re-opened board
+	 *  shows content whose only visible controls are disabled. */
+	const [baseCleared, setBaseCleared] = useState(false);
 	/** Select tool: the picked stroke renders a dashed frame, drag moves it. */
 	const [selectedId, setSelectedId] = useState<number | null>(null);
-	const moveRef = useRef<{ id: number; from: number[]; start: { x: number; y: number } } | null>(null);
+	/** Drag-translation state; `tool` rides along because the geometry
+	 *  helpers stride by tool. */
+	const moveRef = useRef<{
+		id: number;
+		tool: Stroke["tool"];
+		from: number[];
+		start: { x: number; y: number };
+	} | null>(null);
+	/** Scale drag state: a corner handle grabbed at (sx,sy), scaling `from`
+	 *  about the fixed anchor (ax,ay). Committed through the same move op as
+	 *  translation, so undo/redo need no new branch. */
+	const scaleRef = useRef<{
+		id: number;
+		tool: Stroke["tool"];
+		from: number[];
+		ax: number;
+		ay: number;
+		sx: number;
+		sy: number;
+	} | null>(null);
 	/** Text tool: where a tap planted the caret, and the label being typed.
 	 *  `null` means nothing is being edited, so no overlay is mounted. */
 	const [textEditor, setTextEditor] = useState<{ x: number; y: number; id: number | null } | null>(null);
@@ -348,13 +388,21 @@ export function SketchPad({
 	}, [future]);
 
 	const clearAll = useCallback((): void => {
+		// A re-opened board (editing an attachment) shows the imported base
+		// image with an empty stroke list — "clear" must still work there.
+		// It honestly offers no undo for pixels that were never recorded as
+		// strokes; re-mount the image to get it back.
+		if (strokes.length === 0 && (!baseImage || baseCleared)) return;
+		setBaseCleared(true);
 		setStrokes(prev => {
 			if (prev.length === 0) return prev;
 			setPast(p => [...p.slice(-99), { kind: "clear", strokes: prev }]);
 			setFuture([]);
 			return [];
 		});
-	}, []);
+		// An emptied board holds nothing worth a discard prompt.
+		setDirty(false);
+	}, [strokes, baseImage, baseCleared]);
 
 	/** Land whatever is in the caret, then close the overlay. Anything that
 	 *  dismisses the editor (blur, Escape, switching tools) has to route
@@ -434,6 +482,30 @@ export function SketchPad({
 			if (!stage || !pos) return;
 			if (tool === "select") {
 				const hit = stage.getIntersection(pos);
+				// Corner handles sit on their own listening layer above the
+				// strokes, so getIntersection already prefers them — this
+				// branch just has to run before the stroke pick below.
+				if (hit?.name() === "sk-handle" && selectedId !== null) {
+					const victim = strokes.find(s => s.id === selectedId);
+					if (victim && victim.tool !== "text") {
+						// The anchor is the corner opposite the grabbed handle,
+						// taken from the stroke's own extent (not the padded
+						// frame) so the content corner stays visually pinned
+						// while the stroke scales.
+						const ext = strokeExtent(victim);
+						const corner = String(hit.getAttr("corner"));
+						scaleRef.current = {
+							id: victim.id,
+							tool: victim.tool,
+							from: [...victim.points],
+							ax: corner.includes("w") ? ext.x + ext.w : ext.x,
+							ay: corner.includes("n") ? ext.y + ext.h : ext.y,
+							sx: pos.x,
+							sy: pos.y,
+						};
+					}
+					return;
+				}
 				const id = Number(hit?.name() === "sk-stroke" ? hit.id() : NaN);
 				if (Number.isNaN(id)) {
 					setSelectedId(null);
@@ -452,7 +524,7 @@ export function SketchPad({
 				}
 				setSelectedId(id);
 				if (victim) {
-					moveRef.current = { id, from: victim.points, start: pos };
+					moveRef.current = { id, tool: victim.tool, from: victim.points, start: pos };
 				}
 				return;
 			}
@@ -485,7 +557,7 @@ export function SketchPad({
 			drawRef.current = stroke;
 			setPreview(stroke);
 		},
-		[tool, color, size, dropStroke, strokes, textEditor, closeTextEditor],
+		[tool, color, size, dropStroke, strokes, selectedId, textEditor, closeTextEditor],
 	);
 
 	const onPointerMove = useCallback(
@@ -496,11 +568,27 @@ export function SketchPad({
 			const pos = stage.getPointerPosition();
 			if (!pos) return;
 			if (tool === "select") {
+				const sc = scaleRef.current;
+				if (sc) {
+					// Factor = pointer-to-anchor distance ratio. A grab that
+					// started on top of the anchor (<2px away) would divide by
+					// ~0, so it holds scale 1 until the pointer moves off.
+					const d0 = Math.hypot(sc.sx - sc.ax, sc.sy - sc.ay);
+					const factor = d0 < MIN_DRAG ? 1 : Math.hypot(pos.x - sc.ax, pos.y - sc.ay) / d0;
+					setStrokes(prev =>
+						prev.map(s =>
+							s.id === sc.id ? { ...s, points: scalePoints(sc.tool, sc.from, sc.ax, sc.ay, factor) } : s,
+						),
+					);
+					return;
+				}
 				const mv = moveRef.current;
 				if (!mv) return;
 				setStrokes(prev =>
 					prev.map(s =>
-						s.id === mv.id ? { ...s, points: shiftPoints(mv.from, pos.x - mv.start.x, pos.y - mv.start.y) } : s,
+						s.id === mv.id
+							? { ...s, points: shiftPoints(mv.tool, mv.from, pos.x - mv.start.x, pos.y - mv.start.y) }
+							: s,
 					),
 				);
 				return;
@@ -535,6 +623,13 @@ export function SketchPad({
 
 	const onPointerUp = useCallback((): void => {
 		erasingRef.current = false;
+		const sc = scaleRef.current;
+		if (sc) {
+			scaleRef.current = null;
+			const after = strokes.find(s => s.id === sc.id)?.points;
+			if (after && after !== sc.from) commitMove(sc.id, sc.from, after);
+			return;
+		}
 		const mv = moveRef.current;
 		if (mv) {
 			moveRef.current = null;
@@ -565,17 +660,17 @@ export function SketchPad({
 		// then hand the PNG over (the composer adds the chip as the veil
 		// unmounts — the two halves of the Codex zoom animation).
 		void (async () => {
-			if (lightExport && bg !== "#ffffff") {
-				// Light-background export: paint the canvas rect white for the
-				// snapshot, wait a frame for React to apply it, then restore.
-				setForceWhite(true);
-				await new Promise(resolve => setTimeout(resolve, 80));
-				const url = stage.toDataURL({ pixelRatio: 2 });
-				setForceWhite(false);
-				onDone(url);
-				return;
-			}
-			onDone(stage.toDataURL({ pixelRatio: 2 }));
+			// The live canvas is transparent (the board's glass shows
+			// through, so the drawing surface and its chrome read as one
+			// material instead of two slabs of different grey). Every
+			// snapshot therefore paints its background on for the shot —
+			// white under the light-export toggle, else the theme colour —
+			// waits a frame for React to apply it, then restores.
+			setExportBg(lightExport ? "#ffffff" : bg);
+			await new Promise(resolve => setTimeout(resolve, 80));
+			const url = stage.toDataURL({ pixelRatio: 2 });
+			setExportBg(null);
+			onDone(url);
 		})();
 	};
 
@@ -675,6 +770,8 @@ export function SketchPad({
 	}, []);
 
 	const bg = themeCanvasColor();
+	// Selection chrome paints on the canvas, where CSS vars don't resolve.
+	const accent = themeAccentColor();
 	const canUndo = past.length > 0;
 	const canRedo = future.length > 0;
 	const selected = selectedId === null ? undefined : strokes.find(s => s.id === selectedId);
@@ -777,7 +874,7 @@ export function SketchPad({
 						className="gui-sketch-tool"
 						title={t("sketch clear")}
 						aria-label={t("sketch clear")}
-						disabled={strokes.length === 0}
+						disabled={!strokes.length && (!baseImage || baseCleared)}
 						onClick={clearAll}
 					>
 						<Trash2 size={14} />
@@ -828,14 +925,8 @@ export function SketchPad({
 								}}
 							>
 								<Layer listening={false}>
-									<Rect
-										x={0}
-										y={0}
-										width={stageSize.w}
-										height={stageSize.h}
-										fill={forceWhite ? "#ffffff" : bg}
-									/>
-									{baseImage && (
+									{exportBg && <Rect x={0} y={0} width={stageSize.w} height={stageSize.h} fill={exportBg} />}
+									{baseImage && !baseCleared && (
 										<KonvaImage {...fitImage(baseImage, stageSize.w, stageSize.h)} image={baseImage} />
 									)}
 								</Layer>
@@ -850,13 +941,43 @@ export function SketchPad({
 											y={box.y}
 											width={box.w}
 											height={box.h}
-											stroke="var(--accent)"
+											stroke={accent}
 											strokeWidth={1.5}
 											dash={[6, 4]}
 											cornerRadius={4}
 											perfectDrawEnabled={false}
 										/>
 									)}
+								</Layer>
+								{/* Scale handles live on their own listening layer: the
+								 *  dashed frame's layer is listener-less by design, and a
+								 *  node that cannot be hit cannot be dragged. Text labels
+								 *  resize through their caret, so they get no handles. */}
+								<Layer>
+									{box &&
+										selected?.tool !== "text" &&
+										(
+											[
+												["nw", box.x, box.y],
+												["ne", box.x + box.w, box.y],
+												["sw", box.x, box.y + box.h],
+												["se", box.x + box.w, box.y + box.h],
+											] as const
+										).map(([corner, hx, hy]) => (
+											<Rect
+												key={corner}
+												name="sk-handle"
+												corner={corner}
+												x={hx - 4}
+												y={hy - 4}
+												width={8}
+												height={8}
+												fill="#ffffff"
+												stroke={accent}
+												strokeWidth={1}
+												perfectDrawEnabled={false}
+											/>
+										))}
 								</Layer>
 							</Stage>
 						)}

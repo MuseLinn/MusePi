@@ -6,8 +6,11 @@ import {
 	heartPoints,
 	isDegenerateDrag,
 	outlinePoints,
+	scalePoints,
+	shiftPoints,
 	starOuterPoints,
 	strokeBox,
+	strokeExtent,
 	textFontSize,
 	textLabelBox,
 } from "../src/lib/sketch-geometry";
@@ -318,5 +321,104 @@ describe("hasVisibleExtent", () => {
 
 	it("accepts real text", () => {
 		expect(hasVisibleExtent({ tool: "text", points: [12, 40] })).toBe(true);
+	});
+});
+
+describe("strokeExtent", () => {
+	it("measures a shape from its two corners", () => {
+		expect(strokeExtent({ tool: "rect", points: [10, 20, 70, 50] })).toEqual({ x: 10, y: 20, w: 60, h: 30 });
+	});
+
+	it("normalizes reversed corners", () => {
+		expect(strokeExtent({ tool: "rect", points: [70, 50, 10, 20] })).toEqual({ x: 10, y: 20, w: 60, h: 30 });
+	});
+
+	it("walks pen triplets, skipping pressure", () => {
+		const e = strokeExtent({ tool: "pen", points: [0, 0, 0.5, 30, 40, 0.5, 10, 100, 0.9] });
+		expect(e).toEqual({ x: 0, y: 0, w: 30, h: 100 });
+	});
+
+	it("gives text a zero-size box at its anchor", () => {
+		// The label extent is strokeBox's concern; extent stays the pure
+		// coordinate box that scale handles anchor against.
+		expect(strokeExtent({ tool: "text", points: [20, 30] })).toEqual({ x: 20, y: 30, w: 0, h: 0 });
+	});
+});
+
+describe("shiftPoints", () => {
+	it("moves a shape box", () => {
+		expect(shiftPoints("rect", [10, 20, 70, 50], 5, -3)).toEqual([15, 17, 75, 47]);
+	});
+
+	it("moves a text anchor", () => {
+		expect(shiftPoints("text", [20, 30], -12, 8)).toEqual([8, 38]);
+	});
+
+	it("moves pen coordinates by their own axis and passes pressure through", () => {
+		// Regression lock: the pre-2026-09-19 inline formula shifted pen
+		// points with an `i % 2` parity rule, so x-slots took dy and y-slots
+		// took dx (index 3 is an x but odd, index 4 is a y but even) — every
+		// diagonal drag sheared the ink. Both axes must move by their own
+		// delta and every pressure slot must survive untouched.
+		expect(shiftPoints("pen", [0, 0, 0.5, 30, 40, 0.9], 10, 100)).toEqual([10, 100, 0.5, 40, 140, 0.9]);
+	});
+
+	it("does not mutate the input array", () => {
+		// The component keeps `from` around for the undo op; an in-place
+		// shift would corrupt the recorded origin.
+		const src = [10, 20, 70, 50];
+		shiftPoints("rect", src, 5, 5);
+		expect(src).toEqual([10, 20, 70, 50]);
+	});
+});
+
+describe("scalePoints", () => {
+	it("is the identity at factor 1", () => {
+		expect(scalePoints("rect", [10, 20, 70, 50], 0, 0, 1)).toEqual([10, 20, 70, 50]);
+	});
+
+	it("doubles distances from the anchor", () => {
+		expect(scalePoints("rect", [10, 20, 70, 50], 0, 0, 2)).toEqual([20, 40, 140, 100]);
+	});
+
+	it("halves distances from the anchor", () => {
+		expect(scalePoints("rect", [10, 20, 70, 50], 0, 0, 0.5)).toEqual([5, 10, 35, 25]);
+	});
+
+	it("keeps the anchor itself pinned", () => {
+		// Anchor sits on the shape's corner: scaling away from it must leave
+		// that corner exactly where it was — that is the handle contract.
+		const out = scalePoints("rect", [10, 20, 70, 50], 10, 20, 3);
+		expect(out[0]).toBe(10);
+		expect(out[1]).toBe(20);
+		expect(out[2]).toBe(190);
+		expect(out[3]).toBe(110);
+	});
+
+	it("scales toward the anchor when points sit above-left of it", () => {
+		// Negative offsets are the common case (anchor = bottom-right of the
+		// selection, content up-left of it) — the sign must survive the
+		// affine transform.
+		expect(scalePoints("rect", [0, 0, 10, 10], 100, 100, 2)).toEqual([-100, -100, -80, -80]);
+	});
+
+	it("scales pen coordinates and passes pressure through", () => {
+		expect(scalePoints("pen", [10, 10, 0.5, 30, 40, 0.9], 10, 10, 2)).toEqual([10, 10, 0.5, 50, 70, 0.9]);
+	});
+
+	it("scales a text anchor", () => {
+		expect(scalePoints("text", [20, 30], 0, 0, 2)).toEqual([40, 60]);
+	});
+
+	it("clamps a runaway factor from above", () => {
+		const out = scalePoints("rect", [10, 20, 70, 50], 0, 0, 1000);
+		expect(out[0]).toBe(10 * 40);
+	});
+
+	it("clamps a collapsing factor from below", () => {
+		// Below 0.05 every shape folds onto its anchor and becomes an
+		// un-clickable dot; the floor holds instead.
+		const out = scalePoints("rect", [10, 20, 70, 50], 0, 0, 0.0001);
+		expect(out[0]).toBeCloseTo(10 * 0.05);
 	});
 });

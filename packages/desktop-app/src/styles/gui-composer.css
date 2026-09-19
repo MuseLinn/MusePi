@@ -1878,6 +1878,11 @@
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--border);
 	background: var(--glass-bg, transparent);
+	/* Above the body (also z-index 1, but a later sibling — it would
+	 * otherwise paint over this bar's descendants): without this, the
+	 * shape flyout's overhang into the canvas area is clipped by the
+	 * canvas stacking on top of it. */
+	z-index: 2;
 }
 
 .gui-sketch-toolbar-sep {
