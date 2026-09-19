@@ -18,7 +18,6 @@ import {
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
-import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
@@ -33,6 +32,7 @@ import {
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
+import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
@@ -75,16 +75,9 @@ import { PetSprite, usePet } from "./PetSprite";
 import { SketchPad } from "./SketchPad";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
-/** Design style chips (设计稿 08): baseline presets the design-mode
- *  composer offers. Labels are i18n keys; picking one writes the
- *  brief-update sentence into the composer (edit & send). */
-const DESIGN_STYLES = [
-	{ id: "minimal", labelKey: "design style minimal" },
-	{ id: "glass", labelKey: "design style glass" },
-	{ id: "editorial", labelKey: "design style editorial" },
-	{ id: "neubrutalism", labelKey: "design style neubrutalism" },
-	{ id: "darkneon", labelKey: "design style darkneon" },
-] as const;
+// Design style chips (设计稿 08) live in composer/design-styles.tsx —
+// shared with the welcome empty-state composer (same chips, same
+// brief-update protocol).
 
 export type {
 	UsageActiveAccountView,
@@ -1709,9 +1702,21 @@ export function Composer({
 				// what is being typed).
 				chatInput
 				pet={
-					pet.enabled && pet.mode === "input" ? (
-						<PetSprite mood={petMood ?? "rest"} pet={pet.pet} size={30} />
-					) : null
+					pet.enabled && pet.mode === "input"
+						? ({ hovered, hopping }) => (
+								// Poking the pet is a local, momentary override of the
+								// agent-derived mood: it never touches the session state,
+								// and it always falls back to the real mood on release.
+								// `size` is only the engine's authoring scale — the docked
+								// footprint comes from `.gui-composer-pet`'s container
+								// clamp, so the face never falls below legibility.
+								<PetSprite
+									mood={hopping ? "dragging" : hovered ? "hover" : (petMood ?? "rest")}
+									pet={pet.pet}
+									size={30}
+								/>
+							)
+						: null
 				}
 				// Agent-working glow (user: welcome shows the beam on focus,
 				// the session composer shows it while the agent works).
@@ -1735,31 +1740,7 @@ export function Composer({
 							/* Design-session style chips (设计稿 08 composer 风格选择):
 							 * pick a style baseline → the brief-update text lands in
 							 * the composer for the user to edit & send. */
-							<div className="gui-design-chips">
-								<span className="gui-design-chips-label">
-									<Icon name="palette" className="h-3 w-3" />
-									{t("design style")}
-								</span>
-								<button
-									type="button"
-									className={`gui-design-chip${designStyle === null ? " gui-design-chip--on" : ""}`}
-									title={t("design style hint")}
-									onClick={() => pickDesignStyle(null)}
-								>
-									{t("design style inherit")}
-								</button>
-								{DESIGN_STYLES.map(s => (
-									<button
-										key={s.id}
-										type="button"
-										className={`gui-design-chip${designStyle === s.id ? " gui-design-chip--on" : ""}`}
-										title={t("design style hint")}
-										onClick={() => pickDesignStyle(s.id)}
-									>
-										{t(s.labelKey)}
-									</button>
-								))}
-							</div>
+							<DesignStyleChips selected={designStyle} onPick={pickDesignStyle} />
 						)}
 						{composerDockItems.length > 0 ||
 						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||

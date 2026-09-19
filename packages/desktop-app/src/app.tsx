@@ -148,6 +148,9 @@ interface SessionMetaRow {
 	 *  complete | interrupted | aborted | error | pending. Powers the
 	 *  sidebar's colored status square so unfinished history is visible. */
 	status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
+	/** 会话预设(mode)id（work/chat/creator/design…）— 侧栏悬浮卡的模式行；
+	 *  undefined = 未设预设（守护进程 modeId 为 null 的历史会话）。 */
+	modeId?: string;
 }
 
 /** Collect every session id in a session tree (drift check for the poll:
@@ -923,6 +926,7 @@ function AppInner(): ReactNode {
 									timestamp: r.timestamp,
 									updatedAt: r.updatedAt,
 									status: r.status,
+									modeId: r.modeId,
 								},
 							]),
 						),
@@ -954,7 +958,14 @@ function AppInner(): ReactNode {
 					if (!alive) return;
 					const list = rows ?? [];
 					const key = JSON.stringify(
-						list.map(r => [r.id, r.working === true, r.live === true, r.messageCount ?? 0, r.paused === true]),
+						list.map(r => [
+							r.id,
+							r.working === true,
+							r.live === true,
+							r.messageCount ?? 0,
+							r.paused === true,
+							r.modeId,
+						]),
 					);
 					if (key === lastKey) return;
 					lastKey = key;
@@ -972,6 +983,7 @@ function AppInner(): ReactNode {
 								timestamp: r.timestamp ?? row.timestamp,
 								updatedAt: r.updatedAt ?? row.updatedAt,
 								cwd: r.cwd ?? row.cwd,
+								modeId: r.modeId ?? row.modeId,
 							});
 						}
 						return next;

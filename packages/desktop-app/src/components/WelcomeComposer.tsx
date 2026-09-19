@@ -40,6 +40,7 @@ import {
 	type UsageUnreportedAccountView,
 } from "./Composer";
 import { VoiceButton } from "./composer/action-buttons";
+import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -801,6 +802,27 @@ export function WelcomeComposer({
 	}, [text]);
 	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy;
 
+	// ── Design empty state (设计稿 08): preset armed to "design" ──────────
+	// The welcome composer mirrors the session composer's design chips: pick
+	// a style baseline → the brief-update sentence lands in the input for
+	// the user to edit & send, and the placeholder switches to a design-
+	// specific hint instead of the rotating capability tips.
+	const isDesignArmed = activeModeId === "design";
+	const [designStyle, setDesignStyle] = useState<string | null>(null);
+	const pickDesignStyle = useCallback(
+		(id: string | null): void => {
+			setDesignStyle(id);
+			if (!id) return;
+			const style = DESIGN_STYLES.find(s => s.id === id);
+			if (!style) return;
+			const sentence = t("design style brief update {style}", { style: t(style.labelKey) });
+			setText(prev => (prev && prev.trim().length > 0 ? `${prev.trimEnd()}\n${sentence}` : sentence));
+			requestAnimationFrame(() => autosize(taRef.current));
+			taRef.current?.focus();
+		},
+		[setText],
+	);
+
 	// Completion triggers (composer parity): a / @ # that is not glued to ASCII
 	// word characters opens the floating preview lists; Enter/click inserts the
 	// token. The rule is shared with the session composer (lib/completion-trigger)
@@ -1515,6 +1537,11 @@ export function WelcomeComposer({
 						onFocus={() => setBeamOn(true)}
 						onBlur={() => setBeamOn(false)}
 					>
+						{isDesignArmed && (
+							/* Design preset armed (设计稿 08 空态): the same style
+							 * chips the session composer shows, above the input. */
+							<DesignStyleChips selected={designStyle} onPick={pickDesignStyle} />
+						)}
 						<ComposerFrame
 							className="gui-welcome-input"
 							hero
@@ -1522,7 +1549,15 @@ export function WelcomeComposer({
 							chatInput
 							flipAnchor="welcome"
 							pet={
-								pet.enabled && pet.mode === "input" ? <PetSprite mood="rest" pet={pet.pet} size={34} /> : null
+								pet.enabled && pet.mode === "input"
+									? ({ hovered, hopping }) => (
+											<PetSprite
+												mood={hopping ? "dragging" : hovered ? "hover" : "rest"}
+												pet={pet.pet}
+												size={34}
+											/>
+										)
+									: null
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
@@ -1956,7 +1991,7 @@ export function WelcomeComposer({
 											submit(e as unknown as FormEvent<HTMLFormElement>);
 										}
 									}}
-									placeholder={t(PLACEHOLDER_TIPS[tipIdx]!)}
+									placeholder={isDesignArmed ? t("design empty placeholder") : t(PLACEHOLDER_TIPS[tipIdx]!)}
 									spellCheck={(() => {
 										try {
 											return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";

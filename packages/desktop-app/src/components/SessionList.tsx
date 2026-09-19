@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { memo } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
+import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
 import { flattenTree, sessionSortKey, sortSessionTree } from "./session-list-shared";
 
 /**
@@ -212,6 +213,8 @@ const SessionRow = memo(function SessionRow({
 				className={`gui-session-row${selected ? " gui-session-row-active" : ""}${unread ? " gui-session-row--unread" : ""}`}
 				onClick={() => {
 					tapFeedback();
+					// 点开即收卡:行位置随排序/状态变化,卡片锚点已失效。
+					clearSessionHover();
 					onSelect(id);
 				}}
 				onContextMenu={e => {
@@ -219,7 +222,17 @@ const SessionRow = memo(function SessionRow({
 					e.stopPropagation();
 					onContextMenu?.(id, e.clientX, e.clientY);
 				}}
-				title={parentLabel ? `${t("forked from")}: ${parentLabel} · ${id}` : label}
+				onMouseEnter={e =>
+					reportSessionHover({
+						id,
+						label,
+						parentLabel,
+						timestamp,
+						updatedAt,
+						anchor: e.currentTarget.getBoundingClientRect(),
+					})
+				}
+				onMouseLeave={clearSessionHover}
 				{...(untitled ? { "data-untitled": "1" } : {})}
 				draggable
 				onDragStart={e => {

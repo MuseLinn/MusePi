@@ -34,6 +34,10 @@ export interface MaterializedRow {
 	messageCount: number;
 	/** Fork source session (session-tree parent); null for roots. */
 	parentId: string | null;
+	/** 会话预设(mode)id — 持久化自快照 header（persistHeaderPatch 落盘），
+	 *  live 会话在 knownSessions 里以内存值为权威覆盖。侧栏悬浮卡的
+	 *  模式行消费；null = 未设预设。 */
+	modeId: string | null;
 }
 
 export interface MessageHit {
@@ -54,6 +58,7 @@ interface SessionRow {
 	model: string | null;
 	message_count: number;
 	parent_id: string | null;
+	mode_id: string | null;
 }
 
 interface MessageRow {
@@ -114,6 +119,11 @@ export class ViewStore {
 		const cols = this.#db.query("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
 		if (!cols.some(c => c.name === "parent_id")) {
 			this.#db.run("ALTER TABLE sessions ADD COLUMN parent_id TEXT");
+		}
+		// Old databases lack mode_id (session preset id from the snapshot
+		// header) — same idempotent path.
+		if (!cols.some(c => c.name === "mode_id")) {
+			this.#db.run("ALTER TABLE sessions ADD COLUMN mode_id TEXT");
 		}
 		this.#db.run(`
 			CREATE TABLE IF NOT EXISTS messages (
@@ -190,16 +200,32 @@ export class ViewStore {
 			}
 			this.#db
 				.query(
-					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id, mode_id)
+					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 					 ON CONFLICT(session_id) DO UPDATE SET
 					   cursor = excluded.cursor,
 					   updated_at = excluded.updated_at,
 					   cwd = excluded.cwd,
 					   model = excluded.model,
-					   message_count = excluded.message_count`,
+					   message_count = excluded.message_count,
+					   parent_id = excluded.parent_id,
+					   mode_id = excluded.mode_id`,
 				)
-				.run(sessionId, snapshot.cursor, createdAt, lastActivity, state?.cwd ?? "", model, messageCount, parentId);
+				.run(
+					sessionId,
+					snapshot.cursor,
+					createdAt,
+					lastActivity,
+					state?.cwd ?? "",
+					model,
+					messageCount,
+					parentId,
+					// Session preset id rides the snapshot header (create/setMode
+					// write it via persistHeaderPatch); null = no preset armed.
+					(typeof snapshot.header === "object" && snapshot.header
+						? ((snapshot.header as { modeId?: unknown }).modeId ?? null)
+						: null) as string | null,
+				);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
 			let seq = 0;
@@ -261,6 +287,7 @@ export class ViewStore {
 			model: r.model,
 			messageCount: r.message_count,
 			parentId: r.parent_id ?? null,
+			modeId: r.mode_id ?? null,
 		}));
 	}
 

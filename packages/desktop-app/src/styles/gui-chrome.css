@@ -435,6 +435,116 @@
 	color: var(--color-text-faint);
 }
 
+/* ── Session hover card (WorkBuddy 悬浮弹窗 parity + 我们的 mode 行) ──
+ * Fixed tooltip-grade card floating right of the hovered session row
+ * (SessionHoverCard.tsx portals it to document.body — the sidebar's
+ * glass/transform ancestors would hijack fixed positioning). Two-phase
+ * enter like .gui-menu-popup: base paints at opacity 0 so the frosted
+ * backdrop composites before the transform-only entrance — animating
+ * opacity on a backdrop-filter surface reads as plain translucency. */
+.gui-session-hover-card {
+	position: fixed;
+	/* Above chat content, below dialog backdrops (3000) / menus (4100). */
+	z-index: 2600;
+	width: 288px;
+	padding: 12px 14px 10px;
+	border-radius: var(--radius-lg);
+	opacity: 0;
+	pointer-events: none;
+	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		0 0 0 1px rgba(0, 0, 0, 0.36),
+		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
+		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
+		0 6px 6px -3px rgba(0, 0, 0, 0.16),
+		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.gui-session-hover-card--entered {
+	opacity: 1;
+	animation: gui-hover-card-in 160ms var(--spring);
+}
+
+@keyframes gui-hover-card-in {
+	from {
+		transform: translateX(-6px);
+	}
+	to {
+		transform: translateX(0);
+	}
+}
+
+.gui-session-hover-card-title {
+	font-size: var(--ui-font-size);
+	font-weight: 600;
+	line-height: 1.45;
+	color: var(--color-text);
+	/* Two-line clamp (WorkBuddy card parity): long titles truncate with an
+	 * ellipsis instead of blowing the card's height budget. */
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	margin-bottom: 8px;
+}
+
+.gui-session-hover-card-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 3px 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-muted);
+}
+
+.gui-session-hover-card-icon {
+	flex: none;
+	width: 12px;
+	height: 12px;
+	opacity: 0.75;
+}
+
+.gui-session-hover-card-icon--ghost {
+	opacity: 0.4;
+}
+
+.gui-session-hover-card-label {
+	flex: none;
+	color: var(--color-text-faint);
+}
+
+.gui-session-hover-card-text {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text);
+}
+
+/* Mode row — the one row that is ours beyond the WorkBuddy reference:
+ * accent-tinted chip so the session's preset reads at a glance. */
+.gui-session-hover-card-mode {
+	width: fit-content;
+	margin: 2px 0 1px;
+	padding: 3px 8px;
+	gap: 5px;
+	border-radius: var(--radius-xs);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-session-hover-card-mode .gui-session-hover-card-text {
+	color: var(--color-accent);
+}
+
 .gui-session-meta {
 	font-size: var(--ui-font-size-xs);
 	color: var(--color-text-muted);

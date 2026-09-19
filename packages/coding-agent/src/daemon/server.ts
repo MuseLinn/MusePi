@@ -2499,6 +2499,9 @@ export class DaemonSessionHost {
 				cwd: h.cwd,
 				model: null,
 				messageCount: h.messageCount,
+				// SDK transcripts never carried a preset header until the
+				// GUI chips landed — no mode to report for these.
+				modeId: null,
 				// SDK transcripts record forks under header.parentSession
 				// (a session-file path) — derive the parent's id so the tree
 				// renders branch structure (OMP /tree). Session files are
@@ -2524,6 +2527,10 @@ export class DaemonSessionHost {
 			if (!s) continue;
 			const name = s.agentSession.sessionManager.getSessionName();
 			if (name) row.title = name;
+			// Live preset wins: the in-memory modeId is what session.modes
+			// reports, so the sidebar's hover card can never disagree with
+			// the composer chips. The store column covers idle sessions.
+			if (s.modeId) row.modeId = s.modeId;
 		}
 		// Persisted rows win on cursor (authoritative for history); live-only
 		// sessions (pre-first-persist) fall back to the in-memory view.
@@ -3946,6 +3953,8 @@ export class DaemonServer {
 						model: r.model ?? undefined,
 						messageCount: r.messageCount,
 						cwd: r.cwd || undefined,
+						// 会话预设 id（null = 未设预设）：侧栏悬浮卡的模式行。
+						modeId: r.modeId ?? undefined,
 						paused: live?.pauseGate.paused === true,
 						// Real-time status (kimi 实时提醒 parity): `working` = a
 						// live session with a running agent turn (the materialized

@@ -113,6 +113,7 @@ export const composer = {
 	"design style darkneon": "暗黑霓虹",
 	"design style hint": "把风格基准写入设计简报，发送后由 agent 沿用",
 	"design style brief update {style}": "请把设计简报的风格基准调整为「{style}」，其余简报保持不变。",
+	"design empty placeholder": "描述你想设计的界面、风格与情绪，/ 可用命令…",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

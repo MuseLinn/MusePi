@@ -142,6 +142,7 @@ export const general = {
 	"mode chat": "Chat mode",
 	"mode creator": "Creator mode",
 	"mode design": "Design mode",
+	"session workspace": "Workspace",
 	"goal status active": "active",
 	"goal status paused": "paused",
 	"goal status complete": "complete",

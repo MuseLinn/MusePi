@@ -11,6 +11,7 @@ import { type CustomGroup, CustomGroups } from "./CustomGroups";
 import { GroupedSessionList } from "./GroupedSessionList";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
+import { SessionHoverCard } from "./SessionHoverCard";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
@@ -81,6 +82,8 @@ export function SessionSidebar({
 			paused?: boolean;
 			working?: boolean;
 			status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
+			/** 会话预设 id — 悬浮卡的模式行(app 侧 SessionMetaRow 的子集)。 */
+			modeId?: string;
 		}
 	>;
 	selectedId: string | null;
@@ -1380,6 +1383,11 @@ export function SessionSidebar({
 						: []
 				}
 			/>
+			{/* Session hover card — one instance for the whole sidebar; rows
+			 *  report through the module bus (SessionHoverCard.tsx), the card
+			 *  portals to document.body so the sidebar's glass/transform
+			 *  ancestors can't hijack its fixed positioning. */}
+			<SessionHoverCard meta={sessionMeta} />
 		</aside>
 	);
 }

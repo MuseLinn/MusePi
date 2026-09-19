@@ -145,6 +145,25 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.list().find(r => r.sessionId === "s2")!.updatedAt).toBe(Date.parse("2026-08-02T00:00:00.000Z"));
 	});
 
+	test("mode_id round-trips through upsert/list and syncs on re-persist", () => {
+		const store = tempStore();
+		// Historical session without a preset → null (the GUI hover card hides
+		// nothing — it falls back to the default-mode label).
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "x", timestamp: 1 }], 1));
+		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBeNull();
+		// Preset id is read off the snapshot header (cast — the SDK header type
+		// predates the field, mirroring view-store.ts's own read).
+		const withMode = snapshot("s2", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(withMode.header as { modeId?: string }).modeId = "design";
+		store.upsert("s2", withMode);
+		expect(store.list().find(r => r.sessionId === "s2")!.modeId).toBe("design");
+		// Switching presets re-persists the snapshot → the column must follow
+		// (ON CONFLICT update), not stick at the first value.
+		(withMode.header as { modeId?: string }).modeId = "work";
+		store.upsert("s2", withMode);
+		expect(store.list().find(r => r.sessionId === "s2")!.modeId).toBe("work");
+	});
+
 	test("search matches message text across sessions, newest first", () => {
 		const store = tempStore();
 		const now = Date.now();

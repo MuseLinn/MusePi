@@ -116,4 +116,5 @@ export const composer = {
 	"design style hint": "Writes the style baseline into the design brief — send and the agent keeps it",
 	"design style brief update {style}":
 		'Please update the design brief\'s style baseline to "{style}" and keep the rest of the brief unchanged.',
+	"design empty placeholder": "Describe the interface, style and mood you want to design…",
 } as const satisfies Record<ComposerKey, string>;

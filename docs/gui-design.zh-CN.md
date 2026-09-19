@@ -263,6 +263,11 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **右侧面板最大化**是模态:遮罩(z-840,自 48px 头栏之下起,点击还原)垫在 z-850 面板之后——浮动 fixed 层(浮层滚动条、tooltip)必须低于遮罩层,否则会被读成面板内容。
 - **Git 图谱表格**(提交历史子标签):车道求解 SVG 图轨 + 徽章(HEAD=home/强调色,本地分支=branch,远端=cloud/弱化,tag=琥珀) + 日期/作者/哈希列;点击哈希复制,1.2s 反馈。会话级 i18n key 在 settings 域(`subject/date/author/commit column`、`load more`)。
 
+## 5i. 会话悬浮卡与 design 空态(2026-09-19)
+
+- **会话悬浮卡**(WorkBuddy 悬浮弹窗对齐 + 我们的 mode 行):行上悬浮 ~350ms 在行右侧浮出 288px 磨砂卡——标题(2 行截断)、fork 来源、**模式 chip**(accent 着色,`mode {id}` 命名链未知预设回落默认模式,与 ContextPanel 同规)、任务工作空间(cwd basename,title 全路径)、最后活跃 + 创建时间。架构:行经**模块级 bus**(`SessionHoverCard.tsx` 的 `reportSessionHover`/`clearSessionHover`)上报——不给 memo 化的 `SessionRow` 加任何 props;卡片(每侧栏一实例)从 `sessionMeta` 现查 cwd/modeId 并 **portal 到 document.body**(侧栏的玻璃/transform 祖先会劫持 fixed 定位)。卡片取代行原生 `title` 气泡。两阶段入场(opacity 经 `--entered` 翻转、动画只动 transform)遵守 `.gui-menu-popup` 的 backdrop 规则;滚动(capture)/点击行/离行即收,跨行移动有 120ms 宽限。
+- **design 预设空态**(设计稿 08 欢迎页对齐):design 预设 armed 时欢迎页输入框与会话 composer 同款——同一行风格 chips(`composer/design-styles.tsx`,共享 `DesignStyleChips` + `DESIGN_STYLES`)渲染在输入卡上方,点风格即写入 `design style brief update {style}` 句;placeholder 切为 `design empty placeholder`,不再轮播能力提示。模式 chip 背后的数据链:daemon `session.modes`/header → view-store `mode_id` 列(幂等迁移)→ `session.list` → app `sessionMeta` → 悬浮卡。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

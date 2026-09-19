@@ -140,6 +140,7 @@ export const general = {
 	"mode chat": "对话模式",
 	"mode creator": "创作模式",
 	"mode design": "设计模式",
+	"session workspace": "任务工作空间",
 	"goal status active": "进行中",
 	"goal status paused": "已暂停",
 	"goal status complete": "已完成",
