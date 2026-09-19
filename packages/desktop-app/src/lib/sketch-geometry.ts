@@ -18,8 +18,10 @@
 /** Tools that draw a drag-rectangle shape (4-number points) rather than ink. */
 export type ShapeTool = "line" | "arrow" | "rect" | "ellipse" | "diamond" | "triangle" | "star" | "heart";
 
-/** Every tool the board can arm. `eraser` and `select` are gestures, not shapes. */
-export type Tool = "select" | "pen" | "eraser" | "text" | ShapeTool;
+/** Every tool the board can arm. `eraser` and `select` are gestures, not shapes.
+ *  `image` is the imported base picture: it rides in `strokes` like any other
+ *  object so eraser / clear / undo / scale handles all apply to it. */
+export type Tool = "select" | "pen" | "eraser" | "text" | "image" | ShapeTool;
 
 export interface Rect {
 	x: number;
@@ -161,6 +163,12 @@ export function strokeExtent(s: { tool: Tool; points: readonly number[] }): Rect
 	if (s.tool === "text") {
 		return { x: s.points[0], y: s.points[1], w: 0, h: 0 };
 	}
+	// An image stores its own box: [x, y, width, height]. The width/height are
+	// lengths, not a second corner, so they must not go through the min/max
+	// normalization the shape branch applies.
+	if (s.tool === "image") {
+		return { x: s.points[0], y: s.points[1], w: s.points[2], h: s.points[3] };
+	}
 	if (s.tool === "pen") {
 		// Flat [x,y,pressure,…] triplets; pressure is skipped.
 		let minX = Number.POSITIVE_INFINITY;
@@ -202,6 +210,10 @@ export function shiftPoints(tool: Tool, points: readonly number[], dx: number, d
 	if (tool === "text") {
 		return [points[0] + dx, points[1] + dy];
 	}
+	// Only the box's origin moves; width/height are lengths.
+	if (tool === "image") {
+		return [points[0] + dx, points[1] + dy, points[2], points[3]];
+	}
 	return [points[0] + dx, points[1] + dy, points[2] + dx, points[3] + dy];
 }
 
@@ -234,6 +246,12 @@ export function scalePoints(tool: Tool, points: readonly number[], ax: number, a
 	if (tool === "text") {
 		return [ax + (points[0] - ax) * f, ay + (points[1] - ay) * f];
 	}
+	if (tool === "image") {
+		// Same affine walk for the origin; the side lengths scale by the raw
+		// factor (they are not distances from the anchor, so they must not be
+		// measured against it).
+		return [ax + (points[0] - ax) * f, ay + (points[1] - ay) * f, points[2] * f, points[3] * f];
+	}
 	return [ax + (points[0] - ax) * f, ay + (points[1] - ay) * f, ax + (points[2] - ax) * f, ay + (points[3] - ay) * f];
 }
 
@@ -249,6 +267,11 @@ export function strokeBox(s: { tool: Tool; size: number; points: readonly number
 		const { w, h } = textLabelBox(s.size, text);
 		return { x: s.points[0] - pad, y: s.points[1] - pad, w: w + pad * 2, h: h + pad * 2 };
 	}
+	// The picture already is a rectangle: padding it would float the dashed
+	// frame (and its handles) away from the edges the user wants to grab.
+	if (s.tool === "image") {
+		return { x: s.points[0], y: s.points[1], w: s.points[2], h: s.points[3] };
+	}
 	const e = strokeExtent(s);
 	return { x: e.x - pad, y: e.y - pad, w: e.w + pad * 2, h: e.h + pad * 2 };
 }
@@ -258,6 +281,7 @@ export function strokeBox(s: { tool: Tool; size: number; points: readonly number
 export function hasVisibleExtent(s: { tool: Tool; points: readonly number[] }): boolean {
 	if (s.tool === "text") return s.points[0] > 0 && s.points[1] > 0;
 	if (s.tool === "pen") return s.points.length >= 6;
+	if (s.tool === "image") return s.points[2] >= MIN_DRAG && s.points[3] >= MIN_DRAG;
 	const [x0, y0, x1, y1] = s.points;
 	return Math.abs(x1 - x0) >= MIN_DRAG || Math.abs(y1 - y0) >= MIN_DRAG;
 }

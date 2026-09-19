@@ -35,6 +35,7 @@ import {
 	shiftPoints,
 	strokeBox,
 	strokeExtent,
+	type Tool,
 	textFontSize,
 	textLabelBox,
 } from "../lib/sketch-geometry";
@@ -65,18 +66,19 @@ import {
  * simplified to a 180ms transform toward the composer row).
  */
 
-type Tool = "select" | "pen" | "eraser" | "text" | ShapeTool;
-
 interface Stroke {
 	id: number;
 	tool: Exclude<Tool, "eraser">;
 	color: string;
 	size: number;
-	/** pen: flat [x,y,pressure,…]; shapes: [x0,y0,x1,y1]; text: [x,y] anchor. */
+	/** pen: flat [x,y,pressure,…]; shapes: [x0,y0,x1,y1]; text: [x,y] anchor;
+	 *  image: [x,y,width,height]. */
 	points: number[];
 	/** text only: the label. Kept beside `points` so undo/redo and move
 	 *  replay through the same `Op` shapes as every other stroke. */
 	text?: string;
+	/** image only: the data/remote URL the Konva image node is decoded from. */
+	src?: string;
 }
 
 /** Undo/redo ops: single-stroke adds, batch clears, and moves all keep the
@@ -239,6 +241,10 @@ export function SketchPad({
 	const erasingRef = useRef(false);
 	const [preview, setPreview] = useState<Stroke | null>(null);
 	const baseImage = useLoadedImage(initialImage);
+	/** Konva paints a decoded HTMLImageElement, so image strokes keep a small
+	 *  cache keyed by src: the stroke itself stores only the URL, which is
+	 *  what makes undo/redo and the op stack cheap. */
+	const [imageCache, setImageCache] = useState<Record<string, HTMLImageElement>>({});
 	const idRef = useRef(1);
 	const [dirty, setDirty] = useState(false);
 	/** 浅色底导出 (user request): dark-theme sketches export on white so
@@ -248,10 +254,6 @@ export function SketchPad({
 	 *  transparent (it reads as the same glass as the chrome around it),
 	 *  so every export paints its background on just for the shot. */
 	const [exportBg, setExportBg] = useState<string | null>(null);
-	/** The imported base image is not a stroke — it has no undo history —
-	 *  but clearing must still be able to remove it, or a re-opened board
-	 *  shows content whose only visible controls are disabled. */
-	const [baseCleared, setBaseCleared] = useState(false);
 	/** Select tool: the picked stroke renders a dashed frame, drag moves it. */
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	/** Drag-translation state; `tool` rides along because the geometry
@@ -277,6 +279,13 @@ export function SketchPad({
 	/** Text tool: where a tap planted the caret, and the label being typed.
 	 *  `null` means nothing is being edited, so no overlay is mounted. */
 	const [textEditor, setTextEditor] = useState<{ x: number; y: number; id: number | null } | null>(null);
+	/** A text tap parked at pointerdown, planted at pointerup. See the note in
+	 *  `onPointerDown`: mounting the caret inside pointerdown lets the
+	 *  browser's own mousedown default action (focus the clicked element, or
+	 *  blur the current focus when it isn't focusable — a canvas never is)
+	 *  take the focus straight back, so the caret blurs and its empty draft
+	 *  is discarded before the user can type a character. */
+	const pendingTextRef = useRef<{ x: number; y: number } | null>(null);
 	const [textDraft, setTextDraft] = useState("");
 	const [flyout, setFlyout] = useState(false);
 	const textAreaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -296,11 +305,17 @@ export function SketchPad({
 	// Focus follows the caret into the canvas: mounting the textarea is the
 	// same gesture as placing the cursor, and re-mounting for an existing
 	// label has to select it so typing replaces rather than appends.
+	// The focus is deferred by a frame — a synchronous focus() here can still
+	// be undone by the click's own default focus handling, which runs after
+	// the pointerdown/mousedown handlers have returned.
 	useEffect(() => {
 		const el = textAreaRef.current;
 		if (!el) return;
-		el.focus();
-		el.setSelectionRange(el.value.length, el.value.length);
+		const raf = requestAnimationFrame(() => {
+			el.focus();
+			el.setSelectionRange(el.value.length, el.value.length);
+		});
+		return () => cancelAnimationFrame(raf);
 	}, [textEditor]);
 
 	// A click anywhere outside the flyout dismisses it — the flyout is a
@@ -323,6 +338,16 @@ export function SketchPad({
 		setFuture([]);
 		setDirty(true);
 	}, []);
+
+	/** Decode every image stroke's src once, so Konva has a node to paint. */
+	useEffect(() => {
+		for (const s of strokes) {
+			if (s.tool !== "image" || !s.src || imageCache[s.src]) continue;
+			const el = new Image();
+			el.onload = () => setImageCache(prev => ({ ...prev, [s.src as string]: el }));
+			el.src = s.src;
+		}
+	}, [strokes, imageCache]);
 
 	const dropStroke = useCallback((id: number): void => {
 		setStrokes(prev => {
@@ -352,6 +377,34 @@ export function SketchPad({
 		setDirty(true);
 	}, []);
 
+	/** The imported picture becomes a stroke rather than a background bitmap:
+	 *  it rides in `strokes` like any drawn object, which is the only way the
+	 *  eraser, the clear button, undo and the select tool's scale handles can
+	 *  all reach it. It lands in `past` as an add op, so the first Ctrl+Z on a
+	 *  re-opened board takes the picture back off — before this, a board
+	 *  opened from an attachment showed content that no control could touch.
+	 *  Runs once, when the image has decoded and the stage has a box to fit it
+	 *  into. */
+	const importedRef = useRef(false);
+	useEffect(() => {
+		const src = initialImage;
+		if (!src || !baseImage || stageSize.w === 0 || importedRef.current) return;
+		importedRef.current = true;
+		const box = fitImage(baseImage, stageSize.w, stageSize.h);
+		const stroke: Stroke = {
+			id: idRef.current++,
+			tool: "image",
+			color,
+			size,
+			points: [box.x, box.y, box.width, box.height],
+			src,
+		};
+		// Importing is not an edit, so `dirty` stays false — but the op is
+		// recorded, which is what makes the picture undoable.
+		setStrokes(prev => [...prev, stroke]);
+		setPast(prev => [...prev.slice(-99), { kind: "add", stroke }]);
+	}, [initialImage, baseImage, stageSize, color, size]);
+
 	const undo = useCallback((): void => {
 		const op = past[past.length - 1];
 		if (!op) return;
@@ -366,6 +419,9 @@ export function SketchPad({
 			setStrokes(op.strokes);
 		}
 		setFuture(f => [...f, op]);
+		// Undoing the imported picture (or anything else) leaves the board
+		// different from what was handed over, so the discard guard stays on.
+		setDirty(true);
 	}, [past]);
 
 	const redo = useCallback((): void => {
@@ -385,24 +441,17 @@ export function SketchPad({
 			setPast(p => [...p, { kind: "clear", strokes: op.strokes }]);
 			setStrokes([]);
 		}
+		setDirty(true);
 	}, [future]);
 
 	const clearAll = useCallback((): void => {
-		// A re-opened board (editing an attachment) shows the imported base
-		// image with an empty stroke list — "clear" must still work there.
-		// It honestly offers no undo for pixels that were never recorded as
-		// strokes; re-mount the image to get it back.
-		if (strokes.length === 0 && (!baseImage || baseCleared)) return;
-		setBaseCleared(true);
-		setStrokes(prev => {
-			if (prev.length === 0) return prev;
-			setPast(p => [...p.slice(-99), { kind: "clear", strokes: prev }]);
-			setFuture([]);
-			return [];
-		});
+		if (strokes.length === 0) return;
+		setPast(p => [...p.slice(-99), { kind: "clear", strokes }]);
+		setFuture([]);
+		setStrokes([]);
 		// An emptied board holds nothing worth a discard prompt.
 		setDirty(false);
-	}, [strokes, baseImage, baseCleared]);
+	}, [strokes]);
 
 	/** Land whatever is in the caret, then close the overlay. Anything that
 	 *  dismisses the editor (blur, Escape, switching tools) has to route
@@ -536,14 +585,21 @@ export function SketchPad({
 				return;
 			}
 			if (tool === "text") {
+				// Park the tap instead of mounting the caret: the caret is
+				// planted at pointerup, once the click's own focus handling
+				// has run. Mounting it here made the textarea appear and blur
+				// inside the same gesture, and an empty draft is discarded on
+				// blur — the board looked as if the text tool were not wired
+				// up at all. Cancelling the pointerdown also suppresses the
+				// compatibility mouse events, which are what moved the focus.
+				if (e.evt.cancelable) e.evt.preventDefault();
 				// Planting the caret lands the previous label first, so rapid
 				// tap-typing never drops a word.
 				if (textEditor) {
 					closeTextEditor();
 					return;
 				}
-				setTextEditor({ x: pos.x, y: pos.y, id: null });
-				setTextDraft("");
+				pendingTextRef.current = { x: pos.x, y: pos.y };
 				return;
 			}
 			const pressure = e.evt.pressure > 0 ? e.evt.pressure : 0.5;
@@ -623,6 +679,16 @@ export function SketchPad({
 
 	const onPointerUp = useCallback((): void => {
 		erasingRef.current = false;
+		// A parked text tap becomes the caret now that the click's focus
+		// handling is done — this is what makes a tap with the text tool
+		// actually leave an editable box on the board.
+		const pending = pendingTextRef.current;
+		if (pending) {
+			pendingTextRef.current = null;
+			setTextEditor({ x: pending.x, y: pending.y, id: null });
+			setTextDraft("");
+			return;
+		}
 		const sc = scaleRef.current;
 		if (sc) {
 			scaleRef.current = null;
@@ -649,6 +715,13 @@ export function SketchPad({
 		commit(draw);
 	}, [commit, strokes, commitMove]);
 
+	/** Leaving the canvas finishes the gesture but must not plant a caret the
+	 *  user never released inside the board. */
+	const onPointerLeave = useCallback((): void => {
+		pendingTextRef.current = null;
+		onPointerUp();
+	}, [onPointerUp]);
+
 	const finish = (): void => {
 		const stage = stageRef.current;
 		if (!stage) return;
@@ -674,100 +747,143 @@ export function SketchPad({
 		})();
 	};
 
-	const renderStroke = useCallback((s: Stroke, isPreview = false): ReactNode => {
-		const common = {
-			key: isPreview ? "sk-preview" : s.id,
-			...(isPreview ? {} : { id: String(s.id), name: "sk-stroke" as const }),
-			perfectDrawEnabled: false,
-			// Thin pen ink (size 2 → outline 4.4px) is a miserable click
-			// target; widen the hit region without touching the rendering.
-			hitStrokeWidth: Math.max(14, s.size * 2.5),
-		};
-		if (s.tool === "pen") {
-			const outline = inkOutline(s.points, s.size);
+	const renderStroke = useCallback(
+		(s: Stroke, isPreview = false): ReactNode => {
+			// The list key is set per-branch, never through `common`: React 19
+			// treats a spread that carries `key` as an error-level warning.
+			const nodeKey = isPreview ? "sk-preview" : s.id;
+			const common = {
+				...(isPreview ? {} : { id: String(s.id), name: "sk-stroke" as const }),
+				perfectDrawEnabled: false,
+				// Thin pen ink (size 2 → outline 4.4px) is a miserable click
+				// target; widen the hit region without touching the rendering.
+				hitStrokeWidth: Math.max(14, s.size * 2.5),
+			};
+			if (s.tool === "pen") {
+				const outline = inkOutline(s.points, s.size);
+				return (
+					<Line
+						key={nodeKey}
+						{...common}
+						points={outline}
+						closed
+						fill={s.color}
+						lineJoin="round"
+						lineCap="round"
+						pathLength={inkPathLength(outline)}
+						opacity={isPreview ? 0.92 : 1}
+					/>
+				);
+			}
+			if (s.tool === "image") {
+				// Until the src decodes there is nothing to paint; the stroke
+				// itself stays in the model, so it is already undoable/erasable.
+				const img = s.src ? imageCache[s.src] : undefined;
+				if (!img) return null;
+				return (
+					<KonvaImage
+						key={nodeKey}
+						{...common}
+						image={img}
+						x={s.points[0]}
+						y={s.points[1]}
+						width={s.points[2]}
+						height={s.points[3]}
+					/>
+				);
+			}
+			if (s.tool === "text") {
+				const label = s.text ?? "";
+				const { w, h } = textLabelBox(s.size, label);
+				return (
+					<Text
+						key={nodeKey}
+						{...common}
+						x={s.points[0]}
+						y={s.points[1]}
+						text={label}
+						fontSize={textFontSize(s.size)}
+						fill={s.color}
+						// Konva text needs its own hit box: `hitStrokeWidth` does
+						// nothing for a filled glyph run, so drag the measured rect
+						// around it — the same rect the select frame uses.
+						width={w}
+						height={h}
+						perfectDrawEnabled={false}
+					/>
+				);
+			}
+			const [x0, y0, x1, y1] = s.points;
+			if (s.tool === "line" || s.tool === "arrow") {
+				return s.tool === "line" ? (
+					<Line
+						key={nodeKey}
+						{...common}
+						points={[x0, y0, x1, y1]}
+						stroke={s.color}
+						strokeWidth={s.size}
+						lineCap="round"
+					/>
+				) : (
+					<Arrow
+						key={nodeKey}
+						{...common}
+						points={[x0, y0, x1, y1]}
+						stroke={s.color}
+						fill={s.color}
+						strokeWidth={s.size}
+						lineCap="round"
+						pointerLength={Math.max(8, s.size * 3)}
+						pointerWidth={Math.max(8, s.size * 3)}
+					/>
+				);
+			}
+			if (s.tool === "rect") {
+				return (
+					<Rect
+						key={nodeKey}
+						{...common}
+						x={Math.min(x0, x1)}
+						y={Math.min(y0, y1)}
+						width={Math.abs(x1 - x0)}
+						height={Math.abs(y1 - y0)}
+						stroke={s.color}
+						strokeWidth={s.size}
+						cornerRadius={Math.min(6, Math.abs(x1 - x0) / 4)}
+					/>
+				);
+			}
+			if (s.tool === "ellipse") {
+				return (
+					<Ellipse
+						key={nodeKey}
+						{...common}
+						x={(x0 + x1) / 2}
+						y={(y0 + y1) / 2}
+						radiusX={Math.abs(x1 - x0) / 2}
+						radiusY={Math.abs(y1 - y0) / 2}
+						stroke={s.color}
+						strokeWidth={s.size}
+					/>
+				);
+			}
+			// diamond / triangle / star / heart share one closed-polyline path.
+			const pts = outlinePoints(s.tool as ShapeTool, s.points) ?? [];
 			return (
 				<Line
+					key={nodeKey}
 					{...common}
-					points={outline}
+					points={pts}
 					closed
-					fill={s.color}
+					stroke={s.color}
+					strokeWidth={s.size}
 					lineJoin="round"
 					lineCap="round"
-					pathLength={inkPathLength(outline)}
-					opacity={isPreview ? 0.92 : 1}
 				/>
 			);
-		}
-		if (s.tool === "text") {
-			const label = s.text ?? "";
-			const { w, h } = textLabelBox(s.size, label);
-			return (
-				<Text
-					{...common}
-					x={s.points[0]}
-					y={s.points[1]}
-					text={label}
-					fontSize={textFontSize(s.size)}
-					fill={s.color}
-					// Konva text needs its own hit box: `hitStrokeWidth` does
-					// nothing for a filled glyph run, so drag the measured rect
-					// around it — the same rect the select frame uses.
-					width={w}
-					height={h}
-					perfectDrawEnabled={false}
-				/>
-			);
-		}
-		const [x0, y0, x1, y1] = s.points;
-		if (s.tool === "line" || s.tool === "arrow") {
-			return s.tool === "line" ? (
-				<Line {...common} points={[x0, y0, x1, y1]} stroke={s.color} strokeWidth={s.size} lineCap="round" />
-			) : (
-				<Arrow
-					{...common}
-					points={[x0, y0, x1, y1]}
-					stroke={s.color}
-					fill={s.color}
-					strokeWidth={s.size}
-					lineCap="round"
-					pointerLength={Math.max(8, s.size * 3)}
-					pointerWidth={Math.max(8, s.size * 3)}
-				/>
-			);
-		}
-		if (s.tool === "rect") {
-			return (
-				<Rect
-					{...common}
-					x={Math.min(x0, x1)}
-					y={Math.min(y0, y1)}
-					width={Math.abs(x1 - x0)}
-					height={Math.abs(y1 - y0)}
-					stroke={s.color}
-					strokeWidth={s.size}
-					cornerRadius={Math.min(6, Math.abs(x1 - x0) / 4)}
-				/>
-			);
-		}
-		if (s.tool === "ellipse") {
-			return (
-				<Ellipse
-					{...common}
-					x={(x0 + x1) / 2}
-					y={(y0 + y1) / 2}
-					radiusX={Math.abs(x1 - x0) / 2}
-					radiusY={Math.abs(y1 - y0) / 2}
-					stroke={s.color}
-					strokeWidth={s.size}
-				/>
-			);
-		}
-		// diamond / triangle / star / heart share one closed-polyline path.
-		const pts = outlinePoints(s.tool as ShapeTool, s.points) ?? [];
-		return (
-			<Line {...common} points={pts} closed stroke={s.color} strokeWidth={s.size} lineJoin="round" lineCap="round" />
-		);
-	}, []);
+		},
+		[imageCache],
+	);
 
 	const bg = themeCanvasColor();
 	// Selection chrome paints on the canvas, where CSS vars don't resolve.
@@ -802,6 +918,7 @@ export function SketchPad({
 							aria-pressed={tool === key}
 							onClick={() => {
 								if (textEditor) closeTextEditor();
+								pendingTextRef.current = null;
 								setTool(key);
 								if (key !== "select") setSelectedId(null);
 							}}
@@ -837,6 +954,7 @@ export function SketchPad({
 										title={t(labelKey)}
 										onClick={() => {
 											if (textEditor) closeTextEditor();
+											pendingTextRef.current = null;
 											setTool(key);
 											setSelectedId(null);
 											setFlyout(false);
@@ -874,7 +992,7 @@ export function SketchPad({
 						className="gui-sketch-tool"
 						title={t("sketch clear")}
 						aria-label={t("sketch clear")}
-						disabled={!strokes.length && (!baseImage || baseCleared)}
+						disabled={!strokes.length}
 						onClick={clearAll}
 					>
 						<Trash2 size={14} />
@@ -918,7 +1036,7 @@ export function SketchPad({
 								onPointerDown={onPointerDown}
 								onPointerMove={onPointerMove}
 								onPointerUp={onPointerUp}
-								onPointerLeave={onPointerUp}
+								onPointerLeave={onPointerLeave}
 								style={{
 									cursor: tool === "eraser" ? "cell" : tool === "select" ? "default" : "crosshair",
 									touchAction: "none",
@@ -926,9 +1044,6 @@ export function SketchPad({
 							>
 								<Layer listening={false}>
 									{exportBg && <Rect x={0} y={0} width={stageSize.w} height={stageSize.h} fill={exportBg} />}
-									{baseImage && !baseCleared && (
-										<KonvaImage {...fitImage(baseImage, stageSize.w, stageSize.h)} image={baseImage} />
-									)}
 								</Layer>
 								<Layer>
 									{strokes.map(s => renderStroke(s))}

@@ -422,3 +422,49 @@ describe("scalePoints", () => {
 		expect(out[0]).toBeCloseTo(10 * 0.05);
 	});
 });
+
+/** The imported picture rides in `strokes` as `tool: "image"` with
+ *  `[x, y, width, height]` — two side lengths, not a second corner. Every
+ *  geometry helper therefore needs its own branch: treating the sides as a
+ *  corner makes a moved picture jump and a scaled one collapse. */
+describe("image strokes", () => {
+	it("reads the extent straight out of the stored box", () => {
+		expect(strokeExtent({ tool: "image", points: [10, 20, 300, 200] })).toEqual({ x: 10, y: 20, w: 300, h: 200 });
+	});
+
+	it("shifts the origin and leaves the size alone", () => {
+		// Width/height are lengths: adding the delta to them would stretch the
+		// picture while the user only meant to move it.
+		expect(shiftPoints("image", [10, 20, 300, 200], 5, -3)).toEqual([15, 17, 300, 200]);
+	});
+
+	it("scales the sides by the factor, not by distance from the anchor", () => {
+		// Anchor = the picture's own top-left corner, so it stays pinned while
+		// the far corner travels by the factor.
+		expect(scalePoints("image", [10, 20, 300, 200], 10, 20, 2)).toEqual([10, 20, 600, 400]);
+	});
+
+	it("keeps the opposite corner pinned when that corner is the anchor", () => {
+		// Grabbing the north-west handle anchors on the south-east corner:
+		// x + w must land back on 310 after the scale.
+		const out = scalePoints("image", [10, 20, 300, 200], 310, 220, 2);
+		expect(out[0] + out[2]).toBeCloseTo(310);
+		expect(out[1] + out[3]).toBeCloseTo(220);
+	});
+
+	it("frames the picture with no padding", () => {
+		// A padded frame floats the dashed box — and its handles — away from
+		// the edges the user means to grab.
+		expect(strokeBox({ tool: "image", size: 4, points: [10, 20, 300, 200] })).toEqual({
+			x: 10,
+			y: 20,
+			w: 300,
+			h: 200,
+		});
+	});
+
+	it("needs both sides to count as visible", () => {
+		expect(hasVisibleExtent({ tool: "image", points: [0, 0, 300, 200] })).toBe(true);
+		expect(hasVisibleExtent({ tool: "image", points: [0, 0, 300, 1] })).toBe(false);
+	});
+});
