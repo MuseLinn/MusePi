@@ -1058,9 +1058,14 @@ export class DaemonSessionHost {
 	}
 	/** Scheduled-task bridge for the `schedule_task` tool (issue #11). The
 	 *  cron store lives on DaemonServer, so the host gets a provider rather
-	 *  than reaching into another instance's state. */
-	#scheduledTaskProvider: (() => ScheduledTaskHandle) | null = null;
-	setScheduledTaskProvider(provider: () => ScheduledTaskHandle): void {
+	 *  than reaching into another instance's state.
+	 *
+	 *  The provider receives the requesting session's workspace (issue #30):
+	 *  a long-lived daemon's `process.cwd()` is its launch directory (the
+	 *  install path / home), so defaulting tasks to it silently detached
+	 *  them from the project the user was actually working in. */
+	#scheduledTaskProvider: ((sessionCwd: string) => ScheduledTaskHandle) | null = null;
+	setScheduledTaskProvider(provider: (sessionCwd: string) => ScheduledTaskHandle): void {
 		this.#scheduledTaskProvider = provider;
 	}
 	setOnExtensionNotification(handler: (channel: string, message: ExtensionNotificationMessage) => void): void {
@@ -1395,7 +1400,7 @@ export class DaemonSessionHost {
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			collabTool: this.#collabToolProvider?.(),
-			scheduledTasks: this.#scheduledTaskProvider?.() ?? undefined,
+			scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
 			...(await desktopSessionPromptInputs(cwd)),
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
@@ -1475,7 +1480,7 @@ export class DaemonSessionHost {
 			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
 			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
 			collabTool: this.#collabToolProvider?.(),
-			scheduledTasks: this.#scheduledTaskProvider?.() ?? undefined,
+			scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
 			...(await desktopSessionPromptInputs(resumeCwd)),
 		});
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -2850,7 +2855,7 @@ export class DaemonServer {
 
 	constructor(host: DaemonSessionHost) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
-		host.setScheduledTaskProvider(() => this.scheduledTaskHandle());
+		host.setScheduledTaskProvider(sessionCwd => this.scheduledTaskHandle(sessionCwd));
 		host.setOnExtensionNotification((channel, message) => {
 			this.#broadcastExtensionNotification(channel, message);
 		});
@@ -3380,8 +3385,20 @@ export class DaemonServer {
 		return merged;
 	}
 
-	/** Bridge handed to the `schedule_task` tool on every session create. */
-	scheduledTaskHandle(): ScheduledTaskHandle {
+	/** Bridge handed to the `schedule_task` tool on every session create.
+	 *  `sessionCwd` is that session's workspace, which owns every `cwd` this
+	 *  handle defaults — never the daemon's own launch directory (issue #30). */
+	scheduledTaskHandle(sessionCwd: string): ScheduledTaskHandle {
+		// Resolve once, cross-platform-normalised: the GUI records projects
+		// with native separators, so a task stored as `D:/x` would never
+		// group under `D:\x` (issue #30, part 2).
+		const fallbackCwd = path.resolve(sessionCwd || process.cwd());
+		const resolveCwd = (raw: string | undefined): string => {
+			const t = raw?.trim();
+			// Blank means "the session's workspace" per the tool schema and the
+			// task-center placeholder — not the daemon's cwd.
+			return t ? path.resolve(t) : fallbackCwd;
+		};
 		return {
 			upsert: async input => {
 				const candidate = {
@@ -3390,7 +3407,7 @@ export class DaemonServer {
 					enabled: true,
 					schedule: input.schedule,
 					prompt: input.prompt,
-					cwd: input.cwd ?? process.cwd(),
+					cwd: resolveCwd(input.cwd),
 					...(input.model ? { model: input.model } : {}),
 					...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
 					state: { createdAt: Date.now() },
@@ -3402,7 +3419,7 @@ export class DaemonServer {
 				return this.#upsertCronTask(candidate as CronTask);
 			},
 			list: async () => this.#cronTasks,
-			defaultCwd: () => process.cwd(),
+			defaultCwd: () => fallbackCwd,
 		};
 	}
 
