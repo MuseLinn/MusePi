@@ -1383,7 +1383,7 @@ export const settings = {
 	"onboarding title7": "个性化",
 	"onboarding title8": "导入会话",
 	"onboarding step1": "欢迎使用 MusePi！先选择界面语言，随时可改。",
-	"onboarding step2": "选择主题与配色：深色、浅色或跟随系统，品牌色到单色随意切换。",
+	"onboarding step2": "选择主题与配色：深色、浅色或跟随系统，品牌金到单色随意切换。",
 	"onboarding step3": "左侧边栏管理所有会话：",
 	"onboarding feat s1": "新建、归档与恢复历史会话",
 	"onboarding feat s2": "项目分组与文件夹管理，多项目并行",

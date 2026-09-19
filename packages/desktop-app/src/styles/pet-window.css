@@ -13,7 +13,19 @@
 }
 
 :root {
-	--color-accent: oklch(0.773 0.1538 163);
+	/* Brand gold, not emerald. This window never loads tokens.css (see the
+	 * file header), so it needs its own literal — and the value here was
+	 * still the pre-rebrand `oklch(0.773 0.1538 163)` = #34d399, which
+	 * painted the pet panel's working dot, send button and dock-edge glow
+	 * green while the rest of the app had already turned gold (CHANGELOG
+	 * 0.4.31). Kept as the oklch form so the alpha variants below keep
+	 * matching the main window's (`--accent-hover` family). */
+	--color-accent: oklch(0.7507 0.1295 79.85);
+	/* Ink for on-accent fills. The send button was plain `#fff`, which read
+	 * fine on emerald but fails on gold (1.9:1) — the accent-fg pair the
+	 * main window uses is dark ink on gold, so the pet window carries the
+	 * same one. */
+	--color-accent-fg: oklch(0.26 0.06 80);
 	--color-text: oklch(0.93 0.008 60);
 	--color-danger: oklch(0.66 0.19 25);
 	--font-mono: ui-monospace, "SF Mono", Menlo, monospace;
@@ -769,7 +781,7 @@
 	border: none;
 	border-radius: var(--radius-lg);
 	background: var(--color-accent);
-	color: #fff;
+	color: var(--color-accent-fg);
 	font-size: 13px;
 	font-weight: 700;
 	cursor: pointer;

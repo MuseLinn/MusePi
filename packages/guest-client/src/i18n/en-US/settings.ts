@@ -1450,7 +1450,7 @@ export const settings = {
 	"onboarding title8": "Import sessions",
 	"onboarding step1": "Welcome to MusePi! First, choose the interface language — you can change it anytime.",
 	"onboarding step2":
-		"Choose theme and colors: dark, light, or follow the system; switch freely from brand color to monochrome.",
+		"Choose theme and colors: dark, light, or follow the system; switch freely from brand gold to monochrome.",
 	"onboarding step3": "The left sidebar manages all your sessions:",
 	"onboarding feat s1": "Create, archive and restore past sessions",
 	"onboarding feat s2": "Project groups and folder management, run multiple projects",

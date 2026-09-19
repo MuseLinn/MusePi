@@ -2693,6 +2693,25 @@
 	justify-content: space-between;
 	padding: 8px 16px;
 }
+/* Primary CTA: solid brand gold (gunmetal ink on gold).
+ * The onboarding's Next/Get-started button and the settings footer's 引导
+ * entry both ask for `gui-btn-primary`, but that class was only ever
+ * authored in gui-composer.css for a different component family — the
+ * desktop GUI never defined it, so both CTAs silently fell back to
+ * `.gui-btn`'s neutral raised surface (a grey button with no brand presence
+ * anywhere in the primer). Scoped here to the onboarding/settings footer
+ * rather than defined globally, so no other `.gui-btn-primary` call site
+ * changes color. Same pair as .gui-cp-btn--primary and the token comment's
+ * "gold ground, dark ink" rule. */
+.gui-onboarding-actions .gui-btn-primary {
+	background: var(--accent);
+	border-color: transparent;
+	color: var(--accent-fg);
+	font-weight: 600;
+}
+.gui-onboarding-actions .gui-btn-primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
 
 /* Announcement (what's-new) panel — same frosted shell as the primer,
  * but a narrower reading column with release-note typography: version

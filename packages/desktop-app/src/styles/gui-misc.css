@@ -334,7 +334,13 @@
 	max-width: 46px;
 	height: 14px;
 	border-radius: 999px;
-	background: var(--accent);
+	/* Brand gold — the DEFAULT-BRAND swatch must not read the live
+	 * `--accent` var: `--accent` is `data-accent`-scoped, and on the active
+	 * card it picked up the `[data-accent="ocean"]` block sitting on the
+	 * same element, so the brand swatch painted OCEAN BLUE. Neutral
+	 * `currentColor` (the card's own text color) is theme-correct for the
+	 * non-brand presets and can never be self-influenced. */
+	background: currentColor;
 }
 .gui-obo-accent-swatch[data-accent="mono"] {
 	background: oklch(0.62 0.01 307);
@@ -345,8 +351,12 @@
 .gui-obo-accent-swatch[data-accent="jade"] {
 	background: oklch(0.66 0.13 160);
 }
+/* Brand = warm gold, NOT green. The old `oklch(0.773 0.1538 163)` is
+ * emerald #34d399 — a leftover from before the brand-gold rebrand
+ * (CHANGELOG 0.4.31) and a literal, so it survived that sweep green while
+ * everything around it turned gold. */
 .gui-obo-accent-swatch[data-accent="brand"] {
-	background: oklch(0.773 0.1538 163);
+	background: #d9a441;
 }
 /* Feature bullets under promo-step bodies. */
 .gui-obo-features {
