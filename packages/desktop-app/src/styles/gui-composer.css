@@ -1791,7 +1791,12 @@
 
 /* ── SketchPad (Codex 绘画 parity) — board overlay launched from the
  * composer attach menu / image lightbox edit button. Completing plays a
- * scale-out toward the composer row (the "回落" half of the zoom). ── */
+ * scale-out toward the composer row (the "回落" half of the zoom).
+ *
+ * Liquid glass (2026-09-19): the board is an elevated glass surface like
+ * `.gui-dialog` — translucent fill + saturated backdrop blur + the specular
+ * rim and sheen from the tokens.css `--glass-*` ladder — and its entrance
+ * rides `--spring-liquid` (overshoot) rather than a plain ease. ── */
 .gui-sketch-veil {
 	position: fixed;
 	inset: 0;
@@ -1813,21 +1818,52 @@
 }
 
 .gui-sketch-board {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	width: min(880px, 92vw);
 	height: min(640px, 82vh);
 	border-radius: var(--radius-xl);
 	overflow: hidden;
-	border: 1px solid var(--border);
-	background: var(--color-surface-raised);
-	box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+	border: 1px solid var(--glass-border, var(--border));
+	/* Same recipe as the reference `.gui-dialog`: the surface stays
+	 * translucent enough to refract the dimmed backdrop, and the blur is
+	 * saturated so the glass reads as water rather than as fog. */
+	background: color-mix(in oklab, var(--color-surface-raised) 78%, transparent);
+	backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
+	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
+	box-shadow: var(--glass-shadow, 0 20px 60px rgb(0 0 0 / 50%));
 	/* The close/complete animation reads as the board falling back into
 	 * the composer (origin at the bottom center). */
 	transform-origin: 50% 100%;
+	animation: gui-sketch-board-in 240ms var(--spring-liquid, var(--spring));
 	transition:
 		transform 180ms var(--spring),
 		opacity 180ms var(--spring);
+}
+
+/* Diagonal specular wash — the refractive "water" highlight. `::before` is
+ * unclaimed here, so the sheen layer needs no extra element; board content
+ * is lifted above it by the > * rule below. */
+.gui-sketch-board::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background: var(--glass-sheen);
+}
+
+.gui-sketch-board > * {
+	position: relative;
+	z-index: 1;
+}
+
+@keyframes gui-sketch-board-in {
+	from {
+		opacity: 0;
+		transform: scale(0.94) translateY(8px);
+	}
 }
 
 .gui-sketch-veil--closing .gui-sketch-board {
@@ -1841,6 +1877,7 @@
 	gap: 4px;
 	padding: 8px 10px;
 	border-bottom: 1px solid var(--border);
+	background: var(--glass-bg, transparent);
 }
 
 .gui-sketch-toolbar-sep {
@@ -1861,12 +1898,17 @@
 	color: var(--color-text-muted);
 	transition:
 		background 120ms var(--spring),
-		color 120ms var(--spring);
+		color 120ms var(--spring),
+		transform 120ms var(--spring-snappy, var(--spring));
 }
 
 .gui-sketch-tool:hover {
 	background: color-mix(in oklab, var(--color-text) 8%, transparent);
 	color: var(--color-text);
+}
+
+.gui-sketch-tool:active {
+	transform: scale(0.92);
 }
 
 .gui-sketch-tool--on {
@@ -1879,15 +1921,180 @@
 	pointer-events: none;
 }
 
+/* Shape flyout (Codex second-level menu): anchored under its rail button,
+ * glassy like the rest of the board chrome. */
+.gui-sketch-shapes {
+	position: relative;
+	display: inline-flex;
+}
+
+.gui-sketch-flyout {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	z-index: 3;
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 2px;
+	padding: 6px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--glass-border, var(--border));
+	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	backdrop-filter: blur(var(--blur-2xl)) saturate(170%);
+	-webkit-backdrop-filter: blur(var(--blur-2xl)) saturate(170%);
+	box-shadow: var(--glass-shadow, 0 12px 32px rgb(0 0 0 / 40%));
+	transform-origin: 0 0;
+	animation: gui-menu-in 130ms var(--spring-liquid, var(--spring));
+}
+
+.gui-sketch-flyout-item {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms var(--spring),
+		color 120ms var(--spring),
+		transform 120ms var(--spring-snappy, var(--spring));
+}
+
+.gui-sketch-flyout-item:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+	transform: translateY(-1px);
+}
+
+.gui-sketch-flyout-item--on {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-accent);
+}
+
+/* Drawing area + the left thickness rail. The rail is a sibling of the
+ * canvas, not an overlay, so the Konva stage keeps a clean box to measure
+ * (an absolutely-positioned rail over the canvas would also steal pointer
+ * events along the left edge). */
+.gui-sketch-body {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+}
+
+.gui-sketch-thickness {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 44px;
+	flex-shrink: 0;
+	padding: 12px 0;
+	border-right: 1px solid var(--border);
+}
+
+.gui-sketch-knob {
+	border-radius: 50%;
+	background: var(--color-accent);
+	flex-shrink: 0;
+	transition:
+		width 120ms var(--spring-snappy, var(--spring)),
+		height 120ms var(--spring-snappy, var(--spring));
+}
+
+/* Vertical range input. Chromium can rotate a range with
+ * `writing-mode: vertical-lr`, which keeps the native thumb semantics; the
+ * appearance reset is what makes the rotation render at all. */
+.gui-sketch-range {
+	writing-mode: vertical-lr;
+	direction: rtl;
+	width: 18px;
+	height: 148px;
+	flex-shrink: 0;
+	appearance: none;
+	background: transparent;
+	cursor: pointer;
+}
+
+.gui-sketch-range::-webkit-slider-runnable-track {
+	width: 3px;
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--color-text) 18%, transparent);
+}
+
+.gui-sketch-range::-webkit-slider-thumb {
+	appearance: none;
+	width: 14px;
+	height: 14px;
+	margin-left: -5.5px;
+	border-radius: 50%;
+	border: 1px solid var(--glass-border, var(--border));
+	background: var(--color-accent);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 30%);
+	transition: transform 120ms var(--spring-snappy, var(--spring));
+}
+
+.gui-sketch-range:hover::-webkit-slider-thumb {
+	transform: scale(1.15);
+}
+
+.gui-sketch-range:active::-webkit-slider-thumb {
+	transform: scale(1.25);
+}
+
+/* Horizontal variant for the palette row. */
+.gui-sketch-range--inline {
+	writing-mode: horizontal-tb;
+	direction: ltr;
+	width: 96px;
+	height: 18px;
+}
+
+.gui-sketch-range--inline::-webkit-slider-thumb {
+	margin-top: -5.5px;
+	margin-left: 0;
+}
+
+.gui-sketch-range--inline::-webkit-slider-runnable-track {
+	height: 3px;
+	width: 100%;
+}
+
 .gui-sketch-canvas {
 	flex: 1;
 	min-height: 0;
 	position: relative;
+	overflow: hidden;
 }
 
 .gui-sketch-canvas canvas {
 	position: absolute;
 	inset: 0;
+}
+
+/* The in-canvas caret: a real textarea so IME/paste/selection work. It is
+ * transparent (the label underneath is what the export sees) and only wide
+ * enough to read while typing. */
+.gui-sketch-text-input {
+	position: absolute;
+	z-index: 2;
+	min-width: 90px;
+	max-width: min(320px, 70%);
+	padding: 1px 3px;
+	border: 1px dashed color-mix(in oklab, var(--color-accent) 60%, transparent);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--color-surface) 70%, transparent);
+	font: inherit;
+	line-height: 1.25;
+	resize: none;
+	overflow: hidden;
+	white-space: pre;
+	field-sizing: content;
+}
+
+.gui-sketch-text-input::placeholder {
+	color: color-mix(in oklab, var(--color-text) 35%, transparent);
 }
 
 .gui-sketch-palette {
@@ -1896,6 +2103,7 @@
 	gap: 6px;
 	padding: 8px 12px;
 	border-top: 1px solid var(--border);
+	background: var(--glass-bg, transparent);
 }
 
 .gui-sketch-color {
@@ -1905,7 +2113,7 @@
 	border-radius: 50%;
 	border: 2px solid color-mix(in oklab, var(--color-text) 14%, transparent);
 	transition:
-		transform 120ms var(--spring),
+		transform 120ms var(--spring-snappy, var(--spring)),
 		border-color 120ms var(--spring);
 }
 
@@ -1918,29 +2126,13 @@
 	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 30%, transparent);
 }
 
-.gui-sketch-size {
+.gui-sketch-thickness-inline {
 	display: inline-flex;
 	align-items: center;
-	justify-content: center;
-	width: 26px;
-	height: 26px;
+	gap: 6px;
 	flex-shrink: 0;
-	border-radius: var(--radius-md);
-	border: 1px solid transparent;
-	transition: border-color 120ms var(--spring);
-}
-
-.gui-sketch-size span {
-	border-radius: 50%;
-	background: var(--color-text-muted);
-}
-
-.gui-sketch-size--on {
-	border-color: var(--color-accent);
-}
-
-.gui-sketch-size--on span {
-	background: var(--color-accent);
+	margin-left: 6px;
+	color: var(--color-text-muted);
 }
 
 .gui-sketch-spacer {
@@ -1956,7 +2148,8 @@
 	border-radius: 50%;
 	background: var(--color-accent);
 	color: var(--color-accent-fg, #fff);
-	transition: transform 120ms var(--spring);
+	box-shadow: 0 4px 14px color-mix(in oklab, var(--color-accent) 35%, transparent);
+	transition: transform 140ms var(--spring-snappy, var(--spring));
 }
 
 .gui-sketch-done:hover {
@@ -1965,6 +2158,32 @@
 
 .gui-sketch-done:active {
 	transform: scale(0.94);
+}
+
+.gui-sketch-done:disabled {
+	opacity: 0.45;
+	pointer-events: none;
+}
+
+/* Reduced motion: the board still opens/closes, it just stops springing. */
+@media (prefers-reduced-motion: reduce) {
+	.gui-sketch-board,
+	.gui-sketch-flyout {
+		animation: none;
+	}
+
+	.gui-sketch-tool,
+	.gui-sketch-flyout-item,
+	.gui-sketch-color,
+	.gui-sketch-done,
+	.gui-sketch-knob {
+		transition: none;
+	}
+}
+
+.gui-motion-off .gui-sketch-board,
+.gui-motion-off .gui-sketch-flyout {
+	animation: none;
 }
 
 /* ── Design-session style chips (设计稿 08): one row above the input card,

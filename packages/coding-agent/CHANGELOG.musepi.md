@@ -5,7 +5,15 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- 画板对齐 Codex：新增**文本工具**（画布上点一下即可输入，输入法/粘贴/选区都是原生行为，写完落成真文字层）、**形状飞出菜单**（直线/箭头/矩形/椭圆/菱形/三角形/五角星/心形，共 8 种；轨道按钮显示当前选中的形状，矩形和菱形一眼可辨）、**12 色调色盘**与**连续粗细滑杆**（1–24，取代原来只有 2/4/8/14 的四档按钮）。画板几何（拖拽方向归一化、星形/心形取点、文本度量）抽成 `lib/sketch-geometry.ts` 并配 42 个单测——Konva 离开 canvas 没法断言，抽出来才测得动。
+  - EN: The sketch board now matches Codex: a **text tool** (tap the canvas and type — IME, paste and selection behave natively, and the label lands as a real text layer), a **shape flyout** (line / arrow / rectangle / ellipse / diamond / triangle / star / heart — 8 shapes; the rail button shows the armed one so rectangle vs diamond stays legible), a **12-swatch palette**, and a **continuous thickness slider** (1–24) replacing the old four-step 2/4/8/14 buttons. Board geometry (drag-direction normalization, star/heart point generation, text metrics) moved to `lib/sketch-geometry.ts` with 42 unit tests — Konva can't be asserted against without a canvas, so extracting it is what made it testable at all.
+
 ### Fixed
+
+- 画板弹窗并入全局液态玻璃与弹簧动效规范：此前它是一块不透明的实心面板、弹出用普通 ease，和对话框/设置页的玻璃层不是一套视觉语言。现在表面走 `--glass-*` 四件套（半透明填充 + 背景模糊 + 高光边缘 + 对角光泽）与 `--glass-shadow`，入场用 240ms `--spring-liquid` 过冲弹簧，关闭仍是 180ms 的缩小回落（两半合起来才是 Codex 那种"落回输入框"的观感）。顺带修掉心形被映射到拖拽框外的问题（原曲线 y 值域上下不对称，单除数会让底部尖端超出框 13%）。
+  - EN: The sketch dialog now follows the global liquid-glass and spring-motion standard — it used to be an opaque solid panel with a plain-ease entrance, a different visual language from the dialogs and settings surfaces. The surface now uses the `--glass-*` four-piece set (translucent fill, backdrop blur, specular rim, diagonal sheen) plus `--glass-shadow`, and enters on a 240ms `--spring-liquid` overshoot; closing is still the 180ms scale-out, since the two halves together are what read as "falling back into the composer". Also fixed the heart being mapped outside its drag box (the raw curve's y range is asymmetric, so a single divisor pushed the bottom tip 13% past the edge).
 
 - Windows 下左键单击任务栏托盘图标不弹出主窗口：修复 `tray.cjs` 将 `win32` 与 macOS 菜单栏混淆、将左键点击误绑定为 `toggle-tray-menu` 的问题。现在 Windows 下左键单击与双击均触发唤出/恢复主窗口（`show-main-window`），右键单击弹出浮动快捷菜单，对齐 Windows 平台交互规范与源码注释意图。#26
   - EN: Windows tray icon click not showing main window: fixed `tray.cjs` incorrectly treating Windows like macOS menu bar by routing left-clicks to `toggle-tray-menu`. Left-click and double-click now bring up/restore the main window (`show-main-window`), while right-click toggles the shortcut menu, matching Windows UX conventions and code comments. #26
