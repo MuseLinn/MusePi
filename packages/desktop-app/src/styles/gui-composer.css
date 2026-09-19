@@ -2240,3 +2240,98 @@
 	border-color: var(--color-accent);
 	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
+
+/* ── In-input token highlighting (TUI editor rainbow parity) ────────────
+ * The textarea's own text turns transparent and a mirrored overlay paints
+ * line-leading slash commands + standalone magic keywords in accent. The
+ * overlay must track the textarea pixel-for-pixel: same box (absolute
+ * inset-0 in the stack), same font metrics per variant, same wrap rules,
+ * and a scroll mirror (textarea onScroll copies scrollTop). */
+
+.gui-ta-stack {
+	position: relative;
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.gui-ta-highlight {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: var(--color-text);
+}
+
+/* Session composer variant — MUST equal `.gui-composer textarea`
+ * (font-size sm, 20px line-height, 6px 2px padding). */
+.gui-ta-highlight--session {
+	font-size: var(--ui-font-size-sm);
+	line-height: 20px;
+	padding: 6px 2px;
+}
+
+/* Welcome composer variant — MUST equal the welcome textarea's Tailwind
+ * classes (px-1 py-3.5 text-[14px] leading-relaxed). */
+.gui-ta-highlight--welcome {
+	font-size: 14px;
+	line-height: 1.625;
+	padding: 14px 4px;
+}
+
+.gui-ta-hl-slash {
+	color: var(--color-accent);
+	font-weight: 600;
+}
+
+.gui-ta-hl-magic {
+	color: var(--color-accent);
+	font-family: var(--font-mono);
+	font-weight: 600;
+}
+
+/* Transparent-ink pairing: the textarea keeps only its caret; the overlay
+ * supplies the visible glyphs. Placeholder gets an explicit colour (it
+ * would otherwise inherit `transparent` and vanish). */
+.gui-composer textarea {
+	color: transparent;
+	caret-color: var(--color-text);
+}
+
+.gui-composer textarea::placeholder {
+	color: var(--color-text-faint);
+	opacity: 1;
+}
+
+/* Focus mode: the stack takes the textarea's old place in the frame's
+ * column flex (the textarea itself now flexes inside the stack). */
+.gui-composer--focused .gui-composer-frame .gui-ta-stack {
+	flex: 1;
+	min-height: 0;
+	max-height: none;
+}
+
+/* ── Approval-mode button (openchamber input permission picker parity) ── */
+.gui-approval-btn--yolo {
+	color: var(--color-danger, #e5484d);
+	border-color: color-mix(in oklab, var(--color-danger, #e5484d) 45%, transparent);
+}
+
+.gui-approval-btn--open {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+
+.gui-approval-menu {
+	min-width: 260px;
+}
+
+.gui-approval-menu-head {
+	padding: 6px 12px 4px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-text-faint);
+}

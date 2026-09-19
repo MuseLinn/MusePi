@@ -7104,7 +7104,12 @@ export class DaemonServer {
 				// (same source of truth as the TUI's builtin registry, plus the
 				// TUI's skill commands when skills.enableSkillCommands is on —
 				// default true; /skill:<name> is a real agent-side invocation).
-				const { BUILTIN_SLASH_COMMAND_DEFS } = await import("../slash-commands/builtin-registry");
+				// `tuiOnly` marks entries without an ACP/text-mode `handle` —
+				// session.slashCommand reports those "tui-only", so the GUI
+				// hides them (minus its own intercepted panel commands)
+				// instead of letting the user fire commands that can only
+				// answer "该命令仅在终端中可用".
+				const { BUILTIN_SLASH_COMMANDS_INTERNAL } = await import("../slash-commands/builtin-registry");
 				const { getSkillSlashCommandName } = await import("../extensibility/skills");
 				const list: {
 					name: string;
@@ -7112,7 +7117,8 @@ export class DaemonServer {
 					subcommands?: { name: string; description?: string }[];
 					kind: "command" | "skill";
 					category: string;
-				}[] = BUILTIN_SLASH_COMMAND_DEFS.map(c => ({
+					tuiOnly: boolean;
+				}[] = BUILTIN_SLASH_COMMANDS_INTERNAL.map(c => ({
 					name: c.name,
 					description: c.description,
 					subcommands: c.subcommands?.map((sc: { name: string; description?: string }) => ({
@@ -7121,6 +7127,7 @@ export class DaemonServer {
 					})),
 					kind: "command",
 					category: slashCommandCategory(c.name),
+					tuiOnly: typeof c.handle !== "function",
 				}));
 				for (const skill of await this.#getSkills()) {
 					list.push({
@@ -7129,6 +7136,8 @@ export class DaemonServer {
 						kind: "skill",
 						// Second badge = discovery scope (openchamber's PROJECT tag).
 						category: skill.source.split(":")[1] === "project" ? "project" : "user",
+						// Skills are agent-side invocations — never tui-only.
+						tuiOnly: false,
 					});
 				}
 				return list;

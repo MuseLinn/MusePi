@@ -30,10 +30,12 @@ import {
 	VoiceButton,
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
+import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
+import { ComposerHighlight } from "./composer/input-highlight";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
@@ -1836,10 +1838,20 @@ export function Composer({
 								// TUI /guided-goal parity: the agent interviews
 								// the user in chat, then creates the goal. The
 								// current draft rides along as the rough
-								// objective when present.
+								// objective when present — cleared only after
+								// the RPC accepts (a failed start must not eat
+								// the draft), and failures surface in the
+								// slash notice instead of dying silently.
 								if (!rpc || !sessionId) return;
-								const objective = text.trim() || undefined;
-								void rpc.request("session.goal", { sessionId, op: "guided", objective }).catch(() => {});
+								const draft = text.trim();
+								void rpc
+									.request("session.goal", { sessionId, op: "guided", objective: draft || undefined })
+									.then(() => {
+										if (!draft) return;
+										setText("");
+										requestAnimationFrame(() => autosize(taRef.current));
+									})
+									.catch(() => showSlashNotice("error", t("guided goal failed")));
 							}}
 							onPickImages={files => void addFiles(files)}
 							onPickFiles={files => void addFiles(files)}
@@ -1936,6 +1948,9 @@ export function Composer({
 						{/* composer.right 座位槽(DSH conversation.input.right 对齐):
 						 * 扩展声明 composer.right 槽位即注入工具栏右端。 */}
 						<SlotComponentHost rpc={rpc} slot={COMPOSER_RIGHT_SLOT} sessionId={sessionId} cwd={cwd} />
+						{/* Approval mode (openchamber input permission-picker parity):
+						 * the daemon re-reads tools.approvalMode on every tool call. */}
+						<ApprovalModeButton rpc={rpc} />
 						{contextUsage != null && (
 							<ContextRing
 								percent={contextUsage.percent}
@@ -2099,73 +2114,83 @@ export function Composer({
 						e.target.value = "";
 					}}
 				/>
-				<textarea
-					ref={el => {
-						taRef.current = el;
-						menuAnchorRef(el);
-					}}
-					value={text}
-					rows={MIN_ROWS}
-					onPaste={e => {
-						onPaste(e);
-						if (e.defaultPrevented) return;
-						const pastedText = e.clipboardData.getData("text");
-						if (isLongPastedText(pastedText)) {
-							e.preventDefault();
-							requestLongPaste(pastedText);
-						}
-					}}
-					onDragOver={onDragOver}
-					onDrop={onDrop}
-					onChange={e => {
-						setText(e.target.value);
-						// A genuine keystroke that edits the box exits input-history
-						// browsing (programmatic history recall sets state, never
-						// fires onChange — so browse stays until the user edits).
-						if (historyIndex !== null) setHistoryIndex(null);
-						if (clearAllRef.current) {
-							clearAllRef.current = false;
-							if (e.target.value === "") setAttachments([]);
-						}
-						onSlashInput(e.target.value);
-						onAtInput(e.target.value);
-						onHashInput(e.target.value);
-						autosize(taRef.current);
-					}}
-					onCompositionStart={() => {
-						composingRef.current = true;
-					}}
-					onCompositionUpdate={() => {
-						composingRef.current = true;
-					}}
-					onCompositionEnd={() => {
-						// Deferred a tick: WebKit dispatches the confirming Enter
-						// after compositionend, when isComposing is already false.
-						setTimeout(() => {
+				<div className="gui-ta-stack">
+					<ComposerHighlight text={text} className="gui-ta-highlight--session" />
+					<textarea
+						ref={el => {
+							taRef.current = el;
+							menuAnchorRef(el);
+						}}
+						value={text}
+						rows={MIN_ROWS}
+						onScroll={e => {
+							// Mirror the textarea's scroll onto the highlight overlay
+							// (previousElementSibling inside the shared stack) so the
+							// painted tokens track the caret when the draft overflows.
+							const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
+							if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+						}}
+						onPaste={e => {
+							onPaste(e);
+							if (e.defaultPrevented) return;
+							const pastedText = e.clipboardData.getData("text");
+							if (isLongPastedText(pastedText)) {
+								e.preventDefault();
+								requestLongPaste(pastedText);
+							}
+						}}
+						onDragOver={onDragOver}
+						onDrop={onDrop}
+						onChange={e => {
+							setText(e.target.value);
+							// A genuine keystroke that edits the box exits input-history
+							// browsing (programmatic history recall sets state, never
+							// fires onChange — so browse stays until the user edits).
+							if (historyIndex !== null) setHistoryIndex(null);
+							if (clearAllRef.current) {
+								clearAllRef.current = false;
+								if (e.target.value === "") setAttachments([]);
+							}
+							onSlashInput(e.target.value);
+							onAtInput(e.target.value);
+							onHashInput(e.target.value);
+							autosize(taRef.current);
+						}}
+						onCompositionStart={() => {
+							composingRef.current = true;
+						}}
+						onCompositionUpdate={() => {
+							composingRef.current = true;
+						}}
+						onCompositionEnd={() => {
+							// Deferred a tick: WebKit dispatches the confirming Enter
+							// after compositionend, when isComposing is already false.
+							setTimeout(() => {
+								composingRef.current = false;
+							}, 0);
+						}}
+						onBlur={() => {
+							// A composition can end WITHOUT compositionend — an IME
+							// cancel, a window switch, Esc, a renderer reload. Losing
+							// focus always terminates it, so this is the safe reset
+							// for the latch that would otherwise stay true forever
+							// (Enter silently stops sending until restart).
 							composingRef.current = false;
-						}, 0);
-					}}
-					onBlur={() => {
-						// A composition can end WITHOUT compositionend — an IME
-						// cancel, a window switch, Esc, a renderer reload. Losing
-						// focus always terminates it, so this is the safe reset
-						// for the latch that would otherwise stay true forever
-						// (Enter silently stops sending until restart).
-						composingRef.current = false;
-					}}
-					onFocus={() => {
-						// Nothing can still be composing when focus arrives.
-						composingRef.current = false;
-					}}
-					onKeyDown={onKeyDown}
-					placeholder={
-						working
-							? t("agent working — send steers the agent now, /queue waits for the turn to end…")
-							: t("ask anything, / for commands, @ for context…")
-					}
-					spellCheck={spellcheckEnabled()}
-					autoComplete="off"
-				/>
+						}}
+						onFocus={() => {
+							// Nothing can still be composing when focus arrives.
+							composingRef.current = false;
+						}}
+						onKeyDown={onKeyDown}
+						placeholder={
+							working
+								? t("agent working — send steers the agent now, /queue waits for the turn to end…")
+								: t("ask anything, / for commands, @ for context…")
+						}
+						spellCheck={spellcheckEnabled()}
+						autoComplete="off"
+					/>
+				</div>
 				{renderFloatMenu(
 					<CompletionMenus
 						slashOpen={slashOpen}

@@ -12,6 +12,11 @@ import type { AtCompletionEntry, HashCompletionEntry } from "./completion-menus"
  *  the agent) — they win ties in the / completion ranking. */
 const SLASH_GUI_NATIVE: ReadonlySet<string> = new Set(["usage", "context"]);
 
+/** TUI-only daemon commands the GUI intercepts with its own panel — the
+ *  only tuiOnly entries allowed to stay in the / menu (everything else
+ *  tuiOnly can only answer "该命令仅在终端中可用", so it is hidden). */
+const GUI_PANEL_INTERCEPTS: ReadonlySet<string> = new Set(["usage", "context", "debug", "btw", "autoresearch"]);
+
 /**
  * "@"/"#"/"//" completion machinery (TUI parity): the three completion
  * state machines share the textarea anchor and the draft setter. "/"
@@ -122,7 +127,13 @@ export function useCompletion({
 			category: "GUI",
 		};
 		const list = [
-			...(slashCmds ?? []).filter(c => c.name !== "usage" && c.name !== "context"),
+			// Hide TUI-only daemon commands the GUI has no panel for — they
+			// can only answer "该命令仅在终端中可用" when sent. GUI-intercepted
+			// names (panel parity) and skill commands stay visible.
+			...(slashCmds ?? []).filter(
+				c =>
+					c.name !== "usage" && c.name !== "context" && !(c.tuiOnly === true && !GUI_PANEL_INTERCEPTS.has(c.name)),
+			),
 			guiUsageCmd,
 			guiContextCmd,
 		];

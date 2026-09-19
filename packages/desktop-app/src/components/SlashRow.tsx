@@ -15,6 +15,11 @@ export interface SlashEntry {
 	subcommands?: { name: string }[];
 	kind?: "command" | "skill";
 	category?: string;
+	/** No ACP/text-mode handler on the daemon (commands.list): sending it
+	 *  from the GUI only ever answers "该命令仅在终端中可用". The completion
+	 *  list hides these unless the GUI intercepts the name with its own
+	 *  panel (/usage /context /debug /btw /autoresearch). */
+	tuiOnly?: boolean;
 }
 
 export function SlashRow({

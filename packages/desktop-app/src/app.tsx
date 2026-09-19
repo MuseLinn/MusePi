@@ -1872,6 +1872,12 @@ function AppInner(): ReactNode {
 				files?: File[];
 				planMode?: boolean;
 				goalMode?: boolean;
+				/** Guided goal (TUI /guided-goal parity, welcome entry): don't
+				 *  send `text` as a message — create the session, then fire
+				 *  `session.goal op:"guided"` so the agent runs the interview
+				 *  kickoff (hidden synthetic prompt); `text` rides along as the
+				 *  rough objective when present. */
+				guidedGoal?: boolean;
 			},
 		): Promise<void> => {
 			const isSlash = text.startsWith("/") && !text.startsWith("//");
@@ -1949,6 +1955,26 @@ function AppInner(): ReactNode {
 						if (res.prompt) void sendPrompt(res.prompt, undefined, id);
 					})
 					.catch(() => {});
+				return;
+			}
+			if (opts?.guidedGoal) {
+				// Guided goal (TUI /guided-goal parity, welcome entry): the fresh
+				// session runs the interview kickoff — the agent interviews the
+				// user in chat, then creates the goal via its `goal` tool. The
+				// draft rides along as the rough objective; failures surface as
+				// a pet error (the guided RPC swallowed silently once and the
+				// menu looked dead — never again).
+				const client = rpcRef.current;
+				if (!client) return;
+				try {
+					await client.request("session.goal", {
+						sessionId: id,
+						op: "guided",
+						objective: text.trim() || null,
+					});
+				} catch {
+					dispatchPetActivity("error", t("guided goal failed"));
+				}
 				return;
 			}
 			// Empty-state file chips: the welcome surface has no workspace yet,

@@ -40,7 +40,9 @@ import {
 	type UsageUnreportedAccountView,
 } from "./Composer";
 import { VoiceButton } from "./composer/action-buttons";
+import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { DESIGN_STYLES, DesignStyleChips } from "./composer/design-styles";
+import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -161,6 +163,10 @@ export function WelcomeComposer({
 			files?: File[];
 			planMode?: boolean;
 			goalMode?: boolean;
+			/** Guided goal (TUI /guided-goal parity): the host creates the
+			 *  session and fires `session.goal op:"guided"` instead of sending
+			 *  the text as a first message; `text` is the rough objective. */
+			guidedGoal?: boolean;
 		},
 	): Promise<void> | void;
 	busy?: boolean;
@@ -1581,10 +1587,27 @@ export function WelcomeComposer({
 										// to the session it creates.
 										onToggleGoal={() => setGoalArmed(v => !v)}
 										onTogglePlan={() => setPlanArmed(v => !v)}
-										// Guided goal needs a live session (the interview
-										// runs in chat); the welcome state has none, and
-										// the goal row is already disabled there.
-										onGuidedGoal={() => {}}
+										// Guided goal needs a live session (the interview runs
+										// in chat), so the welcome entry CREATES one via
+										// onSubmit(guidedGoal) — the daemon fires the hidden
+										// interview kickoff there and the draft rides along
+										// as the rough objective. The empty `() => {}` once
+										// made the menu row look dead.
+										onGuidedGoal={() => {
+											const draft = text.trim();
+											if (busy) return;
+											setText("");
+											setQuotes([]);
+											requestAnimationFrame(() => autosize(taRef.current));
+											sfxFor("first");
+											setGoalArmed(false);
+											setPlanArmed(false);
+											void onSubmit(draft, {
+												thinkingLevel: thinking,
+												modelId: modelTouched.current ? modelId : effectiveModelId,
+												guidedGoal: true,
+											});
+										}}
 										onPickImages={files => void addFiles(files)}
 										// Same entry set as the session composer: the empty
 										// state is not a reduced product. File chips wait in
@@ -1669,6 +1692,9 @@ export function WelcomeComposer({
 							}
 							footerRight={
 								<>
+									{/* Approval mode (openchamber input permission-picker
+									 * parity) — a global setting, so it works session-less. */}
+									<ApprovalModeButton rpc={rpc} />
 									<VoiceButton
 										state={dictating ? (transcribing ? "transcribing" : "recording") : "idle"}
 										seconds={voiceSeconds}
@@ -1860,148 +1886,158 @@ export function WelcomeComposer({
 										onDismiss={dismissLongPaste}
 									/>
 								)}
-								<textarea
-									ref={el => {
-										taRef.current = el;
-										compAnchorRef(el);
-									}}
-									className="w-full min-w-0 flex-1 resize-none bg-transparent px-1 py-3.5 text-[14px] leading-relaxed text-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
-									rows={3}
-									data-focused={focused ? "1" : "0"}
-									value={text}
-									onPaste={e => {
-										// Any pasted file becomes a chip (session-composer
-										// parity); plain text falls through to the
-										// textarea / long-paste gate.
-										const files = [...e.clipboardData.items]
-											.filter(i => i.kind === "file")
-											.map(i => i.getAsFile())
-											.filter((f): f is File => f !== null);
-										if (files.length > 0) {
-											e.preventDefault();
-											void addFiles(files);
-											return;
-										}
-										const pastedText = e.clipboardData.getData("text");
-										if (isLongPastedText(pastedText)) {
-											e.preventDefault();
-											requestLongPaste(pastedText);
-										}
-									}}
-									onDrop={e => {
-										const files = [...e.dataTransfer.files];
-										if (files.length > 0) {
-											e.preventDefault();
-											void addFiles(files);
-										}
-									}}
-									onChange={e => {
-										setText(e.target.value);
-										if (clearAllRef.current) {
-											clearAllRef.current = false;
-											if (e.target.value === "") setAttachments([]);
-										}
-										onCompletionInput(e.target.value);
-										// Initial height equals the content height, so
-										// first lines never resize the card.
-										autosize(taRef.current);
-									}}
-									onKeyDown={e => {
-										// IME composition: the confirming Enter commits the
-										// candidate text — never submit while composing.
-										if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-										// Attachment keyboard flow (WeChat parity): Backspace/
-										// Delete on an empty input removes the last image chip;
-										// a select-all delete empties attachments too.
-										if (e.key === "Backspace" || e.key === "Delete") {
-											const ta = taRef.current;
-											if (ta) {
-												if (ta.value.length === 0 && attachments.length > 0) {
+								<div className="gui-ta-stack">
+									<ComposerHighlight text={text} className="gui-ta-highlight--welcome" />
+									<textarea
+										ref={el => {
+											taRef.current = el;
+											compAnchorRef(el);
+										}}
+										className="w-full min-w-0 flex-1 resize-none bg-transparent px-1 py-3.5 text-[14px] leading-relaxed text-transparent caret-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
+										rows={3}
+										data-focused={focused ? "1" : "0"}
+										value={text}
+										onScroll={e => {
+											// Mirror the textarea's scroll onto the highlight
+											// overlay (previousElementSibling in the stack).
+											const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
+											if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+										}}
+										onPaste={e => {
+											// Any pasted file becomes a chip (session-composer
+											// parity); plain text falls through to the
+											// textarea / long-paste gate.
+											const files = [...e.clipboardData.items]
+												.filter(i => i.kind === "file")
+												.map(i => i.getAsFile())
+												.filter((f): f is File => f !== null);
+											if (files.length > 0) {
+												e.preventDefault();
+												void addFiles(files);
+												return;
+											}
+											const pastedText = e.clipboardData.getData("text");
+											if (isLongPastedText(pastedText)) {
+												e.preventDefault();
+												requestLongPaste(pastedText);
+											}
+										}}
+										onDrop={e => {
+											const files = [...e.dataTransfer.files];
+											if (files.length > 0) {
+												e.preventDefault();
+												void addFiles(files);
+											}
+										}}
+										onChange={e => {
+											setText(e.target.value);
+											if (clearAllRef.current) {
+												clearAllRef.current = false;
+												if (e.target.value === "") setAttachments([]);
+											}
+											onCompletionInput(e.target.value);
+											// Initial height equals the content height, so
+											// first lines never resize the card.
+											autosize(taRef.current);
+										}}
+										onKeyDown={e => {
+											// IME composition: the confirming Enter commits the
+											// candidate text — never submit while composing.
+											if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+											// Attachment keyboard flow (WeChat parity): Backspace/
+											// Delete on an empty input removes the last image chip;
+											// a select-all delete empties attachments too.
+											if (e.key === "Backspace" || e.key === "Delete") {
+												const ta = taRef.current;
+												if (ta) {
+													if (ta.value.length === 0 && attachments.length > 0) {
+														e.preventDefault();
+														setAttachments(prev => prev.slice(0, -1));
+														return;
+													}
+													if (
+														ta.selectionStart === 0 &&
+														ta.selectionEnd === ta.value.length &&
+														ta.value.length > 0
+													) {
+														clearAllRef.current = true;
+													}
+												}
+											}
+											const menus: {
+												open: boolean;
+												list: unknown[];
+												idx: number;
+												setIdx: (n: number) => void;
+												insert: () => void;
+											}[] = [
+												{
+													open: slashOpen,
+													list: slashFilter,
+													idx: slashIdx,
+													setIdx: setSlashIdx,
+													insert: () =>
+														slashFilter[slashIdx] &&
+														insertCompletion("slash", slashFilter[slashIdx]!.name),
+												},
+												{
+													open: atOpen,
+													list: atFilter,
+													idx: atIdx,
+													setIdx: setAtIdx,
+													insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
+												},
+												{
+													open: hashOpen,
+													list: hashFilter,
+													idx: hashIdx,
+													setIdx: setHashIdx,
+													insert: () =>
+														hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
+												},
+											];
+											for (const m of menus) {
+												if (!m.open || m.list.length === 0) continue;
+												if (e.key === "ArrowDown") {
 													e.preventDefault();
-													setAttachments(prev => prev.slice(0, -1));
+													m.setIdx((m.idx + 1) % m.list.length);
 													return;
 												}
-												if (
-													ta.selectionStart === 0 &&
-													ta.selectionEnd === ta.value.length &&
-													ta.value.length > 0
-												) {
-													clearAllRef.current = true;
+												if (e.key === "ArrowUp") {
+													e.preventDefault();
+													m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
+													return;
+												}
+												if (e.key === "Enter" || e.key === "Tab") {
+													e.preventDefault();
+													m.insert();
+													return;
+												}
+												if (e.key === "Escape") {
+													e.preventDefault();
+													setSlashOpen(false);
+													setAtOpen(false);
+													setHashOpen(false);
+													return;
 												}
 											}
-										}
-										const menus: {
-											open: boolean;
-											list: unknown[];
-											idx: number;
-											setIdx: (n: number) => void;
-											insert: () => void;
-										}[] = [
-											{
-												open: slashOpen,
-												list: slashFilter,
-												idx: slashIdx,
-												setIdx: setSlashIdx,
-												insert: () =>
-													slashFilter[slashIdx] && insertCompletion("slash", slashFilter[slashIdx]!.name),
-											},
-											{
-												open: atOpen,
-												list: atFilter,
-												idx: atIdx,
-												setIdx: setAtIdx,
-												insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
-											},
-											{
-												open: hashOpen,
-												list: hashFilter,
-												idx: hashIdx,
-												setIdx: setHashIdx,
-												insert: () =>
-													hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
-											},
-										];
-										for (const m of menus) {
-											if (!m.open || m.list.length === 0) continue;
-											if (e.key === "ArrowDown") {
+											if (e.key === "Enter" && !e.shiftKey) {
 												e.preventDefault();
-												m.setIdx((m.idx + 1) % m.list.length);
-												return;
+												submit(e as unknown as FormEvent<HTMLFormElement>);
 											}
-											if (e.key === "ArrowUp") {
-												e.preventDefault();
-												m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
-												return;
+										}}
+										placeholder={isDesignArmed ? t("design empty placeholder") : t(PLACEHOLDER_TIPS[tipIdx]!)}
+										spellCheck={(() => {
+											try {
+												return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
+											} catch {
+												return false;
 											}
-											if (e.key === "Enter" || e.key === "Tab") {
-												e.preventDefault();
-												m.insert();
-												return;
-											}
-											if (e.key === "Escape") {
-												e.preventDefault();
-												setSlashOpen(false);
-												setAtOpen(false);
-												setHashOpen(false);
-												return;
-											}
-										}
-										if (e.key === "Enter" && !e.shiftKey) {
-											e.preventDefault();
-											submit(e as unknown as FormEvent<HTMLFormElement>);
-										}
-									}}
-									placeholder={isDesignArmed ? t("design empty placeholder") : t(PLACEHOLDER_TIPS[tipIdx]!)}
-									spellCheck={(() => {
-										try {
-											return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
-										} catch {
-											return false;
-										}
-									})()}
-									autoFocus
-									autoComplete="off"
-								/>
+										})()}
+										autoFocus
+										autoComplete="off"
+									/>
+								</div>
 							</div>
 						</ComposerFrame>
 					</form>
