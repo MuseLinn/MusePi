@@ -1379,7 +1379,7 @@
 	width: 26px;
 	height: 26px;
 	border: none;
-	border-radius: 8px;
+	border-radius: var(--radius-xs);
 	background: transparent;
 	color: var(--color-text-faint);
 	cursor: pointer;
@@ -1457,7 +1457,7 @@
 	flex-direction: column;
 	gap: 2px;
 	padding: 6px 8px;
-	border-radius: 8px;
+	border-radius: var(--radius-xs);
 	background: color-mix(in oklab, var(--color-warning, #f5a623) 8%, transparent);
 }
 

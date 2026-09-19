@@ -90,6 +90,7 @@ export const composer = {
 	"sketch redo": "重做",
 	"sketch clear": "清空",
 	"sketch done": "完成",
+	"sketch export light": "导出浅色底（不随主题）",
 	"sketch discard title": "放弃这次绘画？",
 	"sketch discard confirm": "画布上有未发送的内容，丢弃后无法恢复。",
 	// ── Design session style chips (设计稿 08) ────────────────────────────

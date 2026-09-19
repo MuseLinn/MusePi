@@ -147,6 +147,10 @@ export function SketchPad({
 	const baseImage = useLoadedImage(initialImage);
 	const idRef = useRef(1);
 	const [dirty, setDirty] = useState(false);
+	/** 浅色底导出 (user request): dark-theme sketches export on white so
+	 *  shared/sent images stay readable outside the app. */
+	const [lightExport, setLightExport] = useState(false);
+	const [forceWhite, setForceWhite] = useState(false);
 	const { confirm } = useConfirm();
 
 	// Track the overlay's available box; the stage fills it.
@@ -309,9 +313,19 @@ export function SketchPad({
 		// 180ms: let the scale-out read as "falling back into the composer",
 		// then hand the PNG over (the composer adds the chip as the veil
 		// unmounts — the two halves of the Codex zoom animation).
-		window.setTimeout(() => {
+		void (async () => {
+			if (lightExport && bg !== "#ffffff") {
+				// Light-background export: paint the canvas rect white for the
+				// snapshot, wait a frame for React to apply it, then restore.
+				setForceWhite(true);
+				await new Promise(resolve => setTimeout(resolve, 80));
+				const url = stage.toDataURL({ pixelRatio: 2 });
+				setForceWhite(false);
+				onDone(url);
+				return;
+			}
 			onDone(stage.toDataURL({ pixelRatio: 2 }));
-		}, 180);
+		})();
 	};
 
 	const renderStroke = (s: Stroke, isPreview = false): ReactNode => {
@@ -445,7 +459,7 @@ export function SketchPad({
 							style={{ cursor: tool === "eraser" ? "cell" : "crosshair", touchAction: "none" }}
 						>
 							<Layer listening={false}>
-								<Rect x={0} y={0} width={stageSize.w} height={stageSize.h} fill={bg} />
+								<Rect x={0} y={0} width={stageSize.w} height={stageSize.h} fill={forceWhite ? "#ffffff" : bg} />
 								{baseImage && (
 									<KonvaImage {...fitImage(baseImage, stageSize.w, stageSize.h)} image={baseImage} />
 								)}
