@@ -37,6 +37,7 @@ import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
 import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
+import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
 import { RpcClient, type StreamEvent } from "./lib/rpc";
@@ -268,13 +269,20 @@ function AppInner(): ReactNode {
 		const { electronAPI } = window as unknown as {
 			electronAPI?: { petActivity?(payload: unknown): Promise<unknown> };
 		};
-		const observer = new MutationObserver(() => {
+		// Themed pet palette (pet-palette.ts): derive the orb's shell/ring/
+		// eye colors from the resolved --accent at startup, on every scheme
+		// or accent-axis flip (the observer below), and push the accent to
+		// the pet window alongside the theme so the floating pet matches.
+		applyPetPalette(root);
+		const push = (): void => {
 			applyGlassMaterial(localStorage.getItem("musepi-gui-glass-enabled") !== "0");
 			void electronAPI?.petActivity?.({
 				theme: root.dataset.theme === "light" ? "light" : "dark",
+				accent: resolvedAccent(root) ?? undefined,
 			});
-		});
-		observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] });
+		};
+		const observer = new MutationObserver(push);
+		observer.observe(root, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
 		return () => observer.disconnect();
 	}, []);
 	const [url, setUrl] = useState<string>(() => {

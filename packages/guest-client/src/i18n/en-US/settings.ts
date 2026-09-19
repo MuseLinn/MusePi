@@ -955,8 +955,9 @@ export const settings = {
 	"dot matrix background": "Dot matrix brand background",
 	"agent avatar style": "Agent avatar style",
 	"agent avatar style description":
-		"Animation style for the agent avatar in chat (orbs is the default thinking orb; swap in a hexagon or spark glyph)",
+		"Animation style for the agent avatar in chat (orbs is the default thinking orb; swap in the desktop pet orb, a hexagon or spark glyph)",
 	"avatar orbs": "Orbs",
+	"avatar pet": "Pet orb",
 	"avatar hex": "Hexagon",
 	"avatar spark": "Spark",
 	"avatar punk": "Pixel punk",

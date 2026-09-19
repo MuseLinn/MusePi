@@ -1012,7 +1012,41 @@ function updatePetClickThrough() {
 		petHoverState = hovering;
 		petWindow.webContents.send("pet:hover", hovering);
 	}
+	// Gaze piggybacks on this same poll: the cursor is already in hand, so
+	// eye-following costs one subtraction and a bounded send. The vector is
+	// the cursor offset from the window centre, normalized by GAZE_RANGE
+	// CSS px (full deflection well before the screen edge) and clamped —
+	// the renderer eases the eyes toward it, so 120ms updates read smooth.
+	if (!petWindow.isDestroyed()) {
+		const cursor = cursorToPos(screen.getCursorScreenPoint());
+		const bounds = petWindow.getBounds();
+		const cx = petWindow.getPosition()[0] + cssToPos(bounds.width / 2);
+		const cy = petWindow.getPosition()[1] + cssToPos(bounds.height / 2);
+		const range = Math.max(1, cssToPos(PET_GAZE_RANGE_CSS));
+		let gx = (cursor.x - cx) / range;
+		let gy = (cursor.y - cy) / range;
+		const len = Math.hypot(gx, gy);
+		if (len > 1) {
+			gx /= len;
+			gy /= len;
+		}
+		if (
+			!petGazeState ||
+			Math.abs(gx - petGazeState.x) > PET_GAZE_EPSILON ||
+			Math.abs(gy - petGazeState.y) > PET_GAZE_EPSILON
+		) {
+			petGazeState = { x: gx, y: gy };
+			petWindow.webContents.send("pet:gaze", petGazeState);
+		}
+	}
 }
+
+/** Gaze-following tuning: full eye deflection at this many CSS px from
+ *  the window centre, and the minimum vector change worth an IPC send. */
+const PET_GAZE_RANGE_CSS = 420;
+const PET_GAZE_EPSILON = 0.02;
+/** Last pushed gaze vector — also the "window hidden" reset handle. */
+let petGazeState = null;
 
 // BitFun's pointer poll interval; cheap and bounded. Runs ONLY while the
 // pet is visible — an always-on 120ms interval would wake the main process

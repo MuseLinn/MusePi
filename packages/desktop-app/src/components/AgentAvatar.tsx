@@ -59,7 +59,10 @@ export function AgentAvatar({
 	} catch {
 		// storage unavailable — keep cycling on
 	}
-	const cycling = state === "listening" && !motionOff;
+	// The pet preset opts out of the idle cycle: its mood binding (ORB_TO_
+	// PET_MOOD in avatar-presets.tsx) is authoritative — a scripted cycle
+	// would fight the session state the pet's face now reflects.
+	const cycling = state === "listening" && !motionOff && presetId !== "pet";
 	useEffect(() => {
 		if (!cycling) return;
 		let id = window.setInterval(() => setCycleIndex(i => (i + 1) % IDLE_CYCLE.length), CYCLE_MS);

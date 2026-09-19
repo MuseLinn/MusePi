@@ -85,10 +85,12 @@
 }
 
 /* Lower-right edge shade: on a dark shell the "3D" cue is a cool rim, so the
- * sphere separates from the background instead of dissolving into it. */
+ * sphere separates from the background instead of dissolving into it.
+ * Variable hook: the theme palette (lib/pet-palette.ts) sets --gui-pet-rim
+ * to a light tint of the live accent; the literal is the brand-dark default. */
 .gui-pet-svg__rim {
 	fill: none;
-	stroke: rgba(150, 196, 255, 0.26);
+	stroke: var(--gui-pet-rim, rgba(150, 196, 255, 0.26));
 	stroke-width: 3.2;
 	stroke-linecap: round;
 }

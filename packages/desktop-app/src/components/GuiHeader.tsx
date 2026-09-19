@@ -11,13 +11,13 @@ import {
 	projectName,
 	shellPlatform,
 } from "../lib/electron";
+import { orbFromSession } from "../lib/pet";
 import { usePrompt } from "../lib/prompt-dialog";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
 import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
-import type { OrbState } from "../vendor/thinking-orbs";
 import { StateIcon } from "./StateIcon";
 
 /** Known open-in app ids → built-in oc-icon fallback (shown when the
@@ -197,7 +197,7 @@ export function GuiHeader({
 		store ? store.subscribe.bind(store) : noopSubscribe,
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
-	const orb: OrbState = snap?.working ? (snap.streaming ? "composing" : "working") : "listening";
+	const orb = orbFromSession(snap);
 	const statusText = snap?.working ? (snap.streaming ? t("replying") : t("working")) : t("idle");
 	// Traffic lights are macOS-only. Windows/Linux get a native
 	// titleBarOverlay (top-right ~138px) so the right cluster needs

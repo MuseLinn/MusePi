@@ -12,6 +12,8 @@
  * imported Petdex package (pet.json + spritesheet, 8×9 frame grid).
  */
 
+import type { OrbState } from "../vendor/thinking-orbs";
+
 export type PetMood = "rest" | "working" | "waiting" | "analyzing" | "error";
 /** Petdex-only moods — spritesheet rows 1/2 (hover/dragging) that the
  *  floating desktop pet switches to while the pointer is over it or while
@@ -59,6 +61,10 @@ export interface PetActivity {
 	 *  (the pet window mirrors it as data-theme — see pet-main.tsx);
 	 *  cross-window storage events don't fire reliably under file://. */
 	theme?: "light" | "dark";
+	/** Resolved --accent color (CSS value, e.g. oklch) of the main window —
+	 *  the pet window re-derives its themed shell/ring palette from it
+	 *  (pet-palette.ts). Pushed alongside `theme`. */
+	accent?: string;
 }
 
 export const PET_MOODS: readonly PetMood[] = ["rest", "working", "waiting", "analyzing", "error"];
@@ -366,6 +372,20 @@ export function moodFromState(opts: { working: boolean; streaming: boolean; hasA
 	if (opts.hasApprovals) return "waiting";
 	if (opts.working) return opts.streaming ? "working" : "analyzing";
 	return "rest";
+}
+
+/** Map a session snapshot to the thinking-orb state — the single source the
+ *  header and the chat view derive the agent avatar's animation from (the
+ *  two previously duplicated the ternary and missed the approvals state,
+ *  so the avatar spun on while the agent was actually blocked on a tool
+ *  approval). Pending approvals pin the `waiting` state (the "paused for
+ *  you" wave). */
+export function orbFromSession(
+	snap: { working?: boolean; streaming?: boolean; approvals?: readonly unknown[] } | null | undefined,
+): OrbState {
+	if (snap?.approvals && snap.approvals.length > 0) return "waiting";
+	if (snap?.working) return snap.streaming ? "composing" : "working";
+	return "listening";
 }
 
 /** Normalized pet body height (px) at scale 1 — every pet renders its

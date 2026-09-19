@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { dispatchNotification } from "../lib/notify";
-import { moodFromState } from "../lib/pet";
+import { moodFromState, orbFromSession } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
@@ -34,7 +34,6 @@ import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
-import type { OrbState } from "../vendor/thinking-orbs";
 import { AgentAvatar } from "./AgentAvatar";
 import { ApprovalCard } from "./ApprovalCard";
 import { type AskAnswer, AskCard, type AskRequest } from "./AskCard";
@@ -579,8 +578,10 @@ export function ChatView({
 	}
 	// Agent status via the thinking-orb state (ZCode: avatar, not labels).
 	// streaming = the assistant message has started streaming (view folds it
-	// into entries at message_start — no separate ghost is kept).
-	const orb: OrbState = snap?.working ? (snap.streaming ? "composing" : "working") : "listening";
+	// into entries at message_start — no separate ghost is kept). Pending
+	// tool approvals pin `waiting` (the "paused for you" wave) — shared
+	// helper with the header so both avatars tell the same story.
+	const orb = orbFromSession(snap);
 	// Avatar display toggle lives in Settings → appearance (musepi-gui-avatars).
 	const showAvatars = localStorage.getItem("musepi-gui-avatars") !== "0";
 	// Resizable terminal dock (drag the top edge).

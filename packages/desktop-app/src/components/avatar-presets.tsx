@@ -1,6 +1,8 @@
 import { punkAvatarUri } from "@musepi/guest-client";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import type { PetdexMood } from "../lib/pet";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
+import { BuiltinPetSprite, type GazeVec } from "./PetSprite";
 
 /**
  * Agent-avatar presets (pet-style switcher): the chat avatar is a
@@ -149,11 +151,65 @@ export function PunkAvatar({ size, seed }: { size: number; seed?: string }): Rea
 	return <img src={punkAvatarUri(stableSeed)} width={size} height={size} alt="" className="gui-avatar-punk" />;
 }
 
+/** Orb state → mascot mood (the builtin orb-bot's faces). Mirrors the
+ *  floating pet's state binding instead of the old random idle cycle:
+ *  composing spins as working, searching/solving/shaping squint as
+ *  analyzing, approvals pin the waiting face. */
+const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
+	listening: "rest",
+	working: "working",
+	searching: "analyzing",
+	solving: "analyzing",
+	composing: "working",
+	shaping: "analyzing",
+	waiting: "waiting",
+};
+
+/** Pet avatar (orb-bot): the desktop mascot rendered in the avatar slot.
+ *  Eyes track the cursor — one window-level pointermove writes the gaze
+ *  ref per mounted avatar (the engine reads it per frame; no React
+ *  re-render). Normalized to ±1 over a 120px reach and clamped: beyond
+ *  that the eyes stay pinned toward the pointer, "watching you" across
+ *  the room. */
+function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
+	const boxRef = useRef<HTMLSpanElement | null>(null);
+	const gazeRef = useRef<GazeVec | null>(null);
+	useEffect(() => {
+		const GAZE_RANGE_PX = 120;
+		const onMove = (e: PointerEvent): void => {
+			const el = boxRef.current;
+			if (!el) return;
+			const r = el.getBoundingClientRect();
+			if (r.width <= 0) return;
+			let gx = (e.clientX - (r.left + r.width / 2)) / GAZE_RANGE_PX;
+			let gy = (e.clientY - (r.top + r.height / 2)) / GAZE_RANGE_PX;
+			const len = Math.hypot(gx, gy);
+			if (len > 1) {
+				gx /= len;
+				gy /= len;
+			}
+			gazeRef.current = { x: gx, y: gy };
+		};
+		window.addEventListener("pointermove", onMove);
+		return () => window.removeEventListener("pointermove", onMove);
+	}, []);
+	return (
+		<span ref={boxRef} className="gui-avatar-pet gui-pet" style={{ width: size, height: size }} role="img">
+			<BuiltinPetSprite mood={ORB_TO_PET_MOOD[state]} gazeRef={gazeRef} />
+		</span>
+	);
+}
+
 export const AVATAR_PRESETS: readonly AvatarPresetDef[] = [
 	{
 		id: "orbs",
 		labelKey: "avatar orbs",
 		render: (state, size) => <ThinkingOrb state={state} size={size as 20 | 32 | 64} theme="auto" />,
+	},
+	{
+		id: "pet",
+		labelKey: "avatar pet",
+		render: (state, size) => <PetAvatar state={state} size={size} />,
 	},
 	{ id: "hex", labelKey: "avatar hex", render: (state, size) => <HexAvatar state={state} size={size} /> },
 	{ id: "spark", labelKey: "avatar spark", render: (state, size) => <SparkAvatar state={state} size={size} /> },

@@ -27,8 +27,9 @@
 import { setLocale, t } from "@musepi/guest-client";
 import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { PetSprite, usePet } from "./components/PetSprite";
+import { type GazeVec, PetSprite, usePet } from "./components/PetSprite";
 import { type PetActivity, type PetMood, petScale } from "./lib/pet";
+import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
 import { PetBubbles } from "./pet-bubbles";
 
@@ -46,6 +47,9 @@ import "./styles/gui.css";
 interface PetBridge {
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
 	onPetHover?(cb: (hovering: boolean) => void): () => void;
+	/** Normalized gaze vector (cursor offset from the window centre, clamped
+	 *  to ±1) — eye-tracking target, pushed by the click-through poll. */
+	onPetGaze?(cb: (gaze: GazeVec) => void): () => void;
 	movePetWindowByClient?(clientX: number, clientY: number, screenX: number, screenY: number): Promise<unknown>;
 	petDragArm?(): Promise<unknown>;
 	petDragEnd?(): Promise<unknown>;
@@ -150,6 +154,15 @@ function PetApp(): ReactNode {
 				document.documentElement.dataset.theme = payload.theme;
 				document.documentElement.dataset.colorScheme = payload.theme;
 			}
+			// Themed accent: the pet's shell/ring/eye palette is derived from
+			// the main window's resolved --accent (pet-palette.ts), so the orb
+			// follows the active theme axis (brand/ocean/jade/mono) instead of
+			// a fixed brand gold. Inline the pushed value first — the pet
+			// window never sets data-accent itself.
+			if (typeof payload.accent === "string" && payload.accent) {
+				document.documentElement.style.setProperty("--accent", payload.accent);
+			}
+			if (payload.theme || payload.accent) applyPetPalette(document.documentElement);
 		});
 		// bridge is a window-level constant (preload) — subscribe once.
 	}, []);
@@ -161,6 +174,23 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetHover) return;
 		return bridge.onPetHover?.(setHovering);
 	}, []);
+
+	// Gaze refs: the engine reads gazeRef per frame (no React state — an
+	// IPC stream must never re-render). gazeMirrorRef tracks the sprite's
+	// mirror state for write-time compensation: the flip is CSS scaleX(-1)
+	// over the whole rig, so a mirrored pet renders its gaze mirrored too —
+	// negate x on write and the pet keeps looking at the TRUE cursor.
+	const gazeRef = useRef<GazeVec | null>(null);
+	const gazeMirrorRef = useRef(false);
+	useEffect(() => {
+		if (!bridge?.onPetGaze) return;
+		return bridge.onPetGaze?.(gaze => {
+			gazeRef.current = { x: gazeMirrorRef.current ? -gaze.x : gaze.x, y: gaze.y };
+		});
+	}, []);
+	useEffect(() => {
+		gazeMirrorRef.current = flip || dockSide === "left";
+	}, [flip, dockSide]);
 
 	// Dock side after an edge snap (settings → 宠物 → 挂靠左右侧): the
 	// main process pushes it; the edge highlight bar follows.
@@ -229,6 +259,9 @@ function PetApp(): ReactNode {
 
 	// Light/dark scheme: mirror the main app's scheme (local pref +
 	// system default); the main window's petActivity push overrides it.
+	// Both paths re-derive the themed pet palette from the resolved
+	// --accent (local tokens on first paint; the pushed accent wins once
+	// the first petActivity lands).
 	useEffect(() => {
 		const doc = document.documentElement;
 		const applyScheme = (): void => {
@@ -244,6 +277,7 @@ function PetApp(): ReactNode {
 			doc.dataset.theme = resolved;
 			doc.dataset.colorScheme = resolved;
 			doc.style.colorScheme = resolved;
+			applyPetPalette(doc);
 		};
 		applyScheme();
 		const mq = window.matchMedia("(prefers-color-scheme: dark)");
@@ -531,6 +565,7 @@ function PetApp(): ReactNode {
 							size={104}
 							scale={sizeScale}
 							frozen={displayMood === "hover"}
+							gazeRef={gazeRef}
 						/>
 					</div>
 					{sleeping && (

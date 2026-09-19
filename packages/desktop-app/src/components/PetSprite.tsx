@@ -77,6 +77,22 @@ interface MascotRefs {
  *  it is cycling a slideshow. */
 const DRIFT_MAX = 0.18;
 
+/** Cursor gaze target, normalized to ±1 from the pet's centre (main window:
+ *  pointermove over the avatar; pet window: the main process's click-through
+ *  poll). Lived in a ref on purpose — the engine reads it per frame, so a
+ *  stream of pointer updates never re-renders React. */
+export interface GazeVec {
+	x: number;
+	y: number;
+}
+export type GazeRef = RefObject<GazeVec | null>;
+/** Attention ease-in (ms): how fast the eyes adopt a cursor target. */
+const GAZE_ATTACK_MS = 220;
+/** Attention ease-out (ms): how slowly the pet "looks away" again. */
+const GAZE_RELEASE_MS = 380;
+/** Eye glide time constant (ms): exponential smoothing toward the target. */
+const GAZE_GLIDE_MS = 120;
+
 /** Morph duration constants (ms). Down-blink is fast, up-blink is slower —
  *  a symmetric blink reads mechanical. */
 const MORPH_MS = 420;
@@ -96,11 +112,14 @@ const BLINK_UP_MS = 150;
  *   BODY    The mood's motion numbers evaluated at the clock. Also drives the
  *           ground shadow in counter-phase, so the orb reads as floating.
  */
-function useMascotEngine(mood: PetdexMood): MascotRefs {
+/** gazeRef: optional live cursor target (GazeVec). Present → the eyes track
+ *  the cursor (attack/glide); absent/omitted → authored drift only. */
+function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef): MascotRefs {
 	const eye0 = useRef<SVGPathElement | null>(null);
 	const eye1 = useRef<SVGPathElement | null>(null);
 	const mouthRef = useRef<SVGPathElement | null>(null);
 	const shellRef = useRef<SVGGElement | null>(null);
+	const gazeSmooth = useRef({ x: 0, y: 0, att: 0 });
 
 	// Static per-mood face data — decoded once per mood, never per frame.
 	const prepped = useMemo(() => {
@@ -160,10 +179,24 @@ function useMascotEngine(mood: PetdexMood): MascotRefs {
 			}
 
 			// ── gaze: authored look bias plus an idle saccade, applied as a yaw
-			// so the eyes slide across the sphere and compress at the limb.
+			// so the eyes slide across the sphere and compress at the limb. When
+			// a cursor target is present the eyes ease toward it (GAZE_GLIDE)
+			// while attention (attack/release) blends the authored drift out —
+			// so the orb "notices" you without snapping, and keeps a residue
+			// of its idle personality while tracking.
+			const target = gazeRef?.current ?? null;
+			const gs = gazeSmooth.current;
+			if (target) {
+				const k = 1 - Math.exp(-dt / GAZE_GLIDE_MS);
+				gs.x += (target.x - gs.x) * k;
+				gs.y += (target.y - gs.y) * k;
+				gs.att = Math.min(1, gs.att + dt / GAZE_ATTACK_MS);
+			} else {
+				gs.att = Math.max(0, gs.att - dt / GAZE_RELEASE_MS);
+			}
 			const gaze = gazeDrift(elapsed, prepped.look);
-			const gx = gaze.x * GAZE_TRAVEL.x;
-			const gy = gaze.y * GAZE_TRAVEL.y;
+			const gx = (gaze.x * (1 - gs.att) + gs.x * gs.att) * GAZE_TRAVEL.x;
+			const gy = (gaze.y * (1 - gs.att) + gs.y * gs.att) * GAZE_TRAVEL.y;
 			const yaw = gazeYaw(gx);
 			const face: Face = [
 				applyYaw(
@@ -244,8 +277,8 @@ const VIEW_H = FACE_BOX + HEADROOM + FLOOR;
 const ORB_C = FACE_BOX / 2;
 const ORB_R = FACE_BOX / 2;
 
-function Mascot({ mood }: { mood: PetdexMood }): ReactNode {
-	const refs = useMascotEngine(mood);
+function Mascot({ mood, gazeRef }: { mood: PetdexMood; gazeRef?: GazeRef }): ReactNode {
+	const refs = useMascotEngine(mood, gazeRef);
 	return (
 		<svg
 			className={`gui-pet-svg gui-pet-svg--${mood}`}
@@ -397,9 +430,10 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 }
 
 /** Builtin SVG pet (orb-bot v7) — natively speaks every PetdexMood,
- *  including the floating desktop pet's hover/dragging rows. */
-export function BuiltinPetSprite({ mood }: { mood: PetdexMood }): ReactNode {
-	return <Mascot mood={mood} />;
+ *  including the floating desktop pet's hover/dragging rows. `gazeRef`
+ *  (optional) turns eye tracking on — see GazeVec. */
+export function BuiltinPetSprite({ mood, gazeRef }: { mood: PetdexMood; gazeRef?: GazeRef }): ReactNode {
+	return <Mascot mood={mood} gazeRef={gazeRef} />;
 }
 
 /** Petdex spritesheet pet — CSS background-position frame animation with a
@@ -478,6 +512,7 @@ export function PetSprite({
 	size = 48,
 	scale,
 	frozen = false,
+	gazeRef,
 }: {
 	mood: PetdexMood;
 	pet:
@@ -497,6 +532,9 @@ export function PetSprite({
 	scale?: number;
 	/** Passed through to PetdexSprite (freeze frame loop, keep transform). */
 	frozen?: boolean;
+	/** Eye-tracking target for the builtin sprite (petdex sheets ignore it —
+	 *  their frames are baked bitmaps, the eyes cannot move). */
+	gazeRef?: GazeRef;
 }): ReactNode {
 	const s = scale ?? petScale();
 	if (pet.kind === "petdex") {
@@ -517,7 +555,7 @@ export function PetSprite({
 	// The builtin orb speaks hover/dragging natively — no face mapping.
 	return (
 		<div className="gui-pet" style={{ width: size * s, height: size * s * (VIEW_H / VIEW_W) }}>
-			<BuiltinPetSprite mood={mood} />
+			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} />
 		</div>
 	);
 }

@@ -906,8 +906,9 @@ export const settings = {
 	"dot matrix background": "点阵品牌背景",
 	"agent avatar style": "Agent 头像样式",
 	"agent avatar style description":
-		"聊天气泡中的 Agent 头像动画样式（orbs 为默认的思考光球，也可换成几何六边形或星光）",
+		"聊天气泡中的 Agent 头像动画样式（orbs 为默认的思考光球，也可换成桌宠小球、几何六边形或星光）",
 	"avatar orbs": "光球",
+	"avatar pet": "桌宠小球",
 	"avatar hex": "六边形",
 	"avatar spark": "星光",
 	"avatar punk": "像素朋克",

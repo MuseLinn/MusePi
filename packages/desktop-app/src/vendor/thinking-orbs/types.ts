@@ -1,15 +1,17 @@
 import type { CSSProperties, CanvasHTMLAttributes } from 'react';
 
 /**
- * The six shipped states — each a hand-tuned animation:
+ * The seven shipped states — each a hand-tuned animation:
  * - `working`   — particles on tilted orbits
  * - `searching` — a scan meridian sweeps a dotted globe
  * - `solving`   — bands scramble in quarter turns, then click back
  * - `listening` — a waveform rolls through latitude rings
  * - `composing` — an undulating multi-band sash
  * - `shaping`   — a dotted outline morphs circle → triangle → square
+ * - `waiting`   — the listening waveform, PINNED (no UI-level idle cycle
+ *   runs for it): "paused for you" — tool approvals, blocked prompts
  */
-export type OrbState = 'working' | 'searching' | 'solving' | 'listening' | 'composing' | 'shaping';
+export type OrbState = 'working' | 'searching' | 'solving' | 'listening' | 'composing' | 'shaping' | 'waiting';
 
 /**
  * Rendered size in CSS pixels. Exactly two tuned presets ship:

@@ -270,6 +270,12 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **会话悬浮卡**(WorkBuddy 悬浮弹窗对齐 + 我们的 mode 行):行上悬浮 ~350ms 在行右侧浮出 288px 磨砂卡——标题(2 行截断)、fork 来源、**模式 chip**(accent 着色,`mode {id}` 命名链未知预设回落默认模式,与 ContextPanel 同规)、任务工作空间(cwd basename,title 全路径)、最后活跃 + 创建时间。架构:行经**模块级 bus**(`SessionHoverCard.tsx` 的 `reportSessionHover`/`clearSessionHover`)上报——不给 memo 化的 `SessionRow` 加任何 props;卡片(每侧栏一实例)从 `sessionMeta` 现查 cwd/modeId 并 **portal 到 document.body**(侧栏的玻璃/transform 祖先会劫持 fixed 定位)。卡片取代行原生 `title` 气泡。两阶段入场(opacity 经 `--entered` 翻转、动画只动 transform)遵守 `.gui-menu-popup` 的 backdrop 规则;滚动(capture)/点击行/离行即收,跨行移动有 120ms 宽限。
 - **design 预设空态**(设计稿 08 欢迎页对齐):design 预设 armed 时欢迎页输入框与会话 composer 同款——同一行风格 chips(`composer/design-styles.tsx`,共享 `DesignStyleChips` + `DESIGN_STYLES`)渲染在输入卡上方,点风格即写入 `design style brief update {style}` 句;placeholder 切为 `design empty placeholder`,不再轮播能力提示。模式 chip 背后的数据链:daemon `session.modes`/header → view-store `mode_id` 列(幂等迁移)→ `session.list` → app `sessionMeta` → 悬浮卡。
 
+## 5j. 桌宠眼动、pet 头像预设与主题跟随色板(2026-09-19)
+
+- **眼动跟随(gaze)**:builtin 球的眼睛现在跟着鼠标走——clawd-on-desk 同款能力,也是让球体丰富的状态设计真正值钱的那个交互。桌面桌宠由主进程**复用既有的 120ms 点击穿透轮询**顺带算好"光标相对窗口中心"的归一化向量(`pet:gaze`:420css-px 视距夹到 ±1,0.02 死区节流,零新增定时器)推给渲染进程;引擎以注意力缓动(220ms 渐入 / 380ms 渐出、120ms 滑动时间常数)把实时目标与自带的闲视漂移混合——"注意到你"但不抽搐,保留闲时性格;镜像态(挂靠左侧/拖拽翻面)在写入侧对 x 取反,视线永远对着真实光标。
+- **Agent 头像 pet 预设 + 状态绑定**:设置 → 常规 → Agent 头像新增"桌宠小球"预设(`avatar-presets.tsx` `PetAvatar`)——把桌面那只球放进头像槽,眼睛同样跟随光标。该预设**退出空闲效果轮播**:表情直接绑定会话状态(`ORB_TO_PET_MOOD`:composing→working,searching/solving/shaping→analyzing,listening→rest)。缺状态才是真正的病根——头部与聊天视图此前各自用一份重复的三元式派生 orb、都漏了待审批;`orbFromSession`(lib/pet.ts)成为单一来源,有工具审批待处理时头像钉在新增的第 7 态 `waiting`(wave 动画,钉住不轮播——"暂停等你"),桌面桌宠同步切 waiting 表情。
+- **主题跟随色板**:球体此前的石墨壳+品牌金配色只在默认金色主题下成立——ocean 蓝主题下金圈金眼配冷蓝球像三种凑在一起的颜色。现在壳/圈/眼/边缘光/眼辉的绘制全部从实时 `--accent` 派生:chroma.js 只负责解析 accent token,派生本身是纯 oklch 通道算术,值以 `oklch()` 字符串交付、由 Chromium 做色域映射(出 gamut 的亮 tint 保色相降色度)。`pet-palette.ts` 在启动时、data-theme/data-accent 切换时、以及桌宠窗口收到 `petActivity {theme, accent}` 推送时把 8 个变量(`--gui-pet-shell-a/b/c`、`--gui-pet-gold-a/b/c`、`--gui-pet-rim`、`--gui-pet-glow`)写上文档根。默认金色主题下与旧写死配色几乎重合(身份不变);mono 近中性 accent 经染色下限仍有色调。error 脸保留 `--color-danger`(球上唯一的红)。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

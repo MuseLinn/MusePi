@@ -15,7 +15,11 @@ export const STATE_TO_MODE: Record<OrbState, ModeKey> = {
   solving: 'rubik',
   listening: 'wave',
   composing: 'ribbon',
-  shaping: 'morph'
+  shaping: 'morph',
+  // Waiting reads as the listening pulse — the distinction is that the
+  // avatar renders it PINNED (no idle mode cycling), so the calm wave
+  // itself is the "paused for you" signal.
+  waiting: 'wave'
 };
 
 interface Preset {

@@ -173,6 +173,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("pet:hover", listener);
 		return () => ipcRenderer.removeListener("pet:hover", listener);
 	},
+	/** Pet window: normalized gaze vector (cursor offset from the window
+	 *  centre, clamped to ±1) — drives eye tracking on the builtin sprite. */
+	onPetGaze: (cb) => {
+		const listener = (_e, gaze) => cb(gaze);
+		ipcRenderer.on("pet:gaze", listener);
+		return () => ipcRenderer.removeListener("pet:gaze", listener);
+	},
 	/** Main window → main process: dock-to-edge preference. */
 	setPetDock: (enabled) => ipcRenderer.invoke("pet-dock-set", enabled),
 	/** Pet window: dock side after an edge snap ("left" | "right" | null). */
