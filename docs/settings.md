@@ -618,7 +618,7 @@ memory:
 | `compaction.midTurnEnabled` | boolean | `true` | Check thresholds at safe mid-turn tool-loop boundaries before the next provider request. |
 | `compaction.strategy` | enum | `snapcompact` | `context-full`, `handoff`, `shake`, `snapcompact`, `off`. |
 | `compaction.thresholdPercent` | number | `-1` | Percent-of-context trigger; `-1` = reserve-based default. |
-| `compaction.thresholdTokens` | number | `-1` | Fixed token trigger when `> 0`. |
+| `compaction.thresholdTokens` | number | `-1` | Fixed token trigger when `> 0`; overrides `thresholdPercent`. Use it to cap context *below* a model's physical window — e.g. `190000` on a 500K model to stay under a tier where long-context tokens bill at a higher rate, or `300000` on a 1M model when very long contexts degrade attention quality. |
 | `compaction.reserveTokens` | number | `16384` | Tokens reserved for the next turn. |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens always preserved. |
 | `compaction.remoteEnabled` | boolean | `true` | Allow remote compaction service. |

@@ -619,7 +619,7 @@ memory:
 | `compaction.midTurnEnabled` | boolean | `true` | 在下一个 provider 请求之前，于安全的 turn 中段 tool-loop 边界检查阈值。 |
 | `compaction.strategy` | enum | `snapcompact` | `context-full`, `handoff`, `shake`, `snapcompact`, `off`。 |
 | `compaction.thresholdPercent` | number | `-1` | Context 百分比触发；`-1` = 基于 reserve 的默认行为。 |
-| `compaction.thresholdTokens` | number | `-1` | `> 0` 时为固定 token 触发。 |
+| `compaction.thresholdTokens` | number | `-1` | `> 0` 时为固定 token 触发，优先于 `thresholdPercent`。用于把 context 压到模型物理窗口**以下**——例如 500K 模型设 `190000` 以避开长上下文 token 加价档位，或 1M 模型设 `300000` 以防超长上下文导致注意力涣散。 |
 | `compaction.reserveTokens` | number | `16384` | 为下一 turn 保留的 token 数。 |
 | `compaction.keepRecentTokens` | number | `20000` | 始终保留的近期 token 数。 |
 | `compaction.remoteEnabled` | boolean | `true` | 允许远程 compaction 服务。 |

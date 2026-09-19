@@ -2628,13 +2628,19 @@ export const SETTINGS_SCHEMA = {
 			tab: "context",
 			group: "Compaction",
 			label: "Compaction Token Limit",
-			description: "Fixed token limit for context maintenance; overrides percentage if set",
+			description:
+				"Fixed token limit for context maintenance; overrides percentage if set. Set this to cap context well below a model's physical window — useful when long-context tokens bill at a higher rate past a threshold (e.g. cap a 500K model at 190000), or when very long contexts degrade attention quality.",
 			options: [
 				{ value: "default", label: "Default", description: "Use percentage-based threshold" },
 				{ value: "25000", label: "25K tokens", description: "Quarter of a 200K window" },
 				{ value: "50000", label: "50K tokens", description: "Half of a 200K window" },
 				{ value: "100000", label: "100K tokens", description: "Half of a 200K window" },
 				{ value: "150000", label: "150K tokens", description: "Three-quarters of a 200K window" },
+				{
+					value: "190000",
+					label: "190K tokens",
+					description: "Just under the 200K tier break some providers bill double past",
+				},
 				{ value: "200000", label: "200K tokens", description: "Full standard context window" },
 				{ value: "300000", label: "300K tokens", description: "Large context window" },
 				{ value: "500000", label: "500K tokens", description: "Very large context window" },
