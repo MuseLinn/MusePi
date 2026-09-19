@@ -6231,9 +6231,16 @@ export function getPathsForTab(tab: SettingTab): SettingPath[] {
 }
 
 /** All paths marked `ui.tuiOnly` — settings that only affect the terminal
- *  interface (TUI). Consumed by the daemon to tell GUI-session agents which
- *  settings edits are no-ops, and by the GUI settings renderer to badge rows.
- *  Single source of truth: the `ui.tuiOnly` flag on each definition. */
+ *  interface (TUI).
+ *
+ *  No longer feeds the GUI-session system prompt: that note used to enumerate
+ *  every one of these keys (~40 paths, ~250 tokens per request) and was cut
+ *  back to a one-line marker (issue #40). The GUI settings renderer does not
+ *  need this either — it reads the `ui.tuiOnly` flag straight off the RPC
+ *  schema and badges those rows (`SchemaSettings.tsx`). Kept as the single
+ *  source of truth for "which settings are TUI-only" so a future consumer
+ *  (e.g. a settings-panel filter or a CLI `--tui-only` listing) has one place
+ *  to ask instead of re-deriving it from SETTINGS_SCHEMA. */
 export function tuiOnlySettingKeys(): SettingPath[] {
 	return (Object.keys(SETTINGS_SCHEMA) as SettingPath[]).filter(path => getUi(path)?.tuiOnly === true);
 }

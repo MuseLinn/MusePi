@@ -189,15 +189,21 @@ export async function sessionPromptInputs(
 	return out;
 }
 
-/** sessionPromptInputs + a desktop-interface note. The daemon serves the
- *  GUI/browser, so agents here must know which settings are no-ops: any
- *  `ui.tuiOnly` setting (theme.*, statusLine.*, terminal.*, tui.*, …) only
- *  affects the terminal UI — editing it in a desktop session changes nothing
- *  the agent can observe. The list is generated from SETTINGS_SCHEMA (single
- *  source of truth), so it cannot drift from the settings UI. (display.*
- *  entries that the desktop transcript consumes — smoothStreaming,
- *  hideToolActivity, showTokenUsage, collapseCompacted — are NOT flagged,
- *  so they stay out of this note and the GUI's TUI-only badge.) */
+/** sessionPromptInputs + a one-line desktop-interface marker.
+ *
+ *  The daemon serves the GUI/browser, so a GUI-session agent should know it
+ *  is not driving a terminal — some settings it might otherwise try to change
+ *  (theme.*, statusLine.*, terminal.*, tui.*, …) are TUI-only and would be
+ *  no-ops here.
+ *
+ *  Issue #40: this note used to spell out all ~40 `ui.tuiOnly` setting names
+ *  (~250 tokens every request). The model has no reason to know desktop-GUI
+ *  software's terminal-only key names, and a 40-entry negative list buys
+ *  essentially nothing — the agent rarely volunteers `tui.codexResetFireworks`
+ *  in the first place. The GUI surfaces the same information where it belongs:
+ *  `SchemaSettings.tsx` badges TUI-only rows from the `ui.tuiOnly` flag on the
+ *  RPC schema, so a human editing settings still sees which ones are no-ops.
+ *  Keep the marker, drop the enumeration. */
 
 /** Lazy native desktop session singleton: `computer.capabilities` RPC reads
  *  macOS Screen Recording / Accessibility / Input permissions without
@@ -211,17 +217,14 @@ async function getDesktopCapabilities() {
 	}
 	return desktopCapabilitiesSession.capabilities;
 }
+
 async function desktopSessionPromptInputs(
 	cwd: string,
 ): Promise<{ customSystemPrompt?: string; appendSystemPrompt?: string }> {
 	const base = await sessionPromptInputs(cwd);
-	const { tuiOnlySettingKeys } = await import("../config/settings-schema");
-	const tuiOnly = tuiOnlySettingKeys();
-	if (tuiOnly.length === 0) return base;
 	const note =
-		"当前为桌面界面（GUI）会话。以下设置仅对终端界面（TUI）生效，在本次会话中修改不会影响当前界面：" +
-		tuiOnly.join(", ") +
-		"。";
+		"当前为桌面界面（GUI）会话。部分设置仅对终端界面（TUI）生效，在本次会话中修改不会影响当前界面；" +
+		"设置面板中这些项已标注。";
 	return {
 		...base,
 		appendSystemPrompt: base.appendSystemPrompt ? `${base.appendSystemPrompt}\n\n${note}` : note,
