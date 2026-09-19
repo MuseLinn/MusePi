@@ -432,6 +432,37 @@ export const tools = {
 	"diag warnings": "Skill discovery warnings",
 	"diag disabled providers": "Disabled sources",
 
+	// ── Installed pane (design frame 2:250) ───────────────────────────────────
+	"skill filter official": "Official",
+	"skill filter disabled": "Disabled",
+	"skill manage": "Bulk manage",
+	"skill sort recent": "Recently used",
+	"skill sort name": "By name",
+	"skill sort level": "By level",
+	"skill origin official": "Official",
+	"skill origin extension": "Extension",
+	"skill origin local": "Local file",
+	"skill version unpinned": "Unpinned",
+	"skill enabled": "Enabled",
+	"skill disabled": "Disabled",
+	"skill bundled no uninstall": "Built-in · ships with the client · cannot uninstall",
+	"skill all title": "All skills",
+	"skill view grid": "Grid view",
+	"skill view list": "List view",
+	"skill row actions": "More actions",
+	"skill select all": "Select all",
+	"skill selected {n}": "{n} selected",
+	"skill total hint {total}": "{total} skills total",
+	"skill batch hint": "Enable, disable, or uninstall in bulk",
+	"skill batch enable": "Enable all",
+	"skill batch disable": "Disable all",
+	"uninstall skills confirm {n}": "Uninstall the {n} selected skills? Their SKILL.md files will be deleted.",
+	"uninstall skills confirm partial {n} {skipped}":
+		"{n} skills will be uninstalled; {skipped} built-in or extension skills were skipped (cannot be uninstalled).",
+	"uninstall some failed {n}": "{n} skills failed to uninstall; the rest were processed.",
+	"installed skills status {enabled} {disabled} {total}":
+		"{enabled} enabled · {disabled} disabled · {total} skills total",
+
 	// ── Tool renderer labels ──────────────────────────────────────────────────
 	Report: "Report",
 	Untitled: "Untitled",

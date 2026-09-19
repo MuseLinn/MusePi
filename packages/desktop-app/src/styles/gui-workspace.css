@@ -1474,6 +1474,318 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+
+/* ── 我安装的 (设计稿 frame 2:250) ──
+ * 与"技能市场·发现"同一套 g-ui 语汇:工具行复用 .gui-skill-market-bar /
+ * -search / -select,-chips/-chip 复用发现页的分类 chips。这里只补三块
+ * 新东西:批量管理开关、字形图标 + 选择角标、底部批量操作条。 ─────────── */
+.gui-skill-installed {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	flex: 1;
+}
+
+/* 批量管理开关:未开启是描边按钮,开启后转金色实底 —— 与筛选 chip 的
+ * 选中态同一信号,但形状不同(它是开关,不是筛选项)。 */
+.gui-cap-manage {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		color 120ms var(--spring),
+		border-color 120ms var(--spring),
+		background 120ms var(--spring);
+}
+
+.gui-cap-manage:hover {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-accent) 40%, transparent);
+}
+
+.gui-cap-manage--on {
+	border-color: color-mix(in oklab, var(--color-accent) 50%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+/* 标题行:`全部技能 · N` + 网格/列表切换。 */
+.gui-cap-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.gui-cap-row-title {
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.gui-cap-row-count {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-cap-viewtoggle {
+	display: inline-flex;
+	gap: 2px;
+	margin-left: auto;
+	padding: 2px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
+	border-radius: var(--radius-md);
+	background: var(--color-surface-raised);
+}
+
+.gui-cap-viewbtn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 24px;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	transition:
+		color 120ms var(--spring),
+		background 120ms var(--spring);
+}
+
+.gui-cap-viewbtn:hover {
+	color: var(--color-text);
+}
+
+.gui-cap-viewbtn--on {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+
+/* 字形图标:方形圆角,与卡片顶行等高;首字母态用名字 hash 出的色相,
+ * 所以同一技能在网格/列表两视图永远同色。 */
+.gui-cap-glyph {
+	flex-shrink: 0;
+	object-fit: cover;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.gui-cap-glyph--initial {
+	/* background/color 由组件按 hash 内联,这里只兜底形状。 */
+	border: 1px solid color-mix(in oklab, currentColor 22%, transparent);
+}
+
+/* 卡片顶行:字形 + 名字 + ⋮。名字 flex:1 把 ⋮ 推到最右。 */
+.gui-cap-card .gui-cap-card-top {
+	align-items: flex-start;
+	gap: 8px;
+}
+
+.gui-cap-card-menu {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	margin-left: auto;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	flex-shrink: 0;
+	transition:
+		color 120ms var(--spring),
+		background 120ms var(--spring);
+}
+
+.gui-cap-card-menu:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
+	color: var(--color-text);
+}
+
+/* 副行 `官方 · SkillHub · v2.1.0` —— 比描述更淡、比页脚更实。 */
+.gui-cap-card-meta {
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-cap-card-note {
+	font-size: 10px;
+	color: var(--color-text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* 批量选择角标:卡片左上角(设计稿 2:250 的选择态在角上,不在顶行)。 */
+.gui-cap-pick {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border: 1px solid color-mix(in oklab, var(--color-text-faint) 35%, transparent);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface-raised);
+	color: var(--color-accent-fg, #1a1a1a);
+	z-index: 1;
+	transition:
+		background 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-cap-pick--on {
+	border-color: var(--color-accent);
+	background: var(--color-accent);
+}
+
+/* 选中卡片:金色描边 + 轻微抬起,与 hover 区分开(hover 只换描边色)。 */
+.gui-cap-card--picked {
+	border-color: color-mix(in oklab, var(--color-accent) 65%, transparent);
+	box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 28%, transparent);
+}
+
+/* 已停用卡片整体压暗,但描述仍可读 —— 不用 opacity 直接砸,会连带
+ * 金色标签一起灰掉。 */
+.gui-cap-card--off .gui-cap-card-name,
+.gui-cap-card--off .gui-cap-card-desc {
+	color: var(--color-text-faint);
+}
+
+/* 卡片需要给角标一个定位容器(发现页的卡片已是 relative,这里是本页)。 */
+.gui-cap-card,
+.gui-cap-listrow {
+	position: relative;
+}
+
+/* 列表视图:一行一技能,名称固定列宽让描述对齐。 */
+.gui-cap-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.gui-cap-listrow {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 7px 10px;
+	border: 1px solid transparent;
+	border-radius: var(--radius-md);
+	cursor: pointer;
+	transition:
+		background 120ms var(--spring),
+		border-color 120ms var(--spring);
+}
+
+.gui-cap-listrow:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+
+.gui-cap-listrow.gui-cap-card--picked {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+
+.gui-cap-listrow-name {
+	width: 200px;
+	flex-shrink: 0;
+	font-size: 12.5px;
+	font-weight: 500;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-cap-listrow-desc {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-dim, var(--color-text-faint));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-cap-listrow-meta {
+	flex-shrink: 0;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+
+/* 底部批量操作条 (设计稿 2:250):左侧说明 + 右侧动作,卸载是唯一的
+ * 破坏性动作,单独给红色描边,不和"批量停用"共用中性样式。 */
+.gui-cap-batch {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-top: auto;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+}
+
+.gui-cap-batch-info {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11.5px;
+	color: var(--color-text-muted);
+}
+
+.gui-cap-batch-sep {
+	color: color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+}
+
+.gui-cap-batch-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: auto;
+	flex-wrap: wrap;
+}
+
+.gui-cap-uninstall {
+	border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
+	color: var(--color-danger);
+}
+
+.gui-cap-uninstall:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-danger) 12%, transparent);
+}
+
+.gui-cap-batch-primary {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	background: var(--color-accent);
+	color: var(--color-accent-fg, #1a1a1a);
+}
+
+.gui-cap-batch-primary:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-accent) 86%, white);
+}
 .gui-ext-list {
 	display: flex;
 	flex-direction: column;

@@ -337,7 +337,9 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				})}
 			</div>
 
-			{addOpen ? <AddSkillDialog rpc={rpc} onClose={() => setAddOpen(false)} onDone={onInstalled} /> : null}
+			{addOpen ? (
+				<AddSkillDialog rpc={rpc} onClose={() => setAddOpen(false)} onDone={() => onInstalled?.()} />
+			) : null}
 		</div>
 	);
 }
