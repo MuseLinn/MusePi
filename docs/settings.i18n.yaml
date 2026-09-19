@@ -1,5 +1,5 @@
 # Consistency record for settings.md / settings.zh-CN.md
 # Blob hashes at last confirmed-consistent state. Edit one side -> update the other
 # in the same PR, then re-record: bun run verify-translation-pairing --write docs/settings
-settings.md: aed939858a4b77e1debfc0feded47d5cd8a69471
-settings.zh-CN.md: daefaa5ab6a9dd626ee7decae742852e58498242
+settings.md: b974f378d8eb3cb27e3e1d6d464c9706eee8a5bf
+settings.zh-CN.md: 4b1d1de2e894e03b580510657af13b788d5bd031
