@@ -31,6 +31,11 @@ export interface ChannelAdapter {
 	/** Optional: wire the incoming-message router (IM channels). Called once
 	 *  when the registry constructs the adapter. */
 	attach?(host: ChannelHost): void;
+	/** Optional: native "typing…" indicator (wechat iLink sendtyping; Telegram
+	 *  sendChatAction). Daemon starts it when a channel prompt is dispatched
+	 *  into a session and stops it when the reply is pushed back. */
+	startTyping?(to: string): Promise<void>;
+	stopTyping?(to: string): Promise<void>;
 }
 
 export interface ChannelSendPayload {
@@ -72,5 +77,15 @@ export interface ChannelRegistryOptions {
 	/** Factory map: kind → adapter (lazily constructed per kind). The
 	 *  registry instance is passed for status/host access; the interface
 	 *  stays minimal to avoid a circular type import. */
-	factories: Partial<Record<ChannelKind, (registry: { host: ChannelHost }) => ChannelAdapter>>;
+	factories: Partial<
+		Record<
+			ChannelKind,
+			(registry: {
+				host: ChannelHost;
+				/** Merge runtime-acquired credentials (wechat QR bot_token) into
+				 *  the persisted config WITHOUT touching a running adapter. */
+				persistRuntimeConfig(kind: ChannelKind, patch: Record<string, unknown>): void;
+			}) => ChannelAdapter
+		>
+	>;
 }

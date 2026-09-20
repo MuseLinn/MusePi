@@ -43,7 +43,10 @@ export class ChannelRegistry {
 		if (existing) return existing;
 		const factory = this.#factories[kind];
 		if (!factory) return null;
-		const adapter = factory(this);
+		const adapter = factory({
+			host: this.host,
+			persistRuntimeConfig: (k, patch) => this.persistRuntimeConfig(k, patch),
+		});
 		adapter.attach?.(this.host);
 		this.#adapters.set(kind, adapter);
 		return adapter;
@@ -137,6 +140,30 @@ export class ChannelRegistry {
 		return adapter.status();
 	}
 
+	/** Merge runtime-acquired credentials into the persisted config WITHOUT
+	 *  restarting the adapter (wechat QR login hands back a bot_token after
+	 *  start() has already returned — a configure() here would stop/start the
+	 *  half-initialized adapter). "停止" then only disconnects: the next
+	 *  start() reconnects with the saved token instead of demanding a re-scan. */
+	persistRuntimeConfig(kind: ChannelKind, patch: Record<string, unknown>): void {
+		const channels = this.#load();
+		const existing = channels.find(c => c.kind === kind);
+		if (existing) existing.config = { ...existing.config, ...patch };
+		else channels.push({ kind, config: patch, enabled: false });
+		this.#save(channels);
+	}
+
+	/** Unbind a channel: stop the adapter AND drop its persisted config
+	 *  (credentials included) — the next start() needs a fresh login/config.
+	 *  Destructive, hence the GUI confirm-dialog in front of the RPC. */
+	async unlink(kind: ChannelKind): Promise<ChannelStatus> {
+		const adapter = this.#adapter(kind);
+		if (adapter) await adapter.stop().catch(() => {});
+		const channels = this.#load().filter(c => c.kind !== kind);
+		this.#save(channels);
+		return adapter?.status() ?? { kind, state: "off", config: {} };
+	}
+
 	async stop(kind: ChannelKind): Promise<ChannelStatus> {
 		const adapter = this.#adapter(kind);
 		if (!adapter) throw new Error(`unknown channel kind: ${kind}`);
@@ -169,6 +196,19 @@ export class ChannelRegistry {
 		const adapter = this.#adapter(kind);
 		if (!adapter) throw new Error(`unknown channel kind: ${kind}`);
 		await adapter.send(payload);
+	}
+
+	/** Native "typing…" indicator passthrough (adapters without one no-op). */
+	async startTyping(kind: ChannelKind, to: string): Promise<void> {
+		await this.#adapter(kind)
+			?.startTyping?.(to)
+			.catch(() => {});
+	}
+
+	async stopTyping(kind: ChannelKind, to: string): Promise<void> {
+		await this.#adapter(kind)
+			?.stopTyping?.(to)
+			.catch(() => {});
 	}
 
 	get host(): ChannelRegistryOptions["host"] {

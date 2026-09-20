@@ -1,4 +1,5 @@
 import { logger } from "@musepi/pi-utils";
+import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 interface DiscordMessage {
@@ -27,6 +28,7 @@ export class DiscordChannel implements ChannelAdapter {
 		| null = null;
 
 	static readonly GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
+	static readonly TEXT_CHUNK = 2000;
 	static readonly INTENTS = (1 << 9) | (1 << 12); // GUILD_MESSAGES | DIRECT_MESSAGES
 
 	async configure(config: Record<string, unknown>): Promise<void> {
@@ -191,7 +193,20 @@ export class DiscordChannel implements ChannelAdapter {
 			body = form;
 		} else {
 			headers["Content-Type"] = "application/json";
-			body = JSON.stringify({ content: payload.text.slice(0, 2000) });
+			// Chunked, not truncated — slice() silently dropped the tail of long
+			// agent replies (Discord caps a message at 2000 chars).
+			for (const chunk of chunkText(payload.text, DiscordChannel.TEXT_CHUNK)) {
+				const res = await fetch(url, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({ content: chunk }),
+				});
+				if (!res.ok) {
+					const errBody = await res.text().catch(() => "");
+					throw new Error(`discord send failed: ${res.status} ${errBody.slice(0, 160)}`);
+				}
+			}
+			return;
 		}
 		const res = await fetch(url, { method: "POST", headers, body });
 		if (!res.ok) {

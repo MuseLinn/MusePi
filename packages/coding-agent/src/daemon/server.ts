@@ -21,6 +21,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { getDashboardStats } from "@musepi/musepi-stats";
+import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
 import type { AuthStorage, DisabledCredentialSummary, UsageReport } from "@musepi/pi-ai";
@@ -60,6 +61,7 @@ import {
 	TelegramChannel,
 	WechatChannel,
 } from "../channels";
+import { loadChannelBindings, saveChannelBindings } from "../channels/bindings";
 import { BUILTIN_PLUGINS, loadChannelPlugins } from "../channels/plugins";
 import { CollabHost } from "../collab/host";
 import { LocalShareManager } from "../collab/local-share";
@@ -832,6 +834,19 @@ class SessionScopedEventBus extends EventBus {
 
 // ── Session host ────────────────────────────────────────────────────────────
 
+/** Flatten an assistant message's content parts to plain text (channel reply
+ *  pushes send text only — toolResult/thinking parts are skipped). */
+function assistantReplyText(message: unknown): string {
+	const content = (message as { content?: unknown } | null | undefined)?.content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter(part => (part as { type?: string })?.type === "text")
+		.map(part => String((part as { text?: string }).text ?? ""))
+		.join("")
+		.trim();
+}
+
 interface LiveSession {
 	sessionId: string;
 	agentSession: AgentSession;
@@ -1093,9 +1108,11 @@ export class DaemonSessionHost {
 	 *  frames). Created lazily on first envelope, drained and dropped on
 	 *  disconnect. */
 	readonly #batchers = new Map<string, EventBatcher>();
-	/** Agent turn finished (agent_end) — DaemonServer wires task-completion
-	 *  channel pushes here. */
-	onAgentEnd: ((live: LiveSession) => void) | null = null;
+	/** Agent turn finished (agent_end) — DaemonServer wires channel reply
+	 *  pushes + task-completion channel pushes here. The event carries the
+	 *  final transcript (last assistant message = the reply a channel peer
+	 *  is waiting for). */
+	onAgentEnd: ((live: LiveSession, event: Extract<AgentEvent, { type: "agent_end" }>) => void) | null = null;
 	constructor(options: DaemonOptions = {}) {
 		this.#options = options;
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
@@ -1884,7 +1901,7 @@ export class DaemonSessionHost {
 			// A finished turn re-arms it for the next idle window.
 			if (event.type === "agent_end") {
 				this.#scheduleIdleRecap(live);
-				this.onAgentEnd?.(live);
+				this.onAgentEnd?.(live, event);
 			}
 			// Live 消息树 seam(/tree 语义,2026-08-21):wire 事件在消息发射时尚未入树
 			// (agent.appendMessage 先发事件、sessionManager.appendMessage 后插入),此
@@ -2921,23 +2938,43 @@ export class DaemonServer {
 					return first.done ? null : first.value;
 				},
 				sendPrompt: (sessionId, text, images) => this.#sendToSession(sessionId, text, images),
+				// Native typing indicator toward every peer bound to the session
+				// (wechat sendtyping); #pushChannelReplies stops it on reply.
+				startTyping: sessionId => this.#startChannelTyping(sessionId),
 			},
 			(kind, from, text) => this.#channels.send(kind as ChannelKind, { to: from, text }),
+			{
+				// Bindings persist across daemon restarts — a plain text message
+				// must still route to the session it was bound to before.
+				load: () => loadChannelBindings(path.join(SOCKET_DIR, "channel-bindings.json")),
+				save: snapshot => saveChannelBindings(path.join(SOCKET_DIR, "channel-bindings.json"), snapshot),
+			},
 		);
+		this.#channelHandler = handler;
 		this.#channels = new ChannelRegistry({
 			configPath: path.join(SOCKET_DIR, "channels.json"),
 			host: handler,
 			factories: {
 				"huawei-today": () => new HuaweiTodayChannel(),
 				discord: () => new DiscordChannel(),
-				wechat: () => new WechatChannel(),
+				wechat: () =>
+					new WechatChannel({
+						// QR-login bot_token flows into channels.json (registry
+						// persistRuntimeConfig) — 停止 then only disconnects; the next
+						// start() reconnects with the saved token instead of a re-scan.
+						persistCredentials: token => this.#channels.persistRuntimeConfig("wechat", { token }),
+					}),
 				telegram: () => new TelegramChannel(),
 				feishu: () => new FeishuChannel("feishu"),
 				lark: () => new FeishuChannel("lark"),
 			},
 		});
-		// agent_end → task-completion pushes (huawei today-screen).
-		host.onAgentEnd = live => void this.#pushTaskCompletion(live).catch(() => {});
+		// agent_end → channel reply pushes (wechat "正在输入" stop + final
+		// answer) + task-completion pushes (huawei today-screen).
+		host.onAgentEnd = (live, event) => {
+			void this.#pushChannelReplies(live, event).catch(() => {});
+			void this.#pushTaskCompletion(live).catch(() => {});
+		};
 		void this.#channels.startAll().catch(() => {});
 		// Hot-pluggable channel plugins: scan ~/.musepi/agent/channels/*.ts
 		// and register any discovered channel modules (game-mod style).
@@ -2957,8 +2994,50 @@ export class DaemonServer {
 
 	/** Bot/notification channels (wechat/discord/huawei-today…). */
 	#channels: ChannelRegistry;
+	/** Command router reference — reply routing + typing target lookup. */
+	#channelHandler: ChannelCommandHandler;
+	/** Sessions with an active channel typing indicator (started when a
+	 *  channel prompt is dispatched; stopped when the reply is pushed). */
+	#channelTyping = new Set<string>();
 	/** Directory for hot-pluggable channel plugins (game-mod style). */
 	#channelPluginDir = "";
+
+	/** Native typing indicator toward every peer bound to this session. */
+	#startChannelTyping(sessionId: string): void {
+		if (this.#channelTyping.has(sessionId)) return;
+		this.#channelTyping.add(sessionId);
+		for (const peer of this.#channelHandler.peersFor(sessionId)) {
+			void this.#channels.startTyping(peer.kind as ChannelKind, peer.from).catch(() => {});
+		}
+	}
+
+	#stopChannelTyping(sessionId: string): void {
+		if (!this.#channelTyping.delete(sessionId)) return;
+		for (const peer of this.#channelHandler.peersFor(sessionId)) {
+			void this.#channels.stopTyping(peer.kind as ChannelKind, peer.from).catch(() => {});
+		}
+	}
+
+	/** THE reply path for chat bots (was missing entirely: a plain text
+	 *  message from WeChat reached the session but the agent's answer never
+	 *  came back — the bot looked dead). On agent_end, push the last
+	 *  assistant message to every channel peer bound to that session and
+	 *  stop the typing indicator. */
+	async #pushChannelReplies(live: LiveSession, event: Extract<AgentEvent, { type: "agent_end" }>): Promise<void> {
+		this.#stopChannelTyping(live.sessionId);
+		const peers = this.#channelHandler.peersFor(live.sessionId);
+		if (peers.length === 0) return;
+		const lastAssistant = [...event.messages].reverse().find(msg => msg.role === "assistant");
+		const text = assistantReplyText(lastAssistant);
+		if (!text.trim()) return;
+		for (const peer of peers) {
+			await this.#channels.send(peer.kind as ChannelKind, { to: peer.from, text }).catch(err => {
+				logger.warn(`channel reply push failed (${peer.kind})`, {
+					error: err instanceof Error ? err.message : String(err),
+				});
+			});
+		}
+	}
 
 	/** Load directory plugins and register them (hot-plug on reload). */
 	async #loadChannelPlugins(): Promise<void> {
@@ -6607,6 +6686,13 @@ export class DaemonServer {
 			case "channels.stop": {
 				const p = (params ?? {}) as { kind: string };
 				return this.#channels.stop(p.kind as ChannelKind);
+			}
+			case "channels.unlink": {
+				// 解绑: stop + drop persisted config/credentials (GUI confirm
+				// dialog sits in front of this — the next start needs a fresh
+				// login/QR scan).
+				const p = (params ?? {}) as { kind: string };
+				return this.#channels.unlink(p.kind as ChannelKind);
 			}
 			case "channels.plugins": {
 				return BUILTIN_PLUGINS.map(p => ({ ...p, registered: true })).concat(

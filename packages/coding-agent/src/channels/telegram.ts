@@ -1,4 +1,5 @@
 import { logger } from "@musepi/pi-utils";
+import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** Telegram bot adapter — official Bot API over HTTP long-polling
@@ -8,6 +9,7 @@ import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } f
 export class TelegramChannel implements ChannelAdapter {
 	readonly kind = "telegram" as const;
 	static readonly API = "https://api.telegram.org/bot";
+	static readonly TEXT_CHUNK = 4096;
 	#token = "";
 	#state: ChannelStatus["state"] = "off";
 	#detail: string | undefined;
@@ -163,8 +165,14 @@ export class TelegramChannel implements ChannelAdapter {
 			return;
 		}
 		form.append("chat_id", to);
-		form.append("text", payload.text.slice(0, 4096));
-		await this.#post("sendMessage", form);
+		// Chunked, not truncated — slice() silently dropped the tail of long
+		// agent replies (Telegram caps a single message at 4096 chars).
+		for (const chunk of chunkText(payload.text, TelegramChannel.TEXT_CHUNK)) {
+			const part = new FormData();
+			part.append("chat_id", to);
+			part.append("text", chunk);
+			await this.#post("sendMessage", part);
+		}
 	}
 
 	async #post(method: string, body: FormData): Promise<void> {

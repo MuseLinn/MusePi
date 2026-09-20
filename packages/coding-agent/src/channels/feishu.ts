@@ -1,5 +1,6 @@
 import { AppType, Client, EventDispatcher, WSClient } from "@larksuiteoapi/node-sdk";
 import { logger } from "@musepi/pi-utils";
+import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** Feishu / Lark bot channel — official @larksuiteoapi/node-sdk:
@@ -34,6 +35,7 @@ export class FeishuChannel implements ChannelAdapter {
 		feishu: "https://open.feishu.cn",
 		lark: "https://open.larksuite.com",
 	};
+	static readonly TEXT_CHUNK = 4000;
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		this.#config = {
@@ -196,10 +198,15 @@ export class FeishuChannel implements ChannelAdapter {
 
 	async #sendText(to: string, text: string): Promise<void> {
 		if (!this.#client) return;
-		await this.#client.im.message.create({
-			params: { receive_id_type: "chat_id" },
-			data: { receive_id: to, msg_type: "text", content: JSON.stringify({ text: text.slice(0, 4000) }) },
-		});
+		// Chunked, not truncated — slice() silently dropped the tail of long
+		// agent replies (the 4000-char cap stays conservative until card
+		// messages land).
+		for (const chunk of chunkText(text, FeishuChannel.TEXT_CHUNK)) {
+			await this.#client.im.message.create({
+				params: { receive_id_type: "chat_id" },
+				data: { receive_id: to, msg_type: "text", content: JSON.stringify({ text: chunk }) },
+			});
+		}
 	}
 
 	async #uploadImage(bytes: Buffer): Promise<string> {

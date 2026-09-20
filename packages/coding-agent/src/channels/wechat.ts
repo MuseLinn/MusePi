@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { logger } from "@musepi/pi-utils";
+import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** iLink incoming message (OpenClaw protocol): item_list carries text
@@ -61,6 +62,19 @@ export class WechatChannel implements ChannelAdapter {
 	static readonly ALLOWED_CDN_HOSTS = [".weixin.qq.com"];
 	static readonly UPLOAD_IMAGE = 1;
 	static readonly UPLOAD_FILE = 3;
+	/** sendtyping heartbeat: the server-side indicator expires after a few
+	 *  seconds, so an active agent turn re-arms it on this cadence. */
+	static readonly TYPING_REFRESH_MS = 5_000;
+	static readonly TEXT_CHUNK = 2000;
+
+	/** Runtime QR-login credentials flow back into channels.json through this
+	 *  hook (registry.persistRuntimeConfig) so "停止" only disconnects — the
+	 *  next start() reconnects with the saved token instead of a re-scan. */
+	#persistCredentials: ((token: string) => void) | null;
+
+	constructor(options?: { persistCredentials?: (token: string) => void }) {
+		this.#persistCredentials = options?.persistCredentials ?? null;
+	}
 
 	#state: ChannelStatus["state"] = "off";
 	#detail: string | undefined;
@@ -79,6 +93,10 @@ export class WechatChannel implements ChannelAdapter {
 	#stopped = false;
 	/** context_token per sender (required to reply/media-send to them). */
 	#contextTokens = new Map<string, string>();
+	/** typing_ticket per sender (getconfig → sendtyping "正在输入" state). */
+	#typingTickets = new Map<string, string>();
+	/** Per-sender typing heartbeats — cleared in stopTyping()/stop(). */
+	#typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 	#onMessage:
 		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
 		| null = null;
@@ -176,6 +194,9 @@ export class WechatChannel implements ChannelAdapter {
 			// X-WECHAT-UIN (protocol spec): random uint32 as a decimal string,
 			// base64-encoded — carried on every authorized POST.
 			this.#uin = Buffer.from(String(randomBytes(4).readUInt32BE(0)), "utf-8").toString("base64");
+			// Persist the fresh bot_token (issue: 停止后重启动要重扫码) — the
+			// registry merges it into channels.json without restarting us.
+			this.#persistCredentials?.(this.#botToken);
 			if (this.#pollTimer) {
 				clearInterval(this.#pollTimer);
 				this.#pollTimer = null;
@@ -380,9 +401,13 @@ export class WechatChannel implements ChannelAdapter {
 			});
 		}
 		// Text + each media item as its own downstream message (OpenClaw
-		// sendMediaItems semantics: one item per request).
+		// sendMediaItems semantics: one item per request). Long replies are
+		// CHUNKED, not truncated — slice() silently dropped everything past
+		// 2000 chars (agent answers just ended mid-thought).
 		if (payload.text.trim() || mediaItems.length === 0) {
-			await this.#sendItems(to, contextToken, [{ type: 1, text_item: { text: payload.text.slice(0, 2000) } }]);
+			for (const chunk of chunkText(payload.text, WechatChannel.TEXT_CHUNK)) {
+				await this.#sendItems(to, contextToken, [{ type: 1, text_item: { text: chunk } }]);
+			}
 		}
 		for (const item of mediaItems) {
 			await this.#sendItems(to, contextToken, [item]);
@@ -439,6 +464,54 @@ export class WechatChannel implements ChannelAdapter {
 		});
 	}
 
+	/** Native "对方正在输入…" indicator (iLink sendtyping): getconfig mints a
+	 *  per-user typing_ticket, status 1 starts the indicator and a heartbeat
+	 *  keeps it alive while the agent works; stopTyping sends status 2. */
+	async startTyping(to: string): Promise<void> {
+		if (this.#state !== "connected" || this.#typingTimers.has(to)) return;
+		try {
+			let ticket = this.#typingTickets.get(to);
+			if (!ticket) {
+				const cfg = (await this.#post("/ilink/bot/getconfig", {
+					ilink_user_id: to,
+					context_token: this.#contextTokens.get(to) ?? "",
+					base_info: { channel_version: "1.0.0" },
+				})) as { typing_ticket?: string };
+				ticket = cfg.typing_ticket ?? "";
+				if (!ticket) return;
+				this.#typingTickets.set(to, ticket);
+			}
+			await this.#sendTyping(to, ticket, 1);
+			const timer = setInterval(
+				() => void this.#sendTyping(to, ticket!, 1).catch(() => {}),
+				WechatChannel.TYPING_REFRESH_MS,
+			);
+			timer.unref?.();
+			this.#typingTimers.set(to, timer);
+		} catch {
+			// Typing is best-effort cosmetics — never block the reply path.
+		}
+	}
+
+	async stopTyping(to: string): Promise<void> {
+		const timer = this.#typingTimers.get(to);
+		if (timer) {
+			clearInterval(timer);
+			this.#typingTimers.delete(to);
+		}
+		const ticket = this.#typingTickets.get(to);
+		if (ticket) await this.#sendTyping(to, ticket, 2).catch(() => {});
+	}
+
+	async #sendTyping(to: string, typingTicket: string, status: 1 | 2): Promise<void> {
+		await this.#post("/ilink/bot/sendtyping", {
+			ilink_user_id: to,
+			typing_ticket: typingTicket,
+			status,
+			base_info: { channel_version: "1.0.0" },
+		});
+	}
+
 	status(): ChannelStatus {
 		return {
 			kind: this.kind,
@@ -454,6 +527,9 @@ export class WechatChannel implements ChannelAdapter {
 
 	async stop(): Promise<void> {
 		this.#stopped = true;
+		for (const timer of this.#typingTimers.values()) clearInterval(timer);
+		this.#typingTimers.clear();
+		this.#typingTickets.clear();
 		if (this.#pollTimer) {
 			clearInterval(this.#pollTimer);
 			this.#pollTimer = null;

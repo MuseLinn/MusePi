@@ -1362,6 +1362,10 @@ export const settings = {
 		"Offline — showing cached content, connecting needs a network",
 	"no channels configured": "No channels configured",
 	start: "Start",
+	unlink: "Unlink",
+	"configure channel": "Configure channel",
+	"unlink channel confirm":
+		"Unlinking disconnects the channel and clears its saved credentials — the next start needs a fresh login. Unlink?",
 	"save and start": "Save & start",
 	"channel plugins": "Channel plugins",
 	"reload plugins": "Reload plugins",
