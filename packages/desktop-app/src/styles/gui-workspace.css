@@ -2183,6 +2183,12 @@
 	width: 11px;
 	height: 11px;
 }
+/* ON travel must be sized to the SMALL track: the shared 36px rule slides
+ * the 11px knob 16px, overshooting a 26px track — the dot sat past the
+ * right edge (capability-list switches, 2026-09-20). 26 - 2 - 11 - 2 = 11. */
+.gui-toggle--sm.gui-toggle--on .gui-toggle-knob {
+	transform: translateX(11px);
+}
 .gui-ext-detail {
 	min-height: 0;
 	padding: 14px;
@@ -4388,24 +4394,6 @@
 
 .gui-skill-market-segbtn--on {
 	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
-	color: var(--color-text);
-}
-
-.gui-skill-market-select {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	font-size: 11.5px;
-	color: var(--color-text-muted);
-}
-
-.gui-skill-market-select select {
-	height: 30px;
-	padding: 0 8px;
-	border: 1px solid color-mix(in oklab, var(--color-text-faint) 18%, transparent);
-	border-radius: var(--radius-md);
-	background: var(--color-surface-raised);
-	font-size: 11.5px;
 	color: var(--color-text);
 }
 

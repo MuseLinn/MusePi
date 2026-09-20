@@ -172,7 +172,11 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 											aria-label={`${t("plugin enable")} ${p.name}`}
 											className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 											onClick={() => togglePlugin(p)}
-										/>
+										>
+											{/* Knob span required: the thumb is a child element,
+											 * not a pseudo-element — empty buttons lose the dot. */}
+											<span className="gui-toggle-knob" />
+										</button>
 									</div>
 									<div className="gui-ext-plugins-meta">
 										<span className="gui-ext-plugins-version">v{p.version}</span>

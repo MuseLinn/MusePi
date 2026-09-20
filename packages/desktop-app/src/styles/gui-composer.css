@@ -235,7 +235,8 @@
 	row-gap: 4px;
 }
 
-/* Round soft icon button (aicss iconBtn). */
+/* Round soft icon button (aicss iconBtn): material from the shared
+ * footer-pill glass recipe (gui-composer-pill family block). */
 .gui-composer-ico {
 	position: relative;
 	display: inline-flex;
@@ -244,9 +245,7 @@
 	width: 26px;
 	height: 26px;
 	flex: none;
-	border: 0;
 	border-radius: 999px;
-	background: transparent;
 	color: var(--color-text-muted);
 	cursor: pointer;
 }
@@ -662,57 +661,19 @@
 	}
 }
 
-.gui-composer-ico::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	transition: background 150ms var(--spring);
-}
-
-.gui-composer-ico:hover::before {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.gui-composer-ico > * {
-	position: relative;
-}
-
-/* Enhance pill (aicss pill). */
+/* Enhance pill (aicss pill): material from the shared footer-pill glass
+ * recipe; this class keeps layout only. */
 .gui-composer-pill {
-	position: relative;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
 	height: 24px;
 	padding: 0 9px;
-	border: 0;
 	border-radius: 999px;
-	background: transparent;
-	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-sm);
 	font-weight: 500;
 	white-space: nowrap;
 	cursor: pointer;
-	transition: color 150ms var(--spring);
-}
-
-.gui-composer-pill::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	transition: background 150ms var(--spring);
-}
-
-.gui-composer-pill:hover::before {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.gui-composer-pill > * {
-	position: relative;
 }
 
 .gui-composer-pill--done {
@@ -1775,36 +1736,19 @@
 	color: var(--color-text-muted);
 }
 
-/* Prewalk one-shot arm button: plain chip when unarmed, accent dashed
- * chip when armed (mirrors .gui-mode-chip--armed semantics). */
+/* Prewalk one-shot arm button: plain glass chip when unarmed, accent-tinted
+ * glass when armed (material from the shared footer-pill recipe above;
+ * --armed carries only the tint — the old dashed hairline is gone with the
+ * border itself). */
 .gui-mode-toggle-arm {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
 	padding: 3px 10px;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: transparent;
-	color: var(--color-text-muted);
 	font-size: 11.5px;
 	font-family: inherit;
 	cursor: pointer;
-	transition: color 120ms ease-out, border-color 120ms ease-out;
-}
-
-.gui-mode-toggle-arm:hover {
-	color: var(--color-text);
-	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-}
-
-.gui-mode-toggle-arm--armed {
-	border-style: dashed;
-	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
-	color: var(--color-accent);
-}
-
-.gui-mode-toggle-arm--armed:hover {
-	border-color: var(--color-accent);
 }
 
 /* ── SketchPad (Codex 绘画 parity) — board overlay launched from the
@@ -2282,25 +2226,31 @@
 }
 
 /* ── Composer footer pill family ────────────────────────────────────────
- * Liquid glass (2026-09-20): the footer chips share ONE recipe so the row
- * reads as a single material — a translucent fill over the composer
- * frame's frosted surface, a saturated backdrop blur, and the specular
- * rim (bright top edge / dim bottom echo) + diagonal sheen from the
+ * Liquid glass (2026-09-20 全局规范): the footer chips share ONE recipe so
+ * the row reads as a single material — a translucent fill over the composer
+ * frame's frosted surface, a saturated backdrop blur, and the specular rim
+ * (bright top edge / dim bottom echo) + diagonal sheen from the
  * `--glass-*` ladder in tokens.css. Pair with `--spring-liquid` on press
  * so the surfaces feel fluid rather than linear.
+ *
+ * Members: approval + design-style selects, the round icon buttons
+ * (attach/voice/retry), the focus/enhance pills, the welcome workspace &
+ * preset chips, the session mode toggles and the model/thinking capsule.
+ * Layout (padding, height, font) stays with each member's own class —
+ * only the MATERIAL lives here.
  *
  * The rim is drawn with an INSET box-shadow, never a border: a real 1px
  * border on a 999px-radius pill renders as a visible ring, which is
  * exactly what was reported on the approval chip (2026-09-20). */
 .gui-approval-btn,
-.gui-style-select-btn {
+.gui-style-select-btn,
+.gui-composer-pill,
+.gui-composer-ico,
+.gui-project-chip,
+.gui-mode-toggle-arm,
+.gui-model-capsule {
 	position: relative;
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 3px 10px;
 	border: 0;
-	border-radius: 999px;
 	background: var(--glass-bg);
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
@@ -2308,9 +2258,6 @@
 		inset 0 1px 0 var(--glass-edge-hi),
 		inset 0 -1px 0 var(--glass-edge-lo);
 	color: var(--color-text-muted);
-	font-size: 11.5px;
-	font-family: inherit;
-	cursor: pointer;
 	transition:
 		color 120ms ease-out,
 		background-color 120ms ease-out,
@@ -2318,10 +2265,28 @@
 		transform 120ms var(--spring-liquid);
 }
 
+/* Layout for the two select chips (the shared material group carries none). */
+.gui-approval-btn,
+.gui-style-select-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+}
+
 /* Sheen wash: the diagonal "water" pass, clipped to the capsule. Sits
  * under the content via z-index so labels stay crisp. */
 .gui-approval-btn::before,
-.gui-style-select-btn::before {
+.gui-style-select-btn::before,
+.gui-composer-pill::before,
+.gui-composer-ico::before,
+.gui-project-chip::before,
+.gui-mode-toggle-arm::before,
+.gui-model-capsule::before {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -2332,15 +2297,27 @@
 }
 
 .gui-approval-btn > *,
-.gui-style-select-btn > * {
+.gui-style-select-btn > *,
+.gui-composer-pill > *,
+.gui-composer-ico > *,
+.gui-project-chip > *,
+.gui-mode-toggle-arm > *,
+.gui-model-capsule > * {
 	position: relative;
 	z-index: 1;
 }
 
+/* Hover/open lifts the pill: stronger fill + a soft drop under the rim.
+ * The model capsule is a static container (its segments highlight
+ * individually), so it deliberately has no :hover of its own. */
 .gui-approval-btn:hover,
 .gui-approval-btn--open,
 .gui-style-select-btn:hover,
-.gui-style-select-btn--open {
+.gui-style-select-btn--open,
+.gui-composer-pill:hover,
+.gui-composer-ico:hover,
+.gui-project-chip:hover,
+.gui-mode-toggle-arm:hover {
 	color: var(--color-text);
 	background-color: var(--glass-bg-strong);
 	box-shadow:
@@ -2350,7 +2327,11 @@
 }
 
 .gui-approval-btn:active,
-.gui-style-select-btn:active {
+.gui-style-select-btn:active,
+.gui-composer-pill:active,
+.gui-composer-ico:active,
+.gui-project-chip:active,
+.gui-mode-toggle-arm:active {
 	transform: scale(0.97);
 }
 
@@ -2358,7 +2339,8 @@
  * the state (text + a tinted wash), so switching mode never changes the
  * pill's material. */
 .gui-approval-btn--write,
-.gui-style-select-btn--set {
+.gui-style-select-btn--set,
+.gui-mode-toggle-arm--armed {
 	color: var(--color-accent);
 	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 }
@@ -2370,7 +2352,8 @@
 
 .gui-approval-btn--write:hover,
 .gui-approval-btn--yolo:hover,
-.gui-style-select-btn--set:hover {
+.gui-style-select-btn--set:hover,
+.gui-mode-toggle-arm--armed:hover {
 	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
 }
 

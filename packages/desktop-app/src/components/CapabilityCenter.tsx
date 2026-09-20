@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
+import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
 
 /**
@@ -739,30 +740,32 @@ function InstalledSkillsPane({
 						onChange={e => setQuery(e.target.value)}
 					/>
 				</label>
-				<label className="gui-skill-market-select">
-					<select
-						value={origin}
-						aria-label={t("skill market source")}
-						onChange={e => setOrigin(e.target.value as typeof origin)}
-					>
-						<option value="all">{t("skill market source all")}</option>
-						<option value="official">{t("skill origin official")}</option>
-						<option value="user">{t("skill filter user")}</option>
-						<option value="project">{t("skill filter project")}</option>
-						<option value="extension">{t("skill origin extension")}</option>
-					</select>
-				</label>
-				<label className="gui-skill-market-select">
-					<select
-						value={sortKey}
-						aria-label={t("skill market sort")}
-						onChange={e => setSortKey(e.target.value as typeof sortKey)}
-					>
-						<option value="recent">{t("skill sort recent")}</option>
-						<option value="name">{t("skill sort name")}</option>
-						<option value="level">{t("skill sort level")}</option>
-					</select>
-				</label>
+				{/* Frosted GuiSelect (规范下拉): the native <select> was system
+					 chrome — the "原始下拉" the consistency pass calls out. The
+					 explicit type parameter keeps T narrow (the Dispatch-based
+					 setter gives the inference engine no naked T position). */}
+				<GuiSelect<"all" | "official" | "user" | "project" | "extension">
+					value={origin}
+					onChange={setOrigin}
+					ariaLabel={t("skill market source")}
+					options={[
+						{ value: "all", label: t("skill market source all") },
+						{ value: "official", label: t("skill origin official") },
+						{ value: "user", label: t("skill filter user") },
+						{ value: "project", label: t("skill filter project") },
+						{ value: "extension", label: t("skill origin extension") },
+					]}
+				/>
+				<GuiSelect<"recent" | "name" | "level">
+					value={sortKey}
+					onChange={setSortKey}
+					ariaLabel={t("skill market sort")}
+					options={[
+						{ value: "recent", label: t("skill sort recent") },
+						{ value: "name", label: t("skill sort name") },
+						{ value: "level", label: t("skill sort level") },
+					]}
+				/>
 				<button
 					type="button"
 					className={`gui-cap-manage${manage ? " gui-cap-manage--on" : ""}`}

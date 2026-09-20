@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
+import { GuiSelect } from "./GuiSelect";
 
 /**
  * 技能市场 · 发现 (capability center → 技能 tab, 设计稿 frame 01).
@@ -180,34 +181,33 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						}}
 					/>
 				</label>
-				<label className="gui-skill-market-select">
-					<select
-						value={source}
-						aria-label={t("skill market source")}
-						onChange={ev => {
-							setSource(ev.target.value as SourceFilter);
-							setPage(1);
-						}}
-					>
-						<option value="all">{t("skill market source all")}</option>
-						<option value="skillhub">{t("skill market source skillhub")}</option>
-						<option value="skills.sh">{t("skill market source skills.sh")}</option>
-					</select>
-				</label>
-				<label className="gui-skill-market-select">
-					<select
-						value={sortBy}
-						aria-label={t("skill market sort")}
-						onChange={ev => {
-							setSortBy(ev.target.value as SortKey);
-							setPage(1);
-						}}
-					>
-						<option value="downloads">{t("skill market sort downloads")}</option>
-						<option value="stars">{t("skill market sort stars")}</option>
-						<option value="installs">{t("skill market sort installs")}</option>
-					</select>
-				</label>
+				{/* Frosted GuiSelect (规范下拉): replaces the native <select>. */}
+				<GuiSelect<SourceFilter>
+					value={source}
+					onChange={v => {
+						setSource(v);
+						setPage(1);
+					}}
+					ariaLabel={t("skill market source")}
+					options={[
+						{ value: "all", label: t("skill market source all") },
+						{ value: "skillhub", label: t("skill market source skillhub") },
+						{ value: "skills.sh", label: t("skill market source skills.sh") },
+					]}
+				/>
+				<GuiSelect<SortKey>
+					value={sortBy}
+					onChange={v => {
+						setSortBy(v);
+						setPage(1);
+					}}
+					ariaLabel={t("skill market sort")}
+					options={[
+						{ value: "downloads", label: t("skill market sort downloads") },
+						{ value: "stars", label: t("skill market sort stars") },
+						{ value: "installs", label: t("skill market sort installs") },
+					]}
+				/>
 				<button type="button" className="gui-skill-market-add" onClick={() => setAddOpen(true)}>
 					<Icon name="add" className="h-3.5 w-3.5 shrink-0" />
 					{t("add skill")}

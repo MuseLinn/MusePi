@@ -99,12 +99,9 @@
 	align-items: center;
 	height: 26px;
 	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 6%, transparent);
-	/* The pill must NEVER be squeezed by the button-row flex: row overflow
-	 * (attach/queue/focus/chips sharing the line) would otherwise crush the
-	 * segment labels to zero width and render icon-only even when the frame
-	 * is wide. Shrink-to-icon is driven solely by the @container queries
-	 * below (composer frame genuinely narrow), not by row crowding. */
+	/* Material (liquid-glass fill/blur/rim) comes from the shared footer-pill
+	 * recipe in gui-composer.css — this file loads AFTER it, so any
+	 * background declared here would override the group. Layout only. */
 	flex-shrink: 0;
 	min-width: 0;
 }
@@ -1680,25 +1677,17 @@
 	flex-shrink: 0;
 }
 
-/* ZCode welcome project chip (workspace picker). */
+/* ZCode welcome project chip (workspace picker): material from the shared
+ * footer-pill glass recipe in gui-composer.css (this file loads AFTER it —
+ * border/background here would override the group; keep layout only). */
 .gui-project-chip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	padding: 3px 12px;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
-	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
-	transition: background 120ms ease-out, color 120ms ease-out, border-color 120ms ease-out;
-}
-
-.gui-project-chip:hover {
-	background: var(--color-surface-raised);
-	color: var(--color-text);
-	border-color: var(--color-accent-bd);
 }
 
 /* Add-project menu (projects tab): floating card under the connect button. */

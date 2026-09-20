@@ -226,7 +226,11 @@ function OverviewView({
 								aria-label={`${t("ext provider")} ${p.displayName}`}
 								className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 								onClick={() => onToggleProvider(p)}
-							/>
+							>
+								{/* The knob IS the dot: an empty self-closing button
+								 * rendered a track with no thumb (overview rows). */}
+								<span className="gui-toggle-knob" />
+							</button>
 						</div>
 					))}
 				</div>
@@ -617,7 +621,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												aria-label={`${t("plugin enable")} ${p.name}`}
 												className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
 												onClick={() => void togglePlugin(p)}
-											/>
+											>
+												<span className="gui-toggle-knob" />
+											</button>
 										</div>
 										<div className="gui-ext-plugins-meta">
 											<span className="gui-ext-plugins-version">v{p.version}</span>
