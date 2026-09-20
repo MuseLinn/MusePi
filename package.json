@@ -214,6 +214,7 @@
 		"@dnd-kit/utilities": "^3.2.2",
 		"@huggingface/transformers": "catalog:",
 		"@types/babel__traverse": "^7.28.0",
+		"onnxruntime-node": "1.30.0",
 		"sherpa-onnx-node": "1.13.2"
 	}
 }
