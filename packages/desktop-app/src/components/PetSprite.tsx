@@ -101,6 +101,9 @@ interface MascotRefs {
 	eyeRefs: [RefObject<SVGPathElement | null>, RefObject<SVGPathElement | null>];
 	mouthRef: RefObject<SVGPathElement | null>;
 	shellRef: RefObject<SVGGElement | null>;
+	/** The wearable group (headphones). The engine leans it with the gaze so
+	 *  the wear reads as sitting on a turning head, not pasted on the front. */
+	accessoryRef: RefObject<SVGGElement | null>;
 }
 
 /** Blend weight of the mood's `drift` face during idle — subtle on purpose.
@@ -156,6 +159,7 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 	const eye1 = useRef<SVGPathElement | null>(null);
 	const mouthRef = useRef<SVGPathElement | null>(null);
 	const shellRef = useRef<SVGGElement | null>(null);
+	const accessoryRef = useRef<SVGGElement | null>(null);
 	const gazeSmooth = useRef({ x: 0, y: 0, att: 0 });
 
 	// Static per-mood face data — decoded once per mood, never per frame.
@@ -261,13 +265,26 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX);
 				shell.setAttribute("transform", `translate(${SIDE} ${TOP}) ${motion}`.trim());
 			}
+			// ── the wearable leans with the gaze. The face turns inside the
+			// ball (eyes slide + yaw); the headphones pivot a hair the same
+			// way so the cups track the head's turn along the shell surface.
+			// Amplitudes are small on purpose: ±6px of slide and ±2° of roll
+			// at full deflection reads as physical — more reads as the wear
+			// detaching from the body it is sitting on.
+			const acc = accessoryRef.current;
+			if (acc) {
+				acc.setAttribute(
+					"transform",
+					`translate(${(gx * 0.3).toFixed(2)} ${(gy * 0.24).toFixed(2)}) rotate(${(gx * 0.1).toFixed(2)} ${ORB_C} ${ORB_C})`,
+				);
+			}
 			raf = requestAnimationFrame(tick);
 		};
 		raf = requestAnimationFrame(tick);
 		return () => cancelAnimationFrame(raf);
 	}, [prepped]);
 
-	return { eyeRefs: [eye0, eye1], mouthRef, shellRef };
+	return { eyeRefs: [eye0, eye1], mouthRef, shellRef, accessoryRef };
 }
 
 /** Blend two mouth specs. All four numbers are independent, so a plain
@@ -375,27 +392,31 @@ function Silhouette({
 	eyeRefs,
 	mouthRef,
 	shellRef,
+	accessoryRef,
 	gloss,
 	accessory,
 }: MascotRefs & { gloss: boolean; accessory: PetAccessory }): ReactNode {
 	return (
 		<g aria-hidden className="gui-pet-svg__silhouette">
 			<defs>
-				{/* Shell: an accent-hued sphere lit from the upper left — lit
-				 * crown, body, terminator. The fallback trio is the brand-gold
-				 * dark-theme derivation (pet-palette.ts: L .56/.36/.19 at the
-				 * accent hue, low chroma), so the pre-palette first paint is
-				 * already the warm orb rather than a cold slate ball. Two
-				 * different wrong-graphite fallbacks have shipped here before
-				 * (#4a5768/#26303d/#0e141c then #7d7159/#453a24/#1c1408) and
-				 * both were reported as 「颜色都是黑色球体而不是主题色」 /
-				 * 「品牌金色，但显示的还是黑色带点黄」 — the lesson is that
-				 * the fallback must be the DERIVED value, not a hand-picked
-				 * "close enough" one. PetPaletteVars is the single source. */}
+				{/* Shell: the sphere IS the accent — lit crown, body, terminator.
+				 * The fallback trio is the brand-gold dark-theme derivation
+				 * (pet-palette.ts: L .87/.75/.41 at the accent hue, accent-level
+				 * chroma), so the pre-palette first paint is already the bright
+				 * warm orb. History is the lesson here: two hand-picked
+				 * graphite fallbacks shipped (#4a5768/#26303d/#0e141c then
+				 * #7d7159/#453a24/#1c1408) and were reported as 「颜色都是黑色
+				 * 球体而不是主题色」 / 「品牌金色，但显示的还是黑色带点黄」; the
+				 * DERIVED value then fixed the fallbacks but the derivation
+				 * itself (dark graphite at L .56/.36/.19) was read as black a
+				 * THIRD time (「现在依然是黑色为底色」). A dark desaturated shell
+				 * is a black ball to the eye — the derivation now rides the
+				 * accent and the fallback must always be the derived value.
+				 * PetPaletteVars is the single source. */}
 				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
-					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(56.00% 0.0450 79.84deg))" />
-					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(36.00% 0.0500 79.84deg))" />
-					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(19.00% 0.0450 79.84deg))" />
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(87.07% 0.1400 79.84deg))" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1295 79.84deg))" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.1101 79.84deg))" />
 				</radialGradient>
 				{/* Orbit ring: the accent (brand gold by default), brightest where
 				 * it crosses the light (top-left) and dimmest at the far side.
@@ -427,6 +448,31 @@ function Silhouette({
 				{/* The rig. Orb-local coordinates; shifted into the padded view
 				 * and then driven by the frame loop for mood motion. */}
 				<g ref={shellRef} transform={`translate(${SIDE} ${TOP})`}>
+					{/* Status orbit: three lights on a circle just outside the
+					 * shell (radius ORB_R + 6). Hidden by default; CSS shows and
+					 * spins the group while the orb is working/analyzing — the
+					 * mood legibility the ellipse ring below was supposed to
+					 * carry (it is fully occluded: rx 104 inside the ball's
+					 * 114.27). The invisible guide circle only squares up the
+					 * group's bounding box so `transform-origin: center`
+					 * (fill-box) pivots on the BALL's centre, not the dots' own
+					 * bbox centre. */}
+					<g className="gui-pet-svg__orbit-dots">
+						<circle cx={ORB_C} cy={ORB_C} r={ORB_R + 10.6} fill="none" stroke="none" />
+						<circle className="gui-pet-svg__orbit-dot" cx={ORB_C} cy={ORB_C - (ORB_R + 6)} r="4.6" />
+						<circle
+							className="gui-pet-svg__orbit-dot"
+							cx={ORB_C + (ORB_R + 6) * Math.cos(Math.PI / 6)}
+							cy={ORB_C + (ORB_R + 6) * Math.sin(Math.PI / 6)}
+							r="4.6"
+						/>
+						<circle
+							className="gui-pet-svg__orbit-dot"
+							cx={ORB_C - (ORB_R + 6) * Math.cos(Math.PI / 6)}
+							cy={ORB_C + (ORB_R + 6) * Math.sin(Math.PI / 6)}
+							r="4.6"
+						/>
+					</g>
 					{/* Orbit ring, back half — behind the shell, so the front arc
 					 * reads as the same loop coming round. */}
 					<ellipse
@@ -495,7 +541,7 @@ function Silhouette({
 					 * stem top and the band apex were checked against the
 					 * viewBox (TOP=24 / SIDE=20) so nothing clips. */}
 					{accessory === "headphones" && (
-						<g className="gui-pet-svg__accessory">
+						<g ref={accessoryRef} className="gui-pet-svg__accessory">
 							{/* Band: one arc over the crown, endpoints meeting the
 							 * cups' tops (cup top ≈ y 78, apex ≈ y −4 — 4px above
 							 * the shell, inside the rig's headroom). Gold carries

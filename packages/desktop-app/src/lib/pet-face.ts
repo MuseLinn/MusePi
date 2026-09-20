@@ -80,8 +80,29 @@ export type PetMood = (typeof PET_MOODS)[number];
  * squint after a good poke, `curious` the head-tilt someone gets when they
  * notice the cursor, `dozing` the slow blink of a creature that is about to
  * drop off. See INTERACTION_DIRECTION for how each is played.
- */
-export const PET_INTERACTIONS = ["startled", "delighted", "curious", "dozing", "peek"] as const;
+ *
+ * 2026-09-20: the set grew from 5 to 14 — the chat avatar's reaction
+ * surface opened up (click the message avatar to cycle a random reaction),
+ * and a five-word vocabulary was too thin next to what the engine can
+ * already play (blobstudio-grade richness, user request). The desktop pet
+ * keeps using the original five; the rest are avatar-side reactions, all
+ * running through the same two tables below. */
+export const PET_INTERACTIONS = [
+	"startled",
+	"delighted",
+	"curious",
+	"dozing",
+	"peek",
+	"starstruck",
+	"thinking",
+	"greeting",
+	"celebrate",
+	"confused",
+	"shy",
+	"excited",
+	"suspicious",
+	"dizzy",
+] as const;
 export type PetInteraction = (typeof PET_INTERACTIONS)[number];
 
 export type EyeShape =
@@ -242,6 +263,23 @@ export const moodDirection = (mood: string): MoodDirection => MOOD_DIRECTION[moo
  *              so a blink lands rarely and heavily.
  *   peek        caught looking: awake eyes, a fast blink, gaze parked off to
  *              one side — the pet pretending it was not watching you.
+ *   starstruck  the awe face: star eyes, held (no blink), nearly centred —
+ *              it cannot look away from whatever it just saw.
+ *   thinking    the "hm": half-lidded, drifting tense, gaze parked up and
+ *              away, no blink — focused, not sleepy.
+ *   greeting    the hello: a happy face with an open drift and a springy
+ *              bounce to match.
+ *   celebrate   the win: star eyes over a happy drift, the biggest bounce
+ *              in the set.
+ *   confused    the "?": cross eyes with a wobbly sway and a small
+ *              leftward glance.
+ *   shy         the aww: squint drifting closed, making itself small and
+ *              looking away.
+ *   excited     the anticipation: wide eyes darting toward star, quick
+ *              little hops.
+ *   suspicious  the narrowed stare: tense eyes, no blink, a slow lean —
+ *              it is watching you sideways.
+ *   dizzy       the woozy sway: dizzy rings rolling with the motion.
  */
 const INTERACTION_DIRECTION: Record<PetInteraction, MoodDirection> = {
 	startled: { eyes: "wide", blinkMs: 0, look: 0 },
@@ -249,6 +287,15 @@ const INTERACTION_DIRECTION: Record<PetInteraction, MoodDirection> = {
 	curious: { eyes: "half", drift: "open", blinkMs: 4600, look: 0.55 },
 	dozing: { eyes: "half", drift: "bored", blinkMs: 9000, look: -0.3 },
 	peek: { eyes: "open", drift: "squint", blinkMs: 1800, look: -0.6 },
+	starstruck: { eyes: "star", drift: "star", blinkMs: 0, look: 0.12 },
+	thinking: { eyes: "half", drift: "tense", blinkMs: 0, look: 0.5 },
+	greeting: { eyes: "happy", drift: "open", blinkMs: 3200, look: 0.18 },
+	celebrate: { eyes: "star", drift: "happy", blinkMs: 2400, look: 0.25 },
+	confused: { eyes: "cross", drift: "squint", blinkMs: 2800, look: -0.35 },
+	shy: { eyes: "squint", drift: "closed", blinkMs: 2600, look: -0.18 },
+	excited: { eyes: "wide", drift: "star", blinkMs: 1600, look: 0.35 },
+	suspicious: { eyes: "tense", drift: "squint", blinkMs: 0, look: -0.55 },
+	dizzy: { eyes: "dizzy", drift: "dizzy", blinkMs: 3000, look: -0.2 },
 };
 
 export const interactionDirection = (it: string): MoodDirection =>

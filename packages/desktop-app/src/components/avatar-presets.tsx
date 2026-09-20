@@ -1,6 +1,6 @@
 import { punkAvatarUri } from "@musepi/guest-client";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import type { PetdexMood } from "../lib/pet";
+import { PET_INTERACTIONS, type PetdexMood, type PetInteraction } from "../lib/pet";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 import { BuiltinPetSprite, type GazeVec, PetBox, usePetDecor } from "./PetSprite";
 
@@ -165,6 +165,11 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
 	waiting: "waiting",
 };
 
+/** How long an avatar click reaction holds before the live mood shows
+ *  through again. A touch longer than the desktop pet's hold
+ *  (INTERACTION_HOLD_MS): the avatar is small, its faces read slowly. */
+const AVATAR_REACTION_HOLD_MS = 1500;
+
 /** Pet avatar (orb-bot): the desktop mascot rendered in the avatar slot.
  *  Eyes track the cursor — one window-level pointermove writes the gaze
  *  ref per mounted avatar (the engine reads it per frame; no React
@@ -174,6 +179,13 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
  *  the full-deflection band covered barely one box-width of cursor travel
  *  and the eyes looked pinned almost immediately; 150px keeps the follow
  *  reading as tracking across the panel without going sluggish.
+ *
+ *  Click-to-react (2026-09-20, blobstudio-grade richness request): poking
+ *  the avatar plays a random reaction from the FULL interaction set —
+ *  never the same one twice in a row — and resolves back to the live
+ *  agent mood on its own clock. Transient by contract: a reaction is a
+ *  gesture, never a session state, so it lives in local state only and
+ *  is never written to the store.
  *
  *  The box size comes from CSS (`.gui-avatar-pet`, font-size driven) —
  *  NOT from an inline width. An inline size here outranks the transcript's
@@ -186,6 +198,26 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 	// Live decoration prefs — the avatar must match the floating pet and
 	// the composer orb (gloss off / a wearable shows up here too).
 	const decor = usePetDecor();
+	// The transient click reaction (see the component doc above).
+	const [reaction, setReaction] = useState<PetInteraction | null>(null);
+	const lastReaction = useRef<PetInteraction | null>(null);
+	const reactionTimer = useRef<number | null>(null);
+	useEffect(
+		() => () => {
+			if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
+		},
+		[],
+	);
+	const poke = (): void => {
+		let next = PET_INTERACTIONS[Math.floor(Math.random() * PET_INTERACTIONS.length)]!;
+		if (next === lastReaction.current) {
+			next = PET_INTERACTIONS[(PET_INTERACTIONS.indexOf(next) + 1) % PET_INTERACTIONS.length]!;
+		}
+		lastReaction.current = next;
+		setReaction(next);
+		if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
+		reactionTimer.current = window.setTimeout(() => setReaction(null), AVATAR_REACTION_HOLD_MS);
+	};
 	useEffect(() => {
 		const GAZE_RANGE_PX = 150;
 		const onMove = (e: PointerEvent): void => {
@@ -211,6 +243,7 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 			className="gui-avatar-pet"
 			style={{ "--gui-pet-size": `${size}px` } as CSSProperties}
 			role="img"
+			onClick={poke}
 		>
 			{/* PetBox, not a bare svg: `.gui-pet-svg` has no size rule of its own
 			 * (gui-pet.css sizes `.gui-pet svg`, a descendant) — without the box
@@ -220,6 +253,7 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 				<BuiltinPetSprite
 					mood={ORB_TO_PET_MOOD[state]}
 					gazeRef={gazeRef}
+					interaction={reaction}
 					gloss={decor.gloss}
 					accessory={decor.accessory}
 				/>

@@ -3530,6 +3530,9 @@ body.gui-resizing {
 	vertical-align: top;
 	height: var(--gui-pet-size, 20px);
 	width: auto;
+	/* Click-to-react (2026-09-20): poking the avatar plays a transient
+	 * reaction; the cursor is the affordance. */
+	cursor: pointer;
 }
 
 .gui-avatar-pet > .gui-pet {

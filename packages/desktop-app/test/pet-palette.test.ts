@@ -53,14 +53,25 @@ describe("petPaletteVars — derivation", () => {
 		);
 	});
 
-	test("shell is accent-hued but heavily desaturated (dark)", () => {
+	test("the shell IS the accent — shell-b rides the accent exactly (dark)", () => {
+		// 2026-09-20, user ×3 (「颜色都是黑色球体而不是主题色」/「显示的还是黑色
+		// 带点黄」/「现在依然是黑色为底色」): a dark barely-chromatic shell is a
+		// black ball to the eye no matter how deliberate the derivation. The
+		// contract is now that the ball's BODY is the accent itself — same
+		// lightness, chroma and hue — with a lit crown above and a deep base
+		// below, hue preserved across the whole sphere.
 		const v = petPaletteVars(OCEAN_DARK, "dark");
+		const a = accentChannels(OCEAN_DARK);
+		const shellB = oklchChannels(v["gui-pet-shell-b"]);
+		expect(shellB.l).toBeCloseTo(a.l, 2);
+		expect(shellB.c).toBeCloseTo(a.c, 2);
+		expect(hueDist(shellB.h, a.h)).toBeLessThan(0.1);
 		const shellA = oklchChannels(v["gui-pet-shell-a"]);
-		// Hue survives (the sphere follows the accent family — ocean stays
-		// blue-grey, not the old hardcoded graphite-blue mismatch).
-		expect(hueDist(shellA.h, 255)).toBeLessThan(0.1);
-		expect(shellA.c).toBeLessThan(0.06);
-		expect(shellA.l).toBeCloseTo(0.56, 1);
+		const shellC = oklchChannels(v["gui-pet-shell-c"]);
+		expect(shellA.l).toBeGreaterThan(a.l);
+		expect(shellC.l).toBeLessThan(a.l);
+		expect(hueDist(shellA.h, a.h)).toBeLessThan(0.1);
+		expect(hueDist(shellC.h, a.h)).toBeLessThan(0.1);
 	});
 
 	test("light family is tint → accent → shade on the accent hue", () => {
@@ -100,11 +111,18 @@ describe("petPaletteVars — derivation", () => {
 		expect(hueDist(goldB.h, legacy.h)).toBeLessThan(8);
 	});
 
-	test("light theme deepens the shade floor so eyes keep contrast", () => {
+	test("light theme lifts the ladder so the ball holds contrast on pale ground", () => {
 		const v = petPaletteVars(GOLD_LIGHT, "light");
 		const goldC = oklchChannels(v["gui-pet-gold-c"]);
 		expect(goldC.l).toBeGreaterThanOrEqual(0.3);
-		expect(oklchChannels(v["gui-pet-shell-a"]).l).toBeCloseTo(0.78, 1);
+		// The light ball is BRIGHT (the accent reads against a pale
+		// background) — the old 0.78 was still a washed-out mid tone.
+		expect(oklchChannels(v["gui-pet-shell-a"]).l).toBeCloseTo(0.94, 1);
+		// Hue follows the accent on the whole sphere. Compared against the
+		// accent's chroma-parsed hue, not the literal: chroma's oklch
+		// round-trip drifts the written value by ~0.1° (see the derivation
+		// tests above), so a literal comparison is flakier than the contract.
+		expect(hueDist(oklchChannels(v["gui-pet-shell-b"]).h, accentChannels(GOLD_LIGHT).h)).toBeLessThan(0.2);
 	});
 });
 
@@ -119,7 +137,9 @@ describe("petPaletteVars — edge cases", () => {
 
 	test("rim and glow carry their translucent alphas", () => {
 		const dark = petPaletteVars(GOLD_DARK, "dark");
-		expect(chroma(dark["gui-pet-rim"]).alpha()).toBeCloseTo(0.3, 3);
+		// Dark rim is a DEEP edge now (shading the bright limb), heavier than
+		// the old light-tint rim.
+		expect(chroma(dark["gui-pet-rim"]).alpha()).toBeCloseTo(0.5, 3);
 		expect(chroma(dark["gui-pet-glow"]).alpha()).toBeCloseTo(0.8, 3);
 		const light = petPaletteVars(GOLD_DARK, "light");
 		expect(chroma(light["gui-pet-rim"]).alpha()).toBeCloseTo(0.22, 3);
@@ -147,14 +167,17 @@ describe("petPaletteVars — edge cases", () => {
 	});
 
 	test("the face is always brighter than the shell it sits on", () => {
-		// The single rule the mascot needs: the light source is the face, so
-		// it must out-luminance the ball in both schemes — otherwise the
-		// whole read collapses on the pale light-theme shell.
+		// The single rule the mascot needs: the light source is the face. On
+		// a bright accent ball the crown highlight may approach the face's
+		// lightness, but the face must still out-shine it, and the BODY the
+		// face is actually painted on must stay well below it.
 		for (const theme of ["dark", "light"] as const) {
 			const v = petPaletteVars(OCEAN_DARK, theme);
 			const face = chroma(v["gui-pet-face"]).get("oklch.l");
-			const shell = oklchChannels(v["gui-pet-shell-a"]).l;
-			expect(face - shell).toBeGreaterThan(0.2);
+			const shellA = oklchChannels(v["gui-pet-shell-a"]).l;
+			const shellB = oklchChannels(v["gui-pet-shell-b"]).l;
+			expect(face).toBeGreaterThan(shellA);
+			expect(face - shellB).toBeGreaterThan(0.2);
 		}
 	});
 

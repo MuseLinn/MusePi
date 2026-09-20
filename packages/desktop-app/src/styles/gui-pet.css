@@ -63,7 +63,13 @@
 
 .gui-pet-svg__shell {
 	fill: url(#gui-pet-grad-shell);
-	stroke: var(--gui-pet-outline, rgba(8, 12, 20, 0.5));
+	/* The outline is a deep mix of the shell's own base tone, so it follows
+	 * the accent automatically — a fixed dark stroke on a bright themed
+	 * ball read as a ring of dirt around the theme colour. */
+	stroke: var(
+		--gui-pet-outline,
+		color-mix(in oklab, var(--gui-pet-shell-c, oklch(41.29% 0.1101 79.84deg)) 65%, transparent)
+	);
 	stroke-width: 1.6;
 }
 
@@ -110,15 +116,16 @@
 	stroke-width: 6.5;
 }
 
-/* Lower-right edge shade: on a dark shell the "3D" cue is a cool rim, so the
- * sphere separates from the background instead of dissolving into it.
- * Variable hook: the theme palette (lib/pet-palette.ts) sets --gui-pet-rim
- * to a light tint of the live accent; the literal is the brand-dark default.
+/* Deep-edge limb shade: on a BRIGHT accent ball the limb wants shading,
+ * not a light — the old cool-blue rim light read as a glued-on highlight
+ * (and contributed to the ball reading as a dark mismatched object). The
+ * variable hook (lib/pet-palette.ts --gui-pet-rim) sets a deep shade of
+ * the live accent; the literal is the brand-gold dark derivation's rim.
  * Always on — unlike the gloss family this is not decoration, it is what
- * keeps the ball from vanishing into a dark chat surface. */
+ * gives the sphere its terminator. */
 .gui-pet-svg__rim {
 	fill: none;
-	stroke: var(--gui-pet-rim, rgba(150, 196, 255, 0.26));
+	stroke: var(--gui-pet-rim, rgba(122, 78, 14, 0.5));
 	stroke-width: 3.2;
 	stroke-linecap: round;
 }
@@ -193,6 +200,35 @@
 	transform-origin: center;
 }
 
+/* ── Status orbit dots (2026-09-20) ────────────────────────────────────
+ * Three lights on a circle just outside the shell (PetSprite.tsx renders
+ * the group with an invisible guide circle so `transform-origin: center`
+ * pivots on the BALL's centre, not the dots' own bbox). Hidden on every
+ * mood; shown and spun only while effort should be legible at a glance —
+ * analyzing reads fast and forward, working slower and in reverse (the
+ * ellipse ring is fully occluded by the shell, so these dots are what
+ * actually carries the "busy" signal). */
+.gui-pet-svg__orbit-dots {
+	display: none;
+	transform-box: fill-box;
+	transform-origin: center;
+}
+
+.gui-pet-svg__orbit-dot {
+	fill: url(#gui-pet-grad-ring);
+	opacity: 0.85;
+}
+
+.gui-pet-svg--analyzing .gui-pet-svg__orbit-dots {
+	display: block;
+	animation: gui-pet-ring-spin 1.5s linear infinite;
+}
+
+.gui-pet-svg--working .gui-pet-svg__orbit-dots {
+	display: block;
+	animation: gui-pet-ring-spin 4.2s linear infinite reverse;
+}
+
 /* Hover: the orb perks up and the eye light brightens. */
 .gui-pet-svg--hover .gui-pet-svg__eye {
 	filter: drop-shadow(0 0 5px var(--gui-pet-glow, rgba(217, 168, 63, 0.8)));
@@ -232,6 +268,26 @@
 
 .gui-pet-svg--dozing .gui-pet-svg__ring {
 	opacity: 0.72;
+}
+
+/* Starstruck: the eyes go full bloom — awe reads as glow, not motion. */
+.gui-pet-svg--starstruck .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 8px var(--gui-pet-glow, rgba(255, 255, 255, 0.7)));
+}
+
+/* Celebrate: a warm soft flare, a notch above delighted. */
+.gui-pet-svg--celebrate .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 7px var(--gui-pet-glow, rgba(255, 255, 255, 0.65)));
+}
+
+/* Excited: a bright quick glow to match the hops. */
+.gui-pet-svg--excited .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 6px var(--gui-pet-glow, rgba(255, 255, 255, 0.6)));
+}
+
+/* Shy: the light pulls in — the orb making itself small. */
+.gui-pet-svg--shy .gui-pet-svg__eye {
+	opacity: 0.85;
 }
 
 @keyframes gui-pet-ring-spin {

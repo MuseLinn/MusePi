@@ -56,6 +56,14 @@ describe("pet interaction axis — reactions are reactions, not moods", () => {
 		expect(dozing).toBeGreaterThan(rest);
 	});
 
+	test("held attention reactions hold their face (no blink)", () => {
+		// Awe / thought / suspicion read as FIXED expressions; a blink
+		// landing mid-stare breaks the read the way it does for startle.
+		for (const it of ["starstruck", "thinking", "suspicious"] as const) {
+			expect(interactionDirection(it).blinkMs).toBe(0);
+		}
+	});
+
 	test("every distraction state looks OFF-centre (look is never 0 except startle)", () => {
 		// Curious / dozing / peek are all "attention went somewhere else";
 		// a centred look would read as staring straight ahead, which is the

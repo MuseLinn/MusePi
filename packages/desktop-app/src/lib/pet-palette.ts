@@ -13,15 +13,23 @@
  * active data-accent × data-theme pair).
  *
  * Derivation (H = accent hue, L0/C0 = accent lightness/chroma):
- *   shell  — the sphere stays a "metal" surface: accent-hued but heavily
- *            desaturated, running dark (dark theme) or mid (light theme)
- *            so the emissive face keeps its contrast.
- *   gold-* — the "light" family (ring, antenna, bounce, thrust):
+ *   shell  — the sphere IS the accent (2026-09-20, user ×3: the old
+ *            "accent-hued graphite" shell kept reading as 「黑色球体」 —
+ *            dark + barely chromatic is a black ball to the eye no matter
+ *            how deliberate the derivation). shell-b is the accent
+ *            itself; the lit crown lifts L0 by +0.12 and the base sinks
+ *            to 0.55·L0 for volume, all at accent-level chroma. Dark caps
+ *            the crown at 0.9; light lifts the whole ladder so the ball
+ *            holds contrast on a pale background.
+ *   gold-* — the "light" family (ring, accessories):
  *            a bright tint above the accent, the accent itself, and a
  *            deep shade below it. Under the default brand accent this
  *            lands within a hair of the old hardcoded golds, so the
  *            mascot keeps its identity — other accents inherit a whole
  *            coherent orb for free.
+ *   rim    — a DEEP edge of the same hue (dark theme): on a bright ball
+ *            the limb wants shading, not a light — the old cool-blue rim
+ *            light read as a glued-on highlight.
  *
  * The face (eyes + mouth) is WHITE, not accent-tinted (2026-09-20, user
  * request). It used to ride `--gui-pet-gold-a/b`, which meant a themed orb
@@ -91,18 +99,19 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 	const c0 = Math.max(0.055, a.get("oklch.c"));
 
 	if (theme === "dark") {
-		// Sphere: accent-hued graphite — dark, barely chromatic.
+		// Sphere: the accent itself — crown +0.12, base 0.55×, accent-level
+		// chroma throughout. The ball IS the theme colour.
 		// Light family: bright tint → accent → deep shade.
 		return {
-			"gui-pet-shell-a": fmt(0.56, 0.045, h),
-			"gui-pet-shell-b": fmt(0.36, 0.05, h),
-			"gui-pet-shell-c": fmt(0.19, 0.045, h),
+			"gui-pet-shell-a": fmt(Math.min(0.9, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h),
+			"gui-pet-shell-b": fmt(l0, c0, h),
+			"gui-pet-shell-c": fmt(l0 * 0.55, c0 * 0.85, h),
 			"gui-pet-gold-a": fmt(Math.min(0.88, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h),
 			"gui-pet-gold-b": fmt(l0, c0, h),
 			"gui-pet-gold-c": fmt(l0 * 0.62, c0 * 0.9, h),
-			// Rim: a cool-to-accent edge light — a light tint of the accent,
-			// transparent enough to read as light on the sphere's limb.
-			"gui-pet-rim": fmt(Math.min(0.88, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h, 0.3),
+			// Rim: a deep edge of the same hue — shading the bright limb
+			// instead of lighting it.
+			"gui-pet-rim": fmt(Math.max(0.18, l0 * 0.45), c0 * 0.9, h, 0.5),
 			"gui-pet-glow": fmt(l0, c0, h, 0.8),
 			// Face: near-white, hair of warmth so it reads as a light rather
 			// than a cut-out. Neutral halo (no hue) keeps the glow from
@@ -112,15 +121,15 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 		};
 	}
 
-	// Light scheme: the ball lifts toward the background and the light
-	// family deepens so eyes/ring keep their contrast on the pale shell.
-	// The face stays white but the halo must carry the separation instead
-	// (a white face on a pale shell needs its own dark-agnostic glow), so
-	// the glow drops to a soft neutral with more alpha.
+	// Light scheme: the ball stays saturated and bright — the accent reads
+	// against the pale background instead of dissolving into it. The ladder
+	// lifts so the crown nearly reaches white while the base keeps a deep
+	// tone for volume. The face stays white; the halo does the separating,
+	// so the glow drops to a soft neutral with more alpha.
 	return {
-		"gui-pet-shell-a": fmt(0.78, 0.035, h),
-		"gui-pet-shell-b": fmt(0.58, 0.045, h),
-		"gui-pet-shell-c": fmt(0.38, 0.05, h),
+		"gui-pet-shell-a": fmt(Math.min(0.94, l0 + 0.33), Math.min(0.14, c0 * 1.1 + 0.02), h),
+		"gui-pet-shell-b": fmt(Math.min(0.82, l0 + 0.12), c0, h),
+		"gui-pet-shell-c": fmt(Math.max(0.42, l0 - 0.07), c0 * 0.85, h),
 		"gui-pet-gold-a": fmt(Math.min(0.8, l0 + 0.15), Math.min(0.14, c0 * 1.1 + 0.02), h),
 		"gui-pet-gold-b": fmt(l0, c0, h),
 		"gui-pet-gold-c": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h),

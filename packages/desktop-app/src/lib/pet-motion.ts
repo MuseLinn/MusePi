@@ -77,6 +77,24 @@ export const INTERACTION_MOTION: Record<string, BodyMotion> = {
 	dozing: { pulse: [0.03, 6400], tilt: 2.4, scale: 0.985 },
 	// Caught in the act: a small guilty start, then still.
 	peek: { enter: [1.06, 420], tilt: -3.2, pulse: [0.01, 3600] },
+	// Awe: a happy lift that settles into a proud hold.
+	starstruck: { enter: [1.08, 520], bob: [2.2, 700], scale: 1.02 },
+	// "Hm, let me see": a held thoughtful lean, no pop (sustained, like curious).
+	thinking: { tilt: -4.5, pulse: [0.012, 3400] },
+	// The hello: a springy double-bounce.
+	greeting: { enter: [0.94, 480], bob: [3.2, 560], squash: 0.2 },
+	// The win: the biggest bounce in the set.
+	celebrate: { enter: [0.9, 560], bob: [3.6, 520], squash: 0.26 },
+	// The "?": a wobbly head-shake.
+	confused: { sway: [2.6, 1300], tilt: 2.5 },
+	// Aww: making itself small, leaning away.
+	shy: { tilt: 3, scale: 0.97, pulse: [0.018, 3600] },
+	// Anticipation: quick little hops.
+	excited: { enter: [1.06, 440], bob: [3, 480] },
+	// The narrowed stare: a slow lean, nothing bouncy.
+	suspicious: { tilt: -2.5, sway: [1.6, 2200] },
+	// Woozy: rolling with the dizzy rings.
+	dizzy: { sway: [3.5, 950], tilt: 3.5 },
 };
 
 const easeOutBack = (t: number): number => {
