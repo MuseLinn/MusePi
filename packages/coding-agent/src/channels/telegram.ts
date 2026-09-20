@@ -1,6 +1,36 @@
 import { logger } from "@musepi/pi-utils";
 import { chunkText } from "./chunk";
-import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
+import type { ChannelAdapter, ChannelHost, ChannelInboundSink, ChannelSendPayload, ChannelStatus } from "./types";
+
+/** A Bot API rejection carrying the two fields the retry policy needs:
+ *  HTTP 429 + `retry_after` means "wait and resend", HTTP 400 with an entity
+ *  parse complaint means "drop the markup and resend plain". */
+export class TelegramError extends Error {
+	readonly status: number;
+	readonly retryAfter: number | undefined;
+	constructor(method: string, status: number, body: string) {
+		super(`telegram ${method} failed: ${status} ${body.slice(0, 160)}`);
+		this.name = "TelegramError";
+		this.status = status;
+		let retryAfter: number | undefined;
+		try {
+			retryAfter = (JSON.parse(body) as { parameters?: { retry_after?: number } }).parameters?.retry_after;
+		} catch {
+			retryAfter = undefined;
+		}
+		this.retryAfter = retryAfter;
+	}
+}
+
+/** Only a markup rejection justifies resending without HTML — a 429 must be
+ *  waited out instead (resending duplicates the message and deepens the limit). */
+export function isEntityParseError(err: unknown): boolean {
+	return (
+		err instanceof TelegramError &&
+		err.status === 400 &&
+		/can't parse entities|unsupported start tag|unexpected end tag/i.test(err.message)
+	);
+}
 
 /** Escape the three characters Telegram's HTML parse mode treats as markup. */
 function escapeHtml(text: string): string {
@@ -46,9 +76,7 @@ export class TelegramChannel implements ChannelAdapter {
 	#polling = false;
 	#stopped = false;
 	#timer: ReturnType<typeof setTimeout> | null = null;
-	#onMessage:
-		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
-		| null = null;
+	#onMessage: ChannelInboundSink | null = null;
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		this.#token = typeof config.token === "string" ? config.token : "";
@@ -74,14 +102,21 @@ export class TelegramChannel implements ChannelAdapter {
 	}
 
 	async #pollLoop(): Promise<void> {
+		let backoff = 0;
 		while (this.#polling && !this.#stopped) {
 			try {
 				const updates = await this.#getUpdates();
+				backoff = 0;
 				for (const u of updates) await this.#handleUpdate(u);
 			} catch (err) {
 				logger.warn("telegram getUpdates failed", {
 					error: err instanceof Error ? err.message : String(err),
 				});
+				// 409 = a second instance is polling this token, 429 = flood.
+				// Retrying on the fixed cadence just burns CPU and deepens it.
+				const hinted = err instanceof TelegramError ? err.retryAfter : undefined;
+				backoff = backoff === 0 ? (hinted ?? 3) : Math.min(backoff * 2, 60);
+				await this.#sleep(backoff * 1000);
 			}
 			if (this.#stopped) break;
 			await new Promise(resolve => {
@@ -94,6 +129,7 @@ export class TelegramChannel implements ChannelAdapter {
 		{
 			update_id: number;
 			message?: {
+				message_id?: number;
 				chat?: { id: number };
 				text?: string;
 				caption?: string;
@@ -108,7 +144,7 @@ export class TelegramChannel implements ChannelAdapter {
 		const res = await fetch(
 			`${TelegramChannel.API}${this.#token}/getUpdates?timeout=20&offset=${this.#offset}&limit=20`,
 		);
-		if (!res.ok) throw new Error(`telegram getUpdates failed: HTTP ${res.status}`);
+		if (!res.ok) throw new TelegramError("getUpdates", res.status, await res.text().catch(() => ""));
 		const data = (await res.json()) as { ok: boolean; result?: unknown[] };
 		return Array.isArray(data.result) ? (data.result as never) : [];
 	}
@@ -116,6 +152,7 @@ export class TelegramChannel implements ChannelAdapter {
 	async #handleUpdate(u: {
 		update_id: number;
 		message?: {
+			message_id?: number;
 			chat?: { id: number };
 			text?: string;
 			caption?: string;
@@ -148,7 +185,9 @@ export class TelegramChannel implements ChannelAdapter {
 		if (msg.voice) notes.push("🎙 语音消息（当前无法转写，请以文字发送）");
 		if (msg.sticker) notes.push("[sticker]");
 		const finalText = notes.length > 0 ? (text ? `${text}\n${notes.join("\n")}` : notes.join("\n")) : text;
-		await this.#onMessage?.(this.kind, chatId, finalText, images.length > 0 ? images : undefined);
+		await this.#onMessage?.(this.kind, chatId, finalText, images.length > 0 ? images : undefined, {
+			messageId: msg.message_id === undefined ? undefined : String(msg.message_id),
+		});
 	}
 
 	async #downloadFile(fileId: string): Promise<string | null> {
@@ -226,14 +265,16 @@ export class TelegramChannel implements ChannelAdapter {
 			part.append("text", toTelegramHtml(chunk));
 			part.append("parse_mode", "HTML");
 			try {
-				await this.#post("sendMessage", part);
-			} catch {
-				// HTML entities can still trip the parser (stray < from a tool
-				// output); plain text never fails — retry once without markup.
+				await this.#sendWithRetry("sendMessage", part);
+			} catch (err) {
+				// Only a markup rejection may drop the HTML — a 429 has already
+				// been waited out by #sendWithRetry and must not be resent as a
+				// duplicate (that is how one slow reply became two messages).
+				if (!isEntityParseError(err)) throw err;
 				const plain = new FormData();
 				plain.append("chat_id", to);
 				plain.append("text", chunk);
-				await this.#post("sendMessage", plain);
+				await this.#sendWithRetry("sendMessage", plain);
 			}
 		}
 	}
@@ -273,13 +314,34 @@ export class TelegramChannel implements ChannelAdapter {
 	async #post(method: string, body: FormData): Promise<void> {
 		const res = await fetch(`${TelegramChannel.API}${this.#token}/${method}`, { method: "POST", body });
 		if (!res.ok) {
-			const text = await res.text().catch(() => "");
-			throw new Error(`telegram ${method} failed: ${res.status} ${text.slice(0, 160)}`);
+			throw new TelegramError(method, res.status, await res.text().catch(() => ""));
 		}
+	}
+
+	/** Send honouring Telegram's own flow control: a 429 is waited out
+	 *  (retry_after) and resent; every other error propagates. */
+	async #sendWithRetry(method: string, body: FormData, attempts = 3): Promise<void> {
+		for (let attempt = 0; attempt < attempts; attempt++) {
+			try {
+				await this.#post(method, body);
+				return;
+			} catch (err) {
+				const wait = err instanceof TelegramError && err.status === 429 ? err.retryAfter : undefined;
+				if (wait === undefined || attempt === attempts - 1) throw err;
+				await this.#sleep((wait + 0.25) * 1000);
+			}
+		}
+	}
+
+	#sleep(ms: number): Promise<void> {
+		return new Promise(resolve => {
+			const timer = setTimeout(resolve, ms);
+			timer.unref?.();
+		});
 	}
 
 	/** Registry wiring: incoming messages → command handler. */
 	attach(host: ChannelHost): void {
-		this.#onMessage = (kind, from, text, images) => host.handleIncoming(kind, from, text, images);
+		this.#onMessage = (kind, from, text, images, meta) => host.handleIncoming(kind, from, text, images, meta);
 	}
 }

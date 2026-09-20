@@ -3042,11 +3042,13 @@ export class DaemonServer {
 				: assistantReplyText(lastAssistant);
 		if (!text.trim()) return;
 		for (const peer of peers) {
-			await this.#channels.send(peer.kind as ChannelKind, { to: peer.from, text }).catch(err => {
-				logger.warn(`channel reply push failed (${peer.kind})`, {
-					error: err instanceof Error ? err.message : String(err),
+			await this.#channels
+				.send(peer.kind as ChannelKind, { to: peer.from, text, replyTo: peer.messageId })
+				.catch(err => {
+					logger.warn(`channel reply push failed (${peer.kind})`, {
+						error: err instanceof Error ? err.message : String(err),
+					});
 				});
-			});
 		}
 	}
 

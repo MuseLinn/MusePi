@@ -120,6 +120,9 @@ export class ChannelCommandHandler implements ChannelHost {
 	/** `${kind}:${from}` → sessionId (keyed per channel so two transports can
 	 *  never collide on the same sender id). */
 	readonly #binding = new Map<string, string>();
+	/** `${kind}:${from}` → last inbound message id, so the reply can quote the
+	 *  message it actually answers (not merely the newest one in the chat). */
+	readonly #lastMessageIds = new Map<string, string>();
 	readonly #persist?: { load(): ChannelBindingSnapshot; save(snapshot: ChannelBindingSnapshot): void };
 
 	constructor(
@@ -137,12 +140,16 @@ export class ChannelCommandHandler implements ChannelHost {
 
 	/** Peers (channel + sender) bound to a session — the daemon pushes agent
 	 *  replies and stops the typing indicator for exactly these. */
-	peersFor(sessionId: string): { kind: string; from: string }[] {
-		const peers: { kind: string; from: string }[] = [];
+	peersFor(sessionId: string): { kind: string; from: string; messageId?: string }[] {
+		const peers: { kind: string; from: string; messageId?: string }[] = [];
 		for (const [key, sid] of this.#binding) {
 			if (sid !== sessionId) continue;
 			const sep = key.indexOf(":");
-			peers.push({ kind: key.slice(0, sep), from: key.slice(sep + 1) });
+			peers.push({
+				kind: key.slice(0, sep),
+				from: key.slice(sep + 1),
+				messageId: this.#lastMessageIds.get(key),
+			});
 		}
 		return peers;
 	}
@@ -154,6 +161,7 @@ export class ChannelCommandHandler implements ChannelHost {
 		for (const [key, sid] of this.#binding) {
 			if (sid === sessionId) {
 				this.#binding.delete(key);
+				this.#lastMessageIds.delete(key);
 				changed = true;
 			}
 		}
@@ -169,11 +177,13 @@ export class ChannelCommandHandler implements ChannelHost {
 		from: string,
 		text: string,
 		images?: { data: string; mimeType: string }[],
+		meta?: { messageId?: string },
 	): Promise<void> {
 		const m = MESSAGES[langOf(kind)];
 		const reply = (target: string, body: string): Promise<void> => this.#replyFn(kind, target, body);
 		const say = (body: string): Promise<void> => reply(from, body);
 		const peerKey = `${kind}:${from}`;
+		if (meta?.messageId) this.#lastMessageIds.set(peerKey, meta.messageId);
 		const trimmed = text.trim();
 		if (!trimmed && (!images || images.length === 0)) return;
 		if (trimmed.startsWith("/")) {

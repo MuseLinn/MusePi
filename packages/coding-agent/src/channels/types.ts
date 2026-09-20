@@ -47,6 +47,10 @@ export interface ChannelSendPayload {
 	/** Task-result semantics for today-screen cards. */
 	taskName?: string;
 	taskResult?: string;
+	/** IM: the platform id of the inbound message this reply answers. Quoting
+	 *  the exact message beats quoting "whatever arrived last" — in a busy group
+	 *  chat the answer otherwise hangs under an unrelated line. */
+	replyTo?: string;
 	/** Image attachments (base64 data) — Discord sends them as message
 	 *  attachments; WeChat uploads them to its CDN (AES-128-ECB) and sends
 	 *  IMAGE items. */
@@ -64,11 +68,35 @@ export interface ChannelIncomingImage {
 	mimeType: string;
 }
 
+/** Everything about an inbound message that is not its content — currently
+ *  just the platform message id, which is what a quoted reply needs. */
+export interface ChannelIncomingMeta {
+	messageId?: string;
+}
+
+/** The adapter-side callback shape (what `attach()` installs). Declared here so
+ *  every adapter forwards the same five arguments — a shorter signature
+ *  silently swallowed the message id. */
+export type ChannelInboundSink = (
+	kind: string,
+	from: string,
+	text: string,
+	images?: ChannelIncomingImage[],
+	meta?: ChannelIncomingMeta,
+) => Promise<void>;
+
 export interface ChannelHost {
 	/** Route an incoming IM message: parse /commands, answer, bind chats.
 	 *  `kind` identifies the transport so replies route back through it.
-	 *  `images` ride along and are forwarded to the bound session. */
-	handleIncoming(kind: string, from: string, text: string, images?: ChannelIncomingImage[]): Promise<void>;
+	 *  `images` ride along and are forwarded to the bound session; `meta`
+	 *  carries the message id so the reply can quote it. */
+	handleIncoming(
+		kind: string,
+		from: string,
+		text: string,
+		images?: ChannelIncomingImage[],
+		meta?: ChannelIncomingMeta,
+	): Promise<void>;
 }
 
 export interface ChannelRegistryOptions {

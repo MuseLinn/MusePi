@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { logger } from "@musepi/pi-utils";
 import { chunkText } from "./chunk";
-import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
+import type { ChannelAdapter, ChannelHost, ChannelInboundSink, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** iLink incoming message (OpenClaw protocol): item_list carries text
  *  (type 1), image (type 2), voice (type 3, may carry an ASR transcript) and
@@ -100,9 +100,7 @@ export class WechatChannel implements ChannelAdapter {
 	#typingTickets = new Map<string, string>();
 	/** Per-sender typing heartbeats — cleared in stopTyping()/stop(). */
 	#typingTimers = new Map<string, ReturnType<typeof setInterval>>();
-	#onMessage:
-		| ((kind: string, from: string, text: string, images?: { data: string; mimeType: string }[]) => Promise<void>)
-		| null = null;
+	#onMessage: ChannelInboundSink | null = null;
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		// Token can be pre-supplied (reuse across restarts); empty = QR login.
@@ -550,6 +548,6 @@ export class WechatChannel implements ChannelAdapter {
 
 	/** Registry wiring: incoming messages → command handler. */
 	attach(host: ChannelHost): void {
-		this.#onMessage = (kind, from, text) => host.handleIncoming(kind, from, text);
+		this.#onMessage = (kind, from, text, images) => host.handleIncoming(kind, from, text, images);
 	}
 }

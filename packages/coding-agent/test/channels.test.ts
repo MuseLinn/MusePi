@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { chunkText } from "../src/channels/chunk";
+import { DiscordChannel } from "../src/channels/discord";
 import { ChannelCommandHandler, type ChannelOps, channelFailureText } from "../src/channels/handler";
 import { HuaweiTodayChannel } from "../src/channels/huawei-today";
 import { ChannelRegistry } from "../src/channels/registry";
@@ -269,6 +270,139 @@ describe("telegram channel adaptation", () => {
 	});
 });
 
+/** Minimal Discord gateway socket: records what the adapter sends and lets a
+ *  test push gateway payloads back in. */
+class FakeGatewaySocket {
+	static instances: FakeGatewaySocket[] = [];
+	readyState = 1;
+	onopen: (() => void) | null = null;
+	onmessage: ((e: { data: string }) => void) | null = null;
+	onerror: (() => void) | null = null;
+	onclose: (() => void) | null = null;
+	readonly sent: string[] = [];
+	constructor(readonly url: string) {
+		FakeGatewaySocket.instances.push(this);
+	}
+	send(data: string): void {
+		this.sent.push(data);
+	}
+	close(): void {
+		this.readyState = 3;
+		this.onclose?.();
+	}
+	emit(payload: unknown): void {
+		this.onmessage?.({ data: JSON.stringify(payload) });
+	}
+}
+
+/** Drive a DiscordChannel through a fake handshake (Hello → READY) so the
+ *  adapter reaches its connected state without touching the network. */
+async function withDiscord(fn: (c: DiscordChannel, ws: FakeGatewaySocket) => Promise<void>): Promise<void> {
+	const originalWs = globalThis.WebSocket;
+	globalThis.WebSocket = FakeGatewaySocket as unknown as typeof WebSocket;
+	try {
+		const c = new DiscordChannel();
+		await c.configure({ token: "tok" });
+		const starting = c.start();
+		const ws = FakeGatewaySocket.instances.at(-1);
+		if (!ws) throw new Error("gateway socket was never opened");
+		ws.emit({ op: 10, d: { heartbeat_interval: 41250 } });
+		ws.emit({ op: 0, t: "READY", d: { user: { id: "bot-1" }, session_id: "sess-1" } });
+		await starting;
+		await fn(c, ws);
+		await c.stop();
+	} finally {
+		globalThis.WebSocket = originalWs;
+	}
+}
+
+describe("discord channel adaptation", () => {
+	it("declares MESSAGE_CONTENT — without it guild text arrives empty", () => {
+		expect(DiscordChannel.INTENTS & (1 << 15)).toBe(1 << 15);
+	});
+
+	it("forwards inbound image attachments and the message id", async () => {
+		const original = globalThis.fetch;
+		globalThis.fetch = (async () =>
+			new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 })) as unknown as typeof fetch;
+		try {
+			const seen: { text: string; images?: unknown[]; messageId?: string }[] = [];
+			await withDiscord(async (c, ws) => {
+				c.attach({
+					handleIncoming: async (_kind, _from, text, images, meta) => {
+						seen.push({ text, images, messageId: meta?.messageId });
+					},
+				});
+				ws.emit({
+					op: 0,
+					t: "MESSAGE_CREATE",
+					d: {
+						id: "m1",
+						channel_id: "c1",
+						content: "look",
+						author: { id: "u1" },
+						attachments: [
+							{ url: "https://cdn.discordapp.com/x.png", content_type: "image/png", filename: "x.png" },
+						],
+					},
+				});
+				await new Promise(r => setTimeout(r, 10));
+			});
+			expect(seen.length).toBe(1);
+			// Regression: attach() used to drop the fourth argument entirely.
+			expect(seen[0].images?.length).toBe(1);
+			expect(seen[0].messageId).toBe("m1");
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
+	it("sends the native typing indicator", async () => {
+		const urls: string[] = [];
+		const original = globalThis.fetch;
+		globalThis.fetch = (async (url: unknown) => {
+			urls.push(String(url));
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch;
+		try {
+			await withDiscord(async c => {
+				await c.startTyping("c1");
+				expect(urls.some(u => u.includes("/channels/c1/typing"))).toBe(true);
+				await c.stopTyping("c1");
+			});
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+
+	it("keeps the whole reply when attachments ride along (no silent slice)", async () => {
+		const sent: string[] = [];
+		const original = globalThis.fetch;
+		globalThis.fetch = (async (_url: unknown, init?: { body?: unknown }) => {
+			const body = init?.body;
+			if (body instanceof FormData) sent.push(String(body.get("content") ?? ""));
+			else if (typeof body === "string") {
+				sent.push(String((JSON.parse(body) as { content?: string }).content ?? ""));
+			}
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch;
+		try {
+			await withDiscord(async c => {
+				await c.send({
+					to: "c1",
+					text: `intro\n${"y".repeat(5000)}`,
+					images: [{ data: "AAAA", mimeType: "image/png" }],
+				});
+			});
+			expect(sent.length).toBeGreaterThan(1);
+			expect(sent.join("").length).toBeGreaterThan(4000);
+			for (const s of sent) expect(s.length).toBeLessThanOrEqual(2000);
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+});
+
 describe("channel language routing", () => {
 	it("Chinese-market channels reply in Chinese, others in English", async () => {
 		const ops = mockOps();
@@ -313,6 +447,17 @@ describe("chunkText", () => {
 		const chunks = chunkText(run, 2000);
 		expect(chunks.length).toBe(3);
 		expect(chunks.join("")).toBe(run);
+	});
+
+	it("never splits inside a fenced code block", () => {
+		const text = `intro\n\`\`\`ts\n${"const x = 1;\n".repeat(300)}\`\`\`\noutro`;
+		const chunks = chunkText(text, 200);
+		expect(chunks.length).toBeGreaterThan(1);
+		for (const c of chunks) {
+			expect(c.length).toBeLessThanOrEqual(200);
+			// A lone ``` renders as raw text — every chunk needs whole fences.
+			expect((c.match(/^```/gm) ?? []).length % 2).toBe(0);
+		}
 	});
 
 	it("returns [] for empty input", () => {
