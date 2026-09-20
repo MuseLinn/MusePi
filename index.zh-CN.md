@@ -11,7 +11,7 @@ mp_cta: true
     <div class="mp-hero-copy">
       <div class="mp-hero-badge">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-hero-badge-ver" data-release-version>v0.4.30</span>
+        <span class="mp-hero-badge-ver" data-release-version>v0.4.36</span>
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
         <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
@@ -259,7 +259,9 @@ mp_cta: true
     </div>
     <div class="mp-card">
       <h3><span class="mp-dot"></span>远程与移动</h3>
-      <p>Android 伴侣扫码经局域网配对，三合一发送条——看运行、发提示、停回合。</p>
+      <p>Android 伴侣扫码经局域网配对，三合一发送条——看运行、发提示、停回合。
+         聊天机器人在 Discord、Telegram、飞书与微信里做同样的事，且各按各的原生能力：
+         原生输入状态、引用成线程的回复、长回复分片而不是截断。</p>
     </div>
     <div class="mp-card">
       <h3><span class="mp-dot"></span>端到端加密协作</h3>

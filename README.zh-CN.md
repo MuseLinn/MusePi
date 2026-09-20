@@ -189,7 +189,7 @@ bun run lint / fmt       # biome + rustfmt
 - **HarmonyOS WebView 壳**（`packages/harmony`）：ArkTS `Web` 组件加载同一 bundle（native insets、badge、`musepi://` 深链、键盘 inset）。
 - **PWA**：service worker 离线连接壳。
 - **远程会话管理**（dsh-mobile-remote parity）：guest 可创建/删除/重命名会话、停止远端正在运行的 turn（`session.abort`）；agent 可主动发起分享（collab tool，分级审批）。
-- **机器人渠道**：桌面「移动端远程控制」弹窗支持 Discord / WeChat / 华为今天推送；WeChat 支持**免 Token 扫码登录**——等待扫码时登录二维码直接内联渲染在弹窗里（来自渠道 `status().config.qrUrl`）。
+- **机器人渠道**：桌面「移动端远程控制」弹窗支持 Discord / Telegram / 飞书（Lark）/ WeChat / 华为今天推送，各渠道按协议原生能力适配——原生输入状态（微信 iLink sendtyping、Telegram `sendChatAction`、Discord REST typing）、Telegram HTML 富文本（解析器拒绝时回落纯文本）、飞书首个分片以「引用回复」落到被回复的那条消息下并续成一条线程、中文渠道用中文回复；飞书 bot 没有输入态开放接口，故不伪造。长回复分片发送而非截断；回合被中止或失败也会给一条回执，不再静默。WeChat 支持**免 Token 扫码登录**——等待扫码时登录二维码直接内联渲染在弹窗里（来自渠道 `status().config.qrUrl`）。
 
 ## 📦 打包与发布
 

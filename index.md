@@ -11,7 +11,7 @@ mp_cta: true
     <div class="mp-hero-copy">
       <div class="mp-hero-badge">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-hero-badge-ver" data-release-version>v0.4.30</span>
+        <span class="mp-hero-badge-ver" data-release-version>v0.4.36</span>
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
         <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
@@ -265,7 +265,9 @@ mp_cta: true
     <div class="mp-card">
       <h3><span class="mp-dot"></span>Remote &amp; mobile</h3>
       <p>The Android companion pairs over LAN with a QR join and a three-in-one send
-         bar — watch runs, send prompts, stop turns.</p>
+         bar — watch runs, send prompts, stop turns. Chat bots do the same from
+         Discord, Telegram, Feishu and WeChat, each in its own idiom: native typing
+         indicators, quoted thread replies, chunked answers instead of truncated ones.</p>
     </div>
     <div class="mp-card">
       <h3><span class="mp-dot"></span>E2E-encrypted collab</h3>
