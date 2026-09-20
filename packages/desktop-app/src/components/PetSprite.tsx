@@ -21,6 +21,7 @@ import {
 	PETDEX_ROWS,
 	type PetDisplayMode,
 	type PetdexMood,
+	type PetInteraction,
 	petEnabled,
 	petMode,
 	petScale,
@@ -32,6 +33,7 @@ import {
 	faceFor,
 	GAZE_TRAVEL,
 	gazeYaw,
+	interactionDirection,
 	lerpFace,
 	moodDirection,
 	mouthFrame,
@@ -41,7 +43,7 @@ import {
 	springStep,
 	toPath,
 } from "../lib/pet-face";
-import { gazeDrift, MOOD_MOTION, motionTransform } from "../lib/pet-motion";
+import { gazeDrift, INTERACTION_MOTION, MOOD_MOTION, motionTransform } from "../lib/pet-motion";
 
 /** Live pet prefs: re-resolves when settings change (the settings page
  *  dispatches "omp-pet-changed" after saving; storage events cover other
@@ -113,8 +115,14 @@ const BLINK_UP_MS = 150;
  *           ground shadow in counter-phase, so the orb reads as floating.
  */
 /** gazeRef: optional live cursor target (GazeVec). Present → the eyes track
- *  the cursor (attack/glide); absent/omitted → authored drift only. */
-function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef): MascotRefs {
+ *  the cursor (attack/glide); absent/omitted → authored drift only.
+ *
+ *  `interaction` is the transient user-reaction override (poke / notice /
+ *  pre-sleep): when set it REPLACES the mood's face + motion for its
+ *  duration, because a startle is not a shade of "working". The engine keys
+ *  off the resolved direction, so switching to (or off) an interaction
+ *  replays the morph and the one-shot entrance exactly like a mood change. */
+function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetInteraction | null): MascotRefs {
 	const eye0 = useRef<SVGPathElement | null>(null);
 	const eye1 = useRef<SVGPathElement | null>(null);
 	const mouthRef = useRef<SVGPathElement | null>(null);
@@ -123,7 +131,7 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef): MascotRefs {
 
 	// Static per-mood face data — decoded once per mood, never per frame.
 	const prepped = useMemo(() => {
-		const dir = moodDirection(mood);
+		const dir = interaction ? interactionDirection(interaction) : moodDirection(mood);
 		const base = faceFor(dir.eyes);
 		return {
 			base,
@@ -133,9 +141,9 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef): MascotRefs {
 			mouthDrift: mouthSpecFor(dir.drift ?? dir.eyes),
 			blinkMs: dir.blinkMs,
 			look: dir.look,
-			motion: MOOD_MOTION[mood] ?? {},
+			motion: (interaction ? INTERACTION_MOTION[interaction] : MOOD_MOTION[mood]) ?? {},
 		};
-	}, [mood]);
+	}, [mood, interaction]);
 
 	useEffect(() => {
 		const clock = { start: performance.now(), last: performance.now() };
@@ -277,11 +285,24 @@ const VIEW_H = FACE_BOX + HEADROOM + FLOOR;
 const ORB_C = FACE_BOX / 2;
 const ORB_R = FACE_BOX / 2;
 
-function Mascot({ mood, gazeRef }: { mood: PetdexMood; gazeRef?: GazeRef }): ReactNode {
-	const refs = useMascotEngine(mood, gazeRef);
+function Mascot({
+	mood,
+	gazeRef,
+	interaction,
+}: {
+	mood: PetdexMood;
+	gazeRef?: GazeRef;
+	interaction?: PetInteraction | null;
+}): ReactNode {
+	const refs = useMascotEngine(mood, gazeRef, interaction);
+	// Both classes ride the svg: `--<mood>` carries the MATERIAL state (the
+	// error face's red eye, hover's brightened glow, waiting's dimmed light —
+	// all pure-CSS), while `--<interaction>` carries the reaction. Dropping
+	// the mood class during a reaction would silently reset those materials,
+	// so the reaction is additive rather than a replacement.
 	return (
 		<svg
-			className={`gui-pet-svg gui-pet-svg--${mood}`}
+			className={`gui-pet-svg gui-pet-svg--${mood}${interaction ? ` gui-pet-svg--${interaction}` : ""}`}
 			viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden
@@ -299,19 +320,26 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 		<g aria-hidden className="gui-pet-svg__silhouette">
 			<defs>
 				{/* Shell: a graphite sphere lit from the upper left — lit crown,
-				 * body, terminator. Dark reads as hardware, and it lets the gold
-				 * light do the talking. */}
+				 * body, terminator. The fallback trio is the dark-theme
+				 * L .56/.36/.19 accent-hued graphite, matching what
+				 * pet-palette.ts derives, so the pre-palette first paint is
+				 * already the themed orb rather than a cold slate ball (the
+				 * old #4a5768/#26303d/#0e141c fallback is what showed whenever
+				 * the palette had not been applied yet — reported as "颜色都是
+				 * 黑色球体而不是主题色"). */}
 				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
-					<stop offset="0" stopColor="var(--gui-pet-shell-a, #4a5768)" />
-					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, #26303d)" />
-					<stop offset="1" stopColor="var(--gui-pet-shell-c, #0e141c)" />
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, #7d7159)" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, #453a24)" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, #1c1408)" />
 				</radialGradient>
-				{/* Orbit ring: brand gold, brightest where it crosses the light
-				 * (top-left) and dimmest at the far side. */}
+				{/* Orbit ring: the accent (brand gold by default), brightest where
+				 * it crosses the light (top-left) and dimmest at the far side.
+				 * This is the surface that carries the theme, now that the face
+				 * is white. */}
 				<linearGradient id="gui-pet-grad-ring" x1="0" y1="0" x2="1" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-gold-a, #f7dd93)" />
-					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, #d9a83f)" />
-					<stop offset="1" stopColor="var(--gui-pet-gold-c, #8a6420)" />
+					<stop offset="0" stopColor="var(--gui-pet-gold-a, #ffcb71)" />
+					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, #d9a441)" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-c, #765200)" />
 				</linearGradient>
 				{/* Bounce: warm gold thrown back up from the surface the orb hovers
 				 * over — the cue that sells "floating". */}
@@ -331,12 +359,16 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 					<stop offset="0.62" stopColor="#0b1220" stopOpacity="0.17" />
 					<stop offset="1" stopColor="#0b1220" stopOpacity="0" />
 				</radialGradient>
-				{/* Eye light: gold with a hot core. A flat fill reads as paint;
-				 * a gradient reads as something emitting. */}
+				{/* Eye light: white with a hot core. A flat fill reads as paint;
+				 * a gradient reads as something emitting. The face is white in
+				 * every theme (pet-palette.ts `--gui-pet-face`): the ring is
+				 * what carries the accent, and keeping the face neutral means
+				 * the brightest thing on the orb is always readable, whatever
+				 * the accent hue does to the shell. */}
 				<radialGradient id="gui-pet-grad-eye" cx="0.5" cy="0.3" r="0.78">
-					<stop offset="0" stopColor="#fffaf0" />
-					<stop offset="0.4" stopColor="var(--gui-pet-gold-a, #f7dd93)" />
-					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" />
+					<stop offset="0" stopColor="#ffffff" />
+					<stop offset="0.45" stopColor="var(--gui-pet-face, #f4f6f9)" />
+					<stop offset="1" stopColor="color-mix(in oklab, var(--gui-pet-face, #f4f6f9) 82%, #8f96a3)" />
 				</radialGradient>
 				<radialGradient id="gui-pet-grad-eye-err" cx="0.5" cy="0.3" r="0.78">
 					<stop offset="0" stopColor="#ffd9d5" />
@@ -431,9 +463,18 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 
 /** Builtin SVG pet (orb-bot v7) — natively speaks every PetdexMood,
  *  including the floating desktop pet's hover/dragging rows. `gazeRef`
- *  (optional) turns eye tracking on — see GazeVec. */
-export function BuiltinPetSprite({ mood, gazeRef }: { mood: PetdexMood; gazeRef?: GazeRef }): ReactNode {
-	return <Mascot mood={mood} gazeRef={gazeRef} />;
+ *  (optional) turns eye tracking on — see GazeVec. `interaction` overlays a
+ *  transient user reaction (see pet-face.ts PET_INTERACTIONS). */
+export function BuiltinPetSprite({
+	mood,
+	gazeRef,
+	interaction,
+}: {
+	mood: PetdexMood;
+	gazeRef?: GazeRef;
+	interaction?: PetInteraction | null;
+}): ReactNode {
+	return <Mascot mood={mood} gazeRef={gazeRef} interaction={interaction} />;
 }
 
 /** Petdex spritesheet pet — CSS background-position frame animation with a
@@ -513,6 +554,7 @@ export function PetSprite({
 	scale,
 	frozen = false,
 	gazeRef,
+	interaction,
 }: {
 	mood: PetdexMood;
 	pet:
@@ -535,6 +577,10 @@ export function PetSprite({
 	/** Eye-tracking target for the builtin sprite (petdex sheets ignore it —
 	 *  their frames are baked bitmaps, the eyes cannot move). */
 	gazeRef?: GazeRef;
+	/** Transient user reaction, layered over `mood`. Builtin-only: an imported
+	 *  spritesheet has no reaction rows to play, so it is ignored there rather
+	 *  than remapping the pet to an unrelated row. */
+	interaction?: PetInteraction | null;
 }): ReactNode {
 	const s = scale ?? petScale();
 	if (pet.kind === "petdex") {
@@ -555,7 +601,7 @@ export function PetSprite({
 	// The builtin orb speaks hover/dragging natively — no face mapping.
 	return (
 		<div className="gui-pet" style={{ width: size * s, height: size * s * (VIEW_H / VIEW_W) }}>
-			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} />
+			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} interaction={interaction} />
 		</div>
 	);
 }

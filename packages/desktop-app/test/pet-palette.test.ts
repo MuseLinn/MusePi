@@ -35,7 +35,7 @@ const OCEAN_DARK = "oklch(0.65 0.16 255)";
 const MONO_DARK = "oklch(0.72 0.005 0)";
 
 describe("petPaletteVars — derivation", () => {
-	test("returns exactly the eight pet variables", () => {
+	test("returns exactly the ten pet variables", () => {
 		const v = petPaletteVars(GOLD_DARK, "dark");
 		expect(Object.keys(v).sort()).toEqual(
 			[
@@ -47,6 +47,8 @@ describe("petPaletteVars — derivation", () => {
 				"gui-pet-gold-c",
 				"gui-pet-rim",
 				"gui-pet-glow",
+				"gui-pet-face",
+				"gui-pet-face-glow",
 			].sort(),
 		);
 	});
@@ -122,6 +124,49 @@ describe("petPaletteVars — edge cases", () => {
 		const light = petPaletteVars(GOLD_DARK, "light");
 		expect(chroma(light["gui-pet-rim"]).alpha()).toBeCloseTo(0.22, 3);
 		expect(chroma(light["gui-pet-glow"]).alpha()).toBeCloseTo(0.55, 3);
+	});
+
+	test("the face is white in EVERY theme and accent (the legibility rule)", () => {
+		// The face stopped riding the accent hue on 2026-09-20: a themed face
+		// meant ocean's eyes went blue on a blue-ish ball, so the brightest
+		// element stopped separating from the shell. The contract is now
+		// "near-white, always" — accent-independent by construction.
+		//
+		// Read via chroma, not the oklch-string helper: the face values are
+		// hand-authored literals (`oklch(0.985 0.004 90)`), not `fmt()` output,
+		// so they carry neither `%` nor `deg`.
+		for (const accent of [GOLD_DARK, GOLD_LIGHT, OCEAN_DARK, MONO_DARK, "#d9a83f"]) {
+			for (const theme of ["dark", "light"] as const) {
+				const face = chroma(petPaletteVars(accent, theme)["gui-pet-face"]);
+				expect(face.get("oklch.l")).toBeGreaterThan(0.98);
+				// Effectively neutral: a hair of warmth is allowed (0.004),
+				// but never enough to read as a tint.
+				expect(face.get("oklch.c")).toBeLessThan(0.01);
+			}
+		}
+	});
+
+	test("the face is always brighter than the shell it sits on", () => {
+		// The single rule the mascot needs: the light source is the face, so
+		// it must out-luminance the ball in both schemes — otherwise the
+		// whole read collapses on the pale light-theme shell.
+		for (const theme of ["dark", "light"] as const) {
+			const v = petPaletteVars(OCEAN_DARK, theme);
+			const face = chroma(v["gui-pet-face"]).get("oklch.l");
+			const shell = oklchChannels(v["gui-pet-shell-a"]).l;
+			expect(face - shell).toBeGreaterThan(0.2);
+		}
+	});
+
+	test("the face halo is neutral white (it must not tint the white face)", () => {
+		const dark = petPaletteVars(OCEAN_DARK, "dark");
+		const halo = chroma(dark["gui-pet-face-glow"]);
+		// chroma's oklch round-trip carries float noise (~4e-5), so assert
+		// "effectively neutral" rather than exactly 0.
+		expect(halo.get("oklch.c")).toBeLessThan(0.001);
+		// Light scheme needs a stronger halo — a white face on a pale shell
+		// separates by glow, not by value.
+		expect(halo.alpha()).toBeLessThan(chroma(petPaletteVars(OCEAN_DARK, "light")["gui-pet-face-glow"]).alpha());
 	});
 
 	test("throws on an unparseable accent (callers keep SVG fallbacks)", () => {

@@ -44,8 +44,16 @@ export const SPHERE_R = 105;
 /** Face-space centre expression rings are normalised around. */
 export const FACE_CENTRE = [120, 122.5] as const;
 
-/** How far a full-deflection gaze moves the eyes, in face units. */
-export const GAZE_TRAVEL = { x: 13.2, y: 8.4 } as const;
+/** How far a full-deflection gaze moves the eyes, in face units.
+ *
+ *  Tuned up from 13.2/8.4 (2026-09-20, user report "有眼动但是幅度不够明显"):
+ *  the eye ring is ~26 units wide on a 240-unit face box, so ±13 units read
+ *  as a small nudge rather than a look. The sphere's own yaw foreshortening
+ *  (gazeYaw) keeps the motion volumetric instead of sliding a decal, so the
+ *  larger travel still reads as the face turning on a ball. Y travel is kept
+ *  at ~0.67 of X: a horizontal sweep is the readable axis, and an equal
+ *  vertical budget makes the eyes drift off the shell's lit band. */
+export const GAZE_TRAVEL = { x: 20.5, y: 13.5 } as const;
 
 /** Points per eye ring. Fixed so any two expressions interpolate. */
 export const RING_POINTS = 48;
@@ -56,6 +64,25 @@ export type Face = [Ring, Ring];
 /** The 7-mood axis the rest of the app speaks (PetdexMood). */
 export const PET_MOODS = ["rest", "hover", "dragging", "working", "waiting", "analyzing", "error"] as const;
 export type PetMood = (typeof PET_MOODS)[number];
+
+/**
+ * User-initiated reactions — a SECOND axis, deliberately not folded into
+ * `PetMood`.
+ *
+ * `PetMood` answers "what is the agent doing" (session store → composer →
+ * desktop pet), so its seven values are a session contract. A poke is not a
+ * session state: it must never be written to the store, must resolve on its
+ * own clock, and must fall back to whatever the agent is actually doing. So
+ * reactions live here as a transient override layered ON TOP of the mood.
+ *
+ * Each one is a real re-read of the pet's personality rather than a colour
+ * change: `startled` is the "you touched me" gape, `delighted` the pleased
+ * squint after a good poke, `curious` the head-tilt someone gets when they
+ * notice the cursor, `dozing` the slow blink of a creature that is about to
+ * drop off. See INTERACTION_DIRECTION for how each is played.
+ */
+export const PET_INTERACTIONS = ["startled", "delighted", "curious", "dozing", "peek"] as const;
+export type PetInteraction = (typeof PET_INTERACTIONS)[number];
 
 export type EyeShape =
 	| "open"
@@ -199,6 +226,38 @@ const MOOD_DIRECTION: Record<PetMood, MoodDirection> = {
 };
 
 export const moodDirection = (mood: string): MoodDirection => MOOD_DIRECTION[mood as PetMood] ?? MOOD_DIRECTION.rest;
+
+/**
+ * How each user-initiated reaction plays. Same vocabulary as a mood, so the
+ * engine needs no second code path — only a second lookup.
+ *
+ *   startled   the gape: eyes fly wide, gaze snaps to centre, no blink (a
+ *              blink mid-startle reads as a wink). Short — it is the flinch,
+ *              not the reaction.
+ *   delighted  the pleased squint after a good poke, with a happy drift and
+ *              a warm look toward the hand that did it.
+ *   curious    the head-tilt: half-lidded and drawn toward the cursor, held
+ *              long enough to read as "hm?" rather than a glance.
+ *   dozing     pre-sleep: half eyes drifting to bored, a very long cadence
+ *              so a blink lands rarely and heavily.
+ *   peek        caught looking: awake eyes, a fast blink, gaze parked off to
+ *              one side — the pet pretending it was not watching you.
+ */
+const INTERACTION_DIRECTION: Record<PetInteraction, MoodDirection> = {
+	startled: { eyes: "wide", blinkMs: 0, look: 0 },
+	delighted: { eyes: "happy", drift: "squint", blinkMs: 3000, look: 0.22 },
+	curious: { eyes: "half", drift: "open", blinkMs: 4600, look: 0.55 },
+	dozing: { eyes: "half", drift: "bored", blinkMs: 9000, look: -0.3 },
+	peek: { eyes: "open", drift: "squint", blinkMs: 1800, look: -0.6 },
+};
+
+export const interactionDirection = (it: string): MoodDirection =>
+	INTERACTION_DIRECTION[it as PetInteraction] ?? MOOD_DIRECTION.rest;
+
+/** How long a reaction holds before the pet falls back to its mood (ms).
+ *  Not exported per-interaction as a map — the caller (which owns the
+ *  gesture) knows better than this table whether a poke should linger. */
+export const INTERACTION_HOLD_MS = 1100;
 
 /* ---------------------------------------------------------------- geometry */
 

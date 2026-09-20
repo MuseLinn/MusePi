@@ -168,14 +168,17 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
 /** Pet avatar (orb-bot): the desktop mascot rendered in the avatar slot.
  *  Eyes track the cursor — one window-level pointermove writes the gaze
  *  ref per mounted avatar (the engine reads it per frame; no React
- *  re-render). Normalized to ±1 over a 120px reach and clamped: beyond
+ *  re-render). Normalized to ±1 over a 150px reach and clamped: beyond
  *  that the eyes stay pinned toward the pointer, "watching you" across
- *  the room. */
+ *  the room. 120px was too tight — the avatar's own box is up to 64px, so
+ *  the full-deflection band covered barely one box-width of cursor travel
+ *  and the eyes looked pinned almost immediately; 150px keeps the follow
+ *  reading as tracking across the panel without going sluggish. */
 function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
 	const boxRef = useRef<HTMLSpanElement | null>(null);
 	const gazeRef = useRef<GazeVec | null>(null);
 	useEffect(() => {
-		const GAZE_RANGE_PX = 120;
+		const GAZE_RANGE_PX = 150;
 		const onMove = (e: PointerEvent): void => {
 			const el = boxRef.current;
 			if (!el) return;

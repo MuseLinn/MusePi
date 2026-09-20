@@ -28,7 +28,7 @@ import { setLocale, t } from "@musepi/guest-client";
 import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, usePet } from "./components/PetSprite";
-import { type PetActivity, type PetMood, petScale } from "./lib/pet";
+import { type PetActivity, type PetInteraction, type PetMood, petScale } from "./lib/pet";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
 import { PetBubbles } from "./pet-bubbles";
@@ -36,6 +36,16 @@ import { PetBubbles } from "./pet-bubbles";
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
  *  walk frames — absorbs the ±1–2px per-move jitter of real mouse deltas. */
 const DIR_FLIP_THRESHOLD_PX = 5;
+
+/** Two pokes closer together than this escalate the reaction (startle →
+ *  delight). Mirrors the composer pet's combo window so a poke feels the
+ *  same wherever the pet lives. */
+const POKE_COMBO_MS = 900;
+
+/** How long a poke reaction holds before falling back to the live mood.
+ *  A beat longer than the composer's: here the pet is the whole surface,
+ *  so the reaction deserves to be seen rather than glimpsed. */
+const POKE_HOLD_MS = 1400;
 
 // The pet window needs the full pet style set (.gui-pet-svg-*, mood
 // keyframes, .gui-petdex-sprite) — those live in gui.css alongside the app
@@ -86,6 +96,9 @@ function PetApp(): ReactNode {
 	// to a livelier idle row (thinking / lingering) so it has a life of its own
 	// instead of breathing in place forever (open-design `pet-overlay` parity).
 	const [ambientMood, setAmbientMood] = useState<PetMood | null>(null);
+	// Transient user reaction (poke / notice / pre-sleep). Layered OVER the
+	// mood, never written to it — see pet-face.ts PET_INTERACTIONS.
+	const [interaction, setInteraction] = useState<PetInteraction | null>(null);
 	// Horizontal drag direction: the dragging row's frames are a fixed-
 	// direction walk cycle, so moving the other way must mirror them
 	// (BitFun doesn't — it reads as running backwards on rightward drags).
@@ -112,6 +125,13 @@ function PetApp(): ReactNode {
 	// cancelled and the main window is toggled instead.
 	const lastClickRef = useRef(0);
 	const clickTimerRef = useRef<number | null>(null);
+	// Poke escalation + reaction lifetime. `pokes` counts presses within
+	// POKE_COMBO_MS so a deliberate double-poke escalates while an accidental
+	// double-tap merges; `reactionTimerRef` releases the override.
+	const lastPokeRef = useRef(0);
+	const [pokes, setPokes] = useState(0);
+	const pokeTimerRef = useRef<number | null>(null);
+	const reactionTimerRef = useRef<number | null>(null);
 
 	// Drag state
 	const dragRef = useRef<{
@@ -257,6 +277,53 @@ function PetApp(): ReactNode {
 		return () => window.clearTimeout(timer);
 	}, [mood, hovering, dragging]);
 
+	// Pre-sleep drowse: 20s before the 60s sleep latch, the pet starts
+	// dropping off — half-lidded eyes with a long, heavy blink — so the
+	// transition into sleep is a wind-down rather than a hard cut. Runs on
+	// the same cancel conditions as the sleep scheduler (any gesture or
+	// task activity wakes it) and yields to a live reaction.
+	useEffect(() => {
+		if (mood !== "rest" || hovering || dragging) {
+			setInteraction(cur => (cur === "dozing" ? null : cur));
+			return;
+		}
+		const DROWSE_AFTER_MS = 40_000;
+		const timer = window.setTimeout(() => setInteraction("dozing"), DROWSE_AFTER_MS);
+		return () => window.clearTimeout(timer);
+	}, [mood, hovering, dragging]);
+
+	// Release a poke reaction after POKE_HOLD_MS. Keyed on the reaction value
+	// so a second poke (startle → delight) restarts the hold instead of
+	// expiring on the first poke's clock.
+	useEffect(() => {
+		if (interaction !== "startled" && interaction !== "delighted" && interaction !== "curious") return;
+		reactionTimerRef.current = window.setTimeout(() => {
+			reactionTimerRef.current = null;
+			setInteraction(null);
+		}, POKE_HOLD_MS);
+		return () => {
+			if (reactionTimerRef.current !== null) {
+				window.clearTimeout(reactionTimerRef.current);
+				reactionTimerRef.current = null;
+			}
+		};
+	}, [interaction]);
+
+	// "Caught looking" idle beat: while calm at rest, occasionally glance off
+	// to one side (peek) or tilt toward the cursor (curious) — the pet has an
+	// inner life rather than a single resting face. Only one beat is
+	// scheduled at a time and it is dropped the moment anything else happens.
+	useEffect(() => {
+		if (mood !== "rest" || hovering || dragging || interaction !== null) return;
+		const PEEK_MIN_MS = 12_000;
+		const PEEK_VARIANCE_MS = 14_000;
+		const timer = window.setTimeout(
+			() => setInteraction(Math.random() < 0.5 ? "peek" : "curious"),
+			PEEK_MIN_MS + Math.floor(Math.random() * PEEK_VARIANCE_MS),
+		);
+		return () => window.clearTimeout(timer);
+	}, [mood, hovering, dragging, interaction]);
+
 	// Light/dark scheme: mirror the main app's scheme (local pref +
 	// system default); the main window's petActivity push overrides it.
 	// Both paths re-derive the themed pet palette from the resolved
@@ -401,6 +468,18 @@ function PetApp(): ReactNode {
 		// A gesture wakes the sleeper (and restarts the 60s timer via the
 		// hover state this pointerdown is about to produce).
 		setSleeping(false);
+		// Poke reaction: the FIRST press of a burst startles, a quick
+		// follow-up delights. A press that turns into a drag gets overridden
+		// by `dragging` in displayMood, so reacting here is safe — the drag
+		// takes visual priority the instant it crosses the threshold.
+		const now = performance.now();
+		const combo = now - lastPokeRef.current <= POKE_COMBO_MS;
+		const nextPokes = combo ? Math.min(pokes + 1, 4) : 1;
+		setPokes(nextPokes);
+		lastPokeRef.current = now;
+		setInteraction(nextPokes > 1 ? "delighted" : "startled");
+		if (pokeTimerRef.current !== null) window.clearTimeout(pokeTimerRef.current);
+		pokeTimerRef.current = window.setTimeout(() => setPokes(0), POKE_COMBO_MS);
 		// Drag uses clientX/Y (window-relative logical pixels — unit-stable,
 		// unlike screenX which flips between logical/physical across
 		// down/move on macOS Retina). The main process converts to screen
@@ -507,6 +586,11 @@ function PetApp(): ReactNode {
 	if (!enabled) return null;
 
 	const displayMood = dragging ? "dragging" : hovering ? "hover" : (ambientMood ?? mood);
+	// Reactions yield to live gestures: while dragging or hovering the pet is
+	// already answering the pointer, so a stale poke face must not paint over
+	// it. Sleep is excluded too — the dozing face is meaningless once the
+	// eyes have closed, and the zzz layer carries that state on its own.
+	const displayInteraction = dragging || hovering || sleeping ? null : interaction;
 	// Docked to the left edge the pet faces OUT of the screen (the walk
 	// frames face left) — mirror it so it always faces the workspace.
 	const mirrored = flip || dockSide === "left";
@@ -566,6 +650,7 @@ function PetApp(): ReactNode {
 							scale={sizeScale}
 							frozen={displayMood === "hover"}
 							gazeRef={gazeRef}
+							interaction={displayInteraction}
 						/>
 					</div>
 					{sleeping && (

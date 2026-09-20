@@ -276,6 +276,21 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **Agent 头像 pet 预设 + 状态绑定**:设置 → 常规 → Agent 头像新增"桌宠小球"预设(`avatar-presets.tsx` `PetAvatar`)——把桌面那只球放进头像槽,眼睛同样跟随光标。该预设**退出空闲效果轮播**:表情直接绑定会话状态(`ORB_TO_PET_MOOD`:composing→working,searching/solving/shaping→analyzing,listening→rest)。缺状态才是真正的病根——头部与聊天视图此前各自用一份重复的三元式派生 orb、都漏了待审批;`orbFromSession`(lib/pet.ts)成为单一来源,有工具审批待处理时头像钉在新增的第 7 态 `waiting`(wave 动画,钉住不轮播——"暂停等你"),桌面桌宠同步切 waiting 表情。
 - **主题跟随色板**:球体此前的石墨壳+品牌金配色只在默认金色主题下成立——ocean 蓝主题下金圈金眼配冷蓝球像三种凑在一起的颜色。现在壳/圈/眼/边缘光/眼辉的绘制全部从实时 `--accent` 派生:chroma.js 只负责解析 accent token,派生本身是纯 oklch 通道算术,值以 `oklch()` 字符串交付、由 Chromium 做色域映射(出 gamut 的亮 tint 保色相降色度)。`pet-palette.ts` 在启动时、data-theme/data-accent 切换时、以及桌宠窗口收到 `petActivity {theme, accent}` 推送时把 8 个变量(`--gui-pet-shell-a/b/c`、`--gui-pet-gold-a/b/c`、`--gui-pet-rim`、`--gui-pet-glow`)写上文档根。默认金色主题下与旧写死配色几乎重合(身份不变);mono 近中性 accent 经染色下限仍有色调。error 脸保留 `--color-danger`(球上唯一的红)。
 
+## 5k. 桌宠交互轴、白脸与 footer 液态玻璃胶囊(2026-09-20)
+
+本轮由四条用户反馈驱动:审批胶囊外圈有颜色、停靠球太大、球渲染成黑色而不是主题色、桌宠状态用得不够。
+
+- **footer 胶囊统一为液态玻璃**(`gui-composer.css`):审批模式胶囊与设计风格胶囊共用**同一套配方**——`--glass-bg` 填充叠在 composer 框的磨砂面上、`blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate))`,以及高光边(`--glass-edge-hi` / `--glass-edge-lo`)与 `::before` 上的对角 `--glass-sheen` 水光,按下走 `--spring-liquid`。**这圈边是 inset box-shadow,不是 border**——999px 圆角上真画 1px border 就会渲染出用户反馈的那圈可见环。(`--write` / `--yolo` / `--set`)状态保持同一玻璃面,只让**颜色**承载状态,切换模式不会改变胶囊的材质。
+- **审批胶囊色圈是共享 class 的 bug**:`.gui-approval` 同时被审批**卡片**(`ApprovalCard.tsx`,它画 `--color-warning-soft` 是正当的)和 footer 胶囊(`approval-mode-button.tsx`)使用。卡片那条规则给无边框胶囊底下画了一整个警告色胶囊。修法是加 `--pill` 修饰类清掉 padding/radius/background(`padding: 0; border-radius: 0; background: transparent`),而不是把共享类改透明。**教训:改共享 class 前先 grep 全部使用点。**
+- **停靠球尺寸**:`.gui-composer-pet` 的 clamp 从 `44px…60px` 收窄到 `34px…46px`。60px 时球比 composer 整行第一排还高,读起来像"粘在窗口上的一颗球";34–46 既在脸还能解析的区间内(眼胶囊 ≥4px、嘴描边 ≥0.75px),又明显从属于它所停靠的框。
+- **黑球有两个成因**:(1) SVG 壳渐变的写死 fallback 是冷板岩色(`#4a5768/#26303d/#0e141c`)、不是 accent 派生——色板生效前的每一帧都画黑球;现在回落到达尔文本就该产出的深色 accent 石墨(`#7d7159/#453a24/#1c1408`)。(2) `app.tsx` 只在 `MutationObserver` 上推送 accent 色板,而它**首次加载从不触发**——桌宠窗口在用户换主题前收不到任何 accent。该 effect 现在挂载时也会先推一次。
+- **脸在任何主题下都是白的**(`pet-palette.ts`):眼与嘴不再跟随 `--gui-pet-gold-a/b`。随主题变脸意味着 ocean 主题下蓝眼睛配蓝球,脸不再从壳上分离出来。白色守住了吉祥物唯一需要的可读性规则——**球上最亮的东西永远是脸**——主题则由圈来承载,一眼仍能看出配色。新增两个变量(`--gui-pet-face`、`--gui-pet-face-glow`),光晕是中性的所以永不染白脸。error 脸保留 `--color-danger`(唯一的那点红)。
+- **眼动幅度**:`GAZE_TRAVEL` 从 13.2/8.4 提到 20.5/13.5(face 单位,眼睛环本身约 26 单位宽,±13 只像轻推不像注视),桌宠窗口的 `PET_GAZE_RANGE_CSS` 从 420 收到 260(视距过宽会把有效偏转带压缩进范围的头三分之一),头像预设的 `GAZE_RANGE_PX` 从 120 放宽到 150。
+- **新增:桌宠交互轴**(`pet-face.ts` / `pet-motion.ts`):`PetInteraction` 是**第二条轴**——`startled` / `delighted` / `curious` / `dozing` / `peek`——刻意不并进 `PetMood`。`PetMood` 是 store 写入的会话契约;一次戳弄绝不能被持久化、必须按自己的时钟释放、并且要回落到实时 agent 状态。所以反应是**叠在状态之上**的:引擎按解析出的方向取数据,而 svg 同时带两个 class,好让状态那层的纯 CSS 材质(error 的红眼、hover 的增亮辉光)在反应期间不被重置。`INTERACTION_MOTION` 是全系统唯一允许"闹"的身体运动(戳弄类反应带 `enter` 过冲),因为它们由用户手势触发、约一秒内结束。
+  - **composer 桌宠**:戳一下是 startled,900ms 内快速补一下变成 delighted——`ComposerPetState.pokes` 携带连击计数。hover 仍属状态(它是氛围不是反应);旧的拿 `dragging` 冒充戳弄已删除。
+  - **桌面桌宠**:戳弄类反应保持 `POKE_HOLD_MS` 1400;新增两个闲时桥段——进入 60s 睡眠闩锁前 40s 开始 `dozing`(让入睡是渐睡而非硬切),以及每 12–26s 一次的 `peek`/`curious` "被抓包"桥段。反应会让位于实时手势与睡眠。
+  - 测试:`test/pet-interaction.test.ts`(11 条)钉住这条轴的边界——数据成对完整、两轴名字不冲突、没有 mood 偷偷长出 `enter`、startled 不眨眼(惊到一半眨眼像在抛媚眼)、dozing 是全系统最慢的呼吸。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

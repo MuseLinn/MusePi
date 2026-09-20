@@ -1,8 +1,12 @@
 
+/* The wrapper is a transparent layout box ONLY. */
 .gui-approval-wrap {
 	margin: 8px 14px 0;
 }
 
+/* Approval CARD (ApprovalCard.tsx) — the tool-permission request. Keeps its
+ * warning surface: it is an alert, not a chip, and the tint is the only
+ * signal that the agent is blocked on you. */
 .gui-approval {
 	display: flex;
 	align-items: flex-start;
@@ -10,6 +14,20 @@
 	padding: 8px 10px;
 	border-radius: var(--radius-md);
 	background: var(--color-warning-soft);
+}
+
+/* Approval-mode PILL (approval-mode-button.tsx) — the footer switch. Shares
+ * the `.gui-approval` class for layout only; this is the transparent slot
+ * that must never paint a surface (the chip inside owns the glass).
+ *
+ * Was: the shared `.gui-approval` rule painted `--color-warning-soft` behind
+ * the chip, so the "borderless, no hairline ring" chip sat inside a visible
+ * coloured capsule anyway — reported 2026-09-20 as 审批胶囊外面还是有一圈颜色. */
+.gui-approval--pill {
+	padding: 0;
+	border-radius: 0;
+	background: transparent;
+	align-items: center;
 }
 
 .gui-approval-icon {
@@ -2263,67 +2281,97 @@
 	max-height: none;
 }
 
-/* ── Approval-mode button (openchamber input permission picker parity) ──
- * Borderless chip: states colour the text and tint a soft fill, never a
- * hairline ring — the ring read as a stray background circle. */
-.gui-approval-btn {
+/* ── Composer footer pill family ────────────────────────────────────────
+ * Liquid glass (2026-09-20): the footer chips share ONE recipe so the row
+ * reads as a single material — a translucent fill over the composer
+ * frame's frosted surface, a saturated backdrop blur, and the specular
+ * rim (bright top edge / dim bottom echo) + diagonal sheen from the
+ * `--glass-*` ladder in tokens.css. Pair with `--spring-liquid` on press
+ * so the surfaces feel fluid rather than linear.
+ *
+ * The rim is drawn with an INSET box-shadow, never a border: a real 1px
+ * border on a 999px-radius pill renders as a visible ring, which is
+ * exactly what was reported on the approval chip (2026-09-20). */
+.gui-approval-btn,
+.gui-style-select-btn {
+	position: relative;
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
 	padding: 3px 10px;
+	border: 0;
 	border-radius: 999px;
-	border: 1px solid transparent;
-	background: transparent;
+	background: var(--glass-bg);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo);
 	color: var(--color-text-muted);
 	font-size: 11.5px;
 	font-family: inherit;
 	cursor: pointer;
-	transition: color 120ms ease-out, background-color 120ms ease-out;
+	transition:
+		color 120ms ease-out,
+		background-color 120ms ease-out,
+		box-shadow 120ms ease-out,
+		transform 120ms var(--spring-liquid);
+}
+
+/* Sheen wash: the diagonal "water" pass, clipped to the capsule. Sits
+ * under the content via z-index so labels stay crisp. */
+.gui-approval-btn::before,
+.gui-style-select-btn::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--glass-sheen);
+	pointer-events: none;
+	z-index: 0;
+}
+
+.gui-approval-btn > *,
+.gui-style-select-btn > * {
+	position: relative;
+	z-index: 1;
 }
 
 .gui-approval-btn:hover,
-.gui-approval-btn--open {
+.gui-approval-btn--open,
+.gui-style-select-btn:hover,
+.gui-style-select-btn--open {
 	color: var(--color-text);
-	background-color: color-mix(in oklab, var(--color-text) 8%, transparent);
+	background-color: var(--glass-bg-strong);
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		0 6px 18px oklch(0 0 0 / 22%);
 }
 
-.gui-approval-btn--write {
+.gui-approval-btn:active,
+.gui-style-select-btn:active {
+	transform: scale(0.97);
+}
+
+/* Armed / chosen states keep the chip's glass surface and let COLOUR carry
+ * the state (text + a tinted wash), so switching mode never changes the
+ * pill's material. */
+.gui-approval-btn--write,
+.gui-style-select-btn--set {
 	color: var(--color-accent);
-	background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 }
 
 .gui-approval-btn--yolo {
 	color: var(--color-danger, #e5484d);
-	background-color: color-mix(in oklab, var(--color-danger, #e5484d) 12%, transparent);
+	background-color: color-mix(in oklab, var(--color-danger, #e5484d) 16%, var(--glass-bg));
 }
 
-/* Design-style select (设计稿 08, WorkBuddy footer-pill parity): same
- * borderless chip family as the approval button — a chosen style tints the
- * pill accent, the caret hints the dropdown; no hairline ring in any state. */
-.gui-style-select-btn {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	padding: 3px 10px;
-	border-radius: 999px;
-	border: 1px solid transparent;
-	background: transparent;
-	color: var(--color-text-muted);
-	font-size: 11.5px;
-	font-family: inherit;
-	cursor: pointer;
-	transition: color 120ms ease-out, background-color 120ms ease-out;
-}
-
-.gui-style-select-btn:hover,
-.gui-style-select-btn--open {
-	color: var(--color-text);
-	background-color: color-mix(in oklab, var(--color-text) 8%, transparent);
-}
-
-.gui-style-select-btn--set {
-	color: var(--color-accent);
-	background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);
+.gui-approval-btn--write:hover,
+.gui-approval-btn--yolo:hover,
+.gui-style-select-btn--set:hover {
+	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
 }
 
 .gui-style-select-caret {

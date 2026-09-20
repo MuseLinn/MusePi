@@ -97,16 +97,29 @@ export interface ComposerPetState {
 	hovered: boolean;
 	/** True for the duration of the poke animation. */
 	hopping: boolean;
+	/** Poke count within the current attention window — the caller reads it to
+	 *  escalate the reaction (first poke startles, a quick repeat delights;
+	 *  petting it forever should not loop the same face). */
+	pokes: number;
 }
 
 /** Box width under which the mouth stroke stops resolving (see gui-pet.css). */
 const MICRO_BOX_PX = 46;
+/** Two pokes closer together than this escalate the reaction (startle →
+ *  delight). Longer than the hop ends, so a deliberate second poke always
+ *  reads as "again!" while an accidental double-tap still merges. */
+const POKE_COMBO_MS = 900;
 
 function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState) => ReactNode) }): ReactNode {
 	const [hovered, setHovered] = useState(false);
 	const [hopping, setHopping] = useState(false);
 	const ref = useRef<HTMLDivElement | null>(null);
 	const [micro, setMicro] = useState(false);
+	// Poke escalation. `pokes` resets on a pause, so the count is always
+	// "pokes in the last POKE_COMBO_MS" rather than a lifetime total.
+	const [pokes, setPokes] = useState(0);
+	const lastPokeRef = useRef(0);
+	const pokeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		const el = ref.current;
@@ -118,6 +131,13 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 		ro.observe(el);
 		return () => ro.disconnect();
 	}, []);
+
+	useEffect(
+		() => () => {
+			if (pokeTimerRef.current !== null) window.clearTimeout(pokeTimerRef.current);
+		},
+		[],
+	);
 
 	return (
 		<div
@@ -137,6 +157,11 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 				// `click` still fires, so the poke action is unaffected.
 				e.preventDefault();
 				setHopping(true);
+				const now = performance.now();
+				setPokes(now - lastPokeRef.current <= POKE_COMBO_MS ? p => Math.min(p + 1, 4) : 1);
+				lastPokeRef.current = now;
+				if (pokeTimerRef.current !== null) window.clearTimeout(pokeTimerRef.current);
+				pokeTimerRef.current = window.setTimeout(() => setPokes(0), POKE_COMBO_MS);
 			}}
 			onAnimationEnd={e => {
 				// Only the hop's own animation should clear the flag; the
@@ -144,7 +169,7 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 				if (e.animationName === "gui-pet-composer-hop") setHopping(false);
 			}}
 		>
-			{typeof children === "function" ? children({ hovered, hopping }) : children}
+			{typeof children === "function" ? children({ hovered, hopping, pokes }) : children}
 		</div>
 	);
 }

@@ -1780,17 +1780,22 @@ export function Composer({
 				chatInput
 				pet={
 					pet.enabled && pet.mode === "input"
-						? ({ hovered, hopping }) => (
+						? ({ hovered, hopping, pokes }) => (
 								// Poking the pet is a local, momentary override of the
 								// agent-derived mood: it never touches the session state,
 								// and it always falls back to the real mood on release.
 								// `size` is only the engine's authoring scale — the docked
 								// footprint comes from `.gui-composer-pet`'s container
 								// clamp, so the face never falls below legibility.
+								//
+								// Reaction escalation: a single poke startles, a quick
+								// follow-up delights (see ComposerPetState.pokes). Hover
+								// stays a mood because it is ambient, not a reaction.
 								<PetSprite
-									mood={hopping ? "dragging" : hovered ? "hover" : (petMood ?? "rest")}
+									mood={hovered ? "hover" : (petMood ?? "rest")}
 									pet={pet.pet}
 									size={30}
+									interaction={hopping ? (pokes > 1 ? "delighted" : "startled") : null}
 								/>
 							)
 						: null

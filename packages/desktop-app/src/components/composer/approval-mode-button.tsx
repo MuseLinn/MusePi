@@ -90,10 +90,10 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 
 	const current = MODES.find(m => m.value === mode) ?? MODES[2]!;
 	return (
-		<div ref={anchorRef} className="gui-approval">
-			{/* Borderless chip (own base class, NOT .gui-mode-toggle-arm whose
-				hairline ring read as a stray background): states tint a soft
-				fill and colour the text — no border ring in any state. */}
+		<div ref={anchorRef} className="gui-approval gui-approval--pill">
+			{/* --pill strips the card surface: the chip sits in the composer
+			 * footer row alongside the other pills, so it stays flush with
+			 * them — a card-shaped warning fill read as a stray ring. */}
 			<button
 				type="button"
 				className={`gui-approval-btn${mode === "write" ? " gui-approval-btn--write" : ""}${
@@ -106,7 +106,7 @@ export function ApprovalModeButton({ rpc }: { rpc: RpcClient | null }): ReactNod
 				onClick={() => setOpen(v => !v)}
 			>
 				<Icon name="shield" className="h-3 w-3" />
-				{t(current.short)}
+				<span>{t(current.short)}</span>
 			</button>
 			{renderMenu(
 				<div className="gui-attach-menu gui-approval-menu" role="menu" aria-label={t("approval mode")}>

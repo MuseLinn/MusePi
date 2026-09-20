@@ -270,7 +270,7 @@ function AppInner(): ReactNode {
 			electronAPI?: { petActivity?(payload: unknown): Promise<unknown> };
 		};
 		// Themed pet palette (pet-palette.ts): derive the orb's shell/ring/
-		// eye colors from the resolved --accent at startup, on every scheme
+		// face colors from the resolved --accent at startup, on every scheme
 		// or accent-axis flip (the observer below), and push the accent to
 		// the pet window alongside the theme so the floating pet matches.
 		applyPetPalette(root);
@@ -281,9 +281,18 @@ function AppInner(): ReactNode {
 				accent: resolvedAccent(root) ?? undefined,
 			});
 		};
+		// Push once at mount: the observer only fires on CHANGE, so a fresh
+		// launch whose accent never flips sent the pet no accent at all and
+		// the floating orb stayed on the SVG fallbacks (reported as "颜色都是
+		// 黑色球体"). Timer attached and cleared with the observer so an
+		// unmount during the first paint never leaves a stray send.
+		const initial = window.setTimeout(push, 0);
 		const observer = new MutationObserver(push);
 		observer.observe(root, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
-		return () => observer.disconnect();
+		return () => {
+			window.clearTimeout(initial);
+			observer.disconnect();
+		};
 	}, []);
 	const [url, setUrl] = useState<string>(() => {
 		// Last successful connection wins (connect() persists it): a daemon on

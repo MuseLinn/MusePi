@@ -1042,9 +1042,18 @@ function updatePetClickThrough() {
 }
 
 /** Gaze-following tuning: full eye deflection at this many CSS px from
- *  the window centre, and the minimum vector change worth an IPC send. */
-const PET_GAZE_RANGE_CSS = 420;
-const PET_GAZE_EPSILON = 0.02;
+ *  the window centre, and the minimum vector change worth an IPC send.
+ *
+ *  RANGE was 420 — too wide: the useful deflection band (where the eyes are
+ *  actually chasing the cursor) collapsed into the first ~1/3 of the travel
+ *  and the rest of the screen produced identical full deflection, so the
+ *  tracking read as sluggish and weak (user report 2026-09-20). 260px puts
+ *  a normal desktop working distance inside the range, so moving the mouse
+ *  across the pet's own neighbourhood sweeps the eyes across their full
+ *  arc. Combined with the raised GAZE_TRAVEL (pet-face.ts) the follow is
+ *  both larger and more responsive. */
+const PET_GAZE_RANGE_CSS = 260;
+const PET_GAZE_EPSILON = 0.01;
 /** Last pushed gaze vector — also the "window hidden" reset handle. */
 let petGazeState = null;
 

@@ -32,14 +32,16 @@
 	stroke-width: 1.6;
 }
 
-/* Eyes: the emissive gold. `--gui-pet-eye` lets the error/strained faces
- * swap to red without a second rule per mood. */
+/* Eyes: the emissive face light — white in every theme (pet-palette.ts
+ * `--gui-pet-face`). `--gui-pet-eye` lets the error/strained faces swap to
+ * red without a second rule per mood. */
 .gui-pet-svg__eye {
 	fill: var(--gui-pet-eye, url(#gui-pet-grad-eye));
 	stroke: none;
 	/* A tight glow, not a bloom: drop-shadow on a morphing path is cheap
-	 * (it is a filter on one small path, not the whole SVG). */
-	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(217, 168, 63, 0.55)));
+	 * (it is a filter on one small path, not the whole SVG). Neutral white
+	 * halo — a tinted glow would re-colour the white face. */
+	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(255, 255, 255, 0.6)));
 }
 
 .gui-pet-svg__mouth {
@@ -47,7 +49,7 @@
 	stroke: var(--gui-pet-eye, url(#gui-pet-grad-eye));
 	stroke-linecap: round;
 	stroke-width: 7.5;
-	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(217, 168, 63, 0.45)));
+	filter: drop-shadow(0 0 3px var(--gui-pet-glow, rgba(255, 255, 255, 0.5)));
 }
 
 /* Error is the only place the palette leaves gold. */
@@ -267,6 +269,55 @@
 	opacity: 0.5;
 }
 
+/* ── User-initiated reactions ────────────────────────────────────────────
+ * The face + body data lives in pet-face.ts / pet-motion.ts; these rules are
+ * the MATERIAL half — how the orb's light answers the gesture. They are
+ * additive to the mood classes above (both ride the same svg), so a reaction
+ * on top of `working` keeps the working ring spin and still startles. */
+
+/* Startled: the light flares and the ring jolts out of its resting tilt —
+ * the orb literally catching its breath. */
+.gui-pet-svg--startled .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 7px var(--gui-pet-glow, rgba(255, 255, 255, 0.7)));
+}
+
+.gui-pet-svg--startled .gui-pet-svg__thrust {
+	opacity: 1.7;
+}
+
+/* Delighted: a warmer, softer flare — pleasure reads as bloom, not flash. */
+.gui-pet-svg--delighted .gui-pet-svg__eye {
+	filter: drop-shadow(0 0 6px var(--gui-pet-glow, rgba(255, 255, 255, 0.6)));
+}
+
+.gui-pet-svg--delighted .gui-pet-svg__thrust {
+	opacity: 1.5;
+}
+
+/* Curious: attention, not excitement — a slight bloom and a ring nudge that
+ * follows the head-tilt. */
+.gui-pet-svg--curious .gui-pet-svg__thrust {
+	opacity: 1.2;
+}
+
+/* Pre-sleep: the light visibly dims before the eyes close. */
+.gui-pet-svg--dozing .gui-pet-svg__eye {
+	opacity: 0.7;
+}
+
+.gui-pet-svg--dozing .gui-pet-svg__thrust {
+	opacity: 0.7;
+}
+
+.gui-pet-svg--dozing .gui-pet-svg__ring {
+	opacity: 0.72;
+}
+
+/* Caught looking: the light pulls in — the orb pretending to be idle. */
+.gui-pet-svg--peek .gui-pet-svg__thrust {
+	opacity: 0.85;
+}
+
 @keyframes gui-pet-ring-spin {
 	0% {
 		transform: rotate(0deg);
@@ -470,14 +521,21 @@
  * composer. The clamp floor is the legibility floor: 0.75px of mouth stroke
  * and a >=4px eye capsule, i.e. a ~44px box / ~34px ball. Below that we stop
  * pretending it is a face and let the silhouette carry it (see
- * `.gui-composer-pet--micro`). */
+ * `.gui-composer-pet--micro`).
+ *
+ * Cap 46px (2026-09-20, was 60): in the session composer the pet is perched
+ * on the input's top-right edge, and at 60px it stood taller than the whole
+ * first row of the composer — it read as "a giant ball stuck on the window"
+ * rather than as a mascot peeking over the edge. 34–46px keeps it inside the
+ * band where the face still resolves (eye capsule >=4px, mouth >=0.75px) while
+ * staying visually subordinate to the frame it sits on. */
 .gui-composer-pet
 {
 	position:absolute;
 	z-index:1;
 	cursor:pointer;
 	display:flex;
-	width:var(--gui-composer-pet-size, clamp(44px, 4.6cqw + 26px, 60px));
+	width:var(--gui-composer-pet-size, clamp(34px, 4.6cqw + 26px, 46px));
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
 	justify-content:flex-end;
@@ -489,7 +547,7 @@
 	 * which reads as the pet floating detached from the edge it is perched
 	 * on. Pull the box up by that same fraction so the ball lands flush.
 	 * (HEADROOM 40 / VIEW_H 298.5.) */
-	margin-bottom:calc(var(--gui-composer-pet-size, 44px) * -40 / 298.5);
+	margin-bottom:calc(var(--gui-composer-pet-size, 46px) * -40 / 298.5);
 	transform-origin:50% 100%;
 	transition:transform .18s cubic-bezier(.22,1,.36,1),filter .18s cubic-bezier(.22,1,.36,1);
 	-webkit-tap-highlight-color:transparent;
@@ -535,7 +593,7 @@
 {
 	.gui-composer-pet
 	{
-		width:var(--gui-composer-pet-size, 40px);
+		width:var(--gui-composer-pet-size, 34px);
 	}
 }
 /* ── Micro variant ────────────────────────────────────────────────────────

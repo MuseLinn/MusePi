@@ -54,6 +54,31 @@ export const MOOD_MOTION: Record<string, BodyMotion> = {
 	error: { jitter: [1.1, 110], tilt: 2 },
 };
 
+/**
+ * Body motion for the user-initiated reactions (see pet-face.ts
+ * PET_INTERACTIONS) — the same data contract as a mood, keyed on the second
+ * axis. These are the ONLY entries allowed to be loud: they fire on a user
+ * gesture and resolve in about a second, so an overshoot entrance reads as
+ * "it felt that" rather than as a fidget.
+ *
+ * `enter` is doing most of the work: 0.86 → 1 on an ease-out-back is the
+ * recoil-and-settle of something that just got poked, and it decays on its
+ * own, so the gesture needs no exit animation in the caller.
+ */
+export const INTERACTION_MOTION: Record<string, BodyMotion> = {
+	// The flinch: a quick pop outward, then a nervous shimmer as it settles.
+	startled: { enter: [1.14, 480], jitter: [0.9, 130], scale: 1.04 },
+	// The pleased wobble: a small bouncy double-take, no jitter (happy motion
+	// should look springy, not shaky).
+	delighted: { enter: [0.92, 520], bob: [2.6, 620], squash: 0.22 },
+	// The head-tilt: hold a lean toward whatever caught its attention.
+	curious: { tilt: -6, pulse: [0.014, 3000] },
+	// Pre-sleep: a long, deep, slow breath — the body sinking.
+	dozing: { pulse: [0.03, 6400], tilt: 2.4, scale: 0.985 },
+	// Caught in the act: a small guilty start, then still.
+	peek: { enter: [1.06, 420], tilt: -3.2, pulse: [0.01, 3600] },
+};
+
 const easeOutBack = (t: number): number => {
 	const c = 1.7;
 	const u = t - 1;

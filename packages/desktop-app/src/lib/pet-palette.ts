@@ -6,8 +6,9 @@
  * That pairing only worked under the default gold accent: under ocean
  * (blue) the gold ring + gold eyes on the cold dark ball read as three
  * unrelated colors stuck together. The SVG already reads every paint
- * from CSS variables, so theming is a matter of computing the six
- * variables — plus the rim light and the hover eye glow — from the
+ * from CSS variables, so theming is a matter of computing the palette
+ * — six shell/light variables plus the rim light, the hover eye glow and
+ * the white face pair — from the
  * LIVE accent token (`--accent`, resolved from tokens.css for the
  * active data-accent × data-theme pair).
  *
@@ -15,12 +16,20 @@
  *   shell  — the sphere stays a "metal" surface: accent-hued but heavily
  *            desaturated, running dark (dark theme) or mid (light theme)
  *            so the emissive face keeps its contrast.
- *   gold-* — the "light" family (ring, eyes, antenna, bounce, thrust):
+ *   gold-* — the "light" family (ring, antenna, bounce, thrust):
  *            a bright tint above the accent, the accent itself, and a
  *            deep shade below it. Under the default brand accent this
  *            lands within a hair of the old hardcoded golds, so the
  *            mascot keeps its identity — other accents inherit a whole
  *            coherent orb for free.
+ *
+ * The face (eyes + mouth) is WHITE, not accent-tinted (2026-09-20, user
+ * request). It used to ride `--gui-pet-gold-a/b`, which meant a themed orb
+ * whose face changed colour with the theme — on ocean the eyes went blue
+ * on a blue-ish ball and the face stopped separating from the shell. White
+ * keeps the single legibility rule the mascot needs: the brightest thing
+ * on the orb is always the face, whatever the accent is doing. The ring
+ * still carries the accent, so the theme is still legible at a glance.
  *
  * The error face keeps `--color-danger` (the one red on the mascot);
  * the white speculars (gloss/sweep) stay neutral by design.
@@ -49,6 +58,13 @@ export interface PetPaletteVars {
 	"gui-pet-gold-c": string;
 	"gui-pet-rim": string;
 	"gui-pet-glow": string;
+	/** Face light (eyes + mouth). Always near-white; the value only lifts
+	 *  with the scheme so it stays "the brightest thing on the orb" on a
+	 *  pale light-theme shell too. */
+	"gui-pet-face": string;
+	/** Face halo colour, used for the eye/mouth drop-shadow. Neutral white
+	 *  rather than a tint, so the glow never re-colours the white face. */
+	"gui-pet-face-glow": string;
 }
 
 const PET_PALETTE_VAR_PREFIX = "--gui-pet-";
@@ -61,7 +77,7 @@ function fmt(l: number, c: number, h: number, alpha?: number): string {
 }
 
 /**
- * Derive the eight pet variables from an accent color string (any CSS
+ * Derive the ten pet variables from an accent color string (any CSS
  * format chroma can parse — tokens.css ships `oklch(L C H)`) and the
  * active scheme. Throws only when the accent is unparseable; callers
  * should fall back to the SVG's hardcoded defaults.
@@ -88,11 +104,19 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 			// transparent enough to read as light on the sphere's limb.
 			"gui-pet-rim": fmt(Math.min(0.88, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h, 0.3),
 			"gui-pet-glow": fmt(l0, c0, h, 0.8),
+			// Face: near-white, hair of warmth so it reads as a light rather
+			// than a cut-out. Neutral halo (no hue) keeps the glow from
+			// tinting the white.
+			"gui-pet-face": "oklch(0.985 0.004 90)",
+			"gui-pet-face-glow": "oklch(1 0 0 / 0.72)",
 		};
 	}
 
 	// Light scheme: the ball lifts toward the background and the light
 	// family deepens so eyes/ring keep their contrast on the pale shell.
+	// The face stays white but the halo must carry the separation instead
+	// (a white face on a pale shell needs its own dark-agnostic glow), so
+	// the glow drops to a soft neutral with more alpha.
 	return {
 		"gui-pet-shell-a": fmt(0.78, 0.035, h),
 		"gui-pet-shell-b": fmt(0.58, 0.045, h),
@@ -102,6 +126,11 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 		"gui-pet-gold-c": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h),
 		"gui-pet-rim": fmt(0.3, Math.min(0.1, c0), h, 0.22),
 		"gui-pet-glow": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h, 0.55),
+		// Face on a light shell: keep it white (the identity rule) and let
+		// the halo do the separating — a dark neutral ring around the eye
+		// would fight the mouth stroke, so only the alpha changes.
+		"gui-pet-face": "oklch(0.99 0.002 90)",
+		"gui-pet-face-glow": "oklch(1 0 0 / 0.85)",
 	};
 }
 
