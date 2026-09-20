@@ -3,6 +3,7 @@ import { chunkText } from "../src/channels/chunk";
 import { ChannelCommandHandler, type ChannelOps } from "../src/channels/handler";
 import { HuaweiTodayChannel } from "../src/channels/huawei-today";
 import { ChannelRegistry } from "../src/channels/registry";
+import { TelegramChannel, toTelegramHtml } from "../src/channels/telegram";
 import type { ChannelAdapter, ChannelHost, ChannelKind } from "../src/channels/types";
 
 function mockOps(): ChannelOps & {
@@ -232,6 +233,57 @@ describe("channel registry", () => {
 		const after = registry.list()[0];
 		expect(after.config.enabled).toBe(false);
 		expect(after.config.token).toBeUndefined();
+	});
+});
+
+describe("telegram channel adaptation", () => {
+	it("renders markdown to Telegram HTML and escapes markup", () => {
+		expect(toTelegramHtml("a < b & c > d")).toBe("a &lt; b &amp; c &gt; d");
+		expect(toTelegramHtml("**bold** `code`")).toBe("<b>bold</b> <code>code</code>");
+		expect(toTelegramHtml("[docs](https://x.dev)")).toBe('<a href="https://x.dev">docs</a>');
+		// Fenced blocks keep their body verbatim (no inline rules inside).
+		const fenced = toTelegramHtml("```\nif (a < b) {}\n```");
+		expect(fenced).toBe("<pre>if (a &lt; b) {}</pre>");
+	});
+
+	it("sends the native typing action and stops it", async () => {
+		const calls: { url: string; fields?: string[] }[] = [];
+		const original = globalThis.fetch;
+		globalThis.fetch = (async (url: unknown, init?: { body?: unknown }) => {
+			const body = init?.body;
+			const fields = body instanceof FormData ? [...body.keys()] : undefined;
+			calls.push({ url: String(url), fields });
+			return new Response(JSON.stringify({ ok: true, result: [] }), { status: 200 });
+		}) as typeof fetch;
+		try {
+			const c = new TelegramChannel();
+			await c.configure({ token: "tok" });
+			await c.start();
+			await c.startTyping("42");
+			expect(calls.some(x => x.url.includes("sendChatAction") && x.fields?.includes("action"))).toBe(true);
+			await c.stopTyping("42");
+			await c.stop();
+		} finally {
+			globalThis.fetch = original;
+		}
+	});
+});
+
+describe("channel language routing", () => {
+	it("Chinese-market channels reply in Chinese, others in English", async () => {
+		const ops = mockOps();
+		const texts: string[] = [];
+		const h = new ChannelCommandHandler(ops, async (_k, _f, text) => {
+			texts.push(text);
+		});
+		for (const kind of ["wechat", "feishu", "lark"]) {
+			await h.handleIncoming(kind, `u-${kind}`, "/stop");
+			expect(texts.at(-1)).toBe("没有可停止的会话。");
+		}
+		for (const kind of ["telegram", "discord"]) {
+			await h.handleIncoming(kind, `u-${kind}`, "/stop");
+			expect(texts.at(-1)).toBe("No session to stop.");
+		}
 	});
 });
 

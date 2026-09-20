@@ -29,7 +29,12 @@ export class DiscordChannel implements ChannelAdapter {
 
 	static readonly GATEWAY_URL = "wss://gateway.discord.gg/?v=10&encoding=json";
 	static readonly TEXT_CHUNK = 2000;
+	static readonly REST = "https://discord.com/api/v10";
+	/** Discord's typing indicator expires after 10s. */
+	static readonly TYPING_REFRESH_MS = 8_000;
 	static readonly INTENTS = (1 << 9) | (1 << 12); // GUILD_MESSAGES | DIRECT_MESSAGES
+	/** Per-channel typing heartbeats — cleared in stopTyping()/stop(). */
+	#typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		this.#token = typeof config.token === "string" ? config.token : "";
@@ -126,22 +131,35 @@ export class DiscordChannel implements ChannelAdapter {
 		if (!m.author || m.author.bot || m.author.id === this.#selfId) return;
 		const from = m.channel_id ?? "unknown";
 		const images: { data: string; mimeType: string }[] = [];
+		const notes: string[] = [];
 		for (const a of m.attachments ?? []) {
-			if (!a.url || !a.content_type?.startsWith("image/")) continue;
-			try {
-				const res = await fetch(a.url);
-				if (!res.ok) continue;
-				const bytes = Buffer.from(await res.arrayBuffer());
-				if (bytes.length > 20 * 1024 * 1024) continue;
-				images.push({ data: bytes.toString("base64"), mimeType: a.content_type });
-			} catch {
-				// skip unreadable attachment
+			if (!a.url) continue;
+			if (a.content_type?.startsWith("image/")) {
+				try {
+					const res = await fetch(a.url);
+					if (!res.ok) continue;
+					const bytes = Buffer.from(await res.arrayBuffer());
+					if (bytes.length > 20 * 1024 * 1024) {
+						notes.push(`📎 ${a.filename ?? "file"}（超过 20MB，已跳过）`);
+						continue;
+					}
+					images.push({ data: bytes.toString("base64"), mimeType: a.content_type });
+				} catch {
+					// skip unreadable attachment
+				}
+			} else {
+				// Non-image attachments are not representable as session content —
+				// surface the file name so nothing arrives silently.
+				notes.push(`📎 ${a.filename ?? "file"}`);
 			}
 		}
-		await this.#onMessage?.(this.kind, from, m.content ?? "", images.length > 0 ? images : undefined);
+		const body = notes.length > 0 ? [m.content ?? "", ...notes].filter(Boolean).join("\n") : (m.content ?? "");
+		await this.#onMessage?.(this.kind, from, body, images.length > 0 ? images : undefined);
 	}
 
 	async stop(): Promise<void> {
+		for (const timer of this.#typingTimers.values()) clearInterval(timer);
+		this.#typingTimers.clear();
 		if (this.#heartbeatTimer) {
 			clearInterval(this.#heartbeatTimer);
 			this.#heartbeatTimer = null;
@@ -213,6 +231,36 @@ export class DiscordChannel implements ChannelAdapter {
 			const errBody = await res.text().catch(() => "");
 			throw new Error(`discord send failed: ${res.status} ${errBody.slice(0, 160)}`);
 		}
+	}
+
+	/** Native typing indicator (Discord REST typing endpoint). The client shows
+	 *  it for 10s, so an active agent turn re-arms it on a heartbeat. */
+	async startTyping(to: string): Promise<void> {
+		if (this.#state !== "connected" || this.#typingTimers.has(to)) return;
+		try {
+			await this.#sendTyping(to);
+			const timer = setInterval(() => void this.#sendTyping(to).catch(() => {}), DiscordChannel.TYPING_REFRESH_MS);
+			timer.unref?.();
+			this.#typingTimers.set(to, timer);
+		} catch {
+			// Typing is cosmetics — never block the reply path.
+		}
+	}
+
+	async stopTyping(to: string): Promise<void> {
+		const timer = this.#typingTimers.get(to);
+		if (timer) {
+			clearInterval(timer);
+			this.#typingTimers.delete(to);
+		}
+	}
+
+	async #sendTyping(to: string): Promise<void> {
+		const res = await fetch(`${DiscordChannel.REST}/channels/${to}/typing`, {
+			method: "POST",
+			headers: { Authorization: `Bot ${this.#token}` },
+		});
+		if (!res.ok) throw new Error(`discord typing failed: ${res.status}`);
 	}
 
 	/** Registry wiring: attach the incoming-message router. */

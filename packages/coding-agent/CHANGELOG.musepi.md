@@ -5,6 +5,25 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **IM 渠道打通回复链路：微信里发一句话，agent 的回答终于会回来**：此前渠道侧只有命令回显（/help 等），纯文本被送进会话后 agent 跑完就没有任何推送路径——用户看到的是"发出去石沉大海"，体感就是 bot 很慢/死了。现在会话结束时把最后一条 assistant 回复推回每个绑定的 IM 端；绑定按「渠道+发送者」记录并存盘，重启后照样路由。未绑定的第一条消息不再报错教育，而是自动新建会话并直接开始处理（对齐 Telegram DM：第一句话就有回应）。
+  - EN: IM channels now actually answer back. Previously only command echoes existed — a plain text message reached the session and the agent's reply had no push path at all, so the bot looked dead/slow. The last assistant reply is now pushed to every bound IM peer when a turn ends, and bindings are keyed per channel+sender and persisted, so routing survives a restart. An unbound first message no longer returns an error lecture: it auto-creates a session and starts working (Telegram-DM parity — the first message already gets an answer).
+- **各渠道按自身原生能力适配**：微信接入 iLink 原生「对方正在输入」（getconfig 取 typing_ticket，5 秒心跳，回复时收尾）；Telegram 用 sendChatAction 输入状态 + HTML 富文本渲染（代码块/粗体/链接，解析失败自动回落纯文本）并接收文档与语音占位；Discord 用 REST typing 端点并把非图片附件标注出来；飞书首个分片以「引用回复」落到原消息下（群里看得出在答谁，飞书没有 bot 输入态接口，故不伪装）。所有渠道的长回复改为分片发送，不再静默截断丢尾；命令回复语言按渠道走（微信/飞书/lark/华为中文，Telegram/Discord 英文），/list 显示序号+短 id，手机上 `/switch 2` 就能绑定。
+  - EN: Each channel is adapted to what it natively supports: WeChat gets iLink's native "typing…" (typing_ticket via getconfig, 5s heartbeat, cleared on reply); Telegram gets sendChatAction typing plus HTML rendering (code blocks, bold, links — plain-text fallback if the parser rejects it) and now surfaces documents/voice placeholders; Discord gets the REST typing endpoint and annotates non-image attachments; Feishu quotes the source message for the first chunk (so a group can tell what is being answered) and does NOT fake typing, since bots have no input-state API there. Long replies are chunked everywhere instead of being silently truncated, command replies follow the channel's language (Chinese for WeChat/Feishu/Lark/Huawei, English for Telegram/Discord), and /list prints ordinals + short ids so `/switch 2` is typeable on a phone.
+
+### Changed
+
+- **GUI 渠道行：点「启动」直接给二维码**：wechat 的 token 是可选的（空值走扫码登录），此前点启动先展开一个表单、必须再点「保存并启动」才出二维码，属于多一层无意义的操作。现在字段全可选的渠道点启动直接连接，二维码立刻出现；想预置 token 走齿轮入口。
+  - EN: The GUI channel row now gives the QR straight away. WeChat's token is optional (empty means QR login), but starting used to expand a form first and demanded a second "save and start" click before any QR appeared — one pointless extra step. Channels whose fields are all optional now connect immediately, and the token form lives behind a gear button.
+
+### Fixed
+
+- **「停止」不再等于解绑：扫码拿到的凭证会落盘，停止/解绑两个动作分开**：QR 登录拿到的 bot_token 此前从不写回 channels.json，于是停止后再启动必须重新扫码——用户以为点的是「停止」，实际是解绑。现在 token 落盘，停止只断线；真正的解绑是独立按钮，且先弹二次确认（Enter 确认 / Esc 取消）。
+  - EN: "Stop" no longer means unbind. The bot_token from a QR login was never written back to channels.json, so stopping and starting again demanded a fresh scan — clicking what read as "stop" was effectively unbinding. The credential is persisted now, stop only disconnects, and unbinding is a separate button behind a confirm dialog (Enter confirms, Escape cancels).
+- **长回复不再被静默截断**：微信 2000、Telegram 4096、Discord 2000、飞书 4000 处的 slice() 把超长回复的尾巴直接丢掉，agent 的回答会在半句话处突然结束；现全部改为分片发送。
+  - EN: Long replies are no longer silently truncated: a slice() at 2000 (WeChat), 4096 (Telegram), 2000 (Discord) and 4000 (Feishu) dropped the tail of long answers, ending them mid-sentence. All channels now send chunks instead.
+
 ## [0.4.35] - 2026-09-20
 
 ### Added

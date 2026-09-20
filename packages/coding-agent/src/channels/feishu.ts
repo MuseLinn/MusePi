@@ -36,6 +36,10 @@ export class FeishuChannel implements ChannelAdapter {
 		lark: "https://open.larksuite.com",
 	};
 	static readonly TEXT_CHUNK = 4000;
+	/** 飞书 bot 无「正在输入」开放接口（仅客户端内建状态），故不实现 typing。 */
+	static readonly SUPPORTS_TYPING = false;
+	/** Last incoming message id per chat — replies quote it (thread reply). */
+	#lastMessageIds = new Map<string, string>();
 
 	async configure(config: Record<string, unknown>): Promise<void> {
 		this.#config = {
@@ -92,6 +96,9 @@ export class FeishuChannel implements ChannelAdapter {
 		if (!data.message) return;
 		const chatId = data.message.chat_id ?? "unknown";
 		const from = data.sender?.sender_id?.open_id ?? chatId ?? "unknown";
+		// Remember the source message so answers land as quotes under it
+		// (群聊里否则看不出这条回复是在答谁)。
+		if (data.message.message_id) this.#lastMessageIds.set(chatId, data.message.message_id);
 		const contentType = data.message.message_type ?? "text";
 		const images: { data: string; mimeType: string }[] = [];
 		let text = "";
@@ -201,7 +208,21 @@ export class FeishuChannel implements ChannelAdapter {
 		// Chunked, not truncated — slice() silently dropped the tail of long
 		// agent replies (the 4000-char cap stays conservative until card
 		// messages land).
-		for (const chunk of chunkText(text, FeishuChannel.TEXT_CHUNK)) {
+		const chunks = chunkText(text, FeishuChannel.TEXT_CHUNK);
+		for (const [idx, chunk] of chunks.entries()) {
+			// 首个分片以「引用回复」落到原消息下；后续分片平发；引用失败回落到普通消息。
+			const replyTo = idx === 0 ? this.#lastMessageIds.get(to) : undefined;
+			if (replyTo) {
+				try {
+					await this.#client.im.message.reply({
+						path: { message_id: replyTo },
+						data: { msg_type: "text", content: JSON.stringify({ text: chunk }) },
+					});
+					continue;
+				} catch {
+					// 原消息被撤回/过期 → 平发
+				}
+			}
 			await this.#client.im.message.create({
 				params: { receive_id_type: "chat_id" },
 				data: { receive_id: to, msg_type: "text", content: JSON.stringify({ text: chunk }) },

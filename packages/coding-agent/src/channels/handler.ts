@@ -22,10 +22,18 @@ export interface ChannelBindingSnapshot {
 }
 
 type Lang = "zh" | "en";
-/** Per-channel reply language: WeChat users read Chinese, everything else
- *  keeps the original English surface (same strings the GUI shows). */
+/** Per-channel reply language: Chinese-market channels answer in Chinese,
+ *  the rest keep the original English surface (same strings the GUI shows). */
 function langOf(kind: string): Lang {
-	return kind === "wechat" ? "zh" : "en";
+	switch (kind) {
+		case "wechat":
+		case "feishu":
+		case "lark":
+		case "huawei-today":
+			return "zh";
+		default:
+			return "en";
+	}
 }
 
 interface MsgTable {

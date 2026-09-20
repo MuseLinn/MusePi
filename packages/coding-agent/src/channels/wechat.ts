@@ -4,7 +4,8 @@ import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
 /** iLink incoming message (OpenClaw protocol): item_list carries text
- *  (type 1), image (type 2) and file (type 4) items. */
+ *  (type 1), image (type 2), voice (type 3, may carry an ASR transcript) and
+ *  file (type 4) items. */
 interface WechatIncomingMsg {
 	from_user_id?: string;
 	context_token?: string;
@@ -16,6 +17,8 @@ interface WechatIncomingMsg {
 			aeskey?: string;
 			media?: { encrypt_query_param?: string; aes_key?: string; full_url?: string };
 		};
+		/** type 3 — `text` is the server-side transcript when ASR ran. */
+		voice_item?: { text?: string; playtime?: number };
 		file_item?: { file_name?: string; media?: { encrypt_query_param?: string; aes_key?: string; full_url?: string } };
 	}[];
 }
@@ -291,12 +294,15 @@ export class WechatChannel implements ChannelAdapter {
 				.join("");
 			const images = await this.#downloadImages(items);
 			// Files are not representable in session content parts — surface
-			// their metadata as text so the user sees what arrived.
+			// their metadata as text so the user sees what arrived. Voices carry
+			// a server-side ASR transcript (voice_item.text) when available; use
+			// it instead of dropping the message silently.
 			const fileNotes = items
 				.filter(i => i.type === 4 && i.file_item?.file_name)
 				.map(i => `📎 ${i.file_item!.file_name}`);
-			const finalText =
-				fileNotes.length > 0 ? (text ? `${text}\n${fileNotes.join("\n")}` : fileNotes.join("\n")) : text;
+			const voiceNotes = items.filter(i => i.type === 3 && i.voice_item?.text).map(i => `🎙 ${i.voice_item!.text}`);
+			const notes = [...fileNotes, ...voiceNotes];
+			const finalText = notes.length > 0 ? (text ? `${text}\n${notes.join("\n")}` : notes.join("\n")) : text;
 			if (!finalText.trim() && images.length === 0) continue;
 			void this.#onMessage?.(this.kind, m.from_user_id, finalText, images).catch(() => {});
 		}

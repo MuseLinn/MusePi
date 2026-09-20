@@ -2,6 +2,31 @@ import { logger } from "@musepi/pi-utils";
 import { chunkText } from "./chunk";
 import type { ChannelAdapter, ChannelHost, ChannelSendPayload, ChannelStatus } from "./types";
 
+/** Escape the three characters Telegram's HTML parse mode treats as markup. */
+function escapeHtml(text: string): string {
+	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Render an agent reply's markdown-ish body to Telegram HTML (fenced code,
+ *  inline code, bold, italic, links). HTML is the safe parse mode: only
+ *  & < > are structural, so a stray < in a tool output cannot break a send —
+ *  and send() still falls back to plain text if the parser rejects it. */
+export function toTelegramHtml(text: string): string {
+	const fences: string[] = [];
+	// 1. Pull fenced blocks out first so inline rules never touch their body.
+	let body = text.replace(/```[\w-]*\n?([\s\S]*?)```/g, (_m, code: string) => {
+		fences.push(`<pre>${escapeHtml(String(code).replace(/\n$/, ""))}</pre>`);
+		return `\u0000FENCE${fences.length - 1}\u0000`;
+	});
+	body = escapeHtml(body);
+	body = body
+		.replace(/`([^`\n]+)`/g, "<code>$1</code>")
+		.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")
+		.replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, "$1<i>$2</i>")
+		.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>');
+	return body.replace(/\u0000FENCE(\d+)\u0000/g, (_m, i: string) => fences[Number(i)] ?? "");
+}
+
 /** Telegram bot adapter — official Bot API over HTTP long-polling
  *  (getUpdates offset-based), zero dependencies. Images/files via
  *  sendPhoto/sendDocument (multipart). Incoming messages route through the
@@ -10,7 +35,11 @@ export class TelegramChannel implements ChannelAdapter {
 	readonly kind = "telegram" as const;
 	static readonly API = "https://api.telegram.org/bot";
 	static readonly TEXT_CHUNK = 4096;
+	/** Telegram's typing indicator expires after ~5s. */
+	static readonly TYPING_REFRESH_MS = 4_000;
 	#token = "";
+	/** Per-chat typing heartbeats — cleared in stopTyping()/stop(). */
+	#typingTimers = new Map<string, ReturnType<typeof setInterval>>();
 	#state: ChannelStatus["state"] = "off";
 	#detail: string | undefined;
 	#offset = 0;
@@ -67,8 +96,11 @@ export class TelegramChannel implements ChannelAdapter {
 			message?: {
 				chat?: { id: number };
 				text?: string;
+				caption?: string;
 				photo?: { file_id: string }[];
 				document?: { file_id: string; file_name?: string };
+				voice?: { file_id?: string };
+				sticker?: { file_id?: string };
 				from?: { id: number };
 			};
 		}[]
@@ -86,16 +118,20 @@ export class TelegramChannel implements ChannelAdapter {
 		message?: {
 			chat?: { id: number };
 			text?: string;
+			caption?: string;
 			photo?: { file_id: string }[];
 			document?: { file_id: string; file_name?: string };
+			voice?: { file_id?: string };
+			sticker?: { file_id?: string };
 		};
 	}): Promise<void> {
 		this.#offset = Math.max(this.#offset, u.update_id + 1);
 		const msg = u.message;
 		if (!msg?.chat) return;
 		const chatId = String(msg.chat.id);
-		const text = msg.text ?? "";
+		const text = msg.text ?? msg.caption ?? "";
 		const images: { data: string; mimeType: string }[] = [];
+		const notes: string[] = [];
 		if (msg.photo && msg.photo.length > 0) {
 			// Largest photo is last in the array.
 			const fileId = msg.photo.at(-1)?.file_id;
@@ -104,7 +140,15 @@ export class TelegramChannel implements ChannelAdapter {
 				if (data) images.push({ data, mimeType: "image/jpeg" });
 			}
 		}
-		await this.#onMessage?.(this.kind, chatId, text, images.length > 0 ? images : undefined);
+		// Documents are not representable as session content parts — surface
+		// their name next to a sticker/voice so nothing arrives silently.
+		if (msg.document?.file_id) {
+			notes.push(`📎 ${msg.document.file_name ?? "file"}`);
+		}
+		if (msg.voice) notes.push("🎙 语音消息（当前无法转写，请以文字发送）");
+		if (msg.sticker) notes.push("[sticker]");
+		const finalText = notes.length > 0 ? (text ? `${text}\n${notes.join("\n")}` : notes.join("\n")) : text;
+		await this.#onMessage?.(this.kind, chatId, finalText, images.length > 0 ? images : undefined);
 	}
 
 	async #downloadFile(fileId: string): Promise<string | null> {
@@ -126,6 +170,8 @@ export class TelegramChannel implements ChannelAdapter {
 	async stop(): Promise<void> {
 		this.#stopped = true;
 		this.#polling = false;
+		for (const timer of this.#typingTimers.values()) clearInterval(timer);
+		this.#typingTimers.clear();
 		if (this.#timer) {
 			clearTimeout(this.#timer);
 			this.#timer = null;
@@ -147,32 +193,81 @@ export class TelegramChannel implements ChannelAdapter {
 		if (this.#state !== "connected") throw new Error("telegram channel not connected");
 		const to = payload.to;
 		if (!to) throw new Error("telegram send needs a target chat id");
-		const form = new FormData();
 		if (payload.images && payload.images.length > 0) {
-			form.append("chat_id", to);
-			if (payload.text.trim()) form.append("caption", payload.text.slice(0, 1024));
-			const img = payload.images[0];
-			form.append("photo", new Blob([Buffer.from(img.data, "base64")], { type: img.mimeType }), "photo.jpg");
-			await this.#post("sendPhoto", form);
+			for (const [idx, img] of payload.images.entries()) {
+				const form = new FormData();
+				form.append("chat_id", to);
+				// A caption rides the FIRST photo only (Telegram repeats it on every
+				// message of an album otherwise).
+				if (idx === 0 && payload.text.trim()) {
+					form.append("caption", toTelegramHtml(payload.text.slice(0, 1024)));
+					form.append("parse_mode", "HTML");
+				}
+				form.append("photo", new Blob([Buffer.from(img.data, "base64")], { type: img.mimeType }), "photo.jpg");
+				await this.#post("sendPhoto", form);
+			}
 			return;
 		}
 		if (payload.files && payload.files.length > 0) {
-			form.append("chat_id", to);
-			if (payload.text.trim()) form.append("caption", payload.text.slice(0, 1024));
-			const file = payload.files[0];
-			form.append("document", new Blob([Buffer.from(file.data, "base64")], { type: file.mimeType }), file.name);
-			await this.#post("sendDocument", form);
+			for (const file of payload.files) {
+				const form = new FormData();
+				form.append("chat_id", to);
+				form.append("caption", file.name);
+				form.append("document", new Blob([Buffer.from(file.data, "base64")], { type: file.mimeType }), file.name);
+				await this.#post("sendDocument", form);
+			}
 			return;
 		}
-		form.append("chat_id", to);
 		// Chunked, not truncated — slice() silently dropped the tail of long
 		// agent replies (Telegram caps a single message at 4096 chars).
 		for (const chunk of chunkText(payload.text, TelegramChannel.TEXT_CHUNK)) {
 			const part = new FormData();
 			part.append("chat_id", to);
-			part.append("text", chunk);
-			await this.#post("sendMessage", part);
+			part.append("text", toTelegramHtml(chunk));
+			part.append("parse_mode", "HTML");
+			try {
+				await this.#post("sendMessage", part);
+			} catch {
+				// HTML entities can still trip the parser (stray < from a tool
+				// output); plain text never fails — retry once without markup.
+				const plain = new FormData();
+				plain.append("chat_id", to);
+				plain.append("text", chunk);
+				await this.#post("sendMessage", plain);
+			}
 		}
+	}
+
+	/** Native typing indicator (Telegram sendChatAction). The client shows
+	 *  "typing…" for ~5s, so an active agent turn re-arms it on a heartbeat. */
+	async startTyping(to: string): Promise<void> {
+		if (this.#state !== "connected" || this.#typingTimers.has(to)) return;
+		try {
+			await this.#sendChatAction(to, "typing");
+			const timer = setInterval(
+				() => void this.#sendChatAction(to, "typing").catch(() => {}),
+				TelegramChannel.TYPING_REFRESH_MS,
+			);
+			timer.unref?.();
+			this.#typingTimers.set(to, timer);
+		} catch {
+			// Typing is cosmetics — never block the reply path.
+		}
+	}
+
+	async stopTyping(to: string): Promise<void> {
+		const timer = this.#typingTimers.get(to);
+		if (timer) {
+			clearInterval(timer);
+			this.#typingTimers.delete(to);
+		}
+	}
+
+	async #sendChatAction(to: string, action: string): Promise<void> {
+		const form = new FormData();
+		form.append("chat_id", to);
+		form.append("action", action);
+		await this.#post("sendChatAction", form);
 	}
 
 	async #post(method: string, body: FormData): Promise<void> {
