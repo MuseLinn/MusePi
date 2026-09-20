@@ -16,12 +16,16 @@ export interface ModeLabelEntry {
  *    `modes.list` catalog：那是用户模式真名的唯一来源；
  * 3. catalog 也没有（daemon 未连接/目录过期）→ 回落 "default mode"，
  *    绝不把裸 id 打给用户。
+ *
+ * 空 id 不走兜底而直接视作 "work"：历史会话 daemon modeId 为 null，而
+ * 守护进程默认预设就是 work（与 WelcomeComposer 的 `modeId ?? "work"`
+ * 同一约定）——这些会话必须显示 "工作模式"，不是 "默认模式"。
  */
 export function resolveModeLabel(
 	modeId: string | null | undefined,
 	catalog?: readonly ModeLabelEntry[] | null,
 ): string {
-	const id = (modeId ?? "").trim();
+	const id = (modeId ?? "").trim() || "work";
 	if (!id) return t("default mode");
 	const key = `mode ${id}` as TranslationKey;
 	const label = t(key);

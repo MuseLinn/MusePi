@@ -85,7 +85,9 @@ type SessionModes = {
  * there), finally 默认模式 instead of a raw id.
  */
 function sessionModeLabel(modes: SessionModes | null | undefined, catalog?: readonly ModeLabelEntry[] | null): string {
-	if (!modes) return t("default mode");
+	// No snapshot = daemon default = work (same convention as the shared
+	// naming chain — never surface "默认模式" for a stock session).
+	if (!modes) return resolveModeLabel(null, catalog);
 	if (modes.goalMode?.enabled === true) {
 		const objective = modes.goalMode.objective?.trim();
 		return objective ? `${t("goal mode")}: ${objective}` : t("goal mode");
