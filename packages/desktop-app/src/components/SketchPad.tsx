@@ -28,13 +28,17 @@ import { Arrow, Ellipse, Image as KonvaImage, Layer, Line, Rect, Stage, Text } f
 import { useConfirm } from "../lib/prompt-dialog";
 import {
 	acceptsShapeDrag,
+	caretWrapWidth,
 	MIN_DRAG,
+	measureTextWidth,
 	outlinePoints,
 	type ShapeTool,
 	scalePoints,
 	shiftPoints,
 	strokeBox,
 	strokeExtent,
+	TEXT_DEFAULT_W,
+	TEXT_FONT_STACK,
 	type Tool,
 	textAutoBox,
 	textFontSize,
@@ -109,12 +113,6 @@ const PALETTE = [
  *  still clamp to a sane ink range. */
 const MIN_SIZE = 1;
 const MAX_SIZE = 24;
-
-/** Width a freshly planted text box starts at, in canvas pixels. Wide enough
- *  for a comfortable sentence before the first wrap, narrow enough that the
- *  caret reads as a text box rather than a banner. The user resizes it with
- *  the same corner handles every other object uses. */
-const TEXT_DEFAULT_W = 200;
 
 /** Tools sharing the flyout; the first entry is the always-visible button. */
 const SHAPE_ITEMS = [
@@ -292,8 +290,18 @@ export function SketchPad({
 	/** Text tool: where a tap planted the caret, how wide the box is, and the
 	 *  label being typed. `null` means nothing is being edited, so no overlay
 	 *  is mounted. `w` is the wrap width — the overlay grows downward as the
-	 *  text wraps, and the committed stroke inherits the resulting box. */
-	const [textEditor, setTextEditor] = useState<{ x: number; y: number; w: number; id: number | null } | null>(null);
+	 *  text wraps, and the committed stroke inherits the resulting box.
+	 *  `pinned` marks `w` as a width the USER chose (a re-edit of an existing
+	 *  label, or a corner-handle drag) rather than the generous default a new
+	 *  caret is born with: a pinned width survives the commit, an unpinned one
+	 *  auto-fits so two characters are not left in a 200px frame. */
+	const [textEditor, setTextEditor] = useState<{
+		x: number;
+		y: number;
+		w: number;
+		id: number | null;
+		pinned: boolean;
+	} | null>(null);
 	/** A text tap parked at pointerdown, planted at pointerup. See the note in
 	 *  `onPointerDown`: mounting the caret inside pointerdown lets the
 	 *  browser's own mousedown default action (focus the clicked element, or
@@ -514,7 +522,8 @@ export function SketchPad({
 		// width the caret was given (or the box a re-edit inherited), height is
 		// however many lines the text wrapped to. Typing therefore extends the
 		// box by itself, and a scale-handle drag just writes a new w/h here.
-		const fit = textAutoBox(size, value, ed.w);
+		// Measured with the real canvas metric — an estimate clips CJK labels.
+		const fit = textAutoBox(size, value, caretWrapWidth(ed, value, size), measureTextWidth);
 		if (ed.id === null) {
 			if (!value) return;
 			commit({
@@ -591,7 +600,12 @@ export function SketchPad({
 				// branch just has to run before the stroke pick below.
 				if (hit?.name() === "sk-handle" && selectedId !== null) {
 					const victim = strokes.find(s => s.id === selectedId);
-					if (victim && victim.tool !== "text") {
+					// Text included on purpose: a label carries its own
+					// rectangle now, so its corner handles scale exactly like a
+					// shape's. Leaving the old `tool !== "text"` guard here is
+					// what made the handles draw but do nothing — the hit fell
+					// through with `scaleRef` unset, so the drag was a no-op.
+					if (victim) {
 						// The anchor is the corner opposite the grabbed handle,
 						// taken from the stroke's own extent (not the padded
 						// frame) so the content corner stays visually pinned
@@ -735,7 +749,7 @@ export function SketchPad({
 		const pending = pendingTextRef.current;
 		if (pending) {
 			pendingTextRef.current = null;
-			setTextEditor({ x: pending.x, y: pending.y, w: TEXT_DEFAULT_W, id: null });
+			setTextEditor({ x: pending.x, y: pending.y, w: TEXT_DEFAULT_W, id: null, pinned: false });
 			setTextDraft("");
 			return;
 		}
@@ -783,10 +797,17 @@ export function SketchPad({
 			if (Number.isNaN(id)) return;
 			const victim = strokes.find(s => s.id === id);
 			if (victim?.tool !== "text") return;
-			// A box the user had scaled down stays the wrap width; the caret
-			// inherits it so retyping reflows inside the same rectangle.
+			// A box the user had scaled stays the wrap width; the caret
+			// inherits it as a PINNED width so retyping reflows inside the same
+			// rectangle instead of collapsing back to the default.
 			setSelectedId(id);
-			setTextEditor({ x: victim.points[0], y: victim.points[1], w: victim.points[2], id });
+			setTextEditor({
+				x: victim.points[0],
+				y: victim.points[1],
+				w: victim.points[2],
+				id,
+				pinned: true,
+			});
 			setTextDraft(victim.text ?? "");
 		},
 		[tool, strokes],
@@ -876,6 +897,10 @@ export function SketchPad({
 						y={s.points[1]}
 						text={label}
 						fontSize={textFontSize(s.size)}
+						// Painted with the exact family `measureTextWidth`
+						// measures with: a different stack would make the wrap
+						// decision and the painted lines disagree.
+						fontFamily={TEXT_FONT_STACK}
 						fill={s.color}
 						// The stored box drives the layout: `wrap="word"` keeps the
 						// label inside its width and grows downward into the height,
@@ -971,7 +996,24 @@ export function SketchPad({
 	// Konva renders text itself, but the select frame lives in a separate
 	// listener-less layer and needs the label's measured extent to draw around
 	// it — that measurement comes from the same helper the Text node uses.
-	const box = useMemo(() => (selected ? strokeBox(selected) : null), [selected]);
+	//
+	// While the caret is open the frame tracks the DRAFT, not the stroke: the
+	// stroke still holds the pre-edit box, so without this the dashed frame
+	// sits at the old size while you type and only snaps on commit.
+	const box = useMemo(() => {
+		if (textEditor) {
+			// Same wrap width the commit will use (see `closeTextEditor`), so
+			// the dashed frame tracks the label instead of snapping on commit.
+			const fit = textAutoBox(
+				size,
+				textDraft.trim(),
+				caretWrapWidth(textEditor, textDraft.trim(), size),
+				measureTextWidth,
+			);
+			return { x: textEditor.x, y: textEditor.y, w: fit.w, h: fit.h };
+		}
+		return selected ? strokeBox(selected) : null;
+	}, [selected, textEditor, textDraft, size]);
 	const activeShape = SHAPE_TOOLS.includes(tool as ShapeTool) ? (tool as ShapeTool) : null;
 	const activeShapeItem = SHAPE_ITEMS.find(item => item[0] === activeShape);
 	const ActiveShapeIcon = activeShapeItem ? activeShapeItem[1] : Shapes;
@@ -1186,10 +1228,11 @@ export function SketchPad({
 								style={{
 									left: textEditor.x,
 									top: textEditor.y,
-									// The overlay IS the box being authored: it wraps at this
-									// width and grows downward, and commit copies the result
-									// onto the stroke.
-									width: textEditor.w,
+									// Grows with the text exactly as the committed label
+									// does; `field-sizing: content` supplies the height.
+									// Shares `caretWrapWidth` with the frame and the
+									// commit, so the caret reflows where the label will.
+									width: caretWrapWidth(textEditor, textDraft.trim(), size),
 									color,
 									fontSize: textFontSize(size),
 								}}

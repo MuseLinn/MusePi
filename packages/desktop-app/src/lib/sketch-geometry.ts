@@ -153,35 +153,153 @@ export function textLineHeight(size: number): number {
 /** A text label's box when it has to auto-fit its content: as many wrapped
  *  lines as the text needs at `boxW`, and the width snapped back to the
  *  widest line (so a short label does not sit in a half-empty rectangle).
- *  The 0.62 factor approximates the average advance width of the UI sans —
- *  good enough for hit-testing, and deliberately generous. */
-export function textAutoBox(size: number, label: string, boxW: number): { w: number; h: number } {
+ *
+ *  Width comes from `measure` — a REAL canvas metric supplied by the caller.
+ *  It must not be estimated: the old `length × fontSize × 0.62` factor was a
+ *  Latin approximation, and a CJK glyph advances ~1.0em (≈1.6× wider), so six
+ *  24px 汉字 "measured" 89px while occupying ~144px. The box then clamped to
+ *  `TEXT_MIN_W` and the label rendered clipped to its first three characters.
+ *  Pass `measureTextWidth` (canvas-backed) in the app; tests inject a stub.
+ *
+ *  `boxW` is the wrap width, and it is respected in BOTH directions: text
+ *  wraps inside it, and the box does not shrink below it. Shrinking to the
+ *  widest line would silently discard a deliberate resize (drag the box wide,
+ *  retype two characters, and the width you chose would vanish) — the user's
+ *  chosen width is an instruction, not a hint. It only grows past `boxW` when
+ *  a line genuinely cannot fit (one unbreakable word), where clipping would
+ *  hide text. */
+export function textAutoBox(
+	size: number,
+	label: string,
+	boxW: number,
+	measure?: TextMeasure,
+): { w: number; h: number } {
 	const fs = textFontSize(size);
 	const line = textLineHeight(size);
-	const lines = wrapTextLines(label, Math.max(1, boxW), fs);
-	const widest = lines.reduce((max, l) => Math.max(max, l.length * fs * 0.62), 0);
-	return { w: Math.max(TEXT_MIN_W, Math.min(boxW, widest)), h: Math.max(line, lines.length * line) };
+	const limit = Math.max(TEXT_MIN_W, boxW);
+	const lines = wrapTextLines(label, limit, fs, measure);
+	const widest = lines.reduce((max, l) => Math.max(max, measureText(l, fs, measure)), 0);
+	// `ceil` because sub-pixel canvas widths clip the last glyph. The width
+	// the user chose (`limit`) is a floor, not a cap: only a line that truly
+	// cannot fit widens the box past it, because clipping would hide glyphs.
+	return {
+		w: Math.max(limit, Math.ceil(widest)),
+		h: Math.max(line, lines.length * line),
+	};
+}
+
+/**
+ * How wide `text` paints at `fontSize`, in px. The app passes a canvas-backed
+ * implementation; omitting it falls back to the Latin estimate, which is only
+ * safe for the unit tests that pin the fallback itself.
+ */
+export type TextMeasure = (text: string, fontSize: number) => number;
+
+/** Latin-average fallback. Correct enough for ASCII, badly wrong for CJK —
+ *  which is why it is no longer what the board uses. */
+const GLYPH_ADVANCE = 0.62;
+
+function measureText(text: string, fontSize: number, measure?: TextMeasure): number {
+	if (measure) return measure(text, fontSize);
+	return text.length * fontSize * GLYPH_ADVANCE;
+}
+
+/** Canvas-backed measurer, and the one source of truth for label metrics.
+ *
+ *  Konva measures through exactly this (`Shape.js` holds a single lazily-made
+ *  dummy 2d context and calls `measureText` on it), so a label measured here
+ *  and painted there agree. The context is created once and reused: making one
+ *  per call is the difference between a keystroke and a stutter. */
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/** Lazily make (once) the offscreen 2d context the metrics come from. Returns
+ *  null whenever a canvas is unavailable — no `document`, or a stubbed DOM
+ *  whose `getContext` is missing — because this runs inside the render path of
+ *  a component that unit tests also import. */
+function textMetricsContext(): CanvasRenderingContext2D | null {
+	if (measureCtx !== undefined) return measureCtx;
+	try {
+		if (typeof document === "undefined") {
+			measureCtx = null;
+			return null;
+		}
+		const canvas = document.createElement("canvas");
+		measureCtx = typeof canvas?.getContext === "function" ? canvas.getContext("2d") : null;
+	} catch {
+		measureCtx = null;
+	}
+	return measureCtx;
+}
+
+export function measureTextWidth(text: string, fontSize: number): number {
+	const ctx = textMetricsContext();
+	// No canvas to measure with: fall back to the estimate rather than
+	// throwing. A throw here would take the whole board down on commit.
+	if (!ctx || typeof ctx.measureText !== "function") {
+		return text.length * fontSize * GLYPH_ADVANCE;
+	}
+	const prev = ctx.font;
+	// MUST be the same family string the Konva node paints with — if these
+	// drift, a wrap decision is made against metrics the canvas will not use
+	// and the stored box disagrees with the painted lines.
+	ctx.font = `${fontSize}px ${TEXT_FONT_STACK}`;
+	const w = ctx.measureText(text).width;
+	ctx.font = prev;
+	return Number.isFinite(w) ? w : text.length * fontSize * GLYPH_ADVANCE;
+}
+
+/** The UI sans stack the label paints and measures with. */
+export const TEXT_FONT_STACK = "system-ui, -apple-system, 'Segoe UI', sans-serif";
+
+/** Width a freshly planted text box starts at, in canvas pixels. Wide enough
+ *  for a comfortable sentence before the first wrap, narrow enough that the
+ *  caret reads as a text box rather than a banner. */
+export const TEXT_DEFAULT_W = 200;
+
+/** Widest line of a label, i.e. the width it needs if it never wraps. Drives
+ *  the auto-fit of a new caret's box, so a short label gets a snug frame
+ *  instead of the full default. */
+export function singleLine(label: string): string {
+	return label.split("\n").reduce((longest, line) => (line.length > longest.length ? line : longest), "");
+}
+
+/** Wrap width for a caret: a PINNED width is the one the user chose (a
+ *  re-edit, or a corner-handle drag) and is kept verbatim; an unpinned one — a
+ *  brand-new caret — auto-fits its longest line, CAPPED at `TEXT_DEFAULT_W`.
+ *
+ *  That cap is the whole point: without it a long sentence would keep widening
+ *  its own box instead of wrapping, so a text box could never grow downward.
+ *  The textarea, the dashed frame and the commit all call this, which is what
+ *  keeps the caret reflowing exactly where the label will. */
+export function caretWrapWidth(
+	editor: { w: number; pinned: boolean },
+	label: string,
+	size: number,
+	measure?: TextMeasure,
+): number {
+	if (editor.pinned) return Math.max(TEXT_MIN_W, editor.w);
+	const fitted = measureText(singleLine(label), textFontSize(size), measure);
+	return Math.max(TEXT_MIN_W, Math.min(TEXT_DEFAULT_W, Math.ceil(fitted)));
 }
 
 /** Minimum width of a text box — narrow enough to wrap a sentence, wide
  *  enough that the caret/placeholder remain visible on an empty label. */
 export const TEXT_MIN_W = 60;
 
-/** Average advance width of the UI sans as a fraction of the glyph size —
- *  the one constant the hit box and the wrap estimate share. */
-const GLYPH_ADVANCE = 0.62;
-
 /**
- * Greedy word wrap, measured in the same generous advance the hit box uses.
- * Konva does the real wrapping at paint time; this exists so the stored box
- * and the select frame track the rendered line count without a canvas (the
- * geometry half of this file must stay assertable in a unit test).
+ * Greedy word wrap, measured with the same `measure` the box uses. Konva does
+ * the real wrapping at paint time; this exists so the stored box and the
+ * select frame track the rendered line count without a canvas.
  *
- * A single word longer than the box gets its own line rather than being
- * broken — Konva's `word` wrap does the same, so the counts agree.
+ * Wrapping is decided per character, not per word: a CJK sentence has no
+ * spaces at all, so a word-only splitter would leave it on one endless line
+ * (the original bug). Latin words still break at spaces; a word that does not
+ * fit an empty line is emitted whole rather than hyphenated, which is what
+ * Konva's `wrap="word"` does and therefore what keeps the line counts equal.
  */
-export function wrapTextLines(label: string, boxW: number, fontSize: number): string[] {
-	const perChar = Math.max(1, boxW) / (fontSize * GLYPH_ADVANCE);
+export function wrapTextLines(label: string, boxW: number, fontSize: number, measure?: TextMeasure): string[] {
+	const limit = Math.max(1, boxW);
+	const fit = (s: string): boolean => measureText(s, fontSize, measure) <= limit;
 	const out: string[] = [];
 	// Explicit newlines force a break regardless of wrapping.
 	for (const paragraph of String(label).split("\n")) {
@@ -190,28 +308,79 @@ export function wrapTextLines(label: string, boxW: number, fontSize: number): st
 			continue;
 		}
 		let current = "";
-		for (const word of paragraph.split(/(\s+)/)) {
-			if (word === "") continue;
-			const candidate = current + word;
-			if (candidate.length <= perChar || current === "") {
-				current = candidate;
+		for (const word of segmentWords(paragraph)) {
+			// An empty line accepts the unit unconditionally: a unit wider than
+			// the whole box still has to start somewhere, and refusing it would
+			// spin making no progress. Checking `fit` FIRST (not `current === ""`)
+			// is what keeps a long line wrapping instead of growing forever.
+			if (current === "" || fit(current + word)) {
+				current += word;
 				continue;
 			}
-			out.push(current.trimEnd());
-			current = word.trimStart();
+			out.push(current);
+			current = word;
 		}
-		out.push(current.trimEnd());
+		if (current !== "") out.push(current);
 	}
 	return out.length > 0 ? out : [""];
 }
 
 /**
+ * Split a paragraph into the units wrapping may break between. A run of
+ * spaces rides with the following text (so it never starts a line); CJK
+ * characters break individually because there is no space to break at; Latin
+ * words stay whole.
+ */
+function segmentWords(paragraph: string): string[] {
+	const out: string[] = [];
+	let latin = "";
+	for (const ch of paragraph) {
+		if (isCjk(ch) || ch === " ") {
+			if (latin !== "") {
+				out.push(latin);
+				latin = "";
+			}
+			out.push(ch);
+			continue;
+		}
+		latin += ch;
+	}
+	if (latin !== "") out.push(latin);
+	// Attach trailing spaces to the next unit so a wrapped line never begins
+	// with the space that caused the break.
+	const merged: string[] = [];
+	for (const unit of out) {
+		if (unit === " " && merged.length > 0) {
+			merged[merged.length - 1] += unit;
+			continue;
+		}
+		merged.push(unit);
+	}
+	return merged;
+}
+
+/** CJK ideographs, kana, Hangul and the fullwidth forms — the scripts that
+ *  advance ~1em per glyph and carry no spaces to wrap at. */
+function isCjk(ch: string): boolean {
+	const c = ch.codePointAt(0) ?? 0;
+	return (
+		(c >= 0x3040 && c <= 0x30ff) || // kana
+		(c >= 0x3400 && c <= 0x4dbf) || // CJK ext A
+		(c >= 0x4e00 && c <= 0x9fff) || // CJK unified
+		(c >= 0xac00 && c <= 0xd7af) || // Hangul
+		(c >= 0xf900 && c <= 0xfaff) || // compatibility ideographs
+		(c >= 0xff00 && c <= 0xff60) || // fullwidth forms
+		(c >= 0x20000 && c <= 0x2fa1f) // ext B+
+	);
+}
+
+/**
  * Unpadded extent of a stroke's own coordinates. Shapes are the min/max of
- * their two corners, pen walks the triplets, and text contributes only its
- * anchor (the label extent is `strokeBox`'s concern). The select tool's
- * scale handles take their anchor — the corner opposite the grabbed one —
- * from this rather than from the padded frame, so the content corner the
- * user is dragging away from stays visually pinned during the scale.
+ * their two corners, pen walks the triplets, and text and image both return
+ * their own `[x, y, w, h]` box. The select tool's scale handles take their
+ * anchor — the corner opposite the grabbed one — from this rather than from
+ * the padded frame, so the content corner the user is dragging away from
+ * stays visually pinned during the scale.
  */
 export function strokeExtent(s: { tool: Tool; points: readonly number[] }): Rect {
 	// Text and image both store their own box: [x, y, width, height]. The

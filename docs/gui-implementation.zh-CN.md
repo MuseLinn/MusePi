@@ -601,8 +601,18 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 
 ## 37. 文字标签是一个盒子而非锚点：随文本自动增高，且与图形一样可缩放（2026-09-20）
 
-- **文本笔画现在持有真实矩形——`[x, y, w, h]` 而不是 `[x, y]`**（`lib/sketch-geometry.ts` + `components/SketchPad.tsx`）：旧实现只存一个锚点，宽度每次渲染都由 `label.length * fontSize * 0.62` 重算，于是一整句话永远是单行、直接冲出画板、高度永不增长。现在 `textAutoBox(size, label, boxW)` 把文本交给 `wrapTextLines` 量一遍（贪心断词，`\n` 强制断行，超长单词独占一行）后返回适配的 `{ w, h }`：宽度回缩到最宽行（上限是用户拖出的盒宽），高度为 `行数 × textFontSize(size) × 1.25`。`textLineHeight` 是唯一的行高来源：Konva 节点以 `wrap="word"` + 同一个 `1.25` 渲染，所以「画出来的文本」与「量出来的盒子」不可能对不上。
-- **标签与其他对象共用角手柄**（`SketchPad.tsx`）：缩放手柄层过去用 `selected?.tool !== "text"` 把关，这就是文字唯独不能缩放的原因。现在 `strokeExtent` 给文本与图片相同的 `{x, y, w, h}` 分支，`scalePoints` 对其原点做仿射、对边长乘原始因子，`shiftPoints` 只移原点——文字因此走的是与图形**完全相同**的拖动/缩放/擦除代码路径，没有一处文字专属的缩放数学可供漂移。
-- **编辑改为双击**（单击标签过去会直接打开插入符，让文字成了唯一拖不动的对象）：现在首次点击与任何对象一样是选中＋拖动，`onDblClick` 才在该标签自身的盒子上重建 `<textarea>`（`textEditor` 新增 `w`，既有标签取 `points[2]`、新建取 `TEXT_DEFAULT_W`）。`closeTextEditor` 对插入与编辑两种情形都把量好的盒子写回 `points`。
+- **文本笔画现在持有真实矩形——`[x, y, w, h]` 而不是 `[x, y]`**（`lib/sketch-geometry.ts` + `components/SketchPad.tsx`）：旧实现只存一个锚点，宽度每次渲染都由 `label.length * fontSize * 0.62` 重算，于是一整句话永远是单行、直接冲出画板、高度永不增长。现在 `textAutoBox(size, label, boxW)` 把文本交给 `wrapTextLines` 量一遍后返回适配的 `{ w, h }`，高度为 `行数 × textFontSize(size) × 1.25`。**宽度策略与度量来源在 §38 定稿**（`0.62` 估算与「回缩到最宽行」都已被取代——前者截断中文，后者会丢掉用户拖出的宽度）。`textLineHeight` 是唯一的行高来源：Konva 节点以 `wrap="word"` + 同一个 `1.25` 渲染，所以「画出来的文本」与「量出来的盒子」不可能对不上。
+- **标签与其他对象共用角手柄**（`SketchPad.tsx`）：缩放手柄层过去用 `selected?.tool !== "text"` 把关，这就是文字唯独不能缩放的原因。现在 `strokeExtent` 给文本与图片相同的 `{x, y, w, h}` 分支，`scalePoints` 对其原点做仿射、对边长乘原始因子，`shiftPoints` 只移原点——文字因此走的是与图形**完全相同**的拖动/缩放/擦除代码路径，**注意这个闸门有两处**（渲染层与 `onPointerDown`），§38 记录了只删一处导致「手柄能画、拖不动」的教训。
+- **编辑改为双击**（单击标签过去会直接打开插入符，让文字成了唯一拖不动的对象）：现在首次点击与任何对象一样是选中＋拖动，`onDblClick` 才在该标签自身的盒子上重建 `<textarea>`（`textEditor` 带 `w` 与 `pinned`，既有标签取 `points[2]` 并钉住、新建取 `TEXT_DEFAULT_W` 且自适应）。`closeTextEditor` 对插入与编辑两种情形都把量好的盒子写回 `points`。
 - **编辑浮层真正会换行增高**（`styles/gui-composer.css`）：`.gui-sketch-text-input` 为 `min-width: 60px` / `max-width: min(420px, 90%)` / `max-height: 60vh`，配 `white-space: pre-wrap` + `overflow-wrap: break-word`（原为 `white-space: pre`、90px 下限、320px 上限）——浮层随输入字符增高，而不是让一行无限横向滚下去。
 - **旧的两位数字标签原地迁移**（`lib/sketch-scene.ts`）：`expectedPointCount("text")` 改为 4，`parseStroke` 用 `legacyTextBox(x, y, label, size)` 升级存量 `[x, y]`——此处**必须先清空 `points` 再 push**：把 4 数盒子追加到已有的 2 数锚点会得到 6 数的 `[x, y, x, y, w, h]`，之后每一次 `strokeExtent` 都会读错角点。`strokeBox` 去掉了 `text` 参数：文本与图片一样返回自身矩形，不加 padding。单测：`test/sketch-geometry.test.ts`（`textAutoBox` / `wrapTextLines` / `textFontSize` / 四数 `strokeExtent` / `scalePoints` ×2）与 `test/sketch-scene.test.ts`（四数往返、旧锚点迁移）。
+
+## 38. 文本度量来自画布，而不是估算（2026-09-20）
+
+- **`0.62` 的字宽估算把每一条中文标签都截断了**（`lib/sketch-geometry.ts`）：盒宽用 `字符数 × 字号 × 0.62`，那是拉丁文的平均值。汉字步进约 1.0em，宽了约 1.6 倍——六个 24px 汉字「估算」出 89px，实际占 ~144px。于是盒子被夹到 `TEXT_MIN_W`，Konva 把标签画成只露前三个字（用户反馈：「我输入了六个字了但文本框只显示三个」）。现在宽度取自**真实画布度量**：`measureTextWidth(text, fontSize)` 持有一个懒创建的后台 2d context 并调用 `measureText`——这正是 Konva 自己的 `Text._getTextWidth` 经由 `Shape.js` 那个唯一的 dummy context 所做的操作，所以盒子和实际绘制出的行从构造上就一致。`wrapTextLines` / `textAutoBox` / `caretWrapWidth` 接受可选的 `TextMeasure`，几何模块因此保持无画布、可单测（测试注入模拟真实中英比例的桩）；不传则回落到旧估算，供迁移路径使用。
+- **文字要在「两处」按工具把关的地方都补上**——渲染层**和** `onPointerDown`：上一轮从手柄渲染条件里删掉了 `selected?.tool !== "text"`，却在缩放拖动分支里留下了同一个闸门，于是角手柄画出来了、拖了却毫无反应（命中后 `scaleRef` 没被赋值就返回了）。今后任何按工具的把关都必须从这两半同时移除，否则手柄只是装饰。
+- **用户选定的宽度是指令，不是提示**——`textAutoBox` 把 `boxW` 同时当作**下限**与换行上限。只有某一行真的放不下（一个不可断的长词）才会超出它，因为那时截断会藏起字形。若回缩到最宽行，就会静默丢弃一次刻意的缩放：把盒子拖宽、重打两个字，宽度就没了。
+- **`caretWrapWidth` 是三个表面唯一的宽度策略**（编辑浮层、虚线选中框、提交）：**钉住**的宽度（`textEditor.pinned`——重编辑既有标签，或拖过角手柄）原样保留；未钉住的（全新建的插入符）自适应到最长一行，**上限为 `TEXT_DEFAULT_W`**。没有这个上限，长句子会不断把自己的盒子撑宽而永不换行——那正是「盒子不跟文字走」这个 bug 换了张皮。一个表达式、三个调用点，所以插入符换行的位置就是标签将要换行的位置。
+- **文字标签按字断行，而不是按词**（`wrapTextLines`）：中文没有空格，只按词切分会让整句中文永远停在一行。`segmentWords` 保留拉丁词完整、在中文字之间断开，并把连续空格挂到它**前面**的单元上（这样换行后的行不会以造成断行的空格开头）。超长的单词独占一行，与 Konva 的 `wrap="word"` 一致。
+- **字体是一个共享常量，画布字体每次调用都要设**：`TEXT_FONT_STACK` 同时交给 Konva `Text` 节点的 `fontFamily` 与度量的 `ctx.font`，`.gui-sketch-text-input` 在 CSS 里用同一栈——浮层此前解析的是 `font: inherit`（composer 的字体，不是标签的），所以一提交就能看出文字重排。度量在无画布时（单测，或 `getContext` 缺失的桩 DOM）降级而非抛错：在那里抛错会让整个画板在提交时崩掉。
+- **`measureTextWidth` 会在渲染中被调用，所以必须便宜**：context 只创建一次，且每次度量后恢复原先的 `ctx.font`——这是「一次按键」与「一次卡顿」的区别。

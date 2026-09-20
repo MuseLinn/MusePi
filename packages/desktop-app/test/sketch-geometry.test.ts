@@ -1,20 +1,42 @@
 import { describe, expect, it } from "bun:test";
 import {
 	acceptsShapeDrag,
+	caretWrapWidth,
 	dragBox,
 	hasVisibleExtent,
 	heartPoints,
 	isDegenerateDrag,
+	measureTextWidth,
 	outlinePoints,
 	scalePoints,
 	shiftPoints,
+	singleLine,
 	starOuterPoints,
 	strokeBox,
 	strokeExtent,
+	TEXT_DEFAULT_W,
+	TEXT_MIN_W,
 	textAutoBox,
 	textFontSize,
+	textLineHeight,
 	wrapTextLines,
 } from "../src/lib/sketch-geometry";
+
+/**
+ * Measurer stubs. The real one is canvas-backed (`measureTextWidth`), which a
+ * unit test has no canvas for; these model the same ratios the UI sans shows,
+ * and their whole purpose is that CJK be measured WIDER than Latin per glyph —
+ * the property whose absence clipped six-character Chinese labels.
+ */
+const latinMeasure = (text: string, fontSize: number): number => text.length * fontSize * 0.62;
+const cjkMeasure = (text: string, fontSize: number): number => {
+	let w = 0;
+	for (const ch of text) {
+		const c = ch.codePointAt(0) ?? 0;
+		w += fontSize * (c >= 0x2e80 && c <= 0x9fff ? 1 : 0.5);
+	}
+	return w;
+};
 
 /** SketchPad shape-maths contract (Codex-parity pass, 2026-09-19).
  *
@@ -277,49 +299,167 @@ describe("textAutoBox / textFontSize", () => {
 	});
 
 	it("wraps a long label into multiple lines and grows the height", () => {
-		const oneLine = textAutoBox(4, "hello", 200);
-		const manyLines = textAutoBox(4, "hello ".repeat(20), 200);
+		const oneLine = textAutoBox(4, "hello", 200, latinMeasure);
+		const manyLines = textAutoBox(4, "hello ".repeat(20), 200, latinMeasure);
 		expect(manyLines.h).toBeGreaterThan(oneLine.h);
 	});
 
-	it("snaps the width back to the widest wrapped line", () => {
-		// A short label must not sit in a half-empty 200px rectangle.
-		const box = textAutoBox(4, "hi", 200);
-		expect(box.w).toBeLessThan(200);
-		expect(box.w).toBeGreaterThanOrEqual(60);
+	it("KEEPS the width the user chose, even for a label far narrower", () => {
+		// The behaviour this pins: a box dragged wide must not collapse back
+		// to the widest line just because the label got shorter. Silently
+		// discarding a deliberate resize makes the handles feel broken — you
+		// size the box, retype two characters, and your size is gone.
+		const box = textAutoBox(4, "hi", 400, latinMeasure);
+		expect(box.w).toBe(400);
 	});
 
-	it("never exceeds the wrap width it was given", () => {
-		const box = textAutoBox(4, "averyveryverylongsinglewordthatcannotwrap", 80);
-		expect(box.w).toBeLessThanOrEqual(80);
+	it("KEEPS a deliberately narrowed width instead of resetting to the floor", () => {
+		// Drag the box narrower than the text and the text must wrap inside
+		// that width — not spring back out to a wider default.
+		const box = textAutoBox(4, "hello world again", 80, latinMeasure);
+		expect(box.w).toBe(80);
+		expect(box.h).toBeGreaterThan(textLineHeight(4));
+	});
+
+	it("WIDENS past the wrap width rather than clipping an unbreakable word", () => {
+		// The regression this pins: capping the box down to `boxW` made the
+		// frame report less width than Konva paints, so the label was cut off.
+		// A box too narrow to hold any break is widened to the line.
+		const word = "averyveryverylongsinglewordthatcannotwrap";
+		const natural = latinMeasure(word, textFontSize(4));
+		const box = textAutoBox(4, word, 80, latinMeasure);
+		expect(natural).toBeGreaterThan(80);
+		expect(box.w).toBeGreaterThanOrEqual(Math.ceil(natural));
+	});
+
+	it("gives a six-CJK-glyph label a box wide enough to show all six", () => {
+		// The user's bug: six 汉字 were drawn but only three were visible,
+		// because the old `length × 0.62` estimate under-measured CJK (real
+		// advance is ~1em) and the box clamped to the 60px floor while the
+		// label painted ~1.6× wider. Measured for real, six 24px glyphs need
+		// ~144px and the box must hold them.
+		const label = "哈哈哈哈哈哈";
+		const fs = textFontSize(6);
+		const box = textAutoBox(6, label, 200, cjkMeasure);
+		expect(cjkMeasure(label, fs)).toBeGreaterThan(60);
+		expect(box.w).toBeGreaterThanOrEqual(Math.ceil(cjkMeasure(label, fs)));
+		// One line: 144px fits the 200px limit, so it must not be wrapped.
+		expect(box.h).toBe(textLineHeight(6));
+	});
+
+	it("does not wrap when the measured label fits the box", () => {
+		expect(wrapTextLines("哈哈哈哈哈哈", 200, 24, cjkMeasure)).toEqual(["哈哈哈哈哈哈"]);
 	});
 
 	it("honours an explicit newline as a line break", () => {
-		const flat = textAutoBox(4, "a b", 400);
-		const broken = textAutoBox(4, "a\nb", 400);
+		const flat = textAutoBox(4, "a b", 400, latinMeasure);
+		const broken = textAutoBox(4, "a\nb", 400, latinMeasure);
 		expect(broken.h).toBeGreaterThan(flat.h);
 	});
 
 	it("gives an empty label a tappable minimum", () => {
-		const { w, h } = textAutoBox(4, "", 200);
-		expect(w).toBe(60);
+		// A brand-new caret is seeded with TEXT_DEFAULT_W; an empty label is
+		// still held to the interactive floor so it can be clicked and typed at.
+		const { w, h } = textAutoBox(4, "", 200, latinMeasure);
+		expect(w).toBe(200);
 		expect(h).toBe(20); // fs 16 → one 1.25 line box
+		expect(TEXT_MIN_W).toBeLessThanOrEqual(w);
+	});
+
+	it("falls back to the estimate only when no measurer is supplied", () => {
+		// The Latin estimate stays for callers with no canvas (the migration
+		// path in sketch-scene.ts). It must still answer, and it must agree
+		// with the stub for a pure-ASCII string.
+		const viaStub = textAutoBox(4, "hello", 200, latinMeasure);
+		const viaFallback = textAutoBox(4, "hello", 200);
+		expect(viaFallback.w).toBe(viaStub.w);
+	});
+
+	it("falls back to the estimate without a DOM, and never throws", () => {
+		// `measureTextWidth` is canvas-backed, so under a test runner (no
+		// `document`) it must degrade rather than crash — the board is also
+		// imported by unit tests.
+		const w = measureTextWidth("哈哈哈哈哈哈", 24);
+		expect(Number.isFinite(w)).toBe(true);
+		expect(w).toBeGreaterThan(0);
+		// The estimate stays the ASCII-correct 0.62 factor.
+		expect(measureTextWidth("hello", 16)).toBeCloseTo(5 * 16 * 0.62, 5);
 	});
 });
 
 describe("wrapTextLines", () => {
 	it("breaks on spaces once the line is full", () => {
-		const lines = wrapTextLines("aaa bbb ccc ddd", 40, 16);
+		const lines = wrapTextLines("aaa bbb ccc ddd", 40, 16, latinMeasure);
 		expect(lines.length).toBeGreaterThan(1);
-		expect(lines.join(" ")).toContain("aaa");
+		expect(lines.join("")).toContain("aaa");
 	});
 
 	it("keeps a single over-long word on its own line", () => {
-		expect(wrapTextLines("supercalifragilistic", 20, 16)).toEqual(["supercalifragilistic"]);
+		expect(wrapTextLines("supercalifragilistic", 20, 16, latinMeasure)).toEqual(["supercalifragilistic"]);
 	});
 
 	it("preserves blank lines from explicit newlines", () => {
-		expect(wrapTextLines("a\n\nb", 400, 16)).toEqual(["a", "", "b"]);
+		expect(wrapTextLines("a\n\nb", 400, 16, latinMeasure)).toEqual(["a", "", "b"]);
+	});
+
+	it("wraps a spaced CJK-free sentence that overflows the box", () => {
+		// The unbounded-growth bug: the old loop short-circuited on an empty
+		// line and never consulted the width, so every sentence stayed on one
+		// endless line. 324px of text into a 200px box must break up.
+		const lines = wrapTextLines("hello world foo bar baz qux", 200, 24, latinMeasure);
+		expect(lines.length).toBeGreaterThan(1);
+		// Nothing is lost: the wrap only inserts breaks at the spaces.
+		expect(lines.join("").replace(/\s+/g, " ").trim()).toBe("hello world foo bar baz qux");
+	});
+
+	it("breaks CJK per glyph, since there is no space to break at", () => {
+		// 12 CJK at 24px = 288px; into a 200px box that is two lines.
+		const label = "你好世界一二三四五六七八";
+		const lines = wrapTextLines(label, 200, 24, cjkMeasure);
+		expect(lines.length).toBe(2);
+		// A CJK line has no spaces to break at, so each line is a run of glyphs
+		// and every character survives.
+		expect(lines.join("")).toBe(label);
+	});
+
+	it("never drops a character while wrapping", () => {
+		const label = "你好世界一二三四五六七八";
+		expect(wrapTextLines(label, 200, 24, cjkMeasure).join("")).toBe(label);
+	});
+});
+
+describe("caretWrapWidth / singleLine", () => {
+	it("picks the widest line, ignoring shorter ones", () => {
+		expect(singleLine("ab\nabcdef\nabc")).toBe("abcdef");
+		expect(singleLine("solo")).toBe("solo");
+		expect(singleLine("")).toBe("");
+	});
+
+	it("keeps a pinned width even when the label is far narrower", () => {
+		// The user dragged the box; that width is an instruction, not a hint.
+		expect(caretWrapWidth({ w: 400, pinned: true }, "hi", 4, latinMeasure)).toBe(400);
+	});
+
+	it("holds a pinned width to the interactive floor", () => {
+		expect(caretWrapWidth({ w: 10, pinned: true }, "hi", 4, latinMeasure)).toBe(TEXT_MIN_W);
+	});
+
+	it("auto-fits an unpinned caret to its longest line", () => {
+		const w = caretWrapWidth({ w: TEXT_DEFAULT_W, pinned: false }, "hi", 4, latinMeasure);
+		expect(w).toBeGreaterThanOrEqual(TEXT_MIN_W);
+		expect(w).toBeLessThan(TEXT_DEFAULT_W);
+	});
+
+	it("CAPS an unpinned caret at the default, so text wraps instead of widening", () => {
+		// Without this cap a long sentence kept growing its own box and never
+		// wrapped — "the box does not follow the text" wearing a new hat.
+		const long = "这是一句很长的话需要换行显示出来再长一点";
+		const w = caretWrapWidth({ w: TEXT_DEFAULT_W, pinned: false }, long, 6, cjkMeasure);
+		expect(w).toBe(TEXT_DEFAULT_W);
+	});
+
+	it("starts an empty caret at the floor, not the full default", () => {
+		expect(caretWrapWidth({ w: TEXT_DEFAULT_W, pinned: false }, "", 4, latinMeasure)).toBe(TEXT_MIN_W);
 	});
 });
 

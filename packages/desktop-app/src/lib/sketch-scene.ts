@@ -20,16 +20,25 @@
  * that outlived a format change.
  */
 
-import { type Tool, textAutoBox } from "./sketch-geometry";
+import { TEXT_MIN_W, type TextMeasure, type Tool, textAutoBox, textFontSize } from "./sketch-geometry";
 
 /** Box a legacy two-number text anchor migrates to. The old format measured
  *  its label at paint time with no wrap width, so the closest honest reading
  *  is "one line, no wrapping" — a width generous enough to hold the label
- *  without reflowing it, which is exactly how it looked before the change. */
-function legacyTextBox(x: number, y: number, label: string, size: number): [number, number, number, number] {
-	const fs = Math.max(14, size * 4);
-	const natural = Math.max(60, label.length * fs * 0.62);
-	const fit = textAutoBox(size, label, natural);
+ *  without reflowing it, which is exactly how it looked before the change.
+ *  `measure` is optional so this module stays canvas-free; without it the
+ *  label falls back to the Latin estimate, which under-measures CJK and can
+ *  therefore wrap a migrated Chinese label that used to sit on one line. */
+function legacyTextBox(
+	x: number,
+	y: number,
+	label: string,
+	size: number,
+	measure?: TextMeasure,
+): [number, number, number, number] {
+	const fs = textFontSize(size);
+	const natural = Math.max(TEXT_MIN_W, (measure ?? ((t, s) => t.length * s * 0.62))(label, fs));
+	const fit = textAutoBox(size, label, natural, measure);
 	return [x, y, Math.max(natural, fit.w), fit.h];
 }
 
@@ -40,7 +49,7 @@ export interface SketchStroke {
 	tool: Exclude<Tool, "eraser">;
 	color: string;
 	size: number;
-	/** pen: flat [x,y,pressure,…]; shapes: [x0,y0,x1,y1]; text: [x,y] anchor;
+	/** pen: flat [x,y,pressure,…]; shapes: [x0,y0,x1,y1]; text: [x,y,w,h] box;
 	 *  image: [x,y,width,height]. */
 	points: number[];
 	/** text only: the label. */
