@@ -106,12 +106,21 @@ const easeOutBack = (t: number): number => {
 const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t));
 
 /**
- * Build the body's transform for this frame. `elapsed` is time since the
- * mood was entered (one-shot entrances need it); loops read it too so two
- * pets on screen never pulse in lockstep. `strength` is the user's motion
- * preference — 0 holds the body perfectly still.
+ * Build the body's transform for this frame. `elapsed` is the PERSISTENT
+ * loop clock — it keeps running across mood/interaction switches so sine
+ * loops never jump mid-arc; `entryElapsed` is time since the current state
+ * was entered and drives the one-shot entrances (`enter`/`settle`), which
+ * must replay per arrival. Defaults to `elapsed` for callers that don't
+ * track an entry clock. `strength` is the user's motion preference — 0
+ * holds the body perfectly still.
  */
-export function motionTransform(motion: BodyMotion, elapsed: number, strength: number, box: number): string {
+export function motionTransform(
+	motion: BodyMotion,
+	elapsed: number,
+	strength: number,
+	box: number,
+	entryElapsed: number = elapsed,
+): string {
 	if (strength <= 0) return "";
 	const centre = box / 2;
 	const ground = box;
@@ -156,11 +165,11 @@ export function motionTransform(motion: BodyMotion, elapsed: number, strength: n
 	}
 	if (motion.enter) {
 		const [from, duration] = motion.enter;
-		const t = elapsed / duration;
+		const t = entryElapsed / duration;
 		scale *= t >= 1 ? 1 : from + (1 - from) * easeOutBack(Math.max(t, 0));
 	}
 	if (motion.settle !== undefined) {
-		const t = Math.min(Math.max(elapsed / SETTLE_MS, 0), 1);
+		const t = Math.min(Math.max(entryElapsed / SETTLE_MS, 0), 1);
 		scale *= 1 + (motion.settle - 1) * easeInOut(t) * strength;
 	}
 	if (motion.scale !== undefined) scale *= 1 + (motion.scale - 1) * strength;

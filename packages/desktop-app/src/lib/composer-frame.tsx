@@ -2,6 +2,7 @@ import { ImageLightbox, t } from "@musepi/guest-client";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
+import { type PetInteraction, randomPetInteraction } from "./pet";
 
 /**
  * Shared composer container (welcome + in-session parity): one frame shell
@@ -97,29 +98,32 @@ export interface ComposerPetState {
 	hovered: boolean;
 	/** True for the duration of the poke animation. */
 	hopping: boolean;
-	/** Poke count within the current attention window — the caller reads it to
-	 *  escalate the reaction (first poke startles, a quick repeat delights;
-	 *  petting it forever should not loop the same face). */
-	pokes: number;
+	/** The transient click reaction — a random pick from the FULL
+	 *  interaction set, never the same one twice in a row (see
+	 *  randomPetInteraction). Null once the hold expires; the caller
+	 *  passes it straight to PetSprite's `interaction`. */
+	reaction: PetInteraction | null;
 }
 
 /** Box width under which the mouth stroke stops resolving (see gui-pet.css). */
 const MICRO_BOX_PX = 46;
-/** Two pokes closer together than this escalate the reaction (startle →
- *  delight). Longer than the hop ends, so a deliberate second poke always
- *  reads as "again!" while an accidental double-tap still merges. */
-const POKE_COMBO_MS = 900;
+/** How long a click reaction holds before the live mood shows through
+ *  again. Matches the chat avatar's hold: the composer pet is small, its
+ *  faces read slowly. */
+const REACTION_HOLD_MS = 1500;
 
 function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState) => ReactNode) }): ReactNode {
 	const [hovered, setHovered] = useState(false);
 	const [hopping, setHopping] = useState(false);
 	const ref = useRef<HTMLDivElement | null>(null);
 	const [micro, setMicro] = useState(false);
-	// Poke escalation. `pokes` resets on a pause, so the count is always
-	// "pokes in the last POKE_COMBO_MS" rather than a lifetime total.
-	const [pokes, setPokes] = useState(0);
-	const lastPokeRef = useRef(0);
-	const pokeTimerRef = useRef<number | null>(null);
+	// The click reaction: a random pick from the FULL interaction set (the
+	// old two-face startle/delight escalation was the "limited reactions"
+	// complaint), never the same one twice in a row. Local + transient by
+	// contract — a reaction is a gesture, never session state.
+	const [reaction, setReaction] = useState<PetInteraction | null>(null);
+	const lastReaction = useRef<PetInteraction | null>(null);
+	const reactionTimer = useRef<number | null>(null);
 
 	useEffect(() => {
 		const el = ref.current;
@@ -134,7 +138,7 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 
 	useEffect(
 		() => () => {
-			if (pokeTimerRef.current !== null) window.clearTimeout(pokeTimerRef.current);
+			if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
 		},
 		[],
 	);
@@ -157,11 +161,11 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 				// `click` still fires, so the poke action is unaffected.
 				e.preventDefault();
 				setHopping(true);
-				const now = performance.now();
-				setPokes(now - lastPokeRef.current <= POKE_COMBO_MS ? p => Math.min(p + 1, 4) : 1);
-				lastPokeRef.current = now;
-				if (pokeTimerRef.current !== null) window.clearTimeout(pokeTimerRef.current);
-				pokeTimerRef.current = window.setTimeout(() => setPokes(0), POKE_COMBO_MS);
+				const pick = randomPetInteraction(lastReaction.current);
+				lastReaction.current = pick;
+				setReaction(pick);
+				if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
+				reactionTimer.current = window.setTimeout(() => setReaction(null), REACTION_HOLD_MS);
 			}}
 			onAnimationEnd={e => {
 				// Only the hop's own animation should clear the flag; the
@@ -169,7 +173,7 @@ function ComposerPet({ children }: { children: ReactNode | ((s: ComposerPetState
 				if (e.animationName === "gui-pet-composer-hop") setHopping(false);
 			}}
 		>
-			{typeof children === "function" ? children({ hovered, hopping, pokes }) : children}
+			{typeof children === "function" ? children({ hovered, hopping, reaction }) : children}
 		</div>
 	);
 }

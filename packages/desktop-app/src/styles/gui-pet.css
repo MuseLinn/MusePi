@@ -116,20 +116,6 @@
 	stroke-width: 6.5;
 }
 
-/* Deep-edge limb shade: on a BRIGHT accent ball the limb wants shading,
- * not a light — the old cool-blue rim light read as a glued-on highlight
- * (and contributed to the ball reading as a dark mismatched object). The
- * variable hook (lib/pet-palette.ts --gui-pet-rim) sets a deep shade of
- * the live accent; the literal is the brand-gold dark derivation's rim.
- * Always on — unlike the gloss family this is not decoration, it is what
- * gives the sphere its terminator. */
-.gui-pet-svg__rim {
-	fill: none;
-	stroke: var(--gui-pet-rim, rgba(122, 78, 14, 0.5));
-	stroke-width: 3.2;
-	stroke-linecap: round;
-}
-
 /* ── Surface shading (optional — see lib/pet-decor.ts) ─────────────────
  * Crown gloss, catch-light and the drifting specular sweep. The one
  * decoration that is correct in every context: it is what makes a flat
@@ -155,8 +141,8 @@
 }
 
 /* Flat shell: gloss off. Only the shading layers go — the shell gradient,
- * the orbit ring, the rim light and the (white) face all stay, so the
- * mascot still reads as themed and still has a face. */
+ * the orbit ring and the (white) face all stay, so the mascot still reads
+ * as themed and still has a face. */
 .gui-pet-svg--flat .gui-pet-svg__gloss,
 .gui-pet-svg--flat .gui-pet-svg__gloss-dot,
 .gui-pet-svg--flat .gui-pet-svg__sweep {

@@ -1705,18 +1705,6 @@ ipcMain.handle("pet-click", () => {
 	focusMainFromPet();
 	return { ok: true };
 });
-// Pet double-click: quick-show/hide of the main window. Visible → minimize;
-// hidden or minimized → restore + show + focus.
-ipcMain.handle("pet-toggle-main", () => {
-	if (mainWindow && !mainWindow.isDestroyed()) {
-		if (mainWindow.isVisible() && !mainWindow.isMinimized()) {
-			mainWindow.minimize();
-		} else {
-			focusMainFromPet();
-		}
-	}
-	return { ok: true };
-});
 // Pet panel "recent session" click → open that session in the main window.
 ipcMain.handle("pet-open-session", (_event, sessionId) => {
 	if (mainWindow && !mainWindow.isDestroyed() && typeof sessionId === "string") {

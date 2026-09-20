@@ -102,9 +102,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	petDragEnd: () => ipcRenderer.invoke("pet-drag-end"),
 	/** Pet window click → focus the main window. */
 	focusMainWindow: () => ipcRenderer.invoke("pet-click"),
-	/** Pet double-click → toggle the main window (visible → minimize,
-	 *  hidden/minimized → show + focus). */
-	toggleMainWindow: () => ipcRenderer.invoke("pet-toggle-main"),
 	/** Pet right-click → native context menu (main process). */
 	petContextMenu: () => ipcRenderer.invoke("pet-context-menu"),
 	/** Pet window: sprite-only rect (dock alignment uses the character

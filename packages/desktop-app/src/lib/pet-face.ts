@@ -306,6 +306,20 @@ export const interactionDirection = (it: string): MoodDirection =>
  *  gesture) knows better than this table whether a poke should linger. */
 export const INTERACTION_HOLD_MS = 1100;
 
+/** Pick a random interaction for a click reaction — never the same one
+ *  twice in a row (a repeated surprise is not a surprise; the avatar,
+ *  composer pet and floating pet all share this). `last` is the caller's
+ *  previous pick (null on mount); `exclude` removes states a poke should
+ *  never play (the floating pet's `dozing` is scheduler-owned). */
+export function randomPetInteraction(
+	last: PetInteraction | null,
+	exclude: readonly PetInteraction[] = [],
+): PetInteraction {
+	const pool = PET_INTERACTIONS.filter(x => !exclude.includes(x));
+	const pick = pool[Math.floor(Math.random() * pool.length)] ?? PET_INTERACTIONS[0];
+	return pick === last ? (pool[(pool.indexOf(pick) + 1) % pool.length] ?? pick) : pick;
+}
+
 /* ---------------------------------------------------------------- geometry */
 
 /** The face normalised to look straight ahead, plus the look-direction that

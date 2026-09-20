@@ -16,7 +16,10 @@
  *     process anchors ONCE per drag and tracks the DIP cursor — no
  *     readback, no scale math, exact 1:1 at any scaling)
  *   - a click (below threshold) toggles the interaction panel
- *   - a double-click toggles the main window (visible → minimize)
+ *   - a double-click plays a random interaction reaction (the full
+ *     PET_INTERACTIONS set, dozing excluded — the old show/hide-main-
+ *     window shortcut is gone: the window is reached from the taskbar,
+ *     and a pet is for petting)
  *   - hover/dragging switch the petdex sprite to rows 1/2 (BitFun parity);
  *     hover is driven by the MAIN process (it knows when the cursor is in
  *     the interactive hitbox, including when the window is click-through)
@@ -36,7 +39,7 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
-import { type PetActivity, type PetInteraction, type PetMood, petScale } from "./lib/pet";
+import { type PetActivity, type PetInteraction, type PetMood, petScale, randomPetInteraction } from "./lib/pet";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
 import { PetBubbles } from "./pet-bubbles";
@@ -50,9 +53,11 @@ const DIR_FLIP_THRESHOLD_PX = 5;
  *  same wherever the pet lives. */
 const POKE_COMBO_MS = 900;
 
-/** How long a poke reaction holds before falling back to the live mood.
- *  A beat longer than the composer's: here the pet is the whole surface,
- *  so the reaction deserves to be seen rather than glimpsed. */
+/** How long a transient reaction holds before falling back to the live
+ *  mood — pokes, double-click picks and the idle peek/curious beats alike
+ *  (they are all gestures; only `dozing` is a scheduler-owned STATE). A
+ *  beat longer than the composer's: here the pet is the whole surface, so
+ *  the reaction deserves to be seen rather than glimpsed. */
 const POKE_HOLD_MS = 1400;
 
 // The pet window needs the full pet style set (.gui-pet-svg-*, mood
@@ -72,9 +77,6 @@ interface PetBridge {
 	petDragArm?(): Promise<unknown>;
 	petDragEnd?(): Promise<unknown>;
 	focusMainWindow?(): Promise<unknown>;
-	/** Pet double-click → toggle the main window (visible → minimize,
-	 *  hidden/minimized → show + focus). */
-	toggleMainWindow?(): Promise<unknown>;
 	/** Pet right-click → native context menu (main process). */
 	petContextMenu?(): Promise<unknown>;
 	/** Single click → toggle the interaction panel (the pet window's own
@@ -92,9 +94,9 @@ interface PetBridge {
 }
 
 const DRAG_THRESHOLD_PX = 8;
-/** Max gap between two clicks on the pet for a double-click (→ toggle the
- *  main window). Single clicks defer their panel toggle by this window so
- *  a double click never flashes the panel open/closed. */
+/** Max gap between two clicks on the pet for a double-click (→ a random
+ *  interaction reaction). Single clicks defer their panel toggle by this
+ *  window so a double click never flashes the panel open/closed. */
 const DOUBLE_CLICK_MS = 300;
 
 function PetApp(): ReactNode {
@@ -141,11 +143,14 @@ function PetApp(): ReactNode {
 	const clickTimerRef = useRef<number | null>(null);
 	// Poke escalation + reaction lifetime. `pokes` counts presses within
 	// POKE_COMBO_MS so a deliberate double-poke escalates while an accidental
-	// double-tap merges; `reactionTimerRef` releases the override.
+	// double-tap merges; `reactionTimerRef` releases the override;
+	// `lastReactionRef` remembers the previous random pick so a double-click
+	// never repeats the same reaction back to back.
 	const lastPokeRef = useRef(0);
 	const [pokes, setPokes] = useState(0);
 	const pokeTimerRef = useRef<number | null>(null);
 	const reactionTimerRef = useRef<number | null>(null);
+	const lastReactionRef = useRef<PetInteraction | null>(null);
 
 	// Drag state
 	const dragRef = useRef<{
@@ -306,11 +311,15 @@ function PetApp(): ReactNode {
 		return () => window.clearTimeout(timer);
 	}, [mood, hovering, dragging]);
 
-	// Release a poke reaction after POKE_HOLD_MS. Keyed on the reaction value
-	// so a second poke (startle → delight) restarts the hold instead of
-	// expiring on the first poke's clock.
+	// Release any transient reaction after POKE_HOLD_MS. Keyed on the value
+	// so a new reaction (a second poke, a double-click pick, an idle beat)
+	// restarts the hold instead of expiring on the previous one's clock.
+	// `dozing` is excluded — it is a scheduler-owned STATE (the pre-sleep
+	// drowse), released by its own wake conditions, not a gesture. (This
+	// also fixes the idle peek/curious beats, which the old three-name
+	// release list let stick forever once scheduled.)
 	useEffect(() => {
-		if (interaction !== "startled" && interaction !== "delighted" && interaction !== "curious") return;
+		if (interaction === null || interaction === "dozing") return;
 		reactionTimerRef.current = window.setTimeout(() => {
 			reactionTimerRef.current = null;
 			setInteraction(null);
@@ -325,8 +334,9 @@ function PetApp(): ReactNode {
 
 	// "Caught looking" idle beat: while calm at rest, occasionally glance off
 	// to one side (peek) or tilt toward the cursor (curious) — the pet has an
-	// inner life rather than a single resting face. Only one beat is
-	// scheduled at a time and it is dropped the moment anything else happens.
+	// inner life rather than a single resting face. Each beat holds for
+	// POKE_HOLD_MS (the shared transient-reaction release above) and the
+	// scheduler re-arms once `interaction` returns to null.
 	useEffect(() => {
 		if (mood !== "rest" || hovering || dragging || interaction !== null) return;
 		const PEEK_MIN_MS = 12_000;
@@ -585,14 +595,18 @@ function PetApp(): ReactNode {
 			void bridge?.petDragEnd?.();
 			return;
 		}
-		// Click vs double-click: two clicks within DOUBLE_CLICK_MS toggle
-		// the main window; one click toggles the bubble panel.
+		// Click vs double-click: a double-click plays a random interaction
+		// reaction from the full set (dozing excluded — waking up is the
+		// drowse scheduler's job; never the same pick twice in a row). One
+		// click toggles the bubble panel.
 		const now = Date.now();
 		if (now - lastClickRef.current <= DOUBLE_CLICK_MS) {
 			if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
 			clickTimerRef.current = null;
 			lastClickRef.current = 0;
-			void bridge?.toggleMainWindow?.();
+			const pick = randomPetInteraction(lastReactionRef.current, ["dozing"]);
+			lastReactionRef.current = pick;
+			setInteraction(pick);
 			// Disarm (no drag happened — pointer just went down and up).
 			void bridge?.petDragEnd?.();
 			return;

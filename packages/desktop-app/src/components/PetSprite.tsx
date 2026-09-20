@@ -161,6 +161,26 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 	const shellRef = useRef<SVGGElement | null>(null);
 	const accessoryRef = useRef<SVGGElement | null>(null);
 	const gazeSmooth = useRef({ x: 0, y: 0, att: 0 });
+	// ── Cross-direction continuity (refs, NOT effect closure): every mood
+	// or interaction change re-runs the frame effect, and anything a switch
+	// must NOT reset outlives it in these.
+	// lastExpr/lastSpec — the face as the previous frame actually painted
+	// it (blink included, gaze excluded): the source the next morph eases
+	// FROM. The engine used to seed `from` with the NEW target, so every
+	// switch was a hard cut and the morph machinery never played once
+	// (2026-09-20, user: 表情切换是「突变的」而不是自然的).
+	const lastExpr = useRef<Face | null>(null);
+	const lastSpec = useRef<number[] | null>(null);
+	// phase — the persistent loop clock (idle drift, saccade, body loops).
+	// Resetting it per switch would jump every sine mid-arc; letting it run
+	// keeps loops seamless across directions.
+	const phaseRef = useRef(0);
+	// entry — time since THIS direction was entered; drives the one-shot
+	// enter/settle motions (reset per switch by the frame effect).
+	const entryRef = useRef(0);
+	// blink — phase persisted too: a blink in flight is never cut short by
+	// a mood change. `next` stays wall-clock (compared against `now`).
+	const blinkRef = useRef({ t: 1, next: performance.now() + 900 });
 
 	// Static per-mood face data — decoded once per mood, never per frame.
 	const prepped = useMemo(() => {
@@ -179,45 +199,64 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 	}, [mood, interaction]);
 
 	useEffect(() => {
-		const clock = { start: performance.now(), last: performance.now() };
-		// Morph + blink phase live in the effect closure, so changing mood
-		// never restarts the body clock (an entrance animation would replay).
-		const from: Face = prepped.base;
-		let morphT = 1;
-		let blinkT = 1;
-		let nextBlink = clock.start + 900;
 		let raf = 0;
-		// Seed the paths so the first frame never paints an invalid empty d.
-		eye0.current?.setAttribute("d", toPath(prepped.base[0]));
-		eye1.current?.setAttribute("d", toPath(prepped.base[1]));
+		let last = performance.now();
+		// One-shot entrance clock: a new direction replays its arrival.
+		entryRef.current = 0;
+		// Morph source: whatever the face ACTUALLY looked like on the last
+		// frame before this change — not the new target. First mount has no
+		// history: start exactly on the new base.
+		const from: Face = lastExpr.current ?? prepped.base;
+		const fromSpec: number[] = lastSpec.current ?? prepped.mouth;
+		let morphT = lastExpr.current ? 0 : 1;
+		if (!lastExpr.current) {
+			// Seed the paths so the first frame never paints an invalid empty d.
+			eye0.current?.setAttribute("d", toPath(prepped.base[0]));
+			eye1.current?.setAttribute("d", toPath(prepped.base[1]));
+		}
 
 		const tick = (now: number): void => {
-			const dt = Math.min(now - clock.last, 64);
-			clock.last = now;
-			const elapsed = now - clock.start;
+			const dt = Math.min(now - last, 64);
+			last = now;
+			phaseRef.current += dt;
+			entryRef.current += dt;
+			const elapsed = phaseRef.current;
+			const entryElapsed = entryRef.current;
 
 			// ── blink: fast close, slower open, on the mood's cadence.
-			if (prepped.blinkMs > 0 && blinkT >= 1 && now >= nextBlink) {
-				blinkT = 0;
-				nextBlink = now + prepped.blinkMs;
+			const blink = blinkRef.current;
+			if (prepped.blinkMs > 0 && blink.t >= 1 && now >= blink.next) {
+				blink.t = 0;
+				blink.next = now + prepped.blinkMs;
 			}
-			if (blinkT < 1) blinkT = Math.min(1, blinkT + dt / (blinkT < 0.5 ? BLINK_DOWN_MS : BLINK_UP_MS));
+			if (blink.t < 1) blink.t = Math.min(1, blink.t + dt / (blink.t < 0.5 ? BLINK_DOWN_MS : BLINK_UP_MS));
 
-			// ── face morph.
+			// ── face morph, eased FROM the last painted frame (see lastExpr).
 			if (morphT < 1) morphT = Math.min(1, morphT + dt / MORPH_MS);
 			const base = lerpFace(from, prepped.base, springStep(morphT));
 			// The drift face eases in on a slow sine once the morph has landed,
 			// so a long idle keeps making new faces without ever looking busy.
 			const driftT = morphT >= 1 ? (Math.sin(elapsed / 3400) * 0.5 + 0.5) * DRIFT_MAX : 0;
 			let rings = lerpFace(base, prepped.drift, driftT);
-			let spec = mixSpec(prepped.mouth, prepped.mouthDrift, morphT >= 1 ? driftT / DRIFT_MAX : 0);
-			if (blinkT < 1) {
-				// Ease toward the lash on both halves of the blink. `blinkT`
+			// The mouth morphs in lockstep with the eyes (last painted spec →
+			// the new base spec), then picks up the drift.
+			let spec = mixSpec(
+				mixSpec(fromSpec, prepped.mouth, springStep(morphT)),
+				prepped.mouthDrift,
+				morphT >= 1 ? driftT / DRIFT_MAX : 0,
+			);
+			if (blink.t < 1) {
+				// Ease toward the lash on both halves of the blink. `blink.t`
 				// runs 0→1 across close-then-open, so the bell is the weight.
-				const w = blinkT < 0.5 ? blinkT * 2 : (1 - blinkT) * 2;
+				const w = blink.t < 0.5 ? blink.t * 2 : (1 - blink.t) * 2;
 				rings = lerpFace(rings, prepped.lash, w * 0.96);
 				spec = mixSpec(spec, prepped.mouth, w * 0.6);
 			}
+			// Remember the painted face — BEFORE the gaze offset (the gaze is
+			// a view-space translate, not part of the expression) — as the
+			// next switch's morph source.
+			lastExpr.current = rings;
+			lastSpec.current = spec;
 
 			// ── gaze: authored look bias plus an idle saccade, applied as a yaw
 			// so the eyes slide across the sphere and compress at the limb. When
@@ -262,7 +301,9 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 			// rig keeps its padding shift in front of the motion.
 			const shell = shellRef.current;
 			if (shell) {
-				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX);
+				// Loops ride the persistent phase; the one-shot enter/settle
+				// ride the per-entry clock (replayed on every direction change).
+				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX, entryElapsed);
 				shell.setAttribute("transform", `translate(${SIDE} ${TOP}) ${motion}`.trim());
 			}
 			// ── the wearable leans with the gaze. The face turns inside the
@@ -427,6 +468,18 @@ function Silhouette({
 					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, oklch(75.07% 0.1295 79.84deg))" />
 					<stop offset="1" stopColor="var(--gui-pet-gold-c, oklch(46.54% 0.1166 79.84deg))" />
 				</linearGradient>
+				{/* Wearable (headphones): NEUTRAL hardware charcoal — deliberately
+				 * NOT derived from the accent. The shell IS the accent now, so a
+				 * ring-gradient wear sat tone-on-tone on the ball and read as a
+				 * same-colour growth (2026-09-20, user: 「耳机应该有单独的配
+				 * 色吧」). Real headphones are hardware: a warm graphite that
+				 * holds its hue distance from ANY accent, theme-stable by
+				 * construction (the palette never emits these hooks — the
+				 * fallback literals ARE the values). */}
+				<linearGradient id="gui-pet-grad-wear" x1="0" y1="0" x2="0" y2="1">
+					<stop offset="0" stopColor="var(--gui-pet-wear-a, oklch(36% 0.012 80))" />
+					<stop offset="1" stopColor="var(--gui-pet-wear-b, oklch(25% 0.01 80))" />
+				</linearGradient>
 				{/* Eye light: white with a hot core. A flat fill reads as paint;
 				 * a gradient reads as something emitting. The face is white in
 				 * every theme (pet-palette.ts `--gui-pet-face`): the ring is
@@ -518,14 +571,6 @@ function Silhouette({
 							/>
 						</>
 					)}
-					{/* Rim light down the right edge — sits just inside the
-					 * silhouette so it reads as light on the sphere, not as a
-					 * stroke around it. Always on: it is what separates the ball
-					 * from a dark chat background, so it is not decoration. */}
-					<path
-						className="gui-pet-svg__rim"
-						d={`M${ORB_C + 74} ${ORB_C + 82} A${ORB_R - 3} ${ORB_R - 3} 0 0 0 ${ORB_C + 92} ${ORB_C + 8}`}
-					/>
 					{/* The face, in the engine's own coordinates — no offset needed,
 					 * because the rig already sits on the sphere centre. All three
 					 * paths are rewritten every frame. */}
@@ -544,13 +589,15 @@ function Silhouette({
 						<g ref={accessoryRef} className="gui-pet-svg__accessory">
 							{/* Band: one arc over the crown, endpoints meeting the
 							 * cups' tops (cup top ≈ y 78, apex ≈ y −4 — 4px above
-							 * the shell, inside the rig's headroom). Gold carries
-							 * the accent; cups stay shell-dark with a gold rim so
-							 * the wear reads as part of the body, not a sticker. */}
+							 * the shell, inside the rig's headroom). The wear is
+							 * charcoal hardware (gui-pet-grad-wear), NOT the
+							 * accent: on the accent ball a same-hue wear read as
+							 * a growth, so the cups get a lighter graphite edge
+							 * to separate from the shell they sit against. */}
 							<path
 								d={`M -2 ${ORB_C - 36} A 123.3 123.3 0 0 1 ${2 * ORB_C + 2} ${ORB_C - 36}`}
 								fill="none"
-								stroke="url(#gui-pet-grad-ring)"
+								stroke="url(#gui-pet-grad-wear)"
 								strokeWidth="9"
 								strokeLinecap="round"
 							/>
@@ -560,8 +607,8 @@ function Silhouette({
 								rx="13"
 								ry="26"
 								transform={`rotate(-14 ${ORB_C - ORB_R - 2} ${ORB_C - 10})`}
-								fill="url(#gui-pet-grad-shell)"
-								stroke="url(#gui-pet-grad-ring)"
+								fill="url(#gui-pet-grad-wear)"
+								stroke="var(--gui-pet-wear-edge, oklch(48% 0.014 80))"
 								strokeWidth="2.5"
 							/>
 							<ellipse
@@ -570,8 +617,8 @@ function Silhouette({
 								rx="13"
 								ry="26"
 								transform={`rotate(14 ${ORB_C + ORB_R + 2} ${ORB_C - 10})`}
-								fill="url(#gui-pet-grad-shell)"
-								stroke="url(#gui-pet-grad-ring)"
+								fill="url(#gui-pet-grad-wear)"
+								stroke="var(--gui-pet-wear-edge, oklch(48% 0.014 80))"
 								strokeWidth="2.5"
 							/>
 						</g>

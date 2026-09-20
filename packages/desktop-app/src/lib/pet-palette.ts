@@ -7,10 +7,9 @@
  * (blue) the gold ring + gold eyes on the cold dark ball read as three
  * unrelated colors stuck together. The SVG already reads every paint
  * from CSS variables, so theming is a matter of computing the palette
- * — six shell/light variables plus the rim light, the hover eye glow and
- * the white face pair — from the
- * LIVE accent token (`--accent`, resolved from tokens.css for the
- * active data-accent × data-theme pair).
+ * — the shell ladder, the light family, the hover eye glow and the
+ * white face pair — from the LIVE accent token (`--accent`, resolved
+ * from tokens.css for the active data-accent × data-theme pair).
  *
  * Derivation (H = accent hue, L0/C0 = accent lightness/chroma):
  *   shell  — the sphere IS the accent (2026-09-20, user ×3: the old
@@ -27,9 +26,6 @@
  *            lands within a hair of the old hardcoded golds, so the
  *            mascot keeps its identity — other accents inherit a whole
  *            coherent orb for free.
- *   rim    — a DEEP edge of the same hue (dark theme): on a bright ball
- *            the limb wants shading, not a light — the old cool-blue rim
- *            light read as a glued-on highlight.
  *
  * The face (eyes + mouth) is WHITE, not accent-tinted (2026-09-20, user
  * request). It used to ride `--gui-pet-gold-a/b`, which meant a themed orb
@@ -64,7 +60,6 @@ export interface PetPaletteVars {
 	"gui-pet-gold-a": string;
 	"gui-pet-gold-b": string;
 	"gui-pet-gold-c": string;
-	"gui-pet-rim": string;
 	"gui-pet-glow": string;
 	/** Face light (eyes + mouth). Always near-white; the value only lifts
 	 *  with the scheme so it stays "the brightest thing on the orb" on a
@@ -85,7 +80,7 @@ function fmt(l: number, c: number, h: number, alpha?: number): string {
 }
 
 /**
- * Derive the ten pet variables from an accent color string (any CSS
+ * Derive the nine pet variables from an accent color string (any CSS
  * format chroma can parse — tokens.css ships `oklch(L C H)`) and the
  * active scheme. Throws only when the accent is unparseable; callers
  * should fall back to the SVG's hardcoded defaults.
@@ -109,9 +104,6 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 			"gui-pet-gold-a": fmt(Math.min(0.88, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h),
 			"gui-pet-gold-b": fmt(l0, c0, h),
 			"gui-pet-gold-c": fmt(l0 * 0.62, c0 * 0.9, h),
-			// Rim: a deep edge of the same hue — shading the bright limb
-			// instead of lighting it.
-			"gui-pet-rim": fmt(Math.max(0.18, l0 * 0.45), c0 * 0.9, h, 0.5),
 			"gui-pet-glow": fmt(l0, c0, h, 0.8),
 			// Face: near-white, hair of warmth so it reads as a light rather
 			// than a cut-out. Neutral halo (no hue) keeps the glow from
@@ -133,7 +125,6 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 		"gui-pet-gold-a": fmt(Math.min(0.8, l0 + 0.15), Math.min(0.14, c0 * 1.1 + 0.02), h),
 		"gui-pet-gold-b": fmt(l0, c0, h),
 		"gui-pet-gold-c": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h),
-		"gui-pet-rim": fmt(0.3, Math.min(0.1, c0), h, 0.22),
 		"gui-pet-glow": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h, 0.55),
 		// Face on a light shell: keep it white (the identity rule) and let
 		// the halo do the separating — a dark neutral ring around the eye

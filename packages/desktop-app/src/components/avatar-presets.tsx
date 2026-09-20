@@ -1,6 +1,6 @@
 import { punkAvatarUri } from "@musepi/guest-client";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { PET_INTERACTIONS, type PetdexMood, type PetInteraction } from "../lib/pet";
+import { type PetdexMood, type PetInteraction, randomPetInteraction } from "../lib/pet";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 import { BuiltinPetSprite, type GazeVec, PetBox, usePetDecor } from "./PetSprite";
 
@@ -209,12 +209,9 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 		[],
 	);
 	const poke = (): void => {
-		let next = PET_INTERACTIONS[Math.floor(Math.random() * PET_INTERACTIONS.length)]!;
-		if (next === lastReaction.current) {
-			next = PET_INTERACTIONS[(PET_INTERACTIONS.indexOf(next) + 1) % PET_INTERACTIONS.length]!;
-		}
-		lastReaction.current = next;
-		setReaction(next);
+		const pick = randomPetInteraction(lastReaction.current);
+		lastReaction.current = pick;
+		setReaction(pick);
 		if (reactionTimer.current !== null) window.clearTimeout(reactionTimer.current);
 		reactionTimer.current = window.setTimeout(() => setReaction(null), AVATAR_REACTION_HOLD_MS);
 	};

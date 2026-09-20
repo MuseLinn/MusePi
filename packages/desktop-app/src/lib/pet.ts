@@ -22,7 +22,7 @@ export type PetdexMood = PetMood | "hover" | "dragging";
 /** Re-exported so callers wire reactions without reaching into pet-face
  *  (the data lives there; this barrel is what components import). */
 export type { PetInteraction } from "./pet-face";
-export { INTERACTION_HOLD_MS, PET_INTERACTIONS } from "./pet-face";
+export { INTERACTION_HOLD_MS, PET_INTERACTIONS, randomPetInteraction } from "./pet-face";
 export type PetDisplayMode = "input" | "desktop";
 
 /**

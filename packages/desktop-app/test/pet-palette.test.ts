@@ -35,7 +35,7 @@ const OCEAN_DARK = "oklch(0.65 0.16 255)";
 const MONO_DARK = "oklch(0.72 0.005 0)";
 
 describe("petPaletteVars — derivation", () => {
-	test("returns exactly the ten pet variables", () => {
+	test("returns exactly the nine pet variables", () => {
 		const v = petPaletteVars(GOLD_DARK, "dark");
 		expect(Object.keys(v).sort()).toEqual(
 			[
@@ -45,7 +45,6 @@ describe("petPaletteVars — derivation", () => {
 				"gui-pet-gold-a",
 				"gui-pet-gold-b",
 				"gui-pet-gold-c",
-				"gui-pet-rim",
 				"gui-pet-glow",
 				"gui-pet-face",
 				"gui-pet-face-glow",
@@ -135,14 +134,10 @@ describe("petPaletteVars — edge cases", () => {
 		expect(goldA.c).toBeCloseTo(0.0805, 2);
 	});
 
-	test("rim and glow carry their translucent alphas", () => {
+	test("glow carries its translucent alpha", () => {
 		const dark = petPaletteVars(GOLD_DARK, "dark");
-		// Dark rim is a DEEP edge now (shading the bright limb), heavier than
-		// the old light-tint rim.
-		expect(chroma(dark["gui-pet-rim"]).alpha()).toBeCloseTo(0.5, 3);
 		expect(chroma(dark["gui-pet-glow"]).alpha()).toBeCloseTo(0.8, 3);
 		const light = petPaletteVars(GOLD_DARK, "light");
-		expect(chroma(light["gui-pet-rim"]).alpha()).toBeCloseTo(0.22, 3);
 		expect(chroma(light["gui-pet-glow"]).alpha()).toBeCloseTo(0.55, 3);
 	});
 
