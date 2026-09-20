@@ -39,6 +39,13 @@ import {
 	textFontSize,
 	textLabelBox,
 } from "../lib/sketch-geometry";
+import {
+	nextStrokeId,
+	type SketchScene,
+	type SketchStroke,
+	sceneStrokesFor,
+	serializeScene,
+} from "../lib/sketch-scene";
 
 /**
  * SketchPad (Codex 绘画 parity) — a lightweight drawing overlay launched
@@ -59,33 +66,24 @@ import {
  * lib/sketch-geometry.ts so it can be unit-tested without a canvas.
  *
  * Flow: draw → 完成 exports a PNG (pixelRatio 2, canvas background
- * included) through the composer's normal image attachment pipeline;
- * editing an existing attachment / lightbox image mounts it as the base
+ * included) through the composer's normal image attachment pipeline — and
+ * hands the stroke list over as a scene (lib/sketch-scene.ts), which the
+ * chip keeps beside its pixels. Clicking a board-drawn chip therefore
+ * restores A0 (every object still selectable / movable / erasable) instead
+ * of pasting A1's PNG back as one flat picture you can only paint over;
+ * 完成 then swaps the chip's pixels AND its scene, so the round trip
+ * survives any number of re-edits. A chip without a scene (a restored
+ * draft, a plain image from the lightbox) still mounts its PNG as the base
  * layer. Closing plays the same scale-out as completing, so the board
  * reads as "falling back" into the composer (Codex's zoom-away,
  * simplified to a 180ms transform toward the composer row).
  */
 
-interface Stroke {
-	id: number;
-	tool: Exclude<Tool, "eraser">;
-	color: string;
-	size: number;
-	/** pen: flat [x,y,pressure,…]; shapes: [x0,y0,x1,y1]; text: [x,y] anchor;
-	 *  image: [x,y,width,height]. */
-	points: number[];
-	/** text only: the label. Kept beside `points` so undo/redo and move
-	 *  replay through the same `Op` shapes as every other stroke. */
-	text?: string;
-	/** image only: the data/remote URL the Konva image node is decoded from. */
-	src?: string;
-}
-
 /** Undo/redo ops: single-stroke adds, batch clears, and moves all keep the
  *  stacks small. A move records `from`/`to` deltas so undo is exact. */
 type Op =
-	| { kind: "add"; stroke: Stroke }
-	| { kind: "clear"; strokes: Stroke[] }
+	| { kind: "add"; stroke: SketchStroke }
+	| { kind: "clear"; strokes: SketchStroke[] }
 	| { kind: "move"; id: number; from: number[]; to: number[] }
 	| { kind: "edit"; id: number; from: string; to: string };
 
@@ -218,12 +216,21 @@ function inkPathLength(flat: number[]): number {
 
 export function SketchPad({
 	initialImage = null,
+	initialScene = null,
 	onDone,
 	onClose,
 }: {
-	/** Image (data URL / remote URL) mounted as the editable base layer. */
+	/** Image (data URL / remote URL) mounted as the editable base layer.
+	 *  Ignored when `initialScene` is set — a scene already carries the
+	 *  objects, and importing the chip's own PNG on top would paste the
+	 *  exported picture (with its baked background) over the live drawing. */
 	initialImage?: string | null;
-	onDone(dataUrl: string): void;
+	/** Saved board to reopen (from a board-drawn chip). Restored as live
+	 *  strokes, so every object stays individually editable. */
+	initialScene?: SketchScene | null;
+	/** `scene` is the editable snapshot: the composer stores it on the chip so
+	 *  the next click reopens these very strokes instead of the PNG. */
+	onDone(dataUrl: string, scene: SketchScene): void;
 	onClose(): void;
 }): ReactNode {
 	const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -232,14 +239,14 @@ export function SketchPad({
 	const [tool, setTool] = useState<Tool>("pen");
 	const [color, setColor] = useState(defaultInk);
 	const [size, setSize] = useState(4);
-	const [strokes, setStrokes] = useState<Stroke[]>([]);
+	const [strokes, setStrokes] = useState<SketchStroke[]>([]);
 	const [past, setPast] = useState<Op[]>([]);
 	const [future, setFuture] = useState<Op[]>([]);
 	const [closing, setClosing] = useState(false);
-	const drawRef = useRef<Stroke | null>(null);
+	const drawRef = useRef<SketchStroke | null>(null);
 	/** Eraser drag state: pointerdown on the eraser arms it, pointerup clears. */
 	const erasingRef = useRef(false);
-	const [preview, setPreview] = useState<Stroke | null>(null);
+	const [preview, setPreview] = useState<SketchStroke | null>(null);
 	const baseImage = useLoadedImage(initialImage);
 	/** Konva paints a decoded HTMLImageElement, so image strokes keep a small
 	 *  cache keyed by src: the stroke itself stores only the URL, which is
@@ -260,7 +267,7 @@ export function SketchPad({
 	 *  helpers stride by tool. */
 	const moveRef = useRef<{
 		id: number;
-		tool: Stroke["tool"];
+		tool: SketchStroke["tool"];
 		from: number[];
 		start: { x: number; y: number };
 	} | null>(null);
@@ -269,7 +276,7 @@ export function SketchPad({
 	 *  translation, so undo/redo need no new branch. */
 	const scaleRef = useRef<{
 		id: number;
-		tool: Stroke["tool"];
+		tool: SketchStroke["tool"];
 		from: number[];
 		ax: number;
 		ay: number;
@@ -332,7 +339,7 @@ export function SketchPad({
 		return () => window.removeEventListener("pointerdown", onDown);
 	}, [flyout]);
 
-	const commit = useCallback((stroke: Stroke): void => {
+	const commit = useCallback((stroke: SketchStroke): void => {
 		setStrokes(prev => [...prev, stroke]);
 		setPast(prev => [...prev.slice(-99), { kind: "add", stroke }]);
 		setFuture([]);
@@ -388,10 +395,13 @@ export function SketchPad({
 	const importedRef = useRef(false);
 	useEffect(() => {
 		const src = initialImage;
-		if (!src || !baseImage || stageSize.w === 0 || importedRef.current) return;
+		// A scene already carries this board's objects; importing the chip's
+		// own PNG alongside it would paste the exported picture (background
+		// baked in) on top of the live drawing.
+		if (!src || initialScene || !baseImage || stageSize.w === 0 || importedRef.current) return;
 		importedRef.current = true;
 		const box = fitImage(baseImage, stageSize.w, stageSize.h);
-		const stroke: Stroke = {
+		const stroke: SketchStroke = {
 			id: idRef.current++,
 			tool: "image",
 			color,
@@ -403,7 +413,37 @@ export function SketchPad({
 		// recorded, which is what makes the picture undoable.
 		setStrokes(prev => [...prev, stroke]);
 		setPast(prev => [...prev.slice(-99), { kind: "add", stroke }]);
-	}, [initialImage, baseImage, stageSize, color, size]);
+	}, [initialImage, initialScene, baseImage, stageSize, color, size]);
+
+	/** Reopening a board-drawn chip restores the SAVED STROKES, not the
+	 *  exported PNG: mounting the PNG made every object fuse into one bitmap,
+	 *  so a re-edit could only paint over the picture — the original ink, and
+	 *  with it any chance of fixing one local detail, was gone. Restoring the
+	 *  scene brings each pen stroke, shape and label back as its own node
+	 *  (selectable, movable, scalable, erasable).
+	 *
+	 *  No op is recorded and `dirty` stays false: this is the board's opening
+	 *  content, not something the user just did, so Ctrl+Z must not take it
+	 *  away and closing an untouched board must not prompt. */
+	const restoredRef = useRef(false);
+	useEffect(() => {
+		if (!initialScene || stageSize.w === 0 || restoredRef.current) return;
+		restoredRef.current = true;
+		const restored = sceneStrokesFor(initialScene, stageSize.w, stageSize.h);
+		setStrokes(restored);
+		// Ids continue past the restored set: two nodes sharing an id would
+		// make the eraser and the select tool hit the wrong object.
+		idRef.current = nextStrokeId(restored);
+	}, [initialScene, stageSize]);
+
+	/** Mirror of `strokes` for the snapshot path: `finish` exports inside an
+	 *  async gap (and may land a pending text label first), so reading the
+	 *  `strokes` of that render would serialize the board as it was BEFORE
+	 *  the last commit — the PNG and the saved scene would disagree. */
+	const strokesRef = useRef<SketchStroke[]>([]);
+	useEffect(() => {
+		strokesRef.current = strokes;
+	}, [strokes]);
 
 	const undo = useCallback((): void => {
 		const op = past[past.length - 1];
@@ -603,7 +643,7 @@ export function SketchPad({
 				return;
 			}
 			const pressure = e.evt.pressure > 0 ? e.evt.pressure : 0.5;
-			const stroke: Stroke = {
+			const stroke: SketchStroke = {
 				id: idRef.current++,
 				tool,
 				color,
@@ -743,12 +783,16 @@ export function SketchPad({
 			await new Promise(resolve => setTimeout(resolve, 80));
 			const url = stage.toDataURL({ pixelRatio: 2 });
 			setExportBg(null);
-			onDone(url);
+			// The scene is read from the mirror, not from this closure: a
+			// caret label landed moments ago only reaches `strokes` on the
+			// next render, and a scene that missed it would silently reopen
+			// the board without its text.
+			onDone(url, serializeScene(strokesRef.current, stageSize.w, stageSize.h));
 		})();
 	};
 
 	const renderStroke = useCallback(
-		(s: Stroke, isPreview = false): ReactNode => {
+		(s: SketchStroke, isPreview = false): ReactNode => {
 			// The list key is set per-branch, never through `common`: React 19
 			// treats a spread that carries `key` as an error-level warning.
 			const nodeKey = isPreview ? "sk-preview" : s.id;

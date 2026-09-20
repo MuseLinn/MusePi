@@ -13,6 +13,7 @@ import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
 import { modLabel } from "../lib/shortcuts";
+import type { SketchScene } from "../lib/sketch-scene";
 import { rankSlashEntries } from "../lib/slash-rank";
 import {
 	loadSuggestions,
@@ -111,6 +112,10 @@ interface WelcomeAttachment {
 	file?: File;
 	/** Board-drawn chip (SketchPad): clicking it reopens the canvas. */
 	sketch?: boolean;
+	/** Editable board content behind that chip (its strokes, not its pixels):
+	 *  reopening restores every object so a re-edit can fix one local detail
+	 *  instead of painting over a flat copy of the exported PNG. */
+	sketchScene?: SketchScene;
 }
 
 /**
@@ -304,10 +309,16 @@ export function WelcomeComposer({
 	// image from the lightbox edit action as the base layer; `editId` targets
 	// an existing chip so finishing replaces it in place (session-composer
 	// parity — an extended board must not pile up a second chip).
-	const [sketch, setSketch] = useState<{ open: boolean; editId: number | null; initial: string | null }>({
+	const [sketch, setSketch] = useState<{
+		open: boolean;
+		editId: number | null;
+		initial: string | null;
+		scene: SketchScene | null;
+	}>({
 		open: false,
 		editId: null,
 		initial: null,
+		scene: null,
 	});
 
 	// Voice dictation (session-composer parity): the welcome composer's tips
@@ -1114,9 +1125,9 @@ export function WelcomeComposer({
 	// lightbox edit). `sketch.editId` decides whether this extends an existing
 	// chip or mints one — the session composer's rule, so a board opened from a
 	// chip never leaves a duplicate behind.
-	const onSketchDone = (dataUrl: string): void => {
+	const onSketchDone = (dataUrl: string, scene: SketchScene): void => {
 		const editId = sketch.editId;
-		setSketch({ open: false, editId: null, initial: null });
+		setSketch({ open: false, editId: null, initial: null, scene: null });
 		if (editId !== null) {
 			setAttachments(prev =>
 				prev.map(a =>
@@ -1127,6 +1138,9 @@ export function WelcomeComposer({
 								mimeType: dataUrl.slice(5, dataUrl.indexOf(";")) || a.mimeType,
 								size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75),
 								sketch: true,
+								// The board's current strokes: the next click
+								// reopens the objects, not a raster of them.
+								sketchScene: scene,
 							}
 						: a,
 				),
@@ -1139,7 +1153,7 @@ export function WelcomeComposer({
 			// AFTER the add settles: addFiles awaits the settings read before
 			// appending, so marking first would map the pre-add array and drop
 			// the flag (the chip would then open the plain preview).
-			setAttachments(prev => markSketchChip(prev, fileName));
+			setAttachments(prev => markSketchChip(prev, fileName, scene));
 		})();
 	};
 
@@ -1573,10 +1587,19 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-							onEditImage={src => setSketch({ open: true, editId: null, initial: src })}
+							onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
 							onEditSketch={id => {
 								const chip = attachments.find(x => x.id === id);
-								if (chip) setSketch({ open: true, editId: id, initial: chip.dataUrl });
+								if (!chip) return;
+								// Scene present → reopen the strokes (A0) so
+								// every object stays editable; otherwise fall
+								// back to mounting the chip's PNG.
+								setSketch({
+									open: true,
+									editId: id,
+									initial: chip.sketchScene ? null : chip.dataUrl,
+									scene: chip.sketchScene ?? null,
+								});
 							}}
 							onAddAttachment={() => openAttachMenu.current?.()}
 							footerLeft={
@@ -1630,7 +1653,7 @@ export function WelcomeComposer({
 										// state is not a reduced product. File chips wait in
 										// state until the session this prompt creates exists.
 										onPickFiles={files => void addFiles(files)}
-										onSketch={() => setSketch({ open: true, editId: null, initial: null })}
+										onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
 										onInsert={token => {
 											const ta = taRef.current;
 											if (!ta) return;
@@ -2089,7 +2112,8 @@ export function WelcomeComposer({
 			{sketch.open && (
 				<SketchPad
 					initialImage={sketch.initial}
-					onClose={() => setSketch({ open: false, editId: null, initial: null })}
+					initialScene={sketch.scene}
+					onClose={() => setSketch({ open: false, editId: null, initial: null, scene: null })}
 					onDone={onSketchDone}
 				/>
 			)}

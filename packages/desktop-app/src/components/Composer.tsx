@@ -7,6 +7,7 @@ import { tapFeedback } from "../lib/haptic";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
+import type { SketchScene } from "../lib/sketch-scene";
 import {
 	COMPOSER_DOCK_SLOT,
 	COMPOSER_LEFT_SLOT,
@@ -237,26 +238,34 @@ export function Composer({
 	// a sketch chip (re-edit), or from an image lightbox's edit button
 	// (musepi-gui-sketch-open, wired by ChatView). editId targets an existing
 	// chip — finishing replaces it in place instead of adding a new one.
-	const [sketch, setSketch] = useState<{ open: boolean; editId: number | null; initial: string | null }>({
+	const [sketch, setSketch] = useState<{
+		open: boolean;
+		editId: number | null;
+		initial: string | null;
+		scene: SketchScene | null;
+	}>({
 		open: false,
 		editId: null,
 		initial: null,
+		scene: null,
 	});
 	useEffect(() => {
 		const onOpen = (e: Event): void => {
 			const detail = (e as CustomEvent<{ dataUrl?: string }>).detail;
 			const dataUrl = detail?.dataUrl;
 			if (typeof dataUrl !== "string" || dataUrl.length === 0) return;
-			setSketch({ open: true, editId: null, initial: dataUrl });
+			// A lightbox image carries no scene: the board mounts the picture
+			// itself, and finishing mints a chip (with a scene of its own).
+			setSketch({ open: true, editId: null, initial: dataUrl, scene: null });
 		};
 		window.addEventListener("musepi-gui-sketch-open", onOpen);
 		return () => window.removeEventListener("musepi-gui-sketch-open", onOpen);
 	}, []);
 	const closeSketch = useCallback((): void => {
-		setSketch(prev => ({ open: false, editId: null, initial: null }));
+		setSketch(prev => ({ open: false, editId: null, initial: null, scene: null }));
 	}, []);
 	const onSketchDone = useCallback(
-		(dataUrl: string): void => {
+		(dataUrl: string, scene: SketchScene): void => {
 			const editId = sketch.editId;
 			closeSketch();
 			if (editId !== null) {
@@ -264,7 +273,9 @@ export function Composer({
 				// the rest of the draft survive). `sketch` must survive the
 				// spread too, or the chip stops reopening the board after the
 				// first re-edit — this branch is reached precisely because the
-				// chip carries the flag.
+				// chip carries the flag. `sketchScene` is replaced with the
+				// board's current strokes, so the NEXT click still reopens the
+				// objects rather than a raster of everything drawn so far.
 				setAttachments(prev =>
 					prev.map(a =>
 						a.id === editId
@@ -274,6 +285,7 @@ export function Composer({
 									mimeType: dataUrl.slice(5, dataUrl.indexOf(";")) || a.mimeType,
 									size: Math.round((dataUrl.length - dataUrl.indexOf(",")) * 0.75),
 									sketch: true,
+									sketchScene: scene,
 								}
 							: a,
 					),
@@ -285,13 +297,15 @@ export function Composer({
 			const fileName = nextSketchFileName();
 			void (async () => {
 				await addFiles([dataUrlToFile(dataUrl, fileName)]);
-				// Mark the fresh chip so clicking it reopens the board. This
-				// must run AFTER addFiles settles: addFiles awaits the daemon
-				// settings read before appending, and marking first meant
-				// mapping the pre-add (empty) array — the flag was dropped and
-				// the chip fell back to the plain image preview ("clicking it
-				// just previews the picture").
-				setAttachments(prev => markSketchChip(prev, fileName));
+				// Mark the fresh chip so clicking it reopens the board, and
+				// hang the scene on it — that is what turns the click into
+				// "keep editing A0" instead of "paste A1 as a picture".
+				// This must run AFTER addFiles settles: addFiles awaits the
+				// daemon settings read before appending, and marking first
+				// meant mapping the pre-add (empty) array — the flag was
+				// dropped and the chip fell back to the plain image preview
+				// ("clicking it just previews the picture").
+				setAttachments(prev => markSketchChip(prev, fileName, scene));
 			})();
 		},
 		[sketch.editId, closeSketch, setAttachments, addFiles],
@@ -1825,9 +1839,18 @@ export function Composer({
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
 				onEditSketch={id => {
 					const chip = attachments.find(x => x.id === id);
-					if (chip) setSketch({ open: true, editId: id, initial: chip.dataUrl });
+					if (!chip) return;
+					// A chip with a scene reopens its STROKES (A0) — every
+					// object stays editable. Only a scene-less chip (restored
+					// draft, old data) falls back to mounting its PNG.
+					setSketch({
+						open: true,
+						editId: id,
+						initial: chip.sketchScene ? null : chip.dataUrl,
+						scene: chip.sketchScene ?? null,
+					});
 				}}
-				onEditImage={src => setSketch({ open: true, editId: null, initial: src })}
+				onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
 				onAddAttachment={() => anyPickRef.current?.click()}
 				// Todo/queue chips + extension dock hang ABOVE the input card
 				// (user direction: the status row belongs above the input,
@@ -1936,7 +1959,7 @@ export function Composer({
 							}}
 							onPickImages={files => void addFiles(files)}
 							onPickFiles={files => void addFiles(files)}
-							onSketch={() => setSketch({ open: true, editId: null, initial: null })}
+							onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;
@@ -2255,7 +2278,14 @@ export function Composer({
 					/>,
 				)}
 			</ComposerFrame>
-			{sketch.open && <SketchPad initialImage={sketch.initial} onClose={closeSketch} onDone={onSketchDone} />}
+			{sketch.open && (
+				<SketchPad
+					initialImage={sketch.initial}
+					initialScene={sketch.scene}
+					onClose={closeSketch}
+					onDone={onSketchDone}
+				/>
+			)}
 		</div>
 	);
 }

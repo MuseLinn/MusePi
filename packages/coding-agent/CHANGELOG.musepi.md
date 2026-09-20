@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **画板：点击画板图重新打开的是原画（A0），不再是粘贴一张导出图（A1）**：此前完成只导出一张 PNG，点回 chip 时又把那张 PNG 当底图挂进画板——每一笔、每个图形和文字全部融成一张位图，再编辑只能在图上涂，任何一处旧细节都改不回来。现在完成同时交出画板的**笔画列表**（`lib/sketch-scene.ts` 的 scene），composer 把它挂在 chip 上：点击 chip 恢复的是对象本身，每一笔依旧可选、可拖、可缩放、可擦除，改哪一处就改哪一处；再次完成是像素与 scene **一起**替换，来回编辑多少次都不退化。恢复出来的内容是画板的开场状态（不进撤销栈、不算未保存改动），笔画 id 从恢复集之后续号以免命中错对象；换窗口尺寸后重开会等比缩放回去（压力值不动，线宽随同一系数）。草稿里也尽量带上 scene（超容量或含导入图片时只丢 scene、保住附件），缺失时回落成旧的整图打开，不会退化成打不开。
+  - EN: Sketch board: clicking a board image reopens the original drawing (A0) instead of pasting the exported copy (A1). Finishing used to emit only a PNG, and clicking the chip mounted that PNG back as the base layer — every pen stroke, shape and label fused into one bitmap, so a re-edit could only paint over the picture and no earlier detail was recoverable. 完成 now also hands over the board's **stroke list** (a `scene`, `lib/sketch-scene.ts`) which the composer stores on the chip: clicking it restores the objects themselves, so each stroke is again selectable, movable, scalable and erasable — you fix exactly the part you meant to. Finishing again swaps pixels **and** scene, so the round trip survives any number of re-edits. Restored content is the board's opening state (not an undo step, not a dirty change), stroke ids continue past the restored set so the eraser and select tool never hit the wrong object, and reopening in a resized window rescales proportionally (pressure untouched, thickness follows the same factor). Drafts carry the scene when it fits (oversized payloads or scenes holding an imported picture drop only the scene and keep the attachment), and a missing scene falls back to the old flat-image reopen rather than refusing to open.
+
 ## [0.4.34] - 2026-09-20
 
 ### Added

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { RpcClient } from "../../lib/rpc";
-import { type ComposerAttachment, parseAttachmentDraft } from "./use-attachments";
+import { attachmentDraftPayload, type ComposerAttachment, parseAttachmentDraft } from "./use-attachments";
 
 /** Per-session chip stash, next to the text draft key: separate so a long
  *  text draft can never clobber (or be clobbered by) the base64 payload. */
@@ -112,15 +112,13 @@ export function useDraftPersistence({
 	// Chip stash payload, "" when there is nothing to stash. Keyed on the
 	// encoded value so a keystroke never re-encodes multi-MB base64.
 	const attachmentPayload = useMemo(
-		() =>
-			attachments.length > 0
-				? JSON.stringify(
-						// `sketch` must round-trip: without it a board-drawn chip
-						// comes back from a restored draft as a plain image, so
-						// clicking it opens the lightbox instead of the board.
-						attachments.map(({ dataUrl, mimeType, name, sketch }) => ({ dataUrl, mimeType, name, sketch })),
-					)
-				: "",
+		// `sketch` must round-trip: without it a board-drawn chip comes back
+		// from a restored draft as a plain image, so clicking it opens the
+		// lightbox instead of the board. `scene` is the same story one level
+		// up — without it the board reopens on a flat copy of its own PNG and
+		// none of the strokes can be edited apart. Both are best-effort and
+		// dropped when the payload would not fit (see attachmentDraftPayload).
+		() => (attachments.length > 0 ? attachmentDraftPayload(attachments) : ""),
 		[attachments],
 	);
 	useEffect(() => {

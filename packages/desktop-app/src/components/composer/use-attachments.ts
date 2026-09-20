@@ -2,6 +2,7 @@ import type { ClipboardEvent, DragEvent } from "react";
 import { useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
 import type { RpcClient } from "../../lib/rpc";
+import { parseSketchScene, type SketchScene, sceneHasImage } from "../../lib/sketch-scene";
 
 /**
  * One attachment chip.
@@ -31,6 +32,12 @@ export interface ComposerAttachment {
 	/** Board-drawn chip (SketchPad): clicking it reopens the canvas for
 	 *  editing instead of the plain image lightbox (Codex parity). */
 	sketch?: boolean;
+	/** Editable board content behind a `sketch` chip (its strokes, not its
+	 *  pixels). Reopening the chip restores THESE objects, so a re-edit can
+	 *  move / rescale / erase one earlier stroke instead of painting over a
+	 *  flat copy of the exported PNG. Absent → the chip falls back to the old
+	 *  "mount the PNG as the base layer" reopen. */
+	sketchScene?: SketchScene;
 }
 
 /** One module sequence for chip ids: a restored draft re-seeds chips into a
@@ -49,10 +56,17 @@ export function parseAttachmentDraft(raw: string | null): ComposerAttachment[] {
 		return [];
 	}
 	if (!Array.isArray(parsed)) return [];
+	// Stored entries are untrusted (a value can outlive a shape change), so
+	// the loop reads a widened shape: `scene` is board content this build may
+	// or may not understand, and `parseSketchScene` is the gate.
+	type StoredChip = Partial<ComposerAttachment> & { scene?: unknown };
 	const out: ComposerAttachment[] = [];
-	for (const entry of parsed as Partial<ComposerAttachment>[]) {
+	for (const entry of parsed as StoredChip[]) {
 		if (typeof entry?.dataUrl !== "string" || typeof entry.mimeType !== "string") continue;
 		const kind = entry.kind === "file" ? "file" : "image";
+		// A restored scene brings the strokes back; junk is dropped and the
+		// chip degrades to the flat-image reopen.
+		const scene = parseSketchScene(entry.scene);
 		// A file chip without its raw handle cannot be uploaded anymore —
 		// keep it visible (the user attached it for a reason) but mark it
 		// so the send path can refuse it with a re-attach hint.
@@ -66,6 +80,7 @@ export function parseAttachmentDraft(raw: string | null): ComposerAttachment[] {
 			// Preserve the board-drawn marker so a restored chip still opens
 			// the sketch pad rather than the plain lightbox.
 			...(entry.sketch === true ? { sketch: true } : {}),
+			...(scene ? { sketchScene: scene } : {}),
 		});
 	}
 	return out;
@@ -208,18 +223,64 @@ export function nextSketchFileName(now: number = Date.now()): string {
 }
 
 /**
- * Mark ONE image chip — identified by its exact filename — as board-drawn.
+ * Mark ONE image chip — identified by its exact filename — as board-drawn,
+ * and hang the board's editable scene on it.
  *
  * The name argument is not a convenience. Matching on the `sketch-` prefix
  * (the original form) marked *every* so-named chip: a re-edit ran against
  * several chips at once and every later sketch re-flagged older ones. Exact
  * name + image kind keeps the call idempotent and single-target.
+ *
+ * `scene` is what makes the chip reopen as A0 instead of as a pasted copy of
+ * A1: without it the board would mount its own exported PNG and every object
+ * would be fused into one un-editable bitmap.
  */
 export function markSketchChip<T extends { kind: "image" | "file"; name: string }>(
 	chips: readonly T[],
 	fileName: string,
-): (T & { sketch?: boolean })[] {
-	return chips.map(c => (c.kind !== "file" && c.name === fileName ? { ...c, sketch: true } : c));
+	scene?: SketchScene | null,
+): (T & { sketch?: boolean; sketchScene?: SketchScene })[] {
+	return chips.map(c =>
+		c.kind !== "file" && c.name === fileName ? { ...c, sketch: true, ...(scene ? { sketchScene: scene } : {}) } : c,
+	);
+}
+
+/** Draft-stash size ceiling for the chip payload, scenes included. The chips
+ *  themselves are multi-MB base64 PNGs and localStorage is ~5MB, so a scene
+ *  is only carried while the whole payload still fits; past that the scenes
+ *  are dropped and the chips survive (a plain-image reopen beats losing the
+ *  attachment to a quota error). */
+const ATTACHMENT_DRAFT_BUDGET = 1_500_000;
+
+/**
+ * The chip stash payload: chips always, scenes when they fit.
+ *
+ * Scenes holding an imported picture are never stashed — such a scene carries
+ * a second full-resolution base64 payload, so the only thing gained by
+ * keeping it would be a quota error. Those chips come back from a draft as
+ * flat images (the in-memory chip keeps its scene for the live session).
+ */
+/** One chip as it goes into the draft stash. Mirrors the fields
+ *  `parseAttachmentDraft` reads back; `scene` is the optional board content. */
+interface DraftChipPayload {
+	dataUrl: string;
+	mimeType: string;
+	name: string;
+	sketch?: boolean;
+	scene?: SketchScene;
+}
+
+export function attachmentDraftPayload(attachments: readonly ComposerAttachment[]): string {
+	const entries: DraftChipPayload[] = attachments.map(({ dataUrl, mimeType, name, sketch, sketchScene }) => {
+		const base: DraftChipPayload = { dataUrl, mimeType, name, sketch };
+		const keep = sketch === true && sketchScene !== undefined && !sceneHasImage(sketchScene);
+		return keep ? { ...base, scene: sketchScene } : base;
+	});
+	const full = JSON.stringify(entries);
+	if (full.length <= ATTACHMENT_DRAFT_BUDGET) return full;
+	// Over budget: drop every scene rather than risk the whole write failing
+	// on a quota error (which would take the chips with it).
+	return JSON.stringify(entries.map(({ scene: _scene, ...rest }) => rest));
 }
 
 /**
