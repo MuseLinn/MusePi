@@ -1,11 +1,19 @@
-import { t } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption, t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
 import { Reveal } from "./Reveal";
+
+/** Share scope: what the guest link exposes. */
+const SHARE_SCOPE_SEGMENTS: SegmentedOption<"session" | "workspace" | "tunnel">[] = [
+	{ value: "session", label: t("current session") },
+	{ value: "workspace", label: t("workspace") },
+	{ value: "tunnel", label: t("public tunnel") },
+];
 
 interface CollabGuest {
 	name: string;
@@ -122,6 +130,7 @@ export function CollabDialog({
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [copied, setCopied] = useState(false);
+	const { confirm } = useConfirm();
 	const qrRef = useRef<HTMLCanvasElement | null>(null);
 	const [webLink, setWebLink] = useState<string | null>(null);
 	const [mode, setMode] = useState<"session" | "workspace" | "tunnel">("session");
@@ -193,6 +202,17 @@ export function CollabDialog({
 		} catch (err) {
 			setStartErrors(e => ({ ...e, [kind]: err instanceof Error ? err.message : String(err) }));
 		}
+		await refreshChannels();
+	};
+
+	/** 解绑 (unlink): stop the channel AND drop its persisted credentials.
+	 *  Destructive (the next start needs a fresh QR login), so it sits behind
+	 *  a confirm dialog — Enter confirms, Escape cancels (prompt-dialog). */
+	const unlinkChannel = async (kind: string): Promise<void> => {
+		if (!rpc) return;
+		const ok = await confirm(t("unlink channel confirm"), t("unlink"));
+		if (!ok) return;
+		await rpc.request("channels.unlink", { kind }).catch(() => {});
 		await refreshChannels();
 	};
 
@@ -439,29 +459,12 @@ export function CollabDialog({
 						</>
 					) : (
 						<div className="gui-collab-idle">
-							<div className="gui-segmented">
-								<button
-									type="button"
-									className={`gui-seg-btn${mode === "session" ? " gui-seg-btn--active" : ""}`}
-									onClick={() => setMode("session")}
-								>
-									{t("current session")}
-								</button>
-								<button
-									type="button"
-									className={`gui-seg-btn${mode === "workspace" ? " gui-seg-btn--active" : ""}`}
-									onClick={() => setMode("workspace")}
-								>
-									{t("workspace")}
-								</button>
-								<button
-									type="button"
-									className={`gui-seg-btn${mode === "tunnel" ? " gui-seg-btn--active" : ""}`}
-									onClick={() => setMode("tunnel")}
-								>
-									{t("public tunnel")}
-								</button>
-							</div>
+							<Segmented
+								className="gui-seg--compact"
+								value={mode}
+								options={SHARE_SCOPE_SEGMENTS}
+								onChange={v => setMode(v)}
+							/>
 							<button
 								type="button"
 								className="gui-btn gui-btn-primary"
@@ -495,6 +498,11 @@ export function CollabDialog({
 							const label = c.kind;
 							const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
 							const fields = channelFields[c.kind];
+							// 启动层级（issue: 点启动不出二维码）：只有存在“必填”字段的渠道
+							// 才需要先展开表单（保存并启动）；wechat 的 token 是可选的（空=
+							// QR 登录），点启动直接连，二维码立刻出现。表单仍可经齿轮进入
+							// （想预置 token 跳过扫码时用）。
+							const needsForm = !!fields && fields.some(f => !f.optional);
 							const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
 							const waitingScan = c.state === "waiting_scan";
 							return (
@@ -512,28 +520,63 @@ export function CollabDialog({
 												{c.detail ?? (c.state === "off" ? t("off") : c.state)}
 											</div>
 										</div>
-										<button
-											type="button"
-											className="gui-btn gui-btn-sm"
-											disabled={c.state === "connecting"}
-											onClick={() => {
-												if (on) {
-													void rpc
-														?.request("channels.stop", { kind: c.kind })
-														.then(() => refreshChannels())
-														.catch(() => refreshChannels());
-												} else if (fields) {
-													setExpandedKind(expandedKind === c.kind ? null : c.kind);
-												} else {
-													// No known config form (plugin channel): start
-													// directly off the persisted config instead of
-													// expanding an empty block.
-													void startChannel(c.kind);
-												}
-											}}
-										>
-											{on ? t("stop") : t("start")}
-										</button>
+										{on ? (
+											<div className="flex items-center gap-1">
+												{/* 停止：仅断开连接（token 已持久化，再次启动直连），无需确认。 */}
+												<button
+													type="button"
+													className="gui-btn gui-btn-sm"
+													disabled={c.state === "connecting"}
+													onClick={() => {
+														void rpc
+															?.request("channels.stop", { kind: c.kind })
+															.then(() => refreshChannels())
+															.catch(() => refreshChannels());
+													}}
+												>
+													{t("stop")}
+												</button>
+												{/* 解绑：断开 + 清除凭证（下次要重新扫码），二次确认。 */}
+												<button
+													type="button"
+													className="gui-btn gui-btn-sm"
+													title={t("unlink")}
+													onClick={() => void unlinkChannel(c.kind)}
+												>
+													<Icon name="link-unlink-m" className="h-3 w-3" />
+													<span>{t("unlink")}</span>
+												</button>
+											</div>
+										) : (
+											<div className="flex items-center gap-1">
+												<button
+													type="button"
+													className="gui-btn gui-btn-sm"
+													onClick={() => {
+														if (needsForm) {
+															setExpandedKind(expandedKind === c.kind ? null : c.kind);
+														} else {
+															// 全字段可选（wechat QR 登录）或无已知表单（插件渠道）
+															// — 直接用持久化配置启动，二维码立即出现。
+															void startChannel(c.kind);
+														}
+													}}
+												>
+													{t("start")}
+												</button>
+												{fields && (
+													<button
+														type="button"
+														className="gui-btn gui-btn-sm"
+														title={t("configure channel")}
+														aria-label={t("configure channel")}
+														onClick={() => setExpandedKind(expandedKind === c.kind ? null : c.kind)}
+													>
+														<Icon name="settings-3" className="h-3 w-3" />
+													</button>
+												)}
+											</div>
+										)}
 									</div>
 									{/* QR login (issue #28): the backend exposes the WeChat login
 									 *  QR via status().config.qrUrl while waiting for a scan —

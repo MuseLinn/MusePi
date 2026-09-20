@@ -5,6 +5,7 @@
  * daemon RPC and merges the response back immediately. RPC failures keep
  * the last known state (fail silent).
  */
+import { Segmented, type SegmentedOption } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { t } from "../../i18n/index.js";
@@ -22,6 +23,12 @@ export function SessionModeToggles({ rpc, sessionId }: { rpc: RpcClient; session
 	const computerOn = state.computerEnabled;
 	const visionMode = state.vision.mode;
 	const prewalkArmed = state.prewalk.enabled;
+	// Built in render (not module scope) so a locale switch re-labels them.
+	const visionSegments: SegmentedOption<typeof visionMode>[] = [
+		{ value: "auto", label: t("vision auto") },
+		{ value: "on", label: t("vision on") },
+		{ value: "off", label: t("vision off") },
+	];
 	return (
 		<div ref={anchorRef} className="gui-mode-toggles">
 			<button
@@ -80,20 +87,13 @@ export function SessionModeToggles({ rpc, sessionId }: { rpc: RpcClient; session
 							<Icon name="eye" className="h-3 w-3" />
 							{t("vision mode")}
 						</span>
-						<div className="gui-segmented" role="radiogroup" aria-label={t("vision mode")}>
-							{(["auto", "on", "off"] as const).map(m => (
-								<button
-									key={m}
-									type="button"
-									role="radio"
-									aria-checked={visionMode === m}
-									className={`gui-seg-btn${visionMode === m ? " gui-seg-btn--active" : ""}`}
-									onClick={() => setVision(m)}
-								>
-									{t(m === "auto" ? "vision auto" : m === "on" ? "vision on" : "vision off")}
-								</button>
-							))}
-						</div>
+						<Segmented
+							className="gui-seg--compact"
+							ariaLabel={t("vision mode")}
+							value={visionMode}
+							options={visionSegments}
+							onChange={setVision}
+						/>
 					</div>
 					{/* Prewalk: one-shot arm with @smol; shows armed state. */}
 					<div className="gui-mode-toggle-row">

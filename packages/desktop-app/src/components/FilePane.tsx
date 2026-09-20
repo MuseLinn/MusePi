@@ -1,4 +1,4 @@
-import { highlightToCodeHtml, ImageLightbox, Markdown, t } from "@musepi/guest-client";
+import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type SegmentedOption, t } from "@musepi/guest-client";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
 	ArrowLeft,
@@ -32,6 +32,18 @@ import { useChatHighlight } from "../lib/highlight";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
+
+/** Markdown preview switch: rendered markdown vs the raw source text. */
+const MD_VIEW_SEGMENTS: SegmentedOption<"rendered" | "source">[] = [
+	{ value: "rendered", label: t("rendered view") },
+	{ value: "source", label: t("source code") },
+];
+
+/** HTML preview switch: live iframe vs the raw source text. */
+const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
+	{ value: "live", label: t("page preview") },
+	{ value: "source", label: t("source code") },
+];
 
 /**
  * Workspace file pane: the daemon's structured workspace.tree scan rendered
@@ -1070,22 +1082,13 @@ export function FilePane({
 								{preview.name}
 							</span>
 							{extOf(preview.name) === "md" && preview.text !== undefined && !edit && (
-								<div className="gui-filepane-preview-modes">
-									<button
-										type="button"
-										className={`gui-seg-btn${mdRender ? " gui-seg-btn--active" : ""}`}
-										onClick={() => setMdRender(true)}
-									>
-										{t("rendered view")}
-									</button>
-									<button
-										type="button"
-										className={`gui-seg-btn${mdRender ? "" : " gui-seg-btn--active"}`}
-										onClick={() => setMdRender(false)}
-									>
-										{t("source code")}
-									</button>
-								</div>
+								<Segmented
+									className="gui-seg--compact"
+									ariaLabel={t("preview")}
+									value={mdRender ? "rendered" : "source"}
+									options={MD_VIEW_SEGMENTS}
+									onChange={v => setMdRender(v === "rendered")}
+								/>
 							)}
 							<span className="gui-filepane-preview-tools">
 								{preview.raw !== undefined && !edit && (
@@ -1235,20 +1238,13 @@ function HtmlPreview({
 	return (
 		<div className="gui-filepane-preview-html">
 			<div className="gui-filepane-preview-html-bar">
-				<button
-					type="button"
-					className={`gui-seg-btn${live ? " gui-seg-btn--active" : ""}`}
-					onClick={() => onToggle("live")}
-				>
-					{t("page preview")}
-				</button>
-				<button
-					type="button"
-					className={`gui-seg-btn${live ? "" : " gui-seg-btn--active"}`}
-					onClick={() => onToggle("source")}
-				>
-					{t("source code")}
-				</button>
+				<Segmented
+					className="gui-seg--compact"
+					ariaLabel={t("preview")}
+					value={live ? "live" : "source"}
+					options={HTML_VIEW_SEGMENTS}
+					onChange={onToggle}
+				/>
 			</div>
 			{live ? (
 				<iframe

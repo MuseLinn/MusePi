@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption, t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
@@ -6,6 +6,12 @@ import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../../lib/
 import { useConfirm, usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
+
+/** Changes view: flat file list vs grouped tree. */
+const CHANGES_VIEW_SEGMENTS: SegmentedOption<"flat" | "tree">[] = [
+	{ value: "flat", label: t("flat list") },
+	{ value: "tree", label: t("tree view") },
+];
 
 /** Read-only keyboard shortcut reference (openchamber parity). */
 interface GitAuthState {
@@ -432,28 +438,15 @@ export function GitPrefsRow(): ReactNode {
 					<div className="gui-settings-row-label">{t("changes view")}</div>
 					<div className="gui-settings-row-desc">{t("changes view description")}</div>
 				</div>
-				<div className="gui-segmented">
-					<button
-						type="button"
-						className={`gui-seg-btn${view === "flat" ? " gui-seg-btn--active" : ""}`}
-						onClick={() => {
-							setViewState("flat");
-							localStorage.setItem("musepi-gui-git-view", "flat");
-						}}
-					>
-						{t("flat list")}
-					</button>
-					<button
-						type="button"
-						className={`gui-seg-btn${view === "tree" ? " gui-seg-btn--active" : ""}`}
-						onClick={() => {
-							setViewState("tree");
-							localStorage.setItem("musepi-gui-git-view", "tree");
-						}}
-					>
-						{t("tree view")}
-					</button>
-				</div>
+				<Segmented
+					ariaLabel={t("changes view")}
+					value={view}
+					options={CHANGES_VIEW_SEGMENTS}
+					onChange={v => {
+						setViewState(v);
+						localStorage.setItem("musepi-gui-git-view", v);
+					}}
+				/>
 			</div>
 			<div className="gui-settings-row">
 				<div>

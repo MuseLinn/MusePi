@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption, t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
@@ -10,6 +10,12 @@ import {
 	runCleanupOnce,
 } from "../../lib/session-cleanup";
 import { Icon } from "../../vendor/oc-icons";
+
+/** What expiry does to a stale session: snapshot it or drop it. */
+const CLEANUP_ACTION_SEGMENTS: SegmentedOption<"archive" | "delete">[] = [
+	{ value: "archive", label: t("archive") },
+	{ value: "delete", label: t("delete") },
+];
 
 /** Session behavior: auto titles, delete-confirmation toggle, and
  *  auto-cleanup of stale sessions (archive = session.close → daemon
@@ -195,28 +201,15 @@ export function SessionsSection({
 						<div className="gui-settings-row-label">{t("session expiry action")}</div>
 						<div className="gui-settings-row-desc">{t("session expiry action description")}</div>
 					</div>
-					<div className="gui-segmented">
-						<button
-							type="button"
-							className={`gui-seg-btn${cleanupAction === "archive" ? " gui-seg-btn--active" : ""}`}
-							onClick={() => {
-								setCleanupAction("archive");
-								localStorage.setItem("musepi-gui-autoclean-action", "archive");
-							}}
-						>
-							{t("archive")}
-						</button>
-						<button
-							type="button"
-							className={`gui-seg-btn${cleanupAction === "delete" ? " gui-seg-btn--active" : ""}`}
-							onClick={() => {
-								setCleanupAction("delete");
-								localStorage.setItem("musepi-gui-autoclean-action", "delete");
-							}}
-						>
-							{t("delete")}
-						</button>
-					</div>
+					<Segmented
+						ariaLabel={t("session expiry action")}
+						value={cleanupAction}
+						options={CLEANUP_ACTION_SEGMENTS}
+						onChange={v => {
+							setCleanupAction(v);
+							localStorage.setItem("musepi-gui-autoclean-action", v);
+						}}
+					/>
 				</div>
 				<div className="gui-settings-row">
 					<div>

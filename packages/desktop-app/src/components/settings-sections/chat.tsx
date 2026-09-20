@@ -5,6 +5,8 @@ import {
 	graphemeSpans,
 	nextStep,
 	renderMermaidHtml,
+	Segmented,
+	type SegmentedOption,
 	STREAMING_REVEAL_FRAME_MS,
 	sliceGraphemes,
 	TAIL_RENDERERS,
@@ -15,6 +17,34 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { useChatHighlight } from "../../lib/highlight";
 import { NumberStepper } from "./shared";
+
+/** Segmented option tables — module scope is fine, the labels are static
+ * per locale and the settings view remounts on a language switch. */
+const MERMAID_SEGMENTS: SegmentedOption<"svg" | "ascii">[] = [
+	{ value: "svg", label: t("svg") },
+	{ value: "ascii", label: t("ascii") },
+];
+
+const DIFF_LAYOUT_SEGMENTS: SegmentedOption<"dynamic" | "inline" | "side-by-side">[] = [
+	{ value: "dynamic", label: t("dynamic") },
+	{ value: "inline", label: t("always inline") },
+	{ value: "side-by-side", label: t("always side by side") },
+];
+
+const OUTPUT_STYLE_SEGMENTS: SegmentedOption<"default" | "kimi" | "zcode">[] = [
+	{ value: "default", label: t("output style default") },
+	{ value: "kimi", label: t("output style kimi") },
+	{ value: "zcode", label: t("output style zcode") },
+];
+
+const TYPING_EFFECT_SEGMENTS: SegmentedOption<"typewriter" | "burst" | "shimmer" | "glitch" | "flip" | "ink">[] = [
+	{ value: "typewriter", label: t("typing effect typewriter") },
+	{ value: "burst", label: t("typing effect burst") },
+	{ value: "shimmer", label: t("typing effect shimmer") },
+	{ value: "glitch", label: t("typing effect glitch") },
+	{ value: "flip", label: t("typing effect flip") },
+	{ value: "ink", label: t("typing effect ink") },
+];
 
 /** Small persisted toggle with a settings-row label (shared by the new tabs). */
 export function PrefToggle({
@@ -106,25 +136,19 @@ export function PrefSegmented<T extends string>({
 				<div className="gui-settings-row-label">{label}</div>
 				<div className="gui-settings-row-desc">{description}</div>
 			</div>
-			<div className="gui-segmented">
-				{options.map(o => (
-					<button
-						key={o.id}
-						type="button"
-						className={`gui-seg-btn${value === o.id ? " gui-seg-btn--active" : ""}`}
-						onClick={() => {
-							setValue(o.id);
-							try {
-								localStorage.setItem(storageKey, o.id);
-							} catch {
-								// ignore
-							}
-						}}
-					>
-						{o.label}
-					</button>
-				))}
-			</div>
+			<Segmented
+				ariaLabel={label}
+				value={value}
+				options={options.map(o => ({ value: o.id, label: o.label }))}
+				onChange={v => {
+					setValue(v);
+					try {
+						localStorage.setItem(storageKey, v);
+					} catch {
+						// ignore
+					}
+				}}
+			/>
 		</div>
 	);
 }
@@ -243,25 +267,19 @@ export function ChatSection(): ReactNode {
 						<div className="gui-settings-row-label">{t("mermaid rendering")}</div>
 						<div className="gui-settings-row-desc">{t("mermaid rendering description")}</div>
 					</div>
-					<div className="gui-segmented">
-						{(["svg", "ascii"] as const).map(m => (
-							<button
-								key={m}
-								type="button"
-								className={`gui-seg-btn${mermaidModeState === m ? " gui-seg-btn--active" : ""}`}
-								onClick={() => {
-									setMermaidModeState(m);
-									try {
-										localStorage.setItem("musepi-gui-chat-mermaid", m);
-									} catch {
-										// ignore
-									}
-								}}
-							>
-								{m === "svg" ? t("svg") : t("ascii")}
-							</button>
-						))}
-					</div>
+					<Segmented
+						ariaLabel={t("mermaid rendering")}
+						value={mermaidModeState}
+						options={MERMAID_SEGMENTS}
+						onChange={v => {
+							setMermaidModeState(v);
+							try {
+								localStorage.setItem("musepi-gui-chat-mermaid", v);
+							} catch {
+								// ignore
+							}
+						}}
+					/>
 				</div>
 				<div className="gui-chat-preview-inline">
 					<div className="gui-chat-preview-label">{t("mermaid preview")}</div>
@@ -272,31 +290,19 @@ export function ChatSection(): ReactNode {
 						<div className="gui-settings-row-label">{t("diff layout")}</div>
 						<div className="gui-settings-row-desc">{t("diff layout description")}</div>
 					</div>
-					<div className="gui-segmented">
-						{(
-							[
-								{ id: "dynamic", label: t("dynamic") },
-								{ id: "inline", label: t("always inline") },
-								{ id: "side-by-side", label: t("always side by side") },
-							] as const
-						).map(o => (
-							<button
-								key={o.id}
-								type="button"
-								className={`gui-seg-btn${diffLayoutState === o.id ? " gui-seg-btn--active" : ""}`}
-								onClick={() => {
-									setDiffLayoutState(o.id);
-									try {
-										localStorage.setItem("musepi-gui-chat-difflayout", o.id);
-									} catch {
-										// ignore
-									}
-								}}
-							>
-								{o.label}
-							</button>
-						))}
-					</div>
+					<Segmented
+						ariaLabel={t("diff layout")}
+						value={diffLayoutState}
+						options={DIFF_LAYOUT_SEGMENTS}
+						onChange={v => {
+							setDiffLayoutState(v);
+							try {
+								localStorage.setItem("musepi-gui-chat-difflayout", v);
+							} catch {
+								// ignore
+							}
+						}}
+					/>
 				</div>
 				<div className="gui-chat-preview-inline">
 					<div className="gui-chat-preview-label">{t("diff preview")}</div>
@@ -360,71 +366,44 @@ export function ChatSection(): ReactNode {
 						<div className="gui-settings-row-label">{t("output style")}</div>
 						<div className="gui-settings-row-desc">{t("output style description")}</div>
 					</div>
-					<div className="gui-segmented">
-						{(
-							[
-								{ id: "default", label: t("output style default") },
-								{ id: "kimi", label: t("output style kimi") },
-								{ id: "zcode", label: t("output style zcode") },
-							] as const
-						).map(o => (
-							<button
-								key={o.id}
-								type="button"
-								className={`gui-seg-btn${outputStyle === o.id ? " gui-seg-btn--active" : ""}`}
-								onClick={() => {
-									tapFeedback();
-									setOutputStyle(o.id);
-									try {
-										localStorage.setItem("musepi-gui-chat-output-style", o.id);
-									} catch {
-										// ignore
-									}
-									document.documentElement.dataset.outputStyle = o.id;
-								}}
-							>
-								{o.label}
-							</button>
-						))}
-					</div>
+					<Segmented
+						ariaLabel={t("output style")}
+						value={outputStyle}
+						options={OUTPUT_STYLE_SEGMENTS}
+						onChange={v => {
+							tapFeedback();
+							setOutputStyle(v);
+							try {
+								localStorage.setItem("musepi-gui-chat-output-style", v);
+							} catch {
+								// ignore
+							}
+							document.documentElement.dataset.outputStyle = v;
+						}}
+					/>
 				</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("typing effect")}</div>
 						<div className="gui-settings-row-desc">{t("typing effect description")}</div>
 					</div>
-					<div className="gui-segmented">
-						{(
-							[
-								{ id: "typewriter", label: t("typing effect typewriter") },
-								{ id: "burst", label: t("typing effect burst") },
-								{ id: "shimmer", label: t("typing effect shimmer") },
-								{ id: "glitch", label: t("typing effect glitch") },
-								{ id: "flip", label: t("typing effect flip") },
-								{ id: "ink", label: t("typing effect ink") },
-							] as const
-						).map(o => (
-							<button
-								key={o.id}
-								type="button"
-								className={`gui-seg-btn${typingEffect === o.id ? " gui-seg-btn--active" : ""}`}
-								onClick={() => {
-									tapFeedback();
-									setTypingEffect(o.id);
-									try {
-										localStorage.setItem("musepi-gui-chat-effect", o.id);
-									} catch {
-										// ignore
-									}
-									// No root-class swap here: the transcript applies the
-									// effect only to the block that is streaming right now,
-									// and this preview re-renders from `effect` below.
-								}}
-							>
-								{o.label}
-							</button>
-						))}
-					</div>
+					<Segmented
+						ariaLabel={t("typing effect")}
+						value={typingEffect}
+						options={TYPING_EFFECT_SEGMENTS}
+						onChange={v => {
+							tapFeedback();
+							setTypingEffect(v);
+							try {
+								localStorage.setItem("musepi-gui-chat-effect", v);
+							} catch {
+								// ignore
+							}
+							// No root-class swap here: the transcript applies the
+							// effect only to the block that is streaming right now,
+							// and this preview re-renders from `effect` below.
+						}}
+					/>
 				</div>
 				<div className="gui-chat-preview-inline">
 					<div className="gui-chat-preview-label">{t("output style preview")}</div>

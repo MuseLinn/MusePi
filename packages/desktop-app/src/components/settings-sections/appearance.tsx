@@ -3,8 +3,11 @@ import {
 	getLocaleSnapshot,
 	highlightToCodeHtml,
 	LIGHT_THEME_PRESETS,
+	Segmented,
+	type SegmentedOption,
 	setLocale,
 	subscribeLocale,
+	type ThemePreference,
 	type TranslationKey,
 	t,
 	type UiThemeId,
@@ -87,19 +90,28 @@ const ACCENT_NAMES: Record<string, TranslationKey> = {
 	jade: "accent jade",
 };
 
-const THEME_OPTIONS = [
-	{ id: "system", label: t("follow system") },
-	{ id: "light", label: t("light") },
-	{ id: "dark", label: t("dark") },
-] as const;
+/** Motion budget: full springs / reduced / off (the `gui-motion-off` class
+ * on <html> is what the CSS degrades on). */
+const MOTION_SEGMENTS: SegmentedOption<"full" | "reduced" | "off">[] = [
+	{ value: "full", label: t("full") },
+	{ value: "reduced", label: t("reduced") },
+	{ value: "off", label: t("off") },
+];
 
-/** Same options as a segmented picker with per-mode icons (monitor / sun /
- *  moon) — the theme flip overlay morphs between these same icons. */
-const TYPE_THEME_OPTIONS = [
-	{ id: "system", label: t("follow system"), Icon: MonitorIcon },
-	{ id: "light", label: t("light"), Icon: SunIcon },
-	{ id: "dark", label: t("dark"), Icon: MoonIcon },
-] as const;
+/** Separate light/dark presets vs one unified preset — Segmented keys on a
+ * string, so the boolean rides on these two ids. */
+const THEME_MODE_SEGMENTS: SegmentedOption<"separate" | "unified">[] = [
+	{ value: "separate", label: t("theme mode separate") },
+	{ value: "unified", label: t("theme mode unified") },
+];
+
+/** Follow-system / light / dark with per-mode icons (monitor / sun / moon) —
+ * the theme flip overlay morphs between these same icons. */
+const TYPE_THEME_SEGMENTS: SegmentedOption<ThemePreference>[] = [
+	{ value: "system", label: t("follow system"), icon: MonitorIcon },
+	{ value: "light", label: t("light"), icon: SunIcon },
+	{ value: "dark", label: t("dark"), icon: MoonIcon },
+];
 export function AppearanceSection({
 	showAvatars,
 	onToggleAvatars,
@@ -272,48 +284,26 @@ export function AppearanceSection({
 					<div className="gui-settings-field-label">{t("interface theme")}</div>
 					<div className="gui-settings-field-hint">{t("choose light, dark or follow the system")}</div>
 					<div className="gui-settings-field-control">
-						<div className="gui-segmented gui-theme-seg" role="radiogroup" aria-label={t("interface theme")}>
-							{TYPE_THEME_OPTIONS.map(o => (
-								<button
-									key={o.id}
-									type="button"
-									role="radio"
-									aria-checked={preference === o.id}
-									className={`gui-seg-btn${preference === o.id ? " gui-seg-btn--active" : ""}${themeShake && preference === o.id ? " gui-seg-btn--shake" : ""}`}
-									onAnimationEnd={() => setThemeShake(false)}
-									onClick={() => setPreference(o.id)}
-								>
-									<o.Icon size={14} />
-									<span>{o.label}</span>
-								</button>
-							))}
-						</div>
+						<Segmented
+							ariaLabel={t("interface theme")}
+							value={preference}
+							options={TYPE_THEME_SEGMENTS}
+							onChange={setPreference}
+							shake={themeShake}
+							onShakeEnd={() => setThemeShake(false)}
+						/>
 					</div>
 				</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("theme mode")}</div>
 					<div className="gui-settings-field-hint">{t("theme mode description")}</div>
 					<div className="gui-settings-field-control">
-						<div className="gui-segmented" role="radiogroup" aria-label={t("theme mode")}>
-							<button
-								type="button"
-								role="radio"
-								aria-checked={!unifiedMode}
-								className={`gui-seg-btn${unifiedMode ? "" : " gui-seg-btn--active"}`}
-								onClick={() => setUnifiedMode(false)}
-							>
-								{t("theme mode separate")}
-							</button>
-							<button
-								type="button"
-								role="radio"
-								aria-checked={unifiedMode}
-								className={`gui-seg-btn${unifiedMode ? " gui-seg-btn--active" : ""}`}
-								onClick={() => setUnifiedMode(true)}
-							>
-								{t("theme mode unified")}
-							</button>
-						</div>
+						<Segmented
+							ariaLabel={t("theme mode")}
+							value={unifiedMode ? "unified" : "separate"}
+							options={THEME_MODE_SEGMENTS}
+							onChange={v => setUnifiedMode(v === "unified")}
+						/>
 					</div>
 				</div>
 				<Reveal open={unifiedMode}>
@@ -598,24 +588,18 @@ export function AppearanceSection({
 						<div className="gui-settings-field-label">{t("glass opacity")}</div>
 						<div className="gui-settings-field-hint">{t("glass opacity description")}</div>
 						<div className="gui-settings-field-control">
-							<div className="gui-segmented gui-glass-seg" role="radiogroup" aria-label={t("glass opacity")}>
-								{GLASS_PRESETS.map(p => (
-									<button
-										key={p.id}
-										type="button"
-										role="radio"
-										aria-checked={glass === p.id}
-										className={`gui-seg-btn${glass === p.id ? " gui-seg-btn--active" : ""}`}
-										onClick={() => {
-											setGlass(p.id);
-											setPref("musepi-gui-glass", p.id);
-											applyGlassPreset(p);
-										}}
-									>
-										{t(`glass preset ${p.id}`)}
-									</button>
-								))}
-							</div>
+							<Segmented
+								ariaLabel={t("glass opacity")}
+								value={glass}
+								options={GLASS_PRESETS.map(p => ({ value: p.id, label: t(`glass preset ${p.id}`) }))}
+								onChange={v => {
+									const p = GLASS_PRESETS.find(o => o.id === v);
+									if (!p) return;
+									setGlass(p.id);
+									setPref("musepi-gui-glass", p.id);
+									applyGlassPreset(p);
+								}}
+							/>
 						</div>
 					</div>
 				</Reveal>
@@ -794,22 +778,16 @@ export function AppearanceSection({
 						<div className="gui-settings-row-label">{t("motion effects")}</div>
 						<div className="gui-settings-row-desc">{t("menu popups, orb animation, splash pulse")}</div>
 					</div>
-					<div className="gui-segmented">
-						{(["full", "reduced", "off"] as const).map(m => (
-							<button
-								key={m}
-								type="button"
-								className={`gui-seg-btn${motion === m ? " gui-seg-btn--active" : ""}`}
-								onClick={() => {
-									setMotion(m);
-									localStorage.setItem("musepi-gui-motion", m);
-									document.documentElement.classList.toggle("gui-motion-off", m === "off");
-								}}
-							>
-								{m === "full" ? t("full") : m === "reduced" ? t("reduced") : t("off")}
-							</button>
-						))}
-					</div>
+					<Segmented
+						ariaLabel={t("motion effects")}
+						value={motion}
+						options={MOTION_SEGMENTS}
+						onChange={m => {
+							setMotion(m);
+							localStorage.setItem("musepi-gui-motion", m);
+							document.documentElement.classList.toggle("gui-motion-off", m === "off");
+						}}
+					/>
 				</div>
 				<div className="gui-settings-row">
 					<div>

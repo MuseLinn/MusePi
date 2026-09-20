@@ -1,3 +1,4 @@
+import { Segmented } from "@musepi/guest-client";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
@@ -9,7 +10,9 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
  * portal + positioning + two-phase transform-only enter + outside-click /
  * Escape close + the global menu mutex. The trigger keeps the
  * settings-select look; keyboard: Enter/↑/↓ open, ↑/↓ move, Enter
- * commits, Escape closes. Two options render as a segmented toggle.
+ * commits, Escape closes. Two options render as a segmented toggle (the
+ * shared sliding-thumb Segmented — every binary setting in the app slides
+ * the same way).
  */
 export interface SelectOption<T extends string> {
 	value: T;
@@ -81,24 +84,11 @@ export function GuiSelect<T extends string>({
 	// Two options → a segmented toggle instead of a dropdown (the listbox
 	// chrome is overkill for a binary choice; the trigger width was the
 	// only constraint — inline segments read fine beside the label). Three
-	// or more options keep the list. Reuses the existing .gui-segmented
-	// visual language (ZCode appearance settings).
+	// or more options keep the list. Renders the shared sliding-thumb
+	// Segmented, so every binary setting in the app slides identically.
 	if (options.length === 2) {
 		return (
-			<div className={`gui-segmented${className ? ` ${className}` : ""}`} role="group" aria-label={ariaLabel}>
-				{options.map(o => (
-					<button
-						type="button"
-						key={o.value}
-						role="tab"
-						aria-selected={o.value === value}
-						className={`gui-seg-btn${o.value === value ? " gui-seg-btn--active" : ""}`}
-						onClick={() => onChange(o.value)}
-					>
-						{o.label}
-					</button>
-				))}
-			</div>
+			<Segmented className={className} ariaLabel={ariaLabel} value={value} options={options} onChange={onChange} />
 		);
 	}
 

@@ -26,6 +26,9 @@ export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/m
 export { resolveCardIcon } from "./components/marketplace/types";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
 export { LanguageToggle } from "./components/shell/LanguageToggle";
+/** Sliding-thumb segmented control (shared by the header theme switch and
+ *  the settings rows) — see styles/tokens.css § Segmented control. */
+export { Segmented, type SegmentedOption } from "./components/shell/Segmented";
 export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
