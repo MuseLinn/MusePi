@@ -20,12 +20,25 @@
  *            to 0.55·L0 for volume, all at accent-level chroma. Dark caps
  *            the crown at 0.9; light lifts the whole ladder so the ball
  *            holds contrast on a pale background.
- *   gold-* — the "light" family (ring, accessories):
- *            a bright tint above the accent, the accent itself, and a
- *            deep shade below it. Under the default brand accent this
- *            lands within a hair of the old hardcoded golds, so the
- *            mascot keeps its identity — other accents inherit a whole
- *            coherent orb for free.
+ *   gold-* — the "light" family (ring, accessories), built as a METAL
+ *            ramp rather than a tint→shade ladder. 2026-09-20, user:
+ *            「这个黄感觉不是很有高级细腻质感」. A single hue with chroma
+ *            falling monotonically is exactly how PLASTIC reads: the
+ *            highlight is just a brighter copy of the same colour, so the
+ *            surface has no material. Polished metal does the opposite —
+ *            the specular washes toward white (chroma DROPS as lightness
+ *            RISES), chroma PEAKS in the midtone where the body colour
+ *            lives, and the terminator keeps a deep residue of chroma
+ *            instead of greying out:
+ *              gold-a  high L / low C   — the washed specular
+ *              gold-b  accent L / peak C — the metal's own body
+ *              gold-c  low L  / mid C   — the terminator (kept above
+ *                      shell-c, or the ring's far arc dissolves into the
+ *                      sphere's own shadow instead of reading as passing
+ *                      behind it)
+ *            Hue deliberately does NOT travel: gold-b IS still the accent,
+ *            which is what keeps the theme legible on the ring while the
+ *            shell carries it on the body.
  *
  * The face (eyes + mouth) is WHITE, not accent-tinted (2026-09-20, user
  * request). It used to ride `--gui-pet-gold-a/b`, which meant a themed orb
@@ -101,9 +114,14 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 			"gui-pet-shell-a": fmt(Math.min(0.9, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h),
 			"gui-pet-shell-b": fmt(l0, c0, h),
 			"gui-pet-shell-c": fmt(l0 * 0.55, c0 * 0.85, h),
-			"gui-pet-gold-a": fmt(Math.min(0.88, l0 + 0.12), Math.min(0.14, c0 * 1.1 + 0.02), h),
-			"gui-pet-gold-b": fmt(l0, c0, h),
-			"gui-pet-gold-c": fmt(l0 * 0.62, c0 * 0.9, h),
+			// Light family — see the metal-ramp note above: NON-monotonic
+			// chroma (specular washed, body peaking, terminator holding a
+			// residue) on a single hue. `c0 * 0.74` on gold-c is the whole
+			// "material" trick — the previous `c0 * 0.9` at a shallower
+			// lightness made the ring's shadow side read as grey paint.
+			"gui-pet-gold-a": fmt(Math.min(0.93, l0 + 0.15), Math.min(0.12, c0 * 0.58), h),
+			"gui-pet-gold-b": fmt(l0, Math.min(0.16, c0 * 1.12), h),
+			"gui-pet-gold-c": fmt(Math.max(0.42, l0 * 0.62), c0 * 0.74, h),
 			"gui-pet-glow": fmt(l0, c0, h, 0.8),
 			// Face: near-white, hair of warmth so it reads as a light rather
 			// than a cut-out. Neutral halo (no hue) keeps the glow from
@@ -122,9 +140,9 @@ export function petPaletteVars(accent: string, theme: "light" | "dark"): PetPale
 		"gui-pet-shell-a": fmt(Math.min(0.94, l0 + 0.33), Math.min(0.14, c0 * 1.1 + 0.02), h),
 		"gui-pet-shell-b": fmt(Math.min(0.82, l0 + 0.12), c0, h),
 		"gui-pet-shell-c": fmt(Math.max(0.42, l0 - 0.07), c0 * 0.85, h),
-		"gui-pet-gold-a": fmt(Math.min(0.8, l0 + 0.15), Math.min(0.14, c0 * 1.1 + 0.02), h),
-		"gui-pet-gold-b": fmt(l0, c0, h),
-		"gui-pet-gold-c": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h),
+		"gui-pet-gold-a": fmt(Math.min(0.9, l0 + 0.22), Math.min(0.12, c0 * 0.62), h),
+		"gui-pet-gold-b": fmt(l0, Math.min(0.16, c0 * 1.1), h),
+		"gui-pet-gold-c": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.8, h),
 		"gui-pet-glow": fmt(Math.max(0.3, l0 - 0.18), c0 * 0.95, h, 0.55),
 		// Face on a light shell: keep it white (the identity rule) and let
 		// the halo do the separating — a dark neutral ring around the eye

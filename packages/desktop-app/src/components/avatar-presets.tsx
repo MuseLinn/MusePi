@@ -1,6 +1,7 @@
 import { punkAvatarUri } from "@musepi/guest-client";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { type PetdexMood, type PetInteraction, randomPetInteraction } from "../lib/pet";
+import { type PetdexMood, type PetInteraction, type PetState, randomPetInteraction } from "../lib/pet";
+import type { PetEffectTier } from "../lib/pet-effects";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 import { BuiltinPetSprite, type GazeVec, PetBox, usePetDecor } from "./PetSprite";
 
@@ -165,6 +166,35 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
 	waiting: "waiting",
 };
 
+/**
+ * OrbState → the 31-state axis. This is the mapping that finally answers
+ * "does the session AVATAR get the morph richness too?" — yes, and it gets it
+ * from the same table the desktop pet does.
+ *
+ * The win over the mood mapping above is not more states for their own sake:
+ * `searching` and `solving` were both "analyzing" (one face, one motion) and
+ * `composing` and `working` were both "working". On the state axis they split,
+ * so the avatar can finally tell "reading the codebase" from "reasoning about
+ * it" and "writing the answer" from "running a tool".
+ */
+const ORB_TO_PET_STATE: Record<OrbState, PetState> = {
+	listening: "listening",
+	working: "working",
+	searching: "searching",
+	solving: "thinking",
+	composing: "writing",
+	shaping: "progress",
+	waiting: "notifying",
+};
+
+/**
+ * Effect tier by render size. The avatar ships at 20 / 32 / 64px and the
+ * pet's own vocabulary does not survive all three: at 20px the eyes are a few
+ * pixels and confetti ribbons are sub-pixel smears, so only the badge (a
+ * colour and a position) is worth drawing. See pet-effects.tsx TIER_KEEP.
+ */
+const tierForSize = (size: number): PetEffectTier => (size >= 64 ? "full" : size >= 32 ? "compact" : "micro");
+
 /** How long an avatar click reaction holds before the live mood shows
  *  through again. A touch longer than the desktop pet's hold
  *  (INTERACTION_HOLD_MS): the avatar is small, its faces read slowly. */
@@ -249,6 +279,8 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 			<PetBox size={size}>
 				<BuiltinPetSprite
 					mood={ORB_TO_PET_MOOD[state]}
+					state={ORB_TO_PET_STATE[state]}
+					tier={tierForSize(size)}
 					gazeRef={gazeRef}
 					interaction={reaction}
 					gloss={decor.gloss}

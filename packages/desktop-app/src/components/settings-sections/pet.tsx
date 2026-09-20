@@ -20,15 +20,9 @@ import {
 	savePetdex,
 	setPetScale,
 } from "../../lib/pet";
-import {
-	PET_ACCESSORIES,
-	PET_DECOR_FLAGS,
-	type PetAccessory,
-	type PetDecor,
-	petDecor,
-	setPetAccessory,
-	setPetDecorFlag,
-} from "../../lib/pet-decor";
+// The card previews (BuiltinPetSprite's gloss/accessory) still read the
+// decor record; the EDITING controls moved to general.tsx PetDecorSection.
+import { type PetDecor, petDecor } from "../../lib/pet-decor";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
@@ -357,80 +351,11 @@ export function PetMarket({
 	);
 }
 
-/** Appearance detail (设置 → 伙伴 → 外观细节). The decoration set lives in
- *  lib/pet-decor.ts as a flag record; this section maps over
- *  PET_DECOR_FLAGS so adding an accessory is a one-line change there plus
- *  two i18n keys — never a new hand-written row here.
- *
- *  Scoped to the builtin vector companion: an imported petdex spritesheet is
- *  a baked bitmap, so none of these layers exist to toggle. The row says so
- *  instead of silently doing nothing. */
-function PetDecorSection({
-	builtinSelected,
-	decor,
-	onChange,
-	onAccessory,
-}: {
-	builtinSelected: boolean;
-	decor: PetDecor;
-	onChange(key: keyof PetDecor, value: boolean): void;
-	onAccessory(value: PetAccessory): void;
-}): ReactNode {
-	return (
-		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("pet decor")}</div>
-			<div className="gui-settings-section-desc">
-				{builtinSelected ? t("pet decor description") : t("pet decor description imported")}
-			</div>
-			{PET_DECOR_FLAGS.map(flag => (
-				<div className="gui-settings-row" key={flag.key}>
-					<div>
-						<div className="gui-settings-row-label">{t(flag.labelKey as TranslationKey)}</div>
-						<div className="gui-settings-row-desc">{t(flag.descKey as TranslationKey)}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={decor[flag.key]}
-						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
-						disabled={!builtinSelected}
-						title={builtinSelected ? undefined : t("pet decor description imported")}
-						onClick={() => onChange(flag.key, !decor[flag.key])}
-						aria-label={t(flag.labelKey as TranslationKey)}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-			))}
-			{/* Accessory pick (blobstudio's accessory slot, minimized to one
-			 * wear): a segmented control, not another boolean row — the options
-			 * are mutually exclusive by design (one state one look). */}
-			<div className="gui-settings-row">
-				<div>
-					<div className="gui-settings-row-label">{t("pet accessory")}</div>
-					<div className="gui-settings-row-desc">{t("pet accessory description")}</div>
-				</div>
-				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("pet accessory")}>
-					{PET_ACCESSORIES.map(value => (
-						<button
-							key={value}
-							type="button"
-							role="radio"
-							aria-checked={decor.accessory === value}
-							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
-							disabled={!builtinSelected}
-							title={builtinSelected ? undefined : t("pet decor description imported")}
-							onClick={() => onAccessory(value)}
-						>
-							{t(`pet accessory ${value}` as TranslationKey)}
-						</button>
-					))}
-				</div>
-			</div>
-		</div>
-	);
-}
-
+/** Appearance detail (球面光泽 / 配饰) moved to the GENERAL page's agent
+ *  avatar area (2026-09-21, user: 「这个小球的定制放到常规Agent头像那里去」) —
+ *  it now lives next to the avatar cards that preview the ball. See
+ *  general.tsx PetDecorSection; this page keeps the pick + size + market
+ *  concerns. */
 export function PetSection(): ReactNode {
 	const [enabled, setEnabled] = useState<boolean>(() => petEnabled());
 	const [mode, setMode] = useState<PetDisplayMode>(() => petMode());
@@ -679,10 +604,6 @@ export function PetSection(): ReactNode {
 	}));
 	const allEntries = [...userEntries, ...presetEntries];
 	const selectedEntry = allEntries.find(e => e.id === selectedPetId) ?? null;
-	// Decoration only exists on the builtin vector companion — the imported
-	// spritesheets are baked bitmaps. Drives both the disabled state and the
-	// explainer copy in the detail section.
-	const builtinSelected = selectedEntry?.builtin === true;
 	return (
 		<>
 			<h2 className="gui-settings-page-title">{t("agent companion")}</h2>
@@ -924,20 +845,6 @@ export function PetSection(): ReactNode {
 					</>
 				)}
 			</div>
-			{enabled && (
-				<PetDecorSection
-					builtinSelected={builtinSelected}
-					decor={decor}
-					onChange={(key, value) => {
-						setDecor({ ...decor, [key]: value });
-						setPetDecorFlag(key, value);
-					}}
-					onAccessory={value => {
-						setDecor({ ...decor, accessory: value });
-						setPetAccessory(value);
-					}}
-				/>
-			)}
 		</>
 	);
 }

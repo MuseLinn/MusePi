@@ -10,6 +10,16 @@ import {
 	openExternalUrl,
 	type UpdateCheckResult,
 } from "../../lib/electron";
+import { activePet } from "../../lib/pet";
+import {
+	PET_ACCESSORIES,
+	PET_DECOR_FLAGS,
+	type PetAccessory,
+	type PetDecor,
+	petDecor,
+	setPetAccessory,
+	setPetDecorFlag,
+} from "../../lib/pet-decor";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import {
@@ -23,6 +33,101 @@ import {
 import { DotMatrixMark } from "../DotMatrixMark";
 import { GuiSelect } from "../GuiSelect";
 import { SchemaTabSection } from "./schema";
+
+/** Appearance detail (设置 → 常规, under the agent avatar grid). Moved here
+ *  from the companion page (2026-09-21, user: 「这个小球的定制放到常规Agent
+ *  头像那里去」): the customization belongs next to the avatar cards that
+ *  PREVIEW the ball — the pet card is a live BuiltinPetSprite, so a gloss /
+ *  accessory change reads back instantly in the grid above.
+ *
+ *  Self-contained on purpose: it resolves its own decor state and re-resolves
+ *  on the shared `omp-pet-changed` broadcast (the companion page's pick,
+ *  import and size sliders all fire it), so it works wherever it mounts.
+ *  The decoration set lives in lib/pet-decor.ts as a flag record; mapping
+ *  over PET_DECOR_FLAGS keeps "add an accessory" a one-line change there
+ *  plus two i18n keys — never a new hand-written row here.
+ *
+ *  Scoped to the builtin vector companion: an imported petdex spritesheet is
+ *  a baked bitmap, so none of these layers exist to toggle. The rows say so
+ *  instead of silently doing nothing. */
+function PetDecorSection(): ReactNode {
+	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+	// Decoration only exists on the builtin vector companion — the imported
+	// spritesheets are baked bitmaps. Drives both the disabled state and the
+	// explainer copy.
+	const [builtinSelected, setBuiltinSelected] = useState<boolean>(() => activePet().kind === "builtin");
+	useEffect(() => {
+		const refresh = (): void => {
+			setDecor(petDecor());
+			setBuiltinSelected(activePet().kind === "builtin");
+		};
+		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener("storage", refresh);
+		return () => {
+			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener("storage", refresh);
+		};
+	}, []);
+	return (
+		<div className="gui-settings-section">
+			<div className="gui-settings-section-title">{t("pet decor")}</div>
+			<div className="gui-settings-section-desc">
+				{builtinSelected ? t("pet decor description") : t("pet decor description imported")}
+			</div>
+			{PET_DECOR_FLAGS.map(flag => (
+				<div className="gui-settings-row" key={flag.key}>
+					<div>
+						<div className="gui-settings-row-label">{t(flag.labelKey as TranslationKey)}</div>
+						<div className="gui-settings-row-desc">{t(flag.descKey as TranslationKey)}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={decor[flag.key]}
+						className={`gui-toggle${decor[flag.key] ? " gui-toggle--on" : ""}`}
+						disabled={!builtinSelected}
+						title={builtinSelected ? undefined : t("pet decor description imported")}
+						onClick={() => {
+							setDecor({ ...decor, [flag.key]: !decor[flag.key] });
+							setPetDecorFlag(flag.key, !decor[flag.key]);
+						}}
+						aria-label={t(flag.labelKey as TranslationKey)}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+			))}
+			{/* Accessory pick (blobstudio's accessory slot, minimized to one
+			 * wear): a segmented control, not another boolean row — the options
+			 * are mutually exclusive by design (one state one look). */}
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("pet accessory")}</div>
+					<div className="gui-settings-row-desc">{t("pet accessory description")}</div>
+				</div>
+				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("pet accessory")}>
+					{PET_ACCESSORIES.map((value: PetAccessory) => (
+						<button
+							key={value}
+							type="button"
+							role="radio"
+							aria-checked={decor.accessory === value}
+							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
+							disabled={!builtinSelected}
+							title={builtinSelected ? undefined : t("pet decor description imported")}
+							onClick={() => {
+								setDecor({ ...decor, accessory: value });
+								setPetAccessory(value);
+							}}
+						>
+							{t(`pet accessory ${value}` as TranslationKey)}
+						</button>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
 
 /** Shared fixture feeding both preview cards — the SAME settled-batch shape
  *  the transcript renders (results with per-agent stats/errors). */
@@ -300,6 +405,9 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					);
 				})}
 			</div>
+			{/* The ball's own customization, next to the cards that preview it
+			 * (2026-09-21 move from the companion page). */}
+			<PetDecorSection />
 			{avatarId === "punk" && (
 				<div className="gui-settings-row">
 					<div>

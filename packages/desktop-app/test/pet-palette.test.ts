@@ -73,21 +73,39 @@ describe("petPaletteVars — derivation", () => {
 		expect(hueDist(shellC.h, a.h)).toBeLessThan(0.1);
 	});
 
-	test("light family is tint → accent → shade on the accent hue", () => {
+	test("light family is a METAL ramp — non-monotonic chroma on the accent hue", () => {
+		// 2026-09-20 user: 「这个黄感觉不是很有高级细腻质感」. The previous
+		// contract here was "tint → accent → shade on the accent hue" with
+		// chroma falling monotonically alongside lightness — which is exactly
+		// how PLASTIC reads: the highlight is just a brighter copy of the same
+		// colour, so no surface material survives. Polished metal inverts it
+		// (see the derivation notes in pet-palette.ts): the specular washes
+		// toward white, the body holds the chroma peak, the terminator keeps
+		// a deep residue instead of greying out.
 		const v = petPaletteVars(GOLD_DARK, "dark");
 		const a = accentChannels(GOLD_DARK);
-		// goldB IS the accent (chroma's css() rounds to two decimals).
-		const goldB = oklchChannels(v["gui-pet-gold-b"]);
-		expect(goldB.l).toBeCloseTo(a.l, 2);
-		expect(goldB.c).toBeCloseTo(a.c, 2);
-		expect(goldB.h).toBeCloseTo(a.h, 0);
-		// Tint above, shade below, same hue.
 		const goldA = oklchChannels(v["gui-pet-gold-a"]);
+		const goldB = oklchChannels(v["gui-pet-gold-b"]);
 		const goldC = oklchChannels(v["gui-pet-gold-c"]);
+		// Lightness still orders crown → body → terminator…
 		expect(goldA.l).toBeGreaterThan(a.l);
+		expect(goldB.l).toBeCloseTo(a.l, 2);
 		expect(goldC.l).toBeLessThan(a.l);
+		// …but chroma deliberately does NOT: the peak sits in the BODY, not
+		// in the highlight. This is the whole "material" trick.
+		expect(goldB.c).toBeGreaterThan(a.c);
+		expect(goldB.c).toBeGreaterThan(goldA.c);
+		expect(goldB.c).toBeGreaterThan(goldC.c);
+		expect(goldC.c).toBeGreaterThan(goldA.c);
+		// Hue never travels: the body IS still the accent, which is what keeps
+		// the theme legible on the ring while the shell carries it on the body.
 		expect(hueDist(goldA.h, a.h)).toBeLessThan(0.1);
+		expect(hueDist(goldB.h, a.h)).toBeLessThan(0.1);
 		expect(hueDist(goldC.h, a.h)).toBeLessThan(0.1);
+		// The ring's terminator must stay LIGHTER than the shell's own shadow,
+		// or the far arc dissolves into the sphere instead of reading as an
+		// orbit passing behind the body.
+		expect(goldC.l).toBeGreaterThan(oklchChannels(v["gui-pet-shell-c"]).l);
 	});
 
 	test("shell ladder runs dark in dark mode, light in light mode", () => {
@@ -128,10 +146,12 @@ describe("petPaletteVars — derivation", () => {
 describe("petPaletteVars — edge cases", () => {
 	test("near-neutral accent still tints (chroma floor)", () => {
 		const v = petPaletteVars(MONO_DARK, "dark");
-		const goldA = oklchChannels(v["gui-pet-gold-a"]);
-		// Floor C0=0.055 → tint chroma 0.055*1.1+0.02 ≈ 0.0805, well above
-		// the raw 0.005 — the mono orb reads tinted, not grey.
-		expect(goldA.c).toBeCloseTo(0.0805, 2);
+		const GOLD_A = oklchChannels(v["gui-pet-gold-a"]);
+		// Floor C0=0.055 → the metal body peaks at ≈0.0616 while the specular
+		// sheds most of it (×0.58 ≈ 0.0319) — still ~6× the raw 0.005, so the
+		// mono orb reads tinted AND metallic rather than grey or plastic.
+		expect(GOLD_A.c).toBeCloseTo(0.0319, 2);
+		expect(oklchChannels(v["gui-pet-gold-b"]).c).toBeGreaterThan(GOLD_A.c);
 	});
 
 	test("glow carries its translucent alpha", () => {

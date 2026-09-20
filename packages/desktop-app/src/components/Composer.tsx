@@ -4,7 +4,7 @@ import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
-import type { PetMood } from "../lib/pet";
+import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
 import type { SketchScene } from "../lib/sketch-scene";
@@ -100,6 +100,11 @@ export interface ComposerProps {
 	/** Agent companion mood (伙伴) — derived by ChatView from the session
 	 *  snapshot; the pet renders only when enabled + input mode. */
 	petMood?: PetMood;
+	/** The 31-state session reading (pet.ts PetState). Carried alongside
+	 *  `petMood` rather than replacing it: the mood still selects the
+	 *  spritesheet row and the CSS material class, the state selects the
+	 *  face, the body motion and the effects layer. */
+	petState?: PetState | null;
 	onSend(
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
@@ -190,6 +195,7 @@ async function enhancePrompt(prompt: string, rpc: RpcClient | null, sessionId: s
 export function Composer({
 	working,
 	petMood,
+	petState,
 	onSend,
 	onStop,
 	rpc,
@@ -1821,6 +1827,16 @@ export function Composer({
 								// it is ambient, not a reaction.
 								<PetSprite
 									mood={hovered ? "hover" : (petMood ?? "rest")}
+									// The state is dropped while hovered: hover is a
+									// pointer state, and showing a session's thinking
+									// lights under a hover lift reads as two things
+									// happening at once.
+									state={hovered ? null : (petState ?? null)}
+									// The docked pet is clamped to 34–46px
+									// (.gui-composer-pet) — the bottom of the "full"
+									// tier, where every effect still resolves (the
+									// smallest ribbon is ~2.4px tall there).
+									tier="full"
 									pet={pet.pet}
 									size={30}
 									gloss={pet.decor.gloss}

@@ -186,33 +186,24 @@
 	transform-origin: center;
 }
 
-/* ── Status orbit dots (2026-09-20) ────────────────────────────────────
- * Three lights on a circle just outside the shell (PetSprite.tsx renders
- * the group with an invisible guide circle so `transform-origin: center`
- * pivots on the BALL's centre, not the dots' own bbox). Hidden on every
- * mood; shown and spun only while effort should be legible at a glance —
- * analyzing reads fast and forward, working slower and in reverse (the
- * ellipse ring is fully occluded by the shell, so these dots are what
- * actually carries the "busy" signal). */
-.gui-pet-svg__orbit-dots {
-	display: none;
-	transform-box: fill-box;
-	transform-origin: center;
+/* ── Effects layer (2026-09-20) ──────────────────────────────────────────
+ * Replaces the hardcoded three-dot orbit spinner: three static lights on a
+ * CSS-spun circle could say "busy" and nothing else, while a session has 31
+ * things to say (user: 「自己搞了个很一般的三个小轨道」). The seven effect
+ * kinds now live in lib/pet-effects.tsx and are driven by the frame clock,
+ * so CSS has almost nothing left to declare — only that the layer is never
+ * a hit target, and how the face yields to an effect that owns its content. */
+.gui-pet-svg__fx {
+	pointer-events: none;
 }
 
-.gui-pet-svg__orbit-dot {
-	fill: url(#gui-pet-grad-ring);
-	opacity: 0.85;
-}
-
-.gui-pet-svg--analyzing .gui-pet-svg__orbit-dots {
-	display: block;
-	animation: gui-pet-ring-spin 1.5s linear infinite;
-}
-
-.gui-pet-svg--working .gui-pet-svg__orbit-dots {
-	display: block;
-	animation: gui-pet-ring-spin 4.2s linear infinite reverse;
+/* The face yields for one state only: during a dash flight the body IS a
+ * 21% comet head, and a morphing face on it is noise. The dots/glyph
+ * body-yields are driven by the effects layer on the shared body group
+ * (pet-effects bodyRef transform+opacity), so no CSS hook is needed for
+ * them anymore. */
+.gui-pet-svg__face--hidden {
+	opacity: 0;
 }
 
 /* Hover: the orb perks up and the eye light brightens. */
@@ -466,10 +457,13 @@
  *
  * The pet sizes against the COMPOSER'S OWN WIDTH (`--gui-composer-pet-size`),
  * which is what actually varies across the welcome hero and the session
- * composer. Cap 46px (2026-09-20, was 60): in the session composer the pet is
- * perched on the input's top-right edge, and at 60px it stood taller than the
- * whole first row — "a giant ball stuck on the window" rather than a mascot
- * peeking over the edge.
+ * composer. Cap 52px (2026-09-21, was 46; before that 60): the art shed its
+ * floor/antenna padding (box ≈ 1.04× the ball), which made the old cap read
+ * undersized at the same perch — the user asked for 「稍微大一点」. 52 keeps
+ * the ball below the input's first row height; the 60px "giant ball" era had
+ * a 1.28× rig around a 47px ball, so a 52px box is a ~50px ball — comparable,
+ * but now the box IS the ball and no decoration spills past it.
+ * Hosts that need a specific size override `--gui-composer-pet-size`.
  *
  * ── Why the box and not the SVG ───────────────────────────────────────────
  * This rule is the ONLY thing that sizes the docked builtin pet. PetSprite
@@ -485,7 +479,7 @@
 	z-index:1;
 	cursor:pointer;
 	display:flex;
-	width:var(--gui-composer-pet-size, clamp(34px, 4.6cqw + 26px, 46px));
+	width:var(--gui-composer-pet-size, clamp(38px, 4.6cqw + 27px, 52px));
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
 	justify-content:flex-end;
@@ -525,7 +519,7 @@
 {
 	.gui-composer-pet
 	{
-		width:var(--gui-composer-pet-size, 34px);
+		width:var(--gui-composer-pet-size, 38px);
 	}
 }
 /* ── Micro variant ────────────────────────────────────────────────────────

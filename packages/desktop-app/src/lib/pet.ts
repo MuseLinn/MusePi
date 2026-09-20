@@ -19,6 +19,128 @@ export type PetMood = "rest" | "working" | "waiting" | "analyzing" | "error";
  *  floating desktop pet switches to while the pointer is over it or while
  *  it is being dragged (BitFun parity). The builtin SVG has no such rows. */
 export type PetdexMood = PetMood | "hover" | "dragging";
+
+/**
+ * The 31-state session vocabulary — the axis the BUILTIN pet renders.
+ *
+ * Why a second axis, and why this big (2026-09-20): seven moods cannot say
+ * anything a session actually does. `working` covered "running a tool",
+ * "streaming an answer", "uploading a file" and "thinking" as one face, so
+ * the pet looked identical through four completely different waits. Blob
+ * Studio's AGENT MORPHS runs 40 states and OpenMausBot's `MascotState` runs
+ * 41 — both converged on that granularity because a session's *texture* is
+ * what makes a companion feel like it is paying attention.
+ *
+ * The six groups:
+ *   A core         the turn loop (idle → listening → thinking → working →
+ *                  searching → writing)
+ *   B transfer     bytes on the wire (sending / receiving / uploading /
+ *                  loading) — the states that read as "it is connected"
+ *   C progress     open-ended waits with no end in sight (progress / orbit /
+ *                  radar / thinking-dots / humming)
+ *   D notify/input something needs the user (notifying / alerting / dictating)
+ *   E emotion      RESULT-shaped, never ambient — see below
+ *   F lifecycle    window/body states (spawning / powering-down / bouncing /
+ *                  dragging / drowsy)
+ *
+ * ── The emotions are deliberately last ────────────────────────────────────
+ * OpenMausBot resolves emotion from a bot's ROLE (its `roleFaces` persona:
+ * code→WORKING, research→SEARCHING, design→PLAYFUL), i.e. as an identity
+ * that shows only when the bot is otherwise idle. We have ONE agent with no
+ * persona slot — role-matching would be a permanent, arbitrary face. So our
+ * emotions are wired the other way round: they fire on a RESULT (a turn
+ * completed, a search came back rich) and decay back to `idle`. Emotion as
+ * reaction, not as personality — that is the version a single-agent session
+ * can actually justify.
+ *
+ * `PetMood` is NOT replaced: the petdex spritesheets have exactly 7 rows and
+ * the CSS material classes are keyed on them. {@link STATE_MOOD} collapses
+ * any state onto that legacy axis, so every sheet host keeps working.
+ */
+export const PET_STATES = [
+	// A — the turn loop
+	"idle",
+	"listening",
+	"thinking",
+	"working",
+	"searching",
+	"writing",
+	// B — transfer
+	"sending",
+	"receiving",
+	"uploading",
+	"loading",
+	// C — progress
+	"progress",
+	"orbit",
+	"radar",
+	"thinking-dots",
+	"humming",
+	// D — notification / input
+	"notifying",
+	"alerting",
+	"dictating",
+	// E — emotion (result-shaped)
+	"excited",
+	"happy",
+	"celebrate",
+	"confused",
+	"curious",
+	"proud",
+	"shy",
+	"playful",
+	// F — lifecycle
+	"spawning",
+	"powering-down",
+	"bouncing",
+	"dragging",
+	"drowsy",
+] as const;
+export type PetState = (typeof PET_STATES)[number];
+
+/** Collapse a 31-state reading onto the legacy 7-mood axis (spritesheet rows
+ *  and the CSS material classes). Loud states win over quiet ones: every
+ *  transfer and progress state is a flavour of working/analyzing, every
+ *  emotion is a flavour of rest (a spritesheet has no "proud" row to play). */
+export const STATE_MOOD: Record<PetState, PetdexMood> = {
+	idle: "rest",
+	listening: "rest",
+	thinking: "analyzing",
+	working: "working",
+	searching: "analyzing",
+	writing: "working",
+	sending: "working",
+	receiving: "analyzing",
+	uploading: "working",
+	loading: "analyzing",
+	progress: "analyzing",
+	orbit: "analyzing",
+	radar: "analyzing",
+	"thinking-dots": "analyzing",
+	humming: "rest",
+	notifying: "waiting",
+	alerting: "error",
+	dictating: "working",
+	excited: "working",
+	happy: "rest",
+	celebrate: "rest",
+	confused: "error",
+	curious: "rest",
+	proud: "rest",
+	shy: "rest",
+	playful: "rest",
+	spawning: "rest",
+	"powering-down": "rest",
+	bouncing: "rest",
+	dragging: "dragging",
+	drowsy: "rest",
+};
+
+/** Legacy-mood lookup with a `rest` fallback — for callers holding a string
+ *  that may be either axis (activity payloads, old persisted values). */
+export function moodOfState(state: string | null | undefined): PetdexMood {
+	return (state && STATE_MOOD[state as PetState]) || "rest";
+}
 /** Re-exported so callers wire reactions without reaching into pet-face
  *  (the data lives there; this barrel is what components import). */
 export type { PetInteraction } from "./pet-face";
@@ -33,6 +155,15 @@ export type PetDisplayMode = "input" | "desktop";
  */
 export interface PetActivity {
 	mood?: PetMood;
+	/** The 31-state reading (see PET_STATES). Pushed alongside `mood`: the
+	 *  mood still picks the spritesheet row, the state drives the builtin's
+	 *  face / motion / effects. Optional, so a pet window on an older build
+	 *  (or a partial push) keeps working off `mood` alone.
+	 *
+	 *  `petState`, not `state`: `state` is already the session's live task
+	 *  summary (working / toolName / lastMessage…) and overloading one field
+	 *  with two shapes is how an IPC payload starts lying. */
+	petState?: PetState;
 	bubble?: {
 		kind: "completed" | "error" | "question" | "subtask";
 		text: string;
@@ -382,6 +513,71 @@ export function moodFromState(opts: { working: boolean; streaming: boolean; hasA
 	if (opts.hasApprovals) return "waiting";
 	if (opts.working) return opts.streaming ? "working" : "analyzing";
 	return "rest";
+}
+
+/**
+ * Signals a session exposes for state resolution. Every field is optional and
+ * the resolver is ordered, so a caller wires only what it has — the composer
+ * knows about streaming, the pet window knows about unread counts, and both
+ * get a coherent reading without sharing a store shape.
+ */
+export interface PetSessionSignals {
+	/** The floating pet is being dragged (interaction beats everything). */
+	dragging?: boolean;
+	/** First paint / window spawn. */
+	spawning?: boolean;
+	/** The last tool call failed and the user has to act — glyph "!". */
+	toolFailed?: boolean;
+	/** The instruction was ambiguous and needs clarifying — glyph "?".
+	 *  Distinct from `toolFailed` on purpose: one needs a retry decision, the
+	 *  other needs a rewrite, and the pet must not signal them identically. */
+	ambiguous?: boolean;
+	/** The agent is running a tool (not emitting text). */
+	working?: boolean;
+	/** The agent is streaming text. */
+	streaming?: boolean;
+	/** Unread completions sitting in other sessions. */
+	unread?: number;
+	/** Pending tool approvals — the agent is blocked on the user. */
+	approvals?: number;
+	/** The agent asked a question / offered options and is waiting. */
+	awaitingInput?: boolean;
+	/** A request is on the wire, no response yet. */
+	sending?: boolean;
+	/** A response is landing, first token not arrived yet. */
+	receiving?: boolean;
+	/** Milliseconds since the last activity — drives `drowsy`. */
+	idleMs?: number;
+	/** A turn just finished successfully — drives the result emotions. */
+	justFinished?: boolean;
+}
+
+/** How long the session must be quiet before the pet starts dozing off. */
+export const DROWSY_AFTER_MS = 90_000;
+
+/**
+ * Resolve session signals to ONE state — a strict priority chain, highest
+ * first. The order is the design: a failure outranks everything (an agent
+ * blocked on an error is not "working"), live work outranks notifications
+ * (what is happening now beats what happened elsewhere), and the emotions sit
+ * second-to-last because they are gated on an actual result — never on
+ * nothing happening (see PET_STATES).
+ */
+export function stateFromSignals(s: PetSessionSignals = {}): PetState {
+	if (s.dragging) return "dragging";
+	if (s.spawning) return "spawning";
+	if (s.toolFailed) return "alerting";
+	if (s.ambiguous) return "confused";
+	if (s.working) return s.streaming ? "writing" : "working";
+	// A pending approval is the loudest "you are needed" there is — the agent
+	// is not working, it is WAITING, and the badge is the whole message.
+	if ((s.approvals ?? 0) > 0 || (s.unread ?? 0) > 0) return "notifying";
+	if (s.awaitingInput) return "curious";
+	if (s.sending) return "sending";
+	if (s.receiving) return "receiving";
+	if ((s.idleMs ?? 0) >= DROWSY_AFTER_MS) return "drowsy";
+	if (s.justFinished) return "celebrate";
+	return "idle";
 }
 
 /** Map a session snapshot to the thinking-orb state — the single source the

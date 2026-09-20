@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { dispatchNotification } from "../lib/notify";
-import { moodFromState, orbFromSession } from "../lib/pet";
+import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
 import { rasterizeToBlob } from "../lib/rasterize";
 import type { RpcClient } from "../lib/rpc";
@@ -2117,6 +2117,11 @@ export function ChatView({
 												working: snap?.working ?? false,
 												streaming: snap?.streaming ?? false,
 												hasApprovals: (snap?.approvals.length ?? 0) > 0,
+											})}
+											petState={stateFromSignals({
+												working: snap?.working ?? false,
+												streaming: snap?.streaming ?? false,
+												approvals: snap?.approvals.length ?? 0,
 											})}
 											onSend={sendAndCloseJump}
 											onStop={() => void handleStop()}

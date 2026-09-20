@@ -249,6 +249,93 @@ const MOOD_DIRECTION: Record<PetMood, MoodDirection> = {
 export const moodDirection = (mood: string): MoodDirection => MOOD_DIRECTION[mood as PetMood] ?? MOOD_DIRECTION.rest;
 
 /**
+ * How each of the 31 session states plays the eye vocabulary — the state
+ * axis's face table (see pet.ts PET_STATES).
+ *
+ * This is NOT 25 more faces. The vocabulary is still the 12 eye shapes; what
+ * changes per state is which shape it holds, what it drifts to, how often it
+ * blinks and where it rests its gaze. That is the whole expressive budget,
+ * and it is why 31 states cost 31 rows of data instead of 31 drawings.
+ *
+ * Two rules held throughout:
+ *  - **States that need concentration do not blink.** `blinkMs: 0` on every
+ *    reading/working/scanning state — a blink is what a face does when it has
+ *    a spare moment, and a pet that blinks while it is mid-tool reads as
+ *    bored, not busy.
+ *  - **The drift is where the personality lives.** A state that only ever
+ *    holds one shape is a texture; the drift is what keeps it finding new
+ *    poses to rest in while the state runs for minutes.
+ *
+ * `thinking-dots` and `powering-down` wear `closed` because their content is
+ * not a face at all — the effects layer replaces it (three dots / a collapse).
+ */
+export const STATE_DIRECTION: Record<string, MoodDirection> = {
+	// ── A. the turn loop
+	idle: { eyes: "open", drift: "happy", blinkMs: 5200, look: 0.18 },
+	listening: { eyes: "open", drift: "wide", blinkMs: 4200, look: 0.1 },
+	thinking: { eyes: "half", drift: "dizzy", blinkMs: 0, look: 0.4 },
+	working: { eyes: "tense", blinkMs: 0, look: 0.34 },
+	searching: { eyes: "squint", drift: "half", blinkMs: 0, look: 0.55 },
+	writing: { eyes: "half", drift: "tense", blinkMs: 3000, look: -0.2 },
+	// ── B. transfer
+	sending: { eyes: "open", drift: "star", blinkMs: 3200, look: 0.1 },
+	receiving: { eyes: "open", drift: "wide", blinkMs: 3200, look: -0.1 },
+	uploading: { eyes: "tense", drift: "open", blinkMs: 2600, look: -0.35 },
+	loading: { eyes: "half", drift: "bored", blinkMs: 6400, look: 0 },
+	// ── C. progress
+	progress: { eyes: "half", drift: "bored", blinkMs: 5200, look: -0.1 },
+	orbit: { eyes: "happy", drift: "star", blinkMs: 4800, look: 0.2 },
+	radar: { eyes: "squint", drift: "half", blinkMs: 0, look: 0.5 },
+	"thinking-dots": { eyes: "closed", blinkMs: 0, look: 0 },
+	humming: { eyes: "happy", drift: "closed", blinkMs: 5600, look: 0.15 },
+	// ── D. notification / input
+	notifying: { eyes: "wide", drift: "open", blinkMs: 2400, look: 0.3 },
+	alerting: { eyes: "cross", blinkMs: 0, look: 0 },
+	dictating: { eyes: "open", drift: "half", blinkMs: 2000, look: -0.15 },
+	// ── E. emotion
+	excited: { eyes: "wide", drift: "star", blinkMs: 1600, look: 0.35 },
+	happy: { eyes: "happy", drift: "squint", blinkMs: 3000, look: 0.22 },
+	celebrate: { eyes: "star", drift: "happy", blinkMs: 2400, look: 0.25 },
+	confused: { eyes: "cross", drift: "squint", blinkMs: 2800, look: -0.35 },
+	curious: { eyes: "half", drift: "open", blinkMs: 4600, look: 0.55 },
+	proud: { eyes: "happy", drift: "squint", blinkMs: 3600, look: -0.1 },
+	shy: { eyes: "squint", drift: "closed", blinkMs: 2600, look: -0.18 },
+	playful: { eyes: "happy", drift: "star", blinkMs: 2200, look: 0.3 },
+	// ── F. lifecycle
+	spawning: { eyes: "wide", drift: "open", blinkMs: 1800, look: 0 },
+	"powering-down": { eyes: "closed", blinkMs: 0, look: 0 },
+	bouncing: { eyes: "happy", drift: "star", blinkMs: 2000, look: 0.2 },
+	dragging: { eyes: "wide", drift: "dizzy", blinkMs: 2400, look: -0.3 },
+	drowsy: { eyes: "half", drift: "bored", blinkMs: 9000, look: -0.3 },
+};
+
+export const stateDirection = (state: string): MoodDirection => STATE_DIRECTION[state] ?? MOOD_DIRECTION.rest;
+
+/**
+ * How long a state takes to ease over to its drift face — the "how often it
+ * finds a new resting pose" clock. Busy states change pose faster (they are
+ * actively working through something); ambient and drowsy states stretch it
+ * out, because a slow drift is what reads as calm. Everything not listed
+ * falls back to DEFAULT_DRIFT_MS.
+ */
+export const DEFAULT_DRIFT_MS = 3400;
+export const STATE_DRIFT_MS: Record<string, number> = {
+	idle: 4200,
+	listening: 3600,
+	thinking: 3000,
+	working: 2400,
+	writing: 2000,
+	searching: 1800,
+	orbit: 5200,
+	radar: 2000,
+	humming: 5200,
+	"thinking-dots": 5200,
+	drowsy: 8000,
+	progress: 5200,
+};
+export const driftMsForState = (state: string): number => STATE_DRIFT_MS[state] ?? DEFAULT_DRIFT_MS;
+
+/**
  * How each user-initiated reaction plays. Same vocabulary as a mood, so the
  * engine needs no second code path — only a second lookup.
  *

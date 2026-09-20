@@ -39,7 +39,14 @@ import {
 } from "react";
 import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
-import { type PetActivity, type PetInteraction, type PetMood, petScale, randomPetInteraction } from "./lib/pet";
+import {
+	type PetActivity,
+	type PetInteraction,
+	type PetMood,
+	type PetState,
+	petScale,
+	randomPetInteraction,
+} from "./lib/pet";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
 import { PetBubbles } from "./pet-bubbles";
@@ -106,6 +113,10 @@ function PetApp(): ReactNode {
 	// broadcast the composer/avatar do rather than receiving a prop.
 	const decor = usePetDecor();
 	const [mood, setMood] = useState<PetMood>("rest");
+	// The 31-state session reading pushed from the main window. Separate from
+	// `mood` for the same reason the two axes exist at all: the mood picks the
+	// spritesheet row, the state picks the face / motion / effects.
+	const [sessionState, setSessionState] = useState<PetState | null>(null);
 	const [hovering, setHovering] = useState(false);
 	const [dragging, setDragging] = useState(false);
 	// Ambient idle choreography: while the pet sits calm at rest, briefly swap
@@ -184,6 +195,7 @@ function PetApp(): ReactNode {
 		if (!bridge?.onPetActivity) return;
 		return bridge.onPetActivity?.(payload => {
 			if (payload.mood) setMood(payload.mood);
+			if (payload.petState) setSessionState(payload.petState);
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
 			if (typeof payload.unreadCount === "number") setUnreadCount(payload.unreadCount);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
@@ -625,11 +637,23 @@ function PetApp(): ReactNode {
 	if (!enabled) return null;
 
 	const displayMood = dragging ? "dragging" : hovering ? "hover" : (ambientMood ?? mood);
-	// Reactions yield to live gestures: while dragging or hovering the pet is
-	// already answering the pointer, so a stale poke face must not paint over
-	// it. Sleep is excluded too — the dozing face is meaningless once the
-	// eyes have closed, and the zzz layer carries that state on its own.
-	const displayInteraction = dragging || hovering || sleeping ? null : interaction;
+	// The session state yields to every local choreography: dragging and hover
+	// are pointer states, and the ambient idle choreography swaps the idle ROW
+	// for a livelier one — two choreographies fighting over the same face is
+	// exactly what made the old behaviour read as random.
+	const displayState = dragging || hovering || ambientMood ? null : sessionState;
+	// Reactions yield to drag and sleep — but NOT to hover. The pet window is
+	// click-through, so `hovering` comes from the main process's cursor poll
+	// and is TRUE for the entire duration of any click gesture: the cursor is
+	// necessarily inside the hitbox from pointerdown to pointerup. Yielding to
+	// it made every reaction dead on arrival — double-click sets `interaction`,
+	// the same frame's hover state wipes it, and the pet sits there unchanged
+	// (2026-09-20 user: 「桌宠双击可能由于鼠标悬停的状态导致无交互状态」).
+	// Drag still wins: while dragging the pet is already answering the pointer
+	// with a whole different row, and a poke face fighting it read as noise.
+	// Sleep still wins: once the eyes have closed the dozing face is the only
+	// readable thing and the zzz layer carries that state on its own.
+	const displayInteraction = dragging || sleeping ? null : interaction;
 	// Docked to the left edge the pet faces OUT of the screen (the walk
 	// frames face left) — mirror it so it always faces the workspace.
 	const mirrored = flip || dockSide === "left";
@@ -684,6 +708,10 @@ function PetApp(): ReactNode {
 					<div className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}>
 						<PetSprite
 							mood={displayMood}
+							state={displayState}
+							// The desktop pet is the largest host (104px box) —
+							// every effect runs at full count here.
+							tier="full"
 							pet={pet}
 							/* The builtin SVG derives its own size from
 							 * `--gui-pet-window-scale` (pet-window.css); this

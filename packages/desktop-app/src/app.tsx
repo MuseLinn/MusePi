@@ -36,7 +36,7 @@ import { pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
-import { moodFromState, petEnabled, petMode, petScale } from "./lib/pet";
+import { moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
@@ -2244,6 +2244,7 @@ function AppInner(): ReactNode {
 		).electronAPI;
 		if (!electronAPI?.petActivity) return;
 		let lastMood: string | null = null;
+		let lastPetState: string | null = null;
 		let lastStatePush = 0;
 		const textOf = (content: unknown): string =>
 			typeof content === "string"
@@ -2297,9 +2298,15 @@ function AppInner(): ReactNode {
 				streaming: snap.streaming,
 				hasApprovals: snap.approvals.length > 0,
 			});
-			if (mood !== lastMood) {
+			const state = stateFromSignals({
+				working: snap.working,
+				streaming: snap.streaming,
+				approvals: snap.approvals.length,
+			});
+			if (mood !== lastMood || state !== lastPetState) {
 				lastMood = mood;
-				void electronAPI.petActivity?.({ mood });
+				lastPetState = state;
+				void electronAPI.petActivity?.({ mood, petState: state });
 			}
 		};
 		let unsub: (() => void) | null = null;
@@ -2410,6 +2417,7 @@ function AppInner(): ReactNode {
 			void electronAPI.setPetVisible?.(want);
 			if (!want) {
 				lastMood = null;
+				lastPetState = null;
 			} else {
 				pushMood();
 				pushState(true);
@@ -2488,6 +2496,7 @@ function AppInner(): ReactNode {
 		window.addEventListener("musepi-gui-default-mode-changed", onDefaultModeChanged);
 		const unsubReq = electronAPI.onPetStateRequest?.(() => {
 			lastMood = null; // force a resend
+			lastPetState = null;
 			lastStatePush = 0;
 			pushMood();
 			pushState(true);
