@@ -481,6 +481,12 @@ export const settings = {
 	"voice input": "Voice input",
 	"voice recording stop": "Stop recording",
 	"voice transcribing": "Transcribing…",
+	"voice error timeout":
+		"Speech recognition timed out — the first use downloads the voice model; give it a few seconds and try again",
+	"voice error empty": "Didn't catch that — move closer to the microphone and try again",
+	"voice error mic": "Microphone unavailable — check your system microphone permission",
+	"voice error disconnected": "The speech service disconnected — try again once reconnected",
+	"voice esc to cancel": "Esc to cancel",
 	off: "Off",
 	reduced: "Reduced",
 	full: "Full",

@@ -74,7 +74,11 @@ export interface SessionClient {
 	sendUiResponse(reqId: number, value?: CollabUiResponseValue): void;
 	sendAgentCmd(cmd: "chat" | "kill" | "revive", agentId: string, text?: string): void;
 	fetchTranscript(agentId: string, fromByte: number): Promise<TranscriptResult | null>;
-	rpc<T>(method: string, params?: unknown): Promise<T>;
+	/** `opts.timeoutMs` raises the per-call cap for long-running methods —
+	 *  stt.transcribe loads a GB-scale local model on first use (the host
+	 *  transport enforces its own default cap; the collab link has none and
+	 *  accepts the argument for interface parity). */
+	rpc<T>(method: string, params?: unknown, opts?: { timeoutMs?: number }): Promise<T>;
 	/**
 	 * Daemon **global** event stream (`events.subscribe` — extensions.changed,
 	 * stt.downloadProgress / Done / Error). Only the host transport carries
@@ -364,7 +368,7 @@ export class GuestClient {
 	 * host answers `ok:false`. No timeout — the host always answers (mirrors
 	 * the fetch-transcript pending-map pattern without the polling fallback).
 	 */
-	rpc<T>(method: string, params?: unknown): Promise<T> {
+	rpc<T>(method: string, params?: unknown, _opts?: { timeoutMs?: number }): Promise<T> {
 		const reqId = ++this.#rpcSeq;
 		const { promise, resolve, reject } = Promise.withResolvers<T>();
 		this.#pendingRpcs.set(reqId, {

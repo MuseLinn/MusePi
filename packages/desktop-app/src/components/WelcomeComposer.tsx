@@ -9,7 +9,6 @@ import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
-import { dispatchNotification } from "../lib/notify";
 import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
@@ -24,7 +23,7 @@ import {
 } from "../lib/suggestions";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
+import { cancelActiveDictation, evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { BlurText } from "./BlurText";
@@ -319,6 +318,36 @@ export function WelcomeComposer({
 	const [voiceSeconds, setVoiceSeconds] = useState(0);
 	const [voiceLevel, setVoiceLevel] = useState(0);
 	const stopDict = useRef<(() => void) | null>(null);
+	// Dictation failures surface inline above the input (session-composer
+	// parity) instead of the global "工具错误" toast.
+	const [voiceError, setVoiceError] = useState<string | null>(null);
+	const voiceErrorTimer = useRef<number | null>(null);
+	const showVoiceError = useCallback((message: string): void => {
+		setVoiceError(message);
+		if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
+		voiceErrorTimer.current = window.setTimeout(() => setVoiceError(null), 6000);
+	}, []);
+	useEffect(
+		() => () => {
+			if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
+		},
+		[],
+	);
+	// Esc during dictation DISCARDS the buffer (mic press = keep & transcribe).
+	useEffect(() => {
+		if (!dictating) return;
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			e.stopPropagation();
+			cancelActiveDictation();
+			setDictating(false);
+			setTranscribing(false);
+			setVoiceError(null);
+		};
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
+	}, [dictating]);
 	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity): whether
 	// finishing a dictation auto-sends the transcript instead of filling the draft.
 	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
@@ -1740,7 +1769,7 @@ export function WelcomeComposer({
 												message => {
 													setDictating(false);
 													setTranscribing(false);
-													dispatchNotification("error", { lastMessage: message });
+													showVoiceError(message);
 												},
 												rpc,
 												activity => {
@@ -1753,7 +1782,7 @@ export function WelcomeComposer({
 													} else if (activity.phase === "error") {
 														setDictating(false);
 														setTranscribing(false);
-														dispatchNotification("error", { lastMessage: activity.message });
+														showVoiceError(activity.message);
 													}
 												},
 											);
@@ -1777,6 +1806,12 @@ export function WelcomeComposer({
 								</>
 							}
 						>
+							{voiceError && (
+								<div className="gui-voice-error" role="status" aria-live="polite">
+									<span className="gui-voice-error-dot" aria-hidden />
+									<span className="min-w-0 flex-1">{voiceError}</span>
+								</div>
+							)}
 							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
 								{quotes.length > 0 && (
 									<div className="gui-welcome-quotes">

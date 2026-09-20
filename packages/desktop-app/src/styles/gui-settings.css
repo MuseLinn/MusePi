@@ -3815,6 +3815,35 @@ body.gui-resizing {
 	}
 }
 
+/* Inline voice error chip (composer children), replaces global toast. */
+.gui-voice-error {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 2px 0;
+	padding: 6px 12px;
+	border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
+	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
+	border-radius: var(--radius-md);
+	font-size: 12px;
+	color: var(--color-text);
+}
+
+.gui-voice-error-dot {
+	width: 8px;
+	height: 8px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--color-danger);
+	animation: gui-mic-pulse 1.2s ease-in-out infinite;
+}
+
+.gui-voice-error-hint {
+	flex: none;
+	color: var(--color-text-muted);
+	font-size: 11px;
+}
+
 /* ── Chat display prefs (settings → 聊天) ───────────────────────────── */
 /* Root classes applied from localStorage; transcript.css stays shared. */
 .gui-chat-hide-time .tr-action-time {

@@ -32,8 +32,16 @@ export interface StreamEvent {
 type TimerHandle = Timer;
 
 /** A request unanswered this long is rejected (dead socket / hung daemon) —
- *  without this, a silently-dead connection hangs every caller forever. */
+ *  without this, a silently-dead connection hangs every caller forever.
+ *  Long-running methods (stt.transcribe loads a GB-scale local model on
+ *  first use; tts.synthesize warms Kokoro) pass a larger per-call cap. */
 const REQUEST_TIMEOUT_MS = 15_000;
+
+/** Per-call overrides for {@link RpcClient.request}. */
+export interface RpcRequestOptions {
+	/** Reject the request after this long instead of {@link REQUEST_TIMEOUT_MS}. */
+	timeoutMs?: number;
+}
 /** App-level keepalive cadence. Browsers cannot send WS ping frames, so
  *  liveness is probed with a lightweight RPC ("system.ping"). */
 const KEEPALIVE_INTERVAL_MS = 20_000;
@@ -206,7 +214,7 @@ export class RpcClient {
 		this.#pending.clear();
 	}
 
-	request<T = unknown>(method: string, params?: unknown): Promise<T> {
+	request<T = unknown>(method: string, params?: unknown, opts?: RpcRequestOptions): Promise<T> {
 		const ws = this.#ws;
 		if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("not connected"));
 		const id = this.#nextId++;
@@ -219,7 +227,7 @@ export class RpcClient {
 				if (!this.#pending.has(id)) return;
 				this.#pending.delete(id);
 				reject(new Error(`request timeout: ${method}`));
-			}, REQUEST_TIMEOUT_MS);
+			}, opts?.timeoutMs ?? REQUEST_TIMEOUT_MS);
 			this.#pending.set(id, {
 				resolve: v => {
 					clearTimeout(timer);

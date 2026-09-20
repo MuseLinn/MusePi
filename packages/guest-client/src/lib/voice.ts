@@ -81,14 +81,21 @@ export async function startVoiceCapture(): Promise<VoiceCapture> {
  *  be ~115 MB — 5 decimals (~8 bytes/sample, inaudible for 16-bit ASR) keeps
  *  long recordings comfortably inside the daemon's 16 MiB request cap. */
 export async function transcribeAudio(
-	client: { rpc<T>(method: string, params?: unknown): Promise<T> },
+	client: { rpc<T>(method: string, params?: unknown, opts?: { timeoutMs?: number }): Promise<T> },
 	audio: Float32Array,
 	language?: string,
 ): Promise<string> {
-	const res = await client.rpc<{ text: string }>("stt.transcribe", {
-		audio: Array.from(audio, v => Math.round(v * 1e5) / 1e5),
-		...(language ? { language } : {}),
-	});
+	// 3 min cap: first use downloads/loads the GB-scale local model inside
+	// this call — the default 15s request cap turned exactly that into a
+	// timeout before a single utterance ever came back.
+	const res = await client.rpc<{ text: string }>(
+		"stt.transcribe",
+		{
+			audio: Array.from(audio, v => Math.round(v * 1e5) / 1e5),
+			...(language ? { language } : {}),
+		},
+		{ timeoutMs: 180_000 },
+	);
 	return res?.text ?? "";
 }
 

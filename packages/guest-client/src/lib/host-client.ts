@@ -209,8 +209,8 @@ export class HostClient implements SessionClient {
 		}
 	}
 
-	rpc<T>(method: string, params?: unknown): Promise<T> {
-		return this.#rpc(method, params) as Promise<T>;
+	rpc<T>(method: string, params?: unknown, opts?: { timeoutMs?: number }): Promise<T> {
+		return this.#rpc(method, params, opts) as Promise<T>;
 	}
 
 	/**
@@ -592,7 +592,7 @@ export class HostClient implements SessionClient {
 		this.#notify();
 	}
 
-	#rpc(method: string, params: unknown): Promise<unknown> {
+	#rpc(method: string, params: unknown, opts?: { timeoutMs?: number }): Promise<unknown> {
 		return new Promise<unknown>((resolve, reject) => {
 			const id = ++this.#rpcSeq;
 			this.#pending.set(id, {
@@ -601,7 +601,7 @@ export class HostClient implements SessionClient {
 				timeout: setTimeout(() => {
 					this.#pending.delete(id);
 					reject(new Error(`RPC timeout: ${method}`));
-				}, RPC_TIMEOUT_MS),
+				}, opts?.timeoutMs ?? RPC_TIMEOUT_MS),
 			});
 			this.#ws?.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
 		});

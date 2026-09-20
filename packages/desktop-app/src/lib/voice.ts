@@ -4,9 +4,18 @@
  * VoiceActivity) with startDictationOpts (VAD auto-stop + device + language),
  * speak voice/rate options, enumerateMicDevices, and barge-in (duck/pause).
  */
+import { getLocaleSnapshot, t } from "../i18n/index.js";
 import type { RpcClient } from "./rpc";
 
 /* ── 类型（沿用） ─────────────────────────────────────────────── */
+
+/** RPC cap for stt.transcribe / tts.synthesize: first use downloads and loads
+ *  a GB-scale local model inside the call (Whisper small q8 ≈ 190 MB), and
+ *  CPU inference of a full 15 s window is itself slow — the default 15 s
+ *  request cap turned exactly that into "request timeout: stt.transcribe". */
+const SPEECH_RPC_TIMEOUT_MS = 180_000;
+/** Preheat RPC returns immediately (progress rides the event stream). */
+const PREHEAT_RPC_TIMEOUT_MS = 15_000;
 
 export type VoiceActivity =
 	| { phase: "recording"; seconds: number; level: number }
@@ -274,6 +283,17 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	let rec: { stop(): void } | null = null;
 	const startedAt = Date.now();
 	let lastTick = 0;
+	// Esc-to-cancel support: the module-level cancelActiveDictation() needs a
+	// handle on the live session's flag + recorder.
+	const session = {
+		cancel(): void {
+			cancelled = true;
+			rec?.stop();
+			activeDictation = null;
+			onState?.({ phase: "stopped" });
+		},
+	};
+	activeDictation = session;
 
 	// barge-in：起口述前先 weak 掉 TTS
 	if (opts.bargeIn) {
@@ -289,17 +309,41 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		// changelog only held for callers that already passed a value). Resolve
 		// it here — one place, every entry point — unless the caller overrode it.
 		let vadEndMs = opts.vadEndMs;
-		if (vadEndMs === undefined) {
-			try {
-				const v = await rpc.request<Record<string, unknown> | null>("settings.get", {
-					keys: ["stt.vadEndMs"],
-				});
-				const parsed = Number(v?.["stt.vadEndMs"]);
-				if (Number.isFinite(parsed) && parsed > 0) vadEndMs = parsed;
-			} catch {
-				// settings unavailable — keep the 15 s cap behaviour
+		let configuredLanguage: string | undefined;
+		let configuredModel: string | undefined;
+		try {
+			const v = await rpc.request<Record<string, unknown> | null>("settings.get", {
+				keys: ["stt.vadEndMs", "stt.language", "stt.modelName"],
+			});
+			const parsed = Number(v?.["stt.vadEndMs"]);
+			if (Number.isFinite(parsed) && parsed > 0) vadEndMs = parsed;
+			const lang = typeof v?.["stt.language"] === "string" ? (v["stt.language"] as string).trim() : "";
+			// "auto" (explicit) means let Whisper auto-detect; unset falls back to
+			// the UI language. Forcing the old "en" default turned Chinese speech
+			// into English mush, and pure auto-detect is unreliable on short
+			// non-English utterances — so a zh UI seeds "zh" instead.
+			if (lang && lang.toLowerCase() !== "auto") {
+				configuredLanguage = lang;
+			} else if (!lang && getLocaleSnapshot().toLowerCase().startsWith("zh")) {
+				configuredLanguage = "zh";
 			}
+			configuredModel = typeof v?.["stt.modelName"] === "string" ? (v["stt.modelName"] as string) : undefined;
+		} catch {
+			// settings unavailable — keep the 15 s cap behaviour
 		}
+		if (cancelled) return;
+		// Preheat: kick the model download/load NOW so it overlaps the
+		// recording instead of being billed to the transcribe RPC. The daemon
+		// dedupes per key (alreadyRunning) and the worker keeps the model warm,
+		// so this is safe to fire on every mic press. modelKey mirrors the
+		// daemon's resolveSttModelSpec fallback (settings unset → balanced).
+		const preheatKey = configuredModel?.trim() || "balanced";
+		void rpc
+			.request("stt.modelDownload", { modelKey: preheatKey }, { timeoutMs: PREHEAT_RPC_TIMEOUT_MS })
+			.catch(() => {
+				/* preheat is best-effort: the transcribe path reports real failures */
+			});
+		const language = opts.language ?? configuredLanguage;
 		// #9: `done` resolves when the recording FINISHES (VAD end / 15s cap /
 		// stop button) — the transcribe call below now receives the full
 		// buffer, and settings' vadEndMs actually gates the auto-stop.
@@ -320,26 +364,37 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 		// button must be able to finish the recording while it runs.
 		rec = recording;
 		const recorded = await recording.done;
+		if (cancelled) return;
 		if (!recorded) {
-			onState?.({ phase: "error", message: "microphone unavailable" });
-			const stop = webSpeechFallback(onFinal, onError, opts.language);
+			// The composer surfaces this inline (no toast); the Web Speech
+			// fallback below still gets a chance to answer the utterance.
+			onState?.({ phase: "error", message: friendlyDictationError("microphone unavailable") });
+			const stop = webSpeechFallback(onFinal, onError, language);
 			if (stop) rec = { stop };
 			return;
 		}
-		if (cancelled) return;
 		onState?.({ phase: "transcribing" });
 		try {
-			const res = await rpc.request<{ text: string }>("stt.transcribe", {
-				audio: quantiseForWire(recorded.pcm),
-				...(opts.language ? { language: opts.language } : {}),
-			});
+			const res = await rpc.request<{ text: string }>(
+				"stt.transcribe",
+				{
+					audio: quantiseForWire(recorded.pcm),
+					...(language ? { language } : {}),
+				},
+				{ timeoutMs: SPEECH_RPC_TIMEOUT_MS },
+			);
 			if (cancelled) return;
 			if (res?.text) onFinal(res.text);
-			else onError("empty transcript");
+			else {
+				const message = friendlyDictationError("empty transcript");
+				onError(message);
+				onState?.({ phase: "error", message });
+			}
 		} catch (err) {
 			if (cancelled) return;
-			onError(err instanceof Error ? err.message : String(err));
-			onState?.({ phase: "error", message: err instanceof Error ? err.message : String(err) });
+			const message = friendlyDictationError(err instanceof Error ? err.message : String(err));
+			onError(message);
+			onState?.({ phase: "error", message });
 		}
 	})();
 
@@ -355,6 +410,33 @@ export function startDictationOpts(opts: DictateOptions): (() => void) | null {
 	};
 }
 
+/* ── 取消当前口述（Esc）──────────────────────────────────────────
+ * `stop`（点麦克风 / 再按一次）是"说完提前收工"：保留缓冲并转写。
+ * Esc 语义是"丢弃"：置 cancelled 后停麦，转写路径看到 cancelled 直接退出。
+ * 模块级单例与 activeTts 同一假设：同一时刻只有一场口述。 */
+let activeDictation: { cancel(): void } | null = null;
+
+/** Discard the in-flight dictation (Esc parity). Returns false when idle. */
+export function cancelActiveDictation(): boolean {
+	if (!activeDictation) return false;
+	const session = activeDictation;
+	activeDictation = null;
+	session.cancel();
+	return true;
+}
+
+/* ── 错误文案 ───────────────────────────────────────────────────
+ * 原始错误串（"request timeout: stt.transcribe"）进全局「工具错误」toast
+ * 既吓人又没用：已知失败源翻成可行动的一句话，未知原样透出。 */
+function friendlyDictationError(message: string): string {
+	const m = message ?? "";
+	if (/request timeout|RPC timeout/i.test(m)) return t("voice error timeout");
+	if (/empty transcript/i.test(m)) return t("voice error empty");
+	if (/microphone|NotAllowedError|PermissionDenied/i.test(m)) return t("voice error mic");
+	if (/not connected|connection closed|disconnect/i.test(m)) return t("voice error disconnected");
+	return message;
+}
+
 /* ── 朗读 ─────────────────────────────────────────────────────── */
 export function speak(
 	text: string,
@@ -367,10 +449,15 @@ export function speak(
 		let audio: HTMLAudioElement | null = null;
 		let stopped = false;
 		void rpc
-			.request<{ audio: number[] | null; sampleRate: number }>("tts.synthesize", {
-				text: clean,
-				...(options?.voice ? { voice: options.voice } : {}),
-			})
+			.request<{ audio: number[] | null; sampleRate: number }>(
+				"tts.synthesize",
+				{
+					text: clean,
+					...(options?.voice ? { voice: options.voice } : {}),
+				},
+				// First use warms Kokoro inside the call — same class as stt.transcribe.
+				{ timeoutMs: SPEECH_RPC_TIMEOUT_MS },
+			)
 			.then(res => {
 				if (stopped || !res?.audio || res.audio.length === 0) return;
 				const wav = pcmToWav(res.audio, res.sampleRate || 24000);

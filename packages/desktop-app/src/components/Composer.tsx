@@ -4,7 +4,6 @@ import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
 import { tapFeedback } from "../lib/haptic";
-import { dispatchNotification } from "../lib/notify";
 import type { PetMood } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
@@ -17,7 +16,7 @@ import {
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
+import { cancelActiveDictation, evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
@@ -300,6 +299,36 @@ export function Composer({
 	const [transcribing, setTranscribing] = useState(false);
 	const [voiceSeconds, setVoiceSeconds] = useState(0);
 	const [voiceLevel, setVoiceLevel] = useState(0);
+	// Dictation failures surface inline above the input (auto-dismiss) — a raw
+	// English error string in the global "工具错误" toast read as a broken app.
+	const [voiceError, setVoiceError] = useState<string | null>(null);
+	const voiceErrorTimer = useRef<number | null>(null);
+	const showVoiceError = useCallback((message: string): void => {
+		setVoiceError(message);
+		if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
+		voiceErrorTimer.current = window.setTimeout(() => setVoiceError(null), 6000);
+	}, []);
+	useEffect(
+		() => () => {
+			if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
+		},
+		[],
+	);
+	// Esc during dictation DISCARDS the buffer (mic press = keep & transcribe).
+	useEffect(() => {
+		if (!dictating) return;
+		const onKey = (e: globalThis.KeyboardEvent): void => {
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			e.stopPropagation();
+			cancelActiveDictation();
+			setDictating(false);
+			setTranscribing(false);
+			setVoiceError(null);
+		};
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
+	}, [dictating]);
 
 	// Trailing "+" card in the attachment row (composer-frame): opens the
 	// all-types picker directly, skipping the attach menu.
@@ -2068,7 +2097,7 @@ export function Composer({
 									message => {
 										setDictating(false);
 										setTranscribing(false);
-										dispatchNotification("error", { lastMessage: message });
+										showVoiceError(message);
 									},
 									rpc,
 									activity => {
@@ -2081,7 +2110,7 @@ export function Composer({
 										} else if (activity.phase === "error") {
 											setDictating(false);
 											setTranscribing(false);
-											dispatchNotification("error", { lastMessage: activity.message });
+											showVoiceError(activity.message);
 										}
 									},
 								);
@@ -2111,6 +2140,13 @@ export function Composer({
 					</>
 				}
 			>
+				{voiceError && (
+					<div className="gui-voice-error" role="status" aria-live="polite">
+						<span className="gui-voice-error-dot" aria-hidden />
+						<span className="min-w-0 flex-1">{voiceError}</span>
+						<span className="gui-voice-error-hint">{t("voice esc to cancel")}</span>
+					</div>
+				)}
 				{slashNotice && (
 					<SlashNotice level={slashNotice.level} text={slashNotice.text} markdown={slashNotice.markdown} />
 				)}

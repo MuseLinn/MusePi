@@ -2488,7 +2488,11 @@ export const SETTINGS_SCHEMA = {
 
 	"stt.language": {
 		type: "string",
-		default: "en",
+		// "" (auto-detect) — the shipped tiers are multilingual Whisper
+		// checkpoints, and the old "en" default force-decoded Chinese speech
+		// into English mush. Consumers treat empty as "omit the hint"
+		// (stt-controller: `language || undefined`; GUI trims and passes).
+		default: "",
 	},
 	"stt.vadEndMs": {
 		type: "number",
