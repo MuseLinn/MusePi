@@ -123,38 +123,13 @@
 	color: var(--color-text);
 }
 
-/* Toggle switch (task status). */
-.gui-toggle {
-	position: relative;
-	width: 38px;
-	height: 22px;
-	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: var(--color-surface-sunken);
-	cursor: pointer;
-	transition: background 160ms ease, border-color 160ms ease;
-	padding: 0;
-}
-
-.gui-toggle--on {
-	background: var(--color-accent);
-	border-color: var(--color-accent);
-}
-
-.gui-toggle-thumb {
-	position: absolute;
-	top: 2px;
-	left: 2px;
-	width: 16px;
-	height: 16px;
-	border-radius: 50%;
-	background: #fff;
-	transition: transform 160ms ease;
-}
-
-.gui-toggle--on .gui-toggle-thumb {
-	transform: translateX(16px);
-}
+/* Toggle switch — the ONE .gui-toggle definition lives in gui-settings.css
+ * (36×20 track + .gui-toggle-knob). A TaskModal-only copy used to sit here
+ * with the same class name; loading after gui-settings/gui-workspace, it
+ * silently re-styled EVERY switch app-wide (38×22 + border) and clobbered
+ * .gui-toggle--sm's 26×15 track — small switches rendered a full-size track
+ * with the 11px knob travelling 11px (dot stuck mid-track). TaskModal now
+ * uses the shared classes too (2026-09-20). */
 
 /* ── Widget container queries: adaptive density tiers ─────────────
  * Widget roots become inline-size containers; cards sized by kimi's

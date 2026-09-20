@@ -2205,35 +2205,10 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	cursor: default;
 }
 
-/* Pixel-matrix view transition (dot-matrix reveal, DotMatrixMark parity):
- * the incoming surface appears through a radial-dot mask that coarsens
- * from fine pixels to large blocks — the "pixelating in" feel on board
- * ↔ workspace switches. */
-.gui-pixel-reveal {
-	/* No fill retention: the dot-mask is a transition artifact — after the
-	 * animation the surface must return to a plain unmasked element, or a
-	 * 68px dot lattice stays punched through the board permanently. */
-	animation: gui-pixel-reveal 460ms var(--spring);
-}
-
-@keyframes gui-pixel-reveal {
-	0% {
-		mask-image: radial-gradient(circle, #000 32%, transparent 33%);
-		mask-size: 5px 5px;
-		opacity: 0;
-	}
-	45% {
-		opacity: 1;
-	}
-	100% {
-		mask-size: 68px 68px;
-		opacity: 1;
-	}
-}
-
-.gui-motion-off .gui-pixel-reveal {
-	animation: none;
-}
+/* The old dot-matrix surface reveal (gui-pixel-reveal: a radial-dot mask
+ * coarsening 5px → 68px on every board/scheduled/agents/capability swap)
+ * was removed — users found the pixelation noisy; those page swaps now run
+ * the standard gui-view-enter blur transition like every other surface. */
 
 /* Live pixel-size readout (kimi RESIZE parity: 356 × 252). */
 .gui-board-card-size {
@@ -2358,9 +2333,8 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	gap: 4px;
 }
 
-/* View swap home ↔ board: blur-out 150ms, then the target mounts with
- * a blur-in 300ms — approximates the dot-matrix reassembly between the
- * conversation container and the board container. */
+/* View swap (the standard surface transition app-wide): blur-out 150ms,
+ * then the target mounts with a blur-in 300ms. */
 .gui-view-leave {
 	animation: gui-view-blur-out 150ms ease-in forwards;
 	/* The outgoing frame must never intercept input while it fades. */

@@ -68,7 +68,7 @@ export function TaskModal({
 							aria-checked={task.enabled}
 							onClick={() => update({ task: { ...task, enabled: !task.enabled } })}
 						>
-							<span className="gui-toggle-thumb" />
+							<span className="gui-toggle-knob" />
 						</button>
 					</div>
 					<div className="gui-task-row">

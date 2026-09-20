@@ -172,7 +172,7 @@ function ChatSurfaceShell({ leave, children }: { leave?: boolean; children: Reac
 	return (
 		<div className={leave ? "gui-view-leave" : "gui-view-enter"}>
 			<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-				<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+				<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
 					{children}
 				</div>
 			</div>
@@ -3173,7 +3173,7 @@ function AppInner(): ReactNode {
 								 * mounted for its blur-out, then chat enters. */
 								<div className="gui-view-leave">
 									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface gui-pixel-reveal m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+										<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
 											<BoardPage
 												onBack={() => viewSwapRef.current("chat")}
 												rpc={rpc}

@@ -1884,6 +1884,26 @@
 	transform: translateX(16px);
 }
 
+/* Small variant (dense rows: extension center, capability list, composer
+ * mode toggles). Lives NEXT TO the base definition on purpose — a former
+ * copy in gui-workspace.css was size-clobbered by a same-name .gui-toggle
+ * base block in gui-widgets.css that loaded later (TaskModal copy), so the
+ * 26px track silently rendered 38px with the 11px knob travelling 11px
+ * (dot stuck mid-track). 26 - 2 - 11 - 2 = 11 travel. */
+.gui-toggle--sm {
+	width: 26px;
+	height: 15px;
+}
+
+.gui-toggle--sm .gui-toggle-knob {
+	width: 11px;
+	height: 11px;
+}
+
+.gui-toggle--sm.gui-toggle--on .gui-toggle-knob {
+	transform: translateX(11px);
+}
+
 /* Settings select (default thinking etc) — openchamber control height. */
 .gui-settings-select {
 	height: 34px;

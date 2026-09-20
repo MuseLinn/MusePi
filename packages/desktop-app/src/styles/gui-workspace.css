@@ -2175,20 +2175,10 @@
 .gui-ext-item--selected .gui-ext-item-ops {
 	display: inline-flex;
 }
-.gui-toggle--sm {
-	width: 26px;
-	height: 15px;
-}
-.gui-toggle--sm .gui-toggle-knob {
-	width: 11px;
-	height: 11px;
-}
-/* ON travel must be sized to the SMALL track: the shared 36px rule slides
- * the 11px knob 16px, overshooting a 26px track — the dot sat past the
- * right edge (capability-list switches, 2026-09-20). 26 - 2 - 11 - 2 = 11. */
-.gui-toggle--sm.gui-toggle--on .gui-toggle-knob {
-	transform: translateX(11px);
-}
+/* .gui-toggle--sm moved to gui-settings.css (next to the base definition):
+ * its size rules here were being clobbered by a later-loading same-name
+ * base block in gui-widgets.css — small switches rendered a 38px track
+ * with an 11px knob travelling 11px (dot stuck mid-track, 2026-09-20). */
 .gui-ext-detail {
 	min-height: 0;
 	padding: 14px;
