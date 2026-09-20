@@ -32,7 +32,7 @@
     },
     "packages/agent": {
       "name": "@musepi/pi-agent-core",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-ai": "catalog:",
         "@musepi/pi-catalog": "catalog:",
@@ -51,7 +51,7 @@
     },
     "packages/ai": {
       "name": "@musepi/pi-ai",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@musepi/musepi-type": "catalog:",
@@ -66,7 +66,7 @@
     },
     "packages/catalog": {
       "name": "@musepi/pi-catalog",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@bufbuild/protobuf": "catalog:",
         "@musepi/musepi-type": "catalog:",
@@ -79,7 +79,7 @@
     },
     "packages/coding-agent": {
       "name": "@musepi/pi-coding-agent",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "bin": {
         "musepi": "src/musepi.ts",
       },
@@ -138,14 +138,14 @@
     },
     "packages/collab-proto": {
       "name": "@musepi/collab-proto",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-wire": "workspace:*",
       },
     },
     "packages/desktop-app": {
       "name": "@musepi/desktop-app",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/modifiers": "^9.0.0",
@@ -199,7 +199,7 @@
     },
     "packages/guest-client": {
       "name": "@musepi/guest-client",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -237,7 +237,7 @@
     },
     "packages/hashline": {
       "name": "@musepi/hashline",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "@musepi/pi-utils": "catalog:",
@@ -281,7 +281,7 @@
     },
     "packages/mnemopi": {
       "name": "@musepi/pi-mnemopi",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "bin": {
         "mnemopi": "src/cli.ts",
       },
@@ -307,7 +307,7 @@
     },
     "packages/mobile": {
       "name": "@musepi/mobile",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@aparajita/capacitor-secure-storage": "^8.0.0",
         "@capacitor/app": "^8.0.0",
@@ -324,7 +324,7 @@
     },
     "packages/musepi-type": {
       "name": "@musepi/musepi-type",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "devDependencies": {
         "@ark/attest": "0.56.3",
         "@ark/schema": "0.56.2",
@@ -337,7 +337,7 @@
     },
     "packages/natives": {
       "name": "@musepi/pi-natives",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "devDependencies": {
         "@napi-rs/cli": "catalog:",
         "@types/bun": "catalog:",
@@ -345,7 +345,7 @@
     },
     "packages/sdk": {
       "name": "@musepi/sdk",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-wire": "catalog:",
         "@sinclair/typebox": "^0.34.0",
@@ -353,7 +353,7 @@
     },
     "packages/snapcompact": {
       "name": "@musepi/snapcompact",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-ai": "catalog:",
         "@musepi/pi-catalog": "catalog:",
@@ -367,7 +367,7 @@
     },
     "packages/stats": {
       "name": "@musepi/musepi-stats",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "bin": {
         "musepi-stats": "./src/index.ts",
       },
@@ -394,14 +394,14 @@
     },
     "packages/tool-select": {
       "name": "@musepi/pi-tool-select",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "devDependencies": {
         "@types/bun": "^1.3.14",
       },
     },
     "packages/tui": {
       "name": "@musepi/pi-tui",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "@musepi/pi-utils": "catalog:",
@@ -438,7 +438,7 @@
     },
     "packages/utils": {
       "name": "@musepi/pi-utils",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "dependencies": {
         "@musepi/pi-natives": "catalog:",
         "cross-spawn": "catalog:",
@@ -452,7 +452,7 @@
     },
     "packages/wire": {
       "name": "@musepi/pi-wire",
-      "version": "0.4.33",
+      "version": "0.4.34",
       "devDependencies": {
         "@types/bun": "catalog:",
       },
@@ -475,20 +475,20 @@
     "@bufbuild/protobuf": "^2.12.1",
     "@bufbuild/protoc-gen-es": "^2.12.1",
     "@huggingface/transformers": "^4.2.0",
-    "@musepi/hashline": "0.4.33",
-    "@musepi/musepi-stats": "0.4.33",
-    "@musepi/musepi-type": "0.4.33",
-    "@musepi/pi-agent-core": "0.4.33",
-    "@musepi/pi-ai": "0.4.33",
-    "@musepi/pi-catalog": "0.4.33",
-    "@musepi/pi-coding-agent": "0.4.33",
-    "@musepi/pi-mnemopi": "0.4.33",
-    "@musepi/pi-natives": "0.4.33",
-    "@musepi/pi-tool-select": "0.4.33",
-    "@musepi/pi-tui": "0.4.33",
-    "@musepi/pi-utils": "0.4.33",
-    "@musepi/pi-wire": "0.4.33",
-    "@musepi/snapcompact": "0.4.33",
+    "@musepi/hashline": "0.4.34",
+    "@musepi/musepi-stats": "0.4.34",
+    "@musepi/musepi-type": "0.4.34",
+    "@musepi/pi-agent-core": "0.4.34",
+    "@musepi/pi-ai": "0.4.34",
+    "@musepi/pi-catalog": "0.4.34",
+    "@musepi/pi-coding-agent": "0.4.34",
+    "@musepi/pi-mnemopi": "0.4.34",
+    "@musepi/pi-natives": "0.4.34",
+    "@musepi/pi-tool-select": "0.4.34",
+    "@musepi/pi-tui": "0.4.34",
+    "@musepi/pi-utils": "0.4.34",
+    "@musepi/pi-wire": "0.4.34",
+    "@musepi/snapcompact": "0.4.34",
     "@napi-rs/cli": "3.7.2",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/api-logs": "^0.220.0",
