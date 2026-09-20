@@ -4115,29 +4115,22 @@ body.gui-resizing .gui-pane-right {
 	max-width: 560px;
 }
 
+/* Material (liquid glass) from the shared footer-pill recipe in
+ * gui-composer.css — this file loads AFTER it, so any border/background
+ * here would override the group; keep layout/typography only (same
+ * contract as .gui-project-chip in gui-settings.css). Hover/press
+ * feedback comes from the group's :hover/:active lists — a local
+ * transform here (a 1px lift) would also out-rank the group's press
+ * spring in the cascade, so transforms stay off this class. */
 .gui-suggest-chip {
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
 	padding: 6px 14px;
 	border-radius: 999px;
-	border: 1px solid var(--color-border);
-	background: color-mix(in oklab, var(--color-surface-raised) 55%, transparent);
 	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-sm);
 	cursor: pointer;
-	transition:
-		background 120ms ease-out,
-		border-color 120ms ease-out,
-		color 120ms ease-out,
-		transform 120ms ease-out;
-}
-
-.gui-suggest-chip:hover {
-	background: var(--color-surface-raised);
-	border-color: color-mix(in oklab, var(--color-accent) 40%, var(--color-border));
-	color: var(--color-text);
-	transform: translateY(-1px);
 }
 
 .gui-suggest-chip--more {
@@ -4166,14 +4159,17 @@ body.gui-resizing .gui-pane-right {
 	}
 }
 
-/* 自定义补充 chip: accent-tinted management entry (jumps to settings). */
+/* 自定义补充 chip: accent-tinted management entry (jumps to settings) —
+ * the armed-state recipe on the shared glass (colour carries the state,
+ * the material never changes). */
 .gui-suggest-chip--manage {
 	color: var(--color-accent);
-	border-color: color-mix(in oklab, var(--color-accent) 35%, var(--color-border));
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 }
 
 .gui-suggest-chip--manage:hover {
-	border-color: var(--color-accent);
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
 }
 
 /* Collapse: extra chips fade/blur out before unmounting. */

@@ -191,12 +191,8 @@ export function AttachMenu({
 					>
 						<Icon name="compass-3" className="h-4 w-4" />
 						<span className="min-w-0 flex-1">
-							<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
-								{t("plan mode")}
-							</span>
-							<span className="block truncate text-[12px] leading-tight text-[var(--color-text-faint)]">
-								{t("plan mode hint")}
-							</span>
+							<span className="gui-attach-opt-title">{t("plan mode")}</span>
+							<span className="gui-attach-opt-hint">{t("plan mode hint")}</span>
 						</span>
 						<span className={`gui-attach-switch${planMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
 							<span className="gui-attach-switch-knob" />
@@ -213,12 +209,8 @@ export function AttachMenu({
 					>
 						<Icon name="target" className="h-4 w-4" />
 						<span className="min-w-0 flex-1">
-							<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
-								{t("goal mode")}
-							</span>
-							<span className="block truncate text-[12px] leading-tight text-[var(--color-text-faint)]">
-								{t("goal mode hint")}
-							</span>
+							<span className="gui-attach-opt-title">{t("goal mode")}</span>
+							<span className="gui-attach-opt-hint">{t("goal mode hint")}</span>
 						</span>
 						<span className={`gui-attach-switch${goalMode ? " gui-attach-switch--on" : ""}`} aria-hidden>
 							<span className="gui-attach-switch-knob" />
@@ -237,12 +229,8 @@ export function AttachMenu({
 					>
 						<Icon name="chat-1" className="h-4 w-4" />
 						<span className="min-w-0 flex-1">
-							<span className="block truncate text-[13px] leading-tight text-[var(--color-text)]">
-								{t("guided goal mode")}
-							</span>
-							<span className="block truncate text-[12px] leading-tight text-[var(--color-text-faint)]">
-								{t("guided goal mode hint")}
-							</span>
+							<span className="gui-attach-opt-title">{t("guided goal mode")}</span>
+							<span className="gui-attach-opt-hint">{t("guided goal mode hint")}</span>
 						</span>
 					</button>
 					<input

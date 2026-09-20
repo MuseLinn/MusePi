@@ -1797,7 +1797,7 @@ export function WelcomeComposer({
 									<button
 										type="submit"
 										ref={quotaAnchorRef}
-										className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-accent)] text-[var(--color-accent-fg)] transition-opacity disabled:opacity-40"
+										className="gui-send-btn"
 										disabled={!canSend}
 										aria-label={t("send message")}
 									>
@@ -1940,7 +1940,7 @@ export function WelcomeComposer({
 											taRef.current = el;
 											compAnchorRef(el);
 										}}
-										className="w-full min-w-0 flex-1 resize-none bg-transparent px-1 py-3.5 text-[14px] leading-relaxed text-transparent caret-[var(--color-text)] outline-none placeholder:text-[var(--color-text-faint)]"
+										className="gui-ta-welcome"
 										rows={3}
 										data-focused={focused ? "1" : "0"}
 										value={text}
@@ -2117,7 +2117,7 @@ export function WelcomeComposer({
 										}
 										onClick={() => applySuggestion(r.prompt)}
 									>
-										{r.label}
+										<span>{r.label}</span>
 									</button>
 								);
 							})}
@@ -2132,7 +2132,7 @@ export function WelcomeComposer({
 										)
 									}
 								>
-									{t("custom supplement")}
+									<span>{t("custom supplement")}</span>
 								</button>
 							)}
 							<button

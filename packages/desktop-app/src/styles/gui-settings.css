@@ -1556,6 +1556,7 @@
 .gui-welcome[data-focused] .gui-welcome-greet,
 .gui-welcome[data-focused] .gui-brand,
 .gui-welcome[data-focused] .gui-project-row,
+.gui-welcome[data-focused] .gui-suggest-reveal,
 .gui-welcome[data-focused] .gui-tip {
 	display: none;
 }
@@ -1600,9 +1601,13 @@
  * layout every frame; letting the textarea's own min-height/height
  * transition chase it doubles the layout work and reads as stutter. The
  * JS marks the form .gui-morphing for the animation window and the
- * textarea rides the morph synchronously instead. */
+ * textarea rides the morph synchronously instead. The form's own
+ * `transition: height` (declared on .gui-welcome-form) is suppressed for
+ * the same reason — it double-drove the WAAPI morph on the same
+ * property, two competing 280ms curves fighting every frame. */
 .gui-welcome-form.gui-morphing textarea,
-.gui-welcome-form.gui-morphing .gui-welcome-input {
+.gui-welcome-form.gui-morphing .gui-welcome-input,
+.gui-welcome-form.gui-morphing {
 	transition: none !important;
 }
 

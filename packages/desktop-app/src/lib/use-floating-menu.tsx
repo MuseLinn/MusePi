@@ -62,9 +62,14 @@ export function useFloatingMenu(
 	// effect below sees it on the SAME commit the menu opens. A point
 	// anchor (ContextMenu parity) positions at the pointer instead.
 	const anchorEl = anchorOption instanceof HTMLElement ? anchorOption : anchorRef.current;
-	const [pos, setPos] = useState<{ left?: number; right?: number; top?: number; bottom?: number; up: boolean } | null>(
-		null,
-	);
+	const [pos, setPos] = useState<{
+		left?: number;
+		right?: number;
+		top?: number;
+		bottom?: number;
+		up: boolean;
+		maxH: number;
+	} | null>(null);
 	const [closing, setClosing] = useState(false);
 	const [entered, setEntered] = useState(false);
 	// Latest close callback without re-running the mutex effect.
@@ -88,7 +93,12 @@ export function useFloatingMenu(
 				? anchor.getBoundingClientRect()
 				: { left: anchor.x, top: anchor.y, right: anchor.x, bottom: anchor.y, width: 0, height: 0 };
 		const menuW = menuRef.current?.offsetWidth ?? MENU_ESTIMATED_W;
-		const menuH = menuRef.current?.offsetHeight ?? MENU_ESTIMATED_H;
+		// Natural (unclamped) height: after a maxHeight clamp the box
+		// height shrinks, but scrollHeight still reports the FULL content
+		// height — using it keeps the flip decision stable across the
+		// re-measure/scroll repositions instead of reacting to the clamp.
+		const menuEl = menuRef.current;
+		const menuH = menuEl ? Math.max(menuEl.offsetHeight, menuEl.scrollHeight) : MENU_ESTIMATED_H;
 		// Flip up when the menu would overflow the viewport bottom (top +
 		// height > innerHeight) as well as when there is simply more room
 		// above — a tall menu near the bottom edge must not clip (Base-UI
@@ -97,6 +107,12 @@ export function useFloatingMenu(
 		const roomAbove = r.top;
 		const roomBelow = window.innerHeight - r.bottom;
 		const up = flipUpForBottomOverflow || roomAbove > roomBelow;
+		// Height clamp: never extend past the window edge on the opening
+		// side (a tall attach menu anchored near the top opened upward and
+		// clipped at the viewport top). The wrapper scrolls (inline
+		// overflowY) when its content exceeds the clamp; the 0 floor keeps
+		// a negative value from disabling the clamp entirely.
+		const maxH = Math.max(0, up ? r.top - 6 - MENU_EDGE_PAD : window.innerHeight - r.bottom - 6 - MENU_EDGE_PAD);
 		// Align: right -> menu's right edge on anchor's right edge; left ->
 		// menu's left edge on anchor's left edge. Then CLAMP horizontally into
 		// the viewport — the previous anchor-only clamp (right: innerWidth -
@@ -120,10 +136,16 @@ export function useFloatingMenu(
 			// anchor's rect not at all; every tick otherwise re-renders the
 			// wrapper AND re-runs the [open,pos] enter effect — churn that
 			// also risks a visible hitch on low-end machines).
-			if (prev?.left === left && prev.top === top && prev.bottom === bottom && prev.up === up) {
+			if (
+				prev?.left === left &&
+				prev.top === top &&
+				prev.bottom === bottom &&
+				prev.up === up &&
+				prev.maxH === maxH
+			) {
 				return prev;
 			}
-			return { left, top, bottom, up };
+			return { left, top, bottom, up, maxH };
 		});
 	};
 	useLayoutEffect(() => {
@@ -264,6 +286,11 @@ export function useFloatingMenu(
 					right: pos.right ?? "auto",
 					top: pos.top ?? "auto",
 					bottom: pos.bottom ?? "auto",
+					// Height clamp (see positionMenu): the wrapper scrolls
+					// instead of overflowing past the window edge; overflow-x
+					// stays hidden via .gui-menu-popup.
+					maxHeight: `${pos.maxH}px`,
+					overflowY: "auto",
 					transformOrigin:
 						align === "right" ? (pos.up ? "bottom right" : "top right") : pos.up ? "bottom left" : "top left",
 				}}

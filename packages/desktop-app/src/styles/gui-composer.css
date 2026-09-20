@@ -275,6 +275,9 @@
 	gap: 10px;
 	width: 100%;
 	padding: 7px 9px;
+	/* Token size (matches .gui-menu-item) — every entry reads at the same
+	 * scale; mode-row hints step down via .gui-attach-opt-hint. */
+	font-size: var(--ui-font-size-sm);
 	border: 0;
 	border-radius: var(--radius-lg);
 	background: transparent;
@@ -297,6 +300,29 @@
 
 .gui-attach-opt--on {
 	color: var(--color-text);
+}
+
+/* Mode-row two-line typography (plan / goal / guided goal): token sizes,
+ * not per-row Tailwind literals — the menu previously mixed 13px/12px
+ * arbitrary values with entries inheriting the 15px base. */
+.gui-attach-opt-title {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.25;
+	color: var(--color-text);
+}
+
+.gui-attach-opt-hint {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.25;
+	color: var(--color-text-faint);
 }
 
 .gui-attach-switch {
@@ -2185,12 +2211,42 @@
 	padding: 6px 2px;
 }
 
-/* Welcome composer variant — MUST equal the welcome textarea's Tailwind
- * classes (px-1 py-3.5 text-[14px] leading-relaxed). */
+/* Welcome composer variant — MUST equal `.gui-ta-welcome` below (single
+ * source: the textarea consumes the same metrics from a real CSS class,
+ * NOT Tailwind utilities — the precompiled tailwind.out.css has been
+ * missing the arbitrary-value classes (py-3.5, caret-*, placeholder:*),
+ * which offset the textarea against this overlay and ghost-doubled the
+ * typed text). */
 .gui-ta-highlight--welcome {
 	font-size: 14px;
 	line-height: 1.625;
 	padding: 14px 4px;
+}
+
+/* Welcome textarea: the same box metrics as the overlay variant above,
+ * plus the transparent-ink pairing (the overlay supplies the visible
+ * glyphs; the textarea keeps only its caret). Placeholder gets an
+ * explicit colour for the same reason as `.gui-composer
+ * textarea::placeholder`. */
+.gui-ta-welcome {
+	width: 100%;
+	min-width: 0;
+	flex: 1;
+	resize: none;
+	border: 0;
+	outline: none;
+	background: transparent;
+	font-family: inherit;
+	font-size: 14px;
+	line-height: 1.625;
+	padding: 14px 4px;
+	color: transparent;
+	caret-color: var(--color-text);
+}
+
+.gui-ta-welcome::placeholder {
+	color: var(--color-text-faint);
+	opacity: 1;
 }
 
 .gui-ta-hl-slash {
@@ -2235,7 +2291,8 @@
  *
  * Members: approval + design-style selects, the round icon buttons
  * (attach/voice/retry), the focus/enhance pills, the welcome workspace &
- * preset chips, the session mode toggles and the model/thinking capsule.
+ * preset chips, the session mode toggles, the model/thinking capsule, the
+ * welcome suggestion chips and the welcome send CTA.
  * Layout (padding, height, font) stays with each member's own class —
  * only the MATERIAL lives here.
  *
@@ -2248,7 +2305,9 @@
 .gui-composer-ico,
 .gui-project-chip,
 .gui-mode-toggle-arm,
-.gui-model-capsule {
+.gui-model-capsule,
+.gui-suggest-chip,
+.gui-send-btn {
 	position: relative;
 	border: 0;
 	background: var(--glass-bg);
@@ -2286,7 +2345,9 @@
 .gui-composer-ico::before,
 .gui-project-chip::before,
 .gui-mode-toggle-arm::before,
-.gui-model-capsule::before {
+.gui-model-capsule::before,
+.gui-suggest-chip::before,
+.gui-send-btn::before {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -2302,7 +2363,9 @@
 .gui-composer-ico > *,
 .gui-project-chip > *,
 .gui-mode-toggle-arm > *,
-.gui-model-capsule > * {
+.gui-model-capsule > *,
+.gui-suggest-chip > *,
+.gui-send-btn > * {
 	position: relative;
 	z-index: 1;
 }
@@ -2317,7 +2380,9 @@
 .gui-composer-pill:hover,
 .gui-composer-ico:hover,
 .gui-project-chip:hover,
-.gui-mode-toggle-arm:hover {
+.gui-mode-toggle-arm:hover,
+.gui-suggest-chip:hover,
+.gui-send-btn:hover {
 	color: var(--color-text);
 	background-color: var(--glass-bg-strong);
 	box-shadow:
@@ -2331,7 +2396,9 @@
 .gui-composer-pill:active,
 .gui-composer-ico:active,
 .gui-project-chip:active,
-.gui-mode-toggle-arm:active {
+.gui-mode-toggle-arm:active,
+.gui-suggest-chip:active,
+.gui-send-btn:active {
 	transform: scale(0.97);
 }
 
@@ -2355,6 +2422,33 @@
 .gui-style-select-btn--set:hover,
 .gui-mode-toggle-arm--armed:hover {
 	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
+}
+
+/* Welcome send CTA: material from the family above, hierarchy carried by
+ * the accent tint (armed-state recipe — colour carries the state, the
+ * glass surface itself never changes). Replaces the old solid-accent
+ * Tailwind-pieced button so the welcome footer reads as one material. */
+.gui-send-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	flex: none;
+	border-radius: 999px;
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
+	cursor: pointer;
+}
+
+.gui-send-btn:hover:not(:disabled) {
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 24%, var(--glass-bg));
+}
+
+.gui-send-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
 }
 
 .gui-style-select-caret {
