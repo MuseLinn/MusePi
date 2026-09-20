@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { chunkText } from "../src/channels/chunk";
-import { ChannelCommandHandler, type ChannelOps } from "../src/channels/handler";
+import { ChannelCommandHandler, type ChannelOps, channelFailureText } from "../src/channels/handler";
 import { HuaweiTodayChannel } from "../src/channels/huawei-today";
 import { ChannelRegistry } from "../src/channels/registry";
 import { TelegramChannel, toTelegramHtml } from "../src/channels/telegram";
@@ -284,6 +284,14 @@ describe("channel language routing", () => {
 			await h.handleIncoming(kind, `u-${kind}`, "/stop");
 			expect(texts.at(-1)).toBe("No session to stop.");
 		}
+	});
+});
+
+describe("channel failure notes", () => {
+	it("tells an aborted/failed turn apart and localizes it", () => {
+		expect(channelFailureText("wechat", "aborted")).toBe("⏹ 这一轮已中止。");
+		expect(channelFailureText("wechat", "error", "rate limit")).toBe("❌ 任务失败：rate limit");
+		expect(channelFailureText("telegram", "error")).toBe("❌ Run failed.");
 	});
 });
 

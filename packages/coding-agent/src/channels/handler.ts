@@ -46,6 +46,10 @@ interface MsgTable {
 	stopped(short: string): string;
 	nowNeedsBinding: string;
 	sendFailed(msg: string): string;
+	/** Turn ended with stopReason aborted — the user is still waiting. */
+	aborted: string;
+	/** Turn ended with stopReason error / no reply at all. */
+	failed(reason: string): string;
 	unknown(cmd: string): string;
 	untitled: string;
 	currentMark: string;
@@ -63,6 +67,8 @@ const MESSAGES: Record<Lang, MsgTable> = {
 		stopped: (short: string) => `已停止会话 ${short}`,
 		nowNeedsBinding: "/now <text> — 需要先绑定会话（/switch 或直接发文本）",
 		sendFailed: (msg: string) => `发送失败：${msg}`,
+		aborted: "⏹ 这一轮已中止。",
+		failed: (reason: string) => (reason ? `❌ 任务失败：${reason}` : "❌ 任务失败。"),
 		unknown: (cmd: string) => `未知命令 ${cmd}。/help 查看命令。`,
 		untitled: "（未命名）",
 		currentMark: "▶",
@@ -80,11 +86,20 @@ const MESSAGES: Record<Lang, MsgTable> = {
 		stopped: (short: string) => `Stopped ${short}`,
 		nowNeedsBinding: "/now <text> — needs a bound session (/switch or send plain text)",
 		sendFailed: (msg: string) => `send failed: ${msg}`,
+		aborted: "⏹ This turn was aborted.",
+		failed: (reason: string) => (reason ? `❌ Run failed: ${reason}` : "❌ Run failed."),
 		unknown: (cmd: string) => `Unknown command ${cmd}. /help`,
 		untitled: "(untitled)",
 		currentMark: "▶",
 	},
 };
+
+/** Localized turn-failure note (a channel peer is waiting on the other end —
+ *  an aborted or errored run must say so instead of leaving them in silence). */
+export function channelFailureText(kind: string, stop: "aborted" | "error", reason?: string): string {
+	const m = MESSAGES[langOf(kind)];
+	return stop === "aborted" ? m.aborted : m.failed(reason ?? "");
+}
 
 /** Short display id: full session ids are untypeable on a phone keyboard. */
 function shortId(id: string): string {

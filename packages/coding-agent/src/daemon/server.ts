@@ -55,6 +55,7 @@ import {
 	ChannelCommandHandler,
 	type ChannelKind,
 	ChannelRegistry,
+	channelFailureText,
 	DiscordChannel,
 	FeishuChannel,
 	HuaweiTodayChannel,
@@ -3028,7 +3029,17 @@ export class DaemonServer {
 		const peers = this.#channelHandler.peersFor(live.sessionId);
 		if (peers.length === 0) return;
 		const lastAssistant = [...event.messages].reverse().find(msg => msg.role === "assistant");
-		const text = assistantReplyText(lastAssistant);
+		const stop = (lastAssistant as { stopReason?: string } | undefined)?.stopReason;
+		// A failed/aborted turn still owes the peer an answer — otherwise the
+		// typing indicator just stops and they wait forever.
+		const text =
+			stop === "aborted" || stop === "error"
+				? channelFailureText(
+						peers[0].kind,
+						stop,
+						(lastAssistant as { errorMessage?: string } | undefined)?.errorMessage,
+					)
+				: assistantReplyText(lastAssistant);
 		if (!text.trim()) return;
 		for (const peer of peers) {
 			await this.#channels.send(peer.kind as ChannelKind, { to: peer.from, text }).catch(err => {
