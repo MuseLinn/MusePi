@@ -250,7 +250,8 @@ export const PETDEX_MOOD_ANIM: Record<PetdexMood, { cycleMs: number; transform: 
  *  valid column. Rows 3/4 map to no mood (kept 8 as a safe default). */
 export const PETDEX_ROW_FRAMES_DEFAULT: readonly number[] = [6, 8, 8, 8, 8, 8, 6, 6, 6];
 
-/** Imported Petdex package (from a petdex.dev zip). */
+/** Imported Petdex package (from a petdex.dev zip) — or a user-dropped
+ *  single SVG (format "svg", 2026-09-20). */
 export interface PetdexPackage {
 	id: string;
 	displayName: string;
@@ -259,6 +260,11 @@ export interface PetdexPackage {
 	/** Natural spritesheet pixel size, resolved at import time. */
 	width: number;
 	height: number;
+	/** `sheet` (default) is the 8×9 petdex frame grid; `svg` is a single
+	 *  user-drawn vector — width/height are the WHOLE image, there is no
+	 *  frame grid, and the mood system degrades to the transform row
+	 *  (bob/lift/wiggle) over one static frame. Absent for old packages. */
+	format?: "sheet" | "svg";
 	/** Valid (non-blank) frames per row, scanned at import — the frame
 	 *  cycle must not step into transparent padding columns. Absent for
 	 *  packages stored before the scan existed → PETDEX_ROW_FRAMES_DEFAULT. */

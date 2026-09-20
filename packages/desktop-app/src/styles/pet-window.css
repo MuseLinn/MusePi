@@ -21,6 +21,17 @@
 	 * 0.4.31). Kept as the oklch form so the alpha variants below keep
 	 * matching the main window's (`--accent-hover` family). */
 	--color-accent: oklch(0.7507 0.1295 79.85);
+	/* The raw accent token, duplicated here for the same reason as
+	 * --color-accent above: lib/pet-palette.ts reads `--accent` to derive the
+	 * orb's shell/ring/face colours, and this window never loads
+	 * guest-client/tokens.css where the real one lives. Without this literal
+	 * applyPetPalette() found no accent, bailed, and the SVG fell back to the
+	 * hardcoded graphite shell (#7d7159/#453a24/#1c1408) — reported as
+	 * 「品牌金色，但显示的还是黑色带点黄」. The main window still PUSHES its
+	 * resolved accent (which may be themed — ocean/jade/mono), and that push
+	 * overwrites this value; this is the correct-brand-gold first paint
+	 * instead of a wrong-graphite one. */
+	--accent: oklch(0.7507 0.1295 79.85);
 	/* Ink for on-accent fills. The send button was plain `#fff`, which read
 	 * fine on emerald but fails on gold (1.9:1) — the accent-fg pair the
 	 * main window uses is dark ink on gold, so the pet window carries the
@@ -500,7 +511,17 @@
 	transform: translateX(-50%);
 	width: 316px;
 	height: auto;
-	max-height: calc(100vh - 180px);
+	/* NO max-height here. This card is absolutely positioned inside a window
+	 * that is GROWN UPWARD to fit the overlay content (pet-set-content-size)
+	 * — the window is already the constraint. A vh cap measures the window,
+	 * not the room on screen, so it silently cut the card down (a 1200px
+	 * window allowed 1020px, and the fourth bullet of the recent list was
+	 * clipped mid-row, reading as 「消息显示不正常」). The long-list case is
+	 * bounded where it belongs: .pet-panel__body scrolls when content
+	 * outgrows the card (min-height: 0 is what makes that work — without it
+	 * a flex item refuses to shrink below its content and the card just
+	 * grows). The window in turn is capped by main.cjs against the display's
+	 * work area, so "too tall for the screen" is handled one layer up. */
 	box-sizing: border-box;
 	border-radius: var(--radius-xl);
 	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
@@ -692,7 +713,16 @@
 	gap: 8px;
 	padding: 10px 12px 12px;
 	flex: 1;
+	/* The card no longer carries a max-height (see .pet-panel) — the window
+	 * grows to the content instead. This is the only scrollport that needs
+	 * to give: `min-height: 0` lets the flex item shrink below its content
+	 * once the WINDOW hits the work-area cap (main.cjs clamps there), so a
+	 * very long message/approval list scrolls inside the glass rather than
+	 * pushing the card past the screen edge. */
 	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 30%, transparent) transparent;
 }
 
 /* The reply row anchors to the bottom of the panel; status/approvals grow

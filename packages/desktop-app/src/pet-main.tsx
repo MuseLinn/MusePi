@@ -77,7 +77,9 @@ interface PetBridge {
 	toggleMainWindow?(): Promise<unknown>;
 	/** Pet right-click → native context menu (main process). */
 	petContextMenu?(): Promise<unknown>;
-	/** Single click → toggle the bubble window's interaction panel. */
+	/** Single click → toggle the interaction panel (the pet window's own
+	 *  renderer hosts it; the toggle round-trips through main for the
+	 *  loading-replay guarantee). */
 	toggleBubblePanel?(): Promise<unknown>;
 	setPetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	/** Sprite-only rect (without the unread badge) — used by the main
@@ -423,7 +425,18 @@ function PetApp(): ReactNode {
 		};
 		report();
 		window.addEventListener("resize", report);
-		return () => window.removeEventListener("resize", report);
+		// Overlay elements resize WITHOUT a window resize too (tab switch
+		// inside the panel, bubble text growth while the window is already
+		// sized, the stack morph) — a stale hitbox desyncs the click-through
+		// poll (cursor over a card flips ignore) and mis-lands drags.
+		const ro = new ResizeObserver(report);
+		for (const el of document.querySelectorAll(".pet-bubbles, .pet-panel, .pet-window__pet, .pet-window__badge")) {
+			ro.observe(el);
+		}
+		return () => {
+			window.removeEventListener("resize", report);
+			ro.disconnect();
+		};
 	}, []);
 
 	// Mood transition micro-bump (BitFun's stage-bump): replay the one-shot
@@ -666,6 +679,7 @@ function PetApp(): ReactNode {
 							size={104}
 							scale={sizeScale}
 							gloss={decor.gloss}
+							accessory={decor.accessory}
 							frozen={displayMood === "hover"}
 							gazeRef={gazeRef}
 							interaction={displayInteraction}

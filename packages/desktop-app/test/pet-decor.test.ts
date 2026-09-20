@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { PET_DECOR_DEFAULT, PET_DECOR_FLAGS, type PetDecor, petDecor, setPetDecorFlag } from "../src/lib/pet-decor";
+import {
+	PET_ACCESSORIES,
+	PET_DECOR_DEFAULT,
+	PET_DECOR_FLAGS,
+	type PetDecor,
+	petDecor,
+	setPetAccessory,
+	setPetDecorFlag,
+} from "../src/lib/pet-decor";
 
 /**
  * Decoration prefs (lib/pet-decor.ts). The module is small but it sits on a
@@ -108,13 +116,50 @@ describe("pet decor — flag table", () => {
 		}
 	});
 
-	test("the defaults are all booleans (the record is flag-only)", () => {
-		for (const value of Object.values(PET_DECOR_DEFAULT)) {
-			expect(typeof value).toBe("boolean");
+	test("the boolean flags stay boolean; the accessory stays in its union", () => {
+		// gloss is a flag (toggle row); accessory is a pick-one segmented
+		// control (none/note/headphones) — the settings UI is generated from
+		// these shapes, so a drifted type would break the rows silently.
+		for (const [key, value] of Object.entries(PET_DECOR_DEFAULT)) {
+			if (key === "accessory") {
+				expect((PET_ACCESSORIES as readonly string[]).includes(value as string)).toBe(true);
+			} else {
+				expect(typeof value).toBe("boolean");
+			}
 		}
+		// The flag table's key type is Exclude<keyof PetDecor, "accessory"> —
+		// TS already makes the accessory unrepresentable there; pin the shape.
+		expect(PET_DECOR_FLAGS.map(f => f.key)).toEqual(["gloss"]);
+		expect(Object.keys(PET_DECOR_DEFAULT)).toEqual(["gloss", "accessory"]);
 	});
 
 	test("gloss is on by default — the shell must read as lit out of the box", () => {
 		expect(PET_DECOR_DEFAULT.gloss).toBe(true);
+	});
+
+	test("accessory defaults to none and round-trips through setPetAccessory", () => {
+		withStorage({});
+		expect(petDecor().accessory).toBe("none");
+		setPetAccessory("headphones");
+		expect(petDecor().accessory).toBe("headphones");
+		setPetAccessory("note");
+		expect(petDecor().accessory).toBe("note");
+		// Switching the accessory keeps the sibling flags untouched.
+		expect(petDecor().gloss).toBe(true);
+	});
+
+	test("an unknown stored accessory degrades to none", () => {
+		// A future build may retire a wear (or storage was hand-edited) —
+		// an out-of-union value must not leak into the renderer's switch.
+		withStorage({ "musepi-gui-pet-decor": JSON.stringify({ accessory: "tophat" }) });
+		expect(petDecor().accessory).toBe("none");
+
+		withStorage({ "musepi-gui-pet-decor": JSON.stringify({ accessory: 3 }) });
+		expect(petDecor().accessory).toBe("none");
+
+		// A valid value coexisting with junk keys survives.
+		withStorage({ "musepi-gui-pet-decor": JSON.stringify({ accessory: "note", gloss: false }) });
+		expect(petDecor().accessory).toBe("note");
+		expect(petDecor().gloss).toBe(false);
 	});
 });

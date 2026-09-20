@@ -1687,6 +1687,12 @@ export const settings = {
 	"pet decor gloss": "Surface gloss",
 	"pet decor gloss description":
 		"Specular highlight and drifting sheen on the shell — makes the ball read as lit. Off leaves a flat silhouette.",
+	"pet accessory": "Accessory",
+	"pet accessory description": "A wearable drawn on the built-in orb — it scales with the ball and rides its motion.",
+	"pet accessory none": "None",
+	"pet accessory note": "Music note",
+	"pet accessory headphones": "Headphones",
+	"import svg": "Import SVG",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "Hide Tool Activity",
 	"Hide model-initiated tool calls and results from the transcript":

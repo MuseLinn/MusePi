@@ -20,7 +20,15 @@ import {
 	savePetdex,
 	setPetScale,
 } from "../../lib/pet";
-import { PET_DECOR_FLAGS, type PetDecor, petDecor, setPetDecorFlag } from "../../lib/pet-decor";
+import {
+	PET_ACCESSORIES,
+	PET_DECOR_FLAGS,
+	type PetAccessory,
+	type PetDecor,
+	petDecor,
+	setPetAccessory,
+	setPetDecorFlag,
+} from "../../lib/pet-decor";
 import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
@@ -38,6 +46,7 @@ interface PetGridEntry {
 	src: string;
 	width: number;
 	height: number;
+	format?: "sheet" | "svg";
 	rows?: readonly number[];
 	contentH?: number;
 	smooth?: boolean;
@@ -88,6 +97,7 @@ export function PetCard({
 							src={entry.src}
 							width={entry.width}
 							height={entry.height}
+							format={entry.format}
 							rows={entry.rows}
 							contentH={entry.contentH}
 							smooth={entry.smooth}
@@ -359,10 +369,12 @@ function PetDecorSection({
 	builtinSelected,
 	decor,
 	onChange,
+	onAccessory,
 }: {
 	builtinSelected: boolean;
 	decor: PetDecor;
 	onChange(key: keyof PetDecor, value: boolean): void;
+	onAccessory(value: PetAccessory): void;
 }): ReactNode {
 	return (
 		<div className="gui-settings-section">
@@ -390,6 +402,31 @@ function PetDecorSection({
 					</button>
 				</div>
 			))}
+			{/* Accessory pick (blobstudio's accessory slot, minimized to one
+			 * wear): a segmented control, not another boolean row — the options
+			 * are mutually exclusive by design (one state one look). */}
+			<div className="gui-settings-row">
+				<div>
+					<div className="gui-settings-row-label">{t("pet accessory")}</div>
+					<div className="gui-settings-row-desc">{t("pet accessory description")}</div>
+				</div>
+				<div className="gui-pet-accessory-picker" role="radiogroup" aria-label={t("pet accessory")}>
+					{PET_ACCESSORIES.map(value => (
+						<button
+							key={value}
+							type="button"
+							role="radio"
+							aria-checked={decor.accessory === value}
+							className={`gui-pet-accessory-option${decor.accessory === value ? " gui-pet-accessory-option--on" : ""}`}
+							disabled={!builtinSelected}
+							title={builtinSelected ? undefined : t("pet decor description imported")}
+							onClick={() => onAccessory(value)}
+						>
+							{t(`pet accessory ${value}` as TranslationKey)}
+						</button>
+					))}
+				</div>
+			</div>
 		</div>
 	);
 }
@@ -511,6 +548,87 @@ export function PetSection(): ReactNode {
 			pickPet(DEFAULT_PET_ID);
 		}
 	};
+	// ── User SVG import (2026-09-20) ────────────────────────────────────
+	// A single vector file becomes a one-frame companion: stored as a
+	// petdex package with format "svg" (no 8×9 frame grid), so the grid,
+	// the trigger, the composer and the desktop pet all render it through
+	// the existing PetdexSprite path with the mood transform row intact.
+	// Renderer-side on purpose — no main-process dialog hop; the file
+	// never leaves this window.
+	const svgInputRef = useRef<HTMLInputElement | null>(null);
+	const importSvgPet = (): void => {
+		const input = svgInputRef.current;
+		if (!input) return;
+		// Reset so picking the same file twice still fires onChange.
+		input.value = "";
+		input.click();
+	};
+	const importSvgSize = 512 * 1024;
+	const onSvgPicked = async (file: File): Promise<void> => {
+		setImporting(true);
+		setImportError(null);
+		try {
+			if (file.size > importSvgSize) {
+				console.error("[pet] svg too large:", file.size);
+				setImportError(t("pet import failed"));
+				return;
+			}
+			const text = await file.text();
+			if (!/<svg[\s>]/i.test(text)) {
+				console.error("[pet] not an svg document");
+				setImportError(t("pet import failed"));
+				return;
+			}
+			const dataUrl = await new Promise<string>((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(String(reader.result));
+				reader.onerror = () => reject(new Error("svg-read-failed"));
+				reader.readAsDataURL(file);
+			});
+			// Intrinsic size: the browser resolves width/height/viewBox on
+			// decode; an SVG with neither falls back to parsing the viewBox
+			// out of the source text (Chromium reports 0×0 for sizeless SVGs).
+			const img = new Image();
+			img.src = dataUrl;
+			const { promise: decoded, resolve: resolveDecoded } = Promise.withResolvers<void>();
+			img.onload = () => resolveDecoded();
+			img.onerror = () => resolveDecoded();
+			await decoded;
+			let width = img.naturalWidth;
+			let height = img.naturalHeight;
+			if (!width || !height) {
+				const vb = text.match(/viewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)["']/i);
+				if (vb) {
+					width = Number(vb[1]);
+					height = Number(vb[2]);
+				}
+			}
+			if (!width || !height) {
+				console.error("[pet] svg has no resolvable size");
+				setImportError(t("pet import failed"));
+				return;
+			}
+			const pkg: PetdexPackage = {
+				id: `svg-${Date.now()}`,
+				displayName: file.name.replace(/\.svg$/i, "") || "SVG",
+				spritesheet: dataUrl,
+				width,
+				height,
+				format: "svg",
+				rows: [1],
+				contentH: height,
+				smooth: true,
+				importedAt: Date.now(),
+			};
+			const next = [...petdex.filter(p => p.id !== pkg.id), pkg];
+			savePetdex(next);
+			setPetdex(next);
+			pickPet(pkg.id);
+			setExpanded(true);
+		} finally {
+			setImporting(false);
+		}
+	};
 	const isDesktopShell =
 		typeof (window as unknown as { electronAPI?: { importPetdex?: unknown } }).electronAPI?.importPetdex ===
 		"function";
@@ -553,8 +671,10 @@ export function PetSection(): ReactNode {
 		src: p.spritesheet,
 		width: p.width,
 		height: p.height,
+		format: p.format,
 		rows: p.rows,
 		contentH: p.contentH,
+		smooth: p.smooth,
 		source: "user",
 	}));
 	const allEntries = [...userEntries, ...presetEntries];
@@ -710,6 +830,30 @@ export function PetSection(): ReactNode {
 									<Icon name="download" className="h-3.5 w-3.5" />
 									{importing ? "…" : t("import codex sprite")}
 								</button>
+								{/* User SVG import — renderer-side file pick, no
+								 * desktop-shell gate (a file input works everywhere). */}
+								<button
+									type="button"
+									className="gui-btn"
+									onClick={importSvgPet}
+									disabled={importing}
+									title={t("import svg")}
+								>
+									<Icon name="file-add" className="h-3.5 w-3.5" />
+									{importing ? "…" : t("import svg")}
+								</button>
+								<input
+									ref={svgInputRef}
+									type="file"
+									accept=".svg,image/svg+xml"
+									className="hidden"
+									aria-hidden="true"
+									tabIndex={-1}
+									onChange={e => {
+										const f = e.target.files?.[0];
+										if (f) void onSvgPicked(f);
+									}}
+								/>
 							</div>
 							{importError && (
 								<p className="gui-pet-import-error" role="alert">
@@ -730,12 +874,13 @@ export function PetSection(): ReactNode {
 										src={selectedEntry.src}
 										width={selectedEntry.width}
 										height={selectedEntry.height}
+										format={selectedEntry.format}
 										rows={selectedEntry.rows}
 										contentH={selectedEntry.contentH}
 										smooth={selectedEntry.smooth}
 									/>
 								) : (
-									<BuiltinPetSprite mood="rest" />
+									<BuiltinPetSprite mood="rest" gloss={decor.gloss} accessory={decor.accessory} />
 								)}
 							</span>
 							<span className="gui-pet-trigger__name">{selectedEntry?.name ?? t("builtin pet")}</span>
@@ -786,6 +931,10 @@ export function PetSection(): ReactNode {
 					onChange={(key, value) => {
 						setDecor({ ...decor, [key]: value });
 						setPetDecorFlag(key, value);
+					}}
+					onAccessory={value => {
+						setDecor({ ...decor, accessory: value });
+						setPetAccessory(value);
 					}}
 				/>
 			)}

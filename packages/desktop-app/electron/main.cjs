@@ -312,18 +312,30 @@ function loadPetPosition() {
 			// real one (and makes the window jump back to the stale frame
 			// when the click-through toggles). Fall back to the default
 			// otherwise.
-			const w = Number.isFinite(pos.w) && pos.w > 0 ? pos.w : PET_WINDOW_SIZE.width;
-			const h = Number.isFinite(pos.h) && pos.h > 0 ? pos.h : PET_WINDOW_SIZE.height;
+			//
+			// The anchor is the pet's BOTTOM edge (see persistPetPos): the
+			// window is recreated at BASE height, so a top-left `y` captured
+			// while the overlay had grown the window would drop the pet by
+			// the grown amount on next launch — and a bottom-near-edge rect
+			// failed this visibility check outright, falling back to the
+			// default corner (「拖拽的位置偏移」). `bottom` wins when present;
+			// legacy files derive it from y+h — identical math whether the
+			// stored h was base or grown.
+			const storedBottom =
+				Number.isFinite(pos.bottom) && pos.bottom > 0 ? pos.bottom : pos.y + (Number.isFinite(pos.h) ? pos.h : 0);
+			const y = storedBottom - PET_WINDOW_SIZE.height;
+			const w = PET_WINDOW_SIZE.width;
+			const h = PET_WINDOW_SIZE.height;
 			const visible = screen.getAllDisplays().some(d => {
 				const b = d.workArea;
 				return (
 					pos.x >= b.x &&
 					pos.x + w <= b.x + b.width &&
-					pos.y >= b.y &&
-					pos.y + h <= b.y + b.height
+					y >= b.y &&
+					y + h <= b.y + b.height
 				);
 			});
-			if (visible) return { x: pos.x, y: pos.y };
+			if (visible) return { x: pos.x, y };
 		}
 	} catch {
 		// first run — default below
@@ -352,8 +364,7 @@ function createPetWindow() {
 		transparent: true,
 		// Explicit transparent background: on Windows a transparent window
 		// without backgroundColor can composite with an opaque default
-		// (white/black block around the pet); the bubble window already
-		// uses this exact pattern. No-op on macOS.
+		// (white/black block around the pet). No-op on macOS.
 		backgroundColor: "#00000000",
 		alwaysOnTop: true,
 		skipTaskbar: true,
@@ -1155,6 +1166,16 @@ function persistPetPos() {
 				y: y / dip,
 				w: w / dip,
 				h: h / dip,
+				// The pet's BOTTOM edge, in DIP. The restore recreates the
+				// window at BASE height (bubbles/panel grow the window upward
+				// at runtime), so the top-left `y` alone is the wrong anchor:
+				// saved while the panel was open it restored the pet h−290px
+				// higher than where the user left it — and a bottom-near
+				// work-area-edge rect failed the visibility check outright,
+				// falling back to the default corner (「拖拽的位置偏移」).
+				// The bottom edge is the invariant the sprite hangs from
+				// (reconcile keeps it fixed too).
+				bottom: (y + h) / dip,
 				dock: petDockEnabled,
 				posPhysical: petPosPhysical,
 				cursorPhysical: petCursorPhysical,
@@ -1181,13 +1202,9 @@ function focusMainFromPet() {
 	}
 }
 
-// ── Bubble/panel window (双窗口) ────────────────────────────────────────
-// The activity bubbles + interaction panel live in their OWN window so the
-// pet window can stay a fully transparent sprite (vibrancy + transparent
-// would render the whole window as an opaque glass panel).
-// The bubble window is sized to EXACTLY its content (the renderer reports
-// the content box; see bubble-set-size) and parked above the pet window,
-// following it on every move/snap/settle.
+// (The 2026-09-16 single-window merge killed the old bubble-window section
+// that used to live here — bubbles/panel are DOM in the pet window now; see
+// pet-set-content-size for the only geometry they still negotiate.)
 // Tray diag — file log (stdout is buffered/unreliable under start /b).
 const TRAY_DIAG = path.join(os.tmpdir(), "musepi-tray-diag.log");
 function trayLog(msg) {
@@ -1984,7 +2001,7 @@ ipcMain.handle("pet-approve", (_event, { requestId, approved }) => {
 });
 // Pet bubble ×: the user acknowledged that notification — clear the
 // session's unread badge in the main window (it owns the unread set; the
-// bubble itself is already removed by the bubble window).
+// bubble itself is already removed by the pet window's renderer).
 ipcMain.handle("pet-mark-read", (_event, sessionId) => {
 	if (mainWindow && !mainWindow.isDestroyed() && typeof sessionId === "string") {
 		mainWindow.webContents.send("pet:command", { type: "mark-read", sessionId });

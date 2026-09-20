@@ -3468,6 +3468,48 @@ body.gui-resizing .gui-pane-right {
 	color: var(--danger, #e5484d);
 }
 
+/* Accessory pick (设置 → 伙伴 → 外观细节): a compact segmented control —
+ * the options are mutually exclusive (none / note / headphones), so a
+ * radio row reads tighter than three toggles and can't drift into a
+ * combinatorial wardrobe. */
+.gui-pet-accessory-picker {
+	display: flex;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-sunken);
+}
+
+.gui-pet-accessory-option {
+	padding: 4px 10px;
+	border: none;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: color-mix(in oklab, var(--color-text) 55%, transparent);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 500;
+	line-height: 1.5;
+	cursor: pointer;
+	transition:
+		color 120ms ease-out,
+		background 120ms ease-out;
+}
+
+.gui-pet-accessory-option:hover:not(:disabled) {
+	color: var(--color-text);
+}
+
+.gui-pet-accessory-option--on {
+	background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+	color: var(--color-text);
+}
+
+.gui-pet-accessory-option:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+
 .gui-pet-card {
 	position: relative;
 	display: flex;

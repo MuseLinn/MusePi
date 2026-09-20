@@ -110,6 +110,13 @@ export function PetBubbles(): ReactNode {
 	const stackRef = useRef<HTMLDivElement | null>(null);
 	// Interaction panel: live task summary + approval card + quick reply.
 	const [panelOpen, setPanelOpen] = useState(false);
+	// Mirror of panelOpen for the once-mounted toggle subscription (see the
+	// panel-toggle effect): a closure over the state would pin the value
+	// from the render it was created in.
+	const panelOpenRef = useRef(false);
+	useEffect(() => {
+		panelOpenRef.current = panelOpen;
+	}, [panelOpen]);
 	const [panelEntered, setPanelEntered] = useState(false);
 	const [panelLeaving, setPanelLeaving] = useState(false);
 	// Panel view split (拆开): "messages" = live status/message/approvals/
@@ -208,9 +215,16 @@ export function PetBubbles(): ReactNode {
 
 	// Panel toggle from the pet single click / the context menu — now an
 	// in-window event (no OS-window hop through the main process).
+	//
+	// The subscription is mounted ONCE and reads panelOpen through a ref:
+	// re-subscribing on [panelOpen] meant the handler was torn down and
+	// re-registered on every toggle, and a click landing inside that swap
+	// ran the STALE handler — the panel "opened" while already open, so the
+	// next click toggled it shut with no visible change (reported as
+	// 「消息显示不正常」: the panel would not close on a second click).
 	useEffect(() => {
 		return bridge?.onPetPanelToggle?.(() => {
-			if (panelOpen) {
+			if (panelOpenRef.current) {
 				setPanelLeaving(true);
 				window.setTimeout(() => {
 					setPanelLeaving(false);
@@ -224,7 +238,7 @@ export function PetBubbles(): ReactNode {
 				void bridge?.requestPetState?.();
 			}
 		});
-	}, [panelOpen]);
+	}, []);
 
 	// A global hotkey (Ctrl/Cmd+Shift+Y / N) decided a request — drop the
 	// card (the main window was already told via pet:command).

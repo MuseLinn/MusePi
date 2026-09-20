@@ -26,7 +26,7 @@ import {
 	petMode,
 	petScale,
 } from "../lib/pet";
-import { type PetDecor, petDecor } from "../lib/pet-decor";
+import { type PetAccessory, type PetDecor, petDecor } from "../lib/pet-decor";
 import {
 	applyYaw,
 	FACE_BOX,
@@ -319,6 +319,14 @@ const BOTTOM = 22;
 const VIEW_W = FACE_BOX + SIDE * 2;
 const VIEW_H = FACE_BOX + TOP + BOTTOM;
 
+/** The box ratio every host resolves against (`.gui-pet`'s
+ *  `aspect-ratio: var(--gui-pet-ratio, …)`). Exported and written by
+ *  PetSprite so the padding constants above stay the single source: the old
+ *  literal 1.037 sat in two stylesheet rules and nothing ever wrote the
+ *  variable, so retuning VIEW would have desynced the box silently — every
+ *  host would keep reserving the OLD ratio and stretch the orb. */
+export const PET_BOX_RATIO = VIEW_W / VIEW_H;
+
 /** Sphere centre in orb-local coordinates — the engine's own SPHERE_C. The
  *  rig shifts this down by TOP and right by SIDE into the padded view. */
 const ORB_C = FACE_BOX / 2;
@@ -329,11 +337,13 @@ function Mascot({
 	gazeRef,
 	interaction,
 	gloss,
+	accessory = "none",
 }: {
 	mood: PetdexMood;
 	gazeRef?: GazeRef;
 	interaction?: PetInteraction | null;
 	gloss: boolean;
+	accessory?: PetAccessory;
 }): ReactNode {
 	const refs = useMascotEngine(mood, gazeRef, interaction);
 	// Both classes ride the svg: `--<mood>` carries the MATERIAL state (the
@@ -348,7 +358,7 @@ function Mascot({
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden
 		>
-			<Silhouette {...refs} gloss={gloss} />
+			<Silhouette {...refs} gloss={gloss} accessory={accessory} />
 		</svg>
 	);
 }
@@ -359,32 +369,42 @@ function Mascot({
  *
  *  Floor layers (thrust / bounce / ground) and the crown beacon used to live
  *  here unconditionally. They are gone — see pet-decor.ts. `gloss` is the
- *  one surviving optional layer (crown gloss + specular sweep). */
-function Silhouette({ eyeRefs, mouthRef, shellRef, gloss }: MascotRefs & { gloss: boolean }): ReactNode {
+ *  surface-shading opt-out; `accessory` is the wearable pick (none / note /
+ *  headphones), drawn inside the rig so it rides the body motion. */
+function Silhouette({
+	eyeRefs,
+	mouthRef,
+	shellRef,
+	gloss,
+	accessory,
+}: MascotRefs & { gloss: boolean; accessory: PetAccessory }): ReactNode {
 	return (
 		<g aria-hidden className="gui-pet-svg__silhouette">
 			<defs>
-				{/* Shell: a graphite sphere lit from the upper left — lit crown,
-				 * body, terminator. The fallback trio is the dark-theme
-				 * L .56/.36/.19 accent-hued graphite, matching what
-				 * pet-palette.ts derives, so the pre-palette first paint is
-				 * already the themed orb rather than a cold slate ball (the
-				 * old #4a5768/#26303d/#0e141c fallback is what showed whenever
-				 * the palette had not been applied yet — reported as "颜色都是
-				 * 黑色球体而不是主题色"). */}
+				{/* Shell: an accent-hued sphere lit from the upper left — lit
+				 * crown, body, terminator. The fallback trio is the brand-gold
+				 * dark-theme derivation (pet-palette.ts: L .56/.36/.19 at the
+				 * accent hue, low chroma), so the pre-palette first paint is
+				 * already the warm orb rather than a cold slate ball. Two
+				 * different wrong-graphite fallbacks have shipped here before
+				 * (#4a5768/#26303d/#0e141c then #7d7159/#453a24/#1c1408) and
+				 * both were reported as 「颜色都是黑色球体而不是主题色」 /
+				 * 「品牌金色，但显示的还是黑色带点黄」 — the lesson is that
+				 * the fallback must be the DERIVED value, not a hand-picked
+				 * "close enough" one. PetPaletteVars is the single source. */}
 				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
-					<stop offset="0" stopColor="var(--gui-pet-shell-a, #7d7159)" />
-					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, #453a24)" />
-					<stop offset="1" stopColor="var(--gui-pet-shell-c, #1c1408)" />
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(56.00% 0.0450 79.84deg))" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(36.00% 0.0500 79.84deg))" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(19.00% 0.0450 79.84deg))" />
 				</radialGradient>
 				{/* Orbit ring: the accent (brand gold by default), brightest where
 				 * it crosses the light (top-left) and dimmest at the far side.
 				 * This is the surface that carries the theme, now that the face
 				 * is white. */}
 				<linearGradient id="gui-pet-grad-ring" x1="0" y1="0" x2="1" y2="1">
-					<stop offset="0" stopColor="var(--gui-pet-gold-a, #ffcb71)" />
-					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, #d9a441)" />
-					<stop offset="1" stopColor="var(--gui-pet-gold-c, #765200)" />
+					<stop offset="0" stopColor="var(--gui-pet-gold-a, oklch(87.07% 0.1400 79.84deg))" />
+					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, oklch(75.07% 0.1295 79.84deg))" />
+					<stop offset="1" stopColor="var(--gui-pet-gold-c, oklch(46.54% 0.1166 79.84deg))" />
 				</linearGradient>
 				{/* Eye light: white with a hot core. A flat fill reads as paint;
 				 * a gradient reads as something emitting. The face is white in
@@ -468,6 +488,80 @@ function Silhouette({ eyeRefs, mouthRef, shellRef, gloss }: MascotRefs & { gloss
 						<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
 						<path className="gui-pet-svg__mouth" ref={mouthRef} />
 					</g>
+					{/* ── Wearable accessories (pet-decor.ts PetAccessory) ──
+					 * Static art in orb-local coordinates: they scale with the
+					 * ball and ride the body motion for free. Both are authored
+					 * to stay inside the rig's TOP/SIDE padding — the note's
+					 * stem top and the band apex were checked against the
+					 * viewBox (TOP=24 / SIDE=20) so nothing clips. */}
+					{accessory === "headphones" && (
+						<g className="gui-pet-svg__accessory">
+							{/* Band: one arc over the crown, endpoints meeting the
+							 * cups' tops (cup top ≈ y 78, apex ≈ y −4 — 4px above
+							 * the shell, inside the rig's headroom). Gold carries
+							 * the accent; cups stay shell-dark with a gold rim so
+							 * the wear reads as part of the body, not a sticker. */}
+							<path
+								d={`M -2 ${ORB_C - 36} A 123.3 123.3 0 0 1 ${2 * ORB_C + 2} ${ORB_C - 36}`}
+								fill="none"
+								stroke="url(#gui-pet-grad-ring)"
+								strokeWidth="9"
+								strokeLinecap="round"
+							/>
+							<ellipse
+								cx={ORB_C - ORB_R - 2}
+								cy={ORB_C - 10}
+								rx="13"
+								ry="26"
+								transform={`rotate(-14 ${ORB_C - ORB_R - 2} ${ORB_C - 10})`}
+								fill="url(#gui-pet-grad-shell)"
+								stroke="url(#gui-pet-grad-ring)"
+								strokeWidth="2.5"
+							/>
+							<ellipse
+								cx={ORB_C + ORB_R + 2}
+								cy={ORB_C - 10}
+								rx="13"
+								ry="26"
+								transform={`rotate(14 ${ORB_C + ORB_R + 2} ${ORB_C - 10})`}
+								fill="url(#gui-pet-grad-shell)"
+								stroke="url(#gui-pet-grad-ring)"
+								strokeWidth="2.5"
+							/>
+						</g>
+					)}
+					{accessory === "note" && (
+						<g className="gui-pet-svg__accessory">
+							{/* An eighth-note mark ON the shell's upper right — a
+							 * decal, not a floating charm (a floater would clip at
+							 * the rig's headroom and read as the old beacon noise).
+							 * Head + stem + flag, all in the ring's gold. */}
+							<ellipse
+								cx={ORB_C + 40}
+								cy={ORB_C - 64}
+								rx="11.5"
+								ry="8.8"
+								transform={`rotate(-18 ${ORB_C + 40} ${ORB_C - 64})`}
+								fill="url(#gui-pet-grad-ring)"
+							/>
+							<path
+								d={`M ${ORB_C + 50} ${ORB_C - 62} L ${ORB_C + 50} ${ORB_C - 100}`}
+								stroke="url(#gui-pet-grad-ring)"
+								strokeWidth="5.5"
+								strokeLinecap="round"
+							/>
+							<path
+								d={`M ${ORB_C + 50} ${ORB_C - 100} C ${ORB_C + 63} ${ORB_C - 94}, ${ORB_C + 66} ${ORB_C - 82}, ${ORB_C + 57} ${ORB_C - 70}`}
+								fill="none"
+								stroke="url(#gui-pet-grad-ring)"
+								strokeWidth="5.5"
+								strokeLinecap="round"
+							/>
+							{/* Echo dot — keeps the mark from reading as a lone
+							 * speck; tucked back inside the shell edge. */}
+							<circle cx={ORB_C + 58} cy={ORB_C - 44} r="4" fill="url(#gui-pet-grad-ring)" opacity="0.75" />
+						</g>
+					)}
 				</g>
 			</g>
 		</g>
@@ -486,13 +580,55 @@ export function BuiltinPetSprite({
 	gazeRef,
 	interaction,
 	gloss = true,
+	accessory = "none",
 }: {
 	mood: PetdexMood;
 	gazeRef?: GazeRef;
 	interaction?: PetInteraction | null;
 	gloss?: boolean;
+	accessory?: PetAccessory;
 }): ReactNode {
-	return <Mascot mood={mood} gazeRef={gazeRef} interaction={interaction} gloss={gloss} />;
+	return <Mascot mood={mood} gazeRef={gazeRef} interaction={interaction} gloss={gloss} accessory={accessory} />;
+}
+
+/** The sizing box for a bare builtin SVG — `.gui-pet` plus the two variables
+ *  that make it resolvable outside a `PetSprite`.
+ *
+ *  This exists because `.gui-pet-svg` (the svg root) has NO size rule of its
+ *  own: gui-pet.css only sizes `.gui-pet svg`, a DESCENDANT selector. Any
+ *  call site that rendered `<BuiltinPetSprite>` without the wrapper — the
+ *  chat avatar did, and every avatar slot went blank (2026-09-20 user:
+ *  「头像小球不显示了」) — handed the svg an unresolvable box. Wrapping is
+ *  the contract, so it is a component instead of a rule to remember.
+ *
+ *  `size` is the fallback box only (see PetSprite); hosts that want a fixed
+ *  slot size their own wrapper through `--gui-pet-height` (`.gui-pet--h`
+ *  hosts) or `--gui-pet-width`. */
+export function PetBox({
+	size = 48,
+	className,
+	style,
+	children,
+}: {
+	size?: number;
+	className?: string;
+	style?: CSSProperties;
+	children: ReactNode;
+}): ReactNode {
+	return (
+		<div
+			className={`gui-pet${className ? ` ${className}` : ""}`}
+			style={
+				{
+					"--gui-pet-fallback": `${size}px`,
+					"--gui-pet-ratio": `${PET_BOX_RATIO}`,
+					...style,
+				} as CSSProperties
+			}
+		>
+			{children}
+		</div>
+	);
 }
 
 /** Petdex spritesheet pet — CSS background-position frame animation with a
@@ -508,6 +644,7 @@ export function PetdexSprite({
 	src,
 	width,
 	height,
+	format,
 	rows,
 	contentH,
 	scale = 1,
@@ -518,6 +655,9 @@ export function PetdexSprite({
 	src: string;
 	width: number;
 	height: number;
+	/** "svg" renders the WHOLE image as one static frame (user SVG import);
+	 *  default/absent is the 8×9 petdex frame grid. */
+	format?: "sheet" | "svg";
 	rows?: readonly number[];
 	contentH?: number;
 	scale?: number;
@@ -530,30 +670,39 @@ export function PetdexSprite({
 	 *  `image-rendering: pixelated` treatment would alias them badly. */
 	smooth?: boolean;
 }): ReactNode {
-	const frameW = width / PETDEX_COLUMNS;
-	const frameH = height / PETDEX_ROWS;
 	const anim = PETDEX_MOOD_ANIM[mood];
+	// Body-size normalization + user scale: scale the frame and the whole
+	// sheet together (background-size must match the element scaling).
+	// An SVG import has no frame grid — its width/height ARE the frame, and
+	// the whole image is content, so contentH === height at import.
+	const isSvg = format === "svg";
+	const frameW = isSvg ? width : width / PETDEX_COLUMNS;
+	const frameH = isSvg ? height : height / PETDEX_ROWS;
 	const row = PETDEX_MOOD_ROW[mood];
 	// Cycle only the row's valid frames — sheets pad calm rows with empty
 	// columns, and stepping into one blanks the pet for a frame each loop.
-	const valid = Math.min(PETDEX_COLUMNS, Math.max(1, (rows ?? PETDEX_ROW_FRAMES_DEFAULT)[row] ?? PETDEX_COLUMNS));
-	// Body-size normalization + user scale: scale the frame and the whole
-	// sheet together (background-size must match the element scaling).
+	const valid = isSvg
+		? 1
+		: Math.min(PETDEX_COLUMNS, Math.max(1, (rows ?? PETDEX_ROW_FRAMES_DEFAULT)[row] ?? PETDEX_COLUMNS));
 	const k = scale * (contentH && contentH > 0 ? PET_CONTENT_TARGET_H / contentH : 1);
 	const style: CSSProperties = {
 		width: `${frameW * k}px`,
 		height: `${frameH * k}px`,
 		backgroundImage: `url("${src}")`,
 		backgroundSize: `${width * k}px ${height * k}px`,
-		backgroundPosition: `0 ${-(row * frameH * k)}px`,
+		// An SVG import has ONE frame — the row offset would shift the whole
+		// image out of the box (blank pet on hover/dragging rows).
+		backgroundPosition: isSvg ? "0 0" : `0 ${-(row * frameH * k)}px`,
 		animation: frozen
 			? `gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`
 			: `gui-petdex-cycle ${anim.cycleMs}ms steps(${valid}) infinite, gui-petdex-${anim.transform} ${anim.transformMs}ms ease-in-out infinite`,
-		...(frozen ? {} : { "--gui-petdex-cycle-end": `${-(frameW * valid * k)}px` }),
+		...(frozen || isSvg ? {} : { "--gui-petdex-cycle-end": `${-(frameW * valid * k)}px` }),
 	} as CSSProperties;
+	// An imported SVG is always vector-sharp — the pixelated class would
+	// alias it, so the smooth treatment is forced on.
 	return (
 		<div
-			className={`gui-petdex-sprite gui-petdex-sprite--${mood}${smooth ? " gui-petdex-sprite--smooth" : ""}`}
+			className={`gui-petdex-sprite gui-petdex-sprite--${mood}${smooth || isSvg ? " gui-petdex-sprite--smooth" : ""}`}
 			style={style}
 			aria-hidden
 		/>
@@ -590,6 +739,7 @@ export function PetSprite({
 	gazeRef,
 	interaction,
 	gloss,
+	accessory,
 }: {
 	mood: PetdexMood;
 	pet:
@@ -600,6 +750,7 @@ export function PetSprite({
 					spritesheet: string;
 					width: number;
 					height: number;
+					format?: "sheet" | "svg";
 					rows?: readonly number[];
 					contentH?: number;
 					smooth?: boolean;
@@ -619,9 +770,13 @@ export function PetSprite({
 	 *  spritesheet has no reaction rows to play, so it is ignored there rather
 	 *  than remapping the pet to an unrelated row. */
 	interaction?: PetInteraction | null;
-	/** Builtin-only surface shading (pet-decor.ts). Omitted → the live pref
-	 *  is used; pass an explicit value to preview an option in settings. */
+	/** Builtin-only surface shading (pet-decor.ts). Pass the live pref from
+	 *  usePet()/usePetDecor(); an explicit value previews an option in
+	 *  settings. (Omitting does NOT read storage — there is no subscription
+	 *  in this subtree.) */
 	gloss?: boolean;
+	/** Builtin-only wearable (pet-decor.ts). Same contract as `gloss`. */
+	accessory?: PetAccessory;
 }): ReactNode {
 	if (pet.kind === "petdex") {
 		// Sheets keep their own scale slider: their intrinsic size is the
@@ -632,6 +787,7 @@ export function PetSprite({
 				src={pet.pkg.spritesheet}
 				width={pet.pkg.width}
 				height={pet.pkg.height}
+				format={pet.pkg.format}
 				rows={pet.pkg.rows}
 				contentH={pet.pkg.contentH}
 				scale={scale ?? petScale()}
@@ -641,9 +797,20 @@ export function PetSprite({
 		);
 	}
 	// The builtin orb speaks hover/dragging natively — no face mapping.
+	// The box publishes its own ratio (see PET_BOX_RATIO) so no stylesheet
+	// has to hardcode a number that must track the VIEW constants.
 	return (
-		<div className="gui-pet" style={{ "--gui-pet-fallback": `${size}px` } as CSSProperties}>
-			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} interaction={interaction} gloss={gloss} />
+		<div
+			className="gui-pet"
+			style={{ "--gui-pet-fallback": `${size}px`, "--gui-pet-ratio": `${PET_BOX_RATIO}` } as CSSProperties}
+		>
+			<BuiltinPetSprite
+				mood={mood}
+				gazeRef={gazeRef}
+				interaction={interaction}
+				gloss={gloss}
+				accessory={accessory}
+			/>
 		</div>
 	);
 }

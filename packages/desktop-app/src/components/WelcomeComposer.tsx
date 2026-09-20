@@ -1556,6 +1556,8 @@ export function WelcomeComposer({
 												mood={hopping ? "dragging" : hovered ? "hover" : "rest"}
 												pet={pet.pet}
 												size={34}
+												gloss={pet.decor.gloss}
+												accessory={pet.decor.accessory}
 											/>
 										)
 									: null

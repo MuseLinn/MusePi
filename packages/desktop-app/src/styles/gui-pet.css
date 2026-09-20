@@ -15,7 +15,20 @@
  *   height → `.gui-pet--h` (pet window / avatar slot), height leads instead
  *            and the width follows.
  * `--gui-pet-fallback` is the last resort for a host that supplies neither,
- * so the mascot can never collapse to 0. */
+ * so the mascot can never collapse to 0.
+ *
+ * WRAPPING IS MANDATORY. `.gui-pet svg` below is a DESCENDANT selector — it
+ * sizes the svg only through this box. An svg rendered without the wrapper
+ * (the chat avatar did exactly that) has no size rule reachable at all and
+ * collapses to nothing; that was the blank-avatar bug (2026-09-20 user:
+ * 「头像小球不显示了」). React call sites must go through `PetBox`, not
+ * render `BuiltinPetSprite` bare.
+ *
+ * `--gui-pet-ratio` is written by PetBox from the VIEW constants in
+ * PetSprite.tsx (PET_BOX_RATIO). The literal below is only a pre-hydration
+ * fallback — it used to be the ONLY value, twice, with nothing ever setting
+ * the variable, so retuning the viewBox would have silently stretched every
+ * host that kept reserving the old ratio. */
 .gui-pet {
 	position: relative;
 	flex-shrink: 0;

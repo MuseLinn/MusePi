@@ -1800,6 +1800,7 @@ export function Composer({
 									pet={pet.pet}
 									size={30}
 									gloss={pet.decor.gloss}
+									accessory={pet.decor.accessory}
 									interaction={hopping ? (pokes > 1 ? "delighted" : "startled") : null}
 								/>
 							)

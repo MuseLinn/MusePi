@@ -2,7 +2,7 @@ import { punkAvatarUri } from "@musepi/guest-client";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { PetdexMood } from "../lib/pet";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
-import { BuiltinPetSprite, type GazeVec } from "./PetSprite";
+import { BuiltinPetSprite, type GazeVec, PetBox, usePetDecor } from "./PetSprite";
 
 /**
  * Agent-avatar presets (pet-style switcher): the chat avatar is a
@@ -183,6 +183,9 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
 function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
 	const boxRef = useRef<HTMLSpanElement | null>(null);
 	const gazeRef = useRef<GazeVec | null>(null);
+	// Live decoration prefs — the avatar must match the floating pet and
+	// the composer orb (gloss off / a wearable shows up here too).
+	const decor = usePetDecor();
 	useEffect(() => {
 		const GAZE_RANGE_PX = 150;
 		const onMove = (e: PointerEvent): void => {
@@ -209,7 +212,18 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 			style={{ "--gui-pet-size": `${size}px` } as CSSProperties}
 			role="img"
 		>
-			<BuiltinPetSprite mood={ORB_TO_PET_MOOD[state]} gazeRef={gazeRef} />
+			{/* PetBox, not a bare svg: `.gui-pet-svg` has no size rule of its own
+			 * (gui-pet.css sizes `.gui-pet svg`, a descendant) — without the box
+			 * the avatar svg resolves to nothing and the slot renders empty
+			 * (2026-09-20 user: 「头像小球不显示了」). */}
+			<PetBox size={size}>
+				<BuiltinPetSprite
+					mood={ORB_TO_PET_MOOD[state]}
+					gazeRef={gazeRef}
+					gloss={decor.gloss}
+					accessory={decor.accessory}
+				/>
+			</PetBox>
 		</span>
 	);
 }
