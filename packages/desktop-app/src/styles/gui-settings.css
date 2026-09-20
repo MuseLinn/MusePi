@@ -1991,6 +1991,14 @@
 	box-shadow: 0 0 8px color-mix(in oklab, var(--color-ok) 60%, transparent);
 }
 
+/* Off-channel dot: was unstyled, so stopped channels still glowed green
+ * (the modifier class existed in the markup with no rule behind it). */
+.gui-collab-dot--off {
+	background: var(--color-text-faint);
+	box-shadow: none;
+	opacity: 0.6;
+}
+
 .gui-collab-qr {
 	display: flex;
 	justify-content: center;

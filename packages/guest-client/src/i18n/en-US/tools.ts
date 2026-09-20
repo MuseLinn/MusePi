@@ -322,6 +322,12 @@ export const tools = {
 		"Manage skills, rules, MCP servers, context files, and other extensions in one place (consistent with TUI /extensions)",
 	"subagents settings": "Currently running subagents",
 	"no plugins loaded": "No plugins loaded",
+	"plugins empty hint":
+		"Install plugin packages from the marketplace, or drop them into ~/.musepi/plugins and refresh.",
+	"plugins empty modules hint":
+		"Hot-loaded extension modules (~/.musepi/agent/extensions and project .musepi/extensions) are listed here too — currently none.",
+	"go to marketplace": "Open marketplace",
+	"plugin package tag": "Plugin package",
 	"no skills found": "No skills found",
 	"load errors": "Load errors",
 	"skill warnings": "Skill warnings",
@@ -330,8 +336,6 @@ export const tools = {
 	"extension provider": "Extension-declared",
 	"plugin counts": "{tools} tools · {commands} commands · {handlers} events",
 	"plugin enable": "Enable plugin",
-	"plugin scope user": "User scope",
-	"plugin scope project": "Project scope",
 	"skill filter user": "User",
 	"skill filter project": "Project",
 	"search skills...": "Search skills...",

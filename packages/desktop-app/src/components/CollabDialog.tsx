@@ -5,6 +5,7 @@ import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { QrCode } from "../vendor/qrcode";
 import { DialogFrame } from "./DialogFrame";
+import { Reveal } from "./Reveal";
 
 interface CollabGuest {
 	name: string;
@@ -163,6 +164,21 @@ export function CollabDialog({
 		setConfigDraft({});
 	};
 
+	/** Direct start for channels without a config form (hot-plugged plugin
+	 *  channels): previously the 启动 button silently expanded nothing and
+	 *  the channel was unreachable from the GUI. Uses the persisted config;
+	 *  failures surface in the row (same startErrors channel as the form). */
+	const startChannel = async (kind: string): Promise<void> => {
+		if (!rpc) return;
+		setStartErrors(e => ({ ...e, [kind]: "" }));
+		try {
+			await rpc.request("channels.start", { kind });
+		} catch (err) {
+			setStartErrors(e => ({ ...e, [kind]: err instanceof Error ? err.message : String(err) }));
+		}
+		await refreshChannels();
+	};
+
 	const channelFields: Record<string, { key: string; label: string; secret: boolean; optional?: boolean }[]> = {
 		discord: [{ key: "token", label: "Bot token", secret: true }],
 		// token optional: empty → the channel falls back to QR login (wechat.ts
@@ -172,6 +188,19 @@ export function CollabDialog({
 		"huawei-today": [
 			{ key: "apiKey", label: "PERSONAL-API-KEY", secret: true },
 			{ key: "uid", label: "PERSONAL-UID", secret: false },
+		],
+		// Missing forms used to leave these rows dead: clicking 启动 expanded
+		// nothing (fields undefined) and the channel could never be started
+		// from the GUI — the adapter-side required config lived only in the
+		// daemon (telegram.ts needs token; feishu.ts needs appId/appSecret).
+		telegram: [{ key: "token", label: "Bot token (from @BotFather)", secret: true }],
+		feishu: [
+			{ key: "appId", label: "App ID", secret: false },
+			{ key: "appSecret", label: "App Secret", secret: true },
+		],
+		lark: [
+			{ key: "appId", label: "App ID", secret: false },
+			{ key: "appSecret", label: "App Secret", secret: true },
 		],
 	};
 
@@ -449,6 +478,8 @@ export function CollabDialog({
 							const label = c.kind;
 							const on = c.state === "connected" || c.state === "connecting" || c.state === "waiting_scan";
 							const fields = channelFields[c.kind];
+							const qrUrl = typeof c.config?.qrUrl === "string" ? c.config.qrUrl : "";
+							const waitingScan = c.state === "waiting_scan";
 							return (
 								<div key={c.kind} className="gui-collab-bot-wrap">
 									<div className={`gui-collab-bot${on ? "" : " gui-collab-bot--off"}`}>
@@ -474,8 +505,13 @@ export function CollabDialog({
 														?.request("channels.stop", { kind: c.kind })
 														.then(() => refreshChannels())
 														.catch(() => refreshChannels());
-												} else {
+												} else if (fields) {
 													setExpandedKind(expandedKind === c.kind ? null : c.kind);
+												} else {
+													// No known config form (plugin channel): start
+													// directly off the persisted config instead of
+													// expanding an empty block.
+													void startChannel(c.kind);
 												}
 											}}
 										>
@@ -485,37 +521,42 @@ export function CollabDialog({
 									{/* QR login (issue #28): the backend exposes the WeChat login
 									 *  QR via status().config.qrUrl while waiting for a scan —
 									 *  render it inline so the user can actually scan it.
-									 *  iLink returns raw base64 PNG → channelQrSrc wraps it. */}
-									{c.state === "waiting_scan" && typeof c.config?.qrUrl === "string" && c.config.qrUrl && (
-										<div className="gui-collab-channel-qr">
-											<img src={channelQrSrc(c.config.qrUrl)} alt="WeChat login QR" />
-											<span>{c.detail ?? t("scan the QR code")}</span>
-										</div>
-									)}
+									 *  iLink returns raw base64 PNG → channelQrSrc wraps it.
+									 *  Reveal = 条件区块动效规范 (expand/collapse animation). */}
+									<Reveal open={waitingScan && !!qrUrl}>
+										{qrUrl ? (
+											<div className="gui-collab-channel-qr">
+												<img src={channelQrSrc(qrUrl)} alt="WeChat login QR" />
+												<span>{c.detail ?? t("scan the QR code")}</span>
+											</div>
+										) : null}
+									</Reveal>
 									{startErrors[c.kind] && <div className="gui-collab-error">{startErrors[c.kind]}</div>}
-									{expandedKind === c.kind && fields && (
-										<div className="gui-collab-channel-config">
-											{fields.map(f => (
-												<input
-													key={f.key}
-													className="gui-collab-channel-input"
-													type={f.secret ? "password" : "text"}
-													placeholder={f.label}
-													value={configDraft[f.key] ?? ""}
-													onChange={e => setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))}
-													autoComplete="off"
-												/>
-											))}
-											<button
-												type="button"
-												className="gui-btn gui-btn-primary gui-btn-sm"
-												disabled={!fields.every(f => f.optional || (configDraft[f.key] ?? "").trim())}
-												onClick={() => void saveConfig(c.kind)}
-											>
-												{t("save and start")}
-											</button>
-										</div>
-									)}
+									<Reveal open={expandedKind === c.kind && !!fields}>
+										{fields && (
+											<div className="gui-collab-channel-config">
+												{fields.map(f => (
+													<input
+														key={f.key}
+														className="gui-collab-channel-input"
+														type={f.secret ? "password" : "text"}
+														placeholder={f.label}
+														value={configDraft[f.key] ?? ""}
+														onChange={e => setConfigDraft(d => ({ ...d, [f.key]: e.target.value }))}
+														autoComplete="off"
+													/>
+												))}
+												<button
+													type="button"
+													className="gui-btn gui-btn-primary gui-btn-sm"
+													disabled={!fields.every(f => f.optional || (configDraft[f.key] ?? "").trim())}
+													onClick={() => void saveConfig(c.kind)}
+												>
+													{t("save and start")}
+												</button>
+											</div>
+										)}
+									</Reveal>
 								</div>
 							);
 						})}

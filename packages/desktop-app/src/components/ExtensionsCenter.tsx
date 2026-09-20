@@ -15,6 +15,7 @@ import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
 import { HeightMorph } from "./HeightMorph";
 import { StateIcon } from "./StateIcon";
+import { type PluginPackageEntry as PluginEntry, sourceLevelLabel, UnifiedPluginsView } from "./UnifiedPluginsView";
 
 /**
  * 扩展控制中心 (extension control center) — TUI /extensions parity in the
@@ -47,29 +48,10 @@ function stateLabel(e: ExtensionItem): string {
 	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
 }
 
-/** One installed plugin package from daemon plugins.packages (full
- *  inventory incl. disabled: name/version/description/scope/enabled). */
-interface PluginEntry {
-	name: string;
-	version: string;
-	path: string;
-	scope: "user" | "project";
-	enabled: boolean;
-	description: string | null;
-	tools: number;
-	commands: number;
-	handlers: number;
-}
-
 function levelLabel(s: ExtensionItem): string {
-	if (
-		s.source.provider === "native" ||
-		s.source.provider === "musepi-managed" ||
-		s.source.provider === "builtin-defaults"
-	) {
-		return t("skill filter builtin");
-	}
-	return s.source.level === "project" ? t("skill filter project") : t("skill filter user");
+	// 单一权威判定在 UnifiedPluginsView.sourceLevelLabel（插件 tab 与
+	// 能力清单的来源标签必须一致，防 drift）。
+	return sourceLevelLabel(s.source.provider, s.source.level);
 }
 
 /** User-owned skills (user-level files, not native/auto-learn) can be
@@ -130,11 +112,17 @@ function OverviewView({
 	const activeCount = extensions.filter(e => e.state === "active" && !e.loadError).length;
 	const kindCount = new Set(extensions.map(e => e.kind)).size;
 	const totalSlots = (slots?.exact.length ?? 0) + (slots?.prefixes.length ?? 0);
+	// 来源健康度 skips the `native` provider (TUI buildProviderTabs parity):
+	// native IS the app's own config + builtin registry — the inventory tree
+	// already surfaces it read-only as 内置, and a「MusePi」row toggling the
+	// user's entire native config next to「MusePi Extensions」read as a
+	// duplicate source. Only real (toggleable) sources stay listed.
+	const managedProviders = providers.filter(p => p.id !== "native");
 	const stats: { label: string; value: number; tone?: "err"; sub?: string }[] = [
 		{
 			label: t("ext stat total"),
 			value: extensions.length,
-			sub: t("ext stat total sub {kinds} {sources}", { kinds: kindCount, sources: providers.length }),
+			sub: t("ext stat total sub {kinds} {sources}", { kinds: kindCount, sources: managedProviders.length }),
 		},
 		{
 			label: t("ext stat active"),
@@ -210,7 +198,7 @@ function OverviewView({
 					<span className="gui-group-label">{t("ext provider health")}</span>
 				</div>
 				<div className="gui-ext-overview-rows">
-					{providers.map(p => (
+					{managedProviders.map(p => (
 						<div key={p.id} className="gui-ext-overview-row">
 							<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
 							<span className="gui-ext-overview-row-text">
@@ -310,6 +298,12 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		: null;
 
 	const selected = useMemo(() => (extensions ?? []).find(e => e.id === selectedId) ?? null, [extensions, selectedId]);
+
+	// 插件 tab 计数 = 插件包 + 热加载扩展模块（统一清单的两条链路）。
+	const moduleCount = useMemo(
+		() => (extensions ?? []).filter(e => e.kind === "extension-module").length,
+		[extensions],
+	);
 
 	// Detail content (lazy): skills → SKILL.md via skills.read; context
 	// files → fs.read; other kinds have no content file (inspector only).
@@ -539,9 +533,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{t("ext inventory")}
 					<span className="gui-ext-tab-count">{(extensions ?? []).length}</span>
 				</button>
-				{/* 插件 tab:daemon plugins.list 的
-				 * 会话无关扩展扫描(path/label/tools/commands/handlers/errors),
-				 * 与扩展中心并排 —— marketplace/plugin 生态的 GUI 面。 */}
+				{/* 插件 tab:统一清单(UnifiedPluginsView)—— 插件包(marketplace/npm)
+				 * 与热加载扩展模块(kind=extension-module)同屏,像 skill 管理一样
+				 * 逐项标记来源类别(内置/项目级/用户级)。 */}
 				<button
 					type="button"
 					role="tab"
@@ -550,7 +544,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					onClick={() => setView("plugins")}
 				>
 					{t("plugins")}
-					<span className="gui-ext-tab-count">{plugins.length}</span>
+					<span className="gui-ext-tab-count">{plugins.length + moduleCount}</span>
 				</button>
 				{/* Marketplace tab:daemon marketplace.list 的远程插件目录
 				 * 浏览/一键安装。从 @musepi/guest-client 复用 MarketplaceGrid,
@@ -596,48 +590,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 				) : view === "diagnostics" ? (
 					<DiagnosticsView rpc={rpc} extensions={extensions} tabs={tabs} />
 				) : view === "plugins" ? (
-					<div className="gui-ext-plugins">
-						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
-						{plugins.length === 0 && !pluginsError ? (
-							<div className="gui-ext-detail-empty">{t("no plugins loaded")}</div>
-						) : (
-							<div className="gui-ext-list-scroll">
-								{plugins.map(p => (
-									<div key={p.path} className="gui-ext-provider">
-										<div className="gui-ext-provider-h">
-											<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-											<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
-											<span className="gui-ext-group-count">
-												{t("plugin counts", {
-													tools: p.tools,
-													commands: p.commands,
-													handlers: p.handlers,
-												})}
-											</span>
-											<button
-												type="button"
-												role="switch"
-												aria-checked={p.enabled}
-												aria-label={`${t("plugin enable")} ${p.name}`}
-												className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
-												onClick={() => void togglePlugin(p)}
-											>
-												<span className="gui-toggle-knob" />
-											</button>
-										</div>
-										<div className="gui-ext-plugins-meta">
-											<span className="gui-ext-plugins-version">v{p.version}</span>
-											<span className="gui-ext-plugins-scope">
-												{p.scope === "project" ? t("plugin scope project") : t("plugin scope user")}
-											</span>
-										</div>
-										{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
-										<div className="gui-ext-plugins-path">{p.path}</div>
-									</div>
-								))}
-							</div>
-						)}
-					</div>
+					<UnifiedPluginsView
+						rpc={rpc}
+						plugins={plugins}
+						pluginsError={pluginsError}
+						onTogglePackage={togglePlugin}
+						onOpenMarketplace={() => setView("marketplace")}
+						onError={setError}
+					/>
 				) : view === "marketplace" ? (
 					<MarketplaceView rpc={rpc} />
 				) : (

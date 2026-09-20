@@ -89,7 +89,16 @@ export class WechatChannel implements ChannelAdapter {
 		if (!this.#botToken) {
 			this.#state = "connecting";
 			this.#detail = "fetching QR code…";
-			await this.#fetchQr();
+			// Fail loud + fast: a hung QR fetch (proxy/TLS blackhole) used to
+			// leave the adapter in "connecting" forever and the GUI start
+			// button spinning with zero feedback.
+			try {
+				await this.#fetchQr();
+			} catch (err) {
+				this.#state = "error";
+				this.#detail = err instanceof Error ? err.message : String(err);
+				throw err;
+			}
 			this.#state = "waiting_scan";
 			this.#detail = "scan the QR with WeChat";
 			this.#pollTimer = setInterval(
@@ -108,7 +117,7 @@ export class WechatChannel implements ChannelAdapter {
 	}
 
 	async #fetchQr(): Promise<void> {
-		const res = await fetch(WechatChannel.QR_CODE_URL);
+		const res = await fetch(WechatChannel.QR_CODE_URL, { signal: AbortSignal.timeout(10_000) });
 		if (!res.ok) throw new Error(`wechat QR fetch failed: HTTP ${res.status}`);
 		const data = (await res.json()) as { qrcode?: string; qrcode_img_content?: string };
 		if (!data.qrcode || !data.qrcode_img_content) throw new Error("wechat QR response missing fields");
@@ -119,6 +128,7 @@ export class WechatChannel implements ChannelAdapter {
 	async #pollQrStatus(): Promise<void> {
 		const res = await fetch(
 			`${WechatChannel.BASE_URL}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(this.#qrCode)}`,
+			{ signal: AbortSignal.timeout(10_000) },
 		);
 		if (!res.ok) throw new Error(`wechat QR status failed: HTTP ${res.status}`);
 		const data = (await res.json()) as {

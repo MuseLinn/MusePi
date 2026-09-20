@@ -5,6 +5,7 @@ import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { CapabilityCenter } from "./CapabilityCenter";
 import { SkillMarketView } from "./SkillMarketView";
+import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./UnifiedPluginsView";
 
 /**
  * 能力中心 (capability center) — the FIRST-CLASS sidebar page (设计稿 05:
@@ -14,21 +15,12 @@ import { SkillMarketView } from "./SkillMarketView";
  * Three tabs share one card/filter/drawer language (设计稿 05):
  *   技能  — installed skills + acquire (skills.install / Git URL), with the
  *           skill detail drawer (CapabilityCenter two-screen).
- *   插件  — installed plugin packages (plugins.packages, enable toggles).
+ *   插件  — unified plugin list (UnifiedPluginsView): marketplace/npm
+ *           plugin packages + hot-loaded extension modules, each item
+ *           tagged by source category (内置/项目级/用户级, skill 管理
+ *           同款) like the settings-side tab.
  *   市场  — the remote marketplace catalog (marketplace.list / install).
  */
-
-interface PluginEntry {
-	name: string;
-	version: string;
-	path: string;
-	scope: "user" | "project";
-	enabled: boolean;
-	description: string | null;
-	tools: number;
-	commands: number;
-	handlers: number;
-}
 
 type Tab = "skills" | "plugins" | "marketplace";
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
@@ -148,48 +140,17 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 						)}
 					</>
 				) : tab === "plugins" ? (
-					<div className="gui-ext-plugins">
-						{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
-						{plugins.length === 0 && !pluginsError ? (
-							<div className="gui-ext-detail-empty">{t("no plugins loaded")}</div>
-						) : (
-							plugins.map(p => (
-								<div key={p.path} className="gui-ext-provider">
-									<div className="gui-ext-provider-h">
-										<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-										<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
-										<span className="gui-ext-group-count">
-											{t("plugin counts", {
-												tools: p.tools,
-												commands: p.commands,
-												handlers: p.handlers,
-											})}
-										</span>
-										<button
-											type="button"
-											role="switch"
-											aria-checked={p.enabled}
-											aria-label={`${t("plugin enable")} ${p.name}`}
-											className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
-											onClick={() => togglePlugin(p)}
-										>
-											{/* Knob span required: the thumb is a child element,
-											 * not a pseudo-element — empty buttons lose the dot. */}
-											<span className="gui-toggle-knob" />
-										</button>
-									</div>
-									<div className="gui-ext-plugins-meta">
-										<span className="gui-ext-plugins-version">v{p.version}</span>
-										<span className="gui-ext-plugins-scope">
-											{p.scope === "project" ? t("plugin scope project") : t("plugin scope user")}
-										</span>
-									</div>
-									{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
-									<div className="gui-ext-plugins-path">{p.path}</div>
-								</div>
-							))
-						)}
-					</div>
+					/* Shared unified list (settings-side 扩展控制中心 parity):
+					 * plugin packages + hot-loaded extension modules, source-
+					 * category tags per item, shared empty-state contract. */
+					<UnifiedPluginsView
+						rpc={rpc}
+						plugins={plugins}
+						pluginsError={pluginsError}
+						onTogglePackage={togglePlugin}
+						onOpenMarketplace={() => setTab("marketplace")}
+						onError={setPluginsError}
+					/>
 				) : (
 					<MarketplaceView rpc={rpc} />
 				)}
