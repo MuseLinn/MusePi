@@ -598,3 +598,11 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **scene 经 `strokesRef` 镜像读取，不读渲染闭包**（`finish`）：快照发生在 `closeTextEditor()` 之后约 80ms，刚提交的文字标签还没进到那一帧的 `strokes`——那样会出现「PNG 上有字、存下来的 scene 里没有字」。
 - **场景持久化是刻意的尽力而为**：`attachmentDraftPayload` 仅当 `sketch && !sceneHasImage(scene)` 且整体载荷在 1.5MB 预算内时才带 scene；超预算或场景内含导入图片（会再带一份全尺寸 base64）时只丢 scene、保住 chip——否则一次配额错误会把整份草稿一起丢掉。无 scene 的 chip（恢复的草稿、改动前数据、lightbox 里来的普通图片）回落到旧的整图重开路径，不会退化成「打不开画板」。
 - **`parseSketchScene` 是存量数据的闸门**：版本未知、步长不对（钢笔笔画被截成非 3 的倍数＝最后一点丢了压力值）、坐标非有限，都只丢**那一条**笔画，其余整板保留。NaN 一旦进入 Konva 会让节点整块空白，所以序列化也绝不写出非有限坐标。单测：`packages/desktop-app/test/sketch-scene.test.ts`（各步长往返、量化、垃圾拒绝、等比缩放、压力透传）。
+
+## 37. 文字标签是一个盒子而非锚点：随文本自动增高，且与图形一样可缩放（2026-09-20）
+
+- **文本笔画现在持有真实矩形——`[x, y, w, h]` 而不是 `[x, y]`**（`lib/sketch-geometry.ts` + `components/SketchPad.tsx`）：旧实现只存一个锚点，宽度每次渲染都由 `label.length * fontSize * 0.62` 重算，于是一整句话永远是单行、直接冲出画板、高度永不增长。现在 `textAutoBox(size, label, boxW)` 把文本交给 `wrapTextLines` 量一遍（贪心断词，`\n` 强制断行，超长单词独占一行）后返回适配的 `{ w, h }`：宽度回缩到最宽行（上限是用户拖出的盒宽），高度为 `行数 × textFontSize(size) × 1.25`。`textLineHeight` 是唯一的行高来源：Konva 节点以 `wrap="word"` + 同一个 `1.25` 渲染，所以「画出来的文本」与「量出来的盒子」不可能对不上。
+- **标签与其他对象共用角手柄**（`SketchPad.tsx`）：缩放手柄层过去用 `selected?.tool !== "text"` 把关，这就是文字唯独不能缩放的原因。现在 `strokeExtent` 给文本与图片相同的 `{x, y, w, h}` 分支，`scalePoints` 对其原点做仿射、对边长乘原始因子，`shiftPoints` 只移原点——文字因此走的是与图形**完全相同**的拖动/缩放/擦除代码路径，没有一处文字专属的缩放数学可供漂移。
+- **编辑改为双击**（单击标签过去会直接打开插入符，让文字成了唯一拖不动的对象）：现在首次点击与任何对象一样是选中＋拖动，`onDblClick` 才在该标签自身的盒子上重建 `<textarea>`（`textEditor` 新增 `w`，既有标签取 `points[2]`、新建取 `TEXT_DEFAULT_W`）。`closeTextEditor` 对插入与编辑两种情形都把量好的盒子写回 `points`。
+- **编辑浮层真正会换行增高**（`styles/gui-composer.css`）：`.gui-sketch-text-input` 为 `min-width: 60px` / `max-width: min(420px, 90%)` / `max-height: 60vh`，配 `white-space: pre-wrap` + `overflow-wrap: break-word`（原为 `white-space: pre`、90px 下限、320px 上限）——浮层随输入字符增高，而不是让一行无限横向滚下去。
+- **旧的两位数字标签原地迁移**（`lib/sketch-scene.ts`）：`expectedPointCount("text")` 改为 4，`parseStroke` 用 `legacyTextBox(x, y, label, size)` 升级存量 `[x, y]`——此处**必须先清空 `points` 再 push**：把 4 数盒子追加到已有的 2 数锚点会得到 6 数的 `[x, y, x, y, w, h]`，之后每一次 `strokeExtent` 都会读错角点。`strokeBox` 去掉了 `text` 参数：文本与图片一样返回自身矩形，不加 padding。单测：`test/sketch-geometry.test.ts`（`textAutoBox` / `wrapTextLines` / `textFontSize` / 四数 `strokeExtent` / `scalePoints` ×2）与 `test/sketch-scene.test.ts`（四数往返、旧锚点迁移）。

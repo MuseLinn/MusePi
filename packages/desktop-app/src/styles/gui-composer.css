@@ -2164,17 +2164,25 @@
 .gui-sketch-text-input {
 	position: absolute;
 	z-index: 2;
-	min-width: 90px;
-	max-width: min(320px, 70%);
+	/* The width comes from the stroke box (inline style) — the overlay IS the
+	 * text box being authored, so it wraps at that width and grows downward.
+	 * `field-sizing: content` only supplies the height; the min/max are the
+	 * hard stops for a reckless drag of the box. */
+	min-width: 60px;
+	max-width: min(420px, 90%);
+	max-height: 60vh;
 	padding: 1px 3px;
 	border: 1px dashed color-mix(in oklab, var(--color-accent) 60%, transparent);
 	border-radius: var(--radius-sm);
 	background: color-mix(in oklab, var(--color-surface) 70%, transparent);
 	font: inherit;
+	/* 1.25 matches the Konva `Text` node's `lineHeight`, so committing the
+	 * label does not reflow it. */
 	line-height: 1.25;
 	resize: none;
 	overflow: hidden;
-	white-space: pre;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
 	field-sizing: content;
 }
 

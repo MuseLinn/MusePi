@@ -143,12 +143,66 @@ export function textFontSize(size: number): number {
 	return Math.max(14, size * 4);
 }
 
-/** Measured extent of a text label, from the glyph size Konva will use.
- *  The 0.62 factor approximates the average advance width of the UI sans at
- *  this size — good enough for a hit box, and deliberately generous. */
-export function textLabelBox(size: number, label: string): { w: number; h: number } {
+/** Line box of a text label at this glyph size. Konva's `Text` lays out at
+ *  `fontSize` with a 1.25 line-height (the same ratio `.gui-sketch-text-input`
+ *  uses while typing, so committing a label does not reflow it). */
+export function textLineHeight(size: number): number {
+	return textFontSize(size) * 1.25;
+}
+
+/** A text label's box when it has to auto-fit its content: as many wrapped
+ *  lines as the text needs at `boxW`, and the width snapped back to the
+ *  widest line (so a short label does not sit in a half-empty rectangle).
+ *  The 0.62 factor approximates the average advance width of the UI sans —
+ *  good enough for hit-testing, and deliberately generous. */
+export function textAutoBox(size: number, label: string, boxW: number): { w: number; h: number } {
 	const fs = textFontSize(size);
-	return { w: Math.max(20, label.length * fs * 0.62), h: Math.max(20, fs * 1.3) };
+	const line = textLineHeight(size);
+	const lines = wrapTextLines(label, Math.max(1, boxW), fs);
+	const widest = lines.reduce((max, l) => Math.max(max, l.length * fs * 0.62), 0);
+	return { w: Math.max(TEXT_MIN_W, Math.min(boxW, widest)), h: Math.max(line, lines.length * line) };
+}
+
+/** Minimum width of a text box — narrow enough to wrap a sentence, wide
+ *  enough that the caret/placeholder remain visible on an empty label. */
+export const TEXT_MIN_W = 60;
+
+/** Average advance width of the UI sans as a fraction of the glyph size —
+ *  the one constant the hit box and the wrap estimate share. */
+const GLYPH_ADVANCE = 0.62;
+
+/**
+ * Greedy word wrap, measured in the same generous advance the hit box uses.
+ * Konva does the real wrapping at paint time; this exists so the stored box
+ * and the select frame track the rendered line count without a canvas (the
+ * geometry half of this file must stay assertable in a unit test).
+ *
+ * A single word longer than the box gets its own line rather than being
+ * broken — Konva's `word` wrap does the same, so the counts agree.
+ */
+export function wrapTextLines(label: string, boxW: number, fontSize: number): string[] {
+	const perChar = Math.max(1, boxW) / (fontSize * GLYPH_ADVANCE);
+	const out: string[] = [];
+	// Explicit newlines force a break regardless of wrapping.
+	for (const paragraph of String(label).split("\n")) {
+		if (paragraph.length === 0) {
+			out.push("");
+			continue;
+		}
+		let current = "";
+		for (const word of paragraph.split(/(\s+)/)) {
+			if (word === "") continue;
+			const candidate = current + word;
+			if (candidate.length <= perChar || current === "") {
+				current = candidate;
+				continue;
+			}
+			out.push(current.trimEnd());
+			current = word.trimStart();
+		}
+		out.push(current.trimEnd());
+	}
+	return out.length > 0 ? out : [""];
 }
 
 /**
@@ -160,13 +214,10 @@ export function textLabelBox(size: number, label: string): { w: number; h: numbe
  * user is dragging away from stays visually pinned during the scale.
  */
 export function strokeExtent(s: { tool: Tool; points: readonly number[] }): Rect {
-	if (s.tool === "text") {
-		return { x: s.points[0], y: s.points[1], w: 0, h: 0 };
-	}
-	// An image stores its own box: [x, y, width, height]. The width/height are
-	// lengths, not a second corner, so they must not go through the min/max
-	// normalization the shape branch applies.
-	if (s.tool === "image") {
+	// Text and image both store their own box: [x, y, width, height]. The
+	// width/height are lengths, not a second corner, so they must not go
+	// through the min/max normalization the shape branch applies.
+	if (s.tool === "text" || s.tool === "image") {
 		return { x: s.points[0], y: s.points[1], w: s.points[2], h: s.points[3] };
 	}
 	if (s.tool === "pen") {
@@ -207,11 +258,8 @@ export function shiftPoints(tool: Tool, points: readonly number[], dx: number, d
 		}
 		return out;
 	}
-	if (tool === "text") {
-		return [points[0] + dx, points[1] + dy];
-	}
 	// Only the box's origin moves; width/height are lengths.
-	if (tool === "image") {
+	if (tool === "image" || tool === "text") {
 		return [points[0] + dx, points[1] + dy, points[2], points[3]];
 	}
 	return [points[0] + dx, points[1] + dy, points[2] + dx, points[3] + dy];
@@ -243,10 +291,7 @@ export function scalePoints(tool: Tool, points: readonly number[], ax: number, a
 		}
 		return out;
 	}
-	if (tool === "text") {
-		return [ax + (points[0] - ax) * f, ay + (points[1] - ay) * f];
-	}
-	if (tool === "image") {
+	if (tool === "text" || tool === "image") {
 		// Same affine walk for the origin; the side lengths scale by the raw
 		// factor (they are not distances from the anchor, so they must not be
 		// measured against it).
@@ -258,18 +303,15 @@ export function scalePoints(tool: Tool, points: readonly number[], ax: number, a
 /**
  * Bounding box of a stroke, padded for line width — the select tool draws its
  * dashed frame from this, and `onPointerDown` uses it to decide whether a
- * finger landed on a text label.
+ * finger landed on a text label. Text and image carry their own box, so the
+ * label string no longer feeds this.
  */
-export function strokeBox(s: { tool: Tool; size: number; points: readonly number[] }, text = ""): Rect {
+export function strokeBox(s: { tool: Tool; size: number; points: readonly number[] }): Rect {
 	const pad = s.size * 1.8 + 4;
-	if (s.tool === "text") {
-		// Text stores only its anchor, so the label is what gives it an extent.
-		const { w, h } = textLabelBox(s.size, text);
-		return { x: s.points[0] - pad, y: s.points[1] - pad, w: w + pad * 2, h: h + pad * 2 };
-	}
-	// The picture already is a rectangle: padding it would float the dashed
-	// frame (and its handles) away from the edges the user wants to grab.
-	if (s.tool === "image") {
+	// Text and image already are rectangles: padding them would float the
+	// dashed frame (and its handles) away from the edges the user wants to
+	// grab. A text box carries its own wrapped extent in `points`.
+	if (s.tool === "text" || s.tool === "image") {
 		return { x: s.points[0], y: s.points[1], w: s.points[2], h: s.points[3] };
 	}
 	const e = strokeExtent(s);
@@ -279,7 +321,7 @@ export function strokeBox(s: { tool: Tool; size: number; points: readonly number
 /** Does `points` describe a box the user can actually see? Used to keep the
  *  export from resizing around a hidden zero-size node. */
 export function hasVisibleExtent(s: { tool: Tool; points: readonly number[] }): boolean {
-	if (s.tool === "text") return s.points[0] > 0 && s.points[1] > 0;
+	if (s.tool === "text") return s.points[2] >= MIN_DRAG && s.points[3] >= MIN_DRAG;
 	if (s.tool === "pen") return s.points.length >= 6;
 	if (s.tool === "image") return s.points[2] >= MIN_DRAG && s.points[3] >= MIN_DRAG;
 	const [x0, y0, x1, y1] = s.points;

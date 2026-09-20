@@ -20,7 +20,18 @@
  * that outlived a format change.
  */
 
-import type { Tool } from "./sketch-geometry";
+import { type Tool, textAutoBox } from "./sketch-geometry";
+
+/** Box a legacy two-number text anchor migrates to. The old format measured
+ *  its label at paint time with no wrap width, so the closest honest reading
+ *  is "one line, no wrapping" — a width generous enough to hold the label
+ *  without reflowing it, which is exactly how it looked before the change. */
+function legacyTextBox(x: number, y: number, label: string, size: number): [number, number, number, number] {
+	const fs = Math.max(14, size * 4);
+	const natural = Math.max(60, label.length * fs * 0.62);
+	const fit = textAutoBox(size, label, natural);
+	return [x, y, Math.max(natural, fit.w), fit.h];
+}
 
 /** The stroke record the board paints and the scene stores. `eraser` is a
  *  gesture, not a drawn object, so it is not a valid stroke tool. */
@@ -108,7 +119,8 @@ export function serializeScene(strokes: readonly SketchStroke[], w: number, h: n
 /** Expected `points` length per tool: pen is a multiple of three (checked
  *  separately), everything else is a fixed-width record. */
 function expectedPointCount(tool: string): number | null {
-	if (tool === "text") return 2;
+	// Text and image both store a box [x, y, w, h].
+	if (tool === "text") return 4;
 	if (tool === "image") return 4;
 	return 4;
 }
@@ -133,6 +145,14 @@ function parseStroke(raw: unknown): SketchStroke | null {
 		// A pen stroke is whole triplets; a truncated tail would leave the
 		// last point without its pressure and shear the ink.
 		if (points.length < 3 || points.length % 3 !== 0) return null;
+	} else if (r.tool === "text" && points.length === 2) {
+		// Legacy text (before the box contract) stored a bare [x, y] anchor and
+		// measured its own label at paint time. Restore it as a box so the
+		// label keeps its own wrap width instead of losing the stroke. The
+		// migration REPLACES the pair — the box already carries the origin.
+		const [x, y] = points;
+		points.length = 0;
+		points.push(...legacyTextBox(x, y, typeof r.text === "string" ? r.text : "", r.size));
 	} else {
 		const n = expectedPointCount(r.tool);
 		if (n !== null && points.length !== n) return null;

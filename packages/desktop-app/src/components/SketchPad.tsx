@@ -36,8 +36,8 @@ import {
 	strokeBox,
 	strokeExtent,
 	type Tool,
+	textAutoBox,
 	textFontSize,
-	textLabelBox,
 } from "../lib/sketch-geometry";
 import {
 	nextStrokeId,
@@ -109,6 +109,12 @@ const PALETTE = [
  *  still clamp to a sane ink range. */
 const MIN_SIZE = 1;
 const MAX_SIZE = 24;
+
+/** Width a freshly planted text box starts at, in canvas pixels. Wide enough
+ *  for a comfortable sentence before the first wrap, narrow enough that the
+ *  caret reads as a text box rather than a banner. The user resizes it with
+ *  the same corner handles every other object uses. */
+const TEXT_DEFAULT_W = 200;
 
 /** Tools sharing the flyout; the first entry is the always-visible button. */
 const SHAPE_ITEMS = [
@@ -283,9 +289,11 @@ export function SketchPad({
 		sx: number;
 		sy: number;
 	} | null>(null);
-	/** Text tool: where a tap planted the caret, and the label being typed.
-	 *  `null` means nothing is being edited, so no overlay is mounted. */
-	const [textEditor, setTextEditor] = useState<{ x: number; y: number; id: number | null } | null>(null);
+	/** Text tool: where a tap planted the caret, how wide the box is, and the
+	 *  label being typed. `null` means nothing is being edited, so no overlay
+	 *  is mounted. `w` is the wrap width — the overlay grows downward as the
+	 *  text wraps, and the committed stroke inherits the resulting box. */
+	const [textEditor, setTextEditor] = useState<{ x: number; y: number; w: number; id: number | null } | null>(null);
 	/** A text tap parked at pointerdown, planted at pointerup. See the note in
 	 *  `onPointerDown`: mounting the caret inside pointerdown lets the
 	 *  browser's own mousedown default action (focus the clicked element, or
@@ -502,6 +510,11 @@ export function SketchPad({
 		setTextEditor(null);
 		setTextDraft("");
 		if (!ed) return;
+		// The box the user typed into IS the stroke's box: width is the wrap
+		// width the caret was given (or the box a re-edit inherited), height is
+		// however many lines the text wrapped to. Typing therefore extends the
+		// box by itself, and a scale-handle drag just writes a new w/h here.
+		const fit = textAutoBox(size, value, ed.w);
 		if (ed.id === null) {
 			if (!value) return;
 			commit({
@@ -509,7 +522,7 @@ export function SketchPad({
 				tool: "text",
 				color,
 				size,
-				points: [ed.x, ed.y],
+				points: [ed.x, ed.y, fit.w, fit.h],
 				text: value,
 			});
 			return;
@@ -526,7 +539,9 @@ export function SketchPad({
 			setFuture([]);
 			setDirty(true);
 			if (!value) return prev.filter(s => s.id !== ed.id);
-			return prev.map(s => (s.id === ed.id ? { ...s, text: value } : s));
+			return prev.map(s =>
+				s.id === ed.id ? { ...s, text: value, points: [s.points[0], s.points[1], fit.w, fit.h] } : s,
+			);
 		});
 	}, [textEditor, textDraft, color, size, commit]);
 
@@ -601,16 +616,11 @@ export function SketchPad({
 					if (textEditor) closeTextEditor();
 					return;
 				}
-				// Codex parity: a single click both picks and lets you drag. A
-				// text label reopens its caret instead, since dragging a label
-				// is rare and retyping is the common intent.
+				// A text box behaves like every other object now that it carries
+				// its own rectangle: a press selects and drags it. Reopening the
+				// caret moved to the double-click path below (which is where the
+				// old single-click handler's intent now lives).
 				const victim = strokes.find(s => s.id === id);
-				if (victim?.tool === "text") {
-					setSelectedId(id);
-					setTextEditor({ x: victim.points[0], y: victim.points[1], id });
-					setTextDraft(victim.text ?? "");
-					return;
-				}
 				setSelectedId(id);
 				if (victim) {
 					moveRef.current = { id, tool: victim.tool, from: victim.points, start: pos };
@@ -725,7 +735,7 @@ export function SketchPad({
 		const pending = pendingTextRef.current;
 		if (pending) {
 			pendingTextRef.current = null;
-			setTextEditor({ x: pending.x, y: pending.y, id: null });
+			setTextEditor({ x: pending.x, y: pending.y, w: TEXT_DEFAULT_W, id: null });
 			setTextDraft("");
 			return;
 		}
@@ -761,6 +771,26 @@ export function SketchPad({
 		pendingTextRef.current = null;
 		onPointerUp();
 	}, [onPointerUp]);
+
+	/** Double-click opens a text box's caret. This is the ONLY way back into a
+	 *  label for editing, because a single click now selects-and-drags it —
+	 *  text gained a real rectangle, so it should behave like every other
+	 *  object on the board. */
+	const onDblClick = useCallback(
+		(e: Konva.KonvaEventObject<MouseEvent>): void => {
+			if (tool !== "select") return;
+			const id = Number(e.target?.name?.() === "sk-stroke" ? e.target.id() : NaN);
+			if (Number.isNaN(id)) return;
+			const victim = strokes.find(s => s.id === id);
+			if (victim?.tool !== "text") return;
+			// A box the user had scaled down stays the wrap width; the caret
+			// inherits it so retyping reflows inside the same rectangle.
+			setSelectedId(id);
+			setTextEditor({ x: victim.points[0], y: victim.points[1], w: victim.points[2], id });
+			setTextDraft(victim.text ?? "");
+		},
+		[tool, strokes],
+	);
 
 	const finish = (): void => {
 		const stage = stageRef.current;
@@ -838,7 +868,6 @@ export function SketchPad({
 			}
 			if (s.tool === "text") {
 				const label = s.text ?? "";
-				const { w, h } = textLabelBox(s.size, label);
 				return (
 					<Text
 						key={nodeKey}
@@ -848,11 +877,15 @@ export function SketchPad({
 						text={label}
 						fontSize={textFontSize(s.size)}
 						fill={s.color}
-						// Konva text needs its own hit box: `hitStrokeWidth` does
-						// nothing for a filled glyph run, so drag the measured rect
-						// around it — the same rect the select frame uses.
-						width={w}
-						height={h}
+						// The stored box drives the layout: `wrap="word"` keeps the
+						// label inside its width and grows downward into the height,
+						// which is what makes the box resizable and self-expanding.
+						// `lineHeight` matches `textLineHeight` so the box the select
+						// frame draws is the box Konva paints.
+						width={s.points[2]}
+						height={s.points[3]}
+						wrap="word"
+						lineHeight={1.25}
 						perfectDrawEnabled={false}
 					/>
 				);
@@ -938,7 +971,7 @@ export function SketchPad({
 	// Konva renders text itself, but the select frame lives in a separate
 	// listener-less layer and needs the label's measured extent to draw around
 	// it — that measurement comes from the same helper the Text node uses.
-	const box = useMemo(() => (selected ? strokeBox(selected, selected.text ?? "") : null), [selected]);
+	const box = useMemo(() => (selected ? strokeBox(selected) : null), [selected]);
 	const activeShape = SHAPE_TOOLS.includes(tool as ShapeTool) ? (tool as ShapeTool) : null;
 	const activeShapeItem = SHAPE_ITEMS.find(item => item[0] === activeShape);
 	const ActiveShapeIcon = activeShapeItem ? activeShapeItem[1] : Shapes;
@@ -1081,6 +1114,7 @@ export function SketchPad({
 								onPointerMove={onPointerMove}
 								onPointerUp={onPointerUp}
 								onPointerLeave={onPointerLeave}
+								onDblClick={onDblClick}
 								style={{
 									cursor: tool === "eraser" ? "cell" : tool === "select" ? "default" : "crosshair",
 									touchAction: "none",
@@ -1110,11 +1144,12 @@ export function SketchPad({
 								</Layer>
 								{/* Scale handles live on their own listening layer: the
 								 *  dashed frame's layer is listener-less by design, and a
-								 *  node that cannot be hit cannot be dragged. Text labels
-								 *  resize through their caret, so they get no handles. */}
+								 *  node that cannot be hit cannot be dragged. Text boxes
+								 *  carry a real rectangle, so they resize with the same
+								 *  handles as everything else — dragging a corner sets the
+								 *  wrap width and the label reflows inside it. */}
 								<Layer>
 									{box &&
-										selected?.tool !== "text" &&
 										(
 											[
 												["nw", box.x, box.y],
@@ -1151,8 +1186,12 @@ export function SketchPad({
 								style={{
 									left: textEditor.x,
 									top: textEditor.y,
+									// The overlay IS the box being authored: it wraps at this
+									// width and grows downward, and commit copies the result
+									// onto the stroke.
+									width: textEditor.w,
 									color,
-									fontSize: Math.max(14, size * 4),
+									fontSize: textFontSize(size),
 								}}
 								onChange={e => setTextDraft(e.currentTarget.value)}
 								onPointerDown={e => e.stopPropagation()}

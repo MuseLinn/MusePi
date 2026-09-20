@@ -11,8 +11,9 @@ import {
 	starOuterPoints,
 	strokeBox,
 	strokeExtent,
+	textAutoBox,
 	textFontSize,
-	textLabelBox,
+	wrapTextLines,
 } from "../src/lib/sketch-geometry";
 
 /** SketchPad shape-maths contract (Codex-parity pass, 2026-09-19).
@@ -241,30 +242,28 @@ describe("strokeBox", () => {
 		expect(box.w).toBeCloseTo(30 + pad * 2);
 	});
 
-	it("uses the measured label size for text, not the anchor alone", () => {
-		// A text stroke stores only its anchor; without the label the select
-		// frame would collapse to a padded dot.
-		const box = strokeBox({ tool: "text", size: 4, points: [20, 30] }, "Hello");
-		const pad = 4 * 1.8 + 4;
-		const { w, h } = textLabelBox(4, "Hello");
-		expect(box.w).toBeCloseTo(w + pad * 2);
-		expect(box.h).toBeCloseTo(h + pad * 2);
+	it("returns the text box verbatim (it carries its own rectangle)", () => {
+		// Text stores [x, y, w, h] like an image, so the select frame is the
+		// box itself — padding it would float the handles off the edges.
+		const box = strokeBox({ tool: "text", size: 4, points: [20, 30, 180, 60] });
+		expect(box).toEqual({ x: 20, y: 30, w: 180, h: 60 });
 	});
 
 	it("gives text a non-empty frame at an empty label", () => {
-		// Even an empty label keeps the pad, so the frame never disappears.
-		const box = strokeBox({ tool: "text", size: 4, points: [20, 30] }, "");
+		const box = strokeBox({ tool: "text", size: 4, points: [20, 30, 60, 20] });
 		expect(box.w).toBeGreaterThan(0);
 	});
 
-	it("widens the text frame with the label length", () => {
-		const short = strokeBox({ tool: "text", size: 4, points: [0, 0] }, "ab");
-		const long = strokeBox({ tool: "text", size: 4, points: [0, 0] }, "abcdefghij");
-		expect(long.w).toBeGreaterThan(short.w);
+	it("keeps the text frame equal to the stored box however long the label", () => {
+		// The old contract widened the frame from the label length; now the box
+		// IS the wrap width, so the frame must NOT depend on the string.
+		const short = strokeBox({ tool: "text", size: 4, points: [0, 0, 120, 40] });
+		const long = strokeBox({ tool: "text", size: 4, points: [0, 0, 120, 40] });
+		expect(long).toEqual(short);
 	});
 });
 
-describe("textLabelBox / textFontSize", () => {
+describe("textAutoBox / textFontSize", () => {
 	it("keeps a legible minimum glyph size for hairline strokes", () => {
 		// size 1 would be a 4px glyph — unreadable, and the caret overlay
 		// could not be typed into.
@@ -277,24 +276,50 @@ describe("textLabelBox / textFontSize", () => {
 		expect(textFontSize(24)).toBe(96);
 	});
 
-	it("grows the measured box with the glyph size", () => {
-		const thin = textLabelBox(2, "label");
-		const thick = textLabelBox(20, "label");
-		expect(thick.w).toBeGreaterThan(thin.w);
-		expect(thick.h).toBeGreaterThan(thin.h);
+	it("wraps a long label into multiple lines and grows the height", () => {
+		const oneLine = textAutoBox(4, "hello", 200);
+		const manyLines = textAutoBox(4, "hello ".repeat(20), 200);
+		expect(manyLines.h).toBeGreaterThan(oneLine.h);
+	});
+
+	it("snaps the width back to the widest wrapped line", () => {
+		// A short label must not sit in a half-empty 200px rectangle.
+		const box = textAutoBox(4, "hi", 200);
+		expect(box.w).toBeLessThan(200);
+		expect(box.w).toBeGreaterThanOrEqual(60);
+	});
+
+	it("never exceeds the wrap width it was given", () => {
+		const box = textAutoBox(4, "averyveryverylongsinglewordthatcannotwrap", 80);
+		expect(box.w).toBeLessThanOrEqual(80);
+	});
+
+	it("honours an explicit newline as a line break", () => {
+		const flat = textAutoBox(4, "a b", 400);
+		const broken = textAutoBox(4, "a\nb", 400);
+		expect(broken.h).toBeGreaterThan(flat.h);
 	});
 
 	it("gives an empty label a tappable minimum", () => {
-		// At size 4 the glyph floor gives fs=16 → height 16×1.3 = 20.8, while a
-		// zero-length label has no advance at all and floors at 20px of width.
-		const { w, h } = textLabelBox(4, "");
-		expect(w).toBe(20);
-		expect(h).toBe(20.8);
+		const { w, h } = textAutoBox(4, "", 200);
+		expect(w).toBe(60);
+		expect(h).toBe(20); // fs 16 → one 1.25 line box
+	});
+});
+
+describe("wrapTextLines", () => {
+	it("breaks on spaces once the line is full", () => {
+		const lines = wrapTextLines("aaa bbb ccc ddd", 40, 16);
+		expect(lines.length).toBeGreaterThan(1);
+		expect(lines.join(" ")).toContain("aaa");
 	});
 
-	it("derives height from the glyph ladder, not a flat constant", () => {
-		// size 20 → fs 80 → height 104; the 20px floor must not clamp it.
-		expect(textLabelBox(20, "").h).toBe(104);
+	it("keeps a single over-long word on its own line", () => {
+		expect(wrapTextLines("supercalifragilistic", 20, 16)).toEqual(["supercalifragilistic"]);
+	});
+
+	it("preserves blank lines from explicit newlines", () => {
+		expect(wrapTextLines("a\n\nb", 400, 16)).toEqual(["a", "", "b"]);
 	});
 });
 
@@ -320,7 +345,11 @@ describe("hasVisibleExtent", () => {
 	});
 
 	it("accepts real text", () => {
-		expect(hasVisibleExtent({ tool: "text", points: [12, 40] })).toBe(true);
+		expect(hasVisibleExtent({ tool: "text", points: [12, 40, 120, 40] })).toBe(true);
+	});
+
+	it("rejects a text box with no height", () => {
+		expect(hasVisibleExtent({ tool: "text", points: [12, 40, 120, 0] })).toBe(false);
 	});
 });
 
@@ -338,10 +367,9 @@ describe("strokeExtent", () => {
 		expect(e).toEqual({ x: 0, y: 0, w: 30, h: 100 });
 	});
 
-	it("gives text a zero-size box at its anchor", () => {
-		// The label extent is strokeBox's concern; extent stays the pure
-		// coordinate box that scale handles anchor against.
-		expect(strokeExtent({ tool: "text", points: [20, 30] })).toEqual({ x: 20, y: 30, w: 0, h: 0 });
+	it("reads a text box straight out of its stored rectangle", () => {
+		// Text carries [x, y, w, h] like an image, so the extent is the box.
+		expect(strokeExtent({ tool: "text", points: [20, 30, 180, 60] })).toEqual({ x: 20, y: 30, w: 180, h: 60 });
 	});
 });
 
@@ -406,8 +434,10 @@ describe("scalePoints", () => {
 		expect(scalePoints("pen", [10, 10, 0.5, 30, 40, 0.9], 10, 10, 2)).toEqual([10, 10, 0.5, 50, 70, 0.9]);
 	});
 
-	it("scales a text anchor", () => {
-		expect(scalePoints("text", [20, 30], 0, 0, 2)).toEqual([40, 60]);
+	it("scales a text box origin and its sides", () => {
+		// Text scales like an image: the origin walks the affine transform, the
+		// width/height are lengths and take the raw factor.
+		expect(scalePoints("text", [20, 30, 100, 50], 0, 0, 2)).toEqual([40, 60, 200, 100]);
 	});
 
 	it("clamps a runaway factor from above", () => {

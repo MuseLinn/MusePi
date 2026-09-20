@@ -15,7 +15,7 @@ function sampleScene(): SketchScene {
 	const strokes: SketchStroke[] = [
 		{ id: 1, tool: "pen", color: "#1f2328", size: 4, points: [10, 20, 0.5, 30.44, 40.06, 0.3333] },
 		{ id: 2, tool: "rect", color: "#e5484d", size: 2, points: [5.55, 6.44, 100.01, 200.99] },
-		{ id: 3, tool: "text", color: "#3e63dd", size: 6, points: [12.34, 56.78], text: "hello" },
+		{ id: 3, tool: "text", color: "#3e63dd", size: 6, points: [12.34, 56.78, 180, 60], text: "hello" },
 	];
 	return serializeScene(strokes, 800, 600);
 }
@@ -27,8 +27,28 @@ describe("serializeScene", () => {
 		expect(back).toEqual(scene);
 		expect(back?.strokes[0].points).toHaveLength(6);
 		expect(back?.strokes[1].points).toHaveLength(4);
-		expect(back?.strokes[2].points).toHaveLength(2);
+		expect(back?.strokes[2].points).toHaveLength(4);
 		expect(back?.strokes[2].text).toBe("hello");
+	});
+
+	test("migrates a legacy two-number text anchor into a box", () => {
+		// Text used to store [x, y] and measure its label at paint time. A
+		// stored scene from then must restore as a box, not be thrown away.
+		const legacy = {
+			v: 1,
+			w: 800,
+			h: 600,
+			strokes: [{ id: 7, tool: "text", color: "#000", size: 4, points: [20, 30], text: "hi" }],
+		};
+		const back = parseSketchScene(legacy);
+		expect(back).not.toBeNull();
+		expect(back?.strokes).toHaveLength(1);
+		expect(back?.strokes[0].points).toHaveLength(4);
+		expect(back?.strokes[0].points[0]).toBe(20);
+		expect(back?.strokes[0].points[1]).toBe(30);
+		expect(back?.strokes[0].points[2]).toBeGreaterThan(0);
+		expect(back?.strokes[0].points[3]).toBeGreaterThan(0);
+		expect(back?.strokes[0].text).toBe("hi");
 	});
 
 	test("stamps the format version and the board size", () => {
