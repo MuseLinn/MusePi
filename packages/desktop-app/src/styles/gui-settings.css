@@ -239,13 +239,16 @@
 /* Portal wrapper (useFloatingMenu): fixed, out of the clipped component
  * tree, above everything. Enter/exit animate (gui-menu-in / -out).
  *
- * THE single frosted-glass recipe app-wide: every floating menu gets its
- * translucent surface + blur HERE (menu classes keep layout only — their
- * per-rule background/backdrop-filter/box-shadow were the source of the
- * menu-to-menu frost variance). blur(24px) saturate(180%) is the one
- * glass value; `--gui-glass-overlay` (100% via the window-transparency
- * toggle) replaces the translucency with an opaque pane. overflow:hidden
- * clips menu content to the 12px radius. */
+ * THE single popup-surface recipe app-wide: every floating menu gets its
+ * surface HERE (menu classes keep layout only — their per-rule
+ * background/backdrop-filter/box-shadow were the source of the menu-to-menu
+ * frost variance). Liquid glass (2026-09-20 全局规范): a translucent
+ * `--glass-bg` pane sits UNDER the `--bg-overlay` scrim so the
+ * window-transparency toggle (inline `--gui-glass-overlay: 100%`) still
+ * mutes the whole surface to an opaque pane, plus the shared saturated
+ * blur and the specular rim (bright top edge / dim bottom echo) from
+ * tokens.css `--glass-*`. overflow:hidden clips menu content to the
+ * radius. */
 .gui-menu-popup {
 	position: fixed;
 	/* Top of the z-ladder: above every dialog backdrop (3000) and the
@@ -268,17 +271,35 @@
 	pointer-events: none;
 	border-radius: var(--radius-xl);
 	overflow: hidden;
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
+	background:
+		color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent),
+		var(--glass-bg);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow:
-		inset 0 1px 0 0 rgba(255, 255, 255, 0.1),
-		inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
 		0 0 0 1px rgba(0, 0, 0, 0.36),
 		0 1px 1px -0.5px rgba(0, 0, 0, 0.22),
 		0 3px 3px -1.5px rgba(0, 0, 0, 0.2),
 		0 6px 6px -3px rgba(0, 0, 0, 0.16),
 		0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* Diagonal sheen — the family's "water" pass. The popup is position:fixed
+ * (always a stacking context), so z-index:-1 pins the wash ABOVE the glass
+ * pane and BELOW every menu child without a `> *` rescue: menu children
+ * are uncontrolled (plain rows, self-drawn card panels), and a rescue rule
+ * would flatten their position:absolute layouts. Absolute positioning
+ * relative to the popup also keeps the wash pinned while the menu scrolls. */
+.gui-menu-popup::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--glass-sheen);
+	pointer-events: none;
+	z-index: -1;
 }
 
 .gui-menu-popup--entered {
@@ -503,6 +524,17 @@
 
 .gui-model-opt--active {
 	color: var(--color-accent);
+}
+
+/* While ↑↓ owns the highlight (data-kbd-nav on the list), row :hover's
+ * background is suppressed: the roving --kbd wash IS the highlight, and a
+ * cursor parked over the list during keyboard navigation (or scroll-fueled
+ * mousemove under a stationary pointer) must not paint a second one. The
+ * pointer highlight otherwise comes from the :hover rule above — per-row
+ * mousemove never touches React state (ModelSelector open-lag fix). Color
+ * is left to source order: --active keeps its accent over :hover. */
+.gui-model-list[data-kbd-nav="true"] .gui-model-opt:hover {
+	background: transparent;
 }
 
 /* Generation endpoints (image/video generators) are visible but not chat

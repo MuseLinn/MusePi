@@ -64,6 +64,10 @@ export class WechatChannel implements ChannelAdapter {
 
 	#state: ChannelStatus["state"] = "off";
 	#detail: string | undefined;
+	/** Regional API base: confirmed login hands back the IDC `baseurl` for
+	 *  this session — every later request (poll/send/upload) targets it, not
+	 *  the hardcoded login host. */
+	#apiBase = WechatChannel.BASE_URL;
 	#qrCode = "";
 	#qrUrl = "";
 	#botToken = "";
@@ -117,18 +121,28 @@ export class WechatChannel implements ChannelAdapter {
 	}
 
 	async #fetchQr(): Promise<void> {
-		const res = await fetch(WechatChannel.QR_CODE_URL, { signal: AbortSignal.timeout(10_000) });
+		const res = await fetch(`${this.#apiBase}/ilink/bot/get_bot_qrcode?bot_type=3`, {
+			signal: AbortSignal.timeout(10_000),
+		});
 		if (!res.ok) throw new Error(`wechat QR fetch failed: HTTP ${res.status}`);
 		const data = (await res.json()) as { qrcode?: string; qrcode_img_content?: string };
 		if (!data.qrcode || !data.qrcode_img_content) throw new Error("wechat QR response missing fields");
 		this.#qrCode = data.qrcode;
+		// NOTE: qrcode_img_content is the URL the QR must ENCODE (the WeChat
+		// scan target), not an image — the GUI rasterizes it with its built-in
+		// QR encoder (CollabDialog channelQrSrc).
 		this.#qrUrl = data.qrcode_img_content;
 	}
 
 	async #pollQrStatus(): Promise<void> {
 		const res = await fetch(
-			`${WechatChannel.BASE_URL}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(this.#qrCode)}`,
-			{ signal: AbortSignal.timeout(10_000) },
+			`${this.#apiBase}/ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(this.#qrCode)}`,
+			{
+				// Protocol header (OpenClaw/official SDK parity): without it the
+				// status endpoint can refuse the poll.
+				headers: { "iLink-App-ClientVersion": "1" },
+				signal: AbortSignal.timeout(10_000),
+			},
 		);
 		if (!res.ok) throw new Error(`wechat QR status failed: HTTP ${res.status}`);
 		const data = (await res.json()) as {
@@ -136,11 +150,32 @@ export class WechatChannel implements ChannelAdapter {
 			bot_token?: string;
 			ilink_bot_id?: string;
 			ilink_user_id?: string;
+			baseurl?: string;
 		};
-		// Scanned-and-confirmed carries the credentials.
+		// Dead code: re-fetch so the GUI's 2s status poll surfaces a FRESH QR
+		// instead of sitting on "scan the QR" forever.
+		if (data.status === "expired") {
+			this.#detail = "QR expired — fetching a new one";
+			await this.#fetchQr();
+			this.#detail = "scan the QR with WeChat";
+			return;
+		}
+		// Scanned (not yet confirmed): surface the mid-state so the user knows
+		// the scan registered and the phone needs a confirm tap.
+		if (data.status === "scaned" || data.status === "scaned_but_redirect") {
+			this.#detail = "scanned — confirm on the phone";
+		}
+		// Scanned-and-confirmed carries the credentials + the regional API
+		// base for this session (IDC redirect).
 		if (data.bot_token && data.ilink_bot_id) {
 			this.#botToken = data.bot_token;
 			this.#botId = data.ilink_bot_id;
+			if (typeof data.baseurl === "string" && data.baseurl.startsWith("https://")) {
+				this.#apiBase = data.baseurl;
+			}
+			// X-WECHAT-UIN (protocol spec): random uint32 as a decimal string,
+			// base64-encoded — carried on every authorized POST.
+			this.#uin = Buffer.from(String(randomBytes(4).readUInt32BE(0)), "utf-8").toString("base64");
 			if (this.#pollTimer) {
 				clearInterval(this.#pollTimer);
 				this.#pollTimer = null;
@@ -152,6 +187,9 @@ export class WechatChannel implements ChannelAdapter {
 	}
 
 	#startMessageLoop(): void {
+		// Announce the poller (protocol msg/notifystart): the server tracks
+		// per-account online state from it. Failures are non-fatal.
+		void this.#post("/ilink/bot/msg/notifystart", { base_info: { channel_version: "1.0.0" } }).catch(() => {});
 		const tick = async (): Promise<void> => {
 			if (this.#stopped) return;
 			try {
@@ -167,7 +205,7 @@ export class WechatChannel implements ChannelAdapter {
 	}
 
 	async #post(path: string, body: unknown): Promise<unknown> {
-		const res = await fetch(`${WechatChannel.BASE_URL}${path}`, {
+		const res = await fetch(`${this.#apiBase}${path}`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -176,6 +214,10 @@ export class WechatChannel implements ChannelAdapter {
 				"X-WECHAT-UIN": this.#uin,
 			},
 			body: JSON.stringify(body),
+			// getupdates is a ~35s long poll server-side; everything else
+			// returns fast. 45s covers the poll plus transport slack without
+			// letting a hung connection wedge the loop forever.
+			signal: AbortSignal.timeout(45_000),
 		});
 		if (!res.ok) throw new Error(`wechat ${path} failed: HTTP ${res.status}`);
 		return (await res.json()) as unknown;
@@ -186,13 +228,37 @@ export class WechatChannel implements ChannelAdapter {
 			get_updates_buf: this.#updatesBuf,
 			base_info: { channel_version: "1.0.0" },
 		})) as {
+			ret?: number;
+			errcode?: number;
 			buf?: string;
 			messages?: WechatIncomingMsg[];
+			msgs?: WechatIncomingMsg[];
 			data?: { buf?: string; messages?: WechatIncomingMsg[] };
 		};
-		const body = data.data ?? data;
+		// errcode -14 = session expired (protocol spec): the bot_token is dead
+		// — fall back to QR re-login so the GUI shows a fresh code instead of
+		// a "connected" row that silently receives nothing.
+		if (typeof data.ret === "number" && data.ret !== 0 && data.errcode === -14) {
+			logger.warn("wechat session expired — falling back to QR login");
+			this.#botToken = "";
+			this.#updatesBuf = "";
+			this.#apiBase = WechatChannel.BASE_URL;
+			this.#state = "connecting";
+			this.#detail = "session expired — fetching QR code…";
+			if (this.#loopTimer) {
+				clearTimeout(this.#loopTimer);
+				this.#loopTimer = null;
+			}
+			void this.start().catch(() => {});
+			return;
+		}
+		const body = (data.data ?? data) as {
+			buf?: string;
+			messages?: WechatIncomingMsg[];
+			msgs?: WechatIncomingMsg[];
+		};
 		if (typeof body.buf === "string") this.#updatesBuf = body.buf;
-		for (const m of body.messages ?? []) {
+		for (const m of body.messages ?? body.msgs ?? []) {
 			if (!m.from_user_id) continue;
 			if (typeof m.context_token === "string" && m.context_token) {
 				this.#contextTokens.set(m.from_user_id, m.context_token);

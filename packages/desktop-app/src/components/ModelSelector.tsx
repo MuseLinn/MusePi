@@ -3,7 +3,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { t } from "@musepi/guest-client";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { matchesModelQuery } from "../lib/fuzzy-model-match";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
@@ -359,58 +359,90 @@ export function ModelSelector({
 	// agnes_video_gen tools still target them. This must NOT disable
 	// multimodal *understanding* models (e.g. deepseek-v4-flash-vision-exp):
 	// those carry vision/video input flags, not imageGen/videoGen.
-	const filtered = query.trim() ? models.filter(m => matchesModelQuery(query, m.provider, m.id, m.name)) : models;
-	// Favorites are provider/id keys (legacy bare ids still rank/light up so
-	// old pins keep working).
-	const favKeyOf = (m: WireModel): string => `${m.provider}/${m.id}`;
-	const isFav = (m: WireModel): boolean => favs.includes(favKeyOf(m)) || favs.includes(m.id);
-	// Sectioned listing (openchamber 收藏/最近 parity): favorites in pin
-	// order, then recents in use order (favorites excluded — a row renders
-	// once), then the remaining catalog grouped by provider. Section
-	// headers SURVIVE search (openchamber keeps favorites/recent titles over
-	// the filtered set): favRows/recentRows are already filtered subsets.
-	const searching = query.trim().length > 0;
-	// Favorites in PIN order (position in the favs store), not catalog
-	// order — the grip-drag reorder below writes exactly that order.
-	const favRank = new Map(favs.map((key, i) => [key, i] as const));
-	const favRows = filtered
-		.filter(isFav)
-		.sort(
-			(a, b) =>
-				(favRank.get(favKeyOf(a)) ?? favRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
-				(favRank.get(favKeyOf(b)) ?? favRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
-		);
-	const recentRank = new Map(recents.map((key, i) => [key, i] as const));
-	const recentRows = filtered
-		.filter(m => !isFav(m) && (recentRank.has(favKeyOf(m)) || recentRank.has(m.id)))
-		.sort(
-			(a, b) =>
-				(recentRank.get(favKeyOf(a)) ?? recentRank.get(a.id) ?? 99) -
-				(recentRank.get(favKeyOf(b)) ?? recentRank.get(b.id) ?? 99),
-		);
-	const restRows = filtered.filter(m => !isFav(m) && !recentRows.includes(m));
-	// Rest of the catalog grouped by provider (openchamber provider
-	// sections): one collapsible header per provider, first-seen order.
-	const providerSections: Array<{ provider: string; rows: WireModel[] }> = [];
-	const byProvider = new Map<string, WireModel[]>();
-	for (const m of restRows) {
-		let rows = byProvider.get(m.provider);
-		if (!rows) {
-			rows = [];
-			byProvider.set(m.provider, rows);
-			providerSections.push({ provider: m.provider, rows });
-		}
-		rows.push(m);
-	}
-	// Collapsible sections (chevron per header, per-menu session state).
+	// All listing derivation lives in ONE memo: mousemove/keypress re-renders
+	// must not re-run the filter + section sort + provider grouping (and the
+	// old per-row flatRows.indexOf O(n²)). `recents`/`favs` are stable
+	// snapshots from useSyncExternalStore (module-cached), so this only
+	// recomputes on a real data change.
 	const [secClosed, setSecClosed] = useState<Record<string, boolean>>({});
-	const sections: Array<{ key: string; label: string; rows: WireModel[] }> = [];
-	if (favRows.length > 0) sections.push({ key: "fav", label: t("favorite models"), rows: favRows });
-	if (recentRows.length > 0) sections.push({ key: "recent", label: t("recent models"), rows: recentRows });
-	for (const { provider, rows } of providerSections) {
-		sections.push({ key: `provider:${provider}`, label: provider, rows });
-	}
-	const flatRows = sections.flatMap(s => (secClosed[s.key] ? [] : s.rows));
+	const { sections, flatRows, kbdIndexOf, isFav, favKeyOf, favRows, filtered } = useMemo(() => {
+		const filtered = query.trim() ? models.filter(m => matchesModelQuery(query, m.provider, m.id, m.name)) : models;
+		// Favorites are provider/id keys (legacy bare ids still rank/light up so
+		// old pins keep working).
+		const favKeyOf = (m: WireModel): string => `${m.provider}/${m.id}`;
+		const isFav = (m: WireModel): boolean => favs.includes(favKeyOf(m)) || favs.includes(m.id);
+		// Sectioned listing (openchamber 收藏/最近 parity): favorites in pin
+		// order, then recents in use order (favorites excluded — a row renders
+		// once), then the remaining catalog grouped by provider. Section
+		// headers SURVIVE search (openchamber keeps favorites/recent titles over
+		// the filtered set): favRows/recentRows are already filtered subsets.
+		// Favorites in PIN order (position in the favs store), not catalog
+		// order — the grip-drag reorder below writes exactly that order.
+		const favRank = new Map(favs.map((key, i) => [key, i] as const));
+		const favRows = filtered
+			.filter(isFav)
+			.sort(
+				(a, b) =>
+					(favRank.get(favKeyOf(a)) ?? favRank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+					(favRank.get(favKeyOf(b)) ?? favRank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+			);
+		const recentRank = new Map(recents.map((key, i) => [key, i] as const));
+		const favSet = new Set(favRows);
+		const recentRows = filtered
+			.filter(m => !isFav(m) && (recentRank.has(favKeyOf(m)) || recentRank.has(m.id)))
+			.sort(
+				(a, b) =>
+					(recentRank.get(favKeyOf(a)) ?? recentRank.get(a.id) ?? 99) -
+					(recentRank.get(favKeyOf(b)) ?? recentRank.get(b.id) ?? 99),
+			);
+		// Set lookup instead of the old restRows.includes(m) linear scan (O(n²)).
+		const recentSet = new Set(recentRows);
+		const restRows = filtered.filter(m => !favSet.has(m) && !recentSet.has(m));
+		// Rest of the catalog grouped by provider (openchamber provider
+		// sections): one collapsible header per provider, first-seen order.
+		const providerSections: Array<{ provider: string; rows: WireModel[] }> = [];
+		const byProvider = new Map<string, WireModel[]>();
+		for (const m of restRows) {
+			let rows = byProvider.get(m.provider);
+			if (!rows) {
+				rows = [];
+				byProvider.set(m.provider, rows);
+				providerSections.push({ provider: m.provider, rows });
+			}
+			rows.push(m);
+		}
+		// Collapsible sections (chevron per header, per-menu session state).
+		// Label KEYS ride through the memo (t() resolves at render time so a
+		// language switch relabels without a data change); the literal union
+		// keeps the t() key-typing intact.
+		const nextSections: Array<{
+			key: string;
+			labelKey: "favorite models" | "recent models" | null;
+			label: string;
+			rows: WireModel[];
+		}> = [];
+		if (favRows.length > 0) nextSections.push({ key: "fav", labelKey: "favorite models", label: "", rows: favRows });
+		if (recentRows.length > 0)
+			nextSections.push({ key: "recent", labelKey: "recent models", label: "", rows: recentRows });
+		for (const { provider, rows } of providerSections) {
+			nextSections.push({ key: `provider:${provider}`, labelKey: null, label: provider, rows });
+		}
+		const nextFlat = nextSections.flatMap(s => (secClosed[s.key] ? [] : s.rows));
+		const kbdIndexByKey = new Map<string, number>();
+		nextFlat.forEach((m, i) => kbdIndexByKey.set(`${m.provider}/${m.id}`, i));
+		return {
+			sections: nextSections,
+			flatRows: nextFlat,
+			kbdIndexOf: (m: WireModel): number => kbdIndexByKey.get(`${m.provider}/${m.id}`) ?? -1,
+			// Exposed for the row renderers (fav star state) and the drag/items
+			// wiring (favKeyOf keys) plus the empty-state check.
+			isFav,
+			favKeyOf,
+			favRows,
+			filtered,
+		};
+	}, [models, query, favs, recents, secClosed]);
+	const searching = query.trim().length > 0;
 	// Favorite grip-drag (openchamber parity, @dnd-kit — same library every
 	// openchamber drag site uses): drag from a small grip handle; the
 	// PointerSensor 8px activation threshold keeps clicks from starting a
@@ -418,33 +450,41 @@ export function ModelSelector({
 	// a filtered set) and when there is nothing to swap against.
 	const favDragEnabled = !searching && favRows.length > 1;
 	const favSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
-	const onFavDragEnd = (e: DragEndEvent): void => {
+	const onFavDragEnd = useCallback((e: DragEndEvent): void => {
 		const from = String(e.active.id);
 		const over = e.over;
 		if (!over || from === String(over.id)) return;
 		moveFavModel(from, String(over.id));
-	};
+	}, []);
 	const [kbd, setKbd] = useState(-1);
-	// Hover-vs-keyboard guard (openchamber handleMouseActivity parity): ↑↓
-	// OWNS the highlight until the pointer GENUINELY moves. Scroll-fueled
-	// mousemove events at a stationary cursor (same clientX/clientY while
-	// rows slide underneath) must not steal it back — that was the hijack
-	// bug where scrolling the menu re-highlighted whatever row the cursor
-	// happened to park over.
-	const keyboardOwnsRef = useRef(false);
+	// Latest select() without re-creating onMenuKeyDown every render (select
+	// is declared below; the callback body resolves it at call time).
+	const selectRef = useRef<(m: WireModel) => void>(() => {});
+	// Hover-vs-keyboard split (openchamber handleMouseActivity parity, made
+	// cheap): the POINTER highlight is pure CSS `:hover` — per-row mousemove
+	// never sets highlight state. That was the open lag: every row crossing
+	// re-rendered this whole multi-hundred-row list. ↑↓ OWNS the highlight
+	// instead: while it does, the list carries data-kbd-nav (CSS suppresses
+	// row :hover so a cursor parked over the list can't paint a second wash),
+	// and the FIRST real pointer move yields ownership back (kbd → -1, one
+	// render). Scroll-fueled mousemove at a stationary cursor (same
+	// clientX/clientY while rows slide underneath) still can't steal the
+	// highlight — the moved guard below (openchamber order).
+	const [kbdOwner, setKbdOwner] = useState(false);
 	const lastMouseRef = useRef<{ x: number; y: number } | null>(null);
-	const onRowMouseMove = (e: React.MouseEvent, kbdIndex: number): void => {
+	const onRowMouseMove = useCallback((e: React.MouseEvent): void => {
 		const next = { x: e.clientX, y: e.clientY };
 		const prev = lastMouseRef.current;
 		const moved = !prev || prev.x !== next.x || prev.y !== next.y;
-		// Track the position unconditionally — the guards below only decide
-		// whether THIS event may take the highlight (openchamber order).
+		// Track the position unconditionally — the moved guard decides
+		// whether THIS event may take the highlight back (openchamber order).
 		lastMouseRef.current = next;
-		if (keyboardOwnsRef.current && !prev) return;
-		if (keyboardOwnsRef.current && !moved) return;
-		if (keyboardOwnsRef.current && moved) keyboardOwnsRef.current = false;
-		setKbd(kbdIndex);
-	};
+		if (!moved) return;
+		// Both setState calls bail out (same value) while the keyboard does
+		// NOT own the highlight, so cruising the list costs zero renders.
+		setKbd(-1);
+		setKbdOwner(false);
+	}, []);
 	// Keep the keyboard-highlighted row in view (openchamber parity): the
 	// roving highlight scrolls with ↑↓ instead of running off-list.
 	useEffect(() => {
@@ -454,71 +494,79 @@ export function ModelSelector({
 	}, [kbd]);
 	// Pre-highlight the first visible row on open and after every search
 	// keystroke (openchamber selectionStore.set(0) parity — Enter without
-	// ↑↓ picks the top row). Closing clears the highlight AND the hover
-	// guard so the next open starts fresh.
+	// ↑↓ picks the top row). Closing clears the highlight AND the mouse
+	// tracking so the next open starts fresh.
 	useEffect(() => {
 		setKbd(open ? 0 : -1);
 		if (!open) {
-			keyboardOwnsRef.current = false;
 			lastMouseRef.current = null;
 		}
 	}, [open, query]);
-	const onMenuKeyDown = (e: React.KeyboardEvent): void => {
-		if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-			e.preventDefault();
-			if (flatRows.length === 0) return;
-			// Keyboard takes ownership: subsequent scroll-driven mousemoves
-			// must not steal the highlight back (openchamber moveSelection).
-			keyboardOwnsRef.current = true;
-			lastMouseRef.current = null;
-			setKbd(prev => {
-				const delta = e.key === "ArrowDown" ? 1 : -1;
-				return (prev + delta + flatRows.length) % flatRows.length;
-			});
-		} else if (e.key === "Enter") {
-			const row = flatRows[kbd];
-			if (row) {
+	const onMenuKeyDown = useCallback(
+		(e: React.KeyboardEvent): void => {
+			if (e.key === "ArrowDown" || e.key === "ArrowUp") {
 				e.preventDefault();
-				select(row);
+				if (flatRows.length === 0) return;
+				// Keyboard takes ownership: subsequent scroll-driven mousemoves
+				// must not steal the highlight back (openchamber moveSelection).
+				setKbdOwner(true);
+				lastMouseRef.current = null;
+				setKbd(prev => {
+					const delta = e.key === "ArrowDown" ? 1 : -1;
+					return (prev + delta + flatRows.length) % flatRows.length;
+				});
+			} else if (e.key === "Enter") {
+				const row = flatRows[kbd];
+				if (row) {
+					e.preventDefault();
+					selectRef.current(row);
+				}
 			}
-		}
-	};
+		},
+		[flatRows, kbd],
+	);
 
-	const select = (m: WireModel): void => {
-		// Generation endpoints can't be the session model — the row is disabled,
-		// but guard here too (Enter/Space keys, future callers).
-		if (isGenerationModel(m)) {
+	const select = useCallback(
+		(m: WireModel): void => {
+			// Generation endpoints can't be the session model — the row is disabled,
+			// but guard here too (Enter/Space keys, future callers).
+			if (isGenerationModel(m)) {
+				tapFeedback(1);
+				return;
+			}
+			// The clicked row IS the model — never re-resolve by bare id: two
+			// providers serve the same id (opencode-go vs b-ai
+			// deepseek-v4-flash-vision-exp) and a bare-id find would pick the
+			// first favorite-ranked one, silently switching providers.
+			const selected = m;
 			tapFeedback(1);
-			return;
-		}
-		// The clicked row IS the model — never re-resolve by bare id: two
-		// providers serve the same id (opencode-go vs b-ai
-		// deepseek-v4-flash-vision-exp) and a bare-id find would pick the
-		// first favorite-ranked one, silently switching providers.
-		const selected = m;
-		tapFeedback(1);
-		// Lock the seeding chain: a real pick always wins from now on.
-		userPicked.current = true;
-		pushRecentModel(selected.id, selected.provider);
-		// Selection state is the provider/id composite: two providers serving
-		// the same bare id (opencode-go vs opencode-zen both offer
-		// deepseek-v4-flash) must highlight only the picked row.
-		setModelId(`${selected.provider}/${selected.id}`);
-		setOpen(false);
-		if (sessionId) {
-			// Notify AFTER the daemon switched the model — consumers re-fetch
-			// per-model state (thinkingInfo ceiling/ladder) and would race the
-			// in-flight setModel and read the OLD model's data. The provider
-			// rides along so the daemon resolves the exact model, not the first
-			// provider that happens to serve the same id.
-			void rpc
-				.request("session.setModel", { sessionId, model: { id: selected.id, provider: selected.provider } })
-				.then(() => onSelect?.(selected.id, selected.provider))
-				.catch(() => {});
-		} else {
-			onSelect?.(selected.id, selected.provider);
-		}
-	};
+			// Lock the seeding chain: a real pick always wins from now on.
+			userPicked.current = true;
+			pushRecentModel(selected.id, selected.provider);
+			// Selection state is the provider/id composite: two providers serving
+			// the same bare id (opencode-go vs opencode-zen both offer
+			// deepseek-v4-flash) must highlight only the picked row.
+			setModelId(`${selected.provider}/${selected.id}`);
+			setOpen(false);
+			if (sessionId) {
+				// Notify AFTER the daemon switched the model — consumers re-fetch
+				// per-model state (thinkingInfo ceiling/ladder) and would race the
+				// in-flight setModel and read the OLD model's data. The provider
+				// rides along so the daemon resolves the exact model, not the first
+				// provider that happens to serve the same id.
+				void rpc
+					.request("session.setModel", { sessionId, model: { id: selected.id, provider: selected.provider } })
+					.then(() => onSelect?.(selected.id, selected.provider))
+					.catch(() => {});
+			} else {
+				onSelect?.(selected.id, selected.provider);
+			}
+		},
+		[sessionId, onSelect],
+	);
+	// Published for onMenuKeyDown (declared above): Enter resolves the
+	// highlighted row through the latest select.
+	selectRef.current = select;
 
 	return (
 		<div className={capsule ? "gui-model-capsule-seg" : "gui-model"} ref={capsule ? undefined : anchorRef}>
@@ -561,7 +609,7 @@ export function ModelSelector({
 							autoFocus
 						/>
 					</div>
-					<div className="gui-model-list" ref={listRef}>
+					<div className="gui-model-list" ref={listRef} data-kbd-nav={kbdOwner || undefined}>
 						{/* "not selected" clearing row (openchamber includeNotSelected
 						 * parity): lives OUTSIDE the ↑↓/Enter flat list, exactly like
 						 * the reference — it's an action, not a model row. */}
@@ -599,7 +647,7 @@ export function ModelSelector({
 												name="arrow-down-s"
 												className={`h-3 w-3 transition-transform${closed ? " -rotate-90" : ""}`}
 											/>
-											<span>{sec.label}</span>
+											<span>{sec.labelKey ? t(sec.labelKey) : sec.label}</span>
 											<span className="gui-model-sec-count">{sec.rows.length}</span>
 										</button>
 									)}
@@ -628,7 +676,7 @@ export function ModelSelector({
 															modelId={modelId}
 															defaultRoleModel={defaultRoleModel}
 															allowSetDefault={allowSetDefault}
-															kbdIndex={flatRows.indexOf(m)}
+															kbdIndex={kbdIndexOf(m)}
 															kbd={kbd}
 															onRowMouseMove={onRowMouseMove}
 															onSelectRow={select}
@@ -647,7 +695,7 @@ export function ModelSelector({
 													modelId={modelId}
 													defaultRoleModel={defaultRoleModel}
 													allowSetDefault={allowSetDefault}
-													kbdIndex={flatRows.indexOf(m)}
+													kbdIndex={kbdIndexOf(m)}
 													kbd={kbd}
 													onRowMouseMove={onRowMouseMove}
 													onSelectRow={select}
@@ -677,7 +725,7 @@ interface ModelRowProps {
 	allowSetDefault?: boolean;
 	kbdIndex: number;
 	kbd: number;
-	onRowMouseMove(e: React.MouseEvent, kbdIndex: number): void;
+	onRowMouseMove(e: React.MouseEvent): void;
 	onSelectRow(m: WireModel): void;
 	onToggleFav(id: string, provider: string): void;
 	onSetDefault(id: string, provider: string): void;
@@ -704,7 +752,11 @@ function SortableModelRow(props: ModelRowProps): ReactNode {
 	);
 }
 
-function ModelRow({
+// memo'd so a keyboard ↑↓ only re-renders the two rows whose --kbd state
+// changed (the highlight owner moved), not the whole multi-hundred-row
+// list — with the CSS :hover handoff above this is what keeps the menu
+// click-snappy on big catalogs.
+const ModelRow = memo(function ModelRow({
 	m,
 	fav,
 	sortable,
@@ -759,7 +811,7 @@ function ModelRow({
 			style={rowStyle}
 			className={`gui-model-opt gui-model-opt--stack${`${m.provider}/${m.id}` === modelId ? " gui-model-opt--active" : ""}${genModel ? " gui-model-opt--gen" : ""}${kbdIndex >= 0 && kbdIndex === kbd ? " gui-model-opt--kbd" : ""}${dragging ? " gui-model-opt--dragging" : ""}`}
 			onClick={() => onSelectRow(m)}
-			onMouseMove={e => onRowMouseMove(e, kbdIndex)}
+			onMouseMove={onRowMouseMove}
 			onKeyDown={e => {
 				if (e.key === "Enter" || e.key === " ") {
 					e.preventDefault();
@@ -826,4 +878,4 @@ function ModelRow({
 			</span>
 		</div>
 	);
-}
+});

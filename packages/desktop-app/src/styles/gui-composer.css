@@ -1423,13 +1423,19 @@
 	width: min(600px, 90vw);
 	height: min(420px, 80vh);
 	border-radius: var(--radius-2xl);
-	border: 1px solid var(--glass-border, var(--border));
-	/* Liquid glass: translucent surface over the dimmed backdrop, saturated
-	 * backdrop blur, specular rim + sheen (tokens.css --glass-*). */
+	/* Liquid glass: specular rim via INSET shadows (family recipe — a real
+	 * border draws a uniform ring, the rim is asymmetric), the shared
+	 * saturated blur (`--gui-glass-blur` follows the transparency slider,
+	 * same 24px at default), translucent surface over the dimmed backdrop,
+	 * sheen + `> *` rescue below (tokens.css --glass-*). */
+	border: 0;
 	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
-	backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
-	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
-	box-shadow: var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
 	overflow: hidden;
 }
 
@@ -1466,6 +1472,8 @@
 	padding: 22px 24px;
 	border-radius: var(--radius-xl);
 	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
 		0 0 0 1px rgba(0, 0, 0, 0.25),
 		0 4px 12px rgba(0, 0, 0, 0.25),
 		0 20px 60px rgba(0, 0, 0, 0.5);
@@ -1813,14 +1821,19 @@
 	height: min(640px, 82vh);
 	border-radius: var(--radius-xl);
 	overflow: hidden;
-	border: 1px solid var(--glass-border, var(--border));
+	border: 0;
 	/* Same recipe as the reference `.gui-dialog`: the surface stays
-	 * translucent enough to refract the dimmed backdrop, and the blur is
-	 * saturated so the glass reads as water rather than as fog. */
+	 * translucent enough to refract the dimmed backdrop, the blur is
+	 * saturated (family token — follows the transparency slider) so the
+	 * glass reads as water rather than as fog, and the rim is the family's
+	 * asymmetric specular pair (inset, never a border ring). */
 	background: color-mix(in oklab, var(--color-surface-raised) 78%, transparent);
-	backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
-	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(170%);
-	box-shadow: var(--glass-shadow, 0 20px 60px rgb(0 0 0 / 50%));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		var(--glass-shadow, 0 20px 60px rgb(0 0 0 / 50%));
 	/* The close/complete animation reads as the board falling back into
 	 * the composer (origin at the bottom center). */
 	transform-origin: 50% 100%;

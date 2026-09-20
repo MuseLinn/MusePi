@@ -46,11 +46,28 @@ function drawQr(canvas: HTMLCanvasElement, text: string): void {
  * current session (daemon collab.* RPC, LAN relay), plus the bot-channel
  * section (live daemon state — channels.list/start/stop).
  */
-/** The wechat iLink API returns `qrcode_img_content` as raw base64 PNG (not a
- *  URL) — wrap it in a data URI so `<img>` can render it. data:/http(s) pass
- *  through untouched for adapters that do expose a real URL. */
+/** iLink's `qrcode_img_content` is NOT an image — live API returns the URL
+ *  the QR must ENCODE (the liteapp.weixin.qq.com scan target; rendering it
+ *  as <img> 404s and was the "二维码不显示" bug). So an https URL is
+ *  rasterized HERE with the built-in QR encoder (crisp SVG data URI). A real
+ *  image URL (ending in an image extension) still renders as <img>, and a
+ *  raw base64 PNG (older adapter shape) gets the data:image wrapper. */
 function channelQrSrc(raw: string): string {
-	if (raw.startsWith("data:") || /^https?:\/\//i.test(raw)) return raw;
+	if (raw.startsWith("data:")) return raw;
+	if (/^https?:\/\//i.test(raw)) {
+		if (/\.(png|jpe?g|gif|webp)([?#]|$)/i.test(raw)) return raw;
+		const qr = QrCode.encodeText(raw, "M");
+		const cells: string[] = [];
+		for (let y = 0; y < qr.size; y++) {
+			for (let x = 0; x < qr.size; x++) {
+				if (qr.module(x, y)) cells.push(`M${x} ${y}h1v1h-1z`);
+			}
+		}
+		const svg =
+			`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${qr.size} ${qr.size}" shape-rendering="crispEdges">` +
+			`<rect width="100%" height="100%" fill="#fff"/><path d="${cells.join("")}" fill="#000"/></svg>`;
+		return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+	}
 	return `data:image/png;base64,${raw}`;
 }
 /** 各 bot channel 的可识别 logo（discord 用内置 icon，其余内联简化 SVG）。 */
