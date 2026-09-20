@@ -2249,24 +2249,12 @@
 	opacity: 1;
 }
 
-/* Token pills — slash command / shell bang / magic keyword. Colour and a
- * tinted capsule ONLY: anything that changes glyph advance (font-family —
- * the mono keyword was visibly wider than the textarea's proportional
- * glyphs — font-weight, letter-spacing, horizontal padding without the
- * twin negative margin) desyncs the overlay from the transparent textarea
- * and the caret drifts off the painted characters. The padding is repaid
- * by an equal negative margin, so the pill paints outside its box without
- * occupying it. `@`/`#` are deliberately absent — nothing in the send
- * path expands them, a pill would promise behaviour that doesn't exist. */
-.gui-ta-hl-slash,
-.gui-ta-hl-bang,
-.gui-ta-hl-magic {
-	color: var(--color-accent);
-	background-color: color-mix(in oklab, var(--color-accent) 13%, transparent);
-	border-radius: 999px;
-	padding: 1px 4px;
-	margin: -1px -4px;
-}
+/* Token pills — slash command / shell bang / magic keyword. The MATERIAL
+ * lives in the shared liquid-glass family below (fill + rim + sheen); this
+ * spot only carried the pre-glass tint and has moved next to the family
+ * block so the accent state wins the cascade. `@`/`#` are deliberately
+ * absent — nothing in the send path expands them, a pill would promise
+ * behaviour that doesn't exist. */
 
 /* Transparent-ink pairing: the textarea keeps only its caret; the overlay
  * supplies the visible glyphs. Placeholder gets an explicit colour (it
@@ -2300,7 +2288,9 @@
  * Members: approval + design-style selects, the round icon buttons
  * (attach/voice/retry), the focus/enhance pills, the welcome workspace &
  * preset chips, the session mode toggles, the model/thinking capsule, the
- * welcome suggestion chips and the welcome send CTA.
+ * welcome suggestion chips, the welcome send CTA, and the in-input token
+ * pills (`gui-ta-hl-*` — hover/active stay OFF for them: the highlight
+ * overlay is pointer-events none, those states can never fire).
  * Layout (padding, height, font) stays with each member's own class —
  * only the MATERIAL lives here.
  *
@@ -2315,7 +2305,10 @@
 .gui-mode-toggle-arm,
 .gui-model-capsule,
 .gui-suggest-chip,
-.gui-send-btn {
+.gui-send-btn,
+.gui-ta-hl-slash,
+.gui-ta-hl-bang,
+.gui-ta-hl-magic {
 	position: relative;
 	border: 0;
 	background: var(--glass-bg);
@@ -2355,7 +2348,10 @@
 .gui-mode-toggle-arm::before,
 .gui-model-capsule::before,
 .gui-suggest-chip::before,
-.gui-send-btn::before {
+.gui-send-btn::before,
+.gui-ta-hl-slash::before,
+.gui-ta-hl-bang::before,
+.gui-ta-hl-magic::before {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -2373,7 +2369,10 @@
 .gui-mode-toggle-arm > *,
 .gui-model-capsule > *,
 .gui-suggest-chip > *,
-.gui-send-btn > * {
+.gui-send-btn > *,
+.gui-ta-hl-slash > *,
+.gui-ta-hl-bang > *,
+.gui-ta-hl-magic > * {
 	position: relative;
 	z-index: 1;
 }
@@ -2457,6 +2456,26 @@
 .gui-send-btn:disabled {
 	opacity: 0.4;
 	cursor: default;
+}
+
+/* In-input token pills — glass family members. The armed-state tint rides
+ * ON the shared material: accent ink over an accent-tinted glass fill,
+ * with the family's rim + sheen coming from the group selectors above.
+ * Metric-neutrality is the law here: anything that changes glyph advance
+ * (font family/weight, letter-spacing, horizontal padding without the
+ * twin negative margin) desyncs the mirror from the transparent textarea
+ * and the caret drifts off the painted characters. `padding: 1px 4px` is
+ * repaid by `margin: -1px -4px`, so the capsule paints outside its box
+ * without occupying it. No :hover/:active — the highlight overlay is
+ * pointer-events none, those states can never fire. */
+.gui-ta-hl-slash,
+.gui-ta-hl-bang,
+.gui-ta-hl-magic {
+	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
+	border-radius: 999px;
+	padding: 1px 4px;
+	margin: -1px -4px;
 }
 
 .gui-style-select-caret {

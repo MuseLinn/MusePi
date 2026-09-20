@@ -13,10 +13,12 @@ import type { ReactNode } from "react";
  * same box (absolute inset-0 inside the shared stack), same font metrics
  * (per-variant class), `white-space: pre-wrap` + the same wrapping, and a
  * scroll mirror — the textarea's onScroll copies scrollTop onto the
- * overlay (its previousElementSibling inside the stack). The pill styling
- * is metric-neutral by construction: see `.gui-ta-hl-*` in
- * gui-composer.css — colour + background only, horizontal padding repaid
- * by an equal negative margin. ANY glyph-advance change skews the caret.
+ * overlay (its previousElementSibling inside the stack). The pills are
+ * members of the shared liquid-glass material family (gui-composer.css):
+ * metric-neutral by construction — colour/fill/rim/sheen only, horizontal
+ * padding repaid by an equal negative margin, and the token text wrapped
+ * in an inner <span> so the `> *` rescue lifts it above the family's
+ * sheen layer. ANY glyph-advance change skews the caret.
  *
  * Deliberately NOT highlighted: `@` and `#` tokens — nothing in the send
  * path expands them (no mention/memory syntax in this product), so a pill
@@ -103,7 +105,10 @@ export function ComposerHighlight({ text, className }: { text: string; className
 		if (s.start > cursor) parts.push(text.slice(cursor, s.start));
 		parts.push(
 			<span key={i} className={HL_CLASS[s.kind]}>
-				{text.slice(s.start, s.end)}
+				{/* Inner span: the glass family paints a sheen ::before at
+				 * z-index 0 over raw inline text; the `> *` rescue rule lifts
+				 * this wrapper above it. Pure stacking — zero metrics. */}
+				<span>{text.slice(s.start, s.end)}</span>
 			</span>,
 		);
 		cursor = s.end;
