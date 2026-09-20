@@ -265,24 +265,40 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					<div className="gui-settings-row-label">{t("agent avatar style")}</div>
 					<div className="gui-settings-row-desc">{t("agent avatar style description")}</div>
 				</div>
-				<div className="flex items-center gap-1.5">
-					{AVATAR_PRESETS.map(p => (
+			</div>
+			{/* Preset picker as a labelled card grid (2026-09-20). It used to be
+			 * a row of five 38px glyph buttons with only a `title` tooltip —
+			 * the avatar identities were indistinguishable until you hovered,
+			 * and the selected one was a hairline ring (user: 「这个头像处只能
+			 * 进行切换」). Each card now carries a live preview at a size the
+			 * preset can actually be judged at, its name, and the selected
+			 * state. The pet card previews through BuiltinPetSprite directly:
+			 * an IMPERATIVE render() at 20px would be unreadable at card size
+			 * and would not react to the decor pref. */}
+			<div className="gui-avatar-grid" role="radiogroup" aria-label={t("agent avatar style")}>
+				{AVATAR_PRESETS.map(p => {
+					const selected = avatarId === p.id;
+					return (
 						<button
 							key={p.id}
 							type="button"
-							className={`gui-avatar-opt${avatarId === p.id ? " gui-avatar-opt--active" : ""}`}
-							title={t(p.labelKey as TranslationKey)}
-							aria-pressed={avatarId === p.id}
+							role="radio"
+							aria-checked={selected}
+							className={`gui-avatar-card${selected ? " gui-avatar-card--active" : ""}`}
 							onClick={() => {
 								setAvatarId(p.id);
 								localStorage.setItem("musepi-gui-avatar", p.id);
 								window.dispatchEvent(new CustomEvent("omp-avatar-changed"));
 							}}
 						>
-							{p.render("working", 20)}
+							<span className="gui-avatar-card__stage">{p.render("working", 32)}</span>
+							<span className="gui-avatar-card__name">
+								{t(p.labelKey as TranslationKey)}
+								{selected && <Icon name="check" className="gui-avatar-card__check" />}
+							</span>
 						</button>
-					))}
-				</div>
+					);
+				})}
 			</div>
 			{avatarId === "punk" && (
 				<div className="gui-settings-row">

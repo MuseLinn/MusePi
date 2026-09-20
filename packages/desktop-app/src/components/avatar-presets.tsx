@@ -1,5 +1,5 @@
 import { punkAvatarUri } from "@musepi/guest-client";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { PetdexMood } from "../lib/pet";
 import { type OrbState, ThinkingOrb } from "../vendor/thinking-orbs";
 import { BuiltinPetSprite, type GazeVec } from "./PetSprite";
@@ -173,7 +173,13 @@ const ORB_TO_PET_MOOD: Record<OrbState, PetdexMood> = {
  *  the room. 120px was too tight — the avatar's own box is up to 64px, so
  *  the full-deflection band covered barely one box-width of cursor travel
  *  and the eyes looked pinned almost immediately; 150px keeps the follow
- *  reading as tracking across the panel without going sluggish. */
+ *  reading as tracking across the panel without going sluggish.
+ *
+ *  The box size comes from CSS (`.gui-avatar-pet`, font-size driven) —
+ *  NOT from an inline width. An inline size here outranks the transcript's
+ *  40px gutter column, so the 64px chat avatar would overflow the very
+ *  column the layout reserved for it; the avatar slot is exactly the case
+ *  where the stylesheet, not the call site, knows the right number. */
 function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNode {
 	const boxRef = useRef<HTMLSpanElement | null>(null);
 	const gazeRef = useRef<GazeVec | null>(null);
@@ -197,7 +203,12 @@ function PetAvatar({ state, size }: { state: OrbState; size: number }): ReactNod
 		return () => window.removeEventListener("pointermove", onMove);
 	}, []);
 	return (
-		<span ref={boxRef} className="gui-avatar-pet gui-pet" style={{ width: size, height: size }} role="img">
+		<span
+			ref={boxRef}
+			className="gui-avatar-pet"
+			style={{ "--gui-pet-size": `${size}px` } as CSSProperties}
+			role="img"
+		>
 			<BuiltinPetSprite mood={ORB_TO_PET_MOOD[state]} gazeRef={gazeRef} />
 		</span>
 	);

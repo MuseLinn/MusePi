@@ -26,6 +26,7 @@ import {
 	petMode,
 	petScale,
 } from "../lib/pet";
+import { type PetDecor, petDecor } from "../lib/pet-decor";
 import {
 	applyYaw,
 	FACE_BOX,
@@ -48,13 +49,24 @@ import { gazeDrift, INTERACTION_MOTION, MOOD_MOTION, motionTransform } from "../
 /** Live pet prefs: re-resolves when settings change (the settings page
  *  dispatches "omp-pet-changed" after saving; storage events cover other
  *  tabs/pet windows). */
-export function usePet(): { enabled: boolean; mode: PetDisplayMode; pet: ReturnType<typeof activePet> } {
-	const [state, setState] = useState(() => ({ enabled: petEnabled(), mode: petMode(), pet: activePet() }));
+export function usePet(): {
+	enabled: boolean;
+	mode: PetDisplayMode;
+	pet: ReturnType<typeof activePet>;
+	decor: PetDecor;
+} {
+	const [state, setState] = useState(() => ({
+		enabled: petEnabled(),
+		mode: petMode(),
+		pet: activePet(),
+		decor: petDecor(),
+	}));
 	useEffect(() => {
 		// Old imported packages lack the contentH scan — backfill once so
 		// their render size normalizes like builtins.
 		migratePetdexContent();
-		const refresh = (): void => setState({ enabled: petEnabled(), mode: petMode(), pet: activePet() });
+		const refresh = (): void =>
+			setState({ enabled: petEnabled(), mode: petMode(), pet: activePet(), decor: petDecor() });
 		window.addEventListener("omp-pet-changed", refresh);
 		window.addEventListener("storage", refresh);
 		return () => {
@@ -63,6 +75,23 @@ export function usePet(): { enabled: boolean; mode: PetDisplayMode; pet: ReturnT
 		};
 	}, []);
 	return state;
+}
+
+/** Decoration sub-state for renderers that are NOT the settings page (chat
+ *  avatar, desktop pet window): resolves once and follows the same events,
+ *  so a settings toggle lands everywhere without threading props. */
+export function usePetDecor(): PetDecor {
+	const [decor, setDecor] = useState<PetDecor>(() => petDecor());
+	useEffect(() => {
+		const refresh = (): void => setDecor(petDecor());
+		window.addEventListener("omp-pet-changed", refresh);
+		window.addEventListener("storage", refresh);
+		return () => {
+			window.removeEventListener("omp-pet-changed", refresh);
+			window.removeEventListener("storage", refresh);
+		};
+	}, []);
+	return decor;
 }
 
 /* ── Refs the engine writes to. Every value the frame clock touches lives
@@ -230,7 +259,7 @@ function useMascotEngine(mood: PetdexMood, gazeRef?: GazeRef, interaction?: PetI
 			const shell = shellRef.current;
 			if (shell) {
 				const motion = motionTransform(prepped.motion, elapsed, 1, FACE_BOX);
-				shell.setAttribute("transform", `translate(${SIDE} ${HEADROOM}) ${motion}`.trim());
+				shell.setAttribute("transform", `translate(${SIDE} ${TOP}) ${motion}`.trim());
 			}
 			raf = requestAnimationFrame(tick);
 		};
@@ -265,23 +294,33 @@ function mixSpec(a: number[], b: number[], t: number): number[] {
  * with red appearing exactly once, on the error face. A limited palette is
  * what makes a mascot read as designed rather than assembled. */
 
-/** The orb plus the breathing room the antenna, orbit ring and ground shadow
- *  need. The engine authors the face in a FACE_BOX square and the silhouette
- *  *is* that square, so the face paints at scale 1 straight onto the ball with
- *  no anchor scale to keep in sync — the rig only needs headroom above and a
- *  floor below.
+/** The ball plus the breathing room the orbit ring needs. The engine authors
+ *  the face in a FACE_BOX square and the silhouette *is* that square, so the
+ *  face paints at scale 1 straight onto the ball with no anchor scale to keep
+ *  in sync — the rig only needs to frame the ring's overhang.
  *
- *  Everything inside the rig is authored around the sphere centre (FACE_BOX/2,
- *  matching the engine's own SPHERE_C); the rig itself is shifted down by
- *  PAD_TOP once, in the frame loop, so the padding never leaks into the art. */
-const HEADROOM = 40;
-const SIDE = 26;
-const FLOOR = 30;
+ *  The rig used to reserve HEADROOM for the crown's beacon mast and a FLOOR
+ *  for the hover-thrust / ground-shadow family. Both are gone (2026-09-20,
+ *  pet-decor.ts): with them the padding was ~1.28× the ball and the ball
+ *  rendered at only ~77% of the box — which is exactly why an inline 30px
+ *  box produced a ~23px ball that still read as oversized once the wrapper
+ *  was sized by CSS. The box now hugs the art: SIDE still frames the ring
+ *  (rx 104 of a 228.5 ball, tilted -18°, so a little air is needed left and
+ *  right), TOP/BOTTOM clear the ring's vertical travel plus its sink while
+ *  the body motions.
+ *
+ *  Everything inside the rig is authored around the sphere centre
+ *  (FACE_BOX/2, matching the engine's own SPHERE_C); the rig itself is
+ *  shifted by (SIDE, TOP) once, in the frame loop, so the padding never
+ *  leaks into the art. */
+const TOP = 24;
+const SIDE = 20;
+const BOTTOM = 22;
 const VIEW_W = FACE_BOX + SIDE * 2;
-const VIEW_H = FACE_BOX + HEADROOM + FLOOR;
+const VIEW_H = FACE_BOX + TOP + BOTTOM;
 
 /** Sphere centre in orb-local coordinates — the engine's own SPHERE_C. The
- *  rig shifts this down by HEADROOM and right by SIDE into the padded view. */
+ *  rig shifts this down by TOP and right by SIDE into the padded view. */
 const ORB_C = FACE_BOX / 2;
 const ORB_R = FACE_BOX / 2;
 
@@ -289,10 +328,12 @@ function Mascot({
 	mood,
 	gazeRef,
 	interaction,
+	gloss,
 }: {
 	mood: PetdexMood;
 	gazeRef?: GazeRef;
 	interaction?: PetInteraction | null;
+	gloss: boolean;
 }): ReactNode {
 	const refs = useMascotEngine(mood, gazeRef, interaction);
 	// Both classes ride the svg: `--<mood>` carries the MATERIAL state (the
@@ -302,20 +343,24 @@ function Mascot({
 	// so the reaction is additive rather than a replacement.
 	return (
 		<svg
-			className={`gui-pet-svg gui-pet-svg--${mood}${interaction ? ` gui-pet-svg--${interaction}` : ""}`}
+			className={`gui-pet-svg gui-pet-svg--${mood}${gloss ? "" : " gui-pet-svg--flat"}${interaction ? ` gui-pet-svg--${interaction}` : ""}`}
 			viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
 			xmlns="http://www.w3.org/2000/svg"
 			aria-hidden
 		>
-			<Silhouette {...refs} />
+			<Silhouette {...refs} gloss={gloss} />
 		</svg>
 	);
 }
 
 /** The silhouette, the materials and the mounting points the engine drives.
  *  Order matters: the orbit ring is drawn in two halves so it reads as one
- *  loop passing around the body rather than a band stuck on its front. */
-function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
+ *  loop passing around the body rather than a band stuck on its front.
+ *
+ *  Floor layers (thrust / bounce / ground) and the crown beacon used to live
+ *  here unconditionally. They are gone — see pet-decor.ts. `gloss` is the
+ *  one surviving optional layer (crown gloss + specular sweep). */
+function Silhouette({ eyeRefs, mouthRef, shellRef, gloss }: MascotRefs & { gloss: boolean }): ReactNode {
 	return (
 		<g aria-hidden className="gui-pet-svg__silhouette">
 			<defs>
@@ -341,24 +386,6 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 					<stop offset="0.55" stopColor="var(--gui-pet-gold-b, #d9a441)" />
 					<stop offset="1" stopColor="var(--gui-pet-gold-c, #765200)" />
 				</linearGradient>
-				{/* Bounce: warm gold thrown back up from the surface the orb hovers
-				 * over — the cue that sells "floating". */}
-				<radialGradient id="gui-pet-grad-bounce" cx="0.5" cy="0.5" r="0.5">
-					<stop offset="0" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.5" />
-					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0" />
-				</radialGradient>
-				{/* Thrust: the hover glow under the shell. */}
-				<radialGradient id="gui-pet-grad-thrust" cx="0.5" cy="0.5" r="0.5">
-					<stop offset="0" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.44" />
-					<stop offset="0.6" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0.14" />
-					<stop offset="1" stopColor="var(--gui-pet-gold-b, #d9a83f)" stopOpacity="0" />
-				</radialGradient>
-				{/* Ground shadow: neutral falloff, cooler than the gold. */}
-				<radialGradient id="gui-pet-grad-ground" cx="0.5" cy="0.5" r="0.5">
-					<stop offset="0" stopColor="#0b1220" stopOpacity="0.4" />
-					<stop offset="0.62" stopColor="#0b1220" stopOpacity="0.17" />
-					<stop offset="1" stopColor="#0b1220" stopOpacity="0" />
-				</radialGradient>
 				{/* Eye light: white with a hot core. A flat fill reads as paint;
 				 * a gradient reads as something emitting. The face is white in
 				 * every theme (pet-palette.ts `--gui-pet-face`): the ring is
@@ -376,21 +403,10 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 					<stop offset="1" stopColor="color-mix(in oklab, var(--color-danger) 60%, #000)" />
 				</radialGradient>
 			</defs>
-			{/* Ground shadow + hover thrust stay on the ground while the shell
-			 * drifts above them — deliberately outside the motion group, and in
-			 * view coordinates because they do not move with the orb. */}
-			<ellipse className="gui-pet-svg__ground" cx={SIDE + ORB_C} cy={HEADROOM + ORB_C + ORB_R + 20} rx="58" ry="8" />
-			<ellipse
-				className="gui-pet-svg__thrust"
-				cx={SIDE + ORB_C}
-				cy={HEADROOM + ORB_C + ORB_R + 14}
-				rx="50"
-				ry="13"
-			/>
 			<g className="gui-pet-svg__body">
 				{/* The rig. Orb-local coordinates; shifted into the padded view
 				 * and then driven by the frame loop for mood motion. */}
-				<g ref={shellRef} transform={`translate(${SIDE} ${HEADROOM})`}>
+				<g ref={shellRef} transform={`translate(${SIDE} ${TOP})`}>
 					{/* Orbit ring, back half — behind the shell, so the front arc
 					 * reads as the same loop coming round. */}
 					<ellipse
@@ -403,39 +419,46 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 					/>
 					{/* Shell — the orb itself, which is also the face's sphere. */}
 					<circle className="gui-pet-svg__shell" cx={ORB_C} cy={ORB_C} r={ORB_R} />
-					{/* Crown gloss + secondary catch-light: cheap sphericity. */}
-					<ellipse
-						className="gui-pet-svg__gloss"
-						cx={ORB_C - 34}
-						cy={ORB_C - 57}
-						rx="31"
-						ry="14"
-						transform={`rotate(-22 ${ORB_C - 34} ${ORB_C - 57})`}
-					/>
-					<ellipse
-						className="gui-pet-svg__gloss-dot"
-						cx={ORB_C - 56}
-						cy={ORB_C - 30}
-						rx="7"
-						ry="4"
-						transform={`rotate(-22 ${ORB_C - 56} ${ORB_C - 30})`}
-					/>
-					{/* Bounce light along the bottom + rim down the right edge.
-					 * Both sit just inside the silhouette so they read as light
-					 * on the sphere, not as a stroke around it. */}
-					<ellipse className="gui-pet-svg__bounce" cx={ORB_C - 2} cy={ORB_C + 78} rx="48" ry="11" />
+					{/* Crown gloss + secondary catch-light + specular sweep:
+					 * cheap sphericity, and the one decoration that is correct
+					 * in every context (pet-decor.ts). Off → the shell reads as
+					 * a flat silhouette, which is the quieter look some users
+					 * asked for. */}
+					{gloss && (
+						<>
+							<ellipse
+								className="gui-pet-svg__gloss"
+								cx={ORB_C - 34}
+								cy={ORB_C - 57}
+								rx="31"
+								ry="14"
+								transform={`rotate(-22 ${ORB_C - 34} ${ORB_C - 57})`}
+							/>
+							<ellipse
+								className="gui-pet-svg__gloss-dot"
+								cx={ORB_C - 56}
+								cy={ORB_C - 30}
+								rx="7"
+								ry="4"
+								transform={`rotate(-22 ${ORB_C - 56} ${ORB_C - 30})`}
+							/>
+							<ellipse
+								className="gui-pet-svg__sweep"
+								cx={ORB_C - 20}
+								cy={ORB_C - 64}
+								rx="15"
+								ry="5.6"
+								transform={`rotate(-22 ${ORB_C - 20} ${ORB_C - 64})`}
+							/>
+						</>
+					)}
+					{/* Rim light down the right edge — sits just inside the
+					 * silhouette so it reads as light on the sphere, not as a
+					 * stroke around it. Always on: it is what separates the ball
+					 * from a dark chat background, so it is not decoration. */}
 					<path
 						className="gui-pet-svg__rim"
 						d={`M${ORB_C + 74} ${ORB_C + 82} A${ORB_R - 3} ${ORB_R - 3} 0 0 0 ${ORB_C + 92} ${ORB_C + 8}`}
-					/>
-					{/* Specular sweep drifting across the crown. */}
-					<ellipse
-						className="gui-pet-svg__sweep"
-						cx={ORB_C - 20}
-						cy={ORB_C - 64}
-						rx="15"
-						ry="5.6"
-						transform={`rotate(-22 ${ORB_C - 20} ${ORB_C - 64})`}
 					/>
 					{/* The face, in the engine's own coordinates — no offset needed,
 					 * because the rig already sits on the sphere centre. All three
@@ -445,36 +468,31 @@ function Silhouette({ eyeRefs, mouthRef, shellRef }: MascotRefs): ReactNode {
 						<path className="gui-pet-svg__eye" ref={eyeRefs[1]} />
 						<path className="gui-pet-svg__mouth" ref={mouthRef} />
 					</g>
-					{/* Beacon mast on the crown: idle sway, fast pulse while
-					 * working. Drawn over the shell so it reads as mounted. */}
-					<g className="gui-pet-svg__antenna-group">
-						<path
-							className="gui-pet-svg__antenna"
-							d={`M${ORB_C} ${ORB_C - ORB_R + 6} L${ORB_C} ${ORB_C - ORB_R - 16}`}
-						/>
-						<circle className="gui-pet-svg__antenna-halo" cx={ORB_C} cy={ORB_C - ORB_R - 22} r="11" />
-						<circle className="gui-pet-svg__antenna-tip" cx={ORB_C} cy={ORB_C - ORB_R - 22} r="6" />
-					</g>
 				</g>
 			</g>
 		</g>
 	);
 }
 
-/** Builtin SVG pet (orb-bot v7) — natively speaks every PetdexMood,
+/** Builtin SVG pet (orb-bot v8) — natively speaks every PetdexMood,
  *  including the floating desktop pet's hover/dragging rows. `gazeRef`
  *  (optional) turns eye tracking on — see GazeVec. `interaction` overlays a
- *  transient user reaction (see pet-face.ts PET_INTERACTIONS). */
+ *  transient user reaction (see pet-face.ts PET_INTERACTIONS). `gloss`
+ *  toggles the shell's surface shading (pet-decor.ts) — the React prop so
+ *  the settings preview can render a specific option without touching
+ *  storage; renderers that just want the live pref pass `usePetDecor()`. */
 export function BuiltinPetSprite({
 	mood,
 	gazeRef,
 	interaction,
+	gloss = true,
 }: {
 	mood: PetdexMood;
 	gazeRef?: GazeRef;
 	interaction?: PetInteraction | null;
+	gloss?: boolean;
 }): ReactNode {
-	return <Mascot mood={mood} gazeRef={gazeRef} interaction={interaction} />;
+	return <Mascot mood={mood} gazeRef={gazeRef} interaction={interaction} gloss={gloss} />;
 }
 
 /** Petdex spritesheet pet — CSS background-position frame animation with a
@@ -542,11 +560,27 @@ export function PetdexSprite({
 	);
 }
 
-/** Unified pet renderer: builtin or petdex, sized via CSS font-size scale.
- *  `mood` accepts the petdex-only hover/dragging states (rows 1/2); the
- *  builtin SVG maps them to its closest faces. `scale` defaults to the
- *  settings slider (musepi-gui-pet-scale, 0.6–1.5); pass it explicitly when
- *  the caller tracks the pref itself (desktop pet window). */
+/** Unified pet renderer: builtin or petdex.
+ *
+ *  Sizing is deliberately NOT the same for the two kinds:
+ *
+ *  - petdex spritesheets bake their own frame geometry, so they carry an
+ *    inline width/height (that is their intrinsic size) — unchanged.
+ *  - the builtin SVG is a vector whose natural size is whatever its box is.
+ *    It used to set an inline `width: size * scale` too, which was a bug:
+ *    an inline style outranks every stylesheet rule, so the composer's
+ *    `.gui-composer-pet` container clamp (34–46px) never applied and the
+ *    pet rendered at the authoring scale instead. Docked on an input's edge
+ *    that read as "a giant ball stuck on the window" (2026-09-20, user:
+ *    「顶栏的小球怎么还是这么大，我换其他头像就正常」 — other presets never
+ *    went through this branch). The wrapper now owns the width; the SVG
+ *    keeps its aspect ratio through the box's `aspect-ratio`, so height
+ *    follows for free. Hosts that need a fixed size (avatar slot, desktop
+ *    pet window) set it on their own wrapper — see `.gui-avatar-pet`,
+ *    `.pet-window__stage`.
+ *
+ *  `size` therefore only survives as the FALLBACK for a host that gives the
+ *  box neither a width nor a height, so the mascot cannot collapse to 0. */
 export function PetSprite({
 	mood,
 	pet,
@@ -555,6 +589,7 @@ export function PetSprite({
 	frozen = false,
 	gazeRef,
 	interaction,
+	gloss,
 }: {
 	mood: PetdexMood;
 	pet:
@@ -570,6 +605,9 @@ export function PetSprite({
 					smooth?: boolean;
 				};
 		  };
+	/** Builtin-only fallback box (px) for hosts that size the wrapper via
+	 *  CSS: used when the box has neither a width nor a height to resolve
+	 *  against. Petdex ignores it — its sheet carries the real geometry. */
 	size?: number;
 	scale?: number;
 	/** Passed through to PetdexSprite (freeze frame loop, keep transform). */
@@ -581,9 +619,13 @@ export function PetSprite({
 	 *  spritesheet has no reaction rows to play, so it is ignored there rather
 	 *  than remapping the pet to an unrelated row. */
 	interaction?: PetInteraction | null;
+	/** Builtin-only surface shading (pet-decor.ts). Omitted → the live pref
+	 *  is used; pass an explicit value to preview an option in settings. */
+	gloss?: boolean;
 }): ReactNode {
-	const s = scale ?? petScale();
 	if (pet.kind === "petdex") {
+		// Sheets keep their own scale slider: their intrinsic size is the
+		// frame grid, so nothing else can size them.
 		return (
 			<PetdexSprite
 				mood={mood}
@@ -592,7 +634,7 @@ export function PetSprite({
 				height={pet.pkg.height}
 				rows={pet.pkg.rows}
 				contentH={pet.pkg.contentH}
-				scale={s}
+				scale={scale ?? petScale()}
 				frozen={frozen}
 				smooth={pet.pkg.smooth}
 			/>
@@ -600,8 +642,8 @@ export function PetSprite({
 	}
 	// The builtin orb speaks hover/dragging natively — no face mapping.
 	return (
-		<div className="gui-pet" style={{ width: size * s, height: size * s * (VIEW_H / VIEW_W) }}>
-			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} interaction={interaction} />
+		<div className="gui-pet" style={{ "--gui-pet-fallback": `${size}px` } as CSSProperties}>
+			<BuiltinPetSprite mood={mood} gazeRef={gazeRef} interaction={interaction} gloss={gloss} />
 		</div>
 	);
 }

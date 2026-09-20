@@ -1676,6 +1676,17 @@ export const settings = {
 	"delete pet": "Delete character",
 	"pet presets": "Presets",
 	"pet imported": "Imported",
+	// Companion decoration (lib/pet-decor.ts): the builtin vector orb's
+	// optional surface layer. The floor-glow / beacon-mast family was removed
+	// outright (2026-09-20) — only layers that are correct in every context
+	// get a switch.
+	"pet decor": "Appearance detail",
+	"pet decor description": "Optional layers on the built-in vector companion. Off is always safe.",
+	"pet decor description imported":
+		"These detail layers only exist on the built-in vector companion — the selected imported spritesheet is a baked bitmap.",
+	"pet decor gloss": "Surface gloss",
+	"pet decor gloss description":
+		"Specular highlight and drifting sheen on the shell — makes the ball read as lit. Off leaves a flat silhouette.",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "Hide Tool Activity",
 	"Hide model-initiated tool calls and results from the transcript":

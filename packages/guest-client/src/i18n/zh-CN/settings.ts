@@ -1597,6 +1597,11 @@ export const settings = {
 	"delete pet": "删除形象",
 	"pet presets": "预设",
 	"pet imported": "已导入",
+	"pet decor": "外观细节",
+	"pet decor description": "内置矢量形象的附加图层，全部关闭也不影响形象完整。",
+	"pet decor description imported": "这些细节图层只存在于内置矢量形象上——当前选中的导入形象是烘焙好的位图动画。",
+	"pet decor gloss": "球面光泽",
+	"pet decor gloss description": "球体表面的高光与缓慢流动的光带，让球看起来被照亮。关闭后是纯粹的平面剪影。",
 	// ── i18n gaps (2026-08-11): hand translations for schema strings the TUI zh didn't carry ──
 	"Hide Tool Activity": "隐藏工具活动",
 	"Hide model-initiated tool calls and results from the transcript": "在转录中隐藏模型发起的工具调用及其结果",

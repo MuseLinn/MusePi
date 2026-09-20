@@ -291,6 +291,25 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
   - **桌面桌宠**:戳弄类反应保持 `POKE_HOLD_MS` 1400;新增两个闲时桥段——进入 60s 睡眠闩锁前 40s 开始 `dozing`(让入睡是渐睡而非硬切),以及每 12–26s 一次的 `peek`/`curious` "被抓包"桥段。反应会让位于实时手势与睡眠。
   - 测试:`test/pet-interaction.test.ts`(11 条)钉住这条轴的边界——数据成对完整、两轴名字不冲突、没有 mood 偷偷长出 `enter`、startled 不眨眼(惊到一半眨眼像在抛媚眼)、dozing 是全系统最慢的呼吸。
 
+## 5l. 伙伴尺寸契约、装饰即配置与头像选择器(2026-09-20)
+
+本轮由三条用户反馈驱动:重启后输入框上的小球**仍然**过大(但换任何其他头像都正常)、吉祥物积累了一堆没人要的装饰、设置页的头像行只能切换、什么都区分不出来。
+
+- **输入框上的小球尺寸从来就不是 CSS 定的。** `PetSprite` 的内置分支在 `.gui-pet` 上写了 inline 的 `width: size * scale` / `height: size * scale * (VIEW_H / VIEW_W)`。**inline 样式优先级高于任何样式表规则**,所以 `.gui-composer-pet` 的容器 clamp(§5k 加的 `34px…46px`)**一直没生效**,小球按创作尺寸渲染——dock 在输入框上沿时就是"一个巨大的球卡在窗口上"。其他头像预设走的是 petdex 分支(`PetdexSprite` 自带帧几何)或手绘 `<svg>`,从不经过这条路径,这正是"换其他头像就正常"的原因。**教训:样式表规则看起来没生效时,先排查 inline 声明,再回头调规则。** 这个 clamp 是第三次修这个症状——前两次都在给一个被覆盖的 CSS 重新调参。
+- **尺寸契约**(`gui-pet.css`):一个盒子,两种尺寸来源,而"关键的那个数"永远由宿主提供。
+  - `width` 主导 → `.gui-composer-pet`(容器 clamp),高度由 `aspect-ratio`(`--gui-pet-ratio`,即 SVG 自身的 `VIEW_W / VIEW_H`)跟随。
+  - `--gui-pet--h` 让高度主导 → `.gui-avatar-pet`(调用点传 `--gui-pet-size`:工具栏/顶栏 20、聊天 64)与 `.pet-window__pet`(`--gui-pet-window-scale`,即大小滑杆)。
+  - `--gui-pet-fallback`(旧的 `size` prop,改为自定义属性透传)是宿主既不给宽也不给高时的兜底,保证形象永远不会塌成 0。**调用点绝不能再给 `.gui-pet` 写真实的 `width`。**
+  - `PetAvatar`(聊天头像)采用高度主导还有第二个原因:转录网格为助手头像预留了 **40px gutter**,一个多余的 inline 64px 会溢出布局给它留出的那一列。**定尺寸的槽位必须由槽位来决定尺寸。**
+- **装饰现在是配置,不再是默认**(`lib/pet-decor.ts`):
+  - **整体删除**——地面系(`__thrust` 悬浮辉光、`__bounce` 底部反光、`__ground` 地面投影)与头顶信标(`__antenna-group` 及其 `gui-pet-antenna` / `gui-pet-beacon` / `gui-pet-halo` 三组 keyframes)。地面系描述的是一具**悬浮在地面之上**的身体,而伙伴 dock 在输入框边沿,那里根本没有地面:这些层会溢进缝隙,读作输入框下方的一条金色污渍。信标在任意 composer 尺寸下都细到不足一像素——一个孤立的金点。**不是默认关闭,是不再渲染。**
+  - **保留,但做成可关闭开关**——`gloss`(`__gloss` + `__gloss-dot` + `__sweep`)。它是唯一在每个场景下都成立的装饰:它让一个扁平深色圆读作**被照亮的球**。关闭 → `.gui-pet-svg--flat` 只隐藏光影层;壳渐变、环绕轨道环、边缘轮廓光与白脸全部保留。
+  - **留白收紧** `HEADROOM 40 / SIDE 26 / FLOOR 30` → `TOP 24 / SIDE 20 / BOTTOM 22`(约 1.28× → 约 1.04× 球径)。球在同样的盒子里变大,边缘也不再悬空。旧的 `margin-bottom` hack(为补偿"占位但被隐藏的天线"把 composer 盒子往上拉)随之删除。
+  - 存储是**标志记录**(`musepi-gui-pet-decor`),**逐键降级**——格式损坏或更新版本写入的键只降级自己,不会把整个形象清空(`test/pet-decor.test.ts`,12 条)。`PET_DECOR_FLAGS` 是设置 UI 的生成来源——**加一个配饰(音符、耳机…)只需一条标志 + 两个 i18n key**,不需要手写新行。写入广播 `omp-pet-changed`,而 `usePet` / `usePetDecor` 本就监听该事件,所以开关会同时落到 composer、聊天头像与悬浮桌宠。
+  - 作用域:装饰只存在于**内置矢量**形象上。导入的 petdex 精灵表是烘焙好的位图——该分组会明确说明并禁用开关,而不是静默无效。
+- **设置页的头像选择器能区分选项了**(`gui-settings.css`):`设置 → 常规` 的 Agent 头像行原本是五个无标签的 38px 图标按钮,身份藏在 `title` 悬浮提示里,选中态是一条发丝描边——"只能进行切换"。现在是 `.gui-avatar-grid` + `.gui-avatar-card`:**32px 实时预览台**(小到能judge 出差异的尺寸;固定 40×34 槽位,让宠物的宽盒子与方形图标共享基线)、预设**名称**、以及选中项的**勾选**。伙伴设置页新增对应的**外观细节**分组。两处都复用 `.gui-pet-card` 的卡片语言,让两个头像界面读作同一套系统。(`.gui-avatar-opt` 保留给其他使用者——引导流程的个性化步骤,以及 git 设置里的用户头像来源选择器。)
+- **滑杆对齐**:伙伴大小滑杆步进为 5%,而 `petScale()`/`setPetScale()` 存取并夹取整数百分比,导致存下的值与标签错位(`step=5` → 60/65/70…,却按 1% 的夹取范围读回)。改为 `step=1`。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

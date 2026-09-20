@@ -3,9 +3,31 @@
  * scales with font-size (em-based container); mood animations below.
  * Petdex spritesheets animate via background-position steps (frame cycle
  * keyframes defined here too — the pet window shares this stylesheet). */
+
+/* The builtin SVG's sizing contract (2026-09-20). The wrapper no longer
+ * carries an inline width/height: an inline style outranks every rule below
+ * and silently defeated the composer's container clamp, so the pet rendered
+ * at the authoring scale — "顶栏的小球怎么还是这么大，我换其他头像就正常".
+ *
+ * One box, two ways to size it:
+ *   width  → set by the host (container clamp, avatar slot, pet window) and
+ *            the height follows from the viewBox ratio.
+ *   height → `.gui-pet--h` (pet window / avatar slot), height leads instead
+ *            and the width follows.
+ * `--gui-pet-fallback` is the last resort for a host that supplies neither,
+ * so the mascot can never collapse to 0. */
 .gui-pet {
 	position: relative;
 	flex-shrink: 0;
+	width: var(--gui-pet-width, var(--gui-pet-fallback, 48px));
+	height: auto;
+	aspect-ratio: var(--gui-pet-ratio, 1.037);
+}
+
+.gui-pet--h {
+	width: auto;
+	height: var(--gui-pet-height);
+	aspect-ratio: var(--gui-pet-ratio, 1.037);
 }
 
 .gui-pet svg {
@@ -75,21 +97,12 @@
 	stroke-width: 6.5;
 }
 
-/* Ground: soft radial falloff (a hard-edged ellipse reads as a sticker). The
- * thrust layer underneath is the hover glow; both are animated by the mood
- * motion, the thrust in counter-phase so the orb lifts off its own light. */
-.gui-pet-svg__ground {
-	fill: url(#gui-pet-grad-ground);
-}
-
-.gui-pet-svg__thrust {
-	fill: url(#gui-pet-grad-thrust);
-}
-
 /* Lower-right edge shade: on a dark shell the "3D" cue is a cool rim, so the
  * sphere separates from the background instead of dissolving into it.
  * Variable hook: the theme palette (lib/pet-palette.ts) sets --gui-pet-rim
- * to a light tint of the live accent; the literal is the brand-dark default. */
+ * to a light tint of the live accent; the literal is the brand-dark default.
+ * Always on — unlike the gloss family this is not decoration, it is what
+ * keeps the ball from vanishing into a dark chat surface. */
 .gui-pet-svg__rim {
 	fill: none;
 	stroke: var(--gui-pet-rim, rgba(150, 196, 255, 0.26));
@@ -97,11 +110,15 @@
 	stroke-linecap: round;
 }
 
-/* Bounce light along the bottom — gold thrown back up from the surface. */
-.gui-pet-svg__bounce {
-	fill: url(#gui-pet-grad-bounce);
-}
-
+/* ── Surface shading (optional — see lib/pet-decor.ts) ─────────────────
+ * Crown gloss, catch-light and the drifting specular sweep. The one
+ * decoration that is correct in every context: it is what makes a flat
+ * dark circle read as a lit ball. `--flat` drops it for a quieter
+ * silhouette. The floor family (ground / thrust / bounce) and the crown
+ * beacon mast used to live here too; they described a body levitating over
+ * a ground plane, which the pet — docked on an input's edge — never has.
+ * Removed 2026-09-20 (user: 「头顶有个小呼吸点，嘴下方有个黄光…莫名其妙
+ * 的复杂化」). */
 .gui-pet-svg__gloss {
 	fill: rgba(255, 255, 255, 0.42);
 }
@@ -117,70 +134,13 @@
 	animation: gui-pet-sweep 7s ease-in-out infinite;
 }
 
-/* ── Antenna (mood beacon) ─────────────────────────────────────────────
- * Three layers: a stalk that sways on its own 4.2s rhythm, a tip that
- * pulses, and a halo blooming with the tip. Working speeds the pulse up,
- * error droops the whole stalk.
- *
- * This is the only remaining CSS-driven motion on the builtin pet — the
- * face and body are engine-driven (lib/pet-motion.ts), because a face that
- * morphs between two dozen expressions cannot be expressed as keyframes. */
-
-.gui-pet-svg__antenna-group {
-	transform-box: fill-box;
-	transform-origin: 50% 100%;
-	animation: gui-pet-antenna 4.2s ease-in-out infinite;
-}
-
-.gui-pet-svg__antenna {
-	stroke: url(#gui-pet-grad-ring);
-	stroke-width: 4;
-	stroke-linecap: round;
-	fill: none;
-}
-
-.gui-pet-svg__antenna-tip {
-	fill: var(--gui-pet-gold-a, #f7dd93);
-	animation: gui-pet-beacon 2.8s ease-in-out infinite;
-}
-
-.gui-pet-svg__antenna-halo {
-	fill: var(--gui-pet-gold-b, #d9a83f);
-	transform-box: fill-box;
-	transform-origin: center;
-	animation: gui-pet-halo 2.8s ease-in-out infinite;
-}
-
-@keyframes gui-pet-antenna {
-	0%,
-	100% {
-		transform: rotate(-3deg);
-	}
-	50% {
-		transform: rotate(3.5deg);
-	}
-}
-
-@keyframes gui-pet-beacon {
-	0%,
-	100% {
-		opacity: 0.45;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-
-@keyframes gui-pet-halo {
-	0%,
-	100% {
-		opacity: 0;
-		transform: scale(0.7);
-	}
-	50% {
-		opacity: 0.26;
-		transform: scale(1.15);
-	}
+/* Flat shell: gloss off. Only the shading layers go — the shell gradient,
+ * the orbit ring, the rim light and the (white) face all stay, so the
+ * mascot still reads as themed and still has a face. */
+.gui-pet-svg--flat .gui-pet-svg__gloss,
+.gui-pet-svg--flat .gui-pet-svg__gloss-dot,
+.gui-pet-svg--flat .gui-pet-svg__sweep {
+	display: none;
 }
 
 @keyframes gui-pet-sweep {
@@ -203,16 +163,9 @@
  * left for CSS is the *lighting*: how the orb's own glow responds to what it
  * is doing. Keeping that here means the mood vocabulary stays declarative. */
 
-/* Working: the beacon pulses at a work cadence and the ring spins up, so
- * effort is legible at a glance from across the screen. */
-.gui-pet-svg--working .gui-pet-svg__antenna-tip {
-	animation: gui-pet-beacon 0.62s ease-in-out infinite;
-}
-
-.gui-pet-svg--working .gui-pet-svg__antenna-halo {
-	animation: gui-pet-halo 0.62s ease-in-out infinite;
-}
-
+/* Working: the ring spins up, so effort is legible at a glance from across
+ * the screen. (The beacon pulse that used to carry this went with the mast —
+ * the ring's cadence plus the mood's body motion do the job alone.) */
 .gui-pet-svg--working .gui-pet-svg__ring {
 	animation: gui-pet-ring-spin 2.6s linear infinite;
 	transform-box: fill-box;
@@ -232,39 +185,13 @@
 	filter: drop-shadow(0 0 5px var(--gui-pet-glow, rgba(217, 168, 63, 0.8)));
 }
 
-.gui-pet-svg--hover .gui-pet-svg__thrust {
-	opacity: 1.35;
-}
-
-/* Dragging: caught in hand — full thrust, ring tilted with the motion. */
-.gui-pet-svg--dragging .gui-pet-svg__thrust {
-	opacity: 1.6;
-}
-
-/* Waiting: the light dims and the beacon slows to a drowsy breath. */
-.gui-pet-svg--waiting .gui-pet-svg__antenna-tip {
-	animation-duration: 4.6s;
-}
-
+/* Waiting: the light dims — approval pending, the orb holding still. */
 .gui-pet-svg--waiting .gui-pet-svg__eye {
 	opacity: 0.82;
 }
 
-/* Error: the beacon stalls and the orb runs cold — the mood is carried by
- * the red face plus a collapsed glow, not by extra motion. */
-.gui-pet-svg--error .gui-pet-svg__antenna-tip {
-	animation: none;
-	opacity: 0.5;
-}
-
-.gui-pet-svg--error .gui-pet-svg__antenna-group {
-	animation: gui-pet-droop 2.4s ease-in-out infinite;
-}
-
-.gui-pet-svg--error .gui-pet-svg__thrust {
-	opacity: 0.4;
-}
-
+/* Error: the orb runs cold — the mood is carried by the red face plus a
+ * collapsed glow, not by extra motion. */
 .gui-pet-svg--error .gui-pet-svg__ring {
 	opacity: 0.5;
 }
@@ -275,14 +202,9 @@
  * additive to the mood classes above (both ride the same svg), so a reaction
  * on top of `working` keeps the working ring spin and still startles. */
 
-/* Startled: the light flares and the ring jolts out of its resting tilt —
- * the orb literally catching its breath. */
+/* Startled: the light flares — the orb literally catching its breath. */
 .gui-pet-svg--startled .gui-pet-svg__eye {
 	filter: drop-shadow(0 0 7px var(--gui-pet-glow, rgba(255, 255, 255, 0.7)));
-}
-
-.gui-pet-svg--startled .gui-pet-svg__thrust {
-	opacity: 1.7;
 }
 
 /* Delighted: a warmer, softer flare — pleasure reads as bloom, not flash. */
@@ -290,32 +212,13 @@
 	filter: drop-shadow(0 0 6px var(--gui-pet-glow, rgba(255, 255, 255, 0.6)));
 }
 
-.gui-pet-svg--delighted .gui-pet-svg__thrust {
-	opacity: 1.5;
-}
-
-/* Curious: attention, not excitement — a slight bloom and a ring nudge that
- * follows the head-tilt. */
-.gui-pet-svg--curious .gui-pet-svg__thrust {
-	opacity: 1.2;
-}
-
 /* Pre-sleep: the light visibly dims before the eyes close. */
 .gui-pet-svg--dozing .gui-pet-svg__eye {
 	opacity: 0.7;
 }
 
-.gui-pet-svg--dozing .gui-pet-svg__thrust {
-	opacity: 0.7;
-}
-
 .gui-pet-svg--dozing .gui-pet-svg__ring {
 	opacity: 0.72;
-}
-
-/* Caught looking: the light pulls in — the orb pretending to be idle. */
-.gui-pet-svg--peek .gui-pet-svg__thrust {
-	opacity: 0.85;
 }
 
 @keyframes gui-pet-ring-spin {
@@ -324,19 +227,6 @@
 	}
 	100% {
 		transform: rotate(360deg);
-	}
-}
-
-@keyframes gui-pet-droop {
-	0%,
-	100% {
-		transform: rotate(6deg);
-	}
-	45% {
-		transform: rotate(24deg);
-	}
-	70% {
-		transform: rotate(14deg);
 	}
 }
 
@@ -510,25 +400,30 @@
  *
  * ── Sizing is a legibility decision, not a taste one ─────────────────────
  * The face is authored inside a FACE_BOX square that *is* the ball, and the
- * SVG viewBox pads it with HEADROOM/SIDE/FLOOR. That means only ~77% of the
- * rendered box is ball, and of the ball only ~25% is the eye capsule. At the
- * old fixed `size={30}` the contract was: ball 24px, eye capsule 3.3x6.2px,
- * mouth stroke 0.80px — the mouth was literally sub-pixel, so the pet drew
- * as a dark ball with two gold specks.
- *
- * The pet therefore sizes against the COMPOSER'S OWN WIDTH (`--gui-composer-pet-size`),
- * which is what actually varies across the welcome hero and the session
- * composer. The clamp floor is the legibility floor: 0.75px of mouth stroke
- * and a >=4px eye capsule, i.e. a ~44px box / ~34px ball. Below that we stop
- * pretending it is a face and let the silhouette carry it (see
+ * SVG viewBox pads it by SIDE/TOP/BOTTOM. Since the decoration purge
+ * (2026-09-20, pet-decor.ts) that padding is ~1.04× the ball rather than the
+ * old ~1.28×, so the box is now very nearly the ball and these numbers read
+ * almost directly. The binding constraint is unchanged: the eye capsule is
+ * only ~25% of the ball, so a 34px box is the floor at which the mouth still
+ * clears ~0.75px of stroke and the eyes hold a >=4px capsule. Below that we
+ * stop pretending it is a face and let the silhouette carry it (see
  * `.gui-composer-pet--micro`).
  *
- * Cap 46px (2026-09-20, was 60): in the session composer the pet is perched
- * on the input's top-right edge, and at 60px it stood taller than the whole
- * first row of the composer — it read as "a giant ball stuck on the window"
- * rather than as a mascot peeking over the edge. 34–46px keeps it inside the
- * band where the face still resolves (eye capsule >=4px, mouth >=0.75px) while
- * staying visually subordinate to the frame it sits on. */
+ * The pet sizes against the COMPOSER'S OWN WIDTH (`--gui-composer-pet-size`),
+ * which is what actually varies across the welcome hero and the session
+ * composer. Cap 46px (2026-09-20, was 60): in the session composer the pet is
+ * perched on the input's top-right edge, and at 60px it stood taller than the
+ * whole first row — "a giant ball stuck on the window" rather than a mascot
+ * peeking over the edge.
+ *
+ * ── Why the box and not the SVG ───────────────────────────────────────────
+ * This rule is the ONLY thing that sizes the docked builtin pet. PetSprite
+ * used to also write an inline width/height on `.gui-pet`, and an inline
+ * style outranks every stylesheet rule — so this clamp never applied and the
+ * pet rendered at the authoring scale instead (user: 「顶栏的小球怎么还是
+ * 这么大，我换其他头像就正常」). The inline size is gone; the height now
+ * follows the SVG's own ratio (see `.gui-pet`). Do not reintroduce a width
+ * on `.gui-pet` from the call site. */
 .gui-composer-pet
 {
 	position:absolute;
@@ -539,31 +434,13 @@
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
 	justify-content:flex-end;
-	bottom:calc(100% + 4px);
+	/* Flush with the input's top edge it is perched on: the box is very nearly
+	 * the ball now, so only the ring's overhang sits above it. */
+	bottom:calc(100% - 2px);
 	right:10px;
-	/* The antenna is suppressed at composer scale (see below), but its slot
-	 * in the SVG viewBox is not: HEADROOM reserves the mast's space above the
-	 * ball. Hiding the mast while keeping the box leaves ~6px of dead space,
-	 * which reads as the pet floating detached from the edge it is perched
-	 * on. Pull the box up by that same fraction so the ball lands flush.
-	 * (HEADROOM 40 / VIEW_H 298.5.) */
-	margin-bottom:calc(var(--gui-composer-pet-size, 46px) * -40 / 298.5);
 	transform-origin:50% 100%;
 	transition:transform .18s cubic-bezier(.22,1,.36,1),filter .18s cubic-bezier(.22,1,.36,1);
 	-webkit-tap-highlight-color:transparent;
-}
-/* The pet SVG fills the wrapper; the wrapper owns the size. */
-.gui-composer-pet .gui-pet
-{
-	width:100% !important;
-	height:auto !important;
-	aspect-ratio:auto;
-}
-.gui-composer-pet .gui-pet svg
-{
-	display:block;
-	width:100%;
-	height:auto;
 }
 .gui-composer-pet>*
 {
@@ -597,43 +474,12 @@
 	}
 }
 /* ── Micro variant ────────────────────────────────────────────────────────
- * Below roughly a 46px box the mascot's fine detail stops resolving:
- *   - the antenna mast is stroke-width 4 in face units, so at a 33px ball it
- *     lands at ~0.58px and renders as a disconnected gold speck floating over
- *     the crown rather than as a mast with a beacon;
- *   - the mouth drops under ~1.2px of stroke and greys out.
- * Rather than ship half-resolved geometry, the micro variant sheds both and
- * keeps the two eye lights — the smallest thing that still reads as "a
- * creature looking at you".
- *
- * The antenna is suppressed for every docked pet, not just the micro one: at
- * any composer size the mast lands under a pixel and the beacon becomes a
- * speck, and the composed silhouette is stronger without it. The standalone
- * desktop pet keeps its antenna — it has real estate to spend. */
-.gui-composer-pet .gui-pet-svg__antenna-group
-{
-	display:none;
-}
-/* The floor layers describe a body hovering over the ground: a neutral ground
- * shadow plus a gold thrust glow, both anchored BELOW the silhouette. Docked
- * on the composer the ball is perched ON an edge, so there is no floor for
- * them to fall on — they spill into the gap and read as a gold smear floating
- * under the input. (Measured: both extend ~4.7px past the ball's bottom at a
- * 42px ball.) The wrapper's own drop-shadow does the grounding instead, which
- * is the physically honest cue for something resting on a lit surface. */
-.gui-composer-pet .gui-pet-svg__ground,
-.gui-composer-pet .gui-pet-svg__thrust
-{
-	display:none;
-}
-/* Bounce light is the gold the sphere throws back off the ground it sits on.
- * Same story as the floor layers — with the ground shadow gone the ellipse
- * has nothing to bounce off, so it reads as a stray gold band under the ball
- * rather than as rim light. */
-.gui-composer-pet .gui-pet-svg__bounce
-{
-	display:none;
-}
+ * At the narrow-composer floor the mascot's finest detail stops resolving —
+ * the mouth drops under ~1.2px of stroke and greys out. Rather than ship
+ * half-resolved geometry, the micro variant sheds it and keeps the two eye
+ * lights: the smallest thing that still reads as "a creature looking at
+ * you". (The antenna mast this variant used to also shed is gone from the
+ * art entirely — see pet-decor.ts.) */
 .gui-composer-pet--micro .gui-pet-svg__mouth
 {
 	display:none;

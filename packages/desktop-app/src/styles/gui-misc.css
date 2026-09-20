@@ -1251,6 +1251,17 @@
 	filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.3));
 }
 
+/* The mock composer's pet in the onboarding personalization step. It docks
+ * the same way the real `.gui-composer-pet` does, so it needs the same kind
+ * of box: the builtin SVG no longer carries an inline size (PetSprite), and
+ * this is a fixed mock, not a live clamp — height leads at the authored
+ * 16px so the ball matches what the step is illustrating. */
+.gui-obo-pers-pet > .gui-pet {
+	--gui-pet-height: 16px;
+	width: auto;
+	height: 16px;
+}
+
 /* Provider step demo: rows mirroring the real ProviderSetup list; the
  * middle row's login button cycles to "✓ 已登录" (in-place morph). */
 .gui-obo-providers {

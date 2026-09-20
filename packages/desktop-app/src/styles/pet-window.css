@@ -120,6 +120,18 @@
 		filter 160ms var(--spring, ease);
 }
 
+/* The floating pet's builtin SVG sizes against this box (the pet window has
+ * no composer clamp to inherit and no inline size any more — see PetSprite).
+ * `--gui-pet-window-scale` is the size slider (0.6–1.5) written by
+ * pet-main.tsx; 104px is the scale-1 authored body height, so the ball lands
+ * at the same visual size the inline `size * scale` used to produce.
+ * Petdex sheets ignore all of this — they carry their own frame geometry. */
+.pet-window__pet > .gui-pet {
+	--gui-pet-height: calc(104px * var(--gui-pet-window-scale, 1));
+	width: auto;
+	height: var(--gui-pet-height);
+}
+
 .pet-window__pet:hover {
 	transform: translateY(-6px) scale(1.08);
 	filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.5)) brightness(1.06);

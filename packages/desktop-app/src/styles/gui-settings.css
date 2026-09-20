@@ -3504,6 +3504,27 @@ body.gui-resizing {
 	animation: none !important;
 }
 
+/* Companion (pet) avatar preset inside the agent-avatar slot. The slot's
+ * size arrives as `--gui-pet-size` from the call site (20 toolbar/header,
+ * 64 chat) because it is a semantic size, not a stylesheet constant — but
+ * the BOX itself is owned here, not by an inline width: the transcript grid
+ * reserves a 40px gutter for the avatar, so a stray inline 64px would
+ * overflow the column the layout set aside for it. Height leads (the slot
+ * is a fixed-size avatar, so the ball must fit inside it) and the width
+ * follows from the SVG's own ratio. */
+.gui-avatar-pet {
+	display: inline-block;
+	vertical-align: top;
+	height: var(--gui-pet-size, 20px);
+	width: auto;
+}
+
+.gui-avatar-pet > .gui-pet {
+	--gui-pet-height: var(--gui-pet-size, 20px);
+	width: auto;
+	height: var(--gui-pet-size, 20px);
+}
+
 .gui-avatar-opt {
 	display: inline-flex;
 	align-items: center;
@@ -3522,6 +3543,76 @@ body.gui-resizing {
 	border-color: color-mix(in oklab, var(--color-accent-bd) 55%, transparent);
 	background: color-mix(in oklab, var(--color-accent-bd) 12%, transparent);
 	color: var(--color-text);
+}
+
+/* ── Avatar preset picker (设置 → 常规 → Agent 头像样式) ─────────────────
+ * Replaces the old row of unlabelled 38px glyph buttons. Each preset is a
+ * card with a 32px live preview stage, the preset's name, and a check on the
+ * active one — the identity is legible before you click, which is the whole
+ * point of a preset switcher. Mirrors the companion appearance grid
+ * (.gui-pet-card) so the two avatar surfaces read as one system. */
+.gui-avatar-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+	gap: 8px;
+	margin-top: 8px;
+}
+.gui-avatar-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	padding: 10px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-xl);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	transition:
+		border-color 160ms ease,
+		background 160ms ease,
+		color 160ms ease;
+}
+.gui-avatar-card:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	color: var(--color-text);
+}
+.gui-avatar-card--active {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 1px var(--color-accent) inset;
+	color: var(--color-text);
+}
+/* Preview stage: a fixed 32px slot so the five presets sit on a common
+ * baseline regardless of their intrinsic aspect (the pet's box is wider
+ * than tall, the glyphs are square). */
+.gui-avatar-card__stage {
+	display: grid;
+	place-items: center;
+	width: 40px;
+	height: 34px;
+	overflow: hidden;
+}
+.gui-avatar-card__stage > * {
+	max-width: 100%;
+	max-height: 100%;
+}
+.gui-avatar-card__name {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	max-width: 100%;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 550;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.gui-avatar-card__check {
+	width: 12px;
+	height: 12px;
+	flex-shrink: 0;
+	color: var(--color-accent);
 }
 
 .gui-obo-personalize {

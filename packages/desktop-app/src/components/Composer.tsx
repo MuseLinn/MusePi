@@ -1784,9 +1784,13 @@ export function Composer({
 								// Poking the pet is a local, momentary override of the
 								// agent-derived mood: it never touches the session state,
 								// and it always falls back to the real mood on release.
-								// `size` is only the engine's authoring scale — the docked
-								// footprint comes from `.gui-composer-pet`'s container
-								// clamp, so the face never falls below legibility.
+								//
+								// `size` is only the fallback box — the docked footprint
+								// comes from `.gui-composer-pet`'s container clamp, so the
+								// face never falls below legibility and the pet never
+								// outgrows the input's edge. See PetSprite: the call site
+								// must NOT size the builtin SVG, because an inline style
+								// outranks that clamp.
 								//
 								// Reaction escalation: a single poke startles, a quick
 								// follow-up delights (see ComposerPetState.pokes). Hover
@@ -1795,6 +1799,7 @@ export function Composer({
 									mood={hovered ? "hover" : (petMood ?? "rest")}
 									pet={pet.pet}
 									size={30}
+									gloss={pet.decor.gloss}
 									interaction={hopping ? (pokes > 1 ? "delighted" : "startled") : null}
 								/>
 							)

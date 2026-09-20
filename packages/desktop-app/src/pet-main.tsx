@@ -25,9 +25,17 @@
  */
 
 import { setLocale, t } from "@musepi/guest-client";
-import { type ReactNode, type PointerEvent as ReactPointerEvent, StrictMode, useEffect, useRef, useState } from "react";
+import {
+	type CSSProperties,
+	type ReactNode,
+	type PointerEvent as ReactPointerEvent,
+	StrictMode,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { createRoot } from "react-dom/client";
-import { type GazeVec, PetSprite, usePet } from "./components/PetSprite";
+import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
 import { type PetActivity, type PetInteraction, type PetMood, petScale } from "./lib/pet";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
@@ -89,6 +97,10 @@ const DOUBLE_CLICK_MS = 300;
 
 function PetApp(): ReactNode {
 	const { enabled, pet } = usePet();
+	// Surface shading (pet-decor.ts) — the floating pet is the one renderer
+	// that has NO settings page of its own, so it subscribes to the same
+	// broadcast the composer/avatar do rather than receiving a prop.
+	const decor = usePetDecor();
 	const [mood, setMood] = useState<PetMood>("rest");
 	const [hovering, setHovering] = useState(false);
 	const [dragging, setDragging] = useState(false);
@@ -610,7 +622,7 @@ function PetApp(): ReactNode {
 			 * tracks the sprite's top-right corner regardless of the pet's
 			 * frame size or the user's scale. pointer-events: none keeps
 			 * only the pet interactive. */}
-			<div className="pet-window__stage">
+			<div className="pet-window__stage" style={{ "--gui-pet-window-scale": sizeScale } as CSSProperties}>
 				{unreadCount > 0 && (
 					<button
 						type="button"
@@ -646,8 +658,14 @@ function PetApp(): ReactNode {
 						<PetSprite
 							mood={displayMood}
 							pet={pet}
+							/* The builtin SVG derives its own size from
+							 * `--gui-pet-window-scale` (pet-window.css); this
+							 * is the fallback box. The petdex sheets still need
+							 * the real number, and `scale` is the user's size
+							 * slider for both. */
 							size={104}
 							scale={sizeScale}
+							gloss={decor.gloss}
 							frozen={displayMood === "hover"}
 							gazeRef={gazeRef}
 							interaction={displayInteraction}
