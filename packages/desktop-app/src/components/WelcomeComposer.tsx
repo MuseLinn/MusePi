@@ -23,7 +23,7 @@ import {
 } from "../lib/suggestions";
 import { isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { cancelActiveDictation, evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
+import type { SttSubmitTrigger } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
 import { BlurText } from "./BlurText";
@@ -38,12 +38,13 @@ import {
 	type UsageReportView,
 	type UsageUnreportedAccountView,
 } from "./Composer";
-import { VoiceButton } from "./composer/action-buttons";
+import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
+import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
 import { DotMatrixMark } from "./DotMatrixMark";
@@ -311,43 +312,8 @@ export function WelcomeComposer({
 
 	// Voice dictation (session-composer parity): the welcome composer's tips
 	// advertise the mic button, so the empty state must actually ship one.
-	// Local STT via the daemon (sherpa-ONNX) — same startDictation the session
-	// composer uses; `rpc` is session-less so transcribe works pre-session.
-	const [dictating, setDictating] = useState(false);
-	const [transcribing, setTranscribing] = useState(false);
-	const [voiceSeconds, setVoiceSeconds] = useState(0);
-	const [voiceLevel, setVoiceLevel] = useState(0);
-	const stopDict = useRef<(() => void) | null>(null);
-	// Dictation failures surface inline above the input (session-composer
-	// parity) instead of the global "工具错误" toast.
-	const [voiceError, setVoiceError] = useState<string | null>(null);
-	const voiceErrorTimer = useRef<number | null>(null);
-	const showVoiceError = useCallback((message: string): void => {
-		setVoiceError(message);
-		if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
-		voiceErrorTimer.current = window.setTimeout(() => setVoiceError(null), 6000);
-	}, []);
-	useEffect(
-		() => () => {
-			if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
-		},
-		[],
-	);
-	// Esc during dictation DISCARDS the buffer (mic press = keep & transcribe).
-	useEffect(() => {
-		if (!dictating) return;
-		const onKey = (e: KeyboardEvent): void => {
-			if (e.key !== "Escape") return;
-			e.preventDefault();
-			e.stopPropagation();
-			cancelActiveDictation();
-			setDictating(false);
-			setTranscribing(false);
-			setVoiceError(null);
-		};
-		window.addEventListener("keydown", onKey, true);
-		return () => window.removeEventListener("keydown", onKey, true);
-	}, [dictating]);
+	// Local STT via the daemon — the shared use-dictation phase state, so the
+	// transcription wait keeps its feedback here exactly like in-session.
 	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity): whether
 	// finishing a dictation auto-sends the transcript instead of filling the draft.
 	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
@@ -365,6 +331,20 @@ export function WelcomeComposer({
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
+	const dictation = useDictation({
+		rpc,
+		sttSubmitTrigger,
+		onSubmit: text => {
+			// Welcome parity: the auto-send path trims before firing (a
+			// transcript that is only a "submit" tail sends nothing).
+			const trimmed = text.trim();
+			if (trimmed) sendText(trimmed);
+		},
+		onInsert: transcript => {
+			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
+			requestAnimationFrame(() => autosize(taRef.current));
+		},
+	});
 	// 上手就绪态（setup.status，欢迎页状态感知空态）：null = 未加载；
 	// true = 模型未配置 → 渲染恢复引导卡。刷新源 = 挂载 + onboarding 内
 	// 供应商动作广播（musepi-gui-providers-changed）+ onboarding 完成 +
@@ -1736,64 +1716,9 @@ export function WelcomeComposer({
 									{/* Approval mode (openchamber input permission-picker
 									 * parity) — a global setting, so it works session-less. */}
 									<ApprovalModeButton rpc={rpc} />
-									<VoiceButton
-										state={dictating ? (transcribing ? "transcribing" : "recording") : "idle"}
-										seconds={voiceSeconds}
-										level={voiceLevel}
-										onToggle={() => {
-											if (dictating) {
-												stopDict.current?.();
-												setDictating(false);
-												setTranscribing(false);
-												return;
-											}
-											const stop = startDictation(
-												transcript => {
-													const { submit, trimTrailing } = evaluateSubmitTrigger(
-														transcript,
-														sttSubmitTrigger,
-													);
-													if (submit) {
-														// TUI stt.submitTrigger parity: auto-send the utterance
-														// (minus a stripped "submit" tail) instead of leaving
-														// it in the draft box.
-														const trimmed = transcript.slice(0, transcript.length - trimTrailing).trim();
-														if (trimmed) sendText(trimmed);
-													} else {
-														setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-														requestAnimationFrame(() => autosize(taRef.current));
-													}
-													setDictating(false);
-													setTranscribing(false);
-												},
-												message => {
-													setDictating(false);
-													setTranscribing(false);
-													showVoiceError(message);
-												},
-												rpc,
-												activity => {
-													if (activity.phase === "recording") {
-														setVoiceSeconds(activity.seconds);
-														setVoiceLevel(activity.level);
-														setTranscribing(false);
-													} else if (activity.phase === "transcribing") {
-														setTranscribing(true);
-													} else if (activity.phase === "error") {
-														setDictating(false);
-														setTranscribing(false);
-														showVoiceError(activity.message);
-													}
-												},
-											);
-											stopDict.current = stop;
-											if (stop) {
-												setDictating(true);
-												setVoiceSeconds(0);
-												setVoiceLevel(0);
-											}
-										}}
-									/>
+									{/* Compact motion-only mic control; the live waveform,
+									 * clock and phase copy live in the in-input strip. */}
+									<VoiceButton state={dictation.phase} onToggle={dictation.toggle} />
 									<button
 										type="submit"
 										ref={quotaAnchorRef}
@@ -1806,10 +1731,13 @@ export function WelcomeComposer({
 								</>
 							}
 						>
-							{voiceError && (
+							{dictation.phase !== "idle" && (
+								<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
+							)}
+							{dictation.error && (
 								<div className="gui-voice-error" role="status" aria-live="polite">
 									<span className="gui-voice-error-dot" aria-hidden />
-									<span className="min-w-0 flex-1">{voiceError}</span>
+									<span className="min-w-0 flex-1">{dictation.error}</span>
 								</div>
 							)}
 							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">

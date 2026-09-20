@@ -52,13 +52,14 @@
 		"@musepi/collab-proto": "workspace:*",
 		"@musepi/hashline": "catalog:",
 		"@musepi/musepi-stats": "catalog:",
+		"@musepi/musepi-type": "catalog:",
 		"@musepi/pi-agent-core": "catalog:",
 		"@musepi/pi-ai": "catalog:",
 		"@musepi/pi-catalog": "catalog:",
 		"@musepi/pi-mnemopi": "catalog:",
 		"@musepi/pi-natives": "catalog:",
-		"@musepi/pi-tui": "catalog:",
 		"@musepi/pi-tool-select": "catalog:",
+		"@musepi/pi-tui": "catalog:",
 		"@musepi/pi-utils": "catalog:",
 		"@musepi/pi-wire": "catalog:",
 		"@musepi/sdk": "workspace:*",
@@ -85,8 +86,8 @@
 		"lru-cache": "catalog:",
 		"mupdf": "catalog:",
 		"node-pty": "^1.2.0-beta.15",
-		"puppeteer-core": "catalog:",
-		"@musepi/musepi-type": "catalog:"
+		"opencc-js": "^1.0.5",
+		"puppeteer-core": "catalog:"
 	},
 	"optionalDependencies": {
 		"@huggingface/transformers": "catalog:",

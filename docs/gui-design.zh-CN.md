@@ -310,6 +310,27 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **设置页的头像选择器能区分选项了**(`gui-settings.css`):`设置 → 常规` 的 Agent 头像行原本是五个无标签的 38px 图标按钮,身份藏在 `title` 悬浮提示里,选中态是一条发丝描边——"只能进行切换"。现在是 `.gui-avatar-grid` + `.gui-avatar-card`:**32px 实时预览台**(小到能judge 出差异的尺寸;固定 40×34 槽位,让宠物的宽盒子与方形图标共享基线)、预设**名称**、以及选中项的**勾选**。伙伴设置页新增对应的**外观细节**分组。两处都复用 `.gui-pet-card` 的卡片语言,让两个头像界面读作同一套系统。(`.gui-avatar-opt` 保留给其他使用者——引导流程的个性化步骤,以及 git 设置里的用户头像来源选择器。)
 - **滑杆对齐**:伙伴大小滑杆步进为 5%,而 `petScale()`/`setPetScale()` 存取并夹取整数百分比,导致存下的值与标签错位(`step=5` → 60/65/70…,却按 1% 的夹取范围读回)。改为 `step=1`。
 
+## 5m. 配饰、用户 SVG 导入与桌宠窗口四 bug(2026-09-20 下午)
+
+本轮由五条用户反馈驱动:头像小球变空白、桌面小球保持石墨色而非品牌金、面板裁切/遮挡角色、拖拽位置恢复偏移,以及——功能需求——配饰(音符/耳机)+ 用户 SVG 导入,参考 clawd on desk / blobstudio。
+
+- **配饰是 pick-one 联合类型,不是标志位**(`pet-decor.ts` 的 `PetAccessory = "none" | "note" | "headphones"`):§5l 预言"一条标志 + 两个 i18n key",但穿戴物**互斥**——分段控件(`.gui-pet-accessory-picker`)不会漂移成组合衣柜,clawd-on-desk 的教训("一个状态一套完整动画,不是换贴图")同样适用于穿搭。绘制为 **rig 组内的静态画**(脸部之后):随球缩放、免费骑在身体运动上;两者都按 rig 留白创作(音梁顶点 y≈−4 对 TOP 24;音符杆 r≈112 对壳 R≈114)所以不裁切——头顶漂浮的挂件会复刻已删除信标的"孤立金点"问题,所以音符是**贴在壳面上的贴花**。存储仍是逐键记录;`asAccessory` 把联合类型外的值降级为 `none`。
+- **用户 SVG 导入 = 单帧 petdex 包**(`PetdexPackage.format: "svg"`):渲染端文件选择(≤512KB、`<svg` 嗅探、带 viewBox 文本兜底的 Image 解码以对付无尺寸 SVG)存为 `format:"svg"`、`rows:[1]`、`contentH = height`——预设网格、触发器、composer 与桌面桌宠全部经**现有** PetdexSprite 路径渲染(`backgroundPosition` 钉在 `0 0`;行偏移会在 hover/拖行时把整张图移出盒子)。心情系统对单静态帧降级为 transform 行(bob/lift/wiggle),与缺行的精灵表一致。
+- **头像小球空白**——`.gui-pet-svg` **自身没有尺寸规则**(gui-pet.css 用 `.gui-pet svg` 后代选择器定尺寸);任何不套 `.gui-pet` 包装就渲染精灵的调用点会塌成 0。该规则升级为组件:`PetBox`(包装器 + 两个变量),包装器从导出的 `PET_BOX_RATIO` 发布 `--gui-pet-ratio`——样式表字面量只作水合兜底,重调 VIEW 不再静默失同步每个宿主。
+- **石墨球**——桌宠窗口从不加载 `tokens.css`,根上不存在 `--accent`,`applyPetPalette` 落到硬编码暖石墨兜底("黑色带点黄")。从源头修:`pet-window.css :root` 携带品牌金 `--accent` 字面量(主窗口的主题推送仍会覆盖它)。教训:**推送管线需要在接收端有正确默认值**,而不只在发送端。
+- **面板裁切 + 遮挡**——`.pet-panel` 的 `max-height: calc(100vh - 180px)` 度量的是**它想让它变高的那个窗口**:高度上报量的是被钳住的盒子、只请求刚好的高度、窗口变高、上限跟着变大——恶性反馈循环收敛到一个约 112px 的矮面板(截图 3)。卡片现在**不带 max-height**;窗口才是约束(经 `pet-set-content-size` 向上生长,main.cjs 内按工作区钳制),`.pet-panel__body`(`min-height:0; overflow-y:auto`)是唯一 scrollport。第二处:面板开关订阅挂在 `[panelOpen]` 上重注册,落在拆卸/重注册交换窗内的点击跑的是**旧** handler——面板开着却"又开一次"、且关不掉。改为挂载一次、读 `panelOpenRef`。
+- **拖拽位置偏移**——`persistPetPos` 存的是**浮层展开时变高的窗口**的左上角 `y`;按基础高度恢复会让宠物下坠"长高量",贴底边的矩形则直接过不了可见性检查(位置"被遗忘"→回落默认角落)。锚点改为宠物的**底边**(`bottom: (y+h)/dip`,恢复为 `y = bottom − base`)——精灵悬挂其上的不变量,与 `reconcilePetWindow` 保持的是同一个。命中盒上报加了覆盖浮层元素的 `ResizeObserver`(切 tab / 形变改内容尺寸而不改窗口尺寸;旧命中盒会让点击穿透轮询落错位置)。
+- **去重(clawd pass)**:删除仍在描述已废弃气泡窗口的过时双窗口注释块(main.cjs 托盘段、bubble × 关闭处理器、桌宠窗口 backgroundColor 注、pet-main 开关文档)——描述不存在架构的注释比没有注释更糟。
+
+## 5n. 语音输入交互:只承动效的麦克风按钮与输入框内状态条(2026-09-20)
+
+本轮由三条用户反馈驱动:中文听写输出繁体、转录很慢且全程无反馈(按钮的状态在文字出现前就结束了)、以及麦克风胶囊"装不下那么多文案——更应该承载动效"。
+
+- **30px 胶囊是动效预算,不是文案预算**(`composer/action-buttons.tsx` 的 `VoiceButton`):按钮只通过染色 + 脉冲(录音中)与 spinner(转写中)承载状态——秒数时钟、相位文案、取消提示永不回灌。控件装不下自己的反馈时,把反馈挪到装得下的地方;在胶囊里缩小字号读作坏了,不是紧凑。
+- **反馈长在输入卡内部**(`VoiceStatusStrip`,composer children、textarea 上方——与错误胶囊同位):13 根 bar 的波形 + 秒数/「转写中…」+ Esc 提示。它是**整个转录等待期**唯一的反馈面——旧流程在录音一停就什么都没有了,文字在几秒死寂后"凭空出现"。经 `role="status"` / `aria-live="polite"` 播报。
+- **波形纯 CSS**(动效标准 §3):共享一条 scaleY keyframes;每根 bar 的负 `animation-delay` 加略异的时长错相,不读作节拍器;真实麦克风 RMS 只经 `--voice-level` 调制条组透明度。无 JS 高度驱动,波形无 rAF 循环。
+- **相位诚实**(`use-dictation.ts`):`idle → recording → transcribing` 单一真相源,用户一停就乐观进入转写相位——异步结果在途时控件绝不能渲染成 idle。转写中再 toggle 是真取消(旧 UI 只清自己的 flag,在途结果照样落盘)。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

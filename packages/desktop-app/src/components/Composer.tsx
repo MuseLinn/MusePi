@@ -16,7 +16,7 @@ import {
 } from "../lib/slot-host";
 import { isAutoresearchCommand, isDebugCommand, isUsageCommand } from "../lib/usage-command";
 import { useFloatingMenu } from "../lib/use-floating-menu";
-import { cancelActiveDictation, evaluateSubmitTrigger, type SttSubmitTrigger, startDictation } from "../lib/voice";
+import type { SttSubmitTrigger } from "../lib/voice";
 import { AttachMenu } from "./AttachMenu";
 import { AutoresearchPanel } from "./AutoresearchPanel";
 import { ContextRing, type SnapcompactSavingsView, type UsageQuotaView, type UsageSummaryView } from "./ContextRing";
@@ -27,6 +27,7 @@ import {
 	RetryButton,
 	SendOrStopButton,
 	VoiceButton,
+	VoiceStatusStrip,
 } from "./composer/action-buttons";
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
@@ -64,6 +65,7 @@ import {
 	useAttachments,
 } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
+import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -295,40 +297,6 @@ export function Composer({
 		[sketch.editId, closeSketch, setAttachments, addFiles],
 	);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
-	const [dictating, setDictating] = useState(false);
-	const [transcribing, setTranscribing] = useState(false);
-	const [voiceSeconds, setVoiceSeconds] = useState(0);
-	const [voiceLevel, setVoiceLevel] = useState(0);
-	// Dictation failures surface inline above the input (auto-dismiss) — a raw
-	// English error string in the global "工具错误" toast read as a broken app.
-	const [voiceError, setVoiceError] = useState<string | null>(null);
-	const voiceErrorTimer = useRef<number | null>(null);
-	const showVoiceError = useCallback((message: string): void => {
-		setVoiceError(message);
-		if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
-		voiceErrorTimer.current = window.setTimeout(() => setVoiceError(null), 6000);
-	}, []);
-	useEffect(
-		() => () => {
-			if (voiceErrorTimer.current !== null) window.clearTimeout(voiceErrorTimer.current);
-		},
-		[],
-	);
-	// Esc during dictation DISCARDS the buffer (mic press = keep & transcribe).
-	useEffect(() => {
-		if (!dictating) return;
-		const onKey = (e: globalThis.KeyboardEvent): void => {
-			if (e.key !== "Escape") return;
-			e.preventDefault();
-			e.stopPropagation();
-			cancelActiveDictation();
-			setDictating(false);
-			setTranscribing(false);
-			setVoiceError(null);
-		};
-		window.addEventListener("keydown", onKey, true);
-		return () => window.removeEventListener("keydown", onKey, true);
-	}, [dictating]);
 
 	// Trailing "+" card in the attachment row (composer-frame): opens the
 	// all-types picker directly, skipping the attach menu.
@@ -413,7 +381,6 @@ export function Composer({
 		},
 		[setText],
 	);
-	const stopDict = useRef<(() => void) | null>(null);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
 	const [contextUsage, setContextUsage] = useState<{
@@ -863,6 +830,19 @@ export function Composer({
 		window.addEventListener("omp-settings-changed", load);
 		return () => window.removeEventListener("omp-settings-changed", load);
 	}, [rpc]);
+	// Voice dictation (extracted: composer/use-dictation): one phase state owns
+	// recording → transcribing → insert/error. The transcription wait now keeps
+	// its feedback (strip + spinner) until the text actually lands, mic press
+	// during transcription cancels, and unmount drops the in-flight session.
+	const dictation = useDictation({
+		rpc,
+		sttSubmitTrigger,
+		onSubmit: onSend,
+		onInsert: transcript => {
+			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
+			requestAnimationFrame(() => autosize(taRef.current));
+		},
+	});
 	useEffect(() => {
 		if (!rpc) return;
 		const load = (): void => {
@@ -2069,60 +2049,9 @@ export function Composer({
 								fetchQuota={fetchUsageQuota}
 							/>
 						)}
-						<VoiceButton
-							state={dictating ? (transcribing ? "transcribing" : "recording") : "idle"}
-							seconds={voiceSeconds}
-							level={voiceLevel}
-							onToggle={() => {
-								if (dictating) {
-									stopDict.current?.();
-									setDictating(false);
-									setTranscribing(false);
-									return;
-								}
-								const stop = startDictation(
-									transcript => {
-										const { submit, trimTrailing } = evaluateSubmitTrigger(transcript, sttSubmitTrigger);
-										if (submit) {
-											// TUI stt.submitTrigger parity: auto-send the
-											// utterance (minus a stripped "submit" tail)
-											// instead of leaving it in the draft box.
-											onSend(transcript.slice(0, transcript.length - trimTrailing));
-										} else {
-											setText(prev => (prev ? `${prev} ${transcript}` : transcript));
-											requestAnimationFrame(() => autosize(taRef.current));
-										}
-										setDictating(false);
-										setTranscribing(false);
-									},
-									message => {
-										setDictating(false);
-										setTranscribing(false);
-										showVoiceError(message);
-									},
-									rpc,
-									activity => {
-										if (activity.phase === "recording") {
-											setVoiceSeconds(activity.seconds);
-											setVoiceLevel(activity.level);
-											setTranscribing(false);
-										} else if (activity.phase === "transcribing") {
-											setTranscribing(true);
-										} else if (activity.phase === "error") {
-											setDictating(false);
-											setTranscribing(false);
-											showVoiceError(activity.message);
-										}
-									},
-								);
-								stopDict.current = stop;
-								if (stop) {
-									setDictating(true);
-									setVoiceSeconds(0);
-									setVoiceLevel(0);
-								}
-							}}
-						/>
+						{/* Compact motion-only mic control; the live waveform, clock
+						 * and phase copy live in the in-input VoiceStatusStrip. */}
+						<VoiceButton state={dictation.phase} onToggle={dictation.toggle} />
 						{/* 三合一 send control (user direction, opendesign parity):
 						 * idle → send; working → the button itself displays the
 						 * live agent state (braille + accent shimmer), hover
@@ -2141,10 +2070,13 @@ export function Composer({
 					</>
 				}
 			>
-				{voiceError && (
+				{dictation.phase !== "idle" && (
+					<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
+				)}
+				{dictation.error && (
 					<div className="gui-voice-error" role="status" aria-live="polite">
 						<span className="gui-voice-error-dot" aria-hidden />
-						<span className="min-w-0 flex-1">{voiceError}</span>
+						<span className="min-w-0 flex-1">{dictation.error}</span>
 						<span className="gui-voice-error-hint">{t("voice esc to cancel")}</span>
 					</div>
 				)}

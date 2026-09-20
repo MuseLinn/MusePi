@@ -36,6 +36,7 @@ import {
 	type TransformersSttModelSpec,
 } from "./models";
 import { loadSourceSherpaRuntime, type SherpaOfflineRecognizer, type SherpaRuntime } from "./sherpa-runtime";
+import { normalizeChineseScript } from "./zh-hans";
 
 const ASR_TASK = "automatic-speech-recognition";
 const SHERPA_PACKAGE = "sherpa-onnx-node";
@@ -407,7 +408,7 @@ async function decodeSegment(
 		const stream = model.recognizer.createStream();
 		stream.acceptWaveform({ samples: audio, sampleRate: ASR_SAMPLE_RATE });
 		const result = await model.recognizer.decodeAsync(stream);
-		return (result.text ?? "").trim();
+		return normalizeChineseScript((result.text ?? "").trim(), language);
 	}
 	const options: AsrCallOptions = {
 		chunk_length_s: CHUNK_LENGTH_S,
@@ -421,7 +422,7 @@ async function decodeSegment(
 		if (language) options.language = language;
 	}
 	const output = (await model.pipeline(audio, options)) as AutomaticSpeechRecognitionOutput;
-	return (output.text ?? "").trim();
+	return normalizeChineseScript((output.text ?? "").trim(), language);
 }
 
 async function transcribeAudio(

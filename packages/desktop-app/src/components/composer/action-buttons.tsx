@@ -1,7 +1,7 @@
 import { Check as CheckIconData, WandSparkles as WandSparklesIconData } from "lucide";
 import { SendHorizontal, Square, WandSparkles } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 import { TextMorph } from "../TextMorph";
@@ -34,38 +34,82 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
 	);
 }
 
-/** Voice input toggle (startDictation from ../lib/voice). */
+/** Voice input toggle (startDictation from ../lib/voice).
+ *
+ *  Deliberately a compact motion-only control: the 30px capsule has no room
+ *  for copy (user direction), so the seconds clock, the waveform and the
+ *  phase text moved into the in-input {@link VoiceStatusStrip} — the button
+ *  keeps just the tint + pulse while recording and the spinner while
+ *  transcribing. */
 export function VoiceButton({
 	state,
-	seconds,
-	level,
 	onToggle,
 }: {
 	state: "idle" | "recording" | "transcribing";
-	seconds: number;
-	level: number;
 	onToggle(): void;
 }): ReactNode {
+	const label =
+		state === "recording"
+			? t("voice recording stop")
+			: state === "transcribing"
+				? t("voice transcribing")
+				: t("voice input");
 	return (
 		<button
 			type="button"
 			className={`gui-composer-ico${state !== "idle" ? " gui-composer-ico--dictating" : ""}`}
 			onClick={onToggle}
-			title={state === "recording" ? t("voice recording stop") : t("voice input")}
-			aria-label={state === "recording" ? t("voice recording stop") : t("voice input")}
+			title={label}
+			aria-label={label}
 		>
-			{state === "recording" ? (
-				<>
-					<Icon name="mic" className="h-3.5 w-3.5 gui-voice-pulse" />
-					<span className="gui-voice-seconds">{seconds}s</span>
-					<span className="gui-voice-level" style={{ width: `${Math.round(level * 100)}%` }} />
-				</>
-			) : state === "transcribing" ? (
-				<span className="gui-voice-spinner" aria-label={t("voice transcribing")} />
+			{state === "transcribing" ? (
+				<span className="gui-voice-spinner" />
 			) : (
 				<Icon name="mic" className="h-3.5 w-3.5" />
 			)}
 		</button>
+	);
+}
+
+/** Bar animation seeds: a negative delay per bar desyncs the shared scaleY
+ *  keyframes and a slightly different duration per bar keeps the wave from
+ *  reading as a mechanical metronome. Computed once. */
+const VOICE_WAVE_BARS = Array.from({ length: 13 }, (_, i) => ({
+	delay: `${(-i * 0.11).toFixed(2)}s`,
+	duration: `${(0.72 + (i % 4) * 0.09).toFixed(2)}s`,
+}));
+
+/** In-input voice feedback strip (composer children, above the textarea):
+ *  while dictating, the waveform that used to be crammed into the mic
+ *  capsule lives here instead, where there is room for the clock and the
+ *  phase copy. Bars are pure CSS (staggered scaleY); the real mic RMS only
+ *  modulates the strip's opacity via `--voice-level` (no JS height driving). */
+export function VoiceStatusStrip({
+	phase,
+	seconds,
+	level,
+}: {
+	phase: "recording" | "transcribing";
+	seconds: number;
+	level: number;
+}): ReactNode {
+	return (
+		<div
+			className={`gui-voice-strip${phase === "transcribing" ? " gui-voice-strip--transcribing" : ""}`}
+			style={{ "--voice-level": `${Math.round(level * 100) / 100}` } as CSSProperties}
+			role="status"
+			aria-live="polite"
+		>
+			<span className="gui-voice-wave" aria-hidden>
+				{VOICE_WAVE_BARS.map((bar, i) => (
+					<i key={i} style={{ animationDelay: bar.delay, animationDuration: bar.duration }} />
+				))}
+			</span>
+			<span className="gui-voice-strip-label">
+				{phase === "recording" ? `${seconds}s` : t("voice transcribing")}
+			</span>
+			<span className="gui-voice-strip-hint">{t("voice esc to cancel")}</span>
+		</div>
 	);
 }
 

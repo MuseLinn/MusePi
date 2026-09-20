@@ -254,6 +254,85 @@
 	color: var(--color-danger, #e5484d);
 }
 
+/* ── Voice dictation strip (composer children, above the textarea) ──────
+ * The mic button is a compact motion-only control (its 30px capsule had no
+ * room for copy — user direction); the live waveform, the clock and the
+ * phase copy live HERE instead, inside the input card where there is room.
+ * Bars are pure CSS (staggered scaleY, no JS height driving); the real mic
+ * RMS modulates only the strip's opacity via --voice-level. */
+.gui-voice-strip {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 6px 2px 0;
+	padding: 5px 10px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-danger) 9%, transparent);
+	--voice-level: 0;
+}
+
+.gui-voice-wave {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	height: 16px;
+	flex: none;
+	opacity: calc(0.5 + 0.5 * var(--voice-level));
+	transition: opacity 120ms linear;
+}
+
+.gui-voice-wave i {
+	width: 3px;
+	height: 14px;
+	border-radius: 50%;
+	background: var(--color-danger);
+	transform: scaleY(0.25);
+	animation: gui-voice-bar 0.9s ease-in-out infinite;
+}
+
+@keyframes gui-voice-bar {
+	0%,
+	100% {
+		transform: scaleY(0.25);
+	}
+	50% {
+		transform: scaleY(1);
+	}
+}
+
+.gui-voice-strip-label {
+	font-size: 12px;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-danger);
+}
+
+.gui-voice-strip-hint {
+	margin-left: auto;
+	flex: none;
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+/* Transcribing: the wave idles down and the phase copy takes over — the
+ * model itself is still working, there is nothing to hear anymore. */
+.gui-voice-strip--transcribing {
+	background: color-mix(in oklab, var(--color-text-muted) 8%, transparent);
+}
+
+.gui-voice-strip--transcribing .gui-voice-wave {
+	opacity: 0.35;
+}
+
+.gui-voice-strip--transcribing .gui-voice-wave i {
+	background: var(--color-text-muted);
+	animation-duration: 2.4s;
+}
+
+.gui-voice-strip--transcribing .gui-voice-strip-label {
+	color: var(--color-text-muted);
+}
+
 /* ── Attach (paperclip) menu: image picker + mode toggles ─────────────── */
 .gui-attach-menu {
 	display: flex;
