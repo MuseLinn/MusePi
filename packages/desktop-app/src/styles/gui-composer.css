@@ -2249,17 +2249,23 @@
 	opacity: 1;
 }
 
-/* Tinted spans carry COLOUR ONLY. Anything that changes glyph advance
- * (font-family — the mono keyword was visibly wider than the textarea's
- * proportional glyphs — font-weight, letter-spacing, padding) desyncs the
- * overlay from the transparent textarea and the caret drifts off the
- * painted characters. */
-.gui-ta-hl-slash {
-	color: var(--color-accent);
-}
-
+/* Token pills — slash command / shell bang / magic keyword. Colour and a
+ * tinted capsule ONLY: anything that changes glyph advance (font-family —
+ * the mono keyword was visibly wider than the textarea's proportional
+ * glyphs — font-weight, letter-spacing, horizontal padding without the
+ * twin negative margin) desyncs the overlay from the transparent textarea
+ * and the caret drifts off the painted characters. The padding is repaid
+ * by an equal negative margin, so the pill paints outside its box without
+ * occupying it. `@`/`#` are deliberately absent — nothing in the send
+ * path expands them, a pill would promise behaviour that doesn't exist. */
+.gui-ta-hl-slash,
+.gui-ta-hl-bang,
 .gui-ta-hl-magic {
 	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 13%, transparent);
+	border-radius: 999px;
+	padding: 1px 4px;
+	margin: -1px -4px;
 }
 
 /* Transparent-ink pairing: the textarea keeps only its caret; the overlay
