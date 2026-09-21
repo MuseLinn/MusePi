@@ -103,4 +103,5 @@ export const transcript = {
 	"turn {index}": "Turn {index}",
 	"turn running": "Running",
 	"turn done": "Done",
+	"back to bottom": "Back to bottom",
 } as const satisfies Record<TranscriptKey, string>;

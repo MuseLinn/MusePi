@@ -3291,3 +3291,54 @@ a.tr-tool-search-title:hover {
 .tr-turn-head-sep {
 	opacity: 0.45;
 }
+
+/* Back-to-bottom (M1.10 batch A, L2 float spec): ghost round button,
+ * glass-strong base + accent rim, spring-liquid entrance. Sticky LAST
+ * child of .tr-root — the sticky constraint pins it to the pane bottom
+ * while the content tail is scrolled away; near the tail it settles into
+ * flow, but shouldShowBackToBottom hides it there anyway. */
+.tr-back-bottom {
+	position: sticky;
+	bottom: 14px;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	margin-top: -34px;
+	margin-left: auto;
+	margin-right: 10px;
+	border-radius: 50%;
+	border: 1px solid var(--accent);
+	color: var(--accent);
+	background: var(--glass-bg-strong, oklch(1 0 0 / 11%));
+	backdrop-filter: blur(12px) saturate(1.4);
+	-webkit-backdrop-filter: blur(12px) saturate(1.4);
+	box-shadow: var(--glass-shadow, 0 6px 20px oklch(0 0 0 / 25%));
+	cursor: pointer;
+	animation: tr-back-bottom-in 260ms var(--spring-liquid, cubic-bezier(0.34, 1.56, 0.64, 1));
+	transition: transform 160ms var(--spring, ease), background 160ms ease;
+}
+.tr-back-bottom:hover {
+	transform: translateY(-2px);
+}
+.tr-back-bottom:active {
+	transform: translateY(0) scale(0.94);
+}
+@keyframes tr-back-bottom-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.8);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.tr-back-bottom {
+		animation: none;
+		transition: none;
+	}
+}

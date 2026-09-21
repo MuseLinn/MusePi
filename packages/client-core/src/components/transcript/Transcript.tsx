@@ -1,7 +1,7 @@
 import type { AssistantMessage, CustomMessageEntry, SessionEntry, ToolResultMessage } from "@musepi/pi-wire";
 import { play } from "cuelume";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
-import { GitFork, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
+import { ArrowDown, GitFork, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
 import { electronBridge } from "../../lib/electron-bridge";
 
@@ -39,8 +39,10 @@ import { buildRoundFolds, type RoundFold } from "./round-collapse";
 import {
 	anchorActionAfterContentChange,
 	initialFollowing,
+	isAtBottom,
 	reconcileFollowingForContentAnchor,
 	resolveFollowingAfterScroll,
+	shouldShowBackToBottom,
 	type TimelineUserScrollIntent,
 	timelineKeyboardScrollIntent,
 	timelineTouchScrollIntent,
@@ -1191,7 +1193,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// its scroll event — without the reconcile a streaming commit would
 	// swallow it and yank the viewport back to the bottom).
 	const followingRef = useRef(initialFollowing());
+	const [followingUi, setFollowingUi] = useState(followingRef.current);
+	const setFollowing = useCallback((next: boolean): void => {
+		followingRef.current = next;
+		setFollowingUi(next);
+	}, []);
 	const programmaticScrollRef = useRef(false);
+	// Back-to-bottom smooth scroll in flight: intermediate scroll events must
+	// not be adjudicated as user upscrolls (they'd cancel the animation's
+	// re-follow). Cleared on arrival (at bottom) or scrollend.
+	const smoothScrollRef = useRef(false);
 	const lastObservedScrollTopRef = useRef(0);
 	const scrollIntentRef = useRef<TimelineUserScrollIntent | undefined>(undefined);
 	const prevLenRef = useRef(entries.length);
@@ -1226,7 +1237,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// Session switch → land on the latest message (see `sessionKey`).
 	useEffect(() => {
 		void sessionKey;
-		followingRef.current = true;
+		setFollowing(true);
 		scrollIntentRef.current = undefined;
 		const el = scrollerRef.current;
 		if (el) {
@@ -1321,22 +1332,38 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
 		const onScroll = (): void => {
+			const metrics = {
+				scrollTop: scroller.scrollTop,
+				viewportHeight: scroller.clientHeight,
+				contentHeight: scroller.scrollHeight,
+			};
+			// Back-to-bottom animation in flight: intermediate positions are
+			// programmatic, not user upscrolls. Keep ignoring until arrival
+			// (landing at the bottom re-arms follow) or the scrollend fallback.
+			if (smoothScrollRef.current) {
+				lastObservedScrollTopRef.current = scroller.scrollTop;
+				if (isAtBottom(metrics)) {
+					smoothScrollRef.current = false;
+					programmaticScrollRef.current = false;
+					setFollowing(true);
+				}
+				return;
+			}
 			const source = programmaticScrollRef.current ? "programmatic" : "user";
 			programmaticScrollRef.current = false;
 			lastObservedScrollTopRef.current = scroller.scrollTop;
-			followingRef.current = resolveFollowingAfterScroll({
-				following: followingRef.current,
-				metrics: {
-					scrollTop: scroller.scrollTop,
-					viewportHeight: scroller.clientHeight,
-					contentHeight: scroller.scrollHeight,
-				},
-				source,
-			});
+			setFollowing(resolveFollowingAfterScroll({ following: followingRef.current, metrics, source }));
+		};
+		const onScrollEnd = (): void => {
+			smoothScrollRef.current = false;
 		};
 		scroller.addEventListener("scroll", onScroll);
-		return () => scroller.removeEventListener("scroll", onScroll);
-	}, []);
+		scroller.addEventListener("scrollend", onScrollEnd);
+		return () => {
+			scroller.removeEventListener("scroll", onScroll);
+			scroller.removeEventListener("scrollend", onScrollEnd);
+		};
+	}, [setFollowing]);
 
 	// User scroll-intent capture (wheel/touch/keyboard). The intent exists
 	// one frame ahead of its scroll event; a content commit landing in that
@@ -1420,7 +1447,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (entries.length > prevLenRef.current) {
 			const last = entries[entries.length - 1] as { type?: string; message?: { role?: string } } | undefined;
 			if (last?.type === "message" && last.message?.role === "user") {
-				followingRef.current = true;
+				setFollowing(true);
 				scrollIntentRef.current = undefined;
 			}
 		}
@@ -1429,23 +1456,25 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// scroll event must not be swallowed by this commit (it would yank
 		// the viewport back to the bottom and re-arm follow). The intent is
 		// consumed here; later scroll events adjudicate by landing position.
-		followingRef.current = reconcileFollowingForContentAnchor({
-			following: followingRef.current,
-			metrics: {
-				scrollTop: el.scrollTop,
-				viewportHeight: el.clientHeight,
-				contentHeight: el.scrollHeight,
-			},
-			lastObservedScrollTop: lastObservedScrollTopRef.current,
-			userScrollIntent: scrollIntentRef.current,
-		});
+		setFollowing(
+			reconcileFollowingForContentAnchor({
+				following: followingRef.current,
+				metrics: {
+					scrollTop: el.scrollTop,
+					viewportHeight: el.clientHeight,
+					contentHeight: el.scrollHeight,
+				},
+				lastObservedScrollTop: lastObservedScrollTopRef.current,
+				userScrollIntent: scrollIntentRef.current,
+			}),
+		);
 		scrollIntentRef.current = undefined;
 		if (anchorActionAfterContentChange(followingRef.current) === "stickToBottom") {
 			programmaticScrollRef.current = true;
 			el.scrollTop = el.scrollHeight;
 			lastObservedScrollTopRef.current = el.scrollTop;
 		}
-	}, [followKey, entries]);
+	}, [followKey, entries, setFollowing]);
 
 	// While following, ANY tail-ward content growth re-pins the bottom:
 	// streaming deltas, images finishing decode, deferred code highlighting.
@@ -1492,6 +1521,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	for (const tool of activeTools.values()) {
 		if (!renderedToolIds.has(tool.toolCallId)) tailTools.push(tool);
 	}
+
+	// Back-to-bottom (M1.10 批次 A, L2 float 规格): visible only when the
+	// user has scrolled away (shouldShowBackToBottom semantics from the M1.3
+	// state machine). The click re-arms follow and smooth-scrolls; the
+	// in-flight animation's intermediate scroll events are adjudicated as
+	// programmatic (smoothScrollRef) so they cannot cancel the re-follow.
+	const backToBottom = useCallback((): void => {
+		setFollowing(true);
+		scrollIntentRef.current = undefined;
+		const scroller = scrollerRef.current;
+		if (!scroller) return;
+		smoothScrollRef.current = true;
+		programmaticScrollRef.current = true;
+		scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+	}, [setFollowing]);
 
 	return (
 		<div
@@ -1807,6 +1851,22 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						/>
 					))}
 				</Row>
+			)}
+			{/* Back to bottom — sticky LAST child of .tr-root: its natural
+			    position is the content tail, so while the tail is below the
+			    viewport the sticky constraint pins the button to the pane
+			    bottom; near the tail it settles into flow (and is hidden —
+			    shouldShowBackToBottom is false while following). */}
+			{shouldShowBackToBottom(followingUi, entries.length) && (
+				<button
+					type="button"
+					className="tr-back-bottom"
+					onClick={backToBottom}
+					aria-label={t("back to bottom")}
+					title={t("back to bottom")}
+				>
+					<ArrowDown size={15} strokeWidth={2.2} />
+				</button>
 			)}
 			{/* The pre-stream thinking state is carried by the input-above
 			    status bar (orb + text) — a transcript row with its own gutter

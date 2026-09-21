@@ -100,6 +100,7 @@ export const transcript = {
 	"turn {index}": "第 {index} 轮",
 	"turn running": "进行中",
 	"turn done": "已完成",
+	"back to bottom": "回到底部",
 } as const;
 
 /** Key union for the transcript domain (source of truth). */
