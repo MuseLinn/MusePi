@@ -10,7 +10,7 @@ import { GuiSelect } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
-import { SpotlightCard } from "../SpotlightCard";
+import { SpotlightCard } from "@musepi/client-core";
 import { StateIcon } from "../StateIcon";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";

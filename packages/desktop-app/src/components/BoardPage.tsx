@@ -40,7 +40,7 @@ import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
-import { SpotlightCard } from "./SpotlightCard";
+import { SpotlightCard } from "@musepi/client-core";
 import { StateIcon } from "./StateIcon";
 import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";

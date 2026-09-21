@@ -27,7 +27,7 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
-import { BlurText } from "./BlurText";
+import { BlurText } from "@musepi/client-core";
 import {
 	fmtQuotaDuration,
 	type UsageActiveAccountView,
@@ -48,7 +48,7 @@ import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/us
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
-import { DotMatrixMark } from "./DotMatrixMark";
+import { DotMatrixMark } from "@musepi/client-core";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";

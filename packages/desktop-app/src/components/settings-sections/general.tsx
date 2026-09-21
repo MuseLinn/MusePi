@@ -30,7 +30,7 @@ import {
 	setPunkSeed,
 	userPunkSeed,
 } from "../avatar-presets";
-import { DotMatrixMark } from "../DotMatrixMark";
+import { DotMatrixMark } from "@musepi/client-core";
 import { GuiSelect } from "../GuiSelect";
 import { SchemaTabSection } from "./schema";
 

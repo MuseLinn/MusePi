@@ -10,6 +10,14 @@
  */
 
 export { AgentsPanel } from "./components/agents/AgentsPanel";
+/** reactbits-parity brand chrome (zero-dependency, shared GUI ↔ guest): the
+ *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
+ *  interactive dot-matrix brand mark. The desktop app imports these from
+ *  here instead of keeping local copies. */
+export { BlurText } from "./components/shell/BlurText";
+export { DotMatrixMark } from "./components/shell/DotMatrixMark";
+export { ShinyText } from "./components/shell/ShinyText";
+export { SpotlightCard } from "./components/shell/SpotlightCard";
 export { BarChart, type BarChartProps, type BarChartSerie } from "./components/charts/BarChart";
 export { Donut, type DonutProps } from "./components/charts/Donut";
 export { Gauge, type GaugeProps } from "./components/charts/Gauge";
