@@ -6,7 +6,7 @@ import { useEffect } from "react";
  * scroll container and maintains `data-top-scroll` / `data-bottom-scroll`
  * attributes that CSS mask-image rules key off — the top/bottom content
  * fade engages only while the content actually overflows and is scrolled
- * away from the edge. Shared by the transcript (JumpToBottomButton), the
+ * away from the edge. Shared by the transcript, the
  * sidebar session list, the settings panes, and the model-selector menu.
  *
  * `onMeasure` runs on every scroll/resize/mutation (after the data attrs

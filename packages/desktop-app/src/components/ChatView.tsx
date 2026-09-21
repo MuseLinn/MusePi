@@ -43,7 +43,6 @@ import { BrowserGuiHint } from "./BrowserGuiHint";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
-import { JumpToBottomButton } from "./JumpToBottomButton";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -1908,9 +1907,10 @@ export function ChatView({
 															/>
 														</CodeHighlightProvider>
 													</div>
-													{/* Jump-to-bottom (openchamber ScrollToBottomButton parity):
-													 * floats over the composer edge while scrolled up. */}
-													<JumpToBottomButton rootRef={transcriptRef} />
+													{/* Jump-to-bottom: the shared client-core Transcript owns the
+													 * canonical .tr-back-bottom (M1.10, ZCode-parity follow re-arm).
+													 * The old desktop-local JumpToBottomButton was a DUPLICATE of
+													 * it (user: 滚动到底部的按钮有俩) and has been removed. */}
 													{/* Message-tree navigation (TUI tree-selector parity):
 													 * a floating searchable turn tree — jump to any
 													 * position in the conversation, or fork a new session
