@@ -47,8 +47,28 @@ export const BUILTIN_PLUGINS: PluginDescriptor[] = [
 	{ kind: "huawei-today", label: "Huawei Today", description: "负一屏 task-result push", origin: "builtin" },
 ];
 
-/** Scan a plugin directory for channel plugin modules (.ts/.js, default export). */
-export async function loadChannelPlugins(dir: string): Promise<{ plugin: ChannelPlugin; origin: string }[]> {
+/** Scan a plugin directory for channel plugin modules (.ts/.js, default export).
+ *
+ * Results are cached per directory for `PLUGIN_CACHE_TTL_MS`: the share
+ * dialog's status poll used to rescan + re-import every plugin file on every
+ * tick, and a GUI render-loop bug drove that at ~70 scans/s — hundreds of
+ * redundant dynamic imports against the same files. `channels.reloadPlugins`
+ * (hot-plug) bypasses with `force`. */
+const PLUGIN_CACHE_TTL_MS = 2000;
+const pluginCache = new Map<string, { at: number; promise: Promise<{ plugin: ChannelPlugin; origin: string }[]> }>();
+
+export async function loadChannelPlugins(
+	dir: string,
+	opts?: { force?: boolean },
+): Promise<{ plugin: ChannelPlugin; origin: string }[]> {
+	const cached = pluginCache.get(dir);
+	if (!opts?.force && cached && Date.now() - cached.at < PLUGIN_CACHE_TTL_MS) return cached.promise;
+	const promise = scanChannelPlugins(dir);
+	pluginCache.set(dir, { at: Date.now(), promise });
+	return promise;
+}
+
+async function scanChannelPlugins(dir: string): Promise<{ plugin: ChannelPlugin; origin: string }[]> {
 	const out: { plugin: ChannelPlugin; origin: string }[] = [];
 	let entries: string[];
 	try {

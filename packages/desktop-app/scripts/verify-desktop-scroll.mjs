@@ -183,7 +183,10 @@ function spawnLogged(name, program, args, env, cwd) {
 		stdio: ["ignore", log, log],
 		windowsHide: true,
 	});
-	child.on("exit", () => fs.closeSync(log));
+	child.on("exit", (code, signal) => {
+		fs.closeSync(log);
+		console.log(`[spawn] ${name} exited code=${code} signal=${signal}`);
+	});
 	return child;
 }
 const tail = name => {
@@ -394,7 +397,8 @@ try {
 		fatal(
 			"renderer stuck before the chat surface: " +
 				JSON.stringify(diag) +
-				`\n--- electron log tail ---\n${tail("electron")}\n--- daemon log tail ---\n${tail("daemon")}`,
+				`\n--- electron log tail ---\n${tail("electron")}` +
+				`\n--- daemon exited=${daemon?.exitCode} signal=${daemon?.signalCode} ---\n${tail("daemon")}`,
 		);
 	}
 

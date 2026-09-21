@@ -20,8 +20,10 @@
  *    1. gold BEFORE/AFTER: override the six --gui-pet-{shell,gold}-* vars
  *       with the pre-rework derivation (HEAD formulas) vs the shipped
  *       champagne ramp — same render path, only the palette differs
- *    2. bubbles: activity push → collapsed stack → hover action bar →
- *       expanded list with ∨ fab + 清除全部
+ *    2. bubbles (in their OWN window since the 2026-09-21 split —
+ *       dist/bubbles.html): activity push → collapsed stack → hover action
+ *       bar → expanded list with ∨ fab + 清除全部, plus the split-window
+ *       geometry reports (content size / visible / hitbox)
  *    3. interaction on click: pointerdown → startled class; click →
  *       greeting class (single click no longer opens a panel)
  *    4. old pet panel DOM is gone
@@ -69,6 +71,14 @@ check(
 	"petdex fix: active-pet descriptor pushed with pet activity",
 	appTsx.includes("pet: activePet()"),
 );
+// Bubbles-window split (2026-09-21): the bubbles render in their own
+// window (bubbles.html) sized by the main process via the renderer's
+// content-size / visible / hitbox reports.
+const petMainTsx = fs.readFileSync(path.join(desktopDir, "src", "pet-main.tsx"), "utf8");
+check("pet window no longer hosts the bubbles (pet-main.tsx)", !petMainTsx.includes("pet-bubbles"));
+check("bubbles window wired (main.cjs layoutBubblesWindow + set-content-size IPC)", mainCjs.includes("layoutBubblesWindow") && mainCjs.includes('"bubbles-set-content-size"'));
+check("bubbles window wired (preload setBubblesContentSize/Visible/Hitbox)", ["setBubblesContentSize", "setBubblesVisible", "setBubblesHitbox"].every(m => preloadCjs.includes(m)));
+check("bubbles.html built", fs.existsSync(path.join(desktopDir, "dist", "bubbles.html")));
 
 // ── B. Render checks in headed Edge ──────────────────────────────────────
 /** Pre-rework (HEAD) gold derivation — the "屎黄" baseline. */
@@ -115,11 +125,13 @@ try {
 	});
 	page.on("requestfailed", r => console.log("[reqfail]", r.url().slice(-90), r.failure()?.errorText));
 
-	// Stub the preload bridge BEFORE pet.html boots: capture the activity
-	// listener so the test can push payloads exactly like the main window.
-	await page.evaluateOnNewDocument(() => {
+	// Stub the preload bridge BEFORE the renderer boots: capture the
+	// activity listener so the test can push payloads exactly like the main
+	// window. Shared by the pet page and the bubbles page (evaluateOnNew-
+	// Document is per-page).
+	const stubBridge = () => {
 		const listeners = { activity: [], approvalResolved: [] };
-		const calls = { petReply: [], petApprove: [], petMarkRead: [], petMarkAllRead: [], petOpenSession: [], focusMainWindow: 0, setPetContentSize: [] };
+		const calls = { petReply: [], petApprove: [], petMarkRead: [], petMarkAllRead: [], petOpenSession: [], focusMainWindow: 0, setPetContentSize: [], bubblesSetContentSize: [], bubblesSetVisible: [], bubblesSetHitbox: [] };
 		(window).__petStub = { listeners, calls };
 		(window).electronAPI = {
 			onPetActivity: cb => {
@@ -138,6 +150,18 @@ try {
 			setPetRect: () => Promise.resolve(),
 			setPetContentSize: s => {
 				calls.setPetContentSize.push(s);
+				return Promise.resolve();
+			},
+			bubblesSetContentSize: s => {
+				calls.bubblesSetContentSize.push(s);
+				return Promise.resolve();
+			},
+			bubblesSetVisible: v => {
+				calls.bubblesSetVisible.push(v);
+				return Promise.resolve();
+			},
+			bubblesSetHitbox: r => {
+				calls.bubblesSetHitbox.push(r);
 				return Promise.resolve();
 			},
 			petReply: (text, sessionId) => {
@@ -165,14 +189,15 @@ try {
 				return Promise.resolve();
 			},
 		};
-	});
+	};
+	await page.evaluateOnNewDocument(stubBridge);
 
 	await page.goto(`file:///${distPetHtml.replace(/\\/g, "/")}`, { waitUntil: "load" });
 	await page.waitForSelector(".pet-window", { timeout: 10_000 });
 	await sleep(1200);
 
-	const pushActivity = payload =>
-		page.evaluate(p => {
+	const pushActivity = (pg, payload) =>
+		pg.evaluate(p => {
 			const stub = (window).__petStub;
 			for (const cb of stub.listeners.activity) cb(p);
 		}, payload);
@@ -180,8 +205,8 @@ try {
 	// Dark scheme + working mood, like a live session. Push the accent
 	// explicitly — applyPetPalette only runs on a theme/accent payload, and
 	// without it the six --gui-pet-* vars stay unset (SVG fallbacks).
-	await pushActivity({ theme: "dark", mood: "working", petState: "working" });
-	await pushActivity({ accent: "oklch(0.7507 0.1295 79.85)" });
+	await pushActivity(page, { theme: "dark", mood: "working", petState: "working" });
+	await pushActivity(page, { accent: "oklch(0.7507 0.1295 79.85)" });
 	await sleep(400);
 	const paletteDbg = await page.evaluate(() => ({
 		inlineAccent: document.documentElement.style.getPropertyValue("--accent"),
@@ -197,6 +222,10 @@ try {
 	const shot = async name => {
 		await sleep(150);
 		await page.screenshot({ path: path.join(shotsDir, `${name}.png`), captureBeyondViewport: false });
+	};
+	const shotPg = async (pg, name) => {
+		await sleep(150);
+		await pg.screenshot({ path: path.join(shotsDir, `${name}.png`), captureBeyondViewport: false });
 	};
 
 	// ── 1. Gold BEFORE (HEAD formulas) / AFTER (shipped) ─────────────────
@@ -233,12 +262,28 @@ try {
 	);
 	await shot("pet-gold-after");
 
-	// ── 2. Bubbles: stack → hover actions → expanded ─────────────────────
-	await pushActivity({ bubble: { kind: "completed", text: "构建完成，0 错误。", sessionId: "verify-s1" } });
-	await sleep(300);
-	await pushActivity({ approval: { requestId: "verify-r1", tool: "bash" } });
+	// ── 2. Bubbles: stack → hover actions → expanded (bubbles.html window) ──
+	// Since the 2026-09-21 split the bubbles render in their OWN window —
+	// load dist/bubbles.html with the same bridge stub and drive it exactly
+	// like the main window drives the real one.
+	const distBubblesHtml = path.join(desktopDir, "dist", "bubbles.html");
+	const bubblesPage = await browser.newPage();
+	await bubblesPage.setViewport({ width: 480, height: 400 });
+	await bubblesPage.evaluateOnNewDocument(stubBridge);
+	await bubblesPage.goto(`file:///${distBubblesHtml.replace(/\\/g, "/")}`, { waitUntil: "load" });
+	await bubblesPage.waitForSelector("#root", { timeout: 10_000 });
 	await sleep(600);
-	const stackInfo = await page.evaluate(() => {
+	const rootScope = await bubblesPage.evaluate(() => ({
+		bubblesRoot: document.documentElement.classList.contains("bubbles-root"),
+		stackStatic: getComputedStyle(document.querySelector(".pet-bubbles") ?? document.body).position,
+	}));
+	check("bubbles window renders with bubbles-root re-scope", rootScope.bubblesRoot, JSON.stringify(rootScope));
+	await pushActivity(bubblesPage, { theme: "dark" });
+	await pushActivity(bubblesPage, { bubble: { kind: "completed", text: "构建完成，0 错误。", sessionId: "verify-s1" } });
+	await sleep(300);
+	await pushActivity(bubblesPage, { approval: { requestId: "verify-r1", tool: "bash" } });
+	await sleep(600);
+	const stackInfo = await bubblesPage.evaluate(() => {
 		const top = document.querySelector(".pet-bubbles--stacked .pet-bubble");
 		const more = document.querySelector(".pet-bubble__more");
 		return {
@@ -251,18 +296,36 @@ try {
 		stackInfo.top && /[1-9]/.test(stackInfo.moreText ?? ""),
 		JSON.stringify(stackInfo),
 	);
-	await shot("pet-bubbles-stacked");
+	// Window split contract: the renderer reports content size + visible +
+	// hitbox to the main process (which owns the window geometry).
+	const splitReports = await bubblesPage.evaluate(() => {
+		const calls = (window).__petStub.calls;
+		const last = calls.bubblesSetContentSize.at(-1) ?? { width: 0, height: 0 };
+		return {
+			sized: last.width > 0 && last.height > 0,
+			last,
+			visible: calls.bubblesSetVisible.at(-1) === true,
+			hitboxCalls: calls.bubblesSetHitbox,
+			hitbox: (calls.bubblesSetHitbox.at(-1) ?? null) !== null,
+		};
+	});
+	check(
+		"split-window reports (content size + visible + hitbox)",
+		splitReports.sized && splitReports.visible && splitReports.hitbox,
+		JSON.stringify(splitReports),
+	);
+	await shotPg(bubblesPage, "pet-bubbles-stacked");
 
 	// Hover the top bubble → action bar shows (pure CSS :hover).
-	const bubbleBox = await page.evaluate(() => {
+	const bubbleBox = await bubblesPage.evaluate(() => {
 		const el = document.querySelector(".pet-bubble");
 		if (!el) return null;
 		const r = el.getBoundingClientRect();
 		return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
 	});
-	if (bubbleBox) await page.mouse.move(bubbleBox.x, bubbleBox.y);
+	if (bubbleBox) await bubblesPage.mouse.move(bubbleBox.x, bubbleBox.y);
 	await sleep(300);
-	const actionsVisible = await page.evaluate(() => {
+	const actionsVisible = await bubblesPage.evaluate(() => {
 		const bar = document.querySelector(".pet-bubble__actions");
 		if (!bar) return "no-bar";
 		const cs = getComputedStyle(bar);
@@ -270,30 +333,30 @@ try {
 		return cs.visibility !== "hidden" && cs.display !== "none" && r.height > 0 ? "visible" : `${cs.visibility}/${cs.display}/h=${r.height}`;
 	});
 	check("hover reveals the bubble action bar", actionsVisible === "visible", String(actionsVisible));
-	await shot("pet-bubble-hover");
+	await shotPg(bubblesPage, "pet-bubble-hover");
 
 	// Click the stacked card → expanded list with fab + clear-all.
-	await page.evaluate(() => document.querySelector(".pet-bubbles--stacked > .pet-bubble")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+	await bubblesPage.evaluate(() => document.querySelector(".pet-bubbles--stacked > .pet-bubble")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 	await sleep(800); // size morph
-	const expandedState = await page.evaluate(() => ({
+	const expandedState = await bubblesPage.evaluate(() => ({
 		expanded: !!document.querySelector(".pet-bubbles--expanded"),
 		fab: !!document.querySelector(".pet-bubbles__fab"),
 		clearAll: !!document.querySelector(".pet-bubbles__clear"),
 		count: document.querySelectorAll(".pet-bubbles--expanded .pet-bubble").length,
 	}));
 	check("expanded list with ∨ fab and 清除全部", expandedState.expanded && expandedState.fab && expandedState.clearAll, JSON.stringify(expandedState));
-	await shot("pet-bubbles-expanded");
+	await shotPg(bubblesPage, "pet-bubbles-expanded");
 
 	// Reply path: the completed bubble owns a sessionId → it alone offers
 	// the 💬 reply action. Click it → type → Enter → stub captured petReply.
-	await page.click(".pet-bubbles--expanded .pet-bubble--completed .pet-bubble__action");
+	await bubblesPage.click(".pet-bubbles--expanded .pet-bubble--completed .pet-bubble__action");
 	await sleep(300);
-	const inputThere = await page.evaluate(() => !!document.querySelector(".pet-bubble__reply-input"));
+	const inputThere = await bubblesPage.evaluate(() => !!document.querySelector(".pet-bubble__reply-input"));
 	check("reply action opens the inline input", inputThere);
-	await page.type(".pet-bubble__reply-input", "好的，继续");
-	await page.keyboard.press("Enter");
+	await bubblesPage.type(".pet-bubble__reply-input", "好的，继续");
+	await bubblesPage.keyboard.press("Enter");
 	await sleep(250);
-	const replyCall = await page.evaluate(() => (window).__petStub.calls.petReply);
+	const replyCall = await bubblesPage.evaluate(() => (window).__petStub.calls.petReply);
 	check("inline reply sends via petReply bridge", replyCall.length === 1 && replyCall[0]?.text === "好的，继续", JSON.stringify(replyCall));
 
 	// ── 3. Interaction on click ──────────────────────────────────────────

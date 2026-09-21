@@ -203,8 +203,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Pet window: answer a tool approval (bubble hover 批准/拒绝). */
 	petApprove: (requestId, approved) => ipcRenderer.invoke("pet-approve", { requestId, approved }),
 	/** Pet window: report the height it needs (bubbles grow the
-	 *  window upward, bottom edge fixed). */
+	 *  window upward, bottom edge fixed). LEGACY after the 2026-09-21
+	 *  bubbles-window split — nothing calls it anymore; the bubbles
+	 *  window reports via setBubblesContentSize. */
 	setPetContentSize: (size) => ipcRenderer.invoke("pet-set-content-size", size),
+	/** Bubbles window: report its content size — the main process sizes
+	 *  the window to exactly this and pins it above the sprite. */
+	setBubblesContentSize: (size) => ipcRenderer.invoke("bubbles-set-content-size", size),
+	/** Bubbles window: report whether any bubble is showing (empty stack
+	 *  → the main process hides the window). */
+	setBubblesVisible: (visible) => ipcRenderer.invoke("bubbles-set-visible", visible),
+	/** Bubbles window: report the interactive card union (window-relative)
+	 *  — the transparent padding ring and the gaps stay click-through. */
+	setBubblesHitbox: (rect) => ipcRenderer.invoke("bubbles-set-hitbox", rect),
 	/** Pet window: a global hotkey (Ctrl/Cmd+Shift+Y / N) decided a tool
 	 *  approval — drop the card without an activity round-trip. */
 	onPetApprovalResolved: (cb) => {

@@ -1,6 +1,6 @@
 import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
@@ -153,7 +153,7 @@ export function CollabDialog({
 		{ kind: string; label: string; origin: string; registered: boolean }[] | null
 	>(null);
 
-	const refreshPlugins = async (): Promise<void> => {
+	const refreshPlugins = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
 			const list = await rpc.request<{ kind: string; label: string; origin: string; registered: boolean }[]>(
@@ -164,7 +164,7 @@ export function CollabDialog({
 		} catch {
 			setPlugins([]);
 		}
-	};
+	}, [rpc]);
 
 	const reloadPlugins = async (): Promise<void> => {
 		if (!rpc) return;
@@ -241,7 +241,7 @@ export function CollabDialog({
 		],
 	};
 
-	const refreshChannels = async (): Promise<void> => {
+	const refreshChannels = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
 			const list = await rpc.request<
@@ -251,7 +251,7 @@ export function CollabDialog({
 		} catch {
 			setChannels([]);
 		}
-	};
+	}, [rpc]);
 
 	const genPairCode = async (): Promise<void> => {
 		if (!rpc) return;
@@ -266,7 +266,7 @@ export function CollabDialog({
 		}
 	};
 
-	const refresh = async (): Promise<void> => {
+	const refresh = useCallback(async (): Promise<void> => {
 		if (!rpc) return;
 		try {
 			const st = await rpc.request<CollabInfo>("collab.status", {
@@ -277,14 +277,21 @@ export function CollabDialog({
 		} catch {
 			setInfo({ hosting: false });
 		}
-	};
+	}, [rpc, sessionId]);
 
+	// Boot refresh — ONLY while the dialog is open. DialogFrame keeps children
+	// mounted through the exit animation, so a closed dialog still runs its
+	// hooks; without the open gate this fired on every render (refresh's old
+	// unstable identity retriggered the effect per render → setInfo → render →
+	// …), spamming channels.list/plugins/collab.status ~70×/s at the daemon
+	// from the moment the GUI connected (observed as 689 calls in 13s, with
+	// the daemon dying mid-session-create under the storm).
 	useEffect(() => {
+		if (!open) return;
 		void refresh();
 		void refreshChannels();
 		void refreshPlugins();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [refresh]);
+	}, [open, refresh, refreshChannels, refreshPlugins]);
 
 	useEffect(() => {
 		if (webLink && qrRef.current) drawQr(qrRef.current, webLink);
@@ -295,11 +302,10 @@ export function CollabDialog({
 	// without manual refresh. Idle channels schedule nothing.
 	const pendingChannel = (channels ?? []).some(c => c.state === "connecting" || c.state === "waiting_scan");
 	useEffect(() => {
-		if (!pendingChannel || !rpc) return;
+		if (!open || !pendingChannel || !rpc) return;
 		const timer = window.setInterval(() => void refreshChannels(), 2000);
 		return () => window.clearInterval(timer);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [pendingChannel, rpc]);
+	}, [open, pendingChannel, rpc, refreshChannels]);
 
 	// Countdown clock for the pair code, bounded to the code's lifetime so an
 	// idle dialog schedules no timers.

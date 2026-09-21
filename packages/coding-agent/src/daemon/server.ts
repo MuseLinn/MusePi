@@ -1037,6 +1037,30 @@ export class DaemonSessionHost {
 	#onExtensionNotification: ((channel: string, message: ExtensionNotificationMessage) => void) | undefined;
 	/** In-flight history-session reactivations (dedupe concurrent subscribe/send). */
 	readonly #activating = new Map<string, Promise<LiveSession>>();
+	/** Serializes top-level session bootstraps. Two concurrent createAgentSession
+	 *  calls both default to agentId "Main" on the process-global AgentRegistry,
+	 *  and the loser's pre-registration CAS fails with 'Agent "Main" was replaced
+	 *  during session initialization' (sdk.ts pre-registers the id before
+	 *  construction). The GUI fires sessions.create / sessions.reopen and
+	 *  provider/model RPCs concurrently on fresh roots, so this must hold. */
+	#bootstrapChain: Promise<unknown> = Promise.resolve();
+	/** In-flight ensureRegistry bootstrap (dedupes concurrent provider/model
+	 *  RPCs); cleared on settle so a failed bootstrap can be retried. */
+	#registryBootstrap: Promise<ModelRegistry | null> | null = null;
+	/** Unique-per-invocation suffix for throwaway bootstrap agent ids. */
+	#bootstrapCounter = 0;
+	async #withSessionBootstrapLock<T>(fn: () => Promise<T>): Promise<T> {
+		const prev = this.#bootstrapChain;
+		let release!: () => void;
+		const current = new Promise<void>(resolve => (release = resolve));
+		this.#bootstrapChain = prev.then(() => current, () => current);
+		await prev.catch(() => {});
+		try {
+			return await fn();
+		} finally {
+			release();
+		}
+	}
 	/** First live session's model registry — shared for provider/model RPCs
 	 *  (login/logout/custom-model) that must work without a live session
 	 *  (history sessions are resumed, not live). */
@@ -1406,7 +1430,8 @@ export class DaemonSessionHost {
 		// per-session stream fan-out routes them here only. session.create
 		// mints the id inside createAgentSession, so bind it after adoption.
 		const sessionBus = new SessionScopedEventBus(this.#eventBus, "");
-		const result = await createAgentSession({
+		const result = await this.#withSessionBootstrapLock(async () =>
+			createAgentSession({
 			cwd,
 			hasUI: true,
 			interfaceLabel: "desktop (GUI)",
@@ -1428,7 +1453,8 @@ export class DaemonSessionHost {
 			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
 			...(params.modeId ? { modeId: params.modeId } : {}),
-		});
+			}),
+		);
 		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
 		sessionBus.setSessionId(live.sessionId);
 		// Extension-contributed settings (registerSetting): merge every loaded
@@ -1497,7 +1523,8 @@ export class DaemonSessionHost {
 		// need) so resumed sessions reuse the same server subprocesses.
 		const discovery = await this.#discoveryFor(resumeCwd, getAgentDir());
 		const mcpManager = await this.#ensureMcpManager(resumeCwd, discovery);
-		const result = await createAgentSession({
+		const result = await this.#withSessionBootstrapLock(async () =>
+			createAgentSession({
 			cwd: resumeCwd,
 			sessionManager: manager,
 			hasUI: true,
@@ -1517,7 +1544,8 @@ export class DaemonSessionHost {
 			collabTool: this.#collabToolProvider?.(),
 			scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
 			...(await desktopSessionPromptInputs(resumeCwd)),
-		});
+			}),
+		);
 		// The resumed manager adopts the transcript's header id; a mismatch
 		// means the file wasn't the requested session after all.
 		if (result.session.sessionId !== sessionId) {
@@ -2134,19 +2162,38 @@ export class DaemonSessionHost {
 	 */
 	async ensureRegistry(): Promise<ModelRegistry | null> {
 		if (this.#registry) return this.#registry;
-		// Lazy import keeps daemon startup cheap (same rationale as createSession):
-		// the registry bootstrap is only needed when provider/model RPCs arrive
-		// without any live session ever having been created.
-		const { createAgentSession } = await import("../sdk");
-		const result = await createAgentSession({
-			cwd: this.#options.cwd ?? process.cwd(),
-			hasUI: false,
-			eventBus: this.#eventBus,
+		// Deduplicate concurrent bootstraps (the GUI fires several
+		// provider/model RPCs at once on fresh roots): every caller awaits the
+		// same in-flight promise, and the shared session-bootstrap lock
+		// serializes this against a racing sessions.create.
+		this.#registryBootstrap ??= this.#withSessionBootstrapLock(async () => {
+			// Lazy import keeps daemon startup cheap (same rationale as
+			// createSession): the registry bootstrap is only needed when
+			// provider/model RPCs arrive without any live session ever having
+			// been created.
+			const { createAgentSession } = await import("../sdk");
+			// Bootstrap as a SUBORDINATE agent on a throwaway UNIQUE id — never
+			// top-level "Main": a main-kind bootstrap pre-registers the
+			// process-global agent id (racing a concurrent sessions.create fails
+			// that session with 'Agent "Main" was replaced during session
+			// initialization'), and its dispose tears down
+			// AgentLifecycleManager.global() under every live session. The id
+			// must be unique PER INVOCATION too: two concurrent bootstraps on the
+			// same fixed id fail each other the same way.
+			const result = await createAgentSession({
+				cwd: this.#options.cwd ?? process.cwd(),
+				hasUI: false,
+				parentTaskPrefix: `registry-bootstrap-${++this.#bootstrapCounter}`,
+				eventBus: this.#eventBus,
+			});
+			this.#registry = result.session.modelRegistry;
+			this.#settings ??= result.session.settings as unknown as Settings;
+			await result.session.dispose?.();
+			return this.#registry;
+		}).finally(() => {
+			this.#registryBootstrap = null;
 		});
-		this.#registry = result.session.modelRegistry;
-		this.#settings ??= result.session.settings as unknown as Settings;
-		await result.session.dispose?.();
-		return this.#registry;
+		return this.#registryBootstrap;
 	}
 
 	/** Global settings for the settings.* RPCs (null before any session). */
@@ -3055,7 +3102,7 @@ export class DaemonServer {
 	/** Load directory plugins and register them (hot-plug on reload). */
 	async #loadChannelPlugins(): Promise<void> {
 		if (!this.#channelPluginDir) return;
-		const found = await loadChannelPlugins(this.#channelPluginDir);
+		const found = await loadChannelPlugins(this.#channelPluginDir, { force: true });
 		const known = new Set(this.#channels.kinds());
 		for (const { plugin, origin } of found) {
 			if (known.has(plugin.kind)) continue; // builtin wins
@@ -9924,6 +9971,9 @@ async function handleRpcLine(server: DaemonServer, line: string, conn: DaemonCon
 		conn.send({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } });
 		return;
 	}
+	// TEMP diagnostic (MUSEPI_RPC_TRACE=1): trace the request stream so a
+	// silent daemon death can be attributed to its last in-flight RPC.
+	if (process.env.MUSEPI_RPC_TRACE) logger.info("rpc.request", { method: req.method });
 	try {
 		const result = await server.handle(req.method, req.params, conn);
 		conn.send({ jsonrpc: "2.0", id: req.id, result });

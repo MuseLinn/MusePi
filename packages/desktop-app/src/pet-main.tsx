@@ -1,15 +1,14 @@
 /**
- * Pet window entry (pet.html) — the floating desktop companion (伙伴),
- * SINGLE window (merged 2026-09-16; the former 双窗口 split was the root
- * cause of the pet↔bubble coordinate drift on non-100% scaling):
+ * Pet window entry (pet.html) — the floating desktop companion (伙伴):
+ * the active pet (builtin SVG or Petdex spritesheet) with a mood driven by
+ * the main window's session store, unread badge, and a drag/hover/dock
+ * gesture surface.
  *
- *   - the active pet (builtin SVG or Petdex spritesheet) with a mood
- *     driven by the main window's session store, unread badge, and a
- *     drag/hover/dock gesture surface
- *   - the activity bubbles (pet-bubbles.tsx) layered ABOVE the sprite in
- *     the same window — their relative position is CSS, structurally
- *     immune to DPI/scaling; the window grows upward (bottom edge fixed)
- *     when they need room
+ * The activity bubbles live in a SEPARATE window (bubbles.html,
+ * bubbles-main.tsx) since 2026-09-21 — the 2026-09-16 single-window merge
+ * made the stack clip at the screen edge and overlap the main window. This
+ * window is back to a fixed 320×290 box; the main process pins the bubbles
+ * window above the sprite and follows this window on every move.
  *
  * Pointer handling:
  *   - drag beyond 8px moves the OS window (pet-drag-client; the main
@@ -52,7 +51,6 @@ import {
 } from "./lib/pet";
 import { applyPetPalette } from "./lib/pet-palette";
 import { initTooltips } from "./lib/tooltips";
-import { PetBubbles } from "./pet-bubbles";
 
 /** Horizontal travel (px) that must accumulate before the pet mirrors its
  *  walk frames — absorbs the ±1–2px per-move jitter of real mouse deltas. */
@@ -411,10 +409,9 @@ function PetApp(): ReactNode {
 		return () => mq.removeEventListener("change", onMq);
 	}, []);
 
-	// Report the interactive rect (pet + badge + bubbles) whenever the
-	// layout changes. The MAIN process resizes this window's click-
-	// through state; re-measure on window resize too (the window grows
-	// upward when bubbles open, which fires resize).
+	// Report the interactive rect (pet + badge) whenever the layout changes.
+	// The MAIN process resizes this window's click-through state; re-measure
+	// on window resize too.
 	useEffect(() => {
 		if (!bridge?.setPetHitbox) return;
 		const report = (): void => {
@@ -437,12 +434,7 @@ function PetApp(): ReactNode {
 			void bridge.setPetRect?.(petRect);
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			const union: Record<string, number> = {};
-			// Single-window union: the overlay cards are interactive too —
-			// include the bubbles (and their × overhang and the collapse
-			// fab), or the click-through poll would flip ignore while the
-			// cursor is over a card.
-			const overlay = document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubble__dismiss, .pet-bubbles__fab");
-			for (const el of [pet, badge, ...overlay]) {
+			for (const el of [pet, badge]) {
 				if (!el) continue;
 				const r = el.getBoundingClientRect();
 				if (r.width <= 0 || r.height <= 0) continue;
@@ -463,12 +455,8 @@ function PetApp(): ReactNode {
 		};
 		report();
 		window.addEventListener("resize", report);
-		// Overlay elements resize WITHOUT a window resize too (bubble text
-		// growth, the stack morph, the inline reply row opening) — a stale
-		// hitbox desyncs the click-through poll (cursor over a card flips
-		// ignore) and mis-lands drags.
 		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll(".pet-bubbles, .pet-bubbles__fab, .pet-window__pet, .pet-window__badge")) {
+		for (const el of document.querySelectorAll(".pet-window__pet, .pet-window__badge")) {
 			ro.observe(el);
 		}
 		return () => {
@@ -694,12 +682,6 @@ function PetApp(): ReactNode {
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
-			{/* Activity bubbles (pet-bubbles.tsx): DOM layered above the sprite
-			 * in the SAME window — the relative position is CSS, structurally
-			 * immune to DPI/scaling. The component reports the window height
-			 * it needs and the main process grows the window upward (bottom
-			 * edge fixed). */}
-			<PetBubbles />
 			{/* Stage: centers the sprite AND anchors the unread badge to it —
 			 * a badge anchored to the WINDOW (top/right) floats ~70px right
 			 * of the centered ~104px sprite in the 320px window. The stage

@@ -254,13 +254,12 @@ const managedBrowser = new ManagedBrowserController();
 //   pet-click                    focus the main window
 //   pet-activity {mood, bubble}  main-window store → pet window
 //   pet-import                   pick a Petdex zip, unpack, return package
-// SINGLE WINDOW (merged 2026-09-16, killing the 双窗口 drift): the sprite,
-// the activity bubbles and the interaction panel all live in THIS window —
-// "bubble follows pet" positioning bugs are structurally impossible, there
-// is one coordinate space and one window to move. The window is 320 wide
-// and grows UPWARD (bottom edge fixed, so the sprite never moves on screen)
-// when bubbles/panel need room (pet-set-content-size); it shrinks back to
-// the 290 base height when they close.
+// The activity BUBBLES live in a separate window (bubbles.html) since the
+// 2026-09-21 split — the 2026-09-16 single-window merge clipped the stack
+// at screen edges and overlapped the main window. This window is a fixed
+// 320×290 box; the bubbles window is sized to its content and pinned above
+// the sprite (layoutBubblesWindow follows every pet move through the
+// setPetBounds choke point).
 // Height 290: the pet anchors at bottom:52px in pet-window.css with 52px of
 // transparent room below — rest shadow (0 6px 16px ≈ 22px) and hover shadow
 // (0 10px 22px ≈ 32px, + bump ≈ 2px) all fade inside the window instead of
@@ -415,8 +414,148 @@ function createPetWindow() {
 		stopPetClickThroughPoll();
 		stopPetTopmostWatchdog();
 		petSyncApprovalHotkeys(); // pet gone → unregister the approval hotkeys
+		// The bubbles window rides on the pet — pet gone, bubbles gone.
+		if (bubblesWindow && !bubblesWindow.isDestroyed()) bubblesWindow.destroy();
+		bubblesWindow = null;
+		bubblesVisible = false;
+		bubblesHasSized = false;
 	});
 	return petWindow;
+}
+
+// ── Bubbles window (pet message bubbles, split 2026-09-21) ──────────────
+// The bubbles live in their OWN window again (user: 气泡应该和桌宠分开窗口 —
+// the merged single-window absolute positioning clipped the stack at the
+// screen edge and overlapped the main window). The renderer reports its
+// content size (bubbles-set-content-size), its occupancy (bubbles-set-
+// visible) and its interactive card union (bubbles-set-hitbox); THIS
+// process owns the geometry: the window is sized to the content and its
+// bottom edge is pinned ~20px above the sprite's visual top, horizontally
+// centred on the character, clamped to the work area.
+let bubblesWindow = null;
+/** The renderer says at least one bubble exists (empty stack → hidden). */
+let bubblesVisible = false;
+/** The first content-size report has landed — the window must not show at
+ *  a stale 0×0 before the renderer measured its first layout. */
+let bubblesHasSized = false;
+let bubblesContentSize = { width: 0, height: 0 };
+/** Interactive card union (window-relative CSS px) reported by the
+ *  renderer — the transparent padding ring and the gaps between cards
+ *  stay click-through (the same poll the pet window uses). */
+let bubblesHitbox = null;
+let bubblesIgnoreState = null;
+/** Stack bottom → sprite top clearance (was bottom:174px vs sprite top
+ *  y≈136 in the 290px pet window → 20px). */
+const BUBBLES_GAP_ABOVE_PET = 20;
+
+function createBubblesWindow() {
+	if (bubblesWindow && !bubblesWindow.isDestroyed()) return bubblesWindow;
+	bubblesWindow = new BrowserWindow({
+		// Placeholder rect — layoutBubblesWindow sizes/positions the window
+		// to the reported content before it is ever shown.
+		width: 360,
+		height: 160,
+		title: "MusePi Pet Bubbles",
+		frame: false,
+		transparent: true,
+		backgroundColor: "#00000000",
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		resizable: false,
+		fullscreenable: false,
+		hasShadow: false,
+		show: false,
+		webPreferences: {
+			preload: path.join(__dirname, "preload.cjs"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: true,
+			backgroundThrottling: false,
+		},
+	});
+	bubblesWindow.setAlwaysOnTop(true, PET_TOPMOST_LEVEL);
+	bubblesWindow.loadFile(path.join(DIST_DIR, "bubbles.html"));
+	// Replay the last activity on (re)load — a bubble can arrive before
+	// this window's renderer subscribed (same pattern as the pet window).
+	bubblesWindow.webContents.on("did-finish-load", () => {
+		if (lastPetActivity) {
+			setTimeout(() => {
+				if (bubblesWindow && !bubblesWindow.isDestroyed()) {
+					bubblesWindow.webContents.send("pet:activity", lastPetActivity);
+				}
+			}, 150);
+		}
+	});
+	// Click-through by default; the poll re-enables interaction over the
+	// card union (bubblesHitbox), exactly like the pet window.
+	if (process.platform === "darwin" || process.platform === "win32") {
+		bubblesWindow.setIgnoreMouseEvents(true);
+	}
+	bubblesWindow.on("closed", () => {
+		bubblesWindow = null;
+		bubblesVisible = false;
+		bubblesHasSized = false;
+	});
+	return bubblesWindow;
+}
+
+/** Pin the bubbles window above the sprite. Called on: content-size
+ *  reports, visible toggles, sprite-rect updates and every pet-window
+ *  move (via the setPetBounds choke point), so the stack tracks the pet
+ *  through drags, settle bounces, dock snaps and display changes. */
+function layoutBubblesWindow() {
+	if (!bubblesWindow || bubblesWindow.isDestroyed()) return;
+	if (!petVisible || !petWindow || petWindow.isDestroyed() || !bubblesVisible || !bubblesHasSized) {
+		if (bubblesWindow.isVisible()) bubblesWindow.hide();
+		return;
+	}
+	const pb = petWindow.getBounds();
+	// The pet window's position space may be physical (measured at the last
+	// drag); the sprite rect is renderer CSS px. Work in the pet's position
+	// space, then convert to DIP (this window is a plain DIP window).
+	const cssK = petPosPhysical ? petPosScaleF : 1;
+	const posToDip = petPosPhysical ? 1 / petPosScaleF : 1;
+	const charCx = pb.x + (petRect ? (petRect.x + petRect.width / 2) * cssK : (pb.width / 2) * cssK);
+	const petTop = pb.y + (petRect ? petRect.y * cssK : 0);
+	const w = Math.max(40, Math.ceil(bubblesContentSize.width));
+	const h = Math.max(24, Math.ceil(bubblesContentSize.height));
+	// Centre on the CHARACTER, not the window — the sprite sits centred in
+	// the 320px window; a window-centre anchor drifts ~90px off on dock.
+	let x = charCx - w / 2;
+	let y = petTop - BUBBLES_GAP_ABOVE_PET - h;
+	// Work-area clamp: the old merged window just grew past the top; the
+	// split window must not poke above the work area or off the sides
+	// (multi-monitor included — match the display holding the character).
+	const wa = screen.getDisplayMatching({ x: charCx * posToDip, y: petTop * posToDip, width: 1, height: 1 }).workArea;
+	x = Math.min(Math.max(x, wa.x), Math.max(wa.x, wa.x + wa.width - w));
+	y = Math.max(y, wa.y);
+	setPetBounds(bubblesWindow, { x: Math.round(x * posToDip), y: Math.round(y * posToDip), width: w, height: h });
+	if (!bubblesWindow.isVisible()) bubblesWindow.showInactive();
+}
+
+/** Bubbles-window arm of the click-through poll: interactive only over the
+ *  card union; the transparent padding ring passes clicks to the desktop.
+ *  Uses a DIP cursor directly (this window is always DIP, independent of
+ *  the pet's measured position space). */
+function updateBubblesClickThrough() {
+	if (!bubblesWindow || bubblesWindow.isDestroyed() || !bubblesWindow.isVisible()) return;
+	if (process.platform !== "darwin" && process.platform !== "win32") return;
+	let ignore = true;
+	if (bubblesHitbox) {
+		const raw = screen.getCursorScreenPoint();
+		const curDip = petCursorPhysical ? { x: raw.x / petPosScaleF, y: raw.y / petPosScaleF } : raw;
+		const [wx, wy] = bubblesWindow.getPosition();
+		ignore = !(
+			curDip.x >= wx + bubblesHitbox.x &&
+			curDip.x <= wx + bubblesHitbox.x + bubblesHitbox.width &&
+			curDip.y >= wy + bubblesHitbox.y &&
+			curDip.y <= wy + bubblesHitbox.y + bubblesHitbox.height
+		);
+	}
+	if (ignore !== bubblesIgnoreState) {
+		bubblesIgnoreState = ignore;
+		bubblesWindow.setIgnoreMouseEvents(ignore);
+	}
 }
 
 /** Interactive rect (window-relative) reported by the pet renderer —
@@ -646,6 +785,9 @@ function setPetBounds(win, rect) {
 	const cur = win.getBounds();
 	if (cur.x === x && cur.y === y && cur.width === w && cur.height === h) return false;
 	win.setBounds({ x, y, width: w, height: h });
+	// Every pet-window move (drag, settle bounce, dock snap, reconcile)
+	// lands here — the bubbles window rides on the sprite, so re-pin it.
+	if (win === petWindow) layoutBubblesWindow();
 	return true;
 }
 
@@ -1076,7 +1218,10 @@ let petClickThroughTimer = null;
 
 function startPetClickThroughPoll() {
 	if (petClickThroughTimer !== null) return;
-	petClickThroughTimer = setInterval(updatePetClickThrough, 120);
+	petClickThroughTimer = setInterval(() => {
+		updatePetClickThrough();
+		updateBubblesClickThrough();
+	}, 120);
 }
 
 function stopPetClickThroughPoll() {
@@ -1134,6 +1279,8 @@ function setPetVisible(visible) {
 		// jump the window on the first move of the next drag.
 		petDragLast = null;
 	}
+	// The bubbles window rides on the pet's visibility.
+	layoutBubblesWindow();
 	// Approval hotkeys follow the pet's visibility (registered only while
 	// the pet window is showing AND an approval is pending).
 	petSyncApprovalHotkeys();
@@ -1733,14 +1880,17 @@ ipcMain.handle("pet-set-rect", (_event, rect) => {
 	} else {
 		petRect = null;
 	}
+	// The sprite rect anchors the bubbles window (character centre + top).
+	layoutBubblesWindow();
 	return { ok: true };
 });
 ipcMain.handle("pet-activity", (_event, payload) => {
-	// Cache for replay when the pet window loads after this push.
+	// Cache for replay when the pet/bubbles window loads after this push.
 	lastPetActivity = payload;
-	// Single window since the merge: the pet window consumes everything —
-	// mood/scale/unread/theme AND bubbles/approvals/state/recent sessions.
-	// Track pending approvals for the global Allow/Deny hotkeys.
+	// Two windows consume the push since the 2026-09-21 split: the pet
+	// window takes mood/scale/unread/theme, the bubbles window takes
+	// bubbles/approvals/state. Track pending approvals for the global
+	// Allow/Deny hotkeys.
 	if (payload && typeof payload === "object" && payload.approval?.requestId) {
 		const id = payload.approval.requestId;
 		if (!petPendingApprovals.includes(id)) petPendingApprovals.push(id);
@@ -1748,6 +1898,9 @@ ipcMain.handle("pet-activity", (_event, payload) => {
 	}
 	if (petWindow && !petWindow.isDestroyed() && petVisible) {
 		petWindow.webContents.send("pet:activity", payload);
+	}
+	if (bubblesWindow && !bubblesWindow.isDestroyed()) {
+		bubblesWindow.webContents.send("pet:activity", payload);
 	}
 	return { ok: true };
 });
@@ -2207,9 +2360,11 @@ ipcMain.handle("pet-request-state", () => {
 // now greets the pet and raises the main window via pet-click/focusMainFromPet;
 // bubbles carry their own hover actions. The pet-toggle-panel handler and the
 // context-menu 显示/隐藏面板 item went with it.)
-// The merged pet window reports the height it needs (bubbles grow upward).
-// window bottom, so growing never moves the pet on screen. Width is
-// pinned to PET_WINDOW_SIZE (panel 316px + bubbles 280px both fit).
+// The merged pet window reported the height it needs (bubbles grow upward).
+// LEGACY since the 2026-09-21 bubbles-window split — the pet window is a
+// fixed 320×290 box again; the bubbles window reports via
+// bubbles-set-content-size below. Kept as a no-op-compatible handler in
+// case a stale renderer still calls it.
 ipcMain.handle("pet-set-content-size", (_event, size) => {
 	if (!petWindow || petWindow.isDestroyed()) return { ok: true };
 	const requested = size && Number.isFinite(size.height) ? Math.round(size.height) : PET_WINDOW_SIZE.height;
@@ -2228,6 +2383,43 @@ ipcMain.handle("pet-set-content-size", (_event, size) => {
 		y = wa.y;
 	}
 	petWindow.setBounds({ x: wx, y, width: PET_WINDOW_SIZE.width, height: h });
+	return { ok: true };
+});
+
+// ── Bubbles window IPC (split 2026-09-21) ───────────────────────────────
+// The renderer reports its content size; this process owns the geometry
+// (layoutBubblesWindow). The window is created lazily on the first report
+// that needs it.
+ipcMain.handle("bubbles-set-content-size", (_event, size) => {
+	if (size && Number.isFinite(size.width) && Number.isFinite(size.height)) {
+		bubblesContentSize = { width: Math.max(0, size.width), height: Math.max(0, size.height) };
+		bubblesHasSized = true;
+	}
+	layoutBubblesWindow();
+	return { ok: true };
+});
+ipcMain.handle("bubbles-set-visible", (_event, visible) => {
+	const next = visible === true;
+	if (next !== bubblesVisible) {
+		bubblesVisible = next;
+		// Reset the click-through latch so a re-shown window starts from
+		// the fresh hitbox state instead of a stale ignore flag.
+		bubblesIgnoreState = null;
+	}
+	if (bubblesVisible) createBubblesWindow();
+	layoutBubblesWindow();
+	return { ok: true };
+});
+// Interactive card union (window-relative CSS px) for the click-through
+// poll — the transparent padding ring must not block the desktop.
+ipcMain.handle("bubbles-set-hitbox", (_event, rect) => {
+	if (rect && Number.isFinite(rect.x) && Number.isFinite(rect.y) && Number.isFinite(rect.width) && Number.isFinite(rect.height)) {
+		bubblesHitbox = rect;
+	} else {
+		bubblesHitbox = null;
+	}
+	bubblesIgnoreState = null; // force a refresh on the next poll
+	updateBubblesClickThrough();
 	return { ok: true };
 });
 

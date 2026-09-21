@@ -756,3 +756,35 @@
 		opacity: 1;
 	}
 }
+
+
+/* ── Bubbles window re-scope (bubbles.html, split 2026-09-21) ────────────
+ * In the pet window the bubble surfaces are absolutely positioned against
+ * the pet-window box (bottom:174px etc.). In their OWN window the window
+ * IS the content box: document flow, centred, bottom-packed, and the body
+ * padding is the transparent shadow ring. The main process sizes the window
+ * to exactly this content and pins it above the sprite. */
+html.bubbles-root body {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+	/* Top/left/right room for card shadows (0 6px 24px ≈ 24px) and the
+	 * stack-chip overhang (-9px); bottom room for the fab shadow. */
+	padding: 24px 20px 10px;
+	box-sizing: border-box;
+}
+
+html.bubbles-root .pet-bubbles {
+	position: static;
+	bottom: auto;
+	left: auto;
+	transform: none;
+}
+
+html.bubbles-root .pet-bubbles__fab {
+	position: static;
+	bottom: auto;
+	left: auto;
+	margin-top: 8px;
+}

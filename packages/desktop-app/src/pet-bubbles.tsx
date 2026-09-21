@@ -1,13 +1,15 @@
 /**
- * Pet window overlay surfaces (activity bubbles) — merged into the pet
- * window (single window, 2026-09-16; formerly bubble.html, 双窗口).
+ * Pet bubbles (pet-bubbles.tsx) — the pet's activity/message cards.
  *
- * The old split (dedicated bubble window chasing the pet window on every
- * move) is what made the pet and its bubbles drift apart on non-100%
- * scaling: two windows, two coordinate transformations, one of them
- * guessed at runtime. In the merged window the bubbles are plain DOM
- * layered above the sprite — their position relative to the pet is CSS,
- * structurally immune to any DPI/scaling issue.
+ * Window hosting history: dedicated bubble window (双窗口) → merged into
+ * the pet window (single window, 2026-09-16) → SPLIT BACK OUT into
+ * bubbles.html (2026-09-21, user: 气泡应该和桌宠分开窗口). The merged
+ * single-window absolute positioning is what made the bubbles clip at the
+ * screen edge and overlap the main window: the stack grew the pet window
+ * upward from its bottom-anchored rect with no work-area awareness, and
+ * the 320px-wide window's left:50% centre often landed the stack over the
+ * app window. The split window is sized to its content, pinned above the
+ * sprite with proper work-area clamping, and hidden when empty.
  *
  * 2026-09-21 redesign (kimi-work bubble parity, user review screenshots):
  *  - the single-click interaction PANEL is gone (user: 单击弹窗删除) — a
@@ -20,11 +22,13 @@
  *    approval bubbles, and 💬 回复 on session bubbles — the reply button
  *    expands an inline input that sends via petReply (no panel hop)
  *
- * Sizing: the window is 320 wide and grows UPWARD when the overlay needs
- * more room — the renderer reports the required height via
- * setPetContentSize and the main process keeps the bottom edge fixed (the
- * sprite is anchored to it), so the pet never moves on screen while
- * bubbles open/close above it.
+ * Sizing (split window, 2026-09-21): the bubbles live in their OWN window
+ * (bubbles.html) whose size IS the content — the renderer reports the
+ * content union via bubblesSetContentSize, its interactive card union via
+ * bubblesSetHitbox (the transparent padding ring stays click-through), and
+ * its occupancy via bubblesSetVisible (empty stack → the main process
+ * hides the window). The main process (layoutBubblesWindow) pins the
+ * window above the sprite and follows the pet on every move.
  */
 
 import { setLocale, t } from "@musepi/client-core";
@@ -45,8 +49,15 @@ interface PetBubblesBridge {
 	 *  unread badge; dismissing the notification must clear it too). */
 	petMarkRead?(sessionId: string): Promise<unknown>;
 	petMarkAllRead?(): Promise<unknown>;
-	/** Report the window height the overlay content needs (CSS px). */
-	setPetContentSize?(size: { height: number }): Promise<unknown>;
+	/** Report the content size the window must take (CSS px). The main
+	 *  process sizes the bubbles window to exactly this. */
+	bubblesSetContentSize?(size: { width: number; height: number }): Promise<unknown>;
+	/** Report whether any bubble is showing — empty stack hides the
+	 *  window entirely. */
+	bubblesSetVisible?(visible: boolean): Promise<unknown>;
+	/** Report the interactive card union (window-relative CSS px) — the
+	 *  main process keeps the transparent padding ring click-through. */
+	bubblesSetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	/** Ask the main window to re-push its latest pet state (on mount — the
 	 *  push also carries the active pet descriptor, which this window
 	 *  cannot read from localStorage under file://). */
@@ -55,12 +66,6 @@ interface PetBubblesBridge {
 
 const BUBBLE_MS = 8000;
 const MAX_VISIBLE_BUBBLES = 5;
-/** Base window height (main.cjs PET_WINDOW_SIZE) — reported when the
- *  overlay is empty so the window shrinks back down. */
-const BASE_WINDOW_HEIGHT = 290;
-/** Head-room above the topmost overlay element: card shadows (0 4px 20px)
- *  and the stack-chip overhang (-9px) must not clip at the window edge. */
-const CONTENT_TOP_PAD = 12;
 
 interface Bubble {
 	id: number;
@@ -251,41 +256,36 @@ export function PetBubbles(): ReactNode {
 		return () => window.clearInterval(timer);
 	}, [bubbles]);
 
-	// Report the height the overlay content needs — the main process grows
-	// the window UPWARD (bottom edge fixed), so the sprite never moves.
-	// Only the top edge matters: bubbles sit above the pet, and the window
-	// must extend far enough up that their top (+ shadow/chip head-room)
-	// stays inside the window.
+	// Report the content union — the bubbles window is sized to exactly
+	// this. The window's body padding (pet-window.css .bubbles-root) is the
+	// transparent shadow ring AROUND the measured boxes, so the measured
+	// stack/fab layout boxes alone are what must fit.
 	useEffect(() => {
-		if (!bridge?.setPetContentSize) return;
+		if (!bridge?.bubblesSetContentSize) return;
 		const report = (): void => {
-			let minTop = Infinity;
+			let w = 0;
+			let h = 0;
 			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubbles__fab")) {
-				const r = el.getBoundingClientRect();
-				if (r.width <= 0 || r.height <= 0) continue;
 				// Entrance/leaving keyframes transform the box; getBoundingClientRect
 				// includes the transform, so a mid-animation report would size the
-				// window to the animating (shrunk) box. The layout box (offsetTop)
+				// window to the animating (shrunk) box. The layout box (offset*)
 				// ignores transforms — use it while the element animates; the
 				// animationend re-report below settles the final size.
-				minTop = Math.min(
-					minTop,
-					typeof el.getAnimations === "function" && el.getAnimations().some(a => a.playState === "running")
-						? el.offsetTop
-						: r.top,
-				);
+				const r = el.getBoundingClientRect();
+				const animating =
+					typeof el.getAnimations === "function" && el.getAnimations().some(a => a.playState === "running");
+				w = Math.max(w, animating ? el.offsetWidth : r.width);
+				h += animating ? el.offsetHeight : r.height;
 			}
-			const needed =
-				minTop === Infinity ? BASE_WINDOW_HEIGHT : BASE_WINDOW_HEIGHT + Math.max(0, CONTENT_TOP_PAD - minTop);
-			void bridge.setPetContentSize?.({ height: Math.ceil(needed) });
+			void bridge.bubblesSetContentSize?.({ width: Math.ceil(w), height: Math.ceil(h) });
 			// Transforms do not fire ResizeObserver — re-report when an
 			// entrance/leaving animation settles.
-			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles")) {
+			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubbles__fab")) {
 				el.addEventListener("animationend", report, { once: true });
 			}
 		};
 		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll(".pet-bubbles")) ro.observe(el);
+		for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubbles__fab")) ro.observe(el);
 		report();
 		// Delayed re-reports: typewriter growth / stack expand change the
 		// box after mount; the mutation observer catches newly mounted
@@ -300,6 +300,51 @@ export function PetBubbles(): ReactNode {
 			ro.disconnect();
 			mo.disconnect();
 			window.clearTimeout(timer);
+		};
+	}, []);
+
+	// Show/hide the window with the stack's occupancy: an empty stack
+	// renders nothing — the main process hides the window so the
+	// transparent body never blocks the desktop.
+	const bubbleCount = bubbles.length;
+	useEffect(() => {
+		void bridge?.bubblesSetVisible?.(bubbleCount > 0);
+	}, [bubbleCount]);
+
+	// Report the interactive card union — the main process keeps the
+	// transparent padding ring and the gaps click-through. Window-relative
+	// coords: the cards live inside the body's padding box, and
+	// getBoundingClientRect is viewport-relative (this window == viewport).
+	useEffect(() => {
+		if (!bridge?.bubblesSetHitbox) return;
+		const report = (): void => {
+			let left = Infinity;
+			let top = Infinity;
+			let right = -Infinity;
+			let bottom = -Infinity;
+			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubble")) {
+				const r = el.getBoundingClientRect();
+				if (r.width <= 0 || r.height <= 0) continue;
+				left = Math.min(left, r.left);
+				top = Math.min(top, r.top);
+				right = Math.max(right, r.right);
+				bottom = Math.max(bottom, r.bottom);
+			}
+			void bridge.bubblesSetHitbox?.(
+				left === Infinity
+					? null
+					: { x: Math.round(left), y: Math.round(top), width: Math.round(right - left), height: Math.round(bottom - top) },
+			);
+		};
+		report();
+		const ro = new ResizeObserver(report);
+		const mo = new MutationObserver(report);
+		const root = document.getElementById("root");
+		if (root) mo.observe(root, { childList: true, subtree: true, characterData: true });
+		for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles")) ro.observe(el);
+		return () => {
+			ro.disconnect();
+			mo.disconnect();
 		};
 	}, []);
 
