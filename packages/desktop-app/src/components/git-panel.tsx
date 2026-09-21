@@ -3,7 +3,7 @@
  * history (GitLogPane with lane graph), pull requests (PrPane). Extracted
  * from ContextPanel.tsx; the panel renders <GitPanel rpc cwd /> only.
  */
-import { CodeHighlightProvider, DiffBlock, type TranslationKey, t } from "@musepi/guest-client";
+import { CodeHighlightProvider, DiffBlock, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";

@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { BUILTIN_PETDEX, loadPetdex, type PetdexPackage } from "../lib/pet";

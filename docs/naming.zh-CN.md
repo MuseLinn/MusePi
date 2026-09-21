@@ -8,7 +8,7 @@
 | 层 | 术语 | 规则 |
 |---|---|---|
 | 架构 / 协议 | `host`、`guest`、collab 帧、write token | 内部命名随意用，但**绝不能漏到 UI 文案**。 |
-| 包 / 目录 | `packages/guest-client`、`collab-proto`、入口 `mobile.tsx` | 改名是破坏性变更（import、深链、Capacitor id），不要顺手改；要走专门的 RFC。 |
+| 包 / 目录 | `packages/client-core`、`collab-proto`、入口 `mobile.tsx` | 改名是破坏性变更（import、深链、Capacitor id），不要顺手改；要走专门的 RFC。 |
 | 产品表层 | 按钮、标签、placeholder、设备名、transcript 徽标 | 只用产品语言。**禁用 `host` / `guest`。** |
 
 ## 产品表层规则

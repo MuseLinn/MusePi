@@ -1,4 +1,4 @@
-import { Segmented, type SegmentedOption, t } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";

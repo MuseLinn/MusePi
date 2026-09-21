@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 
 /** Thinking effort ladder (mirrors pi-catalog Effort) + auto (per-model
  * default, TUI /settings defaultThinkingLevel parity). */

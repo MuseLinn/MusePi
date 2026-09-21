@@ -1,4 +1,4 @@
-import { Segmented, type SegmentedOption, t } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";

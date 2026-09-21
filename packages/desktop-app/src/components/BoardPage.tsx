@@ -1,14 +1,14 @@
-import { t } from "@musepi/guest-client";
-import { WidgetErrorBoundary } from "@musepi/guest-client/src/widgets/error-boundary";
-import { WidgetFit } from "@musepi/guest-client/src/widgets/fit";
-import { type BoardWidget, widgetDef } from "@musepi/guest-client/src/widgets/registry";
-import { hasTask, type WidgetTask } from "@musepi/guest-client/src/widgets/task";
+import { t } from "@musepi/client-core";
+import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
+import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
+import { type BoardWidget, widgetDef } from "@musepi/client-core/src/widgets/registry";
+import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import {
 	executeWidgetTask,
 	isTaskDue,
 	runTimeString,
 	type TaskRunResult,
-} from "@musepi/guest-client/src/widgets/task-run";
+} from "@musepi/client-core/src/widgets/task-run";
 import type { ReactNode, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import {

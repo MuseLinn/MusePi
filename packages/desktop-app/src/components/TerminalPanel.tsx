@@ -2,7 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import "@xterm/xterm/css/xterm.css";
-import { t, useSystemTheme } from "@musepi/guest-client";
+import { t, useSystemTheme } from "@musepi/client-core";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 

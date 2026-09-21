@@ -1,4 +1,4 @@
-import { fmtCost, fmtDuration, fmtTokens, relTime, t } from "@musepi/guest-client";
+import { fmtCost, fmtDuration, fmtTokens, relTime, t } from "@musepi/client-core";
 import type { AgentProgress, AgentSnapshot, SubagentLifecyclePayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";

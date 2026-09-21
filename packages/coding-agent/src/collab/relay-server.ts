@@ -217,7 +217,7 @@ export interface RelayServerOptions {
 	port: number;
 	maxGuests?: number;
 	maxFrameBytes?: number;
-	/** Serve guest-client static files (dist/) on plain HTTP so the same port
+	/** Serve client-core static files (dist/) on plain HTTP so the same port
 	 *  hosts both the browser UI and the WebSocket relay (LAN/tunnel mode). */
 	staticDir?: string;
 	/** TLS key/cert PEM. When set the server accepts wss:// (and https:// for

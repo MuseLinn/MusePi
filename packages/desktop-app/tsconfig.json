@@ -19,8 +19,8 @@
 			"react-dom"
 		],
 		"paths": {
-			"@musepi/guest-client/src/*": [
-				"./../guest-client/src/*"
+			"@musepi/client-core/src/*": [
+				"./../client-core/src/*"
 			]
 		}
 	}

@@ -1,5 +1,5 @@
+import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/client-core";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/guest-client";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";

@@ -5,7 +5,7 @@
  * models.remove / models.listCustom / models.discover RPC flows.
  * Extracted from model.tsx; the section renders <CustomProviderPane /> only.
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { RpcClient } from "../../lib/rpc";

@@ -8,7 +8,7 @@
  * providers tab (providers.importApiKey / providers.login / providers.logout),
  * so a key entered here is visible to the generate_image tool immediately.
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";

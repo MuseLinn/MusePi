@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";

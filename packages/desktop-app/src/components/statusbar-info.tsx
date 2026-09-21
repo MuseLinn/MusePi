@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { SessionState } from "@musepi/pi-wire";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";

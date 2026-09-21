@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 
 /**
  * Empty-state composer draft suggestions (openchamber DraftPresetChips

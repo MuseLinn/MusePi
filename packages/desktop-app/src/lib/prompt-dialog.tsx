@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";

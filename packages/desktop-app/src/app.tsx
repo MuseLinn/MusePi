@@ -1,4 +1,4 @@
-import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/guest-client";
+import { getLocaleSnapshot, setLocale, subscribeLocale, t } from "@musepi/client-core";
 import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";

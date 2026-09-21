@@ -16,7 +16,7 @@
  * persistent login state; agent operations surface in the activity line and
  * auto-open the panel (ContextPanel listens for agentActivity).
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";

@@ -1,7 +1,7 @@
-import { Transcript, type TranscriptProps } from "@musepi/guest-client/src/components/transcript/Transcript";
-import { t } from "@musepi/guest-client/src/i18n/index.js";
-import { fmtCost, fmtDuration, fmtTokens } from "@musepi/guest-client/src/lib/format";
-import { decideTranscriptPoll } from "@musepi/guest-client/src/lib/transcript-poll";
+import { Transcript, type TranscriptProps } from "@musepi/client-core/src/components/transcript/Transcript";
+import { t } from "@musepi/client-core/src/i18n/index.js";
+import { fmtCost, fmtDuration, fmtTokens } from "@musepi/client-core/src/lib/format";
+import { decideTranscriptPoll } from "@musepi/client-core/src/lib/transcript-poll";
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";

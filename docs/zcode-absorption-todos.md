@@ -41,16 +41,16 @@
 
 1. **agent 侧没有可调用的 cron 工具** —— `tools/builtin-names.ts` 无 cron/schedule 类工具；全仓 `grep` 只命中 `daemon/server.ts` 与 `collab/host.ts`。⇒ 模型自己没有建任务的入口，这是本项的核心工作量。
 2. **没有聊天内卡片** —— 有两条现成插槽路径（都不需要改 wire 协议）：
-   - **(a) tool-render 注册表（推荐）**：`packages/guest-client/src/tool-render/registry.ts:42-97` 按工具名映射渲染器；契约 `tool-render/types.ts:82-102`；**最佳模板** `tool-render/tools/board.tsx:48-81`（卡片内按钮 → `openBoardFromChat(id,title)` `:72`）。
+   - **(a) tool-render 注册表（推荐）**：`packages/client-core/src/tool-render/registry.ts:42-97` 按工具名映射渲染器；契约 `tool-render/types.ts:82-102`；**最佳模板** `tool-render/tools/board.tsx:48-81`（卡片内按钮 → `openBoardFromChat(id,title)` `:72`）。
    - **(b) `custom_message`**：`Transcript.tsx:899-907` → `renderCustomMessage` `:613-760`（既有分支 `collab-prompt`/`ttsr`/`advisor`/`async-result`/`retry_failure`/`irc:*`）；daemon 侧 `sessionManager.appendCustomMessageEntry(customType, …)`，示例 `session/async-job-delivery.ts:72`。
 3. **`ScheduledTasksPage` 没有"外部指定任务"的 props** —— `:174` / `:222-227` 只有内部 `selectedId` state。
 
 **方案**
 
 1. 新增工具（建议名 `schedule_task`，放 `packages/coding-agent/src/tools/`，薄封装 `cron.upsert`）：入参 `name` / `prompt` / `schedule`（含 `idleWindow`）/ `cwd` / `model` / `thinkingLevel`；返回 `{ taskId, nextRunAt }`。同时加进 `tools/builtin-names.ts` 的 `BUILTIN_TOOL_NAMES`。
-2. 卡片：`packages/guest-client/src/tool-render/tools/schedule-task.tsx`（显示名称、调度摘要、闲时窗口、下一次运行、"编辑"按钮），在 `registry.ts:42-97` 注册；若要"常驻不折叠"，加进 `components/transcript/ToolCard.tsx:53-55` 的 `isArtifactCard()`（现有 `widget`/`board`）。
+2. 卡片：`packages/client-core/src/tool-render/tools/schedule-task.tsx`（显示名称、调度摘要、闲时窗口、下一次运行、"编辑"按钮），在 `registry.ts:42-97` 注册；若要"常驻不折叠"，加进 `components/transcript/ToolCard.tsx:53-55` 的 `isArtifactCard()`（现有 `widget`/`board`）。
 3. 跳转：卡片按钮派发 `window` 事件（照抄 `components/transcript/canvas-jump.tsx:44-67` 的 `omp-open-board` 模式）；宿主监听加在 `packages/desktop-app/src/app.tsx:576-585` 旁 → `viewSwapRef.current("scheduled")`；`ScheduledTasksPage` 增 `initialTaskId?: string` props，打开时定位到该任务的编辑器。
-4. i18n：卡片文案进 `packages/guest-client/src/i18n/{zh-CN,en-US}/<域>.ts`（按域拆分；en 必须 `as const satisfies Record<ZhKey, string>`）。
+4. i18n：卡片文案进 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`（按域拆分；en 必须 `as const satisfies Record<ZhKey, string>`）。
 
 **验收**
 
@@ -276,6 +276,6 @@
 ## 工作纪律（改本文涉及的功能时遵守）
 
 - 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。既有基线：`packages/desktop-app` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript 渲染），与 GUI 改动无关，**不要去"修"**。
-- i18n：按域拆 `packages/guest-client/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`，禁止塞回单文件（`AGENTS.md`）。
+- i18n：按域拆 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`，禁止塞回单文件（`AGENTS.md`）。
 - 长文本渲染、模型身份、模态键盘等 GUI 硬规则见 `AGENTS.md` 的 "GUI Development Rules" 与 `docs/gui-design.md` / `docs/gui-implementation.md`。
 - 本文档吸收完成后**整体删除**（不要翻译、不要长期挂着）。

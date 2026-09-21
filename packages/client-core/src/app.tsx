@@ -1,0 +1,677 @@
+import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
+import type { ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { AgentDrawer } from "./components/agents/AgentDrawer";
+import { AgentsPanel } from "./components/agents/AgentsPanel";
+import { MarketplacePanel } from "./components/marketplace/MarketplacePanel";
+import { BoardPanel } from "./components/panels/BoardPanel";
+import { ScheduledPanel } from "./components/panels/ScheduledPanel";
+import { VoicePanel } from "./components/panels/VoicePanel";
+import { WorkspacePanel } from "./components/panels/WorkspacePanel";
+import { ApprovalCard } from "./components/shell/ApprovalCard";
+import { Banners } from "./components/shell/Banners";
+import { Composer } from "./components/shell/Composer";
+import { ConnectScreen } from "./components/shell/ConnectScreen";
+import { type GuestPanel, HeaderBar } from "./components/shell/HeaderBar";
+import { Toasts } from "./components/shell/Toasts";
+import { WelcomeHint } from "./components/shell/WelcomeHint";
+import { WorkspaceView } from "./components/shell/WorkspaceView";
+import { msgText, Transcript } from "./components/transcript/Transcript";
+import { t } from "./i18n/index.js";
+import { useBackLayer } from "./lib/back-stack";
+import {
+	clearBadge,
+	consumePendingDeepLink,
+	DEEP_LINK_EVENT,
+	incrementBadge,
+	isMobileShell,
+	isNativeShell,
+} from "./lib/capacitor";
+import { GuestClient } from "./lib/client";
+import { isCompatShell } from "./lib/compat-shell";
+import { CompatSlotHost } from "./lib/compat-slot-host";
+import { rememberConnection } from "./lib/connections";
+import { HostClient } from "./lib/host-client";
+import { enableNativeGlass } from "./lib/native-glass";
+import { useTts } from "./lib/tts";
+import { type SessionClient, useGuestSelector } from "./lib/use-guest";
+import type { ToolRenderHost } from "./tool-render";
+import "./components/shell/shell.css";
+
+// Compat shell + Electron bridge → opt the served renderer into the native
+// window glass (transparent root + translucent shell scrims + material
+// mirroring). Runs at import time so the first paint is already glass —
+// a plain-browser guest no-ops (no bridge, no marker).
+enableNativeGlass();
+
+const NAME_KEY = "omp.collab.name";
+
+interface Creds {
+	link: string;
+	name: string;
+}
+
+function storedName(): string {
+	try {
+		return localStorage.getItem(NAME_KEY) ?? "guest";
+	} catch {
+		return "guest";
+	}
+}
+
+/** Deep link = everything after the FIRST `#` (legacy links carry a second `#` inside the fragment). */
+function hashLink(): string | null {
+	const href = window.location.href;
+	const i = href.indexOf("#");
+	if (i < 0 || i + 1 >= href.length) return null;
+	return href.slice(i + 1);
+}
+
+export function App(): ReactNode {
+	const [client, setClient] = useState<GuestClient | HostClient | null>(null);
+	const [connectError, setConnectError] = useState<string | null>(null);
+	const credsRef = useRef<Creds | null>(null);
+	const hostRef = useRef<{ wsUrl: string; token?: string } | null>(null);
+
+	const connect = useCallback((link: string, name: string): void => {
+		// WebCrypto only exists in secure contexts (https or localhost). On
+		// plain http (a LAN IP) the guest degrades to plaintext mode — no E2E
+		// sealing, but also no self-signed-cert warning to dismiss.
+		const plaintext = typeof crypto === "undefined" || !crypto.subtle;
+		let next: GuestClient;
+		try {
+			next = new GuestClient(link, name, { plaintext });
+		} catch (err) {
+			setConnectError(err instanceof Error ? err.message : String(err));
+			return;
+		}
+		// Persist the connection only after the host actually welcomed us —
+		// a failed connect (bad link, unreachable relay, 6s pair timeout)
+		// must not pollute the recent list or leave a dead deep-link in the
+		// URL that an auto-connect on reload would retry.
+		next.onWelcome = (): void => {
+			rememberConnection(link, name);
+			try {
+				window.location.hash = link;
+			} catch {
+				// non-fatal
+			}
+		};
+		next.connect();
+		try {
+			localStorage.setItem(NAME_KEY, name);
+		} catch {
+			// storage unavailable (private mode) — non-fatal
+		}
+		credsRef.current = { link, name };
+		setConnectError(null);
+		setClient(prev => {
+			prev?.close();
+			return next;
+		});
+	}, []);
+
+	/** Host-mode: connect to the serving daemon's own session (compat shell).
+	 *  No collab link, no E2E — the daemon's WS is loopback + token-gated. */
+	const connectHost = useCallback((wsUrl: string, token?: string): void => {
+		const next = new HostClient(wsUrl, token);
+		next.connect();
+		hostRef.current = { wsUrl, token };
+		credsRef.current = null;
+		setConnectError(null);
+		setClient(prev => {
+			prev?.close();
+			return next;
+		});
+	}, []);
+
+	const leave = useCallback((): void => {
+		setClient(prev => {
+			prev?.close();
+			return null;
+		});
+		hostRef.current = null;
+		history.replaceState(null, "", window.location.pathname + window.location.search);
+	}, []);
+
+	const rejoin = useCallback((): void => {
+		const host = hostRef.current;
+		if (host) {
+			connectHost(host.wsUrl, host.token);
+			return;
+		}
+		const creds = credsRef.current;
+		if (creds) connect(creds.link, creds.name);
+	}, [connect, connectHost]);
+
+	// Visual Viewport: adjust app height to fit screen space when mobile keyboard opens.
+	useEffect(() => {
+		const vv = window.visualViewport;
+		if (!vv) return;
+
+		const updateHeight = () => {
+			document.documentElement.style.setProperty("--viewport-height", `${vv.height}px`);
+			window.scrollTo(0, 0);
+		};
+
+		updateHeight();
+		vv.addEventListener("resize", updateHeight);
+		vv.addEventListener("scroll", updateHeight);
+
+		return () => {
+			vv.removeEventListener("resize", updateHeight);
+			vv.removeEventListener("scroll", updateHeight);
+		};
+	}, []);
+
+	// Deep link: a page load with a hash auto-connects.
+	useEffect(() => {
+		const link = hashLink();
+		if (link) connect(link, storedName());
+	}, [connect]);
+
+	// Host-mode boot config: when served by `musepi serve --web-port`, the
+	// daemon also serves /__daemon.json with the JSON-RPC WS origin + token.
+	// Auto-connect as host (skip ConnectScreen) unless a collab deep link is
+	// present. Absent config (dev server / static host) → ConnectScreen.
+	useEffect(() => {
+		if (hashLink()) return;
+		let cancelled = false;
+		void (async () => {
+			try {
+				const res = await fetch("/__daemon.json");
+				if (!res.ok) return;
+				const config = (await res.json()) as { wsUrl?: string; token?: string };
+				if (config.wsUrl && !cancelled) connectHost(config.wsUrl, config.token);
+			} catch {
+				// Not served by a daemon — ConnectScreen below handles it.
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [connectHost]);
+
+	// Deep link: a native musepi:// URL (notification tap / QR / external link)
+	// delivered by the Capacitor App plugin — connect directly, same as hash.
+	useEffect(() => {
+		if (!isMobileShell()) return;
+		const onLink = (e: Event): void => {
+			const link = (e as CustomEvent<{ link: string }>).detail?.link;
+			if (link) connect(link, storedName());
+		};
+		// Cold start: the link arrived before this listener mounted (boot
+		// splash) — the stash drains it exactly once.
+		const stashed = consumePendingDeepLink();
+		if (stashed) connect(stashed, storedName());
+		window.addEventListener(DEEP_LINK_EVENT, onLink);
+		return () => window.removeEventListener(DEEP_LINK_EVENT, onLink);
+	}, [connect]);
+
+	useEffect(() => {
+		if (!client) document.title = t("musepi collab");
+	}, [client]);
+
+	useMobileNotifications(client, credsRef.current?.link ?? null);
+
+	if (!client) {
+		return (
+			<ConnectScreen
+				defaultName={storedName()}
+				defaultLink={hashLink() ?? undefined}
+				error={connectError}
+				onConnect={connect}
+			/>
+		);
+	}
+	return (
+		<Session
+			client={client}
+			onLeave={leave}
+			onRejoin={rejoin}
+			currentLink={credsRef.current?.link ?? ""}
+			onSwitchTo={connect}
+		/>
+	);
+}
+
+/**
+ * Local notifications for the Capacitor shell: when the app is backgrounded,
+ * a newly settled assistant message fires a native notification (session
+ * update while away from the desk). Desktop web and foreground shells no-op —
+ * the plugin is lazily imported and never touches non-Capacitor builds.
+ * This is the LAN-architecture equivalent of openchamber's APNs/FCM relay
+ * (which requires a cloud server we do not have).
+ */
+function useMobileNotifications(client: SessionClient | null, link: string | null): void {
+	const lastNotifiedRef = useRef(0);
+	// Android 13+ requires an explicit POST_NOTIFICATIONS grant before
+	// schedule() does anything; without it the call silently no-ops. Request
+	// once on the first live connection (native shell only — browsers have no
+	// notification permission here, and the plugin import is lazy anyway).
+	const permissionRequestedRef = useRef(false);
+	useEffect(() => {
+		if (!client) return;
+		if (!permissionRequestedRef.current && isNativeShell()) {
+			permissionRequestedRef.current = true;
+			void (async () => {
+				try {
+					const { LocalNotifications } = await import("@capacitor/local-notifications");
+					const status = await LocalNotifications.checkPermissions();
+					if (status.display !== "granted") {
+						await LocalNotifications.requestPermissions();
+					}
+				} catch {
+					// permission prompt unavailable (older Android / browser) — silent;
+					// scheduling below still no-ops rather than crashing
+				}
+			})();
+		}
+		let disposed = false;
+		const unsub = client.subscribe(() => {
+			if (disposed) return;
+			// Foreground: the transcript itself is the notification.
+			if (typeof document !== "undefined" && !document.hidden) return;
+			const snap = client.getSnapshot();
+			let lastAssistant: AssistantMessage | null = null;
+			for (let i = snap.entries.length - 1; i >= 0; i--) {
+				const e = snap.entries[i];
+				if (e.type === "message" && e.message.role === "assistant") {
+					lastAssistant = e.message;
+					break;
+				}
+			}
+			if (!lastAssistant) return;
+			const ts = lastAssistant.timestamp;
+			if (ts <= lastNotifiedRef.current) return;
+			lastNotifiedRef.current = ts;
+			// Extract synchronously (TS closure narrowing); the plugin call is
+			// the only async part. msgText mirrors the transcript's own
+			// content extraction (runtime shape check — wire content is
+			// consumed as unknown across the guest layer).
+			const text = msgText(lastAssistant);
+			void (async () => {
+				try {
+					// Platform-specific module: the Capacitor plugin only exists in
+					// the shell — static import would pull it into the desktop web
+					// bundle.
+					const { LocalNotifications } = await import("@capacitor/local-notifications");
+					await LocalNotifications.schedule({
+						notifications: [
+							{
+								id: ts % 2147483647,
+								title: t("musepi session update"),
+								body: text.slice(0, 140) || t("session update"),
+								smallIcon: "ic_stat_musepi",
+								// Deep-link payload: tapping the notification routes
+								// back to this session via DEEP_LINK_EVENT (see
+								// setupDeepLinkHandler) even after a cold start.
+								extra: link ? { link } : undefined,
+							},
+						],
+					});
+					// Launcher badge rides the notification (ShortcutBadger —
+					// Samsung/Xiaomi/Huawei/Oppo; no-op on unsupported launchers).
+					void incrementBadge();
+				} catch {
+					// notifications unavailable (permission/plugin) — silent
+				}
+			})();
+		});
+		return () => {
+			disposed = true;
+			unsub();
+		};
+	}, [client]);
+
+	// Foreground return: the user has seen the app — clear the badge.
+	useEffect(() => {
+		if (!isMobileShell()) return;
+		const onVisible = (): void => {
+			if (!document.hidden) void clearBadge();
+		};
+		document.addEventListener("visibilitychange", onVisible);
+		return () => document.removeEventListener("visibilitychange", onVisible);
+	}, []);
+}
+
+/** Persistent warning strip for plaintext (no-E2E) sessions. */
+function PlaintextBanner(): ReactNode {
+	return (
+		<div className="plaintext-banner" role="alert">
+			{t("plaintext session: not encrypted — anyone on this network can read it")}
+		</div>
+	);
+}
+
+interface SessionProps {
+	client: SessionClient;
+	onLeave(): void;
+	onRejoin(): void;
+	/** Current connection link (switcher highlight). */
+	currentLink: string;
+	onSwitchTo(link: string, name: string): void;
+}
+
+/**
+ * Message-plane fields only: entries/stream/activeTools change on every
+ * transcript frame, so this pane is the only thing that re-renders during
+ * a stream — never the shell, header, composer, or toasts.
+ */
+function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRenderHost }): ReactNode {
+	const entries = useGuestSelector(client, s => s.entries);
+	const stream = useGuestSelector(client, s => s.stream);
+	const streamDone = useGuestSelector(client, s => s.streamDone);
+	const activeTools = useGuestSelector(client, s => s.activeTools);
+	const working = useGuestSelector(client, s => s.working);
+	const roundDurations = useGuestSelector(client, s => s.roundDurations);
+	// M1 turn header model fallback: live sessions carry a WireModel; history
+	// sessions carry the persisted "provider/modelId" string on the header.
+	const sessionModel = useGuestSelector(client, s =>
+		s.state?.model ? `${s.state.model.provider}/${s.state.model.id}` : (s.header?.model ?? null),
+	);
+	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	// Read-aloud wiring (design 「语音输出四帧」): the Transcript's onSpeak slot
+	// was always there — this is the shell side that was never connected. The
+	// controller is shared with the composer mini-player/barge-in via the
+	// per-client singleton; only the speaking id subscribes here.
+	const tts = useTts(client);
+	const speakingId = useSyncExternalStore(
+		tts.subscribe,
+		() => tts.getSnapshot().speakingId,
+		() => tts.getSnapshot().speakingId,
+	);
+	// Mobile empty state gets the time-aware greeting + rotating tip in place
+	// of the bare "no activity yet" line (gui WelcomeComposer parity).
+	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
+	// Revert (撤回) / retry (重试) are session-tree operations: branchAt moves
+	// the leaf IN PLACE at the target node (TUI /tree parity) — the old leaf
+	// and its subtree stay reachable as a sibling branch, never truncated.
+	// For a user node the daemon backfills the text; the host re-sends it so
+	// the turn resumes at that point. (True composer pre-fill — TUI waits for
+	// the user to confirm — is a follow-up; the GUI composer has no external
+	// set-text channel yet.)
+	const branchAt = (messageId: string): void => {
+		if (!focusedSessionId) return;
+		void client
+			.rpc<{ editorText?: string | null; editorImages?: unknown[] }>("session.branchAt", {
+				sessionId: focusedSessionId,
+				messageId,
+			})
+			.then(result => {
+				if (result.editorText) host.sendPrompt?.(result.editorText);
+			})
+			.catch(err => {
+				console.error("[transcript] branchAt failed:", err);
+			});
+	};
+	// Fork (分叉): copy the session truncated at this message into a NEW
+	// session (non-destructive — original untouched). User messages re-answer
+	// via backfilled text; assistant/toolResult nodes pass includeTarget to
+	// keep the node and continue from it. The daemon returns the new session
+	// id; the GUI switches the workspace focus to it.
+	const forkAt = (messageId: string, _text: string | undefined, includeTarget?: boolean): void => {
+		if (!focusedSessionId) return;
+		void client
+			.rpc<{ sessionId?: string | null; sessionFile?: string | null }>("session.forkAt", {
+				sessionId: focusedSessionId,
+				messageId,
+				includeTarget,
+			})
+			.then(result => {
+				if (result.sessionId) client.selectWorkspaceSession(result.sessionId);
+			})
+			.catch(err => {
+				console.error("[transcript] forkAt failed:", err);
+			});
+	};
+	// Branch topology for the transcript's session-tree nav (layer-1 branch
+	// bars + sibling switching): child counts keyed by entry id from
+	// parentId links, the active path (leaf → root), and switch → branchAt.
+	const branchInfo = useMemo(() => {
+		if (!focusedSessionId || entries.length === 0) return undefined;
+		const childCount = new Map<string, number>();
+		for (const e of entries) {
+			if (e.parentId) childCount.set(e.parentId, (childCount.get(e.parentId) ?? 0) + 1);
+		}
+		const activePathIds = new Set<string>();
+		// Leaf = last entry without children; walk parentId up to the root.
+		let leaf: SessionEntry | undefined;
+		for (let i = entries.length - 1; i >= 0; i--) {
+			if (!childCount.has(entries[i].id)) {
+				leaf = entries[i];
+				break;
+			}
+		}
+		for (let cur = leaf; cur; cur = entries.find(e => e.id === cur?.parentId)) {
+			if (!cur) break;
+			activePathIds.add(cur.id);
+		}
+		return {
+			childCount,
+			activePathIds,
+			onSwitchBranch: (leafEntryId: string) => branchAt(leafEntryId),
+		};
+	}, [entries, focusedSessionId, client]);
+	return (
+		<Transcript
+			entries={entries}
+			stream={stream}
+			streamDone={streamDone}
+			activeTools={activeTools}
+			working={working}
+			roundDurations={roundDurations}
+			model={sessionModel ?? undefined}
+			host={host}
+			emptySlot={emptySlot}
+			onRevert={id => branchAt(id)}
+			onRetry={(id, text) => branchAt(id)}
+			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
+			onSpeak={(text, id) => tts.speak(text, id)}
+			speakingId={speakingId}
+			onStopSpeak={() => tts.stop()}
+			branchInfo={branchInfo}
+		/>
+	);
+}
+
+/** Subagent rail state: agents/progress/lifecycle change independently of the transcript. */
+function AgentsRail({
+	client,
+	selectedId,
+	onSelect,
+}: {
+	client: SessionClient;
+	selectedId: string | null;
+	onSelect(id: string | null): void;
+}): ReactNode {
+	const agents = useGuestSelector(client, s => s.agents);
+	const progress = useGuestSelector(client, s => s.progress);
+	const lifecycle = useGuestSelector(client, s => s.lifecycle);
+	return (
+		<AgentsPanel
+			agents={agents}
+			progress={progress}
+			lifecycle={lifecycle}
+			selectedId={selectedId}
+			onSelect={onSelect}
+		/>
+	);
+}
+
+function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: SessionProps): ReactNode {
+	const [railOpen, setRailOpen] = useState(false);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [activePanel, setActivePanel] = useState<GuestPanel | null>(null);
+	const autoOpenedRef = useRef(false);
+
+	// Low-frequency fields only. The shell never subscribes to the message
+	// plane (entries/stream/activeTools) — those live in TranscriptPane.
+	const phase = useGuestSelector(client, s => s.phase);
+	const endedReason = useGuestSelector(client, s => s.endedReason);
+	const header = useGuestSelector(client, s => s.header);
+	const state = useGuestSelector(client, s => s.state);
+	const agents = useGuestSelector(client, s => s.agents);
+	const workspace = useGuestSelector(client, s => s.workspace);
+	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
+	const readOnly = useGuestSelector(client, s => s.readOnly);
+
+	const subCount = agents.filter(a => a.kind === "sub").length;
+	const agentIds = useMemo(() => new Set(agents.map(a => a.id)), [agents]);
+	const toolHost = useMemo<ToolRenderHost>(
+		() => ({
+			hasAgent: id => agentIds.has(id),
+			openAgent: id => {
+				if (agentIds.has(id)) setSelectedId(id);
+			},
+			sendPrompt: text => client.sendPrompt(text),
+		}),
+		[agentIds, client],
+	);
+
+	// Auto-open the rail the first time a subagent appears.
+	useEffect(() => {
+		if (subCount > 0 && !autoOpenedRef.current) {
+			autoOpenedRef.current = true;
+			setRailOpen(true);
+		}
+	}, [subCount]);
+
+	const title = header?.title ?? state?.sessionName ?? t("session");
+	useEffect(() => {
+		document.title = `${title} · ${t("musepi collab")}`;
+	}, [title]);
+
+	const drawerAgent = selectedId != null ? agents.find(a => a.id === selectedId) : undefined;
+	const inWorkspace = workspace !== null && focusedSessionId === null;
+	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
+	const sessionCwd = state?.cwd ?? null;
+	// Android back key: each layer registers its own close handler on the
+	// shared back stack (lib/back-stack). dispatchBack() walks from the
+	// topmost modal down; the first handler returning true consumes the
+	// press, so exactly one layer closes per back press (never two).
+	useBackLayer(
+		100,
+		selectedId !== null,
+		useCallback(() => {
+			setSelectedId(null);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		80,
+		railOpen,
+		useCallback(() => {
+			setRailOpen(false);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		60,
+		activePanel !== null,
+		useCallback(() => {
+			setActivePanel(null);
+			return true;
+		}, []),
+	);
+	useBackLayer(
+		40,
+		workspace !== null && focusedSessionId !== null,
+		useCallback(() => {
+			backToWorkspace();
+			return true;
+		}, [backToWorkspace]),
+	);
+
+	const hostMode = client instanceof HostClient;
+	return (
+		<div
+			className={["sh-app", isCompatShell() ? "sh-app--compat" : null, hostMode ? "sh-app--host" : null]
+				.filter(Boolean)
+				.join(" ")}
+		>
+			{isCompatShell() && <div className="compat-titlebar" aria-hidden="true" />}
+			<HeaderBar
+				client={client}
+				railOpen={railOpen}
+				onToggleRail={() => setRailOpen(open => !open)}
+				onLeave={onLeave}
+				onBack={inWorkspace ? undefined : workspace !== null ? backToWorkspace : undefined}
+				activePanel={activePanel}
+				currentLink={currentLink}
+				onSwitchTo={onSwitchTo}
+				onSelectPanel={setActivePanel}
+				sessions={workspace}
+				focusedSessionId={focusedSessionId}
+				onSelectSession={id => client.selectWorkspaceSession(id)}
+			/>
+			{client.plaintext && <PlaintextBanner />}
+			<main className="sh-main">
+				{inWorkspace && workspace !== null ? (
+					<WorkspaceView
+						client={client}
+						sessions={workspace}
+						onSelect={id => client.selectWorkspaceSession(id)}
+						onCreateSession={() => client.rpc("session.create", {})}
+						onDeleteSession={id => client.rpc("session.delete", { sessionId: id })}
+						onRenameSession={(id, title) => client.rpc("session.rename", { sessionId: id, title })}
+						onStopSession={id => client.rpc("session.abort", { sessionId: id })}
+					/>
+				) : activePanel !== null ? (
+					<section className="sh-content" data-rail="false">
+						<div className="sh-panel">
+							{activePanel === "board" && <BoardPanel client={client} />}
+							{activePanel === "scheduled" && (
+								<ScheduledPanel client={client} cwd={sessionCwd} readOnly={readOnly} />
+							)}
+							{activePanel === "files" && (
+								<WorkspacePanel client={client} cwd={sessionCwd} readOnly={readOnly} />
+							)}
+							{activePanel === "marketplace" && <MarketplacePanel client={client} />}
+							{activePanel === "workbench" && (
+								<CompatSlotHost slot="panel.tab.workbench" className="sh-compat-panel" />
+							)}
+							{activePanel === "voice" && <VoicePanel client={client} />}
+						</div>
+					</section>
+				) : (
+					<section className="sh-content" data-rail={railOpen ? "true" : "false"}>
+						<div className="sh-transcript">
+							<TranscriptPane client={client} host={toolHost} />
+						</div>
+					</section>
+				)}
+				{railOpen && !inWorkspace && activePanel === null && (
+					<>
+						<div className="sh-rail-backdrop" onClick={() => setRailOpen(false)} />
+						<aside className="sh-rail">
+							<AgentsRail client={client} selectedId={selectedId} onSelect={setSelectedId} />
+						</aside>
+					</>
+				)}
+			</main>
+			{!inWorkspace && activePanel === null && (
+				<>
+					<CompatSlotHost slot="composer.dock" className="sh-compat-dock" />
+					<Composer client={client} />
+				</>
+			)}
+			{!inWorkspace && activePanel === null && <ApprovalCard client={client} />}
+			{!inWorkspace && activePanel === null && <CompatSlotHost slot="statusbar" className="sh-compat-statusbar" />}
+			{drawerAgent && (
+				<>
+					<div className="ag-drawer-backdrop" onClick={() => setSelectedId(null)} />
+					<AgentDrawer
+						agent={drawerAgent}
+						client={client}
+						readOnly={readOnly}
+						host={toolHost}
+						onClose={() => setSelectedId(null)}
+					/>
+				</>
+			)}
+			<Banners phase={phase} endedReason={endedReason} onRejoin={onRejoin} onNewLink={onLeave} />
+			<Toasts client={client} />
+		</div>
+	);
+}

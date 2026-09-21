@@ -1,7 +1,7 @@
 # MusePi GUI 实现笔记(契约与坑)
 [English](gui-implementation.md) | 中文
 
-> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/desktop-app` / `packages/guest-client` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
+> 状态:**活文档**(2026-08-06 建立,从 `gui-design.md` 拆出)——`packages/desktop-app` / `packages/client-core` 实现的**事实记录**:daemon RPC 契约、IPC 形状、算法语义、踩坑与验证方法。与实现同步,实现文件为准。
 >
 > 设计风格规范(布局/token/动效/组件模式)见 **`docs/gui-design.md`**。
 

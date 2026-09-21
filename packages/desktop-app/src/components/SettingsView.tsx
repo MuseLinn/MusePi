@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";

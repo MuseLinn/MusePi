@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
 import type { TrajectoryTurnGroup } from "./trajectory-data";

@@ -1,4 +1,4 @@
-import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type SegmentedOption, t } from "@musepi/guest-client";
+import { highlightToCodeHtml, ImageLightbox, Markdown, Segmented, type SegmentedOption, t } from "@musepi/client-core";
 import { renderAsync as renderDocx } from "docx-preview";
 import {
 	ArrowLeft,

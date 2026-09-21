@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { SoundName } from "cuelume";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";

@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { ShieldAlert } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { haptic } from "../lib/haptic";

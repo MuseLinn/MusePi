@@ -22,8 +22,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const ROOTS = ["packages/desktop-app/src", "packages/guest-client/src"];
-const TOKENS_FILE = "packages/guest-client/src/styles/tokens.css";
+const ROOTS = ["packages/desktop-app/src", "packages/client-core/src"];
+const TOKENS_FILE = "packages/client-core/src/styles/tokens.css";
 const LADDER = ["--radius-xs", "--radius-sm", "--radius-md", "--radius-lg", "--radius-xl", "--radius-2xl"] as const;
 
 /** Semantic shapes that are not part of the ladder (pill / circle / none). */

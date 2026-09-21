@@ -1,4 +1,4 @@
-import { t, archiveSession as writeArchivedSession } from "@musepi/guest-client";
+import { t, archiveSession as writeArchivedSession } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {

@@ -1,4 +1,4 @@
-import { Markdown, type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/guest-client";
+import { Markdown, type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";

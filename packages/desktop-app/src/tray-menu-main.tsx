@@ -22,7 +22,7 @@ import { t } from "./i18n/index.js";
 // Theme tokens first — the tray window renders without them today, so every
 // var(--color-*) (text, borders, the unified scrollbar thumb) falls back to
 // unstyled defaults.
-import "@musepi/guest-client/src/styles/tokens.css";
+import "@musepi/client-core/src/styles/tokens.css";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
 

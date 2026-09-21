@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode, RefObject } from "react";
 import { useState } from "react";
 import { tapFeedback } from "../lib/haptic";

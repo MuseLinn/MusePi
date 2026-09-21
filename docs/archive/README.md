@@ -32,7 +32,7 @@
 | `session-tree-plan.md` + zh-CN | 已被取代 | 见下一行 |
 | `session-tree-redesign.md` | Phase 0–5 已实现 | `session.tree` RPC = 会话列表树；会话内拓扑走 `snap.entries` + daemon journal |
 | `plugin-design.md` | P0–P4 全部实现 | 扩展 API 契约写在活文档 `extensions-dev.md` |
-| `widget-design-system.md` | registry 层已实现（18 种 widget） | `packages/guest-client` 的 widget registry + parity 测试 |
+| `widget-design-system.md` | registry 层已实现（18 种 widget） | `packages/client-core` 的 widget registry + parity 测试 |
 | `board-dashboard.md` + zh-CN | M1–M3 已落地 | BoardPage + WidgetRegistry |
 | `ota-update-design.md` | 已实现（v0.4.4） | 更新通道见 `gui-implementation.md` §17 |
 | `client-gaps-plan.md` | 一次性对照审计完成 | 结论已吸收进 FilePane 编辑器/预览等实现 |

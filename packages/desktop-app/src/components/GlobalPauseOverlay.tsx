@@ -9,7 +9,7 @@
  * blur animates in/out (dynamic blur), a live hold timer, and click/ESC to
  * resume.
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { useEffect, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 

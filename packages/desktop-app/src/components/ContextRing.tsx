@@ -1,6 +1,6 @@
-import { t } from "@musepi/guest-client";
-import { SlidingNumber } from "@musepi/guest-client/src/lib/sliding-number";
-import { CountUp } from "@musepi/guest-client/src/widgets/count-up";
+import { t } from "@musepi/client-core";
+import { SlidingNumber } from "@musepi/client-core/src/lib/sliding-number";
+import { CountUp } from "@musepi/client-core/src/widgets/count-up";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";

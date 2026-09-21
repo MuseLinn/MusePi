@@ -141,7 +141,7 @@ export type CollabFrame =
 // ═══════════════════════════════════════════════════════════════════════════
 
 // Transport primitives moved to @musepi/collab-proto (pure wire layer, shared
-// with guest-client). Re-exported here so existing import sites keep working.
+// with client-core). Re-exported here so existing import sites keep working.
 export {
 	formatCollabLink,
 	formatCollabWebLink,

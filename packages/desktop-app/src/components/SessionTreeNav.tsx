@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { ChevronRight, GitFork } from "lucide-react";
 import type { ReactNode } from "react";
 

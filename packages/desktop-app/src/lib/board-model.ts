@@ -3,8 +3,8 @@
  * placement, collision avoidance, persistence, seed data. Zero React;
  * the only DOM touch is `localStorage` in {@link loadBoards}.
  */
-import { t } from "@musepi/guest-client";
-import { type BoardWidget, widgetDef } from "@musepi/guest-client/src/widgets/registry";
+import { t } from "@musepi/client-core";
+import { type BoardWidget, widgetDef } from "@musepi/client-core/src/widgets/registry";
 
 export const BOARDS_KEY = "musepi-gui-board:boards";
 export const ACTIVE_KEY = "musepi-gui-board:active";

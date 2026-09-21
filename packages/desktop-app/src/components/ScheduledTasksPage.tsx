@@ -1,4 +1,4 @@
-import { archiveSession, t } from "@musepi/guest-client";
+import { archiveSession, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { orderedWeekdayKeys, WEEKDAY_KEYS, weekStartIndex } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";

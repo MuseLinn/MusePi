@@ -219,7 +219,7 @@ pi.registerToolView("my_tool", { moduleUrl: "./views/my-tool.tsx", label: "My To
 
 **分派**：daemon 编译 → `extensions.list.toolViews` → GUI `useExtensionToolViews`（ChatView 挂载）blob-import 并注册进 guest-client tool-render 外部表 → `ToolView` 按名分派。编译失败的 view 携带 `error`，回退内置/generic 渲染器，不破坏 transcript。
 
-**参考实现**：`packages/guest-client/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/desktop-app/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
+**参考实现**：`packages/client-core/src/tool-render/registry.ts`（`registerExternalToolRenderers`）、`packages/desktop-app/src/lib/slot-host.tsx`（`useExtensionToolViews`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectToolViews`）。
 
 ## 10. 扩展 transcript 节点渲染（transcript.node seat，DSH 粒度，2026-08-27）
 
@@ -246,7 +246,7 @@ pi.registerComponent({
 
 **防置换**：扩展声明的 kind 只影响该 kind 条目的渲染；内建类型（message/compaction/branch_summary/model_change 等）仍由宿主持有，扩展只能经 `children` 基座增强声明的 kind。与 DSH 一致——官方 sidebar/conversation 的 owner 始终是宿主，插件贡献到 seat，不覆写核心。
 
-**参考实现**：`packages/guest-client/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/desktop-app/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
+**参考实现**：`packages/client-core/src/components/transcript/Transcript.tsx`（`transcriptNodeKind`/`renderTranscriptNode`）、`packages/desktop-app/src/lib/slot-host.tsx`（`selectTranscriptNodeComponents`/`SlotComponentMount`）、`packages/coding-agent/src/daemon/extension-artifact-compiler.ts`（`collectSlotComponents` 透传 `entryKinds`）。
 
 ## 11. 桌面壳与 Shell 模式（desktop-shell, dsh-desktop parity, 2026-08-28）
 

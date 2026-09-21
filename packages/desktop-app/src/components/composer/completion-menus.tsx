@@ -1,4 +1,4 @@
-import { Markdown } from "@musepi/guest-client";
+import { Markdown } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef } from "react";
 import { t } from "../../i18n/index.js";

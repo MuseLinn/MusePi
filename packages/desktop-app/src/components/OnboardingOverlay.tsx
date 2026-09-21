@@ -16,7 +16,7 @@
  * again; the settings footer button reopens it on demand.
  */
 
-import { setLocale, type TranslationKey, t, useAccentPreference, useThemePreference } from "@musepi/guest-client";
+import { setLocale, type TranslationKey, t, useAccentPreference, useThemePreference } from "@musepi/client-core";
 import { KeyRound, Languages, Sparkles } from "lucide";
 import { MorphIcon } from "morphicons/react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";

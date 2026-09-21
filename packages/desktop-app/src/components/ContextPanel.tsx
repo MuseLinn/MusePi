@@ -5,7 +5,7 @@ import {
 	type TranslationKey,
 	t,
 	WidgetCard,
-} from "@musepi/guest-client";
+} from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";

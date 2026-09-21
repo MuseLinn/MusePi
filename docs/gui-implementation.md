@@ -2,7 +2,7 @@
 
 English | [中文](gui-implementation.zh-CN.md)
 
-> Status: **living document** (established 2026-08-06, split out of `gui-design.md`) — the **factual record** of the `packages/desktop-app` / `packages/guest-client` implementation: daemon RPC contracts, IPC shapes, algorithm semantics, pitfalls, and verification methods. Kept in sync with the implementation; implementation files are the source of truth.
+> Status: **living document** (established 2026-08-06, split out of `gui-design.md`) — the **factual record** of the `packages/desktop-app` / `packages/client-core` implementation: daemon RPC contracts, IPC shapes, algorithm semantics, pitfalls, and verification methods. Kept in sync with the implementation; implementation files are the source of truth.
 >
 > For design style specs (layout/tokens/motion/component patterns), see **`docs/gui-design.md`**.
 

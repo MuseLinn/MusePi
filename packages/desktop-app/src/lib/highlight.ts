@@ -1,4 +1,4 @@
-import { type CodeHighlightFn, useThemePreference } from "@musepi/guest-client";
+import { type CodeHighlightFn, useThemePreference } from "@musepi/client-core";
 import { useCallback } from "react";
 
 /**

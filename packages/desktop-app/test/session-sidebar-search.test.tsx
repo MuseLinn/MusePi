@@ -1,6 +1,6 @@
 import "./dom-shim"; // MUST be first: GUI components touch guest-client element classes / the icon sprite at import time.
 import { describe, expect, test } from "bun:test";
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { GroupedSessionList } from "../src/components/GroupedSessionList";

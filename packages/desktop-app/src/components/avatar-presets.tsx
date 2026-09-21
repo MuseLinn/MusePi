@@ -1,4 +1,4 @@
-import { punkAvatarUri } from "@musepi/guest-client";
+import { punkAvatarUri } from "@musepi/client-core";
 import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { type PetdexMood, type PetInteraction, type PetState, randomPetInteraction } from "../lib/pet";
 import type { PetEffectTier } from "../lib/pet-effects";

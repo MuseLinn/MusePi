@@ -16,7 +16,7 @@
  * never moves on screen while bubbles open/close above it.
  */
 
-import { setLocale, t } from "@musepi/guest-client";
+import { setLocale, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { PetActivity } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";

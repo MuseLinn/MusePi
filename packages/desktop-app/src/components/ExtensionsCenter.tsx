@@ -1,4 +1,4 @@
-import { type MarketplaceCardAction, MarketplaceGrid, type TranslationKey, t } from "@musepi/guest-client";
+import { type MarketplaceCardAction, MarketplaceGrid, type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -547,7 +547,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					<span className="gui-ext-tab-count">{plugins.length + moduleCount}</span>
 				</button>
 				{/* Marketplace tab:daemon marketplace.list 的远程插件目录
-				 * 浏览/一键安装。从 @musepi/guest-client 复用 MarketplaceGrid,
+				 * 浏览/一键安装。从 @musepi/client-core 复用 MarketplaceGrid,
 				 * MarketplacePanel 留在 guest-client 自己用(SessionClient 绑定,
 				 * 这里用 RpcClient 适配)。 */}
 				<button
@@ -968,7 +968,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 /**
  * Marketplace browse panel used by the GUI `marketplace` tab. Wraps the
- * shared {@link MarketplaceGrid} from `@musepi/guest-client` so the visual
+ * shared {@link MarketplaceGrid} from `@musepi/client-core` so the visual
  * stays in lock-step with the collab guest client, and wires install /
  * remove actions to the daemon `marketplace.install` / `marketplace.remove`
  * RPCs. Open detail is a non-fatal no-op for now (the GUI has no plugin

@@ -1,4 +1,4 @@
-import { Segmented } from "@musepi/guest-client";
+import { Segmented } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";

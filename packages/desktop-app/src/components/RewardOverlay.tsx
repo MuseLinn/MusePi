@@ -1,5 +1,5 @@
-import { t } from "@musepi/guest-client";
-import { CountUp } from "@musepi/guest-client/src/widgets/count-up";
+import { t } from "@musepi/client-core";
+import { CountUp } from "@musepi/client-core/src/widgets/count-up";
 import { CircleCheck, Gift, RotateCcw, Share2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";

@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";

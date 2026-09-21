@@ -7,7 +7,7 @@ import {
 	type TranscriptNodeInjection,
 	type TranslationKey,
 	t,
-} from "@musepi/guest-client";
+} from "@musepi/client-core";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -1758,6 +1758,15 @@ export function ChatView({
 															<Transcript
 																entries={visibleEntries}
 																sessionKey={store?.sessionId ?? ""}
+																/* Turn header model chip: same provider/id compound as
+																 * DetailsPanel ("p/id"); render-units keeps the LAST
+																 * model_change inside a turn, so a mid-turn switch still
+																 * names the model that produced the reply. */
+																model={
+																	snap?.state?.model
+																		? `${snap.state.model.provider}/${snap.state.model.id}`
+																		: undefined
+																}
 																/* The branch bar lists siblings that are OFF the
 																 * active path, so it needs the full tree while the
 																 * transcript renders the path. */

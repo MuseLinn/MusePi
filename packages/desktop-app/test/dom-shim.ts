@@ -3,7 +3,7 @@
  * guest-client/test/transcript-dom-shim.ts): guest-client's tool-render element
  * extends HTMLElement at module load, and the GUI's Icon sprite injects an
  * SVG into document.body. Import this FIRST in any test file that pulls
- * @musepi/guest-client or the GUI panel components.
+ * @musepi/client-core or the GUI panel components.
  *
  * The element/document surface is deliberately broader than those two needs.
  * CSS-in-JS libraries decide "browser or server?" from `typeof document`, so

@@ -1,4 +1,4 @@
-import { t, useArchivedSessions } from "@musepi/guest-client";
+import { t, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ModeLabelEntry } from "../lib/mode-label";

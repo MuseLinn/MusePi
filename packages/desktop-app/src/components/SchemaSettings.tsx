@@ -1,4 +1,4 @@
-import { setLocale, type TranslationKey, t } from "@musepi/guest-client";
+import { setLocale, type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useState } from "react";
 import { GuiSelect } from "./GuiSelect";
 import { Reveal } from "./Reveal";

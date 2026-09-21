@@ -9,7 +9,7 @@
  * branch via session.fork (a NEW session), not in-place, so this matches
  * the TUI tree for everything the Desktop can produce.
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";

@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactElement } from "react";
 import { StateIcon } from "./StateIcon";
 import { slashDisplayName } from "./slash-row-shared";

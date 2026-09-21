@@ -11,7 +11,7 @@ import {
 	sliceGraphemes,
 	TAIL_RENDERERS,
 	t,
-} from "@musepi/guest-client";
+} from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";

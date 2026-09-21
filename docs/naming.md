@@ -8,7 +8,7 @@
 | Layer | Terms | Rule |
 |---|---|---|
 | Architecture / protocol | `host`, `guest`, collab frames, write tokens | Internal names are fine. Never surface them in UI copy. |
-| Packages / directories | `packages/guest-client`, `collab-proto`, entry `mobile.tsx` | Renames are breaking changes (imports, deep links, Capacitor ids). Do NOT rename casually; batch with a dedicated RFC. |
+| Packages / directories | `packages/client-core`, `collab-proto`, entry `mobile.tsx` | Renames are breaking changes (imports, deep links, Capacitor ids). Do NOT rename casually; batch with a dedicated RFC. |
 | Product surface | Buttons, labels, placeholders, device names, transcript badges | Product language only. **`host` / `guest` are banned.** |
 
 ## Product-surface rules

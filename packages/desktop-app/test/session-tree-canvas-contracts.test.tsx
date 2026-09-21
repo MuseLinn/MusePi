@@ -1,6 +1,6 @@
 import "./dom-shim";
 import { describe, expect, it } from "bun:test";
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { SessionTreeCanvas } from "../src/components/SessionTreeCanvas";
 

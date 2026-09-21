@@ -9,7 +9,7 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { RIGHT_RAIL_SLOT, SlotComponentHost } from "../lib/slot-host";

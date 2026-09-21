@@ -157,7 +157,7 @@ export interface ComposerProps {
 	 *  member grid (avatar + progress), kimiwork parity. null → no chip. */
 	activeTask?: { partialResult?: unknown } | null;
 	/** Host for the floating member grid (agent trajectory drill-down). */
-	swarmHost?: import("@musepi/guest-client").ToolRenderHost;
+	swarmHost?: import("@musepi/client-core").ToolRenderHost;
 }
 
 function shouldSubmitOnEnter(e: KeyboardEvent<HTMLTextAreaElement>, composing: boolean): boolean {

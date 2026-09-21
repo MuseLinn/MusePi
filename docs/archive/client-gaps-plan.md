@@ -1,7 +1,7 @@
 # 客户端（GUI）差距计划：对照 openchamber 的 UI/UX + 对照 musepi TUI 的功能
 
 > **工作文档，不是长期规格**：逐项落地/关闭后整体删除，不要翻译 `.zh-CN.md`（临时文档不配对，见 `docs/i18n/README.md`）。
-> 来源：两轮只读审计（openchamber `C:\Users\unive\projects\harness-engineering\openchamber` ↔ `packages/desktop-app`/`packages/guest-client`；musepi TUI `packages/coding-agent/src/modes` ↔ 同）。**标 ✅ 的结论我已亲自 grep/sed 复核**，其余为审计结论（附锚点，落地前请顺手核对）。
+> 来源：两轮只读审计（openchamber `C:\Users\unive\projects\harness-engineering\openchamber` ↔ `packages/desktop-app`/`packages/client-core`；musepi TUI `packages/coding-agent/src/modes` ↔ 同）。**标 ✅ 的结论我已亲自 grep/sed 复核**，其余为审计结论（附锚点，落地前请顺手核对）。
 > 日期：2026-09-15。
 
 ## 0. 结论摘要（先做什么）
@@ -162,7 +162,7 @@
 
 - 门禁：项目自带 biome 二进制（`node node_modules/@biomejs/biome/bin/biome check --write <files>`）、`bun run check:ts` 全 workspace exit 0、对应包测试。基线：`packages/desktop-app` 201 pass/0 fail；`packages/coding-agent` 有 **48 个 pre-existing 失败**（TTSR/transcript），与 GUI 无关，别去"修"。
 - GUI 硬规则（`AGENTS.md`）：模态必须独占键盘（`DialogFrame` 捕获 Escape / 移动焦点 / 恢复焦点）、`DialogFrame` 常挂载由 `open` 驱动（条件挂载会杀掉退场动画）、小内容对话框用 `gui-dialog--confirm` 紧凑样式、所有 hook 必须在任何 early return 之前、模型身份恒为 `provider/id`。
-- i18n：按域拆 `packages/guest-client/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`。
+- i18n：按域拆 `packages/client-core/src/i18n/{zh-CN,en-US}/<域>.ts`，en 必须 `as const satisfies Record<ZhKey, string>`。
 - 本文档落地/关闭后**整体删除**（不要翻译、不要长期挂着）。
 
 ---

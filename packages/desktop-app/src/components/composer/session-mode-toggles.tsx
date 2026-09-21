@@ -5,7 +5,7 @@
  * daemon RPC and merges the response back immediately. RPC failures keep
  * the last known state (fail silent).
  */
-import { Segmented, type SegmentedOption } from "@musepi/guest-client";
+import { Segmented, type SegmentedOption } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { t } from "../../i18n/index.js";

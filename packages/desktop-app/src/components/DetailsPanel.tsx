@@ -1,4 +1,4 @@
-import { AgentsPanel, t } from "@musepi/guest-client";
+import { AgentsPanel, t } from "@musepi/client-core";
 import type { AgentSnapshot, SessionState, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 

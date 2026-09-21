@@ -7,7 +7,7 @@
  * keeps only what the schema cannot express: live mic enumeration, the
  * dictation test, and the TTS test card.
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelRow, type SttModelStatusResponse } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";

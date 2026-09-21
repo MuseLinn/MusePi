@@ -1,4 +1,4 @@
-import { getLocaleSnapshot, Markdown, t } from "@musepi/guest-client";
+import { getLocaleSnapshot, Markdown, t } from "@musepi/client-core";
 import { Sparkles, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";

@@ -1,5 +1,5 @@
-import { t } from "@musepi/guest-client/src/i18n/index.js";
-import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/guest-client/src/widgets/registry";
+import { t } from "@musepi/client-core/src/i18n/index.js";
+import { WIDGET_REGISTRY, type WidgetField, widgetDef } from "@musepi/client-core/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 import { Icon } from "../vendor/oc-icons";

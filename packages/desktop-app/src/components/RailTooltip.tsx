@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 

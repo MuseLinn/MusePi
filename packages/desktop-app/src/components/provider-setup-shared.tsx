@@ -13,7 +13,7 @@
  * picker never writes configuration); failures render next to the form
  * (never a dialog).
  */
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { tapFeedback } from "../lib/haptic";

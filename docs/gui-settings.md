@@ -2,7 +2,7 @@
 
 English | [中文](gui-settings.zh-CN.md)
 
-> Status: In sync with the current implementation of `packages/desktop-app` / `packages/guest-client` (2026-08-04).
+> Status: In sync with the current implementation of `packages/desktop-app` / `packages/client-core` (2026-08-04).
 > Earlier planning drafts (gui-architecture / gui-migration / gui-prototype) have been deleted — the implementation has shipped. Together with **`docs/gui-design.md`** (design spec) and **`docs/gui-implementation.md`** (implementation notes), this document is one of the three current references (split into two docs on 2026-08-06).
 
 ## 1. Desktop Shell & Entry Point
@@ -34,7 +34,7 @@ gui-settings-view          ← flex:1 fills the shell (flex ROW); size does not 
 
 ## 3. Theme System (Three Orthogonal Axes)
 
-`packages/guest-client/src/lib/theme.ts` + `packages/guest-client/src/styles/tokens.css`:
+`packages/client-core/src/lib/theme.ts` + `packages/client-core/src/styles/tokens.css`:
 
 | Axis | DOM attribute | Values | Storage key |
 |---|---|---|---|

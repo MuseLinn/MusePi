@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 

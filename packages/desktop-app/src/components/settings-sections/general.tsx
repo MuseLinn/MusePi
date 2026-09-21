@@ -1,6 +1,6 @@
-import { Markdown, type TranslationKey, t } from "@musepi/guest-client";
-import { ToolView } from "@musepi/guest-client/src/tool-render/ToolView";
-import { taskRenderer } from "@musepi/guest-client/src/tool-render/tools/task";
+import { Markdown, type TranslationKey, t } from "@musepi/client-core";
+import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
+import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import {

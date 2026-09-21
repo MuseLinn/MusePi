@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/guest-client";
+import { Markdown, t } from "@musepi/client-core";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
 import { Loader } from "lucide-react";
 import { MorphIcon } from "morphicons/react";

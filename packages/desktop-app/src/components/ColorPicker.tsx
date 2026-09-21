@@ -1,4 +1,4 @@
-import { accentInkContrast, t } from "@musepi/guest-client";
+import { accentInkContrast, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 /**

@@ -1,4 +1,4 @@
-import { relTime, t } from "@musepi/guest-client";
+import { relTime, t } from "@musepi/client-core";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 

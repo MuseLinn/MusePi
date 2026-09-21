@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/guest-client";
+import { Markdown, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
 	downloadInstaller,

@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/guest-client";
+import { type TranslationKey, t } from "@musepi/client-core";
 
 /** One entry of the daemon `modes.list` catalog (builtin presets + user-created). */
 export interface ModeLabelEntry {

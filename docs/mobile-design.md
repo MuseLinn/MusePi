@@ -2,7 +2,7 @@
 
 > **状态（2026-08-31 核对）**：壳已构建（`packages/mobile` Capacitor Android + guest-client 移动入口，CI mobile job 活跃；托盘/会话导入/usage/win32 玻璃均已在）。2026-08-31 完成移动端交互专项核对并修复 6 项缺陷（见 §12）：返回键层栈完整化（back-stack 统一调度）、SessionsSheet 常挂载退场动画、ask 多选 pending 语义、连接成功后才记录/写 hash、≤520px 面板折叠。
 >
-> 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/guest-client` 的
+> 2026-08-24 定稿。范围：`packages/mobile`（Capacitor Android 壳）+ `packages/client-core` 的
 > `mobile.html` / `mobile.tsx` / `mobile.css` 移动入口。桌面 web（`index.html`）与本规范无关。
 > 参考：openchamber `packages/mobile`（HANDOFF.md + `apps/MobileApp.tsx`）、musepi GUI 设计语言
 > （`docs/gui-design.md`）、高星移动端设计惯例（Linear / Obsidian / Arc / Material3 / iOS HIG）。
@@ -627,7 +627,7 @@ trap 拦截**所有**属性访问（含 `then`）并路由到桥接层。原 `se
 
 ## 12. 交互缺陷修复（2026-08-31）
 
-2026-08-31 对移动端交互设计进行专项核对，发现并修复 6 项实现与设计文档不一致的缺陷。全部在 `packages/guest-client/src/` 内完成，不动 wire 协议/daemon/原生壳；每项附带契约测试。
+2026-08-31 对移动端交互设计进行专项核对，发现并修复 6 项实现与设计文档不一致的缺陷。全部在 `packages/client-core/src/` 内完成，不动 wire 协议/daemon/原生壳；每项附带契约测试。
 
 ### 12.1 A1 — 返回键层栈完整化（back-stack）
 

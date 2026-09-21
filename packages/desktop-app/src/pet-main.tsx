@@ -27,7 +27,7 @@
  *     gesture or mood change wakes it
  */
 
-import { setLocale, t } from "@musepi/guest-client";
+import { setLocale, t } from "@musepi/client-core";
 import {
 	type CSSProperties,
 	type ReactNode,

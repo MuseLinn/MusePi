@@ -1,5 +1,5 @@
-import { t } from "@musepi/guest-client/src/i18n/index.js";
-import { hasTask, type WidgetTask } from "@musepi/guest-client/src/widgets/task";
+import { t } from "@musepi/client-core/src/i18n/index.js";
+import { hasTask, type WidgetTask } from "@musepi/client-core/src/widgets/task";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { useFocusTrap } from "../lib/use-focus-trap";

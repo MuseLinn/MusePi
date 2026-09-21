@@ -14,7 +14,7 @@
  * abandons the current request (the daemon side channel keeps running but
  * its result is discarded — runEphemeralTurn has no cross-request cancel).
  */
-import { Markdown, t } from "@musepi/guest-client";
+import { Markdown, t } from "@musepi/client-core";
 import { GitBranch, Sparkles, StopCircle, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 

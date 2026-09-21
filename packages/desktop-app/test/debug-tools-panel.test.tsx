@@ -1,6 +1,6 @@
 import "./dom-shim"; // MUST be first: guest-client element classes extend HTMLElement at import time.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { getLocaleSnapshot, setLocale } from "@musepi/guest-client";
+import { getLocaleSnapshot, setLocale } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DebugToolsPanelBody } from "../src/components/DebugToolsPanel";
 

@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>M1 会话消息渲染 · 视觉设计稿 v1</title>
+<style>
+/* ============================================================
+ * M1 Transcript 视觉设计稿 — 高保真 mockup
+ * 全部视觉值取自 packages/client-core/src/styles/tokens.css
+ * 暗色主题段（:root 第一段）
+ * ============================================================ */
+:root {
+  /* —— 基础面（tokens.css 原值） —— */
+  --bg: oklch(0.155 0.008 60);
+  --bg-raised: oklch(0.19 0.01 60);
+  --bg-inset: oklch(0.125 0.008 60);
+  --bg-overlay: oklch(0.23 0.012 60);
+  --fg: oklch(0.93 0.01 60);
+  --fg-muted: oklch(0.72 0.015 60);
+  --fg-faint: oklch(0.55 0.015 60);
+  --accent: oklch(0.7507 0.1295 79.85);            /* = #d9a441 品牌金，禁止改 */
+  --accent-bd: oklch(0.7507 0.1295 79.85 / 35%);
+  --ok: oklch(0.72 0.15 155);
+  --warn: oklch(0.78 0.14 85);
+  --err: oklch(0.63 0.2 25);
+  --border: oklch(1 0 0 / 9%);
+  /* —— 圆角阶梯（禁字面 px） —— */
+  --r-xs: 2px; --r-sm: 4px; --r-md: 6px; --r-lg: 8px; --r-xl: 12px; --r-2xl: 16px;
+  /* —— 液体玻璃（暗色段原值） —— */
+  --glass-bg: oklch(1 0 0 / 7%);
+  --glass-bg-strong: oklch(1 0 0 / 11%);
+  --glass-border: oklch(1 0 0 / 15%);
+  --glass-edge-hi: oklch(1 0 0 / 30%);
+  --glass-edge-lo: oklch(1 0 0 / 7%);
+  --glass-sheen: linear-gradient(165deg, oklch(1 0 0 / 14%) 0%, oklch(1 0 0 / 4%) 30%, oklch(1 0 0 / 0%) 58%);
+  --glass-shadow: 0 24px 60px oklch(0 0 0 / 45%), inset 0 1px 0 oklch(1 0 0 / 30%), inset 0 -1px 0 oklch(1 0 0 / 7%);
+  --spring-liquid: cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* —— 字体 —— */
+  --font-ui: "Inter Variable", "Inter", -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --ui-font-size: 15px;
+  --ui-font-size-sm: 14px;
+  --ui-font-size-xs: 13px;
+  --ui-font-size-lg: 16px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  line-height: 1.6;
+  padding: 48px 24px 96px;
+}
+
+/* ============ 画板框架（非交付部分） ============ */
+.board {
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+}
+.board-head h1 {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+.board-head .sub {
+  margin-top: 6px;
+  color: var(--fg-muted);
+  font-size: var(--ui-font-size-sm);
+  font-family: var(--font-mono);
+}
+.spec-strip {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: var(--r-lg);
+  background: var(--glass-bg);
+  box-shadow: inset 0 1px 0 var(--glass-edge-hi), inset 0 -1px 0 var(--glass-edge-lo);
+  color: var(--fg-muted);
+  font-size: var(--ui-font-size-xs);
+  font-family: var(--font-mono);
+  line-height: 1.7;
+}
+.spec-strip b { color: var(--accent); font-weight: 600; }
+
+.section-label {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.section-label .tag {
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--accent);
+  border: 1px solid var(--accent-bd);
+  border-radius: var(--r-sm);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.section-label h2 { font-size: var(--ui-font-size-lg); font-weight: 600; }
+.section-note {
+  color: var(--fg-faint);
+  font-size: var(--ui-font-size-xs);
+  margin-bottom: 16px;
+  font-family: var(--font-mono);
+}
+.compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.compare-col > .col-title {
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+  margin-bottom: 10px;
+}
+.compare-col > .col-title .bad { color: var(--err); }
+.compare-col > .col-title .good { color: var(--ok); }
+
+/* 模拟聊天窗口容器 */
+.chat-win {
+  background: var(--bg-inset);
+  border-radius: var(--r-2xl);
+  box-shadow: inset 0 1px 0 var(--glass-edge-lo);
+  padding: 20px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  overflow: hidden;
+}
+.chat-win::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--glass-sheen);
+  pointer-events: none;
+}
+
+/* ============ A · 轮渲染单元 ============ */
+
+/* —— 轮头：轻边界分隔 —— */
+.tr-turn + .tr-turn { margin-top: 22px; }
+.tr-turn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 8px;
+  color: var(--fg-faint);
+  font-size: var(--ui-font-size-xs);
+  font-family: var(--font-mono);
+}
+.tr-turn-head::before,
+.tr-turn-head::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border) 20%, var(--border) 80%, transparent);
+}
+.tr-turn-head .th-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--fg-faint);
+  opacity: 0.6;
+}
+.tr-turn-head .th-status--ok { color: var(--ok); }
+.tr-turn-head .th-status--run { color: var(--accent); }
+
+/* —— 用户气泡（沿用现有 tr-user 语言） —— */
+.tr-user {
+  align-self: flex-end;
+  max-width: 82%;
+  background: var(--bg-raised);
+  border-radius: var(--r-xl);
+  border-bottom-right-radius: var(--r-sm);
+  padding: 10px 14px;
+  margin: 4px 0 12px;
+  font-size: var(--ui-font-size);
+  box-shadow: inset 0 1px 0 var(--glass-edge-lo);
+}
+
+/* —— 工作段（折叠态 = 默认历史态） —— */
+.tr-seg {
+  margin: 6px 0;
+  border-radius: var(--r-lg);
+  background: var(--glass-bg);
+  box-shadow: inset 0 1px 0 var(--glass-edge-hi), inset 0 -1px 0 var(--glass-edge-lo);
+  overflow: hidden;
+}
+.tr-seg-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: 0;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--ui-font-size-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.tr-seg-head:hover { color: var(--fg); }
+.tr-seg-head .sg-chev {
+  transition: transform 0.25s var(--spring-liquid);
+  color: var(--fg-faint);
+  flex: none;
+}
+.tr-seg--open .tr-seg-head .sg-chev { transform: rotate(90deg); }
+.tr-seg-head .sg-ico { flex: none; color: var(--fg-faint); }
+.tr-seg-head .sg-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tr-seg-head .sg-count {
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+  flex: none;
+}
+.tr-seg-head .sg-dur {
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+  flex: none;
+}
+.tr-seg-head .sg-status { flex: none; display: flex; align-items: center; gap: 5px; font-size: var(--ui-font-size-xs); }
+.sg-status .st-ok  { color: var(--ok); }
+.sg-status .st-run { color: var(--accent); }
+.sg-status .st-err { color: var(--err); }
+
+/* 展开态的工具行 */
+.tr-seg-body { display: none; padding: 2px 8px 8px; }
+.tr-seg--open .tr-seg-body { display: block; }
+.tr-tool {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--r-md);
+  font-size: var(--ui-font-size-sm);
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+.tr-tool:hover { background: var(--glass-bg-strong); color: var(--fg); }
+.tr-tool .t-ico { flex: none; width: 15px; text-align: center; }
+.tr-tool .t-name { color: var(--fg); }
+.tr-tool .t-arg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; opacity: 0.85; }
+.tr-tool .t-dur { flex: none; color: var(--fg-faint); font-size: var(--ui-font-size-xs); }
+.tr-tool .t-st { flex: none; font-size: var(--ui-font-size-xs); }
+
+/* —— 助手正文（轮尾，承载复制/操作栏） —— */
+.tr-md {
+  margin: 10px 2px 4px;
+  font-size: var(--ui-font-size);
+}
+.tr-md p + p { margin-top: 8px; }
+.tr-md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--bg-raised);
+  border-radius: var(--r-sm);
+  padding: 1px 5px;
+}
+.tr-actions {
+  display: flex;
+  gap: 4px;
+  margin: 6px 2px 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.tr-md-block:hover .tr-actions { opacity: 1; }
+.tr-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  color: var(--fg-faint);
+  font-size: var(--ui-font-size-xs);
+  font-family: var(--font-mono);
+  padding: 3px 7px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.tr-act:hover { background: var(--glass-bg-strong); color: var(--fg); }
+.tr-md-block { position: relative; }
+
+/* —— 轮尾行（不进折叠）：重试失败 / 异步结果 —— */
+.tr-tail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 2px 0;
+  font-size: var(--ui-font-size-xs);
+  font-family: var(--font-mono);
+  color: var(--fg-faint);
+}
+.tr-tail .tl-chip {
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  background: var(--glass-bg-strong);
+  box-shadow: inset 0 1px 0 var(--glass-edge-hi);
+}
+.tr-tail .tl-chip--err { color: var(--err); }
+.tr-tail .tl-chip--warn { color: var(--warn); }
+
+/* —— Hook 行（不进折叠，轮尾 mono 条） —— */
+.tr-hook {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 2px 0;
+  padding: 4px 8px;
+  border-left: 2px solid var(--glass-border);
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+}
+.tr-hook .hk-name { color: var(--fg-muted); }
+.tr-hook .hk-ev { color: var(--accent); opacity: 0.8; }
+
+/* ============ B · 加载可见性 ============ */
+
+/* 旧：loading 与 pending 卡片并存（错误） */
+.tr-loading-old {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--fg-faint);
+  font-size: var(--ui-font-size-xs);
+  font-family: var(--font-mono);
+}
+.tr-loading-old .ld-dots { display: inline-flex; gap: 4px; }
+.tr-loading-old .ld-dots i {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--accent);
+  animation: ldp 1.1s infinite ease-in-out;
+}
+.tr-loading-old .ld-dots i:nth-child(2) { animation-delay: 0.15s; }
+.tr-loading-old .ld-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ldp { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+
+/* 权限确认卡（glass 承载进度反馈） */
+.tr-approval {
+  margin-top: 14px;
+  border-radius: var(--r-xl);
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(24px) saturate(170%);
+  box-shadow: var(--glass-shadow);
+  padding: 14px 16px;
+  position: relative;
+  overflow: hidden;
+}
+.tr-approval::before {
+  content: "";
+  position: absolute; inset: 0;
+  background: var(--glass-sheen);
+  pointer-events: none;
+}
+.tr-approval .ap-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--ui-font-size-sm); font-weight: 600;
+}
+.tr-approval .ap-head .ap-ico { color: var(--warn); }
+.tr-approval .ap-cmd {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  background: var(--bg-inset);
+  border-radius: var(--r-md);
+  padding: 8px 10px;
+  color: var(--fg-muted);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.tr-approval .ap-btns { display: flex; gap: 8px; margin-top: 12px; }
+.ap-btn {
+  border: 0;
+  border-radius: var(--r-md);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: var(--ui-font-size-sm);
+  cursor: pointer;
+  transition: transform 0.2s var(--spring-liquid);
+}
+.ap-btn:hover { transform: translateY(-1px); }
+.ap-btn--primary { background: var(--accent); color: oklch(0.2 0.03 80); font-weight: 600; }
+.ap-btn--ghost {
+  background: var(--glass-bg);
+  color: var(--fg-muted);
+  box-shadow: inset 0 0 0 1px var(--glass-border);
+}
+.ap-pending-line {
+  display: flex; align-items: center; gap: 7px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-muted);
+}
+.ap-pending-line .pl-bar {
+  flex: 1; height: 2px; border-radius: 1px;
+  background: var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+.ap-pending-line .pl-bar::after {
+  content: "";
+  position: absolute; inset: 0;
+  width: 40%;
+  background: var(--accent);
+  border-radius: 1px;
+  animation: plslide 1.6s var(--spring-liquid) infinite;
+  opacity: 0.7;
+}
+@keyframes plslide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* 新：pending 期间聊天 loading 整体隐藏 — 仅一张卡片，无底部 loading */
+.tr-loading-new-hidden {
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tr-loading-new-hidden .off {
+  border: 1px dashed var(--glass-border);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  color: var(--fg-faint);
+}
+
+/* ============ D · 流式进行态 ============ */
+.tr-stream-caret {
+  display: inline-block;
+  width: 8px; height: 1.1em;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  border-radius: 1px;
+  margin-left: 2px;
+  animation: caret 0.9s steps(2) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
+
+.tr-seg--live { background: var(--glass-bg-strong); }
+.tr-tool .t-st--run { color: var(--accent); }
+.spin {
+  display: inline-block;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent-bd);
+  border-top-color: var(--accent);
+  animation: sp 0.8s linear infinite;
+}
+@keyframes sp { to { transform: rotate(360deg); } }
+
+/* 底部输入区锚点（示意流式时滚动锚定） */
+.tr-anchor-note {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--ui-font-size-xs);
+  color: var(--fg-faint);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tr-anchor-note .an-ico { color: var(--accent); }
+
+@media (max-width: 860px) {
+  .compare { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="board">
+
+  <div class="board-head">
+    <h1>M1 · 会话消息渲染 — 视觉设计稿 v1</h1>
+    <div class="sub">musepi-omp 0.5.0 · 参照 ZCode v4 轮渲染单元语义 · tokens 全部取自 guest-client tokens.css 暗色段</div>
+    <div class="spec-strip">
+      <b>评审范围</b>：A 轮渲染单元（折叠边界） · B 加载可见性（pending 抑制） · C 轮尾行与 Hook 行 · D 流式进行态<br>
+      <b>硬约束</b>：accent 品牌金 #d9a441 不改 · 圆角用阶梯变量 · 玻璃面 = glass token + blur(3xl) saturate(170%) · rim 用 inset box-shadow 不用 border
+    </div>
+  </div>
+
+  <!-- ================= A ================= -->
+  <section>
+    <div class="section-label"><span class="tag">A</span><h2>普通轮 · 工作段折叠 / 展开</h2></div>
+    <div class="section-note">默认历史态折叠；每段 = 原始输入或 accepted guide 对应的一个视觉工作段；展开用 --spring-liquid。</div>
+
+    <div class="compare">
+      <div class="compare-col">
+        <div class="col-title">A1 · 折叠态（默认）</div>
+        <div class="chat-win">
+          <div class="tr-turn">
+            <div class="tr-turn-head">
+              <span class="th-dot"></span>
+              <span>turn 12 · k2.5</span>
+              <span>14:02</span>
+              <span class="th-status--ok">✓ 完成 · 12.4s</span>
+            </div>
+            <div class="tr-user">帮我看一下 <code style="font-family:var(--font-mono)">transcript.css</code> 里折叠相关的样式，顺便跑一下测试</div>
+
+            <div class="tr-seg">
+              <button class="tr-seg-head">
+                <span class="sg-chev">▸</span>
+                <span class="sg-ico">⚒</span>
+                <span class="sg-title">读取样式 · 运行测试</span>
+                <span class="sg-count">4 工具</span>
+                <span class="sg-status st-ok">✓</span>
+                <span class="sg-dur">9.8s</span>
+              </button>
+            </div>
+
+            <div class="tr-md-block">
+              <div class="tr-md">
+                <p>折叠样式集中在 <code>.tr-user-collapse-*</code> 三个类上，钳制行数用的是 <code>-webkit-line-clamp</code>；测试全部通过（201/201）。</p>
+              </div>
+              <div class="tr-actions">
+                <button class="tr-act">⧉ 复制</button>
+                <button class="tr-act">↻ 重试</button>
+                <button class="tr-act">⑂ 分支</button>
+              </div>
+            </div>
+
+            <div class="tr-hook">
+              <span>⚡ hook</span><span class="hk-name">lint-check</span><span class="hk-ev">onTurnEnd</span><span>· 0.3s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-col">
+        <div class="col-title">A2 · 展开态（点击段头）</div>
+        <div class="chat-win">
+          <div class="tr-turn">
+            <div class="tr-turn-head">
+              <span class="th-dot"></span>
+              <span>turn 12 · k2.5</span>
+              <span>14:02</span>
+              <span class="th-status--ok">✓ 完成 · 12.4s</span>
+            </div>
+            <div class="tr-user">帮我看一下 <code style="font-family:var(--font-mono)">transcript.css</code> 里折叠相关的样式，顺便跑一下测试</div>
+
+            <div class="tr-seg tr-seg--open">
+              <button class="tr-seg-head">
+                <span class="sg-chev">▸</span>
+                <span class="sg-ico">⚒</span>
+                <span class="sg-title">读取样式 · 运行测试</span>
+                <span class="sg-count">4 工具</span>
+                <span class="sg-status st-ok">✓</span>
+                <span class="sg-dur">9.8s</span>
+              </button>
+              <div class="tr-seg-body">
+                <div class="tr-tool"><span class="t-ico">📄</span><span class="t-name">read</span><span class="t-arg">packages/client-core/src/components/transcript/transcript.css</span><span class="t-dur">0.2s</span><span class="t-st st-ok">✓</span></div>
+                <div class="tr-tool"><span class="t-ico">📄</span><span class="t-name">grep</span><span class="t-arg">"collapse" transcript.css</span><span class="t-dur">0.1s</span><span class="t-st st-ok">✓</span></div>
+                <div class="tr-tool"><span class="t-ico">✏️</span><span class="t-name">edit</span><span class="t-arg">transcript.css — 2 处</span><span class="t-dur">0.4s</span><span class="t-st st-ok">✓</span></div>
+                <div class="tr-tool"><span class="t-ico">⌨</span><span class="t-name">bash</span><span class="t-arg">bun test packages/client-core</span><span class="t-dur">9.1s</span><span class="t-st st-ok">✓ 201 passed</span></div>
+              </div>
+            </div>
+
+            <div class="tr-md-block">
+              <div class="tr-md">
+                <p>折叠样式集中在 <code>.tr-user-collapse-*</code> 三个类上，钳制行数用的是 <code>-webkit-line-clamp</code>；测试全部通过（201/201）。</p>
+              </div>
+              <div class="tr-actions">
+                <button class="tr-act">⧉ 复制</button>
+                <button class="tr-act">↻ 重试</button>
+                <button class="tr-act">⑂ 分支</button>
+              </div>
+            </div>
+
+            <div class="tr-hook">
+              <span>⚡ hook</span><span class="hk-name">lint-check</span><span class="hk-ev">onTurnEnd</span><span>· 0.3s</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= B ================= -->
+  <section>
+    <div class="section-label"><span class="tag">B</span><h2>加载可见性 · pending 期间抑制聊天 loading</h2></div>
+    <div class="section-note">判定：权限确认 / AskUserQuestion pending → 聊天 loading 隐藏，由卡片自身承担进度反馈；compact / goalVerifier 活跃同样抑制。resolve 后恢复。</div>
+
+    <div class="compare">
+      <div class="compare-col">
+        <div class="col-title"><span class="bad">✗ B1 · 现状（双重反馈）</span></div>
+        <div class="chat-win">
+          <div class="tr-user">把构建产物清理一下再重新 build</div>
+          <div class="tr-approval">
+            <div class="ap-head"><span class="ap-ico">⚠</span><span>权限确认 · bash</span></div>
+            <div class="ap-cmd">rm -rf dist/ && bun run build</div>
+            <div class="ap-btns">
+              <button class="ap-btn ap-btn--primary">允许一次</button>
+              <button class="ap-btn ap-btn--ghost">允许会话内</button>
+              <button class="ap-btn ap-btn--ghost">拒绝</button>
+            </div>
+          </div>
+          <div class="tr-loading-old">
+            <span class="ld-dots"><i></i><i></i><i></i></span>
+            <span>正在思考…</span>
+            <span style="color:var(--err)">← 与上方卡片重复表达"等待用户"</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="compare-col">
+        <div class="col-title"><span class="good">✓ B2 · 目标（卡片承担进度）</span></div>
+        <div class="chat-win">
+          <div class="tr-user">把构建产物清理一下再重新 build</div>
+          <div class="tr-approval">
+            <div class="ap-head"><span class="ap-ico">⚠</span><span>权限确认 · bash</span></div>
+            <div class="ap-cmd">rm -rf dist/ && bun run build</div>
+            <div class="ap-btns">
+              <button class="ap-btn ap-btn--primary">允许一次</button>
+              <button class="ap-btn ap-btn--ghost">允许会话内</button>
+              <button class="ap-btn ap-btn--ghost">拒绝</button>
+            </div>
+            <div class="ap-pending-line">
+              <span>等待用户决定</span>
+              <span class="pl-bar"></span>
+            </div>
+          </div>
+          <div class="tr-loading-new-hidden">
+            <span>chat loading</span><span class="off">OFF</span>
+            <span>· AskUserQuestion pending 时同理</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= C ================= -->
+  <section>
+    <div class="section-label"><span class="tag">C</span><h2>轮尾行 · 不进折叠的伴随信息</h2></div>
+    <div class="section-note">tail rows（重试失败 / 异步结果 / token 用量）与 hookInvocations 保持 CLI 全序原位渲染，永不并入工作段折叠。</div>
+
+    <div class="chat-win">
+      <div class="tr-turn">
+        <div class="tr-turn-head">
+          <span class="th-dot"></span>
+          <span>turn 13 · k2.5</span>
+          <span>14:07</span>
+          <span class="th-status--ok">✓ 完成 · 8.2s</span>
+        </div>
+        <div class="tr-user">再确认一下 daemon 的 ws 端口配置</div>
+
+        <div class="tr-seg">
+          <button class="tr-seg-head">
+            <span class="sg-chev">▸</span>
+            <span class="sg-ico">⚒</span>
+            <span class="sg-title">查找端口配置</span>
+            <span class="sg-count">2 工具 · 1 重试</span>
+            <span class="sg-status st-ok">✓</span>
+            <span class="sg-dur">6.5s</span>
+          </button>
+        </div>
+
+        <div class="tr-md-block">
+          <div class="tr-md"><p>端口在 <code>daemon/config.ts</code> 默认 7110，guest client 通过 <code>WS_PORT</code> 覆盖。</p></div>
+          <div class="tr-actions">
+            <button class="tr-act">⧉ 复制</button>
+            <button class="tr-act">↻ 重试</button>
+          </div>
+        </div>
+
+        <!-- tail rows -->
+        <div class="tr-tail">
+          <span class="tl-chip tl-chip--warn">重试 1 次</span>
+          <span>首次调用超时（10s），第二次成功</span>
+        </div>
+        <div class="tr-tail">
+          <span class="tl-chip">async</span>
+          <span>背景任务 #a3f2 已完成 · 2.1s</span>
+        </div>
+        <div class="tr-tail">
+          <span class="tl-chip">tokens</span>
+          <span>in 4.2k · out 612 · cache hit 78%</span>
+        </div>
+
+        <!-- hook rows -->
+        <div class="tr-hook">
+          <span>⚡ hook</span><span class="hk-name">session-log</span><span class="hk-ev">onTurnEnd</span><span>· 0.1s</span>
+        </div>
+        <div class="tr-hook">
+          <span>⚡ hook</span><span class="hk-name">token-ledger</span><span class="hk-ev">onTurnEnd</span><span>· 0.2s</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= D ================= -->
+  <section>
+    <div class="section-label"><span class="tag">D</span><h2>流式进行态 · 当前轮</h2></div>
+    <div class="section-note">当前轮工作段默认展开且随流式追加；进行中段用 glass-strong 区分；滚动锚定跟随 latestAssistantTextRow 生长。</div>
+
+    <div class="chat-win">
+      <div class="tr-turn">
+        <div class="tr-turn-head">
+          <span class="th-dot" style="background:var(--accent);opacity:1"></span>
+          <span>turn 14 · k2.5</span>
+          <span>14:09</span>
+          <span class="th-status--run"><span class="spin" style="width:9px;height:9px;border-width:1px"></span> 进行中</span>
+        </div>
+        <div class="tr-user">给 Transcript 加上虚拟滚动，先看一下现有实现</div>
+
+        <div class="tr-seg tr-seg--open tr-seg--live">
+          <button class="tr-seg-head">
+            <span class="sg-chev">▸</span>
+            <span class="sg-ico">⚒</span>
+            <span class="sg-title">分析现有渲染</span>
+            <span class="sg-count">3 工具</span>
+            <span class="sg-status st-run"><span class="spin"></span></span>
+            <span class="sg-dur">…</span>
+          </button>
+          <div class="tr-seg-body">
+            <div class="tr-tool"><span class="t-ico">📄</span><span class="t-name">read</span><span class="t-arg">Transcript.tsx</span><span class="t-dur">0.2s</span><span class="t-st st-ok">✓</span></div>
+            <div class="tr-tool"><span class="t-ico">🔍</span><span class="t-name">grep</span><span class="t-arg">"virtual" | "window" packages/client-core</span><span class="t-dur">0.1s</span><span class="t-st st-ok">✓</span></div>
+            <div class="tr-tool"><span class="t-ico">📄</span><span class="t-name">read</span><span class="t-arg">transcript-poll.ts</span><span class="t-dur">…</span><span class="t-st t-st--run"><span class="spin"></span></span></div>
+          </div>
+        </div>
+
+        <div class="tr-md-block">
+          <div class="tr-md">
+            <p>现有实现没有虚拟化，整棵列表直接渲染；条目数到几千时帧率会掉。建议按轮渲染单元分块，配合行高缓存<span class="tr-stream-caret"></span></p>
+          </div>
+        </div>
+
+        <div class="tr-anchor-note">
+          <span class="an-ico">⚓</span>
+          <span>滚动锚定：视口锚在 latestAssistantTextRow 末行，流式追加不跳动（timelineScrollAnchor）</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

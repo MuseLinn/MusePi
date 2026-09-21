@@ -498,7 +498,7 @@ export interface DaemonOptions {
 	socketPath?: string;
 	/** Optional WebSocket port (browser-reachable JSON-RPC transport). */
 	wsPort?: number;
-	/** Optional loopback HTTP port serving the renderer bundle (guest-client
+	/** Optional loopback HTTP port serving the renderer bundle (client-core
 	 *  dist) — the dsh-desktop-compat "runtime serves the web renderer" half.
 	 *  The Electron compat shell loadURLs this origin; the WS stays on wsPort. */
 	webPort?: number;
@@ -6632,7 +6632,7 @@ export class DaemonServer {
 				const collabMode: "session" | "workspace" =
 					mode === "workspace" || (mode === "tunnel" && !p.sessionId) ? "workspace" : "session";
 				const collabHost = new CollabHost(stubCtx as never, collabMode);
-				// Tunnel shares the same loopback relay as the guest-client dist;
+				// Tunnel shares the same loopback relay as the client-core dist;
 				// the public URL is https/wss-same-origin, so webUrl for the
 				// browser deep link is the tunnel URL itself.
 				const urls = mode === "tunnel" ? await transport.startTunnel() : await transport.startLan();
@@ -9951,12 +9951,12 @@ let sdkPrewarmed = false;
 
 /** Resolve the renderer dist dir the compat HTTP server serves. Env
  *  MUSEPI_RENDERER_DIST overrides; defaults to the workspace sibling
- *  guest-client/dist (dev layout). A missing dist is non-fatal —
+ *  client-core/dist (dev layout). A missing dist is non-fatal —
  *  startDaemonWeb throws and the shell falls back to its local bundle. */
 function rendererDistDir(): string {
 	const fromEnv = process.env.MUSEPI_RENDERER_DIST;
 	if (fromEnv) return fromEnv;
-	return path.resolve(import.meta.dir, "../../../guest-client", "dist");
+	return path.resolve(import.meta.dir, "../../../client-core", "dist");
 }
 
 export async function startDaemon(

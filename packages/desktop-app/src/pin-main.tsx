@@ -1,12 +1,12 @@
-import { WidgetErrorBoundary } from "@musepi/guest-client/src/widgets/error-boundary";
-import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/guest-client/src/widgets/registry";
+import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
+import { WIDGET_REGISTRY, type WidgetDef } from "@musepi/client-core/src/widgets/registry";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { initTooltips } from "./lib/tooltips";
 import { Icon, type IconName } from "./vendor/oc-icons";
-import "@musepi/guest-client/src/styles/tokens.css";
-import "@musepi/guest-client/src/styles/base.css";
+import "@musepi/client-core/src/styles/tokens.css";
+import "@musepi/client-core/src/styles/base.css";
 import "./styles/fonts.css";
 import "./styles/gui.css";
 

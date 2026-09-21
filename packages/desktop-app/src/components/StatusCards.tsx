@@ -1,5 +1,5 @@
-import { t } from "@musepi/guest-client";
-import { agentProgressFraction } from "@musepi/guest-client/src/tool-render/tools/task";
+import { t } from "@musepi/client-core";
+import { agentProgressFraction } from "@musepi/client-core/src/tool-render/tools/task";
 import type { SessionEntry, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";

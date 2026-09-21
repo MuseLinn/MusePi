@@ -15,7 +15,7 @@ import {
 	useAccentPreference,
 	useThemePreference,
 	useUiThemePreferences,
-} from "@musepi/guest-client";
+} from "@musepi/client-core";
 import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState, useSyncExternalStore } from "react";

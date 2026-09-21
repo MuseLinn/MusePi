@@ -1,4 +1,4 @@
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
 import { memo } from "react";
 import { tapFeedback } from "../lib/haptic";

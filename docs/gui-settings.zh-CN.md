@@ -1,7 +1,7 @@
 # MusePi GUI 设置面板与主题设计(现状参考)
 [English](gui-settings.md) | 中文
 
-> 状态:与 `packages/desktop-app` / `packages/guest-client` 当前实现同步(2026-08-04)。
+> 状态:与 `packages/desktop-app` / `packages/client-core` 当前实现同步(2026-08-04)。
 > 早期规划稿(gui-architecture / gui-migration / gui-prototype)已删除——实现已交付,本文档与 **`docs/gui-design.md`**(设计规范)和 **`docs/gui-implementation.md`**(实现笔记)是唯一现行参考(2026-08-06 拆分为两份)。
 
 ## 1. 桌面壳与入口
@@ -33,7 +33,7 @@ gui-settings-view          ← flex:1 铺满 shell(flex ROW),尺寸不随 tab �
 
 ## 3. 主题体系(三个正交轴)
 
-`packages/guest-client/src/lib/theme.ts` + `packages/guest-client/src/styles/tokens.css`:
+`packages/client-core/src/lib/theme.ts` + `packages/client-core/src/styles/tokens.css`:
 
 | 轴 | DOM 属性 | 取值 | 存储 key |
 |---|---|---|---|

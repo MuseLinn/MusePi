@@ -1,4 +1,4 @@
-import { Markdown, t } from "@musepi/guest-client";
+import { Markdown, t } from "@musepi/client-core";
 import { ArrowLeft, FileWarning, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";

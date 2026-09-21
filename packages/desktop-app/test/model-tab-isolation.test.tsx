@@ -5,7 +5,7 @@ import "./dom-shim";
 // evaluation order (model-brand-icon deep-imports the brand entrypoints).
 import "@lobehub/icons";
 import { describe, expect, it } from "bun:test";
-import { t } from "@musepi/guest-client";
+import { t } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
 import { CustomProviderPane } from "../src/components/settings-sections/custom-provider";
 import { ModelSection } from "../src/components/settings-sections/model";

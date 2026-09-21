@@ -1,4 +1,4 @@
-import { ImageLightbox, t } from "@musepi/guest-client";
+import { ImageLightbox, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
 import { Icon, type IconName } from "../vendor/oc-icons";
