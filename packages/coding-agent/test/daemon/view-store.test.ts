@@ -164,6 +164,32 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.list().find(r => r.sessionId === "s2")!.modeId).toBe("work");
 	});
 
+	test("a later view-snapshot persist must not clobber a persisted preset", () => {
+		const store = tempStore();
+		// 1) persistHeaderPatch arms the preset off the snapshot header.
+		const armed = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(armed.header as { modeId?: string }).modeId = "design";
+		store.upsert("s1", armed);
+		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
+		// 2) a streaming schedulePersist / idle-close replays the MaterializedView
+		//    projection, whose header has NO modeId key — this used to null the
+		//    preset (BUG: hover card fell back to 工作模式 after restart).
+		const replay = snapshot("s1", [
+			{ role: "user", content: "y", timestamp: 1 },
+			{ role: "assistant", content: "reply", timestamp: 2 },
+		] as never, 2);
+		store.upsert("s1", replay);
+		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
+		// 3) the stored snapshot header carries the preset too, so adopt() can
+		//    restore live.modeId after a restart (not just the query column).
+		expect((store.load("s1")!.header as { modeId?: string }).modeId).toBe("design");
+		// 4) an explicit clear (persistHeaderPatch with null) still wins.
+		const cleared = snapshot("s1", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(cleared.header as { modeId?: string }).modeId = null as never;
+		store.upsert("s1", cleared);
+		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBeNull();
+	});
+
 	test("search matches message text across sessions, newest first", () => {
 		const store = tempStore();
 		const now = Date.now();

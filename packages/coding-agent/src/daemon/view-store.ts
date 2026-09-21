@@ -152,6 +152,33 @@ export class ViewStore {
 
 	/** Persist a snapshot AND sync the query tables, atomically. */
 	upsert(sessionId: string, snapshot: SessionSnapshot, parentId: string | null = null): void {
+		// Session preset id. The MaterializedView projection (rebuilt from wire
+		// events) never carries modeId; only persistHeaderPatch — the create /
+		// setMode paths — writes it, and always with an explicit value (incl.
+		// null to clear). Every other persist path (streaming schedulePersist,
+		// idle-close, compaction) replays the view snapshot, whose header has NO
+		// modeId key, so a naive upsert would null the preset on every event and
+		// the session would fall back to "工作模式" after a restart. Preserve the
+		// previously-persisted preset unless the caller explicitly set the key.
+		const headerObj =
+			typeof snapshot.header === "object" && snapshot.header
+				? (snapshot.header as unknown as Record<string, unknown>)
+				: {};
+		const headerHasModeId = "modeId" in headerObj;
+		let modeId: string | null = headerHasModeId ? ((headerObj.modeId ?? null) as string | null) : null;
+		if (!headerHasModeId) {
+			const prev = this.#db
+				.query("SELECT mode_id FROM sessions WHERE session_id = ?")
+				.get(sessionId) as { mode_id: string | null } | undefined;
+			modeId = prev?.mode_id ?? null;
+		}
+		// Keep the preset riding the stored snapshot header too (when non-null),
+		// so the reactivation path (adopt) can read persisted.header.modeId back
+		// into live.modeId after a restart — not just the query column.
+		const snapshotToStore: SessionSnapshot =
+			headerHasModeId || modeId == null
+				? snapshot
+				: ({ ...snapshot, header: { ...headerObj, modeId } } as SessionSnapshot);
 		this.#db.transaction(() => {
 			this.#db
 				.query(
@@ -162,7 +189,7 @@ export class ViewStore {
 					   snapshot = excluded.snapshot,
 					   updated_at = excluded.updated_at`,
 				)
-				.run(sessionId, snapshot.cursor, JSON.stringify(snapshot), Date.now());
+				.run(sessionId, snapshot.cursor, JSON.stringify(snapshotToStore), Date.now());
 
 			const state = snapshot.state as SessionState | undefined;
 			// Model metadata: prefer the last assistant message's model (always
@@ -220,11 +247,11 @@ export class ViewStore {
 					model,
 					messageCount,
 					parentId,
-					// Session preset id rides the snapshot header (create/setMode
-					// write it via persistHeaderPatch); null = no preset armed.
-					(typeof snapshot.header === "object" && snapshot.header
-						? ((snapshot.header as { modeId?: unknown }).modeId ?? null)
-						: null) as string | null,
+				// Session preset id — preserved from the prior persist when the
+				// view snapshot lacks it, so streaming / idle / compaction
+				// persists never clobber a setMode'd mode (persistHeaderPatch is
+				// the only explicit writer). null = no preset armed.
+				modeId,
 				);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
