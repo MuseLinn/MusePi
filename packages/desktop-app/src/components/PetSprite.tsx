@@ -599,9 +599,9 @@ function Silhouette({
 				 * accent and the fallback must always be the derived value.
 				 * PetPaletteVars is the single source. */}
 				<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
-					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(87.07% 0.1400 79.84deg))" />
-					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1295 79.84deg))" />
-					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.1101 79.84deg))" />
+					<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(89.07% 0.0798 79.84deg))" />
+					<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1036 79.84deg))" />
+					<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.0907 79.84deg))" />
 				</radialGradient>
 				{/* Orbit ring: the accent (brand gold by default), brightest where
 				 * it crosses the light (top-left) and dimmest at the far side.
@@ -618,13 +618,13 @@ function Silhouette({
 					 * environment, and the single cheapest cue that separates
 					 * metal from paint. The lift is a color-mix of the two end
 					 * tokens so no fourth palette variable has to exist. */}
-					<stop offset="0" stopColor="var(--gui-pet-gold-a, oklch(90.07% 0.0751 79.85deg))" />
-					<stop offset="0.15" stopColor="var(--gui-pet-gold-a, oklch(90.07% 0.0751 79.85deg))" />
-					<stop offset="0.5" stopColor="var(--gui-pet-gold-b, oklch(75.07% 0.1450 79.85deg))" />
-					<stop offset="0.86" stopColor="var(--gui-pet-gold-c, oklch(46.54% 0.0958 79.85deg))" />
+					<stop offset="0" stopColor="var(--gui-pet-gold-a, oklch(93.07% 0.0518 79.85deg))" />
+					<stop offset="0.15" stopColor="var(--gui-pet-gold-a, oklch(93.07% 0.0518 79.85deg))" />
+					<stop offset="0.5" stopColor="var(--gui-pet-gold-b, oklch(81.07% 0.1101 79.85deg))" />
+					<stop offset="0.86" stopColor="var(--gui-pet-gold-c, oklch(45.04% 0.0777 79.85deg))" />
 					<stop
 						offset="1"
-						stopColor="color-mix(in oklab, var(--gui-pet-gold-c, oklch(46.54% 0.0958 79.85deg)) 70%, var(--gui-pet-gold-b, oklch(75.07% 0.1450 79.85deg)))"
+						stopColor="color-mix(in oklab, var(--gui-pet-gold-c, oklch(45.04% 0.0777 79.85deg)) 70%, var(--gui-pet-gold-b, oklch(81.07% 0.1101 79.85deg)))"
 					/>
 				</linearGradient>
 				{/* Wearable (headphones): AirPods Max white + rose gold — a
@@ -1068,9 +1068,9 @@ function PetdexStateStage({
 					 * to the first occurrence, which is the same gradient). */}
 					<defs>
 						<radialGradient id="gui-pet-grad-shell" cx="0.34" cy="0.26" r="0.92">
-							<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(87.07% 0.1400 79.84deg))" />
-							<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1295 79.84deg))" />
-							<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.1101 79.84deg))" />
+							<stop offset="0" stopColor="var(--gui-pet-shell-a, oklch(89.07% 0.0798 79.84deg))" />
+							<stop offset="0.5" stopColor="var(--gui-pet-shell-b, oklch(75.07% 0.1036 79.84deg))" />
+							<stop offset="1" stopColor="var(--gui-pet-shell-c, oklch(41.29% 0.0907 79.84deg))" />
 						</radialGradient>
 					</defs>
 					<PetEffects state={state} layer="behind" tier={tier} clockRef={entryRef} htmlBodyRef={bodyRef} />

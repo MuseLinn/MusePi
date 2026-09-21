@@ -37,6 +37,11 @@ type TimerHandle = Timer;
  *  first use; tts.synthesize warms Kokoro) pass a larger per-call cap. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
+/** OAuth logins keep the request open while the user authorizes in a
+ *  browser — routinely far beyond {@link REQUEST_TIMEOUT_MS}. The daemon
+ *  flow is abortable via `providers.loginCancel`. */
+export const PROVIDER_LOGIN_TIMEOUT_MS = 300_000;
+
 /** Per-call overrides for {@link RpcClient.request}. */
 export interface RpcRequestOptions {
 	/** Reject the request after this long instead of {@link REQUEST_TIMEOUT_MS}. */

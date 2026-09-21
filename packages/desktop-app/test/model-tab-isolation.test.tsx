@@ -32,7 +32,6 @@ function sectionHtml(): string {
 				] as never
 			}
 			loginState={null}
-			busy={false}
 			pendingLogins={[]}
 			onLogin={() => {}}
 			onLogout={() => {}}

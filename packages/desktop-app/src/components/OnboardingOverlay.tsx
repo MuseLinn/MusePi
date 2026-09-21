@@ -37,6 +37,7 @@ const ONBOARDING_EXIT_MS = 200;
 
 import { petForId } from "../lib/pet";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
+import { PROVIDER_LOGIN_TIMEOUT_MS } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { AgentAvatar } from "./AgentAvatar";
@@ -481,16 +482,20 @@ function ProviderSetup({
 		setError(null);
 		setLoginState({ providerId });
 		try {
-			const result = await rpc.request<{ ok: boolean }>("providers.login", { providerId });
+			const result = await rpc.request<{ ok: boolean }>(
+				"providers.login",
+				{ providerId },
+				{ timeoutMs: PROVIDER_LOGIN_TIMEOUT_MS },
+			);
 			if (result?.ok) {
 				setLoginState(s => (s?.providerId === providerId ? null : s));
 				await loadProviders();
 			}
 		} catch (err) {
+			// Keep the auth URL on screen so the user can still open the link
+			// or cancel — the daemon flow may still be running.
 			setLoginState(s =>
-				s?.providerId === providerId
-					? { providerId, message: err instanceof Error ? err.message : String(err) }
-					: s,
+				s?.providerId === providerId ? { ...s, message: err instanceof Error ? err.message : String(err) } : s,
 			);
 		} finally {
 			setLoginPending(p => p.filter(x => x !== providerId));

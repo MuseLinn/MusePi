@@ -6,16 +6,18 @@
  *   - the active pet (builtin SVG or Petdex spritesheet) with a mood
  *     driven by the main window's session store, unread badge, and a
  *     drag/hover/dock gesture surface
- *   - the activity bubbles + interaction panel (pet-bubbles.tsx) layered
- *     ABOVE the sprite in the same window — their relative position is
- *     CSS, structurally immune to DPI/scaling; the window grows upward
- *     (bottom edge fixed) when they need room
+ *   - the activity bubbles (pet-bubbles.tsx) layered ABOVE the sprite in
+ *     the same window — their relative position is CSS, structurally
+ *     immune to DPI/scaling; the window grows upward (bottom edge fixed)
+ *     when they need room
  *
  * Pointer handling:
  *   - drag beyond 8px moves the OS window (pet-drag-client; the main
  *     process anchors ONCE per drag and tracks the DIP cursor — no
  *     readback, no scale math, exact 1:1 at any scaling)
- *   - a click (below threshold) toggles the interaction panel
+ *   - a single click greets the pet (interaction animation) and raises the
+ *     main client window (2026-09-21: the old single-click panel popup was
+ *     deleted — bubbles carry their own hover actions now)
  *   - a double-click plays a random interaction reaction (the full
  *     PET_INTERACTIONS set, dozing excluded — the old show/hide-main-
  *     window shortcut is gone: the window is reached from the taskbar,
@@ -41,6 +43,7 @@ import { createRoot } from "react-dom/client";
 import { type GazeVec, PetSprite, usePet, usePetDecor } from "./components/PetSprite";
 import {
 	type PetActivity,
+	type PetdexPackage,
 	type PetInteraction,
 	type PetMood,
 	type PetState,
@@ -86,10 +89,6 @@ interface PetBridge {
 	focusMainWindow?(): Promise<unknown>;
 	/** Pet right-click → native context menu (main process). */
 	petContextMenu?(): Promise<unknown>;
-	/** Single click → toggle the interaction panel (the pet window's own
-	 *  renderer hosts it; the toggle round-trips through main for the
-	 *  loading-replay guarantee). */
-	toggleBubblePanel?(): Promise<unknown>;
 	setPetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	/** Sprite-only rect (without the unread badge) — used by the main
 	 *  process to align the CHARACTER flush to a screen edge on dock. */
@@ -102,12 +101,25 @@ interface PetBridge {
 
 const DRAG_THRESHOLD_PX = 8;
 /** Max gap between two clicks on the pet for a double-click (→ a random
- *  interaction reaction). Single clicks defer their panel toggle by this
- *  window so a double click never flashes the panel open/closed. */
+ *  interaction reaction). Single clicks defer their action (greet + raise
+ *  the main window) by this window so a double click never flashes the
+ *  greeting before the random pick takes over. */
 const DOUBLE_CLICK_MS = 300;
 
 function PetApp(): ReactNode {
-	const { enabled, pet } = usePet();
+	const { enabled, pet: localPet } = usePet();
+	// The main window owns petdex state (its localStorage is unreachable from
+	// this window under file://) — it pushes the active pet descriptor on
+	// pet:activity; until the first push lands we render the local hook's
+	// reading (the same builtin default).
+	const [pushedPet, setPushedPet] = useState<{
+		kind: "builtin";
+		id: string;
+	} | {
+		kind: "petdex";
+		pkg: PetdexPackage;
+	} | null>(null);
+	const pet = pushedPet ?? localPet;
 	// Surface shading (pet-decor.ts) — the floating pet is the one renderer
 	// that has NO settings page of its own, so it subscribes to the same
 	// broadcast the composer/avatar do rather than receiving a prop.
@@ -147,9 +159,9 @@ function PetApp(): ReactNode {
 	// queueDragMove pattern) keeps the window glued to the cursor.
 	const dragMoveRafRef = useRef<number | null>(null);
 	const pendingMoveRef = useRef<{ clientX: number; clientY: number; screenX: number; screenY: number } | null>(null);
-	// Click-vs-double-click discrimination: the first click's panel toggle
-	// is deferred; if a second click lands within DOUBLE_CLICK_MS it is
-	// cancelled and the main window is toggled instead.
+	// Click-vs-double-click discrimination: the first click's action (greet
+	// + raise the main window) is deferred; if a second click lands within
+	// DOUBLE_CLICK_MS it is cancelled and the random interaction plays.
 	const lastClickRef = useRef(0);
 	const clickTimerRef = useRef<number | null>(null);
 	// Poke escalation + reaction lifetime. `pokes` counts presses within
@@ -178,7 +190,7 @@ function PetApp(): ReactNode {
 		/** True once travel exceeded the drag threshold. Survives
 		 *  resetDrag (which zeroes lastX/lastY): a drag interrupted by
 		 *  lostpointercapture/blur must still count as a drag, not a
-		 *  click — otherwise moving the pet pops the panel open. */
+		 *  click — otherwise moving the pet fires the click action. */
 		moved: boolean;
 	}>({
 		startX: 0,
@@ -199,6 +211,10 @@ function PetApp(): ReactNode {
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
 			if (typeof payload.unreadCount === "number") setUnreadCount(payload.unreadCount);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
+			// Active-pet override (petdex packages live in the main window's
+			// localStorage — unreachable from here; the descriptor arrives
+			// inline, spritesheet data URL and all).
+			if (payload.pet) setPushedPet(payload.pet);
 			// Main-window scheme push (the reliable path — storage events
 			// don't fire cross-window under file://).
 			if (payload.theme === "light" || payload.theme === "dark") {
@@ -395,10 +411,10 @@ function PetApp(): ReactNode {
 		return () => mq.removeEventListener("change", onMq);
 	}, []);
 
-	// Report the interactive rect (pet + badge + bubbles + panel) whenever
-	// the layout changes. The MAIN process resizes this window's click-
+	// Report the interactive rect (pet + badge + bubbles) whenever the
+	// layout changes. The MAIN process resizes this window's click-
 	// through state; re-measure on window resize too (the window grows
-	// upward when bubbles/panel open, which fires resize).
+	// upward when bubbles open, which fires resize).
 	useEffect(() => {
 		if (!bridge?.setPetHitbox) return;
 		const report = (): void => {
@@ -422,10 +438,10 @@ function PetApp(): ReactNode {
 			let rect: { x: number; y: number; width: number; height: number } | null = null;
 			const union: Record<string, number> = {};
 			// Single-window union: the overlay cards are interactive too —
-			// include the bubbles (and their × overhang) and the panel, or
-			// the click-through poll would flip ignore while the cursor is
-			// over a card.
-			const overlay = document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubble__dismiss, .pet-panel");
+			// include the bubbles (and their × overhang and the collapse
+			// fab), or the click-through poll would flip ignore while the
+			// cursor is over a card.
+			const overlay = document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubble__dismiss, .pet-bubbles__fab");
 			for (const el of [pet, badge, ...overlay]) {
 				if (!el) continue;
 				const r = el.getBoundingClientRect();
@@ -447,12 +463,12 @@ function PetApp(): ReactNode {
 		};
 		report();
 		window.addEventListener("resize", report);
-		// Overlay elements resize WITHOUT a window resize too (tab switch
-		// inside the panel, bubble text growth while the window is already
-		// sized, the stack morph) — a stale hitbox desyncs the click-through
-		// poll (cursor over a card flips ignore) and mis-lands drags.
+		// Overlay elements resize WITHOUT a window resize too (bubble text
+		// growth, the stack morph, the inline reply row opening) — a stale
+		// hitbox desyncs the click-through poll (cursor over a card flips
+		// ignore) and mis-lands drags.
 		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll(".pet-bubbles, .pet-panel, .pet-window__pet, .pet-window__badge")) {
+		for (const el of document.querySelectorAll(".pet-bubbles, .pet-bubbles__fab, .pet-window__pet, .pet-window__badge")) {
 			ro.observe(el);
 		}
 		return () => {
@@ -471,6 +487,20 @@ function PetApp(): ReactNode {
 		void el.offsetWidth; // force reflow so the class re-triggers
 		el.classList.add("gui-pet-bump");
 	}, []);
+
+	// Blob squash (blobstudio.xyz parity): every poke reaction replays a
+	// quick squash-and-stretch on the sprite wrapper — the press gets a
+	// physical "clicked" feel even on petdex sheets, whose faces cannot
+	// change. Dozing is a slow wind-down, not a poke: no squash.
+	const squashRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!interaction || interaction === "dozing") return;
+		const el = squashRef.current;
+		if (!el) return;
+		el.classList.remove("pet-window__squash");
+		void el.offsetWidth; // force reflow so the class re-triggers
+		el.classList.add("pet-window__squash");
+	}, [interaction]);
 
 	const resetDrag = (): void => {
 		if (!dragRef.current.pressed) return;
@@ -503,11 +533,11 @@ function PetApp(): ReactNode {
 	const onPointerDown = (e: ReactPointerEvent): void => {
 		// Right-click opens the native context menu (onContextMenu) — it is
 		// not a drag/click gesture and must not arm one (a right-click
-		// would otherwise pop the panel via the deferred click timer).
+		// would otherwise fire the deferred single-click action too).
 		if (e.button !== 0) return;
-		// A new gesture starts: any deferred single-click toggle from the
+		// A new gesture starts: any deferred single-click action from the
 		// previous click is void — otherwise a click followed within the
-		// double-click window by a drag would fire togglePanel() mid-drag.
+		// double-click window by a drag would fire it mid-drag.
 		if (clickTimerRef.current !== null) {
 			window.clearTimeout(clickTimerRef.current);
 			clickTimerRef.current = null;
@@ -594,14 +624,14 @@ function PetApp(): ReactNode {
 	const onPointerUp = (e: ReactPointerEvent): void => {
 		// Right button is the context menu gesture, never a click — without
 		// this gate the pointerup falls through to the click/double-click
-		// path and pops the bubble panel alongside the native menu.
+		// path and greets the pet alongside the native menu.
 		if (e.button !== 0) return;
 		const s = dragRef.current;
 		s.pressed = false;
 		s.dragging = false;
 		if (s.moved) {
-			// A completed drag is a drag, never a click — the panel must
-			// not pop after moving the pet.
+			// A completed drag is a drag, never a click — the greeting must
+			// not fire after moving the pet.
 			s.moved = false;
 			setDragging(false);
 			void bridge?.petDragEnd?.();
@@ -609,8 +639,10 @@ function PetApp(): ReactNode {
 		}
 		// Click vs double-click: a double-click plays a random interaction
 		// reaction from the full set (dozing excluded — waking up is the
-		// drowse scheduler's job; never the same pick twice in a row). One
-		// click toggles the bubble panel.
+		// drowse scheduler's job; never the same pick twice in a row). A
+		// single click greets the pet and raises the main window (the old
+		// bubble-panel popup is gone — the bubbles carry their own hover
+		// actions now, 2026-09-21 user: 单击弹窗删除，改为前台显示客户端窗口).
 		const now = Date.now();
 		if (now - lastClickRef.current <= DOUBLE_CLICK_MS) {
 			if (clickTimerRef.current !== null) window.clearTimeout(clickTimerRef.current);
@@ -624,11 +656,13 @@ function PetApp(): ReactNode {
 			return;
 		}
 		lastClickRef.current = now;
-		// Defer the single-click panel toggle by the double-click window so
-		// a double click never flashes the panel open then closed.
+		// Defer the single-click action by the double-click window so a
+		// double click never fires it — and so its greeting never flashes
+		// before the random double-click pick takes over.
 		clickTimerRef.current = window.setTimeout(() => {
 			clickTimerRef.current = null;
-			void bridge?.toggleBubblePanel?.();
+			setInteraction("greeting");
+			void bridge?.focusMainWindow?.();
 			// Disarm after the click's pointer stream ends too.
 			void bridge?.petDragEnd?.();
 		}, DOUBLE_CLICK_MS + 20);
@@ -660,11 +694,11 @@ function PetApp(): ReactNode {
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
-			{/* Bubbles + interaction panel (merged, pet-bubbles.tsx): DOM
-			 * layered above the sprite in the SAME window — the relative
-			 * position is CSS, structurally immune to DPI/scaling. The
-			 * component reports the window height it needs and the main
-			 * process grows the window upward (bottom edge fixed). */}
+			{/* Activity bubbles (pet-bubbles.tsx): DOM layered above the sprite
+			 * in the SAME window — the relative position is CSS, structurally
+			 * immune to DPI/scaling. The component reports the window height
+			 * it needs and the main process grows the window upward (bottom
+			 * edge fixed). */}
 			<PetBubbles />
 			{/* Stage: centers the sprite AND anchors the unread badge to it —
 			 * a badge anchored to the WINDOW (top/right) floats ~70px right
@@ -705,7 +739,7 @@ function PetApp(): ReactNode {
 						void bridge?.petContextMenu?.();
 					}}
 				>
-					<div className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}>
+					<div ref={squashRef} className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}>
 						<PetSprite
 							mood={displayMood}
 							state={displayState}

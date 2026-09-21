@@ -1776,12 +1776,6 @@ ipcMain.handle("pet-context-menu", () => {
 			label: "打开主窗口",
 			click: () => focusMainFromPet(),
 		},
-		{
-			label: "显示/隐藏面板",
-			click: () => {
-				if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:panel-toggle");
-			},
-		},
 		{ type: "separator" },
 		{
 			label: "挂靠屏幕边缘",
@@ -2209,24 +2203,11 @@ ipcMain.handle("pet-request-state", () => {
 	}
 	return { ok: true };
 });
-// Pet window single click → toggle the interaction panel. Since the
-// single-window merge the panel lives in the PET window's renderer.
-ipcMain.handle("pet-toggle-panel", () => {
-	if (!petWindow || petWindow.isDestroyed()) return { ok: true };
-	if (petWindow.webContents.isLoading()) {
-		// The window is still loading (first click after creation): a send
-		// now would race the React subscription and be dropped. Replay once
-		// it settles — same delay as the activity replay.
-		setTimeout(() => {
-			if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:panel-toggle");
-		}, 200);
-	} else {
-		petWindow.webContents.send("pet:panel-toggle");
-	}
-	return { ok: true };
-});
-// The merged pet window reports the height it needs (bubbles/panel grow
-// upward). The bottom edge stays fixed — the sprite is anchored to the
+// (the single-click interaction panel was removed 2026-09-21 — single click
+// now greets the pet and raises the main window via pet-click/focusMainFromPet;
+// bubbles carry their own hover actions. The pet-toggle-panel handler and the
+// context-menu 显示/隐藏面板 item went with it.)
+// The merged pet window reports the height it needs (bubbles grow upward).
 // window bottom, so growing never moves the pet on screen. Width is
 // pinned to PET_WINDOW_SIZE (panel 316px + bubbles 280px both fit).
 ipcMain.handle("pet-set-content-size", (_event, size) => {

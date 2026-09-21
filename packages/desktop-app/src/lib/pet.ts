@@ -200,6 +200,12 @@ export interface PetActivity {
 	 *  the pet window re-derives its themed shell/ring palette from it
 	 *  (pet-palette.ts). Pushed alongside `theme`. */
 	accent?: string;
+	/** Active pet descriptor (builtin id or a full petdex package — the
+	 *  petdex registry lives in the main window's localStorage, which the
+	 *  pet window cannot read under file://). Pushed on change and whenever
+	 *  the pet window re-requests state, so imported theme packages render
+	 *  in the floating pet too. */
+	pet?: { kind: "builtin"; id: string } | { kind: "petdex"; pkg: PetdexPackage };
 }
 
 export const PET_MOODS: readonly PetMood[] = ["rest", "working", "waiting", "analyzing", "error"];

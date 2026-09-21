@@ -5,6 +5,24 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **桌宠主题调色板从未真正生效（变量名双前缀），品牌金观感偏差**：`applyPetPalette` 写入的是 `--gui-pet-gui-pet-shell-a`（前缀 `--gui-pet-` 叠加键名自带的 `gui-pet-`），而 SVG 读取的是 `var(--gui-pet-shell-a, …)`——派生调色板自 2026-09-20 上线起整体静默落空，桌宠永远停在 SVG 硬编码回退色上。前缀修正为 `--` 后主题色（品牌金/海洋/翡翠/单色）实时跟随。同时把静默 catch 改为 `console.warn`，以后调色板再失败控制台可见。已用实机验证脚本（`verify-desktop-pet.mjs`，15 项断言）锁定写入契约。
+  - EN: the pet theme palette never actually applied — `applyPetPalette` wrote `--gui-pet-gui-pet-shell-a` (the `--gui-pet-` prefix stacked on keys that already carry `gui-pet-`) while the SVG reads `var(--gui-pet-shell-a, …)`, so the derived palette silently fell through to the hardcoded SVG fallbacks since it shipped on 2026-09-20. The prefix is corrected to `--`; the silent catch now logs a `console.warn`. Locked by a live verification script (`verify-desktop-pet.mjs`, 15 assertions).
+- **petdex 主题包在桌宠窗口不生效**：petdex 包存在主窗口 localStorage，桌宠窗在 `file://` 下读不到，切了主题包桌宠却不变。现在主窗口推送 `pet-activity` 时内联活动宠物描述符（内建 id 或 petdex 包，含 spritesheet），桌宠窗按推送渲染。
+  - EN: petdex pet packages live in the main window's localStorage, unreachable from the pet window under `file://` — switching the package left the desktop pet unchanged. The main window now inlines the active-pet descriptor (builtin id or petdex package with spritesheet) into its `pet-activity` pushes, and the pet window renders from the push.
+
+### Changed
+
+- **桌宠单击改为前台显示客户端窗口（单击弹窗删除）**：单击的延迟动作从「弹出气泡面板」改为「greeting 反应 + 聚焦主窗」，双击仍是随机交互；右键菜单的「显示/隐藏面板」项一并移除，旧 `pet-toggle-panel` IPC 全链路删除。
+  - EN: the desktop pet's single-click action now greets and raises the client window instead of popping the bubble panel (panel removed, `pet-toggle-panel` IPC deleted end-to-end); double-click still plays a random interaction.
+- **气泡悬停快捷操作 + 内联回复**：气泡悬停浮出操作条——✓ 确认（审批通过 / 完成已读 / 关闭）、✗ 拒绝（仅审批）、💬 回复（带会话的气泡，点击展开内联输入框，Enter 发送走 `pet-reply`）；展开态头部新增「清除全部」，底部 ∨ 圆形按钮收起。旧气泡面板 DOM/CSS 全量移除。
+  - EN: hovering a pet bubble reveals an action bar — confirm (approve / mark-read / close), deny (approvals only) and reply (session bubbles only; expands an inline input, Enter sends via `pet-reply`). The expanded list gains a "clear all" header action and a ∨ collapse fab. The old bubble panel DOM/CSS is fully gone.
+- **品牌金重校为香槟金 + 点击挤压动效**：暗色/浅色两套金色公式全面降饱和（如暗色 gold-b 从 `oklch(75.07% 0.1450 80)` 调至 `oklch(81.07% 0.1101 79.84)`），金属坡 ramp 保持高光洗白/本体峰值/暗部留色的非单调色度结构；窗口级 squash 挤压动效（blobstudio 式）在每次交互反应时重放，petdex 精灵表没有反应帧行，挤压即可见反馈。
+  - EN: the brand-gold ramp is recalibrated champagne — both schemes desaturated (e.g. dark gold-b from `oklch(75.07% 0.1450 80)` to `oklch(81.07% 0.1101 79.84)`) while keeping the polished-metal non-monotonic chroma structure; a blobstudio-style window squash plays on every interaction reaction (petdex sheets carry no reaction rows, so the squash is the visible feedback).
+- **GUI 供应商登录：授权完成后报「request timeout: providers.login」，登录面板标题显示内部 id**：`providers.login` 走的是 WebSocket RPC 默认 15 秒超时，而 OAuth 需要用户在浏览器里完成授权，必然超时——daemon 侧的登录流程其实还在正常跑，GUI 却把整个登录态覆盖成一条原始报错，授权链接和取消按钮都没了。现在登录请求给到 5 分钟超时（仍可取消），出错时保留授权链接/说明，面板标题从内部 id（如 `kimi-code`）改为供应商显示名；等待授权的转圈此前被全局 busy 标志反向 gate 住（登录进行中反而不显示），现改为按该供应商的 pending 状态显示。引导页（Onboarding）登录同样受益。
+  - EN: GUI provider login showed "request timeout: providers.login" after the user authorized, and the panel title displayed the internal id. `providers.login` used the WebSocket RPC's default 15s timeout, but OAuth needs the user to finish authorizing in a browser — it always timed out while the daemon flow kept running fine; the GUI then replaced the whole login state with a raw error, losing the auth link and cancel button. The login request now gets a 5-minute timeout (still cancellable), errors keep the auth link/instructions, and the panel title shows the provider display name instead of the internal id (e.g. `kimi-code`). The "waiting for authorization" spinner was also gated backwards by the global busy flag (hidden while logging in) — it now follows that provider's pending state. Onboarding logins benefit from the same fixes.
+
 ## [0.4.36] - 2026-09-20
 
 ### Added

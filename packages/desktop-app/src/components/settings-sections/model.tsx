@@ -110,7 +110,6 @@ export function ModelSection({
 	apiProviders,
 	custom,
 	loginState,
-	busy,
 	pendingLogins,
 	onLogin,
 	onLogout,
@@ -132,7 +131,6 @@ export function ModelSection({
 		message?: string;
 		waitingInput?: boolean;
 	} | null;
-	busy: boolean;
 	/** Provider ids whose OAuth/API login is in flight — only THOSE provider
 	 *  login controls are disabled, so one pending login doesn't freeze every
 	 *  other provider's button (user report: "登录按钮有时点击没反应"). */
@@ -997,13 +995,17 @@ export function ModelSection({
 	// Login flow (OAuth device-code): lives at the pane body top so it shows
 	// over whichever tab triggered it (providers tab OR a locked-provider
 	// action from the roles rail).
+	// Provider id → catalog display name (raw ids like "kimi-code" read broken
+	// in the flow title when the daemon keys differ from the label).
+	const providerDisplayName = (id: string): string =>
+		providers?.find(p => p.id === id)?.name ?? apiProviders.find(p => p.id === id)?.name ?? id;
 	const renderLoginFlow = (): ReactNode => {
 		if (!loginState) return null;
 		return (
 			<div className="gui-github-flow">
 				<div className="gui-github-flow-title flex items-center gap-1.5">
 					<Icon name="lock" className="h-3.5 w-3.5" />
-					{t("login to {name}", { name: loginState.providerId })}
+					{t("login to {name}", { name: providerDisplayName(loginState.providerId) })}
 				</div>
 				{loginState.url && (
 					<div className="gui-github-flow-actions">
@@ -1058,8 +1060,8 @@ export function ModelSection({
 						</button>
 					</div>
 				) : (
-					!busy &&
-					loginState.url && (
+					loginState.url &&
+					pendingLogins.includes(loginState.providerId) && (
 						<div className="gui-github-flow-waiting">
 							<span className="gui-flow-spinner" aria-hidden="true" />
 							{t("waiting login")}
@@ -1077,7 +1079,7 @@ export function ModelSection({
 			<div className="gui-github-flow">
 				<div className="gui-github-flow-title flex items-center gap-1.5">
 					<Icon name="key" className="h-3.5 w-3.5" />
-					{t("import api key for {name}", { name: apiKeyTarget })}
+					{t("import api key for {name}", { name: providerDisplayName(apiKeyTarget) })}
 				</div>
 				<div className="flex items-center gap-2">
 					<input

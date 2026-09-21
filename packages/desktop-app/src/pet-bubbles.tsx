@@ -1,31 +1,41 @@
 /**
- * Pet window overlay surfaces (bubbles + interaction panel) — merged into
- * the pet window (single window, 2026-09-16; formerly bubble.html, 双窗口).
+ * Pet window overlay surfaces (activity bubbles) — merged into the pet
+ * window (single window, 2026-09-16; formerly bubble.html, 双窗口).
  *
  * The old split (dedicated bubble window chasing the pet window on every
  * move) is what made the pet and its bubbles drift apart on non-100%
  * scaling: two windows, two coordinate transformations, one of them
- * guessed at runtime. In the merged window the bubbles/panel are plain
- * DOM layered above the sprite — their position relative to the pet is
- * CSS, structurally immune to any DPI/scaling issue.
+ * guessed at runtime. In the merged window the bubbles are plain DOM
+ * layered above the sprite — their position relative to the pet is CSS,
+ * structurally immune to any DPI/scaling issue.
  *
- * Sizing: the window is 320 wide (panel 316 / stack 280 both fit) and
- * grows UPWARD when the overlay content needs more room — the renderer
- * reports the required height via setPetContentSize and the main process
- * keeps the bottom edge fixed (the sprite is anchored to it), so the pet
- * never moves on screen while bubbles open/close above it.
+ * 2026-09-21 redesign (kimi-work bubble parity, user review screenshots):
+ *  - the single-click interaction PANEL is gone (user: 单击弹窗删除) — a
+ *    single click on the pet greets it and raises the main window instead;
+ *    everything the panel did now lives on the bubbles themselves
+ *  - collapsed = newest bubble + "N more" chip (iOS Notification-Center
+ *    stack); expanded = full list + 清除全部 + a ∨ round button by the pet
+ *  - hovering a bubble reveals its quick actions: ✓ confirm (approval →
+ *    批准, completion/error → 标记已读并关闭, transient → 关闭), ✗ deny on
+ *    approval bubbles, and 💬 回复 on session bubbles — the reply button
+ *    expands an inline input that sends via petReply (no panel hop)
+ *
+ * Sizing: the window is 320 wide and grows UPWARD when the overlay needs
+ * more room — the renderer reports the required height via
+ * setPetContentSize and the main process keeps the bottom edge fixed (the
+ * sprite is anchored to it), so the pet never moves on screen while
+ * bubbles open/close above it.
  */
 
 import { setLocale, t } from "@musepi/client-core";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import type { PetActivity } from "./lib/pet";
 import { useScrollShadow } from "./lib/use-scroll-shadow";
 
 interface PetBubblesBridge {
 	onPetActivity?(cb: (payload: PetActivity) => void): () => void;
-	/** Context menu / pet click → toggle the panel (the panel lives here). */
-	onPetPanelToggle?(cb: () => void): () => void;
-	/** A global approval hotkey decided a request — drop the card. */
+	/** A global approval hotkey (Ctrl/Cmd+Shift+Y / N) decided a request —
+	 *  drop the bubble. */
 	onPetApprovalResolved?(cb: (payload: { requestId: string; approved: boolean }) => void): () => void;
 	petReply?(text: string, sessionId?: string): Promise<unknown>;
 	petApprove?(requestId: string, approved: boolean): Promise<unknown>;
@@ -34,14 +44,12 @@ interface PetBubblesBridge {
 	/** Bubble × dismiss → mark that session read (the main window owns the
 	 *  unread badge; dismissing the notification must clear it too). */
 	petMarkRead?(sessionId: string): Promise<unknown>;
-	petGetSessionContent?(sessionId: string): Promise<unknown>;
-	onPetSessionContent?(
-		cb: (payload: { sessionId: string; messages: Array<{ role: string; text: string }>; loaded?: boolean }) => void,
-	): () => void;
+	petMarkAllRead?(): Promise<unknown>;
 	/** Report the window height the overlay content needs (CSS px). */
 	setPetContentSize?(size: { height: number }): Promise<unknown>;
-	/** Ask the main window to re-push its latest pet state (panel opens
-	 *  with stale/absent state otherwise — state only re-pushes on change). */
+	/** Ask the main window to re-push its latest pet state (on mount — the
+	 *  push also carries the active pet descriptor, which this window
+	 *  cannot read from localStorage under file://). */
 	requestPetState?(): Promise<unknown>;
 }
 
@@ -50,7 +58,7 @@ const MAX_VISIBLE_BUBBLES = 5;
 /** Base window height (main.cjs PET_WINDOW_SIZE) — reported when the
  *  overlay is empty so the window shrinks back down. */
 const BASE_WINDOW_HEIGHT = 290;
-/** Head-room above the topmost overlay element: card shadows (0 4px 16px)
+/** Head-room above the topmost overlay element: card shadows (0 4px 20px)
  *  and the stack-chip overhang (-9px) must not clip at the window edge. */
 const CONTENT_TOP_PAD = 12;
 
@@ -58,8 +66,11 @@ interface Bubble {
 	id: number;
 	kind: string;
 	text: string;
-	/** Session this notification belongs to — click opens it directly. */
+	/** Session this notification belongs to — click opens it directly and
+	 *  回复 routes to it. */
 	sessionId?: string;
+	/** Tool-approval request — ✓/✗ on the hover actions decide it. */
+	requestId?: string;
 	visible: string;
 }
 
@@ -84,20 +95,6 @@ function bubbleKindLabel(kind: string): string | null {
 	}
 }
 
-interface PendingApproval {
-	requestId: string;
-	tool: string;
-}
-
-/** Compact relative time for the recent-session rows. */
-function relTimeLabel(ts: number): string {
-	const diff = Date.now() - ts;
-	if (diff < 60_000) return "刚刚";
-	if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-	if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
-	return `${Math.floor(diff / 86_400_000)} 天前`;
-}
-
 export function PetBubbles(): ReactNode {
 	const [bubbles, setBubbles] = useState<Bubble[]>([]);
 	// iOS Notification-Center style: collapsed shows the newest bubble +
@@ -108,51 +105,33 @@ export function PetBubbles(): ReactNode {
 	// the new view locked to that size, then transition to the new one.
 	const [stackMorph, setStackMorph] = useState<{ from: { width: number; height: number } } | null>(null);
 	const stackRef = useRef<HTMLDivElement | null>(null);
-	// Interaction panel: live task summary + approval card + quick reply.
-	const [panelOpen, setPanelOpen] = useState(false);
-	// Mirror of panelOpen for the once-mounted toggle subscription (see the
-	// panel-toggle effect): a closure over the state would pin the value
-	// from the render it was created in.
-	const panelOpenRef = useRef(false);
-	useEffect(() => {
-		panelOpenRef.current = panelOpen;
-	}, [panelOpen]);
-	const [panelEntered, setPanelEntered] = useState(false);
-	const [panelLeaving, setPanelLeaving] = useState(false);
-	// Panel view split (拆开): "messages" = live status/message/approvals/
-	// reply; "sessions" = the recent-session list, its own view.
-	const [panelView, setPanelView] = useState<"messages" | "sessions">("messages");
-	const [petState, setPetState] = useState<PetActivity["state"] | null>(null);
-	const [approvals, setApprovals] = useState<PendingApproval[]>([]);
-	const [recentSessions, setRecentSessions] = useState<{ id: string; label: string; timestamp: number }[]>([]);
-	const [activeSession, setActiveSession] = useState<{
-		id: string;
-		label: string;
-		messages: Array<{ role: string; text: string }>;
-		loaded: boolean;
-	} | null>(null);
+	// Inline reply: which bubble's input is open (null = none).
+	const [replyFor, setReplyFor] = useState<number | null>(null);
 	const [replyText, setReplyText] = useState("");
 	const [sending, setSending] = useState(false);
 	const bridge = (window as unknown as { electronAPI?: PetBubblesBridge }).electronAPI;
 
-	const sessionMessages = useMemo(() => {
-		if (!activeSession?.loaded || !activeSession.messages.length) return null;
-		return activeSession.messages.map((m, i) => (
-			<div key={i} className={`pet-panel__msg pet-panel__msg--${m.role}`}>
-				{m.text}
-			</div>
-		));
-	}, [activeSession?.loaded, activeSession?.messages]);
-
-	// pet:activity — bubbles, approvals, session state, theme/locale push.
+	// pet:activity — bubbles, approvals, theme/locale push.
 	useEffect(() => {
 		const off = bridge?.onPetActivity?.(payload => {
-			if (payload.state) setPetState(payload.state);
 			if (payload.approval?.requestId) {
-				setApprovals(prev =>
-					prev.some(a => a.requestId === payload.approval!.requestId)
+				// Tool approval → its own question bubble with ✓/✗ hover
+				// actions (the interaction panel that used to host these is
+				// gone). Duplicate requestIds collapse into one bubble.
+				const approval = payload.approval;
+				setBubbles(prev =>
+					prev.some(b => b.requestId === approval.requestId)
 						? prev
-						: [...prev, { requestId: payload.approval!.requestId, tool: payload.approval!.tool }],
+						: [
+								...prev,
+								{
+									id: Date.now(),
+									kind: "question",
+									text: t("pet approval · {tool}", { tool: approval.tool }),
+									requestId: approval.requestId,
+									visible: "",
+								},
+							].slice(-MAX_VISIBLE_BUBBLES),
 				);
 			}
 			if (payload.bubble?.text) {
@@ -171,12 +150,16 @@ export function PetBubbles(): ReactNode {
 												kind: bubble.kind,
 												text: bubble.text,
 												sessionId: bubble.sessionId,
+												requestId: bubble.requestId,
 												visible: "",
 											}
 										: b,
 								)
-							: [...prev, { id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, visible: "" }]
-						: [...prev, { id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, visible: "" }];
+							: [
+									...prev,
+									{ id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, requestId: bubble.requestId, visible: "" },
+								]
+						: [...prev, { id, kind: bubble.kind, text: bubble.text, sessionId: bubble.sessionId, requestId: bubble.requestId, visible: "" }];
 					return next.length > MAX_VISIBLE_BUBBLES ? next.slice(next.length - MAX_VISIBLE_BUBBLES) : next;
 				});
 				// Completion/error bubbles persist until dismissed or the
@@ -203,59 +186,19 @@ export function PetBubbles(): ReactNode {
 				document.documentElement.dataset.colorScheme = payload.theme;
 				document.documentElement.style.colorScheme = payload.theme;
 			}
-			// Recent-session list for the panel.
-			if (Array.isArray(payload.recentSessions)) setRecentSessions(payload.recentSessions);
 		});
-		// Ask the main window for the latest session state — the panel is
-		// useless with a stale/absent state (title, idle/working, last
-		// message). The main window re-pushes on request (pet:state-request).
+		// Ask the main window for the latest state — it re-pushes mood,
+		// theme AND the active pet descriptor (this window's localStorage
+		// carries no petdex state under file://).
 		void bridge?.requestPetState?.();
 		return off;
 	}, []);
 
-	// Panel toggle from the pet single click / the context menu — now an
-	// in-window event (no OS-window hop through the main process).
-	//
-	// The subscription is mounted ONCE and reads panelOpen through a ref:
-	// re-subscribing on [panelOpen] meant the handler was torn down and
-	// re-registered on every toggle, and a click landing inside that swap
-	// ran the STALE handler — the panel "opened" while already open, so the
-	// next click toggled it shut with no visible change (reported as
-	// 「消息显示不正常」: the panel would not close on a second click).
-	useEffect(() => {
-		return bridge?.onPetPanelToggle?.(() => {
-			if (panelOpenRef.current) {
-				setPanelLeaving(true);
-				window.setTimeout(() => {
-					setPanelLeaving(false);
-					setPanelOpen(false);
-					setApprovals([]);
-				}, 140);
-			} else {
-				setPanelOpen(true);
-				// Fresh state on every open — idle sessions push state only on
-				// change, so an old panel would show a stale title/message.
-				void bridge?.requestPetState?.();
-			}
-		});
-	}, []);
-
 	// A global hotkey (Ctrl/Cmd+Shift+Y / N) decided a request — drop the
-	// card (the main window was already told via pet:command).
+	// bubble (the main window was already told via pet:command).
 	useEffect(() => {
 		return bridge?.onPetApprovalResolved?.(({ requestId }) => {
-			setApprovals(prev => prev.filter(a => a.requestId !== requestId));
-		});
-	}, []);
-
-	// Transcript for the session opened from the recent list.
-	useEffect(() => {
-		return bridge?.onPetSessionContent?.(payload => {
-			setActiveSession(prev =>
-				prev && prev.id === payload.sessionId
-					? { ...prev, messages: payload.messages, loaded: payload.loaded === true }
-					: prev,
-			);
+			setBubbles(prev => prev.filter(b => b.requestId !== requestId));
 		});
 	}, []);
 
@@ -310,14 +253,14 @@ export function PetBubbles(): ReactNode {
 
 	// Report the height the overlay content needs — the main process grows
 	// the window UPWARD (bottom edge fixed), so the sprite never moves.
-	// Only the top edge matters: panel/bubbles sit above the pet, and the
-	// window must extend far enough up that their top (+ shadow/chip
-	// head-room) stays inside the window.
+	// Only the top edge matters: bubbles sit above the pet, and the window
+	// must extend far enough up that their top (+ shadow/chip head-room)
+	// stays inside the window.
 	useEffect(() => {
 		if (!bridge?.setPetContentSize) return;
 		const report = (): void => {
 			let minTop = Infinity;
-			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-panel")) {
+			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles, .pet-bubbles__fab")) {
 				const r = el.getBoundingClientRect();
 				if (r.width <= 0 || r.height <= 0) continue;
 				// Entrance/leaving keyframes transform the box; getBoundingClientRect
@@ -337,17 +280,18 @@ export function PetBubbles(): ReactNode {
 			void bridge.setPetContentSize?.({ height: Math.ceil(needed) });
 			// Transforms do not fire ResizeObserver — re-report when an
 			// entrance/leaving animation settles.
-			for (const el of document.querySelectorAll<HTMLElement>(".pet-panel, .pet-bubbles")) {
+			for (const el of document.querySelectorAll<HTMLElement>(".pet-bubbles")) {
 				el.addEventListener("animationend", report, { once: true });
 			}
 		};
 		const ro = new ResizeObserver(report);
-		for (const el of document.querySelectorAll(".pet-bubbles, .pet-panel")) ro.observe(el);
+		for (const el of document.querySelectorAll(".pet-bubbles")) ro.observe(el);
 		report();
-		// Delayed re-reports: typewriter growth / panel entrance change the
+		// Delayed re-reports: typewriter growth / stack expand change the
 		// box after mount; the mutation observer catches newly mounted
-		// content elements (bubbles appear/disappear, stack expands) and
-		// characterData picks up the typewriter's per-tick text growth.
+		// content elements (bubbles appear/disappear, stack expands, the
+		// inline reply row opens) and characterData picks up the typewriter's
+		// per-tick text growth.
 		const timer = window.setTimeout(report, 300);
 		const mo = new MutationObserver(report);
 		const root = document.getElementById("root");
@@ -416,324 +360,217 @@ export function PetBubbles(): ReactNode {
 		};
 	}, [stackMorph]);
 
-	// Panel entrance waits for the OS window resize. The panel mounts while
-	// the window is still base-sized: an immediate entrance animation would
-	// paint the panel clipped to the old window. The window resize event is
-	// the sync point (the growth is one setBounds round-trip behind the
-	// React commit); the 120ms fallback covers a window that was already
-	// panel-sized or a missed event.
-	useEffect(() => {
-		if (!panelOpen) return;
-		setPanelEntered(false);
-		let settled = false;
-		const enter = (): void => {
-			if (settled) return;
-			settled = true;
-			setPanelEntered(true);
-		};
-		window.addEventListener("resize", enter);
-		const fallback = window.setTimeout(enter, 120);
-		return () => {
-			window.removeEventListener("resize", enter);
-			window.clearTimeout(fallback);
-		};
-	}, [panelOpen]);
-
-	const closePanel = (): void => {
-		setPanelLeaving(true);
-		window.setTimeout(() => {
-			setPanelLeaving(false);
-			setPanelOpen(false);
-			setApprovals([]);
-		}, 140);
+	const dismissBubble = (b: Bubble): void => {
+		// Dismissing a completion/error notification also clears its unread
+		// badge in the main window — bubble and badge track the same signal.
+		if ((b.kind === "completed" || b.kind === "error") && b.sessionId) {
+			void bridge?.petMarkRead?.(b.sessionId);
+		}
+		setBubbles(prev => prev.filter(x => x.id !== b.id));
+		if (replyFor === b.id) {
+			setReplyFor(null);
+			setReplyText("");
+		}
 	};
 
-	const sendReply = (): void => {
+	/** ✓ confirm — the meaning follows the bubble kind: a tool approval is
+	 *  批准'd, a completion/error is marked read and closed, anything else
+	 *  just closes. */
+	const confirmBubble = (b: Bubble): void => {
+		if (b.requestId) {
+			void bridge?.petApprove?.(b.requestId, true);
+			setBubbles(prev => prev.filter(x => x.id !== b.id));
+			return;
+		}
+		dismissBubble(b);
+	};
+
+	const denyBubble = (b: Bubble): void => {
+		if (!b.requestId) return;
+		void bridge?.petApprove?.(b.requestId, false);
+		setBubbles(prev => prev.filter(x => x.id !== b.id));
+	};
+
+	const sendReply = (b: Bubble): void => {
 		const text = replyText.trim();
-		if (!text || sending) return;
+		if (!text || sending || !b.sessionId) return;
 		setSending(true);
-		void bridge?.petReply?.(text, activeSession?.id).finally(() => {
+		void bridge?.petReply?.(text, b.sessionId).finally(() => {
 			setSending(false);
 			setReplyText("");
+			setReplyFor(null);
 		});
 	};
 
-	const decide = (requestId: string, approved: boolean): void => {
-		void bridge?.petApprove?.(requestId, approved);
-		setApprovals(prev => prev.filter(a => a.requestId !== requestId));
+	const clearAll = (): void => {
+		// Read 闭环 for every session notification + the badge in one pass.
+		for (const b of bubbles) {
+			if ((b.kind === "completed" || b.kind === "error") && b.sessionId) {
+				void bridge?.petMarkRead?.(b.sessionId);
+			}
+			if (b.requestId) void bridge?.petApprove?.(b.requestId, true);
+		}
+		void bridge?.petMarkAllRead?.();
+		setBubbles([]);
+		setReplyFor(null);
+		setReplyText("");
+		setStackExpanded(false);
 	};
-
-	if (panelOpen) {
-		return (
-			<div
-				className={`pet-panel${panelEntered ? " pet-panel--in" : ""}${panelLeaving ? " pet-panel--leaving" : ""}`}
-			>
-				<div className="pet-panel__head">
-					<span
-						className="pet-panel__title"
-						title={panelView === "sessions" ? t("recent sessions") : (petState?.sessionTitle ?? undefined)}
-					>
-						{panelView === "sessions"
-							? t("recent sessions")
-							: petState?.sessionTitle
-								? petState.sessionTitle
-								: t("MusePi")}
-					</span>
-					<div className="pet-panel__head-actions">
-						{petState && (
-							<button
-								type="button"
-								className="pet-panel__open"
-								aria-label={t("pet open main window")}
-								title={t("pet open main window")}
-								onClick={() => void bridge?.focusMainWindow?.()}
-							>
-								↗
-							</button>
-						)}
-						<button
-							type="button"
-							className="pet-panel__close"
-							aria-label={t("pet close panel")}
-							onClick={closePanel}
-						>
-							×
-						</button>
-					</div>
-				</div>
-				<div className="pet-panel__tabs" role="tablist" aria-label="panel views">
-					<button
-						type="button"
-						role="tab"
-						aria-selected={panelView === "messages"}
-						className={`pet-panel__tab${panelView === "messages" ? " pet-panel__tab--active" : ""}`}
-						onClick={() => setPanelView("messages")}
-					>
-						{t("pet panel messages")}
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={panelView === "sessions"}
-						className={`pet-panel__tab${panelView === "sessions" ? " pet-panel__tab--active" : ""}`}
-						onClick={() => setPanelView("sessions")}
-					>
-						{t("pet panel sessions")}
-					</button>
-				</div>
-				<div className="pet-panel__body">
-					{panelView === "sessions" ? (
-						// 会话视图：最近活跃会话列表（拆开的独立面板视图）。
-						<div className="pet-panel__sessions">
-							{recentSessions.length === 0 ? (
-								<div className="pet-panel__sessions-empty">{t("pet panel no recent")}</div>
-							) : (
-								recentSessions.slice(0, 5).map(rs => (
-									<button
-										key={rs.id}
-										type="button"
-										className="pet-panel__recent-row"
-										title={rs.label}
-										onClick={() => {
-											// Open the session transcript in the
-											// messages view; the tab is the way back.
-											setActiveSession({
-												id: rs.id,
-												label: rs.label || t("untitled session"),
-												messages: [],
-												loaded: false,
-											});
-											setPanelView("messages");
-											void bridge?.petGetSessionContent?.(rs.id);
-										}}
-									>
-										<span className="pet-panel__recent-label">{rs.label || t("untitled session")}</span>
-										<span className="pet-panel__recent-time">{relTimeLabel(rs.timestamp)}</span>
-									</button>
-								))
-							)}
-						</div>
-					) : activeSession ? (
-						<div className="pet-panel__session">
-							<div className="pet-panel__session-head">
-								<button
-									type="button"
-									className="pet-panel__back"
-									aria-label={t("back to chat")}
-									title={t("back to chat")}
-									onClick={() => setActiveSession(null)}
-								>
-									←
-								</button>
-								<div className="pet-panel__session-title" title={activeSession.label}>
-									{activeSession.label}
-								</div>
-							</div>
-							<div className="pet-panel__session-msgs">
-								{!activeSession.loaded ? (
-									<div className="pet-panel__session-empty">{t("loading…")}</div>
-								) : activeSession.messages.length === 0 ? (
-									<div className="pet-panel__session-empty">{t("no messages yet")}</div>
-								) : (
-									sessionMessages
-								)}
-							</div>
-							{/* Quick reply steers THIS session (sendReply already
-							 * routes to activeSession.id) — viewing a session in
-							 * the panel must let you answer it without leaving. */}
-							<div className="pet-panel__reply">
-								<input
-									className="pet-panel__reply-input"
-									placeholder={t("pet reply placeholder")}
-									value={replyText}
-									onChange={e => setReplyText(e.target.value)}
-									onKeyDown={e => {
-										if (e.key === "Enter") sendReply();
-									}}
-								/>
-								<button
-									type="button"
-									className="pet-panel__reply-send"
-									aria-label={t("send")}
-									onClick={sendReply}
-									disabled={!replyText.trim() || sending}
-								>
-									{t("send")}
-								</button>
-							</div>
-						</div>
-					) : (
-						<>
-							{/* Live task summary */}
-							<div className="pet-panel__status">
-								<div
-									className={`pet-panel__status-dot${petState?.working ? " pet-panel__status-dot--working" : ""}`}
-									aria-hidden="true"
-								/>
-								{petState?.working ? (
-									<span className="pet-panel__status-text">
-										{petState.toolName
-											? t("pet working · {tool}", { tool: petState.toolName })
-											: t("working")}
-									</span>
-								) : (
-									<span className="pet-panel__status-text">{t("idle")}</span>
-								)}
-							</div>
-							{petState?.lastMessage && <div className="pet-panel__message">{petState.lastMessage}</div>}
-							{/* Pending approvals */}
-							{approvals.length > 0 && (
-								<div className="pet-panel__approvals">
-									{approvals.map(a => (
-										<div key={a.requestId} className="pet-panel__approval">
-											<div className="pet-panel__approval-tool">
-												{t("pet approval · {tool}", { tool: a.tool })}
-											</div>
-											<div className="pet-panel__approval-actions">
-												<button
-													type="button"
-													className="pet-panel__btn pet-panel__btn--allow"
-													onClick={() => decide(a.requestId, true)}
-												>
-													{t("Approve")}
-												</button>
-												<button
-													type="button"
-													className="pet-panel__btn pet-panel__btn--deny"
-													onClick={() => decide(a.requestId, false)}
-												>
-													{t("Deny")}
-												</button>
-											</div>
-										</div>
-									))}
-								</div>
-							)}
-							{/* Quick reply — steers the active session. */}
-							<div className="pet-panel__reply">
-								<input
-									className="pet-panel__reply-input"
-									placeholder={t("pet reply placeholder")}
-									value={replyText}
-									onChange={e => setReplyText(e.target.value)}
-									onKeyDown={e => {
-										if (e.key === "Enter") sendReply();
-									}}
-								/>
-								<button
-									type="button"
-									className="pet-panel__reply-send"
-									aria-label={t("send")}
-									onClick={sendReply}
-									disabled={!replyText.trim() || sending}
-								>
-									{t("send")}
-								</button>
-							</div>
-						</>
-					)}
-				</div>
-			</div>
-		);
-	}
 
 	if (bubbles.length === 0) return null;
 
-	// iOS Notification-Center stack: collapsed shows only the newest
-	// bubble (count chip when more pending); expanded shows the full list
-	// (scrolls within the window).
-	return stackExpanded ? (
+	// One bubble card — kind tag as the bold title row, typewriter text,
+	// hover quick actions (✓ confirm / ✗ deny / 💬 reply) and the optional
+	// inline reply row.
+	const renderBubble = (b: Bubble): ReactNode => (
 		<div
-			ref={stackRef}
-			className={`pet-bubbles pet-bubbles--expanded${stackMorph ? " pet-bubbles--morphing" : ""}`}
-			style={stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined}
-			data-top-scroll="false"
-			data-bottom-scroll="false"
-			aria-live="polite"
+			key={b.id}
+			className={`pet-bubble pet-bubble--${b.kind}`}
+			onClick={() => {
+				// Completion/error bubbles carry their session: click opens
+				// it in the main window (that's the "read" action) and
+				// dismisses them. Plain notifications just focus.
+				if (b.sessionId && (b.kind === "completed" || b.kind === "error")) {
+					void bridge?.petOpenSession?.(b.sessionId);
+					setBubbles(prev => prev.filter(x => x.sessionId !== b.sessionId));
+					return;
+				}
+				void bridge?.focusMainWindow?.();
+			}}
 		>
-			<div className="pet-bubbles__head" role="button" tabIndex={0} onClick={() => switchStack(false)}>
-				<span className="pet-bubbles__count">{t("pet bubbles count", { count: bubbles.length })}</span>
-				<span className="pet-bubbles__collapse">{t("pet bubbles collapse")} ▾</span>
-			</div>
-			{[...bubbles].reverse().map(b => (
-				<div
-					key={b.id}
-					className={`pet-bubble pet-bubble--${b.kind}`}
-					onClick={() => {
-						// Completion/error bubbles carry their session: click
-						// opens it in the main window (that's the "read" action)
-						// and dismisses them. Plain notifications just focus.
-						if (b.sessionId && (b.kind === "completed" || b.kind === "error")) {
-							void bridge?.petOpenSession?.(b.sessionId);
-							setBubbles(prev => prev.filter(x => x.sessionId !== b.sessionId));
-							return;
-						}
-						void bridge?.focusMainWindow?.();
-					}}
-				>
+			<button
+				type="button"
+				className="pet-bubble__dismiss"
+				aria-label="dismiss"
+				onClick={e => {
+					e.stopPropagation();
+					dismissBubble(b);
+				}}
+			>
+				×
+			</button>
+			{bubbleKindLabel(b.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(b.kind)}</span>}
+			<div className="pet-bubble__text">{b.visible}</div>
+			{/* Hover quick actions (kimi-work bubble parity): every bubble
+			 * gets ✓ confirm; approvals also get ✗ deny; session bubbles
+			 * get 💬 reply, which expands the inline input below. */}
+			<div className="pet-bubble__actions">
+				{b.sessionId && (
 					<button
 						type="button"
-						className="pet-bubble__dismiss"
-						aria-label="dismiss"
+						className={`pet-bubble__action${replyFor === b.id ? " pet-bubble__action--active" : ""}`}
+						aria-label={t("pet bubble reply")}
+						title={t("pet bubble reply")}
 						onClick={e => {
 							e.stopPropagation();
-							// Dismissing a completion/error notification also
-							// clears its unread badge in the main window —
-							// bubble and badge track the same signal.
-							if ((b.kind === "completed" || b.kind === "error") && b.sessionId) {
-								void bridge?.petMarkRead?.(b.sessionId);
-							}
-							setBubbles(prev => prev.filter(x => x.id !== b.id));
+							setReplyFor(prev => (prev === b.id ? null : b.id));
+							setReplyText("");
 						}}
 					>
-						×
+						💬
 					</button>
-					<div className="pet-bubble__text">{b.visible}</div>
-					{bubbleKindLabel(b.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(b.kind)}</span>}
+				)}
+				<button
+					type="button"
+					className="pet-bubble__action pet-bubble__action--primary"
+					aria-label={t("pet bubble confirm")}
+					title={t("pet bubble confirm")}
+					onClick={e => {
+						e.stopPropagation();
+						confirmBubble(b);
+					}}
+				>
+					✓
+				</button>
+				{b.requestId && (
+					<button
+						type="button"
+						className="pet-bubble__action pet-bubble__action--deny"
+						aria-label={t("pet bubble deny")}
+						title={t("pet bubble deny")}
+						onClick={e => {
+							e.stopPropagation();
+							denyBubble(b);
+						}}
+					>
+						✗
+					</button>
+				)}
+			</div>
+			{replyFor === b.id && (
+				<div
+					className="pet-bubble__reply"
+					// Clicking into the input must not focus the main window
+					// through the card's own click handler.
+					onClick={e => e.stopPropagation()}
+				>
+					<input
+						className="pet-bubble__reply-input"
+						placeholder={t("pet reply placeholder")}
+						value={replyText}
+						autoFocus
+						onChange={e => setReplyText(e.target.value)}
+						onKeyDown={e => {
+							if (e.key === "Enter") sendReply(b);
+							if (e.key === "Escape") {
+								setReplyFor(null);
+								setReplyText("");
+							}
+						}}
+					/>
+					<button
+						type="button"
+						className="pet-bubble__reply-send"
+						aria-label={t("send")}
+						title={t("send")}
+						onClick={() => sendReply(b)}
+						disabled={!replyText.trim() || sending}
+					>
+						↑
+					</button>
 				</div>
-			))}
+			)}
 		</div>
-	) : (
+	);
+
+	// iOS Notification-Center stack: collapsed shows only the newest
+	// bubble (count chip when more pending); expanded shows the full list
+	// with 清除全部 and a ∨ round button by the pet (kimi parity).
+	if (stackExpanded) {
+		return (
+			<>
+				<div
+					ref={stackRef}
+					className={`pet-bubbles pet-bubbles--expanded${stackMorph ? " pet-bubbles--morphing" : ""}`}
+					style={stackMorph ? { width: `${stackMorph.from.width}px`, height: `${stackMorph.from.height}px` } : undefined}
+					data-top-scroll="false"
+					data-bottom-scroll="false"
+					aria-live="polite"
+				>
+					<div className="pet-bubbles__head">
+						<span className="pet-bubbles__count">{t("pet bubbles count", { count: bubbles.length })}</span>
+						<button type="button" className="pet-bubbles__clear" onClick={clearAll}>
+							{t("pet bubbles clear all")}
+						</button>
+					</div>
+					{[...bubbles].reverse().map(renderBubble)}
+				</div>
+				{/* Collapse fab — the ∨ round button floating just above the
+				 * pet (kimi parity), outside the scrollport. */}
+				<button
+					type="button"
+					className="pet-bubbles__fab"
+					aria-label={t("pet bubbles collapse")}
+					title={t("pet bubbles collapse")}
+					onClick={() => switchStack(false)}
+				>
+					∨
+				</button>
+			</>
+		);
+	}
+
+	return (
 		<div
 			ref={stackRef}
 			className={`pet-bubbles pet-bubbles--stacked${stackMorph ? " pet-bubbles--morphing pet-bubbles--shrinking" : ""}`}
@@ -756,18 +593,84 @@ export function PetBubbles(): ReactNode {
 							aria-label="dismiss"
 							onClick={e => {
 								e.stopPropagation();
-								// Same read 闭环 as the expanded list: dismiss
-								// also clears that session's unread badge.
-								if ((top.kind === "completed" || top.kind === "error") && top.sessionId) {
-									void bridge?.petMarkRead?.(top.sessionId);
-								}
-								setBubbles(prev => prev.filter(x => x.id !== top.id));
+								dismissBubble(top);
 							}}
 						>
 							×
 						</button>
-						<div className="pet-bubble__text">{top.visible}</div>
 						{bubbleKindLabel(top.kind) && <span className="pet-bubble__kind">{bubbleKindLabel(top.kind)}</span>}
+						<div className="pet-bubble__text">{top.visible}</div>
+						<div className="pet-bubble__actions">
+							{top.sessionId && (
+								<button
+									type="button"
+									className={`pet-bubble__action${replyFor === top.id ? " pet-bubble__action--active" : ""}`}
+									aria-label={t("pet bubble reply")}
+									title={t("pet bubble reply")}
+									onClick={e => {
+										e.stopPropagation();
+										setReplyFor(prev => (prev === top.id ? null : top.id));
+										setReplyText("");
+									}}
+								>
+									💬
+								</button>
+							)}
+							<button
+								type="button"
+								className="pet-bubble__action pet-bubble__action--primary"
+								aria-label={t("pet bubble confirm")}
+								title={t("pet bubble confirm")}
+								onClick={e => {
+									e.stopPropagation();
+									confirmBubble(top);
+								}}
+							>
+								✓
+							</button>
+							{top.requestId && (
+								<button
+									type="button"
+									className="pet-bubble__action pet-bubble__action--deny"
+									aria-label={t("pet bubble deny")}
+									title={t("pet bubble deny")}
+									onClick={e => {
+										e.stopPropagation();
+										denyBubble(top);
+									}}
+								>
+									✗
+								</button>
+							)}
+						</div>
+						{replyFor === top.id && (
+							<div className="pet-bubble__reply" onClick={e => e.stopPropagation()}>
+								<input
+									className="pet-bubble__reply-input"
+									placeholder={t("pet reply placeholder")}
+									value={replyText}
+									autoFocus
+									onChange={e => setReplyText(e.target.value)}
+									onKeyDown={e => {
+										if (e.key === "Enter") sendReply(top);
+										if (e.key === "Escape") {
+											setReplyFor(null);
+											setReplyText("");
+										}
+									}}
+								/>
+								<button
+									type="button"
+									className="pet-bubble__reply-send"
+									aria-label={t("send")}
+									title={t("send")}
+									onClick={() => sendReply(top)}
+									disabled={!replyText.trim() || sending}
+								>
+									↑
+								</button>
+							</div>
+						)}
 					</div>
 				);
 			})()}

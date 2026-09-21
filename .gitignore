@@ -134,3 +134,6 @@ packages/.desktop-build/
 # Brand glyph intermediates from scripts/regen-brand-icons.py (manually pasted
 # into tray.cjs) — never committed
 .tray-glyph-*.b64
+
+# Root-level dev desktop scratch (list-procs.ps1, verify-scroll, ws-probe.mjs)
+/.desktop-build/

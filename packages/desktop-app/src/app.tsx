@@ -36,7 +36,7 @@ import { pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
-import { moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
+import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
 import { buildWsUrl, loadHosts, newHostId, type RemoteHost, saveHosts } from "./lib/remote-hosts";
@@ -2424,6 +2424,10 @@ function AppInner(): ReactNode {
 				// Size slider changes live in the pet window too (the pet
 				// window cannot hear localStorage writes from this window).
 				void electronAPI.petActivity?.({ scale: petScale() });
+				// Nor the petdex registry — push the active pet descriptor
+				// (builtin id or full package) so imported theme packages
+				// render in the floating pet (2026-09-21 regression fix).
+				void electronAPI.petActivity?.({ pet: activePet() });
 			}
 			syncRecentPoll();
 		};
@@ -2500,6 +2504,9 @@ function AppInner(): ReactNode {
 			lastStatePush = 0;
 			pushMood();
 			pushState(true);
+			// The pet window (re)loaded — its localStorage carries no petdex
+			// state: re-push the active pet descriptor alongside the rest.
+			void electronAPI.petActivity?.({ pet: activePet() });
 		});
 		// Pet-panel commands: quick reply → the active session (same
 		// steer/followUp semantics as the composer); with no active session

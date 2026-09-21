@@ -113,12 +113,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Computer-use overlay target: highlight one desktop input action
 	 *  (window/element frame + action point) on the glow overlay. */
 	glowTarget: (event) => ipcRenderer.invoke("glow-target", event),
-	/** Context-menu "显示/隐藏面板" → the pet renderer toggles the panel. */
-	onPetPanelToggle: (cb) => {
-		const listener = () => cb();
-		ipcRenderer.on("pet:panel-toggle", listener);
-		return () => ipcRenderer.removeListener("pet:panel-toggle", listener);
-	},
 	/** Pet panel recent-session click → open the session in the main window. */
 	petOpenSession: (sessionId) => ipcRenderer.invoke("pet-open-session", sessionId),
 	/** Pet bubble × → mark that session read in the main window (it owns
@@ -206,12 +200,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	/** Main-window renderer: answer with the session transcript. */
 	petSessionContent: (payload) => ipcRenderer.invoke("pet-session-content", payload),
-	/** Pet window: answer a tool approval (pet panel 批准/拒绝). */
+	/** Pet window: answer a tool approval (bubble hover 批准/拒绝). */
 	petApprove: (requestId, approved) => ipcRenderer.invoke("pet-approve", { requestId, approved }),
-	/** Pet window single click → toggle the interaction panel (the panel
-	 *  lives in the pet window since the single-window merge). */
-	toggleBubblePanel: () => ipcRenderer.invoke("pet-toggle-panel"),
-	/** Pet window: report the height it needs (bubbles/panel grow the
+	/** Pet window: report the height it needs (bubbles grow the
 	 *  window upward, bottom edge fixed). */
 	setPetContentSize: (size) => ipcRenderer.invoke("pet-set-content-size", size),
 	/** Pet window: a global hotkey (Ctrl/Cmd+Shift+Y / N) decided a tool

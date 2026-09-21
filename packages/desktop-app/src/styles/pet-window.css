@@ -374,7 +374,6 @@
 		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
 		0 4px 16px rgba(0, 0, 0, 0.3);
 	font-size: 11px;
-	cursor: pointer;
 	pointer-events: auto;
 	flex-shrink: 0;
 }
@@ -384,8 +383,214 @@
 	font-weight: 600;
 }
 
-.pet-bubbles__collapse {
-	color: color-mix(in oklab, var(--color-text) 58%, transparent);
+/* 清除全部 — quiet text button at the head's right edge (kimi parity). */
+.pet-bubbles__clear {
+	padding: 2px 8px;
+	border: none;
+	border-radius: 999px;
+	background: transparent;
+	color: color-mix(in oklab, var(--color-text) 62%, transparent);
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.pet-bubbles__clear:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+/* ∨ collapse fab — round glass button floating just above the pet, to the
+ * right of the sprite (kimi parity). Sibling of the expanded stack, outside
+ * the scrollport so it never scrolls away. */
+.pet-bubbles__fab {
+	position: absolute;
+	/* The stack's bottom edge sits at bottom:174px (see .pet-bubbles);
+	 * park the fab in the 8px gap between the stack and the sprite top. */
+	bottom: 158px;
+	left: calc(50% + 44px);
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
+	border-radius: 999px;
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		var(--pet-surface);
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 12%, transparent),
+		0 3px 10px rgba(0, 0, 0, 0.35);
+	color: var(--color-text);
+	font-size: 13px;
+	line-height: 1;
+	cursor: pointer;
+	pointer-events: auto;
+	animation: pet-bubble-pop 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pet-bubbles__fab:hover {
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 10%, transparent), transparent 45%),
+		var(--pet-chip-bg-hover, var(--pet-surface));
+}
+
+/* ── Bubble hover quick actions (kimi-work parity) ──────────────────────
+ * A right-aligned row of round glass chips, hidden until the card is
+ * hovered (opacity + rise). ✓ is the primary confirm (approval → 批准,
+ * completion/error → 标记已读并关闭); ✗ denies an approval; 💬 expands the
+ * inline reply row. */
+.pet-bubble__actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 6px;
+	padding-left: 4px;
+	opacity: 0;
+	transform: translateY(3px);
+	transition: opacity 140ms var(--spring, ease), transform 140ms var(--spring, ease);
+	pointer-events: none;
+}
+
+.pet-bubble:hover .pet-bubble__actions,
+.pet-bubble__actions:focus-within {
+	opacity: 1;
+	transform: none;
+	pointer-events: auto;
+}
+
+.pet-bubble__action {
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	display: grid;
+	place-items: center;
+	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
+	border-radius: 999px;
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 6%, transparent), transparent 50%),
+		var(--pet-chip-bg);
+	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.pet-bubble__action:hover {
+	background: var(--pet-chip-bg-hover);
+}
+
+.pet-bubble__action--active {
+	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
+	color: var(--color-accent);
+}
+
+/* Primary confirm — the accent-tinted filled chip (the screenshot's blue
+ * ✓): one filled button per card so the confirm action is the obvious one. */
+.pet-bubble__action--primary {
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 10%, transparent), transparent 50%),
+		color-mix(in oklab, var(--color-accent) 26%, var(--pet-chip-bg));
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	color: var(--color-accent);
+	font-weight: 700;
+}
+
+.pet-bubble__action--primary:hover {
+	background:
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 12%, transparent), transparent 50%),
+		color-mix(in oklab, var(--color-accent) 38%, var(--pet-chip-bg));
+}
+
+.pet-bubble__action--deny:hover {
+	border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
+	color: var(--color-danger);
+}
+
+/* ── Inline reply row ────────────────────────────────────────────────────
+ * Grows under the bubble's text when 💬 is clicked (kimi parity: input +
+ * round ↑ send). */
+.pet-bubble__reply {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 6px;
+	padding: 4px 4px 4px 10px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--pet-panel-bg) 72%, transparent);
+	box-shadow: inset 0 1px 0 color-mix(in oklab, var(--color-text) 8%, transparent);
+	animation: pet-bubble-pop 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pet-bubble__reply-input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--color-text);
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.pet-bubble__reply-input::placeholder {
+	color: color-mix(in oklab, var(--color-text) 45%, transparent);
+}
+
+.pet-bubble__reply-send {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	flex-shrink: 0;
+	display: grid;
+	place-items: center;
+	border: none;
+	border-radius: 999px;
+	background: var(--color-accent);
+	color: var(--color-accent-foreground, #fff);
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.pet-bubble__reply-send:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+/* ── Blob squash (blobstudio.xyz parity) ─────────────────────────────────
+ * Replayed on every poke reaction from pet-main.tsx (class toggled with a
+ * forced reflow): the sprite compresses on the press, overshoots tall,
+ * then settles — a physical "clicked" feel that also works on petdex
+ * sheets, whose faces cannot change. */
+@keyframes pet-window-squash {
+	0% {
+		transform: scale(1, 1);
+	}
+	28% {
+		transform: scale(1.12, 0.82);
+	}
+	55% {
+		transform: scale(0.94, 1.08);
+	}
+	78% {
+		transform: scale(1.03, 0.98);
+	}
+	100% {
+		transform: scale(1, 1);
+	}
+}
+
+.pet-window__squash {
+	animation: pet-window-squash 420ms cubic-bezier(0.34, 1.3, 0.64, 1);
+	/* Squash around the blob's base, not its centre — a pressed blob
+	 * flattens downward, it does not shrink into its middle. */
+	transform-origin: 50% 88%;
 }
 
 .pet-bubbles--expanded .pet-bubble__text {
@@ -493,550 +698,6 @@
 
 .pet-bubble__dismiss:hover {
 	background: var(--pet-chip-bg-hover);
-}
-
-/* ── Interaction panel (click the pet to toggle) ─────────────────────────
- * Single-window layout (merged 2026-09-16): the panel floats ABOVE the
- * pet, bottom-anchored at the top of the pet zone; its height follows the
- * content and the window grows upward to fit (pet-set-content-size). */
-
-.pet-panel {
-	position: absolute;
-	top: auto;
-	/* Sits just above the pet zone (the sprite's top is ≈ y=136 in the
-	 * 290 window; 170px of bottom clearance spans the gap) — no dead
-	 * blank between the panel and the pet. */
-	bottom: 170px;
-	left: 50%;
-	transform: translateX(-50%);
-	width: 316px;
-	height: auto;
-	/* NO max-height here. This card is absolutely positioned inside a window
-	 * that is GROWN UPWARD to fit the overlay content (pet-set-content-size)
-	 * — the window is already the constraint. A vh cap measures the window,
-	 * not the room on screen, so it silently cut the card down (a 1200px
-	 * window allowed 1020px, and the fourth bullet of the recent list was
-	 * clipped mid-row, reading as 「消息显示不正常」). The long-list case is
-	 * bounded where it belongs: .pet-panel__body scrolls when content
-	 * outgrows the card (min-height: 0 is what makes that work — without it
-	 * a flex item refuses to shrink below its content and the card just
-	 * grows). The window in turn is capped by main.cjs against the display's
-	 * work area, so "too tall for the screen" is handled one layer up. */
-	box-sizing: border-box;
-	border-radius: var(--radius-xl);
-	border: 1px solid color-mix(in oklab, var(--color-text) 14%, transparent);
-	/* Self-drawn glass (same recipe as .pet-bubble): translucent tint +
-	 * top highlight + inner hairline fake the frosted sheen. The window
-	 * is fully transparent (no vibrancy) so backdrop-filter is a
-	 * best-effort for in-window content layered behind the panel. */
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
-		var(--pet-panel-bg);
-	backdrop-filter: blur(18px) saturate(160%);
-	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 14%, transparent),
-		0 10px 30px rgba(0, 0, 0, 0.4);
-	overflow: hidden;
-	pointer-events: auto;
-	display: flex;
-	flex-direction: column;
-	/* Entrance is gated on the OS window resize (see pet-bubbles panel
-	 * entrance effect): the panel mounts inside a still-base-sized
-	 * window, and an immediate animation would paint the taller panel
-	 * clipped. Keep it invisible here; .pet-panel--in plays the
-	 * spotlight entrance once the window is panel-sized. */
-	opacity: 0;
-}
-
-.pet-panel--in {
-	/* Spotlight entrance (kimiwork 魔灯): fade + rise + blur-in. filter
-	 * (element blur) is used instead of animating backdrop-filter, which
-	 * flashes on first paint. forwards: the base rule now has opacity 0
-	 * (entrance gating), so the animation must hold its end state. */
-	animation: pet-panel-in 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-.pet-panel--leaving {
-	animation: pet-panel-out 140ms ease-in forwards;
-}
-
-@keyframes pet-panel-in {
-	from {
-		opacity: 0;
-		transform: translateX(-50%) translateY(10px) scale(0.98);
-		filter: blur(8px);
-	}
-	to {
-		opacity: 1;
-		transform: translateX(-50%) translateY(0) scale(1);
-		filter: blur(0);
-	}
-}
-
-@keyframes pet-panel-out {
-	to {
-		opacity: 0;
-		transform: translateX(-50%) translateY(6px) scale(0.99);
-		filter: blur(4px);
-	}
-}
-
-/* Dock-to-edge indicator: a glowing accent bar on the snapped edge
- * (settings → 宠物 → 挂靠左右侧). */
-.pet-window--dock-left::before,
-.pet-window--dock-right::after {
-	content: "";
-	position: absolute;
-	top: 44px;
-	bottom: 44px;
-	width: 2.5px;
-	border-radius: var(--radius-sm);
-	background: var(--color-accent);
-	box-shadow: 0 0 10px color-mix(in oklab, var(--color-accent) 70%, transparent);
-	animation: pet-dock-glow 1.6s ease-in-out infinite;
-	pointer-events: none;
-}
-
-.pet-window--dock-left::before {
-	left: 0;
-}
-
-.pet-window--dock-right::after {
-	right: 0;
-}
-
-@keyframes pet-dock-glow {
-	0%,
-	100% {
-		opacity: 0.55;
-	}
-	50% {
-		opacity: 1;
-	}
-}
-
-.pet-panel__head-actions {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-}
-
-.pet-panel__open {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 20px;
-	height: 20px;
-	border: none;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: color-mix(in oklab, var(--color-text) 55%, transparent);
-	font-size: 13px;
-	line-height: 1;
-	cursor: pointer;
-}
-
-.pet-panel__open:hover {
-	background: color-mix(in oklab, var(--color-text) 12%, transparent);
-	color: var(--color-text);
-}
-
-.pet-panel__head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 8px 12px;
-	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.pet-panel__title {
-	font-size: 12px;
-	font-weight: 600;
-	color: var(--color-text);
-	letter-spacing: 0.02em;
-}
-
-/* View tabs (消息 / 会话): the recent-session list lives in its own
- * panel view, so the message view stays focused on the live session. */
-.pet-panel__tabs {
-	display: flex;
-	gap: 2px;
-	padding: 4px 10px 0;
-	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.pet-panel__tab {
-	flex: 1;
-	padding: 5px 0 7px;
-	border: none;
-	background: transparent;
-	font-size: 11.5px;
-	font-weight: 550;
-	color: color-mix(in oklab, var(--color-text) 48%, transparent);
-	cursor: pointer;
-	border-bottom: 2px solid transparent;
-	transition: color 120ms ease-out, border-color 120ms ease-out;
-}
-
-.pet-panel__tab:hover {
-	color: var(--color-text);
-}
-
-.pet-panel__tab--active {
-	color: var(--color-text);
-	border-bottom-color: var(--color-accent, #6ea8ff);
-}
-
-.pet-panel__close {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 20px;
-	height: 20px;
-	border: none;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: color-mix(in oklab, var(--color-text) 55%, transparent);
-	font-size: 14px;
-	line-height: 1;
-	cursor: pointer;
-}
-
-.pet-panel__close:hover {
-	background: color-mix(in oklab, var(--color-text) 12%, transparent);
-	color: var(--color-text);
-}
-
-.pet-panel__body {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	padding: 10px 12px 12px;
-	flex: 1;
-	/* The card no longer carries a max-height (see .pet-panel) — the window
-	 * grows to the content instead. This is the only scrollport that needs
-	 * to give: `min-height: 0` lets the flex item shrink below its content
-	 * once the WINDOW hits the work-area cap (main.cjs clamps there), so a
-	 * very long message/approval list scrolls inside the glass rather than
-	 * pushing the card past the screen edge. */
-	min-height: 0;
-	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--color-text) 30%, transparent) transparent;
-}
-
-/* The reply row anchors to the bottom of the panel; status/approvals grow
- * from the top — the remaining space stays inside the glass surface. */
-.pet-panel__reply {
-	margin-top: auto;
-}
-
-.pet-panel__status {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-}
-
-.pet-panel__status-dot {
-	width: 7px;
-	height: 7px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 35%, transparent);
-	flex-shrink: 0;
-}
-
-/* Working: accent dot with a soft pulse — the agent is doing something,
- * the idle grey dot reads as "available". */
-.pet-panel__status-dot--working {
-	background: var(--color-accent);
-	animation: pet-dot-pulse 1.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-}
-
-@keyframes pet-dot-pulse {
-	0%,
-	100% {
-		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 45%, transparent);
-		transform: scale(1);
-	}
-	50% {
-		box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 0%, transparent);
-		transform: scale(1.15);
-	}
-}
-
-.pet-panel__status-text {
-	font-size: 12px;
-	font-weight: 500;
-	color: color-mix(in oklab, var(--color-text) 82%, transparent);
-	font-family: var(--font-mono);
-}
-
-.pet-panel__message {
-	font-size: 11.5px;
-	line-height: 1.5;
-	color: color-mix(in oklab, var(--color-text) 65%, transparent);
-	/* Scrollable preview: the panel's body is tall enough for a long
-	 * completion message — flex:1 lets it share space with approvals,
-	 * overflow-y scrolls instead of the old 3-line clamp. */
-	flex: 1 1 auto;
-	min-height: 48px;
-	max-height: 300px;
-	overflow-y: auto;
-	word-break: break-word;
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--color-text) 30%, transparent) transparent;
-	padding-right: 2px;
-	white-space: pre-wrap;
-}
-
-.pet-panel__approvals {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	/* Many concurrent approvals must scroll, not shove the reply row off
-	 * the panel (the body is height-bounded by the window). */
-	max-height: 132px;
-	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-color: color-mix(in oklab, var(--color-text) 30%, transparent) transparent;
-	padding-right: 2px;
-}
-
-.pet-panel__approval {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	padding: 7px 9px;
-	border-radius: var(--radius-lg);
-	border: 1px solid color-mix(in oklab, var(--color-danger) 45%, transparent);
-	background: color-mix(in oklab, var(--color-danger) 10%, transparent);
-}
-
-.pet-panel__approval-tool {
-	font-size: 11px;
-	color: var(--color-text);
-	font-family: var(--font-mono);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.pet-panel__approval-actions {
-	display: flex;
-	gap: 5px;
-	flex-shrink: 0;
-}
-
-.pet-panel__btn {
-	border: none;
-	border-radius: var(--radius-md);
-	padding: 4px 10px;
-	font-size: 11px;
-	font-weight: 600;
-	cursor: pointer;
-}
-
-.pet-panel__btn--allow {
-	background: color-mix(in oklab, #46a758 80%, #000);
-	color: #fff;
-}
-
-.pet-panel__btn--allow:hover {
-	background: #46a758;
-}
-
-.pet-panel__btn--deny {
-	background: color-mix(in oklab, var(--color-danger) 75%, #000);
-	color: #fff;
-}
-
-.pet-panel__btn--deny:hover {
-	background: var(--color-danger);
-}
-
-.pet-panel__reply {
-	display: flex;
-	gap: 6px;
-	margin-top: auto;
-}
-
-.pet-panel__input {
-	flex: 1;
-	min-width: 0;
-	box-sizing: border-box;
-	height: 28px;
-	padding: 0 10px;
-	border-radius: var(--radius-lg);
-	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
-	background: color-mix(in oklab, var(--color-text) 8%, transparent);
-	color: var(--color-text);
-	font-size: 12px;
-	outline: none;
-}
-
-.pet-panel__input::placeholder {
-	color: color-mix(in oklab, var(--color-text) 40%, transparent);
-}
-
-.pet-panel__input:focus {
-	border-color: color-mix(in oklab, var(--color-accent) 70%, transparent);
-}
-
-.pet-panel__input:disabled {
-	opacity: 0.5;
-}
-
-.pet-panel__send {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 28px;
-	height: 28px;
-	flex-shrink: 0;
-	border: none;
-	border-radius: var(--radius-lg);
-	background: var(--color-accent);
-	color: var(--color-accent-fg);
-	font-size: 13px;
-	font-weight: 700;
-	cursor: pointer;
-}
-
-.pet-panel__send:hover {
-	filter: brightness(1.1);
-}
-
-.pet-panel__send:disabled {
-	opacity: 0.4;
-	cursor: default;
-}
-
-/* ── Sessions view (最近会话 tab — its own panel view) ─────────────── */
-.pet-panel__sessions {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.pet-panel__sessions-empty {
-	padding: 14px 8px;
-	font-size: 12px;
-	color: color-mix(in oklab, var(--color-text) 45%, transparent);
-	text-align: center;
-}
-
-.pet-panel__recent-row {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	padding: 4px 6px;
-	border-radius: var(--radius-md);
-	text-align: left;
-	transition: background 120ms ease-out;
-}
-
-.pet-panel__recent-row:hover {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-
-.pet-panel__recent-label {
-	flex: 1;
-	min-width: 0;
-	font-size: 12px;
-	color: var(--color-text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.pet-panel__recent-time {
-	flex-shrink: 0;
-	font-size: 10.5px;
-	color: color-mix(in oklab, var(--color-text) 40%, transparent);
-}
-
-/* ── Transcript view (session opened from the recent list) ──────────── */
-.pet-panel__session {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	flex: 1;
-	min-height: 0;
-}
-/* Back affordance: the recent-list rows drop you into the transcript with
- * no way back to the status/approvals/reply view (the messages tab is
- * shadowed by the active session). ← exits back to it. */
-.pet-panel__session-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	border-bottom: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
-	padding-bottom: 4px;
-}
-.pet-panel__back {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 20px;
-	height: 20px;
-	border: none;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: var(--color-text);
-	font-size: 13px;
-	cursor: pointer;
-	flex-shrink: 0;
-}
-.pet-panel__back:hover {
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-}
-.pet-panel__session-title {
-	font-size: 12.5px;
-	font-weight: 650;
-	color: var(--color-text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-.pet-panel__session-msgs {
-	flex: 1;
-	min-height: 0;
-	/* Bounded transcript: the panel sizes to its content (bubble-set-size),
-	 * so an unbounded message list would stretch the window past the
-	 * screen edge. Cap it and scroll inside the card. */
-	max-height: min(300px, 45vh);
-	overflow-y: auto;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-	padding: 2px;
-}
-.pet-panel__session-empty {
-	font-size: 11.5px;
-	color: color-mix(in oklab, var(--color-text) 40%, transparent);
-	text-align: center;
-	padding: 14px 0;
-}
-.pet-panel__msg {
-	font-size: 11.5px;
-	line-height: 1.55;
-	white-space: pre-wrap;
-	word-break: break-word;
-	border-radius: var(--radius-lg);
-	padding: 6px 9px;
-	max-width: 92%;
-}
-.pet-panel__msg--user {
-	align-self: flex-end;
-	background: color-mix(in oklab, var(--color-accent) 78%, transparent);
-	color: #fff;
-}
-.pet-panel__msg--assistant {
-	align-self: flex-start;
-	background: color-mix(in oklab, var(--color-text) 12%, transparent);
-	color: var(--color-text);
 }
 
 /* ── Unread badge (completion count, floats over the pet) ──────────────
