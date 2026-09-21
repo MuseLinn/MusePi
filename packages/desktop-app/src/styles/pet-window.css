@@ -236,20 +236,23 @@
 	width: 100%;
 	max-width: none;
 	box-sizing: border-box;
-	padding: 8px 12px;
-	border: 1px solid color-mix(in oklab, var(--color-text) 18%, transparent);
-	border-radius: var(--radius-2xl);
-	/* Glass-look surface: a translucent tint + top highlight gradient +
-	 * inner hairline fake the frosted sheen. The window is fully
-	 * transparent (per-pixel alpha), so the body behind the card is
-	 * desktop — no native vibrancy layer to blur; the self-drawn
-	 * recipe is the one and only glass path on every platform. */
+	padding: 10px 14px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
+	border-radius: 20px;
+	/* Glass-look surface (kimi-work bubble parity): a translucent tint +
+	 * diagonal sheen + a bright top-edge hairline fake the frosted look.
+	 * The window is fully transparent (per-pixel alpha), so the body
+	 * behind the card is desktop — no native vibrancy layer to blur; the
+	 * self-drawn recipe is the one and only glass path on every platform. */
 	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 7%, transparent), transparent 45%),
+		linear-gradient(135deg, color-mix(in oklab, var(--color-text) 12%, transparent) 0%, transparent 38%),
+		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 9%, transparent), transparent 48%),
 		var(--pet-surface);
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, var(--color-text) 14%, transparent),
-		0 4px 20px rgba(0, 0, 0, 0.45);
+		inset 0 1px 0 color-mix(in oklab, var(--color-text) 22%, transparent),
+		inset 0 -1px 0 color-mix(in oklab, #000 12%, transparent),
+		0 6px 24px rgba(0, 0, 0, 0.35),
+		0 2px 8px rgba(0, 0, 0, 0.28);
 	pointer-events: auto;
 	/* Blur/fade transitions for the collapse morph — spring easing
 	 * (--spring) for a natural settle instead of the default ease. */
@@ -489,21 +492,20 @@
 	color: var(--color-accent);
 }
 
-/* Primary confirm — the accent-tinted filled chip (the screenshot's blue
- * ✓): one filled button per card so the confirm action is the obvious one. */
+/* Primary confirm — the FILLED accent circle (kimi-work's blue ✓): one
+ * solid button per card so the confirm action is obvious at a glance. */
 .pet-bubble__action--primary {
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 10%, transparent), transparent 50%),
-		color-mix(in oklab, var(--color-accent) 26%, var(--pet-chip-bg));
-	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 82%, var(--pet-chip-bg));
+	border-color: color-mix(in oklab, var(--color-accent) 70%, transparent);
+	color: var(--color-accent-foreground, #fff);
 	font-weight: 700;
+	box-shadow:
+		inset 0 1px 0 color-mix(in oklab, #fff 22%, transparent),
+		0 2px 8px color-mix(in oklab, var(--color-accent) 38%, transparent);
 }
 
 .pet-bubble__action--primary:hover {
-	background:
-		linear-gradient(180deg, color-mix(in oklab, var(--color-text) 12%, transparent), transparent 50%),
-		color-mix(in oklab, var(--color-accent) 38%, var(--pet-chip-bg));
+	background: color-mix(in oklab, var(--color-accent) 94%, var(--pet-chip-bg));
 }
 
 .pet-bubble__action--deny:hover {
