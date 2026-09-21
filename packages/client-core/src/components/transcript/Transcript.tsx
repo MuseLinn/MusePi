@@ -36,6 +36,16 @@ import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { buildTurnRenderUnits, type TurnRenderUnit } from "./render-units";
 import { buildRoundFolds, type RoundFold } from "./round-collapse";
+import {
+	anchorActionAfterContentChange,
+	initialFollowing,
+	reconcileFollowingForContentAnchor,
+	resolveFollowingAfterScroll,
+	type TimelineUserScrollIntent,
+	timelineKeyboardScrollIntent,
+	timelineTouchScrollIntent,
+	timelineWheelScrollIntent,
+} from "./scroll-anchor";
 import { ToolCard } from "./ToolCard";
 import {
 	AdvisorBlock,
@@ -158,8 +168,9 @@ export interface TranscriptProps {
 	 *  button in hosts without a board. */
 	onEditImage?(src: string): void;
 	/** Session identity. A CHANGE re-locks the bottom and jumps to the latest
-	 *  position: the transcript stays mounted across sessions, and `lockRef`
-	 *  only ever loosens on user scrolling, so an opened session used to inherit
+	 *  position: the transcript stays mounted across sessions, and the
+	 *  following flag only ever loosens on user scrolling, so an opened
+	 *  session used to inherit
 	 *  the previous scroll offset and render at its very first rows. */
 	sessionKey?: string;
 	/** TUI display.hideToolActivity parity: suppress model-initiated tool
@@ -1170,7 +1181,19 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const folding = collapseCompacted && !compactedOpen && firstCompactionIdx > 0;
 
 	const rootRef = useRef<HTMLDivElement | null>(null);
-	const lockRef = useRef(true);
+	// M1.3 scroll-anchor state machine (scroll-anchor.ts, ZCode parity):
+	// `following` is the user's scrolling INTENT — only real user input flips
+	// it; programmatic stick-to-bottom writes and layout scroll events only
+	// update the geometry ledger. `programmaticScrollRef` marks our own
+	// scrollTop writes so the async scroll event classifies itself;
+	// `intentRef` holds the wheel/touch/keyboard intent a commit must
+	// reconcile BEFORE sticking (a wheel upscroll lands one frame ahead of
+	// its scroll event — without the reconcile a streaming commit would
+	// swallow it and yank the viewport back to the bottom).
+	const followingRef = useRef(initialFollowing());
+	const programmaticScrollRef = useRef(false);
+	const lastObservedScrollTopRef = useRef(0);
+	const scrollIntentRef = useRef<TimelineUserScrollIntent | undefined>(undefined);
 	const prevLenRef = useRef(entries.length);
 	// Every loaded entry renders (see the header note on truncation).
 	const visibleCount = entries.length;
@@ -1203,9 +1226,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// Session switch → land on the latest message (see `sessionKey`).
 	useEffect(() => {
 		void sessionKey;
-		lockRef.current = true;
+		followingRef.current = true;
+		scrollIntentRef.current = undefined;
 		const el = scrollerRef.current;
-		if (el) el.scrollTop = el.scrollHeight;
+		if (el) {
+			programmaticScrollRef.current = true;
+			el.scrollTop = el.scrollHeight;
+			lastObservedScrollTopRef.current = el.scrollTop;
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionKey]);
 
@@ -1253,7 +1281,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			([entry]) => {
 				// Reaching the top pages the next older chunk; the caller guards
 				// concurrency. (This used to also grow the render window first.)
-				if (entry?.isIntersecting && !lockRef.current) onLoadOlder?.();
+				if (entry?.isIntersecting && !followingRef.current) onLoadOlder?.();
 			},
 			// Large lookahead: expansion must finish BEFORE the user reaches
 			// the new rows. At 1200px headroom a fast scroll (~1500px/s) has
@@ -1282,18 +1310,76 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		jumpFlashRow(rootRef.current, jumpRequest.timestamp);
 	}, [jumpRequest, entries, folding, firstCompactionIdx]);
 
-	// Follow the tail while bottom-locked; releasing/re-arming happens in
-	// the scroll listener below (moved off the JSX onScroll attribute —
-	// that fired on .tr-root, which is NOT the scroller in the desktop
-	// GUI; the listener attaches to the resolved scroller).
+	// Scroll-event adjudication (M1.3): our own scrollTop writes set
+	// `programmaticScrollRef` first, so the async scroll event classifies as
+	// "programmatic" and cannot flip the user's following intent; genuine
+	// user scrolls re-decide by landing position (at bottom ⇔ follow). Moved
+	// off the JSX onScroll attribute — that fired on .tr-root, which is NOT
+	// the scroller in the desktop GUI; the listener attaches to the resolved
+	// scroller.
 	useEffect(() => {
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
 		const onScroll = (): void => {
-			lockRef.current = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 40;
+			const source = programmaticScrollRef.current ? "programmatic" : "user";
+			programmaticScrollRef.current = false;
+			lastObservedScrollTopRef.current = scroller.scrollTop;
+			followingRef.current = resolveFollowingAfterScroll({
+				following: followingRef.current,
+				metrics: {
+					scrollTop: scroller.scrollTop,
+					viewportHeight: scroller.clientHeight,
+					contentHeight: scroller.scrollHeight,
+				},
+				source,
+			});
 		};
 		scroller.addEventListener("scroll", onScroll);
 		return () => scroller.removeEventListener("scroll", onScroll);
+	}, []);
+
+	// User scroll-intent capture (wheel/touch/keyboard). The intent exists
+	// one frame ahead of its scroll event; a content commit landing in that
+	// window reconciles against it before any stick-to-bottom (see the
+	// follow effect below).
+	useEffect(() => {
+		const scroller = scrollerRef.current;
+		if (!scroller) return;
+		const onWheel = (e: WheelEvent): void => {
+			scrollIntentRef.current = timelineWheelScrollIntent(e.deltaY);
+		};
+		let lastTouchY: number | null = null;
+		const onTouchStart = (e: TouchEvent): void => {
+			lastTouchY = e.touches[0]?.clientY ?? null;
+		};
+		const onTouchMove = (e: TouchEvent): void => {
+			const y = e.touches[0]?.clientY;
+			if (y === undefined) return;
+			if (lastTouchY !== null) scrollIntentRef.current = timelineTouchScrollIntent(lastTouchY, y);
+			lastTouchY = y;
+		};
+		const onKeyDown = (e: KeyboardEvent): void => {
+			const target = e.target;
+			const editable =
+				target instanceof HTMLElement &&
+				(target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+			const intent = timelineKeyboardScrollIntent({
+				key: e.key,
+				shiftKey: e.shiftKey,
+				editableTarget: editable,
+			});
+			if (intent !== "none") scrollIntentRef.current = intent;
+		};
+		scroller.addEventListener("wheel", onWheel, { passive: true });
+		scroller.addEventListener("touchstart", onTouchStart, { passive: true });
+		scroller.addEventListener("touchmove", onTouchMove, { passive: true });
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			scroller.removeEventListener("wheel", onWheel);
+			scroller.removeEventListener("touchstart", onTouchStart);
+			scroller.removeEventListener("touchmove", onTouchMove);
+			window.removeEventListener("keydown", onKeyDown);
+		};
 	}, []);
 
 	const followKey = `${entries.length}:${stream !== null}:${activeTools.size}:${working}`;
@@ -1334,12 +1420,60 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (entries.length > prevLenRef.current) {
 			const last = entries[entries.length - 1] as { type?: string; message?: { role?: string } } | undefined;
 			if (last?.type === "message" && last.message?.role === "user") {
-				lockRef.current = true;
+				followingRef.current = true;
+				scrollIntentRef.current = undefined;
 			}
 		}
 		prevLenRef.current = entries.length;
-		if (lockRef.current) el.scrollTop = el.scrollHeight;
+		// Reconcile BEFORE sticking: a wheel upscroll one frame ahead of its
+		// scroll event must not be swallowed by this commit (it would yank
+		// the viewport back to the bottom and re-arm follow). The intent is
+		// consumed here; later scroll events adjudicate by landing position.
+		followingRef.current = reconcileFollowingForContentAnchor({
+			following: followingRef.current,
+			metrics: {
+				scrollTop: el.scrollTop,
+				viewportHeight: el.clientHeight,
+				contentHeight: el.scrollHeight,
+			},
+			lastObservedScrollTop: lastObservedScrollTopRef.current,
+			userScrollIntent: scrollIntentRef.current,
+		});
+		scrollIntentRef.current = undefined;
+		if (anchorActionAfterContentChange(followingRef.current) === "stickToBottom") {
+			programmaticScrollRef.current = true;
+			el.scrollTop = el.scrollHeight;
+			lastObservedScrollTopRef.current = el.scrollTop;
+		}
 	}, [followKey, entries]);
+
+	// While following, ANY tail-ward content growth re-pins the bottom:
+	// streaming deltas, images finishing decode, deferred code highlighting.
+	// Once released, growth never pulls the reading position back (the
+	// observer no-ops while !following). Observes .tr-root (the content),
+	// not the scroller — the scroller's own box is layout-fixed. rAF-coalesced
+	// so a burst of measurements settles in one write.
+	useEffect(() => {
+		const content = rootRef.current;
+		if (!content) return;
+		let raf = 0;
+		const ro = new ResizeObserver(() => {
+			if (!followingRef.current) return;
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(() => {
+				const scroller = scrollerRef.current;
+				if (!scroller || !followingRef.current) return;
+				programmaticScrollRef.current = true;
+				scroller.scrollTop = scroller.scrollHeight;
+				lastObservedScrollTopRef.current = scroller.scrollTop;
+			});
+		});
+		ro.observe(content);
+		return () => {
+			ro.disconnect();
+			cancelAnimationFrame(raf);
+		};
+	}, []);
 
 	// Active tools not already represented as toolCall blocks in committed rows or the stream ghost.
 	const renderedToolIds = new Set<string>();
