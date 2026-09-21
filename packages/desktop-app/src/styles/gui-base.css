@@ -341,6 +341,47 @@ html.gui-glass-adaptive {
 	}
 }
 
+/* ── Shared drag-insert line (M2.8) ─────────────────────────────────────
+ * Lightweight "insert here" indicator for reorder drags (settings groups,
+ * sidebar projects). The host only carries position:relative; the line is
+ * a 2px accent bar with a soft glow that scales in over --spring-snappy.
+ * Motion-off / reduced-motion keeps the line, drops only the animation. */
+.gui-drop-line {
+	position: relative;
+}
+.gui-drop-line::before {
+	content: "";
+	position: absolute;
+	z-index: 3;
+	left: 6px;
+	right: 6px;
+	top: -1px;
+	height: 2px;
+	border-radius: 999px;
+	background: var(--color-accent);
+	box-shadow: 0 0 6px 1px color-mix(in oklab, var(--color-accent) 50%, transparent);
+	pointer-events: none;
+	transform-origin: center;
+	animation: gui-drop-line-in 140ms var(--spring-snappy) both;
+}
+.gui-drop-line--after::before {
+	top: auto;
+	bottom: -1px;
+}
+@keyframes gui-drop-line-in {
+	from {
+		opacity: 0;
+		transform: scaleX(0.6);
+	}
+	to {
+		opacity: 1;
+		transform: scaleX(1);
+	}
+}
+.gui-motion-off .gui-drop-line::before {
+	animation: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	.pac-chomp.pac-mouth-f0,
 	.pac-chomp.pac-mouth-f1,

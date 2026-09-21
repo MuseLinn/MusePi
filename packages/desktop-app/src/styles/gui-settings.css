@@ -643,10 +643,12 @@
 	overflow: hidden;
 }
 /* Whole-block drop highlight: dragging a session anywhere onto the group
- * (not just the head) tints the block — clear landing feedback. */
+ * (not just the head) tints the block — clear landing feedback. Ring kept
+ * light (M2.8 减重): tint carries the feedback, the inset line only frames
+ * it, and the shared .gui-drop-line handles explicit insert positions. */
 .gui-group--dragover {
 	background: color-mix(in oklab, var(--color-accent-bd) 7%, transparent);
-	box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-accent-bd) 45%, transparent);
+	box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-accent-bd) 28%, transparent);
 }
 
 .gui-group-head {
@@ -2620,7 +2622,7 @@
 }
 
 .gui-group-head--dragover {
-	box-shadow: inset 0 0 0 1.5px var(--color-accent-bd);
+	box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--color-accent-bd) 35%, transparent);
 	border-radius: var(--radius-lg);
 }
 

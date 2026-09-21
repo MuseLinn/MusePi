@@ -269,6 +269,11 @@ export function SessionSidebar({
 			return [];
 		}
 	});
+	/** Insert-edge hint while dragging a project head (M2.8): which block
+	 * shows the shared .gui-drop-line, and on which edge. The block body
+	 * keeps its swap-on-drop semantics; the head offers precise
+	 * insert-before/after positioning. */
+	const [projInsert, setProjInsert] = useState<{ path: string; edge: "before" | "after" } | null>(null);
 	// Per-project collapse state, keyed by path (expanded by default).
 	const [collapsedProjects, setCollapsedProjects] = useState<string[]>(() => {
 		try {
@@ -1011,7 +1016,13 @@ export function SessionSidebar({
 																});
 															}}
 														>
-															<div className="gui-project-block">
+															<div
+																className={`gui-project-block${
+																	projInsert?.path === path
+																		? ` gui-drop-line${projInsert.edge === "after" ? " gui-drop-line--after" : ""}`
+																		: ""
+																}`}
+															>
 																<button
 																	type="button"
 																	className="gui-project-head"
@@ -1021,6 +1032,44 @@ export function SessionSidebar({
 																	onDragStart={e => {
 																		e.dataTransfer.setData("text/plain", `project:${path}`);
 																		e.dataTransfer.effectAllowed = "move";
+																	}}
+																	onDragEnd={() => setProjInsert(null)}
+																	/** Head-level insert positioning (M2.8): hovering the
+																	 * head's top/bottom half shows the shared drop line and
+																	 * drops insert there; the block body keeps swap-on-drop. */
+																	onDragOver={e => {
+																		if (!e.dataTransfer.types.includes("text/plain")) return;
+																		e.preventDefault();
+																		e.stopPropagation();
+																		e.dataTransfer.dropEffect = "move";
+																		const r = e.currentTarget.getBoundingClientRect();
+																		setProjInsert({
+																			path,
+																			edge: e.clientY < r.top + r.height / 2 ? "before" : "after",
+																		});
+																	}}
+																	onDragLeave={() =>
+																		setProjInsert(cur => (cur?.path === path ? null : cur))
+																	}
+																	onDrop={e => {
+																		e.preventDefault();
+																		e.stopPropagation();
+																		const data = e.dataTransfer.getData("text/plain");
+																		const r = e.currentTarget.getBoundingClientRect();
+																		const edge =
+																			e.clientY < r.top + r.height / 2 ? ("before" as const) : ("after" as const);
+																		setProjInsert(null);
+																		if (!data.startsWith("project:")) return;
+																		const from = data.slice(8);
+																		if (from === path) return;
+																		setProjects(prev => {
+																			const next = prev.filter(p => p !== from);
+																			let ti = next.indexOf(path);
+																			if (ti < 0) return prev;
+																			if (edge === "after") ti += 1;
+																			next.splice(ti, 0, from);
+																			return next;
+																		});
 																	}}
 																	onClick={() => toggleProject(path)}
 																	onContextMenu={e => {
