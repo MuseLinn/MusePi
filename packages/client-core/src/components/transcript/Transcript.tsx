@@ -1229,6 +1229,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const scrollIntentRef = useRef<TimelineUserScrollIntent | undefined>(undefined);
 	const prevLenRef = useRef(entries.length);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
+	/** Session-open grace window (epoch ms): scroll events and content-change
+	 *  reconciles inside it cannot release `following` (see the sessionKey
+	 *  effect). 0 = grace inactive. */
+	const openGraceUntilRef = useRef(0);
 
 	// The scrolling host differs per consumer: the desktop GUI scrolls an
 	// OUTER .gui-transcript (this component's .tr-root is expanded and
@@ -1270,6 +1274,26 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			el.scrollTop = el.scrollHeight;
 			lastObservedScrollTopRef.current = el.scrollTop;
 		}
+		// Open grace: a fresh session's first second is measurement chaos —
+		// fold derivation settles, rows measure in, the browser clamps
+		// scrollTop as estimate→measure corrections land. Those unflagged
+		// scroll events used to adjudicate as USER upscrolls (following went
+		// false) and the transcript parked at its first rows instead of the
+		// latest message. During the grace only explicit at-bottom landing
+		// confirms follow; unfollow decisions are deferred. A final stick at
+		// grace end guarantees the bottom landing even if no content change
+		// re-triggers the follow effect.
+		openGraceUntilRef.current = Date.now() + 1200;
+		const graceTimer = setTimeout(() => {
+			openGraceUntilRef.current = 0;
+			const sc = scrollerRef.current;
+			if (sc && followingRef.current) {
+				programmaticScrollRef.current = true;
+				sc.scrollTop = sc.scrollHeight;
+				lastObservedScrollTopRef.current = sc.scrollTop;
+			}
+		}, 1250);
+		return () => clearTimeout(graceTimer);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionKey]);
 
@@ -1450,7 +1474,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			const source = programmaticScrollRef.current ? "programmatic" : "user";
 			programmaticScrollRef.current = false;
 			lastObservedScrollTopRef.current = scroller.scrollTop;
-			setFollowing(resolveFollowingAfterScroll({ following: followingRef.current, metrics, source }));
+			const resolved = resolveFollowingAfterScroll({ following: followingRef.current, metrics, source });
+			// Open grace: measurement-clamp scroll events are not user
+			// upscrolls — only an explicit at-bottom landing may (re)arm
+			// follow inside the window.
+			if (Date.now() < openGraceUntilRef.current && !isAtBottom(metrics)) {
+				setFollowing(followingRef.current);
+				return;
+			}
+			setFollowing(resolved);
 		};
 		const onScrollEnd = (): void => {
 			smoothScrollRef.current = false;
@@ -1554,18 +1586,24 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// scroll event must not be swallowed by this commit (it would yank
 		// the viewport back to the bottom and re-arm follow). The intent is
 		// consumed here; later scroll events adjudicate by landing position.
-		setFollowing(
-			reconcileFollowingForContentAnchor({
-				following: followingRef.current,
-				metrics: {
-					scrollTop: el.scrollTop,
-					viewportHeight: el.clientHeight,
-					contentHeight: el.scrollHeight,
-				},
-				lastObservedScrollTop: lastObservedScrollTopRef.current,
-				userScrollIntent: scrollIntentRef.current,
-			}),
-		);
+		// Open grace: measurement chaos after a session switch must not
+		// release follow either — the reconcile is skipped entirely (sticks
+		// still run, and the grace-end timer guarantees the final landing).
+		const inGrace = Date.now() < openGraceUntilRef.current;
+		if (!inGrace) {
+			setFollowing(
+				reconcileFollowingForContentAnchor({
+					following: followingRef.current,
+					metrics: {
+						scrollTop: el.scrollTop,
+						viewportHeight: el.clientHeight,
+						contentHeight: el.scrollHeight,
+					},
+					lastObservedScrollTop: lastObservedScrollTopRef.current,
+					userScrollIntent: scrollIntentRef.current,
+				}),
+			);
+		}
 		scrollIntentRef.current = undefined;
 		if (anchorActionAfterContentChange(followingRef.current) === "stickToBottom") {
 			programmaticScrollRef.current = true;

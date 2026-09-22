@@ -389,9 +389,19 @@ export class MaterializedView {
 	 * The view stays a plain full projection of whatever has been loaded —
 	 * nothing is ever folded or evicted.
 	 */
-	prependEntries(older: readonly SessionEntry[]): void {
-		if (older.length === 0) return;
-		for (const e of older) {
+	prependEntries(older: readonly SessionEntry[]): string | null {
+		if (older.length === 0) return null;
+		// Overlap guard: session.history pages by beforeId findIndex, and a
+		// duplicated entry id in the journal (retries, re-emitted custom
+		// messages) makes that boundary ambiguous — the page can re-include
+		// entries the view already holds. Duplicated ids then reach React as
+		// duplicate list keys and unmount the transcript, so drop any `older`
+		// entry whose id is already present before merging.
+		const existingIds = new Set<string>();
+		for (const e of this.#entries) existingIds.add(e.id);
+		const fresh = older.filter(e => !existingIds.has(e.id));
+		if (fresh.length === 0) return null;
+		for (const e of fresh) {
 			// Key exactly like #upsertMessage (messageKey, not entry.id) so a
 			// streamed update to a backfilled message still replaces it. Custom
 			// entries are keyed by their own id — a re-emitted note whose live
@@ -399,7 +409,8 @@ export class MaterializedView {
 			if (e.type === "message") this.#messages.set(messageKey(e.message), e);
 			else if (e.type === "custom_message") this.#customMessages.set(e.id, e);
 		}
-		this.#entries = [...older, ...this.#entries];
+		this.#entries = [...fresh, ...this.#entries];
+		return fresh[0]?.id ?? null;
 	}
 
 	/** SDK-contract snapshot. Cheap: no journal read. */

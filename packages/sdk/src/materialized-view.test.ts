@@ -57,6 +57,27 @@ describe("MaterializedView lazy backfill", () => {
 		}
 	});
 
+	test("prepended page overlapping already-held ids (duplicate journal ids) dedupes instead of double-inserting", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		for (let i = 1; i <= 3; i++) view.apply(userMsg(1000 + i));
+		// Ambiguous beforeId boundary (findIndex hit an earlier duplicate):
+		// the page re-includes entries the view already holds.
+		view.prependEntries(oldEntries(["old-2", "user:1001", "user:1002"], 1));
+
+		const entries = view.snapshot().entries;
+		expect(entries.length).toBe(4); // old-2 added, 2 duplicates dropped
+		expect(entries.map(e => (e.type === "message" ? e.id : "")).join(",")).toBe(
+			"old-2,user:1001,user:1002,user:1003",
+		);
+	});
+
+	test("fully-overlapping prepend is a no-op (does not corrupt the cursor state)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		for (let i = 1; i <= 2; i++) view.apply(userMsg(1000 + i));
+		view.prependEntries(oldEntries(["user:1001", "user:1002"], 1));
+		expect(view.snapshot().entries.length).toBe(2);
+	});
+
 	test("empty prepend is a no-op", () => {
 		const view = MaterializedView.replay("s1", "/tmp", []);
 		view.apply(userMsg(1));

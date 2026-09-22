@@ -82,7 +82,7 @@ const SNAP = `(() => {
 	};
 })()`;
 
-const report: Record<string, unknown> = {};
+const report: Record<string, any> = {};
 
 report.initial = await evaluate<Record<string, number | boolean>>(SNAP);
 

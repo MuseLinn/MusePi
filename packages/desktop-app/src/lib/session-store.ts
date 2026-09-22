@@ -272,8 +272,11 @@ export class GuiSessionStore {
 	 */
 	prependEntries(older: readonly SessionEntry[], remaining: number): void {
 		if (older.length === 0) return;
-		this.#view.prependEntries(older);
-		this.#beforeId = older[0]?.id ?? null;
+		// Overlap pages (ambiguous beforeId on duplicated journal ids) return
+		// null and must NOT advance the cursor — the oldest held id stays the
+		// pagination anchor.
+		const firstFresh = this.#view.prependEntries(older);
+		if (firstFresh !== null) this.#beforeId = firstFresh;
 		this.#hasMore = remaining > 0 && this.#beforeId !== null;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
