@@ -448,8 +448,8 @@ A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部�
 
 - **openchamber**（`packages/ui/src/components/layout/TitlebarLeftControls.tsx` + `Header.tsx` renderDesktop）：浮动控制簇（侧栏开关 + ProjectActions）是 drag header 的 fixed 子节点；簇用 ResizeObserver 实测自身宽度，发布为 CSS 变量 `--oc-titlebar-controls-width`；头部内容区左侧放两个 spacer——① 红绿灯 drag inset、② no-drag carve spacer（宽 = controls-width，220ms 宽度过渡）。侧栏顶部另有 `SidebarTopBar` 预留条（drag inset + no-drag carve + drag 剩余）。
 - **openchamber `sessionTabsEnabled` 默认 false**：会话 tab 是实验功能；开启时由 SessionTabsStrip **承载标题**（活动 tab 内嵌标题列，是"替换"而非"与标题并排"）。
-- **zcode（zai-org/ZCode）** 开源仓库仅含 `apps/zcode-cli`，无 GUI 源码；其 `DESIGN.md` 只约定 token 规范。可吸收结论：tab 属于内容容器（pane）语义，不属于 titlebar。
-- 结论：**tab 若未来要做，走 openchamber 模式（tab 承载标题）或内容容器内的 tab 条，必须先出设计稿评审；顶栏本身永远不放与标题并排的 tab。**
+- **zcode（zai-org/ZCode）桌面端 GUI 存在于 `packages/desktop` + `packages/ui`**（本地 `zcode/` 克隆即含，初始开源提交即有；2026-09-22 实证）：顶栏模型 = `WorkspaceHeader`（TitleSection + ActionSection 两段，**无 tab 条**；`DesktopWindowFrame` 的 `tabBar` 插槽语义是"渲染在 header 内标题**后面**"，不与标题并排）；Win/Linux 用**内联自绘窗口控制按钮**（`DesktopWindowControls`，min/max/close 在 ActionSection 最右，`[app-region:no-drag]`，最大化态经 platform 事件同步换 restore 图标）而非原生 `titleBarOverlay`；mac 避让 = 状态感知 padding 类（pl-38/48/58/66，按全屏 × 更新就绪角标取值，更新角标占红绿灯区），过渡显式限定 `transition-[padding]`（注释说明：限定 transition-property 避免非合成动画拖慢大会话 resize）；Linux 外壳 16px 圆角 + `clip-path` 合成裁切防圆角丢失 + win/linux 不透明根底（mac 才有 vibrancy 透明底）。
+- 结论：**tab 若未来要做，走 openchamber 模式（tab 承载标题）或内容容器内的 tab 条（zcode tabBar 插槽同属此类），必须先出设计稿评审；顶栏本身永远不放与标题并排的 tab。** 窗口控制：维持我们的原生 `titleBarOverlay` + 150px 右避让（零维护、白得系统 snap/贴边布局）；zcode 内联自绘按钮列为已评估替代方案——若未来要主题化窗口按钮或在标题栏塞更新角标再切换。
 
 ### 我们的窗口 frame 配置（`packages/desktop-app/electron/main.cjs`）
 

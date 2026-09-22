@@ -266,6 +266,29 @@
 
 ---
 
+## 桌面端 UI 吸收（2026-09-22 增补，源 `zcode/packages/desktop` + `zcode/packages/ui`）
+
+> 实证说明：zcode 桌面 GUI 在初始开源提交（`872ad96`）即存在，本地 `zcode/` 克隆一直包含，下列锚点逐条核实。
+
+### 顶栏（已评估/已关闭 → 设计契约见 `docs/gui-design.md` §5t）
+
+- ✅ **"顶栏无并排 tab"原则**：`WorkspaceHeader.tsx:135-221` = TitleSection + ActionSection 两段，无 tab 条；`DesktopWindowFrame.tsx:19-20` 的 `tabBar` 插槽注释明言"渲染在 header 内标题**后面**"——tab 属内容容器语义。
+- ✅ **状态感知避让**：`WorkspaceHeader.tsx:118-133`——`shouldOffsetHeaderForWindowControls = !isSidebarVisible`（与我们 spacer 同一触发）；mac 按 全屏 × 更新就绪角标 取 pl-38/48/58/66（**更新角标占红绿灯区**，我们实例更新角标在实例菜单内，暂不迁移）；过渡显式 `transition-[padding]`（`:155-157` 注释：限定 transition-property 防大会话 resize 非合成动画掉帧）。
+- ⚖️ **Win/Linux 内联自绘窗口按钮**（`DesktopWindowControls.tsx`，min/max/close 在 ActionSection 最右 + 最大化态事件同步换图标）：评估后**维持我们的原生 `titleBarOverlay` + 150px 右避让**——零维护且白得系统 snap/贴边；内联自绘列为备选（若未来主题化窗口按钮/标题栏塞更新角标再切换）。verdict 已记入 §5t。
+- 📋 **Linux 外壳圆角守卫**：`DesktopWindowFrame.tsx:36-43`——16px 圆角 + `clip-path:inset(0_round_16px)` 防 Linux 合成器拖拽时丢圆角，最大化时归零；win/linux 用不透明根底（vibrancy 仅 mac）。我们 Linux 支持排期时再吸收。
+
+### 会话消息渲染 / 加载（候选，按 roadmap M1 语义核对后立项）
+
+- `ModelTrajectoryTimeline.tsx`（209 行）/ `ModelTrajectoryExpandableMessage.tsx`（335 行）/ `ModelTrajectoryExpansionMenu.tsx`：轮次 expandable 的展开/折叠与展开菜单——与我们的 M1 轮渲染语义（`docs/review/0.5.0-m1-transcript-design.md`）对照，重点吸收**展开态的延迟渲染/卸载策略**与菜单分组。
+- `ToolCallBlocks/`：工具调用块的分组与折叠层次（对照 `client-core/src/tool-render/`）。
+- `TaskListLoadingHint.tsx`（13 行）：会话列表加载 = Spinner + 文案，极简；`BackgroundTaskElapsedLabel.tsx`（79 行）：后台任务耗时标签。
+- `ChatErrorBanner.tsx`（357 行）：错误横幅的分级/操作（重试/复制/详情展开）。
+- `AssistantPreviewCards.tsx` / `AssistantCodeCommentCards.tsx`：助手侧预览卡——对照我们的 board/widget 卡片。
+
+### 远程连接（候选）
+
+- `RemoteConnectionDialogContent.tsx` / `RemoteConnectionFields.tsx` / `RemoteConnectionWizardChrome.tsx`：远程工作区连接向导的分步 chrome——对照我们实例菜单的 host 行/桥诊断（`GuiHeader.tsx` 实例按钮），做"添加实例"向导化时吸收。
+
 ## 暂不适用 / 已有（勿重复评估）
 
 - **Markdown 预览选中正文加入对话**：MusePi 无独立 Markdown 预览面板。
