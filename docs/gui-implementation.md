@@ -656,3 +656,15 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 - **`turn-index.ts`**：每轮 ~120B 元数据（startIdx/entryId/timestamp/90 字摘要，4 例单测）；TurnRail 数据驱动——不再 DOM 测量（窗口外轮次无行可测正是导航条缺轮次根因）；scroll-spy 按 title=timestamp 反查；点击出窗轮次走 jumpRequest 扩窗后闪光落位；顶部 carousel 触顶自动 `session.history` 回填。
 - **数据链路既有**：daemon TAIL_ENTRIES=200 初始快照 + `session.history` beforeId 分页 + store.prependEntries——客户端补的是无界挂载/派生纪律。
 - **已知边界**：数据窗口（卸载前缀 entries 省内存）未做——窗口只回收派生/DOM 成本，entries 本体常驻内存；guest web shell（app.tsx）未接 onLoadOlder（web 本就全量加载，窗口化对派生/DOM 依然生效）。
+## 40. Shell batches A1/A2/B1/C — header tiers, browser chrome, panel-wiring verdict (2026-09-22, roadmap shell design)
+
+设计稿：`docs/review/0.5.0-shell-panels-topbar-design.md`（§3.1 顶栏 / §3.2 浏览器 / §3.3 接线）。批次提交：`2f0c3b59d`（A1+A2）、`cc5840a91`（B1）、B2 纯复验 + C（本笔）。
+
+- **A1 三级退避**：右簇分 P1（terminal/right panel）/P2（board、mini chat、pause 组，`gui-tool-btn--p2` 退避到 fg-faint）/P3（open-in capsule、instance pill `gui-instance-btn--recessed`）。激活态语言唯一：`.gui-tool-btn--active` 升级 accent rim（inset ring）+ 16% 底（§5s 活态规则壳层版）。决策点②裁定：不新增 ⋯ 聚合菜单——instance 菜单本身已是聚合器（设置/重连/退出都在其中），再叠一层是双重菜单。
+- **A2 四个缺口**：①会话 tab 条（SessionTabsStrip parity）：侧栏折叠或 ≥3 会话时出现，segmented capsule，左键切换/中键关闭（deleteSession 持有确认对话框）；②ctx chip（`session.contextUsage`，值比较节流 + 仅 working 时 5s 轮询，Composer 纪律）；③git branch chip（`git.status` 15s，RightRail 同款；切换仍在 StatusCards）；④远端更新角标（GitHub latest release vs `system.meta.version`，instance 菜单打开时拉取）。
+- **B1 浏览器五件套**：①缩放 −100%+ 地址行右侧，per-tab 持久化，新 IPC `managed-browser:set-zoom`（WebContents zoom，与设备预设 Emulation 覆写互不干扰）；②预设模式 dashed 视口框 + 右/下拖把手（pointer-capture，visual→layout px 经 fit scale 换算，宽 ≥320/高 ≥480，走既有 syncDevice 通道实时回 main）；③加载就绪占位（guest loading 期间 L1 spinner 卡，杜绝死白框）；④chrome IA 重排（设备预设独立二级下拉 computer⇄smartphone morph、pick-element 收进 ⋯、缩放进地址行、<480px 容器查询收为仅地址行）；⑤agent 占用提示（dispatched 且针对当前可见 tab：chrome 2px accent 顶条 + mono 细条）。
+- **B1 顺手修了一个潜伏 bug**：`report()` 里无条件的第二次 `setPaneRect`（原始槽位 rect、无 scale）会覆盖预设分支的 setPaneRect——预设模式的 fit 缩放从未到达宿主（宽预设只溢出不缩小）。已改为 else 分支。
+- **B2 复验结论（四路径状态一致，无需改码）**：rail ⇄ panel ⇄ 视图已是单一派生状态——`activeView` 由 `panelTabs.activeId` 的 tab surface 派生（ChatView:677-682，§3.3.2 tab 模型重构时落地），usePanelTabs 挂在 ChatView 折叠不卸载；tab 布局按 cwd 持久化（`musepi-gui-panel-tabs-${cwd}`，含 activeId）——设计稿设想的 `musepi-gui-right-tab` 全局键被 per-cwd 持久化取代，不加死代码；最大化几何测 session column 而非 surface（ContextPanel:443-447），面板永不遮 rail；welcome/session 侧栏同一条 `sideCollapsed` 规则（app.tsx:3091）。**缓办**：拖把手共享 hook 抽象（B1 把手自包含 pointer-capture，app.tsx/ContextPanel 两处旧把手各有历史包袱，抽象收益 < 回归风险，待下次触碰时再做）。
+- **B1 §23 回归**：全部为 slot 的 overlay 兄弟节点——webview 元素的 display/reparent/零尺寸三禁零触碰。
+- **C 诊断入口**：instance 菜单新增浏览器桥诊断行（端口 + tab 数 + 最近错误，`host.port/tabs/error` 经 useSyncExternalStore 订阅），不开面板即可见桥状态。
+- **已知边界（B1 遗留）**：agent 占用提示的人类输入暂停未接线——Electron `before-input-event` 无法区分真实输入与 CDP 派发（agent 自身的输入也会触发），接了会自我抑制；待找到可靠判别器再做。

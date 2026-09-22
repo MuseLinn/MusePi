@@ -1,6 +1,6 @@
 import { t, archiveSession as writeArchivedSession } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
 	copyToClipboard,
 	listOpenInApps,
@@ -11,6 +11,7 @@ import {
 	projectName,
 	shellPlatform,
 } from "../lib/electron";
+import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { orbFromSession } from "../lib/pet";
 import { usePrompt } from "../lib/prompt-dialog";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
@@ -198,6 +199,9 @@ export function GuiHeader({
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
 	const orb = orbFromSession(snap);
+	// Managed-browser bridge state (batch C): port / tab count / last error
+	// for the instance-menu diagnostics row (open-design 诊断上报契约吸收).
+	const browserHost = useSyncExternalStore(subscribeHost, getHostState);
 	const statusText = snap?.working ? (snap.streaming ? t("replying") : t("working")) : t("idle");
 	// Traffic lights are macOS-only. Windows/Linux get a native
 	// titleBarOverlay (top-right ~138px) so the right cluster needs
@@ -1332,6 +1336,33 @@ export function GuiHeader({
 							</span>
 						)}
 					</div>
+					{/* Managed-browser bridge diagnostics (batch C, open-design
+					 * 诊断上报契约吸收): port + tab count + last error, visible
+					 * without opening the browser panel. */}
+					<div className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5">
+						<span
+							className={`h-2 w-2 shrink-0 rounded-full ${browserHost.port ? "bg-[var(--color-success)]" : "bg-[var(--color-text-faint)]"}`}
+						/>
+						<div className="min-w-0 flex-1">
+							<div className="truncate text-[12.5px]">{t("browser bridge")}</div>
+							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">
+								{browserHost.port
+									? t("browser bridge info", {
+											port: String(browserHost.port),
+											tabs: String(browserHost.tabs.length),
+										})
+									: t("browser bridge offline")}
+							</div>
+						</div>
+					</div>
+					{browserHost.error && (
+						<div
+							className="mx-2 mb-1 truncate rounded-lg bg-[var(--color-danger)]/10 px-2 py-1 font-mono text-[10.5px] text-[var(--color-danger)]"
+							title={browserHost.error}
+						>
+							{browserHost.error}
+						</div>
+					)}
 					{hosts.length > 0 && (
 						<>
 							<div className="my-1 border-t border-[var(--border)]" />
