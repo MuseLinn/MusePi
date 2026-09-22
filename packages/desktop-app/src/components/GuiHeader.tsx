@@ -868,7 +868,10 @@ export function GuiHeader({
 								{store ? projectLabel : project ? projectName(project) : t("local")}
 							</span>
 							{ctxChip && (
-								<span className="gui-header-chip" title={t("context usage")}>{`ctx ${ctxChip.percent}%`}</span>
+								<span
+									className="gui-header-chip"
+									title={t("context usage")}
+								>{`ctx ${Math.round(ctxChip.percent)}%`}</span>
 							)}
 						</span>
 					</button>
