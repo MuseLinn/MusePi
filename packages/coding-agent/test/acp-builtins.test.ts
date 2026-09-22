@@ -510,7 +510,10 @@ describe("ACP builtin slash commands", () => {
 		expect(configNotified).toBe(0);
 	});
 
-	// Removed TUI-only and dropped commands fall through as false
+	// Removed TUI-only and dropped commands fall through as false.
+	// `/extensions` is NOT here since #38 Step 2: it gained a headless ACP
+	// handle (activateExtensionMetaTools) and must be consumed, not passed
+	// through to the model.
 	it("removed commands return false (fall through to model)", async () => {
 		const removedCommands = [
 			"/login",
@@ -521,7 +524,6 @@ describe("ACP builtin slash commands", () => {
 			"/plan",
 			"/loop",
 			"/hotkeys",
-			"/extensions",
 			"/agents",
 			"/copy",
 			"/new",
