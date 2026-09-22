@@ -351,6 +351,7 @@ export const general = {
 	"focus mode": "Focus mode",
 	local: "Local",
 	"instance info": "Instance info",
+	"update available": "Update to {version}",
 	"open actions": "Open actions",
 	"mini chat": "Mini chat",
 	"recent sessions": "Recent sessions",

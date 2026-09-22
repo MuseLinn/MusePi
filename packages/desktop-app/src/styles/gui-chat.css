@@ -198,8 +198,10 @@
 }
 
 .gui-tool-btn--active {
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
 	color: var(--color-accent);
+	/* §5s 活态规则的壳层版：accent rim + strong 底，激活态语言唯一。 */
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 42%, transparent);
 }
 
 /* ── Terminal tabs ──────────────────────────────────────────────────── */

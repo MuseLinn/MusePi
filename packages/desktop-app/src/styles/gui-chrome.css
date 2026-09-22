@@ -1194,3 +1194,99 @@
 }
 
 /* ── Composer ───────────────────────────────────────────────────────── */
+
+
+/* ── Header tier de-escalation (§3.1 A1, shell design 0.5.0) ─────────── */
+/* P2 recess: secondary chrome (board / mini chat / pause group) defaults
+ * to faint foreground with no chrome of its own; hover or activation
+ * promotes back to the base L1 language (.gui-tool-btn hover styles). */
+.gui-tool-btn--p2 {
+	color: var(--color-text-faint);
+}
+
+.gui-tool-btn--p2:hover {
+	color: var(--color-text);
+}
+
+/* P3 recess: the instance pill stays rightmost but drops to faint weight
+ * until hovered or its menu opens (the portal popup itself is L3). */
+.gui-instance-btn--recessed {
+	color: var(--color-text-faint);
+}
+
+.gui-instance-btn--recessed:hover {
+	color: var(--color-text);
+}
+
+/* ── Session tabs strip (openchamber SessionTabsStrip parity, A2) ────── */
+/* Segmented capsule standing next to the session title when the sidebar
+ * is collapsed or several sessions are open. */
+.gui-header-tabs {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	margin-left: 8px;
+	padding: 2px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface) 75%, transparent);
+	border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
+}
+
+.gui-header-tab {
+	max-width: 110px;
+	padding: 1px 8px;
+	border: none;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	line-height: 16px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.gui-header-tab:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-header-tab--active {
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+}
+
+/* ── Title sub-row chips (A2): git branch + context usage ────────────── */
+.gui-header-subrow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.gui-header-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+	font-size: 10px;
+	color: var(--color-text-faint);
+}
+
+/* ── Remote-update badge (A2): instance menu host row ────────────────── */
+.gui-update-badge {
+	flex-shrink: 0;
+	padding: 0 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 16px;
+}

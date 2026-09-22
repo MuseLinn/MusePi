@@ -346,6 +346,7 @@ export const general = {
 	"focus mode": "专注模式",
 	local: "本地",
 	"instance info": "实例信息",
+	"update available": "可更新 {version}",
 	"open actions": "打开操作",
 	"mini chat": "迷你对话",
 	"recent sessions": "最近会话",

@@ -435,6 +435,84 @@ export function GuiHeader({
 	useEffect(() => {
 		if (instanceOpen) refreshMeta();
 	}, [instanceOpen, refreshMeta]);
+	// Remote-update badge (§3.1 A2): compare the daemon's version against
+	// the latest MusePi GitHub release; shown on the instance menu host row.
+	const [latestVersion, setLatestVersion] = useState<string | null>(null);
+	useEffect(() => {
+		if (!instanceOpen) return;
+		let cancelled = false;
+		void fetch("https://api.github.com/repos/MuseLinn/MusePi/releases/latest")
+			.then(r => (r.ok ? (r.json() as Promise<{ tag_name?: string }>) : null))
+			.then(rel => {
+				if (!cancelled && rel?.tag_name) setLatestVersion(rel.tag_name.replace(/^v/, ""));
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [instanceOpen]);
+
+	// ── Header chips (§3.1 A2): context-window usage + git branch ──────
+	// Read-only summaries of existing daemon RPCs. The ctx chip shares
+	// the Composer's value-compare discipline so a poll tick that changed
+	// nothing costs no re-render.
+	const [ctxChip, setCtxChip] = useState<{ tokens: number; contextWindow: number; percent: number } | null>(null);
+	useEffect(() => {
+		if (!store) return;
+		let cancelled = false;
+		const load = (): void => {
+			void rpc
+				.request<{ tokens: number; contextWindow: number; percent: number } | null>("session.contextUsage", {
+					sessionId: store.sessionId,
+				})
+				.then(usage => {
+					if (cancelled || !usage) return;
+					setCtxChip(prev =>
+						prev &&
+						prev.tokens === usage.tokens &&
+						prev.percent === usage.percent &&
+						prev.contextWindow === usage.contextWindow
+							? prev
+							: usage,
+					);
+				})
+				.catch(() => {});
+		};
+		load();
+		// Poll only while the agent works (Composer parity): idle sessions
+		// don't move, and a quiet header shouldn't spam the daemon.
+		if (!snap?.working) return;
+		const id = window.setInterval(load, 5000);
+		return () => {
+			cancelled = true;
+			window.clearInterval(id);
+		};
+	}, [rpc, store, snap?.working]);
+
+	// Git branch chip: read-only display (branch switching lives in the
+	// transcript StatusCards); 15s cadence matches the RightRail counters.
+	const [gitBranch, setGitBranch] = useState<string | null>(null);
+	useEffect(() => {
+		const cwd = store?.cwd ?? null;
+		setGitBranch(null);
+		if (!cwd) return;
+		let cancelled = false;
+		const load = (): void => {
+			void rpc
+				.request<{ branch?: string | null; error?: string }>("git.status", { cwd })
+				.then(res => {
+					if (cancelled) return;
+					setGitBranch(res && !res.error ? (res.branch ?? null) : null);
+				})
+				.catch(() => {});
+		};
+		load();
+		const id = window.setInterval(load, 15_000);
+		return () => {
+			cancelled = true;
+			window.clearInterval(id);
+		};
+	}, [rpc, store?.cwd]);
 
 	const sessionTitle = ((): string => {
 		if (!store) return t("MusePi");
@@ -772,11 +850,22 @@ export function GuiHeader({
 								</span>
 							)}
 						</span>
-						<span
-							className="max-w-full truncate text-[10.5px] text-[var(--color-text-faint)]"
-							title={store ? projectLabel : project ? projectName(project) : t("local")}
-						>
-							{store ? projectLabel : project ? projectName(project) : t("local")}
+						<span className="gui-header-subrow">
+							{gitBranch && (
+								<span className="gui-header-chip" title={`${t("git branch")} · ${gitBranch}`}>
+									<Icon name="git-branch" className="h-2.5 w-2.5" />
+									{gitBranch}
+								</span>
+							)}
+							<span
+								className="min-w-0 truncate text-[10.5px] text-[var(--color-text-faint)]"
+								title={store ? projectLabel : project ? projectName(project) : t("local")}
+							>
+								{store ? projectLabel : project ? projectName(project) : t("local")}
+							</span>
+							{ctxChip && (
+								<span className="gui-header-chip" title={t("context usage")}>{`ctx ${ctxChip.percent}%`}</span>
+							)}
 						</span>
 					</button>
 					<MenuPopup
@@ -936,6 +1025,35 @@ export function GuiHeader({
 						</MenuPopup>
 					</div>
 				)}
+				{/* Session tabs strip (openchamber SessionTabsStrip parity,
+				 * §3.1 A2): standing navigation when the sidebar is collapsed
+				 * or several sessions are open — the switcher dropdown stays
+				 * the history+new surface. Left click switches, middle click
+				 * closes (deleteSession owns the confirm dialog). */}
+				{(sideCollapsed || sessions.length >= 3) && store && sessions.length > 0 && (
+					<div className="gui-header-tabs" role="tablist" aria-label={t("recent sessions")}>
+						{sessions.slice(0, 5).map(s => {
+							const active = store.sessionId === s.id;
+							const label = s.label.trim() || t("untitled session");
+							return (
+								<button
+									key={s.id}
+									type="button"
+									role="tab"
+									aria-selected={active}
+									className={`gui-header-tab${active ? " gui-header-tab--active" : ""}`}
+									title={label}
+									onClick={() => onSelectSession(s.id)}
+									onAuxClick={e => {
+										if (e.button === 1) void onDeleteSession(s.id);
+									}}
+								>
+									{label}
+								</button>
+							);
+						})}
+					</div>
+				)}
 			</div>
 			<div className="ml-auto flex shrink-0 items-center gap-1">
 				{/* Pause controls (per-session then global), left of the
@@ -945,7 +1063,7 @@ export function GuiHeader({
 					<button
 						type="button"
 						data-header-trigger="pause"
-						className={`gui-pause-btn${paused ? " gui-pause-btn--active" : ""}`}
+						className={`gui-pause-btn gui-tool-btn--p2${paused ? " gui-pause-btn--active" : ""}`}
 						title={
 							pauseDisabled
 								? t("select a session to pause it")
@@ -973,7 +1091,7 @@ export function GuiHeader({
 					<button
 						type="button"
 						data-header-trigger="global-pause"
-						className={`gui-pause-btn gui-global-pause-btn${globalPaused ? " gui-pause-btn--active" : ""}`}
+						className={`gui-pause-btn gui-global-pause-btn gui-tool-btn--p2${globalPaused ? " gui-pause-btn--active" : ""}`}
 						title={globalPaused ? t("resume all sessions") : t("pause all sessions")}
 						aria-label={globalPaused ? t("resume all sessions") : t("pause all sessions")}
 						aria-pressed={globalPaused === true}
@@ -994,7 +1112,7 @@ export function GuiHeader({
 				{onOpenBoard && (
 					<button
 						type="button"
-						className="gui-tool-btn h-7 w-7"
+						className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
 						title={t("board")}
 						aria-label={t("board")}
 						onClick={onOpenBoard}
@@ -1016,7 +1134,7 @@ export function GuiHeader({
 				{/* Mini chat (openchamber picture-in-picture). */}
 				<button
 					type="button"
-					className="gui-tool-btn h-7 w-7"
+					className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
 					title={t("mini chat")}
 					aria-label={t("mini chat")}
 					onClick={() => void openMiniChat()}
@@ -1144,7 +1262,7 @@ export function GuiHeader({
 					type="button"
 					data-header-trigger="instance"
 					ref={instanceBtnRef}
-					className="gui-instance-btn"
+					className="gui-instance-btn gui-instance-btn--recessed"
 					title={t("instance info")}
 					aria-label={t("instance info")}
 					onClick={() => setInstanceOpen(v => !v)}
@@ -1208,6 +1326,11 @@ export function GuiHeader({
 							<div className="truncate font-mono text-[10.5px] text-[var(--color-text-faint)]">{daemonUrl}</div>
 						</div>
 						<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
+						{latestVersion && daemonVersion && latestVersion !== daemonVersion && (
+							<span className="gui-update-badge" title={t("update available", { version: `v${latestVersion}` })}>
+								{t("update available", { version: `v${latestVersion}` })}
+							</span>
+						)}
 					</div>
 					{hosts.length > 0 && (
 						<>
