@@ -343,7 +343,13 @@
 	display: flex;
 	flex-direction: column;
 	position: relative;
-	overflow: hidden;
+	/* `clip`, not `hidden`: the panel must never scroll as a box — Chromium
+	 * happily applies programmatic/focus scrolls to overflow:hidden ancestors
+	 * (measured 2026-09-22: aside.scrollLeft became 8 after a rail-open focus
+	 * move, shifting every surface 8px left past the card edge — the user's
+	 * "内容偏左被裁"). clip makes the box non-scrollable: scrollLeft is pinned
+	 * at 0. Inner surfaces keep their own scroll containers (FadeScroll etc.). */
+	overflow: clip;
 	/* Own card (workspace split): rounded + shadow instead of the old
 	 * border-left divider against the chat column. */
 	border-radius: var(--radius-2xl);
