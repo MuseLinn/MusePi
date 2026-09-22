@@ -747,6 +747,19 @@
 	overflow: hidden;
 	overflow-wrap: anywhere;
 }
+/* Advisor-started turns (shared isTurnStart semantics): a compact tag
+ * distinguishes an advisory note from a user prompt in the hover panel. */
+.gui-turn-panel-kind {
+	flex: none;
+	font-size: var(--ui-font-size-2xs, 10px);
+	line-height: 1;
+	padding: 2px 5px;
+	margin-right: 6px;
+	border-radius: var(--radius-full, 999px);
+	color: var(--color-accent, var(--color-text));
+	background: color-mix(in oklab, var(--color-accent, var(--color-text)) 14%, transparent);
+	white-space: nowrap;
+}
 .gui-turn-panel-row--active .gui-turn-panel-text {
 	color: var(--color-text);
 }

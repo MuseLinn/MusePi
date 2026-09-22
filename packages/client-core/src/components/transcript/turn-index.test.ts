@@ -56,6 +56,38 @@ describe("buildTurnIndex", () => {
 		expect(idx[2]!.summary).toBe("word ".repeat(18));
 	});
 
+	test("displayed advisor note starts its own turn (isTurnStart parity)", () => {
+		const entries = [
+			userMsg("prompt"),
+			assistantText("working"),
+			entry({ type: "custom_message", customType: "advisor", content: "先修崩溃再优化", display: true }),
+			assistantText("fixed"),
+			// Not displayed → NOT a turn start.
+			entry({ type: "custom_message", customType: "advisor", content: "hidden", display: false }),
+			userMsg("next prompt"),
+		];
+		const idx = buildTurnIndex(entries);
+		expect(idx).toHaveLength(3);
+		expect(idx[1]).toMatchObject({ startIdx: 2, kind: "advisor", summary: "先修崩溃再优化" });
+		expect(idx[0]!.kind).toBe("user");
+		expect(idx[2]!.kind).toBe("user");
+	});
+
+	test("advisor content array joins text blocks; image-only falls back empty", () => {
+		const entries = [
+			entry({
+				type: "custom_message",
+				customType: "advisor",
+				content: [{ type: "text", text: "part one " }, { type: "image", data: "AAAA", mimeType: "image/png" }, { type: "text", text: "part two" }],
+				display: true,
+			}),
+			entry({ type: "custom_message", customType: "advisor", content: [{ type: "image", data: "AAAA", mimeType: "image/png" }], display: true }),
+		];
+		const idx = buildTurnIndex(entries);
+		expect(idx[0]!.summary).toBe("part one part two");
+		expect(idx[1]!.summary).toBe("");
+	});
+
 	test("empty / no-user sessions yield an empty index", () => {
 		expect(buildTurnIndex([])).toEqual([]);
 		expect(buildTurnIndex([assistantText("hi"), assistantText("again")])).toEqual([]);

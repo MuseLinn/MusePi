@@ -8,6 +8,10 @@ interface TurnMarker {
 	 *  0 in data-driven mode (M1.11) — jumps key off `ts`, not geometry. */
 	top: number;
 	summary: string;
+	/** "advisor" when the turn started from a displayed advisor note (shared
+	 *  isTurnStart semantics) — the panel card tags it so a prompt and an
+	 *  advisory are distinguishable. Only set by the data-driven source. */
+	kind?: "user" | "advisor";
 	/** Entry timestamp — data-driven mode: the DOM row carries
 	 *  `title=<timestamp>`; jumps and the scroll-spy resolve through it. */
 	ts?: string;
@@ -196,7 +200,7 @@ export function TurnRail({
 		const map = new Map<string, number>();
 		const measured = turnsData.turns.map((t, i) => {
 			map.set(t.timestamp, i);
-			return { top: 0, summary: t.summary, ts: t.timestamp };
+			return { top: 0, summary: t.summary, ts: t.timestamp, kind: t.kind };
 		});
 		tsToIndexRef.current = map;
 		turnsRef.current = measured;
@@ -660,6 +664,9 @@ export function TurnRail({
 											}}
 										>
 											<div className="gui-turn-panel-card">
+												{m.kind === "advisor" && (
+													<span className="gui-turn-panel-kind">{t("advisor")}</span>
+												)}
 												<span className="gui-turn-panel-text">{m.summary || t("no text")}</span>
 											</div>
 										</div>
