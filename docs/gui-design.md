@@ -372,6 +372,74 @@ Round driven by three user asks: 「这个小球的定制放到常规Agent头像
 
 **验收**：desktop-app `tsgo --noEmit` + biome 全绿（已达成）；人工走查：折叠态/展开态/审批等待三视图（desktop 真机 daemon 会话）。
 
+## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1-transcript-design.md`）
+
+参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
+
+**轮结构（`ConversationTurnRenderUnit` 对齐）**：
+
+```
+turn
+├── turn header        轻边界：turn 序号 · 模型 · 时间 · 聚合状态(✓/进行中 + 耗时)
+├── user bubble        现有 tr-user 语言
+├── workSegments[]     语义折叠单元（核心新增）
+│    折叠态(默认历史)  单行：chevron + 段摘要 + 工具数 + 段状态 + 段耗时
+│    展开态            工具行全序列表（各自状态+耗时）
+├── latestAssistantTextRow  轮尾最终正文（复制/重试/分支操作栏）
+├── tail rows          重试失败 / 异步结果 / token 用量 —— 永不进折叠
+└── hookInvocations    hook 行（mono 细条 + 左边线）—— 永不进折叠
+```
+
+**折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡一律不参与折叠；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
+
+**loading 可见性（判定表）**：权限确认 pending → 聊天 loading 隐藏，由 ApprovalCard 进度线承担（2px，`--glass-border` 轨道 + accent 40% 滑块，`plslide 1.6s var(--spring-liquid)` 无限，文案"等待用户决定"）；AskUserQuestion pending → 提问卡自身承担；compact 进行中 → compaction divider 承担；goalVerifier 活跃 → verifier 卡片承担（挂接点待确认）；正常流式 → 显示；pending resolve 后恢复。
+
+**tail/hook 行**：tail rows 保持 CLI 全序原位渲染，chip 用 `--glass-bg-strong` + inset rim；hook 行 turn-local，mono 细条 + 2px 左边线（`--glass-border`），`hook 名 · 事件 · 耗时`，hover 出详情——永不并入工作段折叠（hook 是轮的"事后审计信息"）。
+
+**流式进行态（D）**：turn header 圆点 accent + 旋转 spinner + "进行中"，耗时 `…`；当前轮工作段 `.tr-seg--open.tr-seg--live`（`--glass-bg-strong` 底，与历史段 `--glass-bg` 区分）；进行中工具行 spinner + `…`，完成立即转 ✓ + 实际耗时；滚动锚定视口钉在 `latestAssistantTextRow` 末行；流式 caret 8px×1.1em accent 块 0.9s steps(2)。
+
+**遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
+
+## 5s. 液态玻璃材质与动效语言——全产品视觉总纲（M1.10，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1.10-liquid-glass.md`）
+
+> 总纲：**整个产品统一液态玻璃视觉与交互效果，动效丰富流畅，一镜到底。** 双基准：client-core `tokens.css`（web/安卓/desktop 共享渲染层，`--glass-*`/`--spring-liquid`）+ desktop-app `gui.css`（桌面壳，`--gui-motion-*`）。收敛方式是**单向映射层**而非合并词汇：desktop 壳保留 `--gui-motion-*`（motion-pack 皮肤机制是产品特性），取值与曲线锚定 client-core 玻璃语言；client-core 不引入 `--gui-motion-*`。
+
+### 玻璃 = 四层配方（缺一不可，blur 缺席时后三层独立成立）
+
+1. **底** `--glass-bg` / `--glass-bg-strong`（卡面 7% / 浮层 11%；亮色 55%/72%）
+2. **缘** `--glass-border` + 内 rim（edge-hi 上缘高光 30% / edge-lo 下缘收 7%）——"液态"读感主要来自 rim 的 1px 高光，不是 blur
+3. **泽** `--glass-sheen` 线性渐变（对角 45°，仅浮层/活动卡）
+4. **影** `--glass-shadow` 双层（近环 + 远落地）
+
+**层级表（新增组件必须按级取值，禁止跳级发明）**：L0 pane（滚动面板底/输入条：全无）/ L1 card（折叠段、消息卡、工具卡：底+缘）/ L2 float（ApprovalCard、TurnRail hover、回到底部钮、lightbox：强底+缘+rim+泽+近环）/ L3 overlay（对话框、GlobalPause、导览：双层全量）。
+
+**活态**（玻璃随会话状态呼吸）：streaming/进行中 → rim 高光换 accent、底升 strong；审批等待 → 进度线（guest）/pulse beam（desktop）+ 底升 strong；冻结态回落 L1。
+
+### 动效语言
+
+- **曲线统一锚点**：常规变形 `--spring`（linear()）；entrance"弹入" `--spring-liquid = cubic-bezier(0.34,1.56,0.64,1)`（两面对齐到此，写进规范防漂移）；退出 `--spring-snappy`（无 overshoot）；俏皮（宠物/彩蛋）`--spring-bouncy`。
+- **时长阶梯**（desktop `--gui-motion-*` 保留，取值成规范）：130ms 菜单浮层 → 160ms 淡入淡出 → 180ms chip/小件 → 240ms 高度形变/滚动 → 280ms 模糊 → 480ms 大高度形变上限；高度形变一律 delta/6 capped；位移 6px（小）/10px（大）；模糊量 8px/24px。
+- **一镜到底（核心交互原则）**：场景切换不许黑场/闪白/整屏淡入淡出——共享元素持稳定 identity（data-morph-id）从原位置连续变形（desktop `morphFrame` 先例收编：单 rAF 链 translate+scale 插值）；非共享元素就地收缩/滑出（高度形变到 0 + 8px 下滑），整屏 opacity 动画禁用（系统级 overlay 除外）；会话切换（welcome→chat、chat→chat）按此执行，聊天内发送视为同场景增量；场景 morph 总长 300-420ms。
+- **降级**：`gui-motion-off`/`prefers-reduced-motion` → morph 退化即时切换（玻璃材质保留，材质不是动效）；`[data-platform="win32"]` → blur 归零，sheen+rim 补强 2%（blur 缺席的观感补偿成规范）。
+
+### Token 映射表（落地契约）
+
+| 统一语义 | client-core | desktop-app |
+|---|---|---|
+| 玻璃底/强底 | `--glass-bg(-strong)` | `--gui-glass-alpha` 派生 overlay（对齐 7%/11% 两档） |
+| 玻璃缘 | `--glass-border` | 同名对齐，否则 gui.css 引 client-core 值 |
+| entrance 曲线 | `--spring-liquid` | 同名（已天然一致） |
+| 淡入淡出 | 160ms ease（不新建变量） | `--gui-motion-fade-in/out` 时长语义 |
+| 高度形变 | delta/6 capped | `--gui-motion-height(-max)` 同一规则 |
+
+**纪律**：新组件先查本表与层级表；两表没有才提案新增，新增必须双面上报（更新本章）。
+
+### 批次计划（随里程碑推进）
+
+A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部按钮（L2 规格，已落地）。B（guest/安卓壳）：ConnectScreen→会话 morph、移动端列表↔会话 morph、composer 浮层升 L2。C（desktop 壳）：面板浮层（ContextPanel/DetailsPanel）层级审计到 L2/L3；会话切换 morph 推广到 chat→chat。D（收口）：映射表 CI lint（check-radius-tokens 先例）、双平台截图对比报告。
+
+**验收**：映射表与层级表即本章（已合入）；逐面板收敛 biome+tsgo 全绿、无"表外" token、motion-off 无中间帧；Windows blur 缺席下与 macOS 并排截图对比可读性；动效抽查（无黑场、entrance 全走 `--spring-liquid`、时长落阶梯）。
+
 ## 6. Brand icon (App Icon, redesigned 2026-08-06)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, dot-matrix coordinates generated by a Python script — 23×23 grid). Build artifacts: `build/icon.png` (1024×1024) + `build/icon.icns` (iconutil 10-tier iconset).

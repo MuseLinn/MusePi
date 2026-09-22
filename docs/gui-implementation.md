@@ -627,3 +627,32 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 - **A text label breaks per glyph, not per word** (`wrapTextLines`): CJK carries no spaces, so a word-only splitter left a whole Chinese sentence on one endless line. `segmentWords` keeps Latin words whole, breaks between CJK glyphs, and attaches a space run to the unit that precedes it (so a wrapped line never opens with the space that caused the break). An over-long word takes its own line, matching Konva's `wrap="word"`.
 - **The font is one shared constant, and the canvas font is set per call**: `TEXT_FONT_STACK` is passed to both the Konva `Text` node's `fontFamily` and the measurer's `ctx.font`, and `.gui-sketch-text-input` uses the same stack in CSS — the overlay previously resolved `font: inherit` (the composer's font, not the label's), so committing visibly reflowed the text. The measurer also degrades instead of throwing when there is no canvas (unit tests, or a stubbed DOM whose `getContext` is missing): a throw there would take down the whole board on commit.
 - **`measureTextWidth` is called from render, so it must stay cheap**: the context is created once and the previous `ctx.font` is restored after each measurement, which is what keeps a keystroke from becoming a stutter.
+
+## 39. Turn render units & loading visibility semantics (ZCode v4 absorption, 2026-09-21/22, roadmap M1)
+
+源设计稿 `docs/review/0.5.0-m1-transcript-design.md`（视觉层见 `gui-design.md` §5r/§5q）。语义层全部落在 `packages/client-core/src/components/transcript/`，desktop 与 guest 共享。
+
+### 纯函数层（`render-units.ts`，M1.1，19 例单测）
+
+- `buildTurnRenderUnits`：entries → 轮渲染单元（turn 分组 / 回复锚点 strict 语义 / 工作行 / 轮尾行 / hook 行分桶），复用 round-collapse 的 `isTurnStart`。
+- `classifyTranscriptRow`：行分类（文本/推理/工具调用/子智能体/用户输入/轮头/时间线标记/hook）。
+- `hasPendingAsk`：ask toolCall 无匹配 toolResult = 待答（**结构性判定**，非事件推断）。
+- `shouldShowChatLoading`：§B 判定表纯组合（审批 pending / ask 待答 / compact 进行中 / goalVerifier 活跃 → 抑制聊天 loading）。
+- **调查结论（写死，勿再推断）**：审批仅 host 侧（guest transport 恒 null）；ask 是普通工具；compact 是 start/end 事件对；hooks 引擎在 coding-agent 自有（`extensibility/hooks/`，TUI 有 hook 呈现），hook 消息持久化为 custom_message 且 customType 是 hook 作者自定义自由串——分类器按项目既有 `hook:` 命名空间约定匹配（与 hook capability 的 `hook:<type>:<tool>:<name>` extension id 一致）；**前缀强制属于 M2 能力缝纪律**（hook 作者不遵守命名约定时分类兜底，见 roadmap §4.2）。
+
+### 滚动锚定（`scroll-anchor.ts`，M1.3，23 例单测，ZCode `timelineScrollAnchor` 移植）
+
+- `following` = 用户滚动权：**仅真实用户输入**（wheel/touch/keydown）可翻转；程序化贴底/布局 scroll 只记几何账。
+- commit 前 `reconcile` 用户意图：wheel 上滚领先 scroll 事件一帧，不得被流式 commit 吞掉。
+- 内容增长动作 stick/hold：释放后绝不拉回。
+- Transcript 接线：scroll 监听按 programmatic/user 分类；follow effect 先 reconcile 再贴底；ResizeObserver 跟随期尾部重钉（流式 delta/图片/高亮撑高，rAF 合并）。
+- 未移植：virtualizer 测高补偿（无虚拟化时 native overflow-anchor 兜底）。
+- 「回到底部」按钮（M1.10 批次 A）：`shouldShowBackToBottom(followingUi, entries.length)` 语义驱动显隐（L2 float 规格）；点击平滑滚回 + `smoothScrollRef` 裁决——动画中间帧不计为用户上滚，落底 re-arm。**唯一入口**：desktop ChatView 曾叠过本地 `JumpToBottomButton.tsx`，已删（重复设计清扫，ffb4bf915）。
+
+### 窗口化渲染与轮次索引（M1.11）
+
+- **mem-bench 判定依据**（`docs/review/0.5.0-m1-transcript-design/mem-bench.md`）：3,000 轮合成会话 wire 载荷 194.5MB、恢复 parse ~470ms、全量派生 ~200ms/次、常驻字符串 371MB；尾部 300 条窗口派生恒定 ~0.1ms、数据 2.6MB（派生收益 ~2000×、数据 ~140×）。测量方法学：JSC `heapUsed`/`rss` 不可用（rope 共享 + GC 页归还 ±400MB 噪声）——用「字符串字节总量」作内存代理；合成数据逐字符生成防 rope 共享。
+- **渲染窗口**（Transcript）：尾部 800 条初始 / 顶部哨兵上滚扩 600 / 会话切换复位；folds/turn-units 在窗口切片上派生再平移回绝对索引（下游零改动）；跳转目标出窗时按需扩窗 + pending-jump 二次生效；扩窗按 scrollHeight 真实差值补偿 scrollTop。
+- **`turn-index.ts`**：每轮 ~120B 元数据（startIdx/entryId/timestamp/90 字摘要，4 例单测）；TurnRail 数据驱动——不再 DOM 测量（窗口外轮次无行可测正是导航条缺轮次根因）；scroll-spy 按 title=timestamp 反查；点击出窗轮次走 jumpRequest 扩窗后闪光落位；顶部 carousel 触顶自动 `session.history` 回填。
+- **数据链路既有**：daemon TAIL_ENTRIES=200 初始快照 + `session.history` beforeId 分页 + store.prependEntries——客户端补的是无界挂载/派生纪律。
+- **已知边界**：数据窗口（卸载前缀 entries 省内存）未做——窗口只回收派生/DOM 成本，entries 本体常驻内存；guest web shell（app.tsx）未接 onLoadOlder（web 本就全量加载，窗口化对派生/DOM 依然生效）。
