@@ -109,6 +109,32 @@ function sameUrl(left: string, right: string): boolean {
 	return left.replace(/\/+$/, "") === right.replace(/\/+$/, "");
 }
 
+// ── zoom persistence (§3.2.1): per-tab factor in localStorage ─────────
+const ZOOM_KEY = "musepi-gui-managed-browser-zoom";
+
+function loadZooms(): Record<string, number> {
+	try {
+		const raw = window.localStorage.getItem(ZOOM_KEY);
+		const parsed: unknown = raw ? JSON.parse(raw) : {};
+		if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+		return Object.fromEntries(
+			Object.entries(parsed as Record<string, unknown>).filter(
+				(entry): entry is [string, number] => typeof entry[1] === "number" && Number.isFinite(entry[1]),
+			),
+		);
+	} catch {
+		return {};
+	}
+}
+
+function saveZooms(zooms: Record<string, number>): void {
+	try {
+		window.localStorage.setItem(ZOOM_KEY, JSON.stringify(zooms));
+	} catch {
+		// storage quota — best effort
+	}
+}
+
 function labelFromUrl(url: string): string {
 	if (url === EMPTY_URL) return t("browser empty tab");
 	try {
@@ -236,6 +262,48 @@ export function ManagedBrowserPane({
 	const activeUrl = activeTab?.url ?? EMPTY_URL;
 	const isBlank = !activeTab || activeTab.blank || activeUrl === EMPTY_URL || activeUrl === "";
 
+	// ── Zoom controls (§3.2.1, zcode parity): per-tab factor persisted in
+	// localStorage; applied through main (WebContents zoom — independent of
+	// the device-preset Emulation overrides, so the two never fight).
+	const ZOOM_MIN = 0.5;
+	const ZOOM_MAX = 2;
+	const [zoomByTab, setZoomByTab] = useState<Record<string, number>>(() => loadZooms());
+	const activeZoom = (host.activeId ? zoomByTab[host.activeId] : undefined) ?? 1;
+	const setActiveZoom = (next: number): void => {
+		const id = host.activeId;
+		if (!id) return;
+		const clamped = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(next * 100) / 100));
+		setZoomByTab(current => ({ ...current, [id]: clamped }));
+	};
+	useEffect(() => {
+		const timer = window.setTimeout(() => saveZooms(zoomByTab), 200);
+		return () => window.clearTimeout(timer);
+	}, [zoomByTab]);
+	// Tab switch or factor change: re-apply so each tab keeps its own zoom.
+	useEffect(() => {
+		const api = window.electronAPI;
+		if (!api?.managedBrowserSetZoom || !host.activeId || isBlank) return;
+		void api.managedBrowserSetZoom({ tabId: host.activeId, zoom: activeZoom }).catch(() => {});
+	}, [host.activeId, activeZoom, isBlank]);
+
+	// Custom emulated size while a preset is active (§3.2.2): the dashed
+	// viewport frame's right/bottom handles drag the preset away from the
+	// catalog value (width floor 320). Reset when the preset changes.
+	const [customVp, setCustomVp] = useState<{ width: number; height: number | null } | null>(null);
+	const presetWidth = viewport === null ? null : (customVp?.width ?? viewport);
+	const presetHeight = customVp?.height ?? null;
+	useEffect(() => setCustomVp(null), [viewportKey]);
+	// Viewport-frame geometry for the drag handles, measured in report().
+	const [pageBox, setPageBox] = useState<{
+		left: number;
+		width: number;
+		height: number;
+		scale: number;
+		layoutWidth: number;
+		layoutHeight: number;
+	} | null>(null);
+	const vpDragRef = useRef<{ axis: "x" | "y"; startClient: number; startSize: number; scale: number } | null>(null);
+
 	// Device identity: a preset has to change what the SITE serves, not just
 	// the box — at phone width with a desktop UA, UA-sniffing sites (bing.com,
 	// google.com) keep sending their desktop document. Main applies the
@@ -283,12 +351,12 @@ export function ManagedBrowserPane({
 	 *  slot: there is nothing to emulate). */
 	const deviceSize = useCallback((): { width: number; height: number } | null => {
 		const el = slotRef.current;
-		if (!el || viewport === null) return null;
+		if (!el || presetWidth === null) return null;
 		const avail = el.getBoundingClientRect();
 		if (avail.width <= 0 || avail.height <= 0) return null;
-		const fit = fitViewport(viewport, avail.width);
-		return { width: fit.width, height: Math.round(avail.height / fit.scale) };
-	}, [viewport]);
+		const fit = fitViewport(presetWidth, avail.width);
+		return { width: fit.width, height: Math.round(presetHeight ?? avail.height / fit.scale) };
+	}, [presetWidth, presetHeight]);
 	useEffect(() => {
 		if (!host.activeId) return;
 		const previous = deviceSyncRef.current;
@@ -353,36 +421,54 @@ export function ManagedBrowserPane({
 		const el = slotRef.current;
 		if (!el) return;
 		const report = (): void => {
-			if (viewport) {
+			if (presetWidth !== null) {
 				// Preset active: the page must LAY OUT at the preset width (that is
 				// what makes a responsive check meaningful) and be scaled down to
 				// fit — `max-width` alone let flex shrink it instead, so the preset
 				// did nothing (user: 网页显示尺寸不正常).
 				const avail = el.getBoundingClientRect();
-				const fit = fitViewport(viewport, avail.width);
+				const fit = fitViewport(presetWidth, avail.width);
+				const layoutHeight = presetHeight ?? avail.height / fit.scale;
 				const visualWidth = fit.width * fit.scale;
 				setPaneRect({
 					x: avail.x + Math.max(0, (avail.width - visualWidth) / 2),
 					y: avail.y,
 					width: fit.width,
-					height: avail.height / fit.scale,
+					height: layoutHeight,
 					scale: fit.scale,
+				});
+				// Viewport-frame geometry for the drag handles (value-compare:
+				// report runs on a 200ms interval and must not re-render).
+				setPageBox(prev => {
+					const next = {
+						left: Math.max(0, (avail.width - visualWidth) / 2),
+						width: visualWidth,
+						height: layoutHeight * fit.scale,
+						scale: fit.scale,
+						layoutWidth: fit.width,
+						layoutHeight,
+					};
+					return prev &&
+						Math.abs(prev.left - next.left) < 1 &&
+						Math.abs(prev.width - next.width) < 1 &&
+						Math.abs(prev.height - next.height) < 1 &&
+						Math.abs(prev.layoutWidth - next.layoutWidth) < 1 &&
+						Math.abs(prev.layoutHeight - next.layoutHeight) < 1
+						? prev
+						: next;
 				});
 				// Keep the emulated viewport in step with the pane (a window or
 				// panel drag changes the height the guest may lay out into);
 				// syncDevice dedupes.
 				const { tabId: syncedTabId, device: syncedDevice } = syncContextRef.current;
 				if (syncedTabId) {
-					syncDevice(
-						syncedTabId,
-						syncedDevice,
-						{ width: fit.width, height: Math.round(avail.height / fit.scale) },
-						false,
-					);
+					syncDevice(syncedTabId, syncedDevice, { width: fit.width, height: Math.round(layoutHeight) }, false);
 				}
+			} else {
+				setPageBox(prev => (prev === null ? prev : null));
+				const rect = el.getBoundingClientRect();
+				setPaneRect({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
 			}
-			const rect = el.getBoundingClientRect();
-			setPaneRect({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
 		};
 		report();
 		const ro = new ResizeObserver(report);
@@ -404,7 +490,37 @@ export function ManagedBrowserPane({
 			window.removeEventListener("transitionend", report, true);
 			setPaneRect(null);
 		};
-	}, [viewport, syncDevice]);
+	}, [presetWidth, presetHeight, syncDevice]);
+
+	// Viewport-handle drag (§3.2.2): the pointer delta is visual px; convert
+	// through the fit scale so dragging feels 1:1 on screen. Width floor 320
+	// (design minimum); height floor 480.
+	const startVpDrag = (e: React.PointerEvent<HTMLButtonElement>, axis: "x" | "y"): void => {
+		e.preventDefault();
+		if (presetWidth === null || pageBox === null) return;
+		vpDragRef.current = {
+			axis,
+			startClient: axis === "x" ? e.clientX : e.clientY,
+			startSize: axis === "x" ? pageBox.layoutWidth : pageBox.layoutHeight,
+			scale: pageBox.scale,
+		};
+		e.currentTarget.setPointerCapture(e.pointerId);
+	};
+	const onVpDragMove = (e: React.PointerEvent<HTMLButtonElement>): void => {
+		const drag = vpDragRef.current;
+		if (!drag) return;
+		const delta = ((drag.axis === "x" ? e.clientX : e.clientY) - drag.startClient) / drag.scale;
+		if (drag.axis === "x") {
+			const width = Math.max(320, Math.round(drag.startSize + delta));
+			setCustomVp(current => ({ width, height: current?.height ?? null }));
+		} else {
+			const height = Math.max(480, Math.round(drag.startSize + delta));
+			setCustomVp(current => ({ width: current?.width ?? presetWidth ?? 393, height }));
+		}
+	};
+	const endVpDrag = (): void => {
+		vpDragRef.current = null;
+	};
 
 	// Report the fold itself: main's `panelVisible` gates the agent-activity
 	// reveal, and a folded panel keeps this pane mounted (width 0) with a
@@ -486,6 +602,13 @@ export function ManagedBrowserPane({
 		className: "gui-browser-menu",
 		align: "right",
 	});
+	// Viewport-preset dropdown (§3.2.4): device presets are second-tier
+	// chrome, out of the address row and out of the ⋯ menu.
+	const [vpMenuOpen, setVpMenuOpen] = useState(false);
+	const { anchorRef: vpAnchorRef, renderMenu: renderVpMenu } = useFloatingMenu(vpMenuOpen, setVpMenuOpen, {
+		className: "gui-browser-menu",
+		align: "right",
+	});
 
 	const addressDisplayParts = addressEditing ? { url: "" } : formatAddressDisplayParts(activeUrl, activeTab?.title);
 	const shownAddressValue = addressEditing ? addressValue : "";
@@ -546,11 +669,17 @@ export function ManagedBrowserPane({
 	}, [addressValue, suggestionsOpen]);
 
 	const activeTabLoading = Boolean(activeTab?.loading);
+	// Agent occupancy (§3.2.5): only when the dispatched op targets the tab
+	// on screen — background-tab work paints the ledger, not this chrome.
+	const agentBusy = host.activity?.status === "dispatched" && host.activity.tabId === host.activeId && !isBlank;
 
 	return (
-		<div className="relative flex min-h-0 flex-1 flex-col">
-			{/* Chrome bar: nav / address omnibox / actions (open-design db-chrome) */}
-			<div className="gui-browser-chrome">
+		<div className="gui-browser-pane relative flex min-h-0 flex-1 flex-col">
+			{/* Chrome bar: nav / address omnibox / zoom / actions (§3.2.4 IA:
+			 * address row is first-tier; viewport presets + ⋯ are second-tier;
+			 * the pick-element probe moved into ⋯ as a low-frequency tool).
+			 * agentBusy adds the 2px accent top bar (§3.2.5). */}
+			<div className={`gui-browser-chrome${agentBusy ? " gui-browser-chrome--agent" : ""}`}>
 				<div className="gui-browser-nav">
 					<button
 						type="button"
@@ -665,17 +794,76 @@ export function ManagedBrowserPane({
 						</div>,
 					)}
 				</form>
-				<div className="gui-browser-actions">
+				{/* Zoom controls (§3.2.1): address-row tier, − 100% ＋; the
+				 * percent label resets to 100%. Per-tab, persisted. */}
+				<div className="gui-browser-zoom">
 					<button
 						type="button"
-						className={`gui-browser-icon-btn${picking ? " gui-browser-icon-btn--active" : ""}`}
-						aria-label={t("pick element")}
-						title={t("pick element")}
-						disabled={picking || isBlank}
-						onClick={() => void pickElement()}
+						className="gui-browser-icon-btn"
+						aria-label={t("browser zoom out")}
+						title={t("browser zoom out")}
+						disabled={isBlank}
+						onClick={() => setActiveZoom(activeZoom - 0.1)}
 					>
-						<Icon name="target" className="h-4 w-4" />
+						<Icon name="subtract" className="h-3.5 w-3.5" />
 					</button>
+					<button
+						type="button"
+						className="gui-browser-zoom-value"
+						title={t("browser reset zoom")}
+						disabled={isBlank}
+						onClick={() => setActiveZoom(1)}
+					>
+						{Math.round(activeZoom * 100)}%
+					</button>
+					<button
+						type="button"
+						className="gui-browser-icon-btn"
+						aria-label={t("browser zoom in")}
+						title={t("browser zoom in")}
+						disabled={isBlank}
+						onClick={() => setActiveZoom(activeZoom + 0.1)}
+					>
+						<Icon name="add" className="h-3.5 w-3.5" />
+					</button>
+				</div>
+				<div className="gui-browser-actions">
+					{/* Viewport-preset dropdown (§3.2.4): second-tier chrome.
+					 * Icon morphs computer ⇄ smartphone with the active preset. */}
+					<div ref={vpAnchorRef} className="gui-browser-action-item">
+						<button
+							type="button"
+							className={`gui-browser-icon-btn${vpMenuOpen ? " gui-browser-icon-btn--active" : ""}`}
+							aria-label={t("browser viewport presets")}
+							title={t("browser viewport presets")}
+							onClick={() => {
+								setVpMenuOpen(o => !o);
+								setSuggestionsOpen(false);
+							}}
+						>
+							<StateIcon on={device !== "fit"} pair={["computer", "smartphone"]} className="h-4 w-4" />
+						</button>
+						{renderVpMenu(
+							<div role="menu">
+								<span className="gui-browser-menu-label">{t("browser viewport presets")}</span>
+								<div className="gui-browser-menu-viewports">
+									{VIEWPORTS.map(v => (
+										<button
+											key={v.key}
+											type="button"
+											className={viewportKey === v.key ? "gui-browser-menu-chip--active" : ""}
+											onClick={() => {
+												setViewportKey(v.key);
+												setVpMenuOpen(false);
+											}}
+										>
+											{t(v.key)}
+										</button>
+									))}
+								</div>
+							</div>,
+						)}
+					</div>
 					<div ref={actionsAnchorRef} className="gui-browser-action-item">
 						<button
 							type="button"
@@ -691,24 +879,20 @@ export function ManagedBrowserPane({
 						</button>
 						{renderActionsMenu(
 							<div role="menu">
-								{/* Viewport presets */}
-								<span className="gui-browser-menu-label">{t("browser viewport fit")}</span>
-								<div className="gui-browser-menu-viewports">
-									{VIEWPORTS.map(v => (
-										<button
-											key={v.key}
-											type="button"
-											className={viewportKey === v.key ? "gui-browser-menu-chip--active" : ""}
-											onClick={() => {
-												setViewportKey(v.key);
-												setMenuOpen(false);
-											}}
-										>
-											{t(v.key)}
-										</button>
-									))}
-								</div>
-								<span className="gui-browser-menu-sep" />
+								{/* Low-frequency tools live here (§3.2.4), not as
+								 * standing chrome buttons. */}
+								<button
+									type="button"
+									role="menuitem"
+									disabled={picking || isBlank}
+									onClick={() => {
+										setMenuOpen(false);
+										void pickElement();
+									}}
+								>
+									<Icon name="target" className="h-3.5 w-3.5" />
+									{t("pick element")}
+								</button>
 								<button
 									type="button"
 									role="menuitem"
@@ -769,6 +953,18 @@ export function ManagedBrowserPane({
 					</button>
 				</div>
 			</div>
+			{/* Agent occupancy strip (§3.2.5): 2px accent top bar on the chrome
+			 * above plus this mono line — a constant hint while the agent works
+			 * THIS tab. (Human-input pause is not wired: Electron's
+			 * before-input-event cannot distinguish real pointer input from
+			 * CDP-dispatched agent input, so it would suppress itself.) */}
+			{agentBusy && (
+				<div className="gui-browser-agent-strip" role="status" aria-live="polite">
+					<span className="gui-browser-agent-dot" />
+					<span className="flex-shrink-0">{t("agent operating")}</span>
+					{host.activity?.summary ? <span className="min-w-0 truncate">{host.activity.summary}</span> : null}
+				</div>
+			)}
 			{/* Tab strip (Agent-created tabs are badged; selecting only changes
 			 * what the user sees — the agent keeps its own working tab). */}
 			{host.tabs.length > 0 && (
@@ -895,6 +1091,49 @@ export function ManagedBrowserPane({
 			 * scaling the host, not by constraining this box. */}
 			<div className="gui-browser-content">
 				<div ref={slotRef} className="gui-browser-slot" aria-label={t("managed browser")} />
+				{/* Preset mode: dashed viewport frame + right/bottom drag handles
+				 * (§3.2.2). Pure overlay siblings of the slot — the §23 webview
+				 * constraints are untouched (no display/reparent near the page
+				 * element). The 6px offset matches the slot's fixed margin. */}
+				{pageBox && presetWidth !== null && (
+					<div
+						className="gui-browser-vp-frame"
+						style={{ left: 6 + pageBox.left, top: 6, width: pageBox.width, height: pageBox.height }}
+					>
+						<span className="gui-browser-vp-size">
+							{Math.round(pageBox.layoutWidth)} × {Math.round(pageBox.layoutHeight)}
+						</span>
+						<button
+							type="button"
+							className="gui-browser-vp-handle gui-browser-vp-handle--x"
+							title={t("browser viewport width")}
+							aria-label={t("browser viewport width")}
+							onPointerDown={e => startVpDrag(e, "x")}
+							onPointerMove={onVpDragMove}
+							onPointerUp={endVpDrag}
+							onPointerCancel={endVpDrag}
+						/>
+						<button
+							type="button"
+							className="gui-browser-vp-handle gui-browser-vp-handle--y"
+							title={t("browser viewport height")}
+							aria-label={t("browser viewport height")}
+							onPointerDown={e => startVpDrag(e, "y")}
+							onPointerMove={onVpDragMove}
+							onPointerUp={endVpDrag}
+							onPointerCancel={endVpDrag}
+						/>
+					</div>
+				)}
+				{/* Readiness placeholder (§3.2.3): while the guest loads, an L1
+				 * card sits over the slot so the pane never reads as a dead
+				 * white box. Blank tabs render the start page instead. */}
+				{!isBlank && activeTabLoading && (
+					<div className="gui-browser-loading" role="status" aria-live="polite">
+						<Icon name="loader-4" className="h-4 w-4 animate-spin" />
+						<span>{t("browser page loading")}</span>
+					</div>
+				)}
 				{/* Blank tab: the start page layers OVER the about:blank guest — the
 				 * guest stays mounted, so the agent keeps driving the same tab. */}
 				{isBlank && (

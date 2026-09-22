@@ -1553,6 +1553,26 @@ class ManagedBrowserController {
 	}
 
 	/**
+	 * Per-tab page zoom (zcode zoom-control parity, shell design §3.2.1):
+	 * the WebContents zoom factor, fully independent of the device-preset
+	 * Emulation overrides (those own layout metrics + UA identity, never
+	 * page zoom) — the two levers do not step on each other.
+	 */
+	async setZoom(input) {
+		const tab = this.tabs.get(String(input?.tabId));
+		if (!tab) return { ok: false, error: "unknown tab" };
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
+		const zoom = Number(input?.zoom);
+		try {
+			wc.setZoomFactor(Math.min(3, Math.max(0.25, Number.isFinite(zoom) && zoom > 0 ? zoom : 1)));
+			return { ok: true };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	/**
 	 * Apply (or clear) a device-identity preset on one tab's guest.
 	 *
 	 * `reload` re-requests the page so it re-serves under the new identity; the
@@ -1755,6 +1775,7 @@ class ManagedBrowserController {
 		ipcMain.handle("managed-browser:set-device", async (_e, input) =>
 			this.applyDevicePreset(input?.tabId, input?.preset, input?.reload === true, input?.viewport ?? null),
 		);
+		ipcMain.handle("managed-browser:set-zoom", (_e, input) => this.setZoom(input));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {
 			const pending = this.pendingConfirm;

@@ -5074,6 +5074,167 @@ body.gui-resizing {
 	color: var(--color-accent);
 }
 
+/* ── B1: zoom / viewport frame / loading / agent occupancy (§3.2) ───── */
+/* Pane root carries the container query for the narrow-panel collapse
+ * (§3.2.4: <480px chrome collapses to the address row alone). */
+.gui-browser-pane {
+	container-type: inline-size;
+}
+
+@container (max-width: 480px) {
+	.gui-browser-pane .gui-browser-nav,
+	.gui-browser-pane .gui-browser-zoom,
+	.gui-browser-pane .gui-browser-actions {
+		display: none;
+	}
+}
+
+/* Zoom group: address-row tier, − 100% ＋. */
+.gui-browser-zoom {
+	display: inline-flex;
+	align-items: center;
+	gap: 1px;
+	flex: 0 0 auto;
+	min-width: 0;
+}
+
+.gui-browser-zoom-value {
+	min-width: 44px;
+	height: 28px;
+	padding: 0 4px;
+	border: none;
+	border-radius: var(--radius);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+	font-size: 10.5px;
+	cursor: pointer;
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+
+.gui-browser-zoom-value:hover:not(:disabled) {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-browser-zoom-value:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+/* Agent occupancy: 2px accent top bar on the chrome (§3.2.5). */
+.gui-browser-chrome--agent {
+	box-shadow: inset 0 2px 0 var(--color-accent);
+}
+
+/* Mono occupancy strip under the chrome. */
+.gui-browser-agent-strip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+	padding: 2px 10px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+	color: var(--color-accent);
+	font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+	font-size: 10px;
+	line-height: 16px;
+}
+
+.gui-browser-agent-dot {
+	width: 6px;
+	height: 6px;
+	flex-shrink: 0;
+	border-radius: 999px;
+	background: var(--color-accent);
+	animation: gui-browser-agent-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes gui-browser-agent-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+
+/* Dashed viewport frame (preset mode): wraps the scaled page box so the
+ * emulated viewport reads as a device surface, not the whole pane. */
+.gui-browser-vp-frame {
+	position: absolute;
+	z-index: 2;
+	border: 1px dashed color-mix(in oklab, var(--color-accent) 55%, transparent);
+	border-radius: var(--radius);
+	pointer-events: none;
+}
+
+.gui-browser-vp-size {
+	position: absolute;
+	right: 4px;
+	bottom: 4px;
+	padding: 0 5px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	color: var(--color-text-muted);
+	font-family: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+	font-size: 9.5px;
+	line-height: 15px;
+	pointer-events: none;
+}
+
+/* Right/bottom drag handles — the only interactive children; the frame
+ * itself stays pointer-events:none so page clicks pass through. */
+.gui-browser-vp-handle {
+	position: absolute;
+	pointer-events: auto;
+	border: none;
+	padding: 0;
+	background: transparent;
+	cursor: ew-resize;
+	touch-action: none;
+}
+
+.gui-browser-vp-handle--x {
+	top: 0;
+	right: -5px;
+	width: 10px;
+	height: 100%;
+	cursor: ew-resize;
+}
+
+.gui-browser-vp-handle--y {
+	left: 0;
+	bottom: -5px;
+	width: 100%;
+	height: 10px;
+	cursor: ns-resize;
+}
+
+.gui-browser-vp-handle:hover,
+.gui-browser-vp-handle:active {
+	background: color-mix(in oklab, var(--color-accent) 35%, transparent);
+	border-radius: 999px;
+}
+
+/* Readiness placeholder over the slot while the guest loads (§3.2.3). */
+.gui-browser-loading {
+	position: absolute;
+	inset: 0;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+}
+
 /* ---- 语音 → 语音识别模型卡（openchamber model-card parity）---- */
 .gui-stt-card {
 	display: flex;

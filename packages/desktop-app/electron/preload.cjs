@@ -276,6 +276,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	/** Device preset + emulated viewport for the active tab
 	 *  ("fit" clears the identity and the metrics override). */
 	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),
+	/** Per-tab page zoom factor (0.25–3), independent of device presets. */
+	managedBrowserSetZoom: (input) => ipcRenderer.invoke("managed-browser:set-zoom", input),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
 	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */
