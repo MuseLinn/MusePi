@@ -1,4 +1,4 @@
-import { getLocaleSnapshot, setLocale, subscribeLocale, t, BlurText, ShinyText } from "@musepi/client-core";
+import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t } from "@musepi/client-core";
 import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
@@ -34,6 +34,7 @@ import { pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { dispatchNotification } from "./lib/notify";
+import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
 import { applyPetPalette, resolvedAccent } from "./lib/pet-palette";
 import { PromptProvider, useConfirm } from "./lib/prompt-dialog";
@@ -2250,6 +2251,62 @@ function AppInner(): ReactNode {
 				: Array.isArray(content)
 					? content.map(b => (b as { text?: string }).text ?? "").join("\n")
 					: "";
+		// Session cards for the bubbles window (kimi-work parity): every
+		// working session gets a live-status card, every unread finished
+		// session a completion/error card. This is the AUTHORITATIVE list —
+		// background sessions' events never reach this window's stream, so
+		// per-event bubble pushes alone could never notify for them; the
+		// session.list poll + the unread derivation feed this instead.
+		const buildSessionCards = (
+			activeToolName: string | null = null,
+			activeLastMessage: string | null = null,
+		): PetSessionCard[] => {
+			const findLabel = (nodes: SessionListNode[], id: string): string | null => {
+				for (const n of nodes) {
+					if (n.entry.id === id) return n.entry.label ?? n.label ?? null;
+					const hit = findLabel(n.children, id);
+					if (hit) return hit;
+				}
+				return null;
+			};
+			const cards: PetSessionCard[] = [];
+			const unread = unreadSessionsRef.current;
+			const selected = selectedIdRef.current;
+			for (const [id, meta] of sessionMetaRef.current) {
+				const title = meta.title ?? findLabel(treeRef.current, id) ?? t("pet session untitled");
+				if (meta.working) {
+					const live = id === selected;
+					cards.push({
+						sessionId: id,
+						title,
+						phase: "working",
+						statusText:
+							live && activeToolName
+								? t("pet session using tool", { tool: activeToolName })
+								: t("pet session working"),
+						replyPreview: null,
+					});
+				} else if (unread.has(id)) {
+					cards.push({
+						sessionId: id,
+						title,
+						phase: meta.status === "error" ? "error" : "done",
+						statusText: meta.status === "error" ? t("pet session error") : t("pet session done"),
+						replyPreview: id === selected ? activeLastMessage : null,
+					});
+				}
+			}
+			// Working first (they want attention), then newest update.
+			cards.sort((a, b) => {
+				const aw = a.phase === "working" ? 0 : 1;
+				const bw = b.phase === "working" ? 0 : 1;
+				if (aw !== bw) return aw - bw;
+				const am = sessionMetaRef.current.get(a.sessionId)?.updatedAt ?? "";
+				const bm = sessionMetaRef.current.get(b.sessionId)?.updatedAt ?? "";
+				return bm.localeCompare(am);
+			});
+			return cards.slice(0, 6);
+		};
 		const pushState = (force = false): void => {
 			if (!petEnabled() || petMode() !== "desktop") return;
 			const snap = store?.getSnapshot();
@@ -2280,6 +2337,7 @@ function AppInner(): ReactNode {
 					lastMessage,
 					sessionTitle: activeLabelRef.current,
 				},
+				sessions: buildSessionCards(toolName, lastMessage),
 				// The pet window cannot read this window's localStorage —
 				// carry the locale so its panel strings match the UI, and the
 				// resolved scheme so its chrome follows light/dark.
@@ -2451,7 +2509,11 @@ function AppInner(): ReactNode {
 			const rows = walk(treeRef.current)
 				.sort((a, b) => b.timestamp - a.timestamp)
 				.slice(0, 6);
-			void electronAPI.petActivity?.({ recentSessions: rows, unreadCount: unreadSessionsRef.current.size });
+			void electronAPI.petActivity?.({
+				recentSessions: rows,
+				unreadCount: unreadSessionsRef.current.size,
+				sessions: buildSessionCards(),
+			});
 		};
 		let recentTimer: ReturnType<typeof setInterval> | null = null;
 		const syncRecentPoll = (): void => {
@@ -2541,6 +2603,18 @@ function AppInner(): ReactNode {
 				// Pet badge click: clear every unread session (badge + the
 				// pet's completion/error bubbles in one action).
 				markAllRead();
+			} else if (cmd.type === "stop-session" && typeof cmd.sessionId === "string") {
+				// Pet bubble ■: abort a background working session (same RPC
+				// as the composer stop, without the active-session sfx/error
+				// chrome — the bubble card flips to 完成 on the next poll).
+				const id = cmd.sessionId;
+				const client = rpcRef.current;
+				if (client) {
+					void client.request("session.abort", { sessionId: id }).catch(() => {
+						// best-effort — the card stays working until the poll
+						// reflects the aborted state
+					});
+				}
 			}
 		});
 		// Pet panel "recent session" click → return that session's transcript

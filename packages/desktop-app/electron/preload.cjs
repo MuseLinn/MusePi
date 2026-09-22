@@ -120,6 +120,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	petMarkRead: (sessionId) => ipcRenderer.invoke("pet-mark-read", sessionId),
 	/** Pet badge click → mark every session read (badge + pet bubbles). */
 	petMarkAllRead: () => ipcRenderer.invoke("pet-mark-all-read"),
+	/** Pet bubble ■ → abort that (background) working session. */
+	petStopSession: (sessionId) => ipcRenderer.invoke("pet-stop-session", sessionId),
 	/** Main window: pet asked to open a session. */
 	onPetOpenSession: (cb) => {
 		const listener = (_e, sessionId) => cb(sessionId);

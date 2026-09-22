@@ -2151,6 +2151,14 @@ ipcMain.handle("pet-mark-all-read", () => {
 	}
 	return { ok: true };
 });
+// Pet bubble ■: abort a (background) working session — the main window
+// owns the RPC connection, same pet:command channel as mark-read.
+ipcMain.handle("pet-stop-session", (_event, sessionId) => {
+	if (mainWindow && !mainWindow.isDestroyed() && typeof sessionId === "string") {
+		mainWindow.webContents.send("pet:command", { type: "stop-session", sessionId });
+	}
+	return { ok: true };
+});
 // Pin a board card to the desktop (kimi 固定至桌面 parity): a small
 // always-on-top frameless transparent window rendering the widget itself
 // (pin.html — immersive rounded card, drag strip with hover pin-top /

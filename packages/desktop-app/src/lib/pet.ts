@@ -148,12 +148,38 @@ export { INTERACTION_HOLD_MS, PET_INTERACTIONS, randomPetInteraction } from "./p
 export type PetDisplayMode = "input" | "desktop";
 
 /**
+ * Authoritative session card pushed from the main window — one entry per
+ * session that deserves a bubble: working sessions (live status line) and
+ * unread finished ones (completion/error, the ✓/❗ acknowledge target).
+ * The bubbles window renders THESE instead of synthesizing completion
+ * bubbles from per-event `bubble` pushes, so background sessions (whose
+ * events never reach the main window's stream) notify exactly like the
+ * active one.
+ */
+export interface PetSessionCard {
+	sessionId: string;
+	/** Session title (tree label fallback) — the card's bold first row. */
+	title: string;
+	/** working → hover shows 回复/停止; done/error → ✓ (常驻, unread) / ❗. */
+	phase: "working" | "done" | "error";
+	/** Second row: live status for working (正在使用 X…), 已完成/出错了. */
+	statusText: string;
+	/** Latest assistant text preview for finished sessions (may be absent
+	 *  for background sessions the main window never streamed). */
+	replyPreview?: string | null;
+}
+
+/**
  * Activity payload pushed from the main window to the floating pet:
  * mood (sprite state), bubble (notification blurb), state (live task
  * summary for the panel), approval (pending tool approval to answer),
  * scale (size slider). Each field is optional — pushes are partial.
  */
 export interface PetActivity {
+	/** Authoritative session cards (working + unread finished) — the
+	 *  bubbles window renders these as the session-scoped stack, replacing
+	 *  per-event session bubbles. Pushed with state/recent pushes. */
+	sessions?: PetSessionCard[];
 	mood?: PetMood;
 	/** The 31-state reading (see PET_STATES). Pushed alongside `mood`: the
 	 *  mood still picks the spritesheet row, the state drives the builtin's
