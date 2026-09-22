@@ -87,6 +87,7 @@ export function ContextRing({
 	percent,
 	tokens,
 	contextWindow,
+	thresholdTokens = null,
 	onCompact,
 	compacting = false,
 	compactFailed = false,
@@ -97,6 +98,10 @@ export function ContextRing({
 	percent: number | null | undefined;
 	tokens: number | null | undefined;
 	contextWindow: number | null | undefined;
+	/** Effective auto-compaction threshold (issue #42) — when set, the ring
+	 * fills against the THRESHOLD (that's when compaction fires), not the
+	 * physical window. */
+	thresholdTokens?: number | null | undefined;
 	/** Shows a "压缩上下文" button in the popover (TUI /compact parity). */
 	onCompact?: () => void;
 	/** Compaction in flight — disables the action and shows progress. */
@@ -141,11 +146,18 @@ export function ContextRing({
 	}, [open, fetchQuota]);
 
 	const pct = percent ?? 0;
+	// Ring benchmark (issue #42): a configured soft cap is the operative
+	// limit — compaction fires AT the threshold, so the arc/tone fill
+	// against it (a 300K cap on a 1M window must read full-yellow at 300K,
+	// not 28%). The popover keeps the physical-window rows so the true
+	// capacity is never hidden.
+	const effPct =
+		thresholdTokens != null && thresholdTokens > 0 && tokens != null ? (tokens / thresholdTokens) * 100 : pct;
 	// The arc clamps at 100% (a full ring), but the displayed numbers keep
 	// the REAL value: a big-window model switched to a small one can exceed
 	// its window, and showing "100%" would hide the overflow (TUI shows the
 	// true "123.4%/200K" + error color).
-	const clamped = Math.min(100, Math.max(0, pct));
+	const clamped = Math.min(100, Math.max(0, effPct));
 	const tone = clamped >= 90 ? "danger" : clamped >= 70 ? "warn" : "ok";
 	const color =
 		tone === "danger" ? "var(--color-danger)" : tone === "warn" ? "var(--color-warning)" : "var(--color-ok)";
@@ -165,8 +177,8 @@ export function ContextRing({
 			<button
 				type="button"
 				className="gui-context-ring-btn"
-				title={`${t("context usage")} · ${Math.round(pct)}%`}
-				aria-label={`${t("context usage")} · ${Math.round(pct)}%`}
+				title={`${t("context usage")} · ${Math.round(effPct)}%`}
+				aria-label={`${t("context usage")} · ${Math.round(effPct)}%`}
 				aria-expanded={open}
 				onClick={() => setOpen(v => !v)}
 			>
@@ -202,9 +214,15 @@ export function ContextRing({
 						</span>
 					</div>
 					<div className="gui-context-pop-row">
+						<span>{t("auto-compact threshold")}</span>
+						<span className="gui-context-pop-val">
+							{thresholdTokens != null ? <CountUp value={thresholdTokens} format={fmtTokens} /> : "—"}
+						</span>
+					</div>
+					<div className="gui-context-pop-row">
 						<span>{t("utilization")}</span>
 						<span className="gui-context-pop-val" style={{ color }}>
-							<SlidingNumber value={Math.round(pct)} />%
+							<SlidingNumber value={Math.round(effPct)} />%
 						</span>
 					</div>
 					{/* Prompt-cache hit rate + session spend (issue #8, TUI

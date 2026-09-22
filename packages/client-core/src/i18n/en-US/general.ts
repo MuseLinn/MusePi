@@ -252,6 +252,7 @@ export const general = {
 	used: "Used",
 	window: "Window",
 	utilization: "Utilization",
+	"auto-compact threshold": "Auto-compact threshold",
 	"cache hit": "Cache hit",
 	"session spend": "Session spend",
 	"cache read tokens": "Cache read",

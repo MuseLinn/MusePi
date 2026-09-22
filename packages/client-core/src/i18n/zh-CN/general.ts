@@ -248,6 +248,7 @@ export const general = {
 	used: "已用",
 	window: "窗口",
 	utilization: "占比",
+	"auto-compact threshold": "自动压缩阈值",
 	"cache hit": "缓存命中",
 	"session spend": "本次会话花费",
 	"cache read tokens": "缓存读取",

@@ -7769,12 +7769,19 @@ export class DaemonServer {
 				const used = breakdown?.usedTokens ?? usage.tokens;
 				let autoCompactBufferTokens = 0;
 				let freeTokens = 0;
+				// Effective compaction threshold in force (issue #42): when
+				// the user configured a custom soft cap (e.g.
+				// compaction.thresholdTokens: 300_000), every frontend usage
+				// display can use it as the ring/status denominator instead
+				// of the physical context window.
+				let thresholdTokens: number | null = null;
 				if (cw > 0) {
 					const comp = live.agentSession.settings.getGroup("compaction") as
 						| { enabled?: boolean; strategy?: string }
 						| undefined;
 					if (comp?.enabled && comp.strategy !== "off") {
 						const threshold = resolveThresholdTokens(cw, comp as Parameters<typeof resolveThresholdTokens>[1]);
+						thresholdTokens = threshold > 0 ? threshold : null;
 						autoCompactBufferTokens = Math.max(0, cw - threshold);
 					} else if (comp?.enabled) {
 						autoCompactBufferTokens = effectiveReserveTokens(
@@ -7804,13 +7811,14 @@ export class DaemonServer {
 								cacheHitRate: hitRate,
 							}
 						: null;
-				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0 || tokenSummary
+				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0 || tokenSummary || thresholdTokens !== null
 					? {
 							...usage,
 							...(modelRef ? { model: modelRef } : {}),
 							...(snapcompact ? { snapcompact } : {}),
 							...(breakdown ? { breakdown } : {}),
 							...(tokenSummary ? { usage: tokenSummary } : {}),
+							...(thresholdTokens !== null ? { thresholdTokens } : {}),
 							autoCompactBufferTokens,
 							freeTokens,
 						}

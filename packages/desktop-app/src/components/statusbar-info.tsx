@@ -52,7 +52,7 @@ export interface StatusBarContext {
 	sessionId: string;
 	state: SessionState | null;
 	/** Context-window usage from the 3s poll (null before the first tick). */
-	usage: { tokens: number; contextWindow: number | null } | null;
+	usage: { tokens: number; contextWindow: number | null; thresholdTokens?: number | null } | null;
 }
 
 /** Extension-contributed segments (appended after built-ins). */
@@ -87,6 +87,17 @@ const builtinSegments: StatusBarSegment[] = [
 			const { usage } = ctx;
 			if (!usage) return null;
 			const tokens = usage.tokens > 0 ? fmtTokens(usage.tokens) : "0";
+			// Custom soft cap (issue #42): when a compaction threshold is in
+			// force, the segment reads against the THRESHOLD (that's when
+			// compaction actually fires), with the physical window kept in
+			// the tooltip so nothing about the model capacity is hidden.
+			const cap = usage.thresholdTokens;
+			if (cap) {
+				return {
+					label: `${tokens} / ${fmtTokens(cap)}`,
+					title: `${t("context window usage")} · ${t("auto-compact threshold")} ${fmtTokens(cap)} · ${t("window")} ${usage.contextWindow ? fmtTokens(usage.contextWindow) : "?"}`,
+				};
+			}
 			const windowSize = usage.contextWindow ? fmtTokens(usage.contextWindow) : "?";
 			return { label: `${tokens} / ${windowSize}`, title: t("context window usage") };
 		},
@@ -148,16 +159,28 @@ function StatusBarContent({
 	sessionId: string;
 	state: SessionState | null;
 }): ReactNode {
-	const [usage, setUsage] = useState<{ tokens: number; contextWindow: number | null } | null>(null);
+	const [usage, setUsage] = useState<{
+		tokens: number;
+		contextWindow: number | null;
+		thresholdTokens?: number | null;
+	} | null>(null);
 
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
 		const tick = (): void => {
 			void rpc
-				.request<{ tokens: number; contextWindow: number } | null>("session.contextUsage", { sessionId })
+				.request<{ tokens: number; contextWindow: number; thresholdTokens?: number } | null>(
+					"session.contextUsage",
+					{ sessionId },
+				)
 				.then(u => {
-					if (alive && u) setUsage({ tokens: u.tokens ?? 0, contextWindow: u.contextWindow ?? null });
+					if (alive && u)
+						setUsage({
+							tokens: u.tokens ?? 0,
+							contextWindow: u.contextWindow ?? null,
+							thresholdTokens: u.thresholdTokens ?? null,
+						});
 				})
 				.catch(() => {});
 		};

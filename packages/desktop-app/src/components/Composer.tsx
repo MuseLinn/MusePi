@@ -411,6 +411,7 @@ export function Composer({
 		snapcompact?: SnapcompactSavingsView | null;
 		breakdown?: ContextBreakdownView | null;
 		usage?: UsageSummaryView | null;
+		thresholdTokens?: number | null;
 	} | null>(null);
 	// Shared by the 3s poll and the model-switch immediate refresh — the
 	// ring/card must follow a model change without waiting for the next tick.
@@ -427,6 +428,7 @@ export function Composer({
 				usage?: UsageSummaryView | null;
 				autoCompactBufferTokens?: number;
 				freeTokens?: number;
+				thresholdTokens?: number | null;
 			} | null>("session.contextUsage", {
 				sessionId,
 			})
@@ -454,6 +456,7 @@ export function Composer({
 						prev.percent === usage.percent &&
 						prev.contextWindow === usage.contextWindow &&
 						prev.model === usage.model &&
+						prev.thresholdTokens === usage.thresholdTokens &&
 						usageSame &&
 						prev.snapcompact?.savedTokens === usage.snapcompact?.savedTokens
 						? prev
@@ -2080,6 +2083,7 @@ export function Composer({
 								percent={contextUsage.percent}
 								tokens={contextUsage.tokens}
 								contextWindow={contextUsage.contextWindow}
+								thresholdTokens={contextUsage.thresholdTokens ?? null}
 								onCompact={compactContext}
 								compacting={compacting}
 								compactFailed={compactFailed}
