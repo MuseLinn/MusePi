@@ -77,12 +77,16 @@ export {
 
 import "./transcript.css";
 
-// NO windowed truncation. Rows used to be capped to the tail WINDOW_INITIAL
-// with the rest collapsed into a top spacer behind a 显示更早消息 button: opening
-// a session then showed its latest messages above a BLANK gap until the button
-// was clicked, even though every row was already in memory (user report). The
-// transcript now renders every loaded entry; the top sentinel below only drives
-// the daemon-side paging of genuinely older history.
+// M1.11 render window (mem-bench: e4611b51a). Rows are derived (folds/units)
+// and mounted only within a tail window; scrolling past the top sentinel (or
+// a jump into history) expands it. The daemon already tails the wire payload
+// (TAIL_ENTRIES=200, server.ts) and pages genuinely older history via
+// session.history — this window bounds the CLIENT-side derive + DOM cost no
+// matter how much history the user pages in. The old pre-M1.11 behavior
+// ("render every loaded entry") is what made long sessions jank: every
+// streamed frame re-ran the full-entry derive (~200ms at 42k entries).
+const RENDER_WINDOW_INITIAL = 800;
+const RENDER_WINDOW_EXPAND = 600;
 // Initial row-height estimate (kept for the read-time spinner metrics). Real
 // message rows (text + padding) run 60-100px, so 64 is closer than 44.
 const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
@@ -1206,8 +1210,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const lastObservedScrollTopRef = useRef(0);
 	const scrollIntentRef = useRef<TimelineUserScrollIntent | undefined>(undefined);
 	const prevLenRef = useRef(entries.length);
-	// Every loaded entry renders (see the header note on truncation).
-	const visibleCount = entries.length;
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 
 	// The scrolling host differs per consumer: the desktop GUI scrolls an
@@ -1248,38 +1250,84 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionKey]);
 
-	// No hidden prefix: kept as a constant so the fold/jump paths stay simple.
-	const hidden = 0;
+	// M1.11 render window: only the tail RENDER_WINDOW_INITIAL entries are
+	// derived (folds/units) and mounted; scrolling past the top sentinel (or
+	// a jump into history) expands it by RENDER_WINDOW_EXPAND. The daemon
+	// already tails the wire payload (TAIL_ENTRIES=200) and pages older
+	// chunks via session.history — this window bounds the CLIENT-side
+	// derive + DOM cost no matter how much history the user pages in
+	// (mem-bench: full derive ~200ms at 42k entries vs ~0.1ms for a
+	// 300-entry window; every streamed frame used to re-run it).
+	const [renderWindow, setRenderWindow] = useState(RENDER_WINDOW_INITIAL);
+	// Session switch resets the window back to the tail-only default.
+	useEffect(() => {
+		setRenderWindow(RENDER_WINDOW_INITIAL);
+	}, [sessionKey]);
+	const hidden = Math.max(0, entries.length - renderWindow);
 	const slice = hidden > 0 ? entries.slice(hidden) : entries;
+	// Mirror of `hidden` for the IntersectionObserver callback (recreated on
+	// change via the effect dep, but the closure reads the ref to avoid a
+	// stale value mid-callback).
+	const hiddenRef = useRef(hidden);
+	hiddenRef.current = hidden;
 
 	// Completed-round folds (craft-agents TurnCard parity): completed rounds
 	// (frozen duration) except the live tail fold their working span behind a
-	// header. Windowed-out rounds are handled by the window itself — never
-	// folded in the hidden span (the header would orphan rows the user can't
-	// see), so folds are filtered to those ending inside the visible window.
+	// header. Derived over the WINDOW slice (mem-bench: full-entry fold
+	// building is the dominant per-frame cost on long sessions), then shifted
+	// back to absolute indices — every downstream consumer (render loop,
+	// roundFoldOpen keys, jump path) speaks absolute. A turn straddling the
+	// window edge loses its turn-start inside the slice, so its head renders
+	// expanded — correct: the window edge must not hide half a turn behind
+	// a fold header the user can't open.
 	const folds = useMemo(() => {
-		const all = buildRoundFolds(entries, working);
-		return hidden > 0 ? all.filter(f => f.finalIdx >= hidden) : all;
-	}, [entries, working, hidden]);
+		const built = buildRoundFolds(slice, working);
+		if (hidden === 0) return built;
+		return built.map(f => ({
+			...f,
+			startIdx: f.startIdx + hidden,
+			endIdx: f.endIdx + hidden,
+			headerIdx: f.headerIdx + hidden,
+			finalIdx: f.finalIdx + hidden,
+			exempt: f.exempt.map(i => i + hidden),
+		}));
+	}, [slice, working, hidden]);
 
 	// M1 turn projection (design doc §A): turn headers render above each turn
 	// start. Same turn boundaries as round-collapse (shared isTurnStart) and
-	// the same `working` in-flight flag, so headers and folds agree.
+	// the same `working` in-flight flag, so headers and folds agree. Also
+	// window-sliced + absolute-shifted (see folds above).
 	const turnUnitByStart = useMemo(() => {
 		const map = new Map<number, TurnRenderUnit>();
-		for (const unit of buildTurnRenderUnits(entries, working, { fallbackModel: model })) {
-			map.set(unit.startIdx, unit);
+		for (const unit of buildTurnRenderUnits(slice, working, { fallbackModel: model })) {
+			if (hidden === 0) {
+				map.set(unit.startIdx, unit);
+			} else {
+				map.set(unit.startIdx + hidden, {
+					...unit,
+					startIdx: unit.startIdx + hidden,
+					endIdx: unit.endIdx + hidden,
+					replyIdx: unit.replyIdx >= 0 ? unit.replyIdx + hidden : -1,
+					workIdxs: unit.workIdxs.map(i => i + hidden),
+					tailIdxs: unit.tailIdxs.map(i => i + hidden),
+					hookIdxs: unit.hookIdxs.map(i => i + hidden),
+				});
+			}
 		}
 		return map;
-	}, [entries, working, model]);
+	}, [slice, working, model, hidden]);
 
-	// Extend the window when the sentinel enters the visible pane. The
-	// scroller is an ANCESTOR of .tr-root in both hosts (GUI
-	// .gui-transcript, web .sh-transcript); observing with it as the root
-	// keeps the sentinel tied to the pane, not the viewport. The bottom
-	// lock gate matters: while the tail is followed (streaming), batched
-	// renders can transiently swing the sentinel into the root margin and
-	// must not expand the window to the full history.
+	// Two things fire when the top sentinel enters the pane (M1.11):
+	//  1. DATA backfill — the caller pages the next older chunk from
+	//     session.history (daemon tail is 200; pages are 500 entries).
+	//  2. RENDER window expansion — the newly paged-in prefix must actually
+	//     mount. Rows inserted ABOVE the reading position shove the visible
+	//     content down, so the scroll offset is compensated with the real
+	//     scrollHeight delta after React commits (double rAF), same trick
+	//     the caller uses for prepending pages.
+	// The bottom lock gate matters: while the tail is followed (streaming),
+	// batched renders can transiently swing the sentinel into the root
+	// margin and must not expand the window to the full history.
 	useEffect(() => {
 		const el = sentinelRef.current;
 		if (!el) return;
@@ -1290,9 +1338,26 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const scroller = el.closest<HTMLElement>(".gui-transcript") ?? undefined;
 		const obs = new IntersectionObserver(
 			([entry]) => {
+				if (!entry?.isIntersecting || followingRef.current) return;
 				// Reaching the top pages the next older chunk; the caller guards
-				// concurrency. (This used to also grow the render window first.)
-				if (entry?.isIntersecting && !followingRef.current) onLoadOlder?.();
+				// concurrency.
+				onLoadOlder?.();
+				// Grow the render window only when rows are actually hidden —
+				// once everything loaded is mounted the window is the full
+				// list and further growth would be a no-op state churn.
+				if (hiddenRef.current > 0) {
+					const sc = scrollerRef.current;
+					const scrollTop = sc?.scrollTop ?? 0;
+					const scrollHeight = sc?.scrollHeight ?? 0;
+					setRenderWindow(w => w + RENDER_WINDOW_EXPAND);
+					// Keep the reading position stable across the expansion.
+					requestAnimationFrame(() => {
+						requestAnimationFrame(() => {
+							const s = scrollerRef.current;
+							if (s) s.scrollTop = scrollTop + (s.scrollHeight - scrollHeight);
+						});
+					});
+				}
 			},
 			// Large lookahead: expansion must finish BEFORE the user reaches
 			// the new rows. At 1200px headroom a fast scroll (~1500px/s) has
@@ -1302,24 +1367,48 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		);
 		obs.observe(el);
 		return () => obs.disconnect();
-	}, [entries.length, onLoadOlder]);
+	}, [entries.length, onLoadOlder, hidden]);
 
 	// Jump requests (message tree / trajectory / canvas / branch bar): the
-	// target row may live in the folded window or behind the compaction
-	// fold — expand both until it mounts, then scroll + flash. Without the
-	// expansion a jump into folded history just hit the top spacer and the
-	// target stayed unmounted (user: 滚动和导航条、轨迹跳转不能合理处理).
+	// target row may live OUTSIDE the render window, in the folded window or
+	// behind the compaction fold — expand until it mounts, then scroll +
+	// flash. Without the expansion a jump into windowed-out history just hit
+	// the top spacer and the target stayed unmounted (user: 滚动和导航条、
+	// 轨迹跳转不能合理处理).
 	const lastJumpNonceRef = useRef(0);
+	// A jump that had to grow the window first: re-run after the new rows
+	// mount (the layout effect below fires on the window change).
+	const pendingJumpRef = useRef<{ timestamp: string; nonce: number } | null>(null);
+	useEffect(() => {
+		const pending = pendingJumpRef.current;
+		if (!pending) return;
+		const idx = entries.findIndex(e => e.timestamp === pending.timestamp);
+		if (idx < 0) {
+			pendingJumpRef.current = null;
+			return;
+		}
+		if (idx < hidden) return; // still outside the window — wait for expansion
+		pendingJumpRef.current = null;
+		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
+		jumpFlashRow(rootRef.current, pending.timestamp);
+	}, [hidden, entries, folding, firstCompactionIdx]);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
 		const idx = entries.findIndex(e => e.timestamp === jumpRequest.timestamp);
 		if (idx < 0) return;
+		// Outside the render window: grow the window until the target row
+		// mounts — the pending-jump effect above finishes the job on the
+		// window change. (Growth is by RENDER_WINDOW_EXPAND per render pass;
+		// the effect re-fires until the row is inside.)
+		if (idx < hidden) {
+			pendingJumpRef.current = { timestamp: jumpRequest.timestamp, nonce: jumpRequest.nonce };
+			setRenderWindow(entries.length - idx);
+			return;
+		}
 		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
-		// Every row is mounted now, so a jump never has to open a window first:
-		// expand the compaction fold if needed and scroll straight to the row.
 		jumpFlashRow(rootRef.current, jumpRequest.timestamp);
-	}, [jumpRequest, entries, folding, firstCompactionIdx]);
+	}, [jumpRequest, entries, folding, firstCompactionIdx, hidden]);
 
 	// Scroll-event adjudication (M1.3): our own scrollTop writes set
 	// `programmaticScrollRef` first, so the async scroll event classifies as

@@ -74,6 +74,7 @@ export {
 	type TranscriptProps,
 	transcriptNodeKind,
 } from "./components/transcript/Transcript";
+export { buildTurnIndex, type TurnIndexItem, TURN_SUMMARY_MAX } from "./components/transcript/turn-index";
 export {
 	collectWidgetPayloads,
 	latestWidgetFromEntries,

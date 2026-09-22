@@ -1,15 +1,31 @@
-import { t } from "@musepi/client-core";
+import { t, type TurnIndexItem } from "@musepi/client-core";
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PacMan } from "../vendor/pac-man";
 
 interface TurnMarker {
-	/** Content-space top of the user row (valid as the transcript scrolls). */
+	/** Content-space top of the user row (valid as the transcript scrolls).
+	 *  0 in data-driven mode (M1.11) — jumps key off `ts`, not geometry. */
 	top: number;
 	summary: string;
+	/** Entry timestamp — data-driven mode: the DOM row carries
+	 *  `title=<timestamp>`; jumps and the scroll-spy resolve through it. */
+	ts?: string;
 	/** Entry id — present only in the canvas-mode (data-driven) source, where
 	 *  a click hands the node id back to the caller instead of scrolling. */
 	id?: string;
+}
+
+/** M1.11 data-driven source (chat mode): the turn index built from the
+ *  session's loaded entries, plus the daemon-side paging state. Replaces the
+ *  DOM measurement that silently dropped turns outside the transcript's
+ *  render window (rows for windowed-out turns don't exist to measure). */
+export interface TurnRailDataSource {
+	turns: readonly TurnIndexItem[];
+	/** Daemon still has history older than the loaded set — reaching the top
+	 *  of the rail pages it in (session.history backfill). */
+	hasMoreAbove: boolean;
+	onRequestOlder?: () => void;
 }
 
 export type TurnRailSide = "right" | "left";
@@ -75,6 +91,8 @@ export function TurnRail({
 	nodeTurns,
 	activeTurnIndex,
 	onSelectNode,
+	turnsData,
+	onJumpToTurn,
 }: {
 	rootRef: RefObject<HTMLDivElement | null>;
 	/** Re-measure when the transcript grows (entries append). */
@@ -87,6 +105,14 @@ export function TurnRail({
 	/** Index into nodeTurns of the turn the active leaf belongs to. */
 	activeTurnIndex?: number | null;
 	onSelectNode?(nodeId: string): void;
+	/** M1.11 chat-mode data source: turn index from the loaded entries +
+	 *  daemon paging state. Overrides DOM measurement (windowed-out turns
+	 *  have no rows to measure). */
+	turnsData?: TurnRailDataSource;
+	/** M1.11: the clicked turn's row is outside the transcript's render
+	 *  window — the caller dispatches a jumpRequest so Transcript expands
+	 *  its window and flashes the row once mounted. */
+	onJumpToTurn?(timestamp: string): void;
 }): ReactNode {
 	const [turns, setTurns] = useState<TurnMarker[]>([]);
 	const [hover, setHover] = useState<number | null>(null);
@@ -126,7 +152,11 @@ export function TurnRail({
 	}, []);
 
 	// Scroll-spy: the turn whose prompt row is at/above the viewport top
-	// is active (its tick carries the accent).
+	// is active (its tick carries the accent). Data-driven mode resolves
+	// rows by their `title=<timestamp>` attribute (M1.11) — geometry is
+	// consulted only for the threshold, so windowed-out turns simply never
+	// win the spy while unmounted.
+	const tsToIndexRef = useRef<Map<string, number>>(new Map());
 	const computeActive = useCallback((): void => {
 		const root = rootRef.current;
 		const ts = turnsRef.current;
@@ -135,13 +165,44 @@ export function TurnRail({
 			return;
 		}
 		const threshold = root.scrollTop + ACTIVE_TOP_OFFSET_PX;
+		if (turnsData) {
+			const rootRect = root.getBoundingClientRect();
+			const scrollTop = root.scrollTop;
+			let idx = -1;
+			for (const row of root.querySelectorAll<HTMLElement>(".tr-row--user")) {
+				const top = row.getBoundingClientRect().top - rootRect.top + scrollTop;
+				if (top <= threshold) {
+					const i = tsToIndexRef.current.get(row.getAttribute("title") ?? "");
+					if (i !== undefined) idx = i;
+				} else break;
+			}
+			setActive(idx >= 0 ? idx : null);
+			return;
+		}
 		let idx = -1;
 		for (let i = 0; i < ts.length; i++) {
 			if (ts[i].top <= threshold) idx = i;
 			else break;
 		}
 		setActive(idx >= 0 ? idx : null);
-	}, [rootRef]);
+	}, [rootRef, turnsData]);
+
+	// M1.11 chat-mode source: turns come from the metadata index (not DOM
+	// measurement — the render window mounts only the tail slice, so rows
+	// for older turns don't exist). The timestamp→index map feeds the
+	// scroll-spy; prepends and window expansions just change the list.
+	useEffect(() => {
+		if (!turnsData) return;
+		const map = new Map<string, number>();
+		const measured = turnsData.turns.map((t, i) => {
+			map.set(t.timestamp, i);
+			return { top: 0, summary: t.summary, ts: t.timestamp };
+		});
+		tsToIndexRef.current = map;
+		turnsRef.current = measured;
+		setTurns(measured);
+		computeActive();
+	}, [turnsData, computeActive]);
 
 	// Canvas-mode source: no transcript DOM to measure, so the markers ARE the
 	// active-path user messages and the active tick comes from the leaf. This
@@ -165,7 +226,7 @@ export function TurnRail({
 	// alone leaves the rail stale mid-stream.
 	useEffect(() => {
 		void entryCount;
-		if (nodeTurns) return; // data-driven (canvas mode): nothing to measure
+		if (nodeTurns || turnsData) return; // data-driven sources: nothing to measure
 		const root = rootRef.current;
 		if (!root) return;
 		const measure = (): void => {
@@ -195,7 +256,7 @@ export function TurnRail({
 			mo.disconnect();
 			if (timer !== 0) cancelAnimationFrame(timer);
 		};
-	}, [rootRef, entryCount, computeActive, nodeTurns]);
+	}, [rootRef, entryCount, computeActive, nodeTurns, turnsData]);
 
 	// Scroll-spy updates, rAF-throttled (the latch releases inside the
 	// frame so a burst of scroll events collapses into one compute).
@@ -245,9 +306,17 @@ export function TurnRail({
 					const max = Math.max(0, turnsRef.current.length - count);
 					return Math.min(max, Math.max(0, w + dir));
 				});
+				// M1.11: carouselling past the oldest LOADED turn pages in the
+				// next older chunk (session.history backfill) — the rail then
+				// has more room to glide. The caller guards request
+				// concurrency, so the per-tick call is a safe no-op while a
+				// page is in flight.
+				if (dir === -1 && turnsData?.hasMoreAbove && windowStartRef.current <= 0) {
+					turnsData.onRequestOlder?.();
+				}
 			}, CAROUSEL_INTERVAL_MS);
 		},
-		[stopCarousel],
+		[stopCarousel, turnsData],
 	);
 
 	// Leaving the rail hides the panel after a short grace period so the
@@ -282,9 +351,31 @@ export function TurnRail({
 				onSelectNode(m.id);
 				return;
 			}
+			// M1.11 data-driven mode: resolve the row by its title=<timestamp>
+			// attribute. Present → scroll exactly like the measured path; absent
+			// (row outside the transcript's render window) → hand the timestamp
+			// to the caller, which dispatches a jumpRequest so Transcript grows
+			// its window and flashes the row once mounted.
+			if (m.ts) {
+				const root = rootRef.current;
+				const el = root?.querySelector<HTMLElement>(`[title="${CSS.escape(m.ts)}"]`);
+				if (!el) {
+					onJumpToTurn?.(m.ts);
+					return;
+				}
+				const scroller = root?.closest<HTMLElement>(".gui-transcript") ?? root ?? null;
+				if (scroller) {
+					const offset =
+						el.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 12;
+					scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
+				} else {
+					el.scrollIntoView({ block: "start", behavior: "smooth" });
+				}
+				return;
+			}
 			rootRef.current?.scrollTo({ top: Math.max(0, m.top - 12), behavior: "smooth" });
 		},
-		[rootRef, onSelectNode],
+		[rootRef, onSelectNode, onJumpToTurn],
 	);
 
 	const relativeFromY = useCallback((clientY: number, el: HTMLElement): number | null => {

@@ -1,5 +1,6 @@
 import {
 	CodeHighlightProvider,
+	buildTurnIndex,
 	downloadBlob,
 	punkAvatarUri,
 	relTime,
@@ -1312,6 +1313,19 @@ export function ChatView({
 	const onLoadOlderStable = useCallback((): void => {
 		void loadOlder();
 	}, [loadOlder]);
+	// M1.11: data-driven TurnRail source — one lightweight record per turn
+	// (~120B) over the LOADED entries. The rail no longer measures turn
+	// positions from the DOM: rows outside the transcript's render window
+	// don't exist to measure, which is what made the rail drop turns on
+	// long sessions. hasMoreAbove drives the top-edge backfill carousel.
+	const turnsData = useMemo(
+		() => ({
+			turns: buildTurnIndex(snap?.entries ?? []),
+			hasMoreAbove: store?.hasMore === true,
+			onRequestOlder: onLoadOlderStable,
+		}),
+		[snap?.entries, store?.hasMore, onLoadOlderStable],
+	);
 	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
 	// ladder rungs are disabled in the composer's ThinkingSelector, and the
 	// ladder itself is the current model's supported efforts. GuiHeader runs
@@ -2003,6 +2017,8 @@ export function ChatView({
 											nodeTurns={viewMode === "canvas" ? canvasRail.turns : undefined}
 											activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
 											onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}
+											turnsData={viewMode === "canvas" ? undefined : turnsData}
+											onJumpToTurn={ts => requestJump(ts)}
 										/>
 									</div>
 									<div
