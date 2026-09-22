@@ -7,6 +7,7 @@ import { tapFeedback } from "../lib/haptic";
 import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
+import { eventMatches } from "../lib/shortcut-registry";
 import type { SketchScene } from "../lib/sketch-scene";
 import {
 	COMPOSER_DOCK_SLOT,
@@ -270,6 +271,25 @@ export function Composer({
 	const closeSketch = useCallback((): void => {
 		setSketch(prev => ({ open: false, editId: null, initial: null, scene: null }));
 	}, []);
+
+	// kimicode 截屏 parity ("+" 菜单 / ⇧⌘S): grab the primary display through
+	// the main process, then open the annotate board ON the shot — the flow
+	// is capture → markup → chip, so a bare "paste my screen" never lands.
+	// Both the menu item and the shortcut registry dispatch the same event.
+	const openCapture = useCallback((): void => {
+		const api = (
+			window as unknown as { electronAPI?: { captureScreen?: () => Promise<{ dataUrl?: string; error?: string }> } }
+		).electronAPI;
+		if (!api?.captureScreen) return;
+		void api.captureScreen().then(res => {
+			if (res.dataUrl) setSketch({ open: true, editId: null, initial: res.dataUrl, scene: null });
+		});
+	}, []);
+	useEffect(() => {
+		const onCapture = (): void => openCapture();
+		window.addEventListener("musepi-gui-capture-screen", onCapture);
+		return () => window.removeEventListener("musepi-gui-capture-screen", onCapture);
+	}, [openCapture]);
 	const onSketchDone = useCallback(
 		(dataUrl: string, scene: SketchScene): void => {
 			const editId = sketch.editId;
@@ -1650,7 +1670,7 @@ export function Composer({
 		}
 		// Cmd/Ctrl+Enter (dsh parity): send with the OPPOSITE busy behavior
 		// of the configured plain-Enter mode.
-		if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !composingRef.current) {
+		if (e.key === "Enter" && eventMatches(e, "send") && !e.shiftKey && !e.altKey && !composingRef.current) {
 			e.preventDefault();
 			send(true);
 			return;
@@ -1979,6 +1999,7 @@ export function Composer({
 							onPickImages={files => void addFiles(files)}
 							onPickFiles={files => void addFiles(files)}
 							onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
+							onCaptureScreen={openCapture}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;

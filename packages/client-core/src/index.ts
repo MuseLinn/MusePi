@@ -67,6 +67,7 @@ export {
 	TYPING_FADE_WINDOW,
 	typingFadeOpacity,
 } from "./components/transcript/reveal";
+export { isTurnStart } from "./components/transcript/round-collapse";
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
 export {
 	Transcript,

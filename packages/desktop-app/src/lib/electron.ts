@@ -17,6 +17,8 @@ export interface ElectronAPI {
 	listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
 	openExternal(url: string): Promise<boolean>;
 	readFileDataUrl(filePath: string): Promise<{ dataUrl?: string; error?: string }>;
+	/** Full-screen capture (composer 截屏); { dataUrl } or { error }. */
+	captureScreen(): Promise<{ dataUrl?: string; error?: string }>;
 	/** OTA check (electron-updater); null result = disabled. */
 	checkUpdates(): Promise<UpdateCheckResult | null>;
 	/** Current updater state (idle/checking/preparing/downloading/downloaded/error). */

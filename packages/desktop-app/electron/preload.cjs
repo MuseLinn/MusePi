@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	highlightCode: (code, lang, colors) => ipcRenderer.invoke("gui-highlight", code, lang, colors),
 	/** Local image file → data URL (markdown ![](/abs/path)); { dataUrl } or { error }. */
 	readFileDataUrl: (filePath) => ipcRenderer.invoke("gui-read-file-data-url", filePath),
+	/** Full-screen capture (composer 截屏): primary display as a PNG data
+	 *  URL; { dataUrl } or { error }. The annotate board opens on the shot. */
+	captureScreen: () => ipcRenderer.invoke("screen-capture"),
 	/** System notification (main-process Notification — the renderer HTML5
 	 *  API does not surface on macOS). Resolves { ok } or { ok:false }. */
 	showNotification: (title, body) => ipcRenderer.invoke("notification-show", { title, body }),

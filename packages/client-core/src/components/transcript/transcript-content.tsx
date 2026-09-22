@@ -554,11 +554,15 @@ export function lastUserMessageTs(entries: readonly SessionEntry[]): number | un
 export function RoundFoldHeader({
 	fold,
 	open,
+	startTs,
 	onToggle,
 	onRevert,
 }: {
 	fold: RoundFold;
 	open: boolean;
+	/** 轮起始(user 消息)时间戳:折叠态 user 行不挂载,导航条 scroll-spy
+	 *  靠这个 data 锚点把折叠轮纳入当前轮高亮(isTurnStart 同口径)。 */
+	startTs?: string;
 	onToggle(): void;
 	/** Revert anchor (messageId, text) — the round's user message id and
 	 *  text, mirroring the per-message revert affordance. */
@@ -587,7 +591,12 @@ export function RoundFoldHeader({
 		segments.push(<span key="tools">{t("round tools {count}", { count: String(fold.toolCount) })}</span>);
 	}
 	return (
-		<button type="button" className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`} onClick={onToggle}>
+		<button
+			type="button"
+			className={`tr-round-fold${open ? " tr-round-fold--open" : ""}`}
+			data-turn-start-ts={startTs}
+			onClick={onToggle}
+		>
 			{/* Boxed glyph (openchamber's TurnActivity header): the box carries the
 			 *  expand affordance, so there is no separate free-standing chevron. */}
 			<span className="tr-round-fold-icon" aria-hidden>

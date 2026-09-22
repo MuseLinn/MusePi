@@ -2335,6 +2335,40 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 
 /* View swap (the standard surface transition app-wide): blur-out 150ms,
  * then the target mounts with a blur-in 300ms. */
+/* 常驻挂载 keeper(2026-09-23):alt 页面(看板/任务/智能体/能力中心)与
+ * 设置页打开时,chat 工作区只隐藏(display:none)不卸载——返回时长会话的
+ * 转录/虚拟列表/折叠状态全部保留,不再整树重挂重载。返回时的 blur-in
+ * 靠 class 切换重新触发(元素常驻,animation 属性重新应用即重播)。 */
+.gui-chat-keeper {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+.gui-chat-keeper--hidden,
+.gui-workspace-keeper--hidden {
+	display: none;
+}
+.gui-chat-keeper-fill {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.gui-chat-keeper--enter,
+.gui-workspace-keeper--enter {
+	animation: gui-view-blur-in 300ms var(--spring);
+}
+.gui-workspace-keeper {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
 .gui-view-leave {
 	animation: gui-view-blur-out 150ms ease-in forwards;
 	/* The outgoing frame must never intercept input while it fades. */

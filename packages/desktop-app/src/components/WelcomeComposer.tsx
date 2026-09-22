@@ -319,6 +319,25 @@ export function WelcomeComposer({
 		scene: null,
 	});
 
+	// kimicode 截屏 parity ("+" 菜单 / ⇧⌘S): capture the primary display via
+	// the main process, then open the annotate board ON the shot — capture →
+	// markup → chip, same flow as the session composer (the PNG rides the
+	// normal image-attachment pipeline, no workspace needed).
+	const openCapture = useCallback((): void => {
+		const api = (
+			window as unknown as { electronAPI?: { captureScreen?: () => Promise<{ dataUrl?: string; error?: string }> } }
+		).electronAPI;
+		if (!api?.captureScreen) return;
+		void api.captureScreen().then(res => {
+			if (res.dataUrl) setSketch({ open: true, editId: null, initial: res.dataUrl, scene: null });
+		});
+	}, []);
+	useEffect(() => {
+		const onCapture = (): void => openCapture();
+		window.addEventListener("musepi-gui-capture-screen", onCapture);
+		return () => window.removeEventListener("musepi-gui-capture-screen", onCapture);
+	}, [openCapture]);
+
 	// Voice dictation (session-composer parity): the welcome composer's tips
 	// advertise the mic button, so the empty state must actually ship one.
 	// Local STT via the daemon — the shared use-dictation phase state, so the
@@ -1652,6 +1671,7 @@ export function WelcomeComposer({
 										// state until the session this prompt creates exists.
 										onPickFiles={files => void addFiles(files)}
 										onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
+										onCaptureScreen={openCapture}
 										onInsert={token => {
 											const ta = taRef.current;
 											if (!ta) return;

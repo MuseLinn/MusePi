@@ -347,7 +347,13 @@ export function SketchPad({
 	useEffect(() => {
 		if (!flyout) return;
 		const onDown = (e: MouseEvent): void => {
-			const el = e.target instanceof HTMLElement ? e.target : null;
+			// Element (not HTMLElement): the rail buttons render lucide <svg>
+			//  icons, and an svg target fails instanceof HTMLElement — every
+			//  real click on an icon then read as an OUTSIDE click, which both
+			//  dismissed the flyout before its item's click could arm the tool
+			//  and re-opened it on the toggle's own pointerdown (dismiss sets
+			//  false, the trailing click toggles back to true).
+			const el = e.target instanceof Element ? e.target : null;
 			if (el?.closest(".gui-sketch-flyout, .gui-sketch-shapes")) return;
 			setFlyout(false);
 		};

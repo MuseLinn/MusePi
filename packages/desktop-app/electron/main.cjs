@@ -3369,6 +3369,35 @@ ipcMain.handle("gui-read-file-data-url", async (_event, filePath) => {
 	}
 });
 
+// ── IPC: full-screen capture for the composer 截屏 flow (kimicode parity:
+//  输入框 "+" → 截屏 grabs the primary display, then the annotate board
+//  (SketchPad) opens on the shot so the user can mark it up before it lands
+//  as an attachment chip). desktopCapturer only runs in the main process. ──
+
+ipcMain.handle("screen-capture", async () => {
+	try {
+		const { desktopCapturer, screen } = require("electron");
+		const primary = screen.getPrimaryDisplay();
+		// Physical pixels: logical size × scaleFactor. MUST be integers —
+		// Electron's C++ arg conversion rejects floats ("conversion failure"),
+		// and fractional scaleFactors (1.25/1.75) otherwise produce
+		// 3120.25-style values that wedge the capture.
+		const thumbnailSize = {
+			width: Math.round(primary.size.width * primary.scaleFactor),
+			height: Math.round(primary.size.height * primary.scaleFactor),
+		};
+		const sources = await desktopCapturer.getSources({
+			types: ["screen"],
+			thumbnailSize,
+		});
+		const src = sources.find(s => s.display_id === String(primary.id)) ?? sources[0];
+		if (!src || src.thumbnail.isEmpty()) return { error: "no source" };
+		return { dataUrl: src.thumbnail.toDataURL() };
+	} catch (err) {
+		return { error: err instanceof Error ? err.message : String(err) };
+	}
+});
+
 // ── IPC: open a directory in a specific app (openchamber OpenInApp) ─────
 
 ipcMain.handle("open-with", async (_event, payload) => {

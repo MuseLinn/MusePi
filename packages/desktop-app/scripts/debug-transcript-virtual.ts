@@ -36,23 +36,38 @@ async function findTarget() {
 
 const target = await findTarget();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise<void>((res, rej) => { ws.onopen = () => res(); ws.onerror = () => rej(new Error("ws")); });
+await new Promise<void>((res, rej) => {
+	ws.onopen = () => res();
+	ws.onerror = () => rej(new Error("ws"));
+});
 let nextId = 1;
 const pending = new Map<number, (v: unknown) => void>();
 ws.onmessage = ev => {
 	const msg = JSON.parse(String(ev.data));
-	if (msg.id && pending.has(msg.id)) { pending.get(msg.id)?.(msg); pending.delete(msg.id); }
+	if (msg.id && pending.has(msg.id)) {
+		pending.get(msg.id)?.(msg);
+		pending.delete(msg.id);
+	}
 };
 function cdp(method: string, params: unknown = {}): Promise<unknown> {
 	const id = nextId++;
 	ws.send(JSON.stringify({ id, method, params }));
 	return new Promise((res, rej) => {
-		pending.set(id, m => ((m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m)));
-		setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout ${method}`)); } }, 8000);
+		pending.set(id, m =>
+			(m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m),
+		);
+		setTimeout(() => {
+			if (pending.has(id)) {
+				pending.delete(id);
+				rej(new Error(`timeout ${method}`));
+			}
+		}, 8000);
 	});
 }
 async function evaluate<T>(expression: string): Promise<T> {
-	const msg = (await cdp("Runtime.evaluate", { expression, returnByValue: true })) as { result?: { result?: { value?: T } } };
+	const msg = (await cdp("Runtime.evaluate", { expression, returnByValue: true })) as {
+		result?: { result?: { value?: T } };
+	};
 	return msg.result?.result?.value as T;
 }
 async function shot(name: string): Promise<void> {
@@ -111,7 +126,12 @@ if ((report.initial as { mountedRows: number }).mountedRows === 0) {
 }
 
 await shot("virt-initial");
-const s1 = (report.afterOpen ?? report.initial) as { mountedRows: number; scrollHeight: number; scrollerH: number; railItems: number };
+const s1 = (report.afterOpen ?? report.initial) as {
+	mountedRows: number;
+	scrollHeight: number;
+	scrollerH: number;
+	railItems: number;
+};
 
 // ── 1+2: mounted-row bound & spacer truth ─────────────────────────────
 report.checks = report.checks ?? {};
@@ -139,7 +159,7 @@ report.atTop = topState;
 await shot("virt-top");
 
 // ── 4: TurnRail jump — click a rail item near the middle ──────────────
-const jumpResult = await evaluate<(() => Promise<Record<string, number | boolean>>)>(`(() => {
+const jumpResult = await evaluate<() => Promise<Record<string, number | boolean>>>(`(() => {
 	const rail = document.querySelector(".gui-turn-rail");
 	if (!rail) return null;
 	const items = rail.querySelectorAll("[data-turn], button, [class*='item'], [class*='turn']");
@@ -162,7 +182,10 @@ await evaluate(`(() => {
 })()`);
 await sleep(1500);
 report.afterBackToBottom = await evaluate<Record<string, number | boolean>>(SNAP);
-report.checks.backAtBottom = (report.afterBackToBottom as { scrollTop: number; scrollHeight: number; scrollerH: number }).scrollTop + (report.afterBackToBottom as { scrollerH: number }).scrollerH >= (report.afterBackToBottom as { scrollHeight: number }).scrollHeight - 40;
+report.checks.backAtBottom =
+	(report.afterBackToBottom as { scrollTop: number; scrollHeight: number; scrollerH: number }).scrollTop +
+		(report.afterBackToBottom as { scrollerH: number }).scrollerH >=
+	(report.afterBackToBottom as { scrollHeight: number }).scrollHeight - 40;
 await shot("virt-back-bottom");
 
 console.log(JSON.stringify(report, null, 2));

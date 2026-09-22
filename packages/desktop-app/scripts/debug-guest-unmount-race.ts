@@ -13,7 +13,12 @@ async function findTarget() {
 	for (let i = 0; i < 90; i++) {
 		try {
 			const res = await fetch(`http://127.0.0.1:${PORT}/json`);
-			const targets = (await res.json()) as Array<{ type: string; title: string; url: string; webSocketDebuggerUrl: string }>;
+			const targets = (await res.json()) as Array<{
+				type: string;
+				title: string;
+				url: string;
+				webSocketDebuggerUrl: string;
+			}>;
 			const page = targets.find(t => t.type === "page" && t.title === "MusePi" && t.url.includes("index.html"));
 			if (page) return page;
 		} catch {}
@@ -25,21 +30,35 @@ async function findTarget() {
 const target = await findTarget();
 console.log("renderer ready:", target.url);
 const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise<void>((res, rej) => { ws.onopen = () => res(); ws.onerror = () => rej(new Error("ws")); });
+await new Promise<void>((res, rej) => {
+	ws.onopen = () => res();
+	ws.onerror = () => rej(new Error("ws"));
+});
 let nextId = 1;
 const pending = new Map<number, (v: unknown) => void>();
 const errors: unknown[] = [];
 ws.onmessage = ev => {
 	const msg = JSON.parse(String(ev.data));
-	if (msg.id && pending.has(msg.id)) { pending.get(msg.id)?.(msg); pending.delete(msg.id); return; }
+	if (msg.id && pending.has(msg.id)) {
+		pending.get(msg.id)?.(msg);
+		pending.delete(msg.id);
+		return;
+	}
 	if (msg.method === "Runtime.exceptionThrown") errors.push(msg.params);
 };
 function cdp(method: string, params: unknown = {}): Promise<unknown> {
 	const id = nextId++;
 	ws.send(JSON.stringify({ id, method, params }));
 	return new Promise((res, rej) => {
-		pending.set(id, m => ((m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m)));
-		setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout ${method}`)); } }, 20000);
+		pending.set(id, m =>
+			(m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m),
+		);
+		setTimeout(() => {
+			if (pending.has(id)) {
+				pending.delete(id);
+				rej(new Error(`timeout ${method}`));
+			}
+		}, 20000);
 	});
 }
 async function evaluate<T>(expression: string): Promise<T> {
@@ -72,23 +91,41 @@ for (let i = 0; i < 30 && !bridge; i++) {
 		};
 		if (version?.webSocketDebuggerUrl) {
 			bridge = new WebSocket(version.webSocketDebuggerUrl);
-			await new Promise<void>((res, rej) => { bridge!.onopen = () => res(); bridge!.onerror = () => rej(new Error("bridge ws")); });
+			await new Promise<void>((res, rej) => {
+				bridge!.onopen = () => res();
+				bridge!.onerror = () => rej(new Error("bridge ws"));
+			});
 		}
-	} catch { await sleep(1000); }
+	} catch {
+		await sleep(1000);
+	}
 }
-if (!bridge) { console.log("ABORT: no managed-browser bridge on", BRIDGE); process.exit(1); }
+if (!bridge) {
+	console.log("ABORT: no managed-browser bridge on", BRIDGE);
+	process.exit(1);
+}
 let bId = 1;
 const bPending = new Map<number, (v: unknown) => void>();
 bridge.onmessage = ev => {
 	const msg = JSON.parse(String(ev.data));
-	if (msg.id && bPending.has(msg.id)) { bPending.get(msg.id)?.(msg); bPending.delete(msg.id); }
+	if (msg.id && bPending.has(msg.id)) {
+		bPending.get(msg.id)?.(msg);
+		bPending.delete(msg.id);
+	}
 };
 function bcdp(method: string, params: unknown = {}): Promise<unknown> {
 	const id = bId++;
 	bridge!.send(JSON.stringify({ id, method, params }));
 	return new Promise((res, rej) => {
-		bPending.set(id, m => ((m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m)));
-		setTimeout(() => { if (bPending.has(id)) { bPending.delete(id); rej(new Error(`bridge timeout ${method}`)); } }, 20000);
+		bPending.set(id, m =>
+			(m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m),
+		);
+		setTimeout(() => {
+			if (bPending.has(id)) {
+				bPending.delete(id);
+				rej(new Error(`bridge timeout ${method}`));
+			}
+		}, 20000);
 	});
 }
 
@@ -114,7 +151,9 @@ console.log("race cycles created:", created);
 await sleep(2500);
 
 const boundary = await evaluate<boolean>(`document.body.innerText?.includes("渲染出错") === true`);
-const tabCount = await evaluate<number>(`document.querySelectorAll(".gui-managed-host webview").length`).catch(() => -1);
+const tabCount = await evaluate<number>(`document.querySelectorAll(".gui-managed-host webview").length`).catch(
+	() => -1,
+);
 console.log("error boundary:", boundary, "| host webviews left:", tabCount);
 // Electron reports webview teardown through the C++ callback boundary on the
 // uncaught channel even when the page-side containment swallowed the throw —
@@ -124,7 +163,17 @@ const material = errors.filter(e => {
 	const desc = JSON.stringify(e);
 	return !/Invalid guestInstanceId/.test(desc);
 });
-await Bun.write(`${DIR}/gui-race-errors.json`, JSON.stringify({ total: errors.length, benignGuestReports: errors.length - material.length, material }, null, 1));
-console.log("exceptionThrown total:", errors.length, "| benign guestInstanceId reports:", errors.length - material.length, "| material:", material.length);
+await Bun.write(
+	`${DIR}/gui-race-errors.json`,
+	JSON.stringify({ total: errors.length, benignGuestReports: errors.length - material.length, material }, null, 1),
+);
+console.log(
+	"exceptionThrown total:",
+	errors.length,
+	"| benign guestInstanceId reports:",
+	errors.length - material.length,
+	"| material:",
+	material.length,
+);
 if (material.length) console.log("first material:", JSON.stringify(material[0]).slice(0, 500));
 process.exit(material.length > 0 || boundary ? 1 : 0);

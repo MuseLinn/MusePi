@@ -41,7 +41,7 @@ async function findTarget(): Promise<{ id: string; url: string; webSocketDebugge
 
 const target = await findTarget();
 if (!target) {
-	console.log(JSON.stringify({ fatal: "no renderer target on CDP port " + PORT }));
+	console.log(JSON.stringify({ fatal: `no renderer target on CDP port ${PORT}` }));
 	process.exit(1);
 }
 

@@ -141,6 +141,35 @@ describe("buildTrajectory", () => {
 		expect(events.filter(e => e.kind === "assistant").length).toBe(2);
 	});
 
+	it("顾问(advisor)笔记各开一轮:display:true 计入轮数,display:false 不计", () => {
+		// 与折叠/导航层同一 isTurnStart 口径(customType:"advisor" && display:true)。
+		const advisorEntry = (ts: string, text: string, display: boolean): unknown => ({
+			type: "custom_message",
+			customType: "advisor",
+			display,
+			timestamp: ts,
+			content: [{ type: "text", text }],
+		});
+		const entries = [
+			userEntry("2026-08-17T00:00:00.000Z", "第一问"),
+			assistantEntry("2026-08-17T00:00:01.000Z", { text: "回答一" }),
+			// display:false 的顾问笔记不开轮(与折叠/导航一致)。
+			advisorEntry("2026-08-17T00:00:02.000Z", "静默提醒", false),
+			advisorEntry("2026-08-17T00:00:03.000Z", "这里有并发风险", true),
+			assistantEntry("2026-08-17T00:00:04.000Z", { text: "修复了并发问题" }),
+			userEntry("2026-08-17T00:00:05.000Z", "第二问"),
+		];
+		const { events, stats } = buildTrajectory(entries);
+		// user ×2 + advisor(display) ×1 = 3 轮(旧口径 assistant 消息数 = 2,差数即顾问轮)。
+		expect(stats.turns).toBe(3);
+		const advisor = events.filter(e => e.kind === "advisor");
+		expect(advisor).toHaveLength(1);
+		expect(advisor[0]!.title).toBe("这里有并发风险");
+		expect(advisor[0]!.turn).toBe(2);
+		// 顾问轮后续的 assistant 事件归入该轮。
+		expect(events.find(e => e.title === "修复了并发问题")?.turn).toBe(2);
+	});
+
 	it("无工具/无消息时统计为零且事件为空", () => {
 		const { events, stats } = buildTrajectory([]);
 		expect(events.length).toBe(0);

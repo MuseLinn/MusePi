@@ -1,10 +1,16 @@
 /**
  * 会话轨迹数据构建(纯逻辑,无 DOM 依赖):从 MaterializedView entries
  * 构建事件时间线与统计。TrajectoryView 与单元测试共用。
+ *
+ * 轮次语义与折叠/导航层共用 client-core isTurnStart:user 消息或
+ * display:true 的 advisor 笔记各开一轮(stats.turns = 轮起始数,不是
+ * assistant 消息数——长会话下后者是前者的数十倍)。
  */
+import { isTurnStart } from "@musepi/client-core/src/components/transcript/round-collapse";
+
 export interface TrajectoryEvent {
 	id: string;
-	kind: "assistant" | "tool" | "system" | "user";
+	kind: "assistant" | "tool" | "system" | "user" | "advisor";
 	title: string;
 	body?: string;
 	result?: string;
@@ -58,7 +64,6 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 	const events: TrajectoryEvent[] = [];
 	let turn = 0;
 	let toolCalls = 0;
-	let assistantCount = 0;
 	let firstTs: number | undefined;
 	let lastTs: number | undefined;
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
@@ -169,7 +174,6 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				continue;
 			}
 			if (msg.role === "assistant") {
-				assistantCount += 1;
 				const parts = Array.isArray(msg.content) ? msg.content : [];
 				let text = "";
 				let thinking = "";
@@ -219,6 +223,29 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 					});
 				}
 			}
+		} else if (type === "custom_message" && isTurnStart(raw as Parameters<typeof isTurnStart>[0])) {
+			// 顾问(advisor)笔记:与折叠/导航层同一 isTurnStart 口径,各开一轮;
+			// 该轮后续 assistant/tool 事件自然归入此 turn。
+			turn += 1;
+			const c = (raw as { content?: unknown }).content;
+			const text =
+				typeof c === "string"
+					? c
+					: Array.isArray(c)
+						? (c as Array<{ type?: string; text?: string }>)
+								.filter(b => b?.type === "text")
+								.map(b => b.text ?? "")
+								.join(" ")
+						: "";
+			events.push({
+				id: `advisor:${turn}:${ts}`,
+				kind: "advisor",
+				title: truncate(text.trim(), 80) || "advisor",
+				turn,
+				timestamp: entry.timestamp,
+				entryId,
+				tsMs,
+			});
 		} else if (type === "model_change" || type === "thinking_level_change") {
 			// system 事件:title 用原始类型名,组件层映射 i18n(保持纯逻辑无 i18n 依赖)。
 			events.push({
@@ -238,7 +265,9 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 		stats: {
 			durationSec:
 				firstTs !== undefined && lastTs !== undefined ? Math.max(0, Math.round((lastTs - firstTs) / 1000)) : 0,
-			turns: assistantCount,
+			// 轮起始数(user + advisor,与折叠/导航/地图同口径)——不是
+			// assistant 消息数(长会话下二者差数十倍,用户当作"轮次"读)。
+			turns: turn,
 			calls: toolCalls,
 		},
 	};

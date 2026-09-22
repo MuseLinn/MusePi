@@ -356,6 +356,7 @@ function Row({
 	id,
 	gutter,
 	title,
+	turnStart,
 	children,
 	onQuote,
 	onEdit,
@@ -373,6 +374,10 @@ function Row({
 	id?: string;
 	gutter: ReactNode;
 	title?: string;
+	/** 该行是会话轮次的起始行(user 提示或 display:true 的顾问笔记——
+	 *  与 isTurnStart 同口径)。导航条 scroll-spy 靠它把顾问轮纳入
+	 *  当前轮高亮(顾问行是 tr-row--custom,不进 .tr-row--user 查询)。 */
+	turnStart?: boolean;
 	children: ReactNode;
 	onQuote?(text: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
@@ -439,7 +444,11 @@ function Row({
 	};
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	return (
-		<div className={`tr-row tr-row--${kind}`}>
+		<div
+			className={`tr-row tr-row--${kind}`}
+			data-turn-start={turnStart ? "" : undefined}
+			data-turn-start-ts={turnStart ? title : undefined}
+		>
 			<div className="tr-gutter" title={title}>
 				{gutter}
 			</div>
@@ -749,7 +758,7 @@ function renderCustomMessage({
 				? (details.notes as AdvisorNote[])
 				: [];
 		return (
-			<Row kind="custom" gutter="" title={timestamp}>
+			<Row kind="custom" gutter="" title={timestamp} turnStart>
 				<AdvisorBlock notes={notes} />
 			</Row>
 		);
@@ -927,6 +936,7 @@ const EntryRow = memo(function EntryRow({
 								id={entry.id}
 								gutter={userGutter ?? t("host")}
 								title={entry.timestamp}
+								turnStart
 								onQuote={onQuote}
 								onEdit={onEdit}
 								onRetry={onRetry}
@@ -1863,6 +1873,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						})
 					}
 					onRevert={onRevert}
+					startTs={entries[fold.startIdx]?.timestamp}
 				/>
 			) : null;
 		// A header row is the turn's first content row, which is frequently a
@@ -2031,6 +2042,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 								key={vi.key}
 								ref={virtualizer.measureElement}
 								data-index={vi.index}
+								data-entry-ts={entry.timestamp}
 								className="tr-vrow"
 								aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
 							>
@@ -2041,6 +2053,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				: entries.map((entry, absIdx) => (
 						<div
 							key={entry.id ?? absIdx}
+							data-entry-ts={entry.timestamp}
 							className="tr-vrow"
 							aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
 						>

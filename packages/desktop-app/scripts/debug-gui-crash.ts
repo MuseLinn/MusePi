@@ -12,7 +12,12 @@ async function findTarget() {
 	for (let i = 0; i < 40; i++) {
 		try {
 			const res = await fetch(`http://127.0.0.1:${PORT}/json`);
-			const targets = (await res.json()) as Array<{ type: string; title: string; url: string; webSocketDebuggerUrl: string }>;
+			const targets = (await res.json()) as Array<{
+				type: string;
+				title: string;
+				url: string;
+				webSocketDebuggerUrl: string;
+			}>;
 			const page = targets.find(t => t.type === "page" && t.title === "MusePi" && t.url.includes("index.html"));
 			if (page) return page;
 		} catch {}
@@ -23,14 +28,25 @@ async function findTarget() {
 
 const target = await findTarget();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise<void>((res, rej) => { ws.onopen = () => res(); ws.onerror = () => rej(new Error("ws")); });
+await new Promise<void>((res, rej) => {
+	ws.onopen = () => res();
+	ws.onerror = () => rej(new Error("ws"));
+});
 let nextId = 1;
 const pending = new Map<number, (v: unknown) => void>();
 const events: unknown[] = [];
 ws.onmessage = ev => {
 	const msg = JSON.parse(String(ev.data));
-	if (msg.id && pending.has(msg.id)) { pending.get(msg.id)?.(msg); pending.delete(msg.id); return; }
-	if (msg.method === "Runtime.exceptionThrown" || msg.method === "Runtime.consoleAPICalled" || msg.method === "Log.entryAdded") {
+	if (msg.id && pending.has(msg.id)) {
+		pending.get(msg.id)?.(msg);
+		pending.delete(msg.id);
+		return;
+	}
+	if (
+		msg.method === "Runtime.exceptionThrown" ||
+		msg.method === "Runtime.consoleAPICalled" ||
+		msg.method === "Log.entryAdded"
+	) {
 		events.push(msg.params);
 	}
 };
@@ -38,8 +54,15 @@ function cdp(method: string, params: unknown = {}): Promise<unknown> {
 	const id = nextId++;
 	ws.send(JSON.stringify({ id, method, params }));
 	return new Promise((res, rej) => {
-		pending.set(id, m => ((m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m)));
-		setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout ${method}`)); } }, 15000);
+		pending.set(id, m =>
+			(m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m),
+		);
+		setTimeout(() => {
+			if (pending.has(id)) {
+				pending.delete(id);
+				rej(new Error(`timeout ${method}`));
+			}
+		}, 15000);
 	});
 }
 async function evaluate<T>(expression: string): Promise<T> {
@@ -64,7 +87,10 @@ for (let i = 0; i < 40; i++) {
 	if (rows > 0) break;
 }
 console.log("rows after reload:", rows);
-if (rows === 0) { console.log("ABORT: no session list"); process.exit(1); }
+if (rows === 0) {
+	console.log("ABORT: no session list");
+	process.exit(1);
+}
 
 console.log("click:", await evaluate<string>(`(async (search) => { ${openJs} })(${JSON.stringify(SEARCH)})`));
 // Watch the error boundary appear.
@@ -75,7 +101,10 @@ for (let i = 0; i < 20; i++) {
 		if (document.querySelector(".gui-transcript")) return "transcript";
 		return "loading";
 	})()`).catch(() => "eval-fail");
-	if (state === "error-boundary" || state === "transcript") { console.log(`t+${i + 1}s state:`, state); break; }
+	if (state === "error-boundary" || state === "transcript") {
+		console.log(`t+${i + 1}s state:`, state);
+		break;
+	}
 	if (i === 19) console.log("t+20s state:", state);
 }
 

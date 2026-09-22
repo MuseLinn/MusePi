@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MusePi 会话地图 · 轮级聚合设计稿</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --gold: #d4af37;
+    --gold-bright: #f0cd6b;
+    --purple: #b39ddb;
+    --amber: #d4a35c;
+    --mint: #6fc3b8;
+    --text: #e8e6e1;
+    --muted: #9a978f;
+    --faint: #5c5a55;
+    --border: rgba(255, 255, 255, 0.09);
+    --glass: rgba(22, 24, 30, 0.55);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background:
+      radial-gradient(900px 500px at 75% -10%, rgba(212, 175, 55, 0.07), transparent 60%),
+      radial-gradient(700px 500px at 10% 110%, rgba(111, 195, 184, 0.05), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    height: 100vh; overflow: hidden;
+  }
+  /* ── 顶栏 ── */
+  .topbar {
+    height: 52px; display: flex; align-items: center; gap: 12px;
+    padding: 0 16px; border-bottom: 1px solid var(--border);
+    background: rgba(15, 17, 22, 0.7); backdrop-filter: blur(18px);
+  }
+  .topbar .back {
+    width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--glass); color: var(--muted); font-size: 14px; cursor: pointer;
+  }
+  .topbar .title { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+  .topbar .title .count { color: var(--gold); font-family: ui-monospace, monospace; }
+  .topbar .spacer { flex: 1; }
+  .btn {
+    height: 28px; padding: 0 12px; border-radius: 9px; font-size: 12px;
+    border: 1px solid var(--border); background: var(--glass); color: var(--text);
+    cursor: pointer; backdrop-filter: blur(12px);
+  }
+  .btn.accent { border-color: rgba(212, 175, 55, 0.4); color: var(--gold-bright); }
+  /* ── 主体 ── */
+  .stage { display: flex; height: calc(100vh - 52px); }
+  /* 迷你导航条 */
+  .rail {
+    width: 52px; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 2px;
+    background: rgba(15, 17, 22, 0.4);
+  }
+  .rail .tick { width: 22px; height: 3px; border-radius: 2px; opacity: 0.75; }
+  .rail .tick.user { background: var(--gold); }
+  .rail .tick.advisor { background: var(--mint); }
+  .rail .tick.branch { background: var(--purple); opacity: 0.5; }
+  .rail .tick.hot { opacity: 1; box-shadow: 0 0 6px currentColor; }
+  .rail .viewport {
+    position: absolute; left: 8px; width: 36px; border: 1px solid rgba(212,175,55,.55);
+    border-radius: 5px; pointer-events: none;
+  }
+  /* 画布 */
+  .canvas { flex: 1; position: relative; overflow: hidden; }
+  .world { position: absolute; inset: 0; }
+  /* 主线 */
+  .spine {
+    position: absolute; left: 380px; top: 40px; bottom: 40px; width: 2px;
+    background: linear-gradient(180deg, transparent, var(--gold) 8%, var(--gold) 92%, transparent);
+    opacity: 0.5;
+  }
+  .spine::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 40%, rgba(240,205,107,.9) 50%, transparent 60%);
+    background-size: 100% 300%; animation: flow 5s linear infinite;
+  }
+  @keyframes flow { from { background-position: 0 100%; } to { background-position: 0 -200%; } }
+  /* 轮节点 */
+  .node {
+    position: absolute; width: 300px; border-radius: 12px; padding: 10px 12px;
+    background: var(--glass); border: 1px solid var(--border);
+    backdrop-filter: blur(16px); cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0,0,0,.28);
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .node:hover { border-color: rgba(212,175,55,.45); transform: translateY(-1px); }
+  .node .head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .badge {
+    font-size: 9px; font-weight: 700; letter-spacing: .05em; padding: 1.5px 6px;
+    border-radius: 5px; font-family: ui-monospace, monospace; flex-shrink: 0;
+  }
+  .badge.turn { color: var(--gold-bright); background: rgba(212,175,55,.13); border: 1px solid rgba(212,175,55,.3); }
+  .badge.advisor { color: var(--mint); background: rgba(111,195,184,.12); border: 1px solid rgba(111,195,184,.35); }
+  .node .summary {
+    font-size: 11.5px; color: var(--text); line-height: 1.45;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .node .stats { font-size: 10px; color: var(--muted); font-family: ui-monospace, monospace; margin-top: 4px; }
+  .node .stats .dur.hot { color: var(--amber); }
+  /* 事件构成条 */
+  .mix { display: flex; height: 4px; border-radius: 2px; overflow: hidden; margin-top: 7px; gap: 1px; }
+  .mix i { display: block; height: 100%; border-radius: 1px; }
+  .mix .u { background: var(--gold); } .mix .a { background: var(--purple); }
+  .mix .t { background: var(--amber); } .mix .d { background: var(--mint); }
+  /* 叶子/当前 */
+  .node.leaf { border-color: rgba(212,175,55,.65); box-shadow: 0 0 0 1px rgba(212,175,55,.35), 0 4px 24px rgba(212,175,55,.12); }
+  .node.leaf::after {
+    content: ""; position: absolute; top: -3px; right: -3px; width: 9px; height: 9px;
+    border-radius: 50%; background: var(--gold-bright); box-shadow: 0 0 10px var(--gold);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: .45; } }
+  /* 展开态轮内泳道 */
+  .lanes { margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 7px; display: flex; flex-direction: column; gap: 3px; }
+  .lane { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted); }
+  .lane .tag {
+    font-size: 8px; font-weight: 700; letter-spacing: .05em; padding: 1px 5px;
+    border-radius: 4px; min-width: 52px; text-align: center; font-family: ui-monospace, monospace;
+  }
+  .tag.u { color: var(--gold-bright); background: rgba(212,175,55,.12); }
+  .tag.a { color: var(--purple); background: rgba(179,157,219,.12); }
+  .tag.t { color: var(--amber); background: rgba(212,163,92,.12); }
+  .tag.d { color: var(--mint); background: rgba(111,195,184,.12); }
+  .lane .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 分支列 */
+  .branch-col .node { opacity: 0.85; }
+  .branch-link {
+    position: absolute; border-left: 2px solid; border-image: linear-gradient(180deg, var(--gold), var(--purple)) 1;
+    border-top-left-radius: 12px;
+  }
+  .branch-head {
+    position: absolute; font-size: 10px; color: var(--faint); font-family: ui-monospace, monospace;
+    padding-left: 10px;
+  }
+  .branch-head::before { content: "⤷ "; color: var(--purple); }
+  /* 工具提示 */
+  .hint {
+    position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: var(--faint); background: rgba(15,17,22,.7);
+    border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px;
+    backdrop-filter: blur(10px); white-space: nowrap;
+  }
+  .zoom { position: absolute; bottom: 14px; right: 16px; display: flex; gap: 6px; }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button class="back">←</button>
+    <div class="title">会话地图 · <span class="count">164 轮</span> <span style="color:var(--faint);font-weight:400">/ 9985 条消息已聚合</span></div>
+    <div class="spacer"></div>
+    <button class="btn accent">适合全部</button>
+    <button class="btn">轮级 · 消息级</button>
+    <button class="btn">−</button>
+    <button class="btn">＋</button>
+  </div>
+  <div class="stage">
+    <div class="rail" id="rail"><div class="viewport" id="viewport" style="top:60px;height:120px"></div></div>
+    <div class="canvas">
+      <div class="world" id="world">
+        <div class="spine"></div>
+      </div>
+      <div class="hint">单击展开轮内泳道 · 双击跳回对话 · 拖动平移 · 滚轮缩放</div>
+      <div class="zoom"><button class="btn">−</button><button class="btn">＋</button></div>
+    </div>
+  </div>
+<script>
+// ── 样例数据:24 轮(含 1 个顾问轮 + 1 个重答分支),模拟真实分布 ──
+const KIND_MIX = { u: "var(--gold)", a: "var(--purple)", t: "var(--amber)", d: "var(--mint)" };
+const turns = [
+  { n: 1,  t: "分析 CI 基线错误邮件,定位到 desktop-app voice 测试", a: 2, c: 6,  d: "1m12s", mix: [1,2,4] },
+  { n: 2,  t: "修复 trajectory 统计口径:assistantCount → 轮起始数", a: 3, c: 9,  d: "3m40s", mix: [1,3,6] },
+  { n: 3,  t: "补 advisor 单测用例,验证 display:false 不开轮", a: 1, c: 2,  d: "0m48s", mix: [1,1,1] },
+  { n: 4,  t: "排查导航条高亮回归,发现 title 落在 tr-gutter 上", a: 4, c: 11, d: "5m02s", mix: [1,4,7] },
+  { n: 5,  t: "修复 TurnRail spy 选择器,顾问行纳入 scroll-spy", a: 2, c: 5,  d: "2m15s", mix: [1,2,3] },
+  { n: 6,  advisor: true, t: "并发风险:session.history 回填与扩窗竞态", a: 2, c: 7, d: "2m58s", mix: [1,1,6] },
+  { n: 7,  t: "给 history 回填加守卫,验证分页抖动三连修", a: 3, c: 8,  d: "4m21s", mix: [1,3,5], branch: true },
+  { n: 8,  t: "继续:虚拟列表展开态高度同步", a: 2, c: 4, d: "1m33s", mix: [1,2,2] },
+  { n: 9,  t: "地图视图重设计稿:轮级聚合 + 分支泳道", a: 5, c: 3,  d: "6m47s", hot: true, mix: [1,5,2], expanded: true },
+  { n: 10, t: "content-visibility 优化轨迹树与画布节点", a: 2, c: 3,  d: "1m05s", mix: [1,2,2] },
+  { n: 11, t: "能力中心返回卡顿:chat 整树卸载重挂", a: 3, c: 6,  d: "3m12s", mix: [1,3,4] },
+  { n: 12, t: "keeper 常驻挂载改造,设置/能力中心返回不重载", a: 4, c: 9,  d: "5m30s", mix: [1,4,6] },
+  { n: 13, t: "验证 164/164 轮次口径一致", a: 1, c: 1, d: "0m22s", mix: [1,1] },
+  { n: 14, t: "提交推送 advisor + 导航条 + 区间跳转修复", a: 2, c: 2, d: "0m51s", mix: [1,2,1] },
+];
+const branchTurn = { n: "7′", t: "重答:直接改迭代而非递归,避免爆栈", a: 2, c: 4, d: "2m03s", mix: [1,2,3] };
+
+const world = document.getElementById("world");
+const GAP = 18, NODE_H = 96, X_MAIN = 230, X_BRANCH = 600, TOP = 40;
+
+function mixBar(mix) {
+  const total = mix.reduce((s, v) => s + v, 0);
+  const cls = ["u", "a", "t"];
+  return `<div class="mix">${mix.map((v, i) => `<i class="${cls[i]}" style="width:${(v / total) * 100}%"></i>`).join("")}</div>`;
+}
+function laneRow(tag, txt) {
+  return `<div class="lane"><span class="tag ${tag}">${{ u: "USER", a: "ASSISTANT", t: "TOOL", d: "顾问" }[tag]}</span><span class="txt">${txt}</span></div>`;
+}
+function nodeEl(t, x, y, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "node" + (opts.leaf ? " leaf" : "");
+  el.style.left = x + "px"; el.style.top = y + "px";
+  const h = t.advisor ? `<span class="badge advisor">Turn ${t.n} ✦ 顾问</span>` : `<span class="badge turn">Turn ${t.n}</span>`;
+  const lanes = t.expanded ? `<div class="lanes">
+      ${laneRow("u", t.t)}
+      ${laneRow("a", " ASSISTANT · 设计稿:轮级聚合地图,先看 mockup.html…")}
+      ${laneRow("a", " ASSISTANT · 布局:主线垂直时间轴 + 分支列横向开出…")}
+      ${laneRow("t", " tool · write docs/review/0.5.0-map-redesign/design.md")}
+      ${laneRow("t", " tool · write docs/review/0.5.0-map-redesign/mockup.html")}
+    </div>` : "";
+  el.innerHTML = `<div class="head">${h}<span class="summary">${t.t}</span></div>
+    <div class="stats">${t.a} 回复 · ${t.c} 工具 · <span class="dur ${t.hot ? "hot" : ""}">${t.d}</span></div>
+    ${mixBar(t.mix)}${lanes}`;
+  if (t.expanded) { el.style.height = "auto"; el.style.width = "340px"; }
+  return el;
+}
+
+let y = TOP;
+turns.forEach((t, i) => {
+  const isLeaf = i === turns.length - 1;
+  world.appendChild(nodeEl(t, X_MAIN, y, { leaf: isLeaf }));
+  // 迷你导航条
+  const rail = document.getElementById("rail");
+  const tick = document.createElement("div");
+  tick.className = "tick " + (t.advisor ? "advisor" : t.branch ? "branch" : "user") + (t.hot ? " hot" : "");
+  rail.appendChild(tick);
+  y += (t.expanded ? 210 : NODE_H) + GAP;
+});
+// 分支列(从 Turn 7 横向开出)
+const srcY = TOP + (turns.slice(0, 6).reduce((s, t) => s + (t.expanded ? 210 : NODE_H) + GAP, 0));
+world.appendChild(nodeEl(branchTurn, X_BRANCH, srcY));
+const head = document.createElement("div");
+head.className = "branch-head";
+head.style.cssText = `left:${X_BRANCH}px;top:${srcY - 20}px`;
+head.textContent = "自 Turn 7 · 重答分支";
+world.appendChild(head);
+const link = document.createElement("div");
+link.className = "branch-link";
+link.style.cssText = `left:${X_MAIN + 300}px;top:${srcY + 30}px;width:${X_BRANCH - X_MAIN - 300}px;height:60px;border-bottom:none;border-right:none`;
+world.appendChild(link);
+</script>
+</body>
+</html>

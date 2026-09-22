@@ -2531,6 +2531,12 @@
 	background: color-mix(in oklab, var(--color-text-faint) 12%, transparent);
 }
 
+/* 顾问(advisor)笔记:薄荷青,与时间轴泳道 KIND_COLOR.advisor 同源。 */
+.traj-tag--advisor {
+	color: #6fc3b8;
+	background: color-mix(in oklab, #6fc3b8 14%, transparent);
+}
+
 .traj-content {
 	min-width: 0;
 	flex: 1;
@@ -2584,6 +2590,10 @@
 /* ── 轨迹树形化(2026-08-17:turn 折叠节点 + 事件行跳转) ──────────── */
 .traj-turn-group {
 	margin-bottom: 2px;
+	/* 轮分组同样跳过屏外布局(auto 记住上次渲染高度,折叠态变化后首帧
+	 * 用估算值兜底)——长会话时间线模式滚动/切视图提速。 */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 40px;
 }
 .traj-turn-head {
 	display: flex;
@@ -2900,6 +2910,10 @@
 	display: flex;
 	align-items: center;
 	min-width: 0;
+	/* 超长会话分支树上万行:浏览器跳过屏外行布局/绘制(估算 26px,
+	 * 实测行高 24–28)——切视图与滚动不再逐行排版。 */
+	content-visibility: auto;
+	contain-intrinsic-size: auto 26px;
 }
 .traj-trow-main {
 	display: flex;
@@ -3095,6 +3109,10 @@
 	color: var(--color-text);
 	cursor: pointer;
 	transition: border-color 120ms ease, background 120ms ease;
+	/* 地图视图上万张卡片:跳过视口外节点的布局/绘制(NODE_H=76 同源自
+	 * SessionTreeCanvas 常量)——进地图视图不再逐卡排版。 */
+	content-visibility: auto;
+	contain-intrinsic-size: 208px 76px;
 }
 .stc-node:hover {
 	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));

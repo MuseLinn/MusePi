@@ -78,10 +78,19 @@ describe("buildTurnIndex", () => {
 			entry({
 				type: "custom_message",
 				customType: "advisor",
-				content: [{ type: "text", text: "part one " }, { type: "image", data: "AAAA", mimeType: "image/png" }, { type: "text", text: "part two" }],
+				content: [
+					{ type: "text", text: "part one " },
+					{ type: "image", data: "AAAA", mimeType: "image/png" },
+					{ type: "text", text: "part two" },
+				],
 				display: true,
 			}),
-			entry({ type: "custom_message", customType: "advisor", content: [{ type: "image", data: "AAAA", mimeType: "image/png" }], display: true }),
+			entry({
+				type: "custom_message",
+				customType: "advisor",
+				content: [{ type: "image", data: "AAAA", mimeType: "image/png" }],
+				display: true,
+			}),
 		];
 		const idx = buildTurnIndex(entries);
 		expect(idx[0]!.summary).toBe("part one part two");

@@ -404,6 +404,33 @@
 	color: var(--color-text-faint);
 }
 
+/* kimicode "+" menu parity: the leading icon pins to the first line of a
+ * two-line row, and bound shortcuts render as a right-aligned kbd chip
+ * (live binding from the shortcut registry). */
+.gui-attach-opt-ico {
+	flex: none;
+	align-self: flex-start;
+	margin-top: 1px;
+	color: var(--color-text-muted);
+}
+
+.gui-attach-opt:hover .gui-attach-opt-ico {
+	color: var(--color-text);
+}
+
+.gui-attach-keys {
+	flex: none;
+	align-self: center;
+	padding: 2px 7px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--glass-border, var(--border));
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+	font-family: var(--font-mono, monospace);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.4;
+	color: var(--color-text-faint);
+}
+
 .gui-attach-switch {
 	position: relative;
 	flex: none;

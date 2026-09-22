@@ -173,10 +173,16 @@ export function TurnRail({
 			const rootRect = root.getBoundingClientRect();
 			const scrollTop = root.scrollTop;
 			let idx = -1;
-			for (const row of root.querySelectorAll<HTMLElement>(".tr-row--user")) {
-				const top = row.getBoundingClientRect().top - rootRect.top + scrollTop;
+			// 轮起始锚点 = 展开的 user/顾问行(data-turn-start-ts 在行根) +
+			//  折叠轮的 RoundFoldHeader(折叠态 user 行不挂载,折叠头是唯一锚点)。
+			//  只查 .tr-row--user 会让滚动停在顾问轮区域时高亮落回上一个
+			//  user 轮(超长会话里顾问轮占绝大多数,导航条看似"不跟踪")。
+			for (const el of root.querySelectorAll<HTMLElement>(
+				".tr-row[data-turn-start-ts], .tr-round-fold[data-turn-start-ts]",
+			)) {
+				const top = el.getBoundingClientRect().top - rootRect.top + scrollTop;
 				if (top <= threshold) {
-					const i = tsToIndexRef.current.get(row.getAttribute("title") ?? "");
+					const i = tsToIndexRef.current.get(el.dataset.turnStartTs ?? "");
 					if (i !== undefined) idx = i;
 				} else break;
 			}

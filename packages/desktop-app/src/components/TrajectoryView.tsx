@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
@@ -53,6 +53,8 @@ function EventRow({
 						<Icon name="hammer" className="h-2.5 w-2.5" />
 					) : ev.kind === "system" ? (
 						<Icon name="settings-3" className="h-2.5 w-2.5" />
+					) : ev.kind === "advisor" ? (
+						<Icon name="sparkling" className="h-2.5 w-2.5" />
 					) : null}
 					{ev.kind === "assistant"
 						? "ASSISTANT"
@@ -60,7 +62,9 @@ function EventRow({
 							? "TOOL"
 							: ev.kind === "user"
 								? "USER"
-								: "SYSTEM"}
+								: ev.kind === "advisor"
+									? t("advisor").toUpperCase()
+									: "SYSTEM"}
 				</span>
 				<div className="traj-content">
 					{ev.kind === "tool" ? (
@@ -121,9 +125,11 @@ function InspectorCard({
 			? t("trajectory user")
 			: ev.kind === "tool"
 				? "TOOL"
-				: ev.kind === "system"
-					? "SYSTEM"
-					: "ASSISTANT";
+				: ev.kind === "advisor"
+					? t("advisor")
+					: ev.kind === "system"
+						? "SYSTEM"
+						: "ASSISTANT";
 	const timeText =
 		ev.tsMs !== undefined
 			? new Date(ev.tsMs).toLocaleString()
@@ -254,6 +260,7 @@ function TreeNodeRow({
 		<div
 			className={`traj-trow${onPath ? "" : " traj-trow--off"}${isLeaf ? " traj-trow--leaf" : ""}`}
 			style={{ paddingLeft: Math.min(depth, TRAJ_MAX_INDENT) * 14 }}
+			data-trajectory-entry={node.id}
 		>
 			<button type="button" className="traj-trow-main" onClick={() => onJump(node.id)} title={t("trajectory jump")}>
 				<Icon
@@ -331,7 +338,12 @@ export function TrajectoryView({
 	/** forkAt:从该节点分叉新会话。 */
 	onForkAt?(id: string): void;
 }): ReactNode {
-	const [mode, setMode] = useState<"timeline" | "tree">("timeline");
+	const [mode, setModeState] = useState<"timeline" | "tree">("timeline");
+	// startTransition:时间线↔分支树互切是整列表 mount(超长会话上万行),
+	// 可中断渲染让切换即时响应,配合行级 content-visibility 跳过屏外布局。
+	const setMode = (next: "timeline" | "tree"): void => {
+		startTransition(() => setModeState(next));
+	};
 	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
 	// 折叠的 turn 集合(默认全部展开;点击行头折叠/展开)。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
@@ -508,10 +520,9 @@ export function TrajectoryView({
 		// async, so measuring in this tick reads the still-collapsed layout and
 		// the scroll lands short (the rows that just opened shift the target
 		// down). A double rAF waits for commit + layout.
-		const scrollToTarget = (): void => {
+		const scrollToRow = (row: HTMLElement): void => {
 			const scroller = listRef.current;
-			const row = scroller?.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
-			if (!scroller || !row) return;
+			if (!scroller) return;
 			// Scroll ONLY this list: `scrollIntoView` walks every scrollable
 			// ancestor, which pushed the whole panel up out of place, and the row
 			// landed flush against the edge.
@@ -522,8 +533,33 @@ export function TrajectoryView({
 				TURN_JUMP_INSET;
 			scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
 		};
+		const scrollToTarget = (): void => {
+			const scroller = listRef.current;
+			if (!scroller) return;
+			if (mode === "tree") {
+				// 树模式行 = entry 节点(带 data-trajectory-entry;顾问 custom
+				// 条目不进消息树,回退到该轮首个树内事件——两者都折叠时该轮
+				// 无挂载行,继续向后找)。
+				for (const group of turns) {
+					if (!group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs))) continue;
+					for (const ev of group.events) {
+						if (ev.entryId === undefined) continue;
+						const row = scroller.querySelector<HTMLElement>(
+							`[data-trajectory-entry="${CSS.escape(ev.entryId)}"]`,
+						);
+						if (row) {
+							scrollToRow(row);
+							return;
+						}
+					}
+				}
+				return;
+			}
+			const row = scroller.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
+			if (row) scrollToRow(row);
+		};
 		requestAnimationFrame(() => requestAnimationFrame(scrollToTarget));
-	}, [range, turns]);
+	}, [range, turns, mode]);
 
 	const toggleTurn = (turn: number): void => {
 		setCollapsed(prev => {

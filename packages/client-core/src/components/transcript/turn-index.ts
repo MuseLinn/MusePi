@@ -1,6 +1,6 @@
 import type { CustomMessageEntry, SessionEntry } from "@musepi/pi-wire";
-import { msgText } from "./transcript-content";
 import { isTurnStart } from "./round-collapse.js";
+import { msgText } from "./transcript-content";
 
 /**
  * M1.11 turn metadata index: one lightweight record per turn start, where

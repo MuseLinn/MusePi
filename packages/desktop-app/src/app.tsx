@@ -50,6 +50,7 @@ import {
 	type PetBubbleKind,
 } from "./lib/session-store";
 import { sfxFor } from "./lib/sfx";
+import { eventMatches } from "./lib/shortcut-registry";
 import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
@@ -2703,7 +2704,10 @@ function AppInner(): ReactNode {
 			}
 			const mod = e.metaKey || e.ctrlKey;
 			const k = e.key.toLowerCase();
-			if (mod && e.shiftKey && k === "l") {
+			// Every binding below resolves through the shortcut registry
+			// (设置 → 快捷键 is editable; kimicode-parity capture UI), so a
+			// user rebind takes effect here without touching this chain.
+			if (mod && eventMatches(e, "ask")) {
 				// openchamber selection→ask: pop the ask popover for the
 				// current non-composer selection (interpret/explain it in a
 				// throwaway turn, never touching the transcript).
@@ -2722,7 +2726,7 @@ function AppInner(): ReactNode {
 						}),
 					);
 				}
-			} else if (mod && k === "l") {
+			} else if (mod && eventMatches(e, "quote")) {
 				// openchamber Cursor-style Cmd+L: quote the current
 				// selection into the composer — the SAME quote-card style
 				// as the toolbar 引用 button (append-only, stacked cards).
@@ -2734,44 +2738,44 @@ function AppInner(): ReactNode {
 				} else {
 					(document.querySelector('[data-chat-input="true"] textarea') as HTMLTextAreaElement | null)?.focus();
 				}
-			} else if (mod && k === "k") {
+			} else if (mod && eventMatches(e, "search")) {
 				e.preventDefault();
 				setPaletteOpen(v => !v);
-			} else if (mod && k === "o") {
+			} else if (mod && eventMatches(e, "open-folder")) {
 				e.preventDefault();
 				pickProjectFolder();
-			} else if (mod && k === "b") {
+			} else if (mod && eventMatches(e, "toggle-sidebar")) {
 				e.preventDefault();
 				setSideCollapsed(v => {
 					localStorage.setItem("musepi-gui-side", v ? "1" : "0");
 					return !v;
 				});
-			} else if (mod && k === "j") {
+			} else if (mod && eventMatches(e, "toggle-terminal")) {
 				e.preventDefault();
 				setBottomTerminal(v => !v);
-			} else if (mod && k === "n") {
+			} else if (mod && eventMatches(e, "new-task")) {
 				e.preventDefault();
 				startNewTask();
-			} else if (mod && k === ",") {
+			} else if (mod && eventMatches(e, "settings")) {
 				e.preventDefault();
 				openSettings();
-			} else if (mod && k === "arrowdown") {
-				// settings → 快捷键 reference: jump the transcript to the
-				// latest message (smooth, like most chat apps).
+			} else if (mod && eventMatches(e, "capture-screen")) {
+				// kimicode ⇧⌘S parity: hand the composer the screen-capture
+				// flow (annotate board opens on the shot; the chip rides the
+				// next send).
 				e.preventDefault();
-				const scroller = document.querySelector<HTMLElement>(".gui-chat-surface .gui-transcript");
-				if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
-			} else if (mod && e.shiftKey && k === "e") {
+				window.dispatchEvent(new CustomEvent("musepi-gui-capture-screen"));
+			} else if (mod && eventMatches(e, "focus-mode")) {
 				// openchamber ⌘⇧E: focus mode (composer fills the surface).
 				e.preventDefault();
 				setFocusMode(v => !v);
-			} else if (mod && !e.shiftKey && k === "e") {
+			} else if (mod && eventMatches(e, "toggle-panel")) {
 				e.preventDefault();
 				setRightCollapsed(v => {
 					localStorage.setItem("musepi-gui-right", v ? "1" : "0");
 					return !v;
 				});
-			} else if (mod && !e.shiftKey && /^[1-8]$/.test(k)) {
+			} else if (mod && eventMatches(e, "panel-surfaces")) {
 				// ⌘1..8: jump to the nth surface in rail order (design-doc
 				// 遗留项) — digits match the rail's visual order, selecting
 				// while collapsed expands the panel.
@@ -2783,6 +2787,12 @@ function AppInner(): ReactNode {
 					localStorage.setItem("musepi-gui-right", "0");
 					setPanelSelect({ id, nonce: ++panelSelectNonce.current });
 				}
+			} else if (mod && eventMatches(e, "scroll-transcript")) {
+				// settings → 快捷键 reference: jump the transcript to the
+				// latest message (smooth, like most chat apps).
+				e.preventDefault();
+				const scroller = document.querySelector<HTMLElement>(".gui-chat-surface .gui-transcript");
+				if (scroller) scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -3064,29 +3074,20 @@ function AppInner(): ReactNode {
 					</button>
 				</div>
 			)}
-			{settingsOpen ? (
-				/* Full-window settings view replaces the workspace (ZCode),
-				 * with the same blur transition as the view swaps: leave =
-				 * blur-out (closing), enter = blur-in (opening). */
-				<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
-					<SettingsView
-						rpc={rpc}
-						sessionId={store?.sessionId ?? null}
-						providerEvent={providerEvent}
-						initialSection={settingsSection}
-						onBack={closeSettings}
-						cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
-						onOpenSession={sessionId => {
-							closeSettings();
-							void openSession(sessionId);
-						}}
-						onCreateChat={onPresetCreate}
-					/>
-				</div>
-			) : (
-				/* openchamber-style shell: a full-width immersive toolbar riding
+			{/* 工作区常驻挂载:设置页打开时只隐藏(display:none)不卸载——
+			 * 返回时长会话的 ChatView/转录/虚拟列表状态全部保留,不再整树
+			 * 重挂、重新订阅、重新物化上万条 entry。设置页自身仍按
+			 * blur-out/blur-in 进出。 */}
+			<div
+				className={
+					settingsOpen
+						? "gui-workspace-keeper gui-workspace-keeper--hidden"
+						: "gui-workspace-keeper gui-workspace-keeper--enter"
+				}
+			>
+				{/* openchamber-style shell: a full-width immersive toolbar riding
 				 * the top edge, the three panes below it sharing its surface
-				 * (no divider, same frosted tint). */
+				 * (no divider, same frosted tint). */}
 				<div className="gui-main relative flex min-h-0 flex-1">
 					{!sideCollapsed && (
 						<div
@@ -3186,179 +3187,233 @@ function AppInner(): ReactNode {
 							onAddHost={addHost}
 							onRemoveHost={removeHost}
 						/>
-						{(() => {
-							const chatSurface = (
-								<ChatView
-									store={store}
-									rpc={rpc}
-									onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
-									onStop={stop}
-									onDecideApproval={decideApproval}
-									onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
-									onForkSession={async forkId => {
-										await refreshSessions(rpc);
-										await openSession(forkId);
-									}}
-									presetModelId={presetModelId}
-									modes={welcomeModes}
-									modeId={welcomeModeId}
-									onModeChange={setWelcomeModeId}
-									defaultModelId={defaultModelId}
-									presetThinkingLevel={presetThinkingLevel}
-									busy={status === "connecting"}
-									paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-									pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-									onResume={() => void togglePause()}
-									project={project}
-									onProject={action => {
-										if (action === "remote") {
-											setConnectOpen(true);
-										} else if (action === "new") {
-											setNewProjectOpen(true);
-										} else if (action === "none") {
-											// "不在项目中": clear the workspace chip — never open the picker.
-											setProject(null);
-											localStorage.removeItem("musepi-gui-project");
-										} else if (action === "folder") {
-											pickProjectFolder();
-										} else {
-											// A saved workspace picked from the list — switch to it.
-											setProject(action);
-											localStorage.setItem("musepi-gui-project", action);
-										}
-									}}
-									onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
-									rightPanelOpen={!rightCollapsed}
-									onOpenFileInPanel={() => {
-										setRightCollapsed(false);
-									}}
-									onAddProvider={() => openSettings("providers")}
-									onToggleRightPanel={() => {
-										setRightCollapsed(v => {
-											localStorage.setItem("musepi-gui-right", v ? "1" : "0");
-											return !v;
-										});
-									}}
-									onExpandRightPanel={() => {
-										setRightCollapsed(false);
-										localStorage.setItem("musepi-gui-right", "0");
-									}}
-									panelSelectRequest={panelSelect}
-									terminalOpen={bottomTerminal}
-									onCloseTerminal={() => setBottomTerminal(false)}
-									focusMode={focusMode}
-									onToggleFocus={() => setFocusMode(v => !v)}
-									reminders={reminders}
-									onSelectReminder={id => void openSession(id)}
-									onMarkAllRead={markAllRead}
-									sessionLoading={sessionLoading}
-									ask={activeAsk}
-									onAskAnswer={answerAsk}
-								/>
-							);
-							return leavingView === "board" ? (
-								/* Leaving board → chat: the board surface stays
-								 * mounted for its blur-out, then chat enters. */
-								<div className="gui-view-leave">
-									<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-										<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-											<BoardPage
-												onBack={() => viewSwapRef.current("chat")}
-												rpc={rpc}
-												cwd={project ?? undefined}
-												jumpId={boardJumpId}
-												onJumpConsumed={() => setBoardJumpId(null)}
-												onChatCreate={text => {
-													// 对话创建 (kimi parity): leave the board and prompt the
-													// agent to design boards; with text, create a session
-													// (DSH creation flow: Creator persona) and send it
-													// right away.
-													const trimmed = text.trim();
-													if (!trimmed) {
-														startNewTask();
-														return;
-													}
-													const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-													void createAndSend(prompt, "creator");
-												}}
-											/>
-										</div>
-									</div>
-								</div>
-							) : boardOpen ? (
-								/* Board view replaces the chat surface only — the
-								 * sidebar stays (kimi Work tab parity). */
-								<ChatSurfaceShell>
-									<BoardPage
-										onBack={() => viewSwapRef.current("chat")}
+						{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
+						 * keeper 绝对定位填满本区,alt 页面在流内替换——二者互不争抢
+						 * 高度,且 chat 常驻挂载不再卸载。 */}
+						<div className="gui-surface-area relative flex min-h-0 flex-1 flex-col">
+							{(() => {
+								const chatSurface = (
+									<ChatView
+										store={store}
 										rpc={rpc}
-										cwd={project ?? undefined}
-										jumpId={boardJumpId}
-										onJumpConsumed={() => setBoardJumpId(null)}
-										onChatCreate={text => {
-											// 对话创建 (kimi parity): leave the board and prompt the
-											// agent to design boards; with text, create a session
-											// (DSH creation flow: Creator persona) and send it
-											// right away.
-											const trimmed = text.trim();
-											if (!trimmed) {
-												startNewTask();
-												return;
-											}
-											const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-											void createAndSend(prompt, "creator");
+										onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
+										onStop={stop}
+										onDecideApproval={decideApproval}
+										onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
+										onForkSession={async forkId => {
+											await refreshSessions(rpc);
+											await openSession(forkId);
 										}}
+										presetModelId={presetModelId}
+										modes={welcomeModes}
+										modeId={welcomeModeId}
+										onModeChange={setWelcomeModeId}
+										defaultModelId={defaultModelId}
+										presetThinkingLevel={presetThinkingLevel}
+										busy={status === "connecting"}
+										paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
+										pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
+										onResume={() => void togglePause()}
+										project={project}
+										onProject={action => {
+											if (action === "remote") {
+												setConnectOpen(true);
+											} else if (action === "new") {
+												setNewProjectOpen(true);
+											} else if (action === "none") {
+												// "不在项目中": clear the workspace chip — never open the picker.
+												setProject(null);
+												localStorage.removeItem("musepi-gui-project");
+											} else if (action === "folder") {
+												pickProjectFolder();
+											} else {
+												// A saved workspace picked from the list — switch to it.
+												setProject(action);
+												localStorage.setItem("musepi-gui-project", action);
+											}
+										}}
+										onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
+										rightPanelOpen={!rightCollapsed}
+										onOpenFileInPanel={() => {
+											setRightCollapsed(false);
+										}}
+										onAddProvider={() => openSettings("providers")}
+										onToggleRightPanel={() => {
+											setRightCollapsed(v => {
+												localStorage.setItem("musepi-gui-right", v ? "1" : "0");
+												return !v;
+											});
+										}}
+										onExpandRightPanel={() => {
+											setRightCollapsed(false);
+											localStorage.setItem("musepi-gui-right", "0");
+										}}
+										panelSelectRequest={panelSelect}
+										terminalOpen={bottomTerminal}
+										onCloseTerminal={() => setBottomTerminal(false)}
+										focusMode={focusMode}
+										onToggleFocus={() => setFocusMode(v => !v)}
+										reminders={reminders}
+										onSelectReminder={id => void openSession(id)}
+										onMarkAllRead={markAllRead}
+										sessionLoading={sessionLoading}
+										ask={activeAsk}
+										onAskAnswer={answerAsk}
 									/>
-								</ChatSurfaceShell>
-							) : leavingView === "scheduled" ? (
-								/* Leaving scheduled → chat/board: scheduled blurs out first. */
-								<ChatSurfaceShell leave>
-									<ScheduledTasksPage
-										rpc={rpc}
-										onBack={() => viewSwapRef.current("chat")}
-										onOpenSession={id => void openSession(id)}
-										initialTaskId={scheduledJumpId}
-									/>
-								</ChatSurfaceShell>
-							) : scheduledOpen ? (
-								/* Scheduled tasks view (kimi cron page parity). */
-								<ChatSurfaceShell>
-									<ScheduledTasksPage
-										rpc={rpc}
-										onBack={() => viewSwapRef.current("chat")}
-										onOpenSession={id => void openSession(id)}
-										initialTaskId={scheduledJumpId}
-									/>
-								</ChatSurfaceShell>
-							) : leavingView === "agents" ? (
-								/* Leaving agents → chat/board: agents blurs out first. */
-								<ChatSurfaceShell leave>
-									<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
-								</ChatSurfaceShell>
-							) : agentsOpen ? (
-								/* Agents center view (live subagent roster). */
-								<ChatSurfaceShell>
-									<AgentsCenterPage rpc={rpc} store={store} onBack={() => viewSwapRef.current("chat")} />
-								</ChatSurfaceShell>
-							) : leavingView === "capability" ? (
-								/* Leaving capability center → chat: blur out first. */
-								<ChatSurfaceShell leave>
-									<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
-								</ChatSurfaceShell>
-							) : capabilityOpen ? (
-								/* Capability center (设计稿 05: sidebar first-class entry —
-								 * skills / plugins / marketplace over one card language). */
-								<ChatSurfaceShell>
-									<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
-								</ChatSurfaceShell>
-							) : leavingView === "chat" ? (
-								/* Leaving chat → board: chat blurs out first. */
-								<div className="gui-view-leave">{chatSurface}</div>
-							) : (
-								<div className="gui-view-enter">{chatSurface}</div>
-							);
-						})()}
+								);
+								// Chat 常驻挂载:看板/任务/智能体/能力中心打开时 chat 仅
+								// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
+								// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
+								const chatKeeperHidden =
+									settingsOpen || boardOpen || scheduledOpen || agentsOpen || capabilityOpen;
+								return (
+									<>
+										<div
+											className={
+												chatKeeperHidden
+													? "gui-chat-keeper gui-chat-keeper--hidden"
+													: "gui-chat-keeper gui-chat-keeper--enter"
+											}
+										>
+											<div
+												className={
+													leavingView === "chat"
+														? "gui-view-leave gui-chat-keeper-fill"
+														: "gui-chat-keeper-fill"
+												}
+											>
+												{chatSurface}
+											</div>
+										</div>
+										{leavingView === "board" ? (
+											/* Leaving board → chat: the board surface stays
+											 * mounted for its blur-out, then chat enters. */
+											<div className="gui-view-leave">
+												<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+													<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+														<BoardPage
+															onBack={() => viewSwapRef.current("chat")}
+															rpc={rpc}
+															cwd={project ?? undefined}
+															jumpId={boardJumpId}
+															onJumpConsumed={() => setBoardJumpId(null)}
+															onChatCreate={text => {
+																// 对话创建 (kimi parity): leave the board and prompt the
+																// agent to design boards; with text, create a session
+																// (DSH creation flow: Creator persona) and send it
+																// right away.
+																const trimmed = text.trim();
+																if (!trimmed) {
+																	startNewTask();
+																	return;
+																}
+																const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+																void createAndSend(prompt, "creator");
+															}}
+														/>
+													</div>
+												</div>
+											</div>
+										) : boardOpen ? (
+											/* Board view replaces the chat surface only — the
+											 * sidebar stays (kimi Work tab parity). */
+											<ChatSurfaceShell>
+												<BoardPage
+													onBack={() => viewSwapRef.current("chat")}
+													rpc={rpc}
+													cwd={project ?? undefined}
+													jumpId={boardJumpId}
+													onJumpConsumed={() => setBoardJumpId(null)}
+													onChatCreate={text => {
+														// 对话创建 (kimi parity): leave the board and prompt the
+														// agent to design boards; with text, create a session
+														// (DSH creation flow: Creator persona) and send it
+														// right away.
+														const trimmed = text.trim();
+														if (!trimmed) {
+															startNewTask();
+															return;
+														}
+														const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+														void createAndSend(prompt, "creator");
+													}}
+												/>
+											</ChatSurfaceShell>
+										) : leavingView === "scheduled" ? (
+											/* Leaving scheduled → chat/board: scheduled blurs out first. */
+											<ChatSurfaceShell leave>
+												<ScheduledTasksPage
+													rpc={rpc}
+													onBack={() => viewSwapRef.current("chat")}
+													onOpenSession={id => void openSession(id)}
+													initialTaskId={scheduledJumpId}
+												/>
+											</ChatSurfaceShell>
+										) : scheduledOpen ? (
+											/* Scheduled tasks view (kimi cron page parity). */
+											<ChatSurfaceShell>
+												<ScheduledTasksPage
+													rpc={rpc}
+													onBack={() => viewSwapRef.current("chat")}
+													onOpenSession={id => void openSession(id)}
+													initialTaskId={scheduledJumpId}
+												/>
+											</ChatSurfaceShell>
+										) : leavingView === "agents" ? (
+											/* Leaving agents → chat/board: agents blurs out first. */
+											<ChatSurfaceShell leave>
+												<AgentsCenterPage
+													rpc={rpc}
+													store={store}
+													onBack={() => viewSwapRef.current("chat")}
+												/>
+											</ChatSurfaceShell>
+										) : agentsOpen ? (
+											/* Agents center view (live subagent roster). */
+											<ChatSurfaceShell>
+												<AgentsCenterPage
+													rpc={rpc}
+													store={store}
+													onBack={() => viewSwapRef.current("chat")}
+												/>
+											</ChatSurfaceShell>
+										) : leavingView === "capability" ? (
+											/* Leaving capability center → chat: blur out first. */
+											<ChatSurfaceShell leave>
+												<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+											</ChatSurfaceShell>
+										) : capabilityOpen ? (
+											/* Capability center (设计稿 05: sidebar first-class entry —
+											 * skills / plugins / marketplace over one card language). */
+											<ChatSurfaceShell>
+												<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+											</ChatSurfaceShell>
+										) : null}
+									</>
+								);
+							})()}
+						</div>
 					</div>
+				</div>
+			</div>
+			{settingsOpen && (
+				/* Full-window settings view replaces the workspace (ZCode),
+				 * with the same blur transition as the view swaps: leave =
+				 * blur-out (closing), enter = blur-in (opening). */
+				<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
+					<SettingsView
+						rpc={rpc}
+						sessionId={store?.sessionId ?? null}
+						providerEvent={providerEvent}
+						initialSection={settingsSection}
+						onBack={closeSettings}
+						cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
+						onOpenSession={sessionId => {
+							closeSettings();
+							void openSession(sessionId);
+						}}
+						onCreateChat={onPresetCreate}
+					/>
 				</div>
 			)}
 			<ConnectDialog

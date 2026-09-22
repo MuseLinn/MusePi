@@ -14,7 +14,7 @@ import {
 } from "@musepi/client-core";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { dispatchNotification } from "../lib/notify";
@@ -687,7 +687,12 @@ export function ChatView({
 	// forks a new branch under it (TUI navigateTree parity).
 	const [currentLeafKey, setCurrentLeafKey] = useState<string | null>(null);
 	// Layer-3: 聊天表面顶层 Chat | Canvas 切换(canvas = 会话树地图)。
-	const [viewMode, setViewMode] = useState<"chat" | "canvas">("chat");
+	// startTransition:画布/对话互切是整树 mount/unmount(超长会话上万
+	// 节点),可中断渲染让切换按钮与滚动先行响应,避免"点了没反应"的卡顿感。
+	const [viewMode, setViewModeState] = useState<"chat" | "canvas">("chat");
+	const setViewMode = useCallback((mode: "chat" | "canvas") => {
+		startTransition(() => setViewModeState(mode));
+	}, []);
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);

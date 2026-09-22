@@ -19,19 +19,22 @@ export interface TimelineRange {
 
 const MIN_SEGMENT_PX = 3;
 
-/** 记录点颜色与轨迹行标签同源(assistant/tool/system/user)。 */
+/** 记录点颜色与轨迹行标签同源(assistant/tool/system/user/advisor)。 */
 const KIND_COLOR: Record<string, string> = {
 	user: "var(--color-accent)",
 	assistant: "#b39ddb",
 	tool: "#d4a35c",
 	system: "var(--color-text-faint)",
+	advisor: "#6fc3b8",
 };
 
 /** 泳道投影(DSH laneFor parity):system/user → 上道,message(assistant)
- *  → 中道,tool → 下道。三道分开后密集会话的点不再互相叠压。 */
+ *  → 中道,tool → 下道,advisor(顾问笔记) → 第四道。三道分开后密集会话的点
+ *  不再互相叠压。 */
 function laneFor(kind: string): number {
 	if (kind === "tool") return 2;
 	if (kind === "assistant") return 1;
+	if (kind === "advisor") return 3;
 	return 0;
 }
 
@@ -106,6 +109,8 @@ export function TimelineOverview({
 		return { min, max, span: max - min };
 	}, [turns]);
 	if (!domain) return null;
+	// 顾问泳道图例行:仅当轨迹里存在 advisor 事件时显示(第四道)。
+	const hasAdvisor = turns.some(g => g.events.some(e => e.kind === "advisor"));
 
 	const pctOf = (ms: number): number => ((ms - domain.min) / domain.span) * 100;
 
@@ -162,6 +167,12 @@ export function TimelineOverview({
 						<i style={{ background: KIND_COLOR.tool }} />
 						{t("trajectory lane tools")}
 					</span>
+					{hasAdvisor && (
+						<span style={{ top: 48 }}>
+							<i style={{ background: KIND_COLOR.advisor }} />
+							{t("advisor")}
+						</span>
+					)}
 				</div>
 				<div
 					ref={trackRef}

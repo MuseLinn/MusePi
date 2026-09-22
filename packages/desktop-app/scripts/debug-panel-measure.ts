@@ -19,23 +19,38 @@ async function findTarget() {
 
 const target = await findTarget();
 const ws = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise<void>((res, rej) => { ws.onopen = () => res(); ws.onerror = () => rej(new Error("ws")); });
+await new Promise<void>((res, rej) => {
+	ws.onopen = () => res();
+	ws.onerror = () => rej(new Error("ws"));
+});
 let nextId = 1;
 const pending = new Map<number, (v: unknown) => void>();
 ws.onmessage = ev => {
 	const msg = JSON.parse(String(ev.data));
-	if (msg.id && pending.has(msg.id)) { pending.get(msg.id)?.(msg); pending.delete(msg.id); }
+	if (msg.id && pending.has(msg.id)) {
+		pending.get(msg.id)?.(msg);
+		pending.delete(msg.id);
+	}
 };
 function cdp(method: string, params: unknown = {}): Promise<unknown> {
 	const id = nextId++;
 	ws.send(JSON.stringify({ id, method, params }));
 	return new Promise((res, rej) => {
-		pending.set(id, m => ((m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m)));
-		setTimeout(() => { if (pending.has(id)) { pending.delete(id); rej(new Error(`timeout ${method}`)); } }, 8000);
+		pending.set(id, m =>
+			(m as { error?: unknown }).error ? rej(new Error(JSON.stringify((m as { error: unknown }).error))) : res(m),
+		);
+		setTimeout(() => {
+			if (pending.has(id)) {
+				pending.delete(id);
+				rej(new Error(`timeout ${method}`));
+			}
+		}, 8000);
 	});
 }
 async function evaluate<T>(expression: string): Promise<T> {
-	const msg = (await cdp("Runtime.evaluate", { expression, returnByValue: true })) as { result?: { result?: { value?: T } } };
+	const msg = (await cdp("Runtime.evaluate", { expression, returnByValue: true })) as {
+		result?: { result?: { value?: T } };
+	};
 	return msg.result?.result?.value as T;
 }
 const CLICK = `(sel) => {
@@ -83,7 +98,9 @@ report.rail = await evaluate<boolean>(`(() => {
 await sleep(1500);
 // state-aware: the rail click toggles — if the persisted state had the panel
 // open, our click closed it; reopen when the aside measures 0.
-const asideW = await evaluate<number>(`document.querySelector(".gui-pane-right--inner")?.getBoundingClientRect().width ?? 0`);
+const asideW = await evaluate<number>(
+	`document.querySelector(".gui-pane-right--inner")?.getBoundingClientRect().width ?? 0`,
+);
 if (asideW < 50) {
 	await evaluate<boolean>(`(() => {
 		const btn = [...document.querySelectorAll(".gui-right-rail-btn")].find(b => (b.getAttribute("aria-label") ?? "").includes("浏览"));
@@ -130,6 +147,9 @@ report.measure = await evaluate(MEASURE);
 const shot = (await cdp("Page.captureScreenshot", { format: "png" })) as { result?: { data?: string } };
 const { writeFileSync, mkdirSync } = await import("node:fs");
 mkdirSync("docs/review/0.5.0-shell-panels-topbar-design/shots", { recursive: true });
-writeFileSync("docs/review/0.5.0-shell-panels-topbar-design/shots/debug-panel-measure.png", Buffer.from(shot.result?.data ?? "", "base64"));
+writeFileSync(
+	"docs/review/0.5.0-shell-panels-topbar-design/shots/debug-panel-measure.png",
+	Buffer.from(shot.result?.data ?? "", "base64"),
+);
 console.log(JSON.stringify(report, null, 2));
 process.exit(0);

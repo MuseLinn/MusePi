@@ -1,6 +1,7 @@
-import { t } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
+import { bindingLabel } from "../lib/shortcut-registry";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
@@ -23,6 +24,7 @@ export function AttachMenu({
 	onPickImages,
 	onPickFiles,
 	onSketch,
+	onCaptureScreen,
 	onInsert,
 }: {
 	goalMode: boolean;
@@ -46,6 +48,10 @@ export function AttachMenu({
 	 *  composer too — the PNG rides the normal image-attachment pipeline,
 	 *  no workspace needed. */
 	onSketch?(): void;
+	/** kimicode 截屏 parity: captures the primary display and opens the
+	 *  annotate board on the shot (⇧⌘S also routes here — rebinding lives in
+	 *  the shortcut registry, the chip shows the live binding). */
+	onCaptureScreen?(): void;
 	/** Inserts a token (slash command / @mention / session ref) at the caret. */
 	onInsert(token: string): void;
 	/** Hands the host a way to open this menu — the composer frame's
@@ -86,9 +92,34 @@ export function AttachMenu({
 							fileRef.current?.click();
 						}}
 					>
-						<Icon name="file-image" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("add images")}</span>
+						<Icon name="file-image" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("add images")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("add images desc")}</span>
+						</span>
 					</button>
+					{/* kimicode "+" menu parity: icon + label + one-line desc per
+					 *  row; the 截屏 row carries the LIVE binding from the
+					 *  shortcut registry (rebinding in 设置 → 快捷键 shows up
+					 *  here immediately). */}
+					{onCaptureScreen && (
+						<button
+							type="button"
+							className="gui-attach-opt"
+							role="menuitem"
+							onClick={() => {
+								onCaptureScreen();
+								setOpen(false);
+							}}
+						>
+							<Icon name="camera" className="h-4 w-4 gui-attach-opt-ico" />
+							<span className="min-w-0 flex-1">
+								<span className="gui-attach-opt-title">{tLoose("attach capture screen")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("attach capture screen desc")}</span>
+							</span>
+							<kbd className="gui-attach-keys">{bindingLabel("capture-screen")}</kbd>
+						</button>
+					)}
 					{onSketch && (
 						<button
 							type="button"
@@ -99,8 +130,11 @@ export function AttachMenu({
 								setOpen(false);
 							}}
 						>
-							<Icon name="palette" className="h-4 w-4" />
-							<span className="min-w-0 flex-1 truncate">{t("sketch")}</span>
+							<Icon name="palette" className="h-4 w-4 gui-attach-opt-ico" />
+							<span className="min-w-0 flex-1">
+								<span className="gui-attach-opt-title">{t("sketch")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("sketch desc")}</span>
+							</span>
 						</button>
 					)}
 					{onPickFiles && (
@@ -112,8 +146,11 @@ export function AttachMenu({
 								anyFileRef.current?.click();
 							}}
 						>
-							<Icon name="file" className="h-4 w-4" />
-							<span className="min-w-0 flex-1 truncate">{t("add attachments")}</span>
+							<Icon name="file" className="h-4 w-4 gui-attach-opt-ico" />
+							<span className="min-w-0 flex-1">
+								<span className="gui-attach-opt-title">{t("add attachments")}</span>
+								<span className="gui-attach-opt-hint">{tLoose("add attachments desc")}</span>
+							</span>
 						</button>
 					)}
 					<button
@@ -125,8 +162,11 @@ export function AttachMenu({
 							setOpen(false);
 						}}
 					>
-						<Icon name="terminal" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("insert command")}</span>
+						<Icon name="terminal" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("insert command")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("insert command desc")}</span>
+						</span>
 					</button>
 					<button
 						type="button"
@@ -137,8 +177,11 @@ export function AttachMenu({
 							setOpen(false);
 						}}
 					>
-						<Icon name="chat-1" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("mention file")}</span>
+						<Icon name="chat-1" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("mention file")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("mention file desc")}</span>
+						</span>
 					</button>
 					<button
 						type="button"
@@ -149,8 +192,11 @@ export function AttachMenu({
 							setOpen(false);
 						}}
 					>
-						<Icon name="chat-3" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("insert session")}</span>
+						<Icon name="chat-3" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("insert session")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("insert session desc")}</span>
+						</span>
 					</button>
 					<div className="gui-creds-menu-sep" />
 					<button
@@ -163,8 +209,11 @@ export function AttachMenu({
 							setOpen(false);
 						}}
 					>
-						<Icon name="brain-ai-3" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("insert ultrathink")}</span>
+						<Icon name="brain-ai-3" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("insert ultrathink")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("insert ultrathink desc")}</span>
+						</span>
 					</button>
 					<button
 						type="button"
@@ -176,8 +225,11 @@ export function AttachMenu({
 							setOpen(false);
 						}}
 					>
-						<Icon name="git-branch" className="h-4 w-4" />
-						<span className="min-w-0 flex-1 truncate">{t("insert workflowz")}</span>
+						<Icon name="git-branch" className="h-4 w-4 gui-attach-opt-ico" />
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("insert workflowz")}</span>
+							<span className="gui-attach-opt-hint">{tLoose("insert workflowz desc")}</span>
+						</span>
 					</button>
 					<div className="gui-creds-menu-sep" />
 					<button
@@ -189,7 +241,7 @@ export function AttachMenu({
 						title={planDisabled ? t("start a session to use plan mode") : undefined}
 						onClick={onTogglePlan}
 					>
-						<Icon name="compass-3" className="h-4 w-4" />
+						<Icon name="compass-3" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
 							<span className="gui-attach-opt-title">{t("plan mode")}</span>
 							<span className="gui-attach-opt-hint">{t("plan mode hint")}</span>
@@ -207,7 +259,7 @@ export function AttachMenu({
 						title={goalDisabled ? t("start a session to use goal mode") : undefined}
 						onClick={onToggleGoal}
 					>
-						<Icon name="target" className="h-4 w-4" />
+						<Icon name="target" className="h-4 w-4 gui-attach-opt-ico" />
 						<span className="min-w-0 flex-1">
 							<span className="gui-attach-opt-title">{t("goal mode")}</span>
 							<span className="gui-attach-opt-hint">{t("goal mode hint")}</span>
