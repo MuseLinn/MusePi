@@ -469,7 +469,22 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		aliases: ["status"],
 		icon: "extension",
 		description: "Open Extension Control Center dashboard",
-		handleTui: (_command, runtime) => {
+		// issue #38 Step 2: the session's 10 extension meta-tools start
+		// default-inactive (their schemas stay out of the prompt/request).
+		// Explicitly opening the extension center is the agreed hard trigger
+		// to mount them for the agent — deterministic, zero keyword
+		// false-positives, prompt-cache-friendly (see SessionTools).
+		handle: async (_command, runtime) => {
+			const activated = await runtime.session.activateExtensionMetaTools();
+			await runtime.output(
+				activated.length > 0
+					? `Extension tools activated: ${activated.join(", ")}`
+					: "Extension tools already active.",
+			);
+			return commandConsumed();
+		},
+		handleTui: async (_command, runtime) => {
+			await runtime.ctx.session.activateExtensionMetaTools();
 			runtime.ctx.showExtensionsDashboard();
 			runtime.ctx.editor.setText("");
 		},

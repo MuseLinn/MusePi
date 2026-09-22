@@ -164,6 +164,7 @@ export function createExtensionRuntimeTools(
 
 	const defineTool: CustomTool<typeof defineSchema> = {
 		name: "ext_define",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "定义动态插件",
 		description:
 			"定义动态插件(不可变版本):语法预检通过后存入会话注册表。hostCode 是 async 函数体,可调用注入的 defineTool({name,description,parameters,run}) 声明工具。返回 pluginId/packageId。",
@@ -221,6 +222,7 @@ export function createExtensionRuntimeTools(
 
 	const runTool: CustomTool<typeof runSchema> = {
 		name: "ext_run",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "运行动态插件",
 		description:
 			"激活插件版本:vm 沙箱执行 host 半体,defineTool 声明的工具注册进会话工具链(extdyn__ 前缀),下个模型调用即可用。同一插件重新运行 = 热更新版本。",
@@ -333,6 +335,7 @@ export function createExtensionRuntimeTools(
 
 	const stopTool: CustomTool<typeof simpleSchema> = {
 		name: "ext_stop",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "停用动态插件",
 		description: "停用插件:移除该插件全部动态工具,会话工具链立即 reconcile。",
 		parameters: simpleSchema,
@@ -358,6 +361,7 @@ export function createExtensionRuntimeTools(
 
 	const undefineTool: CustomTool<typeof simpleSchema> = {
 		name: "ext_undefine",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "删除动态插件",
 		description: "删除插件及全部版本;活动 run 先停用。",
 		parameters: simpleSchema,
@@ -386,6 +390,7 @@ export function createExtensionRuntimeTools(
 
 	const inspectTool: CustomTool<typeof inspectSchema> = {
 		name: "ext_inspect",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "检查动态插件",
 		description: "会话动态插件注册表快照:插件/版本数/活动 run/工具名。只读。",
 		parameters: inspectSchema,

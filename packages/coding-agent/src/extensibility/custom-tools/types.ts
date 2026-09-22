@@ -238,6 +238,13 @@ export interface CustomTool<TParams extends TSchema = TSchema, TDetails = any> {
 	parameters: TParams;
 	/** If true, tool is excluded unless explicitly listed in --tools or agent's tools field */
 	hidden?: boolean;
+	/** If true, the tool is registered but left OUT of the session's initial
+	 *  active set (issue #38 Step 2 — extension meta tools). Unlike `hidden`
+	 *  it is not discoverability-related: the tool can be activated at any
+	 *  time via `applyActiveToolsByName` (e.g. the `/extensions` command),
+	 *  and until then its schema costs nothing in the prompt or the request.
+	 *  Explicit `toolNames` requests that list the tool by name still win. */
+	defaultInactive?: boolean;
 	/** How this tool is presented when enabled. See {@link ToolLoadMode}. Custom tools default to `"discoverable"`; set `"essential"` to stay top-level. */
 	loadMode?: ToolLoadMode;
 	/** If true, tool may stage deferred changes that require explicit resolve/discard. */

@@ -111,6 +111,7 @@ export function createExtensionManagerTools(
 
 	const extensionLoadTool: CustomTool<typeof extLoadSchema> = {
 		name: "extension_load",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "加载扩展",
 		description:
 			"把指定路径的扩展(目录或 index.ts)加载进当前会话:工具/预设/提示词区块/组件注册。已加载 = no-op;streaming 时会话在空闲边界执行(deferred=true)。",
@@ -140,6 +141,7 @@ export function createExtensionManagerTools(
 
 	const extensionReloadTool: CustomTool<typeof extReloadSchema> = {
 		name: "extension_reload",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "重载扩展",
 		description:
 			"重载指定扩展:磁盘上的新版本替换会话内实例(工具/预设/提示词区块更新);旧工具不再注册的被移除。streaming 时会话在空闲边界执行(deferred=true)。",
@@ -174,6 +176,7 @@ export function createExtensionManagerTools(
 
 	const extensionStatusTool: CustomTool<typeof extStatusSchema> = {
 		name: "extension_status",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "扩展状态",
 		description:
 			"当前会话扩展状态:全部已加载扩展的工具/预设/提示词区块/组件槽位 + 会话级扩展工具全集。path 省略 = 全部。",
@@ -199,6 +202,7 @@ export function createExtensionManagerTools(
 
 	const extensionValidateTool: CustomTool<typeof extValidateSchema> = {
 		name: "extension_validate",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "校验扩展",
 		description: "校验扩展:入口存在性 + 加载错误(语法/注册失败) + 槽位组件编译。不注册到会话,无副作用。",
 		parameters: extValidateSchema,
@@ -226,6 +230,7 @@ export function createExtensionManagerTools(
 
 	const extensionRollbackTool: CustomTool<typeof extRollbackSchema> = {
 		name: "extension_rollback",
+		defaultInactive: true, // issue #38 Step 2: 默认不激活,/extensions 挂载
 		label: "回滚扩展",
 		description:
 			"把指定扩展回滚到最近一次 load/reload 成功的版本(快照位于 ~/.musepi/extension-backups),然后重载会话。用于修复损坏的新版本。",

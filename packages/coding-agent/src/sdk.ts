@@ -1060,6 +1060,7 @@ export function customToolToDefinition(tool: CustomTool): ToolDefinition {
 		description: tool.description,
 		parameters: tool.parameters,
 		hidden: tool.hidden,
+		defaultInactive: tool.defaultInactive,
 		loadMode: defaultLoadModeForToolName(tool.name, tool.loadMode),
 		deferrable: tool.deferrable,
 		approval: typeof tool.approval === "function" ? tool.approval.bind(tool) : tool.approval,
@@ -3485,7 +3486,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const alwaysInclude: string[] = restrictToolNames
 			? []
 			: [
-					...sdkCustomTools.map(t => (isCustomTool(t) ? t.name : t.name)),
+					...sdkCustomTools.filter(t => t.defaultInactive !== true).map(t => t.name),
 					...registeredTools.filter(t => !t.definition.defaultInactive).map(t => t.definition.name),
 				];
 		for (const name of alwaysInclude) {

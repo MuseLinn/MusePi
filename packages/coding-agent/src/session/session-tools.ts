@@ -8,6 +8,7 @@ import { formatModelString } from "../config/model-resolver";
 import type { Settings, SkillsSettings } from "../config/settings";
 import type { CustomTool, CustomToolContext } from "../extensibility/custom-tools/types";
 import { CustomToolAdapter } from "../extensibility/custom-tools/wrapper";
+import { EXTENSION_META_TOOL_NAMES } from "../extensibility/extension-meta-tools";
 import type { ExtensionRunner, SourceInfo, ToolInfo } from "../extensibility/extensions";
 import { ExtensionToolWrapper } from "../extensibility/extensions/wrapper";
 import { loadSkills, type Skill, type SkillWarning, setActiveSkills } from "../extensibility/skills";
@@ -761,6 +762,32 @@ export class SessionTools {
 			() => this.#applyActiveToolsByName(toolNames, forcePromptRefresh, signal),
 			signal,
 		);
+	}
+
+	/**
+	 * Activates the extension meta-tool set (issue #38 Step 2): the 10
+	 * extension bootstrap/lifecycle tools that are registered
+	 * `defaultInactive` to keep their schemas out of the prompt and request.
+	 * The `/extensions` command is the explicit trigger; until it runs, an
+	 * ordinary session never pays for these tools.
+	 *
+	 * Cache discipline: the system prompt rebuild on activation appends the
+	 * `## functions` inventory at the same template position, so the prompt
+	 * text BEFORE that block stays byte-identical — the static prefix keeps
+	 * hitting the provider prompt cache (test-locked in
+	 * `test/extension-meta-tools.test.ts`).
+	 *
+	 * @returns the names that were newly activated (empty = already active).
+	 */
+	async activateExtensionMetaTools(signal?: AbortSignal): Promise<string[]> {
+		return this.runToolRegistryMutation(async () => {
+			signal?.throwIfAborted();
+			const active = new Set(this.getActiveToolNames());
+			const missing = EXTENSION_META_TOOL_NAMES.filter(name => this.#toolRegistry.has(name) && !active.has(name));
+			if (missing.length === 0) return [];
+			await this.#applyActiveToolsByName([...active, ...missing], false, signal);
+			return missing;
+		}, signal);
 	}
 
 	async #applyActiveToolsByName(toolNames: string[], forcePromptRefresh = false, signal?: AbortSignal): Promise<void> {

@@ -4833,6 +4833,16 @@ export class AgentSession {
 		return this.#tools.applyActiveToolsByName(toolNames);
 	}
 
+	/**
+	 * Activates the extension meta-tool set (issue #38 Step 2) — the 10
+	 * extension bootstrap/lifecycle tools that start `defaultInactive`.
+	 * Called by the `/extensions` slash command (TUI + daemon/ACP paths).
+	 * @returns the names that were newly activated (empty = already active).
+	 */
+	activateExtensionMetaTools(signal?: AbortSignal): Promise<string[]> {
+		return this.#tools.activateExtensionMetaTools(signal);
+	}
+
 	/** Rediscovers reloadable skills and refreshes prompt metadata. */
 	refreshSkills(): Promise<void> {
 		return this.#tools.refreshSkills();
