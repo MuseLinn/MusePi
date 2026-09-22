@@ -5,6 +5,8 @@ import {
 	punkAvatarUri,
 	relTime,
 	Transcript,
+	type TranscriptAnchor,
+	type TranscriptAnchorCtl,
 	type TranscriptNodeInjection,
 	type TranslationKey,
 	t,
@@ -1271,18 +1273,19 @@ export function ChatView({
 	// the daemon keeps the full transcript, nothing is lost.
 	const loadOlderRef = useRef(false);
 	const [loadingOlder, setLoadingOlder] = useState(false);
+	// Key-based prepend anchoring (Transcript.anchorCtlRef): captured before
+	// the session.history RPC, restored after the prepend commits — the old
+	// scrollHeight-delta compensation jumped blindly (streaming tail growth
+	// and estimate corrections both skew the delta) and triggered
+	// measurement-correction cascades.
+	const anchorCtlRef = useRef<TranscriptAnchorCtl | null>(null);
 	const loadOlder = useCallback(async (): Promise<void> => {
 		if (!rpc || !store || loadOlderRef.current || !store.hasMore) return;
 		const beforeId = store.historyBeforeId;
 		if (!beforeId) return;
 		loadOlderRef.current = true;
 		setLoadingOlder(true);
-		// Anchor the scroll: prepending grows the top spacer, which would
-		// shove the visible content down by the inserted height. Compensate
-		// with the real scrollHeight delta after React commits (double rAF).
-		const scroller = transcriptRef.current;
-		const scrollTop = scroller?.scrollTop ?? 0;
-		const scrollHeight = scroller?.scrollHeight ?? 0;
+		const anchor: TranscriptAnchor | null = anchorCtlRef.current?.capture() ?? null;
 		try {
 			const res = await rpc.request<{
 				entries: SessionEntry[];
@@ -1297,7 +1300,7 @@ export function ChatView({
 				store.prependEntries(res.entries, res.remaining);
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
-						if (scroller) scroller.scrollTop = scrollTop + (scroller.scrollHeight - scrollHeight);
+						if (anchor) anchorCtlRef.current?.restore(anchor);
 					});
 				});
 			}
@@ -1858,6 +1861,7 @@ export function ChatView({
 																}
 																onLoadOlder={onLoadOlderStable}
 																loadingOlder={loadingOlder}
+																anchorCtlRef={anchorCtlRef}
 																onRetry={(id, text) => void retryFromUserMessage(id, text)}
 																onSpeak={(text, id) => {
 																	// TTS read-aloud via the daemon's local Kokoro worker;

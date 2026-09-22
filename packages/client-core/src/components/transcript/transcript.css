@@ -5,11 +5,24 @@
 	overflow-y: auto;
 	overflow-y: overlay;
 	overflow-x: hidden;
+	/* Chromium scroll anchoring fights the JS prepend anchor
+	 * (TranscriptAnchorCtl.restore / the bottom-follow pin): on a 500-row
+	 * prepend the browser picks its own anchor node and re-adjusts
+	 * scrollTop natively (invisible to JS instrumentation), double-
+	 * compensating the viewport by multi-thousand-px jumps. JS is the
+	 * single anchoring authority here. */
+	overflow-anchor: none;
 	padding: 12px 16px 24px;
 	font-family: var(--font-ui);
 	font-size: var(--tr-font-size, 14px);
 	line-height: var(--tr-line-height, 1.5);
 	color: var(--fg);
+}
+
+/* Same story for the desktop shell's outer scroll host (.tr-root is a
+ * static child there — the scroller is this ancestor). */
+.gui-transcript {
+	overflow-anchor: none;
 }
 
 .tr-empty {

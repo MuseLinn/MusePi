@@ -55,6 +55,11 @@ const CONFIRM_TIMEOUT_MS = 30_000;
 const GUEST_READY_TIMEOUT_MS = 15_000;
 /** capturePage() never settles for an uncomposited guest — cap the wait. */
 const CAPTURE_TIMEOUT_MS = 1_500;
+/** A closed tab's guest is disposed only after the renderer actually unmounts
+ *  its element (`guest-gone` from the ref detach). This is the fallback when
+ *  that report never arrives (renderer dead/busy) — disposing earlier makes
+ *  the webview's disconnectedCallback throw "Invalid guestInstanceId". */
+const GUEST_GONE_TIMEOUT_MS = 2_000;
 /** Gap before the single screenshot retry (cold guest first-frame miss). */
 const CAPTURE_RETRY_MS = 220;
 
@@ -571,6 +576,9 @@ class ManagedBrowserController {
 		/** In-flight risky-navigation consent request ({requestId, timer, resolve}). */
 		this.pendingConfirm = null;
 		this.confirmSeq = 0;
+		/** Closes waiting for the renderer's element-unmount report before the
+		 *  guest is disposed (id → {tab, timer}) — see disposeAfterUnmount. */
+		this.guestGoneWaiters = new Map();
 	}
 
 	// ── lifecycle ────────────────────────────────────────────────────────
@@ -603,6 +611,11 @@ class ManagedBrowserController {
 	/** Drop every tab record without renderer pushes — the owner window (and
 	 *  with it every guest) is gone, so there is nobody left to notify. */
 	releaseTabs() {
+		for (const waiter of this.guestGoneWaiters.values()) {
+			clearTimeout(waiter.timer);
+			waiter.tab.dispose();
+		}
+		this.guestGoneWaiters.clear();
 		for (const tab of [...this.tabs.values()]) tab.dispose();
 		this.tabs.clear();
 		this.activeTabId = null;
@@ -730,9 +743,12 @@ class ManagedBrowserController {
 	}
 
 	/** Renderer reports a guest gone (element unmounted, crash, tab closed):
-	 *  drop the record, its CDP targets and its ledger rows. */
+	 *  drop the record, its CDP targets and its ledger rows. A pending close
+	 *  waiter settles here — the guest is disposed only NOW that the element
+	 *  is already out of the DOM. */
 	handleGuestGone(tabId) {
 		const id = String(tabId ?? "");
+		if (this.settleClosedTab(id)) return { ok: true };
 		const tab = this.tabs.get(id);
 		if (tab) {
 			tab.dispose();
@@ -771,24 +787,51 @@ class ManagedBrowserController {
 	}
 
 	/** Close a tab (CDP `Target.closeTarget`, stopOp). The renderer unmounts
-	 *  the element on the push; closing the guest here also covers a renderer
-	 *  that is already gone. */
+	 *  the element on the push; the guest is disposed after that unmount
+	 *  actually happens (see disposeAfterUnmount) — disposing first makes the
+	 *  webview's disconnectedCallback throw "Invalid guestInstanceId" inside
+	 *  React's commit and crash the GUI. */
 	closeTab(tabId) {
 		const tab = this.tabs.get(String(tabId));
 		if (!tab) return null;
 		this.sendToRenderer("managed-browser:close-tab", { tabId: String(tab.id) });
-		tab.dispose();
-		this.handleTabDestroyed(tab);
+		this.disposeAfterUnmount(tab);
 		return this.state();
+	}
+
+	/** Dispose a tab once its renderer element has actually unmounted.
+	 *
+	 *  Ordering is the whole game: the webview's disconnectedCallback resolves
+	 *  its guest through a main-side registry, and closeTab's `close-tab` push
+	 *  is asynchronous — disposing synchronously after the push means the
+	 *  registry entry is gone by the time the renderer's removeChild runs,
+	 *  and the callback throws "Invalid guestInstanceId" inside React's
+	 *  commit. The renderer reports the REAL unmount (ref detach) via
+	 *  `guest-gone`; the timeout covers a dead or busy renderer. */
+	disposeAfterUnmount(tab) {
+		const id = String(tab.id);
+		if (this.guestGoneWaiters.has(id)) return;
+		const timer = setTimeout(() => this.settleClosedTab(id), GUEST_GONE_TIMEOUT_MS);
+		this.guestGoneWaiters.set(id, { tab, timer });
+	}
+
+	/** Settle a close waiter (guest-gone report or timeout). True when a
+	 *  waiter existed and was settled. */
+	settleClosedTab(id) {
+		const waiter = this.guestGoneWaiters.get(id);
+		if (!waiter) return false;
+		this.guestGoneWaiters.delete(id);
+		clearTimeout(waiter.timer);
+		waiter.tab.dispose();
+		this.handleTabDestroyed(waiter.tab);
+		return true;
 	}
 
 	closeAll() {
 		for (const tab of [...this.tabs.values()]) {
 			this.sendToRenderer("managed-browser:close-tab", { tabId: String(tab.id) });
-			tab.dispose();
-			this.announceTabDestroyed(tab);
+			this.disposeAfterUnmount(tab);
 		}
-		this.tabs.clear();
 		this.activeTabId = null;
 		this.agentTabId = null;
 		this.emitState({});

@@ -12,6 +12,34 @@
  * - 元素以 `src` 定值创建;后台标签的 imperative 导航不可靠,创建后一律走 `loadURL()`。
  */
 
+// ── Guest-unmount race guard(启动时装配,一次)───────────────────────────
+//
+// 实测竞态(Electron 43,压测下 12/12 复现):主进程 closeTab 销毁 guest 后,
+// 渲染端才收到 close 推送并卸载元素,Electron webview 的 disconnectedCallback
+// 按 guestInstanceId 反查主进程注册表失败,同步抛出 "Invalid guestInstanceId"
+// —— 抛在 React commit 的 removeChild 里,unwind 整棵树进错误边界,GUI 崩溃。
+// 主修复在 managed-browser.cjs(dispose 推迟到渲染端真实卸载之后);这里是兜底:
+// 该异常的 DOM 变更已完成(detach 先于回调抛出),只吞这一个精确错误,其余照常上抛。
+try {
+	const originalRemoveChild = Node.prototype.removeChild;
+	Node.prototype.removeChild = function <T extends Node>(this: Node, child: T): T {
+		try {
+			return originalRemoveChild.call(this, child) as T;
+		} catch (error) {
+			// Electron 的 isolated bundle 抛出的异常跨 realm —— 在主世界里
+			// `instanceof Error` 为 false,只能按消息文本匹配。
+			const message = error instanceof Error ? error.message : String(error);
+			if (/Invalid guestInstanceId/.test(message)) {
+				// guest 已被主进程注销(卸载竞态)——元素已是死壳,无可释放。
+				return child;
+			}
+			throw error;
+		}
+	} as typeof Node.prototype.removeChild;
+} catch {
+	// 非 DOM 环境 —— 无需守卫。
+}
+
 /** 元素上我们会用到的 electron webview 方法子集(JSX 类型只有属性)。 */
 export interface HostWebview extends HTMLElement {
 	loadURL(url: string): Promise<void>;
@@ -135,6 +163,7 @@ export function hostElement(tabId: string): HostWebview | null {
 }
 
 function patchTab(tabId: string, patch: Partial<ManagedTab>): void {
+	if (!state.tabs.some(tab => tab.id === tabId)) return;
 	const tabs = state.tabs.map(tab => (tab.id === tabId ? { ...tab, ...patch } : tab));
 	set({ tabs });
 }
@@ -157,7 +186,22 @@ const reportedGuests = new Set<string>();
 /** Element lifecycle: registered by the host renderer, reported to main. */
 export function attachElement(tabId: string, el: HostWebview | null): void {
 	if (el === null) {
-		elements.delete(tabId);
+		const had = elements.delete(tabId);
+		// The null ref is only a REAL unmount when no element re-attaches in the
+		// same commit. ManagedBrowserHost passes an INLINE ref callback, so React
+		// detaches (null) + re-attaches (el) on EVERY re-render — firing
+		// guest-gone for those would make main dispose live guests mid-scroll.
+		// One microtask later the transient swap has re-registered; a genuine
+		// unmount (tab removed from state) has not — that is when main may
+		// dispose the guest (disposing earlier reopens the Invalid
+		// guestInstanceId crash — see disposeAfterUnmount in managed-browser.cjs).
+		if (had) {
+			queueMicrotask(() => {
+				if (!elements.has(tabId)) {
+					void window.electronAPI?.managedBrowserGuestGone(tabId).catch(() => {});
+				}
+			});
+		}
 		return;
 	}
 	elements.set(tabId, el);
@@ -338,8 +382,12 @@ export function closeTab(tabId: string, options?: { notifyMain?: boolean }): voi
 	const tabs = state.tabs.filter(tab => tab.id !== tabId);
 	// The element is gone with the tab: drop its creation URL.
 	forgetEntrySrc(tabId);
-	const el = elements.get(tabId);
-	elements.delete(tabId);
+	// Deliberately keep the element in `elements` until React's ref detach
+	// (attachElement(null)) — that detach is the element's REAL unmount, and it
+	// owns the elements-map delete AND the main notification. Deleting here
+	// would make the detach a no-op, and any notify here fires before the DOM
+	// removal, which races main's dispose (Invalid guestInstanceId crash).
+	const elementNeverMounted = !elements.has(tabId);
 	const pending = pendingCreates.get(tabId);
 	if (pending) {
 		pendingCreates.delete(tabId);
@@ -347,7 +395,11 @@ export function closeTab(tabId: string, options?: { notifyMain?: boolean }): voi
 	}
 	const activeId = state.activeId === tabId ? (tabs[tabs.length - 1]?.id ?? null) : state.activeId;
 	set({ tabs, activeId });
-	if (options?.notifyMain !== false) void window.electronAPI?.managedBrowserGuestGone(tabId).catch(() => {});
+	if (elementNeverMounted && options?.notifyMain !== false) {
+		// Never mounted ⇒ no ref will ever detach: main must hear the demise
+		// from here (its dispose-then has no element to race).
+		void window.electronAPI?.managedBrowserGuestGone(tabId).catch(() => {});
+	}
 	if (activeId) reportActive(activeId);
 	// React unmounts the element on the next render, which destroys the guest —
 	// removing it here too would fight the reconciler.

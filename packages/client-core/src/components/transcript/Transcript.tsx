@@ -137,6 +137,19 @@ function jumpFlashRow(root: HTMLElement | null, timestamp: string): void {
 	});
 }
 
+export interface TranscriptAnchor {
+	/** Entry id of the first visible row at capture time. */
+	key: string;
+	/** The row's distance below the viewport top, px (negative = scrolled
+	 *  partially past it). Restored verbatim after the prepend. */
+	offset: number;
+}
+
+export interface TranscriptAnchorCtl {
+	capture(): TranscriptAnchor | null;
+	restore(anchor: TranscriptAnchor): void;
+}
+
 export interface TranscriptProps {
 	entries: readonly SessionEntry[];
 	/** Branch-tree source, when it differs from `entries`. The GUI renders the
@@ -232,6 +245,13 @@ export interface TranscriptProps {
 	/** True while the caller is paging the next older chunk — the top
 	 *  spacer shows a shimmer so the wait reads as loading, not emptiness. */
 	loadingOlder?: boolean;
+	/** Prepend anchoring (key-based): the caller captures the first visible
+	 *  row before paging older history via session.history and restores it
+	 *  after the prepend commits. Immune to scrollHeight drift from tail
+	 *  streaming and estimate corrections — the old scrollHeight-delta
+	 *  compensation jumped blindly into unmeasured space (multi-thousand-px
+	 *  yanks) and triggered measurement-correction cascades. */
+	anchorCtlRef?: { current: TranscriptAnchorCtl | null };
 	/** Jump request (message tree / trajectory tree / canvas jumps): when
 	 *  `nonce` advances, expand the tail window (and the compaction fold)
 	 *  until the target row mounts, then scroll it into view with the
@@ -1059,6 +1079,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onFork,
 		onLoadOlder,
 		loadingOlder = false,
+		anchorCtlRef,
 		jumpRequest = null,
 		onSpeak,
 		onSaveImage,
@@ -1443,6 +1464,43 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		virtualizer.scrollToIndex(idx, { align: "center" });
 	}, [jumpRequest, entries, folding, firstCompactionIdx, virtualizer]);
 
+	// Key-based prepend anchoring (see anchorCtlRef prop): capture = first
+	// mounted row intersecting the viewport top + its offset below the top;
+	// restore = scrollToIndex(that key) + offset correction on the next
+	// frame. The anchor row was mounted at capture time, so its measurement
+	// survives the prepend (cache is keyed by entry id) and the restore
+	// lands accurately — no scrollHeight arithmetic anywhere.
+	const anchorCtl = useMemo<TranscriptAnchorCtl>(
+		() => ({
+			capture: () => {
+				const scroller = scrollerRef.current;
+				if (!scroller) return null;
+				const first = virtualItems.find(vi => vi.end > scroller.scrollTop);
+				if (!first) return null;
+				return { key: String(first.key), offset: first.start - scroller.scrollTop };
+			},
+			restore: anchor => {
+				const scroller = scrollerRef.current;
+				if (!scroller) return;
+				const idx = entries.findIndex(e => e.id === anchor.key);
+				if (idx < 0) return;
+				programmaticScrollRef.current = true;
+				virtualizer.scrollToIndex(idx, { align: "start" });
+				// scrollToIndex lands the row top at the viewport top; shift by
+				// the captured offset so it returns to exactly its prior spot.
+				requestAnimationFrame(() => {
+					programmaticScrollRef.current = true;
+					scroller.scrollTop -= anchor.offset;
+					lastObservedScrollTopRef.current = scroller.scrollTop;
+				});
+			},
+		}),
+		[virtualItems, entries, virtualizer],
+	);
+	useEffect(() => {
+		if (anchorCtlRef) anchorCtlRef.current = anchorCtl;
+	}, [anchorCtl, anchorCtlRef]);
+
 	// Scroll-event adjudication (M1.3): our own scrollTop writes set
 	// `programmaticScrollRef` first, so the async scroll event classifies as
 	// "programmatic" and cannot flip the user's following intent; genuine
@@ -1503,7 +1561,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const scroller = scrollerRef.current;
 		if (!scroller) return;
 		const onWheel = (e: WheelEvent): void => {
-			scrollIntentRef.current = timelineWheelScrollIntent(e.deltaY);
+			const intent = timelineWheelScrollIntent(e.deltaY);
+			scrollIntentRef.current = intent;
+			// Release follow SYNCHRONOUSLY on an upscroll gesture. Without
+			// this the async scroll-event adjudication races the RO
+			// stick-to-bottom: the RO pins the viewport back to the bottom
+			// before the wheel's scroll event is delivered, the event then
+			// adjudicates "landed at bottom" and RE-ARMS follow — the user's
+			// upscroll is annihilated and every notch fights the pin (the
+			// 分页被拽回底部 jitter). Disarming here means the rAF-coalesced
+			// pin always sees following=false and no-ops.
+			if (intent === "awayFromBottom") setFollowing(false);
 		};
 		let lastTouchY: number | null = null;
 		const onTouchStart = (e: TouchEvent): void => {
@@ -1512,7 +1580,13 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const onTouchMove = (e: TouchEvent): void => {
 			const y = e.touches[0]?.clientY;
 			if (y === undefined) return;
-			if (lastTouchY !== null) scrollIntentRef.current = timelineTouchScrollIntent(lastTouchY, y);
+			if (lastTouchY !== null) {
+				const intent = timelineTouchScrollIntent(lastTouchY, y);
+				scrollIntentRef.current = intent;
+				// Same synchronous release as onWheel (upswipe disarms the
+				// bottom pin before the RO can yank the viewport back).
+				if (intent === "awayFromBottom") setFollowing(false);
+			}
 			lastTouchY = y;
 		};
 		const onKeyDown = (e: KeyboardEvent): void => {
@@ -1525,7 +1599,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				shiftKey: e.shiftKey,
 				editableTarget: editable,
 			});
-			if (intent !== "none") scrollIntentRef.current = intent;
+			if (intent !== "none") {
+				scrollIntentRef.current = intent;
+				if (intent === "awayFromBottom") setFollowing(false);
+			}
 		};
 		scroller.addEventListener("wheel", onWheel, { passive: true });
 		scroller.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -1624,6 +1701,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		let raf = 0;
 		const ro = new ResizeObserver(() => {
 			if (!followingRef.current) return;
+			// Belt & braces over the synchronous gesture release: never pin
+			// while a fresh away-from-bottom intent is pending (the reconcile
+			// that would consume it may not have run yet).
+			if (scrollIntentRef.current === "awayFromBottom") return;
 			cancelAnimationFrame(raf);
 			raf = requestAnimationFrame(() => {
 				const scroller = scrollerRef.current;

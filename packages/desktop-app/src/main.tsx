@@ -31,7 +31,15 @@ function captureRenderError(kind: "error" | "rejection", detail: string): void {
 		// storage unavailable — the console trace above still stands
 	}
 }
-window.addEventListener("error", event => captureRenderError("error", event.message));
+window.addEventListener("error", event => {
+	// Electron's webview teardown reports "Invalid guestInstanceId" through
+	// the C++ callback boundary on EVERY uncaught report channel even though
+	// the page-side containment (managed-browser-host.ts) already swallowed
+	// the propagating throw. Benign tab-churn noise — keep it out of the
+	// diagnostic ring so a real failure is not buried in it.
+	if (/Invalid guestInstanceId/.test(event.message ?? "")) return;
+	captureRenderError("error", event.message);
+});
 window.addEventListener("unhandledrejection", event => {
 	const reason = event.reason;
 	captureRenderError(

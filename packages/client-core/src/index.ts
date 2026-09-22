@@ -70,6 +70,8 @@ export {
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
 export {
 	Transcript,
+	type TranscriptAnchor,
+	type TranscriptAnchorCtl,
 	type TranscriptNodeInjection,
 	type TranscriptProps,
 	transcriptNodeKind,
