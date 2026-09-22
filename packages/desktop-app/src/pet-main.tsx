@@ -1,7 +1,7 @@
 /**
  * Pet window entry (pet.html) — the floating desktop companion (伙伴):
  * the active pet (builtin SVG or Petdex spritesheet) with a mood driven by
- * the main window's session store, unread badge, and a drag/hover/dock
+ * the main window's session store, hidden-stack badge, and a drag/hover/dock
  * gesture surface.
  *
  * The activity bubbles live in a SEPARATE window (bubbles.html,
@@ -92,9 +92,11 @@ interface PetBridge {
 	 *  process to align the CHARACTER flush to a screen edge on dock. */
 	setPetRect?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
 	onPetDock?(cb: (side: "left" | "right" | null) => void): () => void;
-	/** Unread-badge click → mark every session read (main window owns the
-	 *  unread set and pushes bubble dismissals back). */
-	petMarkAllRead?(): Promise<unknown>;
+	/** Hidden-stack badge click → the bubbles window restores its stack
+	 *  (kimi parity: the badge is the restore control, NOT 一键已读 —
+	 *  mark-all-read lives in the expanded list header + reminders
+	 *  panel). */
+	bubblesRestoreStack?(): Promise<unknown>;
 }
 
 const DRAG_THRESHOLD_PX = 8;
@@ -146,7 +148,11 @@ function PetApp(): ReactNode {
 	const [flip, setFlip] = useState(false);
 	const [sizeScale, setSizeScale] = useState<number>(() => petScale());
 	const [dockSide, setDockSide] = useState<"left" | "right" | null>(null);
-	const [unreadCount, setUnreadCount] = useState(0);
+	// Hidden-stack indicator (kimi parity): the count of bubble items hidden
+	// behind the fully-collapsed stack. 0 unless the bubbles window reports
+	// mode === "hidden" — so the badge never lights at boot (a fresh stack
+	// starts "stacked") and never reflects the persisted unread set.
+	const [hiddenCount, setHiddenCount] = useState(0);
 	// Sleep state (clawd-on-desk parity): after 60s of no interaction AND
 	// no task activity, the pet dims and shows a "zzz" (CSS-only — no new
 	// sprite rows needed for imported sheets). Any gesture or mood change
@@ -211,7 +217,7 @@ function PetApp(): ReactNode {
 			if (payload.mood) setMood(payload.mood);
 			if (payload.petState) setSessionState(payload.petState);
 			if (typeof payload.scale === "number" && payload.scale > 0) setSizeScale(payload.scale);
-			if (typeof payload.unreadCount === "number") setUnreadCount(payload.unreadCount);
+			if (payload.bubbles) setHiddenCount(payload.bubbles.mode === "hidden" ? payload.bubbles.count : 0);
 			if (typeof payload.locale === "string") setLocale(payload.locale);
 			// Active-pet override (petdex packages live in the main window's
 			// localStorage — unreachable from here; the descriptor arrives
@@ -686,24 +692,24 @@ function PetApp(): ReactNode {
 
 	return (
 		<div className={`pet-window${dockSide ? ` pet-window--dock-${dockSide}` : ""}`}>
-			{/* Stage: centers the sprite AND anchors the unread badge to it —
-			 * a badge anchored to the WINDOW (top/right) floats ~70px right
+			{/* Stage: centers the sprite AND anchors the hidden-stack badge
+			 * to it — a badge anchored to the WINDOW (top/right) floats ~70px right
 			 * of the centered ~104px sprite in the 320px window. The stage
 			 * shrink-wraps the sprite, so the badge's absolute top/right
 			 * tracks the sprite's top-right corner regardless of the pet's
 			 * frame size or the user's scale. pointer-events: none keeps
 			 * only the pet interactive. */}
 			<div className="pet-window__stage" style={{ "--gui-pet-window-scale": sizeScale } as CSSProperties}>
-				{unreadCount > 0 && (
+				{hiddenCount > 0 && (
 					<button
 						type="button"
 						className="pet-window__badge"
 						role="status"
-						aria-label={t("mark all read")}
-						title={t("mark all read")}
-						onClick={() => void bridge?.petMarkAllRead?.()}
+						aria-label={t("pet bubbles count", { count: hiddenCount })}
+						title={t("pet bubbles show")}
+						onClick={() => void bridge?.bubblesRestoreStack?.()}
 					>
-						{unreadCount > 99 ? "99+" : unreadCount}
+						{hiddenCount > 99 ? "99+" : hiddenCount}
 					</button>
 				)}
 				<div

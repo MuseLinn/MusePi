@@ -36,6 +36,12 @@
  *    → hidden: the ⌄ fab collapses one level at a time (expanded →
  *    stacked → hidden), hidden shows a count BADGE floating by the pet;
  *    clicking the badge restores the stack
+ *  - the PET WINDOW's own corner badge is now the SAME hidden-stack
+ *    indicator (2026-09-22 user: 角标点击还是一键已读不对 / 一启动就有
+ *    角标): it mirrors this window's collapse mode via bubblesSetMode,
+ *    shows the hidden item count only while mode === "hidden", and
+ *    clicking it asks this window to restore (bubbles:restore) — never
+ *    mark-all-read, and never lit at boot (fresh stack starts "stacked")
  *
  * Sizing (split window, 2026-09-21): the bubbles live in their OWN window
  * (bubbles.html) whose size IS the content — the renderer reports the
@@ -73,6 +79,15 @@ interface PetBubblesBridge {
 	/** Report whether any bubble is showing — empty stack hides the
 	 *  window entirely. */
 	bubblesSetVisible?(visible: boolean): Promise<unknown>;
+	/** Report the collapse mode + live item count — the main process
+	 *  mirrors it to the pet window so its badge only lights when the
+	 *  stack is fully hidden (kimi parity: badge = restore, not
+	 *  mark-all-read). */
+	bubblesSetMode?(mode: "expanded" | "stacked" | "hidden", count: number): Promise<unknown>;
+	/** Pet-window badge click → restore the fully-hidden stack. */
+	bubblesRestoreStack?(): Promise<unknown>;
+	/** bubblesRestoreStack arrived — switch hidden → stacked. */
+	onBubblesRestore?(cb: () => void): () => void;
 	/** Report the interactive card union (window-relative CSS px) — the
 	 *  main process keeps the transparent padding ring click-through. */
 	bubblesSetHitbox?(rect: { x: number; y: number; width: number; height: number } | null): Promise<unknown>;
@@ -383,6 +398,13 @@ export function PetBubbles(): ReactNode {
 		void bridge?.bubblesSetVisible?.(itemCount > 0);
 	}, [itemCount]);
 
+	// Mirror the collapse mode to the main process → pet-window badge.
+	// A fresh window starts "stacked", so the badge can never be spuriously
+	// lit at boot (2026-09-22 user: 一启动程序没有会话怎么就有角标).
+	useEffect(() => {
+		void bridge?.bubblesSetMode?.(stackMode, itemCount);
+	}, [stackMode, itemCount]);
+
 	// Report the interactive card union — the main process keeps the
 	// transparent padding ring and the gaps click-through. Window-relative
 	// coords: the cards live inside the body's padding box, and
@@ -440,6 +462,18 @@ export function PetBubbles(): ReactNode {
 			setReplyText("");
 		}
 	};
+
+	// Pet-window badge click → restore the fully-hidden stack (refs dodge
+	// the stale closure — the listener subscribes once).
+	const stackModeRef = useRef(stackMode);
+	stackModeRef.current = stackMode;
+	const switchModeRef = useRef(switchMode);
+	switchModeRef.current = switchMode;
+	useEffect(() => {
+		return bridge?.onBubblesRestore?.(() => {
+			if (stackModeRef.current === "hidden") switchModeRef.current("stacked");
+		});
+	}, []);
 
 	// Expanded list scroll feather (transcript parity): the stack scrolls
 	// inside the window, and data-top-scroll / data-bottom-scroll flip the

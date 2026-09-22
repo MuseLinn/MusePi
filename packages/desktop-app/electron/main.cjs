@@ -393,6 +393,13 @@ function createPetWindow() {
 				if (petWindow && !petWindow.isDestroyed()) petWindow.webContents.send("pet:activity", lastPetActivity);
 			}, 150);
 		}
+		// The badge state is main-owned (bubblesSetMode) — replay it even
+		// when no activity push has landed yet (fresh boot).
+		setTimeout(() => {
+			if (petWindow && !petWindow.isDestroyed()) {
+				petWindow.webContents.send("pet:activity", { bubbles: bubblesModeState });
+			}
+		}, 180);
 	});
 	// Click-through by default (transparent widget pattern): the 320×290
 	// window must not block the desktop — the pet occupies only the bottom.
@@ -444,6 +451,11 @@ let bubblesContentSize = { width: 0, height: 0 };
  *  stay click-through (the same poll the pet window uses). */
 let bubblesHitbox = null;
 let bubblesIgnoreState = null;
+/** Collapse mode + live item count reported by the bubbles window — the
+ *  pet-window badge is ONLY this indicator (kimi parity: hidden stack →
+ *  count badge → click restores). Main-owned so a late-loading pet
+ *  window can be brought up to date on its did-finish-load. */
+let bubblesModeState = { mode: "stacked", count: 0 };
 /** Stack bottom → sprite top clearance (was bottom:174px vs sprite top
  *  y≈136 in the 290px pet window → 20px). */
 const BUBBLES_GAP_ABOVE_PET = 20;
@@ -2428,6 +2440,28 @@ ipcMain.handle("bubbles-set-hitbox", (_event, rect) => {
 	}
 	bubblesIgnoreState = null; // force a refresh on the next poll
 	updateBubblesClickThrough();
+	return { ok: true };
+});
+// Collapse mode + item count from the bubbles window → mirrored to the pet
+// window as its badge state (kimi parity: the badge is ONLY the hidden-
+// stack indicator, never a boot-time unread count, never 一键已读).
+ipcMain.handle("bubbles-set-mode", (_event, state) => {
+	if (state && typeof state.mode === "string") {
+		bubblesModeState = {
+			mode: state.mode === "hidden" || state.mode === "expanded" ? state.mode : "stacked",
+			count: Number.isFinite(state.count) ? Math.max(0, Math.floor(state.count)) : 0,
+		};
+		if (petWindow && !petWindow.isDestroyed() && petVisible) {
+			petWindow.webContents.send("pet:activity", { bubbles: bubblesModeState });
+		}
+	}
+	return { ok: true };
+});
+// Pet-window badge click → the bubbles window restores its hidden stack.
+ipcMain.handle("bubbles-restore-stack", () => {
+	if (bubblesWindow && !bubblesWindow.isDestroyed()) {
+		bubblesWindow.webContents.send("bubbles:restore");
+	}
 	return { ok: true };
 });
 

@@ -214,6 +214,13 @@ export interface PetActivity {
 	recentSessions?: { id: string; label: string; timestamp: number }[];
 	/** Unread completion count (pet badge). */
 	unreadCount?: number;
+	/** Bubbles-window collapse state, mirrored by the main process
+	 *  (kimi-work parity): the pet-window badge is ONLY the "stack fully
+	 *  hidden" indicator — it shows the hidden item count and clicking it
+	 *  restores the stack. Never lit at boot (a fresh stack is never
+	 *  hidden) and never a 一键已读 control (that lives in the expanded
+	 *  list header + reminders panel). */
+	bubbles?: { mode: "expanded" | "stacked" | "hidden"; count: number };
 	scale?: number;
 	/** Main-window locale (the pet window cannot read its localStorage —
 	 *  carried so the panel strings match the main UI language). */
