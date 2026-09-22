@@ -577,6 +577,14 @@
 	}
 }
 
+/* Multiline ask input (ZCode #3): Enter submits, Shift+Enter newline,
+ * autogrow up to 5 lines then scrolls. */
+.gui-ask-textarea {
+	resize: none;
+	max-height: calc(1.5em * 5);
+	overflow-y: auto;
+}
+
 .gui-ask-card-head {
 	display: flex;
 	align-items: flex-start;

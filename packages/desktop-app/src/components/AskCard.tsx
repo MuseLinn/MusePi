@@ -1,8 +1,57 @@
 import { Markdown, t } from "@musepi/client-core";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode, RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
+
+/** Enter-submit guard for the ask textareas (ZCode absorption #3): IME
+ *  composition must never submit (guest Composer's shouldSubmitOnEnter
+ *  parity), and Shift+Enter always means newline. */
+function shouldSubmitAskEnter(e: KeyboardEvent<HTMLTextAreaElement>): boolean {
+	return e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing;
+}
+
+const ASK_TEXTAREA_MAX_LINES = 5;
+
+/** Auto-growing textarea for ask answers: grows with the text up to
+ *  ASK_TEXTAREA_MAX_LINES, then scrolls internally — the card is never
+ *  pushed past its 5-line cap. Replaces the four single-line <input>s
+ *  (ZCode absorption #3: 问答卡换行输入). */
+function AskTextarea(props: {
+	value: string;
+	onChange: (value: string) => void;
+	onKeyDown?: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
+	placeholder: string;
+	textareaRef?: RefObject<HTMLTextAreaElement | null>;
+}): ReactNode {
+	const localRef = useRef<HTMLTextAreaElement | null>(null);
+	const setRefs = (el: HTMLTextAreaElement | null): void => {
+		localRef.current = el;
+		if (props.textareaRef) props.textareaRef.current = el;
+	};
+	// Autogrow: re-measure from 0 so shrink-on-delete actually shrinks;
+	// the CSS max-height + overflow-y:auto cap the box at 5 lines.
+	useEffect(() => {
+		const el = localRef.current;
+		if (!el) return;
+		const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight) || 20;
+		const max = lineHeight * ASK_TEXTAREA_MAX_LINES;
+		el.style.height = "0px";
+		el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+	}, [props.value]);
+	return (
+		<textarea
+			ref={setRefs}
+			rows={1}
+			className="gui-input gui-ask-textarea w-full"
+			value={props.value}
+			placeholder={props.placeholder}
+			spellCheck={false}
+			onChange={e => props.onChange(e.target.value)}
+			onKeyDown={props.onKeyDown}
+		/>
+	);
+}
 
 /** One option inside a multi-question dialog question. */
 export interface AskDialogOption {
@@ -131,8 +180,8 @@ function clearDraft(requestId: string): void {
 export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: AskAnswer): void }): ReactNode {
 	const [custom, setCustom] = useState("");
 	const [otherMode, setOtherMode] = useState(false);
-	const inputRef = useRef<HTMLInputElement | null>(null);
-	const noteInputRef = useRef<HTMLInputElement | null>(null);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const noteInputRef = useRef<HTMLTextAreaElement | null>(null);
 	const [answers, setAnswers] = useState<AnswerState[]>(() => {
 		if (ask.mode !== "dialog") return [];
 		// Restore an in-flight draft (session switch / relaunch) when the
@@ -204,7 +253,7 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 	const toggleNoteRef = useRef<(qIndex: number) => void>(() => {});
 
 	useEffect(() => {
-		const onKey = (e: KeyboardEvent): void => {
+		const onKey = (e: globalThis.KeyboardEvent): void => {
 			if (e.key === "Escape") {
 				// Claim the key (lib/escape-stop): unclaimed Escape interrupts
 				// the running turn.
@@ -354,15 +403,13 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 		if (ask.mode === "input") {
 			return (
 				<>
-					<input
-						ref={inputRef}
-						className="gui-input w-full"
+					<AskTextarea
+						textareaRef={inputRef}
 						value={custom}
 						placeholder={t("ask input placeholder")}
-						spellCheck={false}
-						onChange={e => setCustom(e.target.value)}
+						onChange={v => setCustom(v)}
 						onKeyDown={e => {
-							if (e.key === "Enter" && custom.trim()) answerAndClear(custom.trim());
+							if (shouldSubmitAskEnter(e) && custom.trim()) answerAndClear(custom.trim());
 						}}
 					/>
 					<div className="flex justify-end">
@@ -377,15 +424,13 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 			return (
 				<>
 					<div className="gui-ask-reveal">
-						<input
-							ref={inputRef}
-							className="gui-input w-full"
+						<AskTextarea
+							textareaRef={inputRef}
 							value={custom}
 							placeholder={t("ask input placeholder")}
-							spellCheck={false}
-							onChange={e => setCustom(e.target.value)}
+							onChange={v => setCustom(v)}
 							onKeyDown={e => {
-								if (e.key === "Enter" && custom.trim()) answerAndClear(custom.trim());
+								if (shouldSubmitAskEnter(e) && custom.trim()) answerAndClear(custom.trim());
 							}}
 						/>
 					</div>
@@ -537,13 +582,11 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					</button>
 					{a.otherMode && (
 						<div className="gui-ask-reveal">
-							<input
-								ref={inputRef}
-								className="gui-input w-full"
+							<AskTextarea
+								textareaRef={inputRef}
 								value={a.custom}
 								placeholder={t("ask input placeholder")}
-								spellCheck={false}
-								onChange={e => setOtherText(qIndex, e.target.value)}
+								onChange={value => setOtherText(qIndex, value)}
 							/>
 						</div>
 					)}
@@ -569,15 +612,13 @@ export function AskCard({ ask, onAnswer }: { ask: AskRequest; onAnswer(answer: A
 					</div>
 					{a.noteOpen && (
 						<div className="gui-ask-reveal">
-							<input
-								ref={noteInputRef}
-								className="gui-input w-full"
+							<AskTextarea
+								textareaRef={noteInputRef}
 								value={a.note}
 								placeholder={t("note placeholder")}
-								spellCheck={false}
-								onChange={e => setAnswerAt(qIndex, { note: e.target.value })}
+								onChange={value => setAnswerAt(qIndex, { note: value })}
 								onKeyDown={e => {
-									if (e.key === "Enter") toggleNote(qIndex);
+									if (shouldSubmitAskEnter(e)) toggleNote(qIndex);
 								}}
 							/>
 						</div>
