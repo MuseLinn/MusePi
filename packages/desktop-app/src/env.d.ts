@@ -44,6 +44,12 @@ interface Window {
 		/** Per-tab page zoom factor (0.25–3), independent of the device-preset
 		 *  Emulation overrides (zcode zoom-control parity, shell design §3.2.1). */
 		managedBrowserSetZoom(input: { tabId: string; zoom: number }): Promise<{ ok: boolean; error?: string }>;
+		/** Tab residency: "frozen" pauses the page via CDP `Page.setWebLifecycleState`
+		 *  (DOM + in-page state survive, no reload cost on thaw); "active" resumes. */
+		managedBrowserSetLifecycle(input: {
+			tabId: string;
+			state: "frozen" | "active";
+		}): Promise<{ ok: boolean; error?: string }>;
 		managedBrowserConfirmResult(input: { requestId: string; allow: boolean }): Promise<{ ok: boolean }>;
 		/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId`. */
 		managedBrowserGuestReady(input: { tabId: string; webContentsId: number }): Promise<unknown>;

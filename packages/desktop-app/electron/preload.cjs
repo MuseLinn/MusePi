@@ -289,6 +289,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	managedBrowserSetDevice: (input) => ipcRenderer.invoke("managed-browser:set-device", input),
 	/** Per-tab page zoom factor (0.25–3), independent of device presets. */
 	managedBrowserSetZoom: (input) => ipcRenderer.invoke("managed-browser:set-zoom", input),
+	/** Page freeze/thaw for tab residency: "frozen" pauses the page via CDP
+	 *  (no reload cost on thaw), "active" resumes it. */
+	managedBrowserSetLifecycle: (input) => ipcRenderer.invoke("managed-browser:set-lifecycle", input),
 	/** Renderer answer to a risky-navigation consent request. */
 	managedBrowserConfirmResult: (input) => ipcRenderer.invoke("managed-browser:confirm-result", input),
 	/** Guest lifecycle → main: the CDP bridge binds `webContents.fromId(id)`. */

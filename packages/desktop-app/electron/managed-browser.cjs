@@ -361,6 +361,8 @@ class ManagedTab {
 		this.cdpOk = false;
 		/** Device preset currently applied to the guest (null = engine default). */
 		this.devicePreset = null;
+		/** Page frozen via CDP `Page.setWebLifecycleState` (residency management). */
+		this.frozen = false;
 		/** Pending agent-highlight auto-hide. */
 		this.highlightTimer = null;
 	}
@@ -1573,6 +1575,33 @@ class ManagedBrowserController {
 	}
 
 	/**
+	 * Freeze/thaw one tab's page via the per-tab CDP debugger session
+	 * (`Page.setWebLifecycleState`). Chromium-native page freezing: the DOM
+	 * and in-page state survive, JavaScript timers/loads pause, and there is
+	 * NO reload cost on thaw — the panel-embedded webview has no native
+	 * suspend of its own, so this is the residency lever (sidepanel browser
+	 * rendering design, batch B). Best effort: a guest mid-load or without a
+	 * bound debugger reports `{ok:false}` and the renderer simply keeps the
+	 * tab unfrozen.
+	 */
+	async setTabLifecycle(input) {
+		const tab = this.tabs.get(String(input?.tabId));
+		if (!tab) return { ok: false, error: "unknown tab" };
+		if (!(await tab.whenDebuggerReady())) return { ok: false, error: "browser tab is not ready" };
+		const wc = tab.wc;
+		if (!wc || wc.isDestroyed()) return { ok: false, error: "browser tab is not ready" };
+		const state = input?.state === "frozen" ? "frozen" : "active";
+		try {
+			await wc.debugger.sendCommand("Page.enable");
+			await wc.debugger.sendCommand("Page.setWebLifecycleState", { state });
+			tab.frozen = state === "frozen";
+			return { ok: true };
+		} catch (error) {
+			return { ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	}
+
+	/**
 	 * Apply (or clear) a device-identity preset on one tab's guest.
 	 *
 	 * `reload` re-requests the page so it re-serves under the new identity; the
@@ -1776,6 +1805,8 @@ class ManagedBrowserController {
 			this.applyDevicePreset(input?.tabId, input?.preset, input?.reload === true, input?.viewport ?? null),
 		);
 		ipcMain.handle("managed-browser:set-zoom", (_e, input) => this.setZoom(input));
+		// Page freeze/thaw for tab residency (CDP `Page.setWebLifecycleState`).
+		ipcMain.handle("managed-browser:set-lifecycle", (_e, input) => this.setTabLifecycle(input));
 		ipcMain.handle("managed-browser:stop", (_e, tabId) => this.stopOp(tabId));
 		ipcMain.handle("managed-browser:confirm-result", (_e, input) => {
 			const pending = this.pendingConfirm;

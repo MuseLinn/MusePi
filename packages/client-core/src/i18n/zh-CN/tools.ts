@@ -266,6 +266,7 @@ export const tools = {
 	"managed browser port": "本地端口 {port}",
 	"agent activity": "Agent 活动",
 	"agent created tab": "Agent",
+	"browser tab frozen": "已冻结（后台省电，点击自动恢复）",
 	"new browser tab": "新建标签页",
 	"public http https only": "仅支持 http/https 或 omp-file:// 地址",
 	"close and destroy browser": "关闭并销毁受管浏览器",

@@ -976,7 +976,7 @@ export function ManagedBrowserPane({
 							<div
 								key={tab.id}
 								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}`}
-								title={tab.url}
+								title={tab.frozen ? `${tab.url} · ${t("browser tab frozen")}` : tab.url}
 								style={
 									tab.themeColor
 										? {
@@ -993,7 +993,9 @@ export function ManagedBrowserPane({
 									aria-label={`${tab.title}${tab.agent ? ` (${t("agent created tab")})` : ""}`}
 									onClick={() => selectTab(tab.id)}
 								>
-									{tab.loading ? (
+									{tab.frozen ? (
+										<Icon name="hourglass" className="h-3 w-3 shrink-0 opacity-70" />
+									) : tab.loading ? (
 										<Icon name="loader-4" className="h-3 w-3 shrink-0 animate-spin opacity-70" />
 									) : tab.favicon ? (
 										<img

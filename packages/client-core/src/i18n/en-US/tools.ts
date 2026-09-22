@@ -273,6 +273,7 @@ export const tools = {
 	"managed browser port": "Local port {port}",
 	"agent activity": "Agent activity",
 	"agent created tab": "Agent",
+	"browser tab frozen": "Frozen (power-saving; auto-resumes on click)",
 	"new browser tab": "New browser tab",
 	"public http https only": "Only http/https or omp-file:// URLs",
 	"close and destroy browser": "Close and destroy the managed browser",

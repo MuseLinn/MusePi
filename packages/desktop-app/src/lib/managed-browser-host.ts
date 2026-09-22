@@ -45,6 +45,10 @@ export interface ManagedTab {
 	themeColor: string | null;
 	canGoBack: boolean;
 	canGoForward: boolean;
+	/** Last user/agent activity (load, navigation, selection) — residency LRU. */
+	lastActivityAt: number;
+	/** Page paused via CDP `Page.setWebLifecycleState` (see enforceResidency). */
+	frozen: boolean;
 }
 
 export interface HostRect {
@@ -135,6 +139,14 @@ function patchTab(tabId: string, patch: Partial<ManagedTab>): void {
 	set({ tabs });
 }
 
+/** Residency LRU touch: any load/navigation/selection counts as activity. */
+function touchTab(tabId: string): void {
+	const tab = state.tabs.find(x => x.id === tabId);
+	if (!tab) return;
+	if (Date.now() - tab.lastActivityAt < 1000) return;
+	patchTab(tabId, { lastActivityAt: Date.now() });
+}
+
 function isBlankUrl(url: string): boolean {
 	return url === "" || url === "about:blank";
 }
@@ -160,10 +172,14 @@ export function attachElement(tabId: string, el: HostWebview | null): void {
 		const urls = (event as Event & { favicons?: string[] }).favicons;
 		if (Array.isArray(urls) && urls.length > 0) patchTab(tabId, { favicon: urls[0] ?? null });
 	};
-	const onLoadStart = (): void => patchTab(tabId, { loading: true });
+	const onLoadStart = (): void => {
+		touchTab(tabId);
+		patchTab(tabId, { loading: true });
+	};
 	const onLoadEnd = (): void => {
 		const current = elements.get(tabId);
 		if (!current) return;
+		touchTab(tabId);
 		let url = state.tabs.find(x => x.id === tabId)?.url ?? "";
 		let title = "";
 		let canGoBack = false;
@@ -299,11 +315,15 @@ export function createTab(url: string, options?: { tabId?: string; agent?: boole
 		themeColor: null,
 		canGoBack: false,
 		canGoForward: false,
+		lastActivityAt: Date.now(),
+		frozen: false,
 	};
 	const created = Promise.withResolvers<string>();
 	pendingCreates.set(id, created);
 	set({ tabs: [...state.tabs, tab], activeId: id });
 	if (state.paneVisible) reportActive(id);
+	// A new tab can push the set past the residency cap — reap in the background.
+	enforceResidency();
 	// A guest that never attaches (window closed mid-create) must not hang main.
 	window.setTimeout(() => {
 		const pending = pendingCreates.get(id);
@@ -336,7 +356,11 @@ export function closeTab(tabId: string, options?: { notifyMain?: boolean }): voi
 export function selectTab(tabId: string): void {
 	if (!state.tabs.some(tab => tab.id === tabId)) return;
 	set({ activeId: tabId });
+	touchTab(tabId);
 	reportActive(tabId);
+	// A frozen page is dead to input — always thaw on activation.
+	const tab = state.tabs.find(x => x.id === tabId);
+	if (tab?.frozen) void thawTab(tabId);
 }
 
 function reportActive(tabId: string): void {
@@ -396,14 +420,19 @@ export async function navigate(url: string): Promise<boolean> {
 	}
 	set({ error: null });
 	pumpTabFromElement(tab.id);
+	touchTab(tab.id);
 	return true;
 }
 
 export function goBack(): void {
 	const tab = activeTab();
-	const el = tab ? elements.get(tab.id) : null;
+	if (!tab) return;
+	const el = elements.get(tab.id);
 	try {
-		if (el?.canGoBack()) el.goBack();
+		if (el?.canGoBack()) {
+			el.goBack();
+			touchTab(tab.id);
+		}
 	} catch {
 		// element not attached
 	}
@@ -411,9 +440,13 @@ export function goBack(): void {
 
 export function goForward(): void {
 	const tab = activeTab();
-	const el = tab ? elements.get(tab.id) : null;
+	if (!tab) return;
+	const el = elements.get(tab.id);
 	try {
-		if (el?.canGoForward()) el.goForward();
+		if (el?.canGoForward()) {
+			el.goForward();
+			touchTab(tab.id);
+		}
 	} catch {
 		// element not attached
 	}
@@ -421,13 +454,81 @@ export function goForward(): void {
 
 export function reload(hard = false): void {
 	const tab = activeTab();
-	const el = tab ? elements.get(tab.id) : null;
+	if (!tab) return;
+	const el = elements.get(tab.id);
 	try {
 		if (hard) el?.reloadIgnoringCache();
 		else el?.reload();
+		if (el) touchTab(tab.id);
 	} catch {
 		// element not attached
 	}
+}
+
+// ── Tab residency (batch B, sidepanel browser rendering design) ─────────
+//
+// The panel embeds pages as DOM `<webview>`s, which have NO native suspend:
+// every background tab keeps rendering and running timers. The cap freezes
+// the coldest eligible tabs through CDP `Page.setWebLifecycleState` (Chromium
+// page freezing — DOM and in-page state survive, thaw has no reload cost).
+// Protection matrix: never freeze the active tab, a loading tab, a blank
+// resting tab, the tab the agent is mid-operation on, or (preferentially) an
+// agent-created tab; an idle grace keeps just-switched tabs from flapping.
+
+/** Panel-embedded cap (zcode's desktop BrowserView keeps 32; ours is a pane). */
+const RESIDENCY_LIMIT = 16;
+/** A tab younger than this is never frozen (about-to-be-switched-back guard). */
+const RESIDENCY_IDLE_MS = 30_000;
+
+async function setLifecycle(tabId: string, lifecycle: "frozen" | "active"): Promise<boolean> {
+	const res = await window.electronAPI?.managedBrowserSetLifecycle({ tabId, state: lifecycle }).catch(() => null);
+	return res?.ok === true;
+}
+
+/** Pause a background tab. Fire-and-forget: residency is best-effort by design. */
+function freezeTab(tabId: string): void {
+	void setLifecycle(tabId, "frozen").then(ok => {
+		if (ok) patchTab(tabId, { frozen: true });
+	});
+}
+
+/** Resume a tab on activation; a frozen page is dead to input, so a failed
+ *  thaw falls back to a reload (the partition keeps logins, in-page state
+ *  is what a reload costs). */
+async function thawTab(tabId: string): Promise<void> {
+	if (await setLifecycle(tabId, "active")) {
+		patchTab(tabId, { frozen: false });
+		touchTab(tabId);
+		return;
+	}
+	try {
+		elements.get(tabId)?.reload();
+		patchTab(tabId, { frozen: false });
+	} catch {
+		// guest gone
+	}
+}
+
+/** Freeze the coldest eligible tabs when the set exceeds the cap. */
+export function enforceResidency(): void {
+	const tabs = state.tabs;
+	if (tabs.length <= RESIDENCY_LIMIT) return;
+	const busyTabId = state.activity?.status === "dispatched" ? state.activity.tabId : null;
+	const idleBefore = Date.now() - RESIDENCY_IDLE_MS;
+	const eligible = (tab: ManagedTab): boolean =>
+		tab.id !== state.activeId &&
+		tab.id !== busyTabId &&
+		!tab.loading &&
+		!tab.blank &&
+		!tab.frozen &&
+		tab.lastActivityAt <= idleBefore;
+	// User tabs are the freeze-first pool; agent-created tabs only when no
+	// user tab can take the hit.
+	let pool = tabs.filter(tab => eligible(tab) && !tab.agent);
+	if (pool.length === 0) pool = tabs.filter(eligible);
+	pool.sort((a, b) => a.lastActivityAt - b.lastActivityAt);
+	const excess = tabs.length - RESIDENCY_LIMIT;
+	for (const victim of pool.slice(0, excess)) freezeTab(victim.id);
 }
 
 /** Element picker: the script runs inside the guest (cross-origin safe). */
@@ -499,6 +600,9 @@ export function wireHost(): void {
 	void api.managedBrowserGetState().then(snapshot => {
 		set({ port: snapshot.port ?? null, activity: snapshot.activity ?? null });
 	});
+	// Long-lived sets can exceed the cap without any new tab (restored tabs
+	// all arrive at once); re-check periodically rather than only on create.
+	window.setInterval(enforceResidency, 30_000);
 }
 
 /**
