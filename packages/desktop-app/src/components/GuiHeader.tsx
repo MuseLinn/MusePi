@@ -210,7 +210,6 @@ export function GuiHeader({
 	const isWin = shellPlatform() === "win32";
 	const isLinux = shellPlatform() === "linux";
 	const hasOverlay = isWin || isLinux;
-	const isMac = shellPlatform() === "darwin";
 	const [ceiling, setCeiling] = useState<string | null>(null);
 	const projectLabel = snap?.state?.cwd ? projectName(snap.state.cwd) : store ? t("session") : t("local");
 	// Trigger refs for the portaled popups (global z-order above the chat
@@ -220,6 +219,21 @@ export function GuiHeader({
 	const titleMenuBtnRef = useRef<HTMLButtonElement | null>(null);
 	const openInBtnRef = useRef<HTMLButtonElement | null>(null);
 	const instanceBtnRef = useRef<HTMLButtonElement | null>(null);
+	// §5t titlebar avoidance: the fixed float cluster publishes its measured
+	// width as --gui-float-controls-width; the collapsed-sidebar spacer carves
+	// exactly that much (openchamber --oc-titlebar-controls-width parity).
+	const floatRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		const el = floatRef.current;
+		if (!el) return;
+		const publish = () => {
+			document.documentElement.style.setProperty("--gui-float-controls-width", `${el.offsetWidth}px`);
+		};
+		publish();
+		const ro = new ResizeObserver(publish);
+		ro.observe(el);
+		return () => ro.disconnect();
+	}, []);
 	const [openInOpen, setOpenInOpen] = useState(false);
 	const [projOpen, setProjOpen] = useState(false);
 	const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -696,7 +710,9 @@ export function GuiHeader({
 				store ? " gui-header--session" : " gui-header--welcome"
 			}`}
 			style={{
-				...(sideCollapsed ? { paddingLeft: isMac ? 172 : 16 } : {}),
+				// Right carve only: native titleBarOverlay hit area (win/linux).
+				// Left clearance is the .gui-header-spacer's job (§5t) — never
+				// an inline paddingLeft guess.
 				...(hasOverlay ? { paddingRight: 150 } : {}),
 			}}
 		>
@@ -705,7 +721,7 @@ export function GuiHeader({
 			 * no-drag reliably. Sidebar toggle + the project-actions capsule
 			 * (auto-discover dev server / stop while running), exactly like
 			 * openchamber's toggle + ProjectActionsButton. */}
-			<div className="gui-float-controls gui-float-controls--overlay">
+			<div className="gui-float-controls gui-float-controls--overlay" ref={floatRef}>
 				<button
 					type="button"
 					className="gui-sidebar-toggle"
@@ -823,6 +839,10 @@ export function GuiHeader({
 					</MenuPopup>
 				</div>
 			</div>
+			{/* §5t collapsed-sidebar carve spacer: reserves the float
+			 * cluster's measured width so the session-title pill never
+			 * slides underneath it (openchamber no-drag carve parity). */}
+			<div className="gui-header-spacer" data-collapsed={sideCollapsed ? "true" : undefined} aria-hidden="true" />
 			<div className="flex min-w-0 flex-1 items-center gap-0.5">
 				{/* Session title = switcher trigger (openchamber
 				 * SessionSwitcherDropdown parity): clicking opens 新建会话 +
@@ -1030,35 +1050,6 @@ export function GuiHeader({
 								<span>{t("delete session")}</span>
 							</button>
 						</MenuPopup>
-					</div>
-				)}
-				{/* Session tabs strip (openchamber SessionTabsStrip parity,
-				 * §3.1 A2): standing navigation when the sidebar is collapsed
-				 * or several sessions are open — the switcher dropdown stays
-				 * the history+new surface. Left click switches, middle click
-				 * closes (deleteSession owns the confirm dialog). */}
-				{(sideCollapsed || sessions.length >= 3) && store && sessions.length > 0 && (
-					<div className="gui-header-tabs" role="tablist" aria-label={t("recent sessions")}>
-						{sessions.slice(0, 5).map(s => {
-							const active = store.sessionId === s.id;
-							const label = s.label.trim() || t("untitled session");
-							return (
-								<button
-									key={s.id}
-									type="button"
-									role="tab"
-									aria-selected={active}
-									className={`gui-header-tab${active ? " gui-header-tab--active" : ""}`}
-									title={label}
-									onClick={() => onSelectSession(s.id)}
-									onAuxClick={e => {
-										if (e.button === 1) void onDeleteSession(s.id);
-									}}
-								>
-									{label}
-								</button>
-							);
-						})}
 					</div>
 				)}
 			</div>

@@ -181,7 +181,8 @@ try {
 	report.sessionError = String(e);
 }
 
-// 04 collapse the sidebar → session tabs strip. State-aware: if the
+// 04 collapse the sidebar → the session-title pill must stay clear of the
+// fixed float-controls cluster (§5t carve spacer). State-aware: if the
 // sidebar is already collapsed (toggle offers 打开侧边栏), expand it
 // first so this step always demonstrates the collapse transition.
 try {
@@ -193,12 +194,19 @@ try {
 		await sleep(700);
 	}
 	report.sidebarToggled = await evaluate<boolean>(`(${CLICK})(".gui-sidebar-toggle")`);
-	await sleep(700);
-	report.tabsStrip = await evaluate<{ shown: boolean; tabs: number }>(`({
-	shown: !!document.querySelector(".gui-header-tabs"),
-	tabs: document.querySelectorAll(".gui-header-tab").length,
-})`);
-	await shot("04-tabs-strip.png");
+	await sleep(1000);
+	report.titleClearOfFloatControls = await evaluate<{ clear: boolean; overlapPx: number; spacerPx: number }>(`(() => {
+	const title = document.querySelector(".gui-header-title");
+	const float = document.querySelector(".gui-float-controls--overlay");
+	const spacer = document.querySelector(".gui-header-spacer");
+	if (!title || !float) return { clear: false, overlapPx: -1, spacerPx: -1 };
+	const a = title.getBoundingClientRect();
+	const b = float.getBoundingClientRect();
+	const ox = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+	const oy = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+	return { clear: ox * oy === 0, overlapPx: ox * oy, spacerPx: spacer ? Math.round(spacer.getBoundingClientRect().width) : -1 };
+	})()`);
+	await shot("04-collapsed-title-clear.png");
 } catch (e) {
 	report.tabsError = String(e);
 }

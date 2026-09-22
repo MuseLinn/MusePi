@@ -1218,48 +1218,6 @@
 	color: var(--color-text);
 }
 
-/* ── Session tabs strip (openchamber SessionTabsStrip parity, A2) ────── */
-/* Segmented capsule standing next to the session title when the sidebar
- * is collapsed or several sessions are open. */
-.gui-header-tabs {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	margin-left: 8px;
-	padding: 2px;
-	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--color-surface) 75%, transparent);
-	border: 1px solid color-mix(in oklab, var(--border) 55%, transparent);
-}
-
-.gui-header-tab {
-	max-width: 110px;
-	padding: 1px 8px;
-	border: none;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: var(--color-text-muted);
-	font-size: 11px;
-	line-height: 16px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	cursor: pointer;
-	transition:
-		background 120ms ease-out,
-		color 120ms ease-out;
-}
-
-.gui-header-tab:hover {
-	background: var(--color-surface-raised);
-	color: var(--color-text);
-}
-
-.gui-header-tab--active {
-	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-	color: var(--color-accent);
-}
-
 /* ── Title sub-row chips (A2): git branch + context usage ────────────── */
 .gui-header-subrow {
 	display: flex;

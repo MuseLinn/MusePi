@@ -983,6 +983,26 @@ body.gui-resizing .gui-pane-resize-x::after {
 	left: 16px;
 }
 
+/* §5t collapsed-sidebar carve spacer: the float cluster is position:fixed,
+ * so the header flow reserves its measured width or the session-title pill
+ * slides underneath it (openchamber no-drag carve parity). Width comes from
+ * --gui-float-controls-width, published by GuiHeader's ResizeObserver. */
+.gui-header-spacer {
+	flex-shrink: 0;
+	width: 0;
+	transition: width 220ms ease;
+}
+
+.gui-header-spacer[data-collapsed="true"] {
+	width: calc(var(--gui-float-controls-width, 86px) + 8px);
+}
+
+/* macOS: the cluster anchors at left:84 (traffic-light clearance), so the
+ * spacer additionally covers 84 − 16 baseline padding. */
+:root[data-platform="darwin"] .gui-header-spacer[data-collapsed="true"] {
+	width: calc(68px + var(--gui-float-controls-width, 86px) + 8px);
+}
+
 .gui-sidebar-toggle {
 	display: flex;
 	height: 26px;
