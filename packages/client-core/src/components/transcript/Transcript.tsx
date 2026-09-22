@@ -15,17 +15,8 @@ function hapticTap(): void {
 	}
 }
 
-import {
-	Fragment,
-	memo,
-	type ReactNode,
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
 import { fmtDuration, fmtTokens } from "../../lib/format";
@@ -34,8 +25,8 @@ import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
-import { buildTurnRenderUnits, type TurnRenderUnit } from "./render-units";
-import { buildRoundFolds, type RoundFold } from "./round-collapse";
+import type { TurnRenderUnit } from "./render-units";
+import type { RoundFold } from "./round-collapse";
 import {
 	anchorActionAfterContentChange,
 	initialFollowing,
@@ -67,6 +58,7 @@ import {
 	UserMsgContent,
 	WorkingLine,
 } from "./transcript-content";
+import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 
 export {
 	type MusePiCompatHost,
@@ -77,19 +69,43 @@ export {
 
 import "./transcript.css";
 
-// M1.11 render window (mem-bench: e4611b51a). Rows are derived (folds/units)
-// and mounted only within a tail window; scrolling past the top sentinel (or
-// a jump into history) expands it. The daemon already tails the wire payload
-// (TAIL_ENTRIES=200, server.ts) and pages genuinely older history via
-// session.history — this window bounds the CLIENT-side derive + DOM cost no
-// matter how much history the user pages in. The old pre-M1.11 behavior
-// ("render every loaded entry") is what made long sessions jank: every
-// streamed frame re-ran the full-entry derive (~200ms at 42k entries).
-const RENDER_WINDOW_INITIAL = 800;
-const RENDER_WINDOW_EXPAND = 600;
-// Initial row-height estimate (kept for the read-time spinner metrics). Real
-// message rows (text + padding) run 60-100px, so 64 is closer than 44.
-const AVG_ROW_HEIGHT = 64; // px; refined by measurement once rows mount
+// M2 entry-level virtualization (0.5.0 P0①, zcode ModelTrajectoryTimeline
+// parity — docs/review/0.5.0-transcript-virtualization.md): the transcript
+// renders ONLY the rows intersecting the scroller viewport (+overscan)
+// through @tanstack/react-virtual, with top/bottom spacers sized from the
+// virtualizer's running total, so the scrollbar reflects the FULL loaded
+// history and TurnRail jumps mount the target directly (scrollToIndex)
+// instead of growing a render window to it. This replaces M1.11's
+// grow-only tail window (mem-bench: full-list derive ~200ms/frame at 42k
+// entries; the window also only ever grew, so one trip to the top mounted
+// all loaded history forever). The per-frame derive cost is bounded by
+// turn-derive.ts' incremental per-round cache — completed rounds are never
+// re-classified while streaming.
+
+/** Per-kind initial row-height estimates — the virtualizer's pre-measure
+ *  guess. Refined per row by measureElement; kept close to reality so the
+ *  scrollbar doesn't visibly breathe while scrolling. */
+function estimateEntryHeight(e: SessionEntry | undefined): number {
+	if (!e) return 48;
+	switch (e.type) {
+		case "compaction":
+			return 36;
+		case "model_change":
+			return 24;
+		case "custom_message":
+			return 40;
+		case "message": {
+			const role = e.message.role;
+			if (role === "user") return 72;
+			if (role === "assistant") return 96;
+			if (role === "toolResult") return 56;
+			if (role === "bashExecution") return 40;
+			return 48;
+		}
+		default:
+			return 48;
+	}
+}
 
 /** Top inset for a jump landing: the row must not sit flush against the
  *  scroller's edge (floating status cards / masks live there). */
@@ -1164,15 +1180,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 
 	// display.collapseCompacted parity: fold everything before the FIRST
 	// compaction divider behind a toggle row ("show pre-compaction
-	// history"). Applies to the windowed slice — history outside the
-	// window is hidden by the windowing anyway.
+	// history"). Virtualization renders the folded prefix as zero-height
+	// rows (estimate 0), so the compaction fold costs no DOM.
 	const [compactedOpen, setCompactedOpen] = useState(false);
 	// Completed-round folds (craft-agents TurnCard parity): per-round toggle
-	// state, keyed by the round's user-message entry index. The set stores
-	// DEVIATIONS from the default (openchamber activityDefaultState): when
-	// the default is collapsed it holds OPEN rounds; when expanded, CLOSED
-	// ones — so a settings flip re-reads existing rounds without migration.
-	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<number>>(() => new Set());
+	// state, keyed by the round's user-message ENTRY ID (stable across
+	// history prepends — index keys dropped deviations before). The set
+	// stores DEVIATIONS from the default (openchamber activityDefaultState):
+	// when the default is collapsed it holds OPEN rounds; when expanded,
+	// CLOSED ones — so a settings flip re-reads existing rounds without
+	// migration.
+	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<string>>(() => new Set());
 	// Image preview lightbox: full-size view of clicked message images
 	// (all images of the message form the gallery).
 	const [previewImg, setPreviewImg] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
@@ -1214,12 +1232,17 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 
 	// The scrolling host differs per consumer: the desktop GUI scrolls an
 	// OUTER .gui-transcript (this component's .tr-root is expanded and
-	// static there), the web shell scrolls .tr-root itself. Resolve once
-	// on mount — every scroll-affecting path (lock tracking, bottom
-	// follow) must talk to the real scroller or it silently no-ops.
+	// static there), the web shell scrolls .tr-root itself. Resolved in the
+	// root's ref callback (below) — state, not just a ref, so the
+	// virtualizer re-renders once the scroll element exists. Every
+	// scroll-affecting path (lock tracking, bottom follow, virtualization)
+	// must talk to the real scroller or it silently no-ops.
 	const scrollerRef = useRef<HTMLElement | null>(null);
-	useLayoutEffect(() => {
-		scrollerRef.current = rootRef.current?.closest<HTMLElement>(".gui-transcript") ?? rootRef.current;
+	const resolveScroller = useCallback((el: HTMLDivElement | null): void => {
+		rootRef.current = el;
+		const sc = el?.closest<HTMLElement>(".gui-transcript") ?? el ?? null;
+		scrollerRef.current = sc;
+		setScrollerEl(prev => (prev === sc ? prev : sc));
 	}, []);
 
 	// In-flight round boundary: entries after the last user message while the
@@ -1250,72 +1273,84 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [sessionKey]);
 
-	// M1.11 render window: only the tail RENDER_WINDOW_INITIAL entries are
-	// derived (folds/units) and mounted; scrolling past the top sentinel (or
-	// a jump into history) expands it by RENDER_WINDOW_EXPAND. The daemon
-	// already tails the wire payload (TAIL_ENTRIES=200) and pages older
-	// chunks via session.history — this window bounds the CLIENT-side
-	// derive + DOM cost no matter how much history the user pages in
-	// (mem-bench: full derive ~200ms at 42k entries vs ~0.1ms for a
-	// 300-entry window; every streamed frame used to re-run it).
-	const [renderWindow, setRenderWindow] = useState(RENDER_WINDOW_INITIAL);
-	// Session switch resets the window back to the tail-only default.
+	// Completed-round folds + M1 turn units, derived over the FULL loaded
+	// list through the incremental per-round cache (turn-derive.ts): every
+	// streamed frame only re-derives the in-flight round, never the whole
+	// history (mem-bench: the old full-list build was ~200ms at 42k
+	// entries). Result references are structurally shared — unchanged
+	// frames return the previous arrays, so the memos below stay valid.
+	const deriveCacheRef = useRef(createTurnDeriveCache());
 	useEffect(() => {
-		setRenderWindow(RENDER_WINDOW_INITIAL);
+		deriveCacheRef.current = createTurnDeriveCache();
 	}, [sessionKey]);
-	const hidden = Math.max(0, entries.length - renderWindow);
-	const slice = hidden > 0 ? entries.slice(hidden) : entries;
-	// Mirror of `hidden` for the IntersectionObserver callback (recreated on
-	// change via the effect dep, but the closure reads the ref to avoid a
-	// stale value mid-callback).
-	const hiddenRef = useRef(hidden);
-	hiddenRef.current = hidden;
-
-	// Completed-round folds (craft-agents TurnCard parity): completed rounds
-	// (frozen duration) except the live tail fold their working span behind a
-	// header. Derived over the WINDOW slice (mem-bench: full-entry fold
-	// building is the dominant per-frame cost on long sessions), then shifted
-	// back to absolute indices — every downstream consumer (render loop,
-	// roundFoldOpen keys, jump path) speaks absolute. A turn straddling the
-	// window edge loses its turn-start inside the slice, so its head renders
-	// expanded — correct: the window edge must not hide half a turn behind
-	// a fold header the user can't open.
-	const folds = useMemo(() => {
-		const built = buildRoundFolds(slice, working);
-		if (hidden === 0) return built;
-		return built.map(f => ({
-			...f,
-			startIdx: f.startIdx + hidden,
-			endIdx: f.endIdx + hidden,
-			headerIdx: f.headerIdx + hidden,
-			finalIdx: f.finalIdx + hidden,
-			exempt: f.exempt.map(i => i + hidden),
-		}));
-	}, [slice, working, hidden]);
-
-	// M1 turn projection (design doc §A): turn headers render above each turn
-	// start. Same turn boundaries as round-collapse (shared isTurnStart) and
-	// the same `working` in-flight flag, so headers and folds agree. Also
-	// window-sliced + absolute-shifted (see folds above).
+	const { folds, units: turnUnits } = useMemo(
+		() => deriveTurns(entries, working, { fallbackModel: model }, deriveCacheRef.current),
+		[entries, working, model],
+	);
 	const turnUnitByStart = useMemo(() => {
 		const map = new Map<number, TurnRenderUnit>();
-		for (const unit of buildTurnRenderUnits(slice, working, { fallbackModel: model })) {
-			if (hidden === 0) {
-				map.set(unit.startIdx, unit);
-			} else {
-				map.set(unit.startIdx + hidden, {
-					...unit,
-					startIdx: unit.startIdx + hidden,
-					endIdx: unit.endIdx + hidden,
-					replyIdx: unit.replyIdx >= 0 ? unit.replyIdx + hidden : -1,
-					workIdxs: unit.workIdxs.map(i => i + hidden),
-					tailIdxs: unit.tailIdxs.map(i => i + hidden),
-					hookIdxs: unit.hookIdxs.map(i => i + hidden),
-				});
+		for (const unit of turnUnits) map.set(unit.startIdx, unit);
+		return map;
+	}, [turnUnits]);
+
+	// Completed-round fold OPEN-state keys are the round's user-message id
+	// (fold.userId), NOT the entry index: history prepends shift absolute
+	// indexes, and index keys silently dropped the user's fold deviations.
+	const foldKeyOf = useCallback((f: RoundFold): string => f.userId ?? `idx:${f.startIdx}`, []);
+	const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
+	const foldOpenOf = useCallback(
+		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldsExpanded,
+		[roundFoldOpen, foldsExpanded, foldKeyOf],
+	);
+	// Index set of rows collapsed inside a CLOSED fold — the virtualizer's
+	// estimate for these is ~0 (the fold slot collapses to height 0), which
+	// keeps the scrollbar stable when scrolled-past turns mount/unmount.
+	// Recomputes only when a fold actually toggles (folds is reference-stable
+	// across streamed frames).
+	const collapsedSpanSet = useMemo(() => {
+		const set = new Set<number>();
+		for (const f of folds) {
+			if (foldOpenOf(f)) continue;
+			for (let i = f.startIdx + 1; i <= f.endIdx; i++) {
+				if (i !== f.finalIdx && !f.exempt.includes(i)) set.add(i);
 			}
 		}
-		return map;
-	}, [slice, working, model, hidden]);
+		return set;
+	}, [folds, foldOpenOf]);
+
+	// ── Entry-level virtualization (M2/P0①) ──────────────────────────────
+	// The scroll host resolves in the ref callback below (desktop scrolls an
+	// outer .gui-transcript, the web shell scrolls .tr-root itself).
+	const [scrollerEl, setScrollerEl] = useState<HTMLElement | null>(null);
+	const virtualizer = useVirtualizer({
+		count: entries.length,
+		getScrollElement: () => scrollerEl,
+		getItemKey: (index: number) => entries[index]?.id ?? index,
+		estimateSize: (index: number) => {
+			if (collapsedSpanSet.has(index)) return 2;
+			if (folding && index < firstCompactionIdx) return 0;
+			return estimateEntryHeight(entries[index]);
+		},
+		overscan: 8,
+	});
+	// Prepend anchoring is handled by the CALLER's scrollHeight-delta
+	// compensation (ChatView.loadOlder) — the mechanism this codebase has
+	// always used. tanstack's own measure-drift adjustment would compensate
+	// a second time on the prepend frame, so it stays off; estimate
+	// refinement drift for items entirely above the viewport resolves
+	// before they become visible (see review doc §8-P0④).
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+	const virtualItems = virtualizer.getVirtualItems();
+	// Test/SSR fallback: without a measurable scroller (happy-dom, SSR) the
+	// virtualizer's window is empty — render the full list so row-level tests
+	// and first-paint SSR keep working. Browsers always have a sized scroller
+	// here (the ref callback resolves before paint).
+	const virtualEnabled = (scrollerEl?.clientHeight ?? 0) > 0;
+	const firstVirtualItem = virtualItems[0];
+	const lastVirtualItem = virtualItems.at(-1);
+	const topSpacerHeight = virtualEnabled ? (firstVirtualItem?.start ?? 0) : 0;
+	const bottomSpacerHeight =
+		virtualEnabled && lastVirtualItem ? Math.max(0, virtualizer.getTotalSize() - lastVirtualItem.end) : 0;
 
 	// Two things fire when the top sentinel enters the pane (M1.11):
 	//  1. DATA backfill — the caller pages the next older chunk from
@@ -1339,45 +1374,26 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const obs = new IntersectionObserver(
 			([entry]) => {
 				if (!entry?.isIntersecting || followingRef.current) return;
-				// Reaching the top pages the next older chunk; the caller guards
-				// concurrency.
+				// Reaching the top pages the next older chunk; the caller
+				// guards concurrency and compensates the scroll anchor
+				// (ChatView.loadOlder's scrollHeight-delta) — virtualization
+				// mounts paged-in rows on demand, no render-window growth.
 				onLoadOlder?.();
-				// Grow the render window only when rows are actually hidden —
-				// once everything loaded is mounted the window is the full
-				// list and further growth would be a no-op state churn.
-				if (hiddenRef.current > 0) {
-					const sc = scrollerRef.current;
-					const scrollTop = sc?.scrollTop ?? 0;
-					const scrollHeight = sc?.scrollHeight ?? 0;
-					setRenderWindow(w => w + RENDER_WINDOW_EXPAND);
-					// Keep the reading position stable across the expansion.
-					requestAnimationFrame(() => {
-						requestAnimationFrame(() => {
-							const s = scrollerRef.current;
-							if (s) s.scrollTop = scrollTop + (s.scrollHeight - scrollHeight);
-						});
-					});
-				}
 			},
-			// Large lookahead: expansion must finish BEFORE the user reaches
-			// the new rows. At 1200px headroom a fast scroll (~1500px/s) has
-			// ~800ms for React to mount the next page — without it, the
-			// scroller runs into unmounted space and shows blank.
+			// Lookahead: the page RPC must resolve BEFORE the user scrolls into
+			// the top spacer, or the scroller shows blank space.
 			{ root: scroller, rootMargin: "1200px 0px" },
 		);
 		obs.observe(el);
 		return () => obs.disconnect();
-	}, [entries.length, onLoadOlder, hidden]);
+	}, [onLoadOlder]);
 
-	// Jump requests (message tree / trajectory / canvas / branch bar): the
-	// target row may live OUTSIDE the render window, in the folded window or
-	// behind the compaction fold — expand until it mounts, then scroll +
-	// flash. Without the expansion a jump into windowed-out history just hit
-	// the top spacer and the target stayed unmounted (user: 滚动和导航条、
-	// 轨迹跳转不能合理处理).
+	// Jump requests (message tree / trajectory / canvas / branch bar /
+	// TurnRail): the virtualizer scrolls straight to the target's estimated
+	// position (cheap — no mounting of everything in between), the row mounts
+	// in the next window, then the flash effect below re-anchors precisely
+	// and plays the highlight.
 	const lastJumpNonceRef = useRef(0);
-	// A jump that had to grow the window first: re-run after the new rows
-	// mount (the layout effect below fires on the window change).
 	const pendingJumpRef = useRef<{ timestamp: string; nonce: number } | null>(null);
 	useEffect(() => {
 		const pending = pendingJumpRef.current;
@@ -1387,28 +1403,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			pendingJumpRef.current = null;
 			return;
 		}
-		if (idx < hidden) return; // still outside the window — wait for expansion
+		// Wait until the target row is actually mounted (it mounts with the
+		// next virtual window after scrollToIndex).
+		if (!virtualItems.some(vi => vi.index === idx)) return;
 		pendingJumpRef.current = null;
-		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
 		jumpFlashRow(rootRef.current, pending.timestamp);
-	}, [hidden, entries, folding, firstCompactionIdx]);
+	}, [virtualItems, entries]);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
 		const idx = entries.findIndex(e => e.timestamp === jumpRequest.timestamp);
 		if (idx < 0) return;
-		// Outside the render window: grow the window until the target row
-		// mounts — the pending-jump effect above finishes the job on the
-		// window change. (Growth is by RENDER_WINDOW_EXPAND per render pass;
-		// the effect re-fires until the row is inside.)
-		if (idx < hidden) {
-			pendingJumpRef.current = { timestamp: jumpRequest.timestamp, nonce: jumpRequest.nonce };
-			setRenderWindow(entries.length - idx);
-			return;
-		}
 		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
-		jumpFlashRow(rootRef.current, jumpRequest.timestamp);
-	}, [jumpRequest, entries, folding, firstCompactionIdx, hidden]);
+		pendingJumpRef.current = { timestamp: jumpRequest.timestamp, nonce: jumpRequest.nonce };
+		virtualizer.scrollToIndex(idx, { align: "center" });
+	}, [jumpRequest, entries, folding, firstCompactionIdx, virtualizer]);
 
 	// Scroll-event adjudication (M1.3): our own scrollTop writes set
 	// `programmaticScrollRef` first, so the async scroll event classifies as
@@ -1594,22 +1603,28 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	}, []);
 
 	// Active tools not already represented as toolCall blocks in committed rows or the stream ghost.
-	const renderedToolIds = new Set<string>();
-	for (const entry of entries) {
-		if (entry.type !== "message" || entry.message.role !== "assistant") continue;
-		for (const block of entry.message.content) {
-			if (block.type === "toolCall") renderedToolIds.add(block.id);
+	// Memoized: the full-entry scan ran on EVERY render (not just entries
+	// changes) — one of the per-frame O(n) loops the virtualization work
+	// is eliminating.
+	const tailTools = useMemo(() => {
+		const renderedToolIds = new Set<string>();
+		for (const entry of entries) {
+			if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+			for (const block of entry.message.content) {
+				if (block.type === "toolCall") renderedToolIds.add(block.id);
+			}
 		}
-	}
-	if (stream !== null) {
-		for (const block of stream.content) {
-			if (block.type === "toolCall") renderedToolIds.add(block.id);
+		if (stream !== null) {
+			for (const block of stream.content) {
+				if (block.type === "toolCall") renderedToolIds.add(block.id);
+			}
 		}
-	}
-	const tailTools: ActiveTool[] = [];
-	for (const tool of activeTools.values()) {
-		if (!renderedToolIds.has(tool.toolCallId)) tailTools.push(tool);
-	}
+		const out: ActiveTool[] = [];
+		for (const tool of activeTools.values()) {
+			if (!renderedToolIds.has(tool.toolCallId)) out.push(tool);
+		}
+		return out;
+	}, [entries, stream, activeTools]);
 
 	// Back-to-bottom (M1.10 批次 A, L2 float 规格): visible only when the
 	// user has scrolled away (shouldShowBackToBottom semantics from the M1.3
@@ -1626,9 +1641,243 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		scroller.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
 	}, [setFollowing]);
 
+	// Render ONE entry row (the virtualizer mounts only the viewport
+	// window). Fold/turn/branch decoration all happens here — the
+	// virtual-row wrapper itself is rendered by the list map in JSX.
+	const renderEntryRow = (absIdx: number, entry: SessionEntry): ReactNode => {
+		// Folded pre-compaction history: the toggle row replaces the first
+		// compaction divider; everything before it renders null (its
+		// virtual-row wrapper still mounts at estimate 0).
+		if (folding && absIdx < firstCompactionIdx) return null;
+		if (folding && absIdx === firstCompactionIdx) {
+			return (
+				<button
+					key="compacted-fold"
+					type="button"
+					className="tr-divider tr-compacted-fold"
+					title={t("show pre-compaction history")}
+					onClick={() => setCompactedOpen(true)}
+				>
+					<span>{t("show pre-compaction history ({count})", { count: String(firstCompactionIdx) })}</span>
+				</button>
+			);
+		}
+		const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
+		// One avatar per agent turn (openchamber grouping): consecutive
+		// assistant/tool messages keep the gutter empty so the orb only
+		// renders on the first row of the turn. Virtualization may unmount
+		// the predecessor, so the old window accumulator became a direct
+		// lookup of the previous entry (equivalent — the old seeding code
+		// documented exactly this equivalence).
+		const before = entries[absIdx - 1];
+		const prevIsAssistant =
+			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
+		// M1 turn header: rendered above the turn-start row (the user
+		// prompt or an advisor note — shared isTurnStart semantics).
+		// The frozen round duration keys off the reply message's
+		// timestamp (same map the reply row's timer uses).
+		const turnUnit = turnUnitByStart.get(absIdx);
+		// Completed-round folding (craft-agents TurnCard parity): working
+		// entries between a user message and its final reply fold behind
+		// a header once the round is done and isn't the live tail. The
+		// header renders ABOVE the final assistant message; the in-span
+		// working rows render only while that fold is expanded.
+		// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
+		// process so nothing becomes unreachable. (foldOpenOf / foldsExpanded
+		// live at component scope — fold keys are the round's user-message id,
+		// stable across history prepends.)
+		// The fold this row belongs to — by header row, by reply row, or by
+		// sitting inside the span. ONE lookup drives everything below;
+		// deriving the roles from separate finds is what lost the header for
+		// turns whose first content row is not their reply (the header row
+		// suppressed itself while the hoist onto the reply row never fired —
+		// verified against a real 1721-entry journal: 34 folds, only 20
+		// headers rendered).
+		const fold = folds.find(
+			f => absIdx === f.headerIdx || absIdx === f.finalIdx || (absIdx > f.startIdx && absIdx <= f.endIdx),
+		);
+		const foldOpen = fold !== undefined && foldOpenOf(fold);
+		const foldClosed = fold !== undefined && !foldOpen;
+		const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
+		const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
+		// Widget rows (successful widget toolCalls, see round-collapse
+		// exempt) stay mounted while the fold is closed: the standalone
+		// card is the turn's artifact, not process noise.
+		const isExemptRow = fold?.exempt.includes(absIdx) === true;
+		const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
+		// Rows in the hidden span stay MOUNTED and collapse to height 0
+		// (.tr-fold-slot, animatable via interpolate-size) so folding
+		// animates both ways instead of popping in and out.
+		const collapsible = inHiddenSpan;
+		// Collapsed turn = 活动 row + the answer: the reply row renders its
+		// TEXT only (thinking/tool parts fold into the activity row).
+		const rowTextOnly = foldClosed && isReplyRow;
+		// A closed fold shows ONLY the header + the reply (+ exempt widget
+		// rows): every other row of the turn loses its body, and the header
+		// row (when it is not the reply) disappears entirely — its header
+		// rides the reply row instead.
+		const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
+		const hoistHeaderHere = foldClosed && isReplyRow;
+		const renderHeaderHere = (isHeaderRow && !foldClosed) || hoistHeaderHere;
+		// Per-round work timer: the live tail row ticks from the
+		// round start (last user message); completed rounds show
+		// their frozen total under the final message.
+		const isTail = isAssistantMessage && absIdx === lastAssistantIdx;
+		const streamingLast = working && isTail && lastAssistantInRound;
+		const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
+		// Closed: the header rides the REPLY row (hoisted into its content column) so
+		// orb + 活动 + answer share one line, while the turn's own first row renders
+		// nothing — no pixel-less row, no floating avatar.
+		const foldHeader =
+			renderHeaderHere && fold !== undefined ? (
+				<RoundFoldHeader
+					key={`round-fold-${fold.startIdx}`}
+					fold={fold}
+					open={foldOpenOf(fold)}
+					onToggle={() =>
+						setRoundFoldOpen(prev => {
+							const next = new Set(prev);
+							const key = foldKeyOf(fold);
+							if (next.has(key)) next.delete(key);
+							else next.add(key);
+							return next;
+						})
+					}
+					onRevert={onRevert}
+				/>
+			) : null;
+		// A header row is the turn's first content row, which is frequently a
+		// toolResult / custom row — EntryRow mounts no Row for those, so the
+		// header has to be mounted by this loop instead (it vanished entirely
+		// when it could only ride an assistant body).
+		const headerStandalone = foldHeader !== null && !isAssistantMessage;
+		// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
+		// 活动 row — asking to expand it outranks the setting — and
+		// (b) during the live round, where the activity is the point.
+		// Completed rounds are what the fold + the setting govern.
+		const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
+		// The row body: mounted for hidden-span rows too (the slot collapses
+		// them), suppressed only for a closed fold's non-reply header row.
+		const body =
+			collapsible || !hideRowContent ? (
+				<Fragment key={entry.id}>
+					{headerStandalone ? (
+						// Inside the message column, so it aligns with the reply.
+						<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+							{foldHeader}
+						</Row>
+					) : null}
+					{hideRowContent && !collapsible ? null : (
+						<EntryRow
+							entry={entry}
+							foldHeader={isAssistantMessage ? (foldHeader ?? undefined) : undefined}
+							results={results}
+							active={activeTools}
+							host={host}
+							userGutter={userGutter}
+							agentGutter={
+								// The reply of a COLLAPSED turn owns the orb: its predecessor is the
+								// hidden header row, so the usual "consecutive assistant rows drop the
+								// avatar" rule must not apply here.
+								isAssistantMessage && prevIsAssistant && !(foldClosed && isReplyRow) ? "" : agentGutter
+							}
+							userPlain={userPlain}
+							collapseLongUserMessages={collapseLongUserMessages}
+							hideToolActivity={rowHideTools || rowTextOnly}
+							textOnly={rowTextOnly}
+							showTokenUsage={showTokenUsage}
+							smoothStreaming={smoothStreaming}
+							taskCardStyle={taskCardStyle}
+							artifacts={turnArtifactsByFinal.get(entry.id)}
+							thinkingLevel={thinkingLevel}
+							streamingLast={streamingLast}
+							runStartTs={streamingLast ? lastUserTs : undefined}
+							roundDuration={roundDuration}
+							onQuote={onQuote}
+							onEdit={onEdit}
+							onRetry={onRetry}
+							onRevert={onRevert}
+							onFork={onFork}
+							onSpeak={onSpeak}
+							onSaveImage={onSaveImage}
+							onPreviewImage={openPreview}
+							speaking={speakingId != null && speakingId === entry.id}
+							onStopSpeak={onStopSpeak}
+							retryTarget={retryTargets.get(entry.id) ?? null}
+							renderTranscriptNode={renderTranscriptNode}
+						/>
+					)}
+				</Fragment>
+			) : null;
+		const headerStandaloneRow = headerStandalone ? (
+			// Inside the message column, so it aligns with the reply.
+			<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+				{foldHeader}
+			</Row>
+		) : null;
+		const slotClass = `tr-fold-slot${foldOpen ? " tr-fold-slot--open" : ""}`;
+		const row = collapsible ? (
+			// Hidden span rows stay MOUNTED inside the slot and collapse to
+			// height 0, so folding animates both ways (returning null popped
+			// rows in and out).
+			<div className={slotClass}>{body}</div>
+		) : (
+			<Fragment key={entry.id}>
+				{headerStandaloneRow}
+				{body}
+			</Fragment>
+		);
+		// M1 turn header: rendered above the turn-start row. Rows hidden
+		// by the compaction fold returned null earlier (no orphans), and
+		// turn starts never sit inside a fold's hidden span — the span
+		// begins AFTER the user message.
+		const rowWithTurnHead =
+			turnUnit !== undefined ? (
+				<Fragment key={`${entry.id}-turn`}>
+					<TurnHeader
+						unit={turnUnit}
+						time={branchClock(entry.timestamp)}
+						durationMs={
+							turnUnit.replyIdx >= 0
+								? roundDurations?.get(
+										(entries[turnUnit.replyIdx] as { message: { timestamp: number } }).message.timestamp,
+									)
+								: undefined
+						}
+					/>
+					{row}
+				</Fragment>
+			) : (
+				row
+			);
+		// Layer-1 branch bar: a message with MULTIPLE children gets
+		// a switchable divider under it (hidden when the caller
+		// provides no branch topology — plain linear sessions).
+		const childCount = branchInfo?.childCount.get(entry.id) ?? 0;
+		if (branchInfo && childCount > 1 && entry.type === "message") {
+			const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
+				id: c.id,
+				label: entryLabelOf(c),
+				time: branchClock((c as { timestamp?: unknown }).timestamp),
+			}));
+			return (
+				<div key={entry.id} className="tr-branch-wrap">
+					{rowWithTurnHead}
+					<BranchBar
+						count={childCount}
+						childrenLabels={kids}
+						activeChildId={activeChildOf(entry.id)}
+						onPick={id => branchInfo.onSwitchBranch?.(id)}
+					/>
+				</div>
+			);
+		}
+		return rowWithTurnHead;
+	};
+
 	return (
 		<div
-			ref={rootRef}
+			ref={resolveScroller}
 			className={`tr-root${compact === true ? " tr-root--compact" : ""}`}
 			data-colorblind={colorBlind ? "true" : undefined}
 		>
@@ -1636,263 +1885,56 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				stream === null &&
 				!working &&
 				(emptySlot ?? <div className="tr-empty">{t("no activity yet")}</div>)}
-			{/* Slim sentinel at the top of the list: paging trigger only, never
-			 *  a spacer — hidden history is not a thing any more. */}
+			{/* Slim sentinel at the top of the list: paging trigger only.
+			 *  Spacing above the mounted window comes from the virtual
+			 *  spacer below — the scrollbar now reflects the FULL loaded
+			 *  history (zcode spacer parity). */}
 			<div ref={sentinelRef} className="tr-window-top" aria-hidden="true" />
 			{loadingOlder && (
 				<div className="tr-window-loading" aria-hidden="true">
 					<span className="tr-window-loading-bar" />
 				</div>
 			)}
-			{(() => {
-				// One avatar per agent turn (openchamber grouping): consecutive
-				// assistant/tool messages keep the gutter empty so the orb only
-				// renders on the first row of the turn. With a collapsed window
-				// the first row's predecessor lives outside the slice — seed
-				// the accumulator from the entry just before it.
-				let prevIsAssistant = false;
-				if (hidden > 0) {
-					const before = entries[hidden - 1];
-					if (
-						before?.type === "message" &&
-						(before.message.role === "assistant" || before.message.role === "toolResult")
-					) {
-						prevIsAssistant = true;
-					}
-				}
-				return slice.map((entry, i) => {
-					// Folded pre-compaction history: the toggle row replaces the
-					// first compaction divider; everything before it is hidden.
-					if (folding && i === firstCompactionIdx - hidden) {
-						prevIsAssistant = false;
+			{topSpacerHeight > 0 && (
+				<div
+					className="tr-virtual-spacer tr-virtual-spacer--top"
+					style={{ height: topSpacerHeight }}
+					aria-hidden="true"
+				/>
+			)}
+			{virtualEnabled
+				? virtualItems.map(vi => {
+						const absIdx = vi.index;
+						const entry = entries[absIdx];
+						if (entry === undefined) return null;
 						return (
-							<button
-								key="compacted-fold"
-								type="button"
-								className="tr-divider tr-compacted-fold"
-								title={t("show pre-compaction history")}
-								onClick={() => setCompactedOpen(true)}
+							<div
+								key={vi.key}
+								ref={virtualizer.measureElement}
+								data-index={vi.index}
+								className="tr-vrow"
+								aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
 							>
-								<span>{t("show pre-compaction history ({count})", { count: String(firstCompactionIdx) })}</span>
-							</button>
-						);
-					}
-					if (folding && i < firstCompactionIdx - hidden) return null;
-					const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
-					const absIdx = i + hidden;
-					// M1 turn header: rendered above the turn-start row (the user
-					// prompt or an advisor note — shared isTurnStart semantics).
-					// The frozen round duration keys off the reply message's
-					// timestamp (same map the reply row's timer uses).
-					const turnUnit = turnUnitByStart.get(absIdx);
-					// Completed-round folding (craft-agents TurnCard parity): working
-					// entries between a user message and its final reply fold behind
-					// a header once the round is done and isn't the live tail. The
-					// header renders ABOVE the final assistant message; the in-span
-					// working rows render only while that fold is expanded.
-					// 隐藏工具活动 implies "collapsed into 活动": the fold owns the
-					// process so nothing becomes unreachable.
-					const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
-					const foldOpenOf = (f: RoundFold): boolean => roundFoldOpen.has(f.startIdx) !== foldsExpanded;
-					// The fold this row belongs to — by header row, by reply row, or by
-					// sitting inside the span. ONE lookup drives everything below;
-					// deriving the roles from separate finds is what lost the header for
-					// turns whose first content row is not their reply (the header row
-					// suppressed itself while the hoist onto the reply row never fired —
-					// verified against a real 1721-entry journal: 34 folds, only 20
-					// headers rendered).
-					const fold = folds.find(
-						f => absIdx === f.headerIdx || absIdx === f.finalIdx || (absIdx > f.startIdx && absIdx <= f.endIdx),
-					);
-					const foldOpen = fold !== undefined && foldOpenOf(fold);
-					const foldClosed = fold !== undefined && !foldOpen;
-					const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
-					const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
-					// Widget rows (successful widget toolCalls, see round-collapse
-					// exempt) stay mounted while the fold is closed: the standalone
-					// card is the turn's artifact, not process noise.
-					const isExemptRow = fold?.exempt.includes(absIdx) === true;
-					const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
-					// Rows in the hidden span stay MOUNTED and collapse to height 0
-					// (.tr-fold-slot, animatable via interpolate-size) so folding
-					// animates both ways instead of popping in and out.
-					const collapsible = inHiddenSpan;
-					// Collapsed turn = 活动 row + the answer: the reply row renders its
-					// TEXT only (thinking/tool parts fold into the activity row).
-					const rowTextOnly = foldClosed && isReplyRow;
-					// A closed fold shows ONLY the header + the reply (+ exempt widget
-					// rows): every other row of the turn loses its body, and the header
-					// row (when it is not the reply) disappears entirely — its header
-					// rides the reply row instead.
-					const hideRowContent = foldClosed && !isReplyRow && !isExemptRow;
-					const hoistHeaderHere = foldClosed && isReplyRow;
-					const renderHeaderHere = (isHeaderRow && !foldClosed) || hoistHeaderHere;
-					// Per-round work timer: the live tail row ticks from the
-					// round start (last user message); completed rounds show
-					// their frozen total under the final message.
-					const isTail = isAssistantMessage && absIdx === lastAssistantIdx;
-					const streamingLast = working && isTail && lastAssistantInRound;
-					const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
-					// Closed: the header rides the REPLY row (hoisted into its content column) so
-					// orb + 活动 + answer share one line, while the turn's own first row renders
-					// nothing — no pixel-less row, no floating avatar.
-					const foldHeader =
-						renderHeaderHere && fold !== undefined ? (
-							<RoundFoldHeader
-								key={`round-fold-${fold.startIdx}`}
-								fold={fold}
-								open={foldOpenOf(fold)}
-								onToggle={() =>
-									setRoundFoldOpen(prev => {
-										const next = new Set(prev);
-										const start = fold.startIdx;
-										if (next.has(start)) next.delete(start);
-										else next.add(start);
-										return next;
-									})
-								}
-								onRevert={onRevert}
-							/>
-						) : null;
-					// A header row is the turn's first content row, which is frequently a
-					// toolResult / custom row — EntryRow mounts no Row for those, so the
-					// header has to be mounted by this loop instead (it vanished entirely
-					// when it could only ride an assistant body).
-					const headerStandalone = foldHeader !== null && !isAssistantMessage;
-					// 隐藏工具活动 hides the process EXCEPT (a) behind an expanded
-					// 活动 row — asking to expand it outranks the setting — and
-					// (b) during the live round, where the activity is the point.
-					// Completed rounds are what the fold + the setting govern.
-					const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
-					// The row body: mounted for hidden-span rows too (the slot collapses
-					// them), suppressed only for a closed fold's non-reply header row.
-					const body =
-						collapsible || !hideRowContent ? (
-							<Fragment key={entry.id}>
-								{headerStandalone ? (
-									// Inside the message column, so it aligns with the reply.
-									<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
-										{foldHeader}
-									</Row>
-								) : null}
-								{hideRowContent && !collapsible ? null : (
-									<EntryRow
-										entry={entry}
-										foldHeader={isAssistantMessage ? (foldHeader ?? undefined) : undefined}
-										results={results}
-										active={activeTools}
-										host={host}
-										userGutter={userGutter}
-										agentGutter={
-											// The reply of a COLLAPSED turn owns the orb: its predecessor is the
-											// hidden header row, so the usual "consecutive assistant rows drop the
-											// avatar" rule must not apply here.
-											isAssistantMessage && prevIsAssistant && !(foldClosed && isReplyRow) ? "" : agentGutter
-										}
-										userPlain={userPlain}
-										collapseLongUserMessages={collapseLongUserMessages}
-										hideToolActivity={rowHideTools || rowTextOnly}
-										textOnly={rowTextOnly}
-										showTokenUsage={showTokenUsage}
-										smoothStreaming={smoothStreaming}
-										taskCardStyle={taskCardStyle}
-										artifacts={turnArtifactsByFinal.get(entry.id)}
-										thinkingLevel={thinkingLevel}
-										streamingLast={streamingLast}
-										runStartTs={streamingLast ? lastUserTs : undefined}
-										roundDuration={roundDuration}
-										onQuote={onQuote}
-										onEdit={onEdit}
-										onRetry={onRetry}
-										onRevert={onRevert}
-										onFork={onFork}
-										onSpeak={onSpeak}
-										onSaveImage={onSaveImage}
-										onPreviewImage={openPreview}
-										speaking={speakingId != null && speakingId === entry.id}
-										onStopSpeak={onStopSpeak}
-										retryTarget={retryTargets.get(entry.id) ?? null}
-										renderTranscriptNode={renderTranscriptNode}
-									/>
-								)}
-							</Fragment>
-						) : null;
-					const headerStandaloneRow = headerStandalone ? (
-						// Inside the message column, so it aligns with the reply.
-						<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
-							{foldHeader}
-						</Row>
-					) : null;
-					const slotClass = `tr-fold-slot${foldOpen ? " tr-fold-slot--open" : ""}`;
-					const row = collapsible ? (
-						// Hidden span rows stay MOUNTED inside the slot and collapse to
-						// height 0, so folding animates both ways (returning null popped
-						// rows in and out).
-						<div className={slotClass}>{body}</div>
-					) : (
-						<Fragment key={entry.id}>
-							{headerStandaloneRow}
-							{body}
-						</Fragment>
-					);
-					// M1 turn header: rendered above the turn-start row. Rows hidden
-					// by the compaction fold returned null earlier (no orphans), and
-					// turn starts never sit inside a fold's hidden span — the span
-					// begins AFTER the user message.
-					const rowWithTurnHead =
-						turnUnit !== undefined ? (
-							<Fragment key={`${entry.id}-turn`}>
-								<TurnHeader
-									unit={turnUnit}
-									time={branchClock(entry.timestamp)}
-									durationMs={
-										turnUnit.replyIdx >= 0
-											? roundDurations?.get(
-													(entries[turnUnit.replyIdx] as { message: { timestamp: number } }).message
-														.timestamp,
-												)
-											: undefined
-									}
-								/>
-								{row}
-							</Fragment>
-						) : (
-							row
-						);
-					// toolResult entries render no row but continue the turn.
-					if (
-						entry.type === "message" &&
-						(entry.message.role === "assistant" || entry.message.role === "toolResult")
-					) {
-						prevIsAssistant = true;
-					} else {
-						prevIsAssistant = false;
-					}
-					// Layer-1 branch bar: a message with MULTIPLE children gets
-					// a switchable divider under it (hidden when the caller
-					// provides no branch topology — plain linear sessions).
-					const childCount = branchInfo?.childCount.get(entry.id) ?? 0;
-					if (branchInfo && childCount > 1 && entry.type === "message") {
-						const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
-							id: c.id,
-							label: entryLabelOf(c),
-							time: branchClock((c as { timestamp?: unknown }).timestamp),
-						}));
-						return (
-							<div key={entry.id} className="tr-branch-wrap">
-								{rowWithTurnHead}
-								<BranchBar
-									count={childCount}
-									childrenLabels={kids}
-									activeChildId={activeChildOf(entry.id)}
-									onPick={id => branchInfo.onSwitchBranch?.(id)}
-								/>
+								{renderEntryRow(absIdx, entry)}
 							</div>
 						);
-					}
-					return rowWithTurnHead;
-				});
-			})()}
+					})
+				: entries.map((entry, absIdx) => (
+						<div
+							key={entry.id ?? absIdx}
+							className="tr-vrow"
+							aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}
+						>
+							{renderEntryRow(absIdx, entry)}
+						</div>
+					))}
+			{bottomSpacerHeight > 0 && (
+				<div
+					className="tr-virtual-spacer tr-virtual-spacer--bottom"
+					style={{ height: bottomSpacerHeight }}
+					aria-hidden="true"
+				/>
+			)}
 			{/* Model-response gap (working but no assistant entry yet): the
 			 * ticker stands alone under the user message — the exact spot
 			 * where the reply will land — instead of hanging off the

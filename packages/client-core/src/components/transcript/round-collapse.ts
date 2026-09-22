@@ -276,17 +276,39 @@ function lastAssistantIdx(entries: readonly SessionEntry[], from: number, to: nu
 	return -1;
 }
 
-function pushFold(
-	folds: RoundFold[],
+/** One round's fold computation with INDEX-RELATIVE exempt list — the
+ *  cache-friendly shape: a round's span content is stable across history
+ *  prepends (only absolute indexes shift), so `turn-derive.ts` caches this
+ *  keyed by the span's endpoint ids and reuses it after paging. Null = the
+ *  round does not fold (text-only / no reply / nothing between prompt and
+ *  end). */
+export interface FoldSpan {
+	finalRel: number;
+	toolCount: number;
+	commandCount: number;
+	exploreCount: number;
+	filesChanged: number;
+	added: number;
+	removed: number;
+	preview: string;
+	/** Span-row indexes relative to `startIdx` that stay visible while the
+	 *  fold is closed (widget cards / tail / hook rows). Absolute = startIdx + rel. */
+	exemptRel: number[];
+}
+
+/** Compute one round's fold (pushFold's body, relative-exempt shape).
+ *  `startIdx` = the turn-start entry, `endIdx` = the turn's LAST row
+ *  (inclusive). Returns null when the round must not fold. */
+export function foldSpan(
 	entries: readonly SessionEntry[],
 	startIdx: number,
 	userId: string | null,
 	endIdx: number,
-): void {
+): FoldSpan | null {
 	// The turn must have something between the prompt and its end.
-	if (endIdx <= startIdx + 1) return;
+	if (endIdx <= startIdx + 1) return null;
 	const replyIdx = lastReplyIdx(entries, startIdx, endIdx + 1);
-	if (replyIdx <= startIdx) return; // no reply → no anchor for the header
+	if (replyIdx <= startIdx) return null; // no reply → no anchor for the header
 	// Work is counted over the WHOLE turn (process rows may sit after the
 	// reply — that ordering used to count as "no activity" and produced no row).
 	const { toolCount, commandCount, exploreCount, changes, preview, exempt } = countWorkInside(
@@ -294,21 +316,43 @@ function pushFold(
 		startIdx + 1,
 		endIdx + 1,
 	);
-	if (toolCount === 0 && commandCount === 0) return; // text-only round
-	folds.push({
-		startIdx,
-		endIdx,
-		finalIdx: replyIdx,
-		headerIdx: startIdx + 1,
+	if (toolCount === 0 && commandCount === 0) return null; // text-only round
+	return {
+		finalRel: replyIdx - startIdx,
 		toolCount,
 		commandCount,
 		exploreCount,
 		filesChanged: changes.filesChanged,
 		added: changes.added,
 		removed: changes.removed,
-		userId,
 		preview,
-		exempt,
+		exemptRel: exempt.map(i => i - startIdx),
+	};
+}
+
+function pushFold(
+	folds: RoundFold[],
+	entries: readonly SessionEntry[],
+	startIdx: number,
+	userId: string | null,
+	endIdx: number,
+): void {
+	const span = foldSpan(entries, startIdx, userId, endIdx);
+	if (span === null) return;
+	folds.push({
+		startIdx,
+		endIdx,
+		finalIdx: startIdx + span.finalRel,
+		headerIdx: startIdx + 1,
+		toolCount: span.toolCount,
+		commandCount: span.commandCount,
+		exploreCount: span.exploreCount,
+		filesChanged: span.filesChanged,
+		added: span.added,
+		removed: span.removed,
+		userId,
+		preview: span.preview,
+		exempt: span.exemptRel.map(r => r + startIdx),
 	});
 }
 

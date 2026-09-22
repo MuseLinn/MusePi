@@ -105,6 +105,36 @@ function lastTextReplyIdx(entries: readonly SessionEntry[], from: number, to: nu
 }
 
 /**
+ * One turn's unit body with INDEX-RELATIVE members — the cache-friendly
+ * shape used by turn-derive.ts: a turn's span content is stable across
+ * history prepends (only absolute indexes shift), so the classification
+ * result is cached keyed by the span's endpoint ids.
+ */
+export interface TurnUnitSpan {
+	/** replyIdx relative to startIdx (-1 when the turn has no text reply). */
+	replyRel: number;
+	workRel: number[];
+	tailRel: number[];
+	hookRel: number[];
+}
+
+/** Classify one turn's span (buildTurnRenderUnits' per-turn body, relative
+ *  shape). `startIdx` = turn start, `endIdx` = turn's last row (inclusive). */
+export function turnUnitSpan(entries: readonly SessionEntry[], startIdx: number, endIdx: number): TurnUnitSpan {
+	const workRel: number[] = [];
+	const tailRel: number[] = [];
+	const hookRel: number[] = [];
+	for (let i = startIdx + 1; i <= endIdx; i++) {
+		const kind = classifyTranscriptRow(entries[i]!);
+		if (kind === "work") workRel.push(i - startIdx);
+		else if (kind === "tail") tailRel.push(i - startIdx);
+		else if (kind === "hook") hookRel.push(i - startIdx);
+	}
+	const replyIdx = lastTextReplyIdx(entries, startIdx, endIdx + 1);
+	return { replyRel: replyIdx < 0 ? -1 : replyIdx - startIdx, workRel, tailRel, hookRel };
+}
+
+/**
  * Project entries into per-turn render units. Rows before the first turn
  * start (session header leftovers, pre-first-prompt notices) belong to no
  * turn and are not represented; the render layer keeps showing them as-is.
@@ -141,15 +171,7 @@ export function buildTurnRenderUnits(
 	for (let t = 0; t < starts.length; t++) {
 		const startIdx = starts[t]!;
 		const endIdx = (t + 1 < starts.length ? starts[t + 1]! : entries.length) - 1;
-		const workIdxs: number[] = [];
-		const tailIdxs: number[] = [];
-		const hookIdxs: number[] = [];
-		for (let i = startIdx + 1; i <= endIdx; i++) {
-			const kind = classifyTranscriptRow(entries[i]!);
-			if (kind === "work") workIdxs.push(i);
-			else if (kind === "tail") tailIdxs.push(i);
-			else if (kind === "hook") hookIdxs.push(i);
-		}
+		const span = turnUnitSpan(entries, startIdx, endIdx);
 		const isLastTurn = t === starts.length - 1;
 		const e = entries[startIdx]!;
 		units.push({
@@ -157,10 +179,10 @@ export function buildTurnRenderUnits(
 			turnIndex: t,
 			startIdx,
 			endIdx,
-			replyIdx: lastTextReplyIdx(entries, startIdx, endIdx + 1),
-			workIdxs,
-			tailIdxs,
-			hookIdxs,
+			replyIdx: span.replyRel < 0 ? -1 : startIdx + span.replyRel,
+			workIdxs: span.workRel.map(r => r + startIdx),
+			tailIdxs: span.tailRel.map(r => r + startIdx),
+			hookIdxs: span.hookRel.map(r => r + startIdx),
 			isLastTurn,
 			isRunning: working && isLastTurn,
 			model: modelAtEnd.get(endIdx),
