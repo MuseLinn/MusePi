@@ -177,7 +177,12 @@ describe("task renderer floating SwarmCard (avatar grid content)", () => {
 		const html = renderToStaticMarkup(<SwarmCard {...LIVE} />);
 		expect(html).toContain("s-run");
 		expect(html).toMatch(/tv-swarm-avatar--run/);
-		expect(html).toContain("tv-swarm-bar-fill--live");
+		// kimiwork role-card parity: dot-matrix progress (running tip pulses)
+		expect(html).toContain("tv-swarm-matrix");
+		expect(html).toContain("tv-swarm-matrix--run");
+		expect(html).toContain("tv-swarm-matrix-dot--tip");
+		// working status line (kimiwork "正在工作" semantics, en-US dict)
+		expect(html).toContain("Working");
 	});
 
 	it("folds each member's output behind a per-row accordion", () => {
@@ -192,7 +197,7 @@ describe("task renderer floating SwarmCard (avatar grid content)", () => {
 		expect(html).not.toContain("boom");
 	});
 
-	it("renders members as cards with avatar + agent link + progress bar", () => {
+	it("renders members as cards with avatar + agent link + dot-matrix progress", () => {
 		const html = renderToStaticMarkup(
 			<SwarmCard
 				{...SETTLED}
@@ -204,12 +209,17 @@ describe("task renderer floating SwarmCard (avatar grid content)", () => {
 				}}
 			/>,
 		);
-		// avatar initials from the agent id (A → "A")
+		// avatar from the agent id, state-tinted tile
 		expect(html).toMatch(/tv-swarm-avatar tv-swarm-avatar--ok/);
 		// member name is a clickable AgentLink (opens the trajectory panel)
 		expect(html).toContain("tv-agent-link");
-		// settled member shows the full progress bar (ok → 100%)
-		expect(html).toMatch(/tv-swarm-bar-fill--ok" style="width:100%/);
+		// kimiwork role-card parity: batch index numbers + dot-matrix foot
+		expect(html).toContain("tv-swarm-index");
+		expect(html).toContain(">01<");
+		expect(html).toContain("tv-swarm-foot");
+		expect(html).toContain("tv-swarm-matrix--ok");
+		// settled ok member fills the whole matrix (16 on-dots)
+		expect(html.match(/tv-swarm-matrix-dot--on/g)?.length).toBeGreaterThanOrEqual(16);
 		// the grid container renders
 		expect(html).toContain("tv-swarm-members");
 	});

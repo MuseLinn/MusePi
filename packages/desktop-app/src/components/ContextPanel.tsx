@@ -8,9 +8,10 @@ import {
 } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
+import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { panelTabId } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
@@ -339,6 +340,99 @@ export function ContextPanel({
 	// off returns to the persisted width. Width-drag is disabled while maximized.
 	const [maximized, setMaximized] = useState(false);
 	maximizedRef.current = maximized;
+	// Maximize/restore morph (FLIP): the docked↔fixed switch is not
+	// interpolable (position is discrete, so toggling the class teleported
+	// the panel: user 2026-09-22 — 最大化没有动效，只有还原有). The toggle
+	// therefore pins the pre-toggle box inline, forces a reflow, and animates
+	// left/top/width/height to the post-toggle box on the spring curve:
+	//   maximize:  measure docked rect → flushSync(class on) → measure the
+	//     fixed --pane-max-* box → animate first→last, then drop the inline
+	//     geometry (CSS vars already paint the same box).
+	//   restore:   measure fixed rect → flushSync(class off) → measure the
+	//     real docked box → pin the OLD box via relative left/top offsets
+	//     and animate to zero-offset/docked-size, then clear (leaving width
+	//     at the measured px so React's own inline width prop is untouched).
+	// Mid-animation clicks are ignored; .gui-motion-off / reduced motion
+	// falls back to the plain instant toggle.
+	const flipAnimatingRef = useRef(false);
+	const toggleMaximized = (): void => {
+		const el = panelRef.current;
+		const motionOff =
+			(document.body.closest(".gui-motion-off") ?? document.querySelector(".gui-motion-off")) !== null ||
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+		if (!el || motionOff) {
+			setMaximized(v => !v);
+			return;
+		}
+		if (flipAnimatingRef.current) return;
+		const GEO = ["left", "top", "width", "height"] as const;
+		const clearGeometry = (): void => {
+			for (const p of GEO) el.style.removeProperty(p);
+			el.style.removeProperty("transition");
+		};
+		const runFlip = (toMaximized: boolean): void => {
+			const first = el.getBoundingClientRect();
+			// Transitions OFF before the state flip: the docked→fixed switch
+			// changes which declaration supplies width (inline px ↔ var(--pane-
+			// max-width)), and the panel's own 220ms width transition would
+			// otherwise be RUNNING when the post-flip box is measured — the
+			// FLIP target then captures a mid-animation rect and the morph
+			// animates to the wrong geometry (verified 2026-09-22: restore
+			// pinned width 1244 and never came back to the docked 395).
+			el.style.transition = "none";
+			flushSync(() => setMaximized(toMaximized));
+			if (!el.isConnected) {
+				el.style.removeProperty("transition");
+				return;
+			}
+			const last = el.getBoundingClientRect();
+			if (toMaximized) {
+				el.style.left = `${first.left}px`;
+				el.style.top = `${first.top}px`;
+				el.style.width = `${first.width}px`;
+				el.style.height = `${first.height}px`;
+			} else {
+				// Relative positioning: left/top offset the element VISUALLY
+				// from its layout box. The panel is a RIGHT-ANCHORED flex item,
+				// so its layout left SWEEPS with its width — the offset must be
+				// taken at the PINNED (old fixed) width, not computed against
+				// the docked rect, or the first frame lands one chat-column-
+				// width off (verified 2026-09-22: restore started at left −565
+				// instead of 272). The docked target was captured above.
+				el.style.width = `${first.width}px`;
+				el.style.height = `${first.height}px`;
+				const pinned = el.getBoundingClientRect();
+				el.style.left = `${first.left - pinned.left}px`;
+				el.style.top = `${first.top - pinned.top}px`;
+			}
+			void el.getBoundingClientRect();
+			el.style.transition =
+				"left 260ms var(--spring), top 260ms var(--spring), width 260ms var(--spring), height 260ms var(--spring)";
+			el.style.left = toMaximized ? `${last.left}px` : "0px";
+			el.style.top = toMaximized ? `${last.top}px` : "0px";
+			el.style.width = `${last.width}px`;
+			el.style.height = `${last.height}px`;
+			flipAnimatingRef.current = true;
+			const finish = (widthPx: number | null): void => {
+				clearGeometry();
+				if (widthPx !== null) el.style.width = `${widthPx}px`;
+				flipAnimatingRef.current = false;
+			};
+			const onEnd = (e: TransitionEvent): void => {
+				if (e.target !== el || e.propertyName !== "width") return;
+				el.removeEventListener("transitionend", onEnd);
+				finish(toMaximized ? null : last.width);
+			};
+			el.addEventListener("transitionend", onEnd);
+			// Safety net: if transitionend never fires (tab hidden, mid-frame
+			// unmount), commit the end state anyway.
+			window.setTimeout(() => {
+				el.removeEventListener("transitionend", onEnd);
+				if (flipAnimatingRef.current) finish(toMaximized ? null : last.width);
+			}, 450);
+		};
+		runFlip(!maximized);
+	};
 	// Width drag runs on the normalised pointer-drag primitive (capture +
 	// preventDefault + pointerId filtering) rather than window listeners: the
 	// ad-hoc version had no capture, so the pointer left the 4px strip and the
@@ -579,9 +673,8 @@ export function ContextPanel({
 				<div className="flex h-full min-h-0 w-full flex-col">
 					{/* Tab strip row (tab-primary, docs §3.3.2): the strip replaces
 					 * the old title bar — the active tab IS the title. Maximize
-					 * lives here now; `+` opens a blank placeholder tab of the
-					 * active instance-capable surface (Files fallback, whose body
-					 * doubles as the picker). */}
+					 * lives here now; `+` is surface-aware (browser → real new
+					 * tab, everything else → hidden; see the button below). */}
 					<div className="flex flex-shrink-0 items-start gap-1 px-2 pt-1.5">
 						<div className="min-w-0 flex-1">
 							{panelTabs.tabs.length > 0 && (
@@ -601,24 +694,30 @@ export function ContextPanel({
 							)}
 						</div>
 						<div className="flex items-center gap-0.5 pt-0.5">
-							<button
-								type="button"
-								title={t("new tab")}
-								aria-label={t("new tab")}
-								className="gui-pane-tool"
-								onClick={() => {
-									const surf = activePanelTab?.surface;
-									onViewChange(surf === "notes" || surf === "browser" ? surf : "files");
-								}}
-							>
-								<Icon name="add" className="h-3.5 w-3.5" />
-							</button>
+							{/* `+` is meaningful ONLY for the browser surface: it
+							 * spawns a real new tab. Files/Notes carry their own
+							 * creation buttons in-pane (FilePane head row, notes
+							 * title row), and singleton surfaces have no "new tab"
+							 * semantics — the old button re-opened an existing
+							 * placeholder tab (a no-op upsert) and read as dead
+							 * (user 2026-09-22: 新建标签页按钮点击没有用). */}
+							{activePanelTab?.surface === "browser" && (
+								<button
+									type="button"
+									title={t("new tab")}
+									aria-label={t("new tab")}
+									className="gui-pane-tool"
+									onClick={() => void createBrowserTab("about:blank").catch(() => {})}
+								>
+									<Icon name="add" className="h-3.5 w-3.5" />
+								</button>
+							)}
 							<button
 								type="button"
 								title={maximized ? t("restore panel") : t("maximize panel")}
 								aria-label={maximized ? t("restore panel") : t("maximize panel")}
 								className="gui-pane-tool"
-								onClick={() => setMaximized(v => !v)}
+								onClick={toggleMaximized}
 							>
 								<StateIcon on={maximized} pair={["fullscreen-exit", "fullscreen"]} className="h-3.5 w-3.5" />
 							</button>

@@ -161,6 +161,7 @@ export const tools = {
 	"{count} cancelled": "{count} cancelled",
 	"swarm progress": "Progress {done}/{total}",
 	"swarm running": "Running {count}",
+	"swarm working": "Working",
 	"swarm done summary": "Done {completed} · failed {failed}",
 	"swarm members": "Swarm members",
 	"operation failed": "Operation failed",

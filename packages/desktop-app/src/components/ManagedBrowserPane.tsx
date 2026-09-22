@@ -926,6 +926,21 @@ export function ManagedBrowserPane({
 									<Icon name="refresh" className="h-3.5 w-3.5" />
 									{t("browser hard reload")}
 								</button>
+								{/* Zoom entry for narrow panels: the standing zoom
+								 * group hides under the 480px container tier, so
+								 * the ⋯ menu carries the reset path (§3.2.4). */}
+								<button
+									type="button"
+									role="menuitem"
+									disabled={isBlank || activeZoom === 1}
+									onClick={() => {
+										setActiveZoom(1);
+										setMenuOpen(false);
+									}}
+								>
+									<Icon name="expand-up-down" className="h-3.5 w-3.5" />
+									{t("browser reset zoom")}
+								</button>
 								<span className="gui-browser-menu-sep" />
 								<button type="button" role="menuitem" disabled={history.length === 0} onClick={clearHistory}>
 									<Icon name="history" className="h-3.5 w-3.5" />

@@ -1196,15 +1196,17 @@
 }
 
 /* Initial avatar block (kimiwork swarm-card parity: per-member identity
- * chip; the id's pixel-punk persona renders inside the state-tinted tile). */
+ * chip; the id's pixel-punk persona renders inside the state-tinted tile).
+ * Round face (kimiwork role-card parity) — the tile and the persona both
+ * render as circles. */
 .tv-swarm-avatar {
 	flex: none;
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 26px;
-	height: 26px;
-	border-radius: var(--radius-md);
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
 	font-family: var(--font-mono);
 	font-size: 11px;
 	font-weight: 700;
@@ -1213,9 +1215,9 @@
 }
 
 .tv-swarm-avatar-img {
-	width: 20px;
-	height: 20px;
-	border-radius: var(--radius-sm);
+	width: 24px;
+	height: 24px;
+	border-radius: 50%;
 	display: block;
 }
 
@@ -1252,6 +1254,107 @@
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
+}
+
+/* Batch index (kimiwork role-card parity: 01/02…) — fixed right slot. */
+.tv-swarm-index {
+	margin-left: auto;
+	flex: none;
+	font-family: var(--tv-mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	color: var(--tv-faint);
+	user-select: none;
+}
+
+/* Card foot (kimiwork role-card parity): plain-language status left, the
+ * dot-matrix progress right. Sits below desc/stats as the card's last row. */
+.tv-swarm-foot {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 3px;
+	min-width: 0;
+}
+
+.tv-swarm-status {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 11px;
+	color: var(--tv-muted);
+}
+
+.tv-swarm-status--ok {
+	color: var(--tv-ok, #4caf7d);
+}
+
+.tv-swarm-status--warn {
+	color: #e8b23a;
+}
+
+.tv-swarm-status--err {
+	color: var(--tv-err, #e5484d);
+}
+
+.tv-swarm-status--run {
+	color: var(--tv-accent, #6b9dff);
+}
+
+/* Dot-matrix progress (kimiwork brand language): 2 × 8 cells, filled to
+ * the fraction; the leading dot pulses while running. */
+.tv-swarm-matrix {
+	flex: none;
+	display: grid;
+	grid-template-columns: repeat(var(--tv-matrix-cols, 8), 3px);
+	gap: 2px;
+	line-height: 0;
+}
+
+.tv-swarm-matrix-dot {
+	width: 3px;
+	height: 3px;
+	border-radius: 50%;
+	background: color-mix(in oklab, var(--tv-fg, currentColor) 16%, transparent);
+}
+
+.tv-swarm-matrix--ok .tv-swarm-matrix-dot--on {
+	background: var(--tv-ok, #4caf7d);
+}
+
+.tv-swarm-matrix--warn .tv-swarm-matrix-dot--on {
+	background: #e8b23a;
+}
+
+.tv-swarm-matrix--err .tv-swarm-matrix-dot--on {
+	background: var(--tv-err, #e5484d);
+}
+
+.tv-swarm-matrix--run .tv-swarm-matrix-dot--on {
+	background: var(--tv-accent, #6b9dff);
+}
+
+.tv-swarm-matrix-dot--tip {
+	animation: tv-swarm-matrix-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes tv-swarm-matrix-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.25;
+	}
+}
+
+/* Overview fold chevron (kimiwork ⌄ parity): right-aligned in the line. */
+.tv-swarm-chev--fold {
+	margin-left: auto;
+	padding: 2px 6px;
 }
 
 .tv-swarm-member-desc {

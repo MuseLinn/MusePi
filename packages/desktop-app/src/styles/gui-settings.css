@@ -5076,16 +5076,23 @@ body.gui-resizing {
 
 /* ── B1: zoom / viewport frame / loading / agent occupancy (§3.2) ───── */
 /* Pane root carries the container query for the narrow-panel collapse
- * (§3.2.4: <480px chrome collapses to the address row alone). */
+ * (§3.2.4). Tiered (user 2026-09-22: 窄面板下地址栏按钮全消失只剩输入框):
+ * ≤480px hides ONLY the zoom group (the widest, lowest-frequency control —
+ * its entry survives as "reset zoom" in the ⋯ menu); nav and actions stay
+ * live at every width. The old rule hid everything under 480px, which was
+ * the panel's normal docked width. */
 .gui-browser-pane {
 	container-type: inline-size;
 }
 
 @container (max-width: 480px) {
-	.gui-browser-pane .gui-browser-nav,
-	.gui-browser-pane .gui-browser-zoom,
-	.gui-browser-pane .gui-browser-actions {
+	.gui-browser-pane .gui-browser-zoom {
 		display: none;
+	}
+	.gui-browser-pane .gui-browser-chrome {
+		gap: 4px;
+		padding-left: 6px;
+		padding-right: 6px;
 	}
 }
 

@@ -198,6 +198,9 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 			return next;
 		});
 	};
+	// Whole-grid fold (kimiwork "…N个已完成 ⌄" parity): the overview line
+	// carries a chevron that collapses the member card grid; default open.
+	const [membersOpen, setMembersOpen] = useState(true);
 
 	// Finished agents first, by runtime ascending — same order as the TUI.
 	const ordered = [...results].sort(
@@ -223,8 +226,8 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 
 	return (
 		<div className="tv-swarm-card">
-			<SwarmOverview counts={counts} />
-			{ordered.length > 0 && (
+			<SwarmOverview counts={counts} open={membersOpen} onToggle={() => setMembersOpen(o => !o)} />
+			{membersOpen && ordered.length > 0 && (
 				<div className="tv-list tv-swarm-members">
 					{ordered.map((res, i) => {
 						const key = str(res.id) ?? `#${i}`;
@@ -233,6 +236,7 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 								key={key}
 								res={res}
 								host={host}
+								index={i}
 								open={openRows.has(key)}
 								onToggle={() => toggleRow(key)}
 							/>
@@ -241,10 +245,10 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 					{footer}
 				</div>
 			)}
-			{showProgress && (
+			{membersOpen && showProgress && (
 				<div className="tv-list tv-swarm-members">
 					{progress.map((p, i) => (
-						<SwarmAgentProgressRow key={str(p.id) ?? i} p={p} host={host} />
+						<SwarmAgentProgressRow key={str(p.id) ?? i} p={p} host={host} index={i} />
 					))}
 				</div>
 			)}
@@ -256,7 +260,15 @@ function SwarmCard({ result, host }: ToolRenderProps): ReactNode {
 /** Phase overview: progress line + segmented bar + legend (Kimi parity). */
 type SwarmPhase = "done" | "merge failed" | "running" | "failed" | "aborted";
 
-function SwarmOverview({ counts }: { counts: SwarmCounts }): ReactNode {
+function SwarmOverview({
+	counts,
+	open,
+	onToggle,
+}: {
+	counts: SwarmCounts;
+	open: boolean;
+	onToggle(): void;
+}): ReactNode {
 	if (counts.total === 0) return null;
 	const segments: { phase: SwarmPhase; count: number; cls: string }[] = [];
 	const push = (phase: SwarmPhase, count: number, cls: string): void => {
@@ -286,6 +298,16 @@ function SwarmOverview({ counts }: { counts: SwarmCounts }): ReactNode {
 						</span>
 					)
 				)}
+				{/* Grid fold (kimiwork ⌄ parity): collapses the member card row. */}
+				<button
+					type="button"
+					className="tv-swarm-chev tv-swarm-chev--fold"
+					aria-expanded={open}
+					aria-label={t(open ? "collapse" : "expand")}
+					onClick={onToggle}
+				>
+					<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
+				</button>
 			</div>
 			{segments.length > 1 && (
 				<>
@@ -308,6 +330,64 @@ function SwarmOverview({ counts }: { counts: SwarmCounts }): ReactNode {
 	);
 }
 
+/** Dot-matrix progress indicator (kimiwork role-card parity): the brand
+ *  dot-matrix language instead of a bar — 2 rows × 8 cells, filled to the
+ *  progress fraction; the leading dot pulses while the agent is running
+ *  and the whole matrix takes the phase tint. Pure CSS cells; no canvas. */
+const SWARM_MATRIX_DOTS = 16;
+const SWARM_MATRIX_COLS = 8;
+
+function SwarmMatrix({ fraction, phase }: { fraction: number; phase: "ok" | "warn" | "err" | "run" }): ReactNode {
+	const filled = Math.round(Math.min(1, Math.max(0, fraction)) * SWARM_MATRIX_DOTS);
+	return (
+		<span
+			className={`tv-swarm-matrix tv-swarm-matrix--${phase}`}
+			aria-hidden="true"
+			style={{ ["--tv-matrix-cols" as string]: SWARM_MATRIX_COLS }}
+		>
+			{Array.from({ length: SWARM_MATRIX_DOTS }, (_, i) => (
+				<span
+					key={i}
+					className={
+						i < filled
+							? `tv-swarm-matrix-dot tv-swarm-matrix-dot--on${i === filled - 1 && phase === "run" ? " tv-swarm-matrix-dot--tip" : ""}`
+							: "tv-swarm-matrix-dot"
+					}
+				/>
+			))}
+		</span>
+	);
+}
+
+/** Card foot status line, kimiwork semantics: a plain-language state on the
+ *  left ("正在工作" / done / failed / "N 个工具") with the dot matrix on the
+ *  right. */
+function SwarmFoot({
+	phase,
+	fraction,
+	status,
+	children,
+}: {
+	phase: "ok" | "warn" | "err" | "run";
+	fraction: number;
+	status: string;
+	children?: ReactNode;
+}): ReactNode {
+	return (
+		<div className="tv-swarm-foot">
+			<span className={`tv-swarm-status tv-swarm-status--${phase}`}>{status}</span>
+			<SwarmMatrix fraction={fraction} phase={phase} />
+			{children}
+		</div>
+	);
+}
+
+/** Phase → matrix fill fraction, mirroring the old bar semantics
+ *  (full on ok, partial on warn/err). */
+function resultFraction(phase: "ok" | "warn" | "err"): number {
+	return phase === "ok" ? 1 : phase === "warn" ? 0.66 : 0.34;
+}
+
 /** Final snapshot for one agent: phase dot + status row, with the output
  *  details folded behind a per-member accordion (Kimi parity). Rendered in
  *  the floating SwarmCard grid, not the native card body (which keeps the
@@ -315,11 +395,13 @@ function SwarmOverview({ counts }: { counts: SwarmCounts }): ReactNode {
 function SwarmAgentResult({
 	res,
 	host,
+	index,
 	open,
 	onToggle,
 }: {
 	res: Record<string, unknown>;
 	host?: ToolRenderHost;
+	index: number;
 	open: boolean;
 	onToggle(): void;
 }): ReactNode {
@@ -370,27 +452,29 @@ function SwarmAgentResult({
 						</AgentLink>
 						<Badge tone={tone}>{t(label)}</Badge>{" "}
 						{res.truncated === true && <Badge tone="warn">{t("truncated")}</Badge>}
+						{/* Batch index (kimiwork role-card parity: 01/02…) — the
+						 * card's fixed identity slot, right-aligned. */}
+						<span className="tv-swarm-index">{String(index + 1).padStart(2, "0")}</span>
 					</div>
 					{description && <div className="tv-swarm-member-desc">{truncate(normalizeWs(description), 120)}</div>}
 					{stats.length > 0 && <div className="tv-swarm-member-stats">{stats.join(" · ")}</div>}
-					<div className="tv-swarm-bar" aria-hidden="true">
-						<span
-							className={`tv-swarm-bar-fill tv-swarm-bar-fill--${phase}`}
-							style={{ width: `${phase === "ok" ? 100 : phase === "warn" ? 66 : 34}%` }}
-						/>
-					</div>
+					<SwarmFoot phase={phase} fraction={resultFraction(phase)} status={t(label)}>
+						{hasDetails && (
+							<button
+								type="button"
+								className="tv-swarm-chev"
+								aria-expanded={open}
+								aria-label={t(open ? "collapse" : "expand")}
+								onClick={onToggle}
+							>
+								<span
+									className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`}
+									aria-hidden="true"
+								/>
+							</button>
+						)}
+					</SwarmFoot>
 				</div>
-				{hasDetails && (
-					<button
-						type="button"
-						className="tv-swarm-chev"
-						aria-expanded={open}
-						aria-label={t(open ? "collapse" : "expand")}
-						onClick={onToggle}
-					>
-						<span className={`tv-swarm-chev-icon${open ? " tv-swarm-chev-icon--open" : ""}`} aria-hidden="true" />
-					</button>
-				)}
 			</div>
 			{open && (
 				<div className="tv-swarm-member-body">
@@ -408,9 +492,19 @@ function SwarmAgentResult({
 	);
 }
 
-/** Live (still-running) snapshot for one agent: phase dot + status row.
- *  Rendered in the floating SwarmCard grid. */
-function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?: ToolRenderHost }): ReactNode {
+/** Live (still-running) snapshot for one agent: role card with a
+ *  plain-language foot status (kimiwork parity: "正在工作" while running, tool
+ *  count once done) and the dot-matrix progress. Rendered in the floating
+ *  SwarmCard grid. */
+function SwarmAgentProgressRow({
+	p,
+	host,
+	index,
+}: {
+	p: Record<string, unknown>;
+	host?: ToolRenderHost;
+	index: number;
+}): ReactNode {
 	const status = str(p.status) ?? "running";
 	const tone =
 		status === "completed"
@@ -431,6 +525,15 @@ function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?:
 	if (tokens) bits.push(t("{count} tok", { count: fmtCount(tokens) }));
 	const durationMs = num(p.durationMs);
 	if (durationMs) bits.push(fmtDuration(durationMs));
+	// Foot status, kimiwork semantics: what the agent is doing right now.
+	const footStatus =
+		status === "running"
+			? t("swarm working")
+			: status === "completed"
+				? toolCount > 0
+					? t("{count} tools", { count: String(toolCount) })
+					: t("completed")
+				: status;
 	return (
 		<div className={`tv-swarm-member tv-swarm-member--${phase}`}>
 			<div className="tv-swarm-member-head">
@@ -443,24 +546,18 @@ function SwarmAgentProgressRow({ p, host }: { p: Record<string, unknown>; host?:
 							{taskIdLabel(id)}
 						</AgentLink>
 						<Badge tone={tone}>{status}</Badge>
+						<span className="tv-swarm-index">{String(index + 1).padStart(2, "0")}</span>
 					</div>
 					{description && <div className="tv-swarm-member-desc">{truncate(normalizeWs(description), 120)}</div>}
 					{intent && (
 						<div className="tv-swarm-member-desc tv-swarm-member-intent">{truncate(normalizeWs(intent), 96)}</div>
 					)}
 					{bits.length > 0 && <div className="tv-swarm-member-stats">{bits.join(" · ")}</div>}
-					{status === "running" && (
-						<div className="tv-swarm-bar" aria-hidden="true">
-							{/* Determinate once the agent has run a tool (TUI parity);
-							 * indeterminate only while it has not started working yet. */}
-							<span
-								className={`tv-swarm-bar-fill tv-swarm-bar-fill--run${
-									toolCount > 0 ? "" : " tv-swarm-bar-fill--live"
-								}`}
-								style={toolCount > 0 ? { width: `${Math.round(agentProgressFraction(p) * 100)}%` } : undefined}
-							/>
-						</div>
-					)}
+					<SwarmFoot
+						phase={phase === "ok" ? "ok" : phase === "err" ? "err" : "run"}
+						fraction={agentProgressFraction(p)}
+						status={footStatus}
+					/>
 				</div>
 			</div>
 		</div>

@@ -3953,9 +3953,18 @@ body.gui-resizing .gui-pane-right {
 	z-index: -1;
 }
 
-/* Right panel width collapse: stays mounted, animates 288px → 0px. */
+/* Right panel width collapse: stays mounted, animates 288px → 0px.
+ * Margin rides the SAME spring as width: the folded state drops the card
+ * gutter (margin: 0 below + the appended gutter rule), and without a margin
+ * transition that 8px → 0 snap fired at class-toggle time — the panel's
+ * border box instantly widened 8px into the freed margin space, then the
+ * width animation played (user: 收起时面板会突然放大一点再收起). Measured
+ * 2026-09-22 via scripts/debug-panel-collapse-sample.ts. */
 .gui-pane-right--inner {
-	transition: width 220ms var(--spring), opacity 160ms ease;
+	transition:
+		width 220ms var(--spring),
+		margin 220ms var(--spring),
+		opacity 160ms ease;
 }
 
 .gui-pane-right--inner--closed {
@@ -3963,11 +3972,11 @@ body.gui-resizing .gui-pane-right {
 	border-left-width: 0;
 	opacity: 0;
 	pointer-events: none;
-	/* Give the trailing gap back. The workspace row is gap-2, so a collapsed
-	 * panel left TWO 8px gaps (chat→panel→rail) with zero width between them:
-	 * the chat card ended 16px from the rail when closed versus 8px when open
-	 * (user: 折叠时会话卡片和 rail 之间的空白比展开时大). */
-	margin-right: -8px;
+	/* Folded states leave no trace: margins drop to 0 (the appended gutter
+	 * rule used to override this -8px, making the snap instant). The margin
+	 * change now rides the panel's spring transition (see the --inner rule
+	 * above), so folding no longer flashes the border box 8px wider. */
+	margin-right: 0;
 }
 
 /* Maximize modal scrim: dims the chat column behind the floated panel
@@ -4037,7 +4046,13 @@ body.gui-resizing .gui-pane-right {
 	border: 1px solid var(--border);
 	box-shadow: 0 16px 44px oklch(0 0 0 / 42%);
 	/* No transition: the box is measured from the surface, so animating it
-	 * would let the panel lag the container mid-resize. */
+	 * would let the panel lag the container mid-resize. The maximize/restore
+	 * MORPH is driven by ContextPanel's FLIP (inline left/top/width/height
+	 * with its own transition), not by this class transition. The card-gutter
+	 * MARGIN override lives at the end of this file (`.gui-pane-right--
+	 * maximized { margin: 0 }`): same-specificity rules resolve by order,
+	 * and the appended gutter rule would otherwise win and push this fixed
+	 * panel 8px right/down of the measured column box. */
 	transition: none;
 }
 
@@ -5099,4 +5114,13 @@ body.gui-resizing .gui-pane-right {
  * (user: 左侧有些被截取). */
 .gui-pane-right--inner:not(.gui-pane-right--maximized) {
 	width: calc(288px + var(--gui-card-gutter) * 2);
+}
+
+/* The maximized float IS the measured .gui-chat-column box: the card-gutter
+ * margin (8px) kept applying to the fixed panel and pushed it 8px right/down
+ * of the column (user 2026-09-22: 最大化后面板位置向右下偏移了一点; measured
+ * left 280 vs column 272, right 1520 vs 1512). The gutter rule above carries
+ * equal specificity, so this override is appended last to win. */
+.gui-pane-right--maximized {
+	margin: 0;
 }

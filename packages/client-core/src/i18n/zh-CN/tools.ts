@@ -158,6 +158,7 @@ export const tools = {
 	"{count} cancelled": "{count} 已取消",
 	"swarm progress": "进度 {done}/{total}",
 	"swarm running": "运行中 {count}",
+	"swarm working": "正在工作",
 	"swarm done summary": "完成 {completed} · 失败 {failed}",
 	"swarm members": "Swarm 成员",
 	"operation failed": "操作失败",
