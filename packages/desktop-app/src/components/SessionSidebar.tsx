@@ -1057,7 +1057,9 @@ export function SessionSidebar({
 																		const data = e.dataTransfer.getData("text/plain");
 																		const r = e.currentTarget.getBoundingClientRect();
 																		const edge =
-																			e.clientY < r.top + r.height / 2 ? ("before" as const) : ("after" as const);
+																			e.clientY < r.top + r.height / 2
+																				? ("before" as const)
+																				: ("after" as const);
 																		setProjInsert(null);
 																		if (!data.startsWith("project:")) return;
 																		const from = data.slice(8);

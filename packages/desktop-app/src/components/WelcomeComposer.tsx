@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { BlurText, DotMatrixMark, t } from "@musepi/client-core";
 import { Plus as PlusIcon, X as XIcon } from "lucide";
 import { X } from "lucide-react";
 import { MorphIcon } from "morphicons/react";
@@ -27,7 +27,6 @@ import { useFloatingMenu } from "../lib/use-floating-menu";
 import type { SttSubmitTrigger } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
 import { AttachMenu } from "./AttachMenu";
-import { BlurText } from "@musepi/client-core";
 import {
 	fmtQuotaDuration,
 	type UsageActiveAccountView,
@@ -48,7 +47,6 @@ import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/us
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
-import { DotMatrixMark } from "@musepi/client-core";
 import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";

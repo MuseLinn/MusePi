@@ -129,7 +129,7 @@
 .sh-approval-wait-track {
 	flex: 1;
 	height: 2px;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	background: var(--glass-border, rgba(255, 255, 255, 0.12));
 	overflow: hidden;
 }
@@ -137,7 +137,7 @@
 	display: block;
 	width: 40%;
 	height: 100%;
-	border-radius: 1px;
+	border-radius: var(--radius-xs);
 	background: var(--accent, #d9a441);
 	opacity: 0.7;
 	animation: sh-approval-wait-slide 1.6s var(--spring-liquid, cubic-bezier(0.34, 1.56, 0.64, 1)) infinite;

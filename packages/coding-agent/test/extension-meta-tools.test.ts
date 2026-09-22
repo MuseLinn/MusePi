@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { createExtensionManagerTools } from "@musepi/pi-coding-agent/daemon/extension-lifecycle-tools";
-import { createExtensionRuntimeTools, RuntimeToolRegistry } from "@musepi/pi-coding-agent/daemon/extension-runtime-tools";
+import {
+	createExtensionRuntimeTools,
+	RuntimeToolRegistry,
+} from "@musepi/pi-coding-agent/daemon/extension-runtime-tools";
 import {
 	EXTENSION_META_TOOL_NAMES,
 	isExtensionMetaToolName,
 } from "@musepi/pi-coding-agent/extensibility/extension-meta-tools";
 import { buildSystemPrompt } from "@musepi/pi-coding-agent/system-prompt";
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import path from "node:path";
 
 const sessionOf = () => null;
 
@@ -28,7 +31,13 @@ describe("extension meta tools (issue #38 Step 2)", () => {
 		const tools = createExtensionManagerTools(sessionOf);
 		const byName = new Map(tools.map(t => [t.name, t]));
 		expect(byName.has("extensions_list")).toBe(true);
-		for (const name of ["extension_load", "extension_reload", "extension_status", "extension_validate", "extension_rollback"]) {
+		for (const name of [
+			"extension_load",
+			"extension_reload",
+			"extension_status",
+			"extension_validate",
+			"extension_rollback",
+		]) {
 			expect(byName.get(name)?.defaultInactive).toBe(true);
 		}
 		expect(byName.get("extensions_list")?.defaultInactive).not.toBe(true);

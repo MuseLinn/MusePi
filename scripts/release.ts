@@ -13,7 +13,7 @@ import { compareVersions } from "../packages/utils/src/version.ts";
 import { runChangelogFixer } from "./fix-changelogs";
 import { generateNixBunDeps, resolveNixBunDepsGenerator } from "./gen-nix-bun";
 
-const changelogGlob = new Glob("packages/{coding-agent,guest-client}/CHANGELOG.md");
+const changelogGlob = new Glob("packages/{coding-agent,client-core}/CHANGELOG.md");
 /** The GUI what's-new panel, the OTA manifest notes and the release page all
  *  read THIS file (parseChangelog prefers it over the upstream OMP one), so it
  *  must be renamed in lockstep — v0.4.29 shipped with the previous version's
@@ -307,7 +307,7 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	// Private packages don't publish to npm — except the release-artifact
 	// packages (gui/guest-client/mobile) whose version drives the
 	// electron-builder / Capacitor artifact names (`MusePi-<v>-*.dmg`).
-	const RELEASE_ARTIFACT_PKGS = new Set(["@musepi/desktop-app", "@musepi/guest-client", "@musepi/mobile"]);
+	const RELEASE_ARTIFACT_PKGS = new Set(["@musepi/desktop-app", "@musepi/client-core", "@musepi/mobile"]);
 	const publicPkgPaths: string[] = [];
 	for (const pkgPath of pkgJsonPaths) {
 		const pkgJson = await Bun.file(pkgPath).json();

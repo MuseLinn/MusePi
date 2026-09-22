@@ -238,7 +238,7 @@
 	box-sizing: border-box;
 	padding: 10px 14px;
 	border: 1px solid color-mix(in oklab, var(--color-text) 16%, transparent);
-	border-radius: 20px;
+	border-radius: var(--radius-2xl);
 	/* Glass-look surface (kimi-work bubble parity): a translucent tint +
 	 * diagonal sheen + a bright top-edge hairline fake the frosted look.
 	 * The window is fully transparent (per-pixel alpha), so the body

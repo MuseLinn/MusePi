@@ -20,7 +20,7 @@ const GRANDFATHERED = new Set([
 	"browser-relay",
 	"catalog",
 	"coding-agent",
-	"guest-client",
+	"client-core",
 	"hashline",
 	"metaharness",
 	"mnemopi",

@@ -1,6 +1,6 @@
 import {
-	CodeHighlightProvider,
 	buildTurnIndex,
+	CodeHighlightProvider,
 	downloadBlob,
 	punkAvatarUri,
 	relTime,

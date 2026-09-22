@@ -1,4 +1,4 @@
-import { Markdown, type TranslationKey, t } from "@musepi/client-core";
+import { DotMatrixMark, Markdown, type TranslationKey, t } from "@musepi/client-core";
 import { ToolView } from "@musepi/client-core/src/tool-render/ToolView";
 import { taskRenderer } from "@musepi/client-core/src/tool-render/tools/task";
 import type { ReactNode } from "react";
@@ -30,7 +30,6 @@ import {
 	setPunkSeed,
 	userPunkSeed,
 } from "../avatar-presets";
-import { DotMatrixMark } from "@musepi/client-core";
 import { GuiSelect } from "../GuiSelect";
 import { SchemaTabSection } from "./schema";
 

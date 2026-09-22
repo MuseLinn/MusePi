@@ -10,14 +10,6 @@
  */
 
 export { AgentsPanel } from "./components/agents/AgentsPanel";
-/** reactbits-parity brand chrome (zero-dependency, shared GUI ↔ guest): the
- *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
- *  interactive dot-matrix brand mark. The desktop app imports these from
- *  here instead of keeping local copies. */
-export { BlurText } from "./components/shell/BlurText";
-export { DotMatrixMark } from "./components/shell/DotMatrixMark";
-export { ShinyText } from "./components/shell/ShinyText";
-export { SpotlightCard } from "./components/shell/SpotlightCard";
 export { BarChart, type BarChartProps, type BarChartSerie } from "./components/charts/BarChart";
 export { Donut, type DonutProps } from "./components/charts/Donut";
 export { Gauge, type GaugeProps } from "./components/charts/Gauge";
@@ -32,11 +24,19 @@ export { MarketplaceCard } from "./components/marketplace/MarketplaceCard";
 export { MarketplaceGrid } from "./components/marketplace/MarketplaceGrid";
 export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/marketplace/types";
 export { resolveCardIcon } from "./components/marketplace/types";
+/** reactbits-parity brand chrome (zero-dependency, shared GUI ↔ guest): the
+ *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
+ *  interactive dot-matrix brand mark. The desktop app imports these from
+ *  here instead of keeping local copies. */
+export { BlurText } from "./components/shell/BlurText";
 export { ConnectScreen, type ConnectScreenProps } from "./components/shell/ConnectScreen";
+export { DotMatrixMark } from "./components/shell/DotMatrixMark";
 export { LanguageToggle } from "./components/shell/LanguageToggle";
 /** Sliding-thumb segmented control (shared by the header theme switch and
  *  the settings rows) — see styles/tokens.css § Segmented control. */
 export { Segmented, type SegmentedOption } from "./components/shell/Segmented";
+export { ShinyText } from "./components/shell/ShinyText";
+export { SpotlightCard } from "./components/shell/SpotlightCard";
 export { ThemeToggle } from "./components/shell/ThemeToggle";
 export { type CodeHighlightFn, highlightToCodeHtml } from "./components/transcript/highlight";
 export { CodeHighlightProvider, useCodeHighlight } from "./components/transcript/highlight-context";
@@ -74,7 +74,7 @@ export {
 	type TranscriptProps,
 	transcriptNodeKind,
 } from "./components/transcript/Transcript";
-export { buildTurnIndex, type TurnIndexItem, TURN_SUMMARY_MAX } from "./components/transcript/turn-index";
+export { buildTurnIndex, TURN_SUMMARY_MAX, type TurnIndexItem } from "./components/transcript/turn-index";
 export {
 	collectWidgetPayloads,
 	latestWidgetFromEntries,

@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -27,7 +27,6 @@ import { Icon } from "../../vendor/oc-icons";
 import { GuiSelect } from "../GuiSelect";
 import { BuiltinPetSprite, PetdexSprite } from "../PetSprite";
 import { Reveal } from "../Reveal";
-import { SpotlightCard } from "@musepi/client-core";
 
 /** Agent companion (伙伴, BitFun parity): master switch + display mode
  * (input / floating desktop pet) + appearance (preset grid or imported

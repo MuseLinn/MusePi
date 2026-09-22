@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { SpotlightCard, type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
@@ -10,7 +10,6 @@ import { GuiSelect } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
-import { SpotlightCard } from "@musepi/client-core";
 import { StateIcon } from "../StateIcon";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";

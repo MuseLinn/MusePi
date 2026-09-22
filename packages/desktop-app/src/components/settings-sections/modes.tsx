@@ -1,11 +1,10 @@
-import { t } from "@musepi/client-core";
+import { SpotlightCard, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { DialogFrame } from "../DialogFrame";
 import { FadeScroll } from "../FadeScroll";
-import { SpotlightCard } from "@musepi/client-core";
 
 /** Settings → 智能体 → 预设:命名预设(工具集 + 提示词 + settings 覆盖)卡片面板
  *  + 完整编辑器(modes-plan §8/§9:ModesCenter)。数据源 daemon modes.list/

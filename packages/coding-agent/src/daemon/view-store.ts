@@ -167,9 +167,9 @@ export class ViewStore {
 		const headerHasModeId = "modeId" in headerObj;
 		let modeId: string | null = headerHasModeId ? ((headerObj.modeId ?? null) as string | null) : null;
 		if (!headerHasModeId) {
-			const prev = this.#db
-				.query("SELECT mode_id FROM sessions WHERE session_id = ?")
-				.get(sessionId) as { mode_id: string | null } | undefined;
+			const prev = this.#db.query("SELECT mode_id FROM sessions WHERE session_id = ?").get(sessionId) as
+				| { mode_id: string | null }
+				| undefined;
 			modeId = prev?.mode_id ?? null;
 		}
 		// Keep the preset riding the stored snapshot header too (when non-null),
@@ -247,11 +247,11 @@ export class ViewStore {
 					model,
 					messageCount,
 					parentId,
-				// Session preset id — preserved from the prior persist when the
-				// view snapshot lacks it, so streaming / idle / compaction
-				// persists never clobber a setMode'd mode (persistHeaderPatch is
-				// the only explicit writer). null = no preset armed.
-				modeId,
+					// Session preset id — preserved from the prior persist when the
+					// view snapshot lacks it, so streaming / idle / compaction
+					// persists never clobber a setMode'd mode (persistHeaderPatch is
+					// the only explicit writer). null = no preset armed.
+					modeId,
 				);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);

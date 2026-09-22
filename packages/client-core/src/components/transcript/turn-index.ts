@@ -47,10 +47,7 @@ export function buildTurnIndex(entries: readonly SessionEntry[]): TurnIndexItem[
 			startIdx: i,
 			entryId: e.id,
 			timestamp: e.timestamp,
-			summary: msgText(e.message)
-				.replace(/\s+/g, " ")
-				.trim()
-				.slice(0, TURN_SUMMARY_MAX),
+			summary: msgText(e.message).replace(/\s+/g, " ").trim().slice(0, TURN_SUMMARY_MAX),
 		});
 	}
 	return out;

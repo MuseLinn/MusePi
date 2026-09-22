@@ -17,7 +17,7 @@ const dist = join(harmonyRoot, "..", "guest-client", "dist");
 const rawfile = join(harmonyRoot, "entry", "src", "main", "resources", "rawfile");
 
 if (!existsSync(join(dist, "mobile.html"))) {
-	console.error("[copy-web-assets] guest-client dist not found — run `bun run build` in packages/guest-client first");
+	console.error("[copy-web-assets] guest-client dist not found — run `bun run build` in packages/client-core first");
 	process.exit(1);
 }
 

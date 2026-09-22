@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const mobileRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const collabDist = path.resolve(mobileRoot, "../guest-client/dist");
+const collabDist = path.resolve(mobileRoot, "../client-core/dist");
 const mobileDist = path.resolve(mobileRoot, "dist");
 
 await rm(mobileDist, { recursive: true, force: true });

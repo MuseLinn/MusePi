@@ -27,7 +27,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 REPO = Path(__file__).resolve().parents[1]
-PUBLIC = REPO / "packages" / "guest-client" / "public"
+PUBLIC = REPO / "packages" / "client-core" / "public"
 QA_DIR = REPO / ".workbuddy" / "brand-qa"
 
 # Anchor palette (from build/icon.svg).

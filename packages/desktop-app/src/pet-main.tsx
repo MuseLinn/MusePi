@@ -110,13 +110,17 @@ function PetApp(): ReactNode {
 	// this window under file://) — it pushes the active pet descriptor on
 	// pet:activity; until the first push lands we render the local hook's
 	// reading (the same builtin default).
-	const [pushedPet, setPushedPet] = useState<{
-		kind: "builtin";
-		id: string;
-	} | {
-		kind: "petdex";
-		pkg: PetdexPackage;
-	} | null>(null);
+	const [pushedPet, setPushedPet] = useState<
+		| {
+				kind: "builtin";
+				id: string;
+		  }
+		| {
+				kind: "petdex";
+				pkg: PetdexPackage;
+		  }
+		| null
+	>(null);
 	const pet = pushedPet ?? localPet;
 	// Surface shading (pet-decor.ts) — the floating pet is the one renderer
 	// that has NO settings page of its own, so it subscribes to the same
@@ -721,7 +725,10 @@ function PetApp(): ReactNode {
 						void bridge?.petContextMenu?.();
 					}}
 				>
-					<div ref={squashRef} className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}>
+					<div
+						ref={squashRef}
+						className={`pet-window__pet-flip${mirrored ? " pet-window__pet-flip--mirror" : ""}`}
+					>
 						<PetSprite
 							mood={displayMood}
 							state={displayState}

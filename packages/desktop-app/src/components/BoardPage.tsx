@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { SpotlightCard, t } from "@musepi/client-core";
 import { WidgetErrorBoundary } from "@musepi/client-core/src/widgets/error-boundary";
 import { WidgetFit } from "@musepi/client-core/src/widgets/fit";
 import { type BoardWidget, widgetDef } from "@musepi/client-core/src/widgets/registry";
@@ -40,7 +40,6 @@ import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu } from "./ContextMenu";
 import { DialogFrame } from "./DialogFrame";
-import { SpotlightCard } from "@musepi/client-core";
 import { StateIcon } from "./StateIcon";
 import { TaskModal, widgetHasTask } from "./TaskModal";
 import { WidgetEditor } from "./WidgetEditor";

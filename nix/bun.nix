@@ -873,9 +873,9 @@
     url = "https://registry.npmjs.org/@mermaid-js/parser/-/parser-1.2.1.tgz";
     hash = "sha512-n12NohV3mrUyUL2o93IgG/ifeW9FTyeJn3zDxkhwa8MJ9Fxg3HQMlA3RiGmD/3UnJvheztkjjQAjA2T4LmUcpw==";
   };
+  "@musepi/client-core" = copyPathToStore ../packages/client-core;
   "@musepi/collab-proto" = copyPathToStore ../packages/collab-proto;
   "@musepi/desktop-app" = copyPathToStore ../packages/desktop-app;
-  "@musepi/guest-client" = copyPathToStore ../packages/guest-client;
   "@musepi/harmony" = copyPathToStore ../packages/harmony;
   "@musepi/hashline" = copyPathToStore ../packages/hashline;
   "@musepi/mobile" = copyPathToStore ../packages/mobile;

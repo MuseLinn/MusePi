@@ -1053,7 +1053,10 @@ export class DaemonSessionHost {
 		const prev = this.#bootstrapChain;
 		let release!: () => void;
 		const current = new Promise<void>(resolve => (release = resolve));
-		this.#bootstrapChain = prev.then(() => current, () => current);
+		this.#bootstrapChain = prev.then(
+			() => current,
+			() => current,
+		);
 		await prev.catch(() => {});
 		try {
 			return await fn();
@@ -1432,27 +1435,27 @@ export class DaemonSessionHost {
 		const sessionBus = new SessionScopedEventBus(this.#eventBus, "");
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
-			cwd,
-			hasUI: true,
-			interfaceLabel: "desktop (GUI)",
-			eventBus: sessionBus,
-			pauseGate,
-			settings: discovery.settings,
-			modelRegistry: discovery.modelRegistry,
-			contextFiles: discovery.contextFiles,
-			promptTemplates: discovery.promptTemplates,
-			slashCommands: discovery.slashCommands,
-			skills: discovery.skills,
-			preloadedExtensionPaths: discovery.extensionPaths,
-			mcpManager,
-			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
-			collabTool: this.#collabToolProvider?.(),
-			scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
-			...(await desktopSessionPromptInputs(cwd)),
-			...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
-			...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
-			...(params.modeId ? { modeId: params.modeId } : {}),
+				cwd,
+				hasUI: true,
+				interfaceLabel: "desktop (GUI)",
+				eventBus: sessionBus,
+				pauseGate,
+				settings: discovery.settings,
+				modelRegistry: discovery.modelRegistry,
+				contextFiles: discovery.contextFiles,
+				promptTemplates: discovery.promptTemplates,
+				slashCommands: discovery.slashCommands,
+				skills: discovery.skills,
+				preloadedExtensionPaths: discovery.extensionPaths,
+				mcpManager,
+				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
+				customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+				collabTool: this.#collabToolProvider?.(),
+				scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
+				...(await desktopSessionPromptInputs(cwd)),
+				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
+				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
+				...(params.modeId ? { modeId: params.modeId } : {}),
 			}),
 		);
 		const live = await this.#adoptAgentSession(result.session, cwd, result.setToolUIContext, parentId, pauseGate);
@@ -1525,25 +1528,25 @@ export class DaemonSessionHost {
 		const mcpManager = await this.#ensureMcpManager(resumeCwd, discovery);
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
-			cwd: resumeCwd,
-			sessionManager: manager,
-			hasUI: true,
-			interfaceLabel: "desktop (GUI)",
-			eventBus: new SessionScopedEventBus(this.#eventBus, sessionId),
-			pauseGate,
-			settings: discovery.settings,
-			modelRegistry: discovery.modelRegistry,
-			contextFiles: discovery.contextFiles,
-			promptTemplates: discovery.promptTemplates,
-			slashCommands: discovery.slashCommands,
-			skills: discovery.skills,
-			preloadedExtensionPaths: discovery.extensionPaths,
-			mcpManager,
-			// P0 自举:agent 扩展管理工具(extension_* 工具集)。
-			customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
-			collabTool: this.#collabToolProvider?.(),
-			scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
-			...(await desktopSessionPromptInputs(resumeCwd)),
+				cwd: resumeCwd,
+				sessionManager: manager,
+				hasUI: true,
+				interfaceLabel: "desktop (GUI)",
+				eventBus: new SessionScopedEventBus(this.#eventBus, sessionId),
+				pauseGate,
+				settings: discovery.settings,
+				modelRegistry: discovery.modelRegistry,
+				contextFiles: discovery.contextFiles,
+				promptTemplates: discovery.promptTemplates,
+				slashCommands: discovery.slashCommands,
+				skills: discovery.skills,
+				preloadedExtensionPaths: discovery.extensionPaths,
+				mcpManager,
+				// P0 自举:agent 扩展管理工具(extension_* 工具集)。
+				customTools: [...this.#extensionManagerTools(), ...this.#dynamicExtensionTools()],
+				collabTool: this.#collabToolProvider?.(),
+				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
+				...(await desktopSessionPromptInputs(resumeCwd)),
 			}),
 		);
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -7811,7 +7814,12 @@ export class DaemonServer {
 								cacheHitRate: hitRate,
 							}
 						: null;
-				return snapcompact || breakdown || modelRef || autoCompactBufferTokens > 0 || tokenSummary || thresholdTokens !== null
+				return snapcompact ||
+					breakdown ||
+					modelRef ||
+					autoCompactBufferTokens > 0 ||
+					tokenSummary ||
+					thresholdTokens !== null
 					? {
 							...usage,
 							...(modelRef ? { model: modelRef } : {}),

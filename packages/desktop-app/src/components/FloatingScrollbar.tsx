@@ -208,7 +208,7 @@ export function FloatingScrollbar(): ReactNode {
 		const remeasure = (): void => {
 			if (bar.dataset.visible !== "1") return;
 			const target = st.target;
-			if (!target || !target.isConnected) {
+			if (!target?.isConnected) {
 				hideForGood();
 				return;
 			}

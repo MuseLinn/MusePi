@@ -174,10 +174,14 @@ describe("ViewStore cross-session tables", () => {
 		// 2) a streaming schedulePersist / idle-close replays the MaterializedView
 		//    projection, whose header has NO modeId key — this used to null the
 		//    preset (BUG: hover card fell back to 工作模式 after restart).
-		const replay = snapshot("s1", [
-			{ role: "user", content: "y", timestamp: 1 },
-			{ role: "assistant", content: "reply", timestamp: 2 },
-		] as never, 2);
+		const replay = snapshot(
+			"s1",
+			[
+				{ role: "user", content: "y", timestamp: 1 },
+				{ role: "assistant", content: "reply", timestamp: 2 },
+			] as never,
+			2,
+		);
 		store.upsert("s1", replay);
 		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBe("design");
 		// 3) the stored snapshot header carries the preset too, so adopt() can
