@@ -63,14 +63,22 @@ export function buildMessageTree(entries: readonly unknown[]): MessageTreeNode[]
 
 export function flattenMessageTree(roots: readonly MessageTreeNode[]): FlatMessageTreeRow[] {
 	const rows: FlatMessageTreeRow[] = [];
-	const walk = (nodes: readonly MessageTreeNode[], depth: number): void => {
-		for (let i = 0; i < nodes.length; i++) {
-			const node = nodes[i]!;
-			rows.push({ node, depth, isLast: i === nodes.length - 1 });
-			if (node.children.length > 0) walk(node.children, depth + 1);
+	// Iterative pre-order: a long linear session builds a parent→child chain
+	// thousands deep (one node per message), and the recursive walk overflowed
+	// the call stack (RangeError) once session.history paging loaded the full
+	// transcript into the trajectory/canvas views.
+	const stack: { node: MessageTreeNode; depth: number; isLast: boolean }[] = [];
+	for (let i = roots.length - 1; i >= 0; i--) {
+		stack.push({ node: roots[i]!, depth: 0, isLast: i === roots.length - 1 });
+	}
+	while (stack.length > 0) {
+		const { node, depth, isLast } = stack.pop()!;
+		rows.push({ node, depth, isLast });
+		const children = node.children;
+		for (let i = children.length - 1; i >= 0; i--) {
+			stack.push({ node: children[i]!, depth: depth + 1, isLast: i === children.length - 1 });
 		}
-	};
-	walk(roots, 0);
+	}
 	return rows;
 }
 

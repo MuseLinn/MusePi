@@ -725,6 +725,65 @@ function tailSnapshot<T extends { entries?: readonly unknown[] }>(snap: T): T & 
 		tail: { hasMore: true, beforeId: typeof firstKept?.id === "string" ? firstKept.id : null },
 	};
 }
+/** Full-turn index item — the wire shape of client-core's TurnIndexItem
+ *  (M1.11 turn-index.ts). session.turns ships these so the GUI's TurnRail
+ *  covers turns the tail window never loaded: the client builds its index
+ *  from the LOADED entries only, so on long sessions the rail silently
+ *  dropped everything older than the paged-in window. One ~120B record per
+ *  turn regardless of how much history is materialized. */
+interface DaemonTurnItem {
+	/** Absolute entry index of the turn's start entry. */
+	startIdx: number;
+	entryId: string;
+	timestamp: string;
+	summary: string;
+	kind: "user" | "advisor";
+}
+const TURN_SUMMARY_MAX = 90;
+/** MUST stay in sync with client-core round-collapse.ts isTurnStart: a user
+ *  prompt OR a displayed advisor note starts a turn. Duplicated here rather
+ *  than imported because the daemon must not depend on the client package. */
+function daemonIsTurnStart(e: unknown): boolean {
+	if (!e || typeof e !== "object") return false;
+	const t = e as { type?: unknown; message?: { role?: unknown }; customType?: unknown; display?: unknown };
+	if (t.type === "message") return t.message?.role === "user";
+	if (t.type === "custom_message") return t.customType === "advisor" && t.display === true;
+	return false;
+}
+/** Summary text of a turn-start entry: message entries carry the text under
+ *  `message.content`, custom_message entries under `content` — string or
+ *  text-content blocks, mirroring client-core msgText/customText. */
+function daemonEntryText(e: unknown): string {
+	const rec = e as { message?: { content?: unknown }; content?: unknown } | null;
+	const c = rec?.message?.content ?? rec?.content;
+	if (typeof c === "string") return c;
+	if (Array.isArray(c)) {
+		return c
+			.filter(b => typeof b === "object" && b !== null && (b as { type?: unknown }).type === "text")
+			.map(b => (b as { text?: unknown }).text ?? "")
+			.filter(s => typeof s === "string")
+			.join(" ");
+	}
+	return "";
+}
+export function buildDaemonTurnIndex(entries: readonly unknown[]): DaemonTurnItem[] {
+	const out: DaemonTurnItem[] = [];
+	for (let i = 0; i < entries.length; i++) {
+		const e = entries[i];
+		if (!daemonIsTurnStart(e)) continue;
+		const rec = e as { id?: unknown; timestamp?: unknown; type?: unknown };
+		const entryId = typeof rec.id === "string" ? rec.id : String(rec.id ?? "");
+		const timestamp = typeof rec.timestamp === "string" ? rec.timestamp : String(rec.timestamp ?? "");
+		out.push({
+			startIdx: i,
+			entryId,
+			timestamp,
+			summary: daemonEntryText(e).replace(/\s+/g, " ").trim().slice(0, TURN_SUMMARY_MAX),
+			kind: rec.type === "message" ? "user" : "advisor",
+		});
+	}
+	return out;
+}
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
 /** Single JSON-RPC request cap. Raised 4→16 MiB (2026-09-18, #23 follow-up):
  *  `stt.transcribe` ships 16 kHz mono float JSON (~127 KB/s after the client
@@ -6118,6 +6177,20 @@ export class DaemonServer {
 					hasMore: from > 0,
 					remaining: from,
 				};
+			}
+			case "session.turns": {
+				// Full-turn index over the materialized snapshot
+				// (session.history parity): the client tails 200 entries
+				// and pages older chunks in, so its own buildTurnIndex only
+				// covers the LOADED window — the rail dropped unloaded
+				// turns on long sessions. Scanning the in-memory snapshot
+				// here costs the same as session.history and returns one
+				// ~120B record per turn (20k turns ≈ 2.4MB, loopback).
+				const p = (params ?? {}) as { sessionId?: unknown };
+				if (typeof p.sessionId !== "string") throw new Error("sessionId required");
+				const snap = (await this.#host.snapshot(p.sessionId)) as { entries?: unknown[] } | null;
+				const entries = Array.isArray(snap?.entries) ? snap.entries : [];
+				return { turns: buildDaemonTurnIndex(entries), totalEntries: entries.length };
 			}
 			case "session.resume": {
 				const p = (params ?? {}) as { sessionId: string; cursor?: number };

@@ -9,6 +9,7 @@ import {
 	type TranscriptAnchorCtl,
 	type TranscriptNodeInjection,
 	type TranslationKey,
+	type TurnIndexItem,
 	t,
 } from "@musepi/client-core";
 import type { SessionEntry } from "@musepi/pi-wire";
@@ -615,10 +616,9 @@ export function ChatView({
 	// raw querySelector missed unmounted rows and fell back to scrollTop 0).
 	const [jumpRequest, setJumpRequest] = useState<{ timestamp: string; nonce: number } | null>(null);
 	const jumpNonceRef = useRef(0);
-	const requestJump = useCallback((timestamp: string): void => {
-		jumpNonceRef.current += 1;
-		setJumpRequest({ timestamp, nonce: jumpNonceRef.current });
-	}, []);
+	// requestJump is defined further down (after loadOlder — the TurnRail may
+	// target a turn above the loaded window, so a jump pages older chunks in
+	// first; see the callback below the paging helper).
 	// Session-switch reveal: when the active session changes, the transcript
 	// rows play a staggered fade-in (逐字错峰) so the context swap reads as a
 	// transition instead of a hard cut. The marker is removed after the
@@ -1317,17 +1317,77 @@ export function ChatView({
 		void loadOlder();
 	}, [loadOlder]);
 	// M1.11: data-driven TurnRail source — one lightweight record per turn
-	// (~120B) over the LOADED entries. The rail no longer measures turn
-	// positions from the DOM: rows outside the transcript's render window
-	// don't exist to measure, which is what made the rail drop turns on
-	// long sessions. hasMoreAbove drives the top-edge backfill carousel.
+	// (~120B). The rail no longer measures turn positions from the DOM: rows
+	// outside the transcript's render window don't exist to measure, which is
+	// what made the rail drop turns on long sessions.
+	//
+	// Full-session index (session.turns): the local buildTurnIndex only covers
+	// the LOADED window (the daemon tails 200 entries; older chunks page in on
+	// scroll), so on a long session the rail silently dropped everything above
+	// the paged-in region. The daemon scans the in-memory snapshot once and
+	// ships one record per turn regardless of how much history is loaded; the
+	// loaded set contributes only turns that arrived AFTER that scan (live
+	// streaming), appended in timestamp order.
+	const [daemonTurns, setDaemonTurns] = useState<TurnIndexItem[] | null>(null);
+	useEffect(() => {
+		if (!rpc || !store) {
+			setDaemonTurns(null);
+			return;
+		}
+		let cancelled = false;
+		rpc.request<{ turns: TurnIndexItem[] }>("session.turns", { sessionId: store.sessionId })
+			.then(res => {
+				if (!cancelled) setDaemonTurns(Array.isArray(res?.turns) ? res.turns : null);
+			})
+			.catch(() => {
+				// daemon predates session.turns / session unknown — fall back
+				// to the loaded-window index.
+				if (!cancelled) setDaemonTurns(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, store]);
+	const loadedTurns = useMemo(() => buildTurnIndex(snap?.entries ?? []), [snap?.entries]);
+	const railTurns = useMemo(() => {
+		if (!daemonTurns) return loadedTurns;
+		const lastTs = daemonTurns.length > 0 ? daemonTurns[daemonTurns.length - 1].timestamp : null;
+		const extra = lastTs === null ? loadedTurns : loadedTurns.filter(t => t.timestamp > lastTs);
+		return extra.length > 0 ? [...daemonTurns, ...extra] : daemonTurns;
+	}, [daemonTurns, loadedTurns]);
+	// TurnRail jump dispatcher (defined here — after loadOlder, which a jump
+	// into the folded window pages through). The rail indexes the FULL session,
+	// so the target may sit above the loaded window: page older chunks until
+	// the entry materializes, then dispatch. (Dispatching immediately would
+	// drop the jump — the Transcript resolves rows against the loaded set and
+	// ignores requests it cannot find.)
+	const requestJump = useCallback(
+		(timestamp: string): void => {
+			void (async () => {
+				let guard = 0;
+				while (
+					rpc &&
+					store &&
+					snapRef.current?.entries.some(e => e.timestamp === timestamp) !== true &&
+					store.hasMore &&
+					guard < 200
+				) {
+					guard++;
+					await loadOlder();
+				}
+				jumpNonceRef.current += 1;
+				setJumpRequest({ timestamp, nonce: jumpNonceRef.current });
+			})();
+		},
+		[rpc, store, loadOlder],
+	);
 	const turnsData = useMemo(
 		() => ({
-			turns: buildTurnIndex(snap?.entries ?? []),
+			turns: railTurns,
 			hasMoreAbove: store?.hasMore === true,
 			onRequestOlder: onLoadOlderStable,
 		}),
-		[snap?.entries, store?.hasMore, onLoadOlderStable],
+		[railTurns, store?.hasMore, onLoadOlderStable],
 	);
 	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
 	// ladder rungs are disabled in the composer's ThinkingSelector, and the

@@ -93,41 +93,63 @@ export function layoutTree(
 		}
 	}
 	// 后序:叶取新槽位,内部节点取首末子均值(紧凑无重叠)。
-	const place = (node: MessageTreeNode, depth: number): number => {
+	// 显式栈模拟递归后序:深线性链(每消息一层,全量分页后数千层)会把
+	// 递归走到爆栈;子槽位用 cxOf 表回查,保持与原递归完全相同的
+	// 槽位分配与 nodes 顺序。
+	const cxOf = new Map<string, number>();
+	const postStack: { node: MessageTreeNode; depth: number; expanded: boolean }[] = [];
+	for (let i = roots.length - 1; i >= 0; i--) {
+		postStack.push({ node: roots[i]!, depth: 0, expanded: false });
+	}
+	while (postStack.length > 0) {
+		const f = postStack[postStack.length - 1]!;
+		if (!f.expanded) {
+			f.expanded = true;
+			const children = f.node.children;
+			for (let i = children.length - 1; i >= 0; i--) {
+				postStack.push({ node: children[i]!, depth: f.depth + 1, expanded: false });
+			}
+			continue;
+		}
+		postStack.pop();
+		const node = f.node;
 		let cx: number;
 		if (node.children.length === 0) {
 			cx = nextSlot++;
 		} else {
-			const childXs = node.children.map(c => place(c, depth + 1));
-			cx = (childXs[0]! + childXs[childXs.length - 1]!) / 2;
+			const first = cxOf.get(node.children[0]!.id) ?? 0;
+			const last = cxOf.get(node.children[node.children.length - 1]!.id) ?? first;
+			cx = (first + last) / 2;
 		}
+		cxOf.set(node.id, cx);
 		nodes.push({
 			node,
-			depth,
+			depth: f.depth,
 			x: cx * (NODE_W + GAP_X),
 			y: 0,
 			turn: turnById.get(node.id) ?? 0,
 		});
-		return cx;
-	};
-	for (const root of roots) place(root, 0);
+	}
 	// O(1) 查找表:长会话(220+ 节点)下按 id 找父子节点,线性扫描叠加成 O(n²)。
 	const idToNode = new Map(nodes.map(n => [n.node.id, n]));
 	// y 重排(关键):每节点 y = 父节点底部 + (同轮?轮内紧凑间距:轮间大间距)。
 	// 注意:间距必须含 NODE_H(卡片不重叠)——同轮 12px 是"卡片间 12px 空隙",
 	// 不是"起点差 12px"(后者重叠 64px,文字糊一起)。分支子节点从父的 y 继承
-	// 推进;按树递归天然隔离多根,不用全局累计。
-	const walk = (cn: CanvasNode, parentBottom: number | null, parentTurn: number): void => {
+	// 推进;显式栈模拟递归先序(深线性链会爆栈),各子树根顺序不变。
+	const yStack: { cn: CanvasNode; parentBottom: number | null; parentTurn: number }[] = [];
+	for (let i = roots.length - 1; i >= 0; i--) {
+		const rootNode = idToNode.get(roots[i]!.id);
+		if (rootNode) yStack.push({ cn: rootNode, parentBottom: null, parentTurn: -1 });
+	}
+	while (yStack.length > 0) {
+		const { cn, parentBottom, parentTurn } = yStack.pop()!;
 		const gap = parentBottom === null ? 0 : cn.turn === parentTurn ? GAP_Y_TURN : GAP_Y;
 		cn.y = (parentBottom ?? 0) + gap;
-		for (const child of cn.node.children) {
-			const childNode = idToNode.get(child.id);
-			if (childNode) walk(childNode, cn.y + NODE_H, cn.turn);
+		const children = cn.node.children;
+		for (let i = children.length - 1; i >= 0; i--) {
+			const childNode = idToNode.get(children[i]!.id);
+			if (childNode) yStack.push({ cn: childNode, parentBottom: cn.y + NODE_H, parentTurn: cn.turn });
 		}
-	};
-	for (const root of roots) {
-		const rootNode = idToNode.get(root.id);
-		if (rootNode) walk(rootNode, null, -1);
 	}
 	// 画布尺寸:由实际节点位置决定(所有节点都可见)。
 	const maxY = nodes.reduce((acc, n) => Math.max(acc, n.y), 0);

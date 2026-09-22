@@ -351,19 +351,25 @@ export function TrajectoryView({
 	const treeRoots = useMemo(() => buildMessageTree(entries), [entries]);
 	const treeRows = useMemo(() => {
 		const rows: { node: MessageTreeNode; depth: number }[] = [];
-		const walk = (nodes: readonly MessageTreeNode[], depth: number): void => {
-			for (const node of nodes) {
-				rows.push({ node, depth });
-				if (collapsedNodes.has(node.id)) continue;
-				// Depth counts BRANCHES, not messages: a single-child chain (the
-				// linear message flow) keeps its parent's depth — incrementing
-				// per level made every record indent +14px until rows walked
-				// off the panel edge (user: 每个记录都缩进最后都超出界面).
-				// Real branch points (siblings > 1) open the next level.
-				walk(node.children, node.children.length > 1 ? depth + 1 : depth);
+		// Iterative pre-order: a linear session's parent→child chain is one node
+		// per message (thousands deep with the full transcript paged in) — the
+		// recursive walk overflowed the call stack.
+		const stack: { node: MessageTreeNode; depth: number }[] = [];
+		for (let i = treeRoots.length - 1; i >= 0; i--) stack.push({ node: treeRoots[i]!, depth: 0 });
+		while (stack.length > 0) {
+			const { node, depth } = stack.pop()!;
+			rows.push({ node, depth });
+			if (collapsedNodes.has(node.id)) continue;
+			// Depth counts BRANCHES, not messages: a single-child chain (the
+			// linear message flow) keeps its parent's depth — incrementing
+			// per level made every record indent +14px until rows walked
+			// off the panel edge (user: 每个记录都缩进最后都超出界面).
+			// Real branch points (siblings > 1) open the next level.
+			const childDepth = node.children.length > 1 ? depth + 1 : depth;
+			for (let i = node.children.length - 1; i >= 0; i--) {
+				stack.push({ node: node.children[i]!, depth: childDepth });
 			}
-		};
-		walk(treeRoots, 0);
+		}
 		return rows;
 	}, [treeRoots, collapsedNodes]);
 	// 分支列布局(垂直生长,不右延):第一子继承父列,其余子开新列;
@@ -371,43 +377,54 @@ export function TrajectoryView({
 	const treeLanes = useMemo(() => {
 		const laneOf = new Map<string, number>();
 		const nextLane = { n: 0 };
-		const assign = (nodes: readonly MessageTreeNode[], inherited: number): void => {
-			for (const node of nodes) {
-				const lane = laneOf.get(node.id) ?? inherited;
-				laneOf.set(node.id, lane);
-				for (let i = 0; i < node.children.length; i++) {
-					if (i === 0) {
-						laneOf.set(node.children[i]!.id, lane);
-						assign([node.children[i]!], lane);
-					} else {
-						const nl = nextLane.n++;
-						laneOf.set(node.children[i]!.id, nl);
-						assign([node.children[i]!], nl);
-					}
-				}
-			}
+		// 显式栈模拟递归 assign:顺序与槽位编号必须和原递归完全一致
+		// (首子继承父列深入,余子依次开新列——新列号在首子整棵子树
+		// 之后才分配),深线性链(每消息一层)会把递归走到爆栈。
+		const stack: { children: readonly MessageTreeNode[]; i: number; lane: number }[] = [];
+		const emit = (node: MessageTreeNode, inherited: number): void => {
+			const lane = laneOf.get(node.id) ?? inherited;
+			laneOf.set(node.id, lane);
+			if (node.children.length > 0) stack.push({ children: node.children, i: 0, lane });
 		};
 		for (const root of treeRoots) {
 			if (!laneOf.has(root.id)) {
 				laneOf.set(root.id, nextLane.n++);
-				assign([root], laneOf.get(root.id)!);
+			}
+			emit(root, laneOf.get(root.id)!);
+		}
+		while (stack.length > 0) {
+			const f = stack[stack.length - 1]!;
+			if (f.i >= f.children.length) {
+				stack.pop();
+				continue;
+			}
+			const i = f.i++;
+			const child = f.children[i]!;
+			if (i === 0) {
+				emit(child, f.lane);
+			} else {
+				const nl = nextLane.n++;
+				laneOf.set(child.id, nl);
+				emit(child, nl);
 			}
 		}
 		const byLane = new Map<number, { node: MessageTreeNode; isLeaf: boolean; onPath: boolean }[]>();
-		const walk = (nodes: readonly MessageTreeNode[]): void => {
-			for (const node of nodes) {
-				const lane = laneOf.get(node.id) ?? 0;
-				const arr = byLane.get(lane) ?? [];
-				arr.push({
-					node,
-					isLeaf: leafId != null && node.id === leafId,
-					onPath: !activePathIds || activePathIds.has(node.id),
-				});
-				byLane.set(lane, arr);
-				if (!collapsedNodes.has(node.id)) walk(node.children);
-			}
-		};
-		walk(treeRoots);
+		// Iterative pre-order (deep linear chains overflow a recursive walk).
+		const walkStack: MessageTreeNode[] = [];
+		for (let i = treeRoots.length - 1; i >= 0; i--) walkStack.push(treeRoots[i]!);
+		while (walkStack.length > 0) {
+			const node = walkStack.pop()!;
+			const lane = laneOf.get(node.id) ?? 0;
+			const arr = byLane.get(lane) ?? [];
+			arr.push({
+				node,
+				isLeaf: leafId != null && node.id === leafId,
+				onPath: !activePathIds || activePathIds.has(node.id),
+			});
+			byLane.set(lane, arr);
+			if (collapsedNodes.has(node.id)) continue;
+			for (let i = node.children.length - 1; i >= 0; i--) walkStack.push(node.children[i]!);
+		}
 		return [...byLane.entries()]
 			.sort((a, b) => a[0] - b[0])
 			.map(([lane, rows]) => ({
@@ -425,13 +442,14 @@ export function TrajectoryView({
 		if (seededCollapseFor.current === sessionKey) return;
 		seededCollapseFor.current = sessionKey;
 		const ids = new Set<string>();
-		const walk = (nodes: readonly MessageTreeNode[]): void => {
-			for (const node of nodes) {
-				if (node.children.length > 1 && activePathIds && !activePathIds.has(node.id)) ids.add(node.id);
-				walk(node.children);
-			}
-		};
-		walk(treeRoots);
+		// Iterative pre-order (deep linear chains overflow a recursive walk).
+		const stack: MessageTreeNode[] = [];
+		for (let i = treeRoots.length - 1; i >= 0; i--) stack.push(treeRoots[i]!);
+		while (stack.length > 0) {
+			const node = stack.pop()!;
+			if (node.children.length > 1 && activePathIds && !activePathIds.has(node.id)) ids.add(node.id);
+			for (let i = node.children.length - 1; i >= 0; i--) stack.push(node.children[i]!);
+		}
 		setCollapsedNodes(ids);
 	}, [mode, treeRoots, activePathIds, leafId]);
 
