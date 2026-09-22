@@ -26,6 +26,12 @@ export const MANAGED_BROWSER_PARTITION = "persist:musepi-managed-browser";
  * 2. **隐藏必须保留布局**:`display:none` / 移出视口会让 `capturePage()` 永不返回、
  *    零尺寸只返回空图 —— agent 截图依赖这个合成表面,所以面板关闭时宿主仍按最后
  *    的 rect 挂载,只用 `opacity:0 + pointer-events:none` 隐藏。
+ *
+ * 为什么用「常驻宿主 + rect 镜像」而不是 openchamber 式就地挂载
+ * (docs/review/0.5.0-sidepanel-browser-rendering.md §2.1):① maximized 时页面
+ * 要浮在面板圆角卡之上(z-900 单层可控);② blank tab 的 React 起始页与 glass
+ * chrome 需要在这层之下分层。「原生视图恒在 DOM 之上」的旧动机已随 DOM webview
+ * 失效,勿再拿它当理由。
  */
 export function ManagedBrowserHost(): ReactNode {
 	const state = useSyncExternalStore(subscribeHost, getHostState);

@@ -638,9 +638,14 @@ export function ContextPanel({
 						/>
 					) : view === "browser" ? (
 						/* Browser pane renders OUTSIDE the feather-scroll container:
-						 * the native WebContentsView projects the slot's exact CSS
-						 * rect — a padded/scrollable wrapper breaks the height chain
-						 * and clips the projection. */
+						 * the page is a DOM <webview> owned by the always-mounted
+						 * ManagedBrowserHost, which mirrors THIS pane's slot rect
+						 * (fixed overlay). The slot must sit in a plain flex column —
+						 * a padded/scrollable wrapper breaks the height chain the
+						 * ResizeObserver measures. See docs/review/0.5.0-sidepanel-
+						 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
+						 * projection" motive is gone; the host stays for the maximized
+						 * layering and blank start-page glass stacking). */
 						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} />
 					) : view === "git" || view === "diff" || view === "pr" ? (
 						<GitPanel rpc={rpc} cwd={cwd} />
