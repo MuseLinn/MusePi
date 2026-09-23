@@ -129,19 +129,38 @@ bun run --cwd=packages/desktop-app desktop
 
 ## 🏗 架构
 
-```
-┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
-│  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
-│  packages/desktop-app │   WS 事件流（journal/view）    │  packages/coding-agent│
-│  + guest-client │                               │  AgentSession 宿主    │
-└──────┬───────┘                               └──────────┬───────────┘
-       │                                                    │
-       │  pet.html / bubble.html / pin.html                 │ agent 引擎
-       │  （桌宠 / 气泡 / 置顶窗口）                          ▼
-       │                                         packages/agent · ai · tui
-       │                                         natives（Rust N-API）
-       ▼
-  guest-client：transcript / tool-render / widget / i18n（zh-CN/en-US 域化词表）
+```mermaid
+flowchart LR
+    subgraph DESKTOP["Electron 桌面端 — packages/desktop-app"]
+        direction TB
+        MW["主窗口<br/>会话侧栏 · 对话列 · 侧面板 · 终端坞"]
+        GC["guest-client 渲染核心<br/>transcript · 工具卡 · widget · i18n"]
+        PW["独立小窗<br/>桌宠 · 气泡 · 置顶"]
+        MW --- GC
+        MW -.-> PW
+    end
+
+    subgraph REMOTE["远程与移动端 — guest-client 包"]
+        direction TB
+        WEB["协作 Web UI"]
+        AND["Android（Capacitor）"]
+        HAR["HarmonyOS（WebView）"]
+    end
+
+    subgraph DAEMON["musepi serve（daemon）— packages/coding-agent"]
+        HOST["AgentSession 宿主<br/>journal + materialized view<br/>空闲 30min → 历史快照，按需重激活"]
+    end
+
+    subgraph ENGINE["agent 引擎"]
+        direction TB
+        CORE["agent · ai · tui · catalog · wire · utils"]
+        NAT["natives（Rust N-API）"]
+        CORE --- NAT
+    end
+
+    DESKTOP <-- "JSON-RPC over WS（collab-proto）<br/>事件流：journal / view" --> DAEMON
+    REMOTE <-- "collab 链接 / WS" --> DAEMON
+    DAEMON --> ENGINE
 ```
 
 | 包 | 说明 |

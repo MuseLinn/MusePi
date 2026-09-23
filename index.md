@@ -11,7 +11,7 @@ mp_cta: true
     <div class="mp-hero-copy">
       <div class="mp-hero-badge">
         <span class="mp-pulse" aria-hidden="true"></span>
-        <span class="mp-hero-badge-ver" data-release-version>v0.4.36</span>
+        <span class="mp-hero-badge-ver" data-release-version>v0.4.37</span>
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
         <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>

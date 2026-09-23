@@ -155,19 +155,38 @@ Slash commands shift how a whole session runs (`/compact`, `/usage`, `/context`,
 
 ## Architecture
 
-```
-┌──────────────┐    JSON-RPC (collab-proto)    ┌──────────────────────┐
-│  Electron GUI │ ◄────────────────────────────► │  musepi serve (daemon)│
-│  packages/desktop-app │   WS event stream (journal)   │  packages/coding-agent│
-│  + guest-client │                               │  AgentSession host    │
-└──────┬───────┘                               └──────────┬───────────┘
-       │                                                    │
-       │  pet.html / bubble.html / pin.html                 │ agent engine
-       │  (pet / bubble / pinned windows)                   ▼
-       │                                         packages/agent · ai · tui
-       │                                         natives (Rust N-API)
-       ▼
-  guest-client: transcript / tool-render / widget / i18n (per-domain zh-CN/en-US maps)
+```mermaid
+flowchart LR
+    subgraph DESKTOP["Electron desktop — packages/desktop-app"]
+        direction TB
+        MW["Main window<br/>sidebar · chat column · side pane · terminal dock"]
+        GC["guest-client rendering core<br/>transcript · tool cards · widgets · i18n"]
+        PW["satellite windows<br/>pet · bubbles · pinned"]
+        MW --- GC
+        MW -.-> PW
+    end
+
+    subgraph REMOTE["Remote & mobile — guest-client bundle"]
+        direction TB
+        WEB["collab web UI"]
+        AND["Android (Capacitor)"]
+        HAR["HarmonyOS (WebView)"]
+    end
+
+    subgraph DAEMON["musepi serve (daemon) — packages/coding-agent"]
+        HOST["AgentSession host<br/>journal + materialized view<br/>idle 30 min → history snapshot, reactivates on demand"]
+    end
+
+    subgraph ENGINE["agent engine"]
+        direction TB
+        CORE["agent · ai · tui · catalog · wire · utils"]
+        NAT["natives (Rust N-API)"]
+        CORE --- NAT
+    end
+
+    DESKTOP <-- "JSON-RPC over WS (collab-proto)<br/>event stream: journal / view" --> DAEMON
+    REMOTE <-- "collab link / WS" --> DAEMON
+    DAEMON --> ENGINE
 ```
 
 | Package | Role |
