@@ -9,6 +9,46 @@ import {
 import { PacMan } from "../vendor/pac-man";
 
 /**
+ * Effective stacking level of the container the rail indicates: the
+ * nearest ancestor (including itself) carrying a numeric z-index. The
+ * rail paints one step above it, so any dialog / menu / toast that
+ * covers the scrolled container also covers the rail — the rail used to
+ * pin z-index 4200 ("above everything") and floated over the update
+ * toast and modal backdrops (user: 滚动条覆盖更新弹窗).
+ *
+ * Nested contexts resolve pragmatically: the NEAREST numeric z wins, and
+ * the walk stops early at a `position: fixed` overlay (update toast,
+ * modal backdrop) since that level outranks everything below it.
+ * Contexts without a numeric z (backdrop-filter glass, transforms,
+ * opacity) contribute no number of their own — the walk keeps going and
+ * inherits the level from further up. No numeric z anywhere → 0, i.e.
+ * the rail sits just above plain content but under every overlay.
+ * Results are cached per element (computed once per scrolled container,
+ * not per scroll frame).
+ */
+const stackZCache = new WeakMap<HTMLElement, number>();
+function stackZ(el: HTMLElement): number {
+	const cached = stackZCache.get(el);
+	if (cached !== undefined) return cached;
+	let z = 0;
+	let node: Element | null = el;
+	while (node && node !== document.body && node !== document.documentElement) {
+		const cs = getComputedStyle(node);
+		const zi = cs.zIndex;
+		if (zi !== "auto") {
+			const n = Number(zi);
+			if (Number.isFinite(n)) {
+				z = n;
+				if (cs.position === "fixed") break;
+			}
+		}
+		node = node.parentElement;
+	}
+	stackZCache.set(el, z);
+	return z;
+}
+
+/**
  * Floating scroll indicator (Chromium 150+ / Electron 43).
  *
  * Chromium still parses `overflow: overlay` but lays it out exactly like
@@ -149,6 +189,10 @@ export function FloatingScrollbar(): ReactNode {
 			// This is the container the rail now indicates — keep it for the
 			// drag handle (gummy capsule) to scroll.
 			st.target = target;
+			// Layer the rail with its container (see stackZ): covering
+			// dialogs/toasts also cover the rail instead of the rail
+			// floating over them.
+			bar.style.zIndex = String(stackZ(target) + 1);
 			const range = target.scrollHeight - target.clientHeight;
 			const ratio = range > 0 ? target.scrollTop / range : 0;
 			const barH = r.height;
@@ -226,6 +270,7 @@ export function FloatingScrollbar(): ReactNode {
 			const range = target.scrollHeight - target.clientHeight;
 			const ratio = range > 0 ? target.scrollTop / range : 0;
 			const barH = r.height;
+			bar.style.zIndex = String(stackZ(target) + 1);
 			bar.style.left = `${r.right - 13}px`;
 			bar.style.top = `${Math.round(r.top)}px`;
 			bar.style.height = `${Math.round(barH)}px`;

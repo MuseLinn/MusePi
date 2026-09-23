@@ -2514,13 +2514,13 @@
 .gui-float-scrollbar {
 	position: fixed;
 	width: 12px;
-	/* Highest surface (above menus/dialogs): the rail is positioned and
-	 * sized to the LAST-SCROLLED container (update() sets left/top/height
-	 * from its rect) and only exists while that container scrolls. So it
-	 * always indicates the content actually being scrolled — inside an open
-	 * dialog, menu or maximized right panel included — instead of painting
-	 * over unrelated chrome. */
-	z-index: 4200;
+	/* Fallback only — update()/remeasure() set an inline z-index one step
+	 * above the scrolled container's own stacking level (see stackZ in
+	 * FloatingScrollbar.tsx): the rail is bound to its container's layer,
+	 * so dialogs, menus and toasts that cover the container also cover
+	 * the rail. The old pinned 4200 floated the rail above the update
+	 * toast and modal backdrops (user: 滚动条覆盖更新弹窗). */
+	z-index: 6;
 	pointer-events: none;
 	/* Visibility is attribute-driven (FloatingScrollbar): data-visible once
 	 * a container scrolls, data-idle ~1s after scrolling stops. Idle does
