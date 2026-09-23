@@ -1908,6 +1908,19 @@ ipcMain.handle("pet-activity", (_event, payload) => {
 		if (!petPendingApprovals.includes(id)) petPendingApprovals.push(id);
 		petSyncApprovalHotkeys();
 	}
+	// Eager-create the bubbles window the moment content FOR IT arrives.
+	// It is otherwise created only when its own renderer reports
+	// bubbles-set-visible — a chicken-and-egg deadlock: no payload ever
+	// reaches a window that doesn't exist, and the window never exists
+	// because its renderer (inside the window) is never asked to render.
+	// Observed live 2026-09-23: session cards pushed every second, zero
+	// bubbles window from boot. Creating here makes the did-finish-load
+	// replay + the forward below actually deliver.
+	const hasBubblesContent =
+		(Array.isArray(payload.sessions) && payload.sessions.length > 0) ||
+		!!payload.bubble?.text ||
+		!!payload.approval?.requestId;
+	if (hasBubblesContent && petVisible) createBubblesWindow();
 	if (petWindow && !petWindow.isDestroyed() && petVisible) {
 		petWindow.webContents.send("pet:activity", payload);
 	}

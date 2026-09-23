@@ -387,23 +387,30 @@ export function ChatSection(): ReactNode {
 						<div className="gui-settings-row-label">{t("typing effect")}</div>
 						<div className="gui-settings-row-desc">{t("typing effect description")}</div>
 					</div>
-					<Segmented
-						ariaLabel={t("typing effect")}
-						value={typingEffect}
-						options={TYPING_EFFECT_SEGMENTS}
-						onChange={v => {
-							tapFeedback();
-							setTypingEffect(v);
-							try {
-								localStorage.setItem("musepi-gui-chat-effect", v);
-							} catch {
-								// ignore
-							}
-							// No root-class swap here: the transcript applies the
-							// effect only to the block that is streaming right now,
-							// and this preview re-renders from `effect` below.
-						}}
-					/>
+					<div className="gui-settings-row-extra">
+						{/* Six equal-width segments outgrow any shared row with the
+						 * long description (labels clip at ~43px/item) — the extra
+						 * slot drops the control to its own full-width line, and
+						 * gui-seg--wide lifts the 260px cap so every label fits. */}
+						<Segmented
+							ariaLabel={t("typing effect")}
+							className="gui-seg--compact gui-seg--wide"
+							value={typingEffect}
+							options={TYPING_EFFECT_SEGMENTS}
+							onChange={v => {
+								tapFeedback();
+								setTypingEffect(v);
+								try {
+									localStorage.setItem("musepi-gui-chat-effect", v);
+								} catch {
+									// ignore
+								}
+								// No root-class swap here: the transcript applies the
+								// effect only to the block that is streaming right now,
+								// and this preview re-renders from `effect` below.
+							}}
+						/>
+					</div>
 				</div>
 				<div className="gui-chat-preview-inline">
 					<div className="gui-chat-preview-label">{t("output style preview")}</div>

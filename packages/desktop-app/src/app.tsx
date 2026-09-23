@@ -3399,8 +3399,12 @@ function AppInner(): ReactNode {
 			{settingsOpen && (
 				/* Full-window settings view replaces the workspace (ZCode),
 				 * with the same blur transition as the view swaps: leave =
-				 * blur-out (closing), enter = blur-in (opening). */
-				<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
+				 * blur-out (closing), enter = blur-in (opening). The host is
+				 * anchored over the whole gui-main area (gui-settings-host):
+				 * as a plain flex sibling of .gui-chat-col it split the row
+				 * 50/50, leaving a ~46px control column (clipped segmented
+				 * labels, squished selects, seg overflowing the hint text). */
+				<div className={`${leavingSettings ? "gui-view-leave" : "gui-view-enter"} gui-settings-host`}>
 					<SettingsView
 						rpc={rpc}
 						sessionId={store?.sessionId ?? null}

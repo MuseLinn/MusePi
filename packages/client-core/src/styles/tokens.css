@@ -919,6 +919,14 @@
 	font-size: 12px;
 }
 
+/* Wide variant: settings rows that dropped a many-segment control to its
+ * own full-width line (typing-effect picker). Lifts the 260px cap so six
+ * equal-width segments keep every label uncut (~69px/item at 420px). */
+.gui-seg--wide {
+	width: 100%;
+	max-width: 420px;
+}
+
 /* Icon-only layout (header theme switch): hug the icons, no stretch. */
 .gui-seg--icon {
 	width: auto;
