@@ -7,6 +7,22 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [0.4.37] - 2026-09-23
 
+### Added
+
+- **M1 轮渲染语义落地（ZCode 语义吸收）+ guest-client 归位 client-core**：会话消息渲染从消息级平铺改为轮级投影——与折叠/导航/轨迹同一 `isTurnStart` 口径，轮卡片承载用户请求、assistant 回复、工具调用与思考过程；guest-client（远程网页/安卓）渲染组件归位到共享的 `client-core`，与 desktop-app 同一套轮语义实现，不再各写一份。
+  - EN: M1 turn-rendering semantics landed (ZCode semantics absorbed): session rendering moved from a flat message list to a turn-level projection — same `isTurnStart` caliber as folding/navigation/trajectory, with turn cards carrying the user request, assistant reply, tool calls and thinking; the guest-client (remote web / Android) rendering moved into the shared `client-core`, one turn-semantic implementation for both desktop-app and guest-client instead of two.
+- **轮级会话地图（TurnMapCanvas）**：9985 条消息级事件投影为轮级画布——164 轮 = 164 张玻璃节点卡，主线是垂直时间轴（金色流动渐变连线），重答/分叉轮横向开列（金→紫渐变支线），顾问轮薄荷青徽章；单击展开轮内事件泳道，双击跳回对话定位该轮；左侧迷你导航条 = 全轮次剪影（视口映射 + 点击跳转）。消息级画布（SessionTreeCanvas）降级为调试入口。附带修复全量历史补全后地图/轨迹只见尾窗的问题（entries 身份切换时重新适配视野）。
+  - EN: turn-level session map (TurnMapCanvas): 9985 message-level events projected onto a turn canvas — 164 turns = 164 glass node cards, main line a vertical timeline (flowing gold gradient), retry/branch turns open new columns (gold→purple gradient side lanes), advisor turns in mint; single-click expands the turn's event lanes, double-click jumps back to the transcript at that turn; the left minimap strip shows the full-turn silhouette (viewport mapping + click-to-jump). The message-level canvas (SessionTreeCanvas) is demoted to a debug entry. Also fixed the map/trajectory showing only the trailing window after full-history backfill (viewport re-fits when the entries identity switches).
+
+### Changed
+
+- **输入框 kimicode 版式吸收 + 可编辑快捷键注册表面板**：输入框「+」弹层吸收 Kimi Code 设计（截屏 / 各功能说明 / 快捷键 chip 展示）；新增快捷键注册表面板（设置 → 快捷键，可视化编辑绑定）；修复画板形状弹窗两个实测问题（按钮只开不收、图案点击选不中）；长会话 keeper 常驻与轨迹口径收口。
+  - EN: the composer "+" popover absorbs the Kimi Code layout (screenshot / per-feature descriptions / shortcut chips); a new shortcut registry panel (Settings → Shortcuts) edits bindings visually; two live issues in the shape popover fixed (button only opened, never closed; patterns couldn't be selected by click); long-session keeper stays resident and the trajectory caliber is tightened.
+- **轨迹视图长会话优化**：事件数 > 400 的会话进入轨迹面板时全部轮次默认折叠（render 期播种一次，手动展开状态不被重置），mode 行新增「折叠全部 / 展开全部」；分支树渐进挂载（首帧 300 行，IntersectionObserver 哨兵每次追加 500）；时间线 ↔ 分支树切换走 useTransition + 不确定进度条；区间跳转 rAF + setTimeout 双保险（窗口被遮挡 rAF 停摆也能落定）；14 处裸值 border-radius 按 gui-design.md 阶梯收口为 token 变量。
+  - EN: trajectory-panel long-session optimization: sessions with >400 events enter with all turns folded (render-time one-shot seeding, manual expand state preserved) plus "fold all / expand all" in the mode row; the branch tree mounts progressively (300 rows first, IntersectionObserver sentinel appends 500 at a time); timeline↔tree switching uses useTransition with an indeterminate progress bar; range jumps get an rAF + setTimeout double safeguard (still lands when the window is occluded and rAF stalls); 14 raw border-radius values closed into the gui-design.md阶梯 token variables.
+- **轮级地图视口裁剪 + memo 节点卡**：只渲染可见世界矩形（外扩 260px）内的节点卡，展开轮高度参与命中计算；实机 164 轮会话聚焦态 DOM 卡从 164 降到 13，导航条 164 band 剪影不受影响；TmNodeCard memo 化 + 轮内统计 useMemo，挡住 hover 浮卡/搜索高亮的整树重渲染。
+  - EN: turn-map viewport culling + memoized node cards: only node cards inside the visible world rect (260px pad) render, with expanded-turn height in the hit test; on a live 164-turn session the focused-state DOM cards drop from 164 to 13 while the 164-band minimap silhouette is unaffected; TmNodeCard is memoized with per-turn stats useMemo, blocking whole-tree rerenders from hover cards / search highlights.
+
 ### Fixed
 
 - **桌宠消息气泡拆分为独立窗口**：2026-09-16 的单窗口合并让气泡在 pet 窗内绝对定位——栈体从窗口底边向上生长、无视工作区边界，屏幕右缘/顶缘直接被裁切，窗口还会压住主客户端。现在气泡回到自己的窗口（`bubbles.html`）：渲染端上报内容尺寸/占用状态/卡片命中区，主进程把窗口精确设为内容大小、底部钉在精灵头顶上方 20px、水平对角色角色中心，并做工作区钳制（多显示器按角色所在屏）；拖拽/停靠/吸附/显示变更全部跟随（`setPetBounds` 单一咽喉点）；空栈隐藏窗口，透明外边距环与卡片间隙保持点击穿透（与桌宠同一套 120ms 轮询）。
