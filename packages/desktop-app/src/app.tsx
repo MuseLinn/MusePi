@@ -3261,32 +3261,13 @@ function AppInner(): ReactNode {
 										onAskAnswer={answerAsk}
 									/>
 								);
-								const settingsView = (
-									<SettingsView
-										rpc={rpc}
-										sessionId={store?.sessionId ?? null}
-										providerEvent={providerEvent}
-										initialSection={settingsSection}
-										onBack={closeSettings}
-										cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
-										onOpenSession={sessionId => {
-											closeSettings();
-											void openSession(sessionId);
-										}}
-										onCreateChat={onPresetCreate}
-									/>
-								);
 								// Chat 常驻挂载:看板/任务/智能体/能力中心打开时 chat 仅
 								// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
 								// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
 								// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
 								// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
 								const chatKeeperHidden =
-									(settingsOpen && !leavingSettings) ||
-									boardOpen ||
-									scheduledOpen ||
-									agentsOpen ||
-									capabilityOpen;
+									settingsOpen || boardOpen || scheduledOpen || agentsOpen || capabilityOpen;
 								return (
 									<>
 										<div
@@ -3306,19 +3287,6 @@ function AppInner(): ReactNode {
 												{chatSurface}
 											</div>
 										</div>
-										{leavingSettings ? (
-											/* Leaving settings → chat: the settings surface stays
-											 * mounted for its blur-out, then the chat keeper
-											 * enters (same leave/enter contract as the board). */
-											<div className="gui-view-leave">{settingsView}</div>
-										) : settingsOpen ? (
-											/* Settings replaces the chat surface IN FLOW (same
-											 * pattern as board / agents / capability): the app
-											 * sidebar stays visible beside it, and the
-											 * translucent settings nav no longer paints over
-											 * the sidebar's session list (user: 半透明重叠). */
-											<div className="gui-view-enter">{settingsView}</div>
-										) : null}
 										{leavingView === "board" ? (
 											/* Leaving board → chat: the board surface stays
 											 * mounted for its blur-out, then chat enters. */
@@ -3427,6 +3395,43 @@ function AppInner(): ReactNode {
 								);
 							})()}
 						</div>
+						{/* Settings 覆盖整个聊天列(含 header):SettingsView 自带 48px
+						 * 拖拽条与圆角卡片, 与会话主界面同一壳层语言(zcode RootShell
+						 * isSettingsTabActive 同构); 应用侧栏在覆盖层之外保持可见,
+						 * 玻璃导航不再压住会话列表。 */}
+						{leavingSettings ? (
+							<div className="gui-view-leave gui-settings-host">
+								<SettingsView
+									rpc={rpc}
+									sessionId={store?.sessionId ?? null}
+									providerEvent={providerEvent}
+									initialSection={settingsSection}
+									onBack={closeSettings}
+									cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
+									onOpenSession={sessionId => {
+										closeSettings();
+										void openSession(sessionId);
+									}}
+									onCreateChat={onPresetCreate}
+								/>
+							</div>
+						) : settingsOpen ? (
+							<div className="gui-view-enter gui-settings-host">
+								<SettingsView
+									rpc={rpc}
+									sessionId={store?.sessionId ?? null}
+									providerEvent={providerEvent}
+									initialSection={settingsSection}
+									onBack={closeSettings}
+									cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
+									onOpenSession={sessionId => {
+										closeSettings();
+										void openSession(sessionId);
+									}}
+									onCreateChat={onPresetCreate}
+								/>
+							</div>
+						) : null}
 					</div>
 				</div>
 			</div>
