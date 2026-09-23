@@ -105,3 +105,28 @@ turns: TrajectoryTurnGroup[164]   // turn, events[], startMs, endMs, roundDurati
 3. 分支位置一眼可辨（支脉列 + 渐变色线）；
 4. 单击展开轮内明细、双击跳对话，与导航条/轨迹统计口径一致（164）；
 5. 液态玻璃视觉：玻璃卡片、金色流动主线、薄荷青顾问标记。
+
+---
+
+## 7. 轨迹视图长会话优化(2026-09-23 实施)
+
+针对 164 轮 / 3232 事件的长会话,轨迹面板(时间线 + 分支树)四项性能与交互改动:
+
+1. **时间线默认折叠**:事件数 > 400 的会话进入轨迹面板时全部轮次默认折叠
+   (render 期 derived-state 播种,按 entries 身份只算一次,手动展开状态不被重置);
+   mode 行新增「折叠全部 / 展开全部」按钮(`.traj-fold-all`,仅时间线且轮数 > 5 显示)。
+2. **分支树渐进挂载**:首帧只挂载 300 行,`.traj-tree-sentinel` 哨兵
+   (IntersectionObserver, root=listRef, rootMargin 600px) 进视口追加 500 行,
+   滚动实测 300 → 800 → … → 3300 平滑增长,切换树模式首帧从数秒降到即时。
+3. **模式切换进度反馈**:时间线 ↔ 分支树切换走 `useTransition`,
+   pending 期间显示 `.traj-switch-bar` 不确定进度细条;区间跳转到树模式未挂载行时
+   自动 `setTreeVisible(全量)` + rAF 重试(≤30 次)直到目标行提交。
+4. **跳转调度 rAF+setTimeout 双保险**(`afterPaint`):窗口被遮挡/最小化时
+   document.hidden 导致 rAF 暂停,纯 rAF 调度会让区间跳转永远不执行;
+   setTimeout(160ms) 兜底保证后台也完成(实机验证:隐藏窗下 scroll 6011 → 77275 落定)。
+
+另:全文件 14 处裸值 `border-radius`(7px/8px/10px/12px/1px 等)按
+gui-design.md 阶梯收口为 `--radius-xs/sm/md/lg/xl` 变量,radius token 检查归零。
+
+实机截图:`shots/traj-timeline-folded.png`(折叠态 + 展开全部按钮)、
+`shots/traj-tree-progressive.png`(分支树渐进挂载态)。

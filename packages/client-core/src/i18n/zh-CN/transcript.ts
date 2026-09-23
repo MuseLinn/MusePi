@@ -53,6 +53,8 @@ export const transcript = {
 	"turn map branch from": "自 Turn {turn} · 重答",
 	"turn map message level": "消息级画布",
 	"turn map loading history": "正在补全历史…",
+	"trajectory expand all": "展开全部",
+	"trajectory collapse all": "折叠全部",
 	"trajectory mode timeline": "时间线",
 	"trajectory mode tree": "分支树",
 	"trajectory expand branch": "展开分支",

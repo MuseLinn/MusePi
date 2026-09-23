@@ -115,8 +115,8 @@ describe("layoutTurnMap", () => {
 		const meta: TrajectoryTurnGroup = {
 			turn: 0,
 			events: [
-				{ id: "meta-1", kind: "custom", title: "model_change", turn: 0, tsMs: 10 },
-				{ id: "meta-2", kind: "custom", title: "session start", turn: 0, tsMs: 20 },
+				{ id: "meta-1", kind: "system", title: "model_change", turn: 0, tsMs: 10 },
+				{ id: "meta-2", kind: "system", title: "session start", turn: 0, tsMs: 20 },
 			],
 			startMs: 10,
 			endMs: 20,

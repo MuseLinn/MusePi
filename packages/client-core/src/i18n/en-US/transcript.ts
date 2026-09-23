@@ -56,6 +56,8 @@ export const transcript = {
 	"turn map branch from": "from Turn {turn} · re-answer",
 	"turn map message level": "Message canvas",
 	"turn map loading history": "Completing history…",
+	"trajectory expand all": "Expand all",
+	"trajectory collapse all": "Collapse all",
 	"trajectory mode timeline": "Timeline",
 	"trajectory mode tree": "Branches",
 	"trajectory expand branch": "Expand branch",

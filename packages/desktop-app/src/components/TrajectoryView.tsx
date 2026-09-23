@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
@@ -355,15 +355,27 @@ export function TrajectoryView({
 	}, [onEnsureFullHistory]);
 	// startTransition:时间线↔分支树互切是整列表 mount(超长会话上万行),
 	// 可中断渲染让切换即时响应,配合行级 content-visibility 跳过屏外布局。
+	// isPending 驱动顶部细进度条——切换立即有"正在响应"的反馈,不再像卡死。
+	const [modePending, startModeTransition] = useTransition();
 	const setMode = (next: "timeline" | "tree"): void => {
-		startTransition(() => setModeState(next));
+		startModeTransition(() => setModeState(next));
 	};
 	const { turns, stats } = useMemo(
 		() => buildTrajectoryTree(fullEntries ?? entries, roundDurations),
 		[fullEntries, entries, roundDurations],
 	);
-	// 折叠的 turn 集合(默认全部展开;点击行头折叠/展开)。
+	// 折叠的 turn 集合。长会话(事件数 > 阈值)默认全部折叠——时间线首帧
+	// 只挂轮头(164 个)而不是上万事件行,切进轨迹视图不再卡一整帧。
+	// 派生默认值用 render 期调整(React 官方 derived-state 模式):数据
+	// 身份变化(尾窗→全量)时重算一次;用户手动的展开/折叠不因此重置。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
+	const collapseKeyRef = useRef<unknown>(null);
+	const collapseEntries = fullEntries ?? entries;
+	if (collapseKeyRef.current !== collapseEntries) {
+		collapseKeyRef.current = collapseEntries;
+		const eventCount = turns.reduce((n, g) => n + g.events.length, 0);
+		if (eventCount > 400) setCollapsed(new Set(turns.map(g => g.turn)));
+	}
 	// 检视器选中记录(id;null = 未选中)。close 走 inspectorClosing 播退场,
 	// selectedId 只在动画结束(unmount 前的 finishClose)才清空——弹窗保持
 	// 挂载到 gui-menu-out 播完(DialogFrame/Pop 的 --closing 同款模式)。
@@ -401,6 +413,31 @@ export function TrajectoryView({
 		}
 		return rows;
 	}, [treeRoots, collapsedNodes]);
+	// 树模式渐进挂载:首帧只挂前 300 行,哨兵(600px 预取)进视口再追加
+	// 500——一万行的 DOM 构建不再全堵在切换那一帧。数据身份变化时复位。
+	const [treeVisible, setTreeVisible] = useState(300);
+	const treeRowsKeyRef = useRef<unknown>(null);
+	if (treeRowsKeyRef.current !== treeRows) {
+		treeRowsKeyRef.current = treeRows;
+		if (treeVisible !== 300) setTreeVisible(300);
+	}
+	const visibleTreeRows = treeRows.length > treeVisible ? treeRows.slice(0, treeVisible) : treeRows;
+	const treeHasMore = treeRows.length > treeVisible;
+	const treeSentinelRef = useRef<HTMLDivElement | null>(null);
+	useEffect(() => {
+		if (!treeHasMore) return;
+		const el = treeSentinelRef.current;
+		const scroller = listRef.current;
+		if (!el || !scroller) return;
+		const io = new IntersectionObserver(
+			entries => {
+				if (entries.some(e => e.isIntersecting)) setTreeVisible(v => v + 500);
+			},
+			{ root: scroller, rootMargin: "600px" },
+		);
+		io.observe(el);
+		return () => io.disconnect();
+	}, [treeHasMore, mode, treeVisible]);
 	// 分支列布局(垂直生长,不右延):第一子继承父列,其余子开新列;
 	// 每列 = 一个 flex column,节点按序垂直堆叠。列首显示分支来源摘要。
 	const treeLanes = useMemo(() => {
@@ -514,6 +551,18 @@ export function TrajectoryView({
 
 	// Overview 区间拖拽提交后:自动定位到第一个落在区间内的 turn——展开折叠
 	// 的 target(否则 in-range 事件不可见),平滑滚动到其行头并脉冲高亮一次。
+	// 调度用 rAF+setTimeout 双保险:窗口被遮挡/最小化时 rAF 暂停(页面 hidden),
+	// 纯 rAF 调度会让跳转永远不执行,setTimeout 兜底保证功能在后台也完成。
+	const afterPaint = (fn: () => void): void => {
+		let done = false;
+		const run = (): void => {
+			if (done) return;
+			done = true;
+			fn();
+		};
+		requestAnimationFrame(() => requestAnimationFrame(run));
+		setTimeout(run, 160);
+	};
 	useEffect(() => {
 		if (!range) return;
 		let firstTurn: number | null = null;
@@ -550,13 +599,14 @@ export function TrajectoryView({
 				TURN_JUMP_INSET;
 			scroller.scrollTo({ top: Math.max(0, offset), behavior: "smooth" });
 		};
-		const scrollToTarget = (): void => {
+		const scrollToTarget = (attempts = 0): void => {
 			const scroller = listRef.current;
 			if (!scroller) return;
 			if (mode === "tree") {
 				// 树模式行 = entry 节点(带 data-trajectory-entry;顾问 custom
 				// 条目不进消息树,回退到该轮首个树内事件——两者都折叠时该轮
-				// 无挂载行,继续向后找)。
+				// 无挂载行,继续向后找)。渐进挂载下目标行可能还没挂:补全
+				// 行数后经 rAF 重试,直到行提交(万行 mount 可能超过两帧)。
 				for (const group of turns) {
 					if (!group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs))) continue;
 					for (const ev of group.events) {
@@ -570,12 +620,16 @@ export function TrajectoryView({
 						}
 					}
 				}
+				if (treeRows.length > treeVisible && attempts < 30) {
+					setTreeVisible(treeRows.length);
+					afterPaint(() => scrollToTarget(attempts + 1));
+				}
 				return;
 			}
 			const row = scroller.querySelector<HTMLElement>(`[data-trajectory-turn="${target}"]`);
 			if (row) scrollToRow(row);
 		};
-		requestAnimationFrame(() => requestAnimationFrame(scrollToTarget));
+		afterPaint(() => scrollToTarget());
 	}, [range, turns, mode]);
 
 	const toggleTurn = (turn: number): void => {
@@ -613,7 +667,20 @@ export function TrajectoryView({
 						{t("trajectory mode tree")}
 					</button>
 				</div>
+				{/* 长会话默认全折叠后的一键展开/折叠。 */}
+				{mode === "timeline" && turns.length > 5 && (
+					<button
+						type="button"
+						className="traj-fold-all"
+						onClick={() => setCollapsed(collapsed.size > 0 ? new Set() : new Set(turns.map(g => g.turn)))}
+					>
+						<Icon name={collapsed.size > 0 ? "arrow-down-s" : "arrow-up-double"} className="h-3 w-3" />
+						{collapsed.size > 0 ? t("trajectory expand all") : t("trajectory collapse all")}
+					</button>
+				)}
 			</div>
+			{/* 视图切换中:startTransition 提交前显示不确定进度细条。 */}
+			{modePending && <div className="traj-switch-bar" aria-hidden />}
 			{/* 顶部统计(DSH Trajectory 同款):Duration / Turns / Calls / Model */}
 			<div className="grid grid-cols-2 gap-1.5 px-2.5 pb-2 pt-2">
 				<div className="gui-ctx-stat">
@@ -698,7 +765,7 @@ export function TrajectoryView({
 						</p>
 					) : (
 						<div className="flex flex-col">
-							{treeRows.map(row => (
+							{visibleTreeRows.map(row => (
 								<TreeNodeRow
 									key={row.node.id}
 									node={row.node}
@@ -720,6 +787,8 @@ export function TrajectoryView({
 									onForkAt={onForkAt}
 								/>
 							))}
+							{/* 渐进挂载哨兵:进入视口(预取 600px)自动追加 500 行。 */}
+							{treeHasMore && <div ref={treeSentinelRef} className="traj-tree-sentinel" />}
 						</div>
 					)
 				) : turns.length === 0 ? (
