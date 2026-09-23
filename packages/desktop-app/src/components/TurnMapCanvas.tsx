@@ -1,11 +1,18 @@
 import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import { buildTrajectoryTree, type RoundDurationMap, type TrajectoryEvent } from "./trajectory-data";
-import { layoutTurnMap, TURN_LANE_GAP, TURN_NODE_H, TURN_NODE_W, type TurnMapNode } from "./turn-map-layout";
+import {
+	layoutTurnMap,
+	TURN_LANE_GAP,
+	TURN_NODE_H,
+	TURN_NODE_W,
+	type TurnMapNode,
+	visibleTurnMapNodes,
+} from "./turn-map-layout";
 
 /**
  * 轮级会话地图(0.5.0-map-redesign 设计稿实现):投影单位 = 轮(与折叠/
@@ -54,6 +61,100 @@ function turnStatsOf(group: TurnMapNode["group"]): { replies: number; tools: num
 function jumpEventOf(group: TurnMapNode["group"]): TrajectoryEvent | undefined {
 	return group.events.find(e => e.entryId !== undefined);
 }
+
+/** 节点卡(memo):视口裁剪 + 卡级 memo 双重挡重渲染——hover 浮卡、拖拽、
+ * 搜索高亮等父级状态变化不再让 164 张卡全部重渲;卡内摘要/构成/统计
+ * 按 group 引用 memo(布局只在 turns/expanded 变化时重建)。 */
+const TmNodeCard = memo(function TmNodeCard({
+	n,
+	isLeaf,
+	isCurrent,
+	isExpanded,
+	searchDim,
+	searchHit,
+	onToggle,
+	onJump,
+	onMenu,
+	onHover,
+}: {
+	n: TurnMapNode;
+	isLeaf: boolean;
+	isCurrent: boolean;
+	isExpanded: boolean;
+	searchDim: boolean;
+	searchHit: boolean;
+	onToggle(turn: number): void;
+	onJump(node: TurnMapNode): void;
+	onMenu(node: TurnMapNode, x: number, y: number): void;
+	onHover(node: TurnMapNode | null): void;
+}): ReactNode {
+	const summary = useMemo(() => turnSummaryOf(n.group), [n.group]);
+	const statsRow = useMemo(() => turnStatsOf(n.group), [n.group]);
+	const comp = useMemo(() => compositionOf(n.group), [n.group]);
+	return (
+		<div
+			className={`tm-node${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
+			style={{ left: n.x, top: n.y, width: TURN_NODE_W, minHeight: TURN_NODE_H }}
+			onClick={() => onToggle(n.group.turn)}
+			onDoubleClick={() => onJump(n)}
+			onContextMenu={e => {
+				e.preventDefault();
+				e.stopPropagation();
+				onMenu(n, e.clientX, e.clientY);
+			}}
+			onMouseEnter={() => onHover(n)}
+			onMouseLeave={() => onHover(null)}
+		>
+			<div className="tm-node-head">
+				<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
+					{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
+					{n.advisor && (
+						<em className="tm-turn-advisor">
+							<Icon name="sparkling" className="h-2.5 w-2.5" />
+							{t("advisor")}
+						</em>
+					)}
+				</span>
+				{statsRow.durationMs !== undefined && (
+					<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
+				)}
+			</div>
+			<div className="tm-node-summary" title={summary}>
+				{summary || `${n.group.events.length} events`}
+			</div>
+			{/* 构成条:轮内事件 kind 四色分段(脉络感的主要来源)。 */}
+			<div className="tm-comp" aria-hidden>
+				{comp.map((seg, i) => (
+					<span
+						key={`${seg.kind}-${i}`}
+						className={`tm-comp-seg tm-comp--${seg.kind}`}
+						style={{ width: `${(seg.count / n.group.events.length) * 100}%` }}
+					/>
+				))}
+			</div>
+			<div className="tm-node-stats">
+				{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
+				{tLoose("turn map tools", { count: statsRow.tools })}
+			</div>
+			{/* 轮内泳道(单击展开):该轮事件行,与轨迹检视器同 i18n/颜色。 */}
+			{isExpanded && (
+				<div className="tm-lane" onWheel={e => e.stopPropagation()}>
+					{n.group.events.map(ev => (
+						<div key={ev.id} className={`tm-lane-row tm-lane-row--${ev.kind}`}>
+							<span className="tm-lane-dot" />
+							<span className="tm-lane-title">{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}</span>
+							{ev.tsMs !== undefined && (
+								<span className="tm-lane-time">
+									{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+								</span>
+							)}
+						</div>
+					))}
+				</div>
+			)}
+		</div>
+	);
+});
 
 export function TurnMapCanvas({
 	entries,
@@ -156,16 +257,37 @@ export function TurnMapCanvas({
 		const scale = Math.min(1, Math.max(MIN_FIT_SCALE, widthFit));
 		setView({ scale, x: cw / 2 - fx * scale, y: ch / 2 - fy * scale });
 	}, [width, height, nodes, currentTurn, main]);
+	// 容器尺寸(state 化):视口裁剪与 fit 几何都依赖它,放 state 里保证
+	// 变化触发重算(RO 回调里同步 set,首帧 0 → mount 后即刻修正)。
+	const [wrapSize, setWrapSize] = useState({ w: 0, h: 0 });
 	useEffect(() => {
 		const wrap = wrapRef.current;
 		if (!wrap) return;
 		const ro = new ResizeObserver(() => {
+			setWrapSize({ w: wrap.clientWidth, h: wrap.clientHeight });
 			if (needsFitRef.current) fitView();
 		});
 		ro.observe(wrap);
 		if (needsFitRef.current) fitView();
 		return () => ro.disconnect();
 	}, [fitView]);
+
+	// 视口裁剪:只渲染可见世界矩形内的节点卡(画布版「渐进挂载」)。
+	// 164 轮全量卡 ≈ 1600+ DOM;裁剪后视口内通常只有十几张。view 每帧
+	// 变化(pan/zoom)都重算一次,O(n) filter 可忽略;memo 节点卡挡住
+	// hover 浮卡等状态变化的整树重渲染。
+	const visibleNodes = useMemo(() => {
+		const { w, h } = wrapSize;
+		if (w === 0 || h === 0) return nodes;
+		const vp = {
+			left: -view.x / view.scale,
+			top: -view.y / view.scale,
+			right: (w - view.x) / view.scale,
+			bottom: (h - view.y) / view.scale,
+		};
+		return visibleTurnMapNodes(nodes, vp);
+	}, [nodes, view, wrapSize]);
+	const visibleTurns = useMemo(() => new Set(visibleNodes.map(n => n.group.turn)), [visibleNodes]);
 	// 全量历史补全落地(entries 身份切换:尾窗 → 全量):数据规模可能从
 	// 几轮跳到上百轮,旧视野(适配小树的 scale/offset)不再成立——重新
 	// 适配,让当前轮居中出现在可读缩放下。
@@ -276,6 +398,10 @@ export function TurnMapCanvas({
 		},
 		[onJumpToEntry],
 	);
+	// 节点右键菜单(stable,供 memo 卡引用)。
+	const openNodeMenu = useCallback((node: TurnMapNode, x: number, y: number) => {
+		setCtxMenu({ x, y, node });
+	}, []);
 
 	// 右键菜单:节点 = 跳转/重答/分叉;空白 = 适配视图。
 	const ctxItems = useMemo<ContextMenuItem[]>(() => {
@@ -483,91 +609,32 @@ export function TurnMapCanvas({
 								);
 							})}
 						</svg>
-						{layout.lanes.map(lane => (
-							<div
-								key={`lane-${lane.lane}`}
-								className="tm-lane-head"
-								style={{ left: lane.first.x, top: Math.max(0, lane.first.y - 22) }}
-							>
-								{tLoose("turn map branch from", { turn: lane.sourceTurn })}
-							</div>
-						))}
-						{nodes.map(n => {
-							const summary = turnSummaryOf(n.group);
-							const statsRow = turnStatsOf(n.group);
-							const comp = compositionOf(n.group);
-							const isLeaf = leafTurn === n.group.turn;
-							const isCurrent = currentTurn === n.group.turn;
-							const isExpanded = expanded.has(n.group.turn);
-							const searchDim = hasSearch && searchMatchTurns !== null && !searchMatchTurns.has(n.group.turn);
-							const searchHit = hasSearch && searchMatchTurns?.has(n.group.turn);
-							return (
+						{layout.lanes
+							.filter(lane => visibleTurns.has(lane.first.group.turn))
+							.map(lane => (
 								<div
-									key={n.group.turn}
-									className={`tm-node${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
-									style={{ left: n.x, top: n.y, width: TURN_NODE_W, minHeight: TURN_NODE_H }}
-									onClick={() => handleClick(n.group.turn)}
-									onDoubleClick={() => handleDblClick(n)}
-									onContextMenu={e => {
-										e.preventDefault();
-										e.stopPropagation();
-										setCtxMenu({ x: e.clientX, y: e.clientY, node: n });
-									}}
-									onMouseEnter={() => setHoverNode(n)}
-									onMouseLeave={() => setHoverNode(cur => (cur === n ? null : cur))}
+									key={`lane-${lane.lane}`}
+									className="tm-lane-head"
+									style={{ left: lane.first.x, top: Math.max(0, lane.first.y - 22) }}
 								>
-									<div className="tm-node-head">
-										<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-											{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
-											{n.advisor && (
-												<em className="tm-turn-advisor">
-													<Icon name="sparkling" className="h-2.5 w-2.5" />
-													{t("advisor")}
-												</em>
-											)}
-										</span>
-										{statsRow.durationMs !== undefined && (
-											<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
-										)}
-									</div>
-									<div className="tm-node-summary" title={summary}>
-										{summary || `${n.group.events.length} events`}
-									</div>
-									{/* 构成条:轮内事件 kind 四色分段(脉络感的主要来源)。 */}
-									<div className="tm-comp" aria-hidden>
-										{comp.map((seg, i) => (
-											<span
-												key={`${seg.kind}-${i}`}
-												className={`tm-comp-seg tm-comp--${seg.kind}`}
-												style={{ width: `${(seg.count / n.group.events.length) * 100}%` }}
-											/>
-										))}
-									</div>
-									<div className="tm-node-stats">
-										{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
-										{tLoose("turn map tools", { count: statsRow.tools })}
-									</div>
-									{/* 轮内泳道(单击展开):该轮事件行,与轨迹检视器同 i18n/颜色。 */}
-									{isExpanded && (
-										<div className="tm-lane" onWheel={e => e.stopPropagation()}>
-											{n.group.events.map(ev => (
-												<div key={ev.id} className={`tm-lane-row tm-lane-row--${ev.kind}`}>
-													<span className="tm-lane-dot" />
-													<span className="tm-lane-title">
-														{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}
-													</span>
-													{ev.tsMs !== undefined && (
-														<span className="tm-lane-time">
-															{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
-														</span>
-													)}
-												</div>
-											))}
-										</div>
-									)}
+									{tLoose("turn map branch from", { turn: lane.sourceTurn })}
 								</div>
-							);
-						})}
+							))}
+						{visibleNodes.map(n => (
+							<TmNodeCard
+								key={n.group.turn}
+								n={n}
+								isLeaf={leafTurn === n.group.turn}
+								isCurrent={currentTurn === n.group.turn}
+								isExpanded={expanded.has(n.group.turn)}
+								searchDim={hasSearch && searchMatchTurns !== null && !searchMatchTurns.has(n.group.turn)}
+								searchHit={hasSearch && (searchMatchTurns?.has(n.group.turn) ?? false)}
+								onToggle={handleClick}
+								onJump={handleDblClick}
+								onMenu={openNodeMenu}
+								onHover={setHoverNode}
+							/>
+						))}
 					</div>
 				</>
 			)}

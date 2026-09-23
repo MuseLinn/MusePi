@@ -142,3 +142,27 @@ export function layoutTurnMap(
 	const height = Math.max(mainY, ...nodes.map(n => n.y + TURN_NODE_H + n.expandedExtra + TURN_GAP_Y), TURN_NODE_H * 2);
 	return { nodes, edges, main, lanes, width, height };
 }
+
+/** 视口裁剪矩形(世界坐标)。 */
+export interface TurnMapViewport {
+	left: number;
+	top: number;
+	right: number;
+	bottom: number;
+}
+
+/**
+ * 视口裁剪:只保留与可见世界矩形相交(外扩 pad)的节点——画布版的
+ * 「渐进挂载」。164 轮全量节点卡 ≈ 1600+ DOM,而任何时刻视口内只有
+ * 十几张;filter O(n) 每帧一次可忽略。展开轮高度含 expandedExtra。
+ * 纯逻辑,组件与测试共用。
+ */
+export function visibleTurnMapNodes(nodes: readonly TurnMapNode[], vp: TurnMapViewport, pad = 260): TurnMapNode[] {
+	return nodes.filter(
+		n =>
+			n.x + TURN_NODE_W >= vp.left - pad &&
+			n.x <= vp.right + pad &&
+			n.y + TURN_NODE_H + n.expandedExtra >= vp.top - pad &&
+			n.y <= vp.bottom + pad,
+	);
+}

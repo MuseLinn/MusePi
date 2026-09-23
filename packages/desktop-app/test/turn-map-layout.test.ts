@@ -127,3 +127,56 @@ describe("layoutTurnMap", () => {
 		expect(layout.edges.length).toBe(1);
 	});
 });
+
+describe("visibleTurnMapNodes", () => {
+	it("只保留视口内(含 pad)的节点,视口外剔除", async () => {
+		const { visibleTurnMapNodes } = await import("../src/components/turn-map-layout");
+		const turns = Array.from({ length: 20 }, (_, i) => turnGroup(i + 1));
+		const layout = layoutTurnMap(turns);
+		// 视口只覆盖 y ∈ [500, 1000](世界坐标,pad=0):应命中 y 落区间的节点。
+		const vp = { left: -100, top: 500, right: 400, bottom: 1000 };
+		const vis = visibleTurnMapNodes(layout.nodes, vp, 0);
+		expect(vis.length).toBeGreaterThan(0);
+		expect(vis.length).toBeLessThan(layout.nodes.length);
+		for (const n of vis) {
+			expect(n.y + TURN_NODE_H).toBeGreaterThanOrEqual(500);
+			expect(n.y).toBeLessThanOrEqual(1000);
+		}
+		// 其余节点确实在视口外。
+		const visTurns = new Set(vis.map(n => n.group.turn));
+		for (const n of layout.nodes) {
+			if (visTurns.has(n.group.turn)) continue;
+			expect(n.y > 1000 || n.y + TURN_NODE_H < 500).toBe(true);
+		}
+	});
+
+	it("pad 外扩召回边缘节点;全图视口 = 全量", async () => {
+		const { visibleTurnMapNodes } = await import("../src/components/turn-map-layout");
+		const turns = Array.from({ length: 10 }, (_, i) => turnGroup(i + 1));
+		const layout = layoutTurnMap(turns);
+		const first = layout.nodes[0]!;
+		// 视口紧贴第一个节点下方 100px:pad 260 应把它召回。
+		const vp = { left: 0, top: first.y + TURN_NODE_H + 100, right: TURN_NODE_W, bottom: first.y + TURN_NODE_H + 200 };
+		const vis = visibleTurnMapNodes(layout.nodes, vp);
+		expect(vis.some(n => n.group.turn === first.group.turn)).toBe(true);
+		// 覆盖全图的视口 = 全量返回。
+		const all = visibleTurnMapNodes(layout.nodes, { left: 0, top: 0, right: layout.width, bottom: layout.height }, 0);
+		expect(all.length).toBe(layout.nodes.length);
+	});
+
+	it("展开节点的增量高度参与命中判定", async () => {
+		const { visibleTurnMapNodes } = await import("../src/components/turn-map-layout");
+		const turns = [turnGroup(1, { events: 30 }), turnGroup(2), turnGroup(3)];
+		const layout = layoutTurnMap(turns, new Set([1]));
+		const expanded = layout.nodes[0]!;
+		expect(expanded.expandedExtra).toBe(30 * 24 + 16);
+		// 视口下缘落在卡基础高之下、展开增量之内:必须仍命中。
+		const yInside = expanded.y + TURN_NODE_H + 100;
+		const vis = visibleTurnMapNodes(
+			layout.nodes,
+			{ left: 0, top: yInside, right: TURN_NODE_W, bottom: yInside + 50 },
+			0,
+		);
+		expect(vis.some(n => n.group.turn === 1)).toBe(true);
+	});
+});

@@ -130,3 +130,24 @@ gui-design.md 阶梯收口为 `--radius-xs/sm/md/lg/xl` 变量,radius token 检�
 
 实机截图:`shots/traj-timeline-folded.png`(折叠态 + 展开全部按钮)、
 `shots/traj-tree-progressive.png`(分支树渐进挂载态)。
+
+## 8. 地图视口裁剪(2026-09-23 实施)
+
+与轨迹面板同款的「只渲染看得见的」策略应用到轮级地图画布(TurnMapCanvas):
+
+1. **纯函数裁剪**(`turn-map-layout.ts` → `visibleTurnMapNodes`):按世界坐标
+   视口矩形(外扩 260px)过滤节点,展开轮高度含 `expandedExtra`;O(n) filter
+   每帧一次可忽略。容器尺寸放 state(ResizeObserver 同步 set),首帧 0 时
+   fallback 全量,避免第一屏空白。
+2. **memo 节点卡**:`TmNodeCard = memo(...)`,轮内 summary/composition/stats
+   按节点 useMemo;父级回调稳定化,挡住 hover 浮卡/搜索高亮等状态变化的
+   整树重渲染。
+3. **实机验证**(164 轮 / 3232 事件会话):聚焦当前轮(大树模式)时
+   `.tm-node` 从 164 降到 **13**;导航条 164 band 剪影不受影响(独立于裁剪)。
+   折叠展开态:Turn 1 展开(70 事件,+5px 级增量)时视口内仅其自身——
+   展开高度参与命中计算,邻轮被正确挤到视口外;折叠后同视口恢复 7 张卡。
+
+已知行为特性(有意为之):对视口外节点执行展开(如程序化点击)只改状态、
+卡不渲染——真实用户只点得到可见卡,无影响。
+
+实机截图:`shots/turn-map-culled.png`(折叠态视口裁剪,164 → 7 卡)。
