@@ -2406,19 +2406,6 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	min-height: 0;
 }
 
-/* Settings full-window host: the settings view is a sibling of
- * .gui-chat-col inside the gui-main flex row — as a plain flex item it
- * split the row 50/50, and the field grid's control column collapsed to
- * ~46px (segmented labels clipped, selects squished, segs overflowing
- * the hint column). Anchor the host over the whole main area instead so
- * the view's --gui-settings-content-max (840px+) geometry is honoured.
- * Sits above the chat/sidebar chrome but below popups (z 60+) so select
- * dropdowns and menus opened from settings still escape. */
-.gui-settings-host {
-	position: absolute;
-	inset: 0;
-	z-index: 20;
-}
 .gui-tool-btn--running {
 	animation: gui-spin 900ms linear infinite;
 }
