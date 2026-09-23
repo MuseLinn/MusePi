@@ -59,8 +59,16 @@ import { StatusCards } from "./StatusCards";
 import { SessionStatusBar } from "./statusbar-info";
 import { TerminalPanel } from "./TerminalPanel";
 import type { ThinkingLevel } from "./ThinkingSelector";
+import { TurnMapCanvas } from "./TurnMapCanvas";
 import { TurnRail } from "./TurnRail";
 import { WelcomeComposer } from "./WelcomeComposer";
+
+/** session.history 分页响应(ensureFullHistory 全量补全的循环形态)。 */
+interface HistoryPage {
+	entries: SessionEntry[];
+	hasMore: boolean;
+	remaining: number;
+}
 
 /** "mm:ss" hold time for the pause banner; re-rendered by a 1s tick. */
 function formatPauseElapsed(pausedAt: number): string {
@@ -693,6 +701,10 @@ export function ChatView({
 	const setViewMode = useCallback((mode: "chat" | "canvas") => {
 		startTransition(() => setViewModeState(mode));
 	}, []);
+	// 地图的两种投影:轮级(默认,0.5.0-map-redesign 设计稿——节点 = 轮,
+	// 164 轮 = 164 张卡)与消息级(SessionTreeCanvas,9985 张消息卡,降级
+	// 为调试分支结构的入口:Shift+点「地图」tab 或轮级地图顶栏按钮进入)。
+	const [mapDetail, setMapDetail] = useState<"turn" | "message">("turn");
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
@@ -1321,7 +1333,77 @@ export function ChatView({
 	const onLoadOlderStable = useCallback((): void => {
 		void loadOlder();
 	}, [loadOlder]);
-	// M1.11: data-driven TurnRail source — one lightweight record per turn
+	// Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
+	// 轨迹统计): the daemon tails only 200 entries and pages older chunks on
+	// scroll, so snap.entries covers just the loaded window — the turn map
+	// silently collapsed a 164-turn session to ~4 turns (verified live on
+	// 01a06854, 9988 entries). These surfaces visualize the WHOLE session, so
+	// on first open we loop session.history (cursor = oldest accumulated id,
+	// 1000/call, loopback) into a LOCAL array — deliberately NOT via
+	// store.prependEntries, which would disturb the transcript's render
+	// window and fold state. Jumps still work: requestJump pages the target
+	// region in through the normal transcript path.
+	const [fullEntries, setFullEntries] = useState<SessionEntry[] | null>(null);
+	const [fullLoading, setFullLoading] = useState(false);
+	const fullSessionKeyRef = useRef<string | null>(null);
+	const fullLoadingRef = useRef(false);
+	const fullTokenRef = useRef(0);
+	const ensureFullHistory = useCallback(async (): Promise<void> => {
+		if (!rpc || !store || !store.sessionId) return;
+		if (fullSessionKeyRef.current === store.sessionId) return;
+		if (fullLoadingRef.current) return;
+		const token = ++fullTokenRef.current;
+		fullLoadingRef.current = true;
+		fullSessionKeyRef.current = store.sessionId;
+		setFullLoading(true);
+		try {
+			let acc: SessionEntry[] = [...((snap?.entries ?? []) as SessionEntry[])];
+			let beforeId: string | undefined = acc[0]?.id;
+			// 60 × 1000 = 60k entries cap: far beyond any realistic session;
+			// beyond that the overview falls back to the loaded window.
+			for (let guard = 0; guard < 60; guard++) {
+				const res: HistoryPage = await rpc.request<HistoryPage>("session.history", {
+					sessionId: store.sessionId,
+					beforeId,
+					maxMessages: 1000,
+				});
+				if (token !== fullTokenRef.current) return;
+				if (!res?.entries?.length) break;
+				acc = [...res.entries, ...acc];
+				const olderId: string | undefined = res.entries[0]?.id;
+				if (olderId !== undefined) beforeId = olderId;
+				if (!res.hasMore || res.remaining <= 0) break;
+			}
+			if (token === fullTokenRef.current) setFullEntries(acc);
+		} catch {
+			// daemon rejected / transport hiccup — keep the loaded window
+			if (token === fullTokenRef.current) setFullEntries(null);
+		} finally {
+			if (token === fullTokenRef.current) setFullLoading(false);
+			fullLoadingRef.current = false;
+		}
+	}, [rpc, store, snap?.entries]);
+	// Session switch: drop the previous session's full copy before the new
+	// overview can accidentally read stale turns.
+	useEffect(() => {
+		fullTokenRef.current++;
+		fullLoadingRef.current = false;
+		fullSessionKeyRef.current = null;
+		setFullEntries(null);
+		setFullLoading(false);
+	}, [store?.sessionId]);
+	// Canvas (turn/message map) entry: backfill full history in the
+	// background; the map renders the loaded window immediately and swaps to
+	// the full set when the loop lands.
+	useEffect(() => {
+		if (viewMode === "canvas") void ensureFullHistory();
+	}, [viewMode, ensureFullHistory]);
+	// Entries fed to the overview surfaces: full copy when available, else
+	// the loaded tail window.
+	const overviewEntries = useMemo(
+		() => fullEntries ?? ((snap?.entries ?? []) as SessionEntry[]),
+		[fullEntries, snap?.entries],
+	); // M1.11: data-driven TurnRail source — one lightweight record per turn
 	// (~120B). The rail no longer measures turn positions from the DOM: rows
 	// outside the transcript's render window don't exist to measure, which is
 	// what made the rail drop turns on long sessions.
@@ -1739,7 +1821,12 @@ export function ChatView({
 													role="tab"
 													aria-selected={viewMode === "canvas"}
 													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={() => setViewMode("canvas")}
+													onClick={e => {
+														// Shift+点 = 消息级画布(调试分支结构);
+														// 普通点 = 轮级地图(默认投影)。
+														setMapDetail(e.shiftKey ? "message" : "turn");
+														setViewMode("canvas");
+													}}
 												>
 													<Icon name="apps-2-ai" className="h-3 w-3" />
 													{t("surface canvas")}
@@ -1780,53 +1867,99 @@ export function ChatView({
 												</div>
 											)}
 											{viewMode === "canvas" ? (
-												<SessionTreeCanvas
-													entries={snap?.entries ?? []}
-													leafId={effectiveLeaf}
-													focusRequest={canvasFocus}
-													activePathIds={trustedPathIds}
-													onJump={id => {
-														const ts = (snap?.entries ?? []).find(
-															e =>
-																typeof e === "object" &&
-																e !== null &&
-																(e as { id?: unknown }).id === id,
-														);
-														const t2 =
-															typeof ts === "object" && ts !== null
-																? (ts as { timestamp?: unknown }).timestamp
-																: null;
-														if (typeof t2 === "string") {
+												mapDetail === "turn" ? (
+													<TurnMapCanvas
+														entries={overviewEntries}
+														loading={fullLoading && fullEntries === null}
+														roundDurations={snap?.roundDurations}
+														leafId={effectiveLeaf}
+														activePathIds={trustedPathIds}
+														onJumpToEntry={entryId => {
+															// 双击/右键跳转:回对话模式 + 定位该轮
+															// (与 SessionTreeCanvas 的 onJump 同路径)。
+															const ts = overviewEntries.find(
+																e =>
+																	typeof e === "object" &&
+																	e !== null &&
+																	(e as { id?: unknown }).id === entryId,
+															);
+															const t2 =
+																typeof ts === "object" && ts !== null
+																	? (ts as { timestamp?: unknown }).timestamp
+																	: null;
+															if (typeof t2 === "string") {
+																setViewMode("chat");
+																requestJump(t2);
+															}
+														}}
+														onBranchTo={id => {
+															// Pin the node itself: branchAt answers a USER
+															// message at its parent (see SessionTreeCanvas).
+															void branchTo(id, id).then(res => {
+																if (res?.editorText) setPendingEdit(res.editorText);
+															});
+														}}
+														onForkAt={id => {
+															const entry = overviewEntries.find(
+																e =>
+																	typeof e === "object" &&
+																	e !== null &&
+																	(e as { id?: unknown }).id === id,
+															);
+															const isUser = entry?.type === "message" && entry.message.role === "user";
+															void forkFromMessage(id, undefined, !isUser);
+														}}
+														onOpenMessageMap={() => setMapDetail("message")}
+													/>
+												) : (
+													<SessionTreeCanvas
+														entries={overviewEntries}
+														leafId={effectiveLeaf}
+														focusRequest={canvasFocus}
+														activePathIds={trustedPathIds}
+														onJump={id => {
+															const ts = overviewEntries.find(
+																e =>
+																	typeof e === "object" &&
+																	e !== null &&
+																	(e as { id?: unknown }).id === id,
+															);
+															const t2 =
+																typeof ts === "object" && ts !== null
+																	? (ts as { timestamp?: unknown }).timestamp
+																	: null;
+															if (typeof t2 === "string") {
+																setViewMode("chat");
+																// 双击跳转 + 短暂高亮(1.2s flash)。
+																requestJump(t2);
+															}
+														}}
+														onSwitch={id => {
+															// 双击/右键"轨迹跳转"切换会话节点:对齐 /tree 的
+															// navigateTree 语义(移动 leaf + 滚动 + 草稿回填)。
 															setViewMode("chat");
-															// 双击跳转 + 短暂高亮(1.2s flash)。
-															requestJump(t2);
-														}
-													}}
-													onSwitch={id => {
-														// 双击/右键"轨迹跳转"切换会话节点:对齐 /tree 的
-														// navigateTree 语义(移动 leaf + 滚动 + 草稿回填)。
-														setViewMode("chat");
-														switchToNode(id);
-													}}
-													onBranchTo={id => {
-														// Pin the node itself: branchAt answers a USER
-														// message at its parent, which would drop this
-														// node off the active path.
-														void branchTo(id, id).then(res => {
-															if (res?.editorText) setPendingEdit(res.editorText);
-														});
-													}}
-													onForkAt={id => {
-														const entry = (snap?.entries ?? []).find(
-															e =>
-																typeof e === "object" &&
-																e !== null &&
-																(e as { id?: unknown }).id === id,
-														);
-														const isUser = entry?.type === "message" && entry.message.role === "user";
-														void forkFromMessage(id, undefined, !isUser);
-													}}
-												/>
+															switchToNode(id);
+														}}
+														onBranchTo={id => {
+															// Pin the node itself: branchAt answers a USER
+															// message at its parent, which would drop this
+															// node off the active path.
+															void branchTo(id, id).then(res => {
+																if (res?.editorText) setPendingEdit(res.editorText);
+															});
+														}}
+														onForkAt={id => {
+															const entry = overviewEntries.find(
+																e =>
+																	typeof e === "object" &&
+																	e !== null &&
+																	(e as { id?: unknown }).id === id,
+															);
+															const isUser = entry?.type === "message" && entry.message.role === "user";
+															void forkFromMessage(id, undefined, !isUser);
+														}}
+													/>
+												)
 											) : (
 												<>
 													<div
@@ -2264,6 +2397,9 @@ export function ChatView({
 									onAgentSelect={selectAgent}
 									agentHost={host}
 									extTabs={extTabs}
+									overviewEntries={overviewEntries}
+									overviewLoading={fullLoading && fullEntries === null}
+									onEnsureFullHistory={() => void ensureFullHistory()}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
 										if (ts) requestJump(ts);

@@ -123,6 +123,9 @@ export function ContextPanel({
 	onForkAt,
 	onJumpToEntry,
 	modeCatalog,
+	overviewEntries,
+	overviewLoading,
+	onEnsureFullHistory,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
 	 *  subscription (a second useStore here double-subscribed the same
@@ -143,6 +146,13 @@ export function ContextPanel({
 	/** Extension panel-tab slots (panel.tab.*); nav items live in the
 	 *  RightRail — the panel only renders their content. */
 	extTabs?: import("../lib/slot-host").SlotComponent[];
+	/** 全量历史(ChatView ensureFullHistory 补全)——轨迹统计/时间线/分支树
+	 *  面向整个会话而不是守护进程尾窗的 200 条。 */
+	overviewEntries?: readonly unknown[] | null;
+	/** 全量历史补全中。 */
+	overviewLoading?: boolean;
+	/** 轨迹面板挂载即请求补全(ChatView wiring)。 */
+	onEnsureFullHistory?(): void;
 	/** Active view — DERIVED from the active panel tab inside this component
 	 *  (tab-primary, docs §3.3.2): the panel body switches on the active
 	 *  tab's surface, so a view/tab disagreement is unrepresentable.
@@ -755,6 +765,9 @@ export function ContextPanel({
 						 * list inflate to content height and escape the chat card. */
 						<TrajectoryView
 							entries={snap?.entries ?? []}
+							fullEntries={overviewEntries ?? null}
+							fullLoading={overviewLoading}
+							onEnsureFullHistory={onEnsureFullHistory}
 							modelId={snap?.state?.model?.id}
 							roundDurations={snap?.roundDurations}
 							onJumpToEntry={onJumpToEntry}

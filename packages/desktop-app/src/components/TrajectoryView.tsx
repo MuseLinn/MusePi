@@ -313,6 +313,9 @@ function TreeNodeRow({
 
 export function TrajectoryView({
 	entries,
+	fullEntries,
+	fullLoading,
+	onEnsureFullHistory,
 	modelId,
 	roundDurations,
 	onJumpToEntry,
@@ -322,6 +325,13 @@ export function TrajectoryView({
 	onForkAt,
 }: {
 	entries: readonly unknown[];
+	/** 全量历史(ChatView ensureFullHistory 补全):提供时覆盖 entries —
+	 *  统计/时间线/分支树面向整个会话,而不是守护进程尾窗的 200 条。 */
+	fullEntries?: readonly unknown[] | null;
+	/** 全量历史补全中。 */
+	fullLoading?: boolean;
+	/** 挂载即请求补全全量历史(ChatView wiring)。 */
+	onEnsureFullHistory?: () => void;
 	modelId?: string;
 	/** daemon agent_end 冻结的整轮用时(Map 或持久化 [ms,ms][] 形态)。 */
 	roundDurations?: RoundDurationMap;
@@ -339,12 +349,19 @@ export function TrajectoryView({
 	onForkAt?(id: string): void;
 }): ReactNode {
 	const [mode, setModeState] = useState<"timeline" | "tree">("timeline");
+	// 挂载即补全全量历史(轨迹统计只覆盖加载窗是用户报过的"轮次数不对")。
+	useEffect(() => {
+		onEnsureFullHistory?.();
+	}, [onEnsureFullHistory]);
 	// startTransition:时间线↔分支树互切是整列表 mount(超长会话上万行),
 	// 可中断渲染让切换即时响应,配合行级 content-visibility 跳过屏外布局。
 	const setMode = (next: "timeline" | "tree"): void => {
 		startTransition(() => setModeState(next));
 	};
-	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
+	const { turns, stats } = useMemo(
+		() => buildTrajectoryTree(fullEntries ?? entries, roundDurations),
+		[fullEntries, entries, roundDurations],
+	);
 	// 折叠的 turn 集合(默认全部展开;点击行头折叠/展开)。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
 	// 检视器选中记录(id;null = 未选中)。close 走 inspectorClosing 播退场,
@@ -360,7 +377,7 @@ export function TrajectoryView({
 	const listRef = useRef<HTMLDivElement | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
 	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
-	const treeRoots = useMemo(() => buildMessageTree(entries), [entries]);
+	const treeRoots = useMemo(() => buildMessageTree(fullEntries ?? entries), [fullEntries, entries]);
 	const treeRows = useMemo(() => {
 		const rows: { node: MessageTreeNode; depth: number }[] = [];
 		// Iterative pre-order: a linear session's parent→child chain is one node
@@ -616,6 +633,10 @@ export function TrajectoryView({
 					<div className="gui-ctx-stat-l">{t("trajectory model")}</div>
 				</div>
 			</div>
+			{/* 全量历史补全中:统计当前只覆盖加载窗,补全后自动刷新。 */}
+			{fullLoading === true && !fullEntries && (
+				<div className="traj-loading-note">{t("turn map loading history")}</div>
+			)}
 			{/* Overview 时间轴:拖拽区间聚焦 / 悬停时刻提示 / 单击整轮。 */}
 			{turns.length > 0 && (
 				<div className="px-2.5 pb-1.5">

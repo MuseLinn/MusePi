@@ -4840,3 +4840,480 @@
 .gui-art-frame-wrap .gui-art-frame {
 	transition: width 200ms var(--spring);
 }
+
+/* ── 轮级会话地图(0.5.0-map-redesign):节点 = 轮,主线金色流动渐变,
+   分支列金→紫渐变,液态玻璃卡片。── */
+
+.tm-wrap {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	cursor: grab;
+	touch-action: none;
+}
+
+.tm-wrap[data-dragging] {
+	cursor: grabbing;
+}
+
+/* 顶栏:玻璃容器,标题 + 时间轴 + 搜索 + 消息级入口。 */
+.tm-topbar {
+	position: absolute;
+	top: 10px;
+	left: 64px;
+	right: 12px;
+	z-index: 6;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 7px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 10%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 72%, transparent));
+	backdrop-filter: blur(16px) saturate(1.4);
+	-webkit-backdrop-filter: blur(16px) saturate(1.4);
+	box-shadow: 0 8px 28px color-mix(in oklab, var(--color-bg) 55%, transparent);
+}
+
+.tm-title {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text);
+	white-space: nowrap;
+}
+
+.tm-title-count {
+	font-style: normal;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-text-muted);
+}
+
+/* 全量历史补全中提示:小号弱色 + 呼吸,补全后整个标题区自动刷新。 */
+.tm-title-loading {
+	font-style: normal;
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--color-accent);
+	animation: tm-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tm-pulse {
+	0%,
+	100% {
+		opacity: 0.45;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
+/* 轨迹面板同款补全提示(统计卡片下方一行)。 */
+.traj-loading-note {
+	margin: 0 10px 6px;
+	padding: 4px 8px;
+	border-radius: var(--radius-md, 8px);
+	font-size: 11px;
+	color: var(--color-accent);
+	background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+	animation: tm-pulse 1.6s ease-in-out infinite;
+}
+
+.tm-topbar > .traj-overview,
+.tm-topbar > [class*="traj-overview"] {
+	flex: 1;
+	min-width: 0;
+}
+
+.tm-search {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	width: 170px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	border: 1px solid color-mix(in oklab, var(--color-text) 10%, transparent);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+}
+
+.tm-search-input {
+	width: 100%;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--color-text);
+	background: transparent;
+	outline: none;
+	border: none;
+}
+
+.tm-topbar-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	flex: none;
+	border-radius: 8px;
+	color: var(--color-text-muted);
+	border: 1px solid transparent;
+	transition: all 160ms var(--spring);
+}
+
+.tm-topbar-btn:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
+}
+
+/* 迷你导航条:全轮次剪影 + 视口映射。 */
+.tm-nav {
+	position: absolute;
+	top: 16px;
+	bottom: 16px;
+	left: 10px;
+	width: 30px;
+	z-index: 5;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 0;
+	padding: 4px;
+	border-radius: 10px;
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 10%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 70%, transparent));
+	backdrop-filter: blur(12px) saturate(1.3);
+	-webkit-backdrop-filter: blur(12px) saturate(1.3);
+	cursor: pointer;
+}
+
+.tm-nav-band {
+	display: block;
+	width: 100%;
+	min-height: 2px;
+	border-radius: 1px;
+	opacity: 0.75;
+}
+
+.tm-nav-viewport {
+	position: absolute;
+	left: 1px;
+	width: calc(100% - 2px);
+	border-radius: 4px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 65%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	pointer-events: none;
+	transition: top 120ms ease-out, height 120ms ease-out;
+}
+
+/* 事件构成条颜色(与轨迹 KIND_COLOR 同源)。 */
+.tm-comp--user { background: var(--color-accent); }
+.tm-comp--assistant { background: #b39ddb; }
+.tm-comp--tool { background: #d4a35c; }
+.tm-comp--advisor { background: #6fc3b8; }
+
+.tm-world {
+	position: absolute;
+	top: 0;
+	left: 0;
+	transform-origin: 0 0;
+}
+
+.tm-edges {
+	position: absolute;
+	top: 0;
+	left: 0;
+	pointer-events: none;
+	overflow: visible;
+}
+
+.tm-edge--main {
+	stroke: url(#tm-main-line);
+	stroke-width: 2;
+	stroke-linecap: round;
+	opacity: 0.85;
+}
+
+.tm-edge--branch {
+	stroke: url(#tm-branch-line);
+	stroke-width: 2;
+	stroke-linecap: round;
+	fill: none;
+	opacity: 0.8;
+}
+
+.tm-edge-gold-1 { stop-color: #d4a35c; }
+.tm-edge-gold-2 { stop-color: color-mix(in oklab, #d4a35c 55%, var(--color-accent)); }
+.tm-edge-purple { stop-color: #b39ddb; }
+
+/* 分支列头:自 Turn N · 重答。 */
+.tm-lane-head {
+	position: absolute;
+	font-size: 10px;
+	line-height: 1;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	padding-left: 2px;
+}
+
+/* 轮节点卡:液态玻璃(backdrop blur + 1px border + 圆角 12)。 */
+.tm-node {
+	position: absolute;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 8px 10px;
+	border-radius: 12px;
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 12%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 78%, transparent));
+	backdrop-filter: blur(14px) saturate(1.35);
+	-webkit-backdrop-filter: blur(14px) saturate(1.35);
+	box-shadow: 0 6px 20px color-mix(in oklab, var(--color-bg) 50%, transparent);
+	cursor: pointer;
+	transition: border-color 160ms var(--spring), box-shadow 160ms var(--spring), opacity 200ms ease;
+	user-select: none;
+}
+
+.tm-node:hover {
+	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
+	box-shadow: 0 8px 26px color-mix(in oklab, var(--color-bg) 55%, transparent);
+}
+
+/* 支线卡:降低不透明度(stc-node--off 语义保留)。 */
+.tm-node--branch {
+	opacity: 0.82;
+	border-left: 2px solid transparent;
+	border-image: linear-gradient(180deg, #d4a35c, #b39ddb) 1;
+}
+
+/* 叶子轮:金色发光描边。 */
+.tm-node--leaf {
+	border-color: color-mix(in oklab, #d4a35c 65%, transparent);
+	box-shadow: 0 0 0 1px color-mix(in oklab, #d4a35c 35%, transparent), 0 6px 22px color-mix(in oklab, #d4a35c 18%, transparent);
+}
+
+/* 当前轮:高亮描边 + 呼吸动画。 */
+.tm-node--current {
+	border-color: color-mix(in oklab, var(--color-accent) 70%, transparent);
+	animation: tm-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes tm-breathe {
+	0%, 100% { box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 30%, transparent), 0 6px 20px color-mix(in oklab, var(--color-bg) 50%, transparent); }
+	50% { box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-accent) 22%, transparent), 0 6px 24px color-mix(in oklab, var(--color-accent) 16%, transparent); }
+}
+
+/* 搜索:命中高亮 / 未命中淡显。 */
+.tm-node--hit {
+	border-color: color-mix(in oklab, #d4a35c 70%, transparent);
+}
+
+.tm-node--dim {
+	opacity: 0.35;
+}
+
+.tm-node-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 6px;
+}
+
+.tm-turn-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text);
+}
+
+.tm-turn-badge--advisor {
+	color: #6fc3b8;
+}
+
+.tm-turn-advisor {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	font-style: normal;
+	font-size: 9px;
+	font-weight: 600;
+	padding: 1px 5px;
+	border-radius: 99px;
+	color: #6fc3b8;
+	background: color-mix(in oklab, #6fc3b8 14%, transparent);
+}
+
+.tm-node-dur {
+	font-size: 9px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+}
+
+.tm-node-summary {
+	font-size: 11px;
+	line-height: 1.35;
+	color: var(--color-text);
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	word-break: break-all;
+}
+
+/* 构成条:轮内事件 kind 分段。 */
+.tm-comp {
+	display: flex;
+	height: 4px;
+	border-radius: 2px;
+	overflow: hidden;
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+}
+
+.tm-comp-seg {
+	display: block;
+	height: 100%;
+	min-width: 2px;
+}
+
+.tm-node-stats {
+	font-size: 9px;
+	color: var(--color-text-muted);
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+/* 轮内泳道(单击展开):事件行 24px。 */
+.tm-lane {
+	margin-top: 4px;
+	padding-top: 4px;
+	border-top: 1px dashed color-mix(in oklab, var(--color-text) 12%, transparent);
+	overflow-y: auto;
+	max-height: 240px;
+}
+
+.tm-lane-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	font-size: 10px;
+	color: var(--color-text-muted);
+}
+
+.tm-lane-dot {
+	width: 6px;
+	height: 6px;
+	flex: none;
+	border-radius: 50%;
+	background: var(--color-accent);
+}
+
+.tm-lane-row--assistant .tm-lane-dot { background: #b39ddb; }
+.tm-lane-row--tool .tm-lane-dot { background: #d4a35c; }
+.tm-lane-row--advisor .tm-lane-dot { background: #6fc3b8; }
+.tm-lane-row--system .tm-lane-dot { background: var(--color-text-faint); }
+
+.tm-lane-title {
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tm-lane-time {
+	flex: none;
+	font-size: 9px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+}
+
+/* 悬停浮卡:轮首消息全文 + 首末时刻。 */
+.tm-hover {
+	position: absolute;
+	right: 14px;
+	top: 64px;
+	z-index: 7;
+	width: 300px;
+	max-width: calc(100% - 90px);
+	padding: 10px 12px;
+	border-radius: 12px;
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 12%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 82%, transparent));
+	backdrop-filter: blur(18px) saturate(1.45);
+	-webkit-backdrop-filter: blur(18px) saturate(1.45);
+	box-shadow: 0 10px 32px color-mix(in oklab, var(--color-bg) 60%, transparent);
+	pointer-events: none;
+}
+
+.tm-hover-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 10px;
+	font-weight: 700;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text);
+	margin-bottom: 6px;
+}
+
+.tm-hover-time {
+	font-weight: 500;
+	color: var(--color-text-faint);
+}
+
+.tm-hover-body {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	word-break: break-all;
+	display: -webkit-box;
+	-webkit-line-clamp: 6;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+/* 右下缩放控件(玻璃质感)。 */
+.tm-zoom {
+	position: absolute;
+	right: 14px;
+	bottom: 14px;
+	z-index: 6;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px;
+	border-radius: 10px;
+	border: 1px solid var(--gui-glass-border, color-mix(in oklab, var(--color-text) 10%, transparent));
+	background: var(--gui-glass-bg, color-mix(in oklab, var(--color-bg) 72%, transparent));
+	backdrop-filter: blur(12px) saturate(1.3);
+	-webkit-backdrop-filter: blur(12px) saturate(1.3);
+}
+
+.tm-zoom-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border-radius: 7px;
+	color: var(--color-text-muted);
+	transition: all 160ms var(--spring);
+}
+
+.tm-zoom-btn:hover:not(:disabled) {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 8%, transparent);
+}
+
+.tm-zoom-btn:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
