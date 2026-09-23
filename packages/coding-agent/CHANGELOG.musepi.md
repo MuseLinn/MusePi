@@ -5,6 +5,17 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.38] - 2026-09-23
+
+### Fixed
+
+- **设置面板壳层修复（三迭代收口）**：0.4.37 后设置界面的布局问题一次性收口——设置视图改为覆盖「聊天列」（含 header）的覆盖层，应用侧栏同屏完整可见；SettingsView 自带的 48px 拖拽条与圆角卡片完整保留，与会话主界面同一壳层语言（zcode RootShell `isSettingsTabActive` 同构），不再退化成会话容器内的裸页，半透明玻璃导航也不再压住侧栏会话列表；顺带修复设置面板控件列 46px 对齐错位。
+  - EN: settings shell fixed (three iterations closed): the settings view became an overlay covering the chat column (header included) with the app sidebar fully visible beside it — SettingsView's own 48px drag bar and rounded card restored, the same shell language as the chat surface (zcode RootShell `isSettingsTabActive` isomorph), no longer a bare page inside the session container, and the translucent glass nav no longer paints over the sidebar's session list; also fixed the 46px control-column misalignment in the settings panel.
+- **浮动滚动条层级跟随所在容器**：滚动条栈之前固定挂在最高层，直接盖住更新弹窗（z 900）等所有上层弹层；现在 stackZ 跟随其所属容器的内容层级，容器在上层、滚动条就在上层。
+  - EN: floating scrollbar stacking now follows its container: the rail used to sit at a global top layer, painting over the update dialog (z 900) and every upper layer; the stackZ now derives from the owning container's content level.
+- **桌宠气泡窗口鸡生蛋死锁**：pet 主窗与 bubbles 气泡窗启动时互相等待对方的创建结果，任一窗口未就绪都会把另一条链挂在 await 上，导致气泡可能永远不出现；创建次序改为单向依赖，启动即稳定出泡。
+  - EN: a chicken-and-egg deadlock between the pet main window and the bubbles window: each awaited the other's creation at startup, so a single not-ready window parked the other chain forever and bubbles might never show; creation order is now a one-way dependency and bubbles appear reliably at launch.
+
 ## [0.4.37] - 2026-09-23
 
 ### Added
