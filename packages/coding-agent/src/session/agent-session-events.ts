@@ -1,6 +1,7 @@
 import type { AgentEvent, ThinkingLevel } from "@musepi/pi-agent-core";
 import type { CompactionResult } from "@musepi/pi-agent-core/compaction";
 import type { Effort } from "@musepi/pi-ai";
+import type { SessionEntry } from "@musepi/pi-wire";
 import type { Rule } from "../capability/rule";
 import type { RetryErrorUpdate } from "../extensibility/shared-events";
 import type { Goal, GoalModeState } from "../goals/state";
@@ -68,9 +69,18 @@ export type AgentSessionEvent =
 	 * leaf in place; the daemon publishes it via publishWireEvent so the
 	 * journal, the live stream and GUI clients share one fact (wire type:
 	 * session_leaf_moved in @musepi/pi-wire). `leafId` is the new leaf's
-	 * view key ("role:timestamp"), null = moved to the ROOT.
+	 * view key ("role:timestamp"), null = moved to the ROOT. `path` /
+	 * `pathEntries` (optional, kept in sync with the wire type): the active
+	 * path after the move in view-key space — message entries root → leaf,
+	 * parentId = nearest message ancestor's view key, truncated to the
+	 * daemon tail window.
 	 */
-	| { type: "session_leaf_moved"; leafId: string | null };
+	| {
+			type: "session_leaf_moved";
+			leafId: string | null;
+			path?: string[];
+			pathEntries?: SessionEntry[];
+	  };
 
 /** Listener function for agent session events. */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;

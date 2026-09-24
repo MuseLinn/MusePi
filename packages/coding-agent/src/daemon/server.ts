@@ -6517,6 +6517,48 @@ export class DaemonServer {
 				const btarget = bentries.find(e => e.id === bsdkId) as { message?: WireMessage } | undefined;
 				const btargetText =
 					btarget?.message?.role === "user" ? extractEntryText({ content: btarget.message.content }) : "";
+				// Active path (root → leaf) AFTER the move, in VIEW-key space.
+				// The client store only holds the daemon's TAIL window
+				// (TAIL_ENTRIES) and re-fetched resume snapshots return the
+				// newest 200 rows — on a long session a rewind to a node far
+				// above the tail re-anchored the client onto the WRONG data
+				// (the old tail stayed on screen, 撤回 looked like a no-op).
+				// Shipping the path lets subscribers re-anchor locally. Same
+				// parentId convention the materialized view uses: message
+				// entries only, parentId = nearest MESSAGE ancestor's view
+				// key (hex ids rewritten via messageKey), non-message records
+				// (model_change / compaction) skipped. Truncated from the
+				// LEAF end to TAIL_ENTRIES so the payload stays bounded; a
+				// truncated root's parentId then points outside the payload,
+				// which clients read exactly like a cut tail-window chain.
+				const bpathInfo = ((): { path: string[]; pathEntries: SessionEntry[] } => {
+					const bySdkId = new Map(bentries.map(e => [e.id, e]));
+					const sdkSeen = new Set<string>();
+					let sdkCursor: SessionEntry | undefined = bsm.getLeafEntry();
+					const sdkPath: SessionEntry[] = [];
+					while (sdkCursor && typeof sdkCursor.id === "string" && !sdkSeen.has(sdkCursor.id)) {
+						sdkSeen.add(sdkCursor.id);
+						sdkPath.unshift(sdkCursor);
+						sdkCursor = sdkCursor.parentId ? bySdkId.get(sdkCursor.parentId) : undefined;
+					}
+					const pathEntries: SessionEntry[] = [];
+					let parentViewKey: string | null = null;
+					for (const e of sdkPath) {
+						const m = (e as { message?: WireMessage }).message;
+						if (!m) continue; // non-message record — not a path row
+						const viewKey = messageKey(m);
+						pathEntries.push({
+							type: "message",
+							id: viewKey,
+							parentId: parentViewKey,
+							timestamp: new Date(m.timestamp).toISOString(),
+							message: m,
+						} as SessionEntry);
+						parentViewKey = viewKey;
+					}
+					const windowed = pathEntries.slice(-TAIL_ENTRIES);
+					return { path: windowed.map(e => e.id), pathEntries: windowed };
+				})();
 				// 撤回/切分支广播: navigateTree 只移动 SDK 树的 leaf 指针 —
 				// 不 append 条目、不走 agent 事件流,而 GUI store 只从事件流
 				// 学习(leaf_moved 之前撤回/切分支后订阅端永远停在旧 active
@@ -6524,10 +6566,17 @@ export class DaemonServer {
 				// M1.4 catchup 可原样重放)、view.apply(对无投影的类型是安全
 				// no-op)、订阅端 fan-out。leafId 与下方返回值同源(null =
 				// 撤到根,首条用户消息的 parentId 在 wire 快照里恒为 null)。
-				blive.publishWireEvent({ type: "session_leaf_moved", leafId: bleafKey });
+				blive.publishWireEvent({
+					type: "session_leaf_moved",
+					leafId: bleafKey,
+					path: bpathInfo.path,
+					pathEntries: bpathInfo.pathEntries,
+				});
 				return {
 					ok: true,
 					leafId: bleafKey,
+					path: bpathInfo.path,
+					pathEntries: bpathInfo.pathEntries,
 					editorText: bresult.editorText ?? (btargetText || null),
 					editorImages: bresult.editorImages ?? [],
 				};

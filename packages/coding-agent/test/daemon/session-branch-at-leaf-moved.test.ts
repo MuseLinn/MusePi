@@ -69,7 +69,10 @@ async function runBranchAt(
 	entries: StubEntry[],
 	leafEntry: StubEntry | undefined,
 	targetId: string,
-): Promise<{ res: { ok?: boolean; leafId?: string | null; editorText?: string | null }; published: unknown[] }> {
+): Promise<{
+	res: { ok?: boolean; leafId?: string | null; editorText?: string | null; path?: string[] };
+	published: unknown[];
+}> {
 	const published: unknown[] = [];
 	const host = {
 		cwd: () => "/tmp",
@@ -100,9 +103,19 @@ async function runBranchAt(
 		ok?: boolean;
 		leafId?: string | null;
 		editorText?: string | null;
+		path?: string[];
 	};
 	return { res, published };
 }
+
+/** The view-key wire row the daemon builds for a stub message entry. */
+const wireRowOf = (e: StubEntry, parentId: string | null) => ({
+	type: "message",
+	id: keyOf(e.message!),
+	parentId,
+	timestamp: new Date(e.message!.timestamp!).toISOString(),
+	message: e.message,
+});
 
 describe("session.branchAt leaf-move broadcast", () => {
 	test("publishes session_leaf_moved with the new leaf's view key", async () => {
@@ -120,10 +133,77 @@ describe("session.branchAt leaf-move broadcast", () => {
 		// leaf to its parent (the user message in this stub topology).
 		const { res, published } = await runBranchAt([user, assistant], user, keyOf(user.message!));
 		expect(res.ok).toBe(true);
-		// Regression: without the broadcast the GUI store (event-stream-fed)
-		// never learned the active path changed — 撤回 kept rendering the
-		// dropped tail forever.
-		expect(published).toEqual([{ type: "session_leaf_moved", leafId: keyOf(user.message!) }]);
+		// The broadcast carries the active path (root → leaf, view keys) plus
+		// the wire rows for it — subscribers re-anchor LOCALLY instead of
+		// re-fetching session.resume (whose tail window returns the newest 200
+		// rows, i.e. the rewound-away tail on long sessions). The response and
+		// the broadcast share one computation and must agree.
+		const row = wireRowOf(user, null);
+		expect(res.path).toEqual([keyOf(user.message!)]);
+		expect(published).toEqual([
+			{
+				type: "session_leaf_moved",
+				leafId: keyOf(user.message!),
+				path: [keyOf(user.message!)],
+				pathEntries: [row],
+			},
+		]);
+	});
+
+	test("active path skips non-message records and chains parentIds through message ancestors", async () => {
+		// Topology: user(u1) → model_change(m1, non-message) → assistant(a1, leaf).
+		// The daemon path contains MESSAGE rows only; the assistant row's
+		// parentId skips the model_change and points at the user message —
+		// the same "nearest MESSAGE ancestor" convention the materialized
+		// view stamps on live wire events, so the client leafWalk agrees.
+		const user: StubEntry = {
+			id: "u1",
+			type: "message",
+			message: { role: "user", timestamp: 111, content: [{ type: "text", text: "hi" }] },
+		};
+		const modelChange: StubEntry = { id: "m1", type: "model_change", parentId: "u1" };
+		const assistant: StubEntry = {
+			id: "a1",
+			type: "message",
+			parentId: "m1",
+			message: { role: "assistant", timestamp: 112, content: [{ type: "text", text: "hello" }] },
+		};
+		const userKey = keyOf(user.message!);
+		const { res, published } = await runBranchAt([user, modelChange, assistant], assistant, "a1");
+		expect(res.ok).toBe(true);
+		expect(res.path).toEqual([userKey, keyOf(assistant.message!)]);
+		const publishedEvent = published[0] as { pathEntries?: { id: string; parentId: string | null }[] };
+		expect(publishedEvent.pathEntries).toEqual([
+			{ ...wireRowOf(user, null), id: userKey },
+			{ ...wireRowOf(assistant, userKey), id: keyOf(assistant.message!) },
+		]);
+	});
+
+	test("active path is truncated from the leaf end to the tail window (200)", async () => {
+		// A 250-deep linear chain: the path payload caps at TAIL_ENTRIES from
+		// the LEAF end, and the windowed root's parentId then points at an id
+		// outside the payload — clients read that exactly like a cut tail
+		// window (their pinned-path filter covers the gap).
+		const entries: StubEntry[] = [];
+		for (let i = 0; i < 250; i++) {
+			entries.push({
+				id: `e${i}`,
+				type: "message",
+				parentId: i === 0 ? null : `e${i - 1}`,
+				message: { role: i % 2 === 0 ? "user" : "assistant", timestamp: 1000 + i, content: "x" },
+			});
+		}
+		const { res, published } = await runBranchAt(entries, entries[249], "e100");
+		expect(res.ok).toBe(true);
+		expect(res.path).toHaveLength(200);
+		// Root of the window = entry #50; its parent (entry #49) is NOT shipped.
+		expect(res.path![0]).toBe(keyOf(entries[50].message!));
+		const publishedEvent = published[0] as { pathEntries?: { id: string; parentId: string | null }[] };
+		const windowed = publishedEvent.pathEntries!;
+		expect(windowed).toHaveLength(200);
+		expect(windowed[0]!.parentId).toBe(keyOf(entries[49].message!));
+		const shipped = new Set(windowed.map(e => e.id));
+		expect(shipped.has(keyOf(entries[49].message!))).toBe(false);
 	});
 
 	test("a cancelled navigation publishes nothing and answers ok:false", async () => {
@@ -179,8 +259,11 @@ describe("session.branchAt leaf-move broadcast", () => {
 		expect(res.ok).toBe(true);
 		expect(res.leafId).toBeNull();
 		expect(res.editorText).toBe("edit me");
-		// The broadcast agrees with the response: null = the root.
-		expect(published).toEqual([{ type: "session_leaf_moved", leafId: null }]);
+		// The broadcast agrees with the response: null = the root, and the
+		// active path is EMPTY (shipped as an empty payload, not omitted —
+		// an absent field would send old clients down the resume re-fetch).
+		expect(res.path).toEqual([]);
+		expect(published).toEqual([{ type: "session_leaf_moved", leafId: null, path: [], pathEntries: [] }]);
 	});
 });
 

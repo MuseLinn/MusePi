@@ -363,16 +363,18 @@ export function TurnMapCanvas({
 		return visibleTurnMapNodes(nodes, vp);
 	}, [nodes, view, wrapSize]);
 	const visibleTurns = useMemo(() => new Set(visibleNodes.map(n => n.group.turn)), [visibleNodes]);
-	// 全量历史补全落地(entries 身份切换:尾窗 → 全量):数据规模可能从
-	// 几轮跳到上百轮,旧视野(适配小树的 scale/offset)不再成立——重新
-	// 适配,让当前轮居中出现在可读缩放下。
-	const entriesIdentityRef = useRef(entries);
+	// 全量历史补全落地 / 新轮出现:重新适配。以 turns.length 为信号而不是
+	// entries 身份——ChatView 的 overviewEntries 现在是活合并,流式期间每帧
+	// 替换条目对象,身份每帧都变;按身份 refit 会让地图在流式期间每帧重新
+	// 适配(抖动)。轮数变化(尾窗→全量、新分支长出新一轮)才是真正需要
+	// 重新适配的时刻;撤回/切分支只改路径不改轮数,视野保持不动。
+	const turnCountRef = useRef(turns.length);
 	useEffect(() => {
-		if (entriesIdentityRef.current === entries) return;
-		entriesIdentityRef.current = entries;
+		if (turnCountRef.current === turns.length) return;
+		turnCountRef.current = turns.length;
 		needsFitRef.current = true;
 		fitView();
-	}, [entries, fitView]);
+	}, [turns.length, fitView]);
 	// 方向切换:几何转置,旧视野不成立——重新适配。
 	useEffect(() => {
 		needsFitRef.current = true;

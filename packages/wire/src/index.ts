@@ -259,8 +259,26 @@ export type AgentEvent =
 	 * the first user message → active path is empty). Journaled + broadcast
 	 * via the daemon's publishWireEvent so GUI clients refresh their
 	 * snapshot; carries no transcript rows of its own.
+	 *
+	 * `path` / `pathEntries` (additive, daemon ≥ this revision): the active
+	 * path AFTER the move in VIEW-key space — `path` = entry ids root →
+	 * leaf, `pathEntries` = the wire rows for those ids (message entries
+	 * only, parentId = nearest MESSAGE ancestor's view key, same convention
+	 * the materialized view uses). Lets subscribers re-anchor locally even
+	 * when the branch target sits OUTSIDE the tail window (>200 entries):
+	 * re-fetching session.resume only returns the newest 200 rows, which
+	 * left long-session 撤回 looking like a no-op (old tail stayed on
+	 * screen). Truncated from the LEAF end to the daemon's tail window
+	 * (TAIL_ENTRIES); a cut chain reads exactly like a tail window
+	 * (root-most kept entry's parentId points outside the payload).
+	 * Absent on older daemons — clients fall back to the resume re-fetch.
 	 */
-	| { type: "session_leaf_moved"; leafId: string | null };
+	| {
+			type: "session_leaf_moved";
+			leafId: string | null;
+			path?: string[];
+			pathEntries?: SessionEntry[];
+	  };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Daemon global events (events.subscribe — NOT session events)

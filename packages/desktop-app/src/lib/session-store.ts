@@ -101,12 +101,14 @@ export interface SessionGapHooks {
 	onResyncRequired?: () => void;
 	/** Daemon broadcast `session_leaf_moved` (RPC session.branchAt — 撤回/
 	 *  编辑/重试/branch switch moved the session tree leaf in place). The
-	 *  event carries no transcript rows, so the whole snapshot is stale
-	 *  relative to the daemon's active path: implementations must re-fetch
-	 *  session.resume and hand it to {@link GuiSessionStore.reloadFromSnapshot}
-	 *  — the store identity is preserved so the chat view's pinned leaf and
-	 *  jump-back dock survive the refresh. `leafId` is the new leaf's view
-	 *  key, null = moved to the ROOT. */
+	 *  event carries no transcript rows of its own; daemons that ship
+	 *  `path`/`pathEntries` let the store re-anchor LOCALLY (see
+	 *  #reanchorPath) — older daemons (or a malformed payload) fall back to
+	 *  this hook: implementations re-fetch session.resume and hand it to
+	 *  {@link GuiSessionStore.reloadFromSnapshot} — the store identity is
+	 *  preserved so the chat view's pinned leaf and jump-back dock survive
+	 *  the refresh. `leafId` is the new leaf's view key, null = moved to
+	 *  the ROOT. */
 	onLeafMoved?: (leafId: string | null) => void;
 }
 
@@ -324,6 +326,28 @@ export class GuiSessionStore {
 		this.#hasMore = remaining > 0 && this.#beforeId !== null;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
+	}
+
+	/**
+	 * Local re-anchor after a daemon `session_leaf_moved` that ships
+	 * `pathEntries` (additive daemon contract): fold the new active path
+	 * into the CURRENT view instead of replacing it. Unlike
+	 * reloadFromSnapshot — which swaps the whole view for a fresh
+	 * session.resume (the newest TAIL window) — this keeps every row the
+	 * store already materialized: sibling branches and the rewound-away
+	 * tail stay visible on the map / trajectory, and the transcript filter
+	 * (ChatView's pinned path) decides what shows. Only path rows missing
+	 * from the loaded window get prepended (older-than-tail rewinds);
+	 * prependEntries dedupes by id and advances the history cursor, so a
+	 * subsequent scroll-up backfill stays consistent. The event was
+	 * admitted through the watermark gate before #applyNow ran, so
+	 * #watermark already covers it; pending/reorder frames with seqs ≤ it
+	 * are inside the folded rows by construction. Snapshot rebuild + emit
+	 * are owned by the caller (flush). */
+	#reanchorPath(pathEntries: SessionEntry[]): void {
+		if (this.#resyncTriggered) return;
+		const firstFresh = this.#view.prependEntries(pathEntries);
+		if (firstFresh !== null) this.#beforeId = firstFresh;
 	}
 
 	/**
@@ -974,14 +998,29 @@ export class GuiSessionStore {
 				// Daemon broadcast after RPC session.branchAt (撤回/编辑/重试/
 				// branch switch): the session tree leaf moved IN PLACE, so the
 				// daemon's active path — the thing the transcript is supposed
-				// to render — changed without any entry being appended. The
-				// event itself carries no rows (leaf moves mutate no transcript
-				// entries); the whole snapshot must be re-fetched through the
-				// onLeafMoved hook, which re-aligns the watermark via
-				// reloadFromSnapshot. fire-and-forget: a failed/absent hook
-				// degrades to today's stale-path view, the RPC caller's own
-				// pin still re-anchors the primary client.
-				const leafId = (ev as { leafId?: unknown }).leafId;
+				// to render — changed without any entry being appended.
+				// Newer daemons ship `pathEntries`: the active path in view-key
+				// space. Re-anchor LOCALLY by folding those rows into the
+				// current view — a session.resume re-fetch only returns the
+				// newest TAIL window, so on long sessions it handed back the
+				// tail we just rewound away from (撤回 looked like a no-op).
+				// Rows the store already holds are deduped by id; siblings /
+				// the dropped tail stay in the view (the map still shows them
+				// as a branch). Older daemons without pathEntries degrade to
+				// the onLeafMoved hook (session.resume re-fetch).
+				const lm = ev as {
+					leafId?: unknown;
+					path?: unknown;
+					pathEntries?: unknown;
+				};
+				if (Array.isArray(lm.pathEntries)) {
+					// Empty array = rewound to the session root (active path is
+					// empty): nothing to fold, but the contract IS supported —
+					// skip the session.resume re-fetch below.
+					if (lm.pathEntries.length > 0) this.#reanchorPath(lm.pathEntries as SessionEntry[]);
+					break;
+				}
+				const leafId = lm.leafId;
 				this.#hooks.onLeafMoved?.(typeof leafId === "string" ? leafId : null);
 				break;
 			}

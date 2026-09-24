@@ -35,6 +35,21 @@ function leafMoved(seq: number, leafId: string | null) {
 	};
 }
 
+/** A view-key message row, same shape the daemon ships in pathEntries. */
+function msgRow(id: string, parentId: string | null, ts: number, text: string) {
+	return {
+		type: "message" as const,
+		id,
+		parentId,
+		timestamp: new Date(ts).toISOString(),
+		message: { role: "user", timestamp: ts, content: [{ type: "text", text }] },
+	};
+}
+
+function ids(store: GuiSessionStore): string[] {
+	return store.getSnapshot().entries.map(e => (e as { id?: string }).id ?? "?");
+}
+
 function levels(store: GuiSessionStore): string[] {
 	return store.getSnapshot().entries.map(e => (e as { thinkingLevel?: string }).thinkingLevel ?? "?");
 }
@@ -134,5 +149,125 @@ describe("GuiSessionStore session_leaf_moved", () => {
 		await settle();
 		expect(levels(store)).toEqual(["lvl-9", "lvl-10"]);
 		expect(gaps).toEqual([5]);
+	});
+
+	describe("local re-anchor from pathEntries (additive daemon contract)", () => {
+		it("folds the path into the view WITHOUT the hook: siblings stay, watermark flows", async () => {
+			const moved: Array<string | null> = [];
+			const store = new GuiSessionStore(
+				"s1",
+				{
+					entries: [msgRow("user:100", null, 100, "hi"), msgRow("assistant:101", "user:100", 101, "yo")] as never,
+					cursor: 3,
+				},
+				"/work",
+				{
+					onLeafMoved: leafId => {
+						moved.push(leafId);
+					},
+				},
+			);
+			// Rewind to the user message; the daemon ships the active path.
+			// Regression this covers: the old hook re-fetched session.resume,
+			// whose tail window returns the NEWEST rows — on a long session
+			// that handed the rewound-away tail back to the client and 撤回
+			// looked like a no-op.
+			store.apply({
+				kind: "event",
+				seq: 4,
+				payload: {
+					type: "session_leaf_moved",
+					leafId: "user:100",
+					path: ["user:100"],
+					pathEntries: [msgRow("user:100", null, 100, "hi")],
+				},
+			});
+			await settle();
+			// Local re-anchor: no session.resume round-trip at all.
+			expect(moved).toEqual([]);
+			// The rewound-away tail row is NOT dropped from the view — it
+			// stays as a sibling branch for the map / trajectory.
+			expect(ids(store)).toEqual(["user:100", "assistant:101"]);
+			// A replay of the consumed seq drops (catchup overlap), same as
+			// the hook path.
+			store.apply({
+				kind: "event",
+				seq: 4,
+				payload: { type: "session_leaf_moved", leafId: "user:100", path: [], pathEntries: [] },
+			});
+			await settle();
+			expect(ids(store)).toEqual(["user:100", "assistant:101"]);
+			// The stream continues from the next seq — no stall at the seam.
+			store.apply(seqLevel(5));
+			await settle();
+			expect(ids(store)).toEqual(["user:100", "assistant:101", "tlc-5"]);
+		});
+
+		it("prepends path rows older than the loaded window and advances the history cursor", async () => {
+			const moved: Array<string | null> = [];
+			const store = new GuiSessionStore(
+				"s1",
+				{ entries: [msgRow("user:200", "user:199", 200, "tail")] as never, cursor: 3 },
+				"/work",
+				{
+					onLeafMoved: leafId => {
+						moved.push(leafId);
+					},
+				},
+			);
+			// Rewind target sits ABOVE the loaded tail window: the path rows
+			// are new to the store and must land in root → leaf order.
+			store.apply({
+				kind: "event",
+				seq: 4,
+				payload: {
+					type: "session_leaf_moved",
+					leafId: "user:199",
+					path: ["user:198", "user:199"],
+					pathEntries: [msgRow("user:198", null, 198, "old"), msgRow("user:199", "user:198", 199, "mid")],
+				},
+			});
+			await settle();
+			expect(moved).toEqual([]);
+			expect(ids(store)).toEqual(["user:198", "user:199", "user:200"]);
+			// The oldest fresh row becomes the session.history cursor, so a
+			// later scroll-up backfill pages from the right position.
+			expect(store.historyBeforeId).toBe("user:198");
+		});
+
+		it("an empty pathEntries (rewind-to-root) still marks the contract as supported", async () => {
+			const moved: Array<string | null> = [];
+			const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/work", {
+				onLeafMoved: leafId => {
+					moved.push(leafId);
+				},
+			});
+			store.apply({
+				kind: "event",
+				seq: 1,
+				payload: { type: "session_leaf_moved", leafId: null, path: [], pathEntries: [] },
+			});
+			await settle();
+			// Contract supported → no resume re-fetch; the empty active path
+			// is ChatView's signal to render nothing (pinned to root).
+			expect(moved).toEqual([]);
+			expect(ids(store)).toEqual([]);
+		});
+
+		it("a malformed pathEntries payload degrades to the onLeafMoved hook", async () => {
+			const moved: Array<string | null> = [];
+			const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/work", {
+				onLeafMoved: leafId => {
+					moved.push(leafId);
+				},
+			});
+			store.apply({
+				kind: "event",
+				seq: 1,
+				payload: { type: "session_leaf_moved", leafId: "user:111", pathEntries: "bogus" },
+			});
+			await settle();
+			expect(moved).toEqual(["user:111"]);
+		});
 	});
 });

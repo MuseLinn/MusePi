@@ -651,6 +651,13 @@ export function ChatView({
 		// it on every session switch.
 		setJumpBack(null);
 		setJumpDockOpen(false);
+		// Leaf pin + daemon path pin + map/chat view mode are session state
+		// too: the component is REUSED across sessions (no remount), and a
+		// foreign session's pins leaked into the new session (its transcript
+		// filtered by the old session's path / the map view stuck on).
+		setCurrentLeafKey(null);
+		setPinnedPathIds(null);
+		setViewModeState("chat");
 		const timer = setTimeout(() => {
 			if (el) delete el.dataset.switched;
 		}, 700);
@@ -696,6 +703,12 @@ export function ChatView({
 	// path is empty); a bare string is safe because view keys are
 	// `role:timestamp` and never collide with the sentinel.
 	const [currentLeafKey, setCurrentLeafKey] = useState<string | "root" | null>(null);
+	// Daemon-shipped active path (session.branchAt response / session_leaf_moved
+	// broadcast `path`): a fallback id set for transcript filtering when the
+	// local parentId walk is CUT (root above the loaded tail window — a rewind
+	// target far above the tail used to leave the whole transcript unfiltered,
+	// showing the rewound-away tail). null = no pin (walk decides).
+	const [pinnedPathIds, setPinnedPathIds] = useState<ReadonlySet<string> | null>(null);
 	// Layer-3: 聊天表面顶层 Chat | Canvas 切换(canvas = 会话树地图)。
 	// startTransition:画布/对话互切是整树 mount/unmount(超长会话上万
 	// 节点),可中断渲染让切换按钮与滚动先行响应,避免"点了没反应"的卡顿感。
@@ -843,6 +856,7 @@ export function ChatView({
 			// (visibleEntries, anchored on the leaf) would hide the very answer
 			// the send just produced.
 			setCurrentLeafKey(null);
+			setPinnedPathIds(null);
 			onSend(text, images, deliverAs);
 		},
 		[onSend],
@@ -866,7 +880,11 @@ export function ChatView({
 		if (!store) return false;
 		const fromLeafKey = effectiveLeaf;
 		try {
-			const res = await rpc.request<{ ok: boolean; leafId: string | null }>("session.branchAt", {
+			const res = await rpc.request<{
+				ok: boolean;
+				leafId: string | null;
+				path?: string[];
+			}>("session.branchAt", {
 				sessionId: store.sessionId,
 				messageId,
 			});
@@ -880,6 +898,10 @@ export function ChatView({
 			// user message). Pin explicitly — null means "follow the tip" and
 			// would resurrect the tail we just dropped.
 			setCurrentLeafKey(res.leafId ?? "root");
+			// Daemon-shipped active path (additive contract): anchors the
+			// transcript filter even when the walk from the leaf is cut by
+			// the tail window (long-session rewind).
+			if (Array.isArray(res.path)) setPinnedPathIds(new Set(res.path));
 			if (text) setPendingEdit(text);
 			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
 			pulseSwitch();
@@ -895,12 +917,28 @@ export function ChatView({
 	const undoJumpBack = async (): Promise<void> => {
 		if (!store || !jumpBack) return;
 		try {
-			const res = await rpc.request<{ ok: boolean; leafId: string | null }>("session.branchAt", {
+			const res = await rpc.request<{
+				ok: boolean;
+				leafId: string | null;
+				path?: string[];
+			}>("session.branchAt", {
 				sessionId: store.sessionId,
 				messageId: jumpBack.fromLeafKey,
 			});
 			if (res?.ok !== true) return;
-			if (res.leafId) setCurrentLeafKey(res.leafId);
+			// Restored to the session TIP = nothing is pinned anymore: keep the
+			// explicit leaf and the breadcrumb would resurrect the rewind view
+			// on the next render cycle (nav showed a stale path after undo).
+			const entries = store.getSnapshot().entries;
+			const last = entries[entries.length - 1];
+			const tipId = last && typeof last === "object" ? (last as { id?: unknown }).id : undefined;
+			if (!res.leafId || res.leafId === tipId) {
+				setCurrentLeafKey(null);
+				setPinnedPathIds(null);
+			} else {
+				if (res.leafId) setCurrentLeafKey(res.leafId);
+				if (Array.isArray(res.path)) setPinnedPathIds(new Set(res.path));
+			}
 			setJumpBack(null);
 			pulseSwitch();
 		} catch {
@@ -930,10 +968,17 @@ export function ChatView({
 					ok: boolean;
 					leafId: string | null;
 					editorText: string | null;
+					path?: string[];
 				}>("session.branchAt", { sessionId: store.sessionId, messageId });
 				if (res?.ok !== true) return null;
 				const pinned = pinTo ?? res.leafId;
 				if (pinned) setCurrentLeafKey(pinned);
+				// Display path = daemon's active path, extended through the node
+				// we pinned when they differ (branchAt lands a USER message on
+				// its parent — the transcript must still show the clicked node).
+				if (Array.isArray(res.path)) {
+					setPinnedPathIds(new Set(pinTo ? [...res.path, pinTo] : res.path));
+				}
 				pulseSwitch();
 				return { leafId: res.leafId ?? null, editorText: res.editorText ?? null };
 			} catch {
@@ -1007,6 +1052,7 @@ export function ChatView({
 			// Release the pin so the view follows the new tip, exactly like the
 			// composer's own send path.
 			setCurrentLeafKey(null);
+			setPinnedPathIds(null);
 			if (res?.editorText) onSend(res.editorText);
 			else if (res) onSend(text);
 		});
@@ -1167,8 +1213,11 @@ export function ChatView({
 	// Path handed to the tree/map/trajectory for dimming. With a cut chain the
 	// partial path would dim almost every node (the map's "where am I" anchor
 	// and the off-path fade read as "nothing is lit"), so an untrustworthy walk
-	// passes nothing and those views fall back to leaf-based highlighting.
-	const trustedPathIds = leafWalk.complete ? activePathIds : undefined;
+	// passes nothing and those views fall back to leaf-based highlighting —
+	// UNLESS the daemon shipped the active path (session.branchAt response /
+	// leaf_moved broadcast): that set is authoritative even when the local
+	// chain is cut (long-session rewind), so it wins over passing nothing.
+	const trustedPathIds = leafWalk.complete ? activePathIds : (pinnedPathIds ?? undefined);
 	// Transcript input: the visible conversation is the ACTIVE PATH only —
 	// sibling branches and the tail beyond the leaf stay on the tree (map /
 	// trajectory / session tree keep the full list) but leave the transcript.
@@ -1180,9 +1229,25 @@ export function ChatView({
 	const visibleEntries = useMemo(() => {
 		// The gate is the leaf pin, not "is branched": a rewind to a historical
 		// node drops the tail even in an otherwise-linear session. An
-		// untrustworthy topology (see leafWalk) must never hide rows, so a cut
-		// chain disables filtering wholesale.
-		if (!leafWalk.complete) return snap?.entries ?? [];
+		// untrustworthy topology (see leafWalk) must never hide rows — UNLESS
+		// the daemon shipped the active path for THIS move (pinnedPathIds):
+		// that set survives the tail window, so filtering by it is exact even
+		// when the local parentId chain is cut.
+		if (!leafWalk.complete) {
+			if (!pinnedPathIds) return snap?.entries ?? [];
+			return (snap?.entries ?? []).filter(entry => {
+				const e = entry as { id?: unknown; parentId?: unknown; type?: string };
+				if (typeof e.id !== "string") return true;
+				if (typeof e.parentId !== "string") {
+					// Root-hung rows (round markers, synthetic rows) stay; a
+					// root MESSAGE only shows when it is on the pinned path
+					// (the full session's root lives above a cut window, so
+					// this only matters for truncated daemon paths).
+					return e.type !== "message" || pinnedPathIds.has(e.id);
+				}
+				return pinnedPathIds.has(e.id);
+			});
+		}
 		const pinnedToRoot = currentLeafKey === "root";
 		return (snap?.entries ?? []).filter(entry => {
 			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
@@ -1196,7 +1261,7 @@ export function ChatView({
 			}
 			return activePathIds.has(e.id);
 		});
-	}, [snap?.entries, activePathIds, leafWalk.complete, currentLeafKey]);
+	}, [snap?.entries, activePathIds, leafWalk.complete, currentLeafKey, pinnedPathIds]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -1251,22 +1316,26 @@ export function ChatView({
 	);
 	const switchBranch = useCallback(
 		async (childId: string): Promise<void> => {
-			if (!(await confirmTreeOpWhileWorking())) return;
-			if (snap?.working) onStop();
-
-			// Jump the transcript to the picked sibling first, then move the
-			// session leaf there (branchAt) so continuing forks from it.
-			const target = branchTipOf(childId);
-			const entry = (snap?.entries ?? []).find(
-				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === target,
-			);
-			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
-			if (typeof ts === "string") requestJump(ts);
-			setCurrentLeafKey(target);
-			void branchTo(target, target);
+			// Tree-op guard (runTreeOp, 2026-09-16收口): switchBranch was the
+			// one mutation entry left on the raw confirm+stop path with a
+			// render-frozen `snap` — the same class of race as retry/rewind.
+			// snapRef reads the LATEST working flag inside the guard.
+			await runTreeOp(async () => {
+				// Jump the transcript to the picked sibling first, then move the
+				// session leaf there (branchAt) so continuing forks from it.
+				const target = branchTipOf(childId);
+				const entry = (snapRef.current?.entries ?? []).find(
+					e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === target,
+				);
+				const ts =
+					typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
+				if (typeof ts === "string") requestJump(ts);
+				setCurrentLeafKey(target);
+				await branchTo(target, target);
+			});
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[snap?.entries, branchTo, branchTipOf],
+		[runTreeOp, branchTipOf, branchTo],
 	);
 	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
@@ -1410,12 +1479,46 @@ export function ChatView({
 	useEffect(() => {
 		if (viewMode === "canvas") void ensureFullHistory();
 	}, [viewMode, ensureFullHistory]);
-	// Entries fed to the overview surfaces: full copy when available, else
-	// the loaded tail window.
-	const overviewEntries = useMemo(
-		() => fullEntries ?? ((snap?.entries ?? []) as SessionEntry[]),
-		[fullEntries, snap?.entries],
-	); // M1.11: data-driven TurnRail source — one lightweight record per turn
+	// Entries fed to the overview surfaces: the full copy when available,
+	// LIVE-MERGED with the tail window — not a frozen either/or. The old
+	// `fullEntries ?? snap.entries` froze the map at first-open: the full
+	// history grab could run mid-turn and permanently bake the optimistic
+	// echo ghost (`user:optimistic-*`) plus every later round into the map
+	// never appearing (verified live: map stuck at "1 轮" after a 3rd turn
+	// sent from inside the map view). Merge = full copy minus ghosts as the
+	// base, plus any tail rows the base has never seen (id-absent AND at/after
+	// the base's oldest timestamp). Identity: cached on (fullEntries, live id
+	// signature) so streaming frame replacement (new object, same id) does
+	// NOT rebuild the array every frame — buildTrajectoryTree is O(n) and the
+	// map would refit/recompute per frame otherwise.
+	const overviewMergeRef = useRef<{
+		full: SessionEntry[];
+		liveSig: string;
+		result: SessionEntry[];
+	} | null>(null);
+	const overviewEntries = useMemo(() => {
+		const live = (snap?.entries ?? []) as SessionEntry[];
+		if (!fullEntries) {
+			overviewMergeRef.current = null;
+			return live;
+		}
+		const liveSig = live.map(e => e.id).join(" ");
+		const cache = overviewMergeRef.current;
+		if (cache && cache.full === fullEntries && cache.liveSig === liveSig) return cache.result;
+		const base = fullEntries.filter(e => typeof e.id !== "string" || !e.id.startsWith("user:optimistic-"));
+		const seen = new Set(base.map(e => e.id));
+		const cutoff = base[0]?.timestamp ?? "";
+		const extra = live.filter(
+			e =>
+				!seen.has(e.id) &&
+				(typeof e.id !== "string" || !e.id.startsWith("user:optimistic-")) &&
+				(cutoff === "" || e.timestamp >= cutoff),
+		);
+		const result = extra.length > 0 ? [...base, ...extra] : base;
+		overviewMergeRef.current = { full: fullEntries, liveSig, result };
+		return result;
+	}, [fullEntries, snap?.entries]);
+	// M1.11: data-driven TurnRail source — one lightweight record per turn
 	// (~120B). The rail no longer measures turn positions from the DOM: rows
 	// outside the transcript's render window don't exist to measure, which is
 	// what made the rail drop turns on long sessions.
