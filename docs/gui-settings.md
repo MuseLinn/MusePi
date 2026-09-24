@@ -13,19 +13,26 @@ English | [中文](gui-settings.zh-CN.md)
 
 ## 2. Settings Panel Layout
 
-`SettingsView` (`packages/desktop-app/src/components/SettingsView.tsx`) replaces the workspace full-window, in three parts:
+Since 2026-09-24 the settings shell **reuses the main layout by slot replacement** (it no longer overlays the chat column): the settings nav fills the app sidebar's slot and `SettingsView` fills the chat column. Three parts:
 
 ```
-gui-settings-view          ← flex:1 fills the shell (flex ROW); size does not follow tab content
-├─ gui-settings-drag       ← 28px window drag bar
-└─ flex row
-   ├─ nav column (w-64)    ← grouped navigation (Basics / AGENT capabilities / Data & stats) + bottom guidance
-   └─ gui-settings-main    ← flex:1
-      └─ gui-settings-surface ← rounded floating card (same style as gui-chat-surface:
-           m-2 + rounded-2xl + var(--color-surface) + 0 4px 24px shadow)
-         └─ gui-settings-content ← centered column width:100% / max-width:840px /
-              margin-inline:auto (openchamber SettingsPageLayout parity)
+gui-main (flex ROW)
+├─ .gui-settings-nav-slot   ← the sidebar slot's stand-in while the shell is active;
+│   (width = sideWidth)       SettingsView PORTALS its nav column here (lookup by id)
+│                             └─ gui-settings-nav-col ← grouped navigation
+│                                (Basics / AGENT capabilities / Data & stats) + bottom guidance
+└─ gui-chat-col
+   └─ .gui-view-enter > gui-settings-view   ← fills the chat column
+      ├─ gui-settings-drag       ← 48px window drag bar (same band as the header row)
+      └─ gui-settings-main       ← flex:1
+         └─ gui-settings-surface ← rounded floating card (same style as gui-chat-surface:
+              m-2 + rounded-2xl + var(--color-surface) + 0 4px 24px shadow)
+            └─ gui-settings-content ← centered column width:100% / max-width:840px /
+                 margin-inline:auto (openchamber SettingsPageLayout parity)
 ```
+
+- **Workspace keepers**: the real `SessionSidebar` (`.gui-side-keeper`) and the chat header + surface (`.gui-chat-col-keeper`) stay mounted, display:none, while the shell is active — closing settings restores them with the standard blur-in (expanded groups / transcript / virtual-list state all survive). The slot/keeper decision table lives in `src/lib/settings-shell.ts` and is contract-tested (`test/settings-shell.test.tsx`).
+- **Retired**: `.gui-settings-host` (the absolute chat-column overlay) — the sidebar no longer floats beside a second nav column; the settings nav IS the sidebar slot's content.
 
 - **Rounded card**: a rounded, shadowed card consistent with the main chat area, separated from the left navigation over the frosted-glass background. The earlier "flat, no card" experiment was rejected by the user; the card was restored.
 - **Content column**: 840px centered, symmetric side margins; padding `calc(32px * density)` / `calc(48px * density)`.

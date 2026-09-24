@@ -12,19 +12,26 @@
 
 ## 2. 设置面板布局
 
-`SettingsView`(`packages/desktop-app/src/components/SettingsView.tsx`)全窗口替换工作区,三部分:
+2026-09-24 起设置壳层**以槽位替换复用主布局**(不再覆盖聊天列):设置导航填入应用侧栏槽位,`SettingsView` 填聊天列。三部分:
 
 ```
-gui-settings-view          ← flex:1 铺满 shell(flex ROW),尺寸不随 tab 内容变化
-├─ gui-settings-drag       ← 28px 窗口拖拽条
-└─ flex row
-   ├─ nav 列(w-64)         ← 分组导航(基础设置 / AGENT 能力 / 数据与统计)+ 底部引导
-   └─ gui-settings-main    ← flex:1
-      └─ gui-settings-surface ← 圆角浮动卡片(与 gui-chat-surface 同款:
-           m-2 + rounded-2xl + var(--color-surface) + 0 4px 24px 阴影)
-         └─ gui-settings-content ← 居中列 width:100% / max-width:840px /
-              margin-inline:auto(openchamber SettingsPageLayout parity)
+gui-main (flex ROW)
+├─ .gui-settings-nav-slot   ← 侧栏槽位的替身(壳层激活期间挂载);
+│   (width = sideWidth)       SettingsView 将导航列 PORTAL 进这里(按 id 查找)
+│                             └─ gui-settings-nav-col ← 分组导航
+│                                (基础设置 / AGENT 能力 / 数据与统计)+ 底部引导
+└─ gui-chat-col
+   └─ .gui-view-enter > gui-settings-view   ← 铺满聊天列
+      ├─ gui-settings-drag       ← 48px 窗口拖拽条(与 header 行同一条带)
+      └─ gui-settings-main       ← flex:1
+         └─ gui-settings-surface ← 圆角浮动卡片(与 gui-chat-surface 同款:
+              m-2 + rounded-2xl + var(--color-surface) + 0 4px 24px 阴影)
+            └─ gui-settings-content ← 居中列 width:100% / max-width:840px /
+                 margin-inline:auto(openchamber SettingsPageLayout parity)
 ```
+
+- **工作区 keeper**:真实 `SessionSidebar`(`.gui-side-keeper`)与聊天列 header + surface(`.gui-chat-col-keeper`)在壳层激活期间保持挂载、仅 display:none——关闭设置按标准 blur-in 恢复(分组展开态/转录/虚拟列表全部保留)。槽位与 keeper 的决策表在 `src/lib/settings-shell.ts`,契约测试 `test/settings-shell.test.tsx`。
+- **已退役**:`.gui-settings-host`(聊天列绝对定位覆盖层)——侧栏不再与第二根导航列并排漂浮;设置导航就是侧栏槽位的内容。
 
 - **圆角卡片**:与主聊天区一致的圆角阴影卡片,与左侧导航在磨砂玻璃背景上分隔。早期"平铺无卡片"实验已被用户否决,恢复卡片。
 - **内容列**:840px 居中,左右留白对称;内边距 `calc(32px * density) / calc(48px * density)`。
