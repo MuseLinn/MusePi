@@ -3292,9 +3292,6 @@ a.tr-tool-search-title:hover {
 	background: var(--accent);
 	opacity: 1;
 }
-.tr-turn-head-seq {
-	color: var(--fg-muted);
-}
 .tr-turn-head-status--run {
 	color: var(--accent);
 }

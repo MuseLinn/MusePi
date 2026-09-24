@@ -924,11 +924,16 @@ export function AssistantBody({
 
 /**
  * M1 turn header (design doc §A): the light timeline boundary above each turn
- * start — hairline · dot · 序号/模型/时间 · 状态(+冻结耗时) · hairline. The
+ * start — hairline · dot · 模型/时间 · 状态(+冻结耗时) · hairline. The
  * running tail shows an accent dot + 进行中 with NO duration (the live ticker
  * under the reply owns the counting); completed turns show ✓-colored 已完成
- * plus the frozen round total. Purely presentational — all data comes from
- * the caller's TurnRenderUnit plus the round-duration map lookup.
+ * plus the frozen round total. NO absolute turn number: the header's index
+ * was relative to the currently loaded window, while the round rail counts
+ * the daemon's full session.turns — long sessions / paging / branch switches
+ * made the two disagree (product decision 2026-09-24: the rail is the sole
+ * turn counter; the header keeps model / time / status / duration). Purely
+ * presentational — all data comes from the caller's TurnRenderUnit plus the
+ * round-duration map lookup.
  */
 export function TurnHeader({
 	unit,
@@ -947,19 +952,9 @@ export function TurnHeader({
 		<div className="tr-turn-head" aria-hidden={running ? undefined : true}>
 			<span className="tr-turn-head-line" />
 			<span className={`tr-turn-head-dot${running ? " tr-turn-head-dot--run" : ""}`} />
-			<span className="tr-turn-head-seq">{t("turn {index}", { index: String(unit.turnIndex + 1) })}</span>
-			{unit.model !== undefined && (
-				<>
-					<span className="tr-turn-head-sep">·</span>
-					<span>{unit.model}</span>
-				</>
-			)}
-			{time !== undefined && (
-				<>
-					<span className="tr-turn-head-sep">·</span>
-					<span>{time}</span>
-				</>
-			)}
+			{unit.model !== undefined && <span>{unit.model}</span>}
+			{unit.model !== undefined && time !== undefined && <span className="tr-turn-head-sep">·</span>}
+			{time !== undefined && <span>{time}</span>}
 			<span className="tr-turn-head-sep">·</span>
 			<span className={running ? "tr-turn-head-status--run" : "tr-turn-head-status--done"}>
 				{running ? t("turn running") : t("turn done")}

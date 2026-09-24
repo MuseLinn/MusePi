@@ -2927,8 +2927,7 @@
 	height: 1px;
 }
 /* 对话↔地图视图切换的入场动效:轻微上浮 + 淡入,掩盖首帧构建。 */
-.tm-wrap,
-.stc-wrap {
+.tm-wrap {
 	animation: gui-canvas-in 200ms cubic-bezier(0.22, 0.8, 0.3, 1);
 }
 @keyframes gui-canvas-in {
@@ -2942,8 +2941,7 @@
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	.tm-wrap,
-	.stc-wrap {
+	.tm-wrap {
 		animation: none;
 	}
 }
@@ -3119,420 +3117,6 @@
 	color: var(--color-text);
 }
 
-.stc-wrap {
-	position: absolute;
-	inset: 0;
-	overflow: hidden;
-	background:
-		radial-gradient(color-mix(in oklab, var(--color-text-faint) 14%, transparent) 1px, transparent 1px) 0 0 / 22px 22px,
-		var(--color-surface);
-	cursor: grab;
-	touch-action: none;
-	user-select: none;
-}
-.stc-wrap[data-dragging] {
-	cursor: grabbing;
-}
-.stc-empty {
-	padding: 24px 16px;
-	font-size: 12px;
-	color: var(--color-text-faint);
-}
-.stc-world {
-	position: absolute;
-	top: 0;
-	left: 0;
-	transform-origin: 0 0;
-}
-.stc-edges {
-	position: absolute;
-	top: 0;
-	left: 0;
-	overflow: visible;
-	pointer-events: none;
-}
-.stc-edge {
-	fill: none;
-	stroke: color-mix(in oklab, var(--color-accent) 72%, transparent);
-	stroke-width: 2;
-}
-.stc-edge--off {
-	/* 分支/fork 边:与主线(实线 accent)区分——紫调虚线 = 血缘以外分出的支路
-	 * (dsh-talk-map「虚线血缘 / 实线主线」的线型语义)。 */
-	stroke: color-mix(in oklab, var(--color-accent) 45%, var(--color-text-faint));
-	stroke-width: 1.5;
-	stroke-dasharray: 4 4;
-	opacity: 0.7;
-}
-.stc-arrow-head {
-	fill: var(--color-accent);
-}
-.stc-node {
-	position: absolute;
-	/* 两行式卡片:标题行(角色/工具名 + 时刻 + 悬浮操作)+ 摘要行。摘要独占
-	 * 一行才读得出内容——与时刻/操作同排时会被压成省略号。 */
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	padding: 7px 9px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface-sunken, var(--color-surface));
-	color: var(--color-text);
-	cursor: pointer;
-	transition: border-color 120ms ease, background 120ms ease;
-	/* 地图视图上万张卡片:跳过视口外节点的布局/绘制(NODE_H=76 同源自
-	 * SessionTreeCanvas 常量)——进地图视图不再逐卡排版。 */
-	content-visibility: auto;
-	contain-intrinsic-size: 208px 76px;
-}
-.stc-node:hover {
-	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
-	background: var(--color-surface-raised, var(--color-bg));
-}
-/* 悬浮操作(跳转/重答/分叉):默认隐形,悬停浮在卡片右上角——内联会跟标题
- * 抢宽度,把「角色 · 工具名」挤成省略号。 */
-.stc-node:hover .traj-trow-actions {
-	opacity: 1;
-	background: var(--color-surface-raised, var(--color-bg));
-	border-radius: var(--radius-md);
-}
-.stc-node-head {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	/* 固定行高:18px 悬浮按钮不撑高卡片,摘要两行的位置也稳定。 */
-	height: 18px;
-	flex-shrink: 0;
-}
-.stc-node-head .traj-trow-actions {
-	position: absolute;
-	top: 6px;
-	right: 8px;
-}
-.stc-node-title {
-	min-width: 0;
-	flex: 1;
-	overflow: hidden;
-	font-size: 10.5px;
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	color: var(--color-text-muted);
-}
-.stc-node--user {
-	border-left: 2px solid color-mix(in oklab, var(--color-info, #6aa1ff) 55%, transparent);
-}
-.stc-node--assistant {
-	border-left: 2px solid color-mix(in oklab, var(--color-accent) 55%, transparent);
-}
-.stc-node--toolResult {
-	border-left: 2px solid color-mix(in oklab, var(--color-text-faint) 50%, transparent);
-}
-.stc-node-text {
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	line-clamp: 2;
-	font-size: 11.5px;
-	line-height: 1.35;
-	word-break: break-word;
-	color: var(--color-text-muted);
-}
-.stc-node-verdict {
-	flex-shrink: 0;
-	font-size: 10.5px;
-	line-height: 1;
-	font-weight: 700;
-	font-family: var(--font-mono, ui-monospace, monospace);
-}
-.stc-node-verdict--ok {
-	color: var(--color-ok);
-}
-.stc-node-verdict--error {
-	color: var(--color-danger);
-}
-.stc-node-verdict--empty {
-	color: var(--color-text-faint);
-}
-.stc-node-clock {
-	flex-shrink: 0;
-	font-size: 9.5px;
-	font-family: var(--font-mono, ui-monospace, monospace);
-	color: var(--color-text-faint);
-	opacity: 0.8;
-}
-.stc-node--leaf {
-	border-color: color-mix(in oklab, var(--color-accent) 55%, var(--border));
-	animation: stc-leaf-pulse 2.4s ease-in-out infinite;
-}
-@keyframes stc-leaf-pulse {
-	0%,
-	100% {
-		box-shadow:
-			0 0 0 0 color-mix(in oklab, var(--color-accent) 30%, transparent),
-			0 2px 8px rgba(0, 0, 0, 0.16);
-	}
-	50% {
-		box-shadow:
-			0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent),
-			0 2px 8px rgba(0, 0, 0, 0.16);
-	}
-}
-@media (prefers-reduced-motion: reduce) {
-	.stc-node--leaf {
-		animation: none;
-	}
-}
-.stc-node--off {
-	opacity: 0.75;
-}
-.stc-node--off .gui-mtree-icon {
-	opacity: 0.5;
-}
-.stc-node--active {
-	border-color: color-mix(in oklab, var(--color-accent) 58%, var(--border));
-	background: var(--color-surface-raised, var(--color-bg));
-}
-.stc-node--active.stc-node--leaf {
-	border-color: var(--color-accent);
-}
-/* Current-position marker: when tail-following (leafId null) the deepest
- * active-path node carries a dashed accent ring — the map keeps a "我在哪"
- * anchor, and the zoom stack's target button centers back onto it. */
-.stc-node--current {
-	border-color: var(--color-accent);
-	border-style: dashed;
-	box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 18%, transparent);
-}
-.stc-node--active .stc-node-text {
-	color: var(--color-text);
-}
-.stc-node--active .stc-node-title {
-	color: var(--color-text);
-}
-.stc-node-badge {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-width: 15px;
-	height: 15px;
-	padding: 0 4px;
-	border-radius: var(--radius-md);
-	font-size: 9.5px;
-	line-height: 1;
-	color: var(--color-text);
-	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
-	flex-shrink: 0;
-}
-.stc-node-action {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border-radius: var(--radius-sm);
-	color: var(--color-text-muted);
-	background: transparent;
-	flex-shrink: 0;
-}
-.stc-node-action:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 14%, transparent);
-	color: var(--color-text);
-}
-.stc-zoom {
-	position: absolute;
-	right: 12px;
-	bottom: 12px;
-	z-index: 30;
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-}
-.stc-zoom-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 24px;
-	height: 24px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	color: var(--color-text-muted);
-	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
-	backdrop-filter: blur(8px);
-}
-.stc-zoom-btn:hover {
-	color: var(--color-text);
-	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
-}
-/* Canvas detail card (focus view) */
-/* Canvas focus card: design-language floating card (border + raised +
- * token radius + tiered shadow + glass), NOT an AI-style rounded modal. */
-.stc-focus-overlay {
-	position: absolute;
-	inset: 0;
-	z-index: 40;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
-	backdrop-filter: blur(3px);
-	animation: gui-menu-in var(--gui-motion-menu-in) var(--spring);
-}
-.stc-focus-overlay--closing {
-	animation: gui-menu-out var(--gui-motion-menu-out) ease-in forwards;
-	pointer-events: none;
-}
-@media (prefers-reduced-motion: reduce) {
-	.stc-focus-overlay,
-	.stc-focus-overlay--closing {
-		animation: none;
-	}
-}
-.gui-motion-off .stc-focus-overlay,
-.gui-motion-off .stc-focus-overlay--closing {
-	animation: none;
-}
-.stc-focus-card {
-	width: min(520px, calc(100% - 48px));
-	max-height: 66%;
-	display: flex;
-	flex-direction: column;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface-raised, var(--color-bg));
-	box-shadow: var(--shadow-overlay, 0 12px 32px oklch(0 0 0 / 45%), 0 2px 8px oklch(0 0 0 / 30%));
-	overflow: hidden;
-}
-.stc-focus-head {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 9px 12px;
-	border-bottom: 1px solid var(--border);
-	flex-shrink: 0;
-}
-.stc-focus-label {
-	font-size: var(--ui-font-size-xs);
-	font-weight: 600;
-	letter-spacing: 0.02em;
-	color: var(--color-text-muted);
-}
-.stc-focus-close {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	margin-left: auto;
-	border: none;
-	border-radius: var(--radius-md);
-	background: transparent;
-	color: var(--color-text-muted);
-}
-.stc-focus-close:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
-	color: var(--color-text);
-}
-.stc-focus-body {
-	padding: 12px;
-	overflow-y: auto;
-	font-size: var(--ui-font-size-sm);
-	line-height: 1.6;
-	color: var(--color-text);
-	white-space: pre-wrap;
-	word-break: break-word;
-}
-
-.stc-search {
-	position: absolute;
-	top: 8px;
-	left: 8px;
-	z-index: 30;
-	display: flex;
-	align-items: center;
-	gap: 4px;
-	width: 220px;
-	height: 28px;
-	padding: 0 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
-	backdrop-filter: blur(8px);
-}
-.stc-search:focus-within {
-	border-color: var(--color-accent);
-}
-.stc-search-input {
-	flex: 1;
-	min-width: 0;
-	border: none;
-	outline: none;
-	background: transparent;
-	font-size: 11px;
-	color: var(--color-text);
-}
-.stc-search-input::placeholder {
-	color: var(--color-text-muted);
-}
-.stc-search-count {
-	font-size: 9.5px;
-	color: var(--color-text-muted);
-	flex-shrink: 0;
-}
-.stc-search-nav {
-	display: inline-flex;
-	align-items: center;
-	gap: 1px;
-	flex-shrink: 0;
-}
-.stc-search-nav-btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 18px;
-	height: 18px;
-	border-radius: var(--radius-sm);
-	color: var(--color-text-muted);
-}
-.stc-search-nav-btn:hover {
-	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
-	color: var(--color-text);
-}
-.stc-search-nav-btn:disabled {
-	opacity: 0.35;
-	pointer-events: none;
-}
-.stc-node--search-match {
-	box-shadow: 0 0 0 2px var(--color-accent);
-	animation: stc-search-flash 600ms ease;
-}
-@keyframes stc-search-flash {
-	0% { box-shadow: 0 0 0 6px color-mix(in oklab, var(--color-accent) 60%, transparent); }
-	100% { box-shadow: 0 0 0 2px var(--color-accent); }
-}
-.stc-node--search-current {
-	box-shadow: 0 0 0 3px var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 14%, var(--color-surface-raised, var(--color-bg)));
-}
-.stc-node--search-dim {
-	opacity: 0.35;
-}
-/* Hover lift */
-.stc-node:hover {
-	transform: translateY(-1px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-@keyframes stc-fade-in {
-	from { opacity: 0; }
-	to { opacity: 1; }
-}
-@keyframes stc-scale-in {
-	from { opacity: 0; transform: scale(0.92); }
-	to { opacity: 1; transform: scale(1); }
-}
 /* Trajectory branch lane grid */
 .traj-tree-lanes {
 	display: flex;
@@ -4914,7 +4498,7 @@
 }
 
 /* ── 轮级会话地图(0.5.0-map-redesign):节点 = 轮,主线金色流动渐变,
-   分支列金→紫渐变,液态玻璃卡片。── */
+   分支金→紫渐变,液态玻璃卡片;折叠紧凑卡 + 横/纵双方向。── */
 
 .tm-wrap {
 	position: absolute;
@@ -4928,7 +4512,7 @@
 	cursor: grabbing;
 }
 
-/* 顶栏:玻璃容器,标题 + 时间轴 + 搜索 + 消息级入口。 */
+/* 顶栏:玻璃容器,标题 + 时间轴 + 搜索 + 批量折叠/方向切换。 */
 .tm-topbar {
 	position: absolute;
 	top: 10px;
@@ -5041,7 +4625,7 @@
 	border-color: color-mix(in oklab, var(--color-text) 12%, transparent);
 }
 
-/* 迷你导航条:全轮次剪影 + 视口映射。 */
+/* 迷你导航条:全轮次剪影 + 视口映射。纵向 = 左侧竖条;横向 = 底部横条。 */
 .tm-nav {
 	position: absolute;
 	top: 16px;
@@ -5060,6 +4644,30 @@
 	backdrop-filter: blur(12px) saturate(1.3);
 	-webkit-backdrop-filter: blur(12px) saturate(1.3);
 	cursor: pointer;
+}
+
+/* 横向模式:条目沿 X 轴展开;右侧让位给缩放控件。 */
+.tm-nav[data-orient="h"] {
+	top: auto;
+	left: 16px;
+	right: 56px;
+	bottom: 10px;
+	width: auto;
+	height: 30px;
+	flex-direction: row;
+}
+
+.tm-nav[data-orient="h"] .tm-nav-band {
+	width: auto;
+	height: 100%;
+	min-width: 2px;
+	min-height: 0;
+}
+
+.tm-nav[data-orient="h"] .tm-nav-viewport {
+	top: 1px;
+	height: calc(100% - 2px);
+	transition: left 120ms ease-out, width 120ms ease-out;
 }
 
 .tm-nav-band {
@@ -5154,7 +4762,7 @@
 	box-shadow: 0 8px 26px color-mix(in oklab, var(--color-bg) 55%, transparent);
 }
 
-/* 支线卡:降低不透明度(stc-node--off 语义保留)。 */
+/* 支线卡:降低不透明度 + 金→紫渐变左缘。 */
 .tm-node--branch {
 	opacity: 0.82;
 	border-left: 2px solid transparent;
@@ -5267,6 +4875,65 @@
 	border-top: 1px dashed color-mix(in oklab, var(--color-text) 12%, transparent);
 	overflow-y: auto;
 	max-height: 240px;
+}
+
+/* 折叠态紧凑卡:单行(徽章 + 摘要 + 计数 + 用时),与展开态共用玻璃底。 */
+.tm-node--compact {
+	flex-direction: row;
+	align-items: center;
+	padding: 4px 10px;
+	gap: 6px;
+}
+
+.tm-compact {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex: 1;
+	min-width: 0;
+}
+
+.tm-compact-summary {
+	flex: 1;
+	min-width: 0;
+	font-size: 11px;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tm-compact-count {
+	flex: none;
+	font-size: 9px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-muted);
+}
+
+/* 空态(消息级画布下线后并入 tm 命名)。 */
+.tm-empty {
+	padding: 24px 16px;
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+
+/* 泳道明细(trace 对齐):工具参数摘要 + assistant usage/duration/ttft。 */
+.tm-lane-args {
+	flex: 2;
+	min-width: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
+}
+
+.tm-lane-usage,
+.tm-lane-meta {
+	flex: none;
+	font-size: 9px;
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--color-text-faint);
 }
 
 .tm-lane-row {

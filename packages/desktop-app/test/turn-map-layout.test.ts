@@ -4,12 +4,21 @@ import {
 	layoutTurnMap,
 	TURN_GAP_Y,
 	TURN_LANE_GAP,
+	TURN_NODE_COMPACT_H,
 	TURN_NODE_H,
 	TURN_NODE_W,
+	type TurnMapNode,
 	turnExpandedExtra,
+	visibleTurnMapNodes,
 } from "../src/components/turn-map-layout";
 
-// 轮级会话地图布局(0.5.0-map-redesign):主线垂直时间轴 + 分支横向开列。
+// 轮级会话地图布局(0.5.0-map-redesign):主线时间轴 + 分支开列;
+// 折叠态紧凑卡、横向/纵向双方向。
+
+/** 节点当前有效高度(折叠 = 紧凑卡;展开 = 基础 + 泳道增量)。 */
+function nodeH(n: TurnMapNode): number {
+	return n.expandedExtra > 0 ? TURN_NODE_H + n.expandedExtra : TURN_NODE_COMPACT_H;
+}
 
 function turnGroup(
 	turn: number,
@@ -106,7 +115,17 @@ describe("layoutTurnMap", () => {
 	it("画布尺寸覆盖全部节点(分支列计入宽度)", () => {
 		const layout = layoutTurnMap([turnGroup(1), turnGroup(2, { branch: true })]);
 		expect(layout.width).toBe(2 * TURN_NODE_W + TURN_LANE_GAP);
-		expect(layout.height).toBeGreaterThan(TURN_NODE_H * 2);
+		// 高度覆盖所有节点的底部(含间距);紧凑卡下世界随内容收缩。
+		const bottom = Math.max(...layout.nodes.map(n => n.y + nodeH(n)));
+		expect(layout.height).toBeGreaterThanOrEqual(bottom + TURN_GAP_Y);
+	});
+
+	it("折叠态(默认):节点有效高度 = 紧凑卡高", () => {
+		const layout = layoutTurnMap([turnGroup(1), turnGroup(2)]);
+		expect(layout.nodes.every(n => n.h === TURN_NODE_COMPACT_H)).toBe(true);
+		// 展开后 h 切到基础卡 + 泳道增量。
+		const expanded = layoutTurnMap([turnGroup(1)], new Set([1]));
+		expect(expanded.nodes[0]!.h).toBe(TURN_NODE_H + turnExpandedExtra(2));
 	});
 
 	it("轮前元事件组(turn 0,无 user 事件)不发节点", () => {
@@ -128,6 +147,84 @@ describe("layoutTurnMap", () => {
 	});
 });
 
+describe("layoutTurnMap 横向布局", () => {
+	it("主线沿 X 轴水平推进(y=0),分支车道纵向开行", () => {
+		const turns = [turnGroup(1), turnGroup(2), turnGroup(3, { branch: true }), turnGroup(4)];
+		const layout = layoutTurnMap(turns, new Set(), "h");
+		// 主线:y 全为 0,x 按序递增,步长 = 卡宽 + 间距。
+		expect(layout.main.map(n => n.y)).toEqual([0, 0, 0]);
+		expect(layout.main.map(n => n.x)).toEqual([0, TURN_NODE_W + TURN_GAP_Y, (TURN_NODE_W + TURN_GAP_Y) * 2]);
+		// 分支轮:转置几何——y = 车道行基准(H + LANE_GAP),x 从分叉源右缘起。
+		const branch = layout.nodes.find(n => n.group.turn === 3)!;
+		expect(branch.branch).toBe(true);
+		expect(branch.y).toBe(TURN_NODE_H + TURN_LANE_GAP);
+		expect(branch.x).toBeGreaterThanOrEqual(TURN_NODE_W + TURN_GAP_Y);
+		expect(branch.sourceTurn).toBe(2);
+		// 分支边仍从主线源连到分支轮。
+		const branchEdge = layout.edges.find(e => e.branch);
+		expect(branchEdge?.from.group.turn).toBe(2);
+		expect(branchEdge?.to.group.turn).toBe(3);
+		// 尺寸转置:宽由主线链决定,高由车道数决定。
+		expect(layout.width).toBeGreaterThan(TURN_NODE_W * 2);
+		expect(layout.height).toBe(2 * TURN_NODE_H + TURN_LANE_GAP);
+	});
+
+	it("连续分支轮共用一行(向右排),新车道另起一行", () => {
+		const turns = [
+			turnGroup(1),
+			turnGroup(2, { branch: true }),
+			turnGroup(3, { branch: true }),
+			turnGroup(4),
+			turnGroup(5, { branch: true }),
+		];
+		const layout = layoutTurnMap(turns, new Set(), "h");
+		const t2 = layout.nodes.find(n => n.group.turn === 2)!;
+		const t3 = layout.nodes.find(n => n.group.turn === 3)!;
+		const t5 = layout.nodes.find(n => n.group.turn === 5)!;
+		expect(t2.lane).toBe(1);
+		expect(t3.lane).toBe(1);
+		expect(t5.lane).toBe(2);
+		// 同行:x 递增、y 相同;新行:y 更靠下。
+		expect(t3.x).toBe(t2.x + TURN_NODE_W + TURN_GAP_Y);
+		expect(t3.y).toBe(t2.y);
+		expect(t5.y).toBeGreaterThan(t2.y);
+	});
+
+	it("展开的分支轮把后续车道行推开(行底水位)", () => {
+		// t2 = 车道 1(展开);t3 = 主线;t4 = 车道 2 —— 新行必须在展开卡之下。
+		const turns = [
+			turnGroup(1),
+			turnGroup(2, { branch: true, events: 8 }),
+			turnGroup(3),
+			turnGroup(4, { branch: true }),
+		];
+		const collapsed = layoutTurnMap(turns, new Set(), "h");
+		const expanded = layoutTurnMap(turns, new Set([2]), "h");
+		const extra = turnExpandedExtra(8);
+		const c4 = collapsed.nodes.find(n => n.group.turn === 4)!;
+		const e4 = expanded.nodes.find(n => n.group.turn === 4)!;
+		const expandedBranch = expanded.nodes.find(n => n.group.turn === 2)!;
+		// 展开增量把下一行推到展开卡底部之下,不重叠。
+		expect(e4.y).toBeGreaterThanOrEqual(expandedBranch.y + TURN_NODE_H + extra);
+		// 无展开时行位即车道基准。
+		expect(c4.y).toBe(2 * (TURN_NODE_H + TURN_LANE_GAP));
+	});
+
+	it("横向视口裁剪按 X 轴命中(X 区间外的节点剔除)", () => {
+		const turns = Array.from({ length: 12 }, (_, i) => turnGroup(i + 1));
+		const layout = layoutTurnMap(turns, new Set(), "h");
+		// 视口只覆盖最左 2.5 张卡的水平区间。
+		const vp = { left: 0, top: -50, right: TURN_NODE_W * 2 + TURN_GAP_Y / 2, bottom: TURN_NODE_H + 50 };
+		const vis = visibleTurnMapNodes(layout.nodes, vp, 0);
+		expect(vis.length).toBeGreaterThanOrEqual(2);
+		expect(vis.length).toBeLessThan(layout.nodes.length);
+		for (const n of vis) {
+			expect(n.x + TURN_NODE_W).toBeGreaterThanOrEqual(0);
+			expect(n.x).toBeLessThanOrEqual(TURN_NODE_W * 2 + TURN_GAP_Y / 2);
+		}
+	});
+});
+
 describe("visibleTurnMapNodes", () => {
 	it("只保留视口内(含 pad)的节点,视口外剔除", async () => {
 		const { visibleTurnMapNodes } = await import("../src/components/turn-map-layout");
@@ -139,14 +236,14 @@ describe("visibleTurnMapNodes", () => {
 		expect(vis.length).toBeGreaterThan(0);
 		expect(vis.length).toBeLessThan(layout.nodes.length);
 		for (const n of vis) {
-			expect(n.y + TURN_NODE_H).toBeGreaterThanOrEqual(500);
+			expect(n.y + nodeH(n)).toBeGreaterThanOrEqual(500);
 			expect(n.y).toBeLessThanOrEqual(1000);
 		}
 		// 其余节点确实在视口外。
 		const visTurns = new Set(vis.map(n => n.group.turn));
 		for (const n of layout.nodes) {
 			if (visTurns.has(n.group.turn)) continue;
-			expect(n.y > 1000 || n.y + TURN_NODE_H < 500).toBe(true);
+			expect(n.y > 1000 || n.y + nodeH(n) < 500).toBe(true);
 		}
 	});
 
@@ -156,7 +253,12 @@ describe("visibleTurnMapNodes", () => {
 		const layout = layoutTurnMap(turns);
 		const first = layout.nodes[0]!;
 		// 视口紧贴第一个节点下方 100px:pad 260 应把它召回。
-		const vp = { left: 0, top: first.y + TURN_NODE_H + 100, right: TURN_NODE_W, bottom: first.y + TURN_NODE_H + 200 };
+		const vp = {
+			left: 0,
+			top: first.y + nodeH(first) + 100,
+			right: TURN_NODE_W,
+			bottom: first.y + nodeH(first) + 200,
+		};
 		const vis = visibleTurnMapNodes(layout.nodes, vp);
 		expect(vis.some(n => n.group.turn === first.group.turn)).toBe(true);
 		// 覆盖全图的视口 = 全量返回。

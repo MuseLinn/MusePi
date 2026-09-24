@@ -53,7 +53,6 @@ import { Reveal } from "./Reveal";
 import { RightRail } from "./RightRail";
 import { SaveImageDialog } from "./SaveImageDialog";
 import { SelectionToolbar } from "./SelectionToolbar";
-import { SessionTreeCanvas } from "./SessionTreeCanvas";
 import { type BreadcrumbSegment, SessionTreeNav } from "./SessionTreeNav";
 import { StatusCards } from "./StatusCards";
 import { SessionStatusBar } from "./statusbar-info";
@@ -692,8 +691,11 @@ export function ChatView({
 	const activeView = activePanelTab?.surface ?? null;
 	// Layer-1 session-tree leaf: null = follow the tip (linear session);
 	// a branchAt / branch switch sets it to a historical node so sending
-	// forks a new branch under it (TUI navigateTree parity).
-	const [currentLeafKey, setCurrentLeafKey] = useState<string | null>(null);
+	// forks a new branch under it (TUI navigateTree parity). "root" pins the
+	// view to the session ROOT (rewind of the FIRST user message — the active
+	// path is empty); a bare string is safe because view keys are
+	// `role:timestamp` and never collide with the sentinel.
+	const [currentLeafKey, setCurrentLeafKey] = useState<string | "root" | null>(null);
 	// Layer-3: 聊天表面顶层 Chat | Canvas 切换(canvas = 会话树地图)。
 	// startTransition:画布/对话互切是整树 mount/unmount(超长会话上万
 	// 节点),可中断渲染让切换按钮与滚动先行响应,避免"点了没反应"的卡顿感。
@@ -701,10 +703,9 @@ export function ChatView({
 	const setViewMode = useCallback((mode: "chat" | "canvas") => {
 		startTransition(() => setViewModeState(mode));
 	}, []);
-	// 地图的两种投影:轮级(默认,0.5.0-map-redesign 设计稿——节点 = 轮,
-	// 164 轮 = 164 张卡)与消息级(SessionTreeCanvas,9985 张消息卡,降级
-	// 为调试分支结构的入口:Shift+点「地图」tab 或轮级地图顶栏按钮进入)。
-	const [mapDetail, setMapDetail] = useState<"turn" | "message">("turn");
+	// 地图单一投影:轮级(0.5.0-map-redesign——节点 = 轮,164 轮 = 164 张卡)。
+	// 消息级画布(SessionTreeCanvas)已下线:两套同数据源视图收敛为一个轮级
+	// 地图,消息级分支结构由 ContextPanel 的 TrajectoryView 分支树模式承担。
 	// Extension panel-tab slots (panel.tab.*) — nav items live in the rail;
 	// the panel only renders their content.
 	const extTabs = useSlotComponentsByPrefix(rpc, PANEL_TAB_SLOT_PREFIX);
@@ -875,7 +876,10 @@ export function ChatView({
 				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
 				return false;
 			}
-			if (res.leafId) setCurrentLeafKey(res.leafId);
+			// null leafId = landed on the session ROOT (rewound past the first
+			// user message). Pin explicitly — null means "follow the tip" and
+			// would resurrect the tail we just dropped.
+			setCurrentLeafKey(res.leafId ?? "root");
 			if (text) setPendingEdit(text);
 			setJumpBack(fromLeafKey ? { fromLeafKey, text } : null);
 			pulseSwitch();
@@ -975,24 +979,37 @@ export function ChatView({
 		if (snap?.working !== true) return true;
 		return confirm(`${t("agent is running")}\n\n${t("tree op interrupts work")}`, t("interrupt and continue"));
 	}, [confirm, snap?.working, t]);
+	// 统一树操作守卫(retry / rewind / switchBranch / fork 共用):运行中先
+	// 确认,确认后停下在途回合并等它真正收敛(branchAt 在在途回合下重锚
+	// 会把回复挂错节点,2026-09-16 用户报告)。纯导航(jump)不走此守卫。
+	// 返回 false = 用户取消了确认(操作未执行)。
+	const runTreeOp = useCallback(
+		async (op: () => unknown): Promise<boolean> => {
+			if (!(await confirmTreeOpWhileWorking())) return false;
+			if (snapRef.current?.working) onStop();
+			await waitWorkingCleared();
+			await op();
+			return true;
+		},
+		[confirmTreeOpWhileWorking, onStop, waitWorkingCleared],
+	);
 	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
-		if (!(await confirmTreeOpWhileWorking())) return;
-		if (snapRef.current?.working) onStop();
 		// Converged path: branchAt AFTER the run actually unwinds, otherwise the
 		// re-anchor races the in-flight run and the reply lands under the wrong
 		// node (user report 2026-09-16).
-		await waitWorkingCleared();
-		const res = await branchTo(messageId);
-		// session.branchAt positions a USER message at its PARENT (the node is
-		// re-answered by the send that follows), so the pinned leaf sits at the
-		// branch point — and the transcript, which renders the active path,
-		// would hide the very attempt we are about to create (the user saw only
-		// the "此节点有 N 个分支" divider while the map showed the new branch).
-		// Release the pin so the view follows the new tip, exactly like the
-		// composer's own send path.
-		setCurrentLeafKey(null);
-		if (res?.editorText) onSend(res.editorText);
-		else if (res) onSend(text);
+		await runTreeOp(async () => {
+			const res = await branchTo(messageId);
+			// session.branchAt positions a USER message at its PARENT (the node is
+			// re-answered by the send that follows), so the pinned leaf sits at the
+			// branch point — and the transcript, which renders the active path,
+			// would hide the very attempt we are about to create (the user saw only
+			// the "此节点有 N 个分支" divider while the map showed the new branch).
+			// Release the pin so the view follows the new tip, exactly like the
+			// composer's own send path.
+			setCurrentLeafKey(null);
+			if (res?.editorText) onSend(res.editorText);
+			else if (res) onSend(text);
+		});
 	};
 	// Rewind (撤回, the ⤺ action under a USER message): branch to the user
 	// message's PARENT — the node BEFORE it — so the user message itself also
@@ -1002,21 +1019,12 @@ export function ChatView({
 	// stays on the tree (map/trajectory) as a sibling branch; nothing is
 	// truncated.
 	const rewindFromUserMessage = async (messageId: string): Promise<void> => {
-		if (!(await confirmTreeOpWhileWorking())) return;
-		if (snapRef.current?.working) onStop();
-		// Converged path: branchAt AFTER the run actually unwinds, otherwise the
-		// re-anchor races the in-flight run and the reply lands under the wrong
-		// node (user report 2026-09-16).
-		await waitWorkingCleared();
-		const entry = (snap?.entries ?? []).find(e => (e as { id?: string }).id === messageId) as
-			| { parentId?: string | null }
-			| undefined;
-		const parentId = entry?.parentId;
-		if (!parentId) {
-			window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
-			return;
-		}
-		await jumpBackToMessage(parentId, "");
+		// Converged path: branchAt AFTER the run actually unwinds (runTreeOp).
+		// Hand the message's own id to branchAt: the daemon's user→parent
+		// mapping covers rewind-to-root natively. The old entry lookup +
+		// null-parentId interception toasted "branch failed" BEFORE the RPC
+		// whenever the first user message was rewound.
+		await runTreeOp(() => jumpBackToMessage(messageId, ""));
 	};
 	// Pending composer prefill: message text sent back for re-editing
 	// (jump-back 回填 + transcript inline edit). null = no pending edit.
@@ -1031,19 +1039,23 @@ export function ChatView({
 	// and re-answer via the backfilled text.
 	const forkFromMessage = async (messageId: string, text?: string, includeTarget?: boolean): Promise<void> => {
 		if (!store) return;
-		try {
-			const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
-				sessionId: store.sessionId,
-				messageId,
-				includeTarget,
-			});
-			if (res?.sessionId) {
-				await onForkSession?.(res.sessionId);
-				if (text) setPendingEdit(text);
+		// Tree-op guard (runTreeOp): forking while a run is in flight copies a
+		// mid-flight snapshot — confirm + stop + wait like the other tree ops.
+		await runTreeOp(async () => {
+			try {
+				const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
+					sessionId: store.sessionId,
+					messageId,
+					includeTarget,
+				});
+				if (res?.sessionId) {
+					await onForkSession?.(res.sessionId);
+					if (text) setPendingEdit(text);
+				}
+			} catch {
+				// daemon rejected (unknown message/session) — keep as-is
 			}
-		} catch {
-			// daemon rejected (unknown message/session) — keep as-is
-		}
+		});
 	};
 	// ── Layer-1 session-tree topology (nav unification, 2026-08-24) ────
 	// Children index over the view entries by parentId; the active path
@@ -1066,6 +1078,9 @@ export function ChatView({
 	// Current leaf: explicit branch switch wins; otherwise the LAST entry
 	// (linear tip). Reset the override whenever the session changes.
 	const effectiveLeaf = useMemo(() => {
+		// Pinned to the session root (rewound past the first user message):
+		// the active path is empty, so there is no leaf to walk from.
+		if (currentLeafKey === "root") return null;
 		const entries = snap?.entries ?? [];
 		const last = entries[entries.length - 1];
 		const lastId = typeof last === "object" && last !== null ? (last as { id?: unknown }).id : undefined;
@@ -1080,6 +1095,9 @@ export function ChatView({
 	// against such a partial path dropped nearly every row (user: 打开旧会话只
 	// 显示到最开始那条, 会话树也没亮).
 	const leafWalk = useMemo(() => {
+		// Pinned to the session root: no leaf, so the active path is empty
+		// (and trustworthy — nothing is cut).
+		if (currentLeafKey === "root") return { path: [] as { id: string; kind: string }[], complete: true };
 		const byId = new Map<string, { id: string; kind: string }>();
 		const byKey = new Map<string, { id?: unknown; parentId?: unknown; type?: string }>();
 		for (const entry of snap?.entries ?? []) {
@@ -1110,7 +1128,7 @@ export function ChatView({
 			cursor = parent;
 		}
 		return { path, complete };
-	}, [effectiveLeaf, snap?.entries]);
+	}, [effectiveLeaf, currentLeafKey, snap?.entries]);
 	const leafPath = leafWalk.path;
 	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
 	// change, so it hands the canvas a node to center + highlight.
@@ -1144,22 +1162,6 @@ export function ChatView({
 		}
 		return { turns, activeIdx };
 	}, [snap?.entries, leafPath]);
-	// A session only HAS off-path rows when some node has more than one child.
-	// Without this, a linear session whose chain happens to look "complete"
-	// (the daemon clears a link it cannot resolve, so the walk can stop at what
-	// looks like a root) was filtered down to that one node — an old session
-	// opened as an EMPTY transcript with nothing but 显示更早消息 (user report).
-	const branched = useMemo(() => {
-		const children = new Map<string, number>();
-		for (const entry of snap?.entries ?? []) {
-			const parent = (entry as { parentId?: unknown }).parentId;
-			if (typeof parent !== "string") continue;
-			const n = (children.get(parent) ?? 0) + 1;
-			if (n > 1) return true;
-			children.set(parent, n);
-		}
-		return false;
-	}, [snap?.entries]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
 	// Path handed to the tree/map/trajectory for dimming. With a cut chain the
@@ -1176,17 +1178,25 @@ export function ChatView({
 	// without a parent chain (round markers, synthetic rows) always stay: they
 	// hang off the session root, not off a branch point.
 	const visibleEntries = useMemo(() => {
-		// Nothing to hide in a linear session, and an untrustworthy topology
-		// (see leafWalk) must never be used to hide rows: both cases show the
-		// plain list.
-		if (!branched || !leafWalk.complete) return snap?.entries ?? [];
+		// The gate is the leaf pin, not "is branched": a rewind to a historical
+		// node drops the tail even in an otherwise-linear session. An
+		// untrustworthy topology (see leafWalk) must never hide rows, so a cut
+		// chain disables filtering wholesale.
+		if (!leafWalk.complete) return snap?.entries ?? [];
+		const pinnedToRoot = currentLeafKey === "root";
 		return (snap?.entries ?? []).filter(entry => {
-			const e = entry as { id?: unknown; parentId?: unknown };
+			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
 			if (typeof e.id !== "string") return true;
-			if (typeof e.parentId !== "string") return true;
+			if (typeof e.parentId !== "string") {
+				// Root-hung rows (round markers, synthetic rows) always stay —
+				// except the first USER message when pinned to the root: it is
+				// the node we rewound past and must leave the transcript.
+				if (pinnedToRoot && e.type === "message") return false;
+				return true;
+			}
 			return activePathIds.has(e.id);
 		});
-	}, [snap?.entries, activePathIds, leafWalk.complete, branched]);
+	}, [snap?.entries, activePathIds, leafWalk.complete, currentLeafKey]);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {
@@ -1262,25 +1272,27 @@ export function ChatView({
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
 	const switchToNode = useCallback(
 		async (id: string): Promise<void> => {
-			if (!(await confirmTreeOpWhileWorking())) return;
-
-			const entry = (snap?.entries ?? []).find(
-				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
-			);
-			const ts = typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
-			if (typeof ts === "string") requestJump(ts);
-			// #12: an explicit node switch supersedes the revert dock — its undo
-			// target is the leaf we CAME FROM, which this jump just replaced.
-			setJumpBack(null);
-			// Pin the clicked node itself: branchAt answers a USER message by
-			// positioning at its parent, and following that leaf hid the node
-			// the user just navigated to.
-			void branchTo(id, id).then(res => {
+			// Tree-op guard (runTreeOp): moving the leaf under an in-flight run
+			// re-anchors it — confirm + stop + wait like retry/rewind/fork.
+			await runTreeOp(async () => {
+				const entry = (snap?.entries ?? []).find(
+					e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+				);
+				const ts =
+					typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
+				if (typeof ts === "string") requestJump(ts);
+				// #12: an explicit node switch supersedes the revert dock — its undo
+				// target is the leaf we CAME FROM, which this jump just replaced.
+				setJumpBack(null);
+				// Pin the clicked node itself: branchAt answers a USER message by
+				// positioning at its parent, and following that leaf hid the node
+				// the user just navigated to.
+				const res = await branchTo(id, id);
 				if (res?.editorText) setPendingEdit(res.editorText);
 			});
 		},
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[snap?.entries, branchTo],
+		[snap?.entries, runTreeOp, branchTo],
 	);
 
 	// Lazy history backfill (kimi/DSH parity): the transcript fires this
@@ -1821,12 +1833,7 @@ export function ChatView({
 													role="tab"
 													aria-selected={viewMode === "canvas"}
 													className={`gui-surface-mode-btn${viewMode === "canvas" ? " gui-surface-mode-btn--on" : ""}`}
-													onClick={e => {
-														// Shift+点 = 消息级画布(调试分支结构);
-														// 普通点 = 轮级地图(默认投影)。
-														setMapDetail(e.shiftKey ? "message" : "turn");
-														setViewMode("canvas");
-													}}
+													onClick={() => setViewMode("canvas")}
 												>
 													<Icon name="apps-2-ai" className="h-3 w-3" />
 													{t("surface canvas")}
@@ -1867,99 +1874,54 @@ export function ChatView({
 												</div>
 											)}
 											{viewMode === "canvas" ? (
-												mapDetail === "turn" ? (
-													<TurnMapCanvas
-														entries={overviewEntries}
-														loading={fullLoading && fullEntries === null}
-														roundDurations={snap?.roundDurations}
-														leafId={effectiveLeaf}
-														activePathIds={trustedPathIds}
-														onJumpToEntry={entryId => {
-															// 双击/右键跳转:回对话模式 + 定位该轮
-															// (与 SessionTreeCanvas 的 onJump 同路径)。
-															const ts = overviewEntries.find(
-																e =>
-																	typeof e === "object" &&
-																	e !== null &&
-																	(e as { id?: unknown }).id === entryId,
-															);
-															const t2 =
-																typeof ts === "object" && ts !== null
-																	? (ts as { timestamp?: unknown }).timestamp
-																	: null;
-															if (typeof t2 === "string") {
-																setViewMode("chat");
-																requestJump(t2);
-															}
-														}}
-														onBranchTo={id => {
-															// Pin the node itself: branchAt answers a USER
-															// message at its parent (see SessionTreeCanvas).
-															void branchTo(id, id).then(res => {
-																if (res?.editorText) setPendingEdit(res.editorText);
-															});
-														}}
-														onForkAt={id => {
-															const entry = overviewEntries.find(
-																e =>
-																	typeof e === "object" &&
-																	e !== null &&
-																	(e as { id?: unknown }).id === id,
-															);
-															const isUser = entry?.type === "message" && entry.message.role === "user";
-															void forkFromMessage(id, undefined, !isUser);
-														}}
-														onOpenMessageMap={() => setMapDetail("message")}
-													/>
-												) : (
-													<SessionTreeCanvas
-														entries={overviewEntries}
-														leafId={effectiveLeaf}
-														focusRequest={canvasFocus}
-														activePathIds={trustedPathIds}
-														onJump={id => {
-															const ts = overviewEntries.find(
-																e =>
-																	typeof e === "object" &&
-																	e !== null &&
-																	(e as { id?: unknown }).id === id,
-															);
-															const t2 =
-																typeof ts === "object" && ts !== null
-																	? (ts as { timestamp?: unknown }).timestamp
-																	: null;
-															if (typeof t2 === "string") {
-																setViewMode("chat");
-																// 双击跳转 + 短暂高亮(1.2s flash)。
-																requestJump(t2);
-															}
-														}}
-														onSwitch={id => {
-															// 双击/右键"轨迹跳转"切换会话节点:对齐 /tree 的
-															// navigateTree 语义(移动 leaf + 滚动 + 草稿回填)。
+												<TurnMapCanvas
+													entries={overviewEntries}
+													loading={fullLoading && fullEntries === null}
+													roundDurations={snap?.roundDurations}
+													leafId={effectiveLeaf}
+													activePathIds={trustedPathIds}
+													onJumpToEntry={entryId => {
+														// 双击/右键跳转:回对话模式 + 定位该轮(纯导航,
+														// 不动 leaf)。
+														const ts = overviewEntries.find(
+															e =>
+																typeof e === "object" &&
+																e !== null &&
+																(e as { id?: unknown }).id === entryId,
+														);
+														const t2 =
+															typeof ts === "object" && ts !== null
+																? (ts as { timestamp?: unknown }).timestamp
+																: null;
+														if (typeof t2 === "string") {
 															setViewMode("chat");
-															switchToNode(id);
-														}}
-														onBranchTo={id => {
-															// Pin the node itself: branchAt answers a USER
-															// message at its parent, which would drop this
-															// node off the active path.
-															void branchTo(id, id).then(res => {
-																if (res?.editorText) setPendingEdit(res.editorText);
-															});
-														}}
-														onForkAt={id => {
-															const entry = overviewEntries.find(
-																e =>
-																	typeof e === "object" &&
-																	e !== null &&
-																	(e as { id?: unknown }).id === id,
-															);
-															const isUser = entry?.type === "message" && entry.message.role === "user";
-															void forkFromMessage(id, undefined, !isUser);
-														}}
-													/>
-												)
+															requestJump(t2);
+														}
+													}}
+													onSwitchToBranch={id => {
+														// 「切换到此分支」:显式移动 leaf(session.branchAt,
+														// switchToNode 内含运行中保护 + 跳转 + 草稿回填)。
+														void switchToNode(id);
+													}}
+													onBranchTo={id => {
+														// 重答:分支到该轮并回填草稿(branchAt 定位在该轮
+														// 本身,下一次发送即重答;运行中保护在 runTreeOp)。
+														void runTreeOp(async () => {
+															const res = await branchTo(id, id);
+															if (res?.editorText) setPendingEdit(res.editorText);
+														});
+													}}
+													onForkAt={id => {
+														const entry = overviewEntries.find(
+															e =>
+																typeof e === "object" &&
+																e !== null &&
+																(e as { id?: unknown }).id === id,
+														);
+														const isUser = entry?.type === "message" && entry.message.role === "user";
+														void forkFromMessage(id, undefined, !isUser);
+													}}
+												/>
 											) : (
 												<>
 													<div

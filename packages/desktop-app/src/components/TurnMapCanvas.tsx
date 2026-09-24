@@ -1,4 +1,5 @@
 import { t, tLoose } from "@musepi/client-core";
+import { replaceTabs } from "@musepi/client-core/src/tool-render/util";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
@@ -8,28 +9,41 @@ import { buildTrajectoryTree, type RoundDurationMap, type TrajectoryEvent } from
 import {
 	layoutTurnMap,
 	TURN_LANE_GAP,
+	TURN_NODE_COMPACT_H,
 	TURN_NODE_H,
 	TURN_NODE_W,
+	type TurnMapDirection,
 	type TurnMapNode,
 	visibleTurnMapNodes,
 } from "./turn-map-layout";
 
 /**
  * 轮级会话地图(0.5.0-map-redesign 设计稿实现):投影单位 = 轮(与折叠/
- * 导航/轨迹同一 isTurnStart 口径),164 轮 = 164 个玻璃节点卡,而不是
- * 9985 张消息卡片。主线 = 垂直时间轴(金色流动渐变连线),重答/分叉轮
- * 横向开列(金→紫渐变支线);单击展开轮内事件泳道,双击跳回对话定位该轮,
- * 左侧迷你导航条 = 全轮次剪影(视口映射 + 点击跳转)。消息级画布
- * (SessionTreeCanvas)降级为调试入口(顶栏「消息级画布」按钮)。
+ * 导航/轨迹同一 isTurnStart 口径),164 轮 = 164 个玻璃节点卡。主线时间轴
+ * (金色流动渐变连线),重答/分叉轮开列分支(金→紫渐变支线);单击切换
+ * 轮卡折叠/展开(折叠 = 单行紧凑卡,展开 = 全卡 + 轮内事件泳道),双击
+ * 跳回对话定位该轮,左侧(横向模式为底部)迷你导航条 = 全轮次剪影。
+ * 消息级画布(SessionTreeCanvas)已下线——单一轮级视图。
  *
  * 性能:节点数 = 轮数(≤ 数百),布局 O(n);进入视图无整树 mount 卡顿。
  */
 
 const FIT_PADDING = 28;
-/** 大树自适应缩放下限:纵向超出交给平移,不把卡片缩成细条(设计稿验收 2)。 */
+/** 大树自适应缩放下限:超出交给平移,不把卡片缩成细条(设计稿验收 2)。 */
 const MIN_FIT_SCALE = 0.75;
 const MIN_SCALE = 0.08;
 const MAX_SCALE = 2.2;
+
+/** 方向持久化键(读不到/非法值默认纵向)。 */
+const MAP_DIRECTION_KEY = "musepi.map.direction";
+
+function readMapDirection(): TurnMapDirection {
+	try {
+		return localStorage.getItem(MAP_DIRECTION_KEY) === "h" ? "h" : "v";
+	} catch {
+		return "v";
+	}
+}
 
 /** 轮摘要:轮首非 system 事件的标题(设计稿 = 轮起始消息摘要,90 字截断)。 */
 function turnSummaryOf(group: TurnMapNode["group"]): string {
@@ -62,10 +76,26 @@ function jumpEventOf(group: TurnMapNode["group"]): TrajectoryEvent | undefined {
 	return group.events.find(e => e.entryId !== undefined);
 }
 
-/** 节点卡(memo):视口裁剪 + 卡级 memo 双重挡重渲染——hover 浮卡、拖拽、
- * 搜索高亮等父级状态变化不再让 164 张卡全部重渲;卡内摘要/构成/统计
- * 按 group 引用 memo(布局只在 turns/expanded 变化时重建)。 */
-const TmNodeCard = memo(function TmNodeCard({
+/** token 数缩写(1.2k 形态;TUI /trace 信息密度,GUI 排版)。 */
+function compactTokens(n: number): string {
+	if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
+	return String(n);
+}
+
+/** 工具参数摘要:tab 净化 + 空白折叠(body 已是 160 字截断的 JSON)。 */
+function toolArgsSummary(ev: TrajectoryEvent): string | null {
+	if (ev.kind !== "tool" || !ev.body) return null;
+	const s = replaceTabs(ev.body).replace(/\s+/g, " ").trim();
+	return s ? s : null;
+}
+
+/**
+ * 节点卡(memo):视口裁剪 + 卡级 memo 双重挡重渲染。两态渲染:
+ * 折叠 = 单行紧凑卡(徽章 + 摘要 + 计数 + 用时);展开 = 全卡 + 泳道
+ * (事件行带工具参数摘要 / usage / duration / ttft,trace 对齐)。
+ * 导出仅供测试断言两态渲染契约。
+ */
+export const TmNodeCard = memo(function TmNodeCard({
 	n,
 	isLeaf,
 	isCurrent,
@@ -93,8 +123,8 @@ const TmNodeCard = memo(function TmNodeCard({
 	const comp = useMemo(() => compositionOf(n.group), [n.group]);
 	return (
 		<div
-			className={`tm-node${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
-			style={{ left: n.x, top: n.y, width: TURN_NODE_W, minHeight: TURN_NODE_H }}
+			className={`tm-node${isExpanded ? "" : " tm-node--compact"}${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
+			style={{ left: n.x, top: n.y, width: TURN_NODE_W, height: n.h }}
 			onClick={() => onToggle(n.group.turn)}
 			onDoubleClick={() => onJump(n)}
 			onContextMenu={e => {
@@ -105,51 +135,92 @@ const TmNodeCard = memo(function TmNodeCard({
 			onMouseEnter={() => onHover(n)}
 			onMouseLeave={() => onHover(null)}
 		>
-			<div className="tm-node-head">
-				<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-					{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
-					{n.advisor && (
-						<em className="tm-turn-advisor">
-							<Icon name="sparkling" className="h-2.5 w-2.5" />
-							{t("advisor")}
-						</em>
-					)}
-				</span>
-				{statsRow.durationMs !== undefined && (
-					<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
-				)}
-			</div>
-			<div className="tm-node-summary" title={summary}>
-				{summary || `${n.group.events.length} events`}
-			</div>
-			{/* 构成条:轮内事件 kind 四色分段(脉络感的主要来源)。 */}
-			<div className="tm-comp" aria-hidden>
-				{comp.map((seg, i) => (
-					<span
-						key={`${seg.kind}-${i}`}
-						className={`tm-comp-seg tm-comp--${seg.kind}`}
-						style={{ width: `${(seg.count / n.group.events.length) * 100}%` }}
-					/>
-				))}
-			</div>
-			<div className="tm-node-stats">
-				{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
-				{tLoose("turn map tools", { count: statsRow.tools })}
-			</div>
-			{/* 轮内泳道(单击展开):该轮事件行,与轨迹检视器同 i18n/颜色。 */}
-			{isExpanded && (
-				<div className="tm-lane" onWheel={e => e.stopPropagation()}>
-					{n.group.events.map(ev => (
-						<div key={ev.id} className={`tm-lane-row tm-lane-row--${ev.kind}`}>
-							<span className="tm-lane-dot" />
-							<span className="tm-lane-title">{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}</span>
-							{ev.tsMs !== undefined && (
-								<span className="tm-lane-time">
-									{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
-								</span>
+			{isExpanded ? (
+				<>
+					<div className="tm-node-head">
+						<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
+							{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
+							{n.advisor && (
+								<em className="tm-turn-advisor">
+									<Icon name="sparkling" className="h-2.5 w-2.5" />
+									{t("advisor")}
+								</em>
 							)}
-						</div>
-					))}
+						</span>
+						{statsRow.durationMs !== undefined && (
+							<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
+						)}
+					</div>
+					<div className="tm-node-summary" title={summary}>
+						{summary || `${n.group.events.length} events`}
+					</div>
+					{/* 构成条:轮内事件 kind 四色分段(脉络感的主要来源)。 */}
+					<div className="tm-comp" aria-hidden>
+						{comp.map((seg, i) => (
+							<span
+								key={`${seg.kind}-${i}`}
+								className={`tm-comp-seg tm-comp--${seg.kind}`}
+								style={{ width: `${(seg.count / n.group.events.length) * 100}%` }}
+							/>
+						))}
+					</div>
+					<div className="tm-node-stats">
+						{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
+						{tLoose("turn map tools", { count: statsRow.tools })}
+					</div>
+					{/* 轮内泳道(单击展开):该轮事件行,与轨迹检视器同 i18n/颜色。
+						明细 = trace 对齐:工具参数摘要、assistant usage/duration/ttft。 */}
+					<div className="tm-lane" onWheel={e => e.stopPropagation()}>
+						{n.group.events.map(ev => {
+							const args = toolArgsSummary(ev);
+							return (
+								<div key={ev.id} className={`tm-lane-row tm-lane-row--${ev.kind}`}>
+									<span className="tm-lane-dot" />
+									<span className="tm-lane-title" title={args ?? ev.body ?? ev.title}>
+										{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}
+									</span>
+									{args && (
+										<span className="tm-lane-args" title={args}>
+											{args}
+										</span>
+									)}
+									{ev.kind === "assistant" && ev.usage && (
+										<span className="tm-lane-usage" title={`↑${ev.usage.input} ↓${ev.usage.output}`}>
+											↑{compactTokens(ev.usage.input)} ↓{compactTokens(ev.usage.output)}
+										</span>
+									)}
+									{ev.durationMs !== undefined && (
+										<span className="tm-lane-meta">{durationText(ev.durationMs)}</span>
+									)}
+									{ev.ttftMs !== undefined && (
+										<span className="tm-lane-meta" title="TTFT">
+											ttft {durationText(ev.ttftMs)}
+										</span>
+									)}
+									{ev.tsMs !== undefined && (
+										<span className="tm-lane-time">
+											{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+										</span>
+									)}
+								</div>
+							);
+						})}
+					</div>
+				</>
+			) : (
+				<div className="tm-compact">
+					<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
+						{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
+					</span>
+					<span className="tm-compact-summary" title={summary}>
+						{summary || `${n.group.events.length} events`}
+					</span>
+					<span className="tm-compact-count">
+						{tLoose("turn map compact count", { count: n.group.events.length })}
+					</span>
+					{statsRow.durationMs !== undefined && (
+						<span className="tm-node-dur">{durationText(statsRow.durationMs)}</span>
+					)}
 				</div>
 			)}
 		</div>
@@ -163,9 +234,9 @@ export function TurnMapCanvas({
 	activePathIds,
 	loading,
 	onJumpToEntry,
+	onSwitchToBranch,
 	onBranchTo,
 	onForkAt,
-	onOpenMessageMap,
 }: {
 	entries: readonly unknown[];
 	/** daemon agent_end 冻结的整轮用时(Map 或持久化 [ms,ms][] 形态)。 */
@@ -178,20 +249,20 @@ export function TurnMapCanvas({
 	loading?: boolean;
 	/** 双击/右键跳转:跳回对话并定位该轮(父层切回 chat + requestJump)。 */
 	onJumpToEntry?: (entryId: string) => void;
+	/** 切换到此分支:移动会话叶子到该轮(session.branchAt,显式树操作)。 */
+	onSwitchToBranch?: (entryId: string) => void;
 	/** 重答该轮(锚 = 轮首事件 entryId)。 */
 	onBranchTo?: (entryId: string) => void;
 	/** 从该轮分叉新会话。 */
 	onForkAt?: (entryId: string) => void;
-	/** 打开消息级画布(调试分支结构的降级视图)。 */
-	onOpenMessageMap?: () => void;
 }): ReactNode {
 	const wrapRef = useRef<HTMLDivElement | null>(null);
 	const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
 	const dragRef = useRef<{ px: number; py: number; vx: number; vy: number; moved: boolean } | null>(null);
 	const [dragging, setDragging] = useState(false);
-	// 单击/双击消歧(单击 = 展开泳道,双击 = 跳对话)。
-	const singleClickTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	// 展开的轮集合(展开高度参与布局,同列下方节点推开)。
+	// 单击/双击消歧(单击 = 切换折叠,双击 = 跳对话)。
+	const singleClickTimer = useRef<number | undefined>(undefined);
+	// 折叠/展开状态机(会话内内存态,不进 URL/持久化):集合内 = 展开泳道。
 	const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
 	// 右键菜单。
 	const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: TurnMapNode | null } | null>(null);
@@ -199,9 +270,12 @@ export function TurnMapCanvas({
 	const [searchQuery, setSearchQuery] = useState("");
 	// 悬停浮卡(轮首消息全文 + 首末时刻)。
 	const [hoverNode, setHoverNode] = useState<TurnMapNode | null>(null);
+	// 方向(v = 主线垂直默认;h = 主线水平),localStorage 持久化。
+	const [direction, setDirection] = useState<TurnMapDirection>(readMapDirection);
+	const horizontal = direction === "h";
 
 	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
-	const layout = useMemo(() => layoutTurnMap(turns, expanded), [turns, expanded]);
+	const layout = useMemo(() => layoutTurnMap(turns, expanded, direction), [turns, expanded, direction]);
 	const { nodes, edges, main, width, height } = layout;
 
 	// 当前轮:活动路径上最靠后的主线轮(无路径信息 = 主线尾轮)。
@@ -244,19 +318,20 @@ export function TurnMapCanvas({
 			const scaledH = height * fullScale;
 			setView({
 				scale: fullScale,
-				x: scaledW > cw ? (cw - scaledW) / 2 : (cw - scaledW) / 2,
-				y: scaledH > ch ? (ch - scaledH) / 2 : (ch - scaledH) / 2,
+				x: (cw - scaledW) / 2,
+				y: (ch - scaledH) / 2,
 			});
 			return;
 		}
-		// 大树:纵向超出 → 可读缩放,当前轮居中("我在哪"优先于看全图)。
+		// 大树:主轴超出 → 可读缩放,当前轮居中("我在哪"优先于看全图)。
+		// v = 纵向超出按宽适配;h = 横向超出按高适配。
 		const focus = nodes.find(n => n.group.turn === currentTurn) ?? main[main.length - 1] ?? null;
 		const fx = (focus?.x ?? 0) + TURN_NODE_W / 2;
-		const fy = (focus?.y ?? 0) + TURN_NODE_H / 2;
-		const widthFit = (cw - FIT_PADDING * 2) / width;
-		const scale = Math.min(1, Math.max(MIN_FIT_SCALE, widthFit));
+		const fy = (focus?.y ?? 0) + (horizontal ? TURN_NODE_COMPACT_H / 2 : TURN_NODE_H / 2);
+		const axisFit = horizontal ? (ch - FIT_PADDING * 2) / height : (cw - FIT_PADDING * 2) / width;
+		const scale = Math.min(1, Math.max(MIN_FIT_SCALE, axisFit));
 		setView({ scale, x: cw / 2 - fx * scale, y: ch / 2 - fy * scale });
-	}, [width, height, nodes, currentTurn, main]);
+	}, [width, height, nodes, currentTurn, main, horizontal]);
 	// 容器尺寸(state 化):视口裁剪与 fit 几何都依赖它,放 state 里保证
 	// 变化触发重算(RO 回调里同步 set,首帧 0 → mount 后即刻修正)。
 	const [wrapSize, setWrapSize] = useState({ w: 0, h: 0 });
@@ -298,21 +373,29 @@ export function TurnMapCanvas({
 		needsFitRef.current = true;
 		fitView();
 	}, [entries, fitView]);
+	// 方向切换:几何转置,旧视野不成立——重新适配。
+	useEffect(() => {
+		needsFitRef.current = true;
+		fitView();
+	}, [direction, fitView]);
 
 	const centerOnTurn = useCallback(
 		(turn: number, targetScale?: number): void => {
 			const wrap = wrapRef.current;
 			const n = nodes.find(m => m.group.turn === turn);
 			if (!wrap || !n) return;
-			const scale =
-				targetScale ?? Math.max(0.7, Math.min(1.2, wrap.clientWidth / (TURN_NODE_W + TURN_LANE_GAP * 2)));
+			// v:以卡宽+车道距估可读缩放;h:以卡高+行距估。
+			const readable = horizontal
+				? wrap.clientHeight / (TURN_NODE_H + TURN_LANE_GAP * 2)
+				: wrap.clientWidth / (TURN_NODE_W + TURN_LANE_GAP * 2);
+			const scale = targetScale ?? Math.max(0.7, Math.min(1.2, readable));
 			setView({
 				scale,
 				x: wrap.clientWidth / 2 - (n.x + TURN_NODE_W / 2) * scale,
-				y: wrap.clientHeight / 2 - (n.y + TURN_NODE_H / 2) * scale,
+				y: wrap.clientHeight / 2 - (n.y + n.h / 2) * scale,
 			});
 		},
-		[nodes],
+		[nodes, horizontal],
 	);
 
 	// 滚轮缩放(原生 non-passive,preventDefault 阻止背后页面滚动;
@@ -370,13 +453,13 @@ export function TurnMapCanvas({
 		setDragging(false);
 	}, []);
 
-	// 单击 = 展开/收起轮内泳道;双击 = 跳对话。
+	// 单击 = 切换折叠/展开;双击 = 跳对话。
 	const handleClick = useCallback((turn: number) => {
 		const suppressed = suppressClick.current;
 		suppressClick.current = false;
 		if (suppressed) return;
 		clearTimeout(singleClickTimer.current);
-		singleClickTimer.current = setTimeout(() => {
+		singleClickTimer.current = window.setTimeout(() => {
 			singleClickTimer.current = undefined;
 			setExpanded(prev => {
 				const next = new Set(prev);
@@ -403,7 +486,27 @@ export function TurnMapCanvas({
 		setCtxMenu({ x, y, node });
 	}, []);
 
-	// 右键菜单:节点 = 跳转/重答/分叉;空白 = 适配视图。
+	// 顶栏批量折叠/展开 + 方向切换。
+	const allTurns = useMemo(() => new Set(nodes.map(n => n.group.turn)), [nodes]);
+	const anyExpanded = expanded.size > 0;
+	const toggleAll = useCallback(() => {
+		setExpanded(anyExpanded ? new Set() : allTurns);
+	}, [anyExpanded, allTurns]);
+	const switchDirection = useCallback(() => {
+		setDirection(d => {
+			const next = d === "v" ? "h" : "v";
+			try {
+				localStorage.setItem(MAP_DIRECTION_KEY, next);
+			} catch {
+				// localStorage 不可用(隐私模式)——仅会话内生效。
+			}
+			return next;
+		});
+	}, []);
+
+	// 右键菜单:节点 = 跳转/切换分支/重答/分叉;空白 = 适配视图。
+	// 语义:跳转 = 纯导航(不动 leaf);切换到此分支/重答/分叉 = 树操作
+	// (父层已套运行中保护)。
 	const ctxItems = useMemo<ContextMenuItem[]>(() => {
 		if (!ctxMenu) return [];
 		if (ctxMenu.node !== null) {
@@ -416,6 +519,14 @@ export function TurnMapCanvas({
 					description: t("context jump desc"),
 					icon: "arrow-go-forward",
 					onSelect: () => onJumpToEntry(ev.entryId!),
+				});
+			}
+			if (ev?.entryId && onSwitchToBranch) {
+				items.push({
+					label: t("map switch to branch"),
+					description: t("map switch to branch desc"),
+					icon: "git-merge",
+					onSelect: () => onSwitchToBranch(ev.entryId!),
 				});
 			}
 			if (ev?.entryId && onBranchTo) {
@@ -447,7 +558,7 @@ export function TurnMapCanvas({
 				},
 			},
 		];
-	}, [ctxMenu, onJumpToEntry, onBranchTo, onForkAt, fitView]);
+	}, [ctxMenu, onJumpToEntry, onSwitchToBranch, onBranchTo, onForkAt, fitView]);
 
 	// 顶部时间轴:拖拽区间聚焦 / 单击整轮定位(轨迹检视器同款交互)。
 	const [range, setRange] = useState<TimelineRange | null>(null);
@@ -463,26 +574,33 @@ export function TurnMapCanvas({
 
 	const hasSearch = searchQuery.trim().length > 0;
 
-	// 迷你导航条几何:整条按世界高度等比,视口窗口实时映射。
+	// 迷你导航条几何:整条按主轴世界跨度等比,视口窗口实时映射。
+	// v = 左侧竖条(条目高 = band);h = 底部横条(条目宽 = band)。
 	const navGeo = useMemo(() => {
 		const wrap = wrapRef.current;
-		const railH = (wrap?.clientHeight ?? 600) - 32;
-		const band = Math.max(2, Math.min(6, railH / Math.max(nodes.length, 1)));
-		return { railH, band };
-	}, [nodes.length]);
+		const railSize = horizontal ? (wrap?.clientWidth ?? 600) - 32 : (wrap?.clientHeight ?? 600) - 32;
+		const band = Math.max(2, Math.min(6, railSize / Math.max(nodes.length, 1)));
+		return { railSize, band };
+	}, [nodes.length, horizontal]);
 	const viewportBand = useMemo(() => {
 		const wrap = wrapRef.current;
 		if (!wrap) return null;
+		const { railSize, band } = navGeo;
+		const total = nodes.length * band;
+		const off = Math.max(0, (railSize - total) / 2);
+		if (horizontal) {
+			const worldLeft = -view.x / view.scale;
+			const worldRight = (wrap.clientWidth - view.x) / view.scale;
+			const x1 = off + (worldLeft / width) * total;
+			const x2 = off + (worldRight / width) * total;
+			return { start: Math.max(0, x1), size: Math.min(railSize, Math.max(10, x2 - x1)) };
+		}
 		const worldTop = -view.y / view.scale;
 		const worldBottom = (wrap.clientHeight - view.y) / view.scale;
-		const { railH, band } = navGeo;
-		const per = band;
-		const total = nodes.length * per;
-		const off = Math.max(0, (railH - total) / 2);
 		const y1 = off + (worldTop / height) * total;
 		const y2 = off + (worldBottom / height) * total;
-		return { top: Math.max(0, y1), height: Math.min(railH, Math.max(10, y2 - y1)) };
-	}, [view, navGeo, height, nodes.length]);
+		return { start: Math.max(0, y1), size: Math.min(railSize, Math.max(10, y2 - y1)) };
+	}, [view, navGeo, width, height, nodes.length, horizontal]);
 
 	return (
 		<div
@@ -498,7 +616,7 @@ export function TurnMapCanvas({
 			}}
 			data-dragging={dragging || undefined}
 		>
-			{/* 顶栏:标题 + 轮数 + 搜索 + 时间轴 + 视图控制(玻璃容器)。 */}
+			{/* 顶栏:标题 + 轮数 + 搜索 + 时间轴 + 批量折叠/方向(玻璃容器)。 */}
 			<div className="tm-topbar" onPointerDown={e => e.stopPropagation()}>
 				<span className="tm-title">
 					{t("turn map title")}
@@ -519,27 +637,36 @@ export function TurnMapCanvas({
 				<button
 					type="button"
 					className="tm-topbar-btn"
-					title={t("turn map message level")}
-					aria-label={t("turn map message level")}
-					onClick={onOpenMessageMap}
+					title={t(anyExpanded ? "trajectory collapse all" : "trajectory expand all")}
+					aria-label={t(anyExpanded ? "trajectory collapse all" : "trajectory expand all")}
+					onClick={toggleAll}
 				>
-					<Icon name="node-tree" className="h-3 w-3" />
+					<Icon name={anyExpanded ? "contract-up-down" : "expand-up-down"} className="h-3 w-3" />
+				</button>
+				<button
+					type="button"
+					className="tm-topbar-btn"
+					title={t(horizontal ? "turn map layout vertical" : "turn map layout horizontal")}
+					aria-label={t(horizontal ? "turn map layout vertical" : "turn map layout horizontal")}
+					onClick={switchDirection}
+				>
+					<Icon name="layout-column" className="h-3 w-3" />
 				</button>
 			</div>
 			{nodes.length === 0 ? (
-				<p className="stc-empty">{t("trajectory empty")}</p>
+				<p className="tm-empty">{t("trajectory empty")}</p>
 			) : (
 				<>
 					{/* 迷你导航条:全轮次剪影 + 视口映射 + 点击/拖动跳转。 */}
 					<div
 						className="tm-nav"
+						data-orient={direction}
 						onPointerDown={e => e.stopPropagation()}
 						onClick={e => {
 							const rect = e.currentTarget.getBoundingClientRect();
 							const { band } = navGeo;
-							const idx = Math.floor(
-								(e.clientY - rect.top - Math.max(0, (navGeo.railH - nodes.length * band) / 2)) / band,
-							);
+							const along = horizontal ? e.clientX - rect.left : e.clientY - rect.top;
+							const idx = Math.floor((along - Math.max(0, (navGeo.railSize - nodes.length * band) / 2)) / band);
 							const clamped = Math.max(0, Math.min(nodes.length - 1, idx));
 							const turn = nodes[clamped]?.group.turn;
 							if (turn !== undefined) centerOnTurn(turn);
@@ -550,11 +677,18 @@ export function TurnMapCanvas({
 							<span
 								key={n.group.turn}
 								className={`tm-nav-band tm-comp--${n.advisor ? "advisor" : (n.group.events[0]?.kind ?? "user")}`}
-								style={{ height: navGeo.band }}
+								style={horizontal ? { width: navGeo.band } : { height: navGeo.band }}
 							/>
 						))}
 						{viewportBand && (
-							<span className="tm-nav-viewport" style={{ top: viewportBand.top, height: viewportBand.height }} />
+							<span
+								className="tm-nav-viewport"
+								style={
+									horizontal
+										? { left: viewportBand.start, width: viewportBand.size }
+										: { top: viewportBand.start, height: viewportBand.size }
+								}
+							/>
 						)}
 					</div>
 					<div
@@ -567,22 +701,35 @@ export function TurnMapCanvas({
 					>
 						<svg className="tm-edges" width={width} height={height}>
 							<defs>
-								<linearGradient id="tm-main-line" x1="0" y1="0" x2="0" y2="1">
+								<linearGradient
+									id="tm-main-line"
+									x1="0"
+									y1="0"
+									x2={horizontal ? "1" : "0"}
+									y2={horizontal ? "0" : "1"}
+								>
 									<stop offset="0%" className="tm-edge-gold-1" />
 									<stop offset="100%" className="tm-edge-gold-2" />
 								</linearGradient>
-								<linearGradient id="tm-branch-line" x1="0" y1="0" x2="1" y2="0">
+								<linearGradient
+									id="tm-branch-line"
+									x1="0"
+									y1="0"
+									x2={horizontal ? "0" : "1"}
+									y2={horizontal ? "1" : "0"}
+								>
 									<stop offset="0%" className="tm-edge-gold-1" />
 									<stop offset="100%" className="tm-edge-purple" />
 								</linearGradient>
 							</defs>
 							{edges.map(e => {
 								if (!e.branch) {
-									// 主线直连:节点底部中心 → 下一节点顶部中心(金色流动渐变)。
-									const x1 = e.from.x + TURN_NODE_W / 2;
-									const y1 = e.from.y + TURN_NODE_H + e.from.expandedExtra;
-									const x2 = e.to.x + TURN_NODE_W / 2;
-									const y2 = e.to.y - 4;
+									// 主线直连(v:底部中心 → 下一节点顶部中心;h:右缘中心 →
+									// 下一节点左缘中心;金色流动渐变)。
+									const x1 = horizontal ? e.from.x + TURN_NODE_W : e.from.x + TURN_NODE_W / 2;
+									const y1 = horizontal ? e.from.y + e.from.h / 2 : e.from.y + e.from.h;
+									const x2 = horizontal ? e.to.x - 4 : e.to.x + TURN_NODE_W / 2;
+									const y2 = horizontal ? e.to.y + e.to.h / 2 : e.to.y - 4;
 									return (
 										<line
 											key={`m${e.from.group.turn}-${e.to.group.turn}`}
@@ -594,17 +741,22 @@ export function TurnMapCanvas({
 										/>
 									);
 								}
-								// 分支贝塞尔:源轮右缘中点 → 分支轮左缘中点(金→紫渐变)。
-								const x1 = e.from.x + TURN_NODE_W;
-								const y1 = e.from.y + TURN_NODE_H / 2;
-								const x2 = e.to.x - 2;
-								const y2 = e.to.y + TURN_NODE_H / 2;
-								const mx = (x1 + x2) / 2;
+								// 分支贝塞尔(v:源轮右缘中点 → 分支轮左缘中点;h:源轮底缘
+								// 中点 → 分支轮顶缘中点;金→紫渐变)。
+								const bx1 = horizontal ? e.from.x + TURN_NODE_W / 2 : e.from.x + TURN_NODE_W;
+								const by1 = horizontal ? e.from.y + e.from.h : e.from.y + e.from.h / 2;
+								const bx2 = horizontal ? e.to.x + TURN_NODE_W / 2 : e.to.x - 2;
+								const by2 = horizontal ? e.to.y - 2 : e.to.y + e.to.h / 2;
+								const mx = (bx1 + bx2) / 2;
+								const my = (by1 + by2) / 2;
+								const d = horizontal
+									? `M ${bx1} ${by1} C ${bx1} ${my}, ${bx2} ${my}, ${bx2} ${by2}`
+									: `M ${bx1} ${by1} C ${mx} ${by1}, ${mx} ${by2}, ${bx2} ${by2}`;
 								return (
 									<path
 										key={`b${e.from.group.turn}-${e.to.group.turn}`}
 										className="tm-edge tm-edge--branch"
-										d={`M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`}
+										d={d}
 									/>
 								);
 							})}

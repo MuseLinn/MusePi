@@ -1,6 +1,6 @@
 # 会话地图视图重设计稿（0.5.0 · M1.14）
 
-> 状态：待小袁总审核。审核通过后按本稿实现 SessionTreeCanvas 改造。
+> 状态：已实现（轮级画布 `TurnMapCanvas` + `turn-map-layout.ts` 落地）。2026-09-24 收敛：消息级画布（`SessionTreeCanvas`）下线，会话地图 = 单一轮级视图；轮卡两态折叠、泳道明细对齐 /trace、横/纵双方向。契约见 `docs/gui-implementation.md` §24。
 > 配套可视化 mockup：[mockup.html](mockup.html)（浏览器直接打开）。
 
 ## 1. 问题定义
