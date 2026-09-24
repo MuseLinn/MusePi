@@ -118,6 +118,10 @@ export interface ExtensionItem {
 	shadowedBy?: string;
 	/** 加载失败原因 —— 存在 = 扩展不可用(fail-loud,不静默消失)。 */
 	loadError?: string;
+	/** 来自内置注册表(BUILTIN_EXTENSIONS)的条目或标注行 —— 渲染"内置"徽章。 */
+	builtin?: boolean;
+	/** 只读展示项(主题包/渲染器包):无禁用语义,不渲染停用开关。 */
+	readonly?: boolean;
 }
 
 export interface ExtensionTab {

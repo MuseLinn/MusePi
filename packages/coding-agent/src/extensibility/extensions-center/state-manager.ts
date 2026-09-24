@@ -24,7 +24,12 @@ import {
 	loadCapability,
 } from "../../discovery";
 import { readDisabledServers, readEnabledServers } from "../../mcp/config-writer";
-import { builtinExtensionEntries } from "./builtin-registry";
+import {
+	annotateBuiltinExtensions,
+	builtinExtensionEntries,
+	builtinMirrorDisabled,
+	findBuiltinDef,
+} from "./builtin-registry";
 import type {
 	DashboardState,
 	Extension,
@@ -403,7 +408,10 @@ export async function loadAllExtensions(
 	}
 
 	// 内置扩展注册表(DSH builtins 对齐):inline 部署物,只读不可改删,可禁用。
-	// 新增内置扩展 = builtin-registry.ts 的 BUILTIN_EXTENSIONS 加一行。
+	// 新增内置扩展 = builtin-registry.ts 的 BUILTIN_EXTENSIONS 加一行;
+	// annotate 定义先给扫描行打 builtin 标注(bundled skills 等),再生成
+	// 注册表自身的条目(不产生重复行)。
+	annotateBuiltinExtensions(extensions);
 	extensions.push(...builtinExtensionEntries(disabledExtensions));
 
 	return extensions;
@@ -432,11 +440,12 @@ export function buildSidebarTree(extensions: Extension[]): TreeNode[] {
 		byKind.get(ext.kind)!.push(ext);
 	}
 
-	// Build tree nodes for each provider (show ALL providers, even if disabled/empty)
+	// Build tree nodes for each provider. The native provider ("MusePi" —
+	// ~/.musepi/agent config scans + builtin-annotated rows) is a first-class
+	// node: M2.1 removed the skip-native special case so built-ins have the
+	// same entry point as every other provider. Its master switch stays
+	// read-only (native cannot be disabled), enforced in ExtensionList.
 	for (const provider of providers) {
-		// Skip the 'native' provider as it cannot be toggled
-		if (provider.id === "native") continue;
-
 		const byKind = byProvider.get(provider.id);
 		const kindNodes: TreeNode[] = [];
 		let totalCount = 0;
@@ -548,6 +557,12 @@ function getKindDisplayName(kind: ExtensionKind): string {
 			return "Hooks";
 		case "slash-command":
 			return "Slash Commands";
+		case "magic-keyword":
+			return "Magic Keywords";
+		case "theme":
+			return "Themes";
+		case "tool-render":
+			return "Tool Renderers";
 		default:
 			return kind;
 	}
@@ -575,9 +590,10 @@ export function buildProviderTabs(extensions: Extension[]): ProviderTab[] {
 		count: extensions.length,
 	});
 
-	// Provider tabs (skip native)
+	// Provider tabs — native included (M2.1: no more skip-native; the built-in
+	// story lives in the native "MusePi" tab + the musepi-extensions builtin
+	// rows, both reachable from the tab bar).
 	for (const provider of providers) {
-		if (provider.id === "native") continue;
 		const count = countByProvider.get(provider.id) ?? 0;
 		tabs.push({
 			id: provider.id,
@@ -662,6 +678,36 @@ export function applyDisabledExtensionsToState(state: DashboardState, disabledId
 }
 
 /**
+ * Apply settings-mirrored builtin state (style/shell/magic keywords) to an
+ * existing dashboard state. The TUI dashboard owns a Settings instance, so it
+ * re-resolves mirror state in-process; the daemon does the equivalent rewrite
+ * in extensions.list. Mirror wins over the disabledExtensions-derived state.
+ */
+export function applyBuiltinMirrorState(state: DashboardState, getRaw: (key: string) => unknown): DashboardState {
+	const updateExtension = (ext: Extension): Extension => {
+		const def = findBuiltinDef(ext.id);
+		if (!def?.settingsMirror) return ext;
+		const disabled = builtinMirrorDisabled(def, getRaw);
+		if (disabled) {
+			if (ext.state === "disabled" && ext.disabledReason === "item-disabled") return ext;
+			return { ...ext, state: "disabled", disabledReason: "item-disabled" as const };
+		}
+		if (ext.state === "active") return ext;
+		const enabled: Extension = { ...ext, state: "active" };
+		delete enabled.disabledReason;
+		return enabled;
+	};
+
+	return {
+		...state,
+		extensions: state.extensions.map(updateExtension),
+		tabFiltered: state.tabFiltered.map(updateExtension),
+		searchFiltered: state.searchFiltered.map(updateExtension),
+		selected: state.selected ? updateExtension(state.selected) : null,
+	};
+}
+
+/**
  * Create initial dashboard state.
  */
 export async function createInitialState(cwd?: string, disabledIds?: string[]): Promise<DashboardState> {
@@ -687,6 +733,9 @@ export async function createInitialState(cwd?: string, disabledIds?: string[]): 
  * Toggle provider enabled state.
  */
 export function toggleProvider(providerId: string): boolean {
+	// native is the app's own config source and cannot be disabled
+	// (daemon extensions.setProviderEnabled rejects it too).
+	if (providerId === "native") return true;
 	if (isProviderEnabled(providerId)) {
 		disableProvider(providerId);
 		return false;

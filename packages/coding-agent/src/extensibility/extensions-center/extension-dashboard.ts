@@ -32,9 +32,11 @@ import { bottomBorder, divider, row, topBorder } from "../../modes/components/ov
 import { getTabBarTheme } from "../../modes/shared";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
+import { findBuiltinDef } from "./builtin-registry";
 import { ExtensionList } from "./extension-list";
 import { InspectorPanel } from "./inspector-panel";
 import {
+	applyBuiltinMirrorState,
 	applyDisabledExtensionsToState,
 	applyFilter,
 	createInitialState,
@@ -105,6 +107,7 @@ export class ExtensionDashboard implements Component {
 		const sm = this.settings ?? (await Settings.init());
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		this.#state = await createInitialState(this.cwd, disabledIds);
+		this.#state = this.#applyMirrorState(this.#state);
 
 		const initialMaxVisible = Math.max(3, this.terminalHeight - 9);
 		this.#mainList = new ExtensionList(
@@ -270,6 +273,21 @@ export class ExtensionDashboard implements Component {
 		const sm = this.settings ?? Settings.instance;
 		if (!sm) return;
 
+		// Settings-mirrored builtins (style/shell/magic keywords): the setting
+		// IS the source of truth — toggle writes the mirrored key instead of
+		// the disabledExtensions list (daemon extensions.setEnabled parity).
+		const mirrorDef = findBuiltinDef(extensionId)?.settingsMirror;
+		if (mirrorDef) {
+			sm.set(mirrorDef.key as Parameters<Settings["set"]>[0], (enabled ? mirrorDef.on : mirrorDef.off) as never);
+			void sm.flush();
+			// Immediate feedback: re-resolve mirror state in place (no full reload).
+			this.#state = this.#applyMirrorState(this.#state);
+			this.#mainList.setExtensions(this.#state.searchFiltered);
+			if (this.#state.selected) this.#inspector.setExtension(this.#state.selected);
+			this.onRequestRender?.();
+			return;
+		}
+
 		// MCP toggles route through the canonical denylist in
 		// `~/.musepi/agent/mcp.json` so `/mcp list`, the MCP runtime, and this
 		// dashboard agree on every server's enabled state (issue #3827).
@@ -294,6 +312,13 @@ export class ExtensionDashboard implements Component {
 
 		this.#applyDisabledExtensions(disabled);
 		void this.#refreshFromState();
+	}
+
+	/** Re-resolve settings-mirrored builtin state from the Settings instance. */
+	#applyMirrorState(state: DashboardState): DashboardState {
+		const sm = this.settings ?? Settings.instance;
+		if (!sm) return state;
+		return applyBuiltinMirrorState(state, key => sm.getRaw(key));
 	}
 
 	async #toggleMcpExtension(extensionId: string, enabled: boolean, sm: Settings): Promise<void> {
@@ -341,7 +366,7 @@ export class ExtensionDashboard implements Component {
 		const disabledIds = sm ? ((sm.get("disabledExtensions") as string[]) ?? []) : [];
 		const nextState = await refreshState(this.#state, this.cwd, disabledIds);
 		if (refreshToken !== this.#refreshToken) return;
-		this.#state = nextState;
+		this.#state = this.#applyMirrorState(nextState);
 
 		// Re-anchor on the same tab id in the (re-sorted) list.
 		if (currentTabId) {

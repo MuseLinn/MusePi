@@ -19,7 +19,10 @@ export type ExtensionKind =
 	| "slash-command"
 	| "style"
 	| "gui-motion"
-	| "desktop-shell";
+	| "desktop-shell"
+	| "magic-keyword"
+	| "theme"
+	| "tool-render";
 
 /**
  * Extension state (active, disabled, or shadowed).
@@ -65,6 +68,10 @@ export interface Extension {
 	/** 加载失败原因(registerComponent 校验/语法等)。存在 = 扩展不可用,
 	 *  dashboard 与 agent 感知层可见 —— fail-loud,不静默消失。 */
 	loadError?: string;
+	/** 来自 BUILTIN_EXTENSIONS(内置注册表)的条目或标注行 —— UI 显示"内置"徽章。 */
+	builtin?: boolean;
+	/** 只读展示项:无禁用语义,UI 不渲染停用开关(主题包/渲染器包)。 */
+	readonly?: boolean;
 	/** Raw item data for inspector */
 	raw: unknown;
 }

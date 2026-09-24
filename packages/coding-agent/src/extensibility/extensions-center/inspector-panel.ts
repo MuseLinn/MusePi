@@ -304,6 +304,9 @@ export class InspectorPanel implements Component {
 			instruction: "muted",
 			"slash-command": "accent",
 			"gui-motion": "accent",
+			"magic-keyword": "accent",
+			theme: "muted",
+			"tool-render": "warning",
 		};
 
 		const color = kindColors[kind] || "muted";

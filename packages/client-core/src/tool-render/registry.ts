@@ -98,6 +98,13 @@ export function resolveToolRenderer(name: string): ToolRenderer {
 	return externalRenderers[name] ?? RENDERERS[name] ?? genericRenderer;
 }
 
+/** Wire tool names with a builtin card renderer (keys of the builtin
+ * registry). The canonical sorted inventory lives in `card-tools.ts`; the
+ * registry test guards the two against drift. */
+export function builtinRendererToolNames(): string[] {
+	return Object.keys(RENDERERS);
+}
+
 /** Extension-contributed per-tool renderers (registerToolView): keyed by
  *  wire tool name, consulted
  *  BEFORE the built-in registry so an extension renderer replaces the

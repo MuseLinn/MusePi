@@ -232,6 +232,12 @@ export class ExtensionList implements Component {
 		const namePadded = this.#padText(name, nameWidth);
 		line += namePadded;
 
+		// Built-in badge: registry deployment artifacts + annotated rows
+		// (bundled skills) carry the same "内置" marker as the GUI.
+		if (ext.builtin) {
+			line += theme.fg("muted", ` ${t("Builtin")}`);
+		}
+
 		// Trigger hint
 		if (ext.trigger) {
 			const triggerStyle = effectivelyDisabled ? "dim" : "muted";
@@ -271,6 +277,10 @@ export class ExtensionList implements Component {
 				return theme.icon.extensionContextFile;
 			case "instruction":
 				return theme.icon.extensionInstruction;
+			case "tool-render":
+				return theme.icon.extensionTool;
+			case "magic-keyword":
+				return theme.icon.extensionPrompt;
 			default:
 				return theme.format.bullet;
 		}
@@ -312,8 +322,10 @@ export class ExtensionList implements Component {
 			return;
 		}
 
-		// Provider-specific view: Master switch + flat list
-		if (this.#masterSwitchProvider) {
+		// Provider-specific view: Master switch + flat list. The native
+		// provider has no master switch — it is the app's own config source
+		// and cannot be disabled (daemon parity).
+		if (this.#masterSwitchProvider && this.#masterSwitchProvider !== "native") {
 			const providerName = filtered[0]?.source.providerName ?? this.#masterSwitchProvider;
 			const enabled = isProviderEnabled(this.#masterSwitchProvider);
 
@@ -342,6 +354,8 @@ export class ExtensionList implements Component {
 			"extension-module",
 			"skill",
 			"tool",
+			"tool-render",
+			"magic-keyword",
 			"slash-command",
 			"rule",
 			"mcp",
@@ -350,6 +364,9 @@ export class ExtensionList implements Component {
 			"context-file",
 			"instruction",
 			"gui-motion",
+			"theme",
+			"style",
+			"desktop-shell",
 		];
 
 		for (const kind of kindOrder) {
@@ -394,6 +411,12 @@ export class ExtensionList implements Component {
 				return t("Instructions");
 			case "gui-motion":
 				return t("GUI Motion");
+			case "magic-keyword":
+				return t("Magic Keywords");
+			case "theme":
+				return t("Themes");
+			case "tool-render":
+				return t("Tool Renderers");
 			default:
 				return kind;
 		}
@@ -411,6 +434,9 @@ export class ExtensionList implements Component {
 		if (item?.type === "master") {
 			this.callbacks.onMasterToggle?.(item.providerId);
 		} else if (item?.type === "extension") {
+			// Read-only builtins (theme pack / renderer pack) have no disable
+			// semantics — Space is a no-op instead of writing a dead flag.
+			if (item.item.readonly) return;
 			// Only allow toggling if the provider master switch is enabled.
 			const masterDisabled = this.#masterSwitchProvider !== null && !isProviderEnabled(this.#masterSwitchProvider);
 			if (!masterDisabled) {

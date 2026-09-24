@@ -50,7 +50,10 @@ function stateLabel(e: ExtensionItem): string {
 
 function levelLabel(s: ExtensionItem): string {
 	// 单一权威判定在 UnifiedPluginsView.sourceLevelLabel（插件 tab 与
-	// 能力清单的来源标签必须一致，防 drift）。
+	// 能力清单的来源标签必须一致，防 drift）。builtin 注册表行/标注行
+	// （含安装后的 bundled skills）优先显示"内置"——它们的 level 可能是
+	// user（用户目录安装副本），但身份是内置部署物。
+	if (s.builtin) return t("ext builtin");
 	return sourceLevelLabel(s.source.provider, s.source.level);
 }
 
@@ -112,11 +115,10 @@ function OverviewView({
 	const activeCount = extensions.filter(e => e.state === "active" && !e.loadError).length;
 	const kindCount = new Set(extensions.map(e => e.kind)).size;
 	const totalSlots = (slots?.exact.length ?? 0) + (slots?.prefixes.length ?? 0);
-	// 来源健康度 skips the `native` provider (TUI buildProviderTabs parity):
-	// native IS the app's own config + builtin registry — the inventory tree
-	// already surfaces it read-only as 内置, and a「MusePi」row toggling the
-	// user's entire native config next to「MusePi Extensions」read as a
-	// duplicate source. Only real (toggleable) sources stay listed.
+	// 来源健康度 skips the `native` provider: native 是应用自身配置源 +
+	// builtin 标注行的集合,provider 级开关不存在(daemon 拒绝禁用
+	// native),列表树里它作为只读节点出现(M2.1 起 native 不再是隐藏
+	// 特例)。只有真正可开关的来源留在健康度列表。
 	const managedProviders = providers.filter(p => p.id !== "native");
 	const stats: { label: string; value: number; tone?: "err"; sub?: string }[] = [
 		{
@@ -414,8 +416,14 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 		});
 	}, [extensions, tab, query]);
 
-	// Tree: non-native providers (with kind groups) + a read-only 内置 node
-	// for native items so builtins stay reachable (TUI tabs skip native).
+	// Tree: one node per provider (native included since M2.1 — it renders
+	// without a master switch, same as the inventory provider tabs). Empty
+	// disabled providers stay hidden — EXCEPT musepi-extensions: the
+	// MusePi-native extension provider is a first-class entry the user must
+	// always see (management surface even with zero items, "插件化了用户要能
+	// 了解"), unlike third-party providers. Builtin registry rows (magic
+	// keywords / theme pack / renderer pack) ride the musepi-extensions node
+	// with the 内置 badge via levelLabel.
 	const tree = useMemo(() => {
 		const nodes: {
 			provider: ProviderInfo;
@@ -423,17 +431,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			enabled: boolean;
 			kinds: { kind: string; count: number; items: ExtensionItem[] }[];
 		}[] = [];
-		const nativeItems: ExtensionItem[] = [];
 		for (const p of providers) {
 			const items = filtered.filter(e => e.source.provider === p.id);
-			if (p.id === "native") {
-				nativeItems.push(...items);
-				continue;
-			}
-			// Empty disabled providers stay hidden — EXCEPT musepi-extensions:
-			// the MusePi-native extension provider is a first-class entry the
-			// user must always see (management surface even with zero items,
-			// "插件化了用户要能了解"), unlike third-party providers.
+			// Empty disabled providers stay hidden — EXCEPT musepi-extensions (above).
 			if (items.length === 0 && !p.enabled && p.id !== "musepi-extensions") continue;
 			const kinds = new Map<string, ExtensionItem[]>();
 			for (const it of items) {
@@ -476,7 +476,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 			});
 		}
 		nodes.sort((a, b) => (a.count === 0 ? 1 : 0) - (b.count === 0 ? 1 : 0) || b.count - a.count);
-		return { nodes, nativeItems };
+		return { nodes };
 	}, [providers, filtered]);
 
 	const toggleKind = (key: string): void => {
@@ -750,23 +750,26 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 																							<Icon name="delete-bin" className="h-3 w-3" />
 																						</button>
 																					)}
-																					<button
-																						type="button"
-																						role="switch"
-																						aria-checked={e.state === "active"}
-																						aria-label={
-																							e.state === "active"
-																								? t("disable skill")
-																								: t("enable skill")
-																						}
-																						className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-																						onClick={ev => {
-																							ev.stopPropagation();
-																							toggle(e, e.state !== "active");
-																						}}
-																					>
-																						<span className="gui-toggle-knob" />
-																					</button>
+																					{/* 只读内置项(主题包/渲染器包)无禁用语义,不渲染开关。 */}
+																					{!e.readonly && (
+																						<button
+																							type="button"
+																							role="switch"
+																							aria-checked={e.state === "active"}
+																							aria-label={
+																								e.state === "active"
+																									? t("disable skill")
+																									: t("enable skill")
+																							}
+																							className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+																							onClick={ev => {
+																								ev.stopPropagation();
+																								toggle(e, e.state !== "active");
+																							}}
+																						>
+																							<span className="gui-toggle-knob" />
+																						</button>
+																					)}
 																				</span>
 																			</div>
 																		))}
@@ -778,38 +781,6 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											</div>
 										);
 									})}
-									{tree.nativeItems.length > 0 && (
-										<div className="gui-ext-provider">
-											<div className="gui-ext-provider-h">
-												<span className="gui-ext-dot" />
-												<span className="min-w-0 flex-1 truncate text-[12px] font-medium">
-													{t("ext builtin")}
-												</span>
-												<span className="gui-ext-group-count">({tree.nativeItems.length})</span>
-											</div>
-											<div className="gui-ext-provider-children">
-												{tree.nativeItems.map(e => (
-													<div
-														key={e.id}
-														role="button"
-														tabIndex={0}
-														className={`gui-ext-item${selectedId === e.id ? " gui-ext-item--selected" : ""}`}
-														onClick={() => setSelectedId(e.id)}
-													>
-														<span
-															className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
-														/>
-														<span className="min-w-0 flex-1 truncate">{e.name}</span>
-														{e.loadError && (
-															<span className="gui-ext-item-tag gui-ext-item-tag--err">
-																{t("ext load failed")}
-															</span>
-														)}
-													</div>
-												))}
-											</div>
-										</div>
-									)}
 									{filtered.length === 0 && <div className="gui-ext-empty">{t("no skills found")}</div>}
 								</div>
 							</div>
@@ -824,6 +795,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											{isGuiKind(selected) && (
 												<span className="gui-ext-item-tag gui-ext-item-tag--gui">GUI</span>
 											)}
+											{selected.readonly && <span className="gui-ext-item-tag">{t("ext read-only")}</span>}
 										</div>
 										{selected.description && <p className="gui-ext-detail-desc">{selected.description}</p>}
 										{selected.trigger && (

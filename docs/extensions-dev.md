@@ -88,7 +88,13 @@ export default function myExtension(pi: ExtensionAPI) {
 
 ## 4. 内置扩展 vs 第三方
 
-- **native/内置**(`discovery/builtin.ts`):随代码分发,`extensions.list` 里 provider = native,节点只读(不能禁用)。
+- **native/内置配置**(`discovery/builtin.ts`):`~/.musepi/agent` 与 `.musepi/` 配置文件扫描项,`extensions.list` 里 provider = native。native provider 自 0.5.0(M2.1)起在 TUI/GUI 的 provider tab 可见(不再 skip-native),无 provider 级开关(daemon 拒绝禁用 native)。
+- **内置注册表**(`extensibility/extensions-center/builtin-registry.ts` 的 `BUILTIN_EXTENSIONS`):随代码分发的部署物,以 `musepi-extensions` provider 的 builtin 项呈现(provider=native 语义不扩大),path 恒为空(只读,不可改删/rollback),带"内置"徽章。三类语义:
+  - `settingsMirror`(样式/桌面壳/magic keywords):设置键即事实源,`extensions.setEnabled` 写镜像键,daemon 与 TUI 仪表盘按 `builtinMirrorDisabled` 读回;
+  - 通用项:走 `settings.disabledExtensions`,可禁用;
+  - `readonly: true`(主题包/渲染器包):只读展示,无禁用语义,UI 不渲染开关——登记仅为可见性,不发明语义。
+  - `annotate: true`(bundled skills):不产生独立条目,只给扫描出的同 id 行打 `builtin` 标记(bundled skill 的安装行已由 native 扫描呈现,重复登记会出现两行)。
+  - 0.5.0 M2.1 登记清单:bundled skills ×6(清单源 `src/bundled-skills/index.ts`)、magic keywords ×3(镜像 `magicKeywords.<kw>`)、modes 主题包 ×1(raw.themes = `getBuiltinThemes()`)、tool-render 卡片工具包 ×1(raw.tools = client-core `tool-render/card-tools.ts` 权威清单的快照,契约测试守交集)。**内置 hooks 不存在**:hook 全部是文件/插件态,经 native 扫描自然可见,登记数为 0。
 - **插件安装**(`~/.musepi/plugins/`):provider = user,可启停。
 - 测试/示例扩展(如 `harmony-leak` 夹具)是测试资产,不算产品扩展。
 
