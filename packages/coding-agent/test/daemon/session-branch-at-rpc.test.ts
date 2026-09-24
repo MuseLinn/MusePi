@@ -48,6 +48,9 @@ function runBranchAt(
 				// early no-op exit when the leaf is already at the target.
 				navigateTree: async () => ({ cancelled: false }),
 			},
+			// session.branchAt now broadcasts the leaf move through the live
+			// session (journal + subscribers) — the stub must accept the call.
+			publishWireEvent: () => {},
 		}),
 		setCollabToolProvider: () => {},
 		setScheduledTaskProvider: () => {},

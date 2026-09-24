@@ -44,6 +44,7 @@ import type {
 	SessionState,
 	SttModelRow,
 	SttModelStatusResponse,
+	AgentEvent as WireAgentEvent,
 	WireMessage,
 } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
@@ -489,7 +490,7 @@ import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { getFxRates } from "./fx-rates";
-import { AppendJournal } from "./journal";
+import { AppendJournal, catchupPlan } from "./journal";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -582,6 +583,11 @@ function modesOf(session: unknown): {
 }
 const DEFAULT_SOCKET = path.join(SOCKET_DIR, "daemon.sock");
 const JOURNAL_DIR = path.join(SOCKET_DIR, "journal");
+
+/** Journal file for a session id (the daemon's only journal layout). */
+function journalFilePath(sessionId: string): string {
+	return path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`);
+}
 
 /**
  * Snapcompact wire-savings estimates are memoized per live session — the
@@ -925,7 +931,11 @@ interface LiveSession {
 	 *  创建路径由 createSession 显式补写(SDK 的 create 不写 header)。
 	 *  消费方:session.modes → GUI 的 design 风格 chip 与上下文面板模式名。 */
 	modeId?: string;
-	/** Incrementing event sequence for the stream contract. */
+	/** Envelope seq for NON-journaled stream kinds only (approval-request,
+	 *  ask-request, agent-progress, agent-lifecycle, title, recap,
+	 *  pause-state) — a per-session display counter, NOT the journal
+	 *  watermark space. kind:"event" envelopes carry the journal record seq
+	 *  (see #adoptAgentSession); clients gate only on that space. */
 	seq: number;
 	journal: AppendJournal | null;
 	view: MaterializedView;
@@ -1722,7 +1732,12 @@ export class DaemonSessionHost {
 				MaterializedView.fromSnapshot(sessionId, cwd, {
 					entries: viewEntries,
 					state: { isStreaming: false, queuedMessageCount: 0, cwd, participants: [] },
-					cursor: viewEntries.length,
+					// Single seq authority: the view cursor must live in the
+					// journal numbering (it becomes the client's watermark and
+					// the compaction checkpoint seq), not in the SDK entry
+					// count — the transcript can hold entries the journal
+					// never recorded and vice versa.
+					cursor: journal.tailSeq,
 					agents: [],
 				}) ?? view;
 		}
@@ -1783,7 +1798,9 @@ export class DaemonSessionHost {
 			// 从不把 modeId 写进 JSONL 头,所以仅读 SDK 头会让空态 chip 选的
 			// design 会话在重启/重激活后丢掉预设(GUI 的 design 风格 chip 不显示)。
 			modeId: agentSession.sessionManager?.getHeader()?.modeId ?? persisted?.header?.modeId ?? undefined,
-			seq: viewFinal.cursor,
+			// Non-journaled envelope kinds count from 0 (see LiveSession.seq) —
+			// the journal owns the kind:"event" seq space outright.
+			seq: 0,
 			journal,
 			view: viewFinal,
 			subscribers: new Map(),
@@ -1824,8 +1841,10 @@ export class DaemonSessionHost {
 				trackActiveToolCall(event);
 				const wireEvent = toWireAgentEvent(event);
 				if (!wireEvent) return;
-				const seq = ++live.seq;
-				live.journal?.append(wireEvent);
+				// Journal = single seq authority: the broadcast seq IS the
+				// journal record seq, so a client watermark always compares in
+				// one numbering space (catchup replays the same records).
+				const seq = live.journal ? live.journal.append(wireEvent) : ++live.seq;
 				live.view.apply(wireEvent);
 				schedulePersist();
 				for (const send of live.subscribers.values()) {
@@ -2050,10 +2069,11 @@ export class DaemonSessionHost {
 					m.parentId = parentMsg ? messageKey(parentMsg) : null;
 				}
 			}
-			const seq = ++live.seq;
 			const wireEvent = toWireAgentEvent(event);
 			if (!wireEvent) return;
-			live.journal?.append(wireEvent);
+			// Journal = single seq authority: broadcast seq == journal record
+			// seq (see publishWireEvent).
+			const seq = live.journal ? live.journal.append(wireEvent) : ++live.seq;
 			live.view.apply(wireEvent);
 			schedulePersist();
 			// Compact when the journal crosses a bound: fold the materialized
@@ -2065,7 +2085,7 @@ export class DaemonSessionHost {
 				void live.journal
 					.shouldCompact()
 					.then(needed => {
-						if (needed && live.journal) return live.journal.compact(live.view.cursor, live.view.snapshot());
+						if (needed && live.journal) return live.journal.compact(live.journal.tailSeq, live.view.snapshot());
 					})
 					.catch(err => {
 						// A failed compaction (e.g. transient Windows EPERM on
@@ -2486,6 +2506,13 @@ export class DaemonSessionHost {
 			if (typeof agentLike.isStreaming === "boolean") {
 				snap.state.isStreaming = agentLike.isStreaming;
 			}
+			// Watermark stamp: clients gate catchup/gap recovery on the
+			// journal tail, never on the view's applied-event count (the
+			// SDK-transcript seed path can diverge from it). The branch is
+			// fully synchronous, so the in-memory tail cannot race the
+			// snapshot: every record ≤ tail is either in the snapshot or
+			// arrives as a live envelope with seq > tail.
+			snap.cursor = live.journal?.tailSeq ?? snap.cursor;
 			return snap;
 		}
 		// History path: no running session — serve the persisted materialized
@@ -2494,8 +2521,15 @@ export class DaemonSessionHost {
 		// (daemon shut down mid-stream) must never make the GUI show a phantom
 		// working turn with an un-stoppable stop button.
 		const archivedPause = await readPauseSidecar(sessionId, JOURNAL_DIR);
+		// Watermark stamp: read the journal tail BEFORE building the view, so
+		// a concurrent append can only push records ABOVE the stamped cursor —
+		// the client then sees a (self-healing) gap and catchup replays the
+		// overlap idempotently, instead of the stamp punching a silent hole
+		// over records the snapshot never contained.
+		const tail = await AppendJournal.readTailSeq(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`));
 		const idleHistory = (view: MaterializedView): Static<typeof sessionSnapshot> => {
 			const snap = view.snapshot();
+			snap.cursor = tail;
 			snap.state.isStreaming = false;
 			snap.state.queuedMessageCount = 0;
 			// Paused state survives the archive via the sidecar: the GUI/TUI
@@ -2534,7 +2568,9 @@ export class DaemonSessionHost {
 		const { resolveResumableSession } = await import("../session/session-listing");
 		const match = await resolveResumableSession(sessionId, this.#options.cwd ?? "");
 		if (!match) throw new Error(`Unknown session: ${sessionId}`);
-		return snapshotFromJsonl(match.session.path, sessionId);
+		const fallback = await snapshotFromJsonl(match.session.path, sessionId);
+		fallback.cursor = tail;
+		return fallback;
 	}
 
 	/** Checkpoint seq for a session (0 when never compacted) — resume uses it
@@ -2575,6 +2611,72 @@ export class DaemonSessionHost {
 		} finally {
 			void journal.close();
 		}
+	}
+
+	/**
+	 * session.catchup RPC core (roadmap M1.4 gap fill): replay every journal
+	 * record with seq > afterSeq through the connection's event batcher, in
+	 * journal order. The resync guards are the pure {@link catchupPlan}:
+	 * afterSeq predating the compaction checkpoint, or ahead of the journal
+	 * tail (divergent watermark), both answer `{resyncRequired}` WITHOUT
+	 * pushing anything. Session identity IS the epoch: with restart-
+	 * persistent seqs (journal open recovers the tail from the file), a
+	 * cursor for this session id is always expressed in this journal's
+	 * numbering.
+	 */
+	async catchupFrom(
+		sessionId: string,
+		afterSeq: number,
+		conn: DaemonConnection,
+	): Promise<{ ok: true } | { resyncRequired: true; compactedThrough: number }> {
+		const live = this.#sessions.get(sessionId);
+		const checkpointSeq = await this.checkpointSeq(sessionId);
+		// Prefer the live journal: a fresh instance would miss appends whose
+		// writes are still queued in the live instance's chain (readAll only
+		// flushes its own instance).
+		const journal = live?.journal ?? null;
+		const plan = journal
+			? catchupPlan(afterSeq, checkpointSeq, journal.tailSeq)
+			: catchupPlan(afterSeq, checkpointSeq, await AppendJournal.readTailSeq(journalFilePath(sessionId)));
+		if (plan.resyncRequired) return plan;
+		if (!journal) {
+			const detached = new AppendJournal(JOURNAL_DIR, sessionId);
+			await detached.open();
+			try {
+				return await this.replayCatchup(sessionId, afterSeq, detached, conn);
+			} finally {
+				void detached.close();
+			}
+		}
+		return this.replayCatchup(sessionId, afterSeq, journal, conn);
+	}
+
+	/** Replay loop for `catchupFrom`: journal records with seq > afterSeq,
+	 *  in order, paged through the connection's batcher (see `catchup`).
+	 *  Public so the M1.4 ordered-replay contract is testable with a
+	 *  temp-dir journal without standing up a full daemon. */
+	async replayCatchup(
+		sessionId: string,
+		afterSeq: number,
+		journal: AppendJournal,
+		conn: DaemonConnection,
+	): Promise<{ ok: true }> {
+		const batcher = this.batcherFor(conn);
+		const records = await journal.recordsAfter(afterSeq);
+		for (let i = 0; i < records.length; i++) {
+			const record = records[i];
+			batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });
+			if ((i + 1) % CATCHUP_PAGE_SIZE === 0) {
+				batcher.flushNow();
+				// Yield to the event loop: pending RPC responses and other
+				// connections' envelopes interleave between pages.
+				const { promise, resolve } = Promise.withResolvers<void>();
+				setImmediate(resolve);
+				await promise;
+			}
+		}
+		batcher.flushNow();
+		return { ok: true };
 	}
 
 	/** All known sessions (live + persisted history) with queryable metadata. */
@@ -3703,20 +3805,23 @@ export class DaemonServer {
 	async #reloadSessionExtensions(live: LiveSession, entryPaths: string[]): Promise<void> {
 		for (const entryPath of entryPaths) {
 			const result = await live.agentSession.reloadExtension(entryPath);
+			const event = {
+				type: "extensions.reloaded",
+				extensionPath: entryPath,
+				removedTools: result.removedTools,
+				errors: result.errors,
+				deferred: result.deferred,
+				at: Date.now(),
+			} as unknown as WireAgentEvent;
+			// Same seq authority as every other kind:"event" envelope: journal
+			// it + apply it so the broadcast seq, the journal record and the
+			// view cursor stay in one numbering space (the projection no-ops
+			// on the unknown type; replay is equally inert).
+			const seq = live.journal ? live.journal.append(event) : ++live.seq;
+			live.view.apply(event);
 			for (const send of live.subscribers.values()) {
 				try {
-					send({
-						kind: "event",
-						seq: ++live.seq,
-						payload: {
-							type: "extensions.reloaded",
-							extensionPath: entryPath,
-							removedTools: result.removedTools,
-							errors: result.errors,
-							deferred: result.deferred,
-							at: Date.now(),
-						},
-					});
+					send({ kind: "event", seq, payload: event });
 				} catch {
 					// subscriber socket died; removed on close
 				}
@@ -4865,8 +4970,6 @@ export class DaemonServer {
 				// three states (active/disabled/shadowed). raw is heavy and
 				// served lazily via extensions.raw for the inspector.
 				const extensions = await this.#getExtensions();
-				// Builtin style extension state mirrors display.taskCardStyle
-				// (the setting is the source of truth; setEnabled writes it).
 				let s = this.#host.settings();
 				if (!s) {
 					// Shell mode/enabled live in settings; bootstrap the shared
@@ -4875,8 +4978,6 @@ export class DaemonServer {
 					await this.#host.ensureRegistry();
 					s = this.#host.settings();
 				}
-				const rawStyle = s?.getRaw("display.taskCardStyle");
-				const styleSetting: "swarm" | "classic" = rawStyle === "classic" ? "classic" : "swarm";
 				// Desktop-shell config (dsh-desktop parity): the compat page /
 				// GUI shell read enabled + mode + served origin from the
 				// registry response (raw is stripped by the response mapping).
@@ -4887,18 +4988,20 @@ export class DaemonServer {
 					mode: shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
 					webUrl: this.#webUrl,
 				};
-				for (const ext of extensions) {
-					if (ext.id === "style:task-card-swarm") {
-						ext.state = styleSetting === "classic" ? "disabled" : "active";
-						ext.disabledReason = styleSetting === "classic" ? "item-disabled" : undefined;
-					}
-					// Desktop shell mirrors shell.enabled (setEnabled writes it);
-					// disabled -> the GUI loads its local bundle instead of the
-					// runtime-served renderer.
-					if (ext.id === "desktop-shell:shell") {
-						ext.state = shellCfg.enabled ? "active" : "disabled";
-						ext.disabledReason = shellCfg.enabled ? undefined : "item-disabled";
-					}
+				// Builtin registry entries mirrored on a settings key
+				// (style/shell/magic keywords): the setting IS the source of
+				// truth for state — raw === off means disabled, anything else
+				// (unset defaults to enabled) means active.
+				const { BUILTIN_EXTENSIONS, builtinMirrorDisabled } = await import(
+					"../extensibility/extensions-center/builtin-registry"
+				);
+				for (const def of BUILTIN_EXTENSIONS) {
+					if (!def.settingsMirror) continue;
+					const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
+					if (!ext) continue;
+					const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
+					ext.state = disabled ? "disabled" : "active";
+					ext.disabledReason = disabled ? "item-disabled" : undefined;
 				}
 				const { buildProviderTabs } = await import("../extensibility/extensions-center/state-manager");
 				const tabs = buildProviderTabs(extensions);
@@ -4961,9 +5064,9 @@ export class DaemonServer {
 				// settings.disabledExtensions with the same `kind:name` ids
 				// the dashboard uses. MCP toggles route through the canonical
 				// mcp.json denylist so /mcp list, the MCP runtime and this
-				// center agree (issue #3827). The builtin style extension
-				// (task-card-swarm) maps to display.taskCardStyle instead —
-				// the setting IS the source of truth for render style.
+				// center agree (issue #3827). Settings-mirrored builtins
+				// (task-card style, magic keywords) write their mirrored
+				// setting key instead — the setting IS the source of truth.
 				const p = (params ?? {}) as { id: string; enabled: boolean; mode?: string };
 				let settings = this.#host.settings();
 				if (!settings) {
@@ -4971,18 +5074,6 @@ export class DaemonServer {
 					settings = this.#host.settings();
 				}
 				if (!settings) throw new Error("settings unavailable");
-				if (p.id === "style:task-card-swarm") {
-					// Extension-owned key (registered by the task-card style
-					// extension — not in the static SettingPath union).
-					settings.set(
-						"display.taskCardStyle" as Parameters<Settings["set"]>[0],
-						(p.enabled ? "swarm" : "classic") as never,
-					);
-					await settings.flush();
-					this.#extensionsCache = null;
-					this.#broadcastExtensionsChanged();
-					return { ok: true };
-				}
 				if (p.id === "desktop-shell:shell") {
 					// Desktop shell toggle: enabled -> the GUI shell loads the
 					// runtime-served renderer; disabled -> local bundle. The
@@ -5017,6 +5108,22 @@ export class DaemonServer {
 							// already gone
 						}
 					}
+					this.#extensionsCache = null;
+					this.#broadcastExtensionsChanged();
+					return { ok: true };
+				}
+				// Generic settings-mirror builtins (task-card style, magic
+				// keywords): the mirrored setting IS the source of truth —
+				// write it instead of the disabledExtensions list.
+				const mirrorDef = (await import("../extensibility/extensions-center/builtin-registry")).findBuiltinDef(
+					p.id,
+				)?.settingsMirror;
+				if (mirrorDef) {
+					settings.set(
+						mirrorDef.key as Parameters<Settings["set"]>[0],
+						(p.enabled ? mirrorDef.on : mirrorDef.off) as never,
+					);
+					await settings.flush();
 					this.#extensionsCache = null;
 					this.#broadcastExtensionsChanged();
 					return { ok: true };
@@ -6210,6 +6317,19 @@ export class DaemonServer {
 					compactedThrough: compacted,
 				};
 			}
+			case "session.catchup": {
+				// M1.4 gap fill for live subscriptions: the client's event
+				// stream dropped a frame (reconnect race, batcher loss), it
+				// detected the seq gap and asks for everything after its
+				// watermark. Deltas ride the normal push channel (batcher);
+				// the response itself stays lightweight.
+				const p = (params ?? {}) as { sessionId?: unknown; afterSeq?: unknown };
+				if (typeof p.sessionId !== "string" || !p.sessionId) throw new Error("sessionId required");
+				if (typeof p.afterSeq !== "number" || !Number.isInteger(p.afterSeq) || p.afterSeq < 0) {
+					throw new Error("afterSeq must be a non-negative integer");
+				}
+				return await this.#host.catchupFrom(p.sessionId, p.afterSeq, conn);
+			}
 			case "session.thinking": {
 				// Mobile parity of the TUI thinking selector: sanitize through
 				// the same parser as --thinking, apply to the live session.
@@ -6397,6 +6517,14 @@ export class DaemonServer {
 				const btarget = bentries.find(e => e.id === bsdkId) as { message?: WireMessage } | undefined;
 				const btargetText =
 					btarget?.message?.role === "user" ? extractEntryText({ content: btarget.message.content }) : "";
+				// 撤回/切分支广播: navigateTree 只移动 SDK 树的 leaf 指针 —
+				// 不 append 条目、不走 agent 事件流,而 GUI store 只从事件流
+				// 学习(leaf_moved 之前撤回/切分支后订阅端永远停在旧 active
+				// path)。publishWireEvent 保证三件事: journal append(seq 连续,
+				// M1.4 catchup 可原样重放)、view.apply(对无投影的类型是安全
+				// no-op)、订阅端 fan-out。leafId 与下方返回值同源(null =
+				// 撤到根,首条用户消息的 parentId 在 wire 快照里恒为 null)。
+				blive.publishWireEvent({ type: "session_leaf_moved", leafId: bleafKey });
 				return {
 					ok: true,
 					leafId: bleafKey,

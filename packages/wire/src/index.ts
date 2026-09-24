@@ -250,7 +250,17 @@ export type AgentEvent =
 	| { type: "auto_compaction_end"; aborted: boolean; willRetry: boolean; errorMessage?: string; skipped?: boolean }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
-	| { type: "thinking_level_changed"; thinkingLevel?: string };
+	| { type: "thinking_level_changed"; thinkingLevel?: string }
+	/**
+	 * Daemon-synthetic (RPC session.branchAt, TUI navigateTree parity): the
+	 * session tree leaf moved IN PLACE — 撤回 / 编辑 / 重试 / branch switch.
+	 * `leafId` is the VIEW key ("role:timestamp") of the new leaf's nearest
+	 * message ancestor, or null when the leaf moved to the ROOT (rewind of
+	 * the first user message → active path is empty). Journaled + broadcast
+	 * via the daemon's publishWireEvent so GUI clients refresh their
+	 * snapshot; carries no transcript rows of its own.
+	 */
+	| { type: "session_leaf_moved"; leafId: string | null };
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Daemon global events (events.subscribe — NOT session events)

@@ -37,6 +37,27 @@ export interface JournalCheckpoint {
 export const COMPACT_EVENT_THRESHOLD = 2000;
 export const COMPACT_BYTE_THRESHOLD = 4 * 1024 * 1024;
 
+/** session.catchup verdict (M1.4) — pure guard over (checkpoint, tail,
+ *  afterSeq) so the contract is testable without a daemon host:
+ *
+ * - afterSeq < checkpointSeq → resyncRequired: the missing records were
+ *   folded into the checkpoint snapshot, replay cannot reconstruct them
+ *   (`compactedThrough` = checkpoint seq).
+ * - afterSeq > tailSeq → resyncRequired: the watermark comes from a
+ *   divergent journal; replaying nothing would strand it above every
+ *   future seq (its gate would skip real events).
+ * - otherwise the journal holds every record in (afterSeq, tail] and the
+ *   caller replays them in order. */
+export function catchupPlan(
+	afterSeq: number,
+	checkpointSeq: number,
+	tailSeq: number,
+): { resyncRequired: true; compactedThrough: number } | { resyncRequired: false } {
+	if (afterSeq < checkpointSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
+	if (afterSeq > tailSeq) return { resyncRequired: true, compactedThrough: checkpointSeq };
+	return { resyncRequired: false };
+}
+
 /**
  * Per-file exclusive queue for the rewrite operations (compact). Each
  * writes a fixed `<file>.tmp` then renames it — two rewrites of the same
@@ -45,6 +66,11 @@ export const COMPACT_BYTE_THRESHOLD = 4 * 1024 * 1024;
  * this module-level queue so different
  * AppendJournal instances for the same session serialize too.
  */
+/** Tail-read chunk for {@link AppendJournal.readTailSeq}: covers thousands of
+ *  records while keeping session.history-style watermark stamps off the full
+ *  journal scan. */
+const TAIL_SEQ_READ_BYTES = 64 * 1024;
+
 const rewriteLocks = new Map<string, Promise<void>>();
 function withRewriteLock(filePath: string, fn: () => Promise<void>): Promise<void> {
 	const prev = rewriteLocks.get(filePath) ?? Promise.resolve();
@@ -100,6 +126,11 @@ export class AppendJournal {
 	 *  landing in the rewrite window is queued, not silently dropped. */
 	#fdReady: Promise<fs.promises.FileHandle | null> = Promise.resolve(null);
 	#seq = 0;
+	/** Records appended since the last compact — the event-count compaction
+	 *  bound. The persistent #seq must NOT be the threshold basis: right after
+	 *  a restart it is large from the recovered tail while the file itself is
+	 *  small. */
+	#appendedSinceCompact = 0;
 
 	constructor(dir: string, sessionId: string) {
 		this.filePath = path.join(dir, `${sessionId}.journal.jsonl`);
@@ -110,12 +141,66 @@ export class AppendJournal {
 		this.#fd = await fs.promises.open(this.filePath, "a");
 		withFd(this.filePath).add(this);
 		this.#fdReady = Promise.resolve(this.#fd);
+		// Seq persistence: a reopened journal (daemon restart, transient
+		// history read) continues where the file's tail left off. Renumbering
+		// from 0 would collide with records already on disk and break every
+		// downstream consumer that treats seq as a watermark (catchup, client
+		// gap gate). Fresh/empty files read a 0 tail and keep the 1-based
+		// numbering.
+		this.#seq = await AppendJournal.readTailSeq(this.filePath);
+		this.#appendedSinceCompact = 0;
+	}
+
+	/** Seq of the last valid record in a journal file (0 when the file is
+	 *  missing or has no parseable record). Reads only the trailing bytes —
+	 *  watermark stamps must not pay a full journal scan. Tolerates a torn
+	 *  tail line and bad lines: scans backward for the last parseable one.
+	 *  Oversized single records (one line over the chunk) fall back to a
+	 *  whole-file scan so the tail is never misreported as 0. */
+	static async readTailSeq(filePath: string): Promise<number> {
+		let handle: fs.promises.FileHandle | null = null;
+		try {
+			handle = await fs.promises.open(filePath, "r");
+			const fd = handle;
+			const { size } = await fd.stat();
+			const scan = async (from: number, length: number): Promise<number> => {
+				const buf = Buffer.alloc(length);
+				await fd.read(buf, 0, length, from);
+				const lines = buf.toString("utf8").split("\n");
+				for (let i = lines.length - 1; i >= 0; i--) {
+					const line = lines[i].trim();
+					if (!line) continue;
+					try {
+						const parsed = JSON.parse(line) as { seq?: unknown };
+						if (typeof parsed.seq === "number" && Number.isInteger(parsed.seq)) return parsed.seq;
+					} catch {
+						// torn/invalid line — keep scanning backward
+					}
+				}
+				return -1;
+			};
+			const chunk = Math.min(size, TAIL_SEQ_READ_BYTES);
+			const found = await scan(size - chunk, chunk);
+			if (found >= 0) return found;
+			if (size > chunk) return Math.max(await scan(0, size), 0);
+			return 0;
+		} catch {
+			return 0; // missing/unreadable file
+		} finally {
+			await handle?.close().catch(() => {});
+		}
+	}
+
+	/** Current tail seq (last assigned). The next append is tailSeq + 1. */
+	get tailSeq(): number {
+		return this.#seq;
 	}
 
 	/** Append a wire event; returns its journal seq. Shrinks payloads so a
 	 * single oversized event can never poison replay (same cap as collab). */
 	append(event: WireAgentEvent): number {
 		const seq = ++this.#seq;
+		this.#appendedSinceCompact += 1;
 		const record: JournalRecord = { seq, ts: new Date().toISOString(), event: shrinkForReplication(event) };
 		const line = `${JSON.stringify(record)}\n`;
 		this.#writtenBytes += line.length;
@@ -145,6 +230,18 @@ export class AppendJournal {
 	/** Wait for all queued appends to reach the OS. */
 	async flush(): Promise<void> {
 		await this.#pendingWrite;
+	}
+
+	/** Records with seq > afterSeq, in journal order — the session.catchup
+	 *  replay contract (M1.4): a gap fill must arrive strictly in the
+	 *  journal numbering the client's watermark gate compares against. */
+	async recordsAfter(afterSeq: number): Promise<JournalRecord[]> {
+		await this.flush();
+		const out: JournalRecord[] = [];
+		for (const record of await this.readAll()) {
+			if (record.seq > afterSeq) out.push(record);
+		}
+		return out;
 	}
 
 	/** All records in seq order (used for resume initial replay). */
@@ -218,12 +315,14 @@ export class AppendJournal {
 			);
 			await this.#replaceFile(tmpJournal);
 			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
+			this.#appendedSinceCompact = 0;
 		});
 	}
 
-	/** Should the journal be compacted? (event count or byte size bound) */
+	/** Should the journal be compacted? (records appended since the last
+	 *  compact, or bytes written this process) */
 	async shouldCompact(): Promise<boolean> {
-		if (this.#seq >= COMPACT_EVENT_THRESHOLD) return true;
+		if (this.#appendedSinceCompact >= COMPACT_EVENT_THRESHOLD) return true;
 		if (this.#writtenBytes >= COMPACT_BYTE_THRESHOLD) return true;
 		return false;
 	}

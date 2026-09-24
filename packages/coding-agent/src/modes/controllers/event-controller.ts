@@ -282,6 +282,11 @@ export class EventController {
 				this.ctx.ui.resetDisplay();
 			},
 			goal_updated: async () => {},
+			// Daemon-synthetic (RPC session.branchAt → publishWireEvent): the
+			// TUI rebuilds its transcript directly after navigateTree (selector
+			// controller), so the live handler needs no projection — listed
+			// only to keep the handler map total.
+			session_leaf_moved: async () => {},
 		} satisfies AgentSessionEventHandlers;
 	}
 

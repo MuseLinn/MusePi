@@ -7,7 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-wire";
-import { AppendJournal } from "../../src/daemon/journal";
+import { AppendJournal, catchupPlan } from "../../src/daemon/journal";
 
 const dirs: string[] = [];
 
@@ -125,6 +125,98 @@ describe("AppendJournal", () => {
 		expect(ckpt!.seq).toBe(7);
 		const remaining = await j.readAll();
 		expect(remaining.map(r => r.seq)).toEqual([8, 9, 10]);
+	});
+
+	test("daemon restart: reopened journal continues the tail seq instead of renumbering", async () => {
+		// Contract: the journal seq is a cross-restart watermark (client gap
+		// gate, catchup, compaction checkpoint all compare against it). If a
+		// daemon restart renumbered from 0, the new records would collide
+		// with the pre-restart tail and a client watermark would falsely
+		// accept/drop events. Regression: seq wrap → catchup replay
+		// re-delivers old records as if they were new.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 3; i++) j.append(event("thinking_level_changed", i));
+		await j.flush();
+		await j.close();
+
+		// reopen on the same file (daemon restart shape) — a concurrent
+		// instance reading the tail must also agree with it.
+		const j2 = new AppendJournal(dir, "s1");
+		await j2.open();
+		const continued = j2.append(event("thinking_level_changed", 99));
+		await j2.flush();
+		expect(continued).toBe(4);
+
+		const records = await j2.readAll();
+		expect(records.map(r => r.seq)).toEqual([1, 2, 3, 4]);
+		await j2.close();
+	});
+
+	test("open recovers the tail after a compaction (file holds increments only)", async () => {
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 6; i++) j.append(event("thinking_level_changed", i));
+		await j.close();
+		await j.compact(4, { v: 1 });
+
+		const j2 = new AppendJournal(dir, "s1");
+		await j2.open();
+		expect(j2.tailSeq).toBe(6);
+		const next = j2.append(event("thinking_level_changed", 6));
+		expect(next).toBe(7);
+		await j2.close();
+	});
+
+	test("catchupPlan: in-range afterSeq replays, pre-checkpoint and ahead-of-tail resync", () => {
+		// Contract (M1.4 session.catchup guards): only an afterSeq inside
+		// [checkpoint, tail] can be replayed. Regression: replaying with a
+		// pre-checkpoint cursor leaves the client missing the folded records
+		// (silent hole); "ok" for an ahead-of-tail cursor strands the client
+		// watermark above every future seq (its gate would skip real events).
+		expect(catchupPlan(7, 0, 10)).toEqual({ resyncRequired: false });
+		expect(catchupPlan(0, 0, 10)).toEqual({ resyncRequired: false });
+		expect(catchupPlan(3, 5, 10)).toEqual({ resyncRequired: true, compactedThrough: 5 });
+		expect(catchupPlan(11, 5, 10)).toEqual({ resyncRequired: true, compactedThrough: 5 });
+	});
+
+	test("recordsAfter returns journal records above afterSeq in order", async () => {
+		// Contract (M1.4 session.catchup replay): the gap fill must arrive in
+		// journal order with the journal seqs — the client watermark gate
+		// compares in exactly this space. Regression: reordered/renumbered
+		// replay makes the gate accept the wrong records.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 10; i++) j.append(event("thinking_level_changed", i));
+		await j.close();
+		const records = await j.recordsAfter(7);
+		expect(records.map(r => r.seq)).toEqual([8, 9, 10]);
+		expect(records.map(r => (r.event as { thinkingLevel: string }).thinkingLevel)).toEqual([
+			"lvl-7",
+			"lvl-8",
+			"lvl-9",
+		]);
+		expect((await j.recordsAfter(10)).map(r => r.seq)).toEqual([]);
+		await j.close();
+	});
+
+	test("readTailSeq skips a torn tail line and bad lines", async () => {
+		// Contract: the watermark stamp must survive a crash mid-write —
+		// scanning backward past a torn/invalid line recovers the last real
+		// record's seq instead of reporting 0 (which would make the next
+		// append renumber from 1 and collide).
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 3; i++) j.append(event("thinking_level_changed", i));
+		await j.close();
+		fs.appendFileSync(j.filePath, "not-json-at-all\n");
+		fs.appendFileSync(j.filePath, `{"seq":4,"ts":"x","event":`);
+		expect(await AppendJournal.readTailSeq(j.filePath)).toBe(3);
+		expect(await AppendJournal.readTailSeq(path.join(dir, "missing.journal.jsonl"))).toBe(0);
 	});
 
 	test("compact while the append fd is open replaces the file and keeps appending", async () => {

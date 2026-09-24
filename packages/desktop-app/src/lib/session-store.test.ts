@@ -195,9 +195,18 @@ describe("GuiSessionStore unviewed subagent completions", () => {
 	// that is still loading.
 	//
 	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
-	// #pending and the flush runs on a queueMicrotask. Await one microtask
-	// (registered after the flush's) to observe the settled snapshot —
-	// deterministic, no wall-clock timers.
+	// #pending and the flush runs on the ambient scheduler — rAF when a DOM
+	// shim registered one (a happy-dom file earlier in the full-suite
+	// process), queueMicrotask otherwise. Await the actual primitive: a 0ms
+	// timer can win the race against rAF's ~16ms clamp.
+	function flush(): Promise<void> {
+		const raf = (globalThis as { requestAnimationFrame?: (cb: () => void) => number }).requestAnimationFrame;
+		return new Promise(r => {
+			if (typeof raf === "function") raf(() => r());
+			else setTimeout(r, 0);
+		});
+	}
+
 	let savedDocument: unknown;
 	beforeEach(() => {
 		savedDocument = (globalThis as { document?: unknown }).document;
@@ -206,17 +215,6 @@ describe("GuiSessionStore unviewed subagent completions", () => {
 	afterEach(() => {
 		(globalThis as { document?: unknown }).document = savedDocument;
 	});
-
-	// agent-lifecycle envelopes are frame-coalesced: apply() pushes to
-	// #pending and the flush runs on a queueMicrotask. Await one microtask
-	// (registered after the flush's) to observe the settled snapshot —
-	// deterministic, no wall-clock timers.
-
-	function flush(): Promise<void> {
-		const { promise, resolve } = Promise.withResolvers<void>();
-		queueMicrotask(resolve);
-		return promise;
-	}
 
 	function lifecycleEvent(id: string, status: string, sessionId: string) {
 		return {

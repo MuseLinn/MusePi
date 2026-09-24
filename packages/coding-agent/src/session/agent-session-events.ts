@@ -61,7 +61,16 @@ export type AgentSessionEvent =
 			/** The level `auto` resolved to this turn, once classified. */
 			resolved?: Effort;
 	  }
-	| { type: "goal_updated"; goal: Goal | null; state?: GoalModeState };
+	| { type: "goal_updated"; goal: Goal | null; state?: GoalModeState }
+	/**
+	 * Daemon-synthetic — NEVER emitted by the agent loop itself. RPC
+	 * session.branchAt (撤回/编辑/重试/branch switch) moved the session tree
+	 * leaf in place; the daemon publishes it via publishWireEvent so the
+	 * journal, the live stream and GUI clients share one fact (wire type:
+	 * session_leaf_moved in @musepi/pi-wire). `leafId` is the new leaf's
+	 * view key ("role:timestamp"), null = moved to the ROOT.
+	 */
+	| { type: "session_leaf_moved"; leafId: string | null };
 
 /** Listener function for agent session events. */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;

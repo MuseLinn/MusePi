@@ -249,9 +249,13 @@ export function dispatchNotification(event: NotifyEvent, ctx: NotifyContext, opt
 			.catch(() => {});
 		return;
 	}
-	if (!("Notification" in window) || Notification.permission !== "granted") return;
+	// Read the constructor off window, not the bare global: DOM shims can
+	// leave a window.Notification key whose value is undefined, and probing
+	// `in` while dereferencing the global crashes the caller's flush.
+	const Notifier = window.Notification;
+	if (Notifier?.permission !== "granted") return;
 	try {
-		new Notification(built.title, { body: built.body, tag: `omp-${event}` });
+		new Notifier(built.title, { body: built.body, tag: `omp-${event}` });
 	} catch {
 		// permission revoked mid-flight
 	}
@@ -291,15 +295,14 @@ export function sendTestNotification(): Promise<{ ok: boolean; reason?: string }
 		setTimeout(() => finish(true), 3000);
 		return promise;
 	}
-	if (!("Notification" in window)) return Promise.resolve({ ok: false, reason: "unsupported" });
+	const Notifier = window.Notification;
+	if (!Notifier) return Promise.resolve({ ok: false, reason: "unsupported" });
 	const request =
-		Notification.permission === "default"
-			? Notification.requestPermission()
-			: Promise.resolve(Notification.permission);
+		Notifier.permission === "default" ? Notifier.requestPermission() : Promise.resolve(Notifier.permission);
 	return request.then(permission => {
 		if (permission !== "granted") return { ok: false, reason: permission };
 		try {
-			new Notification(title, { body, tag: "omp-test" });
+			new Notifier(title, { body, tag: "omp-test" });
 			return { ok: true };
 		} catch (err) {
 			return { ok: false, reason: err instanceof Error ? err.message : String(err) };

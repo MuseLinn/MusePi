@@ -84,6 +84,35 @@ export interface ApprovalRequest {
 	prompt?: string;
 }
 
+/** Gap-recovery hooks (roadmap M1.4). Optional: a store built without them
+ *  keeps today's "apply everything" behavior — the watermark gate still
+ *  skips replays, it just never reorders or recovers. */
+export interface SessionGapHooks {
+	/** A journal-seq gap was detected in the event stream. Request daemon
+	 *  catchup from `afterSeq` (session.catchup); the replayed records flow
+	 *  back through apply() and drain the reorder buffer. Resolve
+	 *  `{resyncRequired: true}` when the daemon says the gap predates the
+	 *  compaction checkpoint (or the watermark is divergent) — the caller
+	 *  must then re-open the session (full snapshot resync). */
+	onGapDetected?: (afterSeq: number) => Promise<{ resyncRequired: boolean }>;
+	/** Last-resort full resync: fi	red when catchup answers resyncRequired or
+	 *  a gap stays unresolved past the guard timeout. The store is replaced
+	 *  by the re-open; implementations must NOT touch this store afterwards. */
+	onResyncRequired?: () => void;
+	/** Daemon broadcast `session_leaf_moved` (RPC session.branchAt — 撤回/
+	 *  编辑/重试/branch switch moved the session tree leaf in place). The
+	 *  event carries no transcript rows, so the whole snapshot is stale
+	 *  relative to the daemon's active path: implementations must re-fetch
+	 *  session.resume and hand it to {@link GuiSessionStore.reloadFromSnapshot}
+	 *  — the store identity is preserved so the chat view's pinned leaf and
+	 *  jump-back dock survive the refresh. `leafId` is the new leaf's view
+	 *  key, null = moved to the ROOT. */
+	onLeafMoved?: (leafId: string | null) => void;
+}
+
+/** Gap guard: no reorder progress for this long → full resync. */
+const GAP_TIMEOUT_MS = 10_000;
+
 // ── Completed-round totals (GUI-lifetime registry) ─────────────────────────
 // The store is DISPOSED and recreated on every session switch (app.tsx
 // openSession), so frozen round durations live in a module-level registry
@@ -178,6 +207,7 @@ function recordRoundDuration(entries: readonly SessionEntry[]): { assistantTs: n
 export class GuiSessionStore {
 	readonly #sessionId: string;
 	readonly #cwd: string;
+	readonly #hooks: SessionGapHooks;
 	#view: MaterializedView;
 	#streaming = false;
 	#activeTools = new Map<string, ActiveTool>();
@@ -203,6 +233,17 @@ export class GuiSessionStore {
 	 *  emit. Non-streaming envelopes (approval-request, recap) bypass this. */
 	#pending: StreamEvent[] = [];
 	#frameScheduled = false;
+	/** Journal watermark (M1.4): last contiguously applied event seq.
+	 *  Seeded from the snapshot cursor (the daemon stamps it with the
+	 *  journal tail); advances only when watermark+1 is applied. */
+	#watermark: number;
+	/** Reorder buffer: events with seq > watermark+1 wait here (out of
+	 *  order or dropped frames) until the missing seqs arrive — live or via
+	 *  the catchup replay. */
+	#reorder = new Map<number, StreamEvent>();
+	#catchupInFlight = false;
+	#gapTimer: ReturnType<typeof setTimeout> | null = null;
+	#resyncTriggered = false;
 
 	constructor(
 		sessionId: string,
@@ -222,9 +263,11 @@ export class GuiSessionStore {
 			agentsProgress?: SubagentProgressPayload[];
 		},
 		cwd: string,
+		hooks: SessionGapHooks = {},
 	) {
 		this.#sessionId = sessionId;
 		this.#cwd = cwd;
+		this.#hooks = hooks;
 		this.#view =
 			MaterializedView.fromSnapshot(sessionId, cwd, snapshot) ?? MaterializedView.replay(sessionId, cwd, []);
 		// Merge the daemon-recorded totals (rounds completed while this
@@ -247,6 +290,7 @@ export class GuiSessionStore {
 		for (const wrapper of snapshot.agentsProgress ?? []) {
 			this.#upsertSubagentProgress(wrapper);
 		}
+		this.#watermark = typeof snapshot.cursor === "number" && Number.isInteger(snapshot.cursor) ? snapshot.cursor : 0;
 		this.#snapshot = this.#buildSnapshot();
 	}
 
@@ -278,6 +322,50 @@ export class GuiSessionStore {
 		const firstFresh = this.#view.prependEntries(older);
 		if (firstFresh !== null) this.#beforeId = firstFresh;
 		this.#hasMore = remaining > 0 && this.#beforeId !== null;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	/**
+	 * Whole-snapshot refresh (session_leaf_moved path): swap the view for a
+	 * freshly fetched daemon snapshot and re-align the journal watermark to
+	 * its cursor. The cursor IS the journal tail at snapshot time, so every
+	 * frame already applied is reflected in the fresh entries — replays
+	 * (catchup overlap, frames still in flight) at seqs ≤ the new watermark
+	 * are dropped as the duplicates they now are, and nothing between the old
+	 * watermark and the cursor can go missing. Store identity is preserved:
+	 * listeners, the chat view's pinned leaf and the jump-back dock all
+	 * survive the refresh (a full openSession would tear them down). No-op
+	 * after a resync trigger — that store was already replaced.
+	 */
+	reloadFromSnapshot(snapshot: {
+		entries: SessionEntry[];
+		state?: SessionState;
+		cursor: number;
+		roundDurations?: [number, number][];
+		tail?: { hasMore: boolean; beforeId: string | null };
+	}): void {
+		if (this.#resyncTriggered) return;
+		this.#view =
+			MaterializedView.fromSnapshot(this.#sessionId, this.#cwd, snapshot) ??
+			MaterializedView.replay(this.#sessionId, this.#cwd, []);
+		const merged = roundDurationsFor(this.#sessionId);
+		for (const [ts, ms] of snapshot.roundDurations ?? []) merged.set(ts, ms);
+		this.#roundDurations = merged;
+		this.#hasMore = snapshot.tail?.hasMore === true;
+		this.#beforeId = snapshot.tail?.beforeId ?? null;
+		// Mid-run refresh: the daemon snapshot's authoritative isStreaming
+		// seeds the run flag, exactly like the constructor (live turn events
+		// maintain it and state frames correct it).
+		this.#working = snapshot.state?.isStreaming === true;
+		this.#watermark = typeof snapshot.cursor === "number" && Number.isInteger(snapshot.cursor) ? snapshot.cursor : 0;
+		// Frames admitted before the refresh (pending burst / reorder buffer)
+		// are inside the snapshot cursor by construction — re-applying them
+		// onto the fresh view would duplicate append-only entries (thinking
+		// levels, custom messages).
+		this.#pending = [];
+		this.#reorder.clear();
+		this.#clearGapTimer();
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
 	}
@@ -403,7 +491,13 @@ export class GuiSessionStore {
 	 *  recap, resume snapshots) apply synchronously — they carry UI-critical
 	 *  state. Streaming AgentEvents (message_*, tool_*, turn_*, agent_*) are
 	 *  frame-coalesced: the burst collapses to one snapshot rebuild + emit
-	 *  per animation frame (dsh Notifier.markFrameDirty parity). */
+	 *  per animation frame (dsh Notifier.markFrameDirty parity).
+	 *
+	 *  Journal-seq'd kind:"event" envelopes (seq > 0) pass the M1.4
+	 *  watermark gate first: replays (seq ≤ watermark) are dropped, gaps
+	 *  (seq > watermark+1) buffer in #reorder and trigger daemon catchup.
+	 *  Envelopes without a journal seq (0 / legacy / non-event kinds) apply
+	 *  ungated — they live outside the watermark space. */
 	apply(event: StreamEvent): void {
 		if (event.kind === "approval-request" || event.kind === "recap") {
 			this.#applyNow(event);
@@ -417,8 +511,102 @@ export class GuiSessionStore {
 			this.#emit();
 			return;
 		}
+		if (event.kind === "event" && Number.isInteger(event.seq) && event.seq > 0) {
+			if (!this.#admitSeq(event)) return;
+			this.#scheduleFlush();
+			return;
+		}
 		this.#pending.push(event);
 		this.#scheduleFlush();
+	}
+
+	/** Watermark gate (M1.4). Returns true when the event was admitted
+	 *  (pushed to #pending, possibly draining the reorder buffer behind it);
+	 *  false when it was dropped (replay) or buffered (gap → catchup). */
+	#admitSeq(event: StreamEvent): boolean {
+		const seq = event.seq;
+		if (seq <= this.#watermark) {
+			// Catchup overlap or a replayed frame: already reflected in the
+			// view — re-applying would duplicate transcript entries.
+			return false;
+		}
+		if (seq > this.#watermark + 1) {
+			// Hole in the stream (dropped frame / reconnect race): hold the
+			// event in order and ask the daemon for everything after the
+			// watermark. Never apply past a hole — the transcript must not
+			// show state built on missing frames.
+			this.#reorder.set(seq, event);
+			this.#requestCatchup();
+			return false;
+		}
+		this.#watermark = seq;
+		this.#pending.push(event);
+		// Strict in-order drain: the buffer (and any catchup replay flowing
+		// back through apply) only lands contiguously from watermark+1 up.
+		while (this.#reorder.has(this.#watermark + 1)) {
+			const next = this.#reorder.get(this.#watermark + 1);
+			this.#reorder.delete(this.#watermark + 1);
+			if (next) {
+				this.#watermark += 1;
+				this.#pending.push(next);
+			}
+		}
+		if (this.#reorder.size === 0) this.#clearGapTimer();
+		return true;
+	}
+
+	/** Gap detected: arm the resync guard and ask the daemon for a catchup
+	 *  replay (deduped — one in-flight request at a time). No retry loop
+	 *  here: replayed records flow back through apply() and re-trigger this
+	 *  if they expose a further hole; a gap nobody fills escalates via the
+	 *  guard timer instead of spamming the daemon. */
+	#requestCatchup(): void {
+		this.#armGapTimer();
+		if (this.#catchupInFlight) return;
+		const onGapDetected = this.#hooks.onGapDetected;
+		if (!onGapDetected) return;
+		this.#catchupInFlight = true;
+		onGapDetected(this.#watermark)
+			.then(result => {
+				if (result?.resyncRequired) this.#triggerResync();
+			})
+			.catch(() => {
+				// Catchup RPC failed: no progress. The gap timer escalates
+				// to a full resync — do not tight-loop retries here.
+			})
+			.finally(() => {
+				this.#catchupInFlight = false;
+			});
+	}
+
+	#armGapTimer(): void {
+		if (this.#gapTimer !== null || this.#resyncTriggered) return;
+		this.#gapTimer = setTimeout(() => {
+			this.#gapTimer = null;
+			if (this.#reorder.size > 0) this.#triggerResync();
+		}, GAP_TIMEOUT_MS);
+		this.#gapTimer.unref?.();
+	}
+
+	#clearGapTimer(): void {
+		if (this.#gapTimer !== null) {
+			clearTimeout(this.#gapTimer);
+			this.#gapTimer = null;
+		}
+	}
+
+	/** Unrecoverable gap (compaction swallowed it, or the guard timed out):
+	 *  the only honest recovery is a full snapshot re-subscribe. The caller
+	 *  replaces this store — afterwards this instance only answers skips. */
+	#triggerResync(): void {
+		if (this.#resyncTriggered) return;
+		this.#resyncTriggered = true;
+		this.#clearGapTimer();
+		try {
+			this.#hooks.onResyncRequired?.();
+		} catch {
+			// The resync hook must never take the store down with it.
+		}
 	}
 
 	/** Frame-coalesce: collapse the pending burst to one flush per frame. */
@@ -782,6 +970,21 @@ export class GuiSessionStore {
 				if (rec) this.#roundDurations.set(rec.assistantTs, rec.durationMs);
 				break;
 			}
+			case "session_leaf_moved": {
+				// Daemon broadcast after RPC session.branchAt (撤回/编辑/重试/
+				// branch switch): the session tree leaf moved IN PLACE, so the
+				// daemon's active path — the thing the transcript is supposed
+				// to render — changed without any entry being appended. The
+				// event itself carries no rows (leaf moves mutate no transcript
+				// entries); the whole snapshot must be re-fetched through the
+				// onLeafMoved hook, which re-aligns the watermark via
+				// reloadFromSnapshot. fire-and-forget: a failed/absent hook
+				// degrades to today's stale-path view, the RPC caller's own
+				// pin still re-anchors the primary client.
+				const leafId = (ev as { leafId?: unknown }).leafId;
+				this.#hooks.onLeafMoved?.(typeof leafId === "string" ? leafId : null);
+				break;
+			}
 			default:
 				break;
 		}
@@ -794,6 +997,7 @@ export class GuiSessionStore {
 	}
 
 	dispose(): void {
+		this.#clearGapTimer();
 		this.#listeners.clear();
 	}
 

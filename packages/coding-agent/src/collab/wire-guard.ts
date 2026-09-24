@@ -34,6 +34,9 @@ export const WIRE_AGENT_EVENT_TYPES: Record<WireAgentEvent["type"], true> = {
 	auto_retry_start: true,
 	auto_retry_end: true,
 	thinking_level_changed: true,
+	// Daemon-synthetic (session.branchAt → publishWireEvent); see the wire
+	// AgentEvent union for the shape.
+	session_leaf_moved: true,
 };
 
 export const WIRE_SESSION_ENTRY_TYPES: Record<WireSessionEntry["type"], true> = {

@@ -45,12 +45,7 @@ import type { Surface } from "./assembly/types.ts";
 import { AsyncJobManager } from "./async";
 import { AutoLearnController, buildAutoLearnInstructions } from "./autolearn/controller";
 import { createAutoresearchExtension } from "./autoresearch";
-import bundledBoardDesignSkill from "./bundled-skills/board-design/SKILL.md" with { type: "text" };
-import bundledMusepiContributingSkill from "./bundled-skills/musepi-contributing/SKILL.md" with { type: "text" };
-import bundledExtensionDevSkill from "./bundled-skills/musepi-extension-dev/SKILL.md" with { type: "text" };
-import bundledMusepiHelpSkill from "./bundled-skills/musepi-help/SKILL.md" with { type: "text" };
-import bundledUiUxProMaxSkill from "./bundled-skills/ui-ux-pro-max/SKILL.md" with { type: "text" };
-import bundledWidgetDesignSkill from "./bundled-skills/widget-design/SKILL.md" with { type: "text" };
+import { BUNDLED_SKILLS } from "./bundled-skills/index.ts";
 import { loadCapability } from "./capability";
 import { type Rule, ruleCapability, setActiveRules } from "./capability/rule";
 import { bucketRules } from "./capability/rule-buckets";
@@ -1350,16 +1345,9 @@ export function createAutoLearnCaptureRunner(
  * name is left untouched so user edits survive. `dir` (optional) copies a
  * multi-file skill package (data/scripts/references/…) from
  * src/bundled-skills/<dir> alongside the SKILL.md — missing files only, so
- * user-added files survive re-install.
+ * user-added files survive re-install. The manifest itself (names + content)
+ * lives in `bundled-skills/index.ts`.
  */
-const BUNDLED_SKILLS = [
-	{ name: "widget-design", content: bundledWidgetDesignSkill },
-	{ name: "musepi-help", content: bundledMusepiHelpSkill },
-	{ name: "musepi-extension-dev", content: bundledExtensionDevSkill },
-	{ name: "ui-ux-pro-max", content: bundledUiUxProMaxSkill, dir: "ui-ux-pro-max" },
-	{ name: "board-design", content: bundledBoardDesignSkill },
-	{ name: "musepi-contributing", content: bundledMusepiContributingSkill },
-] as const;
 let bundledSkillsEnsured = false;
 
 /**

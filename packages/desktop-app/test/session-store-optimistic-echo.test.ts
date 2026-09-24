@@ -29,7 +29,9 @@ function userMessageStart(text: string): StreamEventShape {
 function agentEnd(): StreamEventShape {
 	return {
 		kind: "event",
-		seq: 2,
+		// Fresh store (cursor 0): the first sequenced envelope must be seq 1 —
+		// seq 2 would be a gap by definition (M1.4 watermark gate).
+		seq: 1,
 		payload: { type: "agent_end", messages: [{ role: "assistant", stopReason: "end_turn" }] },
 	};
 }
