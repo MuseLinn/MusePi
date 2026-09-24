@@ -50,6 +50,15 @@ const TEXT_CAPS = [32_768, 8_192, 2_048, 512];
 /** 1×1 transparent GIF; stands in for stripped data-URL images so <img> tags stay valid. */
 const BLANK_IMAGE_DATA_URL = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 const IMAGE_OMITTED_TEXT = "[image omitted from share]";
+/** Stands in for a file-mention attachment whose content was stripped from the share. */
+const FILE_CONTENT_OMITTED_TEXT = "[file content omitted from share]";
+/**
+ * Raw attachment payload (file-mention contents + inline image bytes) above which a share is
+ * rejected up front with a structured, retryable reason instead of being silently clamped. The
+ * sealed blob is gzipped, but attachment bytes are usually near-incompressible, so this uncompressed
+ * budget is a conservative tripwire that keeps the share server's 1 MB cap from being the only guard.
+ */
+export const MAX_SHARE_ATTACHMENT_BYTES = 5_000_000;
 
 export type ShareStore = "blob" | "gist";
 
@@ -76,6 +85,14 @@ export interface ShareSessionOptions {
 	 * undefined to skip redaction entirely.
 	 */
 	obfuscator?: SecretObfuscator;
+	/**
+	 * When a share would exceed the attachment budget, fail up front with a
+	 * structured reason (`ShareTooLargeError` with `canRetryWithStrippedAttachments`)
+	 * rather than silently dropping attachment bytes. Pass `true` to skip that
+	 * pre-publish check and let {@link sealToFit} strip attachments as an explicit
+	 * degradation step — the result then reports how many were removed.
+	 */
+	stripAttachments?: boolean;
 }
 
 export interface ShareSessionResult {
@@ -87,12 +104,114 @@ export interface ShareSessionResult {
 	/** True when content was trimmed to fit the upload budget. */
 	truncated: boolean;
 	sealedBytes: number;
+	/** How many attachment payloads (file-mention contents + inline images) were stripped to fit. */
+	strippedAttachments: number;
+}
+
+/** Counts of attachment payloads carried by a share snapshot, before any stripping. */
+export interface AttachmentStats {
+	/** Number of `fileMention.files` entries. */
+	readonly fileMentions: number;
+	/** Total bytes across `fileMention.files[].content`. */
+	readonly fileMentionBytes: number;
+	/** Number of inline image payloads (content image blocks + `file.image` + data: URL strings). */
+	readonly inlineImages: number;
+	/** Total bytes across inline image payloads. */
+	readonly inlineImageBytes: number;
+	/** `fileMentionBytes + inlineImageBytes`. */
+	readonly totalBytes: number;
+}
+
+/** Details carried by a {@link ShareTooLargeError}. */
+export interface ShareTooLargeDetail {
+	/** Sealed blob size (or, for the pre-publish attachment check, the raw attachment payload size). */
+	readonly sealedBytes: number;
+	/** Budget that was exceeded. */
+	readonly maxBytes: number;
+	/** Attachment payloads already stripped in the failed attempt (0 for the pre-publish check). */
+	readonly strippedAttachments: number;
+	/** True when the rejection was attachment-specific and the caller may retry with `stripAttachments: true`. */
+	readonly canRetryWithStrippedAttachments: boolean;
+}
+
+/**
+ * Thrown when a share cannot be sealed under the upload budget. Replaces the old bare
+ * `"Session too large to share: …"` string so callers (the TUI command) can present a readable
+ * reason and, when `detail.canRetryWithStrippedAttachments` is set, offer to strip attachments and retry.
+ */
+export class ShareTooLargeError extends Error {
+	readonly detail: ShareTooLargeDetail;
+	constructor(message: string, detail: ShareTooLargeDetail) {
+		super(message);
+		this.name = "ShareTooLargeError";
+		this.detail = detail;
+	}
 }
 
 /** Build the snapshot that gets sealed and uploaded, redacted when an obfuscator is provided. */
 export function buildShareSnapshot(sm: SessionManager, options?: ShareSessionOptions): SessionData {
 	const data = buildSessionData(sm, options?.state);
 	return options?.obfuscator?.hasSecrets() ? redactSessionDataForShare(options.obfuscator, data) : data;
+}
+
+/**
+ * Tally attachment payloads in a share snapshot — `fileMention.files` contents plus inline image
+ * bytes (content image blocks, `file.image`, and `data:` URL strings), across the main entries and
+ * any sub-sessions. Used for the pre-publish interception so an oversized share fails with a readable,
+ * attachment-specific reason instead of silently truncating.
+ */
+export function computeAttachmentStats(data: SessionData): AttachmentStats {
+	let fileMentions = 0;
+	let fileMentionBytes = 0;
+	let inlineImages = 0;
+	let inlineImageBytes = 0;
+	const scan = (entries: SessionEntry[]): void => {
+		for (const entry of entries) {
+			if (entry.type !== "message") continue;
+			const message = entry.message as {
+				role?: string;
+				content?: unknown;
+				files?: Array<{ content?: string; image?: unknown }>;
+			};
+			if (message.role === "fileMention" && Array.isArray(message.files)) {
+				for (const file of message.files) {
+					fileMentions++;
+					if (typeof file.content === "string") fileMentionBytes += file.content.length;
+					const image = file.image;
+					if (isRecord(image) && image.type === "image" && typeof image.data === "string") {
+						inlineImages++;
+						inlineImageBytes += image.data.length;
+					}
+				}
+			}
+			if (Array.isArray(message.content)) {
+				for (const block of message.content) {
+					if (isRecord(block) && block.type === "image" && typeof block.data === "string") {
+						inlineImages++;
+						inlineImageBytes += block.data.length;
+					}
+				}
+			} else if (
+				typeof message.content === "string" &&
+				message.content.startsWith("data:") &&
+				message.content.length > 0
+			) {
+				inlineImages++;
+				inlineImageBytes += message.content.length;
+			}
+		}
+	};
+	scan(data.entries);
+	if (data.subSessions) {
+		for (const sub of Object.values(data.subSessions)) scan(sub.entries);
+	}
+	return {
+		fileMentions,
+		fileMentionBytes,
+		inlineImages,
+		inlineImageBytes,
+		totalBytes: fileMentionBytes + inlineImageBytes,
+	};
 }
 
 /**
@@ -485,6 +604,28 @@ function redactShareMessage(
 /** Share the session; uploads to the share server unless `options.store` is `"gist"`. */
 export async function shareSession(sm: SessionManager, options?: ShareSessionOptions): Promise<ShareSessionResult> {
 	const data = buildShareSnapshot(sm, options);
+
+	// Pre-publish attachment interception: an oversized share must fail loudly with a structured,
+	// retryable reason — never silently truncate attachment bytes. The caller (TUI command) catches
+	// `ShareTooLargeError` and may retry with `stripAttachments: true`, which routes the stripping
+	// into the explicit `sealToFit` degradation step below and reports how many were removed.
+	if (!options?.stripAttachments) {
+		const stats = computeAttachmentStats(data);
+		if (stats.totalBytes > MAX_SHARE_ATTACHMENT_BYTES) {
+			const total = stats.fileMentions + stats.inlineImages;
+			throw new ShareTooLargeError(
+				`Session attachments too large to share: ${stats.totalBytes} bytes across ${total} attachment(s) ` +
+					`exceeds the ${MAX_SHARE_ATTACHMENT_BYTES}-byte limit. Strip attachments and retry to share the rest of the conversation.`,
+				{
+					sealedBytes: stats.totalBytes,
+					maxBytes: MAX_SHARE_ATTACHMENT_BYTES,
+					strippedAttachments: 0,
+					canRetryWithStrippedAttachments: true,
+				},
+			);
+		}
+	}
+
 	const keyBytes = new Uint8Array(SHARE_KEY_BYTES);
 	crypto.getRandomValues(keyBytes);
 	const key = await crypto.subtle.importKey("raw", keyBytes, "AES-GCM", false, ["encrypt"]);
@@ -501,6 +642,7 @@ export async function shareSession(sm: SessionManager, options?: ShareSessionOpt
 				gistUrl: gist.url,
 				truncated: forGist.truncated,
 				sealedBytes: forGist.sealed.byteLength,
+				strippedAttachments: forGist.strippedAttachments,
 			};
 		}
 		// gh unusable or gist creation failed — fall back to the share server.
@@ -519,33 +661,46 @@ export function normalizeShareServerUrl(serverUrl?: string): string {
 interface SealedSession {
 	sealed: Uint8Array<ArrayBuffer>;
 	truncated: boolean;
+	strippedAttachments: number;
 }
 
 /** Seal `data`, trimming content until the sealed blob fits `maxBytes`. Exported for tests. */
 export async function sealToFit(key: CryptoKey, data: SessionData, maxBytes: number): Promise<SealedSession> {
 	let sealed = await sealSessionData(key, data);
-	if (sealed.byteLength <= maxBytes) return { sealed, truncated: false };
+	if (sealed.byteLength <= maxBytes) return { sealed, truncated: false, strippedAttachments: 0 };
 
 	// Work on a deep copy; the caller may re-fit the original at another budget.
 	const working = structuredClone(data);
-	stripImagePayloads(working);
+	// Explicit degradation step: strip attachments (file-mention contents + inline images) and report
+	// how many were removed. Runs AFTER redaction (buildShareSnapshot already ran above), so the
+	// obfuscation pre-scan still sees the full attachment bytes before they are replaced.
+	const strippedAttachments = stripShareAttachments(working);
 	sealed = await sealSessionData(key, working);
-	if (sealed.byteLength <= maxBytes) return { sealed, truncated: true };
+	if (sealed.byteLength <= maxBytes) return { sealed, truncated: true, strippedAttachments };
 
 	for (const cap of TEXT_CAPS) {
 		capLongStrings(working, cap);
 		sealed = await sealSessionData(key, working);
-		if (sealed.byteLength <= maxBytes) return { sealed, truncated: true };
+		if (sealed.byteLength <= maxBytes) return { sealed, truncated: true, strippedAttachments };
 	}
 
 	// Last resort: drop oldest entries (orphaned children render as roots).
 	while (working.entries.length > 4) {
 		working.entries = working.entries.slice(Math.ceil(working.entries.length / 2));
 		sealed = await sealSessionData(key, working);
-		if (sealed.byteLength <= maxBytes) return { sealed, truncated: true };
+		if (sealed.byteLength <= maxBytes) return { sealed, truncated: true, strippedAttachments };
 	}
 
-	throw new Error(`Session too large to share: ${sealed.byteLength} bytes sealed exceeds the ${maxBytes} byte limit`);
+	throw new ShareTooLargeError(
+		`Session too large to share: ${sealed.byteLength} bytes sealed exceeds the ${maxBytes}-byte limit ` +
+			`even after stripping ${strippedAttachments} attachment(s).`,
+		{
+			sealedBytes: sealed.byteLength,
+			maxBytes,
+			strippedAttachments,
+			canRetryWithStrippedAttachments: false,
+		},
+	);
 }
 
 /** `[12B IV][AES-256-GCM(gzip(JSON))]` — decrypted and gunzipped by share-loader.js. */
@@ -564,28 +719,71 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
 }
 
-/** Replace inline image payloads (image blocks + data: URLs) with tiny placeholders, in place. */
-function stripImagePayloads(value: unknown): void {
+/** Replace inline image payloads (image blocks + data: URLs) with tiny placeholders, in place; returns how many were removed. */
+function stripImagePayloads(value: unknown): number {
+	let count = 0;
 	if (Array.isArray(value)) {
 		for (let i = 0; i < value.length; i++) {
 			const item: unknown = value[i];
 			if (isRecord(item) && item.type === "image" && typeof item.data === "string" && item.data.length > 1024) {
 				value[i] = { type: "text", text: IMAGE_OMITTED_TEXT };
+				count++;
 				continue;
 			}
-			stripImagePayloads(item);
+			count += stripImagePayloads(item);
 		}
-		return;
+		return count;
 	}
-	if (!isRecord(value)) return;
+	if (!isRecord(value)) return count;
 	for (const k in value) {
 		const v = value[k];
 		if (typeof v === "string") {
-			if (v.length > 1024 && v.startsWith("data:")) value[k] = BLANK_IMAGE_DATA_URL;
+			if (v.length > 1024 && v.startsWith("data:")) {
+				value[k] = BLANK_IMAGE_DATA_URL;
+				count++;
+			}
 			continue;
 		}
-		stripImagePayloads(v);
+		count += stripImagePayloads(v);
 	}
+	return count;
+}
+
+/** Clear `fileMention.files[].content` (and large `file.image` payloads), in place; returns how many were removed. */
+function stripFileMentionAttachments(data: SessionData): number {
+	let count = 0;
+	const stripEntries = (entries: SessionEntry[]): void => {
+		for (const entry of entries) {
+			if (entry.type !== "message") continue;
+			const message = entry.message as { role?: string; files?: Array<{ content?: string; image?: unknown }> };
+			if (message.role !== "fileMention" || !Array.isArray(message.files)) continue;
+			for (const file of message.files) {
+				if (typeof file.content === "string" && file.content.length > 0) {
+					file.content = FILE_CONTENT_OMITTED_TEXT;
+					count++;
+				}
+				if (
+					isRecord(file.image) &&
+					file.image.type === "image" &&
+					typeof file.image.data === "string" &&
+					file.image.data.length > 1024
+				) {
+					file.image = { type: "text", text: IMAGE_OMITTED_TEXT };
+					count++;
+				}
+			}
+		}
+	};
+	stripEntries(data.entries);
+	if (data.subSessions) {
+		for (const sub of Object.values(data.subSessions)) stripEntries(sub.entries);
+	}
+	return count;
+}
+
+/** Strip all attachment payloads (inline images + file-mention contents) in place; returns the total removed. */
+function stripShareAttachments(data: SessionData): number {
+	return stripImagePayloads(data) + stripFileMentionAttachments(data);
 }
 
 /** Truncate every string longer than `cap`, in place. */
@@ -659,6 +857,7 @@ async function shareViaServer(
 		method: "server",
 		truncated: forServer.truncated,
 		sealedBytes: forServer.sealed.byteLength,
+		strippedAttachments: forServer.strippedAttachments,
 	};
 }
 
