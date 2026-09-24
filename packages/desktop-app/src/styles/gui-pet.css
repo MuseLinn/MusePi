@@ -796,8 +796,7 @@
 {
 	--beam-stroke-opacity:1;
 }
-[data-theme=dark] .gui-main,
-[data-theme=dark] .gui-settings-view
+[data-theme=dark] .gui-main
 {
 	--gui-glass-overlay:clamp(28%,calc(88%*(1 - var(--gui-glass-alpha,.55))),88%);
 	background:color-mix(in oklab,var(--bg-overlay)var(--gui-glass-overlay,calc(88%*var(--gui-glass-alpha,1))),transparent);

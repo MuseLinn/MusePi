@@ -49,6 +49,7 @@ import {
 	GuiSessionStore,
 	type PetBubbleKind,
 } from "./lib/session-store";
+import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
@@ -742,6 +743,15 @@ function AppInner(): ReactNode {
 			setSettingsOpen(false);
 		}, 150);
 	}, [settingsOpen, leavingSettings]);
+	// Settings shell visible across the whole close transition (blur-out
+	// 150ms before unmount). While active it REPLACES the main layout by
+	// slot: the nav column fills the sidebar slot (.gui-settings-nav-slot)
+	// and the content fills the chat column — the workspace keepers (sidebar
+	// + chat surface) stay mounted underneath, display:none, so closing
+	// restores the session view without a re-mount. Slot/keeper decisions:
+	// lib/settings-shell.ts (contract-tested).
+	const shell = computeSettingsShellState({ settingsOpen, leavingSettings });
+	const settingsActive = shell.settingsActive;
 	// Cross-component navigation into a settings section (welcome composer
 	// 自定义补充 chip): open the pane on the requested section.
 	useEffect(() => {
@@ -1581,6 +1591,59 @@ function AppInner(): ReactNode {
 						agentsProgress: initial?.agentsProgress,
 					},
 					cwd,
+					{
+						// M1.4 gap fill: the store detected a journal-seq hole in
+						// the event stream — replay everything after its
+						// watermark through the normal push channel.
+						onGapDetected: async (afterSeq: number) => {
+							const r = await client.request<{ ok?: boolean; resyncRequired?: boolean }>("session.catchup", {
+								sessionId,
+								afterSeq,
+							});
+							return { resyncRequired: r?.resyncRequired === true };
+						},
+						// Unrecoverable gap (compaction / guard timeout): the only
+						// honest recovery is the whole-snapshot re-subscribe the
+						// open path already implements.
+						onResyncRequired: () => {
+							void openSessionRef.current?.(sessionId);
+						},
+						// session_leaf_moved (daemon broadcast after session.branchAt
+						// — 撤回/编辑/重试/branch switch): the active path changed
+						// server-side with no entries appended, so re-fetch the
+						// snapshot and swap the view IN PLACE. The store identity
+						// is preserved (openSession would tear down the chat view's
+						// pinned leaf + jump-back dock); the fresh snapshot's
+						// cursor re-aligns the journal watermark, so catchup
+						// replays landing at seqs ≤ cursor drop as duplicates.
+						onLeafMoved: async () => {
+							try {
+								const res = await client.request<{
+									snapshot: {
+										entries: unknown[];
+										state?: unknown;
+										cursor: number;
+										roundDurations?: [number, number][];
+										tail?: { hasMore: boolean; beforeId: string | null };
+									};
+								}>("session.resume", { sessionId });
+								// Same wire→view casts the open path applies: the daemon
+								// snapshot carries loose wire shapes the store projects
+								// into its typed view.
+								storeRef.current?.reloadFromSnapshot({
+									entries: res.snapshot.entries as never,
+									state: res.snapshot.state as never,
+									cursor: res.snapshot.cursor,
+									roundDurations: res.snapshot.roundDurations,
+									tail: res.snapshot.tail,
+								});
+							} catch {
+								// History session gone / daemon restarting / older
+								// daemon without the broadcast: the reconnect path
+								// re-opens the session; nothing to do here.
+							}
+						},
+					},
 				);
 				storeRef.current = next;
 				setStore(next);
@@ -3074,17 +3137,12 @@ function AppInner(): ReactNode {
 					</button>
 				</div>
 			)}
-			{/* 工作区常驻挂载:设置页打开时只隐藏(display:none)不卸载——
-			 * 返回时长会话的 ChatView/转录/虚拟列表状态全部保留,不再整树
-			 * 重挂、重新订阅、重新物化上万条 entry。设置页自身仍按
-			 * blur-out/blur-in 进出。 */}
-			<div
-				className={
-					settingsOpen
-						? "gui-workspace-keeper gui-workspace-keeper--hidden"
-						: "gui-workspace-keeper gui-workspace-keeper--enter"
-				}
-			>
+			{/* 工作区常驻挂载:设置壳层以槽位替换方式占用侧栏槽 + 聊天列
+			 * (2026-09-24 起不再整层覆盖工作区),侧栏与聊天列各自的 keeper
+			 * 只隐藏(display:none)不卸载——返回时长会话的 ChatView/转录/
+			 * 虚拟列表状态与侧栏展开态全部保留,不再整树重挂、重新订阅、
+			 * 重新物化上万条 entry。设置壳层自身仍按 blur-out/blur-in 进出。 */}
+			<div className="gui-workspace-keeper gui-workspace-keeper--enter">
 				{/* openchamber-style shell: a full-width immersive toolbar riding
 				 * the top edge, the three panes below it sharing its surface
 				 * (no divider, same frosted tint). */}
@@ -3099,324 +3157,342 @@ function AppInner(): ReactNode {
 							}}
 						/>
 					)}
-					<SessionSidebar
-						nodes={tree}
-						sessionMeta={sessionMeta}
-						selectedId={selectedId}
-						onSelect={selectSession}
-						onNewSession={startNewTask}
-						status={status === "open" ? "open" : "closed"}
-						onDisconnect={disconnect}
-						onOpenConnect={() => setConnectOpen(true)}
-						onOpenBoard={() => viewSwapRef.current("board")}
-						boardActive={boardOpen}
-						onOpenScheduled={() => viewSwapRef.current("scheduled")}
-						scheduledActive={scheduledOpen}
-						cronGlow={cronGlow}
-						onOpenAgents={() => viewSwapRef.current("agents")}
-						agentsActive={agentsOpen}
-						onOpenCapability={() => viewSwapRef.current("capability")}
-						capabilityActive={capabilityOpen}
-						onOpenSettings={openSettings}
-						onOpenCollab={() => setCollabOpen(true)}
-						onRenameSession={renameSession}
-						onOpenSearch={() => setPaletteOpen(true)}
-						unread={unreadSessions}
-						onToggleUnread={toggleUnread}
-						onOpenSkills={() => {
-							setSettingsSection("skills");
-							openSettings();
-						}}
-						onPickFolder={() => {
-							pickProjectFolder();
-						}}
-						onCreateProject={() => setNewProjectOpen(true)}
-						onImportSessions={() => setImportOpen(true)}
-						modeCatalog={welcomeModes}
-						collapsed={sideCollapsed}
-						width={sideWidth}
-						onDeleteArchived={deleteSession}
-					/>
-					<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-						<GuiHeader
-							store={store}
-							rpc={rpc}
-							sideCollapsed={sideCollapsed}
-							onToggleSidebar={() => {
-								setSideCollapsed(v => {
-									localStorage.setItem("musepi-gui-side", v ? "1" : "0");
-									return !v;
-								});
-							}}
-							paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-							pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-							onTogglePause={() => void togglePause()}
-							pauseDisabled={selectedId === null}
-							globalPaused={globalPause.paused}
-							onToggleGlobalPause={() => void toggleGlobalPause()}
+					{/* Sidebar keeper: display:none (not unmount) while the settings
+					 * shell occupies the sidebar slot — expanded groups / tab state
+					 * survive the settings round-trip. */}
+					<div className={shell.sideKeeperHidden ? "gui-side-keeper gui-side-keeper--hidden" : "gui-side-keeper"}>
+						<SessionSidebar
+							nodes={tree}
+							sessionMeta={sessionMeta}
+							selectedId={selectedId}
+							onSelect={selectSession}
 							onNewSession={startNewTask}
+							status={status === "open" ? "open" : "closed"}
+							onDisconnect={disconnect}
+							onOpenConnect={() => setConnectOpen(true)}
 							onOpenBoard={() => viewSwapRef.current("board")}
+							boardActive={boardOpen}
+							onOpenScheduled={() => viewSwapRef.current("scheduled")}
+							scheduledActive={scheduledOpen}
+							cronGlow={cronGlow}
+							onOpenAgents={() => viewSwapRef.current("agents")}
+							agentsActive={agentsOpen}
+							onOpenCapability={() => viewSwapRef.current("capability")}
+							capabilityActive={capabilityOpen}
 							onOpenSettings={openSettings}
-							terminalOpen={bottomTerminal}
-							onToggleTerminal={() => setBottomTerminal(v => !v)}
-							rightPanelOpen={!rightCollapsed}
-							onToggleRightPanel={() => {
-								setRightCollapsed(v => {
-									localStorage.setItem("musepi-gui-right", v ? "1" : "0");
-									return !v;
-								});
-							}}
-							project={project}
-							// Reuse pickProjectFolder: a bare pickDirectory here updated
-							// musepi-gui-project (welcome chip) but never announced the
-							// workspace, so the sidebar 项目 tab stayed empty — the two
-							// surfaces disagreed on what "added" means.
-							onOpenFolder={pickProjectFolder}
-							sessions={recentSessions}
-							onSelectSession={id => void openSession(id)}
-							onRenameSession={renameSession}
-							sessionLabel={activeSessionLabel}
-							remote={activeSessionRemote}
-							connected={status === "open"}
-							daemonUrl={url}
-							onReconnect={() => void boot()}
 							onOpenCollab={() => setCollabOpen(true)}
-							onDeleteSession={deleteSession}
-							hosts={hosts}
-							onSwitchHost={switchHost}
-							onAddHost={addHost}
-							onRemoveHost={removeHost}
+							onRenameSession={renameSession}
+							onOpenSearch={() => setPaletteOpen(true)}
+							unread={unreadSessions}
+							onToggleUnread={toggleUnread}
+							onOpenSkills={() => {
+								setSettingsSection("skills");
+								openSettings();
+							}}
+							onPickFolder={() => {
+								pickProjectFolder();
+							}}
+							onCreateProject={() => setNewProjectOpen(true)}
+							onImportSessions={() => setImportOpen(true)}
+							modeCatalog={welcomeModes}
+							collapsed={sideCollapsed}
+							width={sideWidth}
+							onDeleteArchived={deleteSession}
 						/>
-						{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
-						 * keeper 绝对定位填满本区,alt 页面在流内替换——二者互不争抢
-						 * 高度,且 chat 常驻挂载不再卸载。 */}
-						<div className="gui-surface-area relative flex min-h-0 flex-1 flex-col">
-							{(() => {
-								const chatSurface = (
-									<ChatView
-										store={store}
-										rpc={rpc}
-										onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
-										onStop={stop}
-										onDecideApproval={decideApproval}
-										onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
-										onForkSession={async forkId => {
-											await refreshSessions(rpc);
-											await openSession(forkId);
-										}}
-										presetModelId={presetModelId}
-										modes={welcomeModes}
-										modeId={welcomeModeId}
-										onModeChange={setWelcomeModeId}
-										defaultModelId={defaultModelId}
-										presetThinkingLevel={presetThinkingLevel}
-										busy={status === "connecting"}
-										paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
-										pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
-										onResume={() => void togglePause()}
-										project={project}
-										onProject={action => {
-											if (action === "remote") {
-												setConnectOpen(true);
-											} else if (action === "new") {
-												setNewProjectOpen(true);
-											} else if (action === "none") {
-												// "不在项目中": clear the workspace chip — never open the picker.
-												setProject(null);
-												localStorage.removeItem("musepi-gui-project");
-											} else if (action === "folder") {
-												pickProjectFolder();
-											} else {
-												// A saved workspace picked from the list — switch to it.
-												setProject(action);
-												localStorage.setItem("musepi-gui-project", action);
+					</div>
+					{settingsActive && (
+						/* Settings nav slot: the sidebar slot's stand-in while the
+						 * settings shell is active. SettingsView portals its nav
+						 * column in here (id is the lookup key), so the settings
+						 * navigation occupies the sidebar's geometry — same width
+						 * language, same position — instead of a second nav column
+						 * floating inside the chat area. */
+						<div
+							id="gui-settings-nav-slot"
+							className={shell.navSlotLeaving ? "gui-settings-nav-slot gui-slot-leave" : "gui-settings-nav-slot"}
+							style={{ width: sideCollapsed ? 256 : sideWidth }}
+						/>
+					)}
+					<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+						{/* Chat-column keeper: header + surface hide (display:none,
+						 * not unmount) while the settings shell fills the column —
+						 * the transcript/virtual-list state survives the round-trip. */}
+						<div
+							className={
+								shell.chatColKeeperHidden
+									? "gui-chat-col-keeper gui-chat-col-keeper--hidden"
+									: "gui-chat-col-keeper"
+							}
+						>
+							<GuiHeader
+								store={store}
+								rpc={rpc}
+								sideCollapsed={sideCollapsed}
+								onToggleSidebar={() => {
+									setSideCollapsed(v => {
+										localStorage.setItem("musepi-gui-side", v ? "1" : "0");
+										return !v;
+									});
+								}}
+								paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
+								pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
+								onTogglePause={() => void togglePause()}
+								pauseDisabled={selectedId === null}
+								globalPaused={globalPause.paused}
+								onToggleGlobalPause={() => void toggleGlobalPause()}
+								onNewSession={startNewTask}
+								onOpenBoard={() => viewSwapRef.current("board")}
+								onOpenSettings={openSettings}
+								terminalOpen={bottomTerminal}
+								onToggleTerminal={() => setBottomTerminal(v => !v)}
+								rightPanelOpen={!rightCollapsed}
+								onToggleRightPanel={() => {
+									setRightCollapsed(v => {
+										localStorage.setItem("musepi-gui-right", v ? "1" : "0");
+										return !v;
+									});
+								}}
+								project={project}
+								// Reuse pickProjectFolder: a bare pickDirectory here updated
+								// musepi-gui-project (welcome chip) but never announced the
+								// workspace, so the sidebar 项目 tab stayed empty — the two
+								// surfaces disagreed on what "added" means.
+								onOpenFolder={pickProjectFolder}
+								sessions={recentSessions}
+								onSelectSession={id => void openSession(id)}
+								onRenameSession={renameSession}
+								sessionLabel={activeSessionLabel}
+								remote={activeSessionRemote}
+								connected={status === "open"}
+								daemonUrl={url}
+								onReconnect={() => void boot()}
+								onOpenCollab={() => setCollabOpen(true)}
+								onDeleteSession={deleteSession}
+								hosts={hosts}
+								onSwitchHost={switchHost}
+								onAddHost={addHost}
+								onRemoveHost={removeHost}
+							/>
+							{/* 表面区(会话 / 看板 / 任务中心 / 智能体 / 能力中心):chat
+							 * keeper 绝对定位填满本区,alt 页面在流内替换——二者互不争抢
+							 * 高度,且 chat 常驻挂载不再卸载。 */}
+							<div className="gui-surface-area relative flex min-h-0 flex-1 flex-col">
+								{(() => {
+									const chatSurface = (
+										<ChatView
+											store={store}
+											rpc={rpc}
+											onSend={(text, images, deliverAs) =>
+												void sendPrompt(text, images, undefined, deliverAs)
 											}
-										}}
-										onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
-										rightPanelOpen={!rightCollapsed}
-										onOpenFileInPanel={() => {
-											setRightCollapsed(false);
-										}}
-										onAddProvider={() => openSettings("providers")}
-										onToggleRightPanel={() => {
-											setRightCollapsed(v => {
-												localStorage.setItem("musepi-gui-right", v ? "1" : "0");
-												return !v;
-											});
-										}}
-										onExpandRightPanel={() => {
-											setRightCollapsed(false);
-											localStorage.setItem("musepi-gui-right", "0");
-										}}
-										panelSelectRequest={panelSelect}
-										terminalOpen={bottomTerminal}
-										onCloseTerminal={() => setBottomTerminal(false)}
-										focusMode={focusMode}
-										onToggleFocus={() => setFocusMode(v => !v)}
-										reminders={reminders}
-										onSelectReminder={id => void openSession(id)}
-										onMarkAllRead={markAllRead}
-										sessionLoading={sessionLoading}
-										ask={activeAsk}
-										onAskAnswer={answerAsk}
-									/>
-								);
-								// Chat 常驻挂载:看板/任务/智能体/能力中心打开时 chat 仅
-								// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
-								// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
-								// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
-								// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
-								const chatKeeperHidden =
-									settingsOpen || boardOpen || scheduledOpen || agentsOpen || capabilityOpen;
-								return (
-									<>
-										<div
-											className={
-												chatKeeperHidden
-													? "gui-chat-keeper gui-chat-keeper--hidden"
-													: "gui-chat-keeper gui-chat-keeper--enter"
-											}
-										>
+											onStop={stop}
+											onDecideApproval={decideApproval}
+											onReloadSession={() => (selectedId ? openSession(selectedId) : undefined)}
+											onForkSession={async forkId => {
+												await refreshSessions(rpc);
+												await openSession(forkId);
+											}}
+											presetModelId={presetModelId}
+											modes={welcomeModes}
+											modeId={welcomeModeId}
+											onModeChange={setWelcomeModeId}
+											defaultModelId={defaultModelId}
+											presetThinkingLevel={presetThinkingLevel}
+											busy={status === "connecting"}
+											paused={pauseInfo.sessionId === selectedId && pauseInfo.paused}
+											pausedAt={pauseInfo.sessionId === selectedId ? pauseInfo.pausedAt : null}
+											onResume={() => void togglePause()}
+											project={project}
+											onProject={action => {
+												if (action === "remote") {
+													setConnectOpen(true);
+												} else if (action === "new") {
+													setNewProjectOpen(true);
+												} else if (action === "none") {
+													// "不在项目中": clear the workspace chip — never open the picker.
+													setProject(null);
+													localStorage.removeItem("musepi-gui-project");
+												} else if (action === "folder") {
+													pickProjectFolder();
+												} else {
+													// A saved workspace picked from the list — switch to it.
+													setProject(action);
+													localStorage.setItem("musepi-gui-project", action);
+												}
+											}}
+											onSubmitNewSession={(text, opts) => void submitNewSession(text, opts)}
+											rightPanelOpen={!rightCollapsed}
+											onOpenFileInPanel={() => {
+												setRightCollapsed(false);
+											}}
+											onAddProvider={() => openSettings("providers")}
+											onToggleRightPanel={() => {
+												setRightCollapsed(v => {
+													localStorage.setItem("musepi-gui-right", v ? "1" : "0");
+													return !v;
+												});
+											}}
+											onExpandRightPanel={() => {
+												setRightCollapsed(false);
+												localStorage.setItem("musepi-gui-right", "0");
+											}}
+											panelSelectRequest={panelSelect}
+											terminalOpen={bottomTerminal}
+											onCloseTerminal={() => setBottomTerminal(false)}
+											focusMode={focusMode}
+											onToggleFocus={() => setFocusMode(v => !v)}
+											reminders={reminders}
+											onSelectReminder={id => void openSession(id)}
+											onMarkAllRead={markAllRead}
+											sessionLoading={sessionLoading}
+											ask={activeAsk}
+											onAskAnswer={answerAsk}
+										/>
+									);
+									// Chat 常驻挂载:看板/任务/智能体/能力中心打开时 chat 仅
+									// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
+									// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
+									// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
+									// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
+									const chatKeeperHidden =
+										settingsOpen || boardOpen || scheduledOpen || agentsOpen || capabilityOpen;
+									return (
+										<>
 											<div
 												className={
-													leavingView === "chat"
-														? "gui-view-leave gui-chat-keeper-fill"
-														: "gui-chat-keeper-fill"
+													chatKeeperHidden
+														? "gui-chat-keeper gui-chat-keeper--hidden"
+														: "gui-chat-keeper gui-chat-keeper--enter"
 												}
 											>
-												{chatSurface}
-											</div>
-										</div>
-										{leavingView === "board" ? (
-											/* Leaving board → chat: the board surface stays
-											 * mounted for its blur-out, then chat enters. */
-											<div className="gui-view-leave">
-												<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
-													<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
-														<BoardPage
-															onBack={() => viewSwapRef.current("chat")}
-															rpc={rpc}
-															cwd={project ?? undefined}
-															jumpId={boardJumpId}
-															onJumpConsumed={() => setBoardJumpId(null)}
-															onChatCreate={text => {
-																// 对话创建 (kimi parity): leave the board and prompt the
-																// agent to design boards; with text, create a session
-																// (DSH creation flow: Creator persona) and send it
-																// right away.
-																const trimmed = text.trim();
-																if (!trimmed) {
-																	startNewTask();
-																	return;
-																}
-																const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-																void createAndSend(prompt, "creator");
-															}}
-														/>
-													</div>
+												<div
+													className={
+														leavingView === "chat"
+															? "gui-view-leave gui-chat-keeper-fill"
+															: "gui-chat-keeper-fill"
+													}
+												>
+													{chatSurface}
 												</div>
 											</div>
-										) : boardOpen ? (
-											/* Board view replaces the chat surface only — the
-											 * sidebar stays (kimi Work tab parity). */
-											<ChatSurfaceShell>
-												<BoardPage
-													onBack={() => viewSwapRef.current("chat")}
-													rpc={rpc}
-													cwd={project ?? undefined}
-													jumpId={boardJumpId}
-													onJumpConsumed={() => setBoardJumpId(null)}
-													onChatCreate={text => {
-														// 对话创建 (kimi parity): leave the board and prompt the
-														// agent to design boards; with text, create a session
-														// (DSH creation flow: Creator persona) and send it
-														// right away.
-														const trimmed = text.trim();
-														if (!trimmed) {
-															startNewTask();
-															return;
-														}
-														const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
-														void createAndSend(prompt, "creator");
-													}}
-												/>
-											</ChatSurfaceShell>
-										) : leavingView === "scheduled" ? (
-											/* Leaving scheduled → chat/board: scheduled blurs out first. */
-											<ChatSurfaceShell leave>
-												<ScheduledTasksPage
-													rpc={rpc}
-													onBack={() => viewSwapRef.current("chat")}
-													onOpenSession={id => void openSession(id)}
-													initialTaskId={scheduledJumpId}
-												/>
-											</ChatSurfaceShell>
-										) : scheduledOpen ? (
-											/* Scheduled tasks view (kimi cron page parity). */
-											<ChatSurfaceShell>
-												<ScheduledTasksPage
-													rpc={rpc}
-													onBack={() => viewSwapRef.current("chat")}
-													onOpenSession={id => void openSession(id)}
-													initialTaskId={scheduledJumpId}
-												/>
-											</ChatSurfaceShell>
-										) : leavingView === "agents" ? (
-											/* Leaving agents → chat/board: agents blurs out first. */
-											<ChatSurfaceShell leave>
-												<AgentsCenterPage
-													rpc={rpc}
-													store={store}
-													onBack={() => viewSwapRef.current("chat")}
-												/>
-											</ChatSurfaceShell>
-										) : agentsOpen ? (
-											/* Agents center view (live subagent roster). */
-											<ChatSurfaceShell>
-												<AgentsCenterPage
-													rpc={rpc}
-													store={store}
-													onBack={() => viewSwapRef.current("chat")}
-												/>
-											</ChatSurfaceShell>
-										) : leavingView === "capability" ? (
-											/* Leaving capability center → chat: blur out first. */
-											<ChatSurfaceShell leave>
-												<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
-											</ChatSurfaceShell>
-										) : capabilityOpen ? (
-											/* Capability center (设计稿 05: sidebar first-class entry —
-											 * skills / plugins / marketplace over one card language). */
-											<ChatSurfaceShell>
-												<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
-											</ChatSurfaceShell>
-										) : null}
-									</>
-								);
-							})()}
-						</div>
-						{/* Settings 覆盖整个聊天列(含 header):SettingsView 自带 48px
-						 * 拖拽条与圆角卡片, 与会话主界面同一壳层语言(zcode RootShell
-						 * isSettingsTabActive 同构); 应用侧栏在覆盖层之外保持可见,
-						 * 玻璃导航不再压住会话列表。 */}
-						{leavingSettings ? (
-							<div className="gui-view-leave gui-settings-host">
-								<SettingsView
-									rpc={rpc}
-									sessionId={store?.sessionId ?? null}
-									providerEvent={providerEvent}
-									initialSection={settingsSection}
-									onBack={closeSettings}
-									cwd={sessionMeta.get(store?.sessionId ?? "")?.cwd}
-									onOpenSession={sessionId => {
-										closeSettings();
-										void openSession(sessionId);
-									}}
-									onCreateChat={onPresetCreate}
-								/>
+											{leavingView === "board" ? (
+												/* Leaving board → chat: the board surface stays
+												 * mounted for its blur-out, then chat enters. */
+												<div className="gui-view-leave">
+													<div className="gui-chat-col relative flex min-w-0 flex-1 flex-col">
+														<div className="gui-chat-surface m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl bg-[var(--color-surface)] shadow-[0_4px_24px_rgba(0,0,0,0.25)]">
+															<BoardPage
+																onBack={() => viewSwapRef.current("chat")}
+																rpc={rpc}
+																cwd={project ?? undefined}
+																jumpId={boardJumpId}
+																onJumpConsumed={() => setBoardJumpId(null)}
+																onChatCreate={text => {
+																	// 对话创建 (kimi parity): leave the board and prompt the
+																	// agent to design boards; with text, create a session
+																	// (DSH creation flow: Creator persona) and send it
+																	// right away.
+																	const trimmed = text.trim();
+																	if (!trimmed) {
+																		startNewTask();
+																		return;
+																	}
+																	const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+																	void createAndSend(prompt, "creator");
+																}}
+															/>
+														</div>
+													</div>
+												</div>
+											) : boardOpen ? (
+												/* Board view replaces the chat surface only — the
+												 * sidebar stays (kimi Work tab parity). */
+												<ChatSurfaceShell>
+													<BoardPage
+														onBack={() => viewSwapRef.current("chat")}
+														rpc={rpc}
+														cwd={project ?? undefined}
+														jumpId={boardJumpId}
+														onJumpConsumed={() => setBoardJumpId(null)}
+														onChatCreate={text => {
+															// 对话创建 (kimi parity): leave the board and prompt the
+															// agent to design boards; with text, create a session
+															// (DSH creation flow: Creator persona) and send it
+															// right away.
+															const trimmed = text.trim();
+															if (!trimmed) {
+																startNewTask();
+																return;
+															}
+															const prompt = `${trimmed}。请把这些组件放进一个新看板（用 board 工具 save）。`;
+															void createAndSend(prompt, "creator");
+														}}
+													/>
+												</ChatSurfaceShell>
+											) : leavingView === "scheduled" ? (
+												/* Leaving scheduled → chat/board: scheduled blurs out first. */
+												<ChatSurfaceShell leave>
+													<ScheduledTasksPage
+														rpc={rpc}
+														onBack={() => viewSwapRef.current("chat")}
+														onOpenSession={id => void openSession(id)}
+														initialTaskId={scheduledJumpId}
+													/>
+												</ChatSurfaceShell>
+											) : scheduledOpen ? (
+												/* Scheduled tasks view (kimi cron page parity). */
+												<ChatSurfaceShell>
+													<ScheduledTasksPage
+														rpc={rpc}
+														onBack={() => viewSwapRef.current("chat")}
+														onOpenSession={id => void openSession(id)}
+														initialTaskId={scheduledJumpId}
+													/>
+												</ChatSurfaceShell>
+											) : leavingView === "agents" ? (
+												/* Leaving agents → chat/board: agents blurs out first. */
+												<ChatSurfaceShell leave>
+													<AgentsCenterPage
+														rpc={rpc}
+														store={store}
+														onBack={() => viewSwapRef.current("chat")}
+													/>
+												</ChatSurfaceShell>
+											) : agentsOpen ? (
+												/* Agents center view (live subagent roster). */
+												<ChatSurfaceShell>
+													<AgentsCenterPage
+														rpc={rpc}
+														store={store}
+														onBack={() => viewSwapRef.current("chat")}
+													/>
+												</ChatSurfaceShell>
+											) : leavingView === "capability" ? (
+												/* Leaving capability center → chat: blur out first. */
+												<ChatSurfaceShell leave>
+													<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+												</ChatSurfaceShell>
+											) : capabilityOpen ? (
+												/* Capability center (设计稿 05: sidebar first-class entry —
+												 * skills / plugins / marketplace over one card language). */
+												<ChatSurfaceShell>
+													<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+												</ChatSurfaceShell>
+											) : null}
+										</>
+									);
+								})()}
 							</div>
-						) : settingsOpen ? (
-							<div className="gui-view-enter gui-settings-host">
+						</div>
+						{/* Settings shell (slot replacement): the nav column lives in
+						 * the sidebar slot (see .gui-settings-nav-slot above; the
+						 * portal target is looked up inside SettingsView), this
+						 * fills the chat column with the content surface + the 48px
+						 * window-drag strip (zcode RootShell isSettingsTabActive
+						 * parity). Enters with the standard blur-in; the close path
+						 * keeps it mounted through leavingSettings for the blur-out. */}
+						{settingsActive ? (
+							<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
 								<SettingsView
 									rpc={rpc}
 									sessionId={store?.sessionId ?? null}

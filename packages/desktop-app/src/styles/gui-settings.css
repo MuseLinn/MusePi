@@ -1078,12 +1078,14 @@
 	cursor: pointer;
 }
 
-/* ── Full-window settings view (ZCode-style, replaces the modal) ──────── */
+/* ── Settings view (ZCode-style) — fills the chat column; the nav column
+ * lives in the app sidebar's slot (.gui-settings-nav-slot, see gui-board.css)
+ * via a portal from SettingsView. ─────────────────────────────────────────── */
 
 .gui-settings-view {
-	/* The shell lays panes out as a flex ROW; without flex:1 the view
-	 * collapses to its content width, which varies per tab (the "panel
-	 * size changes between tabs" bug). Fill the shell edge-to-edge. */
+	/* Fills the chat column (flex child of .gui-chat-col): flex:1 keeps the
+	 * view edge-to-edge on every tab (the "panel size changes between tabs"
+	 * bug). */
 	flex: 1;
 	min-width: 0;
 	display: flex;
@@ -1096,11 +1098,12 @@
 	 * reference geometry on normal windows while giving maximized
 	 * high-resolution windows a column that fills the pane. Tune here. */
 	--gui-settings-content-max: clamp(840px, 78%, 1080px);
-	/* Same translucent surface the nav uses — the gap between the nav and
-	 * the floating config surface reads as one continuous panel (no line). */
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	/* Transparent like .gui-sidebar: .gui-main already paints the single
+	 * workspace glass layer; a second scrim here stacked on top of it and
+	 * read darker than the shell (settings/main 色差). The nav slot and
+	 * this view share that one layer, so the boundary between them still
+	 * reads as one continuous panel (no divider line). */
+	background: transparent;
 }
 
 /* Dark scheme: the 55% base can't cover light wallpaper patches behind the
@@ -1108,8 +1111,7 @@
  * the single-layer glass look while restoring contrast (slider still
  * scales it via the derived --gui-glass-overlay; the window-transparency
  * toggle still overrides via an inline 100%). */
-[data-theme="dark"] .gui-main,
-[data-theme="dark"] .gui-settings-view {
+[data-theme="dark"] .gui-main {
 	--gui-glass-overlay: clamp(28%, calc(88% * (1 - var(--gui-glass-alpha, 0.55))), 88%);
 	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(88% * var(--gui-glass-alpha, 1))), transparent);
 }

@@ -2406,18 +2406,55 @@ button[title]:has(svg):not(:has(span)):not(.gui-composer-ico):not(.gui-composer-
 	min-height: 0;
 }
 
-/* Settings overlay host: absolutely covers the whole chat column (header +
- * surface) so the app sidebar stays visible beside it — SettingsView carries
- * its own 48px drag bar + rounded card, the same shell language as the chat
- * surface (zcode RootShell isSettingsTabActive parity). z-index sits below
- * popovers (60+) and the update dialog (900). */
-.gui-settings-host {
-	position: absolute;
-	inset: 0;
-	z-index: 20;
+/* Settings shell — slot replacement (2026-09-24, retires the old
+ * .gui-settings-host chat-column overlay): the settings NAV fills the app
+ * sidebar's slot (same position + width language, resizable via the side
+ * handle) while the content fills the chat column. The workspace keepers
+ * below stay mounted (display:none) so closing restores the session view. */
+.gui-settings-nav-slot {
+	display: flex;
+	flex-direction: column;
+	flex-shrink: 0;
+	min-width: 0;
+	height: 100%;
+	overflow: hidden;
+	/* Transparent like .gui-sidebar: .gui-main already paints the single
+	 * workspace glass layer; a second scrim here stacked on top of it and
+	 * read darker than the shell (settings/main 色差). */
+	background: transparent;
+	animation: gui-view-blur-in 300ms var(--spring);
+}
+/* Close path: the nav slot blurs out in place (150ms) while the workspace
+ * is still hidden — flex:1 from .gui-view-leave would grow it across the
+ * row, so the leave animation gets its own class. */
+.gui-slot-leave {
+	animation: gui-view-blur-out 150ms ease-in forwards;
+	pointer-events: none;
+}
+
+/* Sidebar keeper: the real sidebar stays mounted (display:none) while the
+ * settings nav occupies its slot — expanded groups / tab state survive. */
+.gui-side-keeper {
+	display: block;
+	min-width: 0;
+}
+.gui-side-keeper--hidden {
+	display: none;
+}
+
+/* Chat-column keeper: header + surface stay mounted (display:none) while
+ * the settings content fills the column — transcript/virtual-list state
+ * survives the settings round-trip (same contract as .gui-chat-keeper). */
+.gui-chat-col-keeper {
+	flex: 1;
+	min-height: 0;
 	min-width: 0;
 	display: flex;
 	flex-direction: column;
+	animation: gui-view-blur-in 300ms var(--spring);
+}
+.gui-chat-col-keeper--hidden {
+	display: none;
 }
 
 .gui-tool-btn--running {
