@@ -758,8 +758,10 @@ function AppInner(): ReactNode {
 		const onOpenSection = (e: Event): void => {
 			const section = (e as CustomEvent<string>).detail;
 			if (section === "skills" || section === "suggestions") {
-				setSettingsSection(section);
-				openSettings();
+				// Pass the section INTO openSettings — its 150ms blur-in timer
+				// owns the final setSettingsSection, so a separate pre-set here
+				// gets overwritten back to undefined.
+				openSettings(section);
 			}
 		};
 		window.addEventListener("musepi-gui-open-settings-section", onOpenSection);
@@ -3186,8 +3188,10 @@ function AppInner(): ReactNode {
 							unread={unreadSessions}
 							onToggleUnread={toggleUnread}
 							onOpenSkills={() => {
-								setSettingsSection("skills");
-								openSettings();
+								// Section goes through openSettings's own arg: the 150ms
+								// timer inside re-sets the section, which would wipe a
+								// pre-set "skills" back to the default pane.
+								openSettings("skills");
 							}}
 							onPickFolder={() => {
 								pickProjectFolder();
