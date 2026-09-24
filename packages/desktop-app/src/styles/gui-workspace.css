@@ -4111,6 +4111,27 @@
 	color: var(--color-text-muted);
 }
 
+/* 一键安装的结果提示条(复用 note 基形,收敛成 warn 同款内联条)。 */
+.gui-skill-market-note--ok,
+.gui-skill-market-note--err {
+	padding: 8px 10px;
+	text-align: left;
+	border-radius: var(--radius-md);
+	border: 1px solid transparent;
+}
+
+.gui-skill-market-note--ok {
+	border-color: color-mix(in srgb, var(--color-success, oklch(0.72 0.19 150)) 40%, transparent);
+	background: color-mix(in srgb, var(--color-success, oklch(0.72 0.19 150)) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-skill-market-note--err {
+	border-color: color-mix(in srgb, var(--color-danger, oklch(0.64 0.2 25)) 40%, transparent);
+	background: color-mix(in srgb, var(--color-danger, oklch(0.64 0.2 25)) 10%, transparent);
+	color: var(--color-text);
+}
+
 .gui-skill-market-section {
 	display: flex;
 	flex-direction: column;
@@ -4365,6 +4386,32 @@
 .gui-skill-market-plus:hover {
 	opacity: 1;
 	transform: scale(1.06);
+}
+
+/* 角标态:安装中(转圈、锁定)、已安装(绿色对勾、不可再点)。
+ * 两者都禁掉 hover 放大,避免和"不可操作"信号打架。 */
+.gui-skill-market-plus:disabled {
+	cursor: default;
+}
+
+.gui-skill-market-plus:disabled:hover {
+	opacity: 0.9;
+	transform: none;
+}
+
+.gui-skill-market-plus--done {
+	background: var(--color-success, oklch(0.72 0.19 150));
+	color: oklch(0.25 0.05 150);
+}
+
+@keyframes gui-skill-market-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.gui-skill-market-plus-spin {
+	animation: gui-skill-market-spin 0.9s linear infinite;
 }
 
 /* 推荐套件行的来源 pill（SkillHub 套件 / skills.sh 热门）。 */

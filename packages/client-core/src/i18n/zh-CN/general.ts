@@ -596,10 +596,11 @@ export const general = {
 	"skill market offline": "部分市场暂时不可用：{msg}",
 	"skill market verified": "官方认证",
 	"add skill": "添加技能",
-	"skill market add git": "Git 仓库",
-	"skill market add slug": "输入 SkillHub 技能标识（slug）",
 	"skill market add url": "输入 Git 仓库地址",
 	"skill market status": "已启用 {enabled} · 已停用 {disabled} · 来源 {sources} 个市场",
+	// 一键安装的结果反馈与卡片角标态(技能市场 · 发现)。
+	"skill market installed": "已安装",
+	"skill market install failed {name}": "安装 {name} 失败：{msg}",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	discover: "发现",
 	"installed {count}": "我安装的 {count}",

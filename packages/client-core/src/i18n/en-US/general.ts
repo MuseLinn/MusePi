@@ -602,10 +602,11 @@ export const general = {
 	"skill market offline": "Some markets are unavailable: {msg}",
 	"skill market verified": "Verified",
 	"add skill": "Add skill",
-	"skill market add git": "Git repo",
-	"skill market add slug": "SkillHub slug",
 	"skill market add url": "Git repository URL",
 	"skill market status": "{enabled} enabled · {disabled} disabled · {sources} market(s)",
+	// One-click install feedback + card badge states (skill market discover).
+	"skill market installed": "Installed",
+	"skill market install failed {name}": "Failed to install {name}: {msg}",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	discover: "Discover",
 	"installed {count}": "Installed {count}",

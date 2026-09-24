@@ -49,7 +49,9 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 	useEffect(() => {
 		if (tab !== "skills") return;
 		loadInstalledCount();
-	}, [tab, loadInstalledCount]);
+		// skillPane 也要在依赖里:在「我安装的」里卸载/装完技能后切回
+		// 「发现」,标签上的 N 必须已重读,而不是停留在切走前的旧值。
+	}, [tab, skillPane, loadInstalledCount]);
 
 	useEffect(() => {
 		if (!rpc || tab !== "plugins") return;

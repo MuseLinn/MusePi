@@ -10,9 +10,18 @@ import { GuiSelect } from "./GuiSelect";
  *
  * Reads the remote catalog through the four `skills.marketplace.*` RPCs —
  * SkillHub is the primary source (icons, stars, downloads, categories) and
- * skills.sh contributes search hits only. Nothing here needs a registry
- * entry, which is why this view is NOT `MarketplaceGrid` (that one serves
- * user-added *plugin* sources and renders empty until a user registers one).
+ * skills.sh contributes search hits with a GitHub `installUrl` each. Card
+ * actions route by what the entry carries:
+ *
+ *   - skills.sh entry (installUrl present) → one click runs
+ *     `skills.install {url}` straight from the card;
+ *   - SkillHub entry (no git source exposed) → opens the add dialog
+ *     prefilled with the catalog homepage so the user confirms/edits the
+ *     source before installing.
+ *
+ * Nothing here needs a registry entry, which is why this view is NOT
+ * `MarketplaceGrid` (that one serves user-added *plugin* sources and
+ * renders empty until a user registers one).
  *
  * Failure model: a dead catalog surfaces as a non-blocking banner; the
  * surviving half still renders. See `skills/marketplace-client.ts`.
@@ -68,15 +77,22 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const [sortBy, setSortBy] = useState<SortKey>("downloads");
 	const [keyword, setKeyword] = useState("");
 	const [page, setPage] = useState(1);
-	const [addOpen, setAddOpen] = useState(false);
+	// null = 关闭;对象 = 打开对话框并预填(卡片带入目录来源,裸按钮空表)。
+	const [addPrefill, setAddPrefill] = useState<{ url?: string; name?: string } | null>(null);
 
 	const [pageData, setPageData] = useState<MarketPage | null>(null);
 	const [featured, setFeatured] = useState<SkillEntry[]>([]);
 	const [categories, setCategories] = useState<SkillCategory[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [loadError, setLoadError] = useState<string | null>(null);
-	// 底部状态栏 (设计稿 01): 已启用 / 已停用 / 来源市场数。
+	// 底部状态栏 (设计稿 01): 已启用 / 已停用 / 来源市场数;installedNames
+	// 同时驱动卡片上的「已安装」态 —— 装完即回读,不用等重新挂载。
 	const [installed, setInstalled] = useState({ enabled: 0, disabled: 0 });
+	const [installedNames, setInstalledNames] = useState<Set<string>>(new Set());
+	// 一键安装的去重 + 结果反馈:busyId 锁卡片,notice 是顶部非阻塞提示条
+	// (成功 2.5s 自动消退,失败驻留到下一次操作)。
+	const [busyId, setBusyId] = useState<string | null>(null);
+	const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 	// 换一批 rotates the featured window: the daemon returns a ranked list
 	// and the UI shows FEATURED_SIZE of it starting at this offset.
 	const [featuredOffset, setFeaturedOffset] = useState(0);
@@ -84,16 +100,24 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const refreshInstalled = useCallback((): void => {
 		if (!rpc) return;
 		void rpc
-			.request<{ skills: { disabled?: boolean }[] }>("skills.list", {})
+			.request<{ skills: { name?: string; disabled?: boolean }[] }>("skills.list", {})
 			.then(res => {
 				const rows = res?.skills ?? [];
 				setInstalled({
 					enabled: rows.filter(s => !s.disabled).length,
 					disabled: rows.filter(s => s.disabled).length,
 				});
+				setInstalledNames(new Set(rows.map(s => (s.name ?? "").toLowerCase()).filter(Boolean)));
 			})
 			.catch(() => {});
 	}, [rpc]);
+
+	// 成功提示自动消退;失败提示驻留(用户需要读完原因)。
+	useEffect(() => {
+		if (!notice?.ok) return;
+		const id = window.setTimeout(() => setNotice(null), 2500);
+		return () => window.clearTimeout(id);
+	}, [notice]);
 
 	// Categories + featured load once; they are catalog-level, not query-level.
 	useEffect(() => {
@@ -165,6 +189,38 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const hasMore = page * PAGE_SIZE < total;
 	const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+	/**
+	 * 一键安装 (skills.sh 卡片 / 精选卡):直接用条目自带的 installUrl
+	 * (GitHub repo) 走 skills.install —— 这正是该 RPC 的 v1 契约
+	 * (`{url, subdir?, name?, overwrite?}`)。装完回读 skills.list,
+	 * 卡片就地翻「已安装」,父级同步「我安装的 N」计数。
+	 */
+	const installEntry = useCallback(
+		(entry: SkillEntry): void => {
+			if (!rpc || !entry.installUrl || busyId) return;
+			setBusyId(entry.id);
+			setNotice(null);
+			void rpc
+				.request<{ ok: boolean; name: string }>("skills.install", { url: entry.installUrl })
+				.then(res => {
+					setNotice({ ok: true, text: t("skill installed {name}", { name: res?.name ?? entry.name }) });
+					refreshInstalled();
+					onInstalled?.();
+				})
+				.catch((e: unknown) => {
+					const msg = e instanceof Error ? e.message : String(e);
+					setNotice({ ok: false, text: t("skill market install failed {name}", { name: entry.name, msg }) });
+				})
+				.finally(() => setBusyId(null));
+		},
+		[rpc, busyId, refreshInstalled, onInstalled],
+	);
+
+	const isInstalled = useCallback(
+		(entry: SkillEntry): boolean => installedNames.has(entry.name.toLowerCase()),
+		[installedNames],
+	);
+
 	return (
 		<div className="gui-skill-market">
 			{/* 工具行 (设计稿 01):搜索 → 全部来源下拉 → 热门优先下拉 → + 添加技能 */}
@@ -208,7 +264,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						{ value: "installs", label: t("skill market sort installs") },
 					]}
 				/>
-				<button type="button" className="gui-skill-market-add" onClick={() => setAddOpen(true)}>
+				<button type="button" className="gui-skill-market-add" onClick={() => setAddPrefill({})}>
 					<Icon name="add" className="h-3.5 w-3.5 shrink-0" />
 					{t("add skill")}
 				</button>
@@ -216,6 +272,13 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 
 			{failures ? <div className="gui-skill-market-warn">{t("skill market offline", { msg: failures })}</div> : null}
 			{loadError ? <div className="gui-skill-market-warn">{loadError}</div> : null}
+			{notice && (
+				<div
+					className={`gui-skill-market-note${notice.ok ? " gui-skill-market-note--ok" : " gui-skill-market-note--err"}`}
+				>
+					{notice.text}
+				</div>
+			)}
 
 			{shownFeatured.length > 0 ? (
 				<section className="gui-skill-market-section">
@@ -232,7 +295,14 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					</div>
 					<div className="gui-skill-market-featured">
 						{shownFeatured.map(e => (
-							<FeaturedCard key={e.id} entry={e} onOpen={() => setAddOpen(true)} />
+							<FeaturedCard
+								key={e.id}
+								entry={e}
+								installed={isInstalled(e)}
+								busy={busyId === e.id}
+								onInstall={() => installEntry(e)}
+								onOpen={() => setAddPrefill({ url: e.installUrl ?? e.homepage ?? "", name: e.name })}
+							/>
 						))}
 					</div>
 				</section>
@@ -299,7 +369,14 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				) : (
 					<div className="gui-skill-market-grid">
 						{entries.map(e => (
-							<SkillCard key={e.id} entry={e} onOpen={() => setAddOpen(true)} />
+							<SkillCard
+								key={e.id}
+								entry={e}
+								installed={isInstalled(e)}
+								busy={busyId === e.id}
+								onInstall={() => installEntry(e)}
+								onOpen={() => setAddPrefill({ url: e.installUrl ?? e.homepage ?? "", name: e.name })}
+							/>
 						))}
 					</div>
 				)}
@@ -337,8 +414,18 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				})}
 			</div>
 
-			{addOpen ? (
-				<AddSkillDialog rpc={rpc} onClose={() => setAddOpen(false)} onDone={() => onInstalled?.()} />
+			{addPrefill ? (
+				<AddSkillDialog
+					rpc={rpc}
+					initialUrl={addPrefill.url ?? ""}
+					initialName={addPrefill.name ?? ""}
+					onClose={() => setAddPrefill(null)}
+					onDone={name => {
+						setNotice({ ok: true, text: t("skill installed {name}", { name }) });
+						refreshInstalled();
+						onInstalled?.();
+					}}
+				/>
 			) : null}
 		</div>
 	);
@@ -370,12 +457,73 @@ function SkillGlyph({ entry }: { entry: SkillEntry }): ReactNode {
 	);
 }
 
-function FeaturedCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }): ReactNode {
+/**
+ * 卡片右上角的动作角标,三个状态互斥:
+ *   已安装 → 绿色对勾,不可再点;
+ *   安装中 → 转圈,锁定防重复提交;
+ *   可安装 → 有 installUrl(skills.sh 带 GitHub 源)一键装,没有
+ *   (SkillHub 目录项)打开预填对话框让用户确认来源后再装。
+ */
+function CardAddButton({
+	entry,
+	installed,
+	busy,
+	onInstall,
+	onOpen,
+}: {
+	entry: SkillEntry;
+	installed: boolean;
+	busy: boolean;
+	onInstall(): void;
+	onOpen(): void;
+}): ReactNode {
+	if (installed) {
+		return (
+			<button
+				type="button"
+				className="gui-skill-market-plus gui-skill-market-plus--done"
+				disabled
+				title={t("skill market installed")}
+			>
+				<Icon name="check" className="h-3.5 w-3.5" />
+			</button>
+		);
+	}
+	if (busy) {
+		return (
+			<button type="button" className="gui-skill-market-plus" disabled title={t("installing")}>
+				<Icon name="loader" className="gui-skill-market-plus-spin h-3.5 w-3.5" />
+			</button>
+		);
+	}
+	return (
+		<button
+			type="button"
+			className="gui-skill-market-plus"
+			title={t("add skill")}
+			onClick={entry.installUrl ? onInstall : onOpen}
+		>
+			<Icon name="add" className="h-3.5 w-3.5" />
+		</button>
+	);
+}
+
+function FeaturedCard({
+	entry,
+	installed,
+	busy,
+	onInstall,
+	onOpen,
+}: {
+	entry: SkillEntry;
+	installed: boolean;
+	busy: boolean;
+	onInstall(): void;
+	onOpen(): void;
+}): ReactNode {
 	return (
 		<article className="gui-skill-market-fcard">
-			<button type="button" className="gui-skill-market-plus" title={t("add skill")} onClick={onOpen}>
-				<Icon name="add" className="h-3.5 w-3.5" />
-			</button>
+			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
 			<div className="gui-skill-market-fcard-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-fcard-name">{entry.name}</span>
@@ -385,16 +533,26 @@ function FeaturedCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }):
 	);
 }
 
-function SkillCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }): ReactNode {
+function SkillCard({
+	entry,
+	installed,
+	busy,
+	onInstall,
+	onOpen,
+}: {
+	entry: SkillEntry;
+	installed: boolean;
+	busy: boolean;
+	onInstall(): void;
+	onOpen(): void;
+}): ReactNode {
 	const meta: string[] = [];
 	if (typeof entry.stars === "number") meta.push(`★ ${fmtCount(entry.stars)}`);
 	if (typeof entry.downloads === "number") meta.push(`↓ ${fmtCount(entry.downloads)}`);
 	if (entry.version) meta.push(`v${entry.version}`);
 	return (
 		<article className="gui-skill-market-card">
-			<button type="button" className="gui-skill-market-plus" title={t("add skill")} onClick={onOpen}>
-				<Icon name="add" className="h-3.5 w-3.5" />
-			</button>
+			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-card-name">{entry.name}</span>
@@ -409,37 +567,47 @@ function SkillCard({ entry, onOpen }: { entry: SkillEntry; onOpen(): void }): Re
 }
 
 /**
- * 「+ 添加技能」与卡片上的 `+` 共用这一个对话框 (设计稿 01 的按钮落点):
- * 两条路径都要落进 `~/.musepi/skills/<slug>/`,所以入口不同、动作同源。
- * 目录来源二选一 —— 直接填 skillhub slug,或给一个 Git 仓库地址。
+ * 「+ 添加技能」对话框 (设计稿 01 的按钮落点):卡片没有可直接安装的
+ * 来源(Git URL)时在此确认/编辑后走 `skills.install` —— 与 TUI 扩展
+ * 中心的「从 Git 安装」同一条 daemon 契约 `{url, name?, overwrite?}`。
+ * 卡片有 installUrl 时不经过这里,角标一键安装。名称冲突不是死错误:
+ * 就地给出「覆盖安装」重试(GitInstallCard 同款动线)。
  */
 function AddSkillDialog({
 	rpc,
+	initialUrl,
+	initialName,
 	onClose,
 	onDone,
 }: {
 	rpc: RpcClient | null;
+	initialUrl: string;
+	initialName: string;
 	onClose(): void;
-	onDone(): void;
+	onDone(name: string): void;
 }): ReactNode {
-	const [tab, setTab] = useState<"skillhub" | "git">("skillhub");
-	const [value, setValue] = useState("");
+	const [url, setUrl] = useState(initialUrl);
+	const [name, setName] = useState(initialName);
 	const [busy, setBusy] = useState(false);
-	const [err, setErr] = useState<string | null>(null);
+	const [err, setErr] = useState<{ text: string; canOverwrite: boolean } | null>(null);
 
-	const submit = (): void => {
-		if (!rpc || !value.trim()) return;
+	const install = (overwrite: boolean): void => {
+		if (!rpc || !url.trim() || busy) return;
 		setBusy(true);
 		setErr(null);
-		const params = tab === "skillhub" ? { slug: value.trim() } : { url: value.trim() };
 		void rpc
-			.request("skills.install", params)
-			.then(() => {
-				onDone();
+			.request<{ ok: boolean; name: string }>("skills.install", {
+				url: url.trim(),
+				...(name.trim() ? { name: name.trim() } : {}),
+				...(overwrite ? { overwrite: true } : {}),
+			})
+			.then(res => {
+				onDone(res?.name ?? (name.trim() || url.trim()));
 				onClose();
 			})
 			.catch((e: unknown) => {
-				setErr(e instanceof Error ? e.message : String(e));
+				const text = e instanceof Error ? e.message : String(e);
+				setErr({ text, canOverwrite: /exist|conflict|overwrite/i.test(text) });
 				setBusy(false);
 			});
 	};
@@ -453,41 +621,46 @@ function AddSkillDialog({
 				onClick={ev => ev.stopPropagation()}
 			>
 				<div className="gui-skill-market-dialog-h">{t("add skill")}</div>
-				<div className="gui-capability-subtabs">
-					{(
-						[
-							["skillhub", t("skill market source skillhub")],
-							["git", t("skill market add git")],
-						] as ["skillhub" | "git", string][]
-					).map(([id, label]) => (
-						<button
-							key={id}
-							type="button"
-							className={`gui-capability-subtab${tab === id ? " gui-capability-subtab--on" : ""}`}
-							onClick={() => setTab(id)}
-						>
-							{label}
-						</button>
-					))}
-				</div>
 				<input
 					className="gui-skill-market-dialog-input"
-					value={value}
+					value={url}
 					autoFocus
-					placeholder={tab === "skillhub" ? t("skill market add slug") : t("skill market add url")}
-					onChange={ev => setValue(ev.target.value)}
+					spellCheck={false}
+					placeholder={t("skill market add url")}
+					onChange={ev => setUrl(ev.target.value)}
 					onKeyDown={ev => {
-						if (ev.key === "Enter") submit();
+						if (ev.key === "Enter") install(false);
 						if (ev.key === "Escape") onClose();
 					}}
 				/>
-				{err ? <div className="gui-skill-market-warn">{err}</div> : null}
+				<input
+					className="gui-skill-market-dialog-input"
+					value={name}
+					spellCheck={false}
+					placeholder={t("optional name override")}
+					onChange={ev => setName(ev.target.value)}
+					onKeyDown={ev => {
+						if (ev.key === "Enter") install(false);
+						if (ev.key === "Escape") onClose();
+					}}
+				/>
+				{err ? <div className="gui-skill-market-warn">{err.text}</div> : null}
 				<div className="gui-skill-market-dialog-f">
+					{err?.canOverwrite && (
+						<button type="button" className="gui-skill-market-page" disabled={busy} onClick={() => install(true)}>
+							{t("overwrite install")}
+						</button>
+					)}
 					<button type="button" className="gui-skill-market-page" onClick={onClose}>
 						{t("cancel")}
 					</button>
-					<button type="button" className="gui-skill-market-add" disabled={busy || !value.trim()} onClick={submit}>
-						{busy ? t("skill market loading") : t("add skill")}
+					<button
+						type="button"
+						className="gui-skill-market-add"
+						disabled={busy || !url.trim()}
+						onClick={() => install(false)}
+					>
+						{busy ? t("installing") : t("add skill")}
 					</button>
 				</div>
 			</div>
