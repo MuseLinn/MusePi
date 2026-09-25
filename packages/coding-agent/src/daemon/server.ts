@@ -34,7 +34,7 @@ import {
 import { resolveModelCapabilities } from "@musepi/pi-catalog/identity";
 import { getSupportedEfforts } from "@musepi/pi-catalog/model-thinking";
 import { type GeneratedProvider, getBundledModels, getBundledProviders } from "@musepi/pi-catalog/models";
-import { DesktopSession, FileType, type GlobMatch, getWorkProfile, listWorkspace } from "@musepi/pi-natives";
+import { DesktopSession, getWorkProfile } from "@musepi/pi-natives";
 import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VERSION } from "@musepi/pi-utils";
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
@@ -149,7 +149,6 @@ import {
 } from "./crons";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
-import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 
@@ -484,6 +483,7 @@ import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan } from "./journal";
 import { BoardService } from "./services/board-service";
 import { EventService } from "./services/event-service";
+import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
@@ -2838,80 +2838,10 @@ export class DaemonSessionHost {
 		return this.#store;
 	}
 
-	/**
-	 * Structured workspace tree (file pane): native single-pass scan with
-	 * per-directory caps (recent + oldest kept when over cap). Mirrors the
-	 * TUI workspace-tree semantics without the rendered-string format.
-	 *
-	 * `gitignore: false` lists .gitignore'd paths too (the Files pane's
-	 * toggle) — callers that omit it keep the filtered default.
-	 */
-	async workspaceTree(
-		cwd: string,
-		options: { maxDepth?: number; perDirLimit?: number | null; gitignore?: boolean } = {},
-	): Promise<{
-		rootPath: string;
-		truncated: boolean;
-		entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }>;
-	}> {
-		const rootPath = path.resolve(cwd || this.#options.cwd || os.homedir());
-		const maxDepth = options.maxDepth ?? 2;
-		const perDirLimit = options.perDirLimit ?? 50;
-		let result: { entries: readonly GlobMatch[]; truncated: boolean };
-		try {
-			const scan = await listWorkspace({
-				path: rootPath,
-				maxDepth,
-				hidden: true,
-				gitignore: options.gitignore ?? true,
-			});
-			result = { entries: scan.entries, truncated: scan.truncated };
-		} catch {
-			// Native scan unavailable (e.g. missing binary) — empty tree.
-			result = { entries: [], truncated: false };
-		}
-		// Per-directory cap: sort by mtime desc, keep recent + oldest (same
-		// strategy as the TUI: limit-1 newest + the single oldest).
-		const byParent = new Map<string, Array<{ name: string; entry: GlobMatch; parentPath: string }>>();
-		const entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }> =
-			[];
-		for (const entry of result.entries) {
-			const slash = entry.path.lastIndexOf("/");
-			const name = slash === -1 ? entry.path : entry.path.slice(slash + 1);
-			const parentPath = slash === -1 ? "" : entry.path.slice(0, slash);
-			const bucket = byParent.get(parentPath) ?? [];
-			bucket.push({ name, entry, parentPath });
-			byParent.set(parentPath, bucket);
-		}
-		let truncated = result.truncated;
-		for (const [parentPath, bucket] of byParent) {
-			if (perDirLimit !== null && bucket.length > perDirLimit) {
-				bucket.sort((a, b) => (b.entry.mtime ?? 0) - (a.entry.mtime ?? 0));
-				const keep =
-					perDirLimit <= 1
-						? bucket.slice(0, Math.max(0, perDirLimit))
-						: [...bucket.slice(0, perDirLimit - 1), bucket.at(-1)!];
-				byParent.set(
-					parentPath,
-					keep.map(k => ({ name: k.name, entry: k.entry, parentPath })),
-				);
-				truncated = true;
-			}
-		}
-		for (const [parentPath, bucket] of byParent) {
-			for (const item of bucket) {
-				entries.push({
-					name: item.name,
-					path: parentPath ? `${parentPath}/${item.name}` : item.name,
-					isDir: item.entry.fileType === FileType.Dir,
-					size: item.entry.size ?? 0,
-					mtime: item.entry.mtime ?? 0,
-					depth: parentPath ? parentPath.split("/").length + 1 : 1,
-				});
-			}
-		}
-		entries.sort((a, b) => a.path.localeCompare(b.path));
-		return { rootPath, truncated, entries };
+	/** workspace.tree 根目录兜底（原 workspaceTree 内联语义：
+	 *  #options.cwd 未设置时由 FileService 落到 homedir）。 */
+	get workspaceFallbackCwd(): string | undefined {
+		return this.#options.cwd;
 	}
 
 	async subscribe(sessionId: string, conn: DaemonConnection): Promise<{ seq: number }> {
@@ -3119,6 +3049,12 @@ export class DaemonServer {
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
 		this.#services.register(new BoardService());
+		this.#services.register(
+			new FileService({
+				fallbackCwd: () => host.workspaceFallbackCwd,
+				ensureFileIndex: () => host.ensureFileIndex(),
+			}),
+		);
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -4534,8 +4470,10 @@ export class DaemonServer {
 				return index.status();
 			}
 			case "index.search": {
-				const p = (params ?? {}) as { query?: string; limit?: number };
-				return this.#host.ensureFileIndex().search(p.query ?? "", p.limit ?? 30);
+				// 工作区文件内容索引查询归 FileService（索引导线宿主懒创建）。
+				return this.#services
+					.get<FileService>("files")
+					.searchIndex((params ?? {}) as { query?: string; limit?: number });
 			}
 			case "stats.sync": {
 				// Usage-stats sync (CLI `musepi stats` parity): incrementally
@@ -9798,74 +9736,36 @@ export class DaemonServer {
 				return this.#services.get<UsageService>("usage").reports(p);
 			}
 			case "fs.read": {
-				// Minimal safe file read (dev-server detection): text files
-				// up to 512 KiB only.
-				const p = (params ?? {}) as { path?: string };
-				if (!p.path) return { content: null };
-				try {
-					const st = fs.statSync(p.path);
-					if (!st.isFile() || st.size > 512 * 1024) return { content: null };
-					return { content: fs.readFileSync(p.path, "utf8") };
-				} catch {
-					return { content: null };
-				}
+				// 实现归 FileService（512 KiB 文本软帽语义不变）。
+				return this.#services.get<FileService>("files").read((params ?? {}) as { path?: string });
 			}
 			case "fs.readBytes": {
-				// Binary-safe file read for the GUI file preview (base64 +
-				// mime + size). 8 MiB default cap, 32 MiB hard cap — previews
-				// are meant for small files; big ones open via the OS.
-				const p = (params ?? {}) as { path?: string; maxBytes?: number };
-				if (!p.path) return { error: "missing path" };
-				try {
-					const st = fs.statSync(p.path);
-					if (!st.isFile()) return { error: "not a file" };
-					const max = Math.min(Math.max(p.maxBytes ?? 8 * 1024 * 1024, 1), 32 * 1024 * 1024);
-					if (st.size > max) return { error: `file too large (${st.size} bytes)` };
-					const buf = fs.readFileSync(p.path);
-					return { base64: buf.toString("base64"), size: buf.length, mime: mimeForPath(p.path) };
-				} catch (err) {
-					return { error: err instanceof Error ? err.message : String(err) };
-				}
+				// GUI 文件预览二进制读取归 FileService（8/32 MiB 帽不变）。
+				return this.#services
+					.get<FileService>("files")
+					.readBytes((params ?? {}) as { path?: string; maxBytes?: number });
 			}
 			case "fs.write": {
-				// Create/overwrite a file INSIDE the session workspace (relative
-				// path only; `..` escapes rejected). Backs the GUI file pane's
-				// 新建文件 and the composer's file attachments. Content is UTF-8
-				// text, or base64-decoded bytes when encoding:"base64" (binary
-				// attachments — a PDF must not hit the disk as its base64 text).
-				const p = (params ?? {}) as { cwd?: string; path?: string; content?: string; encoding?: string };
-				if (!p.cwd || !p.path) return { error: "missing cwd/path" };
-				return writeWorkspaceFile(p.cwd, p.path, p.content ?? "", p.encoding);
+				return this.#services
+					.get<FileService>("files")
+					.write((params ?? {}) as { cwd?: string; path?: string; content?: string; encoding?: string });
 			}
 			case "fs.mkdir": {
-				const p = (params ?? {}) as { cwd?: string; path?: string };
-				if (!p.cwd || !p.path) return { error: "missing cwd/path" };
-				return createWorkspaceDir(p.cwd, p.path);
+				return this.#services.get<FileService>("files").mkdir((params ?? {}) as { cwd?: string; path?: string });
 			}
 			case "fs.rename": {
-				const p = (params ?? {}) as { cwd?: string; from?: string; to?: string };
-				if (!p.cwd || !p.from || !p.to) return { error: "missing cwd/from/to" };
-				return renameWorkspaceEntry(p.cwd, p.from, p.to);
+				return this.#services
+					.get<FileService>("files")
+					.rename((params ?? {}) as { cwd?: string; from?: string; to?: string });
 			}
 			case "fs.delete": {
-				// Delete a workspace entry (file or directory tree). The GUI
-				// only sends this after an explicit confirm dialog.
-				const p = (params ?? {}) as { cwd?: string; path?: string };
-				if (!p.cwd || !p.path) return { error: "missing cwd/path" };
-				return deleteWorkspaceEntry(p.cwd, p.path);
+				// GUI 仅在显式确认后发送（语义注释归服务头）。实现归 FileService。
+				return this.#services
+					.get<FileService>("files")
+					.deleteEntry((params ?? {}) as { cwd?: string; path?: string });
 			}
 			case "workspace.tree": {
-				const p = (params ?? {}) as {
-					cwd?: string;
-					maxDepth?: number;
-					perDirLimit?: number | null;
-					gitignore?: boolean;
-				};
-				return this.#host.workspaceTree(p.cwd ?? "", {
-					maxDepth: p.maxDepth,
-					perDirLimit: p.perDirLimit,
-					gitignore: p.gitignore,
-				});
+				return this.#services.get<FileService>("files").tree(params ?? {});
 			}
 			case "artifact.list": {
 				// Artifacts-panel discovery: scan the workspace for
@@ -9917,28 +9817,6 @@ function friendlyNetworkError(err: unknown): string {
 		return "连接 GitHub 失败（网络中断或代理拦截）——请检查网络后重试";
 	}
 	return msg;
-}
-
-/** Extension → MIME for the GUI file preview (fallback application/octet-stream). */
-const FILE_MIME: Record<string, string> = {
-	png: "image/png",
-	jpg: "image/jpeg",
-	jpeg: "image/jpeg",
-	gif: "image/gif",
-	webp: "image/webp",
-	svg: "image/svg+xml",
-	avif: "image/avif",
-	pdf: "application/pdf",
-	mp3: "audio/mpeg",
-	wav: "audio/wav",
-	mp4: "video/mp4",
-	webm: "video/webm",
-};
-function mimeForPath(filePath: string): string {
-	const dot = filePath.lastIndexOf(".");
-	if (dot === -1) return "application/octet-stream";
-	const ext = filePath.slice(dot + 1).toLowerCase();
-	return FILE_MIME[ext] ?? "application/octet-stream";
 }
 
 const BUILTIN_MODEL_ROLES = new Set([

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { ViewStore } from "../view-store";
 import { BoardService } from "./board-service";
 import { EventService } from "./event-service";
+import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
 import { UsageService } from "./usage-service";
@@ -55,6 +56,12 @@ function buildRegistry(): HostServices {
 	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));
 	services.register(new ViewStoreService(store));
 	services.register(new BoardService());
+	services.register(
+		new FileService({
+			fallbackCwd: () => undefined,
+			ensureFileIndex: () => ({ search: () => [] }) as never,
+		}),
+	);
 	return services;
 }
 
