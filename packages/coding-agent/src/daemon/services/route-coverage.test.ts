@@ -11,6 +11,7 @@ import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
+import { ScheduleService } from "./schedule-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
@@ -86,6 +87,15 @@ function buildRegistry(): HostServices {
 	);
 	// RemoteService 无宿主依赖、无状态，直接注册。
 	services.register(new RemoteService());
+	// ScheduleService：stub 化宿主访问，仅参与路由表。
+	services.register(
+		new ScheduleService({
+			createSession: async () => ({ sessionId: "" }),
+			get: () => undefined,
+			deleteSession: async () => {},
+			onCronsChanged: () => {},
+		}),
+	);
 	return services;
 }
 

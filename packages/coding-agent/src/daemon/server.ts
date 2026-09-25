@@ -132,21 +132,6 @@ import { nextActionableTask, type TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
-import {
-	type CronRun,
-	type CronSchedule,
-	type CronStatus,
-	type CronTask,
-	computeNextRun,
-	loadCronRuns,
-	loadCronTasks,
-	mergeCronTask,
-	nextCronScheduleRuns,
-	saveCronRuns,
-	saveCronTasks,
-	validateCronSchedule,
-	validateCronTask,
-} from "./crons";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
@@ -487,6 +472,7 @@ import { EventService } from "./services/event-service";
 import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
+import { ScheduleService } from "./services/schedule-service";
 import { TerminalService } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
@@ -3000,32 +2986,11 @@ export class DaemonServer {
 	dropGlobalEventTarget(connectionId: string): void {
 		this.#services.get<EventService>("events").dropTarget(connectionId);
 	}
-	/** Scheduled tasks (cron): loaded from ~/.musepi/crons.json; a 30s
-	 *  scanner runs due tasks in fresh sessions (kimi cron parity). */
-	#cronTasks: CronTask[] = [];
-	#cronRuns: CronRun[] = [];
-	#cronTimer: ReturnType<typeof setInterval> | null = null;
-	#cronStarting = new Set<string>();
-
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
 	 *  performance-report parity: profile spans two RPC calls so the GUI can
 	 *  hold "reproduce, then stop" between them). */
 	#debugProfilers = new Map<number, ProfilerSession>();
 	#nextDebugProfilerId = 1;
-
-	/** Session ids owned by scheduled tasks (run history + last run per
-	 *  task) — the GUI groups them apart from regular sessions. */
-	#cronSessionIds(): Set<string> {
-		const ids = new Set<string>();
-		for (const task of this.#cronTasks) {
-			const last = task.state?.lastSessionId;
-			if (last) ids.add(last);
-		}
-		for (const run of this.#cronRuns) {
-			if (run.sessionId) ids.add(run.sessionId);
-		}
-		return ids;
-	}
 
 	constructor(host: DaemonSessionHost) {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
@@ -3077,10 +3042,14 @@ export class DaemonServer {
 			}),
 		);
 		this.#services.register(new RemoteService());
-		this.#cronTasks = loadCronTasks();
-		this.#cronRuns = loadCronRuns();
-		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
-		this.#cronTimer.unref?.();
+		const schedule = new ScheduleService({
+			createSession: opts => this.#host.createSession(opts),
+			get: sessionId => this.#host.get(sessionId),
+			deleteSession: sessionId => this.#host.deleteSession(sessionId),
+			onCronsChanged: () => this.#services.get<EventService>("events").broadcastCronsChanged(),
+		});
+		this.#services.register(schedule);
+		schedule.start();
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.
@@ -3237,21 +3206,6 @@ export class DaemonServer {
 
 	#resumeLive: LiveSession | null = null;
 
-	/** Scheduled-task scanner: fire every enabled task whose nextRunAt is
-	 *  due (or missing — first enable after a manual edit recomputes it on
-	 *  the next tick). Runs are fire-and-forget; the per-session agent
-	 *  subscription updates state when the turn finishes. */
-	#cronScan(): void {
-		const now = Date.now();
-		for (const task of this.#cronTasks) {
-			if (!task.enabled) continue;
-			if (this.#cronStarting.has(task.id)) continue;
-			if (task.state.nextRunAt === undefined || task.state.nextRunAt <= now) {
-				void this.#cronRun(task);
-			}
-		}
-	}
-
 	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
 	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
 	 *  6-digit code; it carries no other RPC surface. */
@@ -3364,80 +3318,6 @@ export class DaemonServer {
 						error: err instanceof Error ? err.message : String(err),
 					});
 				});
-		}
-	}
-
-	/** Execute one scheduled task in a fresh session bound to its cwd. */
-	async #cronRun(task: CronTask): Promise<void> {
-		if (this.#cronStarting.has(task.id)) return;
-		this.#cronStarting.add(task.id);
-		const startedAt = Date.now();
-		const run: CronRun = {
-			id: `run-${task.id}-${startedAt}`,
-			taskId: task.id,
-			startedAt,
-			status: "running",
-		};
-		this.#cronRuns.push(run);
-		saveCronRuns(this.#cronRuns);
-		task.state.lastRunAt = startedAt;
-		task.state.lastStatus = "running";
-		task.state.lastError = undefined;
-		task.state.nextRunAt = computeNextRun(task, startedAt) ?? undefined;
-		saveCronTasks(this.#cronTasks);
-		this.#services.get<EventService>("events").broadcastCronsChanged();
-		let live: LiveSession | undefined;
-		try {
-			const { sessionId } = await this.#host.createSession({
-				cwd: task.cwd || undefined,
-				modelPattern: task.model || undefined,
-				thinkingLevel:
-					task.thinkingLevel && task.thinkingLevel !== "default"
-						? (task.thinkingLevel as unknown as ConfiguredThinkingLevel)
-						: undefined,
-			});
-			live = this.#host.get(sessionId);
-			if (!live) throw new Error("session not adopted");
-			run.sessionId = sessionId;
-			task.state.lastSessionId = sessionId;
-			saveCronTasks(this.#cronTasks);
-			const finish = (status: CronStatus, error?: string): void => {
-				if (run.finishedAt !== undefined) return; // already settled (abort raced agent_end)
-				run.status = status;
-				run.finishedAt = Date.now();
-				run.error = error;
-				task.state.lastStatus = status;
-				task.state.lastError = error;
-				saveCronRuns(this.#cronRuns);
-				saveCronTasks(this.#cronTasks);
-				this.#cronStarting.delete(task.id);
-				this.#services.get<EventService>("events").broadcastCronsChanged();
-			};
-			const unsubscribe = live.agentSession.subscribe(e => {
-				if (e.type !== "agent_end") return;
-				unsubscribe();
-				// A failed run is marked by the agent's final assistant message
-				// (stopReason "aborted"/"error" + errorMessage); any other end
-				// — including toolUse chain terminations — completed normally.
-				const lastAssistant = [...e.messages].reverse().find(m => m.role === "assistant");
-				const stop = lastAssistant?.stopReason;
-				if (stop === "aborted" || stop === "error") {
-					finish("error", lastAssistant?.errorMessage || `agent run ${stop}`);
-				} else {
-					finish("success");
-				}
-			});
-			await live.agentSession.sendUserMessage(task.prompt);
-		} catch (err) {
-			run.status = "error";
-			run.finishedAt = Date.now();
-			run.error = err instanceof Error ? err.message : String(err);
-			task.state.lastStatus = "error";
-			task.state.lastError = run.error;
-			saveCronRuns(this.#cronRuns);
-			saveCronTasks(this.#cronTasks);
-			this.#cronStarting.delete(task.id);
-			this.#services.get<EventService>("events").broadcastCronsChanged();
 		}
 	}
 
@@ -3611,59 +3491,10 @@ export class DaemonServer {
 		return { rootDir, slug, dir: path.join(rootDir, slug) };
 	}
 
-	/**
-	 * Create/merge one scheduled task into the daemon-owned list and persist it
-	 * (issue #11). Shared by the `cron.upsert` RPC and the in-session
-	 * `schedule_task` tool — the daemon owns `#cronTasks` in memory, so a tool
-	 * writing crons.json directly would be clobbered by the next save.
-	 */
-	#upsertCronTask(task: CronTask): CronTask {
-		const now = Date.now();
-		const existing = task.id ? this.#cronTasks.find(x => x.id === task.id) : undefined;
-		const merged = mergeCronTask(existing, task, now, process.cwd());
-		if (existing) this.#cronTasks = this.#cronTasks.map(x => (x.id === existing.id ? merged : x));
-		else this.#cronTasks.push(merged);
-		saveCronTasks(this.#cronTasks);
-		this.#services.get<EventService>("events").broadcastCronsChanged();
-		return merged;
-	}
-
-	/** Bridge handed to the `schedule_task` tool on every session create.
-	 *  `sessionCwd` is that session's workspace, which owns every `cwd` this
-	 *  handle defaults — never the daemon's own launch directory (issue #30). */
+	/** Bridge handed to the `schedule_task` tool on every session create
+	 *  (P1 第十刀：实现归 ScheduleService，此处为薄委托）。 */
 	scheduledTaskHandle(sessionCwd: string): ScheduledTaskHandle {
-		// Resolve once, cross-platform-normalised: the GUI records projects
-		// with native separators, so a task stored as `D:/x` would never
-		// group under `D:\x` (issue #30, part 2).
-		const fallbackCwd = path.resolve(sessionCwd || process.cwd());
-		const resolveCwd = (raw: string | undefined): string => {
-			const t = raw?.trim();
-			// Blank means "the session's workspace" per the tool schema and the
-			// task-center placeholder — not the daemon's cwd.
-			return t ? path.resolve(t) : fallbackCwd;
-		};
-		return {
-			upsert: async input => {
-				const candidate = {
-					id: input.id ?? "",
-					name: input.name,
-					enabled: true,
-					schedule: input.schedule,
-					prompt: input.prompt,
-					cwd: resolveCwd(input.cwd),
-					...(input.model ? { model: input.model } : {}),
-					...(input.thinkingLevel ? { thinkingLevel: input.thinkingLevel } : {}),
-					state: { createdAt: Date.now() },
-				};
-				// Same validator the RPC path uses — a bad schedule must fail
-				// here with a clear message, not arm a task that never fires.
-				const check = validateCronTask(candidate);
-				if (!check.ok) throw new Error(check.error ?? "invalid schedule");
-				return this.#upsertCronTask(candidate as CronTask);
-			},
-			list: async () => this.#cronTasks,
-			defaultCwd: () => fallbackCwd,
-		};
+		return this.#services.get<ScheduleService>("schedule").taskHandle(sessionCwd);
 	}
 
 	/**
@@ -4036,7 +3867,7 @@ export class DaemonServer {
 				return this.#host.createSession(p);
 			}
 			case "session.list": {
-				const cronIds = this.#cronSessionIds();
+				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
 				return (await this.#host.knownSessions()).map(r => {
 					const live = this.#host.get(r.sessionId);
 					return {
@@ -4086,7 +3917,7 @@ export class DaemonServer {
 				// session list plus live activity, pending approvals (inline
 				// Allow/Deny in the tray menu) and usage — one round-trip
 				// per 5s poll, so the tray never fans out RPCs.
-				const cronIds = this.#cronSessionIds();
+				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
 				const sessions = (await this.#host.knownSessions()).map(r => ({
 					id: r.sessionId,
 					parentId: r.parentId,
@@ -4258,7 +4089,7 @@ export class DaemonServer {
 				// Cross-session tree (OMP /tree): sessions fork from a parent
 				// (parentId) into a hierarchy. Roots have no parent.
 				const rows = await this.#host.knownSessions();
-				const cronIds = this.#cronSessionIds();
+				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
 				const nodes = new Map<
 					string,
 					{
@@ -5206,80 +5037,26 @@ export class DaemonServer {
 				return this.#services.get<BoardService>("boards").save((params ?? {}) as { boards?: unknown });
 			}
 			case "cron.list": {
-				return { tasks: this.#cronTasks, runs: this.#cronRuns.slice(-20) };
+				// 实现归 ScheduleService（cron 状态机语义不变）。
+				return this.#services.get<ScheduleService>("schedule").list();
 			}
 			case "cron.upsert": {
-				const { task } = (params ?? {}) as { task?: unknown };
-				const check = validateCronTask(task);
-				if (!check.ok) throw new Error(`cron.upsert: ${check.error}`);
-				const merged = this.#upsertCronTask(task as CronTask);
-				return { tasks: this.#cronTasks, task: merged };
+				return this.#services.get<ScheduleService>("schedule").upsert(params ?? {});
 			}
 			case "cron.runs": {
-				// Per-task run history (cron.list only carries the global last
-				// 20): newest-first, bounded by the on-disk 100-run window.
-				const { id, limit } = (params ?? {}) as { id?: string; limit?: number };
-				const cap = Math.min(Math.max(limit ?? 50, 1), 100);
-				const runs = (id ? this.#cronRuns.filter(r => r.taskId === id) : this.#cronRuns).slice(-cap).reverse();
-				return { runs };
+				return this.#services.get<ScheduleService>("schedule").runs(params ?? {});
 			}
 			case "cron.nextRuns": {
-				// Editor preview: the daemon's own parser (timezone +
-				// idle-window semantics) so clients don't fork the logic.
-				const { schedule, count } = (params ?? {}) as { schedule?: CronSchedule; count?: number };
-				const check = validateCronSchedule(schedule);
-				if (!check.ok) throw new Error(`cron.nextRuns: ${check.error}`);
-				const runs = nextCronScheduleRuns(
-					schedule as CronSchedule,
-					Date.now(),
-					Math.min(Math.max(count ?? 4, 1), 10),
-				);
-				return { runs };
+				return this.#services.get<ScheduleService>("schedule").nextRuns(params ?? {});
 			}
 			case "cron.delete": {
-				const { id, cleanup } = (params ?? {}) as { id?: string; cleanup?: "none" | "archive" | "delete" };
-				if (!id) throw new Error("cron.delete: id required");
-				const task = this.#cronTasks.find(t => t.id === id);
-				this.#cronTasks = this.#cronTasks.filter(t => t.id !== id);
-				this.#cronStarting.delete(id);
-				saveCronTasks(this.#cronTasks);
-				// Task-scoped session disposal (GUI asks after the delete
-				// confirm dialog): "delete" removes each session the task ever
-				// ran — journal, materialized row AND the SDK transcript file
-				// (deleteSession now removes the transcript too), so the
-				// file-scan history cannot resurrect it.
-				if (cleanup === "delete" && task) {
-					const sessionIds = new Set<string>();
-					if (task.state.lastSessionId) sessionIds.add(task.state.lastSessionId);
-					for (const run of this.#cronRuns) {
-						if (run.taskId === task.id && run.sessionId) sessionIds.add(run.sessionId);
-					}
-					for (const sid of sessionIds) {
-						await this.#host.deleteSession(sid);
-					}
-					this.#cronRuns = this.#cronRuns.filter(r => r.taskId !== task.id);
-					saveCronRuns(this.#cronRuns);
-				}
-				this.#services.get<EventService>("events").broadcastCronsChanged();
-				return { tasks: this.#cronTasks };
+				return this.#services.get<ScheduleService>("schedule").deleteTask(params ?? {});
 			}
 			case "cron.toggle": {
-				const { id, enabled } = (params ?? {}) as { id?: string; enabled?: boolean };
-				const task = this.#cronTasks.find(t => t.id === id);
-				if (!task) throw new Error(`cron.toggle: unknown task "${id}"`);
-				task.enabled = enabled !== false;
-				task.state.nextRunAt = task.enabled ? (computeNextRun(task, Date.now()) ?? undefined) : undefined;
-				saveCronTasks(this.#cronTasks);
-				this.#services.get<EventService>("events").broadcastCronsChanged();
-				return { tasks: this.#cronTasks };
+				return this.#services.get<ScheduleService>("schedule").toggle(params ?? {});
 			}
 			case "cron.runNow": {
-				const { id } = (params ?? {}) as { id?: string };
-				const task = this.#cronTasks.find(t => t.id === id);
-				if (!task) throw new Error(`cron.runNow: unknown task "${id}"`);
-				void this.#cronRun(task);
-				this.#services.get<EventService>("events").broadcastCronsChanged();
-				return { ok: true, tasks: this.#cronTasks };
+				return this.#services.get<ScheduleService>("schedule").runNow(params ?? {});
 			}
 			case "widget.schema": {
 				// 实现归 BoardService（agent 侧 widget schema parity 不变）。
@@ -5728,17 +5505,15 @@ export class DaemonServer {
 			}
 			case "remote.hostAdd": {
 				// 实现归 RemoteService（SSH 远程主机面语义不变）。
-				return this.#services
-					.get<RemoteService>("remote")
-					.hostAdd(
-						(params ?? {}) as {
-							name?: unknown;
-							host?: unknown;
-							username?: unknown;
-							port?: unknown;
-							keyPath?: unknown;
-						},
-					);
+				return this.#services.get<RemoteService>("remote").hostAdd(
+					(params ?? {}) as {
+						name?: unknown;
+						host?: unknown;
+						username?: unknown;
+						port?: unknown;
+						keyPath?: unknown;
+					},
+				);
 			}
 			case "remote.connect": {
 				// 实现归 RemoteService（SSH 远程主机面语义不变）。
