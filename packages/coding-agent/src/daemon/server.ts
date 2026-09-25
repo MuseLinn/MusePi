@@ -481,6 +481,7 @@ import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan } from "./journal";
+import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
 import { EventService } from "./services/event-service";
 import { FileService } from "./services/file-service";
@@ -3061,6 +3062,11 @@ export class DaemonServer {
 				nextSeq: () => ++this.#eventSeq,
 				emit: (conn, envelope) => this.#host.emitEvent(conn as DaemonConnection, envelope),
 				settings: () => this.#settingsForRpc().catch(() => null),
+			}),
+		);
+		this.#services.register(
+			new ApprovalService({
+				get: sessionId => this.#host.get(sessionId),
 			}),
 		);
 		this.#cronTasks = loadCronTasks();
@@ -9590,35 +9596,20 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "tool.approve": {
-				// `note` = the operator's free-text reason (TUI ask-dialog "✎
-				// note" parity). On a denial it reaches the agent as the
-				// rejection reason; on an approval it is recorded only.
-				const p = (params ?? {}) as { sessionId: string; requestId: string; note?: string };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
-				if (!live.approvals.resolve(p.requestId, true, note))
-					throw new Error(`Unknown approval request: ${p.requestId}`);
-				return { ok: true };
+				// 实现归 ApprovalService（note trim 与未知请求抛错语义不变）。
+				return this.#services
+					.get<ApprovalService>("approvals")
+					.approve((params ?? {}) as { sessionId: string; requestId: string; note?: string });
 			}
 			case "tool.deny": {
-				const p = (params ?? {}) as { sessionId: string; requestId: string; note?: string };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				const note = typeof p.note === "string" && p.note.trim() ? p.note.trim() : undefined;
-				if (!live.approvals.resolve(p.requestId, false, note))
-					throw new Error(`Unknown approval request: ${p.requestId}`);
-				return { ok: true };
+				return this.#services
+					.get<ApprovalService>("approvals")
+					.deny((params ?? {}) as { sessionId: string; requestId: string; note?: string });
 			}
 			case "session.askAnswer": {
-				// Answer a pending ask card (TUI ask parity): select mode takes
-				// one option label, input mode the custom text; null cancels.
-				const p = (params ?? {}) as { sessionId: string; requestId: string; answer: string | null };
-				const live = this.#host.get(p.sessionId);
-				if (!live) throw new Error(`Unknown session: ${p.sessionId}`);
-				if (!live.approvals.resolveAsk(p.requestId, p.answer ?? null))
-					throw new Error(`Unknown ask request: ${p.requestId}`);
-				return { ok: true };
+				return this.#services
+					.get<ApprovalService>("approvals")
+					.answer((params ?? {}) as { sessionId: string; requestId: string; answer: string | null });
 			}
 			case "usage.reports": {
 				// 委托 UsageService（P1 服务抽取；原实现整体搬移至

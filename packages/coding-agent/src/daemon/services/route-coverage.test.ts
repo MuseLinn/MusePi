@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ViewStore } from "../view-store";
+import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
 import { EventService } from "./event-service";
 import { FileService } from "./file-service";
@@ -70,6 +71,8 @@ function buildRegistry(): HostServices {
 			settings: async () => null,
 		}),
 	);
+	// ApprovalService 只认领路由（本测试不应答任何审批），stub 掉会话访问。
+	services.register(new ApprovalService({ get: () => undefined }));
 	return services;
 }
 
