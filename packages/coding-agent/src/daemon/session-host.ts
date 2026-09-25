@@ -1418,11 +1418,14 @@ export class DaemonSessionHost {
 		// 头读的 —— 于是从空态 chip 选"设计模式"进的会话 modeId 恒为
 		// undefined,session.modes 返回 null,Composer 的 design 风格 chip
 		// 永远不显示。这里补 live + 快照头两级,兼顾当次会话与重激活。
+		// schedulePersist 只在首个事件后才落盘:无 modeId 的会话若不在创建时
+		// upsert,knownSessions(→ ViewStore.list)在首个事件前看不到它——出现
+		// session.create 成功而 session.list 缺行的不一致(冒烟 e2e 实测复现)。
+		// 统一先 upsert 一次;modeId 另需补写会话头(persistHeaderPatch 的
+		// load() 依赖该行已存在)。
+		this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
 		if (params.modeId) {
 			live.modeId = params.modeId;
-			// schedulePersist 只在首个事件后才落盘,这里先 upsert 一次,
-			// 否则 persistHeaderPatch 的 load() 拿到空、写入静默失败。
-			this.#store.upsert(live.sessionId, live.view.snapshot(), parentId);
 			this.persistHeaderPatch(live.sessionId, { modeId: params.modeId });
 		}
 		return { sessionId: live.sessionId };
