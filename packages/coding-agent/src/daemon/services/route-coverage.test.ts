@@ -8,6 +8,7 @@ import { EventService } from "./event-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
+import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
 
@@ -60,6 +61,13 @@ function buildRegistry(): HostServices {
 		new FileService({
 			fallbackCwd: () => undefined,
 			ensureFileIndex: () => ({ search: () => [] }) as never,
+		}),
+	);
+	services.register(
+		new TerminalService({
+			nextSeq: () => 0,
+			emit: () => {},
+			settings: async () => null,
 		}),
 	);
 	return services;

@@ -485,6 +485,7 @@ import { BoardService } from "./services/board-service";
 import { EventService } from "./services/event-service";
 import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
+import { TerminalService } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
@@ -3055,6 +3056,13 @@ export class DaemonServer {
 				ensureFileIndex: () => host.ensureFileIndex(),
 			}),
 		);
+		this.#services.register(
+			new TerminalService({
+				nextSeq: () => ++this.#eventSeq,
+				emit: (conn, envelope) => this.#host.emitEvent(conn as DaemonConnection, envelope),
+				settings: () => this.#settingsForRpc().catch(() => null),
+			}),
+		);
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -3429,9 +3437,6 @@ export class DaemonServer {
 	>();
 	/** Event sequence for non-session (provider) envelopes. */
 	#eventSeq = 0;
-
-	/** Live pty bridges keyed by terminal id (bridge process owns node-pty). */
-	#terminals = new Map<string, { write(msg: unknown): Promise<void>; dispose(): void }>();
 
 	/** Clients subscribed to global-pause broadcasts (daemon.pauseStatus
 	 *  subscribes; dead sockets are dropped lazily inside broadcast). */
@@ -3840,106 +3845,6 @@ export class DaemonServer {
 			}
 		}
 	}
-
-	/** Spawn a terminal and wire its output to the caller.
-	 * Primary backend: bun-pty runs natively inside this Bun daemon (no
-	 * extra process). If that fails (platform/build), fall back to the
-	 * node pty-bridge child. Shell/env handling mirrors opencode:
-	 * $SHELL → platform default, login shell for bash/zsh/sh/dash/ksh,
-	 * TERM/COLORTERM forced. */
-	async #openTerminal(cwd: string, cols: number, rows: number, conn: DaemonConnection): Promise<string> {
-		const path = await import("node:path");
-		const fs = await import("node:fs");
-		const id = `term-${++this.#terminalSeq}`;
-		// Resolve the shell + env exactly as the bridge would.
-		const platform = process.platform;
-		const shell = process.env.SHELL || (platform === "win32" ? "powershell.exe" : "bash");
-		const base = path.basename(shell).toLowerCase();
-		const args = ["bash", "zsh", "sh", "dash", "ksh"].includes(base) ? ["-l"] : [];
-		let realCwd = cwd;
-		try {
-			if (!realCwd || !fs.statSync(realCwd).isDirectory()) realCwd = process.env.HOME || "/";
-		} catch {
-			realCwd = process.env.HOME || "/";
-		}
-		const env: Record<string, string> = {
-			...process.env,
-			TERM: "xterm-256color",
-			COLORTERM: "truecolor",
-			SHELL: shell,
-			COLUMNS: String(cols),
-			LINES: String(rows),
-			// GUI-spawned daemons inherit Electron/node-child artifacts that
-			// would leak into every pty shell (openchamber parity):
-			// ELECTRON_RUN_AS_NODE turns `node`/`npx` into Electron's node,
-			// NODE_CHANNEL_FD points at a dead IPC fd, BASH_ENV/ENV silently
-			// alter shell startup. APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP stops
-			// the "install command line developer tools" dialog from a pty
-			// nobody can answer (proma parity); GIT_TERMINAL_PROMPT keeps git
-			// from hanging on credentials.
-			APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP: "1",
-			GIT_TERMINAL_PROMPT: "0",
-		};
-		for (const k of [
-			"ELECTRON_RUN_AS_NODE",
-			"NODE_CHANNEL_FD",
-			"BASH_ENV",
-			"BASH_XTRACEFD",
-			"ENV",
-			"ARGV0",
-		] as const) {
-			delete env[k];
-		}
-		if (platform === "win32") {
-			env.LC_ALL = "C.UTF-8";
-			env.LC_CTYPE = "C.UTF-8";
-			env.LANG = "C.UTF-8";
-		}
-
-		// Resolve provider from manifest seam > settings.raw > default "auto".
-		const { getTerminalProvider, resolveTerminalProvider } = await import("./terminal-provider.ts");
-		const settings = await this.#settingsForRpc().catch(() => null);
-		const manifestProvider = await (async () => {
-			try {
-				const { getSessionState } = await import("../assembly/index.ts");
-				return getSessionState().manifest?.seams.terminal?.provider ?? null;
-			} catch {
-				return null;
-			}
-		})();
-		const provider = getTerminalProvider(
-			resolveTerminalProvider(settings ?? ({ getRaw: () => undefined } as never), manifestProvider),
-		);
-
-		// Wrap the provider handle to emit daemon events.
-		const handle = await provider.open(realCwd, cols, rows, shell, args, env);
-		const entry = {
-			async write(msg: unknown): Promise<void> {
-				const m = msg as { method?: string; params?: Record<string, unknown> };
-				if (m.method === "input") handle.write(String(m.params?.data ?? ""));
-				else if (m.method === "resize")
-					handle.resize(Number(m.params?.cols) || cols, Number(m.params?.rows) || rows);
-				else if (m.method === "close") handle.dispose();
-			},
-			dispose(): void {
-				handle.dispose();
-			},
-		};
-		handle.onData(d =>
-			this.#host.emitEvent(conn, { kind: "terminal-output", seq: ++this.#eventSeq, payload: { id, data: d } }),
-		);
-		handle.onExit(code => {
-			this.#host.emitEvent(conn, {
-				kind: "terminal-exit",
-				seq: ++this.#eventSeq,
-				payload: { id, code: code ?? 0 },
-			});
-		});
-		this.#terminals.set(id, entry);
-		return id;
-	}
-
-	#terminalSeq = 0;
 
 	/** Resolved settings for debug report bundles (TUI #getResolvedSettings
 	 *  parity — the daemon has no TUI context, so the AgentSession carries
@@ -7177,36 +7082,23 @@ export class DaemonServer {
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };
 			}
 			case "terminal.open": {
-				// Interactive terminal backend: a node pty-bridge child hosts
-				// node-pty (posix_spawnp is not Bun-hostable); output streams
-				// back to this connection as terminal-output envelopes.
-				const p = (params ?? {}) as { cwd?: string; cols?: number; rows?: number };
-				const id = await this.#openTerminal(p.cwd ?? "", p.cols ?? 100, p.rows ?? 30, conn);
-				return { id };
+				// 实现归 TerminalService（pty 生命周期语义不变）。
+				return this.#services
+					.get<TerminalService>("terminal")
+					.open((params ?? {}) as { cwd?: string; cols?: number; rows?: number }, conn);
 			}
 			case "terminal.input": {
-				const p = (params ?? {}) as { id: string; data?: string };
-				const bridge = this.#terminals.get(p.id);
-				if (!bridge) throw new Error(`Unknown terminal: ${p.id}`);
-				await bridge.write({ method: "input", id: p.id, params: { data: p.data ?? "" } });
-				return { ok: true };
+				return this.#services
+					.get<TerminalService>("terminal")
+					.input((params ?? {}) as { id: string; data?: string });
 			}
 			case "terminal.resize": {
-				const p = (params ?? {}) as { id: string; cols?: number; rows?: number };
-				const bridge = this.#terminals.get(p.id);
-				if (!bridge) throw new Error(`Unknown terminal: ${p.id}`);
-				await bridge.write({ method: "resize", id: p.id, params: { cols: p.cols ?? 100, rows: p.rows ?? 30 } });
-				return { ok: true };
+				return this.#services
+					.get<TerminalService>("terminal")
+					.resize((params ?? {}) as { id: string; cols?: number; rows?: number });
 			}
 			case "terminal.close": {
-				const p = (params ?? {}) as { id: string };
-				const bridge = this.#terminals.get(p.id);
-				if (bridge) {
-					await bridge.write({ method: "close", id: p.id, params: {} });
-					bridge.dispose();
-					this.#terminals.delete(p.id);
-				}
-				return { ok: true };
+				return this.#services.get<TerminalService>("terminal").close((params ?? {}) as { id: string });
 			}
 			case "agents.list": {
 				// Agent Control Center data (TUI /agents parity): the live
