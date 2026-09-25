@@ -481,8 +481,8 @@ import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type PendingAsk } from "./approval-bridge";
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
-import { getFxRates } from "./fx-rates";
 import { AppendJournal, catchupPlan } from "./journal";
+import { BoardService } from "./services/board-service";
 import { EventService } from "./services/event-service";
 import { HostServices } from "./services/registry";
 import { UsageService } from "./services/usage-service";
@@ -3118,6 +3118,7 @@ export class DaemonServer {
 			}),
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
+		this.#services.register(new BoardService());
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -5354,27 +5355,11 @@ export class DaemonServer {
 				return errors.length > 0 ? { valid: false, errors } : { valid: true };
 			}
 			case "board.list": {
-				// Boards persist on the daemon (~/.musepi/boards/boards.json)
-				// so the GUI, the agent and other windows share one store
-				// (localStorage was the fallback for the offline GUI).
-				const { readBoards } = await import("./boards");
-				return { boards: readBoards() };
+				// 实现归 BoardService（boards 存储语义不变）。
+				return this.#services.get<BoardService>("boards").list();
 			}
 			case "board.save": {
-				const { boards } = (params ?? {}) as { boards?: unknown };
-				const { readBoards, validateBoards, writeBoards } = await import("./boards");
-				const { WIDGET_TYPES } = await import("../tools/widget");
-				const check = validateBoards(boards, WIDGET_TYPES);
-				if (!check.ok) throw new Error(`board.save: ${check.error}`);
-				const list = boards as Array<{ id?: string; builtin?: boolean }>;
-				// Builtin examples are protected: a full-list overwrite from
-				// any client must not drop them (agents can't modify them, so
-				// they always come back factory-fresh).
-				const current = readBoards();
-				const currentBuiltin = current.filter(b => b.builtin === true && !list.some(x => x.id === b.id));
-				if (currentBuiltin.length > 0) writeBoards([...(boards as never[]), ...(currentBuiltin as never[])]);
-				else writeBoards(boards as never);
-				return { ok: true, boards: readBoards() };
+				return this.#services.get<BoardService>("boards").save((params ?? {}) as { boards?: unknown });
 			}
 			case "cron.list": {
 				return { tasks: this.#cronTasks, runs: this.#cronRuns.slice(-20) };
@@ -5453,28 +5438,12 @@ export class DaemonServer {
 				return { ok: true, tasks: this.#cronTasks };
 			}
 			case "widget.schema": {
-				// Agent-facing widget schema (widget tool parity): types,
-				// fields, defaults and card tones so agents can author board
-				// widgets without hardcoding shapes.
-				const { WIDGET_TYPES } = await import("../tools/widget");
-				const { WIDGET_TONES } = await import("../tools/widget");
-				return { types: WIDGET_TYPES, tones: WIDGET_TONES };
+				// 实现归 BoardService（agent 侧 widget schema parity 不变）。
+				return this.#services.get<BoardService>("boards").schema();
 			}
 			case "widget.data": {
-				// Daemon-side data-source proxy (docs/archive/board-dashboard.md §4
-				// 数据源代理): widgets never fetch the network directly — the
-				// daemon fetches each feed once per TTL and caches it
-				// in-process. First feed: FX rates (open.er-api.com, base CNY).
-				// Returns normalized { rates, base, updatedAt } or a typed
-				// { error } (soft error — mirrors the git.*/notes.* result
-				// error convention rather than throwing into JSON-RPC).
-				const p = (params ?? {}) as { feed?: unknown; base?: unknown };
-				const feed = typeof p.feed === "string" ? p.feed : "";
-				if (feed !== "fx-rates") return { error: `widget.data: unknown feed "${feed}"` };
-				const base = typeof p.base === "string" && /^[A-Za-z]{3}$/.test(p.base) ? p.base.toUpperCase() : "CNY";
-				const rates = await getFxRates(base);
-				if (rates === null) return { error: "widget.data: FX feed unavailable" };
-				return { rates, base, updatedAt: Date.now() };
+				// Daemon 侧数据源代理归 BoardService（fx-rates 软错误约定不变）。
+				return this.#services.get<BoardService>("boards").data(params ?? {});
 			}
 			case "git.log": {
 				// Recent commit history for the right-pane git view.

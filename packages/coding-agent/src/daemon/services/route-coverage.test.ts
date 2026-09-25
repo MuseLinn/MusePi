@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ViewStore } from "../view-store";
+import { BoardService } from "./board-service";
 import { EventService } from "./event-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
@@ -53,6 +54,7 @@ function buildRegistry(): HostServices {
 	// 用临时目录避免碰默认 journal 目录。
 	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));
 	services.register(new ViewStoreService(store));
+	services.register(new BoardService());
 	return services;
 }
 

@@ -20,8 +20,6 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"artifact.list",
 	"artifact.read",
 	"autoresearch.status",
-	"board.list",
-	"board.save",
 	"browser.clearAll",
 	"browser.clearCache",
 	"browser.endpoint",
@@ -262,8 +260,6 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"tray.state",
 	"tts.synthesize",
 	"updates.check",
-	"widget.data",
-	"widget.schema",
 	"workspace.tree",
 	"worktree.create",
 ];
