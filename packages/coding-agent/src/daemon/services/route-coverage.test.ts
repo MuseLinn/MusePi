@@ -10,6 +10,7 @@ import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
+import { MarketplaceService } from "./marketplace-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
@@ -105,6 +106,17 @@ function buildRegistry(): HostServices {
 			cwd: () => "",
 			webUrl: () => null,
 			webPortFile: () => "",
+			onChanged: () => {},
+		}),
+	);
+	// MarketplaceService：stub 化宿主访问，仅参与路由表。
+	services.register(
+		new MarketplaceService({
+			cwd: () => "",
+			settings: () => null,
+			extensionEntries: async () => [],
+			invalidateExtensionsCache: () => {},
+			invalidatePluginCaches: () => {},
 			onChanged: () => {},
 		}),
 	);

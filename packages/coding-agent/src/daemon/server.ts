@@ -48,7 +48,6 @@ import type {
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import { YAML } from "bun";
-import { MANAGED_SKILLS_PROVIDER_ID } from "../autolearn/managed-skills";
 import { reset as resetCapabilities } from "../capability";
 import {
 	ChannelCommandHandler,
@@ -82,11 +81,7 @@ import { type CpuProfile, generateHeapSnapshotData, type ProfilerSession, startC
 import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-debugger";
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
-import {
-	clearPluginRootsAndCaches,
-	resolveActiveProjectRegistryPath,
-	resolveOrDefaultProjectRegistryPath,
-} from "../discovery/helpers";
+import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
 import type { CustomTool } from "../extensibility/custom-tools/types";
 import { buildSkillPromptMessage, parseSkillInvocation, type Skill } from "../extensibility/skills";
 import { type FileSlashCommand, loadSlashCommands } from "../extensibility/slash-commands";
@@ -470,6 +465,7 @@ import { BrowserService } from "./services/browser-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
+import { MarketplaceService } from "./services/marketplace-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
@@ -506,19 +502,6 @@ export interface DaemonOptions {
  * rename — both crash the process.
  */
 const SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
-
-/** One skill entry served by skills.list (scan + enablement state). */
-interface SkillListItem {
-	name: string;
-	description: string;
-	filePath: string;
-	source: string;
-	hide: boolean;
-	/** Virtual skills declared by extensions (registerSkill) carry their
-	 *  markdown body here instead of a file (filePath === ""). */
-	content?: string;
-	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
-}
 
 /** Minimal typed view over the live AgentSession's mode state. */
 interface ModeSessionLike {
@@ -3057,6 +3040,17 @@ export class DaemonServer {
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);
+		this.#services.register(
+			new MarketplaceService({
+				cwd: () => this.#host.cwd(),
+				settings: () => this.#host.settings(),
+				extensionEntries: () => this.#services.get<ExtensionService>("extensions").getExtensions(),
+				invalidateExtensionsCache: () =>
+					this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache(),
+				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
+				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
+			}),
+		);
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.
@@ -3343,60 +3337,6 @@ export class DaemonServer {
 	 *  subscribes; dead sockets are dropped lazily inside broadcast). */
 	#pauseConns = new Set<DaemonConnection>();
 
-	/** TTL cache of the marketplace catalog browse (settings → marketplace
-	 *  tab). Combines {@link MarketplaceManager.listAvailablePlugins}
-	 *  output with per-plugin `installed`/`installedScope` flags so the GUI
-	 *  renders Install/Remove affordances without a second round-trip.
-	 *  Busted on install/remove mutations. */
-	#marketplaceCache: {
-		at: number;
-		entries: {
-			name: string;
-			marketplace: string;
-			version?: string;
-			description?: string;
-			author?: string;
-			category?: string;
-			tags?: readonly string[];
-			homepage?: string;
-			repository?: string;
-			license?: string;
-			icon?: string;
-			installed: boolean;
-			installedScope: "user" | "project" | null;
-		}[];
-	} | null = null;
-
-	/** Build a `MarketplaceManager` wired to the host's cwd and the global
-	 *  registry/cache dirs. Reused by the marketplace RPCs so the path
-	 *  resolution stays consistent with the TUI /marketplace flow. */
-	async #buildMarketplaceManager() {
-		const m = await import("../extensibility/plugins/marketplace");
-		const {
-			getInstalledPluginsRegistryPath,
-			getMarketplacesCacheDir,
-			getMarketplacesRegistryPath,
-			getPluginsCacheDir,
-			MarketplaceManager,
-		} = m;
-		return new MarketplaceManager({
-			marketplacesRegistryPath: getMarketplacesRegistryPath(),
-			installedRegistryPath: getInstalledPluginsRegistryPath(),
-			projectInstalledRegistryPath: await resolveOrDefaultProjectRegistryPath(this.#host.cwd()),
-			marketplacesCacheDir: getMarketplacesCacheDir(),
-			pluginsCacheDir: getPluginsCacheDir(),
-			clearPluginRootsCache: clearPluginRootsAndCaches,
-		});
-	}
-
-	/** TTL cache of the skills scan (settings → skills tab + slash
-	 *  completion). */
-	#skillsCache: {
-		at: number;
-		skills: SkillListItem[];
-		warnings: string[];
-	} | null = null;
-
 	#extensionWatcherStarted = false;
 	#extensionWatcherTimer: Timer | null = null;
 
@@ -3425,9 +3365,9 @@ export class DaemonServer {
 		this.#extensionWatcherTimer = setTimeout(() => {
 			this.#extensionWatcherTimer = null;
 			this.#services.get<ExtensionService>("extensions").invalidateCaches();
-			// 扩展声明的技能经 #getSkills 合并:扩展源变更时一并失效,
-			// 否则虚拟技能列表最多滞后 10s TTL。
-			this.#skillsCache = null;
+			// 扩展声明的技能经 MarketplaceService.getSkills 合并:扩展源变更
+			// 时一并失效,否则虚拟技能列表最多滞后 10s TTL。
+			this.#services.get<MarketplaceService>("marketplace").invalidateSkillsCache();
 			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
 			this.#services.get<EventService>("events").broadcastExtensionsChanged();
 			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
@@ -3569,55 +3509,6 @@ export class DaemonServer {
 			const bad = await validateExtensionComponents(ext);
 			for (const c of bad) errors.push(`扩展 "${id}" 组件 "${c.moduleUrl}" 编译失败: ${c.error}`);
 		}
-	}
-
-	/** TTL-refreshed skills scan shared by skills.list and commands.list. */
-	async #getSkills(): Promise<SkillListItem[]> {
-		if (!this.#skillsCache || Date.now() - this.#skillsCache.at > 10_000) {
-			const { discoverSkills } = await import("../sdk");
-			const { skills, warnings } = await discoverSkills(this.#host.cwd());
-			const scanned = skills.map(s => ({
-				name: s.name,
-				description: s.description,
-				filePath: s.filePath,
-				source: s.source,
-				hide: s.hide === true,
-				_source: s._source,
-			}));
-			// 扩展声明的虚拟技能(registerSkill):与文件扫描技能合并展示。
-			// 无 backing 文件(filePath=""),
-			// content 随行携带供 skills.read 直接返回;扩展卸载/禁用后
-			// 自动消失(collectExtensionSkills 按 active 过滤)。
-			const { collectExtensionSkills } = await import("./extension-artifact-compiler");
-			const extSkills = await collectExtensionSkills(
-				(await this.#services.get<ExtensionService>("extensions").getExtensions()).map(e => ({
-					kind: e.kind,
-					state: e.state,
-					path: e.path,
-				})),
-				this.#host.cwd(),
-			);
-			const virtual = extSkills.map(s => ({
-				name: s.name,
-				description: s.description,
-				filePath: "",
-				source: "extension",
-				hide: s.hide === true,
-				content: s.content,
-				_source: {
-					provider: "extension",
-					providerName: s.extensionPath,
-					path: s.extensionPath,
-					level: "user" as const,
-				},
-			}));
-			this.#skillsCache = {
-				at: Date.now(),
-				skills: [...scanned, ...virtual],
-				warnings: warnings.map(w => `${w.skillPath}: ${w.message}`),
-			};
-		}
-		return this.#skillsCache.skills;
 	}
 
 	/** Broadcast the process-global freeze state to subscribed clients
@@ -4245,201 +4136,38 @@ export class DaemonServer {
 				return this.#services.get<ExtensionService>("extensions").setPluginEnabled(params ?? {});
 			}
 			case "marketplace.list": {
-				// Marketplace catalog + install state for the GUI store panel.
-				// Mirrors TUI /marketplace discover output, plus an
-				// installed/installedScope pair derived from the merged
-				// installed-plugins registry so the card grid can flip its
-				// "Install"/"Remove" affordance without a second RPC.
-				// TTL-cached so flipping the marketplace tab doesn't rewalk
-				// every catalog; the install/remove handlers below bust it.
-				if (!this.#marketplaceCache || Date.now() - this.#marketplaceCache.at > 10_000) {
-					const m = await import("../extensibility/plugins/marketplace");
-					const { getMarketplacesRegistryPath, listMarketplaceEntries, readMarketplacesRegistry } = m;
-					const manager = await this.#buildMarketplaceManager();
-					const registry = await readMarketplacesRegistry(getMarketplacesRegistryPath());
-					const catalogs = new Map<string, Awaited<ReturnType<typeof manager.listAvailablePlugins>>>();
-					for (const mkt of registry.marketplaces) {
-						const plugins = await manager.listAvailablePlugins(mkt.name);
-						catalogs.set(mkt.name, plugins);
-					}
-					const userReg = await m.readInstalledPluginsRegistry(m.getInstalledPluginsRegistryPath());
-					const projectPath = await resolveOrDefaultProjectRegistryPath(this.#host.cwd());
-					const projectReg = projectPath ? await m.readInstalledPluginsRegistry(projectPath) : null;
-					const entries = listMarketplaceEntries({
-						registry,
-						catalogs,
-						userRegistry: userReg,
-						projectRegistry: projectReg,
-					});
-					this.#marketplaceCache = { at: Date.now(), entries };
-				}
-				return { entries: this.#marketplaceCache.entries };
+				// 实现归 MarketplaceService（marketplace/skills 面语义不变）。
+				return this.#services.get<MarketplaceService>("marketplace").list();
 			}
 			case "marketplace.install": {
-				// Install a marketplace plugin (GUI store → Install button).
-				// Busts caches so the next list reflects the new state.
-				const p = (params ?? {}) as { name?: string; marketplace?: string; scope?: "user" | "project" };
-				if (!p.name) throw new Error("marketplace.install: name required");
-				if (!p.marketplace) throw new Error("marketplace.install: marketplace required");
-				const manager = await this.#buildMarketplaceManager();
-				await manager.installPlugin(p.name, p.marketplace, {
-					scope: p.scope ?? "user",
-				});
-				this.#marketplaceCache = null;
-				this.#services.get<ExtensionService>("extensions").invalidatePluginCaches();
-				return { ok: true, installed: true, scope: p.scope ?? "user" };
+				return this.#services.get<MarketplaceService>("marketplace").install(params ?? {});
 			}
 			case "marketplace.remove": {
-				// Remove an installed marketplace plugin (GUI store → Remove).
-				// 拼 pluginId = "name@marketplace" 给 manager.uninstallPlugin。
-				const p = (params ?? {}) as { name?: string; marketplace?: string; scope?: "user" | "project" };
-				if (!p.name) throw new Error("marketplace.remove: name required");
-				if (!p.marketplace) throw new Error("marketplace.remove: marketplace required");
-				const { buildPluginId } = await import("../extensibility/plugins/marketplace");
-				const manager = await this.#buildMarketplaceManager();
-				await manager.uninstallPlugin(buildPluginId(p.name, p.marketplace), p.scope);
-				this.#marketplaceCache = null;
-				this.#services.get<ExtensionService>("extensions").invalidatePluginCaches();
-				return { ok: true };
+				return this.#services.get<MarketplaceService>("marketplace").remove(params ?? {});
 			}
 			case "skills.list": {
-				// Session-independent skill discovery (settings → skills tab).
-				const skills = await this.#getSkills();
-				// Per-skill enablement is computed at response time (NOT
-				// cached): skills.ignoredSkills is what the agent loop applies
-				// (loadSkills glob patterns), and the toggles below write it.
-				const settings = this.#host.settings();
-				const ignored = (settings?.get("skills.ignoredSkills") ?? []) as string[];
-				const list = skills.map(s => ({
-					...s,
-					ignored: ignored.some(pattern => new Bun.Glob(pattern).match(s.name)),
-				}));
-				return { skills: list, warnings: this.#skillsCache!.warnings };
+				return this.#services.get<MarketplaceService>("marketplace").listSkills();
 			}
 			case "skills.delete": {
-				// Remove a user-level skill's SKILL.md. Refuses builtin /
-				// musepi-managed skills (auto-learn) and extension-declared
-				// virtual skills — the GUI mirrors this guard.
-				const p = (params ?? {}) as { name: string };
-				const skills = await this.#getSkills();
-				const skill = skills.find(s => s.name === p.name);
-				if (!skill) throw new Error(`unknown skill: ${p.name}`);
-				const src = skill._source;
-				if (
-					skill.filePath === "" ||
-					src?.level !== "user" ||
-					src.provider === MANAGED_SKILLS_PROVIDER_ID ||
-					src.provider === "native" ||
-					src.provider === "extension"
-				) {
-					throw new Error("only user-level file skills can be deleted");
-				}
-				const { rm } = await import("node:fs/promises");
-				await rm(skill.filePath, { force: true });
-				this.#skillsCache = null;
-				// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
-				// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
-				this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache();
-				this.#services.get<EventService>("events").broadcastExtensionsChanged();
-				return { ok: true };
+				return this.#services.get<MarketplaceService>("marketplace").deleteSkill(params ?? {});
 			}
 			case "skills.install": {
-				// Capability-center install flow (issue follow-up: skills were
-				// list/read/delete only — the user had no way to add one from the
-				// GUI). Installs into the user-level skills dir; local-path sources
-				// stay disabled (parseGitUrl is the fetch-and-write gate).
-				const p = (params ?? {}) as { url?: string; subdir?: string; name?: string; overwrite?: boolean };
-				if (!p.url) throw new Error("url is required (https git URL or owner/repo)");
-				const { installSkillFromGit } = await import("../skills/install");
-				const result = await installSkillFromGit({
-					url: p.url,
-					subdir: p.subdir,
-					name: p.name,
-					overwrite: p.overwrite,
-					destRoot: path.join(getAgentDir(), "skills"),
-				});
-				this.#skillsCache = null;
-				this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache();
-				this.#services.get<EventService>("events").broadcastExtensionsChanged();
-				return { ok: true, name: result.name, dir: result.dir };
+				return this.#services.get<MarketplaceService>("marketplace").installSkill(params ?? {});
 			}
 			case "skills.read": {
-				// SKILL.md source for the skill detail pane (OpenCode parity).
-				const p = (params ?? {}) as { name: string };
-				const skills = await this.#getSkills();
-				const skill = skills.find(s => s.name === p.name);
-				if (!skill) throw new Error(`unknown skill: ${p.name}`);
-				// 扩展声明的虚拟技能:无 backing 文件,content 随行携带。
-				if (skill.filePath === "" && skill.content !== undefined) {
-					const content = skill.content;
-					return {
-						name: skill.name,
-						filePath: "",
-						content: content.length > 64 * 1024 ? `${content.slice(0, 64 * 1024)}\n… (truncated)` : content,
-					};
-				}
-				const { readFile } = await import("node:fs/promises");
-				const content = await readFile(skill.filePath, "utf8");
-				return {
-					name: skill.name,
-					filePath: skill.filePath,
-					content: content.length > 64 * 1024 ? `${content.slice(0, 64 * 1024)}\n… (truncated)` : content,
-				};
+				return this.#services.get<MarketplaceService>("marketplace").readSkill(params ?? {});
 			}
 			case "skills.marketplace.query": {
-				// Remote skill catalog (capability center → 发现). Public
-				// SkillHub + skills.sh; no registry entry required, which is
-				// why this is NOT routed through plugins/marketplace (that one
-				// only serves user-added plugin sources and was empty).
-				const p = (params ?? {}) as {
-					keyword?: string;
-					category?: string;
-					sources?: ("skillhub" | "skills.sh")[];
-					sortBy?: "downloads" | "stars" | "installs";
-					pageSize?: number;
-					/** 1-indexed; the grid pages with it (SkillHub rejects 0). */
-					page?: number;
-				};
-				const { querySkillMarket } = await import("../skills/marketplace-client");
-				return await querySkillMarket({
-					keyword: p.keyword,
-					category: p.category,
-					sources: p.sources,
-					sortBy: p.sortBy,
-					pageSize: p.pageSize,
-					page: p.page,
-				});
+				return this.#services.get<MarketplaceService>("marketplace").querySkillMarket(params ?? {});
 			}
 			case "skills.marketplace.categories": {
-				// Chip row source (SkillHub first-level categories).
-				const { listSkillHubCategories } = await import("../skills/marketplace-client");
-				try {
-					return { categories: await listSkillHubCategories(), failures: [] as string[] };
-				} catch (e: unknown) {
-					// A dead catalog must not blank the chips: fall back to
-					// empty and let the UI show the failure line.
-					return {
-						categories: [],
-						failures: [e instanceof Error ? e.message : String(e)],
-					};
-				}
+				return this.#services.get<MarketplaceService>("marketplace").skillCategories();
 			}
 			case "skills.marketplace.featured": {
-				// 精选 (design spec frame 01): the ranked top of the catalog.
-				const p = (params ?? {}) as { pageSize?: number };
-				const { topSkillHub } = await import("../skills/marketplace-client");
-				try {
-					return { entries: await topSkillHub(p.pageSize ?? 8), failures: [] as string[] };
-				} catch (e: unknown) {
-					return { entries: [], failures: [e instanceof Error ? e.message : String(e)] };
-				}
+				return this.#services.get<MarketplaceService>("marketplace").featuredSkills(params ?? {});
 			}
 			case "skills.marketplace.detail": {
-				// Drawer detail (frame 03): version + file tree + audit.
-				const p = (params ?? {}) as { slug?: string };
-				if (!p.slug) throw new Error("skills.marketplace.detail: slug required");
-				const { skillHubDetail } = await import("../skills/marketplace-client");
-				return await skillHubDetail(p.slug);
+				return this.#services.get<MarketplaceService>("marketplace").skillDetail(params ?? {});
 			}
 			case "context.list": {
 				// Context files (AGENTS.md / CLAUDE.md …) for the extensions
@@ -6700,7 +6428,7 @@ export class DaemonServer {
 					category: slashCommandCategory(c.name),
 					tuiOnly: typeof c.handle !== "function",
 				}));
-				for (const skill of await this.#getSkills()) {
+				for (const skill of await this.#services.get<MarketplaceService>("marketplace").getSkills()) {
 					list.push({
 						name: getSkillSlashCommandName({ name: skill.name }),
 						description: skill.description,
