@@ -10,6 +10,7 @@ import { EventService } from "./event-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
+import { RemoteService } from "./remote-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
@@ -83,6 +84,8 @@ function buildRegistry(): HostServices {
 			cwd: () => ".",
 		}),
 	);
+	// RemoteService 无宿主依赖、无状态，直接注册。
+	services.register(new RemoteService());
 	return services;
 }
 

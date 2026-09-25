@@ -150,7 +150,6 @@ import {
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
-import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -487,6 +486,7 @@ import { BrowserService } from "./services/browser-service";
 import { EventService } from "./services/event-service";
 import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
+import { RemoteService } from "./services/remote-service";
 import { TerminalService } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
@@ -3076,6 +3076,7 @@ export class DaemonServer {
 				cwd: () => this.#host.cwd(),
 			}),
 		);
+		this.#services.register(new RemoteService());
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -5721,16 +5722,38 @@ export class DaemonServer {
 					return { error: err instanceof Error ? err.message : String(err) };
 				}
 			}
-			case "remote.hosts":
-				return listRemoteHosts();
-			case "remote.hostAdd":
-				return addRemoteHost((params ?? {}) as Parameters<typeof addRemoteHost>[0]);
-			case "remote.connect":
-				return connectRemoteHost((params ?? {}) as { name?: unknown });
-			case "remote.browse":
-				return browseRemoteDir((params ?? {}) as { name?: unknown; path?: unknown });
-			case "remote.disconnect":
-				return disconnectRemoteHost((params ?? {}) as { name?: unknown });
+			case "remote.hosts": {
+				// 实现归 RemoteService（SSH 远程主机面语义不变）。
+				return this.#services.get<RemoteService>("remote").hosts();
+			}
+			case "remote.hostAdd": {
+				// 实现归 RemoteService（SSH 远程主机面语义不变）。
+				return this.#services
+					.get<RemoteService>("remote")
+					.hostAdd(
+						(params ?? {}) as {
+							name?: unknown;
+							host?: unknown;
+							username?: unknown;
+							port?: unknown;
+							keyPath?: unknown;
+						},
+					);
+			}
+			case "remote.connect": {
+				// 实现归 RemoteService（SSH 远程主机面语义不变）。
+				return this.#services.get<RemoteService>("remote").connect((params ?? {}) as { name?: unknown });
+			}
+			case "remote.browse": {
+				// 实现归 RemoteService（SSH 远程主机面语义不变）。
+				return this.#services
+					.get<RemoteService>("remote")
+					.browse((params ?? {}) as { name?: unknown; path?: unknown });
+			}
+			case "remote.disconnect": {
+				// 实现归 RemoteService（SSH 远程主机面语义不变）。
+				return this.#services.get<RemoteService>("remote").disconnect((params ?? {}) as { name?: unknown });
+			}
 			case "github.prs": {
 				// Pull-request list for the right-pane PR view. Uses the
 				// `gh` CLI when available (same credentials the user's shell
