@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
+import { BrowserService } from "./browser-service";
 import { EventService } from "./event-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
@@ -73,6 +74,15 @@ function buildRegistry(): HostServices {
 	);
 	// ApprovalService 只认领路由（本测试不应答任何审批），stub 掉会话访问。
 	services.register(new ApprovalService({ get: () => undefined }));
+	// BrowserService 只认领路由（本测试不触发浏览器/CDP），stub 掉设置与 cwd。
+	services.register(
+		new BrowserService({
+			settings: async () => {
+				throw new Error("not used in coverage test");
+			},
+			cwd: () => ".",
+		}),
+	);
 	return services;
 }
 

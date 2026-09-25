@@ -483,6 +483,7 @@ import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { AppendJournal, catchupPlan } from "./journal";
 import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
+import { BrowserService } from "./services/browser-service";
 import { EventService } from "./services/event-service";
 import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
@@ -3069,6 +3070,12 @@ export class DaemonServer {
 				get: sessionId => this.#host.get(sessionId),
 			}),
 		);
+		this.#services.register(
+			new BrowserService({
+				settings: () => this.#settingsForRpc(),
+				cwd: () => this.#host.cwd(),
+			}),
+		);
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -4216,48 +4223,35 @@ export class DaemonServer {
 				return { sessions, activeCount, approvals, usage };
 			}
 			case "browser.endpoint": {
-				// Shared automation Chromium (same instance the agent drives)
-				// — endpoint + stable profile for the settings panel.
-				const { browserEndpoint } = await import("./browser-rpc");
-				return browserEndpoint(await this.#settingsForRpc(), this.#host.cwd());
+				// 实现归 BrowserService（共享 Chromium 面板 RPC 语义不变）。
+				return this.#services.get<BrowserService>("browser").endpoint();
 			}
 			case "browser.tabs": {
-				const { browserTabs } = await import("./browser-rpc");
-				return browserTabs(await this.#settingsForRpc(), this.#host.cwd());
+				return this.#services.get<BrowserService>("browser").tabs();
 			}
 			case "browser.screenshot": {
-				const p = (params ?? {}) as { targetId: string };
-				if (!p.targetId) throw new Error("browser.screenshot requires targetId");
-				const { browserScreenshot } = await import("./browser-rpc");
-				return browserScreenshot(await this.#settingsForRpc(), this.#host.cwd(), p.targetId);
+				return this.#services.get<BrowserService>("browser").screenshot((params ?? {}) as { targetId: string });
 			}
 			case "browser.extensions": {
-				const { browserExtensions } = await import("./browser-rpc");
-				return browserExtensions(await this.#settingsForRpc(), this.#host.cwd());
+				return this.#services.get<BrowserService>("browser").extensions();
 			}
 			case "browser.relayInstall": {
-				const { browserRelayInstall } = await import("./browser-rpc");
-				return browserRelayInstall();
+				return this.#services.get<BrowserService>("browser").relayInstall();
 			}
 			case "browser.relayStatus": {
-				const { browserRelayStatus } = await import("./browser-rpc");
-				return browserRelayStatus();
+				return this.#services.get<BrowserService>("browser").relayStatus();
 			}
 			case "browser.relayUninstall": {
-				const { browserRelayUninstall } = await import("./browser-rpc");
-				return browserRelayUninstall();
+				return this.#services.get<BrowserService>("browser").relayUninstall();
 			}
 			case "browser.importChrome": {
-				const { browserImportChrome } = await import("./browser-rpc");
-				return browserImportChrome(await this.#settingsForRpc(), this.#host.cwd());
+				return this.#services.get<BrowserService>("browser").importChrome();
 			}
 			case "browser.clearCache": {
-				const { browserClearCache } = await import("./browser-rpc");
-				return browserClearCache(await this.#settingsForRpc(), this.#host.cwd());
+				return this.#services.get<BrowserService>("browser").clearCache();
 			}
 			case "browser.clearAll": {
-				const { browserClearAll } = await import("./browser-rpc");
-				return browserClearAll(await this.#settingsForRpc(), this.#host.cwd());
+				return this.#services.get<BrowserService>("browser").clearAll();
 			}
 			case "session.tree": {
 				// Cross-session tree (OMP /tree): sessions fork from a parent
