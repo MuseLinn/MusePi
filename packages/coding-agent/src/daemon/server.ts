@@ -19,7 +19,6 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
-import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { getDashboardStats } from "@musepi/musepi-stats";
 import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
@@ -469,6 +468,7 @@ import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { EventService } from "./services/event-service";
+import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
@@ -519,9 +519,6 @@ interface SkillListItem {
 	content?: string;
 	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
 }
-
-/** Unified extension entry (extension control center, TUI parity). */
-type Extension = import("../extensibility/extensions-center/types").Extension;
 
 /** Minimal typed view over the live AgentSession's mode state. */
 interface ModeSessionLike {
@@ -3050,6 +3047,16 @@ export class DaemonServer {
 		});
 		this.#services.register(schedule);
 		schedule.start();
+		this.#services.register(
+			new ExtensionService({
+				settings: () => this.#host.settings(),
+				ensureRegistry: () => this.#host.ensureRegistry(),
+				cwd: () => this.#host.cwd(),
+				webUrl: () => this.#webUrl,
+				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
+				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
+			}),
+		);
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.
@@ -3336,30 +3343,6 @@ export class DaemonServer {
 	 *  subscribes; dead sockets are dropped lazily inside broadcast). */
 	#pauseConns = new Set<DaemonConnection>();
 
-	/** TTL cache of the extension/plugin scan (settings → plugins tab). */
-	#pluginsCache: {
-		at: number;
-		plugins: { path: string; label: string | null; tools: number; commands: number; handlers: number }[];
-		errors: { path: string; error: string }[];
-	} | null = null;
-
-	/** TTL cache of the full installed-plugin inventory (settings → plugins
-	 *  tab, enabled + disabled). */
-	#pluginPackagesCache: {
-		at: number;
-		plugins: {
-			name: string;
-			version: string;
-			path: string;
-			scope: "user" | "project";
-			enabled: boolean;
-			description: string | null;
-			tools: number;
-			commands: number;
-			handlers: number;
-		}[];
-	} | null = null;
-
 	/** TTL cache of the marketplace catalog browse (settings → marketplace
 	 *  tab). Combines {@link MarketplaceManager.listAvailablePlugins}
 	 *  output with per-plugin `installed`/`installedScope` flags so the GUI
@@ -3414,11 +3397,6 @@ export class DaemonServer {
 		warnings: string[];
 	} | null = null;
 
-	/** TTL cache of the unified extension scan (extensions.list — the
-	 *  Extension Control Center's 10 capability kinds, TUI parity).
-	 *  Invalidated by the mutation RPCs below. */
-	#extensionsCache: { at: number; extensions: Extension[] } | null = null;
-
 	#extensionWatcherStarted = false;
 	#extensionWatcherTimer: Timer | null = null;
 
@@ -3446,8 +3424,7 @@ export class DaemonServer {
 		if (this.#extensionWatcherTimer) return;
 		this.#extensionWatcherTimer = setTimeout(() => {
 			this.#extensionWatcherTimer = null;
-			this.#extensionsCache = null;
-			this.#pluginsCache = null;
+			this.#services.get<ExtensionService>("extensions").invalidateCaches();
 			// 扩展声明的技能经 #getSkills 合并:扩展源变更时一并失效,
 			// 否则虚拟技能列表最多滞后 10s TTL。
 			this.#skillsCache = null;
@@ -3562,26 +3539,6 @@ export class DaemonServer {
 		return settings;
 	}
 
-	async #getExtensions(): Promise<Extension[]> {
-		if (!this.#extensionsCache || Date.now() - this.#extensionsCache.at > 10_000) {
-			const { loadAllExtensions } = await import("../extensibility/extensions-center/state-manager");
-			let settings = this.#host.settings();
-			if (!settings) {
-				await this.#host.ensureRegistry();
-				settings = this.#host.settings();
-			}
-			const disabledIds = (settings?.get("disabledExtensions") ?? []) as string[];
-			// omp 生态智能兼容:显式启用集(默认空的隐藏设置键)优先于优先级去重。
-			// getRaw:forceEnabledExtensions 不在 schema(隐藏设置键),走原始读取。
-			const forceIds = (settings?.getRaw("forceEnabledExtensions") ?? []) as string[];
-			this.#extensionsCache = {
-				at: Date.now(),
-				extensions: await loadAllExtensions(this.#host.cwd(), disabledIds, forceIds),
-			};
-		}
-		return this.#extensionsCache.extensions;
-	}
-
 	/**
 	 * P0-② 挂载校验:mode 引用的每个扩展
 	 * 独立加载(不注册到任何会话)验证加载错误 + 槽位组件可编译。
@@ -3595,7 +3552,7 @@ export class DaemonServer {
 		const cwd = this.#host.cwd();
 		const { loadExtensions } = await import("../extensibility/extensions/loader");
 		const { validateExtensionComponents } = await import("./extension-artifact-compiler");
-		const known = await this.#getExtensions();
+		const known = await this.#services.get<ExtensionService>("extensions").getExtensions();
 		for (const id of extensions) {
 			const entry = known.find(e => e.id === id);
 			if (!entry) continue; // 未找到已由 validateMode 报
@@ -3633,7 +3590,11 @@ export class DaemonServer {
 			// 自动消失(collectExtensionSkills 按 active 过滤)。
 			const { collectExtensionSkills } = await import("./extension-artifact-compiler");
 			const extSkills = await collectExtensionSkills(
-				(await this.#getExtensions()).map(e => ({ kind: e.kind, state: e.state, path: e.path })),
+				(await this.#services.get<ExtensionService>("extensions").getExtensions()).map(e => ({
+					kind: e.kind,
+					state: e.state,
+					path: e.path,
+				})),
 				this.#host.cwd(),
 			);
 			const virtual = extSkills.map(s => ({
@@ -4274,74 +4235,14 @@ export class DaemonServer {
 				return { duration: duration ?? null, paused: agentPauseGate.paused };
 			}
 			case "plugins.list": {
-				// Session-independent extension scan (settings → plugins tab).
-				// Mirrors the CLI extension discovery; TTL-cached like the
-				// session-dir scan so list refreshes don't re-walk the FS.
-				if (!this.#pluginsCache || Date.now() - this.#pluginsCache.at > 10_000) {
-					const { discoverExtensionPaths } = await import("../extensibility/extensions");
-					const { loadExtensions } = await import("../extensibility/extensions/loader");
-					const cwd = this.#host.cwd();
-					const paths = await discoverExtensionPaths([], cwd);
-					const result = await loadExtensions(paths, cwd);
-					this.#pluginsCache = {
-						at: Date.now(),
-						plugins: result.extensions.map(ext => ({
-							path: ext.path,
-							label: ext.label ?? null,
-							tools: ext.tools.size,
-							commands: ext.commands.size,
-							handlers: ext.handlers.size,
-						})),
-						errors: result.errors,
-					};
-				}
-				return this.#pluginsCache;
+				// 实现归 ExtensionService（扩展/插件控制面语义不变）。
+				return this.#services.get<ExtensionService>("extensions").listPlugins();
 			}
 			case "plugins.packages": {
-				// Full installed-plugin inventory (enabled + disabled) for the
-				// settings → plugins tab. Session-independent; TTL-cached so
-				// the list doesn't re-walk node_modules on each tab switch.
-				if (!this.#pluginPackagesCache || Date.now() - this.#pluginPackagesCache.at > 10_000) {
-					const { getAllPlugins } = await import("../extensibility/plugins/loader");
-					const installed = await getAllPlugins(this.#host.cwd());
-					this.#pluginPackagesCache = {
-						at: Date.now(),
-						plugins: installed.map(p => ({
-							name: p.name,
-							version: p.version,
-							path: p.path,
-							scope: p.scope,
-							enabled: p.enabled,
-							description: p.manifest.description ?? null,
-							tools: p.manifest.tools ? 1 : 0,
-							commands: Array.isArray(p.manifest.commands)
-								? p.manifest.commands.length
-								: p.manifest.commands
-									? 1
-									: 0,
-							handlers:
-								typeof p.manifest.hooks === "string"
-									? 1
-									: p.manifest.hooks
-										? Object.keys(p.manifest.hooks).length
-										: 0,
-						})),
-					};
-				}
-				return this.#pluginPackagesCache;
+				return this.#services.get<ExtensionService>("extensions").pluginPackages();
 			}
 			case "plugins.setEnabled": {
-				// Enable/disable an installed plugin (settings → plugins tab
-				// toggle). Mirrors the TUI /plugins enable|disable command;
-				// busts the TTL cache so the next list reflects the change.
-				const { PluginManager } = await import("../extensibility/plugins/manager");
-				const p = (params ?? {}) as { name: string; enabled: boolean };
-				if (!p.name) throw new Error("plugins.setEnabled: name required");
-				const manager = new PluginManager(this.#host.cwd());
-				await manager.setPluginEnabled(p.name, Boolean(p.enabled));
-				this.#pluginPackagesCache = null;
-				this.#pluginsCache = null;
-				return { ok: true, enabled: Boolean(p.enabled) };
+				return this.#services.get<ExtensionService>("extensions").setPluginEnabled(params ?? {});
 			}
 			case "marketplace.list": {
 				// Marketplace catalog + install state for the GUI store panel.
@@ -4385,8 +4286,7 @@ export class DaemonServer {
 					scope: p.scope ?? "user",
 				});
 				this.#marketplaceCache = null;
-				this.#pluginPackagesCache = null;
-				this.#pluginsCache = null;
+				this.#services.get<ExtensionService>("extensions").invalidatePluginCaches();
 				return { ok: true, installed: true, scope: p.scope ?? "user" };
 			}
 			case "marketplace.remove": {
@@ -4399,8 +4299,7 @@ export class DaemonServer {
 				const manager = await this.#buildMarketplaceManager();
 				await manager.uninstallPlugin(buildPluginId(p.name, p.marketplace), p.scope);
 				this.#marketplaceCache = null;
-				this.#pluginPackagesCache = null;
-				this.#pluginsCache = null;
+				this.#services.get<ExtensionService>("extensions").invalidatePluginCaches();
 				return { ok: true };
 			}
 			case "skills.list": {
@@ -4440,7 +4339,7 @@ export class DaemonServer {
 				this.#skillsCache = null;
 				// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
 				// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
-				this.#extensionsCache = null;
+				this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache();
 				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true };
 			}
@@ -4460,7 +4359,7 @@ export class DaemonServer {
 					destRoot: path.join(getAgentDir(), "skills"),
 				});
 				this.#skillsCache = null;
-				this.#extensionsCache = null;
+				this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache();
 				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true, name: result.name, dir: result.dir };
 			}
@@ -4560,222 +4459,17 @@ export class DaemonServer {
 				};
 			}
 			case "extensions.list": {
-				// 扩展控制中心统一数据源 (TUI /extensions parity): all 10
-				// capability kinds normalized to one Extension shape with
-				// three states (active/disabled/shadowed). raw is heavy and
-				// served lazily via extensions.raw for the inspector.
-				const extensions = await this.#getExtensions();
-				let s = this.#host.settings();
-				if (!s) {
-					// Shell mode/enabled live in settings; bootstrap the shared
-					// instance so the desktop-shell entry reports them even
-					// before any session exists (fresh daemon + compat page).
-					await this.#host.ensureRegistry();
-					s = this.#host.settings();
-				}
-				// Desktop-shell config (dsh-desktop parity): the compat page /
-				// GUI shell read enabled + mode + served origin from the
-				// registry response (raw is stripped by the response mapping).
-				const shellEnabled = s?.getRaw("shell.enabled");
-				const shellMode = s?.getRaw("shell.mode");
-				const shellCfg = {
-					enabled: shellEnabled !== false,
-					mode: shellMode === "extended" || shellMode === "enhanced" ? shellMode : "compatibility",
-					webUrl: this.#webUrl,
-				};
-				// Builtin registry entries mirrored on a settings key
-				// (style/shell/magic keywords): the setting IS the source of
-				// truth for state — raw === off means disabled, anything else
-				// (unset defaults to enabled) means active.
-				const { BUILTIN_EXTENSIONS, builtinMirrorDisabled } = await import(
-					"../extensibility/extensions-center/builtin-registry"
-				);
-				for (const def of BUILTIN_EXTENSIONS) {
-					if (!def.settingsMirror) continue;
-					const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
-					if (!ext) continue;
-					const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
-					ext.state = disabled ? "disabled" : "active";
-					ext.disabledReason = disabled ? "item-disabled" : undefined;
-				}
-				const { buildProviderTabs } = await import("../extensibility/extensions-center/state-manager");
-				const tabs = buildProviderTabs(extensions);
-				const { getAllProvidersInfo } = await import("../capability");
-				const providers = getAllProvidersInfo().map(p => ({
-					id: p.id,
-					displayName: p.displayName,
-					enabled: p.enabled,
-				}));
-				// Renderer-side slot components (ui-slots analogue): compiled
-				// from active extension-module entries, cached 10s with the
-				// extension scan. The GUI mounts them by slot id.
-				const { collectSlotComponents, collectToolViews, collectStatusBarSegments } = await import(
-					"./extension-artifact-compiler"
-				);
-				const components = await collectSlotComponents(
-					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
-					this.#host.cwd(),
-				);
-				// Renderer-side per-tool views (registerToolView): the
-				// transcript dispatches by tool name, replacing the built-in renderer.
-				const toolViews = await collectToolViews(
-					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
-					this.#host.cwd(),
-				);
-				// Status-bar segments (registerStatusBarSegment): the GUI status bar
-				// merges these after its built-ins, ordered by `order`.
-				const statusBarSegments = await collectStatusBarSegments(
-					extensions.map(e => ({ kind: e.kind, state: e.state, path: e.path })),
-					this.#host.cwd(),
-				);
-				return {
-					extensions: extensions.map(({ raw: _raw, ...rest }) => rest),
-					tabs,
-					providers,
-					components,
-					toolViews,
-					statusBarSegments,
-					// Desktop-shell config (dsh-desktop parity): enabled/mode/
-					// webUrl read by the compat page + GUI shell.
-					shell: shellCfg,
-					// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
-					slots: {
-						exact: [...EXTENSION_SLOT_DECLARATION.exact],
-						prefixes: [...EXTENSION_SLOT_DECLARATION.prefixes],
-					},
-				};
+				// 实现归 ExtensionService（扩展/插件控制面语义不变）。
+				return this.#services.get<ExtensionService>("extensions").list();
 			}
 			case "extensions.raw": {
-				// Raw capability item for the inspector panel (JSON, capped).
-				const p = (params ?? {}) as { id: string };
-				const extensions = await this.#getExtensions();
-				const ext = extensions.find(e => e.id === p.id);
-				if (!ext) throw new Error(`unknown extension: ${p.id}`);
-				const text = JSON.stringify(ext.raw, null, 2);
-				return { raw: text.length > 16 * 1024 ? `${text.slice(0, 16 * 1024)}\n… (truncated)` : text };
+				return this.#services.get<ExtensionService>("extensions").raw(params ?? {});
 			}
 			case "extensions.setEnabled": {
-				// Item toggle (TUI /extensions parity): writes
-				// settings.disabledExtensions with the same `kind:name` ids
-				// the dashboard uses. MCP toggles route through the canonical
-				// mcp.json denylist so /mcp list, the MCP runtime and this
-				// center agree (issue #3827). Settings-mirrored builtins
-				// (task-card style, magic keywords) write their mirrored
-				// setting key instead — the setting IS the source of truth.
-				const p = (params ?? {}) as { id: string; enabled: boolean; mode?: string };
-				let settings = this.#host.settings();
-				if (!settings) {
-					await this.#host.ensureRegistry();
-					settings = this.#host.settings();
-				}
-				if (!settings) throw new Error("settings unavailable");
-				if (p.id === "desktop-shell:shell") {
-					// Desktop shell toggle: enabled -> the GUI shell loads the
-					// runtime-served renderer; disabled -> local bundle. The
-					// setting drives the extension's mirrored state, and the
-					// web.port discovery file is written/deleted so the shell
-					// sees the change without an RPC round-trip. An optional
-					// `mode` param (compatibility/extended/enhanced) switches
-					// the shell mode atomically.
-					if (typeof p.mode === "string") {
-						const mode: string = p.mode;
-						if (mode !== "compatibility" && mode !== "extended" && mode !== "enhanced") {
-							throw new Error(`invalid shell mode: ${mode}`);
-						}
-						settings.set("shell.mode" as Parameters<Settings["set"]>[0], mode as never);
-					}
-					settings.set("shell.enabled" as Parameters<Settings["set"]>[0], p.enabled as never);
-					await settings.flush();
-					const webPortFile = path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port");
-					if (p.enabled && this.#webUrl) {
-						const port = new URL(this.#webUrl).port;
-						if (port) {
-							try {
-								await fs.promises.writeFile(webPortFile, port, "utf8");
-							} catch {
-								// non-fatal
-							}
-						}
-					} else {
-						try {
-							await fs.promises.unlink(webPortFile);
-						} catch {
-							// already gone
-						}
-					}
-					this.#extensionsCache = null;
-					this.#services.get<EventService>("events").broadcastExtensionsChanged();
-					return { ok: true };
-				}
-				// Generic settings-mirror builtins (task-card style, magic
-				// keywords): the mirrored setting IS the source of truth —
-				// write it instead of the disabledExtensions list.
-				const mirrorDef = (await import("../extensibility/extensions-center/builtin-registry")).findBuiltinDef(
-					p.id,
-				)?.settingsMirror;
-				if (mirrorDef) {
-					settings.set(
-						mirrorDef.key as Parameters<Settings["set"]>[0],
-						(p.enabled ? mirrorDef.on : mirrorDef.off) as never,
-					);
-					await settings.flush();
-					this.#extensionsCache = null;
-					this.#services.get<EventService>("events").broadcastExtensionsChanged();
-					return { ok: true };
-				}
-				if (p.id.startsWith("mcp:")) {
-					const { setMcpServerEnabled } = await import("../mcp/config-writer");
-					const { getMCPConfigPath } = await import("@musepi/pi-utils");
-					await setMcpServerEnabled({
-						userPath: getMCPConfigPath("user", this.#host.cwd()),
-						projectPath: getMCPConfigPath("project", this.#host.cwd()),
-						sourcePath: undefined,
-						name: p.id.slice("mcp:".length),
-						enabled: p.enabled,
-					});
-					// Reconcile legacy `mcp:<name>` flags in disabledExtensions
-					// (TUI parity) so a stale entry doesn't keep the server
-					// marked disabled after re-enabling via the UI.
-					const stored = [...((settings.get("disabledExtensions") ?? []) as string[])];
-					const had = stored.indexOf(p.id);
-					if (p.enabled && had !== -1) {
-						stored.splice(had, 1);
-						settings.set("disabledExtensions", stored);
-						await settings.flush();
-					}
-				} else {
-					const disabled = [...((settings.get("disabledExtensions") ?? []) as string[])];
-					const i = disabled.indexOf(p.id);
-					if (p.enabled && i >= 0) disabled.splice(i, 1);
-					if (!p.enabled && i < 0) disabled.push(p.id);
-					settings.set("disabledExtensions", disabled);
-					await settings.flush();
-				}
-				this.#extensionsCache = null;
-				this.#services.get<EventService>("events").broadcastExtensionsChanged();
-				return { ok: true };
+				return this.#services.get<ExtensionService>("extensions").setEnabled(params ?? {});
 			}
 			case "extensions.setForceEnabled": {
-				// omp 生态智能兼容:显式启用同名冲突项(默认被高优先级 shadow)。
-				// 与 disabledExtensions 正交 —— 写入 forceEnabledExtensions;
-				// 感知层(agent/用户)分析 shadowedBy 详情后决定启用。
-				const p = (params ?? {}) as { id: string; enabled: boolean };
-				let settings = this.#host.settings();
-				if (!settings) {
-					await this.#host.ensureRegistry();
-					settings = this.#host.settings();
-				}
-				if (!settings) throw new Error("settings unavailable");
-				const force = [...((settings.getRaw("forceEnabledExtensions") ?? []) as string[])];
-				const i = force.indexOf(p.id);
-				if (p.enabled && i < 0) force.push(p.id);
-				if (!p.enabled && i >= 0) force.splice(i, 1);
-				settings.set("forceEnabledExtensions" as Parameters<Settings["set"]>[0], force as never);
-				await settings.flush();
-				this.#extensionsCache = null;
-				this.#pluginsCache = null;
-				this.#services.get<EventService>("events").broadcastExtensionsChanged();
-				return { ok: true };
+				return this.#services.get<ExtensionService>("extensions").setForceEnabled(params ?? {});
 			}
 			case "events.subscribe": {
 				// 委托 EventService（P1 服务抽取；原实现搬至
@@ -4785,47 +4479,11 @@ export class DaemonServer {
 				return this.#services.get<EventService>("events").subscribe(conn);
 			}
 			case "extensions.setProviderEnabled": {
-				// Provider-level toggle (TUI parity): enableProvider /
-				// disableProvider persist to settings.disabledProviders;
-				// flush here so the change survives a daemon restart (the
-				// capability layer only settings.set's).
-				const p = (params ?? {}) as { providerId: string; enabled: boolean };
-				if (p.providerId === "native") throw new Error("native provider cannot be toggled");
-				const { enableProvider, disableProvider, getAllProvidersInfo } = await import("../capability");
-				if (!getAllProvidersInfo().some(pr => pr.id === p.providerId)) {
-					throw new Error(`unknown provider: ${p.providerId}`);
-				}
-				if (p.enabled) enableProvider(p.providerId);
-				else disableProvider(p.providerId);
-				const settings = this.#host.settings();
-				if (settings) await settings.flush();
-				this.#extensionsCache = null;
-				this.#services.get<EventService>("events").broadcastExtensionsChanged();
-				return { ok: true };
+				// 实现归 ExtensionService（扩展/插件控制面语义不变）。
+				return this.#services.get<ExtensionService>("extensions").setProviderEnabled(params ?? {});
 			}
 			case "ext.call": {
-				// 扩展贡献的 daemon 侧 JSON-RPC(registerRpc):GUI 槽位组件
-				// 经此回调自己的 daemon 侧逻辑。仅限 active extension-module
-				// 条目 —— 与
-				// collectSlotComponents 同源过滤,未知扩展/方法抛 JSON-RPC
-				// 错误给调用方。
-				const p = (params ?? {}) as { extensionId?: string; method?: string; params?: unknown; sessionId?: string };
-				if (typeof p.extensionId !== "string" || p.extensionId.length === 0) {
-					throw new Error("ext.call: extensionId required");
-				}
-				if (typeof p.method !== "string" || p.method.length === 0) {
-					throw new Error("ext.call: method required");
-				}
-				const extensions = await this.#getExtensions();
-				const entry = extensions.find(
-					e => e.kind === "extension-module" && e.state === "active" && e.path === p.extensionId,
-				);
-				if (!entry) throw new Error(`extension not active: ${p.extensionId}`);
-				const { invokeExtensionRpc } = await import("./extension-artifact-compiler");
-				return await invokeExtensionRpc(entry.path, this.#host.cwd(), p.method, p.params ?? {}, {
-					cwd: this.#host.cwd(),
-					sessionId: p.sessionId,
-				});
+				return this.#services.get<ExtensionService>("extensions").call(params ?? {});
 			}
 			case "setup.status": {
 				// 上手就绪态聚合（欢迎页状态感知空态的数据源）：供应商/模式/扩展
@@ -4854,7 +4512,7 @@ export class DaemonServer {
 				const modesDir = this.#modesDir();
 				ensureModeTemplates(modesDir);
 				const modeCount = listModeIds(modesDir).length;
-				const extensions = await this.#getExtensions();
+				const extensions = await this.#services.get<ExtensionService>("extensions").getExtensions();
 				const active = extensions.filter(e => e.state === "active").length;
 				const disabled = extensions.filter(e => e.state !== "active").length;
 				return {
@@ -4909,7 +4567,10 @@ export class DaemonServer {
 				// resolve 的 extraModes 兜底同一优先级规则。
 				const { collectExtensionModes } = await import("./extension-artifact-compiler");
 				const fileIds = new Set(ids);
-				for (const em of await collectExtensionModes(await this.#getExtensions(), this.#host.cwd())) {
+				for (const em of await collectExtensionModes(
+					await this.#services.get<ExtensionService>("extensions").getExtensions(),
+					this.#host.cwd(),
+				)) {
 					if (fileIds.has(em.id)) continue;
 					fileIds.add(em.id);
 					modes.push(em);
@@ -4958,7 +4619,9 @@ export class DaemonServer {
 				}
 				const dir = this.#modesDir();
 				ensureModeTemplates(dir);
-				const knownExtensions = (await this.#getExtensions()).map(e => e.id);
+				const knownExtensions = (await this.#services.get<ExtensionService>("extensions").getExtensions()).map(
+					e => e.id,
+				);
 				const def = {
 					id: p.id,
 					label: p.label,
@@ -5011,7 +4674,9 @@ export class DaemonServer {
 				const p = (params ?? {}) as { id: string };
 				if (!MODE_ID_PATTERN.test(p.id)) return { valid: false, errors: [`invalid mode id: ${p.id}`] };
 				const dir = this.#modesDir();
-				const knownExtensions = (await this.#getExtensions()).map(e => e.id);
+				const knownExtensions = (await this.#services.get<ExtensionService>("extensions").getExtensions()).map(
+					e => e.id,
+				);
 				const errors: string[] = [];
 				try {
 					const def = loadModeFile(dir, p.id);

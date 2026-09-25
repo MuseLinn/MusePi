@@ -7,6 +7,7 @@ import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { EventService } from "./event-service";
+import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
@@ -94,6 +95,17 @@ function buildRegistry(): HostServices {
 			get: () => undefined,
 			deleteSession: async () => {},
 			onCronsChanged: () => {},
+		}),
+	);
+	// ExtensionService：stub 化宿主访问，仅参与路由表。
+	services.register(
+		new ExtensionService({
+			settings: () => null,
+			ensureRegistry: async () => {},
+			cwd: () => "",
+			webUrl: () => null,
+			webPortFile: () => "",
+			onChanged: () => {},
 		}),
 	);
 	return services;
