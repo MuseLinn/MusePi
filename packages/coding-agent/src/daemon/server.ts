@@ -24,7 +24,6 @@ import { getDashboardStats } from "@musepi/musepi-stats";
 import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentBusyError, AgentPauseGate, agentPauseGate } from "@musepi/pi-agent-core";
 import { effectiveReserveTokens, resolveThresholdTokens } from "@musepi/pi-agent-core/compaction";
-import type { AuthStorage, DisabledCredentialSummary, UsageReport } from "@musepi/pi-ai";
 import { resolveUsedFraction } from "@musepi/pi-ai";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import { PROVIDER_REGISTRY } from "@musepi/pi-ai/registry";
@@ -153,13 +152,6 @@ import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-ru
 import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "./fs-ops.js";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
 import { addRemoteHost, browseRemoteDir, connectRemoteHost, disconnectRemoteHost, listRemoteHosts } from "./remote";
-import {
-	collectStoredAccounts,
-	collectUnreportedAccounts,
-	computeReloginDeadlines,
-	isActionableDisable,
-	selectReportableAccounts,
-} from "./usage-shared";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -491,6 +483,8 @@ import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type P
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { getFxRates } from "./fx-rates";
 import { AppendJournal, catchupPlan } from "./journal";
+import { HostServices } from "./services/registry";
+import { UsageService } from "./services/usage-service";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -3073,6 +3067,9 @@ export class DaemonServer {
 	 *  fetches into the same cache directory. */
 	readonly #sttDownloads = new Map<string, Promise<void>>();
 
+	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
+	readonly #services = new HostServices();
+
 	/** Drop a connection from the global-event targets (called on close —
 	 *  the host's disconnect handles the session subscription side). */
 	dropGlobalEventTarget(connectionId: string): void {
@@ -3117,6 +3114,15 @@ export class DaemonServer {
 			this.#broadcastExtensionNotification(channel, message);
 		});
 		this.#host = host;
+		// L2 宿主服务注册表（P1 服务抽取，docs/review/0.5.0-m2-daemon-host-layering.md）：
+		// 巨型 switch 的 case 逐个委托给注册表中的服务；未委托 case 必须
+		// 登记在 services/legacy-routes.ts（路由覆盖快照测试强制闭包）。
+		this.#services.register(
+			new UsageService({
+				get: sessionId => this.#host.get(sessionId),
+				ensureRegistry: () => this.#host.ensureRegistry(),
+			}),
+		);
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -9912,87 +9918,11 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "usage.reports": {
-				// Provider subscription quota (TUI /usage parity): the live
-				// session's fetchUsageReports — the same data the ACP-mode
-				// `_omp/usage` RPC serves. The GUI composer's context-usage
-				// popover shows it next to the token breakdown.
-				//
-				// /usage is NOT model-bound (unlike /context): the data is
-				// every account across every provider, so the RPC also serves
-				// session-less — the empty-state composer fetches the same
-				// global view without a live session. Only the ● active-account
-				// marker needs the session, so it is omitted on the global path.
+				// 委托 UsageService（P1 服务抽取；原实现整体搬移至
+				// services/usage-service.ts，行为不变，TUI /usage parity 语义
+				// 与注释全部保留在服务内）。
 				const p = (params ?? {}) as { sessionId?: string };
-				const live = p.sessionId ? this.#host.get(p.sessionId) : undefined;
-				if (p.sessionId && !live) throw new Error("No active session");
-				// TUI /usage parity coverage: the report pool plus every gap the
-				// text panel shows — ○ accounts with no usage data, ✗ disabled
-				// credential tombstones, ⚠ OAuth re-login deadlines. Attribution
-				// and selection are shared with the TUI (daemon/usage-shared.ts)
-				// so the two surfaces can't drift apart.
-				const gapContext = async (storage: AuthStorage, reports: UsageReport[]) => {
-					const accounts = selectReportableAccounts(
-						collectStoredAccounts(storage),
-						provider => storage.usageProviderFor(provider) !== undefined,
-					);
-					// Best-effort revalidate (TUI runUsageCommand parity): a
-					// just-logged-in credential must not render as a stale
-					// duplicate from the disk cache.
-					try {
-						await storage.revalidateCredentials();
-					} catch {
-						// Stale identities beat no output.
-					}
-					let disabledCredentials: DisabledCredentialSummary[] = [];
-					try {
-						disabledCredentials = (await storage.listDisabledCredentials()).filter(summary =>
-							isActionableDisable(summary, accounts),
-						);
-					} catch {
-						// Usage output must not fail because tombstone listing did.
-					}
-					return {
-						unreportedAccounts: collectUnreportedAccounts(reports, accounts),
-						disabledCredentials,
-						reloginDeadlines: computeReloginDeadlines(accounts, Date.now()),
-					};
-				};
-				if (!live) {
-					// Session-less path (empty-state composer): bootstrap the
-					// daemon-level registry like models.list / auth.list do and
-					// fetch from its auth storage. The antigravity sandbox
-					// special-case is session-settings-driven, so it stays on
-					// the session path.
-					const registry = await this.#host.ensureRegistry();
-					if (!registry) throw new Error("No model registry yet");
-					const reports =
-						(await registry.authStorage.fetchUsageReports({
-							baseUrlResolver: provider => registry.getProviderBaseUrl?.(provider),
-						})) ?? [];
-					const gaps = await gapContext(registry.authStorage, reports);
-					return { reports, ...gaps };
-				}
-				const reports = (await live.agentSession.fetchUsageReports()) ?? [];
-				const gaps = await gapContext(live.agentSession.modelRegistry.authStorage, reports);
-				// TUI /usage parity: resolve the credential this session is
-				// actually using so the GUI can mark the active account (●)
-				// the way the TUI panel does.
-				const provider = live.agentSession.model?.provider;
-				let activeAccount: { provider: string; accountId?: string; email?: string } | undefined;
-				if (provider) {
-					const identity = live.agentSession.modelRegistry.authStorage.getOAuthAccountIdentity(
-						provider,
-						live.agentSession.sessionId,
-					);
-					if (identity) {
-						activeAccount = {
-							provider,
-							...(identity.accountId ? { accountId: identity.accountId } : {}),
-							...(identity.email ? { email: identity.email } : {}),
-						};
-					}
-				}
-				return { reports, ...gaps, ...(activeAccount ? { activeAccount } : {}) };
+				return this.#services.get<UsageService>("usage").reports(p);
 			}
 			case "fs.read": {
 				// Minimal safe file read (dev-server detection): text files

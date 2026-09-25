@@ -2,8 +2,8 @@ import { describe, expect, it } from "bun:test";
 import * as path from "node:path";
 import { startDaemonWeb } from "./static-web";
 
-/** The compat renderer dist the daemon serves (guest-client/dist, sibling). */
-const DIST_DIR = path.resolve(import.meta.dir, "../../../guest-client", "dist");
+/** The compat renderer dist the daemon serves (client-core/dist, sibling). */
+const DIST_DIR = path.resolve(import.meta.dir, "../../../client-core", "dist");
 
 /** dsh-desktop-compat "runtime serves the renderer" half: the loopback HTTP
  *  static server must serve the built SPA + SPA-fallback, and refuse path
