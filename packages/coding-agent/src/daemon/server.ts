@@ -486,6 +486,7 @@ import { AppendJournal, catchupPlan } from "./journal";
 import { EventService } from "./services/event-service";
 import { HostServices } from "./services/registry";
 import { UsageService } from "./services/usage-service";
+import { ViewStoreService } from "./services/view-store-service";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
 import { type MaterializedRow, ViewStore, viewStorePath } from "./view-store";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
@@ -2180,7 +2181,9 @@ export class DaemonSessionHost {
 				title:
 					(
 						row.title ??
-						(this.get(row.sessionId)?.autoTitle !== false ? this.firstUserMessage(row.sessionId) : undefined) ??
+						(this.get(row.sessionId)?.autoTitle !== false
+							? this.#store.firstUserMessage(row.sessionId)
+							: undefined) ??
 						undefined
 					)?.slice(0, 80) ?? null,
 				cwd: row.cwd || agentSession?.cwd || null,
@@ -2819,11 +2822,6 @@ export class DaemonSessionHost {
 		}
 	}
 
-	/** Cross-session message search over the materialized query tables. */
-	searchMessages(query: string, limit: number): ReturnType<ViewStore["search"]> {
-		return this.#store.search(query, limit);
-	}
-
 	/** Lazy workspace file-content index (settings → 索引库 → 代码库). */
 	ensureFileIndex(): FileIndexService {
 		if (!this.#fileIndex) {
@@ -2832,14 +2830,12 @@ export class DaemonSessionHost {
 		return this.#fileIndex;
 	}
 
-	/** Earliest user message for a session — session-tree title source. */
-	firstUserMessage(sessionId: string): string {
-		return this.#store.firstUserMessage(sessionId);
-	}
-
-	/** All message rows for one session (history viewer), oldest first. */
-	sessionMessages(sessionId: string, limit: number): ReturnType<ViewStore["messagesFor"]> {
-		return this.#store.messagesFor(sessionId, limit);
+	/** P1 过渡：物化视图库句柄交予 ViewStoreService 认领查询面与路由
+	 *  （history.messages / session.search）。实例归属仍在宿主——
+	 *  idle 快照 upsert / 复活 load / 处置 close 都纠缠会话生命周期，
+	 *  P2 cordis 化时再切实例归属。 */
+	get viewStore(): ViewStore {
+		return this.#store;
 	}
 
 	/**
@@ -3121,6 +3117,7 @@ export class DaemonServer {
 					this.#host.catchupFrom(sessionId, afterSeq, conn as DaemonConnection),
 			}),
 		);
+		this.#services.register(new ViewStoreService(host.viewStore));
 		this.#cronTasks = loadCronTasks();
 		this.#cronRuns = loadCronRuns();
 		this.#cronTimer = setInterval(() => this.#cronScan(), 30_000);
@@ -4217,7 +4214,7 @@ export class DaemonServer {
 						title:
 							r.title ??
 							(this.#host.get(r.sessionId)?.autoTitle !== false
-								? this.#host.firstUserMessage(r.sessionId)
+								? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
 								: undefined),
 					};
 				});
@@ -4225,9 +4222,8 @@ export class DaemonServer {
 			case "history.messages": {
 				// One session's message rows (history viewer right pane) —
 				// straight from the materialized view-store, no session
-				// activation required.
-				const p = (params ?? {}) as { sessionId: string; limit?: number };
-				return this.#host.sessionMessages(p.sessionId, p.limit ?? 500);
+				// activation required.（实现归 ViewStoreService，行为不变）
+				return this.#services.get<ViewStoreService>("views").messages(params ?? {});
 			}
 			case "tray.state": {
 				// Menu-bar tray snapshot (openchamber tray parity): the
@@ -4248,7 +4244,7 @@ export class DaemonServer {
 					title:
 						r.title ??
 						(this.#host.get(r.sessionId)?.autoTitle !== false
-							? this.#host.firstUserMessage(r.sessionId)
+							? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
 							: undefined),
 				}));
 				const approvals: Array<{
@@ -4440,7 +4436,7 @@ export class DaemonServer {
 					const title =
 						r.title ??
 						(this.#host.get(r.sessionId)?.autoTitle !== false
-							? this.#host.firstUserMessage(r.sessionId)
+							? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
 							: undefined);
 					nodes.set(r.sessionId, {
 						entry: {
@@ -4474,22 +4470,9 @@ export class DaemonServer {
 				return roots;
 			}
 			case "session.search": {
-				const p = (params ?? {}) as { query: string; limit?: number };
-				const matches = this.#host.searchMessages(p.query, p.limit ?? 50);
-				// Group by session, newest first (store already orders by time).
-				const bySession = new Map<string, (typeof matches)[number][]>();
-				for (const m of matches) {
-					const list = bySession.get(m.sessionId) ?? [];
-					list.push(m);
-					bySession.set(m.sessionId, list);
-				}
-				return {
-					matches,
-					sessions: [...bySession.entries()].map(([sessionId, msgs]) => ({
-						sessionId,
-						messageCount: msgs.length,
-					})),
-				};
+				// Cross-session message search（实现归 ViewStoreService，
+				// 分组语义不变：matches 全量 + 按会话计数）。
+				return this.#services.get<ViewStoreService>("views").search(params ?? {});
 			}
 			case "session.subscribe": {
 				const p = (params ?? {}) as { sessionId: string };

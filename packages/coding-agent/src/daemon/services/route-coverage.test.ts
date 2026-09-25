@@ -1,10 +1,13 @@
 import { describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ViewStore } from "../view-store";
 import { EventService } from "./event-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { HostServices } from "./registry";
 import { UsageService } from "./usage-service";
+import { ViewStoreService } from "./view-store-service";
 
 /** 路由覆盖快照（P1 服务抽取纪律）：server.ts 巨型 switch 的每个 case
  *  必须二选一——委托给 HostServices 某服务，或登记在 LEGACY_ROUTES。
@@ -46,6 +49,10 @@ function buildRegistry(): HostServices {
 			catchupFrom: async () => ({}),
 		}),
 	);
+	// ViewStore 只认领路由（本测试不触库），但构造真实实例成本极低，
+	// 用临时目录避免碰默认 journal 目录。
+	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));
+	services.register(new ViewStoreService(store));
 	return services;
 }
 
