@@ -483,6 +483,7 @@ import { type ApprovalBridge, createApprovalBridge, type PendingApproval, type P
 import { type BatchedEvent, EventBatcher } from "./event-batcher";
 import { getFxRates } from "./fx-rates";
 import { AppendJournal, catchupPlan } from "./journal";
+import { EventService } from "./services/event-service";
 import { HostServices } from "./services/registry";
 import { UsageService } from "./services/usage-service";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
@@ -3058,27 +3059,17 @@ export class DaemonServer {
 	setSocketPath(p: string): void {
 		this.#socketPath = p;
 	}
-	/** Connections registered via events.subscribe — receive global (non-
-	 *  session) daemon events such as extensions.changed (HMR). */
-	readonly #globalEventTargets = new Set<DaemonConnection>();
-	#globalEventSeq = 0;
+	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
+	readonly #services = new HostServices();
 	/** Speech-model downloads currently running (keyed by model tier key).
 	 *  Guards against two windows (or a double-click race) starting parallel
 	 *  fetches into the same cache directory. */
 	readonly #sttDownloads = new Map<string, Promise<void>>();
 
-	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
-	readonly #services = new HostServices();
-
 	/** Drop a connection from the global-event targets (called on close —
 	 *  the host's disconnect handles the session subscription side). */
 	dropGlobalEventTarget(connectionId: string): void {
-		for (const conn of this.#globalEventTargets) {
-			if (conn.id === connectionId) {
-				this.#globalEventTargets.delete(conn);
-				break;
-			}
-		}
+		this.#services.get<EventService>("events").dropTarget(connectionId);
 	}
 	/** Scheduled tasks (cron): loaded from ~/.musepi/crons.json; a 30s
 	 *  scanner runs due tasks in fresh sessions (kimi cron parity). */
@@ -3111,7 +3102,7 @@ export class DaemonServer {
 		host.setCollabToolProvider(() => this.#collabToolHandle());
 		host.setScheduledTaskProvider(sessionCwd => this.scheduledTaskHandle(sessionCwd));
 		host.setOnExtensionNotification((channel, message) => {
-			this.#broadcastExtensionNotification(channel, message);
+			this.#services.get<EventService>("events").broadcastExtensionNotification(channel, message);
 		});
 		this.#host = host;
 		// L2 宿主服务注册表（P1 服务抽取，docs/review/0.5.0-m2-daemon-host-layering.md）：
@@ -3121,6 +3112,13 @@ export class DaemonServer {
 			new UsageService({
 				get: sessionId => this.#host.get(sessionId),
 				ensureRegistry: () => this.#host.ensureRegistry(),
+			}),
+		);
+		this.#services.register(
+			new EventService({
+				emitEvent: (conn, event) => this.#host.emitEvent(conn as DaemonConnection, event),
+				catchupFrom: (sessionId, afterSeq, conn) =>
+					this.#host.catchupFrom(sessionId, afterSeq, conn as DaemonConnection),
 			}),
 		);
 		this.#cronTasks = loadCronTasks();
@@ -3431,7 +3429,7 @@ export class DaemonServer {
 		task.state.lastError = undefined;
 		task.state.nextRunAt = computeNextRun(task, startedAt) ?? undefined;
 		saveCronTasks(this.#cronTasks);
-		this.#broadcastCronsChanged();
+		this.#services.get<EventService>("events").broadcastCronsChanged();
 		let live: LiveSession | undefined;
 		try {
 			const { sessionId } = await this.#host.createSession({
@@ -3457,7 +3455,7 @@ export class DaemonServer {
 				saveCronRuns(this.#cronRuns);
 				saveCronTasks(this.#cronTasks);
 				this.#cronStarting.delete(task.id);
-				this.#broadcastCronsChanged();
+				this.#services.get<EventService>("events").broadcastCronsChanged();
 			};
 			const unsubscribe = live.agentSession.subscribe(e => {
 				if (e.type !== "agent_end") return;
@@ -3483,7 +3481,7 @@ export class DaemonServer {
 			saveCronRuns(this.#cronRuns);
 			saveCronTasks(this.#cronTasks);
 			this.#cronStarting.delete(task.id);
-			this.#broadcastCronsChanged();
+			this.#services.get<EventService>("events").broadcastCronsChanged();
 		}
 	}
 
@@ -3621,42 +3619,13 @@ export class DaemonServer {
 			// 否则虚拟技能列表最多滞后 10s TTL。
 			this.#skillsCache = null;
 			void import("./extension-artifact-compiler").then(m => m.invalidateExtensionCaches());
-			this.#broadcastExtensionsChanged();
+			this.#services.get<EventService>("events").broadcastExtensionsChanged();
 			// P5 HMR v2: session-scoped hot reload of loaded extensions whose
 			// entry changed on disk. The watcher callback filename is
 			// unreliable (empty/short names on Windows recursive watch), so
 			// the per-entry mtime comparison decides what changed.
 			this.#reloadChangedSessionExtensions();
 		}, 500);
-	}
-
-	/** 广播 extensions.changed(extensions.list 数据变更后调用):GUI 的
-	 *  单例注册表监听此事件即时重拉 —— mutation RPC 清缓存后必须广播,
-	 *  否则 UI 要等下一个轮询周期(10s)才看到翻转。 */
-	#broadcastExtensionsChanged(): void {
-		const seq = ++this.#globalEventSeq;
-		for (const conn of this.#globalEventTargets) {
-			this.#host.emitEvent(conn, {
-				kind: "event",
-				seq,
-				payload: { type: "extensions.changed", at: Date.now() },
-			});
-		}
-	}
-
-	/** 广播 extensions.notification(扩展 registerNotificationChannel 推送):
-	 *  转发到 events.subscribe 的 GUI 客户端。频道消息带 channel + 完整
-	 *  message(text/title/kind),GUI 渲染为通知。 */
-	#broadcastExtensionNotification(channel: string, message: ExtensionNotificationMessage): void {
-		const seq = ++this.#globalEventSeq;
-		const payload = { type: "extensions.notification" as const, channel, message, at: Date.now() };
-		for (const conn of this.#globalEventTargets) {
-			try {
-				this.#host.emitEvent(conn, { kind: "event", seq, payload });
-			} catch {
-				this.#globalEventTargets.delete(conn);
-			}
-		}
 	}
 
 	/** 预设目录(决策 #5):env MUSEPI_MODES_DIR 可覆盖(隔离测试),默认 <home>/.musepi/modes。 */
@@ -3689,22 +3658,6 @@ export class DaemonServer {
 		return { rootDir, slug, dir: path.join(rootDir, slug) };
 	}
 
-	/** 广播 modes.changed(设置页/输入框 chip 即时刷新;与 extensions.changed 同 seq 机制)。 */
-	#broadcastModesChanged(): void {
-		const seq = ++this.#globalEventSeq;
-		for (const conn of this.#globalEventTargets) {
-			this.#host.emitEvent(conn, {
-				kind: "event",
-				seq,
-				payload: { type: "modes.changed", at: Date.now() },
-			});
-		}
-	}
-
-	/** 广播 crons.changed(定时任务列表/运行状态变更后调用):任务中心页与
-	 *  app 级完成通知监听此事件即时刷新,否则要等下一个 30s 轮询周期。
-	 *  与 extensions.changed 同 seq 机制,payload 只带时间戳,客户端重拉
-	 *  cron.list(任务/运行数据量小,重拉比广播全量更省心)。 */
 	/**
 	 * Create/merge one scheduled task into the daemon-owned list and persist it
 	 * (issue #11). Shared by the `cron.upsert` RPC and the in-session
@@ -3718,7 +3671,7 @@ export class DaemonServer {
 		if (existing) this.#cronTasks = this.#cronTasks.map(x => (x.id === existing.id ? merged : x));
 		else this.#cronTasks.push(merged);
 		saveCronTasks(this.#cronTasks);
-		this.#broadcastCronsChanged();
+		this.#services.get<EventService>("events").broadcastCronsChanged();
 		return merged;
 	}
 
@@ -3758,29 +3711,6 @@ export class DaemonServer {
 			list: async () => this.#cronTasks,
 			defaultCwd: () => fallbackCwd,
 		};
-	}
-
-	#broadcastCronsChanged(): void {
-		const seq = ++this.#globalEventSeq;
-		for (const conn of this.#globalEventTargets) {
-			this.#host.emitEvent(conn, {
-				kind: "event",
-				seq,
-				payload: { type: "crons.changed", at: Date.now() },
-			});
-		}
-	}
-	/** 广播 models.changed(models.add/models.remove 后 GUI 模型选择器即时
-	 *  重拉 —— 会话内的选择器常驻挂载,没有这个事件它永远停在旧列表)。 */
-	#broadcastModelsChanged(): void {
-		const seq = ++this.#globalEventSeq;
-		for (const conn of this.#globalEventTargets) {
-			this.#host.emitEvent(conn, {
-				kind: "event",
-				seq,
-				payload: { type: "models.changed", at: Date.now() },
-			});
-		}
 	}
 
 	/**
@@ -4852,7 +4782,7 @@ export class DaemonServer {
 				// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
 				// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
 				this.#extensionsCache = null;
-				this.#broadcastExtensionsChanged();
+				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "skills.install": {
@@ -4872,7 +4802,7 @@ export class DaemonServer {
 				});
 				this.#skillsCache = null;
 				this.#extensionsCache = null;
-				this.#broadcastExtensionsChanged();
+				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true, name: result.name, dir: result.dir };
 			}
 			case "skills.read": {
@@ -5115,7 +5045,7 @@ export class DaemonServer {
 						}
 					}
 					this.#extensionsCache = null;
-					this.#broadcastExtensionsChanged();
+					this.#services.get<EventService>("events").broadcastExtensionsChanged();
 					return { ok: true };
 				}
 				// Generic settings-mirror builtins (task-card style, magic
@@ -5131,7 +5061,7 @@ export class DaemonServer {
 					);
 					await settings.flush();
 					this.#extensionsCache = null;
-					this.#broadcastExtensionsChanged();
+					this.#services.get<EventService>("events").broadcastExtensionsChanged();
 					return { ok: true };
 				}
 				if (p.id.startsWith("mcp:")) {
@@ -5163,7 +5093,7 @@ export class DaemonServer {
 					await settings.flush();
 				}
 				this.#extensionsCache = null;
-				this.#broadcastExtensionsChanged();
+				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "extensions.setForceEnabled": {
@@ -5185,16 +5115,15 @@ export class DaemonServer {
 				await settings.flush();
 				this.#extensionsCache = null;
 				this.#pluginsCache = null;
-				this.#broadcastExtensionsChanged();
+				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "events.subscribe": {
-				// Global (non-session) daemon events: extensions.changed
-				// (HMR — extension source/config edits invalidate caches and
-				// the renderer refreshes slots/panels immediately instead of
-				// waiting for the next poll).
-				this.#globalEventTargets.add(conn);
-				return { ok: true };
+				// 委托 EventService（P1 服务抽取；原实现搬至
+				// services/event-service.ts，行为不变）。全局（非会话）事件：
+				// extensions.changed（HMR——扩展源/配置变更立即使缓存失效，
+				// 渲染层即时刷新槽位/面板，不等下一轮询）。
+				return this.#services.get<EventService>("events").subscribe(conn);
 			}
 			case "extensions.setProviderEnabled": {
 				// Provider-level toggle (TUI parity): enableProvider /
@@ -5212,7 +5141,7 @@ export class DaemonServer {
 				const settings = this.#host.settings();
 				if (settings) await settings.flush();
 				this.#extensionsCache = null;
-				this.#broadcastExtensionsChanged();
+				this.#services.get<EventService>("events").broadcastExtensionsChanged();
 				return { ok: true };
 			}
 			case "ext.call": {
@@ -5392,7 +5321,7 @@ export class DaemonServer {
 				});
 				const file = modeFilePath(dir, p.id);
 				fs.writeFileSync(file, `${JSON.stringify(def, null, 2)}\n`, "utf8");
-				this.#broadcastModesChanged();
+				this.#services.get<EventService>("events").broadcastModesChanged();
 				return { ok: true };
 			}
 			case "modes.delete": {
@@ -5415,7 +5344,7 @@ export class DaemonServer {
 				} catch (error) {
 					if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 				}
-				this.#broadcastModesChanged();
+				this.#services.get<EventService>("events").broadcastModesChanged();
 				return { ok: true };
 			}
 			case "modes.validate": {
@@ -5519,7 +5448,7 @@ export class DaemonServer {
 					this.#cronRuns = this.#cronRuns.filter(r => r.taskId !== task.id);
 					saveCronRuns(this.#cronRuns);
 				}
-				this.#broadcastCronsChanged();
+				this.#services.get<EventService>("events").broadcastCronsChanged();
 				return { tasks: this.#cronTasks };
 			}
 			case "cron.toggle": {
@@ -5529,7 +5458,7 @@ export class DaemonServer {
 				task.enabled = enabled !== false;
 				task.state.nextRunAt = task.enabled ? (computeNextRun(task, Date.now()) ?? undefined) : undefined;
 				saveCronTasks(this.#cronTasks);
-				this.#broadcastCronsChanged();
+				this.#services.get<EventService>("events").broadcastCronsChanged();
 				return { tasks: this.#cronTasks };
 			}
 			case "cron.runNow": {
@@ -5537,7 +5466,7 @@ export class DaemonServer {
 				const task = this.#cronTasks.find(t => t.id === id);
 				if (!task) throw new Error(`cron.runNow: unknown task "${id}"`);
 				void this.#cronRun(task);
-				this.#broadcastCronsChanged();
+				this.#services.get<EventService>("events").broadcastCronsChanged();
 				return { ok: true, tasks: this.#cronTasks };
 			}
 			case "widget.schema": {
@@ -6324,17 +6253,12 @@ export class DaemonServer {
 				};
 			}
 			case "session.catchup": {
-				// M1.4 gap fill for live subscriptions: the client's event
-				// stream dropped a frame (reconnect race, batcher loss), it
-				// detected the seq gap and asks for everything after its
-				// watermark. Deltas ride the normal push channel (batcher);
-				// the response itself stays lightweight.
-				const p = (params ?? {}) as { sessionId?: unknown; afterSeq?: unknown };
-				if (typeof p.sessionId !== "string" || !p.sessionId) throw new Error("sessionId required");
-				if (typeof p.afterSeq !== "number" || !Number.isInteger(p.afterSeq) || p.afterSeq < 0) {
-					throw new Error("afterSeq must be a non-negative integer");
-				}
-				return await this.#host.catchupFrom(p.sessionId, p.afterSeq, conn);
+				// 委托 EventService（P1 服务抽取；入参校验在服务内，补推实现
+				// 仍归 DaemonSessionHost.catchupFrom——journal 序/session tree
+				// 事件序的载体，P1 不动）。M1.4 gap fill：客户端事件流掉帧
+				//（重连竞态/batcher 丢失）后按水位请求补推，delta 帧走常规
+				// 推送通道（batcher），响应体保持轻量。
+				return this.#services.get<EventService>("events").catchup(params ?? {}, conn);
 			}
 			case "session.thinking": {
 				// Mobile parity of the TUI thinking selector: sanitize through
@@ -7290,10 +7214,7 @@ export class DaemonServer {
 				try {
 					const { downloadSttModel } = await import("../stt/downloader");
 					const emitSttEvent = (payload: Record<string, unknown>): void => {
-						const seq = ++this.#globalEventSeq;
-						for (const conn of this.#globalEventTargets) {
-							this.#host.emitEvent(conn, { kind: "event", seq, payload });
-						}
+						this.#services.get<EventService>("events").broadcast(payload);
 					};
 					// Exactly one run per key lives in #sttDownloads at a time,
 					// so the finally can drop it unconditionally.
@@ -8921,7 +8842,7 @@ export class DaemonServer {
 						},
 					});
 					await registry.refreshProvider(p.providerId, "online");
-					this.#broadcastModelsChanged();
+					this.#services.get<EventService>("events").broadcastModelsChanged();
 					return { ok: true, identity: identity ?? null };
 				} finally {
 					this.#promptResolvers.delete(p.providerId);
@@ -8951,7 +8872,7 @@ export class DaemonServer {
 				const storage = registry.authStorage;
 				await storage.importApiKey(p.providerId, p.apiKey.trim());
 				await registry.refreshProvider(p.providerId, "online");
-				this.#broadcastModelsChanged();
+				this.#services.get<EventService>("events").broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "providers.testConnection": {
@@ -9015,7 +8936,7 @@ export class DaemonServer {
 					}
 				}
 				await registry.refreshProvider(p.providerId, "online");
-				this.#broadcastModelsChanged();
+				this.#services.get<EventService>("events").broadcastModelsChanged();
 				return { ok: true, removed: p.credentialId !== undefined ? 1 : credentials.length };
 			}
 			case "media.providers": {
@@ -9854,7 +9775,7 @@ export class DaemonServer {
 				fs.writeFileSync(filePath, YAML.stringify({ providers }, null, 2));
 				// mtime changed → registry reloads the custom models on refresh().
 				await registry.refresh();
-				this.#broadcastModelsChanged();
+				this.#services.get<EventService>("events").broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "models.remove": {
@@ -9883,7 +9804,7 @@ export class DaemonServer {
 				}
 				fs.writeFileSync(filePath, YAML.stringify({ providers }, null, 2));
 				await registry.refresh();
-				this.#broadcastModelsChanged();
+				this.#services.get<EventService>("events").broadcastModelsChanged();
 				return { ok: true };
 			}
 			case "tool.approve": {
