@@ -1,7 +1,7 @@
 {
 	"name": "@musepi/mobile",
 	"private": true,
-	"version": "0.4.39",
+	"version": "0.4.40",
 	"description": "MusePi mobile companion — Capacitor shell around client-core (join a desktop daemon from a phone/tablet)",
 	"type": "module",
 	"scripts": {
