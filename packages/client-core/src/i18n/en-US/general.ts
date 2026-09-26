@@ -607,6 +607,15 @@ export const general = {
 	// One-click install feedback + card badge states (skill market discover).
 	"skill market installed": "Installed",
 	"skill market install failed {name}": "Failed to install {name}: {msg}",
+	// Card-click preview dialog (look before you install).
+	"skill market install": "Install",
+	"skill market homepage": "Source page",
+	"skill market preview loading": "Loading preview…",
+	"skill market preview none": "No content preview for this source",
+	"skill market preview version": "Latest version",
+	"skill market preview files": "Files",
+	"skill market preview security": "Security audit",
+	"skill market search skills.sh hint": "skills.sh is a search source — type a keyword to query its catalog",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	discover: "Discover",
 	"installed {count}": "Installed {count}",

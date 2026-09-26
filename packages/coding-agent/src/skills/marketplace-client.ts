@@ -50,6 +50,9 @@ export interface SkillMarketEntry {
 	verified?: boolean;
 	/** Repo/URL usable for install; skills.sh exposes this, SkillHub does not. */
 	installUrl?: string;
+	/** skills.sh: the publisher repo (`owner/repo`); the slug is the
+	 *  repo-relative skill folder. Drives subdir-aware install + preview. */
+	repo?: string;
 }
 
 export interface SkillMarketCategory {
@@ -266,7 +269,11 @@ export async function searchSkillsSh(query: string, limit = 24): Promise<SkillMa
 			author: r.source,
 			installs: num(r.installs),
 			// skills.sh exposes the GitHub repo as the install target and a
-			// canonical page per skill.
+			// canonical page per skill. The skill id is the repo-relative
+			// folder — installs must pass it as `subdir` (multi-skill repos
+			// otherwise hit the ambiguous-SKILL.md error) and previews read
+			// SKILL.md straight from the repo.
+			repo: r.source,
 			installUrl: r.source ? `https://github.com/${r.source}` : undefined,
 			homepage: r.id ? `${SKILLS_SH_BASE}/${r.id}` : undefined,
 		};

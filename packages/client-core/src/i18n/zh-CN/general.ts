@@ -601,6 +601,15 @@ export const general = {
 	// 一键安装的结果反馈与卡片角标态(技能市场 · 发现)。
 	"skill market installed": "已安装",
 	"skill market install failed {name}": "安装 {name} 失败：{msg}",
+	// 卡片点击预览弹窗（信息先览，再决定安装）。
+	"skill market install": "安装",
+	"skill market homepage": "来源主页",
+	"skill market preview loading": "正在加载预览…",
+	"skill market preview none": "该来源暂不支持正文预览",
+	"skill market preview version": "最新版本",
+	"skill market preview files": "文件清单",
+	"skill market preview security": "安全审计",
+	"skill market search skills.sh hint": "skills.sh 是搜索源：输入关键词即可检索其目录",
 	// 能力中心 → 技能 tab 的子分段（发现 / 我安装的 N）。
 	discover: "发现",
 	"installed {count}": "我安装的 {count}",

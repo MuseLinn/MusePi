@@ -1711,6 +1711,12 @@ export class DaemonServer {
 			case "skills.marketplace.detail": {
 				return this.#services.get<MarketplaceService>("marketplace").skillDetail(params ?? {});
 			}
+			case "skills.marketplace.install": {
+				return this.#services.get<MarketplaceService>("marketplace").installMarketSkill(params ?? {});
+			}
+			case "skills.marketplace.preview": {
+				return this.#services.get<MarketplaceService>("marketplace").previewMarketSkill(params ?? {});
+			}
 			case "context.list": {
 				// Context files (AGENTS.md / CLAUDE.md …) for the extensions
 				// center (skills + context unified view). Paths + level only —

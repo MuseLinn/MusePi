@@ -5,6 +5,16 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **技能卡片点击预览（信息先览，再决定安装）**：能力中心「发现」屏的卡片现在整卡可点，弹出液态玻璃预览弹窗——两个来源各取所长：skills.sh 由 daemon 从发布者仓库直读 `SKILL.md` 正文（其搜索接口不带描述，正文预览补上"看得到内容"的缺口）；SkillHub 走详情接口展示最新版本、文件清单与安全审计。底部安装键与卡片角标同一条来源感知路由。新增 `skills.marketplace.preview` RPC。
+  - EN: skill cards are now clickable with a look-before-you-install preview: the whole card opens a liquid-glass dialog where each source plays to its strength — skills.sh previews stream the publisher repo's `SKILL.md` straight from the daemon (its search API carries no description, and the body preview closes that gap); SkillHub shows latest version, file manifest, and security audit via the detail endpoint. The footer install button rides the same source-aware route as the card badge. New `skills.marketplace.preview` RPC.
+
+### Fixed
+
+- **技能市场安装链路全面修复**：SkillHub 技能的"添加"此前把目录主页（`api.skillhub.cn/...`）当 git URL 直接 clone，必然 403——现在 daemon 新增 `skills.marketplace.install` 来源感知路由：SkillHub 走官方 `api/v1/download`（302 → 对象存储）zip 直装（fflate 解压 + zip-slip 防护 + 与 git 安装同一套 SKILL.md 定位/命名约定）；skills.sh 以 `repo + slug`（skill id 即仓库内子目录）做子目录 git 安装，修掉 monorepo（如 `anthropics/skills`）根目录多 SKILL.md 必中的歧义报错。卡片内容也有料了：skills.sh 卡片显示发布者仓库，筛选为 skills.sh 且无关键词时给出"输入关键词即可检索"的引导（不再是误导性的"没有匹配的技能"）；「推荐套件」行的来源 pill 修正为真正的 全部来源 / SkillHub / skills.sh 三选一（此前"SkillHub 套件"pill 实际选中的是"全部来源"）。
+  - EN: skill-marketplace install fully rewired: SkillHub's "add" used to feed the catalog homepage (`api.skillhub.cn/...`) straight to git clone, which always 403'd — the daemon now has a source-aware `skills.marketplace.install` route: SkillHub installs via the official `api/v1/download` (302 → object storage) zip path (fflate extraction, zip-slip guard, same SKILL.md locate/name contract as the git installer); skills.sh installs with `repo + slug` (the skill id IS the repo-relative folder) as a subdirectory git clone, fixing the guaranteed ambiguous-SKILL.md error on monorepos like `anthropics/skills`. Cards carry content now too: skills.sh cards show the publisher repo, the skills.sh filter without a keyword says "type a keyword to search its catalog" instead of the misleading "no matching skills", and the 推荐套件 row's source pills are a real all / SkillHub / skills.sh three-way (the "SkillHub 套件" pill had actually selected "all sources").
+
 ## [0.4.39] - 2026-09-26
 
 ### Added

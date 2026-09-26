@@ -81,6 +81,7 @@
 		"bun-pty": "^0.4.10",
 		"chalk": "catalog:",
 		"fast-xml-parser": "catalog:",
+		"fflate": "^0.8.3",
 		"header-generator": "catalog:",
 		"linkedom": "catalog:",
 		"lru-cache": "catalog:",

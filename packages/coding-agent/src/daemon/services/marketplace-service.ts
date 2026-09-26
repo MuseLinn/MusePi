@@ -73,6 +73,8 @@ export class MarketplaceService implements DaemonService {
 		"skills.marketplace.categories": "skillCategories",
 		"skills.marketplace.featured": "featuredSkills",
 		"skills.marketplace.detail": "skillDetail",
+		"skills.marketplace.install": "installMarketSkill",
+		"skills.marketplace.preview": "previewMarketSkill",
 	} as const;
 
 	readonly #deps: MarketplaceServiceDeps;
@@ -406,5 +408,56 @@ export class MarketplaceService implements DaemonService {
 		if (!p.slug) throw new Error("skills.marketplace.detail: slug required");
 		const { skillHubDetail } = await import("../../skills/marketplace-client");
 		return await skillHubDetail(p.slug);
+	}
+
+	/** RPC skills.marketplace.install：来源感知安装（SkillHub zip 直装 /
+	 *  skills.sh 子目录 git 安装）——修掉目录主页当 git URL clone 403 的
+	 *  旧动线（2026-09-26 线上实测）。 */
+	async installMarketSkill(params: unknown) {
+		const p = (params ?? {}) as {
+			source?: "skillhub" | "skills.sh";
+			slug?: string;
+			repo?: string;
+			name?: string;
+			overwrite?: boolean;
+		};
+		if (!p.source || !p.slug) throw new Error("skills.marketplace.install: source and slug required");
+		const destRoot = path.join(getAgentDir(), "skills");
+		let result: { name: string; dir: string };
+		if (p.source === "skillhub") {
+			const { installSkillFromSkillHub } = await import("../../skills/marketplace-install");
+			result = await installSkillFromSkillHub(p.slug, destRoot, { name: p.name, overwrite: p.overwrite });
+		} else {
+			if (!p.repo) throw new Error("skills.marketplace.install: repo required for skills.sh");
+			const { installSkillFromGit } = await import("../../skills/install");
+			// The skill id IS the repo-relative folder; without subdir a
+			// multi-skill repo (anthropics/skills, …) fails the ambiguous
+			// SKILL.md resolution inside the git installer.
+			result = await installSkillFromGit({
+				url: `https://github.com/${p.repo}`,
+				subdir: p.slug,
+				name: p.name,
+				overwrite: p.overwrite,
+				destRoot,
+			});
+		}
+		this.#skillsCache = null;
+		this.#deps.invalidateExtensionsCache();
+		this.#deps.onChanged();
+		return { ok: true, name: result.name, dir: result.dir };
+	}
+
+	/** RPC skills.marketplace.preview：点击卡片先预览——skills.sh 从发布者
+	 *  仓库直读 SKILL.md 正文；SkillHub 回退到详情（版本/文件/安全审计）。 */
+	async previewMarketSkill(params: unknown) {
+		const p = (params ?? {}) as { source?: "skillhub" | "skills.sh"; slug?: string; repo?: string };
+		if (!p.source || !p.slug) throw new Error("skills.marketplace.preview: source and slug required");
+		if (p.source === "skills.sh") {
+			if (!p.repo) return { content: null };
+			const { previewSkillsShSkill } = await import("../../skills/marketplace-install");
+			return await previewSkillsShSkill(p.repo, p.slug);
+		}
+		const { skillHubDetail } = await import("../../skills/marketplace-client");
+		return { detail: await skillHubDetail(p.slug) };
 	}
 }

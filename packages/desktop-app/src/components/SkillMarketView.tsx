@@ -44,6 +44,8 @@ interface SkillEntry {
 	homepage?: string;
 	verified?: boolean;
 	installUrl?: string;
+	/** skills.sh: publisher repo (`owner/repo`); slug is the repo-relative folder. */
+	repo?: string;
 }
 
 interface SkillCategory {
@@ -79,6 +81,8 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const [page, setPage] = useState(1);
 	// null = 关闭;对象 = 打开对话框并预填(卡片带入目录来源,裸按钮空表)。
 	const [addPrefill, setAddPrefill] = useState<{ url?: string; name?: string } | null>(null);
+	// 卡片点击预览（信息先览，再决定安装）——与 addPrefill 互斥的两层弹窗。
+	const [previewEntry, setPreviewEntry] = useState<SkillEntry | null>(null);
 
 	const [pageData, setPageData] = useState<MarketPage | null>(null);
 	const [featured, setFeatured] = useState<SkillEntry[]>([]);
@@ -190,18 +194,30 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
 	/**
-	 * 一键安装 (skills.sh 卡片 / 精选卡):直接用条目自带的 installUrl
-	 * (GitHub repo) 走 skills.install —— 这正是该 RPC 的 v1 契约
-	 * (`{url, subdir?, name?, overwrite?}`)。装完回读 skills.list,
+	 * 一键安装 —— 走 `skills.marketplace.install` 的来源感知路由：
+	 * SkillHub 由 daemon 下载官方 zip（302 → 对象存储）解压安装，不再把
+	 * 目录主页当 git URL clone（403 旧案）；skills.sh 以 repo+slug 走
+	 * 子目录 git 安装（skill id 即仓库内文件夹）。装完回读 skills.list，
 	 * 卡片就地翻「已安装」,父级同步「我安装的 N」计数。
 	 */
 	const installEntry = useCallback(
 		(entry: SkillEntry): void => {
-			if (!rpc || !entry.installUrl || busyId) return;
+			if (!rpc || busyId) return;
+			if (entry.source === "skills.sh" && !entry.repo) {
+				setNotice({
+					ok: false,
+					text: t("skill market install failed {name}", { name: entry.name, msg: "no repo" }),
+				});
+				return;
+			}
 			setBusyId(entry.id);
 			setNotice(null);
 			void rpc
-				.request<{ ok: boolean; name: string }>("skills.install", { url: entry.installUrl })
+				.request<{ ok: boolean; name: string }>("skills.marketplace.install", {
+					source: entry.source,
+					slug: entry.slug,
+					...(entry.repo ? { repo: entry.repo } : {}),
+				})
 				.then(res => {
 					setNotice({ ok: true, text: t("skill installed {name}", { name: res?.name ?? entry.name }) });
 					refreshInstalled();
@@ -301,7 +317,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 								installed={isInstalled(e)}
 								busy={busyId === e.id}
 								onInstall={() => installEntry(e)}
-								onOpen={() => setAddPrefill({ url: e.installUrl ?? e.homepage ?? "", name: e.name })}
+								onOpen={() => setPreviewEntry(e)}
 							/>
 						))}
 					</div>
@@ -315,7 +331,8 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					<div className="gui-skill-market-pills">
 						{(
 							[
-								["all", t("skill market source skillhub")],
+								["all", t("skill market source all")],
+								["skillhub", t("skill market source skillhub")],
 								["skills.sh", t("skill market source skills.sh")],
 							] as [SourceFilter, string][]
 						).map(([id, label]) => (
@@ -365,7 +382,11 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					))}
 				</div>
 				{entries.length === 0 && !loading ? (
-					<div className="gui-skill-market-note">{t("skill market empty")}</div>
+					source === "skills.sh" && !keyword.trim() ? (
+						<div className="gui-skill-market-note">{t("skill market search skills.sh hint")}</div>
+					) : (
+						<div className="gui-skill-market-note">{t("skill market empty")}</div>
+					)
 				) : (
 					<div className="gui-skill-market-grid">
 						{entries.map(e => (
@@ -375,7 +396,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 								installed={isInstalled(e)}
 								busy={busyId === e.id}
 								onInstall={() => installEntry(e)}
-								onOpen={() => setAddPrefill({ url: e.installUrl ?? e.homepage ?? "", name: e.name })}
+								onOpen={() => setPreviewEntry(e)}
 							/>
 						))}
 					</div>
@@ -425,6 +446,16 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 						refreshInstalled();
 						onInstalled?.();
 					}}
+				/>
+			) : null}
+			{previewEntry ? (
+				<SkillPreviewDialog
+					rpc={rpc}
+					entry={previewEntry}
+					installed={isInstalled(previewEntry)}
+					busy={busyId === previewEntry.id}
+					onInstall={() => installEntry(previewEntry)}
+					onClose={() => setPreviewEntry(null)}
 				/>
 			) : null}
 		</div>
@@ -501,7 +532,12 @@ function CardAddButton({
 			type="button"
 			className="gui-skill-market-plus"
 			title={t("add skill")}
-			onClick={entry.installUrl ? onInstall : onOpen}
+			onClick={ev => {
+				// 角标动作不冒泡到卡片主体的预览点击。
+				ev.stopPropagation();
+				if (entry.installUrl || entry.source) onInstall();
+				else onOpen();
+			}}
 		>
 			<Icon name="add" className="h-3.5 w-3.5" />
 		</button>
@@ -522,13 +558,18 @@ function FeaturedCard({
 	onOpen(): void;
 }): ReactNode {
 	return (
-		<article className="gui-skill-market-fcard">
+		<article
+			className="gui-skill-market-fcard gui-skill-market-clickable"
+			onClick={onOpen}
+			title={entry.descriptionZh || entry.description || entry.name}
+		>
 			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
 			<div className="gui-skill-market-fcard-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-fcard-name">{entry.name}</span>
 			</div>
 			<p className="gui-skill-market-fcard-desc">{entry.descriptionZh || entry.description}</p>
+			{entry.author ? <footer className="gui-skill-market-meta">{entry.author}</footer> : null}
 		</article>
 	);
 }
@@ -547,11 +588,17 @@ function SkillCard({
 	onOpen(): void;
 }): ReactNode {
 	const meta: string[] = [];
+	if (entry.author) meta.push(entry.author);
 	if (typeof entry.stars === "number") meta.push(`★ ${fmtCount(entry.stars)}`);
 	if (typeof entry.downloads === "number") meta.push(`↓ ${fmtCount(entry.downloads)}`);
+	if (typeof entry.installs === "number" && !entry.downloads) meta.push(`↓ ${fmtCount(entry.installs)}`);
 	if (entry.version) meta.push(`v${entry.version}`);
 	return (
-		<article className="gui-skill-market-card">
+		<article
+			className="gui-skill-market-card gui-skill-market-clickable"
+			onClick={onOpen}
+			title={entry.descriptionZh || entry.description || entry.name}
+		>
 			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
@@ -662,6 +709,207 @@ function AddSkillDialog({
 					>
 						{busy ? t("installing") : t("add skill")}
 					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/** 卡片点击的信息先览弹窗（液态玻璃 + spring 动效，样式见
+ *  gui-workspace.css 的 gui-skill-market-dialog* 族）。两个来源各取所长：
+ *  - skills.sh：daemon 从发布者仓库直读 SKILL.md 正文（搜索接口不带描述，
+ *    正文预览补上「看不到内容」的缺口）；
+ *  - SkillHub：详情 RPC（版本 + 文件清单 + 安全审计）。
+ *  footer 的来源感知安装与卡片角标同一条 `skills.marketplace.install` 路由。 */
+function SkillPreviewDialog({
+	rpc,
+	entry,
+	installed,
+	busy,
+	onInstall,
+	onClose,
+}: {
+	rpc: RpcClient | null;
+	entry: SkillEntry;
+	installed: boolean;
+	busy: boolean;
+	onInstall(): void;
+	onClose(): void;
+}): ReactNode {
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [markdown, setMarkdown] = useState<string | null>(null);
+	const [detail, setDetail] = useState<{
+		latestVersion?: string;
+		files?: { path: string; size: number }[];
+		security?: { status?: string; statusText?: string; reportUrl?: string }[];
+	} | null>(null);
+
+	useEffect(() => {
+		if (!rpc) return;
+		let alive = true;
+		setLoading(true);
+		setError(null);
+		setMarkdown(null);
+		setDetail(null);
+		void rpc
+			.request<{ content?: string | null; detail?: unknown }>("skills.marketplace.preview", {
+				source: entry.source,
+				slug: entry.slug,
+				...(entry.repo ? { repo: entry.repo } : {}),
+			})
+			.then(res => {
+				if (!alive) return;
+				if (entry.source === "skills.sh") {
+					setMarkdown(res?.content ?? null);
+				} else {
+					setDetail((res?.detail ?? null) as typeof detail);
+				}
+			})
+			.catch((e: unknown) => alive && setError(e instanceof Error ? e.message : String(e)))
+			.finally(() => alive && setLoading(false));
+		return () => {
+			alive = false;
+		};
+	}, [rpc, entry]);
+
+	const meta: string[] = [];
+	if (entry.author) meta.push(entry.author);
+	if (typeof entry.stars === "number") meta.push(`★ ${fmtCount(entry.stars)}`);
+	if (typeof entry.downloads === "number") meta.push(`↓ ${fmtCount(entry.downloads)}`);
+	if (typeof entry.installs === "number" && !entry.downloads) meta.push(`↓ ${fmtCount(entry.installs)}`);
+
+	return (
+		<div
+			className="gui-skill-market-dialog-backdrop"
+			role="presentation"
+			onClick={ev => {
+				ev.stopPropagation();
+				onClose();
+			}}
+		>
+			<div
+				className="gui-skill-market-dialog gui-skill-market-preview"
+				role="dialog"
+				aria-label={entry.name}
+				onClick={ev => ev.stopPropagation()}
+			>
+				<div className="gui-skill-market-dialog-h gui-skill-market-preview-h">
+					<SkillGlyph entry={entry} />
+					<div className="gui-skill-market-preview-title">
+						<span className="gui-skill-market-preview-name">{entry.name}</span>
+						<span className="gui-skill-market-meta">
+							{entry.source === "skillhub"
+								? t("skill market source skillhub")
+								: t("skill market source skills.sh")}
+							{meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
+						</span>
+					</div>
+					<button type="button" className="gui-skill-market-page" onClick={onClose} aria-label={t("close")}>
+						✕
+					</button>
+				</div>
+
+				<div className="gui-skill-market-preview-body">
+					{entry.descriptionZh || entry.description ? (
+						<p className="gui-skill-market-card-desc">{entry.descriptionZh || entry.description}</p>
+					) : null}
+
+					{loading ? <p className="gui-skill-market-note">{t("skill market preview loading")}</p> : null}
+					{error ? <p className="gui-skill-market-warn">{error}</p> : null}
+
+					{!loading && !error && entry.source === "skills.sh" ? (
+						markdown ? (
+							<pre className="gui-skill-market-preview-md">{markdown}</pre>
+						) : (
+							<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+						)
+					) : null}
+
+					{!loading && !error && entry.source === "skillhub" ? (
+						detail ? (
+							<div className="gui-skill-market-preview-detail">
+								{detail.latestVersion ? (
+									<p className="gui-skill-market-meta">
+										{t("skill market preview version")} v{detail.latestVersion}
+									</p>
+								) : null}
+								{detail.files && detail.files.length > 0 ? (
+									<div className="gui-skill-market-preview-files">
+										<p className="gui-skill-market-meta">
+											{t("skill market preview files")} · {detail.files.length}
+										</p>
+										<ul>
+											{detail.files.slice(0, 30).map(f => (
+												<li key={f.path}>
+													{f.path}
+													{f.size > 0 ? ` (${f.size} B)` : ""}
+												</li>
+											))}
+											{detail.files.length > 30 ? <li>…</li> : null}
+										</ul>
+									</div>
+								) : null}
+								{detail.security && detail.security.length > 0 ? (
+									<div className="gui-skill-market-preview-files">
+										<p className="gui-skill-market-meta">{t("skill market preview security")}</p>
+										<ul>
+											{detail.security.map((s, i) => (
+												<li key={i}>
+													{s.statusText ?? s.status ?? "?"}
+													{s.reportUrl ? (
+														<>
+															{" · "}
+															<a href={s.reportUrl} target="_blank" rel="noreferrer">
+																{s.reportUrl}
+															</a>
+														</>
+													) : null}
+												</li>
+											))}
+										</ul>
+									</div>
+								) : null}
+								{!detail.latestVersion && (!detail.files || detail.files.length === 0) ? (
+									<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+								) : null}
+							</div>
+						) : (
+							<p className="gui-skill-market-note">{t("skill market preview none")}</p>
+						)
+					) : null}
+				</div>
+
+				<div className="gui-skill-market-dialog-f">
+					{entry.homepage ? (
+						<a
+							className="gui-skill-market-link"
+							href={entry.homepage}
+							target="_blank"
+							rel="noreferrer"
+							onClick={ev => ev.stopPropagation()}
+						>
+							{t("skill market homepage")}
+						</a>
+					) : null}
+					<span className="gui-skill-market-flex" aria-hidden />
+					{installed ? (
+						<button type="button" className="gui-skill-market-add" disabled>
+							<Icon name="check" className="h-3.5 w-3.5" /> {t("skill market installed")}
+						</button>
+					) : (
+						<button
+							type="button"
+							className="gui-skill-market-add"
+							disabled={busy}
+							onClick={ev => {
+								ev.stopPropagation();
+								onInstall();
+							}}
+						>
+							{busy ? t("installing") : t("skill market install")}
+						</button>
+					)}
 				</div>
 			</div>
 		</div>
