@@ -86,7 +86,9 @@ describe("marketplace install state machine", () => {
 			assert.ok(status.installs.some(i => i.installId === installId && i.state === "failed"));
 
 			// 重试语义：重新发起一次（stub 切回正常 zip）即从头装，不做续传。
-			fetchSpy.mockImplementation(asFetch(async () => new Response(makeZip({ "SKILL.md": SKILL_MD }), { status: 200 })));
+			fetchSpy.mockImplementation(
+				asFetch(async () => new Response(makeZip({ "SKILL.md": SKILL_MD }), { status: 200 })),
+			);
 			const retryEvents = collect();
 			const retryMachine = new MarketplaceInstallMachine(retryEvents.onState);
 			const retryId = retryMachine.start({ source: "skillhub", slug: "demo" }, dest);
