@@ -271,6 +271,7 @@ For the bash tool specifically:
 
 - NEVER commit unless asked.
 - Never use `tsc`/`npx tsc` — always `bun check`.
+- Commit subjects are Conventional Commits (`type(scope): summary`, ≤ 72 chars): the summary states the user-visible change in plain language. No process jargon in the subject — no batch/phase/cut numbering (第N刀, 快赢包, 收官), no roadmap milestone codes (M1.10, P1, C面), no stacked em-dash subtitles; that context goes in the body or the roadmap doc. Bad: `feat(daemon): P1 第十三刀（收官）——会话宿主面文件级拆分`; good: `refactor(daemon): split session-host surface out of server.ts`.
 - Merge commits (maintainer merges of PRs) follow: `Merge PR #<number>: <conventional PR subject> (@<author>)` — e.g. `Merge PR #6386: feat(catalog): add native Meta Model API provider (@eggpeat)`.
 
 ## Testing Guidance
