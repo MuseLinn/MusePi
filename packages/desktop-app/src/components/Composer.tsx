@@ -40,6 +40,7 @@ import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
+import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
@@ -1260,7 +1261,7 @@ export function Composer({
 			const fileChips = attachments.filter(a => a.kind === "file");
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-			const baseObjective = `${quotePrefix}${objective}`.trim();
+			const baseObjective = `${quotePrefix}${expandMentionTokens(objective, attachments)}`.trim();
 			void (async () => {
 				let refs: string[] = [];
 				if (fileChips.length > 0) {
@@ -1431,7 +1432,12 @@ export function Composer({
 			}
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-			const finalMsg = quotePrefix ? `${quotePrefix}${payload}`.trim() : payload;
+			// Attachment mentions (Kimi parity): `@附件[名]` tokens become
+			// explicit references — image chips → `[图片:名]` (pixels ride the
+			// wire images channel as always), file chips → the existing
+			// `[Attachment] <workspace path>` line, stale tokens verbatim.
+			const expanded = expandMentionTokens(payload, attachments);
+			const finalMsg = quotePrefix ? `${quotePrefix}${expanded}`.trim() : expanded;
 			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
 			// quote/attachment) is the "continue working" signal — delivered
 			// as a hidden synthetic directive, not a visible user message.
@@ -1882,6 +1888,26 @@ export function Composer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+				onMentionAttachment={id => {
+					// Kimi parity: insert a mention token at the caret (the
+					// trailing space also closes the @ completion panel — its
+					// trigger treats a whitespace tail as prose).
+					const a = attachments.find(x => x.id === id);
+					const ta = taRef.current;
+					if (!a || !ta) return;
+					const { next, caret } = spliceMentionToken(
+						ta.value,
+						ta.selectionStart ?? ta.value.length,
+						ta.selectionEnd ?? ta.value.length,
+						a.name,
+					);
+					setText(next);
+					requestAnimationFrame(() => {
+						ta.setSelectionRange(caret, caret);
+						ta.focus();
+						autosize(taRef.current);
+					});
+				}}
 				onEditSketch={id => {
 					const chip = attachments.find(x => x.id === id);
 					if (!chip) return;
@@ -2230,7 +2256,24 @@ export function Composer({
 					}}
 				/>
 				<div className="gui-ta-stack">
-					<ComposerHighlight text={text} className="gui-ta-highlight--session" />
+					<ComposerHighlight
+						text={text}
+						className="gui-ta-highlight--session"
+						resolveMention={name => {
+							const a = attachments.find(x => x.name === name);
+							if (!a) return { kind: "file", name, stale: true };
+							return { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined };
+						}}
+						onMentionClick={start => {
+							// Pill click = caret jump to the token (hover preview is
+							// display-only). Mousedown default was already cancelled
+							// so focus never left the textarea.
+							const ta = taRef.current;
+							if (!ta) return;
+							ta.focus();
+							ta.setSelectionRange(start, start);
+						}}
+					/>
 					<textarea
 						ref={el => {
 							taRef.current = el;

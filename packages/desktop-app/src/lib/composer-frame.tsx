@@ -185,6 +185,7 @@ export function ComposerFrame({
 	onRemoveAttachment,
 	onEditSketch,
 	onEditImage,
+	onMentionAttachment,
 	onAddAttachment,
 	onAnnotated,
 	aboveRow,
@@ -225,6 +226,10 @@ export function ComposerFrame({
 	/** Edit an image in the sketch board from the attachment lightbox
 	 *  (Codex 编辑预览 parity). Receives the image source. */
 	onEditImage?(src: string): void;
+	/** Chip "mention" button (Kimi desktop parity): insert a reference
+	 *  token for that attachment into the composer text at the caret. The
+	 *  host owns the textarea; the frame only owns the button. */
+	onMentionAttachment?(id: number): void;
 	/** Render the trailing "+" card in the attachment row (opens the
 	 *  all-types picker). Omitted on scenes without attachment intake. */
 	onAddAttachment?(): void;
@@ -259,13 +264,34 @@ export function ComposerFrame({
 }): ReactNode {
 	// Click-to-preview lightbox for image attachment thumbnails (before
 	// send); the gallery covers image chips only — file chips are inert
-	// icon cards with nothing to zoom.
-	const [preview, setPreview] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
+	// icon cards with nothing to zoom. The origin rect captured at open
+	// time drives the lightbox's 一镜到底 morph (M1.10 §3.3); at close the
+	// chip is RE-MEASURED via its data-attach-id — a chip deleted or
+	// scrolled away mid-preview yields null and the close degrades to the
+	// plain fade.
+	const [preview, setPreview] = useState<{
+		items: { src: string; alt: string; id: number }[];
+		index: number | null;
+		originRect: { left: number; top: number; width: number; height: number } | null;
+	} | null>(null);
 	const imageChips = attachments.filter(a => a.kind !== "file" && a.dataUrl);
-	const openPreview = (chipId: number) =>
+	const openPreview = (chipId: number, el: HTMLElement | null) =>
 		setPreview({
-			items: imageChips.map(x => ({ src: x.dataUrl, alt: x.name })),
+			items: imageChips.map(x => ({ src: x.dataUrl, alt: x.name, id: x.id })),
 			index: imageChips.findIndex(x => x.id === chipId),
+			originRect: el?.getBoundingClientRect() ?? null,
+		});
+	// Close-time re-measure of the chip the lightbox is currently showing.
+	const closePreview = () =>
+		setPreview(prev => {
+			if (!prev || prev.index === null) return null;
+			const id = prev.items[prev.index]?.id;
+			const el = id === undefined ? null : document.querySelector<HTMLImageElement>(`img[data-attach-id="${id}"]`);
+			return {
+				...prev,
+				index: null,
+				originRect: el?.isConnected ? el.getBoundingClientRect() : null,
+			};
 		});
 	const frame = (
 		<div
@@ -287,59 +313,93 @@ export function ComposerFrame({
 			 * the trailing "+" only once there are chips to append to. */}
 			{attachments.length > 0 && (
 				<div className="gui-attach-row px-4 pb-2">
-					{attachments.map(a =>
-						a.kind === "file" ? (
-							// File card: extension icon + truncated name (screenshot
-							// parity), X top-right, progress ring while the send-time
-							// fs.write upload is in flight.
-							<div
-								key={a.id}
-								className={`gui-attach-chip gui-attach-chip--file${a.uploading ? " gui-attach-chip--uploading" : ""}`}
-								title={`${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}`}
-							>
-								<span className="gui-attach-file-icon">
-									<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
-								</span>
-								<span className="gui-attach-file-name">{a.name}</span>
-								{a.uploading && <span className="gui-attach-ring" aria-hidden />}
-								<button
-									type="button"
-									className="gui-attach-x"
-									aria-label={t("remove attachment")}
-									onClick={() => onRemoveAttachment(a.id)}
+					{(() => {
+						// Mention numbering (Kimi parity): images count 图片 1..n in
+						// chip order, files count 文件 1..n independently.
+						let imageNo = 0;
+						let fileNo = 0;
+						return attachments.map(a => {
+							const no = a.kind === "file" ? ++fileNo : ++imageNo;
+							const mentionLabel = t(a.kind === "file" ? "mention file {n}" : "mention image {n}", {
+								n: String(no),
+							});
+							return a.kind === "file" ? (
+								// File card: extension icon + truncated name (screenshot
+								// parity), X top-right, progress ring while the send-time
+								// fs.write upload is in flight.
+								<div
+									key={a.id}
+									className={`gui-attach-chip gui-attach-chip--file${a.uploading ? " gui-attach-chip--uploading" : ""}`}
+									title={`${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}`}
 								>
-									<Icon name="close" className="h-3 w-3" />
-								</button>
-							</div>
-						) : (
-							<div key={a.id} className={`gui-attach-chip${a.sketch ? " gui-attach-chip--sketch" : ""}`}>
-								<img
-									src={a.dataUrl}
-									alt={a.name}
-									className="gui-attach-thumb"
-									role="button"
-									tabIndex={0}
-									title={a.sketch ? t("sketch") : t("preview image")}
-									onClick={() => (a.sketch ? onEditSketch(a.id) : openPreview(a.id))}
-									onKeyDown={e => {
-										if (e.key === "Enter" || e.key === " ") {
-											e.preventDefault();
-											if (a.sketch) onEditSketch(a.id);
-											else openPreview(a.id);
-										}
-									}}
-								/>
-								<button
-									type="button"
-									className="gui-attach-x"
-									aria-label={t("remove attachment")}
-									onClick={() => onRemoveAttachment(a.id)}
-								>
-									<Icon name="close" className="h-3 w-3" />
-								</button>
-							</div>
-						),
-					)}
+									<span className="gui-attach-file-icon">
+										<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
+									</span>
+									<span className="gui-attach-file-name">{a.name}</span>
+									{a.uploading && <span className="gui-attach-ring" aria-hidden />}
+									{onMentionAttachment && (
+										<button
+											type="button"
+											className="gui-attach-mention"
+											aria-label={mentionLabel}
+											title={mentionLabel}
+											onClick={() => onMentionAttachment(a.id)}
+										>
+											@
+										</button>
+									)}
+									<button
+										type="button"
+										className="gui-attach-x"
+										aria-label={t("remove attachment")}
+										onClick={() => onRemoveAttachment(a.id)}
+									>
+										<Icon name="close" className="h-3 w-3" />
+									</button>
+								</div>
+							) : (
+								<div key={a.id} className={`gui-attach-chip${a.sketch ? " gui-attach-chip--sketch" : ""}`}>
+									<img
+										src={a.dataUrl}
+										alt={a.name}
+										className="gui-attach-thumb"
+										role="button"
+										tabIndex={0}
+										// Close-time re-measure anchor for the lightbox morph.
+										data-attach-id={a.id}
+										title={a.sketch ? t("sketch") : t("preview image")}
+										onClick={e => (a.sketch ? onEditSketch(a.id) : openPreview(a.id, e.currentTarget))}
+										onKeyDown={e => {
+											if (e.key === "Enter" || e.key === " ") {
+												e.preventDefault();
+												if (a.sketch) onEditSketch(a.id);
+												else openPreview(a.id, e.currentTarget);
+											}
+										}}
+									/>
+									{onMentionAttachment && (
+										<button
+											type="button"
+											className="gui-attach-mention"
+											aria-label={mentionLabel}
+											title={mentionLabel}
+											onClick={() => onMentionAttachment(a.id)}
+										>
+											@
+										</button>
+									)}
+									<button
+										type="button"
+										className="gui-attach-x"
+										aria-label={t("remove attachment")}
+										onClick={() => onRemoveAttachment(a.id)}
+									>
+										<Icon name="close" className="h-3 w-3" />
+									</button>
+								</div>
+							);
+						});
+					})()}
 					{onAddAttachment && (
 						<button
 							type="button"
@@ -363,7 +423,8 @@ export function ComposerFrame({
 		<ImageLightbox
 			items={preview?.items ?? []}
 			index={preview?.index ?? null}
-			onClose={() => setPreview(null)}
+			originRect={preview?.originRect ?? null}
+			onClose={closePreview}
 			onIndexChange={i => setPreview(prev => (prev ? { ...prev, index: i } : prev))}
 			onEdit={
 				onEditImage

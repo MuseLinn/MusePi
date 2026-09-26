@@ -68,6 +68,12 @@ export const composer = {
 	"model & thinking": "模型与思考",
 	"host session model": "宿主会话当前模型",
 
+	// ── 附件提及（Kimi 桌面端对齐）：chip → 输入框 token，渲染为 accent pill + hover 预览 ──
+	"mention attachment": "提及",
+	"mention image {n}": "提及图片 {n}",
+	"mention file {n}": "提及文件 {n}",
+	"attachment removed": "附件已移除",
+
 	// ── Voice input (daemon stt.transcribe; design 「语音四帧」) ──────────────
 	// "voice input" / "voice recording stop" / "voice transcribing" /
 	// "recording…" live in the settings domain already — reuse, don't duplicate.

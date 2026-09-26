@@ -2789,3 +2789,99 @@
 .gui-voice-setup-btn-primary:hover {
 	background: color-mix(in oklab, var(--color-accent, var(--accent)) 28%, transparent);
 }
+
+/* ── Attachment mention pill (appended 2026-09-26, Kimi desktop parity):
+ * the `@附件[名]` token painted by the highlight overlay. Metric-neutral
+ * per the overlay pairing rules: horizontal padding 6px repaid by an equal
+ * negative margin, no horizontal border (the rim is an inset box-shadow),
+ * so glyph advance is untouched. Accent-tinted so it reads as a live
+ * reference rather than chrome. pointer-events auto on THIS pill only —
+ * hover opens the preview card, click jumps the caret to the token. ── */
+.gui-ta-hl-mention {
+	position: relative;
+	border: 0;
+	border-radius: 999px;
+	padding: 0 6px;
+	margin: 0 -6px;
+	background: color-mix(in oklab, var(--accent) 14%, var(--glass-bg));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
+	color: var(--accent);
+	pointer-events: auto;
+	cursor: pointer;
+	transition: background-color 120ms ease-out;
+}
+
+.gui-ta-hl-mention:hover {
+	background: color-mix(in oklab, var(--accent) 22%, var(--glass-bg));
+}
+
+/* Stale token: the referenced attachment is gone. Dashed outline (no
+ * layout impact) + muted ink; the pill no longer promises a preview. */
+.gui-ta-hl-mention--stale {
+	background: transparent;
+	color: var(--color-text-faint);
+	box-shadow: none;
+	outline: 1px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+	outline-offset: 0;
+}
+
+/* Hover preview card (portaled to body, fixed from the pill's rect — the
+ * overlay's overflow:hidden would clip a nested card). Display-only:
+ * pointer-events none, aria-hidden. */
+.gui-mention-pop {
+	position: fixed;
+	z-index: 2600;
+	transform: translate(0, -100%);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 320px;
+	padding: 8px 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	box-shadow: 0 12px 32px oklch(0 0 0 / 35%);
+	color: var(--color-text);
+	font-size: 12px;
+	pointer-events: none;
+	animation: gui-mention-pop-in 130ms ease-out;
+}
+
+.gui-mention-pop-thumb {
+	width: 72px;
+	height: 48px;
+	object-fit: cover;
+	border-radius: var(--radius-xs);
+	flex: none;
+}
+
+.gui-mention-pop-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.gui-mention-pop-size {
+	color: var(--color-text-muted);
+	flex: none;
+}
+
+.gui-mention-pop-stale {
+	color: var(--color-text-faint);
+	padding: 1px 6px;
+	border: 1px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+	border-radius: 999px;
+	flex: none;
+}
+
+@keyframes gui-mention-pop-in {
+	from {
+		opacity: 0;
+		transform: translate(0, calc(-100% + 4px));
+	}
+}

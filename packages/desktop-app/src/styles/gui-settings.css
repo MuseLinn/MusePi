@@ -5515,3 +5515,37 @@ body.gui-resizing {
 	flex: 1;
 	height: 4px;
 }
+
+/* ── Attachment chip "mention" button (Kimi desktop parity, appended
+ * 2026-09-26): hover reveals an "@" to the LEFT of the remove X; click
+ * asks the host to insert a reference token at the caret. Geometry matches
+ * .gui-attach-x (16px round, top 2px) shifted one slot left. ── */
+.gui-attach-mention {
+	position: absolute;
+	top: 2px;
+	right: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	border: none;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms var(--spring);
+}
+
+.gui-attach-chip:hover .gui-attach-mention,
+.gui-attach-mention:focus-visible {
+	opacity: 1;
+}
+
+.gui-attach-mention:hover {
+	background: rgba(0, 0, 0, 0.75);
+}

@@ -1,7 +1,15 @@
 import { ChevronLeft, ChevronRight, Download, Pencil, X } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { t } from "../i18n/index.js";
+import {
+	computeMorph,
+	MORPH_EASING_IN,
+	MORPH_EASING_OUT,
+	MORPH_MS,
+	type MorphRect,
+	motionDisabled,
+} from "./image-morph.js";
 import "./image-lightbox.css";
 
 /** Exit animation length — must match tr-img-lb-out in image-lightbox.css. */
@@ -30,12 +38,20 @@ export function ImageLightbox({
 	onIndexChange,
 	onAnnotate,
 	onEdit,
+	originRect = null,
 }: {
 	items: readonly { src: string; alt?: string }[];
 	/** Currently shown item; null hides the lightbox (no portal). */
 	index: number | null;
 	onClose(): void;
 	onIndexChange(index: number): void;
+	/** Source thumbnail rect (the chip's getBoundingClientRect at open
+	 *  time). M1.10 §3.3 一镜到底: present → the image flies from this rect
+	 *  to the stage on open and back on close (backdrop fades independently
+	 *  — it is not a shared element). Absent/null → the legacy fade. The
+	 *  host re-measures at close time: a chip deleted or scrolled away
+	 *  mid-preview yields null and the close degrades to the fade. */
+	originRect?: MorphRect | null;
 	/** Open-science FigureBlock parity: click-to-pin annotations with a
 	 * note, delivered back to the host (forwarded to the agent / pasted
 	 * into the composer). Optional — omit for plain preview. */
@@ -139,28 +155,144 @@ export function ImageLightbox({
 	};
 
 	// ── Exit animation: hold the last content while the overlay plays
-	// tr-img-lb-out (EXIT_MS), then drop it. Reopening cancels. ──
+	// tr-img-lb-out (EXIT_MS), then drop it. Reopening cancels. When the
+	// open morph played, the exit instead flies the frame back into the
+	// source chip (MORPH_MS, see below). ──
 	const lastOpenRef = useRef<{ items: readonly { src: string; alt?: string }[]; index: number } | null>(null);
 	const exitTimerRef = useRef<Timer | undefined>(undefined);
 	// State flip to force the final render once the exit timer drops the
 	// held content (mutating the ref alone would leave the overlay stuck).
 	const [exited, setExited] = useState(false);
+	// Morph machinery: the flying frame element, whether the open flight
+	// actually played (drives the reverse flight), the close animation
+	// itself (cancelled on reopen — its fill:forwards would otherwise pin
+	// the landed transform), and the render flag for the morph-close class.
+	const frameRef = useRef<HTMLDivElement | null>(null);
+	const morphLiveRef = useRef(false);
+	const closeAnimRef = useRef<Animation | null>(null);
+	const [morphClosing, setMorphClosing] = useState(false);
 	useEffect(() => {
 		if (open) {
 			lastOpenRef.current = { items, index: index as number };
 			clearTimeout(exitTimerRef.current);
 			exitTimerRef.current = undefined;
 			setExited(false);
+			setMorphClosing(false);
 			return;
 		}
 		if (!lastOpenRef.current) return;
+		// Close flight (M1.10 §3.3): when the open morph played, fly the
+		// frame back into the source chip's rect before unmounting. The host
+		// re-measures the chip at close time, so a chip deleted/scrolled away
+		// mid-preview yields a null originRect and we fall back to the fade.
+		const origin = originRect;
+		if (morphLiveRef.current && origin != null && !motionDisabled()) {
+			setMorphClosing(true);
+			const raf = requestAnimationFrame(() => {
+				const img = imgRef.current;
+				const frame = frameRef.current;
+				if (!img || !frame) return;
+				const target = img.getBoundingClientRect();
+				const m = computeMorph(origin, target);
+				if (!m) return;
+				// fill:forwards pins the landed transform during the hold;
+				// the animation is cancelled on reopen (open-morph effect).
+				closeAnimRef.current = frame.animate(
+					[
+						{ transform: "none", transformOrigin: "top left" },
+						{
+							transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
+							transformOrigin: "top left",
+						},
+					],
+					{ duration: MORPH_MS, easing: MORPH_EASING_OUT, fill: "forwards" },
+				);
+			});
+			exitTimerRef.current = setTimeout(() => {
+				lastOpenRef.current = null;
+				exitTimerRef.current = undefined;
+				setExited(true);
+				setMorphClosing(false);
+			}, MORPH_MS);
+			return () => {
+				cancelAnimationFrame(raf);
+				clearTimeout(exitTimerRef.current);
+			};
+		}
 		exitTimerRef.current = setTimeout(() => {
 			lastOpenRef.current = null;
 			exitTimerRef.current = undefined;
 			setExited(true);
 		}, EXIT_MS);
 		return () => clearTimeout(exitTimerRef.current);
-	}, [open, items, index]);
+	}, [open, items, index, originRect]);
+
+	// ── Open morph (M1.10 §3.3 一镜到底): render at final layout, measure
+	// the stage rect, then fly the frame FROM the source thumbnail's rect
+	// (FLIP). Runs in a layout effect — after the DOM commit but before
+	// paint, so the un-morphed frame never paints (same discipline as the
+	// scene-switch morphFrame). WAAPI rather than a class-toggle rAF dance
+	// for the reason morphFrame documents: an explicit animation always
+	// plays its timeline. Deliberately keyed on `open` alone — gallery
+	// navigation must never re-run the flight (only the first open morphs);
+	// originRect is read from the opening render's closure. ──
+	useLayoutEffect(() => {
+		// NOTE: on !open this effect does NOTHING (early return) — the close
+		// flight below reads morphLiveRef in its own effect, which must see
+		// the value the open phase left behind (layout effects run first and
+		// would otherwise wipe it before the close effect reads it).
+		if (!open) return;
+		morphLiveRef.current = false;
+		closeAnimRef.current?.cancel();
+		closeAnimRef.current = null;
+		if (!originRect || motionDisabled()) return;
+		const img = imgRef.current;
+		const frame = frameRef.current;
+		if (!img || !frame) return;
+		const fly = (): void => {
+			const target = img.getBoundingClientRect();
+			const m = computeMorph(originRect, target);
+			if (!m) return;
+			morphLiveRef.current = true;
+			frame.animate(
+				[
+					{
+						transform: `translate(${m.dx}px, ${m.dy}px) scale(${m.sx}, ${m.sy})`,
+						transformOrigin: "top left",
+					},
+					{ transform: "none", transformOrigin: "top left" },
+				],
+				{ duration: MORPH_MS, easing: MORPH_EASING_IN },
+			);
+		};
+		// The stage rect is only meaningful once the image has intrinsic
+		// size; until then the frame is held invisible (a not-yet-loaded
+		// image would collapse the layout and morph into a tiny box).
+		let done = false;
+		const settle = (): void => {
+			if (done) return;
+			done = true;
+			frame.style.visibility = "";
+			fly();
+		};
+		const fail = (): void => {
+			if (done) return;
+			done = true;
+			frame.style.visibility = "";
+		};
+		if (img.complete && img.naturalWidth > 0) fly();
+		else {
+			frame.style.visibility = "hidden";
+			img.addEventListener("load", settle, { once: true });
+			img.addEventListener("error", fail, { once: true });
+		}
+		return () => {
+			done = true;
+			img.removeEventListener("load", settle);
+			img.removeEventListener("error", fail);
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open]);
 
 	// ── Gallery nav direction → directional slide-in on the new frame ──
 	const prevIndexRef = useRef<number | null>(open ? (index as number) : null);
@@ -292,12 +424,19 @@ export function ImageLightbox({
 		// Backdrop closes on mousedown (openchamber parity); inner controls
 		// stop propagation so they never dismiss the dialog.
 		<div
-			className={`tr-img-lb${isClosing ? " tr-img-lb--closing" : ""}`}
+			className={`tr-img-lb${isClosing && !morphClosing ? " tr-img-lb--closing" : ""}${
+				morphClosing ? " tr-img-lb--morph-closing" : ""
+			}`}
 			role="dialog"
 			aria-modal="true"
 			aria-label={t("preview image")}
-			onMouseDown={isClosing ? undefined : onClose}
+			onMouseDown={isClosing || morphClosing ? undefined : onClose}
 		>
+			{/* Backdrop plate: the dimmed/blurred floor is NOT a shared element,
+			 * so it fades independently of the morphing image (M1.10 §3.3) —
+			 * split out of .tr-img-lb so an open/close morph never fades the
+			 * flying frame with the room. */}
+			<div className="tr-img-lb-backdrop" aria-hidden />
 			{/* Download + close as one group (ZCode preview parity), inset
 			    from the corner so the pair clears the window chrome and reads
 			    as a row rather than a lone floating X. */}
@@ -393,6 +532,7 @@ export function ImageLightbox({
 			>
 				<div
 					key={shown.index}
+					ref={frameRef}
 					className={`tr-img-lb-frame${dir === 1 ? " tr-img-lb-frame--next" : dir === -1 ? " tr-img-lb-frame--prev" : ""}`}
 				>
 					<div

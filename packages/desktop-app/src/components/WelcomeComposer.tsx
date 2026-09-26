@@ -43,6 +43,7 @@ import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
+import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -1180,7 +1181,10 @@ export function WelcomeComposer({
 	const sendText = (trimmed: string): void => {
 		const quotePrefix =
 			quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-		const payload = quotePrefix ? `${quotePrefix}${trimmed}`.trim() : trimmed;
+		// Attachment mentions (session-composer parity): expand before the
+		// quote prefix so the references ride the first prompt too.
+		const expanded = expandMentionTokens(trimmed, attachments);
+		const payload = quotePrefix ? `${quotePrefix}${expanded}`.trim() : expanded;
 		setText("");
 		setQuotes([]);
 		setAttachments([]);
@@ -1604,6 +1608,23 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+							onMentionAttachment={id => {
+								const a = attachments.find(x => x.id === id);
+								const ta = taRef.current;
+								if (!a || !ta) return;
+								const { next, caret } = spliceMentionToken(
+									ta.value,
+									ta.selectionStart ?? ta.value.length,
+									ta.selectionEnd ?? ta.value.length,
+									a.name,
+								);
+								setText(next);
+								requestAnimationFrame(() => {
+									ta.setSelectionRange(caret, caret);
+									ta.focus();
+									autosize(taRef.current);
+								});
+							}}
 							onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
 							onEditSketch={id => {
 								const chip = attachments.find(x => x.id === id);
@@ -1903,7 +1924,21 @@ export function WelcomeComposer({
 									/>
 								)}
 								<div className="gui-ta-stack">
-									<ComposerHighlight text={text} className="gui-ta-highlight--welcome" />
+									<ComposerHighlight
+										text={text}
+										className="gui-ta-highlight--welcome"
+										resolveMention={name => {
+											const a = attachments.find(x => x.name === name);
+											if (!a) return { kind: "file", name, stale: true };
+											return { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined };
+										}}
+										onMentionClick={start => {
+											const ta = taRef.current;
+											if (!ta) return;
+											ta.focus();
+											ta.setSelectionRange(start, start);
+										}}
+									/>
 									<textarea
 										ref={el => {
 											taRef.current = el;

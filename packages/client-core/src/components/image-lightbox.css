@@ -1,6 +1,9 @@
 /* Image preview lightbox (composer attachment / inline transcript image
- * click). Dark frosted overlay, image centered at max viewport size;
- * gallery nav buttons + position counter when multiple images. */
+ * click). Dark frosted backdrop plate (a sibling of the stage, NOT the
+ * root — the backdrop is not a shared element, so it fades independently
+ * of the open/close morph flight per M1.10 §3.3), image centered at max
+ * viewport size; gallery nav buttons + position counter when multiple
+ * images. */
 .tr-img-lb {
 	position: fixed;
 	inset: 0;
@@ -9,13 +12,21 @@
 	align-items: center;
 	justify-content: center;
 	padding: 40px;
+}
+
+.tr-img-lb-backdrop {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
 	background: color-mix(in oklab, #000 62%, transparent);
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
-	animation: tr-img-lb-in 140ms ease-out;
+	animation: tr-img-lb-in 160ms ease-out;
 }
 
 .tr-img-lb-stage {
+	position: relative;
+	z-index: 1;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -50,6 +61,21 @@
 
 .tr-img-lb--closing .tr-img-lb-frame {
 	animation: tr-img-lb-frame-out 150ms ease forwards;
+}
+
+/* Morph close (M1.10 §3.3): the frame flies itself back into the source
+ * chip via WAAPI (fill:forwards) — only the backdrop plate fades here,
+ * and the chrome (buttons/nav/counter) drops out of the way instantly so
+ * nothing floats over the shrinking room. */
+.tr-img-lb--morph-closing .tr-img-lb-backdrop {
+	animation: tr-img-lb-out 160ms ease forwards;
+}
+
+.tr-img-lb--morph-closing .tr-img-lb-actions,
+.tr-img-lb--morph-closing .tr-img-lb-tools,
+.tr-img-lb--morph-closing .tr-img-lb-nav,
+.tr-img-lb--morph-closing .tr-img-lb-count {
+	animation: tr-img-lb-chrome-out 120ms ease forwards;
 }
 
 .tr-img-lb-img {
@@ -172,6 +198,12 @@
 	}
 }
 
+@keyframes tr-img-lb-chrome-out {
+	to {
+		opacity: 0;
+	}
+}
+
 @keyframes tr-img-lb-frame-out {
 	to {
 		opacity: 0;
@@ -278,4 +310,23 @@
 
 .tr-img-lb-note-input:focus {
 	border-color: #d9a441;
+}
+
+/* Motion-off degradation (M1.10 §3.4): the morphs are skipped in JS
+ * (image-morph.motionDisabled — gui-motion-off class + this media query),
+ * and the CSS fades collapse too, so no intermediate frames play at all. */
+@media (prefers-reduced-motion: reduce) {
+	.tr-img-lb,
+	.tr-img-lb-backdrop,
+	.tr-img-lb--closing,
+	.tr-img-lb--closing .tr-img-lb-frame,
+	.tr-img-lb--morph-closing .tr-img-lb-backdrop,
+	.tr-img-lb--morph-closing .tr-img-lb-actions,
+	.tr-img-lb--morph-closing .tr-img-lb-tools,
+	.tr-img-lb--morph-closing .tr-img-lb-nav,
+	.tr-img-lb--morph-closing .tr-img-lb-count,
+	.tr-img-lb-frame--next,
+	.tr-img-lb-frame--prev {
+		animation: none;
+	}
 }

@@ -70,6 +70,13 @@ export const composer = {
 	"model & thinking": "Model & thinking",
 	"host session model": "Current model of the host session",
 
+	// ── Attachment mention (Kimi desktop parity): chip → token in the
+	// textarea, rendered as an accent pill with a hover preview. ──
+	"mention attachment": "Mention",
+	"mention image {n}": "Mention image {n}",
+	"mention file {n}": "Mention file {n}",
+	"attachment removed": "Attachment removed",
+
 	// ── Voice input (daemon stt.transcribe; design 「语音四帧」) ──────────────
 	// "voice input" / "voice recording stop" / "voice transcribing" /
 	// "recording…" live in the settings domain already — reuse, don't duplicate.
