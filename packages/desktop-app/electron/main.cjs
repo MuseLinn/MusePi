@@ -3042,6 +3042,18 @@ ipcMain.handle("updater-notes", () => fetchManifestNotes());
 ipcMain.handle("updater-download-installer", (_event, url) => downloadInstaller(url));
 /** Whether electron-updater/Squirrel can install on this build at all. */
 ipcMain.handle("updater-ota-capable", () => otaCapable());
+/** Taskbar attention flash: the renderer calls this once when a download
+ *  lands while the window is unfocused (design §3.3-2; no system
+ *  notification — decision ④). Clicking the taskbar restores focus. */
+ipcMain.handle("updater-flash-frame", () => {
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		try {
+			mainWindow.flashFrame(true);
+		} catch (err) {
+			logUpdater("flashFrame failed:", err?.message ?? err);
+		}
+	}
+});
 ipcMain.handle("updater-install", async () => {
 	// Kill the daemon sidecar BEFORE quitting so the installed app can
 	// start its own fresh daemon (openchamber killSidecar parity). The
@@ -3258,13 +3270,21 @@ ipcMain.handle("gui-highlight", async (_event, code, lang, colors) => {
 	}
 });
 
-// Silent auto-check shortly after launch, then every UPDATE_POLL_MS
+// Silent auto-check shortly after launch, then on a failure-backoff schedule
 // (openchamber parity: periodic re-checks so a release published while the
 // app idles still surfaces — a single launch-time check misses it until the
-// next app restart). Silence entirely with OMP_NO_AUTO_UPDATE. The renderer
-// owns dismissal/skip (UpdateToast), so a repeated push for an already-seen
-// or skipped version is a no-op there.
-const UPDATE_POLL_MS = 60 * 60 * 1000; // 1h
+// next app restart). Base interval 1h; each consecutive failed check doubles
+// the delay up to a 6h cap, with ±20% jitter (dsh update-schedule parity) —
+// a flapping connection must not hammer the feed every hour forever.
+// Silence entirely with OMP_NO_AUTO_UPDATE. The renderer owns
+// dismissal/skip (UpdateToast), so a repeated push for an already-seen or
+// skipped version is a no-op there.
+const {
+	UPDATE_POLL_BASE_MS,
+	UPDATE_POLL_MAX_MS,
+	nextPollDelayMs,
+} = require("./update-logic.cjs");
+let pollFailures = 0;
 if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
 	app.whenReady().then(() => {
 		// One line per launch is enough to answer "did the check even run, and
@@ -3276,11 +3296,23 @@ if (process.env.OMP_NO_AUTO_UPDATE !== "1") {
 					if (result.enabled && result.newer && mainWindow && !mainWindow.isDestroyed()) {
 						mainWindow.webContents.send("update-available", result);
 					}
+					// checkForUpdates() swallows feed failures into
+					// `result.error` (string) — that still counts as a failed
+					// check for the backoff schedule.
+					pollFailures = result?.error ? pollFailures + 1 : 0;
 				})
-				.catch(() => {});
+				.catch(() => {
+					pollFailures += 1;
+				})
+				.finally(() => {
+					const delay = nextPollDelayMs(pollFailures);
+					if (pollFailures > 0) {
+						logUpdater("poll: backoff after", pollFailures, "failure(s), next check in", Math.round(delay / 60000), "min");
+					}
+					setTimeout(poll, delay);
+				});
 		};
 		setTimeout(poll, 12000);
-		setInterval(poll, UPDATE_POLL_MS);
 	});
 }
 

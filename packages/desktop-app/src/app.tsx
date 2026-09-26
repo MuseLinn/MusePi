@@ -27,6 +27,7 @@ import { SessionSidebar } from "./components/SessionSidebar";
 import { SettingsView } from "./components/SettingsView";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
+import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
@@ -3651,6 +3652,9 @@ function AppInner(): ReactNode {
 			{/* Auto-checked update notice (BitFun parity toast; main.cjs
 			 * pushes update-available ~12s after boot). */}
 			<UpdateToast />
+			{/* Update L-dialog layer: 待重启确认卡 + 失败决策卡 (design
+			 * §3.2 — 分层共存 on top of the toast, not a replacement). */}
+			<UpdateDialog />
 			{/* Floating pac-man scroll indicator (fixed overlay — system
 			 * scrollbars are hidden; see FloatingScrollbar.tsx). */}
 			<FloatingScrollbar />

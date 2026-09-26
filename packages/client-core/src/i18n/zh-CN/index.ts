@@ -11,6 +11,7 @@ import { settings } from "./settings.js";
 import { shell } from "./shell.js";
 import { tools } from "./tools.js";
 import { transcript } from "./transcript.js";
+import { update } from "./update.js";
 
 /**
  * zh-CN translation map — merged from per-domain modules (shell, composer,
@@ -32,6 +33,7 @@ export const zhCN = {
 	...general,
 	...guest,
 	...reward,
+	...update,
 } as const;
 
 // Module-load duplicate guard: a key landing in two domains silently
@@ -52,6 +54,7 @@ export const zhCN = {
 		general,
 		guest,
 		reward,
+		update,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {

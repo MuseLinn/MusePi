@@ -4,13 +4,19 @@ import {
 	downloadInstaller,
 	downloadUpdate,
 	getUpdateNotes,
-	installUpdate,
 	onUpdateAvailable,
 	onUpdateState,
 	openExternalUrl,
 	type UpdateCheckResult,
 	type UpdaterState,
 } from "../lib/electron";
+import {
+	isUpdateInstalling,
+	requestUpdateInstall,
+	setUpdateToastVisible,
+	subscribeUpdateUx,
+	UPDATE_ERROR_BODY_KEYS,
+} from "../lib/update-ux";
 import { Icon } from "../vendor/oc-icons";
 
 /**
@@ -59,6 +65,9 @@ export function UpdateToast(): ReactNode {
 	// Install-phase failure (quitAndInstall rejected: signature, disabled
 	// Squirrel session). Separate from `state.error` which is download-phase.
 	const [installError, setInstallError] = useState<string | null>(null);
+	// Install grace window (shared with UpdateDialog via the update-ux
+	// store): both surfaces switch to the non-clickable installing copy.
+	const [installing, setInstalling] = useState(isUpdateInstalling());
 	// Last full notice — reviving after dismissal keeps the current-version
 	// label even though the state push only carries the new version.
 	const noticeRef = useRef<UpdateCheckResult | null>(null);
@@ -102,6 +111,18 @@ export function UpdateToast(): ReactNode {
 		};
 	}, []);
 
+	// Install grace window: mirrored from the shared store so a restart
+	// triggered from the failure dialog also locks this toast's buttons.
+	useEffect(() => subscribeUpdateUx(() => setInstalling(isUpdateInstalling())), []);
+
+	// Toast visibility feeds the dialog's ≥10-min reboot nudge (the card
+	// only pops while this toast is dismissed/absent).
+	const toastVisible = notice !== null && !closing;
+	useEffect(() => {
+		setUpdateToastVisible(toastVisible);
+		return () => setUpdateToastVisible(false);
+	}, [toastVisible]);
+
 	// Release notes: one cached main-process fetch per notice. The manifest
 	// ships a bilingual-mixed string; render as-is. Never nags on failure.
 	useEffect(() => {
@@ -123,6 +144,8 @@ export function UpdateToast(): ReactNode {
 
 	const preparing = state?.status === "preparing";
 	const downloading = state?.status === "downloading";
+	/** ≥100% received, package not yet finalized (design §3.1-2). */
+	const verifying = state?.status === "verifying";
 	const downloaded = state?.status === "downloaded";
 	const failed = state?.status === "error";
 	/** The downloaded artifact is a standalone installer, not an OTA package. */
@@ -168,13 +191,11 @@ export function UpdateToast(): ReactNode {
 		void downloadUpdate();
 	};
 	const restart = (): void => {
-		// quitAndInstall resolves once the app is shutting down (ok:true)
-		// or rejects with the installer error while the app is still
-		// running — surface the failure inline so a rejected install
-		// (signature, disabled Squirrel session) offers retry instead of
-		// silently doing nothing.
+		// Shared install path (update-ux store): flips both surfaces into
+		// the non-clickable installing copy for the quitAndInstall grace
+		// window and counts consecutive failures toward the dialog card.
 		setInstallError(null);
-		void installUpdate().then(res => {
+		void requestUpdateInstall().then(res => {
 			if (!res.ok) setInstallError(res.error ?? t("update install failed"));
 		});
 	};
@@ -214,6 +235,9 @@ export function UpdateToast(): ReactNode {
 			)}
 			{preparing && (
 				<div className="gui-update-toast-progress">
+					<div className="gui-update-toast-progress-meta">
+						<span>{t("preparing update")}</span>
+					</div>
 					<div className="gui-update-toast-progress-bar gui-update-toast-progress-bar--indeterminate" />
 				</div>
 			)}
@@ -233,6 +257,14 @@ export function UpdateToast(): ReactNode {
 					</div>
 				</>
 			)}
+			{verifying && (
+				<div className="gui-update-toast-progress">
+					<div className="gui-update-toast-progress-meta">
+						<span>{t("verifying update")}</span>
+					</div>
+					<div className="gui-update-toast-progress-bar" style={{ width: "100%" }} />
+				</div>
+			)}
 			{downloaded && (
 				<div className="gui-update-toast-done">
 					<Icon name="check" className="h-3.5 w-3.5" />
@@ -240,37 +272,47 @@ export function UpdateToast(): ReactNode {
 				</div>
 			)}
 			{installerDone && <div className="gui-update-toast-hint">{t("installer ready hint")}</div>}
-			{failed && <div className="gui-update-toast-error">{state?.error ?? t("update download failed")}</div>}
+			{failed && state?.error && (
+				<div className="gui-update-toast-error" title={state.error.message}>
+					{t(UPDATE_ERROR_BODY_KEYS[state.error.kind])}
+				</div>
+			)}
 			{installError && <div className="gui-update-toast-error">{installError}</div>}
-			<div className="gui-update-toast-actions">
-				{downloaded ? (
-					// An installer download has nothing to restart into — the
-					// user finishes it in Finder.
-					installerDone ? null : (
-						<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
-							{t("restart now")}
+			{installing ? (
+				// quitAndInstall grace window: nothing clickable — the app is
+				// handing over to the installer and will relaunch itself.
+				<div className="gui-update-toast-hint">{t("installing update")}</div>
+			) : (
+				<div className="gui-update-toast-actions">
+					{downloaded ? (
+						// An installer download has nothing to restart into — the
+						// user finishes it in Finder.
+						installerDone ? null : (
+							<button type="button" className="gui-btn gui-btn-primary" onClick={restart}>
+								{t("restart now")}
+							</button>
+						)
+					) : preparing || downloading || verifying ? null : (
+						<button type="button" className="gui-btn gui-btn-primary" onClick={startDownload}>
+							{t(manualOnly ? "download installer" : "download update")}
 						</button>
-					)
-				) : preparing || downloading ? null : (
-					<button type="button" className="gui-btn gui-btn-primary" onClick={startDownload}>
-						{t(manualOnly ? "download installer" : "download update")}
-					</button>
-				)}
-				{failed ? (
-					<>
-						<button type="button" className="gui-btn" onClick={startDownload}>
-							{t("retry")}
+					)}
+					{failed ? (
+						<>
+							<button type="button" className="gui-btn" onClick={startDownload}>
+								{t("retry")}
+							</button>
+							<button type="button" className="gui-btn" onClick={goManual}>
+								{t("go to download")}
+							</button>
+						</>
+					) : (
+						<button type="button" className="gui-btn" onClick={() => close(true)}>
+							{t("skip this version")}
 						</button>
-						<button type="button" className="gui-btn" onClick={goManual}>
-							{t("go to download")}
-						</button>
-					</>
-				) : (
-					<button type="button" className="gui-btn" onClick={() => close(true)}>
-						{t("skip this version")}
-					</button>
-				)}
-			</div>
+					)}
+				</div>
+			)}
 		</div>
 	);
 }

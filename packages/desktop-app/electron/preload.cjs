@@ -79,6 +79,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	getUpdateNotes: () => ipcRenderer.invoke("updater-notes"),
 	/** OTA: kill daemon + quitAndInstall (restart into the new version). */
 	installUpdate: () => ipcRenderer.invoke("updater-install"),
+	/** OTA: flash the taskbar icon once (download ready while unfocused). */
+	flashUpdateAttention: () => ipcRenderer.invoke("updater-flash-frame"),
 	/** OTA: listen for an auto-checked update notice. */
 	onUpdateAvailable: (cb) => {
 		const listener = (_e, result) => cb(result);

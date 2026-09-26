@@ -14,6 +14,7 @@ const { autoUpdater } = require("electron-updater");
 const { app, BrowserWindow, session, shell } = require("electron");
 const fs = require("node:fs");
 const nodePath = require("node:path");
+const { classifyUpdateError } = require("./update-logic.cjs");
 
 // ── File log ─────────────────────────────────────────────────────────────
 // Everything the updater does also lands in ~/Library/Logs/MusePi/updater.log
@@ -51,15 +52,30 @@ function log(...args) {
 
 /** Current user-facing state (mirrored to the renderer via updater-state). */
 const state = {
-	status: "idle", // idle | checking | preparing | downloading | downloaded | error
+	status: "idle", // idle | available | checking | preparing | downloading | verifying | downloaded | error
 	/** "ota" = electron-updater/Squirrel path; "installer" = manual dmg/exe. */
 	mode: "ota",
 	version: null,
 	progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 },
+	/** Structured failure: { kind, message, technicalDetails? } — kind is the
+	 *  stable {check|download|install}×{network|other} enum (update-logic.cjs);
+	 *  the renderer maps kind → localized copy and folds the raw message +
+	 *  stack into a 技术详情 section. */
 	error: null,
 	/** Path of a downloaded manual installer (mode "installer"). */
 	installerPath: null,
 };
+
+/** Record a classified failure into the state and log it. */
+function setError(op, err) {
+	state.error = classifyUpdateError(op, err);
+	log(`${op} failed (${state.error.kind}):`, state.error.message);
+}
+
+/** Clear any recorded failure (call on every successful transition). */
+function clearError() {
+	state.error = null;
+}
 
 /** Release notes asset on the latest GitHub release (same redirect the daemon
  *  RPC uses — no api.github.com rate limits). */
@@ -219,37 +235,52 @@ autoUpdater.autoInstallOnAppQuit = false;
 
 autoUpdater.on("checking-for-update", () => {
 	state.status = "checking";
-	state.error = null;
+	clearError();
 	setTaskbarProgress(-2);
 	emitState();
 });
 
 autoUpdater.on("update-available", (info) => {
-	state.status = "idle";
+	// `available` is now an explicit phase (design §3.1-1) so the renderer
+	// can read "a newer version exists" from the state stream alone instead
+	// of splicing the update-available event with updater-state. Never
+	// downgrade an in-flight download/install — a manual re-check while the
+	// package is downloaded must not wipe the 立即重启 entry.
+	if (!["preparing", "downloading", "verifying", "downloaded"].includes(state.status)) {
+		state.status = "available";
+	}
 	state.mode = "ota";
 	state.version = info.version;
-	state.error = null;
+	clearError();
 	log("update available:", info.version);
 	emitState();
 	emitUpdateAvailable(info.version);
 });
 
 autoUpdater.on("update-not-available", () => {
-	state.status = "idle";
-	state.error = null;
+	// A stale-version verdict must not erase a downloaded package either.
+	if (!["preparing", "downloading", "verifying", "downloaded"].includes(state.status)) {
+		state.status = "idle";
+	}
+	clearError();
 	emitState();
 });
 
 autoUpdater.on("error", (err) => {
+	// electron-updater's `error` event fires for whatever operation is
+	// current — infer the operation from the phase the failure arrived in.
+	const op = state.status === "verifying" || state.status === "downloaded" ? "install" : state.status === "downloading" || state.status === "preparing" ? "download" : "check";
 	state.status = "error";
-	state.error = err?.message ?? String(err);
-	log("autoUpdater error:", state.error);
+	setError(op, err);
 	setTaskbarProgress(-2);
 	emitState();
 });
 
 autoUpdater.on("download-progress", (progress) => {
-	state.status = "downloading";
+	// ≥100% but no `update-downloaded` yet: the package is being verified /
+	// finalized (dsh update-coordinator verifying phase) — the progress bar
+	// no longer sits at a fake 100% with no explanation.
+	state.status = progress.percent >= 100 ? "verifying" : "downloading";
 	state.progress = {
 		percent: Math.round(progress.percent),
 		transferred: progress.transferred,
@@ -265,7 +296,7 @@ autoUpdater.on("update-downloaded", (info) => {
 	state.mode = "ota";
 	state.version = info.version;
 	state.progress = { percent: 100, transferred: 0, total: 0 };
-	state.error = null;
+	clearError();
 	log("update downloaded:", info.version);
 	// Clear the taskbar progress once the download lands; the install
 	// phase is signaled by the app quitting, not a bar.
@@ -321,10 +352,12 @@ async function checkForUpdates() {
 		};
 	} catch (err) {
 		state.status = "error";
-		state.error = err?.message ?? String(err);
-		log("check failed:", state.error);
+		setError("check", err);
+		// The checkForUpdates() renderer contract keeps `error` a string
+		// (settings page prints it verbatim); the structured shape only
+		// travels on updater-state.
 		emitState();
-		return { enabled: true, error: state.error, url: "", otaCapable: otaCapable() };
+		return { enabled: true, error: state.error.message, url: "", otaCapable: otaCapable() };
 	}
 }
 
@@ -341,7 +374,7 @@ async function downloadUpdate() {
 	// so the renderer shows a preparing bar instead of a dead button.
 	state.status = "preparing";
 	state.mode = "ota";
-	state.error = null;
+	clearError();
 	setTaskbarProgress(-1); // indeterminate until the first byte flows
 	emitState();
 	try {
@@ -349,7 +382,7 @@ async function downloadUpdate() {
 		return true;
 	} catch (err) {
 		state.status = "error";
-		state.error = err?.message ?? String(err);
+		setError("download", err);
 		setTaskbarProgress(-2);
 		emitState();
 		return false;
@@ -385,7 +418,7 @@ function downloadInstaller(url) {
 
 	state.status = "preparing";
 	state.mode = "installer";
-	state.error = null;
+	clearError();
 	state.installerPath = null;
 	state.progress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 };
 	log("installer download start:", targetUrl, "→", target);
@@ -413,14 +446,13 @@ function downloadInstaller(url) {
 			});
 			item.on("done", (_event, doneState) => {
 				ses.removeListener("will-download", onWillDownload);
-				if (doneState !== "completed") {
-					state.status = "error";
-					state.error = `download ${doneState}`;
-					log("installer download failed:", doneState);
-					emitState();
-					resolve({ ok: false, error: `download ${doneState}` });
-					return;
-				}
+			if (doneState !== "completed") {
+				state.status = "error";
+				setError("download", `download ${doneState}`);
+				emitState();
+				resolve({ ok: false, error: state.error.message });
+				return;
+			}
 				state.status = "downloaded";
 				state.mode = "installer";
 				state.installerPath = target;
@@ -444,10 +476,9 @@ function downloadInstaller(url) {
 		} catch (err) {
 			ses.removeListener("will-download", onWillDownload);
 			state.status = "error";
-			state.error = err?.message ?? String(err);
-			log("downloadURL threw:", state.error);
+			setError("download", err);
 			emitState();
-			resolve({ ok: false, error: state.error });
+			resolve({ ok: false, error: state.error.message });
 		}
 	});
 }
@@ -478,7 +509,7 @@ function quitAndInstall() {
 			// global error handler below also updates state, but this
 			// restores a retryable status for the install-specific path.
 			state.status = "downloaded";
-			state.error = error instanceof Error ? error.message : String(error);
+			setError("install", error);
 			emitState();
 			reject(error instanceof Error ? error : new Error(String(error)));
 		};

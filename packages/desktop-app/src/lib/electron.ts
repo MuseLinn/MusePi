@@ -33,22 +33,37 @@ export interface ElectronAPI {
 	getUpdateNotes(): Promise<string | null>;
 	/** Kill daemon + quitAndInstall (restart into the new version). */
 	installUpdate(): Promise<UpdateInstallResult>;
+	/** Flash the taskbar icon once (download ready while unfocused). */
+	flashUpdateAttention(): Promise<void>;
 	/** Startup auto-check notice; returns the unsubscribe function. */
 	onUpdateAvailable(cb: (result: UpdateCheckResult) => void): () => void;
 	/** Live updater state pushes; returns the unsubscribe function. */
 	onUpdateState(cb: (state: UpdaterState) => void): () => void;
 }
 
+/** Classified updater failure (main process update-logic.cjs → renderer).
+ *  `kind` is the stable {check|download|install}×{network|other} enum the
+ *  UI maps to localized copy; `message` is the raw error text and
+ *  `technicalDetails` the stack — both fold into the 技术详情 section. */
+export interface UpdateErrorInfo {
+	kind: "check" | "check-network" | "download" | "download-network" | "install" | "install-network";
+	message: string;
+	technicalDetails?: string;
+}
+
 /** Live updater state (main process electron-updater → renderer contract).
  *  `preparing` covers the click → first-byte gap (feed resolve + TTFB) where
- *  electron-updater emits no download-progress yet. */
+ *  electron-updater emits no download-progress yet; `available` is an
+ *  explicit phase (update detected, not yet downloading); `verifying`
+ *  covers download-progress ≥100% → update-downloaded. */
 export interface UpdaterState {
-	status: "idle" | "checking" | "preparing" | "downloading" | "downloaded" | "error";
+	status: "idle" | "available" | "checking" | "preparing" | "downloading" | "verifying" | "downloaded" | "error";
 	/** "ota" = Squirrel/electron-updater; "installer" = manual dmg/exe download. */
 	mode?: "ota" | "installer";
 	version?: string | null;
 	progress?: { percent: number; transferred: number; total: number; bytesPerSecond: number };
-	error?: string | null;
+	/** Structured failure (UpdateErrorInfo); null when no failure is recorded. */
+	error?: UpdateErrorInfo | null;
 	/** Absolute path of a downloaded manual installer (mode "installer"). */
 	installerPath?: string | null;
 }
@@ -219,6 +234,18 @@ export function onUpdateState(cb: (state: UpdaterState) => void): () => void {
 	return electronAPI.onUpdateState(cb);
 }
 
+/** Current updater state snapshot (idle/available/checking/preparing/
+ *  downloading/verifying/downloaded/error). */
+export async function getUpdateState(): Promise<UpdaterState | null> {
+	if (!isElectron()) return null;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		return await electronAPI.getUpdateState();
+	} catch {
+		return null;
+	}
+}
+
 /** Download the detected update (progress via onUpdateState). */
 export function downloadUpdate(): Promise<boolean> {
 	if (!isElectron()) return Promise.resolve(false);
@@ -267,6 +294,18 @@ export function installUpdate(): Promise<UpdateInstallResult> {
 	if (!isElectron()) return Promise.resolve({ ok: false, error: "not in electron" });
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	return electronAPI.installUpdate();
+}
+
+/** Flash the taskbar icon once (download ready while the window is
+ *  unfocused; no-op outside Electron). */
+export async function flashUpdateAttention(): Promise<void> {
+	if (!isElectron()) return;
+	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
+	try {
+		await electronAPI.flashUpdateAttention();
+	} catch {
+		// attention is best-effort
+	}
 }
 
 /** Open a directory with a specific app (Finder, VS Code, …). */

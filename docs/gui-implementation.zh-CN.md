@@ -378,10 +378,19 @@ daemon RPC:
 ### OTA 经 electron-updater 更新（v0.4.4，2026-08-24）
 `docs/archive/ota-update-design.md`。把 §17 的「前往下载」改为 **下载 → 校验 → 安装 → 重启**（electron-updater v6.4.1 + GitHub provider）：
 - **配置**：`packages/desktop-app/package.json` build `publish` = `{provider:"github", owner:"MuseLinn", repo:"MusePi", channel:"latest"}`（生成 `latest*.yml`）。**不要手动设 `allowPrerelease`**——6.4.1 按当前版本号自动推导（prerelease 版本 → beta 通道；稳定版 → `/releases/latest`，忽略 prerelease）。
-- **IPC**：`updater-check`（富结果 `{enabled,newer,latest,current,notes}`——updateInfo 与 `app.getVersion()` 比对，notes 与 feed 检查并行拉取）/`updater-download`/`updater-install`/`updater-notes`（renderer→main）+ `updater-state`（`checking/preparing/downloading(percent+bytes)/downloaded/error`）+ `update-available`。`autoDownload=false`、`autoInstallOnAppQuit=false`。
+- **IPC**：`updater-check`（富结果 `{enabled,newer,latest,current,notes}`——updateInfo 与 `app.getVersion()` 比对，notes 与 feed 检查并行拉取）/`updater-download`/`updater-install`/`updater-notes`（renderer→main）+ `updater-state`（`idle/available/checking/preparing/downloading(percent+bytes)/verifying/downloaded/error`；2026-09-26 起 `error` 为结构化 `{kind,message,technicalDetails?}`，见下）+ `update-available` + `updater-flash-frame`（2026-09-26，任务栏闪烁）。`autoDownload=false`、`autoInstallOnAppQuit=false`。
 - **daemon sidecar**：`updater-install` 先 `kill(daemonPort)` 再 `setImmediate(() => autoUpdater.quitAndInstall())`（setImmediate 先 flush IPC reply）；vendored daemon 随新版 app 一起生效。
 - **macOS 需 `.zip`**：MacUpdater `findFile(files,"zip",…)` 无 zip 会抛 `ERR_UPDATER_ZIP_FILE_NOT_FOUND`——`mac.target` 必须含 `"zip"` 且 CI 带上传 `*.zip`（顺带赢 blockmap 差量）。Beta：`-beta` tag → `-c.publish.channel=beta` + prerelease；CI yml 通配从 `latest*.yml` 放宽为 `*.yml`（此前会丢 beta feed 的缺口）。
 - **降级**：未签名 Windows NSIS → SmartScreen 确认；ad-hoc macOS dmg → 校验失败回退「前往下载」；Linux AppImage 免签自替换。
+
+### 更新 UX 分层（安装器/更新弹窗设计稿 B 面，2026-09-26）
+`docs/review/0.5.0-installer-update-dialogs-design.md` §3（决策点①-⑧全部按默认建议执行）。在既有 toast **之上**补显式状态机相位与 L-dialog 层（分层共存，不是替换）：
+
+- **状态机**（`electron/updater.cjs`）：`available` 成为显式状态——`update-available` 置 `state.status="available"`，但不会降级进行中的 `preparing/downloading/verifying/downloaded`（手动重查绝不能冲掉「立即重启」入口）；`verifying` 覆盖 download-progress ≥100% → `update-downloaded`（不再有"假 100% 等待"）。`state.error` 结构化为 `{kind, message, technicalDetails?}`——kind 是稳定的 `{check|download|install} × {network|other}` 枚举；纯逻辑分类器 + 退避数学在 `electron/update-logic.cjs`（零 electron import，契约测试 `test/update-logic.test.ts`）。渲染层按 kind 映射语义文案（`update` i18n 域），message + 堆栈折进「技术详情」`<details>`；`checkForUpdates()` 自身返回值的 `error` 仍是纯字符串（设置页契约不变）。
+- **轮询退避**（`main.cjs`）：固定 1h `setInterval` 改为失败 ×2 退避（上限 6h）+ ±20% jitter（dsh update-schedule parity；常量与 `nextPollDelayMs` 在 update-logic.cjs）。成功回 1h，首查仍为启动+12s，`OMP_NO_AUTO_UPDATE=1` 仍可全部关掉；退避决策写入 updater.log（"poll: backoff after N failure(s)"）。
+- **IPC 只增不改**（preload 既有 API 面不动）：`updater-flash-frame` → `flashUpdateAttention()`——`downloaded` 到达且窗口未聚焦时任务栏闪烁一次（由 UpdateDialog 触发；**不加系统通知**——决策点④）。
+- **L-dialog 层**（`UpdateDialog.tsx`，DialogFrame + `gui-dialog--confirm` 紧凑 380px，app.tsx 常驻挂载、`open` 驱动）：① **待重启确认卡**——`downloaded` 持续 ≥10 分钟且 toast 已关/不可见（30s 间隔轮询判一次；每个 downloaded 周期最多一次；「暂不」仅关闭）；② **失败决策卡**——download 或 install 连续失败 ≥2 次：重试（主按钮，Enter）/ 前往下载页（`openExternal` releases）/ 暂不（Escape）。计数在新下载尝试开始、`downloaded` 重新到达或卡片关闭时清零。跨表面信号（toast 可见性、安装宽限、install 失败计数）集中在 `src/lib/update-ux.ts`——纯模块态 + listener，两个组件订阅。
+- **安装宽限文案**：`quitAndInstall` 的 15s 宽限期内（update-ux.ts 的 `requestUpdateInstall()` 翻转共享 `installing` 标志），toast 与弹窗都切为不可点的「正在安装更新，安装完成后将自动重启」；安装失败回退并喂给失败决策卡。
 
 ### 扩展 P3/P4 接缝（plugin-design.md P 层）
 自 2026-08-25 核对（P3 ❌ / P4 service ❌）后已落地。在 `extensibility/extensions/`：

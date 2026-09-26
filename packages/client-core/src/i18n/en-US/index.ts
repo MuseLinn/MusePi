@@ -11,6 +11,7 @@ import { settings } from "./settings.js";
 import { shell } from "./shell.js";
 import { tools } from "./tools.js";
 import { transcript } from "./transcript.js";
+import { update } from "./update.js";
 
 /**
  * en-US translation map — merged from per-domain modules mirroring zh-CN/
@@ -33,6 +34,7 @@ export const enUS = {
 	...general,
 	...guest,
 	...reward,
+	...update,
 } as const;
 
 // Module-load duplicate guard (mirror of zh-CN/index.ts).
@@ -51,6 +53,7 @@ export const enUS = {
 		general,
 		guest,
 		reward,
+		update,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {
