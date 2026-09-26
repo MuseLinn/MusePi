@@ -4642,19 +4642,6 @@ body.gui-resizing {
 	color: var(--color-text-muted);
 }
 
-.gui-speech-test-actions {
-	display: flex;
-	gap: 6px;
-}
-
-.gui-speech-test-ok {
-	color: var(--color-ok);
-}
-
-.gui-speech-test-error {
-	color: var(--color-danger);
-}
-
 .gui-statusbar-info {
 	display: flex;
 	align-items: center;

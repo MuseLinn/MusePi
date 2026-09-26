@@ -60,7 +60,9 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 					}
 					// Incremental scan — mtime/offset skip makes this cheap.
 					// No session cwd? The daemon falls back to its launch dir.
-					if (st.enabled && !st.scanning) {
+					// 「索引新文件夹」开关门控这条自动扫描：关闭后切换/打开新
+					// 文件夹不再自动建索引（手动打开索引开关仍会扫一次）。
+					if (st.enabled && !st.scanning && autoFolders) {
 						void rpc.request("index.scan", cwd ? { cwd } : {}).catch(() => {});
 					}
 				})
@@ -72,7 +74,7 @@ export function IndexesSection({ rpc, cwd }: { rpc: RpcClient | null; cwd?: stri
 			alive = false;
 			clearInterval(id);
 		};
-	}, [rpc, cwd, idxEnabled]);
+	}, [rpc, cwd, idxEnabled, autoFolders]);
 
 	// Instant code search (debounced).
 	useEffect(() => {
