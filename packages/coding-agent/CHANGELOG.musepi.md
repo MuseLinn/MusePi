@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.4.39] - 2026-09-26
+
 ### Added
 
 - **语音输入首次使用引导**：点击麦克风时先经引导闸口查询 `stt.modelStatus`（新增 `defaultKey`/`defaultCached` 字段，由 daemon 解析设置里的默认识别档）——模型已在本地则直接进入听写；未下载则弹出液态玻璃引导卡（说明模型名称与体积、下载时长预期，稍后/前往安装两键），下载进度走既有的全局 `stt.download*` 事件流实时呈现，完成后自动开始本次听写，失败可重试；首次点击不再把 GB 级下载塞在 `stt.transcribe` RPC 里裸超时。桌面端为液态玻璃弹窗（`voice-setup.tsx` 闸口）；client-core（guest 网页/Android 壳共用）为同流程的引导卡（`Composer.tsx` 的 `setup` 态 + `VoiceSetupCard`，含设备端识别兜底入口），两端共用 wire 契约与全局下载事件流。
