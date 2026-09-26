@@ -518,28 +518,6 @@ export function CustomProviderPane({
 														{t("model supports tools")}
 													</label>
 												</div>
-												<div className="flex flex-wrap items-center gap-2">
-													<GuiSelect
-														className="gui-settings-select !w-auto min-w-[210px]"
-														value={form.modelApi ?? ""}
-														onChange={api => setForm(v => ({ ...v, modelApi: api || undefined }))}
-														options={MODEL_API_OPTIONS}
-													/>
-													<label className="flex items-center gap-1 text-[12px]">
-														<input
-															type="checkbox"
-															checked={form.modelSupportsTools !== false}
-															onChange={() =>
-																setForm(v => ({
-																	...v,
-																	modelSupportsTools:
-																		v.modelSupportsTools === false ? undefined : false,
-																}))
-															}
-														/>
-														{t("model supports tools")}
-													</label>
-												</div>
 												<div className="flex gap-2">
 													<input
 														className="gui-input flex-1"
@@ -653,6 +631,27 @@ export function CustomProviderPane({
 									{modality}
 								</label>
 							))}
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<GuiSelect
+								className="gui-settings-select !w-auto min-w-[210px]"
+								value={form.modelApi ?? ""}
+								onChange={api => setForm(v => ({ ...v, modelApi: api || undefined }))}
+								options={MODEL_API_OPTIONS}
+							/>
+							<label className="flex items-center gap-1 text-[12px]">
+								<input
+									type="checkbox"
+									checked={form.modelSupportsTools !== false}
+									onChange={() =>
+										setForm(v => ({
+											...v,
+											modelSupportsTools: v.modelSupportsTools === false ? undefined : false,
+										}))
+									}
+								/>
+								{t("model supports tools")}
+							</label>
 						</div>
 						<div className="flex gap-2">
 							<input

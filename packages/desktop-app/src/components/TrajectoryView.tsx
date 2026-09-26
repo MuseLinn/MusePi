@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { timeFormatOptions } from "../lib/appearance";
 import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
@@ -179,7 +180,7 @@ function InspectorCard({
 						<div className="gui-ctx-stat">
 							<div className="gui-ctx-stat-v text-[11px]">{t("trajectory clock")}</div>
 							<div className="traj-inspector-value">
-								{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+								{new Date(ev.tsMs).toLocaleTimeString(undefined, timeFormatOptions())}
 							</div>
 						</div>
 					)}
@@ -716,8 +717,9 @@ export function TrajectoryView({
 					<div className="traj-focus-chip">
 						<Icon name="target" className="h-3 w-3 flex-shrink-0" />
 						<span className="traj-focus-time">
-							{t("trajectory focus")} {new Date(range.startMs).toLocaleTimeString(undefined, { hour12: false })}{" "}
-							– {new Date(range.endMs).toLocaleTimeString(undefined, { hour12: false })}
+							{t("trajectory focus")}{" "}
+							{new Date(range.startMs).toLocaleTimeString(undefined, timeFormatOptions())} –{" "}
+							{new Date(range.endMs).toLocaleTimeString(undefined, timeFormatOptions())}
 						</span>
 						<button
 							type="button"

@@ -2,6 +2,7 @@ import { t, tLoose } from "@musepi/client-core";
 import { replaceTabs } from "@musepi/client-core/src/tool-render/util";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { timeFormatOptions } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
@@ -201,7 +202,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 									)}
 									{ev.tsMs !== undefined && (
 										<span className="tm-lane-time">
-											{new Date(ev.tsMs).toLocaleTimeString(undefined, { hour12: false })}
+											{new Date(ev.tsMs).toLocaleTimeString(undefined, timeFormatOptions())}
 										</span>
 									)}
 								</div>
@@ -816,11 +817,11 @@ export function TurnMapCanvas({
 							: `Turn ${hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
 						<span className="tm-hover-time">
 							{hoverNode.group.firstTs
-								? new Date(hoverNode.group.firstTs).toLocaleTimeString(undefined, { hour12: false })
+								? new Date(hoverNode.group.firstTs).toLocaleTimeString(undefined, timeFormatOptions())
 								: "—"}{" "}
 							→{" "}
 							{hoverNode.group.endMs !== undefined
-								? new Date(hoverNode.group.endMs).toLocaleTimeString(undefined, { hour12: false })
+								? new Date(hoverNode.group.endMs).toLocaleTimeString(undefined, timeFormatOptions())
 								: "—"}
 						</span>
 					</div>

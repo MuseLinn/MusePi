@@ -254,6 +254,13 @@
 	color: var(--color-danger, #e5484d);
 }
 
+/* stt.enabled gate (TUI parity): the mic renders disabled while speech
+ * input is off in settings — keep it visible but visibly inert. */
+.gui-composer-ico:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
 /* ── Voice dictation strip (composer children, above the textarea) ──────
  * The mic button is a compact motion-only control (its 30px capsule had no
  * room for copy — user direction); the live waveform, the clock and the

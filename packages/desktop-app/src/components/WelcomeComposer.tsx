@@ -345,12 +345,17 @@ export function WelcomeComposer({
 	// transcription wait keeps its feedback here exactly like in-session.
 	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity): whether
 	// finishing a dictation auto-sends the transcript instead of filling the draft.
+	// Same load carries stt.enabled (TUI parity): settings.get omits it while
+	// unconfigured (schema default false is TUI opt-in semantics), so the mic
+	// stays enabled unless the user explicitly turned speech input off.
 	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
+	const [sttEnabled, setSttEnabled] = useState(true);
 	useEffect(() => {
 		const load = (): void => {
 			void rpc
-				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger"] })
+				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger", "stt.enabled"] })
 				.then(v => {
+					setSttEnabled(v?.["stt.enabled"] !== false);
 					const t = v?.["stt.submitTrigger"];
 					if (typeof t === "string" && t !== "never") setSttSubmitTrigger(t as SttSubmitTrigger);
 				})
@@ -363,6 +368,7 @@ export function WelcomeComposer({
 	const dictation = useDictation({
 		rpc,
 		sttSubmitTrigger,
+		enabled: sttEnabled,
 		onSubmit: text => {
 			// Welcome parity: the auto-send path trims before firing (a
 			// transcript that is only a "submit" tail sends nothing).
@@ -1780,7 +1786,7 @@ export function WelcomeComposer({
 									<ApprovalModeButton rpc={rpc} />
 									{/* Compact motion-only mic control; the live waveform,
 									 * clock and phase copy live in the in-input strip. */}
-									<VoiceButton state={dictation.phase} onToggle={dictation.toggle} />
+									<VoiceButton state={dictation.phase} disabled={!sttEnabled} onToggle={dictation.toggle} />
 									<button
 										type="submit"
 										ref={quotaAnchorRef}

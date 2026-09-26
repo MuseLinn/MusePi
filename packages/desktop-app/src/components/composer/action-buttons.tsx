@@ -43,9 +43,12 @@ export function EnhanceButton({ state, onToggle }: { state: EnhanceState; onTogg
  *  transcribing. */
 export function VoiceButton({
 	state,
+	disabled,
 	onToggle,
 }: {
 	state: "idle" | "recording" | "transcribing";
+	/** stt.enabled gate (TUI parity): renders inert while speech input is off. */
+	disabled?: boolean;
 	onToggle(): void;
 }): ReactNode {
 	const label =
@@ -59,6 +62,7 @@ export function VoiceButton({
 			type="button"
 			className={`gui-composer-ico${state !== "idle" ? " gui-composer-ico--dictating" : ""}`}
 			onClick={onToggle}
+			disabled={disabled}
 			title={label}
 			aria-label={label}
 		>

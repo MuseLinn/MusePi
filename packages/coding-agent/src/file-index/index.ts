@@ -324,8 +324,13 @@ export class FileIndexService {
 	}
 
 	/** FTS5 prefix search over indexed file contents (snippet from the
-	 *  original content column; matching on the bigram-expanded column). */
+	 *  original content column; matching on the bigram-expanded column).
+	 *  Gated on `#enabled`: with the index switched off the FTS table is
+	 *  left untouched (clearing data is a product decision) but queries
+	 *  report no matches — "索引关闭" means the feature is dark, not that
+	 *  stale rows keep answering searches. */
 	search(query: string, limit = 30): IndexHit[] {
+		if (!this.#enabled) return [];
 		if (!query.trim()) return [];
 		try {
 			const rows = this.#db

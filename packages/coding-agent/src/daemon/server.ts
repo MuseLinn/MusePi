@@ -5594,10 +5594,12 @@ export class DaemonServer {
 					// treats as user intent: an unset settings.locale would echo
 					// the schema default (en-US) and flip the desktop UI off the
 					// OS-detected locale; an unset defaultThinkingLevel would
-					// override the composer's neutral preselect. The GUI already
-					// falls back to schema defaults for display (2026-08-11).
+					// override the composer's neutral preselect; an unset
+					// stt.enabled would echo the schema default (false, TUI
+					// opt-in semantics) and disable the desktop mic that shipped
+					// enabled. The GUI falls back to its own defaults for these.
 					if (
-						(key === "settings.locale" || key === "defaultThinkingLevel") &&
+						(key === "settings.locale" || key === "defaultThinkingLevel" || key === "stt.enabled") &&
 						!settings.isConfigured(key as Parameters<Settings["isConfigured"]>[0])
 					) {
 						continue;

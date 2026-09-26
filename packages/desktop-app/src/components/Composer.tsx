@@ -858,14 +858,19 @@ export function Composer({
 	}, [rpc]);
 	// Dictation submit trigger (settings.stt.submitTrigger, TUI parity):
 	// whether finishing a dictation auto-sends the transcript instead of
-	// leaving it in the draft box.
+	// leaving it in the draft box. Same load carries stt.enabled (TUI
+	// parity): settings.get omits it while unconfigured (schema default
+	// false is TUI opt-in semantics), so the mic stays enabled unless the
+	// user explicitly turned speech input off.
 	const [sttSubmitTrigger, setSttSubmitTrigger] = useState<SttSubmitTrigger>("never");
+	const [sttEnabled, setSttEnabled] = useState(true);
 	useEffect(() => {
 		if (!rpc) return;
 		const load = (): void => {
 			void rpc
-				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger"] })
+				.request<Record<string, unknown> | null>("settings.get", { keys: ["stt.submitTrigger", "stt.enabled"] })
 				.then(v => {
+					setSttEnabled(v?.["stt.enabled"] !== false);
 					const t = v?.["stt.submitTrigger"];
 					if (typeof t === "string" && t !== "never") setSttSubmitTrigger(t as SttSubmitTrigger);
 				})
@@ -882,6 +887,7 @@ export function Composer({
 	const dictation = useDictation({
 		rpc,
 		sttSubmitTrigger,
+		enabled: sttEnabled,
 		onSubmit: onSend,
 		onInsert: transcript => {
 			setText(prev => (prev ? `${prev} ${transcript}` : transcript));
@@ -2148,7 +2154,11 @@ export function Composer({
 						)}
 						{/* Compact motion-only mic control; the live waveform, clock
 						 * and phase copy live in the in-input VoiceStatusStrip. */}
-						<VoiceButton state={dictation.phase} onToggle={() => void voiceSetup.onToggle()} />
+						<VoiceButton
+							state={dictation.phase}
+							disabled={!sttEnabled}
+							onToggle={() => void voiceSetup.onToggle()}
+						/>
 						{/* 三合一 send control (user direction, opendesign parity):
 						 * idle → send; working → the button itself displays the
 						 * live agent state (braille + accent shimmer), hover

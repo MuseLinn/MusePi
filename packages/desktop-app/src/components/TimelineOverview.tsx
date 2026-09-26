@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useMemo, useRef, useState } from "react";
+import { timeFormatOptions } from "../lib/appearance";
 import type { TrajectoryTurnGroup } from "./trajectory-data";
 
 /**
@@ -39,22 +40,18 @@ function laneFor(kind: string): number {
 }
 
 function clock(ms: number): string {
-	return new Date(ms).toLocaleTimeString(undefined, {
-		hour12: false,
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
+	return new Date(ms).toLocaleTimeString(
+		undefined,
+		timeFormatOptions({ hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+	);
 }
 
 function clockDetail(ms: number): string {
 	const d = new Date(ms);
-	const base = d.toLocaleTimeString(undefined, {
-		hour12: false,
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
+	const base = d.toLocaleTimeString(
+		undefined,
+		timeFormatOptions({ hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+	);
 	return `${base}.${String(d.getMilliseconds()).padStart(3, "0")}`;
 }
 

@@ -118,6 +118,36 @@ export const WEEKDAY_KEYS = [
 	"scheduled sat",
 ];
 
+/** Time-format preference values (设置 → 外观 → 时间格式, TIME_FMT_KEY). */
+export type TimeFormatPref = "auto" | "12h" | "24h";
+
+/** Read the time-format pref (TIME_FMT_KEY) — storage-safe. */
+export function readTimeFormat(): TimeFormatPref | null {
+	try {
+		return (localStorage.getItem(TIME_FMT_KEY) as TimeFormatPref | null) ?? null;
+	} catch {
+		return null; // storage unavailable
+	}
+}
+
+/** Resolve a time-format pref to the Intl `hour12` flag. The historical
+ *  rendering was hard-coded 24h (`hour12: false`), so the unset pref and
+ *  "auto" both resolve to 24h — only an explicit "12h" switches to locale
+ *  12-hour output. Pure: the pref is a parameter (testable). */
+export function resolveHour12(pref: string | null | undefined): boolean {
+	return pref === "12h";
+}
+
+/** Build Intl time options honoring the time-format preference. Call with
+ *  only `extra` to read the stored pref; pass `pref` explicitly to keep it
+ *  pure (tests). */
+export function timeFormatOptions(
+	extra: Intl.DateTimeFormatOptions = {},
+	pref: string | null | undefined = readTimeFormat(),
+): Intl.DateTimeFormatOptions {
+	return { ...extra, hour12: resolveHour12(pref) };
+}
+
 /** Week start from the settings page (auto → Monday for zh locale), as a
  *  day index (0 = Sunday). Calendar grids and weekday pickers rotate to
  *  match instead of hardcoding Sunday first. */

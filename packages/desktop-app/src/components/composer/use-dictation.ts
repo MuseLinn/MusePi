@@ -39,6 +39,9 @@ export interface DictationController {
 export function useDictation(opts: {
 	rpc: RpcClient | null;
 	sttSubmitTrigger: SttSubmitTrigger;
+	/** stt.enabled daemon gate (TUI parity): false blocks starting a NEW
+	 *  dictation; in-flight phases still settle/cancel normally. */
+	enabled?: boolean;
 	/** Transcript matched the submit trigger — auto-send path (sliced). */
 	onSubmit(text: string): void;
 	/** Transcript for the draft box (submit trigger not matched). */
@@ -79,6 +82,9 @@ export function useDictation(opts: {
 	}, []);
 
 	const toggle = useCallback((): void => {
+		// stt.enabled gate (TUI parity): a disabled setting never starts a
+		// session — but an in-flight dictation may still be stopped/cancelled.
+		if (optsRef.current.enabled === false && phaseRef.current === "idle") return;
 		if (phaseRef.current === "recording") {
 			// Mic press while recording = finish early and transcribe (voice.ts
 			// keeps the buffer). Optimistically show the transcribing phase;
