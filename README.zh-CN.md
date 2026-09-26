@@ -32,7 +32,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 - **Electron 桌面应用**（`packages/desktop-app`）：独立卡片式工作区（会话侧栏、聊天列、Side Pane、终端 dock 是浮在玻璃基底上的各自圆角面板，不再共用一张卡片 + 竖线分割）、中文界面、深浅主题 + 强调色 + 密度三轴 token、磨砂玻璃（vibrancy）窗口，对话框与界面浮层已升级为液态玻璃（镜面描边、液态弹簧动效）。
 - **常驻桌宠**（pet）：窗口角落的动画伙伴（petdex 帧动画包、拖拽定位、click-through、hover 交互、跨窗口活动桥），执行任务时有 pet 气泡反馈。
-- **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。
+- **daemon 架构**：GUI 经 JSON-RPC 连 daemon（`musepi serve`），会话持久化（journal + materialized view）、空闲 30min 转历史快照、按需重激活；Electron 退出后 daemon 存活，GUI 重连即续。daemon 内部已分层（0.5.0，strangler-fig 进行中）：HostServices 注册表以 L2 宿主服务持有 RPC 路由表（usage / events / views / boards / files / terminal / approvals / browser / remote / …… —— `packages/coding-agent/src/daemon/services/`），能力接缝、设置接线与未来的 cordis 组合层都有稳定落点。
 - **受管浏览器**（`browser.gui` 工具）：Electron WebContentsView + CDP 桥——agent 可直接驱动 GUI 内嵌浏览器页（投影布局 + 像素采样验证）。
 - **终端面板**：xterm + bun-pty 集成终端（tab、中键关闭、环境加固——剥离 `ELECTRON_RUN_AS_NODE` 等，注入 `APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP`）。
 - **完整命令面（TUI parity）**：
