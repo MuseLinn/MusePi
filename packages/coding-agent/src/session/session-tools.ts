@@ -1484,7 +1484,7 @@ export class SessionTools {
 	 * after side-effecting changes; see the memory hooks and {@link syncAfterModelChange}.
 	 *
 	 * The current calendar date IS covered (appended as a segment) because
-	 * `buildSystemPrompt` injects it into the prompt body (`Today is '{{date}}'`).
+	 * `buildSystemPrompt` injects it into the prompt body (`Today: '{{date}}'`).
 	 * Without this, a session spanning midnight with only tool-stable MCP
 	 * reconnects would keep yesterday's date indefinitely.
 	 */

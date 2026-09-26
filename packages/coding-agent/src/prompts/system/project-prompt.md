@@ -47,7 +47,7 @@ Additional workspace directories. This CURRENT workspace state supersedes worksp
 {{/each}}
 </workspace-roots>
 {{/if}}
-Today: {{date}}; current working directory: '{{cwd}}'.
+Today: {{date}} ({{weekday}}). This date is the anchor for all time-relative questions — weather, news, schedules, deadlines: use it and never guess the year/month. Current working directory: '{{cwd}}'.
 
 <critical>
 - Each response MUST advance the task; completion only stopping condition.

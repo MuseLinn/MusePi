@@ -877,6 +877,10 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 
 	const date = formatLocalCalendarDate();
 	const dateTime = date;
+	// 星期 + 时间锚点指令:弱模型常忽略 buried 的日期行,问天气/新闻时自行
+	// 编造年月(user: 问今天天气搜成一年前的)。date 值保持 YYYY-MM-DD 不动
+	// (system-prompt-model 测试按此格式断言)。
+	const weekday = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
 	const promptCwd = normalizePromptPath(resolvedCwd);
 	const activeRepoContextPrompt = renderActiveRepoContextPrompt(activeRepoContext);
 
@@ -963,6 +967,7 @@ export async function buildSystemPrompt(options: BuildSystemPromptOptions = {}):
 		alwaysApplyRules: injectedAlwaysApplyRules,
 		date,
 		dateTime,
+		weekday,
 		cwd: promptCwd,
 		additionalWorkspaceRoots: additionalWorkspaceRoots.filter(d => path.resolve(d) !== path.resolve(resolvedCwd)),
 		model: includeModelInPrompt ? (model ?? "") : "",

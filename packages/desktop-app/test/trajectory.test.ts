@@ -179,6 +179,78 @@ describe("buildTrajectory", () => {
 	});
 });
 
+describe("buildTrajectory 活跃叶路径(activePath)", () => {
+	// 用户场景:4 轮问答后撤回到第 2 轮发新消息 —— 新轮应是"第 3 轮"
+	// (新分支深度),旧 3/4 轮是废弃分支;不提供 activePath 时保持旧
+	// first-child 行为(新轮 = journal 追加序第 5 轮,即回归保护的 bug 形态)。
+	function branchedSession(): unknown[] {
+		const msg = (id: string, parentId: string | null, ts: string, role: string, text: string): unknown => ({
+			type: "message",
+			id,
+			parentId,
+			timestamp: ts,
+			message: { role, content: [{ type: "text", text }] },
+		});
+		return [
+			msg("u1", null, "2026-09-26T00:00:00.000Z", "user", "第一问"),
+			msg("a1", "u1", "2026-09-26T00:00:01.000Z", "assistant", "回答一"),
+			msg("u2", "a1", "2026-09-26T00:00:02.000Z", "user", "第二问"),
+			msg("a2", "u2", "2026-09-26T00:00:03.000Z", "assistant", "回答二"),
+			// 旧分支:原第 3、4 轮(branchAt 后废弃)。
+			msg("u3", "a2", "2026-09-26T00:00:04.000Z", "user", "旧第三问"),
+			msg("a3", "u3", "2026-09-26T00:00:05.000Z", "assistant", "旧回答三"),
+			msg("u4", "a3", "2026-09-26T00:00:06.000Z", "user", "旧第四问"),
+			msg("a4", "u4", "2026-09-26T00:00:07.000Z", "assistant", "旧回答四"),
+			// 新主线:撤回第 2 轮后发送(branchAt → parentId = a2,追加在尾部)。
+			msg("u3n", "a2", "2026-09-26T00:00:08.000Z", "user", "新第三问"),
+			msg("a3n", "u3n", "2026-09-26T00:00:09.000Z", "assistant", "新回答三"),
+		];
+	}
+	const activePath = new Set(["u1", "a1", "u2", "a2", "u3n", "a3n"]);
+
+	it("主线/分支按活跃路径判定:旧链整体 branch,新主线轮不带 branch", () => {
+		const { events } = buildTrajectory(branchedSession(), activePath);
+		const branchTitles = events.filter(e => e.branch === true).map(e => e.title);
+		expect(branchTitles).toEqual(["旧第三问", "旧回答三", "旧第四问", "旧回答四"]);
+		const mainTitles = events.filter(e => e.branch !== true).map(e => e.title);
+		expect(mainTitles).toEqual(["第一问", "回答一", "第二问", "回答二", "新第三问", "新回答三"]);
+	});
+
+	it("pathTurn = 树深度:新主线轮重新编号为第 3 轮(不是追加序第 5 轮)", () => {
+		const { events } = buildTrajectory(branchedSession(), activePath);
+		expect(events.find(e => e.title === "新第三问")?.turn).toBe(5); // journal 组键仍唯一
+		expect(events.find(e => e.title === "新第三问")?.pathTurn).toBe(3);
+		expect(events.find(e => e.title === "旧第三问")?.pathTurn).toBe(3); // 废弃分支同深度
+		expect(events.find(e => e.title === "旧第四问")?.pathTurn).toBe(4);
+		expect(events.find(e => e.title === "第二问")?.pathTurn).toBe(2);
+	});
+
+	it("stats.turns 只数主线轮(废弃分支不占当前会话轮数)", () => {
+		const { stats } = buildTrajectory(branchedSession(), activePath);
+		expect(stats.turns).toBe(3);
+		// 无 activePath:旧 first-child 行为(journal 全量计数)。
+		const legacy = buildTrajectory(branchedSession());
+		expect(legacy.stats.turns).toBe(5);
+	});
+
+	it("buildTrajectoryTree:组展示编号 displayTurn = 新分支深度", () => {
+		const { turns } = buildTrajectoryTree(branchedSession(), undefined, activePath);
+		// 组键(journal 序)唯一:1,2,3(旧),4(旧),5(新)。
+		expect(turns.map(g => g.turn)).toEqual([1, 2, 3, 4, 5]);
+		// 展示编号:新主线轮 = 3;旧分支轮保留各自深度编号。
+		expect(turns.map(g => g.displayTurn)).toEqual([1, 2, 3, 4, 3]);
+		// 主线判定喂给布局:旧 3/4 轮组首事件带 branch,新轮不带。
+		expect(turns[2]!.events[0]!.branch).toBe(true);
+		expect(turns[4]!.events[0]!.branch).not.toBe(true);
+	});
+
+	it("空 activePath(撤回过根)回退旧 first-child 行为,不误标全分支", () => {
+		// first-child 链跟随先追加的旧分支 → 旧 3/4 轮算主线,新轮被标 branch。
+		const { events } = buildTrajectory(branchedSession(), new Set());
+		expect(events.filter(e => e.branch === true).map(e => e.title)).toEqual(["新第三问", "新回答三"]);
+	});
+});
+
 describe("buildTrajectoryTree", () => {
 	it("按 turn 分组且组内保持事件顺序", () => {
 		const entries = [

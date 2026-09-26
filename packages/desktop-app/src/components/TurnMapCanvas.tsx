@@ -121,6 +121,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 	const summary = useMemo(() => turnSummaryOf(n.group), [n.group]);
 	const statsRow = useMemo(() => turnStatsOf(n.group), [n.group]);
 	const comp = useMemo(() => compositionOf(n.group), [n.group]);
+	// 展示编号 = 树深度(分支后会话按新主线重新编号);无 pathTurn 回退 journal 序。
+	const shownTurn = n.group.displayTurn ?? n.group.turn;
 	return (
 		<div
 			className={`tm-node${isExpanded ? "" : " tm-node--compact"}${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
@@ -139,7 +141,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 				<>
 					<div className="tm-node-head">
 						<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-							{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
+							{n.group.turn === 0 ? t("trajectory system events") : `Turn ${shownTurn}`}
 							{n.advisor && (
 								<em className="tm-turn-advisor">
 									<Icon name="sparkling" className="h-2.5 w-2.5" />
@@ -210,7 +212,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 			) : (
 				<div className="tm-compact">
 					<span className={`tm-turn-badge${n.advisor ? " tm-turn-badge--advisor" : ""}`}>
-						{n.group.turn === 0 ? t("trajectory system events") : `Turn ${n.group.turn}`}
+						{n.group.turn === 0 ? t("trajectory system events") : `Turn ${shownTurn}`}
 					</span>
 					<span className="tm-compact-summary" title={summary}>
 						{summary || `${n.group.events.length} events`}
@@ -274,7 +276,12 @@ export function TurnMapCanvas({
 	const [direction, setDirection] = useState<TurnMapDirection>(readMapDirection);
 	const horizontal = direction === "h";
 
-	const { turns, stats } = useMemo(() => buildTrajectoryTree(entries, roundDurations), [entries, roundDurations]);
+	// activePathIds 提供时:主线/分支按活跃叶路径判定,轮号 = 树深度
+	// (branchAt 后新主线轮重新编号,废弃分支入分支列);无 = 旧 first-child 启发式。
+	const { turns, stats } = useMemo(
+		() => buildTrajectoryTree(entries, roundDurations, activePathIds),
+		[entries, roundDurations, activePathIds],
+	);
 	const layout = useMemo(() => layoutTurnMap(turns, expanded, direction), [turns, expanded, direction]);
 	const { nodes, edges, main, width, height } = layout;
 
@@ -703,22 +710,27 @@ export function TurnMapCanvas({
 					>
 						<svg className="tm-edges" width={width} height={height}>
 							<defs>
+								{/* userSpaceOnUse:垂直主线 <line> 的 objectBoundingBox
+									宽度为 0,默认渐变坐标系下描边退化不可见(分支
+									贝塞尔因有非零包围盒才正常)。 */}
 								<linearGradient
 									id="tm-main-line"
+									gradientUnits="userSpaceOnUse"
 									x1="0"
 									y1="0"
-									x2={horizontal ? "1" : "0"}
-									y2={horizontal ? "0" : "1"}
+									x2={horizontal ? width : 0}
+									y2={horizontal ? 0 : height}
 								>
 									<stop offset="0%" className="tm-edge-gold-1" />
 									<stop offset="100%" className="tm-edge-gold-2" />
 								</linearGradient>
 								<linearGradient
 									id="tm-branch-line"
+									gradientUnits="userSpaceOnUse"
 									x1="0"
 									y1="0"
-									x2={horizontal ? "0" : "1"}
-									y2={horizontal ? "1" : "0"}
+									x2={horizontal ? 0 : width}
+									y2={horizontal ? height : 0}
 								>
 									<stop offset="0%" className="tm-edge-gold-1" />
 									<stop offset="100%" className="tm-edge-purple" />
@@ -771,7 +783,10 @@ export function TurnMapCanvas({
 									className="tm-lane-head"
 									style={{ left: lane.first.x, top: Math.max(0, lane.first.y - 22) }}
 								>
-									{tLoose("turn map branch from", { turn: lane.sourceTurn })}
+									{tLoose("turn map branch from", {
+										turn:
+											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ?? lane.sourceTurn,
+									})}
 								</div>
 							))}
 						{visibleNodes.map(n => (
@@ -796,7 +811,9 @@ export function TurnMapCanvas({
 			{hoverNode && !dragging && (
 				<div className="tm-hover" onPointerDown={e => e.stopPropagation()}>
 					<div className="tm-hover-head">
-						{hoverNode.group.turn === 0 ? t("trajectory system events") : `Turn ${hoverNode.group.turn}`}
+						{hoverNode.group.turn === 0
+							? t("trajectory system events")
+							: `Turn ${hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
 						<span className="tm-hover-time">
 							{hoverNode.group.firstTs
 								? new Date(hoverNode.group.firstTs).toLocaleTimeString(undefined, { hour12: false })

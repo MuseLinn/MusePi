@@ -167,7 +167,7 @@ function InspectorCard({
 					</div>
 					<div className="gui-ctx-stat">
 						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory turns")}</div>
-						<div className="traj-inspector-value">Turn {ev.turn}</div>
+						<div className="traj-inspector-value">Turn {ev.pathTurn ?? ev.turn}</div>
 					</div>
 					{roundDurationMs !== undefined && (
 						<div className="gui-ctx-stat">
@@ -361,8 +361,8 @@ export function TrajectoryView({
 		startModeTransition(() => setModeState(next));
 	};
 	const { turns, stats } = useMemo(
-		() => buildTrajectoryTree(fullEntries ?? entries, roundDurations),
-		[fullEntries, entries, roundDurations],
+		() => buildTrajectoryTree(fullEntries ?? entries, roundDurations, activePathIds),
+		[fullEntries, entries, roundDurations, activePathIds],
 	);
 	// 折叠的 turn 集合。长会话(事件数 > 阈值)默认全部折叠——时间线首帧
 	// 只挂轮头(164 个)而不是上万事件行,切进轨迹视图不再卡一整帧。
@@ -832,7 +832,9 @@ export function TrajectoryView({
 											className="h-3.5 w-3.5 shrink-0 opacity-60"
 										/>
 										<span className="traj-turn-tag">
-											{group.turn === 0 ? t("trajectory system events") : `Turn ${group.turn}`}
+											{group.turn === 0
+												? t("trajectory system events")
+												: `Turn ${group.displayTurn ?? group.turn}`}
 										</span>
 										<span className="traj-turn-summary">
 											{assistant ? assistant.title : `${group.events.length} events`}

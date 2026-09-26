@@ -16,6 +16,10 @@ export interface TrajectoryEvent {
 	result?: string;
 	toolCallId?: string;
 	turn: number;
+	/** 树深度编号(沿父链的根→该条目的轮起始数):branchAt 后新主线轮的
+	 *  编号 = 新分支深度(3、4…),不是 journal 追加序(5、6…)。无路径/无
+	 *  id 的条目 = undefined,展示层回退 turn。 */
+	pathTurn?: number;
 	timestamp?: string;
 	/** 源 wire entry id — 轨迹行点击跳转 transcript 用。 */
 	entryId?: string;
@@ -60,7 +64,19 @@ function stringifyArgs(args: unknown): string {
 	}
 }
 
-export function buildTrajectory(entries: readonly unknown[]): { events: TrajectoryEvent[]; stats: TrajectoryStats } {
+/**
+ * 构建轨迹事件。activePath(可选)= 当前活跃叶路径上的条目 id 集
+ * (GUI 由 leafWalk/pinnedPathIds 提供)。提供时:
+ *  - 主线/分支按"是否在活跃路径上"判定(取代 first-child 启发式)——
+ *    branchAt/编辑重发后旧分支整链标 branch,新主线轮回到主线列;
+ *  - 每个事件带 pathTurn(树深度),branchAt 后的新轮编号 = 新分支深度
+ *    (撤回第 2 轮再发问 → 新轮是"第 3 轮",不是 journal 追加序的第 5 轮)。
+ * 不提供时保持旧行为(first-child 链 = 主线,追加序编号)。
+ */
+export function buildTrajectory(
+	entries: readonly unknown[],
+	activePath?: ReadonlySet<string>,
+): { events: TrajectoryEvent[]; stats: TrajectoryStats } {
 	const events: TrajectoryEvent[] = [];
 	let turn = 0;
 	let toolCalls = 0;
@@ -68,11 +84,45 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 	let lastTs: number | undefined;
 	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
 	const toolIndex = new Map<string, TrajectoryEvent>();
-	/**
-	 * 分支判定(树结构):主线 = 从根沿 first-child 下行的链;任何不在主线
-	 * 上的条目都是分支(分支点及其整棵子树)。按 parentId 建树后一次遍历。
-	 */
 	let branchIds: ReadonlySet<string> | undefined;
+
+	// ── 树深度预计算:parentId 链上(含自身)的轮起始数。一次遍历 + 记忆化,
+	// 深链(上万条)不会退化成 O(n²)。轮起始口径与折叠/导航层一致
+	// (isTurnStart:user 消息或 display advisor 笔记)。
+	const parentOf = new Map<string, string | null>();
+	const turnStartIds = new Set<string>();
+	for (const raw of entries) {
+		if (!raw || typeof raw !== "object") continue;
+		const e = raw as { id?: unknown; parentId?: unknown };
+		if (typeof e.id !== "string") continue;
+		parentOf.set(e.id, typeof e.parentId === "string" ? e.parentId : null);
+		if (isTurnStart(raw as Parameters<typeof isTurnStart>[0])) turnStartIds.add(e.id);
+	}
+	const depthMemo = new Map<string, number>();
+	const depthOf = (id: string): number => {
+		const hit = depthMemo.get(id);
+		if (hit !== undefined) return hit;
+		const chain: string[] = [];
+		let base = 0;
+		let cur: string = id;
+		for (;;) {
+			const cached = depthMemo.get(cur);
+			if (cached !== undefined) {
+				base = cached;
+				break;
+			}
+			chain.push(cur);
+			const p = parentOf.get(cur);
+			if (p === undefined || p === null || !parentOf.has(p)) break; // 根或链断
+			cur = p;
+		}
+		let d = base;
+		for (let i = chain.length - 1; i >= 0; i--) {
+			if (turnStartIds.has(chain[i]!)) d += 1;
+			depthMemo.set(chain[i]!, d);
+		}
+		return depthMemo.get(id) ?? base;
+	};
 
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
@@ -119,39 +169,47 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				target.result = truncate(content || String(msg.result ?? ""), 160);
 			}
 		} else if (type === "message" && msg) {
-			// Branch detection: a message not on the main first-child chain is
-			// a branch (re-answer / fork continuation) — the timeline flags
-			// it instead of hiding it. Set is computed lazily on first use.
-			if (branchIds === undefined) {
-				const childrenOf = new Map<string, string[]>();
-				const ids = new Set<string>();
-				let rootId: string | null = null;
-				for (const raw of entries) {
-					if (!raw || typeof raw !== "object") continue;
-					const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
-					if (typeof e2.id !== "string" || e2.type !== "message") continue;
-					ids.add(e2.id);
-					const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
-					if (pid !== null) {
-						const arr = childrenOf.get(pid) ?? [];
-						arr.push(e2.id);
-						childrenOf.set(pid, arr);
-					} else if (rootId === null) {
-						rootId = e2.id;
+			// 分支判定:有活跃路径 = "不在路径上即分支"(branchAt 后旧链整体
+			// 入分支列,新主线轮归主线);无路径 = 旧 first-child 启发式。
+			let isBranch: boolean;
+			if (activePath !== undefined && activePath.size > 0) {
+				isBranch = entryId !== undefined && !activePath.has(entryId);
+			} else {
+				// Branch detection: a message not on the main first-child chain is
+				// a branch (re-answer / fork continuation) — the timeline flags
+				// it instead of hiding it. Set is computed lazily on first use.
+				if (branchIds === undefined) {
+					const childrenOf = new Map<string, string[]>();
+					const ids = new Set<string>();
+					let rootId: string | null = null;
+					for (const raw of entries) {
+						if (!raw || typeof raw !== "object") continue;
+						const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
+						if (typeof e2.id !== "string" || e2.type !== "message") continue;
+						ids.add(e2.id);
+						const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
+						if (pid !== null) {
+							const arr = childrenOf.get(pid) ?? [];
+							arr.push(e2.id);
+							childrenOf.set(pid, arr);
+						} else if (rootId === null) {
+							rootId = e2.id;
+						}
 					}
+					// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
+					const main = new Set<string>();
+					let cur = rootId;
+					while (cur !== null && ids.has(cur)) {
+						main.add(cur);
+						cur = childrenOf.get(cur)?.[0] ?? null;
+					}
+					const branch = new Set<string>();
+					for (const id of ids) if (!main.has(id)) branch.add(id);
+					branchIds = branch;
 				}
-				// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
-				const main = new Set<string>();
-				let cur = rootId;
-				while (cur !== null && ids.has(cur)) {
-					main.add(cur);
-					cur = childrenOf.get(cur)?.[0] ?? null;
-				}
-				const branch = new Set<string>();
-				for (const id of ids) if (!main.has(id)) branch.add(id);
-				branchIds = branch;
+				isBranch = entryId !== undefined && branchIds.has(entryId);
 			}
-			const isBranch = entryId !== undefined && branchIds.has(entryId);
+			const pathTurn = entryId !== undefined ? depthOf(entryId) : undefined;
 			if (msg.role === "user") {
 				turn += 1;
 				const text = Array.isArray(msg.content)
@@ -166,6 +224,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						kind: "user",
 						title: truncate(text.trim(), 80),
 						turn,
+						pathTurn,
 						timestamp: entry.timestamp,
 						entryId,
 						tsMs,
@@ -195,6 +254,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 							title: part.name,
 							body: stringifyArgs(part.arguments),
 							turn,
+							pathTurn,
 							timestamp: entry.timestamp,
 							entryId,
 							tsMs,
@@ -212,6 +272,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 						title: truncate(summary, 120),
 						body: truncate(summary),
 						turn,
+						pathTurn,
 						timestamp: entry.timestamp,
 						entryId,
 						tsMs,
@@ -242,6 +303,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				kind: "advisor",
 				title: truncate(text.trim(), 80) || "advisor",
 				turn,
+				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
@@ -253,6 +315,7 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				kind: "system",
 				title: type,
 				turn,
+				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
@@ -267,7 +330,11 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
 				firstTs !== undefined && lastTs !== undefined ? Math.max(0, Math.round((lastTs - firstTs) / 1000)) : 0,
 			// 轮起始数(user + advisor,与折叠/导航/地图同口径)——不是
 			// assistant 消息数(长会话下二者差数十倍,用户当作"轮次"读)。
-			turns: turn,
+			// 有活跃路径时只数主线轮(废弃分支的轮不占当前会话轮数)。
+			turns:
+				activePath !== undefined && activePath.size > 0
+					? events.filter(e => (e.kind === "user" || e.kind === "advisor") && e.branch !== true).length
+					: turn,
 			calls: toolCalls,
 		},
 	};
@@ -278,6 +345,8 @@ export function buildTrajectory(entries: readonly unknown[]): { events: Trajecto
  *  TrajectoryView 与单元测试共用。 */
 export interface TrajectoryTurnGroup {
 	turn: number;
+	/** 展示编号 = 组内事件的树深度(pathTurn);无 = 回退 turn(journal 序)。 */
+	displayTurn?: number;
 	events: TrajectoryEvent[];
 	/** 该 turn 首个事件时间戳(折叠行显示;无则 undefined)。 */
 	firstTs?: string;
@@ -311,17 +380,24 @@ function roundDurationsOf(src: RoundDurationMap | undefined): ReadonlyMap<number
 export function buildTrajectoryTree(
 	entries: readonly unknown[],
 	roundDurations?: RoundDurationMap,
+	activePath?: ReadonlySet<string>,
 ): {
 	turns: TrajectoryTurnGroup[];
 	stats: TrajectoryStats;
 } {
-	const { events, stats } = buildTrajectory(entries);
+	const { events, stats } = buildTrajectory(entries, activePath);
 	const durations = roundDurationsOf(roundDurations);
 	const turns: TrajectoryTurnGroup[] = [];
 	for (const ev of events) {
 		let group = turns[turns.length - 1];
 		if (!group || group.turn !== ev.turn) {
-			group = { turn: ev.turn, events: [], firstTs: ev.timestamp, startMs: ev.tsMs };
+			group = {
+				turn: ev.turn,
+				displayTurn: ev.pathTurn,
+				events: [],
+				firstTs: ev.timestamp,
+				startMs: ev.tsMs,
+			};
 			turns.push(group);
 		}
 		group.events.push(ev);
