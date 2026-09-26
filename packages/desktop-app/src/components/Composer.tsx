@@ -1432,10 +1432,11 @@ export function Composer({
 			}
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
-			// Attachment mentions (Kimi parity): `@附件[名]` tokens become
-			// explicit references — image chips → `[图片:名]` (pixels ride the
-			// wire images channel as always), file chips → the existing
-			// `[Attachment] <workspace path>` line, stale tokens verbatim.
+			// Attachment mentions (Kimi parity): `@名` tokens become explicit
+			// references — image chips → `[图片:名]` (pixels ride the wire
+			// images channel as always), file chips → the existing
+			// `[Attachment] <workspace path>` line; tokens whose attachment is
+			// gone no longer resolve and stay verbatim.
 			const expanded = expandMentionTokens(payload, attachments);
 			const finalMsg = quotePrefix ? `${quotePrefix}${expanded}`.trim() : expanded;
 			// TUI "." / "c" continue-shortcut parity: a bare dot or c (no
@@ -2260,9 +2261,11 @@ export function Composer({
 						text={text}
 						className="gui-ta-highlight--session"
 						resolveMention={name => {
+							// null = no chip with this name → the token is plain
+							// text: the overlay leaves it unpainted and the send
+							// path leaves it unexpanded.
 							const a = attachments.find(x => x.name === name);
-							if (!a) return { kind: "file", name, stale: true };
-							return { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined };
+							return a ? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined } : null;
 						}}
 						onMentionClick={start => {
 							// Pill click = caret jump to the token (hover preview is

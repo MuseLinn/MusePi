@@ -75,7 +75,6 @@ export const composer = {
 	"mention attachment": "Mention",
 	"mention image {n}": "Mention image {n}",
 	"mention file {n}": "Mention file {n}",
-	"attachment removed": "Attachment removed",
 
 	// ── Voice input (daemon stt.transcribe; design 「语音四帧」) ──────────────
 	// "voice input" / "voice recording stop" / "voice transcribing" /

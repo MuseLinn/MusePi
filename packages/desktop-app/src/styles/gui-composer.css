@@ -2790,26 +2790,21 @@
 	background: color-mix(in oklab, var(--color-accent, var(--accent)) 28%, transparent);
 }
 
-/* ── Attachment mention pill (appended 2026-09-26, Kimi desktop parity):
- * the `@附件[名]` token painted by the highlight overlay. Metric-neutral
+/* ── Attachment mention pill (restyle 2026-09-26, Kimi desktop parity):
+ * the `@名` token painted by the highlight overlay. Metric-neutral
  * per the overlay pairing rules: horizontal padding 6px repaid by an equal
- * negative margin, no horizontal border (the rim is an inset box-shadow),
- * so glyph advance is untouched. Accent-tinted so it reads as a live
- * reference rather than chrome. pointer-events auto on THIS pill only —
- * hover opens the preview card, click jumps the caret to the token. ── */
+ * negative margin, so glyph advance is untouched. Clean Kimi-style pill:
+ * accent-tinted glass fill (--glass-* family), no rim/border noise.
+ * pointer-events auto on THIS pill only — hover opens the preview card,
+ * click jumps the caret to the token. ── */
 .gui-ta-hl-mention {
 	position: relative;
-	border: 0;
 	border-radius: 999px;
 	padding: 0 6px;
 	margin: 0 -6px;
 	background: color-mix(in oklab, var(--accent) 14%, var(--glass-bg));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		inset 0 0 0 1px color-mix(in oklab, var(--accent) 35%, transparent);
 	color: var(--accent);
 	pointer-events: auto;
 	cursor: pointer;
@@ -2817,17 +2812,7 @@
 }
 
 .gui-ta-hl-mention:hover {
-	background: color-mix(in oklab, var(--accent) 22%, var(--glass-bg));
-}
-
-/* Stale token: the referenced attachment is gone. Dashed outline (no
- * layout impact) + muted ink; the pill no longer promises a preview. */
-.gui-ta-hl-mention--stale {
-	background: transparent;
-	color: var(--color-text-faint);
-	box-shadow: none;
-	outline: 1px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
-	outline-offset: 0;
+	background: color-mix(in oklab, var(--accent) 24%, var(--glass-bg));
 }
 
 /* Hover preview card (portaled to body, fixed from the pill's rect — the
@@ -2868,14 +2853,6 @@
 
 .gui-mention-pop-size {
 	color: var(--color-text-muted);
-	flex: none;
-}
-
-.gui-mention-pop-stale {
-	color: var(--color-text-faint);
-	padding: 1px 6px;
-	border: 1px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
-	border-radius: 999px;
 	flex: none;
 }
 

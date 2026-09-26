@@ -5,40 +5,62 @@
  * rides draft persistence for free because it lives in the text, and the
  * send path expands it into explicit attachment references.
  *
- * Token grammar: `@附件[文件名]` — single-line, filename verbatim between
- * the brackets (spaces survive), no adjacency to the slash/bang/magic
- * highlight kinds, and distinct from the `@file` TUI/completion semantics
- * (that one inserts a workspace PATH followed by a space; this token only
- * ever references a chip staged in the composer). Known limit: a filename
- * containing `]` truncates at the first bracket close — the token then
- * round-trips as stale, never as a wrong attachment.
+ * Token grammar (v2, 2026-09-26): `@名字` — an `@` followed by a run of
+ * characters that are not whitespace, not `[`/`]`, and not `/`/`\`; a run
+ * directly followed by `/` or `\` is a PATH and produces no candidate at
+ * all, which keeps the bare-`@path` print-mode/TUI semantics intact (that
+ * flow inserts a workspace PATH and is never expanded in the GUI). A
+ * candidate is only a MENTION when 名字 exactly matches a chip staged in
+ * the composer: the overlay paints it (through the host's resolveMention)
+ * and the send path expands it. Everything else — bare `@path`, prose
+ * `@word`, a token whose attachment has been removed — is plain text:
+ * never painted, never rewritten on send (the token survives verbatim).
+ * Known limits (accepted, they fail toward plain text): a filename
+ * containing whitespace or `[`/`]` cannot round-trip (the run breaks at
+ * the first such character); trailing punctuation typed directly after
+ * the name joins the run and breaks the match. Chip-inserted tokens come
+ * with a trailing space and are always followed by prose boundaries in
+ * practice, so the inserted form parses.
  */
 
 import { attachmentWorkspacePath } from "./use-attachments";
 
-export const MENTION_TOKEN_PREFIX = "@附件[";
-
 /** Build one token from an attachment name. */
 export function makeMentionToken(name: string): string {
-	return `${MENTION_TOKEN_PREFIX}${name}]`;
+	return `@${name}`;
 }
 
 export interface MentionTokenSpan {
 	start: number;
 	end: number;
-	/** Raw filename between the brackets (may contain spaces). */
+	/** Candidate name after the `@` (the whitespace-free run). */
 	name: string;
 }
 
-const MENTION_RE = /@附件\[([^\]\n]*)\]/g;
+/** `@` + a run with no whitespace / brackets / slashes. Whether the run is
+ *  a PATH (a `/` or `\` directly after it) is checked AFTER the match — a
+ *  regex lookahead would still match a truncated prefix via backtracking
+ *  ("sr" out of "@src/foo"). */
+const MENTION_RE = /@([^\s[\]\\/]+)/g;
 
-/** Parse every mention token in `text` (scan order, no overlaps by
- *  construction — the grammar cannot nest). */
+/** Path guard shared by both consumers: a run directly followed by `/` or
+ *  `\` is a path segment — never a mention (bare-`@path` TUI semantics). */
+function followedByPathSeparator(text: string, end: number): boolean {
+	const c = text[end];
+	return c === "/" || c === "\\";
+}
+
+/** Parse every mention CANDIDATE in `text` (scan order; candidates cannot
+ *  nest, so no overlaps by construction). Candidate ≠ mention: whether a
+ *  span is a live reference is decided by the consumers — expand checks
+ *  the staged chips, paint checks the host's resolveMention. */
 export function parseMentionTokens(text: string): MentionTokenSpan[] {
 	const out: MentionTokenSpan[] = [];
 	for (const m of text.matchAll(MENTION_RE)) {
 		const idx = m.index ?? 0;
-		out.push({ start: idx, end: idx + m[0].length, name: m[1] ?? "" });
+		const end = idx + m[0].length;
+		if (followedByPathSeparator(text, end)) continue;
+		out.push({ start: idx, end, name: m[1] ?? "" });
 	}
 	return out;
 }
@@ -57,9 +79,10 @@ export interface MentionExpandableAttachment {
  *  - file → `[Attachment] <workspace path>` — the same reference line the
  *    fs.write upload path already produces, so the agent resolves the chip
  *    through the existing mechanism (listed once more inline; harmless).
- *  A token whose attachment is gone stays VERBATIM: stripping would
- *  silently rewrite the user's message, and the stale pill already warned
- *  before send. */
+ *  A token whose attachment is gone stays VERBATIM: it no longer resolves,
+ *  so stripping would silently rewrite the user's message — and since the
+ *  unresolved token is never painted either, it reads as the plain text
+ *  it now is. */
 function expandOne(token: string, name: string, attachments: readonly MentionExpandableAttachment[]): string {
 	const hit = attachments.find(a => a.name === name);
 	if (!hit) return token;
@@ -67,10 +90,14 @@ function expandOne(token: string, name: string, attachments: readonly MentionExp
 }
 
 /** Expand every mention token in `text` against the chips staged at send
- *  time. First name match wins (duplicate chip names share one reference). */
+ *  time. First name match wins (duplicate chip names share one reference);
+ *  unmatched candidates pass through untouched. */
 export function expandMentionTokens(text: string, attachments: readonly MentionExpandableAttachment[]): string {
-	if (!text.includes(MENTION_TOKEN_PREFIX)) return text;
-	return text.replace(MENTION_RE, (token, name: string) => expandOne(token, name, attachments));
+	if (!text.includes("@")) return text;
+	return text.replace(MENTION_RE, (token, name: string, offset: number) => {
+		if (followedByPathSeparator(text, offset + token.length)) return token;
+		return expandOne(token, name, attachments);
+	});
 }
 
 /** Splice a mention token (plus one trailing space, which both reads
@@ -90,8 +117,9 @@ export function spliceMentionToken(
 	const end = Math.min(Math.max(0, selectionEnd), value.length);
 	const head = value.slice(0, start);
 	// Glue hygiene: after an ASCII word character, keep a space before the
-	// token so it never fuses with the preceding word (a fused `word@附件`
-	// also reads as an email-ish token). CJK body text needs no glue.
+	// token so it never fuses with the preceding word (a fused `word@名`
+	// reads email-ish and visually glues the pill to the word). CJK body
+	// text needs no glue.
 	const glue = /[A-Za-z0-9_]$/.test(head) ? " " : "";
 	const next = `${head}${glue}${token}${value.slice(end)}`;
 	return { next, caret: start + glue.length + token.length };

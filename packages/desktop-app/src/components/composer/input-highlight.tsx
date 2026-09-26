@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { t } from "../../i18n/index.js";
-import { MENTION_TOKEN_PREFIX, parseMentionTokens } from "./mention-token";
+import { parseMentionTokens } from "./mention-token";
 
 /**
  * In-input token highlighting (TUI editor parity): an overlay mirror of the
@@ -17,17 +16,20 @@ import { MENTION_TOKEN_PREFIX, parseMentionTokens } from "./mention-token";
  * scroll mirror — the textarea's onScroll copies scrollTop onto the
  * overlay (its previousElementSibling inside the stack). The pills are
  * members of the shared liquid-glass material family (gui-composer.css):
- * metric-neutral by construction — colour/fill/rim/sheen only, horizontal
+ * metric-neutral by construction — colour/fill only, horizontal
  * padding repaid by an equal negative margin, and the token text wrapped
  * in an inner <span> so the `> *` rescue lifts it above the family's
  * sheen layer. ANY glyph-advance change skews the caret.
  *
- * `@` note (updated 2026-09-26): bare `@path` stays unpainted — nothing in
- * the send path expands it (that flow is print-mode/TUI). The exception is
- * the attachment-mention token `@附件[文件名]`, which DOES have send
- * semantics now (expanded to explicit attachment references on send), so
- * it earns a pill — with pointer-events enabled on that pill only, for
- * the hover preview + caret-jump click.
+ * `@` note (updated 2026-09-26, v2 grammar): a `@名字` candidate is
+ * painted ONLY when 名字 resolves against the host's live chip list —
+ * the host passes `resolveMention` (required: mention paint DEPENDS on
+ * it) and the same gate drives the send-path expansion, so paint and
+ * expand can never disagree. Bare `@path` stays unpainted and unexpanded
+ * (that flow is print-mode/TUI); a token whose attachment was removed
+ * stops resolving and silently reverts to plain text. Unpainted tokens
+ * carry no pointer events — hover preview / click-to-caret live on the
+ * resolved pills only.
  */
 
 export type HighlightKind = "slash" | "bang" | "magic" | "mention";
@@ -57,8 +59,30 @@ const LEADING_SLASH_RE = /(^|\n)(\/[^\s/][^\s]*)/gu;
  *  body), so inner whitespace rides inside the pill. */
 const LEADING_BANG_RE = /(^|\n)(!!?[^\S\n]*[^\s]+)/gu;
 
-export function parseHighlightSpans(text: string): HighlightSpan[] {
+/** Attachment data behind a mention pill, resolved by the host from its
+ *  live chip list. Returning null means "no chip with this name" — the
+ *  token is plain text: not painted here, not expanded on send. */
+export interface MentionPreview {
+	kind: "image" | "file";
+	name: string;
+	size?: number;
+	/** Image thumbnail (data URL) for the hover card. */
+	dataUrl?: string;
+}
+
+export type MentionResolver = (name: string) => MentionPreview | null;
+
+export function parseHighlightSpans(text: string, resolveMention: MentionResolver): HighlightSpan[] {
 	const spans: HighlightSpan[] = [];
+	// Mentions first: only candidates that resolve against the live chips
+	// are painted. Pushed BEFORE slash/bang/magic so the stable sort hands
+	// equal-start regions to the mention pill (an attachment literally
+	// named "workflowz" reads as a reference, not the thinking trigger);
+	// unresolved candidates are simply absent, leaving magic/slash free to
+	// claim the region.
+	for (const m of parseMentionTokens(text)) {
+		if (resolveMention(m.name)) spans.push({ start: m.start, end: m.end, kind: "mention" });
+	}
 	for (const m of text.matchAll(LEADING_SLASH_RE)) {
 		const idx = (m.index ?? 0) + m[1]!.length;
 		spans.push({ start: idx, end: idx + m[2]!.length, kind: "slash" });
@@ -72,13 +96,6 @@ export function parseHighlightSpans(text: string): HighlightSpan[] {
 			const idx = m.index ?? 0;
 			spans.push({ start: idx, end: idx + w.length, kind: "magic" });
 		}
-	}
-	// Mention tokens: painted from the same parse the send-path expansion
-	// uses (one grammar, two consumers). A magic word inside the brackets
-	// ("@附件[workflowz]") starts AFTER the mention's `@`, so the greedy
-	// first-wins dedupe below hands the region to the mention pill.
-	for (const m of parseMentionTokens(text)) {
-		spans.push({ start: m.start, end: m.end, kind: "mention" });
 	}
 	return dedupeSpans(spans.sort((a, b) => a.start - b.start));
 }
@@ -105,18 +122,6 @@ const HL_CLASS: Record<HighlightKind, string> = {
 	mention: "gui-ta-hl-mention",
 };
 
-/** Attachment data behind a mention pill, resolved by the host from its
- *  live chip list. `stale` marks a token whose attachment is gone — the
- *  pill downgrades and the preview says so. */
-export interface MentionPreview {
-	kind: "image" | "file";
-	name: string;
-	size?: number;
-	/** Image thumbnail (data URL) for the hover card. */
-	dataUrl?: string;
-	stale?: boolean;
-}
-
 /** Hover-card size labels ("1.2 MB"). */
 function mentionSizeLabel(size: number | undefined): string {
 	if (!size || !Number.isFinite(size) || size <= 0) return "";
@@ -135,8 +140,8 @@ interface MentionPop {
 /** Mirror layer: render `text` with the parsed spans wrapped in tinted
  *  spans. Trailing newline gets a zero-width space so pre-wrap keeps the
  *  final empty line's height (the textarea scrolls one line further).
- *  `resolveMention` + `onMentionClick` are optional — pass them to give
- *  the mention pills their hover preview card and click-to-caret jump. */
+ *  `resolveMention` is required — mention paint is gated on it; pass
+ *  `onMentionClick` to give the resolved pills their click-to-caret jump. */
 export function ComposerHighlight({
 	text,
 	className,
@@ -145,7 +150,7 @@ export function ComposerHighlight({
 }: {
 	text: string;
 	className: string;
-	resolveMention?(name: string): MentionPreview | null;
+	resolveMention: MentionResolver;
 	onMentionClick?(start: number): void;
 }): ReactNode {
 	// Hover preview state — one portaled card at a time, positioned from
@@ -156,14 +161,14 @@ export function ComposerHighlight({
 	const showPop = (name: string, el: HTMLElement): void => {
 		clearTimeout(popHideRef.current);
 		const rect = el.getBoundingClientRect();
-		setPop({ name, preview: resolveMention ? resolveMention(name) : null, x: rect.left, y: rect.top });
+		setPop({ name, preview: resolveMention(name), x: rect.left, y: rect.top });
 	};
 	const hidePop = (): void => {
 		clearTimeout(popHideRef.current);
 		popHideRef.current = setTimeout(() => setPop(null), 60);
 	};
 
-	const spans = parseHighlightSpans(text);
+	const spans = parseHighlightSpans(text, resolveMention);
 	const parts: ReactNode[] = [];
 	let cursor = 0;
 	spans.forEach((s, i) => {
@@ -171,9 +176,8 @@ export function ComposerHighlight({
 		if (s.start > cursor) parts.push(text.slice(cursor, s.start));
 		const isMention = s.kind === "mention";
 		const token = text.slice(s.start, s.end);
-		const mentionPreview =
-			isMention && resolveMention ? resolveMention(token.slice(MENTION_TOKEN_PREFIX.length, -1)) : null;
-		const cls = `${HL_CLASS[s.kind]}${mentionPreview?.stale ? " gui-ta-hl-mention--stale" : ""}`;
+		const mentionName = isMention ? token.slice(1) : "";
+		const cls = HL_CLASS[s.kind];
 		parts.push(
 			<span
 				key={i}
@@ -186,8 +190,7 @@ export function ComposerHighlight({
 								e.preventDefault();
 							},
 							onClick: () => onMentionClick?.(s.start),
-							onMouseEnter: (e: React.MouseEvent<HTMLElement>) =>
-								showPop(token.slice(MENTION_TOKEN_PREFIX.length, -1), e.currentTarget),
+							onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showPop(mentionName, e.currentTarget),
 							onMouseLeave: hidePop,
 						}
 					: {})}
@@ -206,14 +209,6 @@ export function ComposerHighlight({
 			{(() => {
 				const p = pop.preview;
 				if (!p) return <span className="gui-mention-pop-name">{pop.name}</span>;
-				if (p.stale) {
-					return (
-						<>
-							<span className="gui-mention-pop-name">{pop.name}</span>
-							<span className="gui-mention-pop-stale">{t("attachment removed")}</span>
-						</>
-					);
-				}
 				return (
 					<>
 						{p.kind === "image" && p.dataUrl ? (

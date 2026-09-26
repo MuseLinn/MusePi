@@ -1928,9 +1928,12 @@ export function WelcomeComposer({
 										text={text}
 										className="gui-ta-highlight--welcome"
 										resolveMention={name => {
+											// null = no chip with this name → plain text
+											// (unpainted, unexpanded on send).
 											const a = attachments.find(x => x.name === name);
-											if (!a) return { kind: "file", name, stale: true };
-											return { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined };
+											return a
+												? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined }
+												: null;
 										}}
 										onMentionClick={start => {
 											const ta = taRef.current;
