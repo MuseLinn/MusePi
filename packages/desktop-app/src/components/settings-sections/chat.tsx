@@ -250,9 +250,9 @@ export function ChatSection(): ReactNode {
 		() => {
 			try {
 				const v = localStorage.getItem("musepi-gui-chat-effect");
-				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "ink";
+				return v === "burst" || v === "shimmer" || v === "glitch" || v === "flip" || v === "ink" ? v : "typewriter";
 			} catch {
-				return "ink";
+				return "typewriter";
 			}
 		},
 	);

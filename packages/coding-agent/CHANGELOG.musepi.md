@@ -42,6 +42,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **交互页重复语音测试卡移除 + 「索引新文件夹」开关接线**：① 设置 → 交互底部的「语音测试」卡（播放测试语音/测试麦克风）与设置 → 语音标签页内的测试语音输入/输出完全重复——交互页副本删除，端到端语音链路测试统一归口语音标签页；② 设置 → 数据与统计 → 索引库的「索引新文件夹」开关此前写了 localStorage 但全仓无读取（死开关）——现接线为门控后台轮询里的自动 `index.scan`：关闭后切换/打开新文件夹不再自动建索引，手动打开「索引仓库」开关仍会立即扫描一次。
   - EN: duplicate speech-test card removed from Interaction settings + "Index new folders" toggle wired: ① the "Speech test" card at the bottom of Settings → Interaction (play test phrase / test microphone) fully duplicated the test-voice-input/output controls inside the Settings → Voice tab — the Interaction copy is removed and end-to-end speech-stack testing lives solely in the Voice tab; ② the "Index new folders" toggle under Settings → Data & Stats → Index Library wrote localStorage with no reader anywhere (a dead switch) — it now gates the automatic `index.scan` in the background polling: with it off, switching to or opening a new folder no longer auto-indexes it, while manually enabling the "Index repositories" switch still triggers an immediate scan.
 
+- **设置默认值漂移与登出守卫修复（M2.10 审计收尾）**：① 打字机效果开关未设置时，设置页显示 ink 而聊天实际渲染 typewriter（同一存储键两处默认回退不一致）——设置页回退对齐为 typewriter，显示与行为一致；② 设置 → 模型与供应商的「登出」在无会话打开时静默无效（守卫要求 sessionId，但 `providers.logout` RPC 本就不需要它，单凭据删除路径也无此守卫）——去掉多余守卫，无会话也能正常管理凭据。
+  - EN: settings default-value drift and logout guard fixes (M2.10 audit wrap-up): ① with the typing-effect preference unset, the settings page displayed ink while chat actually rendered typewriter (two divergent fallbacks over the same storage key) — the settings fallback is aligned to typewriter so display matches behavior; ② "Log out" under Settings → Models & Providers silently did nothing when no session was open (a guard demanded sessionId, which the `providers.logout` RPC never used, and the per-credential delete path had no such guard) — the spurious guard is removed, credentials can be managed without an open session.
+
 ## [0.4.40] - 2026-09-26
 
 ### Added

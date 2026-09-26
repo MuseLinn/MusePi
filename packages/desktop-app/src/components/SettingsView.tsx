@@ -299,9 +299,9 @@ export function SettingsView({
 	};
 
 	const logout = async (providerId: string): Promise<void> => {
-		if (!rpc || !sessionId) return;
+		if (!rpc) return;
 		try {
-			await rpc.request("providers.logout", { sessionId, providerId });
+			await rpc.request("providers.logout", { providerId });
 			await loadProviders();
 		} catch (err) {
 			setLoginState({ providerId, message: err instanceof Error ? err.message : String(err) });
