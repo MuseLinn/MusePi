@@ -26,7 +26,7 @@ import { BashCard } from "./bash-card";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import type { TurnRenderUnit } from "./render-units";
-import type { RoundFold } from "./round-collapse";
+import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import {
 	anchorActionAfterContentChange,
 	initialFollowing,
@@ -51,6 +51,7 @@ import {
 	msgText,
 	RoundFoldHeader,
 	readLiveCustomMessage,
+	ToolRunLine,
 	type TranscriptNodeInjection,
 	TtsrBlock,
 	TurnHeader,
@@ -194,6 +195,11 @@ export interface TranscriptProps {
 	 *  activityDefaultState "expanded" parity) — default false (collapsed,
 	 *  ZCode behavior). User toggles per round still win either way. */
 	defaultRoundFoldExpanded?: boolean;
+	/** 工具调用汇总 (Kimi parity, default ON): within a turn, stretches of ≥2
+	 *  consecutive work rows summarize into ONE category-aggregated line
+	 *  (`读取了 3 个文件 · 运行了 2 个命令`, round-collapse.buildToolRuns);
+	 *  click re-expands the run. false renders every tool card 现状逐条. */
+	toolCallSummary?: boolean;
 	/** TUI display.smoothStreaming parity: false renders streamed text
 	 *  without the character-level reveal (also applied via the
 	 *  `gui-chat-no-smooth` html class in the desktop GUI). */
@@ -1075,6 +1081,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		userPlain = false,
 		collapseLongUserMessages = false,
 		defaultRoundFoldExpanded = false,
+		toolCallSummary = true,
 		smoothStreaming = true,
 		taskCardStyle = "swarm",
 		hideToolActivity = false,
@@ -1357,6 +1364,38 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldsExpanded,
 		[roundFoldOpen, foldsExpanded, foldKeyOf],
 	);
+
+	// 工具调用汇总 (Kimi parity): consecutive work runs (round-collapse
+	// .buildToolRuns — streaming live tail exempt) summarized per run at the
+	// run head. Expand deviations key on the run head's entry id (stable
+	// across history prepends — same lesson as foldKeyOf): an expanded run
+	// renders its full row sequence plus the summary line (click re-folds).
+	const [runsExpanded, setRunsExpanded] = useState<ReadonlySet<string>>(() => new Set());
+	const toggleRun = useCallback((key: string): void => {
+		setRunsExpanded(prev => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	}, []);
+	const toolRuns = useMemo(
+		() => (toolCallSummary && !hideToolActivity ? buildToolRuns(entries, working) : []),
+		[entries, working, toolCallSummary, hideToolActivity],
+	);
+	const runByHeadIdx = useMemo(() => {
+		const map = new Map<number, ToolRunSummary>();
+		for (const r of toolRuns) map.set(r.headIdx, r);
+		return map;
+	}, [toolRuns]);
+	const runByRowIdx = useMemo(() => {
+		const map = new Map<number, ToolRunSummary>();
+		for (const r of toolRuns) {
+			for (const i of r.idxs) map.set(i, r);
+		}
+		return map;
+	}, [toolRuns]);
+
 	// Index set of rows collapsed inside a CLOSED fold — the virtualizer's
 	// estimate for these is ~0 (the fold slot collapses to height 0), which
 	// keeps the scrollbar stable when scrolled-past turns mount/unmount.
@@ -1370,8 +1409,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				if (i !== f.finalIdx && !f.exempt.includes(i)) set.add(i);
 			}
 		}
+		// 工具调用汇总: summarized run tail rows collapse into zero-height
+		// slots too — same virtualizer estimate contract as closed folds.
+		for (const r of toolRuns) {
+			if (runsExpanded.has(r.key)) continue;
+			for (let k = 1; k < r.idxs.length; k++) set.add(r.idxs[k]);
+		}
 		return set;
-	}, [folds, foldOpenOf]);
+	}, [folds, foldOpenOf, toolRuns, runsExpanded]);
 
 	// ── Entry-level virtualization (M2/P0①) ──────────────────────────────
 	// The scroll host resolves in the ref callback below (desktop scrolls an
@@ -1834,10 +1879,25 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// card is the turn's artifact, not process noise.
 		const isExemptRow = fold?.exempt.includes(absIdx) === true;
 		const inHiddenSpan = fold !== undefined && !isHeaderRow && !isReplyRow && !isExemptRow;
+		// ── 工具调用汇总 (Kimi parity) ────────────────────────────────────
+		// An active run renders its HEAD slot as the one-line summary and
+		// collapses its tail rows into zero-height slots (same .tr-fold-slot
+		// animation the round fold uses); clicking the summary (or re-clicking
+		// an expanded one) flips the run back to its full row sequence.
+		// Suppressed when: the fold is closed (the 活动 header owns the
+		// process), a run row is fold-exempt (widget/tail/hook rows are
+		// artifacts, not noise) — the whole run renders 现状 then.
+		const run = runByRowIdx.get(absIdx);
+		const runBlocked = run !== undefined && fold !== undefined && run.idxs.some(i => fold.exempt.includes(i));
+		const runActive = run !== undefined && !runBlocked && !foldClosed;
+		const isRunHead = runActive && run.headIdx === absIdx;
+		const runOpen = runActive && runsExpanded.has(run.key);
+		const isRunHidden = runActive && !isRunHead && !runOpen;
 		// Rows in the hidden span stay MOUNTED and collapse to height 0
 		// (.tr-fold-slot, animatable via interpolate-size) so folding
-		// animates both ways instead of popping in and out.
-		const collapsible = inHiddenSpan;
+		// animates both ways instead of popping in and out. Summarized run
+		// tail rows take the same slot treatment.
+		const collapsible = inHiddenSpan || isRunHidden;
 		// Collapsed turn = 活动 row + the answer: the reply row renders its
 		// TEXT only (thinking/tool parts fold into the activity row).
 		const rowTextOnly = foldClosed && isReplyRow;
@@ -1887,7 +1947,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// Completed rounds are what the fold + the setting govern.
 		const rowHideTools = hideToolActivity && !foldOpen && absIdx < liveFromIdx;
 		// The row body: mounted for hidden-span rows too (the slot collapses
-		// them), suppressed only for a closed fold's non-reply header row.
+		// them), suppressed only for a closed fold's non-reply header row —
+		// and for a summarized run head, whose body the summary line replaces
+		// (an expanded run keeps its full rows below the summary).
+		const runSummaryHere = isRunHead && run !== undefined;
 		const body =
 			collapsible || !hideRowContent ? (
 				<Fragment key={entry.id}>
@@ -1897,10 +1960,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							{foldHeader}
 						</Row>
 					) : null}
-					{hideRowContent && !collapsible ? null : (
+					{runSummaryHere ? (
+						<Row kind="assistant" gutter={agentGutter ?? t("agent")}>
+							{headerStandalone ? null : foldHeader}
+							<ToolRunLine run={run} open={runOpen} onToggle={() => toggleRun(run.key)} />
+						</Row>
+					) : null}
+					{hideRowContent && !collapsible ? null : runSummaryHere && !runOpen ? null : (
 						<EntryRow
 							entry={entry}
-							foldHeader={isAssistantMessage ? (foldHeader ?? undefined) : undefined}
+							foldHeader={isAssistantMessage && !runSummaryHere ? (foldHeader ?? undefined) : undefined}
 							results={results}
 							active={activeTools}
 							host={host}
@@ -1945,7 +2014,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				{foldHeader}
 			</Row>
 		) : null;
-		const slotClass = `tr-fold-slot${foldOpen ? " tr-fold-slot--open" : ""}`;
+		// Summarized run tail rows stay collapsed even inside an OPEN fold —
+		// the run's own summary line owns their visibility now.
+		const slotClass = `tr-fold-slot${foldOpen && !isRunHidden ? " tr-fold-slot--open" : ""}`;
 		const row = collapsible ? (
 			// Hidden span rows stay MOUNTED inside the slot and collapse to
 			// height 0, so folding animates both ways (returning null popped

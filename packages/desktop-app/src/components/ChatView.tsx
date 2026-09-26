@@ -382,6 +382,24 @@ export function ChatView({
 		window.addEventListener("musepi-roundfold-default-changed", onChanged);
 		return () => window.removeEventListener("musepi-roundfold-default-changed", onChanged);
 	}, []);
+	// 工具调用汇总 (settings → 聊天, default ON): consecutive tool calls
+	// summarize into one line per run. Same companion-event pattern as the
+	// round-fold default (localStorage events do not fire in the same
+	// document) so flipping the toggle re-renders the live transcript.
+	const [toolCallSummary, setToolCallSummary] = useState(() => {
+		try {
+			return (localStorage.getItem("musepi-gui-chat-toolsummary") ?? "1") !== "0";
+		} catch {
+			return true;
+		}
+	});
+	useEffect(() => {
+		const onChanged = (e: Event): void => {
+			setToolCallSummary((e as CustomEvent<boolean>).detail === true);
+		};
+		window.addEventListener("musepi-toolsummary-changed", onChanged);
+		return () => window.removeEventListener("musepi-toolsummary-changed", onChanged);
+	}, []);
 	/** TTS read-aloud 播放状态:行级指示 + 停止句柄。 */
 	const [speakingId, setSpeakingId] = useState<string | null>(null);
 	const stopSpeakRef = useRef<(() => void) | null>(null);
@@ -2094,6 +2112,7 @@ export function ChatView({
 																	}
 																})()}
 																defaultRoundFoldExpanded={defaultRoundFoldExpanded}
+																toolCallSummary={toolCallSummary}
 																/* TUI display-settings parity: the daemon
 																 * settings drive the transcript (unflagged
 																 * from tuiOnly 2026-08-12). */

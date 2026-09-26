@@ -153,6 +153,55 @@ export function PrefSegmented<T extends string>({
 	);
 }
 
+/**
+ * 消息自动折叠 (Kimi parity, default ON): fold a turn's working process when
+ * the turn completes, showing only the summary. Bespoke instead of PrefToggle
+ * because the underlying storage key keeps the LEGACY inverted contract —
+ * `musepi-gui-chat-roundfold` stores "default EXPANDED" ("1") vs collapsed /
+ * auto-fold ("0" or unset) — so the toggle reads/writes the inverted value
+ * and existing user state migrates without a new storage channel. ChatView
+ * keeps reading the raw key; this toggle dispatches the companion
+ * `musepi-roundfold-default-changed` event with the expanded flag.
+ */
+function AutoFoldToggle(): ReactNode {
+	const [onState, setOnState] = useState<boolean>(() => {
+		try {
+			const v = localStorage.getItem("musepi-gui-chat-roundfold");
+			return v === null || v !== "1";
+		} catch {
+			return true;
+		}
+	});
+	return (
+		<div className="gui-settings-row">
+			<div>
+				<div className="gui-settings-row-label">{t("message auto fold")}</div>
+				<div className="gui-settings-row-desc">{t("message auto fold description")}</div>
+			</div>
+			<button
+				type="button"
+				role="switch"
+				aria-checked={onState}
+				className={`gui-toggle${onState ? " gui-toggle--on" : ""}`}
+				onClick={() => {
+					tapFeedback();
+					const next = !onState;
+					setOnState(next);
+					try {
+						localStorage.setItem("musepi-gui-chat-roundfold", next ? "0" : "1");
+					} catch {
+						// ignore
+					}
+					window.dispatchEvent(new CustomEvent("musepi-roundfold-default-changed", { detail: !next }));
+				}}
+				aria-label={t("message auto fold")}
+			>
+				<span className="gui-toggle-knob" />
+			</button>
+		</div>
+	);
+}
+
 /** Chat display settings (transcript rendering) — rendered as a block at
  *  the bottom of 外观 (previously the standalone 聊天设置 tab; merged
  *  2026-08-12 so transcript rendering prefs live with the rest of the
@@ -236,13 +285,12 @@ export function ChatSection(): ReactNode {
 					description={t("collapse long user messages description")}
 					storageKey="musepi-gui-chat-collapseuser"
 				/>
+				<AutoFoldToggle />
 				<PrefToggle
-					label={t("activity default expanded")}
-					description={t("activity default expanded description")}
-					storageKey="musepi-gui-chat-roundfold"
-					onChange={expanded =>
-						window.dispatchEvent(new CustomEvent("musepi-roundfold-default-changed", { detail: expanded }))
-					}
+					label={t("tool call summary")}
+					description={t("tool call summary description")}
+					storageKey="musepi-gui-chat-toolsummary"
+					onChange={on => window.dispatchEvent(new CustomEvent("musepi-toolsummary-changed", { detail: on }))}
 				/>
 				<PrefToggle
 					label={t("show reasoning traces")}

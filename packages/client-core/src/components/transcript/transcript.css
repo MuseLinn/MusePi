@@ -3142,7 +3142,8 @@ a.tr-tool-search-title:hover {
 	overflow: visible;
 }
 
-.tr-round-fold {
+.tr-round-fold,
+.tr-run-summary {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -3163,9 +3164,14 @@ a.tr-tool-search-title:hover {
 	cursor: pointer;
 	transition: background 140ms ease, border-color 140ms ease;
 }
-.tr-round-fold:hover {
+.tr-round-fold:hover,
+.tr-run-summary:hover {
 	background: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 10%, var(--color-surface-raised, var(--bg-overlay, #222)));
 	border-color: color-mix(in oklab, var(--color-accent, var(--accent, #d9a441)) 45%, transparent);
+}
+/* 工具调用汇总 run summary: the chevron rotates with the run's expand state. */
+.tr-run-summary--open .tr-round-fold-icon svg {
+	transform: rotate(90deg);
 }
 /* Boxed glyph, openchamber parity: the box IS the expand affordance. */
 .tr-round-fold-icon {

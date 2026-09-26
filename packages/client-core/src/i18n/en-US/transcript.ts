@@ -6,6 +6,11 @@ export const transcript = {
 	"round commands {count}": "{count} commands",
 	"round changed {count}": "{count} files changed",
 	"round completed": "Completed",
+	// ── 工具调用汇总（连续工具调用的类别聚合摘要行）─────────────────────────
+	"run read {count}": "Read {count} files",
+	"run edit {count}": "Edited {count} files",
+	"run command {count}": "Ran {count} commands",
+	"run other {count}": "{count} other operations",
 	// ── Transcript ────────────────────────────────────────────────────────────
 	" · redacted": " · redacted",
 	"(redacted by provider)": "(Redacted by provider)",

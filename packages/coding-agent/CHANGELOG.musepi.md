@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **消息自动折叠与工具调用汇总两个设置开关（Kimi Code 桌面端 parity）**：设置 → 外观 → 聊天设置新增两条。「消息自动折叠」（默认开）= 回合结束时该轮工作段自动收为折叠态仅展示总结，流式中永不收；由原「活动默认展开」开关替换而来，存储键反义映射、旧设置无缝迁移。「工具调用汇总」（默认开）= 回合内连续的工具调用聚合为一行摘要（如"读取了 3 个文件 · 运行了 2 个命令"，按工具类别聚合计数），点击摘要行展开完整过程、再点收回；流式中进行中的段保持逐条（spinner 即进度），关闭则现状逐条渲染；摘要行样式复用 活动 折叠头的 token。
+  - EN: two new toggles in Settings → Appearance → Chat (Kimi Code desktop parity). "Auto-fold messages" (default on) folds a turn's working process into the collapsed summary when the turn completes — never while streaming; it replaces the old "Activities expanded by default" toggle with an inverted mapping over the same storage key, so existing settings migrate seamlessly. "Tool call summary" (default on) aggregates consecutive tool calls within a turn into one-line abstracts (e.g. "Read 3 files · Ran 2 commands", counts pooled per tool category); click a summary line to reveal the full process, click again to re-fold; the in-flight stretch stays per-tool while streaming (the spinner is the progress), and turning the toggle off renders tool cards one by one as before. Summary lines reuse the activity fold header's token language.
+
 ## [0.4.40] - 2026-09-26
 
 ### Added

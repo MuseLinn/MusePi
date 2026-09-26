@@ -392,6 +392,11 @@ turn
 
 **折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡一律不参与折叠；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
 
+**设置开关（2026-09-26 补齐，Kimi Code 桌面端 parity，入口：外观 → 聊天设置）**：
+
+- **消息自动折叠**（默认开）：回合完成（非流式 in-flight）时该轮工作段自动收为折叠态、仅展示总结——这是 §5r 折叠的默认行为，开关控制渲染默认态（`defaultRoundFoldExpanded` 取反，纯渲染偏好，不改折叠内核）。**流式中当前轮永不收**（in-flight 轮豁免，`working` 边界同 `buildRoundFolds`）。关闭 = 已完成轮的活动摘要默认展开、逐条呈现工具过程。存储键沿用 `musepi-gui-chat-roundfold` 的反义映射（键语义仍是"默认展开"），原「活动默认展开」开关由此替换，旧设置值无缝迁移、无需新存储通道。
+- **工具调用汇总**（默认开，键 `musepi-gui-chat-toolsummary`）：回合内 ≥2 次连续工具动作（toolResult / bashExecution 行，按 `classifyTranscriptRow` 的 work 口径）聚合为**一行摘要**——`读取了 N 个文件 · 编辑了 N 个文件 · 运行了 N 个命令`（按工具类别聚合计数，i18n 双档；纯函数 `round-collapse.buildToolRuns`，摘要行 `.tr-run-summary` 复用 `.tr-round-fold` 的 token 语言）。单次工具调用不汇总（自有卡片已足够）；摘要行点击展开该段的完整行序、再点收回（折叠的是过程不是信息，展开态必须可回）；流式中延伸到条目末尾的 run 保持逐条（spinner 即进度，§D），已完结的 run 照常汇总；关闭 = 现状逐条渲染工具卡。与消息自动折叠正交：折叠关闭态由 活动 头承担摘要，汇总行只在展开态/当前轮生效。
+
 **loading 可见性（判定表）**：权限确认 pending → 聊天 loading 隐藏，由 ApprovalCard 进度线承担（2px，`--glass-border` 轨道 + accent 40% 滑块，`plslide 1.6s var(--spring-liquid)` 无限，文案"等待用户决定"）；AskUserQuestion pending → 提问卡自身承担；compact 进行中 → compaction divider 承担；goalVerifier 活跃 → verifier 卡片承担（挂接点待确认）；正常流式 → 显示；pending resolve 后恢复。
 
 **tail/hook 行**：tail rows 保持 CLI 全序原位渲染，chip 用 `--glass-bg-strong` + inset rim；hook 行 turn-local，mono 细条 + 2px 左边线（`--glass-border`），`hook 名 · 事件 · 耗时`，hover 出详情——永不并入工作段折叠（hook 是轮的"事后审计信息"）。

@@ -352,6 +352,39 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **挂靠球的上限跟着画走,不跟着历史走**:46px 上限定 box 还背着 ~1.28× rig 的年代;padding 卸掉后(box ≈ 1.04× 球)同一上限读起来偏小。上限 46 → 52,下限 34 → 38——仍低于当年"巨球"的视觉(那时 60px box 是 ~47px 球;现在 52px box 是 ~50px 球且无一物外溢)。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
+## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1-transcript-design.md`）
+
+参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
+
+**轮结构（`ConversationTurnRenderUnit` 对齐）**：
+
+```
+turn
+├── turn header        轻边界：turn 序号 · 模型 · 时间 · 聚合状态(✓/进行中 + 耗时)
+├── user bubble        现有 tr-user 语言
+├── workSegments[]     语义折叠单元（核心新增）
+│    折叠态(默认历史)  单行：chevron + 段摘要 + 工具数 + 段状态 + 段耗时
+│    展开态            工具行全序列表（各自状态+耗时）
+├── latestAssistantTextRow  轮尾最终正文（复制/重试/分支操作栏）
+├── tail rows          重试失败 / 异步结果 / token 用量 —— 永不进折叠
+└── hookInvocations    hook 行（mono 细条 + 左边线）—— 永不进折叠
+```
+
+**折叠边界规则**：① 段划分 = 原始输入 + 每条 accepted guide 各一段（ZCode `workSegments` 语义），段内保持 CLI row 全序；② 历史轮一律折叠，当前轮工作段默认展开随流式追加；③ 聚合状态取段内最差（任一 err → err；否则 running；否则 ✓），耗时为段内工具耗时之和；④ 折叠的是"工作过程"不是"信息"——latestAssistantTextRow / tail rows / hook 行 / 用户气泡一律不参与折叠；⑤ 展开/收起 `--spring-liquid` 0.25s，chevron 旋转同步。与既有 pre-compaction 折叠（`collapseCompacted`，按时间切）独立共存。
+
+**设置开关（2026-09-26 补齐，Kimi Code 桌面端 parity，入口：外观 → 聊天设置）**：
+
+- **消息自动折叠**（默认开）：回合完成（非流式 in-flight）时该轮工作段自动收为折叠态、仅展示总结——这是 §5r 折叠的默认行为，开关控制渲染默认态（`defaultRoundFoldExpanded` 取反，纯渲染偏好，不改折叠内核）。**流式中当前轮永不收**（in-flight 轮豁免，`working` 边界同 `buildRoundFolds`）。关闭 = 已完成轮的活动摘要默认展开、逐条呈现工具过程。存储键沿用 `musepi-gui-chat-roundfold` 的反义映射（键语义仍是"默认展开"），原「活动默认展开」开关由此替换，旧设置值无缝迁移、无需新存储通道。
+- **工具调用汇总**（默认开，键 `musepi-gui-chat-toolsummary`）：回合内 ≥2 次连续工具动作（toolResult / bashExecution 行，按 `classifyTranscriptRow` 的 work 口径）聚合为**一行摘要**——`读取了 N 个文件 · 编辑了 N 个文件 · 运行了 N 个命令`（按工具类别聚合计数，i18n 双档；纯函数 `round-collapse.buildToolRuns`，摘要行 `.tr-run-summary` 复用 `.tr-round-fold` 的 token 语言）。单次工具调用不汇总（自有卡片已足够）；摘要行点击展开该段的完整行序、再点收回（折叠的是过程不是信息，展开态必须可回）；流式中延伸到条目末尾的 run 保持逐条（spinner 即进度，§D），已完结的 run 照常汇总；关闭 = 现状逐条渲染工具卡。与消息自动折叠正交：折叠关闭态由 活动 头承担摘要，汇总行只在展开态/当前轮生效。
+
+**loading 可见性（判定表）**：权限确认 pending → 聊天 loading 隐藏，由 ApprovalCard 进度线承担（2px，`--glass-border` 轨道 + accent 40% 滑块，`plslide 1.6s var(--spring-liquid)` 无限，文案"等待用户决定"）；AskUserQuestion pending → 提问卡自身承担；compact 进行中 → compaction divider 承担；goalVerifier 活跃 → verifier 卡片承担（挂接点待确认）；正常流式 → 显示；pending resolve 后恢复。
+
+**tail/hook 行**：tail rows 保持 CLI 全序原位渲染，chip 用 `--glass-bg-strong` + inset rim；hook 行 turn-local，mono 细条 + 2px 左边线（`--glass-border`），`hook 名 · 事件 · 耗时`，hover 出详情——永不并入工作段折叠（hook 是轮的"事后审计信息"）。
+
+**流式进行态（D）**：turn header 圆点 accent + 旋转 spinner + "进行中"，耗时 `…`；当前轮工作段 `.tr-seg--open.tr-seg--live`（`--glass-bg-strong` 底，与历史段 `--glass-bg` 区分）；进行中工具行 spinner + `…`，完成立即转 ✓ + 实际耗时；滚动锚定视口钉在 `latestAssistantTextRow` 末行；流式 caret 8px×1.1em accent 块 0.9s steps(2)。
+
+**遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

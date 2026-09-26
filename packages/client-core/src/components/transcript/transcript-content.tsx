@@ -19,7 +19,7 @@ import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
 import type { TurnRenderUnit } from "./render-units";
-import type { RoundFold } from "./round-collapse";
+import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
 import { isUsageReport, parseUsageReport, UsageCard } from "./usage-card";
@@ -637,6 +637,54 @@ export function RoundFoldHeader({
 					<Undo2 size={12} />
 				</span>
 			)}
+		</button>
+	);
+}
+
+/** 工具调用汇总 one-line summary (Kimi parity): a run of consecutive tool
+ *  work rows (see round-collapse.buildToolRuns) collapses to a
+ *  category-aggregated abstract — 读取了 N 个文件 · 编辑了 N 个文件 ·
+ *  运行了 N 个命令 — styled after the 活动 fold header's tokens. Click
+ *  toggles the run between the summary and its full row sequence (the
+ *  process must stay reachable — folding hides 过程, never information). */
+export function ToolRunLine({
+	run,
+	open,
+	onToggle,
+}: {
+	run: ToolRunSummary;
+	open: boolean;
+	onToggle(): void;
+}): ReactNode {
+	const segments: ReactNode[] = [];
+	if (run.reads > 0) {
+		segments.push(<span key="reads">{t("run read {count}", { count: String(run.reads) })}</span>);
+	}
+	if (run.edits > 0) {
+		segments.push(<span key="edits">{t("run edit {count}", { count: String(run.edits) })}</span>);
+	}
+	if (run.commands > 0) {
+		segments.push(<span key="cmds">{t("run command {count}", { count: String(run.commands) })}</span>);
+	}
+	if (run.other > 0) {
+		segments.push(<span key="other">{t("run other {count}", { count: String(run.other) })}</span>);
+	}
+	return (
+		<button
+			type="button"
+			className={`tr-run-summary${open ? " tr-run-summary--open" : ""}`}
+			onClick={onToggle}
+			aria-expanded={open}
+		>
+			<span className="tr-round-fold-icon" aria-hidden>
+				<ChevronRight size={12} />
+			</span>
+			{segments.map((seg, i) => (
+				<Fragment key={i}>
+					{i > 0 && <span className="tr-round-fold-sep">·</span>}
+					{seg}
+				</Fragment>
+			))}
 		</button>
 	);
 }

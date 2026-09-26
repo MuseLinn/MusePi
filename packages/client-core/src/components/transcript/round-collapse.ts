@@ -364,3 +364,91 @@ export function isInsideFold(folds: readonly RoundFold[], idx: number): boolean 
 	// endIdx is INCLUSIVE (it is the turn's last row).
 	return folds.some(f => idx > f.startIdx && idx <= f.endIdx && idx !== f.finalIdx && !f.exempt.includes(idx));
 }
+
+/** Tools whose calls WRITE files — the run-summary edit segment (DIFF_TOOLS
+ *  plus the plain write tool). */
+const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
+
+/** One summarized run of consecutive tool-work rows (Kimi 工具调用汇总
+ *  parity): while a turn works, maximal stretches of adjacent process rows —
+ *  toolCall-carrying assistants, toolResults, bash executions — collapse to
+ *  ONE category-aggregated summary line (`读取了 3 个文件 · 运行了 2 个
+ *  命令`) rendered at the run's head. The renderer owns per-run expand state;
+ *  this module only computes which rows group together and what they add
+ *  up to. */
+export interface ToolRunSummary {
+	/** Stable expand-state key: the head entry's id, falling back to the
+	 *  absolute index for id-less entries (same stability lesson as the
+	 *  round fold's userId key — history prepends shift indexes). */
+	key: string;
+	/** Absolute index of the run's FIRST row — where the summary line renders. */
+	headIdx: number;
+	/** Absolute indexes of every row in the run, in CLI order (head included). */
+	idxs: number[];
+	/** Read/search/browse tool results (EXPLORE_TOOLS). */
+	reads: number;
+	/** File-writing tool results (write / edit / apply_patch). */
+	edits: number;
+	/** Bash command rows. */
+	commands: number;
+	/** Any other tool results. */
+	other: number;
+}
+
+/**
+ * Group consecutive work rows into summarizable runs. A run needs ≥2 tool
+ * ACTIONS (tool results / bash rows — one call occupies two rows: the
+ * assistant carrier + its result): a lone call reads fine as its own card,
+ * a summary line would only add noise. Text replies, user messages,
+ * tail/hook rows and timeline boundaries all break a run
+ * (classifyTranscriptRow is the ONE predicate — the same vocabulary the
+ * fold and the turn projection use).
+ *
+ * `working` guards the live tail: a run that extends to the transcript's
+ * last entry while the agent streams is still executing — its spinner IS
+ * the progress feedback (design doc §D), so it renders as-is until the run
+ * settles or the turn ends. Settled earlier runs in the same live round DO
+ * summarize (Kimi's "回答过程中，连续的工具调用自动汇总为一行摘要").
+ */
+export function buildToolRuns(entries: readonly SessionEntry[], working: boolean): ToolRunSummary[] {
+	const runs: ToolRunSummary[] = [];
+	let idxs: number[] = [];
+	const flush = (): void => {
+		if (idxs.length > 0 && !(working && idxs[idxs.length - 1] === entries.length - 1)) {
+			let reads = 0;
+			let edits = 0;
+			let commands = 0;
+			let other = 0;
+			for (const i of idxs) {
+				const e = entries[i];
+				if (e?.type !== "message") continue;
+				const m = e.message;
+				if (m.role === "bashExecution") commands++;
+				else if (m.role === "toolResult") {
+					if (EXPLORE_TOOLS.has(m.toolName)) reads++;
+					else if (WRITE_TOOLS.has(m.toolName)) edits++;
+					else other++;
+				}
+			}
+			if (reads + edits + commands + other >= 2) {
+				const head = entries[idxs[0]];
+				runs.push({
+					key: head?.id ?? `idx:${idxs[0]}`,
+					headIdx: idxs[0],
+					idxs,
+					reads,
+					edits,
+					commands,
+					other,
+				});
+			}
+		}
+		idxs = [];
+	};
+	for (let i = 0; i < entries.length; i++) {
+		if (classifyTranscriptRow(entries[i]) === "work") idxs.push(i);
+		else flush();
+	}
+	flush();
+	return runs;
+}
