@@ -1522,6 +1522,19 @@
 	}
 }
 
+/* Motion-off / reduced-motion: exit snaps instead of animating (the 180ms
+ * unmount timer in DialogFrame still fires — onboarding parity, §5u). */
+.gui-motion-off .gui-dialog--closing,
+.gui-motion-off .gui-dialog-backdrop--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-dialog--closing,
+	.gui-dialog-backdrop--closing {
+		animation: none;
+	}
+}
+
 .gui-dialog {
 	display: flex;
 	flex-direction: column;

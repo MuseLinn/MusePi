@@ -385,6 +385,64 @@ turn
 
 **遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
 
+## 5u. 弹窗动效与样式规范（2026-09-26 定稿，源 `docs/review/0.5.0-installer-update-dialogs-design.md` §4，评审决策①-⑧全按默认建议执行）
+
+> 对桌面 GUI 全部模态弹窗 / 全屏覆盖层生效。**以下全部取值为现存值收编**——§5s M1.10 阶梯 + 各组件现行值；禁止为弹窗发明新 token、新曲线、新 scrim 配方。组件盘点依据 `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3。
+
+### 出入场动效阶梯
+
+| 场景 | 曲线 | 时长 | 说明 |
+|---|---|---|---|
+| 弹窗/覆盖层**背板入场** | ease（纯 opacity） | **160ms**（`--gui-motion-fade-in` 档） | DialogFrame / onboarding / TaskModal / palette 背板均为 160ms |
+| 弹窗**卡片入场** | `--spring-liquid` | **240ms**（高度/位移档） | DialogFrame 与 TaskModal（`gui-focus-zoom 240ms`）；palette 保留 130ms `gui-menu-in`——菜单浮层语义，成文例外；UpdateToast 保留 260ms spring（非模态浮件，非弹窗卡） |
+| **出场（背板+卡片）** | `--spring-snappy` | **140ms**，宿主保持挂载 **180ms** 后卸载 | DialogFrame 为基准（140/180）；onboarding 系（Onboarding/Announcement/Reward）已对齐 140/180。例外：UpdateToast 180ms ease-in（非模态 chip 档）、palette 130ms `gui-menu-out`（菜单档） |
+| GlobalPause（系统级例外） | `--spring` transition | 进入 240ms / 退出 320ms | 整屏接管属 M1.10 §3.3 明文的整屏动画例外 |
+| 位移幅度 | — | 出场下滑 **4px**（小位移子档，6px 内）；入场无位移（scale 0.94→1 承担） | `gui-dialog-out` translateY(4px) 保持——决策⑥：弹窗出场是"收拢"不是"位移"，阶梯的 10px 大位移档对弹窗不适用 |
+
+### scrim 规范（两档制）
+
+| 档 | 配方 | 适用 |
+|---|---|---|
+| **标准 scrim** | `color-mix(in oklab, var(--color-bg) 55%, transparent)` + `blur(6px)` | DialogFrame 系全部模态、TaskModal、CommandPalette（自裸黑 35% 迁入，决策⑦） |
+| **重玻璃 scrim** | bg 42-55% + `blur(24px) saturate(150%)` | 仅"接管全屏"的系统级/导览面：Onboarding、Announcement、Reward、GlobalPause、（预留）强制更新层 |
+
+判据：需要继续感知被覆盖内容的用重玻璃（导览、冻结）；纯阻断注意力的用标准 scrim。**禁止第三种配方。**
+
+### 圆角与尺寸档位
+
+| 档 | 圆角 | 尺寸 | 适用 |
+|---|---|---|---|
+| compact | `--radius-xl` | max-width 380px、auto 高、padding 22×24 | confirm / prompt / 更新决策卡（`gui-dialog--confirm`） |
+| standard | `--radius-2xl` | 600×420（`min(600px, 90vw)` × `min(420px, 80vh)`） | 设置类/表单类弹窗（`gui-dialog` 基类） |
+| wide | `--radius-2xl` | 内容定义（SaveImage 760px、palette 620px、Connect 向导） | 预览/多列/向导 |
+| 导览 | `--radius-2xl` | `min(1000px, vw−160)` × `min(620px, vh−160)`，居中浮动、四边留 ≥80px 玻璃边 | Onboarding / Announcement / Reward |
+
+### z-index 层级表
+
+| 带 | z | 内容 |
+|---|---|---|
+| 内容浮层 | ≤120 | 历史容器内浮层（现无成员） |
+| 导览/系统覆盖 | 200 / 卡 210 | onboarding 系、GlobalPause 卡（GlobalPause 背板 9999 见下） |
+| 非模态浮件 | 900 | UpdateToast |
+| 模态弹窗 | **3000** | DialogFrame 系全部、TaskModal（自 120 迁入） |
+| 命令面板 | **4000** | CommandPalette——必须压过一切模态：它可能从模态内唤起 |
+| 系统级阻断 | **9999** | GlobalPauseOverlay（及未来强制更新层） |
+
+新增弹窗类组件**只允许落 3000/4000/9999 三带**；120/200/210/900 是历史存量带，迁移或废弃时随手归带。既定例外：onboarding 系保持 200，为其内部 portal 浮层（卡 210）保留越出背板的能力——说明写在 gui-widgets.css 对应规则处。
+
+### 键盘契约
+
+1. **模态开启即拥有键盘**：Escape 一律在 `document` **capture 相位**认领（DialogFrame.tsx、prompt-dialog.tsx、AnnouncementOverlay.tsx 先例）。
+2. **焦点进出**：打开移焦至首个可聚焦元素（prompt 类聚焦输入框，confirm 类聚焦确认键），关闭还原至 `prevActive`。
+3. **confirm 弹窗 Enter=确认、Escape=取消**；prompt 输入框内 Enter=提交；**Destroy 级确认（删除会话/项目）Escape 仍=取消，Enter 需点击**——不启用"危险确认要打字"模式，维持现契约。
+4. **强制/系统级覆盖层吞 Escape**：GlobalPause 的 Escape=恢复（语义等价关闭）；未来强制更新层 Escape 无效且需吞掉按住的 Enter/Space。
+5. **DialogFrame 常驻挂载驱动 `open`**；prompt/confirm 关闭延迟 promise 兑现至 180ms 出场完毕——AGENTS.md GUI 规则原样重申，作为本规范第 5 条。
+
+### 材质与降级
+
+- 弹窗卡片一律 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` 底 + rim + `--glass-sheen` + `--glass-shadow` 双层——`.gui-dialog` 已达标。**TaskModal 与 palette 卡是实底欠账**：随 M1.10 批次 C 迁移（决策⑧；玻璃只给容器浮层，卡内内容保持纸面感）。两处卡规则处均以 TODO 注释立欠账。
+- 降级三件套照 §5s：`gui-motion-off` / `prefers-reduced-motion` → 出场免动画、无中间帧（全部弹窗组件均带该规则；onboarding 为先例）；`[data-platform="win32"]` blur 归零、sheen+rim 补强——Windows 玻璃 scrim 观感验收按 M1.10 §6.3 双平台截图流程走。
+
 ## 6. 品牌图标(App Icon,2026-08-06 重设计)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,Python 脚本生成点阵坐标——23×23 网格)。构建产物:`build/icon.png`(1024×1024)+ `build/icon.icns`(iconutil 10 档 iconset)。

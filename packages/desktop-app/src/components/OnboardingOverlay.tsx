@@ -33,7 +33,7 @@ import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointMod
 import { Reveal } from "./Reveal";
 
 /** Exit animation duration (mirrors gui-obo-card-out below). */
-const ONBOARDING_EXIT_MS = 200;
+const ONBOARDING_EXIT_MS = 180;
 
 import { petForId } from "../lib/pet";
 import type { RpcClient, StreamEvent } from "../lib/rpc";

@@ -8,7 +8,7 @@ import { sfxFor } from "../lib/sfx";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
-const REWARD_EXIT_MS = 200;
+const REWARD_EXIT_MS = 180;
 
 /** Campaign payload served by the daemon (changelog.startup → reward,
  *  read from <agentDir>/reward.json). Display strings are campaign

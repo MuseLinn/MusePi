@@ -8,7 +8,7 @@ import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
 import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
-const ANNOUNCEMENT_EXIT_MS = 200;
+const ANNOUNCEMENT_EXIT_MS = 180;
 /** Cap for the advisory network probes on the boot path (see withTimeout). */
 const UPDATE_CHECK_TIMEOUT_MS = 4000;
 

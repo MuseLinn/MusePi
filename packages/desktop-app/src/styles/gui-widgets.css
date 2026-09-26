@@ -1,12 +1,12 @@
 .gui-task-modal {
 	position: fixed;
 	inset: 0;
-	z-index: 120;
+	z-index: 3000;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
-	backdrop-filter: blur(8px);
+	backdrop-filter: blur(6px);
 	/* Two-phase enter (useTwoPhaseEnter) — see .gui-board-focus. */
 	opacity: 0;
 }
@@ -20,17 +20,29 @@
 	animation: gui-focus-out 150ms ease-in forwards;
 }
 
+/* Motion-off / reduced-motion: exit snaps instead of animating (the
+ * unmount timer in TaskModal still fires — onboarding parity, §5u). */
+.gui-motion-off .gui-task-modal--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-task-modal--closing {
+		animation: none;
+	}
+}
+
 .gui-task-modal-card {
 	width: min(380px, 86vw);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-2xl);
+	/* TODO(M1.10 批次 C): 迁移 L3 overlay 玻璃（--glass-bg-strong+rim+sheen+shadow），欠账见 gui-design.md §5u */
 	background: var(--color-surface-raised);
 	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 	padding: 16px;
 	display: flex;
 	flex-direction: column;
 	gap: 14px;
-	animation: gui-focus-zoom 260ms var(--spring);
+	animation: gui-focus-zoom 240ms var(--spring-liquid, var(--spring));
 }
 
 .gui-task-modal-head {
@@ -2453,7 +2465,7 @@
 }
 /* Exit: fade the frost out (closing state, kept mounted for the duration). */
 .gui-onboarding-backdrop--closing {
-	animation: gui-onboarding-backdrop-out 200ms ease-in forwards;
+	animation: gui-onboarding-backdrop-out 140ms var(--spring-snappy) forwards;
 }
 @keyframes gui-onboarding-backdrop-out {
 	to {
@@ -2461,7 +2473,7 @@
 	}
 }
 .gui-onboarding-card.gui-onboarding-card--closing {
-	animation: gui-obo-card-out 200ms var(--spring) forwards;
+	animation: gui-obo-card-out 140ms var(--spring-snappy) forwards;
 }
 @keyframes gui-obo-card-out {
 	to {
@@ -2816,7 +2828,7 @@
 	animation: gui-obo-card-in 240ms var(--spring) both;
 }
 .gui-reward-card.gui-reward-card--closing {
-	animation: gui-obo-card-out 200ms var(--spring) forwards;
+	animation: gui-obo-card-out 140ms var(--spring-snappy) forwards;
 }
 .gui-reward-sky {
 	position: relative;
@@ -4424,6 +4436,16 @@
 	to {
 		opacity: 0;
 		transform: translateY(8px);
+	}
+}
+/* Motion-off / reduced-motion: exit snaps instead of animating (the
+ * unmount timer in UpdateToast still fires — onboarding parity, §5u). */
+.gui-motion-off .gui-update-toast--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-update-toast--closing {
+		animation: none;
 	}
 }
 .gui-update-toast-head {

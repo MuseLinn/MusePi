@@ -479,6 +479,64 @@ A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部�
 - 簇宽变化（dev server 启动出现预览按钮）后 spacer 自动跟随，无重叠帧。
 - mac/win 双平台 data-platform 分支各自生效。
 
+## 5u. Dialog motion & style spec (finalized 2026-09-26, source `docs/review/0.5.0-installer-update-dialogs-design.md` §4, review decisions ①-⑧ approved as-is)
+
+> Normative for every modal dialog / full-screen overlay in the desktop GUI. **Every value below is a codified existing value** — the §5s M1.10 ladder plus current component values; inventing new tokens, curves, or scrim recipes for dialogs is prohibited. Verified against the component inventory in `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3.
+
+### Enter/exit motion ladder
+
+| Surface | Curve | Duration | Notes |
+|---|---|---|---|
+| Dialog/overlay **backdrop enter** | ease (pure opacity) | **160ms** (`--gui-motion-fade-in` tier) | DialogFrame / onboarding / TaskModal / palette backdrops all 160ms |
+| Dialog **card enter** | `--spring-liquid` | **240ms** (height/offset tier) | DialogFrame and TaskModal (`gui-focus-zoom 240ms`); palette keeps 130ms `gui-menu-in` — menu-floater semantics, codified exception; UpdateToast keeps its 260ms spring (non-modal floater, not a dialog card) |
+| **Exit (backdrop + card)** | `--spring-snappy` | **140ms**, host stays mounted **180ms** before unmount | DialogFrame is the reference (140/180); the onboarding family (Onboarding/Announcement/Reward) is aligned to 140/180. Exceptions: UpdateToast 180ms ease-in (non-modal chip tier), palette 130ms `gui-menu-out` (menu tier) |
+| GlobalPause (system-level exception) | `--spring` transition | enter 240ms / exit 320ms | full-screen takeover is the M1.10 §3.3 whole-screen-animation exception |
+| Offset amplitude | — | exit slides down **4px** (small-offset sub-tier, ≤6px); enter has no translate (scale 0.94→1 carries the offset) | `gui-dialog-out` translateY(4px) stays — decision ⑥: a dialog exit "gathers", it does not travel; the ladder's 10px large-offset tier does not apply to dialogs |
+
+### Scrim spec (two tiers only)
+
+| Tier | Recipe | Applies to |
+|---|---|---|
+| **Standard scrim** | `color-mix(in oklab, var(--color-bg) 55%, transparent)` + `blur(6px)` | all DialogFrame modals, TaskModal, CommandPalette (migrated from bare black 35%, decision ⑦) |
+| **Heavy-glass scrim** | bg 42-55% + `blur(24px) saturate(150%)` | only screen-takeover system/tour surfaces: Onboarding, Announcement, Reward, GlobalPause, (reserved) forced-update layer |
+
+Judgment rule: heavy glass when the user must keep perceiving the covered content (tour, freeze); standard scrim for pure attention blocking. **A third recipe is prohibited.**
+
+### Radius & size tiers
+
+| Tier | Radius | Size | Applies to |
+|---|---|---|---|
+| compact | `--radius-xl` | max-width 380px, auto height, 22×24 padding | confirm / prompt / update decision cards (`gui-dialog--confirm`) |
+| standard | `--radius-2xl` | 600×420 (`min(600px, 90vw)` × `min(420px, 80vh)`) | settings/form dialogs (`gui-dialog` base) |
+| wide | `--radius-2xl` | content-defined (SaveImage 760px, palette 620px, Connect wizard) | preview / multi-column / wizard |
+| tour | `--radius-2xl` | `min(1000px, vw−160)` × `min(620px, vh−160)`, centered float with ≥80px glass margin on all four sides | Onboarding / Announcement / Reward |
+
+### z-index bands
+
+| Band | z | Contents |
+|---|---|---|
+| In-content floats | ≤120 | legacy container-scoped overlays (no current members) |
+| Tour / system overlay | 200 / card 210 | onboarding family, GlobalPause card (GlobalPause backdrop 9999, below) |
+| Non-modal floater | 900 | UpdateToast |
+| Modal dialogs | **3000** | all DialogFrame modals, TaskModal (migrated from 120) |
+| Command palette | **4000** | CommandPalette — must outrank every modal, since it can be summoned from inside one |
+| System-level block | **9999** | GlobalPauseOverlay (and a future forced-update layer) |
+
+New dialog-like components land **only** in the 3000/4000/9999 bands; 120/200/210/900 are legacy bands — fold them in when the component is touched. Standing exception: the onboarding family keeps 200 so its internal portal floaters (card 210) can still escape the backdrop — documented at the CSS rule in gui-widgets.css.
+
+### Keyboard contract
+
+1. **A modal owns the keyboard the moment it opens**: Escape is claimed on `document` in the **capture phase** (DialogFrame.tsx, prompt-dialog.tsx, AnnouncementOverlay.tsx precedents).
+2. **Focus in/out**: opening moves focus to the first focusable element (prompt dialogs focus the input, confirm dialogs the confirm button); closing restores it to `prevActive`.
+3. **Confirm dialogs: Enter = confirm, Escape = cancel**; prompt inputs: Enter submits; **destroy-grade confirmations (deleting a session/project): Escape still cancels, Enter must be clicked** — no "type-to-confirm" mode, the current contract stands.
+4. **Forced/system-level overlays swallow Escape**: GlobalPause's Escape = resume (semantically a close); a future forced-update layer ignores Escape and must swallow held Enter/Space.
+5. **DialogFrame stays mounted and is driven by `open`**; prompt/confirm close defers its promise resolution until the 180ms exit finishes — restated verbatim from the AGENTS.md GUI rules as rule 5 of this spec.
+
+### Material & degradation
+
+- Dialog cards are **L3 overlay** (§5s tier table): `--glass-bg-strong` base + rim + `--glass-sheen` + `--glass-shadow` double layer — `.gui-dialog` conforms. **TaskModal and the palette card are opaque-surface debt**: they migrate to L3 with M1.10 batch C (decision ⑧; glass only on the container layer, card content stays paper-like). Tracked as TODO comments at both card rules.
+- Degradation trio per §5s: `gui-motion-off` / `prefers-reduced-motion` → exits snap with no animation and no intermediate frames (every dialog component carries the rule; onboarding was the precedent); `[data-platform="win32"]` blur zeroed, sheen+rim boosted — glass-scrim acceptance on Windows follows the M1.10 §6.3 dual-platform screenshot flow.
+
 ## 6. Brand icon (App Icon, redesigned 2026-08-06)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, dot-matrix coordinates generated by a Python script — 23×23 grid). Build artifacts: `build/icon.png` (1024×1024) + `build/icon.icns` (iconutil 10-tier iconset).
