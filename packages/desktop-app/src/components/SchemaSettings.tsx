@@ -14,8 +14,12 @@ export interface SchemaUi {
 	label?: string;
 	description?: string;
 	condition?: string;
+	/** Dead/placeholder key (UiBase.hidden in settings-schema.ts): the
+	 *  feature behind it does not exist yet, so no settings surface lists
+	 *  it. The key stays readable/writable via config.yml. */
+	hidden?: boolean;
 	/** Terminal-only effect (UiBase.tuiOnly in settings-schema.ts): the
-	 * setting only affects the TUI; the desktop panel lists it muted. */
+	 *  setting only affects the TUI; the desktop panel lists it muted. */
 	tuiOnly?: boolean;
 	options?: readonly { value: string; label: string; description?: string }[] | "runtime";
 	secret?: boolean;
@@ -359,12 +363,17 @@ export function SchemaSettings({
 		);
 	};
 
+	// Dead keys (ui.hidden) never render — not even in the TUI-only block:
+	// the feature behind them does not exist, so presenting a control would
+	// be a dead button. The schema item still arrives over the RPC; it is
+	// filtered here so every SchemaTabSection consumer skips it uniformly.
+	const visibleItems = items.filter(item => !item.ui?.hidden);
 	// Terminal-only rows are split out AFTER the GUI-effective ones so the
 	// desktop user sees at a glance which options actually affect the GUI.
 	// The block starts collapsed — 28 of the 30 appearance rows are TUI-only
 	// and would otherwise bury the two GUI-effective ones.
-	const tuiItems = items.filter(item => item.ui?.tuiOnly);
-	const guiItems = items.filter(item => !item.ui?.tuiOnly);
+	const tuiItems = visibleItems.filter(item => item.ui?.tuiOnly);
+	const guiItems = visibleItems.filter(item => !item.ui?.tuiOnly);
 	const [tuiOpen, setTuiOpen] = useState(false);
 
 	return (

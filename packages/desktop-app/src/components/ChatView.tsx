@@ -438,6 +438,7 @@ export function ChatView({
 						"display.taskCardStyle",
 						"tts.autoRead",
 						"tts.rate",
+						"tts.inputMode",
 					],
 				})
 				.then(v => {
@@ -491,6 +492,13 @@ export function ChatView({
 			rpc,
 			{
 				rate: typeof displaySettings["tts.rate"] === "number" ? (displaySettings["tts.rate"] as number) : undefined,
+				// Same content-mode contract the TTS test card uses: anything
+				// but "raw"/"summarize" (unset, "sanitize", garbage) keeps
+				// speak()'s default sanitize behavior.
+				mode:
+					displaySettings["tts.inputMode"] === "raw" || displaySettings["tts.inputMode"] === "summarize"
+						? displaySettings["tts.inputMode"]
+						: undefined,
 			},
 			activity => {
 				if (activity.phase === "speaking") setSpeakingId(lastId);
@@ -505,7 +513,7 @@ export function ChatView({
 			},
 		);
 		setSpeakingId(lastId);
-	}, [snap, displaySettings["tts.autoRead"], displaySettings["tts.rate"], rpc]);
+	}, [snap, displaySettings["tts.autoRead"], displaySettings["tts.rate"], displaySettings["tts.inputMode"], rpc]);
 	// One container, two scenes, BIDIRECTIONAL transition: the incoming
 	// scene mounts (fade/zoom in) while the outgoing one lingers 420ms
 	// with a fade-out before unmounting.

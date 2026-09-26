@@ -279,6 +279,13 @@ interface UiBase {
 	/** Condition function name - setting only shown when true */
 	condition?: string;
 	/**
+	 * Hide the setting from every settings UI (TUI panel + desktop GUI).
+	 * For dead/placeholder keys whose feature does not exist yet: the key
+	 * stays readable/writable (config.yml, CLI config) and keeps its
+	 * schema-defined default, but no settings surface lists it.
+	 */
+	hidden?: boolean;
+	/**
 	 * Terminal-only effect: the setting only affects the TUI/terminal rendering
 	 * (theme registry, status line, OSC sequences, terminal title…). The desktop
 	 * GUI settings panel still lists it (muted, with a note) so the TUI can be
@@ -2092,6 +2099,9 @@ export const SETTINGS_SCHEMA = {
 			label: "Typo Detection (macOS)",
 			description: "Mark misspelled prompt words with the active macOS dictionaries",
 			condition: "macOS",
+			// Feature not implemented anywhere yet (no settings.get consumer) —
+			// hidden from the settings UIs until the spelling engine ships.
+			hidden: true,
 		},
 	},
 
@@ -2104,6 +2114,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Word Autocomplete (macOS)",
 			description: "Show macOS dictionary word completions as inline hints accepted with Tab",
 			condition: "macOS",
+			hidden: true,
 		},
 	},
 
@@ -2116,6 +2127,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Autocorrect (macOS)",
 			description: "Apply confident macOS spelling corrections after completed words",
 			condition: "macOS",
+			hidden: true,
 		},
 	},
 
@@ -2211,6 +2223,9 @@ export const SETTINGS_SCHEMA = {
 				{ value: "stable", label: "Stable" },
 				{ value: "canary", label: "Canary" },
 			],
+			// The updater does not read this key yet (no channel-aware
+			// manifest) — hidden until multi-channel updates ship.
+			hidden: true,
 		},
 	},
 
@@ -5642,6 +5657,9 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Dictation barge-in",
 			description: "What happens to playback when dictation starts: duck (drop volume) or pause.",
+			// DictateOptions.bargeIn has no caller passing it yet — hidden
+			// until barge-in detection actually wires into dictation.
+			hidden: true,
 		},
 	},
 	"speech.enabled": {

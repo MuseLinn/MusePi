@@ -35,6 +35,8 @@ export const guest = {
 	"plugin installed badge": "已安装",
 	"plugin empty title": "没有符合当前筛选条件的插件。",
 	"plugin empty hint": "试试清空搜索词或换个分类。",
+	"plugin detail homepage": "主页",
+	"plugin detail repository": "仓库",
 	"workspace files": "工作区文件",
 	"file name": "文件名",
 	content: "内容",

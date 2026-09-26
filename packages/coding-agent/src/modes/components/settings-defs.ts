@@ -182,6 +182,9 @@ function resolveOptions(ui: AnyUiMetadata): OptionList | "runtime" | undefined {
 function pathToSettingDef(path: SettingPath): SettingDef | null {
 	const ui = getUi(path);
 	if (!ui) return null;
+	// Dead/placeholder keys (ui.hidden) are not listed in the panel; the key
+	// itself stays readable and writable via config.yml / `config` CLI.
+	if (ui.hidden) return null;
 
 	const schemaType = getType(path);
 	const condition = ui.condition ? CONDITIONS[ui.condition] : undefined;

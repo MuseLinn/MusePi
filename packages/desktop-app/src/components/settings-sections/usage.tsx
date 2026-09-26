@@ -90,6 +90,29 @@ interface UsageDashboard {
 /** localStorage key for the persisted usage dashboard snapshot. */
 const DASHBOARD_CACHE_KEY = "musepi-gui-usage-stats";
 
+/** localStorage key for the 7d/30d range preference (survives restarts). */
+const RANGE_PREF_KEY = "musepi-gui-usage-range";
+
+/** Seed the range from the persisted preference; anything but a stored
+ * "30d" (unset, garbage, private-mode) falls back to 7 days. */
+function loadPersistedRange(): "7d" | "30d" {
+	try {
+		return localStorage.getItem(RANGE_PREF_KEY) === "30d" ? "30d" : "7d";
+	} catch {
+		return "7d";
+	}
+}
+
+/** Persist the range preference. Failure is silent — the pref only saves a
+ * click after restart; the session keeps the in-memory value. */
+function persistRange(range: "7d" | "30d"): void {
+	try {
+		localStorage.setItem(RANGE_PREF_KEY, range);
+	} catch {
+		// localStorage unavailable — keep the session-local value
+	}
+}
+
 type DashboardCache = Partial<Record<"7d" | "30d", { main: UsageDashboard; yearly: UsageDashboard }>>;
 
 /** Restore the last dashboard from localStorage so a full GUI restart still
@@ -128,7 +151,7 @@ const dashboardCache: DashboardCache = loadPersistedDashboard();
 export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [stats, setStats] = useState<UsageDashboard | null>(null);
 	const [heatSeries, setHeatSeries] = useState<UsageDashboard["timeSeries"]>([]);
-	const [range, setRange] = useState<"7d" | "30d">("7d");
+	const [range, setRange] = useState<"7d" | "30d">(loadPersistedRange);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const load = useCallback(
@@ -298,6 +321,7 @@ export function UsageSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							onClick={() => {
 								tapFeedback();
 								setRange(r);
+								persistRange(r);
 							}}
 						>
 							{t(r === "7d" ? "last 7 days" : "last 30 days")}

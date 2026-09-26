@@ -1,4 +1,4 @@
-import { type MarketplaceCardAction, MarketplaceGrid, type TranslationKey, t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -14,6 +14,7 @@ import {
 import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
 import { HeightMorph } from "./HeightMorph";
+import { MarketplaceView } from "./MarketplaceView";
 import { StateIcon } from "./StateIcon";
 import { type PluginPackageEntry as PluginEntry, sourceLevelLabel, UnifiedPluginsView } from "./UnifiedPluginsView";
 
@@ -934,44 +935,6 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 					{filtered.length} / {(extensions ?? []).length}
 				</span>
 			</div>
-		</div>
-	);
-}
-
-/**
- * Marketplace browse panel used by the GUI `marketplace` tab. Wraps the
- * shared {@link MarketplaceGrid} from `@musepi/client-core` so the visual
- * stays in lock-step with the collab guest client, and wires install /
- * remove actions to the daemon `marketplace.install` / `marketplace.remove`
- * RPCs. Open detail is a non-fatal no-op for now (the GUI has no plugin
- * detail view yet); it logs so the click doesn't disappear silently.
- */
-function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	// The shared MarketplaceGrid owns fetch / busy / refresh: it pulls
-	// `marketplace.list` on mount (through the duck-typed client adapter) and
-	// wraps every install/remove in a busy flag + automatic re-pull. This view
-	// only routes the actions to the daemon RPCs; failures propagate back to
-	// the grid's error banner.
-	const handleAction = async (action: MarketplaceCardAction): Promise<void> => {
-		if (!rpc) return;
-		if (action.kind === "open") {
-			console.info("[marketplace] open detail pending:", action.entry.name);
-			return;
-		}
-		const method = action.kind === "install" ? "marketplace.install" : "marketplace.remove";
-		await rpc.request(method, {
-			name: action.entry.name,
-			marketplace: action.entry.marketplace ?? "default",
-		});
-	};
-
-	// MarketplaceGrid's `client` prop is duck-typed `{ rpc<T>(method, params?) }`;
-	// RpcClient.request matches that signature, so a thin adapter is enough.
-	const client = rpc ? { rpc: <T,>(m: string, p?: unknown): Promise<T> => rpc.request<T>(m, p) } : null;
-
-	return (
-		<div className="gui-ext-marketplace">
-			<MarketplaceGrid client={client} onAction={handleAction} />
 		</div>
 	);
 }

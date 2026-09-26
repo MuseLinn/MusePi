@@ -37,6 +37,8 @@ export const guest = {
 	"plugin installed badge": "Installed",
 	"plugin empty title": "No plugins match the current filter.",
 	"plugin empty hint": "Try clearing the search or picking another category.",
+	"plugin detail homepage": "Homepage",
+	"plugin detail repository": "Repository",
 	"workspace files": "Workspace files",
 	"file name": "File name",
 	content: "Content",

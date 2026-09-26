@@ -46,10 +46,12 @@ export interface ToolCardProps {
 }
 
 /** Widget cards render expanded by default (GUI setting
- *  musepi-gui-widget-expanded; default on — the card IS the visualization).
- *  Board cards render the board itself — same artifact semantics. Both are
- *  turn *artifacts*, so they never auto-collapse when the turn completes
- *  (process tools fold away, the artifact stays). */
+ *  musepi-gui-widget-expanded, written by the appearance chat PrefToggle as
+ *  "1"/"0": unset or "1" → expanded, "0" → collapsed; default on — the card
+ *  IS the visualization). Board cards render the board itself — same
+ *  artifact semantics. Both are turn *artifacts*, so they never
+ *  auto-collapse when the turn completes (process tools fold away, the
+ *  artifact stays). */
 function isArtifactCard(name: string): boolean {
 	// `schedule_task` joins them (issue #11): the card is the deliverable the
 	// user asked for (a structured task summary + the jump to the task
@@ -59,7 +61,7 @@ function isArtifactCard(name: string): boolean {
 
 function widgetDefaultOpen(): boolean {
 	try {
-		return localStorage.getItem("musepi-gui-widget-expanded") !== "false";
+		return localStorage.getItem("musepi-gui-widget-expanded") !== "0";
 	} catch {
 		return true;
 	}

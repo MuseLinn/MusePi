@@ -1,9 +1,10 @@
-import { type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { CapabilityCenter } from "./CapabilityCenter";
+import { MarketplaceView } from "./MarketplaceView";
 import { SkillMarketView } from "./SkillMarketView";
 import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./UnifiedPluginsView";
 
@@ -157,31 +158,6 @@ export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; o
 					<MarketplaceView rpc={rpc} />
 				)}
 			</div>
-		</div>
-	);
-}
-
-/** Marketplace tab: the shared MarketplaceGrid adapted to a bare RpcClient
- *  (guest-client's MarketplacePanel binds a SessionClient instead). */
-function MarketplaceView({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	// MarketplaceGrid's `client` prop is duck-typed `{ rpc<T>(method, params?) }`;
-	// RpcClient.request matches that signature, so a thin adapter is enough.
-	const client = rpc ? { rpc: <T,>(m: string, p?: unknown): Promise<T> => rpc.request<T>(m, p) } : null;
-	const handleAction = async (action: MarketplaceCardAction): Promise<void> => {
-		if (!rpc) return;
-		if (action.kind === "open") {
-			console.info("[marketplace] open detail pending:", action.entry.name);
-			return;
-		}
-		const method = action.kind === "install" ? "marketplace.install" : "marketplace.remove";
-		await rpc.request(method, {
-			name: action.entry.name,
-			marketplace: action.entry.marketplace ?? "default",
-		});
-	};
-	return (
-		<div className="gui-ext-marketplace">
-			<MarketplaceGrid client={client} onAction={handleAction} />
 		</div>
 	);
 }

@@ -41,8 +41,9 @@ interface GitIdentity {
 /** Git settings (openchamber GitPage parity): GitHub OAuth via the gh CLI
  *  (device flow → gh auth login --with-token, so all gh RPCs pick it up)
  *  plus named commit identities. Identities are stored client-side
- *  (musepi-gui-git-identities) — no commit UI consumes them yet, but the
- *  default identity is what a future git commit flow should use. */
+ *  (musepi-gui-git-identities) and consumed by the git panel, which injects
+ *  them as `-c user.name/email` on git.commit; the default identity is what
+ *  that flow uses. */
 export function GitSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const { prompt } = usePrompt();
 	const { confirm } = useConfirm();
