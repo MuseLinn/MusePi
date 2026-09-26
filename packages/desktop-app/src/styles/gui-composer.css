@@ -2628,3 +2628,151 @@
 	letter-spacing: 0.02em;
 	color: var(--color-text-faint);
 }
+
+/* Voice first-use guide (快赢包 A3): liquid-glass card in the composer-note
+ * stack (same seat as the long-paste gate). Prompt state explains the model
+ * download; downloading state shows a live progress bar riding the daemon's
+ * stt.download* event stream; error state offers a retry. */
+.gui-voice-setup {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0 12px 6px;
+	padding: 10px 12px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-surface-2) 78%, transparent);
+	backdrop-filter: blur(18px) saturate(1.4);
+	-webkit-backdrop-filter: blur(18px) saturate(1.4);
+	box-shadow: 0 8px 28px color-mix(in oklab, var(--color-shadow, #000) 22%, transparent);
+	animation: gui-composer-note-in 200ms var(--spring) both;
+}
+
+.gui-voice-setup[data-dismissing] {
+	opacity: 0;
+	transform: translateY(-3px);
+	transition:
+		opacity 150ms var(--spring),
+		transform 150ms var(--spring);
+}
+
+.gui-voice-setup-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.gui-voice-setup-title {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm, 13px);
+	font-weight: 650;
+	color: var(--color-text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.gui-voice-setup-close {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: var(--color-text-faint);
+	font-size: 12px;
+	line-height: 1;
+	cursor: pointer;
+	transition:
+		background 150ms var(--spring),
+		color 150ms var(--spring);
+}
+
+.gui-voice-setup-close:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-voice-setup-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.gui-voice-setup-desc {
+	margin: 0;
+	font-size: var(--ui-font-size-xs, 12px);
+	line-height: 1.55;
+	color: var(--color-text);
+}
+
+.gui-voice-setup-note {
+	margin: 0;
+	font-size: var(--ui-font-size-xs, 12px);
+	line-height: 1.5;
+	color: var(--color-text-dim, var(--color-text-faint));
+}
+
+.gui-voice-setup-bar {
+	height: 6px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 12%, transparent);
+	overflow: hidden;
+}
+
+.gui-voice-setup-bar-fill {
+	height: 100%;
+	border-radius: inherit;
+	background: linear-gradient(
+		90deg,
+		var(--color-accent, var(--accent)),
+		color-mix(in oklab, var(--color-accent, var(--accent)) 70%, #fff)
+	);
+	transition: width 240ms var(--spring);
+}
+
+.gui-voice-setup-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+}
+
+.gui-voice-setup-btn {
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-surface-2) 65%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs, 12px);
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background 150ms var(--spring),
+		border-color 150ms var(--spring),
+		transform 120ms var(--spring);
+}
+
+.gui-voice-setup-btn:hover {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+
+.gui-voice-setup-btn:active {
+	transform: scale(0.97);
+}
+
+.gui-voice-setup-btn-primary {
+	border-color: color-mix(in oklab, var(--color-accent, var(--accent)) 55%, transparent);
+	background: color-mix(in oklab, var(--color-accent, var(--accent)) 18%, transparent);
+	color: var(--color-accent, var(--accent));
+}
+
+.gui-voice-setup-btn-primary:hover {
+	background: color-mix(in oklab, var(--color-accent, var(--accent)) 28%, transparent);
+}

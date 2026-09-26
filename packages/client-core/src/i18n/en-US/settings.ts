@@ -487,6 +487,15 @@ export const settings = {
 	"voice error mic": "Microphone unavailable — check your system microphone permission",
 	"voice error disconnected": "The speech service disconnected — try again once reconnected",
 	"voice esc to cancel": "Esc to cancel",
+	later: "Later",
+	"voice setup title": "Install voice input to continue",
+	"voice setup desc":
+		"First-time dictation downloads the recognition model ({model}, about {size}). Voice input stays unavailable until the download finishes.",
+	"voice setup note":
+		"The model is stored locally and never re-downloaded; the fetch usually takes 1–10 minutes depending on your network. You can keep using everything else meanwhile.",
+	"voice setup install": "Install now",
+	"voice setup preparing": "Preparing download…",
+	"voice setup download failed": "Model download failed — check your network and retry",
 	off: "Off",
 	reduced: "Reduced",
 	full: "Full",

@@ -13,6 +13,7 @@ import {
 } from "../subprocess/worker-runtime";
 import { resolveTinyModelDevicePreference, type TinyModelDevice, tinyModelDeviceLoadOrder } from "../tiny/device";
 import { resolveTinyModelDtypeOverride, type TinyModelDtype } from "../tiny/dtype";
+import { preferredHubOrigin } from "../tiny/hub-mirrors";
 import { getTtsLocalModelSpec, resolveTtsVoice, type TtsLocalModelKey, type TtsLocalModelSpec } from "./models";
 import {
 	getTtsRuntimeDir,
@@ -64,6 +65,7 @@ interface TransformersEnv {
 		cacheDir?: string;
 		allowLocalModels?: boolean;
 		logLevel?: unknown;
+		remoteHost?: string;
 		backends?: {
 			onnx?: {
 				logLevel?: unknown;
@@ -109,11 +111,16 @@ function toKokoroDevice(device: TinyModelDevice): KokoroDevice {
 	return "cpu";
 }
 
-function configureTransformers(transformers: TransformersEnv): void {
+async function configureTransformers(transformers: TransformersEnv): Promise<void> {
 	transformers.env.cacheDir = getTinyModelsCacheDir();
 	transformers.env.allowLocalModels = false;
 	transformers.env.logLevel = transformers.LogLevel?.ERROR ?? "error";
 	if (transformers.env.backends?.onnx) transformers.env.backends.onnx.logLevel = "error";
+	// Hub mirror fallback (快赢包 A1): Kokoro fetches its ONNX weights through
+	// transformers.js, which defaults to huggingface.co — unreachable from
+	// mainland networks. Point remoteHost at the probe-winning origin before
+	// the first from_pretrained call (cached models never touch the network).
+	transformers.env.remoteHost = await preferredHubOrigin();
 }
 
 /**
@@ -153,7 +160,7 @@ function loadKokoroRuntime(
 		const transformersEntry = resolveRuntimeModule(nodeModules, TRANSFORMERS_PACKAGE);
 		if (!transformersEntry) throw new Error(`Unable to resolve ${TRANSFORMERS_PACKAGE} in runtime at ${nodeModules}`);
 		const runtimeRequire = createRequire(kokoroEntry);
-		configureTransformers(runtimeRequire(transformersEntry) as TransformersEnv);
+		await configureTransformers(runtimeRequire(transformersEntry) as TransformersEnv);
 		return runtimeRequire(kokoroEntry) as KokoroRuntime;
 	});
 }

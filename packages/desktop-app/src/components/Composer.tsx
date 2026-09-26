@@ -72,6 +72,7 @@ import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
+import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
 import { ExtensionStatusCard } from "./ExtensionStatusCard";
@@ -886,6 +887,11 @@ export function Composer({
 			requestAnimationFrame(() => autosize(taRef.current));
 		},
 	});
+	// First-use voice guide (快赢包 A3): mic clicks pass through this gate —
+	// model cached ⇒ straight into dictation; missing ⇒ the liquid-glass setup
+	// dialog owns download-then-dictate, so a first click never fires a bare
+	// GB-scale transcribe RPC at the user.
+	const voiceSetup = useVoiceSetupGate({ rpc, onProceed: dictation.toggle });
 	useEffect(() => {
 		if (!rpc) return;
 		const load = (): void => {
@@ -2115,7 +2121,7 @@ export function Composer({
 						)}
 						{/* Compact motion-only mic control; the live waveform, clock
 						 * and phase copy live in the in-input VoiceStatusStrip. */}
-						<VoiceButton state={dictation.phase} onToggle={dictation.toggle} />
+						<VoiceButton state={dictation.phase} onToggle={() => void voiceSetup.onToggle()} />
 						{/* 三合一 send control (user direction, opendesign parity):
 						 * idle → send; working → the button itself displays the
 						 * live agent state (braille + accent shimmer), hover
@@ -2144,6 +2150,7 @@ export function Composer({
 						<span className="gui-voice-error-hint">{t("voice esc to cancel")}</span>
 					</div>
 				)}
+				{voiceSetup.dialog}
 				{slashNotice && (
 					<SlashNotice level={slashNotice.level} text={slashNotice.text} markdown={slashNotice.markdown} />
 				)}

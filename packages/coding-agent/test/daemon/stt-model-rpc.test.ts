@@ -85,12 +85,20 @@ describe("stt.modelDownload / stt.modelStatus RPCs", () => {
 		const idle = (await rpc("stt.modelStatus", {})) as {
 			models: Array<{ key: string; label: string; cached: boolean }>;
 			downloads: string[];
+			defaultKey?: string;
+			defaultCached?: boolean;
 		};
 		expect(idle.models.length).toBeGreaterThan(0);
 		expect(
 			idle.models.every(m => typeof m.key === "string" && typeof m.label === "string" && m.cached === false),
 		).toBe(true);
 		expect(idle.downloads).toEqual([]);
+		// 快赢包 A2: the first-use guide reads this pair to decide "guided
+		// install" vs "dictate now" — default follows settings stt.modelName
+		// (Whisper small = "balanced" in a fresh env) and must match the
+		// cached flag of the row it names.
+		expect(idle.defaultKey).toBe("balanced");
+		expect(idle.defaultCached).toBe(false);
 
 		await rpc("events.subscribe", {});
 		const run = rpc("stt.modelDownload", { modelKey: "fast" });

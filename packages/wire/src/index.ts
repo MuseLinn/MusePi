@@ -299,10 +299,19 @@ export interface SttModelRow {
  * `stt.modelStatus` payload. `downloads` lists tiers mid-fetch so a window
  * mounted mid-download can render its progress row immediately instead of
  * waiting for the next progress tick.
+ *
+ * `defaultKey`/`defaultCached` support the first-use guide flow: the client
+ * can tell, without resolving settings itself, whether the model a dictation
+ * would actually load is already on disk — and prompt the guided install
+ * instead of surfacing a bare RPC error (A 快赢包: 语音首次使用引导).
  */
 export interface SttModelStatusResponse {
 	models: SttModelRow[];
 	downloads?: string[];
+	/** Tier `stt.transcribe` loads when the caller omits `modelKey` (settings `stt.modelName` resolved). */
+	defaultKey?: string;
+	/** Whether that tier is fully present in the local cache. */
+	defaultCached?: boolean;
 }
 
 /**

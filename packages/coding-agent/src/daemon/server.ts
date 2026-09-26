@@ -3708,14 +3708,32 @@ export class DaemonServer {
 				// `downloads` lists tiers mid-fetch so a freshly-mounted window
 				// renders its progress row immediately, not after the next tick.
 				const { isSttModelCached } = await import("../stt/downloader");
-				const { STT_MODELS } = await import("../stt/models");
+				const { STT_MODELS, resolveSttModelSpec } = await import("../stt/models");
 				// `satisfies` (not `:`) — the wire contract in @musepi/pi-wire
 				// is the single source of truth for both shells; if the shape
 				// here drifts, typecheck fails instead of the UI breaking.
 				const models: SttModelRow[] = await Promise.all(
 					STT_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isSttModelCached(m.key) })),
 				);
-				return { models, downloads: [...this.#sttDownloads.keys()] } satisfies SttModelStatusResponse;
+				// First-use guide: the tier a bare `stt.transcribe` loads
+				// (settings `stt.modelName`, same resolution as the route) —
+				// the client decides "guided install" vs "dictate now" from
+				// this pair without duplicating settings access. Settings may
+				// be uninitialized in bare harness contexts; fall back to the
+				// built-in default tier (Whisper small) instead of throwing.
+				let defaultKey: string;
+				try {
+					const { settings: sttSettings } = await import("../config/settings");
+					defaultKey = resolveSttModelSpec(sttSettings.get("stt.modelName") as string | undefined).key;
+				} catch {
+					defaultKey = resolveSttModelSpec(undefined).key;
+				}
+				return {
+					models,
+					downloads: [...this.#sttDownloads.keys()],
+					defaultKey,
+					defaultCached: models.find(m => m.key === defaultKey)?.cached ?? false,
+				} satisfies SttModelStatusResponse;
 			}
 			case "stt.modelDownload": {
 				// Kick off a speech-model download WITHOUT awaiting it: the

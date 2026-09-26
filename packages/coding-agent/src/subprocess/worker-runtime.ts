@@ -10,6 +10,7 @@ import {
 	resolveRuntimeModule,
 } from "@musepi/pi-utils";
 import packageJson from "../../package.json" with { type: "json" };
+import { preferredHubOrigin } from "../tiny/hub-mirrors";
 
 /**
  * Child-side scaffolding shared by the ONNX inference worker bodies
@@ -298,7 +299,7 @@ export function getTransformersVersionSpec(): string {
 
 /** The subset of the Transformers.js module surface {@link configureTransformers} touches. */
 interface ConfigurableTransformers {
-	env: { cacheDir?: string; allowLocalModels?: boolean; logLevel?: unknown };
+	env: { cacheDir?: string; allowLocalModels?: boolean; logLevel?: unknown; remoteHost?: string };
 	LogLevel: { ERROR: unknown };
 }
 
@@ -410,10 +411,17 @@ export async function formatOnnxRuntimeCudaDiagnostics(
 	return lines.join("\n");
 }
 
-function configureTransformers<T extends ConfigurableTransformers>(transformers: T): T {
+async function configureTransformers<T extends ConfigurableTransformers>(transformers: T): Promise<T> {
 	transformers.env.cacheDir = getTinyModelsCacheDir();
 	transformers.env.allowLocalModels = false;
 	transformers.env.logLevel = transformers.LogLevel.ERROR;
+	// Hub mirror fallback (快赢包 A1): transformers.js defaults every repo-id
+	// model fetch to huggingface.co, unreachable from mainland networks — so
+	// Whisper/Kokoro first use silently failed at download time. Point
+	// remoteHost at the probe-winning HF-compatible origin (upstream or
+	// hf-mirror) before the first pipeline() call; cached models never hit
+	// the network, so this only affects the download path.
+	transformers.env.remoteHost = await preferredHubOrigin();
 	return transformers;
 }
 
@@ -452,7 +460,7 @@ export function loadTransformersRuntime<T extends ConfigurableTransformers, K>(
 	return holder.load(async () => {
 		if (!isCompiledBinary()) {
 			const entry = sourceRequire.resolve(TRANSFORMERS_PACKAGE);
-			return attachTransformersRuntimeMetadata(configureTransformers(sourceRequire(entry) as T), {
+			return attachTransformersRuntimeMetadata(await configureTransformers(sourceRequire(entry) as T), {
 				__ompTransformersEntry: entry,
 			});
 		}
@@ -485,7 +493,7 @@ export function loadTransformersRuntime<T extends ConfigurableTransformers, K>(
 		}
 		const entry = await prepareCompiledRuntime(installedDir, TRANSFORMERS_PACKAGE);
 		const require_ = createRequire(entry);
-		return attachTransformersRuntimeMetadata(configureTransformers(require_(entry) as T), {
+		return attachTransformersRuntimeMetadata(await configureTransformers(require_(entry) as T), {
 			__ompRuntimeNodeModules: path.join(installedDir, "node_modules"),
 			__ompTransformersEntry: entry,
 			__ompCudaRepairError: cudaRepairError,

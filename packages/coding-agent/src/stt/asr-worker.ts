@@ -26,6 +26,7 @@ import {
 } from "../subprocess/worker-runtime";
 import { resolveTinyModelDevicePreference, type TinyModelDevice, tinyModelDeviceLoadOrder } from "../tiny/device";
 import { resolveTinyModelDtypeOverride, type TinyModelDtype } from "../tiny/dtype";
+import { fetchHubFile } from "../tiny/hub-mirrors";
 import type { SttTransport, SttWorkerInbound } from "./asr-protocol";
 import { type EndpointerEvent, StreamEndpointer } from "./endpointer";
 import {
@@ -47,8 +48,10 @@ const STRIDE_LENGTH_S = 5;
 // The client always resamples to 16 kHz mono float32 before sending; sherpa-onnx
 // is told the true input rate (it resamples internally to its feature config).
 const ASR_SAMPLE_RATE = 16_000;
-// Hub origin for raw sherpa-onnx model files (encoder/decoder/joiner/tokens).
-const HF_RESOLVE_BASE = "https://huggingface.co";
+// Hub origins for raw sherpa-onnx model files (encoder/decoder/joiner/tokens):
+// upstream + mainland-China mirror fallback, probe-ordered per process
+// (tiny/hub-mirrors). Previously a hardcoded huggingface.co — unreachable
+// from mainland networks, which is what made first-use dictation dead.
 // Coalesce download progress so streaming a multi-hundred-MB model file doesn't
 // flood the IPC channel with one event per chunk.
 const PROGRESS_EMIT_BYTES = 4_000_000;
@@ -266,8 +269,8 @@ async function downloadSherpaFile(
 	transport: SttTransport,
 	requestId: string,
 ): Promise<void> {
-	const url = `${HF_RESOLVE_BASE}/${repo}/resolve/main/${filename}`;
-	const response = await fetch(url, { redirect: "follow" });
+	const url = `${repo}/resolve/main/${filename}`;
+	const response = await fetchHubFile(url, { redirect: "follow" });
 	if (!response.ok || !response.body) {
 		throw new Error(`Failed to download ${filename} (${repo}): HTTP ${response.status}`);
 	}
