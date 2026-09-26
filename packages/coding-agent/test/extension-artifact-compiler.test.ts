@@ -24,7 +24,10 @@ describe("extension slot components", () => {
 		expect(c.code).toContain("window.MusePiReact");
 		expect(c.code).not.toContain('from"react"');
 		expect(c.error).toBeUndefined();
-	}, 60_000);
+		// 60s 在 CI 冷缓存下会超时(本地 ~35s):扩展图快照要遍历 SDK 类型
+		// 导入链的上千个文件,CI 机器更慢。放宽到 120s —— 测的是编译正确
+		// 性,不是加载速度(图快照遍历是 HMR 设计本身,另列性能优化)。
+	}, 120_000);
 
 	test("skips non-extension-module entries and shadowed states", async () => {
 		const components = await collectSlotComponents(
