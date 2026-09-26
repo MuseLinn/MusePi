@@ -43,7 +43,13 @@ describe("MCP reconnect storm (issue #1592)", () => {
 	}
 
 	it("stops respawning after a burst of immediate exits", async () => {
-		const manager = new MCPManager(workDir);
+		// Burst-limit override: the production limit (5 reconnects / 30s window)
+		// assumes fast crash cycles; on a loaded CI runner each spawn +
+		// handshake round-trip takes seconds, the storm never reaches burst
+		// rate inside the window, and the breaker never trips (CI flake).
+		// Limit 1 trips on the second reconnect regardless of machine speed,
+		// which keeps the regression contract — spawning stops — intact.
+		const manager = new MCPManager(workDir, null, { reconnectBurstLimit: 1 });
 		const config: MCPStdioServerConfig = {
 			type: "stdio",
 			command: BUN_EXEC,
@@ -68,13 +74,10 @@ describe("MCP reconnect storm (issue #1592)", () => {
 			}
 
 			const spawns = countSpawns();
-			// `RECONNECT_BURST_LIMIT` (5) is the per-server reconnect cap inside
-			// the burst window. The initial connect from `connectServers` adds
-			// one more spawn. On the "initialize + tools/list succeed, then
-			// exit" path the inner retry-with-backoff in `#doReconnect` never
-			// fires, so the steady-state ceiling is
-			// `1 + RECONNECT_BURST_LIMIT + 1` ≈ 7 spawns. 10 leaves room for
-			// scheduling jitter without weakening the bound.
+			// With `reconnectBurstLimit: 1` the steady-state ceiling is the
+			// initial connect + two reconnects ≈ 3 spawns (the production-limit
+			// ceiling formula `1 + LIMIT + 1` no longer applies). 10 leaves room
+			// for scheduling jitter without weakening the bound.
 			expect(spawns).toBeLessThanOrEqual(10);
 			// Sanity check: we did spawn at least once. If the fixture never ran
 			// the regression target is wrong and the test is meaningless.

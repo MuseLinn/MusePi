@@ -101,6 +101,18 @@ function createMcpStartupFailure(serverName: string, error: string, source?: Sou
 const RECONNECT_BURST_WINDOW_MS = 30_000;
 const RECONNECT_BURST_LIMIT = 5;
 
+/** Optional overrides for {@link MCPManager}. Tests use these to make the
+ *  reconnect-storm breaker deterministic: the production window/limit assume
+ *  crash cycles are fast, so on a loaded CI runner the storm never reaches
+ *  burst rate and the breaker never trips. */
+export interface MCPManagerOptions {
+	/** Sliding window for the crash-storm breaker. Default 30s. */
+	reconnectBurstWindowMs?: number;
+	/** Reconnects tolerated inside the window before the breaker trips.
+	 *  Default 5. */
+	reconnectBurstLimit?: number;
+}
+
 /**
  * Quiet background reconnect ladder for a server that WAS connected and whose
  * short burst ladder failed (oh-my-pi #11803).
@@ -255,11 +267,17 @@ export class MCPManager {
 	#quietReconnects = new Map<string, NodeJS.Timeout>();
 	/** Monotonic epoch incremented on disconnectAll to invalidate stale reconnections. */
 	#epoch = 0;
+	#reconnectBurstWindowMs: number;
+	#reconnectBurstLimit: number;
 
 	constructor(
 		private cwd: string,
 		private toolCache: MCPToolCache | null = null,
-	) {}
+		options: MCPManagerOptions = {},
+	) {
+		this.#reconnectBurstWindowMs = options.reconnectBurstWindowMs ?? RECONNECT_BURST_WINDOW_MS;
+		this.#reconnectBurstLimit = options.reconnectBurstLimit ?? RECONNECT_BURST_LIMIT;
+	}
 
 	/**
 	 * Register a listener for server-initiated MCP notifications.
@@ -1035,15 +1053,15 @@ export class MCPManager {
 	#tripReconnectBreaker(name: string): boolean {
 		const now = Date.now();
 		const previous = this.#reconnectHistory.get(name) ?? [];
-		const recent = previous.filter(ts => now - ts < RECONNECT_BURST_WINDOW_MS);
+		const recent = previous.filter(ts => now - ts < this.#reconnectBurstWindowMs);
 		recent.push(now);
 		this.#reconnectHistory.set(name, recent);
 
-		if (recent.length > RECONNECT_BURST_LIMIT) {
+		if (recent.length > this.#reconnectBurstLimit) {
 			logger.error("MCP server crashed too many times; suspending automatic reconnects", {
 				path: `mcp:${name}`,
 				crashes: recent.length,
-				windowMs: RECONNECT_BURST_WINDOW_MS,
+				windowMs: this.#reconnectBurstWindowMs,
 			});
 			// Tear down the stale connection so `getConnectionStatus()` no
 			// longer reports it as "connected" and `waitForConnection()` does
