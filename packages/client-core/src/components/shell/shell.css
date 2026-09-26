@@ -928,6 +928,57 @@
 	background: color-mix(in oklab, var(--accent) 26%, transparent);
 }
 
+/* First-use install card (A3): same slot as the guide card, adds the
+ * download progress bar and a primary action. Liquid glass: raised surface,
+ * token radii, backdrop blur matched to the composer card. */
+.sh-voice-setup {
+	gap: 8px;
+}
+
+.sh-voice-setup-note {
+	font-size: 11.5px;
+	line-height: 16px;
+	color: var(--fg-faint);
+}
+
+.sh-voice-setup-bar {
+	width: 100%;
+	max-width: 320px;
+	height: 6px;
+	overflow: hidden;
+	background: var(--bg-sunken, color-mix(in oklab, var(--fg) 8%, transparent));
+	border-radius: 999px;
+}
+
+.sh-voice-setup-bar-fill {
+	height: 100%;
+	background: linear-gradient(90deg, var(--accent), color-mix(in oklab, var(--accent) 70%, var(--fg)));
+	border-radius: 999px;
+	transition: width 220ms var(--spring-snappy);
+}
+
+.sh-voice-guide-btn--primary {
+	color: var(--bg);
+	background: var(--accent);
+	border-color: var(--accent);
+}
+
+.sh-voice-guide-btn--primary:active {
+	background: color-mix(in oklab, var(--accent) 82%, var(--fg));
+}
+
+.sh-voice-setup-native {
+	margin-top: 2px;
+	font-size: 11.5px;
+	color: var(--accent);
+	opacity: 0.85;
+	transition: opacity 150ms var(--spring-snappy);
+}
+
+.sh-voice-setup-native:hover {
+	opacity: 1;
+}
+
 /* ── Voice output strip (design frames 「迷你播放器/合成中/打断降级」) ──────
  * Sits above the composer card; shares the controller with the transcript's
  * per-message speak buttons. */

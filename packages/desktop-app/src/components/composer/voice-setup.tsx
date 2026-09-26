@@ -13,8 +13,9 @@
  * stt.download* events as the settings voice page → done closes the dialog and
  * auto-starts the dictation the user originally asked for; error offers 重试.
  *
- * Desktop-app only for now; guest-client parity is a follow-up (the wire
- * contract is shared, only this component is shell-local).
+ * client-core ships the parity card: Composer.tsx `setup` state + VoiceSetupCard
+ * (same wire flow, plus the device-native recognizer escape hatch). Both ride
+ * the shared stt.download* event stream.
  */
 import { t } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";

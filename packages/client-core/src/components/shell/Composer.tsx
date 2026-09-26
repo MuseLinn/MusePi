@@ -1,3 +1,4 @@
+import { isSttDownloadEvent, type SttModelStatusResponse } from "@musepi/pi-wire";
 import {
 	Brain,
 	Camera,
@@ -99,13 +100,26 @@ function useCompositionGuard(): {
 // ── Voice input (daemon `stt.transcribe`; design frames 「录音中/转写回填/引导态」) ──
 
 /** Voice-input UI state. `guide` = collab-direct host without `stt.*` RPCs.
- *  `native` marks an on-device Web Speech capture (fallback path). */
+ *  `native` marks an on-device Web Speech capture (fallback path).
+ *  `setup` = first use with the recognition model still uncached — the
+ *  guided-install card (A3 guest/mobile parity of the desktop gate). */
 type VoiceUi =
 	| { kind: "idle" }
 	| { kind: "recording"; seconds: number; native?: boolean }
 	| { kind: "transcribing" }
 	| { kind: "error"; message: string }
-	| { kind: "guide" };
+	| { kind: "guide" }
+	| {
+			kind: "setup";
+			modelKey: string;
+			label: string;
+			size: string;
+			phase: "prompt" | "downloading" | "error";
+			percent: number;
+			loaded: number;
+			total: number;
+			error: string | null;
+	  };
 
 const VOICE_WAVE_BARS = 13;
 /** The collab host is expected to answer (or reject) every RPC; the timeout
@@ -115,6 +129,19 @@ const STT_TIMEOUT_MS = 20_000;
 /** Sticky per page-load: once the daemon transport proved to have no
  * `stt.*`, later mic taps go straight to the device's own recognizer. */
 let preferNativeStt = false;
+
+/** Sticky per page-load mirror: once the stt.modelStatus probe proved the
+ *  default model is cached (or the host cannot answer status at all), later
+ *  mic taps skip the round-trip and capture straight away.
+ *  Size hints mirror stt/models.ts `sizeHint` — keep in sync with
+ *  settings voice TIER_META and desktop-app voice-setup SIZE_HINTS. */
+let sttModelCached = false;
+const STT_SIZE_HINTS: Record<string, string> = {
+	fast: "~60 MB",
+	balanced: "~190 MB",
+	turbo: "~600 MB",
+	parakeet: "~680 MB",
+};
 
 function withTimeout<T>(promise: Promise<T>): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -151,6 +178,8 @@ function useVoiceInput(
 	dismiss(): void;
 	/** Guide-card escape hatch: switch to the device's own recognizer. */
 	retryNative(): void;
+	/** First-use gate (A3): kick the guided model install for `modelKey`. */
+	installModel(modelKey: string): void;
 } {
 	const [voice, setVoice] = useState<VoiceUi>({ kind: "idle" });
 	const captureRef = useRef<VoiceCapture | null>(null);
@@ -162,8 +191,88 @@ function useVoiceInput(
 	const onInterruptRef = useRef(onInterrupt);
 	onInterruptRef.current = onInterrupt;
 
+	// ── First-use gate (A3 mobile parity) ──────────────────────────────
+	// Sticky per page-load mirrors preferNativeStt: once the status probe
+	// proved the default model is cached, later mic taps skip the round-trip.
+	// (Backing store lives at module level — a render-local `let` would reset
+	//  on every re-render and re-probe forever.)
+
+	/** Open the mic for real — shared by the plain path and the setup card's
+	 *  "download done → honor the original tap" auto-start. */
+	const beginCapture = useCallback((): void => {
+		const epoch = ++epochRef.current;
+		startVoiceCapture()
+			.then(capture => {
+				if (epoch !== epochRef.current) {
+					capture.abort();
+					return;
+				}
+				captureRef.current = capture;
+				onInterruptRef.current?.();
+				setVoice({ kind: "recording", seconds: 0 });
+				haptic(15);
+			})
+			.catch((err: unknown) => {
+				const reason = err instanceof Error ? err.message : String(err);
+				setVoice({ kind: "error", message: t("voice failed: {reason}", { reason }) });
+				haptic(30);
+			});
+	}, []);
+
+	/** Guided install: fire-and-forget download kick + local progress via the
+	 *  daemon's global stt.download* events (subscribed in the effect below). */
+	const installModel = useCallback(
+		(modelKey: string): void => {
+			setVoice(prev => (prev.kind === "setup" ? { ...prev, phase: "downloading", percent: 0, error: null } : prev));
+			void client.rpc("stt.modelDownload", { modelKey }).catch((err: unknown) => {
+				setVoice(prev =>
+					prev.kind === "setup"
+						? {
+								...prev,
+								phase: "error",
+								error: err instanceof Error ? err.message : String(err),
+							}
+						: prev,
+				);
+			});
+		},
+		[client],
+	);
+
+	// Global download events: while the setup card is open, progress advances
+	// its bar; done closes the card and starts the capture the user originally
+	// asked for; error flips the card to retry. Same event channel as the
+	// settings voice page — first subscriber issues events.subscribe.
+	useEffect(() => {
+		return client.onDaemonEvent(payload => {
+			if (!isSttDownloadEvent(payload)) return;
+			setVoice(prev => {
+				if (prev.kind !== "setup" || payload.modelKey !== prev.modelKey) return prev;
+				if (payload.type === "stt.downloadProgress") {
+					return {
+						...prev,
+						phase: "downloading",
+						percent: payload.percent,
+						loaded: payload.loaded ?? 0,
+						total: payload.total ?? 0,
+					};
+				}
+				if (payload.type === "stt.downloadDone") {
+					// Paint 100% briefly, then honor the tap that opened the card.
+					window.setTimeout(() => {
+						setVoice({ kind: "idle" });
+						beginCapture();
+					}, 450);
+					return { ...prev, phase: "downloading", percent: 100, loaded: prev.total, total: prev.total };
+				}
+				return { ...prev, phase: "error", error: payload.message ?? t("voice setup download failed") };
+			});
+		});
+	}, [client, beginCapture]);
+
 	/** Device-native capture (Web Speech API): the recognizer owns the mic
-	 *  and reports its transcript through callbacks. */
+	 *  and reports its transcript through callbacks. Declared before `start`
+	 *  because `start`'s dependency array references it. */
 	const nativeStart = useCallback((): boolean => {
 		if (!nativeVoiceSupport().recognition) return false;
 		const epoch = ++epochRef.current;
@@ -195,24 +304,44 @@ function useVoiceInput(
 	const start = useCallback((): void => {
 		if (captureRef.current || nativeRef.current) return;
 		if (preferNativeStt && nativeStart()) return;
-		const epoch = ++epochRef.current;
-		startVoiceCapture()
-			.then(capture => {
-				if (epoch !== epochRef.current) {
-					capture.abort();
-					return;
-				}
-				captureRef.current = capture;
-				onInterruptRef.current?.();
-				setVoice({ kind: "recording", seconds: 0 });
-				haptic(15);
-			})
-			.catch((err: unknown) => {
-				const reason = err instanceof Error ? err.message : String(err);
-				setVoice({ kind: "error", message: t("voice failed: {reason}", { reason }) });
-				haptic(30);
-			});
-	}, [nativeStart]);
+		// First-use gate: the daemon may answer stt.modelStatus (daemon hosts)
+		// or reject it (collab-direct). Cached ⇒ capture straight away; missing
+		// ⇒ setup card. An unreadable status (older daemon) falls through to
+		// capture so transcribe's own error mapping keeps owning that case.
+		if (!sttModelCached) {
+			const epoch = epochRef.current;
+			void withTimeout(client.rpc<SttModelStatusResponse>("stt.modelStatus", {}))
+				.then(status => {
+					if (epoch !== epochRef.current) return;
+					sttModelCached = true;
+					const defaultKey = status.defaultKey ?? status.models[0]?.key;
+					const row = status.models.find(m => m.key === defaultKey);
+					const cached = row?.cached ?? status.defaultCached ?? false;
+					if (cached || !defaultKey) {
+						beginCapture();
+						return;
+					}
+					setVoice({
+						kind: "setup",
+						modelKey: defaultKey,
+						label: row?.label ?? defaultKey,
+						size: STT_SIZE_HINTS[defaultKey] ?? "",
+						phase: status.downloads?.includes(defaultKey) ? "downloading" : "prompt",
+						percent: 0,
+						loaded: 0,
+						total: 0,
+						error: null,
+					});
+				})
+				.catch(() => {
+					if (epoch !== epochRef.current) return;
+					sttModelCached = true; // don't re-probe every tap on a rejecting host
+					beginCapture();
+				});
+			return;
+		}
+		beginCapture();
+	}, [client, nativeStart, beginCapture]);
 
 	// Recording timer (0:07 style, mono tabular).
 	useEffect(() => {
@@ -313,7 +442,7 @@ function useVoiceInput(
 		[],
 	);
 
-	return { voice, start, stop, cancel, discard, dismiss, retryNative };
+	return { voice, start, stop, cancel, discard, dismiss, retryNative, installModel };
 }
 
 /** Recording / transcribing / error bar — replaces the textarea in the composer card. */
@@ -421,6 +550,74 @@ function VoiceGuide({ onDismiss, onRetry }: { onDismiss(): void; onRetry?: () =>
 					{t("voice guide ok")}
 				</button>
 			</div>
+		</div>
+	);
+}
+
+/** First-use install card (A3): the daemon hosts the recognition model, so
+ *  the first mic tap with an uncached default model opens this card instead
+ *  of dead-ending in a bare `stt.transcribe` error. Liquid-glass sibling of
+ *  the desktop dialog (same wire flow: modelStatus → modelDownload →
+ *  stt.download* events → auto-start the capture the tap asked for). */
+function VoiceSetupCard({
+	state,
+	onInstall,
+	onRetry,
+	onDismiss,
+	onNative,
+}: {
+	state: Extract<VoiceUi, { kind: "setup" }>;
+	onInstall(): void;
+	onRetry(): void;
+	onDismiss(): void;
+	onNative?(): void;
+}): ReactNode {
+	return (
+		<div className="sh-voice-guide sh-voice-setup" role="alertdialog" aria-label={t("voice setup title")}>
+			<p className="sh-voice-guide-title">{t("voice setup title")}</p>
+			{state.phase === "prompt" && (
+				<>
+					<p className="sh-voice-guide-sub">{t("voice setup desc", { model: state.label, size: state.size })}</p>
+					<p className="sh-voice-setup-note">{t("voice setup note")}</p>
+				</>
+			)}
+			{state.phase === "downloading" && (
+				<>
+					<div
+						className="sh-voice-setup-bar"
+						role="progressbar"
+						aria-valuenow={state.percent}
+						aria-valuemin={0}
+						aria-valuemax={100}
+					>
+						<div className="sh-voice-setup-bar-fill" style={{ width: `${state.percent}%` }} />
+					</div>
+					<p className="sh-voice-setup-note">
+						{state.label} · {state.percent > 0 ? `${state.percent}%` : t("voice setup preparing")}
+					</p>
+				</>
+			)}
+			{state.phase === "error" && <p className="sh-voice-guide-sub sh-voice-err">{state.error}</p>}
+			<div className="sh-voice-guide-actions">
+				<button type="button" className="sh-voice-guide-btn" onClick={onDismiss}>
+					{t("later")}
+				</button>
+				{state.phase === "prompt" && (
+					<button type="button" className="sh-voice-guide-btn sh-voice-guide-btn--primary" onClick={onInstall}>
+						{t("voice setup install")}
+					</button>
+				)}
+				{state.phase === "error" && (
+					<button type="button" className="sh-voice-guide-btn sh-voice-guide-btn--primary" onClick={onRetry}>
+						{t("retry")}
+					</button>
+				)}
+			</div>
+			{state.phase === "prompt" && onNative && (
+				<button type="button" className="sh-voice-setup-native" onClick={onNative}>
+					{t("voice guide native retry")}
+				</button>
+			)}
 		</div>
 	);
 }
@@ -802,6 +999,14 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					<VoiceGuide
 						onDismiss={voiceCtl.dismiss}
 						onRetry={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
+					/>
+				) : voice.kind === "setup" ? (
+					<VoiceSetupCard
+						state={voice}
+						onInstall={() => voiceCtl.installModel(voice.modelKey)}
+						onRetry={() => voiceCtl.installModel(voice.modelKey)}
+						onDismiss={voiceCtl.dismiss}
+						onNative={nativeVoiceSupport().recognition ? voiceCtl.retryNative : undefined}
 					/>
 				) : voiceBusy || voice.kind === "error" ? (
 					<VoiceBar voice={voice} onStop={voiceCtl.stop} onCancel={voiceCtl.cancel} onDiscard={voiceCtl.discard} />
