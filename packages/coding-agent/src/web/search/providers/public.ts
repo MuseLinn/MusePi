@@ -18,6 +18,7 @@ const PUBLIC_ENGINE_IDS = [
 	"startpage",
 	"google",
 	"duckduckgo",
+	"bing",
 	"ecosia",
 	"mojeek",
 ] as const satisfies readonly SearchProviderId[];

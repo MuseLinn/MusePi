@@ -643,3 +643,11 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **决策表**:`src/lib/settings-shell.ts`(`computeSettingsShellState`)是 app.tsx 渲染所依据的唯一决策点;`test/settings-shell.test.tsx` 钉死 open/leaving/closed 三态表与导航的受控点击→`onSelect(id)` 链(用户报的「点击扩展不切换」就死活在这条链上)。
 - **玻璃层只能有一层**:`.gui-settings-view` 与 `.gui-settings-nav-slot` 均为 `background: transparent`——`.gui-main` 已涂刷工作区唯一的 scrim 层(`.gui-sidebar` 是同一先例)。设置表面再刷一遍玻璃配方等于在 `.gui-main` 的 88% 之上又叠 88%,设置壳层看起来就比主界面深(设置/主界面色差,2026-09-24 修复)。导航与内容之间的视觉分隔由 `.gui-settings-surface`(圆角卡片)承担,不靠面板级背景。
 - **坑——Windows 上做交互实测**:Electron 后台窗口的 timer 节流(窗口隐藏一段时间后 1 次/分钟)会让任何等待页面 `setTimeout` 链的 CDP 探针看起来像挂死。探针实例要带 `--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows` 启动(`scripts/cdp-settings-probe.ts` 走原生 CDP WebSocket 发 Runtime.evaluate;完整 open→switch→close 证据见 2026-09-24 任务报告)。
+
+## 42. web_search 工具卡:结构化失败、实时进度、显示名(2026-09-27)
+
+- **`SearchRenderDetails` 新增两个 wire 字段**:`providerLabel`(provider 显示名——`response.provider` 原始 id 是 `mojeek` 这类配置语法,不是 UI 文案)与 `progress`(`{ current, failed }`,仅出现在链路中途的流式 update 上)。两者都由 `packages/coding-agent/src/web/search/index.ts` 的 `executeSearch()` 填写;GUI 渲染器(`client-core/src/tool-render/tools/web-search.tsx`)优先用 `providerLabel`,对旧 daemon 回落到 id。
+- **失败渲染成卡片,不是文本转储**:daemon 的 `Error: …` 内容文本是给模型看的。GUI body 以 `details.error` 为门,渲染 `Note tone="err"`(本地化标题 + 详情),完全跳过 `ResultText`——旧的 `{errorMsg && !resultTextOf(result) && …}` 条件是死代码,因为失败结果的内容文本永远非空。host 暴露 `openSettings` 时,卡片附一个跳到提供商设置区的按钮。
+- **链路中途进度走标准 tool-update 通道**:`executeSearch()` 每次尝试 provider 前发一个 update(`details.progress` + `Trying <label>…` 内容行)。TUI 渲染为带框的「Trying X」面板并列出已失败的 provider;GUI 把内容行显示在卡片实时流区域(`session-store` 的 `partialResult` → `ToolCard` 的 `partial`)。GUI 进度路径无需改动渲染器——只需 daemon 发事件。
+- **`ToolRenderHost.openSettings?(section?)`** 是第四个 host 能力(继 openAgent/sendPrompt/saveImage 之后):ChatView 把它接到 app.tsx 的 `openSettings`(两处调用点都接),任何工具卡都能提供「去设置里修」跳转。没有设置界面的 host 不实现它,按钮自动隐藏。
+- **有序数组设置在 GUI 可编辑**(`ui.ordered: true`,如 `providers.webSearchOrder`):`SchemaSettings` 把已选 chip 按存储顺序排在前面(位置 = 优先级)并附 ←/→ 移动按钮(`lib/ordered-options.ts`,与 TUI ordered-multiselect 对齐);无序数组保持原先的声明序 chip 开关。

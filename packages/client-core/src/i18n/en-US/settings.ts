@@ -222,6 +222,8 @@ export const settings = {
 		"Fastest load; solid all-rounder, slightly noisier extraction labels.",
 	"keep stored credential unless replaced": "Keep stored credential unless replaced",
 	"comma separated values": "Comma separated values",
+	"move earlier": "Move earlier",
+	"move later": "Move later",
 	"invalid json": "Invalid JSON",
 	"options come from the TUI runtime": "Options come from the TUI runtime",
 	"remote token (optional)": "Remote token (optional)",

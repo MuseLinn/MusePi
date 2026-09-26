@@ -578,6 +578,8 @@ export const tools = {
 	"search {count}": "搜索 {count}",
 	provider: "提供商",
 	usage: "用量",
+	"web search failed": "网页搜索失败",
+	"open search settings": "打开搜索设置",
 	// ── 会话维护 + 任务 HUD(右面板 ContextPanel) ────────────────────────
 	jobs: "任务",
 	"jobs running": "运行中",

@@ -248,6 +248,7 @@ OAuth 主机链：`KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 | -------------------------------------------------- | -------------------------------------------------------------- |
 | `EXA_API_KEY`                                      | Exa 搜索/MCP；或使用 `/login exa`                             |
 | `BRAVE_API_KEY`                                    | Brave 搜索 provider                                            |
+| `BOCHAAI_API_KEY` / `BOCHA_API_KEY`                | 博查（Bochaai）搜索 provider 环境变量认证                      |
 | `PERPLEXITY_API_KEY`                               | Perplexity 搜索 provider API-key 模式                          |
 | `PERPLEXITY_COOKIES`                               | Perplexity cookie 认证搜索模式                                 |
 | `TAVILY_API_KEY`                                   | Tavily 搜索 provider                                           |

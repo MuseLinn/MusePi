@@ -5,7 +5,7 @@
  */
 
 import type { Component } from "@musepi/pi-tui";
-import { Markdown, Text } from "@musepi/pi-tui";
+import { Markdown, Text, wrapTextWithAnsi } from "@musepi/pi-tui";
 import type { RenderResultOptions } from "../../extensibility/custom-tools/types";
 import { getMarkdownTheme, type Theme } from "../../modes/theme/theme";
 import {
@@ -54,19 +54,53 @@ function renderFallbackText(contentText: string, expanded: boolean, theme: Theme
 	return new Text(text, 0, 0);
 }
 
+export interface SearchRenderProgress {
+	/** Display label of the provider currently being tried. */
+	current: string;
+	/** Display labels of providers that already failed in this chain walk. */
+	failed: string[];
+}
+
 export interface SearchRenderDetails {
 	response: SearchResponse;
 	error?: string;
+	/** Display label for `response.provider` (the raw id is config syntax, not UI copy). */
+	providerLabel?: string;
+	/** Mid-chain progress, streamed via tool updates while later providers are still being tried. */
+	progress?: SearchRenderProgress;
 }
 
 /** Render a web search failure as a framed error panel, matching the success layout. */
 function renderSearchErrorPanel(message: string, providerLabel: string | undefined, theme: Theme): Component {
 	const header = renderStatusLine({ icon: "error", title: "Web Search", description: providerLabel }, theme);
-	const body = theme.fg("error", `Error: ${replaceTabs(message)}`);
 	const outputBlock = new CachedOutputBlock();
 	return markFramedBlockComponent({
 		render(width: number): readonly string[] {
-			return outputBlock.render({ header, state: "error", sections: [{ lines: [body] }], width }, theme);
+			const body = wrapTextWithAnsi(replaceTabs(message), Math.max(24, outputBlockContentWidth(width))).map(line =>
+				theme.fg("error", line),
+			);
+			return outputBlock.render({ header, state: "error", sections: [{ lines: body }], width }, theme);
+		},
+		invalidate() {
+			outputBlock.invalidate();
+		},
+	});
+}
+
+/** Render mid-chain progress (provider N of M running, earlier ones already failed). */
+function renderSearchProgressPanel(progress: SearchRenderProgress, theme: Theme): Component {
+	const header = renderStatusLine(
+		{ icon: "running", title: "Web Search", description: `Trying ${progress.current}` },
+		theme,
+	);
+	const lines =
+		progress.failed.length > 0
+			? progress.failed.map(label => `${formatStatusIcon("error", theme)} ${theme.fg("muted", label)}`)
+			: [theme.fg("muted", "First provider in the chain")];
+	const outputBlock = new CachedOutputBlock();
+	return markFramedBlockComponent({
+		render(width: number): readonly string[] {
+			return outputBlock.render({ header, state: "running", sections: [{ lines }], width }, theme);
 		},
 		invalidate() {
 			outputBlock.invalidate();
@@ -90,8 +124,14 @@ export function renderSearchResult(
 	if (details?.error) {
 		const errorProvider = details.response?.provider;
 		const errorProviderLabel =
-			errorProvider && errorProvider !== "none" ? getSearchProviderLabel(errorProvider) : undefined;
+			details.providerLabel ??
+			(errorProvider && errorProvider !== "none" ? getSearchProviderLabel(errorProvider) : undefined);
 		return renderSearchErrorPanel(details.error, errorProviderLabel, theme);
+	}
+
+	// Mid-chain progress frames stream in while later providers are tried.
+	if (details?.progress) {
+		return renderSearchProgressPanel(details.progress, theme);
 	}
 
 	const rawText = result.content?.find(block => block.type === "text")?.text?.trim() ?? "";
@@ -111,7 +151,7 @@ export function renderSearchResult(
 	const answerText = typeof response.answer === "string" ? response.answer.trim() : "";
 	const contentText = answerText || rawText;
 
-	const providerLabel = provider !== "none" ? getSearchProviderLabel(provider) : "None";
+	const providerLabel = details?.providerLabel ?? (provider !== "none" ? getSearchProviderLabel(provider) : "None");
 	const queryPreview = args?.query
 		? truncateToWidth(args.query, 80)
 		: searchQueries[0]

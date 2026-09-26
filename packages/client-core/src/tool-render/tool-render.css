@@ -700,6 +700,15 @@
 	color: var(--tv-ok);
 }
 
+.tv-note-title {
+	font-weight: 600;
+	margin-bottom: 2px;
+}
+
+.tv-note .tv-board-open {
+	margin-top: 6px;
+}
+
 /* ---- images ---- */
 
 .tv-imgs {

@@ -2666,6 +2666,39 @@
 	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
+/* Ordered array editor (ui.ordered): chip + ←/→ priority moves. */
+.gui-seg-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.gui-seg-item .gui-seg-btn {
+	flex: 0 1 auto;
+}
+
+.gui-seg-move {
+	padding: 2px 4px;
+	border: none;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: 11px;
+	font-family: inherit;
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.gui-seg-move:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
+.gui-seg-move:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+
 .gui-accent-swatch {
 	width: 24px;
 	height: 24px;

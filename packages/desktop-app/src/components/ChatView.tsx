@@ -248,6 +248,7 @@ export function ChatView({
 	rightPanelOpen,
 	onOpenFileInPanel,
 	onAddProvider,
+	onOpenSettings,
 	onToggleRightPanel,
 	onExpandRightPanel,
 	panelSelectRequest,
@@ -322,6 +323,9 @@ export function ChatView({
 	/** 添加新提供商 menu action (composer model menu) — opens the
 	 *  settings providers page. */
 	onAddProvider?(): void;
+	/** Open the settings surface at a section (tool-card "fix this in
+	 *  settings" actions, e.g. web search provider failures). */
+	onOpenSettings?(section?: string): void;
 	/** Right-edge rail (RightRail) fold toggle — expands/collapses the
 	 *  ContextPanel (app owns the persisted state). */
 	onToggleRightPanel?(): void;
@@ -1689,6 +1693,9 @@ export function ChatView({
 		// Inline widgets hand results back to the conversation (kimi
 		// sendPrompt parity) — same path as the composer.
 		sendPrompt: (text: string) => sendAndCloseJump(text),
+		// Tool cards with a "fix this in settings" action (web search
+		// provider failures) jump straight to the matching section.
+		openSettings: onOpenSettings ? (section?: string) => onOpenSettings(section) : undefined,
 		// Widget card "下载为图片"/"复制为图片": rasterize the card and hand
 		// the blob to the download/clipboard helper. html-to-image is imported
 		// dynamically inside rasterizeToBlob on purpose (same as

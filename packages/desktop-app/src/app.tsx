@@ -3065,6 +3065,7 @@ function AppInner(): ReactNode {
 						store={store}
 						rpc={rpc}
 						onAddProvider={() => openSettings("providers")}
+						onOpenSettings={openSettings}
 						onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
 						onStop={stop}
 						onDecideApproval={decideApproval}
@@ -3331,6 +3332,7 @@ function AppInner(): ReactNode {
 												setRightCollapsed(false);
 											}}
 											onAddProvider={() => openSettings("providers")}
+											onOpenSettings={openSettings}
 											onToggleRightPanel={() => {
 												setRightCollapsed(v => {
 													localStorage.setItem("musepi-gui-right", v ? "1" : "0");

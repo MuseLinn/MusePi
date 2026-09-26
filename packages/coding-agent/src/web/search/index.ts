@@ -20,10 +20,13 @@ import type { ToolSession } from "../../tools";
 import { formatAge } from "../../tools/render-utils";
 import { throwIfAborted } from "../../tools/tool-errors";
 import {
+	clearSearchProviderConnectivityFailure,
 	formatSearchProviderFailure,
 	formatSearchProviderFailures,
 	getSearchProvider,
 	getSearchProviderLabel,
+	isConnectionLevelSearchError,
+	recordSearchProviderConnectivityFailure,
 	resolveProviderCandidates,
 	type SearchProvider,
 	type SearchProviderCandidate,
@@ -132,6 +135,7 @@ interface ExecuteSearchOptions {
 	modelRegistry?: ModelRegistry;
 	sessionId?: string;
 	signal?: AbortSignal;
+	onUpdate?: AgentToolUpdateCallback<SearchRenderDetails>;
 }
 
 /** Execute web search */
@@ -140,7 +144,7 @@ async function executeSearch(
 	params: SearchQueryParams,
 	options: ExecuteSearchOptions,
 ): Promise<{ content: Array<{ type: "text"; text: string }>; details: SearchRenderDetails }> {
-	const { authStorage, modelRegistry, sessionId, signal } = options;
+	const { authStorage, modelRegistry, sessionId, signal, onUpdate } = options;
 	const explicitProvider = params.provider;
 	let candidates: SearchProviderCandidate[];
 	if (explicitProvider && explicitProvider !== "auto") {
@@ -202,6 +206,24 @@ async function executeSearch(
 			availableProviderCount++;
 			lastProvider = provider;
 
+			// Stream mid-chain progress so the UI shows which provider is being
+			// tried (and which already failed) instead of a silent spinner.
+			if (onUpdate) {
+				const failedLabels = failures.map(failure => failure.provider.label);
+				onUpdate({
+					content: [
+						{
+							type: "text",
+							text: `Trying ${provider.label}${failedLabels.length > 0 ? ` (failed: ${failedLabels.join(", ")})` : ""}…`,
+						},
+					],
+					details: {
+						response: { provider: provider.id, sources: [] },
+						progress: { current: provider.label, failed: failedLabels },
+					},
+				});
+			}
+
 			const response = await provider.search({
 				query: params.query,
 				parsedQuery,
@@ -240,11 +262,12 @@ async function executeSearch(
 				throw new SearchProviderError(provider.id, `${provider.label} returned no renderable search content.`, 204);
 			}
 
+			clearSearchProviderConnectivityFailure(candidate.id);
 			const text = formatForLLM(finalResponse, constraintNotes);
 
 			return {
 				content: [{ type: "text" as const, text }],
-				details: { response: finalResponse },
+				details: { response: finalResponse, providerLabel: provider.label },
 			};
 		} catch (error) {
 			// Surface user-initiated cancellation immediately so the session sees
@@ -253,6 +276,9 @@ async function executeSearch(
 			// failure and the loop falls through to the next provider (or to the
 			// summary error), masking the cancellation.
 			throwIfAborted(signal);
+			if (isConnectionLevelSearchError(error)) {
+				recordSearchProviderConnectivityFailure(candidate.id);
+			}
 			failures.push({ provider: provider ?? providerMeta, error });
 		}
 	}
@@ -269,14 +295,24 @@ async function executeSearch(
 	const baseMessage = lastFailure
 		? formatSearchProviderFailure(lastFailure.error, lastFailure.provider)
 		: `Unknown error from ${lastProvider?.label ?? "web search provider"}`;
-	const message =
+	let message =
 		failures.length > 1 ? `All web search providers failed: ${formatSearchProviderFailures(failures)}` : baseMessage;
+
+	// Every failure happened before any HTTP exchange — the classic mainland
+	// direct-connection case where all keyless engines are unreachable. Tell
+	// the model (and through it the user) the three working remedies instead
+	// of leaving a bare connection error.
+	if (failures.length > 0 && failures.every(failure => isConnectionLevelSearchError(failure.error))) {
+		message +=
+			". Every provider failed before any HTTP exchange, which usually means the network cannot reach these endpoints directly. Remedies: set the HTTPS_PROXY/HTTP_PROXY environment variables so requests go through a proxy; move reachable providers earlier via the providers.webSearchOrder setting (e.g. kimi, zai, bochaai, or a self-hosted searxng); or drop unreachable providers via providers.webSearchExclude.";
+	}
 
 	return {
 		content: [{ type: "text" as const, text: `Error: ${message}` }],
 		details: {
 			response: { provider: lastFailure?.provider.id ?? lastProvider?.id ?? "none", sources: [] },
 			error: message,
+			providerLabel: lastFailure?.provider.label ?? lastProvider?.label,
 		},
 	};
 }
@@ -336,7 +372,7 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRe
 		_toolCallId: string,
 		params: SearchToolParams,
 		signal?: AbortSignal,
-		_onUpdate?: AgentToolUpdateCallback<SearchRenderDetails>,
+		onUpdate?: AgentToolUpdateCallback<SearchRenderDetails>,
 		_context?: AgentToolContext,
 	): Promise<AgentToolResult<SearchRenderDetails>> {
 		const authStorage = this.#session.authStorage ?? (await discoverAuthStorage());
@@ -346,6 +382,7 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRe
 			modelRegistry: this.#session.modelRegistry,
 			sessionId,
 			signal,
+			onUpdate,
 		});
 	}
 }
@@ -358,13 +395,7 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 	parameters: webSearchSchema,
 
 	approval: "read",
-	async execute(
-		toolCallId: string,
-		params: SearchToolParams,
-		_onUpdate,
-		ctx: CustomToolContext,
-		signal?: AbortSignal,
-	) {
+	async execute(toolCallId: string, params: SearchToolParams, onUpdate, ctx: CustomToolContext, signal?: AbortSignal) {
 		const authStorage = ctx.modelRegistry?.authStorage ?? (await discoverAuthStorage());
 		const sessionId = ctx.sessionManager.getSessionId();
 		return executeSearch(toolCallId, params, {
@@ -372,6 +403,7 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 			modelRegistry: ctx.modelRegistry,
 			sessionId,
 			signal,
+			onUpdate,
 		});
 	},
 

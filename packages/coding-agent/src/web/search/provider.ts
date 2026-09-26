@@ -109,10 +109,20 @@ const PROVIDER_META: Record<SearchProviderId, ProviderMeta> = {
 		label: SEARCH_PROVIDER_LABELS.searxng,
 		load: async () => new (await import("./providers/searxng")).SearXNGProvider(),
 	},
+	bochaai: {
+		id: "bochaai",
+		label: SEARCH_PROVIDER_LABELS.bochaai,
+		load: async () => new (await import("./providers/bochaai")).BochaaiProvider(),
+	},
 	duckduckgo: {
 		id: "duckduckgo",
 		label: SEARCH_PROVIDER_LABELS.duckduckgo,
 		load: async () => new (await import("./providers/duckduckgo")).DuckDuckGoProvider(),
+	},
+	bing: {
+		id: "bing",
+		label: SEARCH_PROVIDER_LABELS.bing,
+		load: async () => new (await import("./providers/bing")).BingProvider(),
 	},
 	google: {
 		id: "google",
@@ -223,6 +233,59 @@ export function isSearchProviderExcluded(id: SearchProviderId): boolean {
 	return excludedProvIds.has(id);
 }
 
+/**
+ * Transport-level failure signatures (DNS, TCP, TLS, socket) — the endpoint
+ * could not be reached at all. HTTP-status failures (401/403/429, CAPTCHA)
+ * are deliberately excluded: those prove reachability, and the same provider
+ * may succeed on the next query.
+ */
+const CONNECTION_LEVEL_ERROR_PATTERN =
+	/unable to connect|fetch failed|ECONN(?:REFUSED|RESET|ABORTED)|ETIMEDOUT|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|socket hang up|UND_ERR_CONNECT_TIMEOUT/i;
+
+/** `true` when the failure happened before any HTTP exchange (connection refused, DNS, reset, …). */
+export function isConnectionLevelSearchError(error: unknown): boolean {
+	let current: unknown = error;
+	while (current instanceof Error) {
+		if (CONNECTION_LEVEL_ERROR_PATTERN.test(current.message)) return true;
+		current = current.cause;
+	}
+	return false;
+}
+
+/**
+ * How long a provider that failed at the connection level stays skipped in
+ * the auto chain. Short enough to recover from a transient blip, long enough
+ * that a dead endpoint (e.g. every overseas engine on a proxyless mainland
+ * connection) stops costing each search a full hard-timeout wait.
+ */
+const CONNECTIVITY_RETRY_AFTER_MS = 5 * 60 * 1000;
+
+/** Provider id → timestamp of its latest connection-level failure. */
+const connectivityFailures = new Map<SearchProviderId, number>();
+
+/** Record that `id` failed before any HTTP exchange; the auto chain skips it for a while. */
+export function recordSearchProviderConnectivityFailure(id: SearchProviderId): void {
+	connectivityFailures.set(id, Date.now());
+}
+
+/** Clear the recorded connection-level failure for `id` (e.g. after a successful search). */
+export function clearSearchProviderConnectivityFailure(id: SearchProviderId): void {
+	connectivityFailures.delete(id);
+}
+
+/** Forget every recorded connection-level failure. Test-only; production state expires via the TTL. */
+export function resetSearchProviderConnectivity(): void {
+	connectivityFailures.clear();
+}
+
+function isConnectivityDown(id: SearchProviderId): boolean {
+	const failedAt = connectivityFailures.get(id);
+	if (failedAt === undefined) return false;
+	if (Date.now() - failedAt <= CONNECTIVITY_RETRY_AFTER_MS) return true;
+	connectivityFailures.delete(id);
+	return false;
+}
+
 export interface SearchProviderCandidate {
 	id: SearchProviderId;
 	explicit: boolean;
@@ -242,6 +305,10 @@ export function resolveProviderCandidates(forcedProvider?: SearchProviderId): Se
 
 	for (const id of orderedProvIds) {
 		if (id === forcedProvider || isSearchProviderExcluded(id)) continue;
+		// Providers that recently failed at the connection level are skipped in
+		// the auto chain; explicit selections (listed in `webSearchOrder` or
+		// forced per-request) always get tried.
+		if (isConnectivityDown(id) && !explicitProvIds.has(id)) continue;
 		candidates.push({ id, explicit: explicitProvIds.has(id) });
 	}
 

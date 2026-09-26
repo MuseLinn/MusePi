@@ -57,6 +57,10 @@ export interface ToolRenderHost {
 	 *  ("复制为图片" — the widget card's menu). Same rasterizer contract as
 	 *  saveImage; hosts without it hide the item. */
 	copyImage?(element: HTMLElement): void | Promise<void>;
+	/** Open the host's settings UI at a section (e.g. "providers"). Hosts
+	 *  without a settings surface omit it and contextual "fix this in
+	 *  settings" actions hide themselves. */
+	openSettings?(section?: string): void;
 }
 
 /**

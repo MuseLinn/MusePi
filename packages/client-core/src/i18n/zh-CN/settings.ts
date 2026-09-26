@@ -203,6 +203,8 @@ export const settings = {
 	"Fastest load; solid all-rounder, slightly noisier extraction labels.": "加载最快；全面均衡，抽取标签略杂",
 	"keep stored credential unless replaced": "已保存，留空保持不变",
 	"comma separated values": "逗号分隔的值",
+	"move earlier": "前移",
+	"move later": "后移",
 	"invalid json": "JSON 格式无效",
 	"options come from the TUI runtime": "选项由 TUI 运行时提供",
 	"remote token (optional)": "远程令牌（可选）",

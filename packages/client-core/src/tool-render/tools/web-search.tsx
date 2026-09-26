@@ -120,7 +120,7 @@ function SearchAnswer({ text, sourceCount }: { text: string; sourceCount: number
 	);
 }
 
-function Body({ args, result, running }: ToolRenderProps): ReactNode {
+function Body({ args, result, running, host }: ToolRenderProps): ReactNode {
 	const query = str(args.query);
 	const recency = str(args.recency);
 	const limit = num(args.limit);
@@ -131,12 +131,15 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 	const errorMsg = details ? str(details.error) : null;
 	const answer = resultTextOf(result).trim();
 	const provider = response ? str(response.provider) : null;
+	// The daemon sends the provider's display label alongside the raw id —
+	// the id is config syntax (`mojeek`), the label is UI copy (`Mojeek`).
+	const providerLabel = (details ? str(details.providerLabel) : null) ?? provider;
 	const model = response ? str(response.model) : null;
 	const authMode = response ? str(response.authMode) : null;
 	const sources: Record<string, unknown>[] =
 		response && Array.isArray(response.sources) ? response.sources.filter(isRecord) : [];
 
-	let providerInfo = model && provider ? `${model} @ ${provider}` : (model ?? provider ?? "");
+	let providerInfo = model && providerLabel ? `${model} @ ${providerLabel}` : (model ?? providerLabel ?? "");
 	if (providerInfo && authMode) {
 		providerInfo += ` (${authMode === "oauth" ? t("OAuth") : authMode === "api_key" ? t("API") : authMode})`;
 	}
@@ -195,8 +198,26 @@ function Body({ args, result, running }: ToolRenderProps): ReactNode {
 							{usageParts.length > 0 && <Kv k={t("usage")}>{usageParts.join(" · ")}</Kv>}
 						</KvGrid>
 					)}
-					{errorMsg && !resultTextOf(result) && <Note tone="err">{errorMsg}</Note>}
-					{answer && sources.length > 0 ? (
+					{errorMsg ? (
+						// Structured failure card: the raw `Error: …` content text is
+						// model food, not UI copy — show the localized title plus the
+						// detail, and offer a jump to the provider settings when the
+						// host owns a settings surface.
+						<Note tone="err">
+							<div className="tv-note-title">{t("web search failed")}</div>
+							<div>{errorMsg}</div>
+							{host?.openSettings && (
+								<button
+									type="button"
+									className="tv-board-open"
+									onClick={() => host.openSettings?.("providers")}
+								>
+									{t("open search settings")}
+									<span className="tv-board-open-arrow">→</span>
+								</button>
+							)}
+						</Note>
+					) : answer && sources.length > 0 ? (
 						<SearchAnswer text={answer} sourceCount={sources.length} />
 					) : (
 						<ResultText result={result} maxLines={14} lang="markdown" />

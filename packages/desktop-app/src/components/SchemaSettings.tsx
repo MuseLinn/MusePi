@@ -1,5 +1,6 @@
 import { setLocale, type TranslationKey, t } from "@musepi/client-core";
 import { type ReactNode, useState } from "react";
+import { moveOrderedOption, sortOrderedOptions } from "../lib/ordered-options";
 import { GuiSelect } from "./GuiSelect";
 import { Reveal } from "./Reveal";
 
@@ -272,8 +273,12 @@ export function SchemaSettings({
 													// parity): one pressed chip per choice, click flips
 													// membership. Stored values outside the declared set
 													// keep a fallback chip so nothing is silently dropped.
+													// `ui.ordered` (TUI ordered-multiselect parity):
+													// selected chips lead in stored order — position is
+													// priority — and carry ←/→ move buttons.
 													<span className="flex flex-wrap items-center gap-1">
 														{(() => {
+															const ordered = item.ui?.ordered === true;
 															const current = Array.isArray(value)
 																? value.filter((v): v is string => typeof v === "string")
 																: [];
@@ -286,26 +291,63 @@ export function SchemaSettings({
 																if (!opts.some(o => o.value === v))
 																	opts.push({ value: v, label: v, description: undefined });
 															}
-															return opts.map(opt => {
+															const displayOpts = ordered ? sortOrderedOptions(opts, current) : opts;
+															return displayOpts.map(opt => {
 																const on = current.includes(opt.value);
+																const pos = current.indexOf(opt.value);
 																return (
-																	<button
-																		key={opt.value}
-																		type="button"
-																		className={`gui-seg-btn${on ? " gui-seg-btn--active" : ""}`}
-																		aria-pressed={on}
-																		title={opt.description}
-																		onClick={() =>
-																			commit(
-																				item.key,
-																				on
-																					? current.filter(v => v !== opt.value)
-																					: [...current, opt.value],
-																			)
-																		}
-																	>
-																		{opt.label}
-																	</button>
+																	<span key={opt.value} className="gui-seg-item">
+																		<button
+																			type="button"
+																			className={`gui-seg-btn${on ? " gui-seg-btn--active" : ""}`}
+																			aria-pressed={on}
+																			title={opt.description}
+																			onClick={() =>
+																				commit(
+																					item.key,
+																					on
+																						? current.filter(v => v !== opt.value)
+																						: [...current, opt.value],
+																				)
+																			}
+																		>
+																			{opt.label}
+																		</button>
+																		{ordered && on && (
+																			<>
+																				<button
+																					type="button"
+																					className="gui-seg-move"
+																					aria-label={t("move earlier")}
+																					title={t("move earlier")}
+																					disabled={pos === 0}
+																					onClick={() =>
+																						commit(
+																							item.key,
+																							moveOrderedOption(current, opt.value, -1),
+																						)
+																					}
+																				>
+																					←
+																				</button>
+																				<button
+																					type="button"
+																					className="gui-seg-move"
+																					aria-label={t("move later")}
+																					title={t("move later")}
+																					disabled={pos === current.length - 1}
+																					onClick={() =>
+																						commit(
+																							item.key,
+																							moveOrderedOption(current, opt.value, 1),
+																						)
+																					}
+																				>
+																					→
+																				</button>
+																			</>
+																		)}
+																	</span>
 																);
 															});
 														})()}

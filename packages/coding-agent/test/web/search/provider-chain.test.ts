@@ -1,7 +1,10 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { AuthStorage } from "@musepi/pi-ai";
 import { SelectorController } from "@musepi/pi-coding-agent/modes/controllers/selector-controller";
 import {
+	isConnectionLevelSearchError,
+	recordSearchProviderConnectivityFailure,
+	resetSearchProviderConnectivity,
 	resolveProviderCandidates,
 	resolveProviderChain,
 	setExcludedSearchProviders,
@@ -39,6 +42,8 @@ function restoreEnv(): void {
 afterEach(() => {
 	setExcludedSearchProviders([]);
 	setSearchProviderOrder([]);
+	resetSearchProviderConnectivity();
+	vi.restoreAllMocks();
 	restoreEnv();
 });
 
@@ -82,6 +87,60 @@ describe("resolveProviderCandidates", () => {
 		const candidates = resolveProviderCandidates();
 		expect(candidates.slice(0, 2).map(candidate => candidate.id)).toEqual(["exa", "gemini"]);
 		expect(candidates).toHaveLength(SEARCH_PROVIDER_ORDER.length);
+	});
+
+	it("skips auto-chain providers that recently failed at the connection level", () => {
+		recordSearchProviderConnectivityFailure("duckduckgo");
+
+		const candidates = resolveProviderCandidates();
+
+		expect(candidates.map(candidate => candidate.id)).not.toContain("duckduckgo");
+		expect(candidates).toHaveLength(SEARCH_PROVIDER_ORDER.length - 1);
+	});
+
+	it("keeps explicitly ordered providers despite a recorded connection-level failure", () => {
+		setSearchProviderOrder(["duckduckgo"]);
+		recordSearchProviderConnectivityFailure("duckduckgo");
+
+		const candidates = resolveProviderCandidates();
+
+		expect(candidates[0]).toEqual({ id: "duckduckgo", explicit: true });
+	});
+
+	it("still tries a forced provider despite a recorded connection-level failure", () => {
+		recordSearchProviderConnectivityFailure("exa");
+
+		const candidates = resolveProviderCandidates("exa");
+
+		expect(candidates[0]).toEqual({ id: "exa", explicit: true });
+	});
+
+	it("re-admits a provider once the connectivity failure outlives its retry window", () => {
+		recordSearchProviderConnectivityFailure("duckduckgo");
+		vi.spyOn(Date, "now").mockReturnValue(Date.now() + 6 * 60 * 1000);
+
+		const candidates = resolveProviderCandidates();
+
+		expect(candidates.map(candidate => candidate.id)).toContain("duckduckgo");
+	});
+});
+
+describe("isConnectionLevelSearchError", () => {
+	it("matches transport failures, including ones nested as error causes", () => {
+		expect(
+			isConnectionLevelSearchError(new Error("Unable to connect. Is the computer able to access the url?")),
+		).toBe(true);
+		expect(isConnectionLevelSearchError(new Error("fetch failed"))).toBe(true);
+		expect(isConnectionLevelSearchError(new Error("request failed", { cause: new Error("connect ETIMEDOUT") }))).toBe(
+			true,
+		);
+	});
+
+	it("rejects HTTP-status and bot-challenge failures — the endpoint was reached", () => {
+		expect(
+			isConnectionLevelSearchError(new Error("DuckDuckGo blocked the request with a bot-detection challenge")),
+		).toBe(false);
+		expect(isConnectionLevelSearchError(new Error("Brave API error (401): unauthorized"))).toBe(false);
 	});
 });
 

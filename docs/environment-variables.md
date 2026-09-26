@@ -247,6 +247,7 @@ OAuth host chain: `KIMI_CODE_OAUTH_HOST` → `KIMI_OAUTH_HOST` → `https://auth
 | --------------------------------------------------- | ------------------------------------------------------------- |
 | `EXA_API_KEY`                                       | Exa search/MCP; alternatively use `/login exa`                |
 | `BRAVE_API_KEY`                                     | Brave search provider                                         |
+| `BOCHAAI_API_KEY` / `BOCHA_API_KEY`                 | Bochaai (博查) search provider env auth                       |
 | `PERPLEXITY_API_KEY`                                | Perplexity search provider API-key mode                       |
 | `PERPLEXITY_COOKIES`                                | Perplexity cookie-auth search mode                            |
 | `TAVILY_API_KEY`                                    | Tavily search provider                                        |

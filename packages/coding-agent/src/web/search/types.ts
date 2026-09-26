@@ -58,6 +58,11 @@ export const SEARCH_PROVIDER_OPTIONS = [
 	{ value: "synthetic", label: "Synthetic", description: "Requires SYNTHETIC_API_KEY" },
 	{ value: "searxng", label: "SearXNG", description: "Requires SEARXNG_ENDPOINT or searxng.endpoint" },
 	{
+		value: "bochaai",
+		label: "Bochaai",
+		description: "China-hosted search API (博查); requires BOCHAAI_API_KEY",
+	},
+	{
 		value: "startpage",
 		label: "Startpage",
 		description: "Credential-free scrape of Startpage (Google-backed) results; may be bot-challenged",
@@ -66,6 +71,11 @@ export const SEARCH_PROVIDER_OPTIONS = [
 		value: "duckduckgo",
 		label: "DuckDuckGo",
 		description: "Credential-free best-effort fallback; may be bot-challenged on datacenter/shared-egress IPs",
+	},
+	{
+		value: "bing",
+		label: "Bing",
+		description: "Credential-free scrape of the cn.bing.com SERP; reachable from mainland China without a proxy",
 	},
 	{
 		value: "ecosia",

@@ -592,6 +592,8 @@ export const tools = {
 	"search {count}": "Search {count}",
 	provider: "Provider",
 	usage: "Usage",
+	"web search failed": "Web search failed",
+	"open search settings": "Open search settings",
 	// ── Session maintenance + jobs HUD (right-panel ContextPanel) ───────
 	jobs: "Jobs",
 	"jobs running": "Running",
