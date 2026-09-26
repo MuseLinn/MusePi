@@ -17,6 +17,7 @@ import { AgentStorage } from "@musepi/pi-coding-agent/session/agent-storage";
 import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
 import { SessionManager } from "@musepi/pi-coding-agent/session/session-manager";
 import { getProjectAgentDir, TempDir } from "@musepi/pi-utils";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 
 describe("AgentSession advisor toggle", () => {
 	let sharedDir: TempDir;
@@ -26,6 +27,7 @@ describe("AgentSession advisor toggle", () => {
 	let replacementModel: Model;
 
 	beforeAll(async () => {
+		isolatedAgentDir = await isolateAgentDirForTest("pi-advisor-toggle-agent-");
 		sharedDir = TempDir.createSync("@pi-advisor-toggle-shared-");
 		authStorage = await AuthStorage.create(path.join(sharedDir.path(), "testauth.db"));
 		authStorage.setRuntimeApiKey("anthropic", "test-key");
@@ -45,11 +47,15 @@ describe("AgentSession advisor toggle", () => {
 		try {
 			await sharedDir.remove();
 		} catch {}
-	});
+		await restoreAgentDirForTest(isolatedAgentDir);
+		// Windows daemon handles release a few seconds after close —
+		// give the retried rm room beyond the default 5s hook timeout.
+	}, 30000);
 
 	let tempDir: TempDir;
 	let session: AgentSession;
 	let sessionManager: SessionManager;
+	let isolatedAgentDir: string;
 
 	beforeEach(async () => {
 		tempDir = TempDir.createSync("@pi-advisor-toggle-");

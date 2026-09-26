@@ -12,7 +12,7 @@
  * ("role:timestamp") that never equal SDK/jsonl ids — forkAt must resolve
  * by message identity (same as branchAt).
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -22,6 +22,7 @@ import { startDaemon } from "../../src/daemon/server";
 import { ViewStore, viewStorePath } from "../../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
 import { FileSessionStorage } from "../../src/session/session-storage";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const JOURNAL_DIR = path.join(os.tmpdir(), "musepi-daemon", "journal");
 
@@ -98,10 +99,18 @@ async function fileRows(filePath: string): Promise<{ role: string; text: string 
 
 describe("daemon session.forkAt", () => {
 	const cleanup: (() => Promise<void>)[] = [];
+	let isolatedAgentDir = "";
+
+	beforeAll(async () => {
+		isolatedAgentDir = await isolateAgentDirForTest("daemon-forkat-agent-");
+	});
 
 	afterAll(async () => {
 		for (const fn of cleanup.reverse()) await fn();
-	});
+		await restoreAgentDirForTest(isolatedAgentDir);
+		// Windows daemon handles release a few seconds after close —
+		// give the retried rm room beyond the default 5s hook timeout.
+	}, 30000);
 
 	test(
 		"fork before a user message vs through an assistant message",

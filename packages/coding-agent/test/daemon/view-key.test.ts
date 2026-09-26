@@ -6,7 +6,7 @@
  * space silently kills branchChildren/breadcrumb/leafPath (all keyed by
  * messageKey), so every tree surface renders nothing.
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -15,6 +15,7 @@ import { AppendJournal } from "../../src/daemon/journal";
 import { startDaemon } from "../../src/daemon/server";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
 import { FileSessionStorage } from "../../src/session/session-storage";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 interface WireMessage {
 	role: string;
@@ -60,9 +61,16 @@ async function openWs(port: number): Promise<WebSocket> {
 
 describe("daemon snapshot id space (messageKey)", () => {
 	const cleanup: (() => Promise<void>)[] = [];
+	let isolatedAgentDir = "";
+	beforeAll(async () => {
+		isolatedAgentDir = await isolateAgentDirForTest("daemon-viewkey-agent-");
+	});
 	afterAll(async () => {
 		for (const fn of cleanup.reverse()) await fn();
-	});
+		await restoreAgentDirForTest(isolatedAgentDir);
+		// Windows daemon handles release a few seconds after close —
+		// give the retried rm room beyond the default 5s hook timeout.
+	}, 30000);
 
 	test("history session entries carry messageKey ids and parentIds incl. branch points", async () => {
 		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-viewkey-"));

@@ -10,7 +10,7 @@
  *   - assistant messages: leaf lands ON the node (continue from there);
  *   - returns the new leaf as a messageKey so the GUI tree can link it.
  */
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -20,6 +20,7 @@ import { startDaemon } from "../../src/daemon/server";
 import { ViewStore, viewStorePath } from "../../src/daemon/view-store";
 import { computeDefaultSessionDir } from "../../src/session/session-paths";
 import { FileSessionStorage } from "../../src/session/session-storage";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const JOURNAL_DIR = path.join(os.tmpdir(), "musepi-daemon", "journal");
 
@@ -110,10 +111,18 @@ async function seedSession(
 
 describe("daemon session.branchAt", () => {
 	const cleanup: (() => Promise<void>)[] = [];
+	let isolatedAgentDir = "";
+
+	beforeAll(async () => {
+		isolatedAgentDir = await isolateAgentDirForTest("daemon-branchat-agent-");
+	});
 
 	afterAll(async () => {
 		for (const fn of cleanup.reverse()) await fn();
-	});
+		await restoreAgentDirForTest(isolatedAgentDir);
+		// Windows daemon handles release a few seconds after close —
+		// give the retried rm room beyond the default 5s hook timeout.
+	}, 30000);
 
 	test("moves the leaf onto an assistant node without truncating the tail", async () => {
 		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-branchat-"));

@@ -275,6 +275,15 @@ For the bash tool specifically:
 
 ## Testing Guidance
 
+### Test/session isolation (hard rule)
+
+Tests and smoke runs MUST NEVER write into the developer's production session store (`~/.musepi/agent/sessions/`) or share the production daemon socket dir (`%TEMP%/musepi-daemon`). Violations litter the user's session sidebar with "未命名会话" junk and can cross-talk with a running desktop daemon.
+
+- **Tests** that exercise real session storage (daemon suites, `SessionManager` suites, SDK suites) must isolate the agent dir with `test/helpers/isolate-agent-dir.ts` (`isolateAgentDirForTest` in `beforeAll`, `restoreAgentDirForTest` in `afterAll`; give the hook a 30s timeout — daemon/SQLite handles on Windows stay busy past the default 5s). Suites that pass an explicit session dir for every write are exempt.
+- **Why the temp cwd alone is not enough**: the default session root is `<agentDir>/sessions/<cwd-slug>` — a temp cwd only changes the slug, not the root. Only redirecting the agent dir isolates fully.
+- **Manual smoke runs** (desktop app, daemon, CLI chat against real models) must go through `bun scripts/dev-smoke.ts -- <command>`: it sets `PI_CODING_AGENT_DIR` + `MUSEPI_DAEMON_DIR` to a temp tree (copying `auth.json` so real calls work) and cleans up on exit. Never point a smoke run at the production daemon socket or session root.
+- Daemon suites share the default journal dir (`<tmpdir>/musepi-daemon/journal`) and clean up their own journal/view-store entries explicitly — keep that cleanup intact when adding suites (or point `MUSEPI_DAEMON_DIR` at the isolated tree).
+
 Test the contract the system exposes — not the easiest internal detail to assert.
 
 - Every new test must defend one **concrete, externally observable contract**: behavior, output shape, state transition, error mapping, or a regression-prone parsing boundary. If you cannot name the contract, do not add the test.

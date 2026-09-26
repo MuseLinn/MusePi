@@ -6,13 +6,14 @@
  * with a raw TCP socket speaking RFC 6455 by hand: client frames are MASKED
  * (RFC requires it), server frames arrive unmasked.
  */
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as crypto from "node:crypto";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import { VERSION } from "@musepi/pi-utils";
 import { startDaemon } from "../../src/daemon/server";
+import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
 
 const OP_TEXT = 0x1;
 const OP_CLOSE = 0x8;
@@ -150,6 +151,18 @@ async function tmpDir(): Promise<string> {
 }
 
 describe("daemon WebSocket transport", () => {
+	let isolatedAgentDir = "";
+
+	beforeAll(async () => {
+		isolatedAgentDir = await isolateAgentDirForTest("musepi-daemon-ws-agent-");
+	});
+
+	afterAll(async () => {
+		await restoreAgentDirForTest(isolatedAgentDir);
+		// Windows daemon handles release a few seconds after close —
+		// give the retried rm room beyond the default 5s hook timeout.
+	}, 30000);
+
 	test("upgrade + JSON-RPC round trip (system.meta)", async () => {
 		const dir = await tmpDir();
 		const daemon = await startDaemon({ socketPath: path.join(dir, "d.sock"), wsPort: 0 });
