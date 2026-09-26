@@ -34,6 +34,9 @@ export interface InstallSkillOptions {
 	 *  (parseGitUrl is the gate against generic fetch-and-write); tests use
 	 *  it to exercise the full flow offline. */
 	allowLocalPath?: boolean;
+	/** Abort the clone (kills the git process). Used by the marketplace
+	 *  install state machine's cancel path. */
+	signal?: AbortSignal;
 }
 
 export interface InstalledSkill {
@@ -98,21 +101,61 @@ export function skillTargetName(skillDir: string, explicit?: string): string {
 	return path.basename(skillDir);
 }
 
-/** Clone `url` shallowly and return the scratch dir (caller removes it). */
-async function shallowClone(url: string, cwd: string): Promise<string> {
+/** Clone `url` shallowly and return the scratch dir (caller removes it).
+ *  `signal` kills the git process on abort — the marketplace install state
+ *  machine's cancel path rides this. */
+export async function shallowClone(url: string, opts: { cwd?: string; signal?: AbortSignal } = {}): Promise<string> {
 	const scratch = await mkdtemp(path.join(tmpdir(), "musepi-skill-"));
 	const proc = Bun.spawn(["git", "clone", "--depth", "1", url, path.join(scratch, "repo")], {
-		cwd,
+		cwd: opts.cwd,
 		stdout: "ignore",
 		stderr: "pipe",
 	});
-	const exit = await proc.exited;
-	if (exit !== 0) {
-		const stderr = await new Response(proc.stderr).text();
-		await rm(scratch, { recursive: true, force: true });
-		throw new Error(`git clone failed: ${stderr.trim().slice(0, 300) || `exit ${exit}`}`);
+	let onAbort: (() => void) | undefined;
+	if (opts.signal) {
+		onAbort = () => {
+			proc.kill();
+		};
+		opts.signal.addEventListener("abort", onAbort, { once: true });
+	}
+	try {
+		const exit = await proc.exited;
+		if (exit !== 0) {
+			const stderr = await new Response(proc.stderr).text();
+			throw new Error(`git clone failed: ${stderr.trim().slice(0, 300) || `exit ${exit}`}`);
+		}
+	} finally {
+		if (onAbort && opts.signal) opts.signal.removeEventListener("abort", onAbort);
 	}
 	return scratch;
+}
+
+/** Resolve + copy half of the git installer, split from the clone so the
+ *  clone can take an AbortSignal (marketplace install cancel path rides it).
+ *  Caller owns the scratch dir. */
+async function installFromClonedRepo(
+	scratch: string,
+	opts: { subdir?: string; name?: string; overwrite?: boolean; destRoot: string },
+): Promise<InstalledSkill> {
+	const repoDir = path.join(scratch, "repo");
+	const skillDir = resolveSkillDir(repoDir, opts.subdir);
+	if (!skillDir) {
+		throw new Error(
+			opts.subdir
+				? `no SKILL.md under subdir "${opts.subdir}"`
+				: "no SKILL.md found in the repo (root or single subdirectory expected)",
+		);
+	}
+	const name = skillTargetName(skillDir, opts.name);
+	if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
+		throw new Error(`derived skill name is not filesystem-safe: "${name}"`);
+	}
+	const dest = path.join(opts.destRoot, name);
+	if (existsSync(dest) && !opts.overwrite) {
+		throw new Error(`skill "${name}" already exists (pass overwrite to replace)`);
+	}
+	await cp(skillDir, dest, { recursive: true });
+	return { name, dir: dest };
 }
 
 export async function installSkillFromGit(opts: InstallSkillOptions): Promise<InstalledSkill> {
@@ -124,27 +167,9 @@ export async function installSkillFromGit(opts: InstallSkillOptions): Promise<In
 	const parsed = opts.allowLocalPath ? { url: source } : parseGitUrl(source);
 	if (!parsed) throw new Error(`not a git source: ${opts.url}`);
 
-	const scratch = await shallowClone(source, opts.cwd ?? process.cwd());
+	const scratch = await shallowClone(source, { cwd: opts.cwd ?? process.cwd(), signal: opts.signal });
 	try {
-		const repoDir = path.join(scratch, "repo");
-		const skillDir = resolveSkillDir(repoDir, opts.subdir);
-		if (!skillDir) {
-			throw new Error(
-				opts.subdir
-					? `no SKILL.md under subdir "${opts.subdir}"`
-					: "no SKILL.md found in the repo (root or single subdirectory expected)",
-			);
-		}
-		const name = skillTargetName(skillDir, opts.name);
-		if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name)) {
-			throw new Error(`derived skill name is not filesystem-safe: "${name}"`);
-		}
-		const dest = path.join(opts.destRoot, name);
-		if (existsSync(dest) && !opts.overwrite) {
-			throw new Error(`skill "${name}" already exists (pass overwrite to replace)`);
-		}
-		await cp(skillDir, dest, { recursive: true });
-		return { name, dir: dest };
+		return await installFromClonedRepo(scratch, opts);
 	} finally {
 		await rm(scratch, { recursive: true, force: true }).catch(() => {});
 	}

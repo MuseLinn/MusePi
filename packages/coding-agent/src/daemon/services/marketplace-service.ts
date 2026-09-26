@@ -4,6 +4,11 @@ import { MANAGED_SKILLS_PROVIDER_ID } from "../../autolearn/managed-skills";
 import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
+import {
+	MarketplaceInstallMachine,
+	type MarketplaceInstallStartParams,
+	type MarketplaceInstallView,
+} from "../../skills/marketplace-install-machine";
 import type { DaemonService } from "./types";
 
 /**
@@ -15,12 +20,15 @@ import type { DaemonService } from "./types";
  *   `skills.install` / `skills.read`（技能扫描/删除/git 安装/源码读取）与
  *   `skills.marketplace.query` / `skills.marketplace.categories` /
  *   `skills.marketplace.featured` / `skills.marketplace.detail`（远程技能
- *   市场 SkillHub/skills.sh）。
+ *   市场 SkillHub/skills.sh）与 `skills.marketplace.install`（状态机驱动
+ *   安装，M2-2.2）/ `skills.marketplace.status` / `skills.marketplace.cancel`
+ *   / `skills.marketplace.approve`（安装状态机查询/取消/脚本批准）。
  * - 输出：各 RPC 返回值原样；两个 10s TTL 缓存（#marketplaceCache/
  *   #skillsCache）随变更 RPC 与宿主 watcher 失效；extensions.changed 广播
- *   经注入的 onChanged 扇出（宿主侧接 EventService，lazy 调用无循环）。
- * - 生命周期：无 start/stop——缓存惰性构建；宿主扩展 watcher 经
- *   invalidateSkillsCache 失效技能扫描，加载/卸载可逆。
+ *   经注入的 onChanged 扇出（宿主侧接 EventService，lazy 调用无循环）；
+ *   安装状态迁移经 onInstallState 广播 marketplace.install.state 事件。
+ * - 生命周期：stop 中止进行中的安装（状态机半成品清理）；缓存惰性构建；
+ *   宿主扩展 watcher 经 invalidateSkillsCache 失效技能扫描，加载/卸载可逆。
  *
  * 范围边界（有意不包，P1 纪律）：
  * - `context.list`（skills + context 统一视图的 context 半边）原地留宿主；
@@ -57,6 +65,8 @@ export interface MarketplaceServiceDeps {
 	invalidatePluginCaches(): void;
 	/** extensions.changed 广播（宿主接 EventService）。 */
 	onChanged(): void;
+	/** marketplace 安装状态机事件广播（宿主接 EventService.broadcast）。 */
+	onInstallState(payload: Record<string, unknown>): void;
 }
 
 export class MarketplaceService implements DaemonService {
@@ -75,9 +85,16 @@ export class MarketplaceService implements DaemonService {
 		"skills.marketplace.detail": "skillDetail",
 		"skills.marketplace.install": "installMarketSkill",
 		"skills.marketplace.preview": "previewMarketSkill",
+		"skills.marketplace.status": "installStatus",
+		"skills.marketplace.cancel": "cancelMarketInstall",
+		"skills.marketplace.approve": "approveMarketInstall",
 	} as const;
 
 	readonly #deps: MarketplaceServiceDeps;
+
+	/** marketplace 技能安装状态机（M2-2.2）：install/cancel/approve 的实现
+	 *  体，状态迁移经 onInstallState 广播（marketplace.install.state 事件）。 */
+	readonly #installs: MarketplaceInstallMachine;
 
 	/** TTL cache of the marketplace catalog browse (settings → marketplace
 	 *  tab). Combines {@link MarketplaceManager.listAvailablePlugins}
@@ -113,6 +130,20 @@ export class MarketplaceService implements DaemonService {
 
 	constructor(deps: MarketplaceServiceDeps) {
 		this.#deps = deps;
+		this.#installs = new MarketplaceInstallMachine(view => {
+			if (view.state === "done") {
+				// 新技能落盘：与旧一次性安装同款的缓存失效 + 广播三连。
+				this.#skillsCache = null;
+				this.#deps.invalidateExtensionsCache();
+				this.#deps.onChanged();
+			}
+			deps.onInstallState({ type: "marketplace.install.state", at: Date.now(), ...view });
+		});
+	}
+
+	/** DaemonService.stop：中止进行中的安装并清理半成品。 */
+	stop(): void {
+		this.#installs.stop();
 	}
 
 	/** Build a `MarketplaceManager` wired to the host's cwd and the global
@@ -411,40 +442,44 @@ export class MarketplaceService implements DaemonService {
 	}
 
 	/** RPC skills.marketplace.install：来源感知安装（SkillHub zip 直装 /
-	 *  skills.sh 子目录 git 安装）——修掉目录主页当 git URL clone 403 的
-	 *  旧动线（2026-09-26 线上实测）。 */
+	 *  skills.sh 子目录 git 安装）——状态机驱动（M2-2.2）。立即返回
+	 *  installId，进度/终态经 marketplace.install.state 事件广播；半成品
+	 *  清理、取消与脚本批准见 skills/marketplace-install-machine.ts。 */
 	async installMarketSkill(params: unknown) {
-		const p = (params ?? {}) as {
-			source?: "skillhub" | "skills.sh";
-			slug?: string;
-			repo?: string;
-			name?: string;
-			overwrite?: boolean;
-		};
+		const p = (params ?? {}) as Partial<MarketplaceInstallStartParams>;
 		if (!p.source || !p.slug) throw new Error("skills.marketplace.install: source and slug required");
 		const destRoot = path.join(getAgentDir(), "skills");
-		let result: { name: string; dir: string };
-		if (p.source === "skillhub") {
-			const { installSkillFromSkillHub } = await import("../../skills/marketplace-install");
-			result = await installSkillFromSkillHub(p.slug, destRoot, { name: p.name, overwrite: p.overwrite });
-		} else {
-			if (!p.repo) throw new Error("skills.marketplace.install: repo required for skills.sh");
-			const { installSkillFromGit } = await import("../../skills/install");
-			// The skill id IS the repo-relative folder; without subdir a
-			// multi-skill repo (anthropics/skills, …) fails the ambiguous
-			// SKILL.md resolution inside the git installer.
-			result = await installSkillFromGit({
-				url: `https://github.com/${p.repo}`,
-				subdir: p.slug,
+		const installId = this.#installs.start(
+			{
+				source: p.source,
+				slug: p.slug,
+				repo: p.repo,
 				name: p.name,
 				overwrite: p.overwrite,
-				destRoot,
-			});
-		}
-		this.#skillsCache = null;
-		this.#deps.invalidateExtensionsCache();
-		this.#deps.onChanged();
-		return { ok: true, name: result.name, dir: result.dir };
+			},
+			destRoot,
+		);
+		return { ok: true, installId };
+	}
+
+	/** RPC skills.marketplace.status：安装状态机查询（进行中在前 + 终态记录）。 */
+	async installStatus(): Promise<{ installs: MarketplaceInstallView[] }> {
+		return this.#installs.status();
+	}
+
+	/** RPC skills.marketplace.cancel：取消进行中的安装（半成品全清理）。 */
+	async cancelMarketInstall(params: unknown) {
+		const p = (params ?? {}) as { installId?: string };
+		if (!p.installId) throw new Error("skills.marketplace.cancel: installId required");
+		return this.#installs.cancel(p.installId);
+	}
+
+	/** RPC skills.marketplace.approve：脚本拦截后的批准/拒绝（拒绝 →
+	 *  failed{script-declined}）。 */
+	async approveMarketInstall(params: unknown) {
+		const p = (params ?? {}) as { installId?: string; approve?: boolean };
+		if (!p.installId) throw new Error("skills.marketplace.approve: installId required");
+		return this.#installs.approve(p.installId, p.approve === true);
 	}
 
 	/** RPC skills.marketplace.preview：点击卡片先预览——skills.sh 从发布者

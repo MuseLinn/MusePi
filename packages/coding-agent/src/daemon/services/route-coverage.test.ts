@@ -118,6 +118,7 @@ function buildRegistry(): HostServices {
 			invalidateExtensionsCache: () => {},
 			invalidatePluginCaches: () => {},
 			onChanged: () => {},
+			onInstallState: () => {},
 		}),
 	);
 	return services;

@@ -601,6 +601,21 @@ export const general = {
 	// 一键安装的结果反馈与卡片角标态(技能市场 · 发现)。
 	"skill market installed": "已安装",
 	"skill market install failed {name}": "安装 {name} 失败：{msg}",
+	// 安装状态机（M2-2.2）：进度条目 / 取消 / 脚本批准 / 语义失败文案。
+	"skill market install progress": "正在安装 {name}：{state}",
+	"skill market install state preparing": "准备中",
+	"skill market install state downloading": "下载中",
+	"skill market install state verifying": "校验中",
+	"skill market install state installing": "安装中",
+	"skill market install state awaiting-approval": "等待脚本批准",
+	"skill market install cancel": "取消安装",
+	"skill market install cancelled": "已取消安装 {name}",
+	"skill market install scripts found": "该技能包含 {count} 个可执行脚本，批准后才会写入",
+	"skill market install approve": "批准并继续",
+	"skill market install decline": "拒绝",
+	"skill market install retry": "重试",
+	"skill market install failed network": "安装失败：网络不可达（{msg}）。请检查网络后重试。",
+	"skill market install failed script-declined": "安装失败：已拒绝安装脚本。",
 	// 卡片点击预览弹窗（信息先览，再决定安装）。
 	"skill market install": "安装",
 	"skill market homepage": "来源主页",

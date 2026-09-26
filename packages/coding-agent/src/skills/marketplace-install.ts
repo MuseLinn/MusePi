@@ -20,43 +20,67 @@
  * 所有网络调用超时收敛，错误以可读消息跨 RPC 边界抛出。
  */
 import { existsSync } from "node:fs";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { unzipSync } from "fflate";
 import { resolveSkillDir, skillTargetName } from "./install";
-import { skillHubDownloadUrl } from "./marketplace-client";
 
 const FETCH_TIMEOUT_MS = 30_000;
 /** Preview bodies are capped — the dialog shows a taste, not the whole file. */
 const PREVIEW_MAX_BYTES = 24 * 1024;
 
-async function fetchBytes(url: string): Promise<Uint8Array> {
+export async function fetchBytes(url: string, opts: { signal?: AbortSignal } = {}): Promise<Uint8Array> {
 	const ctrl = new AbortController();
 	const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+	// A caller signal joins the timeout controller: cancelling the install
+	// (state machine) aborts the in-flight download immediately.
+	if (opts.signal) {
+		const relay = () => ctrl.abort();
+		opts.signal.addEventListener("abort", relay, { once: true });
+		try {
+			return await fetchBytesOnce(url, ctrl.signal);
+		} finally {
+			opts.signal.removeEventListener("abort", relay);
+			clearTimeout(timer);
+		}
+	}
 	try {
-		const res = await fetch(url, { signal: ctrl.signal, redirect: "follow" });
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		return new Uint8Array(await res.arrayBuffer());
+		return await fetchBytesOnce(url, ctrl.signal);
 	} finally {
 		clearTimeout(timer);
 	}
 }
 
-/** Download the SkillHub zip (302 → object storage) and install the skill
- *  folder it contains. Same resolve/copy contract as the git installer so
- *  both sources land in an indistinguishable target shape. */
-export async function installSkillFromSkillHub(
-	slug: string,
-	destRoot: string,
-	opts: { name?: string; overwrite?: boolean } = {},
-): Promise<{ name: string; dir: string }> {
-	const zip = await fetchBytes(skillHubDownloadUrl(slug));
-	return installSkillFromSkillHubZip(zip, destRoot, opts);
+async function fetchBytesOnce(url: string, signal: AbortSignal): Promise<Uint8Array> {
+	const res = await fetch(url, { signal, redirect: "follow" });
+	if (!res.ok) throw new Error(`HTTP ${res.status}`);
+	return new Uint8Array(await res.arrayBuffer());
+}
+
+/** Write zip entries under `root` (zip-slip guarded). Shared by the direct
+ *  zip installer and the install state machine's verify stage. Throws a
+ *  readable error on garbage bytes. */
+export async function extractZipEntries(zip: Uint8Array, root: string): Promise<void> {
+	let entries: Record<string, Uint8Array>;
+	try {
+		entries = unzipSync(zip);
+	} catch {
+		throw new Error("skillhub download is not a valid zip archive");
+	}
+	for (const [rel, data] of Object.entries(entries)) {
+		const safe = rel.replace(/\\/g, "/").replace(/^\/+/, "");
+		if (!safe || safe.split("/").includes("..")) continue;
+		const target = path.join(root, safe);
+		if (safe.endsWith("/")) continue;
+		await mkdir(path.dirname(target), { recursive: true });
+		await writeFile(target, data);
+	}
 }
 
 /** Zip-extract half, exported for offline tests: feed a synthetic archive
- *  (fflate `zipSync`) through the same entry-guard + resolve/copy path. */
+ *  (fflate `zipSync`) through the same entry-guard + resolve/copy path.
+ *  (The stateful download+install flow lives in marketplace-install-machine.ts.) */
 export async function installSkillFromSkillHubZip(
 	zip: Uint8Array,
 	destRoot: string,
@@ -65,22 +89,7 @@ export async function installSkillFromSkillHubZip(
 	const scratch = await mkdtemp(path.join(tmpdir(), "musepi-skillhub-"));
 	try {
 		const root = path.join(scratch, "zip");
-		// unzipSync has no target-dir option: take the entry map and write
-		// each file under `root` ourselves (also enforces the zip-slip guard).
-		let entries: Record<string, Uint8Array>;
-		try {
-			entries = unzipSync(zip);
-		} catch {
-			throw new Error("skillhub download is not a valid zip archive");
-		}
-		for (const [rel, data] of Object.entries(entries)) {
-			const safe = rel.replace(/\\/g, "/").replace(/^\/+/, "");
-			if (!safe || safe.split("/").includes("..")) continue;
-			const target = path.join(root, safe);
-			if (safe.endsWith("/")) continue;
-			await mkdirp(path.dirname(target));
-			await writeFile(target, data);
-		}
+		await extractZipEntries(zip, root);
 		const skillDir = resolveSkillDir(root);
 		if (!skillDir) {
 			throw new Error("skillhub zip has no SKILL.md at its root or a single subdirectory");
@@ -98,11 +107,6 @@ export async function installSkillFromSkillHubZip(
 	} finally {
 		await rm(scratch, { recursive: true, force: true }).catch(() => {});
 	}
-}
-
-async function mkdirp(dir: string): Promise<void> {
-	const { mkdir } = await import("node:fs/promises");
-	await mkdir(dir, { recursive: true });
 }
 
 /**

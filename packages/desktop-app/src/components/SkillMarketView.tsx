@@ -1,7 +1,7 @@
-import { t } from "@musepi/client-core";
+import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { RpcClient } from "../lib/rpc";
+import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 
@@ -64,6 +64,39 @@ interface MarketPage {
 type SourceFilter = "all" | "skillhub" | "skills.sh";
 type SortKey = "downloads" | "stars" | "installs";
 
+/** 安装状态机（daemon M2-2.2）暴露给 GUI 的状态集合。 */
+type InstallEventState =
+	| "inspecting"
+	| "downloading"
+	| "verifying"
+	| "awaiting-approval"
+	| "installing"
+	| "done"
+	| "failed"
+	| "cancelled";
+
+/** 本视图一次只跟一个安装（卡片角标锁）。状态经 marketplace.install.state
+ *  事件推进，install RPC 只拿 installId（daemon 15s RPC 超时装不下大包）。 */
+interface ActiveInstall {
+	/** 卡片锁定 id（catalog entry id）。 */
+	id: string;
+	/** daemon 状态机记录 id（cancel/approve 的钥匙）。 */
+	installId: string;
+	entry: SkillEntry;
+	state: InstallEventState;
+	kind?: string;
+	message?: string;
+	scripts?: string[];
+}
+
+const INSTALL_STATE_LABEL_KEYS: Record<Exclude<InstallEventState, "done" | "failed" | "cancelled">, TranslationKey> = {
+	inspecting: "skill market install state preparing",
+	downloading: "skill market install state downloading",
+	verifying: "skill market install state verifying",
+	installing: "skill market install state installing",
+	"awaiting-approval": "skill market install state awaiting-approval",
+};
+
 const PAGE_SIZE = 12;
 const FEATURED_SIZE = 4;
 
@@ -93,10 +126,16 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	// 同时驱动卡片上的「已安装」态 —— 装完即回读,不用等重新挂载。
 	const [installed, setInstalled] = useState({ enabled: 0, disabled: 0 });
 	const [installedNames, setInstalledNames] = useState<Set<string>>(new Set());
-	// 一键安装的去重 + 结果反馈:busyId 锁卡片,notice 是顶部非阻塞提示条
-	// (成功 2.5s 自动消退,失败驻留到下一次操作)。
-	const [busyId, setBusyId] = useState<string | null>(null);
-	const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+	// 一键安装的状态机句柄：busy 锁卡片 + 事件推进 state（M2-2.2）。
+	// notice 是顶部非阻塞提示条(成功 2.5s 自动消退,失败驻留到下一次操作),
+	// actions 是提示条内的按钮（重试/批准脚本等）。
+	const [active, setActive] = useState<ActiveInstall | null>(null);
+	const [notice, setNotice] = useState<{
+		ok: boolean;
+		text: string;
+		actions?: { label: string; onClick(): void }[];
+	} | null>(null);
+	const busyId = active?.id ?? null;
 	// 换一批 rotates the featured window: the daemon returns a ranked list
 	// and the UI shows FEATURED_SIZE of it starting at this offset.
 	const [featuredOffset, setFeaturedOffset] = useState(0);
@@ -194,11 +233,11 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
 	/**
-	 * 一键安装 —— 走 `skills.marketplace.install` 的来源感知路由：
-	 * SkillHub 由 daemon 下载官方 zip（302 → 对象存储）解压安装，不再把
-	 * 目录主页当 git URL clone（403 旧案）；skills.sh 以 repo+slug 走
-	 * 子目录 git 安装（skill id 即仓库内文件夹）。装完回读 skills.list，
-	 * 卡片就地翻「已安装」,父级同步「我安装的 N」计数。
+	 * 一键安装 —— 走 `skills.marketplace.install` 的状态机路由：RPC 立即
+	 * 返回 installId，进度经 marketplace.install.state 事件推进（下面的
+	 * 订阅）——旧的一次性动作在 15s RPC 超时下装不完大包，也看不见失败
+	 * 语义（断网/取消/脚本拦截）。装完回读 skills.list，卡片就地翻
+	 * 「已安装」，父级同步「我安装的 N」计数。
 	 */
 	const installEntry = useCallback(
 		(entry: SkillEntry): void => {
@@ -210,26 +249,106 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				});
 				return;
 			}
-			setBusyId(entry.id);
 			setNotice(null);
 			void rpc
-				.request<{ ok: boolean; name: string }>("skills.marketplace.install", {
+				.request<{ ok: boolean; installId: string }>("skills.marketplace.install", {
 					source: entry.source,
 					slug: entry.slug,
 					...(entry.repo ? { repo: entry.repo } : {}),
 				})
 				.then(res => {
-					setNotice({ ok: true, text: t("skill installed {name}", { name: res?.name ?? entry.name }) });
-					refreshInstalled();
-					onInstalled?.();
+					setActive({
+						id: entry.id,
+						installId: res?.installId ?? "",
+						entry,
+						state: "inspecting",
+					});
 				})
 				.catch((e: unknown) => {
 					const msg = e instanceof Error ? e.message : String(e);
 					setNotice({ ok: false, text: t("skill market install failed {name}", { name: entry.name, msg }) });
-				})
-				.finally(() => setBusyId(null));
+				});
 		},
-		[rpc, busyId, refreshInstalled, onInstalled],
+		[rpc, busyId],
+	);
+
+	// 订阅 daemon 全局事件：只认本视图发起的那笔安装（installId 对账）。
+	useEffect(() => {
+		if (!rpc) return;
+		const unlisten = rpc.addEventListener((event: StreamEvent) => {
+			const payload = event.payload as
+				| {
+						type?: string;
+						installId?: string;
+						state?: InstallEventState;
+						kind?: string;
+						message?: string;
+						scripts?: string[];
+				  }
+				| undefined;
+			if (payload?.type !== "marketplace.install.state" || !payload.installId) return;
+			setActive(prev =>
+				prev && prev.installId === payload.installId
+					? {
+							...prev,
+							state: payload.state ?? prev.state,
+							kind: payload.kind,
+							message: payload.message,
+							scripts: payload.scripts,
+						}
+					: prev,
+			);
+		});
+		return unlisten;
+	}, [rpc]);
+
+	// 状态机终态处理：done/cancelled/failed 都收敛回空闲（卡片解锁），
+	// 失败驻留语义文案 + 重试；done 走既有回读三连。
+	useEffect(() => {
+		if (!active) return;
+		if (active.state === "done") {
+			setNotice({ ok: true, text: t("skill installed {name}", { name: active.entry.name }) });
+			setActive(null);
+			refreshInstalled();
+			onInstalled?.();
+			return;
+		}
+		if (active.state === "cancelled") {
+			setNotice({ ok: true, text: t("skill market install cancelled", { name: active.entry.name }) });
+			setActive(null);
+			return;
+		}
+		if (active.state === "failed") {
+			const text =
+				active.kind === "network"
+					? t("skill market install failed network", { msg: active.message ?? "" })
+					: active.kind === "script-declined"
+						? t("skill market install failed script-declined")
+						: t("skill market install failed {name}", {
+								name: active.entry.name,
+								msg: active.message ?? active.kind ?? "",
+							});
+			const entry = active.entry;
+			setNotice({
+				ok: false,
+				text,
+				actions: [{ label: t("skill market install retry"), onClick: () => installEntry(entry) }],
+			});
+			setActive(null);
+		}
+	}, [active, refreshInstalled, onInstalled, installEntry]);
+
+	const cancelInstall = useCallback((): void => {
+		if (!rpc || !active) return;
+		void rpc.request("skills.marketplace.cancel", { installId: active.installId }).catch(() => {});
+	}, [rpc, active]);
+
+	const approveInstall = useCallback(
+		(ok: boolean): void => {
+			if (!rpc || !active) return;
+			void rpc.request("skills.marketplace.approve", { installId: active.installId, approve: ok }).catch(() => {});
+		},
+		[rpc, active],
 	);
 
 	const isInstalled = useCallback(
@@ -293,8 +412,41 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					className={`gui-skill-market-note${notice.ok ? " gui-skill-market-note--ok" : " gui-skill-market-note--err"}`}
 				>
 					{notice.text}
+					{notice.actions?.map(a => (
+						<button key={a.label} type="button" className="gui-skill-market-page" onClick={a.onClick}>
+							{a.label}
+						</button>
+					))}
 				</div>
 			)}
+			{active && active.state !== "failed" && active.state !== "done" && active.state !== "cancelled" ? (
+				<div className="gui-skill-market-note">
+					{active.state === "awaiting-approval" ? (
+						<>
+							{t("skill market install scripts found", { count: String(active.scripts?.length ?? 0) })}{" "}
+							<button type="button" className="gui-skill-market-page" onClick={() => approveInstall(true)}>
+								{t("skill market install approve")}
+							</button>{" "}
+							<button type="button" className="gui-skill-market-page" onClick={() => approveInstall(false)}>
+								{t("skill market install decline")}
+							</button>{" "}
+							<button type="button" className="gui-skill-market-page" onClick={cancelInstall}>
+								{t("skill market install cancel")}
+							</button>
+						</>
+					) : (
+						<>
+							{t("skill market install progress", {
+								name: active.entry.name,
+								state: t(INSTALL_STATE_LABEL_KEYS[active.state]),
+							})}{" "}
+							<button type="button" className="gui-skill-market-page" onClick={cancelInstall}>
+								{t("skill market install cancel")}
+							</button>
+						</>
+					)}
+				</div>
+			) : null}
 
 			{shownFeatured.length > 0 ? (
 				<section className="gui-skill-market-section">
@@ -317,6 +469,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 								installed={isInstalled(e)}
 								busy={busyId === e.id}
 								onInstall={() => installEntry(e)}
+								onCancel={cancelInstall}
 								onOpen={() => setPreviewEntry(e)}
 							/>
 						))}
@@ -396,6 +549,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 								installed={isInstalled(e)}
 								busy={busyId === e.id}
 								onInstall={() => installEntry(e)}
+								onCancel={cancelInstall}
 								onOpen={() => setPreviewEntry(e)}
 							/>
 						))}
@@ -489,9 +643,10 @@ function SkillGlyph({ entry }: { entry: SkillEntry }): ReactNode {
 }
 
 /**
- * 卡片右上角的动作角标,三个状态互斥:
+ * 卡片右上角的动作角标,四个状态互斥:
  *   已安装 → 绿色对勾,不可再点;
- *   安装中 → 转圈,锁定防重复提交;
+ *   安装中 → 转圈,点击发取消(状态机 cancel,半成品由 daemon 清理);
+ *   失败后回到可安装;
  *   可安装 → 有 installUrl(skills.sh 带 GitHub 源)一键装,没有
  *   (SkillHub 目录项)打开预填对话框让用户确认来源后再装。
  */
@@ -500,12 +655,14 @@ function CardAddButton({
 	installed,
 	busy,
 	onInstall,
+	onCancel,
 	onOpen,
 }: {
 	entry: SkillEntry;
 	installed: boolean;
 	busy: boolean;
 	onInstall(): void;
+	onCancel(): void;
 	onOpen(): void;
 }): ReactNode {
 	if (installed) {
@@ -522,7 +679,15 @@ function CardAddButton({
 	}
 	if (busy) {
 		return (
-			<button type="button" className="gui-skill-market-plus" disabled title={t("installing")}>
+			<button
+				type="button"
+				className="gui-skill-market-plus"
+				title={t("skill market install cancel")}
+				onClick={ev => {
+					ev.stopPropagation();
+					onCancel();
+				}}
+			>
 				<Icon name="loader" className="gui-skill-market-plus-spin h-3.5 w-3.5" />
 			</button>
 		);
@@ -549,12 +714,14 @@ function FeaturedCard({
 	installed,
 	busy,
 	onInstall,
+	onCancel,
 	onOpen,
 }: {
 	entry: SkillEntry;
 	installed: boolean;
 	busy: boolean;
 	onInstall(): void;
+	onCancel(): void;
 	onOpen(): void;
 }): ReactNode {
 	return (
@@ -563,7 +730,14 @@ function FeaturedCard({
 			onClick={onOpen}
 			title={entry.descriptionZh || entry.description || entry.name}
 		>
-			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
+			<CardAddButton
+				entry={entry}
+				installed={installed}
+				busy={busy}
+				onInstall={onInstall}
+				onCancel={onCancel}
+				onOpen={onOpen}
+			/>
 			<div className="gui-skill-market-fcard-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-fcard-name">{entry.name}</span>
@@ -579,12 +753,14 @@ function SkillCard({
 	installed,
 	busy,
 	onInstall,
+	onCancel,
 	onOpen,
 }: {
 	entry: SkillEntry;
 	installed: boolean;
 	busy: boolean;
 	onInstall(): void;
+	onCancel(): void;
 	onOpen(): void;
 }): ReactNode {
 	const meta: string[] = [];
@@ -599,7 +775,14 @@ function SkillCard({
 			onClick={onOpen}
 			title={entry.descriptionZh || entry.description || entry.name}
 		>
-			<CardAddButton entry={entry} installed={installed} busy={busy} onInstall={onInstall} onOpen={onOpen} />
+			<CardAddButton
+				entry={entry}
+				installed={installed}
+				busy={busy}
+				onInstall={onInstall}
+				onCancel={onCancel}
+				onOpen={onOpen}
+			/>
 			<div className="gui-skill-market-card-h">
 				<SkillGlyph entry={entry} />
 				<span className="gui-skill-market-card-name">{entry.name}</span>

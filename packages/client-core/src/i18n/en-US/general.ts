@@ -607,6 +607,23 @@ export const general = {
 	// One-click install feedback + card badge states (skill market discover).
 	"skill market installed": "Installed",
 	"skill market install failed {name}": "Failed to install {name}: {msg}",
+	// Install state machine (M2-2.2): progress row / cancel / script approval / semantic failures.
+	"skill market install progress": "Installing {name}: {state}",
+	"skill market install state preparing": "preparing",
+	"skill market install state downloading": "downloading",
+	"skill market install state verifying": "verifying",
+	"skill market install state installing": "installing",
+	"skill market install state awaiting-approval": "awaiting script approval",
+	"skill market install cancel": "Cancel install",
+	"skill market install cancelled": "Cancelled installing {name}",
+	"skill market install scripts found":
+		"This skill contains {count} executable script(s); approve before anything is written",
+	"skill market install approve": "Approve & continue",
+	"skill market install decline": "Decline",
+	"skill market install retry": "Retry",
+	"skill market install failed network":
+		"Install failed: network unreachable ({msg}). Check your connection and retry.",
+	"skill market install failed script-declined": "Install failed: install scripts declined.",
 	// Card-click preview dialog (look before you install).
 	"skill market install": "Install",
 	"skill market homepage": "Source page",

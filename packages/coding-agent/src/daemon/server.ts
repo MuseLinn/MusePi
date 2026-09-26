@@ -591,6 +591,7 @@ export class DaemonServer {
 					this.#services.get<ExtensionService>("extensions").invalidateExtensionsCache(),
 				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
+				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#startExtensionWatcher();
@@ -1716,6 +1717,15 @@ export class DaemonServer {
 			}
 			case "skills.marketplace.preview": {
 				return this.#services.get<MarketplaceService>("marketplace").previewMarketSkill(params ?? {});
+			}
+			case "skills.marketplace.status": {
+				return this.#services.get<MarketplaceService>("marketplace").installStatus();
+			}
+			case "skills.marketplace.cancel": {
+				return this.#services.get<MarketplaceService>("marketplace").cancelMarketInstall(params ?? {});
+			}
+			case "skills.marketplace.approve": {
+				return this.#services.get<MarketplaceService>("marketplace").approveMarketInstall(params ?? {});
 			}
 			case "context.list": {
 				// Context files (AGENTS.md / CLAUDE.md …) for the extensions
