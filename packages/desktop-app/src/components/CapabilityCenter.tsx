@@ -1,5 +1,6 @@
 import { Markdown, type MarketplaceCardAction, MarketplaceGrid, t } from "@musepi/client-core";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
@@ -249,13 +250,13 @@ function DiagnosticsView({
 	);
 }
 
-/** 技能详情抽屉 (设计稿 2:665):右侧滑出的页面内面板 —— 不盖顶栏/工具行,
- *  四面圆角 + 液态玻璃。头部字形图标 + meta 行,动作行(在会话中调用 =
- *  复制 /skill-name、停用 = ignore 开关、卸载 = user 级文件技能),3 tab
- *  (概览 / SKILL.md / 版本记录),概览底部挂卸载风险块。
- *  收起走退场动画:closing 态先播 gui-cap-drawer-out,onAnimationEnd 再
- *  真正卸载 —— React 直接卸载是不会有退场动画的;prefers-reduced-motion
- *  时跳过动画立即关。 */
+/** 技能详情抽屉 (设计稿 2:665):portal 到 body 的右侧悬浮抽屉(DialogFrame
+ *  同款 fixed 弹层,能力中心列表滚动不再带走面板),§5u 取档 —— 标准 scrim、
+ *  背板 160ms 纯 opacity 淡入、卡片 240ms --spring-liquid 入场、出场 140ms
+ *  --spring-snappy(宿主保持挂载 180ms,由定时器卸载)。头部字形图标 +
+ *  meta 行,动作行(在会话中调用 = 复制 /skill-name、停用 = ignore 开关、
+ *  卸载 = user 级文件技能),3 tab(概览 / SKILL.md / 版本记录),概览底部
+ *  挂卸载风险块。prefers-reduced-motion 时跳过动画立即关。 */
 function SkillDrawer({
 	rpc,
 	skill,
@@ -275,6 +276,8 @@ function SkillDrawer({
 	const [closing, setClosing] = useState(false);
 	const [copied, setCopied] = useState(false);
 	const { confirm } = useConfirm();
+	const drawerRef = useRef<HTMLDivElement | null>(null);
+	const closeTimerRef = useRef<number | null>(null);
 
 	useEffect(() => {
 		let alive = true;
@@ -306,15 +309,50 @@ function SkillDrawer({
 			return;
 		}
 		setClosing(true);
+		// DialogFrame parity (§5u ladder): the exit animation runs 140ms but
+		// the host stays mounted 180ms — a timer owns the unmount so card and
+		// backdrop always leave together.
+		closeTimerRef.current = window.setTimeout(onClose, 180);
 	}, [closing, onClose]);
 
+	useEffect(
+		() => () => {
+			if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+		},
+		[],
+	);
+
+	// §5u keyboard contract (DialogFrame precedent): the drawer owns the
+	// keyboard while open — Escape is claimed on document in the capture
+	// phase (wins over any handler behind), opening moves focus to the
+	// first focusable element (else the drawer itself) and closing restores
+	// it to the previously active element.
+	const requestCloseRef = useRef(requestClose);
+	requestCloseRef.current = requestClose;
 	useEffect(() => {
+		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		const onKey = (e: KeyboardEvent): void => {
-			if (e.key === "Escape") requestClose();
+			if (e.key === "Escape") {
+				e.preventDefault();
+				e.stopPropagation();
+				requestCloseRef.current();
+			}
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
-	}, [requestClose]);
+		document.addEventListener("keydown", onKey, true);
+		const raf = requestAnimationFrame(() => {
+			const drawer = drawerRef.current;
+			if (!drawer) return;
+			const focusable = drawer.querySelector<HTMLElement>(
+				'button, input, select, textarea, [tabindex]:not([tabindex="-1"])',
+			);
+			(focusable ?? drawer).focus();
+		});
+		return () => {
+			document.removeEventListener("keydown", onKey, true);
+			cancelAnimationFrame(raf);
+			prevActive?.focus();
+		};
+	}, []);
 
 	// 「已复制」反馈自动消退(按钮图标回位,不弹 toast —— 抽屉内就地反馈)。
 	useEffect(() => {
@@ -372,15 +410,13 @@ function SkillDrawer({
 	const basePath = detail?.filePath ? detail.filePath.replace(/[/\\]SKILL\.md$/i, "") : undefined;
 	const metaText = [skillOriginLabel(skill), skillVersionLabel(skill), skillLevelLabel(skill)].join(" · ");
 
-	return (
+	// Portal to document.body (DialogFrame precedent): a backdrop-filter
+	// ancestor creates a containing block that hijacks position:fixed, and
+	// an in-flow root would scroll away with the capability-center list.
+	return createPortal(
 		<div className={`gui-cap-drawer-root${closing ? " gui-cap-drawer-root--closing" : ""}`} role="dialog" aria-modal>
 			<div className="gui-cap-drawer-backdrop" onClick={requestClose} />
-			<div
-				className="gui-cap-drawer"
-				onAnimationEnd={e => {
-					if (closing && e.animationName === "gui-cap-drawer-out") onClose();
-				}}
-			>
+			<div ref={drawerRef} className="gui-cap-drawer" tabIndex={-1}>
 				<div className="gui-cap-drawer-head">
 					<SkillGlyph skill={skill} size={40} />
 					<div className="gui-cap-drawer-titles">
@@ -480,7 +516,8 @@ function SkillDrawer({
 					)}
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }
 

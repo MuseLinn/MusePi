@@ -295,6 +295,8 @@
 [data-platform="linux"] .gui-onboarding-backdrop,
 [data-platform="win32"] .gui-dialog-backdrop,
 [data-platform="linux"] .gui-dialog-backdrop,
+[data-platform="win32"] .gui-cap-drawer-backdrop,
+[data-platform="linux"] .gui-cap-drawer-backdrop,
 [data-platform="win32"] .gui-global-pause--active,
 [data-platform="linux"] .gui-global-pause--active {
 	backdrop-filter: none;
@@ -309,7 +311,9 @@
 }
 
 [data-platform="win32"] .gui-dialog-backdrop,
-[data-platform="linux"] .gui-dialog-backdrop {
+[data-platform="linux"] .gui-dialog-backdrop,
+[data-platform="win32"] .gui-cap-drawer-backdrop,
+[data-platform="linux"] .gui-cap-drawer-backdrop {
 	background: color-mix(in oklab, var(--color-bg) 78%, transparent);
 }
 

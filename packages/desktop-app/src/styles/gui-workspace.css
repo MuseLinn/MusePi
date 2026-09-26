@@ -1339,11 +1339,13 @@
 	min-height: 0;
 }
 
-/* Skill detail drawer (设计稿 2:665) —— 页面内右侧面板,不是全屏覆盖:
- * 顶栏/工具行留在遮罩之外 (定位容器 .gui-skill-installed-rest)。
- * 四面内缩留出圆角 (之前贴边 + 无 radius,圆角自然"不生效");
- * 液态玻璃表面走全局 --gui-glass-* 规范;唤入/收起一对弹簧动画,
- * 收起由 --closing 态先播 out 再 onAnimationEnd 卸载。 */
+/* Skill detail drawer (设计稿 2:665) —— portal 到 body 的右侧悬浮抽屉
+ * (DialogFrame 同款 fixed 弹层:能力中心列表滚动不再带走面板),§5u 取档:
+ * 标准 scrim(bg 55% + blur 6px)、背板 160ms 纯 opacity 淡入、卡片 240ms
+ * --spring-liquid 入场、出场 140ms --spring-snappy(宿主保持挂载 180ms,
+ * 由组件内定时器卸载)、z 3000 模态带。四面内缩留出圆角;表面为 L3
+ * overlay 配方(强底 + inset rim + sheen + 双层影,照 .gui-dialog);
+ * 收起由 --closing 态播 out 动画,180ms 定时器真正卸载。 */
 .gui-skill-installed-rest {
 	position: relative;
 	display: flex;
@@ -1354,16 +1356,18 @@
 }
 
 .gui-cap-drawer-root {
-	position: absolute;
+	position: fixed;
 	inset: 0;
-	z-index: 90;
+	z-index: 3000; /* §5u modal band */
 }
 
 .gui-cap-drawer-backdrop {
 	position: absolute;
 	inset: 0;
-	background: rgb(0 0 0 / 0.4);
-	animation: gui-fade-in 200ms var(--spring) both;
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	animation: gui-fade-in var(--gui-motion-fade-in) ease both;
 }
 
 .gui-cap-drawer {
@@ -1374,22 +1378,42 @@
 	width: min(480px, calc(100% - 32px));
 	display: flex;
 	flex-direction: column;
-	background: color-mix(in oklab, var(--color-surface) 88%, transparent);
+	/* L3 overlay recipe (§5s 层级表 / §5u Material):强底 + inset rim
+	 * (非对称 1px 高光)+ sheen(::before)+ 双层影 —— 照 .gui-dialog。 */
+	border: 0;
+	border-radius: var(--radius-2xl);
+	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
 	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	box-shadow: -12px 0 40px rgb(0 0 0 / 0.28);
+	box-shadow:
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
 	overflow: hidden;
-	animation: gui-cap-drawer-in 320ms var(--spring) both;
+	animation: gui-cap-drawer-in 240ms var(--spring-liquid, var(--spring)) both;
+}
+
+/* Diagonal specular wash (sheen) — same as .gui-dialog::before; content
+ * lifts above it via the `> *` rescue. */
+.gui-cap-drawer::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background: var(--glass-sheen);
+}
+.gui-cap-drawer > * {
+	position: relative;
+	z-index: 1;
 }
 
 .gui-cap-drawer-root--closing .gui-cap-drawer {
-	animation: gui-cap-drawer-out 200ms ease-in both;
+	animation: gui-cap-drawer-out 140ms var(--spring-snappy) both;
 }
 
 .gui-cap-drawer-root--closing .gui-cap-drawer-backdrop {
-	animation: gui-cap-drawer-backdrop-out 200ms ease-in both;
+	animation: gui-cap-drawer-backdrop-out 140ms var(--spring-snappy) both;
 }
 
 @keyframes gui-cap-drawer-in {
@@ -1423,6 +1447,15 @@
 	}
 }
 
+/* Motion-off / reduced-motion: exit snaps instead of animating (the 180ms
+ * unmount timer still fires — DialogFrame parity, §5u); prefers-reduced-
+ * motion additionally closes immediately in JS (requestClose). */
+.gui-motion-off .gui-cap-drawer,
+.gui-motion-off .gui-cap-drawer-root--closing .gui-cap-drawer,
+.gui-motion-off .gui-cap-drawer-backdrop,
+.gui-motion-off .gui-cap-drawer-root--closing .gui-cap-drawer-backdrop {
+	animation: none;
+}
 @media (prefers-reduced-motion: reduce) {
 	.gui-cap-drawer,
 	.gui-cap-drawer-root--closing .gui-cap-drawer,
