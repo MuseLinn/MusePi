@@ -203,37 +203,48 @@ export interface SkillHubDetail {
 	security?: { status?: string; statusText?: string; reportUrl?: string }[];
 }
 
+/**
+ * v1 详情报文的纯归一化（契约测试直接喂原始报文）。实测形状（2026-09-27）：
+ * 说明不在顶层 `description`，而是嵌在 `skill` 对象里 —— `skill.summary` /
+ * `skill.summary_zh`（长正文在 `skill.overviewMd`，可为空串），顶层只有
+ * `latestVersion` / `securityReports` / `namespace` / `owner`。
+ */
+export function normalizeSkillHubDetail(slug: string, meta: unknown, files: unknown): SkillHubDetail {
+	const m = (meta ?? {}) as Record<string, unknown>;
+	const sk = (m.skill ?? {}) as Record<string, unknown>;
+	const lv = m.latestVersion as { version?: unknown } | undefined;
+	const sec = m.securityReports as
+		| Record<string, { status?: unknown; statusText?: unknown; reportUrl?: unknown }>
+		| undefined;
+	const f = (files ?? {}) as { files?: unknown[] };
+	return {
+		slug,
+		latestVersion: str(lv?.version),
+		description: str(m.description) ?? str(sk.summary) ?? str(sk.overviewMd),
+		descriptionZh: str(m.description_zh) ?? str(m.descriptionZh) ?? str(sk.summary_zh) ?? str(sk.summary),
+		files: Array.isArray(f.files)
+			? f.files.map(x => {
+					const r = (x ?? {}) as Record<string, unknown>;
+					return { path: String(r.path ?? ""), size: num(r.size) ?? 0 };
+				})
+			: [],
+		security: sec
+			? Object.values(sec).map(s => ({
+					status: str(s.status),
+					statusText: str(s.statusText),
+					reportUrl: str(s.reportUrl),
+				}))
+			: undefined,
+	};
+}
+
 export async function skillHubDetail(slug: string): Promise<SkillHubDetail | null> {
 	try {
 		const [meta, files] = await Promise.all([
 			getJson(`${SKILLHUB_BASE}/api/v1/skills/${encodeURIComponent(slug)}`),
 			getJson(`${SKILLHUB_BASE}/api/v1/skills/${encodeURIComponent(slug)}/files`),
 		]);
-		const m = (meta ?? {}) as Record<string, unknown>;
-		const lv = m.latestVersion as { version?: unknown } | undefined;
-		const sec = m.securityReports as
-			| Record<string, { status?: unknown; statusText?: unknown; reportUrl?: unknown }>
-			| undefined;
-		const f = (files ?? {}) as { files?: unknown[] };
-		return {
-			slug,
-			latestVersion: str(lv?.version),
-			description: str(m.description),
-			descriptionZh: str(m.description_zh) ?? str(m.descriptionZh),
-			files: Array.isArray(f.files)
-				? f.files.map(x => {
-						const r = (x ?? {}) as Record<string, unknown>;
-						return { path: String(r.path ?? ""), size: num(r.size) ?? 0 };
-					})
-				: [],
-			security: sec
-				? Object.values(sec).map(s => ({
-						status: str(s.status),
-						statusText: str(s.statusText),
-						reportUrl: str(s.reportUrl),
-					}))
-				: undefined,
-		};
+		return normalizeSkillHubDetail(slug, meta, files);
 	} catch {
 		return null;
 	}

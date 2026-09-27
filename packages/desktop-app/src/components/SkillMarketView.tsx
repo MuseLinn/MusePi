@@ -974,8 +974,9 @@ function AddSkillDialog({
  *  - skills.sh：daemon 从发布者仓库直读 SKILL.md 正文（搜索接口不带描述，
  *    正文预览补上「看不到内容」的缺口）；
  *  - SkillHub：详情 RPC（版本 + 文件清单 + 安全审计）。
- *  footer 的来源感知安装与卡片角标同一条 `skills.marketplace.install` 路由。 */
-function SkillPreviewDialog({
+ *  footer 的来源感知安装与卡片角标同一条 `skills.marketplace.install` 路由。
+ *  导出供契约测试挂载（预览描述的"加载完成不得比加载中少"渲染契约）。 */
+export function SkillPreviewDialog({
 	rpc,
 	entry,
 	installed,
@@ -1070,8 +1071,13 @@ function SkillPreviewDialog({
 				</div>
 
 				<div className="gui-skill-market-preview-body">
-					{entry.descriptionZh || entry.description ? (
-						<p className="gui-skill-market-card-desc">{entry.descriptionZh || entry.description}</p>
+					{/* 描述粘住：detail 拉回的更全描述优先，回落搜索条目自带的描述；
+					 *  只在 body 顶部渲染一处 —— 加载完成不得比加载中信息更少，
+					 *  detail 与 entry 同文也不得重复两段。 */}
+					{detail?.descriptionZh || detail?.description || entry.descriptionZh || entry.description ? (
+						<p className="gui-skill-market-card-desc">
+							{detail?.descriptionZh || detail?.description || entry.descriptionZh || entry.description}
+						</p>
 					) : null}
 
 					{loading ? <p className="gui-skill-market-note">{t("skill market preview loading")}</p> : null}
@@ -1088,9 +1094,6 @@ function SkillPreviewDialog({
 					{!loading && !error && entry.source === "skillhub" ? (
 						detail ? (
 							<div className="gui-skill-market-preview-detail">
-								{detail.description || detail.descriptionZh ? (
-									<p className="gui-skill-market-card-desc">{detail.descriptionZh || detail.description}</p>
-								) : null}
 								{detail.latestVersion ? (
 									<p className="gui-skill-market-meta">
 										{t("skill market preview version")} v{detail.latestVersion}
