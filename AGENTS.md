@@ -52,16 +52,7 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 
 ## Package READMEs
 
-Every package directory under `packages/` must contain a `README.md`.  New
-packages (and any updated README) must be bilingual:
-
-- `README.md` — English
-- `README.zh-CN.md` — Chinese
-
-Existing single-language READMEs are grandfathered in the debt register inside
-`scripts/verify-package-readmes.ts`; the gate runs as part of `bun run check`
-(`check:tools`).  When you translate a grandfathered README, remove its name
-from the script's `GRANDFATHERED` set.
+Every package directory under `packages/` must contain a bilingual README pair: `README.md` (English) + `README.zh-CN.md` (Chinese). Existing single-language READMEs are grandfathered in the debt register inside `scripts/verify-package-readmes.ts` (runs in `bun run check` via `check:tools`) — translating one means removing its name from the script's `GRANDFATHERED` set.
 
 ## GitHub
 
@@ -90,7 +81,7 @@ Unless user tells you exactly what to write:
   	: new Worker(new URL("./<worker>.ts", import.meta.url).href, { type: "module" });
   ```
   When the process was started from the omp CLI — source `cli.ts`, npm-bundle `dist/cli.js`, or compiled binary — `workerHostEntry()` is `Bun.main` and the worker re-enters the single entry module, so no per-worker `--compile` entrypoints or bundle entries exist. Outside a CLI host (`bun test`, SDK embedding, standalone `omp-stats`) it returns `null` and the direct-module fallback loads the worker source. New worker kinds MUST add their selector to the dispatch table in `cli.ts` and keep the fallback branch.
-  History: `with { type: "file" }` only copied the entry as a raw asset (workers crashed silently in compiled binaries — issues #1011, #1027), and the later literal-path + extra-entrypoint pattern required keeping spawn literals and two build scripts in sync (issue #1150). The smoke probe below is the live validation of this contract.
+  History: `with { type: "file" }` copied the entry as a raw asset (silent worker crashes in compiled binaries — #1011, #1027); the later literal-path + extra-entrypoint pattern forced spawn literals and two build scripts to stay in sync (#1150). The smoke probe below is the live validation of this contract.
   Validate any new worker with the dedicated smoke probe: `omp --smoke-test` spawns the stats sync worker and the tiny-model subprocess, pings them, and exits — it's wired into `ci:test:smoke` and `scripts/install-tests/run-ci.sh` so binary, source-link, and tarball installs all exercise it. Add a sibling smoke if the new worker is on a different module graph.
 
 ## Central Utilities
@@ -98,7 +89,7 @@ Unless user tells you exactly what to write:
 Before writing a helper, check whether one already exists — `packages/coding-agent/src/utils/`, `@musepi/pi-utils`, `@musepi/pi-tui`, and the domain modules next to your callsite. This applies to **everything**: VCS wrappers, formatting/truncation/path-display helpers, image handling, clipboard, streams, temp files, caching. The central versions carry hardening a fresh copy always loses (timeouts, output caps, non-interactive env, lock avoidance, caching, TUI sanitization).
 
 - Search first: `grep` for the operation before implementing it. Two implementations of the same thing is a bug even when both work.
-- Examples of the pattern: `src/utils/git.ts` and `src/utils/jj.ts` are the only sanctioned way to run git/jj (`import * as git from "../utils/git"` — never hand-spawn via `$`/`Bun.spawn`); rendering goes through the helpers in TUI Sanitization below (`replaceTabs`, `truncateToWidth`, `shortenPath`, `PREVIEW_LIMITS`) rather than ad-hoc string math.
+- Examples: `src/utils/git.ts` and `src/utils/jj.ts` are the only sanctioned way to run git/jj (`import * as git from "../utils/git"` — never hand-spawn via `$`/`Bun.spawn`); rendering goes through the TUI Sanitization helpers below (`replaceTabs`, `truncateToWidth`, `shortenPath`, `PREVIEW_LIMITS`), not ad-hoc string math.
 - Missing capability? Extend the central helper (new option, new sub-function on the namespace) and call it — don't fork its logic locally.
 
 ## Bun Over Node
@@ -124,7 +115,7 @@ Use Bun APIs where they provide a cleaner alternative; fall back to `node:*` onl
 
 ### Process execution
 
-Prefer Bun Shell (`` $`cmd` ``) for simple commands:
+Prefer Bun Shell (`` $`cmd` ``) for simple commands — methods: `.quiet()`, `.nothrow()`, `.text()`, `.cwd(path)`:
 
 ```typescript
 import { $ } from "bun";
@@ -137,80 +128,28 @@ if (result.exitCode === 0) {
 $`do-stuff ${tmpFile}`.quiet().nothrow(); // fire and forget
 ```
 
-Methods: `.quiet()`, `.nothrow()`, `.text()`, `.cwd(path)`.
-
-Use `Bun.spawn`/`Bun.spawnSync` only for: long-running processes (LSP, kernels), streaming stdin/stdout/stderr (SSE, JSON-RPC), or process control (signals, kill, complex lifecycle).
-
-When using `pipe` mode, cast the stream:
-
-```typescript
-const child = Bun.spawn(["cmd"], { stdout: "pipe", stderr: "pipe" });
-const reader = (child.stdout as ReadableStream<Uint8Array>).getReader();
-```
+Use `Bun.spawn`/`Bun.spawnSync` only for: long-running processes (LSP, kernels), streaming stdin/stdout/stderr (SSE, JSON-RPC), or process control (signals, kill, complex lifecycle). When using `pipe` mode, cast the stream: `(child.stdout as ReadableStream<Uint8Array>).getReader()`.
 
 ### Node module imports
 
-Always use **namespace imports** for `node:fs`, `node:path`, `node:os`:
-
-```typescript
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import * as os from "node:os";
-```
-
-- Async-only file → `node:fs/promises`.
-- Needs both sync and async → `node:fs`, then `fs.promises.xxx` for async.
+Always use **namespace imports** for `node:fs`, `node:path`, `node:os` (`import * as fs from "node:fs/promises"`). Async-only file → `node:fs/promises`; needs both sync and async → `node:fs`, then `fs.promises.xxx` for async.
 
 ### File I/O
 
-Prefer Bun:
-
-```typescript
-const text = await Bun.file(path).text();
-const data = await Bun.file(path).json();
-await Bun.write(path, data); // auto-creates parent dirs
-```
-
-Use `node:fs/promises` for directory ops (`fs.mkdir`, `fs.rm`, `fs.readdir`) — Bun has no native directory APIs. Avoid sync APIs in async flows; use sync only when forced by a synchronous interface.
+Prefer `Bun.file(path).text()` / `.json()` and `Bun.write(path, data)` (auto-creates parent dirs). Use `node:fs/promises` for directory ops (`fs.mkdir`, `fs.rm`, `fs.readdir`) — Bun has no native directory APIs. Avoid sync APIs in async flows; use sync only when forced by a synchronous interface.
 
 **Anti-patterns:**
 
 - `existsSync`/`readFileSync`/`writeFileSync` in async code → `Bun.file()` APIs.
 - `mkdir(dirname(path), …)` before `Bun.write(path, …)` → redundant; `Bun.write` handles it.
-- `if (await file.exists()) { await file.json() }` → two syscalls plus race. Use try-catch with `isEnoent`:
-  ```typescript
-  import { isEnoent } from "@musepi/pi-utils";
-  try {
-  	return await Bun.file(path).json();
-  } catch (err) {
-  	if (isEnoent(err)) return null;
-  	throw err;
-  }
-  ```
+- `if (await file.exists()) { await file.json() }` → two syscalls plus race. Use try-catch with `isEnoent` from `@musepi/pi-utils`: `try { return await Bun.file(path).json() } catch (err) { if (isEnoent(err)) return null; throw err }`.
 - Multiple `Bun.file(path)` handles for the same path (including across `checkX`/`loadX` helpers).
 - `Buffer.from(await Bun.file(x).arrayBuffer())` → `await fs.readFile(path)`.
 - Existence check + try-catch around the same read → drop the existence check.
 
 ### Streams
 
-Prefer centralized helpers:
-
-```typescript
-import { readStream, readLines } from "./utils/stream";
-const text = await readStream(child.stdout);
-for await (const line of readLines(stream)) {
-	/* ... */
-}
-```
-
-Manual reader loops only when the protocol requires it (SSE, streaming JSON-RPC).
-
-### Misc
-
-- **Sleep**: `await Bun.sleep(ms)`, never `new Promise(r => setTimeout(r, ms))`.
-- **Password hashing**: `Bun.password.hash(pw, "bcrypt")` / `Bun.password.verify(pw, hash)`.
-- **String width**: `Bun.stringWidth(text, { countAnsiEscapeCodes?: false })`.
-- **Wrapping**: `Bun.wrapAnsi(text, width, { wordWrap, hard, trim })`.
+Prefer the centralized helpers (`readStream`, `readLines` from `./utils/stream`); manual reader loops only when the protocol requires it (SSE, streaming JSON-RPC).
 
 ## Generated Files
 
@@ -234,7 +173,6 @@ import { logger } from "@musepi/pi-utils";
 
 logger.error("MCP request failed", { url, method });
 logger.warn("Theme file invalid, using fallback", { path });
-logger.debug("LSP fallback triggered", { reason });
 ```
 
 Logs go to `~/.omp/logs/omp.YYYY-MM-DD.log` with automatic rotation. Standalone CLI commands that exit without entering the TUI MAY use `console.*` or process streams for intentional user-facing output. Keep structured stdout clean. This exception is semantic, not filename-based; shared code must use `logger` or an explicit output sink.
@@ -259,14 +197,7 @@ All text displayed in tool renderers must be sanitized. Raw content (file conten
 
 ### Streaming tool previews
 
-Tool-call previews can have **multiple render paths**. If you add preview-only fields or depend on partially streamed args, update every path — not only the final renderer. Streamed argument buffers decode into display args via `decodeStreamedToolArgs` / `ToolArgsRevealController` (`modes/controllers/tool-args-reveal.ts`); both the live event path and transcript rebuilds must go through them — never spread provider-parsed `arguments` next to a raw `__partialJson` (parsed args lag the stream by a throttled parse window).
-
-For the bash tool specifically:
-
-- The pending preview may need raw `partialJson`, not just parsed `arguments`. Parsed args lag until a JSON object closes, which makes inline env assignments appear only at the end.
-- Preserve preview-only fields (e.g. `__partialJson`) through `event-controller.ts`, transcript rebuilds in `ui-helpers.ts`, and merged call/result rendering in `tool-execution.ts`. Missing one path causes inconsistent previews.
-- `ToolExecutionComponent.#buildRenderContext()` for bash must work even before a result exists — the renderer uses call args plus render context to show the command preview while streaming.
-- Verify both live streaming and rebuilt transcript paths after any bash preview change. A fix in one path does not fix the other.
+Tool-call previews have **multiple render paths** — adding preview-only fields or depending on partially streamed args means updating every path (live event, transcript rebuild, merged call/result), not just the final renderer. The full contract (decode helpers, bash `__partialJson` gotchas, verification rule) lives in the module header of `modes/controllers/tool-args-reveal.ts`.
 
 ## Commands
 
@@ -348,7 +279,7 @@ Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's rele
 - One `- EN:` per Chinese bullet — the parity script indexes them by bullet position, so a missing or extra child line is a hard failure.
 - Never use a trailing `### English` / `### 中文` block instead of inline children (0.4.29 did; the release page lost its translation). Those blocks are not parsed.
 - A multi-line Chinese bullet keeps a single `- EN:` child holding the whole translation in one (possibly long) line — do not spread the English across several children.
-- The rule accepts only this exact shape; `bun run check:changelog-i18n` enforces it and names the offending bullet. Released sections are immutable (see above), so the only way to repair an already-shipped one is a deliberate one-off edit — do that rather than leaving the release page broken.
+- The rule accepts only this exact shape; `bun run check:changelog-i18n` enforces it and names the offending bullet.
 
 **Attribution:**
 

@@ -1,3 +1,27 @@
+/**
+ * Streamed tool-args preview contract.
+ *
+ * Tool-call previews render through multiple paths — the live event stream,
+ * transcript rebuilds (`../utils/ui-helpers.ts`), and merged call/result
+ * rendering (`../components/tool-execution.ts`). Preview-only fields and
+ * partially streamed args must flow through ALL of them via
+ * `decodeStreamedToolArgs` / `ToolArgsRevealController` — never spread
+ * provider-parsed `arguments` next to a raw `__partialJson` (parsed args lag
+ * the stream by a throttled parse window).
+ *
+ * Bash specifics:
+ * - The pending preview may need raw `partialJson`, not just parsed
+ *   `arguments`: inline env assignments appear only once a JSON object
+ *   closes, which is too late for a live command preview.
+ * - Preserve preview-only fields (e.g. `__partialJson`) through
+ *   `./event-controller.ts`, the transcript rebuilds, and the merged
+ *   rendering — missing one path makes previews inconsistent.
+ * - `ToolExecutionComponent.#buildRenderContext()` must work before a
+ *   result exists; the renderer shows the command preview from call args
+ *   plus render context while streaming.
+ * - Verify both live streaming and rebuilt transcript paths after any bash
+ *   preview change — a fix in one path does not fix the other.
+ */
 import type { Component } from "@musepi/pi-tui";
 import { parseStreamingJson, parseStreamingJsonThrottled, STREAMING_JSON_PARSE_MIN_GROWTH } from "@musepi/pi-utils";
 import { nextStep, STREAMING_REVEAL_FRAME_MS } from "./streaming-reveal";
