@@ -17,6 +17,7 @@ import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
+import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { dispatchNotification } from "../lib/notify";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -1163,47 +1164,21 @@ export function ChatView({
 		return currentLeafKey ?? (typeof lastId === "string" ? lastId : null);
 	}, [currentLeafKey, snap?.entries]);
 	// Walk root → leaf via parentId (breadcrumb path). `complete` records WHY the
-	// walk stopped: at a genuine root (an entry with no parentId — the topology
+	// walk stopped — at a genuine root (an entry with no parentId — the topology
 	// is trustworthy) or on a parentId that is not in the loaded window (the
 	// chain is cut). The daemon rewrites SDK hex ids to message keys and clears
 	// a link it cannot resolve, so a history session opened fresh can hand us a
 	// chain whose start is outside the window — and filtering the transcript
 	// against such a partial path dropped nearly every row (user: 打开旧会话只
-	// 显示到最开始那条, 会话树也没亮).
+	// 显示到最开始那条, 会话树也没亮). A parentless entry that is NOT the
+	// oldest loaded one is a cut chain too (a role the emitter forgot to stamp),
+	// never a trustworthy root — 实机回归: 尾顾问卡 parentId=null 被当真根,
+	// 旧消息整批消失。Pure logic lives in lib/leaf-walk.ts (tested there).
 	const leafWalk = useMemo(() => {
 		// Pinned to the session root: no leaf, so the active path is empty
 		// (and trustworthy — nothing is cut).
-		if (currentLeafKey === "root") return { path: [] as { id: string; kind: string }[], complete: true };
-		const byId = new Map<string, { id: string; kind: string }>();
-		const byKey = new Map<string, { id?: unknown; parentId?: unknown; type?: string }>();
-		for (const entry of snap?.entries ?? []) {
-			const e = entry as { id?: string; type?: string; message?: { role?: string } };
-			if (typeof e.id !== "string") continue;
-			byId.set(e.id, {
-				id: e.id,
-				kind: e.type === "message" ? (e.message?.role ?? "message") : (e.type ?? "entry"),
-			});
-			byKey.set(e.id, e);
-		}
-		const path: { id: string; kind: string }[] = [];
-		const seen = new Set<string>();
-		let cursor = effectiveLeaf;
-		let complete = false;
-		while (cursor && !seen.has(cursor)) {
-			seen.add(cursor);
-			const node = byId.get(cursor);
-			if (!node) break; // parentId outside the window → chain cut
-			path.unshift(node);
-			const entry = byKey.get(cursor);
-			const parent = entry?.parentId;
-			if (typeof parent !== "string") {
-				complete = true; // reached a root
-				break;
-			}
-			if (!byKey.has(parent)) break; // next hop is missing → chain cut
-			cursor = parent;
-		}
-		return { path, complete };
+		if (currentLeafKey === "root") return EMPTY_TRUSTED_WALK;
+		return walkLeafPath(snap?.entries ?? [], effectiveLeaf);
 	}, [effectiveLeaf, currentLeafKey, snap?.entries]);
 	const leafPath = leafWalk.path;
 	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
@@ -1256,42 +1231,14 @@ export function ChatView({
 	// skipping the filter on re-entry rendered every sibling at once. Entries
 	// without a parent chain (round markers, synthetic rows) always stay: they
 	// hang off the session root, not off a branch point.
-	const visibleEntries = useMemo(() => {
-		// The gate is the leaf pin, not "is branched": a rewind to a historical
-		// node drops the tail even in an otherwise-linear session. An
-		// untrustworthy topology (see leafWalk) must never hide rows — UNLESS
-		// the daemon shipped the active path for THIS move (pinnedPathIds):
-		// that set survives the tail window, so filtering by it is exact even
-		// when the local parentId chain is cut.
-		if (!leafWalk.complete) {
-			if (!pinnedPathIds) return snap?.entries ?? [];
-			return (snap?.entries ?? []).filter(entry => {
-				const e = entry as { id?: unknown; parentId?: unknown; type?: string };
-				if (typeof e.id !== "string") return true;
-				if (typeof e.parentId !== "string") {
-					// Root-hung rows (round markers, synthetic rows) stay; a
-					// root MESSAGE only shows when it is on the pinned path
-					// (the full session's root lives above a cut window, so
-					// this only matters for truncated daemon paths).
-					return e.type !== "message" || pinnedPathIds.has(e.id);
-				}
-				return pinnedPathIds.has(e.id);
-			});
-		}
-		const pinnedToRoot = currentLeafKey === "root";
-		return (snap?.entries ?? []).filter(entry => {
-			const e = entry as { id?: unknown; parentId?: unknown; type?: string };
-			if (typeof e.id !== "string") return true;
-			if (typeof e.parentId !== "string") {
-				// Root-hung rows (round markers, synthetic rows) always stay —
-				// except the first USER message when pinned to the root: it is
-				// the node we rewound past and must leave the transcript.
-				if (pinnedToRoot && e.type === "message") return false;
-				return true;
-			}
-			return activePathIds.has(e.id);
-		});
-	}, [snap?.entries, activePathIds, leafWalk.complete, currentLeafKey, pinnedPathIds]);
+	const visibleEntries = useMemo(
+		() =>
+			filterVisibleEntries(snap?.entries ?? [], leafWalk, activePathIds, {
+				pinnedPathIds: pinnedPathIds ?? undefined,
+				pinnedToRoot: currentLeafKey === "root",
+			}),
+		[snap?.entries, activePathIds, leafWalk, currentLeafKey, pinnedPathIds],
+	);
 	// The leaf is "historical" when it already has children — sending now
 	// would fork a new branch under it.
 	const leafChildren = useMemo(() => {

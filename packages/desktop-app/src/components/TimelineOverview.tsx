@@ -39,11 +39,16 @@ function laneFor(kind: string): number {
 	return 0;
 }
 
-function clock(ms: number): string {
-	return new Date(ms).toLocaleTimeString(
+function clock(ms: number, withDate: boolean): string {
+	const d = new Date(ms);
+	const time = d.toLocaleTimeString(
 		undefined,
 		timeFormatOptions({ hour: "2-digit", minute: "2-digit", second: "2-digit" }),
 	);
+	if (!withDate) return time;
+	// 跨天时间域只报时分秒会把 200h 跨度读成同一天的两个时刻——带上月日。
+	const date = d.toLocaleDateString(undefined, timeFormatOptions({ month: "2-digit", day: "2-digit" }));
+	return `${date} ${time}`;
 }
 
 function clockDetail(ms: number): string {
@@ -106,6 +111,8 @@ export function TimelineOverview({
 		return { min, max, span: max - min };
 	}, [turns]);
 	if (!domain) return null;
+	// 跨天时间域(>24h):起止时钟带月日,否则只报时分秒会读成同一天。
+	const longSpan = domain.span > 24 * 60 * 60 * 1000;
 	// 顾问泳道图例行:仅当轨迹里存在 advisor 事件时显示(第四道)。
 	const hasAdvisor = turns.some(g => g.events.some(e => e.kind === "advisor"));
 
@@ -145,9 +152,9 @@ export function TimelineOverview({
 			 * 不再 absolute 进 track 内部——旧布局里起点附近的条/点被时钟文字
 			 * 盖住,投影域也被迫横跨含文字的全宽。 */}
 			<div className="traj-ov-clocks" aria-hidden="true">
-				<span>{clock(domain.min)}</span>
+				<span>{clock(domain.min, longSpan)}</span>
 				<span className="traj-ov-clocks-span">{durationText(domain.span)}</span>
-				<span>{clock(domain.max)}</span>
+				<span>{clock(domain.max, longSpan)}</span>
 			</div>
 			<div className="traj-ov-body">
 				{/* 泳道标签列(DSH 44px labels 列 parity):色点 + 短词。 */}
@@ -248,7 +255,7 @@ export function TimelineOverview({
 									showHover({
 										leftPct: Math.min(98, left + width / 2),
 										title: `Turn ${group.turn}`,
-										time: `${clock(start)} → ${clock(end)}`,
+										time: `${clock(start, longSpan)} → ${clock(end, longSpan)}`,
 										duration: durationText(group.endMs !== undefined ? group.endMs - start : 0),
 									});
 								}}

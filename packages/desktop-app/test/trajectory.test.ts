@@ -179,6 +179,60 @@ describe("buildTrajectory", () => {
 	});
 });
 
+describe("顾问卡(地图节点契约,实机回归 2026-09-27)", () => {
+	function msg(id: string, parentId: string | null, ts: string, role: string, text: string): unknown {
+		return {
+			type: "message",
+			id,
+			parentId,
+			timestamp: ts,
+			message: { role, content: [{ type: "text", text }] },
+		};
+	}
+	function advisorEntry(id: string, parentId: string | null, ts: string, note: string): unknown {
+		return {
+			id,
+			type: "custom_message",
+			parentId,
+			timestamp: ts,
+			customType: "advisor",
+			display: true,
+			content: '<advisory severity="nit">raw xml</advisory>',
+			details: { notes: [{ note, severity: "nit" }] },
+		};
+	}
+
+	it("advisor 节点标题取 details.notes[].note 干净文本,不泄 <advisory> XML", () => {
+		const entries = [
+			msg("u1", null, "2026-09-26T10:00:00.000Z", "user", "提问"),
+			advisorEntry("custom:1", "u1", "2026-09-26T10:00:05.000Z", "prefer a smaller diff"),
+		];
+		const { events } = buildTrajectory(entries);
+		const advisor = events.find(e => e.kind === "advisor")!;
+		expect(advisor.title).toBe("prefer a smaller diff");
+		expect(advisor.title).not.toContain("<advisory");
+	});
+
+	it("多张顾问卡按 journal 序各开一轮;链断卡的展示编号回退 journal 序(不再全是 Turn 1)", () => {
+		const entries = [
+			msg("u1", null, "2026-09-26T10:00:00.000Z", "user", "提问"),
+			msg("a1", "u1", "2026-09-26T10:00:01.000Z", "assistant", "回答"),
+			// 正常链接的顾问卡:深度编号 = 2(user 轮深度 1 + 本卡)。
+			advisorEntry("custom:2", "a1", "2026-09-26T10:00:10.000Z", "note two"),
+			msg("a2", "custom:2", "2026-09-26T10:00:11.000Z", "assistant", "跟进"),
+			// parentId=null 的漏网卡:不是首条可见条目,深度不可信 → 展示编号
+			// 回退 journal 序(而不是塌成 "Turn 1")。
+			advisorEntry("custom:3", null, "2026-09-26T10:00:20.000Z", "note three"),
+		];
+		const { turns } = buildTrajectoryTree(entries);
+		const advisorTurns = turns.filter(g => g.events.some(e => e.kind === "advisor"));
+		expect(advisorTurns).toHaveLength(2);
+		expect(advisorTurns[0]!.displayTurn).toBe(2);
+		expect(advisorTurns[1]!.displayTurn).toBe(advisorTurns[1]!.turn);
+		expect(advisorTurns[0]!.turn).not.toBe(advisorTurns[1]!.turn);
+	});
+});
+
 describe("buildTrajectory 活跃叶路径(activePath)", () => {
 	// 用户场景:4 轮问答后撤回到第 2 轮发新消息 —— 新轮应是"第 3 轮"
 	// (新分支深度),旧 3/4 轮是废弃分支;不提供 activePath 时保持旧
@@ -307,26 +361,53 @@ describe("轨迹时序字段(Overview 时间轴数据源)", () => {
 	it("roundDurations(Map 形态)命中 assistant 锚后闭合回合:endMs = start + duration", () => {
 		const entries = [
 			userEntry("2026-08-17T00:00:00.000Z", "第一问"),
-			assistantEntry("2026-08-17T00:00:02.000Z", { text: "回答一" }),
+			assistantEntry("2026-08-17T00:00:08.000Z", { text: "回答一" }),
 			userEntry("2026-08-17T00:00:20.000Z", "第二问"),
-			assistantEntry("2026-08-17T00:00:22.000Z", { text: "回答二" }),
+			assistantEntry("2026-08-17T00:00:28.000Z", { text: "回答二" }),
 		];
-		const anchor1 = Date.parse("2026-08-17T00:00:02.000Z");
-		const anchor2 = Date.parse("2026-08-17T00:00:22.000Z");
+		const anchor1 = Date.parse("2026-08-17T00:00:08.000Z");
+		const anchor2 = Date.parse("2026-08-17T00:00:28.000Z");
 		const roundDurations = new Map<number, number>([
-			[anchor1, 8_000], // 回合1:2s 处开始工作,10s 处结束
-			[anchor2, 5_000],
+			[anchor1, 8_000], // 回合1:0s 开始,8s 处结束(末事件恰在 8s)
+			[anchor2, 8_000],
 		]);
 		const { turns } = buildTrajectoryTree(entries, roundDurations);
 		const t1 = turns[0]!;
 		const t2 = turns[1]!;
 		expect(t1.roundDurationMs).toBe(8_000);
 		expect(t1.endMs).toBe(t1.startMs! + t1.roundDurationMs!);
-		expect(t2.roundDurationMs).toBe(5_000);
+		expect(t2.roundDurationMs).toBe(8_000);
 		expect(t2.endMs).toBe(t2.startMs! + t2.roundDurationMs!);
 		// 未命中(如该轮还在跑)的 turn 不闭合。
 		const { turns: live } = buildTrajectoryTree(entries, new Map([[anchor1, 8_000]]));
 		expect(live[1]!.roundDurationMs).toBeUndefined();
+	});
+
+	it("turn 起点锚(startMs 键)直接命中,pre-anchor assistant 键回退仍可读", () => {
+		const entries = [
+			userEntry("2026-08-17T00:00:00.000Z", "第一问"),
+			assistantEntry("2026-08-17T00:00:02.000Z", { text: "回答一" }),
+		];
+		const startMs = Date.parse("2026-08-17T00:00:00.000Z");
+		const assistantMs = Date.parse("2026-08-17T00:00:02.000Z");
+		// 当前锚:turn 起点(materialized-view agent_end 记录键)。
+		expect(buildTrajectoryTree(entries, new Map([[startMs, 6_000]])).turns[0]!.roundDurationMs).toBe(6_000);
+		// pre-anchor 快照:组内首条 assistant ts 键,回退命中。
+		expect(buildTrajectoryTree(entries, new Map([[assistantMs, 7_000]])).turns[0]!.roundDurationMs).toBe(7_000);
+	});
+
+	it("被污染的时长(吞掉空闲的 200h)不得把 endMs 撑出组内最后事件", () => {
+		// 实机回归:时长锚污染把 Overview 时间域撑到 200h+(时钟只报时分秒,
+		// 读成同一天的两个时刻)。钳制:endMs 不超过组内最后事件时刻。
+		const entries = [
+			userEntry("2026-09-26T13:18:13.000Z", "提问"),
+			assistantEntry("2026-09-26T13:18:20.000Z", { text: "回答" }),
+		];
+		const startMs = Date.parse("2026-09-26T13:18:13.000Z");
+		const lastEventMs = Date.parse("2026-09-26T13:18:20.000Z");
+		const { turns } = buildTrajectoryTree(entries, new Map([[startMs, 200 * 3600_000]]));
+		expect(turns[0]!.roundDurationMs).toBe(200 * 3600_000);
+		expect(turns[0]!.endMs).toBe(lastEventMs);
 	});
 
 	it("roundDurations 接受持久化 [ms, ms][] 形态", () => {

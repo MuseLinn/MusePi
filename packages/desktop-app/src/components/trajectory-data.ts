@@ -91,15 +91,21 @@ export function buildTrajectory(
 	// (isTurnStart:user 消息或 display advisor 笔记)。
 	const parentOf = new Map<string, string | null>();
 	const turnStartIds = new Set<string>();
+	let firstEntryId: string | undefined;
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
 		const e = raw as { id?: unknown; parentId?: unknown };
 		if (typeof e.id !== "string") continue;
+		if (firstEntryId === undefined) firstEntryId = e.id;
 		parentOf.set(e.id, typeof e.parentId === "string" ? e.parentId : null);
 		if (isTurnStart(raw as Parameters<typeof isTurnStart>[0])) turnStartIds.add(e.id);
 	}
 	const depthMemo = new Map<string, number>();
-	const depthOf = (id: string): number => {
+	/** 树深度(含自身)的轮起始数。链断(父是 string 但不在本批条目)或
+	 *  parentless 但不是首条可见条目(发射端漏打 parentId —— 与 leaf-walk
+	 *  同一规则)时返回 undefined,调用方回退 journal 序,不把断链深度当真
+	 *  编号(实机回归:parentless 顾问卡全显示 "Turn 1")。 */
+	const depthOf = (id: string): number | undefined => {
 		const hit = depthMemo.get(id);
 		if (hit !== undefined) return hit;
 		const chain: string[] = [];
@@ -113,7 +119,12 @@ export function buildTrajectory(
 			}
 			chain.push(cur);
 			const p = parentOf.get(cur);
-			if (p === undefined || p === null || !parentOf.has(p)) break; // 根或链断
+			if (p === undefined) break; // 根(预计算外的入口,防御)
+			if (p === null) {
+				if (cur !== firstEntryId) return undefined; // 假根:深度不可信
+				break; // 真根 = 首条可见条目
+			}
+			if (!parentOf.has(p)) return undefined; // 链断:深度不可信
 			cur = p;
 		}
 		let d = base;
@@ -286,10 +297,22 @@ export function buildTrajectory(
 			}
 		} else if (type === "custom_message" && isTurnStart(raw as Parameters<typeof isTurnStart>[0])) {
 			// 顾问(advisor)笔记:与折叠/导航层同一 isTurnStart 口径,各开一轮;
-			// 该轮后续 assistant/tool 事件自然归入此 turn。
+			// 该轮后续 assistant/tool 事件自然归入此 turn。标题取
+			// details.notes[].note 的干净文本(与 Transcript 同一解包);
+			// content 是给模型看的 <advisory> XML,永不外露(实机回归:地图
+			// 节点标题泄出 XML)。
 			turn += 1;
+			const details = (raw as { details?: unknown }).details;
+			const notes =
+				details !== null && typeof details === "object" && "notes" in details && Array.isArray(details.notes)
+					? (details.notes as Array<{ note?: unknown }>)
+					: [];
+			const noteText = notes
+				.map(n => (typeof n?.note === "string" ? n.note : ""))
+				.filter(s => s.trim().length > 0)
+				.join("; ");
 			const c = (raw as { content?: unknown }).content;
-			const text =
+			const contentText =
 				typeof c === "string"
 					? c
 					: Array.isArray(c)
@@ -298,6 +321,7 @@ export function buildTrajectory(
 								.map(b => b.text ?? "")
 								.join(" ")
 						: "";
+			const text = noteText || contentText;
 			events.push({
 				id: `advisor:${turn}:${ts}`,
 				kind: "advisor",
@@ -352,16 +376,18 @@ export interface TrajectoryTurnGroup {
 	firstTs?: string;
 	/** 该 turn 首个事件数值时间戳(Overview 时间轴投影锚)。 */
 	startMs?: number;
-	/** 该 turn 末端(最后一个事件;roundDurations 命中时 = start+duration)。 */
+	/** 该 turn 末端(最后一个事件;roundDurations 命中时 = start+duration,
+	 *  钳制不超过组内最后事件时刻)。 */
 	endMs?: number;
 	/** 该 turn 完整回合时长(agent_end 冻结值,仅已完成回合有)。 */
 	roundDurationMs?: number;
 }
 
 /**
- * 归一化 roundDurations(daemon agent_end 冻结的整轮用时,键 = 末条
- * assistant 消息时间戳 ms → 时长 ms)。GUI store 以 Map 形态暴露,持久化
- * 快照/测试以 [number, number][] 形态出现。
+ * 归一化 roundDurations(daemon agent_end 冻结的整轮用时,当前键 = turn 起点
+ * tsMs(isTurnStart 语义);pre-anchor 快照 = 组内首条 assistant tsMs → 时长
+ * ms,查询端回退兼容)。GUI store 以 Map 形态暴露,持久化快照/测试以
+ * [number, number][] 形态出现。
  */
 export type RoundDurationMap = ReadonlyMap<number, number> | readonly (readonly [number, number])[];
 
@@ -393,7 +419,9 @@ export function buildTrajectoryTree(
 		if (!group || group.turn !== ev.turn) {
 			group = {
 				turn: ev.turn,
-				displayTurn: ev.pathTurn,
+				// 展示编号 = 组内事件的树深度(pathTurn);链断(undefined)回退
+				// journal 序 turn,不把断链深度当真编号。
+				displayTurn: ev.pathTurn ?? ev.turn,
 				events: [],
 				firstTs: ev.timestamp,
 				startMs: ev.tsMs,
@@ -404,16 +432,20 @@ export function buildTrajectoryTree(
 		// 末端时间 = 组内最后一条带 tsMs 的事件(组内有序,直接覆盖)。
 		if (ev.tsMs !== undefined) group.endMs = ev.tsMs;
 	}
-	// roundDurations 命中:回合锚 = 该 turn 的 assistant 事件 tsMs(agent_end
-	// 冻结语义,与 session-store 同源);完整回合闭合 = start + duration。
+	// roundDurations 命中:回合锚 = turn 起点 tsMs(materialized-view agent_end
+	// 的当前记录键,isTurnStart 语义);pre-anchor 快照按组内首条 assistant ts
+	// 记录 → 回退查询保持可读。完整回合闭合 = start + duration,但 endMs
+	// 钳制在组内最后事件时刻:时长锚跨空闲/跨轮被污染时(实机回归),旧值
+	// 会把 Overview 时间域撑到数百小时。
 	for (const group of turns) {
 		if (group.startMs === undefined) continue;
 		const assistant = group.events.find(e => e.kind === "assistant" && e.tsMs !== undefined);
-		const anchor = assistant?.tsMs;
-		const duration = anchor !== undefined ? durations.get(anchor) : undefined;
+		const duration =
+			durations.get(group.startMs) ?? (assistant?.tsMs !== undefined ? durations.get(assistant.tsMs) : undefined);
 		if (typeof duration === "number" && Number.isFinite(duration) && duration > 0) {
 			group.roundDurationMs = duration;
-			group.endMs = group.startMs + duration;
+			const candidate = group.startMs + duration;
+			group.endMs = group.endMs !== undefined && candidate > group.endMs ? group.endMs : candidate;
 		}
 	}
 	return { turns, stats };

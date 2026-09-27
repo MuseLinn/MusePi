@@ -665,6 +665,65 @@ export function buildDaemonTurnIndex(entries: readonly unknown[]): DaemonTurnIte
 	return out;
 }
 const IDLE_SCAN_INTERVAL_MS = 60 * 1000;
+
+// Live 消息树 seam(/tree 语义,2026-08-21):wire 事件在消息发射时尚未入树
+// (agent.appendMessage 先发事件、sessionManager.appendMessage 后插入),此刻
+// sessionManager 的叶子即该消息的父节点。把叶子(或其最近的 MESSAGE 祖先)
+// 的 messageKey 打上,wire 事件即携带 parentId 直达 GUI(MaterializedView
+// 保留 message.parentId),GUI 侧 lib/message-tree.ts 即可重建会话内条目树。
+// 白名单覆盖 custom/hookMessage(顾问卡、hook 通知):漏掉它们会让卡片
+// parentId=null,GUI 把尾卡片当"真根"走链,旧消息整批被隐藏 + 地图深度
+// 全塌成 1(实机回归 2026-09-27)。messageKey 对 custom role 是
+// "custom:<ts>",与 view 的 custom 条目键一致,父链可跨 role 链接。
+const LIVE_PARENT_ID_ROLES = new Set(["user", "assistant", "toolResult", "custom", "hookMessage"]);
+
+/** Session-manager seam the stamper reads (structural subset — the SDK
+ *  manager carries more; the daemon must not import SDK internals here). */
+export interface LiveParentIdManager {
+	getLeafEntry(): { type?: string; message?: WireMessage; parentId?: string | null } | undefined;
+	getEntries?(): Array<{ id: string; type?: string; message?: WireMessage; parentId?: string | null }>;
+}
+
+/** Stamp `message.parentId` (messageKey space) from the session-manager leaf
+ *  unless the message already carries one or its role is outside the live
+ *  tree seam. Non-message leaves (model_change / custom / thinking_level_change)
+ *  resolve to the nearest MESSAGE ancestor so the /tree projection stays
+ *  connected. The leaf id is the SDK entry id (generateId hex), but the
+ *  materialized view keys its entries by messageKey ("role:timestamp") —
+ *  the conversion is what lets the GUI tree link parent ↔ child across the
+ *  two id spaces. */
+export function stampLiveMessageParentId(
+	message: { role?: string; parentId?: string | null },
+	mgr: LiveParentIdManager | null,
+): void {
+	if (!LIVE_PARENT_ID_ROLES.has(message.role ?? "") || message.parentId !== undefined) return;
+	const parentEntry = mgr?.getLeafEntry();
+	let parentMsg: WireMessage | null = null;
+	if (parentEntry) {
+		if (parentEntry.type === "message" && parentEntry.message) {
+			parentMsg = parentEntry.message;
+		} else {
+			// The leaf is a non-message entry (model_change / custom /
+			// thinking_level_change): the new message's parentId must point at
+			// the nearest MESSAGE ancestor so the /tree projection stays
+			// connected (scattered single-node trees otherwise). Rare path —
+			// build the hex map only here.
+			const entries = mgr?.getEntries?.() ?? [];
+			const byHex = new Map(entries.map(e => [e.id, e]));
+			let cur = parentEntry.parentId ? byHex.get(parentEntry.parentId) : undefined;
+			const seen = new Set<string>();
+			while (cur && !seen.has(cur.id)) {
+				seen.add(cur.id);
+				if (cur.type === "message" && cur.message) {
+					parentMsg = cur.message;
+					break;
+				}
+				cur = cur.parentId ? byHex.get(cur.parentId) : undefined;
+			}
+		}
+	}
+	message.parentId = parentMsg ? messageKey(parentMsg) : null;
+}
 /** Single JSON-RPC request cap. Raised 4→16 MiB (2026-09-18, #23 follow-up):
  *  `stt.transcribe` ships 16 kHz mono float JSON (~127 KB/s after the client
  *  quantises to 5 decimals), so 4 MiB capped dictation at ~30 s and mobile
@@ -1908,60 +1967,12 @@ export class DaemonSessionHost {
 				this.#scheduleIdleRecap(live);
 				this.onAgentEnd?.(live, event);
 			}
-			// Live 消息树 seam(/tree 语义,2026-08-21):wire 事件在消息发射时尚未入树
-			// (agent.appendMessage 先发事件、sessionManager.appendMessage 后插入),此
-			// 刻 sessionManager.leafId() 即该消息的父节点——打标后 wire 事件携带
-			// parentId 直达 GUI(MaterializedView 保留 message.parentId),GUI 侧
-			// lib/message-tree.ts 即可重建会话内条目树。旧/持久化消息自带 parentId
-			// 时原样保留(??= 只补缺省)。
+			// Live 消息树 seam(/tree 语义,2026-08-21):见 stampLiveMessageParentId。
+			// 旧/持久化消息自带 parentId 时原样保留(helper 只补缺省)。
 			if (event.type === "message_start" || event.type === "message_update" || event.type === "message_end") {
 				const m = event.message as { role?: string; parentId?: string | null } | null;
-				if (
-					m !== null &&
-					typeof m === "object" &&
-					(m.role === "user" || m.role === "assistant" || m.role === "toolResult") &&
-					m.parentId === undefined
-				) {
-					// The leaf id is the SDK entry id (generateId hex), but the
-					// materialized view keys its entries by messageKey
-					// ("role:timestamp") — convert so the GUI tree can actually
-					// link parent ↔ child across the two id spaces.
-					const mgr = agentSession.sessionManager as unknown as {
-						getLeafEntry(): { type?: string; message?: WireMessage; parentId?: string | null } | undefined;
-						getEntries?(): Array<{
-							id: string;
-							type?: string;
-							message?: WireMessage;
-							parentId?: string | null;
-						}>;
-					} | null;
-					const parentEntry = mgr?.getLeafEntry();
-					let parentMsg: WireMessage | null = null;
-					if (parentEntry) {
-						if (parentEntry.type === "message" && parentEntry.message) {
-							parentMsg = parentEntry.message;
-						} else {
-							// The leaf is a non-message entry (model_change /
-							// custom / thinking_level_change): the new message's
-							// parentId must point at the nearest MESSAGE ancestor
-							// so the /tree projection stays connected (scattered
-							// single-node trees otherwise). Rare path — build the
-							// hex map only here.
-							const entries = mgr?.getEntries?.() ?? [];
-							const byHex = new Map(entries.map(e => [e.id, e]));
-							let cur = parentEntry.parentId ? byHex.get(parentEntry.parentId) : undefined;
-							const seen = new Set<string>();
-							while (cur && !seen.has(cur.id)) {
-								seen.add(cur.id);
-								if (cur.type === "message" && cur.message) {
-									parentMsg = cur.message;
-									break;
-								}
-								cur = cur.parentId ? byHex.get(cur.parentId) : undefined;
-							}
-						}
-					}
-					m.parentId = parentMsg ? messageKey(parentMsg) : null;
+				if (m !== null && typeof m === "object") {
+					stampLiveMessageParentId(m, agentSession.sessionManager as unknown as LiveParentIdManager | null);
 				}
 			}
 			const wireEvent = toWireAgentEvent(event);

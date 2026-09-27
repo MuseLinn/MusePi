@@ -210,4 +210,93 @@ describe("MaterializedView custom-role message projection", () => {
 		expect(entries).toHaveLength(1);
 		expect(entries[0]).toMatchObject({ type: "custom_message", customType: "irc:incoming" });
 	});
+
+	test("a live-stamped parentId on a custom-role message is preserved", () => {
+		// Contract the GUI tree relies on: when the daemon stamps parentId on
+		// the wire message (custom roles included), the projected custom entry
+		// keeps it, so the advisor card links into the entry tree instead of
+		// dangling as a fake root (which hid every earlier message).
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(messageEvent("message_start", { role: "user", content: "hi", timestamp: 1 }));
+		view.apply(
+			messageEvent("message_end", {
+				role: "custom",
+				customType: "advisor",
+				content: "<advisory/>",
+				display: true,
+				timestamp: 2,
+				parentId: "user:1",
+			}),
+		);
+		expect(view.snapshot().entries[1]).toMatchObject({ type: "custom_message", id: "custom:2", parentId: "user:1" });
+	});
+
+	test("two different custom notes on the same timestamp keep both cards", () => {
+		// messageKey is "custom:<ts>": a same-ms collision must not let the
+		// second note overwrite the first card.
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		const a = { role: "custom", customType: "advisor", content: "note A", display: true, timestamp: 100 };
+		const b = { role: "custom", customType: "advisor", content: "note B", display: true, timestamp: 100 };
+		view.apply(messageEvent("message_end", a));
+		view.apply(messageEvent("message_end", b));
+		const entries = view.snapshot().entries;
+		expect(entries).toHaveLength(2);
+		expect(entries.map(e => (e as { content?: string }).content)).toEqual(["note A", "note B"]);
+	});
+});
+
+describe("MaterializedView round durations (agent_end freeze)", () => {
+	function messageEvent(type: "message_start" | "message_end", message: unknown): AgentEvent {
+		return { type, message } as unknown as AgentEvent;
+	}
+	function advisorMsg(ts: number): unknown {
+		return {
+			role: "custom",
+			customType: "advisor",
+			content: "<advisory/>",
+			display: true,
+			details: { notes: [{ note: "n" }] },
+			timestamp: ts,
+		};
+	}
+
+	test("advisor-spawned turn anchors the duration at the advisor note, not the stale user message", () => {
+		// Contract: an agent-initiated (advisor) turn has no user message; its
+		// round total must key on the advisor note ts and span only that turn.
+		// Old behavior keyed on the last user message (hours ago) and required
+		// an assistant message, so the GUI showed idle time as round time.
+		const now = Date.now();
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(now - 3 * 3600_000)); // user turn 3h ago
+		view.apply(messageEvent("message_end", advisorMsg(now - 4000)));
+		view.apply({ type: "agent_end" } as AgentEvent);
+
+		const pairs = view.snapshot().roundDurations ?? [];
+		expect(pairs).toHaveLength(1);
+		expect(pairs[0]![0]).toBe(now - 4000);
+		expect(pairs[0]![1]).toBeGreaterThan(0);
+		expect(pairs[0]![1]).toBeLessThan(60_000);
+	});
+
+	test("a user turn ending after a later advisor note anchors at the advisor note", () => {
+		// The anchor is the CURRENT turn start (last isTurnStart entry), not
+		// the first/last user message of the session.
+		const now = Date.now();
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(now - 10_000));
+		view.apply(
+			messageEvent("message_start", {
+				role: "assistant",
+				content: [{ type: "text", text: "a" }],
+				timestamp: now - 9000,
+			}),
+		);
+		view.apply(messageEvent("message_end", advisorMsg(now - 3000)));
+		view.apply({ type: "agent_end" } as AgentEvent);
+
+		const pairs = view.snapshot().roundDurations ?? [];
+		expect(pairs).toHaveLength(1);
+		expect(pairs[0]![0]).toBe(now - 3000);
+		expect(pairs[0]![1]).toBeLessThan(10_000);
+	});
 });

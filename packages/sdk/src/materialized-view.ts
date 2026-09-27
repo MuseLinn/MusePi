@@ -55,6 +55,8 @@ import type { SessionSnapshot } from "./events";
 type CustomRoleMessage = Omit<WireCustomMessage, "role" | "display"> & {
 	role: "custom" | "hookMessage";
 	display?: boolean;
+	/** Live 发射端打标的父链接(/tree 语义),与 provider 消息同一契约。 */
+	parentId?: string | null;
 };
 
 function isCustomRoleMessage(message: WireMessage | CustomRoleMessage): message is CustomRoleMessage {
@@ -87,11 +89,12 @@ export class MaterializedView {
 	 *  constructor for deterministic replay (see above). */
 	readonly #now: () => string;
 	readonly #headerExtra: { title?: string; model?: string; thinkingLevel?: string } = {};
-	/** Completed-round totals: final assistant message ts → duration ms,
-	 *  recorded at agent_end (the round spans the last user message to the
-	 *  run's end — craft-agents completedAt-freeze parity). Survives the
-	 *  persisted-snapshot round-trip, so the GUI recreated on a session
-	 *  switch still shows every completed round's "已工作/用时 X 秒". */
+	/** Completed-round totals: turn-start ts → duration ms, recorded at
+	 *  agent_end (the round spans the turn start — last user message or
+	 *  displayed advisor note — to the run's end; craft-agents
+	 *  completedAt-freeze parity). Survives the persisted-snapshot
+	 *  round-trip, so the GUI recreated on a session switch still shows
+	 *  every completed round's "已工作/用时 X 秒". */
 	#roundDurations = new Map<number, number>();
 
 	constructor(
@@ -279,22 +282,24 @@ export class MaterializedView {
 					this.#mainAgent.status = "idle";
 					this.#mainAgent.lastActivity = Date.now();
 				}
-				// Freeze this run's total (craft-agents completedAt parity): the
-				// round spans the LAST user message (its timestamp is the round
-				// anchor the transcript ticks from) to agent_end; pinned to the
-				// final assistant message so its row shows the frozen total.
-				// Recorded in the view so the daemon persists it and any client
-				// that (re)builds a view from the snapshot gets every total —
-				// including rounds that completed while the GUI was switched away.
-				let userTs: number | undefined;
-				let assistantTs: number | undefined;
+				// Freeze this run's total. Anchor = the CURRENT turn's start
+				// (isTurnStart semantics: a user message OR a displayed advisor
+				// note — the daemon ships an identical helper and both MUST stay
+				// in sync): advisor-spawned turns have no user message, and the
+				// old "last user message" anchor swallowed the idle gap into the
+				// round total. Key = turn-start ts (ms) so the GUI's per-group
+				// lookup (group.startMs) hits exactly; pre-anchor snapshots
+				// keyed by assistant ts stay readable via a fallback lookup.
+				let turnStartMs: number | undefined;
 				for (const entry of this.#entries) {
-					if (entry.type !== "message") continue;
-					if (entry.message.role === "user") userTs = entry.message.timestamp;
-					else if (entry.message.role === "assistant") assistantTs = entry.message.timestamp;
+					if (entry.type === "message" && entry.message.role === "user") {
+						turnStartMs = Date.parse(entry.timestamp);
+					} else if (entry.type === "custom_message" && entry.customType === "advisor" && entry.display === true) {
+						turnStartMs = Date.parse(entry.timestamp);
+					}
 				}
-				if (recordRoundDurations && userTs !== undefined && assistantTs !== undefined) {
-					this.#roundDurations.set(assistantTs, Date.now() - userTs);
+				if (recordRoundDurations && turnStartMs !== undefined && Number.isFinite(turnStartMs)) {
+					this.#roundDurations.set(turnStartMs, Date.now() - turnStartMs);
 				}
 				break;
 			}
@@ -353,11 +358,20 @@ export class MaterializedView {
 	 * otherwise the same advisor card would render twice.
 	 */
 	#upsertCustomMessage(message: CustomRoleMessage): void {
-		const key = messageKey(message);
+		let key = messageKey(message);
+		// Same-ms collision: the dedupe contract covers only the start/end
+		// frames of ONE note (identical content); a different note landing on
+		// the same "custom:<ts>" key must not overwrite the first card.
+		const sameKey = this.#customMessages.get(key);
+		if (sameKey && (sameKey.customType !== message.customType || sameKey.content !== message.content)) {
+			let n = 2;
+			while (this.#customMessages.has(`${key}#${n}`)) n += 1;
+			key = `${key}#${n}`;
+		}
 		const entry: CustomMessageEntry = {
 			type: "custom_message",
 			id: key,
-			parentId: null,
+			parentId: message.parentId ?? null,
 			timestamp: new Date(message.timestamp).toISOString(),
 			customType: message.customType,
 			content: message.content,
