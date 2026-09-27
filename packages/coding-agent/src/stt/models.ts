@@ -29,6 +29,8 @@ interface SttModelBase {
 	description: string;
 	/** Approximate on-disk download size for the shipped weights (UI hint). */
 	sizeHint: string;
+	/** BCP-47-ish language codes the checkpoint handles (`auto` = auto-detect). */
+	languages?: readonly string[];
 }
 
 /** A Whisper-family tier loaded via the transformers.js ASR pipeline. */
@@ -38,14 +40,25 @@ export interface TransformersSttModelSpec extends SttModelBase {
 	dtype: TinyModelDtype;
 }
 
-/** A sherpa-onnx offline tier (e.g. NeMo Parakeet transducer) loaded natively. */
-export interface SherpaSttModelSpec extends SttModelBase {
+/** A sherpa-onnx transducer tier (e.g. NeMo Parakeet) loaded natively. */
+export interface SherpaTransducerSttModelSpec extends SttModelBase {
 	engine: "sherpa";
 	/** sherpa-onnx offline model family (e.g. `nemo_transducer`). */
-	modelType: string;
+	modelType: "nemo_transducer";
 	/** Model files (relative to the repo root) fetched into the local cache. */
 	files: { encoder: string; decoder: string; joiner: string; tokens: string };
 }
+
+/** A sherpa-onnx non-autoregressive single-file tier (FunAudioLLM SenseVoice). */
+export interface SherpaSenseVoiceSttModelSpec extends SttModelBase {
+	engine: "sherpa";
+	/** sherpa-onnx offline model family; selects the `senseVoice` config branch. */
+	modelType: "sense_voice";
+	/** Model files (relative to the repo root) fetched into the local cache. */
+	files: { model: string; tokens: string };
+}
+
+export type SherpaSttModelSpec = SherpaTransducerSttModelSpec | SherpaSenseVoiceSttModelSpec;
 
 export type SttModelSpec = TransformersSttModelSpec | SherpaSttModelSpec;
 
@@ -53,7 +66,9 @@ export type SttModelSpec = TransformersSttModelSpec | SherpaSttModelSpec;
  * Speech model tiers, ordered light → SoTA. Defaults to {@link DEFAULT_STT_MODEL_KEY}.
  * `fast`/`balanced`/`turbo` are multilingual Whisper checkpoints on transformers.js;
  * `parakeet` is NVIDIA Parakeet TDT 0.6B v3 on sherpa-onnx — the Open ASR
- * Leaderboard leader (lower WER and far higher throughput than Whisper).
+ * Leaderboard accuracy/speed leader for English/European speech;
+ * `sensevoice` is FunAudioLLM SenseVoiceSmall (INT8) on sherpa-onnx — the
+ * Chinese-optimized tier (zh first; zh/en mixed speech is its home turf).
  */
 export const STT_MODELS = [
 	{
@@ -104,6 +119,25 @@ export const STT_MODELS = [
 			"NVIDIA Parakeet TDT 0.6B v3 — 25 European languages only (no Chinese/Japanese/Korean; the worker ignores `language`, so CJK speech transcribes to empty). Open ASR Leaderboard leader for accuracy and speed; pick it for English/European dictation.",
 		sizeHint: "~680 MB",
 	},
+	{
+		key: "sensevoice",
+		engine: "sherpa",
+		// FunAudioLLM SenseVoiceSmall (sherpa-onnx official export, INT8).
+		// Verified against deepseek-harness runtime/assets.json: repo revision
+		// 2365bae…, model.int8.onnx = 239,233,841 B, tokens.txt = 315,894 B.
+		repo: "csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17",
+		modelType: "sense_voice",
+		files: {
+			model: "model.int8.onnx",
+			tokens: "tokens.txt",
+		},
+		englishOnly: false,
+		languages: ["auto", "zh", "en", "yue", "ja", "ko"],
+		label: "SenseVoiceSmall (INT8)",
+		description:
+			"FunAudioLLM SenseVoiceSmall — Chinese-optimized non-autoregressive model: Mandarin, Cantonese (yue), mixed zh/en speech, plus ja/ko. Faster and smaller than Whisper small with strong Chinese accuracy; INT8 quant keeps the download at ~239 MB. Auto language detect when no source language is set.",
+		sizeHint: "~239 MB",
+	},
 ] as const satisfies readonly SttModelSpec[];
 
 /**
@@ -120,7 +154,13 @@ export type SttModelKey = (typeof STT_MODELS)[number]["key"];
 /** A concrete entry from {@link STT_MODELS}; `key` is the literal tier union. */
 export type SttModel = (typeof STT_MODELS)[number];
 
-export const STT_MODEL_VALUES = ["fast", "balanced", "turbo", "parakeet"] as const satisfies readonly SttModelKey[];
+export const STT_MODEL_VALUES = [
+	"fast",
+	"balanced",
+	"turbo",
+	"parakeet",
+	"sensevoice",
+] as const satisfies readonly SttModelKey[];
 
 type MissingSttModelValue = Exclude<SttModelKey, (typeof STT_MODEL_VALUES)[number]>;
 type ExtraSttModelValue = Exclude<(typeof STT_MODEL_VALUES)[number], SttModelKey>;

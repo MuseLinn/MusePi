@@ -1,5 +1,4 @@
 import * as fs from "node:fs/promises";
-import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import type {
@@ -7,13 +6,7 @@ import type {
 	AutomaticSpeechRecognitionPipeline,
 	ProgressInfo,
 } from "@huggingface/transformers";
-import {
-	ensureRuntimeInstalled,
-	getTinyModelsCacheDir,
-	isCompiledBinary,
-	resolveRuntimeModule,
-} from "@musepi/pi-utils";
-import packageJson from "../../package.json" with { type: "json" };
+import { getTinyModelsCacheDir } from "@musepi/pi-utils";
 import {
 	errorMessage,
 	errorText,
@@ -36,11 +29,16 @@ import {
 	type SttModelKey,
 	type TransformersSttModelSpec,
 } from "./models";
-import { loadSourceSherpaRuntime, type SherpaOfflineRecognizer, type SherpaRuntime } from "./sherpa-runtime";
+import {
+	getSherpaVersionSpec,
+	installSherpaRuntime,
+	type SherpaOfflineConfig,
+	type SherpaOfflineRecognizer,
+	type SherpaRuntime,
+} from "./sherpa-runtime";
 import { normalizeChineseScript } from "./zh-hans";
 
 const ASR_TASK = "automatic-speech-recognition";
-const SHERPA_PACKAGE = "sherpa-onnx-node";
 // Whisper long-form decoding: split into 30s windows with 5s overlap so audio of
 // any length transcribes without exceeding the 30s receptive field.
 const CHUNK_LENGTH_S = 30;
@@ -97,7 +95,7 @@ interface TransformersRuntime {
 /** A warm model plus the engine that loaded it; cached per tier key. */
 type LoadedModel =
 	| { engine: "transformers"; pipeline: AutomaticSpeechRecognitionPipeline }
-	| { engine: "sherpa"; recognizer: SherpaOfflineRecognizer };
+	| { engine: "sherpa"; recognizer: SherpaOfflineRecognizer; spec: SherpaSttModelSpec; config: SherpaOfflineConfig };
 
 const models = new Map<SttModelKey, Promise<LoadedModel>>();
 // Serialize all model inference on a single chain: the recognizers are not
@@ -115,59 +113,25 @@ function runOnModel<T>(work: () => Promise<T>): Promise<T> {
 const transformersRuntime = new MemoizedRuntime<TransformersRuntime>();
 const sherpaRuntime = new MemoizedRuntime<SherpaRuntime>();
 
-let cachedSherpaVersionSpec: string | undefined;
-function resolveSherpaVersionSpec(): string {
-	const manifest = packageJson as {
-		optionalDependencies?: Record<string, string>;
-		dependencies?: Record<string, string>;
-	};
-	const versionSpec = manifest.optionalDependencies?.[SHERPA_PACKAGE] ?? manifest.dependencies?.[SHERPA_PACKAGE];
-	if (!versionSpec) throw new Error(`${SHERPA_PACKAGE} is missing from package.json optionalDependencies`);
-	return versionSpec;
-}
-
-function getSherpaVersionSpec(): string {
-	cachedSherpaVersionSpec ??= resolveSherpaVersionSpec();
-	return cachedSherpaVersionSpec;
-}
-
 function getSttRuntimeDir(): string {
 	const key = getTransformersVersionSpec().replace(/[^A-Za-z0-9._-]/g, "_");
 	return path.join(path.dirname(getTinyModelsCacheDir()), "stt-runtime", `transformers-${key}`);
 }
 
-function getSherpaRuntimeDir(): string {
-	const key = getSherpaVersionSpec().replace(/[^A-Za-z0-9._-]/g, "_");
-	return path.join(path.dirname(getTinyModelsCacheDir()), "stt-runtime", `sherpa-${key}`);
-}
-
 /**
- * Resolve the native `sherpa-onnx-node` module. In a compiled binary the addon
- * (plus its per-platform prebuilt `sherpa-onnx.node` + bundled onnxruntime
- * dylibs) is installed into a side runtime dir; the addon resolves its native
- * library relative to its own location, so a plain `createRequire` of the entry
- * is enough — no module-resolver patch or bare-require stubbing is needed.
- * Memoized so the runtime loads once per process.
+ * Resolve the native `sherpa-onnx-node` module (shared installer lives in
+ * sherpa-runtime.ts). Memoized so the runtime loads once per process.
  */
 function loadSherpaRuntime(transport: SttTransport, requestId: string, modelKey: SttModelKey): Promise<SherpaRuntime> {
-	return sherpaRuntime.load(async () => {
-		if (!isCompiledBinary()) return loadSourceSherpaRuntime(import.meta.url);
-		const runtimeDir = await ensureRuntimeInstalled({
-			runtimeDir: getSherpaRuntimeDir(),
-			install: { dependencies: { [SHERPA_PACKAGE]: getSherpaVersionSpec() } },
-			probePackage: SHERPA_PACKAGE,
-			onPhase: phase =>
-				transport.send({
-					type: "progress",
-					id: requestId,
-					event: { modelKey, status: phase, name: `${SHERPA_PACKAGE}@${getSherpaVersionSpec()}` },
-				}),
-		});
-		const nodeModules = path.join(runtimeDir, "node_modules");
-		const entry = resolveRuntimeModule(nodeModules, SHERPA_PACKAGE);
-		if (!entry) throw new Error(`Unable to resolve ${SHERPA_PACKAGE} in compiled runtime at ${nodeModules}`);
-		return createRequire(entry)(entry) as SherpaRuntime;
-	});
+	return sherpaRuntime.load(() =>
+		installSherpaRuntime(phase =>
+			transport.send({
+				type: "progress",
+				id: requestId,
+				event: { modelKey, status: phase, name: `sherpa-onnx-node@${getSherpaVersionSpec()}` },
+			}),
+		),
+	);
 }
 
 async function loadPipelineOnDevice(
@@ -316,17 +280,19 @@ async function downloadSherpaFile(
 
 /**
  * Ensure all sherpa-onnx model files for a tier are present in the cache,
- * downloading any that are missing, and return their absolute paths.
+ * downloading any that are missing, and return their absolute paths keyed by
+ * role (`encoder`/`decoder`/`joiner`/`tokens` for transducers, `model`/`tokens`
+ * for SenseVoice).
  */
 async function ensureSherpaModelFiles(
 	spec: SherpaSttModelSpec,
 	modelKey: SttModelKey,
 	transport: SttTransport,
 	requestId: string,
-): Promise<{ encoder: string; decoder: string; joiner: string; tokens: string }> {
+): Promise<Record<string, string>> {
 	const dir = path.join(getTinyModelsCacheDir(), spec.repo);
 	await fs.mkdir(dir, { recursive: true });
-	const resolved = {} as { encoder: string; decoder: string; joiner: string; tokens: string };
+	const resolved: Record<string, string> = {};
 	for (const role in spec.files) {
 		const key = role as keyof typeof spec.files;
 		const filename = spec.files[key];
@@ -341,6 +307,23 @@ async function ensureSherpaModelFiles(
 	return resolved;
 }
 
+/**
+ * SenseVoice accepts a per-request language hint (auto/zh/en/yue/ja/ko). Map the
+ * configured source language onto that set; anything else falls back to auto
+ * (the model auto-detects, zh-first by training).
+ */
+function senseVoiceLanguage(language: string | undefined): string {
+	if (!language) return "auto";
+	const normalized = language.trim().toLowerCase();
+	if (["auto", "zh", "en", "yue", "ja", "ko"].includes(normalized)) return normalized;
+	if (normalized.startsWith("zh")) return "zh";
+	if (normalized.startsWith("yue") || normalized.startsWith("cantonese")) return "yue";
+	if (normalized.startsWith("ja")) return "ja";
+	if (normalized.startsWith("ko")) return "ko";
+	if (normalized.startsWith("en")) return "en";
+	return "auto";
+}
+
 async function loadSherpaModel(
 	spec: SherpaSttModelSpec,
 	modelKey: SttModelKey,
@@ -351,26 +334,42 @@ async function loadSherpaModel(
 	const files = await ensureSherpaModelFiles(spec, modelKey, transport, requestId);
 	const startedAt = performance.now();
 	const numThreads = Math.max(1, Math.min(4, os.availableParallelism()));
+	const modelConfig: SherpaOfflineConfig["modelConfig"] =
+		spec.modelType === "sense_voice"
+			? {
+					senseVoice: {
+						model: files.model!,
+						language: "auto",
+						useInverseTextNormalization: 1,
+					},
+					tokens: files.tokens!,
+					modelType: spec.modelType,
+					numThreads,
+					provider: "cpu",
+					debug: 0,
+				}
+			: {
+					transducer: { encoder: files.encoder!, decoder: files.decoder!, joiner: files.joiner! },
+					tokens: files.tokens!,
+					modelType: spec.modelType,
+					numThreads,
+					provider: "cpu",
+					debug: 0,
+				};
 	const recognizer = await runtime.OfflineRecognizer.createAsync({
-		modelConfig: {
-			transducer: { encoder: files.encoder, decoder: files.decoder, joiner: files.joiner },
-			tokens: files.tokens,
-			modelType: spec.modelType,
-			numThreads,
-			provider: "cpu",
-			debug: 0,
-		},
+		modelConfig,
 		decodingMethod: "greedy_search",
 	});
 	sendLog(transport, "debug", "stt: local model loaded", {
 		modelKey,
 		repo: spec.repo,
 		engine: "sherpa",
+		modelType: spec.modelType,
 		provider: "cpu",
 		numThreads,
 		elapsedMs: Math.round(performance.now() - startedAt),
 	});
-	return { engine: "sherpa", recognizer };
+	return { engine: "sherpa", recognizer, spec, config: { modelConfig, decodingMethod: "greedy_search" } };
 }
 
 async function loadModel(modelKey: SttModelKey, transport: SttTransport, requestId: string): Promise<LoadedModel> {
@@ -408,6 +407,13 @@ async function decodeSegment(
 	language: string | undefined,
 ): Promise<string> {
 	if (model.engine === "sherpa") {
+		// SenseVoice takes the language hint per decode: re-apply the loaded
+		// config with only the language swapped (dsh's recognizer pattern).
+		// Parakeet is European-only and ignores the hint.
+		if (model.spec.modelType === "sense_voice" && model.config.modelConfig.senseVoice) {
+			model.config.modelConfig.senseVoice.language = senseVoiceLanguage(language);
+			model.recognizer.setConfig(model.config);
+		}
 		const stream = model.recognizer.createStream();
 		stream.acceptWaveform({ samples: audio, sampleRate: ASR_SAMPLE_RATE });
 		const result = await model.recognizer.decodeAsync(stream);

@@ -1,6 +1,15 @@
+import * as fs from "node:fs/promises";
 import { createRequire } from "node:module";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { ProgressInfo, RawAudio } from "@huggingface/transformers";
 import { ensureRuntimeInstalled, getTinyModelsCacheDir, resolveRuntimeModule } from "@musepi/pi-utils";
+import {
+	getSherpaVersionSpec,
+	installSherpaRuntime,
+	type SherpaOfflineTts,
+	type SherpaRuntime,
+} from "../stt/sherpa-runtime";
 import {
 	errorMessage,
 	errorText,
@@ -13,8 +22,16 @@ import {
 } from "../subprocess/worker-runtime";
 import { resolveTinyModelDevicePreference, type TinyModelDevice, tinyModelDeviceLoadOrder } from "../tiny/device";
 import { resolveTinyModelDtypeOverride, type TinyModelDtype } from "../tiny/dtype";
-import { preferredHubOrigin } from "../tiny/hub-mirrors";
-import { getTtsLocalModelSpec, resolveTtsVoice, type TtsLocalModelKey, type TtsLocalModelSpec } from "./models";
+import { fetchHubFile, preferredHubOrigin } from "../tiny/hub-mirrors";
+import {
+	getTtsLocalModelSpec,
+	type KokoroTtsLocalModelSpec,
+	resolveTtsModelForText,
+	resolveTtsVoice,
+	type SherpaTtsLocalModelSpec,
+	type TtsLocalModelKey,
+	type TtsLocalModelSpec,
+} from "./models";
 import {
 	getTtsRuntimeDir,
 	KOKORO_PACKAGE,
@@ -25,6 +42,9 @@ import {
 import type { TtsTransport, TtsWorkerInbound } from "./tts-protocol";
 
 const TTS_TASK = "text-to-speech";
+// Coalesce sherpa-onnx raw-file download progress so streaming a multi-hundred-MB
+// model file doesn't flood the IPC channel with one event per chunk.
+const PROGRESS_EMIT_BYTES = 4_000_000;
 // kokoro-js is NEVER a dependency of the main tree: its transformers@3.8.1 +
 // onnxruntime-node@1.21 graph must not pollute it (1.21 segfaults Bun on session
 // creation). It is lazily `bun install`ed into a side runtime dir on first use,
@@ -77,9 +97,15 @@ interface TransformersEnv {
 	};
 }
 
-const models = new Map<TtsLocalModelKey, Promise<KokoroTtsInstance>>();
+/** A loaded TTS engine instance plus its engine tag, cached per tier key. */
+type TtsSynthesizer =
+	| { engine: "kokoro"; instance: KokoroTtsInstance }
+	| { engine: "sherpa"; instance: SherpaOfflineTts };
+
+const models = new Map<TtsLocalModelKey, Promise<TtsSynthesizer>>();
 let synthesizeQueue = Promise.resolve();
 const kokoroRuntime = new MemoizedRuntime<KokoroRuntime>();
+const sherpaRuntime = new MemoizedRuntime<SherpaRuntime>();
 
 /**
  * In-flight streaming sessions keyed by request id. A session is created on
@@ -167,7 +193,7 @@ function loadKokoroRuntime(
 
 async function loadModelOnDevice(
 	runtime: KokoroRuntime,
-	spec: TtsLocalModelSpec,
+	spec: KokoroTtsLocalModelSpec,
 	modelKey: TtsLocalModelKey,
 	transport: TtsTransport,
 	requestId: string,
@@ -182,7 +208,7 @@ async function loadModelOnDevice(
 
 async function loadModelWithDeviceFallback(
 	runtime: KokoroRuntime,
-	spec: TtsLocalModelSpec,
+	spec: KokoroTtsLocalModelSpec,
 	modelKey: TtsLocalModelKey,
 	transport: TtsTransport,
 	requestId: string,
@@ -220,34 +246,182 @@ async function loadModelWithDeviceFallback(
 	throw new Error("No TTS devices configured");
 }
 
+/**
+ * Resolve the native `sherpa-onnx-node` module for the TTS worker. The shared
+ * installer lives in `stt/sherpa-runtime.ts` — MeloTTS-zh adds no new runtime
+ * dependency beyond what the STT worker already installs. Memoized so the
+ * runtime loads once per process.
+ */
+function loadSherpaTtsRuntime(
+	transport: TtsTransport,
+	requestId: string,
+	modelKey: TtsLocalModelKey,
+): Promise<SherpaRuntime> {
+	return sherpaRuntime.load(() =>
+		installSherpaRuntime(phase =>
+			transport.send({
+				type: "progress",
+				id: requestId,
+				event: { modelKey, status: phase, name: `sherpa-onnx-node@${getSherpaVersionSpec()}` },
+			}),
+		),
+	);
+}
+
+/**
+ * Stream a single sherpa-onnx TTS model file from the Hub into the cache
+ * (`.part` sidecar + rename, mirror fallback via fetchHubFile), coalescing
+ * per-chunk progress. Mirrors the STT worker's `downloadSherpaFile`.
+ */
+async function downloadSherpaTtsFile(
+	repo: string,
+	filename: string,
+	dest: string,
+	modelKey: TtsLocalModelKey,
+	transport: TtsTransport,
+	requestId: string,
+): Promise<void> {
+	const url = `${repo}/resolve/main/${filename}`;
+	const response = await fetchHubFile(url, { redirect: "follow" });
+	if (!response.ok || !response.body) {
+		throw new Error(`Failed to download ${filename} (${repo}): HTTP ${response.status}`);
+	}
+	const total = Number(response.headers.get("content-length") ?? 0);
+	transport.send({
+		type: "progress",
+		id: requestId,
+		event: { modelKey, status: "download", name: `${repo}/${filename}`, file: filename },
+	});
+	const part = `${dest}.part`;
+	const handle = await fs.open(part, "w");
+	let loaded = 0;
+	let lastEmitted = 0;
+	const reader = response.body.getReader();
+	try {
+		for (;;) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			if (!value) continue;
+			await handle.write(value);
+			loaded += value.byteLength;
+			if (loaded - lastEmitted >= PROGRESS_EMIT_BYTES || (total > 0 && loaded >= total)) {
+				lastEmitted = loaded;
+				transport.send({
+					type: "progress",
+					id: requestId,
+					event: {
+						modelKey,
+						status: "progress",
+						name: `${repo}/${filename}`,
+						file: filename,
+						loaded,
+						total: total || loaded,
+					},
+				});
+			}
+		}
+	} finally {
+		await handle.close();
+	}
+	await fs.rename(part, dest);
+}
+
+/**
+ * Ensure all sherpa-onnx TTS files for a tier (`model`/`tokens`/`lexicon`) are
+ * present in the cache, downloading any missing, and return their absolute
+ * paths keyed by role.
+ */
+async function ensureSherpaTtsFiles(
+	spec: SherpaTtsLocalModelSpec,
+	modelKey: TtsLocalModelKey,
+	transport: TtsTransport,
+	requestId: string,
+): Promise<Record<string, string>> {
+	const dir = path.join(getTinyModelsCacheDir(), spec.repo);
+	await fs.mkdir(dir, { recursive: true });
+	const resolved: Record<string, string> = {};
+	for (const role in spec.files) {
+		const key = role as keyof typeof spec.files;
+		const filename = spec.files[key];
+		const dest = path.join(dir, filename);
+		const present = await fs
+			.stat(dest)
+			.then(stats => stats.size > 0)
+			.catch(() => false);
+		if (!present) await downloadSherpaTtsFile(spec.repo, filename, dest, modelKey, transport, requestId);
+		resolved[key] = dest;
+	}
+	return resolved;
+}
+
+async function loadSherpaTtsModel(
+	spec: SherpaTtsLocalModelSpec,
+	modelKey: TtsLocalModelKey,
+	transport: TtsTransport,
+	requestId: string,
+): Promise<TtsSynthesizer> {
+	const runtime = await loadSherpaTtsRuntime(transport, requestId, modelKey);
+	const files = await ensureSherpaTtsFiles(spec, modelKey, transport, requestId);
+	const startedAt = performance.now();
+	const numThreads = Math.max(1, Math.min(4, os.availableParallelism()));
+	const instance = await runtime.OfflineTts.createAsync({
+		model: {
+			vits: { model: files.model!, tokens: files.tokens!, lexicon: files.lexicon! },
+			numThreads,
+			provider: "cpu",
+			debug: 0,
+		},
+		maxNumSentences: 1,
+	});
+	sendLog(transport, "debug", "tts: local model loaded", {
+		modelKey,
+		repo: spec.repo,
+		engine: "sherpa",
+		modelType: spec.modelType,
+		provider: "cpu",
+		numThreads,
+		elapsedMs: Math.round(performance.now() - startedAt),
+	});
+	return { engine: "sherpa", instance };
+}
+
 async function loadModel(
 	modelKey: TtsLocalModelKey,
 	transport: TtsTransport,
 	requestId: string,
-): Promise<KokoroTtsInstance> {
+): Promise<TtsSynthesizer> {
 	const spec = getTtsLocalModelSpec(modelKey);
 	if (!spec) throw new Error(`Unknown local TTS model: ${modelKey}`);
 	const cached = replayCachedReady(models, modelKey, transport, requestId, TTS_TASK, spec.repo);
 	if (cached) return cached;
 
-	const runtime = await loadKokoroRuntime(transport, requestId, modelKey);
 	const startedAt = performance.now();
-	const loaded = loadModelWithDeviceFallback(runtime, spec, modelKey, transport, requestId).then(
-		({ model, device }) => {
-			sendLog(transport, "debug", "tts: local model loaded", {
-				modelKey,
-				repo: spec.repo,
-				device,
-				requestedDevice: ttsDevicePreference.device,
-				dtype: ttsDtypeOverride ?? spec.dtype,
-				elapsedMs: Math.round(performance.now() - startedAt),
-			});
+	const loading =
+		spec.engine === "sherpa"
+			? loadSherpaTtsModel(spec, modelKey, transport, requestId)
+			: loadKokoroRuntime(transport, requestId, modelKey).then(runtime =>
+					loadModelWithDeviceFallback(runtime, spec, modelKey, transport, requestId).then(
+						async ({ model, device }) => {
+							sendLog(transport, "debug", "tts: local model loaded", {
+								modelKey,
+								repo: spec.repo,
+								device,
+								requestedDevice: ttsDevicePreference.device,
+								dtype: ttsDtypeOverride ?? spec.dtype,
+								elapsedMs: Math.round(performance.now() - startedAt),
+							});
+							return { engine: "kokoro" as const, instance: model };
+						},
+					),
+				);
+	const loaded = loading.then(
+		synthesizer => {
 			transport.send({
 				type: "progress",
 				id: requestId,
 				event: { modelKey, status: "ready", task: TTS_TASK, model: spec.repo },
 			});
-			return model;
+			return synthesizer;
 		},
 		error => {
 			models.delete(modelKey);
@@ -258,6 +432,29 @@ async function loadModel(
 	return loaded;
 }
 
+/**
+ * Synthesize one text segment with the loaded engine. Kokoro returns a
+ * transformers.js `RawAudio` (`audio`/`sampling_rate`); sherpa-onnx returns
+ * `{samples, sampleRate}` natively.
+ */
+async function synthesizeSegment(
+	synthesizer: TtsSynthesizer,
+	spec: TtsLocalModelSpec,
+	text: string,
+	voice: string | undefined,
+): Promise<{ pcm: Float32Array; sampleRate: number }> {
+	if (synthesizer.engine === "sherpa") {
+		const output = await synthesizer.instance.generateAsync({ text });
+		if (!output.samples || output.samples.length === 0)
+			throw new Error("sherpa TTS synthesis returned no audio samples");
+		return { pcm: output.samples, sampleRate: output.sampleRate || spec.sampleRate };
+	}
+	const output = await synthesizer.instance.generate(text, { voice: resolveTtsVoice(spec.key, voice) });
+	const audio = Array.isArray(output.audio) ? output.audio[0] : output.audio;
+	if (!audio) throw new Error("Kokoro synthesis returned no audio samples");
+	return { pcm: audio, sampleRate: output.sampling_rate || spec.sampleRate };
+}
+
 async function synthesize(
 	transport: TtsTransport,
 	requestId: string,
@@ -265,12 +462,13 @@ async function synthesize(
 	text: string,
 	voice: string | undefined,
 ): Promise<{ pcm: Float32Array; sampleRate: number }> {
-	const synthesizer = await loadModel(modelKey, transport, requestId);
-	const output = await synthesizer.generate(text, { voice: resolveTtsVoice(modelKey, voice) });
-	const spec = getTtsLocalModelSpec(modelKey);
-	const audio = Array.isArray(output.audio) ? output.audio[0] : output.audio;
-	if (!audio) throw new Error("Kokoro synthesis returned no audio samples");
-	return { pcm: audio, sampleRate: output.sampling_rate || spec?.sampleRate || 24_000 };
+	// Route CJK text at an English-only model to the registered Chinese tier
+	// (and vice versa) before loading, so a single request never crosses scripts.
+	const routedKey = resolveTtsModelForText(modelKey, text);
+	const spec = getTtsLocalModelSpec(routedKey);
+	if (!spec) throw new Error(`Unknown local TTS model: ${routedKey}`);
+	const synthesizer = await loadModel(routedKey, transport, requestId);
+	return synthesizeSegment(synthesizer, spec, text, voice);
 }
 
 function enqueueRequest(
@@ -321,10 +519,11 @@ async function handleQueuedRequest(
 async function runStreamSession(transport: TtsTransport, id: string, session: StreamSession): Promise<void> {
 	try {
 		if (session.cancelled) return;
-		const synthesizer = await loadModel(session.modelKey, transport, id);
+		// Prime the session's requested tier up front so the first chunk doesn't
+		// pay the load cost; per-segment routing below may still load the other
+		// engine when the stream mixes scripts (zh/en).
+		await loadModel(session.modelKey, transport, id);
 		if (session.cancelled) return;
-		const spec = getTtsLocalModelSpec(session.modelKey);
-		const voice = resolveTtsVoice(session.modelKey, session.voice);
 		let index = 0;
 		while (!session.cancelled) {
 			const segment = session.queue.shift();
@@ -340,10 +539,13 @@ async function runStreamSession(transport: TtsTransport, id: string, session: St
 				await promise;
 				continue;
 			}
-			const output = await synthesizer.generate(segment, { voice });
+			const routedKey = resolveTtsModelForText(session.modelKey, segment);
+			const spec = getTtsLocalModelSpec(routedKey);
+			if (!spec) continue;
+			const synthesizer = await loadModel(routedKey, transport, id);
 			if (session.cancelled) break;
-			const audio = Array.isArray(output.audio) ? output.audio[0] : output.audio;
-			if (!audio) continue;
+			const { pcm, sampleRate } = await synthesizeSegment(synthesizer, spec, segment, session.voice);
+			if (session.cancelled) break;
 			// Drain the IPC write before the next segment's inference: ONNX
 			// blocks this event loop for seconds at a time, so a fire-and-forget
 			// send would sit in the pipe queue until the session ends and every
@@ -354,8 +556,8 @@ async function runStreamSession(transport: TtsTransport, id: string, session: St
 				id,
 				index: index++,
 				text: segment,
-				pcm: audio,
-				sampleRate: output.sampling_rate || spec?.sampleRate || 24_000,
+				pcm,
+				sampleRate,
 			});
 		}
 		if (!session.cancelled) transport.send({ type: "stream-done", id });

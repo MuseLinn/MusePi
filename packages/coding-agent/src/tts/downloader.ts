@@ -13,17 +13,25 @@ export interface TtsDownloadProgress {
 }
 
 /**
- * Whether the selected local TTS model and the side Kokoro runtime are already
- * present. transformers.js stores `main`-revision files at
- * `<cacheDir>/<repo>/...`, so any `.onnx` weight under the repo dir means the
- * model weights can load without a network fetch; the Kokoro package runtime is
- * version-keyed separately and must also exist before setup can report ready.
+ * Whether the selected local TTS model's weights (and, for Kokoro, the side
+ * runtime) are already present. Kokoro: transformers.js stores `main`-revision
+ * files at `<cacheDir>/<repo>/...`, so any `.onnx` weight under the repo dir
+ * means the weights can load without a network fetch; the Kokoro package
+ * runtime is version-keyed separately and must also exist. Sherpa (MeloTTS-zh):
+ * the worker streams the repo's `files` (`model`/`tokens`/`lexicon`) flat into
+ * `<cacheDir>/<repo>/`, so every declared file must exist — the sherpa native
+ * runtime is shared with the STT worker and is not part of the model cache
+ * condition.
  */
 export async function isTtsModelCached(modelKey: string): Promise<boolean> {
 	const spec = getTtsLocalModelSpec(modelKey);
 	if (!spec) return false;
 	const repoDir = path.join(getTinyModelsCacheDir(), ...spec.repo.split("/"));
 	try {
+		if (spec.engine === "sherpa") {
+			const entries = await fs.readdir(repoDir);
+			return Object.values(spec.files).every(file => entries.includes(file));
+		}
 		const entries = await fs.readdir(repoDir, { recursive: true });
 		const hasWeights = entries.some(entry => typeof entry === "string" && entry.endsWith(".onnx"));
 		return hasWeights && (await isTtsRuntimeCached());

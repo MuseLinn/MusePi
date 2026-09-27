@@ -2529,7 +2529,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Speech Model",
 			description:
-				"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
+				"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
 			options: STT_MODEL_OPTIONS,
 		},
 	},
@@ -5584,7 +5584,11 @@ export const SETTINGS_SCHEMA = {
 					label: "Auto",
 					description: "Prefer local on-device TTS; route .mp3 output to xAI when credentials exist",
 				},
-				{ value: "local", label: "Local", description: "On-device neural TTS (Kokoro-82M); output is WAV/PCM16" },
+				{
+					value: "local",
+					label: "Local",
+					description: "On-device neural TTS (Kokoro-82M / MeloTTS 中文); output is WAV/PCM16",
+				},
 				{
 					value: "xai",
 					label: "xAI Grok Voice",
@@ -5601,7 +5605,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "providers",
 			group: "Services",
 			label: "Local TTS Model",
-			description: "On-device neural TTS model (Kokoro-82M) used by the local TTS backend",
+			description:
+				"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend",
 			options: TTS_LOCAL_MODEL_OPTIONS,
 		},
 	},
