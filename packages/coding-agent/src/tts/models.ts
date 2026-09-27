@@ -49,8 +49,21 @@ export interface SherpaTtsLocalModelSpec extends TtsLocalModelBase {
 	engine: "sherpa";
 	/** sherpa-onnx offline TTS family (currently only `vits`). */
 	modelType: "vits";
-	/** Model files (relative to the repo root) fetched into the local cache. */
+	/** Flat model files (relative to the repo root) fetched into the local cache. */
 	files: { model: string; tokens: string; lexicon: string };
+	/**
+	 * Jieba dictionary directory for zh VITS models: the cache-relative dir
+	 * plus the files within it (also relative to the repo root). Passed to
+	 * OfflineTtsConfig as `vits.dictDir` — without it the zh frontend has no
+	 * word-segmentation dictionary and synthesis degrades/fails.
+	 */
+	dict?: { dir: string; files: readonly string[] };
+	/**
+	 * Text-normalization rule FSTs (relative to the repo root), joined into
+	 * OfflineTtsConfig's top-level `ruleFsts`. Handles number/date/phone
+	 * verbalization and heteronym disambiguation for zh models.
+	 */
+	ruleFsts?: readonly string[];
 }
 
 export type TtsLocalModelSpec = KokoroTtsLocalModelSpec | SherpaTtsLocalModelSpec;
@@ -106,9 +119,12 @@ export const TTS_LOCAL_MODELS = [
 		key: "melotts-zh",
 		engine: "sherpa",
 		// sherpa-onnx official MeloTTS-zh export (from myshell-ai/MeloTTS-Chinese).
-		// File layout verified against the k2-fsa sherpa-onnx docs: model.onnx
-		// (~163 MB), tokens.txt, lexicon.txt — built-in word segmentation, no
-		// external dict dir needed.
+		// File layout verified against the k2-fsa sherpa-onnx release manifest:
+		// model.onnx (~170 MB), tokens.txt, lexicon.txt, the jieba `dict/`
+		// directory (word segmentation for the zh frontend) and the
+		// new_heteronym/number/phone/date FST rules (verbalization +
+		// heteronym disambiguation). A registration missing any of these
+		// synthesizes wrong or not at all — see tts.models.test.ts.
 		repo: "csukuangfj/vits-melo-tts-zh_en",
 		modelType: "vits",
 		files: {
@@ -116,6 +132,11 @@ export const TTS_LOCAL_MODELS = [
 			tokens: "tokens.txt",
 			lexicon: "lexicon.txt",
 		},
+		dict: {
+			dir: "dict",
+			files: ["jieba.dict.utf8", "hmm_model.utf8", "user.dict.utf8", "idf.utf8", "stop_words.utf8"],
+		},
+		ruleFsts: ["new_heteronym.fst", "number.fst", "phone.fst", "date.fst"],
 		sampleRate: 44_100,
 		label: "MeloTTS 中文",
 		description:
@@ -164,6 +185,19 @@ export function getTtsLocalModelSpec(key: string): TtsLocalModelSpec | undefined
 	return TTS_LOCAL_MODELS.find(model => model.key === key);
 }
 
+/**
+ * Every cache-relative file path a sherpa TTS tier needs on disk: the flat
+ * model files, the dict-dir files (`dict/<name>`), and the rule FSTs. The
+ * cache check and the worker's fetcher both derive from this single list so
+ * they can never disagree about what "downloaded" means.
+ */
+export function sherpaTtsRequiredFiles(spec: SherpaTtsLocalModelSpec): string[] {
+	const required = [...Object.values(spec.files)];
+	if (spec.dict) for (const file of spec.dict.files) required.push(`${spec.dict.dir}/${file}`);
+	if (spec.ruleFsts) required.push(...spec.ruleFsts);
+	return required;
+}
+
 export function isTtsLocalModelKey(value: string): value is TtsLocalModelKey {
 	return getTtsLocalModelSpec(value) !== undefined;
 }
@@ -180,6 +214,22 @@ export function resolveTtsRepo(modelKey: string | undefined): string {
 	const spec = (modelKey && getTtsLocalModelSpec(modelKey)) || getTtsLocalModelSpec(DEFAULT_TTS_LOCAL_MODEL_KEY);
 	if (!spec) throw new Error(`No local TTS model registered for key: ${modelKey ?? DEFAULT_TTS_LOCAL_MODEL_KEY}`);
 	return spec.repo;
+}
+
+/**
+ * Map a requested voice id onto a sherpa-onnx speaker id for a sherpa TTS
+ * tier: the voice catalog's order is the model's `sid` order, and any unknown
+ * or unset voice falls back to the model's default voice (sid 0). The sherpa
+ * node addon rejects requests without an explicit `sid`, so synthesis must
+ * always go through this mapping.
+ */
+export function resolveSherpaSpeakerId(spec: SherpaTtsLocalModelSpec, voice: string | undefined): number {
+	const fallback = spec.voices[0]?.id;
+	const resolved = voice ? (spec.voices.find(v => v.id === voice)?.id ?? fallback) : fallback;
+	return Math.max(
+		0,
+		spec.voices.findIndex(v => v.id === resolved),
+	);
 }
 
 /**

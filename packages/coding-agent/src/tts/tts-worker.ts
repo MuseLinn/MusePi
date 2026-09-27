@@ -26,6 +26,7 @@ import { fetchHubFile, preferredHubOrigin } from "../tiny/hub-mirrors";
 import {
 	getTtsLocalModelSpec,
 	type KokoroTtsLocalModelSpec,
+	resolveSherpaSpeakerId,
 	resolveTtsModelForText,
 	resolveTtsVoice,
 	type SherpaTtsLocalModelSpec,
@@ -327,16 +328,17 @@ async function downloadSherpaTtsFile(
 }
 
 /**
- * Ensure all sherpa-onnx TTS files for a tier (`model`/`tokens`/`lexicon`) are
- * present in the cache, downloading any missing, and return their absolute
- * paths keyed by role.
+ * Ensure all sherpa-onnx TTS files for a tier (flat `model`/`tokens`/`lexicon`
+ * plus, when declared, the jieba dict dir and the rule FSTs) are present in the
+ * cache, downloading any missing, and return their absolute paths in
+ * OfflineTtsConfig shape.
  */
 async function ensureSherpaTtsFiles(
 	spec: SherpaTtsLocalModelSpec,
 	modelKey: TtsLocalModelKey,
 	transport: TtsTransport,
 	requestId: string,
-): Promise<Record<string, string>> {
+): Promise<{ model: string; tokens: string; lexicon: string; dictDir?: string; ruleFsts?: string }> {
 	const dir = path.join(getTinyModelsCacheDir(), spec.repo);
 	await fs.mkdir(dir, { recursive: true });
 	const resolved: Record<string, string> = {};
@@ -351,8 +353,35 @@ async function ensureSherpaTtsFiles(
 		if (!present) await downloadSherpaTtsFile(spec.repo, filename, dest, modelKey, transport, requestId);
 		resolved[key] = dest;
 	}
-	return resolved;
+	let dictDir: string | undefined;
+	if (spec.dict) {
+		dictDir = path.join(dir, spec.dict.dir);
+		await fs.mkdir(dictDir, { recursive: true });
+		for (const filename of spec.dict.files) {
+			const dest = path.join(dictDir, filename);
+			const present = await fs
+				.stat(dest)
+				.then(stats => stats.size > 0)
+				.catch(() => false);
+			if (!present)
+				await downloadSherpaTtsFile(
+					spec.repo,
+					`${spec.dict.dir}/${filename}`,
+					dest,
+					modelKey,
+					transport,
+					requestId,
+				);
+		}
+	}
+	const ruleFsts = spec.ruleFsts?.length
+		? spec.ruleFsts.map(filename => path.join(dir, filename)).join(",")
+		: undefined;
+	return { model: resolved.model!, tokens: resolved.tokens!, lexicon: resolved.lexicon!, dictDir, ruleFsts };
 }
+
+/** Top-level `OfflineTtsConfig` extras beyond the shared STT-side shape. */
+type SherpaTtsCreateConfig = Parameters<SherpaRuntime["OfflineTts"]["createAsync"]>[0] & { ruleFsts?: string };
 
 async function loadSherpaTtsModel(
 	spec: SherpaTtsLocalModelSpec,
@@ -364,15 +393,22 @@ async function loadSherpaTtsModel(
 	const files = await ensureSherpaTtsFiles(spec, modelKey, transport, requestId);
 	const startedAt = performance.now();
 	const numThreads = Math.max(1, Math.min(4, os.availableParallelism()));
-	const instance = await runtime.OfflineTts.createAsync({
+	const config: SherpaTtsCreateConfig = {
 		model: {
-			vits: { model: files.model!, tokens: files.tokens!, lexicon: files.lexicon! },
+			vits: {
+				model: files.model,
+				tokens: files.tokens,
+				lexicon: files.lexicon,
+				...(files.dictDir ? { dictDir: files.dictDir } : {}),
+			},
 			numThreads,
 			provider: "cpu",
 			debug: 0,
 		},
 		maxNumSentences: 1,
-	});
+		...(files.ruleFsts ? { ruleFsts: files.ruleFsts } : {}),
+	};
+	const instance = await runtime.OfflineTts.createAsync(config);
 	sendLog(transport, "debug", "tts: local model loaded", {
 		modelKey,
 		repo: spec.repo,
@@ -380,6 +416,8 @@ async function loadSherpaTtsModel(
 		modelType: spec.modelType,
 		provider: "cpu",
 		numThreads,
+		dictDir: files.dictDir !== undefined,
+		ruleFsts: files.ruleFsts !== undefined,
 		elapsedMs: Math.round(performance.now() - startedAt),
 	});
 	return { engine: "sherpa", instance };
@@ -444,7 +482,12 @@ async function synthesizeSegment(
 	voice: string | undefined,
 ): Promise<{ pcm: Float32Array; sampleRate: number }> {
 	if (synthesizer.engine === "sherpa") {
-		const output = await synthesizer.instance.generateAsync({ text });
+		if (spec.engine !== "sherpa") throw new Error(`Model ${spec.key} is not a sherpa TTS tier`);
+		// sherpa-onnx's node addon validates the request object strictly: a
+		// missing `sid`/`speed` field throws "The argument object should have a
+		// field sid/speed" instead of defaulting (the pre-fix silent-TTS bug).
+		const sid = resolveSherpaSpeakerId(spec, voice);
+		const output = await synthesizer.instance.generateAsync({ text, sid, speed: 1 });
 		if (!output.samples || output.samples.length === 0)
 			throw new Error("sherpa TTS synthesis returned no audio samples");
 		return { pcm: output.samples, sampleRate: output.sampleRate || spec.sampleRate };

@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getTinyModelsCacheDir } from "@musepi/pi-utils";
 import { t } from "../i18n/index.ts";
-import { getTtsLocalModelSpec } from "./models";
+import { getTtsLocalModelSpec, sherpaTtsRequiredFiles } from "./models";
 import { isTtsRuntimeCached } from "./runtime";
 import { ttsClient } from "./tts-client";
 
@@ -18,8 +18,10 @@ export interface TtsDownloadProgress {
  * files at `<cacheDir>/<repo>/...`, so any `.onnx` weight under the repo dir
  * means the weights can load without a network fetch; the Kokoro package
  * runtime is version-keyed separately and must also exist. Sherpa (MeloTTS-zh):
- * the worker streams the repo's `files` (`model`/`tokens`/`lexicon`) flat into
- * `<cacheDir>/<repo>/`, so every declared file must exist — the sherpa native
+ * the worker streams every file from the registry manifest — flat model
+ * files, jieba dict files, rule FSTs — into `<cacheDir>/<repo>/`, so the
+ * cached check must cover the full manifest, not just the ONNX weights (an
+ * incomplete melo cache synthesizes wrong or not at all). The sherpa native
  * runtime is shared with the STT worker and is not part of the model cache
  * condition.
  */
@@ -29,8 +31,12 @@ export async function isTtsModelCached(modelKey: string): Promise<boolean> {
 	const repoDir = path.join(getTinyModelsCacheDir(), ...spec.repo.split("/"));
 	try {
 		if (spec.engine === "sherpa") {
-			const entries = await fs.readdir(repoDir);
-			return Object.values(spec.files).every(file => entries.includes(file));
+			const required = sherpaTtsRequiredFiles(spec);
+			// `recursive` listings join nested names with the platform separator;
+			// normalize to `/` so the manifest comparison is platform-stable.
+			const entries = await fs.readdir(repoDir, { recursive: true });
+			const normalized = entries.map(entry => (typeof entry === "string" ? entry.replaceAll("\\", "/") : ""));
+			return required.every(file => normalized.includes(file));
 		}
 		const entries = await fs.readdir(repoDir, { recursive: true });
 		const hasWeights = entries.some(entry => typeof entry === "string" && entry.endsWith(".onnx"));

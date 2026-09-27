@@ -442,7 +442,10 @@ export class TtsClient {
 			if (pending.kind === "download") pending.resolve(true);
 			return;
 		}
-		logger.debug("tts: worker returned error", { error: message.error });
+		// A synthesis failure must be visible, not silent: the promise contract
+		// resolves `null` (callers treat it as "no audio"), so the only trace of
+		// the worker's error message is this log line and the progress event.
+		logger.warn("tts: worker returned error", { modelKey: pending.modelKey, error: message.error });
 		this.#emitProgress({ modelKey: pending.modelKey, status: "error" });
 		if (pending.kind === "synthesize") pending.resolve(null);
 		else if (pending.kind === "download") pending.resolve(false);
