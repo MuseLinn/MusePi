@@ -29,6 +29,9 @@ export const creation = {
 	"creation templates title": "Session templates",
 	"creation templates empty":
 		"No templates yet. Create a prototype or deck, then save it as a template from the success toast.",
+	// Blank-start equivalent in the empty state (opendesign StartFromPicker's Blank-first):
+	// focus the composer — typing and sending creates a session, so the empty state never dead-ends.
+	"creation templates blank start": "Start blank: type a request above and send",
 	"creation template delete": "Delete",
 	"creation template confirm delete": 'Delete template "{name}"? This cannot be undone.',
 	"creation template unnamed": "Unnamed template",

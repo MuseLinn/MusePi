@@ -51,6 +51,7 @@ import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
+import { TemplateRail } from "./composer/template-rail";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
@@ -877,7 +878,10 @@ export function WelcomeComposer({
 	const [railState, setRailState] = useState<CreationRailState | null>(null);
 	const railRef = useRef<CreationRailHandle | null>(null);
 	const designTemplate = designActive && railState?.template === true;
-	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy && !railState?.busy;
+	// 模板 rail 自建会话期的 busy(TemplateRail 经 onBusyChange 上报),
+	// 与 railState.busy 同一语义:发送期禁按。
+	const [templateBusy, setTemplateBusy] = useState(false);
+	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy && !railState?.busy && !templateBusy;
 
 	// ── Design empty state (设计稿 08 → M3.7b §3): preset armed to "design" ──
 	// The welcome composer mirrors the session composer's design select;
@@ -1452,10 +1456,12 @@ export function WelcomeComposer({
 						</div>
 					)}
 					{/* M3.7a design 模式内联形态(v2 修订):类型 chip 排直接落在
-					 * 工作区 chip 排上方一行,无弹层/无第二输入框;template chip 选中
-					 * 时输入框让位给 chip 排下方的模板 rail(§2.3)。进出场走 Reveal
-					 * (高度 240ms + 淡出 160ms + 内层位移,gui-creation-reveal),
-					 * 收起的退场动画播完前保持挂载,草稿/句柄不因收起丢失。 */}
+					 * 工作区 chip 排上方一行,无弹层/无第二输入框。opendesign 铁律:
+					 * composer 是创建页永久锚点——template chip 选中时输入框常驻,
+					 * 模板 rail 落在 composer 下方(见 form 之后的 TemplateRail)。
+					 * 进出场走 Reveal(高度 240ms + 淡出 160ms + 内层位移,
+					 * gui-creation-reveal),收起的退场动画播完前保持挂载,
+					 * 草稿/句柄不因收起丢失。 */}
 					<Reveal open={designActive} className="gui-creation-reveal w-full">
 						<CreationModeRow
 							rpc={rpc}
@@ -1666,542 +1672,565 @@ export function WelcomeComposer({
 							)}
 						</div>
 					)}
-					{!designTemplate && (
-						<form
-							ref={formRef}
-							className="gui-welcome-form relative w-full"
-							onSubmit={submit}
-							onFocus={() => setBeamOn(true)}
-							onBlur={() => setBeamOn(false)}
-						>
-							<ComposerFrame
-								className="gui-welcome-input"
-								hero
-								heroActive={beamOn}
-								chatInput
-								flipAnchor="welcome"
-								pet={
-									pet.enabled && pet.mode === "input"
-										? ({ hovered, hopping }) => (
-												<PetSprite
-													mood={hopping ? "dragging" : hovered ? "hover" : "rest"}
-													pet={pet.pet}
-													size={34}
-													gloss={pet.decor.gloss}
-													accessory={pet.decor.accessory}
-												/>
-											)
-										: null
-								}
-								attachments={attachments}
-								onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-								onMentionAttachment={id => {
-									const a = attachments.find(x => x.id === id);
-									const ta = taRef.current;
-									if (!a || !ta) return;
-									const { next, caret } = spliceMentionToken(
-										ta.value,
-										ta.selectionStart ?? ta.value.length,
-										ta.selectionEnd ?? ta.value.length,
-										a.name,
-									);
-									setText(next);
-									requestAnimationFrame(() => {
-										ta.setSelectionRange(caret, caret);
-										ta.focus();
-										autosize(taRef.current);
-									});
-								}}
-								onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
-								onEditSketch={id => {
-									const chip = attachments.find(x => x.id === id);
-									if (!chip) return;
-									// Scene present → reopen the strokes (A0) so
-									// every object stays editable; otherwise fall
-									// back to mounting the chip's PNG.
-									setSketch({
-										open: true,
-										editId: id,
-										initial: chip.sketchScene ? null : chip.dataUrl,
-										scene: chip.sketchScene ?? null,
-									});
-								}}
-								onAddAttachment={() => openAttachMenu.current?.()}
-								footerLeft={
-									<>
-										<AttachMenu
-											onReady={open => {
-												openAttachMenu.current = open;
-											}}
-											goalMode={goalArmed}
-											planMode={planArmed}
-											// Welcome toggles ARM the mode chip only — no popup
-											// dialog, no session creation (the input keeps its
-											// shape). The first sent message applies the mode
-											// to the session it creates.
-											onToggleGoal={() => setGoalArmed(v => !v)}
-											onTogglePlan={() => setPlanArmed(v => !v)}
-											// Guided goal needs a live session (the interview runs
-											// in chat), so the welcome entry CREATES one via
-											// onSubmit(guidedGoal) — the daemon fires the hidden
-											// interview kickoff there and the draft rides along
-											// as the rough objective. The empty `() => {}` once
-											// made the menu row look dead.
-											onGuidedGoal={() => {
-												const draft = text.trim();
-												if (busy) return;
-												setText("");
-												setQuotes([]);
-												requestAnimationFrame(() => autosize(taRef.current));
-												sfxFor("first");
-												setGoalArmed(false);
-												setPlanArmed(false);
-												void onSubmit(draft, {
-													thinkingLevel: thinking,
-													modelId: modelTouched.current ? modelId : effectiveModelId,
-													guidedGoal: true,
-													// Image chips ride along into the interview
-													// kickoff (TUI /guided-goal input.images
-													// parity); the daemon attaches them to the
-													// hidden synthetic kickoff.
-													images: attachments
-														.filter(a => a.kind !== "file" && a.dataUrl)
-														.map(a => ({
-															type: "image" as const,
-															data: a.dataUrl.split(",")[1] ?? "",
-															mimeType: a.mimeType,
-														})),
-												});
-											}}
-											onPickImages={files => void addFiles(files)}
-											// Same entry set as the session composer: the empty
-											// state is not a reduced product. File chips wait in
-											// state until the session this prompt creates exists.
-											onPickFiles={files => void addFiles(files)}
-											onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
-											onCaptureScreen={openCapture}
-											onInsert={token => {
-												const ta = taRef.current;
-												if (!ta) return;
-												ta.focus();
-												const start = ta.selectionStart ?? text.length;
-												const end = ta.selectionEnd ?? text.length;
-												ta.setRangeText(token, start, end, "end");
-												setText(ta.value);
-												autosize(ta);
-											}}
-										/>
-										{/* Focus mode sits between the attach menu and the model
-										 * selector (openchamber ComposerFooter order). */}
-										{onToggleFocus && (
-											<button
-												type="button"
-												className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
-												onClick={onToggleFocus}
-												title={t("focus mode")}
-												aria-label={t("focus mode")}
-												aria-pressed={focused}
-											>
-												<Icon name="expand-up-down" className="h-3.5 w-3.5" />
-											</button>
-										)}
-										<ModelThinkingCapsule
-											rpc={rpc}
-											sessionId={null}
-											presetModelId={presetModelId ?? modelId}
-											thinkingLevel={thinking}
-											thinkingEfforts={thinkingEfforts}
-											allowSetDefault
-											onAddProvider={onAddProvider}
-											onModelSelect={(v, provider) => {
-												modelTouched.current = true;
-												// Provider/id composite, never the bare id: two
-												// providers serve the same id (opencode-go vs
-												// opencode-zen deepseek-v4-flash), and a bare id
-												// reaching session.create's modelPattern would let
-												// daemon-side preference ranking pick the wrong
-												// provider (or silently fall back to DEFAULT on a
-												// resolution miss).
-												setModelId(provider ? `${provider}/${v}` : v);
-											}}
-											onSetThinking={v => {
-												thinkingTouched.current = true;
-												setThinking(v);
-											}}
-										/>
-										{/* Design style select (M3.7b §3, WorkBuddy footer-pill
-										 * parity): the pick lands in the creation draft
-										 * (designSystemId → projectMetadata), same source as
-										 * the preview rail below the composer. */}
-										{isDesignArmed && (
-											<DesignStyleSelect
-												systems={designSystems}
-												selected={designStyle}
-												onPick={pickDesignStyle}
+					{/* composer 是创建页的永久锚点(opendesign 铁律):任何 chip
+					 * 选中态下输入框都保持可见可用——template chip 选中时模板 rail
+					 * 在 composer 下方展开(见 form 之后的 TemplateRail),输入框
+					 * 不再被替换/卸载,草稿跨 chip 切换存活。 */}
+					<form
+						ref={formRef}
+						className="gui-welcome-form relative w-full"
+						onSubmit={submit}
+						onFocus={() => setBeamOn(true)}
+						onBlur={() => setBeamOn(false)}
+					>
+						<ComposerFrame
+							className="gui-welcome-input"
+							hero
+							heroActive={beamOn}
+							chatInput
+							flipAnchor="welcome"
+							pet={
+								pet.enabled && pet.mode === "input"
+									? ({ hovered, hopping }) => (
+											<PetSprite
+												mood={hopping ? "dragging" : hovered ? "hover" : "rest"}
+												pet={pet.pet}
+												size={34}
+												gloss={pet.decor.gloss}
+												accessory={pet.decor.accessory}
 											/>
-										)}
-										{/* Armed mode chips (plan/goal): shown IN the button row
-										 * right of the thinking selector so the armed state is
-										 * visible without opening the attach menu. */}
-										{goalArmed && (
-											<button
-												type="button"
-												className="gui-mode-chip gui-mode-chip--armed"
-												title={t("next message becomes the goal objective")}
-												onClick={() => setGoalArmed(false)}
-											>
-												<Icon name="target" className="h-3 w-3" />
-												<span>{t("goal")}</span>
-											</button>
-										)}
-										{planArmed && (
-											<button
-												type="button"
-												className="gui-mode-chip gui-mode-chip--armed"
-												title={t("plan mode")}
-												onClick={() => setPlanArmed(false)}
-											>
-												<Icon name="compass-3" className="h-3 w-3" />
-												<span>{t("plan")}</span>
-											</button>
-										)}
-									</>
-								}
-								footerRight={
-									<>
-										{/* Approval mode (openchamber input permission-picker
-										 * parity) — a global setting, so it works session-less. */}
-										<ApprovalModeButton rpc={rpc} />
-										{/* Compact motion-only mic control; the live waveform,
-										 * clock and phase copy live in the in-input strip. */}
-										<VoiceButton state={dictation.phase} disabled={!sttEnabled} onToggle={dictation.toggle} />
+										)
+									: null
+							}
+							attachments={attachments}
+							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+							onMentionAttachment={id => {
+								const a = attachments.find(x => x.id === id);
+								const ta = taRef.current;
+								if (!a || !ta) return;
+								const { next, caret } = spliceMentionToken(
+									ta.value,
+									ta.selectionStart ?? ta.value.length,
+									ta.selectionEnd ?? ta.value.length,
+									a.name,
+								);
+								setText(next);
+								requestAnimationFrame(() => {
+									ta.setSelectionRange(caret, caret);
+									ta.focus();
+									autosize(taRef.current);
+								});
+							}}
+							onEditImage={src => setSketch({ open: true, editId: null, initial: src, scene: null })}
+							onEditSketch={id => {
+								const chip = attachments.find(x => x.id === id);
+								if (!chip) return;
+								// Scene present → reopen the strokes (A0) so
+								// every object stays editable; otherwise fall
+								// back to mounting the chip's PNG.
+								setSketch({
+									open: true,
+									editId: id,
+									initial: chip.sketchScene ? null : chip.dataUrl,
+									scene: chip.sketchScene ?? null,
+								});
+							}}
+							onAddAttachment={() => openAttachMenu.current?.()}
+							footerLeft={
+								<>
+									<AttachMenu
+										onReady={open => {
+											openAttachMenu.current = open;
+										}}
+										goalMode={goalArmed}
+										planMode={planArmed}
+										// Welcome toggles ARM the mode chip only — no popup
+										// dialog, no session creation (the input keeps its
+										// shape). The first sent message applies the mode
+										// to the session it creates.
+										onToggleGoal={() => setGoalArmed(v => !v)}
+										onTogglePlan={() => setPlanArmed(v => !v)}
+										// Guided goal needs a live session (the interview runs
+										// in chat), so the welcome entry CREATES one via
+										// onSubmit(guidedGoal) — the daemon fires the hidden
+										// interview kickoff there and the draft rides along
+										// as the rough objective. The empty `() => {}` once
+										// made the menu row look dead.
+										onGuidedGoal={() => {
+											const draft = text.trim();
+											if (busy) return;
+											setText("");
+											setQuotes([]);
+											requestAnimationFrame(() => autosize(taRef.current));
+											sfxFor("first");
+											setGoalArmed(false);
+											setPlanArmed(false);
+											void onSubmit(draft, {
+												thinkingLevel: thinking,
+												modelId: modelTouched.current ? modelId : effectiveModelId,
+												guidedGoal: true,
+												// Image chips ride along into the interview
+												// kickoff (TUI /guided-goal input.images
+												// parity); the daemon attaches them to the
+												// hidden synthetic kickoff.
+												images: attachments
+													.filter(a => a.kind !== "file" && a.dataUrl)
+													.map(a => ({
+														type: "image" as const,
+														data: a.dataUrl.split(",")[1] ?? "",
+														mimeType: a.mimeType,
+													})),
+											});
+										}}
+										onPickImages={files => void addFiles(files)}
+										// Same entry set as the session composer: the empty
+										// state is not a reduced product. File chips wait in
+										// state until the session this prompt creates exists.
+										onPickFiles={files => void addFiles(files)}
+										onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
+										onCaptureScreen={openCapture}
+										onInsert={token => {
+											const ta = taRef.current;
+											if (!ta) return;
+											ta.focus();
+											const start = ta.selectionStart ?? text.length;
+											const end = ta.selectionEnd ?? text.length;
+											ta.setRangeText(token, start, end, "end");
+											setText(ta.value);
+											autosize(ta);
+										}}
+									/>
+									{/* Focus mode sits between the attach menu and the model
+									 * selector (openchamber ComposerFooter order). */}
+									{onToggleFocus && (
 										<button
-											type="submit"
-											ref={quotaAnchorRef}
-											className="gui-send-btn"
-											disabled={!canSend}
-											aria-label={t("send message")}
+											type="button"
+											className={`gui-composer-ico${focused ? " gui-composer-ico--active" : ""}`}
+											onClick={onToggleFocus}
+											title={t("focus mode")}
+											aria-label={t("focus mode")}
+											aria-pressed={focused}
 										>
-											<Icon name="send-plane" className="h-4 w-4" />
+											<Icon name="expand-up-down" className="h-3.5 w-3.5" />
 										</button>
-									</>
-								}
-							>
-								{dictation.phase !== "idle" && (
-									<VoiceStatusStrip
-										phase={dictation.phase}
-										seconds={dictation.seconds}
-										level={dictation.level}
+									)}
+									<ModelThinkingCapsule
+										rpc={rpc}
+										sessionId={null}
+										presetModelId={presetModelId ?? modelId}
+										thinkingLevel={thinking}
+										thinkingEfforts={thinkingEfforts}
+										allowSetDefault
+										onAddProvider={onAddProvider}
+										onModelSelect={(v, provider) => {
+											modelTouched.current = true;
+											// Provider/id composite, never the bare id: two
+											// providers serve the same id (opencode-go vs
+											// opencode-zen deepseek-v4-flash), and a bare id
+											// reaching session.create's modelPattern would let
+											// daemon-side preference ranking pick the wrong
+											// provider (or silently fall back to DEFAULT on a
+											// resolution miss).
+											setModelId(provider ? `${provider}/${v}` : v);
+										}}
+										onSetThinking={v => {
+											thinkingTouched.current = true;
+											setThinking(v);
+										}}
+									/>
+									{/* Design style select (M3.7b §3, WorkBuddy footer-pill
+									 * parity): the pick lands in the creation draft
+									 * (designSystemId → projectMetadata), same source as
+									 * the preview rail below the composer. */}
+									{isDesignArmed && (
+										<DesignStyleSelect
+											systems={designSystems}
+											selected={designStyle}
+											onPick={pickDesignStyle}
+										/>
+									)}
+									{/* Armed mode chips (plan/goal): shown IN the button row
+									 * right of the thinking selector so the armed state is
+									 * visible without opening the attach menu. */}
+									{goalArmed && (
+										<button
+											type="button"
+											className="gui-mode-chip gui-mode-chip--armed"
+											title={t("next message becomes the goal objective")}
+											onClick={() => setGoalArmed(false)}
+										>
+											<Icon name="target" className="h-3 w-3" />
+											<span>{t("goal")}</span>
+										</button>
+									)}
+									{planArmed && (
+										<button
+											type="button"
+											className="gui-mode-chip gui-mode-chip--armed"
+											title={t("plan mode")}
+											onClick={() => setPlanArmed(false)}
+										>
+											<Icon name="compass-3" className="h-3 w-3" />
+											<span>{t("plan")}</span>
+										</button>
+									)}
+								</>
+							}
+							footerRight={
+								<>
+									{/* Approval mode (openchamber input permission-picker
+									 * parity) — a global setting, so it works session-less. */}
+									<ApprovalModeButton rpc={rpc} />
+									{/* Compact motion-only mic control; the live waveform,
+									 * clock and phase copy live in the in-input strip. */}
+									<VoiceButton state={dictation.phase} disabled={!sttEnabled} onToggle={dictation.toggle} />
+									<button
+										type="submit"
+										ref={quotaAnchorRef}
+										className="gui-send-btn"
+										disabled={!canSend}
+										aria-label={t("send message")}
+									>
+										<Icon name="send-plane" className="h-4 w-4" />
+									</button>
+								</>
+							}
+						>
+							{dictation.phase !== "idle" && (
+								<VoiceStatusStrip phase={dictation.phase} seconds={dictation.seconds} level={dictation.level} />
+							)}
+							{dictation.error && (
+								<div className="gui-voice-error" role="status" aria-live="polite">
+									<span className="gui-voice-error-dot" aria-hidden />
+									<span className="min-w-0 flex-1">{dictation.error}</span>
+								</div>
+							)}
+							<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
+								{quotes.length > 0 && (
+									<div className="gui-welcome-quotes">
+										{quotes.map((q, i) => (
+											<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
+												<div className="gui-quote-text">{q}</div>
+												<button
+													type="button"
+													className="gui-quote-close"
+													onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
+													title={t("remove quote")}
+													aria-label={t("remove quote")}
+												>
+													<X size={12} />
+												</button>
+											</div>
+										))}
+									</div>
+								)}
+								{renderCompMenu(
+									<div
+										className="gui-slash-menu gui-slash-menu--rich"
+										style={{ minWidth: 300 }}
+										ref={completionMenuRef}
+									>
+										{slashOpen && slashFilter.length > 0 && (
+											<>
+												<div className="gui-slash-rows">
+													{slashFilter.map((c, i) => (
+														<SlashRow
+															key={c.name}
+															item={c}
+															active={i === slashIdx}
+															onClick={() => insertCompletion("slash", c.name)}
+														/>
+													))}
+												</div>
+												<div className="gui-slash-footer">{t("slash completion hints")}</div>
+											</>
+										)}
+										{atOpen &&
+											atFilter.length > 0 &&
+											atFilter.map((e, i) => (
+												<button
+													key={e.path}
+													type="button"
+													className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
+													onClick={() => insertCompletion("at", e.path)}
+												>
+													<span className="min-w-0 flex-1 truncate">
+														{e.isDir ? "📁 " : "📄 "}
+														{e.path}
+													</span>
+												</button>
+											))}
+										{hashOpen &&
+											hashFilter.length > 0 &&
+											hashFilter.map((s, i) => (
+												<button
+													key={s.id}
+													type="button"
+													className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
+													onClick={() => insertCompletion("hash", s.id)}
+												>
+													<span className="min-w-0 flex-1 truncate">
+														#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
+													</span>
+												</button>
+											))}
+									</div>,
+								)}
+
+								{pendingPaste && (
+									<LongPasteDialog
+										lineCount={pendingPaste.lineCount}
+										charCount={pendingPaste.charCount}
+										onAction={action => {
+											const ta = taRef.current;
+											if (!ta) {
+												dismissLongPaste();
+												return;
+											}
+											const start = ta.selectionStart ?? ta.value.length;
+											const end = ta.selectionEnd ?? ta.value.length;
+											if (action === "file") {
+												void (async () => {
+													try {
+														const name = `paste-${Date.now()}.md`;
+														await rpc.request("fs.write", {
+															cwd: project ?? "",
+															path: name,
+															content: pendingPaste.text,
+														});
+														const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
+														setText(newText);
+														requestAnimationFrame(() =>
+															ta.setSelectionRange(start + name.length, start + name.length),
+														);
+													} catch {
+														const newText =
+															ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
+														setText(newText);
+													}
+												})();
+												dismissLongPaste();
+												return;
+											}
+											const insertion =
+												action === "code-block"
+													? `\`\`\`\n${pendingPaste.text}\n\`\`\``
+													: pendingPaste.text;
+											const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
+											setText(newText);
+											requestAnimationFrame(() =>
+												ta.setSelectionRange(start + insertion.length, start + insertion.length),
+											);
+											dismissLongPaste();
+										}}
+										onDismiss={dismissLongPaste}
 									/>
 								)}
-								{dictation.error && (
-									<div className="gui-voice-error" role="status" aria-live="polite">
-										<span className="gui-voice-error-dot" aria-hidden />
-										<span className="min-w-0 flex-1">{dictation.error}</span>
-									</div>
-								)}
-								<div className="gui-welcome-ta-wrap flex items-start gap-1.5">
-									{quotes.length > 0 && (
-										<div className="gui-welcome-quotes">
-											{quotes.map((q, i) => (
-												<div className="gui-quote-card" key={`${i}-${q.slice(0, 32)}`}>
-													<div className="gui-quote-text">{q}</div>
-													<button
-														type="button"
-														className="gui-quote-close"
-														onClick={() => setQuotes(prev => prev.filter((_, j) => j !== i))}
-														title={t("remove quote")}
-														aria-label={t("remove quote")}
-													>
-														<X size={12} />
-													</button>
-												</div>
-											))}
-										</div>
-									)}
-									{renderCompMenu(
-										<div
-											className="gui-slash-menu gui-slash-menu--rich"
-											style={{ minWidth: 300 }}
-											ref={completionMenuRef}
-										>
-											{slashOpen && slashFilter.length > 0 && (
-												<>
-													<div className="gui-slash-rows">
-														{slashFilter.map((c, i) => (
-															<SlashRow
-																key={c.name}
-																item={c}
-																active={i === slashIdx}
-																onClick={() => insertCompletion("slash", c.name)}
-															/>
-														))}
-													</div>
-													<div className="gui-slash-footer">{t("slash completion hints")}</div>
-												</>
-											)}
-											{atOpen &&
-												atFilter.length > 0 &&
-												atFilter.map((e, i) => (
-													<button
-														key={e.path}
-														type="button"
-														className={`gui-model-opt${i === atIdx ? " gui-model-opt--active" : ""}`}
-														onClick={() => insertCompletion("at", e.path)}
-													>
-														<span className="min-w-0 flex-1 truncate">
-															{e.isDir ? "📁 " : "📄 "}
-															{e.path}
-														</span>
-													</button>
-												))}
-											{hashOpen &&
-												hashFilter.length > 0 &&
-												hashFilter.map((s, i) => (
-													<button
-														key={s.id}
-														type="button"
-														className={`gui-model-opt${i === hashIdx ? " gui-model-opt--active" : ""}`}
-														onClick={() => insertCompletion("hash", s.id)}
-													>
-														<span className="min-w-0 flex-1 truncate">
-															#{hashLabels.get(s.id) ?? s.cwd ?? s.id}
-														</span>
-													</button>
-												))}
-										</div>,
-									)}
-
-									{pendingPaste && (
-										<LongPasteDialog
-											lineCount={pendingPaste.lineCount}
-											charCount={pendingPaste.charCount}
-											onAction={action => {
-												const ta = taRef.current;
-												if (!ta) {
-													dismissLongPaste();
-													return;
-												}
-												const start = ta.selectionStart ?? ta.value.length;
-												const end = ta.selectionEnd ?? ta.value.length;
-												if (action === "file") {
-													void (async () => {
-														try {
-															const name = `paste-${Date.now()}.md`;
-															await rpc.request("fs.write", {
-																cwd: project ?? "",
-																path: name,
-																content: pendingPaste.text,
-															});
-															const newText = ta.value.slice(0, start) + name + ta.value.slice(end);
-															setText(newText);
-															requestAnimationFrame(() =>
-																ta.setSelectionRange(start + name.length, start + name.length),
-															);
-														} catch {
-															const newText =
-																ta.value.slice(0, start) + pendingPaste.text + ta.value.slice(end);
-															setText(newText);
-														}
-													})();
-													dismissLongPaste();
-													return;
-												}
-												const insertion =
-													action === "code-block"
-														? `\`\`\`\n${pendingPaste.text}\n\`\`\``
-														: pendingPaste.text;
-												const newText = ta.value.slice(0, start) + insertion + ta.value.slice(end);
-												setText(newText);
-												requestAnimationFrame(() =>
-													ta.setSelectionRange(start + insertion.length, start + insertion.length),
-												);
-												dismissLongPaste();
-											}}
-											onDismiss={dismissLongPaste}
-										/>
-									)}
-									<div className="gui-ta-stack">
-										<ComposerHighlight
-											text={text}
-											className="gui-ta-highlight--welcome"
-											resolveMention={name => {
-												// null = no chip with this name → plain text
-												// (unpainted, unexpanded on send).
-												const a = attachments.find(x => x.name === name);
-												return a
-													? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined }
-													: null;
-											}}
-											onMentionClick={start => {
-												const ta = taRef.current;
-												if (!ta) return;
-												ta.focus();
-												ta.setSelectionRange(start, start);
-											}}
-										/>
-										<textarea
-											ref={el => {
-												taRef.current = el;
-												compAnchorRef(el);
-											}}
-											className="gui-ta-welcome"
-											rows={3}
-											data-focused={focused ? "1" : "0"}
-											value={text}
-											onScroll={e => {
-												// Mirror the textarea's scroll onto the highlight
-												// overlay (previousElementSibling in the stack).
-												const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
-												if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
-											}}
-											onPaste={e => {
-												// Any pasted file becomes a chip (session-composer
-												// parity); plain text falls through to the
-												// textarea / long-paste gate.
-												const files = [...e.clipboardData.items]
-													.filter(i => i.kind === "file")
-													.map(i => i.getAsFile())
-													.filter((f): f is File => f !== null);
-												if (files.length > 0) {
-													e.preventDefault();
-													void addFiles(files);
-													return;
-												}
-												const pastedText = e.clipboardData.getData("text");
-												if (isLongPastedText(pastedText)) {
-													e.preventDefault();
-													requestLongPaste(pastedText);
-												}
-											}}
-											onDrop={e => {
-												const files = [...e.dataTransfer.files];
-												if (files.length > 0) {
-													e.preventDefault();
-													void addFiles(files);
-												}
-											}}
-											onChange={e => {
-												setText(e.target.value);
-												if (clearAllRef.current) {
-													clearAllRef.current = false;
-													if (e.target.value === "") setAttachments([]);
-												}
-												onCompletionInput(e.target.value);
-												// Initial height equals the content height, so
-												// first lines never resize the card.
-												autosize(taRef.current);
-											}}
-											onKeyDown={e => {
-												// IME composition: the confirming Enter commits the
-												// candidate text — never submit while composing.
-												if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-												// Attachment keyboard flow (WeChat parity): Backspace/
-												// Delete on an empty input removes the last image chip;
-												// a select-all delete empties attachments too.
-												if (e.key === "Backspace" || e.key === "Delete") {
-													const ta = taRef.current;
-													if (ta) {
-														if (ta.value.length === 0 && attachments.length > 0) {
-															e.preventDefault();
-															setAttachments(prev => prev.slice(0, -1));
-															return;
-														}
-														if (
-															ta.selectionStart === 0 &&
-															ta.selectionEnd === ta.value.length &&
-															ta.value.length > 0
-														) {
-															clearAllRef.current = true;
-														}
-													}
-												}
-												const menus: {
-													open: boolean;
-													list: unknown[];
-													idx: number;
-													setIdx: (n: number) => void;
-													insert: () => void;
-												}[] = [
-													{
-														open: slashOpen,
-														list: slashFilter,
-														idx: slashIdx,
-														setIdx: setSlashIdx,
-														insert: () =>
-															slashFilter[slashIdx] &&
-															insertCompletion("slash", slashFilter[slashIdx]!.name),
-													},
-													{
-														open: atOpen,
-														list: atFilter,
-														idx: atIdx,
-														setIdx: setAtIdx,
-														insert: () =>
-															atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
-													},
-													{
-														open: hashOpen,
-														list: hashFilter,
-														idx: hashIdx,
-														setIdx: setHashIdx,
-														insert: () =>
-															hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
-													},
-												];
-												for (const m of menus) {
-													if (!m.open || m.list.length === 0) continue;
-													if (e.key === "ArrowDown") {
-														e.preventDefault();
-														m.setIdx((m.idx + 1) % m.list.length);
-														return;
-													}
-													if (e.key === "ArrowUp") {
-														e.preventDefault();
-														m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
-														return;
-													}
-													if (e.key === "Enter" || e.key === "Tab") {
-														e.preventDefault();
-														m.insert();
-														return;
-													}
-													if (e.key === "Escape") {
-														e.preventDefault();
-														setSlashOpen(false);
-														setAtOpen(false);
-														setHashOpen(false);
-														return;
-													}
-												}
-												if (e.key === "Enter" && !e.shiftKey) {
-													e.preventDefault();
-													submit(e as unknown as FormEvent<HTMLFormElement>);
-												}
-											}}
-											placeholder={
-												placeholder ??
-												(designActive && railState
-													? railState.placeholder
-													: isDesignArmed
-														? t("design empty placeholder")
-														: t(PLACEHOLDER_TIPS[tipIdx]!))
+								<div className="gui-ta-stack">
+									<ComposerHighlight
+										text={text}
+										className="gui-ta-highlight--welcome"
+										resolveMention={name => {
+											// null = no chip with this name → plain text
+											// (unpainted, unexpanded on send).
+											const a = attachments.find(x => x.name === name);
+											return a
+												? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined }
+												: null;
+										}}
+										onMentionClick={start => {
+											const ta = taRef.current;
+											if (!ta) return;
+											ta.focus();
+											ta.setSelectionRange(start, start);
+										}}
+									/>
+									<textarea
+										ref={el => {
+											taRef.current = el;
+											compAnchorRef(el);
+										}}
+										className="gui-ta-welcome"
+										rows={3}
+										data-focused={focused ? "1" : "0"}
+										value={text}
+										onScroll={e => {
+											// Mirror the textarea's scroll onto the highlight
+											// overlay (previousElementSibling in the stack).
+											const overlay = e.currentTarget.previousElementSibling as HTMLElement | null;
+											if (overlay) overlay.scrollTop = e.currentTarget.scrollTop;
+										}}
+										onPaste={e => {
+											// Any pasted file becomes a chip (session-composer
+											// parity); plain text falls through to the
+											// textarea / long-paste gate.
+											const files = [...e.clipboardData.items]
+												.filter(i => i.kind === "file")
+												.map(i => i.getAsFile())
+												.filter((f): f is File => f !== null);
+											if (files.length > 0) {
+												e.preventDefault();
+												void addFiles(files);
+												return;
 											}
-											spellCheck={(() => {
-												try {
-													return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
-												} catch {
-													return false;
+											const pastedText = e.clipboardData.getData("text");
+											if (isLongPastedText(pastedText)) {
+												e.preventDefault();
+												requestLongPaste(pastedText);
+											}
+										}}
+										onDrop={e => {
+											const files = [...e.dataTransfer.files];
+											if (files.length > 0) {
+												e.preventDefault();
+												void addFiles(files);
+											}
+										}}
+										onChange={e => {
+											setText(e.target.value);
+											if (clearAllRef.current) {
+												clearAllRef.current = false;
+												if (e.target.value === "") setAttachments([]);
+											}
+											onCompletionInput(e.target.value);
+											// Initial height equals the content height, so
+											// first lines never resize the card.
+											autosize(taRef.current);
+										}}
+										onKeyDown={e => {
+											// IME composition: the confirming Enter commits the
+											// candidate text — never submit while composing.
+											if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+											// Attachment keyboard flow (WeChat parity): Backspace/
+											// Delete on an empty input removes the last image chip;
+											// a select-all delete empties attachments too.
+											if (e.key === "Backspace" || e.key === "Delete") {
+												const ta = taRef.current;
+												if (ta) {
+													if (ta.value.length === 0 && attachments.length > 0) {
+														e.preventDefault();
+														setAttachments(prev => prev.slice(0, -1));
+														return;
+													}
+													if (
+														ta.selectionStart === 0 &&
+														ta.selectionEnd === ta.value.length &&
+														ta.value.length > 0
+													) {
+														clearAllRef.current = true;
+													}
 												}
-											})()}
-											autoFocus
-											autoComplete="off"
-										/>
-									</div>
+											}
+											const menus: {
+												open: boolean;
+												list: unknown[];
+												idx: number;
+												setIdx: (n: number) => void;
+												insert: () => void;
+											}[] = [
+												{
+													open: slashOpen,
+													list: slashFilter,
+													idx: slashIdx,
+													setIdx: setSlashIdx,
+													insert: () =>
+														slashFilter[slashIdx] &&
+														insertCompletion("slash", slashFilter[slashIdx]!.name),
+												},
+												{
+													open: atOpen,
+													list: atFilter,
+													idx: atIdx,
+													setIdx: setAtIdx,
+													insert: () => atFilter[atIdx] && insertCompletion("at", atFilter[atIdx]!.path),
+												},
+												{
+													open: hashOpen,
+													list: hashFilter,
+													idx: hashIdx,
+													setIdx: setHashIdx,
+													insert: () =>
+														hashFilter[hashIdx] && insertCompletion("hash", hashFilter[hashIdx]!.id),
+												},
+											];
+											for (const m of menus) {
+												if (!m.open || m.list.length === 0) continue;
+												if (e.key === "ArrowDown") {
+													e.preventDefault();
+													m.setIdx((m.idx + 1) % m.list.length);
+													return;
+												}
+												if (e.key === "ArrowUp") {
+													e.preventDefault();
+													m.setIdx((m.idx - 1 + m.list.length) % m.list.length);
+													return;
+												}
+												if (e.key === "Enter" || e.key === "Tab") {
+													e.preventDefault();
+													m.insert();
+													return;
+												}
+												if (e.key === "Escape") {
+													e.preventDefault();
+													setSlashOpen(false);
+													setAtOpen(false);
+													setHashOpen(false);
+													return;
+												}
+											}
+											if (e.key === "Enter" && !e.shiftKey) {
+												e.preventDefault();
+												submit(e as unknown as FormEvent<HTMLFormElement>);
+											}
+										}}
+										placeholder={
+											placeholder ??
+											(designActive && railState
+												? railState.placeholder
+												: isDesignArmed
+													? t("design empty placeholder")
+													: t(PLACEHOLDER_TIPS[tipIdx]!))
+										}
+										spellCheck={(() => {
+											try {
+												return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
+											} catch {
+												return false;
+											}
+										})()}
+										autoFocus
+										autoComplete="off"
+									/>
 								</div>
-							</ComposerFrame>
-						</form>
-					)}
+							</div>
+						</ComposerFrame>
+					</form>
+					{/* 模板 rail（template chip 的内容区，§3.4 机制不变）：composer
+					 * 下方、设计体系 rail 上方内联展开（与 DesignSystemRail 同层
+					 * 同构）。opendesign 铁律——composer 是创建页永久锚点，选中
+					 * template chip 只展开本 rail，输入框纹丝不动；展开把下方内容
+					 * 下推，不做位移动画。进出场走 Reveal（高度 240ms + 淡出 160ms
+					 * + 内层位移，gui-creation-reveal），gui-motion-off /
+					 * prefers-reduced-motion 归零；节点常驻，草稿不因切换丢失。 */}
+					<Reveal open={designTemplate} className="gui-creation-reveal w-full">
+						<TemplateRail
+							rpc={rpc}
+							active={designTemplate}
+							// 点模板行 = 带模板快照建会话（createFromTemplate 语义不变）；
+							// 设计体系轴（M3.7b §3）与 chip 排发送同源：选中体系的 id 在这里
+							// 落进 projectMetadata，未选中不覆盖快照里的键。
+							onCreate={metadata => {
+								const withDesign = designStyle ? { ...metadata, designSystemId: designStyle } : metadata;
+								return designSubmit ? designSubmit(withDesign) : Promise.resolve(false);
+							}}
+							// 创建成功 → mode chip 复位 work（与原 createFromTemplate 的
+							// onClose 收尾一致）。
+							onCreated={() => onModeChange?.("work")}
+							onBusyChange={setTemplateBusy}
+							// 「空白起步」等价路径：聚焦 composer，直接输入发送即可建会话。
+							onBlankStart={() => taRef.current?.focus()}
+						/>
+					</Reveal>
 					{/* 设计体系预览 rail（M3.7b §3.3）：design armed 时落在 composer
 					 * 下方——120×72 色卡+名称卡横排，选中与风格胶囊同源 state；
 					 * 左右边缘羽化与入场 stagger 见 design-system-rail.tsx。 */}

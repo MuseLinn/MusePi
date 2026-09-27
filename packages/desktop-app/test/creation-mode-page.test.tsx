@@ -190,7 +190,7 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		}
 	});
 
-	test("template chip 收起输入框内联展开模板 rail,点行即以模板快照建会话", async () => {
+	test("template chip 选中后 composer 常驻，rail 落在 composer 下方，点行即以模板快照建会话", async () => {
 		const tpl = {
 			id: "tpl-1",
 			name: "我的演示稿",
@@ -206,9 +206,17 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 			chipButton(t("creation tab template")).click();
 		});
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
-		// template chip 收起输入框,模板 rail 内联落在 chip 排下方(§2.3)。
-		expect(document.body.querySelector("textarea")).toBeNull();
-		const row = document.body.querySelector<HTMLButtonElement>(".gui-creation-template-main");
+		// opendesign 铁律：composer 是创建页永久锚点——template chip 选中时
+		// 输入框常驻可输入，不再被 rail 替换/卸载。
+		const textarea = document.body.querySelector("textarea");
+		expect(textarea).not.toBeNull();
+		// rail 落在 composer 之下、设计体系 rail 之上（DOM 顺序断言）。
+		const form = document.body.querySelector(".gui-welcome-form")!;
+		const rail = document.body.querySelector("[data-testid='gui-template-rail']")!;
+		expect(form.compareDocumentPosition(rail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const dsRail = document.body.querySelector("[data-testid='gui-design-system-rail']")!;
+		expect(rail.compareDocumentPosition(dsRail) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		const row = rail.querySelector<HTMLButtonElement>(".gui-creation-template-main");
 		expect(row).not.toBeNull();
 		expect(row!.textContent).toContain("我的演示稿");
 		await act(async () => {
@@ -218,6 +226,60 @@ describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
 		expect(captured).toHaveLength(1);
 		expect(captured[0]!.metadata.templateId).toBe("tpl-1");
 		expect(captured[0]!.metadata.kind).toBe("deck");
+		// 共享 sessionDraft 归位,不影响其他用例/文件的 chip 起点。
+		act(() => {
+			chipButton(t("creation tab prototype")).click();
+		});
+		root.unmount();
+		document.body.innerHTML = "";
+	});
+
+	test("切换 chip composer 不卸载、草稿存活", async () => {
+		const root = renderWelcome(makeRpc());
+		await settle();
+		const textarea = document.body.querySelector("textarea")!;
+		const propsKey = Object.keys(textarea).find(k => k.startsWith("__reactProps$"))!;
+		const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
+		(textarea as HTMLTextAreaElement).value = "写了一半的需求";
+		act(() => {
+			props.onChange({ target: textarea, currentTarget: textarea });
+		});
+		const before = document.body.querySelector("textarea")!;
+		act(() => {
+			chipButton(t("creation tab template")).click();
+		});
+		await settle();
+		const after = document.body.querySelector("textarea")!;
+		// 同一节点（未卸载重挂），值不丢——先写需求再点模板的场景成立。
+		expect(after).toBe(before);
+		expect(after.value).toBe("写了一半的需求");
+		act(() => {
+			chipButton(t("creation tab prototype")).click();
+		});
+		root.unmount();
+		document.body.innerHTML = "";
+	});
+
+	test("模板空态：来源指引 + 空白起步路径（聚焦 composer）", async () => {
+		const root = renderWelcome(makeRpc());
+		await settle();
+		act(() => {
+			chipButton(t("creation tab template")).click();
+		});
+		await settle();
+		const rail = document.body.querySelector("[data-testid='gui-template-rail']")!;
+		// 来源指引（怎么造模板）保留。
+		expect(rail.textContent).toContain(t("creation templates empty"));
+		// 空白起步等价路径：点击聚焦 composer，直接输入发送即可建会话。
+		const blank = rail.querySelector<HTMLButtonElement>(".gui-creation-template-blank");
+		expect(blank).not.toBeNull();
+		act(() => {
+			blank!.click();
+		});
+		expect(document.activeElement).toBe(document.body.querySelector("textarea"));
+		act(() => {
+			chipButton(t("creation tab prototype")).click();
+		});
 		root.unmount();
 		document.body.innerHTML = "";
 	});

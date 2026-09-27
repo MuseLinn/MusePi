@@ -29,9 +29,12 @@ export const creation = {
 	"creation placeholder audio": "描述声音的情绪、节奏与用途…",
 	"creation placeholder template": "挑一个模板开始，或切到其他类型直接描述…",
 	"creation placeholder other": "描述你想做的东西…",
-	// 模板 rail（template chip 的内容区,§3.4 机制不变）
+	// 模板 rail（template chip 的内容区,§3.4 机制不变；composer 下方常驻展开）
 	"creation templates title": "会话模板",
 	"creation templates empty": "还没有模板。创建原型或演示稿后，可在创建成功的提示里保存为模板。",
+	// 空态的「空白起步」等价路径（opendesign StartFromPicker 的 Blank 第一项）：
+	// 聚焦 composer，直接输入发送即可建会话，空态不卡住用户。
+	"creation templates blank start": "从空白开始：在上方输入需求并发送",
 	"creation template delete": "删除",
 	"creation template confirm delete": "删除模板「{name}」？此操作不可撤销。",
 	"creation template unnamed": "未命名模板",

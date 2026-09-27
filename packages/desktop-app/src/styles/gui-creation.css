@@ -2,8 +2,9 @@
  * Design 模式页(M3.7a v2 修订,docs/review/0.5.0-m3-mode-page-redesign.md §2)
  * ——欢迎页内联形态:mode chip 选中「设计」时类型 chip 排直接落在欢迎页
  * 工作区 chip 排上方一行,横向溢出滚动(边缘羽化由全局滚动羽化接管,
- * 容器类语义化 .gui-creation-chiprail);template chip 的模板 rail 在
- * chip 排下方内联展开。零新视觉 token,chip/accent 选中态取档 M1.10。
+ * 容器类语义化 .gui-creation-chiprail);template chip 的模板 rail 落在
+ * composer 下方(opendesign 铁律:composer 是创建页永久锚点)。零新视觉
+ * token,chip/accent 选中态取档 M1.10。
  * 进出场复用 Reveal 条件区块动效规范(高度 240ms + 淡出 160ms),
  * .gui-creation-reveal 在内层再叠 6px 位移。
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -58,11 +59,16 @@
 	}
 }
 
-/* ── template chip 的模板 rail(chip 排下方内联展开,§3.4 机制不变)───────── */
+/* ── template chip 的模板 rail（composer 下方内联展开，§3.4 机制不变）────
+ * opendesign 铁律：composer 是创建页永久锚点，rail 落在 composer 之下
+ * （与 gui-ds-rail 同层同构：标题行 + 内容区，进出场由 Reveal 承担），
+ * 选中 template chip 只把下方内容下推，绝不替换输入框。 */
 .gui-creation-template-rail {
 	display: flex;
 	flex-direction: column;
 	gap: 7px;
+	margin-top: 10px;
+	width: 100%;
 }
 .gui-creation-field-label {
 	font-size: 12px;
@@ -74,6 +80,36 @@
 	font-size: 12.5px;
 	line-height: 1.6;
 	color: var(--color-text-faint);
+}
+/* 空态：来源指引 + 「空白起步」等价路径（OD StartFromPicker 的 Blank 第一项）。 */
+.gui-creation-template-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 8px;
+}
+.gui-creation-template-blank {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	font-size: 12.5px;
+	white-space: nowrap;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
+	transition:
+		color 130ms ease,
+		background-color 130ms ease,
+		box-shadow 130ms ease;
+}
+.gui-creation-template-blank:hover {
+	background: color-mix(in oklab, var(--color-accent) 26%, var(--glass-bg));
+}
+.gui-creation-template-main:disabled {
+	opacity: 0.6;
+	cursor: default;
 }
 .gui-creation-template-list {
 	display: flex;

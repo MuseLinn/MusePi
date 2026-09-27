@@ -1,4 +1,4 @@
-import { type TranslationKey, t } from "@musepi/client-core";
+import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -13,10 +13,8 @@ import {
 	DEFAULT_CREATION_DRAFT,
 	hydrateDraftFromMetadata,
 } from "../lib/creation";
-import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
-import { Icon } from "../vendor/oc-icons";
 
 /**
  * CreationModeRow — M3.7a design 模式页的欢迎页内联形态
@@ -24,7 +22,9 @@ import { Icon } from "../vendor/oc-icons";
  * 欢迎页 mode chip 选中「设计」时,类型 chip 排直接渲染在欢迎页空态
  * composer 上方一行;没有弹层、没有标题栏、没有第二个输入框——发送
  * 走欢迎页 composer 本体,本组件只拥有「类型选择 → projectMetadata」
- * 的编译与模板 rail。
+ * 的编译。模板 chip 的内容区(TemplateRail,§3.4 机制不变)由
+ * WelcomeComposer 渲染在 composer 下方,opendesign 铁律:composer 是
+ * 创建页永久锚点,选中 chip 永不替换输入框。
  *
  * chip 只承载类型(kind/intent 写进创作草稿,§2.3),类型特有字段全部
  * 取 M3.1 默认列,所以 `buildProjectMetadata` 的编译结果与 M3.2 逐字段
@@ -33,8 +33,8 @@ import { Icon } from "../vendor/oc-icons";
  *
  * 与 composer 的协作通过两个缝:① `onStateChange` 上报
  * placeholder/template/busy(composer 依此覆盖 placeholder、在 template
- * chip 时收起输入框、发送期禁按);② `onReady` 交出 `CreationRailHandle`,
- * composer 的发送钩子调 `handle.submit(text, opts)` 进入
+ * chip 时于 composer 下方展开 TemplateRail、发送期禁按);② `onReady` 交出
+ * `CreationRailHandle`,composer 的发送钩子调 `handle.submit(text, opts)` 进入
  * session.create + projectMetadata 管线(§2.4),失败返回 false 由
  * composer 回填草稿。
  *
@@ -64,43 +64,18 @@ export interface CreationRailHandle {
 }
 
 /** 上报给 composer 的派生态:placeholder 随选中 chip 变化,template
- *  chip 选中时输入框让位给模板 rail,busy 期间禁按发送。 */
+ *  chip 选中时 composer 下方展开模板 rail(输入框常驻,opendesign 铁律),
+ * busy 期间禁按发送。 */
 export interface CreationRailState {
 	placeholder: string;
 	template: boolean;
 	busy: boolean;
 }
 
-/** daemon CreationTemplate 的 GUI 视图(creation.templates.list 返回)。 */
-interface CreationTemplateRow {
-	id: string;
-	name?: string;
-	tab: string;
-	metadata: Record<string, unknown>;
-	createdAt: string;
-	updatedAt: string;
-}
-
 /** 草稿的模块级缓存:chip 排收起(卸载)后仍保留,再入即回填。 */
 let sessionDraft: CreationDraft | null = null;
 /** 每次应用运行只向 daemon 镜像回填一次(cwd 变化时重置)。 */
 let mirrorHydratedFor: string | null = null;
-
-/** 模板文件里的 tab 是任意字符串(daemon 不枚举校验历史文件)——
- *  已知 tab 走 i18n,未知原样回显。 */
-const TAB_LABEL_KEYS: Record<string, TranslationKey> = {
-	prototype: "creation tab prototype",
-	"live-artifact": "creation tab live artifact",
-	deck: "creation tab deck",
-	template: "creation tab template",
-	media: "creation tab media",
-	other: "creation tab other",
-};
-
-function tabLabel(tab: string): string {
-	const key = TAB_LABEL_KEYS[tab];
-	return key ? t(key) : tab;
-}
 
 export function CreationModeRow({
 	rpc,
@@ -123,7 +98,7 @@ export function CreationModeRow({
 	onSubmit(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** 收起模式页(§2.1:Escape/切回其他 mode chip 回到普通欢迎页)。 */
 	onClose(): void;
-	/** 派生态上报(composer 覆盖 placeholder / 收起输入框 / 禁按发送)。 */
+	/** 派生态上报(composer 覆盖 placeholder / 展开模板 rail / 禁按发送)。 */
 	onStateChange(state: CreationRailState): void;
 	/** 发送句柄注册(composer 的发送钩子经此进入创建管线)。 */
 	onReady(handle: CreationRailHandle | null): void;
@@ -138,17 +113,7 @@ export function CreationModeRow({
 		});
 	}, []);
 
-	// ── 模板数据(template chip 的内容区)────────────────────────────────
-	const [templates, setTemplates] = useState<CreationTemplateRow[]>([]);
-	const refreshTemplates = useCallback(() => {
-		if (!rpc) return;
-		void rpc
-			.request<{ templates: CreationTemplateRow[] }>("creation.templates.list", {})
-			.then(res => setTemplates(res?.templates ?? []))
-			.catch(() => setTemplates([]));
-	}, [rpc]);
-
-	const { confirm } = useConfirm();
+	// ── 发送期 busy(模板 rail 的 busy 由 TemplateRail 自行上报 composer)──
 	const [busy, setBusy] = useState(false);
 
 	const onCloseRef = useRef(onClose);
@@ -167,20 +132,20 @@ export function CreationModeRow({
 	const placeholder = t(CREATION_PLACEHOLDER_KEYS[chip]);
 	const template = chip === "template";
 
-	// 派生态变化即上报(composer 依此覆盖 placeholder/template/busy);
+	// 派生态变化即上报(composer 依此覆盖 placeholder/展开模板 rail/禁按);
 	// 收起期间上报中性态——composer 的 designActive 分支不消费 placeholder,
-	// 但 busy/template 必须复位,防止收起态残留禁按或输入框让位。
+	// 但 busy/template 必须复位,防止收起态残留禁按或 rail 保持展开。
 	useEffect(() => {
 		onStateChangeRef.current(
 			active ? { placeholder, template, busy } : { placeholder: "", template: false, busy: false },
 		);
 	}, [active, placeholder, template, busy]);
 
-	// 挂载时:拉模板列表 + 一次性镜像回填(重启后恢复上次的类型选择)。
-	// 只在展开时拉取:普通欢迎页(work 模式)不应产生 creation RPC。
+	// 挂载时:一次性镜像回填(重启后恢复上次的类型选择)。只在展开时消费:
+	// 普通欢迎页(work 模式)不应产生 creation RPC(模板列表由 TemplateRail
+	// 在 rail 展开时自行拉取)。
 	useEffect(() => {
 		if (!active) return;
-		refreshTemplates();
 		if (sessionDraft || mirrorHydratedFor === (project ?? "")) return;
 		mirrorHydratedFor = project ?? "";
 		if (!rpc || !project) return;
@@ -203,7 +168,7 @@ export function CreationModeRow({
 			.catch(() => {
 				// 镜像缺失/损坏 → 保持默认草稿(daemon 会话头才是权威)。
 			});
-	}, [active, refreshTemplates, project, rpc]);
+	}, [active, project, rpc]);
 
 	// Escape 收起(capture 阶段,优先于欢迎页背后的输入框处理)。嵌套
 	// 浮层/弹窗(菜单互斥、DialogFrame/confirm)打开时把 Escape 让给它。
@@ -247,34 +212,6 @@ export function CreationModeRow({
 		updateDraft(applyChip(draft, next));
 	};
 
-	/** 模板 rail:点一条即以该模板快照建会话(§3.4 机制不变)。 */
-	const createFromTemplate = async (tpl: CreationTemplateRow): Promise<void> => {
-		if (busy) return;
-		setBusy(true);
-		try {
-			const now = new Date().toISOString();
-			const inner = tpl.metadata;
-			const name = typeof inner.name === "string" ? inner.name : null;
-			const metadata = { ...inner, name, templateId: tpl.id, createdAt: now, updatedAt: now };
-			const ok = await onSubmit(metadata);
-			if (ok) onCloseRef.current();
-		} finally {
-			setBusy(false);
-		}
-	};
-
-	const deleteTemplate = async (tpl: CreationTemplateRow): Promise<void> => {
-		const name = tpl.name ?? t("creation template unnamed");
-		const ok = await confirm(t("creation template confirm delete", { name }), t("creation template delete"));
-		if (!ok) return;
-		try {
-			await rpc.request("creation.templates.delete", { id: tpl.id });
-			refreshTemplates();
-		} catch {
-			// daemon 离线等:静默(列表刷新自然暴露状态)。
-		}
-	};
-
 	return (
 		<div className="gui-creation-modepage w-full">
 			{/* 类型 chip 排(§2.3:单选,默认 prototype;横向溢出滚动,
@@ -301,40 +238,6 @@ export function CreationModeRow({
 					);
 				})}
 			</div>
-			{/* template chip 的模板 rail:chip 排下方内联展开(§3.4 机制不变)。 */}
-			{template && (
-				<div className="gui-creation-template-rail">
-					<div className="gui-creation-field-label">{t("creation templates title")}</div>
-					{templates.length === 0 ? (
-						<p className="gui-creation-empty">{t("creation templates empty")}</p>
-					) : (
-						<div className="gui-creation-template-list">
-							{templates.map(tpl => (
-								<div key={tpl.id} className="gui-creation-template-row">
-									<button
-										type="button"
-										className="gui-creation-template-main"
-										onClick={() => void createFromTemplate(tpl)}
-									>
-										<span className="gui-creation-template-name">
-											{tpl.name ?? t("creation template unnamed")}
-										</span>
-										<span className="gui-creation-template-tab">{tabLabel(tpl.tab)}</span>
-									</button>
-									<button
-										type="button"
-										className="gui-creation-template-delete"
-										aria-label={t("creation template delete")}
-										onClick={() => void deleteTemplate(tpl)}
-									>
-										<Icon name="delete-bin" className="h-3.5 w-3.5" />
-									</button>
-								</div>
-							))}
-						</div>
-					)}
-				</div>
-			)}
 		</div>
 	);
 }
