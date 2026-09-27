@@ -146,6 +146,8 @@ export function WelcomeComposer({
 	modes,
 	modeId,
 	onModeChange,
+	embedded,
+	placeholder,
 }: {
 	/** First prompt; the model/thinking choices made in the composer are
 	 *  carried along so the new session starts with them. planMode/goalMode
@@ -205,7 +207,16 @@ export function WelcomeComposer({
 	modes?: { id: string; label: string }[] | null;
 	modeId?: string | null;
 	onModeChange?(id: string | null): void;
+	/** M3.7a 模式页内嵌(docs/review/0.5.0-m3-mode-page-redesign.md §2.4):
+	 *  design 模式页渲染这同一个 composer —— 附件/语音/触发词高亮/提及同源,
+	 *  不复制第二份输入框。欢迎页空态的装饰(品牌头+问候语、提示行、建议
+	 *  chip、提醒、项目行、git 分支)属于欢迎页场景,内嵌时由调用方拥有。 */
+	embedded?: boolean;
+	/** placeholder 覆盖(模式页按选中的类型 chip 变化)。 */
+	placeholder?: string;
 }): ReactNode {
+	/** 内嵌模式页:只渲染输入框本体(欢迎页空态装饰见 props.embedded)。 */
+	const bare = embedded === true;
 	const pet = usePet();
 	const [text, setText] = useState("");
 	// Hour-of-day clock: re-renders only when the greeting bracket flips
@@ -1354,29 +1365,40 @@ export function WelcomeComposer({
 				</div>,
 			)}
 			<div
-				className="gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
+				className={
+					bare
+						? "relative flex w-full flex-col items-center"
+						: "gui-welcome gui-pane-glow relative flex h-full flex-1 flex-col items-center justify-center overflow-hidden px-8"
+				}
 				data-focused={focused ? "1" : undefined}
 			>
 				{/* Interactive dot-matrix brand backdrop (kimi-style reference):
 				 * "MusePi" rasterized into a breathing dot grid with colored
 				 * accents, feather edge and click ripples; replaces the static
 				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
-				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
-				<div className="gui-welcome-inner relative z-10 flex w-full max-w-[560px] flex-col items-center">
+				{!bare && dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
+				{/* 模式页内嵌:输入框本身铺满调用方的容器(无 560px 居中列)。 */}
+				<div
+					className={`relative z-10 flex w-full flex-col items-center${bare ? "" : " max-w-[560px] gui-welcome-inner"}`}
+				>
 					{/* Workspace picker (openchamber/ZCode): dropdown list attached
 					 * right above the input — current project, open folder, remote. */}
-					<div className="gui-brand mb-2 flex items-center gap-2">
-						<span className="gui-brand-mark">π</span>
-						<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
-					</div>
-					<p className="gui-welcome-greet pointer-events-none mb-4">
-						<BlurText text={greeting(hour)} stepMs={38} />
-					</p>
+					{!bare && (
+						<>
+							<div className="gui-brand mb-2 flex items-center gap-2">
+								<span className="gui-brand-mark">π</span>
+								<BlurText text={t("MusePi")} className="text-[22px] font-bold" />
+							</div>
+							<p className="gui-welcome-greet pointer-events-none mb-4">
+								<BlurText text={greeting(hour)} stepMs={38} />
+							</p>
+						</>
+					)}
 					{/* 恢复引导卡（就绪态 P0）：模型未配置时在输入框上方提示，
 					 * 一键跳引导的服务商配置步（musepi-open-onboarding detail.step，
 					 * OnboardingOverlay 支持可选定位）。ready 时零渲染——就绪态是
 					 * 引导不是门禁，专注模式下也不显示（输入优先）。 */}
-					{modelMissing && !focused && (
+					{!bare && modelMissing && !focused && (
 						<div className="gui-welcome-setup mb-3" role="status">
 							<div className="gui-welcome-setup-text">
 								<span className="gui-welcome-setup-title">{t("set up a model to start")}</span>
@@ -1546,7 +1568,7 @@ export function WelcomeComposer({
 									)}
 								</div>
 							)}
-							{branchInfo && (
+							{!bare && branchInfo && (
 								<div className="relative z-20" ref={branchAnchorRef}>
 									<button
 										type="button"
@@ -2086,7 +2108,10 @@ export function WelcomeComposer({
 												submit(e as unknown as FormEvent<HTMLFormElement>);
 											}
 										}}
-										placeholder={isDesignArmed ? t("design empty placeholder") : t(PLACEHOLDER_TIPS[tipIdx]!)}
+										placeholder={
+											placeholder ??
+											(isDesignArmed ? t("design empty placeholder") : t(PLACEHOLDER_TIPS[tipIdx]!))
+										}
 										spellCheck={(() => {
 											try {
 												return localStorage.getItem("musepi-gui-chat-spellcheck") === "1";
@@ -2102,67 +2127,73 @@ export function WelcomeComposer({
 						</ComposerFrame>
 					</form>
 					{/* Rotating tip with shimmer refresh (key change re-triggers);
-					 * t() runs at render time so locale switches land immediately. */}
-					<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
-						{t(tipKey).replace("{mod}", modLabel()).replace("⌘", modLabel())}
-					</p>
+					 * t() runs at render time so locale switches land immediately.
+					 * 模式页内嵌不渲染:提示行/建议 chip/提醒都是欢迎页空态的
+					 * 装饰,模式页的下方是它自己的内容区。 */}
+					{!bare && (
+						<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
+							{t(tipKey).replace("{mod}", modLabel()).replace("⌘", modLabel())}
+						</p>
+					)}
 					{/* Suggestion chips (openchamber new-session parity): one tap
 					 * fills the composer; the user hits Enter to send. */}
-					<div className="gui-suggest-reveal mt-4" ref={suggestRevealRef}>
-						<div className="gui-suggest">
-							{visibleSuggestions.map((s, i) => {
-								const r = resolveSuggestion(s);
-								const extra = i >= SUGGESTIONS_COLLAPSED_COUNT;
-								const chipCls = extra
-									? `gui-suggest-chip${collapsing ? " gui-suggest-chip--leaving" : " gui-suggest-chip--expand"}`
-									: "gui-suggest-chip";
-								return (
+					{!bare && (
+						<div className="gui-suggest-reveal mt-4" ref={suggestRevealRef}>
+							<div className="gui-suggest">
+								{visibleSuggestions.map((s, i) => {
+									const r = resolveSuggestion(s);
+									const extra = i >= SUGGESTIONS_COLLAPSED_COUNT;
+									const chipCls = extra
+										? `gui-suggest-chip${collapsing ? " gui-suggest-chip--leaving" : " gui-suggest-chip--expand"}`
+										: "gui-suggest-chip";
+									return (
+										<button
+											key={`${i}-${r.label}`}
+											type="button"
+											className={chipCls}
+											style={
+												extra && !collapsing
+													? ({
+															animationDelay: `${(i - SUGGESTIONS_COLLAPSED_COUNT) * 40}ms`,
+														} as CSSProperties)
+													: undefined
+											}
+											onClick={() => applySuggestion(r.prompt)}
+										>
+											<span>{r.label}</span>
+										</button>
+									);
+								})}
+								{showMore && revealCount > suggestions.length && (
 									<button
-										key={`${i}-${r.label}`}
 										type="button"
-										className={chipCls}
-										style={
-											extra && !collapsing
-												? ({
-														animationDelay: `${(i - SUGGESTIONS_COLLAPSED_COUNT) * 40}ms`,
-													} as CSSProperties)
-												: undefined
+										className="gui-suggest-chip gui-suggest-chip--manage gui-suggest-chip--expand"
+										style={{ animationDelay: "60ms" }}
+										onClick={() =>
+											window.dispatchEvent(
+												new CustomEvent("musepi-gui-open-settings-section", { detail: "suggestions" }),
+											)
 										}
-										onClick={() => applySuggestion(r.prompt)}
 									>
-										<span>{r.label}</span>
+										<span>{t("custom supplement")}</span>
 									</button>
-								);
-							})}
-							{showMore && revealCount > suggestions.length && (
+								)}
 								<button
 									type="button"
-									className="gui-suggest-chip gui-suggest-chip--manage gui-suggest-chip--expand"
-									style={{ animationDelay: "60ms" }}
-									onClick={() =>
-										window.dispatchEvent(
-											new CustomEvent("musepi-gui-open-settings-section", { detail: "suggestions" }),
-										)
-									}
+									className="gui-suggest-chip gui-suggest-chip--more"
+									title={showMore ? t("collapse suggestions") : t("more suggestions")}
+									aria-label={showMore ? t("collapse suggestions") : t("more suggestions")}
+									onClick={showMore ? collapseSuggestions : expandSuggestions}
 								>
-									<span>{t("custom supplement")}</span>
+									<MorphIcon icon={showMore ? XIcon : PlusIcon} size={13} spring="snappy" />
 								</button>
-							)}
-							<button
-								type="button"
-								className="gui-suggest-chip gui-suggest-chip--more"
-								title={showMore ? t("collapse suggestions") : t("more suggestions")}
-								aria-label={showMore ? t("collapse suggestions") : t("more suggestions")}
-								onClick={showMore ? collapseSuggestions : expandSuggestions}
-							>
-								<MorphIcon icon={showMore ? XIcon : PlusIcon} size={13} spring="snappy" />
-							</button>
+							</div>
 						</div>
-					</div>
+					)}
 					{/* Real-time reminders (kimi 实时提醒 parity): background-working
 					 * sessions (进行中) + completed-but-unread ones below the empty
 					 * composer; click opens the session, 一键已读 clears unread. */}
-					{reminders && reminders.length > 0 && (
+					{!bare && reminders && reminders.length > 0 && (
 						<RemindersPanel
 							reminders={reminders}
 							onSelect={onSelectReminder ?? (() => {})}

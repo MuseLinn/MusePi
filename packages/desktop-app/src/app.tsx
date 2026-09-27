@@ -11,7 +11,7 @@ import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
-import { CreationPanel } from "./components/CreationPanel";
+import { type CreationMessage, CreationPanel } from "./components/CreationPanel";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -1951,22 +1951,32 @@ function AppInner(): ReactNode {
 		selectedIdRef.current = null;
 	}, []);
 
-	// M3.2 创作面「创建」:以 design 预设 + project metadata 建会话。成功后
-	// 弹保存模板 toast(载荷 = 本次快照);失败时错误横幅已由 createSession
-	// 置好(daemon 的 16KiB 语义报错原样透出),面板保持打开供修正。
-	const submitCreationSession = useCallback(
-		async (metadata: Record<string, unknown>): Promise<boolean> => {
-			const id = await createSession({
-				cwd: project,
-				modeId: "design",
-				projectMetadata: metadata,
-			});
-			if (!id) return false;
-			setCreationSaved({ metadata, name: typeof metadata.name === "string" ? metadata.name : "" });
-			return true;
+	/** 空态(design 模式页 / 欢迎页)的文件附件:这两处都没有工作区,上传
+	 *  只能发生在会话创建之后 —— 落盘路径前缀到提示词上再发送(会话
+	 *  composer 走同一条通道,channel/清洗/重名规则不漂移)。上传失败返回
+	 *  null:调用方必须放弃这次发送(一条附件没落地的消息只会误导 agent)。 */
+	const uploadFirstMessageFiles = useCallback(
+		async (text: string, files: File[] | undefined, cwd: string | null): Promise<string | null> => {
+			if (!files || files.length === 0) return text;
+			const client = rpcRef.current;
+			if (!client) return null;
+			try {
+				const refs = await uploadAttachmentFiles(
+					client,
+					cwd,
+					files.map(f => ({ file: f, name: f.name })),
+				);
+				return refs.length > 0 ? `${refs.join("\n")}\n\n${text}`.trim() : text;
+			} catch (err) {
+				const msg = `${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
+				dispatchPetActivity("error", msg);
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: msg }));
+				return null;
+			}
 		},
-		[createSession, project],
+		[],
 	);
+
 	// 保存模板 toast 自动消失(8s;点保存/手动关闭提前清)。
 	useEffect(() => {
 		if (!creationSaved) return;
@@ -2050,6 +2060,31 @@ function AppInner(): ReactNode {
 		}
 	}, [selectedId]);
 
+	// M3.7a 模式页「发送」:以 design 预设 + project metadata 建会话,然后把
+	// 输入框的首轮消息发进新会话(附件先落盘再前缀进提示词,与欢迎页同一
+	// uploadFirstMessageFiles 通道)。成功后弹保存模板 toast(载荷 = 本次
+	// 快照);失败时错误横幅已由 createSession 置好(daemon 的 16KiB 语义
+	// 报错原样透出),面板保持打开供修正。
+	const submitCreationSession = useCallback(
+		async (metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean> => {
+			const id = await createSession({
+				cwd: project,
+				modeId: "design",
+				projectMetadata: metadata,
+				thinkingLevel: message?.thinkingLevel ?? undefined,
+				modelId: message?.modelId ?? undefined,
+			});
+			if (!id) return false;
+			setCreationSaved({ metadata, name: typeof metadata.name === "string" ? metadata.name : "" });
+			if (message && message.text.trim()) {
+				const prompt = await uploadFirstMessageFiles(message.text, message.files, project ?? null);
+				if (prompt === null) return true;
+				await sendPrompt(prompt, message.images, id);
+			}
+			return true;
+		},
+		[createSession, project, sendPrompt, uploadFirstMessageFiles],
+	);
 	// Welcome-page submission shared by the mini and main views: create the
 	// session, then either send the prompt or — when the text is a slash
 	// command (TUI parity) — execute it headlessly on the fresh session.
@@ -2209,30 +2244,8 @@ function AppInner(): ReactNode {
 			// so the upload happens HERE, against the session we just created.
 			// The session composer does the same work up front (it has a cwd);
 			// same helper, so channel / sanitizing / collision rules can't drift.
-			let prompt = text;
-			if (opts?.files && opts.files.length > 0) {
-				const client = rpcRef.current;
-				try {
-					const refs = client
-						? await uploadAttachmentFiles(
-								client,
-								// The new session's workspace is `project` — the same
-								// value createSession just received. Fall back to the
-								// composer's own pick when there is no project yet.
-								project ?? null,
-								opts.files.map(f => ({ file: f, name: f.name })),
-							)
-						: [];
-					if (refs.length > 0) prompt = `${refs.join("\n")}\n\n${text}`.trim();
-				} catch (err) {
-					// Same contract as the session composer: a message whose
-					// attachments never landed would just confuse the agent.
-					const msg = `${t("attachment upload failed")}${err instanceof Error && err.message ? `: ${err.message}` : ""}`;
-					dispatchPetActivity("error", msg);
-					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: msg }));
-					return;
-				}
-			}
+			const prompt = await uploadFirstMessageFiles(text, opts?.files, project ?? null);
+			if (prompt === null) return;
 			await sendPrompt(prompt, opts?.images, id);
 		},
 		[createSession, project, sendPrompt],
@@ -3634,7 +3647,7 @@ function AppInner(): ReactNode {
 				rpc={rpc}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
-			{/* M3.2 六 tab 创作面板:常驻挂载由 open 驱动(退场动画与草稿
+			{/* M3.7a design 模式页:常驻挂载由 open 驱动(退场动画与草稿
 			 * 回填都依赖不卸载);收起回到欢迎页空态(mode 复位 work,§3.0)。 */}
 			<CreationPanel
 				open={creationOpen}
@@ -3644,7 +3657,6 @@ function AppInner(): ReactNode {
 				}}
 				rpc={rpc}
 				project={project}
-				onPickProject={pickProjectFolder}
 				onSubmit={submitCreationSession}
 			/>
 			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />

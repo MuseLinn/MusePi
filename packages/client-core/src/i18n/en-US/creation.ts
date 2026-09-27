@@ -1,7 +1,8 @@
 /**
- * Creation surface domain — English mirror of zh-CN/creation.ts (M3.2 six-tab
- * creation panel). Must satisfy Record<CreationKey, string>: a missing or
- * extra key is a compile error.
+ * Creation surface domain — English mirror of zh-CN/creation.ts (M3.7a design
+ * mode page; the six-tab form and its field-level copy were retired with it).
+ * Must satisfy Record<CreationKey, string>: a missing or extra key is a
+ * compile error.
  */
 import type { CreationKey } from "../zh-CN/creation.js";
 
@@ -14,73 +15,24 @@ export const creation = {
 	"creation tab template": "Template",
 	"creation tab media": "Media",
 	"creation tab other": "Other",
-	"creation project name": "Project name",
-	"creation project name placeholder": "Untitled project",
-	"creation workspace": "Workspace",
-	"creation workspace none": "No workspace selected",
-	"creation pick workspace": "Pick folder",
-	"creation create button": "Create session",
-	"creation start from": "Start from",
-	"creation blank": "Blank",
-	"creation pick project first": "Pick a project folder on the welcome page first",
-	"creation platform label": "Platforms",
-	"creation platform responsive": "Responsive",
-	"creation platform web-desktop": "Web Desktop",
-	"creation platform mobile-ios": "iOS",
-	"creation platform mobile-android": "Android",
-	"creation platform tablet": "Tablet",
-	"creation platform desktop-app": "Desktop App",
-	"creation fidelity label": "Fidelity",
-	"creation fidelity wireframe": "Wireframe",
-	"creation fidelity wireframe desc": "Low-fi structure sketch",
-	"creation fidelity high-fidelity": "High fidelity",
-	"creation fidelity high-fidelity desc": "Near-production visuals",
-	"creation surface landing": "Include landing page",
-	"creation surface os widgets": "Include OS widgets",
-	"creation live artifact beta": "Beta",
-	"creation live artifact desc":
-		"A living artifact: it keeps evolving with the session — the deliverable is the artifact itself.",
-	"creation connectors placeholder": "Connector extension slot (lands in M4.3)",
-	"creation speaker notes": "Speaker notes",
+	"creation media image": "Image",
+	"creation media video": "Video",
+	"creation media audio": "Audio",
+	"creation placeholder prototype": "Describe the interface, style and mood you want…",
+	"creation placeholder live artifact": "Describe what this living artifact should keep showing…",
+	"creation placeholder deck": "Describe the deck's topic, length and audience…",
+	"creation placeholder image": "Describe the subject, style and lighting…",
+	"creation placeholder video": "Describe the shots, rhythm and style…",
+	"creation placeholder audio": "Describe the mood, rhythm and purpose of the sound…",
+	"creation placeholder template": "Pick a template to start, or switch type and just describe it…",
+	"creation placeholder other": "Describe what you want to make…",
 	"creation templates title": "Session templates",
 	"creation templates empty":
 		"No templates yet. Create a prototype or deck, then save it as a template from the success toast.",
-	"creation template apply": "Create from this template",
 	"creation template delete": "Delete",
 	"creation template confirm delete": 'Delete template "{name}"? This cannot be undone.',
 	"creation template unnamed": "Unnamed template",
 	"creation saved toast": "Session created",
 	"creation template save action": "Save as template",
 	"creation template saved": "Saved as template",
-	"creation media image": "Image",
-	"creation media video": "Video",
-	"creation media audio": "Audio",
-	"creation media model label": "Model",
-	"creation media aspect label": "Aspect",
-	"creation media duration label": "Duration",
-	"creation media duration sec": "{sec}s",
-	"creation media audio kind label": "Kind",
-	"creation media kind speech": "Speech",
-	"creation media kind sfx": "SFX",
-	"creation media voice label": "Voice",
-	"creation media voice placeholder": "Voice name, e.g. warm-female",
-	"creation media prompt label": "Prompt template",
-	"creation media prompt search": "Search templates…",
-	"creation media prompt placeholder": "Describe the image or sound to generate…",
-	"creation media no providers": "No providers available — configure them in Settings → Media generation.",
-	"creation media not configured": "Not configured",
-	"creation media configured": "Configured",
-	"creation prompt product shot": "Product shot",
-	"creation prompt product shot body":
-		"Studio-style product photo: clean backdrop, soft lighting, emphasized material detail, centered composition.",
-	"creation prompt poster": "Poster",
-	"creation prompt poster body":
-		"Design a portrait poster: clear headline hierarchy, hero visual covering two thirds, generous whitespace.",
-	"creation prompt character": "Character sheet",
-	"creation prompt character body":
-		"Draw a three-view character sheet: front/side/back, consistent lighting, plus expression and pose thumbnails.",
-	"creation prompt scene": "Scene concept",
-	"creation prompt scene body":
-		"Draw a scene concept piece: wide-angle composition, explicit depth layers, annotated ambient light direction.",
-	"creation other desc": "A general session: no design skill routing, platform choice kept.",
 } as const satisfies Record<CreationKey, string>;

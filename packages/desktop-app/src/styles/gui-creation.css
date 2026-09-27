@@ -1,7 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * Creation panel (M3.2) — 欢迎页六 tab 创作面全屏 overlay。
- * 零新视觉 token:玻璃面配方逐行取档 .gui-dialog(gui-composer.css),动效取档
- * §5u 240ms --spring-liquid 入 / 140ms 出,chip/accent 选中态取档 M1.10 规范。
+ * Design 模式页(M3.7a,docs/review/0.5.0-m3-mode-page-redesign.md §2)——欢迎页
+ * 全屏 overlay 的内容物:类型 chip 排 + 复用欢迎页 composer 的输入框 +
+ * template chip 的模板 rail。overlay 骨架与动效沿用 M3.1(240ms 入 /
+ * 140ms 出,--spring-liquid);零新视觉 token,chip/accent 选中态取档 M1.10。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 .gui-creation-backdrop {
@@ -120,106 +121,10 @@
 	color: var(--color-text);
 }
 
-/* ── tab 条(§5s 滑动下划线 240ms)───────────────────────────────────────── */
-.gui-creation-tabs {
-	display: flex;
-	gap: 2px;
-	position: relative;
-	padding: 8px 16px 0;
-	border-bottom: 1px solid var(--border);
+/* ── 类型 chip 排(§2.3:单选,默认 prototype)────────────────────────────── */
+.gui-creation-chiprow {
+	padding: 12px 20px 0;
 }
-.gui-creation-tab {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 7px 11px 9px;
-	font-size: 13px;
-	color: var(--color-text-muted);
-	border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-	white-space: nowrap;
-}
-.gui-creation-tab:hover {
-	color: var(--color-text);
-}
-.gui-creation-tab--on {
-	color: var(--color-text);
-	font-weight: 550;
-}
-.gui-creation-tab-underline {
-	position: absolute;
-	bottom: -1px;
-	left: 0;
-	height: 2px;
-	border-radius: var(--radius-xs);
-	background: var(--color-accent);
-	transition:
-		transform 240ms var(--spring),
-		width 240ms var(--spring);
-}
-
-/* Beta badge(Live Artifact,§3.2)。 */
-.gui-creation-beta {
-	display: inline-flex;
-	align-items: center;
-	padding: 0 5px;
-	height: 15px;
-	border-radius: var(--radius-sm);
-	font-size: 10px;
-	font-weight: 600;
-	letter-spacing: 0.04em;
-	color: var(--color-accent);
-	background: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
-}
-.gui-creation-beta--tab {
-	height: 13px;
-	font-size: 9px;
-	padding: 0 4px;
-}
-
-/* ── 内容区(tab 切换 160ms 交叉淡入,不位移)────────────────────────────── */
-.gui-creation-body {
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
-	padding: 14px 20px;
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
-	animation: gui-creation-fade 160ms ease;
-}
-@keyframes gui-creation-fade {
-	from {
-		opacity: 0;
-	}
-}
-
-.gui-creation-field {
-	display: flex;
-	flex-direction: column;
-	gap: 7px;
-}
-.gui-creation-field-label {
-	font-size: 12px;
-	font-weight: 550;
-	color: var(--color-text-muted);
-}
-.gui-creation-desc {
-	margin: 0;
-	font-size: 12.5px;
-	line-height: 1.55;
-	color: var(--color-text-muted);
-	display: flex;
-	align-items: center;
-	gap: 7px;
-}
-.gui-creation-empty {
-	margin: 0;
-	font-size: 12.5px;
-	line-height: 1.6;
-	color: var(--color-text-faint);
-}
-
-/* ── 平台 chip 组(复用 glass bg + accent 选中态,§5)─────────────────────── */
 .gui-creation-chips {
 	display: flex;
 	flex-wrap: wrap;
@@ -247,166 +152,45 @@
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
-/* ── 保真度双卡(静态 svg 示意内置,§5)───────────────────────────────────── */
-.gui-creation-fidelity {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 10px;
-}
-.gui-creation-fidelity-card {
+/* ── 内容区(模式页空态:chip 切换 160ms 交叉淡入,不位移)───────────────────── */
+.gui-creation-body {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 14px 20px;
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start;
-	gap: 3px;
-	padding: 11px 13px;
-	border-radius: var(--radius-xl);
-	text-align: left;
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-	transition:
-		box-shadow 130ms ease,
-		transform 130ms ease;
+	gap: 14px;
+	animation: gui-creation-fade 160ms ease;
 }
-.gui-creation-fidelity-card:hover {
-	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
-	transform: translateY(-1px);
+/* 模式页内容区:输入框(或模板 rail)在面板里垂直居中,对齐 §2.2 空态图。 */
+.gui-creation-mode {
+	justify-content: center;
 }
-.gui-creation-fidelity-card--on {
-	box-shadow: inset 0 0 0 1.5px var(--color-accent);
-}
-.gui-creation-fidelity-demo {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	width: 100%;
-	margin-bottom: 5px;
-}
-.gui-creation-fidelity-demo i {
-	display: block;
-	height: 6px;
-	border-radius: var(--radius-xs);
-	background: var(--color-text-faint);
-	opacity: 0.5;
-}
-.gui-creation-fidelity-demo i:first-child {
-	width: 62%;
-	height: 14px;
-}
-.gui-creation-fidelity-demo i[data-hi="hero"] {
-	width: 62%;
-	height: 14px;
-	background: var(--color-accent);
-	opacity: 0.75;
-}
-.gui-creation-fidelity-demo i[data-hi="line"] {
-	background: linear-gradient(90deg, var(--color-accent), var(--color-text-faint));
-	opacity: 0.55;
-}
-.gui-creation-fidelity-name {
-	font-size: 13px;
-	font-weight: 550;
-	color: var(--color-text);
-}
-.gui-creation-fidelity-desc {
-	font-size: 11.5px;
-	color: var(--color-text-faint);
-}
-
-/* ── 开关行(设置页 .gui-toggle token)──────────────────────────────────── */
-.gui-creation-toggle-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 8px 12px;
-	border-radius: var(--radius-lg);
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-.gui-creation-toggle-label {
-	font-size: 13px;
-	color: var(--color-text);
-}
-
-/* ── 连接器扩展位(Live Artifact)────────────────────────────────────────── */
-.gui-creation-connectors {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	padding: 9px 12px;
-	border-radius: var(--radius-lg);
-	border: 1px dashed var(--glass-border);
-	font-size: 12.5px;
-	color: var(--color-text-faint);
-}
-
-/* ── 模板轨 StartFromPicker(§5:卡 160×120,Blank 恒首位)──────────────────── */
-.gui-creation-rail {
-	display: flex;
-	gap: 10px;
-	overflow-x: auto;
-	padding: 2px 2px 6px;
-	scrollbar-width: thin;
-}
-.gui-creation-rail-card {
-	position: relative;
-	display: flex;
-	flex-direction: column;
-	justify-content: flex-end;
-	gap: 3px;
-	flex: 0 0 auto;
-	width: 160px;
-	height: 120px;
-	padding: 11px 12px;
-	border-radius: var(--radius-xl);
-	text-align: left;
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-	animation: gui-creation-card-in 200ms var(--spring) backwards;
-	animation-delay: calc(var(--stagger, 0) * 30ms); /* 模板轨 stagger 30ms,仅首次挂载 */
-	transition:
-		box-shadow 130ms ease,
-		transform 130ms ease;
-}
-.gui-creation-rail-card:hover {
-	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
-	transform: translateY(-2px); /* hover L2 浮起 */
-}
-.gui-creation-rail-card--on {
-	box-shadow: inset 0 0 0 1.5px var(--color-accent);
-}
-@keyframes gui-creation-card-in {
+@keyframes gui-creation-fade {
 	from {
 		opacity: 0;
 	}
 }
-.gui-creation-rail-card--blank {
-	align-items: center;
-	justify-content: center;
-	color: var(--color-text-muted);
-	font-size: 12.5px;
+
+.gui-creation-field {
+	display: flex;
+	flex-direction: column;
 	gap: 7px;
 }
-.gui-creation-rail-blank-icon {
-	width: 18px;
-	height: 18px;
-	opacity: 0.7;
-}
-.gui-creation-rail-name {
-	font-size: 12.5px;
+.gui-creation-field-label {
+	font-size: 12px;
 	font-weight: 550;
-	color: var(--color-text);
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-line-clamp: 2;
-	-webkit-box-orient: vertical;
+	color: var(--color-text-muted);
 }
-.gui-creation-rail-tab {
-	font-size: 10.5px;
+.gui-creation-empty {
+	margin: 0;
+	font-size: 12.5px;
+	line-height: 1.6;
 	color: var(--color-text-faint);
 }
 
-/* ── Template tab:radio 行 + 删除 ──────────────────────────────────────── */
+/* ── Template chip 的模板 rail(§3.4 机制不变:点行即建,行尾删除)────────── */
 .gui-creation-template-list {
 	display: flex;
 	flex-direction: column;
@@ -421,9 +205,6 @@
 	background: var(--glass-bg);
 	box-shadow: inset 0 0 0 1px var(--glass-border);
 }
-.gui-creation-template-row--on {
-	box-shadow: inset 0 0 0 1.5px var(--color-accent);
-}
 .gui-creation-template-main {
 	display: flex;
 	align-items: center;
@@ -432,18 +213,6 @@
 	min-width: 0;
 	padding: 6px 0;
 	text-align: left;
-}
-.gui-creation-template-radio {
-	width: 14px;
-	height: 14px;
-	flex: none;
-	border-radius: 999px;
-	color: transparent;
-	box-shadow: inset 0 0 0 1.5px var(--glass-border);
-}
-.gui-creation-template-radio--on {
-	color: var(--color-accent);
-	box-shadow: inset 0 0 0 1.5px var(--color-accent);
 }
 .gui-creation-template-name {
 	font-size: 13px;
@@ -472,176 +241,6 @@
 .gui-creation-template-delete:hover {
 	color: var(--color-danger);
 	background: var(--glass-bg);
-}
-
-/* ── Media tab ──────────────────────────────────────────────────────────── */
-.gui-creation-media-seg {
-	align-self: flex-start;
-}
-.gui-creation-media-cards {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 8px;
-}
-.gui-creation-media-card {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 9px 12px;
-	border-radius: var(--radius-lg);
-	text-align: left;
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-	transition:
-		box-shadow 130ms ease,
-		opacity 130ms ease;
-}
-.gui-creation-media-card:hover:not(:disabled) {
-	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
-}
-.gui-creation-media-card--on {
-	box-shadow: inset 0 0 0 1.5px var(--color-accent);
-}
-/* 未配置 provider 的模型卡置灰(§8 验收):不可选 + 半透明。 */
-.gui-creation-media-card--off {
-	opacity: 0.45;
-	cursor: not-allowed;
-}
-.gui-creation-media-card-main {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-	flex: 1;
-}
-.gui-creation-media-card-label {
-	font-size: 12.5px;
-	font-weight: 550;
-	color: var(--color-text);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-.gui-creation-media-card-status {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	font-size: 11px;
-	color: var(--color-text-faint);
-}
-.gui-creation-media-card-check {
-	width: 14px;
-	height: 14px;
-	flex: none;
-	color: var(--color-accent);
-}
-
-/* 提示词模板(popover L3 档 + 可编辑 textarea 复用 composer 样式语言) */
-.gui-creation-prompt-trigger {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	padding: 7px 11px;
-	border-radius: var(--radius-lg);
-	font-size: 12.5px;
-	color: var(--color-text-muted);
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-.gui-creation-prompt-trigger:hover {
-	color: var(--color-text);
-}
-.gui-creation-prompt-list {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 8px;
-	width: 260px;
-}
-.gui-creation-prompt-text {
-	width: 100%;
-	resize: vertical;
-	min-height: 64px;
-	padding: 9px 11px;
-	border-radius: var(--radius-lg);
-	font-size: 12.5px;
-	line-height: 1.55;
-	color: var(--color-text);
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-.gui-creation-prompt-text:focus {
-	outline: none;
-	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
-}
-.gui-creation-prompt-text::placeholder {
-	color: var(--color-text-faint);
-}
-
-/* ── 底栏:项目名 + 工作目录 + 创建 ─────────────────────────────────────── */
-.gui-creation-foot {
-	display: flex;
-	align-items: flex-end;
-	gap: 10px;
-	padding: 12px 20px 16px;
-	border-top: 1px solid var(--border);
-}
-.gui-creation-foot-field {
-	display: flex;
-	flex-direction: column;
-	gap: 5px;
-	min-width: 0;
-}
-.gui-creation-foot-label {
-	font-size: 11px;
-	color: var(--color-text-faint);
-}
-.gui-creation-name {
-	width: 200px;
-	height: 34px;
-	padding: 0 11px;
-	font-size: 13px;
-	border-radius: var(--radius-lg);
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-.gui-creation-name:focus {
-	outline: none;
-	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
-}
-.gui-creation-workspace {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	height: 34px;
-	max-width: 280px;
-	padding: 0 11px;
-	border-radius: var(--radius-lg);
-	font-size: 12px;
-	color: var(--color-text-muted);
-	background: var(--glass-bg);
-	box-shadow: inset 0 0 0 1px var(--glass-border);
-}
-.gui-creation-workspace:hover {
-	color: var(--color-text);
-}
-.gui-creation-workspace-pick {
-	flex: none;
-	font-size: 11px;
-	color: var(--color-accent);
-	opacity: 0;
-	transition: opacity 130ms ease;
-}
-.gui-creation-workspace:hover .gui-creation-workspace-pick {
-	opacity: 1;
-}
-.gui-creation-create {
-	height: 34px;
-	margin-left: auto;
-	flex: none;
-	padding: 0 18px;
-	border-radius: var(--radius-lg);
-	font-size: 13px;
 }
 
 /* ── 创建成功 toast + 保存为模板动作(§3.4)──────────────────────────────── */
@@ -723,12 +322,8 @@
 .gui-motion-off .gui-creation-backdrop--entered,
 .gui-motion-off .gui-creation-backdrop--closing,
 .gui-motion-off .gui-creation-body,
-.gui-motion-off .gui-creation-rail-card,
 .gui-motion-off .gui-creation-saved {
 	animation: none;
-}
-.gui-motion-off .gui-creation-tab-underline {
-	transition: none;
 }
 @media (prefers-reduced-motion: reduce) {
 	.gui-creation-panel--entered,
@@ -736,11 +331,7 @@
 	.gui-creation-backdrop--entered,
 	.gui-creation-backdrop--closing,
 	.gui-creation-body,
-	.gui-creation-rail-card,
 	.gui-creation-saved {
 		animation: none;
-	}
-	.gui-creation-tab-underline {
-		transition: none;
 	}
 }

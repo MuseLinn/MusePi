@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core/src/i18n/index.js";
+import type { TranslationKey } from "@musepi/client-core/src/i18n/index.js";
 
 /**
  * Creation surface state + metadata builder (M3.2) — the pure, testable
@@ -6,11 +6,36 @@ import { t } from "@musepi/client-core/src/i18n/index.js";
  * renders form state, this module is the single translator between form
  * state and the wire metadata object (built once per create, hydrated
  * back on 再入回填).
+ *
+ * M3.7a (docs/review/0.5.0-m3-mode-page-redesign.md §2.3) adds the mode
+ * page's type chips on top: a chip is a TYPE selection only, and it is
+ * the sole thing the mode page exposes — every type-specific field stays
+ * at its §2.3 default, so `buildProjectMetadata` (unchanged) still emits
+ * the M3.2 field-for-field shape.
  */
 
 export type CreationTab = "prototype" | "live-artifact" | "deck" | "template" | "media" | "other";
 export type MediaKind = "image" | "video" | "audio";
 export type Fidelity = "wireframe" | "high-fidelity";
+
+/**
+ * 模式页类型 chip（§2.3）：六面分类法 + 模板 rail + 其他。媒体三类由 M3.2
+ * 的「media tab + 二级 segmented」压平为一级 chip，顺序对齐 OpenDesign
+ * 类型排。
+ */
+export type CreationChip = "prototype" | "live-artifact" | "deck" | "image" | "video" | "audio" | "template" | "other";
+
+/** chip 排顺序（渲染顺序即此序，默认选中首项 prototype）。 */
+export const CREATION_CHIPS: readonly CreationChip[] = [
+	"prototype",
+	"live-artifact",
+	"deck",
+	"image",
+	"video",
+	"audio",
+	"template",
+	"other",
+];
 
 /** §3.1 平台多选（§4 metadata.platforms 值域）。 */
 export const CREATION_PLATFORMS = [
@@ -27,14 +52,6 @@ export const MEDIA_ASPECTS = ["1:1", "16:9", "9:16", "4:3", "3:4"] as const;
 
 /** 视频/音频时长档（秒）。 */
 export const MEDIA_DURATIONS = [4, 8, 12, 16] as const;
-
-/** 提示词模板内置条目（首版数据源,无后端存储;i18n 键惰性解析）。 */
-export const PROMPT_TEMPLATES = [
-	{ id: "product-shot", labelKey: "creation prompt product shot", bodyKey: "creation prompt product shot body" },
-	{ id: "poster", labelKey: "creation prompt poster", bodyKey: "creation prompt poster body" },
-	{ id: "character", labelKey: "creation prompt character", bodyKey: "creation prompt character body" },
-	{ id: "scene", labelKey: "creation prompt scene", bodyKey: "creation prompt scene body" },
-] as const;
 
 export interface CreationDraft {
 	tab: CreationTab;
@@ -78,6 +95,50 @@ export const DEFAULT_CREATION_DRAFT: CreationDraft = {
 /** Live Artifact（§3.2）:Prototype 特化,强制 high-fidelity。 */
 export function isLiveArtifact(draft: CreationDraft): boolean {
 	return draft.tab === "live-artifact";
+}
+
+/** chip → 标签键（媒体三类复用 media 文案,其余复用 tab 文案,零新文案）。 */
+export const CREATION_CHIP_LABEL_KEYS: Record<CreationChip, TranslationKey> = {
+	prototype: "creation tab prototype",
+	"live-artifact": "creation tab live artifact",
+	deck: "creation tab deck",
+	image: "creation media image",
+	video: "creation media video",
+	audio: "creation media audio",
+	template: "creation tab template",
+	other: "creation tab other",
+};
+
+/** chip → 输入框 placeholder 键（§2.4:placeholder 随选中类型变化）。 */
+export const CREATION_PLACEHOLDER_KEYS: Record<CreationChip, TranslationKey> = {
+	prototype: "creation placeholder prototype",
+	"live-artifact": "creation placeholder live artifact",
+	deck: "creation placeholder deck",
+	image: "creation placeholder image",
+	video: "creation placeholder video",
+	audio: "creation placeholder audio",
+	template: "creation placeholder template",
+	other: "creation placeholder other",
+};
+
+/**
+ * 选中 chip → 草稿:只写类型（tab / mediaKind）,其余字段保持 §2.3 指定的
+ * M3.1 默认列——所以编译结果仍与 M3.2 表单逐字段一致。
+ */
+export function applyChip(draft: CreationDraft, chip: CreationChip): CreationDraft {
+	switch (chip) {
+		case "image":
+		case "video":
+		case "audio":
+			return { ...draft, tab: "media", mediaKind: chip };
+		default:
+			return { ...draft, tab: chip };
+	}
+}
+
+/** 草稿 → chip:镜像回填 / 模板套用后 chip 排跟随解析出的类型。 */
+export function chipForDraft(draft: CreationDraft): CreationChip {
+	return draft.tab === "media" ? draft.mediaKind : draft.tab;
 }
 
 /**
@@ -186,10 +247,4 @@ export function hydrateDraftFromMetadata(metadata: Record<string, unknown>, base
 		}
 	}
 	return draft;
-}
-
-/** Built-in prompt-template label (i18n resolved at render). */
-export function promptTemplateLabel(id: string): string {
-	const tpl = PROMPT_TEMPLATES.find(tpl => tpl.id === id);
-	return tpl ? t(tpl.labelKey) : id;
 }
