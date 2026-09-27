@@ -254,8 +254,9 @@ function DiagnosticsView({
  *  同款 fixed 弹层,能力中心列表滚动不再带走面板),§5u 取档 —— 标准 scrim、
  *  背板 160ms 纯 opacity 淡入、卡片 240ms --spring-liquid 入场、出场 140ms
  *  --spring-snappy(宿主保持挂载 180ms,由定时器卸载)。头部字形图标 +
- *  meta 行,动作行(在会话中调用 = 复制 /skill-name、停用 = ignore 开关、
- *  卸载 = user 级文件技能),3 tab(概览 / SKILL.md / 版本记录),概览底部
+ *  meta 行 + 自动触发开关(技能级启停,skills.setIgnored —— 停用 ≠ 卸载,
+ *  仅关自动触发、保留手动 /调用),动作行(在会话中调用 = 复制
+ *  /skill-name、卸载 = user 级文件技能),3 tab(概览 / SKILL.md / 版本记录),概览底部
  *  挂卸载风险块。prefers-reduced-motion 时跳过动画立即关。 */
 function SkillDrawer({
 	rpc,
@@ -275,6 +276,8 @@ function SkillDrawer({
 	const [tab, setTab] = useState<"overview" | "skillmd" | "versions">("overview");
 	const [closing, setClosing] = useState(false);
 	const [copied, setCopied] = useState(false);
+	// 启停开关的就地确认（WorkBuddy 同款提示条语义，抽屉内 1.8s 自消退）。
+	const [flash, setFlash] = useState<string | null>(null);
 	const { confirm } = useConfirm();
 	const drawerRef = useRef<HTMLDivElement | null>(null);
 	const closeTimerRef = useRef<number | null>(null);
@@ -361,28 +364,31 @@ function SkillDrawer({
 		return () => window.clearTimeout(id);
 	}, [copied]);
 
+	// 启停确认条同样 1.8s 自消退。
+	useEffect(() => {
+		if (!flash) return;
+		const id = window.setTimeout(() => setFlash(null), 1800);
+		return () => window.clearTimeout(id);
+	}, [flash]);
+
 	const canDelete = skill.filePath !== "" && skill._source?.level === "user" && !skill.source.startsWith("managed");
 
-	// Ignore 切换 = settings.set("skills.ignoredSkills") 的 read-modify-write:
-	// daemon 按 Bun.Glob 逐模式匹配技能名,追加/移除精确名是安全的最小修改。
+	// 启停开关 = skills.setIgnored（服务端 read-modify-write
+	// skills.ignoredSkills）：停用只关自动触发，文件保留，会话中仍可手动
+	// /调用 —— WorkBuddy 对齐语义，不是卸载。
 	const toggleIgnored = (): void => {
-		void (async () => {
-			try {
-				const cur = await rpc.request<{ "skills.ignoredSkills"?: string[] }>("settings.get", {
-					keys: ["skills.ignoredSkills"],
-				});
-				const patterns = new Set(cur?.["skills.ignoredSkills"] ?? []);
-				if (skill.ignored) patterns.delete(skill.name);
-				else patterns.add(skill.name);
-				await rpc.request("settings.set", {
-					key: "skills.ignoredSkills",
-					value: [...patterns],
-				});
+		const nextIgnored = !skill.ignored;
+		void rpc
+			.request("skills.setIgnored", { names: [skill.name], ignored: nextIgnored })
+			.then(() => {
+				setFlash(
+					t(nextIgnored ? "skill auto trigger off {name}" : "skill auto trigger on {name}", {
+						name: skill.name,
+					}),
+				);
 				onChanged();
-			} catch (e: unknown) {
-				setError(e instanceof Error ? e.message : String(e));
-			}
-		})();
+			})
+			.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
 	};
 
 	const removeSkill = (): void => {
@@ -428,17 +434,26 @@ function SkillDrawer({
 							)}
 						</div>
 					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={!skill.ignored}
+						aria-label={t("skill auto trigger")}
+						title={t("skill auto trigger hint")}
+						className={`gui-toggle gui-toggle--sm gui-cap-drawer-switch${skill.ignored ? "" : " gui-toggle--on"}`}
+						onClick={toggleIgnored}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
 					<button type="button" className="gui-cap-drawer-close" aria-label={t("close")} onClick={requestClose}>
 						<Icon name="close" className="h-4 w-4" />
 					</button>
 				</div>
+				{flash && <div className="gui-cap-drawer-flash">{flash}</div>}
 				<div className="gui-cap-drawer-actions">
 					<button type="button" className="gui-btn gui-cap-drawer-primary" onClick={invokeSkill}>
 						<Icon name={copied ? "check" : "external-link"} className="h-3.5 w-3.5" />
 						{copied ? t("skill invoke copied") : t("skill invoke")}
-					</button>
-					<button type="button" className="gui-btn" onClick={toggleIgnored}>
-						{skill.ignored ? t("skill enabled") : t("skill disable")}
 					</button>
 					{canDelete && (
 						<button type="button" className="gui-btn gui-cap-drawer-delete" onClick={removeSkill}>
@@ -597,7 +612,7 @@ function GitInstallCard({ rpc, onInstalled }: { rpc: RpcClient; onInstalled(): v
  * 我安装的 (设计稿 frame 2:250).
  *
  * 三个可操作维度都映射到 daemon 已有的开关,没有新状态:
- *   批量启用/停用 → skills.ignoredSkills (read-modify-write,与抽屉同一条路径)
+ *   批量启用/停用 → skills.setIgnored (服务端 read-modify-write,与抽屉开关同一条路径)
  *   卸载         → skills.delete (daemon 侧守卫:仅 user 级文件技能)
  *   筛选/排序    → 纯客户端,不动 RPC
  * 内置技能与扩展声明的虚拟技能不可卸载 —— 卡片上以"内置 · 随客户端分发 ·
@@ -689,22 +704,14 @@ function InstalledSkillsPane({
 		return skills.find(s => s.name === drawerName) ?? null;
 	}, [drawerName, skills]);
 
-	/** 批量启停:一次 read-modify-write 写 full pattern set,再刷新。
-	 *  与抽屉里的切换共用 skills.ignoredSkills,不是第二条路径。 */
+	/** 批量启停:与抽屉开关同一条 skills.setIgnored 路径（daemon 服务端
+	 *  read-modify-write），再刷新。 */
 	const setIgnoredBatch = useCallback(
 		async (names: string[], ignored: boolean): Promise<void> => {
 			if (!rpc || names.length === 0) return;
 			setBusy(true);
 			try {
-				const cur = await rpc.request<{ "skills.ignoredSkills"?: string[] }>("settings.get", {
-					keys: ["skills.ignoredSkills"],
-				});
-				const patterns = new Set(cur?.["skills.ignoredSkills"] ?? []);
-				for (const n of names) {
-					if (ignored) patterns.add(n);
-					else patterns.delete(n);
-				}
-				await rpc.request("settings.set", { key: "skills.ignoredSkills", value: [...patterns] });
+				await rpc.request("skills.setIgnored", { names, ignored });
 				reload();
 				setSelected(new Set());
 			} catch (e: unknown) {

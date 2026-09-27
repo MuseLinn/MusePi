@@ -17,7 +17,8 @@ import type { DaemonService } from "./types";
  * 能力缝声明（M2-2.4）：
  * - 输入：RPC `marketplace.list` / `marketplace.install` / `marketplace.remove`
  *   （GUI 商店面板：目录浏览/安装/移除）、`skills.list` / `skills.delete` /
- *   `skills.install` / `skills.read`（技能扫描/删除/git 安装/源码读取）与
+ *   `skills.install` / `skills.read` / `skills.setIgnored`（技能扫描/删除/
+ *   git 安装/源码读取/启停写 ignoredSkills）与
  *   `skills.marketplace.query` / `skills.marketplace.categories` /
  *   `skills.marketplace.featured` / `skills.marketplace.detail`（远程技能
  *   市场 SkillHub/skills.sh）与 `skills.marketplace.install`（状态机驱动
@@ -79,6 +80,7 @@ export class MarketplaceService implements DaemonService {
 		"skills.delete": "deleteSkill",
 		"skills.install": "installSkill",
 		"skills.read": "readSkill",
+		"skills.setIgnored": "setSkillsIgnored",
 		"skills.marketplace.query": "querySkillMarket",
 		"skills.marketplace.categories": "skillCategories",
 		"skills.marketplace.featured": "featuredSkills",
@@ -300,6 +302,30 @@ export class MarketplaceService implements DaemonService {
 			ignored: ignored.some(pattern => new Bun.Glob(pattern).match(s.name)),
 		}));
 		return { skills: list, warnings: this.#skillsCache!.warnings };
+	}
+
+	/** RPC skills.setIgnored：启停一个/一批技能（写 skills.ignoredSkills）。
+	 *  服务端 read-modify-write，而非 GUI 经 settings.set 直写：该键无 ui
+	 *  元数据（不进设置面板，settings.set 会拒），且集中读改写让卡片/抽屉/
+	 *  批量三路并发不会互相覆盖。追加/移除精确名 —— 用户手写的 glob 模式
+	 *  原样保留。 */
+	async setSkillsIgnored(params: unknown) {
+		const p = (params ?? {}) as { names?: string[]; ignored?: boolean };
+		const names = (p.names ?? []).filter(n => typeof n === "string" && n.length > 0);
+		if (names.length === 0) throw new Error("skills.setIgnored: names required");
+		const settings = this.#deps.settings();
+		if (!settings) throw new Error("settings unavailable");
+		const patterns = new Set((settings.get("skills.ignoredSkills") ?? []) as string[]);
+		for (const n of names) {
+			if (p.ignored) patterns.add(n);
+			else patterns.delete(n);
+		}
+		settings.set("skills.ignoredSkills", [...patterns]);
+		await settings.flush();
+		// 广播让其他窗口的能力中心刷新（ignored 在 listSkills 响应时计算，
+		// 无需清缓存）。
+		this.#deps.onChanged();
+		return { ok: true, ignoredSkills: [...patterns] };
 	}
 
 	/** RPC skills.delete：删除 user 级文件技能的 SKILL.md（四重来源守卫）。 */

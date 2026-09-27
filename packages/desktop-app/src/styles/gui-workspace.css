@@ -1374,7 +1374,10 @@
 	position: absolute;
 	top: 12px;
 	right: 16px;
-	bottom: 12px;
+	/* 高度封顶而非撑满整屏：详情抽屉是查看面板，全高会让短内容（版本
+	 * 记录 tab、无描述的概览）悬空。 */
+	height: min(72vh, 720px);
+	max-height: calc(100% - 24px);
 	width: min(480px, calc(100% - 32px));
 	display: flex;
 	flex-direction: column;
@@ -1514,6 +1517,26 @@
 .gui-cap-drawer-close:hover {
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 	color: var(--color-text);
+}
+
+/* 头部右侧的自动触发开关（WorkBuddy 对齐）：与标题行垂直居中。 */
+.gui-cap-drawer-switch {
+	align-self: center;
+	flex-shrink: 0;
+}
+
+/* 启停确认条：抽屉内就地反馈（不弹全局 toast），accent 玻璃小条，
+ * 由 JS 1.8s 后摘除。 */
+.gui-cap-drawer-flash {
+	margin: 0 16px 10px;
+	padding: 6px 10px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	animation: gui-fade-in var(--gui-motion-fade-in) ease both;
 }
 
 /* 动作行:金色主 CTA + 次级按钮 + 危险按钮,与设计稿 2:665 同排。 */
@@ -4482,37 +4505,65 @@
 	color: var(--color-text-faint);
 }
 
-/* 「+ 添加技能」与卡片预览弹窗：与 gui-voice-setup 同一套液态玻璃语言
- * （半透明 surface-2 + 18px 饱和模糊 + 内高光边 + spring 入场/退场动效）。 */
+/* 「+ 添加技能」与卡片预览弹窗：§5u 档 L3 覆盖层 —— 与 .gui-cap-drawer /
+ * .gui-dialog 同一套液态玻璃配方（surface 78% + 玻璃 token 模糊 + 内高光
+ * 边 + sheen + 双层影），z-index 进 3000 模态带，240ms spring 入场 /
+ * 140ms snappy 退场（closing 类驱动，JS 180ms 后卸载）。 */
 .gui-skill-market-dialog-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 60;
+	z-index: 3000; /* §5u modal band */
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	background: color-mix(in oklab, #000 45%, transparent);
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
 	backdrop-filter: blur(6px);
 	-webkit-backdrop-filter: blur(6px);
 	animation: gui-skill-market-fade-in 180ms var(--spring) both;
 }
 
 .gui-skill-market-dialog {
+	position: relative;
 	display: flex;
 	flex-direction: column;
 	gap: 12px;
 	width: min(440px, calc(100vw - 48px));
 	max-height: min(78vh, 720px);
 	padding: 18px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-xl);
-	background: color-mix(in oklab, var(--color-surface-2) 82%, transparent);
-	backdrop-filter: blur(18px) saturate(1.4);
-	-webkit-backdrop-filter: blur(18px) saturate(1.4);
+	border: 0;
+	border-radius: var(--radius-2xl);
+	background: color-mix(in oklab, var(--color-surface) 78%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
 	box-shadow:
-		inset 0 1px 0 color-mix(in oklab, #fff 14%, transparent),
-		0 18px 48px color-mix(in oklab, var(--color-shadow, #000) 38%, transparent);
+		inset 0 1px 0 var(--glass-edge-hi),
+		inset 0 -1px 0 var(--glass-edge-lo),
+		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
+	overflow: hidden;
 	animation: gui-skill-market-dialog-in 220ms var(--spring) both;
+	outline: none;
+}
+
+/* Diagonal specular wash (sheen) — .gui-dialog / .gui-cap-drawer 同款。 */
+.gui-skill-market-dialog::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	background: var(--glass-sheen);
+}
+.gui-skill-market-dialog > * {
+	position: relative;
+	z-index: 1;
+}
+
+.gui-skill-market-dialog-backdrop--closing {
+	animation: gui-skill-market-fade-out 140ms var(--spring-snappy) both;
+}
+
+.gui-skill-market-dialog-backdrop--closing .gui-skill-market-dialog {
+	animation: gui-skill-market-dialog-out 140ms var(--spring-snappy) both;
 }
 
 @keyframes gui-skill-market-fade-in {
@@ -4524,6 +4575,15 @@
 	}
 }
 
+@keyframes gui-skill-market-fade-out {
+	from {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+	}
+}
+
 @keyframes gui-skill-market-dialog-in {
 	from {
 		opacity: 0;
@@ -4532,6 +4592,32 @@
 	to {
 		opacity: 1;
 		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes gui-skill-market-dialog-out {
+	from {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: translateY(10px) scale(0.97);
+	}
+}
+
+.gui-motion-off .gui-skill-market-dialog,
+.gui-motion-off .gui-skill-market-dialog-backdrop--closing .gui-skill-market-dialog,
+.gui-motion-off .gui-skill-market-dialog-backdrop,
+.gui-motion-off .gui-skill-market-dialog-backdrop--closing {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-skill-market-dialog,
+	.gui-skill-market-dialog-backdrop--closing .gui-skill-market-dialog,
+	.gui-skill-market-dialog-backdrop,
+	.gui-skill-market-dialog-backdrop--closing {
+		animation-duration: 1ms;
 	}
 }
 
@@ -4552,13 +4638,17 @@
 	transform: translateY(0) scale(0.99);
 }
 
-/* ── 预览弹窗（信息先览）：头部横排 + 可滚动正文 + 底部动作条 ── */
+/* ── 预览弹窗（信息先览）：头部横排 + 可滚动正文 + 底部动作条 ──
+ * 固定高度：内容经 RPC 异步到达，高度稳定后 loading → 正文的切换不再
+ * 造成弹窗尺寸突变。 */
 .gui-skill-market-preview {
 	width: min(560px, calc(100vw - 48px));
+	height: min(600px, calc(100vh - 96px));
 }
 
 .gui-skill-market-preview-h {
 	display: flex;
+	flex: none;
 	align-items: center;
 	gap: 10px;
 	min-width: 0;
@@ -4606,7 +4696,7 @@
 	font-family: var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
 	font-size: 11.5px;
 	line-height: 17px;
-	color: var(--color-text-muted);
+	color: var(--color-text);
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -4617,12 +4707,18 @@
 	gap: 8px;
 }
 
+/* 预览弹窗内的次级文字提到 muted：玻璃底上 faint 对比度不够。 */
+.gui-skill-market-preview-h .gui-skill-market-meta,
+.gui-skill-market-preview-detail .gui-skill-market-meta {
+	color: var(--color-text-muted);
+}
+
 .gui-skill-market-preview-files ul {
 	margin: 4px 0 0;
 	padding: 0 0 0 16px;
 	font-size: 11.5px;
 	line-height: 18px;
-	color: var(--color-text-faint);
+	color: var(--color-text-muted);
 }
 
 .gui-skill-market-preview-files a {
@@ -4656,6 +4752,7 @@
 
 .gui-skill-market-dialog-f {
 	display: flex;
+	flex: none;
 	align-items: center;
 	justify-content: flex-end;
 	gap: 8px;

@@ -429,6 +429,7 @@ import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
+import { CreationService } from "./services/creation-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
@@ -539,6 +540,11 @@ export class DaemonServer {
 		);
 		this.#services.register(new ViewStoreService(host.viewStore));
 		this.#services.register(new BoardService());
+		this.#services.register(
+			new CreationService({
+				loadHeader: sessionId => host.viewStore.load(sessionId)?.header ?? null,
+			}),
+		);
 		this.#services.register(
 			new FileService({
 				fallbackCwd: () => host.workspaceFallbackCwd,
@@ -1249,8 +1255,10 @@ export class DaemonServer {
 				return { enabled };
 			}
 			case "session.create": {
-				// modeId(modelPattern/thinkingLevel)透传 host.createSession ——
-				// GUI welcome 预设 chip 的选择在创建时一次应用(modes v1/v2)。
+				// modeId(modelPattern/thinkingLevel/projectMetadata)透传
+				// host.createSession —— GUI welcome 预设 chip 的选择与创作面
+				// metadata(M3.2)在创建时一次应用;metadata 校验(形状/version/
+				// 16KiB)归 host,失败即语义报错。
 				const p = (params ?? {}) as {
 					cwd?: string;
 					title?: string;
@@ -1258,6 +1266,7 @@ export class DaemonServer {
 					modeId?: string;
 					modelPattern?: string;
 					thinkingLevel?: ConfiguredThinkingLevel;
+					projectMetadata?: Record<string, unknown>;
 				};
 				return this.#host.createSession(p);
 			}
@@ -1700,6 +1709,9 @@ export class DaemonServer {
 			case "skills.read": {
 				return this.#services.get<MarketplaceService>("marketplace").readSkill(params ?? {});
 			}
+			case "skills.setIgnored": {
+				return this.#services.get<MarketplaceService>("marketplace").setSkillsIgnored(params ?? {});
+			}
 			case "skills.marketplace.query": {
 				return this.#services.get<MarketplaceService>("marketplace").querySkillMarket(params ?? {});
 			}
@@ -2016,6 +2028,23 @@ export class DaemonServer {
 			case "widget.data": {
 				// Daemon 侧数据源代理归 BoardService（fx-rates 软错误约定不变）。
 				return this.#services.get<BoardService>("boards").data(params ?? {});
+			}
+			case "creation.templates.list": {
+				// 实现归 CreationService（M3.2 创作面数据面,seam 声明见服务头）。
+				return this.#services.get<CreationService>("creation").listTemplates();
+			}
+			case "creation.templates.save": {
+				return this.#services
+					.get<CreationService>("creation")
+					.saveTemplate((params ?? {}) as { id?: string; name?: string; tab?: string; metadata?: unknown });
+			}
+			case "creation.templates.delete": {
+				return this.#services.get<CreationService>("creation").deleteTemplate((params ?? {}) as { id?: string });
+			}
+			case "creation.metadata.get": {
+				return this.#services
+					.get<CreationService>("creation")
+					.getMetadata((params ?? {}) as { sessionId?: string; cwd?: string });
 			}
 			case "git.log": {
 				// Recent commit history for the right-pane git view.

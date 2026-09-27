@@ -1,6 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
@@ -106,6 +106,53 @@ function fmtCount(n: number): string {
 	return n.toLocaleString("en-US");
 }
 
+/** §5u 弹层契约（SkillDrawer 同款）：Escape 在 document 捕获阶段接管、
+ *  打开时焦点进弹窗、关闭时还原；关闭先播 140ms 退场动画，180ms 定时器
+ *  再通知父级卸载（prefers-reduced-motion 立即关）。返回的 ref 挂弹窗
+ *  容器（tabIndex=-1 收焦点）。 */
+function useDialogLifecycle(onClose: () => void): {
+	closing: boolean;
+	dialogRef: React.RefObject<HTMLDivElement | null>;
+	requestClose(): void;
+} {
+	const [closing, setClosing] = useState(false);
+	const dialogRef = useRef<HTMLDivElement | null>(null);
+	const closingRef = useRef(false);
+	const timerRef = useRef<number | null>(null);
+
+	const requestClose = useCallback((): void => {
+		if (closingRef.current) return;
+		closingRef.current = true;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			onClose();
+			return;
+		}
+		setClosing(true);
+		timerRef.current = window.setTimeout(onClose, 180);
+	}, [onClose]);
+
+	useEffect(() => {
+		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+		const onKey = (e: KeyboardEvent): void => {
+			if (e.key === "Escape") {
+				e.preventDefault();
+				e.stopPropagation();
+				requestClose();
+			}
+		};
+		document.addEventListener("keydown", onKey, true);
+		const raf = requestAnimationFrame(() => dialogRef.current?.focus());
+		return () => {
+			document.removeEventListener("keydown", onKey, true);
+			cancelAnimationFrame(raf);
+			if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+			prevActive?.focus();
+		};
+	}, [requestClose]);
+
+	return { closing, dialogRef, requestClose };
+}
+
 export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; onInstalled?(): void }): ReactNode {
 	const [source, setSource] = useState<SourceFilter>("all");
 	const [category, setCategory] = useState<string>("");
@@ -143,12 +190,12 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const refreshInstalled = useCallback((): void => {
 		if (!rpc) return;
 		void rpc
-			.request<{ skills: { name?: string; disabled?: boolean }[] }>("skills.list", {})
+			.request<{ skills: { name?: string; ignored?: boolean }[] }>("skills.list", {})
 			.then(res => {
 				const rows = res?.skills ?? [];
 				setInstalled({
-					enabled: rows.filter(s => !s.disabled).length,
-					disabled: rows.filter(s => s.disabled).length,
+					enabled: rows.filter(s => !s.ignored).length,
+					disabled: rows.filter(s => s.ignored).length,
 				});
 				setInstalledNames(new Set(rows.map(s => (s.name ?? "").toLowerCase()).filter(Boolean)));
 			})
@@ -820,6 +867,7 @@ function AddSkillDialog({
 	const [name, setName] = useState(initialName);
 	const [busy, setBusy] = useState(false);
 	const [err, setErr] = useState<{ text: string; canOverwrite: boolean } | null>(null);
+	const { closing, dialogRef, requestClose } = useDialogLifecycle(onClose);
 
 	const install = (overwrite: boolean): void => {
 		if (!rpc || !url.trim() || busy) return;
@@ -833,7 +881,7 @@ function AddSkillDialog({
 			})
 			.then(res => {
 				onDone(res?.name ?? (name.trim() || url.trim()));
-				onClose();
+				requestClose();
 			})
 			.catch((e: unknown) => {
 				const text = e instanceof Error ? e.message : String(e);
@@ -843,8 +891,14 @@ function AddSkillDialog({
 	};
 
 	return (
-		<div className="gui-skill-market-dialog-backdrop" role="presentation" onClick={onClose}>
+		<div
+			className={`gui-skill-market-dialog-backdrop${closing ? " gui-skill-market-dialog-backdrop--closing" : ""}`}
+			role="presentation"
+			onClick={requestClose}
+		>
 			<div
+				ref={dialogRef}
+				tabIndex={-1}
 				className="gui-skill-market-dialog"
 				role="dialog"
 				aria-label={t("add skill")}
@@ -860,7 +914,6 @@ function AddSkillDialog({
 					onChange={ev => setUrl(ev.target.value)}
 					onKeyDown={ev => {
 						if (ev.key === "Enter") install(false);
-						if (ev.key === "Escape") onClose();
 					}}
 				/>
 				<input
@@ -871,7 +924,6 @@ function AddSkillDialog({
 					onChange={ev => setName(ev.target.value)}
 					onKeyDown={ev => {
 						if (ev.key === "Enter") install(false);
-						if (ev.key === "Escape") onClose();
 					}}
 				/>
 				{err ? <div className="gui-skill-market-warn">{err.text}</div> : null}
@@ -881,7 +933,7 @@ function AddSkillDialog({
 							{t("overwrite install")}
 						</button>
 					)}
-					<button type="button" className="gui-skill-market-page" onClick={onClose}>
+					<button type="button" className="gui-skill-market-page" onClick={requestClose}>
 						{t("cancel")}
 					</button>
 					<button
@@ -927,6 +979,7 @@ function SkillPreviewDialog({
 		files?: { path: string; size: number }[];
 		security?: { status?: string; statusText?: string; reportUrl?: string }[];
 	} | null>(null);
+	const { closing, dialogRef, requestClose } = useDialogLifecycle(onClose);
 
 	useEffect(() => {
 		if (!rpc) return;
@@ -964,14 +1017,16 @@ function SkillPreviewDialog({
 
 	return (
 		<div
-			className="gui-skill-market-dialog-backdrop"
+			className={`gui-skill-market-dialog-backdrop${closing ? " gui-skill-market-dialog-backdrop--closing" : ""}`}
 			role="presentation"
 			onClick={ev => {
 				ev.stopPropagation();
-				onClose();
+				requestClose();
 			}}
 		>
 			<div
+				ref={dialogRef}
+				tabIndex={-1}
 				className="gui-skill-market-dialog gui-skill-market-preview"
 				role="dialog"
 				aria-label={entry.name}
@@ -988,7 +1043,7 @@ function SkillPreviewDialog({
 							{meta.length > 0 ? ` · ${meta.join(" · ")}` : ""}
 						</span>
 					</div>
-					<button type="button" className="gui-skill-market-page" onClick={onClose} aria-label={t("close")}>
+					<button type="button" className="gui-skill-market-page" onClick={requestClose} aria-label={t("close")}>
 						✕
 					</button>
 				</div>
