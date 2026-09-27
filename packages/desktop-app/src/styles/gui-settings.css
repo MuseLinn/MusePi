@@ -5441,40 +5441,62 @@ body.gui-resizing {
 }
 
 /* ---- 语音 → 语音识别模型卡（openchamber model-card parity）---- */
-.gui-stt-card {
+/* ── Speech-model picker (settings → 语音): one card, radio rows ──
+ *  The four tiers used to render as four separate metric cards (accuracy /
+ *  speed bars); the choice is really ONE decision, so the UI is now a
+ *  single card whose rows are radios — the selected row tints, the rest
+ *  stays neutral. Badges carry the humanized one-liner metadata. */
+.gui-stt-picker {
 	display: flex;
-	align-items: flex-start;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 10px 12px;
+	flex-direction: column;
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface) 92%, transparent);
+	overflow: hidden;
 }
-.gui-stt-card + .gui-stt-card {
-	margin-top: 8px;
+.gui-stt-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
 }
-.gui-stt-card-main {
+.gui-stt-row + .gui-stt-row {
+	border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+.gui-stt-row--selected {
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+.gui-stt-row-radio {
+	flex: 1;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	min-width: 0;
+	cursor: pointer;
+}
+.gui-stt-row-radio input[type="radio"] {
+	margin-top: 3px;
+	accent-color: var(--color-accent);
+}
+.gui-stt-row-main {
 	min-width: 0;
 	flex: 1;
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 2px;
 }
-.gui-stt-card-head {
+.gui-stt-row-head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
 	min-width: 0;
+	flex-wrap: wrap;
 }
-.gui-stt-card-label {
+.gui-stt-row-label {
 	font-weight: 600;
 	color: var(--color-text);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
-.gui-stt-card-badge {
+.gui-stt-badge {
 	flex-shrink: 0;
 	padding: 1px 6px;
 	border-radius: 999px;
@@ -5482,58 +5504,62 @@ body.gui-resizing {
 	color: var(--color-accent);
 	font-size: 10.5px;
 }
-.gui-stt-card-size {
+.gui-stt-row-size {
 	flex-shrink: 0;
 	color: var(--color-text-muted);
 	font-size: 11px;
 	font-family: var(--font-mono, monospace);
 }
-.gui-stt-card-ready {
+.gui-stt-row-desc {
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+}
+.gui-stt-row-ready {
 	flex-shrink: 0;
 	color: var(--color-success, var(--color-accent));
 	font-size: 11px;
 }
-.gui-stt-card-bars {
+.gui-stt-row-progress {
 	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-.gui-stt-card-metric {
-	display: grid;
-	grid-template-columns: 44px 1fr;
 	align-items: center;
 	gap: 8px;
-}
-.gui-stt-card-metric-label {
 	color: var(--color-text-muted);
 	font-size: 11px;
 }
-.gui-stt-card-bar {
-	display: block;
+.gui-stt-row-progress progress {
+	flex: 1;
+	height: 4px;
+}
+
+/* ── Voice input test: live level meter + device picker ── */
+.gui-voice-test {
+	min-width: 0;
+	flex: 1;
+}
+.gui-voice-level {
 	height: 4px;
 	border-radius: 999px;
 	background: color-mix(in oklab, var(--color-text) 10%, transparent);
 	overflow: hidden;
+	margin-top: 6px;
 }
-.gui-stt-card-bar-fill {
+.gui-voice-level-fill {
 	display: block;
 	height: 100%;
 	border-radius: inherit;
 	background: var(--color-accent);
+	transition: width 90ms linear;
 }
-.gui-stt-card-bar-fill--speed {
-	background: var(--color-text-muted);
-}
-.gui-stt-card-progress {
+.gui-voice-device {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	color: var(--color-text-muted);
-	font-size: 11px;
+	gap: 6px;
 }
-.gui-stt-card-progress progress {
-	flex: 1;
-	height: 4px;
+.gui-voice-device-label {
+	max-width: 220px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 /* ── Attachment chip "mention" button (Kimi desktop parity, appended

@@ -3,14 +3,19 @@
  * render through <SchemaTabSection tabs={["interaction"]}> (the daemon
  * schema is the single source of truth — the same rows used to be
  * hand-duplicated here with hardcoded defaults that never loaded real
- * values, and drifted from the 交互 tab's schema-driven copies). This file
- * keeps only what the schema cannot express: live mic enumeration, the
- * dictation test, and the TTS test card.
+ * values, and drifted from the 交互 tab's schema-driven copies), EXCEPT
+ * `stt.modelName` which this file renders as a radio-row picker card (a bare
+ * enum dropdown buried in the list made the four tiers unreadable).
+ * This file keeps only what the schema cannot express: the speech-model
+ * picker, live mic enumeration (liquid-glass floating menu), the dictation
+ * test state machine, and the TTS test card.
  */
-import { t } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import { isSttDownloadEvent, type SttModelRow, type SttModelStatusResponse } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import "../../i18n/voice";
 import type { RpcClient } from "../../lib/rpc";
+import { useFloatingMenu } from "../../lib/use-floating-menu";
 import {
 	enumerateMicDevices,
 	getVoiceInputDevice,
@@ -51,22 +56,45 @@ function formatBytes(n: number): string {
  * outcomes ride the global event stream (`stt.downloadProgress` /
  * `stt.downloadDone` / `stt.downloadError`), so state survives page
  * remounts and stays in sync across every open window. */
-/** Per-tier presentation metadata (openchamber model-card parity): accuracy /
- *  speed are 0-100 bars derived from the Open ASR Leaderboard positioning in
- *  `stt/models.ts`; size mirrors that file's sizeHint. Local UI data only — the
- *  wire row stays { key, label, cached }. */
-const TIER_META: Record<string, { accuracy: number; speed: number; size: string; badge?: string }> = {
-	fast: { accuracy: 35, speed: 92, size: "~60 MB", badge: "轻量" },
-	balanced: { accuracy: 55, speed: 72, size: "~190 MB", badge: "多语言 · 默认" },
-	turbo: { accuracy: 85, speed: 45, size: "~600 MB" },
+/** Per-tier presentation metadata (openchamber model-card parity): size
+ *  mirrors `stt/models.ts` `sizeHint`; badge/desc are humanized one-liners
+ *  (i18n keys registered by i18n/voice.ts — the English sentence IS the key,
+ *  matching the core map's contract). Local UI data only — the wire row
+ *  stays { key, label, cached }. Kept in sync with
+ *  composer/voice-setup.tsx SIZE_HINTS. */
+const TIER_META: Record<string, { size: string; badge?: string; desc: string }> = {
+	fast: { size: "~60 MB", badge: "Lightweight", desc: "Lightweight and fast — best for quick English notes" },
+	balanced: {
+		size: "~190 MB",
+		badge: "Multilingual · default",
+		desc: "Balanced default — multilingual, Chinese included",
+	},
+	turbo: { size: "~600 MB", badge: "99 languages", desc: "Widest language coverage — larger download, slower" },
 	// Parakeet TDT v3's 25 languages are all European — the sherpa worker
-	// cannot switch language, so CJK speech transcribes to empty. The badge
+	// cannot switch language, so CJK speech transcribes to empty. The copy
 	// must say so: zh users picking the SoTA badge blindly got silence.
-	parakeet: { accuracy: 97, speed: 96, size: "~680 MB", badge: "SoTA · 英文/欧语" },
+	parakeet: {
+		size: "~680 MB",
+		badge: "SoTA · EN/EU only",
+		desc: "Top accuracy for English & European speech — no Chinese",
+	},
+	sensevoice: {
+		size: "~239 MB",
+		badge: "Chinese-optimized · zh/en",
+		desc: "Chinese-optimized — Mandarin, Cantonese & mixed zh/en",
+	},
 };
 
-function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+/** Speech-model picker: ONE card where each tier is a radio row — selecting
+ *  a tier writes `stt.modelName` and, when its weights aren't cached, kicks
+ *  the download automatically (the old four separate cards made the choice
+ *  look like four parallel features instead of one decision). Progress AND
+ *  both terminal outcomes ride the global event stream
+ *  (`stt.downloadProgress` / `stt.downloadDone` / `stt.downloadError`), so
+ *  state survives page remounts and stays in sync across every open window. */
+function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [models, setModels] = useState<SttModelRow[] | null>(null);
+	const [selected, setSelected] = useState<string | null>(null);
 	const [active, setActive] = useState<ActiveDownload | null>(null);
 	const [error, setError] = useState<{ modelKey: string; message: string } | null>(null);
 	// Single settlement timer: cleared before rescheduling and on unmount,
@@ -94,6 +122,13 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	useEffect(() => {
 		refresh();
+		// Seed the radio selection from the live setting (default tier when unset).
+		void rpc
+			?.request<Record<string, unknown>>("settings.get", { keys: ["stt.modelName"] })
+			.then(v => {
+				if (typeof v?.["stt.modelName"] === "string") setSelected(v["stt.modelName"] as string);
+			})
+			.catch(() => {});
 		if (!rpc) return;
 		const off = rpc.addEventListener(event => {
 			const p = event.payload;
@@ -136,79 +171,111 @@ function ModelDownloadCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		};
 	}, [rpc, refresh]);
 
-	const download = (modelKey: string): void => {
+	const download = useCallback(
+		(modelKey: string): void => {
+			setError(null);
+			setActive({ modelKey, percent: 0, loaded: 0, total: 0, label: "" });
+			void rpc?.request("stt.modelDownload", { modelKey }).catch(err => {
+				// Only reachable for immediate rejections (bad key, daemon offline).
+				setActive(null);
+				setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
+			});
+		},
+		[rpc],
+	);
+
+	const select = (modelKey: string): void => {
+		if (!rpc || modelKey === selected) return;
+		setSelected(modelKey);
 		setError(null);
-		setActive({ modelKey, percent: 0, loaded: 0, total: 0, label: "" });
-		void rpc?.request("stt.modelDownload", { modelKey }).catch(err => {
-			// Only reachable for immediate rejections (bad key, daemon offline).
-			setActive(null);
+		void rpc.request("settings.set", { key: "stt.modelName", value: modelKey }).catch(err => {
 			setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
 		});
 	};
+
+	// Selecting an uncached tier starts its download — both for explicit
+	// clicks (handled in the row's onChange via `download`) and for a seed
+	// selection pointing at weights that aren't on disk yet (fresh machine).
+	const selectedRow = models?.find(m => m.key === selected) ?? null;
+	useEffect(() => {
+		if (!selectedRow || selectedRow.cached || active !== null) return;
+		download(selectedRow.key);
+	}, [selectedRow, active, download]);
 
 	const errorLabel = error ? models?.find(m => m.key === error.modelKey)?.label : undefined;
 
 	return (
 		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("speech models")}</div>
+			<div className="gui-settings-section-title">{tLoose("speech recognition model")}</div>
 			{models === null ? (
 				<div className="gui-settings-row">
 					<div className="gui-settings-row-desc">…</div>
 				</div>
 			) : (
-				models.map(m => {
-					const isActive = active?.modelKey === m.key;
-					const meta = TIER_META[m.key] ?? { accuracy: 50, speed: 50, size: "" };
-					return (
-						<div key={m.key} className="gui-stt-card">
-							<div className="gui-stt-card-main">
-								<div className="gui-stt-card-head">
-									<span className="gui-stt-card-label">{m.label}</span>
-									{meta.badge && <span className="gui-stt-card-badge">{meta.badge}</span>}
-									<span className="gui-stt-card-size">{meta.size}</span>
-									{m.cached && <span className="gui-stt-card-ready">✓ {t("model ready offline")}</span>}
-								</div>
-								<div className="gui-stt-card-bars">
-									<span className="gui-stt-card-metric">
-										<span className="gui-stt-card-metric-label">{t("accuracy")}</span>
-										<span className="gui-stt-card-bar">
-											<span className="gui-stt-card-bar-fill" style={{ width: `${meta.accuracy}%` }} />
+				<div className="gui-stt-picker" role="radiogroup" aria-label={tLoose("speech recognition model")}>
+					{models.map(m => {
+						const isSelected = selected === m.key;
+						const isActive = active?.modelKey === m.key;
+						const meta = TIER_META[m.key] ?? { size: "", desc: "" };
+						return (
+							<div key={m.key} className={`gui-stt-row${isSelected ? " gui-stt-row--selected" : ""}`}>
+								<label className="gui-stt-row-radio">
+									<input
+										type="radio"
+										name="stt-model"
+										checked={isSelected}
+										disabled={!rpc}
+										onChange={() => {
+											select(m.key);
+											// Auto-fetch on pick: a selected tier you
+											// cannot use (weights missing, no download
+											// running) is a broken default — mirror the
+											// effect above for the click path.
+											if (!m.cached && active === null) download(m.key);
+										}}
+									/>
+									<span className="gui-stt-row-main">
+										<span className="gui-stt-row-head">
+											<span className="gui-stt-row-label">{m.label}</span>
+											{meta.badge && <span className="gui-stt-badge">{tLoose(meta.badge)}</span>}
+											<span className="gui-stt-row-size">{meta.size}</span>
 										</span>
+										<span className="gui-stt-row-desc">{tLoose(meta.desc)}</span>
+										{isActive ? (
+											<span className="gui-stt-row-progress" aria-live="polite">
+												<progress
+													max={100}
+													value={active.percent}
+													aria-label={`${m.label} ${active.percent}%`}
+												/>
+												<span>
+													{active.percent}% · {active.label} {formatBytes(active.loaded)}
+													{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+												</span>
+											</span>
+										) : null}
 									</span>
-									<span className="gui-stt-card-metric">
-										<span className="gui-stt-card-metric-label">{t("speed")}</span>
-										<span className="gui-stt-card-bar">
-											<span
-												className="gui-stt-card-bar-fill gui-stt-card-bar-fill--speed"
-												style={{ width: `${meta.speed}%` }}
-											/>
-										</span>
-									</span>
-								</div>
-								{isActive ? (
-									<div className="gui-stt-card-progress" aria-live="polite">
-										<progress max={100} value={active.percent} aria-label={`${m.label} ${active.percent}%`} />
-										<span>
-											{active.percent}% · {active.label} {formatBytes(active.loaded)}
-											{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
-										</span>
-									</div>
+								</label>
+								{m.cached ? (
+									<span className="gui-stt-row-ready">✓ {t("model ready offline")}</span>
+								) : !isActive ? (
+									<button
+										type="button"
+										className="gui-btn"
+										disabled={!rpc || active !== null}
+										onClick={() => download(m.key)}
+									>
+										<Icon name="download" className="h-3.5 w-3.5" />
+										{t("download")}
+									</button>
 								) : null}
 							</div>
-							{!isActive && !m.cached ? (
-								<button
-									type="button"
-									className="gui-btn"
-									disabled={!rpc || active !== null}
-									onClick={() => download(m.key)}
-								>
-									<Icon name="download" className="h-3.5 w-3.5" />
-									{t("download")}
-								</button>
-							) : null}
-						</div>
-					);
-				})
+						);
+					})}
+				</div>
+			)}
+			{selectedRow && !selectedRow.cached && (
+				<div className="gui-settings-row-desc">{tLoose("downloads automatically when selected")}</div>
 			)}
 			{error && (
 				<div className="gui-settings-row">
@@ -299,16 +366,97 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	);
 }
 
+/** Liquid-glass input-device picker: replaces the native <select> (which
+ *  broke the settings surface's visual language) with a floating menu in the
+ *  composer AttachMenu style. The value stays machine-local (localStorage
+ *  via setVoiceInputDevice) and is picked up by every dictation entry point. */
+function InputDeviceMenu({
+	devices,
+	deviceId,
+	onChange,
+}: {
+	devices: { deviceId: string; label: string }[];
+	deviceId: string | null;
+	onChange(deviceId: string | null): void;
+}): ReactNode {
+	const [open, setOpen] = useState(false);
+	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
+	const current = devices.find(d => d.deviceId === deviceId);
+	return (
+		<div className="gui-voice-device" ref={anchorRef}>
+			<button
+				type="button"
+				className="gui-btn"
+				disabled={devices.length === 0}
+				aria-label={t("voice input device")}
+				aria-expanded={open}
+				aria-haspopup="menu"
+				onClick={() => setOpen(v => !v)}
+			>
+				<Icon name="mic" className="h-3.5 w-3.5" />
+				<span className="gui-voice-device-label">{current?.label ?? t("system default")}</span>
+				<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
+			</button>
+			{renderMenu(
+				<div className="gui-attach-menu" role="menu" aria-label={t("voice input device")}>
+					<button
+						type="button"
+						className="gui-attach-opt"
+						role="menuitemradio"
+						aria-checked={deviceId === null}
+						onClick={() => {
+							onChange(null);
+							setOpen(false);
+						}}
+					>
+						<span className="min-w-0 flex-1">
+							<span className="gui-attach-opt-title">{t("system default")}</span>
+						</span>
+						{deviceId === null && <Icon name="check" className="h-4 w-4" />}
+					</button>
+					{devices.map(d => (
+						<button
+							key={d.deviceId}
+							type="button"
+							className="gui-attach-opt"
+							role="menuitemradio"
+							aria-checked={deviceId === d.deviceId}
+							onClick={() => {
+								onChange(d.deviceId);
+								setOpen(false);
+							}}
+						>
+							<span className="min-w-0 flex-1">
+								<span className="gui-attach-opt-title">{d.label}</span>
+							</span>
+							{deviceId === d.deviceId && <Icon name="check" className="h-4 w-4" />}
+						</button>
+					))}
+				</div>,
+			)}
+		</div>
+	);
+}
+
 /** Settings → 语音。 */
 export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	// Schema keys render via SchemaTabSection below. Local state covers
-	// only the live mic test (device enumeration + dictation round-trip).
+	// Schema keys render via SchemaTabSection below — minus stt.modelName,
+	// which the picker card above renders as radio rows (a bare enum
+	// dropdown made the tiers unreadable). Local state covers only the live
+	// mic test (device enumeration + dictation round-trip).
 	const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([]);
 	// Selected microphone (deviceId, null = system default). Seeded from the
 	// same machine-local key the dictation entry points read.
 	const [deviceId, setDeviceId] = useState<string | null>(() => getVoiceInputDevice());
+	// Dictation test state machine: idle → recording (live level meter) →
+	// transcribing → result / error. `dictating` owns the toggle button;
+	// phase drives the status copy and meter.
 	const [dictating, setDictating] = useState(false);
+	const [dictationPhase, setDictationPhase] = useState<"idle" | "recording" | "transcribing">("idle");
+	const [recordSeconds, setRecordSeconds] = useState(0);
+	const [recordLevel, setRecordLevel] = useState(0);
 	const [dictated, setDictated] = useState<string | null>(null);
+	const [dictationError, setDictationError] = useState<string | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
@@ -320,20 +468,55 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const toggleDictation = (): void => {
 		if (dictating) {
+			// Stop = "finish early and transcribe" (#23 D contract): the full
+			// buffer is kept, so a manual stop still produces a result.
 			stopRef.current?.();
-			setDictating(false);
 			return;
 		}
 		setDictated(null);
+		setDictationError(null);
+		setRecordSeconds(0);
+		setRecordLevel(0);
 		setDictating(true);
-		stopRef.current = startDictation(
+		setDictationPhase("recording");
+		const stop = startDictation(
 			(text: string) => {
 				setDictated(text);
 				setDictating(false);
+				setDictationPhase("idle");
 			},
-			() => setDictating(false),
+			(message: string) => {
+				// startDictation routes known failures through
+				// friendlyDictationError already — surface as-is.
+				setDictationError(message);
+				setDictating(false);
+				setDictationPhase("idle");
+			},
 			rpc,
+			(a: VoiceActivity) => {
+				if (a.phase === "recording") {
+					setDictationPhase("recording");
+					setRecordSeconds(a.seconds);
+					setRecordLevel(a.level);
+				} else if (a.phase === "transcribing") {
+					setDictationPhase("transcribing");
+				} else if (a.phase === "stopped") {
+					setDictating(false);
+					setDictationPhase("idle");
+				} else if (a.phase === "error") {
+					setDictationError(a.message);
+					setDictating(false);
+					setDictationPhase("idle");
+				}
+			},
 		);
+		if (!stop) {
+			// Neither daemon RPC nor Web Speech fallback available.
+			setDictating(false);
+			setDictationPhase("idle");
+			return;
+		}
+		stopRef.current = stop;
 	};
 
 	return (
@@ -342,9 +525,10 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
 			 * "Speech" group, NOT the whole tab (the rest of the interaction
-			 * groups live on 交互; duplicating them here was the old bug). */}
-			<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Speech"]} />
-			<ModelDownloadCard rpc={rpc} />
+			 * groups live on 交互; duplicating them here was the old bug).
+			 * stt.modelName is excluded: the picker card owns it. */}
+			<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Speech"]} excludeKeys={["stt.modelName"]} />
+			<ModelPickerCard rpc={rpc} />
 
 			{/* Live device + dictation test: not expressible in schema. */}
 			<div className="gui-settings-section">
@@ -356,39 +540,49 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							{devices.length > 0 ? t("voice input device hint") : t("voice input test description")}
 						</div>
 					</div>
-					{/* A PICKER, not a list: this row used to print the enumerated
-					 *  labels as one joined string, so the microphone could not be
-					 *  chosen at all. The value is stored under a machine-local key
-					 *  and is picked up by every dictation entry point. */}
-					<select
-						className="gui-settings-select"
-						aria-label={t("voice input device")}
-						value={deviceId ?? ""}
-						disabled={devices.length === 0}
-						onChange={e => {
-							const next = e.target.value || null;
+					{/* A floating-menu picker, not a native <select>: the value is
+					 * stored under a machine-local key and is picked up by every
+					 * dictation entry point. */}
+					<InputDeviceMenu
+						devices={devices}
+						deviceId={deviceId}
+						onChange={next => {
 							setDeviceId(next);
 							setVoiceInputDevice(next);
 						}}
-					>
-						<option value="">{t("system default")}</option>
-						{devices.map(d => (
-							<option key={d.deviceId} value={d.deviceId}>
-								{d.label}
-							</option>
-						))}
-					</select>
+					/>
 				</div>
 				<div className="gui-settings-row">
-					<div>
+					<div className="gui-voice-test">
 						<div className="gui-settings-row-label">{t("voice input test")}</div>
 						<div className="gui-settings-row-desc" aria-live="polite">
-							{dictated ?? t("voice input test description")}
+							{dictationError ??
+								dictated ??
+								(dictationPhase === "recording"
+									? `${tLoose("Listening… speak now")} · ${recordSeconds}s`
+									: dictationPhase === "transcribing"
+										? t("voice transcribing")
+										: t("voice input test description"))}
 						</div>
+						{dictationPhase === "recording" && (
+							<div className="gui-voice-level" aria-hidden>
+								<span
+									className="gui-voice-level-fill"
+									style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}
+								/>
+							</div>
+						)}
 					</div>
 					<button type="button" className="gui-btn" disabled={!rpc} onClick={toggleDictation}>
-						<Icon name="mic" className="h-3.5 w-3.5" />
-						{dictating ? t("recording…") : t("voice input test")}
+						<Icon
+							name={dictationPhase === "recording" || dictationPhase === "transcribing" ? "stop" : "mic"}
+							className="h-3.5 w-3.5"
+						/>
+						{dictationPhase === "recording"
+							? t("stop")
+							: dictationPhase === "transcribing"
+								? t("voice transcribing")
+								: t("voice input test")}
 					</button>
 				</div>
 			</div>

@@ -30,6 +30,7 @@ const SIZE_HINTS: Record<string, string> = {
 	balanced: "~190 MB",
 	turbo: "~600 MB",
 	parakeet: "~680 MB",
+	sensevoice: "~239 MB",
 };
 
 interface SetupState {
