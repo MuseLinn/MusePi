@@ -42,6 +42,8 @@ import type {
 	SessionState,
 	SttModelRow,
 	SttModelStatusResponse,
+	TtsModelRow,
+	TtsModelStatusResponse,
 	AgentEvent as WireAgentEvent,
 	WireMessage,
 } from "@musepi/pi-wire";
@@ -507,6 +509,10 @@ export class DaemonServer {
 	 *  Guards against two windows (or a double-click race) starting parallel
 	 *  fetches into the same cache directory. */
 	readonly #sttDownloads = new Map<string, Promise<void>>();
+	/** Local TTS model downloads currently running — same guard contract as
+	 *  #sttDownloads: two windows (or a double-click race) must reuse the
+	 *  running fetch instead of starting parallel ones into the same cache. */
+	readonly #ttsDownloads = new Map<string, Promise<void>>();
 
 	/** Drop a connection from the global-event targets (called on close —
 	 *  the host's disconnect handles the session subscription side). Also
@@ -3958,6 +3964,91 @@ export class DaemonServer {
 				});
 				if (!audio) return { audio: null, sampleRate: 0 };
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };
+			}
+			case "tts.modelStatus": {
+				// GUI voice page (stt.modelStatus parity): which local TTS tiers
+				// are already on disk, so the 朗读模型 card can show "ready" vs
+				// "needs download" per option. `downloads` lists model keys
+				// mid-fetch so a freshly-mounted window renders its progress
+				// row immediately, not after the next tick.
+				const { isTtsModelCached } = await import("../tts/downloader");
+				const { TTS_LOCAL_MODELS, resolveTtsModelSpec } = await import("../tts/models");
+				// `satisfies` (not `:`) — the wire contract in @musepi/pi-wire
+				// is the single source of truth for both shells; if the shape
+				// here drifts, typecheck fails instead of the UI breaking.
+				const models: TtsModelRow[] = await Promise.all(
+					TTS_LOCAL_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isTtsModelCached(m.key) })),
+				);
+				// The card's radio seed follows the user's config (`tts.localModel`,
+				// same resolution as tts.synthesize). Settings may be uninitialized
+				// in bare harness contexts; fall back to the built-in default tier.
+				let defaultKey: string;
+				try {
+					const { settings: ttsSettings } = await import("../config/settings");
+					defaultKey = resolveTtsModelSpec(ttsSettings.get("tts.localModel") as string | undefined).key;
+				} catch {
+					defaultKey = resolveTtsModelSpec(undefined).key;
+				}
+				return { models, downloads: [...this.#ttsDownloads.keys()], defaultKey } satisfies TtsModelStatusResponse;
+			}
+			case "tts.modelDownload": {
+				// Kick off a local TTS model download WITHOUT awaiting it —
+				// stt.modelDownload parity (the fetch outlives the RPC timeout).
+				// Progress AND both terminal outcomes (tts.downloadDone /
+				// tts.downloadError) ride the global event stream, so every
+				// open window stays in sync.
+				const p = (params ?? {}) as { modelKey?: string };
+				if (!p.modelKey) throw new Error("modelKey required");
+				const { isTtsLocalModelKey } = await import("../tts/models");
+				// Reject unknown keys explicitly: downloadTtsModel would silently
+				// return false, leaving the GUI's progress row hanging forever.
+				if (!isTtsLocalModelKey(p.modelKey)) throw new Error(`unknown TTS model: ${p.modelKey}`);
+				const modelKey = p.modelKey;
+				// Idempotent re-trigger: a second window (or a double-click
+				// race) must reuse the running fetch, not start a parallel one
+				// into the same cache directory. Reserve the slot SYNCHRONOUSLY
+				// so a second RPC racing the dynamic import below can't slip
+				// past the guard; it is replaced by the real promise right after.
+				if (this.#ttsDownloads.has(modelKey)) return { ok: true, alreadyRunning: true };
+				this.#ttsDownloads.set(modelKey, Promise.resolve());
+				try {
+					const { downloadTtsModel } = await import("../tts/downloader");
+					const emitTtsEvent = (payload: Record<string, unknown>): void => {
+						this.#services.get<EventService>("events").broadcast(payload);
+					};
+					// Exactly one run per key lives in #ttsDownloads at a time,
+					// so the finally can drop it unconditionally.
+					const run = (async (): Promise<void> => {
+						try {
+							const ok = await downloadTtsModel(modelKey, progress => {
+								emitTtsEvent({
+									type: "tts.downloadProgress",
+									modelKey,
+									percent: progress.percent ?? 0,
+									label: progress.stage,
+								});
+							});
+							// downloadTtsModel reports worker/spawn failures through a
+							// `false` return, not a throw — surface both as the error event.
+							if (!ok) throw new Error("TTS model download failed");
+							emitTtsEvent({ type: "tts.downloadDone", modelKey });
+						} catch (err) {
+							emitTtsEvent({
+								type: "tts.downloadError",
+								modelKey,
+								message: err instanceof Error ? err.message : String(err),
+							});
+						} finally {
+							this.#ttsDownloads.delete(modelKey);
+						}
+					})();
+					this.#ttsDownloads.set(modelKey, run);
+				} catch (err) {
+					// Setup failed (import/dispatch): release the reservation.
+					this.#ttsDownloads.delete(modelKey);
+					throw err;
+				}
+				return { ok: true };
 			}
 			case "terminal.open": {
 				// 实现归 TerminalService（pty 生命周期语义不变）。

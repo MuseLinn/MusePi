@@ -347,6 +347,55 @@ export function isSttDownloadEvent(value: unknown): value is SttDownloadEvent {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Speech models (tts.modelStatus / tts.modelDownload)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** One local TTS model tier as reported by `tts.modelStatus`. */
+export interface TtsModelRow {
+	key: string;
+	label: string;
+	cached: boolean;
+}
+
+/** `tts.modelStatus` payload. `downloads` lists model keys mid-fetch so a
+ *  window mounted mid-download can render its progress row immediately.
+ *  `defaultKey` mirrors the resolved `tts.localModel` config (the radio seed). */
+export interface TtsModelStatusResponse {
+	models: TtsModelRow[];
+	downloads?: string[];
+	defaultKey?: string;
+}
+
+/**
+ * Local TTS model download events — the TTS mirror of the STT channel: same
+ * global event stream, same fire-and-forget download contract (the RPC
+ * returns immediately; progress AND both terminal outcomes ride events).
+ */
+export type TtsDownloadEvent =
+	| {
+			type: "tts.downloadProgress";
+			modelKey: string;
+			percent: number;
+			/** Human-readable stage text (daemon-localized). */
+			label?: string;
+			/** Byte counts when the worker reports them (STT shape parity);
+			 *  currently absent — the TTS workers emit integer percent only. */
+			loaded?: number;
+			total?: number;
+	  }
+	| { type: "tts.downloadDone"; modelKey: string }
+	| { type: "tts.downloadError"; modelKey: string; message: string };
+
+/** Runtime guard: the daemon sends these as untyped `payload` bags. */
+export function isTtsDownloadEvent(value: unknown): value is TtsDownloadEvent {
+	if (typeof value !== "object" || value === null) return false;
+	const v = value as { type?: unknown; modelKey?: unknown; percent?: unknown };
+	if (typeof v.type !== "string" || !v.type.startsWith("tts.download")) return false;
+	if (v.type === "tts.downloadProgress") return typeof v.percent === "number";
+	return v.type === "tts.downloadDone" || v.type === "tts.downloadError";
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // State & agents
 // ═══════════════════════════════════════════════════════════════════════════
 

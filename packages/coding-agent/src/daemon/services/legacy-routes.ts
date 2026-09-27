@@ -203,6 +203,8 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"tool_execution_start",
 	"tool_execution_update",
 	"tray.state",
+	"tts.modelDownload",
+	"tts.modelStatus",
 	"tts.synthesize",
 	"updates.check",
 	"worktree.create",

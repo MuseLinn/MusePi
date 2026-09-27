@@ -4,14 +4,26 @@
  * schema is the single source of truth — the same rows used to be
  * hand-duplicated here with hardcoded defaults that never loaded real
  * values, and drifted from the 交互 tab's schema-driven copies), EXCEPT
- * `stt.modelName` which this file renders as a radio-row picker card (a bare
- * enum dropdown buried in the list made the four tiers unreadable).
- * This file keeps only what the schema cannot express: the speech-model
- * picker, live mic enumeration (liquid-glass floating menu), the dictation
- * test state machine, and the TTS test card.
+ * `stt.modelName` and `tts.localModel`, which this file renders as two
+ * radio-row picker cards (a bare enum dropdown buried in the list made the
+ * tiers unreadable; the TTS one matters doubly because zh users otherwise
+ * cannot pick the Mandarin tier at all).
+ * This file keeps only what the schema cannot express: the two speech-model
+ * pickers, live mic enumeration (liquid-glass floating menu), and the
+ * dictation / TTS tests — both rendered as SIMULATED conversation rows
+ * (transcript .tr-row user/assistant markup) so testing voice I/O previews
+ * exactly what chat will look and sound like.
  */
-import { t, tLoose } from "@musepi/client-core";
-import { isSttDownloadEvent, type SttModelRow, type SttModelStatusResponse } from "@musepi/pi-wire";
+import { Markdown, t, tLoose } from "@musepi/client-core";
+import {
+	isSttDownloadEvent,
+	isTtsDownloadEvent,
+	type SttDownloadEvent,
+	type SttModelRow,
+	type SttModelStatusResponse,
+	type TtsDownloadEvent,
+	type TtsModelStatusResponse,
+} from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import "../../i18n/voice";
 import type { RpcClient } from "../../lib/rpc";
@@ -25,17 +37,23 @@ import {
 	type VoiceActivity,
 } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
-import { StateIconN } from "../StateIcon";
 import { SchemaTabSection } from "./schema";
 
-/* ── Speech-model download state (stt.modelStatus / stt.modelDownload) ──
- *  The RPC contract (`SttModelRow` / `SttModelStatusResponse` / the
- *  `SttDownloadEvent` union + its guard) lives in @musepi/pi-wire so the
- *  desktop and guest shells can never drift apart. Only the renderer's own
- *  row state stays local. */
-/** Active-download row. The event shape itself lives in @musepi/pi-wire
- *  (`SttDownloadEvent` + `isSttDownloadEvent`) — shared with the guest
- *  client so both shells narrow the daemon's untyped payload the same way. */
+/* ── Speech-model download state (stt/tts .modelStatus / .modelDownload) ──
+ *  The RPC contracts (`SttModelRow`/`TtsModelRow`, the status responses, the
+ *  `*.download*` event unions + their guards) live in @musepi/pi-wire so the
+ *  desktop and guest shells can never drift apart. Both channels share one
+ *  shape: fire-and-forget download RPC, progress AND both terminal outcomes
+ *  riding the global event stream, so state survives page remounts and stays
+ *  in sync across every open window. Only the renderer's own row state
+ *  stays local. */
+
+/** Either wire download-event union — the picker normalizes both STT
+ *  (percent + bytes + file label) and TTS (percent + stage label) ticks
+ *  through this one shape. */
+type AnyModelDownloadEvent = SttDownloadEvent | TtsDownloadEvent;
+
+/** Active-download row, normalized from whichever wire event arrived. */
 interface ActiveDownload {
 	modelKey: string;
 	percent: number;
@@ -51,18 +69,20 @@ function formatBytes(n: number): string {
 	return `${n} B`;
 }
 
-/** Per-model row: label + 已就绪 badge or a download button with a live
- * progress bar while the daemon fetches. Progress AND both terminal
- * outcomes ride the global event stream (`stt.downloadProgress` /
- * `stt.downloadDone` / `stt.downloadError`), so state survives page
- * remounts and stays in sync across every open window. */
 /** Per-tier presentation metadata (openchamber model-card parity): size
- *  mirrors `stt/models.ts` `sizeHint`; badge/desc are humanized one-liners
- *  (i18n keys registered by i18n/voice.ts — the English sentence IS the key,
- *  matching the core map's contract). Local UI data only — the wire row
- *  stays { key, label, cached }. Kept in sync with
- *  composer/voice-setup.tsx SIZE_HINTS. */
-const TIER_META: Record<string, { size: string; badge?: string; desc: string }> = {
+ *  mirrors the daemon registry's download footprint; badge/desc are
+ *  humanized one-liners (i18n keys registered by i18n/voice.ts — the
+ *  English sentence IS the key, matching the core map's contract). Local UI
+ *  data only — the wire row stays { key, label, cached }. Kept in sync with
+ *  composer/voice-setup.tsx SIZE_HINTS (STT half). */
+interface TierMeta {
+	size: string;
+	badge?: string;
+	desc: string;
+}
+
+/** STT tiers — sizes mirror `stt/models.ts` `sizeHint`. */
+const TIER_META: Record<string, TierMeta> = {
 	fast: { size: "~60 MB", badge: "Lightweight", desc: "Lightweight and fast — best for quick English notes" },
 	balanced: {
 		size: "~190 MB",
@@ -85,14 +105,64 @@ const TIER_META: Record<string, { size: string; badge?: string; desc: string }> 
 	},
 };
 
+/** TTS tiers — sizes mirror `tts/models.ts`: MeloTTS-zh ships model.onnx
+ *  ~163 MB (+tokens/lexicon, negligible); Kokoro-82M loads at the default
+ *  q8 precision, i.e. the 82M-param weights ≈ 85 MB on disk. */
+const TTS_TIER_META: Record<string, TierMeta> = {
+	kokoro: {
+		size: "~85 MB",
+		badge: "English-first",
+		desc: "SoTA English & code narration — no Chinese",
+	},
+	"melotts-zh": {
+		size: "~165 MB",
+		badge: "Chinese",
+		desc: "Mandarin narration with mixed zh/en",
+	},
+};
+
 /** Speech-model picker: ONE card where each tier is a radio row — selecting
- *  a tier writes `stt.modelName` and, when its weights aren't cached, kicks
- *  the download automatically (the old four separate cards made the choice
- *  look like four parallel features instead of one decision). Progress AND
- *  both terminal outcomes ride the global event stream
- *  (`stt.downloadProgress` / `stt.downloadDone` / `stt.downloadError`), so
- *  state survives page remounts and stays in sync across every open window. */
-function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+ *  a tier writes the backing setting. The STT and TTS pickers are the same
+ *  card over two wire channels, so the component takes the channel endpoints
+ *  as props instead of forking. They differ in one behavior: the STT card
+ *  auto-fetches on pick (a selected tier you cannot use is a broken default),
+ *  while the TTS card leaves the download to the per-row button — synthesis
+ *  falls back across tiers by text script, so an uncached pick still reads
+ *  aloud through the other model. */
+interface SpeechModelPickerProps {
+	rpc: RpcClient | null;
+	/** i18n key for the section title and the radiogroup's aria-label. */
+	titleKey: string;
+	/** DOM radio-group name (keeps the two cards' radios independent). */
+	radioName: string;
+	statusMethod: "stt.modelStatus" | "tts.modelStatus";
+	downloadMethod: "stt.modelDownload" | "tts.modelDownload";
+	/** Setting a radio write commits to (`settings.set <key>`). */
+	settingsKey: "stt.modelName" | "tts.localModel";
+	meta: Record<string, TierMeta>;
+	isDownloadEvent: (value: unknown) => value is AnyModelDownloadEvent;
+	/** STT passes true: selecting an uncached tier starts its download AND a
+	 *  seeded selection pointing at missing weights auto-fetches (fresh
+	 *  machine). TTS omits it (default false): local synthesis routes zh text
+	 *  to the Mandarin tier automatically, so an uncached pick still reads
+	 *  aloud — the per-row download button is the only fetch trigger. */
+	autoFetchOnSelect?: boolean;
+}
+
+/** The STT/TTS pickers are one component over two wire channels — exported
+ *  for the voice-settings contract tests (the TTS half is the only part
+ *  without a pre-existing card to lean on). */
+export function SpeechModelPicker({
+	rpc,
+	titleKey,
+	radioName,
+	statusMethod,
+	downloadMethod,
+	settingsKey,
+	meta,
+	isDownloadEvent,
+	autoFetchOnSelect,
+}: SpeechModelPickerProps): ReactNode {
 	const [models, setModels] = useState<SttModelRow[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [active, setActive] = useState<ActiveDownload | null>(null);
@@ -103,7 +173,7 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	const refresh = useCallback(() => {
 		void rpc
-			?.request<SttModelStatusResponse>("stt.modelStatus", {})
+			?.request<SttModelStatusResponse | TtsModelStatusResponse>(statusMethod, {})
 			.then(res => {
 				setModels(res.models);
 				// Window mounted mid-download: seed a 0% row from the daemon's
@@ -116,24 +186,28 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							? { modelKey: res.downloads[0], percent: 0, loaded: 0, total: 0, label: "" }
 							: null),
 				);
+				// Seed the radio from the daemon-resolved default when the
+				// setting itself gave us nothing (unset → built-in default).
+				setSelected(prev => (prev === null && typeof res.defaultKey === "string" ? res.defaultKey : prev));
 			})
 			.catch(() => setModels([]));
-	}, [rpc]);
+	}, [rpc, statusMethod]);
 
 	useEffect(() => {
 		refresh();
 		// Seed the radio selection from the live setting (default tier when unset).
 		void rpc
-			?.request<Record<string, unknown>>("settings.get", { keys: ["stt.modelName"] })
+			?.request<Record<string, unknown>>("settings.get", { keys: [settingsKey] })
 			.then(v => {
-				if (typeof v?.["stt.modelName"] === "string") setSelected(v["stt.modelName"] as string);
+				if (typeof v?.[settingsKey] === "string") setSelected(v[settingsKey] as string);
 			})
 			.catch(() => {});
 		if (!rpc) return;
 		const off = rpc.addEventListener(event => {
 			const p = event.payload;
-			if (!isSttDownloadEvent(p)) return;
-			if (p.type === "stt.downloadProgress") {
+			if (!isDownloadEvent(p)) return;
+			// Discriminate on the exact literal (endsWith would not narrow).
+			if (p.type === "stt.downloadProgress" || p.type === "tts.downloadProgress") {
 				setActive({
 					modelKey: p.modelKey,
 					percent: p.percent,
@@ -143,7 +217,7 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				});
 				return;
 			}
-			if (p.type === "stt.downloadDone") {
+			if (p.type === "stt.downloadDone" || p.type === "tts.downloadDone") {
 				// Let the bar paint 100% briefly, then clear + re-check cache.
 				if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
 				settleTimer.current = window.setTimeout(() => {
@@ -153,12 +227,9 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				}, 1200);
 				return;
 			}
-			// p.type === "stt.downloadError": fire-and-forget request means
-			// the RPC itself never rejects — the failure only arrives here.
-			// Keep the tier key so the row can be named; other models' UI
-			// state is untouched.
-			// Guard checks `type` only, so the text fields still get a
-			// runtime fallback (an untyped daemon could omit them).
+			// *.downloadError: fire-and-forget request means the RPC itself
+			// never rejects — the failure only arrives here. Keep the tier key
+			// so the row can be named; other models' UI state is untouched.
 			setError({ modelKey: p.modelKey ?? "", message: p.message ?? "download failed" });
 			// Retire the stuck row: without this the tier stays on a progress
 			// bar that will never advance (guest parity).
@@ -169,78 +240,80 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			off();
 			if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
 		};
-	}, [rpc, refresh]);
+	}, [rpc, refresh, settingsKey, isDownloadEvent]);
 
 	const download = useCallback(
 		(modelKey: string): void => {
 			setError(null);
 			setActive({ modelKey, percent: 0, loaded: 0, total: 0, label: "" });
-			void rpc?.request("stt.modelDownload", { modelKey }).catch(err => {
+			void rpc?.request(downloadMethod, { modelKey }).catch(err => {
 				// Only reachable for immediate rejections (bad key, daemon offline).
 				setActive(null);
 				setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
 			});
 		},
-		[rpc],
+		[rpc, downloadMethod],
 	);
 
 	const select = (modelKey: string): void => {
 		if (!rpc || modelKey === selected) return;
 		setSelected(modelKey);
 		setError(null);
-		void rpc.request("settings.set", { key: "stt.modelName", value: modelKey }).catch(err => {
+		void rpc.request("settings.set", { key: settingsKey, value: modelKey }).catch(err => {
 			setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
 		});
 	};
 
-	// Selecting an uncached tier starts its download — both for explicit
-	// clicks (handled in the row's onChange via `download`) and for a seed
-	// selection pointing at weights that aren't on disk yet (fresh machine).
+	// Auto-fetch (STT only): selecting an uncached tier starts its download —
+	// both for explicit clicks (handled in the row's onChange via `download`)
+	// and for a seed selection pointing at weights that aren't on disk yet
+	// (fresh machine). TTS never auto-fetches — see the prop's contract.
 	const selectedRow = models?.find(m => m.key === selected) ?? null;
 	useEffect(() => {
+		if (!autoFetchOnSelect) return;
 		if (!selectedRow || selectedRow.cached || active !== null) return;
 		download(selectedRow.key);
-	}, [selectedRow, active, download]);
+	}, [selectedRow, active, download, autoFetchOnSelect]);
 
 	const errorLabel = error ? models?.find(m => m.key === error.modelKey)?.label : undefined;
 
 	return (
 		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{tLoose("speech recognition model")}</div>
+			<div className="gui-settings-section-title">{tLoose(titleKey)}</div>
 			{models === null ? (
 				<div className="gui-settings-row">
 					<div className="gui-settings-row-desc">…</div>
 				</div>
 			) : (
-				<div className="gui-stt-picker" role="radiogroup" aria-label={tLoose("speech recognition model")}>
+				<div className="gui-stt-picker" role="radiogroup" aria-label={tLoose(titleKey)}>
 					{models.map(m => {
 						const isSelected = selected === m.key;
 						const isActive = active?.modelKey === m.key;
-						const meta = TIER_META[m.key] ?? { size: "", desc: "" };
+						const tierMeta = meta[m.key] ?? { size: "", desc: "" };
 						return (
 							<div key={m.key} className={`gui-stt-row${isSelected ? " gui-stt-row--selected" : ""}`}>
 								<label className="gui-stt-row-radio">
 									<input
 										type="radio"
-										name="stt-model"
+										name={radioName}
 										checked={isSelected}
 										disabled={!rpc}
 										onChange={() => {
 											select(m.key);
-											// Auto-fetch on pick: a selected tier you
-											// cannot use (weights missing, no download
-											// running) is a broken default — mirror the
-											// effect above for the click path.
-											if (!m.cached && active === null) download(m.key);
+											// Auto-fetch on pick (STT only): a selected
+											// tier you cannot use (weights missing, no
+											// download running) is a broken default —
+											// mirror the effect above for the click path.
+											if (autoFetchOnSelect && !m.cached && active === null) download(m.key);
 										}}
 									/>
 									<span className="gui-stt-row-main">
 										<span className="gui-stt-row-head">
 											<span className="gui-stt-row-label">{m.label}</span>
-											{meta.badge && <span className="gui-stt-badge">{tLoose(meta.badge)}</span>}
-											<span className="gui-stt-row-size">{meta.size}</span>
+											{tierMeta.badge && <span className="gui-stt-badge">{tLoose(tierMeta.badge)}</span>}
+											<span className="gui-stt-row-size">{tierMeta.size}</span>
 										</span>
-										<span className="gui-stt-row-desc">{tLoose(meta.desc)}</span>
+										<span className="gui-stt-row-desc">{tLoose(tierMeta.desc)}</span>
 										{isActive ? (
 											<span className="gui-stt-row-progress" aria-live="polite">
 												<progress
@@ -249,8 +322,10 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 													aria-label={`${m.label} ${active.percent}%`}
 												/>
 												<span>
-													{active.percent}% · {active.label} {formatBytes(active.loaded)}
-													{active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}
+													{active.percent}% · {active.label}
+													{active.loaded > 0
+														? ` · ${formatBytes(active.loaded)}${active.total > 0 ? ` / ${formatBytes(active.total)}` : ""}`
+														: ""}
 												</span>
 											</span>
 										) : null}
@@ -274,7 +349,7 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					})}
 				</div>
 			)}
-			{selectedRow && !selectedRow.cached && (
+			{autoFetchOnSelect && selectedRow && !selectedRow.cached && (
 				<div className="gui-settings-row-desc">{tLoose("downloads automatically when selected")}</div>
 			)}
 			{error && (
@@ -292,16 +367,91 @@ function ModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	);
 }
 
-/** TTS test card: synthesizes the sample phrase with the CURRENT schema
- * values (read live from settings.get, so the test always matches what
- * chat playback will use). */
-function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+/** STT picker card (语音识别模型): the four tiers write `stt.modelName` and
+ *  auto-fetch on pick — a selected tier you cannot use is a broken default. */
+function SttModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	return (
+		<SpeechModelPicker
+			rpc={rpc}
+			titleKey="speech recognition model"
+			radioName="stt-model"
+			statusMethod="stt.modelStatus"
+			downloadMethod="stt.modelDownload"
+			settingsKey="stt.modelName"
+			meta={TIER_META}
+			isDownloadEvent={isSttDownloadEvent}
+			autoFetchOnSelect
+		/>
+	);
+}
+
+/** TTS picker card (朗读模型): two tiers write `tts.localModel`. Selecting
+ *  NEVER auto-downloads — local synthesis routes zh text to the Mandarin tier
+ *  automatically, so an uncached pick still reads aloud; the per-row download
+ *  button is the only fetch trigger. Exported: the contract test mounts this
+ *  card directly against a fake RPC. */
+export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+	return (
+		<SpeechModelPicker
+			rpc={rpc}
+			titleKey="speech synthesis model"
+			radioName="tts-model"
+			statusMethod="tts.modelStatus"
+			downloadMethod="tts.modelDownload"
+			settingsKey="tts.localModel"
+			meta={TTS_TIER_META}
+			isDownloadEvent={isTtsDownloadEvent}
+			autoFetchOnSelect={false}
+		/>
+	);
+}
+
+/** Simulated user message: the transcript's user-row markup (right-aligned
+ *  bubble + the SAME Markdown renderer chat uses), so the dictation test
+ *  previews exactly how the transcribed text will look in a conversation.
+ *  Exported: the contract test mounts this directly. */
+export function MockUserMessage({ text }: { text: string }): ReactNode {
+	return (
+		<div className="tr-row tr-row--user">
+			<div className="tr-gutter">
+				<span className="tr-badge">{t("host")}</span>
+			</div>
+			<div className="tr-body">
+				<Markdown text={text} />
+			</div>
+		</div>
+	);
+}
+
+/** Built-in assistant reply the 测试语音输出 card speaks — deliberately
+ *  zh/en mixed with a fenced code block so the default `sanitize` read mode
+ *  (tts.inputMode) has something to strip (the spoken stream never reads
+ *  code aloud) and a zh user can hear the MeloTTS-zh tier. Demo content,
+ *  not locale chrome — it must stay mixed-script by design. */
+const TTS_SAMPLE_MARKDOWN = [
+	"已经帮你把这段配置改好了，简单说两个要点：",
+	"",
+	"```ts",
+	'const model = await downloadTtsModel("melotts-zh");',
+	"```",
+	"",
+	"上面的代码块在 sanitize 模式下会被整段跳过，不会被朗读；inline terms like *neural TTS* and `sampleRate` stay in the stream. 语速可以在「朗读速率」里调整。",
+].join("\n");
+
+/** TTS test: a SIMULATED assistant reply row — the same .tr-row--assistant
+ *  markup (and .tr-action read-aloud button) the transcript renders, so
+ *  the test previews exactly what chat playback looks and sounds like.
+ *  Synthesis uses the CURRENT schema values (read live from settings.get,
+ *  so the test always matches what chat playback will use). Exported for
+ *  the voice-settings contract tests. */
+export function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [state, setState] = useState<"idle" | "loading" | "speaking" | "ok" | "error">("idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
 	useEffect(() => () => stopRef.current?.(), []);
+	const speaking = state === "speaking" || state === "loading";
 	const toggle = (): void => {
-		if (state === "speaking" || state === "loading") {
+		if (speaking) {
 			stopRef.current?.();
 			setState("idle");
 			return;
@@ -314,7 +464,7 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				v =>
 					new Promise<void>(resolve => {
 						stopRef.current = speak(
-							t("voice output sample"),
+							TTS_SAMPLE_MARKDOWN,
 							rpc,
 							{
 								voice: typeof v["tts.localVoice"] === "string" ? (v["tts.localVoice"] as string) : undefined,
@@ -343,9 +493,27 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			});
 	};
 	return (
-		<div className="gui-settings-row">
-			<div>
-				<div className="gui-settings-row-label">{t("voice output test")}</div>
+		<div className="gui-settings-section">
+			<div className="gui-settings-section-title">{t("voice output test")}</div>
+			<div className="gui-voice-sim">
+				<div className="tr-row tr-row--assistant">
+					<div className="tr-gutter">{t("agent")}</div>
+					<div className="tr-body">
+						<Markdown text={TTS_SAMPLE_MARKDOWN} />
+					</div>
+					<div className="tr-actions">
+						<button
+							type="button"
+							className={`tr-action${speaking ? " tr-action--speaking" : ""}`}
+							title={speaking ? t("read aloud stop") : t("read aloud")}
+							aria-label={speaking ? t("read aloud stop") : t("read aloud")}
+							disabled={!rpc}
+							onClick={toggle}
+						>
+							<Icon name="volume-up" className="h-3.5 w-3.5" />
+						</button>
+					</div>
+				</div>
 				<div className="gui-settings-row-desc" aria-live="polite">
 					{state === "ok"
 						? t("voice output played")
@@ -354,14 +522,6 @@ function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							: t("voice output test description")}
 				</div>
 			</div>
-			<button type="button" className="gui-btn" disabled={!rpc} onClick={toggle}>
-				<StateIconN
-					value={state}
-					options={{ loading: "download", speaking: "stop", idle: "play" }}
-					className="h-3.5 w-3.5"
-				/>
-				{state === "speaking" || state === "loading" ? t("stop") : t("voice output test")}
-			</button>
 		</div>
 	);
 }
@@ -440,10 +600,10 @@ function InputDeviceMenu({
 
 /** Settings → 语音。 */
 export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	// Schema keys render via SchemaTabSection below — minus stt.modelName,
-	// which the picker card above renders as radio rows (a bare enum
-	// dropdown made the tiers unreadable). Local state covers only the live
-	// mic test (device enumeration + dictation round-trip).
+	// Schema keys render via SchemaTabSection below — minus stt.modelName and
+	// tts.localModel, which the two picker cards render as radio rows (bare
+	// enum dropdowns made the tiers unreadable). Local state covers only the
+	// live mic test (device enumeration + dictation round-trip).
 	const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([]);
 	// Selected microphone (deviceId, null = system default). Seeded from the
 	// same machine-local key the dictation entry points read.
@@ -457,6 +617,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [recordLevel, setRecordLevel] = useState(0);
 	const [dictated, setDictated] = useState<string | null>(null);
 	const [dictationError, setDictationError] = useState<string | null>(null);
+	const [feedbackNoted, setFeedbackNoted] = useState(false);
 	const stopRef = useRef<(() => void) | null>(null);
 
 	useEffect(() => {
@@ -475,6 +636,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 		}
 		setDictated(null);
 		setDictationError(null);
+		setFeedbackNoted(false);
 		setRecordSeconds(0);
 		setRecordLevel(0);
 		setDictating(true);
@@ -526,11 +688,23 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
 			 * "Speech" group, NOT the whole tab (the rest of the interaction
 			 * groups live on 交互; duplicating them here was the old bug).
-			 * stt.modelName is excluded: the picker card owns it. */}
-			<SchemaTabSection rpc={rpc} tabs={["interaction"]} groups={["Speech"]} excludeKeys={["stt.modelName"]} />
-			<ModelPickerCard rpc={rpc} />
+			 * stt.modelName and tts.localModel are excluded: the picker cards
+			 * own them (a bare enum dropdown buried in the list made the four
+			 * STT tiers unreadable, and left zh users no way at all to pick
+			 * the Mandarin TTS tier). */}
+			<SchemaTabSection
+				rpc={rpc}
+				tabs={["interaction"]}
+				groups={["Speech"]}
+				excludeKeys={["stt.modelName", "tts.localModel"]}
+			/>
+			<SttModelPickerCard rpc={rpc} />
+			<TtsModelPickerCard rpc={rpc} />
 
-			{/* Live device + dictation test: not expressible in schema. */}
+			{/* Live device + dictation test: not expressible in schema. The
+			 * transcription result renders as a SIMULATED user message (the
+			 * transcript's .tr-row--user markup + Markdown), so the test
+			 * previews exactly how dictated text will look in chat. */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("voice input test")}</div>
 				<div className="gui-settings-row">
@@ -557,12 +731,13 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						<div className="gui-settings-row-label">{t("voice input test")}</div>
 						<div className="gui-settings-row-desc" aria-live="polite">
 							{dictationError ??
-								dictated ??
 								(dictationPhase === "recording"
 									? `${tLoose("Listening… speak now")} · ${recordSeconds}s`
 									: dictationPhase === "transcribing"
 										? t("voice transcribing")
-										: t("voice input test description"))}
+										: dictated
+											? tLoose("transcription preview below")
+											: t("voice input test description"))}
 						</div>
 						{dictationPhase === "recording" && (
 							<div className="gui-voice-level" aria-hidden>
@@ -585,6 +760,29 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								: t("voice input test")}
 					</button>
 				</div>
+				{dictated && !dictating && (
+					<div className="gui-voice-sim">
+						<MockUserMessage text={dictated} />
+						<div className="gui-voice-feedback">
+							<button
+								type="button"
+								className="gui-btn"
+								onClick={() => {
+									setDictated(null);
+									setFeedbackNoted(false);
+									toggleDictation();
+								}}
+							>
+								<Icon name="mic" className="h-3.5 w-3.5" />
+								{tLoose("re-record")}
+							</button>
+							<button type="button" className="gui-btn" onClick={() => setFeedbackNoted(true)}>
+								{tLoose("is this more accurate?")}
+							</button>
+							{feedbackNoted && <span className="gui-settings-row-desc">{tLoose("feedback noted")}</span>}
+						</div>
+					</div>
+				)}
 			</div>
 
 			<TtsTestCard rpc={rpc} />
