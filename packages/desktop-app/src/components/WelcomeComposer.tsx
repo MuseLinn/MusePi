@@ -58,6 +58,7 @@ import { ModelThinkingCapsule } from "./ModelThinkingCapsule";
 import { ONBOARDING_PROVIDER_STEP } from "./OnboardingOverlay";
 import { PetSprite, usePet } from "./PetSprite";
 import { type ReminderRow, RemindersPanel } from "./RemindersPanel";
+import { Reveal } from "./Reveal";
 import { SketchPad } from "./SketchPad";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
@@ -1421,7 +1422,7 @@ export function WelcomeComposer({
 				 * accents, feather edge and click ripples; replaces the static
 				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
 				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
-				<div className="relative z-10 flex w-full max-w-[560px] flex-col items-center gui-welcome-inner">
+				<div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gui-welcome-inner">
 					{/* Workspace picker (openchamber/ZCode): dropdown list attached
 					 * right above the input — current project, open folder, remote. */}
 					<div className="gui-brand mb-2 flex items-center gap-2">
@@ -1456,6 +1457,28 @@ export function WelcomeComposer({
 							</button>
 						</div>
 					)}
+					{/* M3.7a design 模式内联形态(v2 修订):类型 chip 排直接落在
+					 * 工作区 chip 排上方一行,无弹层/无第二输入框;template chip 选中
+					 * 时输入框让位给 chip 排下方的模板 rail(§2.3)。进出场走 Reveal
+					 * (高度 240ms + 淡出 160ms + 内层位移,gui-creation-reveal),
+					 * 收起的退场动画播完前保持挂载,草稿/句柄不因收起丢失。 */}
+					<Reveal open={designActive} className="gui-creation-reveal w-full">
+						<CreationModeRow
+							rpc={rpc}
+							active={designActive}
+							project={project ?? null}
+							// 发送只在 designActive 时可达(§2.4 发送钩子由 composer
+							// 的 designActive 分支调用),designSubmit 缺省时兜底 false。
+							onSubmit={(metadata, message) =>
+								designSubmit ? designSubmit(metadata, message) : Promise.resolve(false)
+							}
+							onClose={() => onModeChange?.("work")}
+							onStateChange={setRailState}
+							onReady={handle => {
+								railRef.current = handle;
+							}}
+						/>
+					</Reveal>
 					{/* Project target — an independent row above the composer,
 					 * left-aligned (openchamber DraftTargetSelectors). */}
 					{onProject && (
@@ -1644,21 +1667,6 @@ export function WelcomeComposer({
 								</div>
 							)}
 						</div>
-					)}
-					{/* M3.7a design 模式内联形态(v2 修订):类型 chip 排直接落在
-					 * composer 上方一行,无弹层/无第二输入框;template chip 选中
-					 * 时输入框让位给 chip 排下方的模板 rail(§2.3)。 */}
-					{designActive && (
-						<CreationModeRow
-							rpc={rpc}
-							project={project ?? null}
-							onSubmit={(metadata, message) => designSubmit(metadata, message)}
-							onClose={() => onModeChange?.("work")}
-							onStateChange={setRailState}
-							onReady={handle => {
-								railRef.current = handle;
-							}}
-						/>
 					)}
 					{!designTemplate && (
 						<form

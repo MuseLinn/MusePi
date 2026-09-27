@@ -1,9 +1,11 @@
 /* ═══════════════════════════════════════════════════════════════════════════
  * Design 模式页(M3.7a v2 修订,docs/review/0.5.0-m3-mode-page-redesign.md §2)
  * ——欢迎页内联形态:mode chip 选中「设计」时类型 chip 排直接落在欢迎页
- * 空态 composer 上方一行,横向溢出滚动(边缘羽化由全局滚动羽化接管,
+ * 工作区 chip 排上方一行,横向溢出滚动(边缘羽化由全局滚动羽化接管,
  * 容器类语义化 .gui-creation-chiprail);template chip 的模板 rail 在
  * chip 排下方内联展开。零新视觉 token,chip/accent 选中态取档 M1.10。
+ * 进出场复用 Reveal 条件区块动效规范(高度 240ms + 淡出 160ms),
+ * .gui-creation-reveal 在内层再叠 6px 位移。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /* ── 类型 chip 排(§2.3:单选,默认 prototype;横向溢出滚动)────────────────── */
@@ -207,5 +209,27 @@
 	.gui-creation-modepage,
 	.gui-creation-saved {
 		animation: none;
+	}
+}
+
+/* ── chip 排进出场(Reveal 条件区块动效规范的欢迎页实例)───────────────────
+ * Reveal 提供高度 240ms(--spring-liquid 曲线) + 外层淡出 160ms;这里在内层
+ * 再叠 6px 下移,展开时随高度回弹归位——进场有「落下铺开」的连续感,
+ * 退场先淡出再沉降。gui-motion-off / prefers-reduced-motion 归零。 */
+.gui-creation-reveal > .gui-collapse-inner {
+	transform: translateY(6px);
+	transition: transform 240ms var(--spring-liquid, var(--spring));
+}
+.gui-creation-reveal.gui-collapse--open > .gui-collapse-inner {
+	transform: none;
+}
+.gui-motion-off .gui-creation-reveal > .gui-collapse-inner {
+	transform: none;
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-creation-reveal > .gui-collapse-inner {
+		transform: none;
+		transition: none;
 	}
 }

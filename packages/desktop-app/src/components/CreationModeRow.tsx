@@ -38,8 +38,9 @@ import { Icon } from "../vendor/oc-icons";
  * session.create + projectMetadata 管线(§2.4),失败返回 false 由
  * composer 回填草稿。
  *
- * Escape/切回其他 mode chip → chip 排收起(§2.1:回到普通欢迎页)。草稿
- * 跨收起/再入保留(模块级缓存);应用重启后的回填走
+ * Escape/切回其他 mode chip → chip 排收起(§2.1:回到普通欢迎页)。收起时
+ * 组件保持挂载(退场动效 + 草稿保留),由 `active` prop 门控副作用;
+ * 草稿跨收起/再入保留(模块级缓存);应用重启后的回填走
  * creation.metadata.get(cwd → .musepi/project.json 镜像),仅在本会话
  * 尚无草稿时消费一次。
  */
@@ -103,6 +104,7 @@ function tabLabel(tab: string): string {
 
 export function CreationModeRow({
 	rpc,
+	active,
 	project,
 	onSubmit,
 	onClose,
@@ -110,6 +112,10 @@ export function CreationModeRow({
 	onReady,
 }: {
 	rpc: RpcClient | null;
+	/** chip 排当前是否展开(欢迎页 mode chip 选中「设计」)。收起期间组件
+	 *  保持挂载(退场动效 + 草稿保留),本 prop 门控所有对外副作用:
+	 *  Escape 收起、派生态上报、模板/镜像拉取都只在展开时生效。 */
+	active: boolean;
 	/** 当前工作目录(欢迎页项目 chip)—— 创作会话的 cwd 复用它。 */
 	project: string | null;
 	/** 创建回调:app 组装 session.create(modeId:"design", projectMetadata)
@@ -149,6 +155,8 @@ export function CreationModeRow({
 	onCloseRef.current = onClose;
 	const onStateChangeRef = useRef(onStateChange);
 	onStateChangeRef.current = onStateChange;
+	const activeRef = useRef(active);
+	activeRef.current = active;
 
 	// chip 排横向溢出时左右边缘羽化(全局滚动羽化机制,§gui-design)。
 	const chiprailRef = useRef<HTMLDivElement | null>(null);
@@ -159,13 +167,19 @@ export function CreationModeRow({
 	const placeholder = t(CREATION_PLACEHOLDER_KEYS[chip]);
 	const template = chip === "template";
 
-	// 派生态变化即上报(composer 依此覆盖 placeholder/template/busy)。
+	// 派生态变化即上报(composer 依此覆盖 placeholder/template/busy);
+	// 收起期间上报中性态——composer 的 designActive 分支不消费 placeholder,
+	// 但 busy/template 必须复位,防止收起态残留禁按或输入框让位。
 	useEffect(() => {
-		onStateChangeRef.current({ placeholder, template, busy });
-	}, [placeholder, template, busy]);
+		onStateChangeRef.current(
+			active ? { placeholder, template, busy } : { placeholder: "", template: false, busy: false },
+		);
+	}, [active, placeholder, template, busy]);
 
 	// 挂载时:拉模板列表 + 一次性镜像回填(重启后恢复上次的类型选择)。
+	// 只在展开时拉取:普通欢迎页(work 模式)不应产生 creation RPC。
 	useEffect(() => {
+		if (!active) return;
 		refreshTemplates();
 		if (sessionDraft || mirrorHydratedFor === (project ?? "")) return;
 		mirrorHydratedFor = project ?? "";
@@ -189,13 +203,15 @@ export function CreationModeRow({
 			.catch(() => {
 				// 镜像缺失/损坏 → 保持默认草稿(daemon 会话头才是权威)。
 			});
-	}, [refreshTemplates, project, rpc]);
+	}, [active, refreshTemplates, project, rpc]);
 
 	// Escape 收起(capture 阶段,优先于欢迎页背后的输入框处理)。嵌套
 	// 浮层/弹窗(菜单互斥、DialogFrame/confirm)打开时把 Escape 让给它。
+	// 收起期间组件仍挂载(退场动效),Escape 只在展开时响应。
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key !== "Escape") return;
+			if (!activeRef.current) return;
 			if (e.defaultPrevented) return;
 			if (document.querySelector(".gui-menu-popup, .gui-dialog-backdrop")) return;
 			e.preventDefault();
