@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import {
 	anchorActionAfterContentChange,
 	BOTTOM_ANCHOR_EPSILON_PX,
+	createShouldAdjustForItemSizeChange,
 	distanceToBottom,
 	initialFollowing,
 	isAtBottom,
 	reconcileFollowingForContentAnchor,
 	resolveFollowingAfterScroll,
+	shouldAdjustVirtualizerForItemSizeChange,
 	shouldShowBackToBottom,
 	type TimelineScrollMetrics,
 	timelineKeyboardScrollIntent,
@@ -184,5 +186,76 @@ describe("affordance helpers", () => {
 
 	test("a fresh bind starts following (lands on the latest)", () => {
 		expect(initialFollowing()).toBe(true);
+	});
+});
+
+describe("shouldAdjustVirtualizerForItemSizeChange", () => {
+	const base = {
+		suppressAdjustment: false,
+		following: false,
+		contentWidthChanging: false,
+	};
+
+	test("a fold shrinking entirely above the viewport compensates (reading position anchored)", () => {
+		// The collapsed-state upscroll jitter contract: a row ending above the
+		// current scrollTop (e.g. a 220ms fold animation frame) must write its
+		// height delta back into scrollTop — otherwise the viewport content is
+		// pushed away frame by frame. A blanket `() => false` here regresses it.
+		expect(shouldAdjustVirtualizerForItemSizeChange({ ...base, itemEnd: 400, scrollTop: 600 })).toBe(true);
+	});
+
+	test("an item straddling the viewport never compensates (the user is looking at it)", () => {
+		expect(shouldAdjustVirtualizerForItemSizeChange({ ...base, itemEnd: 700, scrollTop: 600 })).toBe(false);
+	});
+
+	test("an item entirely below the viewport never compensates", () => {
+		expect(shouldAdjustVirtualizerForItemSizeChange({ ...base, itemEnd: 900, scrollTop: 600 })).toBe(false);
+	});
+
+	test("following never compensates — the bottom pin owns the tail", () => {
+		expect(shouldAdjustVirtualizerForItemSizeChange({ ...base, following: true, itemEnd: 400, scrollTop: 600 })).toBe(
+			false,
+		);
+	});
+
+	test("the prepend restore window suppresses compensation (no double-shifted landing)", () => {
+		expect(
+			shouldAdjustVirtualizerForItemSizeChange({ ...base, suppressAdjustment: true, itemEnd: 400, scrollTop: 600 }),
+		).toBe(false);
+	});
+
+	test("a content-width re-measure batch settles before compensating again", () => {
+		expect(
+			shouldAdjustVirtualizerForItemSizeChange({
+				...base,
+				contentWidthChanging: true,
+				itemEnd: 400,
+				scrollTop: 600,
+			}),
+		).toBe(false);
+	});
+});
+
+describe("createShouldAdjustForItemSizeChange", () => {
+	test("the closure reads its deps at call time (per-frame measurement callbacks)", () => {
+		const following = { current: false };
+		const suppressed = { current: false };
+		let scrollTop = 600;
+		const gate = createShouldAdjustForItemSizeChange({
+			isFollowing: () => following.current,
+			isSuppressed: () => suppressed.current,
+			getScrollTop: () => scrollTop,
+		});
+		expect(gate({ end: 400 })).toBe(true);
+		// The wheel released follow a frame after the closure was created:
+		// the next measurement must see it.
+		following.current = true;
+		expect(gate({ end: 400 })).toBe(false);
+		following.current = false;
+		suppressed.current = true;
+		expect(gate({ end: 400 })).toBe(false);
+		suppressed.current = false;
+		scrollTop = 300;
+		expect(gate({ end: 400 })).toBe(false);
 	});
 });

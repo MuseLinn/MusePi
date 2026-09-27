@@ -29,6 +29,7 @@ import type { TurnRenderUnit } from "./render-units";
 import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import {
 	anchorActionAfterContentChange,
+	createShouldAdjustForItemSizeChange,
 	initialFollowing,
 	isAtBottom,
 	reconcileFollowingForContentAnchor,
@@ -113,6 +114,11 @@ function estimateEntryHeight(e: SessionEntry | undefined): number {
 /** Top inset for a jump landing: the row must not sit flush against the
  *  scroller's edge (floating status cards / masks live there). */
 const JUMP_TOP_INSET = 12;
+
+/** Prepend window during which the virtualizer's measure compensation stays
+ *  off — the caller's key-based anchor restore (double rAF after commit)
+ *  lands well inside it, and a settle margin covers a slow frame. */
+const PREPEND_ADJUST_SUPPRESS_MS = 150;
 
 /** Scroll the entry row carrying `title=<timestamp>` into view and flash it
  *  (jump feedback for the request path and the post-expansion path; the
@@ -1271,6 +1277,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const lastObservedScrollTopRef = useRef(0);
 	const scrollIntentRef = useRef<TimelineUserScrollIntent | undefined>(undefined);
 	const prevLenRef = useRef(entries.length);
+	// Prepend detector: a length grow with a new head entry id. Prepends are
+	// anchored by the CALLER's key-based anchor restore (anchorCtlRef), so the
+	// virtualizer's own measure compensation is suppressed for a short window
+	// — otherwise newly mounted rows above the viewport compensate AND the
+	// restore re-anchors, shifting the landing twice.
+	const prevHeadIdRef = useRef(entries[0]?.id);
+	/** Epoch-ms until which virtualizer measure compensation stays off
+	 *  (prepend anchor-restore window). 0 = inactive. */
+	const sizeAdjustSuppressUntilRef = useRef(0);
 	const sentinelRef = useRef<HTMLDivElement | null>(null);
 	/** Session-open grace window (epoch ms): scroll events and content-change
 	 *  reconciles inside it cannot release `following` (see the sessionKey
@@ -1438,13 +1453,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		},
 		overscan: 8,
 	});
-	// Prepend anchoring is handled by the CALLER's scrollHeight-delta
-	// compensation (ChatView.loadOlder) — the mechanism this codebase has
-	// always used. tanstack's own measure-drift adjustment would compensate
-	// a second time on the prepend frame, so it stays off; estimate
-	// refinement drift for items entirely above the viewport resolves
-	// before they become visible (see review doc §8-P0④).
-	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false;
+	// Measure-drift compensation, conditionally gated (scroll-anchor.ts,
+	// ZCode `shouldAdjustVirtualizerForItemSizeChange` parity): a fold or a
+	// measurement correction animating ENTIRELY above the viewport writes its
+	// height delta back into scrollTop every frame, so the reading position
+	// stays anchored instead of being pushed away by the shrinking content
+	// (the collapsed-state upscroll jitter). Gate conditions, evaluated per
+	// measurement frame: following → the bottom pin owns the tail; prepend
+	// restore window → the caller's key-based anchor restore owns anchoring;
+	// partially-visible items are never compensated (the user is looking at
+	// them).
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = createShouldAdjustForItemSizeChange({
+		isFollowing: () => followingRef.current,
+		isSuppressed: () => Date.now() < sizeAdjustSuppressUntilRef.current,
+		getScrollTop: () => scrollerRef.current?.scrollTop ?? 0,
+	});
 	const virtualItems = virtualizer.getVirtualItems();
 	// Test/SSR fallback: without a measurable scroller (happy-dom, SSR) the
 	// virtualizer's window is empty — render the full list so row-level tests
@@ -1457,14 +1480,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const bottomSpacerHeight =
 		virtualEnabled && lastVirtualItem ? Math.max(0, virtualizer.getTotalSize() - lastVirtualItem.end) : 0;
 
-	// Two things fire when the top sentinel enters the pane (M1.11):
-	//  1. DATA backfill — the caller pages the next older chunk from
-	//     session.history (daemon tail is 200; pages are 500 entries).
-	//  2. RENDER window expansion — the newly paged-in prefix must actually
-	//     mount. Rows inserted ABOVE the reading position shove the visible
-	//     content down, so the scroll offset is compensated with the real
-	//     scrollHeight delta after React commits (double rAF), same trick
-	//     the caller uses for prepending pages.
+	// Top sentinel (M1.11): entering the pane pages the next older chunk from
+	// session.history (daemon tail is 200; pages are 500 entries).
 	// The bottom lock gate matters: while the tail is followed (streaming),
 	// batched renders can transiently swing the sentinel into the root
 	// margin and must not expand the window to the full history.
@@ -1480,8 +1497,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			([entry]) => {
 				if (!entry?.isIntersecting || followingRef.current) return;
 				// Reaching the top pages the next older chunk; the caller
-				// guards concurrency and compensates the scroll anchor
-				// (ChatView.loadOlder's scrollHeight-delta) — virtualization
+				// guards concurrency and restores the captured key anchor
+				// (anchorCtlRef, double rAF after commit) — virtualization
 				// mounts paged-in rows on demand, no render-window growth.
 				onLoadOlder?.();
 			},
@@ -1717,6 +1734,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				setFollowing(true);
 				scrollIntentRef.current = undefined;
 			}
+			const headId = entries[0]?.id;
+			if (headId !== undefined && headId !== prevHeadIdRef.current) {
+				// Prepend (paged-in older history): the caller restores the
+				// captured key anchor a frame after commit — suppress the
+				// virtualizer's measure compensation meanwhile so the two
+				// mechanisms can't shift the landing twice.
+				sizeAdjustSuppressUntilRef.current = Date.now() + PREPEND_ADJUST_SUPPRESS_MS;
+			}
+			prevHeadIdRef.current = headId;
 		}
 		prevLenRef.current = entries.length;
 		// Reconcile BEFORE sticking: a wheel upscroll one frame ahead of its
@@ -1753,31 +1779,31 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// streaming deltas, images finishing decode, deferred code highlighting.
 	// Once released, growth never pulls the reading position back (the
 	// observer no-ops while !following). Observes .tr-root (the content),
-	// not the scroller — the scroller's own box is layout-fixed. rAF-coalesced
-	// so a burst of measurements settles in one write.
+	// not the scroller — the scroller's own box is layout-fixed. The pin
+	// writes SYNCHRONOUSLY inside the ResizeObserver callback (pre-paint):
+	// RO callbacks are already delivered once per frame with all observations
+	// batched, and a fold/stream animation changes content height every frame
+	// of its 220ms transition — deferring the write to rAF painted one frame
+	// of bottom gap per frame (the collapse stutter: scrollHeight had moved
+	// on by the time the deferred write landed).
 	useEffect(() => {
 		const content = rootRef.current;
 		if (!content) return;
-		let raf = 0;
 		const ro = new ResizeObserver(() => {
 			if (!followingRef.current) return;
 			// Belt & braces over the synchronous gesture release: never pin
 			// while a fresh away-from-bottom intent is pending (the reconcile
 			// that would consume it may not have run yet).
 			if (scrollIntentRef.current === "awayFromBottom") return;
-			cancelAnimationFrame(raf);
-			raf = requestAnimationFrame(() => {
-				const scroller = scrollerRef.current;
-				if (!scroller || !followingRef.current) return;
-				programmaticScrollRef.current = true;
-				scroller.scrollTop = scroller.scrollHeight;
-				lastObservedScrollTopRef.current = scroller.scrollTop;
-			});
+			const scroller = scrollerRef.current;
+			if (!scroller || !followingRef.current) return;
+			programmaticScrollRef.current = true;
+			scroller.scrollTop = scroller.scrollHeight;
+			lastObservedScrollTopRef.current = scroller.scrollTop;
 		});
 		ro.observe(content);
 		return () => {
 			ro.disconnect();
-			cancelAnimationFrame(raf);
 		};
 	}, []);
 

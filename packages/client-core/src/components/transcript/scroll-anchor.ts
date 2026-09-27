@@ -9,10 +9,16 @@
  * streaming deltas, deferred measurements like images/highlight) re-pins the
  * tail; once released, growth must NEVER pull the reading position back.
  *
- * Deliberately NOT ported: the virtualizer prepend/measure compensation
- * (`prependScrollAdjustment`, `shouldAdjustVirtualizerForItemSizeChange`).
- * Our transcript renders every loaded entry (no virtualization), so prepend
- * compensation is left to the browser's native overflow anchoring.
+ * Ported (2026-09-28, activity-fold scroll fix): the virtualizer measure
+ * compensation GATE (`shouldAdjustVirtualizerForItemSizeChange`) — the
+ * decision of WHEN a measured size change may write the height delta back
+ * into scrollTop. A blanket disable breaks anchoring for folds animating
+ * above the viewport (the reading position is pushed away frame by frame);
+ * a blanket enable double-compensates prepends (the caller's key-based
+ * anchor restore owns that window). The gate below is the conditional
+ * compromise. NOT ported: `prependScrollAdjustment` — prepends are owned by
+ * the caller's key-based anchor restore plus a short suppression window
+ * (see Transcript.tsx), not by scrollTop arithmetic here.
  */
 
 /** Bottom tolerance: nearer than this counts as "at the bottom". Covers
@@ -150,4 +156,63 @@ export function shouldShowBackToBottom(following: boolean, rowCount: number): bo
 /** Session switch / first bind: start following (land on the latest). */
 export function initialFollowing(): boolean {
 	return true;
+}
+
+/**
+ * Virtualizer measure-compensation gate (ZCode `timelineScrollAnchor`
+ * parity). Decides whether a measured size change of ONE item may be
+ * compensated by writing the height delta back into scrollTop.
+ *
+ * Rules, in order:
+ * - suppressed (prepend window): the caller's key-based anchor restore owns
+ *   anchoring — a second compensation source would shift the landing twice;
+ * - following: the stick-to-bottom pin owns the tail — compensating would
+ *   fight it (and mid-animation scrollTop regressions must not read as
+ *   upscrolls);
+ * - content width changing: batched re-measure jitter — settle first;
+ * - otherwise compensate ONLY when the changed item ends at or above the
+ *   current scrollTop, i.e. the entire change happened off-viewport above
+ *   the reading position. A partially visible item is never compensated:
+ *   the user is looking at it.
+ */
+export function shouldAdjustVirtualizerForItemSizeChange(input: {
+	/** Prepend/restore compensation window is active. */
+	suppressAdjustment: boolean;
+	following: boolean;
+	contentWidthChanging: boolean;
+	/** Bottom edge (start + size) of the changed item. */
+	itemEnd: number;
+	/** Current scroller scrollTop. */
+	scrollTop: number;
+}): boolean {
+	if (input.suppressAdjustment) return false;
+	if (input.following) return false;
+	if (input.contentWidthChanging) return false;
+	return input.itemEnd <= input.scrollTop;
+}
+
+/** Minimal slice of the virtualizer item the gate closure needs. */
+export interface SizeChangeItem {
+	end: number;
+}
+
+/**
+ * Live-deps closure wiring the gate into the virtualizer
+ * (`shouldAdjustScrollPositionOnItemSizeChange`). The deps are read at
+ * CALL time — measurements arrive per frame via ResizeObserver, long after
+ * the render that created the closure.
+ */
+export function createShouldAdjustForItemSizeChange(deps: {
+	isFollowing: () => boolean;
+	isSuppressed: () => boolean;
+	getScrollTop: () => number;
+}): (item: SizeChangeItem) => boolean {
+	return item =>
+		shouldAdjustVirtualizerForItemSizeChange({
+			suppressAdjustment: deps.isSuppressed(),
+			following: deps.isFollowing(),
+			contentWidthChanging: false,
+			itemEnd: item.end,
+			scrollTop: deps.getScrollTop(),
+		});
 }
