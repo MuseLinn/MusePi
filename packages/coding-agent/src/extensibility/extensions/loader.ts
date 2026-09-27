@@ -39,6 +39,7 @@ import { resolvePath, withHostGuard } from "../utils";
 import type {
 	AssistantThinkingRenderer,
 	ComposerShapeDefinition,
+	DesignSystemConfig,
 	Extension,
 	ExtensionAPI,
 	ExtensionComponent,
@@ -57,6 +58,7 @@ import type {
 	MessageRenderer,
 	ProviderConfig,
 	RegisteredCommand,
+	RegisteredDesignSystem,
 	RegisteredMediaProvider,
 	ToolDefinition,
 	ToolInfo,
@@ -86,6 +88,7 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	flagValues = new Map<string, boolean | string>();
 	pendingProviderRegistrations: Array<{ name: string; config: ProviderConfig; sourceId: string }> = [];
 	pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
+	pendingDesignSystemRegistrations: RegisteredDesignSystem[] = [];
 
 	registerProvider(name: string, config: ProviderConfig, sourceId: string): void {
 		this.pendingProviderRegistrations.push({ name, config, sourceId });
@@ -105,6 +108,17 @@ export class ExtensionRuntime implements IExtensionRuntime {
 			registration => registration.config.id !== id || registration.sourceId !== sourceId,
 		);
 		this.pendingMediaProviderRegistrations.splice(0, this.pendingMediaProviderRegistrations.length, ...remaining);
+	}
+
+	registerDesignSystem(config: DesignSystemConfig, sourceId: string): void {
+		this.pendingDesignSystemRegistrations.push({ config, sourceId });
+	}
+
+	unregisterDesignSystem(id: string, sourceId: string): void {
+		const remaining = this.pendingDesignSystemRegistrations.filter(
+			registration => registration.config.id !== id || registration.sourceId !== sourceId,
+		);
+		this.pendingDesignSystemRegistrations.splice(0, this.pendingDesignSystemRegistrations.length, ...remaining);
 	}
 
 	sendMessage(): void {
@@ -189,6 +203,7 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		sourceId: string;
 	}> = [];
 	readonly pendingMediaProviderRegistrations: RegisteredMediaProvider[] = [];
+	readonly pendingDesignSystemRegistrations: RegisteredDesignSystem[] = [];
 
 	constructor(
 		public readonly pi: typeof PiCodingAgent,
@@ -473,6 +488,16 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		this.extension.mediaProviders = this.extension.mediaProviders.filter(entry => entry.config.id !== id);
 		this.runtime.unregisterMediaProvider(id, this.extension.path);
 	}
+
+	registerDesignSystem(config: DesignSystemConfig): void {
+		this.extension.designSystems.push({ config, sourceId: this.extension.path });
+		this.runtime.registerDesignSystem(config, this.extension.path);
+	}
+
+	unregisterDesignSystem(id: string): void {
+		this.extension.designSystems = this.extension.designSystems.filter(entry => entry.config.id !== id);
+		this.runtime.unregisterDesignSystem(id, this.extension.path);
+	}
 }
 
 /**
@@ -504,6 +529,7 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
 		services: [],
 		themeTokens: [],
 		mediaProviders: [],
+		designSystems: [],
 		statusBarSegments: [],
 	};
 }
@@ -520,6 +546,7 @@ async function runExtensionFactory(
 ): Promise<void> {
 	const providerRegistrationCheckpoint = [...runtime.pendingProviderRegistrations];
 	const mediaProviderCheckpoint = [...runtime.pendingMediaProviderRegistrations];
+	const designSystemCheckpoint = [...runtime.pendingDesignSystemRegistrations];
 
 	try {
 		await factory(api);
@@ -533,6 +560,11 @@ async function runExtensionFactory(
 			0,
 			runtime.pendingMediaProviderRegistrations.length,
 			...mediaProviderCheckpoint,
+		);
+		runtime.pendingDesignSystemRegistrations.splice(
+			0,
+			runtime.pendingDesignSystemRegistrations.length,
+			...designSystemCheckpoint,
 		);
 		throw error;
 	}

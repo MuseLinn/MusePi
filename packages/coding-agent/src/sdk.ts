@@ -133,6 +133,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import { applyDesignSystemSection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {
 	createModeResolver,
 	type ExtraModeLookup,
@@ -444,6 +445,13 @@ export interface CreateAgentSessionOptions {
 	/** Interface label surfaced in the role line ("terminal (TUI)" /
 	 *  "desktop (GUI)") so the agent knows which MusePi frontend it runs in. */
 	interfaceLabel?: string;
+	/**
+	 * Validated project metadata (M3 creation surface, `version: 1`). When
+	 * `designSystemId` references a registered design system, that system's
+	 * prompt brief is injected into the session prompt via the composer
+	 * (source `design-system`, order 40 — right after mode preset sections).
+	 */
+	projectMetadata?: Record<string, unknown>;
 	/**
 	 * Already-loaded title-generation system prompt override (typically
 	 * {@link discoverTitleSystemPromptFile} → {@link resolvePromptInput}). When
@@ -861,6 +869,10 @@ export async function loadCliExtensionProviders(
 		registerExtensionMediaProvider(config, sourceId);
 	}
 	extensionsResult.runtime.pendingMediaProviderRegistrations = [];
+	for (const { config, sourceId } of extensionsResult.runtime.pendingDesignSystemRegistrations) {
+		registerExtensionDesignSystem(config, sourceId);
+	}
+	extensionsResult.runtime.pendingDesignSystemRegistrations = [];
 	await modelRegistry.refreshRuntimeProviders();
 }
 
@@ -2495,6 +2507,14 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			}
 			extensionsResult.runtime.pendingMediaProviderRegistrations = [];
 		}
+		// Design system registrations consume alongside media providers
+		// (M3 §3: same pending → registry replay lifecycle).
+		if (extensionsResult.runtime.pendingDesignSystemRegistrations.length > 0) {
+			for (const { config, sourceId } of extensionsResult.runtime.pendingDesignSystemRegistrations) {
+				registerExtensionDesignSystem(config, sourceId);
+			}
+			extensionsResult.runtime.pendingDesignSystemRegistrations = [];
+		}
 		// Hydrate cached runtime (extension) provider catalogs before model
 		// resolution. Dynamic-only providers have no synchronous registration side
 		// effect, so a cold --model/provider resume must see the same fresh SQLite
@@ -3383,6 +3403,11 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			});
 
 			if (options.systemPrompt === undefined) {
+				// M3 §3: design system brief rides the same composer channel as
+				// mode preset sections (re-resolved on every rebuild, so an
+				// extension-registered system picked up by a reload takes effect
+				// on the next prompt rebuild; unknown/absent id → no section).
+				applyDesignSystemSection(modeRuntime.composer, options.projectMetadata);
 				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
 				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
 				if (modeRuntime.composer.size > 0) {

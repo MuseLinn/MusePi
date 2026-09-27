@@ -431,6 +431,7 @@ import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { CreationService } from "./services/creation-service";
+import { DesignSystemsService } from "./services/design-systems-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
@@ -550,6 +551,7 @@ export class DaemonServer {
 				loadHeader: sessionId => host.viewStore.load(sessionId)?.header ?? null,
 			}),
 		);
+		this.#services.register(new DesignSystemsService());
 		this.#services.register(
 			new FileService({
 				fallbackCwd: () => host.workspaceFallbackCwd,
@@ -2045,6 +2047,11 @@ export class DaemonServer {
 			case "creation.templates.list": {
 				// 实现归 CreationService（M3.2 创作面数据面,seam 声明见服务头）。
 				return this.#services.get<CreationService>("creation").listTemplates();
+			}
+			case "design.systems.list": {
+				// 设计体系注册表（M3 §3）：builtin + extension 合并视图，
+				// session-less（预览 rail 数据源,seam 声明见服务头）。
+				return this.#services.get<DesignSystemsService>("design-systems").listDesignSystems();
 			}
 			case "creation.templates.save": {
 				return this.#services

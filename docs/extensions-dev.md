@@ -267,3 +267,28 @@ Electron 壳本身是**一等扩展**(`kind: "desktop-shell"`, id `desktop-shell
 - `enhanced`: 渲染器侧同 extended, 壳保留原生 titlebar(原生 UI 面板预留)。
 
 **注册表契约**: daemon 注入脚本(`static-web.ts` `compatSlotHostScript`, 仅 `?shell=1`) blob-import 已编译组件 → `window.MusePiCompatHost.register(slot, entryKinds, Component, extensionId)`; guest-client 初始化注册表(`main.tsx`), `Transcript`/`CompatSlotHost` 只读消费。纯浏览器 guest 无注入脚本 → 注册表为空 → 内建渲染。
+
+## 12. 设计体系贡献(registerDesignSystem, M3 §3, 2026-09-27)
+
+扩展可注册命名设计体系(风格资产包),供 design 模式页的预览 rail 选择与引用:
+
+```ts
+pi.registerDesignSystem({
+  id: "my-brand",                  // kebab-case;撞内置/撞已注册即抛
+  label: "My Brand",
+  description: "一句话描述(hover 浮卡)",
+  swatches: ["#0f172a", "#e2e8f0"], // 色卡,≤6 色
+  tokens: { "--accent": "#38bdf8" }, // gui token 覆盖片段,只允许既有阶梯键,禁止新造 token
+  promptSection: {
+    name: "design-system",
+    order: 40,                     // 固定 40:位于 mode 预设区块之后
+    text: "给 agent 的设计简报(色彩/材质/排版基调)",
+  },
+});
+pi.unregisterDesignSystem("my-brand");
+```
+
+- 消费面:daemon `design.systems.list` RPC 合并返回内置五套(`minimal`/`glass`/`editorial`/`neubrutalism`/`darkneon`,id 稳定保留)与扩展注册项(带 `source: "builtin" | "extension"` 徽章);GUI 选中后把 id 写入 `projectMetadata.designSystemId` 建会话,会话引导时 `promptSection.text` 经 PromptComposer 注入 system prompt(source `design-system`)。
+- 防撞契约:扩展 id 撞内置抛 `registerDesignSystem: id "x" collides with a built-in design system`,重复注册抛 `... is already registered`(与 registerMediaProvider 同形态)。
+- 生命周期:随扩展加载注册、reload/unload 按来源整源清除,下一次 prompt 重建即生效。
+- 类型:`DesignSystemConfig` 见 `packages/coding-agent/src/extensibility/extensions/types.ts`。

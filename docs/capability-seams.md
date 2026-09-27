@@ -5,6 +5,7 @@
 | 域 | 权威锚点 | 声明位置 |
 |---|---|---|
 | daemon L2 服务（RPC 面） | `packages/coding-agent/src/daemon/services/types.ts`（`DaemonService` 接口） | 各服务文件头注释（样板：`schedule-service.ts`） |
+| 设计体系注册表（M3 §3） | `packages/coding-agent/src/presets/design-systems.ts`（内置预设表 + 扩展注册表） | 同文件头部 |
 | 内置工具 | `packages/coding-agent/src/tools/index.ts`（`BUILTIN_TOOLS` / `HIDDEN_TOOLS` / `isToolAllowed`） | 同文件头部 |
 | 斜杠命令 | `packages/coding-agent/src/slash-commands/builtin-registry.ts` | 同文件头部 |
 | hooks 引擎 | `packages/coding-agent/src/extensibility/hooks/types.ts`（`HookEvent` union） | 同文件头部 |

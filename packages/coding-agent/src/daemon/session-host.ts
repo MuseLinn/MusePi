@@ -1464,6 +1464,9 @@ export class DaemonSessionHost {
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(cwd) ?? undefined,
 				...(await desktopSessionPromptInputs(cwd)),
+				// M3 §3: designSystemId 随创建进 SDK——rebuildSystemPrompt 每次
+				// 重解析注册表注入设计体系简报（composer source=design-system）。
+				...(projectMetadata ? { projectMetadata } : {}),
 				...(params.modelPattern ? { modelPattern: params.modelPattern } : {}),
 				...(params.thinkingLevel ? { thinkingLevel: params.thinkingLevel } : {}),
 				...(params.modeId ? { modeId: params.modeId } : {}),

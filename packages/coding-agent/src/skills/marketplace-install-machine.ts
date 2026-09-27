@@ -240,7 +240,7 @@ export class MarketplaceInstallMachine {
 	/** 脚本批准/拒绝（仅 awaiting-approval 态有效）。 */
 	approve(installId: string, ok: boolean): { ok: boolean } {
 		const rec = this.#records.get(installId);
-		if (!rec || rec.phase !== "awaiting-approval") return { ok: false };
+		if (rec?.phase !== "awaiting-approval") return { ok: false };
 		rec.approval.resolve(ok ? "approved" : "declined");
 		return { ok: true };
 	}

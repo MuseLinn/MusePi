@@ -3846,6 +3846,7 @@ describe("ExtensionRunner", () => {
 				services: [],
 				themeTokens: [],
 				mediaProviders: [],
+				designSystems: [],
 				statusBarSegments: [],
 			};
 			return new ExtensionRunner([extension], new ExtensionRuntime(), tempDir.path(), sessionManager, modelRegistry);

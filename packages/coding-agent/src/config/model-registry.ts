@@ -37,6 +37,7 @@ import { collapseBuiltModelVariants } from "@musepi/pi-catalog/variant-collapse"
 import { getAgentDir, isBunTestRuntime, logger, wrapFetchForExtraCa } from "@musepi/pi-utils";
 import { resolveProviderModelReference } from "../config/model-resolver";
 import { generateCodexAttestation } from "../live/attestation";
+import { clearExtensionDesignSystems } from "../presets/design-systems";
 import type { AuthStorage } from "../session/auth-storage";
 import { clearExtensionMediaProviders } from "../tools/image-providers";
 import { type ApiKeyResolverModel, type ApiKeyResolverOptions, createApiKeyResolver } from "./api-key-resolver";
@@ -2044,6 +2045,7 @@ export class ModelRegistry {
 		unregisterCustomApis(sourceId);
 		unregisterOAuthProviders(sourceId);
 		clearExtensionMediaProviders(sourceId);
+		clearExtensionDesignSystems(sourceId);
 		const sourceProviders = this.#runtimeProvidersBySource.get(sourceId);
 		if (!sourceProviders || sourceProviders.size === 0) {
 			return;

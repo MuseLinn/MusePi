@@ -1602,6 +1602,23 @@ export interface ExtensionAPI {
 	 * Has no effect when the id is unknown or owned by another source.
 	 */
 	unregisterMediaProvider(id: string): void;
+
+	/**
+	 * Register a named design system (style asset bundle: palette swatches,
+	 * GUI token overrides, and a prompt brief) contributed by an extension.
+	 * The entry appears in the `design.systems.list` RPC and becomes
+	 * selectable via `projectMetadata.designSystemId` at session creation;
+	 * its promptSection is injected into the session prompt (order 40, after
+	 * mode preset sections). Built-in ids are reserved — registration throws
+	 * on collision, and ids must be kebab-case.
+	 */
+	registerDesignSystem(system: DesignSystemConfig): void;
+
+	/**
+	 * Unregister a design system previously registered by this extension.
+	 * Has no effect when the id is unknown or owned by another source.
+	 */
+	unregisterDesignSystem(id: string): void;
 	/** Shared event bus for extension communication. */
 	events: EventBus;
 }
@@ -1687,6 +1704,41 @@ export interface MediaProviderConfig {
 /** Internal: one registered media provider tagged with its owning extension source. */
 export interface RegisteredMediaProvider {
 	config: MediaProviderConfig;
+	sourceId: string;
+}
+
+/**
+ * A named design system contributed by an extension via pi.registerDesignSystem()
+ * (M3 §3). Mirrors the built-in preset table in `presets/design-systems.ts`;
+ * the daemon registry merges both for `design.systems.list` and prompt injection.
+ */
+export interface DesignSystemConfig {
+	/** Stable kebab-case id. Built-in ids (minimal/glass/editorial/neubrutalism/darkneon) are reserved. */
+	id: string;
+	/** Display name for the preview rail. */
+	label: string;
+	/** One-line description surfaced in the hover card. */
+	description: string;
+	/** Palette swatches (hex) for the rail color strip — at most 6. */
+	swatches: readonly string[];
+	/** GUI token override fragment (existing token ladder keys only, no new tokens). */
+	tokens: Record<string, string>;
+	/** Prompt brief injected into the session prompt when this system is selected. */
+	promptSection: {
+		/** Section name in the composer; "design-system" by convention. */
+		name: string;
+		/** Slot order — 40 places the brief right after mode preset sections. */
+		order: number;
+		/** 给 agent 的设计简报(色彩/材质/排版基调)。 */
+		text: string;
+	};
+	/** Optional session templates bundled with this system (preview rail / template rail). */
+	templates?: unknown[];
+}
+
+/** Internal: one registered design system tagged with its owning extension source. */
+export interface RegisteredDesignSystem {
+	config: DesignSystemConfig;
 	sourceId: string;
 }
 
@@ -1862,6 +1914,16 @@ export interface ExtensionMediaRegistryState {
 	unregisterMediaProvider(id: string, sourceId: string): void;
 }
 
+/** Shared state created by loader (design system registry seam, M3 §3). */
+export interface ExtensionDesignRegistryState {
+	/** Design system registrations queued during extension loading, processed during session initialization. */
+	pendingDesignSystemRegistrations: RegisteredDesignSystem[];
+	/** Queue a design system registration until initialization, then apply it immediately. */
+	registerDesignSystem(config: DesignSystemConfig, sourceId: string): void;
+	/** Remove a queued or initialized design system registration. */
+	unregisterDesignSystem(id: string, sourceId: string): void;
+}
+
 /** Action implementations for ExtensionAPI methods. */
 export interface ExtensionActions {
 	sendMessage: SendMessageHandler;
@@ -1913,7 +1975,11 @@ export interface ExtensionCommandContextActions {
 /** Full runtime = state + actions, including host-compatible service-tier fallbacks. */
 export type SetServiceTierHandler = (family: ServiceTierFamily, tier: ServiceTier | undefined) => void;
 
-export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionMediaRegistryState, ExtensionActions {
+export interface ExtensionRuntime
+	extends ExtensionRuntimeState,
+		ExtensionMediaRegistryState,
+		ExtensionDesignRegistryState,
+		ExtensionActions {
 	getServiceTiers: GetServiceTiersHandler;
 	setServiceTier: SetServiceTierHandler;
 }
@@ -2007,6 +2073,9 @@ export interface Extension {
 	/** Media providers registered by the extension (registerMediaProvider),
 	 *  in registration order; dropped on unload/reload. */
 	mediaProviders: RegisteredMediaProvider[];
+	/** Design systems registered by the extension (registerDesignSystem),
+	 *  in registration order; dropped on unload/reload (M3 §3). */
+	designSystems: RegisteredDesignSystem[];
 	/** Status-bar segments contributed by the extension (registerStatusBarSegment),
 	 *  rendered after the built-ins by `order`; dropped on unload. */
 	statusBarSegments: ExtensionStatusBarSegment[];

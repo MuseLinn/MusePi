@@ -519,6 +519,7 @@ describe("createAgentSession credential_disabled subscription", () => {
 				services: [],
 				themeTokens: [],
 				mediaProviders: [],
+				designSystems: [],
 				statusBarSegments: [],
 			};
 			const runtime = new ExtensionRuntime();
