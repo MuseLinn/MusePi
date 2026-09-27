@@ -212,10 +212,7 @@ describe("plugin toggle — musepi-plugins.lock.json 覆盖层（M2-2.3）", () 
 		lockfile = path.join(tmpRoot, "musepi-plugins.lock.json");
 		pluginDir = path.join(tmpRoot, "hello-plugin");
 		await fs.mkdir(path.join(pluginDir, "dist"), { recursive: true });
-		await Bun.write(
-			path.join(pluginDir, "package.json"),
-			JSON.stringify({ name: "hello-plugin", version: "1.0.0" }),
-		);
+		await Bun.write(path.join(pluginDir, "package.json"), JSON.stringify({ name: "hello-plugin", version: "1.0.0" }));
 		await Bun.write(path.join(pluginDir, "dist", "index.js"), "export default 1;\n");
 
 		spyOn(piUtils, "getPluginsDir").mockReturnValue(tmpRoot);
