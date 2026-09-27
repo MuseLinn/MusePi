@@ -80,6 +80,7 @@ Unless user tells you exactly what to write:
 - **Class privacy**: use ES `#private` fields; leave externally accessible members bare. **No `private`/`protected`/`public` keyword on fields or methods**, except on **constructor parameter properties** where TypeScript requires it (e.g. `constructor(private readonly session: ToolSession)`).
 - **Promises**: use `Promise.withResolvers()` instead of `new Promise((resolve, reject) => ...)`.
 - **Prompts**: never build prompts in code (no inline strings, template literals, or concatenation). Prompts live in static `.md` files; use Handlebars for dynamic content. Import them via `import content from "./prompt.md" with { type: "text" }` — not `readFile`.
+- **能力缝声明（M2.4）**: 新增内置能力（新 L2 服务 / `BUILTIN_TOOLS` 条目 / 斜杠命令域 / `register*` 方法 / widget / 插槽族）必须在对应权威注册表文件头部带六字段缝声明（名称+ns / 输入 / 输出 / 生命周期 / 启停 / 冲突 + 检视入口），并在 `docs/capability-seams.md` 索引页登记锚点。格式与七域锚点见 `docs/review/0.5.0-m2.4-capability-seams.md` §3。启停默认走覆盖层，选 always-on 必须在声明里写理由。
 - **Worker scripts**: workers re-enter the CLI entrypoint; never spawn separate worker entry modules. `cli.ts` declares itself as the worker host at startup (`declareWorkerHostEntry()` from `@musepi/pi-utils/env`) and dispatches hidden argv selectors (`__omp_worker_stats_sync`, `__omp_worker_tab`, `__omp_worker_js_eval`, `__omp_worker_tiny_inference`) before loading the command registry. Spawn sites use:
   ```ts
   import { workerHostEntry } from "@musepi/pi-utils";
