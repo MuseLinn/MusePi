@@ -75,6 +75,20 @@ export function isImageProviderId(value: unknown): value is ImageProvider {
 	return typeof value === "string" && AUTO_IMAGE_PROVIDER_ORDER.includes(value as ImageProvider);
 }
 
+/** Video generation backends surfaced by the daemon `media.providers` RPC.
+ *  Agnes runs text/keyframes-to-video on the same credentials as its image
+ *  models (`agnes_video_gen` tool); the model id mirrors
+ *  DEFAULT_VIDEO_MODEL in `tools/agnes-video-gen.ts`. */
+export const VIDEO_PROVIDER_CHOICES = [
+	{ value: "agnes", label: "Agnes", description: "Requires AGNES_API_KEY", models: ["agnes-video-v2.0"] },
+	{
+		value: "agnes-global",
+		label: "Agnes (Global)",
+		description: "Requires AGNES_GLOBAL_API_KEY",
+		models: ["agnes-video-v2.0"],
+	},
+] as const satisfies ReadonlyArray<{ value: string; label: string; description: string; models: readonly string[] }>;
+
 // ============================================================================
 // Extension media provider registry
 // ============================================================================

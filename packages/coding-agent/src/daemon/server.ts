@@ -106,7 +106,7 @@ import { refreshAgentDiscovery } from "../task";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import { parseConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
-import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES } from "../tools/image-providers";
+import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOICES } from "../tools/image-providers";
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
@@ -5526,18 +5526,29 @@ export class DaemonServer {
 				const registry = await this.#host.ensureRegistry();
 				if (!registry) throw new Error("No model registry yet — create a session first");
 				const storage = registry.authStorage;
-				const builtin = IMAGE_PROVIDER_CHOICES.map(choice => {
-					const provider = choice.value;
-					const configured = storage.hasAuth(provider);
-					return {
-						id: provider,
+				const builtin = [
+					...IMAGE_PROVIDER_CHOICES.map(choice => {
+						const provider = choice.value;
+						const configured = storage.hasAuth(provider);
+						return {
+							id: provider,
+							label: choice.label,
+							description: choice.description,
+							kind: "image" as const,
+							source: "builtin" as const,
+							configured,
+						};
+					}),
+					...VIDEO_PROVIDER_CHOICES.map(choice => ({
+						id: choice.value,
 						label: choice.label,
 						description: choice.description,
-						kind: "image" as const,
+						kind: "video" as const,
 						source: "builtin" as const,
-						configured,
-					};
-				});
+						configured: storage.hasAuth(choice.value),
+						models: [...choice.models],
+					})),
+				];
 				const extensionEntries = getExtensionMediaProviders().map(config => ({
 					id: config.id,
 					label: config.label,
