@@ -108,7 +108,7 @@ export const composer = {
 	"sketch export light": "导出浅色底（不随主题）",
 	"sketch discard title": "放弃这次绘画？",
 	"sketch discard confirm": "画布上有未发送的内容，丢弃后无法恢复。",
-	// ── Design session style chips (设计稿 08) ────────────────────────────
+	// ── Design session style select (M3.7b §3) ───────────────────────────
 	"design style": "设计风格",
 	"design style inherit": "跟随既有",
 	"design style minimal": "极简留白",
@@ -116,8 +116,11 @@ export const composer = {
 	"design style editorial": "编辑杂志",
 	"design style neubrutalism": "新粗野",
 	"design style darkneon": "暗黑霓虹",
-	"design style hint": "把风格基准写入设计简报，发送后由 agent 沿用",
-	"design style brief update {style}": "请把设计简报的风格基准调整为「{style}」，其余简报保持不变。",
+	"design style hint": "选择设计体系，注入会话的设计简报（选中即生效）",
+	"design system rail title": "设计体系",
+	"design system builtin": "内置",
+	"design system extension": "扩展",
+	"design system preview cta": "按钮",
 	"design empty placeholder": "描述你想设计的界面、风格与情绪，/ 可用命令…",
 } as const;
 

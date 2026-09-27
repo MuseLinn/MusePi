@@ -111,7 +111,7 @@ export const composer = {
 	"sketch export light": "Export on a white background",
 	"sketch discard title": "Discard this sketch?",
 	"sketch discard confirm": "The canvas has unsent content — discarding cannot be undone.",
-	// ── Design session style chips (设计稿 08) ────────────────────────────
+	// ── Design session style select (M3.7b §3) ───────────────────────────
 	"design style": "Design style",
 	"design style inherit": "Follow the brief",
 	"design style minimal": "Minimal",
@@ -119,8 +119,10 @@ export const composer = {
 	"design style editorial": "Editorial",
 	"design style neubrutalism": "Neo-brutalism",
 	"design style darkneon": "Dark neon",
-	"design style hint": "Writes the style baseline into the design brief — send and the agent keeps it",
-	"design style brief update {style}":
-		'Please update the design brief\'s style baseline to "{style}" and keep the rest of the brief unchanged.',
+	"design style hint": "Pick a design system — its brief section joins the session immediately",
+	"design system rail title": "Design systems",
+	"design system builtin": "Built-in",
+	"design system extension": "Extension",
+	"design system preview cta": "Button",
 	"design empty placeholder": "Describe the interface, style and mood you want to design…",
 } as const satisfies Record<ComposerKey, string>;

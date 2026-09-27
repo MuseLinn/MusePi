@@ -46,11 +46,13 @@ import {
 } from "./CreationModeRow";
 import { VoiceButton, VoiceStatusStrip } from "./composer/action-buttons";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
-import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
+import { DesignStyleSelect } from "./composer/design-styles";
+import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
 import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
+import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { autosize } from "./composer-autosize";
@@ -877,26 +879,18 @@ export function WelcomeComposer({
 	const designTemplate = designActive && railState?.template === true;
 	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy && !railState?.busy;
 
-	// ── Design empty state (设计稿 08): preset armed to "design" ──────────
-	// The welcome composer mirrors the session composer's design chips: pick
-	// a style baseline → the brief-update sentence lands in the input for
-	// the user to edit & send, and the placeholder switches to a design-
-	// specific hint instead of the rotating capability tips.
+	// ── Design empty state (设计稿 08 → M3.7b §3): preset armed to "design" ──
+	// The welcome composer mirrors the session composer's design select;
+	// the pick lands in the creation draft instead of a composer sentence:
+	// designSystemId rides session.create's projectMetadata (设计体系轴生效
+	// 链路，选中才带键，null/跟随既有不覆盖 M3.1 占位)。预览 rail 与
+	// 本胶囊同源 systems/selected（§3.3）。
 	const isDesignArmed = activeModeId === "design";
+	const designSystems = useDesignSystems(rpc);
 	const [designStyle, setDesignStyle] = useState<string | null>(null);
-	const pickDesignStyle = useCallback(
-		(id: string | null): void => {
-			setDesignStyle(id);
-			if (!id) return;
-			const style = DESIGN_STYLES.find(s => s.id === id);
-			if (!style) return;
-			const sentence = t("design style brief update {style}", { style: t(style.labelKey) });
-			setText(prev => (prev && prev.trim().length > 0 ? `${prev.trimEnd()}\n${sentence}` : sentence));
-			requestAnimationFrame(() => autosize(taRef.current));
-			taRef.current?.focus();
-		},
-		[setText],
-	);
+	const pickDesignStyle = useCallback((id: string | null): void => {
+		setDesignStyle(id);
+	}, []);
 
 	// Completion triggers (composer parity): a / @ # that is not glued to ASCII
 	// word characters opens the floating preview lists; Enter/click inserts the
@@ -1469,9 +1463,13 @@ export function WelcomeComposer({
 							project={project ?? null}
 							// 发送只在 designActive 时可达(§2.4 发送钩子由 composer
 							// 的 designActive 分支调用),designSubmit 缺省时兜底 false。
-							onSubmit={(metadata, message) =>
-								designSubmit ? designSubmit(metadata, message) : Promise.resolve(false)
-							}
+							// 设计体系轴(M3.7b §3):选中体系的 id 在这里落进
+							// projectMetadata——只在选中时覆盖 designSystemId 键,
+							// 未选中保持 buildProjectMetadata 的 M3.1 占位(null)。
+							onSubmit={(metadata, message) => {
+								const withDesign = designStyle ? { ...metadata, designSystemId: designStyle } : metadata;
+								return designSubmit ? designSubmit(withDesign, message) : Promise.resolve(false);
+							}}
 							onClose={() => onModeChange?.("work")}
 							onStateChange={setRailState}
 							onReady={handle => {
@@ -1831,10 +1829,17 @@ export function WelcomeComposer({
 												setThinking(v);
 											}}
 										/>
-										{/* Design style select (设计稿 08 空态, WorkBuddy footer-pill
-										 * parity): the old chips row above the input becomes a
-										 * button-row pill — same brief-update contract on pick. */}
-										{isDesignArmed && <DesignStyleSelect selected={designStyle} onPick={pickDesignStyle} />}
+										{/* Design style select (M3.7b §3, WorkBuddy footer-pill
+										 * parity): the pick lands in the creation draft
+										 * (designSystemId → projectMetadata), same source as
+										 * the preview rail below the composer. */}
+										{isDesignArmed && (
+											<DesignStyleSelect
+												systems={designSystems}
+												selected={designStyle}
+												onPick={pickDesignStyle}
+											/>
+										)}
 										{/* Armed mode chips (plan/goal): shown IN the button row
 										 * right of the thinking selector so the armed state is
 										 * visible without opening the attach menu. */}
@@ -2196,6 +2201,12 @@ export function WelcomeComposer({
 								</div>
 							</ComposerFrame>
 						</form>
+					)}
+					{/* 设计体系预览 rail（M3.7b §3.3）：design armed 时落在 composer
+					 * 下方——120×72 色卡+名称卡横排，选中与风格胶囊同源 state；
+					 * 左右边缘羽化与入场 stagger 见 design-system-rail.tsx。 */}
+					{isDesignArmed && (
+						<DesignSystemRail systems={designSystems} selected={designStyle} onPick={pickDesignStyle} />
 					)}
 					{/* Rotating tip with shimmer refresh (key change re-triggers);
 					 * t() runs at render time so locale switches land immediately. */}

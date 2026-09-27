@@ -35,7 +35,7 @@ import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
 import { ContextUsageCard } from "./composer/context-dialog";
-import { DESIGN_STYLES, DesignStyleSelect } from "./composer/design-styles";
+import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
@@ -68,11 +68,13 @@ import {
 	useAttachments,
 } from "./composer/use-attachments";
 import { useCompletion } from "./composer/use-completion";
+import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { useDraftPersistence } from "./composer/use-draft-persistence";
 import { useInputHistory } from "./composer/use-input-history";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
 import { useModes } from "./composer/use-modes";
+import { useSessionDesignSystem } from "./composer/use-session-design-system";
 import { useVoiceSetupGate } from "./composer/voice-setup";
 import { autosize, MIN_ROWS } from "./composer-autosize";
 import { DebugToolsPanel } from "./DebugToolsPanel";
@@ -404,25 +406,15 @@ export function Composer({
 		appendText,
 		setAppendText,
 	} = useModes(rpc, sessionId);
-	// ── Design-session style chips (设计稿 08) ────────────────────────────
-	// session.modes.modeId === "design" gates the row; picking a style lands
-	// the brief-update sentence in the composer (edit & send, per the design
-	// brief protocol — the agent keeps the brief in-session).
+	// ── Design-session style select（M3.7b §3 生效链路）──────────────────
+	// session.modes.modeId === "design" gates the row; the pick writes via
+	// session.setDesignSystem RPC (null = 跟随既有/清除) and the initial
+	// value hydrates from the session header's projectMetadata — the
+	// brief-update-sentence path (设计稿 08) is retired: the daemon injects
+	// the resolved system's promptSection on rebuild.
 	const isDesignSession = modes?.modeId === "design";
-	const [designStyle, setDesignStyle] = useState<string | null>(null);
-	const pickDesignStyle = useCallback(
-		(id: string | null): void => {
-			setDesignStyle(id);
-			if (!id) return;
-			const style = DESIGN_STYLES.find(s => s.id === id);
-			if (!style) return;
-			const sentence = t("design style brief update {style}", { style: t(style.labelKey) });
-			setText(prev => (prev && prev.trim().length > 0 ? `${prev.trimEnd()}\n${sentence}` : sentence));
-			requestAnimationFrame(() => autosize(taRef.current));
-			taRef.current?.focus();
-		},
-		[setText],
-	);
+	const designSystems = useDesignSystems(rpc);
+	const { designStyle, pickDesignStyle } = useSessionDesignSystem(rpc, sessionId, isDesignSession);
 
 	// ── Context-window usage (usage ring) ─────────────────────────────────
 	const [contextUsage, setContextUsage] = useState<{
@@ -2088,10 +2080,13 @@ export function Composer({
 							}}
 							onSetThinking={onSetThinking}
 						/>
-						{/* Design-style select (设计稿 08 composer 风格选择, WorkBuddy
-						 * footer-pill parity): pick a style baseline → the
-						 * brief-update text lands in the composer to edit & send. */}
-						{isDesignSession && <DesignStyleSelect selected={designStyle} onPick={pickDesignStyle} />}
+						{/* Design-style select (M3.7b §3, WorkBuddy footer-pill
+						 * parity): the pick writes via session.setDesignSystem;
+						 * the daemon injects the resolved system's brief
+						 * section — no sentence lands in the composer. */}
+						{isDesignSession && (
+							<DesignStyleSelect systems={designSystems} selected={designStyle} onPick={pickDesignStyle} />
+						)}
 						{/* Session mode toggles (TUI /fast /computer /vision /prewalk
 						 * parity): a compact popover in the action row, session-only
 						 * (hidden in the welcome scene). */}
