@@ -13,10 +13,19 @@
  * → (follow-up) asking(next) → …  Close dismisses the whole card; stop
  * abandons the current request (the daemon side channel keeps running but
  * its result is discarded — runEphemeralTurn has no cross-request cancel).
+ *
+ * The card is portaled to document.body: ChatView's surface chain carries
+ * transform/filter during (and on throttled windows, frozen INSIDE) the
+ * scene enter animations, and any such ancestor hijacks `position: fixed`
+ * — the card then resolves bottom/right against the wrong box and floats
+ * mid-transcript, covering messages (user report 2026-09-27). SessionHoverCard
+ * documents the same trap. The portal plus a viewport max-height cap keeps
+ * the card anchored bottom-right above the composer in every state.
  */
 import { Markdown, t } from "@musepi/client-core";
 import { GitBranch, Sparkles, StopCircle, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export interface BtwQuestion {
 	question: string;
@@ -111,7 +120,7 @@ export function BtwFloatingCard({
 		setAsking(false);
 	};
 
-	return (
+	return createPortal(
 		<div
 			className="gui-btw-card"
 			role="dialog"
@@ -119,7 +128,16 @@ export function BtwFloatingCard({
 			onKeyDown={e => {
 				if (e.key === "Escape") onClose();
 			}}
-			style={{ position: "fixed", bottom: 96, right: 24, zIndex: 2900, width: 380, maxWidth: "calc(100vw - 48px)" }}
+			style={{
+				position: "fixed",
+				bottom: 96,
+				right: 24,
+				zIndex: 2900,
+				width: 380,
+				maxWidth: "calc(100vw - 48px)",
+				// 视口夹取:窗口极矮时也不越过顶栏(内部 .gui-btw-body 滚动)。
+				maxHeight: "calc(100dvh - 120px)",
+			}}
 		>
 			<div className="gui-btw-head">
 				<Sparkles size={13} />
@@ -191,6 +209,7 @@ export function BtwFloatingCard({
 				</button>
 			</div>
 			{inputFocused && <div className="gui-btw-hint">{t("Enter to ask — Esc closes")}</div>}
-		</div>
+		</div>,
+		document.body,
 	);
 }

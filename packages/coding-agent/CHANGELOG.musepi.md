@@ -71,6 +71,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **媒体生成视频提供商接线（创作面板视频 tab 不再空缺）**：`media.providers` RPC 此前把全部内置提供商硬编码为 `kind: "image"`——`agnes_video_gen` 工具早已可用（复用 agnes/agnes-global 凭据，模型 `agnes-video-v2.0`），但创作面板媒体→视频 tab 与设置→媒体生成的视频分组永远为空。内置列表现补上 Agnes / Agnes (Global) 两条 video 条目（凭据状态与图像侧同一存储），视频 tab 与设置页分组自动出现。
   - EN: video providers wired into media generation (the creation panel's video tab is no longer empty): the `media.providers` RPC hardcoded every builtin as `kind: "image"` — the `agnes_video_gen` tool has long been available (reusing agnes/agnes-global credentials, model `agnes-video-v2.0`), yet the creation panel's media→video tab and the settings video group stayed empty forever. The builtin list now emits Agnes / Agnes (Global) video entries (credential state from the same storage as the image side), so the video tab and the settings group populate automatically.
 
+- **/btw 侧问浮卡飘到消息流中部盖住会话**：浮卡此前以 `position: fixed` 内联渲染在 ChatView 面板树内——面板链路上的 transform/filter 祖先（场景进场动画；被遮挡/节流的窗口会把动画冻结在其中）会把 fixed 参照盒从视口劫持到该祖先，卡片于是按错误参照盒排版、浮在消息区中部。现按 SessionHoverCard 同款契约 portal 到 `document.body`，并补视口高度上限（超出内部滚动）：任何窗口状态下都锚定输入框上方右下，不再遮盖消息流。
+  - EN: the /btw side-question floating card drifted into the middle of the message stream and covered the conversation: it rendered inline in the ChatView pane tree with `position: fixed` — a transform/filter ancestor on the pane chain (scene enter animations; occluded/throttled windows freeze mid-animation) hijacks the fixed containing block away from the viewport, so the card laid itself out against the wrong box. It now portals to `document.body` per the SessionHoverCard contract, with a viewport max-height cap (overflow scrolls internally): in every window state it stays anchored to the bottom-right above the composer and never covers the message stream.
+
 ## [0.4.40] - 2026-09-26
 
 ### Added
