@@ -59,6 +59,12 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 - **设置默认值漂移与登出守卫修复（M2.10 审计收尾）**：① 打字机效果开关未设置时，设置页显示 ink 而聊天实际渲染 typewriter（同一存储键两处默认回退不一致）——设置页回退对齐为 typewriter，显示与行为一致；② 设置 → 模型与供应商的「登出」在无会话打开时静默无效（守卫要求 sessionId，但 `providers.logout` RPC 本就不需要它，单凭据删除路径也无此守卫）——去掉多余守卫，无会话也能正常管理凭据。
   - EN: settings default-value drift and logout guard fixes (M2.10 audit wrap-up): ① with the typing-effect preference unset, the settings page displayed ink while chat actually rendered typewriter (two divergent fallbacks over the same storage key) — the settings fallback is aligned to typewriter so display matches behavior; ② "Log out" under Settings → Models & Providers silently did nothing when no session was open (a guard demanded sessionId, which the `providers.logout` RPC never used, and the per-credential delete path had no such guard) — the spurious guard is removed, credentials can be managed without an open session.
 
+- **定时任务历史完成提示启动重放**：应用启动后首次 `cron.list` 轮询把历史已有的终态 run 全部当"刚完成"弹 toast（最多 20 条连环弹窗）——首次轮询改为只建基线：终态 run 只播种已通知集合不弹窗，运行中的 run 不播种（转终态时仍正常通知）。
+  - EN: cron completion toasts replayed at startup: the first `cron.list` poll treated every historical terminal run as "just finished" and popped up to 20 toasts in a row — the first poll now only establishes a baseline: terminal runs seed the already-notified set without toasting, and running runs are not seeded so their transition to a terminal state still notifies.
+
+- **桌宠拖动逐帧胀大**：拖动桌宠时 `setPetPosition` 每帧读取窗口 live bounds 并连尺寸一并回写——读/写坐标空间不一致导致窗口尺寸逐帧棘轮式胀大；现在位置写入锁死固定创作尺寸（320×290），拖动只移位置不动尺寸。
+  - EN: the desktop pet grew frame by frame while being dragged: `setPetPosition` read the window's live bounds and wrote the size back on every frame — a read/write coordinate-space mismatch ratcheted the window larger each frame; position writes now pin the fixed authoring size (320×290) so dragging only moves the window.
+
 ## [0.4.40] - 2026-09-26
 
 ### Added

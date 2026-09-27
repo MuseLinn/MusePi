@@ -600,6 +600,11 @@ function AppInner(): ReactNode {
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
+		// First poll is a baseline: cron.list returns up to 20 historical runs,
+		// and toasting them replays stale failures on every app start. Terminal
+		// runs are seeded into the notified set without dispatching; in-flight
+		// runs stay unseeded so their terminal transition still notifies.
+		let cronBaselineDone = false;
 		const poll = (): void => {
 			void rpc
 				.request<{
@@ -608,12 +613,15 @@ function AppInner(): ReactNode {
 				}>("cron.list", {})
 				.then(res => {
 					if (!alive) return;
+					const baseline = !cronBaselineDone;
+					cronBaselineDone = true;
 					// Notify with the task's NAME, not its id — "cron-abc finished"
 					// tells the user nothing.
 					const nameById = new Map((res?.tasks ?? []).map(t => [t.id, t.name]));
 					for (const run of res?.runs ?? []) {
 						if (run.status === "running" || cronNotifiedRef.current.has(run.id)) continue;
 						cronNotifiedRef.current.add(run.id);
+						if (baseline) continue;
 						const taskName = nameById.get(run.taskId) ?? run.taskId ?? t("scheduled tasks");
 						if (run.status === "error") {
 							dispatchNotification("error", {
