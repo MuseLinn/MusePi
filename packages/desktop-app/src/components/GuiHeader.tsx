@@ -13,6 +13,12 @@ import {
 } from "../lib/electron";
 import { getHostState, subscribeHost } from "../lib/managed-browser-host";
 import { orbFromSession } from "../lib/pet";
+import {
+	type ProjectAction,
+	readProjectActions,
+	resolveProjectActionIcon,
+	writeProjectActions,
+} from "../lib/project-actions";
 import { usePrompt } from "../lib/prompt-dialog";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
@@ -58,6 +64,7 @@ function openInLabel(app: { id: string; label: string }): string {
 
 import { AgentAvatar } from "./AgentAvatar";
 import { MenuPopup } from "./MenuPopup";
+import { ProjectActionsDialog } from "./ProjectActionsDialog";
 
 /** "mm:ss" hold time for the paused-state hint (matches the composer's
  *  pause banner formatting). */
@@ -415,6 +422,30 @@ export function GuiHeader({
 		};
 		return rpc.addEventListener(onEvent);
 	}, [devRunning, rpc]);
+
+	// Per-project custom actions (openchamber ProjectActionsButton parity):
+	// listed above the auto-discover entry in the project-actions menu and
+	// executed in the bottom terminal dock through the same
+	// musepi-gui-terminal-cmd broadcast the dev server uses. Persisted in
+	// localStorage keyed by cwd (terminal-tabs precedent).
+	const actionDir = store?.cwd ?? project ?? "";
+	const [projectActions, setProjectActions] = useState<ProjectAction[]>([]);
+	const [actionsEditorOpen, setActionsEditorOpen] = useState(false);
+	useEffect(() => {
+		setProjectActions(actionDir ? readProjectActions(actionDir) : []);
+	}, [actionDir]);
+	const persistProjectActions = (next: ProjectAction[]): void => {
+		setProjectActions(next);
+		if (actionDir) writeProjectActions(actionDir, next);
+	};
+	const runProjectAction = (action: ProjectAction): void => {
+		// Same execution path as the dev server: open the dock, then type
+		// the command into the active tab once the pty is up.
+		if (!terminalOpen) onToggleTerminal();
+		setTimeout(() => {
+			window.dispatchEvent(new CustomEvent("musepi-gui-terminal-cmd", { detail: action.command }));
+		}, 900);
+	};
 	useEffect(() => {
 		if (!store) return;
 		let cancelled = false;
@@ -800,12 +831,29 @@ export function GuiHeader({
 						align="right"
 						onOpenChange={setProjOpen}
 					>
+						{/* Custom actions (openchamber project actions parity): run
+						 * in the dock terminal like the dev server. */}
+						{projectActions.map(action => (
+							<button
+								key={action.id}
+								type="button"
+								className="gui-view-opt"
+								onClick={() => {
+									setProjOpen(false);
+									runProjectAction(action);
+								}}
+							>
+								<Icon name={resolveProjectActionIcon(action.icon)} className="h-3.5 w-3.5" />
+								<span>{action.name}</span>
+							</button>
+						))}
+						{projectActions.length > 0 && <div className="my-1 border-t border-[var(--border)]" />}
 						<button
 							type="button"
 							className="gui-view-opt"
 							onClick={() => {
 								setProjOpen(false);
-								onOpenSettings();
+								setActionsEditorOpen(true);
 							}}
 						>
 							<Icon name="add" className="h-3.5 w-3.5" />
@@ -1507,6 +1555,14 @@ export function GuiHeader({
 			</div>
 			{/* statusText mirrors the orb state for screen readers. */}
 			<span className="sr-only">{statusText}</span>
+			{/* Custom-actions editor ("添加新操作"): always mounted, driven by
+			 * `open` so the DialogFrame exit animation plays. */}
+			<ProjectActionsDialog
+				open={actionsEditorOpen}
+				onClose={() => setActionsEditorOpen(false)}
+				actions={projectActions}
+				onChange={persistProjectActions}
+			/>
 		</header>
 	);
 }
