@@ -2,6 +2,7 @@ import { type TranslationKey, t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RpcClient, StreamEvent } from "../lib/rpc";
+import { marketEntryInstalled, rememberSkillMarketIcons } from "../lib/skill-market";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 
@@ -163,6 +164,9 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const [addPrefill, setAddPrefill] = useState<{ url?: string; name?: string } | null>(null);
 	// 卡片点击预览（信息先览，再决定安装）——与 addPrefill 互斥的两层弹窗。
 	const [previewEntry, setPreviewEntry] = useState<SkillEntry | null>(null);
+	// 已安装判定与已安装图标回退共享同一份小写名集合 + 市场图标缓存
+	// （lib/skill-market）：name/slug 双键判定，装完即翻「已安装」。
+	const [installedNames, setInstalledNames] = useState<ReadonlySet<string>>(new Set());
 
 	const [pageData, setPageData] = useState<MarketPage | null>(null);
 	const [featured, setFeatured] = useState<SkillEntry[]>([]);
@@ -172,7 +176,6 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	// 底部状态栏 (设计稿 01): 已启用 / 已停用 / 来源市场数;installedNames
 	// 同时驱动卡片上的「已安装」态 —— 装完即回读,不用等重新挂载。
 	const [installed, setInstalled] = useState({ enabled: 0, disabled: 0 });
-	const [installedNames, setInstalledNames] = useState<Set<string>>(new Set());
 	// 一键安装的状态机句柄：busy 锁卡片 + 事件推进 state（M2-2.2）。
 	// notice 是顶部非阻塞提示条(成功 2.5s 自动消退,失败驻留到下一次操作),
 	// actions 是提示条内的按钮（重试/批准脚本等）。
@@ -201,6 +204,11 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			})
 			.catch(() => {});
 	}, [rpc]);
+
+	const isInstalled = useCallback(
+		(entry: SkillEntry): boolean => marketEntryInstalled(entry, installedNames),
+		[installedNames],
+	);
 
 	// 成功提示自动消退;失败提示驻留(用户需要读完原因)。
 	useEffect(() => {
@@ -231,7 +239,11 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 		let alive = true;
 		void rpc
 			.request<{ entries: SkillEntry[] }>("skills.marketplace.featured", { pageSize: FEATURED_SIZE * 4 })
-			.then(res => alive && setFeatured(res?.entries ?? []))
+			.then(res => {
+				if (!alive) return;
+				rememberSkillMarketIcons(res?.entries ?? []);
+				setFeatured(res?.entries ?? []);
+			})
 			.catch(() => {});
 		return () => {
 			alive = false;
@@ -253,6 +265,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 				page,
 			})
 			.then(res => {
+				rememberSkillMarketIcons(res?.entries ?? []);
 				setPageData(res ?? null);
 				setLoadError(null);
 			})
@@ -289,6 +302,8 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 	const installEntry = useCallback(
 		(entry: SkillEntry): void => {
 			if (!rpc || busyId) return;
+			// 已安装的前置拦截：角标已翻绿✓，这里再挡一次竞态双击。
+			if (marketEntryInstalled(entry, installedNames)) return;
 			if (entry.source === "skills.sh" && !entry.repo) {
 				setNotice({
 					ok: false,
@@ -316,7 +331,7 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 					setNotice({ ok: false, text: t("skill market install failed {name}", { name: entry.name, msg }) });
 				});
 		},
-		[rpc, busyId],
+		[rpc, busyId, installedNames],
 	);
 
 	// 订阅 daemon 全局事件：只认本视图发起的那笔安装（installId 对账）。
@@ -366,6 +381,15 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			return;
 		}
 		if (active.state === "failed") {
+			if (active.kind === "conflict") {
+				// 重复安装同一技能：语义态而非错误 —— 卡片就地翻「已安装」
+				// （daemon 已落盘，回读让角标/底部计数立即对齐），不报错误条。
+				setNotice({ ok: true, text: t("skill market already installed {name}", { name: active.entry.name }) });
+				setActive(null);
+				refreshInstalled();
+				onInstalled?.();
+				return;
+			}
 			const text =
 				active.kind === "network"
 					? t("skill market install failed network", { msg: active.message ?? "" })
@@ -396,11 +420,6 @@ export function SkillMarketView({ rpc, onInstalled }: { rpc: RpcClient | null; o
 			void rpc.request("skills.marketplace.approve", { installId: active.installId, approve: ok }).catch(() => {});
 		},
 		[rpc, active],
-	);
-
-	const isInstalled = useCallback(
-		(entry: SkillEntry): boolean => installedNames.has(entry.name.toLowerCase()),
-		[installedNames],
 	);
 
 	return (
@@ -976,6 +995,8 @@ function SkillPreviewDialog({
 	const [markdown, setMarkdown] = useState<string | null>(null);
 	const [detail, setDetail] = useState<{
 		latestVersion?: string;
+		description?: string;
+		descriptionZh?: string;
 		files?: { path: string; size: number }[];
 		security?: { status?: string; statusText?: string; reportUrl?: string }[];
 	} | null>(null);
@@ -1067,6 +1088,9 @@ function SkillPreviewDialog({
 					{!loading && !error && entry.source === "skillhub" ? (
 						detail ? (
 							<div className="gui-skill-market-preview-detail">
+								{detail.description || detail.descriptionZh ? (
+									<p className="gui-skill-market-card-desc">{detail.descriptionZh || detail.description}</p>
+								) : null}
 								{detail.latestVersion ? (
 									<p className="gui-skill-market-meta">
 										{t("skill market preview version")} v{detail.latestVersion}

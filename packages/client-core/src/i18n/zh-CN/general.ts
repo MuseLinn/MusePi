@@ -600,6 +600,7 @@ export const general = {
 	"skill market status": "已启用 {enabled} · 已停用 {disabled} · 来源 {sources} 个市场",
 	// 一键安装的结果反馈与卡片角标态(技能市场 · 发现)。
 	"skill market installed": "已安装",
+	"skill market already installed {name}": "「{name}」此前已安装",
 	"skill market install failed {name}": "安装 {name} 失败：{msg}",
 	// 安装状态机（M2-2.2）：进度条目 / 取消 / 脚本批准 / 语义失败文案。
 	"skill market install progress": "正在安装 {name}：{state}",

@@ -196,6 +196,9 @@ export async function listSkillHubCategories(): Promise<SkillMarketCategory[]> {
 export interface SkillHubDetail {
 	slug: string;
 	latestVersion?: string;
+	/** 详情接口带回的说明（搜索行可能为空，预览弹窗靠这两行补摘要）。 */
+	description?: string;
+	descriptionZh?: string;
 	files: { path: string; size: number }[];
 	security?: { status?: string; statusText?: string; reportUrl?: string }[];
 }
@@ -215,6 +218,8 @@ export async function skillHubDetail(slug: string): Promise<SkillHubDetail | nul
 		return {
 			slug,
 			latestVersion: str(lv?.version),
+			description: str(m.description),
+			descriptionZh: str(m.description_zh) ?? str(m.descriptionZh),
 			files: Array.isArray(f.files)
 				? f.files.map(x => {
 						const r = (x ?? {}) as Record<string, unknown>;
@@ -298,6 +303,20 @@ export interface MarketQuery {
  * source leaves the other one's results intact and surfaces one line in
  * `failures`, so the store never goes blank because of a single host.
  */
+
+/** Local keyword match across every human-readable field (name / slug /
+ *  description / Chinese description / author), case-insensitive. Remote
+ *  search endpoints index ids and English text only — a Chinese keyword
+ *  (e.g.「编程专家」) returns zero from the wire, so the aggregated query
+ *  falls back to a browse-and-filter pass driven by this predicate. */
+export function marketEntryMatchesKeyword(entry: SkillMarketEntry, keyword: string): boolean {
+	const q = keyword.trim().toLowerCase();
+	if (!q) return true;
+	return [entry.name, entry.slug, entry.description, entry.descriptionZh, entry.author].some(
+		v => typeof v === "string" && v.toLowerCase().includes(q),
+	);
+}
+
 export async function querySkillMarket(q: MarketQuery = {}): Promise<SkillMarketPage> {
 	const want = q.sources ?? ["skillhub", "skills.sh"];
 	const entries: SkillMarketEntry[] = [];
@@ -343,6 +362,23 @@ export async function querySkillMarket(q: MarketQuery = {}): Promise<SkillMarket
 	}
 
 	await Promise.all(jobs);
+
+	// Keyword misses that are still human-readable (中文名/中文描述) get a
+	// second chance: some catalogs only index ids/English on the wire. Pull
+	// one broad browse page and filter it locally — no extra call on hits,
+	// and a dead fallback is swallowed like any other source failure.
+	const kw = q.keyword?.trim();
+	if (kw && entries.length === 0 && want.includes("skillhub")) {
+		try {
+			const browse = await searchSkillHub({ pageSize: 100, page: 1, sortBy: q.sortBy });
+			const hits = browse.entries.filter(e => marketEntryMatchesKeyword(e, kw));
+			entries.push(...hits);
+			total += hits.length;
+			liveSources.push("skillhub");
+		} catch {
+			// The failures banner above already covers an unreachable catalog.
+		}
+	}
 
 	if (q.sortBy && q.sortBy !== "downloads") {
 		entries.sort(

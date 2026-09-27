@@ -606,6 +606,7 @@ export const general = {
 	"skill market status": "{enabled} enabled · {disabled} disabled · {sources} market(s)",
 	// One-click install feedback + card badge states (skill market discover).
 	"skill market installed": "Installed",
+	"skill market already installed {name}": '"{name}" is already installed',
 	"skill market install failed {name}": "Failed to install {name}: {msg}",
 	// Install state machine (M2-2.2): progress row / cancel / script approval / semantic failures.
 	"skill market install progress": "Installing {name}: {state}",

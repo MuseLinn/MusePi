@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from "react-dom";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
+import { lookupSkillMarketIcon } from "../lib/skill-market";
 import { Icon } from "../vendor/oc-icons";
 import { GuiSelect } from "./GuiSelect";
 import { StateIcon } from "./StateIcon";
@@ -79,7 +80,10 @@ function hashHue(seed: string): number {
 }
 
 function SkillGlyph({ skill, size }: { skill: SkillRow; size: number }): ReactNode {
-	const iconUrl = (skill as { iconUrl?: string }).iconUrl;
+	// 本地 SKILL.md 解析不带 icon 字段 —— 市场图标缓存(lib/skill-market,
+	// 发现页拉目录时按 name/slug 记录)命中则沿用同一张图,否则才回落到
+	// 首字母色块,保证同一张卡安装前后图标一致。
+	const iconUrl = (skill as { iconUrl?: string }).iconUrl ?? lookupSkillMarketIcon(skill.name);
 	const [broken, setBroken] = useState(false);
 	const hue = hashHue(skill.name);
 	const style = { width: size, height: size, borderRadius: 8 } as const;
