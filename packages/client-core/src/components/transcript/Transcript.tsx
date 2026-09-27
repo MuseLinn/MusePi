@@ -45,6 +45,7 @@ import {
 	type AdvisorNote,
 	AssistantBody,
 	compatHostRenderer,
+	isBranchFormingEntry,
 	lastUserMessageTs,
 	MsgContent,
 	modelLevelMeta,
@@ -62,6 +63,7 @@ import {
 import { createTurnDeriveCache, deriveTurns } from "./turn-derive.js";
 
 export {
+	isBranchFormingEntry,
 	type MusePiCompatHost,
 	msgText,
 	type TranscriptNodeInjection,
@@ -1143,6 +1145,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const map = new Map<string, SessionEntry[]>();
 		if (!branchInfo) return map;
 		for (const entry of branchEntries ?? entries) {
+			// 分叉条只数会话分叉(message);custom 簿记/展示卡经历史 rekey
+			// 后 parent 到最近 message 祖先,计入会让每条消息都亮"2 个分支"。
+			if (!isBranchFormingEntry(entry)) continue;
 			const pid = entry.parentId ?? "";
 			if (!pid) continue;
 			const bucket = map.get(pid);

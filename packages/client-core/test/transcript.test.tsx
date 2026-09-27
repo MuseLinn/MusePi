@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { AssistantMessage, SessionEntry } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import "./transcript-dom-shim";
-import { msgText, Transcript } from "../src/components/transcript/Transcript";
+import { isBranchFormingEntry, msgText, Transcript } from "../src/components/transcript/Transcript";
 import type { ActiveTool } from "../src/lib/client";
 
 const TOOL_CALL_ID = "call-running-tool";
@@ -689,5 +689,108 @@ describe("daemon trace entries render no empty row", () => {
 		expect(countElements(html, ".tr-entry")).toBe(1);
 		expect(countElements(html, '[data-entry-kind="message:user"]')).toBe(1);
 		expect(countElements(html, '[data-entry-kind="unknown"]')).toBe(0);
+	});
+});
+
+describe("branch bar topology (history rekey regression)", () => {
+	// 实机回归(2026-09-27):历史快照 rekey 把 custom 簿记条目(tool_execution_
+	// start 等)parent 到最近 message 祖先后,它们被计入 children 索引——每条
+	// 消息凭空多出"此节点有 2 个分支"的分叉条,展开后兄弟列表还渲出原始
+	// "custom" 行。分叉拓扑必须只数普通 message 子节点。
+	function childCountOf(entries: readonly SessionEntry[]): Map<string, number> {
+		const map = new Map<string, number>();
+		for (const entry of entries) {
+			if (!isBranchFormingEntry(entry)) continue;
+			const pid = entry.parentId;
+			if (typeof pid !== "string" || !pid) continue;
+			map.set(pid, (map.get(pid) ?? 0) + 1);
+		}
+		return map;
+	}
+
+	function messageChild(parentId: string, timestamp: number, id: string): SessionEntry {
+		return {
+			...assistantEntry({ timestamp }),
+			id,
+			parentId,
+		};
+	}
+
+	function traceChild(parentId: string, id: string): SessionEntry {
+		return {
+			id,
+			parentId,
+			timestamp: "2026-09-12T00:00:01Z",
+			type: "custom",
+			customType: "tool_execution_start",
+			data: { toolCallId: `call_${id}`, toolName: "bash", startedAt: "2026-09-12T00:00:01Z" },
+		} as unknown as SessionEntry;
+	}
+
+	function renderWithBranches(entries: readonly SessionEntry[]): string {
+		const childCount = childCountOf(entries);
+		return renderToStaticMarkup(
+			<Transcript
+				entries={entries}
+				stream={null}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+				branchInfo={{
+					childCount,
+					activePathIds: new Set(entries.map(e => e.id)),
+				}}
+			/>,
+		);
+	}
+
+	it("a message whose extra children are custom bookkeeping entries gets NO branch bar", () => {
+		const parent = assistantEntry({ timestamp: 100 });
+		const entries: SessionEntry[] = [
+			parent,
+			traceChild(parent.id, "trace-1"),
+			traceChild(parent.id, "trace-2"),
+			traceChild(parent.id, "trace-3"),
+			messageChild(parent.id, 200, "reply-next"),
+		];
+		const html = renderWithBranches(entries);
+		expect(countElements(html, ".tr-branch-wrap")).toBe(0);
+	});
+
+	it("a genuine fork (two message children) still renders the branch bar", () => {
+		const parent = assistantEntry({ timestamp: 100 });
+		const entries: SessionEntry[] = [
+			parent,
+			messageChild(parent.id, 200, "reply-a"),
+			messageChild(parent.id, 300, "reply-b"),
+			traceChild(parent.id, "trace-1"),
+		];
+		const html = renderWithBranches(entries);
+		expect(countElements(html, ".tr-branch-wrap")).toBe(1);
+	});
+
+	it("isBranchFormingEntry admits plain messages and rejects custom-role messages and non-message entries", () => {
+		expect(isBranchFormingEntry(userEntry(100))).toBe(true);
+		expect(
+			isBranchFormingEntry({
+				type: "message",
+				id: "advisor-1",
+				parentId: null,
+				timestamp: "2026-09-12T00:00:00Z",
+				message: { role: "custom", customType: "advisor", content: "note", display: true, timestamp: 100 },
+			} as unknown as SessionEntry),
+		).toBe(false);
+		expect(isBranchFormingEntry(traceChild("p", "t"))).toBe(false);
+		expect(
+			isBranchFormingEntry({
+				type: "custom_message",
+				id: "cm-1",
+				parentId: "p",
+				timestamp: "2026-09-12T00:00:00Z",
+				customType: "advisor",
+				content: "note",
+				display: true,
+			}),
+		).toBe(false);
 	});
 });

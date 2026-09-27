@@ -165,6 +165,16 @@ export function readLiveCustomMessage(message: unknown): LiveCustomMessage | und
 	};
 }
 
+/** 分支拓扑只统计会话分叉:普通 provider 消息。custom 角色消息(顾问卡、
+ *  IRC、async 结果——live 消息缝上的插入展示卡)与 custom /
+ *  model_change / thinking_level_change 等非 message 簿记条目都不是分叉;
+ *  历史快照 rekey 会把它们 parent 到最近 message 祖先,若计入 children 索引,
+ *  每条消息都会凭空多出"2 个分支"的分叉条。 */
+export function isBranchFormingEntry(entry: SessionEntry): boolean {
+	if (entry.type !== "message") return false;
+	return readLiveCustomMessage(entry.message) === undefined;
+}
+
 /** transcript.node seat 派发键 (DSH `conversation.chat.node` entryKey 类比):
  *  entry / message role -> 稳定渲染器 kind 字符串。宿主(调用方)按此派发到
  *  注册的 seat 渲染器;内置类型(a message/compaction/…) 走内建渲染,扩展可

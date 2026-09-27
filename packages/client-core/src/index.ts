@@ -70,6 +70,7 @@ export {
 export { isTurnStart } from "./components/transcript/round-collapse";
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
 export {
+	isBranchFormingEntry,
 	Transcript,
 	type TranscriptAnchor,
 	type TranscriptAnchorCtl,
