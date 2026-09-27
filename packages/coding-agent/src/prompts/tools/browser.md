@@ -21,6 +21,7 @@ Drives real Chromium tab; full puppeteer access via JS.
 
 - `app.path` → NEVER tamper with a real desktop app (no stealth patches).
 - `app.relay: true` → drive the user's own Chrome tabs via the musepi browser relay (auto-started; needs the MusePi Browser Relay extension installed). `app.target` picks a tab by URL/title substring; without it the visible tab is adopted without stealing focus.
+{{#if managedBrowser}}- **Managed browser channel**: your tabs open inside the app's built-in browser — the user watches every page and navigation in the side panel and the pages share its login state. Never assume a private/headless browser here, and never look for these pages with the `computer` tool: an embedded page is not an OS window.{{/if}}
 - Selectors: CSS + puppeteer `aria/…`, `text/…`, `xpath/…`, `pierce/…`. Playwright-only pseudos (`:has-text()`, `:visible`) are REJECTED.
 </instruction>
 

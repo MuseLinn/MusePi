@@ -7,6 +7,7 @@ import type { ToolSession } from "../sdk";
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
 import { resolveCmuxKind } from "./browser/cmux/rpc";
+import { managedBrowserBridgeUrl, managedBrowserEnabled } from "./browser/managed-bridge";
 import { assertSafeBrowserDestination } from "./browser/policy";
 import {
 	acquireBrowser,
@@ -133,15 +134,25 @@ export function resolveBrowserKind(params: BrowserParams, session: ToolSession):
 	// the agent's work is visible in the panel and shares its login state.
 	// The `gui` marker lets the supervisor drive a dedicated agent tab instead
 	// of adopting whatever tab the user is looking at.
-	const guiEnabled = session.settings.get("browser.gui") as boolean | undefined;
-	if (guiEnabled) {
-		const guiUrl = (session.settings.get("browser.guiUrl") as string | undefined)?.trim();
+	if (managedBrowserEnabled(session.settings)) {
+		const guiUrl = resolveManagedBrowserUrl(session);
 		if (guiUrl) {
 			return { kind: "connected", cdpUrl: guiUrl.replace(/\/+$/, ""), gui: true };
 		}
 	}
 	const headless = session.settings.get("browser.headless") as boolean;
 	return { kind: "headless", headless };
+}
+
+/**
+ * Endpoint for the managed browser: the live bridge's ACTUAL port (9230-9239
+ * is a retry range, so the setting's default can be off by nine), else the
+ * configured/default `browser.guiUrl`.
+ */
+function resolveManagedBrowserUrl(session: ToolSession): string | undefined {
+	const live = managedBrowserBridgeUrl();
+	if (live) return live;
+	return (session.settings.get("browser.guiUrl") as string | undefined)?.trim() || undefined;
 }
 
 /**
@@ -226,7 +237,11 @@ export class BrowserTool implements AgentTool<typeof browserSchema, BrowserToolD
 	constructor(private readonly session: ToolSession) {}
 	#description?: string;
 	get description(): string {
-		this.#description ??= prompt.render(browserDescription, {});
+		// The managed-browser paragraph is injected ONLY on that channel — a
+		// CLI/TUI run must not be told about a browser panel it cannot see.
+		this.#description ??= prompt.render(browserDescription, {
+			managedBrowser: managedBrowserEnabled(this.session.settings),
+		});
 		return this.#description;
 	}
 

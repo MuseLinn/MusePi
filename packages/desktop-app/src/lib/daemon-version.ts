@@ -35,7 +35,10 @@ export function shouldRestartDaemon(
  * registered belong here (a method behind a feature flag would cause a
  * restart loop).
  */
-export const REQUIRED_DAEMON_METHODS: readonly string[] = ["skills.marketplace.query"];
+// `browser.managedBridge` is what lets the agent's browser tool take over the
+// right-pane managed browser by default; a daemon without it keeps starting
+// an invisible headless Chromium with no visible cause.
+export const REQUIRED_DAEMON_METHODS: readonly string[] = ["skills.marketplace.query", "browser.managedBridge"];
 // NOTE: `marketplace.sources.*` (plugin-marketplace source management) was
 // implemented then rolled back — the plugin marketplace is deferred until
 // MusePi's plugin system settles (it may be reworked wholesale). If it

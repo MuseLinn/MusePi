@@ -272,6 +272,18 @@ export const tools = {
 		"Use the desktop app's built-in browser (Electron WebContentsView + local CDP bridge) as the agent's browser: the agent's actions are visible live in the panel, and login state is shared with the panel. Requires the desktop app to be running (default port 9230).",
 	"managed browser unavailable": "Managed browser unavailable (desktop app not running or port in use)",
 	"managed browser port": "Local port {port}",
+	"managed browser bridge": "Managed browser bridge",
+	"managed browser bridge running · {port}": "Bound · port {port}",
+	"managed browser bridge idle": "Not bound (ports 9230-9239 all in use, or the desktop app is still starting)",
+	"managed browser agent tab active": "Agent tab ready",
+	"managed browser agent tab idle": "Created automatically the first time the agent uses the browser",
+	"managed browser url": "Managed browser bridge URL",
+	"managed browser url description":
+		"Loopback CDP endpoint of the desktop app's local bridge. While a bridge is up its ACTUAL bound port wins (9230-9239 is a retry range), so the value here only applies when no bridge is running.",
+	"browser channel priority": "Channel priority",
+	"browser channel priority description":
+		"A call's app.cdp_url / app.path > browser relay > managed browser (gui) > browser.cdpUrl > headless. The managed browser wins by default while the desktop app is running, unless you turn it off explicitly.",
+	"shared headless browser": "Shared headless browser",
 	"agent activity": "Agent activity",
 	"agent created tab": "Agent",
 	"browser tab frozen": "Frozen (power-saving; auto-resumes on click)",

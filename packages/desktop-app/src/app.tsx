@@ -35,6 +35,7 @@ import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMe
 import { pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
+import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
 import { dispatchNotification } from "./lib/notify";
 import type { PetSessionCard } from "./lib/pet";
 import { activePet, moodFromState, petEnabled, petMode, petScale, stateFromSignals } from "./lib/pet";
@@ -688,6 +689,12 @@ function AppInner(): ReactNode {
 			alive = false;
 			off();
 		};
+	}, [rpc]);
+	// 托管浏览器桥:桥绑定后把真实端口推给 daemon —— agent 的 browser 工具
+	// 据此默认接管右栏内置浏览器(用户显式设过 browser.gui 时以设置为准)。
+	useEffect(() => {
+		if (!rpc) return;
+		return watchManagedBrowserBridge(rpc);
 	}, [rpc]);
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).

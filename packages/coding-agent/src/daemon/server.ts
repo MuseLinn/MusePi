@@ -424,6 +424,7 @@ async function snapshotFromJsonl(file: string, sessionId: string): Promise<Stati
 import { ModelsConfigFile } from "../config/models-config";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
+import { dropManagedBrowserBridge, managedBrowserBridgeUrl } from "../tools/browser/managed-bridge";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { ApprovalService } from "./services/approval-service";
@@ -505,9 +506,13 @@ export class DaemonServer {
 	readonly #sttDownloads = new Map<string, Promise<void>>();
 
 	/** Drop a connection from the global-event targets (called on close —
-	 *  the host's disconnect handles the session subscription side). */
+	 *  the host's disconnect handles the session subscription side). Also
+	 *  withdraws that connection's managed-browser bridge registration: a
+	 *  bridge only exists while the GUI that owns it is connected, and a
+	 *  stale one would point the agent's browser at a dead port. */
 	dropGlobalEventTarget(connectionId: string): void {
 		this.#services.get<EventService>("events").dropTarget(connectionId);
+		dropManagedBrowserBridge(connectionId);
 	}
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
 	 *  performance-report parity: profile spans two RPC calls so the GUI can
@@ -1479,6 +1484,14 @@ export class DaemonServer {
 			}
 			case "browser.relayUninstall": {
 				return this.#services.get<BrowserService>("browser").relayUninstall();
+			}
+			case "browser.managedBridge": {
+				// Desktop GUI reports the managed browser's live CDP bridge
+				// (actual bound port); the agent's browser tool takes it over
+				// unless the user configured browser.gui explicitly.
+				return this.#services
+					.get<BrowserService>("browser")
+					.managedBridge((params ?? {}) as { url?: string | null }, conn.id);
 			}
 			case "browser.importChrome": {
 				return this.#services.get<BrowserService>("browser").importChrome();
@@ -5652,6 +5665,21 @@ export class DaemonServer {
 						(key === "settings.locale" || key === "defaultThinkingLevel" || key === "stt.enabled") &&
 						!settings.isConfigured(key as Parameters<Settings["isConfigured"]>[0])
 					) {
+						continue;
+					}
+					// browser.gui has an effective default that is NOT a stored
+					// value: while the desktop app's managed-browser bridge is
+					// registered, an unconfigured setting resolves to ON (the
+					// agent's pages are visible in the panel). Echo that, so the
+					// settings page shows what the agent will actually use —
+					// otherwise the toggle reads OFF while the channel is live,
+					// and flipping it "on" would only write the redundant true.
+					if (
+						key === "browser.gui" &&
+						!settings.isConfigured("browser.gui") &&
+						managedBrowserBridgeUrl() !== null
+					) {
+						out[key] = true;
 						continue;
 					}
 					out[key] = extKeys.has(key) ? settings.getRaw(key) : settings.get(key as Parameters<Settings["get"]>[0]);

@@ -4681,7 +4681,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Grep & Browser",
 			label: "GUI Managed Browser",
 			description:
-				"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium. Enable when using the MusePi desktop app: the agent's pages are visible in the panel and share its persistent login state. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.",
+				"Drive the in-app managed browser (the desktop GUI's right-pane browser, Electron WebContentsView over a local CDP bridge) instead of launching a separate Chromium: the agent's pages are visible in the panel and share its persistent login state. OFF by default in the CLI/TUI; while the desktop app is running its bridge is live and this turns ON by default — set it to false explicitly to force a headless browser. Takes precedence over Headless Browser; explicit app.cdp_url/path and Browser Relay still win.",
 		},
 	},
 	"browser.guiUrl": {
@@ -4691,7 +4691,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "tools",
 			group: "Grep & Browser",
 			label: "GUI Managed Browser URL",
-			description: "Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230).",
+			description:
+				"Local CDP endpoint of the desktop GUI's managed browser (default http://127.0.0.1:9230). The running app's bridge binds the first free port in 9230-9239 and that ACTUAL port is what gets used; this value only applies when no bridge is up.",
 		},
 	},
 	"browser.policy.restrictToPublic": {

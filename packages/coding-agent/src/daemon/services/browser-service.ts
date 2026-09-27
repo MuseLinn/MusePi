@@ -1,4 +1,9 @@
 import type { Settings } from "../../config/settings";
+import {
+	managedBrowserBridgeUrl,
+	normalizeManagedBrowserUrl,
+	setManagedBrowserBridge,
+} from "../../tools/browser/managed-bridge";
 import type { BrowserExtensionInfo, BrowserTabInfo } from "../browser-rpc";
 import type { DaemonService } from "./types";
 
@@ -11,13 +16,17 @@ import type { DaemonService } from "./types";
  *   `browser.extensions` / `browser.importChrome` / `browser.clearCache` /
  *   `browser.clearAll`（均按宿主 cwd 定位共享浏览器）、
  *   `browser.relayInstall` / `browser.relayStatus` / `browser.relayUninstall`
- *   （MusePi Browser Relay 扩展安装面，与项目目录无关）。
+ *   （MusePi Browser Relay 扩展安装面，与项目目录无关）、
+ *   `browser.managedBridge` —— 桌面 GUI 报告其托管浏览器 CDP 桥的实际地址
+ *   （9230-9239 重试区间里真正绑定的端口），`url: null` 表示桥已停止；按 RPC
+ *   连接记名，连接断开时由宿主撤销（daemon server 的 dropGlobalEventTarget）。
  * - 输出：各 RPC 返回值原样（endpoint/tabs/截图 base64/扩展清单/清理 ok）；
  *   本服务不广播任何事件。CDP 客户端在 browser-rpc.ts 内（一次连接一请求，
  *   低频 GUI 动作，非热工具路径）。
- * - 生命周期：无自有状态——共享 Chromium 由 per-project broker 监管
- *   （ensureSharedBrowser），relay 扩展文件落 `getBrowserRelayDir()`；
- *   本服务只做无状态寻址与转发。
+ * - 生命周期：除托管浏览器桥登记外无自有状态——共享 Chromium 由 per-project
+ *   broker 监管（ensureSharedBrowser），relay 扩展文件落
+ *   `getBrowserRelayDir()`；桥登记是**连接作用域的运行时事实**（不是设置），
+ *   存在 `tools/browser/managed-bridge.ts`，GUI 一走就该消失，故刻意不落盘。
  *
  * 实现模块（browser-rpc.ts）与启动图保持原样：方法内动态 import，
  * 不把重浏览器机制拉进服务加载路径（原 case 内 `await import` 语义不变）。
@@ -43,6 +52,7 @@ export class BrowserService implements DaemonService {
 		"browser.endpoint": "endpoint",
 		"browser.extensions": "extensions",
 		"browser.importChrome": "importChrome",
+		"browser.managedBridge": "managedBridge",
 		"browser.relayInstall": "relayInstall",
 		"browser.relayStatus": "relayStatus",
 		"browser.relayUninstall": "relayUninstall",
@@ -61,6 +71,23 @@ export class BrowserService implements DaemonService {
 	async endpoint(): Promise<{ wsEndpoint: string; profileDir: string; headless: boolean } | null> {
 		const { browserEndpoint } = await import("../browser-rpc");
 		return browserEndpoint(await this.#deps.settings(), this.#deps.cwd());
+	}
+
+	/**
+	 * RPC browser.managedBridge：桌面 GUI 报告它的托管浏览器 CDP 桥地址
+	 * （agent 的 browser 工具据此接管右栏内置浏览器），`url: null` = 桥已停止。
+	 * 登记按连接记名：只接受回环 http(s) 端点，取 origin 归一化。
+	 */
+	managedBridge(params: { url?: string | null }, connectionId: string): { url: string | null } {
+		const p = (params ?? {}) as { url?: string | null };
+		const raw = typeof p.url === "string" ? p.url : null;
+		if (raw === null) {
+			setManagedBrowserBridge(connectionId, null);
+			return { url: managedBrowserBridgeUrl() };
+		}
+		const url = normalizeManagedBrowserUrl(raw);
+		setManagedBrowserBridge(connectionId, url);
+		return { url: managedBrowserBridgeUrl() };
 	}
 
 	/** RPC browser.tabs：列出存活 page targets（title/url）。 */

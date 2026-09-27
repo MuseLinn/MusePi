@@ -1134,8 +1134,8 @@ export const settings = {
 	"widget source": "Widget source",
 	"maximize panel": "Maximize panel",
 	"watch the agent's browser live": "Watch the agent\u2019s browser live",
-	"the agent is using its own hidden browser \u2014 enable the managed browser to watch it in the side panel and share login state":
-		"The agent is using its own hidden browser. Enable the managed browser to watch it live in the side panel and share its login state.",
+	"with the managed browser on, pages the agent opens show up in the side panel and share its login state":
+		"With the managed browser on, pages the agent opens show up in the side panel and share its login state.",
 	"enable & watch": "Enable & watch",
 	"don't ask again": "Don\u2019t ask again",
 	"restore panel": "Restore panel",

@@ -1076,8 +1076,8 @@ export const settings = {
 	"widget source": "组件源码",
 	"maximize panel": "最大化面板",
 	"watch the agent's browser live": "实时查看 agent 的浏览器操作",
-	"the agent is using its own hidden browser — enable the managed browser to watch it in the side panel and share login state":
-		"agent 正在使用独立的隐藏浏览器。启用受管浏览器后可在右侧面板实时查看，并与它共享登录状态。",
+	"with the managed browser on, pages the agent opens show up in the side panel and share its login state":
+		"启用受管浏览器后，agent 打开的页面会直接显示在右侧面板里，并与面板共享登录状态。",
 	"enable & watch": "启用并查看",
 	"don't ask again": "不再提示",
 	"restore panel": "还原面板",

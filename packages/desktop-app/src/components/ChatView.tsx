@@ -2489,11 +2489,12 @@ export function ChatView({
 									}}
 									onToggleRightPanel={onToggleRightPanel}
 								/>
-								{/* First browser-use hint: browser.gui defaults off, so the
-								 * agent's first browsing turn is invisible — offer the
-								 * managed in-app browser with a one-click switch. */}
+								{/* 受管浏览器引导:不等 agent 先跑一次浏览器 ——
+								 * 用户一打开浏览器面板就提示(那时 agent 的页面
+								 * 还可能在隐藏的无头浏览器里)。 */}
 								<BrowserGuiHint
 									activeTools={snap?.activeTools}
+									browserPanelOpen={activeView === "browser"}
 									rpc={rpc}
 									onView={() => setActiveView("browser")}
 									onExpandPanel={onExpandRightPanel}

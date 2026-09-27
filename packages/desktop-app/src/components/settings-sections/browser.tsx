@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { getHostState, subscribeHost } from "../../lib/managed-browser-host";
 import type { RpcClient } from "../../lib/rpc";
 
 interface BrowserTabInfo {
@@ -38,6 +39,12 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [importMsg, setImportMsg] = useState<string | null>(null);
 	const [clearing, setClearing] = useState(false);
 	const [glow, setGlow] = useState<boolean | null>(null);
+	// 托管浏览器桥是**渲染端**事实(主进程 CDP 桥的绑定端口、agent 标签页),
+	// 不经过 daemon —— 直接订阅宿主 store,与右栏面板同源。
+	const [guiUrl, setGuiUrl] = useState<string | null>(null);
+	const host = useSyncExternalStore(subscribeHost, getHostState);
+	const bridgePort = host.port;
+	const agentTab = host.tabs.find(tab => tab.agent) ?? null;
 
 	const refresh = (): void => {
 		if (!rpc) return;
@@ -47,6 +54,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					"browser.headless",
 					"browser.relay",
 					"browser.gui",
+					"browser.guiUrl",
 					"browser.policy.restrictToPublic",
 					"computer.glow",
 				],
@@ -55,6 +63,7 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				setHeadless(res["browser.headless"] === true);
 				setRelay(res["browser.relay"] === true);
 				setGui(res["browser.gui"] === true);
+				if (typeof res["browser.guiUrl"] === "string") setGuiUrl(res["browser.guiUrl"]);
 				setRestrictToPublic(res["browser.policy.restrictToPublic"] === true);
 				setGlow(res["computer.glow"] !== false);
 			})
@@ -171,6 +180,35 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					>
 						<span className="gui-toggle-knob" />
 					</button>
+				</div>
+				{/* 托管浏览器桥地址:桥运行时以它的实际端口为准(9230-9239
+				 * 是重试区间),这里填的值只在没有桥时兜底。 */}
+				<div className="gui-settings-row">
+					<div className="min-w-0 flex-1">
+						<div className="gui-settings-row-label">{t("managed browser url")}</div>
+						<div className="gui-settings-row-desc">{t("managed browser url description")}</div>
+						<input
+							className="gui-input mt-1.5"
+							value={guiUrl ?? ""}
+							spellCheck={false}
+							placeholder="http://127.0.0.1:9230"
+							aria-label={t("managed browser url")}
+							onChange={e => setGuiUrl(e.target.value)}
+							onBlur={() => {
+								if (guiUrl === null) return;
+								void rpc
+									?.request("settings.set", { key: "browser.guiUrl", value: guiUrl.trim() })
+									.then(() => refresh())
+									.catch(() => {});
+							}}
+						/>
+					</div>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("browser channel priority")}</div>
+						<div className="gui-settings-row-desc">{t("browser channel priority description")}</div>
+					</div>
 				</div>
 				<div className="gui-settings-row">
 					<div>
@@ -338,9 +376,24 @@ export function BrowserSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			{/* Shared browser status + installed extensions */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("running state")}</div>
+				{/* 通道一:托管浏览器桥(桌面应用右栏内置浏览器,agent 默认接管) */}
 				<div className="gui-settings-row">
 					<div>
-						<div className="gui-settings-row-label">{t("shared browser")}</div>
+						<div className="gui-settings-row-label">{t("managed browser bridge")}</div>
+						<div className="gui-settings-row-desc">
+							{bridgePort !== null
+								? t("managed browser bridge running · {port}", { port: String(bridgePort) })
+								: t("managed browser bridge idle")}
+							{" · "}
+							{agentTab ? t("managed browser agent tab active") : t("managed browser agent tab idle")}
+						</div>
+					</div>
+					{bridgePort !== null && <span className="gui-provider-chip">{t("running")}</span>}
+				</div>
+				{/* 通道二:共享无头浏览器(没有托管桥时的兜底) */}
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("shared headless browser")}</div>
 						<div className="gui-settings-row-desc">
 							{endpoint
 								? t("shared browser running · {tabs} tabs", { tabs: tabCount ?? 0 })

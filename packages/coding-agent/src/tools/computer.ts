@@ -14,6 +14,7 @@ import { callSessionTool } from "../eval/js/tool-bridge";
 import computerDescription from "../prompts/tools/computer.md" with { type: "text" };
 import { enforceInlineByteCap } from "../session/streaming-output";
 import { truncateForPrompt } from "./approval";
+import { managedBrowserEnabled } from "./browser/managed-bridge";
 import type { ComputerInputEvent, ComputerScreenshot, ComputerSessionSnapshot } from "./computer/protocol";
 import { type ComputerController, ComputerSupervisor, registerComputerController } from "./computer/supervisor";
 import type { ToolSession } from "./index";
@@ -122,7 +123,11 @@ export class ComputerTool implements AgentTool<ComputerSchema, ComputerToolDetai
 	}
 
 	get description(): string {
-		this.#description ??= prompt.render(computerDescription);
+		// The embedded-browser caveat only applies where a managed browser
+		// channel exists (the desktop app); a CLI run has no such panel.
+		this.#description ??= prompt.render(computerDescription, {
+			managedBrowser: managedBrowserEnabled(this.session.settings),
+		});
 		return this.#description;
 	}
 
