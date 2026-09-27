@@ -5531,25 +5531,7 @@ body.gui-resizing {
 	height: 4px;
 }
 
-/* ── Voice input test: live level meter + device picker ── */
-.gui-voice-test {
-	min-width: 0;
-	flex: 1;
-}
-.gui-voice-level {
-	height: 4px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-text) 10%, transparent);
-	overflow: hidden;
-	margin-top: 6px;
-}
-.gui-voice-level-fill {
-	display: block;
-	height: 100%;
-	border-radius: inherit;
-	background: var(--color-accent);
-	transition: width 90ms linear;
-}
+/* ── Voice input device picker ── */
 .gui-voice-device {
 	display: flex;
 	align-items: center;
@@ -5560,30 +5542,6 @@ body.gui-resizing {
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
-}
-
-/* ── Simulated conversation rows (语音设置测试卡): the dictation result and
- *  the TTS sample reuse the transcript's .tr-row--user / .tr-row--assistant
- *  markup so the tests preview real chat bubbles. Only settings-scoped glue
- *  lives here — every token is the transcript's own. ── */
-.gui-voice-sim {
-	min-width: 0;
-}
-/* The transcript reveals .tr-actions on row hover; a settings test card has
- *  no hover affordance to discover — the speak button is the section's
- *  primary action, so it stays visible (message-flow click/hold states
- *  unchanged: .tr-action--speaking still pulses). */
-.gui-voice-sim .tr-actions {
-	opacity: 1;
-}
-/* 重新录制 / 这更准确吗？ feedback row: sits under the right-aligned user
- *  bubble, same gutter alignment the transcript uses for user actions. */
-.gui-voice-feedback {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 8px;
-	flex-wrap: wrap;
 }
 
 /* ── Attachment chip "mention" button (Kimi desktop parity, appended

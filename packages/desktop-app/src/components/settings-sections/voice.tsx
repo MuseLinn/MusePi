@@ -10,11 +10,14 @@
  * cannot pick the Mandarin tier at all).
  * This file keeps only what the schema cannot express: the two speech-model
  * pickers, live mic enumeration (liquid-glass floating menu), and the
- * dictation / TTS tests — both rendered as SIMULATED conversation rows
- * (transcript .tr-row user/assistant markup) so testing voice I/O previews
- * exactly what chat will look and sound like.
+ * dictation / TTS tests — both hosted by the SHARED simulated conversation
+ * view (MockConversationPreview, same component 外观 → 效果预览 renders):
+ * dictation starts from the preview composer's real mic button and the
+ * transcript lands as a user message in the preview (multi-turn), while the
+ * fixed assistant sample carries the read-aloud action, so testing voice I/O
+ * previews exactly what chat will look and sound like.
  */
-import { Markdown, t, tLoose } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import {
 	isSttDownloadEvent,
 	isTtsDownloadEvent,
@@ -37,6 +40,7 @@ import {
 	type VoiceActivity,
 } from "../../lib/voice";
 import { Icon } from "../../vendor/oc-icons";
+import { MockComposer, MockConversationPreview, MockUserRow } from "../MockConversationPreview";
 import { SchemaTabSection } from "./schema";
 
 /* ── Speech-model download state (stt/tts .modelStatus / .modelDownload) ──
@@ -406,28 +410,11 @@ export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNod
 	);
 }
 
-/** Simulated user message: the transcript's user-row markup (right-aligned
- *  bubble + the SAME Markdown renderer chat uses), so the dictation test
- *  previews exactly how the transcribed text will look in a conversation.
- *  Exported: the contract test mounts this directly. */
-export function MockUserMessage({ text }: { text: string }): ReactNode {
-	return (
-		<div className="tr-row tr-row--user">
-			<div className="tr-gutter">
-				<span className="tr-badge">{t("host")}</span>
-			</div>
-			<div className="tr-body">
-				<Markdown text={text} />
-			</div>
-		</div>
-	);
-}
-
-/** Built-in assistant reply the 测试语音输出 card speaks — deliberately
- *  zh/en mixed with a fenced code block so the default `sanitize` read mode
- *  (tts.inputMode) has something to strip (the spoken stream never reads
- *  code aloud) and a zh user can hear the MeloTTS-zh tier. Demo content,
- *  not locale chrome — it must stay mixed-script by design. */
+/** Built-in assistant reply the 语音测试 preview speaks — deliberately
+ * zh/en mixed with a fenced code block so the default `sanitize` read mode
+ * (tts.inputMode) has something to strip (the spoken stream never reads
+ * code aloud) and a zh user can hear the MeloTTS-zh tier. Demo content,
+ * not locale chrome — it must stay mixed-script by design. */
 const TTS_SAMPLE_MARKDOWN = [
 	"已经帮你把这段配置改好了，简单说两个要点：",
 	"",
@@ -438,14 +425,13 @@ const TTS_SAMPLE_MARKDOWN = [
 	"上面的代码块在 sanitize 模式下会被整段跳过，不会被朗读；inline terms like *neural TTS* and `sampleRate` stay in the stream. 语速可以在「朗读速率」里调整。",
 ].join("\n");
 
-/** TTS test: a SIMULATED assistant reply row — the same .tr-row--assistant
- *  markup (and .tr-action read-aloud button) the transcript renders, so
- *  the test previews exactly what chat playback looks and sounds like.
- *  Synthesis uses the CURRENT schema values (read live from settings.get,
- *  so the test always matches what chat playback will use). Exported for
- *  the voice-settings contract tests. */
-export function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
-	const [state, setState] = useState<"idle" | "loading" | "speaking" | "ok" | "error">("idle");
+/** 测试语音输出 — the read-aloud entry (the transcript's .tr-action slot)
+ *  mounted on the preview's assistant row. Synthesis uses the CURRENT schema
+ *  values (read live from settings.get, so the test always matches what
+ *  chat playback will use). State machine carried over from the former
+ *  TtsTestCard, unchanged. Exported for the voice-settings contract tests. */
+export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown: string }): ReactNode {
+	const [state, setState] = useState<"idle" | "loading" | "speaking" | "error">("idle");
 	const [err, setErr] = useState("");
 	const stopRef = useRef<(() => void) | null>(null);
 	useEffect(() => () => stopRef.current?.(), []);
@@ -464,7 +450,7 @@ export function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				v =>
 					new Promise<void>(resolve => {
 						stopRef.current = speak(
-							TTS_SAMPLE_MARKDOWN,
+							markdown,
 							rpc,
 							{
 								voice: typeof v["tts.localVoice"] === "string" ? (v["tts.localVoice"] as string) : undefined,
@@ -476,7 +462,7 @@ export function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 							},
 							(a: VoiceActivity) => {
 								if (a.phase === "speaking") setState("speaking");
-								else if (a.phase === "done") setState("ok");
+								else if (a.phase === "done") setState("idle");
 								else if (a.phase === "stopped") setState("idle");
 								else if (a.phase === "error") {
 									setState("error");
@@ -493,36 +479,16 @@ export function TtsTestCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			});
 	};
 	return (
-		<div className="gui-settings-section">
-			<div className="gui-settings-section-title">{t("voice output test")}</div>
-			<div className="gui-voice-sim">
-				<div className="tr-row tr-row--assistant">
-					<div className="tr-gutter">{t("agent")}</div>
-					<div className="tr-body">
-						<Markdown text={TTS_SAMPLE_MARKDOWN} />
-					</div>
-					<div className="tr-actions">
-						<button
-							type="button"
-							className={`tr-action${speaking ? " tr-action--speaking" : ""}`}
-							title={speaking ? t("read aloud stop") : t("read aloud")}
-							aria-label={speaking ? t("read aloud stop") : t("read aloud")}
-							disabled={!rpc}
-							onClick={toggle}
-						>
-							<Icon name="volume-up" className="h-3.5 w-3.5" />
-						</button>
-					</div>
-				</div>
-				<div className="gui-settings-row-desc" aria-live="polite">
-					{state === "ok"
-						? t("voice output played")
-						: state === "error"
-							? err
-							: t("voice output test description")}
-				</div>
-			</div>
-		</div>
+		<button
+			type="button"
+			className={`tr-action${speaking ? " tr-action--speaking" : ""}`}
+			title={state === "error" ? err : speaking ? t("read aloud stop") : t("read aloud")}
+			aria-label={speaking ? t("read aloud stop") : t("read aloud")}
+			disabled={!rpc}
+			onClick={toggle}
+		>
+			<Icon name="volume-up" className="h-3.5 w-3.5" />
+		</button>
 	);
 }
 
@@ -609,16 +575,34 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// same machine-local key the dictation entry points read.
 	const [deviceId, setDeviceId] = useState<string | null>(() => getVoiceInputDevice());
 	// Dictation test state machine: idle → recording (live level meter) →
-	// transcribing → result / error. `dictating` owns the toggle button;
-	// phase drives the status copy and meter.
+	// transcribing → result / error. Phase drives the status copy, the
+	// dictating-capsule mic button and the meter.
 	const [dictating, setDictating] = useState(false);
 	const [dictationPhase, setDictationPhase] = useState<"idle" | "recording" | "transcribing">("idle");
 	const [recordSeconds, setRecordSeconds] = useState(0);
 	const [recordLevel, setRecordLevel] = useState(0);
-	const [dictated, setDictated] = useState<string | null>(null);
+	// Multi-turn: every finished dictation appends a user message to the
+	// preview (re-record = press the mic again — no separate reset affordance).
+	const [dictatedMessages, setDictatedMessages] = useState<string[]>([]);
 	const [dictationError, setDictationError] = useState<string | null>(null);
-	const [feedbackNoted, setFeedbackNoted] = useState(false);
 	const stopRef = useRef<(() => void) | null>(null);
+	// Session chrome mirrors the chat surface (same localStorage keys
+	// ChatView reads), so the preview shows exactly what a conversation
+	// looks like under the current 外观 toggles.
+	const showAvatars = (() => {
+		try {
+			return localStorage.getItem("musepi-gui-avatars") !== "0";
+		} catch {
+			return true;
+		}
+	})();
+	const statusBarInfo = (() => {
+		try {
+			return localStorage.getItem("musepi-gui-statusbar-info") === "1";
+		} catch {
+			return false;
+		}
+	})();
 
 	useEffect(() => {
 		void enumerateMicDevices()
@@ -634,16 +618,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			stopRef.current?.();
 			return;
 		}
-		setDictated(null);
 		setDictationError(null);
-		setFeedbackNoted(false);
 		setRecordSeconds(0);
 		setRecordLevel(0);
 		setDictating(true);
 		setDictationPhase("recording");
 		const stop = startDictation(
 			(text: string) => {
-				setDictated(text);
+				setDictatedMessages(prev => [...prev, text]);
 				setDictating(false);
 				setDictationPhase("idle");
 			},
@@ -701,12 +683,16 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			<SttModelPickerCard rpc={rpc} />
 			<TtsModelPickerCard rpc={rpc} />
 
-			{/* Live device + dictation test: not expressible in schema. The
-			 * transcription result renders as a SIMULATED user message (the
-			 * transcript's .tr-row--user markup + Markdown), so the test
-			 * previews exactly how dictated text will look in chat. */}
+			{/* Live voice I/O test: not expressible in schema. Hosted by the
+			 * SHARED simulated conversation view — dictation starts from the
+			 * preview composer's real mic button (re-record = press the mic
+			 * again) and every transcript lands as a user message in the
+			 * preview (multi-turn accumulation), while the fixed assistant
+			 * sample carries the read-aloud action — exactly how chat will
+			 * look and sound. */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("voice input test")}</div>
+				<div className="gui-settings-section-title">{tLoose("voice test preview")}</div>
+				<div className="gui-settings-section-desc">{tLoose("voice test preview description")}</div>
 				<div className="gui-settings-row">
 					<div>
 						<div className="gui-settings-row-label">{t("voice input device")}</div>
@@ -726,66 +712,72 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 						}}
 					/>
 				</div>
-				<div className="gui-settings-row">
-					<div className="gui-voice-test">
-						<div className="gui-settings-row-label">{t("voice input test")}</div>
-						<div className="gui-settings-row-desc" aria-live="polite">
-							{dictationError ??
-								(dictationPhase === "recording"
-									? `${tLoose("Listening… speak now")} · ${recordSeconds}s`
-									: dictationPhase === "transcribing"
-										? t("voice transcribing")
-										: dictated
-											? tLoose("transcription preview below")
-											: t("voice input test description"))}
-						</div>
-						{dictationPhase === "recording" && (
-							<div className="gui-voice-level" aria-hidden>
-								<span
-									className="gui-voice-level-fill"
-									style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}
-								/>
-							</div>
-						)}
-					</div>
-					<button type="button" className="gui-btn" disabled={!rpc} onClick={toggleDictation}>
-						<Icon
-							name={dictationPhase === "recording" || dictationPhase === "transcribing" ? "stop" : "mic"}
-							className="h-3.5 w-3.5"
+				<MockConversationPreview
+					showAvatars={showAvatars}
+					statusBarInfo={statusBarInfo}
+					assistantMarkdown={TTS_SAMPLE_MARKDOWN}
+					assistantActions={<SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} />}
+					extraMessages={dictatedMessages.map((text, i) => (
+						<MockUserRow key={`${i}:${text}`} markdown={text} showAvatar={showAvatars} />
+					))}
+					composer={
+						<MockComposer
+							input={
+								<span aria-live="polite">
+									{dictationError ??
+										(dictationPhase === "recording"
+											? `${tLoose("Listening… speak now")} · ${recordSeconds}s`
+											: dictationPhase === "transcribing"
+												? t("voice transcribing")
+												: t("voice input test description"))}
+								</span>
+							}
+							mic={
+								<button
+									type="button"
+									className={`gui-composer-ico gui-effect-preview-mic${
+										dictationPhase === "recording" ? " gui-composer-ico--dictating" : ""
+									}`}
+									disabled={!rpc}
+									onClick={toggleDictation}
+									aria-label={
+										dictationPhase === "recording" || dictationPhase === "transcribing"
+											? t("stop")
+											: t("voice input test")
+									}
+									title={
+										dictationPhase === "recording"
+											? t("stop")
+											: dictationPhase === "transcribing"
+												? t("voice transcribing")
+												: t("voice input test")
+									}
+								>
+									<Icon
+										name={
+											dictationPhase === "recording" || dictationPhase === "transcribing" ? "stop" : "mic"
+										}
+										className="h-3.5 w-3.5"
+									/>
+									{dictationPhase === "recording" && (
+										<>
+											<span className="gui-voice-seconds">{recordSeconds}s</span>
+											{/* Live level meter rides the dictating capsule's
+											 * inner bottom edge (same contract as the real
+											 * composer mic — .gui-voice-level is absolutely
+											 * positioned inside the button). */}
+											<span
+												className="gui-voice-level"
+												style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}
+											/>
+										</>
+									)}
+								</button>
+							}
 						/>
-						{dictationPhase === "recording"
-							? t("stop")
-							: dictationPhase === "transcribing"
-								? t("voice transcribing")
-								: t("voice input test")}
-					</button>
-				</div>
-				{dictated && !dictating && (
-					<div className="gui-voice-sim">
-						<MockUserMessage text={dictated} />
-						<div className="gui-voice-feedback">
-							<button
-								type="button"
-								className="gui-btn"
-								onClick={() => {
-									setDictated(null);
-									setFeedbackNoted(false);
-									toggleDictation();
-								}}
-							>
-								<Icon name="mic" className="h-3.5 w-3.5" />
-								{tLoose("re-record")}
-							</button>
-							<button type="button" className="gui-btn" onClick={() => setFeedbackNoted(true)}>
-								{tLoose("is this more accurate?")}
-							</button>
-							{feedbackNoted && <span className="gui-settings-row-desc">{tLoose("feedback noted")}</span>}
-						</div>
-					</div>
-				)}
+					}
+				/>
 			</div>
-
-			<TtsTestCard rpc={rpc} />
 		</>
 	);
 }

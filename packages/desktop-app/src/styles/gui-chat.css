@@ -826,6 +826,14 @@ body.gui-resizing .gui-pane-resize-x::after {
 	pointer-events: none;
 }
 
+/* The transcript reveals .tr-actions on row hover; a settings preview has
+ * no hover affordance to discover — the voice test's read-aloud button is
+ * the section's primary action, so it stays visible (message-flow
+ * click/hold states unchanged: .tr-action--speaking still pulses). */
+.gui-effect-preview .tr-actions {
+	opacity: 1;
+}
+
 .gui-effect-preview-composer {
 	display: flex;
 	align-items: center;

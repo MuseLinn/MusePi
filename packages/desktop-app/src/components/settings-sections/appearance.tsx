@@ -10,6 +10,7 @@ import {
 	type ThemePreference,
 	type TranslationKey,
 	t,
+	tLoose,
 	type UiThemeId,
 	UNIFIED_THEME_PRESETS,
 	useAccentPreference,
@@ -60,9 +61,9 @@ import {
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
-import { AgentAvatar } from "../AgentAvatar";
 import { ColorPickerPanel } from "../ColorPicker";
 import { GuiSelect } from "../GuiSelect";
+import { MockConversationPreview } from "../MockConversationPreview";
 import { Reveal } from "../Reveal";
 import { setStatusBarEnabled } from "../statusbar-info";
 import {
@@ -218,64 +219,6 @@ export function AppearanceSection({
 		<>
 			<h2 className="gui-settings-page-title">{t("appearance")}</h2>
 			<p className="gui-settings-page-desc">{t("appearance settings")}</p>
-
-			{/* ── 本地化 — language / time format / week start (openchamber parity). ── */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("localization")}</div>
-				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("language")}</div>
-					<GuiSelect
-						className="gui-settings-select"
-						value={locale}
-						onChange={v => {
-							const next = v;
-							// Renderer mirror updates immediately; the daemon key
-							// (settings.locale, config.yml) is the single source the
-							// TUI and the GUI boot sync both read (F1 audit fix).
-							setLocale(next);
-							if (rpc) void rpc.request("settings.set", { key: "settings.locale", value: next }).catch(() => {});
-						}}
-						options={[
-							{ value: "zh-CN", label: "中文" },
-							{ value: "en-US", label: "English" },
-						]}
-					/>
-				</div>
-				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("time format")}</div>
-					<GuiSelect
-						className="gui-settings-select"
-						value={timeFmt}
-						onChange={nv => {
-							const v = nv as "auto" | "12h" | "24h";
-							setTimeFmt(v);
-							setPref(TIME_FMT_KEY, v);
-						}}
-						options={[
-							{ value: "auto", label: t("auto") },
-							{ value: "12h", label: t("12-hour") },
-							{ value: "24h", label: t("24-hour") },
-						]}
-					/>
-				</div>
-				<div className="gui-settings-field">
-					<div className="gui-settings-field-label">{t("week starts on")}</div>
-					<GuiSelect
-						className="gui-settings-select"
-						value={weekStart}
-						onChange={nv => {
-							const v = nv as "auto" | "monday" | "sunday";
-							setWeekStart(v);
-							setPref(WEEK_START_KEY, v);
-						}}
-						options={[
-							{ value: "auto", label: t("auto") },
-							{ value: "monday", label: t("monday") },
-							{ value: "sunday", label: t("sunday") },
-						]}
-					/>
-				</div>
-			</div>
 
 			{/* ── 界面设置 — theme + interface type (ZCode section). ── */}
 			<div className="gui-settings-section">
@@ -606,6 +549,160 @@ export function AppearanceSection({
 				</Reveal>
 			</div>
 
+			{/* ── 效果 — motion / info status bar / avatars (session chrome the
+			 * 效果预览 below reflects live). ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("effects")}</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("motion effects")}</div>
+						<div className="gui-settings-row-desc">{t("menu popups, orb animation, splash pulse")}</div>
+					</div>
+					<Segmented
+						ariaLabel={t("motion effects")}
+						value={motion}
+						options={MOTION_SEGMENTS}
+						onChange={m => {
+							setMotion(m);
+							localStorage.setItem("musepi-gui-motion", m);
+							document.documentElement.classList.toggle("gui-motion-off", m === "off");
+						}}
+					/>
+				</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("info status bar")}</div>
+						<div className="gui-settings-row-desc">{t("info status bar desc")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={statusBarInfo}
+						className={`gui-toggle${statusBarInfo ? " gui-toggle--on" : ""}`}
+						aria-label={t("info status bar")}
+						onClick={() => {
+							const next = !statusBarInfo;
+							setStatusBarInfo(next);
+							setStatusBarEnabled(next);
+						}}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+				<div className="gui-settings-row">
+					<div className="flex-1">
+						<div className="gui-settings-row-label">{t("show avatars")}</div>
+						<div className="gui-settings-row-desc">
+							{t("agent orb avatar beside replies, your avatar at the bubble")}
+						</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={showAvatars}
+						className={`gui-toggle${showAvatars ? " gui-toggle--on" : ""}`}
+						onClick={onToggleAvatars}
+						aria-label={t("show avatars")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+			</div>
+
+			{/* ── 效果预览 — the shared simulated conversation view (voice-test
+			 * parity): REAL tr-* row markup (user bubble, assistant reply with
+			 * the live orb, collapsed 活动 fold) + the current composer card,
+			 * driven live by the toggles above (avatars / info status bar). ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("effects preview")}</div>
+				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
+				<MockConversationPreview showAvatars={showAvatars} statusBarInfo={statusBarInfo} />
+			</div>
+			{/* ── 图片 — the GUI inline-images toggle + the daemon schema's
+			 * Images group (auto-resize / block images) in one place. ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("Images")}</div>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("inline images")}</div>
+						<div className="gui-settings-row-desc">{t("show images inside the transcript")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={inlineImages}
+						className={`gui-toggle${inlineImages ? " gui-toggle--on" : ""}`}
+						onClick={() => {
+							const next = !inlineImages;
+							setInlineImages(next);
+							localStorage.setItem("musepi-gui-images", next ? "1" : "0");
+							document.documentElement.classList.toggle("gui-no-images", !next);
+						}}
+						aria-label={t("inline images")}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
+				</div>
+				<SchemaTabSection rpc={rpc} tabs={["appearance"]} groups={["Images"]} />
+			</div>
+			{/* ── 本地化 — language / time format / week start (openchamber parity). ── */}
+			<div className="gui-settings-section">
+				<div className="gui-settings-section-title">{t("localization")}</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("language")}</div>
+					<GuiSelect
+						className="gui-settings-select"
+						value={locale}
+						onChange={v => {
+							const next = v;
+							// Renderer mirror updates immediately; the daemon key
+							// (settings.locale, config.yml) is the single source the
+							// TUI and the GUI boot sync both read (F1 audit fix).
+							setLocale(next);
+							if (rpc) void rpc.request("settings.set", { key: "settings.locale", value: next }).catch(() => {});
+						}}
+						options={[
+							{ value: "zh-CN", label: "中文" },
+							{ value: "en-US", label: "English" },
+						]}
+					/>
+				</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("time format")}</div>
+					<GuiSelect
+						className="gui-settings-select"
+						value={timeFmt}
+						onChange={nv => {
+							const v = nv as "auto" | "12h" | "24h";
+							setTimeFmt(v);
+							setPref(TIME_FMT_KEY, v);
+						}}
+						options={[
+							{ value: "auto", label: t("auto") },
+							{ value: "12h", label: t("12-hour") },
+							{ value: "24h", label: t("24-hour") },
+						]}
+					/>
+				</div>
+				<div className="gui-settings-field">
+					<div className="gui-settings-field-label">{t("week starts on")}</div>
+					<GuiSelect
+						className="gui-settings-select"
+						value={weekStart}
+						onChange={nv => {
+							const v = nv as "auto" | "monday" | "sunday";
+							setWeekStart(v);
+							setPref(WEEK_START_KEY, v);
+						}}
+						options={[
+							{ value: "auto", label: t("auto") },
+							{ value: "monday", label: t("monday") },
+							{ value: "sunday", label: t("sunday") },
+						]}
+					/>
+				</div>
+			</div>
+
 			{/* ── 代码设置 — code themes / line numbers / wrap / sizes (ZCode). ── */}
 			<div className="gui-settings-section">
 				<div className="gui-settings-section-title">{t("code settings")}</div>
@@ -771,128 +868,18 @@ export function AppearanceSection({
 				</div>
 			</div>
 
-			{/* ── Effects (motion / status line / images) with live preview ── */}
+			{/* ── 终端行为 — the daemon schema's appearance leftovers (Theme /
+			 * Composer / Status Line / Display groups): TUI-only rows are
+			 * split into the collapsed 仅终端 block by SchemaSettings, so
+			 * desktop-irrelevant options (Resize Scrollback, Mermaid, …)
+			 * never mix with the desktop behavior above. ── */}
 			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("effects")}</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("motion effects")}</div>
-						<div className="gui-settings-row-desc">{t("menu popups, orb animation, splash pulse")}</div>
-					</div>
-					<Segmented
-						ariaLabel={t("motion effects")}
-						value={motion}
-						options={MOTION_SEGMENTS}
-						onChange={m => {
-							setMotion(m);
-							localStorage.setItem("musepi-gui-motion", m);
-							document.documentElement.classList.toggle("gui-motion-off", m === "off");
-						}}
-					/>
+				<div className="gui-settings-section-title">{tLoose("terminal behavior")}</div>
+				<div className="gui-settings-section-desc">
+					{tLoose("Affects the terminal (TUI) interface only; desktop settings live above")}
 				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("info status bar")}</div>
-						<div className="gui-settings-row-desc">{t("info status bar desc")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={statusBarInfo}
-						className={`gui-toggle${statusBarInfo ? " gui-toggle--on" : ""}`}
-						aria-label={t("info status bar")}
-						onClick={() => {
-							const next = !statusBarInfo;
-							setStatusBarInfo(next);
-							setStatusBarEnabled(next);
-						}}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div>
-						<div className="gui-settings-row-label">{t("inline images")}</div>
-						<div className="gui-settings-row-desc">{t("show images inside the transcript")}</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={inlineImages}
-						className={`gui-toggle${inlineImages ? " gui-toggle--on" : ""}`}
-						onClick={() => {
-							const next = !inlineImages;
-							setInlineImages(next);
-							localStorage.setItem("musepi-gui-images", next ? "1" : "0");
-							document.documentElement.classList.toggle("gui-no-images", !next);
-						}}
-						aria-label={t("inline images")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
-				<div className="gui-settings-row">
-					<div className="flex-1">
-						<div className="gui-settings-row-label">{t("show avatars")}</div>
-						<div className="gui-settings-row-desc">
-							{t("agent orb avatar beside replies, your avatar at the bubble")}
-						</div>
-					</div>
-					<button
-						type="button"
-						role="switch"
-						aria-checked={showAvatars}
-						className={`gui-toggle${showAvatars ? " gui-toggle--on" : ""}`}
-						onClick={onToggleAvatars}
-						aria-label={t("show avatars")}
-					>
-						<span className="gui-toggle-knob" />
-					</button>
-				</div>
+				<SchemaTabSection rpc={rpc} tabs={["appearance"]} excludeGroups={["Images"]} />
 			</div>
-
-			{/* ── 效果预览 — one mock scene for the whole effects block (code
-			 * preview parity): transcript rows reuse the REAL tr-* classes
-			 * so bubbles and avatars match the chat surface, above a mock
-			 * input card — the same arrangement as the actual composer
-			 * column (agent working state now lives in the send button). */}
-			<div className="gui-settings-section">
-				<div className="gui-settings-section-title">{t("effects preview")}</div>
-				<div className="gui-settings-section-desc">{t("effects preview description")}</div>
-				<div className="gui-effect-preview">
-					{/* 信息状态条 on → the preview carries the same bar above the
-					 * mock composer (real gui-statusbar-info classes, sample
-					 * segments — model / plan / context tokens), so the toggle
-					 * reads here exactly as it lands in the chat. */}
-					{statusBarInfo && (
-						<div className="gui-statusbar-info" role="presentation">
-							<span className="gui-statusbar-info-seg">{t("preview statusbar model")}</span>
-							<span className="gui-statusbar-info-seg">{t("preview statusbar context")}</span>
-						</div>
-					)}
-					<div className="tr-row">
-						<div className="tr-gutter">{showAvatars && <AgentAvatar state="working" size={64} />}</div>
-						<div className="tr-body">
-							<div className="tr-md">{t("preview agent message")}</div>
-						</div>
-					</div>
-					<div className="tr-row tr-row--user">
-						<div className="tr-gutter" />
-						<div className="tr-body">
-							<div className="tr-md">{t("preview user message")}</div>
-						</div>
-					</div>
-					<div className="gui-effect-preview-composer">
-						<div className="gui-effect-preview-input">{t("ask anything, / for commands, @ for context…")}</div>
-						<span className="gui-effect-preview-send" aria-hidden>
-							<Icon name="send-plane" className="h-3.5 w-3.5" />
-						</span>
-					</div>
-				</div>
-			</div>
-			{/* TUI appearance-tab parity (schema-driven): theme presets, status
-			 * line, display and images groups from settings.schema. */}
-			<SchemaTabSection rpc={rpc} tabs={["appearance"]} />
 			{/* Chat display settings (previously the 聊天设置 tab): transcript
 			 * rendering prefs are appearance — merged into one 外观 page. */}
 			<ChatSection />

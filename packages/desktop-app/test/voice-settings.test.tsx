@@ -3,7 +3,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { setLocale } from "@musepi/client-core";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { MockUserMessage, TtsModelPickerCard, TtsTestCard } from "../src/components/settings-sections/voice";
+import { MockAssistantRow, MockConversationPreview, MockUserRow } from "../src/components/MockConversationPreview";
+import { SpeakAction, TtsModelPickerCard } from "../src/components/settings-sections/voice";
 import type { RpcClient, StreamEvent } from "../src/lib/rpc";
 
 /**
@@ -16,10 +17,11 @@ import type { RpcClient, StreamEvent } from "../src/lib/rpc";
  *    per-row download button is the only fetch trigger); the button fires
  *    `tts.modelDownload`, progress rides the global `tts.download*` event
  *    stream, and cached tiers render a ready marker instead of a button.
- * 2. 测试语音模拟真实对话 (MockUserMessage / TtsTestCard): the dictation
- *    result renders as a mock USER message in the transcript bubble styling
- *    (tr-row--user → tr-md), and the TTS test renders a mock ASSISTANT
- *    message whose read-aloud entry (tr-action) synthesizes through the
+ * 2. 语音测试共用模拟会话视图 (MockConversationPreview + SpeakAction): the
+ *    dictation result renders as a mock USER message in the transcript
+ *    bubble styling (tr-row--user → tr-md), the assembled preview carries
+ *    the 活动 fold summary row and the mock composer, and the read-aloud
+ *    entry (tr-action) on the assistant row synthesizes through the
  *    existing tts.synthesize channel with the live schema values.
  */
 
@@ -146,14 +148,14 @@ describe("朗读模型卡 (TtsModelPickerCard)", () => {
 	});
 });
 
-describe("测试语音模拟真实对话", () => {
+describe("语音测试共用模拟会话视图", () => {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
 
 	test("dictation result renders as a transcript user message (bubble + same markdown renderer)", () => {
 		act(() => {
-			root.render(createElement(MockUserMessage, { text: "帮我总结一下 **测试** 结果" }));
+			root.render(createElement(MockUserRow, { markdown: "帮我总结一下 **测试** 结果" }));
 		});
 		const row = host.querySelector(".tr-row--user");
 		expect(row).not.toBeNull();
@@ -165,17 +167,30 @@ describe("测试语音模拟真实对话", () => {
 		expect(md!.textContent).toContain("测试");
 	});
 
-	test("TTS test renders an assistant message card and its read-aloud entry synthesizes via tts.synthesize", async () => {
+	test("the assembled preview carries user row + 活动 fold + assistant row + composer", () => {
+		act(() => {
+			root.render(createElement(MockConversationPreview, null));
+		});
+		expect(host.querySelector(".tr-row--user")).not.toBeNull();
+		expect(host.querySelector(".tr-round-fold")).not.toBeNull();
+		expect(host.querySelector(".tr-row--assistant")).not.toBeNull();
+		expect(host.querySelector(".gui-effect-preview-composer")).not.toBeNull();
+	});
+
+	test("read-aloud action on the assistant row synthesizes via tts.synthesize with live schema values", async () => {
 		const fake = new FakeRpc();
 		fake.responses.set("settings.get", { "tts.localVoice": "af_heart", "tts.rate": 1, "tts.inputMode": "sanitize" });
 		fake.responses.set("tts.synthesize", { audio: null, sampleRate: 0 });
+		const markdown = "已经改好了，简单说两个要点：";
 		act(() => {
-			root.render(createElement(TtsTestCard, { rpc: asRpc(fake) }));
+			root.render(
+				createElement(MockAssistantRow, {
+					markdown,
+					showAvatar: false,
+					actions: createElement(SpeakAction, { rpc: asRpc(fake), markdown }),
+				}),
+			);
 		});
-		// Mock assistant message in transcript styling.
-		const row = host.querySelector(".tr-row--assistant");
-		expect(row).not.toBeNull();
-		expect(row!.querySelector(".tr-body > .tr-md")).not.toBeNull();
 		// Read-aloud entry = the message-stream button (tr-action), which
 		// reads live schema values then synthesizes through the daemon.
 		const speakBtn = host.querySelector<HTMLButtonElement>("button.tr-action");

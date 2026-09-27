@@ -31,10 +31,9 @@ const zhVoice = {
 	Chinese: "中文",
 	"downloads automatically when selected": "选中后自动下载",
 	"Listening… speak now": "聆听中…请说话",
-	"re-record": "重新录制",
-	"is this more accurate?": "这更准确吗？",
-	"feedback noted": "已记录，感谢反馈",
-	"transcription preview below": "转写结果已作为一条模拟消息显示在下方",
+	"voice test preview": "语音测试",
+	"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.":
+		"在下方模拟会话中测试：点击输入框上的麦克风说话，转写结果会作为用户消息出现在预览里；点击回复旁的朗读按钮试听语音输出。",
 } as const;
 
 registerTranslations("zh-CN", zhVoice);
@@ -62,8 +61,7 @@ registerTranslations("en-US", {
 	Chinese: "Chinese",
 	"downloads automatically when selected": "downloads automatically when selected",
 	"Listening… speak now": "Listening… speak now",
-	"re-record": "re-record",
-	"is this more accurate?": "is this more accurate?",
-	"feedback noted": "feedback noted",
-	"transcription preview below": "transcription preview below",
+	"voice test preview": "voice test preview",
+	"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.":
+		"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.",
 } as const satisfies Record<keyof typeof zhVoice, string>);
