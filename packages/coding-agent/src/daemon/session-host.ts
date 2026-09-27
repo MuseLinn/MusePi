@@ -1552,6 +1552,19 @@ export class DaemonSessionHost {
 		// need) so resumed sessions reuse the same server subprocesses.
 		const discovery = await this.#discoveryFor(resumeCwd, getAgentDir());
 		const mcpManager = await this.#ensureMcpManager(resumeCwd, discovery);
+		// M3 §3: rehydrate the creation-surface project metadata from the
+		// persisted snapshot header. The SDK prompt builder only sees metadata
+		// passed at create time, so a design-system choice (or any creation
+		// config) made on a later-closed session would silently drop on
+		// reactivate — the resumed agent designs without the selected brief.
+		// Header absent/invalid → no key, same as a session created without
+		// metadata (validated once at creation; no re-validation on rehydrate).
+		const persisted = this.#store.load(sessionId);
+		const persistedMetadata = (persisted?.header as unknown as Record<string, unknown> | undefined)?.projectMetadata;
+		const projectMetadata =
+			typeof persistedMetadata === "object" && persistedMetadata !== null && !Array.isArray(persistedMetadata)
+				? (persistedMetadata as Record<string, unknown>)
+				: undefined;
 		const result = await this.#withSessionBootstrapLock(async () =>
 			createAgentSession({
 				cwd: resumeCwd,
@@ -1573,6 +1586,7 @@ export class DaemonSessionHost {
 				collabTool: this.#collabToolProvider?.(),
 				scheduledTasks: this.#scheduledTaskProvider?.(resumeCwd) ?? undefined,
 				...(await desktopSessionPromptInputs(resumeCwd)),
+				...(projectMetadata ? { projectMetadata } : {}),
 			}),
 		);
 		// The resumed manager adopts the transcript's header id; a mismatch
@@ -2185,6 +2199,23 @@ export class DaemonSessionHost {
 		}
 		this.#store.upsert(sessionId, persisted);
 		return true;
+	}
+
+	/**
+	 * Read a HISTORY (non-live) session's persisted project metadata + cwd —
+	 * the read half of the read-merge-write contract behind
+	 * `session.setDesignSystem`: that RPC must merge the `designSystemId` key
+	 * into the existing creation metadata (persistHeaderPatch replaces the
+	 * whole `projectMetadata` key) and then mirror the merged result to
+	 * `<cwd>/.musepi/project.json`. Returns null when the session is unknown.
+	 */
+	readProjectMetadata(sessionId: string): { metadata: Record<string, unknown> | null; cwd: string } | null {
+		const persisted = this.#store.load(sessionId);
+		if (!persisted) return null;
+		const raw = (persisted.header as unknown as Record<string, unknown>).projectMetadata;
+		const metadata =
+			typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+		return { metadata, cwd: persisted.state?.cwd ?? "" };
 	}
 
 	/**

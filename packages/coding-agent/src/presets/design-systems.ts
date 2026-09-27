@@ -12,7 +12,12 @@
  *   徽章）、`getDesignSystem(id)` 单体查询、
  *   `applyDesignSystemSection(composer, metadata)` 把命中体系的
  *   promptSection 注入会话 composer（source=design-system，order 40 位于
- *   mode 预设区块之后；未命中/空 id 不注入不炸）。
+ *   mode 预设区块之后；未命中/空 id 不注入不炸）。RPC 写通道
+ *   `session.setDesignSystem`（daemon server.ts）经
+ *   `AgentSession.setDesignSystemId` 热写会话共享 metadata 状态的
+ *   `designSystemId` 键并立即重建 base prompt；历史（非 live）会话走
+ *   读-合并-写持久化快照头（整体替换会丢创建面其它键），两侧均
+ *   best-effort 镜像 `<cwd>/.musepi/project.json`。
  * - 生命周期：模块级 Map，进程内常驻；扩展注册在会话初始化时重放
  *   （pending → register，与 media provider 同机制），扩展
  *   reload/unload 时按 sourceId 整源清除（ModelRegistry.clearSourceRegistrations
@@ -22,7 +27,9 @@
  * - 冲突：内置 id 保留（minimal/glass/editorial/neubrutalism/darkneon）；
  *   扩展 id 撞内置抛 `registerDesignSystem: id "x" collides with a built-in
  *   design system`，撞扩展注册抛 `... is already registered`（照抄
- *   image-providers 防撞契约形态）。
+ *   image-providers 防撞契约形态）；`session.setDesignSystem` 对未知 id
+ *   fail-fast 抛 `Unknown design system: <id>`（GUI banner 原样显示，不写
+ *   悬空选中）。
  *   检视入口：本文件 + `extensibility/extensions/types.ts`（DesignSystemConfig）。
  */
 

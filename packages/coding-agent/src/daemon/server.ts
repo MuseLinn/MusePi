@@ -83,6 +83,7 @@ import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../
 import { cacheHitRate } from "../modes/utils/cache-hit";
 import { resolveApprovedPlan, resolvePlanTitle } from "../plan-mode/approved-plan";
 import { listPlanFiles, readPlanFile, writePlanFile } from "../plan-mode/plan-files";
+import { getDesignSystem } from "../presets/design-systems";
 import guidedGoalInterviewPrompt from "../prompts/goals/guided-goal-interview.md" with { type: "text" };
 import manualContinuePrompt from "../prompts/system/manual-continue.md" with { type: "text" };
 import planModeApprovedPrompt from "../prompts/system/plan-mode-approved.md" with { type: "text" };
@@ -112,6 +113,7 @@ import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
+import { writeProjectMirror } from "./creation";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -3764,6 +3766,66 @@ export class DaemonServer {
 				// History session: persist — applies when the session is next continued.
 				if (!this.#host.persistHeaderPatch(p.sessionId, { modeId: p.modeId ?? null })) {
 					throw new Error(`Unknown session: ${p.sessionId}`);
+				}
+				return { ok: true, persisted: true };
+			}
+			case "session.setDesignSystem": {
+				// M3 §3:会话内选中/清除设计体系(GUI 设计体系选择器的写通道)。
+				// designSystemId 必须先命中注册表(builtin + 扩展),未知 id
+				// fail-fast——persisting 一个悬空的 id 会让后续 rebuild 静默不注入,
+				// GUI 还以为选中成功。live 会话写共享 metadata 状态并立即重建
+				// base prompt(design-system 区块随下一次模型调用生效);
+				// 历史会话走读-合并-写:persistHeaderPatch 整体替换
+				// projectMetadata,直接写会丢掉创建面其它键。两侧都尽力镜像
+				// `<cwd>/.musepi/project.json`(失败不阻断,权威侧已落盘)。
+				// designSystemId: null/缺省 = 清除选中。
+				const p = (params ?? {}) as { sessionId: string; designSystemId?: string | null };
+				if (typeof p.sessionId !== "string" || !p.sessionId) throw new Error("sessionId required");
+				const designSystemId = p.designSystemId ?? null;
+				if (designSystemId !== null && !getDesignSystem(designSystemId)) {
+					throw new Error(`Unknown design system: ${designSystemId}`);
+				}
+				const applyDesignSystemKey = (previous: Record<string, unknown> | null): Record<string, unknown> | null => {
+					const merged: Record<string, unknown> = { ...(previous ?? {}) };
+					if (designSystemId === null) {
+						delete merged.designSystemId;
+					} else {
+						merged.designSystemId = designSystemId;
+					}
+					return Object.keys(merged).length > 0 ? merged : null;
+				};
+				const live = this.#host.get(p.sessionId);
+				if (live) {
+					await live.agentSession.setDesignSystemId(designSystemId);
+					const projectMetadata = applyDesignSystemKey(live.agentSession.getProjectMetadata());
+					if (!this.#host.persistHeaderPatch(p.sessionId, { projectMetadata })) {
+						logger.warn("session.setDesignSystem: failed to persist projectMetadata to session header", {
+							sessionId: p.sessionId,
+						});
+					}
+					writeProjectMirror(live.cwd, projectMetadata ?? {}).catch(error => {
+						logger.warn("session.setDesignSystem: project metadata mirror write failed", {
+							cwd: live.cwd,
+							error: String(error),
+						});
+					});
+					return { ok: true };
+				}
+				// History session: read-merge-write against the persisted snapshot
+				// header (readProjectMetadata returns null for unknown sessions).
+				const existing = this.#host.readProjectMetadata(p.sessionId);
+				if (!existing) throw new Error(`Unknown session: ${p.sessionId}`);
+				const projectMetadata = applyDesignSystemKey(existing.metadata);
+				if (!this.#host.persistHeaderPatch(p.sessionId, { projectMetadata })) {
+					throw new Error(`Unknown session: ${p.sessionId}`);
+				}
+				if (existing.cwd) {
+					writeProjectMirror(existing.cwd, projectMetadata ?? {}).catch(error => {
+						logger.warn("session.setDesignSystem: project metadata mirror write failed", {
+							cwd: existing.cwd,
+							error: String(error),
+						});
+					});
 				}
 				return { ok: true, persisted: true };
 			}

@@ -7,6 +7,7 @@ import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { CreationService } from "./creation-service";
+import { DesignSystemsService } from "./design-systems-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
@@ -66,6 +67,8 @@ function buildRegistry(): HostServices {
 	services.register(new BoardService());
 	// CreationService 只认领路由（本测试不触盘），session 头查找 stub 掉。
 	services.register(new CreationService({ loadHeader: () => null }));
+	// DesignSystemsService 无宿主依赖，注册表路由（design.systems.list）直认领。
+	services.register(new DesignSystemsService());
 	services.register(
 		new FileService({
 			fallbackCwd: () => undefined,

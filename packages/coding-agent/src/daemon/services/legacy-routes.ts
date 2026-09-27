@@ -160,6 +160,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"session.send",
 	"session.setAdvisorEnabled",
 	"session.setComputerEnabled",
+	"session.setDesignSystem",
 	"session.setDraft",
 	"session.setFastMode",
 	"session.setGoal",

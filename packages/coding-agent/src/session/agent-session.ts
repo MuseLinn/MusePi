@@ -632,6 +632,14 @@ export class AgentSession {
 	 */
 	#pendingModeSwitch: { modeId: string | null; hot?: boolean } | undefined = undefined;
 	/**
+	 * M3 §3: mutable project-metadata holder shared with the SDK prompt builder
+	 * (SDK session factory wires the same object into the systemPrompt closure).
+	 * `setDesignSystemId` writes the `designSystemId` key here; every
+	 * rebuildSystemPrompt re-resolves the design-system composer section from
+	 * `current`. Undefined only for AgentSessions built without the SDK factory.
+	 */
+	#projectMetadataState: { current: Record<string, unknown> | null } | undefined;
+	/**
 	 * Backs `ctx.setInterval`/`setTimeout`/`clearTimer` for the runner-less
 	 * command-context fallback (SDK embeddings with no extension runner). Lazily
 	 * created; cleared on dispose alongside the runner's own timers (#5664).
@@ -1125,6 +1133,7 @@ export class AgentSession {
 		this.#slashCommands = config.slashCommands ?? [];
 		this.#extensionRunner = config.extensionRunner;
 		this.#modeSwitcher = config.modeSwitcher;
+		this.#projectMetadataState = config.projectMetadataState;
 		this.#onExtensionPromptSectionsChanged = config.onExtensionPromptSectionsChanged;
 		this.#customCommands = config.customCommands ?? [];
 		const recoveryHost: TurnRecoveryHost = {
@@ -4782,6 +4791,37 @@ export class AgentSession {
 				error: error instanceof Error ? error.message : String(error),
 			});
 		});
+	}
+
+	/**
+	 * M3 §3: set or clear this session's selected design system. The daemon's
+	 * `session.setDesignSystem` RPC routes here for live sessions: the id is
+	 * written into (or deleted from) the shared project-metadata holder, then
+	 * the base system prompt is rebuilt so the design-system composer section
+	 * appears/disappears on the very next model call — the registry lookup
+	 * itself re-runs inside rebuildSystemPrompt, so an id that deregisters
+	 * before the rebuild injects nothing instead of going stale.
+	 */
+	async setDesignSystemId(designSystemId: string | null): Promise<void> {
+		const state = this.#projectMetadataState;
+		if (!state) {
+			throw new Error("design system selection is unavailable for this session");
+		}
+		const next: Record<string, unknown> = { ...(state.current ?? {}) };
+		if (designSystemId === null) {
+			delete next.designSystemId;
+		} else {
+			next.designSystemId = designSystemId;
+		}
+		// Collapse to null when nothing remains — the daemon persists an
+		// explicit null to clear the header key, and a bare {} would linger.
+		state.current = Object.keys(next).length > 0 ? next : null;
+		await this.refreshBaseSystemPrompt();
+	}
+
+	/** Current session project metadata (M3 creation surface), if the SDK factory wired the shared holder. */
+	getProjectMetadata(): Record<string, unknown> | null {
+		return this.#projectMetadataState?.current ?? null;
 	}
 
 	/** Drop extension-owned tools from the session registry and active set

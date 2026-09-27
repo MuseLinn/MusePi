@@ -1599,6 +1599,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		}
 		return { resolved: undefined, composer, activeExtensionIds: new Set() };
 	})();
+	// M3 §3:projectMetadata 挂可变 ref —— session.setDesignSystem 热写
+	// designSystemId 键,rebuildSystemPrompt 闭包每次重建都重读
+	// ref.current 重解析注册表(与 modeRuntime 同一"可变状态 + 闭包重读"形态)。
+	const projectMetadataState: { current: Record<string, unknown> | null } = {
+		current: options.projectMetadata ?? null,
+	};
 	// settings 覆盖(§4.3):mode 键合并进 per-session 克隆实例,不污染共享
 	// discovery.settings(daemon 多会话隔离);用户全局显式值已在克隆快照,
 	// cloneForCwd 的 #global/#project 独立,set 只写本会话视图。
@@ -3407,7 +3413,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				// mode preset sections (re-resolved on every rebuild, so an
 				// extension-registered system picked up by a reload takes effect
 				// on the next prompt rebuild; unknown/absent id → no section).
-				applyDesignSystemSection(modeRuntime.composer, options.projectMetadata);
+				applyDesignSystemSection(modeRuntime.composer, projectMetadataState.current);
 				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
 				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
 				if (modeRuntime.composer.size > 0) {
@@ -4019,6 +4025,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				}
 			},
 			customCommands: customCommandsResult.commands,
+			projectMetadataState,
 			skills,
 			skillWarnings,
 			skillsReloadable: options.skills === undefined,

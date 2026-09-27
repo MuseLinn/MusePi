@@ -222,6 +222,12 @@ export interface AgentSessionConfig {
 		toolNames: string[],
 		tools: Map<string, AgentTool>,
 	) => Promise<{ systemPrompt: string[]; xdevCatalogNames?: readonly string[] }>;
+	/** M3 §3: mutable project-metadata holder shared with the SDK prompt
+	 *  builder — the daemon's `session.setDesignSystem` RPC writes the
+	 *  `designSystemId` key through {@link AgentSession.setDesignSystemId},
+	 *  and every rebuildSystemPrompt re-resolves the design-system composer
+	 *  section from `current`. Wired by the SDK session factory. */
+	projectMetadataState?: { current: Record<string, unknown> | null };
 	/** Local calendar date provider used by prompt-cache invalidation. */
 	getLocalCalendarDate?: () => string;
 	/** Tools mounted under `xd://`, for `/tools` display. */
