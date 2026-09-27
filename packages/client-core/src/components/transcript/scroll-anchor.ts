@@ -147,10 +147,18 @@ export function reconcileFollowingForContentAnchor(input: {
 	return input.following;
 }
 
-/** "Back to bottom" affordance visibility (UI pending design-doc review;
- *  exported so the state and its consumer stay in lockstep). */
-export function shouldShowBackToBottom(following: boolean, rowCount: number): boolean {
-	return !following && rowCount > 0;
+/** "Back to bottom" affordance visibility (exported so the state and its
+ *  consumer stay in lockstep).
+ *
+ *  `following` alone is INTENT, not geometry: a wheel-up over a pane whose
+ *  content already fits releases intent synchronously without any scroll
+ *  event ever re-adjudicating it, and a fold collapse can afterwards shrink
+ *  the content below the viewport — either way the button would linger over
+ *  a pane that cannot scroll (user: 折叠后按钮仍显示). The caller therefore
+ *  ALSO passes live geometry: the pane must actually be scrolled away from
+ *  the bottom (which is only possible when the content overflows). */
+export function shouldShowBackToBottom(following: boolean, rowCount: number, scrolledAwayFromBottom: boolean): boolean {
+	return !following && rowCount > 0 && scrolledAwayFromBottom;
 }
 
 /** Session switch / first bind: start following (land on the latest). */

@@ -35,6 +35,7 @@ import {
 	reconcileFollowingForContentAnchor,
 	resolveFollowingAfterScroll,
 	shouldShowBackToBottom,
+	type TimelineScrollMetrics,
 	type TimelineUserScrollIntent,
 	timelineKeyboardScrollIntent,
 	timelineTouchScrollIntent,
@@ -670,6 +671,11 @@ interface EntryRowProps {
 	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
 	/** Open the full-size image preview lightbox (transcript-level state). */
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Advisor-card expansion for THIS entry (transcript-level state keyed by
+	 *  entry id — survives the row's virtualized unmount/remount). */
+	advisorOpen?: boolean;
+	/** Flip THIS entry's advisor-card expansion. */
+	onToggleAdvisor?(entryId: string): void;
 	/** 该行朗读中(播放状态指示)。 */
 	speaking?: boolean;
 	/** 停止朗读(播放中的行点击)。 */
@@ -678,6 +684,13 @@ interface EntryRowProps {
 	retryTarget?: { id: string; text: string } | null;
 	/** transcript.node seat 注入 —— 按条目派发(见 TranscriptProps)。 */
 	renderTranscriptNode?: (node: TranscriptNodeInjection) => ReactNode;
+}
+
+/** Advisor-card expansion key: the entry id (wire entries always carry one).
+ *  Kept as one place so the open-state lookup and the toggle write the same
+ *  key. */
+function advisorKeyOf(entry: SessionEntry): string {
+	return entry.id;
 }
 
 /** Re-render only when the entry itself or one of its tool pairings changed. */
@@ -705,6 +718,7 @@ function entryRowEqual(prev: EntryRowProps, next: EntryRowProps): boolean {
 	if (prev.onSpeak !== next.onSpeak || prev.onSaveImage !== next.onSaveImage) return false;
 	if (prev.speaking !== next.speaking || prev.onStopSpeak !== next.onStopSpeak) return false;
 	if (prev.onPreviewImage !== next.onPreviewImage) return false;
+	if (prev.advisorOpen !== next.advisorOpen || prev.onToggleAdvisor !== next.onToggleAdvisor) return false;
 	if (prev.renderTranscriptNode !== next.renderTranscriptNode) return false;
 	const e = next.entry;
 	if (e.type !== "message" || e.message.role !== "assistant") return true;
@@ -732,6 +746,8 @@ function renderCustomMessage({
 	display,
 	timestamp,
 	onPreviewImage,
+	advisorOpen = false,
+	onToggleAdvisor,
 }: {
 	customType: string;
 	content: CustomMessageEntry["content"];
@@ -739,6 +755,9 @@ function renderCustomMessage({
 	display: boolean;
 	timestamp: string;
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
+	/** Advisor-card expansion (transcript-level, keyed by the entry id). */
+	advisorOpen?: boolean;
+	onToggleAdvisor?(): void;
 }): ReactNode {
 	if (customType === "collab-prompt") {
 		const from =
@@ -773,7 +792,7 @@ function renderCustomMessage({
 				: [];
 		return (
 			<Row kind="custom" gutter="" title={timestamp} turnStart>
-				<AdvisorBlock notes={notes} />
+				<AdvisorBlock notes={notes} open={advisorOpen} onToggle={() => onToggleAdvisor?.()} />
 			</Row>
 		);
 	}
@@ -919,6 +938,8 @@ const EntryRow = memo(function EntryRow({
 	onSpeak,
 	onSaveImage,
 	onPreviewImage,
+	advisorOpen = false,
+	onToggleAdvisor,
 	speaking,
 	onStopSpeak,
 	retryTarget,
@@ -940,6 +961,8 @@ const EntryRow = memo(function EntryRow({
 						display: custom.display,
 						timestamp: new Date(custom.timestamp).toISOString(),
 						onPreviewImage,
+						advisorOpen,
+						onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
 					});
 				}
 				switch (msg.role) {
@@ -1024,6 +1047,8 @@ const EntryRow = memo(function EntryRow({
 					display: entry.display,
 					timestamp: entry.timestamp,
 					onPreviewImage,
+					advisorOpen,
+					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
 				});
 			case "compaction":
 				return (
@@ -1240,6 +1265,21 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// CLOSED ones — so a settings flip re-reads existing rounds without
 	// migration.
 	const [roundFoldOpen, setRoundFoldOpen] = useState<ReadonlySet<string>>(() => new Set());
+	// Advisor-card expansion, stored at the transcript level keyed by the
+	// ENTRY ID (falling back to the entry timestamp): rows unmount once the
+	// virtualizer scrolls them out of its overscan window, and the card's own
+	// useState reset the manual expansion when the row remounted. Same
+	// deviation-set shape as roundFoldOpen: auto-collapse applies at row
+	// mount; the user's toggle wins from then on.
+	const [advisorOpenIds, setAdvisorOpenIds] = useState<ReadonlySet<string>>(() => new Set());
+	const toggleAdvisorOpen = useCallback((key: string): void => {
+		setAdvisorOpenIds(prev => {
+			const next = new Set(prev);
+			if (next.has(key)) next.delete(key);
+			else next.add(key);
+			return next;
+		});
+	}, []);
 	// Image preview lightbox: full-size view of clicked message images
 	// (all images of the message form the gallery).
 	const [previewImg, setPreviewImg] = useState<{ items: { src: string; alt: string }[]; index: number } | null>(null);
@@ -1270,6 +1310,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		setFollowingUi(next);
 	}, []);
 	const programmaticScrollRef = useRef(false);
+	// Back-to-bottom visibility geometry: `following` is user INTENT and can
+	// stay released while the pane no longer scrolls (a wheel-up over a
+	// fitting pane releases intent synchronously and no scroll event ever
+	// re-adjudicates it; fold collapses can then shrink the content below the
+	// viewport). The button additionally requires the LIVE geometry — the
+	// pane must actually be scrolled away from the bottom — synced on scroll
+	// events, content resizes and bottom pins.
+	const [scrolledAway, setScrolledAway] = useState(false);
+	const updateScrolledAway = useCallback((m: TimelineScrollMetrics): void => {
+		const away = !isAtBottom(m);
+		setScrolledAway(prev => (prev === away ? prev : away));
+	}, []);
+	const syncScrolledAwayFromDom = useCallback((): void => {
+		const sc = scrollerRef.current;
+		if (!sc) return;
+		updateScrolledAway({ scrollTop: sc.scrollTop, viewportHeight: sc.clientHeight, contentHeight: sc.scrollHeight });
+	}, [updateScrolledAway]);
 	// Back-to-bottom smooth scroll in flight: intermediate scroll events must
 	// not be adjudicated as user upscrolls (they'd cancel the animation's
 	// re-follow). Cleared on arrival (at bottom) or scrollend.
@@ -1331,6 +1388,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			programmaticScrollRef.current = true;
 			el.scrollTop = el.scrollHeight;
 			lastObservedScrollTopRef.current = el.scrollTop;
+			syncScrolledAwayFromDom();
 		}
 		// Open grace: a fresh session's first second is measurement chaos —
 		// fold derivation settles, rows measure in, the browser clamps
@@ -1349,6 +1407,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				programmaticScrollRef.current = true;
 				sc.scrollTop = sc.scrollHeight;
 				lastObservedScrollTopRef.current = sc.scrollTop;
+				syncScrolledAwayFromDom();
 			}
 		}, 1250);
 		return () => clearTimeout(graceTimer);
@@ -1594,6 +1653,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				viewportHeight: scroller.clientHeight,
 				contentHeight: scroller.scrollHeight,
 			};
+			updateScrolledAway(metrics);
 			// Back-to-bottom animation in flight: intermediate positions are
 			// programmatic, not user upscrolls. Keep ignoring until arrival
 			// (landing at the bottom re-arms follow) or the scrollend fallback.
@@ -1628,7 +1688,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			scroller.removeEventListener("scroll", onScroll);
 			scroller.removeEventListener("scrollend", onScrollEnd);
 		};
-	}, [setFollowing]);
+	}, [setFollowing, updateScrolledAway]);
 
 	// User scroll-intent capture (wheel/touch/keyboard). The intent exists
 	// one frame ahead of its scroll event; a content commit landing in that
@@ -1772,6 +1832,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			programmaticScrollRef.current = true;
 			el.scrollTop = el.scrollHeight;
 			lastObservedScrollTopRef.current = el.scrollTop;
+			syncScrolledAwayFromDom();
 		}
 	}, [followKey, entries, setFollowing]);
 
@@ -1790,6 +1851,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const content = rootRef.current;
 		if (!content) return;
 		const ro = new ResizeObserver(() => {
+			// Geometry first: a fold collapse while the user reads must drop the
+			// back-to-bottom button even when the pin below no-ops (!following).
+			syncScrolledAwayFromDom();
 			if (!followingRef.current) return;
 			// Belt & braces over the synchronous gesture release: never pin
 			// while a fresh away-from-bottom intent is pending (the reconcile
@@ -1800,6 +1864,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			programmaticScrollRef.current = true;
 			scroller.scrollTop = scroller.scrollHeight;
 			lastObservedScrollTopRef.current = scroller.scrollTop;
+			syncScrolledAwayFromDom();
 		});
 		ro.observe(content);
 		return () => {
@@ -2034,6 +2099,8 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							speaking={speakingId != null && speakingId === entry.id}
 							onStopSpeak={onStopSpeak}
 							retryTarget={retryTargets.get(entry.id) ?? null}
+							advisorOpen={advisorOpenIds.has(advisorKeyOf(entry))}
+							onToggleAdvisor={toggleAdvisorOpen}
 							renderTranscriptNode={renderTranscriptNode}
 						/>
 					)}
@@ -2220,9 +2287,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			{/* Back to bottom — sticky LAST child of .tr-root: its natural
 			    position is the content tail, so while the tail is below the
 			    viewport the sticky constraint pins the button to the pane
-			    bottom; near the tail it settles into flow (and is hidden —
-			    shouldShowBackToBottom is false while following). */}
-			{shouldShowBackToBottom(followingUi, entries.length) && (
+			    bottom; near the tail it settles into flow. Visibility needs
+			    BOTH the released intent AND live geometry (scrolledAway):
+			    intent alone lingers after fold collapses shrink the content
+			    below the viewport. */}
+			{shouldShowBackToBottom(followingUi, entries.length, scrolledAway) && (
 				<button
 					type="button"
 					className="tr-back-bottom"

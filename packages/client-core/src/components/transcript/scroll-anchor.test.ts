@@ -178,10 +178,15 @@ describe("scroll intent classifiers", () => {
 });
 
 describe("affordance helpers", () => {
-	test("back-to-bottom only when released and rows exist (UI pending review)", () => {
-		expect(shouldShowBackToBottom(false, 10)).toBe(true);
-		expect(shouldShowBackToBottom(true, 10)).toBe(false);
-		expect(shouldShowBackToBottom(false, 0)).toBe(false);
+	test("back-to-bottom needs released intent, rows AND a pane that can actually scroll away", () => {
+		// Geometry gate: a released intent with content that fits the viewport
+		// (or already sitting at the bottom) must NOT show the button — a
+		// wheel-up over a fitting pane releases intent without any scroll
+		// event ever re-adjudicating it (user: 折叠后按钮仍显示).
+		expect(shouldShowBackToBottom(false, 10, true)).toBe(true);
+		expect(shouldShowBackToBottom(true, 10, true)).toBe(false);
+		expect(shouldShowBackToBottom(false, 0, true)).toBe(false);
+		expect(shouldShowBackToBottom(false, 10, false)).toBe(false);
 	});
 
 	test("a fresh bind starts following (lands on the latest)", () => {

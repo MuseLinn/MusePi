@@ -737,10 +737,22 @@ export function TtsrBlock({ rules }: { rules: { name: string; description?: stri
 /** TUI createAdvisorMessageCard parity: batched advisor notes rendered as a
  *  distinct voice — severity-tinted rail + badge, blocker count in the meta,
  *  collapse past 3 notes. Reads `details.notes[]` (clean note text), NEVER the
- *  model-facing `<advisory>` content template. */
+ *  model-facing `<advisory>` content template.
+ *
+ *  The expansion state is CONTROLLED (keyed by the entry id at the transcript
+ *  level): transcript rows are virtualized, so the block unmounts once it
+ *  leaves the overscan window — component-local useState reset the manual
+ *  expansion when the row remounted (user: 展开顾问卡滚动离开再回来被折叠). */
 export type AdvisorNote = { note?: string; severity?: string; advisor?: string };
-export function AdvisorBlock({ notes }: { notes: AdvisorNote[] }): ReactNode {
-	const [open, setOpen] = useState(false);
+export function AdvisorBlock({
+	notes,
+	open,
+	onToggle,
+}: {
+	notes: AdvisorNote[];
+	open: boolean;
+	onToggle(): void;
+}): ReactNode {
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	useCollapseHeight(open, bodyRef);
 	const blockers = notes.filter(n => n.severity === "blocker").length;
@@ -748,7 +760,7 @@ export function AdvisorBlock({ notes }: { notes: AdvisorNote[] }): ReactNode {
 	const hidden = notes.length - shown.length;
 	return (
 		<div className="tr-advisor" role="status">
-			<button type="button" className="tr-advisor-head" onClick={() => setOpen(v => !v)} aria-expanded={open}>
+			<button type="button" className="tr-advisor-head" onClick={onToggle} aria-expanded={open}>
 				<span className="tr-advisor-tag">{t("advisor")}</span>
 				<span className="tr-advisor-meta">
 					{t("advisor notes", { count: notes.length })}
