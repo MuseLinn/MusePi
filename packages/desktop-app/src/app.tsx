@@ -11,6 +11,7 @@ import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
+import { CreationPanel } from "./components/CreationPanel";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -178,6 +179,62 @@ function ChatSurfaceShell({ leave, children }: { leave?: boolean; children: Reac
 					{children}
 				</div>
 			</div>
+		</div>
+	);
+}
+
+/** M3.2 创作面「保存为模板」toast（§3.4:保存入口放在创建成功 toast 上）。
+ *  底部居中玻璃胶囊:确认文案 + 保存动作 + 关闭;保存成功后短暂展示结果
+ *  再消失（app 级 8s 兜底计时器独立运行）。 */
+function CreationSavedToast({
+	saved,
+	rpc,
+	onDone,
+}: {
+	saved: { metadata: Record<string, unknown>; name: string } | null;
+	rpc: RpcClient | null;
+	onDone(): void;
+}): ReactNode {
+	const [state, setState] = useState<"idle" | "saving" | "done">("idle");
+	useEffect(() => {
+		setState("idle");
+	}, [saved]);
+	useEffect(() => {
+		if (state !== "done") return;
+		const timer = setTimeout(onDone, 1600);
+		return () => clearTimeout(timer);
+	}, [state, onDone]);
+	if (!saved) return null;
+	const save = (): void => {
+		if (state !== "idle") return;
+		setState("saving");
+		// 模板 tab 记录来源 tab:kind 与 CREATION_TEMPLATE_TABS 同域
+		// （live-artifact 落档为 prototype,rail 在 live-artifact 下同样可见）。
+		const kind = saved.metadata.kind;
+		const tab =
+			typeof kind === "string" && ["prototype", "deck", "media", "other"].includes(kind) ? kind : "prototype";
+		rpc?.request("creation.templates.save", {
+			tab,
+			...(saved.name ? { name: saved.name } : {}),
+			metadata: saved.metadata,
+		})
+			.then(() => setState("done"))
+			.catch(() => setState("idle"));
+	};
+	return (
+		<div className="gui-creation-saved" role="status">
+			<Icon name="check" className="gui-creation-saved-check" />
+			<span className="gui-creation-saved-text">{t("creation saved toast")}</span>
+			{state === "done" ? (
+				<span className="gui-creation-saved-done">{t("creation template saved")}</span>
+			) : (
+				<button type="button" className="gui-creation-saved-action" disabled={state === "saving"} onClick={save}>
+					{t("creation template save action")}
+				</button>
+			)}
+			<button type="button" className="gui-creation-saved-close" aria-label={t("creation close")} onClick={onDone}>
+				<Icon name="close" className="h-3.5 w-3.5" />
+			</button>
 		</div>
 	);
 }
@@ -803,6 +860,10 @@ function AppInner(): ReactNode {
 	const welcomeModeIdRef = useRef<string | null>(welcomeModeId);
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
+	// ── M3.2 创作面(design chip 触发,欢迎页全屏 overlay)──────────────────
+	const [creationOpen, setCreationOpen] = useState(false);
+	/** 创建成功后的「保存为模板」toast 载荷(§3.4:保存入口在成功 toast 上)。 */
+	const [creationSaved, setCreationSaved] = useState<{ metadata: Record<string, unknown>; name: string } | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
 	 *  resting preselect for new sessions. Kept SEPARATE from presetModelId:
 	 *  opening a session must not clobber the welcome default with that
@@ -1793,6 +1854,9 @@ function AppInner(): ReactNode {
 			/** Explicit modeId override (creation flows pass "creator"); falls
 			 * back to the welcome chip selection. */
 			modeId?: string | null;
+			/** M3.2 创作面 project metadata(§4 契约):随 create 一次落盘
+			 * (daemon 会话头权威 + .musepi/project.json 镜像)。 */
+			projectMetadata?: Record<string, unknown>;
 		}): Promise<string | null> => {
 			const client = rpcRef.current;
 			if (!client) return null;
@@ -1827,6 +1891,9 @@ function AppInner(): ReactNode {
 					...((opts?.modeId ?? welcomeModeIdRef.current)
 						? { modeId: opts?.modeId ?? welcomeModeIdRef.current }
 						: {}),
+					// 创作面板(M3.2)的 project metadata:形状/16KiB 校验在 daemon
+					// 侧,失败即语义报错走下方 fmtError 横幅。
+					...(opts?.projectMetadata ? { projectMetadata: opts.projectMetadata } : {}),
 				});
 				// Carry the welcome-composer model seed so the composer never
 				// flashes a stale model from a previous session while
@@ -1868,6 +1935,29 @@ function AppInner(): ReactNode {
 		setSelectedId(null);
 		selectedIdRef.current = null;
 	}, []);
+
+	// M3.2 创作面「创建」:以 design 预设 + project metadata 建会话。成功后
+	// 弹保存模板 toast(载荷 = 本次快照);失败时错误横幅已由 createSession
+	// 置好(daemon 的 16KiB 语义报错原样透出),面板保持打开供修正。
+	const submitCreationSession = useCallback(
+		async (metadata: Record<string, unknown>): Promise<boolean> => {
+			const id = await createSession({
+				cwd: project,
+				modeId: "design",
+				projectMetadata: metadata,
+			});
+			if (!id) return false;
+			setCreationSaved({ metadata, name: typeof metadata.name === "string" ? metadata.name : "" });
+			return true;
+		},
+		[createSession, project],
+	);
+	// 保存模板 toast 自动消失(8s;点保存/手动关闭提前清)。
+	useEffect(() => {
+		if (!creationSaved) return;
+		const timer = setTimeout(() => setCreationSaved(null), 8000);
+		return () => clearTimeout(timer);
+	}, [creationSaved]);
 
 	/** Remote workspace (ConnectDialog step 3): open a session rooted at the
 	 *  mounted remote directory. The mount path is an ordinary local path, so
@@ -3301,7 +3391,12 @@ function AppInner(): ReactNode {
 											presetModelId={presetModelId}
 											modes={welcomeModes}
 											modeId={welcomeModeId}
-											onModeChange={setWelcomeModeId}
+											onModeChange={id => {
+												setWelcomeModeId(id);
+												// M3.2:选中 design 预设即展开创作面板(欢迎页
+												// 全屏 overlay,§3.0);creator 辅助入口归 3.6。
+												if (id === "design") setCreationOpen(true);
+											}}
 											defaultModelId={defaultModelId}
 											presetThinkingLevel={presetThinkingLevel}
 											busy={status === "connecting"}
@@ -3524,6 +3619,20 @@ function AppInner(): ReactNode {
 				rpc={rpc}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
 			/>
+			{/* M3.2 六 tab 创作面板:常驻挂载由 open 驱动(退场动画与草稿
+			 * 回填都依赖不卸载);收起回到欢迎页空态(mode 复位 work,§3.0)。 */}
+			<CreationPanel
+				open={creationOpen}
+				onClose={() => {
+					setCreationOpen(false);
+					setWelcomeModeId("work");
+				}}
+				rpc={rpc}
+				project={project}
+				onPickProject={pickProjectFolder}
+				onSubmit={submitCreationSession}
+			/>
+			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />
 			<CollabDialog
 				rpc={rpc}
 				sessionId={store?.sessionId ?? null}

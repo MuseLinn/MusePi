@@ -3,6 +3,7 @@ import { collab } from "./collab.js";
 import { companion } from "./companion.js";
 import { composer } from "./composer.js";
 import { context } from "./context.js";
+import { creation } from "./creation.js";
 import { general } from "./general.js";
 import { guest } from "./guest.js";
 import { reward } from "./reward.js";
@@ -35,6 +36,7 @@ export const enUS = {
 	...guest,
 	...reward,
 	...update,
+	...creation,
 } as const;
 
 // Module-load duplicate guard (mirror of zh-CN/index.ts).
@@ -54,6 +56,7 @@ export const enUS = {
 		guest,
 		reward,
 		update,
+		creation,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {

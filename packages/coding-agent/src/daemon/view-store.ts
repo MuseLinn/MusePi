@@ -38,6 +38,10 @@ export interface MaterializedRow {
 	 *  live 会话在 knownSessions 里以内存值为权威覆盖。侧栏悬浮卡的
 	 *  模式行消费；null = 未设预设。 */
 	modeId: string | null;
+	/** M3.2 创作面 project metadata — 持久化自快照 header（创建路径
+	 *  persistHeaderPatch 落盘），保留语义与 modeId 相同（视图重建不携带，
+	 *  依赖本列回注）。null = 非创作会话。 */
+	projectMetadata: Record<string, unknown> | null;
 }
 
 export interface MessageHit {
@@ -59,6 +63,7 @@ interface SessionRow {
 	message_count: number;
 	parent_id: string | null;
 	mode_id: string | null;
+	project_metadata: string | null;
 }
 
 interface MessageRow {
@@ -125,6 +130,11 @@ export class ViewStore {
 		if (!cols.some(c => c.name === "mode_id")) {
 			this.#db.run("ALTER TABLE sessions ADD COLUMN mode_id TEXT");
 		}
+		// Old databases lack project_metadata (M3.2 creation-surface metadata,
+		// stored as its serialized JSON from the snapshot header).
+		if (!cols.some(c => c.name === "project_metadata")) {
+			this.#db.run("ALTER TABLE sessions ADD COLUMN project_metadata TEXT");
+		}
 		this.#db.run(`
 			CREATE TABLE IF NOT EXISTS messages (
 				session_id TEXT NOT NULL,
@@ -172,13 +182,43 @@ export class ViewStore {
 				| undefined;
 			modeId = prev?.mode_id ?? null;
 		}
-		// Keep the preset riding the stored snapshot header too (when non-null),
-		// so the reactivation path (adopt) can read persisted.header.modeId back
-		// into live.modeId after a restart — not just the query column.
+		// M3.2 project metadata: same preservation contract as modeId — the
+		// view projection never carries it; only persistHeaderPatch (the
+		// create path) writes it explicitly. Streaming/idle/compaction
+		// persists replay the snapshot header WITHOUT the key, so re-inject
+		// the previously-persisted value or the creation config would be
+		// dropped on the first agent event.
+		let projectMetadata: Record<string, unknown> | null = null;
+		if ("projectMetadata" in headerObj) {
+			// Explicit key wins, including null / non-object to CLEAR.
+			const v = headerObj.projectMetadata;
+			if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+				projectMetadata = v as Record<string, unknown>;
+			}
+		} else {
+			const prev = this.#db.query("SELECT project_metadata FROM sessions WHERE session_id = ?").get(sessionId) as
+				| { project_metadata: string | null }
+				| undefined;
+			if (prev?.project_metadata) {
+				try {
+					const parsed = JSON.parse(prev.project_metadata) as unknown;
+					if (typeof parsed === "object" && parsed !== null) projectMetadata = parsed as Record<string, unknown>;
+				} catch {
+					// Corrupt column value — treat as absent, next explicit write repairs it.
+				}
+			}
+		}
+		// Keep the preset / creation metadata riding the stored snapshot header
+		// too (when the incoming header lacks the key), so the reactivation
+		// path (adopt) can read persisted.header.<key> back after a restart —
+		// not just the query columns.
+		const headerPatch: Record<string, unknown> = {};
+		if (!headerHasModeId && modeId != null) headerPatch.modeId = modeId;
+		if (!("projectMetadata" in headerObj) && projectMetadata) headerPatch.projectMetadata = projectMetadata;
 		const snapshotToStore: SessionSnapshot =
-			headerHasModeId || modeId == null
-				? snapshot
-				: ({ ...snapshot, header: { ...headerObj, modeId } } as SessionSnapshot);
+			Object.keys(headerPatch).length > 0
+				? ({ ...snapshot, header: { ...headerObj, ...headerPatch } } as unknown as SessionSnapshot)
+				: snapshot;
 		this.#db.transaction(() => {
 			this.#db
 				.query(
@@ -227,16 +267,17 @@ export class ViewStore {
 			}
 			this.#db
 				.query(
-					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id, mode_id)
-					 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-					 ON CONFLICT(session_id) DO UPDATE SET
-					   cursor = excluded.cursor,
-					   updated_at = excluded.updated_at,
-					   cwd = excluded.cwd,
-					   model = excluded.model,
-					   message_count = excluded.message_count,
-					   parent_id = excluded.parent_id,
-					   mode_id = excluded.mode_id`,
+					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id, mode_id, project_metadata)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 ON CONFLICT(session_id) DO UPDATE SET
+				   cursor = excluded.cursor,
+				   updated_at = excluded.updated_at,
+				   cwd = excluded.cwd,
+				   model = excluded.model,
+				   message_count = excluded.message_count,
+				   parent_id = excluded.parent_id,
+				   mode_id = excluded.mode_id,
+				   project_metadata = excluded.project_metadata`,
 				)
 				.run(
 					sessionId,
@@ -252,6 +293,9 @@ export class ViewStore {
 					// persists never clobber a setMode'd mode (persistHeaderPatch is
 					// the only explicit writer). null = no preset armed.
 					modeId,
+					// M3.2 creation metadata — same preservation contract (see the
+					// headerPatch assembly above). null = not a creation session.
+					projectMetadata ? JSON.stringify(projectMetadata) : null,
 				);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
@@ -305,17 +349,31 @@ export class ViewStore {
 	/** All sessions with queryable metadata — feeds session.list. */
 	list(): MaterializedRow[] {
 		const rows = this.#db.query("SELECT * FROM sessions ORDER BY updated_at DESC").all() as SessionRow[];
-		return rows.map(r => ({
-			sessionId: r.session_id,
-			cursor: r.cursor,
-			updatedAt: r.updated_at,
-			createdAt: r.created_at,
-			cwd: r.cwd,
-			model: r.model,
-			messageCount: r.message_count,
-			parentId: r.parent_id ?? null,
-			modeId: r.mode_id ?? null,
-		}));
+		return rows.map(r => {
+			let projectMetadata: Record<string, unknown> | null = null;
+			if (r.project_metadata) {
+				try {
+					const parsed = JSON.parse(r.project_metadata) as unknown;
+					if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+						projectMetadata = parsed as Record<string, unknown>;
+					}
+				} catch {
+					// Corrupt column value — surface as absent rather than failing the list.
+				}
+			}
+			return {
+				sessionId: r.session_id,
+				cursor: r.cursor,
+				updatedAt: r.updated_at,
+				createdAt: r.created_at,
+				cwd: r.cwd,
+				model: r.model,
+				messageCount: r.message_count,
+				parentId: r.parent_id ?? null,
+				modeId: r.mode_id ?? null,
+				projectMetadata,
+			};
+		});
 	}
 
 	/**

@@ -6,6 +6,7 @@ import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
+import { CreationService } from "./creation-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
@@ -63,6 +64,8 @@ function buildRegistry(): HostServices {
 	const store = new ViewStore(join(mkdtempSync(join(tmpdir(), "musepi-views-")), "views.db"));
 	services.register(new ViewStoreService(store));
 	services.register(new BoardService());
+	// CreationService 只认领路由（本测试不触盘），session 头查找 stub 掉。
+	services.register(new CreationService({ loadHeader: () => null }));
 	services.register(
 		new FileService({
 			fallbackCwd: () => undefined,

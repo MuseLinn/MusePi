@@ -54,6 +54,7 @@ import type { CollabToolHandle } from "../tools/collab";
 import { previewLine, TRUNCATE_LENGTHS } from "../tools/render-utils";
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import { nextActionableTask, type TodoPhase } from "../tools/todo";
+import { validateProjectMetadata, writeProjectMirror } from "./creation";
 import { createExtensionManagerTools } from "./extension-lifecycle-tools";
 import { createExtensionRuntimeTools, RuntimeToolRegistry } from "./extension-runtime-tools";
 import { pauseSidecarPath, readPauseSidecar, writePauseSidecar } from "./pause-sidecar";
@@ -1356,7 +1357,16 @@ export class DaemonSessionHost {
 		thinkingLevel?: ConfiguredThinkingLevel;
 		/** 会话预设(mode)id:v1 创建时应用(白名单/提示词/settings;docs/archive/modes-plan.md)。 */
 		modeId?: string;
+		/** M3.2 创作面 project metadata(§4 契约):daemon 会话头为权威
+		 *  (persistHeaderPatch 落 view-store 快照头),并镜像写
+		 *  `<cwd>/.musepi/project.json`。超 16KiB / 缺 version 在此拒绝。 */
+		projectMetadata?: Record<string, unknown>;
 	}): Promise<{ sessionId: string }> {
+		// Reject invalid creation metadata BEFORE the (seconds-long) session
+		// bootstrap: the RPC must fail fast with the semantic message, not
+		// burn a full agent spin-up and then unwind.
+		const projectMetadata =
+			params.projectMetadata === undefined ? null : validateProjectMetadata(params.projectMetadata);
 		const cwd = path.resolve(params.cwd ?? this.#options.cwd ?? process.cwd());
 		const parentId = params.forkOf && this.#sessions.has(params.forkOf) ? params.forkOf : null;
 		// Lazy import keeps daemon startup cheap; createAgentSession owns the
@@ -1427,6 +1437,15 @@ export class DaemonSessionHost {
 		if (params.modeId) {
 			live.modeId = params.modeId;
 			this.persistHeaderPatch(live.sessionId, { modeId: params.modeId });
+		}
+		// M3.2 双写:daemon 会话头(权威,经 view-store 列+快照头保留语义) +
+		// `<cwd>/.musepi/project.json` 镜像(恢复/分享/artifact-scan 关联源)。
+		// 镜像写失败不阻断创建——权威侧已落盘,镜像属于尽力而为。
+		if (projectMetadata) {
+			this.persistHeaderPatch(live.sessionId, { projectMetadata });
+			writeProjectMirror(cwd, projectMetadata).catch(error => {
+				logger.warn("project metadata mirror write failed", { cwd, error: String(error) });
+			});
 		}
 		return { sessionId: live.sessionId };
 	}
@@ -2106,11 +2125,27 @@ export class DaemonSessionHost {
 	 */
 	persistHeaderPatch(
 		sessionId: string,
-		patch: { model?: string; thinkingLevel?: string; modeId?: string | null },
+		patch: {
+			model?: string;
+			thinkingLevel?: string;
+			modeId?: string | null;
+			projectMetadata?: Record<string, unknown> | null;
+		},
 	): boolean {
 		const persisted = this.#store.load(sessionId);
 		if (!persisted) return false;
-		persisted.header = { ...persisted.header, ...patch };
+		const { projectMetadata, ...rest } = patch;
+		persisted.header = { ...persisted.header, ...rest };
+		// wire SessionHeader has no null member for projectMetadata, but the
+		// store's "explicit key wins" contract needs the key PRESENT to clear —
+		// write null through a Record escape.
+		if (projectMetadata !== undefined) {
+			if (projectMetadata === null) {
+				(persisted.header as unknown as Record<string, unknown>).projectMetadata = null;
+			} else {
+				persisted.header.projectMetadata = projectMetadata;
+			}
+		}
 		this.#store.upsert(sessionId, persisted);
 		return true;
 	}
@@ -2616,6 +2651,8 @@ export class DaemonSessionHost {
 				parentId: h.parentSessionPath
 					? path.basename(h.parentSessionPath, ".jsonl").split("_").slice(1).join("_") || null
 					: null,
+				// CLI-authored transcripts carry no M3.2 creation metadata.
+				projectMetadata: null,
 				// Title = the persisted title slot (auto-generated or /rename)
 				// when present; SDK-transcript fallback is the first user
 				// message. listAllSessions reads the slot now.
