@@ -1840,6 +1840,30 @@
 	}
 }
 
+/* Drag-sort (Kimi desktop parity): the chip itself is the drag surface —
+ * the pointer activation constraint (distance 8, in composer-frame) keeps
+ * the thumbnail's preview click click-y while a real drag lifts the chip
+ * above its siblings. Sibling shift transitions ride dnd-kit's transform
+ * transition, tuned to the shared spring token in the component; the
+ * dragged chip itself gets no transition (dnd-kit omits it while dragging).
+ * gui-motion-off / prefers-reduced-motion zero the transform transition
+ * entirely (transition is inline-styled, hence !important). */
+.gui-attach-chip--dragging {
+	z-index: 10;
+	opacity: 0.85;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.gui-motion-off .gui-attach-chip {
+	transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.gui-attach-chip {
+		transition: none !important;
+	}
+}
+
 .gui-attach-x {
 	position: absolute;
 	top: 2px;

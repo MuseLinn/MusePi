@@ -1,3 +1,7 @@
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+import { closestCenter, DndContext, PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { ImageLightbox, t } from "@musepi/client-core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BorderBeam } from "../vendor/border-beam";
@@ -61,6 +65,119 @@ function attachSizeLabel(bytes: number | undefined): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** One attachment chip as the frame renders it (a structural subset of both
+ *  composers' full chip types — the hosts keep the raw File handles etc.). */
+export interface ComposerFrameAttachment {
+	id: number;
+	kind?: "image" | "file";
+	dataUrl: string;
+	mimeType: string;
+	name: string;
+	size?: number;
+	/** Send-time upload in flight → progress ring overlay (file chips). */
+	uploading?: boolean;
+	/** Board-drawn chip: click reopens the sketch canvas for editing. */
+	sketch?: boolean;
+}
+
+/**
+ * One drag-sortable attachment chip (Kimi desktop parity: the chips drag to
+ * reorder; chip order is the send order).
+ *
+ * Drag surface = the whole chip, with dnd-kit's distance-8 pointer
+ * constraint keeping plain clicks click-y (surface-tabs precedent) — the
+ * thumbnail's preview click, the @ mention button and the X remove button
+ * all still receive their clicks; a drag that DID activate suppresses the
+ * click that follows pointerup via the row's capture-phase guard, so a drag
+ * ending on a thumbnail never pops the lightbox. The drag pointer handling
+ * lives on the wrapper while the interactive children keep their own
+ * semantics — unlike surface-tabs there is no role/tabIndex on the wrapper
+ * (no keyboard sort exists in this repo to align with, and a role=button
+ * wrapping real buttons would be a nested-interactive lie).
+ *
+ * The shift transition (dnd-kit's `transition` option) uses the shared
+ * spring token; gui-motion-off / prefers-reduced-motion zero it in CSS.
+ */
+function SortableAttachmentChip({
+	a,
+	mentionLabel,
+	onRemove,
+	onMention,
+	onEditSketch,
+	onPreview,
+}: {
+	a: ComposerFrameAttachment;
+	mentionLabel: string;
+	onRemove(id: number): void;
+	onMention?(id: number): void;
+	onEditSketch(id: number): void;
+	onPreview(id: number, el: HTMLElement): void;
+}): ReactNode {
+	const { setNodeRef, transform, transition, isDragging } = useSortable({
+		id: a.id,
+		transition: { duration: 200, easing: "var(--spring-snappy)" },
+	});
+	const isFile = a.kind === "file";
+	return (
+		<div
+			ref={setNodeRef}
+			className={`gui-attach-chip${isFile ? " gui-attach-chip--file" : ""}${
+				a.uploading ? " gui-attach-chip--uploading" : ""
+			}${a.sketch && !isFile ? " gui-attach-chip--sketch" : ""}${isDragging ? " gui-attach-chip--dragging" : ""}`}
+			style={{ transform: CSS.Translate.toString(transform), transition }}
+			title={isFile ? `${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}` : undefined}
+		>
+			{isFile ? (
+				<>
+					<span className="gui-attach-file-icon">
+						<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
+					</span>
+					<span className="gui-attach-file-name">{a.name}</span>
+					{a.uploading && <span className="gui-attach-ring" aria-hidden />}
+				</>
+			) : (
+				<img
+					src={a.dataUrl}
+					alt={a.name}
+					className="gui-attach-thumb"
+					role="button"
+					tabIndex={0}
+					// Close-time re-measure anchor for the lightbox morph.
+					data-attach-id={a.id}
+					title={a.sketch ? t("sketch") : t("preview image")}
+					onClick={e => (a.sketch ? onEditSketch(a.id) : onPreview(a.id, e.currentTarget))}
+					onKeyDown={e => {
+						if (e.key === "Enter" || e.key === " ") {
+							e.preventDefault();
+							if (a.sketch) onEditSketch(a.id);
+							else onPreview(a.id, e.currentTarget);
+						}
+					}}
+				/>
+			)}
+			{onMention && (
+				<button
+					type="button"
+					className="gui-attach-mention"
+					aria-label={mentionLabel}
+					title={mentionLabel}
+					onClick={() => onMention(a.id)}
+				>
+					@
+				</button>
+			)}
+			<button
+				type="button"
+				className="gui-attach-x"
+				aria-label={t("remove attachment")}
+				onClick={() => onRemove(a.id)}
+			>
+				<Icon name="close" className="h-3 w-3" />
+			</button>
+		</div>
+	);
 }
 
 /**
@@ -186,6 +303,7 @@ export function ComposerFrame({
 	onEditSketch,
 	onEditImage,
 	onMentionAttachment,
+	onReorderAttachments,
 	onAddAttachment,
 	onAnnotated,
 	aboveRow,
@@ -201,18 +319,7 @@ export function ComposerFrame({
 	className?: string;
 	/** Textarea + any floating menus the composer needs (absolute). */
 	children: ReactNode;
-	attachments: {
-		id: number;
-		kind?: "image" | "file";
-		dataUrl: string;
-		mimeType: string;
-		name: string;
-		size?: number;
-		/** Send-time upload in flight → progress ring overlay (file chips). */
-		uploading?: boolean;
-		/** Board-drawn chip: click reopens the sketch canvas for editing. */
-		sketch?: boolean;
-	}[];
+	attachments: ComposerFrameAttachment[];
 	onRemoveAttachment(id: number): void;
 	/** Board-drawn chip clicked: reopen the sketch board for editing (Codex
 	 *  parity — clicking the drawn image falls back into the canvas).
@@ -230,6 +337,14 @@ export function ComposerFrame({
 	 *  token for that attachment into the composer text at the caret. The
 	 *  host owns the textarea; the frame only owns the button. */
 	onMentionAttachment?(id: number): void;
+	/** Drag-reorder (Kimi desktop parity): chip `fromId` was dropped onto
+	 *  chip `toId`. The host applies the move to its attachments state —
+	 *  chip order is the send order (images ride the wire images channel in
+	 *  array order, file chips upload/reference in array order), and the
+	 *  mention numbering (@图片N/@文件N) re-derives from the new order on
+	 *  the next render. Tokens already in the text match by NAME (not
+	 *  number), so they survive a reorder untouched. */
+	onReorderAttachments?(fromId: number, toId: number): void;
 	/** Render the trailing "+" card in the attachment row (opens the
 	 *  all-types picker). Omitted on scenes without attachment intake. */
 	onAddAttachment?(): void;
@@ -293,6 +408,33 @@ export function ComposerFrame({
 				originRect: el?.isConnected ? el.getBoundingClientRect() : null,
 			};
 		});
+	// Drag-sort (Kimi desktop parity): same sensor tuning as surface-tabs —
+	// distance 8 keeps clicks click-y, the touch long-press delay keeps
+	// scrolling scrolling. rectSortingStrategy because the chip row is a
+	// wrapping flex line (grid geometry, not a single axis).
+	const sensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+	);
+	// A drag that activated swallows the click that follows pointerup:
+	// without this guard a drag ending on a thumbnail would fire its onClick
+	// and pop the lightbox (Kimi's consumeClick pattern). Set on drag start,
+	// cleared one macrotask after drag end — the click event lands in
+	// between and gets eaten by the row's capture-phase onClick.
+	const dragGuard = useRef(false);
+	const onDragStart = (_e: DragStartEvent): void => {
+		dragGuard.current = true;
+	};
+	const onDragEnd = (e: DragEndEvent): void => {
+		window.setTimeout(() => {
+			dragGuard.current = false;
+		}, 0);
+		if (!onReorderAttachments || !e.over) return;
+		const fromId = Number(e.active.id);
+		const toId = Number(e.over.id);
+		if (fromId === toId) return;
+		onReorderAttachments(fromId, toId);
+	};
 	const frame = (
 		<div
 			className={`${className} gui-composer-frame`}
@@ -312,94 +454,50 @@ export function ComposerFrame({
 			 * already owns "+ add"). Show the row only when it has chips, and
 			 * the trailing "+" only once there are chips to append to. */}
 			{attachments.length > 0 && (
-				<div className="gui-attach-row px-4 pb-2">
-					{(() => {
-						// Mention numbering (Kimi parity): images count 图片 1..n in
-						// chip order, files count 文件 1..n independently.
-						let imageNo = 0;
-						let fileNo = 0;
-						return attachments.map(a => {
-							const no = a.kind === "file" ? ++fileNo : ++imageNo;
-							const mentionLabel = t(a.kind === "file" ? "mention file {n}" : "mention image {n}", {
-								n: String(no),
-							});
-							return a.kind === "file" ? (
-								// File card: extension icon + truncated name (screenshot
-								// parity), X top-right, progress ring while the send-time
-								// fs.write upload is in flight.
-								<div
-									key={a.id}
-									className={`gui-attach-chip gui-attach-chip--file${a.uploading ? " gui-attach-chip--uploading" : ""}`}
-									title={`${a.name}${attachSizeLabel(a.size) ? ` · ${attachSizeLabel(a.size)}` : ""}`}
-								>
-									<span className="gui-attach-file-icon">
-										<Icon name={fileIconFor(a.name)} className="h-5 w-5" />
-									</span>
-									<span className="gui-attach-file-name">{a.name}</span>
-									{a.uploading && <span className="gui-attach-ring" aria-hidden />}
-									{onMentionAttachment && (
-										<button
-											type="button"
-											className="gui-attach-mention"
-											aria-label={mentionLabel}
-											title={mentionLabel}
-											onClick={() => onMentionAttachment(a.id)}
-										>
-											@
-										</button>
-									)}
-									<button
-										type="button"
-										className="gui-attach-x"
-										aria-label={t("remove attachment")}
-										onClick={() => onRemoveAttachment(a.id)}
-									>
-										<Icon name="close" className="h-3 w-3" />
-									</button>
-								</div>
-							) : (
-								<div key={a.id} className={`gui-attach-chip${a.sketch ? " gui-attach-chip--sketch" : ""}`}>
-									<img
-										src={a.dataUrl}
-										alt={a.name}
-										className="gui-attach-thumb"
-										role="button"
-										tabIndex={0}
-										// Close-time re-measure anchor for the lightbox morph.
-										data-attach-id={a.id}
-										title={a.sketch ? t("sketch") : t("preview image")}
-										onClick={e => (a.sketch ? onEditSketch(a.id) : openPreview(a.id, e.currentTarget))}
-										onKeyDown={e => {
-											if (e.key === "Enter" || e.key === " ") {
-												e.preventDefault();
-												if (a.sketch) onEditSketch(a.id);
-												else openPreview(a.id, e.currentTarget);
-											}
-										}}
-									/>
-									{onMentionAttachment && (
-										<button
-											type="button"
-											className="gui-attach-mention"
-											aria-label={mentionLabel}
-											title={mentionLabel}
-											onClick={() => onMentionAttachment(a.id)}
-										>
-											@
-										</button>
-									)}
-									<button
-										type="button"
-										className="gui-attach-x"
-										aria-label={t("remove attachment")}
-										onClick={() => onRemoveAttachment(a.id)}
-									>
-										<Icon name="close" className="h-3 w-3" />
-									</button>
-								</div>
-							);
-						});
-					})()}
+				<div
+					className="gui-attach-row px-4 pb-2"
+					// Capture-phase click guard: a drag that activated eats the
+					// click its pointerup produces (see dragGuard above).
+					onClickCapture={e => {
+						if (!dragGuard.current) return;
+						e.preventDefault();
+						e.stopPropagation();
+					}}
+				>
+					<DndContext
+						sensors={sensors}
+						collisionDetection={closestCenter}
+						onDragStart={onDragStart}
+						onDragEnd={onDragEnd}
+					>
+						<SortableContext items={attachments.map(a => a.id)} strategy={rectSortingStrategy}>
+							{(() => {
+								// Mention numbering (Kimi parity): images count 图片 1..n in
+								// chip order, files count 文件 1..n independently — the
+								// numbering re-derives from the array on every render, so
+								// a drag-reorder renumbers the labels for free.
+								let imageNo = 0;
+								let fileNo = 0;
+								return attachments.map(a => {
+									const no = a.kind === "file" ? ++fileNo : ++imageNo;
+									const mentionLabel = t(a.kind === "file" ? "mention file {n}" : "mention image {n}", {
+										n: String(no),
+									});
+									return (
+										<SortableAttachmentChip
+											key={a.id}
+											a={a}
+											mentionLabel={mentionLabel}
+											onRemove={onRemoveAttachment}
+											onMention={onMentionAttachment}
+											onEditSketch={onEditSketch}
+											onPreview={openPreview}
+										/>
+									);
+								});
+							})()}
+						</SortableContext>
+					</DndContext>
 					{onAddAttachment && (
 						<button
 							type="button"

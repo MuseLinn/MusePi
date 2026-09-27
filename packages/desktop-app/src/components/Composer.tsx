@@ -60,10 +60,13 @@ import type {
 } from "./composer/usage-panel";
 import { fmtQuotaDuration, UsagePanelCard } from "./composer/usage-panel";
 import {
+	attachmentFileChips,
+	attachmentImageParts,
 	attachmentsFromWireImages,
 	dataUrlToFile,
 	markSketchChip,
 	nextSketchFileName,
+	reorderAttachmentChips,
 	uploadAttachmentFiles,
 	useAttachments,
 } from "./composer/use-attachments";
@@ -1249,14 +1252,10 @@ export function Composer({
 	const startGuidedGoal = useCallback(
 		(objective: string): void => {
 			if (!rpc || !sessionId) return;
-			const imageParts = attachments
-				.filter(a => a.kind !== "file")
-				.map(a => ({
-					type: "image" as const,
-					data: a.dataUrl.split(",")[1] ?? "",
-					mimeType: a.mimeType,
-				}));
-			const fileChips = attachments.filter(a => a.kind === "file");
+			// Chip order IS the send order (drag-reorder moves chips in the
+			// state array; these projections follow it).
+			const imageParts = attachmentImageParts(attachments);
+			const fileChips = attachmentFileChips(attachments);
 			const quotePrefix =
 				quotes.length > 0 ? `${quotes.map(q => `> ${q.split("\n").join("\n> ")}`).join("\n\n")}\n\n` : "";
 			const baseObjective = `${quotePrefix}${expandMentionTokens(objective, attachments)}`.trim();
@@ -1445,14 +1444,10 @@ export function Composer({
 			// Record the submitted prompt in the recall ring (TUI history
 			// parity): the exact message that lands on the wire, so ArrowUp
 			// recovers it verbatim. Consecutive repeats are deduped.
-			const imageParts = attachments
-				.filter(a => a.kind !== "file")
-				.map(a => ({
-					type: "image" as const,
-					data: a.dataUrl.split(",")[1] ?? "",
-					mimeType: a.mimeType,
-				}));
-			const fileChips = attachments.filter(a => a.kind === "file");
+			// Chip order IS the send order (drag-reorder moves chips in the
+			// state array; these projections follow it).
+			const imageParts = attachmentImageParts(attachments);
+			const fileChips = attachmentFileChips(attachments);
 			// Shared send tail: everything after the wire send (quote cards
 			// clear, queue chip refresh, composer reset) — both the plain
 			// path and the file-upload path run this once.
@@ -1887,6 +1882,7 @@ export function Composer({
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
 				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+				onReorderAttachments={(fromId, toId) => setAttachments(prev => reorderAttachmentChips(prev, fromId, toId))}
 				onMentionAttachment={id => {
 					// Kimi parity: insert a mention token at the caret (the
 					// trailing space also closes the @ completion panel — its

@@ -1,3 +1,4 @@
+import { arrayMove } from "@dnd-kit/sortable";
 import type { ClipboardEvent, DragEvent } from "react";
 import { useState } from "react";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../../lib/image-resize";
@@ -243,6 +244,49 @@ export function markSketchChip<T extends { kind: "image" | "file"; name: string 
 	return chips.map(c =>
 		c.kind !== "file" && c.name === fileName ? { ...c, sketch: true, ...(scene ? { sketchScene: scene } : {}) } : c,
 	);
+}
+
+/** Wire image parts for the staged chips, IN CHIP ORDER — the chip array's
+ *  order IS the send order (drag-reorder works by moving chips in the state
+ *  array; every send path projects the wire shape from it). The payload is
+ *  the bare base64 (no data-URL prefix). One shared implementation for both
+ *  composers: the session and welcome sends used to inline drifted copies
+ *  of this filter/map (the welcome one guarded against an empty dataUrl,
+ *  the session one didn't). */
+export function attachmentImageParts(
+	attachments: readonly { kind: "image" | "file"; dataUrl: string; mimeType: string }[],
+): { type: "image"; data: string; mimeType: string }[] {
+	return attachments
+		.filter(a => a.kind !== "file" && a.dataUrl)
+		.map(a => ({ type: "image" as const, data: a.dataUrl.split(",")[1] ?? "", mimeType: a.mimeType }));
+}
+
+/** Non-image chips in chip order — the `uploadAttachmentFiles` input. */
+export function attachmentFileChips<T extends { kind: "image" | "file" }>(attachments: readonly T[]): T[] {
+	return attachments.filter(a => a.kind === "file");
+}
+
+/** Raw file handles for non-image chips, in chip order (the welcome
+ *  submit's `files` list; the session composer uploads via fs.write). */
+export function attachmentFiles(attachments: readonly { kind: "image" | "file"; file?: File }[]): File[] {
+	return attachmentFileChips(attachments)
+		.map(a => a.file)
+		.filter((f): f is File => f !== undefined);
+}
+
+/** Drag-reorder (Kimi desktop parity): move chip `fromId` to the position of
+ *  `toId`, everything else shifting by one. No-op (reference-stable) when
+ *  either id is unknown or both are equal — the dnd-kit drag-end already
+ *  filters same-target drops, this keeps the state layer honest too. */
+export function reorderAttachmentChips<T extends { id: number }>(
+	chips: readonly T[],
+	fromId: number,
+	toId: number,
+): T[] {
+	const from = chips.findIndex(c => c.id === fromId);
+	const to = chips.findIndex(c => c.id === toId);
+	if (from === -1 || to === -1 || from === to) return chips as T[];
+	return arrayMove(chips as T[], from, to);
 }
 
 /** Draft-stash size ceiling for the chip payload, scenes included. The chips

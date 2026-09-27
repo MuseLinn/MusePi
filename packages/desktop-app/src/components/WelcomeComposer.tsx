@@ -52,7 +52,14 @@ import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
 import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
 import { TemplateRail } from "./composer/template-rail";
-import { dataUrlToFile, markSketchChip, nextSketchFileName } from "./composer/use-attachments";
+import {
+	attachmentFiles,
+	attachmentImageParts,
+	dataUrlToFile,
+	markSketchChip,
+	nextSketchFileName,
+	reorderAttachmentChips,
+} from "./composer/use-attachments";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
 import { isLongPastedText, useLongTextPaste } from "./composer/use-long-text-paste";
@@ -1230,14 +1237,10 @@ export function WelcomeComposer({
 				.submit(payload, {
 					thinkingLevel: thinking,
 					modelId: modelTouched.current ? modelId : effectiveModelId,
-					images: prevAttachments
-						.filter(a => a.kind !== "file" && a.dataUrl)
-						.map(a => ({
-							type: "image" as const,
-							data: a.dataUrl.split(",")[1] ?? "",
-							mimeType: a.mimeType,
-						})),
-					files: prevAttachments.map(a => a.file).filter((f): f is File => f !== undefined),
+					// Chip order IS the send order (drag-reorder moves chips in
+					// the state array; these projections follow it).
+					images: attachmentImageParts(prevAttachments),
+					files: attachmentFiles(prevAttachments),
 				})
 				.then(ok => {
 					if (!ok) {
@@ -1266,17 +1269,13 @@ export function WelcomeComposer({
 			// session.create forwards it as modelPattern, which resolves exactly
 			// via the daemon's provider reference match — no bare-id ambiguity.
 			modelId: modelTouched.current ? modelId : effectiveModelId,
-			images: attachments
-				.filter(a => a.kind !== "file" && a.dataUrl)
-				.map(a => ({
-					type: "image" as const,
-					data: a.dataUrl.split(",")[1] ?? "",
-					mimeType: a.mimeType,
-				})),
+			// Chip order IS the send order (drag-reorder moves chips in the
+			// state array; these projections follow it).
+			images: attachmentImageParts(attachments),
 			// Non-image chips (the attach menu's file entry). The host owns the
 			// workspace decision: it writes these into the session it creates,
 			// or asks for a project when there is none.
-			files: attachments.map(a => a.file).filter((f): f is File => f !== undefined),
+			files: attachmentFiles(attachments),
 			planMode: planArmed,
 			goalMode: applyGoal,
 		});
@@ -1704,6 +1703,9 @@ export function WelcomeComposer({
 							}
 							attachments={attachments}
 							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
+							onReorderAttachments={(fromId, toId) =>
+								setAttachments(prev => reorderAttachmentChips(prev, fromId, toId))
+							}
 							onMentionAttachment={id => {
 								const a = attachments.find(x => x.id === id);
 								const ta = taRef.current;
