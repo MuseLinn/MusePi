@@ -803,12 +803,18 @@ function setPetBounds(win, rect) {
 	return true;
 }
 
-/** Move the pet window, preserving its current size. Position-only callers go
- *  through the same reconciliation choke point as the rect callers. */
+/** Move the pet window. The size is pinned to PET_WINDOW_SIZE rather than
+ *  read back from the live rect: the pet window has been a fixed 320×290
+ *  box since the bubbles split, and on machines where the read side
+ *  (getBounds) and the write side (setBounds) disagree on the coordinate
+ *  space (the RDP/per-monitor-DPI cases calibrateDragSpace measures for
+ *  positions), echoing the read-back size into the next write ratchets the
+ *  window bigger every drag frame — the sprite, anchored to the window
+ *  bottom, then drifts off the cursor. Writing the canonical size each
+ *  frame makes the drag self-healing instead. */
 function setPetPosition(x, y) {
 	if (!petWindow || petWindow.isDestroyed()) return false;
-	const b = petWindow.getBounds();
-	return setPetBounds(petWindow, { x, y, width: b.width, height: b.height });
+	return setPetBounds(petWindow, { x, y, ...PET_WINDOW_SIZE });
 }
 
 // ── win32 topmost upkeep: watchdog (2026-09-19) ─────────────────────────
