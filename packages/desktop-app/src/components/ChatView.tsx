@@ -36,6 +36,7 @@ import {
 	useSlotComponentsByPrefix,
 } from "../lib/slot-host";
 import { surfaceById } from "../lib/surfaces/registry";
+import { setDockOpen } from "../lib/terminal-dock-state";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
@@ -655,6 +656,21 @@ export function ChatView({
 		},
 	});
 	const terminalDockRef = useRef<HTMLDivElement | null>(null);
+	// The dock shell below stays mounted so open/close animates; the
+	// TerminalPanel inside does NOT. It mounts only once the dock has been
+	// opened while viewing THIS session (latched per session id, "" for the
+	// welcome/empty state) — a session whose dock was never opened must not
+	// spawn daemon pties on mount or session switch. SEMANTICS of "关坞不杀
+	// pty": once opened, the panel stays mounted across dock close (height 0)
+	// and while browsing other surfaces, so running pties survive the toggle;
+	// switching to a session whose dock never opened unmounts it (its pties
+	// close; returning re-seeds fresh pties at the remembered cwds).
+	const dockSessionKey = store?.sessionId ?? "";
+	const [terminalEverOpened, setTerminalEverOpened] = useState<ReadonlySet<string>>(new Set());
+	useEffect(() => {
+		if (terminalOpen) setTerminalEverOpened(prev => setDockOpen(prev, dockSessionKey, true));
+	}, [terminalOpen, dockSessionKey]);
+	const terminalPanelMounted = terminalOpen || terminalEverOpened.has(dockSessionKey);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	// 内容边界羽化:纵向上下羽化(transcript 自身,修复静态 data 属性从不
 	// 更新的死接线)+ 深扫描消息内的工具渲染横向滚动块(tv-pre / diff,
@@ -1822,7 +1838,11 @@ export function ChatView({
 			 * header (GuiHeader) is a separate container ABOVE it. */}
 			<div
 				className="gui-chat-surface flex min-h-0 flex-1 flex-col"
-				style={{ margin: "var(--gui-card-gutter)", gap: "var(--gui-card-gutter)" }}
+				/* Card-to-card spacing is owned by each card's own gutter margin
+				 * (gui-chat.css "Workspace card gutters") — a flex gap here would
+				 * stack on top of those margins and double the scenes→dock
+				 * breath. The surface margin is the window gutter only. */
+				style={{ margin: "var(--gui-card-gutter)" }}
 			>
 				{/* Scene stack: both scenes mount during the 420ms overlap window,
 				 * each absolute-filling this wrapper (so they cross-fade/morph
@@ -2561,9 +2581,11 @@ export function ChatView({
 						onClose={() => setBtwQuestion(null)}
 					/>
 				)}
-				{/* Terminal dock: stays MOUNTED so open/close animates (height
-				 * 0 ↔ dockHeight) and running pty/xterm sessions survive the
-				 * toggle — closing the last tab folds the dock instead. */}
+				{/* Terminal dock: the shell stays MOUNTED so open/close animates
+				 * (height 0 ↔ dockHeight). The TerminalPanel inside mounts lazily
+				 * (terminalPanelMounted above): it appears on this session's
+				 * first dock open, then survives the toggle so running pty/xterm
+				 * sessions are kept — closing the last tab folds the dock. */}
 				<div
 					ref={terminalDockRef}
 					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]${
@@ -2574,7 +2596,9 @@ export function ChatView({
 					{/* Drag handle: the dock pushes the composer up and its
 					 * height is user-adjustable (openchamber bottom dock). */}
 					<div className="gui-dock-handle" {...dockResizeDrag} style={{ touchAction: "none" }} aria-hidden />
-					<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
+					{terminalPanelMounted && (
+						<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
+					)}
 				</div>
 			</div>
 			{/* 保存为图片 export dialog (always mounted — DialogFrame drives its

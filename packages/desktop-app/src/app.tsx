@@ -56,6 +56,7 @@ import { computeSettingsShellState } from "./lib/settings-shell";
 import { sfxFor } from "./lib/sfx";
 import { eventMatches } from "./lib/shortcut-registry";
 import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
+import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
 import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
@@ -843,8 +844,25 @@ function AppInner(): ReactNode {
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
 	// Bottom integrated terminal drawer (ZCode style) — independent of the
-	// right-pane terminal tool.
-	const [bottomTerminal, setBottomTerminal] = useState(false);
+	// right-pane terminal tool. Open state is remembered PER SESSION: a
+	// session whose dock was never opened stays closed (and ChatView then
+	// never mounts TerminalPanel, so no daemon pties spawn unprompted on
+	// session switch); switching back to a session that opened it restores
+	// the dock. In-memory only — every dock starts closed on relaunch.
+	const [terminalDockOpens, setTerminalDockOpens] = useState<ReadonlySet<string>>(new Set());
+	const bottomTerminal = isDockOpen(terminalDockOpens, selectedId);
+	// Own always-in-sync mirror of selectedId (assigned during render): the
+	// pre-existing selectedIdRef is only patched at some mutation sites, so
+	// it can go stale (e.g. session deleted at 2402) — the dock must key on
+	// the exact rendered selection.
+	const dockSessionIdRef = useRef<string | null>(selectedId);
+	dockSessionIdRef.current = selectedId;
+	const toggleTerminalDock = useCallback(() => {
+		setTerminalDockOpens(prev => toggleDockOpen(prev, dockSessionIdRef.current));
+	}, []);
+	const closeTerminalDock = useCallback(() => {
+		setTerminalDockOpens(prev => setDockOpen(prev, dockSessionIdRef.current, false));
+	}, []);
 	// ⌘1..8 surface jump: nonce bumps re-fire ChatView's select effect even
 	// for the same surface. Order comes from the persisted rail order so the
 	// digits match what the user sees on the rail.
@@ -2936,7 +2954,7 @@ function AppInner(): ReactNode {
 				});
 			} else if (mod && eventMatches(e, "toggle-terminal")) {
 				e.preventDefault();
-				setBottomTerminal(v => !v);
+				toggleTerminalDock();
 			} else if (mod && eventMatches(e, "new-task")) {
 				e.preventDefault();
 				startNewTask();
@@ -2981,7 +2999,7 @@ function AppInner(): ReactNode {
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [startNewTask, stop, focusMode]);
+	}, [startNewTask, stop, focusMode, toggleTerminalDock]);
 
 	// ── Boot / error page (opencode-style: splash while starting, error
 	// only when the local daemon can't be reached at all) ───────────────
@@ -3369,7 +3387,7 @@ function AppInner(): ReactNode {
 								onOpenBoard={() => viewSwapRef.current("board")}
 								onOpenSettings={openSettings}
 								terminalOpen={bottomTerminal}
-								onToggleTerminal={() => setBottomTerminal(v => !v)}
+								onToggleTerminal={toggleTerminalDock}
 								rightPanelOpen={!rightCollapsed}
 								onToggleRightPanel={() => {
 									setRightCollapsed(v => {
@@ -3469,7 +3487,7 @@ function AppInner(): ReactNode {
 											}}
 											panelSelectRequest={panelSelect}
 											terminalOpen={bottomTerminal}
-											onCloseTerminal={() => setBottomTerminal(false)}
+											onCloseTerminal={closeTerminalDock}
 											focusMode={focusMode}
 											onToggleFocus={() => setFocusMode(v => !v)}
 											reminders={reminders}
@@ -3749,7 +3767,7 @@ function AppInner(): ReactNode {
 						return !v;
 					});
 				}}
-				onToggleTerminal={() => setBottomTerminal(v => !v)}
+				onToggleTerminal={toggleTerminalDock}
 				onTogglePreview={() => {
 					setRightCollapsed(v => {
 						localStorage.setItem("musepi-gui-right", v ? "1" : "0");

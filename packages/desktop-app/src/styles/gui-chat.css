@@ -165,9 +165,10 @@
 /* ── Bottom integrated terminal drawer (ZCode style) ────────────────── */
 .gui-terminal-dock {
 	min-width: 0;
-	width: 100%;
-	/* Own card (workspace split): the dock floats separately from the chat
-	 * card above it instead of sharing the surface's bottom edge. */
+	/* No `width` here: the dock is a flex-col child (align-items stretch),
+	 * so it fills the surface minus its own gutter margins — a `width:100%`
+	 * plus margins overflowed the parent and pushed the right edge past the
+	 * right rail's (they must align on 窗缘 − gutter). */
 	border-radius: var(--radius-2xl);
 	box-shadow: var(--gui-card-shadow);
 	overflow: hidden;
@@ -5126,9 +5127,16 @@ body.gui-resizing .gui-pane-right {
  * margin wins over the base rules above. */
 .gui-chat-column,
 .gui-pane-right--inner,
-.gui-right-rail,
-.gui-terminal-dock {
+.gui-right-rail {
 	margin: var(--gui-card-gutter);
+}
+
+/* The dock carries the same side/bottom gutter but NO top margin: the
+ * chat column's bottom margin above it already supplies the one-gutter
+ * card-to-card breath (an extra margin-top doubled it). Kept out of the
+ * shared rule above so the spacing has a single documented source. */
+.gui-terminal-dock {
+	margin: 0 var(--gui-card-gutter) var(--gui-card-gutter);
 }
 
 /* Folded/closed states must leave NO trace: the sliver and the closed dock
