@@ -115,7 +115,7 @@ function SortableAttachmentChip({
 	onEditSketch(id: number): void;
 	onPreview(id: number, el: HTMLElement): void;
 }): ReactNode {
-	const { setNodeRef, transform, transition, isDragging } = useSortable({
+	const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({
 		id: a.id,
 		transition: { duration: 200, easing: "var(--spring-snappy)" },
 	});
@@ -123,6 +123,7 @@ function SortableAttachmentChip({
 	return (
 		<div
 			ref={setNodeRef}
+			{...listeners}
 			className={`gui-attach-chip${isFile ? " gui-attach-chip--file" : ""}${
 				a.uploading ? " gui-attach-chip--uploading" : ""
 			}${a.sketch && !isFile ? " gui-attach-chip--sketch" : ""}${isDragging ? " gui-attach-chip--dragging" : ""}`}
