@@ -129,10 +129,11 @@ export class MaterializedView {
 	}
 
 	/** Build a view by replaying journal records (startup / recovery path).
-	 *  Round durations are NOT recorded during replay: agent_end's wall-clock
-	 *  delta would be computed at replay time (a completed round from hours
-	 *  ago would show a garbage total). Persisted snapshots carry the
-	 *  authoritative durations; a replayed view simply has none. */
+	 *  Round durations are NOT recorded during replay: agent_end's delta
+	 *  would be recomputed against whatever the entries' last timestamp
+	 *  happens to be at replay time (a completed round from hours ago would
+	 *  show a garbage total). Persisted snapshots carry the authoritative
+	 *  durations; a replayed view simply has none. */
 	static replay(
 		sessionId: string,
 		cwd: string,
@@ -299,7 +300,17 @@ export class MaterializedView {
 					}
 				}
 				if (recordRoundDurations && turnStartMs !== undefined && Number.isFinite(turnStartMs)) {
-					this.#roundDurations.set(turnStartMs, Date.now() - turnStartMs);
+					// End anchor = the SAME clock as the start anchor: the last
+					// entry's timestamp (wire message clock). Date.now() is wall
+					// clock, and provider-clock lag (minutes, observed in real
+					// journals) inflated frozen totals far beyond the round's
+					// real event span. Skewed rounds whose last event predates
+					// the anchor are skipped rather than frozen with garbage.
+					const lastEntry = this.#entries[this.#entries.length - 1];
+					const endMs = lastEntry ? Date.parse(lastEntry.timestamp) : Number.NaN;
+					if (Number.isFinite(endMs) && endMs >= turnStartMs) {
+						this.#roundDurations.set(turnStartMs, endMs - turnStartMs);
+					}
 				}
 				break;
 			}

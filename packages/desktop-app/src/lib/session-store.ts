@@ -191,19 +191,25 @@ export function clearRoundDurations(sessionId: string): void {
 }
 
 /** Round duration (ms) of a just-completed run — craft-agents parity: start
- *  = the last user message timestamp (the round's anchor), end = agent_end.
+ *  = the last user message timestamp (the round's anchor), end = the round's
+ *  last event timestamp (same wire-message clock as the anchor — wall-clock
+ *  Date.now() mixed clocks and inflated totals under provider-clock lag).
  *  Keyed by the final assistant message's timestamp so the transcript can
  *  pin the frozen total to exactly the round's last row. */
 function recordRoundDuration(entries: readonly SessionEntry[]): { assistantTs: number; durationMs: number } | null {
 	let userTs: number | undefined;
 	let assistantTs: number | undefined;
+	let lastEventTs: number | undefined;
 	for (const e of entries) {
 		if (e.type !== "message") continue;
+		lastEventTs = e.message.timestamp;
 		if (e.message.role === "user") userTs = e.message.timestamp;
 		else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
 	}
-	if (userTs === undefined || assistantTs === undefined) return null;
-	return { assistantTs, durationMs: Date.now() - userTs };
+	if (userTs === undefined || assistantTs === undefined || lastEventTs === undefined || lastEventTs < userTs) {
+		return null;
+	}
+	return { assistantTs, durationMs: lastEventTs - userTs };
 }
 
 export class GuiSessionStore {

@@ -274,8 +274,8 @@ describe("MaterializedView round durations (agent_end freeze)", () => {
 		const pairs = view.snapshot().roundDurations ?? [];
 		expect(pairs).toHaveLength(1);
 		expect(pairs[0]![0]).toBe(now - 4000);
-		expect(pairs[0]![1]).toBeGreaterThan(0);
-		expect(pairs[0]![1]).toBeLessThan(60_000);
+		// Single-entry round: last event IS the anchor → 0, never wall clock.
+		expect(pairs[0]![1]).toBe(0);
 	});
 
 	test("a user turn ending after a later advisor note anchors at the advisor note", () => {
@@ -292,11 +292,40 @@ describe("MaterializedView round durations (agent_end freeze)", () => {
 			}),
 		);
 		view.apply(messageEvent("message_end", advisorMsg(now - 3000)));
+		view.apply(messageEvent("message_end", { role: "assistant", content: [], timestamp: now - 500 }));
 		view.apply({ type: "agent_end" } as AgentEvent);
 
 		const pairs = view.snapshot().roundDurations ?? [];
 		expect(pairs).toHaveLength(1);
 		expect(pairs[0]![0]).toBe(now - 3000);
-		expect(pairs[0]![1]).toBeLessThan(10_000);
+		expect(pairs[0]![1]).toBe(2500);
+	});
+
+	test("round total = last event ts − turn-start ts in event clock, immune to wall-clock lag", () => {
+		// Contract: the frozen duration is computed purely from entry
+		// timestamps (wire message clock). Timestamps an hour in the past
+		// prove no Date.now() is read: wall-clock math would return ~1h,
+		// the event span is exactly 47s.
+		const t0 = Date.now() - 3600_000;
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(t0, "start"));
+		view.apply(messageEvent("message_end", { role: "assistant", content: [], timestamp: t0 + 30_000 }));
+		view.apply(messageEvent("message_end", { role: "assistant", content: [], timestamp: t0 + 47_000 }));
+		view.apply({ type: "agent_end" } as AgentEvent);
+
+		const pairs = view.snapshot().roundDurations ?? [];
+		expect(pairs).toEqual([[t0, 47_000]]);
+	});
+
+	test("a round whose events predate the anchor (clock skew) records no total", () => {
+		const t0 = Date.now();
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(t0));
+		// A late-arriving older event becomes the last entry but predates
+		// the turn-start anchor — a negative total must not be frozen.
+		view.apply(messageEvent("message_end", { role: "assistant", content: [], timestamp: t0 - 5000 }));
+		view.apply({ type: "agent_end" } as AgentEvent);
+
+		expect(view.snapshot().roundDurations ?? []).toHaveLength(0);
 	});
 });

@@ -246,4 +246,118 @@ ${lines.join("\n")}
 		const roots = entries.filter(e => e.parentId === null);
 		expect(roots.length).toBe(1);
 	}, 20_000);
+
+	test("non-message entries (custom / model_change) rekey into the view key space — every parentId resolves in-snapshot", async () => {
+		// Contract: the snapshot handed to the GUI is ONE self-contained id
+		// space. Before the rekey extension, custom/model_change entries kept
+		// SDK hex ids and hex parentIds pointing at messages that had been
+		// rekeyed away — dangling chains for any consumer that walks them.
+		// Now: message ids are messageKeys, non-message ids are deterministic
+		// "type:tsMs", and every parentId resolves to an entry in the same
+		// snapshot (or null at the root).
+		const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), "daemon-viewkey-"));
+		const journalDir = path.join(tmp, "journal");
+		const daemon = await startDaemon({ socketPath: path.join(tmp, "d.sock"), wsPort: 0, cwd: tmp });
+		cleanup.push(async () => {
+			await daemon.close();
+		});
+		const ws = await openWs(daemon.wsPort!);
+		const call = makeRpc(ws);
+		const sessionId = crypto.randomUUID();
+		const t = Date.now();
+		const msgs: WireMessage[] = [
+			{ role: "user", timestamp: t, content: [{ type: "text", text: "A" }] },
+			{ role: "assistant", timestamp: t + 1, content: [{ type: "text", text: "B" }] },
+			{ role: "user", timestamp: t + 2, content: [{ type: "text", text: "C" }] },
+		];
+		const sessionDir = computeDefaultSessionDir(tmp, new FileSessionStorage());
+		const iso = new Date().toISOString().replace(/[:.]/g, "-");
+		const parentFile = path.join(sessionDir, `${iso}_${sessionId}.jsonl`);
+		const header = { type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: tmp };
+		const ids = msgs.map(() => crypto.randomBytes(4).toString("hex"));
+		// B's leaf position is taken by a custom entry; C's by a model_change —
+		// both carry hex parentIds into the message tree.
+		const customId = crypto.randomBytes(4).toString("hex");
+		const modelChangeId = crypto.randomBytes(4).toString("hex");
+		const lines: string[] = [];
+		for (let i = 0; i < msgs.length; i++) {
+			const parentIdx = i - 1;
+			lines.push(
+				JSON.stringify({
+					type: "message",
+					id: ids[i],
+					parentId: parentIdx >= 0 ? ids[parentIdx] : null,
+					timestamp: new Date(msgs[i].timestamp).toISOString(),
+					message: msgs[i],
+				}),
+			);
+			if (i === 1) {
+				lines.push(
+					JSON.stringify({
+						type: "custom",
+						id: customId,
+						parentId: ids[1],
+						timestamp: new Date(msgs[i].timestamp + 10).toISOString(),
+						content: "marker",
+					}),
+				);
+			}
+			if (i === 2) {
+				lines.push(
+					JSON.stringify({
+						type: "model_change",
+						id: modelChangeId,
+						parentId: customId, // leaf = the custom entry when it appended
+						timestamp: new Date(msgs[i].timestamp + 20).toISOString(),
+						model: "test/model",
+						resolvedModelIsFallback: false,
+					}),
+				);
+			}
+		}
+		await fs.promises.writeFile(
+			parentFile,
+			`${JSON.stringify(header)}
+${lines.join("\n")}
+`,
+		);
+		cleanup.push(async () => {
+			ws.close();
+			await fs.promises.rm(parentFile, { force: true });
+			// The mangled session dir lives under ~/.musepi/agent/sessions
+			// (NOT under tmp) — remove it too or the SDK scan keeps listing
+			// the test session in the real daemon's tree.
+			await fs.promises.rm(sessionDir, { recursive: true, force: true });
+			await fs.promises.rm(tmp, { recursive: true, force: true });
+		});
+
+		await call("session.subscribe", { sessionId });
+		const snap = (await call("session.snapshot", { sessionId })) as {
+			entries: { id: string; parentId: string | null; type: string; timestamp: string }[];
+		};
+		const entries = snap.entries ?? [];
+		expect(entries.length).toBe(5);
+
+		// One key space, no SDK hex ids left.
+		for (const e of entries) {
+			expect(e.id).toMatch(/^(user|assistant|toolResult):\d+$|^[a-z_]+:\d+(#\d+)?$/);
+		}
+		// The model_change rekeys to "type:tsMs" ...
+		const mc = entries.find(e => e.type === "model_change");
+		expect(mc).toBeDefined();
+		expect(mc!.id).toBe(`model_change:${t + 22}`);
+		// ... and its parent chain resolves: model_change → assistant B
+		// (nearest MESSAGE ancestor, skipping the custom entry), custom → B.
+		expect(mc!.parentId).toBe(`assistant:${t + 1}`);
+		const custom = entries.find(e => e.type === "custom");
+		expect(custom).toBeDefined();
+		expect(custom!.parentId).toBe(`assistant:${t + 1}`);
+		// Universal invariant: every parentId resolves to an id present in
+		// the same snapshot, or is null at exactly one root.
+		const idsInSnapshot = new Set(entries.map(e => e.id));
+		for (const e of entries) {
+			if (e.parentId !== null) expect(idsInSnapshot.has(e.parentId)).toBe(true);
+		}
+		expect(entries.filter(e => e.parentId === null).length).toBe(1);
+	}, 20_000);
 });

@@ -1652,7 +1652,8 @@ export class DaemonSessionHost {
 			// 是 messageKey("role:timestamp",live wire seam 同款)。不转换就
 			// 混入两种 id 空间:branchChildren/面包屑/leafPath 全按 hex 找
 			// messageKey,三层树 UI 在历史会话上全部失效。这里统一 rekey
-			// (id → messageKey,parentId → 父条目的 messageKey)。
+			// 全部条目:message → messageKey,非 message → "type:tsMs";
+			// parentId 统一映射到最近 message 祖先的 messageKey。
 			const byHex = new Map(sdkEntries.map(e => [e.id, e]));
 			// Messages link to their nearest MESSAGE ancestor: the SDK leaf at
 			// append time may be a non-message entry (model_change / custom /
@@ -1671,14 +1672,36 @@ export class DaemonSessionHost {
 				}
 				return null;
 			};
-			const viewEntries = sdkEntries.map(e => {
+			// Rekey EVERY entry into the view key space, not just messages:
+			// non-message entries (custom / model_change / thinking_level_change
+			// …) kept SDK hex ids while their parent messages were rekeyed into
+			// messageKey space — their hex parentIds dangled (silent broken
+			// chains for any future consumer that walks them). Non-message
+			// entries get a deterministic "type:tsMs" id (collision-suffixed)
+			// and remap parentId through the same nearest-message-ancestor
+			// walk, so every parentId in the snapshot resolves to an entry in
+			// the same snapshot (or null at the root).
+			const usedViewIds = new Set<string>();
+			const viewIdByHex = new Map<string, string>();
+			for (const e of sdkEntries) {
 				const msg = (e as { message?: WireMessage }).message;
-				if (e.type !== "message" || !msg) return e;
-				const key = messageKey(msg);
+				let viewId: string;
+				if (e.type === "message" && msg) {
+					viewId = messageKey(msg);
+				} else {
+					const tsMs = Date.parse(e.timestamp);
+					const base = Number.isFinite(tsMs) ? `${e.type}:${tsMs}` : e.id;
+					viewId = base;
+					for (let n = 2; usedViewIds.has(viewId); n++) viewId = `${base}#${n}`;
+				}
+				usedViewIds.add(viewId);
+				viewIdByHex.set(e.id, viewId);
+			}
+			const viewEntries = sdkEntries.map(e => {
 				const parentMsg = nearestMessageOf(e.parentId);
 				return {
 					...e,
-					id: key,
+					id: viewIdByHex.get(e.id) ?? e.id,
 					parentId: parentMsg ? messageKey(parentMsg) : null,
 				};
 			});
