@@ -4,6 +4,7 @@ import {
 	layoutTurnMap,
 	TURN_GAP_Y,
 	TURN_LANE_GAP,
+	TURN_LANE_MAX_H,
 	TURN_NODE_COMPACT_H,
 	TURN_NODE_H,
 	TURN_NODE_W,
@@ -126,6 +127,18 @@ describe("layoutTurnMap", () => {
 		// 展开后 h 切到基础卡 + 泳道增量。
 		const expanded = layoutTurnMap([turnGroup(1)], new Set([1]));
 		expect(expanded.nodes[0]!.h).toBe(TURN_NODE_H + turnExpandedExtra(2));
+	});
+
+	it("展开高度封顶:事件数超过泳道上限时卡片不再长高(轮内滚动)", () => {
+		// 契约:泳道可视上限 TURN_LANE_MAX_H 之上,展开卡高度 = 基础卡 +
+		// 上限增量,后续轮的推移也按封顶增量计算——否则多事件轮(实机
+		// Turn 6)会把卡片撑到数千 px、下方大片空白而内容只在顶部。
+		expect(turnExpandedExtra(5)).toBe(5 * 24 + 16);
+		expect(turnExpandedExtra(100)).toBe(TURN_LANE_MAX_H + 16);
+		const turns = [turnGroup(1, { events: 100 }), turnGroup(2)];
+		const layout = layoutTurnMap(turns, new Set([1]));
+		expect(layout.nodes[0]!.h).toBe(TURN_NODE_H + TURN_LANE_MAX_H + 16);
+		expect(layout.nodes[1]!.y).toBe(TURN_NODE_H + TURN_LANE_MAX_H + 16 + TURN_GAP_Y);
 	});
 
 	it("轮前元事件组(turn 0,无 user 事件)不发节点", () => {
@@ -271,7 +284,7 @@ describe("visibleTurnMapNodes", () => {
 		const turns = [turnGroup(1, { events: 30 }), turnGroup(2), turnGroup(3)];
 		const layout = layoutTurnMap(turns, new Set([1]));
 		const expanded = layout.nodes[0]!;
-		expect(expanded.expandedExtra).toBe(30 * 24 + 16);
+		expect(expanded.expandedExtra).toBe(TURN_LANE_MAX_H + 16);
 		// 视口下缘落在卡基础高之下、展开增量之内:必须仍命中。
 		const yInside = expanded.y + TURN_NODE_H + 100;
 		const vis = visibleTurnMapNodes(

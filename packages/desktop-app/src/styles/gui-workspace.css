@@ -5044,7 +5044,9 @@
 	padding-left: 2px;
 }
 
-/* 轮节点卡:液态玻璃(backdrop blur + 1px border + 圆角 12)。 */
+/* 轮节点卡:液态玻璃(backdrop blur + 1px border + 圆角 12)。
+ * height 参与过渡(--gui-motion-height):折叠 ⇄ 展开卡高平滑形变;
+ * overflow hidden 让过渡期内溢出内容被圆角边界裁剪。 */
 .tm-node {
 	position: absolute;
 	display: flex;
@@ -5058,8 +5060,19 @@
 	-webkit-backdrop-filter: blur(14px) saturate(1.35);
 	box-shadow: 0 6px 20px color-mix(in oklab, var(--color-bg) 50%, transparent);
 	cursor: pointer;
-	transition: border-color 160ms var(--spring), box-shadow 160ms var(--spring), opacity 200ms ease;
+	transition:
+		height var(--gui-motion-height, 240ms) var(--spring),
+		border-color 160ms var(--spring),
+		box-shadow 160ms var(--spring),
+		opacity 200ms ease;
+	overflow: hidden;
 	user-select: none;
+}
+
+/* 动效关闭:高度形变直接跳变(prefers-reduced-motion 由 gui-base
+ * 的全局 0.01ms 规则覆盖)。 */
+.gui-motion-off .tm-node {
+	transition: none;
 }
 
 .tm-node:hover {
@@ -5173,7 +5186,8 @@
 	font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-/* 轮内泳道(单击展开):事件行 24px。 */
+/* 轮内泳道(单击展开):事件行 24px。可视上限与布局常量
+ * TURN_LANE_MAX_H 同步:超过即轮内滚动,卡片高度不再增长。 */
 .tm-lane {
 	margin-top: 4px;
 	padding-top: 4px;
@@ -5248,6 +5262,18 @@
 	height: 24px;
 	font-size: 10px;
 	color: var(--color-text-muted);
+	border-radius: var(--radius-xs);
+}
+
+/* 带 entryId 的事件行可点击:跳到对话视图对应消息。 */
+.tm-lane-row--link {
+	cursor: pointer;
+	transition: background 120ms var(--spring), color 120ms var(--spring);
+}
+
+.tm-lane-row--link:hover {
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-text);
 }
 
 .tm-lane-dot {

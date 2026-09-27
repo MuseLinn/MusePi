@@ -23,7 +23,9 @@ import {
  * 导航/轨迹同一 isTurnStart 口径),164 轮 = 164 个玻璃节点卡。主线时间轴
  * (金色流动渐变连线),重答/分叉轮开列分支(金→紫渐变支线);单击切换
  * 轮卡折叠/展开(折叠 = 单行紧凑卡,展开 = 全卡 + 轮内事件泳道),双击
- * 跳回对话定位该轮,左侧(横向模式为底部)迷你导航条 = 全轮次剪影。
+ * 跳回对话定位该轮,展开卡的轮内事件行单击 = 定位到该事件对应的
+ * 消息(entry 级,同 onJumpToEntry 通道)。左侧(横向模式为底部)迷你导航条
+ * = 全轮次剪影。
  * 消息级画布(SessionTreeCanvas)已下线——单一轮级视图。
  *
  * 性能:节点数 = 轮数(≤ 数百),布局 O(n);进入视图无整树 mount 卡顿。
@@ -105,6 +107,7 @@ export const TmNodeCard = memo(function TmNodeCard({
 	searchHit,
 	onToggle,
 	onJump,
+	onJumpEvent,
 	onMenu,
 	onHover,
 }: {
@@ -116,6 +119,8 @@ export const TmNodeCard = memo(function TmNodeCard({
 	searchHit: boolean;
 	onToggle(turn: number): void;
 	onJump(node: TurnMapNode): void;
+	/** 泳道事件行点击:跳到对话视图该 entry(与双击同通道,entry 级粒度)。 */
+	onJumpEvent(ev: TrajectoryEvent): void;
 	onMenu(node: TurnMapNode, x: number, y: number): void;
 	onHover(node: TurnMapNode | null): void;
 }): ReactNode {
@@ -177,7 +182,15 @@ export const TmNodeCard = memo(function TmNodeCard({
 						{n.group.events.map(ev => {
 							const args = toolArgsSummary(ev);
 							return (
-								<div key={ev.id} className={`tm-lane-row tm-lane-row--${ev.kind}`}>
+								<div
+									key={ev.id}
+									className={`tm-lane-row tm-lane-row--${ev.kind}${ev.entryId ? " tm-lane-row--link" : ""}`}
+									onClick={e => {
+										// 定位到对话视图该事件;不冒泡到卡面(否则触发折叠)。
+										e.stopPropagation();
+										if (ev.entryId) onJumpEvent(ev);
+									}}
+								>
 									<span className="tm-lane-dot" />
 									<span className="tm-lane-title" title={args ?? ev.body ?? ev.title}>
 										{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}
@@ -491,6 +504,14 @@ export function TurnMapCanvas({
 		},
 		[onJumpToEntry],
 	);
+	// 泳道事件行单击 = 同通道的 entry 级跳转(卡面双击/右键菜单共用
+	// onJumpToEntry,父层切回对话 + requestJump;不触发折叠切换)。
+	const jumpToEvent = useCallback(
+		(ev: TrajectoryEvent) => {
+			if (ev.entryId && onJumpToEntry) onJumpToEntry(ev.entryId);
+		},
+		[onJumpToEntry],
+	);
 	// 节点右键菜单(stable,供 memo 卡引用)。
 	const openNodeMenu = useCallback((node: TurnMapNode, x: number, y: number) => {
 		setCtxMenu({ x, y, node });
@@ -801,6 +822,7 @@ export function TurnMapCanvas({
 								searchHit={hasSearch && (searchMatchTurns?.has(n.group.turn) ?? false)}
 								onToggle={handleClick}
 								onJump={handleDblClick}
+								onJumpEvent={jumpToEvent}
 								onMenu={openNodeMenu}
 								onHover={setHoverNode}
 							/>

@@ -62,9 +62,15 @@ export interface TurnMapLayout {
 	height: number;
 }
 
-/** 轮内展开高度:事件行 24px × N + 底部留白 16(设计稿 §4)。 */
+/** 轮内泳道可视上限(px):事件行超过即轮内滚动,卡片不再长高
+ *  (与 CSS .tm-lane max-height 同步,实机回归:Turn 6 事件多,展开卡
+ *  按事件数撑到数千 px 高而内容只有顶部一截)。 */
+export const TURN_LANE_MAX_H = 240;
+
+/** 轮内展开高度:事件行 24px × N + 底部留白 16(设计稿 §4),封顶
+ *  TURN_LANE_MAX_H + 16(泳道滚动,高度与可视内容一致)。 */
 export function turnExpandedExtra(eventCount: number): number {
-	return eventCount * 24 + 16;
+	return Math.min(eventCount * 24 + 16, TURN_LANE_MAX_H + 16);
 }
 
 /**

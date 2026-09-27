@@ -39,6 +39,7 @@ function renderCard(node: TurnMapNode, isExpanded: boolean): string {
 			searchHit={false}
 			onToggle={noop}
 			onJump={noop}
+			onJumpEvent={noop}
 			onMenu={noop}
 			onHover={noop}
 		/>,
@@ -114,6 +115,17 @@ describe("轮卡折叠/展开渲染分支", () => {
 		expect(html).not.toContain("\t");
 		// 参数摘要渲染出 JSON 键(引号在 SSR 中转义为 &quot;)。
 		expect(html).toContain("&quot;file_path&quot;");
+	});
+
+	it("泳道事件行:带 entryId 的可点击定位(link 类),无 entryId 不可点", () => {
+		const events: TrajectoryEvent[] = [
+			{ id: "u1", kind: "user", title: "用户问题", turn: 3, tsMs: 1000, entryId: "entry-1" },
+			{ id: "s1", kind: "system", title: "model_change", turn: 3, tsMs: 1001 },
+		];
+		const html = renderCard(turnNode(events), true);
+		// 契约:entryId → 可点击行(hover 反馈 + 点击跳对话);无 entryId → 纯展示。
+		expect(html).toContain("tm-lane-row--link");
+		expect(html.match(/tm-lane-row--link/g)!.length).toBe(1);
 	});
 });
 
