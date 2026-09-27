@@ -525,3 +525,23 @@
 		animation: none;
 	}
 }
+
+/* 内容边界羽化(transcript 同配方):卡片网格长列表溢出时上下羽化,
+ * data 属性由 lib/scroll-shadow 维护,只在真实溢出且滚离边缘时显示。 */
+.mp-grid-shell[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 16px,
+		#000 calc(100% - 16px),
+		transparent 100%
+	);
+}
+
+.mp-grid-shell[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 16px);
+}
+
+.mp-grid-shell[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 16px);
+}

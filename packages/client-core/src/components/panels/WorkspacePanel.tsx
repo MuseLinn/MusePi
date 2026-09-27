@@ -1,8 +1,9 @@
 import { ChevronDown, CircleAlert, FolderGit2, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
+import { useDeepScrollShadow } from "../../lib/scroll-shadow";
 import { FilePanel } from "./FilePanel";
 
 /**
@@ -61,8 +62,11 @@ export function WorkspacePanel({
 	readOnly: boolean;
 }): ReactNode {
 	const [tab, setTab] = useState<WorkspaceTab>("changes");
+	// 横向边缘羽化:标签条 + 变更 diff 块都是横向滚动容器,深扫描一棵挂。
+	const rootRef = useRef<HTMLDivElement | null>(null);
+	useDeepScrollShadow(rootRef, ".sh-wspanel-tabs, .sh-changes-diff");
 	return (
-		<div className="sh-wspanel">
+		<div ref={rootRef} className="sh-wspanel">
 			<div className="sh-wspanel-tabs" role="tablist" aria-label={t("workspace")}>
 				{TABS.map(item =>
 					item.disabled ? (

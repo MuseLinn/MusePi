@@ -3358,3 +3358,29 @@ a.tr-tool-search-title:hover {
 		transition: none;
 	}
 }
+
+/* ── 横向内容边界羽化(2026-09-27:与桌面 gui-chat.css 横向段同配方)──
+ * 覆盖共享渲染层的全部横向滚动容器:消息内 markdown 表格(tr-table-scroll,
+ * 用户点名的场景)、代码块、KaTeX 显示公式、mermaid、用量行、fullscreen
+ * 预览、工具渲染(tv-pre / diff / side-by-side 格)与 shell 面板
+ * (workspace tab 条 / 变更 diff / 附件 chip 排)。data-left/right-scroll
+ * 由 client-core lib/scroll-shadow 维护,只在真实横向溢出且滚离边缘时
+ * 显示。柔带宽度走 --gui-fade-x(默认 16px)。mask 羽化的是内容本身,
+ * 容器透明背景下同样正确(渐隐出底色,不残留色块)。 */
+:is(.tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage, .tr-mm-lb-scroll, .tv-pre, .tv-diff, .tv-diff-sbs-cell, .sh-wspanel-tabs, .sh-changes-diff, .sh-attach-chips)[data-left-scroll="true"][data-right-scroll="true"] {
+	mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 var(--gui-fade-x, 16px),
+		#000 calc(100% - var(--gui-fade-x, 16px)),
+		transparent 100%
+	);
+}
+
+:is(.tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage, .tr-mm-lb-scroll, .tv-pre, .tv-diff, .tv-diff-sbs-cell, .sh-wspanel-tabs, .sh-changes-diff, .sh-attach-chips)[data-left-scroll="true"]:not([data-right-scroll="true"]) {
+	mask-image: linear-gradient(to right, transparent 0, #000 var(--gui-fade-x, 16px));
+}
+
+:is(.tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage, .tr-mm-lb-scroll, .tv-pre, .tv-diff, .tv-diff-sbs-cell, .sh-wspanel-tabs, .sh-changes-diff, .sh-attach-chips)[data-right-scroll="true"]:not([data-left-scroll="true"]) {
+	mask-image: linear-gradient(to left, transparent 0, #000 var(--gui-fade-x, 16px));
+}

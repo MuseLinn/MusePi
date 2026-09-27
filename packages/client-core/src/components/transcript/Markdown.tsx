@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { t } from "../../i18n/index.js";
 import { downloadBlob } from "../../lib/download";
 import { electronBridge } from "../../lib/electron-bridge";
+import { useDeepScrollShadow, useScrollShadow } from "../../lib/scroll-shadow";
 import { escapeHtml, highlightToCodeHtml } from "./highlight";
 import { useCodeHighlight } from "./highlight-context";
 import { isLocalFilePath } from "./markdown-shared";
@@ -554,6 +555,10 @@ function MermaidLightbox({
 	onZoom(next: number): void;
 	onClose(): void;
 }): ReactNode {
+	// 横向羽化:fullscreen 预览的滚动容器(深扫描挂在 raw-HTML 根上够不到
+	// 这个 portal 里的盒子,单独挂)。
+	const lbScrollRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(lbScrollRef);
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent): void => {
 			if (e.key === "Escape") onClose();
@@ -597,7 +602,7 @@ function MermaidLightbox({
 						{t("download")}
 					</button>
 				</div>
-				<div className="tr-mm-lb-scroll">
+				<div ref={lbScrollRef} className="tr-mm-lb-scroll">
 					<div className="tr-mm-lb-svg" style={{ zoom }} dangerouslySetInnerHTML={{ __html: value.html }} />
 				</div>
 			</div>
@@ -647,6 +652,14 @@ export const Markdown = memo(function Markdown({
 	// consistent; expanding re-renders from the full text.
 	const revealInput = truncated ? fullText.slice(0, LONG_TEXT_CHARS) : fullText;
 	const rootRef = useRef<HTMLDivElement | null>(null);
+	// 横向边缘羽化:表格 / 代码块 / KaTeX / mermaid / 用量行都是
+	// dangerouslySetInnerHTML 出来的 raw HTML,React 拿不到内部 ref——
+	// 深扫描挂在 root 上,流式重建时 MutationObserver 增量补挂。
+	// 左右羽化只在真实横向溢出时出现(data-left/right-scroll)。
+	useDeepScrollShadow(
+		rootRef,
+		".tr-table-scroll, .tr-md pre, .katex-display, .tr-mermaid, .tr-mermaid-ascii, .tr-usage",
+	);
 	const [copiedHash, setCopiedHash] = useState<string | null>(null);
 	const [mermaidFull, setMermaidFull] = useState<{ html: string; source: string; hash: string } | null>(null);
 	const [mermaidFsZoom, setMermaidFsZoom] = useState(1);

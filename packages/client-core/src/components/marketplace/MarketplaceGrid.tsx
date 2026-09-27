@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
+import { useScrollShadow } from "../../lib/scroll-shadow";
 import { MarketplaceCard } from "./MarketplaceCard";
 import type { MarketplaceCardAction, MarketplaceCardEntry } from "./types";
 import "./marketplace.css";
@@ -145,6 +146,9 @@ export function MarketplaceGrid({
 
 	const grouped = useMemo(() => groupByMarketplace(filtered), [filtered]);
 	const allCategories = useMemo(() => extractCategories(entries), [entries]);
+	// 纵向边缘羽化:卡片网格长列表溢出时上下羽化。
+	const shellRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(shellRef);
 
 	// Skeleton only on the initial catalog load — a refresh over existing
 	// entries keeps the cards in place (the toolbar spinner carries the
@@ -153,7 +157,7 @@ export function MarketplaceGrid({
 	const showLoading = loading === true || (client !== undefined && fetching);
 
 	return (
-		<div className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
+		<div ref={shellRef} className="mp-grid-shell" aria-busy={showLoading ? "true" : "false"}>
 			<header className="mp-grid-toolbar">
 				<input
 					type="search"

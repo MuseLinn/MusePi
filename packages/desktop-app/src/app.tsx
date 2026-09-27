@@ -11,7 +11,7 @@ import { ChatView } from "./components/ChatView";
 import { CollabDialog } from "./components/CollabDialog";
 import { CommandPalette } from "./components/CommandPalette";
 import { ConnectDialog } from "./components/ConnectDialog";
-import { type CreationMessage, CreationPanel } from "./components/CreationPanel";
+import type { CreationMessage } from "./components/CreationModeRow";
 import { uploadAttachmentFiles } from "./components/composer/use-attachments";
 import { DialogFrame } from "./components/DialogFrame";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -875,8 +875,7 @@ function AppInner(): ReactNode {
 	const welcomeModeIdRef = useRef<string | null>(welcomeModeId);
 	/** modes.list(欢迎页 chip 选项;挂载 + modes.changed 刷新)。 */
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
-	// ── M3.2 创作面(design chip 触发,欢迎页全屏 overlay)──────────────────
-	const [creationOpen, setCreationOpen] = useState(false);
+	// ── M3.2 创作面(design chip 选中 → 欢迎页内联形态,v2 修订)────────────
 	/** 创建成功后的「保存为模板」toast 载荷(§3.4:保存入口在成功 toast 上)。 */
 	const [creationSaved, setCreationSaved] = useState<{ metadata: Record<string, unknown>; name: string } | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
@@ -2060,11 +2059,12 @@ function AppInner(): ReactNode {
 		}
 	}, [selectedId]);
 
-	// M3.7a 模式页「发送」:以 design 预设 + project metadata 建会话,然后把
-	// 输入框的首轮消息发进新会话(附件先落盘再前缀进提示词,与欢迎页同一
-	// uploadFirstMessageFiles 通道)。成功后弹保存模板 toast(载荷 = 本次
-	// 快照);失败时错误横幅已由 createSession 置好(daemon 的 16KiB 语义
-	// 报错原样透出),面板保持打开供修正。
+	// M3.7a 模式页「发送」(v2 内联形态):以 design 预设 + project metadata
+	// 建会话,然后把欢迎页 composer 的首轮消息发进新会话(附件先落盘再前
+	// 缀进提示词,与欢迎页同一 uploadFirstMessageFiles 通道)。成功后弹保
+	// 存模板 toast(载荷 = 本次快照)并由 rail 收起模式页;失败返回 false,
+	// composer 回填输入草稿,错误横幅已由 createSession 置好(daemon 的
+	// 16KiB 语义报错原样透出)。
 	const submitCreationSession = useCallback(
 		async (metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean> => {
 			const id = await createSession({
@@ -3196,6 +3196,7 @@ function AppInner(): ReactNode {
 						modes={welcomeModes}
 						modeId={welcomeModeId}
 						onModeChange={setWelcomeModeId}
+						onDesignSubmit={submitCreationSession}
 						defaultModelId={defaultModelId}
 						presetThinkingLevel={presetThinkingLevel}
 						busy={status === "connecting"}
@@ -3421,10 +3422,10 @@ function AppInner(): ReactNode {
 											modeId={welcomeModeId}
 											onModeChange={id => {
 												setWelcomeModeId(id);
-												// M3.2:选中 design 预设即展开创作面板(欢迎页
-												// 全屏 overlay,§3.0);creator 辅助入口归 3.6。
-												if (id === "design") setCreationOpen(true);
+												// M3.7a(v2 修订):选中 design 预设不弹任何浮层——
+												// 类型 chip 排由欢迎页 composer 内联渲染。
 											}}
+											onDesignSubmit={submitCreationSession}
 											defaultModelId={defaultModelId}
 											presetThinkingLevel={presetThinkingLevel}
 											busy={status === "connecting"}
@@ -3646,18 +3647,6 @@ function AppInner(): ReactNode {
 				onClose={() => setConnectOpen(false)}
 				rpc={rpc}
 				onOpenWorkspace={handleOpenRemoteWorkspace}
-			/>
-			{/* M3.7a design 模式页:常驻挂载由 open 驱动(退场动画与草稿
-			 * 回填都依赖不卸载);收起回到欢迎页空态(mode 复位 work,§3.0)。 */}
-			<CreationPanel
-				open={creationOpen}
-				onClose={() => {
-					setCreationOpen(false);
-					setWelcomeModeId("work");
-				}}
-				rpc={rpc}
-				project={project}
-				onSubmit={submitCreationSession}
 			/>
 			<CreationSavedToast saved={creationSaved} rpc={rpc} onDone={() => setCreationSaved(null)} />
 			<CollabDialog

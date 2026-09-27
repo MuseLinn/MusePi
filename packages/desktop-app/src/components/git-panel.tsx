@@ -4,6 +4,7 @@
  * from ContextPanel.tsx; the panel renders <GitPanel rpc cwd /> only.
  */
 import { CodeHighlightProvider, DiffBlock, type TranslationKey, t } from "@musepi/client-core";
+import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../lib/electron";
@@ -817,8 +818,12 @@ const GIT_PANE_TABS: Array<{ id: GitPaneTab; label: string }> = [
 ];
 export function GitPanel({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
 	const [tab, setTab] = useState<GitPaneTab>("changes");
+	// 横向边缘羽化:文件行展开的内嵌 diff 块横向滚动时左右羽化(条件渲染
+	// 的容器由深扫描的 MutationObserver 增量补挂)。
+	const rootRef = useRef<HTMLDivElement | null>(null);
+	useDeepScrollShadow(rootRef, ".gui-changes-file-diff");
 	return (
-		<div className="flex h-full min-h-0 flex-col">
+		<div ref={rootRef} className="flex h-full min-h-0 flex-col">
 			<div className="gui-pane-subtabs" role="tablist" aria-label={t("git")}>
 				{GIT_PANE_TABS.map(({ id, label }) => (
 					<button

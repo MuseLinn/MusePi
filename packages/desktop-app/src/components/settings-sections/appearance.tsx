@@ -18,7 +18,7 @@ import {
 } from "@musepi/client-core";
 import { Monitor as MonitorIcon, Moon as MoonIcon, Sun as SunIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import {
 	applyCodeSize,
 	applyCodeThemes,
@@ -58,6 +58,7 @@ import {
 	validateImportedSkin,
 } from "../../lib/scrollbar-skins";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
+import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
 import { AgentAvatar } from "../AgentAvatar";
 import { ColorPickerPanel } from "../ColorPicker";
@@ -935,6 +936,9 @@ export function CodePreviewCard({
 			alive = false;
 		};
 	}, [scheme]);
+	// 横向边缘羽化:主题代码预览块横向滚动时左右羽化。
+	const previewRef = useRef<HTMLPreElement | null>(null);
+	useScrollShadow(previewRef);
 	return (
 		<div className="gui-code-preview-card">
 			<div className="gui-code-preview-head">
@@ -942,7 +946,7 @@ export function CodePreviewCard({
 				<span className="gui-settings-row-desc">{theme.label}</span>
 				{active && <span className="gui-code-preview-tag">{t("currently active")}</span>}
 			</div>
-			<pre className="gui-code-preview-body" style={{ background: theme.bg, color: theme.fg }}>
+			<pre ref={previewRef} className="gui-code-preview-body" style={{ background: theme.bg, color: theme.fg }}>
 				{html !== null ? (
 					<code dangerouslySetInnerHTML={{ __html: html }} />
 				) : (

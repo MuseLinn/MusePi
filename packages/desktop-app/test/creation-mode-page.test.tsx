@@ -8,24 +8,27 @@ import { setLocale, type TranslationKey, t } from "@musepi/client-core";
 import { creation as creationZh } from "@musepi/client-core/src/i18n/zh-CN/creation.js";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { type CreationMessage, CreationPanel } from "../src/components/CreationPanel";
+import type { CreationMessage } from "../src/components/CreationModeRow";
+import { WelcomeComposer } from "../src/components/WelcomeComposer";
 import { applyChip, buildProjectMetadata, type CREATION_CHIPS, DEFAULT_CREATION_DRAFT } from "../src/lib/creation";
 import type { RpcClient } from "../src/lib/rpc";
 
 /**
- * M3.7a 模式页骨架契约（docs/review/0.5.0-m3-mode-page-redesign.md §6 3.7a 行）：
+ * M3.7a 模式页骨架契约——欢迎页内联形态(v2 修订,
+ * docs/review/0.5.0-m3-mode-page-redesign.md §6 3.7a 行):
  *
- * 1. chip 排单选、默认 prototype，选中 chip 即把 kind/intent 写进草稿 ——
- *    每个 chip 经面板发送产出的 projectMetadata 与 M3.2 编译管线
- *    （buildProjectMetadata，逐字段）一致（六类 chip 均可建会话）。
- * 2. 输入框发送 = 面板 onSubmit(metadata, message)：metadata 走既有
- *    编译管线，message 携带首轮文本。
- * 3. Escape 收合面板（capture 阶段 onClose）。
- * 4. 草稿跨再入保留：卸载重挂后 chip 选择仍在。
- * 5. 「项目名」「工作目录」字段退役：DOM 无底栏，creation 词表无对应键
- *    （字段若复活，两处任一都会重新出现）。
+ * 1. chip 排单选、默认 prototype,选中 chip 即把 kind/intent 写进草稿 ——
+ *    每个 chip 经欢迎页 composer 发送产出的 projectMetadata 与 M3.2 编译
+ *    管线(buildProjectMetadata,逐字段)一致(六类 chip 均可建会话)。
+ * 2. 发送 = designSubmit(metadata, message):metadata 走既有编译管线,
+ *    message 携带首轮文本;没有弹层、没有第二个输入框——用的就是欢迎页
+ *    composer 本体。
+ * 3. Escape 收起 chip 排(mode chip 复位 work)。
+ * 4. 草稿跨再入保留:卸载重挂后 chip 选择仍在。
+ * 5. 「项目名」「工作目录」字段退役:DOM 无底栏,creation 词表无对应键
+ *    (字段若复活,两处任一都会重新出现)。
  *
- * sessionDraft 是 CreationPanel 模块级缓存，测试间有意按序复用：
+ * sessionDraft 是 CreationModeRow 模块级缓存,测试间有意按序复用:
  * 「默认 prototype」必须在任何 chip 切换之前跑。
  */
 
@@ -40,14 +43,16 @@ interface CapturedSubmit {
 }
 
 const captured: CapturedSubmit[] = [];
-let closeCount = 0;
+const modeChanges: (string | null)[] = [];
 
-/** 面板唯一依赖的 daemon 通道:模板列表 + 镜像回填。 */
+/** 欢迎页 composer + 模式页唯一依赖的 daemon 通道:模板列表 + 镜像回填 +
+ *  欢迎页自身的就绪态/模型目录/git 分支等。 */
 function makeRpc(templates: unknown[] = []): RpcClient {
 	return {
 		request: (method: string): Promise<unknown> => {
 			if (method === "creation.templates.list") return Promise.resolve({ templates });
 			if (method === "creation.metadata.get") return Promise.resolve({ metadata: null });
+			if (method === "git.branches") return Promise.resolve({ current: null, branches: [] });
 			if (method === "models.listAvailable" || method === "models.list") return Promise.resolve([]);
 			return Promise.resolve({});
 		},
@@ -56,40 +61,39 @@ function makeRpc(templates: unknown[] = []): RpcClient {
 	} as unknown as RpcClient;
 }
 
-function renderPanel(rpc: RpcClient): ReturnType<typeof createRoot> {
+function renderWelcome(rpc: RpcClient): ReturnType<typeof createRoot> {
 	const host = document.createElement("div");
 	document.body.appendChild(host);
 	const root = createRoot(host);
 	act(() => {
 		root.render(
-			createElement(CreationPanel, {
-				open: true,
-				onClose: () => {
-					closeCount++;
-				},
+			createElement(WelcomeComposer, {
 				rpc,
 				project: "C:\\proj",
-				onSubmit: (metadata: Record<string, unknown>, message?: CreationMessage) => {
+				modes: [
+					{ id: "work", label: "Work" },
+					{ id: "design", label: "Design" },
+				],
+				modeId: "design",
+				onModeChange: (id: string | null) => {
+					modeChanges.push(id);
+				},
+				designSubmit: (metadata: Record<string, unknown>, message?: CreationMessage) => {
 					captured.push({ metadata, message });
 					return Promise.resolve(true);
 				},
+				onSubmit: () => {},
 			}),
 		);
 	});
 	return root;
 }
 
-/** 等两相位进场的双 rAF 把 phase 推进到 open（Escape 监听此时才生效）。 */
+/** 等模式页的派生态 effect(placeholder 上报/模板回填/句柄注册)落地。 */
 async function settle(): Promise<void> {
 	await act(async () => {
 		await new Promise(r => setTimeout(r, 30));
 	});
-}
-
-function panelEl(): HTMLElement {
-	const el = document.body.querySelector<HTMLElement>(".gui-creation-panel");
-	expect(el).not.toBeNull();
-	return el!;
 }
 
 function chipButton(label: string): HTMLButtonElement {
@@ -111,7 +115,7 @@ function onChip(el: HTMLButtonElement): boolean {
  * 按钮(chip/模板的 .click() 在本环境已被验证可靠)。
  */
 async function typeAndSend(text: string): Promise<void> {
-	const textarea = panelEl().querySelector("textarea");
+	const textarea = document.body.querySelector("textarea");
 	expect(textarea).not.toBeNull();
 	const propsKey = Object.keys(textarea!).find(k => k.startsWith("__reactProps$"))!;
 	const props = (textarea as unknown as Record<string, { onChange(e: unknown): void }>)[propsKey]!;
@@ -119,7 +123,7 @@ async function typeAndSend(text: string): Promise<void> {
 	act(() => {
 		props.onChange({ target: textarea, currentTarget: textarea });
 	});
-	const sendBtn = panelEl().querySelector<HTMLButtonElement>(".gui-send-btn");
+	const sendBtn = document.body.querySelector<HTMLButtonElement>(".gui-send-btn");
 	expect(sendBtn).not.toBeNull();
 	act(() => {
 		sendBtn!.click();
@@ -129,13 +133,13 @@ async function typeAndSend(text: string): Promise<void> {
 	});
 }
 
-describe("M3.7a 模式页 chip 排", () => {
-	test("默认选中 prototype，placeholder 随 chip 变化", async () => {
-		const root = renderPanel(makeRpc());
+describe("M3.7a 模式页 chip 排(欢迎页内联形态)", () => {
+	test("默认选中 prototype,placeholder 随 chip 变化", async () => {
+		const root = renderWelcome(makeRpc());
 		await settle();
 		expect(onChip(chipButton(t("creation tab prototype")))).toBe(true);
 		expect(onChip(chipButton(t("creation tab other")))).toBe(false);
-		const textarea = panelEl().querySelector("textarea")!;
+		const textarea = document.body.querySelector("textarea")!;
 		expect(textarea.placeholder).toBe(t("creation placeholder prototype"));
 		act(() => {
 			chipButton(t("creation media video")).click();
@@ -145,7 +149,7 @@ describe("M3.7a 模式页 chip 排", () => {
 		document.body.innerHTML = "";
 	});
 
-	test("六类 chip 均可建会话，metadata 与 M3.2 编译管线逐字段一致", async () => {
+	test("六类 chip 均可建会话,metadata 与 M3.2 编译管线逐字段一致", async () => {
 		const cases: { chip: (typeof CREATION_CHIPS)[number]; label: TranslationKey }[] = [
 			{ chip: "prototype", label: "creation tab prototype" },
 			{ chip: "live-artifact", label: "creation tab live artifact" },
@@ -157,7 +161,7 @@ describe("M3.7a 模式页 chip 排", () => {
 		];
 		for (const { chip, label } of cases) {
 			captured.length = 0;
-			const root = renderPanel(makeRpc());
+			const root = renderWelcome(makeRpc());
 			await settle();
 			act(() => {
 				chipButton(t(label)).click();
@@ -186,7 +190,7 @@ describe("M3.7a 模式页 chip 排", () => {
 		}
 	});
 
-	test("template chip 的内容区是模板 rail，点行即以模板快照建会话", async () => {
+	test("template chip 收起输入框内联展开模板 rail,点行即以模板快照建会话", async () => {
 		const tpl = {
 			id: "tpl-1",
 			name: "我的演示稿",
@@ -196,15 +200,15 @@ describe("M3.7a 模式页 chip 排", () => {
 			updatedAt: "2026-09-27T00:00:00Z",
 		};
 		captured.length = 0;
-		const root = renderPanel(makeRpc([tpl]));
+		const root = renderWelcome(makeRpc([tpl]));
 		await settle();
 		act(() => {
 			chipButton(t("creation tab template")).click();
 		});
 		await settle(); // 等模板列表 RPC 回填并渲染 rail
-		// template chip 不渲染输入框,内容区 = 模板 rail(§2.3)。
-		expect(panelEl().querySelector("textarea")).toBeNull();
-		const row = panelEl().querySelector<HTMLButtonElement>(".gui-creation-template-main");
+		// template chip 收起输入框,模板 rail 内联落在 chip 排下方(§2.3)。
+		expect(document.body.querySelector("textarea")).toBeNull();
+		const row = document.body.querySelector<HTMLButtonElement>(".gui-creation-template-main");
 		expect(row).not.toBeNull();
 		expect(row!.textContent).toContain("我的演示稿");
 		await act(async () => {
@@ -220,15 +224,14 @@ describe("M3.7a 模式页 chip 排", () => {
 });
 
 describe("M3.7a 模式页骨架契约", () => {
-	test("Escape 收合面板", async () => {
-		const before = closeCount;
-		const root = renderPanel(makeRpc());
+	test("Escape 收起 chip 排(mode chip 复位 work)", async () => {
+		const root = renderWelcome(makeRpc());
 		await settle();
 		await act(async () => {
 			document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
 			await Promise.resolve();
 		});
-		expect(closeCount).toBe(before + 1);
+		expect(modeChanges).toContain("work");
 		root.unmount();
 		document.body.innerHTML = "";
 	});
@@ -236,7 +239,7 @@ describe("M3.7a 模式页骨架契约", () => {
 	test("chip 选择跨再入保留(草稿模块级缓存)", async () => {
 		// 模块级 sessionDraft 已被前面的用例写过 —— 本次显式切到 deck 再卸载,
 		// 重挂即验证回填而不是默认值。
-		const root = renderPanel(makeRpc());
+		const root = renderWelcome(makeRpc());
 		await settle();
 		act(() => {
 			chipButton(t("creation tab deck")).click();
@@ -244,19 +247,24 @@ describe("M3.7a 模式页骨架契约", () => {
 		expect(onChip(chipButton(t("creation tab deck")))).toBe(true);
 		root.unmount();
 		document.body.innerHTML = "";
-		const root2 = renderPanel(makeRpc());
+		const root2 = renderWelcome(makeRpc());
 		await settle();
 		expect(onChip(chipButton(t("creation tab deck")))).toBe(true);
 		root2.unmount();
 		document.body.innerHTML = "";
 	});
 
-	test("「项目名」「工作目录」字段随底栏退役", async () => {
-		const root = renderPanel(makeRpc());
+	test("「项目名」「工作目录」字段随底栏退役;无弹层无第二输入框", async () => {
+		const root = renderWelcome(makeRpc());
 		await settle();
 		// DOM 侧:无底栏、无项目名输入框(复活即红)。
-		expect(panelEl().querySelector(".gui-creation-foot")).toBeNull();
-		expect(panelEl().querySelector("#gui-creation-name")).toBeNull();
+		expect(document.body.querySelector(".gui-creation-foot")).toBeNull();
+		expect(document.body.querySelector("#gui-creation-name")).toBeNull();
+		// v2 内联形态:无居中弹层残留(backdrop/panel 复活即红),输入框
+		// 只有一个(欢迎页 composer 本体)。
+		expect(document.body.querySelector(".gui-creation-backdrop")).toBeNull();
+		expect(document.body.querySelector(".gui-creation-panel")).toBeNull();
+		expect(document.body.querySelectorAll("textarea")).toHaveLength(1);
 		// 词表侧:creation 域不再持有这两个字段的键。
 		expect("creation project name" in creationZh).toBe(false);
 		expect("creation workspace" in creationZh).toBe(false);

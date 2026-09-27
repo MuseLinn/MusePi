@@ -22,6 +22,7 @@ import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
 import { processImageFile, revokePreviews, toImageContent } from "../../lib/image";
 import { type NativeRecognition, nativeVoiceSupport, startNativeRecognition } from "../../lib/native-voice";
+import { useScrollShadow } from "../../lib/scroll-shadow";
 import type { TtsSnapshot } from "../../lib/tts";
 import { readSttLangPref, useTts, useTtsSnapshot } from "../../lib/tts";
 import { useGuestSelector } from "../../lib/use-guest";
@@ -767,6 +768,9 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 export function Composer({ client }: ComposerProps): ReactNode {
 	const [text, setText] = useState("");
 	const taRef = useRef<HTMLTextAreaElement | null>(null);
+	// 横向边缘羽化:图片附件 chip 排横向滚动时左右羽化。
+	const attachChipsRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(attachChipsRef);
 	const { composingRef, onCompositionStart, onCompositionEnd } = useCompositionGuard();
 
 	// Pending image attachments (protocol `prompt.images` — host-side
@@ -976,7 +980,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 				</div>
 			)}
 			{canPrompt && pending.length > 0 && (
-				<div className="sh-attach-chips" role="list" aria-label={t("add images")}>
+				<div ref={attachChipsRef} className="sh-attach-chips" role="list" aria-label={t("add images")}>
 					{pending.map(p => (
 						<div key={p.id} className="sh-attach-chip" role="listitem">
 							<img src={p.previewUrl} alt={p.name} className="sh-attach-thumb" />

@@ -4720,6 +4720,31 @@ body.gui-resizing .gui-pane-right {
 	mask-image: linear-gradient(to top, transparent 0, #000 24px);
 }
 
+/* ── 横向内容边界羽化(2026-09-27:全局滚动容器羽化通用化)───────────
+ * 与纵向同配方(useScrollShadow 的 data-left/right-scroll 属性),覆盖
+ * 桌面端全部横向滚动容器:模型/扩展中心/多实例 tab 条、主题代码预览、
+ * 扩展详情代码块、git 内嵌 diff、右栏 panel tab strip。柔带宽度走
+ * --gui-fade-x(默认 14px),需要更窄/更宽的容器自行覆盖。
+ * 注:mask-image 单属性不可双轴叠加,一个容器同时纵横溢出时后写的
+ * 横向规则生效——现有容器均为单方向滚动,勿把本类用于双轴容器。 */
+:is(.gui-fade-scroll, .gui-model-tabs, .gui-surface-tabs, .gui-ext-tabs, .gui-code-preview-body, .gui-ext-detail-code pre, .gui-changes-file-diff, .gui-panel-tabs)[data-left-scroll="true"][data-right-scroll="true"] {
+	mask-image: linear-gradient(
+		to right,
+		transparent 0,
+		#000 var(--gui-fade-x, 14px),
+		#000 calc(100% - var(--gui-fade-x, 14px)),
+		transparent 100%
+	);
+}
+
+:is(.gui-fade-scroll, .gui-model-tabs, .gui-surface-tabs, .gui-ext-tabs, .gui-code-preview-body, .gui-ext-detail-code pre, .gui-changes-file-diff, .gui-panel-tabs)[data-left-scroll="true"]:not([data-right-scroll="true"]) {
+	mask-image: linear-gradient(to right, transparent 0, #000 var(--gui-fade-x, 14px));
+}
+
+:is(.gui-fade-scroll, .gui-model-tabs, .gui-surface-tabs, .gui-ext-tabs, .gui-code-preview-body, .gui-ext-detail-code pre, .gui-changes-file-diff, .gui-panel-tabs)[data-right-scroll="true"]:not([data-left-scroll="true"]) {
+	mask-image: linear-gradient(to left, transparent 0, #000 var(--gui-fade-x, 14px));
+}
+
 /* ── Idle recap row (TUI `※ recap:` status-line parity) ───────────────
  * Fixed below the transcript (does not scroll with it), dim/italic like
  * the terminal status line; cleared by the next wire activity or the

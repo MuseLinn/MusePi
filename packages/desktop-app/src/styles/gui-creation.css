@@ -1,139 +1,37 @@
 /* ═══════════════════════════════════════════════════════════════════════════
- * Design 模式页(M3.7a,docs/review/0.5.0-m3-mode-page-redesign.md §2)——欢迎页
- * 全屏 overlay 的内容物:类型 chip 排 + 复用欢迎页 composer 的输入框 +
- * template chip 的模板 rail。overlay 骨架与动效沿用 M3.1(240ms 入 /
- * 140ms 出,--spring-liquid);零新视觉 token,chip/accent 选中态取档 M1.10。
+ * Design 模式页(M3.7a v2 修订,docs/review/0.5.0-m3-mode-page-redesign.md §2)
+ * ——欢迎页内联形态:mode chip 选中「设计」时类型 chip 排直接落在欢迎页
+ * 空态 composer 上方一行,横向溢出滚动(边缘羽化由全局滚动羽化接管,
+ * 容器类语义化 .gui-creation-chiprail);template chip 的模板 rail 在
+ * chip 排下方内联展开。零新视觉 token,chip/accent 选中态取档 M1.10。
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-.gui-creation-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 2000; /* L2 带:与设置面板平级,低于模态带 z-3000 */
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	padding: 24px;
-	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
-	backdrop-filter: blur(6px);
-	-webkit-backdrop-filter: blur(6px);
-}
-
-.gui-creation-backdrop--pending {
-	opacity: 0;
-}
-.gui-creation-backdrop--entered {
-	animation: gui-creation-backdrop-in 240ms ease;
-}
-.gui-creation-backdrop--closing {
-	animation: gui-creation-backdrop-out 140ms ease forwards;
-	pointer-events: none;
-}
-
-/* 面板本体:liquid glass(DialogFrame 同款 inset rim + sheen)。 */
-.gui-creation-panel {
+/* ── 类型 chip 排(§2.3:单选,默认 prototype;横向溢出滚动)────────────────── */
+.gui-creation-modepage {
 	display: flex;
 	flex-direction: column;
-	position: relative;
-	width: min(760px, 94vw);
-	max-height: min(680px, 88vh);
-	border-radius: var(--radius-2xl);
-	border: 0;
-	background: color-mix(in oklab, var(--color-surface) 72%, transparent);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow:
-		inset 0 1px 0 var(--glass-edge-hi),
-		inset 0 -1px 0 var(--glass-edge-lo),
-		var(--glass-shadow, 0 20px 60px rgba(0, 0, 0, 0.5));
-	overflow: hidden;
-	outline: none;
+	gap: 10px;
+	margin-bottom: 10px;
+	animation: gui-creation-fade 160ms ease;
 }
-.gui-creation-panel::before {
-	content: "";
-	position: absolute;
-	inset: 0;
-	z-index: 0;
-	pointer-events: none;
-	background: var(--glass-sheen);
-}
-.gui-creation-panel > * {
-	position: relative;
-	z-index: 1;
-}
-
-.gui-creation-panel--pending {
-	opacity: 0;
-	transform: scale(0.98);
-}
-.gui-creation-panel--entered {
-	animation: gui-creation-in 240ms var(--spring-liquid, var(--spring));
-}
-.gui-creation-panel--closing {
-	animation: gui-creation-out 140ms ease forwards;
-}
-
-@keyframes gui-creation-backdrop-in {
-	from {
-		opacity: 0;
-	}
-}
-@keyframes gui-creation-backdrop-out {
-	to {
-		opacity: 0;
-	}
-}
-@keyframes gui-creation-in {
-	from {
-		opacity: 0;
-		transform: scale(0.98);
-	}
-}
-@keyframes gui-creation-out {
-	to {
-		opacity: 0;
-		transform: scale(0.98);
-	}
-}
-
-/* ── 头部 ──────────────────────────────────────────────────────────────── */
-.gui-creation-head {
+/* 横滑容器:语义化类名,overflow-x 即滚动羽化工具的目标。 */
+.gui-creation-chiprail {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	padding: 14px 16px 0 20px;
-}
-.gui-creation-title {
-	font-size: 17px;
-	font-weight: 600;
-	letter-spacing: 0.01em;
-}
-.gui-creation-close {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 28px;
-	height: 28px;
-	border-radius: var(--radius-lg);
-	color: var(--color-text-muted);
-}
-.gui-creation-close:hover {
-	background: var(--glass-bg);
-	color: var(--color-text);
-}
-
-/* ── 类型 chip 排(§2.3:单选,默认 prototype)────────────────────────────── */
-.gui-creation-chiprow {
-	padding: 12px 20px 0;
-}
-.gui-creation-chips {
-	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	gap: 7px;
+	overflow-x: auto;
+	scrollbar-width: none;
+	padding: 2px;
+}
+.gui-creation-chiprail::-webkit-scrollbar {
+	display: none;
 }
 .gui-creation-chip {
+	flex: none;
 	padding: 5px 12px;
 	border-radius: 999px;
 	font-size: 12.5px;
+	white-space: nowrap;
 	color: var(--color-text-muted);
 	background: var(--glass-bg);
 	box-shadow: inset 0 0 0 1px var(--glass-border);
@@ -152,28 +50,14 @@
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
-/* ── 内容区(模式页空态:chip 切换 160ms 交叉淡入,不位移)───────────────────── */
-.gui-creation-body {
-	flex: 1;
-	min-height: 0;
-	overflow-y: auto;
-	padding: 14px 20px;
-	display: flex;
-	flex-direction: column;
-	gap: 14px;
-	animation: gui-creation-fade 160ms ease;
-}
-/* 模式页内容区:输入框(或模板 rail)在面板里垂直居中,对齐 §2.2 空态图。 */
-.gui-creation-mode {
-	justify-content: center;
-}
 @keyframes gui-creation-fade {
 	from {
 		opacity: 0;
 	}
 }
 
-.gui-creation-field {
+/* ── template chip 的模板 rail(chip 排下方内联展开,§3.4 机制不变)───────── */
+.gui-creation-template-rail {
 	display: flex;
 	flex-direction: column;
 	gap: 7px;
@@ -189,8 +73,6 @@
 	line-height: 1.6;
 	color: var(--color-text-faint);
 }
-
-/* ── Template chip 的模板 rail(§3.4 机制不变:点行即建,行尾删除)────────── */
 .gui-creation-template-list {
 	display: flex;
 	flex-direction: column;
@@ -317,20 +199,12 @@
 }
 
 /* ── gui-motion-off / prefers-reduced-motion:全部归零(§8 验收)──────────── */
-.gui-motion-off .gui-creation-panel--entered,
-.gui-motion-off .gui-creation-panel--closing,
-.gui-motion-off .gui-creation-backdrop--entered,
-.gui-motion-off .gui-creation-backdrop--closing,
-.gui-motion-off .gui-creation-body,
+.gui-motion-off .gui-creation-modepage,
 .gui-motion-off .gui-creation-saved {
 	animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-	.gui-creation-panel--entered,
-	.gui-creation-panel--closing,
-	.gui-creation-backdrop--entered,
-	.gui-creation-backdrop--closing,
-	.gui-creation-body,
+	.gui-creation-modepage,
 	.gui-creation-saved {
 		animation: none;
 	}

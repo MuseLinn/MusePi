@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openExternalUrl } from "../../lib/electron";
 import { usePrompt } from "../../lib/prompt-dialog";
 import type { RpcClient } from "../../lib/rpc";
+import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
 import { GuiSelect } from "../GuiSelect";
@@ -145,6 +146,9 @@ export function ModelSection({
 	 *  provider add dialog already open (see CustomProviderPane). */
 	openAddProvider?: boolean;
 }): ReactNode {
+	// 横向边缘羽化:顶部 tab 条横向滚动时左右羽化(只在溢出时出现)。
+	const modelTabsRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(modelTabsRef);
 	// Section collapse (bitfun parity): show the first few cards, expand on
 	// demand — 70 login providers + the full catalog is too much for a grid.
 	const [showAll, setShowAll] = useState(false);
@@ -1117,7 +1121,7 @@ export function ModelSection({
 				{/* Top tabs (extensions-center pill parity): the pane's old left
 				 * nav moved up — the roles tab now hosts its own TUI-style rail,
 				 * so a second vertical nav would double up. */}
-				<div className="gui-model-tabs" role="tablist" aria-label={t("model settings")}>
+				<div ref={modelTabsRef} className="gui-model-tabs" role="tablist" aria-label={t("model settings")}>
 					{modelTabs.map(tab => (
 						<button
 							key={tab.id}

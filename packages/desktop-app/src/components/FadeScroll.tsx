@@ -4,10 +4,12 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
 
 /**
  * 内容边界羽化容器(边缘渐变淡出):通用版 useScrollShadow 载体——把
- * `overflow-y-auto` 等滚动类容器包进来,内部维护 `data-top-scroll`/
- * `data-bottom-scroll`,CSS(`.gui-fade-scroll[data-*]`)在内容真实溢出且
- * 滚离边缘时才挂 mask(openchamber ScrollShadow parity,与 transcript /
- * 会话列表 / 设置面板同配方)。
+ * `overflow-y-auto` / `overflow-x-auto` 等滚动类容器包进来,内部维护
+ * `data-top-scroll`/`data-bottom-scroll`/`data-left-scroll`/`data-right-scroll`,
+ * CSS(`.gui-fade-scroll[data-*]`)在内容真实溢出且滚离边缘时才挂 mask:
+ * 纵向容器上下羽化、横向容器(如欢迎页 chip 排)左右羽化(openchamber
+ * ScrollShadow parity,与 transcript / 会话列表 / 消息内表格同配方)。
+ * 注意单方向使用:mask-image 不可双轴叠加。
  *
  * 用于没有专用 class 的泛化滚动容器(右栏 tab 体、轨迹列表、git/diff/pr
  * 面板、向导/引导/导入列表等)——此前这类容器全部漏做羽化(2026-08-21 审计)。

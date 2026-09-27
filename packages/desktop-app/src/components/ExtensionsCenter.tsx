@@ -1,5 +1,6 @@
 import { type TranslationKey, t } from "@musepi/client-core";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -264,6 +265,10 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	// 扩展扫描的独立 TTL 缓存 —— 与 extensions.list 分开拉取。
 	const [plugins, setPlugins] = useState<PluginEntry[]>([]);
 	const [pluginsError, setPluginsError] = useState<string | null>(null);
+	// 横向边缘羽化:顶部/provider 两个 tab 条 + 详情里的横向代码块,
+	// 深扫描一棵挂(只在横向溢出时出现左右羽化)。
+	const centerRef = useRef<HTMLDivElement | null>(null);
+	useDeepScrollShadow(centerRef, ".gui-ext-tabs, .gui-ext-detail-code pre");
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
@@ -490,7 +495,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 	};
 
 	return (
-		<div className="gui-ext-center">
+		<div ref={centerRef} className="gui-ext-center">
 			{/* 标题区 (设计稿 2:1427):大标题 + 副标题 + 右上槽位挂载胶囊。 */}
 			<div className="gui-ext-head">
 				<div className="gui-ext-head-text">

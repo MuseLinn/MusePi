@@ -438,3 +438,22 @@
 		font-size: 16px;
 	}
 }
+
+/* 内容边界羽化(transcript 同配方):agent 列表溢出时上下羽化。 */
+.ag-panel[data-top-scroll="true"][data-bottom-scroll="true"] {
+	mask-image: linear-gradient(
+		to bottom,
+		transparent 0,
+		#000 12px,
+		#000 calc(100% - 12px),
+		transparent 100%
+	);
+}
+
+.ag-panel[data-top-scroll="true"]:not([data-bottom-scroll="true"]) {
+	mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+}
+
+.ag-panel[data-bottom-scroll="true"]:not([data-top-scroll="true"]) {
+	mask-image: linear-gradient(to top, transparent 0, #000 12px);
+}

@@ -12,6 +12,7 @@ import {
 	type TurnIndexItem,
 	t,
 } from "@musepi/client-core";
+import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import type { SessionEntry } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,6 +37,7 @@ import {
 import { surfaceById } from "../lib/surfaces/registry";
 import { usePanelTabs } from "../lib/use-panel-tabs";
 import { usePointerDrag } from "../lib/use-pointer-drag";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { useStore } from "../lib/use-store";
 import { speak } from "../lib/voice";
 import { Icon } from "../vendor/oc-icons";
@@ -48,6 +50,7 @@ import { BrowserGuiHint } from "./BrowserGuiHint";
 import { BtwFloatingCard } from "./BtwFloatingCard";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
+import type { CreationMessage } from "./CreationModeRow";
 import { MessageTreeButton } from "./MessageTree";
 import type { ReminderRow } from "./RemindersPanel";
 import { Reveal } from "./Reveal";
@@ -240,6 +243,8 @@ export function ChatView({
 	modes,
 	modeId,
 	onModeChange,
+	/** M3.7a(v2 修订):design 模式内联形态的发送管线 —— 透传给欢迎页 composer。 */
+	onDesignSubmit,
 	defaultModelId,
 	presetThinkingLevel,
 	busy,
@@ -288,6 +293,8 @@ export function ChatView({
 	modes?: { id: string; label: string }[] | null;
 	modeId?: string | null;
 	onModeChange?(id: string | null): void;
+	/** M3.7a design 模式内联形态(§2.4):session.create + projectMetadata 管线。 */
+	onDesignSubmit?(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** The DEFAULT-role model (modelRoles.default): the welcome composer's
 	 *  resting preselect for NEW sessions. Separate from presetModelId so
 	 *  opening/switching sessions never changes what the welcome shows. */
@@ -648,6 +655,11 @@ export function ChatView({
 	});
 	const terminalDockRef = useRef<HTMLDivElement | null>(null);
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
+	// 内容边界羽化:纵向上下羽化(transcript 自身,修复静态 data 属性从不
+	// 更新的死接线)+ 深扫描消息内的工具渲染横向滚动块(tv-pre / diff,
+	// 同 mask 配方,只在横向溢出时显示左右羽化)。
+	useScrollShadow(transcriptRef);
+	useDeepScrollShadow(transcriptRef, ".tv-pre, .tv-diff, .tv-diff-sbs-cell");
 	// Jump requests (message tree / trajectory / canvas / branch bar): the
 	// Transcript owns window expansion — a jump into the folded window
 	// mounts the target row first, then scrolls + flashes (previously the
@@ -1845,6 +1857,7 @@ export function ChatView({
 									modes={modes}
 									modeId={modeId}
 									onModeChange={onModeChange}
+									designSubmit={onDesignSubmit}
 									onAddProvider={onAddProvider}
 								/>
 							</div>

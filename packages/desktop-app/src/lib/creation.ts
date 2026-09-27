@@ -2,8 +2,8 @@ import type { TranslationKey } from "@musepi/client-core/src/i18n/index.js";
 
 /**
  * Creation surface state + metadata builder (M3.2) — the pure, testable
- * half of CreationPanel. Owns the §4 project-metadata shape: the panel
- * renders form state, this module is the single translator between form
+ * half of CreationModeRow. Owns the §4 project-metadata shape: the row
+ * renders chip state, this module is the single translator between form
  * state and the wire metadata object (built once per create, hydrated
  * back on 再入回填).
  *

@@ -40,6 +40,7 @@ import {
 } from "../lib/managed-browser-host";
 import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-nav";
 import { useFloatingMenu } from "../lib/use-floating-menu";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
 import { StateIcon } from "./StateIcon";
 
@@ -256,6 +257,10 @@ export function ManagedBrowserPane({
 	const viewport = VIEWPORTS.find(v => v.key === viewportKey)?.width ?? null;
 	const [copied, setCopied] = useState(false);
 	const slotRef = useRef<HTMLDivElement | null>(null);
+	// 横向边缘羽化:标签页 strip 横向滚动时左右羽化(通用 .gui-panel-tabs
+	// 类,与 ContextPanel 的 agent tabs strip 同配方)。
+	const tabsRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(tabsRef);
 	const urlRef = useRef<HTMLInputElement | null>(null);
 
 	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
@@ -983,7 +988,7 @@ export function ManagedBrowserPane({
 			{/* Tab strip (Agent-created tabs are badged; selecting only changes
 			 * what the user sees — the agent keeps its own working tab). */}
 			{host.tabs.length > 0 && (
-				<div className="flex items-center gap-1 overflow-x-auto px-1 pb-1">
+				<div ref={tabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
 					{host.tabs.map(tab => {
 						const themeLum = hexLuminance(tab.themeColor);
 						const themeDark = themeLum !== null && themeLum < 0.42;

@@ -22,6 +22,7 @@ import { RIGHT_PANEL_SLOT, SlotComponentHost, SlotComponentMount } from "../lib/
 import { SURFACES } from "../lib/surfaces/registry";
 import type { UsePanelTabsResult } from "../lib/use-panel-tabs";
 import { type PointerDragHandlers, usePointerDrag } from "../lib/use-pointer-drag";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { ContextMenu } from "./ContextMenu";
@@ -1190,6 +1191,10 @@ interface BrowserTabInfo {
 
 function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 	const [url, setUrl] = useState("http://localhost:5173");
+	// 横向边缘羽化:Agent 标签页 strip 横向滚动时左右羽化(通用
+	// .gui-panel-tabs 类,与 ManagedBrowserPane 的 tab strip 同配方)。
+	const agentTabsRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(agentTabsRef);
 	const [current, setCurrent] = useState("http://localhost:5173");
 	const [history, setHistory] = useState<string[]>(["http://localhost:5173"]);
 	const [histIndex, setHistIndex] = useState(0);
@@ -1331,7 +1336,7 @@ function LegacyBrowserPane({ rpc }: { rpc: RpcClient }): ReactNode {
 			 * (the browser the agent drives). Click → open the URL here +
 			 * capture a screenshot thumbnail. */}
 			{agentTabs.length > 0 && (
-				<div className="flex items-center gap-1 overflow-x-auto px-1 pb-1">
+				<div ref={agentTabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
 					<span className="flex-shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{t("agent tabs")}:</span>
 					{agentTabs.map(tab => (
 						<button

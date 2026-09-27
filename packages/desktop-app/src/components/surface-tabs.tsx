@@ -24,6 +24,7 @@ import {
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useScrollShadow } from "../lib/use-scroll-shadow";
 
 /** One open instance inside a surface. Content lives elsewhere; the strip
  *  only tracks labels, so serialization stays trivial. */
@@ -212,6 +213,9 @@ export function SurfaceTabStrip({
 	closeLabel = "close",
 	ariaLabel,
 }: SurfaceTabStripProps): ReactNode {
+	// 横向边缘羽化:实例 tab 条横向滚动时左右羽化(只在溢出时出现)。
+	const stripRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(stripRef);
 	// Same sensor tuning as RightRail's rail reorder (distance 8 keeps clicks
 	// click-y; touch needs the long-press delay so scrolling still scrolls).
 	const sensors = useSensors(
@@ -227,7 +231,13 @@ export function SurfaceTabStrip({
 	};
 
 	return (
-		<div className="gui-surface-tabs" role="tablist" aria-label={ariaLabel} aria-orientation="horizontal">
+		<div
+			ref={stripRef}
+			className="gui-surface-tabs"
+			role="tablist"
+			aria-label={ariaLabel}
+			aria-orientation="horizontal"
+		>
 			<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
 				<SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
 					{tabs.map(tab => (

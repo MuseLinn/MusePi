@@ -1,8 +1,9 @@
 import type { AgentProgress, AgentSnapshot, SubagentLifecyclePayload, SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens, relTime } from "../../lib/format";
+import { useScrollShadow } from "../../lib/scroll-shadow";
 import "./agents.css";
 
 /** Re-render tick so running-tool durations and relative times stay live. */
@@ -83,6 +84,9 @@ export function AgentsPanel(props: {
 }): ReactNode {
 	const { agents, progress, lifecycle, selectedId, onSelect } = props;
 	const now = useNow(1000);
+	// 纵向边缘羽化:agent 列表溢出时上下羽化。
+	const panelRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(panelRef);
 
 	const sorted = useMemo(() => {
 		const mains: AgentSnapshot[] = [];
@@ -98,7 +102,7 @@ export function AgentsPanel(props: {
 	}, [agents]);
 
 	return (
-		<div className="ag-panel">
+		<div ref={panelRef} className="ag-panel">
 			{sorted.mains.map(agent => (
 				<AgentRow
 					key={agent.id}
