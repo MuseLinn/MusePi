@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { getAgentDir } from "@musepi/pi-utils";
 import { MANAGED_SKILLS_PROVIDER_ID } from "../../autolearn/managed-skills";
 import { BUNDLED_SKILL_NAMES } from "../../bundled-skills/index";
+import { reset as resetCapabilities } from "../../capability";
 import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -387,6 +388,11 @@ export class MarketplaceService implements DaemonService {
 		const target = resolveSkillDeleteTarget(skill.filePath, path.join(getAgentDir(), "skills"));
 		await rm(target, { recursive: target !== skill.filePath, force: true });
 		this.#skillsCache = null;
+		// getSkills 底层 loadCapability 还有一层 5s TTL 扫描缓存（本次 delete 的
+		// getSkills 刚把它刷新）——不清掉的话 GUI 紧跟的 skills.list 重拉会拿到
+		// 含已删技能的陈旧清单（"卸载了但卡片还在"）。与 builtin-marketplace
+		// 变更后 resetCapabilities 同款。
+		resetCapabilities();
 		// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
 		// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
 		this.#deps.invalidateExtensionsCache();
@@ -411,6 +417,8 @@ export class MarketplaceService implements DaemonService {
 			destRoot: path.join(getAgentDir(), "skills"),
 		});
 		this.#skillsCache = null;
+		// 同 deleteSkill：清 loadCapability 5s TTL 扫描缓存，新装技能立刻可见。
+		resetCapabilities();
 		this.#deps.invalidateExtensionsCache();
 		this.#deps.onChanged();
 		return { ok: true, name: result.name, dir: result.dir };

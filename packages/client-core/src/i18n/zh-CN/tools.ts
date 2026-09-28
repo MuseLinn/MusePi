@@ -362,7 +362,7 @@ export const tools = {
 	"skill hidden": "隐藏",
 	"skill ignored": "已停用",
 	"delete skill": "删除技能",
-	"delete skill confirm {name}": "确定删除技能 {name}？此操作会删除其 SKILL.md 文件。",
+	"delete skill confirm {name}": "确定卸载技能 {name}？将删除其目录及其中的脚本与资源，且不可撤销。",
 	"enable skill": "启用技能",
 	"disable skill": "停用技能",
 	"context files": "上下文",

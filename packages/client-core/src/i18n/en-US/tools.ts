@@ -373,7 +373,8 @@ export const tools = {
 	"skill hidden": "Hidden",
 	"skill ignored": "Disabled",
 	"delete skill": "Delete skill",
-	"delete skill confirm {name}": "Delete skill {name}? This will remove its SKILL.md file.",
+	"delete skill confirm {name}":
+		"Uninstall skill {name}? This deletes its directory, including scripts and resources, and cannot be undone.",
 	"enable skill": "Enable skill",
 	"disable skill": "Disable skill",
 	"context files": "Context",

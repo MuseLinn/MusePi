@@ -40,10 +40,44 @@ interface SkillRow {
 	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
 }
 
+/** Bundled 技能名单 —— 镜像 `@musepi/pi-coding-agent` bundled-skills/index.ts
+ *  的 BUNDLED_SKILL_NAMES。本地镜像而非跨包 import：浏览器包不拖 agent
+ *  包（client-core marketplace/types.ts 同款约定）；daemon 的
+ *  skills.delete 守卫才是权威，这里只决定卸载按钮显隐。新增 bundled
+ *  技能时两边同步。 */
+const BUNDLED_SKILL_NAMES: readonly string[] = [
+	"widget-design",
+	"musepi-help",
+	"musepi-extension-dev",
+	"ui-ux-pro-max",
+	"board-design",
+	"musepi-contributing",
+];
+
+/** bundled 技能：ensureBundledSkills 落盘到 user 级 skills 目录，native
+ *  扫描后 provider/level 与用户安装技能完全相同，只能按名字区分。 */
+function isBundledSkill(s: SkillRow): boolean {
+	return s._source?.provider === "native" && s._source.level === "user" && BUNDLED_SKILL_NAMES.includes(s.name);
+}
+
+/** skills.delete 守卫的 GUI 镜像（daemon marketplace-service.ts
+ *  skillDeleteBlockReason）：仅用户安装的文件技能可卸载 —— 扩展虚拟技能
+ *  （filePath === ""）、项目级、musepi-managed（auto-learn）与 bundled
+ *  技能一律不可。daemon 仍会再拦一次，这里让按钮根本不出现。 */
+function isSkillUninstallable(s: SkillRow): boolean {
+	const src = s._source;
+	if (s.filePath === "" || src?.level !== "user") return false;
+	if (src.provider === "musepi-managed" || src.provider === "extension") return false;
+	return !isBundledSkill(s);
+}
+
 /** 级别:内置 / 用户级 / 项目级 —— 同时也是 2:250 的筛选 chip 维度。 */
 type LevelKey = "builtin" | "user" | "project";
 
 function skillLevel(s: SkillRow): LevelKey {
+	// bundled 落盘在 user 级目录，但身份是随客户端分发的内置部署物
+	// （ExtensionsCenter 的 builtin 标注行同款语义）。
+	if (isBundledSkill(s)) return "builtin";
 	const level = s._source?.level;
 	if (!level || level === "native") return "builtin";
 	return level === "project" ? "project" : "user";
@@ -375,7 +409,7 @@ function SkillDrawer({
 		return () => window.clearTimeout(id);
 	}, [flash]);
 
-	const canDelete = skill.filePath !== "" && skill._source?.level === "user" && !skill.source.startsWith("managed");
+	const canDelete = isSkillUninstallable(skill);
 
 	// 启停开关 = skills.setIgnored（服务端 read-modify-write
 	// skills.ignoredSkills）：停用只关自动触发，文件保留，会话中仍可手动
@@ -667,10 +701,7 @@ function InstalledSkillsPane({
 	}, [reload]);
 
 	/** 卡片/列表行上"是否可批量操作"的单一判据,批量按钮与行内徽标共用。 */
-	const uninstallable = useCallback(
-		(s: SkillRow): boolean => s.filePath !== "" && s._source?.level === "user" && !s.source.startsWith("managed"),
-		[],
-	);
+	const uninstallable = isSkillUninstallable;
 
 	const counts = useMemo(() => {
 		const list = skills ?? [];
@@ -691,7 +722,7 @@ function InstalledSkillsPane({
 		}
 		if (level === "disabled") list = list.filter(s => s.ignored);
 		else if (level !== "all") list = list.filter(s => skillLevel(s) === level);
-		if (origin === "official") list = list.filter(s => s.source.startsWith("managed"));
+		if (origin === "official") list = list.filter(s => s.source.startsWith("managed") || skillLevel(s) === "builtin");
 		else if (origin === "extension") list = list.filter(s => s.filePath === "");
 		else if (origin === "user") list = list.filter(s => skillLevel(s) === "user");
 		else if (origin === "project") list = list.filter(s => skillLevel(s) === "project");
@@ -941,11 +972,9 @@ function InstalledSkillsPane({
 											) : (
 												<span className="gui-ext-item-tag gui-ext-item-tag--gui">{t("skill enabled")}</span>
 											)}
-											{!uninstallable(s) &&
-												skillLevel(s) === "builtin" &&
-												s.source.startsWith("managed") && (
-													<span className="gui-cap-card-note">{t("skill bundled no uninstall")}</span>
-												)}
+											{!uninstallable(s) && skillLevel(s) === "builtin" && (
+												<span className="gui-cap-card-note">{t("skill bundled no uninstall")}</span>
+											)}
 										</div>
 									</div>
 								);

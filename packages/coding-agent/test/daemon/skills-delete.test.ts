@@ -1,6 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
+import { Settings } from "@musepi/pi-coding-agent/config/settings";
+import { getAgentDir, setAgentDir } from "@musepi/pi-utils/dirs";
 import {
+	MarketplaceService,
 	resolveSkillDeleteTarget,
 	type SkillListItem,
 	skillDeleteBlockReason,
@@ -71,5 +76,45 @@ describe("resolveSkillDeleteTarget", () => {
 	test("包内技能（非 user skills 根直下）只删 SKILL.md", () => {
 		const fp = path.join("cache", "plugins", "pkg", "skills", "foo", "SKILL.md");
 		expect(resolveSkillDeleteTarget(fp, root)).toBe(fp);
+	});
+});
+
+describe("skills.delete 缓存失效", () => {
+	const originalAgentDir = getAgentDir();
+	afterEach(() => setAgentDir(originalAgentDir));
+
+	test("删除后紧跟的 skills.list 不再返回已删技能（穿透 loadCapability 5s TTL 缓存）", async () => {
+		// 回归：deleteSkill 自带的 getSkills 会把 loadCapability 扫描缓存刷到最新，
+		// 若删除后不清这层缓存，GUI 确认卸载后的立即重拉拿到的是含已删技能的
+		// 陈旧清单——能力中心里"卸载了但卡片还在"。
+		const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "musepi-skills-delete-"));
+		try {
+			setAgentDir(agentDir);
+			const skillDir = path.join(agentDir, "skills", "delete-freshness-probe");
+			await fs.mkdir(skillDir, { recursive: true });
+			await Bun.write(
+				path.join(skillDir, "SKILL.md"),
+				"---\nname: delete-freshness-probe\ndescription: probe\n---\n\n# probe\n",
+			);
+			const service = new MarketplaceService({
+				cwd: () => agentDir,
+				settings: () => Settings.isolated(),
+				extensionEntries: async () => [],
+				invalidateExtensionsCache: () => {},
+				invalidatePluginCaches: () => {},
+				onChanged: () => {},
+				onInstallState: () => {},
+			});
+
+			const before = await service.getSkills();
+			expect(before.some(s => s.name === "delete-freshness-probe")).toBe(true);
+
+			await service.deleteSkill({ name: "delete-freshness-probe" });
+
+			const after = await service.getSkills();
+			expect(after.some(s => s.name === "delete-freshness-probe")).toBe(false);
+		} finally {
+			await fs.rm(agentDir, { recursive: true, force: true });
+		}
 	});
 });

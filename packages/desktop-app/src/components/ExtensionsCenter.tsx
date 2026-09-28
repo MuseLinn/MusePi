@@ -59,14 +59,18 @@ function levelLabel(s: ExtensionItem): string {
 	return sourceLevelLabel(s.source.provider, s.source.level);
 }
 
-/** User-owned skills (user-level files, not native/auto-learn) can be
- *  deleted — mirrors the daemon's skills.delete guard. */
+/** User-owned skills (user-level files) can be deleted — mirrors the
+ *  daemon's skills.delete guard (skillDeleteBlockReason). Bundled skills
+ *  land in the user dir too, but the builtin registry annotates them
+ *  (`builtin: true`), which is the discriminator; auto-learn
+ *  (musepi-managed) and extension-declared virtual skills are excluded. */
 function isDeletable(e: ExtensionItem): boolean {
 	return (
 		e.kind === "skill" &&
+		!e.builtin &&
 		e.source.level === "user" &&
-		e.source.provider !== "native" &&
-		e.source.provider !== "musepi-managed"
+		e.source.provider !== "musepi-managed" &&
+		e.source.provider !== "extension"
 	);
 }
 
