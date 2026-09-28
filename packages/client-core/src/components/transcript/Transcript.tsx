@@ -1527,6 +1527,31 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		isSuppressed: () => Date.now() < sizeAdjustSuppressUntilRef.current,
 		getScrollTop: () => scrollerRef.current?.scrollTop ?? 0,
 	});
+	// First measurement must land inside the mount commit, not in the next
+	// frame's ResizeObserver batch: while the user is scrolling, the stock
+	// measureElement gate defers the first measure of a freshly mounted row
+	// (isScrolling && !scrollState). The row then commits with its real
+	// height while the top spacer only releases the estimate, so the document
+	// shifts by Δ (real − estimate) under a fixed scrollTop and paints one
+	// displaced frame — for a long advisor card straddling the landing point
+	// that Δ is 1460px. The RO batch then applies the scrollTop compensation
+	// and snaps it back: the user-visible jitter. resizeItem here runs inside
+	// the commit (pre-paint), so the Δ displacement and its compensation land
+	// in the same frame and cancel. Only on cache miss (first measure): when
+	// !isScrolling the stock ref already measured and the cache hit skips;
+	// smooth-scroll runs keep their stock gate (streaming/fold animation).
+	const measureVirtualRow = useCallback(
+		(el: HTMLDivElement | null) => {
+			virtualizer.measureElement(el);
+			if (el === null) return;
+			const index = virtualizer.indexFromElement(el);
+			if (index < 0) return;
+			const key = virtualizer.options.getItemKey(index);
+			if (virtualizer.itemSizeCache.has(key)) return;
+			virtualizer.resizeItem(index, el.offsetHeight);
+		},
+		[virtualizer],
+	);
 	const virtualItems = virtualizer.getVirtualItems();
 	// Test/SSR fallback: without a measurable scroller (happy-dom, SSR) the
 	// virtualizer's window is empty — render the full list so row-level tests
@@ -2209,7 +2234,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						return (
 							<div
 								key={vi.key}
-								ref={virtualizer.measureElement}
+								ref={measureVirtualRow}
 								data-index={vi.index}
 								data-entry-ts={entry.timestamp}
 								className="tr-vrow"
