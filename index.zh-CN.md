@@ -1,6 +1,6 @@
 ---
 layout: default
-title: MusePi — 一个 Agent，所有工作面
+title: MusePi — 结对工程师，处处与你同行
 lang: zh-CN
 en_url: /
 mp_cta: true
@@ -15,7 +15,7 @@ mp_cta: true
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
         <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
-      <h1 class="mp-hero-title">一个 Agent。<br>处处都是它的主场。</h1>
+      <h1 class="mp-hero-title">一位结对工程师，<br>处处与你同行。</h1>
       <p class="mp-hero-sub">
         MusePi 把液态玻璃桌面驾驶舱、常驻桌宠与移动伴侣接到同一个 daemon
         上——会话、设置与历史记录，从 GUI 到终端到手机一路随行。
@@ -64,6 +64,67 @@ mp_cta: true
 <span class="mp-term-prompt">$ </span>cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</pre>
       <p class="mp-term-hint">一行命令装好 daemon、TUI 与桌面应用。需要 Node ≥ 22 或 Bun。</p>
     </aside>
+  </div>
+  <div class="mp-orb" aria-hidden="true">
+    <svg viewBox="0 0 269 275" xmlns="http://www.w3.org/2000/svg" focusable="false">
+      <defs>
+        <radialGradient id="mp-orb-shell" cx="0.34" cy="0.26" r="0.92">
+          <stop offset="0" stop-color="oklch(89.07% 0.0798 79.84)"/>
+          <stop offset="0.5" stop-color="oklch(65% 0.105 79.84)"/>
+          <stop offset="1" stop-color="oklch(33% 0.08 79.84)"/>
+        </radialGradient>
+        <linearGradient id="mp-orb-ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="oklch(96% 0.07 85)"/>
+          <stop offset="0.15" stop-color="oklch(96% 0.07 85)"/>
+          <stop offset="0.5" stop-color="oklch(88% 0.135 82)"/>
+          <stop offset="0.86" stop-color="oklch(52% 0.09 80)"/>
+          <stop offset="1" stop-color="oklch(70% 0.11 81)"/>
+        </linearGradient>
+        <linearGradient id="mp-orb-wear" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="oklch(97% 0.004 95)"/>
+          <stop offset="1" stop-color="oklch(90% 0.006 95)"/>
+        </linearGradient>
+        <linearGradient id="mp-orb-rose" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="oklch(83% 0.05 40)"/>
+          <stop offset="0.55" stop-color="oklch(72% 0.075 35)"/>
+          <stop offset="1" stop-color="oklch(58% 0.07 32)"/>
+        </linearGradient>
+        <radialGradient id="mp-orb-eye" cx="0.5" cy="0.3" r="0.78">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="0.45" stop-color="#f4f6f9"/>
+          <stop offset="1" stop-color="#c9ced7"/>
+        </radialGradient>
+      </defs>
+      <g transform="translate(20 24)">
+        <path d="M 15.4 149.5 A 104 34 -18 1 1 213.2 85.2" fill="none" stroke="url(#mp-orb-ring)" stroke-width="9" stroke-linecap="round" opacity="0.55"/>
+        <circle cx="114.27" cy="114.27" r="114.27" fill="url(#mp-orb-shell)"/>
+        <ellipse cx="80.27" cy="57.27" rx="31" ry="14" transform="rotate(-22 80.27 57.27)" fill="#ffffff" opacity="0.5"/>
+        <ellipse cx="58.27" cy="84.27" rx="7" ry="4" transform="rotate(-22 58.27 84.27)" fill="#ffffff" opacity="0.35"/>
+        <ellipse cx="94.27" cy="50.27" rx="15" ry="5.6" transform="rotate(-22 94.27 50.27)" fill="#ffffff" opacity="0.55"/>
+        <ellipse cx="88" cy="112" rx="12.5" ry="17" fill="url(#mp-orb-eye)"/>
+        <ellipse cx="141" cy="112" rx="12.5" ry="17" fill="url(#mp-orb-eye)"/>
+        <path d="M 97 138 Q 114.5 152 132 138" fill="none" stroke="#f4f6f9" stroke-width="7" stroke-linecap="round"/>
+        <path d="M 213.2 85.2 A 104 34 -18 1 1 15.4 149.5" fill="none" stroke="url(#mp-orb-ring)" stroke-width="9" stroke-linecap="round"/>
+        <path d="M -2 78 A 123.3 123.3 0 0 1 230.54 78" fill="none" stroke="url(#mp-orb-wear)" stroke-width="14" stroke-linecap="round"/>
+        <path d="M -2 74 A 128 128 0 0 1 230.54 74" fill="none" stroke="url(#mp-orb-rose)" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M -2 84 A 118.5 118.5 0 0 1 230.54 84" fill="none" stroke="url(#mp-orb-rose)" stroke-width="2.6" stroke-linecap="round"/>
+        <rect x="-6.5" y="74" width="9" height="30" rx="4.5" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        <rect x="225.97" y="74" width="9" height="30" rx="4.5" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        <g transform="translate(-2 104.27) rotate(-14)">
+          <ellipse rx="12.6" ry="25" fill="url(#mp-orb-wear)" stroke="oklch(72% 0.012 90)" stroke-width="2.2"/>
+          <ellipse rx="9" ry="20.5" fill="oklch(94% 0.005 95)"/>
+          <ellipse rx="4.8" ry="12.5" fill="oklch(45% 0.012 80)"/>
+          <path d="M -7.2 -17.8 A 11.2 23.2 0 0 1 3.8 -21.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>
+        </g>
+        <g transform="translate(230.54 104.27) rotate(14)">
+          <ellipse rx="12.6" ry="25" fill="url(#mp-orb-wear)" stroke="oklch(72% 0.012 90)" stroke-width="2.2"/>
+          <ellipse rx="9" ry="20.5" fill="oklch(94% 0.005 95)"/>
+          <ellipse rx="4.8" ry="12.5" fill="oklch(45% 0.012 80)"/>
+          <path d="M -7.2 -17.8 A 11.2 23.2 0 0 1 3.8 -21.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>
+          <rect x="2" y="-31" width="7" height="10" rx="2.4" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        </g>
+      </g>
+    </svg>
   </div>
 </section>
 
@@ -253,18 +314,18 @@ mp_cta: true
   </article>
   <div class="mp-bento">
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>常驻桌宠</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M2.2 9.6a6.6 6.6 0 0 0 11.6 0" stroke-linecap="round"/></svg>常驻桌宠</h3>
       <p>会动的桌面伴侣，支持拖拽定位、点击穿透、悬停互动与任务气泡——
          Agent 状态一眼可见。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>远程与移动</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="1.8" width="6" height="12.4" rx="1.6"/><path d="M7.2 12.2h1.6M11 5.4a4.2 4.2 0 0 1 0 5.2M12.8 3.6a6.8 6.8 0 0 1 0 8.8"/></svg>远程与移动</h3>
       <p>Android 伴侣扫码经局域网配对，三合一发送条——看运行、发提示、停回合。
          聊天机器人在 Discord、Telegram、飞书与微信里做同样的事，且各按各的原生能力：
          原生输入状态、引用成线程的回复、长回复分片而不是截断。</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>端到端加密协作</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.6l5.2 1.9v4c0 3.2-2.1 5.5-5.2 6.9-3.1-1.4-5.2-3.7-5.2-6.9v-4L8 1.6z"/><rect x="6.2" y="7" width="3.6" height="2.8" rx=".7"/><path d="M7 7V5.9a1 1 0 0 1 2 0V7"/></svg>端到端加密协作</h3>
       <p>访客可远程管理会话、停止运行中的回合——全程端到端加密，
          不经过任何第三方服务器。</p>
     </div>
@@ -277,7 +338,7 @@ mp_cta: true
   tag 发布；TUI 一行命令安装；Android 与桌面 daemon 经局域网配对。</p>
   <div class="mp-dl-grid">
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--desktop" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
       <h3>桌面客户端</h3>
       <p class="mp-dl-sub">Electron GUI · 液态玻璃界面 · 自动更新</p>
       <ul class="mp-dl-list">
@@ -288,7 +349,7 @@ mp_cta: true
       </ul>
     </div>
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--mobile" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg></div>
       <h3>Android 伴侣</h3>
       <p class="mp-dl-sub">Capacitor 应用 · 局域网配对 · 远程控制</p>
       <ul class="mp-dl-list">
@@ -297,7 +358,7 @@ mp_cta: true
       </ul>
     </div>
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--tui" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M6.5 9.5l3.5 3-3.5 3M12.5 15.5H17"/></svg></div>
       <h3>终端 TUI</h3>
       <p class="mp-dl-sub">完整的 Agent 工作面，就在你的终端里</p>
       <div class="mp-hero-code mp-hero-code--tight">

@@ -1,6 +1,6 @@
 ---
 layout: default
-title: MusePi — one agent, every surface
+title: MusePi — your pair engineer, on every surface
 lang: en
 zh_url: /index.zh-CN.html
 mp_cta: true
@@ -15,10 +15,10 @@ mp_cta: true
         <span class="mp-hero-badge-sep" aria-hidden="true"></span>
         <span class="mp-hero-badge-meta">macOS · Windows · Linux · Android</span>
       </div>
-      <h1 class="mp-hero-title">One agent.<br>Every surface you work&nbsp;on.</h1>
+      <h1 class="mp-hero-title">Your pair engineer,<br>on every surface.</h1>
       <p class="mp-hero-sub">
-        MusePi pairs a liquid-glass desktop cockpit, an always-on pet and a mobile
-        companion with one shared daemon — sessions, settings and history follow you
+        MusePi pairs a liquid-glass desktop cockpit, a resident orb companion and a
+        mobile app with one shared daemon — sessions, settings and history follow you
         from GUI to terminal to phone.
       </p>
       <div class="mp-cta-row">
@@ -65,6 +65,68 @@ mp_cta: true
 <span class="mp-term-prompt">$ </span>cd MusePi &amp;&amp; bun run setup &amp;&amp; bun run musepi</pre>
       <p class="mp-term-hint">One line installs the daemon, the TUI and the desktop app. Node ≥ 22 or Bun required.</p>
     </aside>
+  </div>
+
+  <div class="mp-orb" aria-hidden="true">
+    <svg viewBox="0 0 269 275" xmlns="http://www.w3.org/2000/svg" focusable="false">
+      <defs>
+        <radialGradient id="mp-orb-shell" cx="0.34" cy="0.26" r="0.92">
+          <stop offset="0" stop-color="oklch(89.07% 0.0798 79.84)"/>
+          <stop offset="0.5" stop-color="oklch(65% 0.105 79.84)"/>
+          <stop offset="1" stop-color="oklch(33% 0.08 79.84)"/>
+        </radialGradient>
+        <linearGradient id="mp-orb-ring" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="oklch(96% 0.07 85)"/>
+          <stop offset="0.15" stop-color="oklch(96% 0.07 85)"/>
+          <stop offset="0.5" stop-color="oklch(88% 0.135 82)"/>
+          <stop offset="0.86" stop-color="oklch(52% 0.09 80)"/>
+          <stop offset="1" stop-color="oklch(70% 0.11 81)"/>
+        </linearGradient>
+        <linearGradient id="mp-orb-wear" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="oklch(97% 0.004 95)"/>
+          <stop offset="1" stop-color="oklch(90% 0.006 95)"/>
+        </linearGradient>
+        <linearGradient id="mp-orb-rose" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="oklch(83% 0.05 40)"/>
+          <stop offset="0.55" stop-color="oklch(72% 0.075 35)"/>
+          <stop offset="1" stop-color="oklch(58% 0.07 32)"/>
+        </linearGradient>
+        <radialGradient id="mp-orb-eye" cx="0.5" cy="0.3" r="0.78">
+          <stop offset="0" stop-color="#ffffff"/>
+          <stop offset="0.45" stop-color="#f4f6f9"/>
+          <stop offset="1" stop-color="#c9ced7"/>
+        </radialGradient>
+      </defs>
+      <g transform="translate(20 24)">
+        <path d="M 15.4 149.5 A 104 34 -18 1 1 213.2 85.2" fill="none" stroke="url(#mp-orb-ring)" stroke-width="9" stroke-linecap="round" opacity="0.55"/>
+        <circle cx="114.27" cy="114.27" r="114.27" fill="url(#mp-orb-shell)"/>
+        <ellipse cx="80.27" cy="57.27" rx="31" ry="14" transform="rotate(-22 80.27 57.27)" fill="#ffffff" opacity="0.5"/>
+        <ellipse cx="58.27" cy="84.27" rx="7" ry="4" transform="rotate(-22 58.27 84.27)" fill="#ffffff" opacity="0.35"/>
+        <ellipse cx="94.27" cy="50.27" rx="15" ry="5.6" transform="rotate(-22 94.27 50.27)" fill="#ffffff" opacity="0.55"/>
+        <ellipse cx="88" cy="112" rx="12.5" ry="17" fill="url(#mp-orb-eye)"/>
+        <ellipse cx="141" cy="112" rx="12.5" ry="17" fill="url(#mp-orb-eye)"/>
+        <path d="M 97 138 Q 114.5 152 132 138" fill="none" stroke="#f4f6f9" stroke-width="7" stroke-linecap="round"/>
+        <path d="M 213.2 85.2 A 104 34 -18 1 1 15.4 149.5" fill="none" stroke="url(#mp-orb-ring)" stroke-width="9" stroke-linecap="round"/>
+        <path d="M -2 78 A 123.3 123.3 0 0 1 230.54 78" fill="none" stroke="url(#mp-orb-wear)" stroke-width="14" stroke-linecap="round"/>
+        <path d="M -2 74 A 128 128 0 0 1 230.54 74" fill="none" stroke="url(#mp-orb-rose)" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M -2 84 A 118.5 118.5 0 0 1 230.54 84" fill="none" stroke="url(#mp-orb-rose)" stroke-width="2.6" stroke-linecap="round"/>
+        <rect x="-6.5" y="74" width="9" height="30" rx="4.5" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        <rect x="225.97" y="74" width="9" height="30" rx="4.5" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        <g transform="translate(-2 104.27) rotate(-14)">
+          <ellipse rx="12.6" ry="25" fill="url(#mp-orb-wear)" stroke="oklch(72% 0.012 90)" stroke-width="2.2"/>
+          <ellipse rx="9" ry="20.5" fill="oklch(94% 0.005 95)"/>
+          <ellipse rx="4.8" ry="12.5" fill="oklch(45% 0.012 80)"/>
+          <path d="M -7.2 -17.8 A 11.2 23.2 0 0 1 3.8 -21.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>
+        </g>
+        <g transform="translate(230.54 104.27) rotate(14)">
+          <ellipse rx="12.6" ry="25" fill="url(#mp-orb-wear)" stroke="oklch(72% 0.012 90)" stroke-width="2.2"/>
+          <ellipse rx="9" ry="20.5" fill="oklch(94% 0.005 95)"/>
+          <ellipse rx="4.8" ry="12.5" fill="oklch(45% 0.012 80)"/>
+          <path d="M -7.2 -17.8 A 11.2 23.2 0 0 1 3.8 -21.9" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity="0.85"/>
+          <rect x="2" y="-31" width="7" height="10" rx="2.4" fill="url(#mp-orb-rose)" stroke="oklch(58% 0.07 32)" stroke-width="1.2"/>
+        </g>
+      </g>
+    </svg>
   </div>
 </section>
 
@@ -258,19 +320,19 @@ mp_cta: true
   </article>
   <div class="mp-bento">
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>Always-on pet</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="4.2"/><path d="M2.2 9.6a6.6 6.6 0 0 0 11.6 0" stroke-linecap="round"/></svg>Always-on pet</h3>
       <p>An animated companion with drag positioning, click-through, hover interactions
          and task bubbles — the agent's status at a glance.</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>Remote &amp; mobile</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><rect x="5" y="1.8" width="6" height="12.4" rx="1.6"/><path d="M7.2 12.2h1.6M11 5.4a4.2 4.2 0 0 1 0 5.2M12.8 3.6a6.8 6.8 0 0 1 0 8.8"/></svg>Remote &amp; mobile</h3>
       <p>The Android companion pairs over LAN with a QR join and a three-in-one send
          bar — watch runs, send prompts, stop turns. Chat bots do the same from
          Discord, Telegram, Feishu and WeChat, each in its own idiom: native typing
          indicators, quoted thread replies, chunked answers instead of truncated ones.</p>
     </div>
     <div class="mp-card">
-      <h3><span class="mp-dot"></span>E2E-encrypted collab</h3>
+      <h3><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.6l5.2 1.9v4c0 3.2-2.1 5.5-5.2 6.9-3.1-1.4-5.2-3.7-5.2-6.9v-4L8 1.6z"/><rect x="6.2" y="7" width="3.6" height="2.8" rx=".7"/><path d="M7 7V5.9a1 1 0 0 1 2 0V7"/></svg>E2E-encrypted collab</h3>
       <p>Guests manage sessions and stop running turns remotely — encrypted end to
          end, nothing touches a third-party server.</p>
     </div>
@@ -284,7 +346,7 @@ mp_cta: true
   your desktop daemon over LAN.</p>
   <div class="mp-dl-grid">
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--desktop" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
       <h3>Desktop client</h3>
       <p class="mp-dl-sub">Electron GUI · liquid-glass surfaces · auto-update</p>
       <ul class="mp-dl-list">
@@ -295,7 +357,7 @@ mp_cta: true
       </ul>
     </div>
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--mobile" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.4"/><path d="M10.5 18.5h3"/></svg></div>
       <h3>Android companion</h3>
       <p class="mp-dl-sub">Capacitor app · LAN pairing · remote control</p>
       <ul class="mp-dl-list">
@@ -304,7 +366,7 @@ mp_cta: true
       </ul>
     </div>
     <div class="mp-dl-card">
-      <div class="mp-dl-icon mp-dl-icon--tui" aria-hidden="true"></div>
+      <div class="mp-dl-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="16" rx="2"/><path d="M6.5 9.5l3.5 3-3.5 3M12.5 15.5H17"/></svg></div>
       <h3>Terminal TUI</h3>
       <p class="mp-dl-sub">The full agent surface in your terminal</p>
       <div class="mp-hero-code mp-hero-code--tight">
