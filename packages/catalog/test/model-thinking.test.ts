@@ -314,6 +314,37 @@ describe("model thinking derivation", () => {
 		expect(getSupportedEfforts(v32)).toEqual([Effort.High, Effort.Max]);
 	});
 
+	it("derives the wire low/high/max ladder for Kimi Code's bare K3 SKUs", () => {
+		// The kimi-code `/coding/v1` bare ids (`k3`, `k3-256k`) are NOT matched
+		// by isKimiK3ModelId (that predicate also gates 1M-context routing the
+		// 256k SKU must not inherit). Without the dedicated family check the
+		// bundled fallback derived the generic four-rung ladder while the live
+		// endpoint declares [low, high, max] — the two sources disagreed.
+		for (const id of ["k3", "k3-256k"]) {
+			const sparse = createModel({
+				id,
+				api: "openai-completions",
+				provider: "kimi-code",
+				baseUrl: "https://api.kimi.com/coding/v1",
+			});
+			expect(getSupportedEfforts(sparse)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+			// supports_thinking_type "only" upstream: reasoning cannot be turned
+			// off, so the mandatory flag derives too.
+			expect(sparse.thinking?.requiresEffort).toBe(true);
+
+			// A stale baked ladder (e.g. a bundled snapshot from before the wire
+			// truth changed) is normalized to the same ladder, never trusted.
+			const stale = createModel({
+				id,
+				api: "openai-completions",
+				provider: "kimi-code",
+				baseUrl: "https://api.kimi.com/coding/v1",
+				thinking: { mode: "effort", efforts: [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High] },
+			});
+			expect(getSupportedEfforts(stale)).toEqual([Effort.Low, Effort.High, Effort.Max]);
+		}
+	});
+
 	it("grants the low/high/max ladder to OpenRouter deepseek-v4-pro-0813 but not the undated route (issue #8517)", () => {
 		// OpenRouter's /models advertises reasoning.supported_efforts
 		// [low, high, max] for the dated SKU; the discovered ladder is baked

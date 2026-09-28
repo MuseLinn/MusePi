@@ -8,6 +8,7 @@ import { hostMatchesUrl, modelMatchesHost } from "../hosts";
 import {
 	hasOpus47ApiRestrictions,
 	isAnthropicFableOrMythosModel,
+	isKimiCodeK3ModelId,
 	isKimiK3ModelId,
 	supportsMidConversationSystemMessages,
 } from "../identity/family";
@@ -47,7 +48,7 @@ const KIMI_K27_CODE_MODEL_PATTERN = /(?:^|\/)kimi[-._]?k2(?:[._-]?|p)7[-._]?code
 function matchesKimiMandatoryThinkingModel(spec: ModelSpec<"anthropic-messages">): boolean {
 	if (KIMI_K27_CODE_MODEL_PATTERN.test(spec.id)) return true;
 	if (spec.id === "kimi-for-coding" || spec.id === "kimi-for-coding-highspeed") return true;
-	return isKimiK3ModelId(spec.id) || spec.id === "k3";
+	return isKimiK3ModelId(spec.id) || isKimiCodeK3ModelId(spec.id);
 }
 
 const CLOUDFLARE_ANTHROPIC_GATEWAY_URL_MARKER = /gateway\.ai\.cloudflare\.com\/.+\/anthropic(?:\/|$)/i;

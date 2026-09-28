@@ -28,6 +28,7 @@ import {
 	isGlm52ReasoningEffortModelId,
 	isGlm53ReasoningEffortModelId,
 	isGrokXHighEffortCapable,
+	isKimiCodeK3ModelId,
 	isKimiK3ModelId,
 	isMimoModelIdOrName,
 	isMinimaxM2FamilyModelId,
@@ -350,7 +351,7 @@ function getModelDefinedEfforts<TApi extends Api>(
 			return DEFAULT_REASONING_EFFORTS_WITH_MAX;
 		}
 	}
-	if (isKimiK3ModelId(spec.id)) {
+	if (isKimiK3ModelId(spec.id) || isKimiCodeK3ModelId(spec.id)) {
 		return LOW_HIGH_MAX_REASONING_EFFORTS;
 	}
 	if (isOpenCodeGatewayOxAlphaModel(spec)) {
@@ -619,7 +620,7 @@ function impliesMandatoryReasoning(parsed: ParsedModel, modelId: string): boolea
 		if (semverGte(parsed.version, "3.0")) return true;
 		if (parsed.kind === "pro" && semverGte(parsed.version, "2.5")) return true;
 	}
-	if (isKimiK3ModelId(modelId)) return true;
+	if (isKimiK3ModelId(modelId) || isKimiCodeK3ModelId(modelId)) return true;
 	// GLM-5.3+ no longer supports disabling thinking — thinking.type must
 	// always be "enabled". Floor thinking-off requests to the lowest effort.
 	if (isGlm53ReasoningEffortModelId(modelId)) return true;

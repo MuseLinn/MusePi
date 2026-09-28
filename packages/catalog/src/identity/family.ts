@@ -52,6 +52,17 @@ export const isKimiK3ModelId = memo((modelId: string): boolean => {
 });
 
 /**
+ * Kimi Code's bare K3 SKUs (`k3`, `k3-256k` on the first-party `/coding/v1`
+ * endpoint, or the `kimi/k3` namespace form). Same low/high/max wire ladder
+ * and mandatory reasoning as {@link isKimiK3ModelId}, but a separate
+ * predicate: that one also gates 1M-context routing (cursor discovery), which
+ * the 256k SKU must not inherit.
+ */
+export const isKimiCodeK3ModelId = memo((modelId: string): boolean => {
+	return /(^|\/)k3(?:-256k)?$/i.test(modelId);
+});
+
+/**
  * Claude ids in any namespace form: bare (`claude-*`), path-namespaced
  * (`anthropic/claude.x`), or dot-prefixed (`us.anthropic.claude-…`,
  * `global.anthropic.claude-…`, `au.anthropic.claude-…` — Bedrock cross-region
