@@ -428,7 +428,9 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 
 	// 4. Regenerate lockfiles
 	console.log("Regenerating lockfiles...");
-	await $`rm -f bun.lock`;
+	// 不删 bun.lock：bun 对全新 lockfile 写 lockfileVersion 2，而 bun2nix
+	// （nix/bun.nix 的生成器）只支持 v1——删除后重生成会让发版卡死。原位
+	// `bun install` 同样全量重解析并按既有格式（v1）回写。
 	await $`bun install`;
 	await $`cargo generate-lockfile`;
 	await generateNixBunDeps(nixBunDepsGenerator);
