@@ -437,6 +437,7 @@ import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
+import { CredentialService } from "./services/credential-service";
 import { DesignSystemsService } from "./services/design-systems-service";
 import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
@@ -650,6 +651,11 @@ export class DaemonServer {
 				resolveLive: sessionId => this.#host.get(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
 				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
+			}),
+		);
+		this.#services.register(
+			new CredentialService({
+				storePath: path.join(getAgentDir(), "credentials.json"),
 			}),
 		);
 		mountRegistryServices(this.#hostContext, this.#services.values());
@@ -1378,6 +1384,18 @@ export class DaemonServer {
 				// M4 P1: 写会话级连接器白名单并即时生效（安全边界在
 				// SessionTools，daemon 权威）。实现归 ConnectorService。
 				return this.#services.get<ConnectorService>("connectors").setSelected(params ?? {});
+			}
+			case "credentials.list": {
+				// M4 P1: 连接器配置的凭据引用清单（只有 meta，无密钥）。
+				// 实现归 CredentialService；resolve 不在 wire 上。
+				return this.#services.get<CredentialService>("credentials").list();
+			}
+			case "credentials.set": {
+				// M4 P1: 写入一条凭据（密钥只进本地 store，不进 wire/日志）。
+				return this.#services.get<CredentialService>("credentials").set(params ?? {});
+			}
+			case "credentials.delete": {
+				return this.#services.get<CredentialService>("credentials").delete(params ?? {});
 			}
 			case "tray.state": {
 				// Menu-bar tray snapshot (openchamber tray parity): the

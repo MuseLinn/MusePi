@@ -9,6 +9,7 @@ import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
+import { CredentialService } from "./credential-service";
 import { DesignSystemsService } from "./design-systems-service";
 import { EventService } from "./event-service";
 import { ExtensionService } from "./extension-service";
@@ -152,6 +153,12 @@ function buildRegistry(): HostServices {
 			connectorsSnapshot: () => null,
 			readSelection: () => null,
 			setSelection: async () => ({ ok: true, appliedToLive: false }),
+		}),
+	);
+	// CredentialService：凭据 store 指向隔离 temp 文件（本测试不触凭据面）。
+	services.register(
+		new CredentialService({
+			storePath: join(mkdtempSync(join(tmpdir(), "musepi-creds-")), "credentials.json"),
 		}),
 	);
 	return services;
