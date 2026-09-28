@@ -769,6 +769,102 @@ describe("branch bar topology (history rekey regression)", () => {
 		expect(countElements(html, ".tr-branch-wrap")).toBe(1);
 	});
 
+	it("an UNFILTERED caller childCount (production app.tsx counts every entry) with only bookkeeping siblings gets NO branch bar", () => {
+		// 实机回归(2026-09-28 设计模式会话):app.tsx 的 childCount 把 compaction /
+		// custom 簿记兄弟也数成孩子,toolResult 节点因此亮出假"2 个分支"条,折叠
+		// 展开时锚点行高度为 0,条在原像素位置漂浮跳动。门控必须只看会话分叉
+		// (branchChildren),调用方传全量 map 也不能复活假条。
+		const parent = assistantEntry({ timestamp: 100 });
+		const compaction = {
+			id: "compact-1",
+			parentId: parent.id,
+			timestamp: "2026-09-12T00:00:02Z",
+			type: "compaction",
+		} as unknown as SessionEntry;
+		const entries: SessionEntry[] = [
+			parent,
+			messageChild(parent.id, 200, "reply-next"),
+			compaction,
+			traceChild(parent.id, "trace-1"),
+		];
+		const unfiltered = new Map<string, number>();
+		for (const e of entries) {
+			const pid = e.parentId;
+			if (typeof pid === "string" && pid) unfiltered.set(pid, (unfiltered.get(pid) ?? 0) + 1);
+		}
+		expect(unfiltered.get(parent.id)).toBe(3);
+		const html = renderToStaticMarkup(
+			<Transcript
+				entries={entries}
+				stream={null}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+				branchInfo={{ childCount: unfiltered, activePathIds: new Set(entries.map(e => e.id)) }}
+			/>,
+		);
+		expect(countElements(html, ".tr-branch-wrap")).toBe(0);
+	});
+
+	it("the branch bar hides while its anchor row sits in a collapsed fold and returns when expanded", () => {
+		// 实机回归(2026-09-28):轮中间的真实分叉(a2 有两个 message 孩子)在折叠段
+		// 收起时,锚点行高度为 0 而分叉条留在原像素位置,折叠/展开期间看起来就是
+		// "分支切换的位置变来变去"。条必须随锚点行一起隐藏。
+		const msg = (id: string, ts: number, content: unknown[]): SessionEntry =>
+			({
+				type: "message",
+				id,
+				parentId: null,
+				timestamp: String(ts),
+				message: { role: "assistant", content, timestamp: ts },
+			}) as unknown as SessionEntry;
+		const base: SessionEntry[] = [
+			{
+				type: "message",
+				id: "u1",
+				parentId: null,
+				timestamp: "1",
+				message: { role: "user", content: "hi", timestamp: 1 },
+			} as unknown as SessionEntry,
+			msg("a2", 2, [
+				{ type: "thinking", text: "t" },
+				{ type: "toolCall", id: "c1", name: "bash", arguments: "{}" },
+				{ type: "text", text: "mid reply" },
+			]),
+			{
+				type: "message",
+				id: "r3",
+				parentId: null,
+				timestamp: "3",
+				message: {
+					role: "toolResult",
+					toolCallId: "c1",
+					toolName: "bash",
+					content: [{ type: "text", text: "ok" }],
+					isError: false,
+					timestamp: 3,
+				},
+			} as unknown as SessionEntry,
+			msg("a99", 99, [{ type: "thinking", text: "…" }]),
+		];
+		const forked = [...base, messageChild("a2", 150, "fork-a"), messageChild("a2", 160, "fork-b")];
+		const childCount = childCountOf(forked);
+		const render = (defaultRoundFoldExpanded: boolean): string =>
+			renderToStaticMarkup(
+				<Transcript
+					entries={forked}
+					stream={null}
+					streamDone={true}
+					activeTools={new Map()}
+					working={false}
+					defaultRoundFoldExpanded={defaultRoundFoldExpanded}
+					branchInfo={{ childCount, activePathIds: new Set(forked.map(e => e.id)) }}
+				/>,
+			);
+		expect(countElements(render(false), ".tr-branch-wrap")).toBe(0);
+		expect(countElements(render(true), ".tr-branch-wrap")).toBe(1);
+	});
+
 	it("isBranchFormingEntry admits plain messages and rejects custom-role messages and non-message entries", () => {
 		expect(isBranchFormingEntry(userEntry(100))).toBe(true);
 		expect(

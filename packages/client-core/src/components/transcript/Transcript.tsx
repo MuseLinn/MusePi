@@ -2177,18 +2177,23 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// Layer-1 branch bar: a message with MULTIPLE children gets
 		// a switchable divider under it (hidden when the caller
 		// provides no branch topology — plain linear sessions).
-		const childCount = branchInfo?.childCount.get(entry.id) ?? 0;
-		if (branchInfo && childCount > 1 && entry.type === "message") {
-			const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
-				id: c.id,
-				label: entryLabelOf(c),
-				time: branchClock((c as { timestamp?: unknown }).timestamp),
-			}));
+		// 分叉判定以 branchChildren(只含会话分叉 message)为准,不用调用方的
+		// 全量 childCount——后者把 compaction/custom 簿记兄弟也算成孩子,会
+		// 在轮中间冒出假"2 个分支"条;count 与可切换列表因此永远一致。
+		const kids = (branchChildren.get(entry.id) ?? []).map(c => ({
+			id: c.id,
+			label: entryLabelOf(c),
+			time: branchClock((c as { timestamp?: unknown }).timestamp),
+		}));
+		// 锚点行折进零高度槽(折叠段隐藏跨距 / 汇总尾行)时分叉条随之隐藏:
+		// 它留在原像素位置不动,折叠动画期间看起来就是"位置变来变去"。
+		const anchorCollapsed = hideRowContent || (collapsible && (!foldOpen || isRunHidden));
+		if (branchInfo && !anchorCollapsed && kids.length > 1 && entry.type === "message") {
 			return (
 				<div key={entry.id} className="tr-branch-wrap">
 					{rowWithTurnHead}
 					<BranchBar
-						count={childCount}
+						count={kids.length}
 						childrenLabels={kids}
 						activeChildId={activeChildOf(entry.id)}
 						onPick={id => branchInfo.onSwitchBranch?.(id)}
