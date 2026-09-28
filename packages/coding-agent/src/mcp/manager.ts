@@ -858,6 +858,15 @@ export class MCPManager {
 	}
 
 	/**
+	 * M4 P1: every known server name (discovered configs ∪ live connections),
+	 * sorted for a stable wire shape. The connector surface lists from this —
+	 * servers that failed discovery still appear, with their real status.
+	 */
+	getServerNames(): string[] {
+		return [...new Set([...this.#serverConfigs.keys(), ...this.#connections.keys()])].sort();
+	}
+
+	/**
 	 * Get the source metadata for a server.
 	 */
 	getSource(name: string): SourceMeta | undefined {

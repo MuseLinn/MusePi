@@ -177,6 +177,15 @@ interface StoredGhToken {
 	email?: string;
 	updatedAt: string;
 }
+
+/** M4 P1 连接器清单的一项（`connectors.list` wire 形状，session-host 权威）。 */
+export interface ConnectorServerInfo {
+	/** MCP 服务器原始配置名（白名单同款标识）。 */
+	name: string;
+	transport: "stdio" | "http" | "sse";
+	/** manager 权威健康态——不凭配置显示「已连接」。 */
+	status: "connected" | "connecting" | "disconnected";
+}
 function ghTokenPath(): string {
 	return path.join(getAgentDir(), "github-token.json");
 }
@@ -2068,6 +2077,22 @@ export class DaemonSessionHost {
 			}
 		});
 		this.#sessions.set(sessionId, live);
+		// M4 P1: rehydrate the per-session connector allowlist BEFORE any MCP
+		// tools land — the filter must own the first refresh. null/absent =
+		// unconfigured (legacy all-on semantics, nothing to do); an array
+		// (including empty = zero MCP tools) applies immediately. Both this
+		// and the push below serialize through the session's tool-registry
+		// mutation queue, so enqueue order = execution order.
+		const persistedMcpServers = (persisted?.header as unknown as Record<string, unknown> | undefined)?.mcpServers;
+		if (Array.isArray(persistedMcpServers)) {
+			const servers = persistedMcpServers.filter((s): s is string => typeof s === "string" && s.length > 0);
+			void live.agentSession.setMCPServerAllowlist(servers).catch(error => {
+				logger.warn("MCP server allowlist rehydrate failed on adopt", {
+					sessionId,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		}
 		// This session's cwd-scoped MCP manager: tools connected before the
 		// session existed (or while discovery was in flight) must land on it
 		// now — the tools-changed callback only fires on FUTURE changes.
@@ -2181,11 +2206,13 @@ export class DaemonSessionHost {
 			thinkingLevel?: string;
 			modeId?: string | null;
 			projectMetadata?: Record<string, unknown> | null;
+			/** M4 P1 连接器白名单。null = 清除回未配置;数组(可空)= 已配置。 */
+			mcpServers?: string[] | null;
 		},
 	): boolean {
 		const persisted = this.#store.load(sessionId);
 		if (!persisted) return false;
-		const { projectMetadata, ...rest } = patch;
+		const { projectMetadata, mcpServers, ...rest } = patch;
 		persisted.header = { ...persisted.header, ...rest };
 		// wire SessionHeader has no null member for projectMetadata, but the
 		// store's "explicit key wins" contract needs the key PRESENT to clear —
@@ -2196,6 +2223,11 @@ export class DaemonSessionHost {
 			} else {
 				persisted.header.projectMetadata = projectMetadata;
 			}
+		}
+		// M4 P1: same explicit-key contract — null clears (legacy semantics), an
+		// array (including empty) is a meaningful configured state.
+		if (mcpServers !== undefined) {
+			(persisted.header as unknown as Record<string, unknown>).mcpServers = mcpServers;
 		}
 		this.#store.upsert(sessionId, persisted);
 		return true;
@@ -2216,6 +2248,57 @@ export class DaemonSessionHost {
 		const metadata =
 			typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
 		return { metadata, cwd: persisted.state?.cwd ?? "" };
+	}
+
+	/**
+	 * M4 P1 `connectors.setSelected` 的宿主实现:写会话级连接器白名单并即时
+	 * 生效。live 会话:允许名单先进 SessionTools(激活集当场重算),再落快照头;
+	 * 历史会话:只落快照头(重激活时 adopt 回读)。servers = null 清除回未配置
+	 * (存量「连接即启用」语义)。持久化失败(未知会话)抛错——与 setMode 同契约。
+	 */
+	async setSessionConnectors(
+		sessionId: string,
+		servers: string[] | null,
+	): Promise<{ ok: true; appliedToLive: boolean }> {
+		const live = this.#sessions.get(sessionId);
+		if (live) {
+			await live.agentSession.setMCPServerAllowlist(servers);
+		}
+		if (!this.persistHeaderPatch(sessionId, { mcpServers: servers })) {
+			throw new Error(`Unknown session: ${sessionId}`);
+		}
+		return { ok: true, appliedToLive: live !== undefined };
+	}
+
+	/**
+	 * M4 P1 `connectors.list` 的选择态读半:某会话当前持久化的连接器白名单。
+	 * null = 未配置(存量全量语义);数组(可空)= 已配置。未知会话返回 null。
+	 */
+	readSessionConnectors(sessionId: string): string[] | null {
+		const persisted = this.#store.load(sessionId);
+		if (!persisted) return null;
+		const raw = (persisted.header as unknown as Record<string, unknown>).mcpServers;
+		if (!Array.isArray(raw)) return null;
+		return raw.filter((s): s is string => typeof s === "string" && s.length > 0);
+	}
+
+	/**
+	 * M4 P1 `connectors.list` 的服务器面:某 live 会话 cwd 的 MCP 服务器清单
+	 * + 真实健康态。只认 live 会话(composer chip 的场景);manager 尚未建立
+	 * (该项目无任何 MCP 配置)返回空清单。返回 null = 会话不 live。
+	 */
+	connectorsSnapshot(sessionId: string): { servers: ConnectorServerInfo[] } | null {
+		const live = this.#sessions.get(sessionId);
+		if (!live) return null;
+		const manager = this.#mcpManagers.get(live.cwd);
+		if (!manager) return { servers: [] };
+		const servers: ConnectorServerInfo[] = manager.getServerNames().map(name => {
+			const config = manager.getServerConfig(name);
+			const transport =
+				config?.type ?? (config && "command" in config && config.command ? ("stdio" as const) : ("http" as const));
+			return { name, transport, status: manager.getConnectionStatus(name) };
+		});
+		return { servers };
 	}
 
 	/**
@@ -2712,6 +2795,8 @@ export class DaemonSessionHost {
 				// SDK transcripts never carried a preset header until the
 				// GUI chips landed — no mode to report for these.
 				modeId: null,
+				// Nor a connector allowlist (M4 P1): view-store-only state.
+				mcpServers: null,
 				// SDK transcripts record forks under header.parentSession
 				// (a session-file path) — derive the parent's id so the tree
 				// renders branch structure (OMP /tree). Session files are

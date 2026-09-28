@@ -434,6 +434,7 @@ import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { ApprovalService } from "./services/approval-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
+import { ConnectorService } from "./services/connector-service";
 import { CreationService } from "./services/creation-service";
 import { DesignSystemsService } from "./services/design-systems-service";
 import { EventService } from "./services/event-service";
@@ -617,6 +618,13 @@ export class DaemonServer {
 				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
+			}),
+		);
+		this.#services.register(
+			new ConnectorService({
+				connectorsSnapshot: sessionId => this.#host.connectorsSnapshot(sessionId),
+				readSelection: sessionId => this.#host.readSessionConnectors(sessionId),
+				setSelection: (sessionId, servers) => this.#host.setSessionConnectors(sessionId, servers),
 			}),
 		);
 		this.#startExtensionWatcher();
@@ -1334,6 +1342,16 @@ export class DaemonServer {
 				// straight from the materialized view-store, no session
 				// activation required.（实现归 ViewStoreService，行为不变）
 				return this.#services.get<ViewStoreService>("views").messages(params ?? {});
+			}
+			case "connectors.list": {
+				// M4 P1: composer 连接器选择浮层数据面（服务器清单 + 真实
+				// 健康态 + 本会话选择态）。实现归 ConnectorService。
+				return this.#services.get<ConnectorService>("connectors").list(params ?? {});
+			}
+			case "connectors.setSelected": {
+				// M4 P1: 写会话级连接器白名单并即时生效（安全边界在
+				// SessionTools，daemon 权威）。实现归 ConnectorService。
+				return this.#services.get<ConnectorService>("connectors").setSelected(params ?? {});
 			}
 			case "tray.state": {
 				// Menu-bar tray snapshot (openchamber tray parity): the

@@ -7,6 +7,7 @@ import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
+import { ConnectorService } from "./connector-service";
 import { CreationService } from "./creation-service";
 import { DesignSystemsService } from "./design-systems-service";
 import { EventService } from "./event-service";
@@ -130,6 +131,14 @@ function buildRegistry(): HostServices {
 			invalidatePluginCaches: () => {},
 			onChanged: () => {},
 			onInstallState: () => {},
+		}),
+	);
+	// ConnectorService：只认领路由（本测试不触会话），stub 掉宿主访问。
+	services.register(
+		new ConnectorService({
+			connectorsSnapshot: () => null,
+			readSelection: () => null,
+			setSelection: async () => ({ ok: true, appliedToLive: false }),
 		}),
 	);
 	return services;

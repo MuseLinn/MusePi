@@ -194,6 +194,20 @@ export class SessionTools {
 	#builtInToolNames: Set<string>;
 	#rpcHostToolNames = new Set<string>();
 	#mcpManagerToolNames = new Set<string>();
+	/**
+	 * M4 P1 连接器白名单的来源映射:minted MCP 工具名 → 来源 server 原始配置名,
+	 * 在 manager refresh 时记录。白名单判定只信这张映射——minted 名经过
+	 * sanitize/截断不可逆,从工具名回解析对含下划线的 server 名会切错段。
+	 * 映射里没有的 manager 工具,白名单生效时一律视为不在名单内(fail-closed)。
+	 */
+	#mcpManagerToolServers = new Map<string, string>();
+	/**
+	 * M4 P1 连接器按会话白名单(原始 server 名)。
+	 * `undefined` = 未配置——存量会话(TUI / 白名单落地前)维持「连接即启用」;
+	 * `Set`(可为空)= 已配置,仅名单内 server 的 MCP 工具进入激活集,其余留在
+	 * 注册表但不暴露。安全边界在 daemon 侧生效,客户端过滤不算数。
+	 */
+	#mcpServerAllowlist: Set<string> | undefined;
 	#extensionMcpTools = new Map<string, AgentTool>();
 	/** P2 动态工具链(ext_define/ext_run):注册名 extdyn__ 命名空间。 */
 	#dynamicToolNames = new Set<string>();
@@ -1566,7 +1580,8 @@ export class SessionTools {
 		});
 
 		const extensionRunner = this.#host.extensionRunner();
-		const managerTools = deduplicateMCPToolsByName(mcpTools).map(customTool => {
+		const dedupedManagerTools = deduplicateMCPToolsByName(mcpTools);
+		const managerTools = dedupedManagerTools.map(customTool => {
 			const wrapped = wrapToolWithMetaNotice(CustomToolAdapter.wrap(customTool, getCustomToolContext) as AgentTool);
 			return (extensionRunner ? new ExtensionToolWrapper(wrapped, extensionRunner) : wrapped) as AgentTool;
 		});
@@ -1577,20 +1592,29 @@ export class SessionTools {
 			if (isMCPToolName(name)) this.#toolRegistry.delete(name);
 		}
 		this.#mcpManagerToolNames.clear();
+		this.#mcpManagerToolServers.clear();
+		for (const tool of dedupedManagerTools) {
+			if (typeof tool.mcpServerName === "string" && tool.mcpServerName) {
+				this.#mcpManagerToolServers.set(tool.name, tool.mcpServerName);
+			}
+		}
 		for (const tool of reconciledTools) {
 			this.#toolRegistry.set(tool.name, tool);
 			if (managerToolSet.has(tool)) this.#mcpManagerToolNames.add(tool.name);
 		}
 
-		// Connected manager tools become active immediately. Extension-owned MCP
-		// tools retain their prior selection while both sets share one registry.
+		// Connected manager tools become active immediately — but only those whose
+		// origin server passes the per-session connector allowlist (M4 P1; an
+		// undefined allowlist keeps the legacy "connected = enabled" semantics).
+		// Extension-owned MCP tools retain their prior selection while both sets
+		// share one registry.
 		const retainedActiveExtensionToolNames = previousActiveMcpToolNames.filter(
 			name => this.#extensionMcpTools.has(name) && this.#toolRegistry.has(name),
 		);
 		const nextActive = [
 			...new Set([
 				...this.#getActiveNonMCPToolNames(),
-				...this.#mcpManagerToolNames,
+				...this.#activeManagerToolNames(),
 				...retainedActiveExtensionToolNames,
 			]),
 		];
@@ -1601,6 +1625,46 @@ export class SessionTools {
 			restorePreviousMcpTools();
 			throw error;
 		}
+	}
+
+	/**
+	 * M4 P1:白名单过滤后的 manager 工具名。`undefined` = 未配置,维持存量
+	 * 「连接即启用」;已配置时仅名单内 server 的工具通过,来源 server 未知
+	 * (映射缺失)的一律不放行——安全边界宁可误杀不可漏放。
+	 */
+	#activeManagerToolNames(): string[] {
+		if (this.#mcpServerAllowlist === undefined) return [...this.#mcpManagerToolNames];
+		const allowlist = this.#mcpServerAllowlist;
+		return [...this.#mcpManagerToolNames].filter(name => {
+			const server = this.#mcpManagerToolServers.get(name);
+			return server !== undefined && allowlist.has(server);
+		});
+	}
+
+	/**
+	 * M4 P1 连接器按会话白名单写通道。`null` 清除(回到未配置的存量语义);
+	 * 数组(可为空,空 = 会话内零 MCP 工具)立即生效——激活集当场重算,
+	 * 不依赖下一次 manager refresh。持久化由调用方(daemon)负责。
+	 */
+	setMCPServerAllowlist(servers: readonly string[] | null): Promise<void> {
+		const snapshot = servers === null ? null : [...servers];
+		return this.runToolRegistryMutation(() => this.#applyMCPServerAllowlist(snapshot));
+	}
+
+	async #applyMCPServerAllowlist(servers: readonly string[] | null): Promise<void> {
+		this.#mcpServerAllowlist = servers === null ? undefined : new Set(servers);
+		if (this.#host.isDisposed()) return;
+		const retainedActiveExtensionToolNames = this.getEnabledToolNames().filter(
+			name => this.#extensionMcpTools.has(name) && this.#toolRegistry.has(name),
+		);
+		const nextActive = [
+			...new Set([
+				...this.#getActiveNonMCPToolNames(),
+				...this.#activeManagerToolNames(),
+				...retainedActiveExtensionToolNames,
+			]),
+		];
+		await this.#applyActiveToolsByName(nextActive);
 	}
 
 	/**

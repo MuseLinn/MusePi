@@ -194,6 +194,52 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.list().find(r => r.sessionId === "s1")!.modeId).toBeNull();
 	});
 
+	test("mcpServers (M4 P1 connector allowlist) round-trips, survives replays, [] ≠ null", () => {
+		const store = tempStore();
+		// Unconfigured session → null (legacy all-on semantics for the composer
+		// chip: the GUI shows "not configured", not "zero connectors").
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "x", timestamp: 1 }], 1));
+		expect(store.list().find(r => r.sessionId === "s1")!.mcpServers).toBeNull();
+		// Explicit selection arms off the snapshot header (persistHeaderPatch write).
+		const armed = snapshot("s2", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(armed.header as { mcpServers?: string[] }).mcpServers = ["alpha", "beta"];
+		store.upsert("s2", armed);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toEqual(["alpha", "beta"]);
+		// Switching the selection re-persists → the column follows.
+		(armed.header as { mcpServers?: string[] }).mcpServers = ["gamma"];
+		store.upsert("s2", armed);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toEqual(["gamma"]);
+		// A streaming replay (view snapshot WITHOUT the key) must not clobber the
+		// selection — same bug class as the modeId nulling above.
+		const replay = snapshot(
+			"s2",
+			[
+				{ role: "user", content: "y", timestamp: 1 },
+				{ role: "assistant", content: "reply", timestamp: 2 },
+			] as never,
+			2,
+		);
+		store.upsert("s2", replay);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toEqual(["gamma"]);
+		// The stored snapshot header carries it too, so adopt() can rehydrate the
+		// SessionTools allowlist after a restart.
+		expect((store.load("s2")!.header as { mcpServers?: string[] }).mcpServers).toEqual(["gamma"]);
+		// Configured-EMPTY is a meaningful state (zero MCP tools in the session)
+		// and must round-trip through rewrites — the classic falsy-value trap.
+		const emptied = snapshot("s2", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(emptied.header as { mcpServers?: string[] }).mcpServers = [];
+		store.upsert("s2", emptied);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toEqual([]);
+		const replay2 = snapshot("s2", [{ role: "user", content: "z", timestamp: 3 }], 3);
+		store.upsert("s2", replay2);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toEqual([]);
+		// An explicit clear (header key = null) wins over preservation.
+		const cleared = snapshot("s2", [{ role: "user", content: "y", timestamp: 1 }], 1);
+		(cleared.header as { mcpServers?: string[] | null }).mcpServers = null;
+		store.upsert("s2", cleared);
+		expect(store.list().find(r => r.sessionId === "s2")!.mcpServers).toBeNull();
+	});
+
 	test("search matches message text across sessions, newest first", () => {
 		const store = tempStore();
 		const now = Date.now();

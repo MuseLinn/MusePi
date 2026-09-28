@@ -4984,6 +4984,14 @@ export class AgentSession {
 		return this.#tools.refreshMCPTools(mcpTools);
 	}
 
+	/**
+	 * M4 P1 连接器按会话白名单:`null` 清除(未配置存量语义),数组(可空)立即
+	 * 过滤激活集。安全边界在 SessionTools 生效,客户端不可绕过。
+	 */
+	setMCPServerAllowlist(servers: readonly string[] | null): Promise<void> {
+		return this.#tools.setMCPServerAllowlist(servers);
+	}
+
 	/** Replaces host-owned RPC tools before the next model call. */
 	refreshRpcHostTools(rpcTools: AgentTool[]): Promise<void> {
 		return this.#tools.refreshRpcHostTools(rpcTools);

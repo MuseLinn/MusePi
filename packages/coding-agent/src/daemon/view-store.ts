@@ -42,6 +42,10 @@ export interface MaterializedRow {
 	 *  persistHeaderPatch 落盘），保留语义与 modeId 相同（视图重建不携带，
 	 *  依赖本列回注）。null = 非创作会话。 */
 	projectMetadata: Record<string, unknown> | null;
+	/** M4 P1 连接器按会话白名单（原始 server 名数组）— 持久化自快照 header
+	 *  （persistHeaderPatch 落盘），保留语义与 modeId 相同。null = 未配置
+	 *  （存量「连接即启用」语义）；[] = 已配置且零选择（会话内零 MCP 工具）。 */
+	mcpServers: string[] | null;
 }
 
 export interface MessageHit {
@@ -64,6 +68,7 @@ interface SessionRow {
 	parent_id: string | null;
 	mode_id: string | null;
 	project_metadata: string | null;
+	mcp_servers: string | null;
 }
 
 interface MessageRow {
@@ -134,6 +139,12 @@ export class ViewStore {
 		// stored as its serialized JSON from the snapshot header).
 		if (!cols.some(c => c.name === "project_metadata")) {
 			this.#db.run("ALTER TABLE sessions ADD COLUMN project_metadata TEXT");
+		}
+		// Old databases lack mcp_servers (M4 P1 per-session connector allowlist,
+		// serialized JSON string array from the snapshot header) — same
+		// idempotent path.
+		if (!cols.some(c => c.name === "mcp_servers")) {
+			this.#db.run("ALTER TABLE sessions ADD COLUMN mcp_servers TEXT");
 		}
 		this.#db.run(`
 			CREATE TABLE IF NOT EXISTS messages (
@@ -208,6 +219,34 @@ export class ViewStore {
 				}
 			}
 		}
+		// M4 P1 connector allowlist: same preservation contract as modeId —
+		// the view projection never carries mcpServers; only persistHeaderPatch
+		// (the connectors.setSelected path) writes it explicitly. null = 未配置
+		// (legacy all-on); [] = configured-empty and MUST survive streaming
+		// persists (the empty array is meaningful, not "absent").
+		let mcpServers: string[] | null = null;
+		if ("mcpServers" in headerObj) {
+			const v = headerObj.mcpServers;
+			if (v === null || v === undefined) {
+				mcpServers = null;
+			} else if (Array.isArray(v)) {
+				mcpServers = v.filter((s): s is string => typeof s === "string" && s.length > 0);
+			}
+		} else {
+			const prev = this.#db.query("SELECT mcp_servers FROM sessions WHERE session_id = ?").get(sessionId) as
+				| { mcp_servers: string | null }
+				| undefined;
+			if (prev?.mcp_servers) {
+				try {
+					const parsed = JSON.parse(prev.mcp_servers) as unknown;
+					if (Array.isArray(parsed)) {
+						mcpServers = parsed.filter((s): s is string => typeof s === "string" && s.length > 0);
+					}
+				} catch {
+					// Corrupt column value — treat as absent, next explicit write repairs it.
+				}
+			}
+		}
 		// Keep the preset / creation metadata riding the stored snapshot header
 		// too (when the incoming header lacks the key), so the reactivation
 		// path (adopt) can read persisted.header.<key> back after a restart —
@@ -215,6 +254,7 @@ export class ViewStore {
 		const headerPatch: Record<string, unknown> = {};
 		if (!headerHasModeId && modeId != null) headerPatch.modeId = modeId;
 		if (!("projectMetadata" in headerObj) && projectMetadata) headerPatch.projectMetadata = projectMetadata;
+		if (!("mcpServers" in headerObj) && mcpServers !== null) headerPatch.mcpServers = mcpServers;
 		const snapshotToStore: SessionSnapshot =
 			Object.keys(headerPatch).length > 0
 				? ({ ...snapshot, header: { ...headerObj, ...headerPatch } } as unknown as SessionSnapshot)
@@ -267,8 +307,8 @@ export class ViewStore {
 			}
 			this.#db
 				.query(
-					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id, mode_id, project_metadata)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					`INSERT INTO sessions (session_id, cursor, created_at, updated_at, cwd, model, message_count, parent_id, mode_id, project_metadata, mcp_servers)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 				 ON CONFLICT(session_id) DO UPDATE SET
 				   cursor = excluded.cursor,
 				   updated_at = excluded.updated_at,
@@ -277,7 +317,8 @@ export class ViewStore {
 				   message_count = excluded.message_count,
 				   parent_id = excluded.parent_id,
 				   mode_id = excluded.mode_id,
-				   project_metadata = excluded.project_metadata`,
+				   project_metadata = excluded.project_metadata,
+				   mcp_servers = excluded.mcp_servers`,
 				)
 				.run(
 					sessionId,
@@ -296,6 +337,11 @@ export class ViewStore {
 					// M3.2 creation metadata — same preservation contract (see the
 					// headerPatch assembly above). null = not a creation session.
 					projectMetadata ? JSON.stringify(projectMetadata) : null,
+					// M4 P1 connector allowlist — same preservation contract.
+					// null = unconfigured (legacy all-on semantics survive every
+					// streaming persist); "[]" = configured-empty, a meaningful
+					// state that must round-trip through rewrites.
+					mcpServers !== null ? JSON.stringify(mcpServers) : null,
 				);
 
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
@@ -361,6 +407,17 @@ export class ViewStore {
 					// Corrupt column value — surface as absent rather than failing the list.
 				}
 			}
+			let mcpServers: string[] | null = null;
+			if (r.mcp_servers) {
+				try {
+					const parsed = JSON.parse(r.mcp_servers) as unknown;
+					if (Array.isArray(parsed)) {
+						mcpServers = parsed.filter((s): s is string => typeof s === "string" && s.length > 0);
+					}
+				} catch {
+					// Corrupt column value — surface as absent rather than failing the list.
+				}
+			}
 			return {
 				sessionId: r.session_id,
 				cursor: r.cursor,
@@ -372,6 +429,7 @@ export class ViewStore {
 				parentId: r.parent_id ?? null,
 				modeId: r.mode_id ?? null,
 				projectMetadata,
+				mcpServers,
 			};
 		});
 	}
