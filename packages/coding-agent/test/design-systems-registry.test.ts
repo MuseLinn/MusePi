@@ -15,9 +15,17 @@ import {
 	registerExtensionDesignSystem,
 } from "@musepi/pi-coding-agent/presets/design-systems";
 import { DesignSystemsService } from "../src/daemon/services/design-systems-service";
+import { ExtensionRuntime } from "../src/extensibility/extensions/loader";
 import type { DesignSystemConfig } from "../src/extensibility/extensions/types";
 
 const BUILTIN_IDS = ["minimal", "glass", "editorial", "neubrutalism", "darkneon"] as const;
+
+/** Stub deps：无扩展运行时加载结果（pending 注册为空）。 */
+function makeService(): DesignSystemsService {
+	return new DesignSystemsService({
+		extensionRuntimeLoad: async () => ({ extensions: [], errors: [], runtime: new ExtensionRuntime() }),
+	});
+}
 
 afterEach(() => {
 	// The registry is module-global; never leak extension rows into other suites.
@@ -27,7 +35,7 @@ afterEach(() => {
 
 describe("design.systems.list (builtin registry)", () => {
 	it("returns the five built-ins with complete fields", async () => {
-		const { systems } = await new DesignSystemsService().listDesignSystems();
+		const { systems } = await makeService().listDesignSystems();
 		expect([...systems.map(s => s.id)]).toEqual([...BUILTIN_IDS]);
 		for (const system of systems) {
 			expect(system.source).toBe("builtin");
@@ -44,7 +52,7 @@ describe("design.systems.list (builtin registry)", () => {
 	});
 
 	it("exposes the design.systems.list route for the daemon dispatcher", () => {
-		expect(new DesignSystemsService().routes["design.systems.list"]).toBe("listDesignSystems");
+		expect(makeService().routes["design.systems.list"]).toBe("listDesignSystems");
 	});
 });
 
@@ -60,7 +68,7 @@ describe("design system extension registry", () => {
 
 	it("an extension-registered system appears in the list behind extension built-ins", async () => {
 		registerExtensionDesignSystem(extSystem, "test-source");
-		const { systems } = await new DesignSystemsService().listDesignSystems();
+		const { systems } = await makeService().listDesignSystems();
 		const row = systems.find(s => s.id === "test-brand");
 		expect(row?.source).toBe("extension");
 		expect(row?.promptSection.text).toBe("TEST-BRAND-BRIEF");

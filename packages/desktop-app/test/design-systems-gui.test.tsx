@@ -123,7 +123,9 @@ async function settle(ms = 40): Promise<void> {
 }
 
 function railCards(): HTMLButtonElement[] {
-	return [...document.body.querySelectorAll<HTMLButtonElement>(".gui-ds-card")];
+	// ＋市场卡（M3.7d）同样带 .gui-ds-card 基类（视觉从属），体系卡选择器
+	// 收敛到 [data-design-system]，DOM 顺序契约见 design-system-market.test.tsx。
+	return [...document.body.querySelectorAll<HTMLButtonElement>(".gui-ds-card[data-design-system]")];
 }
 
 function railCard(id: string): HTMLButtonElement {

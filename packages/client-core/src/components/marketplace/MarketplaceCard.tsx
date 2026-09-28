@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
-import { type MarketplaceCardAction, type MarketplaceCardEntry, resolveCardIcon } from "./types";
+import {
+	hasDesignSystemContent,
+	type MarketplaceCardAction,
+	type MarketplaceCardEntry,
+	resolveCardIcon,
+} from "./types";
 
 /**
  * Single plugin card used by the marketplace grid. Pure presentational
@@ -83,6 +88,11 @@ export function MarketplaceCard({
 					)}
 					<span className="mp-card-meta">
 						{isInstalled && <span className="mp-card-badge">✓ {t("plugin installed badge")}</span>}
+						{/* 设计体系内容标识（M3.7d）：catalog 声明 category/tags =
+						 *  design-system 的包在能力中心市场 tab 带徽章，可发现。 */}
+						{hasDesignSystemContent(entry) && (
+							<span className="mp-card-badge mp-card-badge--ds">{t("mp badge design system")}</span>
+						)}
 						{entry.author !== undefined && entry.author.length > 0 && (
 							<span className="mp-card-meta-item">by {entry.author}</span>
 						)}

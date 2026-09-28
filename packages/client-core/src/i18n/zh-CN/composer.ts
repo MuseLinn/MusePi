@@ -120,6 +120,8 @@ export const composer = {
 	"design system rail title": "设计体系",
 	"design system builtin": "内置",
 	"design system extension": "扩展",
+	"design system market cta": "市场",
+	"design system market aria": "去能力中心市场发现更多设计体系",
 	"design system preview cta": "按钮",
 	"design empty placeholder": "描述你想设计的界面、风格与情绪，/ 可用命令…",
 } as const;

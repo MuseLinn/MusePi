@@ -23,7 +23,7 @@ export { ImageLightbox } from "./components/image-lightbox";
 export { MarketplaceCard } from "./components/marketplace/MarketplaceCard";
 export { MarketplaceGrid } from "./components/marketplace/MarketplaceGrid";
 export type { MarketplaceCardAction, MarketplaceCardEntry } from "./components/marketplace/types";
-export { resolveCardIcon } from "./components/marketplace/types";
+export { hasDesignSystemContent, resolveCardIcon } from "./components/marketplace/types";
 /** reactbits-parity brand chrome (zero-dependency, shared GUI ↔ guest): the
  *  blur-in wordmark reveal, shiny text sweep, cursor spotlight card and the
  *  interactive dot-matrix brand mark. The desktop app imports these from

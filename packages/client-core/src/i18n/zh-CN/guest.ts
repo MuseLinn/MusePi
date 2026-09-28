@@ -33,6 +33,7 @@ export const guest = {
 	"plugin refreshing": "刷新中…",
 	"plugin details": "详情",
 	"plugin installed badge": "已安装",
+	"mp badge design system": "设计体系",
 	"plugin empty title": "没有符合当前筛选条件的插件。",
 	"plugin empty hint": "试试清空搜索词或换个分类。",
 	"plugin detail homepage": "主页",

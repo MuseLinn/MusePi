@@ -35,6 +35,7 @@ export const guest = {
 	"plugin refreshing": "Refreshing…",
 	"plugin details": "Details",
 	"plugin installed badge": "Installed",
+	"mp badge design system": "Design system",
 	"plugin empty title": "No plugins match the current filter.",
 	"plugin empty hint": "Try clearing the search or picking another category.",
 	"plugin detail homepage": "Homepage",

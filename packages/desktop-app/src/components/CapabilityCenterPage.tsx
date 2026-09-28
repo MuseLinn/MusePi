@@ -27,8 +27,17 @@ type Tab = "skills" | "plugins" | "marketplace";
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
-export function CapabilityCenterPage({ rpc, onBack }: { rpc: RpcClient | null; onBack(): void }): ReactNode {
-	const [tab, setTab] = useState<Tab>("skills");
+export function CapabilityCenterPage({
+	rpc,
+	onBack,
+	initialTab,
+}: {
+	rpc: RpcClient | null;
+	onBack(): void;
+	/** 落地 tab（omp-open-capability 事件的 detail.tab 载荷；默认 skills）。 */
+	initialTab?: Tab;
+}): ReactNode {
+	const [tab, setTab] = useState<Tab>(initialTab ?? "skills");
 	// The design spec puts the remote catalog INSIDE 技能 as a 发现 sub-pane
 	// (我安装的 is the other half). 市场 stays as its own tab because the
 	// settings-side 扩展控制中心 still links here for plugin sources.

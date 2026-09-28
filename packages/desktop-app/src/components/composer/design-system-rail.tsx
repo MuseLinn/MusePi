@@ -14,10 +14,19 @@ import { type DesignSystemEntry, designSystemLabel } from "./use-design-systems"
  * + 右上角勾选角标（与 DesignStyleSelect 同源 state，调用方保证）；
  * 入场 stagger 每卡 60ms，gui-motion-off 归零；hover 卡面浮出预览卡
  * （§3.3「hover 浮卡给 description 全文」）。
+ *
+ * ＋市场卡（M3.7d §3.2 末段）：排尾 dashed 卡（加号 + 「市场」），点击
+ * 经宿主既有 `omp-open-capability` 事件通道跳能力中心市场 tab
+ * （ExtensionsCenter CTA 同款通道，app.tsx 监听；detail.tab =
+ * "marketplace" 是可选载荷，无载荷的旧调用方行为不变）。它不是单选
+ * 项，故不进 radiogroup（a11y：radiogroup 只含 role=radio）。
  */
 
 /** 卡 hover 浮卡的悬停桥接（ms），与菜单行同款。 */
 const HOVER_LEAVE_MS = 120;
+
+/** 宿主「打开能力中心」事件名（app.tsx 监听；ExtensionsCenter CTA 同款）。 */
+export const OPEN_CAPABILITY_EVENT = "omp-open-capability";
 
 export function DesignSystemRail({
 	systems,
@@ -52,35 +61,52 @@ export function DesignSystemRail({
 		<div className="gui-ds-rail" data-testid="gui-design-system-rail">
 			<div className="gui-ds-rail-head">{t("design system rail title")}</div>
 			<FadeScroll className="gui-ds-rail-scroll overflow-x-auto">
-				<div className="gui-ds-rail-row" role="radiogroup" aria-label={t("design system rail title")}>
-					{systems.map((s, i) => {
-						const on = selected === s.id;
-						return (
-							<button
-								key={s.id}
-								type="button"
-								role="radio"
-								aria-checked={on}
-								data-design-system={s.id}
-								className={`gui-ds-card${on ? " gui-ds-card--on" : ""}`}
-								style={{ animationDelay: `${i * 60}ms` }}
-								onMouseEnter={enterCard(s.id)}
-								onMouseLeave={scheduleHide}
-								onClick={() => onPick(on ? null : s.id)}
-							>
-								<DesignSystemSwatchBar entry={s} className="gui-ds-swatchbar gui-ds-swatchbar--rail" />
-								<span className="gui-ds-card-name">{designSystemLabel(s)}</span>
-								<span className={`gui-ds-badge gui-ds-badge--${s.source}`}>
-									{s.source === "builtin" ? t("design system builtin") : t("design system extension")}
-								</span>
-								{on && (
-									<span className="gui-ds-card-check" aria-hidden="true">
-										<Icon name="check" className="h-2.5 w-2.5" />
+				<div className="gui-ds-rail-row">
+					<div className="gui-ds-rail-group" role="radiogroup" aria-label={t("design system rail title")}>
+						{systems.map((s, i) => {
+							const on = selected === s.id;
+							return (
+								<button
+									key={s.id}
+									type="button"
+									role="radio"
+									aria-checked={on}
+									data-design-system={s.id}
+									className={`gui-ds-card${on ? " gui-ds-card--on" : ""}`}
+									style={{ animationDelay: `${i * 60}ms` }}
+									onMouseEnter={enterCard(s.id)}
+									onMouseLeave={scheduleHide}
+									onClick={() => onPick(on ? null : s.id)}
+								>
+									<DesignSystemSwatchBar entry={s} className="gui-ds-swatchbar gui-ds-swatchbar--rail" />
+									<span className="gui-ds-card-name">{designSystemLabel(s)}</span>
+									<span className={`gui-ds-badge gui-ds-badge--${s.source}`}>
+										{s.source === "builtin" ? t("design system builtin") : t("design system extension")}
 									</span>
-								)}
-							</button>
-						);
-					})}
+									{on && (
+										<span className="gui-ds-card-check" aria-hidden="true">
+											<Icon name="check" className="h-2.5 w-2.5" />
+										</span>
+									)}
+								</button>
+							);
+						})}
+					</div>
+					<button
+						type="button"
+						data-testid="gui-ds-market-card"
+						className="gui-ds-card gui-ds-market-card"
+						style={{ animationDelay: `${systems.length * 60}ms` }}
+						aria-label={t("design system market aria")}
+						onClick={() =>
+							window.dispatchEvent(new CustomEvent(OPEN_CAPABILITY_EVENT, { detail: { tab: "marketplace" } }))
+						}
+					>
+						<span className="gui-ds-market-plus" aria-hidden="true">
+							<Icon name="add" className="h-3.5 w-3.5" />
+						</span>
+						<span className="gui-ds-card-name">{t("design system market cta")}</span>
+					</button>
 				</div>
 			</FadeScroll>
 			<DesignSystemHoverCard entry={hoverEntry} anchor={hoverRect} />

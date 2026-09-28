@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ExtensionRuntime } from "../../extensibility/extensions/loader";
 import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
 import { BoardService } from "./board-service";
@@ -67,8 +68,12 @@ function buildRegistry(): HostServices {
 	services.register(new BoardService());
 	// CreationService 只认领路由（本测试不触盘），session 头查找 stub 掉。
 	services.register(new CreationService({ loadHeader: () => null }));
-	// DesignSystemsService 无宿主依赖，注册表路由（design.systems.list）直认领。
-	services.register(new DesignSystemsService());
+	// DesignSystemsService 只认领路由（design.systems.list），stub 掉宿主运行时加载。
+	services.register(
+		new DesignSystemsService({
+			extensionRuntimeLoad: async () => ({ extensions: [], errors: [], runtime: new ExtensionRuntime() }),
+		}),
+	);
 	services.register(
 		new FileService({
 			fallbackCwd: () => undefined,

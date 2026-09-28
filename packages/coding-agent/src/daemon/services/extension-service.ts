@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import type { Settings } from "../../config/settings";
+import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import type { DaemonService } from "./types";
 
@@ -18,7 +19,11 @@ import type { DaemonService } from "./types";
  *   聚合 tabs/providers/槽位组件/toolViews/状态栏段与 shell 配置；三个 10s
  *   TTL 缓存（#extensionsCache/#pluginsCache/#pluginPackagesCache）随变更
  *   RPC 与宿主 watcher 失效；extensions.changed 广播经注入的 onChanged 扇出
- *   （宿主侧接 EventService，lazy 调用无循环）。
+ *   （宿主侧接 EventService，lazy 调用无循环）。另有宿主级扩展运行时加载
+ *   缓存（#runtimeLoadCache，10s TTL，与 #extensionsCache 同生命周期清）——
+ *   getExtensionRuntimeLoad 按会话同源 discovery 分支执行扩展入口代码，
+ *   供 session-less RPC（design.systems.list 的宿主重放，M3 §3.7d）消费
+ *   pending 注册，不经会话引导。
  * - 生命周期：无 start/stop——缓存惰性构建；宿主扩展 watcher 经
  *   invalidateCaches（及两个粒度更细的失效入口）统一失效，加载/卸载可逆。
  *
@@ -90,6 +95,12 @@ export class ExtensionService implements DaemonService {
 	 *  Invalidated by the mutation RPCs below. */
 	#extensionsCache: { at: number; extensions: Extension[] } | null = null;
 
+	/** TTL cache of the host-level extension runtime load (session-less
+	 *  RPCs like design.systems.list consume queued registrations —
+	 *  pendingDesignSystemRegistrations — without a session boot; M3 §3.7d).
+	 *  Cleared everywhere #extensionsCache is. */
+	#runtimeLoadCache: { at: number; result: LoadExtensionsResult } | null = null;
+
 	constructor(deps: ExtensionServiceDeps) {
 		this.#deps = deps;
 	}
@@ -112,6 +123,32 @@ export class ExtensionService implements DaemonService {
 			};
 		}
 		return this.#extensionsCache.extensions;
+	}
+
+	/**
+	 * 宿主级扩展运行时加载：按会话同源的 discovery 分支（configured 路径 +
+	 * disabledExtensions 过滤 + ambient）执行扩展入口代码，返回
+	 * LoadExtensionsResult（含 runtime.pendingDesignSystemRegistrations 等
+	 * 排队注册）。供 session-less RPC（design.systems.list 的宿主重放，
+	 * M3 §3.7d）消费——装包/卸包后经 invalidateExtensionsCache 失效重载。
+	 * 10s TTL，与 #extensionsCache 同生命周期清。
+	 */
+	async getExtensionRuntimeLoad(): Promise<LoadExtensionsResult> {
+		if (!this.#runtimeLoadCache || Date.now() - this.#runtimeLoadCache.at > 10_000) {
+			const { discoverExtensionPaths } = await import("../../extensibility/extensions");
+			const { loadExtensions } = await import("../../extensibility/extensions/loader");
+			let settings = this.#deps.settings();
+			if (!settings) {
+				await this.#deps.ensureRegistry();
+				settings = this.#deps.settings();
+			}
+			const configured = (settings?.get("extensions") ?? []) as string[];
+			const disabledIds = (settings?.get("disabledExtensions") ?? []) as string[];
+			const cwd = this.#deps.cwd();
+			const paths = await discoverExtensionPaths(configured, cwd, disabledIds, { ambient: true });
+			this.#runtimeLoadCache = { at: Date.now(), result: await loadExtensions(paths, cwd) };
+		}
+		return this.#runtimeLoadCache.result;
 	}
 
 	/** RPC extensions.list：扩展控制中心统一数据源（TUI /extensions parity）。 */
@@ -266,6 +303,7 @@ export class ExtensionService implements DaemonService {
 				}
 			}
 			this.#extensionsCache = null;
+			this.#runtimeLoadCache = null;
 			this.#deps.onChanged();
 			return { ok: true };
 		}
@@ -282,6 +320,7 @@ export class ExtensionService implements DaemonService {
 			);
 			await settings.flush();
 			this.#extensionsCache = null;
+			this.#runtimeLoadCache = null;
 			this.#deps.onChanged();
 			return { ok: true };
 		}
@@ -314,6 +353,7 @@ export class ExtensionService implements DaemonService {
 			await settings.flush();
 		}
 		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true };
 	}
@@ -337,6 +377,7 @@ export class ExtensionService implements DaemonService {
 		settings.set("forceEnabledExtensions" as Parameters<Settings["set"]>[0], force as never);
 		await settings.flush();
 		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
 		this.#pluginsCache = null;
 		this.#deps.onChanged();
 		return { ok: true };
@@ -359,6 +400,7 @@ export class ExtensionService implements DaemonService {
 		const settings = this.#deps.settings();
 		if (settings) await settings.flush();
 		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true };
 	}
@@ -464,6 +506,7 @@ export class ExtensionService implements DaemonService {
 	/** 宿主 watcher（#scheduleExtensionReload）统一失效入口。 */
 	invalidateCaches(): void {
 		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
 		this.#pluginsCache = null;
 	}
 
@@ -475,9 +518,11 @@ export class ExtensionService implements DaemonService {
 		this.#pluginPackagesCache = null;
 	}
 
-	/** 宿主侧 skills.delete/skills.install 的扩展缓存失效入口（保持原粒度：
-	 *  仅清 #extensionsCache，不动插件缓存）。 */
+	/** 宿主侧 skills.delete/skills.install 与 marketplace.install/remove 的
+	 *  扩展缓存失效入口：清 #extensionsCache + 宿主运行时加载缓存
+	 *  （设计体系重放依赖后者重载，M3 §3.7d），不动插件缓存。 */
 	invalidateExtensionsCache(): void {
 		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
 	}
 }

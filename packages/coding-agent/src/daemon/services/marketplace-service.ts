@@ -28,6 +28,9 @@ import type { DaemonService } from "./types";
  *   #skillsCache）随变更 RPC 与宿主 watcher 失效；extensions.changed 广播
  *   经注入的 onChanged 扇出（宿主侧接 EventService，lazy 调用无循环）；
  *   安装状态迁移经 onInstallState 广播 marketplace.install.state 事件。
+ *   marketplace.install/remove 成功后除插件双缓存失效外还扇出
+ *   invalidateExtensionsCache + onChanged（M3 §3.7d：装包/卸包贡献的
+ *   设计体系经宿主注册表重放，GUI 监听 extensions.changed 重拉）。
  * - 生命周期：stop 中止进行中的安装（状态机半成品清理）；缓存惰性构建；
  *   宿主扩展 watcher 经 invalidateSkillsCache 失效技能扫描，加载/卸载可逆。
  *
@@ -270,6 +273,11 @@ export class MarketplaceService implements DaemonService {
 		});
 		this.#marketplaceCache = null;
 		this.#deps.invalidatePluginCaches();
+		// M3 §3.7d 装包即见：插件贡献的设计体系（pi.registerDesignSystem）
+		//  由宿主注册表按扩展运行时重放——除插件缓存外还要清扩展运行时
+		//  加载缓存并广播 extensions.changed，GUI 才会重拉 design.systems.list。
+		this.#deps.invalidateExtensionsCache();
+		this.#deps.onChanged();
 		return { ok: true, installed: true, scope: p.scope ?? "user" };
 	}
 
@@ -285,6 +293,10 @@ export class MarketplaceService implements DaemonService {
 		await manager.uninstallPlugin(buildPluginId(p.name, p.marketplace), p.scope);
 		this.#marketplaceCache = null;
 		this.#deps.invalidatePluginCaches();
+		// M3 §3.7d：与 install 同款——卸包后清扩展运行时加载缓存 +
+		//  广播 extensions.changed，重放时整源清除残留注册。
+		this.#deps.invalidateExtensionsCache();
+		this.#deps.onChanged();
 		return { ok: true };
 	}
 

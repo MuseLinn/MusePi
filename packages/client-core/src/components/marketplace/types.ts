@@ -120,6 +120,26 @@ const KEYWORD_ICONS: ReadonlyArray<readonly [RegExp, string]> = [
 
 const NEUTRAL_ICON = "🧩";
 
+/**
+ * Design-system content marker (M3.7d): a marketplace package declares
+ * itself a design-system pack by setting its catalog `category` or one of
+ * its `tags` to one of these values (case-insensitive). Exact match after
+ * lowercasing + trimming — `design` alone is deliberately NOT a marker
+ * (too broad: icons/UI kits also categorize as design). Wire-compatible:
+ * pure derivation over existing catalog fields, no daemon change.
+ */
+const DESIGN_SYSTEM_MARKERS: readonly string[] = ["design-system", "design system", "design_system", "designsystem"];
+
+/**
+ * True when a marketplace catalog entry declares design-system content —
+ * the capability center renders a 「设计体系」 badge on those cards so
+ * design-system packs are discoverable in the market tab.
+ */
+export function hasDesignSystemContent(entry: Pick<MarketplaceCardEntry, "category" | "tags">): boolean {
+	const haystack = [entry.category ?? "", ...(entry.tags ?? [])].map(v => v.trim().toLowerCase());
+	return haystack.some(v => (DESIGN_SYSTEM_MARKERS as readonly string[]).includes(v));
+}
+
 /** Sanitize an explicit icon string: strip control chars, cap length. */
 function sanitizeIcon(raw: string): string | null {
 	const cleaned = raw.replace(/[\u0000-\u001f\u007f]/g, "").trim();

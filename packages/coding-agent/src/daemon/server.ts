@@ -559,7 +559,11 @@ export class DaemonServer {
 				loadHeader: sessionId => host.viewStore.load(sessionId)?.header ?? null,
 			}),
 		);
-		this.#services.register(new DesignSystemsService());
+		this.#services.register(
+			new DesignSystemsService({
+				extensionRuntimeLoad: () => this.#services.get<ExtensionService>("extensions").getExtensionRuntimeLoad(),
+			}),
+		);
 		this.#services.register(
 			new FileService({
 				fallbackCwd: () => host.workspaceFallbackCwd,

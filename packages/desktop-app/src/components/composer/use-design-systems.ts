@@ -120,24 +120,35 @@ export const FALLBACK_DESIGN_SYSTEMS: readonly DesignSystemEntry[] = [
 	},
 ];
 
-/** 拉取设计体系列表；失败静默回退内置静态镜像（离线可用）。 */
+/** 拉取设计体系列表；失败静默回退内置静态镜像（离线可用）。
+ *  扩展加载面变更（extensions.changed 广播：HMR / 扩展启停 / 装包）后
+ *  重拉——chat 面常驻挂载（display:none 不卸载），装完设计体系包从能力
+ *  中心返回时靠本事件即见新体系，而不是等下一次重挂（M3.7d 即见链路）。 */
 export function useDesignSystems(rpc: RpcClient | null): DesignSystemEntry[] {
 	const [systems, setSystems] = useState<DesignSystemEntry[]>([...FALLBACK_DESIGN_SYSTEMS]);
 	useEffect(() => {
 		if (!rpc) return;
 		let alive = true;
-		void rpc
-			.request<{ systems: DesignSystemEntry[] }>("design.systems.list", {})
-			.then(res => {
-				if (alive && Array.isArray(res?.systems) && res.systems.length > 0) {
-					setSystems(res.systems);
-				}
-			})
-			.catch(() => {
-				// RPC 不可用（daemon 离线/旧版）：保留内置静态镜像。
-			});
+		const pull = (): void => {
+			void rpc
+				.request<{ systems: DesignSystemEntry[] }>("design.systems.list", {})
+				.then(res => {
+					if (alive && Array.isArray(res?.systems) && res.systems.length > 0) {
+						setSystems(res.systems);
+					}
+				})
+				.catch(() => {
+					// RPC 不可用（daemon 离线/旧版）：保留内置静态镜像。
+				});
+		};
+		pull();
+		const unlisten = rpc.addEventListener(event => {
+			const payload = event.payload as { type?: string } | undefined;
+			if (payload?.type === "extensions.changed") pull();
+		});
 		return () => {
 			alive = false;
+			unlisten();
 		};
 	}, [rpc]);
 	return systems;

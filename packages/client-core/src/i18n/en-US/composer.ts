@@ -123,6 +123,8 @@ export const composer = {
 	"design system rail title": "Design systems",
 	"design system builtin": "Built-in",
 	"design system extension": "Extension",
+	"design system market cta": "Market",
+	"design system market aria": "Open the capability center marketplace to discover more design systems",
 	"design system preview cta": "Button",
 	"design empty placeholder": "Describe the interface, style and mood you want to design…",
 } as const satisfies Record<ComposerKey, string>;

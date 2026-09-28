@@ -1,0 +1,10 @@
+[
+	{
+		"kind": "discord",
+		"config": {
+			"token": "raw-secret-token",
+			"note": "user note"
+		},
+		"enabled": false
+	}
+]

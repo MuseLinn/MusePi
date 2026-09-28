@@ -702,6 +702,9 @@ function AppInner(): ReactNode {
 	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "agents" | "capability" | "chat" | null>(
 		null,
 	);
+	// 能力中心落地 tab（omp-open-capability 事件的可选 detail.tab 载荷；
+	// 默认 skills。＋市场卡 M3.7d 跳 marketplace）。
+	const [capabilityInitialTab, setCapabilityInitialTab] = useState<"skills" | "plugins" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "agents" | "capability" | "chat"): void => {});
 	useEffect(() => {
@@ -721,7 +724,13 @@ function AppInner(): ReactNode {
 		};
 		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
 		// 设置 → 扩展控制中心概览的 CTA（设计稿 07 底部互跳）：开一级能力中心。
-		const onOpenCapability = (): void => viewSwapRef.current("capability");
+		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab）；无载荷的旧
+		// 调用方（ExtensionsCenter CTA）保持默认 skills tab。
+		const onOpenCapability = (e: Event): void => {
+			const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
+			setCapabilityInitialTab(tab === "marketplace" ? "marketplace" : "skills");
+			viewSwapRef.current("capability");
+		};
 		window.addEventListener("omp-open-capability", onOpenCapability);
 		return () => {
 			window.removeEventListener("omp-open-board", onOpenBoard);
@@ -3619,13 +3628,21 @@ function AppInner(): ReactNode {
 											) : leavingView === "capability" ? (
 												/* Leaving capability center → chat: blur out first. */
 												<ChatSurfaceShell leave>
-													<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+													<CapabilityCenterPage
+														rpc={rpc}
+														onBack={() => viewSwapRef.current("chat")}
+														initialTab={capabilityInitialTab}
+													/>
 												</ChatSurfaceShell>
 											) : capabilityOpen ? (
 												/* Capability center (设计稿 05: sidebar first-class entry —
 												 * skills / plugins / marketplace over one card language). */
 												<ChatSurfaceShell>
-													<CapabilityCenterPage rpc={rpc} onBack={() => viewSwapRef.current("chat")} />
+													<CapabilityCenterPage
+														rpc={rpc}
+														onBack={() => viewSwapRef.current("chat")}
+														initialTab={capabilityInitialTab}
+													/>
 												</ChatSurfaceShell>
 											) : null}
 										</>
