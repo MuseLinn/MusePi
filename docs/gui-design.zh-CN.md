@@ -446,11 +446,11 @@ turn
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。
-- **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 香槟轨道环 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
+- **设计语言**:**点阵卡上的 IP 桌宠**——桌面桌宠的定帧(金球 + 白色头戴耳机,几何逐字抄自 `SplashOrb.tsx`,scale 2.0)居中带柔光,背景保留 23×23 淡点阵(fg 9% 透明度,`r=4.2`,间距 ~35.8px,球周 r=300 留白晕)。**无轨道环**:真实 PetSprite 的环(rx 104)整环画在不透明球体(r 114.27)之后,静止帧根本看不见环——品牌定帧不得凭空画环(2026-09-28 用户反馈)。卡背景 = 主题深色微渐变(`#242128 → #1b191f`)。替代点阵 π(2026-08-06):旧规"配色只用主题色、零强调色"为品牌 IP 有意打破——金球就是标识(对标 kimicode 式 IP 图标,小袁总 2026-09-28);点阵留作与 `DotMatrixMark` 的视觉脐带。
 - **卡中卡布局(2026-08-06 实测 kimi 对齐)**:不变——深色卡占 tile **80.5%(824/1024,四周对称 100px 透明边距)** + 卡角 superellipse n=5 圆角,与 Kimi 桌面 app 完全一致。**与邻位 app 视觉统一优先于 HIG 抽象规范**——kimi 实际就是卡中卡,我们要并排同大。
 - **同步副本**:`build/icon.png`(打包源 / win32 窗口图标,`ICON_PATH`)+ `build/icon-dock.png`(dev Dock setIcon);打包版 icns 同样带 80.5% 卡边距(不重打包则 bundle icns 手动同步)。~~`src/vendor/logo.png`~~ 已于 2026-09-28 删除——splash 不再内嵌栅格 logo(品牌标是 SplashOrb SVG)。
 - **改动流程**:改 `build/icon.svg`(参数见文件头注释:卡占比、superellipse n、网格间距/点径/透明度、留白晕、球 scale/圆心)→ Chromium headless 渲染 1024 PNG(`omitBackground` 保住 100px 透明边距)→ 复制到 icon.png + icon-dock.png → Pillow 生成 `icon.ico`(16–256)与 `icon.icns`(16–512 @1x/@2x;Windows 上 icns 跳过旧版 1024 档——macOS 会降采样,release bundle icns 打包时本就要重生成)→ **手动同步 bundle icns 后必须重签**(`codesign --force --deep --sign - release/mac-arm64/MusePi.app`——签名后改资源会失效,CSDN 4.3 坑)→ `bun run pack:dir` 重打包(dev 模式 Dock 图标走 `app.dock.setIcon(build/icon-dock.png)`,打包版用 bundle icns——**只换 png 不重打包,打包版 Dock 仍是旧图标**)。
-- **站点 favicon**:`assets/icon.svg`(GitHub Pages,64×64)同款球脸 + 深色圆角方块——favicon 尺寸下耳机/轨道环丢弃(<4px 笔画会糊成噪点)。桌宠形象变更时两处 orb SVG 保持视觉同步。
+- **站点 favicon**:`assets/icon.svg`(GitHub Pages,64×64)同款球脸 + 深色圆角方块——favicon 尺寸下耳机丢弃(<4px 笔画会糊成噪点)。桌宠形象变更时两处 orb SVG 保持视觉同步。
 
 ## 7. 图标 morph 与色彩管线（定稿 2026-09-18）
 

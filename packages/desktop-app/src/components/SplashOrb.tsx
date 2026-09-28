@@ -1,8 +1,11 @@
 /** Launch-splash orb mascot — a posed still of the desktop pet (PetSprite):
- * gold sphere, tilted champagne orbit ring, white over-ear wearables. The
- * geometry is copied verbatim from the landing page's .mp-orb so the brand
- * mark renders identically everywhere. Pure SVG + CSS animation hooks
- * (gui-splash-orb-*), no mascot engine: the splash is a still, not a pet. */
+ * gold sphere + white over-ear wearables. NO orbit ring: the real pet draws
+ * its ring (rx 104) fully behind the opaque shell (r 114.27), so a still
+ * shows no ring — 2026-09-28 user flagged the earlier ringed stills as
+ * "和实际有差异". Geometry is copied verbatim from the landing page's .mp-orb
+ * so the brand mark renders identically everywhere. Pure SVG + CSS animation
+ * hooks (gui-splash-orb-*), no mascot engine: the splash is a still, not a
+ * pet. */
 import type React from "react";
 
 export function SplashOrb(): React.JSX.Element {
@@ -20,13 +23,6 @@ export function SplashOrb(): React.JSX.Element {
 					<stop offset="0.5" stopColor="oklch(65% 0.105 79.84)" />
 					<stop offset="1" stopColor="oklch(33% 0.08 79.84)" />
 				</radialGradient>
-				<linearGradient id="gui-splash-orb-ring" x1="0" y1="0" x2="1" y2="1">
-					<stop offset="0" stopColor="oklch(96% 0.07 85)" />
-					<stop offset="0.15" stopColor="oklch(96% 0.07 85)" />
-					<stop offset="0.5" stopColor="oklch(88% 0.135 82)" />
-					<stop offset="0.86" stopColor="oklch(52% 0.09 80)" />
-					<stop offset="1" stopColor="oklch(70% 0.11 81)" />
-				</linearGradient>
 				<linearGradient id="gui-splash-orb-wear" x1="0" y1="0" x2="0" y2="1">
 					<stop offset="0" stopColor="oklch(97% 0.004 95)" />
 					<stop offset="1" stopColor="oklch(90% 0.006 95)" />
@@ -43,14 +39,6 @@ export function SplashOrb(): React.JSX.Element {
 				</radialGradient>
 			</defs>
 			<g transform="translate(20 24)">
-				<path
-					d="M 15.4 149.5 A 104 34 -18 1 1 213.2 85.2"
-					fill="none"
-					stroke="url(#gui-splash-orb-ring)"
-					strokeWidth="9"
-					strokeLinecap="round"
-					opacity="0.55"
-				/>
 				<circle cx="114.27" cy="114.27" r="114.27" fill="url(#gui-splash-orb-shell)" />
 				<ellipse
 					cx="80.27"
@@ -82,13 +70,6 @@ export function SplashOrb(): React.JSX.Element {
 				<ellipse cx="88" cy="112" rx="12.5" ry="17" fill="url(#gui-splash-orb-eye)" />
 				<ellipse cx="141" cy="112" rx="12.5" ry="17" fill="url(#gui-splash-orb-eye)" />
 				<path d="M 97 138 Q 114.5 152 132 138" fill="none" stroke="#f4f6f9" strokeWidth="7" strokeLinecap="round" />
-				<path
-					d="M 213.2 85.2 A 104 34 -18 1 1 15.4 149.5"
-					fill="none"
-					stroke="url(#gui-splash-orb-ring)"
-					strokeWidth="9"
-					strokeLinecap="round"
-				/>
 				<path
 					d="M -2 78 A 123.3 123.3 0 0 1 230.54 78"
 					fill="none"
