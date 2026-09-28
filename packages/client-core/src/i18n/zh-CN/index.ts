@@ -1,4 +1,5 @@
 import { agents } from "./agents.js";
+import { announcement } from "./announcement.js";
 import { collab } from "./collab.js";
 import { companion } from "./companion.js";
 import { composer } from "./composer.js";
@@ -36,6 +37,7 @@ export const zhCN = {
 	...reward,
 	...update,
 	...creation,
+	...announcement,
 } as const;
 
 // Module-load duplicate guard: a key landing in two domains silently
@@ -58,6 +60,7 @@ export const zhCN = {
 		reward,
 		update,
 		creation,
+		announcement,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {

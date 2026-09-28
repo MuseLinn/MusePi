@@ -1,4 +1,5 @@
 import { agents } from "./agents.js";
+import { announcement } from "./announcement.js";
 import { collab } from "./collab.js";
 import { companion } from "./companion.js";
 import { composer } from "./composer.js";
@@ -37,6 +38,7 @@ export const enUS = {
 	...reward,
 	...update,
 	...creation,
+	...announcement,
 } as const;
 
 // Module-load duplicate guard (mirror of zh-CN/index.ts).
@@ -57,6 +59,7 @@ export const enUS = {
 		reward,
 		update,
 		creation,
+		announcement,
 	};
 	const seen = new Map<string, string>();
 	for (const [file, map] of Object.entries(parts)) {
