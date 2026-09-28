@@ -4,6 +4,7 @@ import {
 	attachmentImageParts,
 	type ComposerAttachment,
 	reorderAttachmentChips,
+	uniqueAttachmentName,
 } from "./use-attachments";
 
 const chip = (id: number, kind: "image" | "file", name: string, file?: File): ComposerAttachment => ({
@@ -55,5 +56,22 @@ describe("attachment send projection follows chip order (drag-reorder contract)"
 		const reordered = reorderAttachmentChips([f1, i1, f2], 1, 3);
 		expect(reordered.map(c => c.id)).toEqual([2, 3, 1]);
 		expect(attachmentFiles(reordered).map(f => f.name)).toEqual(["two.pdf", "one.pdf"]);
+	});
+});
+
+describe("uniqueAttachmentName (duplicate paste names)", () => {
+	test("pasted screenshots named image.png no longer collide — each keeps a distinct identity", () => {
+		// Regression (2026-09-28): two pasted screenshots both arrive as
+		// "image.png" and name-mention tokens resolve to the FIRST match, so
+		// every mention pointed at the first image.
+		const taken = new Set(["image.png"]);
+		expect(uniqueAttachmentName("image.png", taken)).toBe("image-2.png");
+		taken.add("image-2.png");
+		expect(uniqueAttachmentName("image.png", taken)).toBe("image-3.png");
+	});
+
+	test("a fresh name passes through; the suffix goes before the extension", () => {
+		expect(uniqueAttachmentName("report.pdf", new Set())).toBe("report.pdf");
+		expect(uniqueAttachmentName("archive.tar.gz", new Set(["archive.tar.gz"]))).toBe("archive.tar-2.gz");
 	});
 });

@@ -1,13 +1,15 @@
 /**
  * Per-session memory of the bottom terminal dock's open state (app.tsx).
  *
- * The dock is one global surface, but its visibility follows the session
- * view: a session whose dock was never opened stays closed — and ChatView
- * then never mounts TerminalPanel, so no daemon pties spawn unprompted.
- * Each session id owns a bucket; a null session id (welcome / empty state)
- * shares the "" bucket so the dock stays toggleable there without leaking
- * into real sessions. In-memory only — every dock starts closed again on
- * relaunch.
+ * The dock is one global surface, and its VISIBILITY follows the session
+ * view: a session whose dock was never opened shows it folded. Folding is
+ * presentational only — once any session has opened the dock, ChatView
+ * keeps TerminalPanel mounted (height 0 when folded), so the daemon ptys
+ * and their scrollback survive session switches; a session that never
+ * opens the dock never spawns one. Each session id owns a bucket; a null
+ * session id (welcome / empty state) shares the "" bucket so the dock
+ * stays toggleable there without leaking into real sessions. In-memory
+ * only — every dock starts closed again on relaunch.
  */
 
 export type DockOpens = ReadonlySet<string>;

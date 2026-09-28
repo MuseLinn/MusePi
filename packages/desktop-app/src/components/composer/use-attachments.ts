@@ -146,6 +146,28 @@ export function attachmentWorkspacePath(name: string): string {
 	return `attachments/${safe.length > 0 ? safe : "file"}`;
 }
 
+/**
+ * Dedupe an incoming chip's name against the chips already staged (and the
+ * rest of its batch): pasted screenshots all arrive as "image.png", and a
+ * name-mention token resolves to the FIRST chip with that name — two
+ * same-named chips made every mention point at the first one. Suffixes
+ * `-2`/`-3` before the extension, the same convention the workspace upload
+ * path uses for same-name collisions.
+ */
+export function uniqueAttachmentName(name: string, taken: ReadonlySet<string>): string {
+	if (!taken.has(name)) return name;
+	const dot = name.lastIndexOf(".");
+	const stem = dot > 0 ? name.slice(0, dot) : name;
+	const ext = dot > 0 ? name.slice(dot) : "";
+	let n = 2;
+	let candidate = `${stem}-${n}${ext}`;
+	while (taken.has(candidate)) {
+		n++;
+		candidate = `${stem}-${n}${ext}`;
+	}
+	return candidate;
+}
+
 /** Write one batch of non-image files into `cwd` via fs.write(base64) and
  *  return the `[Attachment] <path>` reference lines for the prompt.
  *
@@ -373,7 +395,18 @@ export function useAttachments(rpc: RpcClient): {
 				file: f,
 			})),
 		]);
-		setAttachments(prev => [...prev, ...entries]);
+		setAttachments(prev => {
+			// Dedupe against the staged chips AND within the batch: name-mention
+			// tokens resolve by name (first match), so same-named chips would
+			// all point at the first one.
+			const taken = new Set(prev.map(p => p.name));
+			const named = entries.map(e => {
+				const name = uniqueAttachmentName(e.name, taken);
+				taken.add(name);
+				return name === e.name ? e : { ...e, name };
+			});
+			return [...prev, ...named];
+		});
 	};
 
 	const onPaste = (e: ClipboardEvent): void => {

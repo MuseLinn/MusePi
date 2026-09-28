@@ -151,6 +151,14 @@ function TerminalTab({
 	const termIdRef = useRef<string | null>(null);
 	const termRef = useRef<Terminal | null>(null);
 	const scheme = useSystemTheme();
+	// The creation effect must NOT depend on `scheme` (a theme toggle would
+	// dispose the pty), but a respawn (rpc/cwd change) must still seed the
+	// CURRENT palette — read it through a ref at construction time; the
+	// retint effect below owns live switches.
+	const schemeRef = useRef(scheme);
+	useEffect(() => {
+		schemeRef.current = scheme;
+	}, [scheme]);
 	const [error, setError] = useState<string | null>(null);
 	// Live xterm selection ("" = none). The attach chip renders only while a
 	// selection exists; clicking dispatches it into the chat composer via
@@ -168,6 +176,14 @@ function TerminalTab({
 			fontSize: Number(localStorage.getItem("musepi-gui-terminal-font") ?? 13),
 			scrollback: 10_000,
 			cursorBlink: true,
+			// The palette background is rgba(0,0,0,0) so the terminal blends
+			// into the dock surface — but xterm honors alpha only with
+			// allowTransparency (constructor-only). Without it the canvas
+			// paints OPAQUE BLACK: invisible in dark mode, glaring in light
+			// ("样式没了"). Theme rides the constructor too, so a respawn can
+			// never flash/stick on the default black palette.
+			allowTransparency: true,
+			theme: xtermTheme(schemeRef.current),
 		});
 		termRef.current = term;
 		term.open(host);

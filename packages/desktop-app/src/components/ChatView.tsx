@@ -657,20 +657,21 @@ export function ChatView({
 	});
 	const terminalDockRef = useRef<HTMLDivElement | null>(null);
 	// The dock shell below stays mounted so open/close animates; the
-	// TerminalPanel inside does NOT. It mounts only once the dock has been
-	// opened while viewing THIS session (latched per session id, "" for the
-	// welcome/empty state) — a session whose dock was never opened must not
-	// spawn daemon pties on mount or session switch. SEMANTICS of "关坞不杀
-	// pty": once opened, the panel stays mounted across dock close (height 0)
-	// and while browsing other surfaces, so running pties survive the toggle;
-	// switching to a session whose dock never opened unmounts it (its pties
-	// close; returning re-seeds fresh pties at the remembered cwds).
+	// TerminalPanel inside mounts on the FIRST dock open anywhere in this
+	// view and then NEVER unmounts. Visibility still follows the session
+	// (dockOpen is per session; a session whose dock was never opened shows
+	// the dock folded), but folding is height 0, not disposal — the running
+	// ptys and their scrollback survive a session switch round trip
+	// (previously switching to a never-opened session unmounted the panel,
+	// killing the ptys; returning spawned a fresh PowerShell and lost the
+	// scrollback). Only the first open spawns ptys, so a session that never
+	// opens the dock still never pays for one.
 	const dockSessionKey = store?.sessionId ?? "";
 	const [terminalEverOpened, setTerminalEverOpened] = useState<ReadonlySet<string>>(new Set());
 	useEffect(() => {
 		if (terminalOpen) setTerminalEverOpened(prev => setDockOpen(prev, dockSessionKey, true));
 	}, [terminalOpen, dockSessionKey]);
-	const terminalPanelMounted = terminalOpen || terminalEverOpened.has(dockSessionKey);
+	const terminalPanelMounted = terminalOpen || terminalEverOpened.size > 0;
 	const transcriptRef = useRef<HTMLDivElement | null>(null);
 	// 内容边界羽化:纵向上下羽化(transcript 自身,修复静态 data 属性从不
 	// 更新的死接线)+ 深扫描消息内的工具渲染横向滚动块(tv-pre / diff,
@@ -2582,10 +2583,11 @@ export function ChatView({
 					/>
 				)}
 				{/* Terminal dock: the shell stays MOUNTED so open/close animates
-				 * (height 0 ↔ dockHeight). The TerminalPanel inside mounts lazily
-				 * (terminalPanelMounted above): it appears on this session's
-				 * first dock open, then survives the toggle so running pty/xterm
-				 * sessions are kept — closing the last tab folds the dock. */}
+				 * (height 0 ↔ dockHeight). The TerminalPanel inside mounts on the
+				 * first dock open and then persists across session switches —
+				 * folding the dock hides it without killing the pties, so a
+				 * switch-and-return finds the same terminals with scrollback
+				 * intact. */}
 				<div
 					ref={terminalDockRef}
 					className={`gui-terminal-dock relative flex flex-shrink-0 flex-col overflow-hidden border-t border-[var(--border)]${

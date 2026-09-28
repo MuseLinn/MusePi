@@ -4,7 +4,10 @@ import { parseHighlightSpans } from "../src/components/composer/input-highlight"
 import {
 	expandMentionTokens,
 	makeMentionToken,
+	mentionTokenName,
 	parseMentionTokens,
+	resolveMentionChip,
+	retargetMentionTokens,
 	spliceMentionToken,
 } from "../src/components/composer/mention-token";
 
@@ -147,5 +150,99 @@ describe("parseHighlightSpans × mention", () => {
 		expect(parseHighlightSpans(t, resolver("workflowz"))).toEqual([{ start: 0, end: t.length, kind: "mention" }]);
 		// without the chip only the keyword paints — and it starts after the @.
 		expect(parseHighlightSpans(t, resolver())).toEqual([{ start: 1, end: t.length, kind: "magic" }]);
+	});
+});
+
+/**
+ * Ordinal tokens (v3, Kimi desktop parity): chip-inserted mentions are
+ * `@图片N` / `@文件N` — N = 1-based position among same-kind chips. They
+ * exist because pasted screenshots all arrive as "image.png": name tokens
+ * resolve to the FIRST same-named chip, so every mention pointed at the
+ * first image (user report 2026-09-28). Chip-order changes rewrite the
+ * numbers in the draft (retargetMentionTokens) so a token keeps pointing
+ * at the SAME chip; a removed chip's token degrades to its name form.
+ */
+const oChip = (id: number, kind: "image" | "file", name: string) => ({ id, kind, name });
+
+describe("resolveMentionChip × ordinal tokens", () => {
+	const chips = [oChip(1, "image", "image.png"), oChip(2, "image", "image.png"), oChip(3, "file", "notes.md")];
+
+	test("图片N resolves to the Nth IMAGE chip — duplicate names can't hijack it", () => {
+		expect(resolveMentionChip("图片1", chips)?.chip.id).toBe(1);
+		// The regression: both chips are named image.png; the second mention
+		// must reach the SECOND chip, not the first name match.
+		expect(resolveMentionChip("图片2", chips)?.chip.id).toBe(2);
+	});
+
+	test("文件N numbers files independently of images", () => {
+		const hit = resolveMentionChip("文件1", chips);
+		expect(hit?.chip.id).toBe(3);
+		expect(hit?.ordinal).toBe(1);
+	});
+
+	test("out-of-range ordinals and unknown names stay plain text", () => {
+		expect(resolveMentionChip("图片3", chips)).toBeNull();
+		expect(resolveMentionChip("文件0", chips)).toBeNull();
+		expect(resolveMentionChip("gone.png", chips)).toBeNull();
+	});
+
+	test("name tokens still resolve (legacy drafts, hand-typed names)", () => {
+		const hit = resolveMentionChip("notes.md", chips);
+		expect(hit?.via).toBe("name");
+		expect(hit?.chip.id).toBe(3);
+	});
+});
+
+describe("mentionTokenName", () => {
+	test("the mention button inserts the chip's CURRENT ordinal label", () => {
+		const chips = [oChip(1, "image", "a.png"), oChip(2, "file", "b.pdf"), oChip(3, "image", "c.png")];
+		expect(mentionTokenName(chips, 3)).toBe("图片2");
+		expect(mentionTokenName(chips, 2)).toBe("文件1");
+		expect(mentionTokenName(chips, 99)).toBeNull();
+	});
+});
+
+describe("expandMentionTokens × ordinal tokens", () => {
+	const chips = [oChip(1, "image", "image.png"), oChip(2, "image", "image.png"), oChip(3, "file", "notes.md")];
+
+	test("image ordinal expands to the positional [图片 N] reference", () => {
+		// The wire images ride in chip order, so [图片 2] is the SECOND
+		// image — the duplicate-name case that name tokens got wrong.
+		expect(expandMentionTokens("对比 @图片1 和 @图片2", chips)).toBe("对比 [图片 1] 和 [图片 2]");
+	});
+
+	test("file ordinal expands to the workspace-path reference of the Nth file", () => {
+		expect(expandMentionTokens("@文件1", chips)).toBe("[Attachment] attachments/notes.md");
+	});
+});
+
+describe("retargetMentionTokens (chip-order changes renumber the draft)", () => {
+	const prev = [oChip(1, "image", "a.png"), oChip(2, "image", "b.png"), oChip(3, "image", "c.png")];
+
+	test("a reorder keeps tokens pointing at the SAME chip", () => {
+		// Drag c.png to the front: [a, b, c] → [c, a, b].
+		const next = [prev[2]!, prev[0]!, prev[1]!];
+		expect(retargetMentionTokens("@图片1 与 @图片3", prev, next)).toBe("@图片2 与 @图片1");
+	});
+
+	test("removing a chip shifts later ordinals down", () => {
+		const next = prev.filter(c => c.id !== 1);
+		expect(retargetMentionTokens("@图片2", prev, next)).toBe("@图片1");
+	});
+
+	test("a removed chip's token degrades to its name form — never silently re-points at the next chip", () => {
+		const next = prev.filter(c => c.id !== 2);
+		// b.png is gone: @图片2 must NOT come to mean c.png.
+		expect(retargetMentionTokens("看 @图片2", prev, next)).toBe("看 @b.png");
+	});
+
+	test("name tokens, paths and prose pass through untouched", () => {
+		const next = [prev[2]!, prev[0]!, prev[1]!];
+		const text = "@a.png 和 @src/a.png 和 @someone 和 @图片1";
+		expect(retargetMentionTokens(text, prev, next)).toBe("@a.png 和 @src/a.png 和 @someone 和 @图片2");
+	});
+
+	test("drafts without ordinal tokens are returned by reference", () => {
+		expect(retargetMentionTokens("plain @a.png", prev, [])).toBe("plain @a.png");
 	});
 });

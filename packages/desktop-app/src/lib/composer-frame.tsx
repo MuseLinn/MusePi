@@ -103,6 +103,7 @@ export interface ComposerFrameAttachment {
 function SortableAttachmentChip({
 	a,
 	mentionLabel,
+	ordinal,
 	onRemove,
 	onMention,
 	onEditSketch,
@@ -110,6 +111,10 @@ function SortableAttachmentChip({
 }: {
 	a: ComposerFrameAttachment;
 	mentionLabel: string;
+	/** 1-based position among same-kind chips — the corner badge (Kimi
+	 *  desktop parity) and the number the mention token (`@图片N`/`@文件N`)
+	 *  refers to. */
+	ordinal: number;
 	onRemove(id: number): void;
 	onMention?(id: number): void;
 	onEditSketch(id: number): void;
@@ -169,6 +174,11 @@ function SortableAttachmentChip({
 					@
 				</button>
 			)}
+			{/* Kimi desktop parity: the always-on numbered badge tying the chip
+			 *  to its `@图片N` / `@文件N` mention token. */}
+			<span className="gui-attach-badge" aria-hidden>
+				{ordinal}
+			</span>
 			<button
 				type="button"
 				className="gui-attach-x"
@@ -343,8 +353,9 @@ export function ComposerFrame({
 	 *  chip order is the send order (images ride the wire images channel in
 	 *  array order, file chips upload/reference in array order), and the
 	 *  mention numbering (@图片N/@文件N) re-derives from the new order on
-	 *  the next render. Tokens already in the text match by NAME (not
-	 *  number), so they survive a reorder untouched. */
+	 *  the next render; the host also rewrites ordinal tokens already in
+	 *  the text (retargetMentionTokens) so they keep pointing at the same
+	 *  chip. */
 	onReorderAttachments?(fromId: number, toId: number): void;
 	/** Render the trailing "+" card in the attachment row (opens the
 	 *  all-types picker). Omitted on scenes without attachment intake. */
@@ -489,6 +500,7 @@ export function ComposerFrame({
 											key={a.id}
 											a={a}
 											mentionLabel={mentionLabel}
+											ordinal={no}
 											onRemove={onRemoveAttachment}
 											onMention={onMentionAttachment}
 											onEditSketch={onEditSketch}

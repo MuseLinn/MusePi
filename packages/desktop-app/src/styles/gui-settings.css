@@ -5604,3 +5604,25 @@ body.gui-resizing {
 .gui-attach-mention:hover {
 	background: rgba(0, 0, 0, 0.75);
 }
+
+/* Numbered corner badge (Kimi desktop parity): always-on, bottom-right —
+ *  the number is the chip's mention ordinal (`@图片N` / `@文件N`), so the
+ *  token in the input and the chip in the row visibly correspond. */
+.gui-attach-badge {
+	position: absolute;
+	right: 3px;
+	bottom: 3px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 16px;
+	height: 16px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: rgba(0, 0, 0, 0.55);
+	color: #fff;
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 1;
+	pointer-events: none;
+}

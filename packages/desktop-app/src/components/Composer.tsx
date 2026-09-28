@@ -40,7 +40,13 @@ import { GoalDetailCard } from "./composer/goal-detail-card";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { type LongPasteAction, LongPasteDialog } from "./composer/long-paste-dialog";
 import { MagicKeywordTip } from "./composer/magic-keyword-tip";
-import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
+import {
+	expandMentionTokens,
+	mentionTokenName,
+	resolveMentionChip,
+	retargetMentionTokens,
+	spliceMentionToken,
+} from "./composer/mention-token";
 import { GoalChip, PlanChip } from "./composer/mode-chips";
 import { PlanPanel } from "./composer/plan-panel";
 import { QueuePanel } from "./composer/queue-panel";
@@ -1881,20 +1887,33 @@ export function Composer({
 				heroActive={working}
 				enhancing={enhance === "enhancing"}
 				attachments={attachments}
-				onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-				onReorderAttachments={(fromId, toId) => setAttachments(prev => reorderAttachmentChips(prev, fromId, toId))}
+				onRemoveAttachment={id => {
+					const next = attachments.filter(p => p.id !== id);
+					setAttachments(next);
+					// Ordinal tokens keep pointing at the same chip: renumber
+					// after the removal (retarget rules in mention-token.ts).
+					setText(txt => retargetMentionTokens(txt, attachments, next));
+				}}
+				onReorderAttachments={(fromId, toId) => {
+					const next = reorderAttachmentChips(attachments, fromId, toId);
+					if (next === attachments) return;
+					setAttachments(next);
+					setText(txt => retargetMentionTokens(txt, attachments, next));
+				}}
 				onMentionAttachment={id => {
-					// Kimi parity: insert a mention token at the caret (the
-					// trailing space also closes the @ completion panel — its
-					// trigger treats a whitespace tail as prose).
-					const a = attachments.find(x => x.id === id);
+					// Kimi parity: insert the chip's ordinal token (`@图片N` /
+					// `@文件N`) at the caret — the numbered badge, immune to
+					// duplicate file names. The trailing space also closes the
+					// @ completion panel (its trigger treats a whitespace tail
+					// as prose).
+					const label = mentionTokenName(attachments, id);
 					const ta = taRef.current;
-					if (!a || !ta) return;
+					if (!label || !ta) return;
 					const { next, caret } = spliceMentionToken(
 						ta.value,
 						ta.selectionStart ?? ta.value.length,
 						ta.selectionEnd ?? ta.value.length,
-						a.name,
+						label,
 					);
 					setText(next);
 					requestAnimationFrame(() => {
@@ -2262,11 +2281,18 @@ export function Composer({
 						text={text}
 						className="gui-ta-highlight--session"
 						resolveMention={name => {
-							// null = no chip with this name → the token is plain
-							// text: the overlay leaves it unpainted and the send
-							// path leaves it unexpanded.
-							const a = attachments.find(x => x.name === name);
-							return a ? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined } : null;
+							// null = unresolved (no such ordinal/name) → the token
+							// is plain text: the overlay leaves it unpainted and the
+							// send path leaves it unexpanded.
+							const hit = resolveMentionChip(name, attachments);
+							return hit
+								? {
+										kind: hit.chip.kind,
+										name: hit.chip.name,
+										size: hit.chip.size,
+										dataUrl: hit.chip.dataUrl || undefined,
+									}
+								: null;
 						}}
 						onMentionClick={start => {
 							// Pill click = caret jump to the token (hover preview is

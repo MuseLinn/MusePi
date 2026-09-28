@@ -50,7 +50,13 @@ import { DesignStyleSelect } from "./composer/design-styles";
 import { DesignSystemRail } from "./composer/design-system-rail";
 import { ComposerHighlight } from "./composer/input-highlight";
 import { LongPasteDialog } from "./composer/long-paste-dialog";
-import { expandMentionTokens, spliceMentionToken } from "./composer/mention-token";
+import {
+	expandMentionTokens,
+	mentionTokenName,
+	resolveMentionChip,
+	retargetMentionTokens,
+	spliceMentionToken,
+} from "./composer/mention-token";
 import { TemplateRail } from "./composer/template-rail";
 import {
 	attachmentFiles,
@@ -59,6 +65,7 @@ import {
 	markSketchChip,
 	nextSketchFileName,
 	reorderAttachmentChips,
+	uniqueAttachmentName,
 } from "./composer/use-attachments";
 import { useDesignSystems } from "./composer/use-design-systems";
 import { useDictation } from "./composer/use-dictation";
@@ -1172,7 +1179,18 @@ export function WelcomeComposer({
 				}),
 			),
 		]);
-		setAttachments(prev => [...prev, ...entries]);
+		setAttachments(prev => {
+			// Name-mention tokens resolve by name (first match) — dedupe the
+			// batch against the staged chips (session composer's addFiles
+			// parity: pasted screenshots all arrive as "image.png").
+			const taken = new Set(prev.map(p => p.name));
+			const named = entries.map(e => {
+				const name = uniqueAttachmentName(e.name, taken);
+				taken.add(name);
+				return name === e.name ? e : { ...e, name };
+			});
+			return [...prev, ...named];
+		});
 	};
 
 	// Board → chip, one path for every entry point (attach menu, chip click,
@@ -1702,19 +1720,34 @@ export function WelcomeComposer({
 									: null
 							}
 							attachments={attachments}
-							onRemoveAttachment={id => setAttachments(prev => prev.filter(p => p.id !== id))}
-							onReorderAttachments={(fromId, toId) =>
-								setAttachments(prev => reorderAttachmentChips(prev, fromId, toId))
-							}
+							onRemoveAttachment={id => {
+								const next = attachments.filter(p => p.id !== id);
+								setAttachments(next);
+								// Ordinal tokens keep pointing at the same chip:
+								// renumber after the removal (retarget rules in
+								// mention-token.ts).
+								setText(txt => retargetMentionTokens(txt, attachments, next));
+							}}
+							onReorderAttachments={(fromId, toId) => {
+								const next = reorderAttachmentChips(attachments, fromId, toId);
+								if (next === attachments) return;
+								setAttachments(next);
+								setText(txt => retargetMentionTokens(txt, attachments, next));
+							}}
 							onMentionAttachment={id => {
-								const a = attachments.find(x => x.id === id);
+								// Kimi parity: insert the chip's ordinal token (`@图片N` /
+								// `@文件N`) at the caret — the numbered badge, immune to
+								// duplicate file names. The trailing space also closes the
+								// @ completion panel (its trigger treats a whitespace
+								// tail as prose).
+								const label = mentionTokenName(attachments, id);
 								const ta = taRef.current;
-								if (!a || !ta) return;
+								if (!label || !ta) return;
 								const { next, caret } = spliceMentionToken(
 									ta.value,
 									ta.selectionStart ?? ta.value.length,
 									ta.selectionEnd ?? ta.value.length,
-									a.name,
+									label,
 								);
 								setText(next);
 								requestAnimationFrame(() => {
@@ -2033,11 +2066,16 @@ export function WelcomeComposer({
 										text={text}
 										className="gui-ta-highlight--welcome"
 										resolveMention={name => {
-											// null = no chip with this name → plain text
-											// (unpainted, unexpanded on send).
-											const a = attachments.find(x => x.name === name);
-											return a
-												? { kind: a.kind, name, size: a.size, dataUrl: a.dataUrl || undefined }
+											// null = unresolved (no such ordinal/name) →
+											// plain text (unpainted, unexpanded on send).
+											const hit = resolveMentionChip(name, attachments);
+											return hit
+												? {
+														kind: hit.chip.kind,
+														name: hit.chip.name,
+														size: hit.chip.size,
+														dataUrl: hit.chip.dataUrl || undefined,
+													}
 												: null;
 										}}
 										onMentionClick={start => {
