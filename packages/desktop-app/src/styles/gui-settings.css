@@ -3631,7 +3631,7 @@ body.gui-resizing {
 	animation: none !important;
 }
 
-.gui-motion-off .gui-splash-logo {
+.gui-motion-off .gui-splash-orb {
 	animation: none !important;
 	opacity: 1;
 }

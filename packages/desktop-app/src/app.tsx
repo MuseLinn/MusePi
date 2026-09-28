@@ -26,6 +26,7 @@ import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { SettingsView } from "./components/SettingsView";
+import { SplashOrb } from "./components/SplashOrb";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
 import { UpdateDialog } from "./components/UpdateDialog";
@@ -58,7 +59,6 @@ import { eventMatches } from "./lib/shortcut-registry";
 import { readSurfaceOrder, surfaceById } from "./lib/surfaces/registry";
 import { isDockOpen, setDockOpen, toggleDockOpen } from "./lib/terminal-dock-state";
 import { useMotionExtensions } from "./lib/use-motion-extensions";
-import logoUrl from "./vendor/logo.png";
 import { Icon } from "./vendor/oc-icons";
 import "./styles/gui.css";
 import "./styles/gui-taskcenter.css";
@@ -3019,15 +3019,20 @@ function AppInner(): ReactNode {
 		return (
 			<div className="gui-shell">
 				<div className="gui-splash">
-					{/* Launch splash (reactbits parity): logo settles with a
-					 * glow bloom, then keeps a slow pulse; the wordmark
-					 * blurs in char-by-char and a shine band sweeps the
-					 * tagline. gui-motion-off kills all of it (static). */}
+					{/* Launch splash: the IP orb mascot (SplashOrb, geometry parity
+					 * with the desktop pet and the landing page) settles with a glow
+					 * bloom and a short finite float; the wordmark blurs in
+					 * char-by-char and a shine band sweeps the tagline. All
+					 * animations are FINITE (see .gui-splash-orb / shiny rules) —
+					 * the splash can outlive its intro, and infinite paints wedge
+					 * the renderer. gui-motion-off kills all of it (static). */}
 					<div className="gui-splash-inner">
-						<img src={logoUrl} alt="MusePi" className="gui-splash-logo" draggable={false} />
+						<div className="gui-splash-orb">
+							<SplashOrb />
+						</div>
 						<BlurText text="MusePi" className="gui-splash-wordmark" stepMs={55} />
 						<ShinyText
-							text={t("your desktop coding agent")}
+							text={t("your pair engineer, on every surface")}
 							className="gui-splash-tagline"
 							speed={3.4}
 							shineColor="var(--color-accent)"

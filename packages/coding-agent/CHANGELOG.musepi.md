@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+
+- **开屏焕新为 IP 桌宠形象 + 新定位口号（品牌稿 S3）**：启动 splash 的点阵 π logo.png 换成 SplashOrb 组件——桌面桌宠（PetSprite）的定帧 SVG（金色球体 + 香槟轨道环 + 白色头戴耳机，几何与落地页 .mp-orb 逐字同源），落定动画带辉光绽放 + 有界悬浮呼吸（全部有限次数，延续「开屏动画必须有限」的渲染器防卡死约束，gui-motion-off 全静）；开屏文案从「你的桌面编码智能体」改为「结对工程师，处处与你同行 / Your pair engineer, on every surface.」（与官网新 slogan 对齐）。随之删除无引用的 src/vendor/logo.png 死资产，图标同步契约从三处收敛为两处（build/icon.icns + build/icon-dock.png），gui-design/gui-implementation 文档同步。
+  - EN: launch splash rebranded to the IP orb mascot + new positioning tagline (branding spec S3): the dot-matrix π logo.png becomes the SplashOrb component — a posed-still SVG of the desktop pet (PetSprite): gold sphere + champagne orbit ring + white over-ear wearables, geometry verbatim-identical to the landing page's .mp-orb. The settle animation blooms a glow, then a bounded float/breathe (all iterations finite, per the "splash animations must be finite" renderer-wedge guard; gui-motion-off fully static). The tagline changes from "你的桌面编码智能体" to "结对工程师，处处与你同行 / Your pair engineer, on every surface." (aligned with the site's new slogan). The now-unreferenced src/vendor/logo.png dead asset is deleted, the icon-sync contract shrinks from three places to two (build/icon.icns + build/icon-dock.png), and gui-design/gui-implementation docs are updated.
+
 ### Added
 
 - **what's-new 结构化亮点卡（品牌稿 S1，4 决策点批复后首刀）**：更新弹窗不再倾倒 CHANGELOG markdown 原文——client-core 新增纯函数解析器 `parseChangelogHighlights`（行级状态机按 `## [x.y.z] - date` 切段，`[Unreleased]` 跳过；每版提取 ≤3 条「亮点」（`**` 开头 bullet，标题 + 中文主行第一句，`- EN:` 子行绝不进入）+ Added/Fixed/Changed/Removed 分类计数，11 例契约测试），daemon 零改动。卡面：桌宠「庆祝」sprite 头部 + 「更新到 v X.Y.Z」大标题；当前版 ≤3 张亮点卡（kind 图标 + 两行 clamp 描述）；「本次还有 N 项修复与改进」折叠行点开才挂完整 Markdown；旧版本折叠列表（版本号 + 日期 + 计数徽章）；主按钮「知道了」（Enter）+ 外链「查看完整日志」。解析为空回退原整段渲染不白屏；reward 庆祝票根分支原样保留；退场沿用 180ms 保持挂载模式；新文案入 `announcement` i18n 窄域（双语镜像）。遗留待实机：长 changelog 滚动锚点、motion-off 下桌宠整体隐藏（引擎无静态帧，按「无中间帧」约束取舍）。

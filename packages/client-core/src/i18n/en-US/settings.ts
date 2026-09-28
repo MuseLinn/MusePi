@@ -450,7 +450,7 @@ export const settings = {
 	"needs your attention": "Needs your attention",
 	"approval cards appear when a tool needs your ok": "Approval cards appear when a tool needs your OK",
 	"your sessions persist across restarts": "Sessions persist across restarts",
-	"your desktop coding agent": "Your desktop coding agent",
+	"your pair engineer, on every surface": "Your pair engineer, on every surface.",
 	"switch accent colors from the top bar": "Switch accent colors from the top bar",
 	"mobile remote control": "Mobile remote control",
 	settings: "Settings",

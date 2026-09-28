@@ -419,7 +419,7 @@ export const settings = {
 	"needs your attention": "需要你的关注",
 	"approval cards appear when a tool needs your ok": "代理需要操作权限时会弹出审批卡片",
 	"your sessions persist across restarts": "会话会持久保存，重启后依然在",
-	"your desktop coding agent": "你的桌面编码智能体",
+	"your pair engineer, on every surface": "结对工程师，处处与你同行",
 	"switch accent colors from the top bar": "顶部栏可切换强调色",
 	"mobile remote control": "移动端远程控制",
 	settings: "设置",

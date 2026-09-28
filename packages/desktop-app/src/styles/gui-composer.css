@@ -1156,46 +1156,48 @@
 	gap: 18px;
 }
 
-.gui-splash-logo {
-	width: 96px;
-	height: 96px;
-	/* Pre-rounded in the asset (logo.png is a superellipse card) — no CSS
-	 * radius, or the corners get doubled. Two sequenced animations: a
-	 * one-shot settle (scale+deblur+glow bloom, both-fill holds it) then
-	 * a slow brand pulse. gui-motion-off kills both (static logo). */
+.gui-splash-orb {
+	width: 132px;
+	/* The IP orb mascot (SplashOrb). Two FINITE sequenced animations — a
+	 * one-shot settle (scale+deblur+glow bloom, both-fill holds it) then a
+	 * bounded idle (slow float with a breathing glow, 6 iterations ≈ 29s,
+	 * both-fill settles on the base frame). Splash animations MUST be
+	 * finite — the splash can outlive its intro (cold daemon, fresh
+	 * profile, failed connect) and an infinite paint wedges the renderer
+	 * (see the tagline rule below). gui-motion-off kills both. */
 	animation:
-		gui-splash-logo-in 620ms var(--spring) both,
-		gui-splash-blink 1.8s ease-in-out 700ms 30 both;
+		gui-splash-orb-in 620ms var(--spring) both,
+		gui-splash-orb-idle 4.8s ease-in-out 700ms 6 both;
 }
 
-/* Splash animations MUST be finite — see the tagline rule below for why:
- * the splash can outlive its intro (cold daemon, fresh profile, failed
- * connect) and an infinite glow pulse repaints the logo every frame. */
+.gui-splash-orb-svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
 
-@keyframes gui-splash-logo-in {
+@keyframes gui-splash-orb-in {
 	from {
 		opacity: 0;
-		transform: scale(0.85);
+		transform: scale(0.82);
 		filter: blur(6px) drop-shadow(0 0 0 color-mix(in oklab, var(--accent) 0%, transparent));
 	}
 	to {
 		opacity: 1;
 		transform: scale(1);
-		filter: blur(0) drop-shadow(0 0 24px color-mix(in oklab, var(--accent) 35%, transparent));
+		filter: blur(0) drop-shadow(0 10px 28px color-mix(in oklab, var(--accent) 32%, transparent));
 	}
 }
 
-@keyframes gui-splash-blink {
+@keyframes gui-splash-orb-idle {
 	0%,
 	100% {
-		opacity: 0.9;
-		transform: scale(1);
-		filter: drop-shadow(0 0 18px color-mix(in oklab, var(--accent) 28%, transparent));
+		transform: translateY(0);
+		filter: drop-shadow(0 10px 24px color-mix(in oklab, var(--accent) 26%, transparent));
 	}
 	50% {
-		opacity: 1;
-		transform: scale(1.03);
-		filter: drop-shadow(0 0 30px color-mix(in oklab, var(--accent) 50%, transparent));
+		transform: translateY(-9px);
+		filter: drop-shadow(0 16px 34px color-mix(in oklab, var(--accent) 42%, transparent));
 	}
 }
 
