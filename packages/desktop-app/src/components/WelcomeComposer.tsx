@@ -472,14 +472,19 @@ export function WelcomeComposer({
 	// re-queries when the selection changes.
 	const [thinkingEfforts, setThinkingEfforts] = useState<string[] | null>(null);
 	const effectiveModelId = presetModelId ?? modelId;
+	// The ladder must follow the model the session will actually run: a real
+	// pick (modelTouched) beats the DEFAULT/session snapshot — the same
+	// precedence as session.create's modelId below. The ref is set before
+	// setModelId re-renders, so reading it here tracks the pick.
+	const ladderModelId = modelTouched.current ? modelId : effectiveModelId;
 	useEffect(() => {
-		if (!rpc || !effectiveModelId) {
+		if (!rpc || !ladderModelId) {
 			setThinkingEfforts(null);
 			return;
 		}
 		let cancelled = false;
 		void rpc
-			.request<{ efforts?: string[] } | null>("models.detail", { id: effectiveModelId })
+			.request<{ efforts?: string[] } | null>("models.detail", { id: ladderModelId })
 			.then(detail => {
 				if (cancelled) return;
 				// null = id not resolved (e.g. provider-qualified selector the
@@ -493,7 +498,7 @@ export function WelcomeComposer({
 		return () => {
 			cancelled = true;
 		};
-	}, [rpc, effectiveModelId]);
+	}, [rpc, ladderModelId]);
 	const [tipKey, setTipKey] = useState<(typeof TIP_KEYS)[number]>(
 		() => TIP_KEYS[Math.floor(Math.random() * TIP_KEYS.length)]!,
 	);
