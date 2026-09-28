@@ -1,10 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- MusePi site favicon — brand S4 (2026-09-28): the IP orb face on the dark
+       rounded square (replaces the gold π glyph). Headphones/orbit ring are
+       dropped at this size — sub-4px strokes bake into noise. -->
   <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#d9a441" />
-      <stop offset="1" stop-color="#966400" />
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#242128" />
+      <stop offset="1" stop-color="#1b191f" />
     </linearGradient>
+    <radialGradient id="shell" cx="0.34" cy="0.26" r="0.92">
+      <stop offset="0" stop-color="oklch(89.07% 0.0798 79.84)" />
+      <stop offset="0.5" stop-color="oklch(65% 0.105 79.84)" />
+      <stop offset="1" stop-color="oklch(33% 0.08 79.84)" />
+    </radialGradient>
   </defs>
-  <rect width="64" height="64" rx="12" fill="#0f0b09" />
-  <path fill="url(#g)" d="M14 16h36v8H40v32h-8V24h-6v22h-8V24h-4z" />
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg)" />
+  <circle cx="32" cy="33" r="19" fill="url(#shell)" />
+  <ellipse cx="26" cy="26" rx="5" ry="2.3" transform="rotate(-22 26 26)" fill="#ffffff" opacity="0.5" />
+  <ellipse cx="18.8" cy="30.4" rx="1.2" ry="0.7" transform="rotate(-22 18.8 30.4)" fill="#ffffff" opacity="0.35" />
+  <ellipse cx="28" cy="33" rx="2" ry="2.8" fill="#f4f6f9" />
+  <ellipse cx="36" cy="33" rx="2" ry="2.8" fill="#f4f6f9" />
+  <path d="M 28.5 39.5 Q 32 42.5 35.5 39.5" fill="none" stroke="#f4f6f9" stroke-width="1.6" stroke-linecap="round" />
 </svg>
