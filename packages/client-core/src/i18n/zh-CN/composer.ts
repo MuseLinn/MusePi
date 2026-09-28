@@ -124,6 +124,20 @@ export const composer = {
 	"design system market aria": "去能力中心市场发现更多设计体系",
 	"design system preview cta": "按钮",
 	"design empty placeholder": "描述你想设计的界面、风格与情绪，/ 可用命令…",
+
+	// ── Attach「＋」sub-pickers (M2-2.6): enabled plugins / workspace files ──
+	"plus enabled plugins": "已启用插件",
+	"plus enabled plugins desc": "插入插件名作为上下文提及",
+	"plus workspace files": "当前工作区文件",
+	"plus workspace files desc": "插入 @相对路径 提及文件",
+	"plus picker search": "搜索…",
+	"plus picker loading": "加载中…",
+	"plus picker load failed": "加载失败",
+	"plus picker enabled badge": "已启用",
+	"plus picker no plugins": "还没有已启用的插件",
+	"plus picker no files": "工作区还没有文件",
+	"plus picker no results": "没有匹配的结果",
+	"plus picker truncated": "已显示前 {n} 条 — 输入更多字符缩小范围",
 } as const;
 
 /** Key union for the composer domain (source of truth). */

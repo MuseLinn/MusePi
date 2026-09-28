@@ -2046,6 +2046,9 @@ export function Composer({
 							onPickFiles={files => void addFiles(files)}
 							onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
 							onCaptureScreen={openCapture}
+							rpc={rpc}
+							cwd={cwd}
+							onFocusComposer={() => taRef.current?.focus()}
 							onInsert={token => {
 								const ta = taRef.current;
 								if (!ta) return;

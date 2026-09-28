@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **输入框「+」菜单扩展：已启用插件 / 当前工作区文件两个子选择器（M2-2.6，zcode 吸收 #4 关闭）**：AttachMenu 尾部新增第三段「上下文」两项，点击在同锚点打开搜索浮层（复用 use-floating-menu 磨砂面与单例互斥：加载/错误/空/无结果四态、↑↓+Enter 键盘流、Esc/外点关闭且焦点回 composer、悬停与键盘高亮同址、文件列表 200 条截断提示）。插件选择器数据源 `extensions.list` 按启用态过滤，行 = 名称 + 描述 + 「已启用」徽记（与扩展中心同源零新 RPC）；文件选择器数据源 `workspace.tree`（gitignore 口径）拍平为文件列表，选中插入 `@相对路径 `（与 @ 补全选中后同形，走既有 fileMention 发送管线），插件选中插入纯插件名（不抢 `@`/`#` 前缀，避免与文件/会话补全冲突）。欢迎页（无会话工作区）整段隐藏。过滤纯函数（拍平/大小写不敏感过滤/截断）配 13 例契约测试；不新增 RPC、不动 coding-agent。
+  - EN: composer「+」menu extension: enabled-plugins / workspace-files sub-pickers (M2-2.6, closes zcode absorption #4). Two "上下文" items append a third segment to the AttachMenu; each opens a search popup at the same anchor (reusing use-floating-menu's frosted surface and singleton mutex: loading/error/empty/no-result states, ↑↓+Enter keyboard flow, Esc/outside-click dismissal with focus returned to the composer, hover and keyboard highlight on the same row, and a 200-row truncation hint for files). The plugin picker sources `extensions.list` filtered to enabled state — rows show name + description + an "enabled" badge (same source as the extensions center, zero new RPCs); the file picker sources `workspace.tree` (gitignore semantics), flattens to a file list, and inserts `@relative/path ` on pick (same shape as the @ completion's final text, riding the existing fileMention send pipeline), while a plugin pick inserts the plain plugin name (no `@`/`#` prefix — avoiding collisions with the file/session completions). The whole segment stays hidden on the welcome page (no session workspace). Filter pure functions (flatten/case-insensitive filter/truncation) carry 13 contract tests; no new RPCs, no coding-agent changes.
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

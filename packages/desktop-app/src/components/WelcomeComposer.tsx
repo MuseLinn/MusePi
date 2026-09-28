@@ -1829,6 +1829,10 @@ export function WelcomeComposer({
 										onPickFiles={files => void addFiles(files)}
 										onSketch={() => setSketch({ open: true, editId: null, initial: null, scene: null })}
 										onCaptureScreen={openCapture}
+										// Welcome = no session workspace: without rpc/cwd the
+										//「＋」sub-pickers stay hidden (M2-2.6 spec), so only
+										// the focus hand-back is wired here.
+										onFocusComposer={() => taRef.current?.focus()}
 										onInsert={token => {
 											const ta = taRef.current;
 											if (!ta) return;

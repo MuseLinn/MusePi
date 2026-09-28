@@ -127,4 +127,18 @@ export const composer = {
 	"design system market aria": "Open the capability center marketplace to discover more design systems",
 	"design system preview cta": "Button",
 	"design empty placeholder": "Describe the interface, style and mood you want to design…",
+
+	// ── Attach「＋」sub-pickers (M2-2.6): enabled plugins / workspace files ──
+	"plus enabled plugins": "Enabled plugins",
+	"plus enabled plugins desc": "Insert a plugin name as a context mention",
+	"plus workspace files": "Workspace files",
+	"plus workspace files desc": "Insert a @relative-path file mention",
+	"plus picker search": "Search…",
+	"plus picker loading": "Loading…",
+	"plus picker load failed": "Failed to load",
+	"plus picker enabled badge": "Enabled",
+	"plus picker no plugins": "No enabled plugins yet",
+	"plus picker no files": "No files in the workspace yet",
+	"plus picker no results": "No matching results",
+	"plus picker truncated": "Showing first {n} — type more to narrow it down",
 } as const satisfies Record<ComposerKey, string>;

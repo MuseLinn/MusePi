@@ -477,6 +477,82 @@
 	background: var(--color-accent);
 }
 
+/* ── Attach「＋」sub-pickers (M2-2.6): enabled plugins / workspace files.
+ * Contract: the popup wrapper is .gui-menu-popup (frosted surface, two-phase
+ * fade, Esc + outside-mousedown dismissal, single-menu mutex all live in
+ * use-floating-menu). These rules size the panel; the row list caps at
+ * ~42vh so title + search + footer land inside the ~50vh budget, and rows
+ * reuse .gui-attach-opt for the attach-menu look. */
+.gui-attach-picker {
+	display: flex;
+	flex-direction: column;
+	width: 320px;
+	padding: 4px;
+}
+
+.gui-attach-picker-title {
+	padding: 6px 9px 4px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+}
+
+.gui-attach-picker-search {
+	margin: 0 4px 6px;
+	padding: 6px 9px;
+	border: 1px solid var(--glass-border, var(--border));
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text);
+	outline: none;
+}
+
+.gui-attach-picker-search:focus {
+	border-color: var(--color-accent);
+}
+
+.gui-attach-picker-list {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 42vh;
+	overflow-y: auto;
+}
+
+/* Keyboard-driven highlight — same wash as :hover so mouse and keyboard
+ * agree on the row Enter will pick. */
+.gui-attach-picker .gui-attach-opt--active {
+	background: color-mix(in oklab, var(--color-text) 6%, transparent);
+}
+
+.gui-attach-picker-path {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-mono, monospace);
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text);
+}
+
+.gui-attach-picker-note {
+	padding: 10px 9px;
+	font-size: var(--ui-font-size-xs);
+	color: var(--color-text-faint);
+	text-align: center;
+}
+
+.gui-attach-picker-badge {
+	flex: none;
+	align-self: center;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-accent);
+}
+
 /* ── Context-window usage ring (hover popover) ────────────────────────── */
 .gui-context-ring {
 	position: relative;
