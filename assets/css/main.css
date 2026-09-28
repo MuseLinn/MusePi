@@ -1131,9 +1131,9 @@ body {
 }
 .mp-orb {
   position: absolute;
-  top: -58px;
-  right: 1%;
-  width: clamp(128px, 12.5vw, 184px);
+  top: 20px;
+  right: 2.5%;
+  width: clamp(120px, 11vw, 168px);
   z-index: 3;
   pointer-events: none;
   filter: drop-shadow(0 20px 38px rgba(0, 0, 0, 0.45));
