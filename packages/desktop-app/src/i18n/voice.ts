@@ -30,6 +30,7 @@ const zhVoice = {
 	"English-first": "英文优先",
 	Chinese: "中文",
 	"downloads automatically when selected": "选中后自动下载",
+	voice: "音色",
 	"Listening… speak now": "聆听中…请说话",
 	"voice test preview": "语音测试",
 	"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.":
@@ -60,6 +61,7 @@ registerTranslations("en-US", {
 	"English-first": "English-first",
 	Chinese: "Chinese",
 	"downloads automatically when selected": "downloads automatically when selected",
+	voice: "Voice",
 	"Listening… speak now": "Listening… speak now",
 	"voice test preview": "voice test preview",
 	"Test dictation and read-aloud in the simulated conversation below: press the mic in the input and speak — the transcript lands as a user message; press the read-aloud button on the reply to hear voice output.":

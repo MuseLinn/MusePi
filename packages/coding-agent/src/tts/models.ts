@@ -64,6 +64,13 @@ export interface SherpaTtsLocalModelSpec extends TtsLocalModelBase {
 	 * verbalization and heteronym disambiguation for zh models.
 	 */
 	ruleFsts?: readonly string[];
+	/**
+	 * Default synthesis speed for this tier (sherpa `generate` `speed`, 1 =
+	 * the model's natural rate). Per-model data, not code: VITS exports differ
+	 * in their natural pacing, so a tier that reads slow/fast is tuned here
+	 * without touching the worker.
+	 */
+	speed?: number;
 }
 
 export type TtsLocalModelSpec = KokoroTtsLocalModelSpec | SherpaTtsLocalModelSpec;
@@ -127,6 +134,13 @@ export const TTS_LOCAL_MODELS = [
 		// synthesizes wrong or not at all — see tts.models.test.ts.
 		repo: "csukuangfj/vits-melo-tts-zh_en",
 		modelType: "vits",
+		// The official k2-fsa manifest documents vits-melo-tts-zh_en as a
+		// SINGLE-speaker export (zh female voice, sid 0) — verified against
+		// k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/vits.html. The
+		// voices catalog below must stay in the model's real sid order and
+		// length: the GUI renders it as the tier's voice picker and
+		// resolveSherpaSpeakerId maps catalog index → sid directly.
+		speed: 1,
 		files: {
 			model: "model.onnx",
 			tokens: "tokens.txt",

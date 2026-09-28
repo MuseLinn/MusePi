@@ -9,6 +9,51 @@ function speak(...deltas: string[]): { pushed: string[][]; all: string[] } {
 	return { pushed, all: [...pushed.flat(), ...flushed] };
 }
 
+describe("SpeakableStream Chinese sentence boundaries", () => {
+	it("emits each 。/！/？-terminated Mandarin sentence at push() without waiting for whitespace", () => {
+		// Chinese sentences abut directly (no whitespace): the full-width ender
+		// itself must be the boundary, or Mandarin text only cut at clause/length
+		// fallbacks — mid-sentence pauses were the "停顿怪" complaint.
+		const stream = new SpeakableStream();
+		expect(stream.push("已经帮你把这段配置改好了。简单说两个要点：")).toEqual(["已经帮你把这段配置改好了。"]);
+		// The leftover "简单说两个要点：" prefix stays in the buffer and is
+		// spoken together with the next sentence (short leftovers are not cut
+		// on their own below MIN_SEGMENT, same as stubby English sentences).
+		expect(stream.push("第一点是语音合成已经加速了不少！")).toEqual([
+			"简单说两个要点：第一点是语音合成已经加速了不少！",
+		]);
+		expect(stream.flush()).toEqual([]);
+	});
+
+	it("keeps Chinese closing brackets attached to the sentence ender", () => {
+		const { all } = speak("他说「这件事就这样定了。」第二件事稍后继续。\n");
+		expect(all[0]).toBe("他说「这件事就这样定了。」");
+		expect(all[1]).toBe("第二件事稍后继续。");
+	});
+
+	it("cuts an overlong Mandarin sentence at full-width clause punctuation instead of mid-phrase", () => {
+		const sentence =
+			"当夜幕降临，星光点点洒满整个山谷，微风拂过树梢带来远处的气息，我在静谧中感受着时光的流转，思念如涟漪般荡漾开来，" +
+			"梦境如画卷般缓缓展开，我与自然融为一体，沉静在这片宁静的美丽之中，感受着生命的奇迹与温柔，" +
+			"仿佛能听见远处山谷里传来的潺潺溪水声，看见夜空中流星划过的微弱光芒，闻到雨后泥土散发出的清新气息，" +
+			"想起童年时外婆讲过的那些温柔故事，憧憬着未来日子里所有尚未到来的美好瞬间，心底升起一股难以言表的宁静与欢喜，" +
+			"整个人都想永远沉浸在这无边夜色里，也愿意把这份安宁分享给身边每一个善良的人，" +
+			"更希望明天醒来依旧能记得今晚星光下这份心情，带着微笑走进新的一天，心里暖暖的。";
+		expect(sentence.length).toBeGreaterThan(280);
+		const { all } = speak(sentence);
+		expect(all.length).toBeGreaterThan(1);
+		for (const segment of all) expect(segment.length).toBeLessThanOrEqual(280);
+		for (const segment of all.slice(0, -1)) expect(segment).toMatch(/[,，、;；:：]$/);
+		expect(all[all.length - 1]).toMatch(/。$/);
+	});
+
+	it("flushIdle() treats a trailing 。/！/？ partial as a complete thought", () => {
+		const stream = new SpeakableStream();
+		expect(stream.push("好的，已经收到了。")).toEqual([]);
+		expect(stream.flushIdle()).toEqual(["好的，已经收到了。"]);
+	});
+});
+
 describe("SpeakableStream code fences", () => {
 	it("silences a fenced block while speaking the prose around it", () => {
 		const { all } = speak(

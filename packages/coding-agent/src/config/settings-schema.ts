@@ -5618,7 +5618,8 @@ export const SETTINGS_SCHEMA = {
 			tab: "providers",
 			group: "Services",
 			label: "Local TTS Voice",
-			description: "Kokoro voice used by the local TTS backend (American/British, female/male)",
+			description:
+				"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)",
 			options: TTS_LOCAL_VOICE_OPTIONS,
 		},
 	},

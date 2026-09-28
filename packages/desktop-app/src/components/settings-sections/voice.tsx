@@ -25,6 +25,7 @@ import {
 	type SttModelRow,
 	type SttModelStatusResponse,
 	type TtsDownloadEvent,
+	type TtsModelRow,
 	type TtsModelStatusResponse,
 } from "@musepi/pi-wire";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -143,6 +144,11 @@ interface SpeechModelPickerProps {
 	downloadMethod: "stt.modelDownload" | "tts.modelDownload";
 	/** Setting a radio write commits to (`settings.set <key>`). */
 	settingsKey: "stt.modelName" | "tts.localModel";
+	/** Optional per-tier voice picker (TTS only): when set, the SELECTED row
+	 *  expands its wire-reported voice catalog as a radio sub-list writing this
+	 *  key. The catalog is the daemon registry's `voices` for that tier (sherpa
+	 *  catalog order = sid order) — the GUI never invents speaker ids. */
+	voiceSettingsKey?: "tts.localVoice";
 	meta: Record<string, TierMeta>;
 	isDownloadEvent: (value: unknown) => value is AnyModelDownloadEvent;
 	/** STT passes true: selecting an uncached tier starts its download AND a
@@ -163,12 +169,14 @@ export function SpeechModelPicker({
 	statusMethod,
 	downloadMethod,
 	settingsKey,
+	voiceSettingsKey,
 	meta,
 	isDownloadEvent,
 	autoFetchOnSelect,
 }: SpeechModelPickerProps): ReactNode {
-	const [models, setModels] = useState<SttModelRow[] | null>(null);
+	const [models, setModels] = useState<(SttModelRow | TtsModelRow)[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
+	const [voiceSelected, setVoiceSelected] = useState<string | null>(null);
 	const [active, setActive] = useState<ActiveDownload | null>(null);
 	const [error, setError] = useState<{ modelKey: string; message: string } | null>(null);
 	// Single settlement timer: cleared before rescheduling and on unmount,
@@ -201,9 +209,14 @@ export function SpeechModelPicker({
 		refresh();
 		// Seed the radio selection from the live setting (default tier when unset).
 		void rpc
-			?.request<Record<string, unknown>>("settings.get", { keys: [settingsKey] })
+			?.request<Record<string, unknown>>("settings.get", {
+				keys: voiceSettingsKey ? [settingsKey, voiceSettingsKey] : [settingsKey],
+			})
 			.then(v => {
 				if (typeof v?.[settingsKey] === "string") setSelected(v[settingsKey] as string);
+				if (voiceSettingsKey && typeof v?.[voiceSettingsKey] === "string") {
+					setVoiceSelected(v[voiceSettingsKey] as string);
+				}
 			})
 			.catch(() => {});
 		if (!rpc) return;
@@ -244,7 +257,7 @@ export function SpeechModelPicker({
 			off();
 			if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
 		};
-	}, [rpc, refresh, settingsKey, isDownloadEvent]);
+	}, [rpc, refresh, settingsKey, voiceSettingsKey, isDownloadEvent]);
 
 	const download = useCallback(
 		(modelKey: string): void => {
@@ -266,6 +279,19 @@ export function SpeechModelPicker({
 		void rpc.request("settings.set", { key: settingsKey, value: modelKey }).catch(err => {
 			setError({ modelKey, message: err instanceof Error ? err.message : String(err) });
 		});
+	};
+
+	/** Voice radio (TTS card only): writes the chosen catalog id, which the
+	 *  daemon maps to the model's speaker id (resolveSherpaSpeakerId for
+	 *  sherpa tiers). No auto-download: the tier card's own rules apply. */
+	const selectVoice = (voiceId: string): void => {
+		if (!rpc || !voiceSettingsKey || voiceId === voiceSelected) return;
+		setVoiceSelected(voiceId);
+		void rpc
+			.request("settings.set", { key: voiceSettingsKey, value: voiceId })
+			.catch(err =>
+				setError({ modelKey: selected ?? "", message: err instanceof Error ? err.message : String(err) }),
+			);
 	};
 
 	// Auto-fetch (STT only): selecting an uncached tier starts its download —
@@ -292,8 +318,19 @@ export function SpeechModelPicker({
 				<div className="gui-stt-picker" role="radiogroup" aria-label={tLoose(titleKey)}>
 					{models.map(m => {
 						const isSelected = selected === m.key;
-						const isActive = active?.modelKey === m.key;
+						// Narrowing shape matters: `active !== null && …` lets tsgo
+						// narrow `active` through this alias inside the branch below.
+						const isActive = active !== null && active.modelKey === m.key;
 						const tierMeta = meta[m.key] ?? { size: "", desc: "" };
+						// The selected tier's voice catalog (wire-reported; sherpa
+						// catalog order = sid order — never invent ids). Only TTS
+						// rows carry `voices` — the STT channel's rows don't.
+						const rowVoices = "voices" in m ? m.voices : undefined;
+						const tierVoices = isSelected && voiceSettingsKey ? (rowVoices ?? []) : [];
+						const tierVoiceChecked =
+							voiceSelected && tierVoices.some(v => v.id === voiceSelected)
+								? voiceSelected
+								: (tierVoices[0]?.id ?? null);
 						return (
 							<div key={m.key} className={`gui-stt-row${isSelected ? " gui-stt-row--selected" : ""}`}>
 								<label className="gui-stt-row-radio">
@@ -335,6 +372,26 @@ export function SpeechModelPicker({
 										) : null}
 									</span>
 								</label>
+								{/* Per-tier voice picker (TTS card only): rendered for the
+								 *  SELECTED tier from the wire-reported catalog — catalog
+								 *  order is the sherpa sid order, so what the GUI offers
+								 *  is exactly what the model speaks with. */}
+								{tierVoices.length > 0 && (
+									<div className="gui-stt-voices" role="radiogroup" aria-label={t("voice")}>
+										{tierVoices.map(voice => (
+											<label key={voice.id} className="gui-stt-voice-radio">
+												<input
+													type="radio"
+													name={`${radioName}-voice-${m.key}`}
+													checked={voice.id === tierVoiceChecked}
+													disabled={!rpc}
+													onChange={() => selectVoice(voice.id)}
+												/>
+												<span>{voice.label}</span>
+											</label>
+										))}
+									</div>
+								)}
 								{m.cached ? (
 									<span className="gui-stt-row-ready">✓ {t("model ready offline")}</span>
 								) : !isActive ? (
@@ -392,8 +449,11 @@ function SttModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 /** TTS picker card (朗读模型): two tiers write `tts.localModel`. Selecting
  *  NEVER auto-downloads — local synthesis routes zh text to the Mandarin tier
  *  automatically, so an uncached pick still reads aloud; the per-row download
- *  button is the only fetch trigger. Exported: the contract test mounts this
- *  card directly against a fake RPC. */
+ *  button is the only fetch trigger. The selected row additionally expands a
+ *  voice radio sub-list (from the wire-reported catalog) writing
+ *  `tts.localVoice` — for kokoro that's the multi-voice catalog, for
+ *  melotts-zh the model's single ZH voice. Exported: the contract test mounts
+ *  this card directly against a fake RPC. */
 export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	return (
 		<SpeechModelPicker
@@ -403,6 +463,7 @@ export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNod
 			statusMethod="tts.modelStatus"
 			downloadMethod="tts.modelDownload"
 			settingsKey="tts.localModel"
+			voiceSettingsKey="tts.localVoice"
 			meta={TTS_TIER_META}
 			isDownloadEvent={isTtsDownloadEvent}
 			autoFetchOnSelect={false}
@@ -481,13 +542,13 @@ export function SpeakAction({ rpc, markdown }: { rpc: RpcClient | null; markdown
 	return (
 		<button
 			type="button"
-			className={`tr-action${speaking ? " tr-action--speaking" : ""}`}
+			className={`tr-action${speaking ? " tr-action--speaking" : ""}${state === "error" ? " tr-action--error" : ""}`}
 			title={state === "error" ? err : speaking ? t("read aloud stop") : t("read aloud")}
 			aria-label={speaking ? t("read aloud stop") : t("read aloud")}
 			disabled={!rpc}
 			onClick={toggle}
 		>
-			<Icon name="volume-up" className="h-3.5 w-3.5" />
+			<Icon name={state === "error" ? "error-warning" : "volume-up"} className="h-3.5 w-3.5" />
 		</button>
 	);
 }

@@ -487,7 +487,7 @@ async function synthesizeSegment(
 		// missing `sid`/`speed` field throws "The argument object should have a
 		// field sid/speed" instead of defaulting (the pre-fix silent-TTS bug).
 		const sid = resolveSherpaSpeakerId(spec, voice);
-		const output = await synthesizer.instance.generateAsync({ text, sid, speed: 1 });
+		const output = await synthesizer.instance.generateAsync({ text, sid, speed: spec.speed ?? 1 });
 		if (!output.samples || output.samples.length === 0)
 			throw new Error("sherpa TTS synthesis returned no audio samples");
 		return { pcm: output.samples, sampleRate: output.sampleRate || spec.sampleRate };

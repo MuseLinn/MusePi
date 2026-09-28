@@ -61,8 +61,16 @@ const asRpc = (fake: FakeRpc): RpcClient | null => fake as unknown as RpcClient;
 function statusResponse(): Record<string, unknown> {
 	return {
 		models: [
-			{ key: "kokoro", label: "Kokoro-82M", cached: true },
-			{ key: "melotts-zh", label: "MeloTTS 中文", cached: false },
+			{
+				key: "kokoro",
+				label: "Kokoro-82M",
+				cached: true,
+				voices: [
+					{ id: "af_heart", label: "心音" },
+					{ id: "am_michael", label: "Michael" },
+				],
+			},
+			{ key: "melotts-zh", label: "MeloTTS 中文", cached: false, voices: [{ id: "0", label: "中文女声" }] },
 		],
 		defaultKey: "kokoro",
 	};
@@ -146,6 +154,53 @@ describe("朗读模型卡 (TtsModelPickerCard)", () => {
 		expect(progressRow).not.toBeNull();
 		expect(progressRow!.textContent).toContain("42%");
 	});
+
+	test("the selected tier expands its wire-reported voice catalog; picking one writes tts.localVoice", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("tts.modelStatus", statusResponse());
+		fake.responses.set("settings.get", { "tts.localModel": "kokoro", "tts.localVoice": "af_heart" });
+		mount(fake);
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		const kokoro = host.querySelectorAll(".gui-stt-row")[0]!;
+		const group = kokoro.querySelector<HTMLDivElement>(".gui-stt-voices");
+		expect(group).not.toBeNull();
+		expect(group!.getAttribute("role")).toBe("radiogroup");
+		const radios = group!.querySelectorAll<HTMLInputElement>("input[type=radio]");
+		expect(radios.length).toBe(2);
+		// Seed: the live setting (af_heart) is checked, not merely the first row.
+		expect(radios[0]!.checked).toBe(true);
+		act(() => {
+			radios[1]!.click();
+		});
+		expect(fake.calls("settings.set")).toEqual([{ key: "tts.localVoice", value: "am_michael" }]);
+		// Unselected tiers never show a voice list.
+		const melotts = host.querySelectorAll(".gui-stt-row")[1]!;
+		expect(melotts.querySelector(".gui-stt-voices")).toBeNull();
+	});
+
+	test("selecting the MeloTTS row expands its single-speaker catalog as the voice default", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("tts.modelStatus", statusResponse());
+		fake.responses.set("settings.get", { "tts.localModel": "kokoro" });
+		mount(fake);
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 0));
+		});
+		const melotts = host.querySelectorAll(".gui-stt-row")[1]!;
+		act(() => {
+			melotts.querySelector<HTMLInputElement>("input[type=radio]")!.click();
+		});
+		// The voice sub-list appears on the newly selected row, seeded to the
+		// catalog's first (only) voice — melotts-zh is a single-speaker model.
+		const group = melotts.querySelector(".gui-stt-voices");
+		expect(group).not.toBeNull();
+		const radios = group!.querySelectorAll<HTMLInputElement>("input[type=radio]");
+		expect(radios.length).toBe(1);
+		expect(radios[0]!.checked).toBe(true);
+		expect(group!.textContent).toContain("中文女声");
+	});
 });
 
 describe("语音测试共用模拟会话视图", () => {
@@ -206,5 +261,37 @@ describe("语音测试共用模拟会话视图", () => {
 		const synth = fake.calls("tts.synthesize")[0] as { text: string };
 		expect(typeof synth.text).toBe("string");
 		expect(synth.text.length).toBeGreaterThan(0);
+	});
+
+	test("a synthesis failure turns the read-aloud button into the error state with the reason", async () => {
+		const fake = new FakeRpc();
+		fake.responses.set("settings.get", { "tts.localVoice": "af_heart", "tts.rate": 1, "tts.inputMode": "sanitize" });
+		// Worker-shaped failure: audio null + actionable error text from the daemon.
+		fake.responses.set("tts.synthesize", {
+			audio: null,
+			sampleRate: 0,
+			error: "Failed to download model.onnx: HTTP 404",
+		});
+		const markdown = "已经改好了。";
+		act(() => {
+			root.render(
+				createElement(MockAssistantRow, {
+					markdown,
+					showAvatar: false,
+					actions: createElement(SpeakAction, { rpc: asRpc(fake), markdown }),
+				}),
+			);
+		});
+		const speakBtn = host.querySelector<HTMLButtonElement>("button.tr-action")!;
+		act(() => {
+			speakBtn.click();
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 20));
+		});
+		// Error presentation contract: red state class, warning icon, reason in title.
+		expect(speakBtn.classList.contains("tr-action--error")).toBe(true);
+		expect(speakBtn.title).toBe("Failed to download model.onnx: HTTP 404");
+		expect(speakBtn.querySelector("use")?.getAttribute("href")).toBe("#oc-error-warning");
 	});
 });

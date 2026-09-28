@@ -355,6 +355,13 @@ export interface TtsModelRow {
 	key: string;
 	label: string;
 	cached: boolean;
+	/**
+	 * The tier's voice catalog (registry order = sherpa speaker-id order). The
+	 * picker's per-tier voice radios render exactly this list and write the
+	 * chosen id to `tts.localVoice`; shells must not invent ids. Optional so
+	 * older daemons/guests keep interoping (absence → no voice sub-list).
+	 */
+	voices?: { id: string; label: string }[];
 }
 
 /** `tts.modelStatus` payload. `downloads` lists model keys mid-fetch so a

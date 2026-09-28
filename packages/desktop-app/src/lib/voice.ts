@@ -438,62 +438,252 @@ function friendlyDictationError(message: string): string {
 }
 
 /* ── 朗读 ─────────────────────────────────────────────────────── */
+/**
+ * Daemon-path read-aloud is SENTENCE-STREAMED, not one-shot: the sanitized
+ * text is cut into sentence-sized segments (Chinese-aware — full-width 。！？
+ * enders abut the next sentence with no whitespace), each segment is
+ * synthesized with one `tts.synthesize` RPC, and playback starts the moment
+ * the FIRST segment's PCM lands — segment N+1 synthesizes while segment N
+ * plays. The old one-shot shape paid the whole-text synthesis cost up front
+ * (a 600-char Chinese reply ≈ many seconds of MeloTTS CPU time) before any
+ * sound, which was the reported "点击播放到出声很慢".
+ *
+ * Playback runs on one shared AudioContext: every segment decodes to an
+ * AudioBuffer and schedules back-to-back on a single gain node with a tiny
+ * click-guard gap (the sentence-final pause already lives inside each
+ * segment's audio — MeloTTS renders 。！？ prosody — so no extra silence is
+ * inserted). `rate` is a playbackRate on each source; duck lowers the shared
+ * gain; barge-in "pause" suspends the context.
+ */
+
+/** Guard gap between scheduled segments (seconds); prevents click artifacts. */
+const SEGMENT_GAP_SEC = 0.04;
+/** Boundaries closer than this to the segment start are skipped (stub merge). */
+const SEGMENT_MIN_CHARS = 4;
+/** A segment never exceeds this; longer sentences split at clause punctuation. */
+const SEGMENT_MAX_CHARS = 180;
+
+/** "https://github.com/foo/bar?x#y" → "github.com" (daemon speakable parity). */
+function speakableHost(url: string): string {
+	return url
+		.replace(/^[a-z][\w+.-]*:\/\//i, "")
+		.replace(/^www\./i, "")
+		.replace(/[/?#].*$/, "");
+}
+
+/** Chinese closing brackets that may trail a sentence ender. */
+const ZH_CLOSER_RE = /[」』》”’）]/;
+/** ASCII closers that may trail an ASCII sentence ender. */
+const ASCII_CLOSER_RE = /[)\]"'»”’]/;
+/** Abbreviations whose trailing dot must not end a segment (daemon parity). */
+const ABBREVIATION_TAIL_RE = /(?:e\.g|i\.e|etc|vs|Mr|Mrs|Ms|Dr|St|No)\.$/i;
+/** Clause punctuation for the oversize-segment fallback split. */
+const CLAUSE_CHAR_RE = /[,，、;；:：]/;
+
+/**
+ * Cut sanitized text into synthesis-sized segments. Contract: every sentence
+ * ender (full-width 。！？ without whitespace, ASCII .!?… with whitespace or
+ * end) stays ATTACHED to its segment — MeloTTS derives the sentence-final
+ * pause from that punctuation, so a segment cut before the ender would sound
+ * like a comma-stop. Decimals ("3.14"), "…" runs, mid-word dots
+ * ("example.com") and abbreviations ("e.g.") never split. Segments longer
+ * than {@link SEGMENT_MAX_CHARS} split at the last clause punctuation before
+ * the cap. Pure, exported for contract tests.
+ */
+export function splitSpeakableSentences(text: string): string[] {
+	const segments: string[] = [];
+	const n = text.length;
+	let start = 0;
+	let i = 0;
+	while (i < n) {
+		const ch = text[i]!;
+		let end = -1;
+		if (ch === "。" || ch === "！" || ch === "？") {
+			// Full-width enders abut the next sentence — no whitespace needed.
+			end = i + 1;
+			while (end < n && ZH_CLOSER_RE.test(text[end]!)) end += 1;
+		} else if (ch === "." || ch === "!" || ch === "?") {
+			// ASCII enders require trailing whitespace (or end of text) so
+			// decimals and mid-word dots do not split; "…"/"..." runs only
+			// end at their last dot.
+			const prev = i > 0 ? text[i - 1]! : "";
+			const next = i + 1 < n ? text[i + 1]! : "";
+			if (ch !== "." || !/\d/.test(prev) || !/\d/.test(next)) {
+				const head = text.slice(start, i + 1);
+				let e = i + 1;
+				while (e < n && ASCII_CLOSER_RE.test(text[e]!)) e += 1;
+				if (!ABBREVIATION_TAIL_RE.test(head) && (e >= n || /\s/.test(text[e]!))) end = e;
+			}
+		} else if (ch === "…") {
+			// An ellipsis run only ends a segment at end-of-text or before
+			// whitespace ("他说……然后走了" keeps the sentence whole).
+			let e = i + 1;
+			while (e < n && text[e] === "…") e += 1;
+			if (e >= n || /\s/.test(text[e]!)) end = e;
+		}
+		if (end !== -1 && end - start >= SEGMENT_MIN_CHARS) {
+			segments.push(text.slice(start, end));
+			start = end;
+			i = end;
+			continue;
+		}
+		i += 1;
+	}
+	if (start < n) segments.push(text.slice(start));
+	// Oversize fallback: split at the last clause punctuation before the cap.
+	const out: string[] = [];
+	for (const segment of segments) {
+		let rest = segment.trim();
+		while (rest.length > SEGMENT_MAX_CHARS) {
+			const window = rest.slice(0, SEGMENT_MAX_CHARS + 1);
+			let cut = -1;
+			for (let j = window.length - 1; j > 0; j--) {
+				if (CLAUSE_CHAR_RE.test(window[j]!)) {
+					cut = j + 1;
+					break;
+				}
+			}
+			if (cut <= 0) cut = SEGMENT_MAX_CHARS;
+			out.push(rest.slice(0, cut).trimEnd());
+			rest = rest.slice(cut).trimStart();
+		}
+		if (rest) out.push(rest);
+	}
+	return out.filter(segment => /[\p{L}\p{N}]/u.test(segment));
+}
+
+/** Shared playback graph — one AudioContext for the app's whole read-aloud. */
+let speakCtx: AudioContext | null = null;
+let speakGain: GainNode | null = null;
+
+function speakGraph(): { ctx: AudioContext; gain: GainNode } {
+	if (!speakCtx || !speakGain) {
+		speakCtx = new AudioContext();
+		speakGain = speakCtx.createGain();
+		speakGain.connect(speakCtx.destination);
+	}
+	return { ctx: speakCtx, gain: speakGain };
+}
+
+/** Map a synthesis failure onto an actionable, localized one-liner. */
+function friendlySpeakError(raw: string | undefined): string {
+	const message = raw ?? "";
+	if (/request timeout|RPC timeout/i.test(message)) return t("voice error timeout");
+	if (!message) return t("voice error tts synthesis");
+	// Worker text is already actionable ("Failed to download model.onnx …");
+	// pass it through so e.g. a missing model names the real failure.
+	return message;
+}
+
 export function speak(
 	text: string,
 	rpc: RpcClient | null,
 	options?: SpeakOptions,
 	onState?: (activity: VoiceActivity) => void,
 ): () => void {
-	const clean = sanitize(text, options?.mode ?? "sanitize");
+	const clean = sanitizeForSpeech(text, options?.mode ?? "sanitize");
 	if (rpc) {
-		let audio: HTMLAudioElement | null = null;
+		const segments = splitSpeakableSentences(clean);
+		if (segments.length === 0) {
+			onState?.({ phase: "error", message: t("voice error tts empty") });
+			return () => {};
+		}
 		let stopped = false;
-		void rpc
-			.request<{ audio: number[] | null; sampleRate: number }>(
-				"tts.synthesize",
-				{
-					text: clean,
-					...(options?.voice ? { voice: options.voice } : {}),
-				},
-				// First use warms Kokoro inside the call — same class as stt.transcribe.
-				{ timeoutMs: SPEECH_RPC_TIMEOUT_MS },
-			)
-			.then(res => {
-				if (stopped || !res?.audio || res.audio.length === 0) return;
-				const wav = pcmToWav(res.audio, res.sampleRate || 24000);
-				audio = new Audio(URL.createObjectURL(new Blob([wav.buffer as ArrayBuffer], { type: "audio/wav" })));
-				audio.volume = 1;
-				// Rate is a playback-side concern: HTMLMediaElement time-stretches
-				// with pitch preservation (Chromium), so the daemon's Kokoro PCM
-				// needs no resampling — the slider just works.
-				if (options?.rate) {
-					audio.playbackRate = options.rate;
-					audio.preservesPitch = true;
+		let graph: { ctx: AudioContext; gain: GainNode } | null = null;
+		let cursor = 0;
+		const liveSources = new Set<AudioBufferSourceNode>();
+		const synthesize = (index: number): Promise<{ audio: number[] | null; sampleRate: number; error?: string }> =>
+			rpc
+				.request<{ audio: number[] | null; sampleRate: number; error?: string }>(
+					"tts.synthesize",
+					{
+						text: segments[index],
+						...(options?.voice ? { voice: options.voice } : {}),
+					},
+					// First use warms the model inside the call — same class as stt.transcribe.
+					{ timeoutMs: SPEECH_RPC_TIMEOUT_MS },
+				)
+				.catch((err: unknown) => ({
+					audio: null,
+					sampleRate: 0,
+					error: err instanceof Error ? err.message : String(err),
+				}));
+		void (async (): Promise<void> => {
+			try {
+				let pending = synthesize(0);
+				for (let i = 0; i < segments.length; i += 1) {
+					const res = await pending;
+					if (stopped) return;
+					if (!res?.audio || res.audio.length === 0) {
+						onState?.({ phase: "error", message: friendlySpeakError(res?.error) });
+						return;
+					}
+					// Segment N+1 synthesizes while segment N plays.
+					if (i + 1 < segments.length) pending = synthesize(i + 1);
+					if (!graph) {
+						graph = speakGraph();
+						cursor = graph.ctx.currentTime;
+						void graph.ctx.resume().catch(() => {});
+						onState?.({ phase: "speaking" });
+						activeTts = {
+							duck: () => {
+								if (speakGain) speakGain.gain.value = 0.25;
+							},
+							pause: () => {
+								void speakCtx?.suspend().catch(() => {});
+							},
+							resume: () => {
+								if (speakGain) speakGain.gain.value = 1;
+								void speakCtx?.resume().catch(() => {});
+							},
+						};
+					}
+					const wav = pcmToWav(res.audio, res.sampleRate || 24_000);
+					const buffer = await graph.ctx.decodeAudioData(wav.buffer as ArrayBuffer);
+					if (stopped) return;
+					const source = graph.ctx.createBufferSource();
+					source.buffer = buffer;
+					const rate = options?.rate && options.rate > 0 ? options.rate : 1;
+					if (rate !== 1) source.playbackRate.value = rate;
+					source.connect(graph.gain);
+					source.onended = () => liveSources.delete(source);
+					liveSources.add(source);
+					const startAt = Math.max(cursor, graph.ctx.currentTime + SEGMENT_GAP_SEC);
+					source.start(startAt);
+					cursor = startAt + buffer.duration / rate;
 				}
-				audio.onended = () => {
-					onState?.({ phase: "done" });
+				// Drain: wait until the last scheduled sample has played out.
+				// `graph` is non-null whenever a segment played (segments.length
+				// > 0 guarantees at least one loop iteration).
+				const played = graph;
+				if (played) {
+					const drainMs = Math.max(0, (cursor - played.ctx.currentTime) * 1000) + 80;
+					await new Promise<void>(resolve => setTimeout(resolve, drainMs));
+				}
+				if (!stopped) {
 					activeTts = null;
-				};
-				audio.onerror = () => onState?.({ phase: "error", message: "tts playback failed" });
-				onState?.({ phase: "speaking" });
-				audio.play().catch(() => onState?.({ phase: "error", message: "tts playback failed" }));
-				activeTts = {
-					duck: () => {
-						if (audio) audio.volume = 0.25;
-					},
-					pause: () => audio?.pause(),
-					resume: () => {
-						if (audio) {
-							audio.volume = 1;
-							void audio.play().catch(() => {});
-						}
-					},
-				};
-			})
-			.catch(err => onState?.({ phase: "error", message: err instanceof Error ? err.message : String(err) }));
+					onState?.({ phase: "done" });
+				}
+			} catch (err) {
+				if (!stopped) {
+					activeTts = null;
+					onState?.({
+						phase: "error",
+						message: friendlySpeakError(err instanceof Error ? err.message : String(err)),
+					});
+				}
+			}
+		})();
 		return () => {
 			stopped = true;
-			audio?.pause();
+			for (const source of liveSources) {
+				try {
+					source.stop();
+				} catch {
+					// Already ended.
+				}
+			}
+			liveSources.clear();
 			activeTts = null;
 			onState?.({ phase: "stopped" });
 		};
@@ -554,20 +744,70 @@ export function evaluateSubmitTrigger(
 	return { submit: false, trimTrailing: 0 };
 }
 
-/* ── 净化/摘要（OpenChamber 模式；摘要走 tts 净化的稳定子集） ─────── */
-function sanitize(text: string, mode: "raw" | "sanitize" | "summarize"): string {
-	let s = text
-		.replace(/```[\s\S]*?```/g, " code block ")
-		.replace(/`[^`]+`/g, " code ")
-		.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-		.replace(/https?:\/\/\S+/g, "a link")
-		.replace(/(?:[A-Za-z]:)?\/[\w./-]+/g, "path")
-		.replace(/[*_#{}>~|]/g, "")
+/* ── 净化（朗读前的 markdown → 自然语言文本） ─────────────────────
+ * 行级结构逐行处理（标题/列表/引用/表格分隔行/分隔线），行内结构正则
+ * 替换（链接读 label、URL 读域名、行内代码去反引号留内容、强调记号
+ * 成对剥掉——snake_case 的中间下划线不再被误删）。代码块整体替换为
+ * 本地化占位词（"代码块"），与 daemon speakable 流的"跳过代码"语义
+ * 对齐但保留一个口语路标，听者不会困惑句子为什么跳了一段。 */
+
+/**
+ * Prepare assistant markdown for speech. `sanitize` strips markdown structure
+ * (headings, list markers, blockquotes, tables, emphasis) and rewrites code
+ * and links into spoken form; `raw` keeps the text but still replaces fenced
+ * code with the placeholder; `summarize` keeps the first two sentences
+ * (Chinese enders included). Pure, exported for contract tests.
+ */
+export function sanitizeForSpeech(text: string, mode: "raw" | "sanitize" | "summarize"): string {
+	const codeBlock = t("speech placeholder code block");
+	let s = text.replace(/```[\s\S]*?(?:```|$)/g, ` ${codeBlock} `).replace(/~~~[\s\S]*?(?:~~~|$)/g, ` ${codeBlock} `);
+	if (mode === "raw") return s.replace(/\s+/g, " ").trim().slice(0, 600);
+	s = s
+		.split("\n")
+		.map(line => {
+			// Table separator rows and horizontal rules carry no spoken content.
+			if (/^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes("|")) return " ";
+			if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) return " ";
+			let l = line;
+			l = l.replace(/^\s{0,3}#{1,6}\s+/, ""); // heading marker
+			l = l.replace(/^\s*>\s?/, ""); // blockquote marker
+			l = l.replace(/^\s*[-*+]\s+/, ""); // bullet marker
+			l = l.replace(/^\s*(\d{1,3})[.)]\s+/, "$1, "); // numbered: "1. " → "1, "
+			if (/^\s*\|/.test(l)) {
+				// Table row: read the cells, joined (separator rows dropped above).
+				const cells = l
+					.split("|")
+					.map(cell => cell.trim())
+					.filter(Boolean);
+				return cells.join("，");
+			}
+			return l;
+		})
+		.join("\n")
+		.replace(/!\[([^\]]*)\]\([^()]*\)/g, "$1") // image → its alt
+		.replace(/\[([^\]]+)\]\([^()]*\)/g, "$1") // link → its label
+		.replace(/<((?:https?:\/\/|www\.)[^\s>。！？，、；：]+)>/g, (_match, url: string) => speakableHost(url))
+		.replace(
+			/\bhttps?:\/\/[^\s<>()"'\]。！？，、；：]+|\bwww\.[\w-]+(?:\.[\w-]+)+[^\s<>()"'\]。！？，、；：]*/g,
+			match => speakableHost(match),
+		)
+		.replace(/`+([^`]+)`+/g, "$1") // inline code: keep the identifier, drop ticks
+		.replace(/\*\*([^*]+)\*\*/g, "$1")
+		.replace(/\*([^*]+)\*/g, "$1")
+		.replace(/__([^_]+)__/g, "$1")
+		.replace(/~~([^~]+)~~/g, "$1")
+		.replace(/<\/?[a-zA-Z][^<>]*>/g, " ") // HTML tags
+		.replace(/(^|[\s("'`])((?:~|\.{1,2})?\/?[\w.@+-]+(?:\/[\w.@+-]+){2,}\/?)/g, (_m, lead: string, p: string) => {
+			// "packages/coding-agent/src/tts/vocalizer.ts" → "vocalizer.ts"
+			const parts = p.split("/").filter(part => part.length > 0);
+			return lead + (parts[parts.length - 1] ?? p);
+		})
+		// Stray markdown residue never carries meaning in prose (unlike _, #, []).
+		.replace(/[*~|]/g, "")
 		.replace(/\s+/g, " ")
 		.trim();
-	if (mode === "raw") return text.replace(/```[\s\S]*?```/g, " code block ").slice(0, 600);
 	if (mode === "summarize") {
-		// 摘要：保留首句 + 关键句的轻量蒸馏（真实实现走 daemon summarizeText）
+		// 轻量蒸馏：保留前两句（中英文句末都算）
 		const sentences = s.match(/[^。！？.!?]+[。！？.!?]?/g) ?? [s];
 		s = sentences.slice(0, 2).join("") + (sentences.length > 2 ? "…" : "");
 	}

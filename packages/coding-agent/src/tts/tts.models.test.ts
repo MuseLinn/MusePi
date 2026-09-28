@@ -26,6 +26,17 @@ describe("melotts-zh registry manifest", () => {
 		expect(spec.repo).toBe("csukuangfj/vits-melo-tts-zh_en");
 	});
 
+	it("declares exactly the model's real speaker catalog (single ZH voice, sid 0)", () => {
+		// Downstream consumers: the GUI renders this catalog as the tier's voice
+		// radios and resolveSherpaSpeakerId maps catalog index → sid directly, so
+		// an over-declared catalog offers speaker ids the model does not have
+		// (the sherpa addon then rejects synthesis). k2-fsa's official manifest
+		// documents vits-melo-tts-zh_en as a 1-speaker export.
+		if (spec?.engine !== "sherpa") throw new Error("melotts-zh must be a sherpa tier");
+		expect(spec.voices.length).toBe(1);
+		expect(resolveSherpaSpeakerId(spec, spec.voices[0]!.id)).toBe(0);
+	});
+
 	it("declares the full official file set (weights + jieba dict + rule FSTs)", () => {
 		if (spec?.engine !== "sherpa") throw new Error("melotts-zh must be a sherpa tier");
 		const required = sherpaTtsRequiredFiles(spec);

@@ -23,13 +23,21 @@ export interface TtsAudio {
 }
 
 type PendingRequest =
-	| { kind: "synthesize"; modelKey: TtsLocalModelKey; resolve: (audio: TtsAudio | null) => void }
+	| {
+			kind: "synthesize";
+			modelKey: TtsLocalModelKey;
+			resolve: (audio: TtsAudio | null) => void;
+			/** Receives the worker's error text when synthesis fails (RPC layers surface it). */
+			onError?: (message: string) => void;
+	  }
 	| { kind: "download"; modelKey: TtsLocalModelKey; resolve: (ok: boolean) => void }
 	| { kind: "stream"; modelKey: TtsLocalModelKey; channel: AudioChunkChannel };
 
 export interface TtsSynthesizeOptions {
 	voice?: string;
 	signal?: AbortSignal;
+	/** Called with the worker's error text when synthesis fails; the promise still resolves null. */
+	onError?: (message: string) => void;
 }
 
 export interface TtsDownloadOptions {
@@ -211,7 +219,7 @@ export class TtsClient {
 			const worker = this.#ensureWorker();
 			const id = String(++this.#nextRequestId);
 			const { promise, resolve } = Promise.withResolvers<TtsAudio | null>();
-			this.#addPending(id, { kind: "synthesize", modelKey, resolve });
+			this.#addPending(id, { kind: "synthesize", modelKey, resolve, onError: options.onError });
 			const abort = (): void => {
 				const pending = this.#pending.get(id);
 				if (pending?.kind !== "synthesize") return;
@@ -443,12 +451,15 @@ export class TtsClient {
 			return;
 		}
 		// A synthesis failure must be visible, not silent: the promise contract
-		// resolves `null` (callers treat it as "no audio"), so the only trace of
-		// the worker's error message is this log line and the progress event.
+		// resolves `null` (callers treat it as "no audio"), so the worker's error
+		// text reaches callers only through this onError hook, this log line and
+		// the progress event.
 		logger.warn("tts: worker returned error", { modelKey: pending.modelKey, error: message.error });
 		this.#emitProgress({ modelKey: pending.modelKey, status: "error" });
-		if (pending.kind === "synthesize") pending.resolve(null);
-		else if (pending.kind === "download") pending.resolve(false);
+		if (pending.kind === "synthesize") {
+			pending.onError?.(message.error);
+			pending.resolve(null);
+		} else if (pending.kind === "download") pending.resolve(false);
 		else pending.channel.fail(new Error(message.error));
 		void this.terminate();
 	}
@@ -461,8 +472,10 @@ export class TtsClient {
 		logger.warn("tts: worker error", { error: error.message });
 		for (const pending of this.#pending.values()) {
 			this.#emitProgress({ modelKey: pending.modelKey, status: "error" });
-			if (pending.kind === "synthesize") pending.resolve(null);
-			else if (pending.kind === "download") pending.resolve(false);
+			if (pending.kind === "synthesize") {
+				pending.onError?.(error.message);
+				pending.resolve(null);
+			} else if (pending.kind === "download") pending.resolve(false);
 			else pending.channel.fail(error);
 		}
 		this.#pending.clear();

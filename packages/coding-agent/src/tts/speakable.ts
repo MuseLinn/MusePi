@@ -10,7 +10,9 @@
  *    spoken as "1, …"), and turns newlines into hard segment breaks.
  * 2. Segmentation (stateful): emits a segment the moment a sentence boundary
  *    appears — no next-sentence confirmation, which is what made the previous
- *    engine-side splitter stall a full sentence behind generation. The first
+ *    engine-side splitter stall a full sentence behind generation. Sentence
+ *    enders cover both scripts: ASCII `.!?…` (with trailing whitespace) and
+ *    full-width `。！？` (which abut the next sentence directly). The first
  *    segment cuts early at a clause boundary for fast time-to-first-audio, and
  *    over-long unpunctuated runs are force-split so no segment exceeds the
  *    synthesizer's input budget.
@@ -45,10 +47,18 @@ const SOFT_CLAUSE_LEN = 160;
  */
 const MAX_SEGMENT = 280;
 
-/** Sentence-ending punctuation, optional closers, then whitespace. */
-const SENTENCE_BOUNDARY_RE = /[.!?…]+[)\]"'»”’]*\s/g;
-/** Clause punctuation followed by whitespace — early-cut and force-split points. */
-const CLAUSE_BOUNDARY_RE = /[,;:—–]\s/g;
+/**
+ * Sentence-ending punctuation, optional closers, then whitespace. Full-width
+ * Chinese enders (。！？…) cut WITHOUT trailing whitespace — Chinese sentences
+ * abut directly ("第一句。第二句"), so requiring \s would never cut there and
+ * Mandarin segments would grow to the clause/length fallbacks, landing mid-
+ * sentence (the choppy-pause complaint). ASCII enders keep the \s requirement
+ * so decimals ("3.14") and "word.Next" don't split.
+ */
+const SENTENCE_BOUNDARY_RE = /(?:[。！？]+[」』）》”’）]*|[.!?…]+[)\]"'»”’]*\s)/g;
+/** Clause punctuation — ASCII forms require trailing whitespace (unchanged),
+ * full-width Chinese forms (，、；：) cut without it. */
+const CLAUSE_BOUNDARY_RE = /[,;:—–]\s|[，、；：]/g;
 /** Abbreviations whose trailing dot is not a sentence boundary. */
 const ABBREVIATION_RE = /(?:^|\s)(?:e\.g|i\.e|etc|vs|Mr|Mrs|Ms|Dr|St|No)\.$/i;
 
@@ -230,7 +240,7 @@ export class SpeakableStream {
 	flushIdle(): string[] {
 		const out: string[] = [];
 		const pending = this.#buf.trimEnd();
-		const completeThought = /[.!?…][)\]"'»”’]*$/.test(pending);
+		const completeThought = /[.!?…。！？][)\]"'»”’」』）》）]*$/.test(pending);
 		if (!completeThought && pending.length < MIN_SEGMENT) return out;
 		this.#drain(out);
 		return out;

@@ -58,6 +58,17 @@ describe("TtsClient worker-error visibility", () => {
 		await client.terminate();
 	});
 
+	it("delivers the worker's error text through the synthesize onError hook (RPC layers surface it)", async () => {
+		// Contract: tts.synthesize daemon route forwards the text to the GUI so a
+		// failure reads as "模型未下载/合成失败 + 原因" instead of silent nothing.
+		const client = new TtsClient(() => createErrorWorker("Failed to download model.onnx: HTTP 404"));
+		const errors: string[] = [];
+		const audio = await client.synthesize("melotts-zh", "你好", { onError: message => errors.push(message) });
+		expect(audio).toBeNull();
+		expect(errors).toEqual(["Failed to download model.onnx: HTTP 404"]);
+		await client.terminate();
+	});
+
 	it("fails a streaming session's chunk iterator when the worker errors mid-stream", async () => {
 		const client = new TtsClient(() => createErrorWorker("sherpa TTS synthesis returned no audio samples"));
 		const stream = client.synthesizeStream("melotts-zh");

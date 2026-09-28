@@ -1476,6 +1476,11 @@
 	animation: tr-speaking-pulse 1s ease-in-out infinite;
 }
 
+/* TTS 朗读失败:红色警告图标(原因在 title tooltip 里),直到下次点击复位。 */
+.tr-action--error {
+	color: var(--error, #f85149);
+}
+
 @keyframes tr-speaking-pulse {
 	0%,
 	100% {

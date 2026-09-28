@@ -488,6 +488,11 @@ export const settings = {
 	"voice error empty": "Didn't catch that — move closer to the microphone and try again",
 	"voice error mic": "Microphone unavailable — check your system microphone permission",
 	"voice error disconnected": "The speech service disconnected — try again once reconnected",
+	"voice error tts synthesis":
+		'Speech synthesis failed — download the selected model in "Speech synthesis model" first, or pick another one',
+	"voice error tts empty": "Nothing to read aloud in this content",
+	"voice error tts playback": "Speech playback failed — check your system audio output",
+	"speech placeholder code block": "code block",
 	"voice esc to cancel": "Esc to cancel",
 	later: "Later",
 	"voice setup title": "Install voice input to continue",

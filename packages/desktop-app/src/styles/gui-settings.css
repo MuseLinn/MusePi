@@ -5486,6 +5486,27 @@ body.gui-resizing {
 	align-items: center;
 	gap: 12px;
 	padding: 10px 12px;
+	flex-wrap: wrap;
+}
+/* Per-tier voice sub-picker (TTS card): wraps to its own line under the
+ * selected tier row, indented to align with the row's label text. */
+.gui-stt-voices {
+	flex-basis: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 2px 0 2px 26px;
+}
+.gui-stt-voice-radio {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: var(--ui-font-size);
+	color: var(--fg-muted, var(--fg-faint));
+	cursor: pointer;
+}
+.gui-stt-voice-radio input[type="radio"] {
+	accent-color: var(--color-accent);
 }
 .gui-stt-row + .gui-stt-row {
 	border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);

@@ -3959,10 +3959,17 @@ export class DaemonServer {
 				const { settings: appSettings } = await import("../config/settings");
 				const configured = appSettings.get("tts.localModel") as string | undefined;
 				const modelKey = p.modelKey ?? (configured || DEFAULT_TTS_LOCAL_MODEL_KEY);
+				// A failure resolves `audio: null` — without the worker's error
+				// text the GUI cannot tell "模型未下载" from "合成失败", so the
+				// client's onError hook captures it and the response carries it.
+				let failure: string | undefined;
 				const audio = await ttsClient.synthesize(modelKey as never, p.text, {
 					...(p.voice ? { voice: p.voice } : {}),
+					onError: message => {
+						failure = message;
+					},
 				});
-				if (!audio) return { audio: null, sampleRate: 0 };
+				if (!audio) return { audio: null, sampleRate: 0, error: failure ?? "synthesis failed" };
 				return { audio: Array.from(audio.pcm), sampleRate: audio.sampleRate };
 			}
 			case "tts.modelStatus": {
@@ -3977,7 +3984,15 @@ export class DaemonServer {
 				// is the single source of truth for both shells; if the shape
 				// here drifts, typecheck fails instead of the UI breaking.
 				const models: TtsModelRow[] = await Promise.all(
-					TTS_LOCAL_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isTtsModelCached(m.key) })),
+					TTS_LOCAL_MODELS.map(async m => ({
+						key: m.key,
+						label: m.label,
+						cached: await isTtsModelCached(m.key),
+						// The tier's voice catalog drives the picker's per-tier
+						// voice radios (tts.localVoice): catalog order is the
+						// sherpa sid order, so the GUI must never invent ids.
+						voices: m.voices.map(voice => ({ id: voice.id, label: voice.label })),
+					})),
 				);
 				// The card's radio seed follows the user's config (`tts.localModel`,
 				// same resolution as tts.synthesize). Settings may be uninitialized
