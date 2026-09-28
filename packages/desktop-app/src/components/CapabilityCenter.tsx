@@ -402,6 +402,10 @@ function SkillDrawer({
 				.request("skills.delete", { name: skill.name })
 				.then(() => {
 					onDeleted(skill.name);
+					// 删除成功后必须重拉列表 —— 只把名字移出批量选择集并不会
+					// 让已删卡片从网格里消失（卸载后列表仍显示该技能直到下次
+					// 挂载/TTL 刷新，用户看到"卸载了但还在"）。
+					onChanged();
 					requestClose();
 				})
 				.catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));

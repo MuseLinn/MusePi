@@ -141,7 +141,7 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 		if (!state) return;
 		const prevActive = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 		const raf = requestAnimationFrame(() => {
-			const dlg = document.querySelector<HTMLElement>(".gui-dialog--prompt");
+			const dlg = document.querySelector<HTMLElement>(".gui-dialog--prompt, .gui-dialog--confirm");
 			const target = dlg?.querySelector<HTMLElement>(state.kind === "prompt" ? "input" : "button");
 			target?.focus();
 		});
@@ -168,7 +168,9 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 							onClick={() => finish(null)}
 						>
 							<div
-								className={`gui-dialog gui-dialog--prompt${
+								className={`gui-dialog ${
+									state.kind === "confirm" ? "gui-dialog--confirm" : "gui-dialog--prompt"
+								}${
 									phase === "enter"
 										? " gui-dialog--pending"
 										: phase === "closing"
@@ -208,8 +210,16 @@ export function PromptProvider({ children }: { children: ReactNode }): ReactNode
 								</div>
 							</div>
 						</div>,
-						/* Inside the React root (not body) so delegated listeners fire. */
-						document.getElementById("root") ?? document.body,
+						// Portal to document.body (DialogFrame precedent): the modal
+						// band (3000) breaks ties by DOM order, and body-level
+						// portals (the skill drawer, DialogFrame modals) mount
+						// AFTER #root — a prompt/confirm portaled into #root used
+						// to paint UNDER an open drawer, invisible and
+						// click-blocked by its full-viewport backdrop (capability
+						// center uninstall confirm never reachable). React
+						// synthetic events bubble through the component tree, so
+						// host handlers keep firing from a body portal.
+						document.body,
 					)}
 			</ConfirmContext.Provider>
 		</PromptContext.Provider>
