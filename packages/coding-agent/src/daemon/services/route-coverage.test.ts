@@ -18,6 +18,7 @@ import { MarketplaceService } from "./marketplace-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
+import { SessionService } from "./session-service";
 import { TerminalService } from "./terminal-service";
 import { UsageService } from "./usage-service";
 import { ViewStoreService } from "./view-store-service";
@@ -108,6 +109,18 @@ function buildRegistry(): HostServices {
 			get: () => undefined,
 			deleteSession: async () => {},
 			onCronsChanged: () => {},
+		}),
+	);
+	// SessionService：只认领路由（本测试不触会话），stub 掉宿主访问。
+	services.register(
+		new SessionService({
+			knownSessions: async () => [],
+			snapshot: async () => ({}),
+			checkpointSeq: async () => 0,
+			setResumeLive: () => {},
+			resolveLive: () => undefined,
+			cronSessionIds: () => new Set(),
+			firstUserMessage: () => "",
 		}),
 	);
 	// ExtensionService：stub 化宿主访问，仅参与路由表。

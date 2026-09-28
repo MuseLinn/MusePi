@@ -445,6 +445,7 @@ import { MarketplaceService } from "./services/marketplace-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
+import { SessionService } from "./services/session-service";
 import { TerminalService } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
@@ -636,6 +637,19 @@ export class DaemonServer {
 				connectorsSnapshot: sessionId => this.#host.connectorsSnapshot(sessionId),
 				readSelection: sessionId => this.#host.readSessionConnectors(sessionId),
 				setSelection: (sessionId, servers) => this.#host.setSessionConnectors(sessionId, servers),
+			}),
+		);
+		this.#services.register(
+			new SessionService({
+				knownSessions: () => this.#host.knownSessions(),
+				snapshot: sessionId => this.#host.snapshot(sessionId),
+				checkpointSeq: sessionId => this.#host.checkpointSeq(sessionId),
+				setResumeLive: live => {
+					this.#resumeLive = (live as LiveSession | null) ?? null;
+				},
+				resolveLive: sessionId => this.#host.get(sessionId),
+				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
+				firstUserMessage: sessionId => this.#services.get<ViewStoreService>("views").firstUserMessage(sessionId),
 			}),
 		);
 		mountRegistryServices(this.#hostContext, this.#services.values());
@@ -1547,62 +1561,9 @@ export class DaemonServer {
 				return this.#services.get<BrowserService>("browser").clearAll();
 			}
 			case "session.tree": {
-				// Cross-session tree (OMP /tree): sessions fork from a parent
-				// (parentId) into a hierarchy. Roots have no parent.
-				const rows = await this.#host.knownSessions();
-				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
-				const nodes = new Map<
-					string,
-					{
-						entry: {
-							type: string;
-							id: string;
-							parentId: string | null;
-							timestamp: string;
-							label?: string;
-							source?: string;
-							updatedAt?: string;
-						};
-						children: unknown[];
-					}
-				>();
-				const roots: unknown[] = [];
-				for (const r of rows) {
-					const title =
-						r.title ??
-						(this.#host.get(r.sessionId)?.autoTitle !== false
-							? this.#services.get<ViewStoreService>("views").firstUserMessage(r.sessionId)
-							: undefined);
-					nodes.set(r.sessionId, {
-						entry: {
-							type: "session",
-							id: r.sessionId,
-							parentId: r.parentId,
-							timestamp: new Date(r.createdAt).toISOString(),
-							// Last-activity time (openchamber `time.updated` parity):
-							// the sidebar sorts the session tree by this, so a
-							// resumed/continued session rises without reordering
-							// forks away from their parents.
-							updatedAt: new Date(r.updatedAt).toISOString(),
-							source: cronIds.has(r.sessionId) ? "cron" : undefined,
-							// Title = first user request (opencode/Codex convention);
-							// omit when empty so the GUI falls back to the id.
-							...(title ? { label: title.length > 60 ? `${title.slice(0, 60)}…` : title } : {}),
-						},
-						children: [],
-					});
-				}
-				for (const r of rows) {
-					const node = nodes.get(r.sessionId);
-					if (!node) continue;
-					const parent = r.parentId ? nodes.get(r.parentId) : undefined;
-					if (parent) {
-						(parent.children as unknown[]).push(node);
-					} else {
-						roots.push(node);
-					}
-				}
-				return roots;
+				// Cross-session tree（实现归 SessionService，P2 首个 cordis 化
+				//  L2 服务，ADR 0001；deps 注入宿主/schedule/views）。
+				return this.#services.get<SessionService>("session-tree").tree();
 			}
 			case "session.search": {
 				// Cross-session message search（实现归 ViewStoreService，
@@ -2870,22 +2831,11 @@ export class DaemonServer {
 				return { turns: buildDaemonTurnIndex(entries), totalEntries: entries.length };
 			}
 			case "session.resume": {
+				// 实现归 SessionService（resumeLive 登记 + 压缩检查点判定）；
+				// tailSnapshot 在委托边界外应用（展示层约束，与 snapshot case 同）。
 				const p = (params ?? {}) as { sessionId: string; cursor?: number };
-				const snapshot = await this.#host.snapshot(p.sessionId);
-				const live = this.#host.get(p.sessionId);
-				// Subscription attaches AFTER catch-up (see catchupIfNeeded) so
-				// replayed deltas never duplicate live events.
-				this.#resumeLive = live ?? null;
-				// compactedThrough: the requested cursor predates the compaction
-				// checkpoint — deltas between cursor and checkpoint were folded
-				// into the snapshot, so the client must refresh derived state.
-				const checkpointSeq = await this.#host.checkpointSeq(p.sessionId);
-				const compacted = typeof p.cursor === "number" && checkpointSeq > p.cursor;
-				return {
-					stream: live ? conn.id : null,
-					snapshot: tailSnapshot(snapshot),
-					compactedThrough: compacted,
-				};
+				const r = await this.#services.get<SessionService>("session-tree").resume(p, conn);
+				return { ...r, snapshot: tailSnapshot(r.snapshot) };
 			}
 			case "session.catchup": {
 				// 委托 EventService（P1 服务抽取；入参校验在服务内，补推实现
