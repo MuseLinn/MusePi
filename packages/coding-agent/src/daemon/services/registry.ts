@@ -29,6 +29,11 @@ export class HostServices {
 		return [...this.#services.keys()];
 	}
 
+	/** 全部已注册服务（P2 双跑期供 DaemonHostContext 同源挂载 cordis）。 */
+	values(): IterableIterator<DaemonService> {
+		return this.#services.values();
+	}
+
 	get<T extends DaemonService>(key: string): T {
 		const service = this.#services.get(key);
 		if (!service) throw new Error(`HostServices: unknown service "${key}"`);

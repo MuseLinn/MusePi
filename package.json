@@ -20,6 +20,7 @@
 			"@biomejs/biome": "^2.5.3",
 			"@bufbuild/protobuf": "^2.12.1",
 			"@bufbuild/protoc-gen-es": "^2.12.1",
+			"@deepseek-ai/cordis": "4.0.4",
 			"@huggingface/transformers": "^4.2.0",
 			"@musepi/hashline": "0.5.0",
 			"@musepi/pi-agent-core": "0.5.0",

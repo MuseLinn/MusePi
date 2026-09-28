@@ -49,6 +49,7 @@
 	"dependencies": {
 		"@babel/parser": "catalog:",
 		"@bufbuild/protobuf": "catalog:",
+		"@deepseek-ai/cordis": "catalog:",
 		"@musepi/collab-proto": "workspace:*",
 		"@musepi/hashline": "catalog:",
 		"@musepi/musepi-stats": "catalog:",

@@ -116,6 +116,7 @@ import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import { writeProjectMirror } from "./creation";
+import { DaemonHostContext, mountRegistryServices } from "./host-context";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -506,6 +507,10 @@ export class DaemonServer {
 	}
 	/** L2 宿主服务注册表（P1 服务抽取）。服务的 case 委托入口见构造函数。 */
 	readonly #services = new HostServices();
+	/** cordis 组合内核（P2 首刀，ADR 0001）：注册表双跑——服务同源挂载进
+	 *  根 Context（provide + 检视 + 可回滚拆卸），路由分发权威仍在注册表；
+	 *  双跑期挂载不代调 start/stop（P1 代码是生命周期权威）。 */
+	readonly #hostContext = new DaemonHostContext();
 	/** Speech-model downloads currently running (keyed by model tier key).
 	 *  Guards against two windows (or a double-click race) starting parallel
 	 *  fetches into the same cache directory. */
@@ -523,6 +528,12 @@ export class DaemonServer {
 	dropGlobalEventTarget(connectionId: string): void {
 		this.#services.get<EventService>("events").dropTarget(connectionId);
 		dropManagedBrowserBridge(connectionId);
+	}
+
+	/** 拆卸 cordis 根 Context（daemon close 路径调用；双跑期幂等且不触碰
+	 *  服务 stop——回滚后 P1 代码路径不受影响）。 */
+	async disposeHostContext(): Promise<void> {
+		await this.#hostContext.dispose();
 	}
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
 	 *  performance-report parity: profile spans two RPC calls so the GUI can
@@ -627,6 +638,7 @@ export class DaemonServer {
 				setSelection: (sessionId, servers) => this.#host.setSessionConnectors(sessionId, servers),
 			}),
 		);
+		mountRegistryServices(this.#hostContext, this.#services.values());
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.
@@ -7069,6 +7081,7 @@ export async function startDaemon(
 			if (webHandle) await webHandle.close();
 			unsubscribePause();
 			for (const socket of sockets) socket.destroy();
+			await server.disposeHostContext();
 			host.dispose();
 			await new Promise<void>(resolve => netServer.close(() => resolve()));
 			try {
