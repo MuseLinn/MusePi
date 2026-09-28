@@ -438,7 +438,7 @@
 	width: 18px;
 	height: 18px;
 	padding: 3px;
-	border-radius: 0 0 0 8px;
+	border-radius: 0 0 0 var(--radius-lg);
 	color: #fff;
 	background: var(--color-accent);
 }
@@ -476,7 +476,7 @@
 .gui-ds-swatchbar {
 	display: flex;
 	height: 6px;
-	border-radius: 3px;
+	border-radius: var(--radius-sm);
 	overflow: hidden;
 	flex: none;
 }
@@ -639,7 +639,7 @@
 	width: 18px;
 	height: 18px;
 	padding: 0 0 3px 3px;
-	border-radius: 0 0 0 8px;
+	border-radius: 0 0 0 var(--radius-lg);
 	color: #fff;
 	background: var(--color-accent);
 }
@@ -689,7 +689,7 @@
 .gui-ds-mock-lines > span {
 	display: block;
 	height: 4px;
-	border-radius: 2px;
+	border-radius: var(--radius-xs);
 }
 .gui-ds-mock-btn {
 	align-self: flex-start;

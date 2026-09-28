@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
 ### Added
 
 - **素材策略行 + 高级折叠区 + 媒体 provider 内联（M3 3.7c）**：欢迎页 design 模式的 composer 下方、设计体系 rail 之下新增「素材：◉ AI 生图 / ○ 色块占位」单选（对齐 WorkBuddy「素材不足时的处理策略」语义，默认 AI 生图），选中值随发送落 `projectMetadata.assetPolicy: "ai-image" | "placeholder"`（默认也落键，契约明确）；daemon metadata 校验值域放行、非法值（含 null）fail-fast 语义报错。其旁「高级 ▸」折叠区（展开态入创作草稿、切类型 chip 不丢）承载类型特有字段（平台/保真度/画幅/时长/音色，默认值沿用 M3.1 对表）——图片/视频/音频 chip 选中时区内内联媒体 provider 选择卡（数据源 `media.providers` RPC，未配置的 agnes-global 渲染为禁用），选中 provider 落 metadata。prompt 注入新增 asset-policy 区块（order 41，紧随设计体系简报 40 之后，每次 rebuildSystemPrompt 重解析）：ai-image = 产物引用处走 generate_image/agnes_video_gen 工具链；placeholder = 色块加文字标注占位、明确禁止调用两工具；无键/未知值不注入不炸。契约测试：assetPolicy 落 metadata 逐字段、非法值报错、prompt 三态注入、折叠态切 chip 不丢、视频 chip 选 agnes 端到端建会话。
