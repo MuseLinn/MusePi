@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { formatWhen, shortenPath } from "../../lib/format";
+import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useArchivedSessions } from "../../lib/session-archive";
 
 /**
@@ -202,6 +203,10 @@ function WorkspaceCard({
 	const [draft, setDraft] = useState(session.title ?? "");
 	const title = session.title ?? t("untitled session");
 	const when = formatWhen(session.updatedAt);
+	// Mobile 列表→会话 morph source/target (M1.10 §3.3 批次 B): the card
+	// title shares the header title's morph id — on the way into a session
+	// it is the cached source, on the way back it flies from the header.
+	const titleMorphRef = useMorphTarget<HTMLElement>(sessionTitleMorphId(session.id));
 	const commitRename = (): void => {
 		if (!renaming) return;
 		setRenaming(false);
@@ -230,7 +235,12 @@ function WorkspaceCard({
 							autoFocus
 						/>
 					) : (
-						<span className="sh-ws-title" title={title}>
+						<span
+							ref={titleMorphRef}
+							className="sh-ws-title"
+							title={title}
+							data-morph-id={sessionTitleMorphId(session.id)}
+						>
 							{title}
 						</span>
 					)}

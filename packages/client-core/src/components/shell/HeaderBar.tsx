@@ -16,6 +16,7 @@ import { type TranslationKey, t } from "../../i18n/index.js";
 import { useBackLayer } from "../../lib/back-stack";
 import type { SessionClient } from "../../lib/client";
 import { fmtPercent, shortenPath } from "../../lib/format";
+import { sessionTitleMorphId, useMorphTarget } from "../../lib/scene-morph";
 import { useGuestSelector } from "../../lib/use-guest";
 import { AccentToggle } from "./AccentToggle";
 import { LanguageToggle } from "./LanguageToggle";
@@ -79,6 +80,14 @@ export function HeaderBar({
 	const readOnly = useGuestSelector(client, s => s.readOnly);
 	const subCount = useGuestSelector(client, s => s.agents.filter(a => a.kind === "sub").length);
 	const title = header?.title ?? state?.sessionName ?? t("session");
+	// Mobile 列表↔会话 morph target (M1.10 §3.3 批次 B): the title flies in
+	// from the tapped workspace card's title (shared session-title id). The
+	// id is absent on the directory view, where no counterpart exists. The
+	// two hooks cover the button/span variants — exactly one renders, so
+	// exactly one effect ever finds an element to fly.
+	const titleMorphId = focusedSessionId != null ? sessionTitleMorphId(focusedSessionId) : null;
+	const titleBtnMorphRef = useMorphTarget<HTMLButtonElement>(titleMorphId);
+	const titleSpanMorphRef = useMorphTarget<HTMLSpanElement>(titleMorphId);
 	const usage = state?.contextUsage;
 	let pct: number | null = null;
 	if (usage) {
@@ -147,6 +156,8 @@ export function HeaderBar({
 				{canSwitch ? (
 					<button
 						type="button"
+						ref={titleBtnMorphRef}
+						data-morph-id={titleMorphId ?? undefined}
 						className={`sh-title sh-title-btn${sheetOpen ? " sh-title--open" : ""}`}
 						onClick={() => setSheetOpen(open => !open)}
 						title={t("sessions")}
@@ -154,7 +165,12 @@ export function HeaderBar({
 						{title}
 					</button>
 				) : (
-					<span className="sh-title" title={title}>
+					<span
+						ref={titleSpanMorphRef}
+						className="sh-title"
+						title={title}
+						data-morph-id={titleMorphId ?? undefined}
+					>
 						{title}
 					</span>
 				)}

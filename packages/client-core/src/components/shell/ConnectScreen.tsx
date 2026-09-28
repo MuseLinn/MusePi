@@ -386,6 +386,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 					>
 						<form className="sh-connect-pair" onSubmit={e => void resolvePair(e)}>
 							<div className="sh-connect-pair-row">
+								{/* Shared-element morph ids (M1.10 §3.3 批次 B): the
+								 * open method's input/button fly into the session
+								 * composer's textarea/send on connect. Only one
+								 * method body is open, so the visible pair wins the
+								 * cache (collapsed bodies measure 0 and are skipped). */}
 								<input
 									className="sh-input sh-input-mono"
 									type="text"
@@ -396,6 +401,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									onChange={e => setPairCode(e.target.value)}
 									placeholder="123456"
 									autoComplete="off"
+									data-morph-id="composer-input"
 								/>
 								<input
 									className="sh-input sh-input-mono"
@@ -410,6 +416,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									className="sh-btn sh-btn-primary"
 									type="submit"
 									disabled={pairBusy || !pairCode.trim() || !pairHost.trim()}
+									data-morph-id="composer-send"
 								>
 									{pairBusy ? t("connecting…") : t("pair")}
 								</button>
@@ -455,6 +462,7 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 								placeholder={t("paste a /collab link from any musepi session")}
 								spellCheck={false}
 								autoComplete="off"
+								data-morph-id="composer-input"
 							/>
 							<label className="sh-field">
 								<span className="sh-field-label">{t("display name")}</span>
@@ -469,7 +477,11 @@ export function ConnectScreen({ defaultName, defaultLink, error, onConnect }: Co
 									maxLength={32}
 								/>
 							</label>
-							<button className="sh-btn sh-btn-primary sh-connect-submit" type="submit">
+							<button
+								className="sh-btn sh-btn-primary sh-connect-submit"
+								type="submit"
+								data-morph-id="composer-send"
+							>
 								{t("Connect")}
 							</button>
 						</form>

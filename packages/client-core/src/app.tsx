@@ -33,6 +33,7 @@ import { CompatSlotHost } from "./lib/compat-slot-host";
 import { rememberConnection } from "./lib/connections";
 import { HostClient } from "./lib/host-client";
 import { enableNativeGlass } from "./lib/native-glass";
+import { cacheMorphRects, stageLeavingScene } from "./lib/scene-morph";
 import { useTts } from "./lib/tts";
 import { type SessionClient, useGuestSelector } from "./lib/use-guest";
 import type { ToolRenderHost } from "./tool-render";
@@ -70,60 +71,86 @@ function hashLink(): string | null {
 export function App(): ReactNode {
 	const [client, setClient] = useState<GuestClient | HostClient | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
+	// Latest-ref mirror for the morph gate below: the connect callbacks are
+	// memoized empty, so they can't read `client` from their closure.
+	const clientRef = useRef<GuestClient | HostClient | null>(null);
+	clientRef.current = client;
 	const credsRef = useRef<Creds | null>(null);
 	const hostRef = useRef<{ wsUrl: string; token?: string } | null>(null);
 
-	const connect = useCallback((link: string, name: string): void => {
-		// WebCrypto only exists in secure contexts (https or localhost). On
-		// plain http (a LAN IP) the guest degrades to plaintext mode — no E2E
-		// sealing, but also no self-signed-cert warning to dismiss.
-		const plaintext = typeof crypto === "undefined" || !crypto.subtle;
-		let next: GuestClient;
-		try {
-			next = new GuestClient(link, name, { plaintext });
-		} catch (err) {
-			setConnectError(err instanceof Error ? err.message : String(err));
-			return;
-		}
-		// Persist the connection only after the host actually welcomed us —
-		// a failed connect (bad link, unreachable relay, 6s pair timeout)
-		// must not pollute the recent list or leave a dead deep-link in the
-		// URL that an auto-connect on reload would retry.
-		next.onWelcome = (): void => {
-			rememberConnection(link, name);
-			try {
-				window.location.hash = link;
-			} catch {
-				// non-fatal
-			}
-		};
-		next.connect();
-		try {
-			localStorage.setItem(NAME_KEY, name);
-		} catch {
-			// storage unavailable (private mode) — non-fatal
-		}
-		credsRef.current = { link, name };
-		setConnectError(null);
-		setClient(prev => {
-			prev?.close();
-			return next;
-		});
+	// Scene morph (M1.10 §3.3 批次 B): ConnectScreen → 会话. Only when the
+	// connect screen is actually the visible scene (client still null —
+	// server switching / rejoin happen inside the session view and must not
+	// flash a collapsing connect card). Staged synchronously here, before
+	// the setClient commit, so the next paint already shows the morph.
+	const stageConnectMorph = useCallback((): void => {
+		if (clientRef.current !== null) return;
+		const root = document.querySelector<HTMLElement>(".sh-connect");
+		if (!root) return;
+		cacheMorphRects(document);
+		stageLeavingScene(root);
 	}, []);
+
+	const connect = useCallback(
+		(link: string, name: string): void => {
+			// WebCrypto only exists in secure contexts (https or localhost). On
+			// plain http (a LAN IP) the guest degrades to plaintext mode — no E2E
+			// sealing, but also no self-signed-cert warning to dismiss.
+			const plaintext = typeof crypto === "undefined" || !crypto.subtle;
+			let next: GuestClient;
+			try {
+				next = new GuestClient(link, name, { plaintext });
+			} catch (err) {
+				setConnectError(err instanceof Error ? err.message : String(err));
+				return;
+			}
+			// A failed connect (above) leaves the connect screen up — no morph.
+			stageConnectMorph();
+			// Persist the connection only after the host actually welcomed us —
+			// a failed connect (bad link, unreachable relay, 6s pair timeout)
+			// must not pollute the recent list or leave a dead deep-link in the
+			// URL that an auto-connect on reload would retry.
+			next.onWelcome = (): void => {
+				rememberConnection(link, name);
+				try {
+					window.location.hash = link;
+				} catch {
+					// non-fatal
+				}
+			};
+			next.connect();
+			try {
+				localStorage.setItem(NAME_KEY, name);
+			} catch {
+				// storage unavailable (private mode) — non-fatal
+			}
+			credsRef.current = { link, name };
+			setConnectError(null);
+			setClient(prev => {
+				prev?.close();
+				return next;
+			});
+		},
+		[stageConnectMorph],
+	);
 
 	/** Host-mode: connect to the serving daemon's own session (compat shell).
 	 *  No collab link, no E2E — the daemon's WS is loopback + token-gated. */
-	const connectHost = useCallback((wsUrl: string, token?: string): void => {
-		const next = new HostClient(wsUrl, token);
-		next.connect();
-		hostRef.current = { wsUrl, token };
-		credsRef.current = null;
-		setConnectError(null);
-		setClient(prev => {
-			prev?.close();
-			return next;
-		});
-	}, []);
+	const connectHost = useCallback(
+		(wsUrl: string, token?: string): void => {
+			const next = new HostClient(wsUrl, token);
+			next.connect();
+			hostRef.current = { wsUrl, token };
+			credsRef.current = null;
+			setConnectError(null);
+			stageConnectMorph();
+			setClient(prev => {
+				prev?.close();
+				return next;
+			});
+		},
+		[stageConnectMorph],
+	);
 
 	const leave = useCallback((): void => {
 		setClient(prev => {
@@ -544,7 +571,32 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 
 	const drawerAgent = selectedId != null ? agents.find(a => a.id === selectedId) : undefined;
 	const inWorkspace = workspace !== null && focusedSessionId === null;
-	const backToWorkspace = useCallback(() => client.selectWorkspaceSession(null), [client]);
+	// Mobile 列表↔会话 morph (M1.10 §3.3 批次 B): freeze + collapse the
+	// outgoing scene and cache the shared-element rects before the state
+	// flip commits. Desktop/web shells keep the plain hard switch — the
+	// navigation paths outside the mobile shell never change.
+	const stageMobileSceneMorph = useCallback((): void => {
+		if (!isMobileShell()) return;
+		const root =
+			document.querySelector<HTMLElement>(".sh-workspace") ?? document.querySelector<HTMLElement>(".sh-content");
+		if (!root) return;
+		cacheMorphRects(document);
+		stageLeavingScene(root);
+	}, []);
+	const selectSession = useCallback(
+		(id: string): void => {
+			if (inWorkspace) stageMobileSceneMorph();
+			client.selectWorkspaceSession(id);
+		},
+		[client, inWorkspace, stageMobileSceneMorph],
+	);
+	const backToWorkspace = useCallback((): void => {
+		// Back is only reachable while a session is focused (workspace →
+		// session direction), and only the transcript scene morphs — a panel
+		// occupies .sh-content when one is open.
+		if (!inWorkspace && activePanel === null) stageMobileSceneMorph();
+		client.selectWorkspaceSession(null);
+	}, [activePanel, client, inWorkspace, stageMobileSceneMorph]);
 	const sessionCwd = state?.cwd ?? null;
 	// Android back key: each layer registers its own close handler on the
 	// shared back stack (lib/back-stack). dispatchBack() walks from the
@@ -603,7 +655,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 				onSelectPanel={setActivePanel}
 				sessions={workspace}
 				focusedSessionId={focusedSessionId}
-				onSelectSession={id => client.selectWorkspaceSession(id)}
+				onSelectSession={selectSession}
 			/>
 			{client.plaintext && <PlaintextBanner />}
 			<main className="sh-main">
@@ -611,7 +663,7 @@ function Session({ client, onLeave, onRejoin, currentLink, onSwitchTo }: Session
 					<WorkspaceView
 						client={client}
 						sessions={workspace}
-						onSelect={id => client.selectWorkspaceSession(id)}
+						onSelect={selectSession}
 						onCreateSession={() => client.rpc("session.create", {})}
 						onDeleteSession={id => client.rpc("session.delete", { sessionId: id })}
 						onRenameSession={(id, title) => client.rpc("session.rename", { sessionId: id, title })}

@@ -2973,6 +2973,25 @@
 	font-size: var(--ui-font-size-sm);
 }
 
+/* ── Scene-morph leaving overlay (M1.10 §3.3 批次 B) ─────────────────────
+ * Frozen clone of the outgoing scene, fixed at its last viewport rect and
+ * clipped while the WAAPI collapse plays (height → 0 + 8px slide — the
+ * clone never fades, §3.3 #2 整屏 opacity 禁用). pointer-events/inert: the
+ * incoming scene underneath is already live. Descendant animations and
+ * transitions are frozen so the clone paints as a still frame. */
+.sh-scene-leaving {
+	position: fixed;
+	z-index: 500;
+	overflow: hidden;
+	pointer-events: none;
+}
+
+.sh-scene-leaving,
+.sh-scene-leaving * {
+	animation: none !important;
+	transition: none !important;
+}
+
 /* ── SessionsSheet — iOS 26 / HarmonyOS 6.1 floating frosted-glass card ────── */
 .ss-backdrop {
 	position: fixed;
@@ -2992,14 +3011,16 @@
 	max-width: 640px;
 	margin: 0 10px calc(10px + var(--safe-bottom, 0px));
 	border-radius: var(--radius-2xl);
-	background: color-mix(in oklab, var(--bg-raised) 78%, transparent);
+	/* L2 float (M1.10 §2 层级表): glass-strong base with the sheen wash
+	 * layered on top, glass border + refractive rim (the --glass-shadow
+	 * insets), and the token's single-declaration lifted shadow — same
+	 * one-token usage as the tr-back-bottom L2 precedent. No content row
+	 * takes glass: the sheet container only (§5). */
+	background: var(--glass-sheen), var(--glass-bg-strong);
 	backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
 	-webkit-backdrop-filter: blur(var(--blur-3xl)) saturate(150%);
-	border: 0.5px solid var(--border-strong);
-	border-top-color: color-mix(in oklab, var(--fg) 12%, transparent);
-	box-shadow:
-		0 24px 48px oklch(0 0 0 / 40%),
-		inset 0 1px 0 color-mix(in oklab, var(--fg) 10%, transparent);
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-shadow);
 	overflow: hidden;
 	animation: ss-card-in 280ms var(--spring-bouncy);
 }

@@ -22,6 +22,7 @@ import { haptic } from "../../lib/haptics";
 import type { PendingAttachment } from "../../lib/image";
 import { processImageFile, revokePreviews, toImageContent } from "../../lib/image";
 import { type NativeRecognition, nativeVoiceSupport, startNativeRecognition } from "../../lib/native-voice";
+import { useMorphTarget } from "../../lib/scene-morph";
 import { useScrollShadow } from "../../lib/scroll-shadow";
 import type { TtsSnapshot } from "../../lib/tts";
 import { readSttLangPref, useTts, useTtsSnapshot } from "../../lib/tts";
@@ -767,7 +768,11 @@ function AskEditor({ prefill, onSubmit }: AskEditorProps): ReactNode {
 
 export function Composer({ client }: ComposerProps): ReactNode {
 	const [text, setText] = useState("");
-	const taRef = useRef<HTMLTextAreaElement | null>(null);
+	// Shared-element morph target (M1.10 §3.3 批次 B): the textarea and the
+	// send button fly in from the connect screen's input/button on connect.
+	// Same ref object the autosize/focus logic already uses.
+	const taRef = useMorphTarget<HTMLTextAreaElement>("composer-input");
+	const sendMorphRef = useMorphTarget<HTMLButtonElement>("composer-send");
 	// 横向边缘羽化:图片附件 chip 排横向滚动时左右羽化。
 	const attachChipsRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(attachChipsRef);
@@ -1018,6 +1023,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					<textarea
 						ref={taRef}
 						className="sh-composer-input"
+						data-morph-id="composer-input"
 						value={text}
 						onChange={e => setText(e.target.value)}
 						onKeyDown={onKeyDown}
@@ -1158,7 +1164,9 @@ export function Composer({ client }: ComposerProps): ReactNode {
 					) : (
 						<button
 							type="button"
+							ref={sendMorphRef}
 							className="sh-btn sh-btn-primary"
+							data-morph-id="composer-send"
 							onClick={send}
 							disabled={!canSend}
 							title={t("send (Enter)")}
