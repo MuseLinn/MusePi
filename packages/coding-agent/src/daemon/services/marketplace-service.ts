@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { getAgentDir } from "@musepi/pi-utils";
 import { MANAGED_SKILLS_PROVIDER_ID } from "../../autolearn/managed-skills";
+import { BUNDLED_SKILL_NAMES } from "../../bundled-skills/index";
 import type { Settings } from "../../config/settings";
 import { clearPluginRootsAndCaches, resolveOrDefaultProjectRegistryPath } from "../../discovery/helpers";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -56,6 +57,40 @@ export interface SkillListItem {
 	 *  markdown body here instead of a file (filePath === ""). */
 	content?: string;
 	_source?: { provider: string; providerName: string; path: string; level: "user" | "project" | "native" };
+}
+
+/**
+ * skills.delete 的来源守卫：返回拒绝原因，null = 可卸载。
+ *
+ * 可卸载的只有"用户安装的文件技能"——native provider 在 user 级扫描
+ * ~/.musepi/agent/skills，但该目录同时是随客户端分发的 bundled 技能的
+ * 落盘点（ensureBundledSkills 一次性写入），两者 provider/level 完全相同，
+ * 只能按 BUNDLED_SKILL_NAMES 名字区分；项目级、musepi-managed（auto-learn）
+ * 与扩展虚拟技能（filePath === ""）一律拒绝。
+ */
+export function skillDeleteBlockReason(skill: SkillListItem): string | null {
+	const src = skill._source;
+	if (
+		skill.filePath === "" ||
+		src?.level !== "user" ||
+		src.provider === MANAGED_SKILLS_PROVIDER_ID ||
+		src.provider === "extension"
+	) {
+		return "only user-level file skills can be deleted";
+	}
+	if (src.provider === "native" && BUNDLED_SKILL_NAMES.includes(skill.name)) {
+		return "bundled skills ship with the client and cannot be uninstalled";
+	}
+	return null;
+}
+
+/**
+ * skills.delete 的删除目标：直接挂在 user skills 根下的技能目录整目录删除
+ * （GUI 卸载确认承诺连脚本与资源一起删）；其余（包内技能等）只删 SKILL.md。
+ */
+export function resolveSkillDeleteTarget(filePath: string, userSkillsRoot: string): string {
+	const dir = path.dirname(path.normalize(filePath));
+	return path.dirname(dir) === path.normalize(userSkillsRoot) ? dir : filePath;
 }
 
 export interface MarketplaceServiceDeps {
@@ -340,27 +375,17 @@ export class MarketplaceService implements DaemonService {
 		return { ok: true, ignoredSkills: [...patterns] };
 	}
 
-	/** RPC skills.delete：删除 user 级文件技能的 SKILL.md（四重来源守卫）。 */
+	/** RPC skills.delete：卸载 user 级文件技能（守卫见 skillDeleteBlockReason）。 */
 	async deleteSkill(params: unknown) {
-		// Remove a user-level skill's SKILL.md. Refuses builtin /
-		// musepi-managed skills (auto-learn) and extension-declared
-		// virtual skills — the GUI mirrors this guard.
 		const p = (params ?? {}) as { name: string };
 		const skills = await this.getSkills();
 		const skill = skills.find(s => s.name === p.name);
 		if (!skill) throw new Error(`unknown skill: ${p.name}`);
-		const src = skill._source;
-		if (
-			skill.filePath === "" ||
-			src?.level !== "user" ||
-			src.provider === MANAGED_SKILLS_PROVIDER_ID ||
-			src.provider === "native" ||
-			src.provider === "extension"
-		) {
-			throw new Error("only user-level file skills can be deleted");
-		}
+		const blocked = skillDeleteBlockReason(skill);
+		if (blocked) throw new Error(blocked);
 		const { rm } = await import("node:fs/promises");
-		await rm(skill.filePath, { force: true });
+		const target = resolveSkillDeleteTarget(skill.filePath, path.join(getAgentDir(), "skills"));
+		await rm(target, { recursive: target !== skill.filePath, force: true });
 		this.#skillsCache = null;
 		// extensions.list 也聚合 skill 项:清扩展缓存 + 广播,让
 		// GUI 单例注册表立即刷新(消费端不再本地乐观过滤)。
