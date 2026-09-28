@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
 	applyChip,
 	buildProjectMetadata,
@@ -15,6 +16,7 @@ import {
 } from "../lib/creation";
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
+import { AssetPolicyRow } from "./composer/asset-policy-row";
 
 /**
  * CreationModeRow — M3.7a design 模式页的欢迎页内联形态
@@ -29,7 +31,9 @@ import { useScrollShadow } from "../lib/use-scroll-shadow";
  * chip 只承载类型(kind/intent 写进创作草稿,§2.3),类型特有字段全部
  * 取 M3.1 默认列,所以 `buildProjectMetadata` 的编译结果与 M3.2 逐字段
  * 一致;「项目名」「工作目录」随 M3.2 表单底栏一并退役(§4:标题由首轮
- * 消息生成,cwd 复用欢迎页当前工作目录)。
+ * 消息生成,cwd 复用欢迎页当前工作目录)。M3.7c(§4)起类型特有字段在
+ * 「高级 ▸」折叠区可编辑(素材策略行 + 折叠区由 AssetPolicyRow 渲染,
+ * 经 assetSlot portal 落在 composer 下方),默认值仍取 M3.1 默认列。
  *
  * 与 composer 的协作通过两个缝:① `onStateChange` 上报
  * placeholder/template/busy(composer 依此覆盖 placeholder、在 template
@@ -77,10 +81,19 @@ let sessionDraft: CreationDraft | null = null;
 /** 每次应用运行只向 daemon 镜像回填一次(cwd 变化时重置)。 */
 let mirrorHydratedFor: string | null = null;
 
+/** 测试归位缝:bun test 同进程多测试文件共享本模块的草稿缓存,文件跑完
+ *  把跨文件可见的模块态归位(下一个文件等价于应用刚启动)。生产路径不
+ *  调用——应用生命周期内草稿缓存本就该常驻。 */
+export function resetCreationDraftCacheForTest(): void {
+	sessionDraft = null;
+	mirrorHydratedFor = null;
+}
+
 export function CreationModeRow({
 	rpc,
 	active,
 	project,
+	assetSlot,
 	onSubmit,
 	onClose,
 	onStateChange,
@@ -93,6 +106,12 @@ export function CreationModeRow({
 	active: boolean;
 	/** 当前工作目录(欢迎页项目 chip)—— 创作会话的 cwd 复用它。 */
 	project: string | null;
+	/** 素材策略行 + 「高级 ▸」折叠区的渲染插槽(composer 下方、设计体系
+	 *  rail 之下的容器,由 WelcomeComposer 在 designActive 时挂载)。chip
+	 *  排在 composer 上方、素材策略行在 composer 下方,同一组件两头渲染,
+	 *  经 portal 落到插槽;草稿单一所有权留在本组件。未给(测试/旧调用方)
+	 *  不渲染素材行。 */
+	assetSlot?: HTMLElement | null;
 	/** 创建回调:app 组装 session.create(modeId:"design", projectMetadata)
 	 *  并发送首轮消息。返回是否成功(成功后 chip 排收起,app 弹保存模板 toast)。 */
 	onSubmit(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
@@ -213,31 +232,40 @@ export function CreationModeRow({
 	};
 
 	return (
-		<div className="gui-creation-modepage w-full">
-			{/* 类型 chip 排(§2.3:单选,默认 prototype;横向溢出滚动,
-			 *  左右羽化由 useScrollShadow + .gui-fade-scroll 接管)。 */}
-			<div
-				ref={chiprailRef}
-				className="gui-creation-chiprail gui-fade-scroll"
-				role="radiogroup"
-				aria-label={t("creation title")}
-			>
-				{CREATION_CHIPS.map(item => {
-					const on = chip === item;
-					return (
-						<button
-							key={item}
-							type="button"
-							role="radio"
-							aria-checked={on}
-							className={`gui-creation-chip${on ? " gui-creation-chip--on" : ""}`}
-							onClick={() => pickChip(item)}
-						>
-							{t(CREATION_CHIP_LABEL_KEYS[item])}
-						</button>
-					);
-				})}
+		<>
+			<div className="gui-creation-modepage w-full">
+				{/* 类型 chip 排(§2.3:单选,默认 prototype;横向溢出滚动,
+				 *  左右羽化由 useScrollShadow + .gui-fade-scroll 接管)。 */}
+				<div
+					ref={chiprailRef}
+					className="gui-creation-chiprail gui-fade-scroll"
+					role="radiogroup"
+					aria-label={t("creation title")}
+				>
+					{CREATION_CHIPS.map(item => {
+						const on = chip === item;
+						return (
+							<button
+								key={item}
+								type="button"
+								role="radio"
+								aria-checked={on}
+								className={`gui-creation-chip${on ? " gui-creation-chip--on" : ""}`}
+								onClick={() => pickChip(item)}
+							>
+								{t(CREATION_CHIP_LABEL_KEYS[item])}
+							</button>
+						);
+					})}
+				</div>
 			</div>
-		</div>
+			{/* 素材策略行 + 「高级 ▸」折叠区(M3.7c §4):composer 下方、设计
+			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 WelcomeComposer
+			 *  的插槽;草稿单一所有权在本组件,切 chip 展开态/字段都不丢。收起
+			 *  或插槽缺失(测试/旧调用方)时不渲染。 */}
+			{active && assetSlot
+				? createPortal(<AssetPolicyRow rpc={rpc} draft={draft} updateDraft={updateDraft} />, assetSlot)
+				: null}
+		</>
 	);
 }

@@ -271,6 +271,197 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * 素材策略行 + 「高级 ▸」折叠区（M3.7c §4）
+ *
+ * composer 下方、设计体系 rail 之下的最底行（§2.2 信息架构）:`素材：
+ * ◉ AI 生图 ○ 色块占位` 单选居左,「高级 ▸」折叠开关居右;展开区承载类型
+ * 特有字段与媒体 provider 选择卡。零新视觉 token（chip/accent 档复用
+ * M1.10,provider 状态点复用 gui-provider-status-dot）;折叠进出场复用
+ * Reveal（gui-creation-reveal,见上）,gui-motion-off / prefers-reduced-motion
+ * 归零。
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 行骨架 + 素材策略单选 ─────────────────────────────────────────────── */
+.gui-creation-assetslot {
+	margin-top: 10px;
+}
+.gui-creation-assetrow {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	animation: gui-creation-fade 160ms ease;
+}
+.gui-creation-assetrow-main {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+}
+.gui-creation-asset-label {
+	flex: none;
+	font-size: 12px;
+	color: var(--color-text-faint);
+}
+.gui-creation-asset-radios {
+	display: flex;
+	gap: 7px;
+	min-width: 0;
+	flex: 1;
+}
+.gui-creation-advanced-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex: none;
+	margin-left: auto;
+	padding: 5px 10px;
+	border-radius: 999px;
+	font-size: 12.5px;
+	color: var(--color-text-muted);
+	background: var(--glass-bg);
+	box-shadow: inset 0 0 0 1px var(--glass-border);
+	transition:
+		color 130ms ease,
+		box-shadow 130ms ease;
+}
+.gui-creation-advanced-toggle:hover {
+	color: var(--color-text);
+	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
+}
+.gui-creation-advanced-chevron {
+	width: 12px;
+	height: 12px;
+	transition: transform 200ms var(--spring-liquid, var(--spring));
+}
+.gui-creation-advanced-chevron--open {
+	transform: rotate(180deg);
+}
+.gui-motion-off .gui-creation-advanced-chevron {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-creation-advanced-chevron {
+		transition: none;
+	}
+}
+
+/* ── 「高级 ▸」展开区:类型特有字段（M3.1 §3 逐字段对表默认列）────────── */
+.gui-creation-advanced {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 10px;
+	padding: 10px 12px;
+	border-radius: var(--radius-lg);
+	background: var(--glass-bg);
+	box-shadow: inset 0 0 0 1px var(--glass-border);
+}
+.gui-creation-advanced-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	min-width: 0;
+	width: 100%;
+}
+.gui-creation-advanced-field .gui-input {
+	max-width: 320px;
+}
+.gui-creation-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+}
+
+/* ── 媒体 provider 选择卡（M3.2 媒体子面控件原样搬入,image/video）──────── */
+.gui-creation-media-cards {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.gui-creation-media-card {
+	position: relative;
+	display: flex;
+	align-items: center;
+	min-width: 132px;
+	padding: 7px 10px;
+	border: 0;
+	border-radius: var(--radius-lg);
+	text-align: left;
+	cursor: pointer;
+	font-family: inherit;
+	color: var(--color-text);
+	background: var(--color-surface-raised);
+	box-shadow: inset 0 0 0 1px var(--glass-border);
+	transition:
+		box-shadow 200ms var(--spring-liquid),
+		transform 200ms var(--spring-liquid);
+}
+.gui-creation-media-card:hover:not(:disabled) {
+	box-shadow:
+		inset 0 0 0 1px var(--color-accent-bd),
+		0 6px 18px oklch(0 0 0 / 18%);
+}
+.gui-creation-media-card--on {
+	box-shadow:
+		inset 0 0 0 1.5px var(--color-accent),
+		0 6px 18px oklch(0 0 0 / 18%);
+	transform: scale(1.02);
+}
+.gui-creation-media-card--off {
+	opacity: 0.55;
+	cursor: default;
+}
+.gui-creation-media-card-main {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
+}
+.gui-creation-media-card-label {
+	font-size: 12.5px;
+	line-height: 1.2;
+	white-space: nowrap;
+}
+.gui-creation-media-card-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+.gui-creation-media-card-check {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 18px;
+	height: 18px;
+	padding: 3px;
+	border-radius: 0 0 0 8px;
+	color: #fff;
+	background: var(--color-accent);
+}
+.gui-motion-off .gui-creation-media-card {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-creation-media-card {
+		transition: none;
+	}
+}
+
+/* ── gui-motion-off / prefers-reduced-motion:素材行进场归零 ────────────── */
+.gui-motion-off .gui-creation-assetrow {
+	animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.gui-creation-assetrow {
+		animation: none;
+	}
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * 设计体系预览 rail + hover 预览卡（M3.7b §3.3）
  *
  * rail 卡（120×72：顶部色卡条 + 体系名 + 来源徽章）横排横滑，左右羽化走
@@ -339,6 +530,39 @@
 	display: flex;
 	gap: 8px;
 	padding: 2px;
+}
+/* 单选体系卡组（radiogroup 只含 role=radio；＋市场卡在外层排尾）。 */
+.gui-ds-rail-group {
+	display: flex;
+	gap: 8px;
+	padding: 2px;
+}
+/* ＋市场卡（M3.7d）：结构从属卡片排（同 120×72、同入场 stagger），
+ * 视觉从属——dashed 描边 + 透明底 + 居中加号，明确「占位入口」而非体系。 */
+.gui-ds-market-card {
+	align-items: center;
+	justify-content: center;
+	gap: 4px;
+	color: var(--color-text-muted);
+	background: transparent;
+	border: 1.5px dashed color-mix(in oklab, var(--color-text-faint) 55%, transparent);
+	box-shadow: none;
+}
+.gui-ds-market-card:hover {
+	border-color: var(--color-accent-bd);
+	box-shadow: 0 6px 18px oklch(0 0 0 / 18%);
+	color: var(--color-text);
+}
+.gui-ds-market-plus {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 999px;
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, var(--glass-bg));
+	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
 }
 .gui-ds-card {
 	position: relative;

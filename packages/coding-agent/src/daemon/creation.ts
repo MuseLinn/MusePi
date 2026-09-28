@@ -35,6 +35,13 @@ const TEMPLATE_ID_RE = /^[A-Za-z0-9_-]+$/;
  * present (= 1 until a migration exists), serialized size ≤16KiB. Throws
  * semantic errors — the RPC surface turns them into JSON-RPC error messages
  * the GUI banner shows verbatim.
+ *
+ * M3.7c (mode-page-redesign §4) value-checks the `assetPolicy` key on the
+ * same fail-fast path as the design-system id (unknown `designSystemId`
+ * errors in `session.setDesignSystem`): the key itself rides the open
+ * metadata object like every creation-surface key, but a present value
+ * outside `"ai-image" | "placeholder"` is a semantic error — persisting an
+ * unknown policy would silently inject nothing and read as "selected".
  */
 export function validateProjectMetadata(value: unknown): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -46,6 +53,11 @@ export function validateProjectMetadata(value: unknown): Record<string, unknown>
 	}
 	if (metadata.version !== 1) {
 		throw new Error(`unsupported project metadata version: ${String(metadata.version)} (expected 1)`);
+	}
+	if ("assetPolicy" in metadata && metadata.assetPolicy !== "ai-image" && metadata.assetPolicy !== "placeholder") {
+		throw new Error(
+			`invalid asset policy: ${JSON.stringify(metadata.assetPolicy)} (expected "ai-image" or "placeholder")`,
+		);
 	}
 	const bytes = new TextEncoder().encode(JSON.stringify(metadata)).length;
 	if (bytes > PROJECT_METADATA_LIMIT_BYTES) {

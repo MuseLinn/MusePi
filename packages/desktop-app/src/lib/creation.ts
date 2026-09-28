@@ -12,11 +12,26 @@ import type { TranslationKey } from "@musepi/client-core/src/i18n/index.js";
  * the sole thing the mode page exposes — every type-specific field stays
  * at its §2.3 default, so `buildProjectMetadata` (unchanged) still emits
  * the M3.2 field-for-field shape.
+ *
+ * M3.7c (§4) adds the asset-policy axis on top of the same builder:
+ * `assetPolicy` ("ai-image" | "placeholder", default "ai-image") always
+ * lands in the metadata (default included — the key is contractual), and
+ * the「高级 ▸」fold's field edits ride the same draft; `advancedOpen` is
+ * UI state (cached in the module-level sessionDraft, never serialized).
  */
 
 export type CreationTab = "prototype" | "live-artifact" | "deck" | "template" | "media" | "other";
 export type MediaKind = "image" | "video" | "audio";
 export type Fidelity = "wireframe" | "high-fidelity";
+
+/**
+ * 素材策略（M3.7c §4,对齐 WorkBuddy「素材不足时的处理策略」）：
+ * `ai-image` = 产物引用处走媒体生成工具链;`placeholder` = 色块+标注占位,
+ * 不触发媒体生成。默认 `ai-image`,选中值总是落 `metadata.assetPolicy`
+ * （默认也落键,契约明确）。
+ */
+export const ASSET_POLICIES = ["ai-image", "placeholder"] as const;
+export type AssetPolicy = (typeof ASSET_POLICIES)[number];
 
 /**
  * 模式页类型 chip（§2.3）：六面分类法 + 模板 rail + 其他。媒体三类由 M3.2
@@ -71,6 +86,10 @@ export interface CreationDraft {
 	mediaVoice: string;
 	mediaPromptTemplateId: string | null;
 	mediaPrompt: string;
+	/** 素材策略（§4:默认 ai-image,发送总是落 metadata.assetPolicy）。 */
+	assetPolicy: AssetPolicy;
+	/** 「高级 ▸」折叠区展开态（UI 态入草稿缓存,切 chip 不丢,不进 metadata）。 */
+	advancedOpen: boolean;
 }
 
 export const DEFAULT_CREATION_DRAFT: CreationDraft = {
@@ -90,6 +109,8 @@ export const DEFAULT_CREATION_DRAFT: CreationDraft = {
 	mediaVoice: "",
 	mediaPromptTemplateId: null,
 	mediaPrompt: "",
+	assetPolicy: "ai-image",
+	advancedOpen: false,
 };
 
 /** Live Artifact（§3.2）:Prototype 特化,强制 high-fidelity。 */
@@ -123,14 +144,21 @@ export const CREATION_PLACEHOLDER_KEYS: Record<CreationChip, TranslationKey> = {
 
 /**
  * 选中 chip → 草稿:只写类型（tab / mediaKind）,其余字段保持 §2.3 指定的
- * M3.1 默认列——所以编译结果仍与 M3.2 表单逐字段一致。
+ * M3.1 默认列——所以编译结果仍与 M3.2 表单逐字段一致。媒体 chip 切到
+ * **不同**媒体类时清空 provider/model（M3.2 二级 segmented 的同语义重置,
+ * provider 卡是按 kind 过滤的,跨 kind 残留会指向不可用 provider）。
  */
 export function applyChip(draft: CreationDraft, chip: CreationChip): CreationDraft {
 	switch (chip) {
 		case "image":
 		case "video":
 		case "audio":
-			return { ...draft, tab: "media", mediaKind: chip };
+			return {
+				...draft,
+				tab: "media",
+				mediaKind: chip,
+				...(draft.mediaKind !== chip ? { mediaProvider: null, mediaModel: null } : {}),
+			};
 		default:
 			return { ...draft, tab: chip };
 	}
@@ -159,6 +187,7 @@ export function buildProjectMetadata(draft: CreationDraft, templateId?: string |
 		designSystemId: null,
 		inspirationDesignSystemIds: [],
 		templateId: templateId ?? null,
+		assetPolicy: draft.assetPolicy,
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -202,6 +231,10 @@ export function buildProjectMetadata(draft: CreationDraft, templateId?: string |
 export function hydrateDraftFromMetadata(metadata: Record<string, unknown>, base?: CreationDraft): CreationDraft {
 	const draft: CreationDraft = { ...(base ?? DEFAULT_CREATION_DRAFT) };
 	if (typeof metadata.name === "string") draft.name = metadata.name;
+	// 素材策略（M3.7c §4）:合法值回填;缺省/未知保持 base（可能是缓存草稿）。
+	if (metadata.assetPolicy === "ai-image" || metadata.assetPolicy === "placeholder") {
+		draft.assetPolicy = metadata.assetPolicy;
+	}
 	const kind = metadata.kind;
 	if (kind === "deck") {
 		draft.tab = "deck";

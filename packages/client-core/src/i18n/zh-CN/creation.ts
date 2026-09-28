@@ -42,6 +42,38 @@ export const creation = {
 	"creation saved toast": "会话已创建",
 	"creation template save action": "保存为模板",
 	"creation template saved": "已保存为模板",
+	// 素材策略 + 「高级 ▸」折叠（M3.7c §4：素材策略单选对齐 WorkBuddy
+	// 「素材不足时的处理策略」语义；高级折叠承载类型特有字段，键与默认值
+	// 沿用 M3.1 §3 逐字段对表 / M3.2 表单文案）
+	"creation asset policy label": "素材",
+	"creation asset policy ai image": "AI 生图",
+	"creation asset policy placeholder": "色块占位",
+	"creation advanced": "高级",
+	"creation platform label": "平台",
+	"creation platform responsive": "响应式",
+	"creation platform web-desktop": "桌面 Web",
+	"creation platform mobile-ios": "iOS",
+	"creation platform mobile-android": "Android",
+	"creation platform tablet": "平板",
+	"creation platform desktop-app": "桌面应用",
+	"creation fidelity label": "保真度",
+	"creation fidelity wireframe": "线框",
+	"creation fidelity high-fidelity": "高保真",
+	"creation surface landing": "包含落地页",
+	"creation surface os widgets": "包含 OS 控件",
+	"creation speaker notes": "演讲者备注",
+	"creation media model label": "模型",
+	"creation media aspect label": "画幅",
+	"creation media duration label": "时长",
+	"creation media duration sec": "{sec} 秒",
+	"creation media audio kind label": "类型",
+	"creation media kind speech": "语音",
+	"creation media kind sfx": "音效",
+	"creation media voice label": "音色",
+	"creation media voice placeholder": "音色名，如 warm-female",
+	"creation media no providers": "暂无可用 provider，请在 设置 → 媒体生成 中配置。",
+	"creation media not configured": "未配置",
+	"creation media configured": "已配置",
 } as const;
 
 /** Key union for the creation domain (source of truth). */

@@ -133,6 +133,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { createSessionMemoryRuntimeContext, resolveMemoryBackend } from "./memory-backend";
 import { MEMORY_BACKEND_TOOL_NAMES } from "./memory-backend/tool-names";
 import type { MnemopiSessionState } from "./mnemopi/state";
+import { applyAssetPolicySection } from "./presets/asset-policy";
 import { applyDesignSystemSection, registerExtensionDesignSystem } from "./presets/design-systems";
 import {
 	createModeResolver,
@@ -3414,6 +3415,12 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 				// extension-registered system picked up by a reload takes effect
 				// on the next prompt rebuild; unknown/absent id → no section).
 				applyDesignSystemSection(modeRuntime.composer, projectMetadataState.current);
+				// M3.7c §4: asset policy section right behind the design-system
+				// brief (order 41 vs 40) — ai-image = generate_image /
+				// agnes_video_gen toolchain at asset references, placeholder =
+				// color-block placeholders, no media generation. Re-resolved on
+				// every rebuild; missing/unknown value → no section.
+				applyAssetPolicySection(modeRuntime.composer, projectMetadataState.current);
 				// Modes v1(§5.7):composer 挂点 —— 注入区块按 order 插槽进 base;
 				// promptComplete 时只输出预设 sections(DSH complete:true,忽略内置区块)。
 				if (modeRuntime.composer.size > 0) {

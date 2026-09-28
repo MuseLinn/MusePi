@@ -106,6 +106,20 @@ describe("buildProjectMetadata", () => {
 		expect(metadata.platforms).toEqual(["tablet"]);
 		expect(metadata.fidelity).toBe("high-fidelity");
 	});
+
+	test("assetPolicy always lands — default ai-image included, every kind (M3.7c §4)", () => {
+		// 默认也落键:契约明确,daemon 值域校验以此为存在前提。
+		expect(buildProjectMetadata(DEFAULT_CREATION_DRAFT).assetPolicy).toBe("ai-image");
+		expect(buildProjectMetadata({ ...DEFAULT_CREATION_DRAFT, tab: "deck" }).assetPolicy).toBe("ai-image");
+		expect(
+			buildProjectMetadata({
+				...DEFAULT_CREATION_DRAFT,
+				tab: "media",
+				mediaKind: "video",
+				assetPolicy: "placeholder",
+			}).assetPolicy,
+		).toBe("placeholder");
+	});
 });
 
 describe("hydrateDraftFromMetadata", () => {
@@ -152,5 +166,19 @@ describe("hydrateDraftFromMetadata", () => {
 		expect(restored.tab).toBe("prototype");
 		expect(restored.name).toBe("keep");
 		expect(restored.platforms).toEqual(DEFAULT_CREATION_DRAFT.platforms);
+	});
+
+	test("assetPolicy roundtrips; unknown/absent values keep the base draft (M3.7c §4)", () => {
+		const placeholder = hydrateDraftFromMetadata(
+			{ version: 1, kind: "prototype", assetPolicy: "placeholder" },
+			DEFAULT_CREATION_DRAFT,
+		);
+		expect(placeholder.assetPolicy).toBe("placeholder");
+		// 未知值不炸也不回填——防御旧镜像/手工编辑的悬空键。
+		const unknown = hydrateDraftFromMetadata(
+			{ version: 1, kind: "prototype", assetPolicy: "stock" },
+			DEFAULT_CREATION_DRAFT,
+		);
+		expect(unknown.assetPolicy).toBe("ai-image");
 	});
 });

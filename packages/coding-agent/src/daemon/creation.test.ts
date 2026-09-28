@@ -70,6 +70,26 @@ describe("validateProjectMetadata (M3.2 §4 契约)", () => {
 			expect((err as Error).message).toMatch(/\b\d+ bytes\b/);
 		}
 	});
+
+	it("accepts both asset-policy values, default key included (M3.7c §4)", () => {
+		expect(validateProjectMetadata({ ...VALID_METADATA, assetPolicy: "ai-image" })).toEqual({
+			...VALID_METADATA,
+			assetPolicy: "ai-image",
+		});
+		expect(validateProjectMetadata({ ...VALID_METADATA, assetPolicy: "placeholder" })).toEqual({
+			...VALID_METADATA,
+			assetPolicy: "placeholder",
+		});
+		// 缺键保持放行（可选项语义,与 designSystemId 同一条路）。
+		expect(validateProjectMetadata({ ...VALID_METADATA })).toEqual(VALID_METADATA);
+	});
+
+	it("rejects an unknown assetPolicy value fail-fast with a semantic message", () => {
+		expect(() => validateProjectMetadata({ ...VALID_METADATA, assetPolicy: "stock" })).toThrow(
+			/invalid asset policy: "stock" \(expected "ai-image" or "placeholder"\)/,
+		);
+		expect(() => validateProjectMetadata({ ...VALID_METADATA, assetPolicy: null })).toThrow(/invalid asset policy/);
+	});
 });
 
 describe("creation template store", () => {

@@ -896,6 +896,10 @@ export function WelcomeComposer({
 	// 与 railState.busy 同一语义:发送期禁按。
 	const [templateBusy, setTemplateBusy] = useState(false);
 	const canSend = (text.trim().length > 0 || quotes.length > 0) && !busy && !railState?.busy && !templateBusy;
+	// 素材策略行 + 「高级 ▸」折叠区的 portal 插槽(M3.7c §4):designActive 时
+	// 挂在 composer 下方、设计体系 rail 之下(§2.2 信息架构最底行);callback
+	// ref 喂 state——CreationModeRow 依元素存在与否渲染 portal,收起即卸载。
+	const [assetSlot, setAssetSlot] = useState<HTMLElement | null>(null);
 
 	// ── Design empty state (设计稿 08 → M3.7b §3): preset armed to "design" ──
 	// The welcome composer mirrors the session composer's design select;
@@ -1484,6 +1488,7 @@ export function WelcomeComposer({
 							rpc={rpc}
 							active={designActive}
 							project={project ?? null}
+							assetSlot={assetSlot}
 							// 发送只在 designActive 时可达(§2.4 发送钩子由 composer
 							// 的 designActive 分支调用),designSubmit 缺省时兜底 false。
 							// 设计体系轴(M3.7b §3):选中体系的 id 在这里落进
@@ -2276,6 +2281,16 @@ export function WelcomeComposer({
 					 * 左右边缘羽化与入场 stagger 见 design-system-rail.tsx。 */}
 					{isDesignArmed && (
 						<DesignSystemRail systems={designSystems} selected={designStyle} onPick={pickDesignStyle} />
+					)}
+					{/* 素材策略行 + 「高级 ▸」折叠区（M3.7c §4）的 portal 插槽：composer
+					 *  下方、设计体系 rail 之下（§2.2 信息架构最底行）。空容器，内容由
+					 *  CreationModeRow 经 portal 渲染（草稿单一所有权在 chip 排侧）。 */}
+					{designActive && (
+						<div
+							ref={setAssetSlot}
+							className="gui-creation-assetslot w-full"
+							data-testid="gui-creation-assetslot"
+						/>
 					)}
 					{/* Rotating tip with shimmer refresh (key change re-triggers);
 					 * t() runs at render time so locale switches land immediately. */}
