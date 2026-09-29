@@ -137,3 +137,6 @@ packages/.desktop-build/
 
 # Root-level dev desktop scratch (list-procs.ps1, verify-scroll, ws-probe.mjs)
 /.desktop-build/
+
+# Local prototype state (machine-specific, not shared config)
+.musepi/project.json
