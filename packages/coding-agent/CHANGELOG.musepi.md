@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-29
+
 ### Added
 
 - **CredentialService 落地——连接器凭据托管，密钥不出 wire（M4 P1 第二刀）**：新增 L2 服务 key="credentials"，只认领 `credentials.list` / `credentials.set` / `credentials.delete` 三路由；`resolve` 是内部 async 方法，**不在 wire 上**——任何客户端都无法 RPC 拉明文密钥（契约测试深扫 wire 面 + 显式断言 routes 不含 resolve）。凭据种类 `token | basic | env`；wire 面只回 `CredentialMeta{id,label,kind,createdAt,updatedAt}`，UI 只见「已配置」。store 为 `~/.musepi/agent/credentials.json`：懒加载缓存 + tmp+rename 写穿、0o600 权限；损坏文件 fail-soft（logger.warn + 回空仓，set 可重建）；id 生成 `cred_` + base64url(12B)。决策点③落实：新建 L2 服务，散点（mcp/remote 配置里的明文位）留后续迁移，不复用。6 例契约测试（wire 深扫 / resolve 不在 routes / 跨实例持久化 / delete / 校验 / 损坏 fail-soft，store 指向隔离 temp）+ route-coverage 桩；daemon 全量 265 例全绿。
