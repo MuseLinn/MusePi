@@ -192,3 +192,79 @@ describe("更多内置子系统插件单元(terminal/browser/computer/lsp)", () 
 		expect(settings.getRaw("lsp.lazy")).toBe(false);
 	});
 });
+
+describe("插件「包含的组件」契约(components + setComponentEnabled)", () => {
+	let agentDir: string;
+	let tmpCwd: string;
+	let service: ExtensionService;
+	let settings: Settings;
+	let changedCount: number;
+
+	beforeAll(async () => {
+		agentDir = await isolateAgentDirForTest("omp-builtin-components-");
+	}, 30000);
+
+	afterAll(async () => {
+		await restoreAgentDirForTest(agentDir);
+	}, 30000);
+
+	beforeEach(async () => {
+		changedCount = 0;
+		tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-builtin-components-cwd-"));
+		settings = Settings.isolated();
+		service = new ExtensionService({
+			settings: () => settings,
+			ensureRegistry: async () => {},
+			cwd: () => tmpCwd,
+			webUrl: () => null,
+			webPortFile: () => path.join(agentDir, "web.port"),
+			onChanged: () => {
+				changedCount++;
+			},
+		});
+	});
+
+	test("list 给声明组件的单元挂组件状态(browser/computer/lsp 有,terminal/voice 无)", async () => {
+		const listed = await service.list();
+		const browser = listed.extensions.find(e => e.id === "browser:browser");
+		expect(browser?.components?.map(c => c.id)).toEqual(["browser"]);
+		expect(browser?.components?.[0].enabled).toBe(true);
+		expect(browser?.components?.[0].canToggle).toBe(true);
+
+		const lsp = listed.extensions.find(e => e.id === "lsp:lsp");
+		expect(lsp?.components?.map(c => c.id)).toEqual(["lsp"]);
+
+		const term = listed.extensions.find(e => e.id === "terminal:terminal");
+		expect(term?.components).toBeUndefined();
+		const stt = listed.extensions.find(e => e.id === "voice:stt");
+		expect(stt?.components).toBeUndefined();
+	});
+
+	test("组件开关写 tools.disabled 黑名单:list 同帧回读翻转 + changed 扇出", async () => {
+		await service.setComponentEnabled({ id: "browser:browser", component: "browser", enabled: false });
+		expect(settings.getRaw("tools.disabled")).toEqual(["browser"]);
+		expect(changedCount).toBe(1);
+
+		const after = (await service.list()).extensions.find(e => e.id === "browser:browser");
+		expect(after?.components?.[0].enabled).toBe(false);
+		expect(after?.components?.[0].disabledReason).toBe("tools-denied");
+		// 单元总开关不受组件开关影响(正交)。
+		expect(after?.state).toBe("active");
+
+		await service.setComponentEnabled({ id: "browser:browser", component: "browser", enabled: true });
+		expect(settings.getRaw("tools.disabled")).toEqual([]);
+		const restored = (await service.list()).extensions.find(e => e.id === "browser:browser");
+		expect(restored?.components?.[0].enabled).toBe(true);
+		expect(restored?.components?.[0].disabledReason).toBeUndefined();
+	});
+
+	test("未声明组件直接拒绝,黑名单不留痕", async () => {
+		await expect(
+			service.setComponentEnabled({ id: "terminal:terminal", component: "browser", enabled: false }),
+		).rejects.toThrow(/not a declared component/);
+		await expect(
+			service.setComponentEnabled({ id: "browser:browser", component: "rogue", enabled: false }),
+		).rejects.toThrow(/not a declared component/);
+		expect(settings.getRaw("tools.disabled") ?? []).toEqual([]);
+	});
+});

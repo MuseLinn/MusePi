@@ -597,6 +597,11 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 	}
 	const allTools: Record<string, ToolFactory> = { ...BUILTIN_TOOLS, ...HIDDEN_TOOLS };
 	const isToolAllowed = (name: string) => {
+		// Per-tool denylist (plugin component toggles): a tool on
+		// `tools.disabled` never enters the slate, regardless of its own
+		// enabled gate or force-inclusion paths below.
+		const denylist = session.settings.get("tools.disabled");
+		if (Array.isArray(denylist) && (denylist as string[]).includes(name)) return false;
 		// Never in the default set. Explicitly activatable while goal.enabled and
 		// no goal record exists yet — /guided-goal enables it so the agent can
 		// finish the interview with `goal create`, which turns goal mode on. Once

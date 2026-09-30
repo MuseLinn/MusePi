@@ -414,6 +414,7 @@ export function SettingsView({
 							{activeSection === "files" && <FilesLspSection rpc={rpc} />}
 							{activeSection === "memory" && <MemorySection rpc={rpc} />}
 							{activeSection === "skills" && <SkillsSection rpc={rpc} />}
+							{activeSection === "plugins" && <PluginsSection rpc={rpc} />}
 							{activeSection.startsWith("ext:")
 								? (() => {
 										const item = extSettingsTabs.find(x => `ext:${x.slot}` === activeSection);
@@ -464,6 +465,7 @@ import {
 	ModesSection,
 	NotificationsSection,
 	PetSection,
+	PluginsSection,
 	PromptsSection,
 	SessionsSection,
 	ShellSection,

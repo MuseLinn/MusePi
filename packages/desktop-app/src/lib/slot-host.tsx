@@ -3,6 +3,7 @@ import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
+	PluginComponentDesc,
 	PluginConfigValues,
 	PluginResources,
 	SessionEntry,
@@ -136,6 +137,8 @@ export interface ExtensionItem {
 	resources?: PluginResources;
 	/** 已落盘的插件配置值(daemon 按字段钳制后下发;表单初始值)。 */
 	configValues?: PluginConfigValues;
+	/** dsh 式「包含的组件」状态(声明了组件的内置单元才有;详情弹层渲染开关行)。 */
+	components?: PluginComponentDesc[];
 }
 
 export interface ExtensionTab {

@@ -33,6 +33,26 @@ export interface PluginResources {
 	models?: { name: string; size?: string; downloadUrl?: string }[];
 }
 
+/**
+ * 插件「包含的组件」描述(dsh 插件详情页「包含的组件 · 每组件独立开关」
+ * 段;daemon 下发状态,GUI 渲染开关行)。组件 = 该插件单元暴露给 agent 的
+ * 真实工具(tools/index.ts 的 isToolAllowed 谓词消费同一份 tools.disabled
+ * 黑名单),canToggle=false 的组件只读展示(尚无独立启停语义,不发明)。
+ */
+export interface PluginComponentDesc {
+	/** 组件 id:对工具组件即 wire 工具名(setComponentEnabled 的 component 参数)。 */
+	id: string;
+	/** 显示名(GUI i18n 键或原文)。 */
+	name: string;
+	description?: string;
+	/** 当前是否可用(不在 tools.disabled 黑名单内)。 */
+	enabled: boolean;
+	/** false = 只读展示,不渲染开关。 */
+	canToggle: boolean;
+	/** 不可用原因(被黑名单禁用时给出)。 */
+	disabledReason?: string;
+}
+
 export type ConfigFieldErrorCode =
 	| "config-not-an-object"
 	| "field-not-an-object"

@@ -475,6 +475,18 @@ export const tools = {
 	"ext resources memory": "Memory",
 	"ext resources setup": "First-time setup ≈ {minutes} min",
 	"ext resources models": "Model downloads",
+	"ext plugins official": "Official",
+	"ext plugins installed": "Installed",
+	"ext add plugin": "Add plugin",
+	"ext plugin components": "Included components",
+	"ext plugin components desc":
+		"Toggle components independently: disabling removes them from the agent tool set on the next model request.",
+	"ext component denied": "Disabled via component denylist",
+	"ext plugin details": "Plugin details",
+	"ext plugins settings desc":
+		"Browse every plugin as cards: click a card for the liquid-glass detail — enable, configure and toggle components.",
+	"ext open plugin details": "View details",
+	"ext component toggle failed": "Component toggle failed",
 	"extension type": "Type",
 	trigger: "Trigger",
 	"raw data": "Raw data",

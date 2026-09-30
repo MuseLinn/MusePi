@@ -630,6 +630,12 @@ export const SETTINGS_SCHEMA = {
 
 	disabledExtensions: { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 工具级黑名单（插件「包含的组件」开关写入此处）：名单内的工具
+	 *  无论自身 enabled 门如何都不进 agent 工具集。与单元总开关正交——
+	 *  dsh 组件级禁用的我方落地（browser/computer/lsp 等子系统的组件
+	 *  开关即写这个名单）。隐藏设置键：由插件管理页消费，不直接展示。 */
+	"tools.disabled": { type: "array", default: EMPTY_STRING_ARRAY },
+
 	modelRoleStorage: {
 		type: "enum",
 		values: ["global", "project"] as const,

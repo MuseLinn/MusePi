@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import type { PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
@@ -62,6 +63,7 @@ export class ExtensionService implements DaemonService {
 		"extensions.setForceEnabled": "setForceEnabled",
 		"extensions.setProviderEnabled": "setProviderEnabled",
 		"extensions.setConfig": "setConfig",
+		"extensions.setComponentEnabled": "setComponentEnabled",
 		"ext.call": "call",
 		"plugins.list": "listPlugins",
 		"plugins.packages": "pluginPackages",
@@ -209,6 +211,26 @@ export class ExtensionService implements DaemonService {
 				for (const f of def.config) stored[f.key] = s.getRaw(f.key);
 				ext.configValues = coerceConfigValues([...def.config], stored);
 			}
+		}
+		// 「包含的组件」状态(dsh 插件详情段):组件 = 单元声明的 agent 工具,
+		// enabled 如实读 tools.disabled 黑名单 —— 与 tools/index.ts 的
+		// isToolAllowed 谓词同一存储,组件开关改名单即改工具集。
+		const denylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
+		for (const def of BUILTIN_EXTENSIONS) {
+			if (!def.components || def.components.length === 0) continue;
+			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
+			if (!ext) continue;
+			ext.components = def.components.map(c => {
+				const denied = denylist.has(c.tool);
+				return {
+					id: c.tool,
+					name: c.tool,
+					description: c.description,
+					enabled: !denied,
+					canToggle: true,
+					...(denied ? { disabledReason: "tools-denied" as const } : {}),
+				} satisfies PluginComponentDesc;
+			});
 		}
 		const { buildProviderTabs } = await import("../../extensibility/extensions-center/state-manager");
 		const tabs = buildProviderTabs(extensions);
@@ -375,6 +397,40 @@ export class ExtensionService implements DaemonService {
 		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true };
+	}
+
+	/** RPC extensions.setComponentEnabled：插件「包含的组件」独立开关（dsh
+	 *  插件详情段 parity）。组件 = 内置单元声明的 agent 工具;启停写
+	 *  tools.disabled 黑名单 —— tools/index.ts 的 isToolAllowed 谓词同帧
+	 *  消费,下个模型请求工具集即变(tool_registry 时间线联动)。未声明
+	 *  组件的条目直接拒绝(不发明语义)。 */
+	async setComponentEnabled(params: unknown) {
+		const p = (params ?? {}) as { id?: unknown; component?: unknown; enabled?: unknown };
+		if (typeof p.id !== "string" || typeof p.component !== "string" || typeof p.enabled !== "boolean") {
+			throw new Error("extensions.setComponentEnabled: id, component and enabled are required");
+		}
+		let settings = this.#deps.settings();
+		if (!settings) {
+			await this.#deps.ensureRegistry();
+			settings = this.#deps.settings();
+		}
+		if (!settings) throw new Error("extensions.setComponentEnabled: settings unavailable");
+		const { findBuiltinDef } = await import("../../extensibility/extensions-center/builtin-registry");
+		const def = findBuiltinDef(p.id);
+		const declared = def?.components?.find(c => c.tool === p.component);
+		if (!declared) {
+			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
+		}
+		const denylist = [...((settings.get("tools.disabled") ?? []) as string[])];
+		const i = denylist.indexOf(p.component);
+		if (p.enabled && i >= 0) denylist.splice(i, 1);
+		if (!p.enabled && i < 0) denylist.push(p.component);
+		settings.set("tools.disabled", denylist);
+		await settings.flush();
+		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
+		this.#deps.onChanged();
+		return { ok: true, denied: denylist };
 	}
 
 	/** RPC extensions.setForceEnabled：显式启用同名冲突项（forceEnabledExtensions）。 */

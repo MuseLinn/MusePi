@@ -134,6 +134,13 @@ export interface BuiltinExtensionDef {
 	 * (如 bundled skills —— 安装后的 skill 行已存在,重复登记会出现两行)。
 	 */
 	annotate?: boolean;
+	/**
+	 * dsh 式「包含的组件」声明:该单元暴露给 agent 的工具组件。组件开关
+	 * = 真实工具黑名单(tools.disabled,见 settings-schema 与 tools/index.ts
+	 * isToolAllowed 谓词)——extensions.list 据此下发组件状态,
+	 * extensions.setComponentEnabled 写黑名单。无独立启停语义的工具不声明。
+	 */
+	components?: readonly { tool: string; description?: string }[];
 	/** inspector 的 raw 载荷(可为生成值)。 */
 	raw: unknown;
 }
@@ -353,6 +360,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. Toggle mirrors browser.enabled.",
 		settingsMirror: { key: "browser.enabled", on: true, off: false },
+		components: [{ tool: "browser", description: "Scripted Chromium automation tool exposed to the agent." }],
 		config: [
 			{
 				key: "browser.headless",
@@ -379,6 +387,12 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"Scriptable host-desktop control tool (screenshots, input, accessibility tree). Off by default; toggle mirrors computer.enabled.",
 		settingsMirror: { key: "computer.enabled", on: true, off: false, unsetDisabled: true },
+		components: [
+			{
+				tool: "computer",
+				description: "Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
+			},
+		],
 		config: [
 			{
 				key: "computer.display",
@@ -404,6 +418,12 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"Code intelligence via language servers (definitions, references, diagnostics, rename). Toggle mirrors lsp.enabled.",
 		settingsMirror: { key: "lsp.enabled", on: true, off: false },
+		components: [
+			{
+				tool: "lsp",
+				description: "Code-intelligence tool (definitions, references, diagnostics, rename) exposed to the agent.",
+			},
+		],
 		config: [
 			{
 				key: "lsp.lazy",
