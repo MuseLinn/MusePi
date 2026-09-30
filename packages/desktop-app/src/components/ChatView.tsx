@@ -240,6 +240,9 @@ let lastWelcomeFrameRect: { left: number; top: number; width: number; height: nu
 export function ChatView({
 	store,
 	rpc,
+	parentSession,
+	onOpenParentSession,
+	onOpenSession,
 	onSend,
 	onStop,
 	onDecideApproval,
@@ -280,6 +283,13 @@ export function ChatView({
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
+	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时 transcript 左上
+	 *  角渲染「父级」返回按钮(openchamber parity)。 */
+	parentSession?: { id: string; label: string | null } | null;
+	/** 切换主视图到父会话。 */
+	onOpenParentSession?(id: string): void;
+	/** 切换主视图到任意会话(子会话行点击)——app.tsx 的 openSession。 */
+	onOpenSession?(id: string): void;
 	onSend(
 		text: string,
 		images?: { type: "image"; data: string; mimeType: string }[],
@@ -1978,6 +1988,24 @@ export function ChatView({
 													{t("surface canvas")}
 												</button>
 											</div>
+											{/* Parent-session back chip (openchamber parity): when the
+											 * open session is a subagent child, pin a liquid-glass
+											 * "back to parent" chip at the transcript's top-left so
+											 * the hierarchy is always one click away. */}
+											{parentSession && store && !focusMode && (
+												<button
+													type="button"
+													className="gui-parent-back"
+													title={parentSession.label ?? t("back to parent")}
+													onClick={() => onOpenParentSession?.(parentSession.id)}
+												>
+													<Icon name="arrow-go-back" className="h-3 w-3 flex-shrink-0" />
+													<span className="gui-parent-back-label">
+														{t("back to parent")}
+														{parentSession.label ? ` · ${parentSession.label}` : ""}
+													</span>
+												</button>
+											)}
 											{/* Floating status cards (ZCode 悬浮卡 parity): live git
 											 * state + subagents + todo progress, pinned top-right;
 											 * hidden entirely when there is nothing to show. */}
@@ -2498,6 +2526,7 @@ export function ChatView({
 									onExpandPanel={onExpandRightPanel}
 									agentId={panelAgentId}
 									onAgentSelect={selectAgent}
+									onOpenSession={onOpenSession}
 									agentHost={host}
 									extTabs={extTabs}
 									overviewEntries={overviewEntries}

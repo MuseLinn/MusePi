@@ -657,6 +657,37 @@
 	white-space: pre;
 }
 
+/* 折叠 chevron(openchamber 文件夹层级 parity):父行左侧 14px 占位,箭头
+ * 旋转 90° 表示展开;叶子行占位保持标题对齐。 */
+.gui-tree-fold {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	flex: none;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	border-radius: var(--radius-xs);
+}
+.gui-tree-fold:hover {
+	color: var(--color-text);
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+}
+.gui-tree-fold-arrow {
+	transition: transform 160ms var(--spring, ease-out);
+}
+.gui-tree-fold-arrow--open {
+	transform: rotate(90deg);
+}
+.gui-tree-fold--leaf {
+	cursor: default;
+	pointer-events: none;
+}
+
 /* ── File pane (workspace browser) ──────────────────────────────────── */
 
 .gui-filepane {

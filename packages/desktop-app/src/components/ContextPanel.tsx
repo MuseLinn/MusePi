@@ -11,6 +11,7 @@ import {
 import {
 	AgentsPanel,
 	latestWidgetFromEntries,
+	relTime,
 	type ToolRenderHost,
 	type TranslationKey,
 	t,
@@ -127,6 +128,7 @@ export function ContextPanel({
 	onExpandPanel,
 	agentId,
 	onAgentSelect,
+	onOpenSession,
 	agentHost,
 	leafId,
 	activePathIds,
@@ -181,6 +183,9 @@ export function ContextPanel({
 	 *  second navigation surface. */
 	agentId: string | null;
 	onAgentSelect(id: string | null): void;
+	/** Open a session as the main chat surface (sub-session rows in the
+	 *  agents hub switch the whole view, same as clicking the sidebar row). */
+	onOpenSession?(id: string): void;
 	/** Drill-down host for the docked detail (a nested task card opens
 	 *  another subagent's transcript in place). */
 	agentHost?: ToolRenderHost;
@@ -800,23 +805,28 @@ export function ContextPanel({
 				) : bodyView === "agents" ? (
 					/* Agents hub (TUI Agent Hub parity): the session's live
 					 * roster; a row opens the docked trajectory detail that
-					 * slides in over this view (layer at the aside level). */
-					(snap?.agents ?? []).length === 0 ? (
-						<div className="gui-pane-tab-empty">
-							<span className="gui-pane-tab-empty-icon">
-								<Icon name="ai-agent" />
-							</span>
-							<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
-						</div>
-					) : (
-						<AgentsPanel
-							agents={snap?.agents ?? []}
-							progress={snap?.progress ?? new Map()}
-							lifecycle={snap?.lifecycle ?? new Map()}
-							selectedId={agentId}
-							onSelect={onAgentSelect}
-						/>
-					)
+					 * slides in over this view (layer at the aside level).
+					 * Below it the sub-session list (session.agents registry
+					 * rows) opens a child session as the main chat surface. */
+					<>
+						{(snap?.agents ?? []).length === 0 ? (
+							<div className="gui-pane-tab-empty">
+								<span className="gui-pane-tab-empty-icon">
+									<Icon name="ai-agent" />
+								</span>
+								<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
+							</div>
+						) : (
+							<AgentsPanel
+								agents={snap?.agents ?? []}
+								progress={snap?.progress ?? new Map()}
+								lifecycle={snap?.lifecycle ?? new Map()}
+								selectedId={agentId}
+								onSelect={onAgentSelect}
+							/>
+						)}
+						<SubSessionsSection rpc={rpc} sessionId={snap?.sessionId ?? ""} onOpenSession={onOpenSession} />
+					</>
 				) : typeof bodyView === "string" && bodyView.startsWith("ext:") ? (
 					(() => {
 						const item = extTabs.find(x => `ext:${x.slot}` === view);
@@ -1316,6 +1326,90 @@ function fmtJobTime(ts: number | string): string {
 	const d = new Date(ts);
 	if (Number.isNaN(d.getTime())) return String(ts);
 	return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+/** Sub-session list (agents hub lower section, openchamber parity): the
+ *  session's child transcripts as rows (status dot + name + last activity).
+ *  Backed by the daemon's session.agents registry scan, so rows persist
+ *  after an agent goes idle; clicking a row opens that transcript as the
+ *  main chat surface (same target as the sidebar's nested session rows).
+ *  Polls every 5s while mounted. */
+function SubSessionsSection({
+	rpc,
+	sessionId,
+	onOpenSession,
+}: {
+	rpc: RpcClient;
+	sessionId: string;
+	onOpenSession?(id: string): void;
+}): ReactNode {
+	const [rows, setRows] = useState<
+		readonly {
+			sessionId: string;
+			displayName: string;
+			kind: string;
+			status: string;
+			lastActivity?: number | null;
+		}[]
+	>([]);
+	useEffect(() => {
+		if (!sessionId) return;
+		let alive = true;
+		const poll = (): void => {
+			void rpc
+				.request<{
+					agents: {
+						sessionId: string;
+						displayName: string;
+						kind: string;
+						status: string;
+						lastActivity?: number | null;
+					}[];
+				}>("session.agents", { sessionId })
+				.then(d => {
+					if (alive) setRows(d.agents ?? []);
+				})
+				.catch(() => {
+					/* fail-open: keep whatever rows we already have */
+				});
+		};
+		poll();
+		const timer = setInterval(poll, 5000);
+		return () => {
+			alive = false;
+			clearInterval(timer);
+		};
+	}, [rpc, sessionId]);
+
+	return (
+		<div className="px-1 pb-2 pt-1">
+			<div className="gui-group-label px-2 pb-1 pt-1">{t("sub sessions")}</div>
+			{rows.length === 0 ? (
+				<p className="px-2 py-1 text-[12px] text-[var(--color-text-faint)]">—</p>
+			) : (
+				<div className="flex flex-col gap-0.5 px-2">
+					{rows.map(row => (
+						<button
+							key={row.sessionId}
+							type="button"
+							className="gui-subsession-row"
+							title={`${row.displayName} · ${row.status}`}
+							aria-label={`${t("open subagent session")}: ${row.displayName}`}
+							onClick={() => onOpenSession?.(row.sessionId)}
+						>
+							<span className={`ag-dot ag-dot--${row.status}`} />
+							<span className="min-w-0 flex-1 truncate text-left text-[13px]">{row.displayName}</span>
+							{typeof row.lastActivity === "number" && (
+								<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
+									{relTime(row.lastActivity)}
+								</span>
+							)}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
 }
 
 /** Jobs HUD (会话任务): running jobs with per-job cancel, recent jobs with

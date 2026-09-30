@@ -3331,6 +3331,61 @@
 	color: var(--color-text);
 }
 
+/* Parent-session back chip (openchamber parity): liquid-glass chip pinned
+ * at the transcript's top-left while a subagent child session is open. */
+.gui-parent-back {
+	position: absolute;
+	top: 8px;
+	left: 12px;
+	z-index: 30;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	max-width: min(46%, 320px);
+	padding: 4px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--color-bg) 82%, transparent);
+	backdrop-filter: blur(8px);
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+	font-size: 11px;
+	color: var(--color-text-muted);
+	transition:
+		color 120ms ease,
+		border-color 120ms ease,
+		transform 120ms ease;
+	-webkit-app-region: no-drag;
+}
+.gui-parent-back:hover {
+	color: var(--color-text);
+	border-color: color-mix(in oklab, var(--color-accent) 45%, var(--border));
+	transform: translateY(-1px);
+}
+.gui-parent-back-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Sub-session rows (agents hub lower section): quiet list rows that open a
+ * child transcript as the main chat surface on click. */
+.gui-subsession-row {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	padding: 4px 8px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-muted);
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-subsession-row:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+	color: var(--color-text);
+}
+
 /* Trajectory branch lane grid */
 .traj-tree-lanes {
 	display: flex;

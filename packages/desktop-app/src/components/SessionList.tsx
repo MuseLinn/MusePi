@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { CSSProperties, ReactNode } from "react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { tapFeedback } from "../lib/haptic";
 import { Icon } from "../vendor/oc-icons";
 import { clearSessionHover, reportSessionHover } from "./SessionHoverCard";
@@ -161,6 +161,54 @@ function treePrefix(indent: number, showConnector: boolean, isLast: boolean): st
 	return prefix;
 }
 
+/** 折叠态持久化(openchamber 文件夹层级 parity):父行 chevron 收起后整棵
+ *  子树从列表隐藏,重开客户端仍记得。默认展开(与既有行为一致)。 */
+const COLLAPSE_STORAGE_KEY = "musepi-gui-session-collapse";
+
+function readCollapsedIds(): ReadonlySet<string> {
+	try {
+		const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+		if (!raw) return new Set();
+		const parsed: unknown = JSON.parse(raw);
+		return new Set(Array.isArray(parsed) ? (parsed as string[]) : []);
+	} catch {
+		return new Set();
+	}
+}
+
+function writeCollapsedIds(ids: ReadonlySet<string>): void {
+	try {
+		localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify([...ids]));
+	} catch {
+		/* 存储不可用时折叠态仅保留在内存。 */
+	}
+}
+
+/** 折叠剪枝:被收起节点的整棵子树从渲染树剔除(返回新树,输入不变)。 */
+function pruneCollapsedNodes(nodes: SessionListNode[], collapsed: ReadonlySet<string>): SessionListNode[] {
+	return nodes.map(n => {
+		if (!collapsed.has(n.entry.id)) {
+			return n.children.length > 0 ? { ...n, children: pruneCollapsedNodes(n.children, collapsed) } : n;
+		}
+		return { ...n, children: [] };
+	});
+}
+
+/** 每节点的直接子会话数(渲染折叠 chevron 用,取自剪枝前的树)。 */
+function childCountMap(nodes: SessionListNode[]): Map<string, number> {
+	const map = new Map<string, number>();
+	const walk = (list: SessionListNode[]): void => {
+		for (const n of list) {
+			map.set(n.entry.id, n.children.length);
+			walk(n.children);
+		}
+	};
+	walk(nodes);
+	return map;
+}
+
+const EMPTY_IDS: ReadonlySet<string> = new Set();
+
 /**
  * One session row. Memoized on **primitives only** (the parent resolves the
  * Set/Map lookups to booleans before rendering), so a sidebar re-render —
@@ -186,6 +234,9 @@ const SessionRow = memo(function SessionRow({
 	isLast,
 	searchQuery,
 	subagent,
+	childCount,
+	collapsed,
+	onToggleCollapse,
 	onSelect,
 	onContextMenu,
 }: {
@@ -208,6 +259,11 @@ const SessionRow = memo(function SessionRow({
 	searchQuery: string;
 	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
 	subagent: boolean;
+	/** 直接子会话数（>0 = 父行,渲染折叠 chevron）。 */
+	childCount: number;
+	/** 子树当前是否收起。 */
+	collapsed: boolean;
+	onToggleCollapse?(id: string): void;
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
 }): ReactNode {
@@ -250,6 +306,26 @@ const SessionRow = memo(function SessionRow({
 				 * per-session color chip that survives without grouping —
 				 * interrupted (warning) / complete (success) / error /
 				 * aborted / pending, or the user's manual color. */}
+				{childCount > 0 ? (
+					<button
+						type="button"
+						className="gui-tree-fold"
+						aria-label={t(collapsed ? "expand subtree" : "collapse subtree")}
+						aria-expanded={!collapsed}
+						title={t(collapsed ? "expand subtree" : "collapse subtree")}
+						onClick={e => {
+							e.stopPropagation();
+							onToggleCollapse?.(id);
+						}}
+					>
+						<Icon
+							name="arrow-right-s"
+							className={`h-3 w-3 gui-tree-fold-arrow${collapsed ? "" : " gui-tree-fold-arrow--open"}`}
+						/>
+					</button>
+				) : (
+					<span className="gui-tree-fold gui-tree-fold--leaf" aria-hidden="true" />
+				)}
 				<span
 					className="gui-session-status"
 					aria-hidden="true"
@@ -371,7 +447,23 @@ export function SessionList({
 					return sessionSortKey(b) - sessionSortKey(a) || b.entry.id.localeCompare(a.entry.id);
 				})
 			: nodes;
-	const flat = flattenTree(ordered);
+	// 折叠态(openchamber 文件夹层级 parity):父行 chevron 收起 → 整棵子树
+	// 从渲染树剪除;状态持久化到 localStorage,默认展开(与既有行为一致)。
+	// 子代理会话多的父行可收起,列表不再被长子树刷屏。
+	const [collapsedIds, setCollapsedIds] = useState<ReadonlySet<string>>(readCollapsedIds);
+	const toggleCollapse = (id: string): void => {
+		setCollapsedIds(prev => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			writeCollapsedIds(next);
+			return next;
+		});
+	};
+	const childCounts = childCountMap(ordered);
+	// 搜索期间强制展开:命中行可能藏在收起的子树里,剪枝会让命中不可见。
+	const effectiveCollapsed = searchQuery.trim() ? EMPTY_IDS : collapsedIds;
+	const flat = flattenTree(pruneCollapsedNodes(ordered, effectiveCollapsed));
 	if (flat.length === 0) return null;
 	// Parent lookup for fork markers **at the SESSION level** (a session forked
 	// from another session shows a branch glyph + the parent's label on hover).
@@ -404,6 +496,9 @@ export function SessionList({
 						isLast={isLast}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}
+						childCount={childCounts.get(node.entry.id) ?? 0}
+						collapsed={collapsedIds.has(node.entry.id)}
+						onToggleCollapse={toggleCollapse}
 						onSelect={onSelect}
 						onContextMenu={onContextMenu}
 					/>

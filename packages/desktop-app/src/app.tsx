@@ -1,7 +1,7 @@
 import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t } from "@musepi/client-core";
 import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
@@ -457,6 +457,22 @@ function AppInner(): ReactNode {
 		}
 	}
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	/** 当前会话的父会话(openchamber「父级」返回按钮数据源):侧栏树中
+	 *  选中节点的父节点。fork 与子代理会话均可返回;无父 = null。 */
+	const activeParentSession = useMemo(() => {
+		if (!selectedId) return null;
+		const stack: SessionListNode[] = [...tree];
+		while (stack.length > 0) {
+			const node = stack.pop()!;
+			for (const child of node.children) {
+				if (child.entry.id === selectedId) {
+					return { id: node.entry.id, label: node.entry.label ?? null };
+				}
+			}
+			stack.push(...node.children);
+		}
+		return null;
+	}, [tree, selectedId]);
 	/** Process-global freeze (TUI `/pause` parity, daemon-wide): every session's
 	 *  agents park until released. Drives the fullscreen frosted-glass overlay.
 	 *  Orthogonal to per-session pauseInfo — releasing the global pause never
@@ -3437,6 +3453,9 @@ function AppInner(): ReactNode {
 										<ChatView
 											store={store}
 											rpc={rpc}
+											parentSession={activeParentSession}
+											onOpenParentSession={id => void openSession(id)}
+											onOpenSession={id => void openSession(id)}
 											onSend={(text, images, deliverAs) =>
 												void sendPrompt(text, images, undefined, deliverAs)
 											}
