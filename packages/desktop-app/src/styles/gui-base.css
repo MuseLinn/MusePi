@@ -134,6 +134,24 @@ code,
 	-webkit-user-select: text;
 }
 
+/* ── Floating overlays vs window drag regions (Electron) ──────────────
+ * Electron only honors -webkit-app-region: no-drag on DESCENDANTS of a
+ * drag region — these overlays portal into #root as SIBLINGS of the drag
+ * header (use-floating-menu renders there so no ancestor clips them), so
+ * any part of a menu/list that extends over the header or the top drag
+ * strip had its clicks swallowed for window dragging (composer「+」list,
+ * settings config dropdowns). Every interactive overlay root opts out
+ * explicitly, one rule, one home. */
+.gui-menu-popup,
+.gui-context-menu,
+.gui-palette,
+.gui-palette-backdrop,
+.gui-btw-card,
+.gui-rail-tooltip,
+.gui-session-hover-card {
+	-webkit-app-region: no-drag;
+}
+
 /* ── Glass transparency pipeline (settings → 外观) ────────────────────
  * --gui-glass-alpha   = slider transparency 0.3–0.9 (set by JS in
  *                       src/lib/glass.ts). The slider reads as

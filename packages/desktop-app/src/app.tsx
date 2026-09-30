@@ -3343,10 +3343,10 @@ function AppInner(): ReactNode {
 							onOpenScheduled={() => viewSwapRef.current("scheduled")}
 							scheduledActive={scheduledOpen}
 							cronGlow={cronGlow}
-							// 侧边栏能力中心按钮：直接点击落到技能市场
-							// （插件市场 tab）；悬停菜单才直达各 tab。
+							// 侧边栏能力中心按钮：直接点击落到「技能」tab
+							// （发现分段）；悬停菜单才直达各 tab。
 							onOpenCapability={() => {
-								setCapabilityTab("marketplace");
+								setCapabilityTab("skills");
 								viewSwapRef.current("capability");
 							}}
 							capabilityActive={capabilityOpen}
