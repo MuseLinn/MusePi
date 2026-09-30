@@ -84,6 +84,10 @@ const zhVoice = {
 	"ext builtin tts component melotts-zh": "MeloTTS 引擎",
 	"MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.":
 		"sherpa-onnx 上的 MeloTTS 中文——普通话 + 中英混合，单发音人。",
+	"voice stt plugin disabled": "语音识别由插件「语音输入」提供，当前已停用。",
+	"voice tts plugin disabled": "朗读播报由插件「语音播报」提供，当前已停用。",
+	"voice plugin disabled hint": "启用后以下配置与测试即可使用；也可以在能力中心管理全部插件。",
+	"voice plugin enable": "启用插件",
 } as const;
 
 registerTranslations("zh-CN", zhVoice);
@@ -164,4 +168,8 @@ registerTranslations("en-US", {
 	"ext builtin tts component melotts-zh": "ext builtin tts component melotts-zh",
 	"MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.":
 		"MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.",
+	"voice stt plugin disabled": "voice stt plugin disabled",
+	"voice tts plugin disabled": "voice tts plugin disabled",
+	"voice plugin disabled hint": "voice plugin disabled hint",
+	"voice plugin enable": "voice plugin enable",
 } as const satisfies Record<keyof typeof zhVoice, string>);

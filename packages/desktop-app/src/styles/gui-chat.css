@@ -2549,6 +2549,15 @@ body.gui-resizing .gui-pane-right {
 	padding-top: 0;
 }
 
+/* 插件停用占位卡：弱化排版提示「这段配置由插件承载、当前未启用」。 */
+.gui-settings-section--disabled {
+	opacity: 0.85;
+}
+
+.gui-settings-section--disabled .gui-settings-row-label {
+	color: var(--color-text-muted);
+}
+
 .gui-settings-section-title {
 	font-size: 15px;
 	font-weight: 600;

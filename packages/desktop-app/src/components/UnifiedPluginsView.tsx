@@ -234,6 +234,9 @@ function ModuleRow({
 				/>
 				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
 				<span className="gui-ext-item-tag">{kindTag(e.kind)}</span>
+				{e.enabledInPresets && e.enabledInPresets.length > 0 && (
+					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("ext preset tag")}</span>
+				)}
 				{e.components && e.components.length > 0 && (
 					<span className="gui-ext-item-tag">{t("ext component count", { count: e.components.length })}</span>
 				)}
@@ -284,11 +287,19 @@ export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: Exten
 			</div>
 			{builtinDescription(e) ? <div className="gui-plugin-card-desc">{builtinDescription(e)}</div> : null}
 			<div className="gui-plugin-card-foot">
+				{e.enabledInPresets && e.enabledInPresets.length > 0 && (
+					<span className="gui-ext-item-tag gui-ext-item-tag--preset">{t("ext preset tag")}</span>
+				)}
 				<span className="gui-ext-item-tag">{pluginStateLabel(e)}</span>
 				<span className="gui-ext-item-tag">{e.id}</span>
 			</div>
 		</button>
 	);
+}
+
+/** dsh 面板搜索匹配：大小写不敏感子串，命中任一文本面即算。 */
+function matchesQuery(texts: (string | null | undefined)[], q: string): boolean {
+	return q.length === 0 || texts.some(v => v?.toLocaleLowerCase().includes(q));
 }
 
 export function UnifiedPluginsView({
@@ -314,6 +325,8 @@ export function UnifiedPluginsView({
 	const data = useExtensionRegistry(rpc);
 	// 防双击：一次只允许一个模块开关在途。插件包开关由父级 own。
 	const [busyId, setBusyId] = useState<string | null>(null);
+	// dsh 面板搜索：匹配名称/显示名/id/描述（大小写不敏感）。
+	const [query, setQuery] = useState("");
 	// 详情弹层（dsh 插件详情 parity；行点击打开,同一时刻至多一个）。
 	const [detailId, setDetailId] = useState<string | null>(null);
 	// 模块 lane：真实插件模块 + 内置插件单元（isPluginLaneEntry 单一权威，
@@ -321,8 +334,29 @@ export function UnifiedPluginsView({
 	// 在能力清单 tab 有完整 provider→kind→item 树，这里不重复。
 	const modules = useMemo(() => (data?.extensions ?? []).filter(isPluginLaneEntry), [data]);
 	// dsh 分组：官方 = 内置插件单元；已安装 = 插件包 + 用户级模块。
-	const official = useMemo(() => modules.filter(e => e.builtin), [modules]);
-	const installedModules = useMemo(() => modules.filter(e => !e.builtin), [modules]);
+	const normalizedQuery = query.trim().toLocaleLowerCase();
+	const official = useMemo(
+		() =>
+			modules.filter(
+				e =>
+					e.builtin &&
+					matchesQuery([e.name, e.displayName, e.id, e.description, builtinDescription(e)], normalizedQuery),
+			),
+		[modules, normalizedQuery],
+	);
+	const installedModules = useMemo(
+		() =>
+			modules.filter(
+				e =>
+					!e.builtin &&
+					matchesQuery([e.name, e.displayName, e.id, e.description, builtinDescription(e)], normalizedQuery),
+			),
+		[modules, normalizedQuery],
+	);
+	const filteredPackages = useMemo(
+		() => plugins.filter(p => matchesQuery([p.name, p.description, p.path], normalizedQuery)),
+		[plugins, normalizedQuery],
+	);
 	const detailItem = detailId ? (modules.find(e => e.id === detailId) ?? null) : null;
 
 	const toggleModule = (e: ExtensionItem): void => {
@@ -360,11 +394,21 @@ export function UnifiedPluginsView({
 
 	return (
 		<div className="gui-ext-plugins">
-			{/* dsh 面板顶栏：标题 + 「+ 添加插件」 */}
+			{/* dsh 面板顶栏：搜索 + 计数 + 「+ 添加插件」 */}
 			<div className="gui-ext-plugins-toolbar">
+				<label className="gui-ext-plugins-search">
+					<Icon name="search" className="h-3.5 w-3.5 shrink-0 opacity-50" />
+					<input
+						type="search"
+						value={query}
+						placeholder={t("ext search plugins")}
+						aria-label={t("ext search plugins")}
+						onChange={event => setQuery(event.currentTarget.value)}
+					/>
+				</label>
 				<span className="gui-ext-plugins-toolbar-count">
 					{t("ext plugins official")} {official.length} · {t("ext plugins installed")}{" "}
-					{plugins.length + installedModules.length}
+					{filteredPackages.length + installedModules.length}
 				</span>
 				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
 					<Icon name="add" className="h-3.5 w-3.5" />
@@ -372,6 +416,10 @@ export function UnifiedPluginsView({
 				</button>
 			</div>
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
+			{normalizedQuery.length > 0 &&
+				official.length === 0 &&
+				filteredPackages.length === 0 &&
+				installedModules.length === 0 && <div className="gui-ext-plugins-error">{t("no matches")}</div>}
 			{variant === "cards" ? (
 				<div className="gui-ext-list-scroll">
 					{official.length > 0 && (
@@ -386,14 +434,14 @@ export function UnifiedPluginsView({
 							</div>
 						</div>
 					)}
-					{(plugins.length > 0 || installedModules.length > 0) && (
+					{(filteredPackages.length > 0 || installedModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {plugins.length + installedModules.length}
+								{t("ext plugins installed")} · {filteredPackages.length + installedModules.length}
 							</div>
-							{plugins.length > 0 && (
+							{filteredPackages.length > 0 && (
 								<div className="gui-plugin-cards">
-									{plugins.map(p => (
+									{filteredPackages.map(p => (
 										<div key={p.path} className="gui-plugin-card">
 											<div className="gui-plugin-card-head">
 												<Icon name="plug" className="h-4 w-4 shrink-0 opacity-70" />
@@ -447,12 +495,12 @@ export function UnifiedPluginsView({
 							))}
 						</div>
 					)}
-					{(plugins.length > 0 || installedModules.length > 0) && (
+					{(filteredPackages.length > 0 || installedModules.length > 0) && (
 						<div className="gui-ext-group">
 							<div className="gui-ext-group-title">
-								{t("ext plugins installed")} · {plugins.length + installedModules.length}
+								{t("ext plugins installed")} · {filteredPackages.length + installedModules.length}
 							</div>
-							{plugins.map(p => (
+							{filteredPackages.map(p => (
 								<div key={p.path} className="gui-ext-provider">
 									<div className="gui-ext-provider-h">
 										<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />

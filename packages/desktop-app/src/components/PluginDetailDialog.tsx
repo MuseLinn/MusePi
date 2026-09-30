@@ -203,6 +203,31 @@ export function PluginDetailDialog({
 								</div>
 							)}
 						</div>
+						{/* dsh CardFacts parity：完整名称 / 配置状态 / 启用于。
+						 *  预设提供的条目（会话插件面）配置状态读「由 Agent 预设
+						 *  按会话提供」，与 dsh presetProvidedDetail 同语义。 */}
+						<dl className="gui-plugin-facts">
+							<div>
+								<dt>{t("ext full name")}</dt>
+								<dd>
+									<code>{item.id}</code>
+								</dd>
+							</div>
+							<div>
+								<dt>{t("ext configuration status")}</dt>
+								<dd>
+									{item.enabledInPresets && item.enabledInPresets.length > 0
+										? t("ext preset provided detail")
+										: pluginStateLabel(item)}
+								</dd>
+							</div>
+							{item.enabledInPresets && item.enabledInPresets.length > 0 ? (
+								<div>
+									<dt>{t("ext enabled in")}</dt>
+									<dd>{item.enabledInPresets.join(" · ")}</dd>
+								</div>
+							) : null}
+						</dl>
 						{item.trigger && (
 							<div className="gui-ext-detail-section">
 								<div className="gui-ext-detail-label">{t("trigger")}</div>

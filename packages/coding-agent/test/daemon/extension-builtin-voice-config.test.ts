@@ -322,3 +322,74 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		expect(resolveEnabledTtsModel("melotts-zh", settings).key).toBe("melotts-zh");
 	});
 });
+
+describe("extensions.list 预设启用面(dsh「会话插件」轴)", () => {
+	let agentDir: string;
+	let tmpCwd: string;
+	let modesDir: string;
+	let service: ExtensionService;
+
+	beforeAll(async () => {
+		agentDir = await isolateAgentDirForTest("omp-ext-preset-plane-");
+	}, 30000);
+
+	afterAll(async () => {
+		await restoreAgentDirForTest(agentDir);
+	}, 30000);
+
+	beforeEach(async () => {
+		tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-ext-preset-plane-cwd-"));
+		modesDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-ext-preset-plane-modes-"));
+		service = new ExtensionService({
+			settings: () => Settings.isolated(),
+			ensureRegistry: async () => {},
+			cwd: () => tmpCwd,
+			webUrl: () => null,
+			webPortFile: () => path.join(agentDir, "web.port"),
+			modesDir: () => modesDir,
+			onChanged: () => {},
+		});
+	});
+
+	test("显式扩展白名单的预设给 extension-module 挂 enabledInPresets;无显式声明的预设不进启用面", async () => {
+		// cwd 放一个假扩展模块（空入口会在清单里以加载失败形态出现——
+		// 仍是一条 extension-module 条目,身份匹配不受加载成败影响）。
+		await fs.mkdir(path.join(tmpCwd, ".musepi", "extensions", "my-ext"), { recursive: true });
+		await fs.writeFile(path.join(tmpCwd, ".musepi", "extensions", "my-ext", "index.ts"), "export default {};\n");
+		// 显式白名单预设引用它；另一个预设不显式声明 extensions
+		// （三态语义：undefined = 全部启用,不构成「按预设提供」）。
+		await fs.writeFile(
+			path.join(modesDir, "my-preset.json"),
+			JSON.stringify({ id: "my-preset", label: "My Preset", extensions: ["my-ext"] }),
+		);
+		await fs.writeFile(
+			path.join(modesDir, "no-explicit.json"),
+			JSON.stringify({ id: "no-explicit", label: "No Explicit" }),
+		);
+
+		const listed = await service.list();
+		const mine = listed.extensions.find(e => e.kind === "extension-module" && e.name === "my-ext");
+		expect(mine).toBeDefined();
+		expect(mine?.enabledInPresets).toEqual(["My Preset"]);
+
+		// 顶部预设清单只含显式声明者（内置模板会被 ensureModeTemplates
+		// 写进临时目录;其中显式声明空白的也进清单,但不挂任何扩展）。
+		const plane = listed.presets ?? [];
+		expect(plane.some(p => p.id === "my-preset" && p.label === "My Preset")).toBe(true);
+		expect(plane.some(p => p.id === "no-explicit")).toBe(false);
+	});
+
+	test("白名单不含的扩展不挂 enabledInPresets", async () => {
+		await fs.mkdir(path.join(tmpCwd, ".musepi", "extensions", "other-ext"), { recursive: true });
+		await fs.writeFile(path.join(tmpCwd, ".musepi", "extensions", "other-ext", "index.ts"), "export default {};\n");
+		await fs.writeFile(
+			path.join(modesDir, "my-preset.json"),
+			JSON.stringify({ id: "my-preset", label: "My Preset", extensions: ["unrelated"] }),
+		);
+
+		const listed = await service.list();
+		const other = listed.extensions.find(e => e.kind === "extension-module" && e.name === "other-ext");
+		expect(other).toBeDefined();
+		expect(other?.enabledInPresets).toBeUndefined();
+	});
+});

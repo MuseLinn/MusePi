@@ -1,10 +1,13 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import type { PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
+import type { ResolvedMode } from "../../presets/resolve";
 import type { DaemonService } from "./types";
 
 /**
@@ -20,7 +23,9 @@ import type { DaemonService } from "./types";
  *   extension-module）、`plugins.list` / `plugins.packages` /
  *   `plugins.setEnabled`（插件扫描/已装清单/启停）。
  * - 输出：各 RPC 返回值原样；extensions.raw 超 16KB 截断；extensions.list
- *   聚合 tabs/providers/槽位组件/toolViews/状态栏段与 shell 配置；三个 10s
+ *   聚合 tabs/providers/槽位组件/toolViews/状态栏段、shell 配置与 dsh「会话
+ *   插件」面（显式扩展白名单的预设清单 + 每个 extension-module 的
+ *   enabledInPresets）；三个 10s
  *   TTL 缓存（#extensionsCache/#pluginsCache/#pluginPackagesCache）随变更
  *   RPC 与宿主 watcher 失效；extensions.changed 广播经注入的 onChanged 扇出
  *   （宿主侧接 EventService，lazy 调用无循环）。另有宿主级扩展运行时加载
@@ -50,6 +55,8 @@ export interface ExtensionServiceDeps {
 	webUrl(): string | null;
 	/** web.port 发现文件的绝对路径（宿主计算：socket 目录下）。 */
 	webPortFile(): string;
+	/** 预设目录（宿主注入 #modesDir；缺省回退 $env/用户目录——测试可隔离）。 */
+	modesDir?(): string;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
 }
@@ -238,6 +245,47 @@ export class ExtensionService implements DaemonService {
 				} satisfies PluginComponentDesc;
 			});
 		}
+		// dsh「会话插件」面（预设启用轴）：Agent 预设的显式扩展白名单 →
+		// 每个扩展的「启用于」预设列表 + 顶部预设清单（GUI 切换器/分组）。
+		// 三态白名单里 undefined = 全部启用，不构成「按预设提供」语义
+		// （dsh parity：只有显式声明白名单的预设才算提供者）。白名单 id
+		// 是发现路径稳定名（sdk extensionIdOf 同规则），只可能命中
+		// extension-module 条目。fail-soft：预设面是增益信息，任何一步
+		// 失败都不阻塞清单主数据。
+		const presets: { id: string; label: string }[] = [];
+		const enabledInByName = new Map<string, string[]>();
+		try {
+			const { listModeIds, loadModeFile, resolveMode, ensureModeTemplates } = await import("../../presets/resolve");
+			const { t } = await import("../../i18n/index.js");
+			const { $env } = await import("@musepi/pi-utils");
+			const { getExtensionNameFromPath } = await import("../../discovery/helpers");
+			const dir = this.#deps.modesDir?.() ?? $env.MUSEPI_MODES_DIR ?? path.join(os.homedir(), ".musepi", "modes");
+			ensureModeTemplates(dir);
+			for (const id of listModeIds(dir)) {
+				let resolved: ResolvedMode | undefined;
+				try {
+					resolved = resolveMode(id, mid => loadModeFile(dir, mid));
+				} catch {
+					continue; // 环/悬空预设不参与启用面，与 modes.list 容错同口径
+				}
+				if (!resolved.extensionsExplicit) continue;
+				const builtinName = t(`preset ${id} name` as never);
+				const label = !builtinName.startsWith("preset ") ? builtinName : (resolved.label ?? id);
+				presets.push({ id, label });
+				for (const extName of resolved.extensions ?? []) {
+					const list = enabledInByName.get(extName);
+					if (list) list.push(label);
+					else enabledInByName.set(extName, [label]);
+				}
+			}
+			for (const ext of extensions) {
+				if (ext.kind !== "extension-module") continue;
+				const labels = enabledInByName.get(getExtensionNameFromPath(ext.path));
+				if (labels && labels.length > 0) ext.enabledInPresets = labels;
+			}
+		} catch {
+			// 预设面不可用 → 清单照常，只是没有「启用于」行。
+		}
 		const { buildProviderTabs } = await import("../../extensibility/extensions-center/state-manager");
 		const tabs = buildProviderTabs(extensions);
 		const { getAllProvidersInfo } = await import("../../capability");
@@ -278,6 +326,8 @@ export class ExtensionService implements DaemonService {
 			// Desktop-shell config (dsh-desktop parity): enabled/mode/
 			// webUrl read by the compat page + GUI shell.
 			shell: shellCfg,
+			// dsh「会话插件」面：显式扩展白名单的预设清单（GUI 切换器）。
+			presets,
 			// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 			slots: {
 				exact: [...EXTENSION_SLOT_DECLARATION.exact],

@@ -13,6 +13,7 @@ export function SchemaTabSection({
 	groups,
 	excludeGroups,
 	excludeKeys,
+	excludePrefixes,
 }: {
 	rpc: RpcClient | null;
 	tabs: string[];
@@ -28,6 +29,10 @@ export function SchemaTabSection({
 	 * their group renders (e.g. the tools tab excludes `computer.glow` —
 	 * the browser & desktop tab owns a live-apply custom row for it). */
 	excludeKeys?: readonly string[];
+	/** Optional key-prefix exclude: every key starting with one of these
+	 * prefixes is skipped (e.g. the voice page drops all `stt.` rows when
+	 * the 语音输入 plugin unit is disabled — the page is plugin-driven). */
+	excludePrefixes?: readonly string[];
 }): ReactNode {
 	const [schema, setSchema] = useState<SchemaItem[] | null>(null);
 	const [values, setValues] = useState<Record<string, unknown>>({});
@@ -46,8 +51,11 @@ export function SchemaTabSection({
 						? all.filter(i => i.ui?.group === undefined || !excludeGroups.includes(i.ui.group))
 						: all;
 				const filtered = excludeKeys ? items.filter(i => !excludeKeys.includes(i.key)) : items;
-				setSchema(filtered);
-				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: filtered.map(i => i.key) });
+				const byPrefix = excludePrefixes
+					? filtered.filter(i => !excludePrefixes.some(p => i.key.startsWith(p)))
+					: filtered;
+				setSchema(byPrefix);
+				const vals = await rpc.request<Record<string, unknown>>("settings.get", { keys: byPrefix.map(i => i.key) });
 				if (alive) {
 					setValues(vals ?? {});
 					setError(null);
@@ -57,7 +65,7 @@ export function SchemaTabSection({
 		return () => {
 			alive = false;
 		};
-	}, [rpc, tabs, groups, excludeGroups, excludeKeys]);
+	}, [rpc, tabs, groups, excludeGroups, excludeKeys, excludePrefixes]);
 	const onChange = (key: string, value: unknown): void => {
 		if (!rpc) return;
 		// Optimistic flip; revert on failure.

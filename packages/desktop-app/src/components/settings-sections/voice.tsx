@@ -627,6 +627,45 @@ function InputDeviceMenu({
 	);
 }
 
+/** 插件单元停用时的占位卡：说明归属 + 一键启用（等价能力中心的开关，
+ *  走同一 extensions.setEnabled RPC）。stt/tts 的 schema 行、模型选择器
+ *  与测试入口都由插件状态驱动——插件关了，对应配置就不该出现。 */
+function DisabledVoicePluginNote({
+	rpc,
+	unitId,
+	copyKey,
+	onEnabled,
+}: {
+	rpc: RpcClient | null;
+	unitId: "voice:stt" | "voice:tts";
+	copyKey: string;
+	onEnabled(): void;
+}): ReactNode {
+	const [busy, setBusy] = useState(false);
+	const enable = (): void => {
+		if (!rpc || busy) return;
+		setBusy(true);
+		void rpc
+			.request("extensions.setEnabled", { id: unitId, enabled: true })
+			.then(onEnabled)
+			.finally(() => setBusy(false));
+	};
+	return (
+		<div className="gui-settings-section gui-settings-section--disabled">
+			<div className="gui-settings-row">
+				<div className="min-w-0 flex-1">
+					<div className="gui-settings-row-label">{tLoose(copyKey)}</div>
+					<div className="gui-settings-row-desc">{tLoose("voice plugin disabled hint")}</div>
+				</div>
+				<button type="button" className="gui-btn" disabled={!rpc || busy} onClick={enable}>
+					<Icon name="volume-up" className="h-3.5 w-3.5" />
+					{tLoose("voice plugin enable")}
+				</button>
+			</div>
+		</div>
+	);
+}
+
 /** Settings → 语音。 */
 export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	// Schema keys render via SchemaTabSection below — minus stt.modelName and
@@ -649,6 +688,25 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [dictatedMessages, setDictatedMessages] = useState<string[]>([]);
 	const [dictationError, setDictationError] = useState<string | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
+	// 插件单元状态（页面由插件驱动）：voice:stt / voice:tts 关闭时，
+	// 对应 schema 行、模型选择器与测试入口整体隐藏。null = 尚未取到
+	// （fail-open 按启用渲染，拉取失败绝不让整页配置消失）。
+	const [voiceUnits, setVoiceUnits] = useState<{ stt: boolean; tts: boolean } | null>(null);
+	const refreshVoiceUnits = useCallback((): void => {
+		if (!rpc) return;
+		void rpc
+			.request<{ extensions?: { id: string; state: string }[] }>("extensions.list")
+			.then(res => {
+				const find = (id: string): boolean => res.extensions?.find(e => e.id === id)?.state === "active";
+				setVoiceUnits({ stt: find("voice:stt"), tts: find("voice:tts") });
+			})
+			.catch(() => setVoiceUnits(null));
+	}, [rpc]);
+	useEffect(() => {
+		refreshVoiceUnits();
+	}, [refreshVoiceUnits]);
+	const sttOn = voiceUnits?.stt ?? true;
+	const ttsOn = voiceUnits?.tts ?? true;
 	// Session chrome mirrors the chat surface (same localStorage keys
 	// ChatView reads), so the preview shows exactly what a conversation
 	// looks like under the current 外观 toggles.
@@ -742,9 +800,28 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				tabs={["interaction"]}
 				groups={["Speech"]}
 				excludeKeys={["stt.modelName", "tts.localModel"]}
+				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts."] as const))]}
 			/>
-			<SttModelPickerCard rpc={rpc} />
-			<TtsModelPickerCard rpc={rpc} />
+			{sttOn ? (
+				<SttModelPickerCard rpc={rpc} />
+			) : (
+				<DisabledVoicePluginNote
+					rpc={rpc}
+					unitId="voice:stt"
+					copyKey="voice stt plugin disabled"
+					onEnabled={refreshVoiceUnits}
+				/>
+			)}
+			{ttsOn ? (
+				<TtsModelPickerCard rpc={rpc} />
+			) : (
+				<DisabledVoicePluginNote
+					rpc={rpc}
+					unitId="voice:tts"
+					copyKey="voice tts plugin disabled"
+					onEnabled={refreshVoiceUnits}
+				/>
+			)}
 
 			{/* Live voice I/O test: not expressible in schema. Hosted by the
 			 * SHARED simulated conversation view — dictation starts from the
@@ -779,7 +856,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 					showAvatars={showAvatars}
 					statusBarInfo={statusBarInfo}
 					assistantMarkdown={TTS_SAMPLE_MARKDOWN}
-					assistantActions={<SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} />}
+					assistantActions={ttsOn ? <SpeakAction rpc={rpc} markdown={TTS_SAMPLE_MARKDOWN} /> : undefined}
 					extraMessages={dictatedMessages.map((text, i) => (
 						<MockUserRow key={`${i}:${text}`} markdown={text} showAvatar={showAvatars} />
 					))}
@@ -796,46 +873,48 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 								</span>
 							}
 							mic={
-								<button
-									type="button"
-									className={`gui-composer-ico gui-effect-preview-mic${
-										dictationPhase === "recording" ? " gui-composer-ico--dictating" : ""
-									}`}
-									disabled={!rpc}
-									onClick={toggleDictation}
-									aria-label={
-										dictationPhase === "recording" || dictationPhase === "transcribing"
-											? t("stop")
-											: t("voice input test")
-									}
-									title={
-										dictationPhase === "recording"
-											? t("stop")
-											: dictationPhase === "transcribing"
-												? t("voice transcribing")
+								sttOn ? (
+									<button
+										type="button"
+										className={`gui-composer-ico gui-effect-preview-mic${
+											dictationPhase === "recording" ? " gui-composer-ico--dictating" : ""
+										}`}
+										disabled={!rpc}
+										onClick={toggleDictation}
+										aria-label={
+											dictationPhase === "recording" || dictationPhase === "transcribing"
+												? t("stop")
 												: t("voice input test")
-									}
-								>
-									<Icon
-										name={
-											dictationPhase === "recording" || dictationPhase === "transcribing" ? "stop" : "mic"
 										}
-										className="h-3.5 w-3.5"
-									/>
-									{dictationPhase === "recording" && (
-										<>
-											<span className="gui-voice-seconds">{recordSeconds}s</span>
-											{/* Live level meter rides the dictating capsule's
-											 * inner bottom edge (same contract as the real
-											 * composer mic — .gui-voice-level is absolutely
-											 * positioned inside the button). */}
-											<span
-												className="gui-voice-level"
-												style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}
-											/>
-										</>
-									)}
-								</button>
+										title={
+											dictationPhase === "recording"
+												? t("stop")
+												: dictationPhase === "transcribing"
+													? t("voice transcribing")
+													: t("voice input test")
+										}
+									>
+										<Icon
+											name={
+												dictationPhase === "recording" || dictationPhase === "transcribing" ? "stop" : "mic"
+											}
+											className="h-3.5 w-3.5"
+										/>
+										{dictationPhase === "recording" && (
+											<>
+												<span className="gui-voice-seconds">{recordSeconds}s</span>
+												{/* Live level meter rides the dictating capsule's
+												 * inner bottom edge (same contract as the real
+												 * composer mic — .gui-voice-level is absolutely
+												 * positioned inside the button). */}
+												<span
+													className="gui-voice-level"
+													style={{ width: `${Math.min(100, Math.round(recordLevel * 100))}%` }}
+												/>
+											</>
+										)}
+									</button>
+								) : null
 							}
 						/>
 					}

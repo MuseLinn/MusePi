@@ -618,6 +618,7 @@ export class DaemonServer {
 				cwd: () => this.#host.cwd(),
 				webUrl: () => this.#webUrl,
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
+				modesDir: () => this.#modesDir(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);

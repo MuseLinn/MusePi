@@ -139,6 +139,8 @@ export interface ExtensionItem {
 	configValues?: PluginConfigValues;
 	/** dsh 式「包含的组件」状态(声明了组件的内置单元才有;详情弹层渲染开关行)。 */
 	components?: PluginComponentDesc[];
+	/** dsh「会话插件」面:显式预设白名单启用了该扩展的预设名列表。 */
+	enabledInPresets?: string[];
 }
 
 export interface ExtensionTab {
@@ -170,6 +172,8 @@ export interface ExtensionRegistryData {
 	statusBarSegments: StatusBarSegmentItem[];
 	/** Slot contract from the daemon (collab-proto single authority). */
 	slots: { exact: readonly string[]; prefixes: readonly string[] };
+	/** dsh「会话插件」面:显式扩展白名单的预设清单(旧 daemon 无此字段)。 */
+	presets?: { id: string; label: string }[];
 }
 
 /** Props every extension component receives when mounted. Hosts pass what

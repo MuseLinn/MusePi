@@ -94,6 +94,10 @@ export interface Extension {
 	configValues?: PluginConfigValues;
 	/** dsh 式「包含的组件」状态(内置单元声明了组件才有;GUI 详情弹层渲染开关行)。 */
 	components?: PluginComponentDesc[];
+	/** dsh「会话插件」面：显式扩展白名单启用了该扩展的预设显示名列表
+	 * （仅 extension-module 可能有;预设白名单 undefined = 全部启用,
+	 * 不构成此语义）。 */
+	enabledInPresets?: string[];
 	/** Raw item data for inspector */
 	raw: unknown;
 }
