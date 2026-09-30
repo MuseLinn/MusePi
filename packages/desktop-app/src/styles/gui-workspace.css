@@ -2148,6 +2148,64 @@
 	color: var(--color-danger);
 	background: color-mix(in srgb, var(--color-danger) 8%, transparent);
 }
+
+/* 兼容性归因段（回退保护②）：blocked = 危险红（结构化拒绝证据面），
+ *  exempted = 琥珀（豁免运行中，如实标注可撤销）。 */
+.gui-ext-compat {
+	margin-top: 8px;
+	padding: 8px 10px;
+	border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+	border-radius: var(--radius-lg);
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-danger);
+	background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+.gui-ext-compat--exempted {
+	border-color: color-mix(in srgb, var(--color-warning, #fbbf24) 40%, transparent);
+	color: var(--color-warning, #d9a520);
+	background: color-mix(in srgb, var(--color-warning, #fbbf24) 9%, transparent);
+}
+.gui-ext-compat-head {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-weight: 600;
+}
+.gui-ext-compat-head .gui-ext-item-tag {
+	margin-left: auto;
+}
+.gui-ext-compat-peers {
+	margin-top: 6px;
+}
+.gui-ext-compat-peers-label {
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	opacity: 0.75;
+}
+.gui-ext-compat-peer {
+	margin-top: 2px;
+	font-family: var(--font-mono, monospace);
+	font-size: 10.5px;
+	word-break: break-all;
+}
+.gui-ext-compat-detail {
+	margin-top: 6px;
+	font-family: var(--font-mono, monospace);
+	font-size: 10.5px;
+	word-break: break-all;
+	opacity: 0.85;
+}
+.gui-ext-compat-runtime {
+	margin: 6px 0;
+	opacity: 0.8;
+}
+.gui-ext-compat .gui-btn--sm {
+	padding: 3px 10px;
+	font-size: 11px;
+}
 .gui-ext-detail-raw-toggle {
 	display: inline-flex;
 	align-items: center;

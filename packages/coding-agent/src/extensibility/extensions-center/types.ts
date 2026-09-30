@@ -4,6 +4,7 @@
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
+	PluginCompatibility,
 	PluginComponentDesc,
 	PluginConfigValues,
 	PluginResources,
@@ -111,6 +112,12 @@ export interface Extension {
 	/** dsh 式「启用条件」（真实可判定语义,非表达式字符串）：镜像设置键
 	 * （该键为 on 时单元启用）。预设提供的 user 插件走 enabledInPresets。 */
 	activation?: { kind: "setting"; key: string };
+	/** 清单版本（extension-module 从宿主 fiber 检视面透出;豁免键输入）。 */
+	version?: string;
+	/** 兼容性预检判定（回退保护②,extension-module 才有）：incompatible =
+	 *  结构化拒绝的证据面（GUI 渲染归因与豁免入口）,exempted = 放行但
+	 *  如实标注。兼容（无未满足 peer）无此项。 */
+	compatibility?: PluginCompatibility;
 	/** Raw item data for inspector */
 	raw: unknown;
 }

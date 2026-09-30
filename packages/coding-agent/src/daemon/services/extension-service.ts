@@ -2,11 +2,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import type { PluginComponentDesc } from "@musepi/pi-wire";
+import type { PluginCompatibility, PluginComponentDesc } from "@musepi/pi-wire";
 import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
+import {
+	readCompatibilityExemptions,
+	resolveCompatibilityPath,
+	setVersionExemption,
+} from "../../extensibility/plugins/compatibility-store";
 import type { ResolvedMode } from "../../presets/resolve";
 import type { CordisDynamicExtensionRuntime } from "../cordis-dynamic-extensions";
 import type { DaemonService } from "./types";
@@ -81,6 +86,7 @@ export class ExtensionService implements DaemonService {
 		"extensions.setProviderEnabled": "setProviderEnabled",
 		"extensions.setConfig": "setConfig",
 		"extensions.setComponentEnabled": "setComponentEnabled",
+		"extensions.setVersionExemption": "setVersionExemption",
 		"ext.call": "call",
 		"plugins.list": "listPlugins",
 		"plugins.packages": "pluginPackages",
@@ -291,13 +297,30 @@ export class ExtensionService implements DaemonService {
 		// `<plugin>/<component>` 黑名单（无点号键,见 settings-schema 注释）;
 		// fail-soft：运行时不可用（回退直接装载路径）时按启用渲染、无 runtime 行。
 		const componentDenylist = new Set((s?.get("disabledExtensionComponents") ?? []) as string[]);
-		let inspectedByName: Map<string, Map<string, { fiberState?: string; effectLabels: string[] }>> | undefined;
+		// 宿主 fiber 检视面：组件运行态之外,本轮起同时带出版本与兼容性判定
+		// （回退保护②）——豁免键 `name@version` 的输入与 GUI 归因渲染的数据源。
+		let inspectedByName:
+			| Map<
+					string,
+					{
+						version?: string;
+						compatibility?: PluginCompatibility;
+						components: Map<string, { fiberState?: string; effectLabels: string[] }>;
+					}
+			  >
+			| undefined;
 		try {
 			const dynamic = await this.#deps.dynamicRuntime?.();
 			inspectedByName = new Map(
 				(dynamic?.inspect() ?? []).map(i => [
 					i.name,
-					new Map(i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }])),
+					{
+						...(i.version ? { version: i.version } : {}),
+						...(i.compatibility ? { compatibility: i.compatibility } : {}),
+						components: new Map(
+							i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }]),
+						),
+					},
 				]),
 			);
 		} catch {
@@ -313,7 +336,7 @@ export class ExtensionService implements DaemonService {
 				continue;
 			}
 			if (!meta?.components || meta.components.length === 0) continue;
-			const runtimeComponents = inspectedByName?.get(ext.name);
+			const runtimeComponents = inspectedByName?.get(ext.name)?.components;
 			ext.components = meta.components.map(decl => {
 				const denied = componentDenylist.has(`${ext.name}/${decl.id}`);
 				const rt = runtimeComponents?.get(decl.id);
@@ -327,6 +350,31 @@ export class ExtensionService implements DaemonService {
 					...(rt?.fiberState ? { runtime: { fiberState: rt.fiberState, effects: rt.effectLabels.length } } : {}),
 				} satisfies PluginComponentDesc;
 			});
+		}
+		// 兼容面 + 版本透出（回退保护②）：宿主 fiber 检视面有的 extension-module
+		// 条目如实带出版本与判定——incompatible 是结构化拒绝的证据面（GUI 归因
+		// 段 + 豁免入口）,exempted 如实标注;无检视（运行时不可用）则不挂。
+		// 在役记录的 exempted 标注须对照**当前**豁免清单复核：撤销只影响下次
+		// 装配（不热卸载在役 fiber,dsh 口径），但管理面必须讲当下真话——
+		// 豁免已撤而记录仍标 exempted,GUI 会永远显示过期标注。缺票降级为
+		// incompatible（unmetPeers 原样保留,作证据面）。fail-safe：坏文件 =
+		// 零豁免,exempted 全部降级,不阻塞清单。
+		const liveExemptions = readCompatibilityExemptions(resolveCompatibilityPath()).exemptions;
+		for (const ext of extensions) {
+			if (ext.kind !== "extension-module") continue;
+			const inspected = inspectedByName?.get(ext.name);
+			if (!inspected) continue;
+			if (inspected.version) ext.version = inspected.version;
+			if (!inspected.compatibility) continue;
+			const gate = inspected.compatibility;
+			if (
+				gate.status === "exempted" &&
+				liveExemptions[`${gate.plugin.name}@${gate.plugin.version}`]?.includes(gate.runtimeVersion) !== true
+			) {
+				ext.compatibility = { ...gate, status: "incompatible", code: "incompatible-peer" };
+				continue;
+			}
+			ext.compatibility = gate;
 		}
 		// dsh「会话插件」面（预设启用轴）：Agent 预设的显式扩展白名单 →
 		// 每个扩展的「启用于」预设列表 + 顶部预设清单（GUI 切换器/分组）。
@@ -607,6 +655,34 @@ export class ExtensionService implements DaemonService {
 		this.#runtimeLoadCache = null;
 		this.#deps.onChanged();
 		return { ok: true, denied: denylist };
+	}
+
+	/** RPC extensions.setVersionExemption：授予/撤销兼容性精确版本豁免
+	 *  （回退保护②的「知情接受」入口,dsh `plugin allow-version` parity）。
+	 *  只能批当前运行时版本;落盘 agentDir/compatibility.json（原子写）后失效清单缓存并扇出
+	 *  extensions.changed——GUI 重拉即见 exempted 标注,下次装配即放行。 */
+	async setVersionExemption(params: unknown) {
+		const p = (params ?? {}) as {
+			package?: unknown;
+			runtimeVersion?: unknown;
+			enabled?: unknown;
+			acceptRisk?: unknown;
+		};
+		if (
+			typeof p.package !== "string" ||
+			typeof p.runtimeVersion !== "string" ||
+			typeof p.enabled !== "boolean" ||
+			typeof p.acceptRisk !== "boolean"
+		) {
+			throw new Error(
+				"extensions.setVersionExemption: package, runtimeVersion, enabled and acceptRisk are required",
+			);
+		}
+		await setVersionExemption(resolveCompatibilityPath(), p.package, p.runtimeVersion, p.enabled, p.acceptRisk);
+		this.#extensionsCache = null;
+		this.#runtimeLoadCache = null;
+		this.#deps.onChanged();
+		return { ok: true as const };
 	}
 
 	/** RPC extensions.setForceEnabled：显式启用同名冲突项（forceEnabledExtensions）。 */

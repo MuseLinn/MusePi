@@ -1848,6 +1848,10 @@ export class DaemonServer {
 				// 插件「包含的组件」独立开关（组件黑名单真实禁用）。
 				return this.#services.get<ExtensionService>("extensions").setComponentEnabled(params ?? {});
 			}
+			case "extensions.setVersionExemption": {
+				// 兼容性精确版本豁免的知情授予/撤销（回退保护②）。
+				return this.#services.get<ExtensionService>("extensions").setVersionExemption(params ?? {});
+			}
 			case "ext.call": {
 				return this.#services.get<ExtensionService>("extensions").call(params ?? {});
 			}

@@ -82,6 +82,28 @@ export type ConfigFieldErrorCode =
 	| "field-bad-default"
 	| "field-bad-select";
 
+/**
+ * 插件兼容性预检结果（回退保护②，dsh plugin-compatibility.ts parity）：
+ * 在不 import 插件代码的前提下读 package.json `peerDependencies`，对
+ * MusePi 命名空间 peer（`@musepi/*`，平台单版本线——全部对照宿主运行时
+ * 版本判定）做 semver 区间校验。compatible = 本类型实例不存在（undefined）；
+ * 命中未满足 peer 才产出实例。exempted = 人工登记的精确版本豁免命中
+ * （放行但如实标注）。调用方按 code 本地化渲染，不散装 Error.message。
+ */
+export interface PluginCompatibility {
+	/** 不兼容 / 豁免后的最终判定（compatible 不产出实例）。 */
+	status: "incompatible" | "exempted";
+	/** 结构化拒绝码，调用方本地化渲染。 */
+	code: "incompatible-version" | "incompatible-peer" | "malformed-manifest";
+	plugin: { name: string; version: string };
+	/** 宿主运行时版本（判定基准）。 */
+	runtimeVersion: string;
+	/** 未满足的 peer 区间（仅 @musepi/* peer 参与判定）。 */
+	unmetPeers: Record<string, string>;
+	/** malformed-manifest 时的校验细节（展示用,可本地化）。 */
+	detail?: string;
+}
+
 export interface ConfigFieldError {
 	code: ConfigFieldErrorCode;
 	field?: string;

@@ -6,7 +6,14 @@
  * （否则碰撞归因被「Failed to load extension:」字符串包装淹没）。
  */
 
-export type DynamicExtensionLoadErrorCode = "entry-missing" | "manifest-invalid" | "collision" | "factory-threw";
+export type DynamicExtensionLoadErrorCode =
+	| "entry-missing"
+	| "manifest-invalid"
+	| "collision"
+	| "factory-threw"
+	| "incompatible-version"
+	| "incompatible-peer"
+	| "malformed-manifest";
 
 export class DynamicExtensionLoadError extends Error {
 	constructor(

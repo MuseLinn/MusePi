@@ -1,6 +1,7 @@
 import { t } from "@musepi/client-core";
 import { isSttDownloadEvent, isTtsDownloadEvent } from "@musepi/pi-wire";
 import { type ReactNode, useState } from "react";
+import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import type { ExtensionItem } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
@@ -75,6 +76,102 @@ function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient |
 		);
 	}
 	return null;
+}
+
+/** 兼容性归因段（回退保护②）：incompatible 给结构化证据 + 豁免授予入口
+ *  （知情确认 → extensions.setVersionExemption，授予需 acceptRisk），
+ *  exempted 如实标注 + 可撤销。豁免键用判定面里的 manifest name@version
+ *  （与宿主判定同源，不是发现路径短名）。 */
+function CompatibilitySection({
+	item,
+	rpc,
+	onError,
+}: {
+	item: ExtensionItem;
+	rpc: RpcClient | null;
+	onError(m: string | null): void;
+}): ReactNode {
+	const { confirm } = useConfirm();
+	const [busy, setBusy] = useState(false);
+	const gate = item.compatibility;
+	if (!gate) return null;
+
+	const packageKey = `${gate.plugin.name}@${gate.plugin.version}`;
+	const call = (enabled: boolean, acceptRisk: boolean): void => {
+		if (!rpc || busy) return;
+		setBusy(true);
+		void rpc
+			.request("extensions.setVersionExemption", {
+				package: packageKey,
+				runtimeVersion: gate.runtimeVersion,
+				enabled,
+				acceptRisk,
+			})
+			.then(() => onError(null))
+			.catch((err: unknown) =>
+				onError(`${t("ext compatibility grant failed")}: ${err instanceof Error ? err.message : String(err)}`),
+			)
+			.finally(() => setBusy(false));
+		// daemon 扇出 extensions.changed → registry 重拉，标注自动刷新。
+	};
+
+	const grant = (): void => {
+		void confirm(
+			t("ext compatibility grant confirm", { name: packageKey, version: gate.runtimeVersion }),
+			t("ext compatibility grant label"),
+		).then(ok => {
+			if (ok) call(true, true);
+		});
+	};
+	const revoke = (): void => {
+		void confirm(t("ext compatibility revoke confirm", { name: packageKey })).then(ok => {
+			if (ok) call(false, false);
+		});
+	};
+
+	const peers = Object.entries(gate.unmetPeers);
+	return (
+		<div className="gui-ext-detail-section">
+			<div
+				className={`gui-ext-compat${gate.status === "exempted" ? " gui-ext-compat--exempted" : " gui-ext-compat--blocked"}`}
+			>
+				<div className="gui-ext-compat-head">
+					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+					<span>
+						{gate.code === "malformed-manifest"
+							? t("ext compatibility malformed")
+							: gate.status === "exempted"
+								? t("ext compatibility exempted")
+								: t("ext compatibility incompatible")}
+					</span>
+					<span className="gui-ext-item-tag">{packageKey}</span>
+				</div>
+				{peers.length > 0 ? (
+					<div className="gui-ext-compat-peers">
+						<div className="gui-ext-compat-peers-label">{t("ext compatibility unmet peers")}</div>
+						{peers.map(([name, range]) => (
+							<div key={name} className="gui-ext-compat-peer">
+								<span>{t("ext compatibility peer line", { name, range })}</span>
+							</div>
+						))}
+					</div>
+				) : null}
+				{gate.detail ? <div className="gui-ext-compat-detail">{gate.detail}</div> : null}
+				<div className="gui-ext-compat-runtime">
+					{t("ext compatibility runtime", { version: gate.runtimeVersion })}
+				</div>
+				{gate.status === "exempted" ? (
+					<button type="button" className="gui-btn gui-btn--sm" disabled={busy || !rpc} onClick={revoke}>
+						{t("ext compatibility revoke")}
+					</button>
+				) : (
+					<button type="button" className="gui-btn gui-btn--sm" disabled={busy || !rpc} onClick={grant}>
+						{t("ext compatibility grant")}
+					</button>
+				)}
+			</div>
+		</div>
+	);
 }
 
 function ComponentsSection({
@@ -262,6 +359,7 @@ export function PluginDetailDialog({
 								</div>
 							)}
 						</dl>
+						<CompatibilitySection item={item} rpc={rpc} onError={onError} />
 						{item.trigger && (
 							<div className="gui-ext-detail-section">
 								<div className="gui-ext-detail-label">{t("trigger")}</div>

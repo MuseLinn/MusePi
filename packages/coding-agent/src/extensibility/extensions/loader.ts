@@ -35,8 +35,10 @@ import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../
 import { EventBus } from "../../utils/event-bus";
 import { readPluginConfigStore } from "../extensions-center/plugin-config-store";
 import * as TypeBox from "../legacy-typebox";
+import { readCompatibilityExemptions, resolveCompatibilityPath } from "../plugins/compatibility-store";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/legacy-pi-compat";
 import { getAllPluginExtensionPaths } from "../plugins/loader";
+import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugins/plugin-compatibility";
 import { resolvePath, withHostGuard } from "../utils";
 import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { readExtensionPluginMeta } from "./plugin-manifest";
@@ -730,10 +732,31 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 	const resolvedEventBus = eventBus ?? new EventBus();
 	const runtime = new ExtensionRuntime();
 
-	const imported = await Promise.all(paths.map(extPath => importExtensionModule(extPath, cwd)));
+	// 回退保护②：兼容性预检先于任何 import（dsh「只有兼容性冲突拒绝一行」
+	// parity——清单缺失/不可读不是兼容性意见,交给下方 import 诊断）。
+	// 拒绝的路径不进 imported 清单,errors 带结构化诊断;豁免命中放行但
+	// 打警告日志（如实标注）。豁免清单读 agentDir/compatibility.json,
+	// fail-safe：坏文件 = 零豁免 + 日志,永不阻塞会话装配。
+	let admissible = paths;
+	if (paths.length > 0) {
+		const { exemptions, warnings } = readCompatibilityExemptions(resolveCompatibilityPath());
+		for (const warning of warnings) logger.warn(warning);
+		admissible = [];
+		for (const extPath of paths) {
+			const gate = await compatibilityGateForExtensionPath(extPath, exemptions);
+			if (gate && gate.status !== "exempted") {
+				errors.push({ path: extPath, error: pluginCompatibilityWarning(gate) });
+				continue;
+			}
+			if (gate) logger.warn("compatibility exemption active, loading anyway", { path: extPath });
+			admissible.push(extPath);
+		}
+	}
 
-	for (let i = 0; i < paths.length; i++) {
-		const extPath = paths[i]!;
+	const imported = await Promise.all(admissible.map(extPath => importExtensionModule(extPath, cwd)));
+
+	for (let i = 0; i < admissible.length; i++) {
+		const extPath = admissible[i]!;
 		const { extension, error } = await bindExtension(extPath, imported[i]!, cwd, resolvedEventBus, runtime);
 
 		if (error) {

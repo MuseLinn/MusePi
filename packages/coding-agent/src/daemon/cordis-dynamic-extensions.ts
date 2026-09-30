@@ -49,7 +49,7 @@ import * as path from "node:path";
 import type { Context, Fiber, Plugin } from "@deepseek-ai/cordis";
 import type { KeyId } from "@musepi/pi-tui";
 import { logger } from "@musepi/pi-utils";
-import { type PluginComponentDecl, parsePluginComponents } from "@musepi/pi-wire";
+import { type PluginCompatibility, type PluginComponentDecl, parsePluginComponents } from "@musepi/pi-wire";
 import { getExtensionNameFromPath } from "../discovery/helpers";
 import { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
 import type {
@@ -58,6 +58,11 @@ import type {
 	ExtensionCommandContext,
 	LoadExtensionsResult,
 } from "../extensibility/extensions/types";
+import { readCompatibilityExemptions, resolveCompatibilityPath } from "../extensibility/plugins/compatibility-store";
+import {
+	compatibilityGateForExtensionPath,
+	pluginCompatibilityWarning,
+} from "../extensibility/plugins/plugin-compatibility";
 import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 
@@ -83,6 +88,8 @@ interface ExtensionTarget {
 	components: PluginComponentDecl[];
 	/** 清单所在目录（组件 entry 相对路径的解析基准；文件输入缺席）。 */
 	manifestDir?: string;
+	/** 清单版本（豁免键 `name@version` 与 list 面版本标注的输入）。 */
+	version?: string;
 }
 
 /** 插件内组件的装载记录（entry 组件 = 插件 fiber 下的独立子 fiber）。 */
@@ -107,11 +114,16 @@ export interface DynamicComponentInspection {
 export interface DynamicExtensionInspection {
 	name: string;
 	status: "active" | "unloaded" | "failed";
+	/** 清单版本（兼容面豁免键/版本标注的输入）。 */
+	version?: string;
 	/** cordis fiber 生命周期状态名（FAILED 已拆卸的 fiber 无此项）。 */
 	fiberState?: string;
 	/** fiber 效果账本标签（检视 = getEffects() 诊断树，空数组表示已拆卸）。 */
 	effectLabels: string[];
 	error?: string;
+	/** 兼容性预检判定（回退保护②）：incompatible = 结构化拒绝的证据面,
+	 *  exempted = 放行但如实标注。兼容（无未满足 peer）无此项。 */
+	compatibility?: PluginCompatibility;
 	/** 清单声明的组件装载面（无组件声明 = 空数组）。 */
 	components: DynamicComponentInspection[];
 }
@@ -140,6 +152,11 @@ interface DynamicExtensionRecord {
 	ctx?: Context;
 	extension?: Extension;
 	error?: string;
+	/** 清单版本（兼容性豁免键 `name@version` 的输入）。 */
+	version?: string;
+	/** 兼容性预检判定（回退保护②）：拒绝时 = 结构化证据,随记录与
+	 *  inspect() 下发;exempted = 放行但标注。兼容 = 无此项。 */
+	compatibility?: PluginCompatibility;
 	/** 清单声明组件的装载记录（键 = 组件 id）。 */
 	components: Map<string, DynamicComponentRecord>;
 }
@@ -148,14 +165,17 @@ interface DynamicExtensionRecord {
  *  musepi 为权威字段；omp/pi 是旧上游兼容遗留。 */
 interface ExtensionManifestPkg {
 	name?: string;
+	version?: string;
 	musepi?: { extensions?: string[]; components?: unknown };
 	omp?: { extensions?: string[]; components?: unknown };
 	pi?: { extensions?: string[]; components?: unknown };
 }
 
 /** 目录输入：读 package.json 清单，解析声明入口（musepi 权威，omp/pi 兼容；
- *  声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）与组件声明表。 */
-async function resolveManifestTarget(dir: string): Promise<{ entry: string; components: PluginComponentDecl[] }> {
+ *  声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）与组件声明表、版本。 */
+async function resolveManifestTarget(
+	dir: string,
+): Promise<{ entry: string; components: PluginComponentDecl[]; version?: string }> {
 	const pkgPath = path.join(dir, "package.json");
 	let raw: string;
 	try {
@@ -173,17 +193,18 @@ async function resolveManifestTarget(dir: string): Promise<{ entry: string; comp
 	const declared = pkg.musepi?.extensions ?? pkg.omp?.extensions ?? pkg.pi?.extensions ?? [];
 	const first = declared[0];
 	const joined = first ? path.resolve(dir, first) : dir;
+	const version = typeof pkg.version === "string" ? pkg.version : undefined;
 	let stats: Stats;
 	try {
 		stats = await fs.stat(joined);
 	} catch {
 		throw new DynamicExtensionLoadError("entry-missing", `extension entry "${joined}" does not exist`);
 	}
-	if (!stats.isDirectory()) return { entry: joined, components };
+	if (!stats.isDirectory()) return { entry: joined, components, version };
 	for (const ext of [".ts", ".js", ".mjs", ".cjs"]) {
 		try {
 			await fs.stat(path.join(joined, `index${ext}`));
-			return { entry: path.join(joined, `index${ext}`), components };
+			return { entry: path.join(joined, `index${ext}`), components, version };
 		} catch {
 			/* try next */
 		}
@@ -214,6 +235,7 @@ async function resolveExtensionTarget(inputPath: string): Promise<ExtensionTarge
 			entry: manifest.entry,
 			components: manifest.components,
 			manifestDir: resolved,
+			version: manifest.version,
 		};
 	}
 	const sibling = await resolveSiblingManifest(resolved);
@@ -221,22 +243,24 @@ async function resolveExtensionTarget(inputPath: string): Promise<ExtensionTarge
 		name: getExtensionNameFromPath(resolved),
 		entry: resolved,
 		components: sibling?.components ?? [],
-		...(sibling ? { manifestDir: sibling.manifestDir } : {}),
+		...(sibling ? { manifestDir: sibling.manifestDir, version: sibling.version } : {}),
 	};
 }
 
 /** 文件输入的清单组件解析：向上逐层找带 musepi/omp/pi 块且声明了入口的
- *  package.json,声明入口解析到本文件 → 采用其组件声明;命中声明别的入口
+ *  package.json,声明入口解析到本文件 → 采用其组件声明与版本;命中声明别的入口
  *  → 本文件不属于该插件,返回 null;无声明入口的纯配置块继续向上。 */
 async function resolveSiblingManifest(
 	filePath: string,
-): Promise<{ components: PluginComponentDecl[]; manifestDir: string } | null> {
+): Promise<{ components: PluginComponentDecl[]; manifestDir: string; version?: string } | null> {
 	let dir = path.dirname(filePath);
 	for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
 		let block: { extensions?: string[]; components?: unknown } | undefined;
+		let version: string | undefined;
 		try {
 			const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8")) as ExtensionManifestPkg;
 			block = pkg.musepi ?? pkg.omp ?? pkg.pi;
+			version = typeof pkg.version === "string" ? pkg.version : undefined;
 		} catch {
 			block = undefined;
 		}
@@ -260,7 +284,7 @@ async function resolveSiblingManifest(
 				}
 			}
 			if (entryFile !== filePath) return null;
-			return { components: parsePluginComponents(block.components).components, manifestDir: dir };
+			return { components: parsePluginComponents(block.components).components, manifestDir: dir, version };
 		}
 		const parent = path.dirname(dir);
 		if (parent === dir) break;
@@ -528,6 +552,20 @@ export class CordisDynamicExtensionRuntime {
 		return this.#runtime;
 	}
 
+	/** 兼容性预检（回退保护②，先于任何 import）：读清单 package.json 的
+	 *  MusePi peer 区间,对照运行时版本判定。incompatible = 结构化拒绝
+	 *  （调用方记 failed + 抛结构化码）;exempted = 放行但标注。
+	 *  豁免清单读 agentDir/compatibility.json,fail-safe（坏文件 = 零豁免
+	 *  + 日志警告,永不阻塞装配）。peer 元数据不可验证（malformed）按
+	 *  dsh 口径拒绝而非静默准入。判定本体 = plugin-compatibility 的
+	 *  纯函数（三个装配入口共用同一判定）。 */
+	async #compatibilityPreflight(target: ExtensionTarget): Promise<PluginCompatibility | undefined> {
+		if (!target.manifestDir) return undefined;
+		const { exemptions, warnings } = readCompatibilityExemptions(resolveCompatibilityPath());
+		for (const warning of warnings) logger.warn(warning);
+		return compatibilityGateForExtensionPath(target.manifestDir, exemptions);
+	}
+
 	/** 装载一个真实 user 扩展（目录或入口文件）。失败不留半挂载 fiber
 	 *  （startHostHalf parity：FAILED fiber 立即 dispose）。同名扩展非 active
 	 *  状态（failed/unloaded）时复用记录重载。
@@ -552,8 +590,20 @@ export class CordisDynamicExtensionRuntime {
 		record.cwd = cwd;
 		record.sourcePath = extPath;
 		record.entryKey = target.entry;
+		record.version = target.version;
+		record.compatibility = undefined;
 		record.components = new Map();
 		this.#records.set(record.name, record);
+		// 回退保护②：先于 import 的兼容性预检——拒绝 = failed 记录 + 结构化抛错,
+		// exempted = 放行但保留标注（inspect/list 如实透出）。
+		const gate = await this.#compatibilityPreflight(target);
+		record.compatibility = gate;
+		if (gate && gate.status !== "exempted") {
+			record.status = "failed";
+			record.error = pluginCompatibilityWarning(gate);
+			throw new DynamicExtensionLoadError(gate.code, record.error);
+		}
+		if (gate) logger.warn("compatibility exemption active, loading anyway", { plugin: gate.plugin.name });
 		await this.#mount(record, target, disabledComponents);
 		return this.#buildHandle(record);
 	}
@@ -885,12 +935,14 @@ export class CordisDynamicExtensionRuntime {
 		return [...this.#records.values()].map(record => ({
 			name: record.name,
 			status: record.status,
+			version: record.version,
 			fiberState: record.fiber ? (FIBER_STATE_NAMES[record.fiber.state] ?? String(record.fiber.state)) : undefined,
 			effectLabels:
 				record.fiber && record.fiber.state !== FIBER_STATE_FAILED
 					? record.fiber.getEffects().map(effect => effect.label)
 					: [],
 			error: record.error,
+			compatibility: record.compatibility,
 			components: [...record.components.values()].map(component => ({
 				id: component.id,
 				status: component.status,

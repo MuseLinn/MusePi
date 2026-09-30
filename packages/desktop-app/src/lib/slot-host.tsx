@@ -3,6 +3,7 @@ import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots
 import type {
 	ConfigFieldDesc,
 	ConfigFieldError,
+	PluginCompatibility,
 	PluginComponentDesc,
 	PluginConfigValues,
 	PluginResources,
@@ -146,6 +147,11 @@ export interface ExtensionItem {
 	runtime?: { fiberState: string; effects: number; operational: "running" | "stopped" };
 	/** dsh 式「启用条件」:镜像设置键为 on 时启用。 */
 	activation?: { kind: "setting"; key: string };
+	/** 插件清单版本（extension-module 条目;宿主 runtime 透出,回退保护②）。 */
+	version?: string;
+	/** 兼容性预检判定（回退保护②;incompatible = 结构化拒绝的证据面,
+	 *  exempted = 精确版本豁免放行,GUI 归因段据此渲染 + 提供豁免入口）。 */
+	compatibility?: PluginCompatibility;
 }
 
 export interface ExtensionTab {

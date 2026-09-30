@@ -11,6 +11,8 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { isEnoent, logger, pathIsWithin } from "@musepi/pi-utils";
+import { readCompatibilityExemptions, resolveCompatibilityPath } from "../compatibility-store";
+import { compatibilityGateForExtensionPath, pluginCompatibilityWarning } from "../plugin-compatibility";
 import { normalizePluginRuntimeConfig } from "../runtime-config";
 import type { PluginRuntimeConfig } from "../types";
 
@@ -67,6 +69,11 @@ export interface MarketplaceManagerOptions {
 	 *  Receives any additional file paths that should also be invalidated from the fs cache.
 	 */
 	clearPluginRootsCache?: (extraPaths?: readonly string[]) => void;
+	/**
+	 * 兼容性预检豁免清单路径（回退保护②）。缺省 configRoot/compatibility.json；
+	 * 测试可指向隔离路径。坏文件按零豁免处理（fail-safe），不阻塞安装。
+	 */
+	compatibilityExemptionsPath?: string;
 }
 
 // ── Manager ──────────────────────────────────────────────────────────────────
@@ -295,6 +302,25 @@ export class MarketplaceManager {
 			catalogMetadata: catalog.metadata,
 			tmpDir: os.tmpdir(),
 		});
+
+		// 回退保护②：兼容性预检在缓存/登记**之前**——源已解析、插件代码
+		// 尚未 import。拒绝 = 结构化错误（不带任何盘副作用;tempCloneRoot 由
+		// 下方 finally 清理）;豁免命中放行但打警告。与宿主/会话装配共用同一
+		// 判定函数。malformed peer 元数据按 dsh 口径拒绝（gate 不空且非豁免）。
+		{
+			const exemptionsPath = this.#opts.compatibilityExemptionsPath ?? resolveCompatibilityPath();
+			const { exemptions, warnings } = readCompatibilityExemptions(exemptionsPath);
+			for (const warning of warnings) logger.warn(warning);
+			const gate = await compatibilityGateForExtensionPath(sourcePath, exemptions);
+			if (gate && gate.status !== "exempted") {
+				const message = pluginCompatibilityWarning(gate);
+				if (tempCloneRoot) {
+					await fs.rm(tempCloneRoot, { recursive: true, force: true }).catch(() => {});
+				}
+				throw new Error(message);
+			}
+			if (gate) logger.warn("compatibility exemption active, installing anyway", { plugin: name });
+		}
 
 		// 5. Determine version: catalog entry > plugin manifest > git SHA > fallback
 		let version!: string;
