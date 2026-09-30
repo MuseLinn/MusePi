@@ -23,6 +23,8 @@ export const agents = {
 	"agent status aborted": "已终止",
 	// Completed while the user wasn't looking — cleared on open.
 	new: "新",
+	// 子会话行的内嵌预览动作：在右侧面板就地停靠子代理完整会话。
+	"preview subagent in panel": "在面板中预览",
 } as const;
 
 /** Key union for the agents domain (source of truth). */

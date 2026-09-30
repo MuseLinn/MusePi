@@ -3386,6 +3386,58 @@
 	color: var(--color-text);
 }
 
+/* Row internals: the wrapper div owns the hover surface (above); the open
+ *  button carries the row content, the dock button the embedded-preview
+ *  action. Both reset native button chrome — the wrapper is no longer a
+ *  button itself (nested interactive elements are invalid HTML). */
+.gui-subsession-open {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
+}
+.gui-subsession-dock {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-sm);
+	background: none;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 120ms ease,
+		background 120ms ease,
+		color 120ms ease;
+}
+.gui-subsession-row:hover .gui-subsession-dock,
+.gui-subsession-dock:focus-visible {
+	opacity: 1;
+}
+.gui-subsession-dock:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 16%, transparent);
+	color: var(--color-text);
+}
+@media (hover: none) {
+	/* Touch surfaces have no hover — keep the action reachable. */
+	.gui-subsession-dock {
+		opacity: 1;
+	}
+}
+
 /* Trajectory branch lane grid */
 .traj-tree-lanes {
 	display: flex;

@@ -17,6 +17,7 @@ import {
 	t,
 	WidgetCard,
 } from "@musepi/client-core";
+import type { AgentSnapshot } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
@@ -250,9 +251,19 @@ export function ContextPanel({
 	}, [rpc, snap?.sessionId, snap?.working]);
 	// Docked detail snapshots: the selection is owned by ChatView (the
 	// swarm-card member row in the transcript opens it too), so the layer
-	// resolves against the live snapshot here.
-	const agent = agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null;
-	const agentProgress = agentId !== null ? (snap?.progress.get(agentId)?.progress ?? null) : null;
+	// resolves against the live snapshot here. The sub-session rows below
+	// the roster (session.agents registry scan) can also dock an agent that
+	// has already left the live roster — that selection is local: an
+	// embedded snapshot synthesized from the registry row (openchamber
+	// mini-chat parity: the sub conversation previews in place instead of
+	// only opening as the main surface).
+	const [embedded, setEmbedded] = useState<{ agent: AgentSnapshot; sessionId: string } | null>(null);
+	const embeddedAgent = embedded?.agent ?? null;
+	const agent =
+		embeddedAgent ?? (agentId !== null ? ((snap?.agents ?? []).find(a => a.id === agentId) ?? null) : null);
+	const dockAgentId = agent?.id ?? null;
+	const agentProgress = dockAgentId !== null ? (snap?.progress.get(dockAgentId)?.progress ?? null) : null;
+	const dockOpen = agentId !== null || embedded !== null;
 	// Session-hygiene actions (会话维护): shake / fresh / reset-context —
 	// each daemon RPC returns counts rendered into a shared status line.
 	// The clear action asks for confirmation first (destructive).
@@ -807,7 +818,10 @@ export function ContextPanel({
 					 * roster; a row opens the docked trajectory detail that
 					 * slides in over this view (layer at the aside level).
 					 * Below it the sub-session list (session.agents registry
-					 * rows) opens a child session as the main chat surface. */
+					 * rows): a row opens a child session as the main chat
+					 * surface, and its panel action docks the sub
+					 * conversation in place (openchamber mini-chat parity) —
+					 * live transcript + chat without leaving this session. */
 					<>
 						{(snap?.agents ?? []).length === 0 ? (
 							<div className="gui-pane-tab-empty">
@@ -822,10 +836,21 @@ export function ContextPanel({
 								progress={snap?.progress ?? new Map()}
 								lifecycle={snap?.lifecycle ?? new Map()}
 								selectedId={agentId}
-								onSelect={onAgentSelect}
+								onSelect={id => {
+									setEmbedded(null);
+									onAgentSelect(id);
+								}}
 							/>
 						)}
-						<SubSessionsSection rpc={rpc} sessionId={snap?.sessionId ?? ""} onOpenSession={onOpenSession} />
+						<SubSessionsSection
+							rpc={rpc}
+							sessionId={snap?.sessionId ?? ""}
+							onOpenSession={onOpenSession}
+							onDockAgent={(agent, childSessionId) => {
+								onAgentSelect(null);
+								setEmbedded({ agent, sessionId: childSessionId });
+							}}
+						/>
 					</>
 				) : typeof bodyView === "string" && bodyView.startsWith("ext:") ? (
 					(() => {
@@ -1230,14 +1255,19 @@ export function ContextPanel({
 				 * leaves the pane's stacking context, and while it is open the view
 				 * is the agents surface, so the managed-browser page host has no
 				 * slot to project onto. */}
-				<div className={`gui-agent-dock${agentId !== null ? " gui-agent-dock--open" : ""}`}>
+				<div className={`gui-agent-dock${dockOpen ? " gui-agent-dock--open" : ""}`}>
 					<SubagentPanel
 						agent={agent}
-						open={agentId !== null}
+						open={dockOpen}
 						rpc={rpc}
 						progress={agentProgress}
 						host={agentHost}
-						onClose={() => onAgentSelect(null)}
+						sessionId={embedded?.sessionId ?? null}
+						onOpenSession={onOpenSession}
+						onClose={() => {
+							setEmbedded(null);
+							onAgentSelect(null);
+						}}
 					/>
 				</div>
 			</aside>
@@ -1331,20 +1361,27 @@ function fmtJobTime(ts: number | string): string {
 /** Sub-session list (agents hub lower section, openchamber parity): the
  *  session's child transcripts as rows (status dot + name + last activity).
  *  Backed by the daemon's session.agents registry scan, so rows persist
- *  after an agent goes idle; clicking a row opens that transcript as the
- *  main chat surface (same target as the sidebar's nested session rows).
- *  Polls every 5s while mounted. */
+ *  after an agent goes idle. Two open paths per row: the main area opens
+ *  the child session as the main chat surface (same target as the
+ *  sidebar's nested session rows); the panel action docks the sub
+ *  conversation in place — live transcript + chat + lifecycle actions
+ *  without leaving this session (openchamber mini-chat parity, embedded
+ *  in the pane instead of a separate OS window). Polls every 5s. */
 function SubSessionsSection({
 	rpc,
 	sessionId,
 	onOpenSession,
+	onDockAgent,
 }: {
 	rpc: RpcClient;
 	sessionId: string;
 	onOpenSession?(id: string): void;
+	/** Dock the row's agent conversation over this pane (embedded preview). */
+	onDockAgent?(agent: AgentSnapshot, childSessionId: string): void;
 }): ReactNode {
 	const [rows, setRows] = useState<
 		readonly {
+			id: string;
 			sessionId: string;
 			displayName: string;
 			kind: string;
@@ -1359,6 +1396,7 @@ function SubSessionsSection({
 			void rpc
 				.request<{
 					agents: {
+						id: string;
 						sessionId: string;
 						displayName: string;
 						kind: string;
@@ -1389,22 +1427,56 @@ function SubSessionsSection({
 			) : (
 				<div className="flex flex-col gap-0.5 px-2">
 					{rows.map(row => (
-						<button
-							key={row.sessionId}
-							type="button"
-							className="gui-subsession-row"
-							title={`${row.displayName} · ${row.status}`}
-							aria-label={`${t("open subagent session")}: ${row.displayName}`}
-							onClick={() => onOpenSession?.(row.sessionId)}
-						>
-							<span className={`ag-dot ag-dot--${row.status}`} />
-							<span className="min-w-0 flex-1 truncate text-left text-[13px]">{row.displayName}</span>
-							{typeof row.lastActivity === "number" && (
-								<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
-									{relTime(row.lastActivity)}
-								</span>
-							)}
-						</button>
+						<div key={row.sessionId} className="gui-subsession-row">
+							<button
+								type="button"
+								className="gui-subsession-open"
+								title={`${row.displayName} · ${row.status}`}
+								aria-label={`${t("open subagent session")}: ${row.displayName}`}
+								onClick={() => onOpenSession?.(row.sessionId)}
+							>
+								<span className={`ag-dot ag-dot--${row.status}`} />
+								<span className="min-w-0 flex-1 truncate text-left text-[13px]">{row.displayName}</span>
+								{typeof row.lastActivity === "number" && (
+									<span className="flex-shrink-0 text-[11px] text-[var(--color-text-faint)]">
+										{relTime(row.lastActivity)}
+									</span>
+								)}
+							</button>
+							{onDockAgent ? (
+								<button
+									type="button"
+									className="gui-subsession-dock"
+									title={t("preview subagent in panel")}
+									aria-label={`${t("preview subagent in panel")}: ${row.displayName}`}
+									onClick={() =>
+										onDockAgent(
+											{
+												id: row.id,
+												displayName: row.displayName,
+												kind: row.kind === "main" ? "main" : "sub",
+												parentId: sessionId,
+												status:
+													row.status === "running" ||
+													row.status === "idle" ||
+													row.status === "parked" ||
+													row.status === "aborted"
+														? row.status
+														: "idle",
+												// The registry scan only lists
+												// refs that own a transcript file.
+												hasSessionFile: true,
+												createdAt: row.lastActivity ?? 0,
+												lastActivity: row.lastActivity ?? 0,
+											},
+											row.sessionId,
+										)
+									}
+								>
+									<Icon name="picture-in-picture-2" className="h-3.5 w-3.5" />
+								</button>
+							) : null}
+						</div>
 					))}
 				</div>
 			)}

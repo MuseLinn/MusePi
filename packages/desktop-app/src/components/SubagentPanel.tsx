@@ -3,7 +3,7 @@ import { t } from "@musepi/client-core/src/i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens } from "@musepi/client-core/src/lib/format";
 import { decideTranscriptPoll } from "@musepi/client-core/src/lib/transcript-poll";
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
-import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
+import { ExternalLink, OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
@@ -47,18 +47,26 @@ export function SubagentPanel(props: {
 	} | null;
 	/** Forwarded to tool renderers so nested task cards can drill further. */
 	host?: TranscriptProps["host"];
+	/** Child session id of the docked agent — when present, the header shows
+	 *  an upgrade action that opens the sub conversation as the main chat
+	 *  surface (openchamber mini-chat parity: embedded preview → full view). */
+	sessionId?: string | null;
+	onOpenSession?(id: string): void;
 	onClose(): void;
 }): ReactNode {
-	const { agent, open, rpc, progress: p, host, onClose } = props;
+	const { agent, open, rpc, progress: p, host, sessionId, onOpenSession, onClose } = props;
 	const [entries, setEntries] = useState<readonly SessionEntry[]>([]);
 	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
 	// Written during render (not in an effect) so the snapshot is already
 	// retained in the commit that clears it.
-	const retained = useRef<{ agent: AgentSnapshot; progress: typeof p } | null>(null);
-	if (agent !== null) retained.current = { agent, progress: p };
+	const retained = useRef<{ agent: AgentSnapshot; progress: typeof p; sessionId: string | null | undefined } | null>(
+		null,
+	);
+	if (agent !== null) retained.current = { agent, progress: p, sessionId };
 	const shownAgent = agent ?? retained.current?.agent ?? null;
 	const shownProgress = agent !== null ? p : (retained.current?.progress ?? null);
+	const shownSessionId = agent !== null ? sessionId : (retained.current?.sessionId ?? null);
 
 	// Esc closes the layer (modal panel parity with TaskModal) — gated on
 	// open, since the layer stays mounted through the exit animation.
@@ -184,6 +192,20 @@ export function SubagentPanel(props: {
 						>
 							<RotateCcw size={13} aria-hidden />
 							{t("revive")}
+						</button>
+					) : null}
+					{shownSessionId && onOpenSession ? (
+						<button
+							type="button"
+							className="ag-iconbtn"
+							title={t("open subagent session")}
+							aria-label={t("open subagent session")}
+							onClick={() => {
+								onClose();
+								if (shownSessionId) onOpenSession?.(shownSessionId);
+							}}
+						>
+							<ExternalLink size={14} aria-hidden />
 						</button>
 					) : null}
 					<button type="button" className="ag-iconbtn" aria-label={t("close")} onClick={onClose}>
