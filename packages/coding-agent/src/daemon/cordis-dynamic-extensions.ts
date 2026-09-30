@@ -1,80 +1,78 @@
 /**
- * M2-2.9 spike ①：动态插件运行时——真实 user 扩展经 cordis 装配内核装载，
- * 验证 Loader / 隔离 / 生命周期 / 检视四能力（对标 dsh cordis-host-runner）。
+ * M2-2.9 收编第二刀：user 插件宿主级 cordis 装载运行时（生产接线）。
  *
  * 能力缝声明（M2-2.4）：
- * - 名称+ns：`cordis-dynamic-extensions`（daemon 装配面，spike 级）
- * - 输入：扩展目录（package.json `musepi.extensions` 入口——musepi 为权威
- *   清单字段，omp/pi 遗留兼容；与 plugins/loader 同一发现约定）+ DaemonHostContext 根 Context
- * - 输出：DynamicExtensionHandle（invoke/检视/unload/reload）+ 结构化加载错误
- * - 生命周期：每个扩展 = `musepi-dynamic-extensions` 组 fiber 下的独立子 fiber；
- *   每次登记 = fiber 效果账本（ctx.effect）上的一条带标签 effect，卸载即
- *   fiber.dispose() 反向回收（dsh lifecycle.ts「everything is an effect」parity）
+ * - 名称+ns：`cordis-dynamic-extensions`（daemon 装配面，宿主级）
+ * - 输入：扩展入口路径清单（discoverExtensionPaths 同源发现分支输出）+
+ *   宿主 cwd + DaemonHostContext 根 Context
+ * - 输出：LoadExtensionsResult（extensions/errors/runtime——与 loadExtensions
+ *   同形状，供 session-less RPC 消费）+ DynamicExtensionHandle（invoke/
+ *   检视/unload/reload）+ 结构化加载错误 + DynamicExtensionInspection[]
+ * - 生命周期：每个 user 插件 = `musepi-dynamic-extensions` 组 fiber 下的
+ *   独立子 fiber；每次 register 类动词/on 登记 = fiber 效果账本（ctx.effect）
+ *   一条带标签 effect，卸载即 fiber.dispose() 反向回收（dsh lifecycle.ts
+ *   「everything is an effect」parity）
  * - 启停：随 daemon 进程；runtime.dispose() 幂等拆卸整组
- * - 冲突：与 extensions/loader（静态装配权威）双轨并行——本文件是 spike 探针，
- *   试点通过前不接生产加载路径
+ * - 冲突：与 extensions/loader（会话级装配权威）分层——本文件管宿主级
+ *   session-less 装载（getExtensionRuntimeLoad），会话内装载仍走
+ *   ExtensionRunner（设计稿 §9 第二刀边界：宿主级先切 fiber，会话级后切）
  *
- * 与 dsh cordis-host-runner 的形态差异（如实记录，试点报告输入）：
+ * 与 dsh cordis-host-runner 的形态差异（如实记录）：
  * - dsh 动态插件 = 模型生成的 host/client 双半体**代码字符串**，经 node:vm
  *   沙箱产出 cordis Plugin，apply 拿到的是真 ctx 的白名单 façade（guard.ts）。
- * - 我们动态装载的是**真实 user 扩展目录**（目录 + package.json + TS 入口），
+ * - 我们动态装载的是**真实 user 扩展目录**（package.json + TS 入口），
  *   运行面是既有 pi.* ExtensionAPI——它本身就是 façade：user 代码永不接触
  *   cordis ctx，隔离由构造保证，不需要再包一层 vm（扩展已在宿主进程内以
  *   全权限运行，这与 dsh 模型生成代码的零信任前提根本不同）。
+ * - API 面与生产会话装载**同源**（loader.ts 的 createConcreteExtensionAPI
+ *   唯一工厂 + importAndBindExtension 同一条 import/bind 管线），本文件只
+ *   加两样东西：ctx.effect 效果账本壳（ledgerApi，每登记 verb 一条带
+ *   标签 effect + dispose 反向撤销）与跨扩展命令名碰撞守卫。
  * - cordis 在此纯做三件事：生命周期（fiber state 机 + dispose 效果回收）、
  *   登记守卫的落地载体（碰撞 = apply 抛错 = FAILED fiber，不留半挂载）、
  *   检视（fiber.state + getEffects() 效果账本诊断树）。
- * - HMR 实测口径（Windows + Bun 1.4.2 实测，试点报告输入）：
- *   · 裸 `import("file:///…?t=N")` 查询串**不能**击穿同进程模块缓存
- *     （探针实测：不同 query 返回同一实例）；
- *   · Bun.plugin onLoad 同样只按解析路径缓存——`?mtime=N` 第二次导入
- *     仍命中旧实例（探针实测 onLoad 只触发一次）；且 Bun 1.3.14+ 起
- *     onResolve 对运行时加载模块的传递导入不再触发（legacy-pi-compat.ts
- *     头部记录的已知限制），自定义命名空间方案不可用；
- *   · 可靠口径 = **整包暂存复制**：reload 时把扩展目录复制到 spike 私有
- *     暂存目录，新绝对路径即 Bun 模块缓存新键——入口与子模块改写均在
- *     reload 时拾取；watch 触发粒度契约（AGENTS.md：入口 mtime）不变。
+ *
+ * HMR 实测口径（Windows + Bun 1.4.2 实测，spike 报告 §1 结论，定案不重新讨论）：
+ *   · 裸 `import("file:///…?t=N")` 查询串**不能**击穿同进程模块缓存；
+ *   · Bun.plugin onLoad 同样只按解析路径缓存，自定义命名空间方案不可用；
+ *   · 可靠口径 = loader 的 loadLegacyPiModule **每次装载自带单调 `?mtime=` 查询
+ *     标签**（raw path 而非 file://，legacy-pi-compat.ts 注释明确该机制，
+ *     P5 扩展 HMR 生产依赖它）——入口与子模块改写都在 reload 重新装载时
+ *     拾取，无需暂存复制。宿主级 runtime 经失效入口 reconcile：新路径装载、
+ *     消失路径卸载（效果账本反向回收）。
  */
-
 import type { Stats } from "node:fs";
 import * as fs from "node:fs/promises";
-import * as os from "node:os";
 import * as path from "node:path";
-import { pathToFileURL } from "node:url";
 import type { Context, Fiber, Plugin } from "@deepseek-ai/cordis";
+import type { KeyId } from "@musepi/pi-tui";
 import { logger } from "@musepi/pi-utils";
+import { getExtensionNameFromPath } from "../discovery/helpers";
+import { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
+import type {
+	Extension,
+	ExtensionAPI,
+	ExtensionCommandContext,
+	LoadExtensionsResult,
+} from "../extensibility/extensions/types";
+import { EventBus } from "../utils/event-bus";
 import type { DaemonHostContext } from "./host-context";
 
-/** 扩展目录 package.json 中声明的清单字段形状（spike 窄面）。
- *  musepi 为权威字段；omp/pi 是旧上游兼容遗留。 */
-interface ExtensionManifestPkg {
-	name?: string;
-	musepi?: { extensions?: string[] };
-	omp?: { extensions?: string[] };
-	pi?: { extensions?: string[] };
-}
+export { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
 
 /** fiber.state 数值镜像（cordis FiberState 是 const enum，跨模块不可 import；
  *  镜像必须与 vendor/cordis 的枚举序一致：PENDING..UNLOADING = 0..5）。 */
 const FIBER_STATE_FAILED = 3;
 const FIBER_STATE_NAMES = ["PENDING", "LOADING", "ACTIVE", "FAILED", "DISPOSED", "UNLOADING"] as const;
 
-/** 探针 API：spike 窄面（生产接线时换 ConcreteExtensionAPI 同源工厂）。
- *  每个方法对应一种「登记 = fiber effect」的贡献面。 */
-export interface DynamicExtensionProbeApi {
-	/** 扩展名（package.json name）。 */
-	readonly extensionName: string;
-	/** 探针侧信道：扩展把可观测事件写入自己的探针日志（检视面 tail 可读）。 */
-	emitProbe(line: string): void;
-	/** 登记斜杠命令（kind = command，全局唯一，跨扩展碰撞结构化拒绝）。 */
-	registerCommand(commandName: string, handler: (...args: string[]) => unknown): void;
-	/** 订阅宿主事件（kind = event）。 */
-	on(event: string, handler: (...args: unknown[]) => unknown): void;
-	/** 注册周期回调（kind = interval，卸载即清除——效果账本反向回收的验证面）。 */
-	setInterval(handler: () => void, ms: number): void;
+/** 装载目标：入口解析结果（文件输入走发现管线；目录输入走清单声明）。 */
+interface ExtensionTarget {
+	/** 扩展身份名（getExtensionNameFromPath——与 discoverExtensionPaths 的
+	 *  disabled 过滤 `extension-module:<name>` 同一命名法，reconcile 的键）。 */
+	name: string;
+	/** 解析后的入口文件绝对路径（reconcile 判同键）。 */
+	entry: string;
 }
-
-export type DynamicExtensionFactory = (pi: DynamicExtensionProbeApi) => void | Promise<void>;
 
 export interface DynamicExtensionInspection {
 	name: string;
@@ -83,27 +81,15 @@ export interface DynamicExtensionInspection {
 	fiberState?: string;
 	/** fiber 效果账本标签（检视 = getEffects() 诊断树，空数组表示已拆卸）。 */
 	effectLabels: string[];
-	probeLogTail: string[];
 	error?: string;
-}
-
-/** 结构化加载错误（code 供管理面归因，message 为教学式文案）。 */
-export class DynamicExtensionLoadError extends Error {
-	constructor(
-		readonly code: "entry-missing" | "manifest-invalid" | "collision" | "factory-threw",
-		message: string,
-	) {
-		super(message);
-		this.name = "DynamicExtensionLoadError";
-	}
 }
 
 export interface DynamicExtensionHandle {
 	readonly name: string;
-	/** 调用该扩展登记的命令（不存在 = 结构化「能力缺席」错误——禁用兜底的渲染输入）。 */
-	invoke(commandName: string, ...args: string[]): Promise<unknown>;
-	/** 探针日志（含 tail 上限，防周期回调撑爆内存）。 */
-	getProbeLog(): readonly string[];
+	/** 调用该扩展登记的命令（不存在 = 结构化「能力缺席」错误——禁用兜底的渲染输入）。
+	 *  handler 签名为 (args, ctx)——宿主级无会话 ctx，默认存根在访问任何
+	 *  字段时抛「需要会话」；忽略 ctx 的命令可直接调用。 */
+	invoke(commandName: string, args?: string): Promise<unknown>;
 	unload(): Promise<void>;
 	/** 拆卸后按目录重新装载（入口文件改写即拾取新代码）。 */
 	reload(): Promise<void>;
@@ -111,44 +97,29 @@ export interface DynamicExtensionHandle {
 
 interface DynamicExtensionRecord {
 	name: string;
-	dir: string;
+	/** 原始输入路径（reload 重解析入口用）。 */
+	sourcePath: string;
+	/** 解析后的入口绝对路径（reconcile 判同键）。 */
+	entryKey: string;
+	cwd: string;
 	status: "active" | "unloaded" | "failed";
 	fiber?: Fiber;
-	probeLog: string[];
+	extension?: Extension;
 	error?: string;
 }
 
-/** 探针日志 tail 上限（防 interval 探针无界增长）。 */
-const PROBE_LOG_TAIL = 200;
-
-/** 扩展 factory 的模块形状（default 导出或模块本体）。 */
-type LoadedExtensionModule = DynamicExtensionFactory | { default?: DynamicExtensionFactory };
-
-function getExtensionFactory(module: LoadedExtensionModule): DynamicExtensionFactory | null {
-	const candidate = typeof module === "function" ? module : module.default;
-	return typeof candidate === "function" ? candidate : null;
+/** 扩展目录 package.json 中声明的清单字段形状。
+ *  musepi 为权威字段；omp/pi 是旧上游兼容遗留。 */
+interface ExtensionManifestPkg {
+	name?: string;
+	musepi?: { extensions?: string[] };
+	omp?: { extensions?: string[] };
+	pi?: { extensions?: string[] };
 }
 
-/** 整包暂存目录序列（每次装载递增，新路径 = Bun 模块缓存新键）。 */
-let nextStageSeq = 1;
-
-/**
- * 整包暂存复制导入（缓存击穿实测口径）：
- * Bun 1.4.2（Windows）下查询串与 Bun.plugin onLoad 均不能可靠击穿同进程
- * 模块缓存（本文件头注释的探针记录），唯一可靠口径是新绝对路径——把扩展
- * 目录复制到 spike 私有暂存目录后从暂存入口导入，入口与子模块都是新
- * specifier，reload 即拾取整包最新代码。
- */
-async function importExtensionEntry(entry: string, extDir: string): Promise<unknown> {
-	const stageRoot = path.join(os.tmpdir(), "musepi-cordis-spike-stage");
-	const stageDir = path.join(stageRoot, `${Bun.hash(path.resolve(extDir)).toString(36)}-${nextStageSeq++}`);
-	await fs.cp(extDir, stageDir, { recursive: true });
-	return import(pathToFileURL(path.join(stageDir, path.relative(extDir, entry))).href);
-}
-
-/** 读扩展目录 package.json，解析 musepi.extensions 入口（与 plugins/loader
- *  resolveDirectoryEntries 同一约定：声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）。 */
-async function resolveExtensionEntry(dir: string): Promise<{ name: string; entry: string }> {
+/** 目录输入：读 package.json 清单，解析声明入口（musepi 权威，omp/pi 兼容；
+ *  声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）。 */
+async function resolveManifestEntry(dir: string): Promise<string> {
 	const pkgPath = path.join(dir, "package.json");
 	let raw: string;
 	try {
@@ -162,7 +133,6 @@ async function resolveExtensionEntry(dir: string): Promise<{ name: string; entry
 	} catch {
 		throw new DynamicExtensionLoadError("manifest-invalid", `extension at "${dir}" has invalid package.json JSON`);
 	}
-	// musepi 为权威字段；omp/pi 是旧上游兼容遗留（继续可读）。
 	const declared = pkg.musepi?.extensions ?? pkg.omp?.extensions ?? pkg.pi?.extensions ?? [];
 	const first = declared[0];
 	const joined = first ? path.resolve(dir, first) : dir;
@@ -172,33 +142,269 @@ async function resolveExtensionEntry(dir: string): Promise<{ name: string; entry
 	} catch {
 		throw new DynamicExtensionLoadError("entry-missing", `extension entry "${joined}" does not exist`);
 	}
-	let entry = joined;
-	if (stats.isDirectory()) {
-		entry = "";
-		for (const ext of [".ts", ".js", ".mjs", ".cjs"]) {
-			try {
-				await fs.stat(path.join(joined, `index${ext}`));
-				entry = path.join(joined, `index${ext}`);
-				break;
-			} catch {
-				/* try next */
-			}
-		}
-		if (!entry) {
-			throw new DynamicExtensionLoadError("entry-missing", `extension directory "${joined}" has no index file`);
+	if (!stats.isDirectory()) return joined;
+	for (const ext of [".ts", ".js", ".mjs", ".cjs"]) {
+		try {
+			await fs.stat(path.join(joined, `index${ext}`));
+			return path.join(joined, `index${ext}`);
+		} catch {
+			/* try next */
 		}
 	}
-	return { name: pkg.name ?? path.basename(dir), entry };
+	throw new DynamicExtensionLoadError("entry-missing", `extension directory "${joined}" has no index file`);
+}
+
+/** 把发现管线给出的路径（入口文件或目录）解析为装载目标。
+ *  文件输入：入口即自身；目录输入：清单声明入口（与 plugins/loader 同一
+ *  发现约定）。身份名取 getExtensionNameFromPath——与 discoverExtensionPaths
+ *  的 disabled 过滤 `extension-module:<name>` 同一命名法，reconcile 以入口
+ *  绝对路径判同键。 */
+async function resolveExtensionTarget(inputPath: string): Promise<ExtensionTarget> {
+	const resolved = path.resolve(inputPath);
+	let stats: Stats;
+	try {
+		stats = await fs.stat(resolved);
+	} catch {
+		throw new DynamicExtensionLoadError("entry-missing", `extension path "${resolved}" does not exist`);
+	}
+	const entry = stats.isDirectory() ? await resolveManifestEntry(resolved) : resolved;
+	return { name: getExtensionNameFromPath(entry), entry };
+}
+
+/** 宿主级命令 ctx 存根：宿主装载无会话，handler 访问任何 ctx 字段即抛
+ *  教学式错误（忽略 ctx 的命令不受影响）。 */
+const HOST_COMMAND_CTX = new Proxy(
+	{},
+	{
+		get: (_target, prop) => {
+			throw new Error(`host-level extension command ctx.${String(prop)} requires a session`);
+		},
+	},
+) as unknown as ExtensionCommandContext;
+
+/** 效果账本覆盖的登记动词（每 verb = 一种「登记 = fiber effect」贡献面）。 */
+const LEDGERED_VERBS = new Set([
+	"on",
+	"registerCommand",
+	"registerTool",
+	"registerFileWriteFallback",
+	"registerFileDeleteFallback",
+	"registerSetting",
+	"registerComponent",
+	"registerRpc",
+	"registerSkill",
+	"registerToolView",
+	"registerPrompt",
+	"registerMode",
+	"registerShortcut",
+	"registerFlag",
+	"registerMessageRenderer",
+	"registerAssistantThinkingRenderer",
+	"registerComposerShape",
+	"registerNotificationChannel",
+	"registerService",
+	"registerThemeToken",
+	"registerStatusBarSegment",
+	"registerProvider",
+	"registerMediaProvider",
+	"registerDesignSystem",
+]);
+
+/** 从登记参数提取效果标签键（取不到就退回 verb 本身——标签是诊断面，不追求唯一）。 */
+function effectLabel(verb: string, args: unknown[]): string {
+	const first = args[0];
+	if (typeof first === "string" && first.length > 0) return `${verb}:${first}`;
+	if (first && typeof first === "object") {
+		const rec = first as Record<string, unknown>;
+		for (const key of ["name", "key", "id", "slot"]) {
+			const value = rec[key];
+			if (typeof value === "string" && value.length > 0) return `${verb}:${value}`;
+		}
+		const style = rec.style as Record<string, unknown> | undefined;
+		if (style && typeof style.id === "string" && style.id.length > 0) return `${verb}:${style.id}`;
+	}
+	return verb;
+}
+
+function removeIdentity(list: unknown[], item: unknown): void {
+	const index = list.indexOf(item);
+	if (index >= 0) list.splice(index, 1);
+}
+
+/** 每 verb 的撤销逻辑：dispose 时把登记从 extension 集合/共享 runtime 摘除
+ *  （dsh「卸载即效果反向回收」parity）。 */
+function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension, args: unknown[]): () => void {
+	switch (verb) {
+		case "on": {
+			const [event, handler] = args as [string, unknown];
+			return () => {
+				const list = extension.handlers.get(event);
+				if (!list) return;
+				removeIdentity(list as unknown[], handler);
+				if (list.length === 0) extension.handlers.delete(event);
+			};
+		}
+		case "registerCommand": {
+			const [name] = args as [string];
+			return () => {
+				extension.commands.delete(name);
+			};
+		}
+		case "registerTool": {
+			const [tool] = args as [{ name: string }];
+			return () => {
+				extension.tools.delete(tool.name);
+			};
+		}
+		case "registerFileWriteFallback": {
+			const [handler] = args as [unknown];
+			return () => {
+				removeIdentity(extension.fileWriteFallbackHandlers as unknown[], handler);
+			};
+		}
+		case "registerFileDeleteFallback": {
+			const [handler] = args as [unknown];
+			return () => {
+				removeIdentity(extension.fileDeleteFallbackHandlers as unknown[], handler);
+			};
+		}
+		case "registerSetting": {
+			const [setting] = args as [{ key: string }];
+			return () => {
+				extension.settings.delete(setting.key);
+			};
+		}
+		case "registerComponent": {
+			const [component] = args as [unknown];
+			return () => {
+				removeIdentity(extension.components as unknown[], component);
+			};
+		}
+		case "registerRpc": {
+			const [method] = args as [string];
+			return () => {
+				extension.rpcs.delete(method);
+			};
+		}
+		case "registerSkill": {
+			const [skill] = args as [unknown];
+			return () => {
+				removeIdentity(extension.skills as unknown[], skill);
+			};
+		}
+		case "registerToolView": {
+			const [tool] = args as [string];
+			return () => {
+				const index = extension.toolViews.findIndex(view => view.tool === tool);
+				if (index >= 0) extension.toolViews.splice(index, 1);
+			};
+		}
+		case "registerPrompt": {
+			const [section] = args as [unknown];
+			return () => {
+				removeIdentity(extension.promptSections as unknown[], section);
+			};
+		}
+		case "registerMode": {
+			const [mode] = args as [{ id: string }];
+			return () => {
+				const index = extension.modes.findIndex(entry => entry.id === mode.id);
+				if (index >= 0) extension.modes.splice(index, 1);
+			};
+		}
+		case "registerShortcut": {
+			const [shortcut] = args as [KeyId];
+			return () => {
+				extension.shortcuts.delete(shortcut);
+			};
+		}
+		case "registerFlag": {
+			const [name] = args as [string];
+			// flagValues 默认值留在共享 runtime（布尔/字符串默认值，无害；
+			// 共享 runtime 无删除 API，会话级装载不受影响）。
+			return () => {
+				extension.flags.delete(name);
+			};
+		}
+		case "registerMessageRenderer": {
+			const [customType] = args as [string];
+			return () => {
+				extension.messageRenderers.delete(customType);
+			};
+		}
+		case "registerAssistantThinkingRenderer": {
+			const [renderer] = args as [unknown];
+			return () => {
+				removeIdentity(extension.assistantThinkingRenderers as unknown[], renderer);
+			};
+		}
+		case "registerComposerShape": {
+			const [definition] = args as [{ style: { id: string } }];
+			return () => {
+				extension.composerShapes.delete(definition.style.id);
+			};
+		}
+		case "registerNotificationChannel": {
+			const [channel] = args as [string];
+			return () => {
+				const index = extension.notificationChannels.findIndex(entry => entry.channel === channel);
+				if (index >= 0) extension.notificationChannels.splice(index, 1);
+			};
+		}
+		case "registerService": {
+			const [name] = args as [string];
+			return () => {
+				const index = extension.services.findIndex(entry => entry.name === name);
+				if (index >= 0) extension.services.splice(index, 1);
+			};
+		}
+		case "registerThemeToken": {
+			const [key] = args as [string];
+			return () => {
+				const index = extension.themeTokens.findIndex(entry => entry.key === key);
+				if (index >= 0) extension.themeTokens.splice(index, 1);
+			};
+		}
+		case "registerStatusBarSegment": {
+			const [id] = args as [string];
+			return () => {
+				const index = extension.statusBarSegments.findIndex(entry => entry.id === id);
+				if (index >= 0) extension.statusBarSegments.splice(index, 1);
+			};
+		}
+		case "registerProvider": {
+			const [name] = args as [string];
+			return () => {
+				api.unregisterProvider(name);
+			};
+		}
+		case "registerMediaProvider": {
+			const [config] = args as [{ id: string }];
+			return () => {
+				api.unregisterMediaProvider(config.id);
+			};
+		}
+		case "registerDesignSystem": {
+			const [config] = args as [{ id: string }];
+			return () => {
+				api.unregisterDesignSystem(config.id);
+			};
+		}
+		default:
+			return () => {};
+	}
 }
 
 export class CordisDynamicExtensionRuntime {
 	readonly #host: DaemonHostContext;
 	#group?: Fiber & PromiseLike<Fiber>;
 	readonly #records = new Map<string, DynamicExtensionRecord>();
-	/** 全局登记命名空间：kind:name → owner 扩展（跨扩展碰撞守卫）。 */
+	/** 全局登记命名空间：command:name → owner 扩展（跨扩展碰撞守卫）。 */
 	readonly #registrations = new Map<string, string>();
-	readonly #commands = new Map<string, { owner: string; handler: (...args: string[]) => unknown }>();
-	readonly #listeners = new Map<string, Set<{ owner: string; handler: (...args: unknown[]) => unknown }>>();
+	/** 宿主级共享装配面：与 loadExtensions 每调用新建不同，fiber 运行时跨
+	 *  reconcile 持久——登记随 fiber 生命周期走，TTL 重入不重复登记。 */
+	#runtime: LoadExtensionsResult["runtime"] | null = null;
+	readonly #eventBus = new EventBus();
 
 	constructor(host: DaemonHostContext) {
 		this.#host = host;
@@ -216,39 +422,107 @@ export class CordisDynamicExtensionRuntime {
 		return this.#group;
 	}
 
-	/** 装载一个真实 user 扩展目录为 cordis 动态插件。失败不留半挂载 fiber
+	async #sharedRuntime(): Promise<LoadExtensionsResult["runtime"]> {
+		if (!this.#runtime) {
+			const { ExtensionRuntime } = await import("../extensibility/extensions/loader");
+			this.#runtime = new ExtensionRuntime();
+		}
+		return this.#runtime;
+	}
+
+	/** 装载一个真实 user 扩展（目录或入口文件）。失败不留半挂载 fiber
 	 *  （startHostHalf parity：FAILED fiber 立即 dispose）。同名扩展非 active
 	 *  状态（failed/unloaded）时复用记录重载。 */
-	async load(extDir: string): Promise<DynamicExtensionHandle> {
-		const { name, entry } = await resolveExtensionEntry(extDir);
-		const existing = this.#records.get(name);
+	async load(extPath: string, cwd: string): Promise<DynamicExtensionHandle> {
+		const target = await resolveExtensionTarget(extPath);
+		const existing = this.#records.get(target.name);
 		if (existing?.status === "active") {
-			throw new DynamicExtensionLoadError("collision", `extension "${name}" is already loaded`);
+			throw new DynamicExtensionLoadError("collision", `extension "${target.name}" is already loaded`);
 		}
-		const record: DynamicExtensionRecord = existing ?? { name, dir: extDir, status: "active", probeLog: [] };
+		const record: DynamicExtensionRecord = existing ?? {
+			name: target.name,
+			sourcePath: extPath,
+			entryKey: target.entry,
+			cwd,
+			status: "active",
+		};
 		record.status = "active";
 		record.error = undefined;
-		this.#records.set(name, record);
-		await this.#mount(record, entry);
+		record.cwd = cwd;
+		record.sourcePath = extPath;
+		record.entryKey = target.entry;
+		this.#records.set(record.name, record);
+		await this.#mount(record, target);
 		return this.#buildHandle(record);
 	}
 
-	/** 装配落核：组 fiber 下挂子 fiber，apply = 缓存击穿 import + factory 调用。 */
-	async #mount(record: DynamicExtensionRecord, entry: string): Promise<void> {
+	/** reconcile 批量装载（宿主级 getExtensionRuntimeLoad 的 fiber 路径）：
+	 *  发现清单 ↔ 在役记录对账——消失的路径卸载（效果账本反向回收）、
+	 *  新路径装载、在役不动（TTL 语义由调用方的缓存失效驱动）。聚合结果
+	 *  与 loadExtensions 同形状（extensions/errors/runtime）。 */
+	async loadAll(paths: string[], cwd: string): Promise<LoadExtensionsResult> {
+		const targets = new Map<string, ExtensionTarget>();
+		const errors: Array<{ path: string; error: string }> = [];
+		for (const input of paths) {
+			try {
+				const target = await resolveExtensionTarget(input);
+				targets.set(target.entry, target);
+			} catch (err) {
+				errors.push({ path: input, error: err instanceof Error ? err.message : String(err) });
+			}
+		}
+		// 消失的路径：卸载（登记随效果账本回收，如 design system 注销）。
+		for (const record of [...this.#records.values()]) {
+			if (record.status === "active" && !targets.has(record.entryKey)) {
+				await this.#unloadRecord(record);
+			}
+		}
+		// 新路径（或入口已改道的同名扩展）：装载；失败归 errors 不阻塞其余。
+		for (const target of targets.values()) {
+			const existing = this.#records.get(target.name);
+			if (existing?.status === "active") {
+				if (existing.entryKey === target.entry) continue;
+				await this.#unloadRecord(existing);
+			}
+			try {
+				await this.load(target.entry, cwd);
+			} catch (err) {
+				errors.push({ path: target.entry, error: err instanceof Error ? err.message : String(err) });
+			}
+		}
+		return {
+			extensions: [...this.#records.values()]
+				.filter(record => record.status === "active" && record.extension)
+				.map(record => record.extension!),
+			errors,
+			runtime: await this.#sharedRuntime(),
+		};
+	}
+
+	/** 装配落核：组 fiber 下挂子 fiber，apply = 同源 import/bind（loadLegacyPiModule
+	 *  每次装载自带单调 mtime 标签，Windows 下 raw-path 查询串即缓存新键——
+	 *  入口与子模块改写 reload 即拾取）+ 效果账本壳。bind 失败结构化上抛 →
+	 *  fiber FAILED → 立即 dispose 不留半挂载。 */
+	async #mount(record: DynamicExtensionRecord, target: ExtensionTarget): Promise<void> {
 		const group = await this.#ensureGroup();
 		const fiber = group.ctx.plugin({
 			name: `dynamic-extension:${record.name}`,
 			apply: async ctx => {
-				// 整包暂存复制：新绝对路径 = 新模块实例（入口与子模块均拾取最新代码）。
-				const module = (await importExtensionEntry(entry, record.dir)) as LoadedExtensionModule;
-				const factory = getExtensionFactory(module);
-				if (!factory) {
+				const { importAndBindExtension } = await import("../extensibility/extensions/loader");
+				const bound = await importAndBindExtension(
+					target.entry,
+					record.cwd,
+					this.#eventBus,
+					await this.#sharedRuntime(),
+					(api, extension) => this.#ledgerApi(record.name, api, extension, ctx),
+				);
+				if (bound.error || !bound.extension) {
 					throw new DynamicExtensionLoadError(
-						"manifest-invalid",
-						`extension "${record.name}" entry has no factory export`,
+						bound.code ?? "factory-threw",
+						bound.error ?? `extension "${record.name}" failed to bind`,
 					);
 				}
-				await factory(this.#buildProbeApi(record.name, ctx));
+				record.extension = bound.extension;
 			},
 		} satisfies Plugin.Object);
 		record.fiber = fiber;
@@ -269,110 +543,97 @@ export class CordisDynamicExtensionRuntime {
 		}
 	}
 
-	/** 探针 API：每次登记 = ctx.effect 一条带标签 effect（卸载即回收）。 */
-	#buildProbeApi(name: string, ctx: Context): DynamicExtensionProbeApi {
-		const record = this.#records.get(name);
-		const emitProbe = (line: string): void => {
-			if (!record) return;
-			record.probeLog.push(line);
-			if (record.probeLog.length > PROBE_LOG_TAIL) {
-				record.probeLog.splice(0, record.probeLog.length - PROBE_LOG_TAIL);
-			}
-		};
-		const guardCollision = (kind: string, key: string): void => {
-			const owner = this.#registrations.get(`${kind}:${key}`);
-			if (owner !== undefined && owner !== name) {
-				throw new DynamicExtensionLoadError(
-					"collision",
-					`${kind} "${key}" is already registered by extension "${owner}" — unload that extension first or pick another name`,
-				);
-			}
-		};
-		return {
-			extensionName: name,
-			emitProbe,
-			registerCommand: (commandName, handler) => {
-				guardCollision("command", commandName);
-				ctx.effect(() => {
-					this.#registrations.set(`command:${commandName}`, name);
-					this.#commands.set(commandName, { owner: name, handler });
-					return () => {
-						this.#registrations.delete(`command:${commandName}`);
-						this.#commands.delete(commandName);
-					};
-				}, `command:${commandName}`);
-			},
-			on: (event, handler) => {
-				ctx.effect(() => {
-					let set = this.#listeners.get(event);
-					if (!set) {
-						set = new Set();
-						this.#listeners.set(event, set);
-					}
-					const listener = { owner: name, handler };
-					set.add(listener);
-					return () => {
-						set.delete(listener);
-					};
-				}, `on:${event}`);
-			},
-			setInterval: (handler, ms) => {
-				ctx.effect(() => {
-					const handle = globalThis.setInterval(() => {
-						try {
-							handler();
-						} catch (err) {
-							logger.warn("dynamic extension interval threw", { name, err });
+	/** 效果账本壳：register 类动词/on 每次登记 = ctx.effect 一条带标签 effect，
+	 *  dispose 即按 verb 撤销表反向回收；registerCommand 额外过跨扩展
+	 *  碰撞守卫（先加载者归属不被抢）。 */
+	#ledgerApi(name: string, api: ExtensionAPI, extension: Extension, ctx: Context): ExtensionAPI {
+		// 注意：Proxy trap 内 this 指向 handler 对象，须箭头闭包包住运行时实例。
+		const registrations = this.#registrations;
+		return new Proxy(api, {
+			get: (target, prop, receiver) => {
+				const value = Reflect.get(target, prop, receiver);
+				if (typeof prop !== "string" || typeof value !== "function" || !LEDGERED_VERBS.has(prop)) {
+					return value;
+				}
+				return (...args: unknown[]) => {
+					if (prop === "registerCommand") {
+						const commandName = args[0];
+						const owner =
+							typeof commandName === "string" ? registrations.get(`command:${commandName}`) : undefined;
+						if (owner !== undefined && owner !== name) {
+							throw new DynamicExtensionLoadError(
+								"collision",
+								`command "${String(commandName)}" is already registered by extension "${owner}" — unload that extension first or pick another name`,
+							);
 						}
-					}, ms);
-					return () => clearInterval(handle);
-				}, `interval:${ms}ms`);
+					}
+					return ctx.effect(
+						() => {
+							if (prop === "registerCommand" && typeof args[0] === "string") {
+								registrations.set(`command:${args[0]}`, name);
+							}
+							(value as (...inner: unknown[]) => void).apply(target, args);
+							return undoRegistration(prop, api, extension, args);
+						},
+						effectLabel(prop, args),
+					);
+				};
 			},
-		};
+		}) as ExtensionAPI;
+	}
+
+	async #unloadRecord(record: DynamicExtensionRecord): Promise<void> {
+		if (record.status !== "active" || !record.fiber) return;
+		await record.fiber.dispose();
+		record.status = "unloaded";
+		record.fiber = undefined;
+		record.extension = undefined;
 	}
 
 	#buildHandle(record: DynamicExtensionRecord): DynamicExtensionHandle {
 		return {
 			name: record.name,
-			invoke: async (commandName, ...args) => {
-				const command = this.#commands.get(commandName);
-				if (!command || command.owner !== record.name) {
+			invoke: async (commandName, args = "") => {
+				const command = record.extension?.commands.get(commandName);
+				if (!command) {
 					throw new DynamicExtensionLoadError(
 						"entry-missing",
 						`extension "${record.name}" has no active command "${commandName}" (capability absent — extension unloaded, failed, or never registered it)`,
 					);
 				}
-				return command.handler(...args);
+				return command.handler(args, HOST_COMMAND_CTX);
 			},
-			getProbeLog: () => record.probeLog,
 			unload: async () => {
-				if (record.status !== "active" || !record.fiber) return;
-				await record.fiber.dispose();
-				record.status = "unloaded";
-				record.fiber = undefined;
+				await this.#unloadRecord(record);
 			},
 			reload: async () => {
-				await this.#buildHandle(record).unload();
-				const { entry } = await resolveExtensionEntry(record.dir);
-				await this.#mount(record, entry);
+				await this.#unloadRecord(record);
+				const target = await resolveExtensionTarget(record.sourcePath);
+				record.entryKey = target.entry;
+				record.status = "active";
+				record.error = undefined;
+				await this.#mount(record, target);
 			},
 		};
 	}
 
 	/** 触发宿主事件，分发给所有已订阅扩展（宿主面事件总线，句柄外）。 */
 	emit(event: string, ...args: unknown[]): void {
-		const set = this.#listeners.get(event);
-		if (!set) return;
-		for (const listener of [...set]) {
-			try {
-				listener.handler(...args);
-			} catch (err) {
-				logger.warn("dynamic extension event handler threw", { name: listener.owner, err });
+		for (const record of this.#records.values()) {
+			if (record.status !== "active" || !record.extension) continue;
+			const handlers = record.extension.handlers.get(event);
+			if (!handlers) continue;
+			for (const handler of [...handlers]) {
+				try {
+					handler(...args);
+				} catch (err) {
+					logger.warn("dynamic extension event handler threw", { name: record.name, err });
+				}
 			}
 		}
 	}
 
-	/** 检视面：每个动态扩展的状态 + fiber 效果账本标签 + 探针日志 tail + 错误归因。 */
+	/** 检视面：每个动态扩展的状态 + fiber 效果账本标签 + 错误归因。 */
 	inspect(): DynamicExtensionInspection[] {
 		return [...this.#records.values()].map(record => ({
 			name: record.name,
@@ -382,7 +643,6 @@ export class CordisDynamicExtensionRuntime {
 				record.fiber && record.fiber.state !== FIBER_STATE_FAILED
 					? record.fiber.getEffects().map(effect => effect.label)
 					: [],
-			probeLogTail: record.probeLog.slice(-10),
 			error: record.error,
 		}));
 	}
@@ -396,5 +656,6 @@ export class CordisDynamicExtensionRuntime {
 			logger.warn("CordisDynamicExtensionRuntime: dispose non-fatal", { err });
 		}
 		this.#group = undefined;
+		this.#records.clear();
 	}
 }

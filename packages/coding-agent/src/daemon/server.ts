@@ -115,6 +115,7 @@ import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
+import type { CordisDynamicExtensionRuntime } from "./cordis-dynamic-extensions";
 import { writeProjectMirror } from "./creation";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 
@@ -513,6 +514,11 @@ export class DaemonServer {
 	 *  根 Context（provide + 检视 + 可回滚拆卸），路由分发权威仍在注册表；
 	 *  双跑期挂载不代调 start/stop（P1 代码是生命周期权威）。 */
 	readonly #hostContext = new DaemonHostContext();
+	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性动态 import
+	 *  （cordis-dynamic-extensions 静态引 loader 会拉进 ../../index 大环，
+	 *  与 getExtensionRuntimeLoad 保持同一惰性口径）；组 fiber 挂在根
+	 *  Context 下，宿主拆卸随根 fiber 回收。 */
+	#dynamicExtensions?: Promise<CordisDynamicExtensionRuntime>;
 	/** Speech-model downloads currently running (keyed by model tier key).
 	 *  Guards against two windows (or a double-click race) starting parallel
 	 *  fetches into the same cache directory. */
@@ -536,6 +542,14 @@ export class DaemonServer {
 	 *  服务 stop——回滚后 P1 代码路径不受影响）。 */
 	async disposeHostContext(): Promise<void> {
 		await this.#hostContext.dispose();
+	}
+	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性装配：首个
+	 *  session-less 装载请求到达时才动态 import 并挂到宿主根 Context。 */
+	#getDynamicExtensions(): Promise<CordisDynamicExtensionRuntime> {
+		this.#dynamicExtensions ??= import("./cordis-dynamic-extensions").then(
+			module => new module.CordisDynamicExtensionRuntime(this.#hostContext),
+		);
+		return this.#dynamicExtensions;
 	}
 	/** In-flight CPU profilers started by debug.profileStart (TUI /debug
 	 *  performance-report parity: profile spans two RPC calls so the GUI can
@@ -620,6 +634,7 @@ export class DaemonServer {
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
 				builtinRuntime: () => this.#hostContext.builtinInspect(),
+				dynamicRuntime: () => this.#getDynamicExtensions(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);

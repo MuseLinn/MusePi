@@ -38,6 +38,7 @@ import * as TypeBox from "../legacy-typebox";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/legacy-pi-compat";
 import { getAllPluginExtensionPaths } from "../plugins/loader";
 import { resolvePath, withHostGuard } from "../utils";
+import { DynamicExtensionLoadError, type DynamicExtensionLoadErrorCode } from "./dynamic-extension-error";
 import { readExtensionPluginMeta } from "./plugin-manifest";
 import type {
 	AssistantThinkingRenderer,
@@ -187,6 +188,20 @@ export class ExtensionRuntime implements IExtensionRuntime {
 	emitNotification(): void {
 		throw new ExtensionRuntimeNotInitializedError();
 	}
+}
+
+/**
+ * 同源工厂：ConcreteExtensionAPI 的唯一构造入口（收编第二刀）——会话装载
+ * （bindExtension）与 cordis 宿主级动态装载（cordis-dynamic-extensions）
+ * 共用同一 API 实例来源，换实现处只此一点，两条加载路径不会漂移。
+ */
+export function createConcreteExtensionAPI(
+	extension: Extension,
+	runtime: IExtensionRuntime,
+	cwd: string,
+	eventBus: EventBus,
+): ExtensionAPI {
+	return new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
 }
 
 /**
@@ -629,21 +644,45 @@ async function bindExtension(
 	cwd: string,
 	eventBus: EventBus,
 	runtime: IExtensionRuntime,
-): Promise<{ extension: Extension | null; error: string | null }> {
+	/** 收编第二刀：cordis 宿主级动态装载给 API 套效果账本壳的挂点——
+	 *  默认恒等，会话装载路径不传，语义不变。 */
+	wrapApi: (api: ExtensionAPI, extension: Extension) => ExtensionAPI = (api): ExtensionAPI => api,
+): Promise<{ extension: Extension | null; error: string | null; code?: DynamicExtensionLoadErrorCode }> {
 	const factory = imported.factory;
 	if (imported.error !== null || factory === null) {
 		return { extension: null, error: imported.error };
 	}
 	try {
 		const extension = createExtension(extensionPath, imported.resolvedPath);
-		const api = new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
+		const api = wrapApi(createConcreteExtensionAPI(extension, runtime, cwd, eventBus), extension);
 		await withHostGuard(() => runExtensionFactory(factory, api, runtime));
 
 		return { extension, error: null };
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		return { extension: null, error: `Failed to load extension: ${message}` };
+		return {
+			extension: null,
+			error: `Failed to load extension: ${message}`,
+			// 结构化归因（宿主级 cordis 装载的碰撞守卫等）穿透字符串包装不丢失。
+			...(err instanceof DynamicExtensionLoadError ? { code: err.code } : {}),
+		};
 	}
+}
+
+/**
+ * 同源装配（收编第二刀）：import + bind 一条路径，供 cordis 宿主级动态
+ * 装载复用——与会话装载同一 import 管线（loadLegacyPiModule 兼容层）、
+ * 同一 API 工厂，仅 wrapApi 挂点不同。
+ */
+export async function importAndBindExtension(
+	extensionPath: string,
+	cwd: string,
+	eventBus: EventBus,
+	runtime: IExtensionRuntime,
+	wrapApi?: (api: ExtensionAPI, extension: Extension) => ExtensionAPI,
+): Promise<{ extension: Extension | null; error: string | null; code?: DynamicExtensionLoadErrorCode }> {
+	const imported = await importExtensionModule(extensionPath, cwd);
+	return bindExtension(extensionPath, imported, cwd, eventBus, runtime, wrapApi);
 }
 
 /**
@@ -657,7 +696,7 @@ export async function loadExtensionFromFactory(
 	name = "<inline>",
 ): Promise<Extension> {
 	const extension = createExtension(name, name);
-	const api = new ConcreteExtensionAPI(PiCodingAgent, extension, runtime, cwd, eventBus);
+	const api = createConcreteExtensionAPI(extension, runtime, cwd, eventBus);
 	await runExtensionFactory(factory, api, runtime);
 	return extension;
 }

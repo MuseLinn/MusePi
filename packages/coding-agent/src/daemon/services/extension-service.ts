@@ -8,6 +8,7 @@ import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
 import type { ResolvedMode } from "../../presets/resolve";
+import type { CordisDynamicExtensionRuntime } from "../cordis-dynamic-extensions";
 import type { DaemonService } from "./types";
 
 /**
@@ -62,6 +63,10 @@ export interface ExtensionServiceDeps {
 	/** builtin 单元的 cordis 运行状态（宿主注入 DaemonHostContext.builtinInspect；
 	 *  缺省回退 {}——user 插件与会话装载面无 fiber,不编造 runtime）。 */
 	builtinRuntime?(): Record<string, { fiberState: string; effects: number }>;
+	/** 宿主级 user 插件 cordis 运行时（收编第二刀：DaemonServer 惰性装配
+	 *  CordisDynamicExtensionRuntime；缺省走直接 loadExtensions——会话装载
+	 *  语义不变的 fail-soft 回退）。 */
+	dynamicRuntime?(): Promise<CordisDynamicExtensionRuntime | undefined>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
 }
@@ -150,11 +155,12 @@ export class ExtensionService implements DaemonService {
 	 * 排队注册）。供 session-less RPC（design.systems.list 的宿主重放，
 	 * M3 §3.7d）消费——装包/卸包后经 invalidateExtensionsCache 失效重载。
 	 * 10s TTL，与 #extensionsCache 同生命周期清。
+	 * 收编第二刀：宿主注入 dynamicRuntime 时经 cordis fiber 装载（每插件一
+	 * fiber，登记 = 效果账本，卸载反向回收）；未注入（测试）回退 loadExtensions。
 	 */
 	async getExtensionRuntimeLoad(): Promise<LoadExtensionsResult> {
 		if (!this.#runtimeLoadCache || Date.now() - this.#runtimeLoadCache.at > 10_000) {
 			const { discoverExtensionPaths } = await import("../../extensibility/extensions");
-			const { loadExtensions } = await import("../../extensibility/extensions/loader");
 			let settings = this.#deps.settings();
 			if (!settings) {
 				await this.#deps.ensureRegistry();
@@ -164,7 +170,15 @@ export class ExtensionService implements DaemonService {
 			const disabledIds = (settings?.get("disabledExtensions") ?? []) as string[];
 			const cwd = this.#deps.cwd();
 			const paths = await discoverExtensionPaths(configured, cwd, disabledIds, { ambient: true });
-			this.#runtimeLoadCache = { at: Date.now(), result: await loadExtensions(paths, cwd) };
+			// 收编第二刀：宿主级装载切 cordis fiber（生命周期/效果账本/检视），
+			// 与 loadExtensions 同结果形状；宿主未注入运行时（测试）回退直接装载。
+			const dynamic = await this.#deps.dynamicRuntime?.();
+			this.#runtimeLoadCache = {
+				at: Date.now(),
+				result: dynamic
+					? await dynamic.loadAll(paths, cwd)
+					: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd),
+			};
 		}
 		return this.#runtimeLoadCache.result;
 	}
