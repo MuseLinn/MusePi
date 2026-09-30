@@ -212,19 +212,25 @@ export class ExtensionService implements DaemonService {
 				ext.configValues = coerceConfigValues([...def.config], stored);
 			}
 		}
-		// 「包含的组件」状态(dsh 插件详情段):组件 = 单元声明的 agent 工具,
-		// enabled 如实读 tools.disabled 黑名单 —— 与 tools/index.ts 的
-		// isToolAllowed 谓词同一存储,组件开关改名单即改工具集。
-		const denylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
+		// 「包含的组件」状态(dsh 插件详情段):组件 = 单元声明的可独立启停
+		// 单元,按声明的 deny 通道如实读黑名单 —— tool 通道读 tools.disabled
+		// (tools/index.ts isToolAllowed 同帧消费),stt/tts-engine 通道读
+		// voice.disabledEngines(voice/engine-denylist 全路径过滤)。组件
+		// 开关改名单即真实禁用,不是展示层。
+		const toolDenylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
+		const engineDenylist = new Set((s?.get("voice.disabledEngines") ?? []) as string[]);
 		for (const def of BUILTIN_EXTENSIONS) {
 			if (!def.components || def.components.length === 0) continue;
 			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
 			if (!ext) continue;
 			ext.components = def.components.map(c => {
-				const denied = denylist.has(c.tool);
+				const denied =
+					c.deny === "tool"
+						? toolDenylist.has(c.id)
+						: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
 				return {
-					id: c.tool,
-					name: c.tool,
+					id: c.id,
+					name: c.id,
 					description: c.description,
 					enabled: !denied,
 					canToggle: true,
@@ -400,10 +406,12 @@ export class ExtensionService implements DaemonService {
 	}
 
 	/** RPC extensions.setComponentEnabled：插件「包含的组件」独立开关（dsh
-	 *  插件详情段 parity）。组件 = 内置单元声明的 agent 工具;启停写
-	 *  tools.disabled 黑名单 —— tools/index.ts 的 isToolAllowed 谓词同帧
-	 *  消费,下个模型请求工具集即变(tool_registry 时间线联动)。未声明
-	 *  组件的条目直接拒绝(不发明语义)。 */
+	 *  插件详情段 parity）。组件 = 内置单元声明的可独立启停单元;启停按
+	 *  声明的 deny 通道写对应隐藏黑名单 —— tool 通道写 tools.disabled
+	 *  (isToolAllowed 谓词同帧消费,下个模型请求工具集即变,tool_registry
+	 *  时间线联动),stt/tts-engine 通道写 voice.disabledEngines(模型
+	 *  状态/下载/转写/合成全路径过滤)。未声明组件的条目直接拒绝
+	 *  (不发明语义)。 */
 	async setComponentEnabled(params: unknown) {
 		const p = (params ?? {}) as { id?: unknown; component?: unknown; enabled?: unknown };
 		if (typeof p.id !== "string" || typeof p.component !== "string" || typeof p.enabled !== "boolean") {
@@ -417,15 +425,18 @@ export class ExtensionService implements DaemonService {
 		if (!settings) throw new Error("extensions.setComponentEnabled: settings unavailable");
 		const { findBuiltinDef } = await import("../../extensibility/extensions-center/builtin-registry");
 		const def = findBuiltinDef(p.id);
-		const declared = def?.components?.find(c => c.tool === p.component);
+		const declared = def?.components?.find(c => c.id === p.component);
 		if (!declared) {
 			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
 		}
-		const denylist = [...((settings.get("tools.disabled") ?? []) as string[])];
-		const i = denylist.indexOf(p.component);
+		const settingsKey = declared.deny === "tool" ? "tools.disabled" : "voice.disabledEngines";
+		const denyId =
+			declared.deny === "tool" ? p.component : `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
+		const denylist = [...((settings.get(settingsKey) ?? []) as string[])];
+		const i = denylist.indexOf(denyId);
 		if (p.enabled && i >= 0) denylist.splice(i, 1);
-		if (!p.enabled && i < 0) denylist.push(p.component);
-		settings.set("tools.disabled", denylist);
+		if (!p.enabled && i < 0) denylist.push(denyId);
+		settings.set(settingsKey, denylist);
 		await settings.flush();
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;

@@ -1,4 +1,4 @@
-import { t } from "@musepi/client-core";
+import { t, tLoose } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useRef } from "react";
 import type { SectionId, SectionRequest } from "../lib/settings-nav";
@@ -262,7 +262,7 @@ export function navGroups(
 				{ id: "shortcuts", icon: "command", label: t("shortcuts"), enabled: true },
 				{ id: "model", icon: "ai-agent", label: t("model settings"), enabled: true },
 				{ id: "interaction", icon: "shuffle", label: t("interaction"), enabled: true },
-				{ id: "voice", icon: "mic", label: t("voice"), enabled: true },
+				{ id: "voice", icon: "mic", label: tLoose("voice settings"), enabled: true },
 				{ id: "context", icon: "stack", label: t("context"), enabled: true },
 				{ id: "shell", icon: "terminal-window", label: t("shell"), enabled: true },
 				{ id: "tools", icon: "plug-2", label: t("tools"), enabled: true },

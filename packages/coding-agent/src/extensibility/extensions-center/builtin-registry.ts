@@ -135,12 +135,19 @@ export interface BuiltinExtensionDef {
 	 */
 	annotate?: boolean;
 	/**
-	 * dsh 式「包含的组件」声明:该单元暴露给 agent 的工具组件。组件开关
-	 * = 真实工具黑名单(tools.disabled,见 settings-schema 与 tools/index.ts
-	 * isToolAllowed 谓词)——extensions.list 据此下发组件状态,
-	 * extensions.setComponentEnabled 写黑名单。无独立启停语义的工具不声明。
+	 * dsh 式「包含的组件」声明:该单元暴露的可独立启停组件。组件开关
+	 * 是真实禁用而非展示层,按 deny 通道落不同隐藏设置键:
+	 * - "tool" → tools.disabled(tools/index.ts isToolAllowed 谓词消费)
+	 * - "stt-engine"/"tts-engine" → voice.disabledEngines
+	 *   (voice/engine-denylist.ts:模型状态/下载/转写/合成全路径过滤)
+	 * extensions.list 据此下发组件状态,setComponentEnabled 写名单。
+	 * 无独立启停语义的组件不声明。
 	 */
-	components?: readonly { tool: string; description?: string }[];
+	components?: readonly {
+		id: string;
+		deny: "tool" | "stt-engine" | "tts-engine";
+		description?: string;
+	}[];
 	/** inspector 的 raw 载荷(可为生成值)。 */
 	raw: unknown;
 }
@@ -226,6 +233,23 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"On-device speech-to-text dictation (Whisper / SenseVoice / Parakeet tiers, downloaded on first use). Toggle mirrors stt.enabled; config fields are the stt.* settings keys.",
 		settingsMirror: { key: "stt.enabled", on: true, off: false },
+		components: [
+			{
+				id: "whisper",
+				deny: "stt-engine",
+				description: "Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.",
+			},
+			{
+				id: "sensevoice",
+				deny: "stt-engine",
+				description: "SenseVoiceSmall (INT8) on sherpa-onnx — the Chinese-optimized tier.",
+			},
+			{
+				id: "parakeet",
+				deny: "stt-engine",
+				description: "NVIDIA Parakeet TDT v3 on sherpa-onnx — English/European SoTA tier.",
+			},
+		],
 		config: [
 			{
 				key: "stt.modelName",
@@ -233,6 +257,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				options: STT_MODEL_VALUES,
 				default: DEFAULT_STT_MODEL_KEY,
 				restart: "none",
+				label: "Recognition model",
 				description:
 					"On-device speech model: Whisper small (default, multilingual, Chinese-ready), SenseVoiceSmall (zh/yue-optimized, INT8), Parakeet v3 (English/European top tier, no Chinese).",
 			},
@@ -241,6 +266,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				type: "string",
 				default: "",
 				restart: "none",
+				label: "Recognition language hint",
 				description: "Recognition language hint; empty = auto-detect (recommended for mixed zh/en).",
 			},
 			{
@@ -248,6 +274,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				type: "number",
 				default: 700,
 				restart: "none",
+				label: "End-of-speech pause (ms)",
 				description: "How long of a pause counts as the end of dictation (milliseconds).",
 			},
 			{
@@ -256,6 +283,13 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				options: STT_SUBMIT_TRIGGER_VALUES,
 				default: "never",
 				restart: "none",
+				label: "Submit trigger",
+				optionLabels: {
+					never: "Submit manually",
+					release: "On release (2+ words)",
+					"release-complete": "On complete sentence",
+					"say-submit": "Say “submit”",
+				},
 				description:
 					"When dictation auto-submits: never / on release (2+ words) / release with complete sentence / say-submit.",
 			},
@@ -269,6 +303,18 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). Toggle mirrors speech.enabled; config fields are the tts.* settings keys.",
 		settingsMirror: { key: "speech.enabled", on: true, off: false },
+		components: [
+			{
+				id: "kokoro",
+				deny: "tts-engine",
+				description: "Kokoro-82M neural TTS on kokoro-js — English-first, multi-voice.",
+			},
+			{
+				id: "melotts-zh",
+				deny: "tts-engine",
+				description: "MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.",
+			},
+		],
 		config: [
 			{
 				key: "tts.localModel",
@@ -276,6 +322,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				options: TTS_LOCAL_MODEL_VALUES,
 				default: DEFAULT_TTS_LOCAL_MODEL_KEY,
 				restart: "none",
+				label: "Read-aloud model",
 				description:
 					"Local neural TTS model: Kokoro-82M (English-first, multi-voice) or MeloTTS-zh (Mandarin / mixed zh-en).",
 			},
@@ -285,6 +332,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				options: TTS_LOCAL_VOICE_VALUES,
 				default: DEFAULT_TTS_VOICE,
 				restart: "none",
+				label: "Voice",
 				description: "Voice id for the local TTS backend (per-model voice list).",
 			},
 			{
@@ -295,6 +343,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				max: 2,
 				step: 0.1,
 				restart: "none",
+				label: "Playback rate",
 				description: "Playback rate for local TTS — 0.8x is common for reading aloud.",
 			},
 			{
@@ -303,6 +352,12 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				options: ["raw", "sanitize", "summarize"],
 				default: "sanitize",
 				restart: "none",
+				label: "Content preparation",
+				optionLabels: {
+					raw: "Raw text",
+					sanitize: "Sanitized (no code/markdown)",
+					summarize: "Summarized",
+				},
 				description:
 					"How the reply is prepared before synthesis: raw / sanitized (strip code & markdown) / summarized.",
 			},
@@ -311,6 +366,7 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 				type: "boolean",
 				default: false,
 				restart: "none",
+				label: "Auto read new replies",
 				description: "Automatically read aloud new assistant replies.",
 			},
 		],
@@ -360,7 +416,9 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description:
 			"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. Toggle mirrors browser.enabled.",
 		settingsMirror: { key: "browser.enabled", on: true, off: false },
-		components: [{ tool: "browser", description: "Scripted Chromium automation tool exposed to the agent." }],
+		components: [
+			{ id: "browser", deny: "tool", description: "Scripted Chromium automation tool exposed to the agent." },
+		],
 		config: [
 			{
 				key: "browser.headless",
@@ -389,7 +447,8 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		settingsMirror: { key: "computer.enabled", on: true, off: false, unsetDisabled: true },
 		components: [
 			{
-				tool: "computer",
+				id: "computer",
+				deny: "tool",
 				description: "Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
 			},
 		],
@@ -420,7 +479,8 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		settingsMirror: { key: "lsp.enabled", on: true, off: false },
 		components: [
 			{
-				tool: "lsp",
+				id: "lsp",
+				deny: "tool",
 				description: "Code-intelligence tool (definitions, references, diagnostics, rename) exposed to the agent.",
 			},
 		],

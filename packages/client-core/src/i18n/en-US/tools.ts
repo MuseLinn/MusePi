@@ -480,7 +480,8 @@ export const tools = {
 	"ext add plugin": "Add plugin",
 	"ext plugin components": "Included components",
 	"ext plugin components desc":
-		"Toggle components independently: disabling removes them from the agent tool set on the next model request.",
+		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths.",
+	"ext component count": "components ×{count}",
 	"ext component denied": "Disabled via component denylist",
 	"ext plugin details": "Plugin details",
 	"ext plugins settings desc":

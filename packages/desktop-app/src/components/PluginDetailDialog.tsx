@@ -1,22 +1,81 @@
 import { t } from "@musepi/client-core";
+import { isSttDownloadEvent, isTtsDownloadEvent } from "@musepi/pi-wire";
 import { type ReactNode, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import type { ExtensionItem } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
-import { PluginManifestSections, pluginStateLabel, sourceLevelLabel } from "./UnifiedPluginsView";
+import { SpeechModelPicker, TIER_META, TTS_TIER_META } from "./settings-sections/voice";
+import {
+	builtinDescription,
+	builtinDisplayName,
+	builtinText,
+	PluginManifestSections,
+	pluginStateLabel,
+	sourceLevelLabel,
+} from "./UnifiedPluginsView";
 
 /**
  * 插件详情液态玻璃弹层（dsh 插件详情页 parity，交互形态按小袁总决策
  * 从「跳转页面」改为「弹出浮层」，浮层本身日后可插件化）：
  * 标题（图标 + 显示名 + kind/来源标签 + 状态点）、ID + 描述、
- * 触发词 / 来源 / 路径、清单配置表单与资源卡（PluginManifestSections
- * 单一权威复用），以及 dsh「包含的组件」段——每组件一行独立开关，
- * 经 extensions.setComponentEnabled 写 tools.disabled 黑名单，禁用后
- * agent 工具集下个模型请求即移除。
+ * 触发词 / 来源 / 路径、dsh「包含的组件」段——每组件一行独立开关
+ * （tool 通道写 tools.disabled 工具黑名单，stt/tts-engine 通道写
+ * voice.disabledEngines 引擎黑名单——都是真实禁用，禁用后工具集/
+ * 模型目录/转写合成路径同步关闭）、清单配置表单与资源卡
+ * （PluginManifestSections 单一权威复用）。
+ *
+ * 语音单元（voice:stt / voice:tts）的模型/音色字段不用裸下拉渲染，
+ * 内嵌与设置页完全相同的 SpeechModelPicker 卡片（同一组件、同一
+ * 下载通道、同一存储——双入口零漂移），其余字段才进通用表单。
  *
  * DialogFrame 常驻挂载由 open 驱动（GUI 规范：条件挂载会杀死退场动画）。
  */
+
+/** 语音单元内由模型选择器卡片承载、不再进通用配置表单的设置键。 */
+const VOICE_PICKER_KEYS: Record<string, readonly string[]> = {
+	"voice:stt": ["stt.modelName"],
+	"voice:tts": ["tts.localModel", "tts.localVoice"],
+};
+
+function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
+	if (item.id === "voice:stt") {
+		return (
+			<div className="gui-ext-detail-section">
+				<SpeechModelPicker
+					rpc={rpc}
+					titleKey="speech recognition model"
+					radioName="stt-model-dialog"
+					statusMethod="stt.modelStatus"
+					downloadMethod="stt.modelDownload"
+					settingsKey="stt.modelName"
+					meta={TIER_META}
+					isDownloadEvent={isSttDownloadEvent}
+					autoFetchOnSelect
+				/>
+			</div>
+		);
+	}
+	if (item.id === "voice:tts") {
+		return (
+			<div className="gui-ext-detail-section">
+				<SpeechModelPicker
+					rpc={rpc}
+					titleKey="speech synthesis model"
+					radioName="tts-model-dialog"
+					statusMethod="tts.modelStatus"
+					downloadMethod="tts.modelDownload"
+					settingsKey="tts.localModel"
+					voiceSettingsKey="tts.localVoice"
+					meta={TTS_TIER_META}
+					isDownloadEvent={isTtsDownloadEvent}
+					autoFetchOnSelect={false}
+				/>
+			</div>
+		);
+	}
+	return null;
+}
 
 function ComponentsSection({
 	item,
@@ -50,33 +109,41 @@ function ComponentsSection({
 			</div>
 			<div className="gui-plugin-config-desc">{t("ext plugin components desc")}</div>
 			<div className="gui-plugin-components">
-				{item.components.map(c => (
-					<div key={c.id} className="gui-plugin-component-row">
-						<div className="min-w-0 flex-1">
-							<div className="gui-plugin-component-name">
-								<span className={`gui-ext-dot${c.enabled ? "" : " gui-ext-dot--off"}`} />
-								{c.name}
+				{item.components.map(c => {
+					// 组件名/描述同 builtin 覆盖模式：daemon 英文原文,GUI 按
+					// `ext builtin <name> component <id>[ desc]` 键查译文。
+					const name = (item.builtin ? builtinText(`ext builtin ${item.name} component ${c.id}`) : null) ?? c.name;
+					const description =
+						(item.builtin ? builtinText(`ext builtin ${item.name} component ${c.id} desc`) : null) ??
+						c.description;
+					return (
+						<div key={c.id} className="gui-plugin-component-row">
+							<div className="min-w-0 flex-1">
+								<div className="gui-plugin-component-name">
+									<span className={`gui-ext-dot${c.enabled ? "" : " gui-ext-dot--off"}`} />
+									{name}
+								</div>
+								{description ? <div className="gui-plugin-component-desc">{description}</div> : null}
+								{!c.enabled && c.disabledReason ? (
+									<div className="gui-plugin-component-denied">{t("ext component denied")}</div>
+								) : null}
 							</div>
-							{c.description ? <div className="gui-plugin-component-desc">{c.description}</div> : null}
-							{!c.enabled && c.disabledReason ? (
-								<div className="gui-plugin-component-denied">{t("ext component denied")}</div>
-							) : null}
+							{c.canToggle && (
+								<button
+									type="button"
+									role="switch"
+									aria-checked={c.enabled}
+									aria-label={`${t("plugin enable")} ${name}`}
+									className={`gui-toggle gui-toggle--sm${c.enabled ? " gui-toggle--on" : ""}`}
+									disabled={busy === c.id}
+									onClick={() => toggle(c.id, !c.enabled)}
+								>
+									<span className="gui-toggle-knob" />
+								</button>
+							)}
 						</div>
-						{c.canToggle && (
-							<button
-								type="button"
-								role="switch"
-								aria-checked={c.enabled}
-								aria-label={`${t("plugin enable")} ${c.name}`}
-								className={`gui-toggle gui-toggle--sm${c.enabled ? " gui-toggle--on" : ""}`}
-								disabled={busy === c.id}
-								onClick={() => toggle(c.id, !c.enabled)}
-							>
-								<span className="gui-toggle-knob" />
-							</button>
-						)}
-					</div>
-				))}
+					);
+				})}
 			</div>
 		</div>
 	);
@@ -96,15 +163,18 @@ export function PluginDetailDialog({
 	/** 组件开关错误出口（弹层内横幅）。 */
 	onError(message: string | null): void;
 }): ReactNode {
+	const pickerKeys = item ? VOICE_PICKER_KEYS[item.id] : undefined;
+	const filteredItem =
+		item && pickerKeys && item.config
+			? { ...item, config: item.config.filter(f => !pickerKeys.includes(f.key)) }
+			: item;
 	return (
 		<DialogFrame open={open} onClose={onClose} label={t("ext plugin details")} className="gui-plugin-dialog">
-			{item && (
+			{item && filteredItem && (
 				<>
 					<div className="gui-dialog-head">
 						<Icon name="code-box" className="h-4 w-4 opacity-70" />
-						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-							{item.displayName || item.name}
-						</span>
+						<span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{builtinDisplayName(item)}</span>
 						<span className="gui-ext-item-tag">{item.id}</span>
 						<button type="button" className="gui-tool-btn" onClick={onClose} aria-label={t("close")}>
 							<Icon name="close" className="h-4 w-4" />
@@ -123,7 +193,9 @@ export function PluginDetailDialog({
 									{sourceLevelLabel(item.source.provider, item.source.level)}
 								</span>
 							</div>
-							{item.description ? <div className="gui-ext-plugins-desc">{item.description}</div> : null}
+							{builtinDescription(item) ? (
+								<div className="gui-ext-plugins-desc">{builtinDescription(item)}</div>
+							) : null}
 							{item.loadError && (
 								<div className="gui-ext-detail-loaderror" title={item.loadError}>
 									<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
@@ -148,8 +220,9 @@ export function PluginDetailDialog({
 							<div className="gui-ext-detail-path">{item.path}</div>
 						</div>
 						<ComponentsSection item={item} rpc={rpc} onError={onError} />
-						{(item.config?.length || item.configErrors?.length || item.resources) && (
-							<PluginManifestSections item={item} rpc={rpc} />
+						<VoiceModelPicker item={item} rpc={rpc} />
+						{(filteredItem.config?.length || item.configErrors?.length || item.resources) && (
+							<PluginManifestSections item={filteredItem} rpc={rpc} />
 						)}
 					</div>
 				</>

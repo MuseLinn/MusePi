@@ -39,6 +39,7 @@
  */
 import { logger } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
+import { resolveEnabledTtsModel } from "../voice/engine-denylist";
 import { DEFAULT_TTS_VOICE } from "./models";
 import { SpeakableStream } from "./speakable";
 import { BlockAccumulator, type SpeechEnhancer } from "./speech-enhancer";
@@ -351,7 +352,10 @@ export class Vocalizer {
 	 * prior utterance's, so sequential utterances never overlap.
 	 */
 	#openSession(abort: AbortController): TtsStreamHandle {
-		const modelKey = settings.get("tts.localModel");
+		// Engine components disabled from the plugin page fall back to the
+		// first enabled tier (resolveEnabledTtsModel) — the synthesis path
+		// never loads a denied engine even if the setting still points at one.
+		const modelKey = resolveEnabledTtsModel(settings.get("tts.localModel") as string | undefined, settings).key;
 		const voice = settings.get("speech.voice") || DEFAULT_TTS_VOICE;
 		const handle = ttsClient.synthesizeStream(modelKey, { voice, signal: abort.signal });
 		const player = this.#createPlayer();

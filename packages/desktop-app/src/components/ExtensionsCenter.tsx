@@ -609,6 +609,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 						onTogglePackage={togglePlugin}
 						onOpenMarketplace={() => setView("marketplace")}
 						onError={setError}
+						variant="cards"
 					/>
 				) : view === "marketplace" ? (
 					<MarketplaceView rpc={rpc} />

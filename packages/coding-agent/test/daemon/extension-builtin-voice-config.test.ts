@@ -224,7 +224,7 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		});
 	});
 
-	test("list 给声明组件的单元挂组件状态(browser/computer/lsp 有,terminal/voice 无)", async () => {
+	test("list 给声明组件的单元挂组件状态(browser/computer/lsp/voice 有,terminal 无)", async () => {
 		const listed = await service.list();
 		const browser = listed.extensions.find(e => e.id === "browser:browser");
 		expect(browser?.components?.map(c => c.id)).toEqual(["browser"]);
@@ -234,10 +234,14 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		const lsp = listed.extensions.find(e => e.id === "lsp:lsp");
 		expect(lsp?.components?.map(c => c.id)).toEqual(["lsp"]);
 
+		// voice 单元声明引擎组件(stt: whisper/sensevoice/parakeet;tts: 两模型)。
+		const stt = listed.extensions.find(e => e.id === "voice:stt");
+		expect(stt?.components?.map(c => c.id)).toEqual(["whisper", "sensevoice", "parakeet"]);
+		const tts = listed.extensions.find(e => e.id === "voice:tts");
+		expect(tts?.components?.map(c => c.id)).toEqual(["kokoro", "melotts-zh"]);
+
 		const term = listed.extensions.find(e => e.id === "terminal:terminal");
 		expect(term?.components).toBeUndefined();
-		const stt = listed.extensions.find(e => e.id === "voice:stt");
-		expect(stt?.components).toBeUndefined();
 	});
 
 	test("组件开关写 tools.disabled 黑名单:list 同帧回读翻转 + changed 扇出", async () => {
@@ -266,5 +270,55 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 			service.setComponentEnabled({ id: "browser:browser", component: "rogue", enabled: false }),
 		).rejects.toThrow(/not a declared component/);
 		expect(settings.getRaw("tools.disabled") ?? []).toEqual([]);
+	});
+
+	test("语音引擎组件开关写 voice.disabledEngines(独立于 tools 通道)", async () => {
+		await service.setComponentEnabled({ id: "voice:stt", component: "sensevoice", enabled: false });
+		expect(settings.getRaw("voice.disabledEngines")).toEqual(["stt:sensevoice"]);
+		// 双通道正交:工具黑名单不被语音开关污染。
+		expect(settings.getRaw("tools.disabled") ?? []).toEqual([]);
+
+		const after = (await service.list()).extensions.find(e => e.id === "voice:stt");
+		const sensevoice = after?.components?.find(c => c.id === "sensevoice");
+		expect(sensevoice?.enabled).toBe(false);
+		expect(sensevoice?.disabledReason).toBe("tools-denied");
+		const whisper = after?.components?.find(c => c.id === "whisper");
+		expect(whisper?.enabled).toBe(true);
+
+		await service.setComponentEnabled({ id: "voice:tts", component: "melotts-zh", enabled: false });
+		expect(settings.getRaw("voice.disabledEngines")).toEqual(["stt:sensevoice", "tts:melotts-zh"]);
+	});
+
+	test("引擎黑名单真实改变模型解析:被禁引擎从可用表消失,选择回退首个可用模型", async () => {
+		const { enabledSttModels, enabledTtsModels, resolveEnabledSttModel, resolveEnabledTtsModel } = await import(
+			"../../src/voice/engine-denylist"
+		);
+		// 全引擎可用:目录完整,默认 balanced。
+		expect(enabledSttModels(settings).map(m => m.key)).toEqual([
+			"fast",
+			"balanced",
+			"turbo",
+			"parakeet",
+			"sensevoice",
+		]);
+		expect(resolveEnabledSttModel(undefined, settings).key).toBe("balanced");
+
+		// 禁用 Whisper 一家:三个 Whisper 档位全部消失,SenseVoice 选择不受影响。
+		await service.setComponentEnabled({ id: "voice:stt", component: "whisper", enabled: false });
+		expect(enabledSttModels(settings).map(m => m.key)).toEqual(["parakeet", "sensevoice"]);
+		// 已选 balanced(Whisper)回退到首个可用模型。
+		expect(resolveEnabledSttModel("balanced", settings).key).toBe("parakeet");
+		expect(resolveEnabledSttModel("sensevoice", settings).key).toBe("sensevoice");
+
+		// 禁用 TTS 中文引擎:目录只剩 Kokoro;中文档选择回退。
+		await service.setComponentEnabled({ id: "voice:tts", component: "melotts-zh", enabled: false });
+		expect(enabledTtsModels(settings).map(m => m.key)).toEqual(["kokoro"]);
+		expect(resolveEnabledTtsModel("melotts-zh", settings).key).toBe("kokoro");
+
+		// 恢复后目录与解析原样回来。
+		await service.setComponentEnabled({ id: "voice:stt", component: "whisper", enabled: true });
+		await service.setComponentEnabled({ id: "voice:tts", component: "melotts-zh", enabled: true });
+		expect(enabledSttModels(settings).map(m => m.key)).toContain("balanced");
+		expect(resolveEnabledTtsModel("melotts-zh", settings).key).toBe("melotts-zh");
 	});
 });

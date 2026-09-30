@@ -85,7 +85,7 @@ export function pluginStateLabel(e: ExtensionItem): string {
 }
 
 /** i18n 键探测：命中返回译文，未命中返回 null（fallback 到 daemon 原文）。 */
-function builtinText(key: string): string | null {
+export function builtinText(key: string): string | null {
 	const label = t(key as Parameters<typeof t>[0]);
 	return label === key ? null : label;
 }
@@ -94,12 +94,12 @@ function builtinText(key: string): string | null {
  *  description 是 daemon 硬编码英文原文，GUI 按 `ext builtin <name>[ desc]`
  *  键查译文，未命中回退原文（与 kindTag 同模式，不改 daemon 避免
  *  TUI/GUI 双端分叉）。 */
-function builtinDisplayName(e: ExtensionItem): string {
+export function builtinDisplayName(e: ExtensionItem): string {
 	if (!e.builtin) return e.displayName || e.name;
 	return builtinText(`ext builtin ${e.name}`) ?? e.displayName ?? e.name;
 }
 
-function builtinDescription(e: ExtensionItem): string | undefined {
+export function builtinDescription(e: ExtensionItem): string | undefined {
 	if (!e.builtin) return e.description;
 	return builtinText(`ext builtin ${e.name} desc`) ?? e.description;
 }
@@ -234,6 +234,9 @@ function ModuleRow({
 				/>
 				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
 				<span className="gui-ext-item-tag">{kindTag(e.kind)}</span>
+				{e.components && e.components.length > 0 && (
+					<span className="gui-ext-item-tag">{t("ext component count", { count: e.components.length })}</span>
+				)}
 				{e.loadError && <span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>}
 				{/* 只读展示项(主题包/渲染器包/终端):无禁用语义,不渲染
 				 * 死开关——禁用不会改变运行时,放个可点的开关是撒谎。 */}
@@ -261,6 +264,33 @@ function ModuleRow({
 	);
 }
 
+/** 插件模块卡片（cards variant / 设置插件分区共用）：图标 + 状态点 +
+ *  显示名 + 描述 + 状态/id 脚注，点击打开详情弹层。 */
+export function ModuleCard({ e, onOpen }: { e: ExtensionItem; onOpen(item: ExtensionItem): void }): ReactNode {
+	return (
+		<button
+			type="button"
+			className="gui-plugin-card"
+			aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
+			onClick={() => onOpen(e)}
+		>
+			<div className="gui-plugin-card-head">
+				<Icon name="code-box" className="h-4 w-4 shrink-0 opacity-70" />
+				<span
+					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
+				/>
+				<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{builtinDisplayName(e)}</span>
+				<Icon name="arrow-right-s" className="h-3.5 w-3.5 shrink-0 opacity-40" />
+			</div>
+			{builtinDescription(e) ? <div className="gui-plugin-card-desc">{builtinDescription(e)}</div> : null}
+			<div className="gui-plugin-card-foot">
+				<span className="gui-ext-item-tag">{pluginStateLabel(e)}</span>
+				<span className="gui-ext-item-tag">{e.id}</span>
+			</div>
+		</button>
+	);
+}
+
 export function UnifiedPluginsView({
 	rpc,
 	plugins,
@@ -268,6 +298,7 @@ export function UnifiedPluginsView({
 	onTogglePackage,
 	onOpenMarketplace,
 	onError,
+	variant = "list",
 }: {
 	rpc: RpcClient | null;
 	plugins: PluginPackageEntry[];
@@ -276,6 +307,9 @@ export function UnifiedPluginsView({
 	onOpenMarketplace(): void;
 	/** 模块开关/组件开关的错误出口（父级顶栏 error 横幅）。 */
 	onError(message: string | null): void;
+	/** list = dsh 插件列表面板（能力中心,管理导向:分组行+开关）;
+	 *  cards = 卡片网格（扩展中心,发现导向,与设置插件分区同款）。 */
+	variant?: "list" | "cards";
 }): ReactNode {
 	const data = useExtensionRegistry(rpc);
 	// 防双击：一次只允许一个模块开关在途。插件包开关由父级 own。
@@ -338,71 +372,129 @@ export function UnifiedPluginsView({
 				</button>
 			</div>
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
-			<div className="gui-ext-list-scroll">
-				{official.length > 0 && (
-					<div className="gui-ext-group">
-						<div className="gui-ext-group-title">
-							{t("ext plugins official")} · {official.length}
-						</div>
-						{official.map(e => (
-							<ModuleRow
-								key={e.id}
-								e={e}
-								rpc={rpc}
-								busy={busyId !== null}
-								onToggle={toggleModule}
-								onOpen={item => setDetailId(item.id)}
-							/>
-						))}
-					</div>
-				)}
-				{(plugins.length > 0 || installedModules.length > 0) && (
-					<div className="gui-ext-group">
-						<div className="gui-ext-group-title">
-							{t("ext plugins installed")} · {plugins.length + installedModules.length}
-						</div>
-						{plugins.map(p => (
-							<div key={p.path} className="gui-ext-provider">
-								<div className="gui-ext-provider-h">
-									<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
-									<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
-									<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
-									<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
-									<button
-										type="button"
-										role="switch"
-										aria-checked={p.enabled}
-										aria-label={`${t("plugin enable")} ${p.name}`}
-										className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
-										onClick={() => onTogglePackage(p)}
-									>
-										{/* Knob span required: the thumb is a child element,
-										 * not a pseudo-element — empty buttons lose the dot. */}
-										<span className="gui-toggle-knob" />
-									</button>
-								</div>
-								<div className="gui-ext-plugins-meta">
-									<span className="gui-ext-plugins-version">{`v${p.version}`}</span>
-									<span className="gui-ext-group-count">
-										{t("plugin counts", { tools: p.tools, commands: p.commands, handlers: p.handlers })}
-									</span>
-								</div>
-								{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
+			{variant === "cards" ? (
+				<div className="gui-ext-list-scroll">
+					{official.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("ext plugins official")} · {official.length}
 							</div>
-						))}
-						{installedModules.map(e => (
-							<ModuleRow
-								key={e.id}
-								e={e}
-								rpc={rpc}
-								busy={busyId !== null}
-								onToggle={toggleModule}
-								onOpen={item => setDetailId(item.id)}
-							/>
-						))}
-					</div>
-				)}
-			</div>
+							<div className="gui-plugin-cards">
+								{official.map(e => (
+									<ModuleCard key={e.id} e={e} onOpen={item => setDetailId(item.id)} />
+								))}
+							</div>
+						</div>
+					)}
+					{(plugins.length > 0 || installedModules.length > 0) && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("ext plugins installed")} · {plugins.length + installedModules.length}
+							</div>
+							{plugins.length > 0 && (
+								<div className="gui-plugin-cards">
+									{plugins.map(p => (
+										<div key={p.path} className="gui-plugin-card">
+											<div className="gui-plugin-card-head">
+												<Icon name="plug" className="h-4 w-4 shrink-0 opacity-70" />
+												<span className={`gui-ext-dot${p.enabled ? "" : " gui-ext-dot--off"}`} />
+												<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
+												<button
+													type="button"
+													role="switch"
+													aria-checked={p.enabled}
+													aria-label={`${t("plugin enable")} ${p.name}`}
+													className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
+													onClick={() => onTogglePackage(p)}
+												>
+													<span className="gui-toggle-knob" />
+												</button>
+											</div>
+											{p.description ? <div className="gui-plugin-card-desc">{p.description}</div> : null}
+											<div className="gui-plugin-card-foot">
+												<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
+												<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
+												<span className="gui-ext-item-tag">{`v${p.version}`}</span>
+											</div>
+										</div>
+									))}
+								</div>
+							)}
+							<div className="gui-plugin-cards">
+								{installedModules.map(e => (
+									<ModuleCard key={e.id} e={e} onOpen={item => setDetailId(item.id)} />
+								))}
+							</div>
+						</div>
+					)}
+				</div>
+			) : (
+				<div className="gui-ext-list-scroll">
+					{official.length > 0 && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("ext plugins official")} · {official.length}
+							</div>
+							{official.map(e => (
+								<ModuleRow
+									key={e.id}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					)}
+					{(plugins.length > 0 || installedModules.length > 0) && (
+						<div className="gui-ext-group">
+							<div className="gui-ext-group-title">
+								{t("ext plugins installed")} · {plugins.length + installedModules.length}
+							</div>
+							{plugins.map(p => (
+								<div key={p.path} className="gui-ext-provider">
+									<div className="gui-ext-provider-h">
+										<Icon name="plug" className="h-3.5 w-3.5 shrink-0 opacity-60" />
+										<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{p.name}</span>
+										<span className="gui-ext-item-tag">{t("plugin package tag")}</span>
+										<span className="gui-ext-item-tag">{sourceLevelLabel("omp-plugins", p.scope)}</span>
+										<button
+											type="button"
+											role="switch"
+											aria-checked={p.enabled}
+											aria-label={`${t("plugin enable")} ${p.name}`}
+											className={`gui-toggle gui-toggle--sm${p.enabled ? " gui-toggle--on" : ""}`}
+											onClick={() => onTogglePackage(p)}
+										>
+											{/* Knob span required: the thumb is a child element,
+											 * not a pseudo-element — empty buttons lose the dot. */}
+											<span className="gui-toggle-knob" />
+										</button>
+									</div>
+									<div className="gui-ext-plugins-meta">
+										<span className="gui-ext-plugins-version">{`v${p.version}`}</span>
+										<span className="gui-ext-group-count">
+											{t("plugin counts", { tools: p.tools, commands: p.commands, handlers: p.handlers })}
+										</span>
+									</div>
+									{p.description ? <div className="gui-ext-plugins-desc">{p.description}</div> : null}
+								</div>
+							))}
+							{installedModules.map(e => (
+								<ModuleRow
+									key={e.id}
+									e={e}
+									rpc={rpc}
+									busy={busyId !== null}
+									onToggle={toggleModule}
+									onOpen={item => setDetailId(item.id)}
+								/>
+							))}
+						</div>
+					)}
+				</div>
+			)}
 			<PluginDetailDialog
 				open={detailItem !== null}
 				onClose={() => setDetailId(null)}

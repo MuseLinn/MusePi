@@ -3873,12 +3873,19 @@ export class DaemonServer {
 				// `downloads` lists tiers mid-fetch so a freshly-mounted window
 				// renders its progress row immediately, not after the next tick.
 				const { isSttModelCached } = await import("../stt/downloader");
-				const { STT_MODELS, resolveSttModelSpec } = await import("../stt/models");
+				const { enabledSttModels, resolveEnabledSttModel } = await import("../voice/engine-denylist");
 				// `satisfies` (not `:`) — the wire contract in @musepi/pi-wire
 				// is the single source of truth for both shells; if the shape
 				// here drifts, typecheck fails instead of the UI breaking.
+				// Engine components disabled from the plugin page are filtered
+				// out of the catalog entirely (same list drives the settings
+				// picker and this status route — one source, no drift).
 				const models: SttModelRow[] = await Promise.all(
-					STT_MODELS.map(async m => ({ key: m.key, label: m.label, cached: await isSttModelCached(m.key) })),
+					enabledSttModels().map(async m => ({
+						key: m.key,
+						label: m.label,
+						cached: await isSttModelCached(m.key),
+					})),
 				);
 				// First-use guide: the tier a bare `stt.transcribe` loads
 				// (settings `stt.modelName`, same resolution as the route) —
@@ -3886,12 +3893,17 @@ export class DaemonServer {
 				// this pair without duplicating settings access. Settings may
 				// be uninitialized in bare harness contexts; fall back to the
 				// built-in default tier (Whisper small) instead of throwing.
+				// A selected tier whose engine component got disabled falls
+				// back to the first enabled tier, same as the route.
 				let defaultKey: string;
 				try {
 					const { settings: sttSettings } = await import("../config/settings");
-					defaultKey = resolveSttModelSpec(sttSettings.get("stt.modelName") as string | undefined).key;
+					defaultKey = resolveEnabledSttModel(
+						sttSettings.get("stt.modelName") as string | undefined,
+						sttSettings,
+					).key;
 				} catch {
-					defaultKey = resolveSttModelSpec(undefined).key;
+					defaultKey = resolveEnabledSttModel(undefined).key;
 				}
 				return {
 					models,
@@ -3914,6 +3926,12 @@ export class DaemonServer {
 				// falls back to the default tier, which would download a
 				// GB-scale model the user never asked for.
 				if (!isSttModelKey(p.modelKey)) throw new Error(`unknown speech model: ${p.modelKey}`);
+				// Engine component disabled from the plugin page: the download
+				// entry point closes too (status list no longer shows the tier).
+				const { isVoiceEngineDisabled, sttEngineComponentId } = await import("../voice/engine-denylist");
+				if (isVoiceEngineDisabled("stt", sttEngineComponentId(p.modelKey))) {
+					throw new Error(`speech engine disabled for model: ${p.modelKey}`);
+				}
 				const modelKey = p.modelKey;
 				// Idempotent re-trigger: a second window (or a double-click
 				// race) must reuse the running fetch, not start a parallel one
@@ -3966,14 +3984,16 @@ export class DaemonServer {
 				const p = (params ?? {}) as { audio: number[]; modelKey?: string; language?: string };
 				if (!Array.isArray(p.audio) || p.audio.length === 0) throw new Error("audio required (16kHz mono floats)");
 				const { sttClient } = await import("../stt/asr-client");
-				const { resolveSttModelSpec } = await import("../stt/models");
+				const { resolveEnabledSttModel } = await import("../voice/engine-denylist");
 				// Default follows the user's config (`stt.modelName`, TUI parity)
 				// instead of a hardcoded tier — the GUI mic otherwise silently
-				// uses a different model than the settings panel shows.
+				// uses a different model than the settings panel shows. Engine
+				// components disabled from the plugin page fall back to the
+				// first enabled tier (resolveEnabledSttModel), never a denied one.
 				const { settings: appSettings } = await import("../config/settings");
 				const modelKey = p.modelKey
-					? resolveSttModelSpec(p.modelKey).key
-					: resolveSttModelSpec(appSettings.get("stt.modelName") as string | undefined).key;
+					? resolveEnabledSttModel(p.modelKey, appSettings).key
+					: resolveEnabledSttModel(appSettings.get("stt.modelName") as string | undefined, appSettings).key;
 				const text = await sttClient.transcribe(modelKey, Float32Array.from(p.audio), {
 					...(p.language ? { language: p.language } : {}),
 				});
@@ -3985,12 +4005,15 @@ export class DaemonServer {
 				const p = (params ?? {}) as { text: string; modelKey?: string; voice?: string };
 				if (!p.text?.trim()) throw new Error("text required");
 				const { ttsClient } = await import("../tts/tts-client");
-				const { DEFAULT_TTS_LOCAL_MODEL_KEY } = await import("../tts/models");
+				const { resolveEnabledTtsModel } = await import("../voice/engine-denylist");
 				// Default follows the user's config (`tts.localModel`, TUI
 				// parity) instead of the hardcoded model key.
 				const { settings: appSettings } = await import("../config/settings");
 				const configured = appSettings.get("tts.localModel") as string | undefined;
-				const modelKey = p.modelKey ?? (configured || DEFAULT_TTS_LOCAL_MODEL_KEY);
+				// Engine components disabled from the plugin page fall back to
+				// the first enabled tier (resolveEnabledTtsModel) — same
+				// resolution the modelStatus route reports as defaultKey.
+				const modelKey = resolveEnabledTtsModel(p.modelKey ?? configured, appSettings).key;
 				// A failure resolves `audio: null` — without the worker's error
 				// text the GUI cannot tell "模型未下载" from "合成失败", so the
 				// client's onError hook captures it and the response carries it.
@@ -4011,12 +4034,15 @@ export class DaemonServer {
 				// mid-fetch so a freshly-mounted window renders its progress
 				// row immediately, not after the next tick.
 				const { isTtsModelCached } = await import("../tts/downloader");
-				const { TTS_LOCAL_MODELS, resolveTtsModelSpec } = await import("../tts/models");
+				const { enabledTtsModels, resolveEnabledTtsModel } = await import("../voice/engine-denylist");
 				// `satisfies` (not `:`) — the wire contract in @musepi/pi-wire
 				// is the single source of truth for both shells; if the shape
 				// here drifts, typecheck fails instead of the UI breaking.
+				// Engine components disabled from the plugin page are filtered
+				// out of the catalog entirely (settings picker reads the same
+				// route — one source, no drift).
 				const models: TtsModelRow[] = await Promise.all(
-					TTS_LOCAL_MODELS.map(async m => ({
+					enabledTtsModels().map(async m => ({
 						key: m.key,
 						label: m.label,
 						cached: await isTtsModelCached(m.key),
@@ -4029,12 +4055,17 @@ export class DaemonServer {
 				// The card's radio seed follows the user's config (`tts.localModel`,
 				// same resolution as tts.synthesize). Settings may be uninitialized
 				// in bare harness contexts; fall back to the built-in default tier.
+				// A selected tier whose engine component got disabled falls back
+				// to the first enabled tier, same as the synthesis route.
 				let defaultKey: string;
 				try {
 					const { settings: ttsSettings } = await import("../config/settings");
-					defaultKey = resolveTtsModelSpec(ttsSettings.get("tts.localModel") as string | undefined).key;
+					defaultKey = resolveEnabledTtsModel(
+						ttsSettings.get("tts.localModel") as string | undefined,
+						ttsSettings,
+					).key;
 				} catch {
-					defaultKey = resolveTtsModelSpec(undefined).key;
+					defaultKey = resolveEnabledTtsModel(undefined).key;
 				}
 				return { models, downloads: [...this.#ttsDownloads.keys()], defaultKey } satisfies TtsModelStatusResponse;
 			}
@@ -4050,6 +4081,12 @@ export class DaemonServer {
 				// Reject unknown keys explicitly: downloadTtsModel would silently
 				// return false, leaving the GUI's progress row hanging forever.
 				if (!isTtsLocalModelKey(p.modelKey)) throw new Error(`unknown TTS model: ${p.modelKey}`);
+				// Engine component disabled from the plugin page: the download
+				// entry point closes too (status list no longer shows the tier).
+				const { isVoiceEngineDisabled } = await import("../voice/engine-denylist");
+				if (isVoiceEngineDisabled("tts", p.modelKey)) {
+					throw new Error(`TTS engine disabled for model: ${p.modelKey}`);
+				}
 				const modelKey = p.modelKey;
 				// Idempotent re-trigger: a second window (or a double-click
 				// race) must reuse the running fetch, not start a parallel one

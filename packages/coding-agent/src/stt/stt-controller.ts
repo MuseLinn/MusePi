@@ -1,9 +1,9 @@
 import { AudioCapture } from "@musepi/pi-natives";
 import { logger } from "@musepi/pi-utils";
 import { settings } from "../config/settings";
+import { resolveEnabledSttModel } from "../voice/engine-denylist";
 import { type SttStreamHandle, sttClient } from "./asr-client";
 import { downloadSttModel, isSttModelCached } from "./downloader";
-import { resolveSttModelSpec } from "./models";
 import { evaluateSubmitTrigger } from "./submit-trigger";
 
 export type SttState = "idle" | "recording" | "transcribing";
@@ -93,7 +93,10 @@ export class STTController {
 	}
 
 	async #ensureDeps(options: ToggleOptions): Promise<boolean> {
-		const modelKey = resolveSttModelSpec(settings.get("stt.modelName") as string | undefined).key;
+		// Engine components disabled from the plugin page fall back to the
+		// first enabled tier — the dictation path never loads a denied engine
+		// even if the setting still points at one.
+		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined, settings).key;
 		// Keyed on the model rather than a one-shot flag: switching stt.modelName
 		// mid-session must re-run preflight so an uncached new tier downloads here
 		// (with progress) instead of blocking silently at stop.
@@ -165,7 +168,10 @@ export class STTController {
 	}
 
 	async #startStreaming(editor: Editor, options: ToggleOptions): Promise<void> {
-		const modelKey = resolveSttModelSpec(settings.get("stt.modelName") as string | undefined).key;
+		// Engine components disabled from the plugin page fall back to the
+		// first enabled tier — the dictation path never loads a denied engine
+		// even if the setting still points at one.
+		const modelKey = resolveEnabledSttModel(settings.get("stt.modelName") as string | undefined, settings).key;
 		const language = settings.get("stt.language") as string | undefined;
 		this.#streamEditor = editor;
 		this.#streamCommitted = false;

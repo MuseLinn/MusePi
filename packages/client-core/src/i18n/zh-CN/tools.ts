@@ -463,7 +463,9 @@ export const tools = {
 	"ext plugins installed": "已安装",
 	"ext add plugin": "添加插件",
 	"ext plugin components": "包含的组件",
-	"ext plugin components desc": "组件独立启停：禁用后从 agent 工具集中移除，下个模型请求生效。",
+	"ext plugin components desc":
+		"组件独立启停：工具组件禁用后从 agent 工具集移除，语音引擎组件禁用后从模型目录与转写/朗读路径移除。",
+	"ext component count": "组件 ×{count}",
 	"ext component denied": "已被组件黑名单禁用",
 	"ext plugin details": "插件详情",
 	"ext plugins settings desc": "卡片式查看全部插件：点击卡片打开液态玻璃详情，启用、配置与切换组件。",

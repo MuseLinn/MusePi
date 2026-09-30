@@ -636,6 +636,11 @@ export const SETTINGS_SCHEMA = {
 	 *  开关即写这个名单）。隐藏设置键：由插件管理页消费，不直接展示。 */
 	"tools.disabled": { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 语音引擎级黑名单（插件「包含的组件」开关写入此处）：名单内的
+	 *  STT/TTS 引擎从模型状态列表、下载入口与实际合成/转写路径中消失。
+	 *  组件 id 形如 "stt:whisper" / "tts:kokoro"。隐藏设置键。 */
+	"voice.disabledEngines": { type: "array", default: EMPTY_STRING_ARRAY },
+
 	modelRoleStorage: {
 		type: "enum",
 		values: ["global", "project"] as const,

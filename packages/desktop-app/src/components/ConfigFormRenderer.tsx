@@ -1,4 +1,4 @@
-import { Segmented, type TranslationKey, t } from "@musepi/client-core";
+import { Segmented, type TranslationKey, t, tLoose } from "@musepi/client-core";
 import type { ConfigFieldDesc } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { GuiSelect } from "./GuiSelect";
@@ -92,11 +92,14 @@ function ConfigFieldRow({
 			case "select": {
 				const options = desc.options ?? [];
 				const current = typeof value === "string" && options.includes(value) ? value : String(desc.default);
+				// optionLabels 声明(值 → i18n 键/原文)优先,缺省回退原始值;
+				// 全部经 tLoose 解析,未注册的原文(如用户插件的中文文案)原样通过。
+				const labelOf = (o: string): string => tLoose(desc.optionLabels?.[o] ?? o);
 				if (options.length <= 4) {
 					return (
 						<Segmented
 							value={current}
-							options={options.map(o => ({ value: o, label: o }))}
+							options={options.map(o => ({ value: o, label: labelOf(o) }))}
 							onChange={next => onChange(desc.key, next)}
 							ariaLabel={desc.key}
 						/>
@@ -105,7 +108,7 @@ function ConfigFieldRow({
 				return (
 					<GuiSelect
 						value={current}
-						options={options.map(o => ({ value: o, label: o }))}
+						options={options.map(o => ({ value: o, label: labelOf(o) }))}
 						onChange={next => onChange(desc.key, next)}
 						ariaLabel={desc.key}
 						disabled={disabled}
@@ -130,8 +133,9 @@ function ConfigFieldRow({
 	return (
 		<div className={`gui-settings-row${disabled ? " gui-settings-row--disabled" : ""}`}>
 			<div className="gui-plugin-config-field">
-				<div className="gui-settings-row-label">{desc.key}</div>
-				{desc.description && <div className="gui-settings-row-desc">{desc.description}</div>}
+				{/* label 声明(i18n 键或原文)优先,缺省回退设置键;经 tLoose 解析。 */}
+				<div className="gui-settings-row-label">{tLoose(desc.label ?? desc.key)}</div>
+				{desc.description && <div className="gui-settings-row-desc">{tLoose(desc.description)}</div>}
 				{desc.restart && desc.restart !== "none" && (
 					<div className="gui-plugin-config-restart">
 						{t("ext restart label")} · {restartLabel(desc.restart)}

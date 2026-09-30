@@ -86,8 +86,9 @@ interface TierMeta {
 	desc: string;
 }
 
-/** STT tiers — sizes mirror `stt/models.ts` `sizeHint`. */
-const TIER_META: Record<string, TierMeta> = {
+/** STT tiers — sizes mirror `stt/models.ts` `sizeHint`. Exported: the plugin
+ *  detail dialog embeds the same picker card (one source for both surfaces). */
+export const TIER_META: Record<string, TierMeta> = {
 	fast: { size: "~60 MB", badge: "Lightweight", desc: "Lightweight and fast — best for quick English notes" },
 	balanced: {
 		size: "~190 MB",
@@ -112,8 +113,9 @@ const TIER_META: Record<string, TierMeta> = {
 
 /** TTS tiers — sizes mirror `tts/models.ts`: MeloTTS-zh ships model.onnx
  *  ~163 MB (+tokens/lexicon, negligible); Kokoro-82M loads at the default
- *  q8 precision, i.e. the 82M-param weights ≈ 85 MB on disk. */
-const TTS_TIER_META: Record<string, TierMeta> = {
+ *  q8 precision, i.e. the 82M-param weights ≈ 85 MB on disk. Exported: the
+ *  plugin detail dialog embeds the same picker card. */
+export const TTS_TIER_META: Record<string, TierMeta> = {
 	kokoro: {
 		size: "~85 MB",
 		badge: "English-first",
@@ -726,7 +728,7 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 
 	return (
 		<>
-			<h2 className="gui-settings-page-title">{t("voice")}</h2>
+			<h2 className="gui-settings-page-title">{tLoose("voice settings")}</h2>
 
 			{/* Schema-driven stt.* / tts.* rows — only the interaction tab's
 			 * "Speech" group, NOT the whole tab (the rest of the interaction

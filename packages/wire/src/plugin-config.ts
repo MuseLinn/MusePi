@@ -19,6 +19,10 @@ export interface ConfigFieldDesc {
 	step?: number;
 	/** select 用。 */
 	options?: readonly string[];
+	/** 字段显示名(i18n 键或原文;GUI 经 t() 解析,缺省回退 key)。 */
+	label?: string;
+	/** select 选项的显示名(value → i18n 键或原文;GUI 经 t() 解析)。 */
+	optionLabels?: Record<string, string>;
 	/** 进管理页表单行 desc(i18n 键或原文)。 */
 	description?: string;
 	/** 变更生效域:none = 立即;session = 重启会话;daemon = 重启 daemon。 */
@@ -124,6 +128,14 @@ export function parseConfigFields(raw: unknown): ParsedConfigFields {
 		if (typeof item.min === "number") desc.min = item.min;
 		if (typeof item.max === "number") desc.max = item.max;
 		if (typeof item.step === "number") desc.step = item.step;
+		if (typeof item.label === "string") desc.label = item.label;
+		if (isRecord(item.optionLabels)) {
+			const labels: Record<string, string> = {};
+			for (const [value, text] of Object.entries(item.optionLabels)) {
+				if (typeof text === "string" && text.trim() !== "") labels[value] = text;
+			}
+			if (Object.keys(labels).length > 0) desc.optionLabels = labels;
+		}
 		if (typeof item.description === "string") desc.description = item.description;
 		if (typeof item.restart === "string" && RESTARTS.has(item.restart)) {
 			desc.restart = item.restart as ConfigFieldDesc["restart"];
