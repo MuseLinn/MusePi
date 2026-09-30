@@ -27,8 +27,17 @@
  * native 扫描自然可见),登记数为 0;musepi-extensions provider 级开关
  * 不级联到 builtin 行(与注册前行为一致)。
  */
+import type { ConfigFieldDesc } from "@musepi/pi-wire";
 import { BUNDLED_SKILL_NAMES } from "../../bundled-skills/index.ts";
 import { getBuiltinThemes } from "../../modes/theme/loader.ts";
+import { DEFAULT_STT_MODEL_KEY, STT_MODEL_VALUES } from "../../stt/models.ts";
+import { STT_SUBMIT_TRIGGER_VALUES } from "../../stt/submit-trigger.ts";
+import {
+	DEFAULT_TTS_LOCAL_MODEL_KEY,
+	DEFAULT_TTS_VOICE,
+	TTS_LOCAL_MODEL_VALUES,
+	TTS_LOCAL_VOICE_VALUES,
+} from "../../tts/models.ts";
 import { type Extension, type ExtensionKind, makeExtensionId, parseExtensionId } from "./types";
 
 /** 自有内置扩展的统一来源标记(musepi-extensions provider,builtin 级)。 */
@@ -106,6 +115,13 @@ export interface BuiltinExtensionDef {
 	description?: string;
 	/** 镜像设置键的内置扩展(state 由设置驱动,setEnabled 写设置而非禁用列表)。 */
 	settingsMirror?: { key: string; on: unknown; off: unknown };
+	/**
+	 * dsh 式插件配置表单声明(字段键即设置键):daemon 的 extensions.list
+	 * 据此挂 config + 从设置读出的 configValues,extensions.setConfig 按
+	 * 声明钳制后经 settings 落盘——语音等内置子系统借此获得与插件包
+	 * 同款管理页,不重复发明配置存储。
+	 */
+	config?: readonly ConfigFieldDesc[];
 	/**
 	 * 只读展示项:无禁用语义(如主题包/渲染器包),UI 不渲染停用开关,
 	 * 禁用也不会改变运行时 —— 登记仅为可见性与清单契约,不发明语义。
@@ -190,6 +206,106 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		description: "First-party GUI card renderers for the built-in tool wire names",
 		readonly: true,
 		raw: { name: "builtin-cards", kind: "tool-render-pack", tools: [...TOOL_RENDER_CARD_TOOLS_SNAPSHOT] },
+	},
+	// ── 语音子系统(2,voice:stt / voice:tts;settingsMirror 镜像总开关 +
+	//    dsh 式配置表单——字段键即设置键,extensions.setConfig 经设置落盘,
+	//    与设置页语音分区同一条存储,双入口零漂移)────────────────────────
+	{
+		kind: "voice",
+		name: "stt",
+		displayName: "Speech Input (STT)",
+		description:
+			"On-device speech-to-text dictation (Whisper / SenseVoice / Parakeet tiers, downloaded on first use). Toggle mirrors stt.enabled; config fields are the stt.* settings keys.",
+		settingsMirror: { key: "stt.enabled", on: true, off: false },
+		config: [
+			{
+				key: "stt.modelName",
+				type: "select",
+				options: STT_MODEL_VALUES,
+				default: DEFAULT_STT_MODEL_KEY,
+				restart: "none",
+				description:
+					"On-device speech model: Whisper small (default, multilingual, Chinese-ready), SenseVoiceSmall (zh/yue-optimized, INT8), Parakeet v3 (English/European top tier, no Chinese).",
+			},
+			{
+				key: "stt.language",
+				type: "string",
+				default: "",
+				restart: "none",
+				description: "Recognition language hint; empty = auto-detect (recommended for mixed zh/en).",
+			},
+			{
+				key: "stt.vadEndMs",
+				type: "number",
+				default: 700,
+				restart: "none",
+				description: "How long of a pause counts as the end of dictation (milliseconds).",
+			},
+			{
+				key: "stt.submitTrigger",
+				type: "select",
+				options: STT_SUBMIT_TRIGGER_VALUES,
+				default: "never",
+				restart: "none",
+				description:
+					"When dictation auto-submits: never / on release (2+ words) / release with complete sentence / say-submit.",
+			},
+		],
+		raw: { name: "stt", kind: "voice" },
+	},
+	{
+		kind: "voice",
+		name: "tts",
+		displayName: "Speech Output (TTS)",
+		description:
+			"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). Toggle mirrors speech.enabled; config fields are the tts.* settings keys.",
+		settingsMirror: { key: "speech.enabled", on: true, off: false },
+		config: [
+			{
+				key: "tts.localModel",
+				type: "select",
+				options: TTS_LOCAL_MODEL_VALUES,
+				default: DEFAULT_TTS_LOCAL_MODEL_KEY,
+				restart: "none",
+				description:
+					"Local neural TTS model: Kokoro-82M (English-first, multi-voice) or MeloTTS-zh (Mandarin / mixed zh-en).",
+			},
+			{
+				key: "tts.localVoice",
+				type: "select",
+				options: TTS_LOCAL_VOICE_VALUES,
+				default: DEFAULT_TTS_VOICE,
+				restart: "none",
+				description: "Voice id for the local TTS backend (per-model voice list).",
+			},
+			{
+				key: "tts.rate",
+				type: "number",
+				default: 1,
+				min: 0.5,
+				max: 2,
+				step: 0.1,
+				restart: "none",
+				description: "Playback rate for local TTS — 0.8x is common for reading aloud.",
+			},
+			{
+				key: "tts.inputMode",
+				type: "select",
+				options: ["raw", "sanitize", "summarize"],
+				default: "sanitize",
+				restart: "none",
+				description:
+					"How the reply is prepared before synthesis: raw / sanitized (strip code & markdown) / summarized.",
+			},
+			{
+				key: "tts.autoRead",
+				type: "boolean",
+				default: false,
+				restart: "none",
+				description: "Automatically read aloud new assistant replies.",
+			},
+		],
+		raw: { name: "tts", kind: "voice" },
 	},
 ];
 

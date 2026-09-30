@@ -604,6 +604,8 @@ function getKindDisplayName(kind: ExtensionKind): string {
 			return "Themes";
 		case "tool-render":
 			return "Tool Renderers";
+		case "voice":
+			return "Voice";
 		default:
 			return kind;
 	}

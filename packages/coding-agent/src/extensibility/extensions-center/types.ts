@@ -23,7 +23,8 @@ export type ExtensionKind =
 	| "desktop-shell"
 	| "magic-keyword"
 	| "theme"
-	| "tool-render";
+	| "tool-render"
+	| "voice";
 
 /**
  * Extension state (active, disabled, or shadowed).

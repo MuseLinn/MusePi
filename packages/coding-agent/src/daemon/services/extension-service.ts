@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import { coerceConfigFieldValue } from "@musepi/pi-wire";
+import { coerceConfigFieldValue, coerceConfigValues } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -194,6 +194,21 @@ export class ExtensionService implements DaemonService {
 			const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
 			ext.state = disabled ? "disabled" : "active";
 			ext.disabledReason = disabled ? "item-disabled" : undefined;
+		}
+		// Builtin plugin units declaring dsh-style config (voice STT/TTS):
+		// attach the declared fields plus live settings-backed values — the
+		// field key IS the settings key, so the plugin management form and
+		// the settings page read/write one storage (no divergence).
+		for (const def of BUILTIN_EXTENSIONS) {
+			if (!def.config || def.config.length === 0) continue;
+			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
+			if (!ext) continue;
+			ext.config = [...def.config];
+			if (s) {
+				const stored: Record<string, unknown> = {};
+				for (const f of def.config) stored[f.key] = s.getRaw(f.key);
+				ext.configValues = coerceConfigValues([...def.config], stored);
+			}
 		}
 		const { buildProviderTabs } = await import("../../extensibility/extensions-center/state-manager");
 		const tabs = buildProviderTabs(extensions);
@@ -534,11 +549,36 @@ export class ExtensionService implements DaemonService {
 	 *  字段必须以该扩展 manifest 声明的 config 为准——未声明的键直接拒绝
 	 *  (防写垃圾键);值经 coerceConfigFieldValue 钳制后落盘存储,失效扩展
 	 *  缓存并扇出 extensions.changed 让 GUI 重拉 configValues。返回
-	 *  { restart, values }——restart 声明生效时机(运行时消费随 cordis 试点)。 */
+	 *  { restart, values }——restart 声明生效时机(运行时消费随 cordis 试点)。
+	 *  内置插件单元(语音 STT/TTS)的字段键即设置键:按注册表声明钳制后经
+	 *  settings 落盘,与设置页同一条存储。 */
 	async setConfig(params: unknown) {
 		const p = (params ?? {}) as { id?: unknown; key?: unknown; value?: unknown };
 		if (typeof p.id !== "string" || typeof p.key !== "string") {
 			throw new Error("extensions.setConfig: id and key are required strings");
+		}
+		// Builtin plugin units (voice STT/TTS): field keys ARE settings keys —
+		// clamp against the registry declaration and persist via settings so
+		// the plugin form and the settings page never diverge.
+		const { findBuiltinDef } = await import("../../extensibility/extensions-center/builtin-registry");
+		const builtinDef = findBuiltinDef(p.id);
+		if (builtinDef?.config?.length) {
+			const desc = builtinDef.config.find(f => f.key === p.key);
+			if (!desc) {
+				throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
+			}
+			const coerced = coerceConfigFieldValue(desc, p.value);
+			let s = this.#deps.settings();
+			if (!s) {
+				await this.#deps.ensureRegistry();
+				s = this.#deps.settings();
+			}
+			if (!s) throw new Error("extensions.setConfig: settings unavailable");
+			s.set(desc.key as Parameters<Settings["set"]>[0], coerced as never);
+			await s.flush();
+			this.invalidateExtensionsCache();
+			this.#deps.onChanged();
+			return { ok: true as const, restart: desc.restart ?? ("none" as const), values: undefined };
 		}
 		const extensions = await this.getExtensions();
 		const ext = extensions.find(e => e.id === p.id);

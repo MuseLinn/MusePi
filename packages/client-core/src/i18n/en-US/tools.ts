@@ -412,6 +412,7 @@ export const tools = {
 	"ext kind theme": "Themes",
 	"ext kind tool-render": "Tool renderers",
 	"ext kind desktop-shell": "Desktop shell",
+	"ext kind voice": "Voice",
 	"ext shadowed": "Shadowed",
 	"ext load failed": "Load failed",
 	"ext provider disabled": "Disabled (source turned off)",
@@ -436,6 +437,12 @@ export const tools = {
 		"Built-in TUI themes shipped with the CLI (dark/light plus the bundled default set)",
 	"ext builtin builtin-cards": "Tool Card Renderers",
 	"ext builtin builtin-cards desc": "First-party GUI card renderers for the built-in tool wire names",
+	"ext builtin stt": "Speech Input (STT)",
+	"ext builtin stt desc":
+		"On-device speech-to-text dictation (Whisper / SenseVoice / Parakeet tiers, downloaded on first use). The toggle mirrors stt.enabled; config fields are the stt.* settings keys — one storage with the settings page.",
+	"ext builtin tts": "Speech Output (TTS)",
+	"ext builtin tts desc":
+		"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). The toggle mirrors speech.enabled; config fields are the tts.* settings keys — one storage with the settings page.",
 	"plugin details": "Details",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",

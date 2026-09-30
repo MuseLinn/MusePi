@@ -400,6 +400,7 @@ export const tools = {
 	"ext kind theme": "主题",
 	"ext kind tool-render": "工具卡片渲染",
 	"ext kind desktop-shell": "桌壳",
+	"ext kind voice": "语音",
 	"ext shadowed": "被遮蔽",
 	"ext load failed": "加载失败",
 	"ext provider disabled": "已停用（来源关闭）",
@@ -421,6 +422,12 @@ export const tools = {
 	"ext builtin builtin-themes desc": "CLI 自带的 TUI 主题（深色/浅色及 bundled 默认主题集）。",
 	"ext builtin builtin-cards": "工具卡片渲染器",
 	"ext builtin builtin-cards desc": "内置工具 wire 名的官方 GUI 卡片渲染器。",
+	"ext builtin stt": "语音输入（STT）",
+	"ext builtin stt desc":
+		"端侧语音听写（Whisper / SenseVoice / Parakeet 档位，首次使用自动下载）。开关镜像 stt.enabled；配置项即 stt.* 设置键，与设置页语音分区同一条存储。",
+	"ext builtin tts": "语音播报（TTS）",
+	"ext builtin tts desc":
+		"流式神经语音朗读（Kokoro-82M / MeloTTS 中文，首次使用自动下载）。开关镜像 speech.enabled；配置项即 tts.* 设置键，与设置页语音分区同一条存储。",
 	"plugin details": "详情",
 	"ext read-only": "只读",
 	"ext plugin config": "插件配置",
