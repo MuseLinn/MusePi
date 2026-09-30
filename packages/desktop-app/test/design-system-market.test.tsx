@@ -131,14 +131,19 @@ describe("M3.7d 能力中心落地 tab", () => {
 		} as unknown as RpcClient;
 	}
 
-	test("initialTab=marketplace：市场 tab 选中且市场网格挂载", async () => {
+	test("tab=marketplace：市场 tab 选中且市场网格挂载", async () => {
 		const calls: string[] = [];
 		const host = document.createElement("div");
 		document.body.appendChild(host);
 		const root = createRoot(host);
 		act(() => {
 			root.render(
-				createElement(CapabilityCenterPage, { rpc: makeRpc(calls), onBack: () => {}, initialTab: "marketplace" }),
+				createElement(CapabilityCenterPage, {
+					rpc: makeRpc(calls),
+					onBack: () => {},
+					tab: "marketplace",
+					onTabChange: () => {},
+				}),
 			);
 		});
 		await settle();

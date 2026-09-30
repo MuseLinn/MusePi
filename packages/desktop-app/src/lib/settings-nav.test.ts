@@ -22,7 +22,6 @@ const NAV_IDS = new Set([
 	"files",
 	"memory",
 	"skills",
-	"plugins",
 	"subagents",
 	"mcp",
 	"commands",
@@ -47,8 +46,9 @@ describe("resolveActiveSection", () => {
 		// Regression: 添加供应商 opened settings on `providers`, which has no
 		// content branch → blank pane until the user clicked a nav row.
 		expect(resolveActiveSection("providers", NAV_IDS)).toBe("model");
-		// `plugins` 自 0.5.1 起是独立设置分区(卡片式插件管理),不再是别名。
-		expect(resolveActiveSection("plugins", NAV_IDS)).toBe("plugins");
+		// 0.5.1: 设置侧「插件」独立 tab 已摘除（插件列表归一级能力中心），
+		// "plugins" 成为能力别名，存量深链落到「扩展与插件」控制中心。
+		expect(resolveActiveSection("plugins", NAV_IDS)).toBe("skills");
 		// Every alias must land on a real page.
 		for (const target of Object.values(SECTION_ALIAS)) {
 			expect(NAV_IDS.has(target)).toBe(true);

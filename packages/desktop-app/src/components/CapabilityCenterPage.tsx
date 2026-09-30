@@ -30,14 +30,17 @@ type SkillPane = "discover" | "installed";
 export function CapabilityCenterPage({
 	rpc,
 	onBack,
-	initialTab,
+	tab,
+	onTabChange,
 }: {
 	rpc: RpcClient | null;
 	onBack(): void;
-	/** 落地 tab（omp-open-capability 事件的 detail.tab 载荷；默认 skills）。 */
-	initialTab?: Tab;
+	/** 受控当前 tab（app.tsx 的 capabilityTab state）：侧边栏悬停菜单、
+	 * 扩展控制中心 CTA 等外部入口在页面已挂载时也能切 tab——组件只在
+	 * mount 时读一次的 initialTab 会让这些跳转静默失效。 */
+	tab: Tab;
+	onTabChange(tab: Tab): void;
 }): ReactNode {
-	const [tab, setTab] = useState<Tab>(initialTab ?? "skills");
 	// The design spec puts the remote catalog INSIDE 技能 as a 发现 sub-pane
 	// (我安装的 is the other half). 市场 stays as its own tab because the
 	// settings-side 扩展控制中心 still links here for plugin sources.
@@ -57,14 +60,16 @@ export function CapabilityCenterPage({
 	}, [rpc]);
 
 	useEffect(() => {
-		if (tab !== "skills") return;
 		loadInstalledCount();
 		// skillPane 也要在依赖里:在「我安装的」里卸载/装完技能后切回
 		// 「发现」,标签上的 N 必须已重读,而不是停留在切走前的旧值。
-	}, [tab, skillPane, loadInstalledCount]);
+	}, [skillPane, loadInstalledCount]);
 
+	// 三个 tab 面板常驻挂载（gui-capability-pane 用 display 切换），
+	// 插件清单在 mount 时即拉取——切到插件 tab 时列表已就绪（持久化 +
+	// 切换动效的前提：不能等 tab 激活才挂载/才发请求）。
 	useEffect(() => {
-		if (!rpc || tab !== "plugins") return;
+		if (!rpc) return;
 		let alive = true;
 		void rpc
 			.request<{ plugins: PluginEntry[] }>("plugins.packages", {})
@@ -75,7 +80,7 @@ export function CapabilityCenterPage({
 		return () => {
 			alive = false;
 		};
-	}, [rpc, tab]);
+	}, [rpc]);
 
 	const togglePlugin = (p: PluginEntry): void => {
 		if (!rpc) return;
@@ -116,7 +121,7 @@ export function CapabilityCenterPage({
 						role="tab"
 						aria-selected={tab === tb.id}
 						className={`gui-capability-tab${tab === tb.id ? " gui-capability-tab--on" : ""}`}
-						onClick={() => setTab(tb.id)}
+						onClick={() => onTabChange(tb.id)}
 					>
 						<Icon name={tb.icon} className="h-3.5 w-3.5 shrink-0 opacity-70" />
 						{tb.label}
@@ -124,48 +129,52 @@ export function CapabilityCenterPage({
 				))}
 			</div>
 			<div className="gui-capability-body">
-				{tab === "skills" ? (
-					<>
-						<div className="gui-capability-subtabs" role="tablist">
-							{(
-								[
-									["discover", t("discover")],
-									["installed", t("installed {count}", { count: installedCount })],
-								] as [SkillPane, string][]
-							).map(([id, label]) => (
-								<button
-									key={id}
-									type="button"
-									role="tab"
-									aria-selected={skillPane === id}
-									className={`gui-capability-subtab${skillPane === id ? " gui-capability-subtab--on" : ""}`}
-									onClick={() => setSkillPane(id)}
-								>
-									{label}
-								</button>
-							))}
-						</div>
-						{skillPane === "discover" ? (
-							<SkillMarketView rpc={rpc} onInstalled={loadInstalledCount} />
-						) : (
-							<CapabilityCenter rpc={rpc} />
-						)}
-					</>
-				) : tab === "plugins" ? (
-					/* Shared unified list (settings-side 扩展控制中心 parity):
+				{/* 三个面板常驻挂载、display 切换（gui-capability-pane）：切 tab
+				 * 不丢各面板的滚动位置/输入态/已拉取数据，切入面板有淡入上浮动效
+				 * （display none→block 会重放 keyframes）。 */}
+				<div className={`gui-capability-pane${tab === "skills" ? " gui-capability-pane--on" : ""}`}>
+					<div className="gui-capability-subtabs" role="tablist">
+						{(
+							[
+								["discover", t("discover")],
+								["installed", t("installed {count}", { count: installedCount })],
+							] as [SkillPane, string][]
+						).map(([id, label]) => (
+							<button
+								key={id}
+								type="button"
+								role="tab"
+								aria-selected={skillPane === id}
+								className={`gui-capability-subtab${skillPane === id ? " gui-capability-subtab--on" : ""}`}
+								onClick={() => setSkillPane(id)}
+							>
+								{label}
+							</button>
+						))}
+					</div>
+					<div className={`gui-capability-pane${skillPane === "discover" ? " gui-capability-pane--on" : ""}`}>
+						<SkillMarketView rpc={rpc} onInstalled={loadInstalledCount} />
+					</div>
+					<div className={`gui-capability-pane${skillPane === "installed" ? " gui-capability-pane--on" : ""}`}>
+						<CapabilityCenter rpc={rpc} />
+					</div>
+				</div>
+				<div className={`gui-capability-pane${tab === "plugins" ? " gui-capability-pane--on" : ""}`}>
+					{/* Shared unified list (settings-side 扩展控制中心 parity):
 					 * plugin packages + hot-loaded extension modules, source-
-					 * category tags per item, shared empty-state contract. */
+					 * category tags per item, shared empty-state contract. */}
 					<UnifiedPluginsView
 						rpc={rpc}
 						plugins={plugins}
 						pluginsError={pluginsError}
 						onTogglePackage={togglePlugin}
-						onOpenMarketplace={() => setTab("marketplace")}
+						onOpenMarketplace={() => onTabChange("marketplace")}
 						onError={setPluginsError}
 					/>
-				) : (
+				</div>
+				<div className={`gui-capability-pane${tab === "marketplace" ? " gui-capability-pane--on" : ""}`}>
 					<MarketplaceView rpc={rpc} />
-				)}
+				</div>
 			</div>
 		</div>
 	);

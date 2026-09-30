@@ -745,10 +745,11 @@ function AppInner(): ReactNode {
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
 	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "capability" | "chat" | null>(null);
-	// 能力中心落地 tab（omp-open-capability 事件的可选 detail.tab 载荷；
-	// 默认 skills。＋市场卡 M3.7d 跳 marketplace；侧边栏枢纽下拉直达
-	// 四个 tab，extensions = 运行时扩展模块）。
-	const [capabilityInitialTab, setCapabilityInitialTab] = useState<"skills" | "plugins" | "marketplace">("skills");
+	// 能力中心当前 tab（受控：CapabilityCenterPage 始终挂载，切 tab 只改
+	// 这里，页面内部不再各自 useState(initialTab)——否则人在能力中心时经
+	// 侧边栏悬停菜单点另一个 tab 只更新了 state、组件不重挂载，永远不跳）。
+	// omp-open-capability 事件的可选 detail.tab 载荷与侧边栏悬停菜单都写这里。
+	const [capabilityTab, setCapabilityTab] = useState<"skills" | "plugins" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
 	useEffect(() => {
@@ -772,7 +773,7 @@ function AppInner(): ReactNode {
 		// 调用方保持默认 skills tab。
 		const onOpenCapability = (e: Event): void => {
 			const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
-			setCapabilityInitialTab(tab === "marketplace" || tab === "plugins" ? tab : "skills");
+			setCapabilityTab(tab === "marketplace" || tab === "plugins" ? tab : "skills");
 			viewSwapRef.current("capability");
 		};
 		window.addEventListener("omp-open-capability", onOpenCapability);
@@ -782,29 +783,6 @@ function AppInner(): ReactNode {
 			window.removeEventListener("omp-open-capability", onOpenCapability);
 		};
 	}, []);
-	viewSwapRef.current = (to: "board" | "scheduled" | "capability" | "chat"): void => {
-		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat";
-		// A same-target call must still clear any stale leave state — a
-		// leftover leavingView keeps the leave frame mounted at opacity 0
-		// (forwards fill) and the surface appears blank.
-		if (from === to) {
-			setLeavingView(null);
-			if (swapTimerRef.current) {
-				clearTimeout(swapTimerRef.current);
-				swapTimerRef.current = null;
-			}
-			return;
-		}
-		if (to !== "chat") setSettingsOpen(false);
-		setLeavingView(from);
-		if (swapTimerRef.current) clearTimeout(swapTimerRef.current);
-		swapTimerRef.current = setTimeout(() => {
-			setLeavingView(null);
-			setBoardOpen(to === "board");
-			setScheduledOpen(to === "scheduled");
-			setCapabilityOpen(to === "capability");
-		}, 150);
-	};
 	// Section the settings pane lands on (sidebar 技能 entry + welcome
 	// composer 自定义补充 preselect).
 	const [settingsSection, setSettingsSection] = useState<"skills" | "suggestions" | "providers" | undefined>(
@@ -851,6 +829,34 @@ function AppInner(): ReactNode {
 			setSettingsOpen(false);
 		}, 150);
 	}, [settingsOpen, leavingSettings]);
+	viewSwapRef.current = (to: "board" | "scheduled" | "capability" | "chat"): void => {
+		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat";
+		// A same-target call must still clear any stale leave state — a
+		// leftover leavingView keeps the leave frame mounted at opacity 0
+		// (forwards fill) and the surface appears blank. Settings can be open
+		// ON TOP of the target view (openSettings keeps the underneath view
+		// mounted), e.g. 扩展控制中心 CTA → capability while capability was
+		// already the underneath view — closing settings IS the jump, so the
+		// early return must not skip it.
+		if (from === to) {
+			setLeavingView(null);
+			if (swapTimerRef.current) {
+				clearTimeout(swapTimerRef.current);
+				swapTimerRef.current = null;
+			}
+			closeSettings();
+			return;
+		}
+		if (to !== "chat") closeSettings();
+		setLeavingView(from);
+		if (swapTimerRef.current) clearTimeout(swapTimerRef.current);
+		swapTimerRef.current = setTimeout(() => {
+			setLeavingView(null);
+			setBoardOpen(to === "board");
+			setScheduledOpen(to === "scheduled");
+			setCapabilityOpen(to === "capability");
+		}, 150);
+	};
 	// Settings shell visible across the whole close transition (blur-out
 	// 150ms before unmount). While active it REPLACES the main layout by
 	// slot: the nav column fills the sidebar slot (.gui-settings-nav-slot)
@@ -3371,12 +3377,12 @@ function AppInner(): ReactNode {
 							// 侧边栏能力中心按钮：直接点击落到技能市场
 							// （插件市场 tab）；悬停菜单才直达各 tab。
 							onOpenCapability={() => {
-								setCapabilityInitialTab("marketplace");
+								setCapabilityTab("marketplace");
 								viewSwapRef.current("capability");
 							}}
 							capabilityActive={capabilityOpen}
 							onOpenCapabilityTab={tab => {
-								setCapabilityInitialTab(tab);
+								setCapabilityTab(tab);
 								viewSwapRef.current("capability");
 							}}
 							onOpenSettings={openSettings}
@@ -3659,7 +3665,8 @@ function AppInner(): ReactNode {
 													<CapabilityCenterPage
 														rpc={rpc}
 														onBack={() => viewSwapRef.current("chat")}
-														initialTab={capabilityInitialTab}
+														tab={capabilityTab}
+														onTabChange={setCapabilityTab}
 													/>
 												</ChatSurfaceShell>
 											) : capabilityOpen ? (
@@ -3669,7 +3676,8 @@ function AppInner(): ReactNode {
 													<CapabilityCenterPage
 														rpc={rpc}
 														onBack={() => viewSwapRef.current("chat")}
-														initialTab={capabilityInitialTab}
+														tab={capabilityTab}
+														onTabChange={setCapabilityTab}
 													/>
 												</ChatSurfaceShell>
 											) : null}

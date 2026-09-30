@@ -4368,6 +4368,29 @@
 	padding: 14px 20px 20px;
 }
 
+/* Tab 面板常驻挂载、display 切换：切 tab 不丢滚动位置/输入态/已拉数据；
+ * none→block 重放 keyframes，切入面板淡入上浮。 */
+.gui-capability-pane {
+	display: none;
+}
+
+.gui-capability-pane--on {
+	display: block;
+	animation: gui-capability-pane-in 180ms var(--spring) both;
+}
+
+@keyframes gui-capability-pane-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
 /* 技能 tab 的子分段条（发现 / 我安装的 N）:pill 形,与分类 chips 同一语言。 */
 .gui-capability-subtabs {
 	display: flex;
