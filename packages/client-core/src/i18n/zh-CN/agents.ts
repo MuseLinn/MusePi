@@ -16,6 +16,11 @@ export const agents = {
 	"open a session to view its agents": "打开一个会话以查看其代理",
 	"{count} running · {total} total": "{count} 运行中 · 共 {total}",
 	"{count} agents": "{count} 个代理",
+	// 侧栏会话行展开名册的状态点提示。
+	"agent status running": "运行中",
+	"agent status idle": "空闲",
+	"agent status parked": "已挂起",
+	"agent status aborted": "已终止",
 	// Completed while the user wasn't looking — cleared on open.
 	new: "新",
 } as const;

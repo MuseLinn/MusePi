@@ -18,6 +18,11 @@ export const agents = {
 	"open a session to view its agents": "Open a session to view its agents",
 	"{count} running · {total} total": "{count} running · {total} total",
 	"{count} agents": "{count} agents",
+	// 侧栏会话行展开名册的状态点提示。
+	"agent status running": "Running",
+	"agent status idle": "Idle",
+	"agent status parked": "Parked",
+	"agent status aborted": "Aborted",
 	// Completed while the user wasn't looking — cleared on open.
 	new: "New",
 } as const satisfies Record<AgentsKey, string>;

@@ -2765,7 +2765,14 @@ export class DaemonSessionHost {
 	}
 
 	async knownSessions(): Promise<
-		(ReturnType<ViewStore["list"]>[number] & { liveCursor?: number; title?: string; status?: SessionStatus })[]
+		(ReturnType<ViewStore["list"]>[number] & {
+			liveCursor?: number;
+			title?: string;
+			status?: SessionStatus;
+			/** 磁盘 transcript 路径(SDK 扫描行带来;store 行由 live 覆盖)——
+			 *  session.list 的子代理计数按产物目录前缀过滤需要它。 */
+			sessionFile?: string;
+		})[]
 	> {
 		const live = new Map<string, number>();
 		for (const [id, s] of this.#sessions) live.set(id, s.view.cursor);
@@ -2781,9 +2788,10 @@ export class DaemonSessionHost {
 			history = { at: Date.now(), rows: scan };
 			this.#historyCache = history;
 		}
-		const merged = new Map<string, MaterializedRow & { title?: string; status?: SessionStatus }>(
-			rows.map(r => [r.sessionId, r]),
-		);
+		const merged = new Map<
+			string,
+			MaterializedRow & { title?: string; status?: SessionStatus; sessionFile?: string }
+		>(rows.map(r => [r.sessionId, r]));
 		for (const h of history.rows) {
 			const existing = merged.get(h.id);
 			const first = h.firstMessage && h.firstMessage !== "(no messages)" ? h.firstMessage : undefined;
@@ -2797,6 +2805,9 @@ export class DaemonSessionHost {
 				// comes from the jsonl tail — the store snapshot has no such
 				// field, so the SDK scan is authoritative for it.
 				if (!existing.status && h.status) existing.status = h.status;
+				// 磁盘路径同理只在扫描行上:子代理计数/名册按产物目录前缀
+				// 过滤需要它(store 行由 live 会话在 server 侧覆盖)。
+				if (!existing.sessionFile) existing.sessionFile = h.path;
 				continue;
 			}
 			merged.set(h.id, {
@@ -2826,6 +2837,8 @@ export class DaemonSessionHost {
 				// message. listAllSessions reads the slot now.
 				title: h.title ?? first,
 				status: h.status,
+				// 磁盘 transcript 路径——子代理产物目录 = 去 .jsonl + sep。
+				sessionFile: h.path,
 			});
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);

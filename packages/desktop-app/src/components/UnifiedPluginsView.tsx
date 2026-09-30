@@ -199,8 +199,8 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 }
 
 /** 插件模块行（dsh 列表行 parity）：图标 + 状态点 + 名称 + 描述 + 右侧开关，
- *  点击行头打开详情弹层。 */
-function ModuleRow({
+ *  点击行头打开详情弹层。能力中心「扩展」tab 复用（导出共享）。 */
+export function ModuleRow({
 	e,
 	rpc,
 	busy,

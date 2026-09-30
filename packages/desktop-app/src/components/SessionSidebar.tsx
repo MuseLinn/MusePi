@@ -13,7 +13,7 @@ import { GroupedSessionList } from "./GroupedSessionList";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
-import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import { type SessionAgentEntry, SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
 
@@ -54,17 +54,15 @@ export function SessionSidebar({
 	onOpenScheduled,
 	scheduledActive,
 	cronGlow,
-	onOpenAgents,
-	agentsActive,
 	onOpenCapability,
 	capabilityActive,
+	onOpenCapabilityTab,
 	onOpenSettings,
 	onPickFolder,
 	onCreateProject,
 	onOpenCollab,
 	onRenameSession,
 	onOpenSearch,
-	onOpenSkills,
 	collapsed,
 	width,
 	onDeleteArchived,
@@ -72,6 +70,9 @@ export function SessionSidebar({
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
+	expandedAgents,
+	agentRosters,
+	onToggleAgents,
 }: {
 	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -86,6 +87,8 @@ export function SessionSidebar({
 			status?: "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
 			/** 会话预设 id — 悬浮卡的模式行(app 侧 SessionMetaRow 的子集)。 */
 			modeId?: string;
+			/** 子代理数（session.list agentCount）—— >0 的会话行出现展开 chevron。 */
+			agentCount?: number;
 		}
 	>;
 	selectedId: string | null;
@@ -101,13 +104,12 @@ export function SessionSidebar({
 	cronGlow?: boolean;
 	/** Board view is the active scene — its nav item renders selected. */
 	boardActive?: boolean;
-	/** Agents center view is the active scene — its nav item renders selected. */
-	onOpenAgents?(): void;
-	agentsActive?: boolean;
-	/** 能力中心 (设计稿 05): sidebar first-class entry — opens the full-page
-	 *  capability center (skills / plugins / marketplace). */
+	/** 能力中心枢纽 (WorkBuddy 式单入口): 主点击区进能力中心默认页,
+	 *  尾部 chevron 弹下拉直达 技能/插件/扩展/市场 四个 tab。 */
 	onOpenCapability?(): void;
 	capabilityActive?: boolean;
+	/** 枢纽下拉直达 —— 落地能力中心的指定 tab。 */
+	onOpenCapabilityTab?(tab: "skills" | "plugins" | "extensions" | "marketplace"): void;
 	onOpenSettings(): void;
 	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -120,8 +122,6 @@ export function SessionSidebar({
 	onRenameSession?(sessionId: string, title: string): void;
 	/** Open the app-level command palette (⌘K / sidebar 搜索). */
 	onOpenSearch(): void;
-	/** Open the skill manager (sidebar 技能 entry → settings skills tab). */
-	onOpenSkills(): void;
 	collapsed: boolean;
 	/** Permanently delete a session's local data (journal + index) via the
 	 *  daemon; returns success so the UI only drops the archive row on a real
@@ -139,6 +139,12 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
+	/** 已展开子代理名册的会话 id 集合（openchamber 会话子代理查看）。 */
+	expandedAgents?: ReadonlySet<string>;
+	/** 会话 id → 子代理名册（session.agents 拉取结果）。 */
+	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
+	/** 展开/收起某会话的子代理名册（app 侧触发拉取）。 */
+	onToggleAgents?(sessionId: string): void;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -160,6 +166,10 @@ export function SessionSidebar({
 		}
 	};
 	const [projMenu, setProjMenu] = useState(false);
+	// 能力中心枢纽下拉（WorkBuddy 式）：chevron 弹出直达四 tab 的浮层,
+	// 走全局 MenuPopup（portal + 互斥 + gui-menu-in/out 动画单一权威）。
+	const [capHubOpen, setCapHubOpen] = useState(false);
+	const capHubAnchorRef = useRef<HTMLDivElement | null>(null);
 	// Tab-row quick toggle: null = per-group state, true = all open, false = all closed.
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
 	const [pinned, setPinned] = useState<string[]>(() => {
@@ -321,6 +331,16 @@ export function SessionSidebar({
 			),
 		[sessionMeta],
 	);
+	// 子代理数 >0 的会话（session.list agentCount）——行内 chevron 的数据源。
+	const agentCounts = useMemo(
+		() =>
+			new Map(
+				[...sessionMeta.entries()]
+					.filter(([, meta]) => typeof meta.agentCount === "number" && meta.agentCount > 0)
+					.map(([id, meta]) => [id, meta.agentCount as number]),
+			),
+		[sessionMeta],
+	);
 
 	const deleteArchived = useCallback(
 		async (id: string): Promise<void> => {
@@ -475,6 +495,10 @@ export function SessionSidebar({
 				workingIds={workingIds}
 				statuses={statuses}
 				manualTags={manualTags}
+				agentCounts={agentCounts}
+				expandedAgents={expandedAgents}
+				agentRosters={agentRosters}
+				onToggleAgents={onToggleAgents}
 				searchQuery={sessionQuery}
 			/>
 		</div>
@@ -545,32 +569,61 @@ export function SessionSidebar({
 							<span>{t("board")}</span>
 						</button>
 					)}
-					{onOpenAgents && (
-						<button
-							type="button"
-							className={`gui-menu-item${agentsActive ? " gui-menu-item--active" : ""}`}
-							onClick={onOpenAgents}
-							title={t("agents center")}
-						>
-							<Icon name="ai-agent-fill" className="h-4 w-4" />
-							<span>{t("agents center")}</span>
-						</button>
-					)}
 					{onOpenCapability && (
-						<button
-							type="button"
-							className={`gui-menu-item${capabilityActive ? " gui-menu-item--active" : ""}`}
-							onClick={onOpenCapability}
-							title={t("capability center")}
+						/* 能力中心枢纽（WorkBuddy 式单入口）: 主点击区进默认页,
+						 * 尾部 chevron 弹下拉直达 技能/插件/扩展/市场。 */
+						<div
+							ref={capHubAnchorRef}
+							className={`gui-menu-item gui-menu-item--hub${capabilityActive ? " gui-menu-item--active" : ""}`}
 						>
-							<Icon name="star" className="h-4 w-4" />
-							<span>{t("capability center")}</span>
-						</button>
+							<button
+								type="button"
+								className="gui-menu-item-hub-main"
+								onClick={onOpenCapability}
+								title={t("capability center")}
+							>
+								<Icon name="star" className="h-4 w-4" />
+								<span>{t("capability center")}</span>
+							</button>
+							<button
+								type="button"
+								className={`gui-menu-item-hub-chevron${capHubOpen ? " gui-menu-item-hub-chevron--on" : ""}`}
+								aria-label={t("capability hub open")}
+								aria-expanded={capHubOpen}
+								onClick={() => setCapHubOpen(v => !v)}
+							>
+								<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
+							</button>
+							<MenuPopup
+								open={capHubOpen}
+								onOpenChange={setCapHubOpen}
+								anchor={capHubAnchorRef.current}
+								className="gui-cap-hub-menu"
+							>
+								{(
+									[
+										["skills", "sparkling", t("skills tab")],
+										["plugins", "plug", t("plugins")],
+										["extensions", "code-box", t("extensions")],
+										["marketplace", "plug-2", t("marketplace")],
+									] as ["skills" | "plugins" | "extensions" | "marketplace", string, string][]
+								).map(([id, icon, label]) => (
+									<button
+										key={id}
+										type="button"
+										className="gui-view-opt"
+										onClick={() => {
+											setCapHubOpen(false);
+											onOpenCapabilityTab?.(id);
+										}}
+									>
+										<Icon name={icon as Parameters<typeof Icon>[0]["name"]} className="h-3.5 w-3.5" />
+										<span>{label}</span>
+									</button>
+								))}
+							</MenuPopup>
+						</div>
 					)}
-					<button type="button" className="gui-menu-item" onClick={onOpenSkills} title={t("extensions")}>
-						<Icon name="sparkling" className="h-4 w-4" />
-						<span>{t("extensions")}</span>
-					</button>
 				</div>
 				{/* Group / project tabs: the capsule wraps ONLY the two fixed-width
 				 * pills; the right cluster carries a collapse/expand-all quick toggle
@@ -914,6 +967,10 @@ export function SessionSidebar({
 													workingIds={workingIds}
 													statuses={statuses}
 													manualTags={manualTags}
+													agentCounts={agentCounts}
+													expandedAgents={expandedAgents}
+													agentRosters={agentRosters}
+													onToggleAgents={onToggleAgents}
 													searchQuery={sessionQuery}
 												/>
 											</div>
@@ -929,6 +986,10 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											agentCounts={agentCounts}
+											expandedAgents={expandedAgents}
+											agentRosters={agentRosters}
+											onToggleAgents={onToggleAgents}
 											searchQuery={sessionQuery}
 										/>
 									</>
@@ -983,6 +1044,10 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
+															agentCounts={agentCounts}
+															expandedAgents={expandedAgents}
+															agentRosters={agentRosters}
+															onToggleAgents={onToggleAgents}
 															searchQuery={sessionQuery}
 														/>
 													</div>
@@ -1107,6 +1172,10 @@ export function SessionSidebar({
 																		workingIds={workingIds}
 																		statuses={statuses}
 																		manualTags={manualTags}
+																		agentCounts={agentCounts}
+																		expandedAgents={expandedAgents}
+																		agentRosters={agentRosters}
+																		onToggleAgents={onToggleAgents}
 																		searchQuery={sessionQuery}
 																	/>
 																)}
@@ -1125,6 +1194,10 @@ export function SessionSidebar({
 														</div>
 														<SessionList
 															nodes={noFolder}
+															agentCounts={agentCounts}
+															expandedAgents={expandedAgents}
+															agentRosters={agentRosters}
+															onToggleAgents={onToggleAgents}
 															selectedId={selectedId}
 															onSelect={onSelect}
 															onContextMenu={openSessionCtx}
@@ -1158,6 +1231,10 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
+											agentCounts={agentCounts}
+											expandedAgents={expandedAgents}
+											agentRosters={agentRosters}
+											onToggleAgents={onToggleAgents}
 											searchQuery={sessionQuery}
 										/>
 									</div>
@@ -1224,6 +1301,10 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									agentCounts={agentCounts}
+									expandedAgents={expandedAgents}
+									agentRosters={agentRosters}
+									onToggleAgents={onToggleAgents}
 									searchQuery={sessionQuery}
 								/>
 								{cronNodes.length > 0 && cronSection}
@@ -1237,6 +1318,10 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
+									agentCounts={agentCounts}
+									expandedAgents={expandedAgents}
+									agentRosters={agentRosters}
+									onToggleAgents={onToggleAgents}
 									searchQuery={sessionQuery}
 								/>
 							</>

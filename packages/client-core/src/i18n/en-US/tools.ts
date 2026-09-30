@@ -530,7 +530,12 @@ export const tools = {
 
 	// ── Capability center (two screens + skill drawer + diagnostics) ─────────
 	"capability center": "Capability center",
-	"capability center desc": "Skills · plugins · marketplace",
+	"capability center desc": "Skills · plugins · extensions · marketplace",
+	"capability hub open": "Open quick-jump menu",
+	"extensions runtime": "Runtime extensions",
+	"extensions runtime empty": "No runtime extensions found",
+	"extensions runtime empty hint":
+		"Drop extension modules into ~/.musepi/agent/extensions (user level) or .musepi/extensions/ in a project (project level) — they hot-load on save, no restart needed.",
 	"skills tab": "Skills",
 	"ext overview": "Overview",
 	"ext inventory": "Capability inventory",

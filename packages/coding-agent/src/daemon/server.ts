@@ -1354,8 +1354,20 @@ export class DaemonServer {
 			}
 			case "session.list": {
 				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
+				// 子代理计数(侧栏会话行展开):注册表 transcript 路径落在会话
+				// 产物目录(`<sessionFile 去 .jsonl>/`)下的非 advisor ref。
+				// 每条请求一次注册表快照,逐行前缀过滤。
+				const { AgentRegistry } = await import("../registry/agent-registry");
+				const subagentFiles = AgentRegistry.global()
+					.list()
+					.filter(ref => ref.kind !== "advisor" && typeof ref.sessionFile === "string")
+					.map(ref => ref.sessionFile as string);
 				return (await this.#host.knownSessions()).map(r => {
 					const live = this.#host.get(r.sessionId);
+					const sessionFile = live?.agentSession.sessionFile ?? r.sessionFile ?? null;
+					const root = sessionFile?.endsWith(".jsonl")
+						? `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`
+						: null;
 					return {
 						id: r.sessionId,
 						parentId: r.parentId,
@@ -1368,6 +1380,8 @@ export class DaemonServer {
 						// 会话预设 id（null = 未设预设）：侧栏悬浮卡的模式行。
 						modeId: r.modeId ?? undefined,
 						paused: live?.pauseGate.paused === true,
+						// 子代理数(不含 advisor):>0 时侧栏会话行出现展开 chevron。
+						agentCount: root === null ? 0 : subagentFiles.filter(f => f.startsWith(root)).length,
 						// Real-time status (kimi 实时提醒 parity): `working` = a
 						// live session with a running agent turn (the materialized
 						// view's streaming flag — driven by the same turn_start/
@@ -1391,6 +1405,41 @@ export class DaemonServer {
 								: undefined),
 					};
 				});
+			}
+			case "session.agents": {
+				// 单个会话的子代理名册（侧边栏会话行展开,openchamber 参照）:
+				// 口径 = 注册表 transcript 路径落在本会话产物目录
+				// (`<sessionFile 去 .jsonl>/`) 下的非 advisor ref —— task /
+				// vibe / persisted-rehydrate 三条注册路径同目录约定。
+				// 主 agent 本身不算子代理;advisor 是只读观察 transcript,
+				// 不进可交互名册。非 live 会话经 listAllSessions 解析文件。
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) throw new Error("session.agents: missing sessionId");
+				let sessionFile = this.#host.get(sessionId)?.agentSession.sessionFile ?? null;
+				if (!sessionFile) {
+					const { listAllSessions } = await import("../session/session-listing");
+					const row = (await listAllSessions()).find(r => r.id === sessionId);
+					sessionFile = row?.path ?? null;
+				}
+				if (!sessionFile?.endsWith(".jsonl")) return { agents: [] };
+				const root = `${sessionFile.slice(0, -".jsonl".length)}${path.sep}`;
+				const { AgentRegistry } = await import("../registry/agent-registry");
+				const agents = AgentRegistry.global()
+					.list()
+					.filter(
+						ref =>
+							ref.kind !== "advisor" && typeof ref.sessionFile === "string" && ref.sessionFile.startsWith(root),
+					)
+					.map(ref => ({
+						id: ref.id,
+						displayName: ref.displayName,
+						kind: ref.kind,
+						status: ref.status,
+						activity: ref.activity ?? null,
+						lastActivity: ref.lastActivity,
+					}));
+				return { agents };
 			}
 			case "history.messages": {
 				// One session's message rows (history viewer right pane) —

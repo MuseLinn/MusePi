@@ -2622,6 +2622,86 @@
 	opacity: 0.9;
 }
 
+/* 子代理展开 chevron（openchamber 会话子代理查看 parity）: 仅
+ * agentCount>0 的行出现;低对比常驻,悬停/展开时提亮,展开态箭头微旋。 */
+.gui-tree-agents {
+	flex-shrink: 0;
+	margin-left: 4px;
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 1px 4px;
+	border-radius: var(--radius-md);
+	color: var(--color-text-faint);
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	transition:
+		background 120ms ease-out,
+		color 120ms ease-out;
+}
+
+.gui-tree-agents:hover,
+.gui-tree-agents--on {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-tree-agents--on svg {
+	transform: rotate(180deg);
+}
+
+.gui-tree-agents svg {
+	transition: transform 160ms ease-out;
+}
+
+/* 展开的子代理名册: 行几何对齐会话行(状态方块 12px + 前缀缩进),缩进
+ * 一层树前缀,低对比一行一个。 */
+.gui-session-agent-list {
+	list-style: none;
+	margin: 0;
+	padding: 0 0 2px;
+}
+
+.gui-session-agent-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 3px 10px 3px 30px;
+	border: none;
+	border-radius: var(--radius-lg);
+	background: transparent;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	cursor: pointer;
+	text-align: left;
+	transition: background 120ms ease-out;
+}
+
+.gui-session-agent-row:hover {
+	background: var(--color-surface-raised);
+	color: var(--color-text);
+}
+
+.gui-session-agent-name {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 500;
+}
+
+.gui-session-agent-activity {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--color-text-faint);
+	font-size: 11px;
+}
+
 /* Context-drawer stats (right panel): two compact stat tiles + action row. */
 .gui-ctx-stat {
 	display: flex;

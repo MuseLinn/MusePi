@@ -512,7 +512,12 @@ export const tools = {
 
 	// ── Capability center (two screens + skill drawer + diagnostics) ─────────
 	"capability center": "能力中心",
-	"capability center desc": "技能 · 插件 · 市场",
+	"capability center desc": "技能 · 插件 · 扩展 · 市场",
+	"capability hub open": "打开直达菜单",
+	"extensions runtime": "运行时扩展",
+	"extensions runtime empty": "没有发现运行时扩展",
+	"extensions runtime empty hint":
+		"把扩展模块放到 ~/.musepi/agent/extensions（用户级）或项目 .musepi/extensions/（项目级），保存即热加载，无需重启。",
 	"skills tab": "技能",
 	"ext overview": "概览",
 	"ext inventory": "能力清单",

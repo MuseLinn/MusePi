@@ -2,7 +2,6 @@ import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t }
 import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import { AgentsCenterPage } from "./components/AgentsCenterPage";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
@@ -157,6 +156,19 @@ interface SessionMetaRow {
 	/** 会话预设(mode)id（work/chat/creator/design…）— 侧栏悬浮卡的模式行；
 	 *  undefined = 未设预设（守护进程 modeId 为 null 的历史会话）。 */
 	modeId?: string;
+	/** 子代理数（session.list agentCount,不含 advisor）—— >0 时侧栏会话
+	 *  行出现子代理展开 chevron。 */
+	agentCount?: number;
+}
+
+/** 子代理名册行（session.agents RPC 的显示安全子集）。 */
+interface SessionAgentRow {
+	id: string;
+	displayName: string;
+	kind: string;
+	status: string;
+	activity: string | null;
+	lastActivity: number;
 }
 
 /** Collect every session id in a session tree (drift check for the poll:
@@ -438,6 +450,40 @@ function AppInner(): ReactNode {
 	const [sessionMeta, setSessionMeta] = useState<Map<string, SessionMetaRow>>(new Map());
 	const sessionMetaRef = useRef<Map<string, SessionMetaRow>>(new Map());
 	sessionMetaRef.current = sessionMeta;
+	// 侧栏会话行的子代理名册展开（openchamber parity）：展开时拉
+	// session.agents,展开期间随 session.list 轮询刷新;名册按会话 id 缓存。
+	const [expandedAgents, setExpandedAgents] = useState<ReadonlySet<string>>(new Set());
+	const [agentRosters, setAgentRosters] = useState<ReadonlyMap<string, readonly SessionAgentRow[]>>(new Map());
+	const expandedAgentsRef = useRef<ReadonlySet<string>>(new Set());
+	expandedAgentsRef.current = expandedAgents;
+	const fetchAgentRoster = useCallback(
+		(sessionId: string): void => {
+			if (!rpc) return;
+			void rpc
+				.request<{ agents: SessionAgentRow[] }>("session.agents", { sessionId })
+				.then(res => {
+					setAgentRosters(prev => new Map(prev).set(sessionId, res?.agents ?? []));
+				})
+				.catch(() => {
+					// 拉取失败保留旧名册;不弹错(侧栏轻量交互)。
+				});
+		},
+		[rpc],
+	);
+	const toggleSessionAgents = useCallback(
+		(sessionId: string): void => {
+			const wasExpanded = expandedAgentsRef.current.has(sessionId);
+			setExpandedAgents(prev => {
+				const next = new Set(prev);
+				if (wasExpanded) next.delete(sessionId);
+				else next.add(sessionId);
+				return next;
+			});
+			// 每次展开都重拉（状态/活动是易变数据）;收起不动名册缓存。
+			if (!wasExpanded) fetchAgentRoster(sessionId);
+		},
+		[fetchAgentRoster],
+	);
 	// Per-session "last seen message count" — the source of truth for the
 	// cursor-based unread derivation: a session whose count grew past the
 	// last count the user had it open at is unread. Persisted so sessions
@@ -590,7 +636,6 @@ function AppInner(): ReactNode {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [boardOpen, setBoardOpen] = useState(false);
 	const [scheduledOpen, setScheduledOpen] = useState(false);
-	const [agentsOpen, setAgentsOpen] = useState(false);
 	const [capabilityOpen, setCapabilityOpen] = useState(false);
 	// Cron-run notifications: poll cron.list while the app is up; a run that
 	// finishes fires the standard completion/error notification + pet bubble,
@@ -699,14 +744,15 @@ function AppInner(): ReactNode {
 	}, [rpc]);
 	// Board / scheduled / chat surface swap with the same blur transition
 	// as the board home ↔ collection swap (150ms leave blur, 300ms enter).
-	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "agents" | "capability" | "chat" | null>(
-		null,
-	);
+	const [leavingView, setLeavingView] = useState<"board" | "scheduled" | "capability" | "chat" | null>(null);
 	// 能力中心落地 tab（omp-open-capability 事件的可选 detail.tab 载荷；
-	// 默认 skills。＋市场卡 M3.7d 跳 marketplace）。
-	const [capabilityInitialTab, setCapabilityInitialTab] = useState<"skills" | "plugins" | "marketplace">("skills");
+	// 默认 skills。＋市场卡 M3.7d 跳 marketplace；侧边栏枢纽下拉直达
+	// 四个 tab，extensions = 运行时扩展模块）。
+	const [capabilityInitialTab, setCapabilityInitialTab] = useState<
+		"skills" | "plugins" | "extensions" | "marketplace"
+	>("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const viewSwapRef = useRef((_to: "board" | "scheduled" | "agents" | "capability" | "chat"): void => {});
+	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
 	useEffect(() => {
 		const onOpenBoard = (e: Event) => {
 			const id = (e as CustomEvent<{ id?: string }>).detail?.id;
@@ -724,11 +770,12 @@ function AppInner(): ReactNode {
 		};
 		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
 		// 设置 → 扩展控制中心概览的 CTA（设计稿 07 底部互跳）：开一级能力中心。
-		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab）；无载荷的旧
-		// 调用方（ExtensionsCenter CTA）保持默认 skills tab。
+		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab；侧边栏枢纽
+		// 下拉直达 extensions）；无载荷的旧调用方（ExtensionsCenter CTA）
+		// 保持默认 skills tab。
 		const onOpenCapability = (e: Event): void => {
 			const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
-			setCapabilityInitialTab(tab === "marketplace" ? "marketplace" : "skills");
+			setCapabilityInitialTab(tab === "marketplace" || tab === "plugins" || tab === "extensions" ? tab : "skills");
 			viewSwapRef.current("capability");
 		};
 		window.addEventListener("omp-open-capability", onOpenCapability);
@@ -738,16 +785,8 @@ function AppInner(): ReactNode {
 			window.removeEventListener("omp-open-capability", onOpenCapability);
 		};
 	}, []);
-	viewSwapRef.current = (to: "board" | "scheduled" | "agents" | "capability" | "chat"): void => {
-		const from = boardOpen
-			? "board"
-			: scheduledOpen
-				? "scheduled"
-				: agentsOpen
-					? "agents"
-					: capabilityOpen
-						? "capability"
-						: "chat";
+	viewSwapRef.current = (to: "board" | "scheduled" | "capability" | "chat"): void => {
+		const from = boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat";
 		// A same-target call must still clear any stale leave state — a
 		// leftover leavingView keeps the leave frame mounted at opacity 0
 		// (forwards fill) and the surface appears blank.
@@ -766,7 +805,6 @@ function AppInner(): ReactNode {
 			setLeavingView(null);
 			setBoardOpen(to === "board");
 			setScheduledOpen(to === "scheduled");
-			setAgentsOpen(to === "agents");
 			setCapabilityOpen(to === "capability");
 		}, 150);
 	};
@@ -795,17 +833,7 @@ function AppInner(): ReactNode {
 				section === "skills" || section === "suggestions" || section === "providers" ? section : undefined;
 			if (settingsOpen) return;
 			// Blur the current surface out first (leavingView keeps it mounted).
-			setLeavingView(
-				boardOpen
-					? "board"
-					: scheduledOpen
-						? "scheduled"
-						: agentsOpen
-							? "agents"
-							: capabilityOpen
-								? "capability"
-								: "chat",
-			);
+			setLeavingView(boardOpen ? "board" : scheduledOpen ? "scheduled" : capabilityOpen ? "capability" : "chat");
 			clearTimeout(settingsTimerRef.current ?? undefined);
 			settingsTimerRef.current = setTimeout(() => {
 				settingsTimerRef.current = null;
@@ -1066,6 +1094,7 @@ function AppInner(): ReactNode {
 									updatedAt: r.updatedAt,
 									status: r.status,
 									modeId: r.modeId,
+									agentCount: r.agentCount ?? 0,
 								},
 							]),
 						),
@@ -1104,6 +1133,7 @@ function AppInner(): ReactNode {
 							r.messageCount ?? 0,
 							r.paused === true,
 							r.modeId,
+							r.agentCount ?? 0,
 						]),
 					);
 					if (key === lastKey) return;
@@ -1123,11 +1153,14 @@ function AppInner(): ReactNode {
 								updatedAt: r.updatedAt ?? row.updatedAt,
 								cwd: r.cwd ?? row.cwd,
 								modeId: r.modeId ?? row.modeId,
+								agentCount: r.agentCount ?? 0,
 							});
 						}
 						return next;
 					});
 					applyReadStatus(list);
+					// 已展开名册的会话:随轮询顺带刷新,状态点/活动不Stale。
+					for (const id of expandedAgentsRef.current) void fetchAgentRoster(id);
 					// Tree sync: session.list is the freshest source of which
 					// sessions exist. If its id set drifts from the sidebar
 					// tree's (a session created or deleted outside this window,
@@ -3338,22 +3371,21 @@ function AppInner(): ReactNode {
 							onOpenScheduled={() => viewSwapRef.current("scheduled")}
 							scheduledActive={scheduledOpen}
 							cronGlow={cronGlow}
-							onOpenAgents={() => viewSwapRef.current("agents")}
-							agentsActive={agentsOpen}
 							onOpenCapability={() => viewSwapRef.current("capability")}
 							capabilityActive={capabilityOpen}
+							onOpenCapabilityTab={tab => {
+								setCapabilityInitialTab(tab);
+								viewSwapRef.current("capability");
+							}}
 							onOpenSettings={openSettings}
 							onOpenCollab={() => setCollabOpen(true)}
 							onRenameSession={renameSession}
 							onOpenSearch={() => setPaletteOpen(true)}
 							unread={unreadSessions}
 							onToggleUnread={toggleUnread}
-							onOpenSkills={() => {
-								// Section goes through openSettings's own arg: the 150ms
-								// timer inside re-sets the section, which would wipe a
-								// pre-set "skills" back to the default pane.
-								openSettings("skills");
-							}}
+							expandedAgents={expandedAgents}
+							agentRosters={agentRosters}
+							onToggleAgents={toggleSessionAgents}
 							onPickFolder={() => {
 								pickProjectFolder();
 							}}
@@ -3520,13 +3552,12 @@ function AppInner(): ReactNode {
 											onAskAnswer={answerAsk}
 										/>
 									);
-									// Chat 常驻挂载:看板/任务/智能体/能力中心打开时 chat 仅
+									// Chat 常驻挂载:看板/任务/能力中心打开时 chat 仅
 									// display:none,不卸载——返回时会话/转录/虚拟列表状态全保留
 									// (此前整树卸载,返回全量重挂重订阅,超长会话卡半天)。
 									// Settings 关闭的 150ms 模糊退出期间让 chat keeper 重新占位
 									// (交叉淡入); settingsOpen 真正翻 false 后才隐藏。
-									const chatKeeperHidden =
-										settingsOpen || boardOpen || scheduledOpen || agentsOpen || capabilityOpen;
+									const chatKeeperHidden = settingsOpen || boardOpen || scheduledOpen || capabilityOpen;
 									return (
 										<>
 											<div
@@ -3618,24 +3649,6 @@ function AppInner(): ReactNode {
 														onBack={() => viewSwapRef.current("chat")}
 														onOpenSession={id => void openSession(id)}
 														initialTaskId={scheduledJumpId}
-													/>
-												</ChatSurfaceShell>
-											) : leavingView === "agents" ? (
-												/* Leaving agents → chat/board: agents blurs out first. */
-												<ChatSurfaceShell leave>
-													<AgentsCenterPage
-														rpc={rpc}
-														store={store}
-														onBack={() => viewSwapRef.current("chat")}
-													/>
-												</ChatSurfaceShell>
-											) : agentsOpen ? (
-												/* Agents center view (live subagent roster). */
-												<ChatSurfaceShell>
-													<AgentsCenterPage
-														rpc={rpc}
-														store={store}
-														onBack={() => viewSwapRef.current("chat")}
 													/>
 												</ChatSurfaceShell>
 											) : leavingView === "capability" ? (
@@ -3805,7 +3818,6 @@ function AppInner(): ReactNode {
 					});
 				}}
 				onSelectSession={id => void openSession(id)}
-				onOpenAgents={() => viewSwapRef.current("agents")}
 				onOpenCapability={() => viewSwapRef.current("capability")}
 			/>
 			{/* Process-global freeze overlay: covers the entire window

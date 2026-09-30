@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { Icon, type IconName } from "../vendor/oc-icons";
 import { CapabilityCenter } from "./CapabilityCenter";
+import { ExtensionsRuntimeTab } from "./ExtensionsRuntimeTab";
 import { MarketplaceView } from "./MarketplaceView";
 import { SkillMarketView } from "./SkillMarketView";
 import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./UnifiedPluginsView";
@@ -23,7 +24,7 @@ import { type PluginPackageEntry as PluginEntry, UnifiedPluginsView } from "./Un
  *   市场  — the remote marketplace catalog (marketplace.list / install).
  */
 
-type Tab = "skills" | "plugins" | "marketplace";
+type Tab = "skills" | "plugins" | "extensions" | "marketplace";
 /** 技能 tab 的两个子分段 (设计稿 frame 01/02):发现 / 我安装的 N。 */
 type SkillPane = "discover" | "installed";
 
@@ -93,6 +94,7 @@ export function CapabilityCenterPage({
 	const tabs: { id: Tab; label: string; icon: IconName }[] = [
 		{ id: "skills", label: t("skills tab"), icon: "sparkling" },
 		{ id: "plugins", label: t("plugins"), icon: "plug" },
+		{ id: "extensions", label: t("extensions"), icon: "code-box" },
 		{ id: "marketplace", label: t("marketplace"), icon: "plug-2" },
 	];
 
@@ -163,6 +165,10 @@ export function CapabilityCenterPage({
 						onOpenMarketplace={() => setTab("marketplace")}
 						onError={setPluginsError}
 					/>
+				) : tab === "extensions" ? (
+					/* 运行时扩展模块（用户/项目级热加载，pi/omp 遗产扩展
+					 *  体系）——侧边栏枢纽下拉的直达落点。 */
+					<ExtensionsRuntimeTab rpc={rpc} />
 				) : (
 					<MarketplaceView rpc={rpc} />
 				)}

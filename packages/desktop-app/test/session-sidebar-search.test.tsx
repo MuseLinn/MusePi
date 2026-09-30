@@ -56,7 +56,6 @@ function sidebarHtml(options: {
 			onOpenConnect={() => {}}
 			onOpenSettings={() => {}}
 			onOpenSearch={() => {}}
-			onOpenSkills={() => {}}
 			collapsed={false}
 			onDeleteArchived={async () => true}
 			unread={options.unread}

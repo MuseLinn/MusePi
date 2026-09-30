@@ -122,6 +122,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"save",
 	"session.abort",
 	"session.advisor",
+	"session.agents",
 	"session.armPrewalk",
 	"session.bashCommand",
 	"session.branchAt",
