@@ -2388,7 +2388,7 @@
 .gui-plugin-facts {
 	margin: 12px 0 0;
 	padding: 10px 12px;
-	border-radius: 10px;
+	border-radius: var(--radius-lg);
 	background: color-mix(in srgb, var(--color-text) 4%, transparent);
 	display: grid;
 	gap: 7px;
@@ -3473,7 +3473,7 @@
  * stopPropagation，不会误触发展开。 */
 .gui-ext-provider-h--btn {
 	cursor: pointer;
-	border-radius: 6px;
+	border-radius: var(--radius-md);
 }
 .gui-ext-provider-h--btn:focus-visible {
 	outline: 2px solid var(--color-accent, var(--color-text));

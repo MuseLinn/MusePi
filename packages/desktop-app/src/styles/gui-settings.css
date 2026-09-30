@@ -2094,7 +2094,7 @@
 	gap: 10px;
 	padding: 8px 10px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-lg, 10px);
+	border-radius: var(--radius-lg);
 	background: color-mix(in srgb, var(--color-text) 3%, transparent);
 }
 .gui-plugin-component-name {
@@ -2129,7 +2129,7 @@
 	text-align: left;
 	padding: 10px 12px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-lg, 10px);
+	border-radius: var(--radius-lg);
 	background: var(--color-surface);
 	cursor: pointer;
 	transition: border-color 120ms ease;

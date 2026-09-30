@@ -286,7 +286,7 @@
 
 .tr-tool-registry-chip {
 	padding: 1px 7px;
-	border-radius: var(--radius-full, 999px);
+	border-radius: 999px;
 	background: color-mix(in oklab, var(--accent, #7c8cf8) 16%, transparent);
 	color: var(--fg);
 	font-size: 11px;
