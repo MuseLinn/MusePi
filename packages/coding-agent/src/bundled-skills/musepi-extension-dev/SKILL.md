@@ -58,7 +58,7 @@ export default function (pi: ExtensionAPI) {
 2. **显式配置**：`~/.musepi/agent/config.yml` 的 `extensions:` 数组（路径/包目录）或 `-e/--extension` CLI flag
 3. **禁用**：`disabledExtensions: [extension-module:<name>]`（name = 目录/文件名）；`--no-extensions` 全关
 4. **验证**：`musepi /extensions` 列出已加载扩展；扩展里的 `console.error` 进 daemon/TUI 日志
-5. **改 daemon 场景**：GUI 的 daemon 长驻——改扩展后必须重启 daemon（GUI 菜单"重启 daemon"）才生效；TUI 新会话即生效
+5. **改动生效（HMR 热拔插）**：改扩展**入口文件**后 daemon watcher ~500ms 内广播 `extensions.changed`，GUI ~1s 刷新，活跃会话执行 `reloadExtension`（忙会话挂起、agent_end 补做）——**不用重启 daemon**；会话内工具下次调用生效，未重注册的旧工具名被移除。注意：**子模块改动不热生效**（Bun 模块缓存只重键入口 specifier）——多文件扩展改了子模块要 touch 入口文件。扩展内存态不迁移。只有改了扩展的发现/加载机制本身、或 daemon 侧注册代码时才需要重启 daemon（GUI 菜单"重启 daemon"）；TUI 新会话即生效
 
 ## 插件配置（manifest config + pi.config，dsh 管理页 parity）
 
@@ -70,6 +70,22 @@ const all = await pi.config.getAll(); // 完整值表（只含声明键）
 ```
 
 取值与表单、写入共用同一条钳制链路：存储坏值回退声明默认，未声明键读不到。存储落点 `<agentDir>/extensions/plugin-config.json`，键 = `extension-module:<name>`。fail-soft：坏清单字段被逐个丢弃并给警告，不拖垮扩展登记。详见 `docs/extensions-dev.md` §13。
+
+## 自举工具环（agent 在会话内自己管扩展）
+
+daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠 GUI 就能完成"写文件 → 加载 → 自查 → 热修 → 回退"闭环：
+
+- `extensions_list`——已加载扩展清单（**唯一常激活**，只读、便宜）
+- `extension_load` / `extension_reload` / `extension_status` / `extension_validate` / `extension_rollback`——生命周期五件套；`extension_rollback` 回退到加载时的版本化快照（快照在 `~/.musepi/extension-backups`）
+- `ext_define` / `ext_run` / `ext_stop` / `ext_undefine` / `ext_inspect`——会话级动态插件（vm 沙箱，`extdyn__` 命名空间），不写盘就能试原型
+
+激活方式：普通会话里 `/extensions` 斜杠命令；**creator（创造）预设自动激活整环**（settings `tools.extensionMetaTools`，会话起即顶层可用，不走 xd:// 设备）。默认不激活的原因：普通会话不为这 10 个工具的 schema 付费。
+
+## Cordis 插件运行时（组件 / 子 fiber / 兼容性预检）
+
+- **组件**：插件 package.json `musepi.components` 声明组件数组（`[{ id, label?, deny? }]`）；宿主为组件建独立子 fiber，设置页可对单组件启停（deny 列表落盘）。整插件 reload 时组件一并重建。
+- **宿主 fiber 检视**：cordis 组 fiber 下各插件/组件的加载状态可从扩展检视入口查询（`extension_status` / 插件管理页）。
+- **兼容性预检**：加载插件前宿主先做 Bun/平台兼容性检查；声明不兼容时插件详情弹窗给归因段，用户可对整个插件**授予精确版本豁免**（写 `<agentDir>/compatibility.json`，RPC `extensions.setVersionExemption`）——比 `bunfig` 豁免窄，只放过单个版本。
 
 ## 文档路由表（需要细节时读这些，别猜）
 

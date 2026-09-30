@@ -316,19 +316,20 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 	creator: {
 		id: "creator",
 		label: "Creator",
-		description: "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
+		description: "创造模式:创作预设/扩展的助手(全量工具 + 自举工具环自动激活 + 创作 persona)",
+		settings: { "tools.extensionMetaTools": true },
 		prompt: [
 			{
 				name: "mode:creator:role",
 				order: 25,
-				text: "你是一名 MusePi 扩展与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				text: "你是一名 MusePi 扩展与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 			},
 		],
 	},
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 4;
+export const BUILTIN_TEMPLATE_REVISION = 5;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -337,7 +338,8 @@ export const BUILTIN_TEMPLATE_REVISION = 4;
  * 为什么需要:ensureModeTemplates 原来只写"缺失的文件",所以内置模板一旦改内容,
  * 老用户磁盘上的旧 preset 永远不会被替换。但预设是用户可编辑的,无条件覆盖会
  * 抹掉人家的修改 —— 于是按修订链逐级比对:v1(persona)→ v2(五区块)→
- * v3(manifest 具名 sidecar)→ 当前。未列出的 id 该修订 = 当前 def(内容从未变过)。
+ * v3(manifest 具名 sidecar)→ v4(creator 自举工具环)→ 当前。未列出的 id
+ * 该修订 = 当前 def(内容从未变过)。
  *
  * 硬纪律:这里的每一档必须是**字面量快照**,禁止 spread/map 当前模板
  * (BUILTIN_MODE_TEMPLATES)——当前模板一变,动态构造的历史档会跟着漂移,
@@ -422,6 +424,21 @@ const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
 					name: "mode:design:boundary",
 					order: 45,
 					text: "风格边界:客户端样式改动一律走设计 token —— 圆角只用 --radius-xs/sm/md/lg/xl/2xl(2/4/6/8/12/16),禁止字面 px 圆角;玻璃效果只用 --glass-* 阶梯(背景/模糊/内高光/外阴影四件套齐备),且只有背后有内容的悬浮层才允许用玻璃。任何偏离都要先说明理由。",
+				},
+			],
+		},
+	},
+	// v4:creator 加入自举工具环(settings + persona 指向 extension_*/ext_*)。
+	4: {
+		creator: {
+			id: "creator",
+			label: "Creator",
+			description: "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
+			prompt: [
+				{
+					name: "mode:creator:role",
+					order: 25,
+					text: "你是一名 MusePi 扩展与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
 		},

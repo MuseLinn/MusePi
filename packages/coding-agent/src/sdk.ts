@@ -91,6 +91,7 @@ import {
 } from "./extensibility/custom-commands";
 import { discoverCustomToolPaths, loadCustomTools, type ToolPathWithSource } from "./extensibility/custom-tools";
 import type { CustomTool, CustomToolContext, CustomToolSessionEvent } from "./extensibility/custom-tools/types";
+import { EXTENSION_META_TOOL_NAMES } from "./extensibility/extension-meta-tools";
 import {
 	discoverAndLoadExtensions,
 	discoverExtensionPaths,
@@ -3492,6 +3493,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const defaultInactiveToolNames = new Set(
 			registeredTools.filter(tool => tool.definition.defaultInactive).map(tool => tool.definition.name),
 		);
+		const extensionMetaToolsRequested = settings.get("tools.extensionMetaTools") === true;
 		const requestedActiveToolNames = normalizedRequested.filter(name => name !== "goal");
 		const explicitlyRequestedToolNameSet = explicitlyRequestedToolNames
 			? new Set(explicitlyRequestedToolNames)
@@ -3518,6 +3520,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		for (const name of alwaysInclude) {
 			if (toolRegistry.has(name) && !initialToolNames.includes(name)) {
 				initialToolNames.push(name);
+			}
+		}
+		// Settings/preset override (tools.extensionMetaTools, e.g. the creator
+		// preset): surface the extension bootstrap ring (extension_load/reload/
+		// status/validate/rollback + ext_define/run/stop/undefine/inspect) as
+		// top-level active tools from session start. Without this they only
+		// mount as xd:// devices and need /extensions for top-level access.
+		// An explicit toolNames list means the caller owns the set — don't widen.
+		if (extensionMetaToolsRequested && !options.toolNames) {
+			for (const name of EXTENSION_META_TOOL_NAMES) {
+				if (toolRegistry.has(name) && !initialToolNames.includes(name)) initialToolNames.push(name);
 			}
 		}
 
@@ -3556,7 +3569,18 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			for (const name of initialToolNames) {
 				const tool = toolRegistry.get(name);
 				const explicitlyRequested = explicitlyRequestedToolNameSet?.has(name) === true;
-				if (tool && xdevReadAvailable && xdevWriteAvailable && !explicitlyRequested && isMountableUnderXdev(tool))
+				// tools.extensionMetaTools pins the bootstrap ring top-level: mounting
+				// them as xd:// devices would re-hide the very tools the override
+				// just surfaced.
+				const pinnedTopLevel = extensionMetaToolsRequested && EXTENSION_META_TOOL_NAMES.includes(name);
+				if (
+					tool &&
+					xdevReadAvailable &&
+					xdevWriteAvailable &&
+					!explicitlyRequested &&
+					!pinnedTopLevel &&
+					isMountableUnderXdev(tool)
+				)
 					mountedNames.push(name);
 				else topLevelToolNames.push(name);
 			}

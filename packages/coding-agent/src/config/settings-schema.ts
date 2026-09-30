@@ -4748,6 +4748,23 @@ export const SETTINGS_SCHEMA = {
 			description: "Ask the agent to describe the intent of each tool call before executing it",
 		},
 	},
+	// Extension bootstrap tools (extension_load/reload/status/validate/rollback +
+	// ext_define/run/stop/undefine/inspect) start default-inactive so ordinary
+	// sessions never pay for their schemas; preset/mode settings overrides can
+	// flip this on (creator preset does) to give the agent its self-bootstrap
+	// tool ring from session start.
+	"tools.extensionMetaTools": {
+		type: "boolean",
+		default: false,
+		ui: {
+			tab: "tools",
+			group: "Execution",
+			label: "Extension Meta Tools",
+			description:
+				"Activate the extension bootstrap/lifecycle tool set (extension_load, extension_reload, ext_define, …) from session start. Default-off keeps their schemas out of ordinary sessions; the creator preset enables them automatically.",
+		},
+	},
+
 	"tools.abortOnFabricatedResult": {
 		type: "boolean",
 		default: true,
