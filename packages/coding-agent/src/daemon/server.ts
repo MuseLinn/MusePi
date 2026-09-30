@@ -448,7 +448,7 @@ import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
 import { SessionService } from "./services/session-service";
-import { TerminalService } from "./services/terminal-service";
+import { TerminalService, type TerminalServiceDeps } from "./services/terminal-service";
 import { UsageService } from "./services/usage-service";
 import { ViewStoreService } from "./services/view-store-service";
 import type { DaemonConnection, DaemonOptions, LiveSession, RpcRequest } from "./session-host";
@@ -468,6 +468,8 @@ import {
 	tailSnapshot,
 } from "./session-host";
 import { type DaemonWebHandle, startDaemonWeb } from "./static-web";
+import { registerBuiltinTerminalBackends } from "./terminal-provider";
+import { TerminalRegistry } from "./terminal-registry";
 import { type DaemonWsHandle, startDaemonWs } from "./ws-transport";
 
 export type { DaemonConnection, DaemonOptions, IdleCandidate, LiveSession } from "./session-host";
@@ -598,13 +600,26 @@ export class DaemonServer {
 				ensureFileIndex: () => host.ensureFileIndex(),
 			}),
 		);
-		this.#services.register(
-			new TerminalService({
-				nextSeq: () => ++this.#eventSeq,
-				emit: (conn, envelope) => this.#host.emitEvent(conn as DaemonConnection, envelope),
-				settings: () => this.#settingsForRpc().catch(() => null),
-			}),
-		);
+		// 收编第三刀（设计稿 §2：registerBackend 注册表 + provider 插件化）：
+		// builtin 后端（bun-pty/node-pty）注册进独立 TerminalRegistry，
+		// 宿主以 terminal:backends / terminal:deps 键 provide 进 cordis 根
+		// Context（terminal-core 插件化时的 inject 落点，strangler-fig 薄
+		// 适配层）；TerminalService 消费同一实例，RPC 名与 pty 语义不变。
+		const terminalRegistry = new TerminalRegistry();
+		registerBuiltinTerminalBackends(terminalRegistry);
+		const terminalDeps: TerminalServiceDeps = {
+			nextSeq: () => ++this.#eventSeq,
+			emit: (conn, envelope) => this.#host.emitEvent(conn as DaemonConnection, envelope),
+			settings: () => this.#settingsForRpc().catch(() => null),
+		};
+		this.#hostContext.plugin({
+			name: "terminal-host-wiring",
+			apply: ctx => {
+				ctx.provide("terminal:backends", terminalRegistry);
+				ctx.provide("terminal:deps", terminalDeps);
+			},
+		});
+		this.#services.register(new TerminalService(terminalDeps, { registry: terminalRegistry }));
 		this.#services.register(
 			new ApprovalService({
 				get: sessionId => this.#host.get(sessionId),

@@ -1,4 +1,5 @@
 import type { Settings } from "../../config/settings";
+import { defaultTerminalRegistry, type TerminalRegistry } from "../terminal-registry";
 import type { DaemonService } from "./types";
 
 /**
@@ -17,7 +18,9 @@ import type { DaemonService } from "./types";
  * 范围边界：终端 provider 解析（terminal-provider.ts 的 manifest seam →
  *  settings → auto 三级）仍在服务内，但 provider 模块图保持动态 import
  * 懒加载；设置读取经 settings() 依赖（宿主 #settingsForRpc），P1 不搬
- * 设置面。
+ * 设置面。收编第三刀（设计稿 §2）：backend 注册表经 opts.registry
+ * 注入（宿主 cordis 根 Context 的 terminal:backends 键提供同一实例），
+ * 缺省回落 defaultTerminalRegistry。
  */
 export interface TerminalServiceDeps {
 	/** DaemonServer 共享 envelope 序号（terminal-output / terminal-exit
@@ -30,6 +33,13 @@ export interface TerminalServiceDeps {
 	): void;
 	/** 解析设置（宿主 #settingsForRpc；解析失败返回 null，原语义）。 */
 	settings(): Promise<Settings | null>;
+}
+
+/** 构造选项（收编第三刀）：backend 注册表注入点——宿主把
+ *  terminal:backends 键 provide 进 cordis 根 Context 后，以同一实例
+ *  构造本服务；缺省 defaultTerminalRegistry（TUI/测试直构路径）。 */
+export interface TerminalServiceOptions {
+	registry?: TerminalRegistry;
 }
 
 /** 桥接条目：provider handle 的写/处置适配面（原 server 内联形状）。 */
@@ -48,12 +58,16 @@ export class TerminalService implements DaemonService {
 	} as const;
 
 	readonly #deps: TerminalServiceDeps;
+	/** backend 注册表（收编第三刀：opts.registry 注入，cordis
+	 *  terminal:backends 键提供的同一实例；缺省共享注册表）。 */
+	readonly #registry: TerminalRegistry;
 	/** Live pty bridges keyed by terminal id（provider 进程/handle 拥有 node-pty）。 */
 	readonly #terminals = new Map<string, TerminalBridge>();
 	#terminalSeq = 0;
 
-	constructor(deps: TerminalServiceDeps) {
+	constructor(deps: TerminalServiceDeps, opts?: TerminalServiceOptions) {
 		this.#deps = deps;
+		this.#registry = opts?.registry ?? defaultTerminalRegistry;
 	}
 
 	/** RPC terminal.open：开一个 pty 并把输出接到调用方连接。
@@ -126,6 +140,7 @@ export class TerminalService implements DaemonService {
 		})();
 		const provider = getTerminalProvider(
 			resolveTerminalProvider(settings ?? ({ getRaw: () => undefined } as never), manifestProvider),
+			this.#registry,
 		);
 
 		// Wrap the provider handle to emit daemon events.

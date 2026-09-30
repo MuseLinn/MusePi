@@ -12,28 +12,32 @@
 // followed strictly — bun-pty failure surfaces as a terminal error
 // instead of silently falling back. This is the "avoid automatic
 // fallback recovery" piece of the assembly design.
+//
+// 收编第三刀（设计稿 §2）：具体实现（spawnBunPty/spawnNodePtyBridge）
+// 注册进 TerminalRegistry（terminal-registry.ts 的 registerBackend
+// 形状，dsh parity）；provider 解析策略（manifest > settings > auto）
+// 不变。backend 缺席 = 结构化 NO_BACKEND（禁用兜底归因的数据源），
+// auto 只在在册 backend 间回退。
 // ============================================================
 
 import * as path from "node:path";
 import { spawn } from "@musepi/pi-utils/nodespawn";
 import type { Settings } from "../config/settings.ts";
+import {
+	defaultTerminalRegistry,
+	type TerminalBackendType,
+	type TerminalHandle,
+	type TerminalRegistry,
+	TerminalRegistryError,
+} from "./terminal-registry.ts";
 
 /** Explicit terminal backend selection. */
-export type TerminalProvider = "bun-pty" | "node-pty" | "auto";
+export type TerminalProvider = TerminalBackendType | "auto";
 
-/** The handle returned to a daemon client for one open terminal. */
-export interface TerminalHandle {
-	/** Send input (data / resize / close). */
-	write(data: string): void;
-	/** Resize cols/rows. */
-	resize(cols: number, rows: number): void;
-	/** Kill the process and clean up. */
-	dispose(): void;
-	/** Exit code (once emitted). */
-	onExit: (cb: (code: number | null) => void) => void;
-	/** Raw data received. */
-	onData: (cb: (data: string) => void) => void;
-}
+/** The handle returned to a daemon client for one open terminal.
+ *  （契约类型本体在 terminal-registry.ts，此处重导出保持既有
+ *  import 面不动。） */
+export type { TerminalHandle } from "./terminal-registry.ts";
 
 export interface TerminalProviderFactory {
 	/** Resolve which provider to use given settings (and fallback). */
@@ -181,39 +185,21 @@ async function resolveNodeBinary(): Promise<string> {
 }
 
 // ------------------------------------------------------------
-// Provider registry
+// Provider registry（收编第三刀：静态 PROVIDERS 表 → TerminalRegistry
+// registerBackend，provider 插件化的挂点）
 // ------------------------------------------------------------
 
-const PROVIDERS: Record<TerminalProvider, TerminalProviderFactory> = {
-	"bun-pty": {
-		resolve(_settings): TerminalProvider {
-			return "bun-pty";
-		},
-		open: spawnBunPty,
-	},
-	"node-pty": {
-		resolve(_settings): TerminalProvider {
-			return "node-pty";
-		},
-		open: spawnNodePtyBridge,
-	},
-	auto: {
-		resolve(settings: Settings): TerminalProvider {
-			const raw = settings.getRaw("terminal.provider") as string | undefined;
-			return raw === "bun-pty" ? "bun-pty" : raw === "node-pty" ? "node-pty" : "auto";
-		},
-		async open(cwd, cols, rows, shell, shellArgs, env) {
-			// Try bun-pty first; on hard failure (ENOENT / module not found) fall back to node-pty.
-			try {
-				return await spawnBunPty(cwd, cols, rows, shell, shellArgs, env);
-			} catch (err) {
-				// Log but continue — auto is intended to degrade.
-				console.warn(`[terminal] bun-pty failed (${String(err)}), falling back to node-pty`);
-				return await spawnNodePtyBridge(cwd, cols, rows, shell, shellArgs, env);
-			}
-		},
-	},
-};
+/** builtin 后端（bun-pty / node-pty）注册进给定注册表。幂等：同一
+ *  注册表重复调用是 no-op（模块热重载安全）；未来 provider 插件可用
+ *  返回语义外的 registerBackend/dispose 走同一挂点独立装载。 */
+const builtinRegistered = new WeakSet<TerminalRegistry>();
+
+export function registerBuiltinTerminalBackends(registry: TerminalRegistry = defaultTerminalRegistry): void {
+	if (builtinRegistered.has(registry)) return;
+	builtinRegistered.add(registry);
+	registry.registerBackend("bun-pty", { open: spawnBunPty });
+	registry.registerBackend("node-pty", { open: spawnNodePtyBridge });
+}
 
 /**
  * Read the effective terminal provider from manifest + settings.
@@ -233,10 +219,55 @@ export function resolveTerminalProvider(
 	return "auto";
 }
 
-export function getTerminalProvider(name: TerminalProvider): TerminalProviderFactory {
-	return PROVIDERS[name];
+/** 解析 provider 工厂。显式 provider 的 open 直查注册表——backend
+ *  缺席给结构化 NO_BACKEND（manifest 显式声明的严格语义：不静默回退）；
+ *  auto 只在在册 backend 间按 bun-pty → node-pty 顺序回退，
+ *  全缺席 = 结构化 NO_BACKEND。 */
+export function getTerminalProvider(
+	name: TerminalProvider,
+	registry: TerminalRegistry = defaultTerminalRegistry,
+): TerminalProviderFactory {
+	if (name === "auto") {
+		return {
+			resolve(settings: Settings): TerminalProvider {
+				const raw = settings.getRaw("terminal.provider") as string | undefined;
+				return raw === "bun-pty" ? "bun-pty" : raw === "node-pty" ? "node-pty" : "auto";
+			},
+			async open(cwd, cols, rows, shell, shellArgs, env) {
+				const order: readonly TerminalBackendType[] = ["bun-pty", "node-pty"];
+				let lastErr: unknown;
+				for (const type of order) {
+					if (!registry.hasBackend(type)) continue;
+					try {
+						return await registry.getBackend(type).open(cwd, cols, rows, shell, shellArgs, env);
+					} catch (err) {
+						// Log but continue — auto is intended to degrade, but only
+						// among registered backends (disabled plugins are skipped).
+						lastErr = err;
+						console.warn(`[terminal] ${type} failed (${String(err)}), trying next backend`);
+					}
+				}
+				throw new TerminalRegistryError(
+					"NO_BACKEND",
+					lastErr instanceof Error
+						? `no terminal backend available: ${lastErr.message}`
+						: "no terminal backend available",
+				);
+			},
+		};
+	}
+	return {
+		resolve(_settings): TerminalProvider {
+			return name;
+		},
+		async open(cwd, cols, rows, shell, shellArgs, env) {
+			return registry.getBackend(name).open(cwd, cols, rows, shell, shellArgs, env);
+		},
+	};
 }
 
+const PROVIDER_NAMES: readonly TerminalProvider[] = ["bun-pty", "node-pty", "auto"];
+
 export function isTerminalProvider(value: unknown): value is TerminalProvider {
-	return typeof value === "string" && Object.hasOwn(PROVIDERS, value);
+	return typeof value === "string" && (PROVIDER_NAMES as readonly string[]).includes(value);
 }

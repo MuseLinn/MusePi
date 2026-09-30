@@ -623,6 +623,10 @@
 		"./daemon/terminal-provider": {
 			"types": "./src/daemon/terminal-provider.ts",
 			"import": "./src/daemon/terminal-provider.ts"
+		},
+		"./daemon/terminal-registry": {
+			"types": "./src/daemon/terminal-registry.ts",
+			"import": "./src/daemon/terminal-registry.ts"
 		}
 	},
 	"piConfig": {
