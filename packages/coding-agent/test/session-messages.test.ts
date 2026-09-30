@@ -5,6 +5,7 @@ import { inferCopilotInitiator } from "@musepi/pi-ai/providers/github-copilot-he
 import {
 	convertToLlm,
 	SKILL_PROMPT_MESSAGE_TYPE,
+	TOOL_REGISTRY_CHANGE_CUSTOM_TYPE,
 	wrapSteeringForModel,
 } from "@musepi/pi-coding-agent/session/messages";
 import { COLLAB_PROMPT_MESSAGE_TYPE } from "@musepi/pi-wire";
@@ -116,6 +117,47 @@ describe("convertToLlm custom message mapping", () => {
 		expect(converted[0]?.role).toBe("developer");
 		expectAttribution(converted[0], "agent");
 		expect(inferCopilotInitiator(converted)).toBe("agent");
+	});
+
+	it("rebuilds tool-registry journal entries as the canonical developer notice", () => {
+		// Contract: a persisted tool_registry custom_message (written by the
+		// session listener on hot-toggle) must replay to the model on context
+		// rebuild as the SAME text the live loop injected (dsh
+		// developer/message backfill parity) — otherwise resume/compaction
+		// silently drops the model's knowledge of tool-set changes.
+		const messages: AgentMessage[] = [
+			{
+				role: "custom",
+				customType: TOOL_REGISTRY_CHANGE_CUSTOM_TYPE,
+				content: "",
+				display: true,
+				attribution: "agent",
+				details: { added: ["late_tool"], removed: ["gone_tool"], tools: ["echo", "late_tool"] },
+				timestamp: Date.now(),
+			},
+		];
+
+		const converted = convertToLlm(messages);
+
+		expect(converted).toHaveLength(1);
+		expect(converted[0]?.role).toBe("developer");
+		expect(converted[0]?.content).toBe("Tool added: late_tool\nTool removed: gone_tool");
+	});
+
+	it("drops tool-registry journal entries whose details carry no diff", () => {
+		const messages: AgentMessage[] = [
+			{
+				role: "custom",
+				customType: TOOL_REGISTRY_CHANGE_CUSTOM_TYPE,
+				content: "",
+				display: true,
+				attribution: "agent",
+				details: { added: [], removed: [], tools: ["echo"] },
+				timestamp: Date.now(),
+			},
+		];
+
+		expect(convertToLlm(messages)).toHaveLength(0);
 	});
 
 	it("maps legacy custom messages to developer role", () => {

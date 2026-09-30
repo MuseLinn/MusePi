@@ -10,9 +10,11 @@ export const SESSION_EXIT_CUSTOM_TYPE = "session_exit";
  * 会话运行中扩展/插件热插拔导致下一次模型请求的 wire 工具集变化时，
  * agent-loop 经 onToolRegistryChange 上报，会话落一条 display:true 的
  * custom_message 条目（customType = TOOL_REGISTRY_CHANGE_CUSTOM_TYPE）。
- * UI 时间线与轨迹面板据此渲染「工具已更新 · +N/−M」注入行；条目在
- * session-context 的 display-only 排除表里，不进 LLM 上下文、对 provider
- * 前缀缓存零影响（模型可见注入是后续独立刀）。
+ * UI 时间线与轨迹面板据此渲染「工具已更新 · +N/−M」注入行；LLM 重建路径
+ * （session-context 不再排除 + convertToLlm 的 custom 分支）把该条目还原为
+ * developer 通知（formatToolRegistryNotice 与 live 注入同一文本权威），
+ * resume/压缩重建后模型依然知晓工具集变化（dsh developer/message 回灌
+ * parity；provider 前缀缓存只在追加处向前增长）。
  */
 export const TOOL_REGISTRY_CHANGE_CUSTOM_TYPE = "tool_registry";
 export interface ToolRegistryChangeData {

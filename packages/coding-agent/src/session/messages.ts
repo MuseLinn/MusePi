@@ -5,6 +5,7 @@
  * and provides a transformer to convert them to LLM-compatible messages.
  */
 import type { AgentMessage } from "@musepi/pi-agent-core";
+import { formatToolRegistryNotice } from "@musepi/pi-agent-core";
 import {
 	invalidateMessageCache,
 	registerMessageCacheInvalidator,
@@ -38,6 +39,9 @@ export {
 
 import type { OutputMeta } from "../tools/output-meta";
 import { formatOutputNotice } from "../tools/output-meta";
+import { TOOL_REGISTRY_CHANGE_CUSTOM_TYPE, type ToolRegistryChangeData } from "./exit-diagnostics";
+
+export { TOOL_REGISTRY_CHANGE_CUSTOM_TYPE, type ToolRegistryChangeData } from "./exit-diagnostics";
 
 export const SKILL_PROMPT_MESSAGE_TYPE = "skill-prompt";
 export const LSP_LATE_DIAGNOSTIC_MESSAGE_TYPE = "lsp-late-diagnostic";
@@ -1231,6 +1235,29 @@ function convertOne(m: AgentMessage, interruptedNext: boolean): Message[] {
 			return out;
 		}
 		case "custom": {
+			// 工具注册表时间线（dsh developer/message 回灌 parity）：session 树
+			// 里的 tool_registry 条目在 LLM 重建路径转成 developer 通知，与
+			// agent-loop live 注入共用 formatToolRegistryNotice 单一文本权威
+			// （resume/压缩重建后模型依然知晓工具集变化）。展示路径不经过
+			// 这里——Transcript 把该条目渲染为「工具已更新」注入行。
+			if (m.customType === TOOL_REGISTRY_CHANGE_CUSTOM_TYPE) {
+				const details = m.details as Partial<ToolRegistryChangeData> | undefined;
+				const added = Array.isArray(details?.added)
+					? details.added.filter((n): n is string => typeof n === "string")
+					: [];
+				const removed = Array.isArray(details?.removed)
+					? details.removed.filter((n): n is string => typeof n === "string")
+					: [];
+				if (added.length === 0 && removed.length === 0) return [];
+				return [
+					{
+						role: "developer",
+						content: formatToolRegistryNotice(added, removed),
+						attribution: "agent",
+						timestamp: m.timestamp,
+					},
+				];
+			}
 			if (!isCustomMessageContent(m.content)) return [];
 			if (isSteeringUserMessage(m)) {
 				const converted = convertMessageToLlm(wrapSteeringUserMessage(m));

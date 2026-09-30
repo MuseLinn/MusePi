@@ -348,9 +348,13 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * (sorted); `tools` is the full new set. The first request of a run only
 	 * establishes the baseline (the initial set is already recorded by the
 	 * host's session_init entry), so this fires at most once per actual
-	 * change. Hosts use it to journal a tool-registry timeline entry and to
-	 * refresh live UI; the callback runs before the differing request is
-	 * gated/sent, and throwing is the host's responsibility to avoid.
+	 * change. Before firing, the loop already injected a developer-role notice
+	 * (`formatToolRegistryNotice`) into the run context so the model learns the
+	 * change in the very request that carries it (dsh developer/message
+	 * backfill parity). Hosts use the callback to journal a tool-registry
+	 * timeline entry and to refresh live UI; the callback runs before the
+	 * differing request is gated/sent, and throwing is the host's
+	 * responsibility to avoid.
 	 */
 	onToolRegistryChange?: (change: { added: string[]; removed: string[]; tools: string[] }) => void;
 

@@ -515,10 +515,20 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		const changes: { added: string[]; removed: string[]; tools: string[] }[] = [];
+		const developerNotices: string[] = [];
 		let syncCalls = 0;
 		const config: AgentLoopConfig = {
 			model: mock.model,
-			convertToLlm: identityConverter,
+			convertToLlm: messages => {
+				// dsh developer/message 回灌 parity 的对外契约：携带新工具集的
+				// 同一请求里，convertToLlm 必须收到 developer 通知（模型可见）。
+				for (const m of messages) {
+					if (m.role === "developer" && typeof m.content === "string") {
+						developerNotices.push(m.content);
+					}
+				}
+				return identityConverter(messages);
+			},
 			onToolRegistryChange: change => changes.push(change),
 			syncContextBeforeModelCall: ctx => {
 				syncCalls += 1;
@@ -538,6 +548,8 @@ describe("agentLoop with AgentMessage", () => {
 		expect(changes[0]?.added).toEqual(["late_tool"]);
 		expect(changes[0]?.removed).toEqual([]);
 		expect(changes[0]?.tools).toEqual(["echo", "late_tool"]);
+		// 通知与变化同请求到达，文本与 formatToolRegistryNotice 一致。
+		expect(developerNotices).toEqual(["Tool added: late_tool"]);
 	});
 
 	it("does not report tool registry changes when the wire tool set is stable", async () => {

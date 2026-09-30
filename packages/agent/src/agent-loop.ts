@@ -66,6 +66,7 @@ import {
 	startExecuteToolSpan,
 	startInvokeAgentSpan,
 } from "./telemetry";
+import { formatToolRegistryNotice } from "./tool-registry-notice";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -1051,11 +1052,13 @@ async function runLoopBody(
 		let directiveResolvedForTurn = false;
 		let turnOpen = false;
 
-		// 工具注册表时间线（dsh request/header parity）：上一次模型请求实际
-		// 携带的 wire 工具名快照。逐请求比对——扩展/插件热插拔在两步之间
-		// 增删工具时，diff 经 config.onToolRegistryChange 上报（宿主落
-		// session 日志 + 实时 UI），轨迹/会话树据此渲染「工具已更新」行。
-		// 首个请求只建立基线不触发（初始工具集已由 session_init 记录）。
+		// 工具注册表时间线（dsh request/header + developer/message 回灌
+		// parity）：上一次模型请求携带的 wire 工具名快照。逐请求比对——扩展/
+		// 插件热插拔在两步之间增删工具时，① developer 通知立即注入
+		// context.messages（模型在本请求即见，格式由 formatToolRegistryNotice
+		// 单一权威产出），② diff 经 config.onToolRegistryChange 上报（宿主落
+		// session 日志 + 实时 UI）。首个请求只建立基线不触发（初始工具集已
+		// 由 session_init 记录）。
 		let prevWireToolNames: string[] | null = null;
 
 		// Outer loop: continues when queued follow-up messages arrive after agent would stop
@@ -1104,6 +1107,31 @@ async function runLoopBody(
 						await config.syncContextBeforeModelCall(currentContext, signal);
 					}
 
+					// 工具注册表时间线（dsh request/header + developer/message 回灌
+					// parity）：sync 已刷新 context.tools，此刻比对即本次请求实际
+					// 携带的 wire 工具名（normalizeTools 不改名）。有 diff 时——
+					// ① 立即把 developer 通知注入 context.messages（模型在本请求
+					//    即见，位置贴近变化点；前缀缓存只向前增长）；
+					// ② 经宿主回调落 session 日志（display-only 注入行 + 轨迹）。
+					// 首个请求只建立基线（初始工具集已由 session_init 记录）。
+					const wireToolNames = (currentContext.tools ?? []).map(t => t.name).sort();
+					if (prevWireToolNames !== null) {
+						const prev = new Set(prevWireToolNames);
+						const next = new Set(wireToolNames);
+						const added = wireToolNames.filter(n => !prev.has(n));
+						const removed = prevWireToolNames.filter(n => !next.has(n));
+						if (added.length > 0 || removed.length > 0) {
+							currentContext.messages.push({
+								role: "developer",
+								content: formatToolRegistryNotice(added, removed),
+								attribution: "agent",
+								timestamp: Date.now(),
+							});
+							config.onToolRegistryChange?.({ added, removed, tools: wireToolNames });
+						}
+					}
+					prevWireToolNames = wireToolNames;
+
 					if (!directiveResolvedForTurn) {
 						const directive = signal?.aborted ? undefined : config.getToolChoice?.();
 						const softReq = isSoftToolRequirement(directive) ? directive : undefined;
@@ -1131,21 +1159,6 @@ async function runLoopBody(
 					}
 
 					preparedProviderCall = await prepareProviderCall(currentContext, config, signal);
-					// 工具注册表时间线：wire 工具集逐请求比对（见 runLoopBody
-					// 的 prevWireToolNames 声明）。热插拔导致的 diff 经宿主回调
-					// 落 session 日志；首个请求只建立基线。
-					const wireTools = preparedProviderCall.promptToolWireTools ?? preparedProviderCall.context.tools;
-					const wireToolNames = (wireTools ?? []).map(t => t.name).sort();
-					if (prevWireToolNames !== null && config.onToolRegistryChange) {
-						const prev = new Set(prevWireToolNames);
-						const next = new Set(wireToolNames);
-						const added = wireToolNames.filter(n => !prev.has(n));
-						const removed = prevWireToolNames.filter(n => !next.has(n));
-						if (added.length > 0 || removed.length > 0) {
-							config.onToolRegistryChange({ added, removed, tools: wireToolNames });
-						}
-					}
-					prevWireToolNames = wireToolNames;
 					gateResult = (await config.beforeModelCall?.(preparedProviderCall.context, signal)) || undefined;
 				} catch (error) {
 					if (!turnOpen) {
