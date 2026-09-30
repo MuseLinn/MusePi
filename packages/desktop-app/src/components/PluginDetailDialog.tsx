@@ -227,6 +227,34 @@ export function PluginDetailDialog({
 									<dd>{item.enabledInPresets.join(" · ")}</dd>
 								</div>
 							) : null}
+							{item.runtime && (
+								<div>
+									<dt>{t("ext runtime status")}</dt>
+									<dd>
+										<span
+											className={
+												item.runtime.operational === "running"
+													? "gui-ext-runtime-dot gui-ext-runtime-dot--running"
+													: "gui-ext-runtime-dot gui-ext-runtime-dot--stopped"
+											}
+										/>
+										{item.runtime.operational === "running"
+											? t("ext operational running")
+											: t("ext operational stopped")}
+										{item.runtime.fiberState !== "ACTIVE"
+											? ` · ${t("ext fiber state")} ${item.runtime.fiberState}`
+											: null}
+									</dd>
+								</div>
+							)}
+							{item.activation && (
+								<div>
+									<dt>{t("ext activation condition")}</dt>
+									<dd>
+										<code>{item.activation.key}</code> {t("ext activation when on")}
+									</dd>
+								</div>
+							)}
 						</dl>
 						{item.trigger && (
 							<div className="gui-ext-detail-section">

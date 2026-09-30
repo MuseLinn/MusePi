@@ -2419,6 +2419,28 @@
 	font-size: 11.5px;
 	word-break: break-all;
 }
+
+/* 运行状态圆点（液态玻璃质感：泽 + 缘，随 operational 两态取色） */
+.gui-ext-runtime-dot {
+	display: inline-block;
+	width: 8px;
+	height: 8px;
+	margin-right: 6px;
+	border-radius: 50%;
+	vertical-align: baseline;
+	box-shadow:
+		inset 0 1px 1px rgb(255 255 255 / 45%),
+		0 0 0 1px rgb(0 0 0 / 12%);
+}
+
+.gui-ext-runtime-dot--running {
+	background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 70%), transparent 45%), var(--color-success, #3ecf8e);
+}
+
+.gui-ext-runtime-dot--stopped {
+	background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 45%), transparent 45%), var(--color-text-faint, #8a8f98);
+	opacity: 0.75;
+}
 .gui-ext-detail-status {
 	display: inline-flex;
 	align-items: center;

@@ -619,6 +619,7 @@ export class DaemonServer {
 				webUrl: () => this.#webUrl,
 				webPortFile: () => path.join(path.dirname(this.#socketPath || DEFAULT_SOCKET), "web.port"),
 				modesDir: () => this.#modesDir(),
+				builtinRuntime: () => this.#hostContext.builtinInspect(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 			}),
 		);
@@ -660,6 +661,12 @@ export class DaemonServer {
 			}),
 		);
 		mountRegistryServices(this.#hostContext, this.#services.values());
+		// 收编第一刀：builtin 注册表单元挂为 cordis builtin 插件组
+		// （运行状态/fiberPhase 的真实数据源;与 user 动态插件同语法
+		// 不同信任级,设计稿 §1 第 3 步）。装载失败不拖垮宿主（层隔离）。
+		void this.#hostContext.mountBuiltinPlugins().catch(err => {
+			logger.error("daemon: builtin plugin group mount failed", { err });
+		});
 		this.#startExtensionWatcher();
 		// Bot/notification channels (CollabDialog "use bot channel" + task
 		// completion pushes). Persisted config lives in the daemon dir.

@@ -98,6 +98,19 @@ export interface Extension {
 	 * （仅 extension-module 可能有;预设白名单 undefined = 全部启用,
 	 * 不构成此语义）。 */
 	enabledInPresets?: string[];
+	/** cordis 运行时真实状态（仅接入 cordis fiber 的条目才有——builtin
+	 * 单元随 daemon 挂载;user 插件会话装载,宿主面无 fiber,不编造）。
+	 * fiberState = cordis fiber 状态机名;operational = 镜像设置现读的
+	 * 业务运行判定（比 fiberPhase 更贴我方架构：stt.enabled=false 时
+	 * 语音确实没在跑,而 fiber 仍 ACTIVE——两层如实分开）。 */
+	runtime?: {
+		fiberState: string;
+		effects: number;
+		operational: "running" | "stopped";
+	};
+	/** dsh 式「启用条件」（真实可判定语义,非表达式字符串）：镜像设置键
+	 * （该键为 on 时单元启用）。预设提供的 user 插件走 enabledInPresets。 */
+	activation?: { kind: "setting"; key: string };
 	/** Raw item data for inspector */
 	raw: unknown;
 }

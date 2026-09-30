@@ -25,7 +25,9 @@ import type { DaemonService } from "./types";
  * - 输出：各 RPC 返回值原样；extensions.raw 超 16KB 截断；extensions.list
  *   聚合 tabs/providers/槽位组件/toolViews/状态栏段、shell 配置与 dsh「会话
  *   插件」面（显式扩展白名单的预设清单 + 每个 extension-module 的
- *   enabledInPresets）；三个 10s
+ *   enabledInPresets）+ builtin 单元的 cordis 运行状态（runtime：fiberState/
+ *   effects/operational,宿主注入 builtinRuntime）与启用条件（activation：
+ *   镜像设置键）；三个 10s
  *   TTL 缓存（#extensionsCache/#pluginsCache/#pluginPackagesCache）随变更
  *   RPC 与宿主 watcher 失效；extensions.changed 广播经注入的 onChanged 扇出
  *   （宿主侧接 EventService，lazy 调用无循环）。另有宿主级扩展运行时加载
@@ -57,6 +59,9 @@ export interface ExtensionServiceDeps {
 	webPortFile(): string;
 	/** 预设目录（宿主注入 #modesDir；缺省回退 $env/用户目录——测试可隔离）。 */
 	modesDir?(): string;
+	/** builtin 单元的 cordis 运行状态（宿主注入 DaemonHostContext.builtinInspect；
+	 *  缺省回退 {}——user 插件与会话装载面无 fiber,不编造 runtime）。 */
+	builtinRuntime?(): Record<string, { fiberState: string; effects: number }>;
 	/** extensions.changed 广播（宿主接 EventService，lazy 调用无循环）。 */
 	onChanged(): void;
 }
@@ -203,6 +208,23 @@ export class ExtensionService implements DaemonService {
 			const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
 			ext.state = disabled ? "disabled" : "active";
 			ext.disabledReason = disabled ? "item-disabled" : undefined;
+			// dsh 式「启用条件」（真实可判定）：镜像设置键为 on 时启用。
+			ext.activation = { kind: "setting", key: def.settingsMirror.key };
+		}
+		// cordis 运行状态（收编第一刀）：builtin 单元的 fiber 真实状态 +
+		// 镜像设置现读的业务运行判定。user 插件会话装载、宿主无 fiber,
+		// 不挂 runtime——管理面如实缺省,不编造。
+		const builtinRuntime = this.#deps.builtinRuntime?.() ?? {};
+		for (const ext of extensions) {
+			const rt = builtinRuntime[ext.id];
+			if (!rt) continue;
+			const def = BUILTIN_EXTENSIONS.find(d => `${d.kind}:${d.name}` === ext.id);
+			const disabled = def?.settingsMirror ? (s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false) : false;
+			ext.runtime = {
+				fiberState: rt.fiberState,
+				effects: rt.effects,
+				operational: disabled ? "stopped" : "running",
+			};
 		}
 		// Builtin plugin units declaring dsh-style config (voice STT/TTS):
 		// attach the declared fields plus live settings-backed values — the

@@ -393,3 +393,77 @@ describe("extensions.list 预设启用面(dsh「会话插件」轴)", () => {
 		expect(other?.enabledInPresets).toBeUndefined();
 	});
 });
+
+describe("extensions.list cordis 运行状态 + 启用条件（收编第一刀）", () => {
+	let agentDir: string;
+	let tmpCwd: string;
+	let modesDir: string;
+
+	beforeAll(async () => {
+		agentDir = await isolateAgentDirForTest("omp-ext-runtime-plane-");
+	}, 30000);
+
+	afterAll(async () => {
+		await restoreAgentDirForTest(agentDir);
+	}, 30000);
+
+	beforeEach(async () => {
+		tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-ext-runtime-cwd-"));
+		modesDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-ext-runtime-modes-"));
+	});
+
+	const makeService = (
+		settings: Settings,
+		builtinRuntime?: () => Record<string, { fiberState: string; effects: number }>,
+	) =>
+		new ExtensionService({
+			settings: () => settings,
+			ensureRegistry: async () => {},
+			cwd: () => tmpCwd,
+			webUrl: () => null,
+			webPortFile: () => path.join(agentDir, "web.port"),
+			modesDir: () => modesDir,
+			...(builtinRuntime ? { builtinRuntime } : {}),
+			onChanged: () => {},
+		});
+
+	test("有 fiber 的镜像单元挂 runtime + activation;operational 跟随镜像设置现读", async () => {
+		const settings = Settings.isolated();
+		settings.set("stt.enabled", false);
+		const service = makeService(settings, () => ({ "voice:stt": { fiberState: "ACTIVE", effects: 0 } }));
+		const listed = await service.list();
+		const stt = listed.extensions.find(e => e.id === "voice:stt");
+		expect(stt?.activation).toEqual({ kind: "setting", key: "stt.enabled" });
+		expect(stt?.runtime).toEqual({ fiberState: "ACTIVE", effects: 0, operational: "stopped" });
+		expect(stt?.state).toBe("disabled");
+	});
+
+	test("镜像键为 on 时 operational=running;无 fiber 的条目与 user 插件不挂 runtime", async () => {
+		const settings = Settings.isolated();
+		settings.set("stt.enabled", true);
+		const service = makeService(settings, () => ({ "voice:stt": { fiberState: "ACTIVE", effects: 0 } }));
+		const listed = await service.list();
+		const stt = listed.extensions.find(e => e.id === "voice:stt");
+		expect(stt?.runtime?.operational).toBe("running");
+		// terminal 是 readonly 单元且本例无 fiber → 不挂 runtime（如实缺省）。
+		const terminal = listed.extensions.find(e => e.id === "terminal:terminal");
+		expect(terminal?.runtime).toBeUndefined();
+		expect(terminal?.activation).toBeUndefined();
+		// user 插件（假扩展目录）不挂 runtime。
+		await fs.mkdir(path.join(tmpCwd, ".musepi", "extensions", "user-ext"), { recursive: true });
+		await fs.writeFile(path.join(tmpCwd, ".musepi", "extensions", "user-ext", "index.ts"), "export default {};\n");
+		const listed2 = await service.list();
+		const user = listed2.extensions.find(e => e.kind === "extension-module" && e.name === "user-ext");
+		expect(user?.runtime).toBeUndefined();
+	});
+
+	test("builtinRuntime 缺省（宿主未注入 cordis 检视）→ 清单照常,无 runtime 面", async () => {
+		const service = makeService(Settings.isolated());
+		const listed = await service.list();
+		const stt = listed.extensions.find(e => e.id === "voice:stt");
+		expect(stt).toBeDefined();
+		expect(stt?.runtime).toBeUndefined();
+		// activation 不依赖 cordis,镜像单元照常挂。
+		expect(stt?.activation).toEqual({ kind: "setting", key: "stt.enabled" });
+	});
+});

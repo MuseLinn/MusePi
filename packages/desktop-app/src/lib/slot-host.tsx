@@ -141,6 +141,11 @@ export interface ExtensionItem {
 	components?: PluginComponentDesc[];
 	/** dsh「会话插件」面:显式预设白名单启用了该扩展的预设名列表。 */
 	enabledInPresets?: string[];
+	/** cordis 运行状态（仅接入 fiber 的条目才有;builtin 单元随 daemon
+	 *  挂载,user 插件会话装载无宿主 fiber,缺省如实不显示）。 */
+	runtime?: { fiberState: string; effects: number; operational: "running" | "stopped" };
+	/** dsh 式「启用条件」:镜像设置键为 on 时启用。 */
+	activation?: { kind: "setting"; key: string };
 }
 
 export interface ExtensionTab {
