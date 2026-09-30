@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
+import { coerceConfigFieldValue } from "@musepi/pi-wire";
 import type { Settings } from "../../config/settings";
 import type { LoadExtensionsResult } from "../../extensibility/extensions/types";
 import type { Extension } from "../../extensibility/extensions-center/types";
@@ -12,7 +13,9 @@ import type { DaemonService } from "./types";
  * - 输入：RPC `extensions.list` / `extensions.raw` / `extensions.setEnabled` /
  *   `extensions.setForceEnabled` / `extensions.setProviderEnabled`（统一扩展
  *   扫描、inspector 原文、条目/桌面外壳/供应商启停，写 settings 与 mcp.json
- *   denylist）、`ext.call`（扩展 registerRpc 的 daemon 侧回调，仅限 active
+ *   denylist）、`extensions.setConfig`（插件清单声明式配置写入：按字段声明
+ *   钳制后落盘 plugin-config-store 并扇出 extensions.changed）、`ext.call`
+ *   （扩展 registerRpc 的 daemon 侧回调，仅限 active
  *   extension-module）、`plugins.list` / `plugins.packages` /
  *   `plugins.setEnabled`（插件扫描/已装清单/启停）。
  * - 输出：各 RPC 返回值原样；extensions.raw 超 16KB 截断；extensions.list
@@ -58,6 +61,7 @@ export class ExtensionService implements DaemonService {
 		"extensions.setEnabled": "setEnabled",
 		"extensions.setForceEnabled": "setForceEnabled",
 		"extensions.setProviderEnabled": "setProviderEnabled",
+		"extensions.setConfig": "setConfig",
 		"ext.call": "call",
 		"plugins.list": "listPlugins",
 		"plugins.packages": "pluginPackages",
@@ -524,5 +528,29 @@ export class ExtensionService implements DaemonService {
 	invalidateExtensionsCache(): void {
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;
+	}
+
+	/** 插件清单声明式配置写入(dsh 管理页契约):params = { id, key, value }。
+	 *  字段必须以该扩展 manifest 声明的 config 为准——未声明的键直接拒绝
+	 *  (防写垃圾键);值经 coerceConfigFieldValue 钳制后落盘存储,失效扩展
+	 *  缓存并扇出 extensions.changed 让 GUI 重拉 configValues。返回
+	 *  { restart, values }——restart 声明生效时机(运行时消费随 cordis 试点)。 */
+	async setConfig(params: unknown) {
+		const p = (params ?? {}) as { id?: unknown; key?: unknown; value?: unknown };
+		if (typeof p.id !== "string" || typeof p.key !== "string") {
+			throw new Error("extensions.setConfig: id and key are required strings");
+		}
+		const extensions = await this.getExtensions();
+		const ext = extensions.find(e => e.id === p.id);
+		const desc = ext?.config?.find(f => f.key === p.key);
+		if (!desc) {
+			throw new Error(`extensions.setConfig: "${p.key}" is not a declared config field of ${p.id}`);
+		}
+		const coerced = coerceConfigFieldValue(desc, p.value);
+		const { writePluginConfigValue } = await import("../../extensibility/extensions-center/plugin-config-store");
+		const values = await writePluginConfigValue(p.id, p.key, coerced);
+		this.invalidateExtensionsCache();
+		this.#deps.onChanged();
+		return { ok: true as const, restart: desc.restart ?? ("none" as const), values };
 	}
 }

@@ -5,6 +5,8 @@
 import * as path from "node:path";
 import { fuzzyMatch } from "@musepi/pi-tui";
 import { getMCPConfigPath, getProjectDir, logger } from "@musepi/pi-utils";
+import type { PluginConfigValues } from "@musepi/pi-wire";
+import { coerceConfigValues } from "@musepi/pi-wire";
 import type { ContextFile } from "../../capability/context-file";
 import type { ExtensionModule } from "../../capability/extension-module";
 import type { GuiMotion } from "../../capability/gui-motion";
@@ -32,6 +34,7 @@ import {
 	builtinMirrorDisabled,
 	findBuiltinDef,
 } from "./builtin-registry";
+import { readPluginConfigStore } from "./plugin-config-store";
 import type {
 	DashboardState,
 	Extension,
@@ -86,6 +89,7 @@ export async function loadAllExtensions(
 			getTrigger?: (item: T) => string | undefined;
 			getShadowedBy?: (item: T) => string | undefined;
 			getPluginMeta?: (item: T) => ExtensionPluginMeta | null | undefined;
+			getPluginConfigValues?: (item: T) => PluginConfigValues | undefined;
 		},
 	): void {
 		for (const item of items) {
@@ -124,6 +128,7 @@ export async function loadAllExtensions(
 				disabledReason,
 				shadowedBy: opts?.getShadowedBy?.(item),
 				...(opts?.getPluginMeta ? spreadPluginMeta(opts.getPluginMeta(item)) : {}),
+				...(opts?.getPluginConfigValues ? { configValues: opts.getPluginConfigValues(item) } : {}),
 				raw: item,
 			});
 		}
@@ -181,16 +186,24 @@ export async function loadAllExtensions(
 			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
 		);
 		// 插件清单 config/resources(dsh 式管理页):逐模块向上解析最近的
-		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上。
+		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上;已落盘的
+		// 配置值同帧读出,经字段声明钳制后以 configValues 下发(表单初始值)。
 		const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
 		await Promise.all(
 			nativeModules.map(async module => {
 				pluginMetaByPath.set(module.path, await readExtensionPluginMeta(module.path));
 			}),
 		);
+		const configStore = await readPluginConfigStore();
 		addItems(nativeModules, "extension-module", {
 			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
+			getPluginConfigValues: item => {
+				const meta = pluginMetaByPath.get(item.path);
+				if (!meta || meta.fields.length === 0) return undefined;
+				const stored = configStore[makeExtensionId("extension-module", item.name)];
+				return coerceConfigValues(meta.fields, stored);
+			},
 		});
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });

@@ -141,3 +141,44 @@ export function parsePluginResources(raw: unknown): PluginResources | undefined 
 	}
 	return Object.keys(out).length > 0 ? out : undefined;
 }
+
+/** 插件配置的值表(storage 形态:key → 值)。 */
+export type PluginConfigValues = Record<string, unknown>;
+
+/**
+ * 单字段取值钳制(写入与读取共用契约):任何与声明不符的原始值都回退到
+ * 字段默认值(fail-soft,不抛错);数字额外夹取 [min, max] 声明区间。
+ * daemon 的 setConfig 写入校验与 GUI 的表单渲染都必须走这一个函数,
+ * 保证两端对"什么是合法值"的定义永不漂移。
+ */
+export function coerceConfigFieldValue(desc: ConfigFieldDesc, raw: unknown): unknown {
+	switch (desc.type) {
+		case "boolean":
+			return typeof raw === "boolean" ? raw : desc.default;
+		case "number": {
+			const n = typeof raw === "number" ? raw : Number(raw);
+			if (Number.isNaN(n)) return desc.default;
+			let clamped = n;
+			if (typeof desc.min === "number") clamped = Math.max(desc.min, clamped);
+			if (typeof desc.max === "number") clamped = Math.min(desc.max, clamped);
+			return clamped;
+		}
+		case "select":
+			return typeof raw === "string" && (desc.options ?? []).includes(raw) ? raw : desc.default;
+		case "string":
+		case "path":
+			return typeof raw === "string" ? raw : desc.default;
+	}
+}
+
+/** 全表钳制:以清单为准过滤未知键、修正坏值,得到完整值集。 */
+export function coerceConfigValues(
+	fields: ConfigFieldDesc[],
+	stored: PluginConfigValues | undefined,
+): PluginConfigValues {
+	const out: PluginConfigValues = {};
+	for (const desc of fields) {
+		out[desc.key] = coerceConfigFieldValue(desc, stored?.[desc.key]);
+	}
+	return out;
+}

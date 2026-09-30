@@ -412,6 +412,8 @@ export const tools = {
 	"ext restart session": "新会话生效",
 	"ext restart daemon": "重启服务后生效",
 	"ext restart label": "生效时机",
+	"ext config saved": "已保存",
+	"ext config save failed": "保存失败",
 	"ext config errors": "{count} 个配置字段无效，已按 fail-soft 忽略",
 	"ext plugin resources": "资源占用",
 	"ext resources disk": "磁盘",

@@ -425,6 +425,8 @@ export const tools = {
 	"ext restart session": "Applies to new sessions",
 	"ext restart daemon": "Applies after service restart",
 	"ext restart label": "Effective",
+	"ext config saved": "Saved",
+	"ext config save failed": "Save failed",
 	"ext config errors": "{count} config field(s) invalid, ignored fail-soft",
 	"ext plugin resources": "Resource footprint",
 	"ext resources disk": "Disk",

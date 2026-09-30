@@ -1,7 +1,7 @@
 /**
  * Types for the Extension Control Center dashboard.
  */
-import type { ConfigFieldDesc, ConfigFieldError, PluginResources } from "@musepi/pi-wire";
+import type { ConfigFieldDesc, ConfigFieldError, PluginConfigValues, PluginResources } from "@musepi/pi-wire";
 import type { SourceMeta } from "../../capability/types";
 
 /**
@@ -79,6 +79,8 @@ export interface Extension {
 	configErrors?: ConfigFieldError[];
 	/** 插件声明的资源占用(disk/memory/setup/models,详情页资源卡)。 */
 	resources?: PluginResources;
+	/** 已落盘的插件配置值(经字段声明钳制;表单初始值)。 */
+	configValues?: PluginConfigValues;
 	/** Raw item data for inspector */
 	raw: unknown;
 }

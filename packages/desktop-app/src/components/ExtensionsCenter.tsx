@@ -1,7 +1,7 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
+import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { defaultsConfigValues } from "../lib/plugin-config-values";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -85,14 +85,39 @@ function isGuiKind(e: ExtensionItem): boolean {
 
 /**
  * 插件清单元数据区(dsh 插件管理页五段式):配置表单 + 资源卡 + fail-soft
- * 丢弃提示。值状态按条目隔离(key={selected.id} 重挂载即重置)——清单
- * 驱动的配置写入链路随插件管理落地,本刀先把渲染与取值契约立住。
+ * 丢弃提示。表单是受控渲染 + 写入链路:初始值 = 清单默认值 ← 存储值
+ * (daemon 已按字段钳制下发到 configValues);每次变更先乐观更新本地,
+ * 再经 extensions.setConfig 落盘——失败回滚该键并显示错误,成功按字段的
+ * restart 声明提示生效时机(运行时消费随 cordis 试点落地)。
  */
-function PluginManifestSections({ item }: { item: ExtensionItem }): ReactNode {
+function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
 	const [values, setValues] = useState<Record<string, unknown>>(() =>
-		item.config ? defaultsConfigValues(item.config, undefined) : {},
+		item.config ? coerceConfigValues(item.config, item.configValues) : {},
 	);
+	const [notice, setNotice] = useState<{ kind: "saved" | "error"; text: string } | null>(null);
 	const resources = item.resources;
+
+	const handleChange = (key: string, value: unknown): void => {
+		const desc = item.config?.find(f => f.key === key);
+		const previous = values[key];
+		setValues(prev => ({ ...prev, [key]: value }));
+		setNotice(null);
+		if (!rpc || !desc) return;
+		void rpc
+			.request("extensions.setConfig", { id: item.id, key, value })
+			.then(() => {
+				const hint =
+					desc.restart && desc.restart !== "none"
+						? ` · ${desc.restart === "session" ? t("ext restart session") : t("ext restart daemon")}`
+						: "";
+				setNotice({ kind: "saved", text: `${t("ext config saved")}${hint}` });
+			})
+			.catch((err: unknown) => {
+				setValues(prev => ({ ...prev, [key]: previous }));
+				setNotice({ kind: "error", text: `${t("ext config save failed")}: ${String(err)}` });
+			});
+	};
+
 	return (
 		<>
 			{item.configErrors && item.configErrors.length > 0 && (
@@ -105,11 +130,14 @@ function PluginManifestSections({ item }: { item: ExtensionItem }): ReactNode {
 				<div className="gui-ext-detail-section">
 					<div className="gui-ext-detail-label">{t("ext plugin config")}</div>
 					<div className="gui-plugin-config-desc">{t("ext plugin config desc")}</div>
-					<ConfigFormRenderer
-						fields={item.config}
-						values={values}
-						onChange={(key, value) => setValues(prev => ({ ...prev, [key]: value }))}
-					/>
+					<ConfigFormRenderer fields={item.config} values={values} onChange={handleChange} disabled={!rpc} />
+					{notice && (
+						<div
+							className={`gui-plugin-config-notice${notice.kind === "error" ? " gui-plugin-config-notice--error" : ""}`}
+						>
+							{notice.text}
+						</div>
+					)}
 				</div>
 			)}
 			{resources && (
@@ -915,7 +943,7 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 											)}
 										</div>
 										{(selected.config?.length || selected.configErrors?.length || selected.resources) && (
-											<PluginManifestSections key={selected.id} item={selected} />
+											<PluginManifestSections key={selected.id} item={selected} rpc={rpc} />
 										)}
 										{selected.state === "shadowed" && (
 											<div className="gui-ext-detail-actions">

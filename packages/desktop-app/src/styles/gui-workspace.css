@@ -2227,6 +2227,15 @@
 	color: var(--color-text);
 	word-break: break-all;
 }
+.gui-plugin-config-notice {
+	margin-top: 6px;
+	font-size: 11px;
+	line-height: 1.45;
+	color: var(--color-text-faint);
+}
+.gui-plugin-config-notice--error {
+	color: var(--color-danger);
+}
 .gui-ext-item-tag {
 	/* Shrinkable with an ellipsis: a row whose badges are all rigid pushes
 	 * its trailing controls (hover ops, toggle) past the pane's right edge,
