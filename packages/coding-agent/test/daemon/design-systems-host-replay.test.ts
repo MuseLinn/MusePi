@@ -170,8 +170,12 @@ describe("marketplace.install/remove 失效与广播契约", () => {
 		events.broadcastExtensionsChanged();
 		expect(emitted).toHaveLength(1);
 		const envelope = emitted[0] as { kind: string; payload: { type: string; at: number } };
-		expect(envelope.kind).toBe("event");
-		// 事件名即本任务验收关键：不是 extensions.changed，GUI 不会重拉 design.systems.list。
+		// P0-1：全局事件必须走独立的 "global-event" kind——kind:"event" 是
+		// 会话 journal 记录的专属 kind，客户端对它执行 seq 水位门；全局
+		// seq 接上水位会让真实 journal 记录被误判重放静默丢弃。payload
+		// 事件名仍是本任务验收关键：不是 extensions.changed，GUI 不会重拉
+		// design.systems.list。
+		expect(envelope.kind).toBe("global-event");
 		expect(envelope.payload.type).toBe("extensions.changed");
 		expect(typeof envelope.payload.at).toBe("number");
 	});

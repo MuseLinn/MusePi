@@ -1204,6 +1204,14 @@ function AppInner(): ReactNode {
 					setPendingAsk({ ...(event.payload as AskRequest), sessionId: event.sessionId });
 					return;
 				}
+				// Global events (extensions.changed / modes.changed / STT-TTS
+				// install progress…) ride their own "global-event" kind with an
+				// INDEPENDENT seq space (P0-1) and are consumed exclusively via
+				// rpc.addEventListener subscribers. They must never reach the
+				// session store's journal watermark gate — as kind:"event"
+				// their seqs advanced the watermark / triggered catchup storms
+				// and could get real journal records dropped as "replays".
+				if (event.kind === "global-event") return;
 				// B1: envelopes carry the subscribing sessionId. The daemon
 				// allows multi-subscription per connection now, so switching
 				// sessions leaves the old subscription attached — drop events

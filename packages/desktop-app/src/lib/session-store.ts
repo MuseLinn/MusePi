@@ -529,6 +529,13 @@ export class GuiSessionStore {
 	 *  Envelopes without a journal seq (0 / legacy / non-event kinds) apply
 	 *  ungated — they live outside the watermark space. */
 	apply(event: StreamEvent): void {
+		// P0-1: daemon global events (extensions.changed / install progress…)
+		// use the separate "global-event" kind with their own seq space. They
+		// are not journal records — feeding them to the watermark gate below
+		// let their seqs advance the watermark (real records then dropped as
+		// "replays" = silent message loss) or arm catchup/resync storms. The
+		// store has no consumer for their payloads; drop them outright.
+		if (event.kind === "global-event") return;
 		if (event.kind === "approval-request" || event.kind === "recap") {
 			this.#applyNow(event);
 			this.#emit();

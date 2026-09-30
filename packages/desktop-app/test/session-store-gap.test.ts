@@ -133,3 +133,56 @@ describe("GuiSessionStore watermark gate (M1.4)", () => {
 		expect(levels(store)).toEqual(["legacy"]);
 	});
 });
+
+describe("P0-1: global-event envelopes never touch the journal watermark", () => {
+	const globalEvent = (seq: number) => ({
+		kind: "global-event" as const,
+		seq,
+		payload: { type: "extensions.changed", at: 1727600000000 + seq },
+	});
+
+	it("a global event before the first journal record does not get it dropped as a replay", async () => {
+		// Regression (silent message loss): global broadcasts rode kind:"event"
+		// with their own seq counter. On a fresh session (watermark 0) the first
+		// global event carried seq 1 → watermark jumped to 1 → the real journal
+		// record seq 1 was then dropped as an already-applied "replay" and the
+		// transcript lost a message forever.
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
+		store.apply(globalEvent(1));
+		store.apply(globalEvent(2));
+		await settle();
+
+		store.apply(seqEvent(1));
+		await settle();
+		expect(levels(store)).toEqual(["lvl-1"]);
+	});
+
+	it("an install-progress storm triggers no catchup and no resync", async () => {
+		// Regression (resync storm): each global seq beyond watermark+1 was
+		// buffered as a "hole" → catchup RPC + 10s gap timer → whole-session
+		// resync. STT/TTS download progress broadcasts fired these in rapid
+		// succession, repeatedly resetting every open session.
+		const gaps: number[] = [];
+		let resyncs = 0;
+		const store = new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp", {
+			onGapDetected: (afterSeq: number) => {
+				gaps.push(afterSeq);
+				return Promise.resolve({ resyncRequired: false });
+			},
+			onResyncRequired: () => {
+				resyncs += 1;
+			},
+		});
+		// 40 consecutive download-progress broadcasts, seqs 1..40 — with the
+		// old kind:"event" every one past the watermark was a fresh "gap".
+		for (let n = 1; n <= 40; n++) store.apply(globalEvent(n));
+		await settle();
+		expect(gaps).toEqual([]);
+		expect(resyncs).toBe(0);
+
+		// The watermark is still 0: the first journal record applies normally.
+		store.apply(seqEvent(1));
+		await settle();
+		expect(levels(store)).toEqual(["lvl-1"]);
+	});
+});

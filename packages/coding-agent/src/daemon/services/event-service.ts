@@ -11,6 +11,8 @@ import type { DaemonService } from "./types";
  *   内部广播入口 broadcastExtensionsChanged / broadcastExtensionNotification。
  * - 输出：全局事件走各连接的事件批处理器（host emitEvent → batcher），
  *   事件载荷为 extensions.changed / extensions.notification；
+ *   信封 kind 为 "global-event"（P0-1：与 kind:"event" 的会话 journal
+ *   水位空间完全分离，客户端水位门只对 journal 记录生效）；
  *   catchup 的 delta 帧 riding 常规推送通道，响应体轻量。
  * - 生命周期：随 DaemonServer 构造创建、随进程退出销毁；无持久状态
  *   （targets/seq 均为内存态）。连接关闭必须调 dropTarget 防泄漏。
@@ -105,26 +107,34 @@ export class EventService implements DaemonService {
 		this.broadcast({ type: "models.changed", at: Date.now() });
 	}
 
-	/** 全局事件广播原语：全部全局事件（含 STT 下载进度等任意载荷）共用
-	 *  同一 seq 计数——与原 #globalEventSeq 语义一致。原语不捕获发送异常
-	 *  （与原广播方法行为一致）；需要容错清理死连接的路径走
-	 *  broadcastExtensionNotification。 */
+	/** 全局事件广播原语：全部全局事件（含 STT/TTS 下载进度等任意载荷）共用
+	 *  同一 seq 计数——与原 #globalEventSeq 语义一致。
+	 *
+	 *  P0-1：信封 kind 是 "global-event" 而非 "event"——"event" 是会话
+	 *  journal 记录的专属 kind，客户端对它执行 seq 水位门（重放丢弃/空洞
+	 *  补推/整会话 resync）。全局事件有独立计数空间，若以 kind "event"
+	 *  下发，seq 恰好接上水位会让客户端把后续 journal 记录误判为重放而
+	 *  静默丢弃，seq 越过水位+1 更会触发无意义的 catchup/resync 风暴。
+	 *  seq 仍保留（帧识别要求数字 seq），但不进任何会话水位语义。
+	 *  原语不捕获发送异常（与原广播方法行为一致）；需要容错清理死连接的
+	 *  路径走 broadcastExtensionNotification。 */
 	broadcast(payload: Record<string, unknown>): void {
 		const seq = ++this.#seq;
 		for (const conn of this.#targets) {
-			this.#host.emitEvent(conn, { kind: "event", seq, payload });
+			this.#host.emitEvent(conn, { kind: "global-event", seq, payload });
 		}
 	}
 
 	/** 广播 extensions.notification（扩展 registerNotificationChannel 推送）：
 	 *  转发到 events.subscribe 的客户端。频道消息带 channel + 完整
-	 *  message(text/title/kind)，GUI 渲染为通知。 */
+	 *  message(text/title/kind)，GUI 渲染为通知。同 P0-1：kind 为
+	 *  "global-event"，不进会话 journal 水位空间。 */
 	broadcastExtensionNotification(channel: string, message: ExtensionNotificationMessage): void {
 		const seq = ++this.#seq;
 		const payload = { type: "extensions.notification" as const, channel, message, at: Date.now() };
 		for (const conn of this.#targets) {
 			try {
-				this.#host.emitEvent(conn, { kind: "event", seq, payload });
+				this.#host.emitEvent(conn, { kind: "global-event", seq, payload });
 			} catch {
 				this.#targets.delete(conn);
 			}
