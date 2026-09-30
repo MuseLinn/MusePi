@@ -332,6 +332,20 @@ export function buildTrajectory(
 				entryId,
 				tsMs,
 			});
+		} else if (type === "custom_message" && (raw as { customType?: unknown }).customType === "tool_registry") {
+			// 工具注册表时间线（热插拔注入行）：display-only custom_message，
+			// 与 model_change 同款 system 事件——title 用原始类型名，组件层
+			// 映射 i18n（保持纯逻辑无 i18n 依赖）。
+			events.push({
+				id: `tool_registry:${ts}`,
+				kind: "system",
+				title: "tool_registry",
+				turn,
+				pathTurn: entryId !== undefined ? depthOf(entryId) : undefined,
+				timestamp: entry.timestamp,
+				entryId,
+				tsMs,
+			});
 		} else if (type === "model_change" || type === "thinking_level_change") {
 			// system 事件:title 用原始类型名,组件层映射 i18n(保持纯逻辑无 i18n 依赖)。
 			events.push({

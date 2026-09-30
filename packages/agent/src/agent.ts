@@ -439,6 +439,9 @@ export class Agent {
 	#onTurnEnd?: (messages: AgentMessage[], signal?: AbortSignal, context?: AgentTurnEndContext) => Promise<void> | void;
 	#beforeModelCall?: AgentBeforeModelCall;
 	#additionalBeforeModelCalls = new Set<AgentBeforeModelCall>();
+
+	/** 工具注册表时间线订阅者（agent-loop 逐请求比对 wire 工具集后分发）。 */
+	#toolRegistryChangeListeners = new Set<(change: { added: string[]; removed: string[]; tools: string[] }) => void>();
 	#asideMessageProvider?: () => AsideMessage[] | Promise<AsideMessage[]>;
 	#telemetry?: AgentLoopConfig["telemetry"];
 	#appendOnlyContext?: AppendOnlyContextManager;
@@ -907,6 +910,21 @@ export class Agent {
 		this.#additionalBeforeModelCalls.add(fn);
 		return () => {
 			this.#additionalBeforeModelCalls.delete(fn);
+		};
+	}
+
+	/**
+	 * Subscribe to wire tool-set changes between model requests within a run
+	 * (extension/plugin hot-toggle while the loop idles between steps). Fires
+	 * at most once per actual change; the first request of a run only
+	 * establishes the baseline. Returns a disposer.
+	 */
+	addToolRegistryChangeListener(
+		fn: (change: { added: string[]; removed: string[]; tools: string[] }) => void,
+	): () => void {
+		this.#toolRegistryChangeListeners.add(fn);
+		return () => {
+			this.#toolRegistryChangeListeners.delete(fn);
 		};
 	}
 
@@ -1487,6 +1505,14 @@ export class Agent {
 								if (callbackResult?.stop) return callbackResult;
 							}
 							return undefined;
+						}
+					: undefined,
+			onToolRegistryChange:
+				this.#toolRegistryChangeListeners.size > 0
+					? change => {
+							for (const listener of this.#toolRegistryChangeListeners) {
+								listener(change);
+							}
 						}
 					: undefined,
 			cursorExecHandlers: this.#cursorExecHandlers,

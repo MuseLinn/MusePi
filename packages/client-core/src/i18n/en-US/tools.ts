@@ -351,7 +351,7 @@ export const tools = {
 	"plugins empty hint":
 		"Install plugin packages from the marketplace, or drop them into ~/.musepi/plugins and refresh.",
 	"plugins empty modules hint":
-		"Hot-loaded extension modules (~/.musepi/agent/extensions and project .musepi/extensions) are listed here too — currently none.",
+		"Hot-loaded extension modules (~/.musepi/agent/extensions and project .musepi/extensions) and built-in plugin units (desktop shell, themes, card renderers, magic keywords) are listed here too.",
 	"go to marketplace": "Open marketplace",
 	"plugin package tag": "Plugin package",
 	"no skills found": "No skills found",
@@ -411,6 +411,7 @@ export const tools = {
 	"ext kind magic-keyword": "Magic keywords",
 	"ext kind theme": "Themes",
 	"ext kind tool-render": "Tool renderers",
+	"ext kind desktop-shell": "Desktop shell",
 	"ext shadowed": "Shadowed",
 	"ext load failed": "Load failed",
 	"ext provider disabled": "Disabled (source turned off)",

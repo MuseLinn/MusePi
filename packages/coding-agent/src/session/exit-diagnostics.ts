@@ -6,6 +6,23 @@ export const TOOL_EXECUTION_START_CUSTOM_TYPE = "tool_execution_start";
 export const SESSION_EXIT_CUSTOM_TYPE = "session_exit";
 
 /**
+ * 工具注册表时间线（dsh request/header + tool-addition/removal parity）：
+ * 会话运行中扩展/插件热插拔导致下一次模型请求的 wire 工具集变化时，
+ * agent-loop 经 onToolRegistryChange 上报，会话落一条 display:true 的
+ * custom_message 条目（customType = TOOL_REGISTRY_CHANGE_CUSTOM_TYPE）。
+ * UI 时间线与轨迹面板据此渲染「工具已更新 · +N/−M」注入行；条目在
+ * session-context 的 display-only 排除表里，不进 LLM 上下文、对 provider
+ * 前缀缓存零影响（模型可见注入是后续独立刀）。
+ */
+export const TOOL_REGISTRY_CHANGE_CUSTOM_TYPE = "tool_registry";
+export interface ToolRegistryChangeData {
+	added: string[];
+	removed: string[];
+	/** 变化后的完整 wire 工具名集合（排序）。 */
+	tools: string[];
+}
+
+/**
  * Compact projection of tool-call arguments persisted with the start marker.
  * The assistant message already carries the full arguments; this exists only
  * so `appendArgumentSummary` can name the command/path in resume warnings

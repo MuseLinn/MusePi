@@ -596,6 +596,11 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "Model error",
 	"retry attempt {count}": "Retry attempt {count}",
+	// Tool-registry timeline injection row (extension/plugin hot-toggle; display-only custom_message).
+	"tools updated": "Tools updated",
+	"tools added {count}": "+{count} added",
+	"tools removed {count}": "−{count} removed",
+	"tool registry names": "Tools affected",
 	"model supports tools": "Model supports tools",
 	// Surface tab strip close button (files pane multi-instance tabs).
 	"close other tabs": "Close other tabs",

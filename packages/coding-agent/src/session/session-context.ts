@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@musepi/pi-agent-core";
 import { coerceServiceTierByFamily, type ProviderPayload, type ServiceTierByFamily } from "@musepi/pi-ai";
 import * as snapcompact from "@musepi/snapcompact";
+import { TOOL_REGISTRY_CHANGE_CUSTOM_TYPE } from "./exit-diagnostics";
 import {
 	createBranchSummaryMessage,
 	createCompactionSummaryMessage,
@@ -342,9 +343,14 @@ export function buildSessionContext(
 			// the human; they must never become a developer message on the NEXT
 			// turn (otherwise the model wastes tokens responding to its own
 			// failed retry). Prewalk plans have the same display/context split.
+			// Tool-registry rows（热插拔注入行）同为纯 UI 标记：模型从每次请
+			// 求自带的工具表得知变化，把 diff 回灌只会白烧 token 并扰动
+			// provider 前缀缓存。
 			if (
 				!options?.transcript &&
-				(entry.customType === PREWALK_PLAN_MESSAGE_TYPE || entry.customType === "retry_failure")
+				(entry.customType === PREWALK_PLAN_MESSAGE_TYPE ||
+					entry.customType === "retry_failure" ||
+					entry.customType === TOOL_REGISTRY_CHANGE_CUSTOM_TYPE)
 			) {
 				return;
 			}

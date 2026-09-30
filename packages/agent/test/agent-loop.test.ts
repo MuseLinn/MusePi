@@ -476,6 +476,113 @@ describe("agentLoop with AgentMessage", () => {
 		expect(contexts[1]?.index).toBe(1);
 	});
 
+	it("reports wire tool-set changes between model requests", async () => {
+		// Contract: when the host mutates context.tools between two model
+		// requests (extension/plugin hot-toggle while the loop idles between
+		// steps), onToolRegistryChange fires exactly once with the wire-name
+		// diff. A consumer reading the session timeline observes the
+		// added/removed tools; if this regresses, hot-toggles go silent.
+		const toolSchema = type({ value: "string" });
+		const echoTool: AgentTool<typeof toolSchema, { value: string }> = {
+			name: "echo",
+			label: "Echo",
+			description: "Echo tool",
+			parameters: toolSchema,
+			async execute(_toolCallId, params) {
+				return {
+					content: [{ type: "text", text: `echoed: ${params.value}` }],
+					details: { value: params.value },
+				};
+			},
+		};
+		const lateTool: AgentTool<typeof toolSchema, { value: string }> = {
+			name: "late_tool",
+			label: "Late",
+			description: "Late-registered tool",
+			parameters: toolSchema,
+			async execute() {
+				return { content: [{ type: "text", text: "late" }], details: { value: "" } };
+			},
+		};
+
+		const context: AgentContext = { systemPrompt: [""], messages: [], tools: [echoTool] };
+
+		const mock = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "hello" } }] },
+				{ content: ["done"] },
+			],
+		});
+
+		const changes: { added: string[]; removed: string[]; tools: string[] }[] = [];
+		let syncCalls = 0;
+		const config: AgentLoopConfig = {
+			model: mock.model,
+			convertToLlm: identityConverter,
+			onToolRegistryChange: change => changes.push(change),
+			syncContextBeforeModelCall: ctx => {
+				syncCalls += 1;
+				if (syncCalls === 2) {
+					// Simulate a hot-plugged tool before the second request.
+					ctx.tools = [...(ctx.tools ?? []), lateTool];
+				}
+			},
+		};
+
+		const stream = agentLoop([createUserMessage("echo something")], context, config, undefined, mock.stream);
+		for await (const _ of stream) {
+			// drain
+		}
+
+		expect(changes).toHaveLength(1);
+		expect(changes[0]?.added).toEqual(["late_tool"]);
+		expect(changes[0]?.removed).toEqual([]);
+		expect(changes[0]?.tools).toEqual(["echo", "late_tool"]);
+	});
+
+	it("does not report tool registry changes when the wire tool set is stable", async () => {
+		// Contract: the first request of a run only establishes the baseline
+		// (the initial tool set is already recorded at session_init), and an
+		// unchanged tool set never fires. If this regresses, the timeline
+		// fills with spurious "tools updated" rows on every request.
+		const toolSchema = type({ value: "string" });
+		const tool: AgentTool<typeof toolSchema, { value: string }> = {
+			name: "echo",
+			label: "Echo",
+			description: "Echo tool",
+			parameters: toolSchema,
+			async execute(_toolCallId, params) {
+				return {
+					content: [{ type: "text", text: `echoed: ${params.value}` }],
+					details: { value: params.value },
+				};
+			},
+		};
+
+		const context: AgentContext = { systemPrompt: [""], messages: [], tools: [tool] };
+
+		const mock = createMockModel({
+			responses: [
+				{ content: [{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "hello" } }] },
+				{ content: ["done"] },
+			],
+		});
+
+		const changes: unknown[] = [];
+		const config: AgentLoopConfig = {
+			model: mock.model,
+			convertToLlm: identityConverter,
+			onToolRegistryChange: change => changes.push(change),
+		};
+
+		const stream = agentLoop([createUserMessage("echo something")], context, config, undefined, mock.stream);
+		for await (const _ of stream) {
+			// drain
+		}
+
+		expect(changes).toHaveLength(0);
+	});
+
 	it("should handle tool calls and results", async () => {
 		const toolSchema = type({ value: "string" });
 		const executed: string[] = [];

@@ -589,6 +589,11 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "模型错误",
 	"retry attempt {count}": "重试第 {count} 次",
+	// 工具注册表时间线注入行（扩展/插件热插拔，display-only custom_message）。
+	"tools updated": "工具已更新",
+	"tools added {count}": "+{count} 新增",
+	"tools removed {count}": "−{count} 移除",
+	"tool registry names": "涉及工具",
 	"model supports tools": "模型支持工具调用",
 	// Surface tab strip close button (files pane multi-instance tabs).
 	"close other tabs": "关闭其他标签页",

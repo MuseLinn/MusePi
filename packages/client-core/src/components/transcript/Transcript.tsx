@@ -881,6 +881,41 @@ function renderCustomMessage({
 			</Row>
 		);
 	}
+	if (customType === "tool_registry") {
+		// 工具注册表时间线注入行（dsh ContextInjectionRow parity）：热插拔
+		// 改变下一次请求的 wire 工具集时落一条 display-only custom_message。
+		// details = { added, removed, tools }（exit-diagnostics ToolRegistryChangeData）。
+		const reg =
+			details !== null && typeof details === "object"
+				? (details as { added?: unknown; removed?: unknown; tools?: unknown })
+				: {};
+		const names = (v: unknown): string[] =>
+			Array.isArray(v) ? v.filter((n): n is string => typeof n === "string") : [];
+		const added = names(reg.added);
+		const removed = names(reg.removed);
+		const current = names(reg.tools);
+		return (
+			<Row kind="custom" gutter="" title={timestamp}>
+				<div className="tr-tool-registry" role="status">
+					<span className="tr-tool-registry-chip">{t("tools updated")}</span>
+					{added.length > 0 && (
+						<span className="tr-tool-registry-delta tr-tool-registry-delta--add">
+							{t("tools added {count}", { count: String(added.length) })}
+						</span>
+					)}
+					{removed.length > 0 && (
+						<span className="tr-tool-registry-delta tr-tool-registry-delta--remove">
+							{t("tools removed {count}", { count: String(removed.length) })}
+						</span>
+					)}
+					<span className="tr-tool-registry-names" title={[...added, ...removed].join(", ")}>
+						{t("tool registry names")}:{" "}
+						{[...added.map(n => `+${n}`), ...removed.map(n => `−${n}`)].join(" ") || current.join(", ")}
+					</span>
+				</div>
+			</Row>
+		);
+	}
 	if (!display) return null;
 	return (
 		<Row kind="custom" gutter="" title={timestamp}>

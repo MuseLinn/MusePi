@@ -340,7 +340,7 @@ export const tools = {
 	"no plugins loaded": "未加载插件",
 	"plugins empty hint": "插件包可从插件市场一键安装，或放入 ~/.musepi/plugins 后刷新。",
 	"plugins empty modules hint":
-		"热加载的扩展模块（~/.musepi/agent/extensions 与项目 .musepi/extensions）也会汇总在此，当前为空。",
+		"热加载的扩展模块（~/.musepi/agent/extensions 与项目 .musepi/extensions）与内置插件单元（桌壳、主题、卡片渲染、魔术关键词等）都会汇总在此。",
 	"go to marketplace": "去插件市场",
 	"plugin package tag": "插件包",
 	"no skills found": "未发现技能",
@@ -399,6 +399,7 @@ export const tools = {
 	"ext kind magic-keyword": "魔术关键词",
 	"ext kind theme": "主题",
 	"ext kind tool-render": "工具卡片渲染",
+	"ext kind desktop-shell": "桌壳",
 	"ext shadowed": "被遮蔽",
 	"ext load failed": "加载失败",
 	"ext provider disabled": "已停用（来源关闭）",

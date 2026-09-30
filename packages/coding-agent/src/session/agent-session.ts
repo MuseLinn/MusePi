@@ -276,7 +276,9 @@ import {
 	type SessionExitData,
 	summarizeToolArguments,
 	TOOL_EXECUTION_START_CUSTOM_TYPE,
+	TOOL_REGISTRY_CHANGE_CUSTOM_TYPE,
 	type ToolExecutionStartData,
+	type ToolRegistryChangeData,
 } from "./exit-diagnostics";
 import { IrcBridge, type IrcBridgeHost } from "./irc-bridge";
 import {
@@ -664,6 +666,7 @@ export class AgentSession {
 	#usagePreflightReadyModel: Model | undefined;
 	#detachUsageBeforeQueueDequeue: (() => void) | undefined;
 	#detachUsageBeforeModelCall: (() => void) | undefined;
+	#detachToolRegistryListener: (() => void) | undefined;
 
 	#transformContext: (messages: AgentMessage[], signal?: AbortSignal) => AgentMessage[] | Promise<AgentMessage[]>;
 	#onPayload: SimpleStreamOptions["onPayload"] | undefined;
@@ -1193,6 +1196,23 @@ export class AgentSession {
 			if (!(await this.#runUsageAwarePreflight(signal))) {
 				signal?.throwIfAborted();
 				throw new DOMException("Usage preflight cancelled", "AbortError");
+			}
+		});
+		// 工具注册表时间线：热插拔（扩展/插件启停）在两步模型请求之间改变
+		// wire 工具集时，agent-loop 逐请求比对后回调。落 custom_message 条目
+		// （display:true → GUI/TUI 时间线渲染「工具已更新」注入行；customType
+		// 在 session-context 的 display-only 排除表里 → 不进 LLM 上下文、对
+		// provider 前缀缓存零影响）。dsh request/header + tool-addition/
+		// removal 契约 parity；模型可见注入是后续独立刀。
+		this.#detachToolRegistryListener = this.agent.addToolRegistryChangeListener(change => {
+			try {
+				this.sessionManager.appendCustomMessageEntry(TOOL_REGISTRY_CHANGE_CUSTOM_TYPE, "", true, {
+					added: change.added,
+					removed: change.removed,
+					tools: change.tools,
+				} satisfies ToolRegistryChangeData);
+			} catch (error) {
+				logger.warn("tool registry change journaling failed", { error: String(error) });
 			}
 		});
 		const statsHost: SessionStatsTrackerHost = {
@@ -3936,6 +3956,8 @@ export class AgentSession {
 		this.#detachUsageBeforeQueueDequeue = undefined;
 		this.#detachUsageBeforeModelCall?.();
 		this.#detachUsageBeforeModelCall = undefined;
+		this.#detachToolRegistryListener?.();
+		this.#detachToolRegistryListener = undefined;
 		this.#memory.cancelLocalMemoryStartup();
 		this.#titleGenerationAbortController.abort();
 		this.#abortAutolearnCapture();

@@ -267,6 +267,47 @@
 	color: var(--fg);
 }
 
+/* 工具注册表时间线注入行（扩展/插件热插拔；display-only custom_message）。 */
+.tr-tool-registry {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	max-width: 100%;
+	padding: 6px 10px;
+	border: 0.5px solid color-mix(in oklab, var(--fg) 18%, transparent);
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--fg);
+}
+
+.tr-tool-registry-chip {
+	padding: 1px 7px;
+	border-radius: var(--radius-full, 999px);
+	background: color-mix(in oklab, var(--accent, #7c8cf8) 16%, transparent);
+	color: var(--fg);
+	font-size: 11px;
+}
+
+.tr-tool-registry-delta--add {
+	color: var(--success, #3fb950);
+}
+
+.tr-tool-registry-delta--remove {
+	color: var(--error, #f85149);
+}
+
+.tr-tool-registry-names {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	opacity: 0.75;
+}
+
 .tr-retry-failure-chip {
 	flex: none;
 	padding: 1px 7px;

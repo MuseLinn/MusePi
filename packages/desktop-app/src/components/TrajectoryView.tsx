@@ -81,7 +81,11 @@ function EventRow({
 						</>
 					) : ev.kind === "system" ? (
 						<div className="traj-text">
-							{ev.title === "model_change" ? t("model changed") : t("thinking level changed")}
+							{ev.title === "model_change"
+								? t("model changed")
+								: ev.title === "tool_registry"
+									? t("tools updated")
+									: t("thinking level changed")}
 						</div>
 					) : (
 						<div className="traj-text">{ev.body ?? ev.title}</div>

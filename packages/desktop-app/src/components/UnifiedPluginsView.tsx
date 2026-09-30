@@ -38,7 +38,33 @@ export function sourceLevelLabel(provider: string, level: string): string {
 	if (provider === "native" || provider === "musepi-managed" || provider === "builtin-defaults") {
 		return t("skill filter builtin");
 	}
+	// builtin-registry 条目：musepi-extensions provider + native level。
+	if (provider === "musepi-extensions" && level === "native") {
+		return t("skill filter builtin");
+	}
 	return level === "project" ? t("skill filter project") : t("skill filter user");
+}
+
+/**
+ * 插件 lane 判定（统一清单的「模块侧」口径，ExtensionsCenter 的 tab 计数
+ * 与本视图共用此单一权威，防双口径漂移）：
+ * - kind=extension-module：真实扩展模块（native / musepi-extensions provider）；
+ * - builtin-registry 条目（musepi-extensions provider + native level，即
+ *   task-card 风格 / 桌壳 / 魔术关键词 / 主题 / 工具卡片渲染等内置插件单元）。
+ *   排除 kind=skill —— 捆绑技能是技能清单的管理对象，不进插件 lane，
+ *   避免与能力清单 tab 整屏重复。
+ */
+export function isPluginLaneEntry(e: ExtensionItem): boolean {
+	if (e.kind === "extension-module") return true;
+	return e.source.provider === "musepi-extensions" && e.source.level === "native" && e.kind !== "skill";
+}
+
+/** kind 显示名（与 ExtensionsCenter.kindLabel 同 fallback 口径：有 i18n
+ *  key 用译文，没有则回退原始 kind 字符串）。 */
+function kindTag(kind: string): string {
+	const key = `ext kind ${kind}`;
+	const label = t(key as Parameters<typeof t>[0]);
+	return label === key ? kind : label;
 }
 
 export function UnifiedPluginsView({
@@ -60,9 +86,10 @@ export function UnifiedPluginsView({
 	const data = useExtensionRegistry(rpc);
 	// 防双击：一次只允许一个模块开关在途。插件包开关由父级 own。
 	const [busyId, setBusyId] = useState<string | null>(null);
-	// 只取 extension-module 一类：其余 kind（skill/tool/mcp/…）在能力
-	// 清单 tab 有完整 provider→kind→item 树，这里不重复。
-	const modules = useMemo(() => (data?.extensions ?? []).filter(e => e.kind === "extension-module"), [data]);
+	// 模块 lane：真实扩展模块 + 内置插件单元（isPluginLaneEntry 单一权威，
+	// 与 ExtensionsCenter tab 计数同口径）。其余 kind（skill/tool/mcp/…）
+	// 在能力清单 tab 有完整 provider→kind→item 树，这里不重复。
+	const modules = useMemo(() => (data?.extensions ?? []).filter(isPluginLaneEntry), [data]);
 
 	const toggleModule = (e: ExtensionItem): void => {
 		if (!rpc || busyId) return;
@@ -139,7 +166,7 @@ export function UnifiedPluginsView({
 								className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}
 							/>
 							<span className="min-w-0 flex-1 truncate text-[12px] font-medium">{e.displayName || e.name}</span>
-							<span className="gui-ext-item-tag">{t("ext kind extension-module")}</span>
+							<span className="gui-ext-item-tag">{kindTag(e.kind)}</span>
 							<span className="gui-ext-item-tag">{sourceLevelLabel(e.source.provider, e.source.level)}</span>
 							{e.loadError && (
 								<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>

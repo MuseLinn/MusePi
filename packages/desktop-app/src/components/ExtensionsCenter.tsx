@@ -19,7 +19,12 @@ import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
 import { StateIcon } from "./StateIcon";
-import { type PluginPackageEntry as PluginEntry, sourceLevelLabel, UnifiedPluginsView } from "./UnifiedPluginsView";
+import {
+	isPluginLaneEntry,
+	type PluginPackageEntry as PluginEntry,
+	sourceLevelLabel,
+	UnifiedPluginsView,
+} from "./UnifiedPluginsView";
 
 /**
  * 扩展控制中心 (extension control center) — TUI /extensions parity in the
@@ -407,11 +412,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 
 	const selected = useMemo(() => (extensions ?? []).find(e => e.id === selectedId) ?? null, [extensions, selectedId]);
 
-	// 插件 tab 计数 = 插件包 + 热加载扩展模块（统一清单的两条链路）。
-	const moduleCount = useMemo(
-		() => (extensions ?? []).filter(e => e.kind === "extension-module").length,
-		[extensions],
-	);
+	// 插件 tab 计数 = 插件包 + 模块 lane（统一清单两条链路；判定单一权威
+	// 在 UnifiedPluginsView.isPluginLaneEntry，与本视图过滤同口径）。
+	const moduleCount = useMemo(() => (extensions ?? []).filter(isPluginLaneEntry).length, [extensions]);
 
 	// Detail content (lazy): skills → SKILL.md via skills.read; context
 	// files → fs.read; other kinds have no content file (inspector only).

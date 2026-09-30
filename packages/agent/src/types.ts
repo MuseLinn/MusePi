@@ -341,6 +341,20 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	beforeModelCall?: AgentBeforeModelCall;
 
 	/**
+	 * Fired when the wire-visible tool set changes between model requests
+	 * within one run (e.g. an extension/plugin hot-toggle added or removed
+	 * tools while the loop was idle between steps — see
+	 * `syncContextBeforeModelCall`). `added`/`removed` are wire tool names
+	 * (sorted); `tools` is the full new set. The first request of a run only
+	 * establishes the baseline (the initial set is already recorded by the
+	 * host's session_init entry), so this fires at most once per actual
+	 * change. Hosts use it to journal a tool-registry timeline entry and to
+	 * refresh live UI; the callback runs before the differing request is
+	 * gated/sent, and throwing is the host's responsibility to avoid.
+	 */
+	onToolRegistryChange?: (change: { added: string[]; removed: string[]; tools: string[] }) => void;
+
+	/**
 	 * Optional transform applied to tool call arguments before execution.
 	 * Use for deobfuscating secrets or rewriting arguments.
 	 */
