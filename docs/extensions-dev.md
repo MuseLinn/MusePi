@@ -295,14 +295,14 @@ pi.unregisterDesignSystem("my-brand");
 
 ## 13. 插件清单配置(manifest config/resources + pi.config,dsh 插件管理页 parity,2026-09-30)
 
-扩展的 package.json 可在 `omp`/`pi` 块下声明**配置字段表**与**资源占用卡**:扩展中心详情页据此渲染 dsh 式管理视图(配置表单 + 资源卡),扩展运行时经 `pi.config` 读取同一份值。
+扩展的 package.json 可在 `musepi` 块下声明**配置字段表**与**资源占用卡**(`musepi` 为权威清单字段;旧上游的 `omp`/`pi` 块继续可读,新扩展一律写 `musepi`):扩展中心详情页据此渲染 dsh 式管理视图(配置表单 + 资源卡),扩展运行时经 `pi.config` 读取同一份值。
 
 ### 清单声明
 
 ```json
 {
   "name": "voice-input",
-  "omp": {
+  "musepi": {
     "extensions": ["index.ts"],
     "config": [
       { "key": "enabled", "type": "boolean", "default": true, "description": "启用语音输入" },

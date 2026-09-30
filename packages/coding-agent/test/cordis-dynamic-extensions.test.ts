@@ -2,7 +2,8 @@
  * M2-2.9 spike ①（动态插件运行时）四能力契约测试。
  *
  * 钉死的契约（消费者 = 试点报告与后续收编决策）：
- *  1. 加载：真实扩展目录（package.json omp.extensions 入口）→ 命令可调用，
+ *  1. 加载：真实扩展目录（package.json musepi.extensions 入口，musepi 为权威
+ *     清单字段）→ 命令可调用，
  *     检视如实报告 ACTIVE + 效果账本标签（command/on/interval 三面）；
  *  2. 隔离：跨扩展重名命令 = 结构化碰撞拒绝（教学式文案带归属），后加载者
  *     FAILED 且不留半挂载 fiber，先加载者登记不受影响；
@@ -38,7 +39,7 @@ const PROBE_API_TS = `interface ProbeApi {
 `;
 
 function probeManifest(name: string): string {
-	return JSON.stringify({ name, version: "0.0.0", omp: { extensions: ["./index.ts"] } });
+	return JSON.stringify({ name, version: "0.0.0", musepi: { extensions: ["./index.ts"] } });
 }
 
 /** probe-a：命令 + 事件订阅 + 周期回调三个贡献面；版本字面量与 greeting 分处
@@ -133,6 +134,25 @@ describe("spike ① 动态插件运行时（Loader / 隔离 / 生命周期 / 检
 		expect(entry?.effectLabels).toContain("command:probe-a-hello");
 		expect(entry?.effectLabels).toContain("on:refresh");
 		expect(entry?.effectLabels).toContain("interval:5ms");
+	});
+
+	test("遗留 omp 清单字段仍可读（musepi 权威前的旧上游扩展不掉队）", async () => {
+		const host = new DaemonHostContext();
+		const legacyRuntime = new CordisDynamicExtensionRuntime(host);
+		const dir = await writeExtension("legacy-omp-manifest", {
+			"package.json": JSON.stringify({
+				name: "legacy-omp-manifest",
+				version: "0.0.0",
+				omp: { extensions: ["./index.ts"] },
+			}),
+			"index.ts": probeAIndex("v1"),
+			"helper.ts": PROBE_A_HELPER,
+		});
+		const handle = await legacyRuntime.load(dir);
+		expect(await handle.invoke("probe-a-hello")).toBe("A:v1");
+		expect(legacyRuntime.inspect().find(r => r.name === "legacy-omp-manifest")?.status).toBe("active");
+		await legacyRuntime.dispose();
+		await host.dispose();
 	});
 
 	test("隔离·碰撞：重名命令结构化拒绝，先加载者不受影响，FAILED fiber 不留挂载", async () => {

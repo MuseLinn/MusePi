@@ -1,9 +1,10 @@
 /**
  * 扩展插件清单(plugin manifest)的 config/resources 读取与校验。
  *
- * dsh 插件管理页五段式契约的第一段:扩展的 package.json 在 `omp`/`pi`
- * 字段下可声明 `config`(配置字段表)与 `resources`(资源占用声明),
- * 扩展中心详情页据此渲染 dsh 式配置表单与资源卡。
+ * dsh 插件管理页五段式契约的第一段:扩展的 package.json 在 `musepi` 字段
+ * 下可声明 `config`(配置字段表)与 `resources`(资源占用声明),
+ * 扩展中心详情页据此渲染 dsh 式配置表单与资源卡。`omp`/`pi` 是旧上游
+ * 兼容的遗留字段(继续可读,新扩展一律写 `musepi`)。
  *
  * 校验哲学(fail-soft,回退保护①):manifest 是用户可写 JSON,逐字段
  * 校验——坏字段进结构化 errors 被丢弃,好字段照常通过,不让一个坏
@@ -34,8 +35,9 @@ export interface ExtensionPluginMeta {
 }
 
 /**
- * 从扩展入口文件解析插件清单。向上逐层查找最近的带 `omp`/`pi` 字段的
- * package.json;找不到或 JSON 不可读返回 null(不是插件声明,无元数据)。
+ * 从扩展入口文件解析插件清单。向上逐层查找最近的带 `musepi`（或遗留
+ * `omp`/`pi`）字段的 package.json；找不到或 JSON 不可读返回 null(不是
+ * 插件声明,无元数据)。
  */
 export async function readExtensionPluginMeta(entryPath: string): Promise<ExtensionPluginMeta | null> {
 	const raw = await readManifestBlock(entryPath);
@@ -54,10 +56,12 @@ async function readManifestBlock(entryPath: string): Promise<{ config?: unknown;
 		const packageJsonPath = path.join(dir, "package.json");
 		try {
 			const pkg = (await Bun.file(packageJsonPath).json()) as {
+				musepi?: { config?: unknown; resources?: unknown };
 				omp?: { config?: unknown; resources?: unknown };
 				pi?: { config?: unknown; resources?: unknown };
 			};
-			const block = pkg.omp ?? pkg.pi;
+			// musepi 为权威字段；omp/pi 是旧上游兼容遗留（继续可读）。
+			const block = pkg.musepi ?? pkg.omp ?? pkg.pi;
 			if (block && typeof block === "object") {
 				return block;
 			}

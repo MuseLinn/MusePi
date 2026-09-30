@@ -12,7 +12,7 @@ description: 为 MusePi（TUI/CLI + 桌面 GUI）开发扩展——custom tools�
 | **Custom tool** | 模型可调用的函数（execute + Zod schema） | `extensibility/custom-tools/loader.ts` |
 | **Extension** | 生命周期/事件框架——可注册工具、拦截/修改事件 | `extensibility/extensions/`（loader/runner） |
 | **Hook** | 外部 pre/post 命令脚本（如 tool_call 拦截） | `extensibility/hooks` |
-| **Plugin** | 可安装的扩展包（`omp.extensions` 清单） | `extensibility/plugins` |
+| **Plugin** | 可安装的扩展包（`musepi.extensions` 清单，`omp`/`pi` 遗留兼容） | `extensibility/plugins` |
 | **Slash command** | 斜杠命令（`/xxx`） | `extensibility/slash-commands.ts` |
 | **Skill** | 静态知识包（SKILL.md） | `extensibility/skills.ts` + `discovery/builtin.ts` |
 
@@ -62,7 +62,7 @@ export default function (pi: ExtensionAPI) {
 
 ## 插件配置（manifest config + pi.config，dsh 管理页 parity）
 
-扩展需要用户可配项时，在扩展目录的 package.json 的 `omp` 块声明 `config` 字段表（`boolean | number | string | select | path`，数字可带 `min/max/step`，下拉必须给 `options`，每个字段可标 `restart: none|session|daemon` 生效域）与 `resources` 资源卡（`disk`/`memory`/`setupMinutes`/`models`）。扩展中心详情页自动渲染管理表单并落盘；运行时读取：
+扩展需要用户可配项时，在扩展目录的 package.json 的 `musepi` 块（权威清单字段；`omp`/`pi` 遗留兼容可读）声明 `config` 字段表（`boolean | number | string | select | path`，数字可带 `min/max/step`，下拉必须给 `options`，每个字段可标 `restart: none|session|daemon` 生效域）与 `resources` 资源卡（`disk`/`memory`/`setupMinutes`/`models`）。扩展中心详情页自动渲染管理表单并落盘；运行时读取：
 
 ```ts
 const threshold = await pi.config.get<number>("threshold"); // 钳制后的值，未写过 = 声明默认

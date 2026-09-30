@@ -5,8 +5,9 @@ import * as path from "node:path";
 import { readExtensionPluginMeta } from "../src/extensibility/extensions/plugin-manifest";
 
 /**
- * readExtensionPluginMeta 契约:从扩展入口向上解析最近带 omp/pi 字段的
- * package.json,config/resources 经 pi-wire fail-soft 校验后成为管理页元数据。
+ * readExtensionPluginMeta 契约:从扩展入口向上解析最近带 musepi 字段的
+ * package.json(musepi 为权威清单字段,omp/pi 遗留兼容可读),config/resources
+ * 经 pi-wire fail-soft 校验后成为管理页元数据。
  * 失败模式:manifest 缺失/损坏/未声明时必须返回 null(不是插件声明),
  * 绝不能抛错阻断扩展登记。
  */
@@ -35,7 +36,7 @@ describe("readExtensionPluginMeta", () => {
 		expect(await readExtensionPluginMeta(entry)).toBeNull();
 	});
 
-	test("returns null when package.json declares no omp/pi block", async () => {
+	test("returns null when package.json declares no manifest block", async () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",
 			"package.json": JSON.stringify({ name: "plain-ext", version: "1.0.0" }),
@@ -43,12 +44,12 @@ describe("readExtensionPluginMeta", () => {
 		expect(await readExtensionPluginMeta(entry)).toBeNull();
 	});
 
-	test("parses well-formed config fields and resources from the omp block", async () => {
+	test("parses well-formed config fields and resources from the musepi block", async () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",
 			"package.json": JSON.stringify({
 				name: "voice-input",
-				omp: {
+				musepi: {
 					extensions: ["index.ts"],
 					config: [
 						{ key: "enabled", type: "boolean", default: true, description: "Enable voice input" },
@@ -83,7 +84,7 @@ describe("readExtensionPluginMeta", () => {
 		const entry = await writeExtension({
 			"index.ts": "export default {}",
 			"package.json": JSON.stringify({
-				omp: {
+				musepi: {
 					config: [
 						{ key: "good", type: "boolean", default: true },
 						{ key: "bad-type", type: "teleport", default: 1 },
@@ -111,10 +112,20 @@ describe("readExtensionPluginMeta", () => {
 	test("finds the manifest one directory above a nested entry file", async () => {
 		const entry = await writeExtension({
 			"src/deep/entry.ts": "export default {}",
-			"package.json": JSON.stringify({ omp: { config: [{ key: "flag", type: "boolean", default: false }] } }),
+			"package.json": JSON.stringify({ musepi: { config: [{ key: "flag", type: "boolean", default: false }] } }),
 		});
 		const meta = await readExtensionPluginMeta(path.join(dir, "src", "deep", "entry.ts"));
 		expect(meta).not.toBeNull();
 		expect(meta!.fields.map(f => f.key)).toEqual(["flag"]);
+	});
+
+	test("still reads the legacy omp block (old upstream extensions keep working)", async () => {
+		const entry = await writeExtension({
+			"index.ts": "export default {}",
+			"package.json": JSON.stringify({ omp: { config: [{ key: "legacy", type: "boolean", default: true }] } }),
+		});
+		const meta = await readExtensionPluginMeta(entry);
+		expect(meta).not.toBeNull();
+		expect(meta!.fields.map(f => f.key)).toEqual(["legacy"]);
 	});
 });

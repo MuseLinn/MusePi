@@ -32,7 +32,7 @@ async function writeFixture(agentDir: string, name: string, manifest: Record<str
 		}\n`,
 	);
 	if (manifest) {
-		await Bun.write(path.join(dir, "package.json"), JSON.stringify({ name, omp: manifest }));
+		await Bun.write(path.join(dir, "package.json"), JSON.stringify({ name, musepi: manifest }));
 	}
 	return path.join(dir, "index.ts");
 }

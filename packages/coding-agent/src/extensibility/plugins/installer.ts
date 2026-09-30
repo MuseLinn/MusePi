@@ -80,7 +80,8 @@ export async function installPlugin(packageName: string): Promise<InstalledPlugi
 		name: pkg.name,
 		version: pkg.version,
 		path: path.join(PLUGINS_DIR, "node_modules", actualName),
-		manifest: pkg.omp || pkg.pi || { version: pkg.version },
+		// musepi 为权威清单字段；omp/pi 是旧上游兼容遗留（继续可读）。
+		manifest: pkg.musepi || pkg.omp || pkg.pi || { version: pkg.version },
 		enabledFeatures: null,
 		enabled: true,
 	};
@@ -129,7 +130,7 @@ export async function listPlugins(): Promise<InstalledPlugin[]> {
 				name,
 				version: pkg.version,
 				path: pluginPath,
-				manifest: pkg.omp || pkg.pi || { version: pkg.version },
+				manifest: pkg.musepi || pkg.omp || pkg.pi || { version: pkg.version },
 				enabledFeatures: null,
 				enabled: true,
 			});

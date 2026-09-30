@@ -4,8 +4,8 @@
  *
  * 能力缝声明（M2-2.4）：
  * - 名称+ns：`cordis-dynamic-extensions`（daemon 装配面，spike 级）
- * - 输入：扩展目录（package.json `omp`/`pi.extensions` 入口，与 plugins/loader
- *   同一发现约定）+ DaemonHostContext 根 Context
+ * - 输入：扩展目录（package.json `musepi.extensions` 入口——musepi 为权威
+ *   清单字段，omp/pi 遗留兼容；与 plugins/loader 同一发现约定）+ DaemonHostContext 根 Context
  * - 输出：DynamicExtensionHandle（invoke/检视/unload/reload）+ 结构化加载错误
  * - 生命周期：每个扩展 = `musepi-dynamic-extensions` 组 fiber 下的独立子 fiber；
  *   每次登记 = fiber 效果账本（ctx.effect）上的一条带标签 effect，卸载即
@@ -45,9 +45,11 @@ import type { Context, Fiber, Plugin } from "@deepseek-ai/cordis";
 import { logger } from "@musepi/pi-utils";
 import type { DaemonHostContext } from "./host-context";
 
-/** 扩展目录 package.json 中声明的 omp/pi 字段形状（spike 窄面）。 */
+/** 扩展目录 package.json 中声明的清单字段形状（spike 窄面）。
+ *  musepi 为权威字段；omp/pi 是旧上游兼容遗留。 */
 interface ExtensionManifestPkg {
 	name?: string;
+	musepi?: { extensions?: string[] };
 	omp?: { extensions?: string[] };
 	pi?: { extensions?: string[] };
 }
@@ -144,7 +146,7 @@ async function importExtensionEntry(entry: string, extDir: string): Promise<unkn
 	return import(pathToFileURL(path.join(stageDir, path.relative(extDir, entry))).href);
 }
 
-/** 读扩展目录 package.json，解析 omp/pi.extensions 入口（与 plugins/loader
+/** 读扩展目录 package.json，解析 musepi.extensions 入口（与 plugins/loader
  *  resolveDirectoryEntries 同一约定：声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）。 */
 async function resolveExtensionEntry(dir: string): Promise<{ name: string; entry: string }> {
 	const pkgPath = path.join(dir, "package.json");
@@ -160,7 +162,8 @@ async function resolveExtensionEntry(dir: string): Promise<{ name: string; entry
 	} catch {
 		throw new DynamicExtensionLoadError("manifest-invalid", `extension at "${dir}" has invalid package.json JSON`);
 	}
-	const declared = pkg.omp?.extensions ?? pkg.pi?.extensions ?? [];
+	// musepi 为权威字段；omp/pi 是旧上游兼容遗留（继续可读）。
+	const declared = pkg.musepi?.extensions ?? pkg.omp?.extensions ?? pkg.pi?.extensions ?? [];
 	const first = declared[0];
 	const joined = first ? path.resolve(dir, first) : dir;
 	let stats: Stats;

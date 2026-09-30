@@ -114,7 +114,7 @@ async function collectPluginsAtRoot(
 	const plugins: ScopedInstalledPlugin[] = [];
 	for (const name of names) {
 		const pluginPkgPath = path.join(nodeModulesPath, name, "package.json");
-		let pluginPkg: { version: string; omp?: PluginManifest; pi?: PluginManifest };
+		let pluginPkg: { version: string; musepi?: PluginManifest; omp?: PluginManifest; pi?: PluginManifest };
 		try {
 			pluginPkg = await Bun.file(pluginPkgPath).json();
 		} catch (err) {
@@ -124,7 +124,8 @@ async function collectPluginsAtRoot(
 			throw err;
 		}
 
-		const manifest: PluginManifest | undefined = pluginPkg.omp || pluginPkg.pi;
+		// musepi 为权威清单字段；omp/pi 是旧上游兼容遗留（继续可读）。
+		const manifest: PluginManifest | undefined = pluginPkg.musepi || pluginPkg.omp || pluginPkg.pi;
 		if (!manifest) {
 			// Not an musepi plugin, skip
 			continue;
@@ -293,13 +294,18 @@ function readDeclaredManifestEntries(dir: string): DeclaredManifestEntries {
 	} catch {
 		return { declared: false, files: [] };
 	}
-	let pkg: { omp?: { extensions?: unknown }; pi?: { extensions?: unknown } };
+	let pkg: { musepi?: { extensions?: unknown }; omp?: { extensions?: unknown }; pi?: { extensions?: unknown } };
 	try {
-		pkg = JSON.parse(raw) as { omp?: { extensions?: unknown }; pi?: { extensions?: unknown } };
+		pkg = JSON.parse(raw) as {
+			musepi?: { extensions?: unknown };
+			omp?: { extensions?: unknown };
+			pi?: { extensions?: unknown };
+		};
 	} catch {
 		return { declared: false, files: [] };
 	}
-	const declared = (pkg.omp ?? pkg.pi)?.extensions;
+	// musepi 为权威清单字段；omp/pi 是旧上游兼容遗留（继续可读）。
+	const declared = (pkg.musepi ?? pkg.omp ?? pkg.pi)?.extensions;
 	if (!Array.isArray(declared) || declared.length === 0) {
 		return { declared: false, files: [] };
 	}
