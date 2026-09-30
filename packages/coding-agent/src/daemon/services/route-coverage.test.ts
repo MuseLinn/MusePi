@@ -198,6 +198,17 @@ describe("P1 route coverage", () => {
 		expect(() => services.register(clash)).toThrow(/duplicate service key/);
 	});
 
+	it("every service route has a switch case (防「Unknown method」反向门禁)", () => {
+		// 正向门禁（第一个测试）只查 switch ⊆ 路由表；2026-09-30 组件开关 GUI 报
+		// 「Unknown method: extensions.setComponentEnabled」的根因正是 routes 表
+		// 有登记、switch 漏挂 case。反向必须同样钉死：服务认领的每条路由都要能被
+		// 客户端真实调到。
+		const table = buildRegistry().routeTable();
+		const cases = new Set(switchCases());
+		const missing = [...table.keys()].filter(route => !cases.has(route)).sort();
+		expect(missing).toEqual([]);
+	});
+
 	it("session tree contract routes are pinned in the switch (客户端 tree 接口不许静默消失)", () => {
 		const cases = new Set(switchCases());
 		const missing = SESSION_TREE_ROUTES.filter(route => !cases.has(route));

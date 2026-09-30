@@ -1824,6 +1824,15 @@ export class DaemonServer {
 				// 实现归 ExtensionService（扩展/插件控制面语义不变）。
 				return this.#services.get<ExtensionService>("extensions").setProviderEnabled(params ?? {});
 			}
+			case "extensions.setConfig": {
+				// 插件清单声明式配置写入（routes 表与 switch 双登记缺一不可，
+				// 漏挂时 GUI 报「Unknown method」——反向门禁见 route-coverage）。
+				return this.#services.get<ExtensionService>("extensions").setConfig(params ?? {});
+			}
+			case "extensions.setComponentEnabled": {
+				// 插件「包含的组件」独立开关（组件黑名单真实禁用）。
+				return this.#services.get<ExtensionService>("extensions").setComponentEnabled(params ?? {});
+			}
 			case "ext.call": {
 				return this.#services.get<ExtensionService>("extensions").call(params ?? {});
 			}
