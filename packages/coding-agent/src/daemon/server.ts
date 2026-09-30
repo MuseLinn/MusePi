@@ -2824,14 +2824,44 @@ export class DaemonServer {
 				const entries = Array.isArray(snap?.entries) ? snap.entries : [];
 				let start = entries.length;
 				if (p.beforeId) {
-					const idx = entries.findIndex(e => (e as { id?: unknown } | null)?.id === p.beforeId);
-					if (idx !== -1) start = idx;
+					// LAST-occurrence match: the paging client anchors at its
+					// oldest LOADED entry, which is always the most recently
+					// materialized one carrying that id — an earlier duplicate
+					// (retried journal record, re-emitted custom message)
+					// belongs to history the client already paged past, so a
+					// first-match findIndex would hand back a fully-overlapped
+					// page and the cursor would never move (P0-3).
+					let idx = -1;
+					for (let i = entries.length - 1; i >= 0; i--) {
+						if ((entries[i] as { id?: unknown } | null)?.id === p.beforeId) {
+							idx = i;
+							break;
+						}
+					}
+					if (idx === -1) {
+						// Stale cursor — journal compaction swallowed the
+						// anchor, resume swapped the view, or a cross-version
+						// snapshot. NEVER silently fall back to the latest
+						// page: it fully overlaps what the client holds, the
+						// client-side dedup drops every entry, the cursor
+						// never advances and every scroll re-issues the same
+						// zero-progress RPC. Report the staleness so the
+						// client re-anchors instead (P0-3).
+						return { entries: [], hasMore: false, remaining: 0, nextBeforeId: null, stale: true };
+					}
+					start = idx;
 				}
 				const from = Math.max(0, start - max);
+				const page = entries.slice(from, start);
 				return {
-					entries: entries.slice(from, start),
+					entries: page,
 					hasMore: from > 0,
 					remaining: from,
+					// Explicit next anchor — the client adopts it even when the
+					// page turns out to be fully overlapped, so a duplicate-id
+					// boundary still makes monotone progress (P0-3).
+					nextBeforeId: (page[0] as { id?: unknown } | undefined)?.id ?? null,
+					stale: false,
 				};
 			}
 			case "session.turns": {

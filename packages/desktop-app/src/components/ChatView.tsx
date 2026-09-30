@@ -73,6 +73,10 @@ interface HistoryPage {
 	entries: SessionEntry[];
 	hasMore: boolean;
 	remaining: number;
+	/** 显式下一锚点(P0-3):整页重叠时客户端采用它推进游标。 */
+	nextBeforeId?: string | null;
+	/** 游标失效(P0-3):daemon 不再回退到最新页,客户端据此停止分页。 */
+	stale?: boolean;
 }
 
 /** "mm:ss" hold time for the pause banner; re-rendered by a 1s tick. */
@@ -1395,17 +1399,19 @@ export function ChatView({
 		setLoadingOlder(true);
 		const anchor: TranscriptAnchor | null = anchorCtlRef.current?.capture() ?? null;
 		try {
-			const res = await rpc.request<{
-				entries: SessionEntry[];
-				hasMore: boolean;
-				remaining: number;
-			}>("session.history", {
+			const res = await rpc.request<HistoryPage>("session.history", {
 				sessionId: store.sessionId,
 				beforeId,
 				maxMessages: 500,
 			});
+			if (res?.stale) {
+				// P0-3: the anchor no longer exists upstream — stop paging
+				// instead of re-issuing the same cursor on every scroll.
+				store.markHistoryStale();
+				return;
+			}
 			if (res?.entries?.length) {
-				store.prependEntries(res.entries, res.remaining);
+				store.prependEntries(res.entries, res.remaining, res.nextBeforeId ?? null);
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
 						if (anchor) anchorCtlRef.current?.restore(anchor);
@@ -1459,10 +1465,15 @@ export function ChatView({
 					maxMessages: 1000,
 				});
 				if (token !== fullTokenRef.current) return;
+				if (res?.stale) break; // P0-3: never loop on a dead cursor
 				if (!res?.entries?.length) break;
 				acc = [...res.entries, ...acc];
-				const olderId: string | undefined = res.entries[0]?.id;
-				if (olderId !== undefined) beforeId = olderId;
+				// P0-3: the daemon's explicit anchor wins — on a fully-
+				// overlapped page it still moves the cursor, so the loop
+				// makes monotone progress instead of spinning in place.
+				const olderId: string | null = res.nextBeforeId ?? res.entries[0]?.id ?? null;
+				if (olderId === null || olderId === beforeId) break;
+				beforeId = olderId;
 				if (!res.hasMore || res.remaining <= 0) break;
 			}
 			if (token === fullTokenRef.current) setFullEntries(acc);

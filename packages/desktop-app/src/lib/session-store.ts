@@ -267,6 +267,13 @@ export class GuiSessionStore {
 		this.#roundDurations = merged;
 		this.#hasMore = snapshot.tail?.hasMore === true;
 		this.#beforeId = snapshot.tail?.beforeId ?? null;
+		// P0-8: hasMore with a null cursor used to read as "no paging entry"
+		// and silently walled off the older history. Derive the cursor from
+		// the loaded window instead — the oldest loaded entry id IS the
+		// session.history anchor by definition.
+		if (this.#hasMore && this.#beforeId === null) {
+			this.#beforeId = this.#view.oldestEntryId();
+		}
 		// Mid-run join (resume while the agent works): the daemon snapshot's
 		// authoritative isStreaming seeds the run flag — live turn events
 		// maintain it and state frames correct it.
@@ -302,16 +309,71 @@ export class GuiSessionStore {
 	/**
 	 * Prepend an older page (lazy backfill on scroll-up): the caller
 	 * fetched session.history with historyBeforeId; remaining = how many
-	 * older entries still exist beyond this page (re-arms the cursor).
+	 * older entries still exist beyond this page. nextBeforeId is the
+	 * daemon's explicit anchor for the following page.
+	 *
+	 * P0-3 progress contract — "no progress" must be explicit, never an
+	 * infinite scroll-driven retry of the same zero-gain RPC:
+	 * - fully-overlapped page + usable nextBeforeId → adopt the anchor (the
+	 *   view already holds that entry, so the next page makes progress);
+	 * - otherwise, a page that advanced nothing while history remains →
+	 *   fail soft: warn and stop offering the fold.
 	 */
-	prependEntries(older: readonly SessionEntry[], remaining: number): void {
-		if (older.length === 0) return;
-		// Overlap pages (ambiguous beforeId on duplicated journal ids) return
-		// null and must NOT advance the cursor — the oldest held id stays the
-		// pagination anchor.
+	prependEntries(older: readonly SessionEntry[], remaining: number, nextBeforeId?: string | null): void {
+		if (older.length === 0) {
+			if (remaining > 0) {
+				console.warn(
+					"[gui] session.history returned an empty page with history remaining — history backfill stalled",
+					{
+						sessionId: this.#sessionId,
+						remaining,
+					},
+				);
+				this.#hasMore = false;
+				this.#snapshot = this.#buildSnapshot();
+				this.#emit();
+			}
+			return;
+		}
 		const firstFresh = this.#view.prependEntries(older);
-		if (firstFresh !== null) this.#beforeId = firstFresh;
+		if (firstFresh !== null) {
+			this.#beforeId = firstFresh;
+		} else if (
+			typeof nextBeforeId === "string" &&
+			nextBeforeId !== this.#beforeId &&
+			this.#view.hasEntryId(nextBeforeId)
+		) {
+			// Fully-overlapped page (duplicate journal ids made the boundary
+			// ambiguous): the daemon's next anchor points at an entry this
+			// view holds, so adopting it lets the following page advance
+			// instead of looping on the same cursor.
+			this.#beforeId = nextBeforeId;
+		} else if (remaining > 0) {
+			console.warn("[gui] session.history page made no progress — history backfill stalled", {
+				sessionId: this.#sessionId,
+				remaining,
+				olderCount: older.length,
+			});
+			this.#hasMore = false;
+			this.#snapshot = this.#buildSnapshot();
+			this.#emit();
+			return;
+		}
 		this.#hasMore = remaining > 0 && this.#beforeId !== null;
+		this.#snapshot = this.#buildSnapshot();
+		this.#emit();
+	}
+
+	/** The daemon reported the history cursor as stale (compaction dropped
+	 *  the anchor, resume swapped the view). Stop paging — every further
+	 *  scroll would re-issue the same cursor and get the same refusal —
+	 *  and surface it; the loaded window stays fully usable. */
+	markHistoryStale(): void {
+		if (!this.#hasMore) return;
+		console.warn("[gui] session.history cursor is stale — older history needs a session reload to page again", {
+			sessionId: this.#sessionId,
+		});
+		this.#hasMore = false;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
 	}
@@ -366,6 +428,10 @@ export class GuiSessionStore {
 		this.#roundDurations = merged;
 		this.#hasMore = snapshot.tail?.hasMore === true;
 		this.#beforeId = snapshot.tail?.beforeId ?? null;
+		// P0-8 fallback — same derivation as the constructor (see there).
+		if (this.#hasMore && this.#beforeId === null) {
+			this.#beforeId = this.#view.oldestEntryId();
+		}
 		// Mid-run refresh: the daemon snapshot's authoritative isStreaming
 		// seeds the run flag, exactly like the constructor (live turn events
 		// maintain it and state frames correct it).

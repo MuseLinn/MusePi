@@ -430,6 +430,21 @@ export class MaterializedView {
 		return fresh[0]?.id ?? null;
 	}
 
+	/** Oldest loaded entry id (history-paging cursor fallback), or null when
+	 *  the view is empty. O(1). */
+	oldestEntryId(): string | null {
+		return this.#entries[0]?.id ?? null;
+	}
+
+	/** Whether an entry with this id is currently loaded. O(n) — only called
+	 *  on the rare zero-progress history page, never per render (P0-3). */
+	hasEntryId(id: string): boolean {
+		for (const e of this.#entries) {
+			if (e.id === id) return true;
+		}
+		return false;
+	}
+
 	/** SDK-contract snapshot. Cheap: no journal read. */
 	snapshot(): SessionSnapshot {
 		const state: SessionState = {

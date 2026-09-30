@@ -608,6 +608,21 @@ export function tailSnapshot<T extends { entries?: readonly unknown[] }>(snap: T
 		return { ...snap, tail: { hasMore: false, beforeId: null } };
 	}
 	const firstKept = entries[entries.length - TAIL_ENTRIES] as { id?: unknown } | undefined;
+	if (typeof firstKept?.id !== "string") {
+		// SessionEntry.id is typed required, so this is "impossible" — but when
+		// it happens (corrupted/compacted row) the old contract shipped
+		// hasMore:true with beforeId:null, which the client folds into "no
+		// paging entry" and the user silently loses the whole older history
+		// (P0-8). Warn loudly; the client now derives the cursor from its own
+		// oldest loaded entry when beforeId is missing, so history stays
+		// reachable.
+		logger.warn(
+			"[daemon] tailSnapshot: oldest kept entry has no string id — client will derive the history cursor from its loaded window",
+			{
+				sessionEntries: entries.length,
+			},
+		);
+	}
 	return {
 		...snap,
 		entries: entries.slice(-TAIL_ENTRIES),
