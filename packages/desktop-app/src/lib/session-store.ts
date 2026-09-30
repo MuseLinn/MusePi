@@ -9,14 +9,15 @@
  * streaming "ghost" message until the matching entry lands in the view.
  */
 
-import type {
-	AgentEvent,
-	AgentProgress,
-	AgentSnapshot,
-	SessionEntry,
-	SessionState,
-	SubagentLifecyclePayload,
-	SubagentProgressPayload,
+import {
+	type AgentEvent,
+	type AgentProgress,
+	type AgentSnapshot,
+	roundDurationRecord,
+	type SessionEntry,
+	type SessionState,
+	type SubagentLifecyclePayload,
+	type SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import { MaterializedView } from "@musepi/sdk";
 import { dispatchNotification, documentUnfocused, type FocusReport, type NotifyContext } from "./notify";
@@ -122,7 +123,10 @@ const GAP_TIMEOUT_MS = 10_000;
 // rounds that completed while the GUI was switched away — the daemon records
 // them at agent_end) AND from live agent_end events this store processed
 // (covers rounds completed in-session even before the daemon restarts with
-// the recording code). Pruned on session delete.
+// the recording code). BOTH key spaces are turn-START ts (ms) — the shared
+// pi-wire roundDurationRecord contract — so a daemon-seeded value and a
+// GUI-recorded value for the same round collapse onto one key. Pruned on
+// session delete.
 const roundDurationsBySession = new Map<string, Map<number, number>>();
 
 function roundDurationsFor(sessionId: string): Map<number, number> {
@@ -188,28 +192,6 @@ function assistantText(
 /** Drop a deleted session's recorded totals (GUI session.delete path). */
 export function clearRoundDurations(sessionId: string): void {
 	roundDurationsBySession.delete(sessionId);
-}
-
-/** Round duration (ms) of a just-completed run — craft-agents parity: start
- *  = the last user message timestamp (the round's anchor), end = the round's
- *  last event timestamp (same wire-message clock as the anchor — wall-clock
- *  Date.now() mixed clocks and inflated totals under provider-clock lag).
- *  Keyed by the final assistant message's timestamp so the transcript can
- *  pin the frozen total to exactly the round's last row. */
-function recordRoundDuration(entries: readonly SessionEntry[]): { assistantTs: number; durationMs: number } | null {
-	let userTs: number | undefined;
-	let assistantTs: number | undefined;
-	let lastEventTs: number | undefined;
-	for (const e of entries) {
-		if (e.type !== "message") continue;
-		lastEventTs = e.message.timestamp;
-		if (e.message.role === "user") userTs = e.message.timestamp;
-		else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
-	}
-	if (userTs === undefined || assistantTs === undefined || lastEventTs === undefined || lastEventTs < userTs) {
-		return null;
-	}
-	return { assistantTs, durationMs: lastEventTs - userTs };
 }
 
 export class GuiSessionStore {
@@ -1003,8 +985,8 @@ export class GuiSessionStore {
 				// the totals would die with the disposed instance. (The daemon
 				// records the same at agent_end in its own view — the registry
 				// covers the window before a daemon restart picks that up.)
-				const rec = recordRoundDuration(this.#view.snapshot().entries);
-				if (rec) this.#roundDurations.set(rec.assistantTs, rec.durationMs);
+				const rec = roundDurationRecord(this.#view.snapshot().entries);
+				if (rec) this.#roundDurations.set(rec.turnStartMs, rec.durationMs);
 				break;
 			}
 			case "session_leaf_moved": {

@@ -11,10 +11,12 @@
  * Pure functions only — the renderer owns the fold state per round.
  */
 
-import type { SessionEntry } from "@musepi/pi-wire";
+import { isTurnStartEntry, type SessionEntry } from "@musepi/pi-wire";
 import { diffStats } from "../../tool-render/tools/edit";
 import { isRecord } from "../../tool-render/util";
 import { classifyTranscriptRow } from "./row-kinds";
+
+export { isTurnStartEntry as isTurnStart };
 
 /** One completed round's fold descriptor. */
 export interface RoundFold {
@@ -237,16 +239,9 @@ export function buildRoundFolds(entries: readonly SessionEntry[], working: boole
  *  notes as first-class rows.
  *
  * Exported for render-units.ts (M1 turn projection) — both modules must agree
- * on what starts a turn, so there is ONE predicate. */
-export function isTurnStart(e: SessionEntry | undefined): boolean {
-	if (!e) return false;
-	if (e.type === "message") return e.message.role === "user";
-	if (e.type === "custom_message") {
-		const c = e as { customType?: unknown; display?: unknown };
-		return c.customType === "advisor" && c.display === true;
-	}
-	return false;
-}
+ * on what starts a turn, so there is ONE predicate (implemented in pi-wire so
+ * the daemon-side recorder shares it). */
+const isTurnStart = isTurnStartEntry;
 
 /** Last assistant index in `(from, to)` whose content carries non-empty TEXT —
  *  the turn's REPLY. The last assistant message overall is not it: a turn can

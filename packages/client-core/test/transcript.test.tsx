@@ -164,7 +164,10 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 	const ASSISTANT_TS = USER_TS + 100;
 	const ticking = /working for 6s|已工作 6 秒/;
 	const took = /took 6s|用时 6 秒/;
-	const round = (ms: number): ReadonlyMap<number, number> => new Map([[ASSISTANT_TS, ms]]);
+	// Frozen totals live under the turn-START key (shared recorder contract,
+	// same key space daemon snapshots seed); the turn-start entry here is the
+	// user message at USER_TS.
+	const round = (ms: number): ReadonlyMap<number, number> => new Map([[USER_TS, ms]]);
 
 	it("ticks from the round start (last user message) while working", () => {
 		const html = renderTranscript({
@@ -208,13 +211,15 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 			userEntry(USER_TS),
 			assistantEntry({ timestamp: ASSISTANT_TS }),
 		];
+		// Keys are the three turn-start user timestamps — what the daemon
+		// ships; per-assistant keys would prove the old key space.
 		const html = renderTranscript({
 			entries,
 			working: false,
 			roundDurations: new Map([
-				[a1, 6_300],
-				[a2, 12_700],
-				[ASSISTANT_TS, 1_900],
+				[a1 - 100, 6_300],
+				[a2 - 100, 12_700],
+				[USER_TS, 1_900],
 			]),
 		});
 		expect(countElements(html, ".tr-working")).toBe(3);
@@ -229,7 +234,10 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 		expect(countElements(html, ".tr-working")).toBe(0);
 	});
 
-	it("ghost stream row shows the frozen total once streamDone", () => {
+	it("ghost stream row shows a pre-anchor snapshot total keyed by the stream ts", () => {
+		// Pre-anchor snapshots froze rounds under the final assistant (stream)
+		// ts; with no entries there is no turn-start key to look up, so the
+		// stream-ts fallback must carry those old values.
 		const stream: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "done" }],
@@ -245,7 +253,7 @@ describe("work timer (已工作 X 秒, per-round)", () => {
 				streamDone={true}
 				activeTools={new Map()}
 				working={false}
-				roundDurations={round(6_300)}
+				roundDurations={new Map([[ASSISTANT_TS, 6_300]])}
 			/>,
 		);
 		expect(countElements(html, ".tr-working")).toBe(1);

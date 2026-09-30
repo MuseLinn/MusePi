@@ -9,16 +9,18 @@
  * The renderer (Transcript, tool cards, composer) is identical — only the
  * transport and auth differ.
  */
-import type {
-	AgentSnapshot,
-	AssistantMessage,
-	CollabUiRequest,
-	ImageContent,
-	SessionEntry,
-	SessionHeader,
-	SessionState,
-	SubagentLifecyclePayload,
-	SubagentProgressPayload,
+import {
+	type AgentSnapshot,
+	type AssistantMessage,
+	type CollabUiRequest,
+	entryStartMs,
+	type ImageContent,
+	roundDurationRecord,
+	type SessionEntry,
+	type SessionHeader,
+	type SessionState,
+	type SubagentLifecyclePayload,
+	type SubagentProgressPayload,
 } from "@musepi/pi-wire";
 import type {
 	ActiveTool,
@@ -517,20 +519,33 @@ export class HostClient implements SessionClient {
 				break;
 			case "agent_end":
 				this.#working = false;
-				// Freeze this run's round duration (final assistant message ts
-				// → ms since the last user message).
+				// Freeze this run's total under the SHARED record contract
+				// (pi-wire roundDurationRecord — the same helper the daemon and
+				// every other GUI write side call, so host-rendered totals share
+				// ONE key space with daemon-seeded snapshots). The final
+				// message's entry frame can land AFTER agent_end — the stream
+				// ghost still holds it then (cleared once the entry folds in) —
+				// so fold the ghost in as a synthetic tail entry before
+				// computing, or the end anchor would stop at the last tool
+				// result and undercount the reply generation.
 				{
-					let userTs: number | undefined;
-					let assistantTs: number | undefined;
-					for (const e of this.#entries) {
-						if (e.type !== "message") continue;
-						if (e.message.role === "user") userTs = e.message.timestamp;
-						else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
-					}
-					if (this.#stream?.role === "assistant") assistantTs = this.#stream.timestamp;
-					if (userTs !== undefined && assistantTs !== undefined) {
-						this.#roundDurations = new Map(this.#roundDurations).set(assistantTs, Date.now() - userTs);
-					}
+					const ghost = this.#stream?.role === "assistant" ? this.#stream : undefined;
+					const last = this.#entries[this.#entries.length - 1];
+					const entries =
+						ghost !== undefined && (last === undefined || entryStartMs(last) < ghost.timestamp)
+							? [
+									...this.#entries,
+									{
+										type: "message",
+										id: "__stream-ghost__",
+										parentId: null,
+										timestamp: new Date(ghost.timestamp).toISOString(),
+										message: ghost,
+									} satisfies SessionEntry,
+								]
+							: this.#entries;
+					const rec = roundDurationRecord(entries);
+					if (rec) this.#roundDurations = new Map(this.#roundDurations).set(rec.turnStartMs, rec.durationMs);
 				}
 				break;
 			case "notice": {

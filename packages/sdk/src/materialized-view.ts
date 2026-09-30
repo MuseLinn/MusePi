@@ -34,16 +34,17 @@
  *   represented in the message stream (assistant toolCalls + ToolResultMessage)
  *   or have no SessionState field — not projected in V1.
  */
-import type {
-	AgentEvent,
-	AgentSnapshot,
-	CustomMessageEntry,
-	MessageEntry,
-	SessionEntry,
-	SessionState,
-	ThinkingLevelChangeEntry,
-	WireCustomMessage,
-	WireMessage,
+import {
+	type AgentEvent,
+	type AgentSnapshot,
+	type CustomMessageEntry,
+	type MessageEntry,
+	roundDurationRecord,
+	type SessionEntry,
+	type SessionState,
+	type ThinkingLevelChangeEntry,
+	type WireCustomMessage,
+	type WireMessage,
 } from "@musepi/pi-wire";
 import type { SessionSnapshot } from "./events";
 
@@ -283,34 +284,25 @@ export class MaterializedView {
 					this.#mainAgent.status = "idle";
 					this.#mainAgent.lastActivity = Date.now();
 				}
-				// Freeze this run's total. Anchor = the CURRENT turn's start
-				// (isTurnStart semantics: a user message OR a displayed advisor
-				// note — the daemon ships an identical helper and both MUST stay
-				// in sync): advisor-spawned turns have no user message, and the
-				// old "last user message" anchor swallowed the idle gap into the
-				// round total. Key = turn-start ts (ms) so the GUI's per-group
-				// lookup (group.startMs) hits exactly; pre-anchor snapshots
-				// keyed by assistant ts stay readable via a fallback lookup.
-				let turnStartMs: number | undefined;
-				for (const entry of this.#entries) {
-					if (entry.type === "message" && entry.message.role === "user") {
-						turnStartMs = Date.parse(entry.timestamp);
-					} else if (entry.type === "custom_message" && entry.customType === "advisor" && entry.display === true) {
-						turnStartMs = Date.parse(entry.timestamp);
-					}
-				}
-				if (recordRoundDurations && turnStartMs !== undefined && Number.isFinite(turnStartMs)) {
-					// End anchor = the SAME clock as the start anchor: the last
-					// entry's timestamp (wire message clock). Date.now() is wall
-					// clock, and provider-clock lag (minutes, observed in real
-					// journals) inflated frozen totals far beyond the round's
-					// real event span. Skewed rounds whose last event predates
-					// the anchor are skipped rather than frozen with garbage.
-					const lastEntry = this.#entries[this.#entries.length - 1];
-					const endMs = lastEntry ? Date.parse(lastEntry.timestamp) : Number.NaN;
-					if (Number.isFinite(endMs) && endMs >= turnStartMs) {
-						this.#roundDurations.set(turnStartMs, endMs - turnStartMs);
-					}
+				// Freeze this run's total under the SHARED record contract
+				// (pi-wire roundDurationRecord — the same helper every GUI write
+				// side calls, so daemon-seeded snapshots and live GUI writes share
+				// ONE key space): anchor = the CURRENT turn's start (isTurnStart
+				// semantics: a user message OR a displayed advisor note —
+				// advisor-spawned turns have no user message, and the old "last
+				// user message" anchor swallowed the idle gap into the round
+				// total). Key = turn-start ts (ms) so the GUI's per-group lookup
+				// (group.startMs) hits exactly; pre-anchor snapshots keyed by
+				// assistant ts stay readable via the read sides' fallback lookup.
+				if (recordRoundDurations) {
+					// End anchor = the SAME wire clock as the start anchor (the
+					// last entry's timestamp): Date.now() is wall clock, and
+					// provider-clock lag (minutes, observed in real journals)
+					// inflated frozen totals far beyond the round's real event
+					// span. Skewed rounds whose last event predates the anchor
+					// are skipped rather than frozen with garbage.
+					const rec = roundDurationRecord(this.#entries);
+					if (rec) this.#roundDurations.set(rec.turnStartMs, rec.durationMs);
 				}
 				break;
 			}

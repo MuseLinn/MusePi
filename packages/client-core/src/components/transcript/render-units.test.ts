@@ -5,6 +5,7 @@ import {
 	type ChatLoadingVisibility,
 	classifyTranscriptRow,
 	hasPendingAsk,
+	roundTimerKeyByRow,
 	shouldShowChatLoading,
 } from "./render-units";
 
@@ -263,5 +264,73 @@ describe("buildTurnRenderUnits model tracking", () => {
 		const entries = [withId({ type: "model_change", model: "k2.5" }), userMsg(), assistantText("a")];
 		const [u] = buildTurnRenderUnits(entries, false);
 		expect(u!.model).toBe("k2.5");
+	});
+});
+
+describe("roundTimerKeyByRow", () => {
+	// Contract: the row that displays a turn's frozen total (its LAST
+	// assistant row) maps to the turn-START key the shared recorder writes —
+	// the same key space daemon snapshots seed. A regression to assistant-ts
+	// keys makes every daemon-seeded total invisible in the transcript.
+	const msg = (role: string, ts: number, extra: object = {}): SessionEntry =>
+		withId({
+			type: "message",
+			message: { role, content: [{ type: "text", text: "x" }], timestamp: ts, ...extra },
+		}) as unknown as SessionEntry;
+
+	test("multi-step round: timer row → turn-start key, mid-turn rows unmapped", () => {
+		const entries = [
+			msg("user", 1_000),
+			msg("assistant", 1_500),
+			msg("assistant", 2_600),
+			msg("toolResult", 2_700, { toolCallId: "c", toolName: "read", isError: false }),
+			msg("assistant", 2_800),
+		];
+		const units = buildTurnRenderUnits(entries, false);
+		const keys = roundTimerKeyByRow(entries, units);
+		// Only the LAST assistant row (index 4) owns the timer, keyed by the
+		// user message ts — mid-round assistant rows must not double-display.
+		expect([...keys]).toEqual([[4, 1_000]]);
+	});
+
+	test("every turn maps its own final assistant row to its own start key", () => {
+		const entries = [msg("user", 1_000), msg("assistant", 1_500), msg("user", 5_000), msg("assistant", 5_900)];
+		const units = buildTurnRenderUnits(entries, false);
+		const keys = roundTimerKeyByRow(entries, units);
+		expect([...keys]).toEqual([
+			[1, 1_000],
+			[3, 5_000],
+		]);
+	});
+
+	test("advisor-spawned turn anchors at the advisor note ts", () => {
+		const entries = [
+			msg("user", 1_000),
+			msg("assistant", 1_500),
+			withId({ type: "custom_message", customType: "advisor", content: "note", display: true }),
+			msg("assistant", 9_000),
+		];
+		// The fixture stamps entry-level timestamps as "0"; the advisor anchor
+		// parses the ENTRY timestamp (custom messages have no wire ts field).
+		const advisorTs = 4_000;
+		entries[2] = { ...entries[2]!, timestamp: new Date(advisorTs).toISOString() } as SessionEntry;
+		const units = buildTurnRenderUnits(entries, false);
+		const keys = roundTimerKeyByRow(entries, units);
+		expect([...keys]).toEqual([
+			[1, 1_000],
+			[3, advisorTs],
+		]);
+	});
+
+	test("tool-only turn gets no timer row (totals still read in the trajectory view)", () => {
+		const entries = [
+			msg("user", 1_000),
+			msg("assistant", 1_500),
+			msg("user", 5_000),
+			msg("toolResult", 5_100, { toolCallId: "c", toolName: "read", isError: false }),
+		];
+		const units = buildTurnRenderUnits(entries, false);
+		const keys = roundTimerKeyByRow(entries, units);
+		expect([...keys]).toEqual([[1, 1_000]]);
 	});
 });

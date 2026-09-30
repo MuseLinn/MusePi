@@ -205,6 +205,48 @@ export type SessionEntry =
 	| ModelChangeEntry
 	| ThinkingLevelChangeEntry;
 
+/** Entry start instant (ms): message entries carry the wire timestamp as a
+ *  number; every other entry type parses its ISO `timestamp`. On the
+ *  production path the two are the same instant (materialized views stamp
+ *  `entry.timestamp = new Date(message.timestamp).toISOString()`) — reading
+ *  the numeric field directly keeps the anchor robust against lossy
+ *  re-serialization. */
+export function entryStartMs(e: SessionEntry): number {
+	return e.type === "message" ? e.message.timestamp : Date.parse(e.timestamp);
+}
+
+/** 回合起点判定(唯一实现,daemon 与全部 GUI 写侧共用):user message,或
+ *  advisor 定制消息且 display=true(agent 主动发起的轮没有 user 消息,
+ *  冻结用时必须锚在该顾问笔记上而不是几小时前的上一条用户消息)。 */
+export function isTurnStartEntry(e: SessionEntry | undefined): boolean {
+	if (!e) return false;
+	if (e.type === "message") return e.message.role === "user";
+	if (e.type === "custom_message") return e.customType === "advisor" && e.display === true;
+	return false;
+}
+
+/** Frozen round-total record, shared by the daemon (agent_end in the
+ *  materialized view) and every GUI write side: ONE key space, so daemon-seeded
+ *  snapshots and live GUI writes hit the same lookup. Key = 回合起点
+ *  entryStartMs;value = 末条事件 entryStartMs − 起点(同一 wire 时钟,
+ *  绝不混 Date.now——provider 时钟滞后时 wall-clock 会把总时长吹大几个量级)。
+ *  末条早于起点(时钟回拨)返回 null,不冻结垃圾值。 */
+export function roundDurationRecord(
+	entries: readonly SessionEntry[],
+): { turnStartMs: number; durationMs: number } | null {
+	let turnStartMs: number | undefined;
+	for (const e of entries) {
+		if (!isTurnStartEntry(e)) continue;
+		const ts = entryStartMs(e);
+		if (Number.isFinite(ts)) turnStartMs = ts;
+	}
+	if (turnStartMs === undefined) return null;
+	const last = entries[entries.length - 1];
+	const endMs = last ? entryStartMs(last) : Number.NaN;
+	if (!Number.isFinite(endMs) || endMs < turnStartMs) return null;
+	return { turnStartMs, durationMs: endMs - turnStartMs };
+}
+
 /** customType of collab guest prompts injected on the host. */
 export const COLLAB_PROMPT_MESSAGE_TYPE = "collab-prompt";
 

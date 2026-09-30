@@ -9,20 +9,22 @@
  */
 
 import { COLLAB_PROTO, CollabSocket, encodeBase64Url, importRoomKey, parseCollabLink } from "@musepi/collab-proto";
-import type {
-	AgentSnapshot,
-	AssistantMessage,
-	CollabUiRequest,
-	CollabUiResponseValue,
-	GuestFrame,
-	HostFrame,
-	ImageContent,
-	SessionEntry,
-	SessionHeader,
-	SessionState,
-	SubagentLifecyclePayload,
-	SubagentProgressPayload,
-	WorkspaceSessionInfo,
+import {
+	type AgentSnapshot,
+	type AssistantMessage,
+	type CollabUiRequest,
+	type CollabUiResponseValue,
+	entryStartMs,
+	type GuestFrame,
+	type HostFrame,
+	type ImageContent,
+	roundDurationRecord,
+	type SessionEntry,
+	type SessionHeader,
+	type SessionState,
+	type SubagentLifecyclePayload,
+	type SubagentProgressPayload,
+	type WorkspaceSessionInfo,
 } from "@musepi/pi-wire";
 import type { TranslationKey } from "../i18n/index.js";
 import { t } from "../i18n/index.js";
@@ -707,24 +709,35 @@ export class GuestClient {
 				break;
 			case "agent_end":
 				this.#working = false;
-				// Freeze this run's total (craft-agents completedAt parity): the
-				// round spans the last user message to agent_end; pinned to the
-				// final assistant message so its row shows the frozen total.
+				// Freeze this run's total under the SHARED record contract
+				// (pi-wire roundDurationRecord — the same helper the daemon and
+				// every other GUI write side call, so collab-guest totals share
+				// ONE key space with daemon-seeded snapshots). The final
+				// message's entry frame can land AFTER agent_end — the stream
+				// ghost still holds it then (cleared once the entry folds in) —
+				// so fold the ghost in as a synthetic tail entry before
+				// computing, or the end anchor would stop at the last tool
+				// result and undercount the reply generation.
 				{
-					let userTs: number | undefined;
-					let assistantTs: number | undefined;
-					for (const e of this.#entries) {
-						if (e.type !== "message") continue;
-						if (e.message.role === "user") userTs = e.message.timestamp;
-						else if (e.message.role === "assistant") assistantTs = e.message.timestamp;
-					}
-					// The final message's entry frame can land AFTER agent_end —
-					// the stream ghost still holds it then (cleared once the
-					// entry folds in), so prefer it as the round's last message.
-					if (this.#stream?.role === "assistant") assistantTs = this.#stream.timestamp;
-					if (userTs !== undefined && assistantTs !== undefined) {
+					const ghost = this.#stream?.role === "assistant" ? this.#stream : undefined;
+					const last = this.#entries[this.#entries.length - 1];
+					const entries =
+						ghost !== undefined && (last === undefined || entryStartMs(last) < ghost.timestamp)
+							? [
+									...this.#entries,
+									{
+										type: "message",
+										id: "__stream-ghost__",
+										parentId: null,
+										timestamp: new Date(ghost.timestamp).toISOString(),
+										message: ghost,
+									} satisfies SessionEntry,
+								]
+							: this.#entries;
+					const rec = roundDurationRecord(entries);
+					if (rec) {
 						const next = new Map(this.#roundDurations);
-						next.set(assistantTs, Date.now() - userTs);
+						next.set(rec.turnStartMs, rec.durationMs);
 						this.#roundDurations = next;
 					}
 				}

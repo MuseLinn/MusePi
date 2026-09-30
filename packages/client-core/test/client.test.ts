@@ -192,26 +192,29 @@ describe("GuestClient frame apply", () => {
 		client.applyFrameForTest({ t: "state", state: { ...STATE, isStreaming: false } });
 		expect(client.getSnapshot().working).toBe(false);
 	});
-	it("agent_end freezes the completed round's total pinned to its final message", () => {
-		// Round = last user message → agent_end (craft-agents completedAt
-		// parity): the frozen value spans the whole working period, including
-		// tool execution.
+	it("agent_end freezes the round total under the turn-start key, wire-clock span", () => {
+		// Contract (shared recorder): the frozen value keys on the turn START
+		// (last user message ts) — the SAME key space daemon snapshots seed —
+		// and spans the round's wire-clock events (2000 − 1000 = 1000, never
+		// Date.now(): wall-clock math would be nondeterministic here). The old
+		// assistant-ts key space made daemon-seeded values invisible to the
+		// transcript's per-row lookup.
 		const client = liveClient([messageEntry("u1", { role: "user", content: "do it", timestamp: 1_000 })]);
 		const finalMsg = assistantMessage("done");
 		finalMsg.timestamp = 2_000;
 		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: finalMsg } });
 		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: finalMsg } });
 		// agent_end may arrive while the ghost still holds the final message
-		// (its entry frame lands later) — the total must still pin to the
-		// ghost's timestamp, not some older assistant message.
+		// (its entry frame lands later) — the end anchor must fold the ghost
+		// in, not stop at the user message.
 		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
 		const snap = client.getSnapshot();
 		expect(snap.roundDurations.size).toBe(1);
 		const [ts, ms] = [...snap.roundDurations][0];
-		expect(ts).toBe(2_000);
-		expect(ms).toBeGreaterThan(0);
+		expect(ts).toBe(1_000);
+		expect(ms).toBe(1_000);
 	});
-	it("agent_end pins the total to the folded entry once the ghost cleared", () => {
+	it("agent_end freezes the same record once the ghost folded into an entry", () => {
 		const client = liveClient([messageEntry("u1", { role: "user", content: "do it", timestamp: 1_000 })]);
 		const finalMsg = assistantMessage("done");
 		finalMsg.timestamp = 2_000;
@@ -220,9 +223,7 @@ describe("GuestClient frame apply", () => {
 		client.applyFrameForTest({ t: "entry", entry: messageEntry("e2", finalMsg) });
 		expect(client.getSnapshot().stream).toBeNull();
 		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
-		const [ts, ms] = [...client.getSnapshot().roundDurations][0];
-		expect(ts).toBe(2_000);
-		expect(ms).toBeGreaterThan(0);
+		expect([...client.getSnapshot().roundDurations]).toEqual([[1_000, 1_000]]);
 	});
 	it("round totals accumulate per completed round (每轮单独计时)", () => {
 		const client = liveClient([messageEntry("u1", { role: "user", content: "first", timestamp: 1_000 })]);
@@ -230,6 +231,7 @@ describe("GuestClient frame apply", () => {
 		first.timestamp = 2_000;
 		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: first } });
 		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: first } });
+		client.applyFrameForTest({ t: "entry", entry: messageEntry("a1", first) });
 		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
 		// Round 2: a new user message anchors the next round.
 		client.applyFrameForTest({
@@ -240,9 +242,11 @@ describe("GuestClient frame apply", () => {
 		second.timestamp = 4_000;
 		client.applyFrameForTest({ t: "event", event: { type: "message_start", message: second } });
 		client.applyFrameForTest({ t: "event", event: { type: "message_end", message: second } });
+		client.applyFrameForTest({ t: "entry", entry: messageEntry("a2", second) });
 		client.applyFrameForTest({ t: "event", event: { type: "agent_end" } });
+		// Both rounds freeze under their own turn-start keys, one per round.
 		const durations = client.getSnapshot().roundDurations;
-		expect([...durations.keys()].sort()).toEqual([2_000, 4_000]);
+		expect([...durations.keys()].sort()).toEqual([1_000, 3_000]);
 	});
 	it("a state frame recovers a stuck-idle guest when agent_start was dropped", () => {
 		// The host begins streaming mid-turn, but the matching `agent_start`

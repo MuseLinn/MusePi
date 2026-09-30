@@ -139,3 +139,47 @@ describe("GuiSessionStore working-state machine (stop capsule)", () => {
 		expect(store.getSnapshot().working).toBe(false);
 	});
 });
+
+describe("GuiSessionStore round-duration key space (P0-2 shared recorder)", () => {
+	// Contract: live agent_end freezes AND daemon snapshot seeding both use
+	// the turn-START key (pi-wire roundDurationRecord) — one key space, so a
+	// daemon-seeded total and a GUI-recorded total for the same round collapse
+	// onto one key and the transcript's per-row lookup hits both. The old
+	// assistant-ts key space made every daemon-seeded value invisible.
+	const entry = (role: "user" | "assistant", ts: number): unknown => ({
+		type: "message",
+		id: `${role}-${ts}`,
+		parentId: null,
+		timestamp: new Date(ts).toISOString(),
+		message: { role, content: [], timestamp: ts },
+	});
+
+	it("freezes a completed multi-step round under the user-message ts, wire-clock span", async () => {
+		const store = new GuiSessionStore(
+			"s1",
+			{
+				entries: [entry("user", 1_000), entry("assistant", 1_500), entry("assistant", 2_600)] as never[],
+				cursor: 0,
+			},
+			"/tmp",
+		);
+		store.apply(agentEvent("agent_end"));
+		await settle();
+		// 2600 − 1000 from entry timestamps only — Date.now() would be
+		// nondeterministic here.
+		expect(store.getSnapshot().roundDurations.get(1_000)).toBe(1_600);
+	});
+
+	it("serves daemon-seeded turn-start keys through the same registry", () => {
+		const store = new GuiSessionStore(
+			"s1",
+			{
+				entries: [entry("user", 1_000), entry("assistant", 1_500)] as never[],
+				cursor: 0,
+				roundDurations: [[1_000, 1_600]],
+			},
+			"/tmp",
+		);
+		expect(store.getSnapshot().roundDurations.get(1_000)).toBe(1_600);
+	});
+});

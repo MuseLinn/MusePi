@@ -1,4 +1,10 @@
-import type { AssistantMessage, CustomMessageEntry, SessionEntry, ToolResultMessage } from "@musepi/pi-wire";
+import {
+	type AssistantMessage,
+	type CustomMessageEntry,
+	entryStartMs,
+	type SessionEntry,
+	type ToolResultMessage,
+} from "@musepi/pi-wire";
 import { play } from "cuelume";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
 import { ArrowDown, GitFork, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
@@ -25,7 +31,7 @@ import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
-import type { TurnRenderUnit } from "./render-units";
+import { roundTimerKeyByRow, type TurnRenderUnit } from "./render-units";
 import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import {
 	anchorActionAfterContentChange,
@@ -1433,6 +1439,27 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		for (const unit of turnUnits) map.set(unit.startIdx, unit);
 		return map;
 	}, [turnUnits]);
+	// Frozen-total lookup: each turn's LAST assistant row → the turn-start ts
+	// key the daemon/GUI recorders freeze the total under (one key space —
+	// daemon-seeded snapshots and live GUI writes hit the same entry).
+	const roundTimerKeys = useMemo(() => roundTimerKeyByRow(entries, turnUnits), [entries, turnUnits]);
+	// Turn header's 已完成 + frozen total: same turn-start key, with the
+	// reply-ts fallback for pre-anchor snapshots.
+	const turnHeaderDurationMs = useCallback(
+		(unit: TurnRenderUnit): number | undefined => {
+			const startEntry = entries[unit.startIdx];
+			if (startEntry === undefined) return undefined;
+			const startMs = entryStartMs(startEntry);
+			if (!Number.isFinite(startMs)) return undefined;
+			return (
+				roundDurations?.get(startMs) ??
+				(unit.replyIdx >= 0
+					? roundDurations?.get((entries[unit.replyIdx] as { message: { timestamp: number } }).message.timestamp)
+					: undefined)
+			);
+		},
+		[entries, roundDurations],
+	);
 
 	// Completed-round fold OPEN-state keys are the round's user-message id
 	// (fold.userId), NOT the entry index: history prepends shift absolute
@@ -1969,8 +1996,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			before?.type === "message" && (before.message.role === "assistant" || before.message.role === "toolResult");
 		// M1 turn header: rendered above the turn-start row (the user
 		// prompt or an advisor note — shared isTurnStart semantics).
-		// The frozen round duration keys off the reply message's
-		// timestamp (same map the reply row's timer uses).
+		// The frozen round duration keys off the turn-START ts (shared
+		// recorder contract), with the reply-ts fallback for pre-anchor
+		// snapshots.
 		const turnUnit = turnUnitByStart.get(absIdx);
 		// Completed-round folding (craft-agents TurnCard parity): working
 		// entries between a user message and its final reply fold behind
@@ -2031,10 +2059,16 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		const renderHeaderHere = (isHeaderRow && !foldClosed) || hoistHeaderHere;
 		// Per-round work timer: the live tail row ticks from the
 		// round start (last user message); completed rounds show
-		// their frozen total under the final message.
+		// their frozen total under the final message. The frozen
+		// total lives under the turn-START key (shared recorder
+		// contract); pre-anchor snapshots keyed by this row's own
+		// assistant ts stay readable via the fallback.
 		const isTail = isAssistantMessage && absIdx === lastAssistantIdx;
 		const streamingLast = working && isTail && lastAssistantInRound;
-		const roundDuration = isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined;
+		const roundTimerKey = isAssistantMessage ? roundTimerKeys.get(absIdx) : undefined;
+		const roundDuration =
+			(roundTimerKey !== undefined ? roundDurations?.get(roundTimerKey) : undefined) ??
+			(isAssistantMessage ? roundDurations?.get(entry.message.timestamp) : undefined);
 		// Closed: the header rides the REPLY row (hoisted into its content column) so
 		// orb + 活动 + answer share one line, while the turn's own first row renders
 		// nothing — no pixel-less row, no floating avatar.
@@ -2161,13 +2195,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					<TurnHeader
 						unit={turnUnit}
 						time={branchClock(entry.timestamp)}
-						durationMs={
-							turnUnit.replyIdx >= 0
-								? roundDurations?.get(
-										(entries[turnUnit.replyIdx] as { message: { timestamp: number } }).message.timestamp,
-									)
-								: undefined
-						}
+						durationMs={turnHeaderDurationMs(turnUnit)}
 					/>
 					{row}
 				</Fragment>
@@ -2285,7 +2313,12 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						active={activeTools}
 						pending={!streamDone}
 						runStartTs={lastUserTs}
-						roundDuration={roundDurations?.get(stream.timestamp)}
+						roundDuration={
+							// Ghost stream row: the round froze under the turn-start
+							// key; the stream-ts fallback keeps pre-anchor snapshots
+							// (reply-ts keys) readable.
+							roundDurations?.get(lastUserTs ?? Number.NaN) ?? roundDurations?.get(stream.timestamp)
+						}
 						host={host}
 						hideToolActivity={hideToolActivity}
 						showTokenUsage={showTokenUsage}

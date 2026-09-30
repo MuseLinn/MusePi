@@ -1013,8 +1013,10 @@ export function TurnHeader({
 	unit: TurnRenderUnit;
 	/** Turn-start clock label ("14:02") — undefined hides the clock. */
 	time?: string;
-	/** Frozen round total (craft-agents roundDurations, keyed by the reply
-	 *  message timestamp) — undefined while running or when no reply yet. */
+	/** Frozen round total (roundDurations, keyed by the turn-START timestamp
+	 *  under the shared pi-wire recorder contract; pre-anchor snapshots keyed
+	 *  by the reply ts stay readable via the caller's fallback) — undefined
+	 *  while running or when no reply yet. */
 	durationMs?: number;
 }): ReactNode {
 	const running = unit.isRunning;

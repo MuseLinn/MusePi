@@ -36,7 +36,7 @@
  *    capability-seam item, not M1.
  */
 
-import type { SessionEntry } from "@musepi/pi-wire";
+import { entryStartMs, type SessionEntry } from "@musepi/pi-wire";
 import { isTurnStart } from "./round-collapse";
 import { classifyTranscriptRow } from "./row-kinds";
 
@@ -189,6 +189,36 @@ export function buildTurnRenderUnits(
 		});
 	}
 	return units;
+}
+
+/** Frozen-total row anchor: row index → the round-duration MAP KEY its turn
+ *  freezes under. The daemon and every GUI write side record rounds under the
+ *  turn-START ts (pi-wire roundDurationRecord); the timer DISPLAY stays on the
+ *  turn's LAST assistant row (the old reply-ts display parity — trailing
+ *  bookkeeping rows after the final assistant never owned the timer), so the
+ *  renderer needs that one row → turn-start-key mapping. Turns with no
+ *  assistant row (tool-only rounds) get no entry — their totals still read in
+ *  the trajectory view, which keys off the turn start directly. Pre-anchor
+ *  snapshots keyed by the final assistant ts stay readable through the
+ *  caller's per-row fallback lookup. */
+export function roundTimerKeyByRow(
+	entries: readonly SessionEntry[],
+	units: readonly TurnRenderUnit[],
+): ReadonlyMap<number, number> {
+	const map = new Map<number, number>();
+	for (const unit of units) {
+		const startEntry = entries[unit.startIdx];
+		if (startEntry === undefined) continue;
+		const startMs = entryStartMs(startEntry);
+		if (!Number.isFinite(startMs)) continue;
+		let lastAssistantIdx = -1;
+		for (let i = unit.startIdx; i <= unit.endIdx; i++) {
+			const e = entries[i];
+			if (e?.type === "message" && e.message.role === "assistant") lastAssistantIdx = i;
+		}
+		if (lastAssistantIdx >= 0) map.set(lastAssistantIdx, startMs);
+	}
+	return map;
 }
 
 /**
