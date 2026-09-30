@@ -1,7 +1,8 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { enUS } from "./en-US/index.js";
+import { enUS, enUSDomainCount, enUSDuplicates } from "./en-US/index.js";
 import { getLocaleSnapshot, registerTranslations, setLocale, t, tLoose } from "./index.js";
-import { zhCN } from "./zh-CN/index.js";
+import { collectDomainDuplicates } from "./merge-domains.js";
+import { zhCN, zhCNDomainCount, zhCNDuplicates } from "./zh-CN/index.js";
 
 describe("i18n maps (per-domain split)", () => {
 	test("zh-CN and en-US carry the same key set", () => {
@@ -17,11 +18,27 @@ describe("i18n maps (per-domain split)", () => {
 		}
 	});
 
-	test("duplicate keys across zh domains fail loudly (module-load guard)", async () => {
-		// The barrel throws at import time when two domains collide; a
-		// duplicate present in the tree would surface here.
-		const mod = await import("./zh-CN/index.js");
-		expect(Object.keys(mod.zhCN).length).toBe(Object.keys(zhCN).length);
+	test("无跨域重复键(重复曾两次白屏 GUI — 回归即 report 非空)", () => {
+		expect(zhCNDuplicates).toEqual({});
+		expect(enUSDuplicates).toEqual({});
+	});
+
+	test("域文件数不缩小(防缩小守卫:扫描面收窄比漏检更糟)", () => {
+		// 新增域文件时同步调高;当前 16 个域。
+		expect(zhCNDomainCount).toBeGreaterThanOrEqual(16);
+		expect(enUSDomainCount).toBeGreaterThanOrEqual(16);
+		expect(Object.keys(zhCN).length).toBeGreaterThan(3000);
+	});
+
+	test("重复键容错:不抛错、双方域被记录(dsh fail-safe parity)", () => {
+		// 合成碰撞:同一 key 落在两个域 —— 检测必须返回冲突双方,
+		// 绝不抛错(模块加载期抛错 = 整个 GUI 白屏,本测试钉死该契约)。
+		const report = collectDomainDuplicates("test", {
+			a: { "dup.key": "A" },
+			b: { "dup.key": "B", solo: "S" },
+		});
+		expect(report["dup.key"]).toEqual({ first: "a", second: "b" });
+		expect(collectDomainDuplicates("test", { a: { x: "1" } })).toEqual({});
 	});
 });
 

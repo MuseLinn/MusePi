@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **i18n 重复键不再白屏（fail-safe 化，根除此前两次事故的失效模式）**：client-core 双语 barrel 的模块加载守卫从「跨域重复 key 直接 throw（一个重复文案键 → 整个 GUI 白屏，已发生两次）」改为容错检测——冲突记入 `zhCNDuplicates`/`enUSDuplicates` report 并打 `[musepi-i18n] duplicate key:` 前缀的 console.error（可检索、不崩溃），词表合并语义不变。把关前移到测试必经路径：i18n parity 断言（跨域零重复 + 域文件数/键总数防缩小守卫 + 合成碰撞用例钉死「不抛错且记录冲突双方」）进 `bun test`，CI 与包级 check 都无法绕过；参照 dsh `locale-dictionary-parity.spec.ts` 的「门禁必须长在必经路径 + 防缩小守卫」设计。本次事故键 `plugin details`（guest 域已持有）从 tools 域移除。
+  - EN: Duplicate i18n keys no longer white-screen the GUI (fail-safe, rooting out the failure mode behind two past incidents): the client-core bilingual barrel's module-load guard changes from throwing on a cross-domain duplicate key (one duplicated copy key → whole GUI white screen, twice already) to tolerant detection — collisions are recorded in the `zhCNDuplicates`/`enUSDuplicates` reports with a greppable `[musepi-i18n] duplicate key:` console.error (no crash), merge semantics unchanged. The gate moves onto the mandatory test path: i18n parity assertions (zero cross-domain duplicates + domain-count/key-count anti-narrowing guards + a synthetic-collision case pinning "no throw, both domains recorded") join `bun test`, unbypassable from CI or package-level checks; design mirrors dsh's `locale-dictionary-parity.spec.ts` ("gates must live on the mandatory path + anti-narrowing guards"). This incident's key `plugin details` (already owned by the guest domain) is removed from the tools domain.
+
 ### Added
 
 - **语音子系统插件化登记（voice:stt / voice:tts，dsh 式内置插件单元）**：语音输入/播报首次以插件身份进入插件页与能力清单——`voice:stt`（开关镜像 `stt.enabled`）与 `voice:tts`（开关镜像 `speech.enabled`，vocalizer 每次推送本就现读该键）两个内置单元带 **dsh 式配置表单**：STT 模型档位/语言提示/静音阈值/提交触发，TTS 本地模型/音色/语速（0.5–2 夹取）/朗读内容模式/自动朗读。关键设计：**字段键即设置键**——`extensions.list` 挂注册表声明的 config + 从 settings 现读的 configValues，`extensions.setConfig` 按声明钳制后经 settings 落盘，插件管理表单与设置页语音分区同一条存储、零漂移；未声明键拒绝、越界夹取、changed 扇出与插件包配置同一契约。GUI 侧新 kind「语音」标签 + 双语显示名/描述（`ext builtin stt/tts [desc]`），插件 tab 行内展开即可开关+配置。契约测试 5 例（list 挂字段+设置值、setConfig 落盘回读闭环、越界夹取、未声明键拒绝不留痕、setEnabled 镜像总开关状态翻转）。

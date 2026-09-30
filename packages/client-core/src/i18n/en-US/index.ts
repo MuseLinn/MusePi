@@ -1,3 +1,4 @@
+import { collectDomainDuplicates } from "../merge-domains.js";
 import { agents } from "./agents.js";
 import { announcement } from "./announcement.js";
 import { collab } from "./collab.js";
@@ -41,34 +42,29 @@ export const enUS = {
 	...announcement,
 } as const;
 
-// Module-load duplicate guard (mirror of zh-CN/index.ts).
-{
-	const parts = {
-		shell,
-		composer,
-		sessions,
-		context,
-		collab,
-		transcript,
-		settings,
-		agents,
-		tools,
-		companion,
-		general,
-		guest,
-		reward,
-		update,
-		creation,
-		announcement,
-	};
-	const seen = new Map<string, string>();
-	for (const [file, map] of Object.entries(parts)) {
-		for (const key of Object.keys(map)) {
-			const prev = seen.get(key);
-			if (prev !== undefined) {
-				throw new Error(`duplicate i18n key "${key}" in en-US (${prev} and ${file})`);
-			}
-			seen.set(key, file);
-		}
-	}
-}
+// Module-load duplicate detection (fail-safe, mirror of zh-CN/index.ts —
+// never throw here; a duplicate key must not white-screen the GUI).
+const parts = {
+	shell,
+	composer,
+	sessions,
+	context,
+	collab,
+	transcript,
+	settings,
+	agents,
+	tools,
+	companion,
+	general,
+	guest,
+	reward,
+	update,
+	creation,
+	announcement,
+};
+
+/** Cross-domain duplicate report (empty in a healthy tree). */
+export const enUSDuplicates = collectDomainDuplicates("en-US", parts);
+
+/** 防缩小锚点:参与合并的域文件数(i18n parity 测试据此守卫)。 */
+export const enUSDomainCount = Object.keys(parts).length;
