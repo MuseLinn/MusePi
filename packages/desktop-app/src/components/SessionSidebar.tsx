@@ -109,7 +109,7 @@ export function SessionSidebar({
 	onOpenCapability?(): void;
 	capabilityActive?: boolean;
 	/** 枢纽下拉直达 —— 落地能力中心的指定 tab。 */
-	onOpenCapabilityTab?(tab: "skills" | "plugins" | "extensions" | "marketplace"): void;
+	onOpenCapabilityTab?(tab: "skills" | "plugins" | "marketplace"): void;
 	onOpenSettings(): void;
 	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
@@ -166,10 +166,24 @@ export function SessionSidebar({
 		}
 	};
 	const [projMenu, setProjMenu] = useState(false);
-	// 能力中心枢纽下拉（WorkBuddy 式）：chevron 弹出直达四 tab 的浮层,
-	// 走全局 MenuPopup（portal + 互斥 + gui-menu-in/out 动画单一权威）。
+	// 能力中心枢纽悬停菜单：鼠标悬停行即弹出直达 tab 的浮层（单一
+	// 按钮，无独立 chevron），走全局 MenuPopup（portal + 互斥 +
+	// gui-menu-in/out 动画单一权威）。菜单是 portal 渲染，行与菜单
+	// 之间的鼠标迁移靠延迟关（HOVER_CLOSE_MS）兜住。
 	const [capHubOpen, setCapHubOpen] = useState(false);
 	const capHubAnchorRef = useRef<HTMLDivElement | null>(null);
+	const capHubCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const openCapHub = (): void => {
+		if (capHubCloseTimerRef.current) {
+			clearTimeout(capHubCloseTimerRef.current);
+			capHubCloseTimerRef.current = null;
+		}
+		setCapHubOpen(true);
+	};
+	const scheduleCapHubClose = (): void => {
+		if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
+		capHubCloseTimerRef.current = setTimeout(() => setCapHubOpen(false), 180);
+	};
 	// Tab-row quick toggle: null = per-group state, true = all open, false = all closed.
 	const [groupsAll, setGroupsAll] = useState<boolean | null>(null);
 	const [pinned, setPinned] = useState<string[]>(() => {
@@ -570,29 +584,28 @@ export function SessionSidebar({
 						</button>
 					)}
 					{onOpenCapability && (
-						/* 能力中心枢纽（WorkBuddy 式单入口）: 主点击区进默认页,
-						 * 尾部 chevron 弹下拉直达 技能/插件/扩展/市场。 */
+						/* 能力中心枢纽：单一按钮——悬停弹出直达 tab 的浮层，
+						 * 直接点击进技能市场（app 侧落 marketplace tab）。 */
 						<div
 							ref={capHubAnchorRef}
 							className={`gui-menu-item gui-menu-item--hub${capabilityActive ? " gui-menu-item--active" : ""}`}
+							onMouseEnter={openCapHub}
+							onMouseLeave={scheduleCapHubClose}
 						>
 							<button
 								type="button"
 								className="gui-menu-item-hub-main"
-								onClick={onOpenCapability}
+								onClick={() => {
+									if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
+									setCapHubOpen(false);
+									onOpenCapability();
+								}}
+								onFocus={openCapHub}
+								onBlur={scheduleCapHubClose}
 								title={t("capability center")}
 							>
 								<Icon name="star" className="h-4 w-4" />
 								<span>{t("capability center")}</span>
-							</button>
-							<button
-								type="button"
-								className={`gui-menu-item-hub-chevron${capHubOpen ? " gui-menu-item-hub-chevron--on" : ""}`}
-								aria-label={t("capability hub open")}
-								aria-expanded={capHubOpen}
-								onClick={() => setCapHubOpen(v => !v)}
-							>
-								<Icon name="arrow-down-s" className="h-3.5 w-3.5" />
 							</button>
 							<MenuPopup
 								open={capHubOpen}
@@ -600,27 +613,29 @@ export function SessionSidebar({
 								anchor={capHubAnchorRef.current}
 								className="gui-cap-hub-menu"
 							>
-								{(
-									[
-										["skills", "sparkling", t("skills tab")],
-										["plugins", "plug", t("plugins")],
-										["extensions", "code-box", t("extensions")],
-										["marketplace", "plug-2", t("marketplace")],
-									] as ["skills" | "plugins" | "extensions" | "marketplace", string, string][]
-								).map(([id, icon, label]) => (
-									<button
-										key={id}
-										type="button"
-										className="gui-view-opt"
-										onClick={() => {
-											setCapHubOpen(false);
-											onOpenCapabilityTab?.(id);
-										}}
-									>
-										<Icon name={icon as Parameters<typeof Icon>[0]["name"]} className="h-3.5 w-3.5" />
-										<span>{label}</span>
-									</button>
-								))}
+								<div onMouseEnter={openCapHub} onMouseLeave={scheduleCapHubClose}>
+									{(
+										[
+											["skills", "sparkling", t("skills tab")],
+											["plugins", "plug", t("plugins")],
+											["marketplace", "plug-2", t("marketplace")],
+										] as ["skills" | "plugins" | "marketplace", string, string][]
+									).map(([id, icon, label]) => (
+										<button
+											key={id}
+											type="button"
+											className="gui-view-opt"
+											onClick={() => {
+												if (capHubCloseTimerRef.current) clearTimeout(capHubCloseTimerRef.current);
+												setCapHubOpen(false);
+												onOpenCapabilityTab?.(id);
+											}}
+										>
+											<Icon name={icon as Parameters<typeof Icon>[0]["name"]} className="h-3.5 w-3.5" />
+											<span>{label}</span>
+										</button>
+									))}
+								</div>
 							</MenuPopup>
 						</div>
 					)}

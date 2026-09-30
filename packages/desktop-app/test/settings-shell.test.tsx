@@ -100,13 +100,13 @@ describe("SettingsNav interaction", () => {
 		// The nav exposes every built-in section row plus the bottom
 		// user-area entries (onboarding / what's-new) — all clickable.
 		expect(rows.length).toBeGreaterThanOrEqual(28);
-		const extensionsRow = rows.find(b => b.querySelector(".gui-settings-nav-label")?.textContent === "扩展");
+		const extensionsRow = rows.find(b => b.querySelector(".gui-settings-nav-label")?.textContent === "扩展与插件");
 		expect(extensionsRow).toBeDefined();
 		act(() => {
 			extensionsRow!.click();
 		});
-		// "扩展" is the nav label of the `skills` section — the exact path of
-		// the reported bug (clicking 扩展 must request skills, whose content
+		// "扩展与插件" is the nav label of the `skills` section — the exact path of
+		// the reported bug (clicking it must request skills, whose content
 		// branch is the ExtensionsCenter).
 		expect(picked).toContain("skills");
 	});

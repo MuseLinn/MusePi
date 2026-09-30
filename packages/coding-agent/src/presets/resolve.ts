@@ -322,7 +322,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 			{
 				name: "mode:creator:role",
 				order: 25,
-				text: "你是一名 MusePi 扩展与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+				text: "你是一名 MusePi 插件与预设创作者。创造模式已自动激活扩展自举工具环(extension_load/extension_reload/extension_status/extension_validate/extension_rollback + ext_define/ext_run/ext_stop/ext_undefine/ext_inspect,extensions_list 本就常激活):创建扩展后用它加载、自查、热修、回退,不要只靠写文件猜状态。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 			},
 		],
 	},
@@ -438,7 +438,7 @@ const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
 				{
 					name: "mode:creator:role",
 					order: 25,
-					text: "你是一名 MusePi 扩展与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
+					text: "你是一名 MusePi 插件与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
 		},

@@ -159,7 +159,7 @@ describe("provider tab 可见性(M2.1 去 skip-native)", () => {
 			name: "ultrathink",
 			displayName: "Ultrathink Keyword",
 			path: "",
-			source: { provider: "musepi-extensions", providerName: "MusePi Extensions", level: "native" },
+			source: { provider: "musepi-extensions", providerName: "MusePi Plugins", level: "native" },
 			state: "active",
 			builtin: true,
 			raw: {},

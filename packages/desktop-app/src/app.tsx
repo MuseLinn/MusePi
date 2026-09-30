@@ -748,9 +748,7 @@ function AppInner(): ReactNode {
 	// 能力中心落地 tab（omp-open-capability 事件的可选 detail.tab 载荷；
 	// 默认 skills。＋市场卡 M3.7d 跳 marketplace；侧边栏枢纽下拉直达
 	// 四个 tab，extensions = 运行时扩展模块）。
-	const [capabilityInitialTab, setCapabilityInitialTab] = useState<
-		"skills" | "plugins" | "extensions" | "marketplace"
-	>("skills");
+	const [capabilityInitialTab, setCapabilityInitialTab] = useState<"skills" | "plugins" | "marketplace">("skills");
 	const swapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const viewSwapRef = useRef((_to: "board" | "scheduled" | "capability" | "chat"): void => {});
 	useEffect(() => {
@@ -770,12 +768,11 @@ function AppInner(): ReactNode {
 		};
 		window.addEventListener("omp-open-scheduled-task", onOpenScheduledTask);
 		// 设置 → 扩展控制中心概览的 CTA（设计稿 07 底部互跳）：开一级能力中心。
-		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab；侧边栏枢纽
-		// 下拉直达 extensions）；无载荷的旧调用方（ExtensionsCenter CTA）
-		// 保持默认 skills tab。
+		// detail.tab 是可选载荷（＋市场卡 M3.7d：跳市场 tab）；无载荷的旧
+		// 调用方保持默认 skills tab。
 		const onOpenCapability = (e: Event): void => {
 			const tab = (e as CustomEvent<{ tab?: string }>).detail?.tab;
-			setCapabilityInitialTab(tab === "marketplace" || tab === "plugins" || tab === "extensions" ? tab : "skills");
+			setCapabilityInitialTab(tab === "marketplace" || tab === "plugins" ? tab : "skills");
 			viewSwapRef.current("capability");
 		};
 		window.addEventListener("omp-open-capability", onOpenCapability);
@@ -3371,7 +3368,12 @@ function AppInner(): ReactNode {
 							onOpenScheduled={() => viewSwapRef.current("scheduled")}
 							scheduledActive={scheduledOpen}
 							cronGlow={cronGlow}
-							onOpenCapability={() => viewSwapRef.current("capability")}
+							// 侧边栏能力中心按钮：直接点击落到技能市场
+							// （插件市场 tab）；悬停菜单才直达各 tab。
+							onOpenCapability={() => {
+								setCapabilityInitialTab("marketplace");
+								viewSwapRef.current("capability");
+							}}
 							capabilityActive={capabilityOpen}
 							onOpenCapabilityTab={tab => {
 								setCapabilityInitialTab(tab);

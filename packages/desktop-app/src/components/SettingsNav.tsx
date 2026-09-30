@@ -274,7 +274,7 @@ export function navGroups(
 		{
 			title: t("agent capabilities"),
 			items: [
-				{ id: "skills", icon: "sparkling", label: t("extensions"), enabled: true },
+				{ id: "skills", icon: "sparkling", label: t("extensions & plugins"), enabled: true },
 				{ id: "plugins", icon: "plug", label: t("plugins"), enabled: true },
 				{ id: "subagents", icon: "user", label: t("tasks & subagents"), enabled: true },
 				{ id: "mcp", icon: "server", label: t("mcp servers"), enabled: true },

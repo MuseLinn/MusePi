@@ -1492,8 +1492,8 @@ button.gui-stats-pill {
 	color: var(--color-text-muted);
 }
 
-/* 能力中心枢纽（WorkBuddy 式单入口）：容器沿用 gui-menu-item 的行几何,
- * 内部分主点击区 + chevron 两个可点击子区,悬停高亮落在子区上。 */
+/* 能力中心枢纽（悬停菜单式单入口）：容器沿用 gui-menu-item 的行几何,
+ * 整行一个可点击子区（主按钮占满），悬停高亮落在子区上。 */
 .gui-menu-item--hub {
 	gap: 0;
 	padding: 0;
@@ -1528,37 +1528,7 @@ button.gui-stats-pill {
 	color: var(--color-text);
 }
 
-.gui-menu-item-hub-chevron {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	align-self: stretch;
-	padding: 0 8px;
-	border: none;
-	border-radius: var(--radius-lg);
-	background: transparent;
-	color: inherit;
-	cursor: pointer;
-	opacity: 0.55;
-	transition:
-		background 120ms ease-out,
-		opacity 120ms ease-out,
-		transform 160ms ease-out;
-}
-
-.gui-menu-item-hub-chevron:hover {
-	background: var(--color-surface-raised);
-	color: var(--color-text);
-	opacity: 1;
-}
-
-/* 展开态箭头微旋,给浮层一个来向提示。 */
-.gui-menu-item-hub-chevron--on {
-	opacity: 1;
-	transform: rotate(180deg);
-}
-
-/* 枢纽下拉的行几何复用全局 gui-view-opt;这里只补面板内边距。 */
+/* 枢纽悬停下拉的行几何复用全局 gui-view-opt;这里只补面板内边距。 */
 .gui-cap-hub-menu {
 	padding: 4px;
 	min-width: 148px;

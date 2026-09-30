@@ -44,7 +44,7 @@ const PRIORITY = 100;
 // Modes/插件化(DSH 对齐):MusePi 自有扩展系统(TS 扩展模块 + manifest)独立
 // provider —— 与 OMP Extension Packages(omp-plugins)并存,扩展中心独立 tab。
 const MUSEPI_EXTENSIONS_PROVIDER_ID = "musepi-extensions";
-const MUSEPI_EXTENSIONS_DISPLAY_NAME = "MusePi Extensions";
+const MUSEPI_EXTENSIONS_DISPLAY_NAME = "MusePi Plugins";
 const MUSEPI_EXTENSIONS_DESCRIPTION =
 	"MusePi 自有扩展(TS 模块 + manifest):~/.musepi/agent/extensions 与 <cwd>/.musepi/extensions";
 

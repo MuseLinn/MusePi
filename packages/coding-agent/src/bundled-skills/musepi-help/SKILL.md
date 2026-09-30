@@ -40,7 +40,7 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
   校验/删除；`modes.validate` 供 agent 自检）。极简模板 = `extensions: []` +
   promptComplete（固定提示词）+ 关压缩。
 - **扩展中心两个分类**：OMP Extension Packages（OMP 生态扩展包，`extensions:`
-  设置/`--extension`）+ MusePi Extensions（自有扩展系统：TS 模块 + manifest，
+  设置/`--extension`）+ MusePi Plugins（自有扩展系统：TS 模块 + manifest，
   `~/.musepi/agent/extensions`）—— 两者独立 tab、并存。
 - **怎么查用量/配额**：TUI 斜杠 `/usage`（每供应商凭证并排 + 最右合计列，供应商按
   用量最低优先）；桌面 GUI 输入 `/usage` 弹用量面板（同款并排视图）、会话输入框旁

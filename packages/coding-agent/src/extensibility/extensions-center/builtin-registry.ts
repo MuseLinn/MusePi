@@ -43,7 +43,7 @@ import { type Extension, type ExtensionKind, makeExtensionId, parseExtensionId }
 /** 自有内置扩展的统一来源标记(musepi-extensions provider,builtin 级)。 */
 const BUILTIN_SOURCE: Extension["source"] = {
 	provider: "musepi-extensions",
-	providerName: "MusePi Extensions",
+	providerName: "MusePi Plugins",
 	level: "native",
 };
 

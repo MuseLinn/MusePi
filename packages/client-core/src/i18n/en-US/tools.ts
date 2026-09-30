@@ -184,6 +184,7 @@ export const tools = {
 	"skills settings":
 		"Manage project-level and user-level skills. Once enabled, they can be used in chat via skill://.",
 	extensions: "Extensions",
+	"extensions & plugins": "Extensions & plugins",
 	"browser settings description": "Shared browser (agent and UI share one Chromium instance) and default behavior",
 	"headless browser": "Headless browser",
 	"headless browser description": "When off, the browser used by the agent shows its UI (hidden by default)",
@@ -530,12 +531,7 @@ export const tools = {
 
 	// ── Capability center (two screens + skill drawer + diagnostics) ─────────
 	"capability center": "Capability center",
-	"capability center desc": "Skills · plugins · extensions · marketplace",
-	"capability hub open": "Open quick-jump menu",
-	"extensions runtime": "Runtime extensions",
-	"extensions runtime empty": "No runtime extensions found",
-	"extensions runtime empty hint":
-		"Drop extension modules into ~/.musepi/agent/extensions (user level) or .musepi/extensions/ in a project (project level) — they hot-load on save, no restart needed.",
+	"capability center desc": "Skills · plugins · marketplace",
 	"skills tab": "Skills",
 	"ext overview": "Overview",
 	"ext inventory": "Capability inventory",
