@@ -413,6 +413,10 @@ export const tools = {
 	"ext kind tool-render": "Tool renderers",
 	"ext kind desktop-shell": "Desktop shell",
 	"ext kind voice": "Voice",
+	"ext kind terminal": "Terminal",
+	"ext kind browser": "Browser",
+	"ext kind computer": "Computer Use",
+	"ext kind lsp": "LSP",
 	"ext shadowed": "Shadowed",
 	"ext load failed": "Load failed",
 	"ext provider disabled": "Disabled (source turned off)",
@@ -443,6 +447,18 @@ export const tools = {
 	"ext builtin tts": "Speech Output (TTS)",
 	"ext builtin tts desc":
 		"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). The toggle mirrors speech.enabled; config fields are the tts.* settings keys — one storage with the settings page.",
+	"ext builtin terminal": "Terminal",
+	"ext builtin terminal desc":
+		"Session terminal backend (bun-pty → node-pty auto-fallback) powering the TUI terminal and the GUI terminal panel. Read-only display: no master switch — close the terminal panel from its own UI.",
+	"ext builtin browser": "Browser",
+	"ext builtin browser desc":
+		"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. The toggle mirrors browser.enabled; config fields are the browser.* settings keys.",
+	"ext builtin computer": "Computer Use",
+	"ext builtin computer desc":
+		"Scriptable host-desktop control tool (screenshots, input, accessibility tree). Off by default; the toggle mirrors computer.enabled; config fields are the computer.* settings keys.",
+	"ext builtin lsp": "LSP",
+	"ext builtin lsp desc":
+		"Code intelligence via language servers (definitions, references, diagnostics, rename). The toggle mirrors lsp.enabled; config fields are the lsp.* settings keys.",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",
 	"ext plugin config desc":

@@ -606,6 +606,14 @@ function getKindDisplayName(kind: ExtensionKind): string {
 			return "Tool Renderers";
 		case "voice":
 			return "Voice";
+		case "terminal":
+			return "Terminal";
+		case "browser":
+			return "Browser";
+		case "computer":
+			return "Computer Use";
+		case "lsp":
+			return "LSP";
 		default:
 			return kind;
 	}

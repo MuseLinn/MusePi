@@ -24,7 +24,11 @@ export type ExtensionKind =
 	| "magic-keyword"
 	| "theme"
 	| "tool-render"
-	| "voice";
+	| "voice"
+	| "terminal"
+	| "browser"
+	| "computer"
+	| "lsp";
 
 /**
  * Extension state (active, disabled, or shadowed).

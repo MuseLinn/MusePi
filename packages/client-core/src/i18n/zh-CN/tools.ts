@@ -401,6 +401,10 @@ export const tools = {
 	"ext kind tool-render": "工具卡片渲染",
 	"ext kind desktop-shell": "桌壳",
 	"ext kind voice": "语音",
+	"ext kind terminal": "终端",
+	"ext kind browser": "浏览器",
+	"ext kind computer": "电脑控制",
+	"ext kind lsp": "语言服务器",
 	"ext shadowed": "被遮蔽",
 	"ext load failed": "加载失败",
 	"ext provider disabled": "已停用（来源关闭）",
@@ -428,6 +432,18 @@ export const tools = {
 	"ext builtin tts": "语音播报（TTS）",
 	"ext builtin tts desc":
 		"流式神经语音朗读（Kokoro-82M / MeloTTS 中文，首次使用自动下载）。开关镜像 speech.enabled；配置项即 tts.* 设置键，与设置页语音分区同一条存储。",
+	"ext builtin terminal": "终端",
+	"ext builtin terminal desc":
+		"会话终端后端（bun-pty → node-pty 自动回退），驱动 TUI 终端与 GUI 终端面板。只读展示：无总开关语义；终端面板从自身 UI 关闭。",
+	"ext builtin browser": "浏览器",
+	"ext builtin browser desc":
+		"脚本化 Chromium 自动化工具（puppeteer）与应用内托管浏览器桥。开关镜像 browser.enabled；配置项即 browser.* 设置键。",
+	"ext builtin computer": "电脑控制",
+	"ext builtin computer desc":
+		"可脚本化的宿主桌面控制工具（截图、输入、无障碍树），默认关闭。开关镜像 computer.enabled；配置项即 computer.* 设置键。",
+	"ext builtin lsp": "语言服务器（LSP）",
+	"ext builtin lsp desc":
+		"经语言服务器提供代码智能（定义、引用、诊断、重命名）。开关镜像 lsp.enabled；配置项即 lsp.* 设置键。",
 	"ext read-only": "只读",
 	"ext plugin config": "插件配置",
 	"ext plugin config desc": "由插件清单声明的配置项，按字段类型渲染；修改的持久化写入随插件管理落地。",

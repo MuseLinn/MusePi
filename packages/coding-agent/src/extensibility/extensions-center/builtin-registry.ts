@@ -113,8 +113,10 @@ export interface BuiltinExtensionDef {
 	name: string;
 	displayName: string;
 	description?: string;
-	/** 镜像设置键的内置扩展(state 由设置驱动,setEnabled 写设置而非禁用列表)。 */
-	settingsMirror?: { key: string; on: unknown; off: unknown };
+	/** 镜像设置键的内置扩展(state 由设置驱动,setEnabled 写设置而非禁用列表)。
+	 *  unsetDisabled:设置从未写入时按禁用呈现(用于 schema 默认值即 false
+	 *  的键,如 computer.enabled);缺省仍按「未设置 = 启用」处理。 */
+	settingsMirror?: { key: string; on: unknown; off: unknown; unsetDisabled?: boolean };
 	/**
 	 * dsh 式插件配置表单声明(字段键即设置键):daemon 的 extensions.list
 	 * 据此挂 config + 从设置读出的 configValues,extensions.setConfig 按
@@ -307,6 +309,119 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		],
 		raw: { name: "tts", kind: "voice" },
 	},
+	// ── 更多内置子系统(dsh 子系统插件 parity:terminal/browser/computer/
+	//    lsp ——终端只读展示(无总开关语义,不发明);其余镜像各自 enabled
+	//    设置键,配置字段键即设置键)────────────────────────────────────
+	{
+		kind: "terminal",
+		name: "terminal",
+		displayName: "Terminal",
+		description:
+			"Session terminal backend (bun-pty → node-pty auto-fallback) powering the TUI terminal and the GUI terminal panel. Read-only display: no master switch — disable the terminal panel from its own UI.",
+		readonly: true,
+		config: [
+			{
+				key: "terminal.provider",
+				type: "select",
+				options: ["auto", "bun-pty", "node-pty"],
+				default: "auto",
+				restart: "daemon",
+				description:
+					"Explicit terminal backend: auto (fallback chain) / bun-pty (native, lowest latency) / node-pty (bridge process, more portable).",
+			},
+			{
+				key: "terminal.showImages",
+				type: "boolean",
+				default: true,
+				restart: "none",
+				description: "Render images inline in the terminal (TUI, image-protocol terminals only).",
+			},
+			{
+				key: "terminal.showProgress",
+				type: "boolean",
+				default: true,
+				restart: "none",
+				description: "Render command progress bars inline in the terminal (TUI).",
+			},
+		],
+		raw: { name: "terminal", kind: "terminal" },
+	},
+	{
+		kind: "browser",
+		name: "browser",
+		displayName: "Browser",
+		description:
+			"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. Toggle mirrors browser.enabled.",
+		settingsMirror: { key: "browser.enabled", on: true, off: false },
+		config: [
+			{
+				key: "browser.headless",
+				type: "boolean",
+				default: true,
+				restart: "none",
+				description: "Launch the browser in headless mode (disable to show the browser UI while automating).",
+			},
+			{
+				key: "browser.cdpUrl",
+				type: "string",
+				default: "",
+				restart: "none",
+				description:
+					"Default CDP discovery endpoint to attach to (e.g. http://127.0.0.1:9222) instead of launching; empty = launch own browser.",
+			},
+		],
+		raw: { name: "browser", kind: "browser" },
+	},
+	{
+		kind: "computer",
+		name: "computer",
+		displayName: "Computer Use",
+		description:
+			"Scriptable host-desktop control tool (screenshots, input, accessibility tree). Off by default; toggle mirrors computer.enabled.",
+		settingsMirror: { key: "computer.enabled", on: true, off: false, unsetDisabled: true },
+		config: [
+			{
+				key: "computer.display",
+				type: "string",
+				default: "all",
+				restart: "none",
+				description: "Composite all displays or a native display id.",
+			},
+			{
+				key: "computer.maxWidth",
+				type: "number",
+				default: 3840,
+				restart: "none",
+				description: "Maximum composite screenshot width in pixels.",
+			},
+		],
+		raw: { name: "computer", kind: "computer" },
+	},
+	{
+		kind: "lsp",
+		name: "lsp",
+		displayName: "LSP",
+		description:
+			"Code intelligence via language servers (definitions, references, diagnostics, rename). Toggle mirrors lsp.enabled.",
+		settingsMirror: { key: "lsp.enabled", on: true, off: false },
+		config: [
+			{
+				key: "lsp.lazy",
+				type: "boolean",
+				default: true,
+				restart: "session",
+				description: "Start language servers on first use instead of at session startup.",
+			},
+			{
+				key: "lsp.shared",
+				type: "boolean",
+				default: true,
+				restart: "daemon",
+				description: "Share one language-server instance across sessions.",
+			},
+		],
+		raw: { name: "lsp", kind: "lsp" },
+	},
 ];
 
 /** 由 kind+name 得注册表定义(不存在返回 undefined)。 */
@@ -317,12 +432,15 @@ export function findBuiltinDef(id: string): BuiltinExtensionDef | undefined {
 }
 
 /**
- * 镜像设置项的禁用判定:设置值 === off 即禁用,其余(含未设置,默认值
- * 均为启用)视为启用。daemon extensions.list 与 TUI 仪表盘共用此口径。
+ * 镜像设置项的禁用判定:设置值 === off 即禁用;声明了 unsetDisabled
+ * 的项未设置时按禁用(schema 默认值即 false,如 computer.enabled),
+ * 其余未设置一律视为启用。daemon extensions.list 与 TUI 仪表盘共用此口径。
  */
 export function builtinMirrorDisabled(def: BuiltinExtensionDef, getRaw: (key: string) => unknown): boolean {
 	if (!def.settingsMirror) return false;
-	return getRaw(def.settingsMirror.key) === def.settingsMirror.off;
+	const raw = getRaw(def.settingsMirror.key);
+	if (raw === undefined) return def.settingsMirror.unsetDisabled === true;
+	return raw === def.settingsMirror.off;
 }
 
 /**

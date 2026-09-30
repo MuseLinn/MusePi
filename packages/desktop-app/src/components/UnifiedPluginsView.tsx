@@ -372,23 +372,27 @@ export function UnifiedPluginsView({
 								{e.loadError && (
 									<span className="gui-ext-item-tag gui-ext-item-tag--err">{t("ext load failed")}</span>
 								)}
-								<button
-									type="button"
-									role="switch"
-									aria-checked={e.state === "active"}
-									aria-label={
-										e.state === "active"
-											? `${t("disable skill")} ${e.name}`
-											: `${t("enable skill")} ${e.name}`
-									}
-									className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
-									onClick={ev => {
-										ev.stopPropagation();
-										toggleModule(e);
-									}}
-								>
-									<span className="gui-toggle-knob" />
-								</button>
+								{/* 只读展示项(主题包/渲染器包/终端):无禁用语义,不渲染
+								 * 死开关——禁用不会改变运行时,放个可点的开关是撒谎。 */}
+								{!e.readonly && (
+									<button
+										type="button"
+										role="switch"
+										aria-checked={e.state === "active"}
+										aria-label={
+											e.state === "active"
+												? `${t("disable skill")} ${e.name}`
+												: `${t("enable skill")} ${e.name}`
+										}
+										className={`gui-toggle gui-toggle--sm${e.state === "active" ? " gui-toggle--on" : ""}`}
+										onClick={ev => {
+											ev.stopPropagation();
+											toggleModule(e);
+										}}
+									>
+										<span className="gui-toggle-knob" />
+									</button>
+								)}
 							</div>
 							{e.description ? <div className="gui-ext-plugins-desc">{builtinDescription(e)}</div> : null}
 							<div className="gui-ext-plugins-path">{e.path}</div>

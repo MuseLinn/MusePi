@@ -112,3 +112,83 @@ describe("内置语音插件单元(voice:stt / voice:tts)", () => {
 		expect(stt?.state).toBe("disabled");
 	});
 });
+
+describe("更多内置子系统插件单元(terminal/browser/computer/lsp)", () => {
+	let agentDir: string;
+	let tmpCwd: string;
+	let service: ExtensionService;
+	let settings: Settings;
+
+	beforeAll(async () => {
+		agentDir = await isolateAgentDirForTest("omp-builtin-subs-");
+	}, 30000);
+
+	afterAll(async () => {
+		await restoreAgentDirForTest(agentDir);
+	}, 30000);
+
+	beforeEach(async () => {
+		tmpCwd = await fs.mkdtemp(path.join(os.tmpdir(), "omp-builtin-subs-cwd-"));
+		settings = Settings.isolated();
+		service = new ExtensionService({
+			settings: () => settings,
+			ensureRegistry: async () => {},
+			cwd: () => tmpCwd,
+			webUrl: () => null,
+			webPortFile: () => path.join(agentDir, "web.port"),
+			onChanged: () => {},
+		});
+	});
+
+	test("terminal 只读单元:无禁用语义 + 配置字段即 terminal.* 设置键", async () => {
+		const listed = await service.list();
+		const term = listed.extensions.find(e => e.id === "terminal:terminal");
+		expect(term).toBeDefined();
+		expect(term?.readonly).toBe(true);
+		expect(term?.builtin).toBe(true);
+		expect(term?.config?.map(f => f.key)).toEqual([
+			"terminal.provider",
+			"terminal.showImages",
+			"terminal.showProgress",
+		]);
+		expect(term?.configValues?.["terminal.provider"]).toBe("auto");
+		// 只读项 setEnabled 不应存在语义:仍走通用 disabledExtensions 分支(不发明设置键)。
+		await service.setConfig({ id: "terminal:terminal", key: "terminal.showImages", value: false });
+		expect(settings.getRaw("terminal.showImages")).toBe(false);
+	});
+
+	test("browser 单元:镜像 browser.enabled,配置写入经 settings 落盘", async () => {
+		const listed = await service.list();
+		const browser = listed.extensions.find(e => e.id === "browser:browser");
+		expect(browser?.state).toBe("active");
+
+		await service.setEnabled({ id: "browser:browser", enabled: false });
+		expect(settings.getRaw("browser.enabled")).toBe(false);
+		const after = (await service.list()).extensions.find(e => e.id === "browser:browser");
+		expect(after?.state).toBe("disabled");
+
+		await service.setConfig({ id: "browser:browser", key: "browser.headless", value: false });
+		expect(settings.getRaw("browser.headless")).toBe(false);
+	});
+
+	test("computer 默认关闭:镜像 default false,状态如实上报 disabled", async () => {
+		const listed = await service.list();
+		const computer = listed.extensions.find(e => e.id === "computer:computer");
+		expect(computer?.state).toBe("disabled");
+		expect(computer?.disabledReason).toBe("item-disabled");
+
+		await service.setEnabled({ id: "computer:computer", enabled: true });
+		const after = (await service.list()).extensions.find(e => e.id === "computer:computer");
+		expect(after?.state).toBe("active");
+		expect(settings.getRaw("computer.enabled")).toBe(true);
+	});
+
+	test("lsp 单元:镜像 lsp.enabled + 配置字段即 lsp.* 设置键", async () => {
+		const listed = await service.list();
+		const lsp = listed.extensions.find(e => e.id === "lsp:lsp");
+		expect(lsp?.state).toBe("active");
+		expect(lsp?.config?.map(f => f.key)).toEqual(["lsp.lazy", "lsp.shared"]);
+		await service.setConfig({ id: "lsp:lsp", key: "lsp.lazy", value: false });
+		expect(settings.getRaw("lsp.lazy")).toBe(false);
+	});
+});
