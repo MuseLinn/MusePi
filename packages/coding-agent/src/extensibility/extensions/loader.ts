@@ -19,6 +19,8 @@ import type {
 } from "@musepi/pi-ai";
 import { isBuiltinComposerStyle, type KeyId } from "@musepi/pi-tui";
 import { hasFsCode, isEacces, isEnoent, logger } from "@musepi/pi-utils";
+import type { ConfigFieldDesc } from "@musepi/pi-wire";
+import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ExtensionModule, extensionModuleCapability } from "../../capability/extension-module";
 import { type Hook, hookCapability } from "../../capability/hook";
 import { isServiceTierFamily, isServiceTierForFamily } from "../../config/service-tier";
@@ -31,11 +33,12 @@ import * as PiCodingAgent from "../../index";
 import type { CustomMessagePayload } from "../../session/messages";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import { EventBus } from "../../utils/event-bus";
+import { readPluginConfigStore } from "../extensions-center/plugin-config-store";
 import * as TypeBox from "../legacy-typebox";
 import { installLegacyPiSpecifierShim, loadLegacyPiModule } from "../plugins/legacy-pi-compat";
 import { getAllPluginExtensionPaths } from "../plugins/loader";
-
 import { resolvePath, withHostGuard } from "../utils";
+import { readExtensionPluginMeta } from "./plugin-manifest";
 import type {
 	AssistantThinkingRenderer,
 	ComposerShapeDefinition,
@@ -212,6 +215,29 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 		private readonly cwd: string,
 		public readonly events: EventBus,
 	) {}
+
+	/**
+	 * Manifest-declared config 的运行时读取(pi.config)。清单 meta 按实例
+	 * 缓存(HMR 重载会新建 API 实例,天然刷新);存储值每次现读——写穿透
+	 * 更新进程内缓存,restart=none 的"最新写入立即可见"由此成立。
+	 */
+	readonly config: ExtensionAPI["config"] = {
+		get: async <T>(key: string): Promise<T | undefined> => (await this.#configValues())[key] as T | undefined,
+		getAll: async (): Promise<Record<string, unknown>> => ({ ...(await this.#configValues()) }),
+	};
+
+	#configFieldsPromise: Promise<ConfigFieldDesc[]> | null = null;
+
+	#configFields(): Promise<ConfigFieldDesc[]> {
+		this.#configFieldsPromise ??= readExtensionPluginMeta(this.extension.path).then(meta => meta?.fields ?? []);
+		return this.#configFieldsPromise;
+	}
+
+	async #configValues(): Promise<Record<string, unknown>> {
+		const [fields, store] = await Promise.all([this.#configFields(), readPluginConfigStore()]);
+		const id = `extension-module:${getExtensionNameFromPath(this.extension.path)}`;
+		return coerceConfigValues(fields, store[id]);
+	}
 
 	on<F extends HandlerFn>(event: string, handler: F): void {
 		const list = this.extension.handlers.get(event) ?? [];

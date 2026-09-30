@@ -292,3 +292,45 @@ pi.unregisterDesignSystem("my-brand");
 - 防撞契约：扩展 id 撞内置抛 `registerDesignSystem: id "x" collides with a built-in design system`，重复注册抛 `... is already registered`（与 registerMediaProvider 同形态）。
 - 生命周期：随扩展加载注册、reload/unload 按来源整源清除，下一次 prompt 重建即生效。
 - 类型：`DesignSystemConfig` 见 `packages/coding-agent/src/extensibility/extensions/types.ts`。
+
+## 13. 插件清单配置（manifest config/resources + pi.config，dsh 插件管理页 parity，2026-09-30）
+
+扩展的 package.json 可在 `omp`/`pi` 块下声明**配置字段表**与**资源占用卡**：扩展中心详情页据此渲染 dsh 式管理视图（配置表单 + 资源卡），扩展运行时经 `pi.config` 读取同一份值。
+
+### 清单声明
+
+```json
+{
+  "name": "voice-input",
+  "omp": {
+    "extensions": ["index.ts"],
+    "config": [
+      { "key": "enabled", "type": "boolean", "default": true, "description": "启用语音输入" },
+      { "key": "threshold", "type": "number", "default": 0.5, "min": 0, "max": 1, "step": 0.05 },
+      { "key": "model", "type": "select", "default": "base", "options": ["base", "large"], "restart": "session" },
+      { "key": "prompt", "type": "string", "default": "你好" },
+      { "key": "bin", "type": "path", "default": "" }
+    ],
+    "resources": { "disk": "120MB", "memory": "350MB", "setupMinutes": 2, "models": [{ "name": "stt-base", "size": "75MB" }] }
+  }
+}
+```
+
+- 字段类型：`boolean | number | string | select | path`；number 可带 `min/max/step`，select 必须给 `options`。
+- `restart` 生效域：`none`（默认，立即） / `session`（新会话） / `daemon`（重启 daemon）。
+- fail-soft：manifest 是用户可写 JSON，坏字段逐个被丢弃进结构化 errors（详情页有可见警告），好字段照常生效，绝不拖垮扩展登记。
+
+### 运行时读取
+
+```ts
+export default async function (pi: ExtensionAPI) {
+  const threshold = await pi.config.get<number>("threshold"); // 钳制后的值，未写过 = 声明默认
+  const all = await pi.config.getAll(); // 完整值表（只含声明键）
+}
+```
+
+- 取值与扩展中心表单、`extensions.setConfig` 写入共用同一条 `coerceConfigValues` 钳制链路（daemon/GUI 单一权威在 `@musepi/pi-wire`）：存储坏值回退声明默认，未声明键 `get` 返回 `undefined`、`getAll` 被过滤。
+- 生效语义：`restart: "none"` 字段每次调用现读——GUI 表单改完立即可见；`session` 字段在扩展加载时快照，新会话/重载后生效；`daemon` 字段约定需重启 daemon。
+- 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（`extension-module:<name>`）。
+
+契约与类型：`ConfigFieldDesc`/`PluginResources`/`coerceConfigValues` 见 `packages/wire/src/plugin-config.ts`；存储见 `packages/coding-agent/src/extensibility/extensions-center/plugin-config-store.ts`；运行时读取见 `ConcreteExtensionAPI.config`（loader.ts）。

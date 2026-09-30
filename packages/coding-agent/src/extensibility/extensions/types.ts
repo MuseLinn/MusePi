@@ -6,6 +6,25 @@
  * - Register LLM-callable tools
  * - Register commands, keyboard shortcuts, and CLI flags
  * - Interact with the user via UI primitives
+ *
+ * 能力缝声明（M2-2.4，索引：docs/capability-seams.md「扩展 API（register* 面）」）：
+ * - 名称+ns：`ExtensionAPI`（pi 对象，extension-module 加载期注入；新增面
+ *   `config`（manifest 声明式配置读取，2026-09-30，extensions-dev.md §13））。
+ * - 输入：扩展 factory 的注册调用（registerTool/registerCommand/
+ *   registerComponent/registerRpc/registerSkill/registerToolView/registerPrompt/
+ *   registerMode/registerSetting/registerShortcut/registerFlag/
+ *   registerFileWriteFallback/registerFileDeleteFallback 等）+ 运行时查询
+ *   （getFlag/config.get/config.getAll）。
+ * - 输出：进程内注册表（extension 对象的 Map/数组）+ `extensions.list` /
+ *   会话工具/命令/GUI 槽位挂载/声明式配置管理页（config+resources 经
+ *   extensions.list 下发）。
+ * - 生命周期：随扩展加载注册、reload/unload 按来源整源清除；config 读面
+ *   每次现读存储（restart=none 立即可见），清单 meta 按 API 实例缓存。
+ * - 启停：默认走覆盖层（disabledExtensions）；`--no-extensions` 全关。
+ * - 冲突：同 kind 同名 last-wins 或抛错（各 register* 自带防撞契约）；
+ *   config 键空间与 disabledExtensions 一致（extension-module:<name>），
+ *   未声明键写入被 extensions.setConfig 拒绝。
+ * - 检视入口：docs/extensions-dev.md（开发规范，§13 = 插件清单配置）。
  */
 
 import type { type as ArkType } from "@musepi/musepi-type";
@@ -1426,6 +1445,28 @@ export interface ExtensionAPI {
 
 	/** Get the value of a registered CLI flag. */
 	getFlag(name: string): boolean | string | undefined;
+
+	// =========================================================================
+	// Plugin Config (manifest-declared, dsh-style management page)
+	// =========================================================================
+
+	/** Manifest-declared plugin configuration. The extension's package.json
+	 *  `omp`/`pi` block declares a `config` field table (ConfigFieldDesc in
+	 *  @musepi/pi-wire); the extension center renders the management form and
+	 *  persists writes through `extensions.setConfig` into the plugin config
+	 *  store. Reads here merge stored values over declared defaults with
+	 *  per-field coercion — an undeclared key reads as undefined, a corrupt
+	 *  stored value falls back to the declared default. Restart semantics:
+	 *  `none` fields are read fresh on every call (latest write wins);
+	 *  `session` fields are snapshot at extension load (new sessions pick up
+	 *  changes); `daemon` fields are documented as requiring a daemon
+	 *  restart. */
+	readonly config: {
+		/** Coerced value of one declared field (default when never written). */
+		get<T = unknown>(key: string): Promise<T | undefined>;
+		/** The full coerced value table for this extension's declared fields. */
+		getAll(): Promise<Record<string, unknown>>;
+	};
 
 	// =========================================================================
 	// Message Rendering

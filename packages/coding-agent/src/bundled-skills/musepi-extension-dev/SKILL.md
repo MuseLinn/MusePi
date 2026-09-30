@@ -60,11 +60,23 @@ export default function (pi: ExtensionAPI) {
 4. **验证**：`musepi /extensions` 列出已加载扩展；扩展里的 `console.error` 进 daemon/TUI 日志
 5. **改 daemon 场景**：GUI 的 daemon 长驻——改扩展后必须重启 daemon（GUI 菜单"重启 daemon"）才生效；TUI 新会话即生效
 
+## 插件配置（manifest config + pi.config，dsh 管理页 parity）
+
+扩展需要用户可配项时，在扩展目录的 package.json 的 `omp` 块声明 `config` 字段表（`boolean | number | string | select | path`，数字可带 `min/max/step`，下拉必须给 `options`，每个字段可标 `restart: none|session|daemon` 生效域）与 `resources` 资源卡（`disk`/`memory`/`setupMinutes`/`models`）。扩展中心详情页自动渲染管理表单并落盘；运行时读取：
+
+```ts
+const threshold = await pi.config.get<number>("threshold"); // 钳制后的值，未写过 = 声明默认
+const all = await pi.config.getAll(); // 完整值表（只含声明键）
+```
+
+取值与表单、写入共用同一条钳制链路：存储坏值回退声明默认，未声明键读不到。存储落点 `<agentDir>/extensions/plugin-config.json`，键 = `extension-module:<name>`。fail-soft：坏清单字段被逐个丢弃并给警告，不拖垮扩展登记。详见 `docs/extensions-dev.md` §13。
+
 ## 文档路由表（需要细节时读这些，别猜）
 
 | 任务 | 文档 |
 |---|---|
 | 扩展 API 全貌/事件名/命令上下文 | `docs/extensions.md` |
+| 插件配置（manifest config / pi.config / 资源卡） | `docs/extensions-dev.md` §13 |
 | 加载机制细节（发现顺序/路径解析/禁用） | `docs/extension-loading.md` |
 | 自定义工具（模型直接调用） | `docs/custom-tools.md` |
 | Hook（pre/post 脚本、可突变什么） | `docs/hooks.md` |
