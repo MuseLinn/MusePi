@@ -1456,6 +1456,11 @@ export function ChatView({
 		try {
 			let acc: SessionEntry[] = [...((snap?.entries ?? []) as SessionEntry[])];
 			let beforeId: string | undefined = acc[0]?.id;
+			// P0-3: the daemon anchors at the LAST occurrence of a duplicated id
+			// and may answer with a page partially overlapping what we already
+			// hold — absorb only the rows we have never seen, so duplicate
+			// journal ids can never double entries in the map/trajectory.
+			const seen = new Set(acc.map(e => e.id));
 			// 60 × 1000 = 60k entries cap: far beyond any realistic session;
 			// beyond that the overview falls back to the loaded window.
 			for (let guard = 0; guard < 60; guard++) {
@@ -1466,12 +1471,14 @@ export function ChatView({
 				});
 				if (token !== fullTokenRef.current) return;
 				if (res?.stale) break; // P0-3: never loop on a dead cursor
-				if (!res?.entries?.length) break;
-				acc = [...res.entries, ...acc];
+				const fresh = (res?.entries ?? []).filter(e => !seen.has(e.id));
+				if (fresh.length === 0) break; // zero-progress page — fail soft
+				for (const e of fresh) seen.add(e.id);
+				acc = [...fresh, ...acc];
 				// P0-3: the daemon's explicit anchor wins — on a fully-
 				// overlapped page it still moves the cursor, so the loop
 				// makes monotone progress instead of spinning in place.
-				const olderId: string | null = res.nextBeforeId ?? res.entries[0]?.id ?? null;
+				const olderId: string | null = res.nextBeforeId ?? fresh[0]?.id ?? null;
 				if (olderId === null || olderId === beforeId) break;
 				beforeId = olderId;
 				if (!res.hasMore || res.remaining <= 0) break;
