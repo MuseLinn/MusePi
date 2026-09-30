@@ -749,6 +749,30 @@
 	color: var(--color-danger);
 }
 
+/* Two-line preset menu item (dsh mode-menu parity): the name row keeps the
+ * base layout; the description rides a full-width second line in muted small
+ * text, spanning under the name + trailing check. */
+.gui-view-opt--desc {
+	flex-wrap: wrap;
+	row-gap: 1px;
+}
+
+.gui-view-opt-desc {
+	flex-basis: 100%;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.45;
+	color: var(--color-text-faint);
+}
+
+.gui-view-opt--desc:hover .gui-view-opt-desc,
+.gui-view-opt--active .gui-view-opt-desc {
+	color: color-mix(in oklab, currentColor 55%, var(--color-text-faint));
+}
+
 /* ── Settings: model / provider management ─────────────────────────────── */
 
 .gui-settings-reset {
@@ -2393,16 +2417,18 @@
 }
 
 /* Pending-message queue chip (TUI /queue parity): shown while the agent
- * works and messages are queued behind the current turn. */
+ * works and messages are queued behind the current turn. Material (glass
+ * fill + rim + sheen + hover lift) comes from the footer-pill family in
+ * gui-composer.css — 批次 C1: this file only carries the accent state
+ * colour and its tinted wash. */
 .gui-queue-chip {
 	display: inline-flex;
 	align-items: center;
 	gap: 4px;
 	padding: 2px 8px;
-	border: 1px solid color-mix(in oklab, var(--color-accent) 30%, transparent);
 	border-radius: 999px;
-	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
 	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 	font-family: inherit;
 	font-size: 11px;
 	font-weight: 600;
@@ -2411,7 +2437,7 @@
 }
 
 .gui-queue-chip--open {
-	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
 }
 
 /* Editable pending-queue panel (kimi-code parity): sits above the input
@@ -3354,6 +3380,120 @@ body.gui-resizing {
 	max-width: 21em;
 }
 
+/* Split columns (dsh 0.2.0 two-column parity): one DndContext spans both
+ * column zones; each column is an independent strip + body stack. */
+.gui-pane-columns {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+.gui-pane-col {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+}
+
+.gui-pane-col--second {
+	border-left: 1px solid var(--border);
+}
+
+.gui-pane-col--over {
+	background: color-mix(in oklab, var(--color-text) 4%, transparent);
+	border-radius: var(--radius-md);
+}
+
+.gui-pane-col-head {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+	min-width: 0;
+	padding: 4px 6px 2px 10px;
+}
+
+/* dsh TabStrip parity: the chips box is the strip's only shrinking part;
+ * the add control and chrome keep their width at the row's end. */
+.gui-pane-col-strip {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+.gui-pane-col-tools {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex-shrink: 0;
+}
+
+/* Single-column body wrapper: hosts the right-half split drop zone (dsh
+ * dock-zone parity). Flex chain identical to the bare body so the browser
+ * slot / trajectory height contracts are untouched. */
+.gui-pane-body-wrap {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+}
+
+/* Drag-to-split target: armed only while a tab drags (the DndContext arms
+ * it via `disabled`, so it never swallows pointer events at rest). */
+.gui-pane-split-zone {
+	display: none;
+}
+
+.gui-pane-split-zone--active {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	bottom: 8px;
+	z-index: 5;
+	display: flex;
+	width: 45%;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	border: 1.5px dashed color-mix(in oklab, var(--color-accent) 45%, transparent);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-accent) 5%, transparent);
+	color: var(--color-text-muted);
+	pointer-events: none;
+}
+
+.gui-pane-split-zone--over {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	color: var(--color-accent);
+}
+
+.gui-pane-split-zone-icon {
+	display: inline-flex;
+}
+
+.gui-pane-split-zone-label {
+	margin: 0;
+	font-size: var(--ui-font-size-xs);
+}
+
+.gui-pane-tab-empty--clickable {
+	cursor: pointer;
+	border: none;
+	width: 100%;
+	background: transparent;
+	font: inherit;
+}
+
+.gui-pane-tab-empty--clickable:hover .gui-pane-tab-empty-icon {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+}
+
 .gui-pane-tool {
 	display: inline-flex;
 	align-items: center;
@@ -4290,6 +4430,87 @@ body.gui-resizing {
 	border-radius: var(--radius-lg);
 	background: color-mix(in oklab, var(--color-surface-raised) 60%, transparent);
 	margin-bottom: 8px;
+}
+
+/* ── Settings: 预设页分组卡片 + 「查看配置」只读视图 ─────────────────────
+ * 样式契约(液态玻璃批次规范 gui-design.md §5s):
+ *  - 分组标题/卡片本体零新视觉 token——卡片复用上方 .gui-agent-card(L1
+ *    卡:玻璃底 color-mix surface-raised + 缘 var(--border)),默认高亮沿用
+ *    卡片行既有的 accent 描边 + check 图标;
+ *  - 只读视图各段(.gui-modes-view-section-title 等)只用既有的 text/size
+ *    token,诊断条用 danger/muted 语义色,层级不超过 L1。 */
+.gui-modes-group-title {
+	margin-top: 14px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text-faint);
+	letter-spacing: 0.04em;
+}
+.gui-modes-view-warn {
+	margin-bottom: 6px;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+}
+.gui-modes-view-section-title {
+	margin-top: 14px;
+	margin-bottom: 6px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	color: var(--color-text-faint);
+	letter-spacing: 0.04em;
+}
+.gui-modes-chain {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.gui-modes-chain-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 8px;
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
+}
+.gui-modes-chain-tag {
+	flex-shrink: 0;
+	font-size: 10px;
+	color: var(--color-text-faint);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	padding: 0 4px;
+}
+.gui-modes-prompt-block {
+	margin-bottom: 8px;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	background: color-mix(in oklab, var(--color-surface-raised) 45%, transparent);
+}
+.gui-modes-prompt-text {
+	margin-top: 4px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.6;
+	color: var(--color-text-muted);
+}
+.gui-modes-kv {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 3px 0;
+	font-size: var(--ui-font-size-xs);
+}
+.gui-modes-kv-key {
+	flex-shrink: 0;
+	min-width: 140px;
+	color: var(--color-text-faint);
+}
+.gui-modes-kv-val {
+	min-width: 0;
+	word-break: break-all;
+	color: var(--color-text-muted);
 }
 
 /* ── Settings: memory maintenance card (memory.status + actions) ────── */

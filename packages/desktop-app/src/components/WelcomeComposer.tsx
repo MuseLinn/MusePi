@@ -9,6 +9,7 @@ import { ComposerFrame } from "../lib/composer-frame";
 import { isContextCommand } from "../lib/context-command";
 import { projectName } from "../lib/electron";
 import { readAutoResizeImages, readFileAsDataURL, resizeImageDataUrl } from "../lib/image-resize";
+import { type ModeLabelEntry, resolveModeDescription, resolveModeLabel } from "../lib/mode-label";
 import { projectLabels } from "../lib/project-label";
 import type { RpcClient } from "../lib/rpc";
 import { sfxFor } from "../lib/sfx";
@@ -228,7 +229,7 @@ export function WelcomeComposer({
 	onSelectReminder?(sessionId: string): void;
 	onMarkAllRead?(): void;
 	/** 预设(mode)chip 选项(项目行旁)。 */
-	modes?: { id: string; label: string }[] | null;
+	modes?: ModeLabelEntry[] | null;
 	modeId?: string | null;
 	onModeChange?(id: string | null): void;
 	/** M3.7a design 模式内联形态(v2 修订,§2.4):mode chip 选中「设计」时
@@ -1630,31 +1631,35 @@ export function WelcomeComposer({
 										aria-label={t("modes title")}
 									>
 										<Icon name="stack" className="h-3.5 w-3.5" />
-										<span className="max-w-[160px] truncate">
-											{modes.find(m => m.id === activeModeId)?.label ?? activeModeId}
-										</span>
+										<span className="max-w-[160px] truncate">{resolveModeLabel(activeModeId, modes)}</span>
 										<Icon name="arrow-down-s" className="h-3 w-3 opacity-60" />
 									</button>
 									{renderPresetMenu(
 										<>
 											{/* 无“默认(无预设)”:modeId 恒非 null(默认 work),
 											 * 与 DSH 一致——每次新建都带一个预设。 */}
-											{modes.map(m => (
-												<button
-													key={m.id}
-													type="button"
-													className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}`}
-													onClick={() => {
-														onModeChange?.(m.id);
-														setPresetOpen(false);
-													}}
-												>
-													<span className="min-w-0 flex-1 truncate">{m.label}</span>
-													{activeModeId === m.id && (
-														<Icon name="check" className="h-3 w-3 flex-shrink-0" />
-													)}
-												</button>
-											))}
+											{modes.map(m => {
+												const desc = resolveModeDescription(m.id);
+												return (
+													<button
+														key={m.id}
+														type="button"
+														className={`gui-view-opt${activeModeId === m.id ? " gui-view-opt--active" : ""}${desc ? " gui-view-opt--desc" : ""}`}
+														onClick={() => {
+															onModeChange?.(m.id);
+															setPresetOpen(false);
+														}}
+													>
+														<span className="min-w-0 flex-1 truncate">
+															{resolveModeLabel(m.id, modes)}
+														</span>
+														{activeModeId === m.id && (
+															<Icon name="check" className="h-3 w-3 flex-shrink-0" />
+														)}
+														{desc && <span className="gui-view-opt-desc">{desc}</span>}
+													</button>
+												);
+											})}
 										</>,
 									)}
 								</div>

@@ -1,8 +1,8 @@
 import { t } from "@musepi/client-core";
 import { SlidingNumber } from "@musepi/client-core/src/lib/sliding-number";
 import { CountUp } from "@musepi/client-core/src/widgets/count-up";
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useId, useState } from "react";
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { Icon } from "../vendor/oc-icons";
 
@@ -164,6 +164,12 @@ export function ContextRing({
 	const radius = 8;
 	const circumference = 2 * Math.PI * radius;
 	const dash = (clamped / 100) * circumference;
+	// Liquid-glass ring (user 2026-09-29): the RING ITSELF is the material —
+	// a thicker arc carrying a tone-gradient stroke + a soft chromatic glow,
+	// over a frosted track. The button around it stays a bare hit target, not
+	// a glass icon (that reading was the earlier miss).
+	const gradId = `ctx-ring-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+	const strokeWidth = 3.4;
 
 	const fmtTokens = (n: number | null | undefined): string => {
 		if (n == null) return "—";
@@ -183,18 +189,34 @@ export function ContextRing({
 				onClick={() => setOpen(v => !v)}
 			>
 				<svg width="20" height="20" viewBox="0 0 20 20" className="gui-context-ring-svg">
-					<circle cx="10" cy="10" r={radius} fill="none" stroke="var(--border)" strokeWidth="2.5" />
+					<defs>
+						<linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+							<stop offset="0%" stopColor={`color-mix(in srgb, ${color} 45%, white)`} />
+							<stop offset="100%" stopColor={color} />
+						</linearGradient>
+					</defs>
+					{/* Frosted glass track: two hairlines (rim + inner wash) read
+					 *  as material without a filled disc behind the hole. */}
 					<circle
 						cx="10"
 						cy="10"
 						r={radius}
 						fill="none"
-						stroke={color}
-						strokeWidth="2.5"
+						stroke="color-mix(in oklab, var(--color-text) 13%, transparent)"
+						strokeWidth={strokeWidth}
+					/>
+					<circle
+						cx="10"
+						cy="10"
+						r={radius}
+						fill="none"
+						stroke={`url(#${gradId})`}
+						strokeWidth={strokeWidth}
 						strokeLinecap="round"
 						strokeDasharray={`${dash} ${circumference - dash}`}
 						transform="rotate(-90 10 10)"
 						className="gui-context-ring-arc"
+						style={{ "--ring-glow": `color-mix(in srgb, ${color} 60%, transparent)` } as CSSProperties}
 					/>
 				</svg>
 			</button>

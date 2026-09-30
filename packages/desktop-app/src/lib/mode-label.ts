@@ -7,8 +7,8 @@ export interface ModeLabelEntry {
 }
 
 /**
- * 会话预设取名链 — ContextPanel 右栏头部与 SessionHoverCard 悬浮卡共用，
- * 两处必须永远显示同一个名字：
+ * 会话预设取名链 — ContextPanel 右栏头部、SessionHoverCard 悬浮卡与
+ * WelcomeComposer 预设 chip/菜单三处共用，永远显示同一个名字：
  *
  * 1. 内置预设（work/chat/creator/design）走 i18n `mode {id}` 词表（daemon
  *    端已本地化）；
@@ -32,4 +32,17 @@ export function resolveModeLabel(
 	if (label !== key) return label;
 	const entry = catalog?.find(m => m.id === id);
 	return entry?.label?.trim() ? entry.label.trim() : t("default mode");
+}
+
+/**
+ * 预设一句话描述 — 预设 chip 菜单（dsh 模式菜单 parity：名称 + 描述两行）。
+ * 与 {@link resolveModeLabel} 同链：`mode {id} description` 词表命中即返回；
+ * 回显 key（用户/插件预设未收录）返回 null，菜单项退化为单行名称。
+ */
+export function resolveModeDescription(modeId: string | null | undefined): string | null {
+	const id = (modeId ?? "").trim();
+	if (!id) return null;
+	const key = `mode ${id} description` as TranslationKey;
+	const text = t(key);
+	return text !== key ? text : null;
 }

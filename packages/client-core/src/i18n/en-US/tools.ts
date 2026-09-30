@@ -308,6 +308,7 @@ export const tools = {
 	"browser empty tab": "New Tab",
 	"browser new tab": "New tab",
 	"browser close tab": "Close tab",
+	"browser duplicate tab": "Duplicate tab",
 	"browser copy url": "Copy URL",
 	"browser copy url done": "URL copied",
 	"browser open in system": "Open in system browser",

@@ -18,8 +18,10 @@ import {
 	FolderPlus,
 	Pencil,
 	Presentation,
+	Quote,
 	RefreshCw,
 	Save,
+	ScanEye,
 	Search,
 } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
@@ -27,7 +29,13 @@ import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 // Import order below is alphabetical by module path (biome).
-import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../lib/git-prefs";
+import {
+	onGitPrefsChanged,
+	readShowHidden,
+	readShowIgnored,
+	writeShowHidden,
+	writeShowIgnored,
+} from "../lib/git-prefs";
 import { useChatHighlight } from "../lib/highlight";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -355,6 +363,7 @@ export function FilePane({
 	activeFile = null,
 	onOpenFile,
 	onDirty,
+	onShowTree,
 }: {
 	rpc: RpcClient;
 	cwd: string;
@@ -370,6 +379,10 @@ export function FilePane({
 	 *  panel tab (dot + close guard). Reported with the same path the pane
 	 *  passed to onOpenFile, so the strip can find its tab. */
 	onDirty?: (path: string, dirty: boolean) => void;
+	/** Panel-level file instances split the tree and the preview into two
+	 *  tabs: the preview's back button shows the tree tab instead of
+	 *  unmounting its own preview (dsh tree/preview tab parity). */
+	onShowTree?: () => void;
 }): ReactNode {
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -387,6 +400,9 @@ export function FilePane({
 	/** List .gitignore'd paths too (shared pref with the Git tab / changes
 	 *  view; on by default — see lib/git-prefs). */
 	const [showIgnored, setShowIgnored] = useState<boolean>(() => readShowIgnored());
+	/** List dotfiles too. The daemon scan always returns them (`hidden:
+	 *  true`), so hiding is a pure client-side filter (lib/git-prefs). */
+	const [showHidden, setShowHidden] = useState<boolean>(() => readShowHidden());
 	const [query, setQuery] = useState("");
 	const [selectedPath, setSelectedPath] = useState<string | null>(null);
 	const [editing, setEditing] = useState<Editing | null>(null);
@@ -405,6 +421,10 @@ export function FilePane({
 	/** The tree path the current preview registered under (onOpenFile arg) —
 	 *  the key onDirty reports so the strip can find the tab. */
 	const previewRegPathRef = useRef<string | null>(null);
+	/** Ref mirror of `preview.path` so the unmount cleanup can stash a dirty
+	 *  editor buffer without depending on `preview` (which would re-arm the
+	 *  cleanup on every preview switch). */
+	const previewPathRef = useRef<string | null>(null);
 
 	// File instances live in the PANEL tab strip (tab-primary, docs §3.3.2):
 	// this pane is the body of whichever `files:<path>` tab is active, so it
@@ -439,8 +459,15 @@ export function FilePane({
 		void load();
 	}, [load]);
 
-	// The Git tab / changes view write the same pref — follow it here.
-	useEffect(() => onGitPrefsChanged(() => setShowIgnored(readShowIgnored())), []);
+	// The Git tab / changes view write the same prefs — follow them here.
+	useEffect(
+		() =>
+			onGitPrefsChanged(() => {
+				setShowIgnored(readShowIgnored());
+				setShowHidden(readShowHidden());
+			}),
+		[],
+	);
 
 	// Track the list viewport height for virtualization. Deps deliberately
 	// include the things that (un)mount the list: the first run bails while
@@ -474,7 +501,27 @@ export function FilePane({
 	// cache holds the last buffer per path; a saved file drops its entry.
 	const bufferCacheRef = useRef(new Map<string, { text: string; saved: string }>());
 
-	const tree = useMemo(() => compressTree(buildTree(entries ?? [])), [entries]);
+	// Tree↔file tab switches unmount this pane (renderPanelBody mounts only
+	// the active tab). Stash a dirty editor buffer keyed by the preview path
+	// so the re-mounted pane restores the unsaved text instead of disk bytes;
+	// openPreview reads the cache back through the normal restore path.
+	useEffect(() => {
+		previewPathRef.current = preview?.path ?? null;
+	}, [preview]);
+	useEffect(() => {
+		return () => {
+			const buf = editBufRef.current;
+			const path = previewPathRef.current;
+			if (buf && buf.text !== buf.saved && path) bufferCacheRef.current.set(path, buf);
+		};
+	}, []);
+
+	const tree = useMemo(() => {
+		// Dotfile filter is client-side only: the daemon scan always returns
+		// hidden entries, so the toggle just narrows what the tree builds.
+		const visible = showHidden ? (entries ?? []) : (entries ?? []).filter(e => !e.name.startsWith("."));
+		return compressTree(buildTree(visible));
+	}, [entries, showHidden]);
 	// Collapsed by default (openchamber parity): a fresh Files view is a folder
 	// list, not an expanded dump — the expanded form is what reads as noise.
 	// Seeded once from the first tree that carries directories, so a later
@@ -534,12 +581,16 @@ export function FilePane({
 			// reveals (artifact cards) may carry absolute paths — don't join.
 			const absPath = entry.path.startsWith("/") ? entry.path : `${cwd}/${entry.path}`;
 			// A re-open of the same file (tree click on the tab already open)
-			// keeps its unsaved buffer; anything else starts from disk.
+			// keeps its unsaved buffer; anything else starts from disk. A
+			// DIRTY cached buffer also re-enters the editor straight away
+			// (pane unmount across a tree↔file tab switch): the user comes
+			// back to their unsaved text, not a silent reset to disk bytes.
 			const buffer = bufferCacheRef.current.get(absPath) ?? null;
 			if (!buffer) bufferCacheRef.current.delete(absPath);
 			// If the editor opened straight into a freshly created file, a
 			// tree click before any save would otherwise drop its content.
 			const enterEdit = opts?.enterEdit ?? false;
+			const restoreEdit = enterEdit || (buffer !== null && buffer.text !== buffer.saved);
 			try {
 				const res = await rpc.request<{ base64?: string; size?: number; mime?: string; error?: string }>(
 					"fs.readBytes",
@@ -592,7 +643,7 @@ export function FilePane({
 						}
 					}
 					setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, text, raw });
-					if (enterEdit) setEdit(buffer ?? { text, saved: text });
+					if (restoreEdit) setEdit(buffer ?? { text, saved: text });
 					return true;
 				}
 				if (res.mime?.startsWith("image/")) {
@@ -902,6 +953,22 @@ export function FilePane({
 		const closed = isDir && collapsed.has(entry.path);
 		const selected = selectedPath === entry.path;
 		const indent = (depth - 1) * 14;
+		// dsh rc.2 ui-open-in-app parity: a hover action opens the entry in
+		// the OS default app (folder → Explorer/Finder, file → default app).
+		const openInApp = (
+			<button
+				type="button"
+				className="gui-filepane-open-btn"
+				title={t("open with app")}
+				aria-label={t("open with app")}
+				onClick={ev => {
+					ev.stopPropagation();
+					void window.electronAPI?.openWith("", `${cwd}/${entry.path}`);
+				}}
+			>
+				<ExternalLink size={12} />
+			</button>
+		);
 		if (isDir) {
 			return (
 				<li
@@ -929,6 +996,7 @@ export function FilePane({
 							{node.label}
 						</span>
 					</button>
+					{openInApp}
 				</li>
 			);
 		}
@@ -961,6 +1029,7 @@ export function FilePane({
 						{node.label}
 					</span>
 				</button>
+				{openInApp}
 			</li>
 		);
 	};
@@ -1036,6 +1105,20 @@ export function FilePane({
 					>
 						{showIgnored ? <Eye size={12} /> : <EyeOff size={12} />}
 					</button>
+					<button
+						className={`gui-btn gui-btn-icon${showHidden ? " gui-btn-icon--active" : ""}`}
+						type="button"
+						title={t("show hidden files")}
+						aria-label={t("show hidden files")}
+						aria-pressed={showHidden}
+						onClick={() => {
+							const next = !showHidden;
+							setShowHidden(next);
+							writeShowHidden(next);
+						}}
+					>
+						{showHidden ? <ScanEye size={12} /> : <EyeOff size={12} />}
+					</button>
 					<button className="gui-btn gui-btn-icon" type="button" onClick={() => void load()} title={t("refresh")}>
 						<RefreshCw size={12} />
 					</button>
@@ -1074,7 +1157,15 @@ export function FilePane({
 								type="button"
 								className="gui-btn gui-btn-icon"
 								title={t("back to files")}
-								onClick={() => void exitEdit().then(() => setPreview(null))}
+								onClick={() => {
+									// Panel-level file instances split tree and
+									// preview into two tabs (dsh parity): back
+									// activates the tree tab. Standalone (legacy
+									// sidebar) usage has no tree tab — drop the
+									// preview inside this pane instead.
+									if (onShowTree) onShowTree();
+									else void exitEdit().then(() => setPreview(null));
+								}}
 							>
 								<ArrowLeft size={12} />
 							</button>
@@ -1110,6 +1201,24 @@ export function FilePane({
 									}}
 								>
 									<ClipboardCopy size={12} />
+								</button>
+								<button
+									type="button"
+									className="gui-btn gui-btn-icon"
+									title={t("cite file in composer")}
+									onClick={() => {
+										// Cite the workspace-relative path into the
+										// chat draft (shared insert channel — the
+										// composer listens window-wide).
+										const rel = preview.path.startsWith(`${cwd}/`)
+											? preview.path.slice(cwd.length + 1)
+											: preview.path;
+										window.dispatchEvent(
+											new CustomEvent("musepi-gui-insert-text", { detail: { text: `@${rel}` } }),
+										);
+									}}
+								>
+									<Quote size={12} />
 								</button>
 								<button
 									type="button"

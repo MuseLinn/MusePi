@@ -443,6 +443,97 @@ turn
 - 弹窗卡片一律 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` 底 + rim + `--glass-sheen` + `--glass-shadow` 双层——`.gui-dialog` 已达标。**TaskModal 与 palette 卡是实底欠账**：随 M1.10 批次 C 迁移（决策⑧；玻璃只给容器浮层，卡内内容保持纸面感）。两处卡规则处均以 TODO 注释立欠账。
 - 降级三件套照 §5s：`gui-motion-off` / `prefers-reduced-motion` → 出场免动画、无中间帧（全部弹窗组件均带该规则；onboarding 为先例）；`[data-platform="win32"]` blur 归零、sheen+rim 补强——Windows 玻璃 scrim 观感验收按 M1.10 §6.3 双平台截图流程走。
 
+## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；源 `docs/review/0.5.0-promo-gap-analysis.md` 第三版 + 交互原型 `docs/review/tab-primary-prototype.html` v2）
+
+> 背景：tab-primary 模型（`lib/panel-tabs.ts`，openchamber ContextPanel parity——一条标签带容纳所有表面的视图，rail 只是 launcher）自 2026-09-15 已在架构层落地，但交互层一直缺位：rail 点击开出的是无 target 的占位标签（身份恒 `surface::`），每个表面永远只有一个 rail 开的标签，标签带退化成 rail 的一对一镜像。M1.12 补的就是交互层，模型层不动。**中心浮面多表面容器已评估并否决**（2026-09-29，小袁总）：产品维持 codex 式布局——主会话独占中心浮面，终端/代码/看板/预览等附加表面全部由右侧面板标签承载。
+
+### 布局契约（不变）
+
+面板内容在左，44px `RightRail` 贴客户端工作区右缘（`ChatView.tsx` ~2507，与面板互为兄弟节点）。结构零改动，本章只加交互、删一个视觉态。
+
+### rail 语义——纯 launcher
+
+- **取消常态高亮**。rail 不再随活动标签保持点亮（仅悬停高亮）。"当前哪个标签在活动"只由标签带表达。理由（小袁总，原型评审）：点亮的 rail 图标读起来像实例标签，而它不是。
+- 单击 = open-or-focus：该表面已有标签则聚焦最近一个；否则开其占位标签。活动表面的 rail 项在面板已开时再点 = 收起面板（沿用现有 RightRail 语义，Chrome 侧边栏式），不变。
+- **中键或 ⌘/Ctrl+点击 = 新实例**（永不聚焦）：新开一个该表面标签并立即选 target（文件→目录选择、笔记→新建、浏览器→地址输入、其他→表面默认）。修饰键分支不得触发收起面板。
+- 键盘 `Mod+1..N` 维持现有 jump 语义（focus-or-open）；本批次不加新实例快捷键。
+
+### 标签带契约
+
+- 身份仍是 `surface::target`（`panelTabId`，`lib/panel-tabs.ts:64`）：target 为实例地址（文件路径 / note id / URL）。`surface::`（空 target）仍是该表面的占位标签——无打开标签时 rail 点开占位，首个真实打开替换占位（既有语义，不变）。
+- 标签带头部「**+**」开新实例菜单，按表面分组：每项带表面图标 + 新实例动作与其 target 选择器（文件→目录、笔记→新建、浏览器→地址）。位置：标签带第一个子节点，常驻不被挤出（标签在其下横向滚动）。
+- 每表面预算维持 `PANEL_TABS_MAX_PER_SURFACE = 12`（openchamber parity）：逐出消耗该表面最旧的非活动标签。「+」遇预算打满时聚焦最旧标签并 toast 提示，不静默逐出。
+- 溢出横向滚动，沿用现有左右羽化（`--gui-fade-x`，gui-chat.css horizontal 段）；标签带永不折行。
+
+### 标签交互
+
+- **右键菜单**：复制标签（同 surface+target，标签名加「（副本）」式后缀，经独立 `dedupeKey`）、关闭其他标签、关闭。菜单动效与材质走 §5u（L2 float 配方 + `--spring-liquid`）。
+- 拖拽排序沿用现有 dnd-kit 实现；drop 只重排，不改变表面归属。
+- 每个标签的关闭钮（×）：悬停显现，沿用现有样式；关闭活动标签激活其右邻（既有行为）。
+
+### 动效
+
+全部新增走 §5s 阶梯：标签打开 = 从发起处（rail 图标 / + / 菜单项）共享元素生长 + `--spring-liquid`；focus-or-open 闪烁 = 700ms accent-muted 渐隐（原型 `flash` 关键帧先例）；新实例菜单 = §5u 进出场。不新增 token、曲线或 scrim。
+
+### 验收
+
+- 同表面多实例端到端可用：两个不同目录的文件标签、两个不同 URL 的浏览器标签、复制的笔记标签——各有独立 `surface::target` 身份与内容。
+- 任意状态下 rail 零常态高亮、仅悬停高亮；单击/中键/⌘点击语义符合上文。
+- 「+」菜单可达且可键盘操作（↑↓ Enter Esc，焦点回标签带，`use-floating-menu` 四态契约，M2-2.6 AttachMenu 先例）。
+- 右键菜单复制/关闭其他/关闭全部可用；预算逐出以 toast  surfaced，不静默。
+- desktop-app biome + tsgo 全绿；i18n key 落 rail/panel 域文件，en 侧 `as const satisfies Record<ZhKey, string>` 配对；契约测试覆盖 id 生成与 open-with-target 路径（禁静态 echo）。
+
+### 实现锚点
+
+- `lib/panel-tabs.ts` / `lib/use-panel-tabs.ts`——模型；`open(descriptor)` 已接受 `target`/`dedupeKey`。预期模型零改动。
+- `ChatView.tsx:796-808`——`setActiveView` 是今天丢 target 的唯一收口；新实例流把 target 穿过去（或直接带 descriptor 调 `panelTabs.open`，`setActiveView` 只留 focus 路径）。
+- `components/RightRail.tsx`——删常态高亮；加 `onAuxClick` 中键与 meta/ctrl 修饰分支调新实例流。
+- `components/surface-tabs.tsx`（SurfaceTabStrip）——「+」按钮、右键菜单、复制/关闭其他动作。
+- 新实例 target 选择器复用 M2-2.6 plus-menu 的 picker 模式（目录选择 / 笔记新建 / 地址输入）——不另造浮层机制。
+
+## 5w. Composer 统计行：「性能与用量」丸条（M1.10 批次 C 增补，2026-09-29 批复；源 `.workbuddy/tasks/2026-09-29-m1.10c-composer-stats-pills.md`，dsh-v0.2.0-rc.1 StatsPills 对标）
+
+> 范围：一条跟随 composer 常驻的统计行——时间/用量两颗丸，把会话性能与 token 账目摆在输入框旁，吸收 dsh 0.2.0 的 composer-dock 统计，**零新增统计 RPC**。
+
+### 布局与落点（决策①——方案 A）
+
+- `ContextRing` 留在原胶囊排（`footerRight`）不动。统计行是 composer footer 排**下方的一条独立新行**，经 `ComposerFrame` 新增的 `belowRow` 插槽渲染在输入卡磨砂面之外（与 `aboveRow` 对称），与 `footerRight` 同一网格右对齐；两颗丸都隐藏时该行零高度收拢。
+- 挂载跟着 composer 走（不挂聊天 transcript），transcript 滚动时数字保持可见——dsh `conversation.composer.dock` 同款。
+
+### 玻璃与动效（§5s 层级，零新 token）
+
+- 丸休眠态：**L1 card**——基材+缘取自 footer-pill 家族配方（`.gui-stats-pill` 加入 gui-composer.css 的家族选择器组；状态由颜色承载，遵守批次 C1 纪律）。
+- 浮层：**L2 float** 走唯一 `.gui-menu-popup` 配方（`useFloatingMenu`，两阶段仅 transform 入场）——与批次 C2 同一收口契约；丸不得自声明 background/backdrop-filter/box-shadow。
+- 动效：丸入场 180ms `var(--spring)`（§5s 时长阶梯的 chip 档）；浮层出入走共享菜单两阶段；backdrop-filter 表面禁 opacity 动画。
+
+### 两颗丸（决策②）
+
+- **时间丸**——`N 轮 M 步 · tok/s`（轮数 · 步数 · 解码速度）。popover 明细行：模型用时（请求墙钟合计）/ 工具用时（tool-call→tool-result 墙钟合计）/ TTFT（均值）/ 输出速度——有数据才开行；窗口**完全无计时数据**时退化为纯读数、不开 popover（dsh 契约）。
+- **用量丸**——`总 tok · 缓存命中 %`。popover：input / cacheRead / cacheWrite / output 精确分桶（cacheWrite 为 0 时该行消失，dsh 同款）。
+
+### 数据契约（决策③——零新 RPC）
+
+- **token 数字读 daemon 持久投影**：`session.contextUsage` 已返回 `usage { input, output, cacheRead, cacheWrite, totalTokens, cost, cacheHitRate }`（TUI `cache_hit` 同款，daemon 侧计算）。Composer 已为 ContextRing 轮询该 RPC——统计行消费同一份 state。总量 = input + cacheRead + cacheWrite + output（计费输入三桶 + 输出）。分页/压缩永不改写这些数字。
+- **时间/轮/步数字走可见窗口 fold**（`deriveWindowStats`，`packages/desktop-app/src/lib/derive-window-stats.ts`）：daemon 没有逐轮计时投影，fold 回答「屏幕上有什么」，字段名刻意与 dsh `WindowStats` 同形，便于日后整体替换。
+- **Fold 口径（契约测试守在 `packages/desktop-app/test/derive-window-stats.test.ts`）**：
+  - `turns` = 窗口内非 synthetic 用户消息数；`steps` = **已 settled** 的 assistant 消息数（有 `stopReason`——流式中的条目还不算一步）。
+  - `llmMs` = 已 settled 步的 `AssistantMessage.duration` 之和；`ttftMs`/`ttftSteps` = 记录了 ttft 的步的和/计数。
+  - `decodeMs` = 兼有 duration 与 ttft 的步的 `max(0, duration − ttft)` 之和；`decodeTokens` = 这些步的 `usage.output` 之和；展示速度 = `decodeTokens / (decodeMs / 1000)`。
+  - `toolMs` = `toolCallId` 配对且**双方都在窗口内**的 `max(0, toolResult.timestamp − 宿主 assistant.timestamp)` 之和；配对不全的不计入。
+- **性能边界**：fold 对可见尾部 O(n)（≤ ~200 条）。允许每渲染重算（字段读取很便宜），但行组件以派生数字 + usage 身份做 `memo()` 门控——流式 delta 不改任何 settled 数字，比较器判等即不重渲染（契约测试守护）。
+
+### 简洁/详细两档（决策④）
+
+- 设置项「性能与用量」（设置 → 外观 → 聊天分区 `ChatSection`）：Segmented **简洁 / 详细**，渲染端 localStorage 键 `musepi-gui-stats-mode`（默认 `detailed`）+ `musepi-stats-mode-changed` 窗口事件——与 `musepi-gui-chat-*` 同款偏好模式（GUI 专属偏好，零 daemon 改动）。
+- **详细**（默认）：两颗丸带 popover，如上。
+- **简洁**：只剩两个纯读数——解码速度与缓存命中——且各有数据才显示；无 popover、无计数。两者皆空 → 整行不渲染。
+
+### 交互契约
+
+- 两个 popover 共享一个 open 位——开一个关另一个（`useFloatingMenu` 模块级互斥已全应用强制）。
+- 全空（无步数、无 token）→ 整行隐藏；纯用户消息的窗口只把计数丸显示为纯读数。
+- 数字不随分页/压缩跳动：token 数字有投影背书；窗口数字只在窗口 settled 内容变化时变化。
+
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

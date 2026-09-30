@@ -312,7 +312,6 @@ export function RightRail({
 								key={id}
 								id={id}
 								s={s}
-								active={tool === id}
 								orderNumber={index + 1}
 								revealNumbers={revealNumbers}
 								badgeCount={id === "git" ? gitChanges : null}
@@ -327,10 +326,9 @@ export function RightRail({
 					<button
 						key={`${item.extensionId}:${item.slot}`}
 						type="button"
-						className={`gui-right-rail-btn${tool === id ? " gui-right-rail-btn--active" : ""}`}
+						className="gui-right-rail-btn"
 						title={item.label ?? item.slot}
 						aria-label={item.label ?? item.slot}
-						aria-pressed={tool === id}
 						onClick={() => onSelect(id)}
 					>
 						<Icon name="plug" className="h-4 w-4" />
@@ -386,7 +384,7 @@ export function RightRail({
 									key={id}
 									type="button"
 									role="menuitem"
-									className={`gui-right-rail-overflow-item${tool === id ? " gui-right-rail-overflow-item--active" : ""}`}
+									className="gui-right-rail-overflow-item"
 									onClick={() => {
 										onSelect(id);
 										setOverflowOpen(false);
@@ -429,10 +427,12 @@ export function RightRail({
 // or inputs, and the 8px activation constraint keeps a click a click. The
 // badge corner shows either the live git changed-files count or, while the
 // ⌘/Ctrl modifier is held, the digit that jumps to this surface.
+// Launcher semantics (dsh 0.2.0 parity, user 2026-09-29): a rail button
+// OPENS its surface (open-or-focus via upsert) — it is not bound to the tab
+// instance, so it carries no active emphasis: hover + tooltip + badges only.
 function SortableRailItem({
 	id,
 	s,
-	active,
 	orderNumber,
 	revealNumbers,
 	badgeCount,
@@ -442,7 +442,6 @@ function SortableRailItem({
 }: {
 	id: string;
 	s: SurfaceDescriptor;
-	active: boolean;
 	orderNumber: number;
 	revealNumbers: boolean;
 	badgeCount: number | null;
@@ -464,9 +463,8 @@ function SortableRailItem({
 				type="button"
 				{...attributes}
 				{...listeners}
-				className={`gui-right-rail-btn${active ? " gui-right-rail-btn--active" : ""}`}
+				className="gui-right-rail-btn"
 				aria-label={badgeAria ? `${label}，${badgeAria}` : label}
-				aria-pressed={active}
 				onClick={() => onSelect(id)}
 				onMouseEnter={e => onHover(e.currentTarget, id)}
 				onMouseLeave={() => onHover(null, null)}

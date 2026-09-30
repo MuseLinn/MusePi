@@ -300,6 +300,7 @@ export const tools = {
 	"browser empty tab": "新标签页",
 	"browser new tab": "新建标签",
 	"browser close tab": "关闭标签页",
+	"browser duplicate tab": "复制标签页",
 	"browser copy url": "复制网址",
 	"browser copy url done": "已复制网址",
 	"browser open in system": "在系统浏览器打开",

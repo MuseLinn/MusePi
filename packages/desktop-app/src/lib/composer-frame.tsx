@@ -318,6 +318,7 @@ export function ComposerFrame({
 	onAddAttachment,
 	onAnnotated,
 	aboveRow,
+	belowRow,
 	footerLeft,
 	footerRight,
 	hero = false,
@@ -368,6 +369,10 @@ export function ComposerFrame({
 	 *  box itself stays clean (user direction: status belongs above the
 	 *  input, not inside it). */
 	aboveRow?: ReactNode;
+	/** Row docked BELOW the framed surface (the §5w stats pill line): the
+	 *  pills are L1 glass on the window backdrop, not children of the
+	 *  input card's frosted surface. */
+	belowRow?: ReactNode;
 	footerLeft: ReactNode;
 	footerRight: ReactNode;
 	/** Border-beam hero glow (welcome scene). */
@@ -574,6 +579,7 @@ export function ComposerFrame({
 				>
 					{frame}
 				</BorderBeam>
+				{belowRow}
 				{lightbox}
 			</>
 		);
@@ -581,6 +587,7 @@ export function ComposerFrame({
 		<>
 			{aboveRow}
 			{frame}
+			{belowRow}
 			{lightbox}
 		</>
 	);

@@ -10,6 +10,7 @@
  */
 
 const SHOW_IGNORED_KEY = "musepi-gui-git-show-ignored";
+const SHOW_HIDDEN_KEY = "musepi-gui-filepane-show-hidden";
 
 /** Fired after any git pref changes; live consumers re-read on it. */
 export const GIT_PREFS_EVENT = "omp-git-prefs-changed";
@@ -32,6 +33,28 @@ export function readShowIgnored(): boolean {
 export function writeShowIgnored(value: boolean): void {
 	try {
 		localStorage.setItem(SHOW_IGNORED_KEY, value ? "1" : "0");
+	} catch {
+		// storage unavailable — the in-memory state still drives this render
+	}
+	window.dispatchEvent(new CustomEvent(GIT_PREFS_EVENT));
+}
+
+/**
+ * Whether dotfiles (`.env`, `.gitignore`, …) are listed in the Files pane.
+ * Defaults to ON: the daemon scan already returns them (`hidden: true`), so
+ * hiding is the opt-in side of the toggle. Only an explicit "0" disables it.
+ */
+export function readShowHidden(): boolean {
+	try {
+		return localStorage.getItem(SHOW_HIDDEN_KEY) !== "0";
+	} catch {
+		return true;
+	}
+}
+
+export function writeShowHidden(value: boolean): void {
+	try {
+		localStorage.setItem(SHOW_HIDDEN_KEY, value ? "1" : "0");
 	} catch {
 		// storage unavailable — the in-memory state still drives this render
 	}

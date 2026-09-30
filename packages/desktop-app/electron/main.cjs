@@ -14,6 +14,15 @@
 "use strict";
 
 const { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, net, Notification, powerMonitor, screen, session, shell } = require("electron");
+// Host guard: if a broken/raced launcher shim executes this file under plain
+// Node, every destructured API above is undefined and the failure surfaces
+// somewhere deep and cryptic. Fail fast with a one-line diagnosis instead.
+if (!app) {
+	process.stderr.write(
+		"[main] electron app object unavailable — main.cjs must run under the Electron binary, not plain Node. Check the launcher shim (concurrent bun install can rewrite node_modules/.bin mid-run).\n",
+	);
+	process.exit(1);
+}
 const path = require("node:path");
 const os = require("node:os");
 const fs = require("node:fs");

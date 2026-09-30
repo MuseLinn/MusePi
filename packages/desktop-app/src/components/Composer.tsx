@@ -1,8 +1,10 @@
+import type { SessionEntry } from "@musepi/pi-wire";
 import type { KeyboardEvent, ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n/index.js";
 import { ComposerFrame } from "../lib/composer-frame";
 import { type ContextBreakdownView, isContextCommand } from "../lib/context-command";
+import { deriveWindowStats } from "../lib/derive-window-stats";
 import { tapFeedback } from "../lib/haptic";
 import type { PetMood, PetState } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
@@ -53,6 +55,7 @@ import { QueuePanel } from "./composer/queue-panel";
 import { QuoteCards } from "./composer/quote-cards";
 import { SessionModeToggles } from "./composer/session-mode-toggles";
 import { SlashCommandTip } from "./composer/slash-command-tip";
+import { StatsPillsRow, useStatsMode } from "./composer/stats-pills";
 import { QueueToggleChip, SwarmChip, TodoChip } from "./composer/status-chips";
 import { SwarmCardPreview } from "./composer/swarm-card-preview";
 import { TodoPanel } from "./composer/todo-panel";
@@ -129,6 +132,11 @@ export interface ComposerProps {
 	sessionId: string;
 	/** Session workspace root — feeds "@" file/folder completion. */
 	cwd?: string;
+	/** Visible chat window (snapshot entries) — feeds the §5w stats row's
+	 *  visible-window fold. The array identity changes on stream deltas; the
+	 *  fold re-derives cheaply and the memoized row only re-renders when the
+	 *  derived figures move. */
+	entries?: readonly SessionEntry[];
 	/** Current session thinking effort (snap.state.thinkingLevel). */
 	thinkingLevel?: string | null;
 	/** Configured selector state (auto vs pinned) — menu highlight. */
@@ -215,6 +223,7 @@ export function Composer({
 	rpc,
 	sessionId,
 	cwd,
+	entries,
 	thinkingLevel,
 	thinkingConfigLevel,
 	onSetThinking,
@@ -513,6 +522,14 @@ export function Composer({
 			document.removeEventListener("visibilitychange", onVis);
 		};
 	}, [rpc, sessionId, refreshUsage, working]);
+
+	// ── §5w stats row ── Visible-window fold (time figures) rides the chat
+	// window the caller passes; token figures reuse the durable
+	// `session.contextUsage` projection state above. The memoized row
+	// re-renders only when the derived figures move, so stream deltas on
+	// `entries` stay invisible to it.
+	const statsMode = useStatsMode();
+	const windowStats = useMemo(() => deriveWindowStats(entries ?? []), [entries]);
 
 	// ── Manual context compaction (TUI /compact parity) ────────────────────
 	// The ring shows usage; this is the escape hatch when it fills up. The
@@ -1834,6 +1851,7 @@ export function Composer({
 			{compacting && <CompactionStatusLine onCancel={cancelCompaction} />}
 			<ComposerFrame
 				flipAnchor="session"
+				belowRow={<StatsPillsRow stats={windowStats} usage={contextUsage?.usage ?? null} mode={statsMode} />}
 				onAnnotated={text => {
 					setText(prev => (prev ? `${prev}\n${text}` : text));
 					requestAnimationFrame(() => autosize(taRef.current));

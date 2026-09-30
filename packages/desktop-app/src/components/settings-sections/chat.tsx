@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { tapFeedback } from "../../lib/haptic";
 import { useChatHighlight } from "../../lib/highlight";
+import { STATS_MODE_EVENT, STATS_MODE_KEY } from "../composer/stats-pills";
 import { NumberStepper } from "./shared";
 
 /** Segmented option tables — module scope is fine, the labels are static
@@ -44,6 +45,12 @@ const TYPING_EFFECT_SEGMENTS: SegmentedOption<"typewriter" | "burst" | "shimmer"
 	{ value: "glitch", label: t("typing effect glitch") },
 	{ value: "flip", label: t("typing effect flip") },
 	{ value: "ink", label: t("typing effect ink") },
+];
+
+/** Composer stats row density (§5w) — same localStorage key the row reads. */
+const STATS_MODE_SEGMENTS: SegmentedOption<"detailed" | "compact">[] = [
+	{ value: "detailed", label: t("stats mode detailed") },
+	{ value: "compact", label: t("stats mode compact") },
 ];
 
 /** Small persisted toggle with a settings-row label (shared by the new tabs). */
@@ -256,6 +263,15 @@ export function ChatSection(): ReactNode {
 			}
 		},
 	);
+	// 性能与用量 (§5w) — density of the composer stats row; the same key the
+	// StatsPillsRow reads, and the companion event wakes its external store.
+	const [statsMode, setStatsMode] = useState<"detailed" | "compact">(() => {
+		try {
+			return localStorage.getItem(STATS_MODE_KEY) === "compact" ? "compact" : "detailed";
+		} catch {
+			return "detailed";
+		}
+	});
 	// Live previews re-render with the segments (mermaid svg/ascii + diff
 	// layout) — same renderers the transcript uses, sample content only.
 	const mermaidPreviewHtml = useMemo(() => renderMermaidHtml(MERMAID_SAMPLE, mermaidModeState), [mermaidModeState]);
@@ -495,6 +511,27 @@ export function ChatSection(): ReactNode {
 					storageKey="musepi-gui-chat-codehl"
 					onClass="gui-chat-plain-code"
 				/>
+				<div className="gui-settings-row">
+					<div>
+						<div className="gui-settings-row-label">{t("performance usage")}</div>
+						<div className="gui-settings-row-desc">{t("performance usage description")}</div>
+					</div>
+					<Segmented
+						ariaLabel={t("performance usage")}
+						value={statsMode}
+						options={STATS_MODE_SEGMENTS}
+						onChange={v => {
+							tapFeedback();
+							setStatsMode(v);
+							try {
+								localStorage.setItem(STATS_MODE_KEY, v);
+							} catch {
+								// ignore
+							}
+							window.dispatchEvent(new Event(STATS_MODE_EVENT));
+						}}
+					/>
+				</div>
 			</div>
 		</CodeHighlightProvider>
 	);

@@ -1,4 +1,14 @@
 import {
+	type CollisionDetection,
+	DndContext,
+	type DragEndEvent,
+	PointerSensor,
+	TouchSensor,
+	useDroppable,
+	useSensor,
+	useSensors,
+} from "@dnd-kit/core";
+import {
 	AgentsPanel,
 	latestWidgetFromEntries,
 	type ToolRenderHost,
@@ -13,7 +23,7 @@ import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElemen
 import { isElectron, openExternalUrl } from "../lib/electron";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
-import { panelTabId } from "../lib/panel-tabs";
+import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, maxPanelWidth } from "../lib/panel-width";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -34,7 +44,7 @@ import { NotesPane } from "./notes-pane";
 import { PanelTabsEmptyState } from "./panel-tabs-empty-state";
 import { StateIcon } from "./StateIcon";
 import { SubagentPanel } from "./SubagentPanel";
-import { SurfaceTabStrip } from "./surface-tabs";
+import { SurfaceTabStripSortable } from "./surface-tabs";
 import { TrajectoryView } from "./TrajectoryView";
 
 /** Electron <webview> tag (embedded browser): the DOM element exposes
@@ -625,6 +635,325 @@ export function ContextPanel({
 		[panelTabs, confirm],
 	);
 
+	// ── Split columns (dsh 0.2.0 two-column parity) ────────────────────
+	// One DndContext spans both column strips so a tab drags across
+	// columns; the drag-end routes same-column pairs to reorder and
+	// cross-column pairs (or column drop zones) to moveToColumn.
+	const splitSensors = useSensors(
+		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+	);
+	const tabsCol = (col: PanelColumn): PanelTab[] => tabsInColumn(panelTabs.tabs, col);
+	const tabForColumn = (col: PanelColumn): PanelTab | null => {
+		const colTabs = tabsCol(col);
+		const active = panelTabs.columnActive[col];
+		return colTabs.find(t => t.id === active) ?? colTabs[colTabs.length - 1] ?? null;
+	};
+	const onSplitDragEnd = (e: DragEndEvent): void => {
+		const active = String(e.active.id);
+		const over = e.over ? String(e.over.id) : null;
+		if (!over || active === over) return;
+		if (over === "panel-col-0" || over === "panel-col-1") {
+			panelTabs.moveToColumn(active, over === "panel-col-0" ? 0 : 1);
+			return;
+		}
+		const overTab = panelTabs.tabs.find(tb => tb.id === over);
+		const activeTab = panelTabs.tabs.find(tb => tb.id === active);
+		if (!overTab || !activeTab) return;
+		if (overTab.column === activeTab.column) panelTabs.reorder(active, over);
+		else panelTabs.moveToColumn(active, overTab.column);
+	};
+
+	// dsh dockkit parity (ui-dockkit pointerWithin discipline): containment,
+	// not distance. closestCenter oscillates when a dragged chip sits between
+	// a small tab rect and the big column zone — the "over" flips back and
+	// forth across columns and both strips animate every frame (user
+	// 2026-09-29: 跨列拖拽鬼畜闪烁). Here only droppables whose rect CONTAINS
+	// the pointer are candidates, the smallest rect wins (a tab beats the
+	// column zone that contains it), and once the pointer crosses into the
+	// other column that column owns every candidate — one stable verdict per
+	// pointer position, zero flip-flop.
+	const panelSplitCollision: CollisionDetection = ({ droppableRects, droppableContainers, pointerCoordinates }) => {
+		if (!pointerCoordinates) return [];
+		const hits: Array<{ id: (typeof droppableContainers)[number]["id"]; value: number }> = [];
+		for (const container of droppableContainers) {
+			const rect = droppableRects.get(container.id);
+			if (!rect) continue;
+			const { x, y } = pointerCoordinates;
+			if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+				hits.push({ id: container.id, value: rect.width * rect.height });
+			}
+		}
+		return hits.sort((a, b) => a.value - b.value);
+	};
+
+	// 「+」surface picker (dsh strip add-control parity): every primary
+	// surface is launchable from the strip itself, into the clicked column.
+	const [addMenu, setAddMenu] = useState<{ column: PanelColumn; x: number; y: number } | null>(null);
+
+	// Single-column drag-to-split (dsh dock-zone parity, user 2026-09-29):
+	//  dragging a tab onto the body's right half splits the panel and seats
+	//  the tab in column 1 — no pre-clicked split toggle needed. Same
+	//  containment collision as the split strips: stable verdict, no flicker.
+	const [stripDragId, setStripDragId] = useState<string | null>(null);
+	const onStripDragEnd = (e: DragEndEvent): void => {
+		const active = String(e.active.id);
+		const over = e.over ? String(e.over.id) : null;
+		setStripDragId(null);
+		if (over === "panel-split-zone") {
+			panelTabs.setSplit(true);
+			panelTabs.moveToColumn(active, 1);
+			return;
+		}
+		if (!over || active === over) return;
+		panelTabs.reorder(active, over);
+	};
+
+	/** Panel body for ONE column's displayed tab. Both split columns and
+	 *  the single-column layout render through here, so a surface looks
+	 *  identical in either shape. The browser singleton renders only in
+	 *  the globally-focused column (the page host projects onto one slot). */
+	const renderPanelBody = (bodyView: string | null, bodyTab: PanelTab | null): ReactNode =>
+		bodyView === "browser" ? (
+			bodyTab !== null && bodyTab.id !== panelTabs.activeId ? (
+				<button
+					type="button"
+					className="gui-pane-tab-empty gui-pane-tab-empty--clickable"
+					onClick={() => panelTabs.activate(bodyTab.id)}
+				>
+					<span className="gui-pane-tab-empty-icon">
+						<Icon name="window" />
+					</span>
+					<p className="gui-pane-tab-empty-title">{t("browser shown in other column")}</p>
+					<p className="gui-pane-tab-empty-hint">{t("click to focus browser tab")}</p>
+				</button>
+			) : (
+				/* Browser pane renders OUTSIDE the feather-scroll container:
+				 * the page is a DOM <webview> owned by the always-mounted
+				 * ManagedBrowserHost, which mirrors THIS pane's slot rect
+				 * (fixed overlay). The slot must sit in a plain flex column —
+				 * a padded/scrollable wrapper breaks the height chain the
+				 * ResizeObserver measures. See docs/review/0.5.0-sidepanel-
+				 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
+				 * projection" motive is gone; the host stays for the maximized
+				 * layering and blank start-page glass stacking). */
+				<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} />
+			)
+		) : bodyView === "git" || bodyView === "diff" || bodyView === "pr" ? (
+			<GitPanel rpc={rpc} cwd={cwd} />
+		) : bodyView === "trajectory" ? (
+			/* Trajectory renders OUTSIDE the feather-scroll (browser/git
+			 * parity): its root is a flex-1 column with its own scroll list —
+			 * a scroll-wrapper + percentage-height chain lets that nested
+			 * list inflate to content height and escape the chat card. */
+			<TrajectoryView
+				entries={snap?.entries ?? []}
+				fullEntries={overviewEntries ?? null}
+				fullLoading={overviewLoading}
+				onEnsureFullHistory={onEnsureFullHistory}
+				modelId={snap?.state?.model?.id}
+				roundDurations={snap?.roundDurations}
+				onJumpToEntry={onJumpToEntry}
+				leafId={leafId}
+				activePathIds={activePathIds}
+				onBranchTo={onBranchTo}
+				onForkAt={onForkAt}
+			/>
+		) : (
+			<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
+				{bodyView === "notes" ? (
+					<NotesPane rpc={rpc} cwd={cwd} />
+				) : bodyView === "files" && cwd ? (
+					<FilePane
+						rpc={rpc}
+						cwd={cwd}
+						openRequest={openRequest}
+						// File instances live in the PANEL strip (tab-primary):
+						// the pane loads whatever file tab is active and
+						// registers tree clicks back into the strip.
+						activeFile={bodyTab?.surface === "files" ? bodyTab.target : null}
+						onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
+						onDirty={onFileDirty}
+						// Tree and file previews are sibling tabs (dsh parity):
+						// the preview's back button activates the tree tab.
+						onShowTree={() => panelTabs.open({ surface: "files" })}
+					/>
+				) : bodyView === "artifacts" ? (
+					/* Artifacts panel (设计板 W3): artifact.manifest.json
+					 * sidecars discovered by the daemon, each card opening
+					 * the entry-file viewer (iframe/markdown/source). */
+					<ArtifactsPanel rpc={rpc} cwd={cwd} />
+				) : bodyView === "widget" ? (
+					<WidgetSidebarTab entries={snap?.entries ?? []} />
+				) : bodyView === "jobs" ? (
+					snap?.sessionId ? (
+						<JobsPane rpc={rpc} sessionId={snap.sessionId} />
+					) : (
+						<div className="gui-pane-tab-empty">
+							<span className="gui-pane-tab-empty-icon">
+								<Icon name="inbox-archive" />
+							</span>
+							<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
+							<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
+						</div>
+					)
+				) : bodyView === "agents" ? (
+					/* Agents hub (TUI Agent Hub parity): the session's live
+					 * roster; a row opens the docked trajectory detail that
+					 * slides in over this view (layer at the aside level). */
+					(snap?.agents ?? []).length === 0 ? (
+						<div className="gui-pane-tab-empty">
+							<span className="gui-pane-tab-empty-icon">
+								<Icon name="ai-agent" />
+							</span>
+							<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
+						</div>
+					) : (
+						<AgentsPanel
+							agents={snap?.agents ?? []}
+							progress={snap?.progress ?? new Map()}
+							lifecycle={snap?.lifecycle ?? new Map()}
+							selectedId={agentId}
+							onSelect={onAgentSelect}
+						/>
+					)
+				) : typeof bodyView === "string" && bodyView.startsWith("ext:") ? (
+					(() => {
+						const item = extTabs.find(x => `ext:${x.slot}` === view);
+						return item ? (
+							<FadeScroll className="h-full overflow-y-auto">
+								<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
+							</FadeScroll>
+						) : null;
+					})()
+				) : (
+					<div className="px-1 py-2">
+						<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
+						<div className="flex flex-col gap-1 px-2 text-[13px]">
+							<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+								<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
+								<span className="truncate">{cwd || t("no folder")}</span>
+							</div>
+							{snap?.state?.model?.id && (
+								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+									<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
+									<span className="truncate">{snap.state.model.id}</span>
+								</div>
+							)}
+							{modes && (
+								<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
+									<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
+									<span className="truncate">{sessionModeLabel(modes, modeCatalog)}</span>
+								</div>
+							)}
+						</div>
+						{/* Session stats (openchamber context-drawer parity): message
+						 * count and run time at a glance. */}
+						<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
+						<div className="grid grid-cols-2 gap-1.5 px-2">
+							<div className="gui-ctx-stat">
+								<div className="gui-ctx-stat-v">{messageCount}</div>
+								<div className="gui-ctx-stat-l">{t("messages")}</div>
+							</div>
+							<div className="gui-ctx-stat">
+								<div className="gui-ctx-stat-v">{runMinutes}</div>
+								<div className="gui-ctx-stat-l">{t("minutes")}</div>
+							</div>
+						</div>
+						{/* Context-window usage: live tokens/capacity bar (product
+						 * parity with the header ring — same RPC). */}
+						{ctxUsage && (
+							<>
+								<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
+								<div className="px-2">
+									<div className="gui-ctx-usage-row">
+										<span className="text-[12px] tabular-nums opacity-80">
+											{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
+											{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
+										</span>
+										<span className="text-[12px] tabular-nums opacity-70">
+											{Math.round(ctxUsage.percent)}%
+										</span>
+									</div>
+									<div className="gui-ctx-usage-track">
+										<div
+											className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
+											style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+										/>
+									</div>
+								</div>
+							</>
+						)}
+						{/* Reusable context quick actions: copy the workspace path. */}
+						<div className="mt-2 flex flex-col gap-0.5 px-2">
+							<button
+								type="button"
+								className="gui-pane-action"
+								onClick={() => {
+									if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
+								}}
+							>
+								<Icon name="clipboard" className="h-3.5 w-3.5" />
+								<span>{t("copy workspace path")}</span>
+							</button>
+						</div>
+						{/* Session hygiene (会话维护): shake context / reset
+						 * provider stream / clear session context — each RPC
+						 * reports counts into the status line below. */}
+						<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
+						<div className="flex flex-col gap-0.5 px-2">
+							<button
+								type="button"
+								className="gui-pane-action"
+								disabled={!snap?.sessionId || maintenanceBusy !== null}
+								onClick={() => void runMaintenance("shake")}
+							>
+								<Icon
+									name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
+									className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
+								/>
+								<span>{t("shake context")}</span>
+							</button>
+							<button
+								type="button"
+								className="gui-pane-action"
+								disabled={!snap?.sessionId || maintenanceBusy !== null}
+								onClick={() => void runMaintenance("fresh")}
+							>
+								<Icon
+									name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
+									className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
+								/>
+								<span>{t("fresh provider")}</span>
+							</button>
+							<button
+								type="button"
+								className="gui-pane-action"
+								disabled={!snap?.sessionId || maintenanceBusy !== null}
+								onClick={() => void runMaintenance("clear")}
+							>
+								<Icon
+									name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
+									className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
+								/>
+								<span>{t("clear session context")}</span>
+							</button>
+						</div>
+						{maintenanceStatus && (
+							<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
+								{maintenanceStatus}
+							</p>
+						)}
+					</div>
+				)}
+				{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
+				 * 挂内容区末尾,随面板滚动。 */}
+				<div className="gui-pane-extension px-2 pt-3">
+					<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
+				</div>
+			</FadeScroll>
+		);
+
 	return (
 		<>
 			{/* Surface-tab context menu (right-click on a panel tab): close /
@@ -658,6 +987,29 @@ export function ContextPanel({
 					onClose={() => setTabMenu(null)}
 				/>
 			)}
+			{/* 「+」surface picker: the strip's add control opens any primary
+			 *  surface as a new tab in the clicked column (dsh canAddTab
+			 *  parity). Browser additionally spawns a blank managed tab. */}
+			{addMenu !== null && (
+				<ContextMenu
+					open
+					x={addMenu.x}
+					y={addMenu.y}
+					items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(s => ({
+						label: t(s.label as TranslationKey),
+						icon: s.icon as IconName,
+						onSelect: () => {
+							if (s.id === "browser") {
+								panelTabs.open({ surface: "browser" }, { column: addMenu.column });
+								void createBrowserTab("about:blank").catch(() => {});
+							} else {
+								panelTabs.open({ surface: s.id }, { column: addMenu.column });
+							}
+						},
+					}))}
+					onClose={() => setAddMenu(null)}
+				/>
+			)}
 			{/* Maximize: NO scrim (user 2026-09-16 — 最大化不要遮罩，正常缩放卡片尺寸即可).
 			 * The panel floats exactly over the measured chat-column card; the
 			 * surrounding gutters stay live and the chat keeps working behind it. */}
@@ -682,291 +1034,184 @@ export function ContextPanel({
 				 * moves that leave the strip). */}
 				<div className="gui-pane-resize-x" {...(resizeHandleHandlers ?? {})} aria-hidden />
 				<div className="flex h-full min-h-0 w-full flex-col">
-					{/* Tab strip row (tab-primary, docs §3.3.2): the strip replaces
-					 * the old title bar — the active tab IS the title. Maximize
-					 * lives here now; `+` is surface-aware (browser → real new
-					 * tab, everything else → hidden; see the button below). */}
-					<div className="flex flex-shrink-0 items-start gap-1 px-2 pt-1.5">
-						<div className="min-w-0 flex-1">
-							{panelTabs.tabs.length > 0 && (
-								<SurfaceTabStrip
-									tabs={panelTabs.tabs.map(t => ({
-										id: t.id,
-										title: t.label,
-										dirty: t.dirty,
-									}))}
-									activeId={panelTabs.activeId}
-									closeLabel={t("close tab")}
-									onActivate={panelTabs.activate}
-									onClose={closeTabWithGuard}
-									onReorder={panelTabs.reorder}
-									onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
-								/>
-							)}
-						</div>
-						<div className="flex items-center gap-0.5 pt-0.5">
-							{/* `+` is meaningful ONLY for the browser surface: it
-							 * spawns a real new tab. Files/Notes carry their own
-							 * creation buttons in-pane (FilePane head row, notes
-							 * title row), and singleton surfaces have no "new tab"
-							 * semantics — the old button re-opened an existing
-							 * placeholder tab (a no-op upsert) and read as dead
-							 * (user 2026-09-22: 新建标签页按钮点击没有用). */}
-							{activePanelTab?.surface === "browser" && (
-								<button
-									type="button"
-									title={t("new tab")}
-									aria-label={t("new tab")}
-									className="gui-pane-tool"
-									onClick={() => void createBrowserTab("about:blank").catch(() => {})}
-								>
-									<Icon name="add" className="h-3.5 w-3.5" />
-								</button>
-							)}
-							<button
-								type="button"
-								title={maximized ? t("restore panel") : t("maximize panel")}
-								aria-label={maximized ? t("restore panel") : t("maximize panel")}
-								className="gui-pane-tool"
-								onClick={toggleMaximized}
-							>
-								<StateIcon on={maximized} pair={["fullscreen-exit", "fullscreen"]} className="h-3.5 w-3.5" />
-							</button>
-						</div>
-					</div>
-					{panelTabs.tabs.length === 0 ? (
-						/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
-						 * parity): the rail's primary surfaces as launchable entries. */
-						<PanelTabsEmptyState
-							heading={t("start here")}
-							items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(s => ({
-								id: s.id,
-								label: t(s.label as TranslationKey),
-								icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
-								onSelect: () => onViewChange(s.id),
-							}))}
-						/>
-					) : view === "browser" ? (
-						/* Browser pane renders OUTSIDE the feather-scroll container:
-						 * the page is a DOM <webview> owned by the always-mounted
-						 * ManagedBrowserHost, which mirrors THIS pane's slot rect
-						 * (fixed overlay). The slot must sit in a plain flex column —
-						 * a padded/scrollable wrapper breaks the height chain the
-						 * ResizeObserver measures. See docs/review/0.5.0-sidepanel-
-						 * browser-rendering.md §1.2 (A1: the old "native WebContentsView
-						 * projection" motive is gone; the host stays for the maximized
-						 * layering and blank start-page glass stacking). */
-						<BrowserPane rpc={rpc} browserOpenRequest={browserOpenRequest} open={open} />
-					) : view === "git" || view === "diff" || view === "pr" ? (
-						<GitPanel rpc={rpc} cwd={cwd} />
-					) : view === "trajectory" ? (
-						/* Trajectory renders OUTSIDE the feather-scroll (browser/git
-						 * parity): its root is a flex-1 column with its own scroll list —
-						 * a scroll-wrapper + percentage-height chain lets that nested
-						 * list inflate to content height and escape the chat card. */
-						<TrajectoryView
-							entries={snap?.entries ?? []}
-							fullEntries={overviewEntries ?? null}
-							fullLoading={overviewLoading}
-							onEnsureFullHistory={onEnsureFullHistory}
-							modelId={snap?.state?.model?.id}
-							roundDurations={snap?.roundDurations}
-							onJumpToEntry={onJumpToEntry}
-							leafId={leafId}
-							activePathIds={activePathIds}
-							onBranchTo={onBranchTo}
-							onForkAt={onForkAt}
-						/>
-					) : (
-						<FadeScroll className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3 pt-1.5">
-							{view === "notes" ? (
-								<NotesPane rpc={rpc} cwd={cwd} />
-							) : view === "files" && cwd ? (
-								<FilePane
-									rpc={rpc}
-									cwd={cwd}
-									openRequest={openRequest}
-									// File instances live in the PANEL strip (tab-primary):
-									// the pane loads whatever file tab is active and
-									// registers tree clicks back into the strip.
-									activeFile={activePanelTab?.surface === "files" ? activePanelTab.target : null}
-									onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
-									onDirty={onFileDirty}
-								/>
-							) : view === "artifacts" ? (
-								/* Artifacts panel (设计板 W3): artifact.manifest.json
-								 * sidecars discovered by the daemon, each card opening
-								 * the entry-file viewer (iframe/markdown/source). */
-								<ArtifactsPanel rpc={rpc} cwd={cwd} />
-							) : view === "widget" ? (
-								<WidgetSidebarTab entries={snap?.entries ?? []} />
-							) : view === "jobs" ? (
-								snap?.sessionId ? (
-									<JobsPane rpc={rpc} sessionId={snap.sessionId} />
-								) : (
-									<div className="gui-pane-tab-empty">
-										<span className="gui-pane-tab-empty-icon">
-											<Icon name="inbox-archive" />
-										</span>
-										<p className="gui-pane-tab-empty-title">{t("select a session")}</p>
-										<p className="gui-pane-tab-empty-hint">{t("jobs empty hint")}</p>
-									</div>
-								)
-							) : view === "agents" ? (
-								/* Agents hub (TUI Agent Hub parity): the session's live
-								 * roster; a row opens the docked trajectory detail that
-								 * slides in over this view (layer at the aside level). */
-								(snap?.agents ?? []).length === 0 ? (
-									<div className="gui-pane-tab-empty">
-										<span className="gui-pane-tab-empty-icon">
-											<Icon name="ai-agent" />
-										</span>
-										<p className="gui-pane-tab-empty-title">{t("no subagents")}</p>
-									</div>
-								) : (
-									<AgentsPanel
-										agents={snap?.agents ?? []}
-										progress={snap?.progress ?? new Map()}
-										lifecycle={snap?.lifecycle ?? new Map()}
-										selectedId={agentId}
-										onSelect={onAgentSelect}
-									/>
-								)
-							) : typeof view === "string" && view.startsWith("ext:") ? (
-								(() => {
-									const item = extTabs.find(x => `ext:${x.slot}` === view);
-									return item ? (
-										<FadeScroll className="h-full overflow-y-auto">
-											<SlotComponentMount item={item} rpc={rpc} sessionId={snap?.sessionId} cwd={cwd} />
-										</FadeScroll>
-									) : null;
-								})()
-							) : (
-								<div className="px-1 py-2">
-									<div className="gui-group-label px-2 pb-1 pt-1">{t("session")}</div>
-									<div className="flex flex-col gap-1 px-2 text-[13px]">
-										<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-											<Icon name="folder" className="h-3.5 w-3.5 flex-shrink-0" />
-											<span className="truncate">{cwd || t("no folder")}</span>
-										</div>
-										{snap?.state?.model?.id && (
-											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-												<Icon name="ai-agent" className="h-3.5 w-3.5 flex-shrink-0" />
-												<span className="truncate">{snap.state.model.id}</span>
-											</div>
-										)}
-										{modes && (
-											<div className="flex items-center gap-2 text-[var(--color-text-muted)]">
-												<Icon name="target" className="h-3.5 w-3.5 flex-shrink-0" />
-												<span className="truncate">{sessionModeLabel(modes, modeCatalog)}</span>
-											</div>
-										)}
-									</div>
-									{/* Session stats (openchamber context-drawer parity): message
-									 * count and run time at a glance. */}
-									<div className="gui-group-label px-2 pb-1 pt-3">{t("stats")}</div>
-									<div className="grid grid-cols-2 gap-1.5 px-2">
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v">{messageCount}</div>
-											<div className="gui-ctx-stat-l">{t("messages")}</div>
-										</div>
-										<div className="gui-ctx-stat">
-											<div className="gui-ctx-stat-v">{runMinutes}</div>
-											<div className="gui-ctx-stat-l">{t("minutes")}</div>
-										</div>
-									</div>
-									{/* Context-window usage: live tokens/capacity bar (product
-									 * parity with the header ring — same RPC). */}
-									{ctxUsage && (
-										<>
-											<div className="gui-group-label px-2 pb-1 pt-3">{t("context window")}</div>
-											<div className="px-2">
-												<div className="gui-ctx-usage-row">
-													<span className="text-[12px] tabular-nums opacity-80">
-														{fmtTokens(ctxUsage.tokens)} / {fmtTokens(ctxUsage.contextWindow)}
-														{ctxUsage.model ? ` · ${ctxUsage.model}` : ""}
-													</span>
-													<span className="text-[12px] tabular-nums opacity-70">
-														{Math.round(ctxUsage.percent)}%
-													</span>
-												</div>
-												<div className="gui-ctx-usage-track">
-													<div
-														className={`gui-ctx-usage-bar${ctxUsage.percent > 90 ? " gui-ctx-usage-bar--hot" : ""}`}
-														style={{ width: `${Math.min(100, Math.max(2, ctxUsage.percent))}%` }}
+					{panelTabs.split ? (
+						<DndContext
+							sensors={splitSensors}
+							collisionDetection={panelSplitCollision}
+							onDragEnd={onSplitDragEnd}
+						>
+							<div className="gui-pane-columns">
+								{([0, 1] as const).map(col => {
+									const colTabs = tabsCol(col);
+									const colTab = tabForColumn(col);
+									return (
+										<PanelColumnZone key={col} column={col}>
+											{/* dsh TabStrip parity: chips, the add
+											 * control and the chrome share ONE row —
+											 * no separate control line, the strip
+											 * never wraps. Surface-wide chrome
+											 * (merge / maximize) rides the second
+											 * column's end, the layout's corner. */}
+											<div className="gui-pane-col-head">
+												<div className="gui-pane-col-strip">
+													<SurfaceTabStripSortable
+														tabs={colTabs.map(t => ({
+															id: t.id,
+															title: t.label,
+															dirty: t.dirty,
+														}))}
+														activeId={colTab?.id ?? null}
+														closeLabel={t("close tab")}
+														onActivate={panelTabs.activate}
+														onClose={closeTabWithGuard}
+														onReorder={panelTabs.reorder}
+														onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
 													/>
 												</div>
+												<div className="gui-pane-col-tools">
+													<button
+														type="button"
+														title={t("new tab")}
+														aria-label={t("new tab")}
+														className="gui-pane-tool"
+														onClick={e => setAddMenu({ column: col, x: e.clientX, y: e.clientY })}
+													>
+														<Icon name="add" className="h-3.5 w-3.5" />
+													</button>
+													{col === 1 && (
+														<>
+															<button
+																type="button"
+																title={t("merge panel")}
+																aria-label={t("merge panel")}
+																className="gui-pane-tool"
+																onClick={() => panelTabs.setSplit(false)}
+															>
+																<Icon name="layout-left" className="h-3.5 w-3.5" />
+															</button>
+															<button
+																type="button"
+																title={maximized ? t("restore panel") : t("maximize panel")}
+																aria-label={maximized ? t("restore panel") : t("maximize panel")}
+																className="gui-pane-tool"
+																onClick={toggleMaximized}
+															>
+																<StateIcon
+																	on={maximized}
+																	pair={["fullscreen-exit", "fullscreen"]}
+																	className="h-3.5 w-3.5"
+																/>
+															</button>
+														</>
+													)}
+												</div>
 											</div>
-										</>
-									)}
-									{/* Reusable context quick actions: copy the workspace path. */}
-									<div className="mt-2 flex flex-col gap-0.5 px-2">
-										<button
-											type="button"
-											className="gui-pane-action"
-											onClick={() => {
-												if (cwd) void navigator.clipboard.writeText(cwd).catch(() => {});
-											}}
-										>
-											<Icon name="clipboard" className="h-3.5 w-3.5" />
-											<span>{t("copy workspace path")}</span>
-										</button>
-									</div>
-									{/* Session hygiene (会话维护): shake context / reset
-									 * provider stream / clear session context — each RPC
-									 * reports counts into the status line below. */}
-									<div className="gui-group-label px-2 pb-1 pt-3">{t("session maintenance")}</div>
-									<div className="flex flex-col gap-0.5 px-2">
-										<button
-											type="button"
-											className="gui-pane-action"
-											disabled={!snap?.sessionId || maintenanceBusy !== null}
-											onClick={() => void runMaintenance("shake")}
-										>
-											<Icon
-												name={maintenanceBusy === "shake" ? "loader-4" : "scissors"}
-												className={`h-3.5 w-3.5${maintenanceBusy === "shake" ? " animate-spin" : ""}`}
-											/>
-											<span>{t("shake context")}</span>
-										</button>
-										<button
-											type="button"
-											className="gui-pane-action"
-											disabled={!snap?.sessionId || maintenanceBusy !== null}
-											onClick={() => void runMaintenance("fresh")}
-										>
-											<Icon
-												name={maintenanceBusy === "fresh" ? "loader-4" : "restart"}
-												className={`h-3.5 w-3.5${maintenanceBusy === "fresh" ? " animate-spin" : ""}`}
-											/>
-											<span>{t("fresh provider")}</span>
-										</button>
-										<button
-											type="button"
-											className="gui-pane-action"
-											disabled={!snap?.sessionId || maintenanceBusy !== null}
-											onClick={() => void runMaintenance("clear")}
-										>
-											<Icon
-												name={maintenanceBusy === "clear" ? "loader-4" : "delete-bin"}
-												className={`h-3.5 w-3.5${maintenanceBusy === "clear" ? " animate-spin" : ""}`}
-											/>
-											<span>{t("clear session context")}</span>
-										</button>
-									</div>
-									{maintenanceStatus && (
-										<p className="px-2 pt-1.5 text-[12px] leading-relaxed text-[var(--color-text-muted)]">
-											{maintenanceStatus}
-										</p>
+											{colTab === null ? (
+												<div className="gui-pane-tab-empty">
+													<span className="gui-pane-tab-empty-icon">
+														<Icon name="layout-column" />
+													</span>
+													<p className="gui-pane-tab-empty-title">{t("drop tabs here")}</p>
+												</div>
+											) : (
+												renderPanelBody(colTab.surface, colTab)
+											)}
+										</PanelColumnZone>
+									);
+								})}
+							</div>
+						</DndContext>
+					) : (
+						<DndContext
+							sensors={splitSensors}
+							collisionDetection={panelSplitCollision}
+							onDragStart={e => setStripDragId(String(e.active.id))}
+							onDragEnd={onStripDragEnd}
+							onDragCancel={() => setStripDragId(null)}
+						>
+							{/* Tab strip row (tab-primary, docs §3.3.2): the strip replaces
+							 * the old title bar — the active tab IS the title. The strip
+							 * shares ONE DndContext with the body's split drop zone: a tab
+							 * dragged onto the right half splits the panel (dsh dock-zone
+							 * parity) instead of needing the toggle first. */}
+							<div className="flex flex-shrink-0 items-start gap-1 px-2 pt-1.5">
+								<div className="min-w-0 flex-1">
+									{panelTabs.tabs.length > 0 && (
+										<SurfaceTabStripSortable
+											tabs={panelTabs.tabs.map(t => ({
+												id: t.id,
+												title: t.label,
+												dirty: t.dirty,
+											}))}
+											activeId={panelTabs.activeId}
+											closeLabel={t("close tab")}
+											onActivate={panelTabs.activate}
+											onClose={closeTabWithGuard}
+											onReorder={panelTabs.reorder}
+											onTabContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
+										/>
 									)}
 								</div>
-							)}
-							{/* Modes v2 右面板 Phase 0-2:扩展贡献区块(panel.right 槽位) —
-							 * 挂内容区末尾,随面板滚动。 */}
-							<div className="gui-pane-extension px-2 pt-3">
-								<SlotComponentHost rpc={rpc} slot={RIGHT_PANEL_SLOT} sessionId={snap?.sessionId} cwd={cwd} />
+								<div className="flex items-center gap-0.5 pt-0.5">
+									{/* `+` opens the surface picker (dsh add-control
+									 *  parity): every primary surface is launchable
+									 *  from the strip. The old browser-only direct
+									 *  button read as dead UI on every other surface
+									 *  (user 2026-09-22). */}
+									<button
+										type="button"
+										title={t("new tab")}
+										aria-label={t("new tab")}
+										className="gui-pane-tool"
+										onClick={e => setAddMenu({ column: 0, x: e.clientX, y: e.clientY })}
+									>
+										<Icon name="add" className="h-3.5 w-3.5" />
+									</button>
+									<button
+										type="button"
+										title={t("split panel")}
+										aria-label={t("split panel")}
+										className="gui-pane-tool"
+										onClick={() => panelTabs.setSplit(true)}
+									>
+										<Icon name="layout-column" className="h-3.5 w-3.5" />
+									</button>
+									<button
+										type="button"
+										title={maximized ? t("restore panel") : t("maximize panel")}
+										aria-label={maximized ? t("restore panel") : t("maximize panel")}
+										className="gui-pane-tool"
+										onClick={toggleMaximized}
+									>
+										<StateIcon
+											on={maximized}
+											pair={["fullscreen-exit", "fullscreen"]}
+											className="h-3.5 w-3.5"
+										/>
+									</button>
+								</div>
 							</div>
-						</FadeScroll>
+							<div className="gui-pane-body-wrap">
+								{panelTabs.tabs.length === 0 ? (
+									/* Zero tabs → empty-state navigation page (Kimi "从这里开始"
+									 * parity): the rail's primary surfaces as launchable entries. */
+									<PanelTabsEmptyState
+										heading={t("start here")}
+										items={SURFACES.filter(s => s.group === "primary" && s.availability === "always").map(
+											s => ({
+												id: s.id,
+												label: t(s.label as TranslationKey),
+												icon: <Icon name={s.icon as IconName} className="h-4 w-4" />,
+												onSelect: () => onViewChange(s.id),
+											}),
+										)}
+									/>
+								) : (
+									renderPanelBody(view, activePanelTab)
+								)}
+								<PanelSplitZone active={stripDragId !== null} />
+							</div>
+						</DndContext>
 					)}
 				</div>
 				{/* Subagent trajectory detail (agents-view drill-down): an in-pane
@@ -987,6 +1232,45 @@ export function ContextPanel({
 				</div>
 			</aside>
 		</>
+	);
+}
+
+/** Split-column drop zone (dsh two-column parity): the whole column is
+ * a droppable so a dragged tab can land on empty space, not just on tabs. */
+function PanelColumnZone({ column, children }: { column: PanelColumn; children: ReactNode }): ReactNode {
+	const { setNodeRef, isOver } = useDroppable({ id: `panel-col-${column}` });
+	return (
+		<div
+			ref={setNodeRef}
+			className={`gui-pane-col${column === 1 ? " gui-pane-col--second" : ""}${isOver ? " gui-pane-col--over" : ""}`}
+		>
+			{children}
+		</div>
+	);
+}
+
+/** Right-half split target (dsh dock-zone parity): while a tab drags in the
+ * single-column layout, the body's right half becomes a drop zone that
+ * splits the panel and seats the tab in column 1. Always mounted so the
+ * rect cache stays warm; disabled (excluded from collisions, invisible)
+ * until a drag arms it. */
+function PanelSplitZone({ active }: { active: boolean }): ReactNode {
+	const { setNodeRef, isOver } = useDroppable({ id: "panel-split-zone", disabled: !active });
+	return (
+		<div
+			ref={setNodeRef}
+			aria-hidden={!active}
+			className={`gui-pane-split-zone${active ? " gui-pane-split-zone--active" : ""}${isOver ? " gui-pane-split-zone--over" : ""}`}
+		>
+			{active && (
+				<>
+					<span className="gui-pane-split-zone-icon">
+						<Icon name="layout-column" />
+					</span>
+					<p className="gui-pane-split-zone-label">{t("drop to split panel")}</p>
+				</>
+			)}
+		</div>
 	);
 }
 

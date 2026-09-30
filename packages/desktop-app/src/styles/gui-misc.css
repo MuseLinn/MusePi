@@ -1467,8 +1467,9 @@
 }
 
 /* ── Plan review panel (composer, TUI plan-approval overlay parity) ──
- * Same glass card tokens as the goal panel; the plan body renders as
- * read-only preformatted text with refine/approve/exit actions. */
+ * Same floating-card layout as the goal/quota panels; the frosted surface
+ * lives on the .gui-menu-popup shell (批次 C2 — this card previously
+ * double-drew its own translucent backdrop). */
 .gui-plan-panel {
 	width: min(440px, calc(100vw - 64px));
 	display: flex;
@@ -1477,10 +1478,6 @@
 	padding: 14px 16px;
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-xl);
-	background: var(--bg-overlay);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
 }
 
 .gui-plan-title {
@@ -1566,8 +1563,9 @@
 }
 
 /* ── Goal detail card (composer dialog, TUI /goal menu parity) ──
- * Shares the quota panel's floating-card look (same overlay/glass
- * tokens); floats under the goal chip like the quota/context cards. */
+ * Shares the quota panel's floating-card layout; the frosted surface lives
+ * on the .gui-menu-popup shell (批次 C2 — single glass recipe app-wide);
+ * floats under the goal chip like the quota/context cards. */
 .gui-goal-panel {
 	width: min(380px, calc(100vw - 64px));
 	display: flex;
@@ -1576,10 +1574,6 @@
 	padding: 14px 16px;
 	border: 1px solid var(--border-strong);
 	border-radius: var(--radius-xl);
-	background: var(--bg-overlay);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow: 0 14px 40px rgba(0, 0, 0, 0.34);
 }
 
 .gui-goal-status {

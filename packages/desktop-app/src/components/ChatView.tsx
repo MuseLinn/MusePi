@@ -2424,6 +2424,7 @@ export function ChatView({
 										)}
 										<Composer
 											working={snap?.working ?? false}
+											entries={snap?.entries ?? []}
 											petMood={moodFromState({
 												working: snap?.working ?? false,
 												streaming: snap?.streaming ?? false,

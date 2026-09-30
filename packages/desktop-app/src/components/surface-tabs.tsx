@@ -202,7 +202,10 @@ export interface SurfaceTabStripProps {
 
 /** Horizontal, drag-reorderable, closable tab strip (WorkBuddy doc-tabs /
  *  openchamber SortableTabsStrip parity). Scrollable when crowded; tabs flex
- *  to fill and clamp between min/max width before the scrollbar appears. */
+ *  to fill and clamp between min/max width before the scrollbar appears.
+ *
+ *  Renders its OWN DndContext — for cross-container drag (panel split columns)
+ *  use {@link SurfaceTabStripSortable} inside a parent-owned DndContext. */
 export function SurfaceTabStrip({
 	tabs,
 	activeId,
@@ -213,9 +216,6 @@ export function SurfaceTabStrip({
 	closeLabel = "close",
 	ariaLabel,
 }: SurfaceTabStripProps): ReactNode {
-	// 横向边缘羽化:实例 tab 条横向滚动时左右羽化(只在溢出时出现)。
-	const stripRef = useRef<HTMLDivElement | null>(null);
-	useScrollShadow(stripRef);
 	// Same sensor tuning as RightRail's rail reorder (distance 8 keeps clicks
 	// click-y; touch needs the long-press delay so scrolling still scrolls).
 	const sensors = useSensors(
@@ -231,6 +231,39 @@ export function SurfaceTabStrip({
 	};
 
 	return (
+		<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+			<SurfaceTabStripSortable
+				tabs={tabs}
+				activeId={activeId}
+				onActivate={onActivate}
+				onClose={onClose}
+				onReorder={onReorder}
+				onTabContextMenu={onTabContextMenu}
+				closeLabel={closeLabel}
+				ariaLabel={ariaLabel}
+			/>
+		</DndContext>
+	);
+}
+
+/** The sortable strip content WITHOUT a DndContext — for embedding inside a
+ *  parent-owned context (panel split columns share one context so a tab can
+ *  drag across columns; the parent decides reorder-vs-move from the over id). */
+export function SurfaceTabStripSortable({
+	tabs,
+	activeId,
+	onActivate,
+	onClose,
+	onReorder,
+	onTabContextMenu,
+	closeLabel = "close",
+	ariaLabel,
+}: SurfaceTabStripProps): ReactNode {
+	// 横向边缘羽化:实例 tab 条横向滚动时左右羽化(只在溢出时出现)。
+	const stripRef = useRef<HTMLDivElement | null>(null);
+	useScrollShadow(stripRef);
+
+	return (
 		<div
 			ref={stripRef}
 			className="gui-surface-tabs"
@@ -238,21 +271,19 @@ export function SurfaceTabStrip({
 			aria-label={ariaLabel}
 			aria-orientation="horizontal"
 		>
-			<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-				<SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
-					{tabs.map(tab => (
-						<SurfaceTabButton
-							key={tab.id}
-							tab={tab}
-							active={tab.id === activeId}
-							closeLabel={closeLabel}
-							onActivate={onActivate}
-							onClose={onClose}
-							onTabContextMenu={onTabContextMenu}
-						/>
-					))}
-				</SortableContext>
-			</DndContext>
+			<SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+				{tabs.map(tab => (
+					<SurfaceTabButton
+						key={tab.id}
+						tab={tab}
+						active={tab.id === activeId}
+						closeLabel={closeLabel}
+						onActivate={onActivate}
+						onClose={onClose}
+						onTabContextMenu={onTabContextMenu}
+					/>
+				))}
+			</SortableContext>
 		</div>
 	);
 }

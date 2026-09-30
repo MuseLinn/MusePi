@@ -784,6 +784,35 @@
 	white-space: nowrap;
 }
 
+/* Row hover action (dsh rc.2 ui-open-in-app parity): opens the entry in
+ * the OS default app. Hidden until the row is hovered or keyboard-focused
+ * so the tree stays quiet; the row's right edge reserves its slot. */
+.gui-filepane-open-btn {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 18px;
+	margin-right: 2px;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--color-text-faint);
+	cursor: pointer;
+	border-radius: var(--radius-xs);
+	opacity: 0;
+	transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.gui-filepane-vrow:hover .gui-filepane-open-btn,
+.gui-filepane-vrow:focus-within .gui-filepane-open-btn {
+	opacity: 1;
+}
+.gui-filepane-open-btn:hover {
+	color: var(--color-text);
+	background: var(--color-surface-raised);
+}
+
 .gui-filepane-agents {
 	color: var(--color-warning);
 }
@@ -799,7 +828,8 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	width: 100%;
+	flex: 1;
+	min-width: 0;
 	height: 100%;
 	padding: 0 4px;
 	border: none;

@@ -11,10 +11,15 @@
 import { copyFileSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// VERBOSE=1 prints every touched file; default prints one summary line per
+// phase so a dev-loop `desktop` start stays readable.
+const VERBOSE = process.env.VERBOSE === "1";
+
 // fileURLToPath, not .pathname: on Windows .pathname yields "/C:/…" which
 // readdirSync/copyFileSync cannot resolve.
 const dir = fileURLToPath(new URL("../dist/", import.meta.url));
 const htmlFiles = readdirSync(dir).filter(f => f.endsWith(".html"));
+let stripped = 0;
 for (const file of htmlFiles) {
 	const content = readFileSync(`${dir}${file}`, "utf8");
 	const fixed = content
@@ -22,16 +27,20 @@ for (const file of htmlFiles) {
 		.replaceAll('<link rel="stylesheet" crossorigin href=', '<link rel="stylesheet" href=');
 	if (fixed !== content) {
 		writeFileSync(`${dir}${file}`, fixed);
-		console.log(`dist/${file}: stripped crossorigin (file:// CORS fix)`);
+		stripped++;
+		if (VERBOSE) console.log(`dist/${file}: stripped crossorigin (file:// CORS fix)`);
 	}
 }
+if (stripped > 0) console.log(`dist: stripped crossorigin in ${stripped} html entr${stripped === 1 ? "y" : "ies"} (file:// CORS fix)`);
 
 // Builtin chiikawa pet spritesheets (public/pets) ship alongside the HTML
 // entries so both the app and the pet window can load them by relative path.
 const petsSrc = fileURLToPath(new URL("../public/pets/", import.meta.url));
 const petsDst = `${dir}pets/`;
 mkdirSync(petsDst, { recursive: true });
-for (const file of readdirSync(petsSrc)) {
+const petFiles = readdirSync(petsSrc);
+for (const file of petFiles) {
 	copyFileSync(`${petsSrc}${file}`, `${petsDst}${file}`);
-	console.log(`dist/pets/${file}`);
+	if (VERBOSE) console.log(`dist/pets/${file}`);
 }
+console.log(`dist: ${petFiles.length} pet sprite(s) shipped`);

@@ -537,6 +537,97 @@ New dialog-like components land **only** in the 3000/4000/9999 bands; 120/200/21
 - Dialog cards are **L3 overlay** (§5s tier table): `--glass-bg-strong` base + rim + `--glass-sheen` + `--glass-shadow` double layer — `.gui-dialog` conforms. **TaskModal and the palette card are opaque-surface debt**: they migrate to L3 with M1.10 batch C (decision ⑧; glass only on the container layer, card content stays paper-like). Tracked as TODO comments at both card rules.
 - Degradation trio per §5s: `gui-motion-off` / `prefers-reduced-motion` → exits snap with no animation and no intermediate frames (every dialog component carries the rule; onboarding was the precedent); `[data-platform="win32"]` blur zeroed, sheen+rim boosted — glass-scrim acceptance on Windows follows the M1.10 §6.3 dual-platform screenshot flow.
 
+## 5v. Right-panel tab strip: tab-primary completion (M1.12, approved 2026-09-29; source `docs/review/0.5.0-promo-gap-analysis.md` v3 + interactive prototype `docs/review/tab-primary-prototype.html` v2)
+
+> Background: the tab-primary model (`lib/panel-tabs.ts`, openchamber ContextPanel parity — ONE tab strip hosts every open view regardless of surface; the rail is a launcher) has been in place since 2026-09-15, but the interaction layer never arrived: rail clicks open a target-less placeholder tab (`surface::`), so each surface hosts exactly one rail-opened tab and the strip degenerates into a 1:1 mirror of the rail. M1.12 completes the interaction layer; the model layer is untouched. **A center-pane multi-surface container was evaluated and rejected** (2026-09-29, 小袁总): the product keeps the codex-style layout — the main conversation owns the center pane exclusively; every auxiliary surface (terminal/code/board/previews) is carried by right-panel tabs.
+
+### Layout contract (unchanged)
+
+Panel content on the left, 44px `RightRail` flush against the client surface's right edge (`ChatView.tsx` ~2507, sibling of the panel). No structural change; this chapter only adds interaction and removes one visual state.
+
+### Rail semantics — pure launcher
+
+- **No persistent active highlight.** The rail never stays lit to mirror the active tab (hover highlight only). The current active-state styling on the rail item is removed; "which tab is active" is communicated exclusively by the tab strip. Rationale (小袁总, prototype review): a lit rail item reads as an instance tab, which it is not.
+- Click = open-or-focus: focus the surface's most-recent tab if one exists; otherwise open its placeholder tab. Clicking the rail item of the already-active surface while the panel is open collapses the panel (existing RightRail parity — Chrome side-panel semantics) and is unchanged.
+- **Middle-click or ⌘/Ctrl+click = new instance** (never focus): opens a new tab of that surface with a freshly chosen target (files → directory picker, notes → new note, browser → address entry, others → surface default). The modifier variant must not toggle/collapse the panel.
+- Keyboard `Mod+1..N` keeps its existing jump semantics (focus-or-open); no new-instance shortcut is added in this batch.
+
+### Tab strip contract
+
+- Identity stays `surface::target` (`panelTabId`, `lib/panel-tabs.ts:64`): `target` is the instance address (file path / note id / URL). `surface::` (empty target) remains the surface's placeholder tab — a rail click with no open tab opens the placeholder, and the first real open replaces it (existing semantics, unchanged).
+- **"+" button at the strip head** opens the new-instance menu, grouped by surface: each entry carries the surface favicon + "new instance" affordance with its target picker (files → directory, notes → new note, browser → address). Position: first child of the strip, before all tabs, always visible, never scrolled out (the strip scrolls tabs under it).
+- Per-surface budget stays `PANEL_TABS_MAX_PER_SURFACE = 12` (openchamber parity): evicting spends the oldest non-active tab of that surface. "+" on a surface at budget focuses the oldest tab with a toast instead of silently evicting.
+- Strip overflow scrolls horizontally with the existing left/right feathering (`--gui-fade-x`, gui-chat.css horizontal section); the strip never wraps.
+
+### Tab interactions
+
+- **Context menu** (right-click / long-press): 复制标签 (duplicate → same surface+target with a "（副本）"-style label suffix via a distinct `dedupeKey`), 关闭其他标签, 关闭. Menu motion and materials follow §5u (L2 float recipe, `--spring-liquid`).
+- Drag-to-reorder uses the existing dnd-kit strip implementation; drop reorders only, never reparents surfaces.
+- Close button (×) per tab: hover-revealed, follows the existing strip close affordance; closing the active tab activates its right neighbor (existing behavior).
+
+### Motion
+
+All additions ride the §5s ladder: tab open = shared-element grow from the invoking affordance (rail icon / "+" / menu item) with `--spring-liquid`; focus-or-open flash = 700ms accent-muted fade (prototype `flash` keyframes precedent); new-instance menu = §5u enter/exit. No new tokens, curves, or scrims.
+
+### Acceptance
+
+- Same-surface multi-instance works end-to-end: two Files tabs for different directories, two Browser tabs for different URLs, duplicated note tabs — each with its own `surface::target` identity and content.
+- Rail shows zero persistent highlight in any state; hover-only. Click/middle-click/⌘-click semantics per above.
+- "+" menu reachable and keyboard-navigable (↑↓ Enter Esc, focus returns to the strip, `use-floating-menu` four-state contract per the M2-2.6 AttachMenu precedent).
+- Context menu duplicate/close-others/close all functional; budget eviction surfaces a toast instead of silent eviction.
+- biome + tsgo green for desktop-app; i18n keys land in the rail/panel domain files with `en as const satisfies Record<ZhKey, string>` parity; contract tests cover id-generation and open-with-target paths (no static echo).
+
+### Implementation anchors
+
+- `lib/panel-tabs.ts` / `lib/use-panel-tabs.ts` — model; `open(descriptor)` already accepts `target`/`dedupeKey`. No model change expected.
+- `ChatView.tsx:796-808` — `setActiveView` is the single choke point that drops `target` today; new-instance flows thread a target through it (or call `panelTabs.open` directly with the descriptor, keeping `setActiveView` for focus-only paths).
+- `components/RightRail.tsx` — remove persistent active highlight; add `onAuxClick` middle-click and meta/ctrl modifier branch calling the new-instance flow.
+- `components/surface-tabs.tsx` (SurfaceTabStrip) — "+" button, context menu, duplicate/close-others actions.
+- New-instance target pickers reuse the M2-2.6 plus-menu picker patterns (directory picker / note create / address input) — do not fork new floating-menu machinery.
+
+## 5w. Composer stats row: the「性能与用量」pill line (M1.10 batch C addendum, approved 2026-09-29; source `.workbuddy/tasks/2026-09-29-m1.10c-composer-stats-pills.md`, dsh-v0.2.0-rc.1 StatsPills parity)
+
+> Scope: a persistent statistics line docked with the composer — two pills (time / usage) that surface session performance and token accounting next to the input, absorbing dsh 0.2.0's composer-dock stats without adding any statistics RPC.
+
+### Layout & placement (decision ① — plan A)
+
+- The `ContextRing` stays in the existing capsule row (`footerRight`), untouched. The stats row is a **new independent line directly below the composer footer row**, rendered outside the input card's frosted surface via a `belowRow` slot on `ComposerFrame` (mirroring `aboveRow`). Right-aligned to the same grid as `footerRight`; the row collapses to zero height when both pills are hidden.
+- Mounting follows the composer (not the chat transcript), so the figures stay visible while the transcript scrolls — dsh `conversation.composer.dock` parity.
+
+### Glass & motion (§5s tiers, zero new tokens)
+
+- Pills at rest: **L1 card** — base + edge from the footer-pill family recipe (`.gui-stats-pill` joins the pill family group in gui-composer.css; colour carries state, same discipline as 批次 C1).
+- Popovers: **L2 float** through the single `.gui-menu-popup` recipe (`useFloatingMenu`, two-phase transform-only enter) — the same convergence contract as 批次 C2; no pill may declare its own background/backdrop-filter/box-shadow.
+- Motion: pill entrance 180ms `var(--spring)` (the chip step of the §5s duration ladder); popover enter/exit is the shared menu two-phase; no opacity animation on backdrop-filter surfaces.
+
+### The two pills (decision ②)
+
+- **Time pill** — `N 轮 M 步 · tok/s` (turns · steps · decode speed). Popover detail rows: 模型用时 (Σ request wall time) / 工具用时 (Σ tool-call→tool-result wall time) / TTFT (average) / 输出速度 — each row only when its data exists; when the window carries **no timing data at all**, the pill degrades to a plain reading with no popover (dsh contract).
+- **Usage pill** — `总 tok · 缓存命中 %`. Popover: exact buckets input / cacheRead / cacheWrite / output (cacheWrite row drops when zero, dsh parity).
+
+### Data contract (decision ③ — zero new RPC)
+
+- **Token figures ride the daemon's durable projection**: `session.contextUsage` already returns `usage { input, output, cacheRead, cacheWrite, totalTokens, cost, cacheHitRate }` (TUI `cache_hit` parity, computed daemon-side). Composer already polls this RPC for the ContextRing — the stats row consumes the same state. Total = input + cacheRead + cacheWrite + output (billed input buckets + output). Paging/compaction never rewrites these numbers.
+- **Time/turn/step figures ride a visible-window fold** (`deriveWindowStats` in `packages/desktop-app/src/lib/derive-window-stats.ts`): daemon has no per-turn timing projection, so the fold answers "what is on screen" from `SessionEntry[]`, with field names deliberately mirroring dsh's `WindowStats` for a wholesale future swap.
+- **Fold 口径 (the contract tested in `packages/desktop-app/test/derive-window-stats.test.ts`)**:
+  - `turns` = non-synthetic user messages in window; `steps` = *settled* assistant messages (`stopReason` present — a streaming entry is not a step yet).
+  - `llmMs` = Σ `AssistantMessage.duration` over settled steps; `ttftMs`/`ttftSteps` = Σ/count of `ttft` where recorded.
+  - `decodeMs` = Σ `max(0, duration − ttft)` over steps carrying both; `decodeTokens` = Σ `usage.output` over those steps; displayed speed = `decodeTokens / (decodeMs / 1000)`.
+  - `toolMs` = Σ `max(0, toolResult.timestamp − hostAssistant.timestamp)` for `toolCallId` pairs where **both** sides are in-window; unpaired calls/results contribute nothing.
+- **Performance boundary**: the fold is O(n) over the visible tail (≤ ~200 entries). It may re-run per render (cheap field reads), but the row component is `memo()`-gated on the derived numbers + usage identity — a streaming delta changes no settled figure, so the comparator returns equal and the row does not re-render (contract test guards this).
+
+### Compact / detailed (decision ④)
+
+- Setting「性能与用量」(settings → 外观 → 聊天 section, `ChatSection`): Segmented **简洁 / 详细**, renderer-local `localStorage` key `musepi-gui-stats-mode` (`detailed` default) + a `musepi-stats-mode-changed` window event — the same pref pattern as `musepi-gui-chat-*` (GUI-only pref, zero daemon change).
+- **Detailed** (default): both pills with popovers, per above.
+- **Compact**: only two plain readings — decode speed and cache-hit — and only when each has data; no popovers, no counts. Both empty → the row renders nothing.
+
+### Interaction contracts
+
+- The two popovers share one open slot — opening one closes the other (the `useFloatingMenu` module mutex already enforces this app-wide).
+- Both empty (no steps, no tokens) → the whole row is hidden; a window of pure user messages shows the counts pill as a plain reading.
+- Figures never move because of paging or compaction: token figures are projection-backed; window figures only change when the window's settled content changes.
+
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

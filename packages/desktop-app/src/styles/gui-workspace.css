@@ -50,15 +50,13 @@
 	max-width: 240px;
 	padding: 3px 9px;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
-	color: var(--color-text-muted);
 	font-size: var(--ui-font-size-xs);
 	line-height: 16px;
 	cursor: pointer;
+	/* Material (glass fill + rim + sheen + hover/press) lives in the
+	 * footer-pill family, gui-composer.css — 批次 C1 材质一元化. */
 	/* Entrance pop when the mode turns on (composer row). */
 	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
-	transition: color 120ms ease-out, border-color 120ms ease-out;
 }
 
 @keyframes gui-chip-in {
@@ -72,52 +70,49 @@
 	}
 }
 
-.gui-mode-chip:hover {
-	color: var(--color-text);
-	border-color: var(--color-accent-bd);
-}
-
+/* Goal / paused / armed carry state through COLOUR on the family's glass
+ * surface (批次 C1: 材质一元化) — the family owns hover/lift, so these
+ * blocks declare only text colour + a tinted wash per state. */
 .gui-mode-chip--goal {
-	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
 	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 }
 
 .gui-mode-chip--goal:hover {
-	border-color: var(--color-accent);
+	background-color: color-mix(in oklab, currentColor 24%, var(--glass-bg));
 }
 
 /* Paused goal (session.goal pause): the record survives but the agent
  * isn't tracking it — warning tint instead of the live accent. */
 .gui-mode-chip--paused {
-	border-style: dashed;
-	border-color: color-mix(in oklab, var(--color-warning, #f5a524) 50%, transparent);
 	color: var(--color-warning, #f5a524);
-}
-
-.gui-mode-chip--paused:hover {
-	border-color: var(--color-warning, #f5a524);
+	background-color: color-mix(in oklab, var(--color-warning, #f5a524) 14%, var(--glass-bg));
 }
 
 /* Armed goal (openchamber parity): the chip is lit but the objective is
- * still pending — the next sent message becomes it. Dashed accent ring +
- * soft pulse read as "armed, not yet live". */
+ * still pending — the next sent message becomes it. Accent tint + a soft
+ * outer pulse read as "armed, not yet live". */
 .gui-mode-chip--armed {
-	border-style: dashed;
-	border-color: color-mix(in oklab, var(--color-accent) 55%, transparent);
 	color: var(--color-accent);
+	background-color: color-mix(in oklab, var(--color-accent) 16%, var(--glass-bg));
 	animation: gui-chip-in 180ms var(--spring), gui-armed-pulse 2s ease-in-out infinite;
 }
 
-.gui-mode-chip--armed:hover {
-	border-color: var(--color-accent);
-}
-
+/* The pulse must KEEP the family's rim insets (box-shadow replaces the
+ * whole list, not just the parts it names) or the glass rim flickers out
+ * mid-animation. */
 @keyframes gui-armed-pulse {
 	0%, 100% {
-		box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent);
+		box-shadow:
+			inset 0 1px 0 var(--glass-edge-hi),
+			inset 0 -1px 0 var(--glass-edge-lo),
+			0 0 0 0 color-mix(in oklab, var(--color-accent) 0%, transparent);
 	}
 	50% {
-		box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent);
+		box-shadow:
+			inset 0 1px 0 var(--glass-edge-hi),
+			inset 0 -1px 0 var(--glass-edge-lo),
+			0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent);
 	}
 }
 
@@ -127,16 +122,9 @@
 	gap: 7px;
 	padding: 3px 9px;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
 	cursor: pointer;
-	transition: border-color 140ms ease, background 140ms ease;
-}
-
-.gui-todo-chip:hover,
-.gui-todo-chip--open {
-	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
+	/* Material lives in the footer-pill family (批次 C1). */
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
 }
 
 /* Temporary swarm status chip (kimiwork parity): while a `task` tool runs,
@@ -148,16 +136,9 @@
 	gap: 7px;
 	padding: 3px 9px;
 	border-radius: 999px;
-	border: 1px solid var(--border);
-	background: color-mix(in oklab, var(--bg-overlay) var(--gui-glass-overlay, calc(55% * var(--gui-glass-alpha, 1))), transparent);
 	cursor: pointer;
-	transition: border-color 140ms ease, background 140ms ease;
-}
-
-.gui-swarm-chip:hover,
-.gui-swarm-chip--open {
-	border-color: color-mix(in oklab, var(--color-accent) 45%, transparent);
-	background: color-mix(in oklab, var(--bg-overlay) 65%, var(--color-accent) 6%);
+	/* Material lives in the footer-pill family (批次 C1). */
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
 }
 
 .gui-swarm-chip-dot {
@@ -185,23 +166,20 @@
 }
 
 /* Frosted floating member grid (the composer swarm chip's popup). The
- * guest-client SwarmCard renders inside with its own member chrome. */
+ * guest-client SwarmCard renders inside with its own member chrome. The
+ * frosted surface + two-phase enter live on the .gui-menu-popup shell
+ * (批次 C2) — this card keeps layout only. */
 .gui-swarm-popup-card {
 	width: min(400px, calc(100vw - 24px));
 	max-height: 320px;
 	overflow-y: auto;
 	padding: 10px 12px;
-	border-radius: var(--radius-xl);
-	border: 1px solid var(--border);
-	background: color-mix(in oklab, var(--color-surface) 82%, transparent);
-	backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	-webkit-backdrop-filter: blur(var(--gui-glass-blur)) saturate(var(--gui-glass-saturate));
-	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
-	animation: gui-todo-in 200ms var(--spring);
 }
 
 /* Expanded todo board (TUI todo panel parity): phases with per-phase bars,
- * status icons, blocked-task notes. */
+ * status icons, blocked-task notes. The frosted surface + two-phase enter
+ * live on the .gui-menu-popup shell (批次 C2) — this card keeps layout
+ * only. */
 .gui-todo-panel {
 	display: flex;
 	flex-direction: column;
@@ -212,22 +190,6 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 12px 14px;
-	border-radius: var(--radius-xl);
-	border: 1px solid var(--border);
-	background: var(--color-surface);
-	box-shadow: 0 8px 32px oklch(0 0 0 / 28%);
-	animation: gui-todo-in 200ms var(--spring);
-}
-
-@keyframes gui-todo-in {
-	from {
-		opacity: 0;
-		transform: translateY(6px);
-	}
-	to {
-		opacity: 1;
-		transform: translateY(0);
-	}
 }
 
 .gui-todo-phase {

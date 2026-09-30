@@ -2746,6 +2746,17 @@
 	color: var(--fg-muted);
 	animation: gui-obo-item-in 320ms var(--spring) 140ms both;
 }
+/* Announcement footer: the actions row hangs directly off the card here
+ * (the onboarding wraps its own actions inside a padded pane), so the
+ * base .gui-onboarding-actions gives it no inset — the buttons kissed the
+ * card's rounded bottom edge and got clipped by overflow:hidden. Own
+ * padding + a hairline turns it into a standard dialog footer. */
+.gui-announcement-card .gui-onboarding-actions {
+	flex-shrink: 0;
+	margin-top: 0;
+	padding: 12px 24px 16px;
+	border-top: 1px solid var(--border);
+}
 .gui-announcement-body :is(h1, h2, h3) {
 	margin: 14px 0 6px;
 	color: var(--fg);

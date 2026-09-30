@@ -10,8 +10,49 @@
  */
 "use strict";
 
+// ── Host guard ────────────────────────────────────────────────────────────
+// electron-updater's lazy autoUpdater getter constructs an app adapter that
+// reads `require("electron").app` — under a plain-Node host (a broken/raced
+// launcher shim executing main.cjs with node instead of the Electron binary)
+// that is undefined and the require below crashes the ENTIRE startup with a
+// cryptic ElectronAppAdapter dump (observed 2026-09-29: one `bun run desktop`
+// run raced a concurrent bun install rewriting the .bin shim). Degrade to a
+// disabled-updater stub with a one-line diagnosis instead: the GUI may still
+// come up, and the log says exactly what happened.
+const electronModule = require("electron");
+const app = typeof electronModule === "string" ? null : (electronModule.app ?? null);
+
+if (!app) {
+	const unavailable = "updater unavailable: main process is not running under the Electron binary (require(\"electron\") returned no app object — check the launcher shim)";
+	process.stderr.write(`[updater] ${unavailable}\n`);
+	const disabledState = {
+		status: "error",
+		mode: "ota",
+		version: null,
+		progress: { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 },
+		error: { kind: "check-other", message: unavailable },
+		installerPath: null,
+	};
+	module.exports = {
+		checkForUpdates: async () => ({ enabled: false, error: unavailable, url: "", otaCapable: false }),
+		downloadUpdate: async () => false,
+		downloadInstaller: async () => ({ ok: false, error: unavailable }),
+		quitAndInstall: async () => {
+			throw new Error(unavailable);
+		},
+		fetchManifestNotes: async () => null,
+		fetchManifestMeta: async () => null,
+		otaCapable: () => false,
+		detectSigning: () => "unknown",
+		log: (...args) => process.stderr.write(`[updater] ${args.join(" ")}\n`),
+		wireRenderer: () => {},
+		state: disabledState,
+	};
+	return;
+}
+
 const { autoUpdater } = require("electron-updater");
-const { app, BrowserWindow, session, shell } = require("electron");
+const { BrowserWindow, session, shell } = electronModule;
 const fs = require("node:fs");
 const nodePath = require("node:path");
 const { classifyUpdateError } = require("./update-logic.cjs");

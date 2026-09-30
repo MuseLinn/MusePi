@@ -756,13 +756,13 @@ export const commands = {
 	"modes validate usage": "用法:/modes validate <id> —— 校验预设文件(结构/环/悬空引用),不落盘",
 	"modes validate ok": '预设 "{0}" 校验通过',
 	"modes validate fail": '预设 "{0}" 校验失败:{1}',
-	"preset work name": "Work",
+	"preset work name": "工作模式",
 	"preset work description": "默认工作预设:完整工具集、无提示词覆盖(未启用预设时的行为)",
-	"preset chat name": "Chat",
+	"preset chat name": "对话模式",
 	"preset chat description": "极简对话:仅内置核心工具 + 固定 prompt + 无压缩",
-	"preset design name": "Design",
+	"preset design name": "设计模式",
 	"preset design description": "设计模式:全量工具 + 设计师 persona(视觉方案优先)",
-	"preset creator name": "Creator",
+	"preset creator name": "创作模式",
 	"preset creator description": "创造模式:创作预设/扩展的助手(全量工具 + 创作 persona)",
 } as const;
 

@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M1.12 tab-primary 补全 · 交互原型</title>
+<style>
+/* ── MusePi brand tokens（对齐 packages/client-core/src/styles/tokens.css）── */
+:root {
+  --bg: oklch(0.155 0.008 60);
+  --bg-raised: oklch(0.19 0.01 60);
+  --bg-inset: oklch(0.125 0.007 60);
+  --bg-overlay: oklch(0.23 0.012 60);
+  --fg: oklch(0.93 0.008 60);
+  --fg-muted: oklch(0.72 0.01 60);
+  --fg-faint: oklch(0.55 0.01 60);
+  --accent: oklch(0.7507 0.1295 79.85); /* #d9a441 brand gold */
+  --accent-fg: oklch(0.26 0.06 80);
+  --accent-muted: oklch(0.7507 0.1295 79.85 / 18%);
+  --accent-bd: oklch(0.7507 0.1295 79.85 / 35%);
+  --ok: oklch(0.76 0.14 150);
+  --warn: oklch(0.79 0.14 85);
+  --err: oklch(0.66 0.19 25);
+  --ring: oklch(0.817 0.112 205 / 70%);
+  --border: oklch(1 0 0 / 9%);
+  --border-strong: oklch(1 0 0 / 13%);
+  --radius: 6px; --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px; --radius-2xl: 16px;
+  --font-ui: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --spring: linear(0, 0.0126 3.23%, 0.0458 6.45%, 0.0935 9.68%, 0.1511 12.90%, 0.2147 16.13%, 0.2812 19.35%, 0.3483 22.58%, 0.4143 25.81%, 0.4778 29.03%, 0.5379 32.26%, 0.5941 35.48%, 0.6460 38.71%, 0.6933 41.94%, 0.7362 45.16%, 0.7747 48.39%, 0.8089 51.61%, 0.8392 54.84%, 0.8657 58.06%, 0.8888 61.29%, 0.9088 64.52%, 0.9260 67.74%, 0.9407 70.97%, 0.9531 74.19%, 0.9635 77.42%, 0.9722 80.65%, 0.9794 83.87%, 0.9853 87.10%, 0.9900 90.32%, 0.9938 93.55%, 0.9968 96.77%, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font-ui);
+  background:
+    radial-gradient(1200px 700px at 15% -10%, oklch(0.30 0.05 75 / 45%), transparent 60%),
+    radial-gradient(900px 600px at 90% 110%, oklch(0.28 0.06 250 / 35%), transparent 60%),
+    var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+  font-size: 13px;
+}
+
+/* ── 原型页顶栏 ─────────────────────────────── */
+.proto-bar {
+  height: 52px; display: flex; align-items: center; gap: 12px;
+  padding: 0 20px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg-overlay) 55%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  position: relative; z-index: 50;
+}
+.proto-bar .mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #d9a441 0%, #b8862f 50%, #966400 100%);
+  box-shadow: 0 2px 10px oklch(0.7507 0.1295 79.85 / 40%);
+}
+.proto-bar h1 { font-size: 13px; font-weight: 600; letter-spacing: 0.02em; }
+.proto-bar .sub { color: var(--fg-faint); font-size: 12px; }
+.mode-switch {
+  margin-left: auto; display: flex; gap: 2px; padding: 3px;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-xl);
+}
+.mode-switch button {
+  border: 0; background: transparent; color: var(--fg-muted);
+  font: inherit; font-size: 12px; padding: 5px 14px; border-radius: 10px;
+  cursor: pointer; transition: all 0.25s var(--spring);
+}
+.mode-switch button.on {
+  background: var(--accent-muted); color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-bd);
+}
+
+/* ── 主区域 ─────────────────────────────────── */
+.stage { display: flex; height: calc(100% - 52px); }
+
+.app {
+  flex: 1; display: flex; flex-direction: column; min-width: 0;
+}
+
+/* 应用窗口顶栏 */
+.app-header {
+  height: 40px; display: flex; align-items: center; gap: 10px;
+  padding: 0 14px; border-bottom: 1px solid var(--border);
+}
+.traffic { display: flex; gap: 7px; }
+.traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.traffic i:nth-child(1) { background: oklch(0.66 0.19 25); }
+.traffic i:nth-child(2) { background: oklch(0.79 0.14 85); }
+.traffic i:nth-child(3) { background: oklch(0.76 0.14 150); }
+.project-chip {
+  display: flex; align-items: center; gap: 7px; padding: 4px 12px;
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  font-size: 12px; color: var(--fg-muted); font-family: var(--font-mono);
+}
+.project-chip b { color: var(--fg); font-weight: 600; }
+.project-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.app-header .spacer { flex: 1; }
+.hdr-btn {
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted);
+  font: inherit; font-size: 11.5px; padding: 4px 10px; border-radius: var(--radius-lg);
+  cursor: pointer; transition: all 0.2s;
+}
+.hdr-btn:hover { color: var(--fg); border-color: var(--border-strong); }
+
+.app-body { flex: 1; display: flex; min-height: 0; }
+
+/* 左侧会话栏 */
+.sessions {
+  width: 208px; border-right: 1px solid var(--border);
+  padding: 12px 10px; display: flex; flex-direction: column; gap: 6px;
+  background: color-mix(in oklab, var(--bg) 60%, transparent);
+}
+.sessions .cap { font-size: 10.5px; color: var(--fg-faint); letter-spacing: 0.08em; padding: 2px 8px 6px; }
+.sess {
+  padding: 8px 10px; border-radius: var(--radius-lg); font-size: 12px; color: var(--fg-muted);
+  cursor: pointer; transition: all 0.2s; border: 1px solid transparent;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sess small { font-size: 10.5px; color: var(--fg-faint); font-family: var(--font-mono); }
+.sess.on { background: var(--accent-muted); border-color: var(--accent-bd); color: var(--fg); }
+.sess:hover:not(.on) { background: var(--bg-overlay); }
+
+/* 工作区玻璃层 */
+.workspace {
+  flex: 1; display: flex; min-width: 0;
+  background: color-mix(in oklab, var(--bg-overlay) 55%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* 中心浮面 */
+.center { flex: 1; display: flex; flex-direction: column; min-width: 0; position: relative; }
+
+/* 中心浮面 tab 带（远期模式） */
+.center-tabs {
+  display: none; align-items: center; gap: 2px; padding: 8px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+body.mode-center .center-tabs { display: flex; }
+.ctab {
+  display: flex; align-items: center; gap: 6px; padding: 6px 12px;
+  font-size: 12px; color: var(--fg-muted); cursor: pointer; user-select: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; border: 1px solid transparent; border-bottom: 0;
+  transition: all 0.25s var(--spring); position: relative;
+}
+.ctab:hover { color: var(--fg); background: var(--bg-overlay); }
+.ctab.on {
+  color: var(--fg); background: color-mix(in oklab, var(--bg-raised) 80%, transparent);
+  border-color: var(--border);
+}
+.ctab.on::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px;
+  background: var(--accent); border-radius: 2px;
+}
+.ctab .ic { font-size: 12px; }
+
+/* 中心内容 */
+.center-content { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.chat-scroll { flex: 1; padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+.msg { display: flex; gap: 10px; max-width: 78%; }
+.msg .avatar {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #d9a441, #966400);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--accent-fg); font-weight: 700;
+}
+.msg.user { align-self: flex-end; flex-direction: row-reverse; }
+.msg.user .avatar { background: var(--bg-overlay); color: var(--fg-muted); border: 1px solid var(--border-strong); }
+.bubble {
+  padding: 9px 13px; border-radius: var(--radius-xl); font-size: 12.5px; line-height: 1.55;
+  background: color-mix(in oklab, var(--bg-raised) 75%, transparent);
+  border: 1px solid var(--border);
+}
+.msg.user .bubble { background: var(--accent-muted); border-color: var(--accent-bd); }
+.tool-card {
+  margin-top: 6px; border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--bg-inset); font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted);
+  padding: 7px 10px; display: flex; gap: 8px; align-items: center;
+}
+.tool-card .tk { color: var(--ok); }
+
+/* 中心其它表面占位（远期模式） */
+.center-surface {
+  flex: 1; display: none; padding: 26px; font-family: var(--font-mono); font-size: 12px;
+  color: var(--fg-muted); line-height: 1.7;
+}
+body.mode-center .center-surface.show { display: block; }
+body.mode-center .center-content.chat-mode .chat-scroll,
+body.mode-center .center-content.chat-mode .composer { display: none; }
+.center-surface .ln .p { color: var(--accent); }
+.center-surface .ln .s { color: var(--fg-faint); }
+.center-surface .ln .k { color: var(--ring); }
+
+/* Composer */
+.composer {
+  margin: 0 22px 16px; border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--bg-raised) 72%, transparent);
+  border: 1px solid var(--border-strong);
+  backdrop-filter: blur(24px) saturate(180%);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 35%);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  transition: border-color 0.25s;
+}
+.composer:focus-within { border-color: var(--accent-bd); }
+.composer textarea-like {
+  display: block; min-height: 40px; color: var(--fg); font-size: 13px; line-height: 1.5;
+  padding: 4px 6px; outline: none;
+}
+.composer .row { display: flex; align-items: center; gap: 7px; }
+.capsule {
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px;
+  border-radius: var(--radius-xl); font-size: 11.5px; cursor: pointer; user-select: none;
+  background: var(--bg-inset); border: 1px solid var(--border); color: var(--fg-muted);
+  transition: all 0.2s; white-space: nowrap;
+}
+.capsule:hover { color: var(--fg); border-color: var(--border-strong); }
+.capsule.gold { background: var(--accent-muted); border-color: var(--accent-bd); color: var(--accent); }
+.capsule svg { width: 12px; height: 12px; }
+.row .spacer { flex: 1; }
+.send-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 0; cursor: pointer;
+  background: linear-gradient(135deg, #d9a441, #b8862f); color: var(--accent-fg);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 14px oklch(0.7507 0.1295 79.85 / 35%);
+  transition: transform 0.25s var(--spring);
+}
+.send-btn:hover { transform: scale(1.08); }
+
+/* 桌宠球体（与 pet-face 同源：整眼、无瞳孔） */
+.orb {
+  position: absolute; right: 26px; bottom: 92px; width: 64px; height: 64px; z-index: 5;
+  filter: drop-shadow(0 8px 20px oklch(0 0 0 / 45%));
+  animation: bob 4.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+
+/* ── 右栏：rail + tab strip ─────────────────── */
+.panel { width: 320px; border-left: 1px solid var(--border); display: flex; background: color-mix(in oklab, var(--bg) 45%, transparent); }
+/* 右缘 rail：贴面板右侧，纯 launcher，无常态高亮 */
+.rail {
+  width: 44px; border-left: 1px solid var(--border); padding: 10px 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.rail-btn {
+  width: 32px; height: 32px; border-radius: var(--radius-lg); border: 1px solid transparent;
+  background: transparent; color: var(--fg-faint); cursor: pointer; font-size: 14px;
+  font-family: var(--font-ui), "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  display: flex; align-items: center; justify-content: center; position: relative;
+  transition: color 0.2s, background 0.25s var(--spring);
+}
+.rail-btn:hover { color: var(--fg); background: var(--bg-overlay); }
+.rail-btn .tip {
+  position: absolute; right: 42px; top: 50%; transform: translateY(-50%) translateX(4px);
+  background: var(--bg-overlay); border: 1px solid var(--border-strong); color: var(--fg);
+  font-size: 11px; padding: 4px 9px; border-radius: var(--radius-lg); white-space: nowrap;
+  opacity: 0; pointer-events: none; transition: all 0.2s; z-index: 30;
+  box-shadow: 0 8px 20px oklch(0 0 0 / 40%);
+}
+.rail-btn:hover .tip { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+.panel-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* tab strip（M1.12 核心新增） */
+.tabstrip {
+  display: flex; align-items: center; gap: 2px; padding: 8px 8px 0;
+  border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none;
+}
+.tabstrip::-webkit-scrollbar { display: none; }
+.ptab {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 8px 6px 11px;
+  font-size: 11.5px; color: var(--fg-muted); cursor: pointer; user-select: none;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; border: 1px solid transparent; border-bottom: 0;
+  white-space: nowrap; transition: all 0.25s var(--spring); flex-shrink: 0;
+}
+.fav, .ic, .ctab .ic, .pane-cap, .project-chip .dot { font-family: var(--font-ui), "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+.fav { font-size: 11px; }
+.ptab .x {
+  width: 15px; height: 15px; border-radius: 50%; border: 0; background: transparent;
+  color: var(--fg-faint); font-size: 11px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.ptab .x:hover { background: oklch(0.66 0.19 25 / 30%); color: var(--err); }
+.ptab:hover { color: var(--fg); background: var(--bg-overlay); }
+.ptab.on {
+  color: var(--fg); background: color-mix(in oklab, var(--bg-raised) 85%, transparent);
+  border-color: var(--border);
+}
+.ptab.on::after {
+  content: ""; position: absolute; left: 8px; right: 8px; bottom: 0; height: 2px;
+  background: var(--accent); border-radius: 2px 2px 0 0;
+}
+.ptab { position: relative; }
+.ptab.flash { animation: flash 0.7s var(--spring); }
+@keyframes flash { 0% { background: var(--accent-muted); } 100% { background: transparent; } }
+.ptab.dragging { opacity: 0.35; }
+.ptab.dragover { box-shadow: inset 2px 0 0 var(--accent); }
+
+.tab-add {
+  width: 24px; height: 24px; margin: 0 2px 2px; border-radius: var(--radius-lg); flex-shrink: 0;
+  border: 1px solid var(--border); background: transparent; color: var(--fg-muted);
+  font-size: 14px; line-height: 1; cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.tab-add:hover { color: var(--accent); border-color: var(--accent-bd); background: var(--accent-muted); }
+
+/* 面板内容 */
+.panel-content { flex: 1; padding: 12px; overflow: hidden; font-size: 12px; }
+.pane-cap { font-size: 10.5px; color: var(--fg-faint); letter-spacing: 0.08em; margin: 2px 4px 10px; display: flex; align-items: center; gap: 6px; }
+.pane-cap .id { font-family: var(--font-mono); color: var(--accent); background: var(--accent-muted); padding: 1px 6px; border-radius: 4px; letter-spacing: 0; }
+.tree { font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-muted); line-height: 2; }
+.tree .dir { color: var(--fg); font-weight: 600; }
+.tree .fi { padding-left: 16px; display: block; }
+.tree .fi:hover { color: var(--accent); }
+.note-card {
+  background: var(--bg-inset); border: 1px solid var(--border); border-radius: var(--radius-xl);
+  padding: 12px; color: var(--fg-muted); line-height: 1.7; font-size: 12px;
+}
+.note-card b { color: var(--fg); }
+.note-card .tg { display: inline-block; font-size: 10.5px; color: var(--accent); background: var(--accent-muted); border-radius: 4px; padding: 1px 6px; margin-right: 5px; }
+.browser-bar {
+  display: flex; align-items: center; gap: 7px; background: var(--bg-inset);
+  border: 1px solid var(--border); border-radius: var(--radius-xl); padding: 6px 11px;
+  font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); margin-bottom: 12px;
+}
+.browser-bar .lock { color: var(--ok); }
+
+/* 弹出菜单（+ 新标签 / 右键） */
+.menu {
+  position: fixed; z-index: 100; min-width: 190px; padding: 5px;
+  background: color-mix(in oklab, var(--bg-overlay) 88%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-xl);
+  box-shadow: 0 16px 40px oklch(0 0 0 / 50%);
+  display: none; flex-direction: column;
+}
+.menu.open { display: flex; animation: menuIn 0.28s var(--spring); }
+@keyframes menuIn { from { opacity: 0; transform: scale(0.92) translateY(-5px); } }
+.menu .mi {
+  display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius-lg);
+  font-size: 12px; color: var(--fg-muted); cursor: pointer; border: 0; background: transparent;
+  font-family: inherit; text-align: left; width: 100%; transition: all 0.15s;
+}
+.menu .mi:hover { background: var(--accent-muted); color: var(--fg); }
+.menu .mi .ic { width: 16px; text-align: center; }
+.menu .mi small { margin-left: auto; color: var(--fg-faint); font-size: 10.5px; }
+.menu .sep { height: 1px; background: var(--border); margin: 5px 8px; }
+.menu .mh { font-size: 10px; color: var(--fg-faint); letter-spacing: 0.08em; padding: 5px 10px 3px; }
+
+/* 标注气泡 */
+.badge {
+  position: absolute; z-index: 20; width: 19px; height: 19px; border-radius: 50%;
+  background: linear-gradient(135deg, #d9a441, #b8862f); color: var(--accent-fg);
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 3px oklch(0.7507 0.1295 79.85 / 25%), 0 4px 12px oklch(0 0 0 / 40%);
+  cursor: default; animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 3px oklch(0.7507 0.1295 79.85 / 25%), 0 4px 12px oklch(0 0 0 / 40%); } 50% { box-shadow: 0 0 0 6px oklch(0.7507 0.1295 79.85 / 10%), 0 4px 12px oklch(0 0 0 / 40%); } }
+
+/* 右侧图例 */
+.legend {
+  width: 264px; border-left: 1px solid var(--border); padding: 16px;
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+  overflow-y: auto;
+}
+.legend h2 { font-size: 11px; letter-spacing: 0.1em; color: var(--fg-faint); font-weight: 600; margin-bottom: 12px; }
+.legend .item { display: flex; gap: 10px; margin-bottom: 14px; align-items: flex-start; }
+.legend .n {
+  width: 19px; height: 19px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-muted); color: var(--accent); border: 1px solid var(--accent-bd);
+  font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+}
+.legend .item p { font-size: 11.5px; line-height: 1.6; color: var(--fg-muted); }
+.legend .item p b { color: var(--fg); font-weight: 600; }
+.legend .note {
+  margin-top: 14px; padding: 10px 12px; border-radius: var(--radius-xl); font-size: 11px;
+  line-height: 1.65; color: var(--fg-faint); background: var(--bg-inset); border: 1px solid var(--border);
+}
+.legend .note em { color: var(--accent); font-style: normal; }
+.toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(20px);
+  background: color-mix(in oklab, var(--bg-overlay) 92%, transparent);
+  border: 1px solid var(--accent-bd); color: var(--fg); font-size: 12px;
+  padding: 9px 16px; border-radius: var(--radius-xl); opacity: 0; pointer-events: none;
+  transition: all 0.35s var(--spring); z-index: 200; backdrop-filter: blur(24px);
+  box-shadow: 0 12px 32px oklch(0 0 0 / 45%);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+kbd {
+  font-family: var(--font-mono); font-size: 10px; background: var(--bg-overlay);
+  border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px;
+}
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="mark"></div>
+  <h1>tab-primary 交互原型</h1>
+  <span class="sub">M1.12 右栏补全 · 中心浮面远期 · 送审稿 v1（2026-09-29）</span>
+  <div class="mode-switch" style="margin-left:auto; font-size:12px; color:var(--fg-faint); padding-right:4px;">
+    送审稿 v2（2026-09-29）· 仅右栏改动，中心主会话不动
+  </div>
+</div>
+
+<div class="stage">
+  <div class="app">
+    <div class="app-header">
+      <div class="traffic"><i></i><i></i><i></i></div>
+      <div class="project-chip"><span class="dot"></span> musepi-omp <b>main</b></div>
+      <div class="spacer"></div>
+      <button class="hdr-btn">能力中心</button>
+      <button class="hdr-btn">设置</button>
+    </div>
+    <div class="app-body">
+      <!-- 左：会话列表 -->
+      <div class="sessions">
+        <div class="cap">会话</div>
+        <div class="sess on">0.5 roadmap 收尾<small>main · 进行中</small></div>
+        <div class="sess">M1.12 原型评审<small>design · 新</small></div>
+        <div class="sess">宣传片 A/B 终版<small>promo · 已完成</small></div>
+        <div class="sess">桌宠眼动调参<small>pet · 已完成</small></div>
+      </div>
+
+      <!-- 工作区玻璃层 -->
+      <div class="workspace">
+        <!-- 中心浮面 -->
+        <div class="center">
+          <div class="center-content" id="centerContent">
+            <div class="chat-scroll" id="chatScroll">
+              <div class="msg">
+                <div class="avatar">π</div>
+                <div>
+                  <div class="bubble">右栏 tab-primary 补全的设计稿我已经按液态玻璃 token 出了一版，你看标注 ①–④。</div>
+                  <div class="tool-card"><span class="tk">✓</span> read docs/review/0.5.0-promo-gap-analysis.md</div>
+                </div>
+              </div>
+              <div class="msg user">
+                <div class="avatar">袁</div>
+                <div class="bubble">rail 还是一对一镜像标签带，这不就是换皮的侧边栏吗？</div>
+              </div>
+              <div class="msg">
+                <div class="avatar">π</div>
+                <div class="bubble">模型层早已是 <b style="font-family:var(--font-mono)">surface::target</b> 实例地址（use-panel-tabs.ts，openchamber parity），差的是交互层入口——这就是 M1.12 要补的。</div>
+              </div>
+            </div>
+
+            <!-- Composer -->
+            <div class="composer">
+              <div class="textarea-like" contenteditable="true">把 M1.12 排进 0.5.x 第一批…</div>
+              <div class="row">
+                <div class="capsule gold">✓ 自动审批</div>
+                <div class="capsule">Kimi K2 · 深思</div>
+                <div class="capsule">🎙</div>
+                <div class="capsule">@文件</div>
+                <div class="spacer"></div>
+                <div class="capsule" style="padding:4px 8px;">规划模式</div>
+                <button class="send-btn">➤</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 桌宠球体（pet-face 同源：整眼无瞳孔） -->
+          <svg class="orb" viewBox="0 0 228 228">
+            <defs>
+              <radialGradient id="orbBody" cx="38%" cy="30%" r="80%">
+                <stop offset="0%" stop-color="oklch(0.42 0.07 75)"/>
+                <stop offset="55%" stop-color="oklch(0.24 0.04 70)"/>
+                <stop offset="100%" stop-color="oklch(0.16 0.03 65)"/>
+              </radialGradient>
+            </defs>
+            <circle cx="114" cy="114" r="105" fill="url(#orbBody)"/>
+            <ellipse cx="82" cy="66" rx="34" ry="18" fill="oklch(1 0 0 / 14%)" transform="rotate(-18 82 66)"/>
+            <g id="orbEyes">
+              <ellipse cx="86" cy="112" rx="15" ry="21" fill="oklch(0.96 0.01 80)"/>
+              <ellipse cx="142" cy="112" rx="15" ry="21" fill="oklch(0.96 0.01 80)"/>
+            </g>
+            <path d="M 102 158 Q 114 166 126 158" stroke="oklch(0.96 0.01 80)" stroke-width="5" fill="none" stroke-linecap="round"/>
+          </svg>
+        </div>
+
+        <!-- 右栏：标签带面板 + 右缘 rail（与真实客户端 RightRail 同构） -->
+        <div class="panel">
+          <div class="panel-main">
+            <div class="tabstrip" id="tabstrip"></div>
+            <div class="panel-content" id="panelContent"></div>
+          </div>
+          <div class="rail" id="rail"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图例 -->
+  <div class="legend">
+    <h2>变更标注 · M1.12</h2>
+    <div class="item"><div class="n">1</div><p><b>「+」开新实例</b>：标签带头部新增 +，按表面类型出菜单（文件→选目录、笔记→新建、浏览器→输地址）。</p></div>
+    <div class="item"><div class="n">2</div><p><b>rail 只是快捷启动</b>：悬停才高亮，不随活动标签保持点亮，避免看起来像实例标签；单击 = 聚焦该表面已有标签（同视图再点 = 收起面板，沿用现有 RightRail 语义）；<kbd>中键</kbd>/<kbd>⌘</kbd>+点击 = 新开一个实例标签。</p></div>
+    <div class="item"><div class="n">3</div><p><b>同表面多实例</b>：标签身份 <b>surface::target</b>（目录路径 / note id / URL），例如同时开两个不同目录的文件标签。</p></div>
+    <div class="item"><div class="n">4</div><p><b>标签右键菜单</b>：复制标签 / 关闭其他 / 关闭；拖拽排序沿用现有 dnd-kit。</p></div>
+    <div class="item"><div class="n">✕</div><p><b>已否决 · 中心浮面多表面</b>：维持 codex 式布局——主会话居中独占，终端/代码/看板等附加表面全部走右侧面板标签承载，中心面不做容器级切换。</p></div>
+    <div class="note">本原型可实际交互：<em>点 rail</em>看聚焦闪烁、<em>中键或 ⌘+点 rail</em>开新实例、<em>右键标签</em>出菜单、<em>拖标签</em>换位。布局同真实客户端：面板内容在左、44px rail 贴右缘。实现层现状：<em>use-panel-tabs.ts</em> 模型已具备全部能力，本次只补 UI 入口与 target 传递。</div>
+  </div>
+</div>
+
+<div class="menu" id="menu"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── 数据 ─────────────────────────────────────── */
+const strip = document.getElementById("tabstrip");
+const rail = document.getElementById("rail");
+const SURFACES = {
+  files:   { fav: "📁", label: "文件",   tip: "文件 · 中键/⌘点击开新目录" },
+  notes:   { fav: "📝", label: "笔记",   tip: "笔记 · 中键/⌘点击新建" },
+  browser: { fav: "🌐", label: "浏览器", tip: "浏览器 · 中键/⌘点击开新地址" },
+  board:   { fav: "▦",  label: "看板",   tip: "看板" },
+};
+const INSTANCE_POOL = {
+  files: ["src/components", "docs/review", "packages/client-core", ".workbuddy"],
+  notes: ["会议 · M1.12 评审", "灵感 · 桌宠彩蛋", "TODO · 0.5.x 批次"],
+  browser: ["github.com/musepi", "muselinn.github.io/MusePi", "developer.mozilla.org"],
+};
+let uid = 0;
+const tabs = [];           // {id, surface, target, label}
+let activeId = null;
+let poolCursor = { files: 0, notes: 1, browser: 0 };
+
+/* ── 初始化：恢复一个「现状已够用的最小集」 ───── */
+function addTab(surface, target, opts = {}) {
+  const t = { id: ++uid, surface, target, label: target };
+  tabs.push(t);
+  renderTabs();
+  if (!opts.inactive) setActive(t.id, { silent: true });
+  return t;
+}
+addTab("files", "src/", { inactive: true });
+addTab("notes", "0.5 收尾清单", { inactive: true });
+addTab("browser", "github.com/musepi", { inactive: true });
+setActive(tabs[0].id, { silent: true });
+
+/* ── rail 渲染 ────────────────────────────────── */
+Object.entries(SURFACES).forEach(([key, s]) => {
+  const b = document.createElement("button");
+  b.className = "rail-btn"; b.dataset.surface = key;
+  b.innerHTML = `<span>${s.fav}</span><span class="tip">${s.tip}</span>`;
+  b.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey) { openNewInstance(key); return; }
+    // 单击 = 聚焦 or 打开（launcher 语义）
+    const existing = tabs.find(t => t.surface === key);
+    if (existing) { setActive(existing.id); flash(existing.id); toast(`聚焦已有「${existing.label}」标签 · ${key}::${existing.target}`); }
+    else { addTab(key, defaultTarget(key)); toast(`rail 打开 ${key}::${defaultTarget(key)}`); }
+  });
+  b.addEventListener("auxclick", (e) => { if (e.button === 1) { e.preventDefault(); openNewInstance(key); } });
+  b.addEventListener("contextmenu", (e) => { e.preventDefault(); openNewInstance(key); });
+  rail.appendChild(b);
+});
+function defaultTarget(surface) {
+  const pool = INSTANCE_POOL[surface];
+  return pool ? pool[poolCursor[surface] % pool.length] : SURFACES[surface].label;
+}
+function openNewInstance(surface) {
+  const target = nextTarget(surface);
+  const t = addTab(surface, target);
+  toast(`新实例 ${surface}::${target}`);
+}
+function nextTarget(surface) {
+  const pool = INSTANCE_POOL[surface];
+  if (!pool) return SURFACES[surface].label;
+  poolCursor[surface]++;
+  return pool[(poolCursor[surface] - 1) % pool.length];
+}
+
+/* ── tab strip 渲染 ───────────────────────────── */
+function renderTabs() {
+  strip.querySelectorAll(".ptab,.tab-add").forEach(n => n.remove());
+  tabs.forEach(t => {
+    const el = document.createElement("div");
+    el.className = "ptab" + (t.id === activeId ? " on" : "");
+    el.dataset.id = t.id; el.draggable = true;
+    el.innerHTML = `<span class="fav">${SURFACES[t.surface].fav}</span><span>${t.label}</span><button class="x" title="关闭">×</button>`;
+    el.addEventListener("click", (e) => { if (!e.target.classList.contains("x")) setActive(t.id); });
+    el.querySelector(".x").addEventListener("click", (e) => { e.stopPropagation(); closeTab(t.id); });
+    el.addEventListener("contextmenu", (e) => { e.preventDefault(); tabMenu(e, t); });
+    // 拖拽排序（示意）
+    el.addEventListener("dragstart", () => el.classList.add("dragging"));
+    el.addEventListener("dragend", () => { el.classList.remove("dragging"); renderTabs(); });
+    el.addEventListener("dragover", (e) => { e.preventDefault(); el.classList.add("dragover"); });
+    el.addEventListener("dragleave", () => el.classList.remove("dragover"));
+    el.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const from = tabs.findIndex(x => x.id === +el.dataset.id);
+      const dragEl = strip.querySelector(".dragging");
+      if (!dragEl) return;
+      const fromId = +dragEl.dataset.id;
+      const to = tabs.findIndex(x => x.id === +el.dataset.id);
+      const [moved] = tabs.splice(tabs.findIndex(x => x.id === fromId), 1);
+      tabs.splice(to, 0, moved);
+      renderTabs(); toast(`标签排序：「${moved.label}」移至第 ${to + 1} 位`);
+    });
+    strip.appendChild(el);
+  });
+  // 「+」按钮
+  const add = document.createElement("button");
+  add.className = "tab-add"; add.textContent = "+"; add.title = "新标签";
+  add.addEventListener("click", (e) => plusMenu(e));
+  strip.appendChild(add);
+  renderPanel();
+}
+function setActive(id, opts = {}) {
+  activeId = id;
+  strip.querySelectorAll(".ptab").forEach(el => el.classList.toggle("on", +el.dataset.id === id));
+  renderPanel();
+  if (!opts.silent) {
+    const t = tabs.find(x => x.id === id);
+    if (t) document.getElementById("panelContent").dataset.id = `${t.surface}::${t.target}`;
+  }
+}
+function flash(id) {
+  const el = strip.querySelector(`.ptab[data-id="${id}"]`);
+  if (el) { el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); }
+}
+function closeTab(id) {
+  const i = tabs.findIndex(t => t.id === id);
+  if (i < 0) return;
+  const [gone] = tabs.splice(i, 1);
+  if (activeId === id) activeId = tabs[Math.min(i, tabs.length - 1)]?.id ?? null;
+  renderTabs();
+  toast(`关闭 ${gone.surface}::${gone.target}`);
+}
+
+/* ── 面板内容 ─────────────────────────────────── */
+function renderPanel() {
+  const c = document.getElementById("panelContent");
+  const t = tabs.find(x => x.id === activeId);
+  if (!t) { c.innerHTML = `<div class="pane-cap">无打开的标签 · 点 rail 或 + 开始</div>`; return; }
+  c.innerHTML = `<div class="pane-cap">${SURFACES[t.surface].fav} ${SURFACES[t.surface].label}<span class="id">${t.surface}::${t.target}</span></div>` + ({
+    files: `<div class="tree"><div class="dir">▾ ${t.target}/</div><span class="fi">├ composer.tsx</span><span class="fi">├ use-panel-tabs.ts</span><span class="fi">├ ChatView.tsx</span><span class="fi">└ pet-face.ts</span></div>`,
+    notes: `<div class="note-card"><span class="tg">0.5.x</span><b>${t.target}</b><br><br>① M1.12 右栏 tab-primary 补全（设计稿先行）<br>② M1.10 批次 C composer 液态玻璃<br>③ M4 专家团设计稿（creation-prompts 输入）</div>`,
+    browser: `<div class="browser-bar"><span class="lock">🔒</span> https://${t.target}</div><div class="note-card">该表面托管外部页面，target = URL 实例地址，可同时开多个站点标签。</div>`,
+    board: `<div class="note-card">▦ 看板表面：Hello World / 每日财经，widget 容器占位。</div>`,
+  })[t.surface];
+}
+
+/* ── 菜单 ─────────────────────────────────────── */
+const menu = document.getElementById("menu");
+function hideMenu() { menu.classList.remove("open"); }
+document.addEventListener("click", (e) => { if (!menu.contains(e.target)) hideMenu(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") hideMenu(); });
+
+function plusMenu(e) {
+  e.stopPropagation();
+  menu.innerHTML = `<div class="mh">新标签 · 选择表面</div>` +
+    Object.entries(SURFACES).map(([k, s]) =>
+      `<button class="mi" data-surface="${k}"><span class="ic">${s.fav}</span>${s.label} 新实例<small>${k === "files" ? "选目录" : k === "notes" ? "新建笔记" : k === "browser" ? "输地址" : "打开"}</small></button>`
+    ).join("");
+  menu.classList.add("open");
+  positionMenu(e);
+  menu.querySelectorAll(".mi").forEach(mi => mi.addEventListener("click", () => {
+    hideMenu(); openNewInstance(mi.dataset.surface);
+  }));
+}
+function tabMenu(e, t) {
+  menu.innerHTML = `
+    <button class="mi" data-act="copy"><span class="ic">⧉</span>复制标签<small>${t.surface}::${t.target}</small></button>
+    <button class="mi" data-act="closeOthers"><span class="ic">⌁</span>关闭其他标签</button>
+    <div class="sep"></div>
+    <button class="mi" data-act="close"><span class="ic">×</span>关闭</button>`;
+  menu.classList.add("open");
+  positionMenu(e);
+  menu.querySelectorAll(".mi").forEach(mi => mi.addEventListener("click", () => {
+    hideMenu();
+    if (mi.dataset.act === "copy") { const c = addTab(t.surface, t.target + "（副本）"); toast(`复制 → ${c.surface}::${c.target}`); }
+    if (mi.dataset.act === "closeOthers") { for (let i = tabs.length - 1; i >= 0; i--) if (tabs[i].id !== t.id) tabs.splice(i, 1); activeId = t.id; renderTabs(); toast("已关闭其他标签"); }
+    if (mi.dataset.act === "close") closeTab(t.id);
+  }));
+}
+function positionMenu(e) {
+  menu.style.left = Math.min(e.clientX, innerWidth - 220) + "px";
+  menu.style.top = Math.min(e.clientY, innerHeight - 190) + "px";
+}
+
+/* ── toast ────────────────────────────────────── */
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+renderTabs();
+</script>
+</body>
+</html>

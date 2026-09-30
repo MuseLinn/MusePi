@@ -42,6 +42,7 @@ import { type SuggestionStepKey, stepSuggestionIndex } from "../lib/suggestion-n
 import { useFloatingMenu } from "../lib/use-floating-menu";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
+import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { StateIcon } from "./StateIcon";
 
 const statusLabel = (status: string): string => {
@@ -163,10 +164,8 @@ function faviconUrl(url: string): string | undefined {
 	}
 }
 
-/** #rgb/#rrggbb → WCAG 相对亮度 (0–1); 无效返回 null。主题色小于 ~0.42 视作
- *  深色背景, 前景反题成白 — 让 tab badge 读取网页 theme-color 时保持对比度。 */
-function hexLuminance(color: string | null | undefined): number | null {
-	if (!color) return null;
+/** #rgb/#rrggbb → {r,g,b} (0–255); 无效返回 null。 */
+function parseHexColor(color: string): { r: number; g: number; b: number } | null {
 	const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
 	if (!m) return null;
 	let hex = m[1]!;
@@ -176,11 +175,7 @@ function hexLuminance(color: string | null | undefined): number | null {
 			.map(c => `${c}${c}`)
 			.join("");
 	const n = Number.parseInt(hex, 16);
-	const lin = (c: number): number => {
-		c /= 255;
-		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-	};
-	return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+	return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
 }
 
 interface AddressDisplayParts {
@@ -261,6 +256,40 @@ export function ManagedBrowserPane({
 	// 类,与 ContextPanel 的 agent tabs strip 同配方)。
 	const tabsRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(tabsRef);
+
+	// 标签右键菜单(桌面浏览器 parity):关闭/关闭其他/复制标签页/复制网址。
+	const [tabMenu, setTabMenu] = useState<{ tabId: string; x: number; y: number } | null>(null);
+	const tabMenuItems = useMemo((): ContextMenuItem[] => {
+		if (!tabMenu) return [];
+		const target = host.tabs.find(tab => tab.id === tabMenu.tabId);
+		if (!target) return [];
+		return [
+			{
+				label: t("browser close tab"),
+				icon: "close",
+				onSelect: () => closeTab(target.id),
+			},
+			{
+				label: t("close other tabs"),
+				icon: "close-circle",
+				disabled: host.tabs.length <= 1,
+				onSelect: () => {
+					for (const tab of host.tabs) if (tab.id !== target.id) closeTab(tab.id);
+				},
+			},
+			{ divider: true },
+			{
+				label: t("browser duplicate tab"),
+				icon: "file-copy",
+				onSelect: () => void createTab(target.url).catch(() => {}),
+			},
+			{
+				label: t("browser copy url"),
+				icon: "clipboard",
+				onSelect: () => void window.electronAPI?.copyText(target.url).catch(() => {}),
+			},
+		];
+	}, [tabMenu, host.tabs]);
 	const urlRef = useRef<HTMLInputElement | null>(null);
 
 	const activeTab = host.tabs.find(tab => tab.id === host.activeId) ?? null;
@@ -990,22 +1019,28 @@ export function ManagedBrowserPane({
 			{host.tabs.length > 0 && (
 				<div ref={tabsRef} className="gui-panel-tabs flex items-center gap-1 overflow-x-auto px-1 pb-1">
 					{host.tabs.map(tab => {
-						const themeLum = hexLuminance(tab.themeColor);
-						const themeDark = themeLum !== null && themeLum < 0.42;
+						// 网页 theme-color 只做低透明度晕染 + 细环,不再整块实底
+						// 反白文字——玻璃标签的质感与可读性都保住(部分站点的
+						// theme-color 与界面明暗冲突,实底标签读起来就是"样式坏了")。
+						const themeRgb = tab.themeColor ? parseHexColor(tab.themeColor) : null;
 						return (
 							<div
 								key={tab.id}
 								className={`gui-browser-tab${tab.id === host.activeId ? " gui-browser-tab--active" : ""}${tab.agent ? " gui-browser-tab--agent" : ""}`}
 								title={tab.frozen ? `${tab.url} · ${t("browser tab frozen")}` : tab.url}
 								style={
-									tab.themeColor
+									themeRgb
 										? {
-												backgroundColor: tab.themeColor,
-												color: themeDark ? "#fff" : "#000",
+												backgroundColor: `rgba(${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}, 0.18)`,
+												boxShadow: `inset 0 0 0 1px rgba(${themeRgb.r}, ${themeRgb.g}, ${themeRgb.b}, 0.32)`,
 												borderColor: "transparent",
 											}
 										: undefined
 								}
+								onContextMenu={ev => {
+									ev.preventDefault();
+									setTabMenu({ tabId: tab.id, x: ev.clientX, y: ev.clientY });
+								}}
 							>
 								<button
 									type="button"
@@ -1217,6 +1252,13 @@ export function ManagedBrowserPane({
 					</div>
 				</div>
 			)}
+			<ContextMenu
+				open={tabMenu !== null}
+				x={tabMenu?.x ?? 0}
+				y={tabMenu?.y ?? 0}
+				items={tabMenuItems}
+				onClose={() => setTabMenu(null)}
+			/>
 		</div>
 	);
 }

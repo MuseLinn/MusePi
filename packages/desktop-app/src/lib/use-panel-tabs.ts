@@ -9,13 +9,18 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import {
+	activatePanelTab,
 	closePanelTab,
 	closePanelTabs,
+	EMPTY_PANEL_TAB_STATE,
+	movePanelTabToColumn,
+	type PanelColumn,
 	type PanelTabDescriptor,
 	type PanelTabState,
 	reorderPanelTabs,
 	restorePanelTabs,
 	serializePanelTabs,
+	setPanelSplit,
 	setPanelTabDirty,
 	type UpsertPanelTabOptions,
 	upsertPanelTab,
@@ -28,14 +33,18 @@ export interface UsePanelTabsResult extends PanelTabState {
 	activate(id: string): void;
 	reorder(fromId: string, toId: string): void;
 	setDirty(id: string, dirty: boolean): void;
+	/** Cross-column drag (dsh split parity): move + focus. */
+	moveToColumn(id: string, column: PanelColumn): void;
+	/** Toggle the two-column split; disabling merges column 1 into column 0. */
+	setSplit(split: boolean): void;
 }
 
 function readPanelTabs(storageKey: string): PanelTabState {
 	try {
 		const raw = localStorage.getItem(storageKey);
-		return raw ? restorePanelTabs(JSON.parse(raw)) : { tabs: [], activeId: null };
+		return raw ? restorePanelTabs(JSON.parse(raw)) : { ...EMPTY_PANEL_TAB_STATE };
 	} catch {
-		return { tabs: [], activeId: null };
+		return { ...EMPTY_PANEL_TAB_STATE };
 	}
 }
 
@@ -63,10 +72,7 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 	);
 	const close = useCallback((id: string): void => setState(s => closePanelTab(s, id)), []);
 	const closeMany = useCallback((ids: readonly string[]): void => setState(s => closePanelTabs(s, ids)), []);
-	const activate = useCallback(
-		(id: string): void => setState(s => (s.tabs.some(t => t.id === id) ? { ...s, activeId: id } : s)),
-		[],
-	);
+	const activate = useCallback((id: string): void => setState(s => activatePanelTab(s, id)), []);
 	const reorder = useCallback(
 		(fromId: string, toId: string): void =>
 			setState(s => {
@@ -79,6 +85,11 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 		(id: string, dirty: boolean): void => setState(s => setPanelTabDirty(s, id, dirty)),
 		[],
 	);
+	const moveToColumn = useCallback(
+		(id: string, column: PanelColumn): void => setState(s => movePanelTabToColumn(s, id, column)),
+		[],
+	);
+	const setSplit = useCallback((split: boolean): void => setState(s => setPanelSplit(s, split)), []);
 
-	return { ...state, open, close, closeMany, activate, reorder, setDirty };
+	return { ...state, open, close, closeMany, activate, reorder, setDirty, moveToColumn, setSplit };
 }
