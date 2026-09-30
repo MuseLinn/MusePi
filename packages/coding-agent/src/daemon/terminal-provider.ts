@@ -25,6 +25,7 @@ import { spawn } from "@musepi/pi-utils/nodespawn";
 import type { Settings } from "../config/settings.ts";
 import {
 	defaultTerminalRegistry,
+	type TerminalBackend,
 	type TerminalBackendType,
 	type TerminalHandle,
 	type TerminalRegistry,
@@ -189,16 +190,29 @@ async function resolveNodeBinary(): Promise<string> {
 // registerBackend，provider 插件化的挂点）
 // ------------------------------------------------------------
 
+/** builtin bun-pty backend 工厂（terminal-provider-bunpty 插件单元与
+ *  registerBuiltinTerminalBackends 共用同一实现，防漂移）。 */
+export function createBunPtyBackend(): TerminalBackend {
+	return { open: spawnBunPty };
+}
+
+/** builtin node-pty bridge backend 工厂（terminal-provider-nodepty 插件
+ *  单元与 registerBuiltinTerminalBackends 共用同一实现，防漂移）。 */
+export function createNodePtyBackend(): TerminalBackend {
+	return { open: spawnNodePtyBridge };
+}
+
 /** builtin 后端（bun-pty / node-pty）注册进给定注册表。幂等：同一
- *  注册表重复调用是 no-op（模块热重载安全）；未来 provider 插件可用
- *  返回语义外的 registerBackend/dispose 走同一挂点独立装载。 */
+ *  注册表重复调用是 no-op（模块热重载安全）；生产宿主路径已改走
+ *  terminal-core-plugin.ts 的 provider 插件单元（cordis effect 账本
+ *  挂接），本 helper 留给默认注册表消费者与测试。 */
 const builtinRegistered = new WeakSet<TerminalRegistry>();
 
 export function registerBuiltinTerminalBackends(registry: TerminalRegistry = defaultTerminalRegistry): void {
 	if (builtinRegistered.has(registry)) return;
 	builtinRegistered.add(registry);
-	registry.registerBackend("bun-pty", { open: spawnBunPty });
-	registry.registerBackend("node-pty", { open: spawnNodePtyBridge });
+	registry.registerBackend("bun-pty", createBunPtyBackend());
+	registry.registerBackend("node-pty", createNodePtyBackend());
 }
 
 /**
