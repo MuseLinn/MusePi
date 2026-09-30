@@ -173,10 +173,13 @@ export class ExtensionService implements DaemonService {
 			// 收编第二刀：宿主级装载切 cordis fiber（生命周期/效果账本/检视），
 			// 与 loadExtensions 同结果形状；宿主未注入运行时（测试）回退直接装载。
 			const dynamic = await this.#deps.dynamicRuntime?.();
+			// 清单组件禁用面：disabledExtensionComponents 复合键
+			// `<plugin>/<component>` 黑名单,reconcile 装载时跳过命中组件。
+			const disabledComponents = new Set((settings?.get("disabledExtensionComponents") ?? []) as string[]);
 			this.#runtimeLoadCache = {
 				at: Date.now(),
 				result: dynamic
-					? await dynamic.loadAll(paths, cwd)
+					? await dynamic.loadAll(paths, cwd, disabledComponents)
 					: await (await import("../../extensibility/extensions/loader")).loadExtensions(paths, cwd),
 			};
 		}
@@ -278,6 +281,50 @@ export class ExtensionService implements DaemonService {
 					enabled: !denied,
 					canToggle: true,
 					...(denied ? { disabledReason: "tools-denied" as const } : {}),
+				} satisfies PluginComponentDesc;
+			});
+		}
+		// user 插件清单组件面（dsh `- insert:` 子插件 parity）：manifest
+		// `musepi.components` 声明的组件下发——entry 组件带宿主 fiber 运行时
+		// 的真实数据（fiber 状态机/效果账本）,启用态读隐藏键
+		// extensions.disabledComponents → disabledExtensionComponents 复合键
+		// `<plugin>/<component>` 黑名单（无点号键,见 settings-schema 注释）;
+		// fail-soft：运行时不可用（回退直接装载路径）时按启用渲染、无 runtime 行。
+		const componentDenylist = new Set((s?.get("disabledExtensionComponents") ?? []) as string[]);
+		let inspectedByName: Map<string, Map<string, { fiberState?: string; effectLabels: string[] }>> | undefined;
+		try {
+			const dynamic = await this.#deps.dynamicRuntime?.();
+			inspectedByName = new Map(
+				(dynamic?.inspect() ?? []).map(i => [
+					i.name,
+					new Map(i.components.map(c => [c.id, { fiberState: c.fiberState, effectLabels: c.effectLabels }])),
+				]),
+			);
+		} catch {
+			inspectedByName = undefined;
+		}
+		const { readExtensionPluginMeta } = await import("../../extensibility/extensions/plugin-manifest");
+		for (const ext of extensions) {
+			if (ext.kind !== "extension-module") continue;
+			let meta: Awaited<ReturnType<typeof readExtensionPluginMeta>>;
+			try {
+				meta = await readExtensionPluginMeta(ext.path);
+			} catch {
+				continue;
+			}
+			if (!meta?.components || meta.components.length === 0) continue;
+			const runtimeComponents = inspectedByName?.get(ext.name);
+			ext.components = meta.components.map(decl => {
+				const denied = componentDenylist.has(`${ext.name}/${decl.id}`);
+				const rt = runtimeComponents?.get(decl.id);
+				return {
+					id: decl.id,
+					name: decl.id,
+					description: decl.description,
+					enabled: !denied,
+					canToggle: !!decl.entry,
+					...(denied ? { disabledReason: "component-disabled" as const } : {}),
+					...(rt?.fiberState ? { runtime: { fiberState: rt.fiberState, effects: rt.effectLabels.length } } : {}),
 				} satisfies PluginComponentDesc;
 			});
 		}
@@ -513,6 +560,38 @@ export class ExtensionService implements DaemonService {
 		const def = findBuiltinDef(p.id);
 		const declared = def?.components?.find(c => c.id === p.component);
 		if (!declared) {
+			// user 插件径（dsh `- insert:` 子插件 parity）：extension-module 条目
+			// 清单 `musepi.components` 声明的 entry 组件——先经 fiber 运行时切换
+			// （校验声明 + 真实挂载/拆卸,效果账本随 fiber 回收）,成功才持久化
+			// 黑名单;运行时未装载该插件时先 reconcile 一次再重试,仍失败结构化
+			// 上抛且不落盘。
+			if (p.id.startsWith("extension-module:")) {
+				const pluginName = p.id.slice("extension-module:".length);
+				const component = p.component;
+				const enabled = p.enabled;
+				const runtime = await this.#deps.dynamicRuntime?.();
+				if (!runtime) {
+					throw new Error("extensions.setComponentEnabled: cordis dynamic runtime unavailable");
+				}
+				const toggle = (): Promise<unknown> => runtime.setComponentEnabled(pluginName, component, enabled);
+				try {
+					await toggle();
+				} catch {
+					await this.getExtensionRuntimeLoad();
+					await toggle();
+				}
+				const denylist = [...((settings.get("disabledExtensionComponents") ?? []) as string[])];
+				const key = `${pluginName}/${p.component}`;
+				const i = denylist.indexOf(key);
+				if (p.enabled && i >= 0) denylist.splice(i, 1);
+				if (!p.enabled && i < 0) denylist.push(key);
+				settings.set("disabledExtensionComponents" as Parameters<Settings["set"]>[0], denylist as never);
+				await settings.flush();
+				this.#extensionsCache = null;
+				this.#runtimeLoadCache = null;
+				this.#deps.onChanged();
+				return { ok: true, denied: denylist };
+			}
 			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
 		}
 		const settingsKey = declared.deny === "tool" ? "tools.disabled" : "voice.disabledEngines";

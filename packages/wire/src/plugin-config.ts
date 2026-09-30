@@ -38,6 +38,20 @@ export interface PluginResources {
 }
 
 /**
+ * 插件清单声明的「包含的组件」(manifest `components`,dsh bundle 插件
+ * `cordis.patch.yml` 的 `- insert:` 子插件 parity):每个组件是**独立装载
+ * 单元**——清单给出 `entry`(相对清单目录的模块路径)时,宿主装载把它挂为
+ * 插件 fiber 下的独立子 fiber(独立效果账本/启停/reload);无 `entry` 的
+ * 组件是纯展示声明(只读行,不渲染开关,不发明启停语义)。
+ */
+export interface PluginComponentDecl {
+	id: string;
+	description?: string;
+	/** 组件入口模块路径(相对清单所在目录);缺席 = 只读展示组件。 */
+	entry?: string;
+}
+
+/**
  * 插件「包含的组件」描述(dsh 插件详情页「包含的组件 · 每组件独立开关」
  * 段;daemon 下发状态,GUI 渲染开关行)。组件 = 该插件单元暴露给 agent 的
  * 真实工具(tools/index.ts 的 isToolAllowed 谓词消费同一份 tools.disabled
@@ -55,6 +69,9 @@ export interface PluginComponentDesc {
 	canToggle: boolean;
 	/** 不可用原因(被黑名单禁用时给出)。 */
 	disabledReason?: string;
+	/** entry 组件的真实 cordis 运行面(fiber 状态机 + 效果账本计数);
+	 *  宿主无 fiber 的组件(软开关/未装载)无此项——如实,不编造。 */
+	runtime?: { fiberState: string; effects: number };
 }
 
 export type ConfigFieldErrorCode =
@@ -151,6 +168,35 @@ export function parseConfigFields(raw: unknown): ParsedConfigFields {
 		fields.push(desc);
 	}
 	return { fields, errors };
+}
+
+/** 组件声明表校验(manifest `components`,fail-soft 同 parseConfigFields):
+ *  逐条取可用者(id 非空字符串必填;entry/description 取字符串),坏条目进
+ *  errors 被丢弃,不让一个坏组件拖垮整个插件的登记。 */
+export function parsePluginComponents(raw: unknown): { components: PluginComponentDecl[]; errors: ConfigFieldError[] } {
+	const components: PluginComponentDecl[] = [];
+	const errors: ConfigFieldError[] = [];
+	if (raw === undefined || raw === null) return { components, errors };
+	if (!Array.isArray(raw)) {
+		errors.push({ code: "config-not-an-object", detail: typeof raw });
+		return { components, errors };
+	}
+	for (const item of raw) {
+		if (!isRecord(item)) {
+			errors.push({ code: "field-not-an-object", detail: String(item)?.slice(0, 80) });
+			continue;
+		}
+		const id = item.id;
+		if (typeof id !== "string" || id.trim() === "") {
+			errors.push({ code: "field-bad-key" });
+			continue;
+		}
+		const decl: PluginComponentDecl = { id };
+		if (typeof item.description === "string") decl.description = item.description;
+		if (typeof item.entry === "string" && item.entry.trim() !== "") decl.entry = item.entry;
+		components.push(decl);
+	}
+	return { components, errors };
 }
 
 /** 资源需求卡校验(更宽松:逐字段取可用者,全坏 = undefined)。 */

@@ -11,7 +11,9 @@
  * - 生命周期：每个 user 插件 = `musepi-dynamic-extensions` 组 fiber 下的
  *   独立子 fiber；每次 register 类动词/on 登记 = fiber 效果账本（ctx.effect）
  *   一条带标签 effect，卸载即 fiber.dispose() 反向回收（dsh lifecycle.ts
- *   「everything is an effect」parity）
+ *   「everything is an effect」parity）；清单 `musepi.components` 声明的
+ *   entry 组件 = 插件 fiber 下的组件子 fiber（dsh `- insert:` 子插件
+ *   parity），独立启停/检视/热重载
  * - 启停：随 daemon 进程；runtime.dispose() 幂等拆卸整组
  * - 冲突：与 extensions/loader（会话级装配权威）分层——本文件管宿主级
  *   session-less 装载（getExtensionRuntimeLoad），会话内装载仍走
@@ -47,6 +49,7 @@ import * as path from "node:path";
 import type { Context, Fiber, Plugin } from "@deepseek-ai/cordis";
 import type { KeyId } from "@musepi/pi-tui";
 import { logger } from "@musepi/pi-utils";
+import { type PluginComponentDecl, parsePluginComponents } from "@musepi/pi-wire";
 import { getExtensionNameFromPath } from "../discovery/helpers";
 import { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-extension-error";
 import type {
@@ -65,6 +68,10 @@ export { DynamicExtensionLoadError } from "../extensibility/extensions/dynamic-e
 const FIBER_STATE_FAILED = 3;
 const FIBER_STATE_NAMES = ["PENDING", "LOADING", "ACTIVE", "FAILED", "DISPOSED", "UNLOADING"] as const;
 
+/** 文件输入向上查找清单 package.json 的最大目录层级
+ *  （与 plugin-manifest.ts 的 MAX_MANIFEST_DEPTH 同口径）。 */
+const MAX_MANIFEST_DEPTH = 4;
+
 /** 装载目标：入口解析结果（文件输入走发现管线；目录输入走清单声明）。 */
 interface ExtensionTarget {
 	/** 扩展身份名（getExtensionNameFromPath——与 discoverExtensionPaths 的
@@ -72,6 +79,29 @@ interface ExtensionTarget {
 	name: string;
 	/** 解析后的入口文件绝对路径（reconcile 判同键）。 */
 	entry: string;
+	/** 清单声明的组件表（目录输入读 package.json；文件输入为空）。 */
+	components: PluginComponentDecl[];
+	/** 清单所在目录（组件 entry 相对路径的解析基准；文件输入缺席）。 */
+	manifestDir?: string;
+}
+
+/** 插件内组件的装载记录（entry 组件 = 插件 fiber 下的独立子 fiber）。 */
+interface DynamicComponentRecord {
+	id: string;
+	description?: string;
+	status: "active" | "disabled" | "failed" | "unloaded";
+	fiber?: Fiber;
+	/** 组件入口绑定的扩展面（句柄 invoke 的组件命令查找面）。 */
+	extension?: Extension;
+	error?: string;
+}
+
+export interface DynamicComponentInspection {
+	id: string;
+	status: DynamicComponentRecord["status"];
+	fiberState?: string;
+	effectLabels: string[];
+	error?: string;
 }
 
 export interface DynamicExtensionInspection {
@@ -82,6 +112,8 @@ export interface DynamicExtensionInspection {
 	/** fiber 效果账本标签（检视 = getEffects() 诊断树，空数组表示已拆卸）。 */
 	effectLabels: string[];
 	error?: string;
+	/** 清单声明的组件装载面（无组件声明 = 空数组）。 */
+	components: DynamicComponentInspection[];
 }
 
 export interface DynamicExtensionHandle {
@@ -104,22 +136,26 @@ interface DynamicExtensionRecord {
 	cwd: string;
 	status: "active" | "unloaded" | "failed";
 	fiber?: Fiber;
+	/** 插件 fiber 的 Context（组件子 fiber 的挂载点;插件存活期内有效）。 */
+	ctx?: Context;
 	extension?: Extension;
 	error?: string;
+	/** 清单声明组件的装载记录（键 = 组件 id）。 */
+	components: Map<string, DynamicComponentRecord>;
 }
 
 /** 扩展目录 package.json 中声明的清单字段形状。
  *  musepi 为权威字段；omp/pi 是旧上游兼容遗留。 */
 interface ExtensionManifestPkg {
 	name?: string;
-	musepi?: { extensions?: string[] };
-	omp?: { extensions?: string[] };
-	pi?: { extensions?: string[] };
+	musepi?: { extensions?: string[]; components?: unknown };
+	omp?: { extensions?: string[]; components?: unknown };
+	pi?: { extensions?: string[]; components?: unknown };
 }
 
 /** 目录输入：读 package.json 清单，解析声明入口（musepi 权威，omp/pi 兼容；
- *  声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）。 */
-async function resolveManifestEntry(dir: string): Promise<string> {
+ *  声明文件 → 自身；目录 → index.{ts,js,mjs,cjs}）与组件声明表。 */
+async function resolveManifestTarget(dir: string): Promise<{ entry: string; components: PluginComponentDecl[] }> {
 	const pkgPath = path.join(dir, "package.json");
 	let raw: string;
 	try {
@@ -133,6 +169,7 @@ async function resolveManifestEntry(dir: string): Promise<string> {
 	} catch {
 		throw new DynamicExtensionLoadError("manifest-invalid", `extension at "${dir}" has invalid package.json JSON`);
 	}
+	const { components } = parsePluginComponents(pkg.musepi?.components ?? pkg.omp?.components ?? pkg.pi?.components);
 	const declared = pkg.musepi?.extensions ?? pkg.omp?.extensions ?? pkg.pi?.extensions ?? [];
 	const first = declared[0];
 	const joined = first ? path.resolve(dir, first) : dir;
@@ -142,11 +179,11 @@ async function resolveManifestEntry(dir: string): Promise<string> {
 	} catch {
 		throw new DynamicExtensionLoadError("entry-missing", `extension entry "${joined}" does not exist`);
 	}
-	if (!stats.isDirectory()) return joined;
+	if (!stats.isDirectory()) return { entry: joined, components };
 	for (const ext of [".ts", ".js", ".mjs", ".cjs"]) {
 		try {
 			await fs.stat(path.join(joined, `index${ext}`));
-			return path.join(joined, `index${ext}`);
+			return { entry: path.join(joined, `index${ext}`), components };
 		} catch {
 			/* try next */
 		}
@@ -158,7 +195,10 @@ async function resolveManifestEntry(dir: string): Promise<string> {
  *  文件输入：入口即自身；目录输入：清单声明入口（与 plugins/loader 同一
  *  发现约定）。身份名取 getExtensionNameFromPath——与 discoverExtensionPaths
  *  的 disabled 过滤 `extension-module:<name>` 同一命名法，reconcile 以入口
- *  绝对路径判同键。 */
+ *  绝对路径判同键。
+ *  组件声明两种入口都收：目录输入直接读清单；文件输入向上找带清单声明的
+ *  package.json（与 readExtensionPluginMeta 同深度口径）,且仅当其声明入口
+ *  解析到本文件时才采用——裸文件扩展不会误吸项目根的清单。 */
 async function resolveExtensionTarget(inputPath: string): Promise<ExtensionTarget> {
 	const resolved = path.resolve(inputPath);
 	let stats: Stats;
@@ -167,8 +207,66 @@ async function resolveExtensionTarget(inputPath: string): Promise<ExtensionTarge
 	} catch {
 		throw new DynamicExtensionLoadError("entry-missing", `extension path "${resolved}" does not exist`);
 	}
-	const entry = stats.isDirectory() ? await resolveManifestEntry(resolved) : resolved;
-	return { name: getExtensionNameFromPath(entry), entry };
+	if (stats.isDirectory()) {
+		const manifest = await resolveManifestTarget(resolved);
+		return {
+			name: getExtensionNameFromPath(manifest.entry),
+			entry: manifest.entry,
+			components: manifest.components,
+			manifestDir: resolved,
+		};
+	}
+	const sibling = await resolveSiblingManifest(resolved);
+	return {
+		name: getExtensionNameFromPath(resolved),
+		entry: resolved,
+		components: sibling?.components ?? [],
+		...(sibling ? { manifestDir: sibling.manifestDir } : {}),
+	};
+}
+
+/** 文件输入的清单组件解析：向上逐层找带 musepi/omp/pi 块且声明了入口的
+ *  package.json,声明入口解析到本文件 → 采用其组件声明;命中声明别的入口
+ *  → 本文件不属于该插件,返回 null;无声明入口的纯配置块继续向上。 */
+async function resolveSiblingManifest(
+	filePath: string,
+): Promise<{ components: PluginComponentDecl[]; manifestDir: string } | null> {
+	let dir = path.dirname(filePath);
+	for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
+		let block: { extensions?: string[]; components?: unknown } | undefined;
+		try {
+			const pkg = JSON.parse(await fs.readFile(path.join(dir, "package.json"), "utf8")) as ExtensionManifestPkg;
+			block = pkg.musepi ?? pkg.omp ?? pkg.pi;
+		} catch {
+			block = undefined;
+		}
+		if (block && typeof block === "object") {
+			const first = block.extensions?.[0];
+			if (typeof first !== "string") continue;
+			const joined = path.resolve(dir, first);
+			let entryFile: string | null = null;
+			const joinedStats = await fs.stat(joined).catch(() => null);
+			if (joinedStats && !joinedStats.isDirectory()) {
+				entryFile = joined;
+			} else if (joinedStats) {
+				for (const ext of [".ts", ".js", ".mjs", ".cjs"]) {
+					try {
+						await fs.stat(path.join(joined, `index${ext}`));
+						entryFile = path.join(joined, `index${ext}`);
+						break;
+					} catch {
+						/* try next */
+					}
+				}
+			}
+			if (entryFile !== filePath) return null;
+			return { components: parsePluginComponents(block.components).components, manifestDir: dir };
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
 }
 
 /** 宿主级命令 ctx 存根：宿主装载无会话，handler 访问任何 ctx 字段即抛
@@ -432,8 +530,10 @@ export class CordisDynamicExtensionRuntime {
 
 	/** 装载一个真实 user 扩展（目录或入口文件）。失败不留半挂载 fiber
 	 *  （startHostHalf parity：FAILED fiber 立即 dispose）。同名扩展非 active
-	 *  状态（failed/unloaded）时复用记录重载。 */
-	async load(extPath: string, cwd: string): Promise<DynamicExtensionHandle> {
+	 *  状态（failed/unloaded）时复用记录重载。
+	 *  disabledComponents：清单组件的禁用集合（`<plugin>/<component>` 复合键，
+	 *  由调用方从 settings 读入）——命中的 entry 组件不挂 fiber,如实记 disabled。 */
+	async load(extPath: string, cwd: string, disabledComponents?: ReadonlySet<string>): Promise<DynamicExtensionHandle> {
 		const target = await resolveExtensionTarget(extPath);
 		const existing = this.#records.get(target.name);
 		if (existing?.status === "active") {
@@ -445,14 +545,16 @@ export class CordisDynamicExtensionRuntime {
 			entryKey: target.entry,
 			cwd,
 			status: "active",
+			components: new Map(),
 		};
 		record.status = "active";
 		record.error = undefined;
 		record.cwd = cwd;
 		record.sourcePath = extPath;
 		record.entryKey = target.entry;
+		record.components = new Map();
 		this.#records.set(record.name, record);
-		await this.#mount(record, target);
+		await this.#mount(record, target, disabledComponents);
 		return this.#buildHandle(record);
 	}
 
@@ -460,7 +562,11 @@ export class CordisDynamicExtensionRuntime {
 	 *  发现清单 ↔ 在役记录对账——消失的路径卸载（效果账本反向回收）、
 	 *  新路径装载、在役不动（TTL 语义由调用方的缓存失效驱动）。聚合结果
 	 *  与 loadExtensions 同形状（extensions/errors/runtime）。 */
-	async loadAll(paths: string[], cwd: string): Promise<LoadExtensionsResult> {
+	async loadAll(
+		paths: string[],
+		cwd: string,
+		disabledComponents?: ReadonlySet<string>,
+	): Promise<LoadExtensionsResult> {
 		const targets = new Map<string, ExtensionTarget>();
 		const errors: Array<{ path: string; error: string }> = [];
 		for (const input of paths) {
@@ -485,7 +591,7 @@ export class CordisDynamicExtensionRuntime {
 				await this.#unloadRecord(existing);
 			}
 			try {
-				await this.load(target.entry, cwd);
+				await this.load(target.entry, cwd, disabledComponents);
 			} catch (err) {
 				errors.push({ path: target.entry, error: err instanceof Error ? err.message : String(err) });
 			}
@@ -502,8 +608,13 @@ export class CordisDynamicExtensionRuntime {
 	/** 装配落核：组 fiber 下挂子 fiber，apply = 同源 import/bind（loadLegacyPiModule
 	 *  每次装载自带单调 mtime 标签，Windows 下 raw-path 查询串即缓存新键——
 	 *  入口与子模块改写 reload 即拾取）+ 效果账本壳。bind 失败结构化上抛 →
-	 *  fiber FAILED → 立即 dispose 不留半挂载。 */
-	async #mount(record: DynamicExtensionRecord, target: ExtensionTarget): Promise<void> {
+	 *  fiber FAILED → 立即 dispose 不留半挂载。主 fiber 落定后按清单声明
+	 *  挂组件子 fiber（层隔离：单组件失败只记 FAILED，插件与其余组件无损）。 */
+	async #mount(
+		record: DynamicExtensionRecord,
+		target: ExtensionTarget,
+		disabledComponents?: ReadonlySet<string>,
+	): Promise<void> {
 		const group = await this.#ensureGroup();
 		const fiber = group.ctx.plugin({
 			name: `dynamic-extension:${record.name}`,
@@ -523,6 +634,7 @@ export class CordisDynamicExtensionRuntime {
 					);
 				}
 				record.extension = bound.extension;
+				record.ctx = ctx;
 			},
 		} satisfies Plugin.Object);
 		record.fiber = fiber;
@@ -533,6 +645,7 @@ export class CordisDynamicExtensionRuntime {
 			await fiber.dispose();
 			record.status = "failed";
 			record.fiber = undefined;
+			record.ctx = undefined;
 			record.error = err instanceof Error ? err.message : String(err);
 			throw err instanceof DynamicExtensionLoadError
 				? err
@@ -541,6 +654,123 @@ export class CordisDynamicExtensionRuntime {
 						`extension "${record.name}" failed to load: ${record.error}`,
 					);
 		}
+		await this.#mountComponents(record, target, disabledComponents);
+	}
+
+	/** 组件子 fiber 挂载（dsh `- insert:` 子插件 parity）：每个带 entry 且
+	 *  未禁用的清单组件 = 插件 fiber 下的独立子 fiber，装载走与插件入口
+	 *  完全相同的 importAndBindExtension 管线 + 效果账本（ledgerApi 的 owner
+	 *  名 = `<plugin>/<component>`,跨组件命令碰撞结构化拒绝）。无 entry 的
+	 *  组件如实记 disabled（只读展示声明,不发明启停语义）。 */
+	async #mountComponents(
+		record: DynamicExtensionRecord,
+		target: ExtensionTarget,
+		disabledComponents?: ReadonlySet<string>,
+	): Promise<void> {
+		for (const decl of target.components) {
+			const component: DynamicComponentRecord = {
+				id: decl.id,
+				...(decl.description ? { description: decl.description } : {}),
+				status: "disabled",
+			};
+			record.components.set(decl.id, component);
+			if (!decl.entry) continue;
+			if (disabledComponents?.has(`${record.name}/${decl.id}`)) continue;
+			if (!record.ctx) {
+				component.status = "failed";
+				component.error = "plugin context unavailable";
+				continue;
+			}
+			const entryAbs = path.resolve(target.manifestDir ?? path.dirname(target.entry), decl.entry);
+			await this.#mountComponent(record, component, entryAbs);
+		}
+	}
+
+	/** 挂单个组件 fiber（装载与热启用共用）；失败层隔离为 FAILED 记录。 */
+	async #mountComponent(
+		record: DynamicExtensionRecord,
+		component: DynamicComponentRecord,
+		entryAbs: string,
+	): Promise<void> {
+		const owner = `${record.name}/${component.id}`;
+		const ctx = record.ctx;
+		if (!ctx) {
+			component.status = "failed";
+			component.error = "plugin context unavailable";
+			return;
+		}
+		const fiber = ctx.plugin({
+			name: `dynamic-extension-component:${owner}`,
+			apply: async cctx => {
+				const { importAndBindExtension } = await import("../extensibility/extensions/loader");
+				const bound = await importAndBindExtension(
+					entryAbs,
+					record.cwd,
+					this.#eventBus,
+					await this.#sharedRuntime(),
+					(api, extension) => this.#ledgerApi(owner, api, extension, cctx),
+				);
+				if (bound.error || !bound.extension) {
+					throw new DynamicExtensionLoadError(
+						bound.code ?? "factory-threw",
+						bound.error ?? `component "${owner}" failed to bind`,
+					);
+				}
+				component.extension = bound.extension;
+			},
+		} satisfies Plugin.Object);
+		component.fiber = fiber;
+		try {
+			await fiber.await();
+			component.status = "active";
+			component.error = undefined;
+		} catch (err) {
+			await fiber.dispose().catch(() => {});
+			component.status = "failed";
+			component.fiber = undefined;
+			component.error = err instanceof Error ? err.message : String(err);
+			logger.warn("dynamic extension component mount failed", { owner, err });
+		}
+	}
+
+	/** 组件独立启停（extensions.setComponentEnabled 的 user 插件径）：
+	 *  停用 = dispose 组件 fiber（效果账本反向回收,登记随 fiber 生命周期走）；
+	 *  启用 = 重挂组件 fiber（mtime 标签口径,改写即拾取）。仅 entry 组件
+	 *  可切换;插件须在役。 */
+	async setComponentEnabled(pluginName: string, componentId: string, enabled: boolean): Promise<void> {
+		const record = this.#records.get(pluginName);
+		if (record?.status !== "active") {
+			throw new DynamicExtensionLoadError("entry-missing", `extension "${pluginName}" is not active`);
+		}
+		const component = record.components.get(componentId);
+		if (!component) {
+			throw new DynamicExtensionLoadError(
+				"entry-missing",
+				`extension "${pluginName}" has no declared component "${componentId}"`,
+			);
+		}
+		if (enabled) {
+			if (component.status === "active") return;
+			const target = await resolveExtensionTarget(record.sourcePath);
+			const decl = target.components.find(c => c.id === componentId);
+			if (!decl?.entry) {
+				throw new DynamicExtensionLoadError(
+					"entry-missing",
+					`component "${pluginName}/${componentId}" has no entry to mount`,
+				);
+			}
+			const entryAbs = path.resolve(target.manifestDir ?? path.dirname(target.entry), decl.entry);
+			component.status = "disabled";
+			await this.#mountComponent(record, component, entryAbs);
+			return;
+		}
+		if (component.status !== "active") return;
+		if (component.fiber) {
+			await component.fiber.dispose().catch(() => {});
+		}
+		component.status = "disabled";
+		component.fiber = undefined;
+		component.extension = undefined;
 	}
 
 	/** 效果账本壳：register 类动词/on 每次登记 = ctx.effect 一条带标签 effect，
@@ -587,14 +817,29 @@ export class CordisDynamicExtensionRuntime {
 		await record.fiber.dispose();
 		record.status = "unloaded";
 		record.fiber = undefined;
+		record.ctx = undefined;
 		record.extension = undefined;
+		for (const component of record.components.values()) {
+			component.status = "unloaded";
+			component.fiber = undefined;
+			component.extension = undefined;
+		}
 	}
 
 	#buildHandle(record: DynamicExtensionRecord): DynamicExtensionHandle {
 		return {
 			name: record.name,
 			invoke: async (commandName, args = "") => {
-				const command = record.extension?.commands.get(commandName);
+				// 主入口优先,其后按声明序查在役组件（host-level 命令面 =
+				// 插件 + 组件的并集;缺席 = 结构化「能力缺席」错误）。
+				let command = record.extension?.commands.get(commandName);
+				if (!command) {
+					for (const component of record.components.values()) {
+						if (component.status !== "active") continue;
+						command = component.extension?.commands.get(commandName);
+						if (command) break;
+					}
+				}
 				if (!command) {
 					throw new DynamicExtensionLoadError(
 						"entry-missing",
@@ -612,6 +857,7 @@ export class CordisDynamicExtensionRuntime {
 				record.entryKey = target.entry;
 				record.status = "active";
 				record.error = undefined;
+				record.components = new Map();
 				await this.#mount(record, target);
 			},
 		};
@@ -633,7 +879,8 @@ export class CordisDynamicExtensionRuntime {
 		}
 	}
 
-	/** 检视面：每个动态扩展的状态 + fiber 效果账本标签 + 错误归因。 */
+	/** 检视面：每个动态扩展的状态 + fiber 效果账本标签 + 错误归因 +
+	 *  组件装载面（fiber 状态机/效果账本,无 fiber 的组件如实缺项）。 */
 	inspect(): DynamicExtensionInspection[] {
 		return [...this.#records.values()].map(record => ({
 			name: record.name,
@@ -644,6 +891,18 @@ export class CordisDynamicExtensionRuntime {
 					? record.fiber.getEffects().map(effect => effect.label)
 					: [],
 			error: record.error,
+			components: [...record.components.values()].map(component => ({
+				id: component.id,
+				status: component.status,
+				fiberState: component.fiber
+					? (FIBER_STATE_NAMES[component.fiber.state] ?? String(component.fiber.state))
+					: undefined,
+				effectLabels:
+					component.fiber && component.fiber.state !== FIBER_STATE_FAILED
+						? component.fiber.getEffects().map(effect => effect.label)
+						: [],
+				error: component.error,
+			})),
 		}));
 	}
 

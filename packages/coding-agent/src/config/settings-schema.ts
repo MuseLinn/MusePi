@@ -641,6 +641,14 @@ export const SETTINGS_SCHEMA = {
 	 *  组件 id 形如 "stt:whisper" / "tts:kokoro"。隐藏设置键。 */
 	"voice.disabledEngines": { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** user 插件清单组件黑名单（dsh `- insert:` 子插件 parity）：复合键
+	 *  `<plugin>/<component>`（extensions.setComponentEnabled 写入），宿主
+	 *  级 fiber 装载 reconcile 时跳过命中组件——entry 组件停用 = 不挂
+	 *  组件子 fiber（启用 = 独立子 fiber,独立效果账本/检视/热重载）。
+	 *  隐藏设置键。无点号命名：点号键会被 Settings 当嵌套路径，与既有
+	 *  的 dotless `extensions` 数组键（line 609）冲突后宿主扩展装载即崩。 */
+	disabledExtensionComponents: { type: "array", default: EMPTY_STRING_ARRAY },
+
 	modelRoleStorage: {
 		type: "enum",
 		values: ["global", "project"] as const,

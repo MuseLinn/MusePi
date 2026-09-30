@@ -2115,6 +2115,12 @@
 	color: var(--color-text-faint);
 	margin-top: 2px;
 }
+.gui-plugin-component-runtime {
+	font-size: 11px;
+	color: var(--color-text-faint);
+	margin-top: 2px;
+	font-variant-numeric: tabular-nums;
+}
 /* 设置 · 插件分区：dsh「内置插件」卡片网格（两列，窄屏单列）。 */
 .gui-plugin-cards {
 	display: grid;

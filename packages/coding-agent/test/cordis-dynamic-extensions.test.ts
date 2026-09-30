@@ -33,7 +33,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { CordisDynamicExtensionRuntime, DynamicExtensionLoadError } from "../src/daemon/cordis-dynamic-extensions";
+import {
+	CordisDynamicExtensionRuntime,
+	type DynamicExtensionHandle,
+	DynamicExtensionLoadError,
+} from "../src/daemon/cordis-dynamic-extensions";
 import { DaemonHostContext } from "../src/daemon/host-context";
 
 function probeManifest(name: string): string {
@@ -318,5 +322,182 @@ describe("收编第二刀 宿主级 user 插件 cordis 装载（Loader / 同源 
 		const a = snapshot.find(r => r.name === "probe-a");
 		expect(a?.effectLabels.some(label => label.startsWith("registerCommand:"))).toBe(true);
 		expect(a?.effectLabels).toContain("on:refresh");
+	});
+});
+
+describe("组件对齐刀 清单组件子 fiber（dsh `- insert:` 子插件 parity / 独立启停 / 检视）", () => {
+	let compsHost: DaemonHostContext;
+	let compsRuntime: CordisDynamicExtensionRuntime;
+	let compsDir = "";
+	let compsHandle: DynamicExtensionHandle;
+
+	function compsManifest(): string {
+		return JSON.stringify({
+			name: "probe-comps",
+			version: "0.0.0",
+			musepi: {
+				extensions: ["./index.ts"],
+				components: [
+					{ id: "alpha", description: "Alpha unit", entry: "./alpha.ts" },
+					{ id: "beta", description: "Beta unit", entry: "./beta.ts" },
+					{ id: "readonly" },
+				],
+			},
+		});
+	}
+
+	const COMPS_MAIN = `export default function extension(pi: any) {
+	pi.registerCommand("probe-comps-main", { handler: async () => "main" });
+}
+`;
+	const COMPS_ALPHA = `export default function extension(pi: any) {
+	pi.registerCommand("probe-comps-alpha", { handler: async () => "alpha" });
+}
+`;
+	const COMPS_BETA_V1 = `export default function extension(pi: any) {
+	pi.registerCommand("probe-comps-beta", { handler: async () => "beta-v1" });
+}
+`;
+	const COMPS_BETA_V2 = `export default function extension(pi: any) {
+	pi.registerCommand("probe-comps-beta", { handler: async () => "beta-v2" });
+}
+`;
+
+	beforeAll(async () => {
+		compsHost = new DaemonHostContext();
+		compsRuntime = new CordisDynamicExtensionRuntime(compsHost);
+		compsDir = await writeExtension("probe-comps", {
+			"package.json": compsManifest(),
+			"index.ts": COMPS_MAIN,
+			"alpha.ts": COMPS_ALPHA,
+			"beta.ts": COMPS_BETA_V1,
+		});
+		compsHandle = await compsRuntime.load(compsDir, rootDir);
+	});
+
+	afterAll(async () => {
+		await compsRuntime.dispose();
+		await compsHost.dispose();
+	});
+
+	test("组件装载：entry 组件 = 独立子 fiber（独立效果账本/状态机），无 entry 组件如实只读", async () => {
+		const handle = compsHandle;
+		expect(await handle.invoke("probe-comps-main")).toBe("main");
+		expect(await handle.invoke("probe-comps-alpha")).toBe("alpha");
+		expect(await handle.invoke("probe-comps-beta")).toBe("beta-v1");
+
+		const entry = compsRuntime.inspect().find(r => r.name === "probe-comps");
+		const byId = new Map(entry?.components.map(c => [c.id, c]));
+		expect(byId.get("alpha")?.status).toBe("active");
+		expect(byId.get("alpha")?.fiberState).toBe("ACTIVE");
+		expect(byId.get("alpha")?.effectLabels).toContain("registerCommand:probe-comps-alpha");
+		expect(byId.get("beta")?.status).toBe("active");
+		// 只读声明组件：不挂 fiber,如实 disabled 且无 fiberState。
+		expect(byId.get("readonly")?.status).toBe("disabled");
+		expect(byId.get("readonly")?.fiberState).toBeUndefined();
+	});
+
+	test("组件独立启停：停用即能力缺席（效果回收），主入口与其余组件无损；启用即重挂", async () => {
+		const handle = compsHandle;
+		await compsRuntime.setComponentEnabled("probe-comps", "alpha", false);
+		const missing = await handle.invoke("probe-comps-alpha").catch(err => err);
+		expect(missing).toBeInstanceOf(DynamicExtensionLoadError);
+		expect((missing as DynamicExtensionLoadError).code).toBe("entry-missing");
+		expect(await handle.invoke("probe-comps-main")).toBe("main");
+		expect(await handle.invoke("probe-comps-beta")).toBe("beta-v1");
+		expect(
+			compsRuntime
+				.inspect()
+				.find(r => r.name === "probe-comps")
+				?.components.find(c => c.id === "alpha")?.status,
+		).toBe("disabled");
+
+		await compsRuntime.setComponentEnabled("probe-comps", "alpha", true);
+		expect(await handle.invoke("probe-comps-alpha")).toBe("alpha");
+	});
+
+	test("禁用集装载：disabledComponents 命中的组件不挂 fiber,其余照常", async () => {
+		const localHost = new DaemonHostContext();
+		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const handle = await localRuntime.load(compsDir, rootDir, new Set(["probe-comps/beta"]));
+		const missing = await handle.invoke("probe-comps-beta").catch(err => err);
+		expect(missing).toBeInstanceOf(DynamicExtensionLoadError);
+		expect(await handle.invoke("probe-comps-alpha")).toBe("alpha");
+		expect(
+			localRuntime
+				.inspect()
+				.find(r => r.name === "probe-comps")
+				?.components.find(c => c.id === "beta")?.status,
+		).toBe("disabled");
+		await localRuntime.dispose();
+		await localHost.dispose();
+	});
+
+	test("组件失败层隔离：单组件抛错只记 FAILED,插件与兄弟组件无损", async () => {
+		const dir = await writeExtension("probe-comps-fragile", {
+			"package.json": JSON.stringify({
+				name: "probe-comps-fragile",
+				version: "0.0.0",
+				musepi: {
+					extensions: ["./index.ts"],
+					components: [
+						{ id: "good", entry: "./good.ts" },
+						{ id: "broken", entry: "./broken.ts" },
+					],
+				},
+			}),
+			"index.ts": COMPS_MAIN,
+			"good.ts": COMPS_ALPHA,
+			"broken.ts": `export default function extension(_pi: any) { throw new Error("boom from component"); }\n`,
+		});
+		const localHost = new DaemonHostContext();
+		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const handle = await localRuntime.load(dir, rootDir);
+		expect(await handle.invoke("probe-comps-alpha")).toBe("alpha");
+		const entry = localRuntime.inspect().find(r => r.name === "probe-comps-fragile");
+		expect(entry?.status).toBe("active");
+		const broken = entry?.components.find(c => c.id === "broken");
+		expect(broken?.status).toBe("failed");
+		expect(broken?.error).toContain("boom from component");
+		expect(broken?.fiberState).toBeUndefined();
+		await localRuntime.dispose();
+		await localHost.dispose();
+	});
+
+	test("组件 HMR：reload 拾取组件入口改写", async () => {
+		const handle = compsHandle;
+		await fs.writeFile(path.join(compsDir, "beta.ts"), COMPS_BETA_V2);
+		await handle.reload();
+		expect(await handle.invoke("probe-comps-beta")).toBe("beta-v2");
+	});
+
+	test("组件命令碰撞守卫：组件抢主入口命令名 → 组件 FAILED（插件无损）", async () => {
+		const dir = await writeExtension("probe-comps-usurper", {
+			"package.json": JSON.stringify({
+				name: "probe-comps-usurper",
+				version: "0.0.0",
+				musepi: {
+					extensions: ["./index.ts"],
+					components: [{ id: "usurper", entry: "./usurper.ts" }],
+				},
+			}),
+			"index.ts": COMPS_MAIN,
+			"usurper.ts": `export default function extension(pi: any) {
+	pi.registerCommand("probe-comps-main", { handler: async () => "stolen" });
+}
+`,
+		});
+		const localHost = new DaemonHostContext();
+		const localRuntime = new CordisDynamicExtensionRuntime(localHost);
+		const handle = await localRuntime.load(dir, rootDir);
+		expect(await handle.invoke("probe-comps-main")).toBe("main");
+		const usurper = localRuntime
+			.inspect()
+			.find(r => r.name === "probe-comps-usurper")
+			?.components.find(c => c.id === "usurper");
+		expect(usurper?.status).toBe("failed");
+		expect(usurper?.error).toContain("already registered");
+		await localRuntime.dispose();
+		await localHost.dispose();
 	});
 });

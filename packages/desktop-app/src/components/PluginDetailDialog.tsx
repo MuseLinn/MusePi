@@ -127,6 +127,12 @@ function ComponentsSection({
 								{!c.enabled && c.disabledReason ? (
 									<div className="gui-plugin-component-denied">{t("ext component denied")}</div>
 								) : null}
+								{c.runtime && c.runtime.fiberState !== "ACTIVE" ? (
+									<div className="gui-plugin-component-runtime">
+										{t("ext fiber state")} {c.runtime.fiberState}
+										{c.runtime.effects > 0 ? ` · ${c.runtime.effects}` : null}
+									</div>
+								) : null}
 							</div>
 							{c.canToggle && (
 								<button

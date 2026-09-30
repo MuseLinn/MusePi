@@ -2,7 +2,8 @@
  * 扩展插件清单(plugin manifest)的 config/resources 读取与校验。
  *
  * dsh 插件管理页五段式契约的第一段:扩展的 package.json 在 `musepi` 字段
- * 下可声明 `config`(配置字段表)与 `resources`(资源占用声明),
+ * 下可声明 `config`(配置字段表)、`resources`(资源占用声明)与
+ * `components`(「包含的组件」子插件声明),
  * 扩展中心详情页据此渲染 dsh 式配置表单与资源卡。`omp`/`pi` 是旧上游
  * 兼容的遗留字段(继续可读,新扩展一律写 `musepi`)。
  *
@@ -16,8 +17,8 @@
  */
 import * as path from "node:path";
 import { isEacces, isEnoent } from "@musepi/pi-utils";
-import type { ConfigFieldDesc, ConfigFieldError, PluginResources } from "@musepi/pi-wire";
-import { parseConfigFields, parsePluginResources } from "@musepi/pi-wire";
+import type { ConfigFieldDesc, ConfigFieldError, PluginComponentDecl, PluginResources } from "@musepi/pi-wire";
+import { parseConfigFields, parsePluginComponents, parsePluginResources } from "@musepi/pi-wire";
 
 /** 从入口文件向上查找 package.json 的最大目录层级。 */
 const MAX_MANIFEST_DEPTH = 4;
@@ -32,6 +33,8 @@ export interface ExtensionPluginMeta {
 	configErrors: ConfigFieldError[];
 	/** 声明的资源占用(disk/memory/setup/models)。 */
 	resources?: PluginResources;
+	/** 声明的「包含的组件」(dsh 子插件 parity;entry 组件 = 独立装载单元)。 */
+	components?: PluginComponentDecl[];
 }
 
 /**
@@ -44,21 +47,29 @@ export async function readExtensionPluginMeta(entryPath: string): Promise<Extens
 	if (!raw) return null;
 	const { fields, errors } = parseConfigFields(raw.config);
 	const resources = parsePluginResources(raw.resources);
-	if (fields.length === 0 && errors.length === 0 && !resources) {
+	const { components } = parsePluginComponents(raw.components);
+	if (fields.length === 0 && errors.length === 0 && !resources && components.length === 0) {
 		return null;
 	}
-	return { fields, configErrors: errors, resources };
+	return {
+		fields,
+		configErrors: errors,
+		...(resources ? { resources } : {}),
+		...(components.length > 0 ? { components } : {}),
+	};
 }
 
-async function readManifestBlock(entryPath: string): Promise<{ config?: unknown; resources?: unknown } | null> {
+async function readManifestBlock(
+	entryPath: string,
+): Promise<{ config?: unknown; resources?: unknown; components?: unknown } | null> {
 	let dir = path.dirname(entryPath);
 	for (let depth = 0; depth < MAX_MANIFEST_DEPTH; depth++) {
 		const packageJsonPath = path.join(dir, "package.json");
 		try {
 			const pkg = (await Bun.file(packageJsonPath).json()) as {
-				musepi?: { config?: unknown; resources?: unknown };
-				omp?: { config?: unknown; resources?: unknown };
-				pi?: { config?: unknown; resources?: unknown };
+				musepi?: { config?: unknown; resources?: unknown; components?: unknown };
+				omp?: { config?: unknown; resources?: unknown; components?: unknown };
+				pi?: { config?: unknown; resources?: unknown; components?: unknown };
 			};
 			// musepi 为权威字段；omp/pi 是旧上游兼容遗留（继续可读）。
 			const block = pkg.musepi ?? pkg.omp ?? pkg.pi;
