@@ -1,4 +1,4 @@
-import { Context, type Fiber } from "@deepseek-ai/cordis";
+import { Context, type Fiber, type Plugin } from "@deepseek-ai/cordis";
 import { logger } from "@musepi/pi-utils";
 import type { DaemonService } from "./services/types";
 
@@ -44,7 +44,7 @@ export class DaemonHostContext {
 			throw new Error(`DaemonHostContext: duplicate service key "${key}"`);
 		}
 		const lifecycle = opts?.lifecycle ?? "external";
-		const fiber = this.#root.plugin({
+		const fiber = this.plugin({
 			name: `daemon-service:${key}`,
 			apply: ctx => {
 				if (lifecycle === "cordis") service.start?.();
@@ -53,8 +53,16 @@ export class DaemonHostContext {
 			},
 		});
 		this.#fibers.set(key, fiber);
+		return fiber;
+	}
+
+	/** 在根 Context 上直接装配一个任意 cordis 对象插件（fiber 由调用方持有）。
+	 *  用于注册表之外的装配面——动态插件组（M2-2.9 spike ①）等。
+	 *  返回 fiber 句柄：await 它即等挂载落定；挂载失败 fiber 进入 FAILED。 */
+	plugin(definition: Plugin.Object): Fiber & PromiseLike<Fiber> {
+		const fiber = this.#root.plugin(definition);
 		Promise.resolve(fiber).catch(err => {
-			logger.error("DaemonHostContext: service mount failed", { key, err });
+			logger.error("DaemonHostContext: plugin mount failed", { name: definition.name, err });
 		});
 		return fiber;
 	}
