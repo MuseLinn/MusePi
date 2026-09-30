@@ -111,6 +111,29 @@ html:root body {
 	background: transparent;
 }
 
+/* ── Selection scope (dsh parity) ─────────────────────────────────────
+ * Chrome text is non-selectable by default: dragging across nav tabs,
+ * rail icons, settings labels or plugin cards must not start an
+ * accidental selection (the classic mis-drag that also swallows the
+ * click). Long-form copyable content re-enables selection: form fields,
+ * editable surfaces, code blocks and the chat markdown body (.tr-md —
+ * AI replies and user text stay copyable). xterm's canvas selection is
+ * unaffected (it draws its own selection, not CSS text). */
+html:root,
+html:root body {
+	user-select: none;
+	-webkit-user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"],
+pre,
+code,
+.tr-md {
+	user-select: text;
+	-webkit-user-select: text;
+}
+
 /* ── Glass transparency pipeline (settings → 外观) ────────────────────
  * --gui-glass-alpha   = slider transparency 0.3–0.9 (set by JS in
  *                       src/lib/glass.ts). The slider reads as

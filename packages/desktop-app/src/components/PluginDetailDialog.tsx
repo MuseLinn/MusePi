@@ -6,7 +6,14 @@ import type { RpcClient } from "../lib/rpc";
 import type { ExtensionItem } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DialogFrame } from "./DialogFrame";
-import { SpeechModelPicker, TIER_META, TTS_TIER_META } from "./settings-sections/voice";
+import {
+	hiddenTiersFromComponents,
+	SpeechModelPicker,
+	STT_COMPONENT_TIERS,
+	TIER_META,
+	TTS_COMPONENT_TIERS,
+	TTS_TIER_META,
+} from "./settings-sections/voice";
 import {
 	builtinDescription,
 	builtinDisplayName,
@@ -40,6 +47,9 @@ const VOICE_PICKER_KEYS: Record<string, readonly string[]> = {
 };
 
 function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
+	// 组件开关实时过滤：引擎组件停用 → 对应档位立即从选择器消失（与设置页
+	// 同一 helper / 同一存储；item 来自全局 registry 单例，拨开关后经
+	// extensions.changed 重拉，弹层内选择器同帧跟随）。
 	if (item.id === "voice:stt") {
 		return (
 			<div className="gui-ext-detail-section">
@@ -53,6 +63,7 @@ function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient |
 					meta={TIER_META}
 					isDownloadEvent={isSttDownloadEvent}
 					autoFetchOnSelect
+					hiddenTiers={hiddenTiersFromComponents(item.components, STT_COMPONENT_TIERS)}
 				/>
 			</div>
 		);
@@ -71,6 +82,7 @@ function VoiceModelPicker({ item, rpc }: { item: ExtensionItem; rpc: RpcClient |
 					meta={TTS_TIER_META}
 					isDownloadEvent={isTtsDownloadEvent}
 					autoFetchOnSelect={false}
+					hiddenTiers={hiddenTiersFromComponents(item.components, TTS_COMPONENT_TIERS)}
 				/>
 			</div>
 		);

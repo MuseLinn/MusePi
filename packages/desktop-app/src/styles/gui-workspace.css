@@ -3609,11 +3609,25 @@
 /* 模块行行内展开（dsh 插件详情 parity）：整行头可点（手风琴），展开区
  * 复用能力清单 detail pane 的段式样式（gui-ext-detail-*）。开关按钮
  * stopPropagation，不会误触发展开。 */
-.gui-ext-provider-h--btn {
+/* 插件条目整卡可点（dsh 列表行 parity）：整条（图标+名称+标签+描述）
+ * 是一个点击区，悬停整卡高亮；卡内行头不再单独高亮（避免双层），
+ * 右侧开关 stopPropagation 独占点击。 */
+.gui-ext-provider--btn {
 	cursor: pointer;
+	padding: 3px 5px;
 	border-radius: var(--radius-md);
+	transition: background 160ms ease;
 }
-.gui-ext-provider-h--btn:focus-visible {
+
+.gui-ext-provider--btn:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 8%, transparent);
+}
+
+.gui-ext-provider--btn:hover .gui-ext-provider-h {
+	background: transparent;
+}
+
+.gui-ext-provider--btn:focus-visible {
 	outline: 2px solid var(--color-accent, var(--color-text));
 	outline-offset: 1px;
 }

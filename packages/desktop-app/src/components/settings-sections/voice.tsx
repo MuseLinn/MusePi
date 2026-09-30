@@ -28,9 +28,10 @@ import {
 	type TtsModelRow,
 	type TtsModelStatusResponse,
 } from "@musepi/pi-wire";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "../../i18n/voice";
 import type { RpcClient } from "../../lib/rpc";
+import { useExtensionRegistry } from "../../lib/slot-host";
 import { useFloatingMenu } from "../../lib/use-floating-menu";
 import {
 	enumerateMicDevices,
@@ -128,6 +129,35 @@ export const TTS_TIER_META: Record<string, TierMeta> = {
 	},
 };
 
+/** 组件 id → 该组件承载的档位键（与 builtin-registry 声明的 voice 单元
+ *  组件一一对应；daemon 的 voice.disabledEngines 黑名单按组件 id 记账，
+ *  这里把它翻译回选择器可见的档位）。 */
+export const STT_COMPONENT_TIERS: Record<string, readonly string[]> = {
+	whisper: ["fast", "balanced", "turbo"],
+	sensevoice: ["sensevoice"],
+	parakeet: ["parakeet"],
+};
+export const TTS_COMPONENT_TIERS: Record<string, readonly string[]> = {
+	kokoro: ["kokoro"],
+	"melotts-zh": ["melotts-zh"],
+};
+
+/** 组件禁用清单 → 选择器应隐藏的档位集合。组件开关实时生效的 GUI 半：
+ *  引擎一关，对应档位立即从模型选择器消失（与 daemon 侧
+ *  voice.disabledEngines 关闭转写/合成路径同一份存储，双端零漂移）。
+ *  导出：插件详情弹层用同一 helper 过滤内嵌选择器。 */
+export function hiddenTiersFromComponents(
+	components: { id: string; enabled: boolean }[] | undefined,
+	tierMap: Record<string, readonly string[]>,
+): ReadonlySet<string> {
+	const hidden = new Set<string>();
+	for (const component of components ?? []) {
+		if (component.enabled) continue;
+		for (const tier of tierMap[component.id] ?? []) hidden.add(tier);
+	}
+	return hidden;
+}
+
 /** Speech-model picker: ONE card where each tier is a radio row — selecting
  *  a tier writes the backing setting. The STT and TTS pickers are the same
  *  card over two wire channels, so the component takes the channel endpoints
@@ -159,6 +189,10 @@ interface SpeechModelPickerProps {
 	 *  to the Mandarin tier automatically, so an uncached pick still reads
 	 *  aloud — the per-row download button is the only fetch trigger. */
 	autoFetchOnSelect?: boolean;
+	/** Tiers hidden by a disabled plugin component (voice.* engine blacklist):
+	 *  filtered out of the row list in real time — flipping a component switch
+	 *  in the capability center immediately shrinks the picker, no remount. */
+	hiddenTiers?: ReadonlySet<string>;
 }
 
 /** The STT/TTS pickers are one component over two wire channels — exported
@@ -175,6 +209,7 @@ export function SpeechModelPicker({
 	meta,
 	isDownloadEvent,
 	autoFetchOnSelect,
+	hiddenTiers,
 }: SpeechModelPickerProps): ReactNode {
 	const [models, setModels] = useState<(SttModelRow | TtsModelRow)[] | null>(null);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -300,7 +335,11 @@ export function SpeechModelPicker({
 	// both for explicit clicks (handled in the row's onChange via `download`)
 	// and for a seed selection pointing at weights that aren't on disk yet
 	// (fresh machine). TTS never auto-fetches — see the prop's contract.
-	const selectedRow = models?.find(m => m.key === selected) ?? null;
+	// The row set is the COMPONENT-VISIBLE subset: a hidden tier (its engine
+	// disabled in the plugin's component settings) is not a selection the
+	// user can make, so it must not seed an auto-download either.
+	const visibleModels = models?.filter(m => !hiddenTiers?.has(m.key)) ?? null;
+	const selectedRow = visibleModels?.find(m => m.key === selected) ?? null;
 	useEffect(() => {
 		if (!autoFetchOnSelect) return;
 		if (!selectedRow || selectedRow.cached || active !== null) return;
@@ -312,13 +351,17 @@ export function SpeechModelPicker({
 	return (
 		<div className="gui-settings-section">
 			<div className="gui-settings-section-title">{tLoose(titleKey)}</div>
-			{models === null ? (
+			{visibleModels === null ? (
 				<div className="gui-settings-row">
 					<div className="gui-settings-row-desc">…</div>
 				</div>
+			) : visibleModels.length === 0 ? (
+				<div className="gui-settings-row">
+					<div className="gui-settings-row-desc">{tLoose("all speech engines disabled hint")}</div>
+				</div>
 			) : (
 				<div className="gui-stt-picker" role="radiogroup" aria-label={tLoose(titleKey)}>
-					{models.map(m => {
+					{visibleModels.map(m => {
 						const isSelected = selected === m.key;
 						// Narrowing shape matters: `active !== null && …` lets tsgo
 						// narrow `active` through this alias inside the branch below.
@@ -432,7 +475,13 @@ export function SpeechModelPicker({
 
 /** STT picker card (语音识别模型): the four tiers write `stt.modelName` and
  *  auto-fetch on pick — a selected tier you cannot use is a broken default. */
-function SttModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+function SttModelPickerCard({
+	rpc,
+	hiddenTiers,
+}: {
+	rpc: RpcClient | null;
+	hiddenTiers?: ReadonlySet<string>;
+}): ReactNode {
 	return (
 		<SpeechModelPicker
 			rpc={rpc}
@@ -444,6 +493,7 @@ function SttModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
 			meta={TIER_META}
 			isDownloadEvent={isSttDownloadEvent}
 			autoFetchOnSelect
+			hiddenTiers={hiddenTiers}
 		/>
 	);
 }
@@ -456,7 +506,13 @@ function SttModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
  *  `tts.localVoice` — for kokoro that's the multi-voice catalog, for
  *  melotts-zh the model's single ZH voice. Exported: the contract test mounts
  *  this card directly against a fake RPC. */
-export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNode {
+export function TtsModelPickerCard({
+	rpc,
+	hiddenTiers,
+}: {
+	rpc: RpcClient | null;
+	hiddenTiers?: ReadonlySet<string>;
+}): ReactNode {
 	return (
 		<SpeechModelPicker
 			rpc={rpc}
@@ -469,6 +525,7 @@ export function TtsModelPickerCard({ rpc }: { rpc: RpcClient | null }): ReactNod
 			meta={TTS_TIER_META}
 			isDownloadEvent={isTtsDownloadEvent}
 			autoFetchOnSelect={false}
+			hiddenTiers={hiddenTiers}
 		/>
 	);
 }
@@ -629,17 +686,17 @@ function InputDeviceMenu({
 
 /** 插件单元停用时的占位卡：说明归属 + 一键启用（等价能力中心的开关，
  *  走同一 extensions.setEnabled RPC）。stt/tts 的 schema 行、模型选择器
- *  与测试入口都由插件状态驱动——插件关了，对应配置就不该出现。 */
+ *  与测试入口都由插件状态驱动——插件关了，对应配置就不该出现。启用后
+ *  daemon 广播 extensions.changed，全局 registry 单例即时刷新，本卡自动
+ *  换回真实配置，无需本地回调。 */
 function DisabledVoicePluginNote({
 	rpc,
 	unitId,
 	copyKey,
-	onEnabled,
 }: {
 	rpc: RpcClient | null;
 	unitId: "voice:stt" | "voice:tts";
 	copyKey: string;
-	onEnabled(): void;
 }): ReactNode {
 	const [busy, setBusy] = useState(false);
 	const enable = (): void => {
@@ -647,7 +704,7 @@ function DisabledVoicePluginNote({
 		setBusy(true);
 		void rpc
 			.request("extensions.setEnabled", { id: unitId, enabled: true })
-			.then(onEnabled)
+			.catch(() => {})
 			.finally(() => setBusy(false));
 	};
 	return (
@@ -689,24 +746,19 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	const [dictationError, setDictationError] = useState<string | null>(null);
 	const stopRef = useRef<(() => void) | null>(null);
 	// 插件单元状态（页面由插件驱动）：voice:stt / voice:tts 关闭时，
-	// 对应 schema 行、模型选择器与测试入口整体隐藏。null = 尚未取到
-	// （fail-open 按启用渲染，拉取失败绝不让整页配置消失）。
-	const [voiceUnits, setVoiceUnits] = useState<{ stt: boolean; tts: boolean } | null>(null);
-	const refreshVoiceUnits = useCallback((): void => {
-		if (!rpc) return;
-		void rpc
-			.request<{ extensions?: { id: string; state: string }[] }>("extensions.list")
-			.then(res => {
-				const find = (id: string): boolean => res.extensions?.find(e => e.id === id)?.state === "active";
-				setVoiceUnits({ stt: find("voice:stt"), tts: find("voice:tts") });
-			})
-			.catch(() => setVoiceUnits(null));
-	}, [rpc]);
-	useEffect(() => {
-		refreshVoiceUnits();
-	}, [refreshVoiceUnits]);
-	const sttOn = voiceUnits?.stt ?? true;
-	const ttsOn = voiceUnits?.tts ?? true;
+	// 对应 schema 行、模型选择器与测试入口整体隐藏。数据源是全局 registry
+	// 单例（extensions.changed 即时刷新）——能力中心里拨插件/组件开关，
+	// 这里同帧跟随，不再需要页面重进。registry 尚未取到时 fail-open 按
+	// 启用渲染，拉取失败绝不让整页配置消失。
+	const registry = useExtensionRegistry(rpc);
+	const sttItem = useMemo(() => registry?.extensions.find(e => e.id === "voice:stt"), [registry]);
+	const ttsItem = useMemo(() => registry?.extensions.find(e => e.id === "voice:tts"), [registry]);
+	const sttOn = sttItem ? sttItem.state === "active" : true;
+	const ttsOn = ttsItem ? ttsItem.state === "active" : true;
+	// 组件级（引擎）黑名单 → 选择器隐藏档位：组件开关一拨，档位行立即
+	// 增减，与 daemon 的 voice.disabledEngines 同一份存储。
+	const sttHiddenTiers = useMemo(() => hiddenTiersFromComponents(sttItem?.components, STT_COMPONENT_TIERS), [sttItem]);
+	const ttsHiddenTiers = useMemo(() => hiddenTiersFromComponents(ttsItem?.components, TTS_COMPONENT_TIERS), [ttsItem]);
 	// Session chrome mirrors the chat surface (same localStorage keys
 	// ChatView reads), so the preview shows exactly what a conversation
 	// looks like under the current 外观 toggles.
@@ -803,24 +855,14 @@ export function VoiceSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 				excludePrefixes={[...(sttOn ? [] : (["stt."] as const)), ...(ttsOn ? [] : (["tts."] as const))]}
 			/>
 			{sttOn ? (
-				<SttModelPickerCard rpc={rpc} />
+				<SttModelPickerCard rpc={rpc} hiddenTiers={sttHiddenTiers} />
 			) : (
-				<DisabledVoicePluginNote
-					rpc={rpc}
-					unitId="voice:stt"
-					copyKey="voice stt plugin disabled"
-					onEnabled={refreshVoiceUnits}
-				/>
+				<DisabledVoicePluginNote rpc={rpc} unitId="voice:stt" copyKey="voice stt plugin disabled" />
 			)}
 			{ttsOn ? (
-				<TtsModelPickerCard rpc={rpc} />
+				<TtsModelPickerCard rpc={rpc} hiddenTiers={ttsHiddenTiers} />
 			) : (
-				<DisabledVoicePluginNote
-					rpc={rpc}
-					unitId="voice:tts"
-					copyKey="voice tts plugin disabled"
-					onEnabled={refreshVoiceUnits}
-				/>
+				<DisabledVoicePluginNote rpc={rpc} unitId="voice:tts" copyKey="voice tts plugin disabled" />
 			)}
 
 			{/* Live voice I/O test: not expressible in schema. Hosted by the

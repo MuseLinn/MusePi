@@ -198,8 +198,10 @@ export function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc
 	);
 }
 
-/** 插件模块行（dsh 列表行 parity）：图标 + 状态点 + 名称 + 描述 + 右侧开关，
- *  点击行头打开详情弹层。能力中心「扩展」tab 复用（导出共享）。 */
+/** 插件模块行（dsh 插件条目 parity：**整条**是一个信息丰富的可点击卡片
+ *  ——图标 + 状态点 + 名称 + kind/组件数标签 + 描述都在点击区内，悬停整卡
+ *  高亮；只有右侧开关独占点击（stopPropagation）。能力中心「插件」tab
+ *  复用（导出共享）。 */
 export function ModuleRow({
 	e,
 	rpc,
@@ -214,20 +216,20 @@ export function ModuleRow({
 	onOpen(item: ExtensionItem): void;
 }): ReactNode {
 	return (
-		<div className="gui-ext-provider">
-			<div
-				className="gui-ext-provider-h gui-ext-provider-h--btn"
-				role="button"
-				tabIndex={0}
-				aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
-				onClick={() => onOpen(e)}
-				onKeyDown={ev => {
-					if (ev.key === "Enter" || ev.key === " ") {
-						ev.preventDefault();
-						onOpen(e);
-					}
-				}}
-			>
+		<div
+			className="gui-ext-provider gui-ext-provider--btn"
+			role="button"
+			tabIndex={0}
+			aria-label={`${t("ext open plugin details")} · ${builtinDisplayName(e)}`}
+			onClick={() => onOpen(e)}
+			onKeyDown={ev => {
+				if (ev.key === "Enter" || ev.key === " ") {
+					ev.preventDefault();
+					onOpen(e);
+				}
+			}}
+		>
+			<div className="gui-ext-provider-h">
 				<Icon name="code-box" className="h-3.5 w-3.5 shrink-0 opacity-60" />
 				<span
 					className={`gui-ext-dot${e.loadError ? " gui-ext-dot--error" : e.state === "active" ? "" : e.state === "shadowed" ? " gui-ext-dot--shadowed" : " gui-ext-dot--off"}`}

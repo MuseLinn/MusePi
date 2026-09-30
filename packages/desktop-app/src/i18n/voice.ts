@@ -88,6 +88,8 @@ const zhVoice = {
 	"voice tts plugin disabled": "朗读播报由插件「语音播报」提供，当前已停用。",
 	"voice plugin disabled hint": "启用后以下配置与测试即可使用；也可以在能力中心管理全部插件。",
 	"voice plugin enable": "启用插件",
+	"all speech engines disabled hint":
+		"该单元的全部引擎已在插件组件设置中停用，暂无可选模型；可在能力中心重新启用对应组件。",
 } as const;
 
 registerTranslations("zh-CN", zhVoice);
@@ -172,4 +174,6 @@ registerTranslations("en-US", {
 	"voice tts plugin disabled": "voice tts plugin disabled",
 	"voice plugin disabled hint": "voice plugin disabled hint",
 	"voice plugin enable": "voice plugin enable",
+	"all speech engines disabled hint":
+		"All engines for this unit are disabled in the plugin's component settings — no model to pick; re-enable the component in the capability center.",
 } as const satisfies Record<keyof typeof zhVoice, string>);
