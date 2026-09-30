@@ -443,7 +443,6 @@ export const tools = {
 	"ext builtin tts": "Speech Output (TTS)",
 	"ext builtin tts desc":
 		"Streaming neural text-to-speech readback (Kokoro-82M / MeloTTS 中文, downloaded on first use). The toggle mirrors speech.enabled; config fields are the tts.* settings keys — one storage with the settings page.",
-	"plugin details": "Details",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",
 	"ext plugin config desc":

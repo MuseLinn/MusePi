@@ -428,7 +428,6 @@ export const tools = {
 	"ext builtin tts": "语音播报（TTS）",
 	"ext builtin tts desc":
 		"流式神经语音朗读（Kokoro-82M / MeloTTS 中文，首次使用自动下载）。开关镜像 speech.enabled；配置项即 tts.* 设置键，与设置页语音分区同一条存储。",
-	"plugin details": "详情",
 	"ext read-only": "只读",
 	"ext plugin config": "插件配置",
 	"ext plugin config desc": "由插件清单声明的配置项，按字段类型渲染；修改的持久化写入随插件管理落地。",
