@@ -836,3 +836,6 @@ export type RelayControlToHost = {
 /** Relay → guest control message. */
 export type RelayControlToGuest = { t: "room-closed" };
 export type RelayControlMessage = RelayControlToHost | RelayControlToGuest;
+
+/** 插件声明式配置契约(§4 管理页 schema 驱动表单,daemon/GUI 共用)。 */
+export * from "./plugin-config";

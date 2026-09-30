@@ -1,6 +1,7 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { defaultsConfigValues } from "../lib/plugin-config-values";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import {
@@ -14,6 +15,7 @@ import {
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
+import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
 import { StateIcon } from "./StateIcon";
@@ -79,6 +81,72 @@ function isDeletable(e: ExtensionItem): boolean {
  *  the detail pane so users can tell GUI-surface extensions apart. */
 function isGuiKind(e: ExtensionItem): boolean {
 	return e.kind === "gui-motion" || e.kind === "style";
+}
+
+/**
+ * 插件清单元数据区(dsh 插件管理页五段式):配置表单 + 资源卡 + fail-soft
+ * 丢弃提示。值状态按条目隔离(key={selected.id} 重挂载即重置)——清单
+ * 驱动的配置写入链路随插件管理落地,本刀先把渲染与取值契约立住。
+ */
+function PluginManifestSections({ item }: { item: ExtensionItem }): ReactNode {
+	const [values, setValues] = useState<Record<string, unknown>>(() =>
+		item.config ? defaultsConfigValues(item.config, undefined) : {},
+	);
+	const resources = item.resources;
+	return (
+		<>
+			{item.configErrors && item.configErrors.length > 0 && (
+				<div className="gui-ext-detail-loaderror">
+					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
+					<span className="min-w-0 truncate">{t("ext config errors", { count: item.configErrors.length })}</span>
+				</div>
+			)}
+			{item.config && item.config.length > 0 && (
+				<div className="gui-ext-detail-section">
+					<div className="gui-ext-detail-label">{t("ext plugin config")}</div>
+					<div className="gui-plugin-config-desc">{t("ext plugin config desc")}</div>
+					<ConfigFormRenderer
+						fields={item.config}
+						values={values}
+						onChange={(key, value) => setValues(prev => ({ ...prev, [key]: value }))}
+					/>
+				</div>
+			)}
+			{resources && (
+				<div className="gui-ext-detail-section">
+					<div className="gui-ext-detail-label">{t("ext plugin resources")}</div>
+					<div className="gui-plugin-resources">
+						{resources.disk && (
+							<div className="gui-plugin-resource-row">
+								<span className="gui-plugin-resource-key">{t("ext resources disk")}</span>
+								<span className="gui-plugin-resource-value">{resources.disk}</span>
+							</div>
+						)}
+						{resources.memory && (
+							<div className="gui-plugin-resource-row">
+								<span className="gui-plugin-resource-key">{t("ext resources memory")}</span>
+								<span className="gui-plugin-resource-value">{resources.memory}</span>
+							</div>
+						)}
+						{typeof resources.setupMinutes === "number" && (
+							<div className="gui-plugin-resource-row">
+								<span className="gui-plugin-resource-key">{t("ext resources setup")}</span>
+								<span className="gui-plugin-resource-value">{resources.setupMinutes}</span>
+							</div>
+						)}
+						{resources.models && resources.models.length > 0 && (
+							<div className="gui-plugin-resource-row">
+								<span className="gui-plugin-resource-key">{t("ext resources models")}</span>
+								<span className="gui-plugin-resource-value">
+									{resources.models.map(m => (m.size ? `${m.name} · ${m.size}` : m.name)).join(", ")}
+								</span>
+							</div>
+						)}
+					</div>
+				</div>
+			)}
+		</>
+	);
 }
 
 /**
@@ -846,6 +914,9 @@ export function ExtensionsCenter({ rpc }: { rpc: RpcClient | null }): ReactNode 
 												</div>
 											)}
 										</div>
+										{(selected.config?.length || selected.configErrors?.length || selected.resources) && (
+											<PluginManifestSections key={selected.id} item={selected} />
+										)}
 										{selected.state === "shadowed" && (
 											<div className="gui-ext-detail-actions">
 												<button

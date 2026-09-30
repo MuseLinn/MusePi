@@ -24,6 +24,8 @@ import {
 	loadCapability,
 } from "../../discovery";
 import { readDisabledServers, readEnabledServers } from "../../mcp/config-writer";
+import type { ExtensionPluginMeta } from "../extensions/plugin-manifest";
+import { readExtensionPluginMeta } from "../extensions/plugin-manifest";
 import {
 	annotateBuiltinExtensions,
 	builtinExtensionEntries,
@@ -50,6 +52,21 @@ export interface ExtensionSettingsManager {
 }
 
 /**
+ * 插件清单元数据 → Extension 的可选字段(无声明时返回空对象,
+ * spread 进条目后不留痕迹)。
+ */
+function spreadPluginMeta(
+	meta: ExtensionPluginMeta | null | undefined,
+): Pick<Extension, "config" | "configErrors" | "resources"> {
+	if (!meta) return {};
+	const out: Pick<Extension, "config" | "configErrors" | "resources"> = {};
+	if (meta.fields.length > 0) out.config = meta.fields;
+	if (meta.configErrors.length > 0) out.configErrors = meta.configErrors;
+	if (meta.resources) out.resources = meta.resources;
+	return out;
+}
+
+/**
  * Load all extensions from all capabilities.
  */
 export async function loadAllExtensions(
@@ -68,6 +85,7 @@ export async function loadAllExtensions(
 			getDescription?: (item: T) => string | undefined;
 			getTrigger?: (item: T) => string | undefined;
 			getShadowedBy?: (item: T) => string | undefined;
+			getPluginMeta?: (item: T) => ExtensionPluginMeta | null | undefined;
 		},
 	): void {
 		for (const item of items) {
@@ -105,6 +123,7 @@ export async function loadAllExtensions(
 				state,
 				disabledReason,
 				shadowedBy: opts?.getShadowedBy?.(item),
+				...(opts?.getPluginMeta ? spreadPluginMeta(opts.getPluginMeta(item)) : {}),
 				raw: item,
 			});
 		}
@@ -161,8 +180,17 @@ export async function loadAllExtensions(
 		const nativeModules = modules.all.filter(
 			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
 		);
+		// 插件清单 config/resources(dsh 式管理页):逐模块向上解析最近的
+		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上。
+		const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
+		await Promise.all(
+			nativeModules.map(async module => {
+				pluginMetaByPath.set(module.path, await readExtensionPluginMeta(module.path));
+			}),
+		);
 		addItems(nativeModules, "extension-module", {
 			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
+			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
 		});
 	} catch (error) {
 		logger.warn("Failed to load extension-modules capability", { error: String(error) });

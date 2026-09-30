@@ -1,6 +1,7 @@
 /**
  * Types for the Extension Control Center dashboard.
  */
+import type { ConfigFieldDesc, ConfigFieldError, PluginResources } from "@musepi/pi-wire";
 import type { SourceMeta } from "../../capability/types";
 
 /**
@@ -72,6 +73,12 @@ export interface Extension {
 	builtin?: boolean;
 	/** 只读展示项:无禁用语义,UI 不渲染停用开关(主题包/渲染器包)。 */
 	readonly?: boolean;
+	/** 插件清单声明的配置字段表(dsh 式管理页配置表单;解析见 extensions/plugin-manifest.ts)。 */
+	config?: ConfigFieldDesc[];
+	/** 被丢弃的坏配置字段及原因(fail-soft 证据,详情页展示)。 */
+	configErrors?: ConfigFieldError[];
+	/** 插件声明的资源占用(disk/memory/setup/models,详情页资源卡)。 */
+	resources?: PluginResources;
 	/** Raw item data for inspector */
 	raw: unknown;
 }

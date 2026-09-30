@@ -2163,6 +2163,70 @@
 .gui-ext-detail-raw-toggle:hover {
 	color: var(--color-text-muted);
 }
+
+/* ── Plugin manifest sections (dsh-style management page) ─────────────
+ * Config form rows reuse the settings-row grid so plugin fields sit at the
+ * same rhythm as app settings; the resources card is a compact key/value
+ * list under the detail pane's section label. */
+.gui-plugin-config {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	margin-top: 4px;
+}
+.gui-plugin-config-desc {
+	font-size: 11px;
+	line-height: 1.5;
+	color: var(--color-text-faint);
+	margin: 2px 0 6px;
+}
+.gui-plugin-config-field {
+	min-width: 0;
+}
+.gui-plugin-config-restart {
+	margin-top: 2px;
+	font-size: 10.5px;
+	color: var(--color-text-faint);
+}
+.gui-plugin-config-input {
+	flex: 1;
+	min-width: 0;
+	max-width: 220px;
+	padding: 5px 9px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: color-mix(in oklab, var(--color-text-faint) 6%, transparent);
+	color: var(--color-text);
+	font-size: 12px;
+	outline: none;
+	transition: border-color 160ms ease;
+}
+.gui-plugin-config-input:focus {
+	border-color: color-mix(in oklab, var(--color-text-faint) 35%, transparent);
+}
+.gui-plugin-resources {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-top: 4px;
+}
+.gui-plugin-resource-row {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 11.5px;
+}
+.gui-plugin-resource-key {
+	color: var(--color-text-muted);
+	flex-shrink: 0;
+}
+.gui-plugin-resource-value {
+	min-width: 0;
+	text-align: right;
+	color: var(--color-text);
+	word-break: break-all;
+}
 .gui-ext-item-tag {
 	/* Shrinkable with an ellipsis: a row whose badges are all rigid pushes
 	 * its trailing controls (hover ops, toggle) past the pane's right edge,

@@ -1,6 +1,6 @@
 import { registerExternalToolRenderers, type ToolRenderer } from "@musepi/client-core";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
-import type { SessionEntry } from "@musepi/pi-wire";
+import type { ConfigFieldDesc, ConfigFieldError, PluginResources, SessionEntry } from "@musepi/pi-wire";
 import type { ComponentType, ReactNode } from "react";
 import * as React from "react";
 import { useEffect, useMemo, useState } from "react";
@@ -122,6 +122,12 @@ export interface ExtensionItem {
 	builtin?: boolean;
 	/** 只读展示项(主题包/渲染器包):无禁用语义,不渲染停用开关。 */
 	readonly?: boolean;
+	/** 插件清单声明的配置字段表(dsh 式管理页;daemon 经 pi-wire 校验后下发)。 */
+	config?: ConfigFieldDesc[];
+	/** 被丢弃的坏配置字段及原因(fail-soft 证据)。 */
+	configErrors?: ConfigFieldError[];
+	/** 插件声明的资源占用(disk/memory/setup/models)。 */
+	resources?: PluginResources;
 }
 
 export interface ExtensionTab {

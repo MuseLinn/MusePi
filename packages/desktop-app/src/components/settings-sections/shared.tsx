@@ -19,7 +19,7 @@ export function NumberStepper({
 	min: number;
 	max: number;
 	step?: number;
-	unit: "px" | "%";
+	unit?: string;
 	defaultValue: number;
 	onChange(next: number): void;
 }): ReactNode {
