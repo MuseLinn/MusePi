@@ -49,8 +49,9 @@ export interface TerminalBackend {
 
 /** 结构化终端错误码（dsh types.ts 子集——只保留我方真实失败模式；
  *  不预支 FOREIGN_SESSION / OWNER_NOT_LIVE 等 owner 鉴权码，那属于
- *  terminal-core 插件化的下一刀）。 */
-export type TerminalRegistryErrorCode = "DUPLICATE_BACKEND" | "NO_BACKEND";
+ *  terminal-core 插件化的下一刀）。DISABLED_BACKEND = 用户经插件组件
+ *  开关显式禁用该后端（terminal.disabledBackends 名单命中）。 */
+export type TerminalRegistryErrorCode = "DUPLICATE_BACKEND" | "NO_BACKEND" | "DISABLED_BACKEND";
 
 /** 结构化终端错误：code 供调用方归因本地化，message 仅作日志。 */
 export class TerminalRegistryError extends Error {

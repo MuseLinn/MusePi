@@ -128,7 +128,9 @@ export class TerminalService implements DaemonService {
 		}
 
 		// Resolve provider from manifest seam > settings.raw > default "auto".
-		const { getTerminalProvider, resolveTerminalProvider } = await import("../terminal-provider.ts");
+		const { getTerminalProvider, readDisabledTerminalBackends, resolveTerminalProvider } = await import(
+			"../terminal-provider.ts"
+		);
 		const settings = await this.#deps.settings().catch(() => null);
 		const manifestProvider = await (async () => {
 			try {
@@ -138,9 +140,13 @@ export class TerminalService implements DaemonService {
 				return null;
 			}
 		})();
+		const disabledBackends = settings
+			? readDisabledTerminalBackends({ get: (key: string) => settings.getRaw(key) })
+			: new Set<string>();
 		const provider = getTerminalProvider(
 			resolveTerminalProvider(settings ?? ({ getRaw: () => undefined } as never), manifestProvider),
 			this.#registry,
+			disabledBackends,
 		);
 
 		// Wrap the provider handle to emit daemon events.

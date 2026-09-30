@@ -641,6 +641,12 @@ export const SETTINGS_SCHEMA = {
 	 *  组件 id 形如 "stt:whisper" / "tts:kokoro"。隐藏设置键。 */
 	"voice.disabledEngines": { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 终端后端级黑名单（插件「包含的组件」开关写入此处）：名单内的
+	 *  provider（bun-pty / node-pty）从 auto 回退顺序与显式解析中移除——
+	 *  auto 跳过后备，显式选中被禁后端给结构化 DISABLED_BACKEND。
+	 *  terminal-provider.ts 是唯一读取方。隐藏设置键。 */
+	"terminal.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
+
 	/** user 插件清单组件黑名单（dsh `- insert:` 子插件 parity）：复合键
 	 *  `<plugin>/<component>`（extensions.setComponentEnabled 写入），宿主
 	 *  级 fiber 装载 reconcile 时跳过命中组件——entry 组件停用 = 不挂

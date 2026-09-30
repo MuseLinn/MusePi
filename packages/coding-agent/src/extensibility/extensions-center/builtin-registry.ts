@@ -140,12 +140,14 @@ export interface BuiltinExtensionDef {
 	 * - "tool" → tools.disabled(tools/index.ts isToolAllowed 谓词消费)
 	 * - "stt-engine"/"tts-engine" → voice.disabledEngines
 	 *   (voice/engine-denylist.ts:模型状态/下载/转写/合成全路径过滤)
+	 * - "terminal-backend" → terminal.disabledBackends
+	 *   (terminal-provider.ts:auto 回退剔除 + 显式选中 DISABLED_BACKEND)
 	 * extensions.list 据此下发组件状态,setComponentEnabled 写名单。
 	 * 无独立启停语义的组件不声明。
 	 */
 	components?: readonly {
 		id: string;
-		deny: "tool" | "stt-engine" | "tts-engine";
+		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend";
 		description?: string;
 	}[];
 	/** inspector 的 raw 载荷(可为生成值)。 */
@@ -369,15 +371,27 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		raw: { name: "tts", kind: "voice" },
 	},
 	// ── 更多内置子系统(dsh 子系统插件 parity:terminal/browser/computer/
-	//    lsp ——终端只读展示(无总开关语义,不发明);其余镜像各自 enabled
-	//    设置键,配置字段键即设置键)────────────────────────────────────
+	//    lsp ——终端无总开关语义(不发明),两个 provider 单元以组件形式
+	//    独立启停;其余镜像各自 enabled 设置键,配置字段键即设置键)───────
 	{
 		kind: "terminal",
 		name: "terminal",
 		displayName: "Terminal",
 		description:
-			"Session terminal backend (bun-pty → node-pty auto-fallback) powering the TUI terminal and the GUI terminal panel. Read-only display: no master switch — disable the terminal panel from its own UI.",
+			"Session terminal backend (bun-pty → node-pty auto-fallback) powering the TUI terminal and the GUI terminal panel. Read-only display: no master switch — the two provider units toggle as components.",
 		readonly: true,
+		components: [
+			{
+				id: "bun-pty",
+				deny: "terminal-backend",
+				description: "ext builtin terminal component bun-pty desc",
+			},
+			{
+				id: "node-pty",
+				deny: "terminal-backend",
+				description: "ext builtin terminal component node-pty desc",
+			},
+		],
 		config: [
 			{
 				key: "terminal.provider",

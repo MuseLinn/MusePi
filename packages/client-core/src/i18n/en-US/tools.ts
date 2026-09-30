@@ -534,6 +534,10 @@ export const tools = {
 		"Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
 	"ext builtin lsp component lsp desc":
 		"Code-intelligence tool (definitions, references, diagnostics, rename) exposed to the agent.",
+	"ext builtin terminal component bun-pty": "Bun PTY",
+	"ext builtin terminal component bun-pty desc": "Native Bun process backend (preferred, lowest latency).",
+	"ext builtin terminal component node-pty": "node-pty bridge",
+	"ext builtin terminal component node-pty desc": "node-pty subprocess bridge backend (portability fallback).",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",
 	"ext plugin config desc":
@@ -555,7 +559,7 @@ export const tools = {
 	"ext add plugin": "Add plugin",
 	"ext plugin components": "Included components",
 	"ext plugin components desc":
-		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths.",
+		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths; terminal-backend components leave the provider resolution chain.",
 	"ext component count": "components ×{count}",
 	"ext component denied": "Disabled via component denylist",
 	"ext plugin details": "Plugin details",

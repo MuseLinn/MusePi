@@ -236,10 +236,16 @@ export function resolveTerminalProvider(
 /** 解析 provider 工厂。显式 provider 的 open 直查注册表——backend
  *  缺席给结构化 NO_BACKEND（manifest 显式声明的严格语义：不静默回退）；
  *  auto 只在在册 backend 间按 bun-pty → node-pty 顺序回退，
- *  全缺席 = 结构化 NO_BACKEND。 */
+ *  全缺席 = 结构化 NO_BACKEND。
+ *
+ *  组件黑名单（terminal.disabledBackends，插件「包含的组件」开关写入，
+ *  voice/engine-denylist 同哲学）：被禁后端从 auto 回退顺序剔除；显式
+ *  选中（manifest 或 settings）被禁后端时 open 给结构化 DISABLED_BACKEND
+ *  ——禁用是用户显式意图，不静默回退到 auto。 */
 export function getTerminalProvider(
 	name: TerminalProvider,
 	registry: TerminalRegistry = defaultTerminalRegistry,
+	disabled: ReadonlySet<string> = new Set(),
 ): TerminalProviderFactory {
 	if (name === "auto") {
 		return {
@@ -251,7 +257,7 @@ export function getTerminalProvider(
 				const order: readonly TerminalBackendType[] = ["bun-pty", "node-pty"];
 				let lastErr: unknown;
 				for (const type of order) {
-					if (!registry.hasBackend(type)) continue;
+					if (!registry.hasBackend(type) || disabled.has(type)) continue;
 					try {
 						return await registry.getBackend(type).open(cwd, cols, rows, shell, shellArgs, env);
 					} catch (err) {
@@ -275,9 +281,29 @@ export function getTerminalProvider(
 			return name;
 		},
 		async open(cwd, cols, rows, shell, shellArgs, env) {
+			if (disabled.has(name)) {
+				throw new TerminalRegistryError(
+					"DISABLED_BACKEND",
+					`terminal backend "${name}" is disabled (plugin component toggle)`,
+				);
+			}
 			return registry.getBackend(name).open(cwd, cols, rows, shell, shellArgs, env);
 		},
 	};
+}
+
+/** 读终端后端组件黑名单（fail-soft：坏值/非数组 = 空集）。组件开关
+ *  （extensions.setComponentEnabled 经 extension-service）写
+ *  `terminal.disabledBackends`，本 helper 是唯一读取方。 */
+export function readDisabledTerminalBackends(source: { get(key: string): unknown }): Set<string> {
+	let raw: unknown;
+	try {
+		raw = source.get("terminal.disabledBackends");
+	} catch {
+		return new Set();
+	}
+	if (!Array.isArray(raw)) return new Set();
+	return new Set(raw.filter((item): item is string => typeof item === "string"));
 }
 
 const PROVIDER_NAMES: readonly TerminalProvider[] = ["bun-pty", "node-pty", "auto"];

@@ -267,10 +267,12 @@ export class ExtensionService implements DaemonService {
 		// 「包含的组件」状态(dsh 插件详情段):组件 = 单元声明的可独立启停
 		// 单元,按声明的 deny 通道如实读黑名单 —— tool 通道读 tools.disabled
 		// (tools/index.ts isToolAllowed 同帧消费),stt/tts-engine 通道读
-		// voice.disabledEngines(voice/engine-denylist 全路径过滤)。组件
-		// 开关改名单即真实禁用,不是展示层。
+		// voice.disabledEngines(voice/engine-denylist 全路径过滤),terminal-
+		// backend 通道读 terminal.disabledBackends(terminal-provider 解析
+		// 消费)。组件开关改名单即真实禁用,不是展示层。
 		const toolDenylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
 		const engineDenylist = new Set((s?.get("voice.disabledEngines") ?? []) as string[]);
+		const terminalDenylist = new Set((s?.get("terminal.disabledBackends") ?? []) as string[]);
 		for (const def of BUILTIN_EXTENSIONS) {
 			if (!def.components || def.components.length === 0) continue;
 			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
@@ -279,7 +281,9 @@ export class ExtensionService implements DaemonService {
 				const denied =
 					c.deny === "tool"
 						? toolDenylist.has(c.id)
-						: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
+						: c.deny === "terminal-backend"
+							? terminalDenylist.has(c.id)
+							: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
 				return {
 					id: c.id,
 					name: c.id,
@@ -642,9 +646,16 @@ export class ExtensionService implements DaemonService {
 			}
 			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
 		}
-		const settingsKey = declared.deny === "tool" ? "tools.disabled" : "voice.disabledEngines";
+		const settingsKey =
+			declared.deny === "tool"
+				? "tools.disabled"
+				: declared.deny === "terminal-backend"
+					? "terminal.disabledBackends"
+					: "voice.disabledEngines";
 		const denyId =
-			declared.deny === "tool" ? p.component : `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
+			declared.deny === "tool" || declared.deny === "terminal-backend"
+				? p.component
+				: `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
 		const denylist = [...((settings.get(settingsKey) ?? []) as string[])];
 		const i = denylist.indexOf(denyId);
 		if (p.enabled && i >= 0) denylist.splice(i, 1);
