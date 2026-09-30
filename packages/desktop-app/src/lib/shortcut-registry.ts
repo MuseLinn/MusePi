@@ -250,7 +250,7 @@ export function eventMatches(e: ShortcutKeyEvent, id: string): boolean {
  */
 export function setBinding(id: string, binding: string | null): { ok: boolean; conflict?: string } {
 	const entry = getEntry(id);
-	if (!entry || !entry.editable) return { ok: false };
+	if (!entry?.editable) return { ok: false };
 	if (binding !== null) {
 		for (const other of SHORTCUTS) {
 			if (other.id === id) continue;

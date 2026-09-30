@@ -1446,7 +1446,7 @@ export function ChatView({
 	const fullLoadingRef = useRef(false);
 	const fullTokenRef = useRef(0);
 	const ensureFullHistory = useCallback(async (): Promise<void> => {
-		if (!rpc || !store || !store.sessionId) return;
+		if (!rpc || !store?.sessionId) return;
 		if (fullSessionKeyRef.current === store.sessionId) return;
 		if (fullLoadingRef.current) return;
 		const token = ++fullTokenRef.current;

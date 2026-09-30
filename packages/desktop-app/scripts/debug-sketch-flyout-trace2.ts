@@ -25,7 +25,7 @@ const send = (method, params = {}) =>
 	});
 const evalJs = async expr => {
 	const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
-	if (r.result?.exceptionDetails) return "EXC: " + JSON.stringify(r.result.exceptionDetails).slice(0, 400);
+	if (r.result?.exceptionDetails) return `EXC: ${JSON.stringify(r.result.exceptionDetails).slice(0, 400)}`;
 	return r.result?.result?.value;
 };
 const mouse = (type, x, y) =>

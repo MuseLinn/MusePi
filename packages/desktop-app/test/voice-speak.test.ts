@@ -53,7 +53,7 @@ describe("splitSpeakableSentences", () => {
 	});
 
 	test("splits an overlong sentence at full-width clause punctuation instead of mid-phrase", () => {
-		const long = Array.from({ length: 60 }, () => "某字段").join("，") + "。";
+		const long = `${Array.from({ length: 60 }, () => "某字段").join("，")}。`;
 		expect(long.length).toBeGreaterThan(180);
 		const segments = splitSpeakableSentences(long);
 		expect(segments.length).toBeGreaterThan(1);

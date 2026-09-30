@@ -2111,7 +2111,7 @@ function AppInner(): ReactNode {
 			});
 			if (!id) return false;
 			setCreationSaved({ metadata, name: typeof metadata.name === "string" ? metadata.name : "" });
-			if (message && message.text.trim()) {
+			if (message?.text.trim()) {
 				const prompt = await uploadFirstMessageFiles(message.text, message.files, project ?? null);
 				if (prompt === null) return true;
 				await sendPrompt(prompt, message.images, id);
