@@ -426,10 +426,10 @@ export const tools = {
 	"ext builtin": "Built-in",
 	"ext builtin task-card-swarm": "Swarm Task Card",
 	"ext builtin task-card-swarm desc":
-		"Kimi-parity task/swarm card style: member grid with per-agent avatars, progress bars and accordion outputs",
+		"Task/swarm collaboration card style: member grid with per-agent avatars, progress bars and accordion outputs",
 	"ext builtin shell": "MusePi Desktop Shell",
 	"ext builtin shell desc":
-		"Electron compat shell: wraps the daemon-served renderer (dsh-desktop parity). Enabled -> the shell loads the runtime-served content; disabled -> the local bundle.",
+		"The Electron desktop shell hosting the daemon-served renderer. Enabled -> loads runtime-served UI content; disabled -> falls back to the bundled build.",
 	"ext builtin ultrathink": "Ultrathink Keyword",
 	"ext builtin ultrathink desc":
 		"Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
@@ -460,6 +460,80 @@ export const tools = {
 	"ext builtin lsp": "LSP",
 	"ext builtin lsp desc":
 		"Code intelligence via language servers (definitions, references, diagnostics, rename). The toggle mirrors lsp.enabled; config fields are the lsp.* settings keys.",
+	// Built-in plugin config fields (the daemon registry emits i18n keys; the
+	// GUI resolves them via tLoose, falling back to the raw string — same
+	// convention as optionLabels).
+	"plugin cfg stt.modelName label": "Recognition model",
+	"plugin cfg stt.modelName desc":
+		"On-device speech model: Whisper small (default, multilingual, Chinese-ready), SenseVoiceSmall (zh/yue-optimized, INT8), Parakeet v3 (English/European top tier, no Chinese).",
+	"plugin cfg stt.language label": "Language hint",
+	"plugin cfg stt.language desc": "Recognition language hint; empty = auto-detect (recommended for mixed zh/en).",
+	"plugin cfg stt.vadEndMs label": "End-of-speech pause (ms)",
+	"plugin cfg stt.vadEndMs desc": "How long of a pause counts as the end of dictation (milliseconds).",
+	"plugin cfg stt.submitTrigger label": "Auto-submit",
+	"plugin cfg stt.submitTrigger opt never": "Submit manually",
+	"plugin cfg stt.submitTrigger opt release": "On release (2+ words)",
+	"plugin cfg stt.submitTrigger opt release-complete": "On complete sentence",
+	"plugin cfg stt.submitTrigger opt say-submit": "Say “submit”",
+	"plugin cfg stt.submitTrigger desc":
+		"When dictation auto-submits: manually / on release (2+ words) / on complete sentence / say-submit.",
+	"plugin cfg tts.localModel label": "Read-aloud model",
+	"plugin cfg tts.localModel desc":
+		"Local neural TTS model: Kokoro-82M (English-first, multi-voice) or MeloTTS-zh (Mandarin / mixed zh-en).",
+	"plugin cfg tts.localVoice label": "Voice",
+	"plugin cfg tts.localVoice desc": "Voice id for the local TTS backend (per-model voice list).",
+	"plugin cfg tts.rate label": "Playback rate",
+	"plugin cfg tts.rate desc": "Playback rate for local TTS — 0.8x is common for reading aloud.",
+	"plugin cfg tts.inputMode label": "Content preparation",
+	"plugin cfg tts.inputMode opt raw": "Raw text",
+	"plugin cfg tts.inputMode opt sanitize": "Sanitized (no code/markdown)",
+	"plugin cfg tts.inputMode opt summarize": "Summarized",
+	"plugin cfg tts.inputMode desc":
+		"How the reply is prepared before readback: raw / sanitized (strip code & markdown) / summarized.",
+	"plugin cfg tts.autoRead label": "Auto read new replies",
+	"plugin cfg tts.autoRead desc": "Automatically read aloud new assistant replies.",
+	"plugin cfg terminal.provider label": "Terminal backend",
+	"plugin cfg terminal.provider opt auto": "Auto",
+	"plugin cfg terminal.provider opt bun-pty": "bun-pty (native)",
+	"plugin cfg terminal.provider opt node-pty": "node-pty (bridge)",
+	"plugin cfg terminal.provider desc":
+		"Explicit terminal backend: auto (fallback chain) / bun-pty (native, lowest latency) / node-pty (bridge process, more portable).",
+	"plugin cfg terminal.showImages label": "Inline images",
+	"plugin cfg terminal.showImages desc": "Render images inline in the terminal (TUI, image-protocol terminals only).",
+	"plugin cfg terminal.showProgress label": "Progress bars",
+	"plugin cfg terminal.showProgress desc": "Render command progress bars inline in the terminal (TUI).",
+	"plugin cfg browser.headless label": "Headless mode",
+	"plugin cfg browser.headless desc":
+		"Launch the browser in headless mode (disable to show the browser UI while automating).",
+	"plugin cfg browser.cdpUrl label": "CDP attach endpoint",
+	"plugin cfg browser.cdpUrl desc":
+		"Default CDP discovery endpoint to attach to (e.g. http://127.0.0.1:9222) instead of launching; empty = launch own browser.",
+	"plugin cfg computer.display label": "Display",
+	"plugin cfg computer.display desc": "Composite all displays or a native display id.",
+	"plugin cfg computer.maxWidth label": "Max composite width",
+	"plugin cfg computer.maxWidth desc": "Maximum composite screenshot width in pixels.",
+	"plugin cfg lsp.lazy label": "Lazy start",
+	"plugin cfg lsp.lazy desc": "Start language servers on first use instead of at session startup.",
+	"plugin cfg lsp.shared label": "Share across sessions",
+	"plugin cfg lsp.shared desc": "Share one language-server instance across sessions.",
+	"ext builtin stt component whisper": "Whisper",
+	"ext builtin stt component sensevoice": "SenseVoice",
+	"ext builtin stt component parakeet": "Parakeet",
+	"ext builtin tts component kokoro": "Kokoro",
+	"ext builtin tts component melotts-zh": "MeloTTS 中文",
+	"ext builtin browser component browser": "Browser automation",
+	"ext builtin computer component computer": "Computer use",
+	"ext builtin lsp component lsp": "LSP",
+	"ext builtin stt component whisper desc": "Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.",
+	"ext builtin stt component sensevoice desc": "SenseVoiceSmall (INT8) on sherpa-onnx — the Chinese-optimized tier.",
+	"ext builtin stt component parakeet desc": "NVIDIA Parakeet TDT v3 on sherpa-onnx — the English/European top tier.",
+	"ext builtin tts component kokoro desc": "Kokoro-82M neural TTS on kokoro-js — English-first, multi-voice.",
+	"ext builtin tts component melotts-zh desc": "MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.",
+	"ext builtin browser component browser desc": "Scripted Chromium automation tool exposed to the agent.",
+	"ext builtin computer component computer desc":
+		"Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
+	"ext builtin lsp component lsp desc":
+		"Code-intelligence tool (definitions, references, diagnostics, rename) exposed to the agent.",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",
 	"ext plugin config desc":

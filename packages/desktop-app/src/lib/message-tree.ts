@@ -95,10 +95,16 @@ export function treeKindOf(entry: unknown): "user" | "assistant" | "toolResult" 
 	return "other";
 }
 
-/** 树行文本预览:message content 块拼接纯文本;非消息条目显示类型名。 */
+/** 树行文本预览:message content 块拼接纯文本;工具调用行无文本块时回退到
+ *  工具名汇总;空工具结果返回 ""(行渲染层可用 treeToolNameOf 兜底);
+ *  视觉截断交给 .traj-trow-text 的 CSS ellipsis,这里只留 DOM 上限,不再
+ *  预切片加 "…"(预切片会让每行都自带硬截断点,工具行整行读作省略号)。 */
 export function treeTextOf(entry: unknown): string {
 	if (!entry || typeof entry !== "object") return "…";
-	const e = entry as { type?: unknown; message?: { content?: unknown; text?: unknown } };
+	const e = entry as {
+		type?: unknown;
+		message?: { role?: unknown; content?: unknown; text?: unknown };
+	};
 	if (e.type === "message") {
 		const m = e.message;
 		const blocks = Array.isArray(m?.content) ? (m.content as Array<{ type?: string; text?: string }>) : [];
@@ -111,7 +117,15 @@ export function treeTextOf(entry: unknown): string {
 							.filter(b => b?.type === "text")
 							.map(b => b.text ?? "")
 							.join(" ");
-		return text.replace(/\s+/g, " ").trim().slice(0, 90) || "…";
+		const cleaned = text.replace(/\s+/g, " ").trim();
+		if (cleaned) return cleaned.slice(0, 400);
+		if (m?.role === "toolResult") return "";
+		const calls = blocks.filter(b => b?.type === "toolCall") as Array<{ name?: string }>;
+		if (calls.length > 0) {
+			const names = calls.map(c => (typeof c.name === "string" && c.name !== "" ? c.name : "?"));
+			return names.length === 1 ? names[0]! : `${names[0]!} +${names.length - 1}`;
+		}
+		return "…";
 	}
 	return typeof e.type === "string" ? e.type : "entry";
 }

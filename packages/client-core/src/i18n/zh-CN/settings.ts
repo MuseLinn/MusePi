@@ -671,7 +671,7 @@ export const settings = {
 
 	"new task": "新建任务",
 	search: "搜索",
-	"scheduled tasks desc": "管理定时任务：列表查看、日历按日期排布、看板按状态跟进（kimi cron parity）",
+	"scheduled tasks desc": "管理定时任务：列表查看、日历按日期排布、看板按状态跟进。",
 	"scheduled new": "新建定时任务",
 	"task list": "任务列表",
 	"task calendar empty":
@@ -2104,8 +2104,8 @@ export const settings = {
 	"Task Card Style": "任务卡样式",
 	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
 		"task/swarm 卡片渲染样式：MusePi Swarm 显示成员网格（TUI 盲文进度条 / GUI 悬浮头像网格卡）；MusePi 原版（Classic）仅保留原生工具调用卡",
-	"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
-		"Kimi 风格成员网格：每个智能体的盲文进度条（TUI）与头像+进度悬浮卡（GUI）",
+	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
+		"成员网格：每个智能体的盲文进度条（TUI）与头像+进度悬浮卡（GUI）",
 	"Plain tool-call card only — no swarm member grid": "仅普通工具调用卡，无 swarm 成员网格",
 	"MusePi Swarm": "MusePi Swarm",
 	"MusePi original (Classic)": "MusePi 原版 (Classic)",

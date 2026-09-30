@@ -1,6 +1,6 @@
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { listSubagentSessions, resolveResumableSession } from "@musepi/pi-coding-agent/session/session-listing";
 import { isolateAgentDirForTest, restoreAgentDirForTest } from "./helpers/isolate-agent-dir";
 

@@ -2056,6 +2056,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		);
 		const foldOpen = fold !== undefined && foldOpenOf(fold);
 		const foldClosed = fold !== undefined && !foldOpen;
+		// OPEN fold: the 活动 header row owns the turn's orb (it renders either
+		// on the header entry's own row or on the standalone header Row), so
+		// every span row after it must drop the gutter — including rows whose
+		// predecessor is a non-message entry (a custom "读取了 N 个文件" row
+		// between the header and the first thinking row used to re-trigger the
+		// avatar: two orbs on one expanded turn).
+		const spanAvatarOwnedByHeader =
+			fold !== undefined && foldOpen && absIdx > fold.headerIdx && absIdx <= fold.endIdx;
 		const isHeaderRow = fold !== undefined && absIdx === fold.headerIdx;
 		const isReplyRow = fold !== undefined && absIdx === fold.finalIdx;
 		// Widget rows (successful widget toolCalls, see round-collapse
@@ -2167,8 +2175,13 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							agentGutter={
 								// The reply of a COLLAPSED turn owns the orb: its predecessor is the
 								// hidden header row, so the usual "consecutive assistant rows drop the
-								// avatar" rule must not apply here.
-								isAssistantMessage && prevIsAssistant && !(foldClosed && isReplyRow) ? "" : agentGutter
+								// avatar" rule must not apply here. An OPEN fold's header owns the orb
+								// for the whole span instead (spanAvatarOwnedByHeader above).
+								isAssistantMessage &&
+								(prevIsAssistant || spanAvatarOwnedByHeader) &&
+								!(foldClosed && isReplyRow)
+									? ""
+									: agentGutter
 							}
 							userPlain={userPlain}
 							collapseLongUserMessages={collapseLongUserMessages}

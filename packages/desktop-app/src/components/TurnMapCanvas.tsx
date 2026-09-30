@@ -615,23 +615,47 @@ export function TurnMapCanvas({
 	}, [nodes.length, horizontal]);
 	const viewportBand = useMemo(() => {
 		const wrap = wrapRef.current;
-		if (!wrap) return null;
+		if (!wrap || nodes.length === 0) return null;
 		const { railSize, band } = navGeo;
 		const total = nodes.length * band;
 		const off = Math.max(0, (railSize - total) / 2);
+		// 世界主轴坐标 → 导航条位置:导航条目按节点索引等宽排列(flex),
+		// 而视口是世界坐标 —— 展开节点 / 分支列会让两者漂移。以每个节点的
+		// 主轴坐标为锚做分段线性插值:视口边缘对准某轮坐标时,指示窗也对准
+		// 该轮条目(点击定位与指示窗共用同一几何,不再各说各话)。
+		const axisOf = horizontal ? (n: TurnMapNode) => n.x : (n: TurnMapNode) => n.y;
+		const axisMax = horizontal ? width : height;
+		const anchors = nodes.map((n, i) => ({ c: axisOf(n), r: off + (i + 0.5) * band })).sort((a, b) => a.c - b.c);
+		const worldToRail = (w: number): number => {
+			const clamped = Math.max(0, Math.min(axisMax, w));
+			if (clamped <= anchors[0]!.c) return anchors[0]!.r;
+			const last = anchors[anchors.length - 1]!;
+			if (clamped >= last.c) return last.r;
+			let lo = 0;
+			let hi = anchors.length - 1;
+			while (hi - lo > 1) {
+				const mid = (lo + hi) >> 1;
+				if (anchors[mid]!.c <= clamped) lo = mid;
+				else hi = mid;
+			}
+			const a0 = anchors[lo]!;
+			const a1 = anchors[hi]!;
+			const t = a1.c > a0.c ? (clamped - a0.c) / (a1.c - a0.c) : 0;
+			return a0.r + t * (a1.r - a0.r);
+		};
 		if (horizontal) {
 			const worldLeft = -view.x / view.scale;
 			const worldRight = (wrap.clientWidth - view.x) / view.scale;
-			const x1 = off + (worldLeft / width) * total;
-			const x2 = off + (worldRight / width) * total;
+			const x1 = worldToRail(worldLeft);
+			const x2 = worldToRail(worldRight);
 			return { start: Math.max(0, x1), size: Math.min(railSize, Math.max(10, x2 - x1)) };
 		}
 		const worldTop = -view.y / view.scale;
 		const worldBottom = (wrap.clientHeight - view.y) / view.scale;
-		const y1 = off + (worldTop / height) * total;
-		const y2 = off + (worldBottom / height) * total;
+		const y1 = worldToRail(worldTop);
+		const y2 = worldToRail(worldBottom);
 		return { start: Math.max(0, y1), size: Math.min(railSize, Math.max(10, y2 - y1)) };
-	}, [view, navGeo, width, height, nodes.length, horizontal]);
+	}, [view, navGeo, width, height, nodes, horizontal]);
 
 	return (
 		<div

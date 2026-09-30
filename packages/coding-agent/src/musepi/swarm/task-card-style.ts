@@ -490,17 +490,17 @@ export function createTaskCardStyleExtension(options?: { enabled?: boolean }): E
 				group: "Display",
 				label: "Task Card Style",
 				description:
-					"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); OMP original (Classic) keeps only the native tool-call card",
+					"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
 				options: [
 					{
 						value: "swarm",
 						label: "MusePi Swarm",
 						description:
-							"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
+							"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 					},
 					{
 						value: "classic",
-						label: "OMP original (Classic)",
+						label: "MusePi original (Classic)",
 						description: "Plain tool-call card only — no swarm member grid",
 					},
 				],

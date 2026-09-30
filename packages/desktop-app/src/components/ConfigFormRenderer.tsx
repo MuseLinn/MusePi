@@ -70,7 +70,9 @@ function ConfigFieldRow({
 						disabled={disabled}
 						className={`gui-toggle${value === true ? " gui-toggle--on" : ""}`}
 						onClick={() => onChange(desc.key, value !== true)}
-					/>
+					>
+						<span className="gui-toggle-knob" />
+					</button>
 				);
 			case "number": {
 				const min = typeof desc.min === "number" ? desc.min : Number.MIN_SAFE_INTEGER;

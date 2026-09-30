@@ -720,7 +720,7 @@ export const settings = {
 
 	"new task": "New task",
 	search: "Search",
-	"scheduled tasks desc": "Manage scheduled tasks: list view, calendar by date, board by status (kimi cron parity)",
+	"scheduled tasks desc": "Manage scheduled tasks: list view, calendar by date, board by status.",
 	"scheduled new": "New scheduled task",
 	"task list": "Task list",
 	"task calendar empty":
@@ -2208,8 +2208,8 @@ export const settings = {
 	"Task Card Style": "Task Card Style",
 	"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card":
 		"Task/swarm card render style: MusePi Swarm shows the member grid (TUI braille progress bars / GUI floating avatar grid); MusePi original (Classic) keeps only the native tool-call card",
-	"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
-		"Kimi-style member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
+	"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)":
+		"Member grid: per-agent braille progress bars (TUI) and avatar+progress floating card (GUI)",
 	"Plain tool-call card only — no swarm member grid": "Plain tool-call card only — no swarm member grid",
 	"MusePi Swarm": "MusePi Swarm",
 	"MusePi original (Classic)": "MusePi original (Classic)",

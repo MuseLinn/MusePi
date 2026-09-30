@@ -2,7 +2,14 @@ import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { timeFormatOptions } from "../lib/appearance";
-import { buildMessageTree, type MessageTreeNode, TREE_ICON, treeKindOf, treeTextOf } from "../lib/message-tree";
+import {
+	buildMessageTree,
+	type MessageTreeNode,
+	TREE_ICON,
+	treeKindOf,
+	treeTextOf,
+	treeToolNameOf,
+} from "../lib/message-tree";
 import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { StateIcon } from "./StateIcon";
@@ -272,7 +279,9 @@ function TreeNodeRow({
 					name={(TREE_ICON[kind] ?? "file-list-2") as Parameters<typeof Icon>[0]["name"]}
 					className={`h-3 w-3 flex-shrink-0 gui-mtree-icon gui-mtree-icon--${kind}`}
 				/>
-				<span className="traj-trow-text">{treeTextOf(node.entry)}</span>
+				<span className="traj-trow-text">
+					{treeTextOf(node.entry) || (kind === "toolResult" ? (treeToolNameOf(node.entry) ?? "") : "")}
+				</span>
 				{childCount > 1 && (
 					<span
 						className={`traj-trow-badge${isCollapsed ? " traj-trow-badge--closed" : ""}`}
