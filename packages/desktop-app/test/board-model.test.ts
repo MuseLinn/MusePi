@@ -1,14 +1,15 @@
 import "./dom-shim";
 import { afterEach, describe, expect, it } from "bun:test";
+import { defineGlobal } from "./define-global";
 
 // dom-shim has no localStorage — provide a minimal Map-backed one so the
 // board persistence (loadBoards BOARDS_KEY contract) is testable in Node.
 const store = new Map<string, string>();
-(globalThis as Record<string, unknown>).localStorage = {
+defineGlobal("localStorage", {
 	getItem: (k: string) => store.get(k) ?? null,
 	setItem: (k: string, v: string) => void store.set(k, v),
 	removeItem: (k: string) => void store.delete(k),
-};
+});
 
 import {
 	BOARDS_KEY,

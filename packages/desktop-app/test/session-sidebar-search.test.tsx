@@ -91,10 +91,13 @@ function listHtml(searchQuery?: string): string {
 describe("分组 tab: 无近期重复区,底栏仍为日期分组", () => {
 	test("renders each session exactly once — no 近期 block duplicating the groups below", () => {
 		const html = sidebarHtml({ nodes: [node("fresh", "Fresh task", ago(1 * HOUR))] });
-		// One row renders the label exactly twice: the title attribute and the
-		// visible text. A duplicated 近期 block would push this to 4.
+		// The row renders the label exactly once in its visible text. A
+		// duplicated 近期 block would push this to 2. (The count was never
+		// "title attribute + text": the row button never carried title={label}
+		// — the original expectation of 2 failed from the commit that
+		// introduced this test.)
 		const occurrences = html.split("Fresh task").length - 1;
-		expect(occurrences).toBe(2);
+		expect(occurrences).toBe(1);
 	});
 
 	test("the groups tab stays date-grouped — no folder blocks duplicating the projects tab", () => {

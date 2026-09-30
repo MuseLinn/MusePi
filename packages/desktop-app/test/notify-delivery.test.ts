@@ -1,5 +1,7 @@
 import "./dom-shim"; // MUST be first — GUI libs capture `isBrowser` at import.
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { defineGlobal } from "./define-global";
+import { settle } from "./settle-store";
 
 // dom-shim installs a document but no localStorage / window — provide both so
 // the renderer-local prefs and the Electron notification bridge are testable.
@@ -15,24 +17,24 @@ const store = new Map<string, string>();
 const shown: Array<{ title: string; body: string }> = [];
 
 function installGlobals(): void {
-	globals.localStorage = {
+	defineGlobal("localStorage", {
 		getItem: (k: string) => store.get(k) ?? null,
 		setItem: (k: string, v: string) => void store.set(k, v),
 		removeItem: (k: string) => void store.delete(k),
-	};
-	globals.window = {
+	});
+	defineGlobal("window", {
 		electronAPI: {
 			showNotification: (title: string, body: string) => {
 				shown.push({ title, body });
 				return Promise.resolve({ ok: true });
 			},
 		},
-	};
+	});
 }
 
 function restoreGlobals(): void {
-	globals.document = savedDoc;
-	globals.window = savedWindow;
+	defineGlobal("document", savedDoc);
+	defineGlobal("window", savedWindow);
 }
 
 import { buildNotification, type FocusReport, saveNotifyTemplates, shouldNotify } from "../src/lib/notify";
@@ -66,12 +68,6 @@ function useLastMessageTemplate(): void {
 		error: { title: "err", message: "{last_message}" },
 		question: { title: "q", message: "{last_message}" },
 	});
-}
-
-/** apply() frame-coalesces through a microtask flush — yield twice. */
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
 }
 
 describe("notify focus gate (issue #14 gap 1)", () => {

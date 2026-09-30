@@ -8,6 +8,7 @@ import {
 	setPetAccessory,
 	setPetDecorFlag,
 } from "../src/lib/pet-decor";
+import { defineGlobal } from "./define-global";
 
 /**
  * Decoration prefs (lib/pet-decor.ts). The module is small but it sits on a
@@ -20,7 +21,7 @@ import {
 /** Minimal localStorage for the bun test runtime (no DOM here). */
 function withStorage(seed: Record<string, string>): void {
 	const map = new Map(Object.entries(seed));
-	(globalThis as unknown as { localStorage: unknown }).localStorage = {
+	defineGlobal("localStorage", {
 		getItem: (k: string) => map.get(k) ?? null,
 		setItem: (k: string, v: string) => map.set(k, v),
 		removeItem: (k: string) => map.delete(k),
@@ -29,7 +30,7 @@ function withStorage(seed: Record<string, string>): void {
 		get length() {
 			return map.size;
 		},
-	};
+	});
 }
 
 describe("pet decor — storage degradation", () => {

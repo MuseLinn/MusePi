@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GuiSessionStore } from "../src/lib/session-store";
+import { settle } from "./settle-store";
 
 /**
  * M1.4 watermark / gap-reorder contracts (GuiSessionStore).
@@ -33,11 +34,8 @@ function levels(store: GuiSessionStore): string[] {
 	return store.getSnapshot().entries.map(e => (e as { thinkingLevel?: string }).thinkingLevel ?? "?");
 }
 
-/** apply() frame-coalesces via a microtask flush — yield twice before reading. */
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
-}
+/** apply() frame-coalesces — see ./settle-store for why two microtasks may
+ *  not be enough in full-suite runs. */
 
 describe("GuiSessionStore watermark gate (M1.4)", () => {
 	it("buffers a dropped frame, requests catchup from the watermark, and drains strictly in order", async () => {

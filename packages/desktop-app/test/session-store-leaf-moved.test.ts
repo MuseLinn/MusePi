@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GuiSessionStore } from "../src/lib/session-store";
+import { settle } from "./settle-store";
 
 /**
  * session_leaf_moved handling (GuiSessionStore).
@@ -54,11 +55,8 @@ function levels(store: GuiSessionStore): string[] {
 	return store.getSnapshot().entries.map(e => (e as { thinkingLevel?: string }).thinkingLevel ?? "?");
 }
 
-/** apply() frame-coalesces via a microtask flush — yield twice before reading. */
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
-}
+/** apply() frame-coalesces — see ./settle-store for why two microtasks may
+ *  not be enough in full-suite runs. */
 
 describe("GuiSessionStore session_leaf_moved", () => {
 	it("fires onLeafMoved with the wire leafId and keeps the watermark flowing", async () => {

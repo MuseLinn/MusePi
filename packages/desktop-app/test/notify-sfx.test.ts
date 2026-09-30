@@ -1,14 +1,15 @@
 import "./dom-shim";
 import { describe, expect, it } from "bun:test";
+import { defineGlobal } from "./define-global";
 
 // dom-shim has no localStorage — provide a minimal Map-backed one so the
 // renderer-local prefs contract (sfx/notify) is testable in Node.
 const store = new Map<string, string>();
-(globalThis as Record<string, unknown>).localStorage = {
+defineGlobal("localStorage", {
 	getItem: (k: string) => store.get(k) ?? null,
 	setItem: (k: string, v: string) => void store.set(k, v),
 	removeItem: (k: string) => void store.delete(k),
-};
+});
 
 import {
 	buildNotification,
@@ -67,9 +68,27 @@ describe("notify (notification config + dispatch contract)", () => {
 	it("buildNotification substitutes template variables", () => {
 		localStorage.setItem("musepi-gui-notify", "1");
 		localStorage.setItem("musepi-gui-notify-focused", "1"); // notify even when focused
+		// Pin an explicit {last_message} template: asserting against the
+		// localized DEFAULT would pass without any substitution (the zh default
+		// contains "完成") and would flip to English whenever another test
+		// file's DOM (happy-dom, lang="en-US") is the live global. An explicit
+		// template makes the substitution contract locale-independent.
+		saveNotifyTemplates({
+			completion: { title: "done", message: "{agent_name}: {last_message}" },
+			subtask: { title: "", message: "" },
+			error: { title: "", message: "" },
+			question: { title: "", message: "" },
+		});
 		const out = buildNotification("completion", { lastMessage: "resize fix done", agentName: "agent" });
 		expect(out).not.toBeNull();
-		expect(`${out?.title} ${out?.body}`).toMatch(/resize fix done|完成|done/i);
+		expect(out?.title).toBe("done");
+		expect(out?.body).toBe("agent: resize fix done");
+		saveNotifyTemplates({
+			completion: { title: "", message: "" },
+			subtask: { title: "", message: "" },
+			error: { title: "", message: "" },
+			question: { title: "", message: "" },
+		});
 		localStorage.removeItem("musepi-gui-notify");
 		localStorage.removeItem("musepi-gui-notify-focused");
 	});

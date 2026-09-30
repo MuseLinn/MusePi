@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { onGitPrefsChanged, readShowIgnored, writeShowIgnored } from "../src/lib/git-prefs";
+import { defineGlobal } from "./define-global";
 
 /**
  * Shared git display pref (lib/git-prefs). Three surfaces read the same key
@@ -17,17 +18,17 @@ const savedWindow = realm.window;
 const savedLocalStorage = realm.localStorage;
 
 beforeAll(() => {
-	realm.window = new EventTarget();
-	realm.localStorage = {
+	defineGlobal("window", new EventTarget());
+	defineGlobal("localStorage", {
 		getItem: (key: string): string | null => store.get(key) ?? null,
 		setItem: (key: string, value: string): void => void store.set(key, String(value)),
 		removeItem: (key: string): void => void store.delete(key),
-	};
+	});
 });
 
 afterAll(() => {
-	realm.window = savedWindow;
-	realm.localStorage = savedLocalStorage;
+	defineGlobal("window", savedWindow);
+	defineGlobal("localStorage", savedLocalStorage);
 });
 
 beforeEach(() => store.clear());

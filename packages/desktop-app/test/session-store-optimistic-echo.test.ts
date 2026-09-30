@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GuiSessionStore } from "../src/lib/session-store";
+import { settle } from "./settle-store";
 
 // 乐观回显契约(TUI startPendingSubmission parity):GUI 发送后立即本地
 // 插入用户消息,不等 daemon 事件流回推——否则 reactivate 历史会话 /
@@ -7,12 +8,6 @@ import { GuiSessionStore } from "../src/lib/session-store";
 
 function store(): GuiSessionStore {
 	return new GuiSessionStore("s1", { entries: [], cursor: 0 }, "/tmp");
-}
-
-/** apply 的 streaming 事件是 frame-coalesced(queueMicrotask flush)。 */
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
 }
 
 function userMessageStart(text: string): StreamEventShape {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { GuiSessionStore } from "../src/lib/session-store";
+import { settle } from "./settle-store";
 
 // Subagent transcript availability (SubagentPanel): the daemon attaches the
 // subagent's session file to the progress/lifecycle envelopes
@@ -40,11 +41,8 @@ function lifecycleFrame(id: string, agent: string, status: "started" | "complete
 	return { kind: "agent-lifecycle", seq: 0, payload: { id, agent, status, index: 0, sessionFile } };
 }
 
-/** apply() frame-coalesces via a microtask flush — yield twice before reading. */
-async function settle(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
-}
+/** apply() frame-coalesces — see ./settle-store for why two microtasks may
+ * not be enough in full-suite runs. */
 
 describe("GuiSessionStore subagent transcript availability", () => {
 	it("synthesizes the agent row with hasSessionFile from the progress envelope", async () => {
