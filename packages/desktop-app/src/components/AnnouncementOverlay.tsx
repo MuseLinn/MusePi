@@ -13,7 +13,7 @@ import { onboardingPending } from "../lib/onboarding";
 import { activePet } from "../lib/pet";
 import type { RpcClient } from "../lib/rpc";
 import { useTwoPhaseEnter } from "../lib/use-two-phase-enter";
-import { PetSprite } from "./PetSprite";
+import { PetSprite, usePetDecor } from "./PetSprite";
 import { RewardOverlay, type RewardPayload } from "./RewardOverlay";
 
 /** Exit animation duration (mirrors gui-obo-card-out in gui-widgets.css). */
@@ -183,6 +183,7 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 	const [reward, setReward] = useState<RewardPayload | null>(null);
 	const [latest, setLatest] = useState<string | null>(null);
 	const [pet] = useState(() => activePet());
+	const decor = usePetDecor();
 	// Structured-view UI state, reset on every open (the peek re-open may
 	// serve different markdown than the boot push).
 	const [showFullLog, setShowFullLog] = useState(false);
@@ -414,7 +415,16 @@ export function AnnouncementOverlay({ rpc }: { rpc: RpcClient | null }): ReactNo
 					</button>
 				</div>
 				<div className="gui-announcement-title" style={{ gap: 14, padding: "16px 24px 12px" }}>
-					{!reducedMotion && <PetSprite mood="rest" state="celebrate" pet={pet} size={44} />}
+					{!reducedMotion && (
+						<PetSprite
+							mood="rest"
+							state="celebrate"
+							pet={pet}
+							size={44}
+							accessory={decor.accessory}
+							gloss={decor.gloss}
+						/>
+					)}
 					<div style={{ minWidth: 0, display: "grid", gap: 4 }}>
 						<div style={{ fontSize: 17, fontWeight: 650, letterSpacing: "-0.01em", color: "var(--fg)" }}>
 							{t("MusePi updated to v{version}", { version: current.version })}

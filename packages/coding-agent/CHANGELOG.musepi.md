@@ -7,6 +7,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
+- **「新功能」公告弹窗的桌宠穿戴用户装饰**：版本更新公告里的庆祝桌宠（PetSprite）此前渲染默认裸装——现在经 `usePetDecor()` 挂上用户当前选的配饰与光泽，与主界面桌宠观感一致。
+  - EN: The "what's new" announcement overlay's celebrating pet now wears the user's decor: the PetSprite previously rendered the default bare look and now mounts the active accessory and gloss via `usePetDecor()`, consistent with the main-surface pet.
+
 - **输入框「性能与用量」统计条（M1.10c，dsh-v0.2.0-rc.1 StatsPills parity）**：输入框下方新增两颗 pill——时间 pill（轮次/步数 · 总 tokens · 模型用时 · 工具用时 · TTFT · tokens/s）与用量 pill（输入/输出/缓存读写 · 缓存命中率 · 成本），点击各自弹出明细浮层（useFloatingMenu 单例互斥）；ContextRing 不动，统计行经 ComposerFrame 新 `belowRow` 插槽渲染在输入卡外（设计稿 `docs/gui-design.md` §5w）。数据源零新 RPC：token 数字复用 `session.contextUsage` 持久投影（分页/压缩安全），时间数字走可见窗口 fold 纯函数 `deriveWindowStats`（八字段镜像 dsh，memo 比较器守流式重渲染）；设置 → 聊天 → 「interface and input」新增 详细/简洁 档位（简洁档只留速度与缓存命中），localStorage + 跨标签页 storage 事件同步。纯函数 15 例契约测试。
   - EN: composer "Performance & usage" stats row (M1.10c, dsh-v0.2.0-rc.1 StatsPills parity): two pills ride below the composer — a time pill (turns/steps · total tokens · model time · tool time · TTFT · tokens/s) and a usage pill (input/output/cache read+write · cache hit · cost), each opening a detail popup (useFloatingMenu singleton mutex). The ContextRing stays put; the row renders outside the input card via ComposerFrame's new `belowRow` slot (design doc `docs/gui-design.md` §5w). Zero new RPCs: token figures reuse the durable `session.contextUsage` projection (paging/compaction-safe), time figures come from the visible-window fold pure function `deriveWindowStats` (eight fields mirroring dsh, memo comparator guarding streaming re-renders); Settings → Chat → "interface and input" gains a Detailed/Compact density (compact keeps only speed and cache hit), synced over localStorage + the cross-tab storage event. Fifteen contract tests on the pure functions.
 
