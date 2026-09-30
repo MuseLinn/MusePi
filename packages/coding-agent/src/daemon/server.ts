@@ -1389,6 +1389,8 @@ export class DaemonServer {
 						id: r.sessionId,
 						parentId: r.parentId,
 						kind: "session",
+						/** 子代理 transcript 行:GUI 渲染为父会话下的层级子行。 */
+						subagent: r.subagent === true,
 						timestamp: new Date(r.createdAt).toISOString(),
 						updatedAt: new Date(r.updatedAt).toISOString(),
 						model: r.model ?? undefined,
@@ -1450,6 +1452,9 @@ export class DaemonServer {
 					)
 					.map(ref => ({
 						id: ref.id,
+						/** 子代理 transcript 的会话 id(文件名 `<subId>.jsonl` 约定):
+						 *  GUI 名册行点击直达子会话消息视图的打开目标。 */
+						sessionId: path.basename(ref.sessionFile as string, ".jsonl"),
 						displayName: ref.displayName,
 						kind: ref.kind,
 						status: ref.status,

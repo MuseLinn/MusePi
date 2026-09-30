@@ -638,6 +638,23 @@ export async function listAllSessions(storage: SessionStorage = new FileSessionS
 	}
 }
 
+/** List sub-agent transcript sessions (newest first): task/vibe subagents persist
+ *  their own transcript at `<cwd-slug>/<parent-file-base>/<subId>.jsonl` — two
+ *  levels deep, so {@link listAllSessions}' one-level glob never sees them.
+ *  Anything without a valid session header is dropped by the scan, so non-session
+ *  `.jsonl` artifacts in the parent's product directory never surface. */
+export async function listSubagentSessions(storage: SessionStorage = new FileSessionStorage()): Promise<SessionInfo[]> {
+	const sessionsRoot = path.join(getDefaultAgentDir(), "sessions");
+	try {
+		const files = await Array.fromAsync(new Bun.Glob("*/*/*.jsonl").scan(sessionsRoot), name =>
+			path.join(sessionsRoot, name),
+		);
+		return await collectSessionsFromFiles(files, storage, true);
+	} catch {
+		return [];
+	}
+}
+
 /** Exported for testing */
 export async function findMostRecentSession(
 	sessionDir: string,
@@ -715,9 +732,19 @@ export async function resolveResumableSession(
 
 	const globalSessions = await listAllSessions(storage);
 	const globalMatch = globalSessions.find(session => sessionMatchesResumeArg(session, sessionArg));
-	if (!globalMatch) {
+	if (globalMatch) {
+		return { session: globalMatch, scope: "global" };
+	}
+
+	// Sub-agent transcripts live two levels deep (`<slug>/<parent>/<sub>.jsonl`)
+	// and are deliberately absent from the top-level listing — but resuming one
+	// by id is exactly how the GUI opens a child session from the sidebar tree,
+	// so the global fallback extends to them.
+	const subagentSessions = await listSubagentSessions(storage);
+	const subagentMatch = subagentSessions.find(session => sessionMatchesResumeArg(session, sessionArg));
+	if (!subagentMatch) {
 		return undefined;
 	}
 
-	return { session: globalMatch, scope: "global" };
+	return { session: subagentMatch, scope: "global" };
 }

@@ -29,28 +29,13 @@ export interface SessionListEntry {
 	label?: string;
 	/** Session origin — "cron" for scheduled-task runs (grouped apart). */
 	source?: string;
+	/** 子代理会话（transcript 挂在父会话目录下，daemon 两层扫描合并时
+	 *  打标）——行尾渲染子代理标记，与 fork 标记同级。 */
+	subagent?: boolean;
 }
 
 /** Session lifecycle status (TUI session-list parity). */
 export type SessionStatus = "complete" | "interrupted" | "aborted" | "error" | "pending" | "unknown";
-
-/** 子代理名册行（session.agents RPC 的显示安全子集）。 */
-export interface SessionAgentEntry {
-	id: string;
-	displayName: string;
-	kind: string;
-	status: string;
-	activity: string | null;
-	lastActivity: number;
-}
-
-/** 子代理状态 → 状态点类（复用全局 gui-ext-dot 家族）。 */
-function agentDotClass(status: string): string {
-	if (status === "aborted") return " gui-ext-dot--error";
-	if (status === "parked") return " gui-ext-dot--shadowed";
-	if (status === "idle" || status === "running") return "";
-	return " gui-ext-dot--off";
-}
 
 /**
  * Status → color token (kimiwork 状态色 parity): the row's left square uses
@@ -200,10 +185,7 @@ const SessionRow = memo(function SessionRow({
 	showConnector,
 	isLast,
 	searchQuery,
-	agentCount,
-	agentsExpanded,
-	roster,
-	onToggleAgents,
+	subagent,
 	onSelect,
 	onContextMenu,
 }: {
@@ -224,13 +206,8 @@ const SessionRow = memo(function SessionRow({
 	showConnector: boolean;
 	isLast: boolean;
 	searchQuery: string;
-	/** 子代理数（session.list agentCount）；>0 渲染展开 chevron。 */
-	agentCount: number;
-	/** 名册是否展开。 */
-	agentsExpanded: boolean;
-	/** 展开的名册行（session.agents）；未拉取/空为 null。 */
-	roster: readonly SessionAgentEntry[] | null;
-	onToggleAgents?(sessionId: string): void;
+	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
+	subagent: boolean;
 	onSelect(id: string): void;
 	onContextMenu?(sessionId: string, x: number, y: number): void;
 }): ReactNode {
@@ -308,31 +285,14 @@ const SessionRow = memo(function SessionRow({
 						<Icon name="git-branch" className="h-3 w-3" />
 					</span>
 				)}
-				{/* 子代理展开 chevron（openchamber 会话子代理查看 parity）:
-				 * 仅 agentCount>0 的行出现;点击展开/收起内联名册,不触发选
-				 * 中行（stopPropagation）。 */}
-				{agentCount > 0 && (
+				{subagent && (
 					<span
-						className={`gui-tree-agents${agentsExpanded ? " gui-tree-agents--on" : ""}`}
-						role="button"
-						tabIndex={0}
-						aria-expanded={agentsExpanded}
-						aria-label={t("{count} agents", { count: agentCount })}
-						title={t("{count} agents", { count: agentCount })}
-						onClick={e => {
-							e.stopPropagation();
-							onToggleAgents?.(id);
-						}}
-						onKeyDown={e => {
-							if (e.key === "Enter" || e.key === " ") {
-								e.preventDefault();
-								e.stopPropagation();
-								onToggleAgents?.(id);
-							}
-						}}
+						className="gui-tree-fork"
+						role="img"
+						aria-label={t("subagent session")}
+						title={t("subagent session")}
 					>
 						<Icon name="ai-agent-fill" className="h-3 w-3" />
-						<span className="gui-tree-agents-n">{agentCount}</span>
 					</span>
 				)}
 				{/* Last activity beats creation time: a session resumed today
@@ -349,33 +309,6 @@ const SessionRow = memo(function SessionRow({
 					{rowTime(updatedAt ?? timestamp)}
 				</span>
 			</button>
-			{/* 展开的子代理名册（session.agents）：状态点 + 名称 + 活动
-			 *  gist 一行一个;点击进入所属会话（右栏 AgentsPanel 做完整
-			 *  管理）。roster 未拉取完前不渲染,避免闪烁。 */}
-			{agentsExpanded && roster !== null && roster.length > 0 && (
-				<ul className="gui-session-agent-list">
-					{roster.map(a => (
-						<li key={a.id}>
-							<button
-								type="button"
-								className="gui-session-agent-row"
-								title={a.activity ?? a.displayName}
-								onClick={() => {
-									tapFeedback();
-									onSelect(id);
-								}}
-							>
-								<span
-									className={`gui-ext-dot${agentDotClass(a.status)}`}
-									title={t(`agent status ${a.status}` as Parameters<typeof t>[0])}
-								/>
-								<span className="gui-session-agent-name">{a.displayName}</span>
-								{a.activity ? <span className="gui-session-agent-activity">{a.activity}</span> : null}
-							</button>
-						</li>
-					))}
-				</ul>
-			)}
 		</li>
 	);
 });
@@ -392,10 +325,6 @@ export function SessionList({
 	manualTags,
 	searchQuery = "",
 	sort = "statusTime",
-	agentCounts,
-	expandedAgents,
-	agentRosters,
-	onToggleAgents,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -424,15 +353,6 @@ export function SessionList({
 	sort?: "statusTime" | "none";
 	/** Active session-search query — matched title fragments are marked. */
 	searchQuery?: string;
-	/** 每会话子代理数（session.list agentCount）—— >0 的行渲染展开
-	 *  chevron（openchamber 会话子代理查看 parity）。 */
-	agentCounts?: ReadonlyMap<string, number>;
-	/** 已展开子代理名册的会话 id 集合。 */
-	expandedAgents?: ReadonlySet<string>;
-	/** 会话 id → 子代理名册（session.agents 拉取结果，展开时渲染）。 */
-	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
-	/** 展开/收起某会话的子代理名册。 */
-	onToggleAgents?(sessionId: string): void;
 }): ReactNode {
 	// Hierarchical sort FIRST (roots + each sibling group by last-activity,
 	// with a stable id tiebreak), THEN flatten. Sorting the flattened array
@@ -483,10 +403,7 @@ export function SessionList({
 						showConnector={showConnector}
 						isLast={isLast}
 						searchQuery={searchQuery}
-						agentCount={agentCounts?.get(node.entry.id) ?? 0}
-						agentsExpanded={expandedAgents?.has(node.entry.id) ?? false}
-						roster={agentRosters?.get(node.entry.id) ?? null}
-						onToggleAgents={onToggleAgents}
+						subagent={node.entry.subagent === true}
 						onSelect={onSelect}
 						onContextMenu={onContextMenu}
 					/>

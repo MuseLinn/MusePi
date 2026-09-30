@@ -325,6 +325,7 @@ export const general = {
 	"no prompts yet": "No prompts yet",
 	"forked session": "Forked session",
 	"forked from": "Forked from",
+	"subagent session": "Subagent session",
 	"last active": "Last active",
 	"created at": "Created",
 	"default mode": "Default mode",

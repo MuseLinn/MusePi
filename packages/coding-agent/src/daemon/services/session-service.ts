@@ -30,6 +30,8 @@ export interface SessionTreeRow {
 	createdAt: number | string;
 	updatedAt: number | string;
 	title?: string;
+	/** 子代理 transcript 行（task/vibe 子会话）——GUI 渲染为父行下的层级子行。 */
+	subagent?: boolean;
 }
 
 /** live 会话最小结构面（tree 的 autoTitle 判定 + resumeLive 登记引用）。 */
@@ -80,6 +82,8 @@ export class SessionService implements DaemonService {
 					type: string;
 					id: string;
 					parentId: string | null;
+					/** 子代理 transcript 行:GUI 渲染为父会话下的层级子行。 */
+					subagent?: boolean;
 					timestamp: string;
 					label?: string;
 					source?: string;
@@ -100,6 +104,8 @@ export class SessionService implements DaemonService {
 					type: "session",
 					id: r.sessionId,
 					parentId: r.parentId,
+					/** 子代理 transcript 行:GUI 渲染为父会话下的层级子行。 */
+					subagent: r.subagent === true,
 					timestamp: new Date(r.createdAt).toISOString(),
 					updatedAt: new Date(r.updatedAt).toISOString(),
 					source: cronIds.has(r.sessionId) ? "cron" : undefined,

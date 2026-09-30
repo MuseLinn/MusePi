@@ -3,7 +3,7 @@ import type { DragEvent, KeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 import { Reveal } from "./Reveal";
-import { type SessionAgentEntry, SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 export interface CustomGroup {
 	name: string;
@@ -54,10 +54,6 @@ export function CustomGroups({
 	workingIds,
 	statuses,
 	manualTags,
-	agentCounts,
-	expandedAgents,
-	agentRosters,
-	onToggleAgents,
 	searchQuery,
 }: {
 	groups: CustomGroup[];
@@ -92,14 +88,6 @@ export function CustomGroups({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
-	/** Sub-agent count per session id — rows with agents get a chevron. */
-	agentCounts?: ReadonlyMap<string, number>;
-	/** Sessions whose sub-agent roster is expanded. */
-	expandedAgents?: ReadonlySet<string>;
-	/** Fetched sub-agent rosters keyed by session id. */
-	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
-	/** Toggle the sub-agent roster for a session row. */
-	onToggleAgents?(sessionId: string): void;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 }): ReactNode {
@@ -154,10 +142,6 @@ export function CustomGroups({
 					workingIds={workingIds}
 					statuses={statuses}
 					manualTags={manualTags}
-					agentCounts={agentCounts}
-					expandedAgents={expandedAgents}
-					agentRosters={agentRosters}
-					onToggleAgents={onToggleAgents}
 					searchQuery={searchQuery}
 				/>
 			))}
@@ -188,10 +172,6 @@ function GroupBlock({
 	workingIds,
 	statuses,
 	manualTags,
-	agentCounts,
-	expandedAgents,
-	agentRosters,
-	onToggleAgents,
 	searchQuery,
 }: {
 	group: CustomGroup;
@@ -224,14 +204,6 @@ function GroupBlock({
 	statuses?: ReadonlyMap<string, SessionStatus>;
 	/** User-assigned color per session id (manual override of status). */
 	manualTags?: ReadonlyMap<string, SessionStatus>;
-	/** Sub-agent count per session id — rows with agents get a chevron. */
-	agentCounts?: ReadonlyMap<string, number>;
-	/** Sessions whose sub-agent roster is expanded. */
-	expandedAgents?: ReadonlySet<string>;
-	/** Fetched sub-agent rosters keyed by session id. */
-	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
-	/** Toggle the sub-agent roster for a session row. */
-	onToggleAgents?(sessionId: string): void;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
 }): ReactNode {
@@ -400,10 +372,6 @@ function GroupBlock({
 							workingIds={workingIds}
 							statuses={statuses}
 							manualTags={manualTags}
-							agentCounts={agentCounts}
-							expandedAgents={expandedAgents}
-							agentRosters={agentRosters}
-							onToggleAgents={onToggleAgents}
 							searchQuery={searchQuery}
 							sort="none"
 						/>

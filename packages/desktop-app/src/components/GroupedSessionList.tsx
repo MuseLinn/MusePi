@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { type SessionAgentEntry, SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 
 /** Bucket a timestamp into a date-group label (ZCode groups tab). */
 function dateGroup(ts: string): string {
@@ -37,10 +37,6 @@ export function GroupedSessionList({
 	statuses,
 	manualTags,
 	searchQuery,
-	agentCounts,
-	expandedAgents,
-	agentRosters,
-	onToggleAgents,
 }: {
 	nodes: SessionListNode[];
 	selectedId: string | null;
@@ -55,11 +51,6 @@ export function GroupedSessionList({
 	manualTags?: ReadonlyMap<string, SessionStatus>;
 	/** Active session-search query — forwarded so matched titles are marked. */
 	searchQuery?: string;
-	/** 每会话子代理数 → 行内展开 chevron（SessionList 透传）。 */
-	agentCounts?: ReadonlyMap<string, number>;
-	expandedAgents?: ReadonlySet<string>;
-	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
-	onToggleAgents?(sessionId: string): void;
 }): ReactNode {
 	const groups = new Map<string, SessionListNode[]>();
 	for (const n of nodes) {
@@ -100,10 +91,6 @@ export function GroupedSessionList({
 						statuses={statuses}
 						manualTags={manualTags}
 						searchQuery={searchQuery}
-						agentCounts={agentCounts}
-						expandedAgents={expandedAgents}
-						agentRosters={agentRosters}
-						onToggleAgents={onToggleAgents}
 					/>
 				</div>
 			))}

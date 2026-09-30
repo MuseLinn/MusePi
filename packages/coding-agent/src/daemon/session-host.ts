@@ -1155,9 +1155,10 @@ export class DaemonSessionHost {
 	 *  and can ride the GUI stream. */
 	readonly #eventBus = new EventBus();
 	/** TTL cache of the SDK session-dir scan (history rows the view-store
-	 *  never journaled). Refreshed on demand; 10s covers GUI list refreshes
-	 *  without re-scanning the whole session dir per request. */
-	#historyCache: { at: number; rows: SessionInfo[] } | null = null;
+	 *  never journaled) + the two-level sub-agent transcript scan. Refreshed
+	 *  on demand; 10s covers GUI list refreshes without re-scanning the whole
+	 *  session dir per request. */
+	#historyCache: { at: number; rows: SessionInfo[]; subagents: SessionInfo[] } | null = null;
 	/** Per-connection event coalescers (transport backpressure + batch
 	 *  frames). Created lazily on first envelope, drained and dropped on
 	 *  disconnect. */
@@ -2772,6 +2773,9 @@ export class DaemonSessionHost {
 			/** 磁盘 transcript 路径(SDK 扫描行带来;store 行由 live 覆盖)——
 			 *  session.list 的子代理计数按产物目录前缀过滤需要它。 */
 			sessionFile?: string;
+			/** 子代理 transcript 行(task/vibe 子会话):parentId 指向父会话,
+			 *  GUI 树按 openchamber 层级呈现,行可直达子会话消息。 */
+			subagent?: boolean;
 		})[]
 	> {
 		const live = new Map<string, number>();
@@ -2781,16 +2785,16 @@ export class DaemonSessionHost {
 		// journaled) — read-only scan, TTL-cached. Rows without a journal are
 		// listed too so the GUI can resume them; `title` carries the jsonl
 		// first-user-message fallback for the tree label.
-		const { listAllSessions } = await import("../session/session-listing");
+		const { listAllSessions, listSubagentSessions } = await import("../session/session-listing");
 		let history = this.#historyCache;
 		if (!history || Date.now() - history.at > 10_000) {
-			const scan = await listAllSessions();
-			history = { at: Date.now(), rows: scan };
+			const [scan, subagents] = await Promise.all([listAllSessions(), listSubagentSessions()]);
+			history = { at: Date.now(), rows: scan, subagents };
 			this.#historyCache = history;
 		}
 		const merged = new Map<
 			string,
-			MaterializedRow & { title?: string; status?: SessionStatus; sessionFile?: string }
+			MaterializedRow & { title?: string; status?: SessionStatus; sessionFile?: string; subagent?: boolean }
 		>(rows.map(r => [r.sessionId, r]));
 		for (const h of history.rows) {
 			const existing = merged.get(h.id);
@@ -2839,6 +2843,34 @@ export class DaemonSessionHost {
 				status: h.status,
 				// 磁盘 transcript 路径——子代理产物目录 = 去 .jsonl + sep。
 				sessionFile: h.path,
+			});
+		}
+		// 子代理 transcript(`<slug>/<parentFileBase>/<subId>.jsonl`)收编为层
+		// 级子会话行:parentId 由父文件路径推导(父文件名 `<timestamp>_<id>`
+		// 约定,与上方 header.parentSession 推导同源),session.tree / list
+		// 据此把子会话渲染为父行下的嵌套子列表(openchamber parity),行可
+		// 直达子会话消息(resume 径已扩到两层扫描)。父会话缺席(已删除)时
+		// parentId 落空,树把该行提为根——不丢消息。
+		for (const h of history.subagents) {
+			if (merged.has(h.id)) continue;
+			const parentBase = path.basename(path.dirname(h.path));
+			const parentId = parentBase.split("_").slice(1).join("_") || null;
+			merged.set(h.id, {
+				sessionId: h.id,
+				cursor: 0,
+				createdAt: h.created.getTime(),
+				updatedAt: h.modified.getTime(),
+				cwd: h.cwd,
+				model: null,
+				messageCount: h.messageCount,
+				modeId: null,
+				mcpServers: null,
+				parentId: parentId === h.id ? null : parentId,
+				projectMetadata: null,
+				title: h.title,
+				status: h.status,
+				sessionFile: h.path,
+				subagent: true,
 			});
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);

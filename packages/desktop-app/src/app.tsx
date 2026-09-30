@@ -156,19 +156,8 @@ interface SessionMetaRow {
 	/** 会话预设(mode)id（work/chat/creator/design…）— 侧栏悬浮卡的模式行；
 	 *  undefined = 未设预设（守护进程 modeId 为 null 的历史会话）。 */
 	modeId?: string;
-	/** 子代理数（session.list agentCount,不含 advisor）—— >0 时侧栏会话
-	 *  行出现子代理展开 chevron。 */
+	/** 子代理数（session.list agentCount,不含 advisor）。 */
 	agentCount?: number;
-}
-
-/** 子代理名册行（session.agents RPC 的显示安全子集）。 */
-interface SessionAgentRow {
-	id: string;
-	displayName: string;
-	kind: string;
-	status: string;
-	activity: string | null;
-	lastActivity: number;
 }
 
 /** Collect every session id in a session tree (drift check for the poll:
@@ -450,40 +439,6 @@ function AppInner(): ReactNode {
 	const [sessionMeta, setSessionMeta] = useState<Map<string, SessionMetaRow>>(new Map());
 	const sessionMetaRef = useRef<Map<string, SessionMetaRow>>(new Map());
 	sessionMetaRef.current = sessionMeta;
-	// 侧栏会话行的子代理名册展开（openchamber parity）：展开时拉
-	// session.agents,展开期间随 session.list 轮询刷新;名册按会话 id 缓存。
-	const [expandedAgents, setExpandedAgents] = useState<ReadonlySet<string>>(new Set());
-	const [agentRosters, setAgentRosters] = useState<ReadonlyMap<string, readonly SessionAgentRow[]>>(new Map());
-	const expandedAgentsRef = useRef<ReadonlySet<string>>(new Set());
-	expandedAgentsRef.current = expandedAgents;
-	const fetchAgentRoster = useCallback(
-		(sessionId: string): void => {
-			if (!rpc) return;
-			void rpc
-				.request<{ agents: SessionAgentRow[] }>("session.agents", { sessionId })
-				.then(res => {
-					setAgentRosters(prev => new Map(prev).set(sessionId, res?.agents ?? []));
-				})
-				.catch(() => {
-					// 拉取失败保留旧名册;不弹错(侧栏轻量交互)。
-				});
-		},
-		[rpc],
-	);
-	const toggleSessionAgents = useCallback(
-		(sessionId: string): void => {
-			const wasExpanded = expandedAgentsRef.current.has(sessionId);
-			setExpandedAgents(prev => {
-				const next = new Set(prev);
-				if (wasExpanded) next.delete(sessionId);
-				else next.add(sessionId);
-				return next;
-			});
-			// 每次展开都重拉（状态/活动是易变数据）;收起不动名册缓存。
-			if (!wasExpanded) fetchAgentRoster(sessionId);
-		},
-		[fetchAgentRoster],
-	);
 	// Per-session "last seen message count" — the source of truth for the
 	// cursor-based unread derivation: a session whose count grew past the
 	// last count the user had it open at is unread. Persisted so sessions
@@ -1162,8 +1117,6 @@ function AppInner(): ReactNode {
 						return next;
 					});
 					applyReadStatus(list);
-					// 已展开名册的会话:随轮询顺带刷新,状态点/活动不Stale。
-					for (const id of expandedAgentsRef.current) void fetchAgentRoster(id);
 					// Tree sync: session.list is the freshest source of which
 					// sessions exist. If its id set drifts from the sidebar
 					// tree's (a session created or deleted outside this window,
@@ -3391,9 +3344,6 @@ function AppInner(): ReactNode {
 							onOpenSearch={() => setPaletteOpen(true)}
 							unread={unreadSessions}
 							onToggleUnread={toggleUnread}
-							expandedAgents={expandedAgents}
-							agentRosters={agentRosters}
-							onToggleAgents={toggleSessionAgents}
 							onPickFolder={() => {
 								pickProjectFolder();
 							}}

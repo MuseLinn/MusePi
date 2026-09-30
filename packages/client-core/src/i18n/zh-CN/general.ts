@@ -319,6 +319,7 @@ export const general = {
 	"no prompts yet": "暂无提示词",
 	"forked session": "分叉会话",
 	"forked from": "分叉自",
+	"subagent session": "子代理会话",
 	"last active": "最后活跃",
 	"created at": "创建于",
 	"default mode": "默认模式",

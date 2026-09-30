@@ -13,7 +13,7 @@ import { GroupedSessionList } from "./GroupedSessionList";
 import { MenuPopup } from "./MenuPopup";
 import { Reveal } from "./Reveal";
 import { SessionHoverCard } from "./SessionHoverCard";
-import { type SessionAgentEntry, SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
+import { SessionList, type SessionListNode, type SessionStatus } from "./SessionList";
 import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
 
@@ -70,9 +70,6 @@ export function SessionSidebar({
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
-	expandedAgents,
-	agentRosters,
-	onToggleAgents,
 }: {
 	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -139,12 +136,6 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
-	/** 已展开子代理名册的会话 id 集合（openchamber 会话子代理查看）。 */
-	expandedAgents?: ReadonlySet<string>;
-	/** 会话 id → 子代理名册（session.agents 拉取结果）。 */
-	agentRosters?: ReadonlyMap<string, readonly SessionAgentEntry[]>;
-	/** 展开/收起某会话的子代理名册（app 侧触发拉取）。 */
-	onToggleAgents?(sessionId: string): void;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -345,16 +336,6 @@ export function SessionSidebar({
 			),
 		[sessionMeta],
 	);
-	// 子代理数 >0 的会话（session.list agentCount）——行内 chevron 的数据源。
-	const agentCounts = useMemo(
-		() =>
-			new Map(
-				[...sessionMeta.entries()]
-					.filter(([, meta]) => typeof meta.agentCount === "number" && meta.agentCount > 0)
-					.map(([id, meta]) => [id, meta.agentCount as number]),
-			),
-		[sessionMeta],
-	);
 
 	const deleteArchived = useCallback(
 		async (id: string): Promise<void> => {
@@ -509,10 +490,6 @@ export function SessionSidebar({
 				workingIds={workingIds}
 				statuses={statuses}
 				manualTags={manualTags}
-				agentCounts={agentCounts}
-				expandedAgents={expandedAgents}
-				agentRosters={agentRosters}
-				onToggleAgents={onToggleAgents}
 				searchQuery={sessionQuery}
 			/>
 		</div>
@@ -982,10 +959,6 @@ export function SessionSidebar({
 													workingIds={workingIds}
 													statuses={statuses}
 													manualTags={manualTags}
-													agentCounts={agentCounts}
-													expandedAgents={expandedAgents}
-													agentRosters={agentRosters}
-													onToggleAgents={onToggleAgents}
 													searchQuery={sessionQuery}
 												/>
 											</div>
@@ -1001,10 +974,6 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
-											agentCounts={agentCounts}
-											expandedAgents={expandedAgents}
-											agentRosters={agentRosters}
-											onToggleAgents={onToggleAgents}
 											searchQuery={sessionQuery}
 										/>
 									</>
@@ -1059,10 +1028,6 @@ export function SessionSidebar({
 															workingIds={workingIds}
 															statuses={statuses}
 															manualTags={manualTags}
-															agentCounts={agentCounts}
-															expandedAgents={expandedAgents}
-															agentRosters={agentRosters}
-															onToggleAgents={onToggleAgents}
 															searchQuery={sessionQuery}
 														/>
 													</div>
@@ -1187,10 +1152,6 @@ export function SessionSidebar({
 																		workingIds={workingIds}
 																		statuses={statuses}
 																		manualTags={manualTags}
-																		agentCounts={agentCounts}
-																		expandedAgents={expandedAgents}
-																		agentRosters={agentRosters}
-																		onToggleAgents={onToggleAgents}
 																		searchQuery={sessionQuery}
 																	/>
 																)}
@@ -1209,10 +1170,6 @@ export function SessionSidebar({
 														</div>
 														<SessionList
 															nodes={noFolder}
-															agentCounts={agentCounts}
-															expandedAgents={expandedAgents}
-															agentRosters={agentRosters}
-															onToggleAgents={onToggleAgents}
 															selectedId={selectedId}
 															onSelect={onSelect}
 															onContextMenu={openSessionCtx}
@@ -1246,10 +1203,6 @@ export function SessionSidebar({
 											workingIds={workingIds}
 											statuses={statuses}
 											manualTags={manualTags}
-											agentCounts={agentCounts}
-											expandedAgents={expandedAgents}
-											agentRosters={agentRosters}
-											onToggleAgents={onToggleAgents}
 											searchQuery={sessionQuery}
 										/>
 									</div>
@@ -1316,10 +1269,6 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
-									agentCounts={agentCounts}
-									expandedAgents={expandedAgents}
-									agentRosters={agentRosters}
-									onToggleAgents={onToggleAgents}
 									searchQuery={sessionQuery}
 								/>
 								{cronNodes.length > 0 && cronSection}
@@ -1333,10 +1282,6 @@ export function SessionSidebar({
 									workingIds={workingIds}
 									statuses={statuses}
 									manualTags={manualTags}
-									agentCounts={agentCounts}
-									expandedAgents={expandedAgents}
-									agentRosters={agentRosters}
-									onToggleAgents={onToggleAgents}
 									searchQuery={sessionQuery}
 								/>
 							</>
