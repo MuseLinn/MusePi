@@ -180,7 +180,7 @@ export const tools = {
 	"daemon meta unavailable: {reason}": "Daemon metadata unavailable: {reason}",
 	version: "Version",
 	engine: "Engine",
-	"plugins settings": "List of discovered extension plugins",
+	"plugins settings": "List of discovered plugins",
 	"skills settings":
 		"Manage project-level and user-level skills. Once enabled, they can be used in chat via skill://.",
 	extensions: "Extensions",
@@ -345,13 +345,13 @@ export const tools = {
 	"scheduled tasks completed": "Scheduled tasks completed",
 	"extensions control center": "Extensions control center",
 	"extensions settings":
-		"Manage skills, rules, MCP servers, context files, and other extensions in one place (consistent with TUI /extensions)",
+		"Manage skills, rules, MCP servers, context files, and other capabilities in one place (consistent with TUI /extensions)",
 	"subagents settings": "Currently running subagents",
 	"no plugins loaded": "No plugins loaded",
 	"plugins empty hint":
 		"Install plugin packages from the marketplace, or drop them into ~/.musepi/plugins and refresh.",
 	"plugins empty modules hint":
-		"Hot-loaded extension modules (~/.musepi/agent/extensions and project .musepi/extensions) and built-in plugin units (desktop shell, themes, card renderers, magic keywords) are listed here too.",
+		"Hot-loaded plugin modules (~/.musepi/agent/extensions and project .musepi/extensions) and built-in plugin units (desktop shell, themes, card renderers, magic keywords) are listed here too.",
 	"go to marketplace": "Open marketplace",
 	"plugin package tag": "Plugin package",
 	"no skills found": "No skills found",
@@ -396,7 +396,7 @@ export const tools = {
 	"all slots hosted": "All declared slots have a desktop host",
 	"slot unhosted {slot}": "Declared but no desktop host: {slot}",
 	"slot declaration": "Slot declaration",
-	"ext kind extension-module": "Extension module",
+	"ext kind extension-module": "Plugin module",
 	"ext kind skill": "Skill",
 	"ext kind rule": "Rule",
 	"ext kind tool": "Tool",
@@ -418,6 +418,25 @@ export const tools = {
 	"ext item disabled": "Disabled",
 	"ext provider": "Source",
 	"ext builtin": "Built-in",
+	"ext builtin task-card-swarm": "Swarm Task Card",
+	"ext builtin task-card-swarm desc":
+		"Kimi-parity task/swarm card style: member grid with per-agent avatars, progress bars and accordion outputs",
+	"ext builtin shell": "MusePi Desktop Shell",
+	"ext builtin shell desc":
+		"Electron compat shell: wraps the daemon-served renderer (dsh-desktop parity). Enabled -> the shell loads the runtime-served content; disabled -> the local bundle.",
+	"ext builtin ultrathink": "Ultrathink Keyword",
+	"ext builtin ultrathink desc":
+		"Let standalone ultrathink request maximum automatic thinking and append its hidden notice",
+	"ext builtin orchestrate": "Orchestrate Keyword",
+	"ext builtin orchestrate desc": "Let standalone orchestrate append its hidden multi-agent orchestration notice",
+	"ext builtin workflow": "Workflow Keyword",
+	"ext builtin workflow desc": "Let standalone workflowz append its hidden eval workflow notice",
+	"ext builtin builtin-themes": "Built-in Theme Pack",
+	"ext builtin builtin-themes desc":
+		"Built-in TUI themes shipped with the CLI (dark/light plus the bundled default set)",
+	"ext builtin builtin-cards": "Tool Card Renderers",
+	"ext builtin builtin-cards desc": "First-party GUI card renderers for the built-in tool wire names",
+	"plugin details": "Details",
 	"ext read-only": "Read-only",
 	"ext plugin config": "Plugin settings",
 	"ext plugin config desc":

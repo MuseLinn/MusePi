@@ -1,6 +1,5 @@
 import { type TranslationKey, t } from "@musepi/client-core";
 import { useDeepScrollShadow } from "@musepi/client-core/src/lib/scroll-shadow";
-import { coerceConfigValues } from "@musepi/pi-wire";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
@@ -15,13 +14,14 @@ import {
 } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { DiagnosticsView } from "./CapabilityCenter";
-import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { HeightMorph } from "./HeightMorph";
 import { MarketplaceView } from "./MarketplaceView";
 import { StateIcon } from "./StateIcon";
 import {
 	isPluginLaneEntry,
 	type PluginPackageEntry as PluginEntry,
+	PluginManifestSections,
+	pluginStateLabel,
 	sourceLevelLabel,
 	UnifiedPluginsView,
 } from "./UnifiedPluginsView";
@@ -49,12 +49,9 @@ function kindLabel(kind: string): string {
 }
 
 function stateLabel(e: ExtensionItem): string {
-	// Load failure is the winning phase (dsh PluginInventory parity): the
-	// item may nominally be "active" in config but nothing registered.
-	if (e.loadError) return t("ext load failed");
-	if (e.state === "active") return t("extension active");
-	if (e.state === "shadowed") return t("ext shadowed");
-	return e.disabledReason === "provider-disabled" ? t("ext provider disabled") : t("ext item disabled");
+	// 语义单一权威在 UnifiedPluginsView.pluginStateLabel（插件 tab 行内
+	// 展开与能力清单 detail pane 必须一致，防 drift）。
+	return pluginStateLabel(e);
 }
 
 function levelLabel(s: ExtensionItem): string {
@@ -86,100 +83,6 @@ function isDeletable(e: ExtensionItem): boolean {
  *  the detail pane so users can tell GUI-surface extensions apart. */
 function isGuiKind(e: ExtensionItem): boolean {
 	return e.kind === "gui-motion" || e.kind === "style";
-}
-
-/**
- * 插件清单元数据区(dsh 插件管理页五段式):配置表单 + 资源卡 + fail-soft
- * 丢弃提示。表单是受控渲染 + 写入链路:初始值 = 清单默认值 ← 存储值
- * (daemon 已按字段钳制下发到 configValues);每次变更先乐观更新本地,
- * 再经 extensions.setConfig 落盘——失败回滚该键并显示错误,成功按字段的
- * restart 声明提示生效时机(运行时消费随 cordis 试点落地)。
- */
-function PluginManifestSections({ item, rpc }: { item: ExtensionItem; rpc: RpcClient | null }): ReactNode {
-	const [values, setValues] = useState<Record<string, unknown>>(() =>
-		item.config ? coerceConfigValues(item.config, item.configValues) : {},
-	);
-	const [notice, setNotice] = useState<{ kind: "saved" | "error"; text: string } | null>(null);
-	const resources = item.resources;
-
-	const handleChange = (key: string, value: unknown): void => {
-		const desc = item.config?.find(f => f.key === key);
-		const previous = values[key];
-		setValues(prev => ({ ...prev, [key]: value }));
-		setNotice(null);
-		if (!rpc || !desc) return;
-		void rpc
-			.request("extensions.setConfig", { id: item.id, key, value })
-			.then(() => {
-				const hint =
-					desc.restart && desc.restart !== "none"
-						? ` · ${desc.restart === "session" ? t("ext restart session") : t("ext restart daemon")}`
-						: "";
-				setNotice({ kind: "saved", text: `${t("ext config saved")}${hint}` });
-			})
-			.catch((err: unknown) => {
-				setValues(prev => ({ ...prev, [key]: previous }));
-				setNotice({ kind: "error", text: `${t("ext config save failed")}: ${String(err)}` });
-			});
-	};
-
-	return (
-		<>
-			{item.configErrors && item.configErrors.length > 0 && (
-				<div className="gui-ext-detail-loaderror">
-					<Icon name="alert" className="h-3.5 w-3.5 shrink-0" />
-					<span className="min-w-0 truncate">{t("ext config errors", { count: item.configErrors.length })}</span>
-				</div>
-			)}
-			{item.config && item.config.length > 0 && (
-				<div className="gui-ext-detail-section">
-					<div className="gui-ext-detail-label">{t("ext plugin config")}</div>
-					<div className="gui-plugin-config-desc">{t("ext plugin config desc")}</div>
-					<ConfigFormRenderer fields={item.config} values={values} onChange={handleChange} disabled={!rpc} />
-					{notice && (
-						<div
-							className={`gui-plugin-config-notice${notice.kind === "error" ? " gui-plugin-config-notice--error" : ""}`}
-						>
-							{notice.text}
-						</div>
-					)}
-				</div>
-			)}
-			{resources && (
-				<div className="gui-ext-detail-section">
-					<div className="gui-ext-detail-label">{t("ext plugin resources")}</div>
-					<div className="gui-plugin-resources">
-						{resources.disk && (
-							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources disk")}</span>
-								<span className="gui-plugin-resource-value">{resources.disk}</span>
-							</div>
-						)}
-						{resources.memory && (
-							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources memory")}</span>
-								<span className="gui-plugin-resource-value">{resources.memory}</span>
-							</div>
-						)}
-						{typeof resources.setupMinutes === "number" && (
-							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources setup")}</span>
-								<span className="gui-plugin-resource-value">{resources.setupMinutes}</span>
-							</div>
-						)}
-						{resources.models && resources.models.length > 0 && (
-							<div className="gui-plugin-resource-row">
-								<span className="gui-plugin-resource-key">{t("ext resources models")}</span>
-								<span className="gui-plugin-resource-value">
-									{resources.models.map(m => (m.size ? `${m.name} · ${m.size}` : m.name)).join(", ")}
-								</span>
-							</div>
-						)}
-					</div>
-				</div>
-			)}
-		</>
-	);
 }
 
 /**

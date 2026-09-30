@@ -3404,6 +3404,25 @@
 	color: var(--color-text-muted);
 	margin-top: 2px;
 }
+/* 模块行行内展开（dsh 插件详情 parity）：整行头可点（手风琴），展开区
+ * 复用能力清单 detail pane 的段式样式（gui-ext-detail-*）。开关按钮
+ * stopPropagation，不会误触发展开。 */
+.gui-ext-provider-h--btn {
+	cursor: pointer;
+	border-radius: 6px;
+}
+.gui-ext-provider-h--btn:focus-visible {
+	outline: 2px solid var(--color-accent, var(--color-text));
+	outline-offset: 1px;
+}
+.gui-ext-plugins-detail {
+	margin-top: 6px;
+	padding: 8px 10px 2px;
+	border-top: 1px solid var(--border);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
 
 
 /* ── Layer-1 session-tree nav chrome: composer breadcrumb + fork hint ──
