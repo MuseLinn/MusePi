@@ -156,12 +156,10 @@ const WORKING_RAYS = Array.from({ length: 8 }, (_, i) => {
 	);
 });
 
-/** Build the prefix (indent + connectors) for one flat node. */
-function treePrefix(indent: number, showConnector: boolean, isLast: boolean): string {
-	let prefix = "";
-	for (let i = 0; i < indent; i++) prefix += "  ";
-	if (showConnector) prefix += isLast ? "└─ " : "├─ ";
-	return prefix;
+/** Build the indent prefix for one flat node. Hierarchy is expressed by
+ *  indentation alone — no ├─/└─ connector glyphs (redundant visual noise). */
+function treePrefix(indent: number): string {
+	return "  ".repeat(indent);
 }
 
 /** 折叠态持久化(openchamber 文件夹层级 parity):父行 chevron 收起后整棵
@@ -233,8 +231,6 @@ const SessionRow = memo(function SessionRow({
 	status,
 	untitled,
 	indent,
-	showConnector,
-	isLast,
 	searchQuery,
 	subagent,
 	advisor,
@@ -258,8 +254,6 @@ const SessionRow = memo(function SessionRow({
 	status?: SessionStatus;
 	untitled: boolean;
 	indent: number;
-	showConnector: boolean;
-	isLast: boolean;
 	searchQuery: string;
 	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
 	subagent: boolean;
@@ -338,7 +332,7 @@ const SessionRow = memo(function SessionRow({
 					style={fill ? { background: fill } : undefined}
 					title={status ? t(`session status ${status}` as const) : undefined}
 				/>
-				<span className="gui-tree-prefix">{treePrefix(indent, showConnector, isLast)}</span>
+				<span className="gui-tree-prefix">{treePrefix(indent)}</span>
 				<span className="gui-session-title">
 					{searchQuery.trim() ? <SearchHitText text={label} query={searchQuery} /> : label}
 				</span>
@@ -488,7 +482,7 @@ export function SessionList({
 	const byId = new Map(flat.map(f => [f.node.entry.id, f.node]));
 	return (
 		<ul className="gui-session-list">
-			{flat.map(({ node, indent, showConnector, isLast }) => {
+			{flat.map(({ node, indent }) => {
 				const parent = node.entry.parentId ? byId.get(node.entry.parentId) : null;
 				// Manual status tag wins over the derived one — same precedence
 				// as `statusFill`, so the chip's tooltip always matches its color.
@@ -508,8 +502,6 @@ export function SessionList({
 						status={status}
 						untitled={!(node.entry.label ?? "").trim()}
 						indent={indent}
-						showConnector={showConnector}
-						isLast={isLast}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}
 						advisor={node.entry.advisor === true}

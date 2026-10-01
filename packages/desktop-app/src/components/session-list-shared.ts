@@ -4,8 +4,6 @@ import type { SessionListNode } from "./SessionList";
 interface FlatNode {
 	node: SessionListNode;
 	indent: number;
-	showConnector: boolean;
-	isLast: boolean;
 }
 
 /** Sort key for one session — last-activity (updatedAt) with a createdAt
@@ -43,23 +41,23 @@ export function sortSessionTree(
  *   fork tree (tui/tree-list.ts + modes/components/tree-selector.ts):
  *   indent 0 stays 0 unless the parent branches (>1 children → +1); indent 1
  *   children always go to 2; indent 2+ single-child chains stay flat, +1 only
- *   when a parent branches. Connectors (├─/└─) show only for branched children.
+ *   when a parent branches.
  * - default (GUI sidebar) — openchamber 文件夹层级 parity: EVERY child
  *   indents one level, so a session with a single subagent still reads as a
  *   nested subtree instead of a flat sibling.
+ * Hierarchy is expressed by indentation alone; no connector glyphs.
  */
 export function flattenTree(roots: SessionListNode[], opts?: { compactSingleChildChains?: boolean }): FlatNode[] {
 	const result: FlatNode[] = [];
 	const compact = opts?.compactSingleChildChains === true;
-	type StackItem = [SessionListNode, number, boolean, boolean, boolean];
+	type StackItem = [SessionListNode, number, boolean];
 	const items: StackItem[] = [];
 	for (let i = roots.length - 1; i >= 0; i--) {
-		const isLast = i === roots.length - 1;
-		items.push([roots[i], 0, true, roots.length > 1, isLast]);
+		items.push([roots[i], 0, true]);
 	}
 	while (items.length > 0) {
-		const [node, indent, justBranched, showConnector, isLast] = items.pop()!;
-		result.push({ node, indent, showConnector, isLast });
+		const [node, indent, justBranched] = items.pop()!;
+		result.push({ node, indent });
 		const children = node.children;
 		const multipleChildren = children.length > 1;
 		let childIndent: number;
@@ -71,8 +69,7 @@ export function flattenTree(roots: SessionListNode[], opts?: { compactSingleChil
 			childIndent = indent;
 		}
 		for (let i = children.length - 1; i >= 0; i--) {
-			const childIsLast = i === children.length - 1;
-			items.push([children[i], childIndent, multipleChildren, true, childIsLast]);
+			items.push([children[i], childIndent, multipleChildren]);
 		}
 	}
 	return result;
