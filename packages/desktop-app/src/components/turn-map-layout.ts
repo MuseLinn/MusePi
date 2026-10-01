@@ -1,14 +1,16 @@
 /**
  * 轮级会话地图布局(纯逻辑,无 DOM 依赖):把 buildTrajectoryTree 的
  * TrajectoryTurnGroup[164] 投影成画布节点 —— 主线一条时间轴,重答/分叉
- * 轮开列分支,边 = 主线直连 + 分支贝塞尔。TurnMapCanvas 与单元测试共用。
+ * 轮开列分支,边 = 主线直连 + 分支贝塞尔;分叉在父轮结束后的干线上形成
+ * 独立交汇点(git 树式圆点),兄弟分支共享。TurnMapCanvas 与单元测试共用。
  *
  * 方向(direction):"v" = 主线垂直、分支横向开列(默认);"h" = 主线水平、
  * 分支纵向开行。两个方向的几何互为转置(轴交换),裁剪/导航共用同一套
  * 世界坐标。
  *
  * 设计稿:docs/review/0.5.0-map-redesign/design.md(投影单位从消息改为
- * 轮,164 轮 = 164 个节点,而不是 9985 张消息卡片)。
+ * 轮,164 轮 = 164 个节点,而不是 9985 张消息卡片);2026-10-01 实机诉求:
+ * 每轮 = 可折叠框(展开 = 框内事件卡),分叉 = 父轮末端干线上的交汇点。
  */
 
 import type { TrajectoryTurnGroup } from "./trajectory-data";
@@ -49,6 +51,8 @@ export interface TurnMapEdge {
 	from: TurnMapNode;
 	to: TurnMapNode;
 	branch: boolean;
+	/** 分支边:交汇点世界坐标(渲染层从交汇点而非源轮卡片发线)。 */
+	junction?: { x: number; y: number };
 }
 
 export interface TurnMapLayout {
@@ -58,19 +62,46 @@ export interface TurnMapLayout {
 	main: TurnMapNode[];
 	/** 分支车道头文案数据(车道号 → 首个分支轮)。 */
 	lanes: { lane: number; first: TurnMapNode; sourceTurn: number }[];
+	/** 干线交汇点(兄弟分支按 sourceTurn 去重)。 */
+	junctions: TurnMapJunction[];
 	width: number;
 	height: number;
 }
 
-/** 轮内泳道可视上限(px):事件行超过即轮内滚动,卡片不再长高
+/** 轮内泳道可视上限(px):事件卡超过即轮内滚动,卡片不再长高
  *  (与 CSS .tm-lane max-height 同步,实机回归:Turn 6 事件多,展开卡
  *  按事件数撑到数千 px 高而内容只有顶部一截)。 */
 export const TURN_LANE_MAX_H = 240;
+/** 轮内事件卡高度(px)与卡间距——与 CSS .tm-lane-row / .tm-lane gap 同步。 */
+export const TURN_EVENT_CARD_H = 28;
+export const TURN_EVENT_CARD_GAP = 4;
+/** 泳道容器上下留白合计(px)——与 CSS .tm-lane padding 同步。 */
+export const TURN_LANE_PAD = 8;
 
-/** 轮内展开高度:事件行 24px × N + 底部留白 16(设计稿 §4),封顶
- *  TURN_LANE_MAX_H + 16(泳道滚动,高度与可视内容一致)。 */
+/**
+ * 轮内展开高度:事件卡 28px + 间距 4px × N + 泳道留白 8,封顶
+ *  TURN_LANE_MAX_H + 8(泳道滚动,高度与可视内容一致)。
+ */
 export function turnExpandedExtra(eventCount: number): number {
-	return Math.min(eventCount * 24 + 16, TURN_LANE_MAX_H + 16);
+	return Math.min(
+		eventCount * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD,
+		TURN_LANE_MAX_H + TURN_LANE_PAD,
+	);
+}
+
+/**
+ * 干线交汇点(git 树式分叉节点):分支不从父轮卡片中部拉线,而是在
+ * 父轮结束之后的主干线上形成一个独立圆点,兄弟分支轮都从这个点
+ * 发出(实机设计诉求 2026-10-01:分叉 = 从上一个轮的末端开始,不是
+ * 从轮的内部)。同一父轮的多个兄弟分支共享一个交汇点。
+ */
+export interface TurnMapJunction {
+	/** 交汇点世界坐标:v = 主线卡水平中心 × 父轮下缘间距中点;
+	 *  h = 父轮右缘间距中点 × 父轮垂直中心(正好落在干线连线上)。 */
+	x: number;
+	y: number;
+	/** 分叉源主线轮号(兄弟分支共享同一交汇点)。 */
+	sourceTurn: number;
 }
 
 /**
@@ -187,11 +218,24 @@ export function layoutTurnMap(
 	}
 	// 主线直连边。
 	for (let i = 0; i + 1 < main.length; i++) edges.push({ from: main[i]!, to: main[i + 1]!, branch: false });
-	// 分支边:源轮 → 分支轮(贝塞尔由渲染层画)。
+	// 分支边:源轮 → 分支轮(贝塞尔由渲染层画);交汇点落在父轮结束之后
+	// 的干线间距中点(v:主线卡中心 × 父轮下缘+GAP/2;h:父轮右缘+GAP/2 ×
+	// 父轮垂直中心),兄弟分支按 sourceTurn 共享一个交汇点。
+	const junctions: TurnMapJunction[] = [];
+	const junctionBySource = new Map<number, TurnMapJunction>();
 	for (const n of nodes) {
 		if (!n.branch) continue;
 		const source = main.find(m => m.group.turn === n.sourceTurn);
-		if (source) edges.push({ from: source, to: n, branch: true });
+		if (!source) continue;
+		const jx = horizontal ? source.x + TURN_NODE_W + TURN_GAP_Y / 2 : source.x + TURN_NODE_W / 2;
+		const jy = horizontal ? source.y + source.h / 2 : source.y + source.h + TURN_GAP_Y / 2;
+		let junction = junctionBySource.get(source.group.turn);
+		if (!junction) {
+			junction = { x: jx, y: jy, sourceTurn: source.group.turn };
+			junctionBySource.set(source.group.turn, junction);
+			junctions.push(junction);
+		}
+		edges.push({ from: source, to: n, branch: true, junction: { x: junction.x, y: junction.y } });
 	}
 	const lanes = [...laneSource.entries()]
 		.sort((a, b) => a[0] - b[0])
@@ -212,7 +256,7 @@ export function layoutTurnMap(
 	);
 	const width = horizontal ? chainSpanW : laneSpan;
 	const height = horizontal ? Math.max(laneSpanH, laneRowBottom, TURN_NODE_H * 2) : chainSpan;
-	return { nodes, edges, main, lanes, width, height };
+	return { nodes, edges, main, lanes, junctions, width, height };
 }
 
 /** 视口裁剪矩形(世界坐标)。 */

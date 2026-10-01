@@ -2,9 +2,12 @@ import { describe, expect, it } from "bun:test";
 import type { TrajectoryEvent, TrajectoryTurnGroup } from "../src/components/trajectory-data";
 import {
 	layoutTurnMap,
+	TURN_EVENT_CARD_GAP,
+	TURN_EVENT_CARD_H,
 	TURN_GAP_Y,
 	TURN_LANE_GAP,
 	TURN_LANE_MAX_H,
+	TURN_LANE_PAD,
 	TURN_NODE_COMPACT_H,
 	TURN_NODE_H,
 	TURN_NODE_W,
@@ -113,6 +116,102 @@ describe("layoutTurnMap", () => {
 		expect(branchEdge?.to.group.turn).toBe(3);
 	});
 
+	it("分支边携带干线交汇点:落在父轮之后的干线间距中点(分叉 = 父轮末端,不是父轮卡片中部)", () => {
+		// 实机设计诉求(2026-10-01,手绘示意图):git 树式分叉——交汇圆点在
+		// 父轮结束之后的主干线上,贝塞尔从圆点发出。若退回到"源轮卡片右缘
+		// 中点",分叉视觉上从轮内部拉出,兄弟轮被画成父子关系。
+		const withDepth = (turn: number, displayTurn: number, branch = false): TrajectoryTurnGroup => ({
+			turn,
+			displayTurn,
+			events: [
+				{
+					id: `e${turn}-0`,
+					kind: "user",
+					title: `event ${turn}-0`,
+					turn,
+					pathTurn: displayTurn,
+					tsMs: turn * 1000,
+					...(branch ? { branch: true } : {}),
+				} as TrajectoryEvent,
+			],
+			firstTs: new Date(turn * 1000).toISOString(),
+			startMs: turn * 1000,
+			endMs: turn * 1000 + 1,
+		});
+		const turns = [withDepth(1, 1), withDepth(2, 2), withDepth(3, 2, true)];
+		const layout = layoutTurnMap(turns);
+		expect(layout.junctions.length).toBe(1);
+		const j = layout.junctions[0]!;
+		expect(j.sourceTurn).toBe(1);
+		const source = layout.main.find(n => n.group.turn === 1)!;
+		// v 模式:交汇点 = 主线卡水平中心 × 父轮下缘间距中点(正落在干线
+		// 主线上,渲染层圆点压线、贝塞尔从此发出)。
+		expect(j.x).toBe(source.x + TURN_NODE_W / 2);
+		expect(j.y).toBe(source.y + source.h + TURN_GAP_Y / 2);
+		const branchEdge = layout.edges.find(e => e.branch)!;
+		expect(branchEdge.junction).toEqual({ x: j.x, y: j.y });
+	});
+
+	it("同一父轮的兄弟分支共享一个交汇点(两个分支边指向同一圆点)", () => {
+		const withDepth = (turn: number, displayTurn: number, branch = false): TrajectoryTurnGroup => ({
+			turn,
+			displayTurn,
+			events: [
+				{
+					id: `e${turn}-0`,
+					kind: "user",
+					title: `event ${turn}-0`,
+					turn,
+					pathTurn: displayTurn,
+					tsMs: turn * 1000,
+					...(branch ? { branch: true } : {}),
+				} as TrajectoryEvent,
+			],
+			firstTs: new Date(turn * 1000).toISOString(),
+			startMs: turn * 1000,
+			endMs: turn * 1000 + 1,
+		});
+		// 两个同深度分支轮(如多次撤回重答)都从第 1 轮末端分叉。
+		const turns = [withDepth(1, 1), withDepth(2, 2), withDepth(3, 2, true), withDepth(4, 2, true)];
+		const layout = layoutTurnMap(turns);
+		expect(layout.junctions.length).toBe(1);
+		const j = layout.junctions[0]!;
+		const branchEdges = layout.edges.filter(e => e.branch);
+		expect(branchEdges.length).toBe(2);
+		for (const e of branchEdges) {
+			expect(e.junction).toEqual({ x: j.x, y: j.y });
+			expect(e.from.group.turn).toBe(1);
+		}
+	});
+
+	it("横向模式:交汇点转置——父轮右缘间距中点 × 父轮垂直中心", () => {
+		const withDepth = (turn: number, displayTurn: number, branch = false): TrajectoryTurnGroup => ({
+			turn,
+			displayTurn,
+			events: [
+				{
+					id: `e${turn}-0`,
+					kind: "user",
+					title: `event ${turn}-0`,
+					turn,
+					pathTurn: displayTurn,
+					tsMs: turn * 1000,
+					...(branch ? { branch: true } : {}),
+				} as TrajectoryEvent,
+			],
+			firstTs: new Date(turn * 1000).toISOString(),
+			startMs: turn * 1000,
+			endMs: turn * 1000 + 1,
+		});
+		const turns = [withDepth(1, 1), withDepth(2, 2), withDepth(3, 2, true)];
+		const layout = layoutTurnMap(turns, new Set(), "h");
+		expect(layout.junctions.length).toBe(1);
+		const j = layout.junctions[0]!;
+		const source = layout.main.find(n => n.group.turn === 1)!;
+		expect(j.x).toBe(source.x + TURN_NODE_W + TURN_GAP_Y / 2);
+		expect(j.y).toBe(source.y + source.h / 2);
+	});
+
 	it("连续分支轮共用一列;主线轮后重置新列", () => {
 		const turns = [
 			turnGroup(1),
@@ -133,7 +232,7 @@ describe("layoutTurnMap", () => {
 		const collapsed = layoutTurnMap(turns);
 		const expanded = layoutTurnMap(turns, new Set([1]));
 		const extra = turnExpandedExtra(5);
-		expect(extra).toBe(5 * 24 + 16);
+		expect(extra).toBe(5 * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD);
 		expect(expanded.nodes[0]?.expandedExtra).toBe(extra);
 		expect(expanded.nodes[1]?.y).toBe((collapsed.nodes[1]?.y ?? 0) + extra);
 		// 后续主线轮一并推开。
@@ -166,12 +265,12 @@ describe("layoutTurnMap", () => {
 		// 契约:泳道可视上限 TURN_LANE_MAX_H 之上,展开卡高度 = 基础卡 +
 		// 上限增量,后续轮的推移也按封顶增量计算——否则多事件轮(实机
 		// Turn 6)会把卡片撑到数千 px、下方大片空白而内容只在顶部。
-		expect(turnExpandedExtra(5)).toBe(5 * 24 + 16);
-		expect(turnExpandedExtra(100)).toBe(TURN_LANE_MAX_H + 16);
+		expect(turnExpandedExtra(5)).toBe(5 * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD);
+		expect(turnExpandedExtra(100)).toBe(TURN_LANE_MAX_H + TURN_LANE_PAD);
 		const turns = [turnGroup(1, { events: 100 }), turnGroup(2)];
 		const layout = layoutTurnMap(turns, new Set([1]));
-		expect(layout.nodes[0]!.h).toBe(TURN_NODE_H + TURN_LANE_MAX_H + 16);
-		expect(layout.nodes[1]!.y).toBe(TURN_NODE_H + TURN_LANE_MAX_H + 16 + TURN_GAP_Y);
+		expect(layout.nodes[0]!.h).toBe(TURN_NODE_H + TURN_LANE_MAX_H + TURN_LANE_PAD);
+		expect(layout.nodes[1]!.y).toBe(TURN_NODE_H + TURN_LANE_MAX_H + TURN_LANE_PAD + TURN_GAP_Y);
 	});
 
 	it("轮前元事件组(turn 0,无 user 事件)不发节点", () => {
@@ -317,7 +416,7 @@ describe("visibleTurnMapNodes", () => {
 		const turns = [turnGroup(1, { events: 30 }), turnGroup(2), turnGroup(3)];
 		const layout = layoutTurnMap(turns, new Set([1]));
 		const expanded = layout.nodes[0]!;
-		expect(expanded.expandedExtra).toBe(TURN_LANE_MAX_H + 16);
+		expect(expanded.expandedExtra).toBe(TURN_LANE_MAX_H + TURN_LANE_PAD);
 		// 视口下缘落在卡基础高之下、展开增量之内:必须仍命中。
 		const yInside = expanded.y + TURN_NODE_H + 100;
 		const vis = visibleTurnMapNodes(

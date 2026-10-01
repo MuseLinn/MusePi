@@ -5425,6 +5425,14 @@ button.traj-error-note:hover {
 	opacity: 0.8;
 }
 
+/* 干线交汇点(git 树式分叉圆点):金核 + 光晕,压在主线连线上。 */
+.tm-junction {
+	fill: #d4a35c;
+	stroke: color-mix(in oklab, var(--color-bg) 85%, transparent);
+	stroke-width: 1.5;
+	filter: drop-shadow(0 0 3px color-mix(in oklab, #d4a35c 65%, transparent));
+}
+
 .tm-edge-gold-1 { stop-color: #d4a35c; }
 .tm-edge-gold-2 { stop-color: color-mix(in oklab, #d4a35c 55%, var(--color-accent)); }
 .tm-edge-purple { stop-color: #b39ddb; }
@@ -5526,10 +5534,27 @@ button.traj-error-note:hover {
 	letter-spacing: 0.04em;
 	font-family: var(--font-mono, ui-monospace, monospace);
 	color: var(--color-text);
+	/* 轮次角标:框上的标识药丸( accent 淡底 + 描边)。 */
+	padding: 2px 8px;
+	border-radius: 99px;
+	border: 1px solid color-mix(in oklab, var(--color-accent) 32%, transparent);
+	background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+}
+
+.tm-node--branch .tm-turn-badge {
+	border-color: color-mix(in oklab, #d4a35c 40%, transparent);
+	background: color-mix(in oklab, #d4a35c 10%, transparent);
+}
+
+.tm-node--leaf .tm-turn-badge {
+	border-color: color-mix(in oklab, #d4a35c 55%, transparent);
+	background: color-mix(in oklab, #d4a35c 14%, transparent);
 }
 
 .tm-turn-badge--advisor {
 	color: #6fc3b8;
+	border-color: color-mix(in oklab, #6fc3b8 40%, transparent);
+	background: color-mix(in oklab, #6fc3b8 10%, transparent);
 }
 
 .tm-turn-advisor {
@@ -5583,14 +5608,19 @@ button.traj-error-note:hover {
 	font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-/* 轮内泳道(单击展开):事件行 24px。可视上限与布局常量
- * TURN_LANE_MAX_H 同步:超过即轮内滚动,卡片高度不再增长。 */
+/* 轮内泳道(单击展开):事件卡 28px + 卡间距 4px。可视上限与布局常量
+ * turnExpandedExtra 同步(TURN_LANE_MAX_H + 留白 8):超过即轮内滚动,
+ * 卡片高度不再增长。 */
 .tm-lane {
 	margin-top: 4px;
-	padding-top: 4px;
+	padding: 6px 2px;
 	border-top: 1px dashed color-mix(in oklab, var(--color-text) 12%, transparent);
 	overflow-y: auto;
-	max-height: 240px;
+	max-height: 248px;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 }
 
 /* 折叠态紧凑卡:单行(徽章 + 摘要 + 计数 + 用时),与展开态共用玻璃底。 */
@@ -5656,24 +5686,29 @@ button.traj-error-note:hover {
 	color: var(--color-text-faint);
 }
 
+/* 事件卡(框内卡片):微玻璃面 + kind 色点;带 entryId 的可点击跳对话。 */
 .tm-lane-row {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	height: 24px;
+	min-height: 28px;
+	padding: 0 8px;
 	font-size: 10px;
 	color: var(--color-text-muted);
-	border-radius: var(--radius-xs);
+	border-radius: var(--radius-sm);
+	border: 1px solid color-mix(in oklab, var(--color-text) 9%, transparent);
+	background: color-mix(in oklab, var(--color-bg) 55%, transparent);
 }
 
-/* 带 entryId 的事件行可点击:跳到对话视图对应消息。 */
+/* 带 entryId 的事件卡可点击:跳到对话视图对应消息。 */
 .tm-lane-row--link {
 	cursor: pointer;
-	transition: background 120ms var(--spring), color 120ms var(--spring);
+	transition: background 120ms var(--spring), color 120ms var(--spring), border-color 120ms var(--spring);
 }
 
 .tm-lane-row--link:hover {
 	background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+	border-color: color-mix(in oklab, var(--color-accent) 35%, transparent);
 	color: var(--color-text);
 }
 

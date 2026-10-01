@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Changed
+
+- **会话地图重做分叉形态与轮内颗粒度（按实机手绘示意图）**：① 分叉改在父轮结束之后的主干线上形成独立交汇圆点（git 树式）——此前分支贝塞尔从父轮卡片右缘中部拉出，视觉上兄弟轮被画成父轮的子节点；现在交汇点落在父轮下缘间距中点的干线上（横向模式为转置几何），同一父轮的兄弟分支共享一个圆点，贝塞尔先从圆点沿主干走一段再进入分支卡。② 每轮展开后框内事件从 24px 裸行升级为独立事件卡（微玻璃面 + kind 色点 + 描边，28px + 4px 间距），轮次徽章改为框上的 accent 药丸角标（分支/叶子/顾问轮各有配色）。布局常量与 CSS 同步（turnExpandedExtra 按事件卡 32px 步进 + 泳道留白 8 封顶 TURN_LANE_MAX_H + 8）。3 例新契约测试（交汇点落在父轮之后干线间距中点 / 兄弟分支共享一个交汇点 / 横向模式转置几何）。
+  - EN: The session map's fork shape and per-turn granularity were reworked (per the on-device hand-drawn sketch): ① forks now form an independent junction dot on the trunk right after the parent turn ends (git-tree style) — previously the branch bezier started from the middle of the parent card's right edge, visually drawing sibling turns as children of the parent; the junction now sits on the trunk at the mid-gap below the parent card (transposed geometry in horizontal mode), siblings branching from the same parent share one dot, and the bezier runs along the trunk from the dot before entering the branch card. ② events inside an expanded turn upgrade from 24px bare rows to standalone event cards (micro glass surface + kind color dot + border, 28px + 4px gap), and the turn badge becomes an accent pill corner mark on the frame (branch/leaf/advisor turns each get their own tint). Layout constants stay in sync with CSS (turnExpandedExtra steps 32px per event card + 8px lane padding, capped at TURN_LANE_MAX_H + 8). 3 new contract tests (junction sits at the trunk mid-gap after the parent / siblings share one junction / transposed geometry in horizontal mode).
+
 ### Fixed
 
 - **会话序言条目（parentless 的 model_change / thinking_level_change）不再打断消息树的根判定**：物化视图开头常有一串无父节点的簿记序言，首条 user 消息因此不再是"最老条目"——leaf-walk 的真根判据（游标抵达最老条目）整段失效，活跃路径过滤被跳过，撤回/重答后旧分支消息与新分支一起显示；轨迹深度链同因误判丢失 pathTurn，地图编号回退错误的 journal 序（实机会话 2 轮分支显示成 Turn 3），地图分叉贝塞尔也错误挂在上一个主线轮之下。修法：① walkLeafPath 新增"头部 root 级连续段"判定——序言段的 parentless 条目视为真根，中段漏打 parentId 仍判链断（顾问卡回归契约保留）；② 轨迹 depthOf 的假根判定改用同一头部段集合；③ 分叉条高亮优先取 activePathIds 中的活跃子节点，不再近似为最后追加的子节点（切回旧兄弟分支后高亮滞留新分支的实机回归）；④ 地图分支锚点改按树深度锚定到父轮（displayTurn = 分支深度 - 1）。4 例新契约测试（序言不破坏链 / 序言存在时中段假根仍判链断 / 序言拓扑编号恢复 2-1、2-2 / 兄弟轮分叉锚在深度-1 父轮）+ 高亮跟随活跃路径契约测试。

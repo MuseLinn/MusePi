@@ -22,11 +22,11 @@ import {
 /**
  * 轮级会话地图(0.5.0-map-redesign 设计稿实现):投影单位 = 轮(与折叠/
  * 导航/轨迹同一 isTurnStart 口径),164 轮 = 164 个玻璃节点卡。主线时间轴
- * (金色流动渐变连线),重答/分叉轮开列分支(金→紫渐变支线);单击切换
- * 轮卡折叠/展开(折叠 = 单行紧凑卡,展开 = 全卡 + 轮内事件泳道),双击
- * 跳回对话定位该轮,展开卡的轮内事件行单击 = 定位到该事件对应的
- * 消息(entry 级,同 onJumpToEntry 通道)。左侧(横向模式为底部)迷你导航条
- * = 全轮次剪影。
+ * (金色流动渐变连线),重答/分叉轮开列分支(金→紫渐变支线)——分叉在
+ * 父轮结束后的干线上形成独立交汇圆点(git 树式),兄弟分支共享;
+ * 单击切换轮卡折叠/展开(折叠 = 单行紧凑卡,展开 = 全卡 + 轮内事件卡),
+ * 双击跳回对话定位该轮,事件卡单击 = 定位到该事件对应的消息(entry 级,
+ * 同 onJumpToEntry 通道)。左侧(横向模式为底部)迷你导航条 = 全轮次剪影。
  * 消息级画布(SessionTreeCanvas)已下线——单一轮级视图。
  *
  * 性能:节点数 = 轮数(≤ 数百),布局 O(n);进入视图无整树 mount 卡顿。
@@ -95,8 +95,8 @@ function toolArgsSummary(ev: TrajectoryEvent): string | null {
 
 /**
  * 节点卡(memo):视口裁剪 + 卡级 memo 双重挡重渲染。两态渲染:
- * 折叠 = 单行紧凑卡(徽章 + 摘要 + 计数 + 用时);展开 = 全卡 + 泳道
- * (事件行带工具参数摘要 / usage / duration / ttft,trace 对齐)。
+ * 折叠 = 单行紧凑卡(角标 + 摘要 + 计数 + 用时);展开 = 全卡 + 框内
+ * 事件卡(每张卡带工具参数摘要 / usage / duration / ttft,trace 对齐)。
  * 导出仅供测试断言两态渲染契约。
  */
 export const TmNodeCard = memo(function TmNodeCard({
@@ -806,17 +806,21 @@ export function TurnMapCanvas({
 										/>
 									);
 								}
-								// 分支贝塞尔(v:源轮右缘中点 → 分支轮左缘中点;h:源轮底缘
-								// 中点 → 分支轮顶缘中点;金→紫渐变)。
-								const bx1 = horizontal ? e.from.x + TURN_NODE_W / 2 : e.from.x + TURN_NODE_W;
-								const by1 = horizontal ? e.from.y + e.from.h : e.from.y + e.from.h / 2;
+								// 分支贝塞尔:从父轮结束后的干线交汇点(git 树式
+								// 分叉节点)发出,而非源轮卡片中部——先沿主干走
+								// 一段再水平进入分支卡(v);h 为转置(先沿主干横
+								// 走再垂直进入)。金→紫渐变。
+								const j = e.junction ?? {
+									x: horizontal ? e.from.x + TURN_NODE_W : e.from.x + TURN_NODE_W / 2,
+									y: horizontal ? e.from.y + e.from.h / 2 : e.from.y + e.from.h,
+								};
 								const bx2 = horizontal ? e.to.x + TURN_NODE_W / 2 : e.to.x - 2;
 								const by2 = horizontal ? e.to.y - 2 : e.to.y + e.to.h / 2;
-								const mx = (bx1 + bx2) / 2;
-								const my = (by1 + by2) / 2;
+								const mx = (j.x + bx2) / 2;
+								const my = (j.y + by2) / 2;
 								const d = horizontal
-									? `M ${bx1} ${by1} C ${bx1} ${my}, ${bx2} ${my}, ${bx2} ${by2}`
-									: `M ${bx1} ${by1} C ${mx} ${by1}, ${mx} ${by2}, ${bx2} ${by2}`;
+									? `M ${j.x} ${j.y} C ${mx} ${j.y}, ${bx2} ${my}, ${bx2} ${by2}`
+									: `M ${j.x} ${j.y} C ${j.x} ${my}, ${mx} ${by2}, ${bx2} ${by2}`;
 								return (
 									<path
 										key={`b${e.from.group.turn}-${e.to.group.turn}`}
@@ -825,6 +829,11 @@ export function TurnMapCanvas({
 									/>
 								);
 							})}
+							{/* 干线交汇点:兄弟分支共享的 git 树式分叉圆点,
+							    压在主线连线上(后画,覆盖干线)。 */}
+							{layout.junctions.map(j => (
+								<circle key={`j${j.sourceTurn}`} className="tm-junction" cx={j.x} cy={j.y} r={4} />
+							))}
 						</svg>
 						{layout.lanes
 							.filter(lane => visibleTurns.has(lane.first.group.turn))
