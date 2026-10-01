@@ -2,7 +2,7 @@ import "./dom-shim";
 import { describe, expect, it } from "bun:test";
 import { t, tLoose } from "@musepi/client-core";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TmNodeCard, TurnMapCanvas } from "../src/components/TurnMapCanvas";
+import { TmNodeCard, TurnMapCanvas, turnEndEventOf, turnUserEventOf } from "../src/components/TurnMapCanvas";
 import type { TrajectoryEvent } from "../src/components/trajectory-data";
 import type { TurnMapNode } from "../src/components/turn-map-layout";
 
@@ -28,7 +28,7 @@ function turnNode(events: TrajectoryEvent[], turn = 3, branch = false): TurnMapN
 
 const noop = () => {};
 
-function renderCard(node: TurnMapNode, isExpanded: boolean): string {
+function renderCard(node: TurnMapNode, isExpanded: boolean, selectedEventId: string | null = null): string {
 	return renderToStaticMarkup(
 		<TmNodeCard
 			n={node}
@@ -37,9 +37,12 @@ function renderCard(node: TurnMapNode, isExpanded: boolean): string {
 			isExpanded={isExpanded}
 			searchDim={false}
 			searchHit={false}
+			selectedEventId={selectedEventId}
 			onToggle={noop}
 			onJump={noop}
+			onSelectEvent={noop}
 			onJumpEvent={noop}
+			onEventMenu={noop}
 			onMenu={noop}
 			onHover={noop}
 		/>,
@@ -123,9 +126,51 @@ describe("轮卡折叠/展开渲染分支", () => {
 			{ id: "s1", kind: "system", title: "model_change", turn: 3, tsMs: 1001 },
 		];
 		const html = renderCard(turnNode(events), true);
-		// 契约:entryId → 可点击行(hover 反馈 + 点击跳对话);无 entryId → 纯展示。
+		// 契约:entryId → 可点击行(单击选中 + 双击跳对话);无 entryId → 纯展示。
 		expect(html).toContain("tm-lane-row--link");
 		expect(html.match(/tm-lane-row--link/g)!.length).toBe(1);
+	});
+
+	it("泳道事件卡:kind 图标按事件类型渲染,选中态跟随 selectedEventId", () => {
+		const events: TrajectoryEvent[] = [
+			{ id: "u1", kind: "user", title: "用户问题", turn: 3, tsMs: 1000, entryId: "entry-1" },
+			{ id: "a1", kind: "assistant", title: "回答", turn: 3, tsMs: 1001, entryId: "entry-2" },
+		];
+		const html = renderCard(turnNode(events), true, "a1");
+		// 契约:每张事件卡带 kind 图标(用户能一眼区分 user/assistant/工具)。
+		expect(html.match(/tm-lane-icon/g)!.length).toBe(2);
+		// 契约:selectedEventId 命中的卡带选中描边类,其余没有。
+		expect(html).toContain("tm-lane-row--selected");
+		expect(html.match(/tm-lane-row--selected/g)!.length).toBe(1);
+	});
+});
+
+describe("树操作锚选择(切换/重答的分叉语义)", () => {
+	// 实机回归(2026-10-02,会话 01a0f81b):地图「切换到此分支」以轮首
+	// user 事件为锚 → branchAt 的 user→parent 重答语义生效——leaf 落到
+	// 该轮之前、草稿回填该轮文本,用户看到"怎么切换都停在旧分支 + 输入框
+	// 出现草稿」。切换必须锚到轮末(assistant/工具),重答才锚轮首 user。
+	const group = {
+		turn: 2,
+		events: [
+			{ id: "u1", kind: "user" as const, title: "再说一遍", turn: 2, entryId: "entry-u" },
+			{ id: "a1", kind: "assistant" as const, title: "回答", turn: 2, entryId: "entry-a" },
+			{ id: "s1", kind: "system" as const, title: "model_change", turn: 2 },
+		],
+		firstTs: new Date(1000).toISOString(),
+		startMs: 1000,
+		endMs: 2000,
+	};
+
+	it("切换锚 = 轮末带 entryId 的事件,不是轮首 user(锚回 user = 重答语义)", () => {
+		expect(turnEndEventOf(group)?.id).toBe("a1");
+		expect(turnEndEventOf(group)?.kind).not.toBe("user");
+	});
+
+	it("重答锚 = 轮首 user 事件(无 user 事件的轮回退轮末)", () => {
+		expect(turnUserEventOf(group)?.id).toBe("u1");
+		const noUser = { ...group, events: group.events.filter(e => e.kind !== "user") };
+		expect(turnUserEventOf(noUser)?.id).toBe("a1");
 	});
 });
 

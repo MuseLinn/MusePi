@@ -1399,7 +1399,7 @@ export function ChatView({
 	// switchToNode: 统一树节点切换入口(画布双击/MessageTree 行点击/面包屑)。
 	// 对齐 TUI /tree 的 navigateTree 语义——移动到目标 leaf + 滚动 + 回填草稿。
 	const switchToNode = useCallback(
-		async (id: string): Promise<void> => {
+		async (id: string, opts?: { backfillDraft?: boolean }): Promise<void> => {
 			// Tree-op guard (runTreeOp): moving the leaf under an in-flight run
 			// re-anchors it — confirm + stop + wait like retry/rewind/fork.
 			await runTreeOp(async () => {
@@ -1416,7 +1416,9 @@ export function ChatView({
 				// positioning at its parent, and following that leaf hid the node
 				// the user just navigated to.
 				const res = await branchTo(id, id);
-				if (res?.editorText) setPendingEdit(res.editorText);
+				// 切换语义可显式关草稿回填(地图「切换到此分支」:纯切分支,
+				// 若带着上一轮重答留下的草稿会让输入框停留在旧文本)。
+				if (res?.editorText && opts?.backfillDraft !== false) setPendingEdit(res.editorText);
 			});
 		},
 		// P1-12: the entry lookup inside reads id/timestamp — both immutable
@@ -1745,10 +1747,13 @@ export function ChatView({
 		[overviewEntries, requestJump],
 	);
 	// 「切换到此分支」:显式移动 leaf(session.branchAt,switchToNode 内含
-	// 运行中保护 + 跳转 + 草稿回填)。
+	// 运行中保护 + 跳转)。纯切换语义关 branchAt 的草稿回填(地图锚 = 轮末
+	// assistant/工具事件,本就不会回填;user 锚的重答回填属于「重新回答」,
+	// 不属于切换),并清掉上一轮重答可能留下的草稿。
 	const handleCanvasSwitchToBranch = useCallback(
 		(id: string): void => {
-			void switchToNode(id);
+			setPendingEdit(null);
+			void switchToNode(id, { backfillDraft: false });
 		},
 		[switchToNode],
 	);

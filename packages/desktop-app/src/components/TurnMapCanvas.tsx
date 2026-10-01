@@ -3,7 +3,7 @@ import { replaceTabs } from "@musepi/client-core/src/tool-render/util";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { timeFormatOptions } from "../lib/appearance";
-import { Icon } from "../vendor/oc-icons";
+import { Icon, type IconName } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
 import type { RoundDurationMap, TrajectoryEvent } from "./trajectory-data";
@@ -80,6 +80,35 @@ function jumpEventOf(group: TurnMapNode["group"]): TrajectoryEvent | undefined {
 	return group.events.find(e => e.entryId !== undefined);
 }
 
+/** 「切换到此分支」锚:轮末带 entryId 的事件。session.branchAt 对 user
+ *  消息定位到其父级(重答语义,还会回填草稿)——切换若以轮首 user 事件
+ *  为锚,leaf 落在该轮之前、转录停在"准备重答"态(实机回归 2026-10-02:
+ *  地图上怎么切换都显示旧分支 + 输入框出现草稿)。锚到轮末的
+ *  assistant/工具节点 = leaf 落在该分支末尾,转录显示"已切到该分支"。
+ *  导出供契约测试断言锚选择。 */
+export function turnEndEventOf(group: TurnMapNode["group"]): TrajectoryEvent | undefined {
+	for (let i = group.events.length - 1; i >= 0; i--) {
+		const ev = group.events[i];
+		if (ev?.entryId !== undefined) return ev;
+	}
+	return undefined;
+}
+
+/** 「在此分支重新回答」锚:轮首 user 事件(branchAt 的 user→parent 重答
+ *  语义正需要 user 消息;无 user 事件的轮回退轮末事件)。导出供契约测试。 */
+export function turnUserEventOf(group: TurnMapNode["group"]): TrajectoryEvent | undefined {
+	return group.events.find(e => e.kind === "user" && e.entryId !== undefined) ?? turnEndEventOf(group);
+}
+
+/** 事件卡 kind 图标(与轨迹检视器同色系,oc-icons)。 */
+const EVENT_KIND_ICON: Record<TrajectoryEvent["kind"], IconName> = {
+	user: "user",
+	assistant: "ai-agent",
+	tool: "hammer",
+	advisor: "sparkling",
+	system: "terminal",
+};
+
 /** token 数缩写(1.2k 形态;TUI /trace 信息密度,GUI 排版)。 */
 function compactTokens(n: number): string {
 	if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
@@ -106,9 +135,12 @@ export const TmNodeCard = memo(function TmNodeCard({
 	isExpanded,
 	searchDim,
 	searchHit,
+	selectedEventId,
 	onToggle,
 	onJump,
+	onSelectEvent,
 	onJumpEvent,
+	onEventMenu,
 	onMenu,
 	onHover,
 }: {
@@ -118,10 +150,16 @@ export const TmNodeCard = memo(function TmNodeCard({
 	isExpanded: boolean;
 	searchDim: boolean;
 	searchHit: boolean;
+	/** 当前选中的轮内事件卡 id(单击选中态,无则 null)。 */
+	selectedEventId: string | null;
 	onToggle(turn: number): void;
 	onJump(node: TurnMapNode): void;
-	/** 泳道事件行点击:跳到对话视图该 entry(与双击同通道,entry 级粒度)。 */
+	/** 事件卡单击:选中(不跳转)。 */
+	onSelectEvent(ev: TrajectoryEvent): void;
+	/** 事件卡双击:跳到对话视图该 entry(与卡面双击同通道,entry 级粒度)。 */
 	onJumpEvent(ev: TrajectoryEvent): void;
+	/** 事件卡右键:以该事件为锚的上下文菜单(不冒泡到轮卡)。 */
+	onEventMenu(node: TurnMapNode, ev: TrajectoryEvent, x: number, y: number): void;
 	onMenu(node: TurnMapNode, x: number, y: number): void;
 	onHover(node: TurnMapNode | null): void;
 }): ReactNode {
@@ -187,14 +225,23 @@ export const TmNodeCard = memo(function TmNodeCard({
 							return (
 								<div
 									key={ev.id}
-									className={`tm-lane-row tm-lane-row--${ev.kind}${ev.entryId ? " tm-lane-row--link" : ""}`}
+									className={`tm-lane-row tm-lane-row--${ev.kind}${ev.entryId ? " tm-lane-row--link" : ""}${selectedEventId === ev.id ? " tm-lane-row--selected" : ""}`}
 									onClick={e => {
+										e.stopPropagation();
+										onSelectEvent(ev);
+									}}
+									onDoubleClick={e => {
 										// 定位到对话视图该事件;不冒泡到卡面(否则触发折叠)。
 										e.stopPropagation();
 										if (ev.entryId) onJumpEvent(ev);
 									}}
+									onContextMenu={e => {
+										e.preventDefault();
+										e.stopPropagation();
+										onEventMenu(n, ev, e.clientX, e.clientY);
+									}}
 								>
-									<span className="tm-lane-dot" />
+									<Icon name={EVENT_KIND_ICON[ev.kind]} className="tm-lane-icon" />
 									<span className="tm-lane-title" title={args ?? ev.body ?? ev.title}>
 										{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}
 									</span>
@@ -268,9 +315,10 @@ export function TurnMapCanvas({
 	loading?: boolean;
 	/** 双击/右键跳转:跳回对话并定位该轮(父层切回 chat + requestJump)。 */
 	onJumpToEntry?: (entryId: string) => void;
-	/** 切换到此分支:移动会话叶子到该轮(session.branchAt,显式树操作)。 */
+	/** 切换到此分支:移动会话叶子到该分支末尾(session.branchAt,显式
+	 *  树操作;锚由内部解析到轮末事件,避免 user→parent 重答语义)。 */
 	onSwitchToBranch?: (entryId: string) => void;
-	/** 重答该轮(锚 = 轮首事件 entryId)。 */
+	/** 重答该轮(锚 = 轮首 user 事件 entryId)。 */
 	onBranchTo?: (entryId: string) => void;
 	/** 从该轮分叉新会话。 */
 	onForkAt?: (entryId: string) => void;
@@ -283,8 +331,15 @@ export function TurnMapCanvas({
 	const singleClickTimer = useRef<number | undefined>(undefined);
 	// 折叠/展开状态机(会话内内存态,不进 URL/持久化):集合内 = 展开泳道。
 	const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
-	// 右键菜单。
-	const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: TurnMapNode | null } | null>(null);
+	// 右键菜单(node = 轮卡;event = 事件卡——事件级右键以该事件为锚)。
+	const [ctxMenu, setCtxMenu] = useState<{
+		x: number;
+		y: number;
+		node: TurnMapNode | null;
+		event: TrajectoryEvent | null;
+	} | null>(null);
+	// 事件卡选中态(单击选中,双击跳转;画布空白点按清除)。
+	const [selectedEvent, setSelectedEvent] = useState<{ turn: number; id: string } | null>(null);
 	// 搜索命中轮高亮。
 	const [searchQuery, setSearchQuery] = useState("");
 	// 悬停浮卡(轮首消息全文 + 首末时刻)。
@@ -460,6 +515,8 @@ export function TurnMapCanvas({
 			const target = e.target as HTMLElement;
 			if (target.closest(".tm-node, .tm-hover, .tm-topbar, .tm-nav, .tm-zoom, .tm-search, .gui-context-menu"))
 				return;
+			// 空白点按:清除事件卡选中态。
+			setSelectedEvent(null);
 			dragRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false };
 			setDragging(true);
 			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -509,7 +566,7 @@ export function TurnMapCanvas({
 		},
 		[onJumpToEntry],
 	);
-	// 泳道事件行单击 = 同通道的 entry 级跳转(卡面双击/右键菜单共用
+	// 事件卡双击 = 同通道的 entry 级跳转(卡面双击/右键菜单共用
 	// onJumpToEntry,父层切回对话 + requestJump;不触发折叠切换)。
 	const jumpToEvent = useCallback(
 		(ev: TrajectoryEvent) => {
@@ -517,9 +574,16 @@ export function TurnMapCanvas({
 		},
 		[onJumpToEntry],
 	);
-	// 节点右键菜单(stable,供 memo 卡引用)。
+	// 事件卡单击 = 选中(纯视觉态,不跳转)。
+	const selectEvent = useCallback((ev: TrajectoryEvent) => {
+		setSelectedEvent(prev => (prev?.id === ev.id ? null : { turn: ev.turn, id: ev.id }));
+	}, []);
+	// 节点右键菜单(stable,供 memo 卡引用);事件卡右键带事件锚。
 	const openNodeMenu = useCallback((node: TurnMapNode, x: number, y: number) => {
-		setCtxMenu({ x, y, node });
+		setCtxMenu({ x, y, node, event: null });
+	}, []);
+	const openEventMenu = useCallback((node: TurnMapNode, ev: TrajectoryEvent, x: number, y: number) => {
+		setCtxMenu({ x, y, node, event: ev });
 	}, []);
 
 	// 顶栏批量折叠/展开 + 方向切换。
@@ -540,14 +604,24 @@ export function TurnMapCanvas({
 		});
 	}, []);
 
-	// 右键菜单:节点 = 跳转/切换分支/重答/分叉;空白 = 适配视图。
-	// 语义:跳转 = 纯导航(不动 leaf);切换到此分支/重答/分叉 = 树操作
-	// (父层已套运行中保护)。
+	// 右键菜单:节点/事件卡 = 跳转/切换分支/重答/分叉;空白 = 适配视图。
+	// 语义:跳转 = 纯导航(不动 leaf);切换到此分支 = leaf 落到该分支
+	// 末尾(轮末事件锚,user 事件会触发重答语义故不换锚);重答 = 轮首
+	// user 事件锚(branchAt user→parent + 草稿回填正是重答契约);分叉 =
+	// 以点选事件为锚复制新会话。树操作父层已套运行中保护。
 	const ctxItems = useMemo<ContextMenuItem[]>(() => {
 		if (!ctxMenu) return [];
 		if (ctxMenu.node !== null) {
 			const node = ctxMenu.node;
-			const ev = jumpEventOf(node.group);
+			const group = node.group;
+			// 跳转/分叉锚 = 点选事件本身;轮卡右键 = 轮首事件。
+			const ev = ctxMenu.event ?? jumpEventOf(group);
+			// 切换锚:事件卡右键点到 user 事件也切到轮末(切换 ≠ 重答);
+			// assistant/工具事件 = 该事件自身(从该点继续)。
+			const switchEv =
+				(!ctxMenu.event || ctxMenu.event.kind === "user" ? turnEndEventOf(group) : ctxMenu.event) ?? ev;
+			// 重答锚:轮首 user 事件(与点选哪个事件无关——重答的对象是这轮)。
+			const reanswerEv = turnUserEventOf(group) ?? ev;
 			const items: ContextMenuItem[] = [];
 			if (ev?.entryId && onJumpToEntry) {
 				items.push({
@@ -557,20 +631,20 @@ export function TurnMapCanvas({
 					onSelect: () => onJumpToEntry(ev.entryId!),
 				});
 			}
-			if (ev?.entryId && onSwitchToBranch) {
+			if (switchEv?.entryId && onSwitchToBranch) {
 				items.push({
 					label: t("map switch to branch"),
 					description: t("map switch to branch desc"),
 					icon: "git-merge",
-					onSelect: () => onSwitchToBranch(ev.entryId!),
+					onSelect: () => onSwitchToBranch(switchEv.entryId!),
 				});
 			}
-			if (ev?.entryId && onBranchTo) {
+			if (reanswerEv?.entryId && onBranchTo) {
 				items.push({
 					label: t("branch re-answer here"),
 					description: t("context branch desc"),
 					icon: "git-branch",
-					onSelect: () => onBranchTo(ev.entryId!),
+					onSelect: () => onBranchTo(reanswerEv.entryId!),
 				});
 			}
 			if (ev?.entryId && onForkAt) {
@@ -672,7 +746,7 @@ export function TurnMapCanvas({
 			onPointerCancel={onPointerUp}
 			onContextMenu={e => {
 				e.preventDefault();
-				setCtxMenu({ x: e.clientX, y: e.clientY, node: null });
+				setCtxMenu({ x: e.clientX, y: e.clientY, node: null, event: null });
 			}}
 			data-dragging={dragging || undefined}
 		>
@@ -860,9 +934,12 @@ export function TurnMapCanvas({
 								isExpanded={expanded.has(n.group.turn)}
 								searchDim={hasSearch && searchMatchTurns !== null && !searchMatchTurns.has(n.group.turn)}
 								searchHit={hasSearch && (searchMatchTurns?.has(n.group.turn) ?? false)}
+								selectedEventId={selectedEvent?.turn === n.group.turn ? selectedEvent.id : null}
 								onToggle={handleClick}
 								onJump={handleDblClick}
+								onSelectEvent={selectEvent}
 								onJumpEvent={jumpToEvent}
+								onEventMenu={openEventMenu}
 								onMenu={openNodeMenu}
 								onHover={setHoverNode}
 							/>
