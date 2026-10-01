@@ -6820,6 +6820,10 @@ export class DaemonServer {
 			case "fs.mkdir": {
 				return this.#services.get<FileService>("files").mkdir((params ?? {}) as { cwd?: string; path?: string });
 			}
+			case "fs.stat": {
+				// 只读存在性探测（项目列表幽灵目录清理）——实现归 FileService。
+				return this.#services.get<FileService>("files").stat((params ?? {}) as { path?: string });
+			}
 			case "fs.rename": {
 				return this.#services
 					.get<FileService>("files")

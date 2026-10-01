@@ -3368,6 +3368,7 @@ function AppInner(): ReactNode {
 							nodes={tree}
 							sessionMeta={sessionMeta}
 							selectedId={selectedId}
+							rpc={rpc ?? undefined}
 							onSelect={selectSession}
 							onNewSession={startNewTask}
 							status={status === "open" ? "open" : "closed"}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
+import type { RpcClient } from "../lib/rpc";
 import { shortcutLabel } from "../lib/shortcuts";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { Icon } from "../vendor/oc-icons";
@@ -71,6 +72,7 @@ export function SessionSidebar({
 	onToggleUnread,
 	onImportSessions,
 	modeCatalog,
+	rpc,
 }: {
 	nodes: SessionListNode[];
 	/** session.list metadata (cwd/model/status) keyed by id — archive folder
@@ -141,6 +143,9 @@ export function SessionSidebar({
 	 *  picture-in-picture mini chat window (Electron); non-Electron hosts
 	 *  should fall back to opening the session in place. */
 	onOpenMiniChat?(sessionId: string): void;
+	/** Daemon RPC client — the projects-tab ghost sweep probes each persisted
+	 *  folder with fs.stat; absent (non-Electron dev hosts) the sweep skips. */
+	rpc?: RpcClient;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -425,6 +430,33 @@ export function SessionSidebar({
 			return missing.length === 0 ? prev : [...prev, ...missing];
 		});
 	}, [sessionMeta, dismissedProjects]);
+	// Ghost sweep (projects tab): the persisted list accumulates folders seeded
+	// from session cwds over time — deleted/test workspaces (Temp\daemon-viewkey-*)
+	// would linger forever even after the daemon pruned its own rows. Probe each
+	// known path with fs.stat and drop the ones the disk no longer has, together
+	// with their collapse/tombstone state. Runs per list change; a sweep that
+	// removes nothing leaves state untouched, so the effect settles after at
+	// most one removal round.
+	useEffect(() => {
+		if (!rpc || projects.length === 0) return;
+		let cancelled = false;
+		void Promise.all(
+			projects.map(p => rpc.request<{ exists?: boolean }>("fs.stat", { path: p }).catch(() => null)),
+		).then(results => {
+			if (cancelled) return;
+			const gone = new Set<string>();
+			results.forEach((r, i) => {
+				if (r && r.exists === false) gone.add(projects[i]!);
+			});
+			if (gone.size === 0) return;
+			setProjects(prev => prev.filter(p => !gone.has(p)));
+			setCollapsedProjects(prev => prev.filter(p => !gone.has(p)));
+			setDismissedProjects(prev => prev.filter(p => !gone.has(p)));
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, projects]);
 	// The header's session ⋯ menu (and the task center) can archive sessions —
 	// useArchivedSessions subscribes to the shared store, so this component's
 	// copy follows every writer without a reload.

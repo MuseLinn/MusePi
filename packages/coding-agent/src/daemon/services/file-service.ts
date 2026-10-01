@@ -12,7 +12,8 @@ import type { DaemonService } from "./types";
  *
  * 能力缝声明（M2-2.4）：
  * - 输入：RPC `fs.read` / `fs.readBytes` / `fs.write` / `fs.mkdir` /
- *   `fs.rename` / `fs.delete`（GUI 文件面板 + 附件）、`workspace.tree`
+ *   `fs.rename` / `fs.delete`（GUI 文件面板 + 附件）、`fs.stat`（只读存在性
+ *   探测，侧栏项目列表幽灵清理）、`workspace.tree`
  *   （结构化工作区树）、`index.search`（工作区文件内容索引）。
  * - 输出：全部为软错误约定（`{ error }` / `{ content: null }`），与
  *   git.* 一致，不抛进 JSON-RPC；workspace.tree 返回扁平 entries +
@@ -90,6 +91,7 @@ export class FileService implements DaemonService {
 		"fs.read": "read",
 		"fs.readBytes": "readBytes",
 		"fs.rename": "rename",
+		"fs.stat": "stat",
 		"fs.write": "write",
 		"workspace.tree": "tree",
 		"index.search": "searchIndex",
@@ -146,6 +148,20 @@ export class FileService implements DaemonService {
 		const p = params ?? {};
 		if (!p.cwd || !p.path) return { error: "missing cwd/path" };
 		return createWorkspaceDir(p.cwd, p.path);
+	}
+
+	/** RPC fs.stat：只读存在性探测（侧栏项目列表的幽灵目录清理用）——
+	 *  任何错误（不存在 / 无权限 / 参数缺失）一律归一为 exists:false，
+	 *  绝不抛错；调用方据 exists 过滤列表，探测本身无副作用。 */
+	stat(params: { path?: string }): { exists: boolean; isDirectory: boolean } {
+		const p = params ?? {};
+		if (!p.path) return { exists: false, isDirectory: false };
+		try {
+			const st = fs.statSync(p.path);
+			return { exists: true, isDirectory: st.isDirectory() };
+		} catch {
+			return { exists: false, isDirectory: false };
+		}
 	}
 
 	rename(params: { cwd?: string; from?: string; to?: string }): FsOpResult | { error: string } {
