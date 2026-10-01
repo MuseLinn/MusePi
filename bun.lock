@@ -17,6 +17,7 @@
         "sherpa-onnx-node": "1.13.2",
       },
       "devDependencies": {
+        "@babel/parser": "catalog:",
         "@biomejs/biome": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
