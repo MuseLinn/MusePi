@@ -29,7 +29,7 @@ import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
 import { getAgentDir, getSessionsDir, logger, prompt } from "@musepi/pi-utils";
-import type { SessionEntry, SessionHeader, SessionState, WireMessage } from "@musepi/pi-wire";
+import type { SessionEntry, WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -326,55 +326,14 @@ function extractSnapshotText(content: unknown): string {
 }
 
 /**
- * Project an SDK transcript (jsonl of final AgentEvents, first line a
- * `session` header) into the snapshot shape the GUI consumes. The daemon
- * journal replays streaming events; persisted transcripts carry final
- * `message` rows instead, so this mirrors the materialized view's message
- * projection rather than replaying through it.
+ * Project an SDK transcript (jsonl of final entries, `session` header line,
+ * optional leading `title` slot line) into the session-snapshot shape.
+ * Canonical implementation lives in ./jsonl-snapshot (P0-5: full record
+ * families preserved + view-key rekeying — one copy, two call sites).
  */
-async function snapshotFromJsonl(file: string, sessionId: string): Promise<Static<typeof sessionSnapshot>> {
-	const text = await fs.promises.readFile(file, "utf8");
-	const entries: SessionEntry[] = [];
-	let header: SessionHeader | undefined;
-	let cursor = 0;
-	for (const line of text.split("\n")) {
-		if (!line.trim()) continue;
-		let rec: Record<string, unknown>;
-		try {
-			rec = JSON.parse(line) as Record<string, unknown>;
-		} catch {
-			continue;
-		}
-		if (rec.type === "session") {
-			header = rec as unknown as SessionHeader;
-			continue;
-		}
-		if (rec.type === "message" && rec.message && typeof rec.message === "object") {
-			const id = typeof rec.id === "string" ? rec.id : `msg-${cursor}`;
-			const parentId = typeof rec.parentId === "string" ? rec.parentId : null;
-			const ts =
-				typeof rec.timestamp === "string"
-					? rec.timestamp
-					: new Date((rec.message as { timestamp?: unknown }).timestamp as number).toISOString();
-			entries.push({ type: "message", id, parentId, timestamp: ts, message: rec.message as WireMessage });
-			cursor += 1;
-		}
-	}
-	const cwd = header && typeof header.cwd === "string" ? header.cwd : "";
-	const state: SessionState = {
-		isStreaming: false,
-		queuedMessageCount: 0,
-		cwd,
-		participants: [],
-	};
-	return {
-		header: header ?? { type: "session", id: sessionId, timestamp: "", cwd },
-		entries,
-		state,
-		agents: [],
-		cursor,
-	};
-}
+import { snapshotFromJsonl } from "./jsonl-snapshot";
+
+export { snapshotFromJsonl };
 
 import type {
 	ExtensionNotificationMessage,
@@ -1823,7 +1782,10 @@ export class DaemonSessionHost {
 				const { resolveResumableSession } = await import("../session/session-listing");
 				const match = await resolveResumableSession(sessionId, this.#options.cwd ?? "");
 				if (match) {
-					const projected = await snapshotFromJsonl(match.session.path, sessionId);
+					// cursor = journal tail seq (the GUI seeds its M1.4 watermark
+					// from it) — never the entry count; an entry-count cursor
+					// would drop every live record as a "replay".
+					const projected = await snapshotFromJsonl(match.session.path, sessionId, journal.tailSeq);
 					view = MaterializedView.fromSnapshot(sessionId, match.session.cwd || cwd, projected);
 				}
 			}
@@ -2693,8 +2655,7 @@ export class DaemonSessionHost {
 		const { resolveResumableSession } = await import("../session/session-listing");
 		const match = await resolveResumableSession(sessionId, this.#options.cwd ?? "");
 		if (!match) throw new Error(`Unknown session: ${sessionId}`);
-		const fallback = await snapshotFromJsonl(match.session.path, sessionId);
-		fallback.cursor = tail;
+		const fallback = await snapshotFromJsonl(match.session.path, sessionId, tail);
 		return fallback;
 	}
 

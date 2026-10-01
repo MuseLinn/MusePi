@@ -38,8 +38,6 @@ import { $env, getAgentDir, getConfigRootDir, getSessionsDir, logger, prompt, VE
 import { interceptUnhandledRejections } from "@musepi/pi-utils/postmortem";
 import type {
 	SessionEntry,
-	SessionHeader,
-	SessionState,
 	SttModelRow,
 	SttModelStatusResponse,
 	TtsModelRow,
@@ -47,7 +45,7 @@ import type {
 	AgentEvent as WireAgentEvent,
 	WireMessage,
 } from "@musepi/pi-wire";
-import { messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
+import { messageKey } from "@musepi/sdk";
 import { YAML } from "bun";
 import { reset as resetCapabilities } from "../capability";
 import {
@@ -377,55 +375,12 @@ function extractSnapshotText(content: unknown): string {
 }
 
 /**
- * Project an SDK transcript (jsonl of final AgentEvents, first line a
- * `session` header) into the snapshot shape the GUI consumes. The daemon
- * journal replays streaming events; persisted transcripts carry final
- * `message` rows instead, so this mirrors the materialized view's message
- * projection rather than replaying through it.
+ * Project an SDK transcript (jsonl of final entries, `session` header line,
+ * optional leading `title` slot line) into the session-snapshot shape.
+ * Canonical implementation lives in ./jsonl-snapshot (P0-5: full record
+ * families preserved + view-key rekeying — one copy, two call sites).
  */
-async function snapshotFromJsonl(file: string, sessionId: string): Promise<Static<typeof sessionSnapshot>> {
-	const text = await fs.promises.readFile(file, "utf8");
-	const entries: SessionEntry[] = [];
-	let header: SessionHeader | undefined;
-	let cursor = 0;
-	for (const line of text.split("\n")) {
-		if (!line.trim()) continue;
-		let rec: Record<string, unknown>;
-		try {
-			rec = JSON.parse(line) as Record<string, unknown>;
-		} catch {
-			continue;
-		}
-		if (rec.type === "session") {
-			header = rec as unknown as SessionHeader;
-			continue;
-		}
-		if (rec.type === "message" && rec.message && typeof rec.message === "object") {
-			const id = typeof rec.id === "string" ? rec.id : `msg-${cursor}`;
-			const parentId = typeof rec.parentId === "string" ? rec.parentId : null;
-			const ts =
-				typeof rec.timestamp === "string"
-					? rec.timestamp
-					: new Date((rec.message as { timestamp?: unknown }).timestamp as number).toISOString();
-			entries.push({ type: "message", id, parentId, timestamp: ts, message: rec.message as WireMessage });
-			cursor += 1;
-		}
-	}
-	const cwd = header && typeof header.cwd === "string" ? header.cwd : "";
-	const state: SessionState = {
-		isStreaming: false,
-		queuedMessageCount: 0,
-		cwd,
-		participants: [],
-	};
-	return {
-		header: header ?? { type: "session", id: sessionId, timestamp: "", cwd },
-		entries,
-		state,
-		agents: [],
-		cursor,
-	};
-}
+export { snapshotFromJsonl } from "./jsonl-snapshot";
 
 import { ModelsConfigFile } from "../config/models-config";
 import type { StoredAuthCredential } from "../session/auth-storage";
