@@ -131,6 +131,12 @@ export const sessionSnapshot = Type.Object({
 	/** Completed-round totals: [final assistant msg ts, duration ms] pairs,
 	 *  recorded at agent_end (survive the persisted-snapshot round-trip). */
 	roundDurations: Type.Optional(Type.Array(Type.Tuple([Type.Integer(), Type.Integer()]))),
+	/** Topology revision of the entries list: bumped on push/prepend only,
+	 *  never on a content upsert (id/parentId are immutable there). GUI
+	 *  topology derivations (branch index, leaf walk, turn tree) gate on
+	 *  this so streaming token frames skip O(n) rebuilds. Absent on
+	 *  snapshots persisted by older builds — treat as undefined-safe. */
+	structureRev: Type.Optional(Type.Integer({ minimum: 0 })),
 });
 
 export type SessionSnapshot = {
@@ -140,4 +146,7 @@ export type SessionSnapshot = {
 	agents: AgentSnapshot[];
 	cursor: number;
 	roundDurations?: [number, number][];
+	/** See the schema field above. Optional: older persisted snapshots
+	 *  predate the counter. */
+	structureRev?: number;
 };

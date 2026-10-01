@@ -74,6 +74,14 @@ export interface GuiSessionState {
 	/** Frozen per-round totals (final assistant msg ts → ms) — each completed
 	 *  round's "已工作 X 秒" stays under its final message. */
 	roundDurations: ReadonlyMap<number, number>;
+	/** Topology revision of `entries` (MaterializedView.structureRev):
+	 *  bumps when the entry LIST shape changes (push/prepend), never on a
+	 *  content upsert. Topology memos (branch index, leaf walk, turn tree)
+	 *  gate on this so streaming token frames skip O(n) rebuilds. The
+	 *  optimistic echo row is a store-layer append outside this counter —
+	 *  it renders parentless and always stays visible, so the gap is
+	 *  harmless. */
+	structureRev?: number;
 }
 
 /** One pending tool approval awaiting a GUI decision. */
@@ -558,6 +566,7 @@ export class GuiSessionStore {
 			approvals: [...this.#approvals.values()],
 			recap: this.#recap,
 			roundDurations: this.#roundDurations,
+			structureRev: snap.structureRev,
 		};
 	}
 

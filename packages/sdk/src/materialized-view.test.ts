@@ -329,3 +329,95 @@ describe("MaterializedView round durations (agent_end freeze)", () => {
 		expect(view.snapshot().roundDurations ?? []).toHaveLength(0);
 	});
 });
+
+describe("MaterializedView structureRev / snapshot reference suppression (P1-12)", () => {
+	// 失败模式:GUI 在流式 token 帧内重跑全部 O(n) 拓扑派生(分支索引、
+	// 叶子链、画布导航条、消息树),长会话每帧 ≥5 次全量遍历;topology
+	// memo 若挂在 entries 引用上,引用抑制又会冻住流式行更新。
+	test("content upsert bumps entriesRev but NOT structureRev; snapshot emits a fresh array carrying the new entry object", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(1000, "第一帧"));
+		const revBefore = view.snapshot().structureRev;
+
+		// 同一 key 的内容 upsert(message_update 流式帧):id/parentId 不变。
+		view.apply({ type: "message_update", message: { role: "user", content: "第二帧", timestamp: 1000 } });
+
+		const snap = view.snapshot();
+		expect(snap.structureRev).toBe(revBefore);
+		const entry = snap.entries[0];
+		expect(entry.type).toBe("message");
+		if (entry.type === "message") {
+			expect((entry.message as { content?: unknown }).content).toBe("第二帧");
+		}
+	});
+
+	test("new message push bumps BOTH revisions", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(1000));
+		const before = view.snapshot().structureRev ?? 0;
+		view.apply(userMsg(2000));
+		const snap = view.snapshot();
+		expect(snap.structureRev).toBe(before + 1);
+		expect(snap.entries.map(e => e.id).join(",")).toBe("user:1000,user:2000");
+	});
+
+	test("prependEntries bumps both revisions (list shape changed)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(1000));
+		const before = view.snapshot().structureRev ?? 0;
+		view.prependEntries(oldEntries(["old-1"], 1));
+		const snap = view.snapshot();
+		expect(snap.structureRev).toBe(before + 1);
+		expect(snap.entries[0]?.id).toBe("old-1");
+	});
+
+	test("frames that touch no entry (turn_start/agent lifecycle) reuse the snapshot entries reference", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(1000));
+		const first = view.snapshot();
+		const ref = first.entries;
+
+		view.apply({ type: "turn_start" } as AgentEvent);
+		view.apply({ type: "agent_start" } as AgentEvent);
+		view.apply({ type: "agent_end" } as AgentEvent);
+
+		const second = view.snapshot();
+		// 引用抑制:非内容帧必须拿到同一数组引用,GUI memo 层才不抖动。
+		expect(second.entries).toBe(ref);
+		expect(second.cursor).toBe(first.cursor + 3);
+	});
+
+	test("roundDurations array is reference-stable until a round completes", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		const t0 = Date.now();
+		view.apply(userMsg(t0));
+		view.apply({
+			type: "message_end",
+			message: { role: "assistant", content: [], timestamp: t0 + 1000 },
+		} as unknown as AgentEvent);
+		view.apply({ type: "agent_end" } as AgentEvent);
+		const withRound = view.snapshot();
+		expect(withRound.roundDurations).toHaveLength(1);
+
+		// 后续非 round 帧复用同一引用。
+		view.apply({ type: "turn_start" } as AgentEvent);
+		expect(view.snapshot().roundDurations).toBe(withRound.roundDurations);
+	});
+
+	test("snapshot round-trips through fromSnapshot (old persisted snapshots without structureRev stay loadable)", () => {
+		const view = MaterializedView.replay("s1", "/tmp", []);
+		view.apply(userMsg(1000));
+		const snap = view.snapshot();
+
+		// 模拟旧版本持久化:没有 structureRev 字段。
+		const legacy = JSON.parse(JSON.stringify(snap)) as Record<string, unknown>;
+		delete legacy.structureRev;
+		const restored = MaterializedView.fromSnapshot("s1", "/tmp", legacy);
+		expect(restored).not.toBeNull();
+		// 恢复后的视图照常工作:新 push 仍 bump 两个版本号。
+		restored?.apply(userMsg(2000));
+		const restoredSnap = restored?.snapshot();
+		expect(restoredSnap?.entries.map(e => e.id).join(",")).toBe("user:1000,user:2000");
+		expect(typeof restoredSnap?.structureRev).toBe("number");
+	});
+});

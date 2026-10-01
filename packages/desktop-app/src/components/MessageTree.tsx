@@ -15,6 +15,11 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../vendor/oc-icons";
 
+/** Empty tree for the closed panel (P1-12): the component stays mounted,
+ *  but with the panel closed the tree/filter/full render must not run on
+ *  every streaming frame. */
+const EMPTY_TURN_TREE: TurnNode[] = [];
+
 interface TurnNode {
 	entry: SessionEntry;
 	children: TurnNode[];
@@ -178,8 +183,15 @@ export function MessageTreeButton({
 	const inputRef = useRef<HTMLInputElement | null>(null);
 	const toggleRef = useRef<HTMLButtonElement | null>(null);
 	const panelRef = useRef<HTMLDivElement | null>(null);
-	const tree = useMemo(() => buildTurnTree(entries), [entries]);
-	const filtered = useMemo(() => filterTree(applyTreeFilter(tree, filterMode), q), [tree, filterMode, q]);
+	// P1-12: gated on `open` — the panel is permanently mounted, and with it
+	// closed the full O(n) buildTurnTree + filterTree ran on EVERY streaming
+	// frame (entries identity changes per content upsert). Closed panel
+	// renders nothing, so the empty tree is behaviourally identical.
+	const tree = useMemo(() => (open ? buildTurnTree(entries) : EMPTY_TURN_TREE), [open, entries]);
+	const filtered = useMemo(
+		() => (open ? filterTree(applyTreeFilter(tree, filterMode), q) : EMPTY_TURN_TREE),
+		[open, tree, filterMode, q],
+	);
 	// 当前位置链(TUI currentLeafId/activePath parity):优先用父组件传入的
 	// activePathIds(与画布同源,反映 branchAt 后的真实 leaf 路径);未提供时
 	// 回退到"末子节点下行"推导的线性尾部链。

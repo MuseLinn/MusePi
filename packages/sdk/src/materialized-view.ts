@@ -82,6 +82,25 @@ export class MaterializedView {
 	 *  as {@link #messages}: a start/end pair for one note yields one entry. */
 	readonly #customMessages = new Map<string, CustomMessageEntry>();
 	#entries: SessionEntry[] = [];
+	/** Topology revision: bumped ONLY when the entry LIST shape changes
+	 *  (#entries.push / prependEntries) — never on a content upsert, where
+	 *  id/parentId are immutable on the replacement object. Consumers with
+	 *  O(n) topology derivations (branch index, leaf walk, canvas rail, turn
+	 *  tree) gate on this so a streaming token frame does not rebuild them. */
+	#structureRev = 0;
+	/** Any-change revision: bumped on EVERY entries mutation, including
+	 *  content upserts. snapshot() compares it against the cached emitted
+	 *  array's revision to reuse the reference across frames that touched
+	 *  nothing (turn_start/end, agent lifecycle) — downstream memo layers
+	 *  then stay quiet. Distinct from #structureRev by design. */
+	#entriesRev = 0;
+	/** Cached snapshot output arrays — see snapshot(). The cached reference
+	 *  is SHARED with previous snapshots: callers must treat the returned
+	 *  entries/roundDurations as immutable. */
+	#lastSnapshotEntries: SessionEntry[] | null = null;
+	#lastSnapshotEntriesRev = -1;
+	#lastSnapshotRoundDurations: [number, number][] | null = null;
+	#lastSnapshotRoundRev = -1;
 	#mainAgent: AgentSnapshot | null = null;
 	#isStreaming = false;
 	// Extra header fields (user-picked model/thinking/title for history
@@ -97,6 +116,10 @@ export class MaterializedView {
 	 *  round-trip, so the GUI recreated on a session switch still shows
 	 *  every completed round's "已工作/用时 X 秒". */
 	#roundDurations = new Map<number, number>();
+	/** Bumped on every #roundDurations mutation (agent_end freeze,
+	 *  seedRoundDurations) so snapshot() can reuse the emitted array's
+	 *  reference when no round completed since the last snapshot. */
+	#roundDurationsRev = 0;
 
 	constructor(
 		sessionId: string,
@@ -122,6 +145,7 @@ export class MaterializedView {
 	 *  durations — rounds that predate the operation keep their totals). */
 	seedRoundDurations(pairs: readonly (readonly [number, number])[] | undefined): void {
 		if (!pairs) return;
+		this.#roundDurationsRev += 1;
 		for (const pair of pairs) {
 			if (Array.isArray(pair) && pair.length === 2 && Number.isInteger(pair[0]) && Number.isInteger(pair[1])) {
 				this.#roundDurations.set(pair[0] as number, pair[1] as number);
@@ -207,6 +231,8 @@ export class MaterializedView {
 					thinkingLevel: event.thinkingLevel ?? null,
 				};
 				this.#entries.push(entry);
+				this.#structureRev += 1;
+				this.#entriesRev += 1;
 				break;
 			}
 			case "ttsr_triggered": {
@@ -223,6 +249,8 @@ export class MaterializedView {
 					details: { rules: event.rules },
 				};
 				this.#entries.push(entry);
+				this.#structureRev += 1;
+				this.#entriesRev += 1;
 				break;
 			}
 			case "irc_message": {
@@ -260,6 +288,8 @@ export class MaterializedView {
 				};
 				this.#customMessages.set(entry.id, entry);
 				this.#entries.push(entry);
+				this.#structureRev += 1;
+				this.#entriesRev += 1;
 				break;
 			}
 			case "agent_start": {
@@ -302,7 +332,10 @@ export class MaterializedView {
 					// span. Skewed rounds whose last event predates the anchor
 					// are skipped rather than frozen with garbage.
 					const rec = roundDurationRecord(this.#entries);
-					if (rec) this.#roundDurations.set(rec.turnStartMs, rec.durationMs);
+					if (rec) {
+						this.#roundDurations.set(rec.turnStartMs, rec.durationMs);
+						this.#roundDurationsRev += 1;
+					}
 				}
 				break;
 			}
@@ -339,6 +372,10 @@ export class MaterializedView {
 			this.#messages.set(key, updated);
 			const idx = this.#entries.indexOf(existing);
 			if (idx !== -1) this.#entries[idx] = updated;
+			// Content upsert: id/parentId unchanged — topology (#structureRev)
+			// stays put; only the array content moved, so the snapshot array
+			// must be re-emitted (new entry object inside).
+			this.#entriesRev += 1;
 			return;
 		}
 		const entry: MessageEntry = {
@@ -353,6 +390,8 @@ export class MaterializedView {
 		};
 		this.#messages.set(key, entry);
 		this.#entries.push(entry);
+		this.#structureRev += 1;
+		this.#entriesRev += 1;
 	}
 
 	/**
@@ -387,10 +426,15 @@ export class MaterializedView {
 			const idx = this.#entries.indexOf(existing);
 			if (idx !== -1) {
 				this.#entries[idx] = entry;
+				// Same-key replacement (start/end frame pair): same reasoning
+				// as #upsertMessage — content only, no topology change.
+				this.#entriesRev += 1;
 				return;
 			}
 		}
 		this.#entries.push(entry);
+		this.#structureRev += 1;
+		this.#entriesRev += 1;
 	}
 
 	/** Current cursor (= last applied event seq). */
@@ -427,6 +471,8 @@ export class MaterializedView {
 			else if (e.type === "custom_message") this.#customMessages.set(e.id, e);
 		}
 		this.#entries = [...fresh, ...this.#entries];
+		this.#structureRev += 1;
+		this.#entriesRev += 1;
 		return fresh[0]?.id ?? null;
 	}
 
@@ -445,7 +491,14 @@ export class MaterializedView {
 		return false;
 	}
 
-	/** SDK-contract snapshot. Cheap: no journal read. */
+	/** SDK-contract snapshot. Cheap: no journal read. The entries and
+	 *  roundDurations arrays are CACHED references: a frame that changed
+	 *  neither (turn_start/end, agent lifecycle, thinking changes that no
+	 *  consumer reads here) returns the SAME array identity as the previous
+	 *  snapshot, so downstream memo layers see no churn. Content upserts
+	 *  bump #entriesRev and get a fresh array carrying the new entry
+	 *  objects — streamed rows keep updating. Callers must not mutate the
+	 *  returned arrays. */
 	snapshot(): SessionSnapshot {
 		const state: SessionState = {
 			isStreaming: this.#isStreaming,
@@ -454,6 +507,14 @@ export class MaterializedView {
 			participants: [],
 		};
 		const agents = this.#mainAgent ? [this.#mainAgent] : [];
+		if (this.#lastSnapshotEntriesRev !== this.#entriesRev || this.#lastSnapshotEntries === null) {
+			this.#lastSnapshotEntries = [...this.#entries];
+			this.#lastSnapshotEntriesRev = this.#entriesRev;
+		}
+		if (this.#lastSnapshotRoundRev !== this.#roundDurationsRev || this.#lastSnapshotRoundDurations === null) {
+			this.#lastSnapshotRoundDurations = [...this.#roundDurations];
+			this.#lastSnapshotRoundRev = this.#roundDurationsRev;
+		}
 		return {
 			header: {
 				type: "session",
@@ -462,11 +523,12 @@ export class MaterializedView {
 				cwd: this.#cwd,
 				...this.#headerExtra,
 			},
-			entries: [...this.#entries],
+			entries: this.#lastSnapshotEntries,
 			state,
 			agents,
 			cursor: this.#cursor,
-			roundDurations: [...this.#roundDurations],
+			roundDurations: this.#lastSnapshotRoundDurations,
+			structureRev: this.#structureRev,
 		};
 	}
 }

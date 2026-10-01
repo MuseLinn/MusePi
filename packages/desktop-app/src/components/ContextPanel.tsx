@@ -19,7 +19,7 @@ import {
 } from "@musepi/client-core";
 import type { AgentSnapshot } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
 import { isElectron, openExternalUrl } from "../lib/electron";
@@ -212,9 +212,18 @@ export function ContextPanel({
 	// so the panel can name the session preset instead of flattening every
 	// non-goal/non-plan session into "默认模式".
 	const modes = snap?.state as SessionModes | null;
-	// Session stats: message count + wall-clock run time.
-	const messageCount = (snap?.entries ?? []).filter(e => e.type === "message").length;
-	const firstTs = (snap?.entries ?? []).find(e => typeof e.timestamp === "string")?.timestamp;
+	// Session stats: message count + wall-clock run time. P1-12: the count
+	// and the first timestamp only move when the entry LIST shape changes —
+	// a streaming content upsert replaces a message object in place — so
+	// the O(n) scan gates on structureRev instead of running on every
+	// streamed frame.
+	const { messageCount, firstTs } = useMemo(() => {
+		const entries = snap?.entries ?? [];
+		return {
+			messageCount: entries.filter(e => e.type === "message").length,
+			firstTs: entries.find(e => typeof e.timestamp === "string")?.timestamp,
+		};
+	}, [snap?.structureRev]);
 	const runMinutes =
 		typeof firstTs === "string" ? Math.max(0, Math.round((Date.now() - new Date(firstTs).getTime()) / 60000)) : 0;
 

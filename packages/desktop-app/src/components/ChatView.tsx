@@ -1163,26 +1163,29 @@ export function ChatView({
 	// navigateTree parity for assistant/toolResult nodes — continue from
 	// there with a fresh prompt); user messages truncate before the node
 	// and re-answer via the backfilled text.
-	const forkFromMessage = async (messageId: string, text?: string, includeTarget?: boolean): Promise<void> => {
-		if (!store) return;
-		// Tree-op guard (runTreeOp): forking while a run is in flight copies a
-		// mid-flight snapshot — confirm + stop + wait like the other tree ops.
-		await runTreeOp(async () => {
-			try {
-				const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
-					sessionId: store.sessionId,
-					messageId,
-					includeTarget,
-				});
-				if (res?.sessionId) {
-					await onForkSession?.(res.sessionId);
-					if (text) setPendingEdit(text);
+	const forkFromMessage = useCallback(
+		async (messageId: string, text?: string, includeTarget?: boolean): Promise<void> => {
+			if (!store) return;
+			// Tree-op guard (runTreeOp): forking while a run is in flight copies a
+			// mid-flight snapshot — confirm + stop + wait like the other tree ops.
+			await runTreeOp(async () => {
+				try {
+					const res = await rpc.request<{ sessionId: string; parentId: string }>("session.forkAt", {
+						sessionId: store.sessionId,
+						messageId,
+						includeTarget,
+					});
+					if (res?.sessionId) {
+						await onForkSession?.(res.sessionId);
+						if (text) setPendingEdit(text);
+					}
+				} catch {
+					// daemon rejected (unknown message/session) — keep as-is
 				}
-			} catch {
-				// daemon rejected (unknown message/session) — keep as-is
-			}
-		});
-	};
+			});
+		},
+		[rpc, store, runTreeOp, onForkSession],
+	);
 	// ── Layer-1 session-tree topology (nav unification, 2026-08-24) ────
 	// Children index over the view entries by parentId; the active path
 	// (breadcrumb + transcript filtering) walks from the leaf up.
@@ -1203,7 +1206,10 @@ export function ChatView({
 			else map.set(e.parentId, [row]);
 		}
 		return map;
-	}, [snap?.entries]);
+		// P1-12: gate on structureRev, not snap.entries — a streaming content
+		// upsert replaces the message object but never touches id/parentId, so
+		// the topology is unchanged. Deps stay deliberately narrow.
+	}, [snap?.structureRev]);
 	// Current leaf: explicit branch switch wins; otherwise the LAST entry
 	// (linear tip). Reset the override whenever the session changes.
 	const effectiveLeaf = useMemo(() => {
@@ -1214,7 +1220,11 @@ export function ChatView({
 		const last = entries[entries.length - 1];
 		const lastId = typeof last === "object" && last !== null ? (last as { id?: unknown }).id : undefined;
 		return currentLeafKey ?? (typeof lastId === "string" ? lastId : null);
-	}, [currentLeafKey, snap?.entries]);
+		// P1-12: structureRev covers the last entry's identity. The store's
+		// optimistic echo appends outside that counter — its row is parentless
+		// and always renders, so a stale leaf id for the sub-second echo
+		// window is invisible (see session-store.structureRev note).
+	}, [currentLeafKey, snap?.structureRev]);
 	// Walk root → leaf via parentId (breadcrumb path). `complete` records WHY the
 	// walk stopped — at a genuine root (an entry with no parentId — the topology
 	// is trustworthy) or on a parentId that is not in the loaded window (the
@@ -1231,7 +1241,10 @@ export function ChatView({
 		// (and trustworthy — nothing is cut).
 		if (currentLeafKey === "root") return EMPTY_TRUSTED_WALK;
 		return walkLeafPath(snap?.entries ?? [], effectiveLeaf);
-	}, [effectiveLeaf, currentLeafKey, snap?.entries]);
+		// P1-12: the parentId chain only changes when the entry list shape
+		// changes (structureRev); a content upsert preserves parentId on the
+		// replacement object.
+	}, [effectiveLeaf, currentLeafKey, snap?.structureRev]);
 	const leafPath = leafWalk.path;
 	// Map-mode prompt-rail focus request: the rail is navigation, not a branch
 	// change, so it hands the canvas a node to center + highlight.
@@ -1264,7 +1277,11 @@ export function ChatView({
 			activeIdx = turns.length - 1;
 		}
 		return { turns, activeIdx };
-	}, [snap?.entries, leafPath]);
+		// P1-12: the rail iterates the ACTIVE PATH's user turns — user message
+		// content is final at insert (assistant messages stream, users don't),
+		// so a content upsert can only stale the 90-char summary of a user
+		// note, never the turn set. Topology gate is sufficient.
+	}, [snap?.structureRev, leafPath]);
 	// Active path id set for transcript filtering (off-path entries collapse).
 	const activePathIds = useMemo(() => new Set(leafPath.map(p => p.id)), [leafPath]);
 	// Path handed to the tree/map/trajectory for dimming. With a cut chain the
@@ -1389,8 +1406,15 @@ export function ChatView({
 				if (res?.editorText) setPendingEdit(res.editorText);
 			});
 		},
+		// P1-12: the entry lookup inside reads id/timestamp — both immutable
+		// across content upserts — so structureRev (list shape) is the correct
+		// freshness gate, and it keeps this callback stable across streaming
+		// frames (it feeds the memo'd canvas cards via onSwitchToBranch). The
+		// eslint comment below predates the biome-only setup (biome's
+		// useExhaustiveDependencies is off) and is kept for editors running
+		// the eslint plugin.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[snap?.entries, runTreeOp, branchTo],
+		[snap?.structureRev, runTreeOp, branchTo],
 	);
 
 	// Lazy history backfill (kimi/DSH parity): the transcript fires this
@@ -1573,7 +1597,12 @@ export function ChatView({
 			overviewMergeRef.current = null;
 			return live;
 		}
-		const liveSig = live.map(e => e.id).join(" ");
+		// P1-12: the id SET is a pure function of (structureRev, length) —
+		// every id-affecting mutation (push/prepend/optimistic echo) moves
+		// one of the two, while a content upsert moves neither. The old
+		// per-frame `live.map(e => e.id).join(" ")` allocated an O(n)
+		// signature string on EVERY streaming frame just to key this cache.
+		const liveSig = `${snap?.structureRev ?? 0}:${live.length}`;
 		const cache = overviewMergeRef.current;
 		if (cache && cache.full === fullEntries && cache.liveSig === liveSig) return cache.result;
 		const base = fullEntries.filter(e => typeof e.id !== "string" || !e.id.startsWith("user:optimistic-"));
@@ -1588,7 +1617,7 @@ export function ChatView({
 		const result = extra.length > 0 ? [...base, ...extra] : base;
 		overviewMergeRef.current = { full: fullEntries, liveSig, result };
 		return result;
-	}, [fullEntries, snap?.entries]);
+	}, [fullEntries, snap?.entries, snap?.structureRev]);
 	// M1.11: data-driven TurnRail source — one lightweight record per turn
 	// (~120B). The rail no longer measures turn positions from the DOM: rows
 	// outside the transcript's render window don't exist to measure, which is
@@ -1653,6 +1682,53 @@ export function ChatView({
 			})();
 		},
 		[rpc, store, loadOlder],
+	);
+	// P1-12: stable identities for the canvas card memo (TmNodeCard): the
+	// previous inline arrows changed identity every ChatView render, which
+	// recreated TurnMapCanvas's internal useCallbacks (they list these as
+	// deps) and re-rendered every memo'd card on every streaming frame.
+	// 双击/右键跳转:回对话模式 + 定位该轮(纯导航,不动 leaf)。
+	const handleCanvasJumpToEntry = useCallback(
+		(entryId: string): void => {
+			const ts = overviewEntries.find(
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === entryId,
+			);
+			const t2 = typeof ts === "object" && ts !== null ? (ts as { timestamp?: unknown }).timestamp : null;
+			if (typeof t2 === "string") {
+				setViewMode("chat");
+				requestJump(t2);
+			}
+		},
+		[overviewEntries, requestJump],
+	);
+	// 「切换到此分支」:显式移动 leaf(session.branchAt,switchToNode 内含
+	// 运行中保护 + 跳转 + 草稿回填)。
+	const handleCanvasSwitchToBranch = useCallback(
+		(id: string): void => {
+			void switchToNode(id);
+		},
+		[switchToNode],
+	);
+	// 重答:分支到该轮并回填草稿(branchAt 定位在该轮本身,下一次发送即
+	// 重答;运行中保护在 runTreeOp)。
+	const handleCanvasBranchTo = useCallback(
+		(id: string): void => {
+			void runTreeOp(async () => {
+				const res = await branchTo(id, id);
+				if (res?.editorText) setPendingEdit(res.editorText);
+			});
+		},
+		[runTreeOp, branchTo],
+	);
+	const handleCanvasForkAt = useCallback(
+		(id: string): void => {
+			const entry = overviewEntries.find(
+				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
+			);
+			const isUser = entry?.type === "message" && entry.message.role === "user";
+			void forkFromMessage(id, undefined, !isUser);
+		},
+		[overviewEntries, forkFromMessage],
 	);
 	const turnsData = useMemo(
 		() => ({
@@ -2080,47 +2156,10 @@ export function ChatView({
 													roundDurations={snap?.roundDurations}
 													leafId={effectiveLeaf}
 													activePathIds={trustedPathIds}
-													onJumpToEntry={entryId => {
-														// 双击/右键跳转:回对话模式 + 定位该轮(纯导航,
-														// 不动 leaf)。
-														const ts = overviewEntries.find(
-															e =>
-																typeof e === "object" &&
-																e !== null &&
-																(e as { id?: unknown }).id === entryId,
-														);
-														const t2 =
-															typeof ts === "object" && ts !== null
-																? (ts as { timestamp?: unknown }).timestamp
-																: null;
-														if (typeof t2 === "string") {
-															setViewMode("chat");
-															requestJump(t2);
-														}
-													}}
-													onSwitchToBranch={id => {
-														// 「切换到此分支」:显式移动 leaf(session.branchAt,
-														// switchToNode 内含运行中保护 + 跳转 + 草稿回填)。
-														void switchToNode(id);
-													}}
-													onBranchTo={id => {
-														// 重答:分支到该轮并回填草稿(branchAt 定位在该轮
-														// 本身,下一次发送即重答;运行中保护在 runTreeOp)。
-														void runTreeOp(async () => {
-															const res = await branchTo(id, id);
-															if (res?.editorText) setPendingEdit(res.editorText);
-														});
-													}}
-													onForkAt={id => {
-														const entry = overviewEntries.find(
-															e =>
-																typeof e === "object" &&
-																e !== null &&
-																(e as { id?: unknown }).id === id,
-														);
-														const isUser = entry?.type === "message" && entry.message.role === "user";
-														void forkFromMessage(id, undefined, !isUser);
-													}}
+													onJumpToEntry={handleCanvasJumpToEntry}
+													onSwitchToBranch={handleCanvasSwitchToBranch}
+													onBranchTo={handleCanvasBranchTo}
+													onForkAt={handleCanvasForkAt}
 												/>
 											) : (
 												<>
