@@ -1618,6 +1618,19 @@ export function ChatView({
 		overviewMergeRef.current = { full: fullEntries, liveSig, result };
 		return result;
 	}, [fullEntries, snap?.entries, snap?.structureRev]);
+	// 激活路径过滤(概览面):回退/切分支后,时间线/统计只应呈现"当前这条分
+	// 支"的轮次——兄弟分支的轮属于树视图(地图/分支树保留全量淡显),不属于
+	// 会话在视内容。与 transcript 同一套 leaf-walk 契约;null = 拓扑不可信且
+	// 无 daemon 捎带路径 → 概览回退全量(旧行为)。
+	const pathEntries = useMemo(
+		() =>
+			filterVisibleEntries(overviewEntries, leafWalk, activePathIds, {
+				pinnedPathIds: pinnedPathIds ?? undefined,
+				pinnedToRoot: currentLeafKey === "root",
+			}),
+		[overviewEntries, leafWalk, activePathIds, currentLeafKey, pinnedPathIds],
+	);
+	const pathEntriesOrNull = leafWalk.complete || pinnedPathIds ? pathEntries : null;
 	// M1.11: data-driven TurnRail source — one lightweight record per turn
 	// (~120B). The rail no longer measures turn positions from the DOM: rows
 	// outside the transcript's render window don't exist to measure, which is
@@ -1657,6 +1670,23 @@ export function ChatView({
 		const extra = lastTs === null ? loadedTurns : loadedTurns.filter(t => t.timestamp > lastTs);
 		return extra.length > 0 ? [...daemonTurns, ...extra] : daemonTurns;
 	}, [daemonTurns, loadedTurns]);
+	// 分支在视:导航条只标激活路径上的轮次(兄弟分支的轮属于树视图,不在
+	// 当前这条会话里)。仅在本地拓扑可信(walk complete)时过滤——那时整条
+	// 路径都在加载窗内,过滤不丢轮;pinned 路径是尾窗截断集,按它过滤会把
+	// 窗口外更早的路径轮抹掉,而 rail 还肩负全量索引 + 向上翻页的职责。
+	const pathTurnIds = useMemo(() => {
+		if (!leafWalk.complete || !pathEntriesOrNull) return null;
+		const set = new Set<string>();
+		for (const e of pathEntriesOrNull) {
+			const id = (e as { id?: unknown }).id;
+			if (typeof id === "string") set.add(id);
+		}
+		return set;
+	}, [leafWalk.complete, pathEntriesOrNull]);
+	const railTurnsInPath = useMemo(
+		() => (pathTurnIds ? railTurns.filter(t => pathTurnIds.has(t.entryId)) : railTurns),
+		[railTurns, pathTurnIds],
+	);
 	// TurnRail jump dispatcher (defined here — after loadOlder, which a jump
 	// into the folded window pages through). The rail indexes the FULL session,
 	// so the target may sit above the loaded window: page older chunks until
@@ -1732,11 +1762,11 @@ export function ChatView({
 	);
 	const turnsData = useMemo(
 		() => ({
-			turns: railTurns,
+			turns: railTurnsInPath,
 			hasMoreAbove: store?.hasMore === true,
 			onRequestOlder: onLoadOlderStable,
 		}),
-		[railTurns, store?.hasMore, onLoadOlderStable],
+		[railTurnsInPath, store?.hasMore, onLoadOlderStable],
 	);
 	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
 	// ladder rungs are disabled in the composer's ThinkingSelector, and the
@@ -2618,6 +2648,7 @@ export function ChatView({
 									}}
 									leafId={effectiveLeaf}
 									activePathIds={trustedPathIds}
+									pathEntries={pathEntriesOrNull}
 									modeCatalog={modes}
 									onBranchTo={id => {
 										// Pin the clicked canvas node (see the trajectory

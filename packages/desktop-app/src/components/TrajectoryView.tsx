@@ -324,6 +324,11 @@ function TreeNodeRow({
 export function TrajectoryView({
 	entries,
 	fullEntries,
+	/** 激活路径过滤后的条目(ChatView leaf-walk):时间线模式与统计
+	 *  只呈现"当前这条分支"的轮次——回退/切分支后兄弟分支的轮属于
+	 *  树视图,不属于会话在视内容。null = 拓扑不可信,回退全量(旧行为)。
+	 *  分支树模式始终用全量(它本身就是分支结构视图)。 */
+	pathEntries,
 	fullLoading,
 	fullError,
 	onEnsureFullHistory,
@@ -339,6 +344,8 @@ export function TrajectoryView({
 	/** 全量历史(ChatView ensureFullHistory 补全):提供时覆盖 entries —
 	 *  统计/时间线/分支树面向整个会话,而不是守护进程尾窗的 200 条。 */
 	fullEntries?: readonly unknown[] | null;
+	/** 激活路径过滤集(见上方解构注释);null = 不过滤。 */
+	pathEntries?: readonly unknown[] | null;
 	/** 全量历史补全中。 */
 	fullLoading?: boolean;
 	/** 全量历史补全失败(P0-4,可重试)——显示降级提示 + 重试入口,不再
@@ -381,10 +388,13 @@ export function TrajectoryView({
 	// 每帧重入,但热路径退化为 O(n) 指针比对(~µs 级),文本派生只落在
 	// 新增条目上(契约测试 probe 计数桩钉死)。
 	const deriveCacheRef = useRef(createTrajectoryDeriveCache());
-	const trajectoryInput = fullEntries ?? entries;
+	const treeInput = fullEntries ?? entries;
+	// 时间线/统计跟随激活路径(回退/切分支后只呈现当前分支的轮);
+	// 分支树模式保留全量——它展示的就是整棵分支结构。
+	const timelineInput = pathEntries ?? treeInput;
 	const { turns, stats } = useMemo(
-		() => deriveTrajectoryTree(trajectoryInput, roundDurations, activePathIds, deriveCacheRef.current),
-		[trajectoryInput, roundDurations, activePathIds],
+		() => deriveTrajectoryTree(timelineInput, roundDurations, activePathIds, deriveCacheRef.current),
+		[timelineInput, roundDurations, activePathIds],
 	);
 	// 折叠的 turn 集合。长会话(事件数 > 阈值)默认全部折叠——时间线首帧
 	// 只挂轮头(164 个)而不是上万事件行,切进轨迹视图不再卡一整帧。
@@ -392,7 +402,7 @@ export function TrajectoryView({
 	// 身份变化(尾窗→全量)时重算一次;用户手动的展开/折叠不因此重置。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
 	const collapseKeyRef = useRef<unknown>(null);
-	const collapseEntries = trajectoryInput;
+	const collapseEntries = timelineInput;
 	if (collapseKeyRef.current !== collapseEntries) {
 		collapseKeyRef.current = collapseEntries;
 		const eventCount = turns.reduce((n, g) => n + g.events.length, 0);
@@ -411,7 +421,7 @@ export function TrajectoryView({
 	const listRef = useRef<HTMLDivElement | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
 	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
-	const treeRoots = useMemo(() => buildMessageTree(trajectoryInput), [trajectoryInput]);
+	const treeRoots = useMemo(() => buildMessageTree(treeInput), [treeInput]);
 	const treeRows = useMemo(() => {
 		const rows: { node: MessageTreeNode; depth: number }[] = [];
 		// Iterative pre-order: a linear session's parent→child chain is one node
