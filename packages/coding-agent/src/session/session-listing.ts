@@ -43,6 +43,11 @@ export interface SessionInfo {
 	 * synthesized {@link SessionInfo}s (cross-project stubs, tests) leave it unset.
 	 */
 	status?: SessionStatus;
+	/** Advisor transcript (`<session>/__advisor[.<slug>].jsonl`): the advisor's
+	 *  internal record living inside the parent's product directory — listed as
+	 *  a hierarchical child for inspection, but tagged so surfaces render it as
+	 *  an advisor (not a task subagent) and keep it read-only. */
+	advisor?: boolean;
 }
 
 export interface ResolvedSessionMatch {
@@ -649,7 +654,16 @@ export async function listSubagentSessions(storage: SessionStorage = new FileSes
 		const files = await Array.fromAsync(new Bun.Glob("*/*/*.jsonl").scan(sessionsRoot), name =>
 			path.join(sessionsRoot, name),
 		);
-		return await collectSessionsFromFiles(files, storage, true);
+		const sessions = await collectSessionsFromFiles(files, storage, true);
+		// Advisor transcripts (`__advisor[.<slug>].jsonl`) ride the same
+		// two-level glob as task subagents but are the advisor's internal
+		// record, not a runnable sub-session — tag them so the tree can
+		// badge them distinctly and block interactive sends.
+		const { isAdvisorTranscriptName } = await import("../advisor/transcript-recorder");
+		for (const s of sessions) {
+			if (isAdvisorTranscriptName(path.basename(s.path))) s.advisor = true;
+		}
+		return sessions;
 	} catch {
 		return [];
 	}

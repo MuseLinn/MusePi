@@ -31,8 +31,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	openPath: (dirPath) => ipcRenderer.invoke("shell-open-path", dirPath),
 	/** Clipboard write (openchamber copy-path action). */
 	copyText: (text) => ipcRenderer.invoke("clipboard-write", text),
-	/** Open a picture-in-picture mini chat window. */
-	openMiniChat: () => ipcRenderer.invoke("mini-chat-open"),
+	/** Open a picture-in-picture mini chat window; optional session id
+	 *  deep-links the window to that session (?mini=1&session=<id>). */
+	openMiniChat: (sessionId) => ipcRenderer.invoke("mini-chat-open", sessionId),
 	/** Open a directory in a specific app (openchamber open-in). */
 	openWith: (app, path) => ipcRenderer.invoke("open-with", { app, path }),
 	/** Installed apps for the open-in capsule, with real icons. */

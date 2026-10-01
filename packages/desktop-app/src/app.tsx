@@ -32,7 +32,7 @@ import { UpdateDialog } from "./components/UpdateDialog";
 import { UpdateToast } from "./components/UpdateToast";
 import { applyAppearancePrefs } from "./lib/appearance";
 import { REQUIRED_DAEMON_METHODS, shouldRestartDaemon, shouldRestartForMissingMethods } from "./lib/daemon-version";
-import { pickDirectory } from "./lib/electron";
+import { openMiniChat, pickDirectory } from "./lib/electron";
 import { escapeOwner, shouldEscapeStopTurn } from "./lib/escape-stop";
 import { applyGlassMaterial, applyGlassPreset, readGlassPreset } from "./lib/glass";
 import { watchManagedBrowserBridge } from "./lib/managed-browser-bridge";
@@ -472,6 +472,18 @@ function AppInner(): ReactNode {
 			stack.push(...node.children);
 		}
 		return null;
+	}, [tree, selectedId]);
+	/** 选中会话是否为顾问 transcript（session.tree 行的 advisor 标记）
+	 *  —— ChatView 据此把输入区换成只读说明条。 */
+	const selectedIsAdvisor = useMemo(() => {
+		if (!selectedId) return false;
+		const stack: SessionListNode[] = [...tree];
+		while (stack.length > 0) {
+			const node = stack.pop()!;
+			if (node.entry.id === selectedId) return node.entry.advisor === true;
+			stack.push(...node.children);
+		}
+		return false;
 	}, [tree, selectedId]);
 	/** Process-global freeze (TUI `/pause` parity, daemon-wide): every session's
 	 *  agents park until released. Drives the fullscreen frosted-glass overlay.
@@ -1831,6 +1843,17 @@ function AppInner(): ReactNode {
 		[doOpenSession],
 	);
 	openSessionRef.current = openSession;
+	// Mini chat deep-link (?mini=1&session=<id>, Electron mini-chat-open IPC):
+	// open the requested session once the socket is up. The id is consumed
+	// once — a later reconnect must not silently re-steal the mini window.
+	const miniDeepLinkRef = useRef<string | null>(isMini ? new URLSearchParams(location.search).get("session") : null);
+	useEffect(() => {
+		if (!isMini || status !== "open") return;
+		const id = miniDeepLinkRef.current;
+		if (!id) return;
+		miniDeepLinkRef.current = null;
+		void openSession(id);
+	}, [isMini, status, openSession]);
 	// Stable sidebar row handler: rows are memoized, so an inline arrow at the
 	// call site would re-render every row on each app render.
 	const selectSession = useCallback(
@@ -1838,6 +1861,17 @@ function AppInner(): ReactNode {
 			void openSession(sessionId);
 		},
 		[openSession],
+	);
+	// openchamber mini-chat parity: pop the row's session into the
+	// picture-in-picture mini window; on non-Electron hosts (browser dev)
+	// openMiniChat resolves false and we fall back to opening it in place.
+	const openMiniChatFor = useCallback(
+		(sessionId: string): void => {
+			void openMiniChat(sessionId).then(ok => {
+				if (!ok) void openSession(sessionId);
+			});
+		},
+		[openMiniChat, openSession],
 	);
 
 	const togglePause = useCallback(async (): Promise<void> => {
@@ -3227,6 +3261,7 @@ function AppInner(): ReactNode {
 					<ChatView
 						store={store}
 						rpc={rpc}
+						readOnly={selectedIsAdvisor}
 						onAddProvider={() => openSettings("providers")}
 						onOpenSettings={openSettings}
 						onSend={(text, images, deliverAs) => void sendPrompt(text, images, undefined, deliverAs)}
@@ -3358,6 +3393,7 @@ function AppInner(): ReactNode {
 							onOpenCollab={() => setCollabOpen(true)}
 							onRenameSession={renameSession}
 							onOpenSearch={() => setPaletteOpen(true)}
+							onOpenMiniChat={openMiniChatFor}
 							unread={unreadSessions}
 							onToggleUnread={toggleUnread}
 							onPickFolder={() => {
@@ -3453,6 +3489,7 @@ function AppInner(): ReactNode {
 										<ChatView
 											store={store}
 											rpc={rpc}
+											readOnly={selectedIsAdvisor}
 											parentSession={activeParentSession}
 											onOpenParentSession={id => void openSession(id)}
 											onOpenSession={id => void openSession(id)}

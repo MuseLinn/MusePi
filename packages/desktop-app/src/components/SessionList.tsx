@@ -32,6 +32,9 @@ export interface SessionListEntry {
 	/** 子代理会话（transcript 挂在父会话目录下，daemon 两层扫描合并时
 	 *  打标）——行尾渲染子代理标记，与 fork 标记同级。 */
 	subagent?: boolean;
+	/** 顾问 transcript 行（`__advisor[.<slug>].jsonl`）——渲染顾问标记
+	 *  （区别于任务子代理），打开后转录只读。 */
+	advisor?: boolean;
 }
 
 /** Session lifecycle status (TUI session-list parity). */
@@ -234,6 +237,7 @@ const SessionRow = memo(function SessionRow({
 	isLast,
 	searchQuery,
 	subagent,
+	advisor,
 	childCount,
 	collapsed,
 	onToggleCollapse,
@@ -259,6 +263,8 @@ const SessionRow = memo(function SessionRow({
 	searchQuery: string;
 	/** 子代理会话行（父会话的子树行）——渲染子代理标记。 */
 	subagent: boolean;
+	/** 顾问 transcript 行——渲染顾问标记（区别于任务子代理）。 */
+	advisor: boolean;
 	/** 直接子会话数（>0 = 父行,渲染折叠 chevron）。 */
 	childCount: number;
 	/** 子树当前是否收起。 */
@@ -369,6 +375,16 @@ const SessionRow = memo(function SessionRow({
 						title={t("subagent session")}
 					>
 						<Icon name="ai-agent-fill" className="h-3 w-3" />
+					</span>
+				)}
+				{advisor && (
+					<span
+						className="gui-tree-advisor"
+						role="img"
+						aria-label={t("advisor session")}
+						title={t("advisor session")}
+					>
+						<Icon name="sparkling" className="h-3 w-3" />
 					</span>
 				)}
 				{/* Last activity beats creation time: a session resumed today
@@ -496,6 +512,7 @@ export function SessionList({
 						isLast={isLast}
 						searchQuery={searchQuery}
 						subagent={node.entry.subagent === true}
+						advisor={node.entry.advisor === true}
 						childCount={childCounts.get(node.entry.id) ?? 0}
 						collapsed={collapsedIds.has(node.entry.id)}
 						onToggleCollapse={toggleCollapse}

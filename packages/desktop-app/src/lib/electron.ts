@@ -12,7 +12,9 @@ export interface ElectronAPI {
 	restartDaemon(port: number): Promise<number>;
 	openDirectory(): Promise<string | null>;
 	copyText(text: string): Promise<boolean>;
-	openMiniChat(): Promise<boolean>;
+	/** Picture-in-picture mini chat window (openchamber mini chat);
+	 *  sessionId deep-links the window to that session. */
+	openMiniChat(sessionId?: string): Promise<boolean>;
 	openWith(app: string, path: string): Promise<boolean>;
 	listOpenInApps(): Promise<{ apps: OpenInApp[] }>;
 	openExternal(url: string): Promise<boolean>;
@@ -182,12 +184,13 @@ export async function copyToClipboard(text: string): Promise<boolean> {
 	}
 }
 
-/** Picture-in-picture mini chat window (openchamber mini chat). */
-export async function openMiniChat(): Promise<boolean> {
+/** Picture-in-picture mini chat window (openchamber mini chat);
+ *  sessionId deep-links the window to that session. */
+export async function openMiniChat(sessionId?: string): Promise<boolean> {
 	if (!isElectron()) return false;
 	const { electronAPI } = window as unknown as { electronAPI: ElectronAPI };
 	try {
-		return await electronAPI.openMiniChat();
+		return await electronAPI.openMiniChat(sessionId);
 	} catch {
 		return false;
 	}

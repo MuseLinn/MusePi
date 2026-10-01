@@ -240,6 +240,7 @@ let lastWelcomeFrameRect: { left: number; top: number; width: number; height: nu
 export function ChatView({
 	store,
 	rpc,
+	readOnly = false,
 	parentSession,
 	onOpenParentSession,
 	onOpenSession,
@@ -283,6 +284,9 @@ export function ChatView({
 }: {
 	store: GuiSessionStore | null;
 	rpc: RpcClient;
+	/** 顾问 transcript 只读态（session.tree 行的 advisor 标记传入）：
+	 *  转录照常浏览，输入区替换为只读说明条，禁止发送。 */
+	readOnly?: boolean;
 	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时 transcript 左上
 	 *  角渲染「父级」返回按钮(openchamber parity)。 */
 	parentSession?: { id: string; label: string | null } | null;
@@ -2468,49 +2472,56 @@ export function ChatView({
 												}}
 											/>
 										)}
-										<Composer
-											working={snap?.working ?? false}
-											entries={snap?.entries ?? []}
-											petMood={moodFromState({
-												working: snap?.working ?? false,
-												streaming: snap?.streaming ?? false,
-												hasApprovals: (snap?.approvals.length ?? 0) > 0,
-											})}
-											petState={stateFromSignals({
-												working: snap?.working ?? false,
-												streaming: snap?.streaming ?? false,
-												approvals: snap?.approvals.length ?? 0,
-											})}
-											onSend={sendAndCloseJump}
-											onStop={() => void handleStop()}
-											rpc={rpc}
-											sessionId={store.sessionId}
-											cwd={store.cwd}
-											thinkingLevel={thinkingLevel}
-											thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
-											onSetThinking={setThinking}
-											onModelChange={onComposerModelChange}
-											onAddProvider={onAddProvider}
-											thinkingCeiling={thinkingCeiling}
-											thinkingEfforts={thinkingEfforts}
-											presetModelId={presetModelId}
-											welcome={showWelcome}
-											quotes={quotes}
-											onQuotesChange={setQuotes}
-											pendingEdit={pendingEdit}
-											onEditConsumed={() => setPendingEdit(null)}
-											focused={focusMode}
-											onToggleFocus={onToggleFocus}
-											onBtw={q => setBtwQuestion(q)}
-											activeTask={
-												displaySettings["display.taskCardStyle"] === "classic"
-													? null
-													: ([...(snap?.activeTools?.values() ?? [])]
-															.filter(t => t.toolName === "task")
-															.at(-1) ?? null)
-											}
-											swarmHost={host}
-										/>
+										{readOnly ? (
+											<div className="gui-readonly-bar" role="note">
+												<Icon name="sparkling" className="h-3.5 w-3.5" />
+												<span>{t("advisor transcript readonly")}</span>
+											</div>
+										) : (
+											<Composer
+												working={snap?.working ?? false}
+												entries={snap?.entries ?? []}
+												petMood={moodFromState({
+													working: snap?.working ?? false,
+													streaming: snap?.streaming ?? false,
+													hasApprovals: (snap?.approvals.length ?? 0) > 0,
+												})}
+												petState={stateFromSignals({
+													working: snap?.working ?? false,
+													streaming: snap?.streaming ?? false,
+													approvals: snap?.approvals.length ?? 0,
+												})}
+												onSend={sendAndCloseJump}
+												onStop={() => void handleStop()}
+												rpc={rpc}
+												sessionId={store.sessionId}
+												cwd={store.cwd}
+												thinkingLevel={thinkingLevel}
+												thinkingConfigLevel={thinkingInfoAuto ? "auto" : thinkingLevel}
+												onSetThinking={setThinking}
+												onModelChange={onComposerModelChange}
+												onAddProvider={onAddProvider}
+												thinkingCeiling={thinkingCeiling}
+												thinkingEfforts={thinkingEfforts}
+												presetModelId={presetModelId}
+												welcome={showWelcome}
+												quotes={quotes}
+												onQuotesChange={setQuotes}
+												pendingEdit={pendingEdit}
+												onEditConsumed={() => setPendingEdit(null)}
+												focused={focusMode}
+												onToggleFocus={onToggleFocus}
+												onBtw={q => setBtwQuestion(q)}
+												activeTask={
+													displaySettings["display.taskCardStyle"] === "classic"
+														? null
+														: ([...(snap?.activeTools?.values() ?? [])]
+																.filter(t => t.toolName === "task")
+																.at(-1) ?? null)
+												}
+												swarmHost={host}
+											/>
+										)}
 									</div>
 								</div>
 								{/* Right panel stays mounted so the width collapse animates;

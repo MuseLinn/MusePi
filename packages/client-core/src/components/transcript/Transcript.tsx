@@ -1615,6 +1615,24 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		[virtualizer],
 	);
 	const virtualItems = virtualizer.getVirtualItems();
+	// React-key uniqueness guard: entry ids are normally unique, but a daemon
+	// rekey collision (two same-millisecond advisor "Session update" messages)
+	// once produced duplicate ids. React's reconciliation drops the FIRST
+	// fiber of a duplicate-key pair from its existingChildren map, so that
+	// node is never unmounted — stale advisor rows leaked into every later
+	// session's transcript DOM (fixed at the source too; this is the belt to
+	// the source's braces). First occurrence keeps the bare id so prepend
+	// paging keeps row identity; later duplicates get an ordinal suffix.
+	const rowKeys = useMemo(() => {
+		const seen = new Map<string, number>();
+		return entries.map(entry => {
+			const id = entry.id;
+			if (typeof id !== "string") return null;
+			const n = seen.get(id) ?? 0;
+			seen.set(id, n + 1);
+			return n === 0 ? id : `${id}#${n + 1}`;
+		});
+	}, [entries]);
 	// Test/SSR fallback: without a measurable scroller (happy-dom, SSR) the
 	// virtualizer's window is empty — render the full list so row-level tests
 	// and first-paint SSR keep working. Browsers always have a sized scroller
@@ -2314,7 +2332,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						if (entry === undefined) return null;
 						return (
 							<div
-								key={vi.key}
+								key={rowKeys[absIdx] ?? vi.key}
 								ref={measureVirtualRow}
 								data-index={vi.index}
 								data-entry-ts={entry.timestamp}
@@ -2327,7 +2345,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 					})
 				: entries.map((entry, absIdx) => (
 						<div
-							key={entry.id ?? absIdx}
+							key={rowKeys[absIdx] ?? entry.id ?? absIdx}
 							data-entry-ts={entry.timestamp}
 							className="tr-vrow"
 							aria-hidden={folding && absIdx < firstCompactionIdx ? true : undefined}

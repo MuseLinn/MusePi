@@ -38,37 +38,41 @@ export function sortSessionTree(
 }
 
 /**
- * Flatten a session tree for rendering, ported from the TUI TreeList
- * indentation rules (tui/tree-list.ts + modes/components/tree-selector.ts):
- * - indent 0 stays 0 unless the parent branches (>1 children → +1)
- * - indent 1 children always go to 2 (visual grouping of the subtree)
- * - indent 2+: single-child chains stay flat, +1 only when a parent branches
- * Connectors (├─/└─) show only when a node is a branched child.
+ * Flatten a session tree for rendering. Two indentation dialects:
+ * - `compactSingleChildChains: true` — the TUI TreeList rules ported for the
+ *   fork tree (tui/tree-list.ts + modes/components/tree-selector.ts):
+ *   indent 0 stays 0 unless the parent branches (>1 children → +1); indent 1
+ *   children always go to 2; indent 2+ single-child chains stay flat, +1 only
+ *   when a parent branches. Connectors (├─/└─) show only for branched children.
+ * - default (GUI sidebar) — openchamber 文件夹层级 parity: EVERY child
+ *   indents one level, so a session with a single subagent still reads as a
+ *   nested subtree instead of a flat sibling.
  */
-export function flattenTree(roots: SessionListNode[]): FlatNode[] {
+export function flattenTree(roots: SessionListNode[], opts?: { compactSingleChildChains?: boolean }): FlatNode[] {
 	const result: FlatNode[] = [];
+	const compact = opts?.compactSingleChildChains === true;
 	type StackItem = [SessionListNode, number, boolean, boolean, boolean];
-	const stack: StackItem[] = [];
+	const items: StackItem[] = [];
 	for (let i = roots.length - 1; i >= 0; i--) {
 		const isLast = i === roots.length - 1;
-		stack.push([roots[i], 0, true, roots.length > 1, isLast]);
+		items.push([roots[i], 0, true, roots.length > 1, isLast]);
 	}
-	while (stack.length > 0) {
-		const [node, indent, justBranched, showConnector, isLast] = stack.pop()!;
+	while (items.length > 0) {
+		const [node, indent, justBranched, showConnector, isLast] = items.pop()!;
 		result.push({ node, indent, showConnector, isLast });
 		const children = node.children;
 		const multipleChildren = children.length > 1;
 		let childIndent: number;
-		if (multipleChildren) {
-			childIndent = indent + 1;
-		} else if (justBranched && indent > 0) {
+		if (children.length === 0) {
+			childIndent = indent;
+		} else if (!compact || multipleChildren || (justBranched && indent > 0)) {
 			childIndent = indent + 1;
 		} else {
 			childIndent = indent;
 		}
 		for (let i = children.length - 1; i >= 0; i--) {
 			const childIsLast = i === children.length - 1;
-			stack.push([children[i], childIndent, multipleChildren, true, childIsLast]);
+			items.push([children[i], childIndent, multipleChildren, true, childIsLast]);
 		}
 	}
 	return result;

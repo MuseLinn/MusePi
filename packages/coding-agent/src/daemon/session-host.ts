@@ -1729,7 +1729,20 @@ export class DaemonSessionHost {
 				const msg = (e as { message?: WireMessage }).message;
 				let viewId: string;
 				if (e.type === "message" && msg) {
-					viewId = messageKey(msg);
+					// Collision-suffixed like the non-message branch below: two
+					// advisor "Session update" user messages can land in the SAME
+					// millisecond, and messageKey("role:timestamp") would emit
+					// the same id twice. Duplicate entry ids break downstream
+					// id-keyed consumers — React transcript rows with dup keys
+					// leak orphaned DOM nodes across session switches (the
+					// first fiber of a dup pair is dropped from React's
+					// existingChildren map and never unmounted), so the parent
+					// session rendered the advisor transcript after a child
+					// visit. Suffixing keeps ids unique; tree walks use
+					// parentId, which is unaffected.
+					const base = messageKey(msg);
+					viewId = base;
+					for (let n = 2; usedViewIds.has(viewId); n++) viewId = `${base}#${n}`;
 				} else {
 					const tsMs = Date.parse(e.timestamp);
 					const base = Number.isFinite(tsMs) ? `${e.type}:${tsMs}` : e.id;
@@ -2776,6 +2789,9 @@ export class DaemonSessionHost {
 			/** 子代理 transcript 行(task/vibe 子会话):parentId 指向父会话,
 			 *  GUI 树按 openchamber 层级呈现,行可直达子会话消息。 */
 			subagent?: boolean;
+			/** 顾问 transcript 行(`__advisor[.<slug>].jsonl`):挂在父会话产物
+			 *  目录下的顾问内部记录,GUI 标记为顾问且只读。 */
+			advisor?: boolean;
 		})[]
 	> {
 		const live = new Map<string, number>();
@@ -2794,7 +2810,13 @@ export class DaemonSessionHost {
 		}
 		const merged = new Map<
 			string,
-			MaterializedRow & { title?: string; status?: SessionStatus; sessionFile?: string; subagent?: boolean }
+			MaterializedRow & {
+				title?: string;
+				status?: SessionStatus;
+				sessionFile?: string;
+				subagent?: boolean;
+				advisor?: boolean;
+			}
 		>(rows.map(r => [r.sessionId, r]));
 		for (const h of history.rows) {
 			const existing = merged.get(h.id);
@@ -2852,7 +2874,18 @@ export class DaemonSessionHost {
 		// 直达子会话消息(resume 径已扩到两层扫描)。父会话缺席(已删除)时
 		// parentId 落空,树把该行提为根——不丢消息。
 		for (const h of history.subagents) {
-			if (merged.has(h.id)) continue;
+			const existing = merged.get(h.id);
+			if (existing) {
+				// The view store may already carry this id (adoption-era rows
+				// for transcripts the view once materialized) without the
+				// hierarchical flags — the disk scan is authoritative: tag it
+				// subagent, and advisor when the file is an advisor transcript,
+				// so session.list/tree badge it instead of listing it flat.
+				existing.subagent = true;
+				if (h.advisor === true) existing.advisor = true;
+				if (!existing.sessionFile) existing.sessionFile = h.path;
+				continue;
+			}
 			const parentBase = path.basename(path.dirname(h.path));
 			const parentId = parentBase.split("_").slice(1).join("_") || null;
 			merged.set(h.id, {
@@ -2871,6 +2904,9 @@ export class DaemonSessionHost {
 				status: h.status,
 				sessionFile: h.path,
 				subagent: true,
+				// Advisor transcripts stay tagged through the merge so the
+				// list route can distinguish them from task subagents.
+				advisor: h.advisor === true,
 			});
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);

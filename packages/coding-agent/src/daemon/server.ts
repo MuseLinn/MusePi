@@ -1391,6 +1391,8 @@ export class DaemonServer {
 						kind: "session",
 						/** 子代理 transcript 行:GUI 渲染为父会话下的层级子行。 */
 						subagent: r.subagent === true,
+						/** 顾问 transcript 行:GUI 渲染顾问标记且保持只读。 */
+						advisor: r.advisor === true,
 						timestamp: new Date(r.createdAt).toISOString(),
 						updatedAt: new Date(r.updatedAt).toISOString(),
 						model: r.model ?? undefined,

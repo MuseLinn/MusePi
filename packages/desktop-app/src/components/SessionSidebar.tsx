@@ -63,6 +63,7 @@ export function SessionSidebar({
 	onOpenCollab,
 	onRenameSession,
 	onOpenSearch,
+	onOpenMiniChat,
 	collapsed,
 	width,
 	onDeleteArchived,
@@ -136,6 +137,10 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
+	/** openchamber mini-chat parity: pop a session row out into the
+	 *  picture-in-picture mini chat window (Electron); non-Electron hosts
+	 *  should fall back to opening the session in place. */
+	onOpenMiniChat?(sessionId: string): void;
 }): ReactNode {
 	// groups ↔ projects is persisted (issue #34): opening Settings unmounts
 	// this whole subtree, so in-memory state silently reset to "groups" on
@@ -1347,6 +1352,15 @@ export function SessionSidebar({
 									label: t("rename task"),
 									icon: "pencil",
 									onSelect: () => void renameSession(sessionCtx.id),
+								},
+								{
+									// openchamber parity: any session row (parent or
+									// subagent) can be popped out into the mini chat
+									// window; non-Electron hosts fall back to opening
+									// it in place (handled by the app callback).
+									label: t("open in mini chat"),
+									icon: "chat-1",
+									onSelect: () => onOpenMiniChat?.(sessionCtx.id),
 								},
 								{
 									label: t("archive task"),

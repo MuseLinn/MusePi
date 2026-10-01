@@ -3641,8 +3641,15 @@ let miniWindow = null;
 
 /** Open (or focus) the picture-in-picture mini chat window — shared by the
  *  header button and the tray's 迷你对话 entry. */
-function openMiniChatWindow() {
+function openMiniChatWindow(sessionId) {
 	if (miniWindow && !miniWindow.isDestroyed()) {
+		// Already open — a session deep-link reloads the page with the new
+		// target (the renderer opens it once connected); otherwise just focus.
+		if (sessionId) {
+			const devServer = DEV && process.env.MUSEPI_GUI_DEV === "1" ? "http://127.0.0.1:5173/" : null;
+			if (devServer) void miniWindow.loadURL(`${devServer}?mini=1&session=${encodeURIComponent(sessionId)}`);
+			else void miniWindow.loadFile(DIST_DIR + "/index.html", { query: { mini: "1", session: sessionId } });
+		}
 		miniWindow.focus();
 		return true;
 	}
@@ -3679,15 +3686,19 @@ function openMiniChatWindow() {
 		},
 	});
 	const devServer = DEV && process.env.MUSEPI_GUI_DEV === "1" ? "http://127.0.0.1:5173/" : null;
-	if (devServer) void miniWindow.loadURL(`${devServer}?mini=1`);
-	else void miniWindow.loadFile(DIST_DIR + "/index.html", { query: { mini: "1" } });
+	if (devServer)
+		void miniWindow.loadURL(`${devServer}?mini=1${sessionId ? `&session=${encodeURIComponent(sessionId)}` : ""}`);
+	else
+		void miniWindow.loadFile(DIST_DIR + "/index.html", {
+			query: sessionId ? { mini: "1", session: sessionId } : { mini: "1" },
+		});
 	miniWindow.on("closed", () => {
 		miniWindow = null;
 	});
 	return true;
 }
 
-ipcMain.handle("mini-chat-open", () => openMiniChatWindow());
+ipcMain.handle("mini-chat-open", (_event, sessionId) => openMiniChatWindow(sessionId));
 
 // ── IPC: native directory picker (ZCode "打开文件夹" project add) ─────────
 

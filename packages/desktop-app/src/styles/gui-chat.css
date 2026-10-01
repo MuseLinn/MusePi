@@ -4295,6 +4295,26 @@ body.gui-resizing .gui-pane-right {
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
+/* 顾问 transcript 只读条：输入区替换为说明条（液态玻璃，居中，不可交互）。 */
+.gui-readonly-bar {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 14px 16px;
+	margin-bottom: 4px;
+	border-radius: var(--radius-xl);
+	border: 1px solid color-mix(in oklab, var(--color-accent, var(--color-primary)) 22%, transparent);
+	background: color-mix(in oklab, var(--color-accent, var(--color-primary)) 7%, var(--color-surface));
+	backdrop-filter: blur(18px) saturate(1.4);
+	-webkit-backdrop-filter: blur(18px) saturate(1.4);
+	color: color-mix(in oklab, var(--color-fg) 72%, transparent);
+	font-size: 13px;
+	line-height: 1.5;
+	user-select: none;
+	cursor: default;
+}
+
 .gui-revert-dock-head {
 	display: flex;
 	align-items: center;
