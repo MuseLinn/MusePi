@@ -5,6 +5,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-01
+
 ### Added
 
 - **文件子系统插件化（插件化第五刀：musepi:file 包）**：文件子系统从「散置的工具 + 索引」收编为一个内置插件单元（dsh fs 插件族 parity：tool-fs / tool-str-replace-editor / tool-fs-search）——`read`（read 工具族：文件 / pdf / sqlite / archive 选择器）/ `write`（write / edit / ast_edit 写入编辑族）/ `search`（glob / grep / ast_grep 检索族）/ `index`（工作区文件内容索引扫描）四个真实后端组件独立启停。新增 file-backend deny 通道：组件开关写隐藏键 `file.disabledBackends`（settings-schema 登记、fail-soft 读取），消费哲学与 terminal/browser 组件一致——read/write/search 被禁后对应工具族不再进入会话工具集（tools/index.ts isToolAllowed 谓词消费，禁用是显式意图、不静默留桩），index 被禁后 daemon 停止后台扫描（server.ts index.scan 门消费；已有 FTS 数据的查询面仍由 index.setEnabled 总开关治理，不越权）。无总开关语义（不发明）：file 行只读展示，禁用粒度落到后端组件。extensions.list 组件面如实下发；组件名/描述/kind 标签 i18n 键 zh/en 同步。9 例新契约测试（注册表投影/名单写读/list 下发/谓词映射/扫描门）。
