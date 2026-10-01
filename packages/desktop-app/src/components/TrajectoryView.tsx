@@ -14,12 +14,8 @@ import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { StateIcon } from "./StateIcon";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
-import {
-	buildTrajectoryTree,
-	isTrajectoryEventInRange,
-	type RoundDurationMap,
-	type TrajectoryEvent,
-} from "./trajectory-data";
+import { isTrajectoryEventInRange, type RoundDurationMap, type TrajectoryEvent } from "./trajectory-data";
+import { createTrajectoryDeriveCache, deriveTrajectoryTree } from "./trajectory-derive";
 
 /** 令牌数紧凑化(1.2k / 45.6k / 1.8M)——与 transcript usage 行同语感。 */
 function fmtTokens(n: number): string {
@@ -378,9 +374,17 @@ export function TrajectoryView({
 	const setMode = (next: "timeline" | "tree"): void => {
 		startModeTransition(() => setModeState(next));
 	};
+	// P1-11:memo 依赖每个流式帧都换引用(snapshot 每帧 spread 新数组、
+	// leafWalk 沿 snap.entries 重建 → 新 Set、roundDurations 每帧新数组),
+	// 全靠 deriveTrajectoryTree 内部的增量缓存消化:对象身份找公共前缀,
+	// 断点续派生只重跑增量片段;零变更帧返回上次结果引用。memo 本身仍
+	// 每帧重入,但热路径退化为 O(n) 指针比对(~µs 级),文本派生只落在
+	// 新增条目上(契约测试 probe 计数桩钉死)。
+	const deriveCacheRef = useRef(createTrajectoryDeriveCache());
+	const trajectoryInput = fullEntries ?? entries;
 	const { turns, stats } = useMemo(
-		() => buildTrajectoryTree(fullEntries ?? entries, roundDurations, activePathIds),
-		[fullEntries, entries, roundDurations, activePathIds],
+		() => deriveTrajectoryTree(trajectoryInput, roundDurations, activePathIds, deriveCacheRef.current),
+		[trajectoryInput, roundDurations, activePathIds],
 	);
 	// 折叠的 turn 集合。长会话(事件数 > 阈值)默认全部折叠——时间线首帧
 	// 只挂轮头(164 个)而不是上万事件行,切进轨迹视图不再卡一整帧。
@@ -388,7 +392,7 @@ export function TrajectoryView({
 	// 身份变化(尾窗→全量)时重算一次;用户手动的展开/折叠不因此重置。
 	const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
 	const collapseKeyRef = useRef<unknown>(null);
-	const collapseEntries = fullEntries ?? entries;
+	const collapseEntries = trajectoryInput;
 	if (collapseKeyRef.current !== collapseEntries) {
 		collapseKeyRef.current = collapseEntries;
 		const eventCount = turns.reduce((n, g) => n + g.events.length, 0);
@@ -407,7 +411,7 @@ export function TrajectoryView({
 	const listRef = useRef<HTMLDivElement | null>(null);
 	// 树模式:已折叠节点集 + 展平行(buildMessageTree 按 parentId 投影)。
 	const [collapsedNodes, setCollapsedNodes] = useState<ReadonlySet<string>>(new Set());
-	const treeRoots = useMemo(() => buildMessageTree(fullEntries ?? entries), [fullEntries, entries]);
+	const treeRoots = useMemo(() => buildMessageTree(trajectoryInput), [trajectoryInput]);
 	const treeRows = useMemo(() => {
 		const rows: { node: MessageTreeNode; depth: number }[] = [];
 		// Iterative pre-order: a linear session's parent→child chain is one node

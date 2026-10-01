@@ -65,6 +65,43 @@ function stringifyArgs(args: unknown): string {
 }
 
 /**
+ * first-child 主线启发式的分支集合:不在「根 → 每节点首子」链上的 message
+ * 条目全部判为分支。buildTrajectory 首次用到时对自己的批次惰性计算;
+ * trajectory-derive 的断点续派生必须用全量输入调本函数经 init 注入
+ * (增量片段批次缺前缀,就地算会把前缀条目错判)。追加条目不改变既有
+ * 节点的首子/根关系 → 集合对「已验证前缀」稳定,可跨帧复用。
+ */
+export function computeBranchIds(entries: readonly unknown[]): ReadonlySet<string> {
+	const childrenOf = new Map<string, string[]>();
+	const ids = new Set<string>();
+	let rootId: string | null = null;
+	for (const raw of entries) {
+		if (!raw || typeof raw !== "object") continue;
+		const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
+		if (typeof e2.id !== "string" || e2.type !== "message") continue;
+		ids.add(e2.id);
+		const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
+		if (pid !== null) {
+			const arr = childrenOf.get(pid) ?? [];
+			arr.push(e2.id);
+			childrenOf.set(pid, arr);
+		} else if (rootId === null) {
+			rootId = e2.id;
+		}
+	}
+	// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
+	const main = new Set<string>();
+	let cur = rootId;
+	while (cur !== null && ids.has(cur)) {
+		main.add(cur);
+		cur = childrenOf.get(cur)?.[0] ?? null;
+	}
+	const branch = new Set<string>();
+	for (const id of ids) if (!main.has(id)) branch.add(id);
+	return branch;
+}
+
+/**
  * 构建轨迹事件。activePath(可选)= 当前活跃叶路径上的条目 id 集
  * (GUI 由 leafWalk/pinnedPathIds 提供)。提供时:
  *  - 主线/分支按"是否在活跃路径上"判定(取代 first-child 启发式)——
@@ -72,23 +109,59 @@ function stringifyArgs(args: unknown): string {
  *  - 每个事件带 pathTurn(树深度),branchAt 后的新轮编号 = 新分支深度
  *    (撤回第 2 轮再发问 → 新轮是"第 3 轮",不是 journal 追加序的第 5 轮)。
  * 不提供时保持旧行为(first-child 链 = 主线,追加序编号)。
+ *
+ * hooks(可选,trajectory-derive 的增量复用用):
+ *  - init:从上次派生的断点状态继续(turn/toolCalls/首末 ts/toolIndex/
+ *    branchIds),只对「entries 是接在断点后的增量片段」的调用有意义;
+ *  - onState:消费每条目前的运行态快照(断点记账,复用端按 index 存);
+ *  - probe.derivedEntries:每跑一条完整派生 +1(契约测试用来证明
+ *    流式追加一帧的重算量与新增条目相关、与总条目无关,P1-11)。
  */
-export function buildTrajectory(
-	entries: readonly unknown[],
-	activePath?: ReadonlySet<string>,
-): { events: TrajectoryEvent[]; stats: TrajectoryStats } {
-	const events: TrajectoryEvent[] = [];
-	let turn = 0;
-	let toolCalls = 0;
-	let firstTs: number | undefined;
-	let lastTs: number | undefined;
-	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
-	const toolIndex = new Map<string, TrajectoryEvent>();
-	let branchIds: ReadonlySet<string> | undefined;
+export interface TrajectoryRunState {
+	turn: number;
+	toolCalls: number;
+	firstTs: number | undefined;
+	lastTs: number | undefined;
+	/** 已消费条目产生的事件数(断点拼接用,纯函数调用恒为 0 可忽略)。 */
+	eventCount: number;
+	/** toolCallId → 最近的 TOOL 事件(结果回填)。跨增量片段共享同一引用。 */
+	toolIndex: Map<string, TrajectoryEvent>;
+	branchIds: ReadonlySet<string> | undefined;
+}
 
-	// ── 树深度预计算:parentId 链上(含自身)的轮起始数。一次遍历 + 记忆化,
-	// 深链(上万条)不会退化成 O(n²)。轮起始口径与折叠/导航层一致
-	// (isTurnStart:user 消息或 display advisor 笔记)。
+export interface BuildTrajectoryHooks {
+	init?: TrajectoryRunState;
+	/** 全量批次的树深度索引(增量派生注入;缺省对本批次自建)。 */
+	batch?: TrajectoryBatchIndex;
+	onState?: (index: number, state: TrajectoryRunState) => void;
+	probe?: { derivedEntries: number };
+}
+
+export function initialTrajectoryRunState(): TrajectoryRunState {
+	return {
+		turn: 0,
+		toolCalls: 0,
+		firstTs: undefined,
+		lastTs: undefined,
+		eventCount: 0,
+		toolIndex: new Map<string, TrajectoryEvent>(),
+		branchIds: undefined,
+	};
+}
+
+/** 树深度索引:parentId 映射 + 轮起始集合 + 首条可见条目 id。一次遍历,
+ *  深链(上万条)的记忆化行走靠它不退化成 O(n²)。轮起始口径与折叠/
+ *  导航层一致(isTurnStart:user 消息或 display advisor 笔记)。
+ *  注意:深度判定的「本批」边界就是这个索引——增量派生(trajectory-
+ *  derive)的增量片段批次缺前缀,必须把全量输入索引后经 hooks.batch
+ *  注入,否则前缀父被误判链断、pathTurn 全丢。 */
+export interface TrajectoryBatchIndex {
+	parentOf: Map<string, string | null>;
+	turnStartIds: Set<string>;
+	firstEntryId: string | undefined;
+}
+
+export function indexTrajectoryBatch(entries: readonly unknown[]): TrajectoryBatchIndex {
 	const parentOf = new Map<string, string | null>();
 	const turnStartIds = new Set<string>();
 	let firstEntryId: string | undefined;
@@ -100,18 +173,55 @@ export function buildTrajectory(
 		parentOf.set(e.id, typeof e.parentId === "string" ? e.parentId : null);
 		if (isTurnStart(raw as Parameters<typeof isTurnStart>[0])) turnStartIds.add(e.id);
 	}
+	return { parentOf, turnStartIds, firstEntryId };
+}
+
+export function buildTrajectory(
+	entries: readonly unknown[],
+	activePath?: ReadonlySet<string>,
+	hooks?: BuildTrajectoryHooks,
+): { events: TrajectoryEvent[]; stats: TrajectoryStats; finalState: TrajectoryRunState } {
+	const events: TrajectoryEvent[] = [];
+	const init = hooks?.init;
+	let turn = init?.turn ?? 0;
+	let toolCalls = init?.toolCalls ?? 0;
+	let firstTs = init?.firstTs;
+	let lastTs = init?.lastTs;
+	/** 累计事件数 = init 携带的前缀事件数 + 本片段新生成(events 只是本
+	 *  片段的局部数组,断点记账必须用累计值)。 */
+	const baseEventCount = init?.eventCount ?? 0;
+	/** toolCallId → 最近的 TOOL 事件(结果回填)。 */
+	const toolIndex = init?.toolIndex ?? new Map<string, TrajectoryEvent>();
+	let branchIds = init?.branchIds;
+
+	// ── 树深度索引:默认对本批次构建;增量复用方注入全量索引(见
+	//  indexTrajectoryBatch 的边界说明)。
+	const batch = hooks?.batch ?? indexTrajectoryBatch(entries);
+	const parentOf = batch.parentOf;
+	const turnStartIds = batch.turnStartIds;
+	const firstEntryId = batch.firstEntryId;
 	const depthMemo = new Map<string, number>();
+	/** 断链/假根判定也是可记忆化的结论:链上任意节点重查都指向同一个
+	 *  断点,不记下就会每个事件重走一遍链(P1-11:尾窗头部条目父在窗外
+	 *  是常态,单次重算因此退化为 O(n²))。 */
+	const depthBroken = new Set<string>();
 	/** 树深度(含自身)的轮起始数。链断(父是 string 但不在本批条目)或
 	 *  parentless 但不是首条可见条目(发射端漏打 parentId —— 与 leaf-walk
 	 *  同一规则)时返回 undefined,调用方回退 journal 序,不把断链深度当真
 	 *  编号(实机回归:parentless 顾问卡全显示 "Turn 1")。 */
 	const depthOf = (id: string): number | undefined => {
+		if (depthBroken.has(id)) return undefined;
 		const hit = depthMemo.get(id);
 		if (hit !== undefined) return hit;
 		const chain: string[] = [];
 		let base = 0;
 		let cur: string = id;
+		let broken = false;
 		for (;;) {
+			if (depthBroken.has(cur)) {
+				broken = true;
+				break;
+			}
 			const cached = depthMemo.get(cur);
 			if (cached !== undefined) {
 				base = cached;
@@ -121,11 +231,19 @@ export function buildTrajectory(
 			const p = parentOf.get(cur);
 			if (p === undefined) break; // 根(预计算外的入口,防御)
 			if (p === null) {
-				if (cur !== firstEntryId) return undefined; // 假根:深度不可信
+				if (cur !== firstEntryId) broken = true; // 假根:深度不可信
 				break; // 真根 = 首条可见条目
 			}
-			if (!parentOf.has(p)) return undefined; // 链断:深度不可信
+			if (!parentOf.has(p)) {
+				broken = true; // 链断:深度不可信
+				break;
+			}
 			cur = p;
+		}
+		if (broken) {
+			// 链上所有已访问节点共享同一个 undefined 结论,一次记下。
+			for (const n of chain) depthBroken.add(n);
+			return undefined;
 		}
 		let d = base;
 		for (let i = chain.length - 1; i >= 0; i--) {
@@ -135,8 +253,18 @@ export function buildTrajectory(
 		return depthMemo.get(id) ?? base;
 	};
 
-	for (const raw of entries) {
+	for (const [index, raw] of entries.entries()) {
 		if (!raw || typeof raw !== "object") continue;
+		if (hooks?.probe) hooks.probe.derivedEntries += 1;
+		hooks?.onState?.(index, {
+			turn,
+			toolCalls,
+			firstTs,
+			lastTs,
+			eventCount: baseEventCount + events.length,
+			toolIndex,
+			branchIds,
+		});
 		const entry = raw as {
 			type?: string;
 			message?: Record<string, unknown>;
@@ -188,35 +316,11 @@ export function buildTrajectory(
 			} else {
 				// Branch detection: a message not on the main first-child chain is
 				// a branch (re-answer / fork continuation) — the timeline flags
-				// it instead of hiding it. Set is computed lazily on first use.
+				// it instead of hiding it. Set is computed lazily on first use;
+				// 增量复用方(trajectory-derive)对全量输入预计算后经 init 注入,
+				// 增量片段自己的小批次算出来的集合不可信(缺前缀条目)。
 				if (branchIds === undefined) {
-					const childrenOf = new Map<string, string[]>();
-					const ids = new Set<string>();
-					let rootId: string | null = null;
-					for (const raw of entries) {
-						if (!raw || typeof raw !== "object") continue;
-						const e2 = raw as { id?: unknown; parentId?: unknown; type?: unknown };
-						if (typeof e2.id !== "string" || e2.type !== "message") continue;
-						ids.add(e2.id);
-						const pid = e2.parentId === null || typeof e2.parentId !== "string" ? null : e2.parentId;
-						if (pid !== null) {
-							const arr = childrenOf.get(pid) ?? [];
-							arr.push(e2.id);
-							childrenOf.set(pid, arr);
-						} else if (rootId === null) {
-							rootId = e2.id;
-						}
-					}
-					// 主线 = 从根沿 first-child 下行;其余全部 = 分支。
-					const main = new Set<string>();
-					let cur = rootId;
-					while (cur !== null && ids.has(cur)) {
-						main.add(cur);
-						cur = childrenOf.get(cur)?.[0] ?? null;
-					}
-					const branch = new Set<string>();
-					for (const id of ids) if (!main.has(id)) branch.add(id);
-					branchIds = branch;
+					branchIds = computeBranchIds(entries);
 				}
 				isBranch = entryId !== undefined && branchIds.has(entryId);
 			}
@@ -361,8 +465,18 @@ export function buildTrajectory(
 		}
 	}
 
+	const finalState: TrajectoryRunState = {
+		turn,
+		toolCalls,
+		firstTs,
+		lastTs,
+		eventCount: baseEventCount + events.length,
+		toolIndex,
+		branchIds,
+	};
 	return {
 		events,
+		finalState,
 		stats: {
 			durationSec:
 				firstTs !== undefined && lastTs !== undefined ? Math.max(0, Math.round((lastTs - firstTs) / 1000)) : 0,
@@ -417,15 +531,12 @@ function roundDurationsOf(src: RoundDurationMap | undefined): ReadonlyMap<number
 	return m;
 }
 
-export function buildTrajectoryTree(
-	entries: readonly unknown[],
+/** 按事件分组成轮(turn 字段已有;roundDurations 锚定回合时长)。纯逻辑,
+ *  buildTrajectoryTree / trajectory-derive 共用。 */
+export function groupTrajectoryTurns(
+	events: readonly TrajectoryEvent[],
 	roundDurations?: RoundDurationMap,
-	activePath?: ReadonlySet<string>,
-): {
-	turns: TrajectoryTurnGroup[];
-	stats: TrajectoryStats;
-} {
-	const { events, stats } = buildTrajectory(entries, activePath);
+): TrajectoryTurnGroup[] {
 	const durations = roundDurationsOf(roundDurations);
 	const turns: TrajectoryTurnGroup[] = [];
 	for (const ev of events) {
@@ -462,7 +573,20 @@ export function buildTrajectoryTree(
 			group.endMs = group.endMs !== undefined && candidate > group.endMs ? group.endMs : candidate;
 		}
 	}
-	return { turns, stats };
+	return turns;
+}
+
+/** 一次性全量入口(测试与回退用):buildTrajectory + 分组。 */
+export function buildTrajectoryTree(
+	entries: readonly unknown[],
+	roundDurations?: RoundDurationMap,
+	activePath?: ReadonlySet<string>,
+): {
+	turns: TrajectoryTurnGroup[];
+	stats: TrajectoryStats;
+} {
+	const { events, stats } = buildTrajectory(entries, activePath);
+	return { turns: groupTrajectoryTurns(events, roundDurations), stats };
 }
 
 /** 事件是否落在 [startMs, endMs] 区间内(Overview 拖拽聚焦的高亮/置灰判定)。

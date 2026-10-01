@@ -6,7 +6,8 @@ import { timeFormatOptions } from "../lib/appearance";
 import { Icon } from "../vendor/oc-icons";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
-import { buildTrajectoryTree, type RoundDurationMap, type TrajectoryEvent } from "./trajectory-data";
+import type { RoundDurationMap, TrajectoryEvent } from "./trajectory-data";
+import { createTrajectoryDeriveCache, deriveTrajectoryTree } from "./trajectory-derive";
 import {
 	layoutTurnMap,
 	TURN_LANE_GAP,
@@ -290,10 +291,12 @@ export function TurnMapCanvas({
 	const [direction, setDirection] = useState<TurnMapDirection>(readMapDirection);
 	const horizontal = direction === "h";
 
-	// activePathIds 提供时:主线/分支按活跃叶路径判定,轮号 = 树深度
-	// (branchAt 后新主线轮重新编号,废弃分支入分支列);无 = 旧 first-child 启发式。
+	// P1-11:entries/roundDurations/activePathIds 每帧换引用(snapshot 每帧
+	// spread),deriveTrajectoryTree 内部按对象身份断点续派生——流式帧只
+	// 重跑增量片段,零变更帧返回上次结果引用(契约测试 probe 钉死)。
+	const deriveCacheRef = useRef(createTrajectoryDeriveCache());
 	const { turns, stats } = useMemo(
-		() => buildTrajectoryTree(entries, roundDurations, activePathIds),
+		() => deriveTrajectoryTree(entries, roundDurations, activePathIds, deriveCacheRef.current),
 		[entries, roundDurations, activePathIds],
 	);
 	const layout = useMemo(() => layoutTurnMap(turns, expanded, direction), [turns, expanded, direction]);
