@@ -156,7 +156,7 @@ describe(".musepi/project.json mirror", () => {
 
 describe("ViewStore project_metadata preservation (modeId 同款保留语义)", () => {
 	it("persists creation metadata through the header and survives metadata-less re-persists", () => {
-		const store = new ViewStore(join(tmpDir(), "views.db"));
+		const store = new ViewStore(join(tmpDir(), "views.db"), { minSnapshotJsonIntervalMs: 0 });
 		store.upsert("s1", snapshot({ id: "s1", projectMetadata: VALID_METADATA }), null);
 		// load() 路径（恢复/reactivation 读回）。
 		expect(store.load("s1")?.header.projectMetadata).toEqual(VALID_METADATA);
@@ -167,7 +167,7 @@ describe("ViewStore project_metadata preservation (modeId 同款保留语义)", 
 	});
 
 	it("replaces when an explicit new value arrives and stays null for plain sessions", () => {
-		const store = new ViewStore(join(tmpDir(), "views.db"));
+		const store = new ViewStore(join(tmpDir(), "views.db"), { minSnapshotJsonIntervalMs: 0 });
 		store.upsert("plain", snapshot({ id: "plain" }), null);
 		store.upsert("plain", snapshot({ id: "plain" }), null);
 		expect(store.load("plain")?.header.projectMetadata).toBeUndefined();

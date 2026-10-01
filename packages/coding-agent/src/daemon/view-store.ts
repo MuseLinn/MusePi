@@ -21,7 +21,7 @@
 import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { MessageEntry, SessionState } from "@musepi/pi-wire";
+import type { MessageEntry, SessionEntry, SessionState } from "@musepi/pi-wire";
 import type { SessionSnapshot } from "@musepi/sdk";
 
 export interface MaterializedRow {
@@ -80,6 +80,24 @@ interface MessageRow {
 	timestamp: number;
 }
 
+/** P1-13 constructor options. */
+export interface ViewStoreOptions {
+	/** Test/diagnostic hook: reports how many message-projection rows a
+	 *  persist actually wrote and through which path. Production passes
+	 *  nothing; contract tests assert write counts stay proportional to
+	 *  the delta (a regression to whole-table rewrites is caught here). */
+	hooks?: {
+		onMessageRows?(kind: "full" | "append" | "update", count: number): void;
+	};
+	/** Minimum interval between materialized_sessions snapshot-JSON writes
+	 *  for one session (default 1000ms). Streaming persists coalesce to one
+	 *  O(session-size) stringify per interval; force writes (dispose /
+	 *  compaction / header patch) are never throttled. The journal remains
+	 *  the source of truth — a throttled snapshot only means slightly more
+	 *  replay after a crash. */
+	minSnapshotJsonIntervalMs?: number;
+}
+
 /** Extract a displayable text form from message content (text | image | array). */
 function contentToText(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -97,8 +115,22 @@ function contentToText(content: unknown): string {
 
 export class ViewStore {
 	readonly #db: Database;
+	readonly #hooks: ViewStoreOptions["hooks"];
+	readonly #minSnapshotJsonIntervalMs: number;
+	/** P1-13: per-session message-projection index — entryId → positional
+	 *  seq. Lets a persist verify the journal-append regime (ids align with
+	 *  positions) and write ONLY the changed rows instead of DELETE+rebuild.
+	 *  Keys are short strings — bounded and cleaned by remove(). */
+	#msgIndex = new Map<string, Map<string, number>>();
+	/** Highest seq handed out per session (append path continues at +1). */
+	#msgMaxSeq = new Map<string, number>();
+	/** P1-13: snapshot-JSON write throttle state per session. */
+	#lastJsonEntriesRef = new Map<string, unknown>();
+	#lastJsonAt = new Map<string, number>();
 
-	constructor(dbPath: string) {
+	constructor(dbPath: string, options?: ViewStoreOptions) {
+		this.#hooks = options?.hooks;
+		this.#minSnapshotJsonIntervalMs = options?.minSnapshotJsonIntervalMs ?? 1000;
 		fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 		this.#db = new Database(dbPath, { create: true });
 		// Multiple daemon processes can share the journal dir (test daemons
@@ -171,8 +203,22 @@ export class ViewStore {
 		this.#db.run("PRAGMA journal_mode = WAL");
 	}
 
-	/** Persist a snapshot AND sync the query tables, atomically. */
-	upsert(sessionId: string, snapshot: SessionSnapshot, parentId: string | null = null): void {
+	/** Persist a snapshot AND sync the query tables, atomically.
+	 *
+	 *  P1-13 incremental projection: the message table is no longer
+	 *  DELETE+rebuilt on every persist. When the session's entry ids still
+	 *  align positionally (the journal-append regime — prepend/truncate/
+	 *  reorder fall back to a full rewrite), only `options.changed` rows
+	 *  are written: known ids UPDATE in place, new ids INSERT at maxSeq+1.
+	 *  The materialized_sessions snapshot JSON is additionally throttled to
+	 *  one write per `minSnapshotJsonIntervalMs` while streaming (the
+	 *  journal stays authoritative; `force` bypasses for lifecycle points). */
+	upsert(
+		sessionId: string,
+		snapshot: SessionSnapshot,
+		parentId: string | null = null,
+		options?: { force?: boolean; changed?: readonly SessionEntry[] },
+	): void {
 		// Session preset id. The MaterializedView projection (rebuilt from wire
 		// events) never carries modeId; only persistHeaderPatch — the create /
 		// setMode paths — writes it, and always with an explicit value (incl.
@@ -260,16 +306,34 @@ export class ViewStore {
 				? ({ ...snapshot, header: { ...headerObj, ...headerPatch } } as unknown as SessionSnapshot)
 				: snapshot;
 		this.#db.transaction(() => {
-			this.#db
-				.query(
-					`INSERT INTO materialized_sessions (session_id, cursor, snapshot, updated_at)
-					 VALUES (?, ?, ?, ?)
-					 ON CONFLICT(session_id) DO UPDATE SET
-					   cursor = excluded.cursor,
-					   snapshot = excluded.snapshot,
-					   updated_at = excluded.updated_at`,
-				)
-				.run(sessionId, snapshot.cursor, JSON.stringify(snapshotToStore), Date.now());
+			// P1-13: throttle the O(session-size) snapshot JSON to one write
+			// per minSnapshotJsonIntervalMs while streaming (content frames
+			// arrive every 100ms persist). The journal remains authoritative;
+			// a skipped write only means slightly more replay after a crash.
+			// Lifecycle points (dispose / compaction / header patch) pass
+			// force and are never throttled.
+			const entriesRef: unknown = snapshot.entries;
+			const lastRef = this.#lastJsonEntriesRef.get(sessionId);
+			const lastAt = this.#lastJsonAt.get(sessionId) ?? 0;
+			const nowMs = Date.now();
+			if (
+				options?.force === true ||
+				lastRef === undefined ||
+				(entriesRef !== lastRef && nowMs - lastAt >= this.#minSnapshotJsonIntervalMs)
+			) {
+				this.#db
+					.query(
+						`INSERT INTO materialized_sessions (session_id, cursor, snapshot, updated_at)
+						 VALUES (?, ?, ?, ?)
+						 ON CONFLICT(session_id) DO UPDATE SET
+						   cursor = excluded.cursor,
+						   snapshot = excluded.snapshot,
+						   updated_at = excluded.updated_at`,
+					)
+					.run(sessionId, snapshot.cursor, JSON.stringify(snapshotToStore), nowMs);
+				this.#lastJsonEntriesRef.set(sessionId, entriesRef);
+				this.#lastJsonAt.set(sessionId, nowMs);
+			}
 
 			const state = snapshot.state as SessionState | undefined;
 			// Model metadata: prefer the last assistant message's model (always
@@ -344,28 +408,87 @@ export class ViewStore {
 					mcpServers !== null ? JSON.stringify(mcpServers) : null,
 				);
 
-			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
-			let seq = 0;
+			// P1-13: message projection. Append regime (ids still align with
+			// their positional seqs — the only shape the daemon view ever
+			// produces) writes just the changed rows; prepend/truncate/reorder
+			// fall back to the whole-table rebuild.
+			const msgEntries: MessageEntry[] = [];
 			for (const entry of snapshot.entries) {
-				if (entry.type !== "message") continue;
-				const msg = (entry as MessageEntry).message;
-				this.#db
-					.query(
-						"INSERT INTO messages (session_id, seq, role, model, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
-					)
-					.run(
-						sessionId,
-						seq++,
-						msg.role,
-						"model" in msg ? (String((msg as { model?: unknown }).model ?? "") ?? null) : null,
-						"content" in msg ? contentToText(msg.content) : "",
-						// Mid-stream wire messages carry no timestamp yet; the
-						// entry-level timestamp (message_start time) is the
-						// closest stable value. Coalescing here keeps a
-						// shutdown/close during streaming from tripping the
-						// NOT NULL constraint (and killing the daemon).
-						msg.timestamp ?? (Date.parse(entry.timestamp) || Date.now()),
-					);
+				if (entry.type === "message") msgEntries.push(entry as MessageEntry);
+			}
+			const index = this.#msgIndex.get(sessionId);
+			const prevSize = index?.size ?? 0;
+			let aligned = index !== undefined && msgEntries.length >= prevSize;
+			if (aligned && index) {
+				// Head must be positionally identical (id → seq === position)…
+				for (let i = 0; i < prevSize; i++) {
+					if (index.get(msgEntries[i].id) !== i) {
+						aligned = false;
+						break;
+					}
+				}
+				// …and the tail beyond the previous size must be genuinely new
+				// ids — a tail id that already has a seq is a reorder/prepend
+				// in disguise, not an append.
+				if (aligned) {
+					for (let i = prevSize; i < msgEntries.length; i++) {
+						if (index.has(msgEntries[i].id)) {
+							aligned = false;
+							break;
+						}
+					}
+				}
+			}
+			const rowValues = (msg: MessageEntry["message"], entry: SessionEntry): Array<string | number | null> => [
+				msg.role,
+				"model" in msg ? (String((msg as { model?: unknown }).model ?? "") ?? null) : null,
+				"content" in msg ? contentToText(msg.content) : "",
+				// Mid-stream wire messages carry no timestamp yet; the
+				// entry-level timestamp (message_start time) is the closest
+				// stable value. Coalescing here keeps a shutdown/close during
+				// streaming from tripping the NOT NULL constraint (and killing
+				// the daemon).
+				msg.timestamp ?? (Date.parse(entry.timestamp) || Date.now()),
+			];
+			const insertStmt = this.#db.query(
+				"INSERT INTO messages (session_id, seq, role, model, content, timestamp) VALUES (?, ?, ?, ?, ?, ?)",
+			);
+			const updateStmt = this.#db.query(
+				"UPDATE messages SET role = ?, model = ?, content = ?, timestamp = ? WHERE session_id = ? AND seq = ?",
+			);
+			if (!aligned || !index) {
+				this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
+				const freshIndex = new Map<string, number>();
+				for (let i = 0; i < msgEntries.length; i++) {
+					const entry = msgEntries[i];
+					insertStmt.run(sessionId, i, ...rowValues(entry.message, entry));
+					freshIndex.set(entry.id, i);
+				}
+				this.#msgIndex.set(sessionId, freshIndex);
+				this.#msgMaxSeq.set(sessionId, msgEntries.length - 1);
+				this.#hooks?.onMessageRows?.("full", msgEntries.length);
+			} else {
+				let updates = 0;
+				let appends = 0;
+				if (options?.changed) {
+					for (const entry of options.changed) {
+						if (entry.type !== "message") continue;
+						const msg = (entry as MessageEntry).message;
+						const seq = index.get(entry.id);
+						if (seq !== undefined) {
+							updateStmt.run(...rowValues(msg, entry), sessionId, seq);
+							updates++;
+						} else {
+							const next = (this.#msgMaxSeq.get(sessionId) ?? -1) + 1;
+							insertStmt.run(sessionId, next, ...rowValues(msg, entry));
+							index.set(entry.id, next);
+							this.#msgMaxSeq.set(sessionId, next);
+							appends++;
+						}
+					}
+				}
+				if (updates > 0) this.#hooks?.onMessageRows?.("update", updates);
+				if (appends > 0) this.#hooks?.onMessageRows?.("append", appends);
 			}
 
 			this.#db.query("DELETE FROM agents WHERE session_id = ?").run(sessionId);
@@ -496,6 +619,12 @@ export class ViewStore {
 			this.#db.query("DELETE FROM messages WHERE session_id = ?").run(sessionId);
 			this.#db.query("DELETE FROM agents WHERE session_id = ?").run(sessionId);
 		})();
+		// P1-13: drop the incremental-persist state with the rows — a removed
+		// session that comes back must rebuild from a full write.
+		this.#msgIndex.delete(sessionId);
+		this.#msgMaxSeq.delete(sessionId);
+		this.#lastJsonEntriesRef.delete(sessionId);
+		this.#lastJsonAt.delete(sessionId);
 	}
 
 	close(): void {

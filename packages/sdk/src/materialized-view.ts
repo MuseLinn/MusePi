@@ -101,6 +101,12 @@ export class MaterializedView {
 	#lastSnapshotEntriesRev = -1;
 	#lastSnapshotRoundDurations: [number, number][] | null = null;
 	#lastSnapshotRoundRev = -1;
+	/** Entries created or content-replaced since the last drainDirtyEntries()
+	 *  (P1-13): the daemon's ViewStore persists only these rows instead of
+	 *  rewriting the whole message projection every 100ms persist. Drained by
+	 *  the persist scheduler; restore/static paths leave it empty (a fresh
+	 *  ViewStore state triggers a full write anyway). */
+	#dirtyEntries = new Set<SessionEntry>();
 	#mainAgent: AgentSnapshot | null = null;
 	#isStreaming = false;
 	// Extra header fields (user-picked model/thinking/title for history
@@ -233,6 +239,7 @@ export class MaterializedView {
 				this.#entries.push(entry);
 				this.#structureRev += 1;
 				this.#entriesRev += 1;
+				this.#dirtyEntries.add(entry);
 				break;
 			}
 			case "ttsr_triggered": {
@@ -251,6 +258,7 @@ export class MaterializedView {
 				this.#entries.push(entry);
 				this.#structureRev += 1;
 				this.#entriesRev += 1;
+				this.#dirtyEntries.add(entry);
 				break;
 			}
 			case "irc_message": {
@@ -290,6 +298,7 @@ export class MaterializedView {
 				this.#entries.push(entry);
 				this.#structureRev += 1;
 				this.#entriesRev += 1;
+				this.#dirtyEntries.add(entry);
 				break;
 			}
 			case "agent_start": {
@@ -376,6 +385,7 @@ export class MaterializedView {
 			// stays put; only the array content moved, so the snapshot array
 			// must be re-emitted (new entry object inside).
 			this.#entriesRev += 1;
+			this.#dirtyEntries.add(updated);
 			return;
 		}
 		const entry: MessageEntry = {
@@ -392,6 +402,7 @@ export class MaterializedView {
 		this.#entries.push(entry);
 		this.#structureRev += 1;
 		this.#entriesRev += 1;
+		this.#dirtyEntries.add(entry);
 	}
 
 	/**
@@ -429,12 +440,14 @@ export class MaterializedView {
 				// Same-key replacement (start/end frame pair): same reasoning
 				// as #upsertMessage — content only, no topology change.
 				this.#entriesRev += 1;
+				this.#dirtyEntries.add(entry);
 				return;
 			}
 		}
 		this.#entries.push(entry);
 		this.#structureRev += 1;
 		this.#entriesRev += 1;
+		this.#dirtyEntries.add(entry);
 	}
 
 	/** Current cursor (= last applied event seq). */
@@ -469,6 +482,7 @@ export class MaterializedView {
 			// key matches the backfilled one must not render twice.
 			if (e.type === "message") this.#messages.set(messageKey(e.message), e);
 			else if (e.type === "custom_message") this.#customMessages.set(e.id, e);
+			this.#dirtyEntries.add(e);
 		}
 		this.#entries = [...fresh, ...this.#entries];
 		this.#structureRev += 1;
@@ -489,6 +503,17 @@ export class MaterializedView {
 			if (e.id === id) return true;
 		}
 		return false;
+	}
+
+	/** Entries created or content-replaced since the previous drain — the
+	 *  P1-13 incremental-persist channel. The daemon's persist scheduler
+	 *  drains this and hands the list to ViewStore.upsert({ changed }), so
+	 *  the message projection writes only these rows instead of rewriting
+	 *  the whole table. Drain is destructive: each entry is reported once. */
+	drainDirtyEntries(): SessionEntry[] {
+		const out = [...this.#dirtyEntries];
+		this.#dirtyEntries.clear();
+		return out;
 	}
 
 	/** SDK-contract snapshot. Cheap: no journal read. The entries and

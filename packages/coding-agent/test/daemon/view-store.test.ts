@@ -6,17 +6,20 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { UserMessage } from "@musepi/pi-wire";
+import type { WireMessage } from "@musepi/pi-wire";
 import type { SessionSnapshot } from "@musepi/sdk";
 import { ViewStore } from "../../src/daemon/view-store";
 
 const dirs: string[] = [];
 const stores: ViewStore[] = [];
 
-function tempStore(): ViewStore {
+function tempStore(opts?: ConstructorParameters<typeof ViewStore>[1]): ViewStore {
 	const d = fs.mkdtempSync(path.join(os.tmpdir(), "vstore-test-"));
 	dirs.push(d);
-	const store = new ViewStore(path.join(d, "materialized.db"));
+	// Default the snapshot-JSON throttle to 0 so multi-upsert assertions on
+	// load() stay deterministic; P1-13 throttle tests opt into a large
+	// interval explicitly.
+	const store = new ViewStore(path.join(d, "materialized.db"), { minSnapshotJsonIntervalMs: 0, ...opts });
 	stores.push(store);
 	return store;
 }
@@ -31,7 +34,7 @@ afterEach(() => {
 
 function snapshot(
 	sessionId: string,
-	messages: UserMessage[],
+	messages: WireMessage[],
 	cursor = messages.length,
 	model?: string,
 ): SessionSnapshot {
@@ -283,7 +286,7 @@ describe("ViewStore cross-session tables", () => {
 							{ type: "text", text: "needle" },
 						],
 						timestamp: 1,
-					} as unknown as UserMessage,
+					} as unknown as WireMessage,
 				],
 				1,
 			),
@@ -305,5 +308,143 @@ describe("ViewStore cross-session tables", () => {
 		expect(store.list()).toHaveLength(0);
 		expect(store.load("s1")).toBeUndefined();
 		expect(store.search("x")).toEqual([]);
+	});
+});
+
+describe("ViewStore incremental projection (P1-13)", () => {
+	// 失败模式：流式期间每次 100ms persist 都 DELETE 全表 + 逐条重插 +
+	// 整体 JSON.stringify（10⁴ 行 × 10/s 的同步事务阻塞事件循环）。断言
+	// 写入行数与本次变更量成正比（hooks 计数桩），且检索内容保持新鲜。
+	test("content-only persist updates just the changed row (search stays fresh, no full rewrite)", () => {
+		const writes: Array<{ kind: string; count: number }> = [];
+		const store = tempStore({ hooks: { onMessageRows: (kind, count) => writes.push({ kind, count }) } });
+		const now = Date.now();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "partial answer", timestamp: now - 1000 }], 1));
+
+		// 流式内容帧：同 id 新对象（MaterializedView upsert 形状）。
+		const updatedEntry = {
+			type: "message" as const,
+			id: "m0",
+			parentId: null,
+			timestamp: new Date(now - 1000).toISOString(),
+			message: { role: "user" as const, content: "partial answer, now complete", timestamp: now - 1000 },
+		};
+		const snap2 = snapshot(
+			"s1",
+			[{ role: "user", content: "partial answer, now complete", timestamp: now - 1000 }],
+			2,
+		);
+		snap2.entries = [updatedEntry];
+		store.upsert("s1", snap2, null, { changed: [updatedEntry] });
+
+		expect(store.search("now complete")).toHaveLength(1);
+		expect(store.search("partial answer")).toHaveLength(1); // 同一条，不是第二条
+		// 首 upsert 必然是 full；断言的是第二次 persist 没有再走全量重建。
+		expect(writes.filter(w => w.kind === "full")).toHaveLength(1);
+		expect(writes.filter(w => w.kind === "update")).toEqual([{ kind: "update", count: 1 }]);
+	});
+
+	test("append persist inserts only the new tail rows", () => {
+		const writes: Array<{ kind: string; count: number }> = [];
+		const store = tempStore({ hooks: { onMessageRows: (kind, count) => writes.push({ kind, count }) } });
+		const now = Date.now();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[
+					{ role: "user", content: "one", timestamp: now - 3000 },
+					{ role: "assistant", content: "two", timestamp: now - 2000 } as unknown as WireMessage,
+				],
+				2,
+			),
+		);
+		const third = {
+			type: "message" as const,
+			id: "m2",
+			parentId: null,
+			timestamp: new Date(now - 1000).toISOString(),
+			message: { role: "user" as const, content: "three", timestamp: now - 1000 },
+		};
+		const snap2 = snapshot(
+			"s1",
+			[
+				{ role: "user", content: "one", timestamp: now - 3000 },
+				{ role: "assistant", content: "two", timestamp: now - 2000 } as unknown as WireMessage,
+			],
+			2,
+		);
+		snap2.entries = [...snap2.entries, third];
+		store.upsert("s1", snap2, null, { changed: [third] });
+
+		const rows = store.messagesFor("s1");
+		expect(rows.map(r => r.content)).toEqual(["one", "two", "three"]);
+		expect(rows.map(r => r.seq)).toEqual([0, 1, 2]);
+		// 首 upsert 必然是 full；断言的是追加 persist 只走 append 通道。
+		expect(writes.filter(w => w.kind === "full")).toHaveLength(1);
+		expect(writes.filter(w => w.kind === "append")).toEqual([{ kind: "append", count: 1 }]);
+	});
+
+	test("a persist with no changes writes zero message rows", () => {
+		let writeCount = 0;
+		const store = tempStore({ hooks: { onMessageRows: () => writeCount++ } });
+		const now = Date.now();
+		const snap = snapshot("s1", [{ role: "user", content: "steady", timestamp: now - 1000 }], 1);
+		store.upsert("s1", snap);
+		// turn_start/agent_end 帧：同一 entries 引用、无 dirty——非内容 persist。
+		store.upsert("s1", snap, null, { changed: [] });
+		expect(writeCount).toBe(1); // 仅首 upsert 的 full
+		expect(store.search("steady")).toHaveLength(1);
+	});
+
+	test("prepend/misalignment falls back to a full rebuild and stays consistent", () => {
+		const writes: Array<{ kind: string; count: number }> = [];
+		const store = tempStore({ hooks: { onMessageRows: (kind, count) => writes.push({ kind, count }) } });
+		const now = Date.now();
+		store.upsert("s1", snapshot("s1", [{ role: "user", content: "newer", timestamp: now - 1000 }], 1));
+		// 前插一条更老的消息：newer 的 id (m0) 从 seq 0 挪到 seq 1，位置对齐被破坏。
+		const older = {
+			type: "message" as const,
+			id: "old-1",
+			parentId: null,
+			timestamp: new Date(now - 5000).toISOString(),
+			message: { role: "user" as const, content: "older", timestamp: now - 5000 },
+		};
+		const snap2 = snapshot("s1", [{ role: "user", content: "newer", timestamp: now - 1000 }], 2);
+		snap2.entries = [older, ...snap2.entries];
+		store.upsert("s1", snap2, null, { changed: [older] });
+
+		const rows = store.messagesFor("s1");
+		expect(rows.map(r => r.content)).toEqual(["older", "newer"]);
+		expect(writes.filter(w => w.kind === "full")).toHaveLength(2);
+	});
+
+	test("snapshot JSON is throttled while streaming; force bypasses", () => {
+		const store = tempStore({ minSnapshotJsonIntervalMs: 60_000 });
+		const now = Date.now();
+		const snap1 = snapshot("s1", [{ role: "user", content: "v1", timestamp: now - 1000 }], 1);
+		store.upsert("s1", snap1);
+		expect(store.load("s1")?.cursor).toBe(1);
+
+		// 非内容帧（同 entries 引用，cursor 前进）：JSON 被节流，cursor 不前进。
+		const snap2 = { ...snap1, cursor: 5 };
+		store.upsert("s1", snap2, null, { changed: [] });
+		expect(store.load("s1")?.cursor).toBe(1);
+
+		// force（dispose/compaction 语义）：立即写。
+		store.upsert("s1", { ...snap1, cursor: 9 }, null, { force: true });
+		expect(store.load("s1")?.cursor).toBe(9);
+	});
+
+	test("remove clears the incremental state — a resurrected session rebuilds fully", () => {
+		const writes: Array<{ kind: string; count: number }> = [];
+		const store = tempStore({ hooks: { onMessageRows: (kind, count) => writes.push({ kind, count }) } });
+		const now = Date.now();
+		const snap = snapshot("s1", [{ role: "user", content: "again", timestamp: now - 1000 }], 1);
+		store.upsert("s1", snap);
+		store.remove("s1");
+		store.upsert("s1", snap);
+		expect(writes.filter(w => w.kind === "full")).toHaveLength(2);
+		expect(store.search("again")).toHaveLength(1);
 	});
 });

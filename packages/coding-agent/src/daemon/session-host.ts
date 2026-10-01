@@ -1804,7 +1804,12 @@ export class DaemonSessionHost {
 			persistTimer = setTimeout(() => {
 				persistTimer = undefined;
 				try {
-					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+					// P1-13: persist only the rows the view dirtied since the
+					// last flush (plus a throttled snapshot JSON) instead of
+					// rewriting the whole message projection every 100ms.
+					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId, {
+						changed: viewFinal.drainDirtyEntries(),
+					});
 				} catch (error) {
 					// Persistence is best-effort fire-and-forget: the journal +
 					// SDK file remain authoritative. A transient write failure
@@ -1892,7 +1897,8 @@ export class DaemonSessionHost {
 					persistTimer = undefined;
 				}
 				try {
-					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId);
+					// Final lifecycle write — never throttled (P1-13).
+					this.#store.upsert(sessionId, viewFinal.snapshot(), parentId, { force: true });
 				} catch (error) {
 					// See schedulePersist: best-effort persistence must not
 					// crash the daemon during session teardown either.
@@ -2252,7 +2258,9 @@ export class DaemonSessionHost {
 		if (mcpServers !== undefined) {
 			(persisted.header as unknown as Record<string, unknown>).mcpServers = mcpServers;
 		}
-		this.#store.upsert(sessionId, persisted);
+		// Header-only change on a snapshot whose entries may be byte-identical
+		// to the last persist — force the JSON row (never throttled, P1-13).
+		this.#store.upsert(sessionId, persisted, null, { force: true });
 		return true;
 	}
 
@@ -2385,7 +2393,7 @@ export class DaemonSessionHost {
 			state.isStreaming = false;
 			state.queuedMessageCount = 0;
 		}
-		this.#store.upsert(sessionId, snapshot as never);
+		this.#store.upsert(sessionId, snapshot as never, null, { force: true });
 	}
 
 	/** Refresh a live session's idle clock (called on session.send). */
