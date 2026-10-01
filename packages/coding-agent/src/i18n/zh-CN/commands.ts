@@ -193,7 +193,7 @@ export const commands = {
 	"Show complete changelog": "显示完整更新日志",
 	"Show tools currently visible to the agent": "显示代理当前可见的工具",
 	"Show estimated context usage breakdown": "显示预估上下文用量明细",
-	"Open Extension Control Center dashboard": "打开扩展控制中心仪表盘",
+	"Open Extensions & plugins": "打开扩展与插件",
 	"Open Agent Control Center dashboard": "打开代理控制中心仪表盘",
 	"Create a new branch from a previous message": "从之前的消息创建新分支",
 	"Create a new fork from a previous message": "从之前的消息创建新分叉",

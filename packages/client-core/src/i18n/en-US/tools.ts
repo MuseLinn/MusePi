@@ -344,7 +344,6 @@ export const tools = {
 	"public internet only description":
 		"Restrict browser navigation to public http/https: block localhost, private networks, and URLs with credentials, and re-check DNS before navigating (against DNS rebinding). Off by default — accessing local dev servers is a core feature.",
 	"scheduled tasks completed": "Scheduled tasks completed",
-	"extensions control center": "Extensions control center",
 	"extensions settings":
 		"Manage skills, rules, MCP servers, context files, and other capabilities in one place (consistent with TUI /extensions)",
 	"subagents settings": "Currently running subagents",
@@ -648,7 +647,7 @@ export const tools = {
 	"ext provider health": "Source health",
 	"ext provider items {n}": "{n} items",
 	"ext open capability hint": "Browse, install, and manage skills",
-	"ext center title": "Extension Control Center",
+	"ext center title": "Extensions & plugins",
 	"ext center subtitle":
 		"The GUI twin of TUI /extensions · configure & diagnose here; browse & install in the capability center",
 	"installed capabilities": "Installed",

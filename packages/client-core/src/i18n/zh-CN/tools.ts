@@ -335,7 +335,6 @@ export const tools = {
 	"public internet only description":
 		"限制浏览器导航为公网 http/https：禁止 localhost、私网与带认证信息的 URL，并在导航前复查 DNS（防 DNS rebinding）。默认关闭——访问本地开发服务器是核心功能。",
 	"scheduled tasks completed": "定时任务完成",
-	"extensions control center": "扩展控制中心",
 	"extensions settings": "统一管理技能、规则、MCP 服务器、上下文文件等能力（与 TUI /extensions 一致）",
 	"subagents settings": "当前运行的子代理",
 	"no plugins loaded": "未加载插件",
@@ -621,7 +620,7 @@ export const tools = {
 	"ext provider health": "来源健康度",
 	"ext provider items {n}": "{n} 项",
 	"ext open capability hint": "浏览、安装与管理技能",
-	"ext center title": "扩展控制中心",
+	"ext center title": "扩展与插件",
 	"ext center subtitle": "TUI /extensions 的 GUI 对等物 · 配置与诊断在这里，浏览与安装去能力中心",
 	"installed capabilities": "已安装",
 	"acquire capabilities": "获取能力",

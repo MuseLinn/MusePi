@@ -468,7 +468,7 @@ export const BUILTIN_SESSION_SLASH_COMMANDS: ReadonlyArray<SlashCommandSpec> = [
 		name: "extensions",
 		aliases: ["status"],
 		icon: "extension",
-		description: "Open Extension Control Center dashboard",
+		description: "Open Extensions & plugins",
 		// issue #38 Step 2: the session's 10 extension meta-tools start
 		// default-inactive (their schemas stay out of the prompt/request).
 		// Explicitly opening the extension center is the agreed hard trigger

@@ -1896,7 +1896,7 @@ export const settings = {
 	"no subagents yet — task spawns appear here": "暂无子代理 — 任务生成将显示在此",
 	"j/k:select  Enter:open  r:revive  x:kill  Esc/←←:close": "j/k:选择  Enter:打开  r:恢复  x:终止  Esc/←←:关闭",
 	"Description is required.": "描述不能为空。",
-	"Extension Control Center": "扩展控制中心",
+	"Extensions & plugins": "扩展与插件",
 	"Choose the interface language for setup and the TUI.": "选择设置和 TUI 的界面语言。",
 
 	// ── Settings — full coverage (2026-08-01 audit gap fill) ──
