@@ -307,6 +307,46 @@ describe("buildTrajectory 活跃叶路径(activePath)", () => {
 		expect(turns[4]!.events.every(e => e.pathTurnLabel === "3-2")).toBe(true);
 	});
 
+	it("会话序言(parentless 非消息)不破坏深度链:实机会话拓扑编号 1 / 2-1 / 2-2", () => {
+		// 实机回归(2026-10-01,会话 01a0f81b):视图以 parentless 的
+		// model_change/thinking_level_change 序言开头,首条 user 消息不
+		// 是首条目 —— 旧"parentless 非首条 = 假根"规则把整条链判断,
+		// pathTurn/标签全丢,地图回退错误的 journal 序编号(Turn 3)。
+		const prologue = (id: string, ts: string): unknown => ({
+			type: "model_change",
+			id,
+			parentId: null,
+			timestamp: ts,
+		});
+		const msg = (id: string, parentId: string | null, ts: string, role: string, text: string): unknown => ({
+			type: "message",
+			id,
+			parentId,
+			timestamp: ts,
+			message: { role, content: [{ type: "text", text }] },
+		});
+		const entries = [
+			prologue("model_change:1", "2026-10-01T15:36:00.000Z"),
+			prologue("tlc-2", "2026-10-01T15:36:01.000Z"),
+			msg("u1", null, "2026-10-01T15:36:02.000Z", "user", "hello？"),
+			msg("a1", "u1", "2026-10-01T15:36:03.000Z", "assistant", "你好！"),
+			msg("u2", "a1", "2026-10-01T15:36:04.000Z", "user", "你可以做什么"),
+			msg("a2", "u2", "2026-10-01T15:36:05.000Z", "assistant", "我可以帮你…"),
+			// 撤回第 2 轮重发:与 u2 兄弟(同挂 a1)。
+			msg("u2n", "a1", "2026-10-01T15:36:06.000Z", "user", "再说一遍"),
+			msg("a2n", "u2n", "2026-10-01T15:36:07.000Z", "assistant", "你好！"),
+		];
+		const path = new Set(["u1", "a1", "u2n", "a2n"]);
+		const { turns } = buildTrajectoryTree(entries, undefined, path);
+		// 序言自成 turn=0 组(轨迹视图保留;地图布局会滤掉)。消息组:
+		// 组键(journal 序)= 1,2(旧),3(新);展示编号 = 树深度;
+		// 展示标签 = 深度 + 同父兄弟序。
+		expect(turns.map(g => g.turn)).toEqual([0, 1, 2, 3]);
+		expect(turns.map(g => g.displayTurn)).toEqual([0, 1, 2, 2]);
+		// 序言组无轮标签(渲染层回退 displayTurn);消息组标签正确。
+		expect(turns.map(g => g.displayTurnLabel)).toEqual([undefined, "1", "2-1", "2-2"]);
+	});
+
 	it("线性会话无兄弟轮:标签 = 纯深度,不加 -1 后缀", () => {
 		const msg = (id: string, parentId: string | null, ts: string, role: string, text: string): unknown => ({
 			type: "message",

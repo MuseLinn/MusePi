@@ -39,6 +39,42 @@ describe("walkLeafPath", () => {
 		expect(walk.complete).toBe(true);
 		expect(walk.path.map(p => p.id)).toEqual(["user:1", "assistant:2", "custom:3"]);
 	});
+
+	test("session prologue (parentless non-messages) does not break the chain", () => {
+		// 实机回归(2026-10-01,会话 01a0f81b):视图开头是 parentless 的
+		// model_change/thinking_level_change 序言,首条 user 消息因此不是
+		// "最老条目" —— 旧判据把完整链误判链断,活跃路径过滤整段失效,
+		// 撤回后的旧分支全部留在转录里。序言同根的首条消息必须是真根。
+		const prologue = (id: string) => ({ id, type: "model_change", parentId: null });
+		const entries = [
+			prologue("model_change:1"),
+			prologue("tlc-2"),
+			user("user:1", null),
+			assistant("assistant:2", "user:1"),
+			user("user:2", "assistant:2"),
+			assistant("assistant:3", "user:2"),
+			// 撤回第 2 轮后的新分支(挂在 assistant:2 下,与 user:2 兄弟)。
+			user("user:2n", "assistant:2"),
+			assistant("assistant:3n", "user:2n"),
+		];
+		const walk = walkLeafPath(entries, "assistant:3n");
+		expect(walk.complete).toBe(true);
+		expect(walk.path.map(p => p.id)).toEqual(["user:1", "assistant:2", "user:2n", "assistant:3n"]);
+	});
+
+	test("mid-session parentless entry behind a parentless prologue is still a cut chain", () => {
+		// 负契约:序言存在时,发射端漏打 parentId 的中段条目仍判链断 ——
+		// root 级连续段只覆盖头部连续 parentless,不包庇中段假根。
+		const prologue = (id: string) => ({ id, type: "model_change", parentId: null });
+		const entries = [
+			prologue("model_change:1"),
+			user("user:1", null),
+			assistant("assistant:2", "user:1"),
+			advisorCard("custom:3", null),
+		];
+		const walk = walkLeafPath(entries, "custom:3");
+		expect(walk.complete).toBe(false);
+	});
 });
 
 describe("filterVisibleEntries", () => {

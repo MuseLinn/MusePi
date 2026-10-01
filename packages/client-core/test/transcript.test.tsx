@@ -724,6 +724,14 @@ describe("branch bar topology (history rekey regression)", () => {
 		};
 	}
 
+	function withText(entry: SessionEntry, text: string): SessionEntry {
+		const msg = (entry as { message?: Record<string, unknown> }).message ?? {};
+		return {
+			...entry,
+			message: { ...msg, content: [{ type: "text", text }] },
+		} as SessionEntry;
+	}
+
 	function traceChild(parentId: string, id: string): SessionEntry {
 		return {
 			id,
@@ -775,6 +783,36 @@ describe("branch bar topology (history rekey regression)", () => {
 		];
 		const html = renderWithBranches(entries);
 		expect(countElements(html, ".tr-branch-wrap")).toBe(1);
+	});
+
+	it("active highlight follows the active path, not the last-appended child", () => {
+		// 实机回归(2026-10-01):切回旧兄弟分支后,分叉条高亮仍停留在
+		// 最后追加的新分支("last child"近似只在最新分支激活时对)。
+		const parent = assistantEntry({ timestamp: 100 });
+		const replyA = withText(messageChild(parent.id, 200, "reply-a"), "旧分支回答");
+		const replyB = withText(messageChild(parent.id, 300, "reply-b"), "新分支回答");
+		const entries: SessionEntry[] = [parent, replyA, replyB];
+		const childCount = childCountOf(entries);
+		const html = renderToStaticMarkup(
+			<Transcript
+				entries={entries}
+				stream={null}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+				branchInfo={{
+					childCount,
+					// 活跃路径 = 父节点 + 旧兄弟 reply-a(新分支已切走)。
+					activePathIds: new Set([parent.id, "reply-a"]),
+				}}
+			/>,
+		);
+		expect(countElements(html, ".tr-branch-item--active")).toBe(1);
+		const activeAt = html.indexOf("tr-branch-item--active");
+		const activeEnd = html.indexOf("</button>", activeAt);
+		const segment = html.slice(activeAt, activeEnd === -1 ? activeAt + 2000 : activeEnd);
+		expect(segment).toContain("旧分支回答");
+		expect(segment).not.toContain("新分支回答");
 	});
 
 	it("an UNFILTERED caller childCount (production app.tsx counts every entry) with only bookkeeping siblings gets NO branch bar", () => {

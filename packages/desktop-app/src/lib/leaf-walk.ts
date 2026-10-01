@@ -38,10 +38,19 @@ export function walkLeafPath<T>(entries: readonly T[], leafId: string | null): L
 		});
 		byKey.set(e.id, e);
 	}
-	// 加载窗内最老条目的 id:parentless 节点只有它才可信为真根(历史分页
-	// 从真根开始prepend,根之上没有别的条目)。
-	const oldest = entries[0] as { id?: unknown } | undefined;
-	const oldestId = typeof oldest?.id === "string" ? oldest.id : undefined;
+	// 头部 root 级连续段:从首条目起连续的 parentless 条目(会话序言的
+	// model_change/thinking_level_change 与第一条 user 消息同挂会话根)。
+	// 走到其中任一 parentless 节点都算到达真根;窗口中段的 parentless
+	// 节点(发射端漏打 parentId,2026-09-27 顾问卡回归)不在该段内,
+	// 仍判链断。实机回归(2026-10-01,会话 01a0f81b):序言条目使首条
+	// user 消息不是"最老条目",旧 `cursor === oldestId` 判据把完整链误判
+	// 链断 → 活跃路径过滤整段失效,撤回后的旧分支全部留在转录里。
+	const rootRunIds = new Set<string>();
+	for (const entry of entries) {
+		const e = entry as { id?: unknown; parentId?: unknown };
+		if (typeof e.id !== "string" || typeof e.parentId === "string") break;
+		rootRunIds.add(e.id);
+	}
 	const path: LeafWalkNode[] = [];
 	const seen = new Set<string>();
 	let cursor = leafId;
@@ -54,9 +63,10 @@ export function walkLeafPath<T>(entries: readonly T[], leafId: string | null): L
 		const entry = byKey.get(cursor);
 		const parent = entry?.parentId;
 		if (typeof parent !== "string") {
-			// parentless:真根仅当它是加载窗内最老条目;否则某条消息的
-			// parentId 缺失(发射端漏打),链在这里断掉。
-			complete = cursor === oldestId;
+			// parentless:真根仅当它属于头部 root 级连续段(序言同根的
+			// 首条消息);否则某条消息的 parentId 缺失(发射端漏打),链
+			// 在这里断掉。
+			complete = rootRunIds.has(cursor);
 			break;
 		}
 		if (!byKey.has(parent)) break; // next hop is missing → chain cut

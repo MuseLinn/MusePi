@@ -131,8 +131,16 @@ export function layoutTurnMap(
 		} else {
 			if (!lastWasBranch) lane += 1;
 			lastWasBranch = true;
-			// 分叉源 = 上一个主线轮。
-			const source = main[main.length - 1];
+			// 分叉源 = 树上深度-1 的主线轮(兄弟轮共享同一父轮:撤回/重答
+			// 的新轮挂在上一轮末尾,与旧轮是兄弟,不是旧轮的子轮)。深度
+			// 缺失(链断回退 journal 序)时回退旧行为"上一个主线轮"。实机
+			// 回归 2026-10-01:旧规则按 journal 顺序取"上一个主线轮",把
+			// 兄弟轮画成旧轮的子节点(分叉锚点错位一整轮)。
+			const branchDepth = group.events[0]?.pathTurn;
+			const source =
+				(branchDepth !== undefined && branchDepth > 1
+					? main.find(m => (m.group.displayTurn ?? m.group.turn) === branchDepth - 1)
+					: undefined) ?? main[main.length - 1];
 			const sourceTurn = source?.group.turn ?? 0;
 			if (!laneSource.has(lane)) laneSource.set(lane, sourceTurn);
 			if (horizontal) {

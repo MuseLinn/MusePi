@@ -18,7 +18,7 @@
 		"build:haptic": "bun scripts/build-haptic.mjs",
 		"build": "bun run build:tailwind && bun run build:bundle && bun run --parallel build:pdf build:fix build:haptic",
 		"desktop": "bun scripts/desktop-run.mjs",
-		"desktop:rebuild": "bun run build && bun scripts/relaunch-gui.mjs && electron .",
+		"desktop:rebuild": "bun run build && bun scripts/desktop-run.mjs",
 		"desktop:dev": "bun scripts/dev-desktop.mjs",
 		"desktop:run": "electron .",
 		"check": "biome check . && bun run check:types",

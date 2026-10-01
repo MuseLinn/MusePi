@@ -80,6 +80,39 @@ describe("layoutTurnMap", () => {
 		expect(layout.lanes[0]?.sourceTurn).toBe(2);
 	});
 
+	it("兄弟轮(同深度)的分叉源锚在深度-1 的父轮,不是 journal 上一主线轮", () => {
+		// 实机回归(2026-10-01,会话 01a0f81b):撤回第 2 轮重发 → 新轮与
+		// 旧轮同挂第 1 轮末尾(兄弟,树深度相同)。旧规则"分叉源 = 上一个
+		// 主线轮"把新轮画成旧轮的子节点;按 pathTurn 锚定后贝塞尔从
+		// 第 1 轮发出,与条目树一致。
+		const withDepth = (turn: number, displayTurn: number, branch = false): TrajectoryTurnGroup => ({
+			turn,
+			displayTurn,
+			events: [
+				{
+					id: `e${turn}-0`,
+					kind: "user",
+					title: `event ${turn}-0`,
+					turn,
+					pathTurn: displayTurn,
+					tsMs: turn * 1000,
+					...(branch ? { branch: true } : {}),
+				} as TrajectoryEvent,
+			],
+			firstTs: new Date(turn * 1000).toISOString(),
+			startMs: turn * 1000,
+			endMs: turn * 1000 + 1,
+		});
+		// 主线 = 第 1 轮(d1)+ 新第 2 轮(d2);旧第 2 轮(d2)= 分支。
+		const turns = [withDepth(1, 1), withDepth(2, 2), withDepth(3, 2, true)];
+		const layout = layoutTurnMap(turns);
+		const branchNode = layout.nodes.find(n => n.group.turn === 3);
+		expect(branchNode?.sourceTurn).toBe(1);
+		const branchEdge = layout.edges.find(e => e.branch);
+		expect(branchEdge?.from.group.turn).toBe(1);
+		expect(branchEdge?.to.group.turn).toBe(3);
+	});
+
 	it("连续分支轮共用一列;主线轮后重置新列", () => {
 		const turns = [
 			turnGroup(1),

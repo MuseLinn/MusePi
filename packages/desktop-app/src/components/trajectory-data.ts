@@ -169,21 +169,34 @@ export interface TrajectoryBatchIndex {
 	parentOf: Map<string, string | null>;
 	turnStartIds: Set<string>;
 	firstEntryId: string | undefined;
+	/** 头部 root 级连续段的条目 id:从首条目起连续的 parentless 条目
+	 *  (会话序言 model_change/thinking_level_change 与首条 user 消息同
+	 *  挂会话根)。depthOf 判真根用 —— 序言存在时首条 user 消息不是
+	 *  firstEntryId,旧"parentless 非首条 = 假根"规则会把整条链判断,
+	 *  深度/标签全丢(实机回归 2026-10-01,会话 01a0f81b)。中段的
+	 *  parentless 条目(漏打 parentId)不在该段内,仍判假根。 */
+	rootRunIds: Set<string>;
 }
 
 export function indexTrajectoryBatch(entries: readonly unknown[]): TrajectoryBatchIndex {
 	const parentOf = new Map<string, string | null>();
 	const turnStartIds = new Set<string>();
+	const rootRunIds = new Set<string>();
 	let firstEntryId: string | undefined;
+	let inRootRun = true;
 	for (const raw of entries) {
 		if (!raw || typeof raw !== "object") continue;
 		const e = raw as { id?: unknown; parentId?: unknown };
 		if (typeof e.id !== "string") continue;
 		if (firstEntryId === undefined) firstEntryId = e.id;
+		if (inRootRun) {
+			if (typeof e.parentId === "string") inRootRun = false;
+			else rootRunIds.add(e.id);
+		}
 		parentOf.set(e.id, typeof e.parentId === "string" ? e.parentId : null);
 		if (isTurnStart(raw as Parameters<typeof isTurnStart>[0])) turnStartIds.add(e.id);
 	}
-	return { parentOf, turnStartIds, firstEntryId };
+	return { parentOf, turnStartIds, firstEntryId, rootRunIds };
 }
 
 export function buildTrajectory(
@@ -209,16 +222,16 @@ export function buildTrajectory(
 	const batch = hooks?.batch ?? indexTrajectoryBatch(entries);
 	const parentOf = batch.parentOf;
 	const turnStartIds = batch.turnStartIds;
-	const firstEntryId = batch.firstEntryId;
 	const depthMemo = new Map<string, number>();
 	/** 断链/假根判定也是可记忆化的结论:链上任意节点重查都指向同一个
 	 *  断点,不记下就会每个事件重走一遍链(P1-11:尾窗头部条目父在窗外
 	 *  是常态,单次重算因此退化为 O(n²))。 */
 	const depthBroken = new Set<string>();
 	/** 树深度(含自身)的轮起始数。链断(父是 string 但不在本批条目)或
-	 *  parentless 但不是首条可见条目(发射端漏打 parentId —— 与 leaf-walk
-	 *  同一规则)时返回 undefined,调用方回退 journal 序,不把断链深度当真
-	 *  编号(实机回归:parentless 顾问卡全显示 "Turn 1")。 */
+	 *  parentless 但不在头部 root 级连续段内(发射端漏打 parentId —— 与
+	 *  leaf-walk 同一规则;序言同根的首条消息在该段内,是真根)时返回
+	 *  undefined,调用方回退 journal 序,不把断链深度当真编号(实机回归:
+	 *  parentless 顾问卡全显示 "Turn 1")。 */
 	const depthOf = (id: string): number | undefined => {
 		if (depthBroken.has(id)) return undefined;
 		const hit = depthMemo.get(id);
@@ -241,8 +254,10 @@ export function buildTrajectory(
 			const p = parentOf.get(cur);
 			if (p === undefined) break; // 根(预计算外的入口,防御)
 			if (p === null) {
-				if (cur !== firstEntryId) broken = true; // 假根:深度不可信
-				break; // 真根 = 首条可见条目
+				// 真根 = 头部 root 级连续段内的 parentless 节点(序言同根);
+				// 中段 parentless = 假根:深度不可信。
+				if (!batch.rootRunIds.has(cur)) broken = true;
+				break;
 			}
 			if (!parentOf.has(p)) {
 				broken = true; // 链断:深度不可信

@@ -1247,16 +1247,20 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 						.join(" ");
 		return text.replace(/\s+/g, " ").trim().slice(0, 60);
 	}, []);
-	// Which child of `parentId` lies on the active path (the one whose
-	// subtree contains the current leaf — approximated here as the LAST
-	// child in entry order, which is where new branches append).
+	// Which child of `parentId` lies on the active path: prefer the kid whose
+	// id is IN the active path set — "last child in entry order" is only right
+	// while the newest branch is active; after switching back to an older
+	// sibling the highlight must follow the path, not the append order (user
+	// report 2026-10-01: highlight stayed on the newer sibling after switching
+	// back to the rolled-back branch).
 	const activeChildOf = useCallback(
 		(parentId: string): string | null => {
 			const kids = branchChildren.get(parentId);
 			if (!kids || kids.length === 0) return null;
-			return kids[kids.length - 1]!.id;
+			const onPath = branchInfo?.activePathIds ? kids.find(k => branchInfo.activePathIds.has(k.id)) : undefined;
+			return (onPath ?? kids[kids.length - 1]!).id;
 		},
-		[branchChildren],
+		[branchChildren, branchInfo?.activePathIds],
 	);
 
 	// Turn-final file artifacts (本轮文件卡片展示在最底部): a turn spans
