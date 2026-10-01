@@ -421,6 +421,37 @@ export interface DaemonOptions {
  */
 export const SOCKET_DIR = process.env.MUSEPI_DAEMON_DIR || path.join(os.tmpdir(), "musepi-daemon");
 
+/**
+ * One-shot daemon-startup sweep: remove EMPTY top-level slug dirs under the
+ * sessions root. Deleting every session of a workspace leaves the slug dir
+ * behind, and it would otherwise linger in the project list's disk scan
+ * forever. rmdirSync only succeeds on truly empty dirs — anything with
+ * content (session files, subagent artifacts) throws and stays. Best-effort:
+ * a busy/locked dir is skipped, never fatal at startup.
+ */
+function sweepEmptySessionDirs(): void {
+	const root = getSessionsDir();
+	let entries: fs.Dirent[];
+	try {
+		entries = fs.readdirSync(root, { withFileTypes: true });
+	} catch {
+		return;
+	}
+	let swept = 0;
+	for (const entry of entries) {
+		if (!entry.isDirectory()) continue;
+		try {
+			fs.rmdirSync(path.join(root, entry.name));
+			swept++;
+		} catch {
+			/* non-empty or locked — keep */
+		}
+	}
+	if (swept > 0) {
+		logger.info("Swept empty session workspace dirs at startup", { swept });
+	}
+}
+
 /** Minimal typed view over the live AgentSession's mode state. */
 export interface ModeSessionLike {
 	getGoalModeState?(): { enabled?: boolean; goal?: { objective?: string; status?: string } } | undefined;
@@ -1173,6 +1204,7 @@ export class DaemonSessionHost {
 		this.#store = new ViewStore(viewStorePath(JOURNAL_DIR));
 		this.#idleScanner = setInterval(() => this.#scanIdle(), IDLE_SCAN_INTERVAL_MS);
 		this.#idleScanner.unref?.();
+		sweepEmptySessionDirs();
 	}
 
 	/**
@@ -2914,6 +2946,30 @@ export class DaemonSessionHost {
 				// list route can distinguish them from task subagents.
 				advisor: h.advisor === true,
 			});
+		}
+		// Ghost-row reconciliation: view-store rows outlive their transcripts.
+		// A store row whose session file vanished from disk (or whose whole
+		// workspace slug dir is gone when no path is recorded) and which has no
+		// live session behind it is a ghost — deleted/test workspaces otherwise
+		// pollute session.list and the sidebar project tab forever. Live rows
+		// are skipped: a pre-first-persist session has no file yet by design.
+		const ghostIds: string[] = [];
+		const sessionsRoot = getSessionsDir();
+		const { peekDefaultSessionDir } = await import("../session/session-paths");
+		for (const [id, row] of merged) {
+			if (live.has(id)) continue;
+			if (row.sessionFile) {
+				if (!fs.existsSync(row.sessionFile)) ghostIds.push(id);
+				continue;
+			}
+			if (!fs.existsSync(peekDefaultSessionDir(row.cwd, sessionsRoot))) ghostIds.push(id);
+		}
+		for (const id of ghostIds) {
+			merged.delete(id);
+			this.#store.remove(id);
+		}
+		if (ghostIds.length > 0) {
+			logger.info("Pruned ghost view-store rows (transcript or workspace gone)", { count: ghostIds.length });
 		}
 		const all = [...merged.values()].sort((a, b) => b.updatedAt - a.updatedAt);
 		// Live sessions: the realtime session name wins over the store

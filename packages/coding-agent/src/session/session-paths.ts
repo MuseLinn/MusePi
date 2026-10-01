@@ -178,6 +178,17 @@ export function resolveManagedSessionRoot(sessionDir: string, cwd: string): stri
 }
 
 /**
+ * Read-only variant of {@link computeDefaultSessionDir} for existence probes:
+ * computes the canonical slug dir for a cwd WITHOUT running migrations or
+ * creating the directory. Ghost-row reconciliation uses it to test whether a
+ * session's workspace tree still exists at all.
+ */
+export function peekDefaultSessionDir(cwd: string, sessionsRoot: string = getSessionsDir()): string {
+	const { encodedDirName } = getDefaultSessionDirName(cwd);
+	return path.join(sessionsRoot, encodedDirName);
+}
+
+/**
  * Compute the default session directory for a cwd.
  * Classifies cwd by canonical location so symlink/alias paths resolve to the
  * same home-relative or temp-root directory names as their real targets.
