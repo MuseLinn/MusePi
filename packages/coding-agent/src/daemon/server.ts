@@ -633,7 +633,7 @@ export class DaemonServer {
 		this.#services.register(
 			new SessionService({
 				knownSessions: () => this.#host.knownSessions(),
-				snapshot: sessionId => this.#host.snapshot(sessionId),
+				snapshot: async sessionId => tailSnapshot(await this.#host.snapshot(sessionId)),
 				checkpointSeq: sessionId => this.#host.checkpointSeq(sessionId),
 				setResumeLive: (conn, live) => {
 					// Per-connection attribution (P0-7): see #resumeLiveByConn.

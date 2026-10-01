@@ -37,9 +37,16 @@ export interface SessionTreeRow {
 	advisor?: boolean;
 }
 
-/** live 会话最小结构面（tree 的 autoTitle 判定 + resumeLive 登记引用）。 */
+/** live 会话最小结构面（tree 的 autoTitle 判定 + resumeLive 登记引用 +
+ *  resume 响应的流式视觉水合——server 的 resolveLive 实参是全量 LiveSession，
+ *  此处只声明用到的结构子集）。 */
 export interface ResumeLiveHandle {
 	autoTitle?: boolean;
+	/** Running tool calls（subscribe-time 水合同源；GUI 打开 live 会话时的
+	 *  composer dock 首帧）。 */
+	activeToolCalls?: Map<string, unknown>;
+	/** Owned subagent progress（同上，swarm 卡首帧）。 */
+	subagentProgress?: Map<string, unknown>;
 }
 
 export interface SessionServiceDeps {
@@ -136,15 +143,22 @@ export class SessionService implements DaemonService {
 	}
 
 	/** RPC session.resume：快照 + resumeLive 登记（订阅附着前置状态，
-	 *  读取侧在 server.ts 的 session.subscribe）。compactedThrough = 请求
-	 *  cursor 早于压缩检查点（期间 delta 已折进快照，客户端须刷新派生态）。
-	 *  stream = 发起 resume 的连接 id（live 存在时客户端切流凭证）。 */
+	 *  读取侧在 server.ts 的 catchupIfNeeded——仅当会话本就 live 才附着，
+	 *  历史会话保持只读快照、不激活，P0-6）。compactedThrough = 请求 cursor
+	 *  早于压缩检查点（期间 delta 已折进快照，客户端须刷新派生态）。stream
+	 *  = 发起 resume 的连接 id（live 存在时客户端切流凭证）。live 时快照
+	 *  附带 activeTools/agentsProgress 水合（subscribe 路由的 dock/swarm 首帧
+	 *  等价物——GUI 打开路径改 resume 首选后不能丢这段）。 */
 	async resume(
 		params: { sessionId: string; cursor?: number },
 		conn: { id: string },
 	): Promise<{
 		stream: string | null;
-		snapshot: { entries?: readonly unknown[] };
+		snapshot: {
+			entries?: readonly unknown[];
+			activeTools?: unknown[];
+			agentsProgress?: unknown[];
+		};
 		compactedThrough: boolean;
 	}> {
 		const snapshot = await this.#deps.snapshot(params.sessionId);
@@ -154,7 +168,11 @@ export class SessionService implements DaemonService {
 		const compacted = typeof params.cursor === "number" && checkpointSeq > params.cursor;
 		return {
 			stream: live ? conn.id : null,
-			snapshot,
+			snapshot: {
+				...snapshot,
+				...(live?.activeToolCalls ? { activeTools: [...live.activeToolCalls.values()] } : {}),
+				...(live?.subagentProgress ? { agentsProgress: [...live.subagentProgress.values()] } : {}),
+			},
 			compactedThrough: compacted,
 		};
 	}

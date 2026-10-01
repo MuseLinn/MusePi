@@ -1657,6 +1657,37 @@ function AppInner(): ReactNode {
 					agentsProgress?: SubagentProgressPayload[];
 				} | null = null;
 				try {
+					// P0-6: snapshot-first open. session.resume attaches the live
+					// stream only when the session is ALREADY live (via the
+					// post-response catchup); a history session stays a read-only
+					// snapshot — no AgentSession/MCP/discovery spin-up, so
+					// MAX_LIVE_SESSIONS / idle reclaim keep working. The old
+					// subscribe-first order activated EVERY opened session and
+					// made the snapshot path dead code. subscribe remains only as
+					// the explicit-stream fallback below.
+					const res = await client.request<{
+						stream: string | null;
+						snapshot: {
+							entries: unknown[];
+							state?: unknown;
+							cursor: number;
+							header?: { cwd?: string };
+							tail?: { hasMore: boolean; beforeId: string | null };
+							activeTools?: {
+								toolCallId: string;
+								toolName: string;
+								args: unknown;
+								intent?: string;
+								partialResult?: unknown;
+								startedAt: number;
+							}[];
+							agentsProgress?: SubagentProgressPayload[];
+						};
+					}>("session.resume", { sessionId });
+					initial = res.snapshot;
+				} catch {
+					// Defensive fallback: explicit stream attach (activates the
+					// session — reserved for paths where resume is unavailable).
 					const res = await client.request<{
 						stream: string | null;
 						initial: {
@@ -1677,18 +1708,6 @@ function AppInner(): ReactNode {
 						};
 					}>("session.subscribe", { sessionId });
 					initial = res.initial;
-				} catch {
-					// Unknown session (history) — fall back to resume.
-					const res = await client.request<{
-						snapshot: {
-							entries: unknown[];
-							state?: unknown;
-							cursor: number;
-							header?: { cwd?: string };
-							tail?: { hasMore: boolean; beforeId: string | null };
-						};
-					}>("session.resume", { sessionId });
-					initial = res.snapshot;
 				}
 				// A newer user action (another session opened while this RPC was
 				// in flight) supersedes this result: mounting the stale session's

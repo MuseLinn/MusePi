@@ -3034,8 +3034,13 @@ export class DaemonSessionHost {
 	}
 
 	async subscribe(sessionId: string, conn: DaemonConnection): Promise<{ seq: number }> {
-		// History sessions (idle-closed / pre-restart) reactivate on demand so
-		// opening them in the GUI yields a live stream, not a dead snapshot.
+		// Explicit stream attach: history sessions (idle-closed / pre-restart)
+		// reactivate on demand so a client that wants the LIVE stream (send
+		// path, resync fallback) gets one, not a dead snapshot. The desktop
+		// open path deliberately does NOT come through here — it opens
+		// snapshot-first via session.resume (P0-6) and only activates on
+		// send/branch, so merely viewing a history session never spins up an
+		// AgentSession / MCP / discovery (MAX_LIVE_SESSIONS stays meaningful).
 		let live = this.#sessions.get(sessionId);
 		if (!live) live = await this.activate(sessionId);
 		// Multi-subscription per connection: envelopes carry `sessionId`, so
