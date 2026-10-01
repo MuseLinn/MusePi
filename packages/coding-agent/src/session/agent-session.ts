@@ -8836,6 +8836,17 @@ export class AgentSession {
 			 * the original one.
 			 */
 			reanswerAskResult?: AgentToolResult<AskToolDetails>;
+			/**
+			 * Regenerate semantics (GUI 重试 on an assistant reply): land the
+			 * leaf immediately BEFORE the target — the target reply and its
+			 * old tail stay on the tree as a dead sibling branch — and the
+			 * caller re-runs the agent from the truncated state. No
+			 * editorText is returned (nothing is backfilled for re-send;
+			 * re-sending user text would duplicate the turn). Only meaningful
+			 * for non-user targets; user targets keep the revert/re-answer
+			 * semantics.
+			 */
+			regenerate?: boolean;
 		} = {},
 	): Promise<{
 		editorText?: string;
@@ -8883,7 +8894,7 @@ export class AgentSession {
 		// landed, or another caller navigated straight onto the ask result),
 		// and must still return `reopenAsk` / branch the new answer instead of
 		// silently reporting a no-op (chatgpt-codex review on #5895).
-		if (targetId === oldLeafId && !(options.allowAskReopen && targetIsAskResult)) {
+		if (targetId === oldLeafId && !options.regenerate && !(options.allowAskReopen && targetIsAskResult)) {
 			return { cancelled: false };
 		}
 
@@ -9058,6 +9069,13 @@ export class AgentSession {
 			};
 			newLeafId = this.sessionManager.appendMessageToBranch(toolResultMessage, targetEntry.parentId);
 			isAskReanswerCompletion = true;
+		} else if (options.regenerate && targetEntry.parentId) {
+			// Regenerate (GUI 重试): land BEFORE the target — the target reply
+			// and everything after it stay on the tree as a sibling branch, and
+			// the caller re-runs the agent from the state that produced the
+			// original call. Deliberately NO editorText: backfilling user text
+			// would re-send it and duplicate the turn (user report 2026-10-01).
+			newLeafId = targetEntry.parentId;
 		} else {
 			// Non-user message (or a user-invoked skill-prompt injection): land the
 			// leaf on the selected node so it stays on the active branch. Skill
@@ -9140,6 +9158,29 @@ export class AgentSession {
 			sessionContext: stateContext,
 			askReanswerCommitted: isAskReanswerCompletion,
 		};
+	}
+
+	/**
+	 * Regenerate (重试) the assistant reply at `targetId` IN PLACE: navigate
+	 * the leaf to just before the target — the old reply and its tail stay on
+	 * the tree as a sibling branch (navigateTree parity, nothing truncated) —
+	 * and re-run the agent from the truncated state WITHOUT re-sending any
+	 * user text. The transcript-level retry button used to branch to the
+	 * producing USER message and re-send it, which duplicated the turn in the
+	 * model context and bumped the turn count (user report 2026-10-01).
+	 *
+	 * @returns true when the agent run was scheduled, false when the session
+	 * is busy (streaming/compacting), the target is not an assistant message,
+	 * or the navigation was cancelled.
+	 */
+	async regenerateAt(targetId: string): Promise<boolean> {
+		if (this.#isDisposed || this.isStreaming || this.isCompacting) return false;
+		const target = this.sessionManager.getEntry(targetId);
+		if (target?.type !== "message" || target.message.role !== "assistant") return false;
+		const result = await this.navigateTree(targetId, { regenerate: true });
+		if (result.cancelled) return false;
+		this.#scheduleAgentContinue();
+		return true;
 	}
 
 	/**

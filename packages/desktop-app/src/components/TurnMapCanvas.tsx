@@ -129,7 +129,9 @@ export const TmNodeCard = memo(function TmNodeCard({
 	const statsRow = useMemo(() => turnStatsOf(n.group), [n.group]);
 	const comp = useMemo(() => compositionOf(n.group), [n.group]);
 	// 展示编号 = 树深度(分支后会话按新主线重新编号);无 pathTurn 回退 journal 序。
-	const shownTurn = n.group.displayTurn ?? n.group.turn;
+	// 展示标签 = 深度 + 同父兄弟序(撤回/编辑重发后同深度的兄弟轮显示
+	// "2-1"/"2-2",不再两个都叫 "Turn 2");无标签回退编号。
+	const shownTurn = n.group.displayTurnLabel ?? n.group.displayTurn ?? n.group.turn;
 	return (
 		<div
 			className={`tm-node${isExpanded ? "" : " tm-node--compact"}${n.branch ? " tm-node--branch" : ""}${isLeaf ? " tm-node--leaf" : ""}${isCurrent ? " tm-node--current" : ""}${searchDim ? " tm-node--dim" : ""}${searchHit ? " tm-node--hit" : ""}`}
@@ -834,7 +836,9 @@ export function TurnMapCanvas({
 								>
 									{tLoose("turn map branch from", {
 										turn:
-											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ?? lane.sourceTurn,
+											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurnLabel ??
+											main.find(m => m.group.turn === lane.sourceTurn)?.group.displayTurn ??
+											lane.sourceTurn,
 									})}
 								</div>
 							))}
@@ -863,7 +867,7 @@ export function TurnMapCanvas({
 					<div className="tm-hover-head">
 						{hoverNode.group.turn === 0
 							? t("trajectory system events")
-							: `Turn ${hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
+							: `Turn ${hoverNode.group.displayTurnLabel ?? hoverNode.group.displayTurn ?? hoverNode.group.turn}`}
 						<span className="tm-hover-time">
 							{hoverNode.group.firstTs
 								? new Date(hoverNode.group.firstTs).toLocaleTimeString(undefined, timeFormatOptions())

@@ -298,6 +298,33 @@ describe("buildTrajectory 活跃叶路径(activePath)", () => {
 		expect(turns[4]!.events[0]!.branch).not.toBe(true);
 	});
 
+	it("组展示标签 displayTurnLabel = 深度 + 同父兄弟序:撤回后同深度的旧轮与新轮区分 3-1 / 3-2", () => {
+		const { turns } = buildTrajectoryTree(branchedSession(), undefined, activePath);
+		// u3(旧第三问,先创建)= 3-1;u3n(新第三问)= 3-2;独子轮无前缀;
+		// 旧第四问挂在新第三问下,深度 4 无兄弟 → 纯 "4"。
+		expect(turns.map(g => g.displayTurnLabel)).toEqual(["1", "2", "3-1", "4", "3-2"]);
+		// 组内事件同标签(assistant 事件跟随其 user 轮)。
+		expect(turns[4]!.events.every(e => e.pathTurnLabel === "3-2")).toBe(true);
+	});
+
+	it("线性会话无兄弟轮:标签 = 纯深度,不加 -1 后缀", () => {
+		const msg = (id: string, parentId: string | null, ts: string, role: string, text: string): unknown => ({
+			type: "message",
+			id,
+			parentId,
+			timestamp: ts,
+			message: { role, content: [{ type: "text", text }] },
+		});
+		const entries = [
+			msg("u1", null, "2026-09-26T00:00:00.000Z", "user", "一问"),
+			msg("a1", "u1", "2026-09-26T00:00:01.000Z", "assistant", "一答"),
+			msg("u2", "a1", "2026-09-26T00:00:02.000Z", "user", "二问"),
+			msg("a2", "u2", "2026-09-26T00:00:03.000Z", "assistant", "二答"),
+		];
+		const { turns } = buildTrajectoryTree(entries);
+		expect(turns.map(g => g.displayTurnLabel)).toEqual(["1", "2"]);
+	});
+
 	it("空 activePath(撤回过根)回退旧 first-child 行为,不误标全分支", () => {
 		// first-child 链跟随先追加的旧分支 → 旧 3/4 轮算主线,新轮被标 branch。
 		const { events } = buildTrajectory(branchedSession(), new Set());

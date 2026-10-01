@@ -1178,6 +1178,88 @@ export class DaemonServer {
 		return text.trim().length > 0 ? text : undefined;
 	}
 
+	/** Resolve a transcript VIEW key ("role:timestamp" or a raw entry id) to
+	 *  the SDK entry id. Shared by every tree-mutation RPC (branchAt /
+	 *  regenerateAt): message entries match by role + timestamp, ask
+	 *  toolResults by toolCallId — the same matching the GUI's view rows use. */
+	#resolveViewMessageId(live: LiveSession, messageId: string): string {
+		const entries = (
+			live.agentSession as unknown as { sessionManager: { getEntries(): SessionEntry[] } }
+		).sessionManager.getEntries();
+		const direct = entries.find(e => e.id === messageId)?.id;
+		if (direct) return direct;
+		const sep = messageId.indexOf(":");
+		if (sep > 0) {
+			const role = messageId.slice(0, sep);
+			const key = messageId.slice(sep + 1);
+			const hit = entries.find(e => {
+				if (e.type !== "message") return false;
+				// Entries of type "message" need not carry a payload: the SDK
+				// file mixes in bookkeeping records, and an unguarded
+				// `e.message.role` threw on the first one — surfacing to the
+				// user as a dead tree-op button.
+				const m = e.message as { role?: string; timestamp?: number | string; toolCallId?: string } | undefined;
+				if (!m || m.role !== role) return false;
+				return role === "toolResult" ? m.toolCallId === key : String(m.timestamp) === key;
+			});
+			if (hit?.id) return hit.id;
+		}
+		throw new Error(`Unknown message: ${messageId}`);
+	}
+
+	/** Post-leaf-move snapshot for the session_leaf_moved broadcast: the leaf
+	 *  as a VIEW key (nearest MESSAGE ancestor — the transcript tree's keying)
+	 *  plus the active path (root → leaf, message-only rows, parentId = nearest
+	 *  message ancestor's view key) truncated from the leaf end to
+	 *  TAIL_ENTRIES. Extracted from session.branchAt: navigateTree-family ops
+	 *  only move the SDK tree's leaf pointer — no entry append, no agent event —
+	 *  so every tree mutation RPC must publish this same synthetic event or
+	 *  subscribers stay stuck on the stale active path. */
+	#leafMoveSnapshot(live: LiveSession): { leafId: string | null; path: string[]; pathEntries: SessionEntry[] } {
+		const session = live.agentSession as unknown as {
+			sessionManager: { getEntries(): SessionEntry[]; getLeafEntry(): SessionEntry | undefined };
+		};
+		const entries = session.sessionManager.getEntries();
+		const byId = new Map(entries.map(e => [e.id, e]));
+		let leafId: string | null = null;
+		let cursor: SessionEntry | undefined = session.sessionManager.getLeafEntry();
+		const seen = new Set<string>();
+		while (cursor && typeof cursor.id === "string" && !seen.has(cursor.id)) {
+			seen.add(cursor.id);
+			const raw = cursor as { message?: WireMessage; parentId?: string | null };
+			if (raw.message) {
+				leafId = messageKey(raw.message);
+				break;
+			}
+			cursor = raw.parentId ? byId.get(raw.parentId) : undefined;
+		}
+		const sdkSeen = new Set<string>();
+		let sdkCursor: SessionEntry | undefined = session.sessionManager.getLeafEntry();
+		const sdkPath: SessionEntry[] = [];
+		while (sdkCursor && typeof sdkCursor.id === "string" && !sdkSeen.has(sdkCursor.id)) {
+			sdkSeen.add(sdkCursor.id);
+			sdkPath.unshift(sdkCursor);
+			sdkCursor = sdkCursor.parentId ? byId.get(sdkCursor.parentId) : undefined;
+		}
+		const pathEntries: SessionEntry[] = [];
+		let parentViewKey: string | null = null;
+		for (const e of sdkPath) {
+			const m = (e as { message?: WireMessage }).message;
+			if (!m) continue; // non-message record — not a path row
+			const viewKey = messageKey(m);
+			pathEntries.push({
+				type: "message",
+				id: viewKey,
+				parentId: parentViewKey,
+				timestamp: new Date(m.timestamp).toISOString(),
+				message: m,
+			} as SessionEntry);
+			parentViewKey = viewKey;
+		}
+		const windowed = pathEntries.slice(-TAIL_ENTRIES);
+		return { leafId, path: windowed.map(e => e.id), pathEntries: windowed };
+	}
+
 	async handle(method: string, params: unknown, conn: DaemonConnection): Promise<unknown> {
 		switch (method) {
 			case "system.ping": {
@@ -3086,37 +3168,13 @@ export class DaemonServer {
 				const blive = this.#host.get(bp.sessionId) ?? (await this.#host.activate(bp.sessionId).catch(() => null));
 				if (!blive) throw new Error(`Unknown session: ${bp.sessionId}`);
 				// Resolve the view key ("role:timestamp") to the SDK entry id
-				// (same message-key matching as forkAt).
+				// (shared matcher — regenerateAt resolves the same way).
 				const bentries = (
 					blive.agentSession as unknown as {
 						sessionManager: { getEntries(): SessionEntry[] };
 					}
 				).sessionManager.getEntries();
-				const bviewKey = bp.messageId;
-				let bsdkId = bentries.find(e => e.id === bviewKey)?.id;
-				if (!bsdkId) {
-					const bsep = bviewKey.indexOf(":");
-					if (bsep > 0) {
-						const brole = bviewKey.slice(0, bsep);
-						const bkey = bviewKey.slice(bsep + 1);
-						const bhit = bentries.find(e => {
-							if (e.type !== "message") return false;
-							// Entries of type "message" need not carry a payload:
-							// the SDK file mixes in bookkeeping records, and an
-							// unguarded `e.message.role` threw
-							// "undefined is not an object (evaluating 'message.role')"
-							// on the first one — which surfaced to the user as the
-							// 撤回/编辑/重试 buttons doing nothing at all.
-							const m = e.message as
-								| { role?: string; timestamp?: number | string; toolCallId?: string }
-								| undefined;
-							if (!m || m.role !== brole) return false;
-							return brole === "toolResult" ? m.toolCallId === bkey : String(m.timestamp) === bkey;
-						});
-						bsdkId = bhit?.id;
-					}
-				}
-				if (!bsdkId) throw new Error(`Unknown message: ${bp.messageId}`);
+				const bsdkId = this.#resolveViewMessageId(blive, bp.messageId);
 				const bresult = await (
 					blive.agentSession as unknown as {
 						navigateTree(
@@ -3126,33 +3184,6 @@ export class DaemonServer {
 					}
 				).navigateTree(bsdkId, {});
 				if (bresult.cancelled) return { ok: false };
-				// Report where the leaf landed as a VIEW key ("role:timestamp").
-				// The leaf need not be a message — model_change /
-				// thinking_level_change / title records are legitimate leaves —
-				// and `messageKey` dereferences `.message`, so reading it
-				// unguarded threw "undefined is not an object (evaluating
-				// 'message.role')" out of an otherwise successful branch. The
-				// GUI saw only a failed RPC, which is why 撤回/编辑/重试 looked
-				// like dead buttons (nothing moved, nothing backfilled).
-				// Walk up to the nearest MESSAGE ancestor — the entry the
-				// transcript tree actually keys on (same resolution as the
-				// stream-event rekey above).
-				const bsm = blive.agentSession.sessionManager as unknown as {
-					getLeafEntry(): SessionEntry | undefined;
-				};
-				const bById = new Map(bentries.map(e => [e.id, e]));
-				let bCursor: SessionEntry | undefined = bsm.getLeafEntry();
-				const bSeen = new Set<string>();
-				let bleafKey: string | null = null;
-				while (bCursor && typeof bCursor.id === "string" && !bSeen.has(bCursor.id)) {
-					bSeen.add(bCursor.id);
-					const bRaw = bCursor as { message?: WireMessage; parentId?: string | null };
-					if (bRaw.message) {
-						bleafKey = messageKey(bRaw.message);
-						break;
-					}
-					bCursor = bRaw.parentId ? bById.get(bRaw.parentId) : undefined;
-				}
 				// editorText is what the composer gets backfilled with. navigateTree
 				// returns it when it actually moves the leaf, but it takes an early
 				// no-op exit when the leaf is ALREADY at the target — which is
@@ -3163,48 +3194,9 @@ export class DaemonServer {
 				const btarget = bentries.find(e => e.id === bsdkId) as { message?: WireMessage } | undefined;
 				const btargetText =
 					btarget?.message?.role === "user" ? extractEntryText({ content: btarget.message.content }) : "";
-				// Active path (root → leaf) AFTER the move, in VIEW-key space.
-				// The client store only holds the daemon's TAIL window
-				// (TAIL_ENTRIES) and re-fetched resume snapshots return the
-				// newest 200 rows — on a long session a rewind to a node far
-				// above the tail re-anchored the client onto the WRONG data
-				// (the old tail stayed on screen, 撤回 looked like a no-op).
-				// Shipping the path lets subscribers re-anchor locally. Same
-				// parentId convention the materialized view uses: message
-				// entries only, parentId = nearest MESSAGE ancestor's view
-				// key (hex ids rewritten via messageKey), non-message records
-				// (model_change / compaction) skipped. Truncated from the
-				// LEAF end to TAIL_ENTRIES so the payload stays bounded; a
-				// truncated root's parentId then points outside the payload,
-				// which clients read exactly like a cut tail-window chain.
-				const bpathInfo = ((): { path: string[]; pathEntries: SessionEntry[] } => {
-					const bySdkId = new Map(bentries.map(e => [e.id, e]));
-					const sdkSeen = new Set<string>();
-					let sdkCursor: SessionEntry | undefined = bsm.getLeafEntry();
-					const sdkPath: SessionEntry[] = [];
-					while (sdkCursor && typeof sdkCursor.id === "string" && !sdkSeen.has(sdkCursor.id)) {
-						sdkSeen.add(sdkCursor.id);
-						sdkPath.unshift(sdkCursor);
-						sdkCursor = sdkCursor.parentId ? bySdkId.get(sdkCursor.parentId) : undefined;
-					}
-					const pathEntries: SessionEntry[] = [];
-					let parentViewKey: string | null = null;
-					for (const e of sdkPath) {
-						const m = (e as { message?: WireMessage }).message;
-						if (!m) continue; // non-message record — not a path row
-						const viewKey = messageKey(m);
-						pathEntries.push({
-							type: "message",
-							id: viewKey,
-							parentId: parentViewKey,
-							timestamp: new Date(m.timestamp).toISOString(),
-							message: m,
-						} as SessionEntry);
-						parentViewKey = viewKey;
-					}
-					const windowed = pathEntries.slice(-TAIL_ENTRIES);
-					return { path: windowed.map(e => e.id), pathEntries: windowed };
-				})();
+				// Leaf position + active path after the move (shared snapshot
+				// builder — see #leafMoveSnapshot for the broadcast contract).
+				const bsnap = this.#leafMoveSnapshot(blive);
 				// 撤回/切分支广播: navigateTree 只移动 SDK 树的 leaf 指针 —
 				// 不 append 条目、不走 agent 事件流,而 GUI store 只从事件流
 				// 学习(leaf_moved 之前撤回/切分支后订阅端永远停在旧 active
@@ -3214,18 +3206,47 @@ export class DaemonServer {
 				// 撤到根,首条用户消息的 parentId 在 wire 快照里恒为 null)。
 				blive.publishWireEvent({
 					type: "session_leaf_moved",
-					leafId: bleafKey,
-					path: bpathInfo.path,
-					pathEntries: bpathInfo.pathEntries,
+					leafId: bsnap.leafId,
+					path: bsnap.path,
+					pathEntries: bsnap.pathEntries,
 				});
 				return {
 					ok: true,
-					leafId: bleafKey,
-					path: bpathInfo.path,
-					pathEntries: bpathInfo.pathEntries,
+					leafId: bsnap.leafId,
+					path: bsnap.path,
+					pathEntries: bsnap.pathEntries,
 					editorText: bresult.editorText ?? (btargetText || null),
 					editorImages: bresult.editorImages ?? [],
 				};
+			}
+			case "session.regenerateAt": {
+				// Regenerate (重试) an assistant reply IN PLACE: move the leaf to
+				// just before the reply and re-run the agent from there — the old
+				// reply and its tail stay on the tree as a sibling branch
+				// (navigateTree parity, nothing truncated), and NO user text is
+				// re-sent. The transcript retry used to branchAt the producing
+				// USER message and re-send it, duplicating the turn in the model
+				// context and bumping the turn count (user report 2026-10-01).
+				// Same session_leaf_moved broadcast contract as session.branchAt
+				// so subscribers re-anchor onto the truncated active path while
+				// the fresh reply streams in as a new sibling.
+				const rp = (params ?? {}) as { sessionId: string; messageId: string };
+				if (!rp.messageId) throw new Error("messageId required");
+				const rlive = this.#host.get(rp.sessionId) ?? (await this.#host.activate(rp.sessionId).catch(() => null));
+				if (!rlive) throw new Error(`Unknown session: ${rp.sessionId}`);
+				const rsdkId = this.#resolveViewMessageId(rlive, rp.messageId);
+				const started = await (
+					rlive.agentSession as unknown as { regenerateAt(targetId: string): Promise<boolean> }
+				).regenerateAt(rsdkId);
+				if (!started) return { ok: false };
+				const rsnap = this.#leafMoveSnapshot(rlive);
+				rlive.publishWireEvent({
+					type: "session_leaf_moved",
+					leafId: rsnap.leafId,
+					path: rsnap.path,
+					pathEntries: rsnap.pathEntries,
+				});
+				return { ok: true, leafId: rsnap.leafId, path: rsnap.path, pathEntries: rsnap.pathEntries };
 			}
 			case "session.btwBranch": {
 				// GUI /btw promote (TUI branchFromBtw parity — openchamber

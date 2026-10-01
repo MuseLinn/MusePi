@@ -411,12 +411,12 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	// Mobile empty state gets the time-aware greeting + rotating tip in place
 	// of the bare "no activity yet" line (gui WelcomeComposer parity).
 	const emptySlot = isMobileShell() ? <WelcomeHint /> : undefined;
-	// Revert (撤回) / retry (重试) are session-tree operations: branchAt moves
-	// the leaf IN PLACE at the target node (TUI /tree parity) — the old leaf
-	// and its subtree stay reachable as a sibling branch, never truncated.
-	// For a user node the daemon backfills the text; the host re-sends it so
-	// the turn resumes at that point. (True composer pre-fill — TUI waits for
-	// the user to confirm — is a follow-up; the GUI composer has no external
+	// Revert (撤回) is a session-tree operation: branchAt moves the leaf IN
+	// PLACE at the target node (TUI /tree parity) — the old leaf and its
+	// subtree stay reachable as a sibling branch, never truncated. For a user
+	// node the daemon backfills the text; the host re-sends it so the turn
+	// resumes at that point. (True composer pre-fill — TUI waits for the
+	// user to confirm — is a follow-up; the GUI composer has no external
 	// set-text channel yet.)
 	const branchAt = (messageId: string): void => {
 		if (!focusedSessionId) return;
@@ -430,6 +430,21 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			})
 			.catch(err => {
 				console.error("[transcript] branchAt failed:", err);
+			});
+	};
+	// Retry (重试) on an assistant reply regenerates it IN PLACE: the daemon
+	// truncates to just before the reply (old reply + tail stay as a sibling
+	// branch) and re-runs the agent — no user text re-send (re-sending the
+	// producing user message duplicated the turn, user report 2026-10-01).
+	const regenerateAt = (messageId: string): void => {
+		if (!focusedSessionId) return;
+		void client
+			.rpc<{ ok?: boolean }>("session.regenerateAt", {
+				sessionId: focusedSessionId,
+				messageId,
+			})
+			.catch(err => {
+				console.error("[transcript] regenerateAt failed:", err);
 			});
 	};
 	// Fork (分叉): copy the session truncated at this message into a NEW
@@ -492,7 +507,7 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			host={host}
 			emptySlot={emptySlot}
 			onRevert={id => branchAt(id)}
-			onRetry={(id, text) => branchAt(id)}
+			onRetry={(id, _text) => regenerateAt(id)}
 			onFork={(id, text, includeTarget) => forkAt(id, text, includeTarget)}
 			onSpeak={(text, id) => tts.speak(text, id)}
 			speakingId={speakingId}

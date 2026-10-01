@@ -1025,12 +1025,13 @@ export function ChatView({
 			// daemon rejected — keep as-is
 		}
 	};
-	// Retry (重新生成该回复): branch to the user message that produced
-	// this reply and re-send it (TUI navigateTree parity, 2026-08-24).
-	// session.branchAt moves the session leaf IN PLACE — the old reply and
-	// any later tail stay on the tree as a sibling branch (NOT truncated
-	// like revertTo, NOT copied like forkAt). The new turn re-answers the
-	// user message and forks a parallel branch.
+	// Map 重答 (branchTo): branch to the turn's user message and backfill the
+	// draft — the composer re-send re-answers it (TUI navigateTree parity,
+	// 2026-08-24). session.branchAt moves the session leaf IN PLACE — the old
+	// reply and any later tail stay on the tree as a sibling branch (NOT
+	// truncated like revertTo, NOT copied like forkAt). The transcript ↻
+	// retry no longer goes through here: it regenerates the assistant reply
+	// in place via session.regenerateAt (no user text re-send, 2026-10-01).
 	const branchTo = useCallback(
 		async (
 			messageId: string,
@@ -1118,23 +1119,35 @@ export function ChatView({
 		},
 		[confirmTreeOpWhileWorking, onStop, waitWorkingCleared],
 	);
-	const retryFromUserMessage = async (messageId: string, text: string): Promise<void> => {
-		// Converged path: branchAt AFTER the run actually unwinds, otherwise the
-		// re-anchor races the in-flight run and the reply lands under the wrong
-		// node (user report 2026-09-16).
+	// Regenerate (重试, the ↻ action under an ASSISTANT reply): truncate to
+	// just before the reply and re-run the agent from there — session.regenerateAt
+	// moves the leaf to the reply's parent (the old reply and its tail stay on
+	// the tree as a sibling branch, nothing truncated) and schedules a fresh
+	// agent run WITHOUT re-sending user text. The old flow branched to the
+	// producing USER message and re-sent it, which duplicated the turn in the
+	// model context and bumped the turn count (user report 2026-10-01).
+	const regenerateFromAssistant = async (messageId: string): Promise<void> => {
+		if (!store) return;
 		await runTreeOp(async () => {
-			const res = await branchTo(messageId);
-			// session.branchAt positions a USER message at its PARENT (the node is
-			// re-answered by the send that follows), so the pinned leaf sits at the
-			// branch point — and the transcript, which renders the active path,
-			// would hide the very attempt we are about to create (the user saw only
-			// the "此节点有 N 个分支" divider while the map showed the new branch).
-			// Release the pin so the view follows the new tip, exactly like the
-			// composer's own send path.
-			setCurrentLeafKey(null);
-			setPinnedPathIds(null);
-			if (res?.editorText) onSend(res.editorText);
-			else if (res) onSend(text);
+			try {
+				const res = await rpc.request<{ ok: boolean; leafId: string | null; path?: string[] }>(
+					"session.regenerateAt",
+					{ sessionId: store.sessionId, messageId },
+				);
+				if (res?.ok !== true) {
+					window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: t("branch failed") }));
+					return;
+				}
+				// Follow the fresh tip: the regenerated reply streams in as a new
+				// sibling under the truncated node — the same follow-the-send
+				// contract as the composer path.
+				setCurrentLeafKey(null);
+				setPinnedPathIds(null);
+				pulseSwitch();
+			} catch (err) {
+				const reason = `${t("branch failed")}: ${err instanceof Error ? err.message : String(err)}`;
+				window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: reason }));
+			}
 		});
 	};
 	// Rewind (撤回, the ⤺ action under a USER message): branch to the user
@@ -2292,7 +2305,7 @@ export function ChatView({
 																onLoadOlder={onLoadOlderStable}
 																loadingOlder={loadingOlder}
 																anchorCtlRef={anchorCtlRef}
-																onRetry={(id, text) => void retryFromUserMessage(id, text)}
+																onRetry={(id, _text) => void regenerateFromAssistant(id)}
 																onSpeak={(text, id) => {
 																	// TTS read-aloud via the daemon's local Kokoro worker;
 																	// 行级播放状态(朗读中 → 该行按钮高亮,点击停止)。

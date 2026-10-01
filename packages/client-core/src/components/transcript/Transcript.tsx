@@ -416,8 +416,10 @@ function Row({
 	speaking?: boolean;
 	/** 停止朗读(播放中的行点击)。 */
 	onStopSpeak?(): void;
-	/** The user message whose reply this row is — retry truncates to it and
-	 *  re-sends it (assistant rows only). */
+	/** Visibility gate for the retry action: the row is an assistant reply
+	 *  produced by a user message. The retry itself regenerates THIS row —
+	 *  the handler receives the row's own `id` (not the user message's) and
+	 *  re-runs the agent in place without re-sending user text. */
 	retryTarget?: { id: string; text: string } | null;
 	/** Save-as-image: hands over the rendered message body element so the
 	 *  caller rasterizes the REAL markdown DOM (openchamber toPng parity)
@@ -539,18 +541,21 @@ function Row({
 							<Pencil size={13} />
 						</button>
 					)}
-					{onRetry && kind === "assistant" && retryTarget && (
+					{onRetry && kind === "assistant" && id && retryTarget && (
 						<button
 							type="button"
 							className="tr-action"
 							title={t("retry")}
 							aria-label={t("retry")}
 							onClick={() => {
-								// Retry = regenerate THIS reply: truncate to the
-								// user message that produced it and re-send that
-								// user message (NOT this assistant text — sending
-								// the reply back as a new user message was a bug).
-								onRetry(retryTarget.id, retryTarget.text);
+								// Retry = regenerate THIS reply in place: truncate
+								// to just before it and re-run the agent — the old
+								// reply stays on the tree as a sibling branch and
+								// NO user text is re-sent (re-sending the producing
+								// user message duplicated the turn, user report
+								// 2026-10-01). Pass THIS row's id, not the user
+								// message's.
+								onRetry(id, retryTarget.text);
 							}}
 						>
 							<RefreshCw size={13} />

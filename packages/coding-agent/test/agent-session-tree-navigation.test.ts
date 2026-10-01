@@ -74,6 +74,33 @@ describe.skipIf(!e2eApiKey("ANTHROPIC_API_KEY"))("AgentSession tree navigation e
 		expect(sessionManager.getLeafId()).toBe(assistantEntry!.id);
 	}, 60000);
 
+	it("navigateTree with regenerate lands the leaf on the target's PARENT (retry semantics)", async () => {
+		const { session, sessionManager } = ctx;
+
+		// Build conversation
+		await session.prompt("Hello");
+		await session.agent.waitForIdle();
+
+		const entries = sessionManager.getEntries();
+		const assistantEntry = entries.find(e => e.type === "message" && e.message.role === "assistant");
+		expect(assistantEntry).toBeDefined();
+
+		// Retry (重试) semantics: truncate to just BEFORE the reply so the
+		// agent re-runs from the state that produced it — the reply itself
+		// must NOT be in the regenerated context, and nothing is backfilled
+		// for re-send (re-sending the user text duplicated the turn).
+		const result = await session.navigateTree(assistantEntry!.id, { regenerate: true });
+
+		expect(result.cancelled).toBe(false);
+		expect(result.editorText).toBeUndefined();
+		expect(sessionManager.getLeafId()).toBe(assistantEntry!.parentId ?? null);
+
+		// The old reply stays on the tree as a sibling (branch to its parent
+		// still resolves it).
+		const reResolved = sessionManager.getEntry(assistantEntry!.id);
+		expect(reResolved).toBeDefined();
+	}, 60000);
+
 	it("should create branch summary when navigating with summarize=true", async () => {
 		const { session, sessionManager } = ctx;
 

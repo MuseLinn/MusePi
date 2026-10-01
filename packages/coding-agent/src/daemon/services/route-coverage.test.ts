@@ -36,6 +36,7 @@ const SESSION_TREE_ROUTES = [
 	"session.btwBranch",
 	"session.catchup",
 	"session.forkAt",
+	"session.regenerateAt",
 	"session.resume",
 	"session.tree",
 ] as const;

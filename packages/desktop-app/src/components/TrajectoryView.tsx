@@ -175,7 +175,7 @@ function InspectorCard({
 					</div>
 					<div className="gui-ctx-stat">
 						<div className="gui-ctx-stat-v text-[11px]">{t("trajectory turns")}</div>
-						<div className="traj-inspector-value">Turn {ev.pathTurn ?? ev.turn}</div>
+						<div className="traj-inspector-value">Turn {ev.pathTurnLabel ?? ev.pathTurn ?? ev.turn}</div>
 					</div>
 					{roundDurationMs !== undefined && (
 						<div className="gui-ctx-stat">
@@ -874,7 +874,7 @@ export function TrajectoryView({
 										<span className="traj-turn-tag">
 											{group.turn === 0
 												? t("trajectory system events")
-												: `Turn ${group.displayTurn ?? group.turn}`}
+												: `Turn ${group.displayTurnLabel ?? group.displayTurn ?? group.turn}`}
 										</span>
 										<span className="traj-turn-summary">
 											{assistant ? assistant.title : `${group.events.length} events`}
