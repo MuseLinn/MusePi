@@ -2675,6 +2675,12 @@ export function ChatView({
 											if (res?.editorText) setPendingEdit(res.editorText);
 										});
 									}}
+									onSwitchTo={id => {
+										// 纯切换:非 user 锚 leaf 直接落节点,关草稿回填并清
+										// 遗留草稿(与地图「切换到此分支」同一语义)。
+										setPendingEdit(null);
+										void switchToNode(id, { backfillDraft: false });
+									}}
 									onForkAt={id => {
 										const entry = snap?.entries.find(e => e.id === id);
 										const isUser = entry?.type === "message" && entry.message.role === "user";

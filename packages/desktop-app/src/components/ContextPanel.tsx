@@ -136,6 +136,7 @@ export function ContextPanel({
 	/** 激活路径过滤集(回退/切分支后时间线/统计只呈现当前分支)。 */
 	pathEntries,
 	onBranchTo,
+	onSwitchTo,
 	onForkAt,
 	onJumpToEntry,
 	modeCatalog,
@@ -204,6 +205,9 @@ export function ContextPanel({
 	/** 激活路径过滤后的条目;null = 拓扑不可信,时间线回退全量。 */
 	pathEntries?: readonly unknown[] | null;
 	onBranchTo?(id: string): void;
+	/** branchAt 纯切换(非 user 节点):leaf 落节点、不回填草稿——与
+	 *  TrajectoryView 树行按 kind 分派的切换操作对应。 */
+	onSwitchTo?(id: string): void;
 	onForkAt?(id: string): void;
 	/** modes.list catalog (builtin + user-created presets) — the last link
 	 *  of the shared mode naming chain: user-created session presets carry
@@ -791,6 +795,7 @@ export function ContextPanel({
 				leafId={leafId}
 				activePathIds={activePathIds}
 				onBranchTo={onBranchTo}
+				onSwitchTo={onSwitchTo}
 				onForkAt={onForkAt}
 			/>
 		) : (

@@ -238,9 +238,12 @@ function InspectorCard({
 }
 
 /** 分支树单行(第二层):缩进层级 + kind 图标 + 预览 + 子分支角标(点击折叠)
- *  + 悬停操作(branchAt 重答 / fork 新会话)。当前叶脉冲高亮,活动路径全亮,
- *  路径外淡显——与第一层 BranchBar 同一 id 空间(view key)。 */
-function TreeNodeRow({
+ *  + 悬停操作(user 节点 = 重答;其他节点 = 纯切换;fork 新会话)。
+ *  branchAt 语义按 kind 分派:user 消息锚触发"定位父级 + 回填草稿"的
+ *  重答,assistant/工具锚 leaf 直接落到该节点(= 切换到此分支)。
+ *  当前叶脉冲高亮,活动路径全亮,路径外淡显——与第一层 BranchBar
+ *  同一 id 空间(view key)。 */
+export function TreeNodeRow({
 	node,
 	depth,
 	isLeaf,
@@ -250,6 +253,7 @@ function TreeNodeRow({
 	onToggleCollapse,
 	onJump,
 	onBranchTo,
+	onSwitchTo,
 	onForkAt,
 }: {
 	node: MessageTreeNode;
@@ -260,7 +264,10 @@ function TreeNodeRow({
 	isCollapsed: boolean;
 	onToggleCollapse(id: string): void;
 	onJump(id: string): void;
+	/** user 消息节点:branchAt 重答(定位父级 + 回填草稿)。 */
 	onBranchTo?(id: string): void;
+	/** 非 user 节点:branchAt 即纯切换(leaf 落到该节点,不回填草稿)。 */
+	onSwitchTo?(id: string): void;
 	onForkAt?(id: string): void;
 }): ReactNode {
 	const kind = treeKindOf(node.entry);
@@ -291,9 +298,13 @@ function TreeNodeRow({
 					</span>
 				)}
 			</button>
-			{(onBranchTo || onForkAt) && (
+			{(onBranchTo || onSwitchTo || onForkAt) && (
 				<span className="traj-trow-actions">
-					{onBranchTo && (
+					{/* branchAt 按 kind 分派:user 锚 = 重答(父级 + 草稿);
+					    其他锚 = 纯切换(leaf 落节点,不回填)——与地图右键菜单
+					    的「切换/重答」双操作同一语义,不再用一个「重答」按钮
+					    包两种行为。 */}
+					{onBranchTo && kind === "user" && (
 						<button
 							type="button"
 							className="traj-trow-action"
@@ -302,6 +313,17 @@ function TreeNodeRow({
 							onClick={() => onBranchTo(node.id)}
 						>
 							<Icon name="git-branch" className="h-3 w-3" />
+						</button>
+					)}
+					{onSwitchTo && kind !== "user" && (
+						<button
+							type="button"
+							className="traj-trow-action"
+							title={t("map switch to branch")}
+							aria-label={t("map switch to branch")}
+							onClick={() => onSwitchTo(node.id)}
+						>
+							<Icon name="arrow-right-s" className="h-3 w-3" />
 						</button>
 					)}
 					{onForkAt && (
@@ -338,6 +360,7 @@ export function TrajectoryView({
 	leafId,
 	activePathIds,
 	onBranchTo,
+	onSwitchTo,
 	onForkAt,
 }: {
 	entries: readonly unknown[];
@@ -364,8 +387,12 @@ export function TrajectoryView({
 	leafId?: string | null;
 	/** 活动路径(根→叶)上的条目 id 集;未提供 = 全部视为在路径上。 */
 	activePathIds?: ReadonlySet<string>;
-	/** branchAt 重答:把会话叶移到该节点并回填编辑器(TUI navigateTree parity)。 */
+	/** branchAt 重答:把会话叶移到该节点并回填编辑器(TUI navigateTree parity)。
+	 *  仅作用于 user 消息节点(树行按 kind 分派);非 user 节点用 onSwitchTo。 */
 	onBranchTo?(id: string): void;
+	/** branchAt 纯切换:leaf 落到该节点、不回填草稿。仅作用于非 user 节点
+	 *  (assistant/工具锚天然落在节点本身,没有 user 锚的父级重定位语义)。 */
+	onSwitchTo?(id: string): void;
 	/** forkAt:从该节点分叉新会话。 */
 	onForkAt?(id: string): void;
 }): ReactNode {
@@ -824,6 +851,7 @@ export function TrajectoryView({
 									}
 									onJump={onJumpToEntry ?? (() => {})}
 									onBranchTo={onBranchTo}
+									onSwitchTo={onSwitchTo}
 									onForkAt={onForkAt}
 								/>
 							))}
