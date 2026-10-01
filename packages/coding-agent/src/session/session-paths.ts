@@ -2,7 +2,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { getTerminalId } from "@musepi/pi-tui";
-import { getSessionsDir, getTerminalSessionsDir, isEnoent, logger, resolveEquivalentPath } from "@musepi/pi-utils";
+import {
+	getSessionsDir,
+	getTerminalSessionsDir,
+	isEnoent,
+	logger,
+	normalizePathForComparison,
+	resolveEquivalentPath,
+} from "@musepi/pi-utils";
 import type { SessionStorage } from "./session-storage";
 
 const migratedSessionRoots = new Set<string>();
@@ -64,12 +71,15 @@ function getDefaultSessionDirName(cwd: string): {
 	hashedDirName: string;
 	resolvedCwd: string;
 } {
+	// normalizePathForComparison = realpath + 平台大小写归一（Windows 上
+	// 大小写不敏感）：同一物理目录经不同大小写/符号链接写法传入时必须
+	// 分类到同一作用域、生成同一 slug，否则一个项目分裂成两个会话目录。
 	const resolvedCwd = path.resolve(cwd);
-	const canonicalCwd = resolveEquivalentPath(resolvedCwd);
+	const canonicalCwd = normalizePathForComparison(resolvedCwd);
 	const home = os.homedir();
-	const canonicalHome = resolveEquivalentPath(home);
+	const canonicalHome = normalizePathForComparison(home);
 	const tempRoot = os.tmpdir();
-	const canonicalTempRoot = resolveEquivalentPath(tempRoot);
+	const canonicalTempRoot = normalizePathForComparison(tempRoot);
 	const homeRelative = path.relative(canonicalHome, canonicalCwd);
 	const tempRelative = path.relative(canonicalTempRoot, canonicalCwd);
 	let encodedDirName: string;
@@ -84,7 +94,10 @@ function getDefaultSessionDirName(cwd: string): {
 		encodedDirName = encodeLegacyAbsoluteSessionDirName(canonicalCwd);
 		scope = "abs";
 	}
-	return { encodedDirName, hashedDirName: encodeHashedSessionDirName(canonicalCwd, scope), resolvedCwd };
+	// 哈希 slug（17.2.5-17.2.8 遗物）的 SHA 输入保持大小写保留的等价路径：
+	// 旧产物是按原始大小写哈希的，换键会让迁移查找失配、搁浅旧会话。
+	const equivalentCwd = resolveEquivalentPath(resolvedCwd);
+	return { encodedDirName, hashedDirName: encodeHashedSessionDirName(equivalentCwd, scope), resolvedCwd };
 }
 
 /**
@@ -171,21 +184,49 @@ function migrateHashedSessionDir(hashedDirName: string, sessionDir: string, sess
 export function resolveManagedSessionRoot(sessionDir: string, cwd: string): string | undefined {
 	const currentDirName = path.basename(sessionDir);
 	const { encodedDirName } = getDefaultSessionDirName(cwd);
-	if (currentDirName !== encodedDirName && currentDirName !== encodeLegacyAbsoluteSessionDirName(cwd)) {
+	// Windows 大小写不敏感：现存目录可能是 slug 归一化之前创建的原始大小写
+	// 变体（resolveCaseVariantDirName 复用不重命名），匹配随之放宽。
+	const matches = (a: string, b: string): boolean =>
+		process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+	if (!matches(currentDirName, encodedDirName) && !matches(currentDirName, encodeLegacyAbsoluteSessionDirName(cwd))) {
 		return undefined;
 	}
 	return path.dirname(sessionDir);
 }
 
 /**
+ * Windows 大小写不敏感：同一 cwd 的大小写变体必须落到同一个 slug 目录，
+ * 否则历史目录（如 `-AppData-Local-Programs-MusePi`，建于大小写归一生效
+ * 之前）与新生成的小写 slug 各收各的会话，一个项目分裂成两个工作区。
+ * 返回 sessionsRoot 下与 encodedDirName 大小写不敏感匹配的现存目录名
+ * （精确匹配快速返回）；无匹配返回 encodedDirName 本身。只读，不建目录。
+ */
+function resolveCaseVariantDirName(sessionsRoot: string, encodedDirName: string): string {
+	// Windows 的 existsSync 走大小写不敏感的文件系统：「精确目录已存在」
+	// 不能用它判断（小写探测会命中大写变体），必须列目录做大小写敏感的
+	// 精确匹配；POSIX 文件系统本身大小写敏感，无变体问题，直接返回。
+	if (process.platform !== "win32") return encodedDirName;
+	let entries: string[];
+	try {
+		entries = fs.readdirSync(sessionsRoot);
+	} catch {
+		return encodedDirName;
+	}
+	if (entries.includes(encodedDirName)) return encodedDirName;
+	const lower = encodedDirName.toLowerCase();
+	return entries.find(e => e.toLowerCase() === lower) ?? encodedDirName;
+}
+
+/**
  * Read-only variant of {@link computeDefaultSessionDir} for existence probes:
  * computes the canonical slug dir for a cwd WITHOUT running migrations or
  * creating the directory. Ghost-row reconciliation uses it to test whether a
- * session's workspace tree still exists at all.
+ * session's workspace tree still exists at all. Shares the case-variant
+ * resolution with compute so a probe and a create always agree on the dir.
  */
 export function peekDefaultSessionDir(cwd: string, sessionsRoot: string = getSessionsDir()): string {
 	const { encodedDirName } = getDefaultSessionDirName(cwd);
-	return path.join(sessionsRoot, encodedDirName);
+	return path.join(sessionsRoot, resolveCaseVariantDirName(sessionsRoot, encodedDirName));
 }
 
 /**
@@ -200,7 +241,9 @@ export function computeDefaultSessionDir(
 ): string {
 	const { encodedDirName, hashedDirName, resolvedCwd } = getDefaultSessionDirName(cwd);
 	migrateHomeSessionDirs(sessionsRoot);
-	const sessionDir = path.join(sessionsRoot, encodedDirName);
+	// 现存目录的大小写变体优先复用（Windows 大小写不敏感）——首次出现的
+	// 写法赢得目录名，后来的大小写变体并入同一目录，不分裂工作区。
+	const sessionDir = path.join(sessionsRoot, resolveCaseVariantDirName(sessionsRoot, encodedDirName));
 	migrateLegacyAbsoluteSessionDir(resolvedCwd, sessionDir, sessionsRoot);
 	migrateHashedSessionDir(hashedDirName, sessionDir, sessionsRoot);
 	storage.ensureDirSync(sessionDir);

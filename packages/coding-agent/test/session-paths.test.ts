@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { computeDefaultSessionDir } from "@musepi/pi-coding-agent/session/session-paths";
+import {
+	computeDefaultSessionDir,
+	peekDefaultSessionDir,
+	resolveManagedSessionRoot,
+} from "@musepi/pi-coding-agent/session/session-paths";
 import { FileSessionStorage } from "@musepi/pi-coding-agent/session/session-storage";
 
 const cleanup: string[] = [];
@@ -63,5 +67,43 @@ describe("legacy session directory migration", () => {
 
 		expect(fs.readFileSync(recreated, "utf8")).toBe("older-process-write\n");
 		expect(fs.readFileSync(destination, "utf8")).toBe("canonical\n");
+	});
+});
+
+describe("slug 归一化（Windows 大小写不敏感）", () => {
+	/** 现存 slug 目录的大小写变体（首个小写字母改大写，足以区分又不碰前导 `-`）。 */
+	function caseVariant(dir: string): string {
+		return path.join(
+			path.dirname(dir),
+			path.basename(dir).replace(/[a-z]/, c => c.toUpperCase()),
+		);
+	}
+
+	test("现存的大小写变体目录被复用——同一项目不分裂成两个工作区", () => {
+		if (process.platform !== "win32") return;
+		const sessionsRoot = makeTempDir("omp-session-root-");
+		const cwd = makeTempDir("omp-session-cwd-");
+		const storage = new FileSessionStorage();
+		const canonical = peekDefaultSessionDir(cwd, sessionsRoot);
+		const variant = caseVariant(canonical);
+		expect(variant).not.toBe(canonical);
+		fs.mkdirSync(variant, { recursive: true });
+
+		// 不同大小写写法的同一 cwd：落进现存变体目录，且 peek 与 compute 一致。
+		const dir = computeDefaultSessionDir(cwd.toUpperCase(), storage, sessionsRoot);
+		expect(dir).toBe(variant);
+		expect(peekDefaultSessionDir(cwd.toUpperCase(), sessionsRoot)).toBe(variant);
+	});
+
+	test("resolveManagedSessionRoot 认领大小写变体目录（GC/归档不误判外部目录）", () => {
+		if (process.platform !== "win32") return;
+		const sessionsRoot = makeTempDir("omp-session-root-");
+		const cwd = makeTempDir("omp-session-cwd-");
+		const storage = new FileSessionStorage();
+		const variant = caseVariant(peekDefaultSessionDir(cwd, sessionsRoot));
+		fs.mkdirSync(variant, { recursive: true });
+		expect(resolveManagedSessionRoot(variant, cwd)).toBe(sessionsRoot);
+		// 负契约：无关目录不归我们管。
+		expect(resolveManagedSessionRoot(path.join(sessionsRoot, "unrelated"), cwd)).toBeUndefined();
 	});
 });
