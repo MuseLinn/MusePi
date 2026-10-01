@@ -1856,6 +1856,7 @@ export const settings = {
 	"Args:": "参数：",
 	"Env vars:": "环境变量：",
 	"Trigger:": "触发：",
+	"Config:": "配置：",
 	"Extension Modules": "扩展模块",
 	Skills: "技能",
 	Commands: "命令",

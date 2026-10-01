@@ -153,6 +153,42 @@ const CONDITIONS: Record<string, () => boolean> = {
 			return false;
 		}
 	},
+	// 插件归属设置随插件停用隐藏(GUI 语音设置页 parity:插件关了,对应
+	// 配置就不该出现)。读的是 settingsMirror 键 —— 与 /extensions 仪表盘
+	// 拨开关写的是同一份存储,双端零漂移。fail-open:读不到按启用渲染,
+	// 拉取失败绝不让整组配置消失。总开关本身(stt.enabled / speech.enabled)
+	// 不带条件,停用后仍可见可重新启用。
+	sttPluginEnabled: () => {
+		try {
+			return Settings.instance.get("stt.enabled") === true;
+		} catch {
+			return true;
+		}
+	},
+	ttsPluginEnabled: () => {
+		try {
+			return Settings.instance.get("speech.enabled") === true;
+		} catch {
+			return true;
+		}
+	},
+	browserPluginEnabled: () => {
+		try {
+			return Settings.instance.get("browser.enabled") === true;
+		} catch {
+			return true;
+		}
+	},
+	// computer.enabled 带 unsetDisabled 语义(schema 默认即 false,未设置 =
+	// 停用),故读不到/未设置按隐藏处理 —— 与 /extensions 仪表盘对 computer
+	// 行的呈现一致,不 fail-open。
+	computerPluginEnabled: () => {
+		try {
+			return Settings.instance.get("computer.enabled") === true;
+		} catch {
+			return false;
+		}
+	},
 	summarizeActive: () => {
 		try {
 			return Settings.instance.get("read.summarize.enabled") === true;

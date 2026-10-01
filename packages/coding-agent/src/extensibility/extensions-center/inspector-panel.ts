@@ -90,6 +90,28 @@ export class InspectorPanel implements Component {
 			lines.push("");
 		}
 
+		// 配置面(dsh 插件 config 表单 parity):字段键即设置键,值从设置
+		// 直读(state-manager 的 configValues);编辑入口是 /settings 的同一
+		// 批键,此处如实呈现现状。未翻译的 label(GUI 侧 i18n 键)不渲染。
+		if (ext.config && ext.config.length > 0) {
+			lines.push(theme.fg("muted", t("Config:")));
+			for (const field of ext.config) {
+				const raw = ext.configValues?.[field.key];
+				const rendered =
+					raw === undefined || raw === null || raw === ""
+						? theme.fg("dim", t("(default)"))
+						: theme.fg("accent", String(raw));
+				if (!field.label) {
+					lines.push(`  ${field.key}: ${rendered}`);
+					continue;
+				}
+				const label = t(field.label);
+				if (label === field.label) continue;
+				lines.push(`  ${label}: ${rendered}`);
+			}
+			lines.push("");
+		}
+
 		// Preview section (routed based on kind)
 		const previewLines = this.#renderPreview(ext, width);
 		lines.push(...previewLines);

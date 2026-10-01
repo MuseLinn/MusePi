@@ -2549,6 +2549,14 @@ export const SETTINGS_SCHEMA = {
 		// into English mush. Consumers treat empty as "omit the hint"
 		// (stt-controller: `language || undefined`; GUI trims and passes).
 		default: "",
+		ui: {
+			tab: "interaction",
+			group: "Speech",
+			label: "Speech Language Hint",
+			description:
+				"BCP-47 hint passed to the speech model (e.g. zh, yue, en, ja). Empty = auto-detect — the shipped models are multilingual and usually need no hint.",
+			condition: "sttPluginEnabled",
+		},
 	},
 	"stt.vadEndMs": {
 		type: "number",
@@ -2558,6 +2566,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Silence threshold (ms)",
 			description: "How long of a pause counts as the end of dictation.",
+			condition: "sttPluginEnabled",
 		},
 	},
 
@@ -2572,6 +2581,7 @@ export const SETTINGS_SCHEMA = {
 			description:
 				"Local on-device speech model. Whisper base/small/large-v3-turbo tiers (transformers.js) are multilingual — Chinese ready (Whisper small is the default); SenseVoiceSmall (sherpa-onnx, INT8) is Chinese-optimized for Mandarin/Cantonese and mixed zh/en speech (auto/zh/en/yue/ja/ko); Parakeet TDT v3 (sherpa-onnx) tops accuracy/speed for English and European languages but does not support Chinese. Downloaded on first use.",
 			options: STT_MODEL_OPTIONS,
+			condition: "sttPluginEnabled",
 		},
 	},
 	"stt.submitTrigger": {
@@ -2585,6 +2595,7 @@ export const SETTINGS_SCHEMA = {
 			description:
 				"Choose when speech dictation automatically submits: Never, Release (2+ words), Release with complete sentence, or When I Say Submit.",
 			options: STT_SUBMIT_TRIGGER_OPTIONS,
+			condition: "sttPluginEnabled",
 		},
 	},
 
@@ -4446,6 +4457,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Computer",
 			label: "Computer Display",
 			description: "Composite all displays or select a native display id",
+			condition: "computerPluginEnabled",
 		},
 	},
 
@@ -4457,6 +4469,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Computer",
 			label: "Computer Screenshot Width",
 			description: "Maximum composite screenshot width in pixels",
+			condition: "computerPluginEnabled",
 		},
 	},
 
@@ -4666,6 +4679,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Browser CDP URL",
 			description:
 				"Default HTTP CDP discovery endpoint (for example http://127.0.0.1:9222) to attach to instead of launching a browser. Explicit app.cdp_url or app.path on the tool call take precedence.",
+			condition: "browserPluginEnabled",
 		},
 	},
 
@@ -4700,6 +4714,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Grep & Browser",
 			label: "Headless Browser",
 			description: "Launch browser in headless mode (disable to show browser UI)",
+			condition: "browserPluginEnabled",
 		},
 	},
 
@@ -5666,6 +5681,7 @@ export const SETTINGS_SCHEMA = {
 			description:
 				"On-device neural TTS model (Kokoro-82M English-first, MeloTTS 中文 for Mandarin/mixed zh-en) used by the local TTS backend",
 			options: TTS_LOCAL_MODEL_OPTIONS,
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"tts.localVoice": {
@@ -5679,6 +5695,7 @@ export const SETTINGS_SCHEMA = {
 			description:
 				"Voice used by the local TTS backend — the voice picker under each tier in Settings → Voice writes this (Kokoro multi-voice, MeloTTS-zh single ZH voice)",
 			options: TTS_LOCAL_VOICE_OPTIONS,
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"tts.autoRead": {
@@ -5689,6 +5706,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Auto-read new replies",
 			description: "Automatically read aloud new assistant replies via the local TTS engine",
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"tts.rate": {
@@ -5699,6 +5717,7 @@ export const SETTINGS_SCHEMA = {
 			group: "Speech",
 			label: "Speech rate (0.5–2)",
 			description: "Playback rate for local TTS — 0.8× is common for reading aloud.",
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"tts.inputMode": {
@@ -5711,6 +5730,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Read content",
 			description:
 				"How the assistant reply is prepared before synthesis: raw, sanitized (strip code/markdown), or summarized.",
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"tts.bargeIn": {
@@ -5752,6 +5772,7 @@ export const SETTINGS_SCHEMA = {
 				{ value: "assistant", label: "Assistant messages" },
 				{ value: "yield", label: "Final message only" },
 			],
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"speech.enhanced": {
@@ -5763,6 +5784,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Enhanced Speech Rewriting",
 			description:
 				"Rewrite assistant output into natural spoken prose with the tiny/smol model before synthesis (describes code, drops links and markdown). Falls back to mechanical cleanup on failure",
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"speech.voice": {
@@ -5775,6 +5797,7 @@ export const SETTINGS_SCHEMA = {
 			label: "Speech Vocalization Voice",
 			description: "Kokoro voice used when speaking the assistant's output aloud",
 			options: TTS_LOCAL_VOICE_OPTIONS,
+			condition: "ttsPluginEnabled",
 		},
 	},
 	"providers.tinyModel": {

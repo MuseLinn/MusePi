@@ -772,6 +772,17 @@ export function applyBuiltinMirrorState(state: DashboardState, getRaw: (key: str
 			});
 			out = { ...out, components };
 		}
+		// 配置面(dsh 式插件 config 表单):字段键即设置键,TUI 独立进程从
+		// 设置直读当前值——编辑入口是 /settings 的同一批键(不重复造表单,
+		// 两处实现同一功能是 bug),此处让检视面如实呈现配置现状。
+		if (def.config && def.config.length > 0) {
+			const stored: Record<string, unknown> = {};
+			for (const field of def.config) {
+				const raw = getRaw(field.key);
+				if (raw !== undefined) stored[field.key] = raw;
+			}
+			out = { ...out, configValues: coerceConfigValues([...def.config], stored) };
+		}
 		return out;
 	};
 
