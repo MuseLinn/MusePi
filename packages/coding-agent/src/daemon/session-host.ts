@@ -2875,6 +2875,13 @@ export class DaemonSessionHost {
 		// parentId 落空,树把该行提为根——不丢消息。
 		for (const h of history.subagents) {
 			const existing = merged.get(h.id);
+			// 父 id 推导对「已有行」同样必要:激活过的子/顾问会话在 view store
+			// 留有物化行(activation 写入,无层级字段),existing 分支此前只回填
+			// subagent/advisor 标,parentId 被丢弃——session.tree 按 parentId
+			// 挂父节点,缺它激活过的顾问行被提为顶层孤立行(磁盘结构完好)。
+			const parentBase = path.basename(path.dirname(h.path));
+			const parentId = parentBase.split("_").slice(1).join("_") || null;
+			const derivedParent = parentId === h.id ? null : parentId;
 			if (existing) {
 				// The view store may already carry this id (adoption-era rows
 				// for transcripts the view once materialized) without the
@@ -2884,10 +2891,9 @@ export class DaemonSessionHost {
 				existing.subagent = true;
 				if (h.advisor === true) existing.advisor = true;
 				if (!existing.sessionFile) existing.sessionFile = h.path;
+				if (!existing.parentId) existing.parentId = derivedParent;
 				continue;
 			}
-			const parentBase = path.basename(path.dirname(h.path));
-			const parentId = parentBase.split("_").slice(1).join("_") || null;
 			merged.set(h.id, {
 				sessionId: h.id,
 				cursor: 0,
@@ -2898,7 +2904,7 @@ export class DaemonSessionHost {
 				messageCount: h.messageCount,
 				modeId: null,
 				mcpServers: null,
-				parentId: parentId === h.id ? null : parentId,
+				parentId: derivedParent,
 				projectMetadata: null,
 				title: h.title,
 				status: h.status,
