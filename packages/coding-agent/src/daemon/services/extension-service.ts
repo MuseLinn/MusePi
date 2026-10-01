@@ -269,11 +269,14 @@ export class ExtensionService implements DaemonService {
 		// (tools/index.ts isToolAllowed 同帧消费),stt/tts-engine 通道读
 		// voice.disabledEngines(voice/engine-denylist 全路径过滤),terminal-
 		// backend 通道读 terminal.disabledBackends(terminal-provider 解析
-		// 消费)。组件开关改名单即真实禁用,不是展示层。
+		// 消费),browser-backend 通道读 browser.disabledBackends(browser 工具
+		// 解析链消费),file-backend 通道读 file.disabledBackends(file-backend
+		// 谓词 + 索引扫描门消费)。组件开关改名单即真实禁用,不是展示层。
 		const toolDenylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
 		const engineDenylist = new Set((s?.get("voice.disabledEngines") ?? []) as string[]);
 		const terminalDenylist = new Set((s?.get("terminal.disabledBackends") ?? []) as string[]);
 		const browserDenylist = new Set((s?.get("browser.disabledBackends") ?? []) as string[]);
+		const fileDenylist = new Set((s?.get("file.disabledBackends") ?? []) as string[]);
 		for (const def of BUILTIN_EXTENSIONS) {
 			if (!def.components || def.components.length === 0) continue;
 			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
@@ -286,7 +289,9 @@ export class ExtensionService implements DaemonService {
 							? terminalDenylist.has(c.id)
 							: c.deny === "browser-backend"
 								? browserDenylist.has(c.id)
-								: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
+								: c.deny === "file-backend"
+									? fileDenylist.has(c.id)
+									: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
 				return {
 					id: c.id,
 					name: c.id,
@@ -656,9 +661,14 @@ export class ExtensionService implements DaemonService {
 					? "terminal.disabledBackends"
 					: declared.deny === "browser-backend"
 						? "browser.disabledBackends"
-						: "voice.disabledEngines";
+						: declared.deny === "file-backend"
+							? "file.disabledBackends"
+							: "voice.disabledEngines";
 		const denyId =
-			declared.deny === "tool" || declared.deny === "terminal-backend" || declared.deny === "browser-backend"
+			declared.deny === "tool" ||
+			declared.deny === "terminal-backend" ||
+			declared.deny === "browser-backend" ||
+			declared.deny === "file-backend"
 				? p.component
 				: `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
 		const denylist = [...((settings.get(settingsKey) ?? []) as string[])];

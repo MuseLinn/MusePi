@@ -144,12 +144,14 @@ export interface BuiltinExtensionDef {
 	 *   (terminal-provider.ts:auto 回退剔除 + 显式选中 DISABLED_BACKEND)
 	 * - "browser-backend" → browser.disabledBackends
 	 *   (tools/browser.ts:设置链回退跳过 + 显式 app 参数 DISABLED_BACKEND)
+	 * - "file-backend" → file.disabledBackends
+	 *   (tools/file-backend.ts:工具从 slate 剔除 + index 扫描门)
 	 * extensions.list 据此下发组件状态,setComponentEnabled 写名单。
 	 * 无独立启停语义的组件不声明。
 	 */
 	components?: readonly {
 		id: string;
-		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend" | "browser-backend";
+		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend" | "browser-backend" | "file-backend";
 		description?: string;
 	}[];
 	/** inspector 的 raw 载荷(可为生成值)。 */
@@ -539,6 +541,40 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 			},
 		],
 		raw: { name: "lsp", kind: "lsp" },
+	},
+	// ── file 子系统（dsh fs 插件族 parity：tool-fs / tool-str-replace-editor /
+	//    tool-fs-search / 索引——读写检索三工具族 + 索引扫描四组件；无总开关
+	//    语义（不发明），file 工具是编码核心能力，禁用粒度落到后端组件）──
+	{
+		kind: "file",
+		name: "file",
+		displayName: "File Tools & Index",
+		description:
+			"Workspace file subsystems: the read/write/search tool families and the background content index. Read-only display: no master switch — the four backend units toggle as components.",
+		readonly: true,
+		components: [
+			{
+				id: "read",
+				deny: "file-backend",
+				description: "ext builtin file component read desc",
+			},
+			{
+				id: "write",
+				deny: "file-backend",
+				description: "ext builtin file component write desc",
+			},
+			{
+				id: "search",
+				deny: "file-backend",
+				description: "ext builtin file component search desc",
+			},
+			{
+				id: "index",
+				deny: "file-backend",
+				description: "ext builtin file component index desc",
+			},
+		],
+		raw: { name: "file", kind: "file" },
 	},
 ];
 

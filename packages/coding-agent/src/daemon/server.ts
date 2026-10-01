@@ -431,6 +431,7 @@ import { ModelsConfigFile } from "../config/models-config";
 import type { StoredAuthCredential } from "../session/auth-storage";
 import { USER_INTERRUPT_LABEL } from "../session/messages";
 import { dropManagedBrowserBridge, managedBrowserBridgeUrl } from "../tools/browser/managed-bridge";
+import { isFileIndexBackendEnabled } from "../tools/file-backend";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { ApprovalService } from "./services/approval-service";
@@ -1734,12 +1735,18 @@ export class DaemonServer {
 			}
 			case "index.scan": {
 				// Fire-and-forget background scan of the workspace dir
-				// (cwd fallback: this daemon's launch directory).
+				// (cwd fallback: this daemon's launch directory). The
+				// musepi:file plugin's `index` component denylist stops the
+				// scan (explicit intent — distinct from the index master
+				// switch, which governs querying the existing FTS data).
 				const p = (params ?? {}) as { cwd?: string };
 				const index = this.#host.ensureFileIndex();
 				const dir = p.cwd ? path.resolve(p.cwd) : this.#host.cwd();
-				// Don't await — the GUI polls index.status for progress.
-				void index.scan(dir).catch(err => console.error("[file-index] scan failed:", err));
+				const settings = this.#host.settings();
+				if (!settings || isFileIndexBackendEnabled(settings)) {
+					// Don't await — the GUI polls index.status for progress.
+					void index.scan(dir).catch(err => console.error("[file-index] scan failed:", err));
+				}
 				return index.status();
 			}
 			case "index.search": {

@@ -418,6 +418,7 @@ export const tools = {
 	"ext kind browser": "Browser",
 	"ext kind computer": "Computer Use",
 	"ext kind lsp": "LSP",
+	"ext kind file": "File Tools & Index",
 	"ext shadowed": "Shadowed",
 	"ext load failed": "Load failed",
 	"ext provider disabled": "Disabled (source turned off)",
@@ -541,6 +542,18 @@ export const tools = {
 		"Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
 	"ext builtin lsp component lsp desc":
 		"Code-intelligence tool (definitions, references, diagnostics, rename) exposed to the agent.",
+	"ext builtin file component read": "File read",
+	"ext builtin file component write": "File write & edit",
+	"ext builtin file component search": "File search",
+	"ext builtin file component index": "File content index",
+	"ext builtin file component read desc":
+		"The read tool family (files / pdf / sqlite / archive selectors) — disabled leaves the session tool set.",
+	"ext builtin file component write desc":
+		"The write / edit / ast_edit tool family — disabled makes the agent read-only.",
+	"ext builtin file component search desc":
+		"The glob / grep / ast_grep search family — disabled removes file-level retrieval.",
+	"ext builtin file component index desc":
+		"The workspace file-content index background scan (file-index) — disabled stops scanning; querying existing data stays governed by the index master switch.",
 	"ext builtin terminal component bun-pty": "Bun PTY",
 	"ext builtin terminal component bun-pty desc": "Native Bun process backend (preferred, lowest latency).",
 	"ext builtin terminal component node-pty": "node-pty bridge",
@@ -566,7 +579,7 @@ export const tools = {
 	"ext add plugin": "Add plugin",
 	"ext plugin components": "Included components",
 	"ext plugin components desc":
-		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths; terminal-backend components leave the provider resolution chain.",
+		"Toggle components independently: tool components leave the agent tool set; voice-engine components leave the model catalog and the dictation/readback paths; terminal-backend components leave the provider resolution chain; file-backend components remove their tool families from the tool set and stop the index scan.",
 	"ext component count": "components ×{count}",
 	"ext component denied": "Disabled via component denylist",
 	"ext plugin details": "Plugin details",

@@ -35,7 +35,8 @@ export type ExtensionKind =
 	| "terminal"
 	| "browser"
 	| "computer"
-	| "lsp";
+	| "lsp"
+	| "file";
 
 /**
  * Extension state (active, disabled, or shadowed).

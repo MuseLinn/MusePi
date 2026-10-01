@@ -406,6 +406,7 @@ export const tools = {
 	"ext kind browser": "浏览器",
 	"ext kind computer": "电脑控制",
 	"ext kind lsp": "语言服务器",
+	"ext kind file": "文件工具与索引",
 	"ext shadowed": "被遮蔽",
 	"ext load failed": "加载失败",
 	"ext provider disabled": "已停用（来源关闭）",
@@ -519,6 +520,16 @@ export const tools = {
 	"ext builtin browser component gui desc": "托管面板浏览器桥（browser.gui）——agent 页面开进右侧面板，共享登录态。",
 	"ext builtin computer component computer desc": "暴露给 agent 的宿主桌面控制工具（截图、输入、无障碍树）。",
 	"ext builtin lsp component lsp desc": "暴露给 agent 的代码智能工具（定义、引用、诊断、重命名）。",
+	"ext builtin file component read": "文件读取",
+	"ext builtin file component write": "文件写入与编辑",
+	"ext builtin file component search": "文件检索",
+	"ext builtin file component index": "文件内容索引",
+	"ext builtin file component read desc":
+		"read 工具族（文件 / pdf / sqlite / archive 选择器读取）——禁用后从会话工具集移除。",
+	"ext builtin file component write desc": "write / edit / ast_edit 写入编辑工具族——禁用后 agent 变为只读。",
+	"ext builtin file component search desc": "glob / grep / ast_grep 检索工具族——禁用后失去文件级检索能力。",
+	"ext builtin file component index desc":
+		"工作区文件内容索引后台扫描（file-index）——禁用后停止扫描；已有索引数据的查询面仍由索引总开关治理。",
 	"ext builtin terminal component bun-pty": "Bun PTY",
 	"ext builtin terminal component bun-pty desc": "原生 Bun 进程后端（首选，延迟最低）。",
 	"ext builtin terminal component node-pty": "node-pty 桥接",
@@ -543,7 +554,7 @@ export const tools = {
 	"ext add plugin": "添加插件",
 	"ext plugin components": "包含的组件",
 	"ext plugin components desc":
-		"组件独立启停：工具组件禁用后从 agent 工具集移除，语音引擎组件禁用后从模型目录与转写/朗读路径移除，终端后端组件禁用后从 provider 解析链移除。",
+		"组件独立启停：工具组件禁用后从 agent 工具集移除，语音引擎组件禁用后从模型目录与转写/朗读路径移除，终端后端组件禁用后从 provider 解析链移除，文件后端组件禁用后对应工具族从工具集移除、索引停止扫描。",
 	"ext component count": "组件 ×{count}",
 	"ext component denied": "已被组件黑名单禁用",
 	"ext plugin details": "插件详情",

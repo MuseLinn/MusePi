@@ -655,6 +655,14 @@ export const SETTINGS_SCHEMA = {
 	 *  隐藏设置键。 */
 	"browser.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 文件后端级黑名单（插件「包含的组件」开关写入此处）：名单内的后端
+	 *  组件（read = 读取工具族 / write = 写入编辑工具族 / search = 检索工
+	 *  具族 / index = 工作区内容索引扫描）——read/write/search 被禁后对应
+	 *  工具不再进入会话工具集（tools/file-backend.ts 谓词消费），index
+	 *  被禁后 daemon 停止后台扫描（server.ts index.scan 门消费；已有 FTS
+	 *  数据的查询面仍由 index.setEnabled 总开关治理）。隐藏设置键。 */
+	"file.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
+
 	/** user 插件清单组件黑名单（dsh `- insert:` 子插件 parity）：复合键
 	 *  `<plugin>/<component>`（extensions.setComponentEnabled 写入），宿主
 	 *  级 fiber 装载 reconcile 时跳过命中组件——entry 组件停用 = 不挂

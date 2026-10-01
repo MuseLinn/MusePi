@@ -48,6 +48,7 @@ import { ComputerTool } from "./computer";
 import { DebugTool } from "./debug";
 import { EvalTool } from "./eval";
 import { resolveEvalBackends } from "./eval-backends";
+import { isFileBackendToolAllowed } from "./file-backend";
 import { GithubTool } from "./gh";
 import { GlobTool } from "./glob";
 import { GrepTool } from "./grep";
@@ -602,6 +603,10 @@ export async function createTools(session: ToolSession, toolNames?: string[]): P
 		// enabled gate or force-inclusion paths below.
 		const denylist = session.settings.get("tools.disabled");
 		if (Array.isArray(denylist) && (denylist as string[]).includes(name)) return false;
+		// File-backend component denylist (musepi:file plugin components): a
+		// tool whose backend family (read/write/search) is disabled never
+		// enters the slate — same explicit-intent contract as tools.disabled.
+		if (!isFileBackendToolAllowed(name, session.settings)) return false;
 		// Never in the default set. Explicitly activatable while goal.enabled and
 		// no goal record exists yet — /guided-goal enables it so the agent can
 		// finish the interview with `goal create`, which turns goal mode on. Once
