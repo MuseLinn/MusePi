@@ -96,21 +96,27 @@ describe("SessionService (P2 cordis 化首服务)", () => {
 		expect(calls).toEqual(["auto"]);
 	});
 
-	it("resume: stream is the requesting connection id; resumeLive write-half receives the live handle", async () => {
+	it("resume: stream is the requesting connection id; resumeLive write-half receives (conn, live)", async () => {
 		const live = { autoTitle: true };
 		let registered: unknown = "unset";
+		let registeredConn: unknown = "unset";
 		const svc = new SessionService(
 			deps({
 				snapshot: async () => ({ entries: [{ seq: 1 }] }),
 				checkpointSeq: async () => 5,
 				resolveLive: () => live,
-				setResumeLive: l => {
+				setResumeLive: (conn, l) => {
+					registeredConn = conn;
 					registered = l;
 				},
 			}),
 		);
-		const r = await svc.resume({ sessionId: "s1" }, { id: "conn-7" });
+		const conn = { id: "conn-7" };
+		const r = await svc.resume({ sessionId: "s1" }, conn);
 		expect(r.stream).toBe("conn-7");
+		// P0-7 写半契约：连接对象原样透传——server 侧按连接归属登记，若此处
+		// 只传 live 丢 conn，并发 resume 会共享一个字段互相覆盖串线。
+		expect(registeredConn).toBe(conn);
 		expect(registered).toBe(live);
 		expect(r.compactedThrough).toBe(false);
 	});

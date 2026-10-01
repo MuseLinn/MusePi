@@ -16,9 +16,10 @@ import type { DaemonService } from "./types";
  *  副作用。
  * - 启停：always-on——会话树是 GUI 侧栏的常驻数据面，无独立启停语义
  *  （声明理由：服务本体无状态可卸载）。
- * - 冲突：`#resumeLive` 登记是 server 的订阅附着前置状态（session.resume
- *  与 session.subscribe 的跨 RPC 约定），本服务只写不读，读取侧仍在
- *  server.ts——v2 收编 session.subscribe 时必须一并迁移该状态。分支族
+ * - 冲突：`#resumeLiveByConn` 登记是 server 的订阅附着前置状态（session.resume
+ *  与 catchupIfNeeded 的跨 RPC 约定），按连接归属（P0-7：旧单字段让并发 resume
+ *  跨连接串线）；本服务只写不读，读取侧仍在 server.ts——v2 收编
+ *  session.subscribe 时必须一并迁移该状态。分支族
  *  （branchAt/btwBranch/forkAt——复活/事件序纠缠区）按分层文档纪律留
  *  v2 独立刀。检视入口：本文件。
  */
@@ -49,8 +50,9 @@ export interface SessionServiceDeps {
 	snapshot(sessionId: string): Promise<{ entries?: readonly unknown[] }>;
 	/** 压缩检查点序号（宿主 session-host.checkpointSeq）。 */
 	checkpointSeq(sessionId: string): Promise<number>;
-	/** 写 resumeLive 登记（server 字段 #resumeLive 的写半）。 */
-	setResumeLive(live: ResumeLiveHandle | null): void;
+	/** 写 resumeLive 登记（server `#resumeLiveByConn` 的写半；按连接归属——
+	 *  P0-7：单字段被并发 resume 跨连接串线）。 */
+	setResumeLive(conn: object, live: ResumeLiveHandle | null): void;
 	/** 会话 id 的 live 引用（宿主 session-host.get；resume 的 stream 判定）。 */
 	resolveLive?(sessionId: string): ResumeLiveHandle | undefined;
 	/** cron 会话 id 集合（ScheduleService.sessionIds——树节点 source 标注）。 */
@@ -147,7 +149,7 @@ export class SessionService implements DaemonService {
 	}> {
 		const snapshot = await this.#deps.snapshot(params.sessionId);
 		const live = this.#deps.resolveLive?.(params.sessionId) ?? null;
-		this.#deps.setResumeLive(live);
+		this.#deps.setResumeLive(conn, live);
 		const checkpointSeq = await this.#deps.checkpointSeq(params.sessionId);
 		const compacted = typeof params.cursor === "number" && checkpointSeq > params.cursor;
 		return {

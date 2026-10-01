@@ -635,8 +635,10 @@ export class DaemonServer {
 				knownSessions: () => this.#host.knownSessions(),
 				snapshot: sessionId => this.#host.snapshot(sessionId),
 				checkpointSeq: sessionId => this.#host.checkpointSeq(sessionId),
-				setResumeLive: live => {
-					this.#resumeLive = (live as LiveSession | null) ?? null;
+				setResumeLive: (conn, live) => {
+					// Per-connection attribution (P0-7): see #resumeLiveByConn.
+					if (live) this.#resumeLiveByConn.set(conn, live as LiveSession);
+					else this.#resumeLiveByConn.delete(conn);
 				},
 				resolveLive: sessionId => this.#host.get(sessionId),
 				cronSessionIds: () => this.#services.get<ScheduleService>("schedule").sessionIds(),
@@ -809,7 +811,14 @@ export class DaemonServer {
 		}
 	}
 
-	#resumeLive: LiveSession | null = null;
+	/** Pending post-resume live attach, PER CONNECTION (P0-7): the
+	 *  registration is written by session.resume on one connection and consumed
+	 *  by catchupIfNeeded on the SAME connection after the response is written.
+	 *  A single shared field cross-wired concurrent resumes — connection A
+	 *  could attach to connection B's just-resumed session (frames then dropped
+	 *  by the client's sessionId guard, or mixed). WeakMap so a dropped
+	 *  connection never leaks its LiveSession reference. */
+	#resumeLiveByConn = new WeakMap<object, LiveSession>();
 
 	/** Lazily start the LAN pair endpoint (pair.resolve only). Bound to
 	 *  0.0.0.0 so the mobile app can fetch the full collab link from a
@@ -1133,8 +1142,11 @@ export class DaemonServer {
 	async catchupIfNeeded(method: string, params: unknown, conn: DaemonConnection): Promise<void> {
 		if (method !== "session.resume") return;
 		const p = (params ?? {}) as { sessionId: string; cursor?: number };
-		const live = this.#resumeLive;
-		this.#resumeLive = null;
+		// P0-7: consume THIS connection's registration only — the single shared
+		// field used to cross-wire concurrent resumes from different
+		// connections (A could attach to B's just-resumed session).
+		const live = this.#resumeLiveByConn.get(conn);
+		this.#resumeLiveByConn.delete(conn);
 		try {
 			if (typeof p.cursor === "number") {
 				await this.#host.catchup(p.sessionId, p.cursor, conn);
