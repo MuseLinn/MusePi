@@ -20,6 +20,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
+import { lightenOverviewEntry } from "../lib/message-tree";
 import { dispatchNotification } from "../lib/notify";
 import { moodFromState, orbFromSession, stateFromSignals } from "../lib/pet";
 import { useConfirm } from "../lib/prompt-dialog";
@@ -1456,6 +1457,9 @@ export function ChatView({
 	// region in through the normal transcript path.
 	const [fullEntries, setFullEntries] = useState<SessionEntry[] | null>(null);
 	const [fullLoading, setFullLoading] = useState(false);
+	/** 全量补全失败（RPC 拒绝 / 传输抖动 / stale 游标，P0-4）：不再永久
+	 *  闩锁——下次进入概览或点重试即可再来一次，且给可见降级提示。 */
+	const [fullError, setFullError] = useState(false);
 	const fullSessionKeyRef = useRef<string | null>(null);
 	const fullLoadingRef = useRef(false);
 	const fullTokenRef = useRef(0);
@@ -1468,8 +1472,15 @@ export function ChatView({
 		fullSessionKeyRef.current = store.sessionId;
 		setFullLoading(true);
 		try {
-			let acc: SessionEntry[] = [...((snap?.entries ?? []) as SessionEntry[])];
-			let beforeId: string | undefined = acc[0]?.id;
+			// P0-4: the overview copy is CONTENT-STRIPPED at ingest
+			// (lightenOverviewEntry) — the overview surfaces only ever read
+			// display-level text (≤400 chars) and structural fields, so the
+			// second local array no longer retains full message bodies (long
+			// sessions used to hold hundreds of MB duplicated here). Truncation
+			// is display-identical: every consumer cap (80/120/220/160) is
+			// below the ingest cap.
+			let acc: SessionEntry[] = (snap?.entries ?? []).map(e => lightenOverviewEntry(e) as SessionEntry);
+			let beforeId: string | undefined = (snap?.entries ?? [])[0]?.id;
 			// P0-3: the daemon anchors at the LAST occurrence of a duplicated id
 			// and may answer with a page partially overlapping what we already
 			// hold — absorb only the rows we have never seen, so duplicate
@@ -1484,8 +1495,14 @@ export function ChatView({
 					maxMessages: 1000,
 				});
 				if (token !== fullTokenRef.current) return;
-				if (res?.stale) break; // P0-3: never loop on a dead cursor
-				const fresh = (res?.entries ?? []).filter(e => !seen.has(e.id));
+				if (res?.stale) {
+					// P0-3: never loop on a dead cursor — but surface it as a
+					// retryable failure (P0-4), not a silent partial view.
+					throw new Error("stale history cursor");
+				}
+				const fresh = (res?.entries ?? [])
+					.filter(e => !seen.has(e.id))
+					.map(e => lightenOverviewEntry(e) as SessionEntry);
 				if (fresh.length === 0) break; // zero-progress page — fail soft
 				for (const e of fresh) seen.add(e.id);
 				acc = [...fresh, ...acc];
@@ -1497,10 +1514,21 @@ export function ChatView({
 				beforeId = olderId;
 				if (!res.hasMore || res.remaining <= 0) break;
 			}
-			if (token === fullTokenRef.current) setFullEntries(acc);
+			if (token === fullTokenRef.current) {
+				setFullEntries(acc);
+				setFullError(false);
+			}
 		} catch {
-			// daemon rejected / transport hiccup — keep the loaded window
-			if (token === fullTokenRef.current) setFullEntries(null);
+			// daemon rejected / transport hiccup / stale cursor: reset the latch
+			// so the next overview entry or the retry button re-runs the
+			// backfill, and flag the visible degradation hint (P0-4 — the old
+			// code latched the session key before the loop, so any single
+			// failure permanently disabled the full view for that session).
+			if (token === fullTokenRef.current) {
+				setFullEntries(null);
+				setFullError(true);
+				fullSessionKeyRef.current = null;
+			}
 		} finally {
 			if (token === fullTokenRef.current) setFullLoading(false);
 			fullLoadingRef.current = false;
@@ -1514,6 +1542,7 @@ export function ChatView({
 		fullSessionKeyRef.current = null;
 		setFullEntries(null);
 		setFullLoading(false);
+		setFullError(false);
 	}, [store?.sessionId]);
 	// Canvas (turn/message map) entry: backfill full history in the
 	// background; the map renders the loaded window immediately and swaps to
@@ -2542,6 +2571,7 @@ export function ChatView({
 									extTabs={extTabs}
 									overviewEntries={overviewEntries}
 									overviewLoading={fullLoading && fullEntries === null}
+									overviewError={fullError}
 									onEnsureFullHistory={() => void ensureFullHistory()}
 									onJumpToEntry={entryId => {
 										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;

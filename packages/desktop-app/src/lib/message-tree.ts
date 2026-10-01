@@ -17,6 +17,81 @@ export interface MessageTreeNode {
 	children: MessageTreeNode[];
 }
 
+/**
+ * 概览面(轨迹/地图/分支树)条目文本上限。所有概览消费方的显示截断
+ * (轨迹 80/120/220/160、树行预览)都 ≤ 这个值,所以摄入时按此上限
+ * 预截断任一文本字段对显示输出是恒等的(join 后截断只依赖前缀)。
+ */
+export const OVERVIEW_TEXT_CAP = 400;
+
+function capText(s: string): string {
+	return s.length > OVERVIEW_TEXT_CAP ? `${s.slice(0, OVERVIEW_TEXT_CAP)}…` : s;
+}
+
+/**
+ * 概览专用轻量条目(P0-4):会话全量补全(ensureFullHistory)会把每条
+ * SessionEntry 原文存进第二份本地数组——长会话下这是数百 MB 的重复
+ * 内容,而概览消费方只读显示级文本(≤ OVERVIEW_TEXT_CAP)与结构字段
+ * (id/parentId/type/timestamp/usage/duration)。浅拷贝并裁掉重负载:
+ * 文本块预截断、图片块剥掉 data(概览从不渲染图片)、顾问 notes 预截断。
+ * 结构字段原样保留,树/轨迹构建输出与原文条目共价。
+ */
+export function lightenOverviewEntry(raw: unknown): unknown {
+	if (!raw || typeof raw !== "object") return raw;
+	const entry = raw as Record<string, unknown>;
+	const out: Record<string, unknown> = { ...entry };
+	const msg = entry.message;
+	if (msg !== null && typeof msg === "object") {
+		const m = msg as Record<string, unknown>;
+		const light: Record<string, unknown> = { ...m };
+		if (typeof m.content === "string") {
+			light.content = capText(m.content);
+		} else if (Array.isArray(m.content)) {
+			light.content = m.content.map(block => {
+				if (!block || typeof block !== "object") return block;
+				const b = block as Record<string, unknown>;
+				if (typeof b.text === "string" && b.text.length > OVERVIEW_TEXT_CAP) {
+					return { ...b, text: capText(b.text) };
+				}
+				if (typeof b.thinking === "string" && b.thinking.length > OVERVIEW_TEXT_CAP) {
+					return { ...b, thinking: capText(b.thinking) };
+				}
+				// 图片块:data(base64)可达数 MB,概览消费方从不读取——剥掉。
+				if (b.type === "image" && ("data" in b || "mimeType" in b)) {
+					const { data: _d, mimeType: _m, ...rest } = b;
+					return rest;
+				}
+				return block;
+			});
+		}
+		if (typeof m.text === "string" && m.text.length > OVERVIEW_TEXT_CAP) light.text = capText(m.text);
+		if (typeof m.result === "string" && m.result.length > OVERVIEW_TEXT_CAP) {
+			light.result = capText(m.result);
+		}
+		out.message = light;
+	}
+	const details = entry.details;
+	if (details !== null && typeof details === "object") {
+		const d = details as Record<string, unknown>;
+		if (Array.isArray(d.notes)) {
+			out.details = {
+				...d,
+				notes: d.notes.map(n => {
+					if (n && typeof n === "object" && typeof (n as { note?: unknown }).note === "string") {
+						const note = n as { note: string };
+						return note.note.length > OVERVIEW_TEXT_CAP ? { ...note, note: capText(note.note) } : n;
+					}
+					return n;
+				}),
+			};
+		}
+	}
+	if (typeof entry.content === "string" && entry.content.length > OVERVIEW_TEXT_CAP) {
+		out.content = capText(entry.content);
+	}
+	return out;
+}
+
 /** 展平后的树行(渲染视图用;isLast 供缩进连接线/脊柱绘制)。 */
 export interface FlatMessageTreeRow {
 	node: MessageTreeNode;
@@ -118,7 +193,7 @@ export function treeTextOf(entry: unknown): string {
 							.map(b => b.text ?? "")
 							.join(" ");
 		const cleaned = text.replace(/\s+/g, " ").trim();
-		if (cleaned) return cleaned.slice(0, 400);
+		if (cleaned) return cleaned.slice(0, OVERVIEW_TEXT_CAP);
 		if (m?.role === "toolResult") return "";
 		const calls = blocks.filter(b => b?.type === "toolCall") as Array<{ name?: string }>;
 		if (calls.length > 0) {

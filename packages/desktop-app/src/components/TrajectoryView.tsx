@@ -329,6 +329,7 @@ export function TrajectoryView({
 	entries,
 	fullEntries,
 	fullLoading,
+	fullError,
 	onEnsureFullHistory,
 	modelId,
 	roundDurations,
@@ -344,6 +345,9 @@ export function TrajectoryView({
 	fullEntries?: readonly unknown[] | null;
 	/** 全量历史补全中。 */
 	fullLoading?: boolean;
+	/** 全量历史补全失败(P0-4,可重试)——显示降级提示 + 重试入口,不再
+	 *  静默只覆盖加载窗。 */
+	fullError?: boolean;
 	/** 挂载即请求补全全量历史(ChatView wiring)。 */
 	onEnsureFullHistory?: () => void;
 	modelId?: string;
@@ -717,6 +721,13 @@ export function TrajectoryView({
 			{/* 全量历史补全中:统计当前只覆盖加载窗,补全后自动刷新。 */}
 			{fullLoading === true && !fullEntries && (
 				<div className="traj-loading-note">{t("turn map loading history")}</div>
+			)}
+			{/* P0-4 补全失败的显式降级:不再静默只覆盖加载窗——点按重试
+			    (ensureFullHistory 的闩锁已在失败时复位)。 */}
+			{fullError === true && !fullEntries && fullLoading !== true && (
+				<button type="button" className="traj-loading-note traj-error-note" onClick={onEnsureFullHistory}>
+					{t("trajectory history partial retry")}
+				</button>
 			)}
 			{/* Overview 时间轴:拖拽区间聚焦 / 悬停时刻提示 / 单击整轮。 */}
 			{turns.length > 0 && (

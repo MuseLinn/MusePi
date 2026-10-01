@@ -139,6 +139,7 @@ export function ContextPanel({
 	modeCatalog,
 	overviewEntries,
 	overviewLoading,
+	overviewError,
 	onEnsureFullHistory,
 }: {
 	/** Materialized snapshot, passed down from ChatView's own store
@@ -165,6 +166,8 @@ export function ContextPanel({
 	overviewEntries?: readonly unknown[] | null;
 	/** 全量历史补全中。 */
 	overviewLoading?: boolean;
+	/** 全量历史补全失败（可重试，P0-4）——轨迹面板据此显示降级提示。 */
+	overviewError?: boolean;
 	/** 轨迹面板挂载即请求补全(ChatView wiring)。 */
 	onEnsureFullHistory?(): void;
 	/** Active view — DERIVED from the active panel tab inside this component
@@ -766,6 +769,7 @@ export function ContextPanel({
 				entries={snap?.entries ?? []}
 				fullEntries={overviewEntries ?? null}
 				fullLoading={overviewLoading}
+				fullError={overviewError}
 				onEnsureFullHistory={onEnsureFullHistory}
 				modelId={snap?.state?.model?.id}
 				roundDurations={snap?.roundDurations}

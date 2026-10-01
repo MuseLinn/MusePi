@@ -60,6 +60,7 @@ export const transcript = {
 	"turn map layout horizontal": "横向布局",
 	"turn map compact count": "{count} 事件",
 	"turn map loading history": "正在补全历史…",
+	"trajectory history partial retry": "历史补全失败，当前仅显示局部历史 — 点击重试",
 	"map switch to branch": "切换到此分支",
 	"map switch to branch desc": "把会话叶子移动到该分支（切回对话查看）",
 	"trajectory expand all": "展开全部",

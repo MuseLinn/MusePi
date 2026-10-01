@@ -37,7 +37,7 @@ function writeTranscript(lines: string[]): string {
 	const d = fs.mkdtempSync(path.join(os.tmpdir(), "jsonl-snapshot-test-"));
 	dirs.push(d);
 	const file = path.join(d, "session.jsonl");
-	fs.writeFileSync(file, lines.join("\n") + "\n");
+	fs.writeFileSync(file, `${lines.join("\n")}\n`);
 	return file;
 }
 

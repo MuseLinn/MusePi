@@ -5261,6 +5261,23 @@
 	animation: tm-pulse 1.6s ease-in-out infinite;
 }
 
+/* P0-4 补全失败的降级提示:可点按重试,不再脉动(不是进行中态)。 */
+button.traj-error-note {
+	display: block;
+	width: calc(100% - 20px);
+	border: none;
+	text-align: left;
+	cursor: pointer;
+	font-family: inherit;
+	color: var(--color-warning, var(--color-accent));
+	background: color-mix(in srgb, var(--color-warning, var(--color-accent)) 10%, transparent);
+	animation: none;
+}
+
+button.traj-error-note:hover {
+	background: color-mix(in srgb, var(--color-warning, var(--color-accent)) 18%, transparent);
+}
+
 .tm-topbar > .traj-overview,
 .tm-topbar > [class*="traj-overview"] {
 	flex: 1;

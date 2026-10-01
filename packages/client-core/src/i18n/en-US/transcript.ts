@@ -63,6 +63,7 @@ export const transcript = {
 	"turn map layout horizontal": "Horizontal layout",
 	"turn map compact count": "{count} events",
 	"turn map loading history": "Completing history…",
+	"trajectory history partial retry": "History backfill failed — showing a partial window only. Click to retry.",
 	"map switch to branch": "Switch to this branch",
 	"map switch to branch desc": "Move the session leaf to this branch (opens the chat view)",
 	"trajectory expand all": "Expand all",
