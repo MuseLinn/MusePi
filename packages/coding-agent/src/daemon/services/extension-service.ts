@@ -616,7 +616,9 @@ export class ExtensionService implements DaemonService {
 			settings = this.#deps.settings();
 		}
 		if (!settings) throw new Error("extensions.setComponentEnabled: settings unavailable");
-		const { findBuiltinDef } = await import("../../extensibility/extensions-center/builtin-registry");
+		const { componentDenyTarget, findBuiltinDef } = await import(
+			"../../extensibility/extensions-center/builtin-registry"
+		);
 		const def = findBuiltinDef(p.id);
 		const declared = def?.components?.find(c => c.id === p.component);
 		if (!declared) {
@@ -654,28 +656,12 @@ export class ExtensionService implements DaemonService {
 			}
 			throw new Error(`extensions.setComponentEnabled: "${p.component}" is not a declared component of ${p.id}`);
 		}
-		const settingsKey =
-			declared.deny === "tool"
-				? "tools.disabled"
-				: declared.deny === "terminal-backend"
-					? "terminal.disabledBackends"
-					: declared.deny === "browser-backend"
-						? "browser.disabledBackends"
-						: declared.deny === "file-backend"
-							? "file.disabledBackends"
-							: "voice.disabledEngines";
-		const denyId =
-			declared.deny === "tool" ||
-			declared.deny === "terminal-backend" ||
-			declared.deny === "browser-backend" ||
-			declared.deny === "file-backend"
-				? p.component
-				: `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
-		const denylist = [...((settings.get(settingsKey) ?? []) as string[])];
-		const i = denylist.indexOf(denyId);
+		const target = componentDenyTarget(declared.deny, p.component);
+		const denylist = [...((settings.get(target.key) ?? []) as string[])];
+		const i = denylist.indexOf(target.id);
 		if (p.enabled && i >= 0) denylist.splice(i, 1);
-		if (!p.enabled && i < 0) denylist.push(denyId);
-		settings.set(settingsKey, denylist);
+		if (!p.enabled && i < 0) denylist.push(target.id);
+		settings.set(target.key, denylist);
 		await settings.flush();
 		this.#extensionsCache = null;
 		this.#runtimeLoadCache = null;

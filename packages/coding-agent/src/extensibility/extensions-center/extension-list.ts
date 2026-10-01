@@ -6,6 +6,7 @@
  * master switch is off.
  */
 import { type Component, matchesKey, padding, truncateToWidth, visibleWidth } from "@musepi/pi-tui";
+import type { PluginComponentDesc } from "@musepi/pi-wire";
 import { isProviderEnabled } from "../../discovery";
 import { t } from "../../i18n/index.js";
 import {
@@ -24,6 +25,8 @@ export interface ExtensionListCallbacks {
 	onSelectionChange?: (extension: Extension | null) => void;
 	/** Called when extension is toggled */
 	onToggle?: (extensionId: string, enabled: boolean) => void;
+	/** Called when a plugin「包含的组件」row is toggled (dsh 组件开关 parity) */
+	onComponentToggle?: (extensionId: string, componentId: string, enabled: boolean) => void;
 	/** Called when master switch is toggled */
 	onMasterToggle?: (providerId: string) => void;
 	/** Provider ID for master switch (null = no master switch) */
@@ -36,7 +39,8 @@ const DEFAULT_MAX_VISIBLE = 15;
 type ListItem =
 	| { type: "master"; providerId: string; providerName: string; enabled: boolean }
 	| { type: "kind-header"; kind: ExtensionKind; label: string; icon: string; count: number }
-	| { type: "extension"; item: Extension };
+	| { type: "extension"; item: Extension }
+	| { type: "component"; parent: Extension; component: PluginComponentDesc };
 
 export class ExtensionList implements Component {
 	#listItems: ListItem[] = [];
@@ -92,7 +96,9 @@ export class ExtensionList implements Component {
 
 	getSelectedExtension(): Extension | null {
 		const item = this.#listItems[this.#selectedIndex];
-		return item?.type === "extension" ? item.item : null;
+		if (item?.type === "extension") return item.item;
+		if (item?.type === "component") return item.parent;
+		return null;
 	}
 
 	/** Get the currently selected kind header (for preview purposes) */
@@ -153,6 +159,14 @@ export class ExtensionList implements Component {
 				rowStr = this.#renderMasterSwitch(listItem, isSelected, rowWidth);
 			} else if (listItem.type === "kind-header") {
 				rowStr = this.#renderKindHeader(listItem, isSelected, rowWidth);
+			} else if (listItem.type === "component") {
+				rowStr = this.#renderComponentRow(
+					listItem.parent,
+					listItem.component,
+					isSelected,
+					rowWidth,
+					masterDisabled,
+				);
 			} else {
 				rowStr = this.#renderExtensionRow(listItem.item, isSelected, rowWidth, masterDisabled);
 			}
@@ -255,6 +269,31 @@ export class ExtensionList implements Component {
 		return truncateToWidth(line, width);
 	}
 
+	/** Render a plugin「包含的组件」child row, indented under its parent extension. */
+	#renderComponentRow(
+		parent: Extension,
+		component: PluginComponentDesc,
+		isSelected: boolean,
+		width: number,
+		masterDisabled: boolean,
+	): string {
+		const parentDisabled = masterDisabled || parent.state === "disabled";
+		const checkbox = component.enabled
+			? theme.fg(parentDisabled ? "dim" : "success", theme.checkbox.checked)
+			: theme.fg("dim", theme.checkbox.unchecked);
+		let name = component.name;
+		if (isSelected && !parentDisabled && component.canToggle) {
+			name = theme.bold(theme.fg("accent", name));
+		} else if (parentDisabled || !component.enabled) {
+			name = theme.fg("dim", name);
+		}
+		let line = `      ${checkbox} ${name}`;
+		if (isSelected) {
+			line = theme.bg("selectedBg", line);
+		}
+		return truncateToWidth(line, width);
+	}
+
 	#getKindIcon(kind: ExtensionKind): string {
 		switch (kind) {
 			case "extension-module":
@@ -281,6 +320,18 @@ export class ExtensionList implements Component {
 				return theme.icon.extensionTool;
 			case "magic-keyword":
 				return theme.icon.extensionPrompt;
+			case "voice":
+				return theme.icon.mic;
+			case "terminal":
+				return theme.icon.package;
+			case "browser":
+				return theme.icon.host;
+			case "computer":
+				return theme.icon.camera;
+			case "lsp":
+				return theme.icon.pi;
+			case "file":
+				return theme.icon.file;
 			default:
 				return theme.format.bullet;
 		}
@@ -306,6 +357,14 @@ export class ExtensionList implements Component {
 			return truncateToWidth(text, targetWidth);
 		}
 		return text + padding(targetWidth - width);
+	}
+
+	/** Push an extension row followed by its「包含的组件」child rows (if any). */
+	#pushExtensionWithComponents(ext: Extension): void {
+		this.#listItems.push({ type: "extension", item: ext });
+		for (const component of ext.components ?? []) {
+			this.#listItems.push({ type: "component", parent: ext, component });
+		}
 	}
 
 	#rebuildList(): void {
@@ -337,7 +396,7 @@ export class ExtensionList implements Component {
 			});
 
 			for (const ext of filtered) {
-				this.#listItems.push({ type: "extension", item: ext });
+				this.#pushExtensionWithComponents(ext);
 			}
 			return;
 		}
@@ -364,6 +423,12 @@ export class ExtensionList implements Component {
 			"context-file",
 			"instruction",
 			"gui-motion",
+			"voice",
+			"terminal",
+			"browser",
+			"computer",
+			"lsp",
+			"file",
 			"theme",
 			"style",
 			"desktop-shell",
@@ -382,7 +447,7 @@ export class ExtensionList implements Component {
 			});
 
 			for (const ext of items) {
-				this.#listItems.push({ type: "extension", item: ext });
+				this.#pushExtensionWithComponents(ext);
 			}
 		}
 	}
@@ -417,6 +482,18 @@ export class ExtensionList implements Component {
 				return t("Themes");
 			case "tool-render":
 				return t("Tool Renderers");
+			case "voice":
+				return t("Voice");
+			case "terminal":
+				return t("Terminal");
+			case "browser":
+				return t("Browser");
+			case "computer":
+				return t("Computer Use");
+			case "lsp":
+				return t("LSP");
+			case "file":
+				return t("Files");
 			default:
 				return kind;
 		}
@@ -442,6 +519,14 @@ export class ExtensionList implements Component {
 			if (!masterDisabled) {
 				const newEnabled = item.item.state === "disabled";
 				this.callbacks.onToggle?.(item.item.id, newEnabled);
+			}
+		} else if (item?.type === "component") {
+			// Plugin「包含的组件」row: Space flips this component via its deny
+			// channel (parent disabled/master off → toggles are meaningless).
+			const masterDisabled = this.#masterSwitchProvider !== null && !isProviderEnabled(this.#masterSwitchProvider);
+			const parentDisabled = masterDisabled || item.parent.state === "disabled";
+			if (!parentDisabled && item.component.canToggle) {
+				this.callbacks.onComponentToggle?.(item.parent.id, item.component.id, !item.component.enabled);
 			}
 		}
 	}

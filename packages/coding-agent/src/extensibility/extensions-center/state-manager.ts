@@ -32,6 +32,7 @@ import {
 	annotateBuiltinExtensions,
 	builtinExtensionEntries,
 	builtinMirrorDisabled,
+	componentDenyTarget,
 	findBuiltinDef,
 } from "./builtin-registry";
 import { readPluginConfigStore } from "./plugin-config-store";
@@ -729,24 +730,49 @@ export function applyDisabledExtensionsToState(state: DashboardState, disabledId
 }
 
 /**
- * Apply settings-mirrored builtin state (style/shell/magic keywords) to an
- * existing dashboard state. The TUI dashboard owns a Settings instance, so it
- * re-resolves mirror state in-process; the daemon does the equivalent rewrite
- * in extensions.list. Mirror wins over the disabledExtensions-derived state.
+ * Apply settings-mirrored builtin state (style/shell/magic keywords) plus
+ * 「包含的组件」状态标注 to an existing dashboard state. The TUI dashboard
+ * owns a Settings instance, so it re-resolves both in-process; the daemon
+ * does the equivalent rewrite in extensions.list. Mirror wins over the
+ * disabledExtensions-derived state. Components are annotated from the same
+ * hidden denylists the daemon's extensions.list reads (voice.disabledEngines
+ * etc.) — TUI standalone has no daemon to annotate them. Unresolvable deny
+ * list values are treated as "not denied" (fail-open, same as daemon).
  */
 export function applyBuiltinMirrorState(state: DashboardState, getRaw: (key: string) => unknown): DashboardState {
 	const updateExtension = (ext: Extension): Extension => {
 		const def = findBuiltinDef(ext.id);
-		if (!def?.settingsMirror) return ext;
-		const disabled = builtinMirrorDisabled(def, getRaw);
-		if (disabled) {
-			if (ext.state === "disabled" && ext.disabledReason === "item-disabled") return ext;
-			return { ...ext, state: "disabled", disabledReason: "item-disabled" as const };
+		if (!def) return ext;
+		let out = ext;
+		if (def.settingsMirror) {
+			const disabled = builtinMirrorDisabled(def, getRaw);
+			if (disabled) {
+				if (!(out.state === "disabled" && out.disabledReason === "item-disabled")) {
+					out = { ...out, state: "disabled", disabledReason: "item-disabled" as const };
+				}
+			} else if (out.state !== "active") {
+				const enabled: Extension = { ...out, state: "active" };
+				delete enabled.disabledReason;
+				out = enabled;
+			}
 		}
-		if (ext.state === "active") return ext;
-		const enabled: Extension = { ...ext, state: "active" };
-		delete enabled.disabledReason;
-		return enabled;
+		if (def.components && def.components.length > 0) {
+			const components = def.components.map(c => {
+				const target = componentDenyTarget(c.deny, c.id);
+				const list = getRaw(target.key);
+				const denied = Array.isArray(list) && (list as unknown[]).includes(target.id);
+				return {
+					id: c.id,
+					name: c.id,
+					description: c.description,
+					enabled: !denied,
+					canToggle: true,
+					...(denied ? { disabledReason: "tools-denied" as const } : {}),
+				};
+			});
+			out = { ...out, components };
+		}
+		return out;
 	};
 
 	return {

@@ -32,7 +32,7 @@ import { bottomBorder, divider, row, topBorder } from "../../modes/components/ov
 import { getTabBarTheme } from "../../modes/shared";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt } from "../../modes/utils/keybinding-matchers";
-import { findBuiltinDef } from "./builtin-registry";
+import { componentDenyTarget, findBuiltinDef } from "./builtin-registry";
 import { ExtensionList } from "./extension-list";
 import { InspectorPanel } from "./inspector-panel";
 import {
@@ -120,6 +120,8 @@ export class ExtensionDashboard implements Component {
 					this.#body.resetInspectorScroll();
 				},
 				onToggle: (extensionId, enabled) => this.#handleExtensionToggle(extensionId, enabled),
+				onComponentToggle: (extensionId, componentId, enabled) =>
+					this.#handleComponentToggle(extensionId, componentId, enabled),
 				onMasterToggle: providerId => this.#handleProviderToggle(providerId),
 				masterSwitchProvider: this.#getActiveProviderId(),
 			},
@@ -261,6 +263,27 @@ export class ExtensionDashboard implements Component {
 			this.#inspector.setExtension(this.#state.selected);
 		}
 		this.#body.resetInspectorScroll();
+		this.onRequestRender?.();
+	}
+
+	/** 组件开关(dsh 插件详情段 parity):写对应隐藏黑名单设置键,与 daemon
+	 *  extensions.setComponentEnabled 同一映射(componentDenyTarget),下个
+	 *  会话/工具集装配即消费。写完原地重解析镜像+组件状态,不整表重载。 */
+	#handleComponentToggle(extensionId: string, componentId: string, enabled: boolean): void {
+		const sm = this.settings ?? Settings.instance;
+		const def = findBuiltinDef(extensionId);
+		const declared = def?.components?.find(c => c.id === componentId);
+		if (!sm || !declared) return;
+		const target = componentDenyTarget(declared.deny, componentId);
+		const denylist = [...((sm.get(target.key) as string[] | undefined) ?? [])];
+		const i = denylist.indexOf(target.id);
+		if (enabled && i >= 0) denylist.splice(i, 1);
+		if (!enabled && i < 0) denylist.push(target.id);
+		sm.set(target.key as Parameters<Settings["set"]>[0], denylist as never);
+		void sm.flush();
+		this.#state = this.#applyMirrorState(this.#state);
+		this.#mainList.setExtensions(this.#state.searchFiltered);
+		if (this.#state.selected) this.#inspector.setExtension(this.#state.selected);
 		this.onRequestRender?.();
 	}
 

@@ -40,6 +40,51 @@ import {
 } from "../../tts/models.ts";
 import { type Extension, type ExtensionKind, makeExtensionId, parseExtensionId } from "./types";
 
+/** 组件 deny 通道:组件开关按通道落不同隐藏设置键(见 componentDenyTarget)。 */
+export type BuiltinComponentDeny =
+	| "tool"
+	| "stt-engine"
+	| "tts-engine"
+	| "terminal-backend"
+	| "browser-backend"
+	| "file-backend";
+
+/**
+ * 组件 deny 通道 → 隐藏设置键 + 名单内 id(daemon setComponentEnabled 与
+ * TUI 仪表盘写侧共用同一映射,读侧见 daemon extension-service 的
+ * extensions.list 组件状态标注):
+ * - "tool" → tools.disabled(id 即组件 id)
+ * - "stt-engine"/"tts-engine" → voice.disabledEngines(id 带 "stt:"/"tts:" 前缀)
+ * - "terminal-backend" → terminal.disabledBackends
+ * - "browser-backend" → browser.disabledBackends
+ * - "file-backend" → file.disabledBackends
+ */
+export function componentDenyTarget(
+	deny: BuiltinComponentDeny,
+	componentId: string,
+): {
+	key:
+		| "tools.disabled"
+		| "voice.disabledEngines"
+		| "terminal.disabledBackends"
+		| "browser.disabledBackends"
+		| "file.disabledBackends";
+	id: string;
+} {
+	switch (deny) {
+		case "tool":
+			return { key: "tools.disabled", id: componentId };
+		case "terminal-backend":
+			return { key: "terminal.disabledBackends", id: componentId };
+		case "browser-backend":
+			return { key: "browser.disabledBackends", id: componentId };
+		case "file-backend":
+			return { key: "file.disabledBackends", id: componentId };
+		default:
+			return { key: "voice.disabledEngines", id: `${deny === "stt-engine" ? "stt" : "tts"}:${componentId}` };
+	}
+}
+
 /** 自有内置扩展的统一来源标记(musepi-extensions provider,builtin 级)。 */
 const BUILTIN_SOURCE: Extension["source"] = {
 	provider: "musepi-extensions",
@@ -151,7 +196,7 @@ export interface BuiltinExtensionDef {
 	 */
 	components?: readonly {
 		id: string;
-		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend" | "browser-backend" | "file-backend";
+		deny: BuiltinComponentDeny;
 		description?: string;
 	}[];
 	/** inspector 的 raw 载荷(可为生成值)。 */

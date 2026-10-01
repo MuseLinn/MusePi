@@ -1864,6 +1864,8 @@ export const settings = {
 	Instructions: "指令",
 	Themes: "主题",
 	"Tool Renderers": "工具卡片渲染",
+	Voice: "语音",
+	"Computer Use": "电脑控制",
 	Builtin: "内置",
 	"No MCP servers configured.": "未配置任何 MCP 服务器。",
 	"Use {0} to add a server.": "使用 {0} 添加服务器。",

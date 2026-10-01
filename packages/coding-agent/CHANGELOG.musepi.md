@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **TUI `/extensions` 仪表盘补齐子系统插件面（组件开关 + 新 kind 分组）**：此前 TUI 仪表盘有两处实质缺口——① voice/terminal/browser/computer/lsp/file 六类子系统内置单元在 ALL 视图被 `kindOrder` 白名单整组丢弃（provider 页可见、ALL 页不可见）；② 插件「包含的组件」在 TUI 完全不可见不可操作（GUI 有组件开关行）。修复：kindOrder 补六类子系统 kind（各配图标与 i18n 分组标签）；列表在插件行下渲染组件子行（缩进 + 勾选态），Space/点击开关走 daemon 同一条 `componentDenyTarget` 映射（tool → tools.disabled、stt/tts 引擎 → voice.disabledEngines 带前缀、terminal/browser/file 后端 → 各自 disabledBackends）直写隐藏设置键，下个会话工具集/引擎过滤即消费——不是展示层；检视面补「包含的组件」段（每组件状态 + 已翻译说明）。TUI 独立进程无 daemon 标注组件态，`applyBuiltinMirrorState` 扩展为同时按隐藏黑名单重解析组件状态（fail-open 与 daemon 同口径）。daemon `setComponentEnabled` 重构复用同一 helper，消除两处映射漂移面。9 例新契约测试（映射分支/TUI 组件标注/fail-open/镜像正交/子行渲染/开关回调两态）。
+  - EN: The TUI `/extensions` dashboard gains the subsystem plugin surface (component toggles + new kind groups). Two real gaps existed: ① the six subsystem builtin units (voice/terminal/browser/computer/lsp/file) were dropped entirely from the ALL view by the `kindOrder` whitelist (visible on provider tabs, invisible on ALL); ② plugin "included components" were completely invisible and non-toggleable in the TUI (the GUI has component toggle rows). Fix: kindOrder gains the six subsystem kinds (each with an icon and an i18n group label); the list renders component child rows under a plugin row (indented + checkbox state), and Space/click routes through the same `componentDenyTarget` mapping the daemon uses (tool → tools.disabled, stt/tts engines → voice.disabledEngines with prefix, terminal/browser/file backends → their disabledBackends keys), writing the hidden settings keys directly so the next session's tool set / engine filtering consumes them — not a display layer. The inspector gains a "Components" section (per-component state + translated description). TUI standalone has no daemon to annotate component state, so `applyBuiltinMirrorState` now also re-resolves component state from the hidden denylists (fail-open, same rule as the daemon). The daemon's `setComponentEnabled` refactors onto the same helper, removing the two-copy drift surface. 9 new contract tests (mapping branches / TUI component annotation / fail-open / mirror orthogonality / child-row rendering / toggle callbacks in both states).
+
 ## [0.5.2] - 2026-10-01
 
 ### Added

@@ -71,6 +71,25 @@ export class InspectorPanel implements Component {
 		lines.push(`  ${this.#getStatusBadge(ext.state, ext.disabledReason, ext.shadowedBy)}`);
 		lines.push("");
 
+		// 「包含的组件」段(dsh 插件详情 parity):组件开关在左侧列表
+		// 的子行进行(Space),此处展示每个组件的当前状态与说明。
+		if (ext.components && ext.components.length > 0) {
+			lines.push(theme.fg("muted", t("Components:")));
+			for (const component of ext.components) {
+				const state = component.enabled
+					? theme.fg("success", `${theme.status.enabled} ${t("Enabled")}`)
+					: theme.fg("dim", `${theme.status.disabled} ${t("Disabled")}`);
+				lines.push(`  ${component.name}  ${state}`);
+				const description = component.description ? t(component.description) : "";
+				if (description && description !== component.description && width > 6) {
+					for (const line of wrapTextWithAnsi(`  ${description}`, width - 2)) {
+						lines.push(truncateToWidth(line, width));
+					}
+				}
+			}
+			lines.push("");
+		}
+
 		// Preview section (routed based on kind)
 		const previewLines = this.#renderPreview(ext, width);
 		lines.push(...previewLines);
