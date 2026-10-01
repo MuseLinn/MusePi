@@ -142,12 +142,14 @@ export interface BuiltinExtensionDef {
 	 *   (voice/engine-denylist.ts:模型状态/下载/转写/合成全路径过滤)
 	 * - "terminal-backend" → terminal.disabledBackends
 	 *   (terminal-provider.ts:auto 回退剔除 + 显式选中 DISABLED_BACKEND)
+	 * - "browser-backend" → browser.disabledBackends
+	 *   (tools/browser.ts:设置链回退跳过 + 显式 app 参数 DISABLED_BACKEND)
 	 * extensions.list 据此下发组件状态,setComponentEnabled 写名单。
 	 * 无独立启停语义的组件不声明。
 	 */
 	components?: readonly {
 		id: string;
-		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend";
+		deny: "tool" | "stt-engine" | "tts-engine" | "terminal-backend" | "browser-backend";
 		description?: string;
 	}[];
 	/** inspector 的 raw 载荷(可为生成值)。 */
@@ -431,9 +433,25 @@ export const BUILTIN_EXTENSIONS: readonly BuiltinExtensionDef[] = [
 		name: "browser",
 		displayName: "Browser",
 		description:
-			"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. Toggle mirrors browser.enabled.",
+			"Scripted Chromium automation tool (puppeteer) plus the managed in-app browser bridge. Toggle mirrors browser.enabled; the three backend units toggle as components.",
 		settingsMirror: { key: "browser.enabled", on: true, off: false },
-		components: [{ id: "browser", deny: "tool", description: "ext builtin browser component browser desc" }],
+		components: [
+			{
+				id: "launch",
+				deny: "browser-backend",
+				description: "ext builtin browser component launch desc",
+			},
+			{
+				id: "attach",
+				deny: "browser-backend",
+				description: "ext builtin browser component attach desc",
+			},
+			{
+				id: "gui",
+				deny: "browser-backend",
+				description: "ext builtin browser component gui desc",
+			},
+		],
 		config: [
 			{
 				key: "browser.headless",

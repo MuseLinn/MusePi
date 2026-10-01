@@ -273,6 +273,7 @@ export class ExtensionService implements DaemonService {
 		const toolDenylist = new Set((s?.get("tools.disabled") ?? []) as string[]);
 		const engineDenylist = new Set((s?.get("voice.disabledEngines") ?? []) as string[]);
 		const terminalDenylist = new Set((s?.get("terminal.disabledBackends") ?? []) as string[]);
+		const browserDenylist = new Set((s?.get("browser.disabledBackends") ?? []) as string[]);
 		for (const def of BUILTIN_EXTENSIONS) {
 			if (!def.components || def.components.length === 0) continue;
 			const ext = extensions.find(e => e.id === `${def.kind}:${def.name}`);
@@ -283,7 +284,9 @@ export class ExtensionService implements DaemonService {
 						? toolDenylist.has(c.id)
 						: c.deny === "terminal-backend"
 							? terminalDenylist.has(c.id)
-							: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
+							: c.deny === "browser-backend"
+								? browserDenylist.has(c.id)
+								: engineDenylist.has(`${c.deny === "stt-engine" ? "stt" : "tts"}:${c.id}`);
 				return {
 					id: c.id,
 					name: c.id,
@@ -651,9 +654,11 @@ export class ExtensionService implements DaemonService {
 				? "tools.disabled"
 				: declared.deny === "terminal-backend"
 					? "terminal.disabledBackends"
-					: "voice.disabledEngines";
+					: declared.deny === "browser-backend"
+						? "browser.disabledBackends"
+						: "voice.disabledEngines";
 		const denyId =
-			declared.deny === "tool" || declared.deny === "terminal-backend"
+			declared.deny === "tool" || declared.deny === "terminal-backend" || declared.deny === "browser-backend"
 				? p.component
 				: `${declared.deny === "stt-engine" ? "stt" : "tts"}:${p.component}`;
 		const denylist = [...((settings.get(settingsKey) ?? []) as string[])];

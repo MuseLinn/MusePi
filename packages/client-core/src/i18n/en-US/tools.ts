@@ -521,7 +521,9 @@ export const tools = {
 	"ext builtin stt component parakeet": "Parakeet",
 	"ext builtin tts component kokoro": "Kokoro",
 	"ext builtin tts component melotts-zh": "MeloTTS 中文",
-	"ext builtin browser component browser": "Browser automation",
+	"ext builtin browser component launch": "Scripted browser",
+	"ext builtin browser component attach": "Attach browser",
+	"ext builtin browser component gui": "Managed pane bridge",
 	"ext builtin computer component computer": "Computer use",
 	"ext builtin lsp component lsp": "LSP",
 	"ext builtin stt component whisper desc": "Whisper tiers (Fast / Balanced / Turbo) on the transformers.js engine.",
@@ -529,7 +531,12 @@ export const tools = {
 	"ext builtin stt component parakeet desc": "NVIDIA Parakeet TDT v3 on sherpa-onnx — the English/European top tier.",
 	"ext builtin tts component kokoro desc": "Kokoro-82M neural TTS on kokoro-js — English-first, multi-voice.",
 	"ext builtin tts component melotts-zh desc": "MeloTTS 中文 on sherpa-onnx — Mandarin + mixed zh/en, single speaker.",
-	"ext builtin browser component browser desc": "Scripted Chromium automation tool exposed to the agent.",
+	"ext builtin browser component launch desc":
+		"Scripted Chromium backend (headed/headless via browser.headless); the tool's fallback path.",
+	"ext builtin browser component attach desc":
+		"Take over an existing browser: CDP endpoint, relay extension, cmux, or spawn-and-attach.",
+	"ext builtin browser component gui desc":
+		"Managed in-app browser bridge (browser.gui) — agent pages open in the right pane, sharing login state.",
 	"ext builtin computer component computer desc":
 		"Host-desktop control tool (screenshots, input, a11y tree) exposed to the agent.",
 	"ext builtin lsp component lsp desc":

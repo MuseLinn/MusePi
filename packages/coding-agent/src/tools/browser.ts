@@ -91,42 +91,87 @@ export interface BrowserToolDetails {
 	meta?: OutputMeta;
 }
 
+/** 浏览器后端组件 id（builtin-registry browser 行 components 声明同步）。
+ *  launch = 脚本启动的 Chromium（browser.headless 控制有头/无头）；
+ *  attach = 接管已有浏览器（CDP 端点 / relay 扩展 / cmux / spawn-and-attach）；
+ *  gui = 托管面板浏览器桥（browser.gui，agent 页面开进右侧面板）。 */
+export type BrowserBackendComponent = "launch" | "attach" | "gui";
+
+/** BrowserKind → 后端组件分组的唯一映射。gui 是 connected 的 gui:true
+ *  变体，其余 connected/spawned/relay/cmux 全属 attach。 */
+function browserBackendComponent(kind: BrowserKind): BrowserBackendComponent {
+	if (kind.kind === "connected") return kind.gui ? "gui" : "attach";
+	return kind.kind === "headless" ? "launch" : "attach";
+}
+
+/** 读浏览器后端组件黑名单（fail-soft：坏值/非数组 = 空集）。组件开关
+ *  （extensions.setComponentEnabled 经 extension-service）写
+ *  `browser.disabledBackends`，resolveBrowserKind 是唯一消费方。 */
+export function readDisabledBrowserBackends(source: { get(key: string): unknown }): Set<string> {
+	let raw: unknown;
+	try {
+		raw = source.get("browser.disabledBackends");
+	} catch {
+		return new Set();
+	}
+	if (!Array.isArray(raw)) return new Set();
+	return new Set(raw.filter((item): item is string => typeof item === "string"));
+}
+
 export function resolveBrowserKind(params: BrowserParams, session: ToolSession): BrowserKind {
+	const disabled = readDisabledBrowserBackends(session.settings);
+	/** 显式 app 参数指向被禁后端 = 用户/agent 显式意图，给结构化
+	 *  DISABLED_BACKEND，不静默回退（terminal-provider 同哲学）。 */
+	const denyExplicit = (kind: BrowserKind): BrowserKind => {
+		const backend = browserBackendComponent(kind);
+		if (disabled.has(backend)) {
+			throw new ToolError(`browser backend "${backend}" is disabled (plugin component toggle)`, {
+				code: "DISABLED_BACKEND",
+				backend,
+			});
+		}
+		return kind;
+	};
 	const app = params.app;
 	if (app?.cdp_url) {
-		return { kind: "connected", cdpUrl: app.cdp_url.replace(/\/+$/, "") };
+		return denyExplicit({ kind: "connected", cdpUrl: app.cdp_url.replace(/\/+$/, "") });
 	}
 	if (app?.path) {
 		const exe = resolveToCwd(app.path, session.cwd);
-		return { kind: "spawned", path: exe };
+		return denyExplicit({ kind: "spawned", path: exe });
 	}
 	const relayUrl = session.settings.get("browser.relayUrl") as string | undefined;
 	// Explicit app.relay wins over every setting; PI_BROWSER_RELAY stays the
 	// final kill switch (a relay that is down would otherwise brick the tool).
 	if (app?.relay) {
 		const relayKind = resolveRelayKind({ settingEnabled: true, url: relayUrl });
-		if (relayKind) return relayKind;
+		if (relayKind) return denyExplicit(relayKind);
 	}
 	// Relay before cdpUrl among settings: enabling the opt-out-by-default relay
 	// is a deliberate mode selection, while cdpUrl is a standing fallback
 	// endpoint. A configured endpoint is a default, not an override: explicit
 	// app options win.
-	if (app?.relay !== false) {
+	if (app?.relay !== false && !disabled.has("attach")) {
 		const relayKind = resolveRelayKind({
 			settingEnabled: session.settings.get("browser.relay") as boolean | undefined,
 			url: relayUrl,
 		});
 		if (relayKind) return relayKind;
 	}
+	// Settings chain below is defaults, not overrides: a backend disabled by
+	// the plugin component toggle is skipped (never attempted), falling through
+	// to the next candidate — same contract as terminal auto-fallback.
 	const configuredCdpUrl = (session.settings.get("browser.cdpUrl") as string | undefined)?.trim();
-	if (configuredCdpUrl) {
+	if (!disabled.has("attach") && configuredCdpUrl) {
 		return { kind: "connected", cdpUrl: configuredCdpUrl.replace(/\/+$/, "") };
 	}
-	const cmuxKind = resolveCmuxKind({
-		settingEnabled: session.settings.get("browser.cmux") as boolean | undefined,
-	});
-	if (cmuxKind) {
-		return cmuxKind;
+	if (!disabled.has("attach")) {
+		const cmuxKind = resolveCmuxKind({
+			settingEnabled: session.settings.get("browser.cmux") as boolean | undefined,
+		});
+		if (cmuxKind) {
+			return cmuxKind;
+		}
 	}
 	// GUI managed browser: the desktop app's right-pane browser (Electron
 	// WebContentsView) exposes a loopback CDP bridge the tool attaches to like
@@ -134,14 +179,17 @@ export function resolveBrowserKind(params: BrowserParams, session: ToolSession):
 	// the agent's work is visible in the panel and shares its login state.
 	// The `gui` marker lets the supervisor drive a dedicated agent tab instead
 	// of adopting whatever tab the user is looking at.
-	if (managedBrowserEnabled(session.settings)) {
+	if (managedBrowserEnabled(session.settings) && !disabled.has("gui")) {
 		const guiUrl = resolveManagedBrowserUrl(session);
 		if (guiUrl) {
 			return { kind: "connected", cdpUrl: guiUrl.replace(/\/+$/, ""), gui: true };
 		}
 	}
 	const headless = session.settings.get("browser.headless") as boolean;
-	return { kind: "headless", headless };
+	if (!disabled.has("launch")) return { kind: "headless", headless };
+	throw new ToolError("no browser backend available (all backends disabled by plugin components)", {
+		code: "NO_BACKEND",
+	});
 }
 
 /**

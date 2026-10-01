@@ -647,6 +647,14 @@ export const SETTINGS_SCHEMA = {
 	 *  terminal-provider.ts 是唯一读取方。隐藏设置键。 */
 	"terminal.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 浏览器后端级黑名单（插件「包含的组件」开关写入此处）：名单内的
+	 *  后端组件（launch = 脚本启动 / attach = 接管已有浏览器（CDP/relay/
+	 *  cmux/spawn）/ gui = 托管面板桥）从 browser 工具解析链剔除——设置
+	 *  链回退跳过被禁环节，显式 app 参数指向被禁后端给结构化
+	 *  DISABLED_BACKEND，全禁 = NO_BACKEND。tools/browser.ts 是读取方。
+	 *  隐藏设置键。 */
+	"browser.disabledBackends": { type: "array", default: EMPTY_STRING_ARRAY },
+
 	/** user 插件清单组件黑名单（dsh `- insert:` 子插件 parity）：复合键
 	 *  `<plugin>/<component>`（extensions.setComponentEnabled 写入），宿主
 	 *  级 fiber 装载 reconcile 时跳过命中组件——entry 组件停用 = 不挂

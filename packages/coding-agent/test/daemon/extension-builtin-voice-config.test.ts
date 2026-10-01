@@ -224,10 +224,10 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		});
 	});
 
-	test("list 给声明组件的单元挂组件状态(browser/computer/lsp/voice 有,terminal 无)", async () => {
+	test("list 给声明组件的单元挂组件状态(browser/computer/lsp/voice/terminal 有)", async () => {
 		const listed = await service.list();
 		const browser = listed.extensions.find(e => e.id === "browser:browser");
-		expect(browser?.components?.map(c => c.id)).toEqual(["browser"]);
+		expect(browser?.components?.map(c => c.id)).toEqual(["launch", "attach", "gui"]);
 		expect(browser?.components?.[0].enabled).toBe(true);
 		expect(browser?.components?.[0].canToggle).toBe(true);
 
@@ -241,23 +241,24 @@ describe("插件「包含的组件」契约(components + setComponentEnabled)", 
 		expect(tts?.components?.map(c => c.id)).toEqual(["kokoro", "melotts-zh"]);
 
 		const term = listed.extensions.find(e => e.id === "terminal:terminal");
-		expect(term?.components).toBeUndefined();
+		expect(term?.components?.map(c => c.id)).toEqual(["bun-pty", "node-pty"]);
 	});
 
-	test("组件开关写 tools.disabled 黑名单:list 同帧回读翻转 + changed 扇出", async () => {
-		await service.setComponentEnabled({ id: "browser:browser", component: "browser", enabled: false });
-		expect(settings.getRaw("tools.disabled")).toEqual(["browser"]);
+	test("组件开关写 tools.disabled 黑名单(computer 单 tool 组件):list 同帧回读翻转 + changed 扇出", async () => {
+		const before = (await service.list()).extensions.find(e => e.id === "computer:computer");
+		await service.setComponentEnabled({ id: "computer:computer", component: "computer", enabled: false });
+		expect(settings.getRaw("tools.disabled")).toEqual(["computer"]);
 		expect(changedCount).toBe(1);
 
-		const after = (await service.list()).extensions.find(e => e.id === "browser:browser");
+		const after = (await service.list()).extensions.find(e => e.id === "computer:computer");
 		expect(after?.components?.[0].enabled).toBe(false);
 		expect(after?.components?.[0].disabledReason).toBe("tools-denied");
-		// 单元总开关不受组件开关影响(正交)。
-		expect(after?.state).toBe("active");
+		// 单元总开关不受组件开关影响(正交；computer unsetDisabled 未设置 = disabled)。
+		expect(after?.state).toBe(before?.state);
 
-		await service.setComponentEnabled({ id: "browser:browser", component: "browser", enabled: true });
+		await service.setComponentEnabled({ id: "computer:computer", component: "computer", enabled: true });
 		expect(settings.getRaw("tools.disabled")).toEqual([]);
-		const restored = (await service.list()).extensions.find(e => e.id === "browser:browser");
+		const restored = (await service.list()).extensions.find(e => e.id === "computer:computer");
 		expect(restored?.components?.[0].enabled).toBe(true);
 		expect(restored?.components?.[0].disabledReason).toBeUndefined();
 	});
