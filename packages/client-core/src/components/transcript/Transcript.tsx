@@ -134,8 +134,8 @@ const PREPEND_ADJUST_SUPPRESS_MS = 150;
  *  Scrolls ONLY the transcript's own scroller: `scrollIntoView` walks every
  *  scrollable ancestor, so a jump used to push the whole shell up and leave the
  *  target half-hidden under the top chrome (user: 轨迹跳转后界面上移被遮挡). */
-function jumpFlashRow(root: HTMLElement | null, timestamp: string): void {
-	const el = root?.querySelector<HTMLElement>(`[title="${CSS.escape(timestamp)}"]`);
+function jumpFlashRow(root: HTMLElement | null, entryId: string): void {
+	const el = root?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(entryId)}"]`);
 	if (!el) return;
 	const scroller = root?.closest<HTMLElement>(".gui-transcript") ?? null;
 	if (scroller) {
@@ -279,7 +279,7 @@ export interface TranscriptProps {
 	 *  flash highlight. Long sessions previously scrolled to the top
 	 *  spacer instead — the target stayed unmounted (user: 轨迹跳转不能
 	 *  合理处理). */
-	jumpRequest?: { timestamp: string; nonce: number } | null;
+	jumpRequest?: { entryId: string; nonce: number } | null;
 	/** Read an assistant reply aloud (TTS). */
 	onSpeak?(text: string, messageId?: string): void;
 	/** 当前朗读中的消息 id(播放状态行级指示;null = 无朗读)。 */
@@ -1689,11 +1689,11 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// in the next window, then the flash effect below re-anchors precisely
 	// and plays the highlight.
 	const lastJumpNonceRef = useRef(0);
-	const pendingJumpRef = useRef<{ timestamp: string; nonce: number } | null>(null);
+	const pendingJumpRef = useRef<{ entryId: string; nonce: number } | null>(null);
 	useEffect(() => {
 		const pending = pendingJumpRef.current;
 		if (!pending) return;
-		const idx = entries.findIndex(e => e.timestamp === pending.timestamp);
+		const idx = entries.findIndex(e => e.id === pending.entryId);
 		if (idx < 0) {
 			pendingJumpRef.current = null;
 			return;
@@ -1702,15 +1702,15 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// next virtual window after scrollToIndex).
 		if (!virtualItems.some(vi => vi.index === idx)) return;
 		pendingJumpRef.current = null;
-		jumpFlashRow(rootRef.current, pending.timestamp);
+		jumpFlashRow(rootRef.current, pending.entryId);
 	}, [virtualItems, entries]);
 	useEffect(() => {
 		if (!jumpRequest || jumpRequest.nonce === lastJumpNonceRef.current) return;
 		lastJumpNonceRef.current = jumpRequest.nonce;
-		const idx = entries.findIndex(e => e.timestamp === jumpRequest.timestamp);
+		const idx = entries.findIndex(e => e.id === jumpRequest.entryId);
 		if (idx < 0) return;
 		if (folding && idx < firstCompactionIdx) setCompactedOpen(true);
-		pendingJumpRef.current = { timestamp: jumpRequest.timestamp, nonce: jumpRequest.nonce };
+		pendingJumpRef.current = { entryId: jumpRequest.entryId, nonce: jumpRequest.nonce };
 		virtualizer.scrollToIndex(idx, { align: "center" });
 	}, [jumpRequest, entries, folding, firstCompactionIdx, virtualizer]);
 

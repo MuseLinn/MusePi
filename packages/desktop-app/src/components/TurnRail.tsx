@@ -15,8 +15,11 @@ interface TurnMarker {
 	/** Entry timestamp — data-driven mode: the DOM row carries
 	 *  `title=<timestamp>`; jumps and the scroll-spy resolve through it. */
 	ts?: string;
-	/** Entry id — present only in the canvas-mode (data-driven) source, where
-	 *  a click hands the node id back to the caller instead of scrolling. */
+	/** Entry id (stable identity) — the jump key. Timestamps collide (P1-17). */
+	entryId?: string;
+	/** Canvas-node id — only the canvas-mode source sets it, where a click
+	 *  hands the node to the caller instead of scrolling. See ntryId for the
+	 *  transcript jump key. */
 	id?: string;
 }
 
@@ -116,7 +119,7 @@ export function TurnRail({
 	/** M1.11: the clicked turn's row is outside the transcript's render
 	 *  window — the caller dispatches a jumpRequest so Transcript expands
 	 *  its window and flashes the row once mounted. */
-	onJumpToTurn?(timestamp: string): void;
+	onJumpToTurn?(entryId: string): void;
 }): ReactNode {
 	const [turns, setTurns] = useState<TurnMarker[]>([]);
 	const [hover, setHover] = useState<number | null>(null);
@@ -206,7 +209,7 @@ export function TurnRail({
 		const map = new Map<string, number>();
 		const measured = turnsData.turns.map((t, i) => {
 			map.set(t.timestamp, i);
-			return { top: 0, summary: t.summary, ts: t.timestamp, kind: t.kind };
+			return { top: 0, summary: t.summary, ts: t.timestamp, entryId: t.entryId, kind: t.kind };
 		});
 		tsToIndexRef.current = map;
 		turnsRef.current = measured;
@@ -363,14 +366,14 @@ export function TurnRail({
 			}
 			// M1.11 data-driven mode: resolve the row by its title=<timestamp>
 			// attribute. Present → scroll exactly like the measured path; absent
-			// (row outside the transcript's render window) → hand the timestamp
-			// to the caller, which dispatches a jumpRequest so Transcript grows
-			// its window and flashes the row once mounted.
-			if (m.ts) {
+			// (row outside the transcript's render window) → hand the entry id
+			// to the caller, which pages older chunks in and dispatches a
+			// jumpRequest so Transcript grows its window and flashes the row.
+			if (m.entryId) {
 				const root = rootRef.current;
-				const el = root?.querySelector<HTMLElement>(`[title="${CSS.escape(m.ts)}"]`);
+				const el = root?.querySelector<HTMLElement>(`[data-entry-id="${CSS.escape(m.entryId)}"]`);
 				if (!el) {
-					onJumpToTurn?.(m.ts);
+					onJumpToTurn?.(m.entryId);
 					return;
 				}
 				const scroller = root?.closest<HTMLElement>(".gui-transcript") ?? root ?? null;

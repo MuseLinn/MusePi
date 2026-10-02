@@ -159,7 +159,7 @@ export function MessageTreeButton({
 	/** Jump the transcript to this entry (Transcript jumpRequest): the
 	 *  transcript expands its window/compaction fold until the row mounts,
 	 *  then scrolls + flashes. */
-	onJump(timestamp: string): void;
+	onJump(entryId: string): void;
 	/** Row click switches the session leaf to this node (TUI /tree parity,
 	 *  session.branchAt): user messages backfill the composer for re-answer;
 	 *  assistant/toolResult nodes continue from the node. Falls back to
@@ -236,7 +236,7 @@ export function MessageTreeButton({
 		// 切换节点优先(对齐 /tree):onNavigateTo 存在时行点击切换 leaf
 		// 而非仅滚动;缺省回退纯滚动跳转。
 		if (onNavigateTo) onNavigateTo(node.entry);
-		else onJump(node.entry.timestamp);
+		else onJump(node.entry.id);
 		setOpen(false);
 	};
 

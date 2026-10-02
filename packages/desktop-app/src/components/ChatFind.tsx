@@ -40,7 +40,7 @@ export function ChatFind({
 	onPrev(): void;
 	onNext(): void;
 	onClose(): void;
-	onJumpTo(timestamp: string): void;
+	onJumpTo(hit: FindHit): void;
 }): ReactNode {
 	const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -70,8 +70,11 @@ export function ChatFind({
 
 	// A click on the preview row is the "take me there" affordance — the same
 	// reveal a keyboard Enter performs.
+	// Hand over the whole hit: the daemon's search rows carry no entry id,
+	// so the resolver needs the text to disambiguate a same-millisecond
+	// collision (P1-17).
 	const reveal = (): void => {
-		if (current) onJumpTo(current.timestamp);
+		if (current) onJumpTo(current);
 	};
 
 	const counter = searching

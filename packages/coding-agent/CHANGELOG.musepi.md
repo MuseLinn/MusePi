@@ -28,6 +28,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Fixed
 
+- **修复会话跳转定位到错误轮次**：两轮会话若起始时间戳落在同一毫秒（顾问笔记与用户提问同刻、秒级精度的历史会话、乐观回显条目），导航条 / 消息树 / 轨迹 / ⌘F 查找都会滚到**更早**的那一轮 —— 这些路径都用时间戳作键，而查找一律取首个匹配。现改为用条目 id 作键；⌘F 这条链路的命中来自 daemon 消息表（不存条目 id），按命中文本消歧。
+  - EN: Fixed jumps landing on the wrong turn. When two turns started within the same millisecond (an advisor note and the user's prompt in the same tick, second-precision history, optimistic echo rows), the turn rail, message tree, trajectory and ⌘F find all scrolled to the earlier turn — every one of those paths keyed on the timestamp, and every lookup took the first match. Jumps are now keyed on the entry id; the ⌘F path, whose hits come from the daemon message table (which stores no entry id), disambiguates by the matched text.
 - **⌘F 统一为会话内查找，侧栏会话搜索移至 ⌘⇧F**：⌘F 查找栏上线后与侧栏搜索加速器冲突（两个 window 级监听各开各的），按出来的是侧栏搜索而不是会话内查找。现按 openchamber 语义分派：⌘F = 当前会话内查找（find-in-chat 注册表绑定），⌘⇧F = 侧栏会话搜索（tooltip 与快捷键同步更新），两者按 shift 修饰键区分、互不冒泡。
   - EN: ⌘F is now uniformly the in-chat find bar, and sidebar session search moved to ⌘⇧F. The find bar's launch conflicted with the sidebar search accelerator (two window-level listeners firing independently), so the sidebar search opened instead of the in-chat find. Dispatch now follows openchamber semantics: ⌘F = find within the current conversation (find-in-chat registry binding), ⌘⇧F = sidebar session search (tooltip and accelerator updated together); the two are distinguished by the shift modifier and no longer collide.
 

@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
+import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { lightenOverviewEntry } from "../lib/message-tree";
 import { dispatchNotification } from "../lib/notify";
@@ -702,7 +703,7 @@ export function ChatView({
 	// Transcript owns window expansion — a jump into the folded window
 	// mounts the target row first, then scrolls + flashes (previously the
 	// raw querySelector missed unmounted rows and fell back to scrollTop 0).
-	const [jumpRequest, setJumpRequest] = useState<{ timestamp: string; nonce: number } | null>(null);
+	const [jumpRequest, setJumpRequest] = useState<{ entryId: string; nonce: number } | null>(null);
 	const jumpNonceRef = useRef(0);
 	// requestJump is defined further down (after loadOlder — the TurnRail may
 	// target a turn above the loaded window, so a jump pages older chunks in
@@ -1384,12 +1385,7 @@ export function ChatView({
 				// Jump the transcript to the picked sibling first, then move the
 				// session leaf there (branchAt) so continuing forks from it.
 				const target = branchTipOf(childId);
-				const entry = (snapRef.current?.entries ?? []).find(
-					e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === target,
-				);
-				const ts =
-					typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
-				if (typeof ts === "string") requestJump(ts);
+				requestJump({ entryId: target });
 				setCurrentLeafKey(target);
 				await branchTo(target, target);
 			});
@@ -1404,12 +1400,7 @@ export function ChatView({
 			// Tree-op guard (runTreeOp): moving the leaf under an in-flight run
 			// re-anchors it — confirm + stop + wait like retry/rewind/fork.
 			await runTreeOp(async () => {
-				const entry = (snap?.entries ?? []).find(
-					e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === id,
-				);
-				const ts =
-					typeof entry === "object" && entry !== null ? (entry as { timestamp?: unknown }).timestamp : null;
-				if (typeof ts === "string") requestJump(ts);
+				requestJump({ entryId: id });
 				// #12: an explicit node switch supersedes the revert dock — its undo
 				// target is the leaf we CAME FROM, which this jump just replaced.
 				setJumpBack(null);
@@ -1573,15 +1564,18 @@ export function ChatView({
 	// flashes the row). Same path the TurnRail and the canvas use. The
 	// indirection exists because requestJump is declared further down (it
 	// depends on loadOlder) while this block needs to reach it.
-	const jumpToHit = useCallback((ts: string): void => {
-		requestJumpRef.current?.(ts);
+	// The daemon's message table has no wire entry id (P1-17), so a hit
+	// arrives as timestamp + text; JumpTarget resolves that against the loaded
+	// entries and disambiguates same-millisecond collisions by content.
+	const jumpToHit = useCallback((hit: FindHit): void => {
+		requestJumpRef.current?.({ timestamp: hit.timestamp, snippet: hit.snippet });
 	}, []);
-	// Reveal the selected hit. Keyed on the SELECTED TIMESTAMP rather than the
+	// Reveal the selected hit. Keyed on the selected HIT rather than the
 	// query, so typing never yanks the viewport on a keystroke.
-	const selectedHitTs = findIndex >= 0 ? findHits[findIndex]?.timestamp : undefined;
+	const selectedHit = findIndex >= 0 ? findHits[findIndex] : undefined;
 	useEffect(() => {
-		if (selectedHitTs) jumpToHit(selectedHitTs);
-	}, [selectedHitTs, jumpToHit]); // Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
+		if (selectedHit) jumpToHit(selectedHit);
+	}, [selectedHit, jumpToHit]); // Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
 	// 轨迹统计): the daemon tails only 200 entries and pages older chunks on
 	// scroll, so snap.entries covers just the loaded window — the turn map
 	// silently collapsed a 164-turn session to ~4 turns (verified live on
@@ -1805,23 +1799,29 @@ export function ChatView({
 	// the entry materializes, then dispatch. (Dispatching immediately would
 	// drop the jump — the Transcript resolves rows against the loaded set and
 	// ignores requests it cannot find.)
-	const requestJumpRef = useRef<((timestamp: string) => void) | null>(null);
+	const requestJumpRef = useRef<((target: JumpTarget) => void) | null>(null);
 	const requestJump = useCallback(
-		(timestamp: string): void => {
+		(target: JumpTarget): void => {
 			void (async () => {
+				// Page until the target is inside the loaded window — the rail indexes
+				// the FULL session, so a jump can target a row above the loaded set.
 				let guard = 0;
 				while (
 					rpc &&
 					store &&
-					snapRef.current?.entries.some(e => e.timestamp === timestamp) !== true &&
+					resolveJumpEntryId(snapRef.current?.entries, target) === null &&
 					store.hasMore &&
 					guard < 200
 				) {
 					guard++;
 					await loadOlder();
 				}
+				// Unresolvable: drop it instead of dispatching a jump the Transcript
+				// cannot satisfy. (Visible failure feedback is a separate P1-17 item.)
+				const entryId = resolveJumpEntryId(snapRef.current?.entries, target);
+				if (!entryId) return;
 				jumpNonceRef.current += 1;
-				setJumpRequest({ timestamp, nonce: jumpNonceRef.current });
+				setJumpRequest({ entryId, nonce: jumpNonceRef.current });
 			})();
 		},
 		[rpc, store, loadOlder],
@@ -1836,14 +1836,8 @@ export function ChatView({
 	// 双击/右键跳转:回对话模式 + 定位该轮(纯导航,不动 leaf)。
 	const handleCanvasJumpToEntry = useCallback(
 		(entryId: string): void => {
-			const ts = overviewEntries.find(
-				e => typeof e === "object" && e !== null && (e as { id?: unknown }).id === entryId,
-			);
-			const t2 = typeof ts === "object" && ts !== null ? (ts as { timestamp?: unknown }).timestamp : null;
-			if (typeof t2 === "string") {
-				setViewMode("chat");
-				requestJump(t2);
-			}
+			setViewMode("chat");
+			requestJump({ entryId });
 		},
 		[overviewEntries, requestJump],
 	);
@@ -2488,7 +2482,7 @@ export function ChatView({
 													 * the wrap — can never sit under it. */}
 													<MessageTreeButton
 														entries={snap?.entries ?? []}
-														onJump={requestJump}
+														onJump={entryId => requestJump({ entryId })}
 														onNavigateTo={entry =>
 															// TUI tree-selector parity: 行点击切换 leaf(而非仅
 															// 滚动),与画布双击同一入口。
@@ -2571,7 +2565,7 @@ export function ChatView({
 											activeTurnIndex={viewMode === "canvas" ? canvasRail.activeIdx : null}
 											onSelectNode={id => setCanvasFocus(prev => ({ id, nonce: (prev?.nonce ?? 0) + 1 }))}
 											turnsData={viewMode === "canvas" ? undefined : turnsData}
-											onJumpToTurn={ts => requestJump(ts)}
+											onJumpToTurn={entryId => requestJump({ entryId })}
 										/>
 									</div>
 									<div
@@ -2774,10 +2768,7 @@ export function ChatView({
 									overviewLoading={fullLoading && fullEntries === null}
 									overviewError={fullError}
 									onEnsureFullHistory={() => void ensureFullHistory()}
-									onJumpToEntry={entryId => {
-										const ts = snap?.entries.find(e => e.id === entryId)?.timestamp;
-										if (ts) requestJump(ts);
-									}}
+									onJumpToEntry={entryId => requestJump({ entryId })}
 									leafId={effectiveLeaf}
 									activePathIds={trustedPathIds}
 									pathEntries={pathEntriesOrNull}
