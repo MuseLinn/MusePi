@@ -23,6 +23,7 @@ import {
 	matchesSelectUp,
 } from "../../modes/utils/keybinding-matchers";
 import type { SessionEntry, SessionTreeNode } from "../../session/session-entries";
+import { isHiddenByDefaultEntry } from "../../session/transcript-records";
 import { toPathList } from "../../tools/path-utils";
 import { shortenPath } from "../../tools/render-utils";
 import { canonicalizeMessage } from "../../utils/thinking-display";
@@ -335,20 +336,10 @@ class TreeList implements Component {
 
 			// Apply filter mode
 			let passesFilter = true;
-			// Entry types hidden in default view (settings/bookkeeping). These carry
-			// no conversation content, so the tree only shows them in "all" mode.
-			const isSettingsEntry =
-				entry.type === "label" ||
-				entry.type === "custom" ||
-				entry.type === "model_change" ||
-				entry.type === "thinking_level_change" ||
-				entry.type === "service_tier_change" ||
-				entry.type === "title_change" ||
-				entry.type === "credential_pin" ||
-				entry.type === "session_init" ||
-				entry.type === "ttsr_injection" ||
-				entry.type === "mode_change" ||
-				entry.type === "reset_boundary";
+			// Shared with the hub transcript viewer so the two cannot drift. `custom_message`
+			// is deliberately absent: advisor cards carry conversation content and must show
+			// in the tree (see transcript-records.ts).
+			const isSettingsEntry = isHiddenByDefaultEntry(entry);
 
 			switch (this.#filterMode) {
 				case "user-only":

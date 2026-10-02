@@ -24,6 +24,7 @@ import type { AgentLifecycleManager } from "../../registry/agent-lifecycle";
 import type { AgentRegistry, AgentStatus } from "../../registry/agent-registry";
 import type { FileEntry, SessionMessageEntry } from "../../session/session-entries";
 import { parseSessionEntries } from "../../session/session-loader";
+import { extractRenderableEntries } from "../../session/transcript-records";
 import { replaceTabs, shortenPath, truncateToWidth } from "../../tools/render-utils";
 import type { ObservableSession, SessionObserverRegistry } from "../session-observer-registry";
 import { getEditorTheme, theme } from "../theme/theme";
@@ -414,15 +415,25 @@ export class AgentTranscriptViewer implements Component {
 			});
 	}
 
-	/** Filter to message entries, tracking the model from the first assistant / a model_change. */
+	/**
+	 * Conversation-bearing entries, tracking the model from the first assistant
+	 * message / a model_change.
+	 *
+	 * `custom_message` is INCLUDED — advisor cards, hook notices, collab and skill
+	 * prompts. This used to gate on `type === "message"`, which dropped every one
+	 * of them with no placeholder and no error: a subagent session run with
+	 * `advisor: true` keeps its advisor cards in its OWN jsonl, so the hub viewer
+	 * dropped exactly the rows that identify what it is showing. The live
+	 * transcript renders the same entries (chat-transcript-builder routes
+	 * `role: "custom"` to #appendCustomMessage), so the two surfaces disagreed.
+	 */
 	#extractMessages(entries: FileEntry[]): SessionMessageEntry[] {
-		const messages: SessionMessageEntry[] = [];
+		const messages = extractRenderableEntries(entries);
 		for (const entry of entries) {
-			if (entry.type === "message") {
-				messages.push(entry);
-				if (!this.#model && entry.message.role === "assistant") this.#model = entry.message.model;
-			} else if (entry.type === "model_change") {
+			if (entry.type === "model_change") {
 				this.#model = entry.model;
+			} else if (entry.type === "message" && entry.message.role === "assistant" && !this.#model) {
+				this.#model = entry.message.model;
 			}
 		}
 		return messages;
