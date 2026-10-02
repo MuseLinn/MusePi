@@ -520,13 +520,14 @@ export function SessionSidebar({
 		},
 		[closeSearch],
 	);
-	// Sidebar-search accelerator: ⌘F (Ctrl+F elsewhere). ⌘K belongs to the app
-	// command palette, so the two entry points never fight; a collapsed pane
-	// leaves the key alone.
+	// Sidebar-search accelerator: ⌘⇧F (Ctrl+Shift+F elsewhere). Plain ⌘F
+	// belongs to the in-chat find bar (openchamber parity, find-in-chat in
+	// the shortcut registry) — the two entry points never fight; ⌘K remains
+	// the app command palette; a collapsed pane leaves the keys alone.
 	useEffect(() => {
 		if (collapsed) return;
 		const onKey = (event: KeyboardEvent): void => {
-			if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+			if (!(event.metaKey || event.ctrlKey) || event.altKey || !event.shiftKey) return;
 			if (event.key.toLowerCase() !== "f") return;
 			event.preventDefault();
 			setSearchOpen(true);
@@ -716,13 +717,13 @@ export function SessionSidebar({
 					 * width and always sit flush to the strip's right edge. */}
 					<div className="ml-auto flex flex-shrink-0 items-center gap-0.5">
 						{/* Session search toggle: keyboard reachable (Tab → Enter) and
-						 * the ⌘F accelerator; `data-search-toggle` keeps the box's
-						 * outside-dismiss from swallowing the closing click. */}
+						 * the ⌘⇧F accelerator (⌘F is the in-chat find bar); `data-search-toggle`
+						 * keeps the box's outside-dismiss from swallowing the closing click. */}
 						<button
 							type="button"
 							className="gui-tab-action"
 							data-search-toggle="true"
-							title={`${t("search sessions…")} (${shortcutLabel("⌘F")})`}
+							title={`${t("search sessions…")} (${shortcutLabel("⌘⇧F")})`}
 							aria-label={t("search sessions…")}
 							aria-expanded={searchOpen}
 							onClick={() => {
