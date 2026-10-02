@@ -307,6 +307,7 @@ export function finalizeCustomModel(model: CustomModelOverlay, options: CustomMo
 		imageInputDecoder: resolvedModel.imageInputDecoder,
 		...(supportsTools !== undefined ? { supportsTools } : {}),
 		cost,
+		...(resolvedModel.promptCache ? { promptCache: resolvedModel.promptCache } : {}),
 		contextWindow:
 			resolvedModel.contextWindow ?? capabilityReference?.contextWindow ?? (options.useDefaults ? 128000 : null),
 		maxTokens: resolvedModel.maxTokens ?? capabilityReference?.maxTokens ?? (options.useDefaults ? 16384 : null),

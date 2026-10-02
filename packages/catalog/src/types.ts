@@ -858,6 +858,13 @@ export interface ModelCost extends TokenCost {
 }
 
 /**
+ * Best-effort prompt-cache entry lifetime in seconds for each retention tier a
+ * request can ask for. A missing tier means the lifetime is unknown; consumers
+ * must not schedule cache warming against unknown lifetimes.
+ */
+export type ModelPromptCache = Partial<Record<"short" | "long", number>>;
+
+/**
  * Native tokenizer families keyed by model generation. Some models share a
  * tokenizer across generations rather than providers: DeepSeek V3 through V4 share
  * `"deepseek-v3"`; Kimi K2 through K3 share `"kimi-k2"`.
@@ -930,6 +937,12 @@ export interface Model<TApi extends Api = Api> {
 	/** Cursor `max_mode` request flag returned by `GetUsableModels` for premium models that require max mode. */
 	cursorMaxMode?: boolean;
 	cost: ModelCost;
+	/**
+	 * Prompt-cache entry lifetime per retention tier, annotated only where the
+	 * provider's documented lifetimes are verified. Absent tiers are unknown
+	 * lifetimes, not zero — warming must skip them.
+	 */
+	promptCache?: ModelPromptCache;
 	/** Premium Copilot requests charged per user-initiated request (defaults to 1). */
 	premiumMultiplier?: number;
 	contextWindow: number | null;

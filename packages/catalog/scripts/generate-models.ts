@@ -54,7 +54,7 @@ import {
 	stripFireworksDeepSeekThinkingToggle,
 } from "../src/provider-models/openai-compat";
 import { type OpenAICodexAccount, openaiCodexModelManagerOptions } from "../src/provider-models/special";
-import type { Api, ModelSpec } from "../src/types";
+import type { Api, ModelPromptCache, ModelSpec } from "../src/types";
 import { cleanModelName } from "../src/utils";
 import { collapseEffortVariantsAcrossProviders } from "../src/variant-collapse";
 import {
@@ -390,6 +390,26 @@ function normalizeAntigravityEndpoint(models: readonly ModelSpec[]): ModelSpec[]
 
 const ANTIGRAVITY_ENDPOINT = ANTIGRAVITY_PRIMARY_ENDPOINT;
 
+/**
+ * Prompt-cache entry lifetimes for direct-Anthropic rows. This is currently
+ * the only provider whose cache-expiry and one-token replay behavior has been
+ * validated for cache warming; every other provider stays unannotated, and
+ * custom models opt in via models.yml `promptCache` overrides.
+ */
+const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
+
+/**
+ * Annotate direct-Anthropic rows with prompt-cache lifetimes so the coding
+ * agent's cache warmer can schedule refreshes against a known entry lifetime.
+ */
+function applyPromptCacheLifetimes(models: readonly ModelSpec[]): ModelSpec[] {
+	return models.map(model =>
+		model.provider === "anthropic" && model.api === "anthropic-messages"
+			? { ...model, promptCache: { ...ANTHROPIC_PROMPT_CACHE } }
+			: model,
+	);
+}
+
 async function getOAuthAccessFromStorage(provider: OAuthProvider): Promise<OAuthAccess | null> {
 	try {
 		const authStorage = await discoverAuthStorage();
@@ -707,6 +727,7 @@ async function generateModels() {
 	allModels = dropXiaomiAudioOnlyIds(allModels);
 	allModels = dropUnsupportedBedrockGeoIds(allModels);
 	allModels = normalizeAntigravityEndpoint(allModels);
+	allModels = applyPromptCacheLifetimes(allModels);
 	// Normalize display names: gateway author prefixes ("OpenAI: …"), alias
 	// markers ("(latest)"), provider attribution ("(Antigravity)"), and
 	// price/promo tags are model-extrinsic — strip them from the bundle.

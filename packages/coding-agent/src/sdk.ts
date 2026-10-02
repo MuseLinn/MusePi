@@ -160,6 +160,7 @@ import {
 import { AgentSession, type InitialRetryFallbackState, type PlanYolo, type Prewalk } from "./session/agent-session";
 import { discoverAuthStorage as discoverAuthStorageFromConfig } from "./session/auth-broker-config";
 import type { AuthStorage } from "./session/auth-storage";
+import { CacheWarmer } from "./session/cache-warmer";
 import { createInterruptedTurnAbortMessage } from "./session/exit-diagnostics";
 import {
 	type CustomMessage,
@@ -435,6 +436,12 @@ export interface CreateAgentSessionOptions {
 	scopedModels?: Array<{ model: Model; thinkingLevel?: ThinkingLevel }>;
 	/** Prewalk from the starting model to a fast/cheap target at the first edit/write once the todo list exists. */
 	prewalk?: Prewalk;
+	/**
+	 * Own a prompt-cache warmer for this session. Defaults to on for the main
+	 * agent loop; pass `false` for spawned/one-shot sessions (subagents, task
+	 * executors) so they never issue paid warm requests of their own.
+	 */
+	cacheWarming?: boolean;
 	/** Force read-only plan mode at start, auto-approve on the model's first resolve call, then switch to execute. */
 	planYolo?: PlanYolo;
 
@@ -3719,6 +3726,18 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 			wrapStreamFnWithProviderConcurrency(settings, createSettingsAwareStreamFn(settings)),
 			blobBroker,
 		);
+		// Prompt-cache warmer for the main agent loop only: replays the last
+		// request through the same settings-aware wrapper just before the entry
+		// would expire, so idle gaps do not force a full-prefix cache re-write.
+		const cacheWarmer =
+			options.cacheWarming === false
+				? undefined
+				: new CacheWarmer({
+						stream: (model, context, streamOptions) => settingsAwareStreamFn(model, context, streamOptions),
+						getPromptTokens: () => session.lastPromptTokens(),
+						getMode: () => settings.get("providers.cacheWarming"),
+						decide: event => extensionRunner.emitCacheWarmingDecision(event),
+					});
 		const transformToolCallArguments = (args: Record<string, unknown>): Record<string, unknown> => {
 			let result = args;
 			const maxTimeout = settings.get("tools.maxTimeout");
@@ -3786,11 +3805,17 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 					settings.get("externalThinking") &&
 					agent.state.tools.some(tool => tool.name === "think") &&
 					supportsExternalThinking(streamModel);
-				return settingsAwareStreamFn(streamModel, context, {
+				const merged: SimpleStreamOptions = {
 					...streamOptions,
-					anthropicCacheRefresh: true,
 					forceReasoningOff: externalThinking || streamOptions?.forceReasoningOff,
-				});
+				};
+				const stream = settingsAwareStreamFn(streamModel, context, merged);
+				// Main-loop requests only: side-channel and advisor calls carry a
+				// suffixed sessionId and must not take over the warmer.
+				if (streamOptions?.sessionId === session.sessionId) {
+					session.startCacheWarming(streamModel, context, merged);
+				}
+				return stream;
 			},
 			cursorExecHandlers,
 			getCursorTools: () => (toolSession.xdev ? listXdevTools(toolSession.xdev) : []),
@@ -4013,6 +4038,7 @@ async function createAgentSessionScoped(options: CreateAgentSessionOptions): Pro
 		const initialAdvisorCosts = await loadAdvisorTranscriptCosts(sessionManager.getSessionFile());
 		session = new AgentSession({
 			advisorWatchdogPrompt,
+			cacheWarmer,
 			advisorContextPrompt,
 			advisorSharedInstructions: discoveredAdvisors.sharedInstructions,
 			advisorConfigs: discoveredAdvisors.advisors,

@@ -2,6 +2,7 @@ import type { Api, Model, ModelSpec, RemoteCompactionConfig, ThinkingConfig } fr
 import { buildModel } from "@musepi/pi-catalog/build";
 import { isVertexExpressOpenAIUrl } from "@musepi/pi-catalog/hosts";
 import { PROVIDER_DESCRIPTORS } from "@musepi/pi-catalog/provider-models";
+import type { ModelPromptCache } from "@musepi/pi-catalog/types";
 import { isRecord } from "@musepi/pi-utils";
 import type { ModelOverride } from "./models-config-schema";
 /** Provider override config (baseUrl, headers, apiKey, compat, transport) without custom models */
@@ -189,6 +190,11 @@ export interface ModelPatch {
 	imageInputDecoder?: Model<Api>["imageInputDecoder"];
 	supportsTools?: boolean;
 	cost?: Partial<Model<Api>["cost"]>;
+	/**
+	 * Prompt-cache entry lifetimes per retention tier. Opt-in for custom models:
+	 * the cache warmer only schedules refreshes against a declared lifetime.
+	 */
+	promptCache?: ModelPromptCache;
 	contextWindow?: number;
 	maxTokens?: number;
 	omitMaxOutputTokens?: boolean;
@@ -235,6 +241,7 @@ export function applyModelPatch(base: Model<Api>, patch: ModelPatch, transport: 
 			...(longContext ? { longContext } : {}),
 		};
 	}
+	if (patch.promptCache !== undefined) result.promptCache = patch.promptCache;
 	let compat: ModelSpec<Api>["compat"];
 	if (transport === "merge") {
 		if (patch.headers) {

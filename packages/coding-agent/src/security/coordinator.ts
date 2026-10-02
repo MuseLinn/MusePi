@@ -254,6 +254,7 @@ async function createDefaultSecuritySession(input: SecurityScanSessionFactoryInp
 			account: input.plan.account,
 		}),
 		providerSessionId: `security:${input.scanId}`,
+		cacheWarming: false,
 		sessionManager: input.sessionManager,
 		customTools: [input.publicationTool],
 		toolNames: SECURITY_SESSION_TOOLS,

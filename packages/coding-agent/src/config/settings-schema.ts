@@ -5959,6 +5959,32 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
+	"providers.cacheWarming": {
+		type: "enum",
+		values: ["off", "streaming", "idle"] as const,
+		default: "idle",
+		ui: {
+			tab: "providers",
+			group: "Protocol",
+			label: "Cache Warming",
+			description:
+				"Re-send the last request with a one-token output budget shortly before its prompt-cache entry expires",
+			options: [
+				{ value: "off", label: "Off", description: "Disable cache warming" },
+				{
+					value: "streaming",
+					label: "Streaming",
+					description: "Protect expensive prefixes during long tool executions; stops when the agent settles",
+				},
+				{
+					value: "idle",
+					label: "Idle",
+					description: "Also refresh between runs while the expected savings stay above the cost floor",
+				},
+			],
+		},
+	},
+
 	"providers.streamFirstEventTimeoutSeconds": {
 		type: "number",
 		default: -1,

@@ -12346,7 +12346,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 8192,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-3-5-sonnet-20241022": {
 			"id": "claude-3-5-sonnet-20241022",
@@ -12368,7 +12372,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 8192,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-3-7-sonnet-20250219": {
 			"id": "claude-3-7-sonnet-20250219",
@@ -12414,6 +12422,10 @@
 				"requiresThinkingEnabled": false,
 				"replayUnsignedThinking": false,
 				"escapeBuiltinToolNames": false
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-3-haiku-20240307": {
@@ -12436,7 +12448,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 4096,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-3-opus-20240229": {
 			"id": "claude-3-opus-20240229",
@@ -12472,6 +12488,10 @@
 				"requiresThinkingEnabled": false,
 				"replayUnsignedThinking": false,
 				"escapeBuiltinToolNames": false
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-3-sonnet-20240229": {
@@ -12508,6 +12528,10 @@
 				"requiresThinkingEnabled": false,
 				"replayUnsignedThinking": false,
 				"escapeBuiltinToolNames": false
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-fable-5": {
@@ -12539,6 +12563,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-haiku-4-5": {
@@ -12569,6 +12597,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-haiku-4-5-20251001": {
@@ -12599,6 +12631,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-mythos-5": {
@@ -12630,6 +12666,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-4-0": {
@@ -12662,7 +12702,11 @@
 				]
 			},
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-opus-4-1": {
 			"id": "claude-opus-4-1",
@@ -12694,7 +12738,11 @@
 				]
 			},
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-opus-4-1-20250805": {
 			"id": "claude-opus-4-1-20250805",
@@ -12716,7 +12764,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 32000,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-opus-4-20250514": {
 			"id": "claude-opus-4-20250514",
@@ -12738,7 +12790,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 32000,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-opus-4-5": {
 			"id": "claude-opus-4-5",
@@ -12768,6 +12824,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-4-5-20251101": {
@@ -12798,6 +12858,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-4-6": {
@@ -12827,6 +12891,10 @@
 					"high",
 					"max"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-4-7": {
@@ -12858,6 +12926,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-4-8": {
@@ -12889,6 +12961,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-opus-5": {
@@ -12920,6 +12996,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-sonnet-4-0": {
@@ -12952,7 +13032,11 @@
 				]
 			},
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-sonnet-4-20250514": {
 			"id": "claude-sonnet-4-20250514",
@@ -12974,7 +13058,11 @@
 			"contextWindow": 200000,
 			"maxTokens": 64000,
 			"supportsComputerUse": false,
-			"supportsComputerUseConfig": false
+			"supportsComputerUseConfig": false,
+			"promptCache": {
+				"short": 300,
+				"long": 3600
+			}
 		},
 		"claude-sonnet-4-5": {
 			"id": "claude-sonnet-4-5",
@@ -13004,6 +13092,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-sonnet-4-5-20250929": {
@@ -13034,6 +13126,10 @@
 					"high",
 					"xhigh"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-sonnet-4-6": {
@@ -13062,6 +13158,10 @@
 					"medium",
 					"high"
 				]
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		},
 		"claude-sonnet-5": {
@@ -13093,6 +13193,10 @@
 					"max"
 				],
 				"supportsDisplay": true
+			},
+			"promptCache": {
+				"short": 300,
+				"long": 3600
 			}
 		}
 	},

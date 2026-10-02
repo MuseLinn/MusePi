@@ -64,6 +64,7 @@ export async function createCompressSession(options: {
 		enableLsp: false,
 		hasUI: false,
 		autoApprove: true,
+		cacheWarming: false,
 		agentId: options.agentId ?? "Compress",
 		agentDisplayName: "compress",
 	});

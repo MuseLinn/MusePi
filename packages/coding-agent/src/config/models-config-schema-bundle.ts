@@ -175,6 +175,10 @@ export const getModelsConfigSchemaBundle = once(() => {
 			cacheRead: "number",
 			cacheWrite: "number",
 		},
+		"promptCache?": {
+			"short?": "number",
+			"long?": "number",
+		},
 		"premiumMultiplier?": "number",
 		"contextWindow?": "number",
 		"maxTokens?": "number",
@@ -224,6 +228,10 @@ export const getModelsConfigSchemaBundle = once(() => {
 			"output?": "number",
 			"cacheRead?": "number",
 			"cacheWrite?": "number",
+		},
+		"promptCache?": {
+			"short?": "number",
+			"long?": "number",
 		},
 		"premiumMultiplier?": "number",
 		"contextWindow?": "number",

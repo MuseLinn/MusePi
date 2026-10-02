@@ -56,6 +56,7 @@ import {
 import type {
 	AssistantMessage,
 	CodexCompactionContext,
+	Context,
 	ImageContent,
 	Message,
 	Model,
@@ -108,7 +109,12 @@ import type { ResolvedModelRoleValue } from "../config/model-resolver";
 import { expandPromptTemplate, type PromptTemplate } from "../config/prompt-templates";
 import { buildServiceTierByFamily } from "../config/service-tier";
 import type { Settings, SkillsSettings } from "../config/settings";
-import { onAppendOnlyModeChanged, onExtendedContextChanged, onModelRolesChanged } from "../config/settings";
+import {
+	onAppendOnlyModeChanged,
+	onCacheWarmingChanged,
+	onExtendedContextChanged,
+	onModelRolesChanged,
+} from "../config/settings";
 import { RawSseDebugBuffer } from "../debug/raw-sse-buffer";
 import { getFileSnapshotStore } from "../edit/file-snapshot-store";
 import type { PythonResult } from "../eval/py/executor";
@@ -246,6 +252,7 @@ import {
 	buildAsyncResultBatchMessage,
 } from "./async-job-delivery";
 import { BashRunner, type BashRunnerHost } from "./bash-runner";
+import type { CacheWarmer, CacheWarmingStatus } from "./cache-warmer";
 import {
 	checkpointStartedAtFromEntry,
 	completedRewindFromEntry,
@@ -508,6 +515,7 @@ export class AgentSession {
 	#unsubscribeAppendOnly?: () => void;
 	#unsubscribeModelRoles?: () => void;
 	#unsubscribeExtendedContext?: () => void;
+	#unsubscribeCacheWarmingMode?: () => void;
 	/** Last (enable, providerId) tuple resolved by `#syncAppendOnlyContext` — used to skip no-op invalidations. */
 	#lastAppendOnlyResolution?: { enable: boolean; providerId: string | undefined };
 	#eventListeners: AgentSessionEventListener[] = [];
@@ -726,6 +734,7 @@ export class AgentSession {
 	#yieldTerminationPending = false;
 	#synchronouslyTerminatedYieldToolCallIds = new Set<string>();
 	#providerSessionState = new Map<string, ProviderSessionState>();
+	readonly #cacheWarmer: CacheWarmer | undefined;
 	#hindsightSessionState: HindsightSessionState | undefined = undefined;
 	readonly #memory: SessionMemory;
 	readonly rawSseDebugBuffer: RawSseDebugBuffer;
@@ -1135,6 +1144,15 @@ export class AgentSession {
 		this.#promptTemplates = config.promptTemplates ?? [];
 		this.#slashCommands = config.slashCommands ?? [];
 		this.#extensionRunner = config.extensionRunner;
+		this.#cacheWarmer = config.cacheWarmer;
+		if (config.cacheWarmer) {
+			const warmer = config.cacheWarmer;
+			warmer.onWarmed = message => this.#recordCacheWarmUsage(message);
+			this.subscribeRunState(state => {
+				if (state === "idle") warmer.onAgentSettled();
+			});
+			this.#unsubscribeCacheWarmingMode = onCacheWarmingChanged(() => warmer.onModeChanged());
+		}
 		this.#modeSwitcher = config.modeSwitcher;
 		this.#projectMetadataState = config.projectMetadataState;
 		this.#onExtensionPromptSectionsChanged = config.onExtensionPromptSectionsChanged;
@@ -3772,6 +3790,64 @@ export class AgentSession {
 		return () => this.#runStateListeners.delete(listener);
 	}
 
+	/**
+	 * Current prompt-cache warming state, for hosts that surface it. Undefined
+	 * when the session has no warmer (side-channels, subagents, older hosts).
+	 */
+	get cacheWarmingStatus(): CacheWarmingStatus | undefined {
+		return this.#cacheWarmer?.status;
+	}
+
+	/**
+	 * Arms the prompt-cache warmer for a main-loop request. Called from the
+	 * session's streamFn after the request's options are finalized; a no-op
+	 * when the session has no warmer.
+	 */
+	startCacheWarming(model: Model, context: Context, options: SimpleStreamOptions): void {
+		const warmer = this.#cacheWarmer;
+		if (!warmer) return;
+		const armMessages = this.messages;
+		const modelKey = `${model.provider}/${model.id}`;
+		warmer.start({ model, context, options }, () => {
+			// The armed request must still be a prefix of the live messages by
+			// entry identity: appends are fine (tool results mid-run), but a
+			// rewrite, shallow array copy with new objects, compaction, branch,
+			// or session switch invalidates the cache key being warmed.
+			const current = this.messages;
+			if (current.length < armMessages.length) return false;
+			for (let index = 0; index < armMessages.length; index++) {
+				if (current[index] !== armMessages[index]) return false;
+			}
+			return `${this.model?.provider}/${this.model?.id}` === modelKey;
+		});
+	}
+
+	/** Prompt size (input + cacheRead + cacheWrite) of the most recent real provider response. */
+	lastPromptTokens(): number {
+		const messages = this.messages;
+		for (let index = messages.length - 1; index >= 0; index--) {
+			const message = messages[index];
+			if (message.role === "assistant")
+				return message.usage.input + message.usage.cacheRead + message.usage.cacheWrite;
+		}
+		return 0;
+	}
+
+	/**
+	 * Report a completed warm request's billed cost. Upstream persists this as an
+	 * off-transcript `model_usage` entry; this fork has no such session entry
+	 * family yet, so the cost lands in the log rather than the session totals
+	 * (a warm request is one cache read plus one output token).
+	 */
+	#recordCacheWarmUsage(message: AssistantMessage): void {
+		logger.debug("Cache-warm request completed", {
+			provider: message.provider,
+			model: message.model,
+			stopReason: message.stopReason,
+			cost: message.usage.cost.total,
+		});
+	}
+
 	/** Register cleanup that runs when this AgentSession adopts a different session ID. */
 	registerSessionChangeCallback(callback: () => void): () => void {
 		this.#sessionChangeCallbacks.add(callback);
@@ -4069,6 +4145,12 @@ export class AgentSession {
 
 	async #doDispose(options: AgentSessionDisposeOptions = {}): Promise<void> {
 		this.beginDispose();
+		// Stop cache warming before the drain windows below: an armed tick firing
+		// mid-dispose would issue a paid warm request against a closing session.
+		if (this.#cacheWarmer) {
+			this.#cacheWarmer.onWarmed = undefined;
+			this.#cacheWarmer.cancel();
+		}
 		this.#recordSessionExit(options.reason ?? "dispose");
 		this.#cancelExitRecorder?.();
 		this.#cancelExitRecorder = undefined;
@@ -4138,6 +4220,10 @@ export class AgentSession {
 		if (this.#unsubscribeExtendedContext) {
 			this.#unsubscribeExtendedContext();
 			this.#unsubscribeExtendedContext = undefined;
+		}
+		if (this.#unsubscribeCacheWarmingMode) {
+			this.#unsubscribeCacheWarmingMode();
+			this.#unsubscribeCacheWarmingMode = undefined;
 		}
 		this.#eventListeners = [];
 		this.#runStateListeners.clear();

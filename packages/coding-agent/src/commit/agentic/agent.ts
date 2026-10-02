@@ -67,6 +67,7 @@ export async function runCommitAgentSession(input: CommitAgentInput): Promise<Co
 		enableLsp: false,
 		enableMCP: false,
 		hasUI: false,
+		cacheWarming: false,
 		spawns,
 		toolNames: ["__none__"],
 		contextFiles: input.contextFiles,

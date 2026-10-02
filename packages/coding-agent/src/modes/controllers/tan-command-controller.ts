@@ -137,6 +137,7 @@ export class TanCommandController {
 							settings,
 							hasUI: false,
 							enableMCP: false,
+							cacheWarming: false,
 							customTools,
 							enableLsp,
 							agentId: cloneId,

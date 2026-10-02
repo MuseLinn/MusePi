@@ -3092,6 +3092,9 @@ export async function runSubprocess(options: ExecutorOptions): Promise<SingleRes
 				outputSchemaMode: options.outputSchemaMode,
 				restrictToolNames: options.restrictToolNames,
 				requireYieldTool: true,
+				// Subagents are short-lived: a paid warm request would never be
+				// amortized over the parent's next turn.
+				cacheWarming: false,
 				contextFiles: options.contextFiles,
 				skills: options.skills,
 				promptTemplates: options.promptTemplates,

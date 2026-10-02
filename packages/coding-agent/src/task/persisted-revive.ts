@@ -125,6 +125,7 @@ export function createPersistedSubagentReviverFactory(
 				modelPatternAuthFallback: init.resolvedModel,
 				settings: subagentSettings,
 				sessionManager: reopened,
+				cacheWarming: false,
 				agentId: ref.id,
 				agentDisplayName: ref.displayName,
 				parentTaskPrefix: ref.id,

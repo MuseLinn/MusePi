@@ -2523,6 +2523,7 @@ const SETTING_HOOKS: Partial<Record<SettingPath, SettingHook<any>>> = {
 			appendOnlyModeSignal.fire(value);
 		}
 	},
+	"providers.cacheWarming": () => cacheWarmingSignal.fire(),
 	"providers.maxInFlightRequests": value => {
 		configureProviderMaxInFlightRequests(validateProviderMaxInFlightRequests(value));
 	},
@@ -2571,6 +2572,19 @@ const extendedContextSignal = new SettingSignal("extendedContext");
  * Returns an unsubscribe function.
  */
 export const onExtendedContextChanged = (cb: () => void) => extendedContextSignal.on(cb);
+
+/** Cache warming policy values, mirroring the `providers.cacheWarming` enum. */
+export type CacheWarmingMode = "off" | "streaming" | "idle";
+
+/** Fires when `providers.cacheWarming` changes at runtime. */
+const cacheWarmingSignal = new SettingSignal("providers.cacheWarming");
+
+/**
+ * Subscribe to cache-warming mode changes. Sessions reconcile an armed warming
+ * run immediately instead of waiting for its next timer tick, so re-read the
+ * setting in the callback. Returns an unsubscribe function.
+ */
+export const onCacheWarmingChanged: (cb: () => void) => () => void = cacheWarmingSignal.on.bind(cacheWarmingSignal);
 
 /** Fires when `statusLine.sessionAccent` changes at runtime. */
 const statusLineSessionAccentSignal = new SettingSignal("statusLine.sessionAccent");

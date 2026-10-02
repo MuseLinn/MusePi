@@ -753,6 +753,7 @@ export class AgentsHubComponent implements Component {
 			hasUI: false,
 			enableLsp: false,
 			enableMCP: false,
+			cacheWarming: false,
 			disableExtensionDiscovery: true,
 			toolNames: ["__none__"],
 			customTools: [],

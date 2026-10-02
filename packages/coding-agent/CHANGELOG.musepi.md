@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **空闲会话提示缓存预热（吸收上游 cache-warmer）**：在缓存条目即将过期前用「1 token 输出预算」重发上一次请求，避免长时间空闲后整段前缀缓存被重写。成本感知调度——在声明的条目寿命 90% 处触发（至少保留 10 秒余量），且仅当「预计省下的缓存未命中费用 − 刷新成本 ≥ $0.05」时才真正发送；streaming / idle 两段策略分别用 100% / 15% 的续写概率，并受 60 分钟 / 30 分钟固定安全窗口约束。**只对 catalog 里显式标注了 `promptCache` 寿命的模型生效**（目前仅直连 Anthropic：5m / 1h，与官方文档一致），Bedrock / 网关 / openai-compat 代理一律不标注——它们的重放行为与过期时间未经验证，宁可不预热也不编造。自定义模型可在 `models.yml` 里用 `promptCache` 自行开启。新增 `providers.cacheWarming` 开关（off / streaming / idle，默认 idle），并新增 `cache_warming_decision` 扩展事件可覆盖单次决策。扩展可读取 `session.cacheWarmingStatus` 查看当前预热状态。原先 Anthropic 专属的固定 keep-alive 刷新回路（ai 层 stream 调度机制）已随之移除。
+  - EN: Idle prompt-cache warming (absorbing upstream's cache-warmer): the last request is re-sent with a one-token output budget shortly before its cache entry expires, so a long idle gap no longer forces a full-prefix cache re-write. Cost-aware scheduling — the refresh fires at 90% of the declared entry lifetime (keeping at least a ten-second margin), and only when the expected avoided cache-miss cost minus the refresh cost clears $0.05; the streaming/idle phases use 100%/15% continuation probability and are bounded by fixed 60-minute / 30-minute safety windows. It only arms for models whose catalog entry explicitly declares a `promptCache` lifetime (currently direct Anthropic only: 5m / 1h, matching the vendor docs); Bedrock, gateways, and openai-compat proxies stay unannotated because their replay behavior and expiry are unvalidated — better not to warm than to guess. Custom models can opt in via `promptCache` in `models.yml`. New `providers.cacheWarming` setting (off / streaming / idle, default idle) plus a `cache_warming_decision` extension event to override an individual decision; extensions can read `session.cacheWarmingStatus` for the current state. The previous Anthropic-only fixed keep-alive refresh loop (and its stream-level scheduling machinery in the ai package) is removed.
+
 ### Changed
 
 - **会话地图的事件卡从"一行字"升级为信息 + 操作卡**：展开轮后的事件卡重构为主行 + 副行结构——主行 = kind 药丸（用户/助手/工具/顾问/系统，与图标同色系）+ 摘要（工具行显示工具名）+ 元信息（usage/耗时/ttft/时刻）；工具行副行显示参数摘要（mono、单行截断）。交互上单击卡片直接跳回对话定位该事件（取代原先只高亮无用的选中态），悬停浮现「切换到此分支 / 重答」操作按钮（user 行双操作、其余行仅切换，锚分派与右键菜单同一套 branchAt 语义）；事件卡高度按形态区分（单行 28px / 工具双行 44px），布局增量与渲染同源。轨迹检视器时间线模式的轮头同步补上同款悬停「重答 / 切换」双操作（重答锚轮首 user 事件、切换锚轮末事件）。

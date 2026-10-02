@@ -36,6 +36,7 @@ import type { FileSlashCommand } from "../extensibility/slash-commands";
 import type { SecretObfuscator } from "../secrets/obfuscator";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import type { XdevState } from "../tools/xdev";
+import type { CacheWarmer } from "./cache-warmer";
 import type { CodexAutoRedeemCoordinator } from "./codex-auto-reset";
 import type { SessionManager } from "./session-manager";
 
@@ -148,6 +149,12 @@ export interface AgentSessionConfig {
 	slashCommands?: FileSlashCommand[];
 	/** Extension runner created with wrapped tools. */
 	extensionRunner?: ExtensionRunner;
+	/**
+	 * Prompt-cache warmer owned by the main agent loop. The session arms it per
+	 * main-loop request, settles it when the agent run finishes, and invalidates
+	 * it when the context changes; side-channel requests never arm it.
+	 */
+	cacheWarmer?: CacheWarmer;
 	/** Loaded skills already discovered by the SDK. */
 	skills?: Skill[];
 	/** Skill loading warnings already captured by the SDK. */

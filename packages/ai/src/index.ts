@@ -42,6 +42,7 @@ export * from "./usage/opencode-go";
 export * from "./usage/synthetic";
 export * from "./usage/xai-oauth";
 export * from "./usage/zai";
+export { resolveCacheRetention } from "./utils";
 export * from "./utils/anthropic-auth";
 export * from "./utils/event-stream";
 export * from "./utils/glyph-codec";

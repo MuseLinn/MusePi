@@ -17,6 +17,7 @@ import type { CompactionPreparation, CompactionResult } from "@musepi/pi-agent-c
 import type { AssistantRetryRecovery, ImageContent, TextContent, ToolResultMessage } from "@musepi/pi-ai";
 import type { Rule } from "../capability/rule";
 import type { Goal, GoalModeState } from "../goals/state";
+import type { CacheWarmingAction } from "../session/cache-warmer";
 import type { BranchSummaryEntry, CompactionEntry, SessionEntry } from "../session/session-entries";
 import type { TodoItem } from "../tools/todo";
 
@@ -348,6 +349,28 @@ export interface ToolResultEventResult {
 export interface SessionBeforeSwitchResult {
 	/** If true, cancel the switch */
 	cancel?: boolean;
+}
+
+/**
+ * Fired before each prompt-cache warming refresh with the warmer's economics
+ * filled in. Return `{ action }` to override whether the refresh is sent.
+ */
+export interface CacheWarmingDecisionEvent {
+	type: "cache_warming_decision";
+	/** Price of this refresh: a cache read of the prompt plus one output token. */
+	warmCost: number;
+	/** Extra price of the next real request if the cache entry is lost. */
+	missCost: number;
+	/** Estimated chance that a real request arrives before the entry expires. */
+	continuationProbability: number;
+	/** The warmer's own decision. */
+	action: CacheWarmingAction;
+}
+
+/** Return type for `cache_warming_decision` handlers. */
+export interface CacheWarmingDecisionEventResult {
+	/** Override whether this refresh is sent. "stop" ends warming until the next real request. */
+	action?: CacheWarmingAction;
 }
 
 /** Return type for `session_before_branch` handlers */
