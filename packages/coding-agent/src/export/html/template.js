@@ -1,6 +1,20 @@
     (function() {
       'use strict';
 
+      // Entry types with no conversation content, hidden in this viewer's
+      // default / no-tools filter modes. Injected by export/html/index.ts from
+      // HIDDEN_BY_DEFAULT_ENTRY_TYPES (src/session/transcript-records.ts) —
+      // this file used to carry its own literal copy and had already lost
+      // three types, which leaked service_tier_change / title_change /
+      // reset_boundary rows into the export.
+      //
+      // A missing global degrades to "nothing is hidden": leaking a few
+      // bookkeeping rows is cosmetic, hiding conversation content is not.
+      // `custom_message` is deliberately NOT in the list — advisor cards,
+      // hook notices and collab prompts are conversation.
+      var HIDDEN_BY_DEFAULT_ENTRY_TYPES = Array.isArray(window.__OMP_HIDDEN_ENTRY_TYPES__)
+        ? window.__OMP_HIDDEN_ENTRY_TYPES__
+        : [];
       const THEME_STORAGE_KEY = 'omp-export-theme';
       const themeSelect = document.getElementById('theme-select');
       let themePreference = 'auto';
@@ -377,7 +391,7 @@
           }
 
           // Apply filter mode
-          const isSettingsEntry = ['label', 'custom', 'model_change', 'thinking_level_change', 'mode_change', 'ttsr_injection', 'session_init', 'credential_pin'].includes(entry.type);
+          const isSettingsEntry = HIDDEN_BY_DEFAULT_ENTRY_TYPES.includes(entry.type);
           let passesFilter = true;
 
           switch (filterMode) {

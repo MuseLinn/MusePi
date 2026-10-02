@@ -229,6 +229,24 @@ export function isTurnStartEntry(e: SessionEntry | undefined): boolean {
 	return false;
 }
 
+/**
+ * 顾问笔记的人读文本:`details.notes[].note`,多条以 "; " 连接,空的丢弃。
+ *
+ * 顾问条目的 `content` 是**给模型看的** `<advisory severity="…" guidance="…">`
+ * XML —— 同一段文字外加严重度/引导属性,写给人看的部分在 notes 里。任何把这条
+ * 笔记渲染给人看的表面都必须走这里:daemon 的轮次摘要(导航条悬停面板直接渲染它)、
+ * GUI 的 Markdown 导出,等等。回退到 `content` 会把 XML 标签摆到用户面前。
+ */
+export function advisorNoteText(details: unknown): string {
+	if (details === null || typeof details !== "object" || !("notes" in details)) return "";
+	const notes = (details as { notes?: unknown }).notes;
+	if (!Array.isArray(notes)) return "";
+	return notes
+		.map(n => (typeof (n as { note?: unknown } | null)?.note === "string" ? (n as { note: string }).note : ""))
+		.filter(s => s.trim().length > 0)
+		.join("; ");
+}
+
 /** Frozen round-total record, shared by the daemon (agent_end in the
  *  materialized view) and every GUI write side: ONE key space, so daemon-seeded
  *  snapshots and live GUI writes hit the same lookup. Key = 回合起点

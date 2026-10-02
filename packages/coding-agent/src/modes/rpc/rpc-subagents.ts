@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import { isEnoent } from "@musepi/pi-utils";
-import type { FileEntry, SessionMessageEntry } from "../../session/session-entries";
 import { parseSessionEntries } from "../../session/session-loader";
+import { extractRenderableEntries } from "../../session/transcript-records";
 import {
 	type AgentProgress,
 	type SubagentEventPayload,
@@ -29,10 +29,6 @@ export interface RpcSubagentTranscriptSelector {
 type RpcSubagentOutput = (frame: RpcSubagentFrame) => void;
 
 const MAX_RETAINED_TRANSCRIPT_REFERENCES = 256;
-
-function isSessionMessageEntry(entry: FileEntry): entry is SessionMessageEntry {
-	return entry.type === "message";
-}
 
 function statusFromLifecycle(status: SubagentLifecyclePayload["status"]): AgentProgress["status"] {
 	return status === "started" ? "running" : status;
@@ -100,7 +96,7 @@ export async function readRpcSubagentTranscript(sessionFile: string, fromByte = 
 		nextByte,
 		reset,
 		entries,
-		messages: entries.filter(isSessionMessageEntry).map(entry => entry.message),
+		messages: extractRenderableEntries(entries).map(entry => entry.message),
 	};
 }
 

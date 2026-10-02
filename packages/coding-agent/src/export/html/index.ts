@@ -6,6 +6,7 @@ import { getResolvedThemeColors, getThemeExportColors } from "../../modes/theme/
 import type { SessionEntry, SessionHeader } from "../../session/session-entries";
 import { loadEntriesFromFile } from "../../session/session-loader";
 import { SessionManager } from "../../session/session-manager";
+import { HIDDEN_BY_DEFAULT_ENTRY_TYPES } from "../../session/transcript-records";
 import type { ExportThemeNames } from "./args";
 import templateCssPath from "./template.css" with { type: "file" };
 import templateHtmlPath from "./template.html" with { type: "file" };
@@ -41,7 +42,13 @@ export function getTemplate(): string {
 	cachedTemplate = templateHtml
 		.replace("<template-css/>", () => `<style>${minifiedCss}</style>`)
 		.replace("<template-tool-views/>", () => `<script>${toolViewsJs}</script>`)
-		.replace("<template-js/>", () => `<script>${templateJs}</script>`);
+		.replace("<template-js/>", () => {
+			// Single source for the viewer's bookkeeping-entry filter: the TS
+			// set, serialised. The template cannot import it (it is inlined
+			// browser JS), and its own literal copy had already drifted.
+			const hidden = JSON.stringify([...HIDDEN_BY_DEFAULT_ENTRY_TYPES]);
+			return `<script>window.__OMP_HIDDEN_ENTRY_TYPES__=${hidden};</script><script>${templateJs}</script>`;
+		});
 	return cachedTemplate;
 }
 

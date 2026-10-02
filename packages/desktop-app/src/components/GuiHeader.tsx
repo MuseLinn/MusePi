@@ -23,6 +23,7 @@ import {
 import { usePrompt } from "../lib/prompt-dialog";
 import { buildWsUrl, type RemoteHost } from "../lib/remote-hosts";
 import type { RpcClient } from "../lib/rpc";
+import { buildSessionMarkdown, markdownFileName } from "../lib/session-markdown";
 import type { GuiSessionStore } from "../lib/session-store";
 import { useStore } from "../lib/use-store";
 import { Icon } from "../vendor/oc-icons";
@@ -619,30 +620,17 @@ export function GuiHeader({
 	const exportSessionMarkdown = (): void => {
 		if (!store) return;
 		const snap = store.getSnapshot();
-		const textOf = (content: unknown): string =>
-			typeof content === "string"
-				? content
-				: Array.isArray(content)
-					? content.map(b => (b as { text?: string }).text ?? "").join("\n")
-					: "";
-		const lines: string[] = [`# ${title}`, ""];
-		for (const e of snap.entries) {
-			if (e.type !== "message") continue;
-			const role = e.message?.role;
-			if (role !== "user" && role !== "assistant") continue;
-			const body = textOf(e.message?.content).trim();
-			if (!body) continue;
-			lines.push(`## ${role === "user" ? t("user") : t("assistant")}`, "", body, "");
-		}
-		const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
+		// Selection rule (advisor cards, hook notices, collab/skill prompts, and
+		// the model-facing-XML trap) lives in lib/session-markdown.ts.
+		const markdown = buildSessionMarkdown(title, snap.entries, {
+			user: t("user"),
+			assistant: t("assistant"),
+			advisor: t("advisor"),
+		});
+		const blob = new Blob([markdown], { type: "text/markdown" });
 		const a = document.createElement("a");
 		a.href = URL.createObjectURL(blob);
-		a.download = `${
-			title
-				.replace(/[^\w\u4e00-\u9fa5-]+/g, "-")
-				.replace(/^-+|-+$/g, "")
-				.slice(0, 40) || "session"
-		}.md`;
+		a.download = `${markdownFileName(title)}.md`;
 		a.click();
 		URL.revokeObjectURL(a.href);
 	};

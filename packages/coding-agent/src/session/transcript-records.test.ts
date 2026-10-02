@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { getTemplate } from "../export/html/index";
 import type { CustomMessageEntry, FileEntry, SessionMessageEntry } from "./session-entries";
 import {
 	customMessageEntryToSessionMessage,
@@ -193,5 +195,42 @@ describe("customMessageEntryToSessionMessage", () => {
 		const msg = customMessageEntryToSessionMessage(advisorEntry({ timestamp: "not-a-date" }));
 		if (msg.message.role !== "custom") throw new Error("unreachable");
 		expect(Number.isFinite(msg.message.timestamp)).toBe(true);
+	});
+});
+
+/**
+ * The HTML share export carries the same filter, and it used to carry its own
+ * literal copy of the list — which had already lost three types, leaking
+ * service_tier_change / title_change / reset_boundary rows into the export's
+ * default and no-tools views. The template is inlined browser JS and cannot
+ * import the TS module, so index.ts serialises the set into a global it reads.
+ *
+ * These assertions pin the wiring in both directions: the global the template
+ * actually receives, and the absence of a second literal list to drift.
+ */
+describe("HTML export bookkeeping filter", () => {
+	it("the assembled template injects exactly the canonical set", () => {
+		const html = getTemplate();
+		const match = /window\.__OMP_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(html);
+		expect(match).not.toBeNull();
+		expect(JSON.parse(match![1]!)).toEqual([...HIDDEN_BY_DEFAULT_ENTRY_TYPES]);
+	});
+
+	it("the injected list is complete — the three lost types are back", () => {
+		// Named rather than counted: a count assertion would still pass if the
+		// wrong three went missing.
+		const injected = JSON.parse(/window\.__OMP_HIDDEN_ENTRY_TYPES__=(\[.*?\]);/.exec(getTemplate())![1]!) as string[];
+		expect(injected).toContain("service_tier_change");
+		expect(injected).toContain("title_change");
+		expect(injected).toContain("reset_boundary");
+		expect(injected).not.toContain("custom_message");
+	});
+
+	it("the template reads the injected set instead of a literal of its own", () => {
+		const source = readFileSync(new URL("../export/html/template.js", import.meta.url), "utf8");
+		// A source-level assertion is the only way to see this: the drift WAS a
+		// literal in this file. Assert it stays gone by asserting the literal is.
+		expect(source).not.toContain("'thinking_level_change', 'mode_change'");
+		expect(source).toContain("HIDDEN_BY_DEFAULT_ENTRY_TYPES.includes(entry.type)");
 	});
 });

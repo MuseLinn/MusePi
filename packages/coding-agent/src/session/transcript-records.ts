@@ -12,8 +12,11 @@
  * Two things live here so they cannot drift apart:
  *
  *   - which entry types are bookkeeping with no conversation content. This
- *     list was a function-local const in tree-selector.ts and a SEPARATE,
- *     already-diverged copy in export/html/template.js (four types missing);
+ *     list was a function-local const in tree-selector.ts plus a SEPARATE,
+ *     already-diverged copy in export/html/template.js, which had lost
+ *     service_tier_change, title_change and reset_boundary. The template is
+ *     inlined browser JS and cannot import this module, so index.ts serialises
+ *     HIDDEN_BY_DEFAULT_ENTRY_TYPES into a global it reads;
  *   - how a file-level `custom_message` entry becomes the in-memory
  *     `role: "custom"` message the TUI transcript builder actually renders.
  *     On disk the payload sits on the entry; in memory it sits inside

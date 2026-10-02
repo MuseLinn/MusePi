@@ -29,7 +29,7 @@ import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
 import { getAgentDir, getSessionsDir, logger, prompt } from "@musepi/pi-utils";
-import { isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
+import { advisorNoteText, isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -648,24 +648,6 @@ export const TURN_SUMMARY_MAX = 90;
  *  skipped. */
 function daemonIsTurnStart(e: unknown): boolean {
 	return typeof e === "object" && e !== null && isTurnStartEntry(e as SessionEntry);
-}
-/** Human-readable text of an advisor note: `details.notes[].note`.
- *
- *  An advisor entry's `content` is the MODEL-FACING `<advisory …>` XML — the
- *  same text plus severity/guidance attributes, meant for the model, not the
- *  reader. `DaemonTurnItem.summary` is rendered verbatim by the TurnRail
- *  hover panel, so falling back to `content` would put raw XML tags in front
- *  of the user. (trajectory-data.ts already unwraps notes for the map and
- *  documents the same leak; this path had been left behind.) Mirrors that
- *  unwrap: notes joined with "; ", empty when absent — no XML fallback. */
-function advisorNoteText(details: unknown): string {
-	if (details === null || typeof details !== "object" || !("notes" in details)) return "";
-	const notes = (details as { notes?: unknown }).notes;
-	if (!Array.isArray(notes)) return "";
-	return notes
-		.map(n => (typeof (n as { note?: unknown } | null)?.note === "string" ? (n as { note: string }).note : ""))
-		.filter(s => s.trim().length > 0)
-		.join("; ");
 }
 /** Summary text of a turn-start entry: user messages carry the text under
  *  `message.content` (string or text-content blocks); an advisor note carries
