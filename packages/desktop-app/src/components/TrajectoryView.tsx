@@ -14,6 +14,7 @@ import { Icon } from "../vendor/oc-icons";
 import { FadeScroll } from "./FadeScroll";
 import { StateIcon } from "./StateIcon";
 import { durationText, TimelineOverview, type TimelineRange } from "./TimelineOverview";
+import { turnEndEventOf, turnUserEventOf } from "./TurnMapCanvas";
 import { isTrajectoryEventInRange, type RoundDurationMap, type TrajectoryEvent } from "./trajectory-data";
 import { createTrajectoryDeriveCache, deriveTrajectoryTree } from "./trajectory-derive";
 
@@ -882,39 +883,74 @@ export function TrajectoryView({
 							const inRange =
 								range === null ||
 								group.events.some(ev => isTrajectoryEventInRange(ev, range.startMs, range.endMs));
+							// 悬停双操作锚:重答 = 轮首 user 事件;切换 = 轮末事件
+							// (与分支树行/地图右键同一套 branchAt 语义分派)。
+							const reanswerAnchor = onBranchTo ? turnUserEventOf(group) : undefined;
+							const switchAnchor = onSwitchTo ? turnEndEventOf(group) : undefined;
 							return (
 								<div
 									key={group.turn}
 									data-trajectory-turn={group.turn}
 									className={`traj-turn-group${inRange ? "" : " traj-turn-group--dim"}${flashTurn === group.turn ? " traj-turn-group--flash" : ""}`}
 								>
-									<button
-										type="button"
-										className="traj-turn-head"
-										aria-expanded={!isCollapsed}
-										onClick={() => toggleTurn(group.turn)}
-									>
-										<StateIcon
-											on={isCollapsed}
-											pair={["arrow-right-s", "arrow-down-s"]}
-											className="h-3.5 w-3.5 shrink-0 opacity-60"
-										/>
-										<span className="traj-turn-tag">
-											{group.turn === 0
-												? t("trajectory system events")
-												: `Turn ${group.displayTurnLabel ?? group.displayTurn ?? group.turn}`}
-										</span>
-										<span className="traj-turn-summary">
-											{assistant ? assistant.title : `${group.events.length} events`}
-										</span>
-										<span className="traj-turn-meta">
-											{toolCount > 0 ? `${toolCount} ${t("trajectory calls").toLowerCase()}` : ""}
-											{groupDuration !== undefined
-												? `${toolCount > 0 ? " · " : ""}${durationText(groupDuration)}`
-												: ""}
-											{firstTs ? ` · ${firstTs}` : ""}
-										</span>
-									</button>
+									<div className="traj-turn-headrow">
+										<button
+											type="button"
+											className="traj-turn-head"
+											aria-expanded={!isCollapsed}
+											onClick={() => toggleTurn(group.turn)}
+										>
+											<StateIcon
+												on={isCollapsed}
+												pair={["arrow-right-s", "arrow-down-s"]}
+												className="h-3.5 w-3.5 shrink-0 opacity-60"
+											/>
+											<span className="traj-turn-tag">
+												{group.turn === 0
+													? t("trajectory system events")
+													: `Turn ${group.displayTurnLabel ?? group.displayTurn ?? group.turn}`}
+											</span>
+											<span className="traj-turn-summary">
+												{assistant ? assistant.title : `${group.events.length} events`}
+											</span>
+											<span className="traj-turn-meta">
+												{toolCount > 0 ? `${toolCount} ${t("trajectory calls").toLowerCase()}` : ""}
+												{groupDuration !== undefined
+													? `${toolCount > 0 ? " · " : ""}${durationText(groupDuration)}`
+													: ""}
+												{firstTs ? ` · ${firstTs}` : ""}
+											</span>
+										</button>
+										{/* 悬停双操作(与分支树行/地图右键同一语义):重答锚轮首
+										    user 事件(branchAt 父级 + 草稿回填);切换锚轮末事件
+										    (leaf 落到该分支末尾)。仅列出带 entryId 锚的动作。 */}
+										{(onBranchTo || onSwitchTo) && (
+											<span className="traj-trow-actions traj-turn-actions">
+												{onBranchTo && reanswerAnchor?.entryId && (
+													<button
+														type="button"
+														className="traj-trow-action"
+														title={t("branch re-answer here")}
+														aria-label={t("branch re-answer here")}
+														onClick={() => onBranchTo(reanswerAnchor.entryId!)}
+													>
+														<Icon name="git-branch" className="h-3 w-3" />
+													</button>
+												)}
+												{onSwitchTo && switchAnchor?.entryId && (
+													<button
+														type="button"
+														className="traj-trow-action"
+														title={t("map switch to branch")}
+														aria-label={t("map switch to branch")}
+														onClick={() => onSwitchTo(switchAnchor.entryId!)}
+													>
+														<Icon name="git-merge" className="h-3 w-3" />
+													</button>
+												)}
+											</span>
+										)}
+									</div>
 									{!isCollapsed && (
 										<div className="traj-turn-events">
 											{group.events.map(ev => (

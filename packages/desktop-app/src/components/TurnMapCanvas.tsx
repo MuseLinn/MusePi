@@ -109,6 +109,15 @@ const EVENT_KIND_ICON: Record<TrajectoryEvent["kind"], IconName> = {
 	system: "terminal",
 };
 
+/** 事件卡 kind 标签(主行药丸,与图标同色系)。 */
+const EVENT_KIND_LABEL = {
+	user: "turn map kind user",
+	assistant: "turn map kind assistant",
+	tool: "turn map kind tool",
+	advisor: "turn map kind advisor",
+	system: "turn map kind system",
+} as const satisfies Record<TrajectoryEvent["kind"], string>;
+
 /** token 数缩写(1.2k 形态;TUI /trace 信息密度,GUI 排版)。 */
 function compactTokens(n: number): string {
 	if (n >= 10000) return `${(n / 1000).toFixed(1)}k`;
@@ -135,11 +144,11 @@ export const TmNodeCard = memo(function TmNodeCard({
 	isExpanded,
 	searchDim,
 	searchHit,
-	selectedEventId,
 	onToggle,
 	onJump,
-	onSelectEvent,
 	onJumpEvent,
+	onSwitchEvent,
+	onReanswerEvent,
 	onEventMenu,
 	onMenu,
 	onHover,
@@ -150,14 +159,16 @@ export const TmNodeCard = memo(function TmNodeCard({
 	isExpanded: boolean;
 	searchDim: boolean;
 	searchHit: boolean;
-	/** 当前选中的轮内事件卡 id(单击选中态,无则 null)。 */
-	selectedEventId: string | null;
 	onToggle(turn: number): void;
 	onJump(node: TurnMapNode): void;
-	/** 事件卡单击:选中(不跳转)。 */
-	onSelectEvent(ev: TrajectoryEvent): void;
-	/** 事件卡双击:跳到对话视图该 entry(与卡面双击同通道,entry 级粒度)。 */
+	/** 事件卡单击/双击:跳到对话视图该 entry(entry 级,同 onJumpToEntry 通道)。 */
 	onJumpEvent(ev: TrajectoryEvent): void;
+	/** 事件卡悬停「切换到此分支」:锚 = 非 user 事件自身;user 事件锚轮末
+	 *  (切换 ≠ 重答,branchAt 的 user→parent 语义是重答契约)。 */
+	onSwitchEvent(node: TurnMapNode, ev: TrajectoryEvent): void;
+	/** 事件卡悬停「重答」:仅 user 事件(锚 = 该消息本身,branchAt 定位
+	 *  父级 + 回填草稿)。 */
+	onReanswerEvent(ev: TrajectoryEvent): void;
 	/** 事件卡右键:以该事件为锚的上下文菜单(不冒泡到轮卡)。 */
 	onEventMenu(node: TurnMapNode, ev: TrajectoryEvent, x: number, y: number): void;
 	onMenu(node: TurnMapNode, x: number, y: number): void;
@@ -217,23 +228,31 @@ export const TmNodeCard = memo(function TmNodeCard({
 						{tLoose("turn map replies", { count: statsRow.replies })} ·{" "}
 						{tLoose("turn map tools", { count: statsRow.tools })}
 					</div>
-					{/* 轮内泳道(单击展开):该轮事件行,与轨迹检视器同 i18n/颜色。
-						明细 = trace 对齐:工具参数摘要、assistant usage/duration/ttft。 */}
+					{/* 轮内泳道(单击展开):该轮事件卡,与轨迹检视器同 i18n/颜色。
+						明细 = trace 对齐:工具参数摘要、assistant usage/duration/ttft。
+						卡片 = 主行(kind 药丸 + 图标 + 摘要 + 元信息)+ 工具行副行
+						(参数摘要);单击跳对话定位该事件,悬停浮「切换/重答」操作。 */}
 					<div className="tm-lane" onWheel={e => e.stopPropagation()}>
 						{n.group.events.map(ev => {
 							const args = toolArgsSummary(ev);
+							// 主行摘要:工具 = 工具名(副行给参数);其余 = 文本预览。
+							const primary = ev.kind === "tool" ? ev.title : (ev.body ?? ev.title);
+							const canJump = ev.entryId !== undefined;
+							const canSwitch = canJump && ev.kind !== "system";
+							const canReanswer = canJump && ev.kind === "user";
 							return (
 								<div
 									key={ev.id}
-									className={`tm-lane-row tm-lane-row--${ev.kind}${ev.entryId ? " tm-lane-row--link" : ""}${selectedEventId === ev.id ? " tm-lane-row--selected" : ""}`}
+									className={`tm-lane-row tm-lane-row--${ev.kind}${canJump ? " tm-lane-row--link" : ""}`}
 									onClick={e => {
 										e.stopPropagation();
-										onSelectEvent(ev);
+										// 单击 = 跳到对话视图该事件(纯导航);无 entryId 纯展示。
+										if (canJump) onJumpEvent(ev);
 									}}
 									onDoubleClick={e => {
 										// 定位到对话视图该事件;不冒泡到卡面(否则触发折叠)。
 										e.stopPropagation();
-										if (ev.entryId) onJumpEvent(ev);
+										if (canJump) onJumpEvent(ev);
 									}}
 									onContextMenu={e => {
 										e.preventDefault();
@@ -241,32 +260,69 @@ export const TmNodeCard = memo(function TmNodeCard({
 										onEventMenu(n, ev, e.clientX, e.clientY);
 									}}
 								>
-									<Icon name={EVENT_KIND_ICON[ev.kind]} className="tm-lane-icon" />
-									<span className="tm-lane-title" title={args ?? ev.body ?? ev.title}>
-										{ev.kind === "tool" ? ev.title : (ev.body ?? ev.title)}
-									</span>
+									<div className="tm-lane-main">
+										<Icon name={EVENT_KIND_ICON[ev.kind]} className="tm-lane-icon" />
+										<span className={`tm-kind tm-kind--${ev.kind}`}>{t(EVENT_KIND_LABEL[ev.kind])}</span>
+										<span className="tm-lane-title" title={args ?? primary}>
+											{primary}
+										</span>
+										<span className="tm-lane-metas">
+											{ev.kind === "assistant" && ev.usage && (
+												<span className="tm-lane-usage" title={`↑${ev.usage.input} ↓${ev.usage.output}`}>
+													↑{compactTokens(ev.usage.input)} ↓{compactTokens(ev.usage.output)}
+												</span>
+											)}
+											{ev.durationMs !== undefined && (
+												<span className="tm-lane-meta">{durationText(ev.durationMs)}</span>
+											)}
+											{ev.ttftMs !== undefined && (
+												<span className="tm-lane-meta" title="TTFT">
+													ttft {durationText(ev.ttftMs)}
+												</span>
+											)}
+											{ev.tsMs !== undefined && (
+												<span className="tm-lane-time">
+													{new Date(ev.tsMs).toLocaleTimeString(undefined, timeFormatOptions())}
+												</span>
+											)}
+										</span>
+										{(canSwitch || canReanswer) && (
+											<span className="tm-lane-actions">
+												{canSwitch && (
+													<button
+														type="button"
+														className="tm-lane-act"
+														title={t("map switch to branch")}
+														aria-label={t("map switch to branch")}
+														onClick={e => {
+															e.stopPropagation();
+															onSwitchEvent(n, ev);
+														}}
+													>
+														<Icon name="git-merge" className="h-3 w-3" />
+													</button>
+												)}
+												{canReanswer && (
+													<button
+														type="button"
+														className="tm-lane-act"
+														title={t("branch re-answer here")}
+														aria-label={t("branch re-answer here")}
+														onClick={e => {
+															e.stopPropagation();
+															onReanswerEvent(ev);
+														}}
+													>
+														<Icon name="git-branch" className="h-3 w-3" />
+													</button>
+												)}
+											</span>
+										)}
+									</div>
 									{args && (
-										<span className="tm-lane-args" title={args}>
+										<div className="tm-lane-detail" title={args}>
 											{args}
-										</span>
-									)}
-									{ev.kind === "assistant" && ev.usage && (
-										<span className="tm-lane-usage" title={`↑${ev.usage.input} ↓${ev.usage.output}`}>
-											↑{compactTokens(ev.usage.input)} ↓{compactTokens(ev.usage.output)}
-										</span>
-									)}
-									{ev.durationMs !== undefined && (
-										<span className="tm-lane-meta">{durationText(ev.durationMs)}</span>
-									)}
-									{ev.ttftMs !== undefined && (
-										<span className="tm-lane-meta" title="TTFT">
-											ttft {durationText(ev.ttftMs)}
-										</span>
-									)}
-									{ev.tsMs !== undefined && (
-										<span className="tm-lane-time">
-											{new Date(ev.tsMs).toLocaleTimeString(undefined, timeFormatOptions())}
-										</span>
+										</div>
 									)}
 								</div>
 							);
@@ -338,8 +394,6 @@ export function TurnMapCanvas({
 		node: TurnMapNode | null;
 		event: TrajectoryEvent | null;
 	} | null>(null);
-	// 事件卡选中态(单击选中,双击跳转;画布空白点按清除)。
-	const [selectedEvent, setSelectedEvent] = useState<{ turn: number; id: string } | null>(null);
 	// 搜索命中轮高亮。
 	const [searchQuery, setSearchQuery] = useState("");
 	// 悬停浮卡(轮首消息全文 + 首末时刻)。
@@ -515,8 +569,7 @@ export function TurnMapCanvas({
 			const target = e.target as HTMLElement;
 			if (target.closest(".tm-node, .tm-hover, .tm-topbar, .tm-nav, .tm-zoom, .tm-search, .gui-context-menu"))
 				return;
-			// 空白点按:清除事件卡选中态。
-			setSelectedEvent(null);
+			// 空白点按:无操作(纯取消拖拽判定;事件卡无选中态可清)。
 			dragRef.current = { px: e.clientX, py: e.clientY, vx: view.x, vy: view.y, moved: false };
 			setDragging(true);
 			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -566,18 +619,30 @@ export function TurnMapCanvas({
 		},
 		[onJumpToEntry],
 	);
-	// 事件卡双击 = 同通道的 entry 级跳转(卡面双击/右键菜单共用
-	// onJumpToEntry,父层切回对话 + requestJump;不触发折叠切换)。
+	// 事件卡单击/双击 = 跳到对话定位(同一通道,entry 级粒度)。
 	const jumpToEvent = useCallback(
 		(ev: TrajectoryEvent) => {
 			if (ev.entryId && onJumpToEntry) onJumpToEntry(ev.entryId);
 		},
 		[onJumpToEntry],
 	);
-	// 事件卡单击 = 选中(纯视觉态,不跳转)。
-	const selectEvent = useCallback((ev: TrajectoryEvent) => {
-		setSelectedEvent(prev => (prev?.id === ev.id ? null : { turn: ev.turn, id: ev.id }));
-	}, []);
+	// 事件卡悬停「切换到此分支」:锚分派与右键菜单同一语义——user 事件锚
+	// 轮末(branchAt 的 user→parent 是重答语义);非 user 事件锚自身(从该点继续)。
+	const switchEventBranch = useCallback(
+		(node: TurnMapNode, ev: TrajectoryEvent) => {
+			const anchor = (ev.kind === "user" ? turnEndEventOf(node.group) : ev) ?? ev;
+			if (anchor.entryId && onSwitchToBranch) onSwitchToBranch(anchor.entryId);
+		},
+		[onSwitchToBranch],
+	);
+	// 事件卡悬停「重答」:仅 user 事件,锚 = 该消息本身(重答契约:
+	// branchAt 定位父级 + 回填草稿,下一次发送即重答)。
+	const reanswerEvent = useCallback(
+		(ev: TrajectoryEvent) => {
+			if (ev.kind === "user" && ev.entryId && onBranchTo) onBranchTo(ev.entryId);
+		},
+		[onBranchTo],
+	);
 	// 节点右键菜单(stable,供 memo 卡引用);事件卡右键带事件锚。
 	const openNodeMenu = useCallback((node: TurnMapNode, x: number, y: number) => {
 		setCtxMenu({ x, y, node, event: null });
@@ -934,11 +999,11 @@ export function TurnMapCanvas({
 								isExpanded={expanded.has(n.group.turn)}
 								searchDim={hasSearch && searchMatchTurns !== null && !searchMatchTurns.has(n.group.turn)}
 								searchHit={hasSearch && (searchMatchTurns?.has(n.group.turn) ?? false)}
-								selectedEventId={selectedEvent?.turn === n.group.turn ? selectedEvent.id : null}
 								onToggle={handleClick}
 								onJump={handleDblClick}
-								onSelectEvent={selectEvent}
 								onJumpEvent={jumpToEvent}
+								onSwitchEvent={switchEventBranch}
+								onReanswerEvent={reanswerEvent}
 								onEventMenu={openEventMenu}
 								onMenu={openNodeMenu}
 								onHover={setHoverNode}

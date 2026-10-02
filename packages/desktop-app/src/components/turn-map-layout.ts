@@ -13,7 +13,7 @@
  * 每轮 = 可折叠框(展开 = 框内事件卡),分叉 = 父轮末端干线上的交汇点。
  */
 
-import type { TrajectoryTurnGroup } from "./trajectory-data";
+import type { TrajectoryEvent, TrajectoryTurnGroup } from "./trajectory-data";
 
 /** 轮节点卡尺寸(px)——设计稿 §3.1 NODE 208×88。 */
 export const TURN_NODE_W = 208;
@@ -72,21 +72,38 @@ export interface TurnMapLayout {
  *  (与 CSS .tm-lane max-height 同步,实机回归:Turn 6 事件多,展开卡
  *  按事件数撑到数千 px 高而内容只有顶部一截)。 */
 export const TURN_LANE_MAX_H = 240;
-/** 轮内事件卡高度(px)与卡间距——与 CSS .tm-lane-row / .tm-lane gap 同步。 */
+/** 单行事件卡高(px)——与 CSS .tm-lane-row(主行 only)同步。 */
 export const TURN_EVENT_CARD_H = 28;
+/** 双行事件卡高(px)——工具行(名称主行 + 参数摘要副行);与 CSS 同步。 */
+export const TURN_EVENT_CARD_DETAIL_H = 44;
+/** 轮内事件卡间距(px)——与 CSS .tm-lane gap 同步。 */
 export const TURN_EVENT_CARD_GAP = 4;
 /** 泳道容器上下留白合计(px)——与 CSS .tm-lane padding 同步。 */
 export const TURN_LANE_PAD = 8;
 
+/** 事件卡高计算的最小输入(布局层不依赖完整 TrajectoryEvent)。 */
+interface TurnEventCardShape {
+	kind: TrajectoryEvent["kind"];
+	body?: string;
+}
+
 /**
- * 轮内展开高度:事件卡 28px + 间距 4px × N + 泳道留白 8,封顶
- *  TURN_LANE_MAX_H + 8(泳道滚动,高度与可视内容一致)。
+ * 单张事件卡高度:工具事件带参数摘要 = 双行卡(44px),其余单行(28px)。
+ *  卡片形态与 TurnMapCanvas 的渲染分支(tm-lane-detail 是否存在)同源,
+ *  布局增量按真实渲染高度计,展开卡不再截断或留白。
  */
-export function turnExpandedExtra(eventCount: number): number {
-	return Math.min(
-		eventCount * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD,
-		TURN_LANE_MAX_H + TURN_LANE_PAD,
-	);
+export function turnEventCardH(ev: TurnEventCardShape): number {
+	return ev.kind === "tool" && ev.body ? TURN_EVENT_CARD_DETAIL_H : TURN_EVENT_CARD_H;
+}
+
+/**
+ * 轮内展开高度:Σ 各事件卡高(单/双行) + 间距 4px × (N-1) + 泳道留白 8,
+ *  封顶 TURN_LANE_MAX_H + 8(泳道滚动,高度与可视内容一致)。
+ */
+export function turnExpandedExtra(events: readonly TurnEventCardShape[]): number {
+	const cardsH = events.reduce((acc, ev) => acc + turnEventCardH(ev), 0);
+	const gapsH = Math.max(0, events.length - 1) * TURN_EVENT_CARD_GAP;
+	return Math.min(cardsH + gapsH + TURN_LANE_PAD, TURN_LANE_MAX_H + TURN_LANE_PAD);
 }
 
 /**
@@ -138,7 +155,7 @@ export function layoutTurnMap(
 	for (const group of rounds) {
 		const branch = group.events[0]?.branch === true;
 		const advisor = group.events[0]?.kind === "advisor";
-		const extra = expanded.has(group.turn) ? turnExpandedExtra(group.events.length) : 0;
+		const extra = expanded.has(group.turn) ? turnExpandedExtra(group.events) : 0;
 		const h = extra > 0 ? TURN_NODE_H + extra : TURN_NODE_COMPACT_H;
 		// 主线 advance 步长:v = 卡高 + 展开增量 + 间距(展开占纵向);
 		// h = 卡宽 + 间距(展开增量向卡下方生长,不占横向)。

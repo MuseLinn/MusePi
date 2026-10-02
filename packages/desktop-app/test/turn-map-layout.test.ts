@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import type { TrajectoryEvent, TrajectoryTurnGroup } from "../src/components/trajectory-data";
 import {
 	layoutTurnMap,
+	TURN_EVENT_CARD_DETAIL_H,
 	TURN_EVENT_CARD_GAP,
 	TURN_EVENT_CARD_H,
 	TURN_GAP_Y,
@@ -12,6 +13,7 @@ import {
 	TURN_NODE_H,
 	TURN_NODE_W,
 	type TurnMapNode,
+	turnEventCardH,
 	turnExpandedExtra,
 	visibleTurnMapNodes,
 } from "../src/components/turn-map-layout";
@@ -44,6 +46,11 @@ function turnGroup(
 		startMs: turn * 1000,
 		endMs: turn * 1000 + (opts.events ?? 2),
 	};
+}
+
+/** N 个单行事件(user 无 body → 28px 卡)。 */
+function singleLineEvents(n: number): Pick<TrajectoryEvent, "kind" | "body">[] {
+	return Array.from({ length: n }, () => ({ kind: "user" as const }));
 }
 
 describe("layoutTurnMap", () => {
@@ -231,8 +238,8 @@ describe("layoutTurnMap", () => {
 		const turns = [turnGroup(1, { events: 5 }), turnGroup(2), turnGroup(3)];
 		const collapsed = layoutTurnMap(turns);
 		const expanded = layoutTurnMap(turns, new Set([1]));
-		const extra = turnExpandedExtra(5);
-		expect(extra).toBe(5 * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD);
+		const extra = turnExpandedExtra(singleLineEvents(5));
+		expect(extra).toBe(5 * TURN_EVENT_CARD_H + 4 * TURN_EVENT_CARD_GAP + TURN_LANE_PAD);
 		expect(expanded.nodes[0]?.expandedExtra).toBe(extra);
 		expect(expanded.nodes[1]?.y).toBe((collapsed.nodes[1]?.y ?? 0) + extra);
 		// 后续主线轮一并推开。
@@ -258,19 +265,33 @@ describe("layoutTurnMap", () => {
 		expect(layout.nodes.every(n => n.h === TURN_NODE_COMPACT_H)).toBe(true);
 		// 展开后 h 切到基础卡 + 泳道增量。
 		const expanded = layoutTurnMap([turnGroup(1)], new Set([1]));
-		expect(expanded.nodes[0]!.h).toBe(TURN_NODE_H + turnExpandedExtra(2));
+		expect(expanded.nodes[0]!.h).toBe(TURN_NODE_H + turnExpandedExtra(singleLineEvents(2)));
 	});
 
 	it("展开高度封顶:事件数超过泳道上限时卡片不再长高(轮内滚动)", () => {
 		// 契约:泳道可视上限 TURN_LANE_MAX_H 之上,展开卡高度 = 基础卡 +
 		// 上限增量,后续轮的推移也按封顶增量计算——否则多事件轮(实机
 		// Turn 6)会把卡片撑到数千 px、下方大片空白而内容只在顶部。
-		expect(turnExpandedExtra(5)).toBe(5 * (TURN_EVENT_CARD_H + TURN_EVENT_CARD_GAP) + TURN_LANE_PAD);
-		expect(turnExpandedExtra(100)).toBe(TURN_LANE_MAX_H + TURN_LANE_PAD);
+		expect(turnExpandedExtra(singleLineEvents(5))).toBe(
+			5 * TURN_EVENT_CARD_H + 4 * TURN_EVENT_CARD_GAP + TURN_LANE_PAD,
+		);
+		expect(turnExpandedExtra(singleLineEvents(100))).toBe(TURN_LANE_MAX_H + TURN_LANE_PAD);
 		const turns = [turnGroup(1, { events: 100 }), turnGroup(2)];
 		const layout = layoutTurnMap(turns, new Set([1]));
 		expect(layout.nodes[0]!.h).toBe(TURN_NODE_H + TURN_LANE_MAX_H + TURN_LANE_PAD);
 		expect(layout.nodes[1]!.y).toBe(TURN_NODE_H + TURN_LANE_MAX_H + TURN_LANE_PAD + TURN_GAP_Y);
+	});
+
+	it("工具事件带参数 = 双行卡:展开增量按真实渲染高度计", () => {
+		// 契约(2026-10-02 实机诉求):事件卡不再统一 28px——工具行有参数
+		// 摘要副行(44px),布局增量与渲染分支同源,展开卡不截断/不留白。
+		expect(turnEventCardH({ kind: "tool", body: '{"path":"a.ts"}' })).toBe(TURN_EVENT_CARD_DETAIL_H);
+		expect(turnEventCardH({ kind: "tool" })).toBe(TURN_EVENT_CARD_H);
+		expect(turnEventCardH({ kind: "assistant", body: "文本" })).toBe(TURN_EVENT_CARD_H);
+		const mixed = [{ kind: "user" as const }, { kind: "tool" as const, body: "{}" }];
+		expect(turnExpandedExtra(mixed)).toBe(
+			TURN_EVENT_CARD_H + TURN_EVENT_CARD_DETAIL_H + TURN_EVENT_CARD_GAP + TURN_LANE_PAD,
+		);
 	});
 
 	it("轮前元事件组(turn 0,无 user 事件)不发节点", () => {
@@ -345,7 +366,7 @@ describe("layoutTurnMap 横向布局", () => {
 		];
 		const collapsed = layoutTurnMap(turns, new Set(), "h");
 		const expanded = layoutTurnMap(turns, new Set([2]), "h");
-		const extra = turnExpandedExtra(8);
+		const extra = turnExpandedExtra(singleLineEvents(8));
 		const c4 = collapsed.nodes.find(n => n.group.turn === 4)!;
 		const e4 = expanded.nodes.find(n => n.group.turn === 4)!;
 		const expandedBranch = expanded.nodes.find(n => n.group.turn === 2)!;

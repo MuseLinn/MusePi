@@ -28,7 +28,7 @@ function turnNode(events: TrajectoryEvent[], turn = 3, branch = false): TurnMapN
 
 const noop = () => {};
 
-function renderCard(node: TurnMapNode, isExpanded: boolean, selectedEventId: string | null = null): string {
+function renderCard(node: TurnMapNode, isExpanded: boolean): string {
 	return renderToStaticMarkup(
 		<TmNodeCard
 			n={node}
@@ -37,11 +37,11 @@ function renderCard(node: TurnMapNode, isExpanded: boolean, selectedEventId: str
 			isExpanded={isExpanded}
 			searchDim={false}
 			searchHit={false}
-			selectedEventId={selectedEventId}
 			onToggle={noop}
 			onJump={noop}
-			onSelectEvent={noop}
 			onJumpEvent={noop}
+			onSwitchEvent={noop}
+			onReanswerEvent={noop}
 			onEventMenu={noop}
 			onMenu={noop}
 			onHover={noop}
@@ -101,7 +101,7 @@ describe("轮卡折叠/展开渲染分支", () => {
 		expect(html).toContain("ttft 0.2s");
 	});
 
-	it("泳道明细:工具行带参数摘要(单行,tab 净化)", () => {
+	it("泳道明细:工具行双行卡(参数摘要副行,tab 净化)", () => {
 		const events: TrajectoryEvent[] = [
 			{
 				id: "t1",
@@ -113,7 +113,10 @@ describe("轮卡折叠/展开渲染分支", () => {
 			},
 		];
 		const html = renderCard(turnNode(events), true);
-		expect(html).toContain("tm-lane-args");
+		expect(html).toContain("tm-lane-detail");
+		// 主行摘要 = 工具名(副行给参数)。
+		expect(html).toContain("tm-lane-title");
+		expect(html).toContain("read");
 		// tab 已净化为空格(裸 tab 会破坏终端/文本渲染)。
 		expect(html).not.toContain("\t");
 		// 参数摘要渲染出 JSON 键(引号在 SSR 中转义为 &quot;)。
@@ -126,22 +129,27 @@ describe("轮卡折叠/展开渲染分支", () => {
 			{ id: "s1", kind: "system", title: "model_change", turn: 3, tsMs: 1001 },
 		];
 		const html = renderCard(turnNode(events), true);
-		// 契约:entryId → 可点击行(单击选中 + 双击跳对话);无 entryId → 纯展示。
+		// 契约:entryId → 可点击行(单击/双击跳对话);无 entryId → 纯展示。
 		expect(html).toContain("tm-lane-row--link");
 		expect(html.match(/tm-lane-row--link/g)!.length).toBe(1);
 	});
 
-	it("泳道事件卡:kind 图标按事件类型渲染,选中态跟随 selectedEventId", () => {
+	it("泳道事件卡:kind 药丸按事件类型渲染,悬停操作按 kind 分派", () => {
 		const events: TrajectoryEvent[] = [
 			{ id: "u1", kind: "user", title: "用户问题", turn: 3, tsMs: 1000, entryId: "entry-1" },
 			{ id: "a1", kind: "assistant", title: "回答", turn: 3, tsMs: 1001, entryId: "entry-2" },
+			{ id: "t1", kind: "tool", title: "read", turn: 3, tsMs: 1002, entryId: "entry-3" },
 		];
-		const html = renderCard(turnNode(events), true, "a1");
-		// 契约:每张事件卡带 kind 图标(用户能一眼区分 user/assistant/工具)。
-		expect(html.match(/tm-lane-icon/g)!.length).toBe(2);
-		// 契约:selectedEventId 命中的卡带选中描边类,其余没有。
-		expect(html).toContain("tm-lane-row--selected");
-		expect(html.match(/tm-lane-row--selected/g)!.length).toBe(1);
+		const html = renderCard(turnNode(events), true);
+		// 契约:每张事件卡带 kind 药丸(用户能一眼区分 user/assistant/工具)。
+		expect(html.match(/tm-kind--user/g)!.length).toBe(1);
+		expect(html.match(/tm-kind--assistant/g)!.length).toBe(1);
+		expect(html.match(/tm-kind--tool/g)!.length).toBe(1);
+		// 契约:悬停操作分派——user 行 = 切换 + 重答(2 个),非 user 行 =
+		// 仅切换(1 个);与分支树行的 branchAt 语义分派一致。
+		expect(html.match(/class="tm-lane-act"/g)!.length).toBe(4);
+		expect(html.match(/git-branch/g)!.length).toBe(1);
+		expect(html.match(/git-merge/g)!.length).toBe(3);
 	});
 });
 
