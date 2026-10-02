@@ -1503,17 +1503,19 @@ export function ChatView({
 		setFindSearching(true);
 		const timer = setTimeout(() => {
 			void rpc
-				.request<{ matches: { timestamp: string; content: string }[] }>("session.search", {
+				.request<{ matches: { timestamp: number; content: string }[] }>("session.search", {
 					query: q,
 					sessionId: findSessionId,
 					limit: 200,
 				})
 				.then(res => {
 					if (token !== findTokenRef.current) return;
-					const hits = (res?.matches ?? []).map(m => ({
-						timestamp: m.timestamp,
-						snippet: m.content.trim().slice(0, 160),
-					}));
+					const hits = (res?.matches ?? [])
+						.filter(m => typeof m.timestamp === "number" && Number.isFinite(m.timestamp))
+						.map(m => ({
+							timestampMs: m.timestamp,
+							snippet: m.content.trim().slice(0, 160),
+						}));
 					setFindHits(hits);
 					// Land on the first hit straight away: opening find with a query
 					// already typed should reveal something.
@@ -1568,7 +1570,7 @@ export function ChatView({
 	// arrives as timestamp + text; JumpTarget resolves that against the loaded
 	// entries and disambiguates same-millisecond collisions by content.
 	const jumpToHit = useCallback((hit: FindHit): void => {
-		requestJumpRef.current?.({ timestamp: hit.timestamp, snippet: hit.snippet });
+		requestJumpRef.current?.({ timestampMs: hit.timestampMs, snippet: hit.snippet });
 	}, []);
 	// Reveal the selected hit. Keyed on the selected HIT rather than the
 	// query, so typing never yanks the viewport on a keystroke.
@@ -1881,6 +1883,48 @@ export function ChatView({
 		}),
 		[railTurnsInPath, store?.hasMore, onLoadOlderStable],
 	);
+	// Find-bar docking. `.gui-find` is absolutely positioned against
+	// .gui-chat-body (the chat column's own box — openchamber anchors its bar
+	// to the equivalent chatRootRef), so the one thing it cannot know is how
+	// much of that edge the TurnRail covers: the rail is a 24px absolutely-
+	// positioned overlay hugging whichever side the user picked (设置 → 外观),
+	// and its extent changes with the rail style and the turn count. Measure
+	// it and publish the clearance rather than hardcoding a margin — a fixed
+	// inset is what put the bar over the rail, then over the window edge.
+	const FIND_EDGE_GAP_PX = 14;
+	const FIND_RAIL_GAP_PX = 10;
+	const chatBodyRef = useRef<HTMLDivElement | null>(null);
+	// TurnRail returns null for an empty turn list, so its presence tracks the
+	// same source it is fed; re-measure when that flips.
+	const findRailMounted = ((viewMode === "canvas" ? canvasRail.turns : turnsData?.turns)?.length ?? 0) > 0;
+	useEffect(() => {
+		const host = chatBodyRef.current;
+		if (!host) return;
+		const sync = () => {
+			const rail = host.querySelector(".gui-turn-rail");
+			let inset = FIND_EDGE_GAP_PX;
+			if (rail instanceof HTMLElement) {
+				const hostRect = host.getBoundingClientRect();
+				const railRect = rail.getBoundingClientRect();
+				// The rail hugs ONE edge; take the nearer side so the bar is pushed
+				// inward from the rail instead of off the opposite edge.
+				const extent = Math.min(hostRect.right - railRect.right, railRect.left - hostRect.left);
+				if (extent > 0) inset = Math.max(inset, Math.ceil(extent + FIND_RAIL_GAP_PX));
+			}
+			host.style.setProperty("--gui-find-inset-end", `${inset}px`);
+		};
+		sync();
+		const ro = new ResizeObserver(sync);
+		ro.observe(host);
+		// The rail's extent tracks its own style and the turn count, so observe
+		// it too for as long as it is mounted.
+		const rail = host.querySelector(".gui-turn-rail");
+		if (rail instanceof HTMLElement) ro.observe(rail);
+		return () => {
+			ro.disconnect();
+			host.style.removeProperty("--gui-find-inset-end");
+		};
+	}, [findRailMounted]);
 	// Per-model thinking ceiling + exact ladder (TUI /model parity): higher
 	// ladder rungs are disabled in the composer's ThinkingSelector, and the
 	// ladder itself is the current model's supported efforts. GuiHeader runs
@@ -2187,7 +2231,12 @@ export function ChatView({
 									 * scroll container): the wrapper also carries flex:1, so
 									 * leaving it mounted would split the surface in half and
 									 * the composer could never fill it. */}
-									<div className={focusMode ? "hidden" : "relative flex min-h-0 min-w-0 flex-1 flex-col"}>
+									<div
+										ref={chatBodyRef}
+										className={
+											focusMode ? "hidden" : "gui-chat-body relative flex min-h-0 min-w-0 flex-1 flex-col"
+										}
+									>
 										{paused === true && (
 											<div className="gui-pause-banner" role="status" aria-live="polite">
 												<span className="gui-pause-banner-icon">
@@ -2568,10 +2617,13 @@ export function ChatView({
 											onJumpToTurn={entryId => requestJump({ entryId })}
 										/>
 									</div>
-									{/* ⌘F find bar (openchamber parity): floats over the transcript's
-									 * top edge. Inside .gui-transcript-wrap (the positioned ancestor),
-									 * so it never reflows the transcript — a bar in flow would
-									 * re-measure every virtual row on open. */}
+									{/* ⌘F find bar (openchamber parity): floats over the conversation's
+									 * top edge. It is a child of .gui-chat-body — the chat column's own
+									 * box, and therefore its offset parent (openchamber's chatRootRef
+									 * model). NOT .gui-transcript-wrap: the pause banner sits in flow
+									 * above the wrap, so the two boxes differ, and an earlier revision
+									 * wrongly assumed the wrap was the ancestor. Absolutely positioned
+									 * on purpose: a bar in flow would re-measure every virtual row. */}
 									{findOpen && (
 										<ChatFind
 											hits={findHits}

@@ -4645,20 +4645,35 @@ body.gui-resizing .gui-pane-right {
 /* ── Transcript scroll shadow + jump-to-bottom (openchamber parity) ──
  * Mask-image content fades engage only while the transcript overflows
  * (data-top-scroll / data-bottom-scroll set by useScrollShadow). */
-/* ⌘F find bar (openchamber parity): a floating field over the transcript's
- * top edge. Right-aligned so it clears the TurnRail tick gutter on either
- * side. Absolutely positioned on purpose — the bar must NOT reflow the
- * transcript, which would re-measure every virtual row. */
+/* The chat column's content box. This is the OFFSET PARENT for the ⌘F find
+ * bar (and, via the shared column, what the bar's inset is measured against),
+ * so `position` is declared here rather than left to a `relative` utility
+ * inside a `focusMode ? … : …` ternary three levels up: when the bar's
+ * offset parent silently became the window, the bar docked to the whole UI
+ * instead of the conversation card. Keep this rule if that ternary changes. */
+.gui-chat-body {
+	position: relative;
+}
+
+/* ⌘F find bar (openchamber parity): a floating field over the conversation's
+ * top edge. Offset parent is .gui-chat-body (see above).
+ *
+ * --gui-find-inset-end is MEASURED, not hardcoded: ChatView observes the
+ * TurnRail — a 24px absolutely-positioned overlay hugging whichever edge
+ * the user picked in 设置 → 外观 — and publishes the clearance needed to sit
+ * inside it. The literal fallback only applies before that first measurement. */
 .gui-find {
 	position: absolute;
 	top: 10px;
-	right: 14px;
+	right: var(--gui-find-inset-end, 14px);
 	z-index: 30;
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
 	max-width: min(420px, 70%);
 }
+
+
 .gui-find-field {
 	display: flex;
 	align-items: center;

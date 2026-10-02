@@ -3,10 +3,12 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useEffect, useRef } from "react";
 
-/** One ⌘F hit: the row's entry timestamp (the transcript's jump key) plus the
- *  matched message text for the preview line. */
+/** One ⌘F hit: the daemon's epoch-ms stamp for the matched row, plus the
+ *  matched message text. NOTE the type — the daemon's `messages.timestamp`
+ *  column is numeric while transcript entries carry ISO strings;
+ *  resolveJumpEntryId normalizes across that gap. */
 export interface FindHit {
-	timestamp: string;
+	timestampMs: number;
 	snippet: string;
 }
 

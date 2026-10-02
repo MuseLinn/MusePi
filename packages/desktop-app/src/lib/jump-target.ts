@@ -14,15 +14,29 @@
  *
  * The one caller that cannot produce an id is the ⌘F find bar: the daemon's
  * `messages` table is keyed `(session_id, seq)` and stores no wire entry id,
- * so a hit comes back as a timestamp plus the matched text. That is still
- * resolvable — two entries sharing a millisecond are two different messages,
- * so the text disambiguates. `{ timestamp, snippet }` covers exactly that.
+ * so a hit comes back as a timestamp plus the matched text.
+ *
+ * That timestamp needs care — see `TIMESTAMP_WINDOW_MS`.
  */
+
+/**
+ * How close two stamps must be to count as "the same instant".
+ *
+ * They are produced by different code paths: the daemon stores the *wire
+ * message's* numeric timestamp (`msg.timestamp`, epoch ms), while the
+ * transcript entries carry an ISO string stamped at *entry* creation. The
+ * two agree in practice but are not the same clock reading, so exact
+ * equality is too strict — and a plain string/number comparison never
+ * matches at all. A one-second window is far tighter than "any entry" while
+ * tolerating that skew; when it admits more than one candidate, the hit's
+ * matched text picks between them.
+ */
+const TIMESTAMP_WINDOW_MS = 1000;
 
 /** Only the leading slice is compared: the daemon already truncates snippets. */
 const MATCH_PREFIX = 60;
 
-export type JumpTarget = { readonly entryId: string } | { readonly timestamp: string; readonly snippet: string };
+export type JumpTarget = { readonly entryId: string } | { readonly timestampMs: number; readonly snippet: string };
 
 /**
  * Message text for snippet matching. Deliberately local and minimal rather
@@ -30,7 +44,7 @@ export type JumpTarget = { readonly entryId: string } | { readonly timestamp: st
  * dragging a React renderer into a resolution helper would be wrong) — this
  * only needs the text blocks, for one comparison per collision.
  */
-function entryText(entry: { type?: string; message?: { content?: unknown }; content?: unknown }): string {
+function entryText(entry: { message?: { content?: unknown }; content?: unknown }): string {
 	const raw = entry.message?.content ?? entry.content;
 	if (typeof raw === "string") return raw;
 	if (!Array.isArray(raw)) return "";
@@ -40,11 +54,14 @@ function entryText(entry: { type?: string; message?: { content?: unknown }; cont
 		.join(" ");
 }
 
-/** Minimum shape the resolver needs — the wire SessionEntry union
- * satisfies it structurally, so callers pass their entries straight through. */
 interface JumpRow {
 	readonly id: string;
 	readonly timestamp: string;
+}
+
+function epochMs(iso: string): number {
+	const parsed = Date.parse(iso);
+	return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed;
 }
 
 /**
@@ -60,18 +77,18 @@ export function resolveJumpEntryId(entries: readonly JumpRow[] | null | undefine
 	if ("entryId" in target) {
 		return list.some(e => e.id === target.entryId) ? target.entryId : null;
 	}
-	const sameTimestamp = list.filter(e => e.timestamp === target.timestamp);
-	if (sameTimestamp.length === 0) return null;
-	if (sameTimestamp.length === 1) return sameTimestamp[0]!.id;
-	// Collision: pick the row whose text actually contains the matched hit.
+	const near = list.filter(e => Math.abs(epochMs(e.timestamp) - target.timestampMs) <= TIMESTAMP_WINDOW_MS);
+	if (near.length === 0) return null;
+	if (near.length === 1) return near[0]!.id;
+	// More than one candidate — the hit's text picks between them.
 	const needle = target.snippet.trim().slice(0, MATCH_PREFIX);
 	if (needle) {
-		const hit = sameTimestamp.find(e =>
+		const hit = near.find(e =>
 			entryText(e as { message?: { content?: unknown }; content?: unknown }).includes(needle),
 		);
 		if (hit) return hit.id;
 	}
 	// Still ambiguous (identical text, or a snippet we cannot match): keep the
 	// historical first-match behaviour rather than dropping the jump.
-	return sameTimestamp[0]!.id;
+	return near[0]!.id;
 }
