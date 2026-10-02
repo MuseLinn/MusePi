@@ -723,3 +723,98 @@ seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq
 - **Prompts are injected per channel**: `browser.md` gains a "Managed browser channel" bullet (pages are visible in the panel, and `computer` cannot see them) and `computer.md` an "embedded browser pages are invisible here" rule, both behind `{{#if managedBrowser}}` — a CLI/TUI run never sees in-app-browser copy. `BrowserTool.description` and `ComputerTool.description` pass the flag through `prompt.render`.
 - **GUI side**: `lib/managed-browser-bridge.ts` subscribes to the managed-browser host store (`wireHost` pushes `port` from main) and publishes changes to the daemon, de-duplicated by (rpc, port) — host state changes several times a second. Wired once in `app.tsx` next to the other rpc effects. `browser.managedBridge` was added to `REQUIRED_DAEMON_METHODS` so a same-version stale daemon (dev/worktree case) restarts instead of silently missing the takeover.
 - **Settings → Browser** now separates the two channels under 运行状态: "managed browser bridge" (real bound port + whether the agent tab exists — read straight from the renderer's host store, the same source the pane uses) and "shared headless browser" (the old `browser.endpoint` row). Added an editable `browser.guiUrl` and a channel-priority note. `BrowserGuiHint` now fires when the browser panel is first opened (not only after the agent's first headless call) and shows channel-neutral copy.
+## 45. Find bar / undo toast / palette deltas (2026-10-02, openchamber v2.1.0 parity)
+
+Design side: `gui-design.md` §5x. Three low-risk absorptions, no layout-model change.
+The toolchain traps at the end of this section cost the most time — read them before
+touching any file listed there.
+
+### 45.1 `session.search` gained a `sessionId` scope
+
+`ViewStore.search(query, limit = 50, sessionId?)` — `packages/coding-agent/src/daemon/view-store.ts`;
+`ViewStoreService.search(params: {query?, limit?, sessionId?})` passes it through.
+
+**Why the scope is required, not an optimization.** ⌘F searches one conversation, but
+`session.search` is a cross-session `LIKE` with a `LIMIT`. Without the scope, hits from
+_other_ sessions consume the limit and starve the conversation being searched — and a
+foreign hit is worse than a missing one: the row's `timestamp` **is** the transcript jump
+key, so a leaked hit scrolls to the wrong row or to nothing at all. An unknown `sessionId`
+must return `[]`, never degrade to an unscoped search (asserted in
+`test/daemon/view-store.test.ts`).
+
+### 45.2 Reuse `requestJump`; do not build a second "reveal a message" path
+
+`ChatView.requestJump(timestamp)` (`ChatView.tsx`, ~line 2055) is already the single owner
+of "put this row on screen". It pages older chunks until the entry materializes, opens the
+compaction fold when the target predates it, then `virtualizer.scrollToIndex(…, {align:"center"})`
+and flashes the row. The TurnRail, the message-tree canvas and the trajectory map all route
+through it.
+
+**The find bar therefore owns no scroll geometry at all** — `ChatFind.tsx` is presentational
+and hands a timestamp back. If you add copy-message-link (§46 backlog), route it here too;
+a second path will drift on the paging and compaction cases.
+
+Declared **after** the find block, so the block reaches it through
+`requestJumpRef.current` (a ref assigned in an effect). Keep that indirection — the reverse
+order would need `requestJump` to move above `loadOlder`.
+
+Search-result ordering: the daemon returns newest-first, so ↑ walks towards the present and
+↓ back through history. The bar jumps on the **selected timestamp**, not on the query, so
+typing never yanks the viewport on a keystroke. The debounce alone does not order the RPCs
+— a monotonic token (`findTokenRef`) discards a slow reply for an abandoned query.
+
+### 45.3 Action-toast store: why archive needs no confirm dialog
+
+`packages/desktop-app/src/lib/action-toast.ts` — plain module state + listener set
+(`useSyncExternalStore` in the view), mirroring `lib/update-ux.ts`. Deliberately _not_ the
+session store's `notices`: those are daemon-pushed, and a GUI-local undo has to be
+synchronous.
+
+**Archiving is a localStorage list edit** (`client-core/session-archive.ts`:
+`archiveSession` / `unarchiveSession` are pure list transforms), so the reverse costs
+nothing — no RPC rollback, no confirm dialog. That is the whole justification for
+unconditionally offering undo at both archive sites (sidebar row menu, and the header action
+that archives _and immediately leaves the session_).
+
+**Same message replaces, never stacks** — enforced in the store, because archiving three
+sessions in a row must not build a wall of identical toasts and the newest undo is the only
+still-actionable one. `dismissActionToast` on an unknown id is a no-op (no notification):
+the toast's own timer and the click handler can both fire.
+
+### 45.4 Palette deltas
+
+`CommandPalette.tsx`: Reload UI in the panels group; **pasted session ids resolve exactly**
+(`exactSession` useMemo, declared _before_ the search effect that reads it — biome's
+`noInvalidUseBeforeDeclaration` enforces the order); query captured on close and re-seeded on
+open. An exact-id query skips the RPC entirely and shows the id as the row's subtitle, so the
+match reads as deliberate rather than as a glitch.
+
+### 45.5 Toolchain traps (cost the most time here — read before editing)
+
+- **The `edit` tool rewrites indentation and will silently flatten a whole tab-indented file
+  to spaces.** Observed: `ChatView.tsx` went from `tab=2554` to `tab=0` on a _one-line_ import
+  edit; both `gui-*.css` files likewise. `GuiHeader.tsx` was additionally lost to a crash
+  mid-write (65504 bytes of NUL — a 64KB buffer boundary; restore from HEAD and re-apply).
+  **For tab-indented files use byte-exact replacement** (read raw → `.Replace(old, new)` →
+  `WriteAllText` with a UTF8 no-BOM encoder), or you will ship a 6000-line whitespace diff.
+  Always check `git diff --stat` after an `edit` on a large file.
+- **biome only checks files that differ from `main`** (`vcs.defaultBranch` + `useIgnoreFile` in
+  `biome.json`). Clean HEAD passes because nothing is "changed". The moment you touch a legacy
+  file, its pre-existing indentation debt surfaces and `check:ts` fails — `app.tsx`,
+  `ChatView.tsx`, `CommandPalette.tsx`, `GuiHeader.tsx`, `SessionSidebar.tsx` all carry it. The
+  fix is `biome check --write` on the file, which reformats it wholesale; expect a large but
+  purely mechanical diff (the concurrent `6bb37eb6a` commit did the same to `TrajectoryView.tsx`).
+  This is repo-wide debt, not something a change introduced.
+- **biome does not manage CSS** — `files.includes` is `*.ts` / `*.tsx` only. Passing a `.css`
+  path to `biome check --write` bypasses that filter and reformats the file (tabs → 2 spaces,
+  ~6000 lines). Never feed CSS to biome.
+- `gui-workspace.css` is not in `gui-chat.css`'s cascade for the find bar; the find bar's rules
+  live in `gui-chat.css` next to the transcript rules they depend on.
+
+### 45.6 Verification
+
+`bun run check:ts` (biome + i18n dup-key + client-UI i18n gates + tsgo), `bun test
+packages/desktop-app/test` (694), `bun test packages/coding-agent/test/daemon` (328). New
+contract tests: session-scoped search (cross-session leak), action-toast replace/stack/id
+isolation. `⌘F` needs a live manual pass — the bar is driven by a window-level shortcut that
+only exists in the desktop shell.

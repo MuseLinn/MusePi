@@ -4412,6 +4412,65 @@
 
 /* Update toast (BitFun update-available dialog parity): bottom-right
  * frosted card pushed by main.cjs's silent launch check. */
+/* Undo-action toasts (openchamber "every archive message offers Undo").
+ * Bottom-center, below the update toast's z-index, so an OTA card and an
+ * undo never land in the same corner. */
+.gui-action-toasts {
+	position: fixed;
+	left: 50%;
+	bottom: 24px;
+	transform: translateX(-50%);
+	z-index: 880;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	pointer-events: none;
+}
+.gui-action-toast {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 8px 10px 8px 14px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: color-mix(in srgb, var(--color-surface-raised) 88%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	box-shadow: var(--shadow-overlay);
+	color: var(--color-text);
+	font-size: var(--ui-font-size-sm);
+	pointer-events: auto;
+	animation: gui-action-toast-in 200ms var(--spring, ease);
+}
+.gui-action-toast-msg {
+	white-space: nowrap;
+}
+.gui-action-toast-btn {
+	flex-shrink: 0;
+	padding: 3px 10px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: var(--color-accent);
+	color: var(--color-accent-contrast, #fff);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+}
+.gui-action-toast-btn:hover {
+	filter: brightness(1.08);
+}
+@keyframes gui-action-toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	
+	to {
+		opacity: 1;
+		transform: none;
+	
+}
 .gui-update-toast {
 	position: fixed;
 	right: 20px;

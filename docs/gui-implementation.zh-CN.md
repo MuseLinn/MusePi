@@ -668,3 +668,86 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **提示词按通道注入**:`browser.md` 新增 "Managed browser channel" 条目(页面在面板里可见、`computer` 看不到它们),`computer.md` 新增「内嵌页面在这里不可见」规则,两者都在 `{{#if managedBrowser}}` 之后——CLI/TUI 场景永远看不到这段应用内浏览器文案。`BrowserTool.description` 与 `ComputerTool.description` 经 `prompt.render` 传入该标志。
 - **GUI 侧**:`lib/managed-browser-bridge.ts` 订阅托管浏览器宿主 store(主进程经 `wireHost` 推送 `port`),按 (rpc, port) 去重后推给 daemon——宿主状态每秒变好几次。在 `app.tsx` 与其它 rpc effect 并列接一次。`browser.managedBridge` 已加入 `REQUIRED_DAEMON_METHODS`,让「同版本号但代码陈旧」的 daemon(dev/工作区场景)重启,而不是静默缺了这条接管链路。
 - **设置 → 浏览器**在运行状态下拆成两条通道:「托管浏览器桥」(实际绑定端口 + agent 标签页是否存在,直读渲染端宿主 store,与右栏面板同源)与「共享无头浏览器」(原 `browser.endpoint` 行);新增可编辑的 `browser.guiUrl` 与通道优先级说明。`BrowserGuiHint` 改为首次打开浏览器面板即触发(不必等 agent 先跑一次无头调用),文案改为与通道无关的中性表述。
+## 45. 查找栏 / 撤销 toast / 面板增量（2026-10-02，openchamber v2.1.0 parity）
+
+设计侧：`gui-design.md` §5x。三件低风险吸收，未触碰布局模型。本节末尾的工具链陷阱
+耗时最多 —— 动下列任何文件前先读。
+
+### 45.1 `session.search` 新增 `sessionId` 作用域
+
+`ViewStore.search(query, limit = 50, sessionId?)` —— `packages/coding-agent/src/daemon/view-store.ts`；
+`ViewStoreService.search(params: {query?, limit?, sessionId?})` 负责透传。
+
+**为什么这个作用域是必需项而非优化项。** ⌘F 只搜一个会话，而 `session.search` 是带 `LIMIT`
+的跨会话 `LIKE`。没有作用域时，**别的会话**的命中会吃掉 limit，把当前会话的结果饿死 ——
+而串进来的命中比查不到更糟：那一行的 `timestamp` **就是** transcript 的跳转键，所以一个
+外来命中会滚到错误的行，或者根本滚不到。未知 `sessionId` 必须返回 `[]`，绝不能退化成
+无作用域搜索（断言见 `test/daemon/view-store.test.ts`）。
+
+### 45.2 复用 `requestJump`；不要造第二条「把消息露出来」的路径
+
+`ChatView.requestJump(timestamp)`（`ChatView.tsx`，约 2055 行）已经是「把这行放到屏幕上」
+的唯一属主。它会翻历史分页直到目标条目出现、在目标早于压缩点时展开折叠，然后
+`virtualizer.scrollToIndex(…, {align:"center"})` 并闪烁该行。TurnRail、消息树画布、
+轨迹图全部走它。
+
+**因此查找栏完全不持有任何滚动几何** —— `ChatFind.tsx` 是纯展示组件，把 timestamp 交回
+调用方。若你后续加「复制消息链接」（§46 待办），也走这里；第二条路径必然在分页与压缩
+两个 case 上漂移。
+
+它声明在查找块**之后**，所以查找块通过 `requestJumpRef.current`（一个在 effect 里赋值的
+ref）触达。保留这个间接层 —— 反过来做就得把 `requestJump` 移到 `loadOlder` 之上。
+
+命中顺序：daemon 按时间倒序返回，所以 ↑ 朝当下走、↓ 回溯历史。查找栏只在**选中项的
+timestamp** 变化时跳转，而不是随 query 变化，因此打字时不会每个按键都拽一次视口。
+仅靠 debounce 不能给 RPC 排序 —— 单调 token（`findTokenRef`）负责丢弃已废弃 query 的
+慢响应。
+
+### 45.3 Action-toast store：为什么归档不需要确认对话框
+
+`packages/desktop-app/src/lib/action-toast.ts` —— 纯模块状态 + 监听集（视图侧用
+`useSyncExternalStore`），对齐 `lib/update-ux.ts`。**刻意不用** session store 的
+`notices`：那些由 daemon 推送，而 GUI 本地的撤销必须是同步的。
+
+**归档是 localStorage 列表编辑**（`client-core/session-archive.ts`：`archiveSession` /
+`unarchiveSession` 是纯列表变换），所以反向操作零成本 —— 无需 RPC 回滚，无需确认对话框。
+这正是两个归档入口（侧栏行菜单，以及「归档并立即跳走」的头部动作）都无条件给撤销的全部
+理由。
+
+**同文案替换，绝不堆叠** —— 约束落在 store 里，因为连续归档三个会话不该立起一堵一样的
+toast，而最新那条撤销是唯一仍可操作的。`dismissActionToast` 对未知 id 是静默 no-op
+（不发通知）：toast 自身的定时器与点击处理都可能触发。
+
+### 45.4 面板增量
+
+`CommandPalette.tsx`：面板组新增 Reload UI；**粘贴 session id 精确命中**（`exactSession`
+useMemo，声明在读取它的搜索 effect **之前** —— biome 的 `noInvalidUseBeforeDeclaration`
+强制这个顺序）；query 在关闭时捕获、打开时回填。精确 id 查询完全跳过 RPC，并把 id 作为该行
+的副标题显示，让这次命中读起来是刻意的，而不是像出了 bug。
+
+### 45.5 工具链陷阱（此处耗时最多 —— 编辑前必读）
+
+- **`edit` 工具会重写缩进，并可能悄悄把整个 tab 缩进文件压平成空格。** 实测：
+  `ChatView.tsx` 在一次**单行** import 编辑后从 `tab=2554` 变成 `tab=0`；两个 `gui-*.css`
+  同理。`GuiHeader.tsx` 还因崩溃时的半截写入彻底损坏（65504 字节 NUL —— 正好是 64KB 缓冲
+  边界；已从 HEAD 恢复并重放改动）。**对 tab 缩进文件请用字节级精确替换**（读原始文本 →
+  `.Replace(old, new)` → `WriteAllText` 配 UTF8 无 BOM 编码器），否则你会交付一个 6000 行的
+  纯空白 diff。对大文件做 `edit` 后务必检查 `git diff --stat`。
+- **biome 只检查相对 `main` 有改动的文件**（`biome.json` 的 `vcs.defaultBranch` +
+  `useIgnoreFile`）。干净 HEAD 能通过，是因为「没有文件有改动」。你一旦动了某个遗留文件，
+  它既有的缩进债立刻浮现，`check:ts` 随之失败 —— `app.tsx`、`ChatView.tsx`、
+  `CommandPalette.tsx`、`GuiHeader.tsx`、`SessionSidebar.tsx` 全都有这笔债。解法是对该文件跑
+  `biome check --write`，代价是整文件重排；diff 会很大但纯属机械改动（并发的 `6bb37eb6a`
+  提交对 `TrajectoryView.tsx` 做过同样的事）。这是全仓债务，不是某次改动引入的。
+- **biome 不管 CSS** —— `files.includes` 只有 `*.ts` / `*.tsx`。把 `.css` 路径传给
+  `biome check --write` 会绕过该过滤并重排文件（tab → 2 空格，约 6000 行）。永远不要把 CSS
+  喂给 biome。
+- `gui-workspace.css` 不在 `gui-chat.css` 的层叠里；查找栏的规则与它依赖的 transcript 规则
+  同放在 `gui-chat.css`。
+
+### 45.6 验证
+
+`bun run check:ts`（biome + i18n dup-key + client-UI i18n 门控 + tsgo）、`bun test
+packages/desktop-app/test`（694）、`bun test packages/coding-agent/test/daemon`（328）。
+新增契约测试：会话作用域搜索（跨会话泄漏）、action-toast 的替换/堆叠/id 隔离。
+⌘F 需要实机手动过一遍 —— 该查找栏由只存在于桌面壳里的窗口级快捷键驱动。

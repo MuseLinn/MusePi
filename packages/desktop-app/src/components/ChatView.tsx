@@ -51,6 +51,7 @@ import { AskPopover } from "./AskPopover";
 import { PunkAvatar } from "./avatar-presets";
 import { BrowserGuiHint } from "./BrowserGuiHint";
 import { BtwFloatingCard } from "./BtwFloatingCard";
+import { ChatFind, type FindHit } from "./ChatFind";
 import { Composer } from "./Composer";
 import { ContextPanel } from "./ContextPanel";
 import type { CreationMessage } from "./CreationModeRow";
@@ -1484,7 +1485,103 @@ export function ChatView({
 	const onLoadOlderStable = useCallback((): void => {
 		void loadOlder();
 	}, [loadOlder]);
-	// Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
+	// ── ⌘F in-conversation find (openchamber parity) ─────────────────────
+	// The daemon search is scoped to this session, so it sees the WHOLE
+	// conversation rather than only the loaded transcript window; the jump
+	// then pages the hit in through the normal transcript path. Hits arrive
+	// newest first, so ↑ walks towards the present and ↓ back through history.
+	const [findOpen, setFindOpen] = useState(false);
+	const [findQuery, setFindQuery] = useState("");
+	const [findHits, setFindHits] = useState<readonly FindHit[]>([]);
+	const [findIndex, setFindIndex] = useState(-1);
+	const [findSearching, setFindSearching] = useState(false);
+	const findSessionId = store?.sessionId ?? null;
+	// Monotonic request token: a slow reply for an abandoned query must not
+	// land on top of a newer one — the debounce alone doesn't order the RPCs.
+	const findTokenRef = useRef(0);
+	useEffect(() => {
+		if (!findOpen) return;
+		const token = ++findTokenRef.current;
+		const q = findQuery.trim();
+		if (!q || !rpc || !findSessionId) {
+			setFindHits([]);
+			setFindIndex(-1);
+			setFindSearching(false);
+			return;
+		}
+		setFindSearching(true);
+		const timer = setTimeout(() => {
+			void rpc
+				.request<{ matches: { timestamp: string; content: string }[] }>("session.search", {
+					query: q,
+					sessionId: findSessionId,
+					limit: 200,
+				})
+				.then(res => {
+					if (token !== findTokenRef.current) return;
+					const hits = (res?.matches ?? []).map(m => ({
+						timestamp: m.timestamp,
+						snippet: m.content.trim().slice(0, 160),
+					}));
+					setFindHits(hits);
+					// Land on the first hit straight away: opening find with a query
+					// already typed should reveal something.
+					setFindIndex(hits.length > 0 ? 0 : -1);
+					setFindSearching(false);
+				})
+				.catch(() => {
+					if (token !== findTokenRef.current) return;
+					setFindHits([]);
+					setFindIndex(-1);
+					setFindSearching(false);
+				});
+		}, 200);
+		return () => clearTimeout(timer);
+	}, [findOpen, findQuery, rpc, findSessionId]);
+	const openFind = useCallback((): void => setFindOpen(true), []);
+	const closeFind = useCallback((): void => {
+		setFindOpen(false);
+		setFindQuery("");
+		setFindHits([]);
+		setFindIndex(-1);
+	}, []);
+	// The window-level ⌘F handler (app.tsx) owns the binding so it composes with
+	// every other shortcut in one chain; ChatView takes the dispatch.
+	useEffect(() => {
+		const onOpen = (): void => openFind();
+		window.addEventListener("musepi-gui-find-in-chat", onOpen);
+		return () => window.removeEventListener("musepi-gui-find-in-chat", onOpen);
+	}, [openFind]);
+	// Leaving the session (or switching to the canvas overview, which has no
+	// transcript to search) must not leave a find bar over a pane it cannot
+	// search — its hits would still be the previous session's.
+	useEffect(() => {
+		if (!findSessionId || viewMode === "canvas") closeFind();
+	}, [findSessionId, viewMode, closeFind]);
+	const stepFind = useCallback(
+		(delta: number): void => {
+			setFindIndex(prev => {
+				const n = findHits.length;
+				if (n === 0) return -1;
+				return (Math.max(prev, 0) + delta + n) % n;
+			});
+		},
+		[findHits.length],
+	);
+	// Jump via requestJumpRef — the single owner of "put this row on screen"
+	// (pages older chunks, opens the compaction fold, scrolls the virtualizer,
+	// flashes the row). Same path the TurnRail and the canvas use. The
+	// indirection exists because requestJump is declared further down (it
+	// depends on loadOlder) while this block needs to reach it.
+	const jumpToHit = useCallback((ts: string): void => {
+		requestJumpRef.current?.(ts);
+	}, []);
+	// Reveal the selected hit. Keyed on the SELECTED TIMESTAMP rather than the
+	// query, so typing never yanks the viewport on a keystroke.
+	const selectedHitTs = findIndex >= 0 ? findHits[findIndex]?.timestamp : undefined;
+	useEffect(() => {
+		if (selectedHitTs) jumpToHit(selectedHitTs);
+	}, [selectedHitTs, jumpToHit]); // Full-history backfill for the overview surfaces (轮级地图 / 消息级画布 /
 	// 轨迹统计): the daemon tails only 200 entries and pages older chunks on
 	// scroll, so snap.entries covers just the loaded window — the turn map
 	// silently collapsed a 164-turn session to ~4 turns (verified live on
@@ -1708,6 +1805,7 @@ export function ChatView({
 	// the entry materializes, then dispatch. (Dispatching immediately would
 	// drop the jump — the Transcript resolves rows against the loaded set and
 	// ignores requests it cannot find.)
+	const requestJumpRef = useRef<((timestamp: string) => void) | null>(null);
 	const requestJump = useCallback(
 		(timestamp: string): void => {
 			void (async () => {
@@ -1728,6 +1826,9 @@ export function ChatView({
 		},
 		[rpc, store, loadOlder],
 	);
+	useEffect(() => {
+		requestJumpRef.current = requestJump;
+	}, [requestJump]);
 	// P1-12: stable identities for the canvas card memo (TmNodeCard): the
 	// previous inline arrows changed identity every ChatView render, which
 	// recreated TurnMapCanvas's internal useCallbacks (they list these as
@@ -2548,6 +2649,19 @@ export function ChatView({
 														aria-hidden="true"
 													/>
 												</div>
+												{findOpen && (
+													<ChatFind
+														hits={findHits}
+														index={findIndex}
+														query={findQuery}
+														searching={findSearching}
+														onQuery={setFindQuery}
+														onPrev={() => stepFind(-1)}
+														onNext={() => stepFind(1)}
+														onClose={closeFind}
+														onJumpTo={jumpToHit}
+													/>
+												)}
 												<Reveal open={jumpDockOpen}>
 													<div className="gui-revert-dock-body">
 														<div className="gui-revert-item">

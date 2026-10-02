@@ -145,6 +145,14 @@ export const SHORTCUTS: readonly ShortcutEntry[] = [
 		groupKey: "shortcut group transcript",
 	},
 	{
+		id: "find-in-chat",
+		labelKey: "find in chat shortcut",
+		descKey: "find in chat shortcut desc",
+		def: "⌘F",
+		editable: true,
+		groupKey: "shortcut group transcript",
+	},
+	{
 		id: "stop",
 		labelKey: "stop agent shortcut",
 		descKey: "stop agent shortcut desc",

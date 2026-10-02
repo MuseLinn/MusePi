@@ -4645,6 +4645,93 @@ body.gui-resizing .gui-pane-right {
 /* ── Transcript scroll shadow + jump-to-bottom (openchamber parity) ──
  * Mask-image content fades engage only while the transcript overflows
  * (data-top-scroll / data-bottom-scroll set by useScrollShadow). */
+/* ⌘F find bar (openchamber parity): a floating field over the transcript's
+ * top edge. Right-aligned so it clears the TurnRail tick gutter on either
+ * side. Absolutely positioned on purpose — the bar must NOT reflow the
+ * transcript, which would re-measure every virtual row. */
+.gui-find {
+	position: absolute;
+	top: 10px;
+	right: 14px;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: min(420px, 70%);
+}
+.gui-find-field {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 4px 4px 4px 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: color-mix(in srgb, var(--color-surface-raised) 82%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	box-shadow: var(--shadow-overlay);
+}
+.gui-find-input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--color-text);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+}
+.gui-find-input::placeholder {
+	color: var(--color-text-faint);
+}
+.gui-find-count {
+	flex-shrink: 0;
+	min-width: 42px;
+	text-align: right;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+	color: var(--color-text-faint);
+}
+.gui-find-btn {
+	display: grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 22px;
+	height: 22px;
+	border: 0;
+	border-radius: var(--radius-md);
+	background: transparent;
+	color: var(--color-text-muted);
+	cursor: pointer;
+}
+.gui-find-btn:hover:not(:disabled) {
+	background: var(--color-surface-hover);
+	color: var(--color-text);
+}
+.gui-find-btn:disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+/* Match preview — click to jump. Clamped to one line: it identifies the
+ * hit, it does not become a second transcript. */
+.gui-find-preview {
+	overflow: hidden;
+	padding: 6px 10px;
+	border-radius: var(--radius-md);
+	border: 1px solid var(--border);
+	background: color-mix(in srgb, var(--color-surface-raised) 82%, transparent);
+	backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	-webkit-backdrop-filter: blur(var(--gui-glass-blur, 20px)) saturate(1.4);
+	color: var(--color-text-muted);
+	font-size: 11.5px;
+	text-align: left;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	cursor: pointer;
+}
+.gui-find-preview:hover {
+	color: var(--color-text);
+}
 .gui-transcript-wrap {
 	container-type: size;
 }

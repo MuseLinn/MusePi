@@ -1,6 +1,6 @@
 import { t } from "@musepi/client-core";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { tapFeedback } from "../lib/haptic";
 import type { RpcClient } from "../lib/rpc";
@@ -57,6 +57,9 @@ export function CommandPalette({
 }): ReactNode {
 	const [query, setQuery] = useState("");
 	const [tab, setTab] = useState<PaletteTab>("all");
+	// Seed for the next open (openchamber parity: the palette remembers the
+	// last query). Written on close, read back on open — never while typing.
+	const [seed, setSeed] = useState("");
 	const [rows, setRows] = useState<SearchRow[] | null>(null);
 	const [searching, setSearching] = useState(false);
 	const [active, setActive] = useState(0);
@@ -72,8 +75,15 @@ export function CommandPalette({
 		if (open) {
 			setVisible(true);
 			setClosing(false);
+			// Re-seed on open only: a ⌘K toggle restores the last query instead
+			// of resetting it under the user's cursor. Anything typed after
+			// this wins.
+			if (seed) setQuery(seed);
 			return;
 		}
+		// Capture the query for the next open (openchamber parity: the palette
+		// remembers it, so ⌘K does not wipe a half-typed search).
+		setSeed(query);
 		setClosing(true);
 		const t = setTimeout(() => {
 			setVisible(false);
@@ -82,6 +92,14 @@ export function CommandPalette({
 		return () => clearTimeout(t);
 	}, [open]);
 
+	// Pasting a full session id resolves to exactly that session (openchamber
+	// parity). Fuzzy text search cannot do this: an id is a long hex string
+	// that never matches a label, so pasting a copied id got "no results".
+	const exactSession = useMemo(() => {
+		const q = query.trim();
+		if (!q) return null;
+		return sessions.find(s => s.id === q) ?? null;
+	}, [query, sessions]);
 	// Cross-session message search (debounced), like the daemon's search.
 	useEffect(() => {
 		if (open) {
@@ -92,11 +110,22 @@ export function CommandPalette({
 				setSearching(false);
 				return;
 			}
+			// An exact session id resolves locally — a fuzzy search would never
+			// match it anyway, so skip the round trip entirely.
+			if (exactSession) {
+				setRows(null);
+				setSearching(false);
+				return;
+			}
 			setSearching(true);
 			const id = setTimeout(() => {
 				void rpc
 					.request<{
-						matches: { sessionId: string; content: string; timestamp: string }[];
+						matches: {
+							sessionId: string;
+							content: string;
+							timestamp: string;
+						}[];
 						sessions: { sessionId: string; messageCount: number }[];
 					}>("session.search", { query: q, limit: 40 })
 					.then(res => {
@@ -131,7 +160,7 @@ export function CommandPalette({
 			setRows(null);
 		}
 		return;
-	}, [query, open, visible, rpc, sessions]);
+	}, [query, open, visible, rpc, sessions, exactSession]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -162,17 +191,52 @@ export function CommandPalette({
 
 	// Flat item list for keyboard navigation: [actions…, tasks…].
 	const actions: { icon: string; label: string; hint?: string; fn(): void }[] = [
-		{ icon: "add-circle", label: t("new task"), hint: "⌘N", fn: onNewSession },
-		{ icon: "folder-open", label: t("open workspace"), hint: "⌘O", fn: onOpenWorkspace },
+		{
+			icon: "add-circle",
+			label: t("new task"),
+			hint: "⌘N",
+			fn: onNewSession,
+		},
+		{
+			icon: "folder-open",
+			label: t("open workspace"),
+			hint: "⌘O",
+			fn: onOpenWorkspace,
+		},
 		{ icon: "settings-3", label: t("settings"), fn: onSettings },
 	];
 	const panels: { icon: string; label: string; hint?: string; fn(): void }[] = [
-		{ icon: "layout-left", label: t("toggle sidebar"), hint: "⌘B", fn: onToggleSidebar },
-		{ icon: "terminal-box", label: t("toggle terminal"), hint: "⌘J", fn: onToggleTerminal },
-		{ icon: "equalizer-2", label: t("toggle preview"), hint: "⌘E", fn: onTogglePreview },
+		{
+			icon: "layout-left",
+			label: t("toggle sidebar"),
+			hint: "⌘B",
+			fn: onToggleSidebar,
+		},
+		{
+			icon: "terminal-box",
+			label: t("toggle terminal"),
+			hint: "⌘J",
+			fn: onToggleTerminal,
+		},
+		{
+			icon: "equalizer-2",
+			label: t("toggle preview"),
+			hint: "⌘E",
+			fn: onTogglePreview,
+		},
 		...(onOpenCapability ? [{ icon: "star", label: t("capability center"), fn: onOpenCapability }] : []),
+		// openchamber parity: a Reload UI escape hatch. Every renderer-side
+		// recovery path (a stale extension slot, derived state blown away by a
+		// hot reload) bottoms out in one full reload; without this command the
+		// user has to restart the window by hand.
+		{
+			icon: "refresh",
+			label: t("reload ui"),
+			fn: () => window.location.reload(),
+		},
 	];
-	const taskRows = (rows ?? sessions.slice(0, 8)).map<{
+
+	const taskRows = (exactSession ? [exactSession] : (rows ?? sessions.slice(0, 8))).map<{
 		icon: string;
 		label: string;
 		hint?: string;
@@ -182,7 +246,10 @@ export function CommandPalette({
 		icon: "chat-1",
 		label: s.label || t("untitled session"),
 		hint: "count" in s ? String(s.count) : undefined,
-		snippet: "snippet" in s ? s.snippet : undefined,
+		// An exact-id hit shows the id as its own subtitle — otherwise the row
+		// looks identical to a plain recent session and the match reads as a
+		// glitch rather than a deliberate paste.
+		snippet: "snippet" in s ? s.snippet : "sessionId" in s ? undefined : s.id,
 		fn: (): void => onSelectSession("sessionId" in s ? s.sessionId : s.id),
 	}));
 	const showTasks = tab !== "actions";
@@ -234,7 +301,11 @@ export function CommandPalette({
 						>
 							<StateIconN
 								value={id}
-								options={{ all: "menu-2", actions: "rocket", list: "list-check-2" }}
+								options={{
+									all: "menu-2",
+									actions: "rocket",
+									list: "list-check-2",
+								}}
 								className="h-3.5 w-3.5"
 							/>
 							<span>{id === "all" ? t("all") : id === "actions" ? t("actions") : t("tasks")}</span>

@@ -534,6 +534,47 @@ turn
 - 全空（无步数、无 token）→ 整行隐藏；纯用户消息的窗口只把计数丸显示为纯读数。
 - 数字不随分页/压缩跳动：token 数字有投影背书；窗口数字只在窗口 settled 内容变化时变化。
 
+## 5x. 查找栏、撤销 toast、命令面板增量（2026-10-02，openchamber v2.1.0 parity）
+
+三件低风险吸收同批落地。实现契约与它们暴露出的工具链陷阱见
+`gui-implementation.md` §45。
+
+### 查找栏（⌘F，会话内）
+
+- **位置**：绝对定位于 transcript **顶边**之上、右对齐（`.gui-find`，`gui-chat.css`），
+  两侧都让开 TurnRail 的刻度槽。
+- **硬规则——绝不让 transcript 重排**。查找栏是 `.gui-transcript-wrap` 内的
+  `position: absolute`；若放进常规流，打开瞬间会重测每一个虚拟行。
+- **材质**：§5s 玻璃配方，`--color-surface-raised` 82% + `backdrop-filter`
+  blur/saturate。零新增 token。
+- **控件**：输入框（打开时自动聚焦并全选）、命中计数（`n/total`，tabular-nums；搜索中为
+  `…`；无命中显示 无结果）、↑ / ↓ / ✕。Enter 下一个、Shift+Enter 上一个、Esc 关闭。
+  查找栏用 `stopPropagation` 独占 Esc/Enter —— 未被认领的 Escape 会中断正在生成的回复
+  （`lib/escape-stop`）。
+- **预览行**：单行、超出省略、点击即跳。它的职责是标明命中，不是变成第二份 transcript。
+- **渲染在滚动容器之上**，以免遮住它自己要揭示的那一行。
+
+### 撤销 toast（归档）
+
+- **位置**：底部居中，`z-index: 880` —— 刻意**低于**更新 toast（右下，z 900），并避开
+  `.sh-toasts`（底部条带，z 60）。OTA 卡片与撤销不得共用同一角。
+- **内容**：文案 + accent 动作按钮。88% 玻璃 + shadow-overlay，200ms 入场
+  （`translateY(8px)` → 0）。
+- **规则——同文案替换，绝不堆叠**。连续归档三个会话不该立起一堵一模一样的 toast；
+  最新那条撤销才是仍可操作的那条。该约束落在 store 里，而非视图里。
+- **每一次归档都给撤销**，包括「归档并立即跳走」的头部动作 —— 这是全应用最不可恢复的
+  一条路径。之所以不需要确认对话框：归档本身是 localStorage 列表编辑
+  （`client-core/session-archive.ts`），反向操作同步且零成本。
+
+### 命令面板增量
+
+- 面板组新增 **Reload UI** —— 所有渲染进程侧的恢复路径（失效的扩展插槽、热重载冲掉的
+  派生状态）最终都归结为一次整页重载；没有这条命令，用户只能手动重启窗口。
+- **粘贴完整 session id 精确命中该会话**。模糊搜索做不到这点：id 是一长串 hex，
+  永远匹配不到标题。这类行会把 id 作为自己的副标题显示，让这次命中读起来是刻意的，
+  而不是像出了 bug。
+- **面板记住上一次的 query**（关闭时捕获、打开时回填），所以重新打开不会抹掉敲了一半的
+  搜索词。
 ## 6. 品牌图标(App Icon,2026-09-28 重设计,品牌稿 S4)
 
 - **源文件**:`packages/desktop-app/build/icon.svg`(1024×1024 画布,手写 SVG,生成参数记在文件头注释里——superellipse 与点阵是参数化的)。构建产物:`build/icon.png`(1024×1024)+ `build/icon-dock.png`(同字节)+ `build/icon.icns` + `build/icon.ico`。

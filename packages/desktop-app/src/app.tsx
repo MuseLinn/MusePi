@@ -2,6 +2,7 @@ import { BlurText, getLocaleSnapshot, ShinyText, setLocale, subscribeLocale, t }
 import type { SubagentProgressPayload } from "@musepi/pi-wire";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { ActionToastStack } from "./components/ActionToast";
 import { AnnouncementOverlay } from "./components/AnnouncementOverlay";
 import type { AskAnswer, AskRequest } from "./components/AskCard";
 import { BoardPage } from "./components/BoardPage";
@@ -107,7 +108,9 @@ function isElectron(): boolean {
 async function probeDaemonPort(): Promise<number | null> {
 	if (!isElectron()) return null;
 	try {
-		const { electronAPI } = window as unknown as { electronAPI: { probeDaemonPort(): Promise<number | null> } };
+		const { electronAPI } = window as unknown as {
+			electronAPI: { probeDaemonPort(): Promise<number | null> };
+		};
 		const port = await electronAPI.probeDaemonPort();
 		return typeof port === "number" && port > 0 ? port : null;
 	} catch {
@@ -117,7 +120,9 @@ async function probeDaemonPort(): Promise<number | null> {
 
 /** Launch `musepi serve --port` from the Electron shell. */
 async function startDaemonViaShell(port: number): Promise<number> {
-	const { electronAPI } = window as unknown as { electronAPI: { startDaemon(port: number): Promise<number> } };
+	const { electronAPI } = window as unknown as {
+		electronAPI: { startDaemon(port: number): Promise<number> };
+	};
 	return await electronAPI.startDaemon(port);
 }
 
@@ -350,7 +355,10 @@ function AppInner(): ReactNode {
 		// unmount during the first paint never leaves a stray send.
 		const initial = window.setTimeout(push, 0);
 		const observer = new MutationObserver(push);
-		observer.observe(root, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
+		observer.observe(root, {
+			attributes: true,
+			attributeFilter: ["data-theme", "data-accent"],
+		});
 		return () => {
 			window.clearTimeout(initial);
 			observer.disconnect();
@@ -489,7 +497,10 @@ function AppInner(): ReactNode {
 	 *  agents park until released. Drives the fullscreen frosted-glass overlay.
 	 *  Orthogonal to per-session pauseInfo — releasing the global pause never
 	 *  clears a session's own pause, and vice versa. */
-	const [globalPause, setGlobalPause] = useState<{ paused: boolean; pausedAt: number | null }>({
+	const [globalPause, setGlobalPause] = useState<{
+		paused: boolean;
+		pausedAt: number | null;
+	}>({
 		paused: false,
 		pausedAt: null,
 	});
@@ -497,7 +508,11 @@ function AppInner(): ReactNode {
 	 *  the daemon gates each session independently, so pausing one never
 	 *  freezes the others). Synced via session.pauseStatus on open + the
 	 *  session stream's pause-state envelopes. */
-	const [pauseInfo, setPauseInfo] = useState<{ sessionId: string | null; paused: boolean; pausedAt: number | null }>({
+	const [pauseInfo, setPauseInfo] = useState<{
+		sessionId: string | null;
+		paused: boolean;
+		pausedAt: number | null;
+	}>({
 		sessionId: null,
 		paused: false,
 		pausedAt: null,
@@ -639,7 +654,13 @@ function AppInner(): ReactNode {
 			void rpc
 				.request<{
 					tasks?: { id: string; name?: string }[];
-					runs?: { id: string; taskId: string; status: string; startedAt: number; error?: string }[];
+					runs?: {
+						id: string;
+						taskId: string;
+						status: string;
+						startedAt: number;
+						error?: string;
+					}[];
 				}>("cron.list", {})
 				.then(res => {
 					if (!alive) return;
@@ -889,7 +910,10 @@ function AppInner(): ReactNode {
 	// ⌘1..8 surface jump: nonce bumps re-fire ChatView's select effect even
 	// for the same surface. Order comes from the persisted rail order so the
 	// digits match what the user sees on the rail.
-	const [panelSelect, setPanelSelect] = useState<{ id: string; nonce: number } | null>(null);
+	const [panelSelect, setPanelSelect] = useState<{
+		id: string;
+		nonce: number;
+	} | null>(null);
 	const panelSelectNonce = useRef(0);
 	// Focus mode (openchamber): the composer expands to fill the surface.
 	const [focusMode, setFocusMode] = useState(false);
@@ -918,7 +942,10 @@ function AppInner(): ReactNode {
 	const [welcomeModes, setWelcomeModes] = useState<{ id: string; label: string }[] | null>(null);
 	// ── M3.2 创作面(design chip 选中 → 欢迎页内联形态,v2 修订)────────────
 	/** 创建成功后的「保存为模板」toast 载荷(§3.4:保存入口在成功 toast 上)。 */
-	const [creationSaved, setCreationSaved] = useState<{ metadata: Record<string, unknown>; name: string } | null>(null);
+	const [creationSaved, setCreationSaved] = useState<{
+		metadata: Record<string, unknown>;
+		name: string;
+	} | null>(null);
 	/** The DEFAULT-role model (modelRoles.default) — the welcome composer's
 	 *  resting preselect for new sessions. Kept SEPARATE from presetModelId:
 	 *  opening a session must not clobber the welcome default with that
@@ -1017,8 +1044,11 @@ function AppInner(): ReactNode {
 		const ids = [...unreadSessionsRef.current];
 		if (ids.length === 0) return;
 		try {
-			const api = (window as unknown as { electronAPI?: { petActivity?(p: unknown): Promise<unknown> } })
-				.electronAPI;
+			const api = (
+				window as unknown as {
+					electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
+				}
+			).electronAPI;
 			if (petEnabled() && petMode() === "desktop") {
 				void api?.petActivity?.({ dismissSessions: ids });
 			}
@@ -1218,7 +1248,10 @@ function AppInner(): ReactNode {
 				// cross-session envelope, and the subscribe-time daemon replay
 				// re-delivers it when the user switches over anyway.
 				if (event.kind === "ask-request") {
-					setPendingAsk({ ...(event.payload as AskRequest), sessionId: event.sessionId });
+					setPendingAsk({
+						...(event.payload as AskRequest),
+						sessionId: event.sessionId,
+					});
 					return;
 				}
 				// Global events (extensions.changed / modes.changed / STT-TTS
@@ -1237,14 +1270,23 @@ function AppInner(): ReactNode {
 				// and pass through).
 				if (event.sessionId !== undefined && event.sessionId !== storeRef.current?.sessionId) return;
 				if (event.kind === "global-pause-state") {
-					const payload = event.payload as { paused?: boolean; pausedAt?: number | null };
-					setGlobalPause({ paused: payload.paused === true, pausedAt: payload.pausedAt ?? null });
+					const payload = event.payload as {
+						paused?: boolean;
+						pausedAt?: number | null;
+					};
+					setGlobalPause({
+						paused: payload.paused === true,
+						pausedAt: payload.pausedAt ?? null,
+					});
 					return;
 				}
 				if (event.kind === "pause-state") {
 					// Envelopes only arrive for the subscribed (selected)
 					// session, so the state belongs to it.
-					const payload = event.payload as { paused?: boolean; pausedAt?: number | null };
+					const payload = event.payload as {
+						paused?: boolean;
+						pausedAt?: number | null;
+					};
 					setPauseInfo({
 						sessionId: selectedIdRef.current,
 						paused: payload.paused === true,
@@ -1319,8 +1361,15 @@ function AppInner(): ReactNode {
 			// Subscribe to the process-global freeze state (daemon-wide
 			// pause overlay; also returns the current value on boot).
 			try {
-				const st = await client.request<{ paused: boolean; pausedAt: number | null }>("daemon.pauseStatus");
-				if (st) setGlobalPause({ paused: st.paused === true, pausedAt: st.pausedAt ?? null });
+				const st = await client.request<{
+					paused: boolean;
+					pausedAt: number | null;
+				}>("daemon.pauseStatus");
+				if (st)
+					setGlobalPause({
+						paused: st.paused === true,
+						pausedAt: st.pausedAt ?? null,
+					});
 			} catch {
 				// older daemon without the RPC — global pause stays hidden
 			}
@@ -1447,7 +1496,10 @@ function AppInner(): ReactNode {
 					const rpc = rpcRef.current;
 					const api = (
 						window as unknown as {
-							electronAPI?: { getAppVersion?(): Promise<string>; restartDaemon?(port: number): Promise<number> };
+							electronAPI?: {
+								getAppVersion?(): Promise<string>;
+								restartDaemon?(port: number): Promise<number>;
+							};
 						}
 					).electronAPI;
 					if (rpc && api?.restartDaemon) {
@@ -1622,8 +1674,11 @@ function AppInner(): ReactNode {
 				// bubble window to dismiss that session's completion/error
 				// bubbles (they persist until read; this is the read 闭环).
 				try {
-					const api = (window as unknown as { electronAPI?: { petActivity?(p: unknown): Promise<unknown> } })
-						.electronAPI;
+					const api = (
+						window as unknown as {
+							electronAPI?: { petActivity?(p: unknown): Promise<unknown> };
+						}
+					).electronAPI;
 					if (petEnabled() && petMode() === "desktop") {
 						void api?.petActivity?.({ dismissSessions: [sessionId] });
 					}
@@ -1723,7 +1778,11 @@ function AppInner(): ReactNode {
 				// the persisted header.model choice) so the composer selector shows
 				// what the session actually uses instead of the welcome default.
 				const header = (initial as { header?: { model?: string; title?: string } } | null)?.header;
-				const state = (initial as { state?: { model?: { id?: string; provider?: string } } } | null)?.state;
+				const state = (
+					initial as {
+						state?: { model?: { id?: string; provider?: string } };
+					} | null
+				)?.state;
 				const sessionModel =
 					header?.model ?? (state?.model?.id ? `${state.model.provider}/${state.model.id}` : null);
 				if (sessionModel) setPresetModelId(sessionModel);
@@ -1735,7 +1794,11 @@ function AppInner(): ReactNode {
 						state: initial?.state as never,
 						cursor: initial?.cursor ?? 0,
 						roundDurations: (initial as { roundDurations?: [number, number][] } | null)?.roundDurations,
-						tail: (initial as { tail?: { hasMore: boolean; beforeId: string | null } } | null)?.tail,
+						tail: (
+							initial as {
+								tail?: { hasMore: boolean; beforeId: string | null };
+							} | null
+						)?.tail,
 						activeTools: initial?.activeTools,
 						agentsProgress: initial?.agentsProgress,
 					},
@@ -1745,7 +1808,10 @@ function AppInner(): ReactNode {
 						// the event stream — replay everything after its
 						// watermark through the normal push channel.
 						onGapDetected: async (afterSeq: number) => {
-							const r = await client.request<{ ok?: boolean; resyncRequired?: boolean }>("session.catchup", {
+							const r = await client.request<{
+								ok?: boolean;
+								resyncRequired?: boolean;
+							}>("session.catchup", {
 								sessionId,
 								afterSeq,
 							});
@@ -1807,11 +1873,18 @@ function AppInner(): ReactNode {
 				setSessionLoading(false);
 				// its pause-state envelopes via the live stream).
 				try {
-					const st = await client.request<{ paused: boolean; pausedAt: number | null }>("session.pauseStatus", {
+					const st = await client.request<{
+						paused: boolean;
+						pausedAt: number | null;
+					}>("session.pauseStatus", {
 						sessionId,
 					});
 					if (st) {
-						setPauseInfo({ sessionId, paused: st.paused === true, pausedAt: st.pausedAt ?? null });
+						setPauseInfo({
+							sessionId,
+							paused: st.paused === true,
+							pausedAt: st.pausedAt ?? null,
+						});
 						setSessionMeta(prev => {
 							const row = prev.get(sessionId) ?? {};
 							const next = new Map(prev);
@@ -1900,15 +1973,31 @@ function AppInner(): ReactNode {
 		setError(null);
 		try {
 			if (pauseInfo.paused && pauseInfo.sessionId === sessionId) {
-				const res = await client.request<{ duration: number | null; paused: boolean }>("session.pauseRelease", {
+				const res = await client.request<{
+					duration: number | null;
+					paused: boolean;
+				}>("session.pauseRelease", {
 					sessionId,
 				});
-				if (res) setPauseInfo({ sessionId, paused: res.paused === true, pausedAt: null });
+				if (res)
+					setPauseInfo({
+						sessionId,
+						paused: res.paused === true,
+						pausedAt: null,
+					});
 			} else {
-				const res = await client.request<{ paused: boolean; pausedAt: number | null }>("session.pause", {
+				const res = await client.request<{
+					paused: boolean;
+					pausedAt: number | null;
+				}>("session.pause", {
 					sessionId,
 				});
-				if (res) setPauseInfo({ sessionId, paused: res.paused === true, pausedAt: res.pausedAt ?? null });
+				if (res)
+					setPauseInfo({
+						sessionId,
+						paused: res.paused === true,
+						pausedAt: res.pausedAt ?? null,
+					});
 			}
 		} catch (err) {
 			setError(fmtError("pause", err));
@@ -1921,11 +2010,21 @@ function AppInner(): ReactNode {
 		setError(null);
 		try {
 			if (globalPause.paused) {
-				const res = await client.request<{ duration: number | null; paused: boolean }>("daemon.pauseRelease");
+				const res = await client.request<{
+					duration: number | null;
+					paused: boolean;
+				}>("daemon.pauseRelease");
 				if (res) setGlobalPause({ paused: res.paused === true, pausedAt: null });
 			} else {
-				const res = await client.request<{ paused: boolean; pausedAt: number | null }>("daemon.pause");
-				if (res) setGlobalPause({ paused: res.paused === true, pausedAt: res.pausedAt ?? null });
+				const res = await client.request<{
+					paused: boolean;
+					pausedAt: number | null;
+				}>("daemon.pause");
+				if (res)
+					setGlobalPause({
+						paused: res.paused === true,
+						pausedAt: res.pausedAt ?? null,
+					});
 			}
 		} catch (err) {
 			setError(fmtError("global pause", err));
@@ -2014,7 +2113,10 @@ function AppInner(): ReactNode {
 				}
 				if (opts?.goalMode) {
 					await client
-						.request("session.setGoal", { sessionId: res.sessionId, objective: opts.goalMode })
+						.request("session.setGoal", {
+							sessionId: res.sessionId,
+							objective: opts.goalMode,
+						})
 						.catch(() => {});
 				}
 				// Sidebar tree/metadata refresh for the new session — fire and
@@ -2168,7 +2270,10 @@ function AppInner(): ReactNode {
 				modelId: message?.modelId ?? undefined,
 			});
 			if (!id) return false;
-			setCreationSaved({ metadata, name: typeof metadata.name === "string" ? metadata.name : "" });
+			setCreationSaved({
+				metadata,
+				name: typeof metadata.name === "string" ? metadata.name : "",
+			});
 			if (message?.text.trim()) {
 				const prompt = await uploadFirstMessageFiles(message.text, message.files, project ?? null);
 				if (prompt === null) return true;
@@ -2284,10 +2389,12 @@ function AppInner(): ReactNode {
 			if (isSlash) {
 				if (!client) return;
 				void client
-					.request<{ consumed: boolean; reason?: string; prompt?: string; outputs?: string[] }>(
-						"session.slashCommand",
-						{ sessionId: id, text },
-					)
+					.request<{
+						consumed: boolean;
+						reason?: string;
+						prompt?: string;
+						outputs?: string[];
+					}>("session.slashCommand", { sessionId: id, text })
 					.then(res => {
 						if (!res?.consumed) {
 							const msg =
@@ -2302,7 +2409,9 @@ function AppInner(): ReactNode {
 						const out = (res.outputs ?? []).filter(Boolean).join("\n");
 						if (out) {
 							dispatchPetActivity("completed", out.slice(0, 200));
-							dispatchNotification("completion", { lastMessage: out.slice(0, 140) });
+							dispatchNotification("completion", {
+								lastMessage: out.slice(0, 140),
+							});
 						}
 						if (res.prompt) void sendPrompt(res.prompt, undefined, id);
 					})
@@ -2421,7 +2530,13 @@ function AppInner(): ReactNode {
 			const client = rpcRef.current;
 			const id = selectedId;
 			if (!client || !id) return;
-			void client.request("session.askAnswer", { sessionId: id, requestId: ask.requestId, answer }).catch(() => {});
+			void client
+				.request("session.askAnswer", {
+					sessionId: id,
+					requestId: ask.requestId,
+					answer,
+				})
+				.catch(() => {});
 		},
 		[selectedId],
 	);
@@ -2439,7 +2554,12 @@ function AppInner(): ReactNode {
 	}, []);
 	const addHost = useCallback(
 		(input: { label: string; url: string; token?: string }): void => {
-			const h: RemoteHost = { id: newHostId(), label: input.label, url: input.url, token: input.token || undefined };
+			const h: RemoteHost = {
+				id: newHostId(),
+				label: input.label,
+				url: input.url,
+				token: input.token || undefined,
+			};
 			const next = [...hosts, h];
 			setHosts(next);
 			saveHosts(next);
@@ -2676,7 +2796,9 @@ function AppInner(): ReactNode {
 						if (r) {
 							glowFetched = true;
 							void r
-								.request<Record<string, unknown>>("settings.get", { keys: ["computer.glow"] })
+								.request<Record<string, unknown>>("settings.get", {
+									keys: ["computer.glow"],
+								})
 								.then(v => {
 									glowEnabled = v?.["computer.glow"] !== false;
 								})
@@ -2711,7 +2833,12 @@ function AppInner(): ReactNode {
 		const onBubble = (e: Event): void => {
 			if (!petEnabled() || petMode() !== "desktop") return;
 			const detail = (
-				e as CustomEvent<{ kind: PetBubbleKind; text: string; requestId?: string; sessionId?: string }>
+				e as CustomEvent<{
+					kind: PetBubbleKind;
+					text: string;
+					requestId?: string;
+					sessionId?: string;
+				}>
 			).detail;
 			// Completion notifications keep the pet bubble + badge until the
 			// user opens that session (or dismisses the bubble). The session
@@ -2743,7 +2870,9 @@ function AppInner(): ReactNode {
 			// Question bubbles carry the approval requestId — surface the
 			// approval card in the pet panel too.
 			if (detail.kind === "question" && detail.requestId) {
-				void electronAPI.petActivity?.({ approval: { requestId: detail.requestId, tool: detail.text } });
+				void electronAPI.petActivity?.({
+					approval: { requestId: detail.requestId, tool: detail.text },
+				});
 			}
 		};
 		const onPetChanged = (): void => {
@@ -2916,12 +3045,19 @@ function AppInner(): ReactNode {
 				}
 				const messages: Array<{ role: string; text: string }> = [];
 				for (const e of initial?.entries ?? []) {
-					const entry = e as { type?: string; message?: { role?: string; content?: unknown } };
+					const entry = e as {
+						type?: string;
+						message?: { role?: string; content?: unknown };
+					};
 					if (entry.type !== "message" || !entry.message) continue;
 					const role = entry.message.role;
 					if (role !== "user" && role !== "assistant") continue;
 					const text = textOf(entry.message.content).trim();
-					if (text) messages.push({ role, text: text.length > 600 ? `${text.slice(0, 600)}…` : text });
+					if (text)
+						messages.push({
+							role,
+							text: text.length > 600 ? `${text.slice(0, 600)}…` : text,
+						});
 				}
 				void electronAPI.petSessionContent?.({
 					sessionId,
@@ -3018,6 +3154,12 @@ function AppInner(): ReactNode {
 			} else if (mod && eventMatches(e, "search")) {
 				e.preventDefault();
 				setPaletteOpen(v => !v);
+			} else if (mod && eventMatches(e, "find-in-chat")) {
+				// openchamber ⌘F: find within the open conversation. The bar
+				// itself owns Escape/Enter/Enter-next, so only the open is
+				// dispatched here — a second press while open re-seeds it.
+				e.preventDefault();
+				window.dispatchEvent(new CustomEvent("musepi-gui-find-in-chat"));
 			} else if (mod && eventMatches(e, "open-folder")) {
 				e.preventDefault();
 				pickProjectFolder();
@@ -3173,7 +3315,11 @@ function AppInner(): ReactNode {
 	// with the pane they control; the blank toolbar drags the window.
 	// Recent sessions for the header switcher (openchamber
 	// SessionSwitcherDropdown parity), newest first.
-	const recentSessions = ((): { id: string; label: string; timestamp: number }[] => {
+	const recentSessions = ((): {
+		id: string;
+		label: string;
+		timestamp: number;
+	}[] => {
 		const rows: { id: string; label: string; timestamp: number }[] = [];
 		const walk = (nodes: SessionListNode[]): void => {
 			for (const n of nodes) {
@@ -3875,6 +4021,9 @@ function AppInner(): ReactNode {
 			{/* Auto-checked update notice (BitFun parity toast; main.cjs
 			 * pushes update-available ~12s after boot). */}
 			<UpdateToast />
+			{/* Undo-action toasts (archive → Undo). Bottom-center: clear of
+			 * the update toast (bottom-right, z 900) and .sh-toasts. */}
+			<ActionToastStack />
 			{/* Update L-dialog layer: 待重启确认卡 + 失败决策卡 (design
 			 * §3.2 — 分层共存 on top of the toast, not a replacement). */}
 			<UpdateDialog />

@@ -266,6 +266,37 @@ describe("ViewStore cross-session tables", () => {
 		expect(hits.map(h => h.content)).toContain("login flow broken");
 	});
 
+	test("session-scoped search returns only that session, and a foreign id yields nothing", () => {
+		// Contract: the ⌘F find bar searches ONE conversation. Leaking a
+		// same-worded message from another session would navigate the user to
+		// a transcript they never searched (the timestamp IS the jump key, so a
+		// foreign hit scrolls to the wrong row, or to none at all).
+		const store = tempStore();
+		const now = Date.now();
+		store.upsert(
+			"s1",
+			snapshot(
+				"s1",
+				[
+					{ role: "user", content: "the login bug is here", timestamp: now - 3000 },
+					{ role: "user", content: "unrelated chatter", timestamp: now - 2900 },
+					{ role: "user", content: "login again please", timestamp: now - 2800 },
+				],
+				3,
+			),
+		);
+		store.upsert("s2", snapshot("s2", [{ role: "user", content: "login flow broken", timestamp: now - 1000 }], 1));
+
+		const scoped = store.search("login", 50, "s1");
+		expect(scoped).toHaveLength(2);
+		expect(scoped.every(h => h.sessionId === "s1")).toBe(true);
+		// Newest-first within the session, as the unscoped search orders.
+		expect(scoped[0]!.content).toBe("login again please");
+		// The unscoped search is unchanged — it still spans sessions.
+		expect(store.search("login")).toHaveLength(3);
+		// An unknown session must not degrade into an unscoped search.
+		expect(store.search("login", 50, "s-nope")).toEqual([]);
+	});
 	test("search with no matches returns empty", () => {
 		const store = tempStore();
 		store.upsert("s1", snapshot("s1", [{ role: "user", content: "plain text", timestamp: 1 }], 1));

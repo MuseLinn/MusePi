@@ -43,15 +43,17 @@ export class ViewStoreService implements DaemonService {
 	}
 
 	/** RPC session.search：跨会话消息搜索，matches 全量 + 按会话分组计数
-	 *  （store 已按时间排序，分组即顺序遍历）。默认上限 50 与原 case 一致。 */
-	search(params: { query?: unknown; limit?: unknown }): {
+	 *  （store 已按时间排序，分组即顺序遍历）。默认上限 50 与原 case 一致。
+	 *  传 `sessionId` 则只搜该会话（⌘F 会话内查找）。 */
+	search(params: { query?: unknown; limit?: unknown; sessionId?: unknown }): {
 		matches: ReturnType<ViewStore["search"]>;
 		sessions: Array<{ sessionId: string; messageCount: number }>;
 	} {
-		const { query, limit } = params ?? {};
+		const { query, limit, sessionId } = params ?? {};
 		const matches = this.#store.search(
 			typeof query === "string" ? query : "",
 			typeof limit === "number" ? limit : 50,
+			typeof sessionId === "string" && sessionId ? sessionId : undefined,
 		);
 		// Group by session, newest first (store already orders by time).
 		const bySession = new Map<string, (typeof matches)[number][]>();

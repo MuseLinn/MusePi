@@ -628,6 +628,53 @@ All additions ride the §5s ladder: tab open = shared-element grow from the invo
 - Both empty (no steps, no tokens) → the whole row is hidden; a window of pure user messages shows the counts pill as a plain reading.
 - Figures never move because of paging or compaction: token figures are projection-backed; window figures only change when the window's settled content changes.
 
+## 5x. Find bar, undo-action toast, palette deltas (2026-10-02, openchamber v2.1.0 parity)
+
+Three low-risk absorptions landed together. Implementation contracts and the
+toolchain traps they exposed live in `gui-implementation.md` §45.
+
+### Find bar (⌘F, in-conversation)
+
+- **Placement**: absolutely positioned over the transcript's **top** edge, right-aligned
+  (`.gui-find`, `gui-chat.css`) so it clears the TurnRail tick gutter on either side.
+- **Hard rule — never reflows the transcript.** The bar is `position: absolute` inside
+  `.gui-transcript-wrap`; a bar in normal flow would re-measure every virtual row on open.
+- **Material**: §5s glass recipe, `--color-surface-raised` at 82% + `backdrop-filter`
+  blur/saturate. Zero new tokens.
+- **Controls**: input (autofocused + selected on open), match counter (`n/total`,
+  tabular-nums, or `…` while searching, or 无结果), ↑ / ↓ / ✕. Enter → next,
+  Shift+Enter → previous, Esc → close. The bar claims Esc/Enter with
+  `stopPropagation` — an unclaimed Escape interrupts the running turn
+  (`lib/escape-stop`).
+- **Preview row**: one line, ellipsized, click = jump. It identifies the hit; it is not a
+  second transcript.
+- **Placement above the scroller** so the hit it reveals is never covered by it.
+
+### Undo-action toast (archive)
+
+- **Geometry**: bottom-center, `z-index: 880` — deliberately _below_ the update toast
+  (bottom-right, z 900) and clear of `.sh-toasts` (bottom strip, z 60). An OTA card and an
+  undo must never share a corner.
+- **Content**: message + accent action button. Glass at 88% + shadow-overlay, 200ms
+  enter (`translateY(8px)` → 0).
+- **Rule — same message replaces, never stacks.** Archiving three sessions in a row must
+  not build a three-row wall of identical toasts; the newest undo is the one still
+  actionable. This is enforced in the store, not the view.
+- **Every archive offers undo**, including the header action that archives _and
+  immediately leaves the session_ — that is the least recoverable-feeling path in the app.
+  Justification for having no confirm dialog: the archive is a localStorage list edit
+  (`client-core/session-archive.ts`), so the reverse is synchronous and free.
+
+### Command palette deltas
+
+- **Reload UI** added to the panels group — every renderer-side recovery path (stale
+  extension slot, derived state lost to a hot reload) bottoms out in one full reload;
+  without the command the user restarts the window by hand.
+- **Pasting a full session id resolves to exactly that session.** Fuzzy search cannot do
+  this: an id is a long hex string that never matches a label. Such a row shows the id as
+  its own subtitle so the match reads as deliberate rather than as a glitch.
+- **The palette remembers its last query** across a ⌘K toggle (captured on close, re-seeded
+  on open) so re-opening does not wipe a half-typed search.
 ## 6. Brand icon (App Icon, redesigned 2026-09-28, brand S4)
 
 - **Source file**: `packages/desktop-app/build/icon.svg` (1024×1024 canvas, hand-authored with generator params recorded in its header comment — superellipse + dot grid are parametric). Build artifacts: `build/icon.png` (1024×1024) + `build/icon-dock.png` (identical bytes) + `build/icon.icns` + `build/icon.ico`.

@@ -558,20 +558,35 @@ export class ViewStore {
 	}
 
 	/**
-	 * Cross-session message search (LIKE on message text). Returns matching
-	 * messages with their session; the caller groups by session.
+	 * Message search (LIKE on message text). Returns matching messages with
+	 * their session; the caller groups by session. `sessionId` narrows the
+	 * scan to one conversation — the ⌘F find bar needs the whole session
+	 * ordered newest-first, which a cross-session LIMIT would starve once
+	 * other sessions match too.
 	 */
-	search(query: string, limit = 50): MessageHit[] {
+	search(query: string, limit = 50, sessionId?: string): MessageHit[] {
 		const like = `%${query}%`;
-		const rows = this.#db
-			.query(
-				`SELECT session_id, seq, role, model, content, timestamp
-				 FROM messages
-				 WHERE content LIKE ?
-				 ORDER BY timestamp DESC
-				 LIMIT ?`,
-			)
-			.all(like, limit) as MessageRow[];
+		const rows = (
+			sessionId
+				? this.#db
+						.query(
+							`SELECT session_id, seq, role, model, content, timestamp
+							 FROM messages
+							 WHERE content LIKE ? AND session_id = ?
+							 ORDER BY timestamp DESC
+							 LIMIT ?`,
+						)
+						.all(like, sessionId, limit)
+				: this.#db
+						.query(
+							`SELECT session_id, seq, role, model, content, timestamp
+							 FROM messages
+							 WHERE content LIKE ?
+							 ORDER BY timestamp DESC
+							 LIMIT ?`,
+						)
+						.all(like, limit)
+		) as MessageRow[];
 		return rows.map(r => ({
 			sessionId: r.session_id,
 			seq: r.seq,

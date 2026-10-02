@@ -1,6 +1,7 @@
 import { t, useArchivedSessions } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { pushActionToast } from "../lib/action-toast";
 import type { ModeLabelEntry } from "../lib/mode-label";
 import { projectLabel, projectLabels } from "../lib/project-label";
 import { useConfirm, usePrompt } from "../lib/prompt-dialog";
@@ -250,7 +251,11 @@ export function SessionSidebar({
 	const openInFinder = (id: string): void => {
 		const cwd = sessionMeta.get(id)?.cwd;
 		if (!cwd) return;
-		const api = (window as unknown as { electronAPI?: { revealPath?(p: string): Promise<void> } }).electronAPI;
+		const api = (
+			window as unknown as {
+				electronAPI?: { revealPath?(p: string): Promise<void> };
+			}
+		).electronAPI;
 		if (api?.revealPath) void api.revealPath(cwd);
 	};
 	const [viewMenu, setViewMenu] = useState(false);
@@ -298,7 +303,10 @@ export function SessionSidebar({
 	 * shows the shared .gui-drop-line, and on which edge. The block body
 	 * keeps its swap-on-drop semantics; the head offers precise
 	 * insert-before/after positioning. */
-	const [projInsert, setProjInsert] = useState<{ path: string; edge: "before" | "after" } | null>(null);
+	const [projInsert, setProjInsert] = useState<{
+		path: string;
+		edge: "before" | "after";
+	} | null>(null);
 	// Per-project collapse state, keyed by path (expanded by default).
 	const [collapsedProjects, setCollapsedProjects] = useState<string[]>(() => {
 		try {
@@ -321,15 +329,27 @@ export function SessionSidebar({
 			return [];
 		}
 	});
-	const [sessionCtx, setSessionCtx] = useState<{ id: string; x: number; y: number } | null>(null);
+	const [sessionCtx, setSessionCtx] = useState<{
+		id: string;
+		x: number;
+		y: number;
+	} | null>(null);
 	// Stable row callback: session rows are memoized, so an inline arrow at each
 	// call site would defeat the memo on every sidebar render (5s status poll,
 	// streaming updates, pinned/tag edits) and re-render the whole list.
 	const openSessionCtx = useCallback((id: string, x: number, y: number): void => {
 		setSessionCtx({ id, x, y });
 	}, []);
-	const [groupCtx, setGroupCtx] = useState<{ index: number; x: number; y: number } | null>(null);
-	const [projectCtx, setProjectCtx] = useState<{ path: string; x: number; y: number } | null>(null);
+	const [groupCtx, setGroupCtx] = useState<{
+		index: number;
+		x: number;
+		y: number;
+	} | null>(null);
+	const [projectCtx, setProjectCtx] = useState<{
+		path: string;
+		x: number;
+		y: number;
+	} | null>(null);
 	// Paused sessions (per-session freeze) — rendered as a pause chip on rows.
 	const pausedIds = useMemo(
 		() => new Set([...sessionMeta.entries()].filter(([, meta]) => meta.paused === true).map(([id]) => id)),
@@ -369,7 +389,15 @@ export function SessionSidebar({
 		const onExternal = (): void => {
 			try {
 				const raw = localStorage.getItem("musepi-gui-groups");
-				setGroups(raw ? (JSON.parse(raw) as { name: string; sessions: string[]; color?: string }[]) : []);
+				setGroups(
+					raw
+						? (JSON.parse(raw) as {
+								name: string;
+								sessions: string[];
+								color?: string;
+							}[])
+						: [],
+				);
 			} catch {
 				// ignore malformed storage
 			}
@@ -1161,7 +1189,11 @@ export function SessionSidebar({
 																		// menu as group blocks (remove project lives here, not as
 																		// a lone side button).
 																		e.preventDefault();
-																		setProjectCtx({ path, x: e.clientX, y: e.clientY });
+																		setProjectCtx({
+																			path,
+																			x: e.clientX,
+																			y: e.clientY,
+																		});
 																	}}
 																>
 																	<Icon name="folder" className="h-3 w-3" />
@@ -1272,7 +1304,10 @@ export function SessionSidebar({
 											gs.map((g, gi) =>
 												gi !== i
 													? g
-													: { ...g, sessions: g.sessions.includes(id) ? g.sessions : [...g.sessions, id] },
+													: {
+															...g,
+															sessions: g.sessions.includes(id) ? g.sessions : [...g.sessions, id],
+														},
 											),
 										)
 									}
@@ -1398,7 +1433,16 @@ export function SessionSidebar({
 									label: t("archive task"),
 									icon: "archive",
 									// cwd rides along so the archive row can show the folder.
-									onSelect: () => archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd),
+									// Archiving is a local list edit, so the undo is a
+									// synchronous reverse — no confirm dialog, no RPC.
+									onSelect: () => {
+										archiveSession(sessionCtx.id, sessionMeta.get(sessionCtx.id)?.cwd);
+										pushActionToast({
+											message: t("session archived"),
+											actionLabel: t("undo"),
+											onAction: () => unarchiveSession(sessionCtx.id),
+										});
+									},
 								},
 								{
 									label: unread?.has(sessionCtx.id) ? t("mark as read") : t("mark as unread"),
@@ -1413,7 +1457,11 @@ export function SessionSidebar({
 								...(
 									[
 										{ tag: "complete", dot: "ok", label: t("tag complete") },
-										{ tag: "interrupted", dot: "warning", label: t("tag interrupted") },
+										{
+											tag: "interrupted",
+											dot: "warning",
+											label: t("tag interrupted"),
+										},
 										{ tag: "error", dot: "danger", label: t("tag error") },
 										{ tag: "aborted", dot: "muted", label: t("tag aborted") },
 										{ tag: "pending", dot: "accent", label: t("tag pending") },
@@ -1507,7 +1555,9 @@ export function SessionSidebar({
 									icon: "folder-open",
 									onSelect: () => {
 										const api = (
-											window as unknown as { electronAPI?: { revealPath?(p: string): Promise<void> } }
+											window as unknown as {
+												electronAPI?: { revealPath?(p: string): Promise<void> };
+											}
 										).electronAPI;
 										if (api?.revealPath) void api.revealPath(projectCtx.path);
 									},

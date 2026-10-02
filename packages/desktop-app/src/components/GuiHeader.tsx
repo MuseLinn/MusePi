@@ -1,6 +1,7 @@
-import { t, archiveSession as writeArchivedSession } from "@musepi/client-core";
+import { t, unarchiveSession, archiveSession as writeArchivedSession } from "@musepi/client-core";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { pushActionToast } from "../lib/action-toast";
 import {
 	copyToClipboard,
 	listOpenInApps,
@@ -325,7 +326,9 @@ export function GuiHeader({
 		}
 		let cancelled = false;
 		void rpc
-			.request<{ content: string | null }>("fs.read", { path: `${dir}/package.json` })
+			.request<{ content: string | null }>("fs.read", {
+				path: `${dir}/package.json`,
+			})
 			.then(async res => {
 				if (cancelled) return;
 				try {
@@ -347,7 +350,9 @@ export function GuiHeader({
 					let pm = "npm run";
 					for (const [lock, , cmd] of locks) {
 						const has = await rpc
-							.request<{ content: string | null }>("fs.read", { path: `${dir}/${lock}` })
+							.request<{ content: string | null }>("fs.read", {
+								path: `${dir}/${lock}`,
+							})
 							.then(r => r?.content !== null)
 							.catch(() => false);
 						if (has) {
@@ -450,7 +455,9 @@ export function GuiHeader({
 		if (!store) return;
 		let cancelled = false;
 		void rpc
-			.request<{ ceiling?: string }>("session.thinkingInfo", { sessionId: store.sessionId })
+			.request<{ ceiling?: string }>("session.thinkingInfo", {
+				sessionId: store.sessionId,
+			})
 			.then(info => {
 				if (!cancelled) setCeiling(info.ceiling ?? null);
 			})
@@ -505,13 +512,21 @@ export function GuiHeader({
 	// Read-only summaries of existing daemon RPCs. The ctx chip shares
 	// the Composer's value-compare discipline so a poll tick that changed
 	// nothing costs no re-render.
-	const [ctxChip, setCtxChip] = useState<{ tokens: number; contextWindow: number; percent: number } | null>(null);
+	const [ctxChip, setCtxChip] = useState<{
+		tokens: number;
+		contextWindow: number;
+		percent: number;
+	} | null>(null);
 	useEffect(() => {
 		if (!store) return;
 		let cancelled = false;
 		const load = (): void => {
 			void rpc
-				.request<{ tokens: number; contextWindow: number; percent: number } | null>("session.contextUsage", {
+				.request<{
+					tokens: number;
+					contextWindow: number;
+					percent: number;
+				} | null>("session.contextUsage", {
 					sessionId: store.sessionId,
 				})
 				.then(usage => {
@@ -548,7 +563,9 @@ export function GuiHeader({
 		let cancelled = false;
 		const load = (): void => {
 			void rpc
-				.request<{ branch?: string | null; error?: string }>("git.status", { cwd })
+				.request<{ branch?: string | null; error?: string }>("git.status", {
+					cwd,
+				})
 				.then(res => {
 					if (cancelled) return;
 					setGitBranch(res && !res.error ? (res.branch ?? null) : null);
@@ -637,7 +654,18 @@ export function GuiHeader({
 	 *  key, leaving the two clients with unrelated archives). */
 	const archiveActiveSession = (): void => {
 		if (!store) return;
-		writeArchivedSession(store.sessionId, store.cwd ?? undefined);
+		const archivedId = store.sessionId;
+		writeArchivedSession(archivedId, store.cwd ?? undefined);
+		// Archiving immediately leaves the session — the least recoverable-
+		// feeling path in the app, since the row vanishes from under the
+		// cursor and the conversation switches. Every archive offers an undo;
+		// the archive is a local list edit, so the reverse is free (no daemon
+		// round trip, no confirm dialog).
+		pushActionToast({
+			message: t("session archived"),
+			actionLabel: t("undo"),
+			onAction: () => unarchiveSession(archivedId),
+		});
 		onNewSession();
 	};
 
@@ -672,7 +700,10 @@ export function GuiHeader({
 		});
 		if (!branch) return;
 		const created = await rpc
-			.request<{ path?: string; error?: string }>("worktree.create", { cwd: store.cwd, branch })
+			.request<{ path?: string; error?: string }>("worktree.create", {
+				cwd: store.cwd,
+				branch,
+			})
 			.catch((err: unknown): { path?: string; error?: string } => ({
 				error: err instanceof Error ? err.message : String(err),
 			}));
@@ -1197,12 +1228,16 @@ export function GuiHeader({
 							className={`gui-openin-main${openInScanning ? " gui-openin-main--scanning" : ""}`}
 							title={
 								selectedOpenInApp
-									? t("open with {app}", { app: openInLabel(selectedOpenInApp) })
+									? t("open with {app}", {
+											app: openInLabel(selectedOpenInApp),
+										})
 									: t("open actions")
 							}
 							aria-label={
 								selectedOpenInApp
-									? t("open with {app}", { app: openInLabel(selectedOpenInApp) })
+									? t("open with {app}", {
+											app: openInLabel(selectedOpenInApp),
+										})
 									: t("open actions")
 							}
 							onClick={() => {
@@ -1373,7 +1408,12 @@ export function GuiHeader({
 						</div>
 						<span className="shrink-0 text-[10.5px] text-[var(--color-text-faint)]">{daemonVersion ?? "—"}</span>
 						{latestVersion && daemonVersion && latestVersion !== daemonVersion && (
-							<span className="gui-update-badge" title={t("update available", { version: `v${latestVersion}` })}>
+							<span
+								className="gui-update-badge"
+								title={t("update available", {
+									version: `v${latestVersion}`,
+								})}
+							>
 								{t("update available", { version: `v${latestVersion}` })}
 							</span>
 						)}
