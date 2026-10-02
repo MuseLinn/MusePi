@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { buildTrajectory, buildTrajectoryTree, isTrajectoryEventInRange } from "../src/components/trajectory-data";
+import { layoutTurnMap } from "../src/components/turn-map-layout";
 
 // 会话轨迹视图(DSH Trajectory 参考吸收):entries → 事件时间线 + 统计。
 
@@ -104,6 +105,55 @@ describe("buildTrajectory", () => {
 		const { events } = buildTrajectory(entries);
 		expect(events.filter(e => e.branch).map(e => e.title)).toEqual(["重答分支", "分支回复"]);
 		expect(events.filter(e => !e.branch).map(e => e.title)).toEqual(["第一问", "第一答", "第二问", "第二答"]);
+	});
+
+	it("顾问笔记与消息共用分支口径:离活跃路径的顾问轮进分支车道,不落主干", () => {
+		// The map decides branch-ness from `turn.events[0].branch`, so an advisor
+		// event that omits the flag is drawn on the MAIN line. Only message events
+		// used to carry it, which put an advisor note from a discarded branch on the
+		// main line — actively misleading, not just less legible.
+		const advisor = (id: string, parentId: string, ts: string): unknown => ({
+			type: "custom_message",
+			customType: "advisor",
+			display: true,
+			id,
+			parentId,
+			timestamp: ts,
+			content: "<advisory>xml</advisory>",
+			details: { notes: [{ note: "并发风险" }] },
+		});
+		const entries = [
+			{
+				type: "message",
+				id: "u1",
+				parentId: null,
+				timestamp: "2026-08-17T00:00:00.000Z",
+				message: { role: "user", content: [{ type: "text", text: "第一问" }] },
+			},
+			{
+				type: "message",
+				id: "a1",
+				parentId: "u1",
+				timestamp: "2026-08-17T00:00:01.000Z",
+				message: { role: "assistant", content: [{ type: "text", text: "第一答" }] },
+			},
+			advisor("adv1", "a1", "2026-08-17T00:00:02.000Z"),
+		];
+		// Active path = the user/assistant chain only, so the note is off it.
+		const off = buildTrajectory(entries, new Set(["u1", "a1"]));
+		expect(off.events.filter(e => e.branch).map(e => e.title)).toEqual(["并发风险"]);
+
+		// Same note ON the path must not be flagged — guards over-flagging, which
+		// would push every advisor turn into its own lane.
+		const on = buildTrajectory(entries, new Set(["u1", "a1", "adv1"]));
+		expect(on.events.filter(e => e.branch)).toHaveLength(0);
+
+		// The consequence the reader sees: turn 2 (the advisor) gets a branch lane
+		// while turn 1 stays on the main line.
+		const { turns } = buildTrajectoryTree(entries, undefined, new Set(["u1", "a1"]));
+		const layout = layoutTurnMap(turns);
+		expect(layout.main.map(n => n.group.turn)).toEqual([1]);
+		expect(layout.lanes.map(l => l.first.group.turn)).toEqual([2]);
 	});
 
 	it("提取工具调用为 TOOL 事件并回填结果", () => {

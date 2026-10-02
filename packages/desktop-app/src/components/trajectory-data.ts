@@ -343,6 +343,23 @@ export function buildTrajectory(
 		return `${depth}`;
 	};
 
+	/** Branch test for an entry id — ONE rule for every event kind.
+	 *
+	 *  Active path present = "off the path means branch" (after branchAt the whole
+	 *  old chain becomes a branch column while the new main-line turns do not); no
+	 *  path = the first-child heuristic (a message off the main chain is a
+	 *  re-answer / fork continuation). The map decides a turn is a branch from
+	 *  `group.events[0]?.branch`, so an event that omits the flag is drawn on the
+	 *  MAIN LINE — which is why advisor notes need this too, not just messages. */
+	const isBranchEntry = (id: string | undefined): boolean => {
+		if (id === undefined) return false;
+		if (activePath !== undefined && activePath.size > 0) return !activePath.has(id);
+		// Computed lazily on first use; incremental callers (trajectory-derive)
+		// precompute the set over the FULL input and inject it via init — a set
+		// derived from a fragment's own batch is untrustworthy (missing the prefix).
+		if (branchIds === undefined) branchIds = computeBranchIds(entries);
+		return branchIds.has(id);
+	};
 	let currentTurnLabel: string | undefined = init?.turnLabel;
 	for (const [index, raw] of entries.entries()) {
 		if (!raw || typeof raw !== "object") continue;
@@ -400,22 +417,8 @@ export function buildTrajectory(
 				target.result = truncate(content || String(msg.result ?? ""), 160);
 			}
 		} else if (type === "message" && msg) {
-			// 分支判定:有活跃路径 = "不在路径上即分支"(branchAt 后旧链整体
-			// 入分支列,新主线轮归主线);无路径 = 旧 first-child 启发式。
-			let isBranch: boolean;
-			if (activePath !== undefined && activePath.size > 0) {
-				isBranch = entryId !== undefined && !activePath.has(entryId);
-			} else {
-				// Branch detection: a message not on the main first-child chain is
-				// a branch (re-answer / fork continuation) — the timeline flags
-				// it instead of hiding it. Set is computed lazily on first use;
-				// 增量复用方(trajectory-derive)对全量输入预计算后经 init 注入,
-				// 增量片段自己的小批次算出来的集合不可信(缺前缀条目)。
-				if (branchIds === undefined) {
-					branchIds = computeBranchIds(entries);
-				}
-				isBranch = entryId !== undefined && branchIds.has(entryId);
-			}
+			// 分支判定:见上方 isBranchEntry(message 与 advisor 事件共用同一口径)。
+			const isBranch = isBranchEntry(entryId);
 			const pathTurn = entryId !== undefined ? depthOf(entryId) : undefined;
 			if (msg.role === "user") {
 				turn += 1;
@@ -534,6 +537,7 @@ export function buildTrajectory(
 				timestamp: entry.timestamp,
 				entryId,
 				tsMs,
+				branch: isBranchEntry(entryId) || undefined,
 			});
 		} else if (type === "custom_message" && (raw as { customType?: unknown }).customType === "tool_registry") {
 			// 工具注册表时间线（热插拔注入行）：display-only custom_message，
