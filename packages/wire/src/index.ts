@@ -220,7 +220,11 @@ export function entryStartMs(e: SessionEntry): number {
  *  冻结用时必须锚在该顾问笔记上而不是几小时前的上一条用户消息)。 */
 export function isTurnStartEntry(e: SessionEntry | undefined): boolean {
 	if (!e) return false;
-	if (e.type === "message") return e.message.role === "user";
+	// Total by contract: this predicate is applied to raw journal records, not
+	// only well-formed entries (the daemon indexes unvalidated JSONL lines), so a
+	// `type: "message"` row with no `message` must be skipped rather than throw —
+	// a throw on one malformed line takes the daemon down with it.
+	if (e.type === "message") return e.message?.role === "user";
 	if (e.type === "custom_message") return e.customType === "advisor" && e.display === true;
 	return false;
 }

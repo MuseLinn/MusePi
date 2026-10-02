@@ -29,7 +29,7 @@ import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
 import { getAgentDir, getSessionsDir, logger, prompt } from "@musepi/pi-utils";
-import type { SessionEntry, WireMessage } from "@musepi/pi-wire";
+import { isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
 import type { WorkspaceSessionInfo } from "../collab/protocol";
@@ -635,22 +635,46 @@ export interface DaemonTurnItem {
 	kind: "user" | "advisor";
 }
 export const TURN_SUMMARY_MAX = 90;
-/** MUST stay in sync with client-core round-collapse.ts isTurnStart: a user
- *  prompt OR a displayed advisor note starts a turn. Duplicated here rather
- *  than imported because the daemon must not depend on the client package. */
+/** Turn-start test. Delegates to the ONE canonical predicate
+ *  (`isTurnStartEntry`, @musepi/pi-wire) instead of restating the rule: this
+ *  was a hand-copied twin whose only guard was a comment, and turn boundaries
+ *  feed the turn rail, the trajectory map and entry-id jumps — so drift here
+ *  is an app-wide miscount, not a local bug. (The old comment named
+ *  client-core as the source of truth; the canonical home is pi-wire.)
+ *
+ *  The narrowing stays local because journal records arrive as `unknown`:
+ *  `isTurnStartEntry` dereferences `message.role` unguarded once
+ *  `type === "message"`, so a malformed line would throw instead of being
+ *  skipped. */
 function daemonIsTurnStart(e: unknown): boolean {
-	if (!e || typeof e !== "object") return false;
-	const t = e as { type?: unknown; message?: { role?: unknown }; customType?: unknown; display?: unknown };
-	if (t.type === "message") return t.message?.role === "user";
-	if (t.type === "custom_message") return t.customType === "advisor" && t.display === true;
-	return false;
+	return typeof e === "object" && e !== null && isTurnStartEntry(e as SessionEntry);
 }
-/** Summary text of a turn-start entry: message entries carry the text under
- *  `message.content`, custom_message entries under `content` — string or
- *  text-content blocks, mirroring client-core msgText/customText. */
+/** Human-readable text of an advisor note: `details.notes[].note`.
+ *
+ *  An advisor entry's `content` is the MODEL-FACING `<advisory …>` XML — the
+ *  same text plus severity/guidance attributes, meant for the model, not the
+ *  reader. `DaemonTurnItem.summary` is rendered verbatim by the TurnRail
+ *  hover panel, so falling back to `content` would put raw XML tags in front
+ *  of the user. (trajectory-data.ts already unwraps notes for the map and
+ *  documents the same leak; this path had been left behind.) Mirrors that
+ *  unwrap: notes joined with "; ", empty when absent — no XML fallback. */
+function advisorNoteText(details: unknown): string {
+	if (details === null || typeof details !== "object" || !("notes" in details)) return "";
+	const notes = (details as { notes?: unknown }).notes;
+	if (!Array.isArray(notes)) return "";
+	return notes
+		.map(n => (typeof (n as { note?: unknown } | null)?.note === "string" ? (n as { note: string }).note : ""))
+		.filter(s => s.trim().length > 0)
+		.join("; ");
+}
+/** Summary text of a turn-start entry: user messages carry the text under
+ *  `message.content` (string or text-content blocks); an advisor note carries
+ *  it under `details.notes[].note` — see advisorNoteText for why `content`
+ *  must not be used there. */
 function daemonEntryText(e: unknown): string {
-	const rec = e as { message?: { content?: unknown }; content?: unknown } | null;
-	const c = rec?.message?.content ?? rec?.content;
+	const rec = e as { type?: unknown; message?: { content?: unknown }; details?: unknown } | null;
+	if (rec?.type === "custom_message") return advisorNoteText(rec.details);
+	const c = rec?.message?.content;
 	if (typeof c === "string") return c;
 	if (Array.isArray(c)) {
 		return c
