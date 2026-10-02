@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type GitUser, readGitUser } from "../lib/git-user";
 import { useChatHighlight } from "../lib/highlight";
+import { HISTORY_PAGE_MESSAGES, loadAlignedHistoryBatch } from "../lib/history-batch";
 import { type JumpTarget, resolveJumpEntryId } from "../lib/jump-target";
 import { EMPTY_TRUSTED_WALK, filterVisibleEntries, walkLeafPath } from "../lib/leaf-walk";
 import { lightenOverviewEntry } from "../lib/message-tree";
@@ -1439,31 +1440,39 @@ export function ChatView({
 	const anchorCtlRef = useRef<TranscriptAnchorCtl | null>(null);
 	const loadOlder = useCallback(async (): Promise<void> => {
 		if (!rpc || !store || loadOlderRef.current || !store.hasMore) return;
-		const beforeId = store.historyBeforeId;
-		if (!beforeId) return;
+		const firstCursor = store.historyBeforeId;
+		if (!firstCursor) return;
 		loadOlderRef.current = true;
 		setLoadingOlder(true);
 		const anchor: TranscriptAnchor | null = anchorCtlRef.current?.capture() ?? null;
+		const sessionId = store.sessionId;
 		try {
-			const res = await rpc.request<HistoryPage>("session.history", {
-				sessionId: store.sessionId,
-				beforeId,
-				maxMessages: 500,
-			});
-			if (res?.stale) {
+			// Turn-aligned batch (openchamber loadOlderPage parity). The walk, its
+			// bound and its cursor discipline live in lib/history-batch.ts — the point
+			// is that the batch starts on a turn boundary so the rail's top tick is a
+			// whole turn, not a fragment of one.
+			const batch = await loadAlignedHistoryBatch(
+				beforeId =>
+					rpc.request<HistoryPage>("session.history", {
+						sessionId,
+						beforeId,
+						maxMessages: HISTORY_PAGE_MESSAGES,
+					}),
+				firstCursor,
+			);
+			if (batch.stale) {
 				// P0-3: the anchor no longer exists upstream — stop paging
 				// instead of re-issuing the same cursor on every scroll.
 				store.markHistoryStale();
 				return;
 			}
-			if (res?.entries?.length) {
-				store.prependEntries(res.entries, res.remaining, res.nextBeforeId ?? null);
+			if (batch.entries.length === 0) return;
+			store.prependEntries(batch.entries, batch.remaining, batch.nextBeforeId);
+			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {
-					requestAnimationFrame(() => {
-						if (anchor) anchorCtlRef.current?.restore(anchor);
-					});
+					if (anchor) anchorCtlRef.current?.restore(anchor);
 				});
-			}
+			});
 		} catch {
 			// daemon rejected (unknown session) — keep as-is
 		} finally {
