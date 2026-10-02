@@ -63,6 +63,7 @@ export function SessionSidebar({
 	onPickFolder,
 	onCreateProject,
 	onOpenCollab,
+	onOpenShortcuts,
 	onRenameSession,
 	onOpenSearch,
 	onOpenMiniChat,
@@ -119,6 +120,8 @@ export function SessionSidebar({
 	onCreateProject?(): void;
 	/** Open the ZCode-style collab remote-control dialog. */
 	onOpenCollab?(): void;
+	/** Open the keyboard-shortcuts reference (openchamber HelpDialog parity). */
+	onOpenShortcuts?(): void;
 	/** Persist a user-set session title (daemon session.rename). */
 	onRenameSession?(sessionId: string, title: string): void;
 	/** Open the app-level command palette (⌘K / sidebar 搜索). */
@@ -1368,6 +1371,15 @@ export function SessionSidebar({
 						<span className={`gui-dot gui-dot-${status}`} />
 						<span>{status === "open" ? t("local daemon") : t("disconnected")}</span>
 					</div>
+					<button
+						type="button"
+						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
+						onClick={onOpenShortcuts}
+						title={t("keyboard shortcuts")}
+						aria-label={t("keyboard shortcuts")}
+					>
+						<Icon name="command" className="h-4 w-4" />
+					</button>{" "}
 					<button
 						type="button"
 						className="rounded-md p-1 text-[var(--color-text-faint)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"

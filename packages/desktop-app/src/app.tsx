@@ -26,6 +26,7 @@ import { ScheduledTasksPage } from "./components/ScheduledTasksPage";
 import type { SessionListNode } from "./components/SessionList";
 import { SessionSidebar } from "./components/SessionSidebar";
 import { SettingsView } from "./components/SettingsView";
+import { ShortcutsDialog } from "./components/ShortcutsDialog";
 import { SplashOrb } from "./components/SplashOrb";
 import type { ThinkingLevel } from "./components/ThinkingSelector";
 import { THINKING_LEVELS } from "./components/thinking-selector-shared";
@@ -887,6 +888,9 @@ function AppInner(): ReactNode {
 	}, [openSettings]);
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
+	// Keyboard-shortcuts reference (openchamber HelpDialog parity). Always mounted:
+	// DialogFrame plays its own exit animation when `open` flips false.
+	const [shortcutsOpen, setShortcutsOpen] = useState(false);
 	// Bottom integrated terminal drawer (ZCode style) — independent of the
 	// right-pane terminal tool. Open state is remembered PER SESSION: a
 	// session whose dock was never opened stays closed (and ChatView then
@@ -3557,6 +3561,7 @@ function AppInner(): ReactNode {
 							}}
 							onOpenSettings={openSettings}
 							onOpenCollab={() => setCollabOpen(true)}
+							onOpenShortcuts={() => setShortcutsOpen(true)}
 							onRenameSession={renameSession}
 							onOpenSearch={() => setPaletteOpen(true)}
 							onOpenMiniChat={openMiniChatFor}
@@ -3976,6 +3981,9 @@ function AppInner(): ReactNode {
 			 * see ChatView `ask`/`onAskAnswer` props. */}
 			{/* Always mounted — CommandPalette self-hides and plays its exit
 			 * animation when `open` flips false (Pop/DialogFrame parity). */}
+			{/* Keyboard shortcuts — always mounted so DialogFrame can play its
+			 * exit animation (CommandPalette parity). */}
+			<ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />{" "}
 			<CommandPalette
 				open={paletteOpen}
 				onClose={() => setPaletteOpen(false)}

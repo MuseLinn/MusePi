@@ -1313,3 +1313,72 @@
 	font-weight: 600;
 	line-height: 16px;
 }
+
+/* ── Keyboard-shortcuts reference (openchamber HelpDialog parity) ────────
+ * Every row is derived from lib/shortcut-registry.ts, so this file owns only
+ * the presentation. The width is the point: a 600×420 settings box cannot hold
+ * five grouped sections in two columns without scrolling the headers away. */
+.gui-dialog--shortcuts {
+	width: min(880px, 92vw);
+	height: auto;
+	max-height: min(84vh, 720px);
+	overflow: hidden;
+}
+.gui-shortcuts-lede {
+	flex-shrink: 0;
+	margin: 0 0 14px;
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.55;
+	color: var(--color-text-muted);
+}
+.gui-shortcuts-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0 32px;
+	min-height: 0;
+	overflow-y: auto;
+/* One column on a narrow window: two 400px columns of key chips wrap the
+ * combos instead of listing them. */media (min-width: 720px) {
+	.gui-shortcuts-grid {
+		grid-template-columns: 1fr 1fr;
+	}
+}
+.gui-shortcut-group {
+	margin: 0 0 4px;
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	color: var(--color-text-muted);
+}
+.gui-shortcut-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 26px;
+}
+.gui-shortcut-label {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--ui-font-size-sm);
+	color: var(--color-text);
+}
+.gui-shortcut-key {
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: color-mix(in oklab, var(--color-text) 7%, transparent);
+	font-family: var(--font-mono, ui-monospace, "SF Mono", Menlo, monospace);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+.gui-shortcut-tips {
+	margin: 4px 0 0;
+	padding: 0;
+	list-style: none;
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.7;
+	color: var(--color-text-faint);
+}
