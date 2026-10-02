@@ -2568,6 +2568,23 @@ export function ChatView({
 											onJumpToTurn={entryId => requestJump({ entryId })}
 										/>
 									</div>
+									{/* ⌘F find bar (openchamber parity): floats over the transcript's
+									 * top edge. Inside .gui-transcript-wrap (the positioned ancestor),
+									 * so it never reflows the transcript — a bar in flow would
+									 * re-measure every virtual row on open. */}
+									{findOpen && (
+										<ChatFind
+											hits={findHits}
+											index={findIndex}
+											query={findQuery}
+											searching={findSearching}
+											onQuery={setFindQuery}
+											onPrev={() => stepFind(-1)}
+											onNext={() => stepFind(1)}
+											onClose={closeFind}
+											onJumpTo={jumpToHit}
+										/>
+									)}
 									<div
 										ref={composerWrapRef}
 										className={
@@ -2643,19 +2660,7 @@ export function ChatView({
 														aria-hidden="true"
 													/>
 												</div>
-												{findOpen && (
-													<ChatFind
-														hits={findHits}
-														index={findIndex}
-														query={findQuery}
-														searching={findSearching}
-														onQuery={setFindQuery}
-														onPrev={() => stepFind(-1)}
-														onNext={() => stepFind(1)}
-														onClose={closeFind}
-														onJumpTo={jumpToHit}
-													/>
-												)}
+
 												<Reveal open={jumpDockOpen}>
 													<div className="gui-revert-dock-body">
 														<div className="gui-revert-item">
