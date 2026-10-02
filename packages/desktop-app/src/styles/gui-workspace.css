@@ -546,9 +546,56 @@
 .gui-turn-track {
 	position: relative;
 	width: 24px;
-	cursor: pointer;
-	outline: none;
 }
+/* Load-more control (openchamber PromptNavigatorRail parity). Absolutely
+ * positioned above the tick track rather than in flow, so adding it cannot
+ * shift the tape the carousel measures. `bottom: 100%` + the same 2px inset
+ * the ticks use (`.gui-turn-tick { inset-inline: 2px }` in a 24px rail) puts
+ * the 20px circle on the tick column's centre line for BOTH rail sides —
+ * a 20px box inset 2px in a 24px rail is the same box either way, so no
+ * [data-side] override is needed.
+ *
+ * It must be clickable while the ticks stay pointer-events:none — the whole
+ * gutter is otherwise one hover/click target that maps y to the nearest turn. */
+.gui-turn-loadmore {
+	position: absolute;
+	bottom: 100%;
+	inset-inline-end: 2px;
+	width: 20px;
+	height: 20px;
+	margin-bottom: 6px;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: none;
+	border-radius: 999px;
+	background: none;
+	color: color-mix(in oklab, var(--color-text) 55%, transparent);
+	cursor: pointer;
+	transition: background 120ms ease-out, color 120ms ease-out, opacity 120ms ease-out;
+	}
+.gui-turn-loadmore:hover:not(:disabled) {
+	background: color-mix(in oklab, var(--color-text) 10%, transparent);
+	color: var(--color-text);
+	}
+.gui-turn-loadmore:disabled {
+	cursor: wait;
+	opacity: 0.7;
+	}
+.gui-turn-loadmore-icon {
+	width: 14px;
+	height: 14px;
+	}
+/* The spinner is the only motion here, and it only runs while a page is in
+ * flight; prefers-reduced-motion users get a static glyph instead of a
+ * frozen half-spin. */
+@media (prefers-reduced-motion: reduce) {
+	.gui-turn-loadmore-icon {
+		animation: none !important;
+	}
+	}
 
 .gui-turn-tape-wrap {
 	position: absolute;

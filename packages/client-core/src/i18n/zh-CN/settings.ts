@@ -257,6 +257,8 @@ export const settings = {
 	"no text": "（无文本）",
 	"thinking…": "思考中…",
 	"branch summary": "分支摘要",
+	"load more prompts": "加载更多提示",
+	"older history unavailable": "无法加载更早的对话：会话历史已被压缩或替换。",
 
 	// ── Settings dialog: model / provider management ──────────────────────────
 	"model settings": "模型与供应商",

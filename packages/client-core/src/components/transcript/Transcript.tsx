@@ -266,6 +266,11 @@ export interface TranscriptProps {
 	/** True while the caller is paging the next older chunk — the top
 	 *  spacer shows a shimmer so the wait reads as loading, not emptiness. */
 	loadingOlder?: boolean;
+	/** Older history became unreachable (the daemon refused a stale cursor, or a
+	 *  page advanced nothing). Terminal: no further page can succeed, so the
+	 *  caller's paging affordances disappear. Without an explicit end state the
+	 *  user just finds the load-more control gone and no explanation. */
+	historyBlocked?: boolean;
 	/** Prepend anchoring (key-based): the caller captures the first visible
 	 *  row before paging older history via session.history and restores it
 	 *  after the prepend commits. Immune to scrollHeight drift from tail
@@ -1175,6 +1180,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		onFork,
 		onLoadOlder,
 		loadingOlder = false,
+		historyBlocked = false,
 		anchorCtlRef,
 		jumpRequest = null,
 		onSpeak,
@@ -2321,6 +2327,14 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			 *  Spacing above the mounted window comes from the virtual
 			 *  spacer below — the scrollbar now reflects the FULL loaded
 			 *  history (zcode spacer parity). */}
+			{/* Terminal paging state. The load-more affordances (rail control, top-edge
+			 *  hover) disappear once history is unreachable; this says why, instead of
+			 *  leaving the user staring at a transcript that silently stops growing. */}
+			{historyBlocked && (
+				<div className="tr-window-blocked" role="status">
+					{t("older history unavailable")}
+				</div>
+			)}
 			<div ref={sentinelRef} className="tr-window-top" aria-hidden="true" />
 			{loadingOlder && (
 				<div className="tr-window-loading" aria-hidden="true">

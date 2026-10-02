@@ -1879,9 +1879,12 @@ export function ChatView({
 		() => ({
 			turns: railTurnsInPath,
 			hasMoreAbove: store?.hasMore === true,
+			// The rail's own pending state: the control must disable itself
+			// rather than wait for the transcript's aria-hidden bar to move.
+			loadingOlder,
 			onRequestOlder: onLoadOlderStable,
 		}),
-		[railTurnsInPath, store?.hasMore, onLoadOlderStable],
+		[railTurnsInPath, store?.hasMore, loadingOlder, onLoadOlderStable],
 	);
 	// Find-bar docking. `.gui-find` is absolutely positioned against
 	// .gui-chat-body (the chat column's own box — openchamber anchors its bar
@@ -2453,6 +2456,7 @@ export function ChatView({
 																}
 																onLoadOlder={onLoadOlderStable}
 																loadingOlder={loadingOlder}
+																historyBlocked={store.historyBlocked}
 																anchorCtlRef={anchorCtlRef}
 																onRetry={(id, _text) => void regenerateFromAssistant(id)}
 																onSpeak={(text, id) => {

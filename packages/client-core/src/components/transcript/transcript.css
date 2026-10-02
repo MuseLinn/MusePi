@@ -2151,6 +2151,20 @@ a.tr-tool-search-title:hover {
 
 /* Slim shimmer line at the top spacer while an older page is being
  * fetched — the wait reads as loading, never as an empty end. */
+/* Terminal paging state: the daemon refused a stale cursor, or a page
+ * advanced nothing. Every load-more affordance (the rail control, the rail's
+ * top-edge hover) disappears at this point, so this row is the explanation
+ * left behind — without it the transcript just silently stops growing. */
+.tr-window-blocked {
+	margin: 6px 24px 0;
+	padding: 5px 10px;
+	border-radius: var(--radius-lg);
+	background: color-mix(in oklab, var(--fg) 5%, transparent);
+	color: color-mix(in oklab, var(--fg) 55%, transparent);
+	font-size: 12px;
+	line-height: 1.45;
+	text-align: center;
+	}
 .tr-window-loading {
 	position: relative;
 	height: 2px;

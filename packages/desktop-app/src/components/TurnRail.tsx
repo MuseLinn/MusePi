@@ -1,6 +1,7 @@
 import { type TurnIndexItem, t } from "@musepi/client-core";
 import type { ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../vendor/oc-icons/Icon";
 import { PacMan } from "../vendor/pac-man";
 
 interface TurnMarker {
@@ -32,6 +33,10 @@ export interface TurnRailDataSource {
 	/** Daemon still has history older than the loaded set — reaching the top
 	 *  of the rail pages it in (session.history backfill). */
 	hasMoreAbove: boolean;
+	/** A page is in flight. The rail control owns its own pending state
+	 *  rather than leaning on the transcript loading bar, which is
+	 *  aria-hidden and sits at the other end of the scroll. */
+	loadingOlder: boolean;
 	onRequestOlder?: () => void;
 }
 
@@ -145,8 +150,8 @@ export function TurnRail({
 	const maxWindowStart = Math.max(0, turns.length - visibleCount);
 	const clampedWindowStart = Math.min(windowStart, maxWindowStart);
 	const windowEnd = clampedWindowStart + visibleCount;
-	const hasMoreAbove = clampedWindowStart > 0;
-	const hasMoreBelow = windowEnd < turns.length;
+	const moreTicksAbove = clampedWindowStart > 0;
+	const moreTicksBelow = windowEnd < turns.length;
 
 	// Preferences are set from SettingsView; pick them up live.
 	useEffect(() => {
@@ -413,12 +418,12 @@ export function TurnRail({
 			const rect = el.getBoundingClientRect();
 			const y = e.clientY - rect.top;
 			let dir: -1 | 0 | 1 = 0;
-			if (y <= EDGE_ZONE_PX && hasMoreAbove) dir = -1;
-			else if (y >= rect.height - EDGE_ZONE_PX && hasMoreBelow) dir = 1;
+			if (y <= EDGE_ZONE_PX && moreTicksAbove) dir = -1;
+			else if (y >= rect.height - EDGE_ZONE_PX && moreTicksBelow) dir = 1;
 			if (dir !== 0) startCarousel(dir);
 			else stopCarousel();
 		},
-		[cancelHide, hasMoreAbove, hasMoreBelow, relativeFromY, startCarousel, stopCarousel],
+		[cancelHide, moreTicksAbove, moreTicksBelow, relativeFromY, startCarousel, stopCarousel],
 	);
 
 	const onTrackPointerDown = useCallback(
@@ -556,9 +561,15 @@ export function TurnRail({
 	const overscanStart = Math.max(0, clampedWindowStart - TICK_OVERSCAN);
 	const overscanEnd = Math.min(turns.length, windowEnd + TICK_OVERSCAN);
 	const gutterMask =
-		hasMoreAbove || hasMoreBelow
-			? `linear-gradient(to bottom, ${hasMoreAbove ? "transparent, black 14%" : "black"}, ${hasMoreBelow ? "black 86%, transparent" : "black"})`
+		moreTicksAbove || moreTicksBelow
+			? `linear-gradient(to bottom, ${moreTicksAbove ? "transparent, black 14%" : "black"}, ${moreTicksBelow ? "black 86%, transparent" : "black"})`
 			: undefined;
+
+	// Non-null only while the daemon actually has older history — the rail's
+	// `hasMoreAbove` means "more TICKS above the window" (carousel paging), which
+	// is a different thing entirely and was the reason this control read as
+	// always-available before.
+	const olderPager = turnsData?.hasMoreAbove === true ? turnsData : null;
 
 	if (turns.length === 0) return null;
 
@@ -571,6 +582,27 @@ export function TurnRail({
 				scheduleHide();
 			}}
 		>
+			{/* Load-more (openchamber PromptNavigatorRail parity). The rail already pages
+			 * history in when the pointer enters its top edge, but that gesture has no
+			 * visual affordance at all: nothing on screen says older turns exist. This is
+			 * the clickable, discoverable form of the same call, and it owns its own
+			 * pending state instead of leaning on the transcript's aria-hidden bar. */}
+			{olderPager && (
+				<button
+					type="button"
+					className="gui-turn-loadmore"
+					aria-label={t("load more prompts")}
+					title={t("load more prompts")}
+					disabled={olderPager.loadingOlder}
+					onPointerDown={event => event.stopPropagation()}
+					onClick={event => {
+						event.stopPropagation();
+						if (!olderPager.loadingOlder) olderPager.onRequestOlder?.();
+					}}
+				>
+					<Icon name={olderPager.loadingOlder ? "loader" : "arrow-up"} className="gui-turn-loadmore-icon" />
+				</button>
+			)}
 			<div
 				ref={trackRef}
 				className="gui-turn-track"

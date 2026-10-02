@@ -301,12 +301,26 @@ export class GuiSessionStore {
 
 	/** Tail-window state: older history exists beyond the loaded tail. */
 	#hasMore = false;
+	/** Terminal paging state: older history exists but can no longer be
+	 *  fetched. Three distinct failures collapse to the same user-visible
+	 *  outcome, so one flag carries it: the daemon refused a stale cursor
+	 *  (compaction dropped the anchor), an empty page arrived while the
+	 *  daemon still reported remaining rows, or a page advanced nothing.
+	 *  All three set `hasMore = false`, which makes the rail's load-more
+	 *  control disappear — so without this flag the user just finds the
+	 *  affordance gone and no explanation. */
+	#historyBlocked = false;
 	/** Oldest loaded entry id — the session.history cursor. */
 	#beforeId: string | null = null;
 
 	/** True while the daemon still has history older than the loaded tail. */
 	get hasMore(): boolean {
 		return this.#hasMore;
+	}
+
+	/** True once older history became unreachable (see #historyBlocked). */
+	get historyBlocked(): boolean {
+		return this.#historyBlocked;
 	}
 
 	/** session.history cursor for the next older page (null = exhausted). */
@@ -337,6 +351,7 @@ export class GuiSessionStore {
 						remaining,
 					},
 				);
+				this.#historyBlocked = true;
 				this.#hasMore = false;
 				this.#snapshot = this.#buildSnapshot();
 				this.#emit();
@@ -362,6 +377,7 @@ export class GuiSessionStore {
 				remaining,
 				olderCount: older.length,
 			});
+			this.#historyBlocked = true;
 			this.#hasMore = false;
 			this.#snapshot = this.#buildSnapshot();
 			this.#emit();
@@ -381,6 +397,7 @@ export class GuiSessionStore {
 		console.warn("[gui] session.history cursor is stale — older history needs a session reload to page again", {
 			sessionId: this.#sessionId,
 		});
+		this.#historyBlocked = true;
 		this.#hasMore = false;
 		this.#snapshot = this.#buildSnapshot();
 		this.#emit();
@@ -436,6 +453,10 @@ export class GuiSessionStore {
 		this.#roundDurations = merged;
 		this.#hasMore = snapshot.tail?.hasMore === true;
 		this.#beforeId = snapshot.tail?.beforeId ?? null;
+		// A reload re-arms paging, so the terminal state belongs to the view
+		// that hit it — a stale cursor in the previous snapshot says nothing
+		// about this one.
+		this.#historyBlocked = false;
 		// P0-8 fallback — same derivation as the constructor (see there).
 		if (this.#hasMore && this.#beforeId === null) {
 			this.#beforeId = this.#view.oldestEntryId();

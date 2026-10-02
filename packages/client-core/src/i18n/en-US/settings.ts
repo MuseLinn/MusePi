@@ -277,6 +277,8 @@ export const settings = {
 	"no text": "(No text)",
 	"thinking…": "Thinking…",
 	"branch summary": "Branch summary",
+	"load more prompts": "Load more prompts",
+	"older history unavailable": "Older history is unavailable — the session history was compacted or replaced.",
 
 	// ── Settings dialog: model / provider management ──────────────────────────
 	"model settings": "Models & providers",

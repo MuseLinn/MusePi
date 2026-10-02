@@ -109,4 +109,61 @@ describe("GuiSessionStore history paging (P0-3)", () => {
 		expect(new Set(ids).size).toBe(ids.length);
 		expect(ids[0]).toBe(page2[0]?.id);
 	});
+
+	/**
+	 * Terminal paging state. Every one of these failures sets `hasMore = false`,
+	 * which is what makes the rail's load-more control disappear — so without a
+	 * flag the user's only signal is an affordance silently going away. The
+	 * failure a consumer observes: after any of these, the transcript shows the
+	 * "older history unavailable" row and no further page is attempted.
+	 */
+	describe("GuiSessionStore historyBlocked (terminal paging state)", () => {
+		it("is clear on a fresh store whose tail still has history", () => {
+			const store = storeWithTail([msg("a")]);
+			expect(store.hasMore).toBe(true);
+			expect(store.historyBlocked).toBe(false);
+		});
+
+		it("is set when the daemon refuses the cursor as stale", () => {
+			const store = storeWithTail([msg("a")]);
+			store.markHistoryStale();
+			expect(store.historyBlocked).toBe(true);
+		});
+
+		it("is set when a page advances nothing while history remains", () => {
+			const e1 = msg("a");
+			const store = storeWithTail([e1]);
+			store.prependEntries([e1], 5, "not-held");
+			expect(store.historyBlocked).toBe(true);
+		});
+
+		it("is set when an empty page still claims history remains", () => {
+			const store = storeWithTail([msg("a")]);
+			store.prependEntries([], 4, null);
+			expect(store.historyBlocked).toBe(true);
+		});
+
+		it("stays clear on a normal page — progress is not a terminal state", () => {
+			const e2 = msg("b");
+			const store = storeWithTail([e2]);
+			const older = [msg("older")];
+			store.prependEntries(older, 2, older[0]?.id ?? null);
+			expect(store.hasMore).toBe(true);
+			expect(store.historyBlocked).toBe(false);
+		});
+
+		it("re-arms on a fresh snapshot: the terminal state belongs to the view that hit it", () => {
+			const store = storeWithTail([msg("a")]);
+			store.markHistoryStale();
+			expect(store.historyBlocked).toBe(true);
+			const fresh = msg("fresh");
+			store.reloadFromSnapshot({
+				entries: [fresh],
+				cursor: 1,
+				tail: { hasMore: true, beforeId: null },
+			});
+			expect(store.historyBlocked).toBe(false);
+			expect(store.hasMore).toBe(true);
+		});
+	});
 });
