@@ -115,6 +115,7 @@ import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicExtensionRuntime } from "./cordis-dynamic-extensions";
 import { writeProjectMirror } from "./creation";
+import { resolveExtensionWatchRoots } from "./extension-watch-roots";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
 
 /** Stable per-project notes filename (cwd hash). */
@@ -958,19 +959,29 @@ export class DaemonServer {
 	 *  `extensions.changed` to events.subscribe clients so the GUI refreshes
 	 *  slots/panels immediately instead of waiting for the next poll.
 	 *  Session-scoped tools/handlers of already-loaded extensions pick up
-	 *  the change on the next load (v1 scope). */
+	 *  the change on the next load (v1 scope).
+	 *
+	 *  Roots come from `resolveExtensionWatchRoots` rather than a list written
+	 *  here: the hand-written one had drifted from what discovery loads, so the
+	 *  installed-plugin roots were missing entirely — the only plugins a user
+	 *  can install had no hot reload at all, while hand-written extensions
+	 *  (which land in agentDir/extensions) reloaded fine. */
 	#startExtensionWatcher(): void {
 		if (this.#extensionWatcherStarted) return;
 		this.#extensionWatcherStarted = true;
-		const roots = [path.join(getAgentDir(), "extensions"), path.join(this.#host.cwd(), ".musepi", "extensions")];
-		for (const root of roots) {
-			try {
-				fs.watch(root, { recursive: true }, () => this.#scheduleExtensionReload());
-			} catch {
-				// Root absent/unwatchable — the discovery scan still picks up
-				// changes when its TTL expires.
+		const attach = (roots: readonly string[]): void => {
+			for (const root of roots) {
+				try {
+					fs.watch(root, { recursive: true }, () => this.#scheduleExtensionReload());
+				} catch {
+					// Root absent/unwatchable — the discovery scan still picks up
+					// changes when its TTL expires.
+				}
 			}
-		}
+		};
+		void resolveExtensionWatchRoots(this.#host.cwd()).then(attach).catch(err => {
+			logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });
+		});
 	}
 
 	#scheduleExtensionReload(): void {
