@@ -643,6 +643,20 @@ export async function listAllSessions(storage: SessionStorage = new FileSessionS
 	}
 }
 
+/** Parent session id encoded in a depth-3 subagent transcript path
+ *  (`<slug>/<parent-file-base>/<subId>.jsonl`, parent file base =
+ *  `<timestamp>_<parentId>`). Single source of truth for the derivation —
+ *  the session.list merge route and the delete cascade must agree, or a
+ *  parent delete misses its children while the list still nests them.
+ *  Returns null when the path is not a depth-3 subagent transcript or the
+ *  base carries no id part. */
+export function subagentParentIdOf(transcriptPath: string): string | null {
+	const parentBase = path.basename(path.dirname(transcriptPath));
+	const parentId = parentBase.split("_").slice(1).join("_") || null;
+	const id = path.basename(transcriptPath, ".jsonl");
+	return parentId === id ? null : parentId;
+}
+
 /** List sub-agent transcript sessions (newest first): task/vibe subagents persist
  *  their own transcript at `<cwd-slug>/<parent-file-base>/<subId>.jsonl` — two
  *  levels deep, so {@link listAllSessions}' one-level glob never sees them.

@@ -47,6 +47,7 @@ import { MCP_CONNECTION_STATUS_EVENT_CHANNEL, type McpConnectionStatusEvent } fr
 import { computeContextBreakdown } from "../modes/utils/context-usage";
 import idleRecapPrompt from "../prompts/system/recap-user.md" with { type: "text" };
 import type { SessionInfo, SessionStatus } from "../session/session-listing";
+import { subagentParentIdOf } from "../session/session-listing";
 import type { SnapcompactSavingsEstimate } from "../session/snapcompact-inline";
 import { resolvePromptInput } from "../system-prompt";
 import type { ConfiguredThinkingLevel } from "../thinking";
@@ -2880,9 +2881,7 @@ export class DaemonSessionHost {
 			// 留有物化行(activation 写入,无层级字段),existing 分支此前只回填
 			// subagent/advisor 标,parentId 被丢弃——session.tree 按 parentId
 			// 挂父节点,缺它激活过的顾问行被提为顶层孤立行(磁盘结构完好)。
-			const parentBase = path.basename(path.dirname(h.path));
-			const parentId = parentBase.split("_").slice(1).join("_") || null;
-			const derivedParent = parentId === h.id ? null : parentId;
+			const derivedParent = subagentParentIdOf(h.path);
 			if (existing) {
 				// The view store may already carry this id (adoption-era rows
 				// for transcripts the view once materialized) without the
@@ -2971,13 +2970,43 @@ export class DaemonSessionHost {
 	 * workspace files are never touched.
 	 */
 	async deleteSession(sessionId: string): Promise<void> {
+		// Cascade target collection BEFORE any mutation. Subagent transcripts
+		// live at depth 3 (`<slug>/<parent-file-base>/<subId>.jsonl`) — the
+		// depth-2 cleanup glob below never sees them, so deleting a parent
+		// used to leave its advisor/task children resolvable (their journals
+		// and store rows survived even when the dir went), and deleting a
+		// child directly never removed its transcript, so the next
+		// session.list re-scan resurrected it (删不掉顾问会话). Collect the
+		// exact transcript path per target from the same scan the list
+		// route uses, plus every child of this session, and delete them all.
+		const { listAllSessions, listSubagentSessions } = await import("../session/session-listing");
+		const [scan, subs] = await Promise.all([listAllSessions(), listSubagentSessions()]);
+		const ownPath = scan.find(h => h.id === sessionId)?.path ?? subs.find(h => h.id === sessionId)?.path ?? null;
+		const childTargets = subs
+			.filter(h => h.id !== sessionId && subagentParentIdOf(h.path) === sessionId)
+			.map(h => ({ id: h.id, path: h.path }));
+		const targets = [{ id: sessionId, path: ownPath }, ...childTargets];
 		// TUI parity (`/session delete` refuses while streaming): tearing a
 		// session down mid-turn leaves the agent's in-flight runLoop
-		// rejecting into a void — the daemon must not delete under it.
-		const live = this.#sessions.get(sessionId);
-		if (live && (live.view.snapshot().state.isStreaming || live.agentSession.isStreaming)) {
-			throw new Error("Cannot delete the session while streaming.");
+		// rejecting into a void — the daemon must not delete under it. The
+		// check covers EVERY cascade target: a partial cascade (parent gone,
+		// streaming child left) would orphan the child's rows anyway.
+		for (const t of targets) {
+			const live = this.#sessions.get(t.id);
+			if (live && (live.view.snapshot().state.isStreaming || live.agentSession.isStreaming)) {
+				throw new Error("Cannot delete the session while streaming.");
+			}
 		}
+		for (const t of targets) {
+			await this.#deleteSessionArtifacts(t.id, t.path);
+		}
+	}
+
+	/** Delete one session's rows and files: view-store row, journal, pause
+	 *  sidecar, the exact transcript path from the listing scan (depth-3
+	 *  subagent transcripts are invisible to the glob), and any depth-2
+	 *  transcript/artifacts dir matching the id (parent cleanup parity). */
+	async #deleteSessionArtifacts(sessionId: string, transcriptPath: string | null): Promise<void> {
 		this.close(sessionId);
 		this.#store.remove(sessionId);
 		try {
@@ -2994,6 +3023,12 @@ export class DaemonSessionHost {
 			// Absence is the non-paused state; a real IO failure still
 			// surfaces so a stuck delete is visible.
 			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+		}
+		if (transcriptPath) {
+			// Exact path from the scan (subagent depth-3 transcripts) — the
+			// glob below only reaches depth 2. Absence is fine (adopted
+			// rows, already-cascaded children).
+			await fs.promises.unlink(transcriptPath).catch(() => {});
 		}
 		// SDK transcript files (`<sessionsDir>/<project>/<id>.jsonl`) and
 		// their artifacts dir (`<project>/<id>/` — subagent transcripts,
