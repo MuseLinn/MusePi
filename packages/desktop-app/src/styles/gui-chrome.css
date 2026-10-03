@@ -1338,7 +1338,8 @@
 	min-height: 0;
 	overflow-y: auto;
 /* One column on a narrow window: two 400px columns of key chips wrap the
- * combos instead of listing them. */media (min-width: 720px) {
+ * combos instead of listing them. */
+@media (min-width: 720px) {
 	.gui-shortcuts-grid {
 		grid-template-columns: 1fr 1fr;
 	}
