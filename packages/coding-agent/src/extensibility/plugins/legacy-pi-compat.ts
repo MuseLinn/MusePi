@@ -1052,19 +1052,24 @@ export async function __rewriteLegacyExtensionSourceForTests(
 }
 
 /**
- * Build the import specifier for a graph-resolved absolute path. POSIX
- * emits a bare filesystem path with an optional `?mtime=<tag>` (Bun keys
- * query strings for bare-path specifiers), so same-process extension
- * reloads pick up edits to package-alias (`#foo/*`) and extension-local
- * bare deps. Windows and bundled virtual specifiers keep the current
- * `file://` / virtual form — Bun ignores queries on `file://` URLs, so
- * cache-bust does not reach Windows extensions until Bun changes that.
+ * Build the import specifier for a graph-resolved absolute path: a bare
+ * filesystem path plus an optional `?mtime=<tag>`, on every platform.
+ *
+ * Bare path, not `file://`, whenever a tag is present. Bun keys query strings
+ * on bare-path specifiers but ignores them on `file://` URLs, so a `file://`
+ * graph module is served from cache no matter what the tag says — that form
+ * reached POSIX and left every Windows reload stale. This mirrors what
+ * `loadLegacyPiModule` already does for the entry itself, which is why an
+ * edited entry reloaded on Windows while its children did not.
+ *
+ * Without a tag there is nothing to bust, so the `file://` form is kept for
+ * the compiled-binary and bundled-virtual cases.
  */
 function toGraphImportSpecifier(resolvedPath: string, mtimeTag: string | null): string {
 	if (isBundledVirtualSpecifier(resolvedPath)) {
 		return resolvedPath;
 	}
-	if (process.platform === "win32" || !mtimeTag) {
+	if (!mtimeTag) {
 		return url.pathToFileURL(stripWindowsExtendedLengthPathPrefix(resolvedPath)).href;
 	}
 	return `${stripWindowsExtendedLengthPathPrefix(resolvedPath)}?mtime=${mtimeTag}`;
@@ -1842,6 +1847,89 @@ function escapeRegExp(value: string): string {
 // the previous load.
 const extensionGraphHookModules = new Map<string, Set<string>>();
 const extensionGraphCacheBustResolvedImportModules = new Map<string, Set<string>>();
+
+// Source-graph mtimes per entry, snapshotted at each load. The cache-bust tag
+// already re-reads the whole graph on every load (`nextLegacyPiLoadTag` is
+// monotonic and the onLoad hook stamps it onto every relative import), so a
+// submodule edit only needs its owner entry RELOADED to take effect — the
+// bytes it was serving were never the problem. What was missing is deciding
+// *that* a reload is due: the daemon compared the entry file's mtime alone,
+// so editing any other file in the graph scheduled nothing and the edit
+// stayed invisible until someone touched the entry by hand.
+const extensionGraphMtimes = new Map<string, Map<string, number>>();
+
+/** Sync realpath with the async path's cache, for the watcher-facing probe. */
+const extensionGraphRealpathCache = new Map<string, string>();
+function realpathSyncOrSelf(target: string): string {
+	const cached = extensionGraphRealpathCache.get(target);
+	if (cached !== undefined) return cached;
+	let resolved: string;
+	try {
+		resolved = fs.realpathSync.native(target);
+	} catch {
+		resolved = target;
+	}
+	extensionGraphRealpathCache.set(target, resolved);
+	return resolved;
+}
+
+/** Snapshot the graph mtimes for one entry. Best-effort per file: a module that
+ *  vanished between the walk and the stat simply leaves the snapshot. */
+function recordExtensionGraphMtimes(entryRealPath: string, modulePaths: Iterable<string>): void {
+	const snapshot = new Map<string, number>();
+	for (const modulePath of modulePaths) {
+		try {
+			snapshot.set(modulePath, fs.statSync(modulePath).mtimeMs);
+		} catch {
+			// Vanished mid-walk — not part of the graph that got loaded.
+		}
+	}
+	extensionGraphMtimes.set(entryRealPath, snapshot);
+}
+
+/**
+ * Which of `entryPaths` have a source graph that changed since it was last
+ * loaded — i.e. which extensions a watcher tick must reload.
+ *
+ * Returns the callers' own spelling of each path so the reload call keeps
+ * using the same identity it resolved at load time.
+ *
+ * An entry with no recorded graph (compiled-bundled, or not loaded through
+ * this compat loader) is reported as changed: this probe is strictly more
+ * informed than the entry-mtime check it replaces, and reporting a spurious
+ * reload costs one module re-read while missing a real edit costs a manual
+ * `touch` of a file the user may not know is the entry.
+ */
+export function extensionEntriesNeedingReload(entryPaths: Iterable<string>): string[] {
+	const changed: string[] = [];
+	for (const entryPath of entryPaths) {
+		const entryRealPath = realpathSyncOrSelf(path.resolve(entryPath));
+		const snapshot = extensionGraphMtimes.get(entryRealPath);
+		if (!snapshot) {
+			changed.push(entryPath);
+			continue;
+		}
+		for (const [modulePath, recordedMtime] of snapshot) {
+			let nextMtime: number;
+			try {
+				nextMtime = fs.statSync(modulePath).mtimeMs;
+			} catch {
+				// Deleted or renamed out from under the graph: the next load
+				// re-walks and re-resolves, which is the point of reloading.
+				changed.push(entryPath);
+				break;
+			}
+			// Not `>`: an edit landing in the same millisecond as the load still
+			// has to be seen, and a checkout that moves mtime backwards is a
+			// change too.
+			if (nextMtime !== recordedMtime) {
+				changed.push(entryPath);
+				break;
+			}
+		}
+	}
+	return changed;
+}
 const commonJsModuleSources = new Map<string, string>();
 const commonJsFallbackModulePaths = new Map<string, string>();
 const extensionSynchronousSpecifierTargets = new Map<string, Map<string, string>>();
@@ -2483,6 +2571,10 @@ async function ensureExtensionGraphHook(entryRealPath: string): Promise<{ clear(
 		cacheBustResolvedImportModules: discoveredCacheBustModules,
 		synchronousSourcePaths,
 	} = await collectExtensionModules(entryRealPath);
+	// Snapshot before any early return below: the graph just walked is the graph
+	// this load is about to serve, so it is the baseline the next watcher tick
+	// compares against — including on loads that install no new hooks.
+	recordExtensionGraphMtimes(entryRealPath, currentModules.keys());
 	let cacheBustResolvedImportModules = extensionGraphCacheBustResolvedImportModules.get(entryRealPath);
 	if (!cacheBustResolvedImportModules) {
 		cacheBustResolvedImportModules = new Set<string>();

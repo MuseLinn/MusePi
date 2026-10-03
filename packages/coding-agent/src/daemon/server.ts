@@ -77,6 +77,7 @@ import { getRemoteDebugger, startRemoteDebuggerServer } from "../debug/remote-de
 import { clearArtifactCache, createReportBundle, getArtifactCacheStats, getLogText } from "../debug/report-bundle";
 import { collectSystemInfo, formatSystemInfo } from "../debug/system-info";
 import { clearPluginRootsAndCaches, resolveActiveProjectRegistryPath } from "../discovery/helpers";
+import { extensionEntriesNeedingReload } from "../extensibility/plugins/legacy-pi-compat";
 import { buildSkillPromptMessage, parseSkillInvocation } from "../extensibility/skills";
 import { loadSlashCommands } from "../extensibility/slash-commands";
 import { copyLocalArtifacts, resolveLocalRoot, resolveLocalUrlToPath } from "../internal-urls/local-protocol";
@@ -979,9 +980,11 @@ export class DaemonServer {
 				}
 			}
 		};
-		void resolveExtensionWatchRoots(this.#host.cwd()).then(attach).catch(err => {
-			logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });
-		});
+		void resolveExtensionWatchRoots(this.#host.cwd())
+			.then(attach)
+			.catch(err => {
+				logger.warn("daemon: extension watch roots unresolved; discovery TTL still applies", { err });
+			});
 	}
 
 	#scheduleExtensionReload(): void {
@@ -1048,16 +1051,14 @@ export class DaemonServer {
 	#reloadChangedSessionExtensions(): void {
 		for (const live of this.#host.allSessions()) {
 			const session = live.agentSession;
-			const entryMtimes = session.getExtensionEntryMtimes();
-			if (entryMtimes.size === 0) continue;
-			const changed: string[] = [];
-			for (const [resolvedPath, recordedMtime] of entryMtimes) {
-				try {
-					if (fs.statSync(resolvedPath).mtimeMs > recordedMtime) changed.push(resolvedPath);
-				} catch {
-					// Entry deleted/renamed — leave the loaded instance as-is.
-				}
-			}
+			const entryPaths = [...session.getExtensionEntryMtimes().keys()];
+			if (entryPaths.length === 0) continue;
+			// Whole source graph, not just the entry file: the loader re-reads
+			// every module on reload, so a submodule edit only needs its owner
+			// entry scheduled. Comparing entry mtimes alone scheduled nothing
+			// for such an edit, which is why touching the entry by hand used to
+			// be required.
+			const changed = extensionEntriesNeedingReload(entryPaths);
 			if (changed.length === 0) continue;
 			void this.#reloadSessionExtensions(live, changed);
 		}
