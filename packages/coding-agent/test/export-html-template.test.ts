@@ -5,6 +5,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { BunPlugin } from "bun";
 import { getTemplate, resolveBundledHtmlAssetPath } from "../src/export/html/index";
+import { HIDDEN_BY_DEFAULT_ENTRY_TYPES } from "../src/session/transcript-records";
 
 interface HeapProbeResult {
 	retainedAssetStrings: number;
@@ -77,10 +78,21 @@ function composeExpectedTemplate(): string {
 		.replace(/\s+/g, " ")
 		.replace(/\s*([{}:;,])\s*/g, "$1")
 		.trim();
-	return templateHtml
-		.replace("<template-css/>", () => `<style>${minifiedCss}</style>`)
-		.replace("<template-tool-views/>", () => `<script>${toolViewsJs}</script>`)
-		.replace("<template-js/>", () => `<script>${templateJs}</script>`);
+	return (
+		templateHtml
+			.replace("<template-css/>", () => `<style>${minifiedCss}</style>`)
+			.replace("<template-tool-views/>", () => `<script>${toolViewsJs}</script>`)
+			// Must mirror src/export/html/index.ts: the viewer's bookkeeping-entry
+			// filter is published as a global ahead of the inlined JS, because the
+			// template cannot import the TS set. Deriving it from the same export
+			// keeps the two from drifting again — a literal copy here is what this
+			// test was silently missing when that global was introduced.
+			.replace(
+				"<template-js/>",
+				() =>
+					`<script>window.__OMP_HIDDEN_ENTRY_TYPES__=${JSON.stringify([...HIDDEN_BY_DEFAULT_ENTRY_TYPES])};</script><script>${templateJs}</script>`,
+			)
+	);
 }
 
 async function runProbe(command: string[]): Promise<TemplateProbeResult> {
