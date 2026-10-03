@@ -233,7 +233,14 @@ clap = { version = "4", features = ["derive"] }
 # ──────────────────────────────────────────────────────────────────────────────
 # Text Processing & Parsing
 # ──────────────────────────────────────────────────────────────────────────────
-pdf-inspector = "1"
+# Pinned exactly, not caret. `release.ts` regenerates the lockfile with an
+# unconstrained `cargo update`, so a caret range lets a patch release silently
+# change native behaviour: 1.20.0 -> 1.25.2 flipped this crate's OCR-need
+# detection (it now flags scanned / vector-text / invisible-layer / no-text /
+# garbled pages and suppresses text from flagged pages), which turned a PDF we
+# ship a regression fixture for into "needs OCR" with no decision on our side.
+# Bumping this is now a deliberate act.
+pdf-inspector = "=1.25.2"
 regex = "1"
 similar = "3.1.0"
 fontdue = { version = "0.9", default-features = false }
