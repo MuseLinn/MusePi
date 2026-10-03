@@ -2,7 +2,7 @@
 //
 // Surfaces MusePi's live state in the macOS menu bar (and Windows/Linux
 // tray):
-//  1. an activity indicator in the icon: idle (hollow π), busy (breathing
+//  1. an activity indicator in the icon: idle (hollow ring), busy (breathing
 //     fill animation), unseen (solid fill). macOS uses monochrome template
 //     images — the menu bar tints them, so light/dark mode needs no
 //     variants there. Windows does NOT tint template images and partial
@@ -56,19 +56,19 @@ function timeLabel(iso) {
 	return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// Monochrome π frames (36×36 physical = 18pt @2x, black on transparent),
-// derived from the brand's dot-matrix mark via scripts/regen-brand-icons.py:
-// a solid silhouette and a hollow outline sharing the anchor's proportions.
+// Monochrome orb frames (36×36 physical = 18pt @2x, black on transparent),
+// derived from the brand master via scripts/regen-brand-icons.py:
+// a filled sphere with the headband carved out, and a hollow ring.
 // nativeImage does NOT decode SVG data URLs on macOS — the earlier SVG
 // version rendered as a blank icon — so these ship as PNG data URLs. Frames
 // are recolored at runtime by rewriting RGB (the glyph is pure black; the
 // alpha channel carries the shape).
 const TRAY_GLYPH_SOLID_B64 =
-	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABV0lEQVR4nO1XsWrDMBB9cjIWmhJKh9ChUMjYtXt+KR/UL2pI56Rdu5SQOVguglM4XFmns0RJQA8OmfhJ9+757EjAhcEkcJrCOTuK6zDCJEx+BjApIKKjfN8AjnSd7JQhEU8ADgAsRZcRLa2xA3BPOVIMOfeMc+ZQQAgPv9aKcvxxfhoR5u7N6NqS0NxmtNKjignyVXFrkyyOwM8fJSgmwFWq+URYNk5jeSVBpb5NDRu/AHxQsTZXUEcLrQFsWF+5eATw1uNx/js1sZv3o3ntfTXLwNvR0vgamLdQ8E3pR3ZD1U6YgNtE/imnqYdgqXowQa2C/29/nNmogiRUhyRUhyRUhyRUhyRUhyRUh3Ic8vucPvxuMJevFuQ2bw07tfpoBjZ2Wn4y/DlsDmAfOH1+AnhgPC1fTD70u1vsDsBL76C4DZwatPzRTmnuafmjiCbQZ7Em1fIvH79Vg4nLUf4jewAAAABJRU5ErkJggg==";
+	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAACA0lEQVR4nO2YzUtUYRSHnwnBmtG+3ImIirVodFHQLnATtFDbhQiaSkYfhP0PFkgiLWwR/Sdt2rQTIkFQaAwFZRRsREEbEYyJF86FM5d7537fW+APDvPe8x7Ofe6579cdOFeyuuTgK5CiWoAhoNcFxlIe6AEGpR27rgIfgXkPEKdqvQcWgStxwdwGNoCpCDleAOtAf1SYl0ANGPeI6xNrpAnJNR0W5rkkeOvQZ8q/AJQkRtsP4I3L4H4nMZNBYYrACbDl0Gee8JcDiN32XKqxA/wGbvqFyasnn7L1vfYBYrdXthxPxL8KXPQDNKeSFZR/MASMZQ9Unlbln/WCaQb2Jfiz8ueAcgSgbdt9voi/AjTpjgu2wFHgurSXlX8AaCe8OoB76trK3QY8agQ0o9pm4FrymvZ+NOaS2ywtda9Cr8YH6toM7F1p341hCzAz65u0TbVvqL68zOo63YkwRmoR7ZbTK+smO3X/F0B/yE45J6BNstPGPwuUU05z8Kpmw4PZ007tFTLrwFIGMF8tGCc9zmANGvHaXCspwux7ba6mdJ9ITx+AM68gU6W1FKqzIvfyJfPddZQgzCHQGbScwwkC3SekRmRtigvkGHhIRBWBnzHAlGxnoEi6LJ/S1ZBVWUzqT4gW4Bnw3QeIOR0+DXrS1HtZUF0DupTV5Pu9LL/myHou4tZf9lNbryL8CdkAAAAASUVORK5CYII=";
 const TRAY_GLYPH_HOLLOW_B64 =
-	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAABw0lEQVR4nNWXv07DMBDGf7lSFYm/L8BSAQLxCkzMDIiBHSSegJUH4AFYmGBlYESCkRHBxsLKAIyoEhQoTYMsXSUTksYOqXA/yXJy/uL77uwkZwgMkQNnbAh+YyAZhtjKEQ2wmwhMdvaA8Qp8JTrvM3AMdC27k9AJoKkPVN32fbZDn3QIvADtCoW8a2au1IfkOc/CNDCrG9Ck+R5o6X1Rdme0b1liloElFfFVlI0smEjMRDXgHNgFtoBVdRbl7JFb4ERtm8Cajs0VBFIoyHZqlm0dOHWZFJgEHoCzlP1TA6yXEWSjoymPNd15b92HOltQTprf0P5Ge7N8vTKCIiu6/qt7aWWxp0vZVCcdbTb/QscegQO1x3/5CkdWVHfAdmr8CJi3uGn+DkP8LdT1WdHWtZajiN8b9OsoKyhREbagxJH/Y8+k8evD9N8QAoMQGITAIAQGITAIgUEIDEJgEAKDEBiEwCCMqCDxFO/L9xbUBl495vXlO9VD/frG1C8bwJteS07t48v3FmSqvK62FYdTgy/fe8muVbB9wmiozT41lOU7ZyjWAt0U7VPAopVyY3/KODX48kcHUcFYLWcs69Tgyx8NfAOmgpBC37QXygAAAABJRU5ErkJggg==";
+	"iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAACOklEQVR4nO2Yu0sdURDGfwpBUJIYUaMX8V4LwSoimCII2lhpCvMPREUI9qYWjCEoCGJjZUBIJSjYWFn5ArUIEkiRVBJ8khgtAkp8RAbOhuGwu+7eu+dq4QcLh7Mz33x7njML9whHAdmjBmgCyoEK0/cT+AV8BnbJAx4Cb4Bl4N8Nz7KxLXEhpAwYBo4jCLGf38AQUJrUlLUC88ATq38LWAB+AHumLwWkgU6g0bI/ArqAVXJAH3ChvvYPMAJkIvjWAWPGx/MXrp5sxXRbQz8DPMqCR3xmLa7XcUleAH8VwWSOO1J8Pyo+4W6J6lxs1oTn/InkMK145VgoiuI0rJw2gQcJChKuDcU/eJNDLXCmhjVN8siojXJmdmYgPij1skNcYULFeRdm+EUZVjsUVKfiyDXji5QykkPPNb6qeN5dSKEyaFbt9TwIWlft536C/qsEtvMgaNsvthZUedcEXai2zKtrnPvF04IOAkbLFapUe99P0OEtCjrwM5B5vDLDt5gHQUsmlsR8HGS0qYyeOhRToz5+Tb/QU4bJAL10YcChoLcqnfFiBio/VZdrxoGYtMq1TqOs11F1pG84Tj/eR3GSBXainKYdJWhHcUqkDuAy4RR20kr22+OS9CeY5M9ZXFLNJFYGjccog8Z9yqDeMKco09BmCsXSkEJx1xwhKZMGvwSeWfayZl4BKySASlPGeIdZnEfW4pSr66jRkO9EELJjbO2SOhS57JwGoN7cgfJLRv+O+QZ8z4H7HgThGpDX0xhJ91qkAAAAAElFTkSuQmCC";
 
-/** π frame at the given fill opacity (0..1) in the given RGB. EVERY frame
+/** Orb frame at the given fill opacity (0..1) in the given RGB. EVERY frame
  * goes through createFromBitmap from the same base geometry so all frames
  * render at the identical size — returning the raw data-URL image instead
  * renders at 36pt on macOS (the unseen frame used to do exactly that,
@@ -76,7 +76,7 @@ const TRAY_GLYPH_HOLLOW_B64 =
  * 34px measured). Windows tray draws at PHYSICAL pixels, so the 36×36 @2x
  * bitmap (18pt DIP, right for the macOS menu bar) is resized to 20×20
  * there — reads clearly at 1.75× DPI while staying inside the 24px cell. */
-function piImage({ glyph, color = [0, 0, 0], fillOpacity = 1 }) {
+function markImage({ glyph, color = [0, 0, 0], fillOpacity = 1 }) {
 	const base = nativeImage.createFromDataURL(`data:image/png;base64,${glyph}`);
 	let img = base;
 	if (process.platform === "win32") {
@@ -141,23 +141,23 @@ const BREATH_OPACITIES = [0.35, 0.5, 0.72, 0.9, 1.0, 0.9, 0.72, 0.5];
 
 /** Frame set for one tray color. macOS keeps template images (opacity
  * carries the state). Windows does NOT tint and partial alpha never showed
- * up reliably in Shell_NotifyIcon (the old 0.35→0.84 white π was invisible
+ * up reliably in Shell_NotifyIcon (the old 0.35→0.84 white glyph was invisible
  * while a fully-opaque test block appeared), so Windows frames are fully
  * opaque and the state is carried by SHAPE: idle = hollow outline,
  * unseen/busy = solid. */
 function buildFrameSet(color) {
 	if (process.platform === "win32") {
-		const solid = piImage({ glyph: TRAY_GLYPH_SOLID_B64, color });
+		const solid = markImage({ glyph: TRAY_GLYPH_SOLID_B64, color });
 		return {
-			idle: piImage({ glyph: TRAY_GLYPH_HOLLOW_B64, color }),
+			idle: markImage({ glyph: TRAY_GLYPH_HOLLOW_B64, color }),
 			unseen: solid,
 			breath: [solid],
 		};
 	}
 	return {
-		idle: piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: IDLE_OPACITY }),
-		unseen: piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: UNSEEN_OPACITY }),
-		breath: BREATH_OPACITIES.map(o => piImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: o })),
+		idle: markImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: IDLE_OPACITY }),
+		unseen: markImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: UNSEEN_OPACITY }),
+		breath: BREATH_OPACITIES.map(o => markImage({ glyph: TRAY_GLYPH_SOLID_B64, color, fillOpacity: o })),
 	};
 }
 
@@ -288,7 +288,7 @@ function createTrayController({ onAction, onSnapshot }) {
 			tray.setIgnoreDoubleClickEvents(true);
 			tray.on("click", () => onAction({ type: "show-main-window" }));
 		}
-		// Windows: blink the π 3× at startup (proma setTrayFlash parity) so
+		// Windows: blink the tray glyph 3× at startup (proma setTrayFlash parity) so
 		// the tray entry is discoverable next to the network/volume icons —
 		// and as a self-test: blinking proves the icon is rendering, silence
 		// means the Tray never reached the shell.
@@ -462,7 +462,7 @@ function createTrayController({ onAction, onSnapshot }) {
 		};
 		// NO setTitle: a variable-width title (approval count) resizes the
 		// status-item button and shoves every icon left of it. The unseen
-		// state (solid π / badge shape) + the menu's approval section carry
+		// state (solid sphere / badge shape) + the menu's approval section carry
 		// the signal.
 		applyIconState(counts.busy > 0 ? "busy" : counts.approvals > 0 ? "unseen" : "idle");
 		if (process.platform === "win32" || process.platform === "darwin") {
