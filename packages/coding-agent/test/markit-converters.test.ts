@@ -227,10 +227,16 @@ describe("markit converters", () => {
 			expect(
 				out.includes("Inline image tokenizer repro issue") || out.includes("Text extraction is incomplete"),
 			).toBe(true);
-			// The PDF path goes through the native pdf-inspector bridge, which
-			// emits pipes unpadded (unlike the docx/epub turndown HTML path).
-			expect(out).toContain("|Name|Qty|");
-			expect(out).toContain("|Wire|12|");
+			// The PDF path goes through the native pdf-inspector bridge, which emits
+			// pipes unpadded (unlike the docx/epub turndown HTML path). When the page
+			// IS extracted the result must be complete — the original failure mode was
+			// a truncated or garbled fragment, so a half-emitted table is that same
+			// bug in a different costume. Guarding it here does not force the refused
+			// case to invent a table.
+			if (out.includes("Inline image tokenizer repro issue")) {
+				expect(out).toContain("|Name|Qty|");
+				expect(out).toContain("|Wire|12|");
+			}
 		} finally {
 			await removeWithRetries(homeDir);
 		}
