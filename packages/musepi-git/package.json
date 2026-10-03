@@ -1,0 +1,20 @@
+{
+  "name": "musepi-git",
+  "version": "0.1.0",
+  "description": "Git context for MusePi sessions: repository state on demand, read through MusePi's central git helper.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "devDependencies": {
+    "@musepi/pi-coding-agent": "workspace:*"
+  },
+  "scripts": {
+    "check": "tsgo -p tsconfig.json --noEmit"
+  },
+  "musepi": {
+    "name": "Git Context",
+    "description": "Reads repository state through the host git helper (never a hand-spawned `git`) and exposes it as a session command.",
+    "extensions": [
+      "src/index.ts"
+    ]
+  }
+}

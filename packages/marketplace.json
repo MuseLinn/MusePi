@@ -1,0 +1,22 @@
+{
+  "name": "musepi",
+  "owner": {
+    "name": "MusePi"
+  },
+  "metadata": {
+    "description": "First-party MusePi plugins.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "musepi-git",
+      "source": "./musepi-git",
+      "version": "0.1.0",
+      "description": "Git context for MusePi sessions: branch, HEAD shape and working-tree counts via the host git helper.",
+      "category": "developer-tools",
+      "keywords": ["git", "branch", "status", "vcs"],
+      "license": "UNLICENSED",
+      "icon": "lucide:git-branch"
+    }
+  ]
+}
