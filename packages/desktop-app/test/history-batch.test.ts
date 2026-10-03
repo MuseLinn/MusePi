@@ -128,7 +128,7 @@ describe("loadAlignedHistoryBatch", () => {
 		});
 		const batch = await loadAlignedHistoryBatch(s.fetch, "c1");
 		expect(s.calls).toEqual(["c1", "c2"]);
-		expect(batch.entries[0]?.id).toBe("u" + seq);
+		expect(batch.entries[0]?.id).toBe(`u${seq}`);
 	});
 
 	test("bounds the walk at two extra reads", async () => {
