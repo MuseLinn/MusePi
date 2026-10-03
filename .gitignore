@@ -120,8 +120,9 @@ packages/desktop-app/vendor/
 # i18n split scratch (split(1) output from a one-off migration)
 .tmp-i18n-rem-part-*
 
-# WorkBuddy agent session state (memory, outputs) — never committed
+# Agent session state (memory, outputs) — never committed
 .workbuddy/
+.sisyphus/
 
 # Dev desktop data isolation (dev-desktop.mjs): isolated daemon home, socket
 # dir and Electron userData for `bun run desktop:dev` — never committed.
