@@ -1,6 +1,6 @@
 {
   "name": "musepi-git",
-  "version": "0.1.0",
+  "version": "0.5.3",
   "description": "Git context for MusePi sessions: repository state on demand, read through MusePi's central git helper.",
   "license": "UNLICENSED",
   "type": "module",
