@@ -432,7 +432,22 @@ async function cmdRelease(versionOrBump: string): Promise<void> {
 	// （nix/bun.nix 的生成器）只支持 v1——删除后重生成会让发版卡死。原位
 	// `bun install` 同样全量重解析并按既有格式（v1）回写。
 	await $`bun install`;
-	await $`cargo generate-lockfile`;
+	// `--workspace`, not `generate-lockfile`. The workspace version bump above
+	// changes member manifests, and the lock has to record that — but a release
+	// is not the place to re-resolve the dependency graph.
+	//
+	// `cargo generate-lockfile` re-resolves EVERY dependency to the newest
+	// compatible version. That is how 0.5.3 shipped pdf-inspector 1.20.0 ->
+	// 1.25.2 with nobody deciding it: the new version widened that crate's
+	// OCR-need detection and started discarding text from flagged pages, which
+	// changed how PDFs convert. A patch release silently changed native
+	// behaviour; the only reason it was caught at all is that a test happened to
+	// encode the old answer.
+	//
+	// `cargo update --workspace` syncs the bumped member versions into
+	// Cargo.lock and leaves every third-party pin exactly where it was. Moving
+	// one of those is now a separate, reviewable change.
+	await $`cargo update --workspace`;
 	await generateNixBunDeps(nixBunDepsGenerator);
 	console.log();
 
