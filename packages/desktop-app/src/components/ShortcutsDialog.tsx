@@ -75,7 +75,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 	const paletteBinding = getEntry("search") ? bindingLabel("search") : "";
 
 	const renderColumn = (column: ShortcutSection[]) => (
-		<div className="flex min-w-0 flex-col gap-5">
+		<div className="gui-shortcuts-body flex min-w-0 flex-col gap-5">
 			{column.map(section => (
 				<section key={section.groupKey || "ungrouped"} className="flex flex-col gap-1.5">
 					{section.groupKey && (
