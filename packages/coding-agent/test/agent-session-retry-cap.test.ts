@@ -143,8 +143,13 @@ describe("AgentSession retry delay cap", () => {
 		expect(retryStartEvents).toHaveLength(0);
 		expect(retryEndEvents).toHaveLength(1);
 		expect(retryEndEvents[0]).toMatchObject({ success: false });
-		expect(retryEndEvents[0].finalError).toContain("exceeds retry.maxDelayMs");
-		expect(retryEndEvents[0].finalError).toContain("11180000");
+		expect(retryEndEvents[0].finalError).toContain("rate_limit_error");
+		// The cap decision is retryer bookkeeping and must not reach the user-facing
+		// string — every surface renders finalError verbatim, so wrapping the provider
+		// reason in it is what buried the actionable message. It goes to the log.
+		// (The retry-after value itself legitimately appears inside the provider body,
+		// so it is the cap wording that has to be absent, not the number.)
+		expect(retryEndEvents[0].finalError).not.toContain("exceeds retry.maxDelayMs");
 		// No multi-hour (or any) sleep — the cap path skips scheduler.wait entirely.
 		for (const call of waitSpy.mock.calls) {
 			expect(call[0]).toBeLessThanOrEqual(100);

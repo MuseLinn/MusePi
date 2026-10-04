@@ -264,7 +264,10 @@ describe("EventController error banner", () => {
 		showError.mockClear();
 		streamingComponent.setErrorPinned.mockClear();
 
-		const finalError = `Retry continuation failed locally: local hook failed. Original error: ${providerError}`;
+		// A local continuation failure is the actionable reason — the provider error is
+		// already pinned on screen — so finalError leads with the local cause and
+		// never restates the provider text.
+		const finalError = `Retry continuation failed locally: local hook failed`;
 		await controller.handleEvent({
 			type: "auto_retry_end",
 			success: false,

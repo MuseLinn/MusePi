@@ -2154,11 +2154,20 @@ export class TurnRecovery {
 			await this.persistTerminalEmptyErrorTurn(message);
 			const attempt = this.#retryAttempt;
 			this.#retryAttempt = 0;
+			// Two channels, the shape upstream settled on: `finalError` carries what
+			// the user can act on, and the retryer's own reasoning is diagnostic and
+			// goes to the log. Wrapping the provider message in the delay-cap
+			// explanation put the actionable reason underneath retryer internals in
+			// every surface that renders this string.
+			logger.warn(`retry aborted: provider asked to wait ${delayMs}ms, over the ${maxDelayMs}ms cap`, {
+				error: errorMessage,
+				attempt,
+			});
 			await this.#host.emitSessionEvent({
 				type: "auto_retry_end",
 				success: false,
 				attempt,
-				finalError: `Provider requested ${delayMs}ms wait, exceeds retry.maxDelayMs (${maxDelayMs}ms). Original error: ${errorMessage}`,
+				finalError: errorMessage,
 			});
 			this.#clearPendingRetryErrors();
 			this.resolveRetry();
@@ -2274,11 +2283,19 @@ export class TurnRecovery {
 		this.#retryAttempt = 0;
 		const localError = error instanceof Error ? error.message : String(error);
 		await this.persistTerminalEmptyErrorTurn(message);
+		// Same split as the delay-cap abort, but the other way round: here the local
+		// failure is the actionable one — a broken hook is the user's to fix, and the
+		// provider error is already on screen pinned. Preferring the provider text
+		// would restate what they can see and hide what stopped the retry.
+		logger.warn(`retry continuation failed locally: ${localError}`, {
+			error: message.errorMessage ?? "Unknown error",
+			attempt,
+		});
 		await this.#host.emitSessionEvent({
 			type: "auto_retry_end",
 			success: false,
 			attempt,
-			finalError: `Retry continuation failed locally: ${localError}. Original error: ${message.errorMessage ?? "Unknown error"}`,
+			finalError: `Retry continuation failed locally: ${localError}`,
 		});
 		this.#clearPendingRetryErrors();
 		this.resolveRetry();
