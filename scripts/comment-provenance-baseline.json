@@ -111,7 +111,7 @@
 		"packages/desktop-app/src/components/BtwFloatingCard.tsx": 1,
 		"packages/desktop-app/src/components/CapabilityCenterPage.tsx": 1,
 		"packages/desktop-app/src/components/ChatFind.tsx": 1,
-		"packages/desktop-app/src/components/ChatView.tsx": 23,
+		"packages/desktop-app/src/components/ChatView.tsx": 1,
 		"packages/desktop-app/src/components/ChromaGroup.tsx": 1,
 		"packages/desktop-app/src/components/CollabDialog.tsx": 1,
 		"packages/desktop-app/src/components/CommandPalette.tsx": 5,

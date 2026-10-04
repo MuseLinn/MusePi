@@ -172,10 +172,10 @@ function UserAvatar({ rpc, cwd }: { rpc: RpcClient; cwd: string }): ReactNode {
  *  - welcome (no session): greeting, watermark, centered composer with
  *    border-beam glow; fades/zooms out when a session appears.
  *  - session: header (title/status + terminal & right-panel toggles in
- *    the top-right, ZCode style), transcript with the session-bound
+ *    the top-right), transcript with the session-bound
  *    ContextPanel nested beneath it, bottom composer, optional dock.
  *
- * ZCode immersive layout: the session-bound right panel lives INSIDE this
+ * Immersive layout: the session-bound right panel lives INSIDE this
  * surface; the global session sidebar stays a separate full-height pane
  * whose controls float on the boundary next to this surface.
  */
@@ -346,7 +346,7 @@ export function ChatView({
 	paused?: boolean;
 	pausedAt?: number | null;
 	onResume?(): void;
-	/** Session-bound right panel (context/files/terminal tools), ZCode
+	/** Session-bound right panel (context/files/terminal tools),
 	 * "打开标签页" style — nested under the transcript inside this surface. */
 	rightPanelOpen: boolean;
 	/** Reveal a file in the right panel: the caller (App) opens the panel;
@@ -371,7 +371,7 @@ export function ChatView({
 	terminalOpen: boolean;
 	/** Last terminal tab closed → fold the dock (TerminalPanel onAllClosed). */
 	onCloseTerminal?(): void;
-	/** Focus mode (openchamber ⌘⇧E): composer fills the surface. */
+	/** Focus mode: composer fills the surface. */
 	focusMode: boolean;
 	onToggleFocus(): void;
 	/** Welcome-scene reminders (kimi 实时提醒 parity): background-working +
@@ -393,7 +393,7 @@ export function ChatView({
 		store ? store.subscribe.bind(store) : noopSubscribe,
 		store ? store.getSnapshot.bind(store) : () => null,
 	);
-	// 扩展 per-tool 渲染器(registerToolView — DSH tool.call.toolview):
+	// 扩展 per-tool 渲染器(registerToolView):
 	// 注册进 guest-client tool-render 外部表,transcript 按工具名分派。
 	useExtensionToolViews(rpc);
 	// Pause banner hold timer: tick every second while the freeze is engaged
@@ -648,7 +648,7 @@ export function ChatView({
 			if (r.width > 0) lastWelcomeFrameRect = { left: r.left, top: r.top, width: r.width, height: r.height };
 		}
 	}
-	// Agent status via the thinking-orb state (ZCode: avatar, not labels).
+	// Agent status via the thinking-orb state (avatar, not labels).
 	// streaming = the assistant message has started streaming (view folds it
 	// into entries at message_start — no separate ghost is kept). Pending
 	// tool approvals pin `waiting` (the "paused for you" wave) — shared
@@ -746,7 +746,7 @@ export function ChatView({
 		}, 700);
 		return () => clearTimeout(timer);
 	}, [store?.sessionId, store]);
-	// ZCode 引用回复 / Cmd+L 追加引用: quoted texts prepend the next
+	// 引用回复 / Cmd+L 追加引用: quoted texts prepend the next
 	// composer message; multiple quotes append as stacked cards.
 	const [quotes, setQuotes] = useState<string[]>([]);
 	const appendQuote = useCallback((text: string): void => {
@@ -821,7 +821,7 @@ export function ChatView({
 			// the strip never navigate to it.
 			if (!view) return;
 			// Strip label: registry display name for built-ins, the slot's own
-			// label for extension tabs (openchamber tab-label parity) — a raw
+			// label for extension tabs — a raw
 			// surface id like "ext:settings" must never reach the tab title.
 			const ext = view.startsWith("ext:") ? extTabsRef.current.find(x => `ext:${x.slot}` === view) : undefined;
 			const label = ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
@@ -829,11 +829,11 @@ export function ChatView({
 		},
 		[panelTabs.open],
 	);
-	// transcript.node seat dispatch (DSH `conversation.chat.node` entryKey
-	// analog): extensions register renderers for specific node kinds
-	// (transcriptNodeKind). A matched renderer OWNS the entry's rendering
+	// transcript.node seat dispatch: extensions register renderers for specific
+	// node kinds (transcriptNodeKind). A matched renderer OWNS the entry's
+	// rendering (may include the built-in children base or render fully custom);
 	// (may include the built-in children base or render fully custom);
-	// unregistered kinds fall through to the built-in (DSH fallback).
+	// unregistered kinds fall through to the built-in.
 	// Memoized: the identity is part of EntryRow's memo comparison, and the
 	// component set changes only on extensions.changed — not on stream frames.
 	const transcriptNodeComponents = useSlotComponents(rpc, TRANSCRIPT_NODE_SLOT);
@@ -1425,7 +1425,7 @@ export function ChatView({
 		[snap?.structureRev, runTreeOp, branchTo],
 	);
 
-	// Lazy history backfill (kimi/DSH parity): the transcript fires this
+	// Lazy history backfill: the transcript fires this
 	// when its tail window is fully expanded and the user scrolls up past
 	// the oldest loaded entry. Pages the next chunk from session.history
 	// (cursor = oldest loaded entry id) and prepends it into the store —
@@ -1447,7 +1447,7 @@ export function ChatView({
 		const anchor: TranscriptAnchor | null = anchorCtlRef.current?.capture() ?? null;
 		const sessionId = store.sessionId;
 		try {
-			// Turn-aligned batch (openchamber loadOlderPage parity). The walk, its
+			// Turn-aligned batch. The walk, its
 			// bound and its cursor discipline live in lib/history-batch.ts — the point
 			// is that the batch starts on a turn boundary so the rail's top tick is a
 			// whole turn, not a fragment of one.
@@ -1485,7 +1485,7 @@ export function ChatView({
 	const onLoadOlderStable = useCallback((): void => {
 		void loadOlder();
 	}, [loadOlder]);
-	// ── ⌘F in-conversation find (openchamber parity) ─────────────────────
+	// ── ⌘F in-conversation find ────────────────────────────────────────
 	// The daemon search is scoped to this session, so it sees the WHOLE
 	// conversation rather than only the loaded transcript window; the jump
 	// then pages the hit in through the normal transcript path. Hits arrive
@@ -1896,8 +1896,8 @@ export function ChatView({
 		[railTurnsInPath, store?.hasMore, loadingOlder, onLoadOlderStable],
 	);
 	// Find-bar docking. `.gui-find` is absolutely positioned against
-	// .gui-chat-body (the chat column's own box — openchamber anchors its bar
-	// to the equivalent chatRootRef), so the one thing it cannot know is how
+	// .gui-chat-body (the chat column's own box — it is the offset parent),
+	// so the one thing it cannot know is how
 	// much of that edge the TurnRail covers: the rail is a 24px absolutely-
 	// positioned overlay hugging whichever side the user picked (设置 → 外观),
 	// and its extent changes with the rail style and the turn count. Measure
@@ -1975,7 +1975,7 @@ export function ChatView({
 	})();
 	// /btw floating card: null = closed, string = active question.
 	const [btwQuestion, setBtwQuestion] = useState<string | null>(null);
-	// Docked subagent detail (kimiwork parity: a swarm-card member row, the
+	// Docked subagent detail (a swarm-card member row, the
 	// composer's swarm chip or the agents roster). The detail belongs to the
 	// right panel's agents view — the rail is the single navigation axis, so
 	// selecting an agent opens THAT surface (expanding a folded panel)
@@ -2162,13 +2162,13 @@ export function ChatView({
 			{/* Selection→ask popover (session-scoped throwaway turns). */}
 			<AskPopover rpc={rpc} sessionId={store?.sessionId ?? null} />
 			{/* Window drag strip: the 8px margin above the floating surface
-			 * plus the header's blank areas stay draggable (openchamber
-			 * app-region-drag header); every button inside is no-drag. */}
+			 * plus the header's blank areas stay draggable; every button inside
+			 * is no-drag. */}
 			<div className="gui-drag-strip" aria-hidden />
-			{/* Workspace split (ZCode 工作区面板改版 parity): the session column,
+			{/* Workspace split: the session column,
 			 * the side pane and the terminal dock are INDEPENDENT rounded cards
 			 * floating on the glass base (docs/archive/gui-right-panel-redesign.md
-			 * §3.3.2 / zcode-absorption-todos #工作区面板拆分) — no more single
+			 * §3.3.2) — no more single
 			 * card with a vertical divider. This wrapper is layout-only now;
 			 * each region carries its own card chrome. `gui-chat-surface` stays
 			 * as the JS anchor for the maximize measurement query. The window
@@ -2232,8 +2232,7 @@ export function ChatView({
 							<div className="flex min-h-0 flex-1">
 								{/* Session column: transcript + composer + dock — the
 								 * right panel sits BESIDE this column (same level), so
-								 * opening it pushes the composer left (openchamber
-								 * MainLayout main | ContextPanel). */}
+								 * opening it pushes the composer left (main | ContextPanel). */}
 								<div className="gui-chat-column gui-float-card flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--color-surface)]">
 									{/* Maximize anchor (docs §3.3.2): the floated panel and
 									 * its backdrop measure THIS column — the old target
@@ -2274,7 +2273,7 @@ export function ChatView({
 												)}
 											</div>
 										)}
-										{/* Scroll-shadow (openchamber ScrollShadow parity): a real
+										{/* Scroll-shadow: a real
 										 * content fade via mask-image, applied only while the
 										 * transcript overflows (top/bottom data attrs). */}
 										<div className="gui-transcript-wrap relative min-h-0 min-w-0 flex-1">
@@ -2301,7 +2300,7 @@ export function ChatView({
 													{t("surface canvas")}
 												</button>
 											</div>
-											{/* Parent-session back chip (openchamber parity): when the
+											{/* Parent-session back chip: when the
 											 * open session is a subagent child, pin a liquid-glass
 											 * "back to parent" chip at the transcript's top-left so
 											 * the hierarchy is always one click away. */}
@@ -2319,7 +2318,7 @@ export function ChatView({
 													</span>
 												</button>
 											)}
-											{/* Floating status cards (ZCode 悬浮卡 parity): live git
+											{/* Floating status cards: live git
 											 * state + subagents + todo progress, pinned top-right;
 											 * hidden entirely when there is nothing to show. */}
 											<StatusCards
@@ -2512,7 +2511,7 @@ export function ChatView({
 																	setSpeakingId(null);
 																}}
 																onSaveImage={text => setSaveImageText(text)}
-																/* ZCode: avatars replace the 宿主/代理 gutter labels. */
+																/* avatars replace the 宿主/代理 gutter labels. */
 																userGutter={showAvatars ? <UserAvatar rpc={rpc} cwd={store.cwd} /> : ""}
 																agentGutter={showAvatars ? <AgentAvatar state={orb} size={64} /> : ""}
 																/* Layer-1 branch topology: multi-child messages render a
@@ -2531,7 +2530,7 @@ export function ChatView({
 														</CodeHighlightProvider>
 													</div>
 													{/* Jump-to-bottom: the shared client-core Transcript owns the
-													 * canonical .tr-back-bottom (M1.10, ZCode-parity follow re-arm).
+													 * canonical .tr-back-bottom (M1.10 follow re-arm).
 													 * The old desktop-local JumpToBottomButton was a DUPLICATE of
 													 * it (user: 滚动到底部的按钮有俩) and has been removed. */}
 													{/* Message-tree navigation (TUI tree-selector parity):
@@ -2556,7 +2555,7 @@ export function ChatView({
 														onRevertTo={entry => void jumpBackToMessage(entry.id, "")}
 														activePathIds={trustedPathIds}
 													/>
-													{/* In-message text selection actions (openchamber parity):
+													{/* In-message text selection actions:
 													 * quote a snippet (not the whole message), copy, start a
 													 * new session from it, or append it to the workspace notes. */}
 													<SelectionToolbar
@@ -2614,8 +2613,7 @@ export function ChatView({
 												</>
 											)}
 										</div>
-										{/* Turn-position rail (openchamber PromptNavigatorRail
-										 * parity): a marker per user message — hover previews
+										{/* Turn-position rail: a marker per user message — hover previews
 										 * the prompt, click jumps to that turn. In canvas mode
 										 * the transcript scroller does not exist, so the rail
 										 * switches to the active-path source below and clicks
@@ -2630,10 +2628,10 @@ export function ChatView({
 											onJumpToTurn={entryId => requestJump({ entryId })}
 										/>
 									</div>
-									{/* ⌘F find bar (openchamber parity): floats over the conversation's
+									{/* ⌘F find bar: floats over the conversation's
 									 * top edge. It is a child of .gui-chat-body — the chat column's own
-									 * box, and therefore its offset parent (openchamber's chatRootRef
-									 * model). NOT .gui-transcript-wrap: the pause banner sits in flow
+									 * box, and therefore its offset parent. NOT .gui-transcript-wrap:
+									 * the pause banner sits in flow
 									 * above the wrap, so the two boxes differ, and an earlier revision
 									 * wrongly assumed the wrap was the ancestor. Absolutely positioned
 									 * on purpose: a bar in flow would re-measure every virtual row. */}
@@ -2862,8 +2860,7 @@ export function ChatView({
 										void forkFromMessage(id, undefined, !isUser);
 									}}
 								/>
-								{/* Right-edge 44px icon rail (openchamber ContextPanelRail
-								 * parity): tool icons + panel fold toggle + extension
+								{/* Right-edge 44px icon rail: tool icons + panel fold toggle + extension
 								 * rail.right slot. Sibling of the panel at the surface's
 								 * right edge. */}
 								<RightRail
@@ -2954,7 +2951,7 @@ export function ChatView({
 					style={{ height: terminalOpen ? dockHeight : 0 }}
 				>
 					{/* Drag handle: the dock pushes the composer up and its
-					 * height is user-adjustable (openchamber bottom dock). */}
+					 * height is user-adjustable. */}
 					<div className="gui-dock-handle" {...dockResizeDrag} style={{ touchAction: "none" }} aria-hidden />
 					{terminalPanelMounted && (
 						<TerminalPanel rpc={rpc} cwd={store?.cwd ?? project ?? ""} onAllClosed={onCloseTerminal} />
