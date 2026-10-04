@@ -18,7 +18,7 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getConfigRootDir, isEnoent } from "@musepi/pi-utils";
 
-/** Metadata size cap (§4: 对齐 open-design 上限,16KiB)。 */
+/** Metadata size cap (§4: 16KiB)。 */
 export const PROJECT_METADATA_LIMIT_BYTES = 16 * 1024;
 
 /** Template tab ids that a saved template can originate from. "template"

@@ -364,7 +364,7 @@ function fsCopyFileSync(src: string, dst: string): void {
 }
 
 /** One-time import of Cookies + LocalStorage from the most recent Chrome
- *  profile into the shared browser profile (zcode 浏览器数据 parity).
+ *  profile into the shared browser profile.
  *  Copies the SQLite cookie DB and the Local Storage leveldb tree. */
 export async function browserImportChrome(
 	settings: Settings,

@@ -1,5 +1,5 @@
 /**
- * P0 自举:agent 扩展管理工具(extension_* 工具集,DSH tool-cordis 参考吸收)。
+ * P0 自举:agent 扩展管理工具(extension_* 工具集)。
  *
  * 会话级——操作调用者所在会话的 runner:load/reload 走 AgentSession 的
  * busy gate(streaming 时 park 到 agent_end);只读查询走 listLoadedExtensions

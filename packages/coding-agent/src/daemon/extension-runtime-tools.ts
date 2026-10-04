@@ -1,5 +1,5 @@
 /**
- * P2 动态自举工具链(DSH cordis-host-runner 的 musepi 落地,无审批):
+ * P2 动态自举工具链(cordis-host-runner 的 musepi 落地,无审批):
  *
  * 会话内 agent 定义→运行→停用→删除动态插件工具,全程沙箱隔离:
  * - ext_define  { name, purpose, hostCode, pluginId? }
@@ -255,7 +255,7 @@ export function createExtensionRuntimeTools(
 				clearTimeout: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
 			});
 			try {
-				// shape A:hostCode 是 async 函数体(DSH evaluateHostCode 语义,
+				// shape A:hostCode 是 async 函数体(evaluateHostCode 语义,
 				// 包成 `(async () => { code })` 执行)。
 				await evaluateHostCode<unknown>(sandbox, version.hostCode, plugin.pluginId, VM_TIMEOUT_MS);
 				// shape B:hostCode 是工厂表达式(如 `async () => {...}` 或

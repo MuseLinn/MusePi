@@ -31,7 +31,7 @@ export interface SlotComponent {
 	order?: number;
 	/** transcript.node seat: node kinds (transcriptNodeKind entryKey) this
 	 *  renderer owns. No entryKinds -> does not participate in per-kind node
-	 *  dispatch. DSH entryKey analog. */
+	 *  dispatch. Entry-key analog. */
 	entryKinds?: string[];
 }
 

@@ -357,11 +357,11 @@ export class ViewStore {
 						? String((snapshot.header as { timestamp?: string }).timestamp ?? "")
 						: "",
 				) || Date.now();
-			// Last-ACTIVITY stamp (openchamber `time.updated` parity): the newest
+			// Last-ACTIVITY stamp: the newest
 			// entry timestamp, NOT the persist wall-clock. Persisting happens on
 			// VIEW too (activate, idle-close dispose), and a view-stamped
-			// updated_at re-ranks the session for merely being opened (bitfun's
-			// nav list documents the same trap: "rows do not jump to the top on
+			// updated_at re-ranks the session for merely being opened (the
+			// same trap: "rows do not jump to the top on
 			// click"). Entries are ISO-stamped at append; max() is robust to any
 			// out-of-order replay, and an empty session falls back to createdAt.
 			let lastActivity = createdAt;

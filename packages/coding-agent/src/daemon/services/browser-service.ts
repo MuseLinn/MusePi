@@ -135,7 +135,7 @@ export class BrowserService implements DaemonService {
 	}
 
 	/** RPC browser.importChrome：从最近使用的 Chrome profile 一次性导入
-	 *  Cookies + LocalStorage（zcode 浏览器数据 parity）。 */
+	 *  Cookies + LocalStorage。 */
 	async importChrome(): Promise<{ ok: boolean; importedFrom?: string; error?: string }> {
 		const { browserImportChrome } = await import("../browser-rpc");
 		return browserImportChrome(await this.#deps.settings(), this.#deps.cwd());

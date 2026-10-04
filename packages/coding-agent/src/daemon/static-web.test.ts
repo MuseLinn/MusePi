@@ -5,7 +5,7 @@ import { startDaemonWeb } from "./static-web";
 /** The compat renderer dist the daemon serves (client-core/dist, sibling). */
 const DIST_DIR = path.resolve(import.meta.dir, "../../../client-core", "dist");
 
-/** dsh-desktop-compat "runtime serves the renderer" half: the loopback HTTP
+/** "runtime serves the renderer" half: the loopback HTTP
  *  static server must serve the built SPA + SPA-fallback, and refuse path
  *  traversal — the Electron compat shell loadURLs this origin, leaving the
  *  served content authoritative. */

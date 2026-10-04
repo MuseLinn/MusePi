@@ -1,7 +1,7 @@
 // ============================================================
 // terminal-core builtin 插件单元 —— cordis 收编第四刀（设计稿 §2
-// 目标形态：终端能力收进 builtin 插件，dsh
-// packages/terminal/terminal + tool-terminal 形状 parity，不拷 dsh 代码）。
+// 目标形态：终端能力收进 builtin 插件，形状对齐 tool-terminal，
+// 不拷外部代码）。
 //
 // 能力缝声明（M2-2.4）：
 // - 名称+ns：terminal-core（daemon 装配面，builtin 信任级）；provider

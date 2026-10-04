@@ -21,10 +21,10 @@ import type { DaemonService } from "./types";
  * - 生命周期：无自有状态。FileIndexService 实例仍归 DaemonSessionHost
  *  （懒创建、进程级单例），本服务经 ensureFileIndex 句柄访问。
  *
- * 对标注记（dsh 0.1.7 workspace-files）：dsh 已把"只读文件预览 + 目录
- *  列表 + 文件系统变更 feed"做成独立 cordis 服务（分页解码、NUL 扫描、
- * 字节区间）。我们的 readBytes 已覆盖二进制预览（8MiB 软帽/32MiB 硬帽），
- * 差距在分页文本流与变更 feed——列入 M2 增强候选，P1 只搬移不改行为。
+ * 已知差距：分页文本流与文件系统变更 feed 尚未实现——列入 M2 增强候选。
+ * 本次只搬移不改行为：readBytes 已覆盖二进制预览
+ * （8MiB 软帽 / 32MiB 硬帽）。
+ *
  */
 export interface FileServiceDeps {
 	/** workspace.tree 根目录兜底（host #options.cwd，未设置时 homedir）。 */

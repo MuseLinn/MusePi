@@ -15,7 +15,7 @@
 //
 // 收编第三刀（设计稿 §2）：具体实现（spawnBunPty/spawnNodePtyBridge）
 // 注册进 TerminalRegistry（terminal-registry.ts 的 registerBackend
-// 形状，dsh parity）；provider 解析策略（manifest > settings > auto）
+// 形状）；provider 解析策略（manifest > settings > auto）
 // 不变。backend 缺席 = 结构化 NO_BACKEND（禁用兜底归因的数据源），
 // auto 只在在册 backend 间回退。
 // ============================================================
