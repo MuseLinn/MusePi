@@ -166,7 +166,7 @@ function ghPath(): string | null {
 }
 
 /**
- * Daemon-owned GitHub token (openchamber pattern): the device-flow token is
+ * Daemon-owned GitHub token: the device-flow token is
  * stored here instead of `gh auth login`, whose token validation hits
  * api.github.com — unreachable on flaky networks, which then fails the whole
  * auth even though the device flow succeeded. gh RPCs receive it via the
@@ -229,8 +229,8 @@ function clearGhToken(): void {
 }
 
 /**
- * Slash-command grouping for the GUI completion tags (openchamber-style
- * category badges). Keys are stable English ids; the GUI translates them.
+ * Slash-command grouping for the GUI completion tags (category
+ * badges). Keys are stable English ids; the GUI translates them.
  */
 const SLASH_CATEGORY: Record<string, string> = {
 	// Session & context
@@ -359,7 +359,7 @@ export interface DaemonOptions {
 	/** Optional WebSocket port (browser-reachable JSON-RPC transport). */
 	wsPort?: number;
 	/** Optional loopback HTTP port serving the renderer bundle (client-core
-	 *  dist) — the dsh-desktop-compat "runtime serves the web renderer" half.
+	 *  dist) — the "runtime serves the web renderer" half.
 	 *  The Electron compat shell loadURLs this origin; the WS stays on wsPort. */
 	webPort?: number;
 	cwd?: string;
@@ -2795,7 +2795,7 @@ export class DaemonSessionHost {
 			 *  session.list 的子代理计数按产物目录前缀过滤需要它。 */
 			sessionFile?: string;
 			/** 子代理 transcript 行(task/vibe 子会话):parentId 指向父会话,
-			 *  GUI 树按 openchamber 层级呈现,行可直达子会话消息。 */
+			 *  GUI 树按层级呈现,行可直达子会话消息。 */
 			subagent?: boolean;
 			/** 顾问 transcript 行(`__advisor[.<slug>].jsonl`):挂在父会话产物
 			 *  目录下的顾问内部记录,GUI 标记为顾问且只读。 */

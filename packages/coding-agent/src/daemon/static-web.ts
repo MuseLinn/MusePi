@@ -1,6 +1,6 @@
 /**
  * Loopback HTTP static server for the renderer bundle — the "runtime serves
- * the web renderer" half of the dsh-desktop-compat chain. The daemon serves
+ * the web renderer" half of the desktop-compat chain. The daemon serves
  * the built `client-core` SPA at http://127.0.0.1:<webPort>/; the Electron
  * compat shell `loadURL`s it and overlays the desktop frame (the wrapper that
  * leaves the served content authoritative).
@@ -37,7 +37,7 @@ export interface DaemonWebHandle {
 
 const DAEMON_CONFIG_PATH = "/__daemon.json";
 
-/** Injected compat slot host (dsh-desktop plugin parity): served only to
+/** Injected compat slot host: served only to
  *  `?shell=1` (the Electron compat shell). The client-core bundle stays a
  *  passive renderer — this script is the host that pulls the daemon's
  *  compiled `transcript.node` extension components (extensions.list) and
@@ -99,7 +99,7 @@ export function compatSlotHostScript(): string {
 		} catch {
 			return; // daemon unreachable — no extensions to host
 		}
-		// DSH shell modes: compatibility = transcript.node only; extended adds
+		// Shell modes: compatibility = transcript.node only; extended adds
 		// the composer/panel/statusbar slots; enhanced keeps those plus native
 		// shell UI (Electron side). The injected host registers components for
 		// the slots the current mode consumes.

@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 
 /**
- * Scheduled tasks store + scheduler (kimi cron + openchamber scheduled-task
- * parity): tasks live in ~/.musepi/crons.json, the daemon checks due runs
+ * Scheduled tasks store + scheduler: tasks live in
+ * ~/.musepi/crons.json, the daemon checks due runs
  * on an interval and executes each task's prompt in a fresh session bound
  * to the task's cwd. State (last run / next run / status) is persisted so
  * the GUI list survives restarts.
@@ -14,7 +14,7 @@ export interface CronSchedule {
 	kind: "once" | "daily" | "weekly" | "monthly" | "cron";
 	/** HH:mm — daily / weekly / monthly */
 	time?: string;
-	/** HH:mm list — daily (openchamber parity: multiple fire times a day) */
+	/** HH:mm list — daily (multiple fire times a day) */
 	times?: string[];
 	/** YYYY-MM-DD — once */
 	date?: string;
@@ -366,7 +366,7 @@ function computeNextRunRaw(s: CronSchedule, from: number): number | null {
 		return target > from ? target : null;
 	}
 	if (s.kind === "daily") {
-		// openchamber parity: daily tasks fire at every configured time.
+		// Daily tasks fire at every configured time.
 		const times = (s.times?.length ? s.times : s.time ? [s.time] : [])
 			.map(parseTime)
 			.filter((x): x is { h: number; m: number } => x !== null);
@@ -410,7 +410,7 @@ function computeNextRunRaw(s: CronSchedule, from: number): number | null {
 	}
 	if (s.kind === "cron") {
 		// Minimal 5-field cron (min hour dom mon dow) — enough for the
-		// openchamber examples and common agent schedules. Full
+		// common agent schedules. Full
 		// cron-parser is out of scope for the daemon bundle; unknown
 		// tokens fall back to wildcard. Expanded per calendar day in the
 		// task's timezone (Vixie dom/dow AND/OR semantics preserved).

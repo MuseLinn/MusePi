@@ -1,8 +1,8 @@
 // ============================================================
 // Terminal backend registry — cordis 收编第三刀（设计稿 §2：
-// registerBackend 注册表 + provider 插件化，dsh
-// packages/terminal/terminal/src/index.ts 的 registerBackend /
-// DUPLICATE_BACKEND 形状 parity，不拷 dsh 代码）。
+// registerBackend 注册表 + provider 插件化。形状对齐
+// registerBackend /
+// DUPLICATE_BACKEND，不拷外部代码）。
 //
 // 能力缝声明（M2-2.4）：
 // - 输入：TerminalBackend 注册（bun-pty / node-pty 具体实现，
@@ -14,7 +14,7 @@
 //   仍是当前持有者时生效——被顶替的旧注册 dispose 不误删新 backend）；
 //   进程退出随 daemon 消亡，pty 句柄清理仍在 terminal.close 路径。
 // - 冲突：同类型重复注册 = DUPLICATE_BACKEND 结构化错误
-//   （dsh parity），不允许覆盖式静默顶替。
+//   不允许覆盖式静默顶替。
 // ============================================================
 
 /** 终端 backend 类型（显式 provider 选择的取值域）。 */
@@ -47,7 +47,7 @@ export interface TerminalBackend {
 	): Promise<TerminalHandle>;
 }
 
-/** 结构化终端错误码（dsh types.ts 子集——只保留我方真实失败模式；
+/** 结构化终端错误码（只保留我方真实失败模式；
  *  不预支 FOREIGN_SESSION / OWNER_NOT_LIVE 等 owner 鉴权码，那属于
  *  terminal-core 插件化的下一刀）。DISABLED_BACKEND = 用户经插件组件
  *  开关显式禁用该后端（terminal.disabledBackends 名单命中）。 */
@@ -65,8 +65,8 @@ export class TerminalRegistryError extends Error {
 }
 
 /**
- * Owner-scoped 终端 backend 注册表（dsh TerminalSessionService
- * registerBackend parity）。provider 插件化的挂点：插件装载时
+ * Owner-scoped 终端 backend 注册表（
+ * registerBackend 形状）。provider 插件化的挂点：插件装载时
  * registerBackend，卸载时 dispose 反注册——backend 缺席时
  * getBackend 给结构化 NO_BACKEND，auto 解析跳过缺席者，
  * 禁用兜底（设计稿 §3.③）由此获得真实数据源。

@@ -1,7 +1,7 @@
 /**
  * P2 动态自举沙箱:node:vm 受限 realm 承载动态扩展的 host 半体。
  *
- * DSH cordis-host-runner sandbox.ts 的 musepi 落地(Bun 运行时):
+ * cordis-host-runner sandbox.ts 的 musepi 落地(Bun 运行时):
  * - precheckCode:define 时语法预检,不运行 —— 坏代码在注册前被拒。
  * - createSandbox:新 realm,只注入白名单宿主闭包(defineTool/timers/log),
  *   process/require/Bun/globalThis 天然不在 vm context(验证过 ReferenceError)。
@@ -35,14 +35,14 @@ export interface SandboxHostApi {
 
 /**
  * 语法预检:编译不运行。SyntaxError 的 name 是 realm 安全的判定键
- * (DSH isSyntaxError 同款 —— vm 构造的错误 instanceof 宿主 SyntaxError 为假)。
+ * (同款判定 —— vm 构造的错误 instanceof 宿主 SyntaxError 为假)。
  */
 export function precheckCode(code: string, what: string): void {
 	try {
 		new Script(code);
 	} catch (error) {
 		// vm 构造的错误 instanceof 宿主 SyntaxError 为假 —— name 属性是
-		// realm 安全的判定键(DSH isSyntaxError 同款)。
+		// realm 安全的判定键(同款判定)。
 		const name =
 			typeof error === "object" && error !== null && "name" in error && typeof error.name === "string"
 				? error.name
