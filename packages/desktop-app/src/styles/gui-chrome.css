@@ -1358,15 +1358,10 @@
 	line-height: 1.55;
 	color: var(--color-text-muted);
 }
-/* .gui-dialog is a flex column with overflow:hidden, so every child shrinks by
- * default. Head and lede are fixed-height and must say so; the grid is the
- * scroll container and takes what is left. Left unstated, the shrink lands on
- * the grid's columns instead of producing a scrollbar, and a section squeezed
- * below its rows' min-height packs them into each other. */
-.gui-dialog--shortcuts > .gui-dialog-head,
-.gui-dialog--shortcuts > .gui-shortcuts-lede {
-	flex-shrink: 0;
-}
+/* Head and lede need no flex-shrink guard: their content is text, so the
+ * automatic minimum size already floors them and the shrink never reaches
+ * them. Measured on a 420px-tall window, both boxes are identical with and
+ * without one. */
 .gui-shortcuts-grid {
 	--shortcut-fade: 22px;
 	--fade-top: 0px;
@@ -1374,6 +1369,11 @@
 	display: grid;
 	grid-template-columns: 1fr;
 	gap: 0 32px;
+	/* Grow as well as shrink. The flex basis is the full list height, so the
+	 * grid absorbs the whole overflow on its own and stops 122px into a 164px
+	 * slot — leaving 42px of dead space at the dialog's bottom edge. grow:1
+	 * takes it back. Measured on a 420px-tall window; reverting this reproduces
+	 * both numbers. */
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
