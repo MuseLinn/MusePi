@@ -1,0 +1,61 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "scripts/*.ts",
+    "*.config.{ts,js,mjs,cjs}",
+    "**/*.{test,spec}.{ts,tsx}",
+    "**/*.bench.ts"
+  ],
+  "project": ["scripts/**", "packages/**", "*.{ts,js,mjs,cjs}"],
+  "workspaces": {
+    "packages/desktop-app": {
+      "entry": [
+        "src/main.tsx",
+        "electron/main.cjs",
+        "electron/**/*.{ts,cjs}",
+        "vite.config.ts",
+        "test/**/*.{ts,tsx}",
+        "src/**/*.{test,spec}.{ts,tsx}"
+      ],
+      "project": ["src/**", "test/**", "electron/**"]
+    },
+    "packages/metaharness": {
+      "entry": [
+        "src/server.ts",
+        "src/web/app.tsx",
+        "src/**/*.test.ts",
+        "test/**/*.test.ts"
+      ],
+      "project": ["src/**", "test/**", "scripts/**"]
+    },
+    "packages/musepi-git": {
+      "entry": ["src/index.ts"]
+    },
+    "packages/harmony": {
+      "entry": ["hvigorfile.ts", "scripts/*.js"],
+      "project": ["hvigorfile.ts", "scripts/**", "src/**"]
+    },
+    "packages/mobile": {
+      "entry": ["capacitor.config.ts", "scripts/*.mjs"],
+      "project": ["capacitor.config.ts", "scripts/**", "src/**"]
+    },
+    "packages/typescript-edit-benchmark": {
+      "entry": ["src/*.ts"],
+      "project": ["src/**"]
+    },
+    "packages/with-deps": {
+      "entry": [],
+      "project": []
+    }
+  },
+  "ignoreBinaries": ["knip"],
+  "ignoreDependencies": [
+    "tailwindcss",
+    "postcss",
+    "@napi-rs/cli",
+    "@bufbuild/protoc-gen-es",
+    "react-refresh",
+    "@types/react",
+    "@types/react-dom"
+  ]
+}

@@ -86,7 +86,6 @@
 		"header-generator": "catalog:",
 		"linkedom": "catalog:",
 		"lru-cache": "catalog:",
-		"mupdf": "catalog:",
 		"node-pty": "^1.2.0-beta.15",
 		"opencc-js": "^1.0.5",
 		"puppeteer-core": "catalog:"

@@ -30,21 +30,14 @@
 		"@musepi/pi-catalog": "workspace:*",
 		"@musepi/pi-utils": "workspace:*",
 		"@musepi/typescript-edit-benchmark": "workspace:*",
-		"clsx": "^2.1.1",
-		"d3-scale": "^4.0.2",
-		"d3-shape": "^3.2.0",
 		"diff": "^9.0.0",
 		"@musepi/pi-natives": "workspace:*",
-		"motion": "^12.15.0",
 		"react": "^19.1.0",
 		"react-dom": "^19.1.0",
-		"tailwind-merge": "^3.3.0",
 		"@musepi/pi-coding-agent": "workspace:*"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.3.14",
-		"@types/d3-scale": "^4.0.9",
-		"@types/d3-shape": "^3.1.7",
 		"@types/react": "^19.1.0",
 		"@types/react-dom": "^19.1.0",
 		"react-refresh": "^0.18.0"

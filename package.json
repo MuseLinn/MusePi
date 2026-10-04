@@ -68,10 +68,8 @@
 			"ghostty-web": "^0.4.0",
 			"header-generator": "^2.1.88",
 			"linkedom": "^0.18.13",
-			"lint-staged": "^17.0.8",
 			"lru-cache": "^5.1.1",
 			"lucide-react": "^1.24.0",
-			"mupdf": "^1.28.0",
 			"onnxruntime-node": "1.26.0",
 			"postcss": "^8.5.16",
 			"prettier": "^3.9.5",
@@ -200,14 +198,10 @@
 		"@typescript/native-preview": "catalog:",
 		"glob": "^7.2.3",
 		"knip": "^6.39.0",
-		"lint-staged": "catalog:",
 		"morphicons": "^1.7.0",
 		"prettier": "catalog:",
 		"ts-morph": "catalog:",
 		"typescript": "catalog:"
-	},
-	"lint-staged": {
-		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
 		"@babel/traverse": "^8.0.4",
