@@ -1359,6 +1359,7 @@
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
+}
 /* One column on a narrow window: two 400px columns of key chips wrap the
  * combos instead of listing them. */
 @media (min-width: 720px) {
