@@ -6,7 +6,13 @@ English | [中文](gui-design.zh-CN.md)
 >
 > Implementation contracts, daemon RPC shapes, pitfall records, and verification methods live in **`docs/gui-implementation.md`** (split out of this file on 2026-08-06). Early wireframe/architecture drafts (gui-prototype / gui-architecture / gui-migration) have been deleted — the implementation shipped long ago; this document and gui-implementation are authoritative.
 >
-> Editing convention: change the implementation → update this file in sync; when this document disagrees with code, code wins and this document gets updated.
+> Editing convention: change the implementation
+>
+> Executable detail for two areas lives in its own document: **`docs/gui-dialog-spec.md`** (the
+> `DialogFrame` contract — size tiers, scroll containers, focus, and the modifier-class
+> specificity rule) and **`docs/gui-widget-spec.md`** (board and inline card geometry,
+> registration parity, source text, visual rules). Where this file states intent and those
+> state the constraint, the constraint wins. → update this file in sync; when this document disagrees with code, code wins and this document gets updated.
 
 ## i18n contract (guest-client/src/i18n)
 
@@ -145,13 +151,11 @@ The top of TrajectoryView in the right ContextPanel's "Trajectory" tab = a **fix
 | `../ui-references/cuelume/` `border-beam/` `thinking-orbs/` | Sound/beams/thinking-orbs references | Inspiration sources for self-built components |
 | reactbits.dev (since 2026-08-07) | Animation-component source reference | Landed: CountUp/BlurText/ShinyText/SpotlightCard (all zero-dependency variants); candidate: glyph particle background (needs WebGL, not adopted) |
 
-## 5d. Design gaps & follow-ups (logged 2026-08-07)
+## 5d. Design gaps & follow-ups
 
-| Gap | Current state | Completion design draft | Status |
-|---|---|---|---|
-| **Plan-approval 3-option GUI support** | The GUI ApprovalCard only approves/denies (tool.approve/deny); the TUI has approve-and-run (new session) / approve-and-compact-context / approve-and-keep-context — those ride the `xd://propose` device flow → `handlePlanApproval` → in-process `session.prompt`, a TUI-only mechanism; the daemon's approval-request payload carries only `{requestId, tool}` with no plan metadata, and the GUI has no matching RPC | ① daemon `approval-request` attaches plan context for plan tools (planFilePath/title/planExists, mirroring the TUI propose dispatch shape); ② add an approve mode parameter (tool.approve extended with `mode: "run"\|"compact"\|"keep"`); ③ GUI ApprovalCard detects `tool === plan` and shows 3 options, defaulting to keep-context; ④ pet approval cards share the same source | Logged, unscheduled |
-| **New-session-from-answer modal** | Fork exists (`session.forkAt`, non-destructive branching); openchamber uses a config modal (model/thinking level/agent/instructions/worktree/goal run) | Lightweight modal reusing ModelSelector/ThinkingSelector, defaults = current session | Logged, unscheduled (optional) |
-| **Aurora/Particles welcome background** | Not adopted (WebGL/persistent rAF violates CSS-first; DotMatrixMark is already the brand visual) | If users want a "vibe change", offer a CSS gradient-animation alternative or a toggle | Alternative, not doing |
+Three gaps were logged here on 2026-08-07 and are now tracked as items 8–10 of
+`docs/review/0.5.0-roadmap.md` §7. A backlog with no schedule is a work queue, not a spec:
+entries belong here only once they carry a design decision.
 
 ## 5f. Design asset extension points (pluggable, finalized 2026-08-16)
 
@@ -266,7 +270,7 @@ Design decisions and patterns for work landed after the early sections; implemen
 - **A text label behaves like a shape, not like a caption** (2026-09-20): the rule is *one object model*, so text gets no privileges and no exemptions. It wraps and grows taller as you type (the label owns a real box; its height follows the wrapped line count), it resizes from the same four corner handles as a rect or an image, and a single click selects and drags it exactly like anything else — editing is the **double-click**, because "click a label to place the caret" made text the one object on the board you could not move. The invariant worth keeping: the text you see and the box that selection draws are measured by one shared line-height, so a widening selection frame can never disagree with the glyphs inside it.
 - **Measure text, never estimate it — and respect the width the user chose** (2026-09-20): two rules that together make a text box feel like an object rather than a guess. (1) A label's box is sized from **real canvas metrics**, because any fixed per-character factor is a statement about one script: an estimate tuned for Latin under-measures CJK by ~1.6× and silently clips Chinese labels down to their first few glyphs. (2) When the user drags a box to a width, that width is kept — text wraps inside it and the box does not spring back to fit its own content, because a size the user set by hand must never be quietly overruled. The only exception is a line that cannot fit at all, where the box widens rather than hiding glyphs.
 
-## 5h. Absorption round additions (2026-08-29)
+## 5h. Floating status cards, overlays & git table (2026-08-29)
 
 - **Floating status cards** (chat top-right, ZCode 悬浮卡 parity): compact frosted launchers (git / agents / todo), 248px wide, `gui-menu-in` entrance; collapse to a slim pill (persisted `musepi-gui-status-cards`); the stack disappears entirely when empty — never decorate an idle session. Click-through opens the owning surface; cards never duplicate surface UI beyond the branch switcher.
 - **Reward ticket overlay** (campaign what's-new variant): starfield sky + floating 3D-tilt ticket, layered transforms (tilt / float / entrance on separate elements — one animation owner per `transform`); CountUp on the amount; all motion dies under `gui-motion-off`/`prefers-reduced-motion`. Claim feedback couples to the completion sfx.
@@ -339,7 +343,7 @@ Round driven by three user reports: zh dictation output Traditional Chinese, tra
 - **The waveform is CSS-only** (motion standard §3): one shared scaleY keyframes; per-bar negative `animation-delay` plus slightly different durations desync it so it never reads as a metronome; the real mic RMS only modulates the strip's opacity via `--voice-level`. No JS height driving, no rAF loop for the wave.
 - **Phases are honest** (`use-dictation.ts`): `idle → recording → transcribing` is a single source of truth, and the transcribing phase starts optimistically the moment the user stops — a control must never render idle while an async result is in flight. Toggling during transcribing truly cancels (the old UI just cleared its flags and let the in-flight result land anyway).
 
-## 5o. Verbatim absorption: the state axis speaks blobstudio, imported SVGs become full companions (2026-09-20 evening)
+## 5o. State axis wording & imported SVGs as full companions (2026-09-20 evening)
 
 Round driven by one methodological directive and its feature completion: 「我们以后不能靠语义来复刻，而是直接吸收源码——语义相似但效果千差万别，完整复现后我们的伙伴形象才精致完好」, plus the goal that an imported SVG companion supports the same states, effects and parameters as the built-in orb.
 

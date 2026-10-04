@@ -5,7 +5,9 @@
 >
 > 实现契约、daemon RPC 形状、踩坑记录与验证方法见 **`docs/gui-implementation.md`**(2026-08-06 从本文件拆出)。早期线稿/架构稿(gui-prototype / gui-architecture / gui-migration)已删除——实现早已交付,以本文档与 gui-implementation 为准。
 >
-> 修改约定:改实现时同步本文件;发现本文档与代码不一致时,以代码为准并更新本文档。
+> 修改约定:改实现时同步本文件
+>
+> 两个领域的执行细则已各自独立成文:**`docs/gui-dialog-spec.md`**(`DialogFrame` 契约——尺寸档位、滚动容器、焦点、修饰类特异度规则)与 **`docs/gui-widget-spec.md`**(看板与内联卡片的几何、注册对等、源文本、视觉规则)。本文陈述意图、那两篇陈述约束时,以约束为准。;发现本文档与代码不一致时,以代码为准并更新本文档。
 
 ## i18n 契约(guest-client/src/i18n)
 
@@ -142,14 +144,9 @@
 | `../ui-references/cuelume/` `border-beam/` `thinking-orbs/` | 音效/光束/思维球参考 | 自研组件的灵感源 |
 | reactbits.dev(2026-08-07 起) | 动画组件源码参考 | 已落地:CountUp/BlurText/ShinyText/SpotlightCard(全部零依赖变体);候选:字体粒子背景(需 WebGL,未采用) |
 
-## 5d. 设计缺口与跟进(2026-08-07 登记)
+## 5d. 设计缺口与跟进
 
-| 缺口 | 现状 | 补全设计草案 | 状态 |
-|---|---|---|---|
-| **plan 审批 3 选项 GUI 化** | GUI ApprovalCard 仅 批准/拒绝(tool.approve/deny);TUI 有 批准并执行(新开会话)/批准并压缩上下文/批准并保持上下文——那是 `xd://propose` 设备流 → `handlePlanApproval` → 进程内 `session.prompt` 的 TUI 专属机制,daemon 的 approval-request payload 只有 `{requestId, tool}`,无 plan 元数据,GUI 无对应 RPC | ①daemon `approval-request` 对 plan 工具附加 plan 上下文(planFilePath/title/planExists,对齐 TUI 的 propose dispatch 形状);②新增 approve 模式参数(tool.approve 扩展 `mode: "run"\|"compact"\|"keep"`);③GUI ApprovalCard 检测 `tool === plan` 显示 3 选项,默认保持上下文;④桌宠审批卡同源 | 登记待排期 |
-| **基于回答开始新会话模态** | 已有 fork(`session.forkAt`,非破坏性分叉);openchamber 是配置模态(模型/思考级别/智能体/说明/工作树/目标运行) | 复用 ModelSelector/ThinkingSelector 组件做轻量模态,默认值=当前会话 | 登记待排期(可选) |
-| **Aurora/Particles 欢迎页背景** | 未采用(WebGL/常驻 rAF 违反 CSS 优先;DotMatrixMark 已是品牌视觉) | 若用户想要"换氛围",用 CSS 渐变动画替代或做切换开关 | 备选,不做 |
-
+2026-08-07 在此处登记的三个缺口现由 `docs/review/0.5.0-roadmap.md` §7 第 8–10 项跟踪。没有排期的清单是工作队列而非规范：条目只有在承载设计决策之后才应回到这里。
 
 ## 5f. 设计资产扩展点(插件化,2026-08-16 定稿)
 
@@ -262,7 +259,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **文字标签是图形,不是说明文字**(2026-09-20):规则是**一套对象模型**,所以文字既无特权也无豁免。它随输入自动换行并增高(标签持有真实盒子,高度跟着换行行数走),用与矩形、图片相同的四个角手柄缩放,单击即选中并拖动——**双击**才是编辑,因为"点标签放插入符"曾让文字成为画板上唯一拖不动的对象。值得守住的不变量:看到的文字与选中框量自同一个行高,所以不断变宽的选中框永远不会和里面的字形对不上。
 - **文字要量,不要估;用户选的宽度必须尊重**(2026-09-20):这两条合起来才让文本框像一个对象而不是一次猜测。(1) 标签盒子按**真实画布度量**定尺寸,因为任何固定的"每字符系数"都只是在描述某一种文字:按拉丁文调出来的估算会把中文低估约 1.6 倍,于是中文标签被静默截到只剩前几个字。(2) 用户把盒子拖到某个宽度,这个宽度就要保留——文字在里面换行,盒子不会弹回去贴合自己的内容,因为用户亲手设定的尺寸绝不能被悄悄推翻。唯一的例外是某一行真的放不下,那时盒子变宽而不是藏起字形。
 
-## 5h. 吸收轮增补(2026-08-29)
+## 5h. 悬浮状态卡、浮层与 Git 表格(2026-08-29)
 
 - **浮动状态卡**(会话右上角,ZCode 悬浮卡对齐):紧凑磨砂启动卡(Git / 智能体 / 待办),248px 宽,`gui-menu-in` 入场;可折叠为细药丸(持久化 `musepi-gui-status-cards`);全部为空时整栈消失——不为空闲会话装饰。点击穿透打开对应 surface;除分支切换器外不复刻 surface 内部 UI。
 - **奖励票券弹窗**(活动版 what's-new 形态):星空 + 3D 倾斜漂浮票券,变换分层(tilt / float / entrance 各在独立元素——每个 `transform` 只有一个动画源);数额 CountUp 滚动;`gui-motion-off`/`prefers-reduced-motion` 下全部静止。领取反馈耦合完成音效。
@@ -335,7 +332,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **波形纯 CSS**(动效标准 §3):共享一条 scaleY keyframes;每根 bar 的负 `animation-delay` 加略异的时长错相,不读作节拍器;真实麦克风 RMS 只经 `--voice-level` 调制条组透明度。无 JS 高度驱动,波形无 rAF 循环。
 - **相位诚实**(`use-dictation.ts`):`idle → recording → transcribing` 单一真相源,用户一停就乐观进入转写相位——异步结果在途时控件绝不能渲染成 idle。转写中再 toggle 是真取消(旧 UI 只清自己的 flag,在途结果照样落盘)。
 
-## 5o. 原文级吸收:状态轴说 blobstudio 的话,导入 SVG 成为完整伙伴(2026-09-20 晚)
+## 5o. 状态轴措辞与导入 SVG 成为完整伙伴(2026-09-20 晚)
 
 本轮由一条方法论指令及其功能落地驱动:「我们以后不能靠语义来复刻,而是直接吸收源码——语义相似但效果千差万别,完整复现后我们的伙伴形象才精致完好」,以及让导入的 SVG 伙伴与内置球体支持同一套状态、特效与参数。
 
