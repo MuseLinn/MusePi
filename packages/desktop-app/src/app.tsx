@@ -67,11 +67,11 @@ import "./styles/gui-taskcenter.css";
 const DEFAULT_URL = "ws://127.0.0.1:8300";
 
 /**
- * Splash → recovery affordance threshold (dsh-desktop immediate-window
- * parity, 2026-09-15): a boot attempt still in flight after this long grows
- * a diagnosis line + retry on the splash instead of holding it forever. A
- * cold start pays daemon spawn + the ~8s prewarm wait, so the bar must sit
- * ABOVE the worst legitimate cold boot, not above the animation.
+ * Splash → recovery affordance threshold: a boot attempt still in flight
+ * after this long grows a diagnosis line + retry on the splash instead of
+ * holding it forever. A cold start pays daemon spawn + the ~8s prewarm
+ * wait, so the bar must sit ABOVE the worst legitimate cold boot, not
+ * above the animation.
  */
 const BOOT_STALL_MS = 20_000;
 
@@ -153,7 +153,7 @@ interface SessionMetaRow {
 	messageCount?: number;
 	title?: string;
 	timestamp?: string;
-	/** Last-activity time (openchamber `time.updated` parity). */
+	/** Last-activity time. */
 	updatedAt?: string;
 	/** Lifecycle status from the session file tail (TUI session-list parity):
 	 *  complete | interrupted | aborted | error | pending. Powers the
@@ -466,7 +466,7 @@ function AppInner(): ReactNode {
 		}
 	}
 	const [selectedId, setSelectedId] = useState<string | null>(null);
-	/** 当前会话的父会话(openchamber「父级」返回按钮数据源):侧栏树中
+	/** 当前会话的父会话（「父级」返回按钮数据源）：侧栏树中
 	 *  选中节点的父节点。fork 与子代理会话均可返回;无父 = null。 */
 	const activeParentSession = useMemo(() => {
 		if (!selectedId) return null;
@@ -521,7 +521,7 @@ function AppInner(): ReactNode {
 	const [store, setStore] = useState<GuiSessionStore | null>(null);
 	const [connectError, setConnectError] = useState<string | null>(null);
 	const [booting, setBooting] = useState(true);
-	// Boot stall recovery (dsh-desktop immediate-window parity): the splash
+	// Boot stall recovery: the splash
 	// must never be a dead end. When a boot attempt exceeds BOOT_STALL_MS the
 	// splash grows a diagnosis line + retry, while `booting` itself stays in
 	// charge of the transition (a slow but eventually-successful boot still
@@ -578,7 +578,7 @@ function AppInner(): ReactNode {
 	const [connectOpen, setConnectOpen] = useState(false);
 	const [collabOpen, setCollabOpen] = useState(false);
 	const [importOpen, setImportOpen] = useState(false);
-	// kimiwork parity: 新建空白项目 dialog (name + parent path → daemon
+	// 新建空白项目 dialog (name + parent path → daemon
 	// fs.mkdir → open the folder). Kept always-mounted so the DialogFrame
 	// plays its enter/exit animation.
 	const [newProjectOpen, setNewProjectOpen] = useState(false);
@@ -888,7 +888,7 @@ function AppInner(): ReactNode {
 	}, [openSettings]);
 	// Command palette (⌘K / sidebar 搜索): quick actions + session search.
 	const [paletteOpen, setPaletteOpen] = useState(false);
-	// Keyboard-shortcuts reference (openchamber HelpDialog parity). Always mounted:
+	// Keyboard-shortcuts reference. Always mounted:
 	// DialogFrame plays its own exit animation when `open` flips false.
 	const [shortcutsOpen, setShortcutsOpen] = useState(false);
 	// Bottom integrated terminal drawer — independent of the
@@ -1075,8 +1075,7 @@ function AppInner(): ReactNode {
 	const refreshSessions = useCallback(
 		async (client: RpcClient): Promise<void> => {
 			// The two reads are independent: issuing them together saves one
-			// round trip, so the sidebar's first list is ready sooner
-			// (openchamber 1.23.2 "app becomes ready sooner" parity). Both keep
+			// round trip, so the sidebar's first list is ready sooner. Both keep
 			// their own sequence guard, so a newer refresh still wins per lane.
 			const tSeq = ++treeRefreshSeqRef.current;
 			const mSeq = ++metaRefreshSeqRef.current;
@@ -1230,7 +1229,7 @@ function AppInner(): ReactNode {
 					setStatus("open");
 					// Reconnect (daemon restart / machine sleep): clear the stale
 					// error bar, refresh the session tree, and re-open the session
-					// that was showing (openchamber parity — the UI comes back to
+					// that was showing (the UI comes back to
 					// the live session instead of a dead snapshot).
 					setError(null);
 					console.log("[gui] refreshSessions…");
@@ -1318,7 +1317,7 @@ function AppInner(): ReactNode {
 					void refreshSessions(client);
 					return;
 				}
-				// Desktop notifications (kimi-code/openchamber parity): the
+				// Desktop notifications: the
 				// agent turn completing and approval requests. Gated by the
 				// notifications setting (musepi-gui-notify).
 				const payload = event.payload as
@@ -1958,7 +1957,7 @@ function AppInner(): ReactNode {
 		},
 		[openSession],
 	);
-	// openchamber mini-chat parity: pop the row's session into the
+	// Mini-chat: pop the row's session into the
 	// picture-in-picture mini window; on non-Electron hosts (browser dev)
 	// openMiniChat resolves false and we fall back to opening it in place.
 	const openMiniChatFor = useCallback(
@@ -2078,7 +2077,7 @@ function AppInner(): ReactNode {
 			viewSwapRef.current("chat");
 			setError(null);
 			try {
-				// The ZCode project picker chooses the workspace folder — it
+				// The project picker chooses the workspace folder — it
 				// becomes the session cwd so 按项目 groups by it.}
 				const res = await client.request<{ sessionId: string }>("session.create", {
 					...(opts?.cwd ? { cwd: opts.cwd } : {}),
@@ -2457,7 +2456,7 @@ function AppInner(): ReactNode {
 		[createSession, project, sendPrompt],
 	);
 
-	/** DSH creation-flow parity: open a chat session under the given modeId
+	/** Creation flow: open a chat session under the given modeId
 	 *  (creation contexts pass "creator") and send the first prompt right
 	 *  away — used by the board and settings-preset 新建输入框, where the
 	 *  agent designs & saves the artifact (board / preset) in a chat. */
@@ -3093,7 +3092,7 @@ function AppInner(): ReactNode {
 		const onKey = (e: KeyboardEvent): void => {
 			if (!e.metaKey && !e.ctrlKey) {
 				if (e.key === "Escape") {
-					// openchamber: Escape leaves focus mode first.
+					// Escape leaves focus mode first.
 					if (focusMode) {
 						setFocusMode(false);
 						return;
@@ -3122,10 +3121,10 @@ function AppInner(): ReactNode {
 			const mod = e.metaKey || e.ctrlKey;
 			const k = e.key.toLowerCase();
 			// Every binding below resolves through the shortcut registry
-			// (设置 → 快捷键 is editable; kimicode-parity capture UI), so a
+			// (设置 → 快捷键 is editable; capture UI), so a
 			// user rebind takes effect here without touching this chain.
 			if (mod && eventMatches(e, "ask")) {
-				// openchamber selection→ask: pop the ask popover for the
+				// Selection→ask: pop the ask popover for the
 				// current non-composer selection (interpret/explain it in a
 				// throwaway turn, never touching the transcript).
 				e.preventDefault();
@@ -3144,7 +3143,7 @@ function AppInner(): ReactNode {
 					);
 				}
 			} else if (mod && eventMatches(e, "quote")) {
-				// openchamber Cursor-style Cmd+L: quote the current
+				// Cursor-style Cmd+L: quote the current
 				// selection into the composer — the SAME quote-card style
 				// as the toolbar 引用 button (append-only, stacked cards).
 				// With no selection, focus the composer instead.
@@ -3159,7 +3158,7 @@ function AppInner(): ReactNode {
 				e.preventDefault();
 				setPaletteOpen(v => !v);
 			} else if (mod && eventMatches(e, "find-in-chat")) {
-				// openchamber ⌘F: find within the open conversation. The bar
+				// ⌘F: find within the open conversation. The bar
 				// itself owns Escape/Enter/Enter-next, so only the open is
 				// dispatched here — a second press while open re-seeds it.
 				e.preventDefault();
@@ -3183,13 +3182,13 @@ function AppInner(): ReactNode {
 				e.preventDefault();
 				openSettings();
 			} else if (mod && eventMatches(e, "capture-screen")) {
-				// kimicode ⇧⌘S parity: hand the composer the screen-capture
+				// ⇧⌘S: hand the composer the screen-capture
 				// flow (annotate board opens on the shot; the chip rides the
 				// next send).
 				e.preventDefault();
 				window.dispatchEvent(new CustomEvent("musepi-gui-capture-screen"));
 			} else if (mod && eventMatches(e, "focus-mode")) {
-				// openchamber ⌘⇧E: focus mode (composer fills the surface).
+				// ⌘⇧E: focus mode (composer fills the surface).
 				e.preventDefault();
 				setFocusMode(v => !v);
 			} else if (mod && eventMatches(e, "toggle-panel")) {
@@ -3317,8 +3316,8 @@ function AppInner(): ReactNode {
 	// ── Main: immersive three-pane layout with a persistent window toolbar
 	// (opencode style): pane toggles live on the toolbar so they never hide
 	// with the pane they control; the blank toolbar drags the window.
-	// Recent sessions for the header switcher (openchamber
-	// SessionSwitcherDropdown parity), newest first.
+	// Recent sessions for the header switcher dropdown,
+	// newest first.
 	const recentSessions = ((): {
 		id: string;
 		label: string;
@@ -3777,7 +3776,7 @@ function AppInner(): ReactNode {
 																onChatCreate={text => {
 																	// 对话创建 (kimi parity): leave the board and prompt the
 																	// agent to design boards; with text, create a session
-																	// (DSH creation flow: Creator persona) and send it
+																	// (Creation flow: Creator persona) and send it
 																	// right away.
 																	const trimmed = text.trim();
 																	if (!trimmed) {
@@ -3804,7 +3803,7 @@ function AppInner(): ReactNode {
 														onChatCreate={text => {
 															// 对话创建 (kimi parity): leave the board and prompt the
 															// agent to design boards; with text, create a session
-															// (DSH creation flow: Creator persona) and send it
+															// (Creation flow: Creator persona) and send it
 															// right away.
 															const trimmed = text.trim();
 															if (!trimmed) {
@@ -3867,9 +3866,9 @@ function AppInner(): ReactNode {
 						 * the sidebar slot (see .gui-settings-nav-slot above; the
 						 * portal target is looked up inside SettingsView), this
 						 * fills the chat column with the content surface + the 48px
-						 * window-drag strip (zcode RootShell isSettingsTabActive
-						 * parity). Enters with the standard blur-in; the close path
-						 * keeps it mounted through leavingSettings for the blur-out. */}
+						 * window-drag strip. Enters with the standard blur-in;
+						 * the close path keeps it mounted through leavingSettings
+						 * for the blur-out. */}
 						{settingsActive ? (
 							<div className={leavingSettings ? "gui-view-leave" : "gui-view-enter"}>
 								<SettingsView
@@ -3977,7 +3976,7 @@ function AppInner(): ReactNode {
 				</div>
 			</DialogFrame>
 			{/* Ask card (TUI ask parity) renders inside ChatView as a floating
-			 * card above the composer (openchamber QuestionCard parity) —
+			 * card above the composer —
 			 * see ChatView `ask`/`onAskAnswer` props. */}
 			{/* Always mounted — CommandPalette self-hides and plays its exit
 			 * animation when `open` flips false (Pop/DialogFrame parity). */}

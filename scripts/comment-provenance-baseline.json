@@ -103,7 +103,6 @@
 		"packages/coding-agent/src/tools/tts.ts": 1,
 		"packages/coding-agent/src/utils/windows-spawn-guard.ts": 2,
 		"packages/collab-proto/src/extension-slots.ts": 1,
-		"packages/desktop-app/src/app.tsx": 24,
 		"packages/desktop-app/src/components/ApprovalCard.tsx": 1,
 		"packages/desktop-app/src/components/AskCard.tsx": 6,
 		"packages/desktop-app/src/components/AskPopover.tsx": 1,
