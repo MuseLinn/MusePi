@@ -66,7 +66,6 @@
 		"packages/coding-agent/src/collab/ngrok.ts": 1,
 		"packages/coding-agent/src/commands/serve.ts": 1,
 		"packages/coding-agent/src/config/settings-schema.ts": 3,
-		"packages/coding-agent/src/daemon/cordis-dynamic-extensions.ts": 10,
 		"packages/coding-agent/src/daemon/crons.ts": 2,
 		"packages/coding-agent/src/daemon/journal.ts": 1,
 		"packages/coding-agent/src/extensibility/extensions-center/builtin-registry.ts": 7,

@@ -10,22 +10,22 @@
  *   检视/unload/reload）+ 结构化加载错误 + DynamicExtensionInspection[]
  * - 生命周期：每个 user 插件 = `musepi-dynamic-extensions` 组 fiber 下的
  *   独立子 fiber；每次 register 类动词/on 登记 = fiber 效果账本（ctx.effect）
- *   一条带标签 effect，卸载即 fiber.dispose() 反向回收（dsh lifecycle.ts
- *   「everything is an effect」parity）；清单 `musepi.components` 声明的
- *   entry 组件 = 插件 fiber 下的组件子 fiber（dsh `- insert:` 子插件
- *   parity），独立启停/检视/热重载
+ *   一条带标签 effect，卸载即 fiber.dispose() 反向回收。清单
+ *   `musepi.components` 声明的 entry 组件 = 插件 fiber 下的
+ *   组件子 fiber（独立启停/检视/热重载）。
+ *
  * - 启停：随 daemon 进程；runtime.dispose() 幂等拆卸整组
  * - 冲突：与 extensions/loader（会话级装配权威）分层——本文件管宿主级
  *   session-less 装载（getExtensionRuntimeLoad），会话内装载仍走
  *   ExtensionRunner（设计稿 §9 第二刀边界：宿主级先切 fiber，会话级后切）
  *
- * 与 dsh cordis-host-runner 的形态差异（如实记录）：
- * - dsh 动态插件 = 模型生成的 host/client 双半体**代码字符串**，经 node:vm
+ * 与"模型生成代码 + 沙箱"那套形态的差异（如实记录）：
+ * - 那套做法里，插件 = 模型生成的 host/client 双半体**代码字符串**，经 node:vm
  *   沙箱产出 cordis Plugin，apply 拿到的是真 ctx 的白名单 façade（guard.ts）。
  * - 我们动态装载的是**真实 user 扩展目录**（package.json + TS 入口），
  *   运行面是既有 pi.* ExtensionAPI——它本身就是 façade：user 代码永不接触
  *   cordis ctx，隔离由构造保证，不需要再包一层 vm（扩展已在宿主进程内以
- *   全权限运行，这与 dsh 模型生成代码的零信任前提根本不同）。
+ *   全权限运行，这与"模型生成代码"的零信任前提根本不同）。
  * - API 面与生产会话装载**同源**（loader.ts 的 createConcreteExtensionAPI
  *   唯一工厂 + importAndBindExtension 同一条 import/bind 管线），本文件只
  *   加两样东西：ctx.effect 效果账本壳（ledgerApi，每登记 verb 一条带
@@ -354,7 +354,7 @@ function removeIdentity(list: unknown[], item: unknown): void {
 }
 
 /** 每 verb 的撤销逻辑：dispose 时把登记从 extension 集合/共享 runtime 摘除
- *  （dsh「卸载即效果反向回收」parity）。 */
+ *  （卸载即反向回收效果账本）。 */
 function undoRegistration(verb: string, api: ExtensionAPI, extension: Extension, args: unknown[]): () => void {
 	switch (verb) {
 		case "on": {
@@ -532,7 +532,7 @@ export class CordisDynamicExtensionRuntime {
 		this.#host = host;
 	}
 
-	/** 动态插件组 fiber（dsh `cordis-dynamic` group parity）：首个 load 时创建，
+	/** 动态插件组 fiber：首个 load 时创建，
 	 *  所有动态扩展的子 fiber 挂在它下面，拆卸整组 = dispose 它一个。 */
 	async #ensureGroup(): Promise<Fiber> {
 		if (!this.#group) {
@@ -557,7 +557,7 @@ export class CordisDynamicExtensionRuntime {
 	 *  （调用方记 failed + 抛结构化码）;exempted = 放行但标注。
 	 *  豁免清单读 agentDir/compatibility.json,fail-safe（坏文件 = 零豁免
 	 *  + 日志警告,永不阻塞装配）。peer 元数据不可验证（malformed）按
-	 *  dsh 口径拒绝而非静默准入。判定本体 = plugin-compatibility 的
+	 *  口径是拒绝而非静默准入。判定本体 = plugin-compatibility 的
 	 *  纯函数（三个装配入口共用同一判定）。 */
 	async #compatibilityPreflight(target: ExtensionTarget): Promise<PluginCompatibility | undefined> {
 		if (!target.manifestDir) return undefined;
@@ -691,7 +691,7 @@ export class CordisDynamicExtensionRuntime {
 		try {
 			await fiber.await();
 		} catch (err) {
-			// 失败不留挂载：dispose 后结构化记录（dsh latestRun attempt parity）。
+			// 失败不留挂载：dispose 后结构化记录（latestRun attempt 形状）。
 			await fiber.dispose();
 			record.status = "failed";
 			record.fiber = undefined;
@@ -707,7 +707,7 @@ export class CordisDynamicExtensionRuntime {
 		await this.#mountComponents(record, target, disabledComponents);
 	}
 
-	/** 组件子 fiber 挂载（dsh `- insert:` 子插件 parity）：每个带 entry 且
+	/** 组件子 fiber 挂载：每个带 entry 且
 	 *  未禁用的清单组件 = 插件 fiber 下的独立子 fiber，装载走与插件入口
 	 *  完全相同的 importAndBindExtension 管线 + 效果账本（ledgerApi 的 owner
 	 *  名 = `<plugin>/<component>`,跨组件命令碰撞结构化拒绝）。无 entry 的
