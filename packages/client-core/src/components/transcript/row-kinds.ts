@@ -7,7 +7,7 @@
  * predicate here means the fold's "what stays visible" exemptions and the
  * render unit buckets can never drift apart.
  *
- * Semantics per design doc docs/review/0.5.0-m1-transcript-design.md §A/§C.
+ * Semantics per design doc docs/archive/0.5.0-m1-transcript-design.md §A/§C.
  */
 import type { SessionEntry } from "@musepi/pi-wire";
 

@@ -1,6 +1,6 @@
 /**
  * Update UX domain — 应用内更新的 L-dialog 层与 toast 新相位文案
- * （docs/review/0.5.0-installer-update-dialogs-design.md §3，B 面）。
+ * （docs/archive/0.5.0-installer-update-dialogs-design.md §3，B 面）。
  * 复用 settings 域既有的 "restart now" / "go to download" / "retry" /
  * "download update" 等键，此处只收新增文案。
  */

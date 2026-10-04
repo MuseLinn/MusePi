@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const PORT = process.env.MUSEPI_CDP_PORT ?? "9224";
-const OUT = resolve(process.argv[2] ?? "docs/review/0.5.0-shell-panels-topbar-design/shots");
+const OUT = resolve(process.argv[2] ?? "docs/archive/0.5.0-shell-panels-topbar-design/shots");
 mkdirSync(OUT, { recursive: true });
 
 const sleep = (ms: number): Promise<void> => new Promise(r => setTimeout(r, ms));

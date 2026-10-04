@@ -6,7 +6,7 @@ lang: zh-CN
 
 # MusePi 文档
 
-> 147 份文档（含子目录）。**活文档** 标记表示需随代码变更保持同步。
+> **活文档** 标记表示需随代码变更保持同步。
 
 ## 一键安装
 
@@ -23,12 +23,11 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 - [gui-design.md](gui-design.html) — **活文档** GUI 设计规范：布局 / token / 动效 / 组件模式 / 桌宠视觉风格
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI 实现笔记：daemon RPC 契约、IPC 形状、踩坑、验证工作流
 - [i18n.md](i18n.html) — **活文档** i18n 架构：按域 locale 表、编译期英文对等、插件翻译注册
-- [widget-design-system.md](widget-design-system.html) — 组件系统设计
 - [gui-settings.md](gui-settings.html) — 设置面板笔记
 
 ## 会话与上下文
 
-- [session.md](session.html) · [session-operations-export-share-fork-resume.md](session-operations-export-share-fork-resume.html) · [session-switching-and-recent-listing.md](session-switching-and-recent-listing.html) · [session-tree-plan.md](session-tree-plan.html)
+- [session.md](session.html) · [session-operations-export-share-fork-resume.md](session-operations-export-share-fork-resume.html) · [session-switching-and-recent-listing.md](session-switching-and-recent-listing.html)
 - [compaction.md](compaction.html) · [non-compaction-retry-policy.md](non-compaction-retry-policy.html) · [context-files.md](context-files.html)
 - [memory.md](memory.html) · [mnemosyne-memory-backend.md](mnemosyne-memory-backend.html) · [install-id.md](install-id.html) · [ttsr-injection-lifecycle.md](ttsr-injection-lifecycle.html)
 
@@ -51,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 ## 看板与自动化
 
-- [board-dashboard.md](board-dashboard.html) · [board-dashboard-intro.md](board-dashboard-intro.html) · [advisor-watchdog.md](advisor-watchdog.html)
+- [board-dashboard-intro.md](board-dashboard-intro.html) · [advisor-watchdog.md](advisor-watchdog.html)
 
 ## TUI
 

@@ -7,7 +7,7 @@ title: Documentation
 
 English | [中文](index.zh-CN.md)
 
-> 147 documents (incl. subdirectories). Living docs are marked **活文档** — keep them in sync with code changes.
+> Living docs are marked **活文档** — keep them in sync with code changes.
 
 ## Install (one command)
 
@@ -22,12 +22,11 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 - [gui-design.md](gui-design.html) — **活文档** GUI design spec: layout / tokens / motion / component patterns / pet visual style
 - [gui-implementation.md](gui-implementation.html) — **活文档** GUI implementation notes: daemon RPC contracts, IPC shapes, pitfalls, verification workflows
 - [i18n.md](i18n.html) — **活文档** i18n architecture: per-domain locale maps, compile-time en parity, plugin translation registration
-- [widget-design-system.md](widget-design-system.html) — widget system design
 - [gui-settings.md](gui-settings.html) — settings panel notes
 
 ## Sessions & Context
 
-- [session.md](session.html) · [session-operations-export-share-fork-resume.md](session-operations-export-share-fork-resume.html) · [session-switching-and-recent-listing.md](session-switching-and-recent-listing.html) · [session-tree-plan.md](session-tree-plan.html)
+- [session.md](session.html) · [session-operations-export-share-fork-resume.md](session-operations-export-share-fork-resume.html) · [session-switching-and-recent-listing.md](session-switching-and-recent-listing.html)
 - [compaction.md](compaction.html) · [non-compaction-retry-policy.md](non-compaction-retry-policy.html) · [context-files.md](context-files.html)
 - [memory.md](memory.html) · [mnemosyne-memory-backend.md](mnemosyne-memory-backend.html) · [install-id.md](install-id.html) · [ttsr-injection-lifecycle.md](ttsr-injection-lifecycle.html)
 
@@ -50,7 +49,7 @@ Installer defaults to the prebuilt release binary (`musepi-<os>-<arch>` + `SHA25
 
 ## Board & Automation
 
-- [board-dashboard.md](board-dashboard.html) · [board-dashboard-intro.md](board-dashboard-intro.html) · [advisor-watchdog.md](advisor-watchdog.html)
+- [board-dashboard-intro.md](board-dashboard-intro.html) · [advisor-watchdog.md](advisor-watchdog.html)
 
 ## TUI
 

@@ -38,3 +38,21 @@
 | `client-gaps-plan.md` | 一次性对照审计完成 | 结论已吸收进 FilePane 编辑器/预览等实现 |
 | `opentui-migration-assessment.md` | 评估完成，未采纳 | — |
 | `gui-right-panel-redesign.md` | 草案；TabBar / 多实例被架构否决 | 落地部分见 `gui-implementation.md` §11 及相关章节 |
+## 归档清单（2026-10-04）
+
+一次代码核查后的批量归档。判定依据仍是上面两条规则（结论已落地 / 已被更新文档取代），每条都在归档时于原状态行留下了去向。
+
+| 文档                                              | 归档时的状态                                                                                    | 去向/替代者                                                                                                                                                                     |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extensibility-architecture.md`                   | 4 条待做 0 条按原路线落地；唯一的硬决策（cordis「高风险待评估」）已被 roadmap §4.3 定案 v3 推翻 | 能力缝口径 → `capability-seams.md`；加载管线 → `capability/` + `discovery/index.ts`；未落地的两条旧债（事件声明面分叉、两套 runner）转入 `docs/0.5.0-roadmap.md` §10.2 第 12 条 |
+| `review/0.5.1-dsh-trajectory-session-gap.md`      | 16 项差距已转成 P0/P1/P2 编号清单并大量修复                                                     | `review/0.5.1-defect-handoff.md`（承接单，含 2026-10-04 复核段）                                                                                                                |
+| `review/0.5.0-m2.9-cordis-spike.md`               | 试点 25/25 + 16/16 通过，5 决策点全批（稿内自带归档指令）                                       | `docs/adr/0001-cordis-adoption-boundary.md` + `scripts/check-cordis-boundary.ts`                                                                                                |
+| `review/0.5.0-promo-gap-analysis.md`              | 结论已批复并入 roadmap                                                                          | M1.12 条目在 roadmap §6；设计章节 → `gui-design.md` §5v                                                                                                                         |
+| `review/0.5.0-map-redesign/`                      | 已实现（轮级画布 `TurnMapCanvas`）                                                              | 契约见 `gui-implementation.md` §24                                                                                                                                              |
+| `review/0.5.0-installer-update-dialogs-design.md` | C 面转正、B 面已实现；A 面（品牌化安装器）**决定不做**，非未落地项                              | `gui-design.md` §5u + `gui-implementation.md` §389                                                                                                                              |
+| `review/0.5.0-shell-panels-topbar-design/`        | A/B/C 批次全解锁并落地                                                                          | `gui-design.md` §5t + `gui-implementation.md` §40（`shots/` 为实机走查证据，随稿留存）                                                                                          |
+| `review/0.5.0-m1.10-liquid-glass.md`              | §5s 转正；批次 C 全落地，D 剩两件已转入 roadmap §10.2 第 2 条                                   | `gui-design.md` §5s                                                                                                                                                             |
+| `review/0.5.0-m1.10c-composer-glass-design.md`    | C1–C4 全落地                                                                                    | `gui-design.md` §5s / §5w                                                                                                                                                       |
+| `review/0.5.0-m1-transcript-design.md`            | §5r 转正，实现转 `gui-implementation.md` §39                                                    | 视觉 → `gui-design.md` §5r；语义 → `gui-implementation.md` §39。**同名的 `review/0.5.0-m1-transcript-design/` 目录未归档**（mem-bench 与实机截图仍被虚拟化稿引用）              |
+
+**仍未归档的三份评审稿，各有明确前置**（写在各自状态行里）：`0.5.0-m2.4-capability-seams.md`（`AGENTS.md` 与 `capability-seams.md` 引其 §3 作格式定义，须先内联）、`0.5.0-sidepanel-browser-rendering.md`（residency 契约只存在于代码注释，须先补 `gui-implementation.md` 章节）、`0.5.0-transcript-virtualization.md`（P1⑥/P1⑦/P2⑧⑨ 仍未动工，命中归档规则第 3 条）。

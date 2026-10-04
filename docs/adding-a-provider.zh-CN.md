@@ -1,7 +1,7 @@
 # 添加 Provider
 
 
-[English](adding-a-provide.md) | 中文
+[English](adding-a-provider.md) | 中文
 一个 provider 由两半组成：
 
 - **Catalog half**（`packages/catalog`）：`CATALOG_PROVIDERS` 表（`packages/catalog/src/provider-models/descriptors.ts`）中的一条条目，携带 `id`、`defaultModel`、runtime model-discovery factory，以及 catalog-generation wiring。`KnownProvider`、`PROVIDER_DESCRIPTORS` 和 `DEFAULT_MODEL_PER_PROVIDER` 均由此表派生。

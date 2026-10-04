@@ -2,7 +2,7 @@
 
 [English](session-tree-plan.md) | 中文
 
-参考：[session.md](../docs/session.html)
+参考：[session.md](../session.html)
 
 本文档描述当前会话树导航的实现方式：内存中的 tree model、leaf movement rules、branching behavior，以及 extension/event integration。
 

@@ -1,6 +1,6 @@
 /**
  * M1 turn render units — the pure projection layer behind the transcript
- * redesign (design doc: docs/review/0.5.0-m1-transcript-design.md, approved
+ * redesign (design doc: docs/archive/0.5.0-m1-transcript-design.md, approved
  * 2026-09-21). ZCode `conversationTurnRenderUnits` semantics adapted to our
  * wire model: a turn is a user prompt (or a displayed advisor note, see
  * round-collapse.isTurnStart) through the row before the next turn start.
