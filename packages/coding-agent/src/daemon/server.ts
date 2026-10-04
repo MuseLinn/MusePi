@@ -473,6 +473,9 @@ export class DaemonServer {
 	 *  根 Context（provide + 检视 + 可回滚拆卸），路由分发权威仍在注册表；
 	 *  双跑期挂载不代调 start/stop（P1 代码是生命周期权威）。 */
 	readonly #hostContext = new DaemonHostContext();
+	/** P2：L2 服务在 cordis 宿主 Context 上的挂载落定 promise（构造器发起，
+	 *  startDaemon 在开监听前 await）。见 settleHostServices。 */
+	readonly #hostServicesMounted: Promise<unknown>;
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性动态 import
 	 *  （cordis-dynamic-extensions 静态引 loader 会拉进 ../../index 大环，
 	 *  与 getExtensionRuntimeLoad 保持同一惰性口径）；组 fiber 挂在根
@@ -501,6 +504,22 @@ export class DaemonServer {
 	 *  服务 stop——回滚后 P1 代码路径不受影响）。 */
 	async disposeHostContext(): Promise<void> {
 		await this.#hostContext.dispose();
+	}
+
+	/**
+	 * 等待 L2 服务在 cordis 宿主 Context 上全部挂载落定；任一服务挂载失败则
+	 * 拆掉已挂载的 fiber 并把错误抛给启动方——daemon 启动失败。
+	 *
+	 * 失败路径先 dispose 再抛：半装配的 Context 不该留给 GC 之外的东西，
+	 * 且回滚语义（Context 拆掉即回 P1 形态）要求不留半挂载纤维。
+	 */
+	async settleHostServices(): Promise<void> {
+		try {
+			await this.#hostServicesMounted;
+		} catch (err) {
+			await this.#hostContext.dispose();
+			throw err;
+		}
 	}
 	/** 宿主级 user 插件 cordis 运行时（收编第二刀）——惰性装配：首个
 	 *  session-less 装载请求到达时才动态 import 并挂到宿主根 Context。 */
@@ -599,7 +618,6 @@ export class DaemonServer {
 			onCronsChanged: () => this.#services.get<EventService>("events").broadcastCronsChanged(),
 		});
 		this.#services.register(schedule);
-		schedule.start();
 		this.#services.register(
 			new ExtensionService({
 				settings: () => this.#host.settings(),
@@ -652,7 +670,21 @@ export class DaemonServer {
 				storePath: path.join(getAgentDir(), "credentials.json"),
 			}),
 		);
-		mountRegistryServices(this.#hostContext, this.#services.values());
+		// P2 启动编排（ADR 0001 / spike 报告「启动失败传播」）：L2 服务挂载改为
+		// 有序 await，挂载失败即中止 daemon 启动——缺席服务的症状若推迟到某个
+		// RPC 命中它才出现，归因就落在派发层而非服务本身。构造器是同步的，
+		// 落定 promise 挂在实例上，由 startDaemon 在开任何传输前 settle。
+		// 直接 new DaemonServer 的测试不经传输，不 settle 也不受影响。
+		this.#hostServicesMounted = mountRegistryServices(this.#hostContext, this.#services.values(), {
+			// 收编第二刀：schedule 的生命周期权威交给 cordis effect 账本——
+			// start 即 apply（从盘加载任务 + 起 30s 扫描器），stop 即 disposer。
+			// 它是第一个真正带 effect 的服务，此前靠 server.ts 里那次手写 start()
+			// ——手写调用既不会被 dispose 回收（daemon 重启即漏一个定时器），
+			// 也拿不到「启动失败 = 启动失败」的归因。其余服务仍由 P1 掌管。
+			lifecycleByKey: { schedule: "cordis" },
+		});
+		// 无人 settle 时（测试直构）不得变成 unhandledRejection；真 await 见 settleHostServices。
+		void this.#hostServicesMounted.catch(() => {});
 		// 收编第一刀：builtin 注册表单元挂为 cordis builtin 插件组
 		// （运行状态/fiberPhase 的真实数据源;与 user 动态插件同语法
 		// 不同信任级,设计稿 §1 第 3 步）。装载失败不拖垮宿主（层隔离）。
@@ -7069,6 +7101,10 @@ export async function startDaemon(
 
 	const host = new DaemonSessionHost(options);
 	const server = new DaemonServer(host);
+
+	// P2：服务挂载全部落定后才开监听——半装配的 daemon 不接受任何连接。
+	// 挂载失败在这里抛出，经 commands/serve.ts 冒泡成启动失败。
+	await server.settleHostServices();
 
 	// Prewarm the lazy SDK module graph in the background so the FIRST
 	// session.create / session.resume does not pay the multi-second import

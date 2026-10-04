@@ -21,11 +21,12 @@ function fiberStateName(fiber: Fiber): string {
  *   同源实例，本文件是唯一 cordis 适配点——ADR 边界 2）。
  * - 输出：cordis 根 Context 上的服务提供（`ctx.<key>` 可解析）、检视面
  *   （registry size / 挂载键清单）、orderly shutdown 通路（fiber.dispose）。
- * - 生命周期：双跑期（P2）服务的 start/stop 权威仍在 P1 既有代码（注册表
- *   不编排生命周期，server.ts 仅 schedule.start() 一处临时调用），本文件
- *   挂载时**不代调** start/stop——cordis 卸载不回充副作用，Context 拆掉
- *   即无损回 P1 形态（strangler-fig 可回滚承诺）。首个真正 cordis 化服务
- *   （SessionService）落地时，按服务逐个把生命周期切给 cordis effect 账本。
+ * - 生命周期：**逐服务声明**（`MountRegistryOptions.lifecycleByKey`）。未列入的
+ *   服务 start/stop 权威仍在 P1 代码，挂载时代调——strangler-fig 的可回滚承诺
+ *   由此成立（Context 拆掉即回 P1 形态）。列入 `"cordis"` 的服务由 apply 代调
+ *   start、disposer 反向回收 stop：语义从"手写纪律"升级为"框架保证"，且
+ *   disposer 一定跑得到（手写调用没有这个对称面）。当前唯一列入者是 schedule
+ *   （收编第二刀）；其余服务逐个翻。
  * - 启停：随 daemon 进程创建/消亡；`dispose()` 在 daemon close 路径调用。
  *   冲突：路由唯一归属仍由 HostServices.routeTable 强制，cordis 不参与
  *   路由分发（垫片期注册表是 dispatch 权威）。
@@ -154,14 +155,56 @@ export class DaemonHostContext {
 	}
 }
 
-/** 便捷工厂：把注册表里的全部服务以 external 生命周期挂载（P2 双跑默认）。 */
-export function mountRegistryServices(
+/** mountRegistryServices 的挂载期选项。 */
+export interface MountRegistryOptions {
+	/** 按服务键指定生命周期权威，缺省即全部 "external"（P2 双跑默认）。
+	 *  翻成 "cordis" 的服务由 apply 代调 start、disposer 代调 stop——收编刀口
+	 *  按服务逐个推进，未翻的仍由 P1 代码掌管生命周期。 */
+	lifecycleByKey?: Readonly<Record<string, "external" | "cordis">>;
+}
+
+/** L2 服务挂载失败（daemon 启动期契约）。
+ *
+ * 失败必须在启动期暴露。服务缺席时路由表仍认领它的 RPC，调用会一路走到
+ * 派发才炸在一个与根因无关的位置（spike 报告「启动失败传播」：daemon 要求
+ * 服务 start 失败 = 进程启动失败）。带上服务键，运维才知道该看哪个服务。
+ */
+export class DaemonServiceMountError extends Error {
+	readonly serviceKey: string;
+
+	constructor(serviceKey: string, cause: unknown) {
+		super(`Daemon service "${serviceKey}" failed to mount on the cordis host context`, { cause });
+		this.name = "DaemonServiceMountError";
+		this.serviceKey = serviceKey;
+	}
+}
+
+/** 便捷工厂：把注册表里的全部服务以 external 生命周期挂载（P2 双跑默认）
+ *  并**按注册序 await** 落定。
+ *
+ * 返回 fiber 句柄供调用方继续持有。任何一个服务 apply 抛错即以
+ * {@link DaemonServiceMountError} 中止——调用方据此让 daemon 启动失败。
+ * 重复键这类编程错误在挂载期就地抛（不进 await 循环），保持栈可读。
+ */
+export async function mountRegistryServices(
 	hostContext: DaemonHostContext,
 	services: Iterable<DaemonService>,
-): (Fiber & PromiseLike<Fiber>)[] {
-	const fibers: (Fiber & PromiseLike<Fiber>)[] = [];
+	options?: MountRegistryOptions,
+): Promise<(Fiber & PromiseLike<Fiber>)[]> {
+	const mounted: { key: string; fiber: Fiber & PromiseLike<Fiber> }[] = [];
 	for (const service of services) {
-		fibers.push(hostContext.mount(service));
+		const lifecycle = options?.lifecycleByKey?.[service.key];
+		mounted.push({
+			key: service.key,
+			fiber: hostContext.mount(service, lifecycle ? { lifecycle } : undefined),
+		});
 	}
-	return fibers;
+	for (const { key, fiber } of mounted) {
+		try {
+			await fiber;
+		} catch (err) {
+			throw new DaemonServiceMountError(key, err);
+		}
+	}
+	return mounted.map(m => m.fiber);
 }

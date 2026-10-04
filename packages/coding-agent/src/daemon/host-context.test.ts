@@ -12,7 +12,7 @@
  *  5. 重复挂载同 key 抛错；dispose 幂等。
  */
 import { describe, expect, it } from "bun:test";
-import { DaemonHostContext, mountRegistryServices } from "./host-context";
+import { DaemonHostContext, DaemonServiceMountError, mountRegistryServices } from "./host-context";
 import type { DaemonService } from "./services/types";
 
 function makeService(key: string, log: string[]): DaemonService {
@@ -95,11 +95,96 @@ describe("DaemonHostContext (P2 cordis 双跑)", () => {
 	it("mountRegistryServices mounts an iterable of services (registry values dual-run)", async () => {
 		const host = new DaemonHostContext();
 		const services = [makeService("s1", []), makeService("s2", [])];
-		const fibers = mountRegistryServices(host, services);
+		const fibers = await mountRegistryServices(host, services);
 		expect(fibers.length).toBe(2);
 		await Promise.all(fibers);
 		expect(host.get("s1")).toBe(services[0]);
 		expect(host.get("s2")).toBe(services[1]);
 		await host.dispose();
+	});
+});
+describe("启动期挂载编排（P2 首刀，ADR 0001）", () => {
+	it("settles every registered service before returning (no mount/settle race)", async () => {
+		const host = new DaemonHostContext();
+		const services = [makeService("a1", []), makeService("a2", []), makeService("a3", [])];
+		await mountRegistryServices(host, services);
+		// Failure mode if regressed: the helper returns fiber handles without
+		// awaiting them, so callers treat a not-yet-applied service as mounted —
+		// ctx.<key> resolution then races apply, and startup-ordered guarantees
+		// (the reason we await in registration order) evaporate.
+		for (const service of services) expect(host.get(service.key)).toBe(service);
+		await host.dispose();
+	});
+
+	it("a failing service aborts the mount with its key and the original cause", async () => {
+		const host = new DaemonHostContext();
+		const boom = new Error("cron store unreadable");
+		const broken: DaemonService = {
+			key: "broken",
+			start() {
+				throw boom;
+			},
+		};
+		// cordis 生命周期才让 apply 代调 start —— 失败面因此真实可达。
+		let caught: unknown;
+		try {
+			await mountRegistryServices(host, [makeService("ok", []), broken], {
+				lifecycleByKey: { broken: "cordis" },
+			});
+		} catch (err) {
+			caught = err;
+		}
+		// Failure mode if regressed: the throw is swallowed into a log line and
+		// the daemon boots without the service; the symptom then surfaces as an
+		// RPC dispatch error far from the cause, with no service named.
+		expect(caught).toBeInstanceOf(DaemonServiceMountError);
+		const err = caught as DaemonServiceMountError;
+		expect(err.serviceKey).toBe("broken");
+		expect(err.cause).toBe(boom);
+		expect(err.message).toContain('"broken"');
+		await host.dispose();
+	});
+
+	it("attribution is the failing service, not the first one registered", async () => {
+		const host = new DaemonHostContext();
+		const first: DaemonService = {
+			key: "first",
+			start() {
+				throw new Error("first blew up");
+			},
+		};
+		const second: DaemonService = {
+			key: "second",
+			start() {
+				throw new Error("second blew up");
+			},
+		};
+		let caught: unknown;
+		try {
+			await mountRegistryServices(host, [first, second], {
+				lifecycleByKey: { first: "cordis", second: "cordis" },
+			});
+		} catch (err) {
+			caught = err;
+		}
+		// The key is the only thing that tells an operator where to look; a
+		// wrapper that reports mount order instead of the failing service
+		// sends them to the wrong file.
+		expect((caught as DaemonServiceMountError).serviceKey).toBe("first");
+		await host.dispose();
+	});
+
+	it("lifecycleByKey leaves unlisted services on the P1 lifecycle authority", async () => {
+		const log: string[] = [];
+		const host = new DaemonHostContext();
+		await mountRegistryServices(host, [makeService("ledger", log), makeService("p1", log)], {
+			lifecycleByKey: { ledger: "cordis" },
+		});
+		// Failure mode if regressed: flipping one service onto the cordis ledger
+		// silently takes over start/stop for every service — double-run side
+		// effects against the P1 call sites that still own them.
+		expect(log).toEqual(["ledger.start"]);
+		await host.dispose();
+		expect(log).toEqual(["ledger.start", "ledger.stop"]);
 	});
 });
