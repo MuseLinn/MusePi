@@ -106,12 +106,14 @@ describe("ShortcutsDialog", () => {
 		}
 	});
 
-	test("renders both columns and the tips", async () => {
+	test("renders both columns, and the tips exactly once", async () => {
 		const host = await render();
-		// The tips ride the tail of a column (openchamber parity): a full-width
-		// block below both columns would leave a gap under the longer one.
-		expect(host.querySelectorAll(".gui-shortcut-tips li").length).toBeGreaterThan(0);
 		expect(host.querySelectorAll(".gui-shortcuts-grid > div").length).toBe(2);
+		// Failure mode if regressed: the tips live inside the per-column renderer,
+		// so both columns emitted the pair and the dialog showed it twice. A
+		// "> 0" assertion cannot see that; the count has to be exact.
+		expect(host.querySelectorAll(".gui-shortcut-tips").length).toBe(1);
+		expect(host.querySelectorAll(".gui-shortcut-tips li").length).toBe(2);
 	});
 
 	test("labels the dialog for assistive tech", async () => {

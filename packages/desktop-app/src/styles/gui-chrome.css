@@ -1318,10 +1318,14 @@
  * Every row is derived from lib/shortcut-registry.ts, so this file owns only
  * the presentation. The width is the point: a 600×420 settings box cannot hold
  * five grouped sections in two columns without scrolling the headers away. */
-.gui-dialog--shortcuts {
-	width: min(880px, 92vw);
+/* Written as `.gui-dialog` + modifier, not as the bare modifier. `.gui-dialog`
+ * itself is declared in gui-composer.css, which gui.css imports after this file,
+ * and at equal specificity the later sheet wins — so the bare modifier lost every
+ * time and this dialog silently rendered at the generic 600×420 settings box. */
+.gui-dialog.gui-dialog--shortcuts {
+	width: min(1040px, 94vw);
 	height: auto;
-	max-height: min(84vh, 720px);
+	max-height: min(88vh, 880px);
 	overflow: hidden;
 }
 /* .gui-dialog carries no padding of its own and DialogFrame renders children
@@ -1353,12 +1357,33 @@
 	flex-shrink: 0;
 }
 .gui-shortcuts-grid {
+	--shortcut-fade: 22px;
+	--fade-top: 0px;
+	--fade-bottom: 0px;
 	display: grid;
 	grid-template-columns: 1fr;
 	gap: 0 32px;
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
+	/* Feather each edge only while content hides behind it. Hard-clipping a
+	 * scrolling list against the dialog's rounded border reads as a rendering
+	 * fault, and a permanent mask would dim the first and last row of a dialog
+	 * whose columns happen to fit — so the component sets these two flags from
+	 * the live scroll position. */
+	mask-image: linear-gradient(
+		to bottom,
+		transparent var(--fade-top),
+		#000 calc(var(--fade-top) + 1px),
+		#000 calc(100% - var(--fade-bottom) - 1px),
+		transparent 100%
+	);
+}
+.gui-shortcuts-grid[data-scrolled-top="true"] {
+	--fade-top: var(--shortcut-fade);
+}
+.gui-shortcuts-grid[data-scrolled-bottom="true"] {
+	--fade-bottom: var(--shortcut-fade);
 }
 /* One column on a narrow window: two 400px columns of key chips wrap the
  * combos instead of listing them. */

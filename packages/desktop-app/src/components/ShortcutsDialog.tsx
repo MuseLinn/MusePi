@@ -1,5 +1,5 @@
 import { t } from "@musepi/client-core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	bindingLabel,
 	getEntry,
@@ -57,6 +57,33 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 		return () => window.removeEventListener(SHORTCUTS_CHANGED_EVENT, onChanged);
 	}, [open]);
 
+	// Which scroll edges are still covered. A mask that always feathers would dim
+	// the first and last row of a dialog whose columns happen to fit, so the
+	// gradients follow the actual scroll position instead.
+	const gridRef = useRef<HTMLDivElement>(null);
+	const [edges, setEdges] = useState({ top: false, bottom: false });
+	useEffect(() => {
+		if (!open) return;
+		const el = gridRef.current;
+		if (!el) return;
+		const measure = (): void => {
+			const slack = el.scrollHeight - el.clientHeight;
+			setEdges({
+				top: el.scrollTop > 1,
+				bottom: slack > 1 && el.scrollTop < slack - 1,
+			});
+		};
+		measure();
+		el.addEventListener("scroll", measure, { passive: true });
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		for (const child of Array.from(el.children)) observer.observe(child);
+		return () => {
+			el.removeEventListener("scroll", measure);
+			observer.disconnect();
+		};
+	}, [open]);
+
 	const sections = useMemo<ShortcutSection[]>(() => {
 		const byGroup = new Map<string, ShortcutEntry[]>();
 		for (const entry of SHORTCUTS) {
@@ -74,7 +101,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 	const right = sections.filter(s => !LEFT_COLUMN_GROUPS.has(s.groupKey));
 	const paletteBinding = getEntry("search") ? bindingLabel("search") : "";
 
-	const renderColumn = (column: ShortcutSection[]) => (
+	const renderColumn = (column: ShortcutSection[], withTips: boolean) => (
 		<div className="gui-shortcuts-body flex min-w-0 flex-col gap-5">
 			{column.map(section => (
 				<section key={section.groupKey || "ungrouped"} className="flex flex-col gap-1.5">
@@ -91,11 +118,14 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 			))}
 			{/* Pro tips ride the tail of the second column: the left one runs
 			    longer here, so a full-width block below both would leave a
-			    visible gap. */}
-			<ul className="gui-shortcut-tips">
-				<li>{t("shortcut tips palette", { shortcut: paletteBinding })}</li>
-				<li>{t("shortcut tips rebind")}</li>
-			</ul>
+			    visible gap. They are emitted once, not per column — two columns
+			    each carried the pair and the dialog showed both. */}
+			{withTips && (
+				<ul className="gui-shortcut-tips">
+					<li>{t("shortcut tips palette", { shortcut: paletteBinding })}</li>
+					<li>{t("shortcut tips rebind")}</li>
+				</ul>
+			)}
 		</div>
 	);
 
@@ -108,9 +138,14 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
 				</div>
 			</div>
 			<p className="gui-shortcuts-lede">{t("keyboard shortcuts desc")}</p>
-			<div className="gui-shortcuts-grid">
-				{renderColumn(left)}
-				{renderColumn(right)}
+			<div
+				ref={gridRef}
+				className="gui-shortcuts-grid"
+				data-scrolled-top={edges.top ? "true" : "false"}
+				data-scrolled-bottom={edges.bottom ? "true" : "false"}
+			>
+				{renderColumn(left, false)}
+				{renderColumn(right, true)}
 			</div>
 		</DialogFrame>
 	);
