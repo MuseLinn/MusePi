@@ -32,15 +32,19 @@ export interface ModuleMockingHit {
 }
 
 /**
- * Blank out comments while preserving line structure.
+ * Blank out comments and string bodies while preserving line structure.
  *
- * Comments are stripped before the search rather than filtered per line: a
+ * Both are stripped before the search rather than filtered per line. A
  * multi-line doc comment is the most natural place to explain why this API is
- * banned, so the gate's own rule text and every test that documents the ban
- * would otherwise be reported as violations. Newlines survive so the reported
- * line numbers still point at the real call site.
+ * banned, and a test that documents the ban has to spell the call out as a
+ * string — so the gate's own text, its contract cases and the AGENTS.md rule
+ * would all be reported as violations otherwise. Newlines survive so the
+ * reported line numbers still point at the real call site.
+ *
+ * The blind spot this creates is a call assembled at runtime from string
+ * fragments, which no static gate could see anyway.
  */
-export function stripComments(source: string): string {
+export function stripNonCode(source: string): string {
 	let out = "";
 	let i = 0;
 	let inLine = false;
@@ -67,13 +71,17 @@ export function stripComments(source: string): string {
 			continue;
 		}
 		if (quote) {
-			out += ch;
 			if (ch === "\\") {
-				out += next ?? "";
+				out += "  ";
 				i += 2;
 				continue;
 			}
-			if (ch === quote) quote = null;
+			if (ch === quote) {
+				quote = null;
+				out += ch;
+			} else {
+				out += ch === "\n" ? "\n" : " ";
+			}
 			i++;
 			continue;
 		}
@@ -106,7 +114,7 @@ const CALL = /(^|[^\w$.])mock\s*\.\s*module\s*\(/;
 
 export function findModuleMocking(file: string, source: string): ModuleMockingHit[] {
 	const hits: ModuleMockingHit[] = [];
-	stripComments(source)
+	stripNonCode(source)
 		.split("\n")
 		.forEach((text, index) => {
 			if (CALL.test(text)) hits.push({ file, line: index + 1 });

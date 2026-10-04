@@ -33,6 +33,13 @@ describe("findModuleMocking", () => {
 		expect(findModuleMocking("x.test.ts", source)).toHaveLength(0);
 	});
 
+	test("ignores the name inside a string literal", () => {
+		// A test that documents the ban has to spell the call out as a string.
+		// If this were reported, the gate could not even test itself.
+		const source = 'const doc = "never call mock.module() here";' + "\n";
+		expect(findModuleMocking("x.test.ts", source)).toHaveLength(0);
+	});
+
 	test("ignores an unrelated mock whose name merely ends in module", () => {
 		const source = 'mock.moduleRegistry("../src/x");\n';
 		expect(findModuleMocking("x.test.ts", source)).toHaveLength(0);

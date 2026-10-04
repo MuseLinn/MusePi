@@ -117,7 +117,7 @@
 		"check": "bun run --parallel check:ts check:rs",
 		"check:ts": "bun run check:tools && bun run --workspaces --if-present check",
 		"check:changelog-i18n": "bun scripts/check-changelog-i18n.ts",
-		"check:tools": "biome check . --no-errors-on-unmatched && bun scripts/verify-package-readmes.ts && bun scripts/check-no-module-mocking.ts && bun scripts/check-changelog-i18n.ts && bun scripts/check-changelog-voice.ts && bun scripts/check-comment-provenance.ts && bun scripts/check-css-structure.ts && bun scripts/check-tailwind-sources.ts && bun scripts/check-radius-tokens.ts && bun scripts/check-peer-compat.ts && bun scripts/check-cordis-boundary.ts && bun scripts/check-i18n-dup-keys.ts && bun scripts/verify-client-ui-i18n.ts",
+		"check:tools": "biome check . --no-errors-on-unmatched && bun scripts/verify-package-readmes.ts && bun scripts/check-no-module-mocking.ts && bun scripts/check-dead-code.ts && bun scripts/check-changelog-i18n.ts && bun scripts/check-changelog-voice.ts && bun scripts/check-comment-provenance.ts && bun scripts/check-css-structure.ts && bun scripts/check-tailwind-sources.ts && bun scripts/check-radius-tokens.ts && bun scripts/check-peer-compat.ts && bun scripts/check-cordis-boundary.ts && bun scripts/check-i18n-dup-keys.ts && bun scripts/verify-client-ui-i18n.ts",
 		"check:rs": "bun scripts/run-rs-task.ts check:rs",
 		"lint": "bun run --parallel lint:ts lint:rs",
 		"lint:ts": "bun run --parallel lint:tools && bun run --workspaces --if-present lint",
@@ -198,12 +198,13 @@
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",
 		"@typescript/native-preview": "catalog:",
+		"glob": "^7.2.3",
+		"knip": "^6.39.0",
 		"lint-staged": "catalog:",
 		"morphicons": "^1.7.0",
 		"prettier": "catalog:",
 		"ts-morph": "catalog:",
-		"typescript": "catalog:",
-		"glob": "^7.2.3"
+		"typescript": "catalog:"
 	},
 	"lint-staged": {
 		"*.{js,ts,jsx,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
