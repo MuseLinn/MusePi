@@ -20,7 +20,6 @@
 		"packages/client-core/src/components/transcript/FileCards.tsx": 1,
 		"packages/client-core/src/components/transcript/Markdown.tsx": 3,
 		"packages/client-core/src/components/transcript/ToolCard.tsx": 4,
-		"packages/client-core/src/components/transcript/Transcript.tsx": 22,
 		"packages/client-core/src/components/transcript/file-artifacts.ts": 1,
 		"packages/client-core/src/components/transcript/highlight.ts": 1,
 		"packages/client-core/src/components/transcript/image-card-stack.tsx": 1,

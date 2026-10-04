@@ -80,8 +80,8 @@ export {
 
 import "./transcript.css";
 
-// M2 entry-level virtualization (0.5.0 P0①, zcode ModelTrajectoryTimeline
-// parity — docs/review/0.5.0-transcript-virtualization.md): the transcript
+// M2 entry-level virtualization (0.5.0 P0①,
+// docs/review/0.5.0-transcript-virtualization.md): the transcript
 // renders ONLY the rows intersecting the scroller viewport (+overscan)
 // through @tanstack/react-virtual, with top/bottom spacers sized from the
 // virtualizer's running total, so the scrollbar reflects the FULL loaded
@@ -182,7 +182,7 @@ export interface TranscriptProps {
 	working: boolean;
 	/** Frozen round durations by final assistant message timestamp (ms),
 	 *  recorded at agent_end — each completed round's total stays visible
-	 *  under its final message (craft-agents TaskActionMenu freeze parity). */
+	 *  under its final message . */
 	roundDurations?: ReadonlyMap<number, number>;
 	/** Current session thinking level (SessionState.thinkingLevel — the
 	 *  auto-classified or user-picked effort). Shown beside the per-round
@@ -194,21 +194,18 @@ export interface TranscriptProps {
 	compact?: boolean; // dense variant for the agent drawer
 	/** Sub-session drill-down capabilities forwarded to tool renderers. */
 	host?: ToolRenderHost;
-	/** Gutter replacement (ZCode: avatars instead of 宿主/代理 labels). */
+	/** Gutter replacement (avatars instead of 宿主/代理 labels). */
 	userGutter?: ReactNode;
 	agentGutter?: ReactNode;
-	/** User messages render as plain text instead of markdown
-	 *  (openchamber userMessageRendering parity). */
+	/** User messages render as plain text instead of markdown. */
 	userPlain?: boolean;
 	/** Empty-state replacement (mobile welcome hint): rendered in place of
 	 *  the bare "no activity yet" line when the transcript has nothing. */
 	emptySlot?: ReactNode;
-	/** Long user messages clamp to two lines with an expand toggle
-	 *  (openchamber collapsibleUserMessages parity). */
+	/** Long user messages clamp to two lines with an expand toggle. */
 	collapseLongUserMessages?: boolean;
-	/** Completed-round activity folds default EXPANDED (openchamber
-	 *  activityDefaultState "expanded" parity) — default false (collapsed,
-	 *  ZCode behavior). User toggles per round still win either way. */
+	/** Completed-round activity folds default EXPANDED — default false (collapsed).
+	 *  User toggles per round still win either way. */
 	defaultRoundFoldExpanded?: boolean;
 	/** 工具调用汇总 (Kimi parity, default ON): within a turn, stretches of ≥2
 	 *  consecutive work rows summarize into ONE category-aggregated line
@@ -244,7 +241,7 @@ export interface TranscriptProps {
 	/** TUI colorBlindMode parity: diff additions render blue instead of
 	 *  green (root gets `data-colorblind`). */
 	colorBlind?: boolean;
-	/** Quote-a-message into the composer (ZCode 引用回复). */
+	/** Quote-a-message into the composer (引用回复). */
 	onQuote?(text: string): void;
 	/** Edit: truncate to this message and restore its text (edit-and-reconverse). */
 	onEdit?(messageId: string, text: string): void;
@@ -259,7 +256,7 @@ export interface TranscriptProps {
 	 *  re-answer via backfilled `text`; assistant/toolResult nodes pass
 	 *  `includeTarget: true` to keep the node and continue from it. */
 	onFork?(messageId: string, text: string | undefined, includeTarget?: boolean): void;
-	/** Lazy history backfill (kimi/DSH parity): fires when the tail window
+	/** Lazy history backfill: fires when the tail window
 	 *  is fully expanded AND the user keeps scrolling up — the caller pages
 	 *  the next older chunk from session.history and prepends it. */
 	onLoadOlder?(): void;
@@ -304,7 +301,7 @@ export interface TranscriptProps {
 		activePathIds: ReadonlySet<string>;
 		onSwitchBranch?(leafEntryId: string): void;
 	};
-	/** transcript.node seat 注入 (DSH `conversation.chat.node` analog):
+	/** transcript.node seat 注入:
 	 *  host 提供按条目派发的渲染器,按 `transcriptNodeKind(entry)` 分发,
 	 *  可用 `children`(内建渲染)增强/追加;缺省 -> 仅内建渲染(inert)。
 	 *  调用方 MUST memoize(身份参与 EntryRow memo 比较)。 */
@@ -427,7 +424,7 @@ function Row({
 	 *  re-runs the agent in place without re-sending user text. */
 	retryTarget?: { id: string; text: string } | null;
 	/** Save-as-image: hands over the rendered message body element so the
-	 *  caller rasterizes the REAL markdown DOM (openchamber toPng parity)
+	 *  caller rasterizes the REAL markdown DOM
 	 *  instead of re-drawing plain text. May return a promise — the row
 	 *  shows a spinner while it runs, then morphs to a check on success. */
 	onSaveImage?(text: string, element: HTMLElement | null): void | Promise<void>;
@@ -439,7 +436,7 @@ function Row({
 		if (!quoteText) return;
 		try {
 			if (kind === "assistant" && bodyRef.current && typeof ClipboardItem !== "undefined") {
-				// Rich clipboard (openchamber copyMarkdownToClipboard parity):
+				// Rich clipboard:
 				// markdown source as text/plain + the LIVE rendered HTML, so
 				// pasting into rich editors keeps headings/bold/code. Tool
 				// and thinking cards are stripped — copy is the answer text.
@@ -456,7 +453,7 @@ function Row({
 				}
 				await navigator.clipboard.write([new ClipboardItem(payload)]);
 			} else {
-				// User rows copy plain text (openchamber does the same).
+				// User rows copy plain text.
 				await navigator.clipboard.writeText(quoteText);
 			}
 			setCopied(true);
@@ -662,8 +659,8 @@ interface EntryRowProps {
 	userPlain?: boolean;
 	collapseLongUserMessages?: boolean;
 	hideToolActivity?: boolean;
-	/** 活动 header rendered INSIDE this row's content column (openchamber puts
-	 *  TurnActivity in the message body): it inherits the message alignment and
+	/** 活动 header rendered INSIDE this row's content column: it inherits the
+	 *  message alignment and
 	 *  the row's gutter, so a collapsed turn shows orb + 活动 + answer on ONE line
 	 *  instead of the orb floating on a blank row of its own. */
 	foldHeader?: ReactNode;
@@ -892,7 +889,7 @@ function renderCustomMessage({
 		);
 	}
 	if (customType === "tool_registry") {
-		// 工具注册表时间线注入行（dsh ContextInjectionRow parity）：热插拔
+		// 工具注册表时间线注入行：热插拔
 		// 改变下一次请求的 wire 工具集时落一条 display-only custom_message。
 		// details = { added, removed, tools }（exit-diagnostics ToolRegistryChangeData）。
 		const reg =
@@ -1313,10 +1310,10 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// history"). Virtualization renders the folded prefix as zero-height
 	// rows (estimate 0), so the compaction fold costs no DOM.
 	const [compactedOpen, setCompactedOpen] = useState(false);
-	// Completed-round folds (craft-agents TurnCard parity): per-round toggle
+	// Completed-round folds: per-round toggle
 	// state, keyed by the round's user-message ENTRY ID (stable across
 	// history prepends — index keys dropped deviations before). The set
-	// stores DEVIATIONS from the default (openchamber activityDefaultState):
+	// stores DEVIATIONS from the default:
 	// when the default is collapsed it holds OPEN rounds; when expanded,
 	// CLOSED ones — so a settings flip re-reads existing rounds without
 	// migration.
@@ -1350,7 +1347,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	const folding = collapseCompacted && !compactedOpen && firstCompactionIdx > 0;
 
 	const rootRef = useRef<HTMLDivElement | null>(null);
-	// M1.3 scroll-anchor state machine (scroll-anchor.ts, ZCode parity):
+	// M1.3 scroll-anchor state machine (scroll-anchor.ts):
 	// `following` is the user's scrolling INTENT — only real user input flips
 	// it; programmatic stick-to-bottom writes and layout scroll events only
 	// update the geometry ledger. `programmaticScrollRef` marks our own
@@ -1589,8 +1586,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		},
 		overscan: 8,
 	});
-	// Measure-drift compensation, conditionally gated (scroll-anchor.ts,
-	// ZCode `shouldAdjustVirtualizerForItemSizeChange` parity): a fold or a
+	// Measure-drift compensation, conditionally gated (scroll-anchor.ts): a fold or a
 	// measurement correction animating ENTIRELY above the viewport writes its
 	// height delta back into scrollTop every frame, so the reading position
 	// stays anchored instead of being pushed away by the shrinking content
@@ -2053,7 +2049,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			);
 		}
 		const isAssistantMessage = entry.type === "message" && entry.message.role === "assistant";
-		// One avatar per agent turn (openchamber grouping): consecutive
+		// One avatar per agent turn: consecutive
 		// assistant/tool messages keep the gutter empty so the orb only
 		// renders on the first row of the turn. Virtualization may unmount
 		// the predecessor, so the old window accumulator became a direct
@@ -2068,7 +2064,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// recorder contract), with the reply-ts fallback for pre-anchor
 		// snapshots.
 		const turnUnit = turnUnitByStart.get(absIdx);
-		// Completed-round folding (craft-agents TurnCard parity): working
+		// Completed-round folding: working
 		// entries between a user message and its final reply fold behind
 		// a header once the round is done and isn't the live tail. The
 		// header renders ABOVE the final assistant message; the in-span
@@ -2326,7 +2322,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 			{/* Slim sentinel at the top of the list: paging trigger only.
 			 *  Spacing above the mounted window comes from the virtual
 			 *  spacer below — the scrollbar now reflects the FULL loaded
-			 *  history (zcode spacer parity). */}
+			 *  history. */}
 			{/* Terminal paging state. The load-more affordances (rail control, top-edge
 			 *  hover) disappear once history is unreachable; this says why, instead of
 			 *  leaving the user staring at a transcript that silently stops growing. */}
