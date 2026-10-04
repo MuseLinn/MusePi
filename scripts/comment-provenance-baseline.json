@@ -75,7 +75,6 @@
 		"packages/coding-agent/src/daemon/extension-runtime-tools.ts": 2,
 		"packages/coding-agent/src/daemon/extension-sandbox.ts": 3,
 		"packages/coding-agent/src/daemon/journal.ts": 1,
-		"packages/coding-agent/src/daemon/server.ts": 24,
 		"packages/coding-agent/src/daemon/services/browser-service.ts": 1,
 		"packages/coding-agent/src/daemon/services/extension-service.ts": 15,
 		"packages/coding-agent/src/daemon/services/file-service.ts": 1,

@@ -225,7 +225,7 @@ function ghPath(): string | null {
 }
 
 /**
- * Daemon-owned GitHub token (openchamber pattern): the device-flow token is
+ * Daemon-owned GitHub token: the device-flow token is
  * stored here instead of `gh auth login`, whose token validation hits
  * api.github.com — unreachable on flaky networks, which then fails the whole
  * auth even though the device flow succeeded. gh RPCs receive it via the
@@ -279,8 +279,7 @@ function clearGhToken(): void {
 }
 
 /**
- * Slash-command grouping for the GUI completion tags (openchamber-style
- * category badges). Keys are stable English ids; the GUI translates them.
+ * Slash-command grouping for the GUI completion tags (category badges). Keys are stable English ids; the GUI translates them.
  */
 const SLASH_CATEGORY: Record<string, string> = {
 	// Session & context
@@ -764,7 +763,7 @@ export class DaemonServer {
 		void this.#loadChannelPlugins().catch(() => {});
 	}
 
-	/** Active GUI collab share (ZCode remote-control dialog). */
+	/** Active GUI collab share (remote-control dialog). */
 	#collab: { host: CollabHost; transport: LocalShareManager } | null = null;
 
 	/** Mobile pair codes: 6-digit code → the shared webLink. The GUI displays
@@ -1436,8 +1435,8 @@ export class DaemonServer {
 				return {};
 			case "system.getAutostart": {
 				// Desktop daemon launch-at-login (Windows Run key; macOS
-				// LaunchAgents; Linux XDG autostart). openchamber parity —
-				// but the DAEMON self-registers (independent of Electron),
+				// LaunchAgents; Linux XDG autostart).
+				// But the DAEMON self-registers (independent of Electron),
 				// so the setting survives GUI-less operation.
 				return getAutostartState();
 			}
@@ -1522,7 +1521,7 @@ export class DaemonServer {
 				});
 			}
 			case "session.agents": {
-				// 单个会话的子代理名册（侧边栏会话行展开,openchamber 参照）:
+				// 单个会话的子代理名册（侧边栏会话行展开）:
 				// 口径 = 注册表 transcript 路径落在本会话产物目录
 				// (`<sessionFile 去 .jsonl>/`) 下的非 advisor ref —— task /
 				// vibe / persisted-rehydrate 三条注册路径同目录约定。
@@ -1588,7 +1587,7 @@ export class DaemonServer {
 				return this.#services.get<CredentialService>("credentials").delete(params ?? {});
 			}
 			case "tray.state": {
-				// Menu-bar tray snapshot (openchamber tray parity): the
+				// Menu-bar tray snapshot: the
 				// session list plus live activity, pending approvals (inline
 				// Allow/Deny in the tray menu) and usage — one round-trip
 				// per 5s poll, so the tray never fans out RPCs.
@@ -2612,7 +2611,7 @@ export class DaemonServer {
 			case "git.commit": {
 				// Commit the staged index. Identity (settings Git tab 身份) is
 				// injected per-commit with -c (never writes the repo's local
-				// config — openchamber persists it instead, but a desktop
+				// config — persist it here instead, but a desktop
 				// setting must not silently mutate the user's repo).
 				const p = (params ?? {}) as Record<string, unknown>;
 				const message = typeof p.message === "string" ? p.message : "";
@@ -2835,7 +2834,7 @@ export class DaemonServer {
 					]);
 					return { exit: exit ?? -1, out, err };
 				};
-				// Daemon-owned token (openchamber pattern) wins: it was saved
+				// Daemon-owned token wins: it was saved
 				// by the device flow and needs no api.github.com round-trip to
 				// be trusted. The keyring (gh CLI manual login) is the
 				// fallback path below.
@@ -2960,7 +2959,7 @@ export class DaemonServer {
 				}
 				if (body.error) return { error: body.error_description ?? body.error };
 				if (!body.access_token) return { error: "no access token" };
-				// openchamber pattern: persist the token daemon-side instead
+				// Persist the token daemon-side instead
 				// of `gh auth login --with-token` (whose validation requests
 				// api.github.com and fails the whole flow on flaky networks).
 				// gh RPCs receive it via GH_TOKEN env.
@@ -2997,7 +2996,7 @@ export class DaemonServer {
 				return { connected: true };
 			}
 			case "github.authLogout": {
-				// Drop the daemon-owned token (openchamber pattern); also
+				// Drop the daemon-owned token; also
 				// best-effort `gh auth logout --yes` for a keyring login the
 				// user made via the gh CLI directly. 10s cap on the gh spawn.
 				clearGhToken();
@@ -3146,8 +3145,8 @@ export class DaemonServer {
 				// map to the AgentSession delivery semantics.
 				const options = p.deliverAs && p.deliverAs !== "prompt" ? { deliverAs: p.deliverAs } : undefined;
 				const images = Array.isArray(p.images) && p.images.length > 0 ? p.images : undefined;
-				// Image attachments ride along as content parts (openchamber
-				// paste/drag parity); sendUserMessage accepts text+images.}
+				// Image attachments ride along as content parts, whether
+				// pasted or dragged; sendUserMessage accepts text+images.}
 				const content =
 					images && images.length > 0
 						? [
@@ -3293,8 +3292,7 @@ export class DaemonServer {
 				return { ok: true, leafId: rsnap.leafId, path: rsnap.path, pathEntries: rsnap.pathEntries };
 			}
 			case "session.btwBranch": {
-				// GUI /btw promote (TUI branchFromBtw parity — openchamber
-				// BtwPanel promote parity): an ephemeral side-question answer
+				// GUI /btw promote: an ephemeral side-question answer
 				// becomes its own BRANCHED session. The daemon mirrors the
 				// current live session into a new session file and appends the
 				// question + answer as its first user/assistant pair; the
@@ -3600,7 +3598,7 @@ export class DaemonServer {
 							focus = next;
 							return true;
 						},
-						// dsh-mobile-remote parity: remote guests manage the
+						// Remote guests manage the
 						// workspace (new/delete/rename sessions) over the
 						// collab RPC — write-token gated in the host.
 						createWorkspaceSession: async () => {
@@ -4443,7 +4441,7 @@ export class DaemonServer {
 						name: getSkillSlashCommandName({ name: skill.name }),
 						description: skill.description,
 						kind: "skill",
-						// Second badge = discovery scope (openchamber's PROJECT tag).
+						// Second badge = discovery scope (project vs user).
 						category: skill.source.split(":")[1] === "project" ? "project" : "user",
 						// Skills are agent-side invocations — never tui-only.
 						tuiOnly: false,
@@ -4542,7 +4540,7 @@ export class DaemonServer {
 				// message (visible in the TUI; the GUI surfaces the summary
 				// via the RPC response) and injected into the model context
 				// unless the "!!" prefix excludes it — same semantics as the
-				// TUI input controller and openchamber's shell mode.
+				// TUI input controller and the shell mode.
 				const p = (params ?? {}) as {
 					sessionId: string;
 					command: string;
@@ -5192,7 +5190,7 @@ export class DaemonServer {
 				return { ok: true };
 			}
 			case "memory.workspace": {
-				// 设置 → 记忆的工作区记忆卡(ZCode 记忆面板 parity):记忆根下的
+				// 设置 → 记忆的工作区记忆卡:记忆根下的
 				// 各工作区目录 + 选中工作区的 .md 记忆文件列表(mtime 降序)。
 				// 目录缺失时列出空集(该工作区还没有记忆产物)。
 				const p = (params ?? {}) as { cwd?: unknown; slug?: unknown };
@@ -6157,7 +6155,7 @@ export class DaemonServer {
 					out.resolvedRoleModels = resolved;
 				}
 				if (keys.includes("modelRoleSources")) {
-					// openchamber-style provenance echo: which layer actually
+					// Provenance echo: which layer actually
 					// supplies each role (full merge precedence: runtime →
 					// overlay → project → global → default). The GUI badges the
 					// role cards' scope toggle with it so a write never lands in
@@ -6417,8 +6415,8 @@ export class DaemonServer {
 				return { sent: true };
 			}
 			case "session.queuedReorder": {
-				// Drag-reorder a queued message within one group (GUI queue
-				// panel parity, openchamber messageQueueStore.reorderQueue).
+				// Drag-reorder a queued message within one group in the
+				// GUI queue panel.
 				// Same-group only — steering↔follow-up is a timing change,
 				// not a sort. Returns the moved flag; unmatched/no-op → false.
 				const p = (params ?? {}) as {
@@ -6445,7 +6443,7 @@ export class DaemonServer {
 				return { moved };
 			}
 			case "notes.list": {
-				// Project notes (right-panel 项目知识, openchamber v1.19 parity):
+				// Project notes (right-panel 项目知识):
 				// one markdown file per note under agentDir/notes/<cwdHash>/,
 				// never touching the user's project. The legacy single-blob
 				// note (<slug>.md) migrates into the per-project dir on first
@@ -6492,7 +6490,7 @@ export class DaemonServer {
 			}
 			case "notes.create": {
 				// Create one note. A blank body is a rejected write, not a
-				// delete (openchamber v1.19 invariant).
+				// delete.
 				const p = (params ?? {}) as { cwd?: string; body?: string };
 				const cwd = p.cwd?.trim() || this.#host.cwd();
 				const body = (p.body ?? "").trim();
@@ -6533,7 +6531,7 @@ export class DaemonServer {
 				}
 			}
 			case "plans.list": {
-				// Saved plan files (right-panel 计划, openchamber parity): one
+				// Saved plan files (right-panel 计划): one
 				// markdown file per plan under agentDir/plans/<cwdHash>/, never
 				// touching the user's project. Title = first `# heading` or the
 				// slug; createdAt = filename `<ts>-<slug>.md` or file mtime.
@@ -7162,7 +7160,7 @@ export async function startDaemon(
 	}
 
 	// Loopback HTTP static renderer — the "runtime serves the web renderer"
-	// half of the dsh-desktop-compat chain: the Electron compat shell
+	// half of the desktop-compat chain: the Electron compat shell
 	// loadURLs this origin and overlays the desktop frame over the served
 	// content. Optional (webPort); a missing renderer dist is non-fatal —
 	// the shell falls back to its local bundle.
@@ -7284,7 +7282,7 @@ export async function startDaemon(
 	};
 }
 
-// ── Launch-at-login (daemon self-registration, openchamber parity) ────────
+// ── Launch-at-login (daemon self-registration) ────────
 // The daemon is independent of the Electron GUI, so Electron's
 // setLoginItemSettings cannot cover it. We register the DAEMON command
 // itself in the OS autostart slot:
@@ -7292,7 +7290,7 @@ export async function startDaemon(
 //   darwin  — ~/Library/LaunchAgents/dev.musepi.daemon.plist
 //   linux   — ~/.config/autostart/musepi-daemon.desktop
 // GUI-less operation: the daemon stays up after login and the GUI connects
-// on demand (open-design sidecar model). The check reads the actual slot so
+// on demand (sidecar model). The check reads the actual slot so
 // external edits are reflected.
 
 const AUTOSTART_RUN_KEY = "Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\Run";
