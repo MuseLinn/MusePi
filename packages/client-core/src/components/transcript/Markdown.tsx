@@ -189,7 +189,7 @@ function tableToMarkdown({ headers, rows }: { headers: string[]; rows: string[][
 }
 
 /**
- * Table toolbar HTML (openchamber parity): hover-revealed copy
+ * Table toolbar HTML: hover-revealed copy
  * (CSV/TSV/Markdown) + download (CSV/Markdown) menus. The copy button
  * shares the code-block hash scheme so its label flips to "copied"; menu
  * items are delegated in the component below.
@@ -470,7 +470,7 @@ export function renderStreamingMarkdown(
 const highlightSource = new Map<string, { code: string; lang?: string }>();
 const highlightHtml = new Map<string, string>();
 
-// Local-image bridge (bitfun parity): markdown `![](/abs/path)` images are
+// Local-image bridge: markdown `![](/abs/path)` images are
 // read through Electron IPC into data URLs so desktop sessions can display
 // real files. Browser guests have no bridge and keep the raw src (which
 // simply fails to load there). Bounded cache mirrors the highlight one.

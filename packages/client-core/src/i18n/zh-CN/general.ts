@@ -535,7 +535,7 @@ export const general = {
 	"tag.project": "项目",
 	"tag.user": "用户",
 	"slash completion hints": "↓↑ 导航 · Enter 选择 · Esc 关闭",
-	// Right-panel changes tree + PR + browser (openchamber parity).
+	// Right-panel changes tree + PR + browser.
 	staged: "已暂存",
 	unstaged: "未暂存",
 	untracked: "未跟踪",

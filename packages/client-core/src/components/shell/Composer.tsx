@@ -427,7 +427,7 @@ function useVoiceInput(
 	}, []);
 
 	/** Guide-card escape hatch: switch to the device's own recognizer
-	 *  (openchamber parity) and stick to it for the rest of the page load. */
+	 * and stick to it for the rest of the page load. */
 	const retryNative = useCallback((): void => {
 		if (nativeStart()) {
 			preferNativeStt = true;
@@ -815,7 +815,7 @@ export function Composer({ client }: ComposerProps): ReactNode {
 	const compacting = useGuestSelector(client, s => s.compacting);
 	const showWorking = shouldShowChatLoading({ working: busy, approvalPending, askPending, compacting });
 	const queued = useGuestSelector(client, s => s.state?.queuedMessageCount ?? 0);
-	// Empty-state draft suggestions (openchamber parity): show only while the
+	// Empty-state draft suggestions: show only while the
 	// session is live, editable and has nothing to show yet.
 	const empty = useGuestSelector(client, s => s.entries.length === 0 && s.stream === null && !s.working);
 	const model = useGuestSelector(client, s => s.state?.model ?? null);

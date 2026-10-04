@@ -101,12 +101,12 @@ export class TerminalService implements DaemonService {
 			COLUMNS: String(cols),
 			LINES: String(rows),
 			// GUI-spawned daemons inherit Electron/node-child artifacts that
-			// would leak into every pty shell (openchamber parity):
+			// would leak into every pty shell:
 			// ELECTRON_RUN_AS_NODE turns `node`/`npx` into Electron's node,
 			// NODE_CHANNEL_FD points at a dead IPC fd, BASH_ENV/ENV silently
 			// alter shell startup. APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP stops
 			// the "install command line developer tools" dialog from a pty
-			// nobody can answer (proma parity); GIT_TERMINAL_PROMPT keeps git
+			// nobody can answer; GIT_TERMINAL_PROMPT keeps git
 			// from hanging on credentials.
 			APPLE_SUPPRESS_DEVELOPER_TOOL_POPUP: "1",
 			GIT_TERMINAL_PROMPT: "0",

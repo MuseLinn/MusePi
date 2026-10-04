@@ -17,7 +17,7 @@ import type { OrbState } from "../vendor/thinking-orbs";
 export type PetMood = "rest" | "working" | "waiting" | "analyzing" | "error";
 /** Petdex-only moods — spritesheet rows 1/2 (hover/dragging) that the
  *  floating desktop pet switches to while the pointer is over it or while
- *  it is being dragged (BitFun parity). The builtin SVG has no such rows. */
+ * it is being dragged. The builtin SVG has no such rows. */
 export type PetdexMood = PetMood | "hover" | "dragging";
 
 /**
@@ -399,7 +399,7 @@ export const PETDEX_MOOD_ROW: Record<PetdexMood, number> = {
 	error: 5,
 };
 
-/** Per-mood animation timings (BitFun parity): the frame cycle runs at a
+/** Per-mood animation timings: the frame cycle runs at a
  *  mood-dependent speed, paired with one transform animation (breathe /
  *  work bob / hover lift / drag wiggle). Keyed by mood, used by PetdexSprite. */
 export const PETDEX_MOOD_ANIM: Record<PetdexMood, { cycleMs: number; transform: string; transformMs: number }> = {

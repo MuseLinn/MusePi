@@ -406,7 +406,7 @@ export function TurnRail({
 
 	// The whole gutter is one hover/click target: the cursor's vertical
 	// position maps to the nearest tick, so tick density never demands
-	// pointer precision. Edge zones carousel the window (openchamber).
+	// pointer precision. Edge zones carousel the window.
 	const onTrackPointerMove = useCallback(
 		(e: React.PointerEvent<HTMLDivElement>): void => {
 			cancelHide();
@@ -434,7 +434,7 @@ export function TurnRail({
 		[jumpTo, relativeFromY],
 	);
 
-	// Keyboard navigation (openchamber parity): the gutter is focusable
+	// Keyboard navigation: the gutter is focusable
 	// (tab), arrows move the highlight, Enter jumps, Escape closes.
 	const onTrackKeyDown = useCallback(
 		(e: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -520,7 +520,7 @@ export function TurnRail({
 	// Panel list geometry: centered on the highlight when the panel opens,
 	// then a dead zone — the list only glides when the highlighted row gets
 	// within one row of the window edge, so small pointer moves don't
-	// scroll (openchamber).
+	// scroll.
 	const panelVisibleRows = Math.min(turns.length, PANEL_MAX_ROWS);
 	const panelHeight = panelVisibleRows * PANEL_ROW_HEIGHT_PX;
 	const panelMaxOffset = turns.length * PANEL_ROW_HEIGHT_PX - panelHeight;

@@ -7,7 +7,7 @@ import { Icon, type IconName } from "../vendor/oc-icons";
 import { MENU_ANIM_MS } from "./MenuPopup";
 
 /**
- * Floating actions for in-message text selection (openchamber parity):
+ * Floating actions for in-message text selection:
  * selecting text inside the transcript pops a small glass toolbar above
  * the selection with 引用 (quote to composer) / 复制 / 基于选择新建会话 /
  * 添加到笔记. Dismisses on outside click, scroll, or Escape.

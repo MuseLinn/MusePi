@@ -209,7 +209,7 @@ export class TtsController {
 				const msg = err instanceof Error ? err.message : String(err);
 				if (isTransportMiss(msg)) {
 					// collab-direct host (or a silent one): fall back to the
-					// webview's system speech engine (openchamber parity) —
+					// webview's system speech engine —
 					// read-aloud keeps working with no daemon at all. Only a
 					// device without speechSynthesis lands in the guide.
 					if (this.#state.engine !== "daemon" && nativeVoiceSupport().synthesis) {

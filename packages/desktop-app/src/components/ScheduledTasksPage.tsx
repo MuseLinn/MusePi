@@ -715,7 +715,7 @@ function CwdPicker({ value, onChange }: { value: string; onChange(cwd: string): 
 
 /* ── Calendar picker (openchamber one-off parity) ────────────────── */
 
-/** Floating date-picker input (openchamber parity): a text-like field
+/** Floating date-picker input: a text-like field
  *  with calendar icon + chevron that opens a dropdown calendar; the
  *  calendar grid starts on the settings-page week start, not Sunday. */
 function CalendarPicker({ value, onChange }: { value?: string; onChange(date: string): void }): ReactNode {

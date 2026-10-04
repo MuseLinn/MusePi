@@ -291,7 +291,7 @@ export interface TranscriptProps {
 	speakingId?: string | null;
 	/** 停止朗读(点击播放中的行按钮触发)。 */
 	onStopSpeak?(): void;
-	/** Save an assistant reply as an image to the clipboard (openchamber). */
+	/** Save an assistant reply as an image to the clipboard. */
 	onSaveImage?(text: string): void;
 	/** Branch topology (session-tree nav, layer-1): children counts per
 	 *  entry id (from buildMessageTree) + the active path id set. When
@@ -1885,7 +1885,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		return idx;
 	}, [entries]);
 	// Round anchor for the live ticker: the LAST user message timestamp
-	// (craft-agents parity) — the round's start, data-driven so a session
+	// — the round's start, data-driven so a session
 	// switch mid-round resumes the count instead of restarting it.
 	const lastUserTs = useMemo(() => lastUserMessageTs(entries), [entries]);
 	// Round-true tail: the last assistant entry must BELONG to the current

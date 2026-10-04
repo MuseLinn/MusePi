@@ -293,7 +293,7 @@ function usageRow(message: AssistantMessage): string {
 	// Compact single line: time-only stamp, tokens, duration, tok/s (TTFT
 	// dropped — the TUI only shows it when non-zero and the GUI line reads
 	// cleaner without it). Cross-day messages get a MM-DD prefix so history
-	// stays datable (openchamber parity).
+	// stays datable.
 	if (!Number.isNaN(d.getTime())) {
 		const now = new Date();
 		const sameDay =
@@ -369,7 +369,7 @@ export function MsgContent({
 					case "image":
 						// A lone image keeps its in-flow position (the old
 						// thumbnail's spot); multiple images collapse into
-						// one stack after the blocks (craft-agents parity).
+						// one stack after the blocks.
 						if (images.length > 1) return null;
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
@@ -384,7 +384,7 @@ export function MsgContent({
 	);
 }
 
-/** User-message text with the chat-settings variants (openchamber parity):
+/** User-message text with the chat-settings variants:
  * plain rendering instead of markdown, and long messages clamped to two
  * lines with an expand/collapse toggle. */
 const USER_COLLAPSE_MIN_CHARS = 240;
@@ -469,7 +469,7 @@ export function UserMsgContent({
 					case "image":
 						// A lone image keeps its in-flow position (the old
 						// thumbnail's spot); multiple images collapse into
-						// one stack after the blocks (craft-agents parity).
+						// one stack after the blocks.
 						if (images.length > 1) return null;
 						// Anonymous content blocks have no stable id — index is identity.
 						return (
@@ -579,7 +579,7 @@ export function RoundFoldHeader({
 	onRevert?(messageId: string, text: string): void;
 }): ReactNode {
 	const changed = fold.filesChanged > 0;
-	// Summary segments (openchamber wording): changes · explored · commands,
+	// Summary segments: changes · explored · commands,
 	// falling back to the bare tool count for rounds with neither signal.
 	const segments: ReactNode[] = [];
 	if (changed) {

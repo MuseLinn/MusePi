@@ -421,7 +421,7 @@ export function ImageLightbox({
 	const prev = (): void => onIndexChange((shown.index - 1 + shown.items.length) % shown.items.length);
 	const next = (): void => onIndexChange((shown.index + 1) % shown.items.length);
 	return createPortal(
-		// Backdrop closes on mousedown (openchamber parity); inner controls
+		// Backdrop closes on mousedown; inner controls
 		// stop propagation so they never dismiss the dialog.
 		<div
 			className={`tr-img-lb${isClosing && !morphClosing ? " tr-img-lb--closing" : ""}${

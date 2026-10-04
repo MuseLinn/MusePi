@@ -22,7 +22,7 @@ const trimSelectionValue = (value: string): string => value.replace(/\r\n?/g, "\
 
 /** Read the selection of a focused text control (input/textarea) that is
  *  NOT the chat composer. Collapses the selection so a duplicate delivery
- *  cannot re-capture the same range (openchamber parity). */
+ * cannot re-capture the same range. */
 const readTextControlSelection = (element: Element): string | null => {
 	if (isInsideChatComposer(element)) return null;
 	const tag = element.tagName?.toLowerCase();

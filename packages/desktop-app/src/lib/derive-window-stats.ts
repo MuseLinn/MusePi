@@ -137,7 +137,7 @@ export function formatTokenCount(n: number): string {
 	return String(n);
 }
 
-/** Compact duration: 45.2s under a minute, 2m42s from there on (dsh parity). */
+/** Compact duration: 45.2s under a minute, 2m42s from there on. */
 export function formatDurationMs(ms: number): string {
 	const s = ms / 1000;
 	if (s < 60) return `${Math.round(s * 10) / 10}s`;

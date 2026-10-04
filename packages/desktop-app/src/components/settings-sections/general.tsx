@@ -277,7 +277,7 @@ export function GeneralSection({ rpc }: { rpc: RpcClient | null }): ReactNode {
 	};
 	const [avatarId, setAvatarId] = useState<string>(avatarPresetId);
 	const [punkSeedInput, setPunkSeedInput] = useState<string>(userPunkSeed() ?? "");
-	// Busy-state plain-Enter behavior (dsh parity): steer (TUI default) or
+	// Busy-state plain-Enter behavior: steer (TUI default) or
 	// queue; Cmd/Ctrl+Enter uses the opposite.
 	const [busyEnter, setBusyEnterState] = useState<"steer" | "queue">("steer");
 	useEffect(() => {

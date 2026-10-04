@@ -4,7 +4,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { dismissActionToast, getToasts, subscribeActionToasts } from "../lib/action-toast";
 
 /**
- * Undo-action toast stack (openchamber parity). Sits bottom-center, clear of
+ * Undo-action toast stack. Sits bottom-center, clear of
  * the update toast (bottom-right, z-index 900) and the shell's `.sh-toasts`
  * (bottom strip, z-index 60) so a notice and an undo never overlap.
  */

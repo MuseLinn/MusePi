@@ -13,7 +13,7 @@ import { PluginDetailDialog } from "./PluginDetailDialog";
  * （extensions.list 的 kind=extension-module —— deepseek-harness 式
  * 插件化基础组件）同屏汇总，布局对齐 dsh 插件列表面板：
  * - 分组：官方（内置插件单元）/ 已安装（插件包 + 用户模块）;
- * - 行：图标 + 名称 + 一行描述 + 右侧启停开关(dsh 同款);
+ * - 行：图标 + 名称 + 一行描述 + 右侧启停开关;
  * - 点击行打开插件详情液态玻璃弹层（PluginDetailDialog）——配置表单、
  *   资源卡与「包含的组件」独立开关都在弹层内,不跳转页面;
  * - 顶栏「+ 添加插件」进 marketplace。

@@ -6997,7 +6997,7 @@ export class AgentSession {
 		const rest = queue.slice();
 		rest.splice(start, block.length);
 		// Target index in the array WITHOUT the dragged block; insert before
-		// it so a downward move lands above the target (openchamber semantics).
+		// it so a downward move lands above the target.
 		let target = -1;
 		for (let i = 0; i < rest.length; i++) {
 			if (isUserQueuedMessage(rest[i]) && queueChipText(rest[i]) === toText) {

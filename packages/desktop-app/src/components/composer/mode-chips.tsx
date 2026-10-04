@@ -3,7 +3,7 @@ import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 import { StateIcon } from "../StateIcon";
 
-/** Goal-mode chip (openchamber parity): armed state (one tap with no live
+/** Goal-mode chip: armed state (one tap with no live
  *  goal arms goal mode — the NEXT SENT MESSAGE becomes the objective),
  *  a live/paused goal with its objective, or a paused goal. Tapping a live
  *  or paused goal opens the goal card (details + pause/resume/drop/budget);

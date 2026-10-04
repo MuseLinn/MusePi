@@ -347,7 +347,7 @@ export function ContextPanel({
 		revealedNonceRef.current.browser = browserOpenRequest.nonce;
 		onViewChange("browser");
 	}, [browserOpenRequest, onViewChange]);
-	// Managed browser (Proma 吸收): when the agent opens a tab in the in-app
+	// Managed browser: when the agent opens a tab in the in-app
 	// browser (browser.gui), surface the browser tool so the user sees the
 	// agent's work without hunting for the panel. Skipped while the panel is
 	// maximized (the mirror ref is declared here, wired to state below) — an
@@ -378,7 +378,7 @@ export function ContextPanel({
 			}
 		});
 	}, []);
-	// Resizable right-pane width (openchamber parity): drag the left edge;
+	// Resizable right-pane width: drag the left edge;
 	// persisted per run.
 	// Width range 260–1200 (openchamber ContextPanel 380–1400, adapted to the
 	// desktop surface): file preview takeover and the browser need room; 260
@@ -813,7 +813,7 @@ export function ContextPanel({
 						activeFile={bodyTab?.surface === "files" ? bodyTab.target : null}
 						onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
 						onDirty={onFileDirty}
-						// Tree and file previews are sibling tabs (dsh parity):
+						// Tree and file previews are sibling tabs:
 						// the preview's back button activates the tree tab.
 						onShowTree={() => panelTabs.open({ surface: "files" })}
 					/>

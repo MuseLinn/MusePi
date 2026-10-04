@@ -81,7 +81,7 @@ import { SketchPad } from "./SketchPad";
 import { type SlashEntry, SlashRow } from "./SlashRow";
 import type { ThinkingLevel } from "./ThinkingSelector";
 
-/** Time-aware greeting (ZCode-style): seven brackets — 清晨 / 早上 / 中午 /
+/** Time-aware greeting: seven brackets — 清晨 / 早上 / 中午 /
  * 下午 / 晚上 / 深夜. Each bracket carries its own tone so the welcome
  * reads less canned. */
 function greeting(hour: number): string {
@@ -325,7 +325,7 @@ export function WelcomeComposer({
 	}, []);
 	const { pending: pendingPaste, requestPaste: requestLongPaste, dismiss: dismissLongPaste } = useLongTextPaste();
 	const [attachments, setAttachments] = useState<WelcomeAttachment[]>([]);
-	// Armed plan/goal (openchamber parity): one tap arms the mode chip —
+	// Armed plan/goal: one tap arms the mode chip —
 	// NO popup dialog and NO session creation, so the welcome input keeps
 	// its shape. The first sent message applies the mode (goal: the
 	// message text becomes the objective; plan: session opens in plan
@@ -1367,7 +1367,7 @@ export function WelcomeComposer({
 		/* Scene content only — the surrounding rounded surface belongs to
 		 * ChatView, which renders both the welcome and in-session scenes
 		 * inside one container. Focus mode (⌘⇧E) expands the composer to
-		 * fill the surface (openchamber parity): brand/greeting/tips hide
+		 * fill the surface: brand/greeting/tips hide
 		 * and the input grows. */
 		<>
 			{renderQuotaMenu(

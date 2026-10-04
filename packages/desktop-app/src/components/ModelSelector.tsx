@@ -219,7 +219,7 @@ export function ModelSelector({
 	const [open, setOpen] = useState(false);
 	const [models, setModels] = useState<WireModel[]>([]);
 	const [modelId, setModelId] = useState<string>("");
-	// Searchable list (openchamber parity): filter by id/name/provider.
+	// Searchable list: filter by id/name/provider.
 	const [query, setQuery] = useState("");
 	const { anchorRef, renderMenu } = useFloatingMenu(open, setOpen);
 	// Content-boundary feather on the scrolling list (sessions-list parity).
@@ -485,7 +485,7 @@ export function ModelSelector({
 		setKbd(-1);
 		setKbdOwner(false);
 	}, []);
-	// Keep the keyboard-highlighted row in view (openchamber parity): the
+	// Keep the keyboard-highlighted row in view: the
 	// roving highlight scrolls with ↑↓ instead of running off-list.
 	useEffect(() => {
 		if (kbd < 0) return;
@@ -731,7 +731,7 @@ interface ModelRowProps {
 	onSetDefault(id: string, provider: string): void;
 }
 
-/** Favorite row with @dnd-kit sortable wiring (openchamber parity): the
+/** Favorite row with @dnd-kit sortable wiring: the
  *  transform animates the row as it is dragged, and the grip is the sole
  *  drag activator so the row's own click/star/default buttons stay
  *  clickable. */

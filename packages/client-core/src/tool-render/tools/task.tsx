@@ -2,7 +2,7 @@
  *  Kimi SwarmTool parity (2026-08-11): the head carries a done/total chip,
  *  and the native card body lists one compact line per subagent (status
  *  badge + description + stats) with output previews — the "one subagent
- *  per line" progress style. The rich avatar member grid (kimiwork parity)
+ * per line" progress style. The rich avatar member grid
  *  is an ADDITIVE component (`SwarmCard`) the host renders as a floating
  *  hover card, not inline under the tool call. */
 import type { ReactNode } from "react";

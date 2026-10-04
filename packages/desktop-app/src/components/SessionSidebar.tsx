@@ -870,7 +870,7 @@ export function SessionSidebar({
 					</MenuPopup>
 				)}
 				{/* Sessions list — custom groups in groups tab; project/timeline in
-				 * projects; archived sessions in the archive view (ZCode). */}
+				 * projects; archived sessions in the archive view. */}
 				<div className="gui-sessions-tab mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
 					<SessionSearchBar
 						open={searchOpen}

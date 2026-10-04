@@ -708,7 +708,7 @@ export const SETTINGS_SCHEMA = {
 	// parity). No TUI UI; the GUI 行为 tab renders its own picker.
 	sideChannelModel: { type: "string", default: "" },
 
-	// Busy-state plain-Enter behavior (dsh parity): steer (insert into the
+	// Busy-state plain-Enter behavior: steer (insert into the
 	// running turn immediately — the TUI default) or queue (follow-up,
 	// delivered after the turn yields). Cmd/Ctrl+Enter uses the opposite.
 	busyEnter: { type: "string", default: "steer" },

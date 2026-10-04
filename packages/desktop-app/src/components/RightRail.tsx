@@ -184,7 +184,7 @@ export function RightRail({
 		};
 	}, []);
 
-	// Git changed-files badge (openchamber parity): a live count on the git
+	// Git changed-files badge: a live count on the git
 	// rail icon. Same RPC + 15s cadence as StatusCards — the panel shows the
 	// same fact in words a few pixels away, so no second source of truth.
 	// Paths deduped (a file can be staged AND modified again).

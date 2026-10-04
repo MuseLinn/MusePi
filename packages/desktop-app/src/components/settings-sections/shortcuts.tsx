@@ -12,7 +12,7 @@ import {
 } from "../../lib/shortcut-registry";
 
 /**
- * 设置 → 快捷键 (kimicode parity): searchable list where every row is
+ * 设置 → 快捷键: searchable list where every row is
  * action name + one-line description + binding chips + edit/reset. Edit
  * arms a capture-the-next-press mode; conflicts are refused with the name
  * of the owning action. Overrides persist via the shortcut registry and

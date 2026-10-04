@@ -541,7 +541,7 @@ export const general = {
 	"tag.project": "Project",
 	"tag.user": "User",
 	"slash completion hints": "↓↑ navigate · Enter select · Esc close",
-	// Right-panel changes tree + PR + browser (openchamber parity).
+	// Right-panel changes tree + PR + browser.
 	staged: "Staged",
 	unstaged: "Unstaged",
 	untracked: "Untracked",

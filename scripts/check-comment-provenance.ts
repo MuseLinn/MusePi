@@ -100,7 +100,14 @@ export function trackedSources(): string[] {
 		encoding: "utf8",
 	})
 		.split("\n")
-		.filter(f => f && !f.includes("node_modules") && !/\.(test|spec)\./.test(f));
+		.filter(
+			f =>
+				f &&
+				!f.includes("node_modules") &&
+				!/\.(test|spec)\./.test(f) &&
+				// This file names the projects on purpose: it is the token list.
+				f !== "scripts/check-comment-provenance.ts",
+		);
 }
 
 export function readBaseline(): Baseline {

@@ -62,7 +62,7 @@ const FS_ICON =
 	'<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path d="M8 3V5H4V9H2V3H8ZM2 21V15H4V19H8V21H2ZM22 21H16V19H20V15H22V21ZM22 9H20V5H16V3H22V9Z" fill="currentColor"/></svg>';
 
 /**
- * Hover toolbar (openchamber parity): copy the mermaid SOURCE (svg mode
+ * Hover toolbar: copy the mermaid SOURCE (svg mode
  * additionally offers zoom in/out and download of the rendered SVG). The
  * copy button shares the code-block hash scheme so its label flips to
  * "copied"; the source rides in data-mermaid-src (escaped) and the SVG is

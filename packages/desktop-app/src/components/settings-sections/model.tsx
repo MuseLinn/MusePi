@@ -59,7 +59,7 @@ interface CatalogProvider {
 	}[];
 }
 
-/** Cards per provider section before the "show all" expand (bitfun parity). */
+/** Cards per provider section before the "show all" expand. */
 const PROVIDER_COLLAPSE_LIMIT = 8;
 
 /** Built-in role display tags (TUI config/model-roles MODEL_ROLES parity). */
@@ -149,7 +149,7 @@ export function ModelSection({
 	// 横向边缘羽化:顶部 tab 条横向滚动时左右羽化(只在溢出时出现)。
 	const modelTabsRef = useRef<HTMLDivElement | null>(null);
 	useScrollShadow(modelTabsRef);
-	// Section collapse (bitfun parity): show the first few cards, expand on
+	// Section collapse: show the first few cards, expand on
 	// demand — 70 login providers + the full catalog is too much for a grid.
 	const [showAll, setShowAll] = useState(false);
 	const [providerQuery, setProviderQuery] = useState("");

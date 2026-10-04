@@ -237,7 +237,7 @@ export function ManagedBrowserPane({
 	const host = useSyncExternalStore(subscribeHost, getHostState);
 	const [picking, setPicking] = useState(false);
 	const [pickedSelector, setPickedSelector] = useState<string | null>(null);
-	// Address omnibox state (open-design parity): editing shows the raw URL,
+	// Address omnibox state: editing shows the raw URL,
 	// idle shows `host / title` display parts.
 	const [addressValue, setAddressValue] = useState("");
 	const [addressEditing, setAddressEditing] = useState(false);
@@ -605,7 +605,7 @@ export function ManagedBrowserPane({
 		void navigateTo(openRequest.url);
 	}, [openRequest, navigateTo]);
 
-	// Suggestions: history entries filtered by the query (open-design parity).
+	// Suggestions: history entries filtered by the query.
 	const suggestions = useMemo(() => {
 		const query = addressValue.trim().toLocaleLowerCase();
 		const showDefault = addressEditing && !query;

@@ -219,7 +219,7 @@ export function ModesSection({
 			.catch(error => setErrors([String(error)]));
 	};
 
-	/** 分组卡片:内置(builtin)与自定义分两卡片区(dsh parity)。插件注册的
+	/** 分组卡片:内置(builtin)与自定义分两卡片区。插件注册的
 	 * 预设(source=extension)归入自定义区,操作按钮自带禁用逻辑。 */
 	const builtinModes = modes?.filter(m => m.builtin === true) ?? [];
 	const customModes = modes?.filter(m => m.builtin !== true) ?? [];
@@ -315,7 +315,7 @@ export function ModesSection({
 				<div className="gui-settings-row text-[12px] text-[var(--color-danger)]">{errors.join("; ")}</div>
 			)}
 			{/* 新建预设:看板式始终可见自然语言输入框 —— Enter/发送把预设描述
-			 * 发给 Creator 会话(DSH),由 Creator 设计并保存预设。SpotlightCard
+			 * 发给 Creator 会话,由 Creator 设计并保存预设。SpotlightCard
 			 * 提供板输入框同款光标跟随光晕(accent 微光),overflow-visible 让
 			 * 发送按钮的 glow 不被容器裁掉。 */}
 			<SpotlightCard

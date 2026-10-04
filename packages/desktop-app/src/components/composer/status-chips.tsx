@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { t } from "../../i18n/index.js";
 import { Icon } from "../../vendor/oc-icons";
 
-/** Swarm status chip (kimiwork parity): while a `task` tool is running, a
+/** Swarm status chip: while a `task` tool is running, a
  * temporary chip sits above the input; clicking opens the frosted floating
  * member grid (avatars + progress) — the portaled menu is passed in. */
 export function SwarmChip({

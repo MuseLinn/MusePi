@@ -7,7 +7,7 @@ import { type TranslationKey, t } from "../../i18n/index.js";
  * tip line cycles on a 6s timer and refreshes with a shimmer keyed re-render.
  */
 
-/** Time-aware greeting (ZCode-style): seven brackets — 凌晨 / 清晨 / 早上 /
+/** Time-aware greeting: seven brackets — 凌晨 / 清晨 / 早上 /
  * 中午 / 下午 / 晚上 / 深夜. */
 function greeting(hour: number): string {
 	if (hour < 5) return t("it is late, take care");

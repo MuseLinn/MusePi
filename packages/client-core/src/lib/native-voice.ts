@@ -250,7 +250,7 @@ export function speakNative(
 }
 
 /**
- * iOS/Safari autoplay unlock (openchamber parity): a silent WAV + a silent
+ * iOS/Safari autoplay unlock: a silent WAV + a silent
  * utterance inside the current user gesture arm the synthesis engine for
  * later gesture-less calls (auto-read). No-op elsewhere.
  */

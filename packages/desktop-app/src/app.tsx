@@ -443,7 +443,7 @@ function AppInner(): ReactNode {
 	const treeRefreshSeqRef = useRef(0);
 	const metaRefreshSeqRef = useRef(0);
 	/** session.list metadata keyed by id — folder display in the archive
-	 *  view (ZCode), pause chips, and the real-time working/unread status
+	 * view, pause chips, and the real-time working/unread status
 	 *  the sidebar + reminders panel derive from (kimi parity). */
 	const [sessionMeta, setSessionMeta] = useState<Map<string, SessionMetaRow>>(new Map());
 	const sessionMetaRef = useRef<Map<string, SessionMetaRow>>(new Map());
@@ -546,7 +546,7 @@ function AppInner(): ReactNode {
 	// render" on the splash → full-app transition (Rules of Hooks).
 	const [sessionLoading, setSessionLoading] = useState(false);
 	const sessionLoadingTimerRef = useRef<Timer | null>(null);
-	// Panel collapse (ZCode-style): side rail and context panel fold to thin
+	// Panel collapse: side rail and context panel fold to thin
 	// strips with a reopen button.
 	const [sideCollapsed, setSideCollapsed] = useState(() => localStorage.getItem("musepi-gui-side") === "0");
 	const [sideWidth, setSideWidth] = useState<number>(() => Number(localStorage.getItem("musepi-gui-side-w") ?? 256));
@@ -891,7 +891,7 @@ function AppInner(): ReactNode {
 	// Keyboard-shortcuts reference (openchamber HelpDialog parity). Always mounted:
 	// DialogFrame plays its own exit animation when `open` flips false.
 	const [shortcutsOpen, setShortcutsOpen] = useState(false);
-	// Bottom integrated terminal drawer (ZCode style) — independent of the
+	// Bottom integrated terminal drawer — independent of the
 	// right-pane terminal tool. Open state is remembered PER SESSION: a
 	// session whose dock was never opened stays closed (and ChatView then
 	// never mounts TerminalPanel, so no daemon pties spawn unprompted on
@@ -919,7 +919,7 @@ function AppInner(): ReactNode {
 		nonce: number;
 	} | null>(null);
 	const panelSelectNonce = useRef(0);
-	// Focus mode (openchamber): the composer expands to fill the surface.
+	// Focus mode: the composer expands to fill the surface.
 	const [focusMode, setFocusMode] = useState(false);
 	// Mini chat window (Electron mini-chat-open → ?mini=1): a chat-only
 	// surface — no sidebar, header, or settings.
@@ -2470,7 +2470,7 @@ function AppInner(): ReactNode {
 		[createSession, sendPrompt, project],
 	);
 
-	/** Settings → 智能体 → 预设 新建输入框 (DSH):send the natural-language
+	/** Settings → 智能体 → 预设 新建输入框:send the natural-language
 	 *  preset description to a Creator session that designs & saves the
 	 *  preset (modes-plan structure → modes.save). Closes the settings pane
 	 *  first so the new chat isn't buried behind it. */
@@ -2943,7 +2943,7 @@ function AppInner(): ReactNode {
 			if (typeof sessionId !== "string") return;
 			void openSessionRef.current(sessionId);
 		});
-		// Menu-bar tray (openchamber parity): session row → open it; the
+		// Menu-bar tray: session row → open it; the
 		// "New Session" item → create one (same path as the welcome button).
 		const unsubTrayOpen = electronAPI.onTrayOpenSession?.(sessionId => {
 			if (typeof sessionId !== "string") return;

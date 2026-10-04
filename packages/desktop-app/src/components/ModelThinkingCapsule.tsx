@@ -44,7 +44,7 @@ export function ModelThinkingCapsule({
 	thinkingCeiling?: string | null;
 	thinkingEfforts?: readonly string[] | null;
 	allowSetDefault?: boolean;
-	/** Top-menu 添加新提供商 action (openchamber parity) — opens the
+	/** Top-menu 添加新提供商 action — opens the
 	 *  settings providers page; omitted where no opener is reachable. */
 	onAddProvider?(): void;
 }): ReactNode {

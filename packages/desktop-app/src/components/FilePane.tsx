@@ -522,7 +522,7 @@ export function FilePane({
 		const visible = showHidden ? (entries ?? []) : (entries ?? []).filter(e => !e.name.startsWith("."));
 		return compressTree(buildTree(visible));
 	}, [entries, showHidden]);
-	// Collapsed by default (openchamber parity): a fresh Files view is a folder
+	// Collapsed by default: a fresh Files view is a folder
 	// list, not an expanded dump — the expanded form is what reads as noise.
 	// Seeded once from the first tree that carries directories, so a later
 	// refresh (or the gitignore toggle reload) doesn't fight the user's own
@@ -1159,7 +1159,7 @@ export function FilePane({
 								title={t("back to files")}
 								onClick={() => {
 									// Panel-level file instances split tree and
-									// preview into two tabs (dsh parity): back
+									// preview into two tabs: back
 									// activates the tree tab. Standalone (legacy
 									// sidebar) usage has no tree tab — drop the
 									// preview inside this pane instead.

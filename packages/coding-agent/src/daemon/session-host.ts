@@ -2878,7 +2878,7 @@ export class DaemonSessionHost {
 		// 子代理 transcript(`<slug>/<parentFileBase>/<subId>.jsonl`)收编为层
 		// 级子会话行:parentId 由父文件路径推导(父文件名 `<timestamp>_<id>`
 		// 约定,与上方 header.parentSession 推导同源),session.tree / list
-		// 据此把子会话渲染为父行下的嵌套子列表(openchamber parity),行可
+		// 据此把子会话渲染为父行下的嵌套子列表,行可
 		// 直达子会话消息(resume 径已扩到两层扫描)。父会话缺席(已删除)时
 		// parentId 落空,树把该行提为根——不丢消息。
 		for (const h of history.subagents) {

@@ -74,7 +74,7 @@ export function SoundEventRow({ ev }: { ev: SfxEvent }): ReactNode {
 	);
 }
 
-/** Notification template variables (openchamber parity). */
+/** Notification template variables. */
 const TEMPLATE_VARIABLES = [
 	"project_name",
 	"worktree",

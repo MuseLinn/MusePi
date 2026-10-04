@@ -13,7 +13,7 @@ const CHANGES_VIEW_SEGMENTS: SegmentedOption<"flat" | "tree">[] = [
 	{ value: "tree", label: t("tree view") },
 ];
 
-/** Read-only keyboard shortcut reference (openchamber parity). */
+/** Read-only keyboard shortcut reference. */
 interface GitAuthState {
 	installed?: boolean;
 	authenticated?: boolean;

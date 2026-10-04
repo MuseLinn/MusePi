@@ -72,7 +72,7 @@ export function useModes(
 			document.removeEventListener("visibilitychange", onVis);
 		};
 	}, [refreshModes]);
-	// Armed goal (openchamber parity): one tap with no live goal arms goal
+	// Armed goal: one tap with no live goal arms goal
 	// mode — the NEXT SENT MESSAGE becomes the objective (no popup dialog,
 	// same one-tap shape as the plan-mode toggle). A second tap disarms.
 	const [goalArmed, setGoalArmed] = useState(false);

@@ -1169,7 +1169,7 @@ export function Composer({
 	const { anchorRef: todoAnchorRef, renderMenu: renderTodoMenu } = useFloatingMenu(todoOpen, setTodoOpen, {
 		className: "gui-todo-popup",
 	});
-	// Swarm status chip (kimiwork parity): while a `task` tool is running,
+	// Swarm status chip: while a `task` tool is running,
 	// a temporary chip sits above the input; clicking opens the frosted
 	// floating member grid (avatars + progress) — same portaled pattern.
 	const [swarmOpen, setSwarmOpen] = useState(false);
@@ -1440,7 +1440,7 @@ export function Composer({
 				return;
 			}
 			if (!payload && attachments.length === 0) return;
-			// Armed goal (openchamber parity): the sent message becomes the
+			// Armed goal: the sent message becomes the
 			// objective — no popup dialog. The daemon creates the goal from the
 			// prompt text; the chip confirms via the modes poll.
 			if (goalArmed && payload && rpc && sessionId) {
@@ -1697,7 +1697,7 @@ export function Composer({
 			requestAnimationFrame(() => autosize(taRef.current));
 			return;
 		}
-		// Cmd/Ctrl+Enter (dsh parity): send with the OPPOSITE busy behavior
+		// Cmd/Ctrl+Enter: send with the OPPOSITE busy behavior
 		// of the configured plain-Enter mode.
 		if (e.key === "Enter" && eventMatches(e, "send") && !e.shiftKey && !e.altKey && !composingRef.current) {
 			e.preventDefault();

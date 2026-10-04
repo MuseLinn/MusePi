@@ -59,7 +59,7 @@ function fileIconFor(name: string): IconName {
 	return "file";
 }
 
-/** "1.2 MB"-style size label (openchamber parity). */
+/** "1.2 MB"-style size label. */
 function attachSizeLabel(bytes: number | undefined): string {
 	if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return "";
 	if (bytes < 1024) return `${bytes} B`;

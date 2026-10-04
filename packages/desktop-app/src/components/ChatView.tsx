@@ -292,7 +292,7 @@ export function ChatView({
 	 *  转录照常浏览，输入区替换为只读说明条，禁止发送。 */
 	readOnly?: boolean;
 	/** 当前会话的父会话(fork 来源 / 子代理宿主)——非空时 transcript 左上
-	 *  角渲染「父级」返回按钮(openchamber parity)。 */
+	 * 角渲染「父级」返回按钮。 */
 	parentSession?: { id: string; label: string | null } | null;
 	/** 切换主视图到父会话。 */
 	onOpenParentSession?(id: string): void;
@@ -2105,7 +2105,7 @@ export function ChatView({
 		fetchThinkingInfo();
 	}, [fetchThinkingInfo]);
 
-	// Terminate confirmation (openchamber parity): the stop button asks
+	// Terminate confirmation: the stop button asks
 	// before aborting — the dialog explains what abort means (same
 	// semantics as TUI Esc: current turn stops, queued messages stay).
 	const handleStop = useCallback(async (): Promise<void> => {
@@ -2413,7 +2413,7 @@ export function ChatView({
 																		}),
 																	);
 																}}
-																/* Chat settings (openchamber parity): user message
+																/* Chat settings: user message
 																 * markdown/plain + long-message collapse. */
 																userPlain={(() => {
 																	try {

@@ -1,5 +1,5 @@
 /**
- * Floating member grid (kimiwork parity): renders the guest-client task
+ * Floating member grid: renders the guest-client task
  * renderer's SwarmCard against the live task tool's partialResult details
  * (progress/results) — the frosted card opened from the composer's
  * temporary swarm status chip. Host wires agent-trajectory drill-down.

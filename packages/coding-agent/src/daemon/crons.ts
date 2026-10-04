@@ -48,7 +48,7 @@ export interface CronTask {
 	schedule: CronSchedule;
 	prompt: string;
 	cwd: string;
-	/** Task-level model id (openchamber parity); unset → session default. */
+	/** Task-level model id; unset → session default. */
 	model?: string;
 	/** Task-level thinking effort; unset → session default. */
 	thinkingLevel?: "default" | "low" | "medium" | "high";

@@ -2653,7 +2653,7 @@ export class DaemonServer {
 			}
 			case "git.branches": {
 				// Local branch list + current branch for the welcome/new-session
-				// branch selector (openchamber parity). Runs in the caller's
+				// branch selector. Runs in the caller's
 				// cwd; not a git repo → { error }.
 				const p = (params ?? {}) as { cwd?: unknown };
 				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());

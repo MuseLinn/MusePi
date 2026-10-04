@@ -21,7 +21,7 @@
  *     PET_INTERACTIONS set, dozing excluded — the old show/hide-main-
  *     window shortcut is gone: the window is reached from the taskbar,
  *     and a pet is for petting)
- *   - hover/dragging switch the petdex sprite to rows 1/2 (BitFun parity);
+ * - hover/dragging switch the petdex sprite to rows 1/2;
  *     hover is driven by the MAIN process (it knows when the cursor is in
  *     the interactive hitbox, including when the window is click-through)
  *   - 60s idle at rest → sleep state (dimmed + zzz, CSS-only); any
@@ -153,7 +153,7 @@ function PetApp(): ReactNode {
 	// mode === "hidden" — so the badge never lights at boot (a fresh stack
 	// starts "stacked") and never reflects the persisted unread set.
 	const [hiddenCount, setHiddenCount] = useState(0);
-	// Sleep state (clawd-on-desk parity): after 60s of no interaction AND
+	// Sleep state: after 60s of no interaction AND
 	// no task activity, the pet dims and shows a "zzz" (CSS-only — no new
 	// sprite rows needed for imported sheets). Any gesture or mood change
 	// wakes it.
