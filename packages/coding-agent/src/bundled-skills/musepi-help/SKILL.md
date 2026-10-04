@@ -7,13 +7,13 @@ description: MusePi 产品使用帮助——回答"怎么用/是什么/出问题
 
 MusePi 是本地优先的 AI 编程助手（oh-my-pi 的定制分支）：终端 TUI/CLI + 桌面
 GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品问题时先确定话题，
-再按下面路由回答；不确定时读本地文档（仓库 `docs/`）再答，不要编造。
+再按下面路由回答；不确定时先查运行时可观测的事实（设置项字段、`--help`、RPC 检视面、`~/.musepi/` 下的实际文件）；只有当 cwd 在 MusePi 仓库 clone 内才读 `docs/`。不要编造，也不要声称读过读不到的文件。
 
 ## 产品构成
 
 - **TUI/CLI**：`musepi` 命令启动终端会话；斜杠命令（`/board` 看板、`/pause`
   暂停、`/steer` 转向、`/tasks` 任务、`/extensions` 扩展）。
-- **桌面 GUI**：`packages/desktop-app`（Electron）——daemon 架构：GUI 连 daemon
+- **桌面 GUI**（Electron）——daemon 架构：GUI 连 daemon
   （端口 8300）驱动会话；`musepi --gui` 或应用启动。
 - **看板（dashboard）**：widget 卡片墙——GUI 侧栏「看板」进入（画布随窗口自适应缩放 + ChromaGrid 组光效）；`board` 工具读写（list/get/schema/save，agent 可建板/加卡）；卡片可拖拽/缩放（网格 92×44、gutter 12）；组件即卡（无外框）。
 - **对话内联 widget**：`widget` 工具在对话里渲染活卡片（计算器/滑杆/行情/
@@ -49,7 +49,7 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 - **看板卡片出不来了/空白**：确认 daemon 在跑（GUI 会自启）；检查卡片
   `widget` 类型是否在注册表（设置→技能/看板 tab）；历史数据卡（fx/stocks/
   history）需要网络，离线时显示兜底。
-- **GUI 没反应**：daemon 长驻——改 daemon 源码后必须重启 daemon 才生效
+- **GUI 没反应**：daemon 长驻——改了扩展或配置后必须重启 daemon 才生效
   （GUI 菜单"重启 daemon"）；`kill` 后 Electron 不会自动 respawn。
 - **音效没有**：系统策略限制——CDP 合成输入不产生 user activation，音效只在
   真实点击下播放（已知限制，非故障）。
@@ -62,5 +62,5 @@ GUI（Electron，可固定看板到桌面）+ 云端协作渲染。回答产品�
 
 - 先给结论，再给路径/命令；引用具体目录或文件。
 - 产品问题不要泛化到通用 AI 教程；不知道的查文档或源码再答。
-- 涉及 GUI 视觉/行为细节时，以 `docs/gui-design.md` / `docs/gui-implementation.md`
-  为准（仓库内）。
+- 涉及 GUI 视觉/行为细节时：仓库 clone 内以 `docs/gui-design.md` / `docs/gui-implementation.md`
+  为准；仓库外以运行中的实际表现为准，不要引用读不到的文件。

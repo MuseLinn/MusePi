@@ -89,6 +89,8 @@ daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠
 
 ## 文档路由表（需要细节时读这些，别猜）
 
+**这张表只在 MusePi 仓库 clone 内有效**：它指向的 `docs/` 目录不随发行包分发。在仓库外开发扩展时改用运行时可观测的事实——`settings.schema` 的字段、`extension_status` 检视面、`~/.musepi/agent/` 下的实际文件、`--help`——不要按这些路径去找文件，也不要声称读过读不到的文件。
+
 | 任务 | 文档 |
 |---|---|
 | 扩展 API 全貌/事件名/命令上下文 | `docs/extensions.md` |
@@ -96,7 +98,7 @@ daemon 会话给 agent 挂了一组扩展自举工具，让创造类任务不靠
 | 加载机制细节（发现顺序/路径解析/禁用） | `docs/extension-loading.md` |
 | 自定义工具（模型直接调用） | `docs/custom-tools.md` |
 | Hook（pre/post 脚本、可突变什么） | `docs/hooks.md` |
-| 加 LLM provider（如新模型厂） | `docs/adding-a-provider.md` + 照抄 `packages/ai/src/registry/` 现有 provider（一个 def 文件 + 一个 registry 行 + catalog 条目） |
+| 加 LLM provider（如新模型厂） | `docs/adding-a-provider.md` + 参照 `packages/ai/src/registry/` 现有 provider 的写法（一个 def 文件 + 一个 registry 行 + catalog 条目） |
 | MCP server/工具 | `docs/mcp-config.md` / `docs/mcp-server-tool-authoring.md` |
 | 插件市场/安装器 | `docs/marketplace.md` / `docs/plugin-manager-installer-plumbing.md` |
 | 设置项（settings.schema） | `docs/settings.md` + `src/config/settings-schema.ts`（单文件权威） |
