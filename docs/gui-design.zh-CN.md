@@ -352,7 +352,7 @@ openchamber 全线拖拽(14 处:模型收藏/供应商、右栏面板排序、�
 - **挂靠球的上限跟着画走,不跟着历史走**:46px 上限定 box 还背着 ~1.28× rig 的年代;padding 卸掉后(box ≈ 1.04× 球)同一上限读起来偏小。上限 46 → 52,下限 34 → 38——仍低于当年"巨球"的视觉(那时 60px box 是 ~47px 球;现在 52px box 是 ~50px 球且无一物外溢)。
 - **耳机作为整体绕球心缩放**(`HEADPHONE_SCALE` 1.08):耳罩、canopy 与轨是按一个刚体授权的,放大就是引擎每帧配件 transform 里的一次 scale——不是重新绘制。1.08 是所有极值都留在 rig padding 内的最大系数;尺寸与 gaze 倾斜搭乘同一属性,因为该属性归引擎所有。
 
-## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1-transcript-design.md`）
+## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/archive/0.5.0-m1-transcript-design.md`）
 
 参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
 
@@ -385,7 +385,7 @@ turn
 
 **遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
 
-## 5u. 弹窗动效与样式规范（2026-09-26 定稿，源 `docs/review/0.5.0-installer-update-dialogs-design.md` §4，评审决策①-⑧全按默认建议执行）
+## 5u. 弹窗动效与样式规范（2026-09-26 定稿，源 `docs/archive/0.5.0-installer-update-dialogs-design.md` §4，评审决策①-⑧全按默认建议执行）
 
 > 对桌面 GUI 全部模态弹窗 / 全屏覆盖层生效。**以下全部取值为现存值收编**——§5s M1.10 阶梯 + 各组件现行值；禁止为弹窗发明新 token、新曲线、新 scrim 配方。组件盘点依据 `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3。
 
@@ -443,7 +443,7 @@ turn
 - 弹窗卡片一律 **L3 overlay**（§5s 层级表）：`--glass-bg-strong` 底 + rim + `--glass-sheen` + `--glass-shadow` 双层——`.gui-dialog` 已达标。**TaskModal 与 palette 卡是实底欠账**：随 M1.10 批次 C 迁移（决策⑧；玻璃只给容器浮层，卡内内容保持纸面感）。两处卡规则处均以 TODO 注释立欠账。
 - 降级三件套照 §5s：`gui-motion-off` / `prefers-reduced-motion` → 出场免动画、无中间帧（全部弹窗组件均带该规则；onboarding 为先例）；`[data-platform="win32"]` blur 归零、sheen+rim 补强——Windows 玻璃 scrim 观感验收按 M1.10 §6.3 双平台截图流程走。
 
-## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；源 `docs/review/0.5.0-promo-gap-analysis.md` 第三版 + 交互原型 `docs/review/tab-primary-prototype.html` v2）
+## 5v. 右栏标签带：tab-primary 补全（M1.12，2026-09-29 批复；源 `docs/archive/0.5.0-promo-gap-analysis.md` 第三版 + 交互原型 `docs/review/tab-primary-prototype.html` v2）
 
 > 背景：tab-primary 模型（`lib/panel-tabs.ts`，openchamber ContextPanel parity——一条标签带容纳所有表面的视图，rail 只是 launcher）自 2026-09-15 已在架构层落地，但交互层一直缺位：rail 点击开出的是无 target 的占位标签（身份恒 `surface::`），每个表面永远只有一个 rail 开的标签，标签带退化成 rail 的一对一镜像。M1.12 补的就是交互层，模型层不动。**中心浮面多表面容器已评估并否决**（2026-09-29，小袁总）：产品维持 codex 式布局——主会话独占中心浮面，终端/代码/看板/预览等附加表面全部由右侧面板标签承载。
 

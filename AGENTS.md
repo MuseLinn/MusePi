@@ -261,6 +261,33 @@ Location: primary — `packages/coding-agent/CHANGELOG.musepi.md` (MusePi's rele
 - `### Fixed`
 - `### Removed`
 
+**Voice** — `CHANGELOG.musepi.md` is not an engineering log; it is the single source for
+every user-facing release surface (what's-new panel cards, `/changelog`, the OTA
+`update-manifest.json` notes, the GitHub release page body). A bullet's bold span is
+rendered **verbatim as a card headline**, and the panel takes the first three such
+bullets in document order — so the title is the entire user-facing surface.
+
+- **Title = what changed for the user**, in user vocabulary. `**回合导轨新增「加载更多」按钮**`,
+  not `**回合导轨新增「加载更多」按钮**（吸收 openchamber PromptNavigatorRail）`.
+- **No provenance anywhere in this file.** Reading references and absorbing what works is a
+  development-time activity — it belongs in the task brief, the PR body and
+  `docs/0.5.0-roadmap.md`, never in a shipped entry. That rules out `吸收 X` / `X parity` /
+  `对标 X` / reference-repo names, `刻意不抄 X`, internal cut numbers (`M2-2.6`,
+  `ADR 0001 首刀`, `⑥ 第二刀`, `P0-4`), and process narration (根因 / 这一刀 / 复核 / 拍板).
+  Not in the title, and not in the body either: the panel truncates the body, but
+  `/changelog` and the release page render it whole.
+- **The body may still be rich.** Mechanism, rationale, rollout and compatibility detail are
+  welcome after the first sentence. What must not happen is the headline being a record of
+  how we decided something.
+- **「我们刻意没抄 X」不是发布说明。** A divergence with no user-visible consequence belongs
+  in the PR; with one, write the consequence instead.
+- **User-visible changes come first within a version.** Internal maintenance (dependency
+  pins, lockfile churn, refactors with no behaviour change) must not occupy the first three
+  bullets of a section — those are the ones that become cards.
+- Gate: `bun scripts/check-changelog-voice.ts` (wired into `check:tools`) fails the build when
+  an `[Unreleased]` title carries a narrative tell. Title layer only, `[Unreleased]` only —
+  released sections stay immutable and predate the rule.
+
 **Rules:**
 
 - New entries always go under `## [Unreleased]`.

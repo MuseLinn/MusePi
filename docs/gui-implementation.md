@@ -362,7 +362,7 @@ Three sites, one source, all via `/releases/latest/download/update-manifest.json
 - Main process `main.cjs` checks quietly 12s after launch; if `checkForUpdates()` yields `newer`, sends `webContents.send("update-available", result)`.
 - Renderer `UpdateToast.tsx` (`packages/desktop-app/src/components/UpdateToast.tsx`) subscribes via `onUpdateAvailable` (preload-exposed); bottom-right card: version (v current → v latest) + notes + "Download"/"Skip this version". **Notes come from the `updater-notes` IPC** (main-process manifest fetch, success-cached) — not the daemon RPC — so the preview survives a not-yet-connected daemon and a disabled `startup.checkUpdate`; notes longer than 200 chars get a show-more toggle.
 - **Download states** (updater-state pushes): `preparing` is set synchronously by `updater-download` (indeterminate bar — covers the click → first-byte gap before electron-updater emits `download-progress`, and its re-entry guard makes double-clicks safe), `downloading` shows percent + transferred/total MB + `bytesPerSecond`, `downloaded` shows the success row + 立即重启. A dismissed toast **revives** on `preparing`/`downloaded` pushes — with `autoInstallOnAppQuit=false`, 立即重启 is the only install path, so it must stay reachable (the settings page's in-app 下载更新 button relies on the same revival). Dismissal plays a 180ms exit animation (close-timer + `--closing` class, prompt-dialog parity); download failure offers retry + "Go to download".
-- **"Skip this version" remembers per version** (`localStorage["musepi-update-skip-version"]`, bitfun-style) — same version won't nag again; **release notes and the "What's new" dialog are two independent chains**: the toast reads `update-manifest.json`'s `notes` (a plain string — the `{zh,en}` shape is reserved for a future split manifest; daemon `updates.check` passes both through), the dialog reads `CHANGELOG.musepi.md` — fill both on release.
+- **"Skip this version" remembers per version** (`localStorage["musepi-update-skip-version"]`, bitfun-style) — same version won't nag again; **release notes and the "What's new" dialog are two independent chains**: the toast reads `update-manifest.json`'s `notes` (a plain string — the `{zh,en}` shape is reserved for a future split manifest; daemon `updates.check` passes both through), the dialog reads `CHANGELOG.musepi.md`. They stay in sync by construction: `gui-release.yml` slices the manifest `notes` out of the newest `CHANGELOG.musepi.md` section (`sectionMatch`, first `## [x.y.z]` block), so a release only has to write that one section.
 - Bridging goes uniformly through `packages/desktop-app/src/lib/electron.ts`'s `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` types (no inline window assertions in components).
 
 ### Release artifacts and CLI relationship (confirmed by measurement 2026-08-23)
@@ -387,7 +387,7 @@ Contracts, RPC shapes and pitfalls for work landed after the earlier sections; d
 - **Degradation**: unsigned Windows NSIS → SmartScreen confirm; ad-hoc macOS dmg → verification failure falls back to "Go to download"; Linux AppImage replaces itself without signing.
 
 ### Update UX layering (B-face of the installer/update dialogs design, 2026-09-26)
-`docs/review/0.5.0-installer-update-dialogs-design.md` §3 (decisions ①-⑧ all per the default recommendation). Explicit state machine phases + an L-dialog layer **on top of** the existing toast (分层共存, not a replacement):
+`docs/archive/0.5.0-installer-update-dialogs-design.md` §3 (decisions ①-⑧ all per the default recommendation). Explicit state machine phases + an L-dialog layer **on top of** the existing toast (分层共存, not a replacement):
 
 - **State machine** (`electron/updater.cjs`): `available` is an explicit status — `update-available` sets `state.status="available"` unless that would downgrade an in-flight `preparing/downloading/verifying/downloaded` (a manual re-check must never wipe the 立即重启 entry); `verifying` covers download-progress ≥100% → `update-downloaded` (no more fake-100% stall). `state.error` is structured `{kind, message, technicalDetails?}` — kind is the stable `{check|download|install} × {network|other}` enum; the pure classifier + poll-backoff math live in `electron/update-logic.cjs` (no electron imports; contract-tested in `test/update-logic.test.ts`). The renderer maps kind → localized copy (`update` i18n domain) and folds message+stack into a 技术详情 `<details>`; `checkForUpdates()`'s own return keeps `error` a plain string (settings page contract unchanged).
 - **Poll backoff** (`main.cjs`): the fixed 1h `setInterval` became failure ×2 backoff capped at 6h with ±20% jitter (dsh update-schedule parity; constants + `nextPollDelayMs` in update-logic.cjs). Base 1h on success, first check still launch+12s, `OMP_NO_AUTO_UPDATE=1` still silences everything; backoff decisions land in updater.log ("poll: backoff after N failure(s)").
@@ -642,7 +642,7 @@ After every cron mutation and run start/finish the daemon broadcasts `{ type: "c
 
 ## 39. Turn render units & loading visibility semantics (ZCode v4 absorption, 2026-09-21/22, roadmap M1)
 
-源设计稿 `docs/review/0.5.0-m1-transcript-design.md`（视觉层见 `gui-design.md` §5r/§5q）。语义层全部落在 `packages/client-core/src/components/transcript/`，desktop 与 guest 共享。
+源设计稿 `docs/archive/0.5.0-m1-transcript-design.md`（视觉层见 `gui-design.md` §5r/§5q）。语义层全部落在 `packages/client-core/src/components/transcript/`，desktop 与 guest 共享。
 
 ### 纯函数层（`render-units.ts`，M1.1，19 例单测）
 
@@ -680,7 +680,7 @@ seq 单一权威 = daemon journal：journal 打开时从文件尾部恢复 `#seq
 - **已知边界**：guest/web shell 未接水位闸（断档仍走整快照替换）；TUI 不消费 daemon 推送 seq 不受影响；`session.resume` 的 `cursor`+`catchupIfNeeded` 旧链保留但 GUI 不传 cursor（catchup RPC 取代之）。
 ## 40. Shell batches A1/A2/B1/C — header tiers, browser chrome, panel-wiring verdict (2026-09-22, roadmap shell design)
 
-设计稿：`docs/review/0.5.0-shell-panels-topbar-design.md`（§3.1 顶栏 / §3.2 浏览器 / §3.3 接线）。批次提交：`2f0c3b59d`（A1+A2）、`cc5840a91`（B1）、B2 纯复验 + C（本笔）。
+设计稿：`docs/archive/0.5.0-shell-panels-topbar-design.md`（§3.1 顶栏 / §3.2 浏览器 / §3.3 接线）。批次提交：`2f0c3b59d`（A1+A2）、`cc5840a91`（B1）、B2 纯复验 + C（本笔）。
 
 - **A1 三级退避**：右簇分 P1（terminal/right panel）/P2（board、mini chat、pause 组，`gui-tool-btn--p2` 退避到 fg-faint）/P3（open-in capsule、instance pill `gui-instance-btn--recessed`）。激活态语言唯一：`.gui-tool-btn--active` 升级 accent rim（inset ring）+ 16% 底（§5s 活态规则壳层版）。决策点②裁定：不新增 ⋯ 聚合菜单——instance 菜单本身已是聚合器（设置/重连/退出都在其中），再叠一层是双重菜单。
 - **A2 四个缺口**：①会话 tab 条（SessionTabsStrip parity）：侧栏折叠或 ≥3 会话时出现，segmented capsule，左键切换/中键关闭（deleteSession 持有确认对话框）；②ctx chip（`session.contextUsage`，值比较节流 + 仅 working 时 5s 轮询，Composer 纪律）；③git branch chip（`git.status` 15s，RightRail 同款；切换仍在 StatusCards）；④远端更新角标（GitHub latest release vs `system.meta.version`，instance 菜单打开时拉取）。

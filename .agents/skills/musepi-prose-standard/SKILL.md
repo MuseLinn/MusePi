@@ -51,9 +51,18 @@ description: MusePi 代码库的文案/注释标准——写"契约"而不是写
 - **GUI/CLI 可见字符串**：同 prompt——措辞即行为，改动要过 snapshot 或行为验证。
 - **测试**：只解释非显然的测试设计——为什么需要这个 fixture、断言、平台迁就、
   真实入口或间接观察。删走查式叙述和清单（AGENTS.md 测试规则已定义好坏测试）。
-- **CHANGELOG**：按包 `CHANGELOG.md` 的 `## [Unreleased]` 分区（Breaking/Added/
+- **CHANGELOG**：按包 `CHANGELOG.musepi.md` 的 `## [Unreleased]` 分区（Breaking/Added/
   Changed/Fixed/Removed），已发布分区不可改；评审不挑分区格式（`bun run release`
-  会自动规范化）。
+  会自动规范化）。**文体有硬约定**：粗体标题会被逐字渲染成 what's-new 卡片大标题，
+  面板还按文档顺序取前三条，所以标题只写"用户得到什么"。参考吸收是开发期的事，只进
+  任务单 / PR / roadmap——changelog 里一律不出现 provenance（吸收 / 对标 / parity /
+  参考了谁）、内部编号（`M2-2.6`、`ADR 0001 首刀`）、过程叙述（根因 / 这一刀 / 复核）；
+  机制与理由可以留在正文。`bun scripts/check-changelog-voice.ts` 门禁标题层。
+  详见 AGENTS.md → Changelog → "Voice"。
+- **代码注释**：写契约与不写明的理由，不写"我们参考/吸收了谁"。跨面一致性（TUI ↔ GUI ↔
+  daemon ↔ guest-client 必须同步）是真契约，照写；外部项目名不是——它对没有那份上下文的
+  维护者零信息量，却把一次开发期的取舍焊进了代码。
+
 - **docs**：产品行为文档归属 `docs/gui-design.md`（设计/交互标准）与
   `docs/gui-implementation.md`（RPC 契约/踩坑/验证工作流）；改 GUI 行为必须同步。
   扩展 API 变更同步 `docs/extensions-dev.md`。文档是现状描述，不是变更日志。

@@ -364,7 +364,7 @@ Round driven by three user asks: 「这个小球的定制放到常规Agent头像
 
 1. **model prop 接线（已落地）**：`<Transcript model={snap.state.model ? provider/id : undefined}>`（`ChatView.tsx`），与 DetailsPanel 同一 compound key 约定；render-units 语义取 turn 内最后一个 model_change，轮内切换仍显示实际产出回复的模型。缺省（无 snap）时 header 不显示模型段。
 2. **审批等待反馈——等价物映射，不照搬**：guest-client 用 ApprovalCard 底部 accent 进度线；desktop 的 ApprovalCard 已有 pulse border beam（`BorderBeam`）+ 提示音，且 ChatView 有 "paused for you" wave 语义（审批 pin waiting）。设计裁决：**desktop 保持 beam/wave 现状**，进度线不跨面照搬——两个面各自已有"卡片承担进度反馈"的实现，语义同构即可，视觉允许面差。
-3. **loading 收敛**：desktop Composer 无 guest 式聊天 loading pill，工作态指示走 `snap.working` 既有链路；M1.2 的抑制矩阵（审批/ask/compact 期间抑制聊天 loading）在 desktop 无对应物可抑制，记为无需移植，仅保留语义对照（`docs/review/0.5.0-m1-transcript-design.md` §B 判定表）。
+3. **loading 收敛**：desktop Composer 无 guest 式聊天 loading pill，工作态指示走 `snap.working` 既有链路；M1.2 的抑制矩阵（审批/ask/compact 期间抑制聊天 loading）在 desktop 无对应物可抑制，记为无需移植，仅保留语义对照（`docs/archive/0.5.0-m1-transcript-design.md` §B 判定表）。
 
 **M1.3 滚动锚定**：将落在共享 `Transcript` 组件内（现有 followKey/lockRef 机制上补 timelineScrollAnchor 语义），一处落地 guest + desktop 两面同时生效，不设 desktop 单独验收。
 
@@ -372,7 +372,7 @@ Round driven by three user asks: 「这个小球的定制放到常规Agent头像
 
 **验收**：desktop-app `tsgo --noEmit` + biome 全绿（已达成）；人工走查：折叠态/展开态/审批等待三视图（desktop 真机 daemon 会话）。
 
-## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1-transcript-design.md`）
+## 5r. 轮渲染视觉语言（M1，评审稿 2026-09-21 转正，源 `docs/archive/0.5.0-m1-transcript-design.md`）
 
 参照 ZCode v4 轮渲染单元语义（`zcode/packages/ui/src/v4/conversationTurnRenderUnits.ts`）。**设计基线**：全部视觉值取自 `packages/client-core/src/styles/tokens.css` 暗色段，禁止发明新 token；品牌 accent #d9a441 金禁止改。
 
@@ -405,7 +405,7 @@ turn
 
 **遗留决策点**（随实现推进裁定，未裁定前按现状执行）：① turn header 是否保留模型名段（多模型场景有用，单模型是噪声——现状：接线后缺省不显示）；② 段摘要的 i18n 模板句 vs 规则拼接；③ token 用量行 settings 开关；④ hook 行是否默认聚合 "N 个 hook · 展开"。
 
-## 5s. 液态玻璃材质与动效语言——全产品视觉总纲（M1.10，评审稿 2026-09-21 转正，源 `docs/review/0.5.0-m1.10-liquid-glass.md`）
+## 5s. 液态玻璃材质与动效语言——全产品视觉总纲（M1.10，评审稿 2026-09-21 转正，源 `docs/archive/0.5.0-m1.10-liquid-glass.md`）
 
 > 总纲：**整个产品统一液态玻璃视觉与交互效果，动效丰富流畅，一镜到底。** 双基准：client-core `tokens.css`（web/安卓/desktop 共享渲染层，`--glass-*`/`--spring-liquid`）+ desktop-app `gui.css`（桌面壳，`--gui-motion-*`）。收敛方式是**单向映射层**而非合并词汇：desktop 壳保留 `--gui-motion-*`（motion-pack 皮肤机制是产品特性），取值与曲线锚定 client-core 玻璃语言；client-core 不引入 `--gui-motion-*`。
 
@@ -479,7 +479,7 @@ A（顺手带）：M2-2.10 设置面板审计对齐玻璃层级；回到底部�
 - 簇宽变化（dev server 启动出现预览按钮）后 spacer 自动跟随，无重叠帧。
 - mac/win 双平台 data-platform 分支各自生效。
 
-## 5u. Dialog motion & style spec (finalized 2026-09-26, source `docs/review/0.5.0-installer-update-dialogs-design.md` §4, review decisions ①-⑧ approved as-is)
+## 5u. Dialog motion & style spec (finalized 2026-09-26, source `docs/archive/0.5.0-installer-update-dialogs-design.md` §4, review decisions ①-⑧ approved as-is)
 
 > Normative for every modal dialog / full-screen overlay in the desktop GUI. **Every value below is a codified existing value** — the §5s M1.10 ladder plus current component values; inventing new tokens, curves, or scrim recipes for dialogs is prohibited. Verified against the component inventory in `.workbuddy/tasks/2026-09-26-installer-update-dialogs.report.md` §3.3.
 
@@ -537,7 +537,7 @@ New dialog-like components land **only** in the 3000/4000/9999 bands; 120/200/21
 - Dialog cards are **L3 overlay** (§5s tier table): `--glass-bg-strong` base + rim + `--glass-sheen` + `--glass-shadow` double layer — `.gui-dialog` conforms. **TaskModal and the palette card are opaque-surface debt**: they migrate to L3 with M1.10 batch C (decision ⑧; glass only on the container layer, card content stays paper-like). Tracked as TODO comments at both card rules.
 - Degradation trio per §5s: `gui-motion-off` / `prefers-reduced-motion` → exits snap with no animation and no intermediate frames (every dialog component carries the rule; onboarding was the precedent); `[data-platform="win32"]` blur zeroed, sheen+rim boosted — glass-scrim acceptance on Windows follows the M1.10 §6.3 dual-platform screenshot flow.
 
-## 5v. Right-panel tab strip: tab-primary completion (M1.12, approved 2026-09-29; source `docs/review/0.5.0-promo-gap-analysis.md` v3 + interactive prototype `docs/review/tab-primary-prototype.html` v2)
+## 5v. Right-panel tab strip: tab-primary completion (M1.12, approved 2026-09-29; source `docs/archive/0.5.0-promo-gap-analysis.md` v3 + interactive prototype `docs/review/tab-primary-prototype.html` v2)
 
 > Background: the tab-primary model (`lib/panel-tabs.ts`, openchamber ContextPanel parity — ONE tab strip hosts every open view regardless of surface; the rail is a launcher) has been in place since 2026-09-15, but the interaction layer never arrived: rail clicks open a target-less placeholder tab (`surface::`), so each surface hosts exactly one rail-opened tab and the strip degenerates into a 1:1 mirror of the rail. M1.12 completes the interaction layer; the model layer is untouched. **A center-pane multi-surface container was evaluated and rejected** (2026-09-29, 小袁总): the product keeps the codex-style layout — the main conversation owns the center pane exclusively; every auxiliary surface (terminal/code/board/previews) is carried by right-panel tabs.
 

@@ -359,7 +359,7 @@ daemon RPC:
 - 主进程 `main.cjs` 启动后 12s 静默检查，`checkForUpdates()` 得 `newer` 则 `webContents.send("update-available", result)`。
 - 渲染端 `UpdateToast.tsx`（`packages/desktop-app/src/components/UpdateToast.tsx`）订阅 `onUpdateAvailable`（preload 暴露），右下角卡片：版本（v当前 → v最新）+ notes + 「下载更新」/「跳过此版本」。**notes 走 `updater-notes` IPC**（主进程拉 manifest，成功后缓存）——不再依赖 daemon RPC——daemon 未连上或 `startup.checkUpdate` 关闭时预览照常可用；notes 超 200 字符出「展开」toggle。
 - **下载状态**（updater-state 推送）：`preparing` 由 `updater-download` 同步置位（不确定态进度条——覆盖点击 → 首字节之间 electron-updater 尚未发 `download-progress` 的空窗；重入保护让双击安全），`downloading` 显示百分比 + 已传/总量 MB + `bytesPerSecond`，`downloaded` 显示完成行 + 立即重启。被关掉的 toast 会在 `preparing`/`downloaded` 推送时**复活**——`autoInstallOnAppQuit=false` 下立即重启是唯一安装路径，必须始终可达（设置页的应用内「下载更新」按钮同样依赖该复活）。关闭播 180ms 退出动画（close-timer + `--closing` 类，prompt-dialog parity）；下载失败提供重试 + 「前往下载」。
-- **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`，发版两处都要填。
+- **「跳过此版本」按版本记忆**（`localStorage["musepi-update-skip-version"]`，bitfun 同款）——同一版本不再打扰；**更新说明与「新功能」弹窗是两条独立链路**：toast 读 `update-manifest.json` 的 `notes`（纯字符串——`{zh,en}` 形状留给未来拆分 manifest；daemon `updates.check` 两种都透传），弹窗读 `CHANGELOG.musepi.md`。两条链路靠构造保持同步：`gui-release.yml` 用 `sectionMatch`（首个 `## [x.y.z]` 块）从最新一节切出 manifest 的 `notes`，所以发版只写那一节即可。
 - 桥接统一走 `packages/desktop-app/src/lib/electron.ts` 的 `ElectronAPI.checkUpdates/onUpdateAvailable/getUpdateNotes` + `UpdateCheckResult` 类型（不在组件里内联 window 断言）。
 
 ### 发布产物与 CLI 关系（2026-08-23 实测确认）
@@ -384,7 +384,7 @@ daemon RPC:
 - **降级**：未签名 Windows NSIS → SmartScreen 确认；ad-hoc macOS dmg → 校验失败回退「前往下载」；Linux AppImage 免签自替换。
 
 ### 更新 UX 分层（安装器/更新弹窗设计稿 B 面，2026-09-26）
-`docs/review/0.5.0-installer-update-dialogs-design.md` §3（决策点①-⑧全部按默认建议执行）。在既有 toast **之上**补显式状态机相位与 L-dialog 层（分层共存，不是替换）：
+`docs/archive/0.5.0-installer-update-dialogs-design.md` §3（决策点①-⑧全部按默认建议执行）。在既有 toast **之上**补显式状态机相位与 L-dialog 层（分层共存，不是替换）：
 
 - **状态机**（`electron/updater.cjs`）：`available` 成为显式状态——`update-available` 置 `state.status="available"`，但不会降级进行中的 `preparing/downloading/verifying/downloaded`（手动重查绝不能冲掉「立即重启」入口）；`verifying` 覆盖 download-progress ≥100% → `update-downloaded`（不再有"假 100% 等待"）。`state.error` 结构化为 `{kind, message, technicalDetails?}`——kind 是稳定的 `{check|download|install} × {network|other}` 枚举；纯逻辑分类器 + 退避数学在 `electron/update-logic.cjs`（零 electron import，契约测试 `test/update-logic.test.ts`）。渲染层按 kind 映射语义文案（`update` i18n 域），message + 堆栈折进「技术详情」`<details>`；`checkForUpdates()` 自身返回值的 `error` 仍是纯字符串（设置页契约不变）。
 - **轮询退避**（`main.cjs`）：固定 1h `setInterval` 改为失败 ×2 退避（上限 6h）+ ±20% jitter（dsh update-schedule parity；常量与 `nextPollDelayMs` 在 update-logic.cjs）。成功回 1h，首查仍为启动+12s，`OMP_NO_AUTO_UPDATE=1` 仍可全部关掉；退避决策写入 updater.log（"poll: backoff after N failure(s)"）。
