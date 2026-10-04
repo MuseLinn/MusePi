@@ -74,6 +74,13 @@ describe("collectHits", () => {
 		expect(collectHits(["a.ts"], read({ "a.ts": source }))).toHaveLength(0);
 	});
 
+	test("flags a JSX comment, which opens with a brace", () => {
+		const source = ["return (", "\t{/* openchamber ContextPanelRail: tool icons */}", ");", ""].join("\n");
+		// Failure mode if regressed: the gate silently stops seeing every JSX
+		// comment, so the GUI's .tsx files look clean while carrying annotations.
+		expect(collectHits(["a.tsx"], read({ "a.tsx": source }))).toHaveLength(1);
+	});
+
 	test("matches whole tokens, not substrings", () => {
 		const source = "// The zcodes buffer and the dshift helper are ours.\n";
 		// A loose pattern would rewrite unrelated identifiers.

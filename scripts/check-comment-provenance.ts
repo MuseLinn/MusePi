@@ -51,8 +51,10 @@ const PROVENANCE_TOKENS: RegExp[] = [
 	/\bclawd-on-desk\b/i,
 ];
 
-/** A comment line, or a block-comment continuation line. */
-const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*)/;
+/** A comment line, or a block-comment continuation line. A JSX comment opens
+ *  with `{/*`, which the line-comment alternatives alone would miss — .tsx sources
+ *  are full of them. */
+const COMMENT_LINE = /^\s*(?:\/\/|\*|\/\*|\{\/\*)/;
 
 export interface CommentProvenanceHit {
 	file: string;
