@@ -101,12 +101,12 @@ needed to use it.
 Planning, audit and history. Useful when picking work up or reconstructing a
 decision; **not** a description of current behaviour.
 
-- [0.5.0-roadmap.md](0.5.0-roadmap.html) — roadmap plus the verification ledger of what is genuinely outstanding
+- [0.5.0-roadmap.md](review/0.5.0-roadmap.html) — roadmap plus the verification ledger of what is genuinely outstanding
 - [capability-seams.md](capability-seams.html) — index of declared capability seams
-- [zcode-absorption-todos.md](zcode-absorption-todos.html) · [openchamber-absorption-todos.md](openchamber-absorption-todos.html) — absorption checklists with per-item verdicts
+- [zcode-absorption-todos.md](review/zcode-absorption-todos.html) · [openchamber-absorption-todos.md](review/openchamber-absorption-todos.html) — absorption checklists with per-item verdicts
 - [porting-to-natives.md](porting-to-natives.html) · [porting-from-pi-mono.md](porting-from-pi-mono.html) — porting field notes
 - [windows-development.md](windows-development.html) — Windows build environment setup
-- [ERRATA-GPT5-HARMONY.md](ERRATA-GPT5-HARMONY.html) — historical research note, explicitly not a runtime contract
+- [ERRATA-GPT5-HARMONY.md](archive/ERRATA-GPT5-HARMONY.html) — historical research note, explicitly not a runtime contract
 - [review/](review/) — design drafts under review and verification write-ups (~50 files)
 - [archive/](archive/) — superseded documents, kept for history (~47 files; see [archive/README.md](archive/README.md))
 - [gui-verification/](gui-verification/) — GUI verification runs and screenshots (~28 files)

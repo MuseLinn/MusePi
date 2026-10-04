@@ -271,7 +271,7 @@ bullets in document order — so the title is the entire user-facing surface.
   not `**回合导轨新增「加载更多」按钮**（吸收 openchamber PromptNavigatorRail）`.
 - **No provenance anywhere in this file.** Reading references and absorbing what works is a
   development-time activity — it belongs in the task brief, the PR body and
-  `docs/0.5.0-roadmap.md`, never in a shipped entry. That rules out `吸收 X` / `X parity` /
+  `docs/review/0.5.0-roadmap.md`, never in a shipped entry. That rules out `吸收 X` / `X parity` /
   `对标 X` / reference-repo names, `刻意不抄 X`, internal cut numbers (`M2-2.6`,
   `ADR 0001 首刀`, `⑥ 第二刀`, `P0-4`), and process narration (根因 / 这一刀 / 复核 / 拍板).
   Not in the title, and not in the body either: the panel truncates the body, but

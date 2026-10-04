@@ -98,12 +98,12 @@ curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/instal
 
 规划、核查与历史。接手工作或还原某项决策时有用；**不描述当前行为**。
 
-- [0.5.0-roadmap.md](0.5.0-roadmap.html) — 路线图 + 真实未完成事项的核查台账
+- [0.5.0-roadmap.md](review/0.5.0-roadmap.html) — 路线图 + 真实未完成事项的核查台账
 - [capability-seams.md](capability-seams.html) — 能力缝声明索引
-- [zcode-absorption-todos.md](zcode-absorption-todos.html) · [openchamber-absorption-todos.md](openchamber-absorption-todos.html) — 带逐项结论的吸收清单
+- [zcode-absorption-todos.md](review/zcode-absorption-todos.html) · [openchamber-absorption-todos.md](review/openchamber-absorption-todos.html) — 带逐项结论的吸收清单
 - [porting-to-natives.md](porting-to-natives.html) · [porting-from-pi-mono.md](porting-from-pi-mono.html) — 移植现场笔记
 - [windows-development.md](windows-development.html) — Windows 构建环境搭建
-- [ERRATA-GPT5-HARMONY.md](ERRATA-GPT5-HARMONY.html) — 历史研究笔记，明确声明不是运行时契约
+- [ERRATA-GPT5-HARMONY.md](archive/ERRATA-GPT5-HARMONY.html) — 历史研究笔记，明确声明不是运行时契约
 - [review/](review/) — 评审中的设计稿与验证记录（约 50 份）
 - [archive/](archive/) — 已被取代的文档，留存历史（约 47 份；见 [archive/README.md](archive/README.md)）
 - [gui-verification/](gui-verification/) — GUI 验证记录与截图（约 28 份）
