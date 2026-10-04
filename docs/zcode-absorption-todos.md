@@ -15,6 +15,25 @@
 > **2026-09-24 收尾**：#9（会话分享附件校验）已落地——发布前附件统计 + 超限结构化拦截（`ShareTooLargeError` + `stripAttachments` 重试选项）、`sealToFit` 显式剥离步并回报数量；剩余 open：#4、#6、#7。
 
 > **2026-09-28 收尾**：#4（输入框「+」菜单扩展，M2-2.6）已落地——AttachMenu 新增「已启用插件 / 当前工作区文件」两个子选择器（extensions.list / workspace.tree 既有数据源，零新 RPC）；剩余 open：#6、#7（均 M5-5.5 批次）。
+> **2026-10-04 核查（代码为唯一真相）**：#6 / #7 逐子项读码，结论是**两条都还没动**，但两处现状描述已过期。#7 的第一条不变量本来就成立（既有实现 + 已有测试），真正欠的只有高 DPI 集成测试。
+
+| #   | 子项                                | 核查结论     | 现锚点                                                                                                                                                                 |
+| --- | ----------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6   | ① 托盘后截图「临时可见」            | 未做         | `managed-browser.cjs:1485-1534` capture 分支仍只做 `isDestroyed()` 检查 + 2 次重试，无可见性判断；全 desktop-app 的 `showInactive` 共 5 处，`managed-browser.cjs` 0 处 |
+| 6   | ② `preparePageForScreenshot` 短重试 | 未做         | `tab-worker.ts:733-738` 单次 `visibilityState` 判定后立刻抛                                                                                                            |
+| 6   | ③ createTab 重试 + 收养回填 url     | 未做         | `managed-browser.cjs:688-694` `waitForGuest()` 失败即 `dispose()` 返回 null；`:720-743` `handleGuestReady` 采纳时写死 `about:blank`，不读 `input.url`                  |
+| 6   | ④ Emulation override 生命周期       | 未做         | `:1672-1680` 只在 `applyDevicePreset` 切档时 clear；关面板/换会话无显式 clear；`deviceScaleFactor: 0` 仍无「保持当前 ≠ 恢复」的注释                                    |
+| 6   | ⑤ 超时常量语义统一                  | 部分         | 四个常量各有单点注释，但无统一串讲；`gui-implementation.md` 里「窗口遮挡不合成」的验证经验未纠正                                                                       |
+| 7   | ① caps 缩图走 `geometry.scaled()`   | **本就成立** | `frame.rs:154-163,212-217` + 测试 `cap_scaling_adjusts_geometry`，不需要新增                                                                                           |
+| 7   | ② 应用缩放不进页面层坐标            | 部分         | 注释层已明确（`managed-browser.cjs:1600-1605,1663-1669`），但**无测试锁定**                                                                                            |
+| 7   | ③ 1.25/1.5/2.0 高 DPI 集成测试      | 未做         | `frame.rs:265-271` 只跑 `{1.0, 2.0}`；无 1.5、无多屏混合 scale、无「截图中心点→点击误差 <1px」断言                                                                     |
+
+**两处与本文前提不符的事实**（修法按现实写，不要照抄下文方案）：
+
+1. 下文 §7 写「全仓源码**没有** `setZoomFactor`/`setZoomLevel`」——**已过期**：`managed-browser.cjs:1606-1618` 现在有 `setZoom()`（per-tab `wc.setZoomFactor`）。页面层因此是三个杠杆（host CSS scale / Emulation override / page zoom），不变量②要按三者互不干涉重写。
+2. 下文的行号已漂移：`CAPTURE_RETRY_MS` 从 `:59` 移到 `:64`；Emulation 块从 `:1580-1585` 移到 `:1672-1680`。
+
+> **与 roadmap §10.2 的关系**：roadmap 曾把「M5-5.5 高 DPI/截图」整体记为 open。win32 DPI 采集与退避（`main.cjs:623-703`、`win32-native.cjs`）确实已实做，但那是**系统层 DPI 感知**，与本文的 **#6 浏览器截图链路加固**、**#7 点击坐标不变量与集成测试**是两件事——后者仍全未动工。关闭 M5-5.5 时按本文子项逐条销，不要按里程碑整条销。
 
 | # | 项 | 规模 | 前置 | 建议批次 | 状态 |
 |---|---|---|---|---|---|
@@ -285,7 +304,7 @@
 
 ### 会话消息渲染 / 加载（候选，按 roadmap M1 语义核对后立项）
 
-- `ModelTrajectoryTimeline.tsx`（209 行）/ `ModelTrajectoryExpandableMessage.tsx`（335 行）/ `ModelTrajectoryExpansionMenu.tsx`：轮次 expandable 的展开/折叠与展开菜单——与我们的 M1 轮渲染语义（`docs/review/0.5.0-m1-transcript-design.md`）对照，重点吸收**展开态的延迟渲染/卸载策略**与菜单分组。
+- `ModelTrajectoryTimeline.tsx`（209 行）/ `ModelTrajectoryExpandableMessage.tsx`（335 行）/ `ModelTrajectoryExpansionMenu.tsx`：轮次 expandable 的展开/折叠与展开菜单——与我们的 M1 轮渲染语义（`docs/archive/0.5.0-m1-transcript-design.md`）对照，重点吸收**展开态的延迟渲染/卸载策略**与菜单分组。
 - `ToolCallBlocks/`：工具调用块的分组与折叠层次（对照 `client-core/src/tool-render/`）。
 - `TaskListLoadingHint.tsx`（13 行）：会话列表加载 = Spinner + 文案，极简；`BackgroundTaskElapsedLabel.tsx`（79 行）：后台任务耗时标签。
 - `ChatErrorBanner.tsx`（357 行）：错误横幅的分级/操作（重试/复制/详情展开）。

@@ -28,6 +28,31 @@
 见 `gui-implementation.md` §45 / `gui-design.md` §5x：⌘F 会话内查找、归档撤销 toast、
 命令面板增量（Reload UI / 粘贴 session id 精确命中 / 记住 query）。
 
+## 核查（2026-10-04，代码为唯一真相）
+
+18 条逐项读码：**16 条完全未动，3 条部分落地**（下表标「部分」的三条）。除上面那批已落地项外没有别的存量收口——不要按梯队顺序推断"第一梯队做了一半"，第一梯队实际也只有零星几处沾边。
+
+| #   | 项                                | 结论     | 关键锚点 / 差距                                                                                                                                                 |
+| --- | --------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | 可折叠 Markdown 段落              | 未动     | `Markdown.tsx:61-70` `html({text})` 一律 escape，`<details>` 永不产出                                                                                           |
+| 2   | `/btw` 补齐                       | 未动     | 两半都缺：`BtwFloatingCard.tsx:69-98` 无 model/effort 入参、卡内无选择器；`SelectionToolbar.tsx:130-136` 无 /btw 入口                                           |
+| 3   | 复制单条消息链接                  | 未动     | `main.cjs` 无协议注册（`second-instance` 只 restore+focus）；`musepi://` 仅在移动壳接 Capacitor                                                                 |
+| 4   | 失败详情 + 复制为 Markdown        | 未动     | `Transcript.tsx:842-860` retry_failure 只有 chip+message；`:441-457` 单一 `ClipboardItem` 隐式附带 markdown                                                     |
+| 5   | ⌘[ / ⌘] 会话前进后退              | 未动     | `lib/back-stack.ts` 仍只有 Android 硬件返回栈；命名冲突提醒有效                                                                                                 |
+| 6   | per-agent 固定标签色              | 未动     | `tool-render/tools/task.tsx:446,541` → `punkAvatarUri(id)` 仍按 identity 哈希                                                                                   |
+| 7   | 可搜索主题选择器                  | **部分** | 主题预设已从 `Segmented` 换成 `GuiSelect`（不再是硬塞 10 项的 Segmented），但 `GuiSelect.tsx:60-82` 只有 ↑↓/Enter，**无输入框、无 query 过滤**                  |
+| 8   | 命令面板 query 过滤               | **部分** | 分组标题已有（`CommandPalette.tsx:318,337,359`），但 `:319` `actions.map` 与 `:338` `panels.map` **仍无过滤**；query 只驱动 session 搜索与 exact-id             |
+| 9   | git 按 hunk 暂存/丢弃             | 未动     | `git.stage` = `git add -- <paths>`（`server.ts:2516-2540`），无 `git.apply`/`git.discard`/hunk 参数；`git-panel.tsx` 只传 `{paths}`                             |
+| 10  | 后台任务实时日志 + detach         | 未动     | `ContextPanel.tsx:1514-1540` 5s 轮询 + 只有 cancel；无流式日志、无 detach RPC                                                                                   |
+| 11  | 文件预览 audio/video/字体/mermaid | 未动     | `FilePane.tsx:74-97` `PreviewState` 九态不含这四类；mermaid 只在 Markdown 里渲染                                                                                |
+| 12  | 悬浮磨砂 composer + 羽化          | 未动     | 布局模型未动：composer 仍是 flex 兄弟（`ChatView.tsx:2741-2775`），`--chat-composer-inset`/`data-live-tail` 全仓零命中                                          |
+| 13  | 引用悬浮面板                      | 未动     | `quote-cards.tsx` 仍 27 行、`quotes: string[]`、12px X；发出时仍拍平成 `> ` 纯文本                                                                              |
+| 14  | 滚动条交互打磨 5 点               | 未动     | 5 点全零改动：`FloatingScrollbar.tsx:184,187` 热路径仍每帧读布局、`:89-96` 单 last-scrolled 实例、无程序化滚动抑制、`:217-221` pacman 无比例 thumb 且只支持垂直 |
+| 15  | 「In work」会话分区               | 未动     | 侧栏仍只有 pinned/projects/archived/cron，无第四轴                                                                                                              |
+| 16  | 每会话三态权限 + 盾牌             | **部分** | 三态胶囊与盾牌已存在（`composer/approval-mode-button.tsx:22,108`），但读写的是**全局** `tools.approvalMode`，注释自承 "no per-session state involved"           |
+| 17  | multi-run                         | 未动     | 全仓零命中，daemon 无对应 RPC                                                                                                                                   |
+| 18  | 主题导入                          | 未动     | `tmTheme`/`vscode-theme` 全仓零命中；zip 导入模式仅 `scrollbar-skins.ts:101`                                                                                    |
+
 ## 别抄 —— 我们已经更强
 
 | 能力          | 对方                          | 我们                                                                                              |
