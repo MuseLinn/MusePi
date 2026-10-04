@@ -9,4 +9,4 @@
  * matches nothing contributes nothing rather than failing, so a stale name here
  * silently regenerates an empty utility sheet. */
 @source "../**/*.{ts,tsx}";
-@source "../../client-core/src/**/*.{ts,tsx}";
+@source "../../../client-core/src/**/*.{ts,tsx}";
