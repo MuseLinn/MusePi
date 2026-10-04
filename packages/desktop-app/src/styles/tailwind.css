@@ -3,5 +3,10 @@
  * below the app's own unlayered styles (tokens.css/base.css/gui.css), so
  * existing component styles keep precedence. */
 @import "tailwindcss";
-@source "./src/**/*.{ts,tsx}";
-@source "../guest-client/src/**/*.{ts,tsx}";
+/* Paths resolve against this file, which sits in src/styles/ — so the renderer's
+ * own sources are one level up, not one level down. The second path names
+ * client-core: the package was renamed from guest-client, and a @source that
+ * matches nothing contributes nothing rather than failing, so a stale name here
+ * silently regenerates an empty utility sheet. */
+@source "../**/*.{ts,tsx}";
+@source "../../client-core/src/**/*.{ts,tsx}";
