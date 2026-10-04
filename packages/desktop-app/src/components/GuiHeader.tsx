@@ -763,7 +763,7 @@ export function GuiHeader({
 				...(hasOverlay ? { paddingRight: 150 } : {}),
 			}}
 		>
-			{/* TitlebarLeftControls (openchamber): a fixed, HORIZONTAL overlay
+			{/* TitlebarLeftControls: a fixed, HORIZONTAL overlay
 			 * cluster — a CHILD of the drag header so Electron honors
 			 * no-drag reliably. Sidebar toggle + the project-actions capsule
 			 * (auto-discover dev server / stop while running), the toggle and the actions capsule both work from here. */}
@@ -808,7 +808,7 @@ export function GuiHeader({
 							<Icon name="scan-2" className="h-3.5 w-3.5" />
 						)}
 					</button>
-					{/* Preview button (openchamber showSelectedPreviewButton): appears
+					{/* Preview button: appears
 					 * once the dev server printed its URL; click re-opens it. */}
 					{devRunning && devPreviewUrl && (
 						<button
@@ -846,7 +846,7 @@ export function GuiHeader({
 						align="right"
 						onOpenChange={setProjOpen}
 					>
-						{/* Custom actions (openchamber project actions parity): run
+						{/* Custom actions: run
 						 * in the dock terminal like the dev server. */}
 						{projectActions.map(action => (
 							<button
@@ -907,8 +907,7 @@ export function GuiHeader({
 			 * slides underneath it (drag strip carved out). */}
 			<div className="gui-header-spacer" data-collapsed={sideCollapsed ? "true" : undefined} aria-hidden="true" />
 			<div className="flex min-w-0 flex-1 items-center gap-0.5">
-				{/* Session title = switcher trigger (openchamber
-				 * SessionSwitcherDropdown parity): clicking opens 新建会话 +
+				{/* Session title = switcher trigger: clicking opens 新建会话 +
 				 * recent sessions. Essential when the sidebar is collapsed. */}
 				<div className="gui-header-title">
 					<button
@@ -1011,7 +1010,7 @@ export function GuiHeader({
 						)}
 					</MenuPopup>
 				</div>
-				{/* Session-title menu (openchamber session … button): horizontal
+				{/* Session-title menu: horizontal
 				 * ellipsis; rename / copy id / share / export / worktree /
 				 * archive / delete. */}
 				{store && (
@@ -1192,7 +1191,7 @@ export function GuiHeader({
 						<Icon name="equalizer-2" className="h-4 w-4" />
 					</button>
 				)}
-				{/* Mini chat (openchamber picture-in-picture). */}
+				{/* Mini chat (picture-in-picture). */}
 				<button
 					type="button"
 					className="gui-tool-btn gui-tool-btn--p2 h-7 w-7"
@@ -1202,7 +1201,7 @@ export function GuiHeader({
 				>
 					<Icon name="apps-2-ai" className="h-4 w-4" />
 				</button>
-				{/* Open-in capsule (openchamber OpenInAppButton): the selected
+				{/* Open-in capsule: the selected
 				 * app's icon with a dropdown of every installed app. */}
 				{openInDir && (
 					<div className="gui-openin-capsule">
@@ -1321,7 +1320,7 @@ export function GuiHeader({
 						</MenuPopup>
 					</div>
 				)}
-				{/* Instance info (openchamber DesktopServicesMenu): real daemon
+				{/* Instance info: real daemon
 				 * state (system.meta version, connection status) plus actions. */}
 				<button
 					type="button"
@@ -1344,7 +1343,7 @@ export function GuiHeader({
 					align="right"
 					onOpenChange={setInstanceOpen}
 				>
-					{/* Current-instance header row (openchamber DesktopHostSwitcher):
+					{/* Current-instance header row:
 					 * local daemon + manual re-probe. */}
 					<div className="flex items-center gap-2 px-2 py-1.5">
 						<span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--color-surface-sunken)]">
@@ -1380,7 +1379,7 @@ export function GuiHeader({
 							/>
 						</button>
 					</div>
-					{/* Host row (openchamber host list): the single local host with
+					{/* Host row: the single local host with
 					 * status dot + version + endpoint URL. */}
 					<div className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-[var(--color-surface-sunken)]">
 						<span
@@ -1402,8 +1401,7 @@ export function GuiHeader({
 							</span>
 						)}
 					</div>
-					{/* Managed-browser bridge diagnostics (batch C, open-design
-					 * 诊断上报契约吸收): port + tab count + last error, visible
+					{/* Managed-browser bridge diagnostics: port + tab count + last error, visible
 					 * without opening the browser panel. */}
 					<div className="mx-2 mb-1 flex items-center gap-2 rounded-lg px-2 py-1.5">
 						<span
