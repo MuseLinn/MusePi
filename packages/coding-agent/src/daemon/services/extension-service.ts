@@ -29,7 +29,7 @@ import type { DaemonService } from "./types";
  *   extension-module）、`plugins.list` / `plugins.packages` /
  *   `plugins.setEnabled`（插件扫描/已装清单/启停）。
  * - 输出：各 RPC 返回值原样；extensions.raw 超 16KB 截断；extensions.list
- *   聚合 tabs/providers/槽位组件/toolViews/状态栏段、shell 配置与 dsh「会话
+ *   聚合 tabs/providers/槽位组件/toolViews/状态栏段、shell 配置与「会话
  *   插件」面（显式扩展白名单的预设清单 + 每个 extension-module 的
  *   enabledInPresets）+ builtin 单元的 cordis 运行状态（runtime：fiberState/
  *   effects/operational,宿主注入 builtinRuntime）与启用条件（activation：
@@ -207,7 +207,7 @@ export class ExtensionService implements DaemonService {
 			await this.#deps.ensureRegistry();
 			s = this.#deps.settings();
 		}
-		// Desktop-shell config (dsh-desktop parity): the compat page /
+		// Desktop-shell config: the compat page /
 		// GUI shell read enabled + mode + served origin from the
 		// registry response (raw is stripped by the response mapping).
 		const shellEnabled = s?.getRaw("shell.enabled");
@@ -231,7 +231,7 @@ export class ExtensionService implements DaemonService {
 			const disabled = s ? builtinMirrorDisabled(def, key => s.getRaw(key)) : false;
 			ext.state = disabled ? "disabled" : "active";
 			ext.disabledReason = disabled ? "item-disabled" : undefined;
-			// dsh 式「启用条件」（真实可判定）：镜像设置键为 on 时启用。
+			// 「启用条件」（真实可判定）：镜像设置键为 on 时启用。
 			ext.activation = { kind: "setting", key: def.settingsMirror.key };
 		}
 		// cordis 运行状态（收编第一刀）：builtin 单元的 fiber 真实状态 +
@@ -249,7 +249,7 @@ export class ExtensionService implements DaemonService {
 				operational: disabled ? "stopped" : "running",
 			};
 		}
-		// Builtin plugin units declaring dsh-style config (voice STT/TTS):
+		// Builtin plugin units declaring config in their manifest (voice STT/TTS):
 		// attach the declared fields plus live settings-backed values — the
 		// field key IS the settings key, so the plugin management form and
 		// the settings page read/write one storage (no divergence).
@@ -264,7 +264,7 @@ export class ExtensionService implements DaemonService {
 				ext.configValues = coerceConfigValues([...def.config], stored);
 			}
 		}
-		// 「包含的组件」状态(dsh 插件详情段):组件 = 单元声明的可独立启停
+		// 「包含的组件」状态:组件 = 单元声明的可独立启停
 		// 单元,按声明的 deny 通道如实读黑名单 —— tool 通道读 tools.disabled
 		// (tools/index.ts isToolAllowed 同帧消费),stt/tts-engine 通道读
 		// voice.disabledEngines(voice/engine-denylist 全路径过滤),terminal-
@@ -302,7 +302,7 @@ export class ExtensionService implements DaemonService {
 				} satisfies PluginComponentDesc;
 			});
 		}
-		// user 插件清单组件面（dsh `- insert:` 子插件 parity）：manifest
+		// user 插件清单组件面（清单声明的组件）：manifest
 		// `musepi.components` 声明的组件下发——entry 组件带宿主 fiber 运行时
 		// 的真实数据（fiber 状态机/效果账本）,启用态读隐藏键
 		// extensions.disabledComponents → disabledExtensionComponents 复合键
@@ -367,7 +367,7 @@ export class ExtensionService implements DaemonService {
 		// 条目如实带出版本与判定——incompatible 是结构化拒绝的证据面（GUI 归因
 		// 段 + 豁免入口）,exempted 如实标注;无检视（运行时不可用）则不挂。
 		// 在役记录的 exempted 标注须对照**当前**豁免清单复核：撤销只影响下次
-		// 装配（不热卸载在役 fiber,dsh 口径），但管理面必须讲当下真话——
+		// 装配（不热卸载在役 fiber），但管理面必须讲当下真话——
 		// 豁免已撤而记录仍标 exempted,GUI 会永远显示过期标注。缺票降级为
 		// incompatible（unmetPeers 原样保留,作证据面）。fail-safe：坏文件 =
 		// 零豁免,exempted 全部降级,不阻塞清单。
@@ -388,10 +388,10 @@ export class ExtensionService implements DaemonService {
 			}
 			ext.compatibility = gate;
 		}
-		// dsh「会话插件」面（预设启用轴）：Agent 预设的显式扩展白名单 →
+		// 「会话插件」面（预设启用轴）：Agent 预设的显式扩展白名单 →
 		// 每个扩展的「启用于」预设列表 + 顶部预设清单（GUI 切换器/分组）。
 		// 三态白名单里 undefined = 全部启用，不构成「按预设提供」语义
-		// （dsh parity：只有显式声明白名单的预设才算提供者）。白名单 id
+		// （只有显式声明白名单的预设才算提供者）。白名单 id
 		// 是发现路径稳定名（sdk extensionIdOf 同规则），只可能命中
 		// extension-module 条目。fail-soft：预设面是增益信息，任何一步
 		// 失败都不阻塞清单主数据。
@@ -466,10 +466,10 @@ export class ExtensionService implements DaemonService {
 			components,
 			toolViews,
 			statusBarSegments,
-			// Desktop-shell config (dsh-desktop parity): enabled/mode/
+			// Desktop-shell config: enabled/mode/
 			// webUrl read by the compat page + GUI shell.
 			shell: shellCfg,
-			// dsh「会话插件」面：显式扩展白名单的预设清单（GUI 切换器）。
+			// 「会话插件」面：显式扩展白名单的预设清单（GUI 切换器）。
 			presets,
 			// 槽位契约单一权威(collab-proto):GUI 据此诊断未挂载槽位。
 			slots: {
@@ -598,8 +598,8 @@ export class ExtensionService implements DaemonService {
 		return { ok: true };
 	}
 
-	/** RPC extensions.setComponentEnabled：插件「包含的组件」独立开关（dsh
-	 *  插件详情段 parity）。组件 = 内置单元声明的可独立启停单元;启停按
+	/** RPC extensions.setComponentEnabled：插件「包含的组件」独立开关。
+	 *  组件 = 内置单元声明的可独立启停单元;启停按
 	 *  声明的 deny 通道写对应隐藏黑名单 —— tool 通道写 tools.disabled
 	 *  (isToolAllowed 谓词同帧消费,下个模型请求工具集即变,tool_registry
 	 *  时间线联动),stt/tts-engine 通道写 voice.disabledEngines(模型
@@ -622,7 +622,7 @@ export class ExtensionService implements DaemonService {
 		const def = findBuiltinDef(p.id);
 		const declared = def?.components?.find(c => c.id === p.component);
 		if (!declared) {
-			// user 插件径（dsh `- insert:` 子插件 parity）：extension-module 条目
+			// user 插件径（extension-module 条目
 			// 清单 `musepi.components` 声明的 entry 组件——先经 fiber 运行时切换
 			// （校验声明 + 真实挂载/拆卸,效果账本随 fiber 回收）,成功才持久化
 			// 黑名单;运行时未装载该插件时先 reconcile 一次再重试,仍失败结构化
@@ -670,7 +670,7 @@ export class ExtensionService implements DaemonService {
 	}
 
 	/** RPC extensions.setVersionExemption：授予/撤销兼容性精确版本豁免
-	 *  （回退保护②的「知情接受」入口,dsh `plugin allow-version` parity）。
+	 *  （回退保护②的「知情接受」入口）。
 	 *  只能批当前运行时版本;落盘 agentDir/compatibility.json（原子写）后失效清单缓存并扇出
 	 *  extensions.changed——GUI 重拉即见 exempted 标注,下次装配即放行。 */
 	async setVersionExemption(params: unknown) {
@@ -865,7 +865,7 @@ export class ExtensionService implements DaemonService {
 		this.#runtimeLoadCache = null;
 	}
 
-	/** 插件清单声明式配置写入(dsh 管理页契约):params = { id, key, value }。
+	/** 插件清单声明式配置写入:params = { id, key, value }。
 	 *  字段必须以该扩展 manifest 声明的 config 为准——未声明的键直接拒绝
 	 *  (防写垃圾键);值经 coerceConfigFieldValue 钳制后落盘存储,失效扩展
 	 *  缓存并扇出 extensions.changed 让 GUI 重拉 configValues。返回
