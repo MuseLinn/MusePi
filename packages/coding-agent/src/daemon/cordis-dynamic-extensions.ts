@@ -24,8 +24,9 @@
  *   沙箱产出 cordis Plugin，apply 拿到的是真 ctx 的白名单 façade（guard.ts）。
  * - 我们动态装载的是**真实 user 扩展目录**（package.json + TS 入口），
  *   运行面是既有 pi.* ExtensionAPI——它本身就是 façade：user 代码永不接触
- *   cordis ctx，隔离由构造保证，不需要再包一层 vm（扩展已在宿主进程内以
- *   全权限运行，这与"模型生成代码"的零信任前提根本不同）。
+ *   cordis ctx，无需再包一层 vm。但这只收窄 API 面，**不是进程隔离**：
+ * - 扩展与 daemon 同进程全权限运行（环境变量、文件系统、网络都可达）。
+ *   零信任前提我们不具备——代码是用户自己装的，不是模型现场生成的。
  * - API 面与生产会话装载**同源**（loader.ts 的 createConcreteExtensionAPI
  *   唯一工厂 + importAndBindExtension 同一条 import/bind 管线），本文件只
  *   加两样东西：ctx.effect 效果账本壳（ledgerApi，每登记 verb 一条带
