@@ -1,9 +1,10 @@
-import { describe, expect, mock, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { EventBatcher } from "../../src/daemon/event-batcher";
 import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "../../src/daemon/server";
+import * as downloader from "../../src/stt/downloader";
 
 /**
- * stt.modelStatus / stt.modelDownload RPC tests: the downloader is mocked so
+ * stt.modelStatus / stt.modelDownload RPC tests: the downloader is stubbed so
  * no real model fetch (network / native worker) is attempted. Under test are
  * the RPC-layer contracts the GUI voice page depends on:
  *  - unknown/missing modelKey is rejected (resolveSttModelSpec would silently
@@ -14,29 +15,31 @@ import { type DaemonConnection, DaemonServer, type DaemonSessionHost } from "../
  *    stt.downloadError, and the in-flight slot is released afterwards.
  */
 
-// ── Mocked downloader state (reset per test) ──
+// ── Stubbed downloader state (reset per test) ──
 let gate = Promise.withResolvers<void>();
 let failWith: Error | null = null;
 let downloadCalls = 0;
 
-function resetDownloader(): void {
+// Spied per test rather than installed with `mock.module`, which replaces an
+// entry in the global module registry and therefore leaks into every later file
+// in the same run. stt-controller names its imports from this module, so a spy
+// on the namespace object is what the call site actually reads.
+beforeEach(() => {
 	gate = Promise.withResolvers<void>();
 	failWith = null;
 	downloadCalls = 0;
-}
-
-mock.module("../../src/stt/downloader", () => ({
-	downloadSttModel: async (
-		_key: string,
-		onProgress?: (p: { status: string; percent: number; loaded: number; total: number; label: string }) => void,
-	) => {
+	vi.spyOn(downloader, "downloadSttModel").mockImplementation(async (_key, onProgress) => {
 		downloadCalls++;
-		onProgress?.({ status: "progress", percent: 40, loaded: 40, total: 100, label: "mock" });
+		onProgress?.({ status: "progress", percent: 40, loaded: 40, total: 100, repo: "test", label: "stub" });
 		await gate.promise;
 		if (failWith) throw failWith;
-	},
-	isSttModelCached: async () => false,
-}));
+	});
+	vi.spyOn(downloader, "isSttModelCached").mockResolvedValue(false);
+});
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 function makeHarness() {
 	const sent: string[] = [];
@@ -72,7 +75,6 @@ async function waitUntilReleased(
 
 describe("stt.modelDownload / stt.modelStatus RPCs", () => {
 	test("rejects a missing or unknown modelKey instead of falling back to the default tier", async () => {
-		resetDownloader();
 		const { rpc } = makeHarness();
 		await expect(rpc("stt.modelDownload", {})).rejects.toThrow("modelKey required");
 		await expect(rpc("stt.modelDownload", { modelKey: "not-a-tier" })).rejects.toThrow("unknown speech model");
@@ -80,7 +82,6 @@ describe("stt.modelDownload / stt.modelStatus RPCs", () => {
 	});
 
 	test("stt.modelStatus lists models and in-flight downloads", async () => {
-		resetDownloader();
 		const { rpc } = makeHarness();
 		const idle = (await rpc("stt.modelStatus", {})) as {
 			models: Array<{ key: string; label: string; cached: boolean }>;
@@ -111,7 +112,6 @@ describe("stt.modelDownload / stt.modelStatus RPCs", () => {
 	});
 
 	test("concurrent duplicate requests dedupe into one fetch and emit done", async () => {
-		resetDownloader();
 		const { rpc, sent, flush } = makeHarness();
 		await rpc("events.subscribe", {});
 		const first = rpc("stt.modelDownload", { modelKey: "fast" });
@@ -132,7 +132,6 @@ describe("stt.modelDownload / stt.modelStatus RPCs", () => {
 	});
 
 	test("a failed fetch emits stt.downloadError with the daemon message and releases its slot", async () => {
-		resetDownloader();
 		failWith = new Error("network unreachable");
 		const { rpc, sent, flush } = makeHarness();
 		await rpc("events.subscribe", {});
