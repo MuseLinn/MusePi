@@ -143,7 +143,6 @@
 		"packages/desktop-app/src/components/ScheduledTasksPage.tsx": 13,
 		"packages/desktop-app/src/components/SessionList.tsx": 7,
 		"packages/desktop-app/src/components/SessionSearchBar.tsx": 3,
-		"packages/desktop-app/src/components/SessionSidebar.tsx": 20,
 		"packages/desktop-app/src/components/SettingsNav.tsx": 2,
 		"packages/desktop-app/src/components/SettingsView.tsx": 2,
 		"packages/desktop-app/src/components/ShortcutsDialog.tsx": 3,

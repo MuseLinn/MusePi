@@ -20,7 +20,7 @@ import { SessionSearchBar } from "./SessionSearchBar";
 import { filterSessionTree } from "./session-list-shared";
 
 /**
- * Left pane — ZCode-style: menu (new/search/scheduled/skills), a group/
+ * Left pane: menu (new/search/scheduled/skills), a group/
  * project tab row, then the session list, and a user footer with daemon
  * status + theme toggles. Rounded containers, background-delta hierarchy,
  * no hairline borders.
@@ -113,14 +113,14 @@ export function SessionSidebar({
 	/** 枢纽下拉直达 —— 落地能力中心的指定 tab。 */
 	onOpenCapabilityTab?(tab: "skills" | "plugins" | "marketplace"): void;
 	onOpenSettings(): void;
-	/** ZCode 打开文件夹 — native directory picker (Electron dialog). */
+	/** 打开文件夹 — native directory picker (Electron dialog). */
 	onPickFolder?(): void;
-	/** kimiwork parity: create a blank project — a dialog asks for a name
+	/** Create a blank project — a dialog asks for a name
 	 *  + parent path and the app mkdirs + opens it (daemon fs.mkdir). */
 	onCreateProject?(): void;
-	/** Open the ZCode-style collab remote-control dialog. */
+	/** Open the collab remote-control dialog. */
 	onOpenCollab?(): void;
-	/** Open the keyboard-shortcuts reference (openchamber HelpDialog parity). */
+	/** Open the keyboard-shortcuts reference. */
 	onOpenShortcuts?(): void;
 	/** Persist a user-set session title (daemon session.rename). */
 	onRenameSession?(sessionId: string, title: string): void;
@@ -129,7 +129,7 @@ export function SessionSidebar({
 	collapsed: boolean;
 	/** Permanently delete a session's local data (journal + index) via the
 	 *  daemon; returns success so the UI only drops the archive row on a real
-	 *  deletion (ZCode confirm dialog wording promises data cleanup). */
+	 *  deletion (the confirm dialog wording promises data cleanup). */
 	onDeleteArchived(sessionId: string): Promise<boolean>;
 	/** Pane width in px (draggable resize). */
 	width?: number;
@@ -143,7 +143,7 @@ export function SessionSidebar({
 	/** modes.list catalog (builtin + user-created presets) — forwarded to the
 	 *  hover card's mode row (shared naming chain, lib/mode-label.ts). */
 	modeCatalog?: readonly ModeLabelEntry[] | null;
-	/** openchamber mini-chat parity: pop a session row out into the
+	/** Mini chat: pop a session row out into the
 	 *  picture-in-picture mini chat window (Electron); non-Electron hosts
 	 *  should fall back to opening the session in place. */
 	onOpenMiniChat?(sessionId: string): void;
@@ -277,7 +277,7 @@ export function SessionSidebar({
 	});
 	// Inline group-name editing (double-click the block / context menu).
 	const [groupEditIdx, setGroupEditIdx] = useState<number | null>(null);
-	// Archived sessions (ZCode archive view). Shared with the guest/mobile shell
+	// Archived sessions (archive view). Shared with the guest/mobile shell
 	// through guest-client's session-archive module — one localStorage key, one
 	// event, and it migrates the two legacy keys (2026-09-15). archivedAt is
 	// display time; cwd is captured at archive time from session.list so the
@@ -492,7 +492,7 @@ export function SessionSidebar({
 	// useArchivedSessions subscribes to the shared store, so this component's
 	// copy follows every writer without a reload.
 	const visibleNodes = nodes.filter(n => !archivedIds.has(n.entry.id));
-	// Session search (openchamber sidebar parity): the tree is filtered by
+	// Session search: the tree is filtered by
 	// label + cwd through the shared filterSessionTree, which also reports how
 	// many sessions the query kept — the box's count and the filtered list come
 	// from the same pass and so can never disagree.
@@ -524,8 +524,8 @@ export function SessionSidebar({
 		[closeSearch],
 	);
 	// Sidebar-search accelerator: ⌘⇧F (Ctrl+Shift+F elsewhere). Plain ⌘F
-	// belongs to the in-chat find bar (openchamber parity, find-in-chat in
-	// the shortcut registry) — the two entry points never fight; ⌘K remains
+	// belongs to the in-chat find bar (find-in-chat in the shortcut
+	// registry) — the two entry points never fight; ⌘K remains
 	// the app command palette; a collapsed pane leaves the keys alone.
 	useEffect(() => {
 		if (collapsed) return;
@@ -801,7 +801,7 @@ export function SessionSidebar({
 						</button>
 					</div>
 				</div>
-				{/* View/sort menu (projects tab) — ZCode parity. Floating portal
+				{/* View/sort menu (projects tab). Floating portal
 				 * (not an inline block) so it overlays the tree like the other
 				 * menus. */}
 				{tab === "projects" && (
@@ -950,7 +950,7 @@ export function SessionSidebar({
 						) : searchActive && searchMatchCount === 0 ? null : tab === "projects" ? (
 							<>
 								{/* Add-project button lives above BOTH view modes (the
-								 * timeline default hid it before — ZCode parity: 项目 tab
+								 * timeline default hid it before — the 项目 tab
 								 * always offers 打开文件夹 / 远程连接). */}
 								<div className="relative">
 									<button
@@ -1048,7 +1048,7 @@ export function SessionSidebar({
 									</>
 								) : (
 									(() => {
-										// ZCode project blocks: persisted folder list, each a
+										// Project blocks: persisted folder list, each a
 										// collapsible block. Sessions group by exact cwd; folders
 										// without sessions still show (empty state) so a freshly
 										// picked 打开文件夹 appears immediately.
@@ -1189,7 +1189,7 @@ export function SessionSidebar({
 																	}}
 																	onClick={() => toggleProject(path)}
 																	onContextMenu={e => {
-																		// ZCode parity: project blocks carry the same right-click
+																		// Project blocks carry the same right-click
 																		// menu as group blocks (remove project lives here, not as
 																		// a lone side button).
 																		e.preventDefault();
@@ -1262,8 +1262,7 @@ export function SessionSidebar({
 							</>
 						) : (
 							<>
-								{/* Pinned sessions show in the groups tab too (ZCode
-								 * 已置顶 parity), above custom groups. */}
+								{/* Pinned sessions show in the groups tab too, above custom groups. */}
 								{pinnedNodes.length > 0 && (
 									<div className="mb-1.5">
 										<div className="gui-group-label px-2 pb-1 pt-2.5">{t("pinned")}</div>
@@ -1280,7 +1279,7 @@ export function SessionSidebar({
 										/>
 									</div>
 								)}
-								{/* ZCode: the groups tab lists sessions too — custom
+								{/* The groups tab lists sessions too — custom
 								 * groups on top, then the time-grouped session tree. */}
 								<CustomGroups
 									groups={groups}
@@ -1365,7 +1364,7 @@ export function SessionSidebar({
 					</div>
 				</div>
 				{/* User footer: daemon status + settings (theme/language moved into
-				 * the settings dialog, ZCode-style). */}
+				 * the settings dialog). */}
 				<div className="gui-sidebar-footer flex items-center gap-1.5 border-t border-[var(--border)] px-3 py-2">
 					<div className="flex flex-1 items-center gap-1.5 text-[13px] text-[var(--color-text-muted)]">
 						<span className={`gui-dot gui-dot-${status}`} />
@@ -1409,7 +1408,7 @@ export function SessionSidebar({
 					</button>
 				</div>
 			</div>
-			{/* Session right-click menu (ZCode task menu): archive, copy id. */}
+			{/* Session right-click menu: archive, copy id. */}
 			<ContextMenu
 				open={sessionCtx !== null}
 				x={sessionCtx?.x ?? 0}
@@ -1434,7 +1433,7 @@ export function SessionSidebar({
 									onSelect: () => void renameSession(sessionCtx.id),
 								},
 								{
-									// openchamber parity: any session row (parent or
+									// Right-click: any session row (parent or
 									// subagent) can be popped out into the mini chat
 									// window; non-Electron hosts fall back to opening
 									// it in place (handled by the app callback).
@@ -1552,8 +1551,8 @@ export function SessionSidebar({
 						: []
 				}
 			/>
-			{/* Project block right-click menu (ZCode parity with the group
-			 * menu — same frosted-glass ContextMenu component): open folder,
+			{/* Project block right-click menu: same frosted-glass ContextMenu
+			 * component as the group menu — open folder,
 			 * copy path, remove project. */}
 			<ContextMenu
 				open={projectCtx !== null}
