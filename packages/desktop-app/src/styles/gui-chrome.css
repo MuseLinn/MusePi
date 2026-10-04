@@ -1332,17 +1332,31 @@
 	min-height: 0;
 	padding: 14px 12px 16px 16px;
 }
+/* The lede is a sibling of .gui-dialog-head, not a child of .gui-shortcuts-body,
+ * so the body's inset does not reach it — without its own the sentence starts
+ * flush against the dialog's left edge. Same 16px / 12px as the head. */
 .gui-shortcuts-lede {
 	flex-shrink: 0;
 	margin: 0 0 14px;
+	padding: 0 12px 0 16px;
 	font-size: var(--ui-font-size-sm);
 	line-height: 1.55;
 	color: var(--color-text-muted);
+}
+/* .gui-dialog is a flex column with overflow:hidden, so every child shrinks by
+ * default. Head and lede are fixed-height and must say so; the grid is the
+ * scroll container and takes what is left. Left unstated, the shrink lands on
+ * the grid's columns instead of producing a scrollbar, and a section squeezed
+ * below its rows' min-height packs them into each other. */
+.gui-dialog--shortcuts > .gui-dialog-head,
+.gui-dialog--shortcuts > .gui-shortcuts-lede {
+	flex-shrink: 0;
 }
 .gui-shortcuts-grid {
 	display: grid;
 	grid-template-columns: 1fr;
 	gap: 0 32px;
+	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
 /* One column on a narrow window: two 400px columns of key chips wrap the
@@ -1351,6 +1365,11 @@
 	.gui-shortcuts-grid {
 		grid-template-columns: 1fr 1fr;
 	}
+}
+/* A stretched grid item hands its height to this column's flex children; without
+ * this they absorb the deficit and their rows collide. */
+.gui-shortcuts-body > * {
+	flex-shrink: 0;
 }
 .gui-shortcut-group {
 	margin: 0 0 4px;

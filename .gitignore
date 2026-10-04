@@ -141,3 +141,6 @@ packages/.desktop-build/
 
 # Local prototype state (machine-specific, not shared config)
 .musepi/project.json
+
+# Browser-panel screenshots land here; they are verification artifacts, not sources.
+.openchamber/
