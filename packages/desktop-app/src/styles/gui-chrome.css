@@ -1325,6 +1325,11 @@
 .gui-dialog.gui-dialog--shortcuts {
 	width: min(1040px, 94vw);
 	height: auto;
+	/* Content-sized alone, this reads as a low slab: the columns total ~420px
+	 * and the panel kept that height in a 1080px window. The floor gives it
+	 * presence; the row rhythm below is what actually fills it, so the box does
+	 * not sit padded with dead space. */
+	min-height: min(58vh, 620px);
 	max-height: min(88vh, 880px);
 	overflow: hidden;
 }
@@ -1335,6 +1340,12 @@
 .gui-shortcuts-body {
 	min-height: 0;
 	padding: 14px 12px 16px 16px;
+	/* Owned here rather than as a Tailwind gap-* utility: the generated
+	 * tailwind.out.css is content-scanned and only carries the utilities the
+	 * scanned sources asked for, so an arbitrary gap-N silently does nothing and
+	 * the sections butt together. That spacing has to outrank the gap between a
+	 * group heading and its first row, or the groups read as one list. */
+	gap: 32px;
 }
 /* The lede is a sibling of .gui-dialog-head, not a child of .gui-shortcuts-body,
  * so the body's inset does not reach it — without its own the sentence starts
@@ -1398,7 +1409,7 @@
 	flex-shrink: 0;
 }
 .gui-shortcut-group {
-	margin: 0 0 4px;
+	margin: 0 0 8px;
 	font-size: var(--ui-font-size-xs);
 	font-weight: 600;
 	letter-spacing: 0.02em;
@@ -1408,7 +1419,7 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	min-height: 26px;
+	min-height: 30px;
 }
 .gui-shortcut-label {
 	flex: 1;
