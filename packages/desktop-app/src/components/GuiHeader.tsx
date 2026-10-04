@@ -77,10 +77,10 @@ function formatPauseElapsed(pausedAt: number): string {
 
 /**
  * Window header — the container layer between the session sidebar and the
- * chat surface (openchamber Header parity: Sidebar | Header > ChatSurface).
+ * chat surface.
  * Full-width drag region; floating sidebar controls on the left (sidebar
  * toggle + project-actions capsule), the session title as a switcher
- * trigger (openchamber SessionSwitcherDropdown) in the middle, and the
+ * trigger in the middle, and the
  * top-right cluster (terminal, right panel, mini chat, open-in, instance
  * info, more) on the right. No divider line in the welcome state.
  */
@@ -167,8 +167,7 @@ export function GuiHeader({
 	onToggleRightPanel(): void;
 	project: string | null;
 	onOpenFolder(): void;
-	/** Recent sessions for the header switcher (openchamber
-	 * SessionSwitcherDropdown), newest first. */
+	/** Recent sessions for the header switcher, newest first. */
 	sessions: { id: string; label: string; timestamp: number }[];
 	onSelectSession(id: string): void;
 	/** Persist a user-set session title (daemon session.rename). */
@@ -183,7 +182,7 @@ export function GuiHeader({
 	/** Daemon connection state (instance menu status dot). */
 	connected: boolean;
 	/** WebSocket endpoint URL of the connected daemon (instance menu host
-	 *  row, openchamber DesktopHostSwitcher parity). */
+	 *  row). */
 	daemonUrl: string;
 	/** Re-run the daemon boot/connect chain (instance menu 重新连接). */
 	onReconnect(): void;
@@ -192,8 +191,7 @@ export function GuiHeader({
 	/** Permanently delete a session (journal + index); the caller also
 	 *  resets the UI when it was the active session. Returns success. */
 	onDeleteSession(sessionId: string): Promise<boolean>;
-	/** Saved remote daemon hosts for the instance switcher (openchamber
-	 *  DesktopHostSwitcher host list parity). */
+	/** Saved remote daemon hosts for the instance switcher . */
 	hosts: RemoteHost[];
 	/** Switch the GUI to a host (remote or the implicit local daemon). */
 	onSwitchHost(host: RemoteHost | null): void;
@@ -209,7 +207,7 @@ export function GuiHeader({
 	);
 	const orb = orbFromSession(snap);
 	// Managed-browser bridge state (batch C): port / tab count / last error
-	// for the instance-menu diagnostics row (open-design 诊断上报契约吸收).
+	// for the instance-menu diagnostics row.
 	const browserHost = useSyncExternalStore(subscribeHost, getHostState);
 	const statusText = snap?.working ? (snap.streaming ? t("replying") : t("working")) : t("idle");
 	// Traffic lights are macOS-only. Windows/Linux get a native
@@ -230,7 +228,7 @@ export function GuiHeader({
 	const instanceBtnRef = useRef<HTMLButtonElement | null>(null);
 	// §5t titlebar avoidance: the fixed float cluster publishes its measured
 	// width as --gui-float-controls-width; the collapsed-sidebar spacer carves
-	// exactly that much (openchamber --oc-titlebar-controls-width parity).
+	// exactly that much.
 	const floatRef = useRef<HTMLDivElement | null>(null);
 	useEffect(() => {
 		const el = floatRef.current;
@@ -248,10 +246,10 @@ export function GuiHeader({
 	const [switcherOpen, setSwitcherOpen] = useState(false);
 	const [titleMenuOpen, setTitleMenuOpen] = useState(false);
 	const [instanceOpen, setInstanceOpen] = useState(false);
-	// Instance switcher add form (openchamber "Add instance" parity).
+	// Instance switcher add form.
 	const [addHostOpen, setAddHostOpen] = useState(false);
 	const [hostDraft, setHostDraft] = useState({ label: "", url: "", token: "" });
-	// Host reachability (openchamber Remote Instances parity): each saved host
+	// Host reachability: each saved host
 	// gets a live ping when the list changes; the instance menu marks it.
 	const [hostReach, setHostReach] = useState<Record<string, boolean>>({});
 	useEffect(() => {
@@ -269,12 +267,12 @@ export function GuiHeader({
 	const [devRunning, setDevRunning] = useState(false);
 	const [devStopping, setDevStopping] = useState(false);
 	// First http(s) URL seen in terminal output while the dev server runs
-	// (openchamber autoOpenUrl + preview button).
+	// (with a preview button).
 	const [devPreviewUrl, setDevPreviewUrl] = useState<string | null>(null);
 	const [noDevFlash, setNoDevFlash] = useState(false);
 	const noDevTimer = useRef<number | null>(null);
 
-	// Open-in app list (openchamber OpenInAppButton parity): real app icons
+	// Open-in app list: real app icons
 	// from the Electron shell, persisted selection like openInAppsStore.
 	const [openInApps, setOpenInApps] = useState<OpenInApp[]>([]);
 	const [openInScanning, setOpenInScanning] = useState(false);
@@ -309,7 +307,7 @@ export function GuiHeader({
 		if (openInDir) void openWith(app.appName, openInDir);
 	};
 
-	// Dev-server auto-discovery (openchamber detectDevServer parity): look
+	// Dev-server auto-discovery: look
 	// for a dev/start/preview/serve/develop script and the package manager
 	// from lockfiles, so the header button runs the right command.
 	const DEV_SCRIPT_RE = /^(dev|start|preview|serve|develop)(:.*)?$/i;
@@ -340,7 +338,7 @@ export function GuiHeader({
 						setDevCommand(null);
 						return;
 					}
-					// Package manager from lockfiles (openchamber detectPackageManager).
+					// Package manager from lockfiles.
 					const locks: [string, string, string][] = [
 						["pnpm-lock.yaml", "pnpm", "pnpm"],
 						["yarn.lock", "yarn", "yarn"],
@@ -383,7 +381,7 @@ export function GuiHeader({
 		}
 		if (devRunning || devStopping) {
 			// Stop: brief loader, then Ctrl+C into the active dock tab
-			// (openchamber stopAction spinner parity).
+			// (spinner while it runs).
 			if (devStopping) return;
 			setDevStopping(true);
 			setTimeout(() => {
@@ -403,7 +401,7 @@ export function GuiHeader({
 	}, [devCommand, devRunning, devStopping, terminalOpen, onToggleTerminal]);
 
 	// While the dev server runs, watch the dock terminal output for the
-	// first http(s) URL (openchamber projectActionTerminal autoOpenUrl):
+	// first http(s) URL:
 	// auto-open it once and keep it available on the preview button.
 	const urlOpenedRef = useRef(false);
 	useEffect(() => {
@@ -429,7 +427,7 @@ export function GuiHeader({
 		return rpc.addEventListener(onEvent);
 	}, [devRunning, rpc]);
 
-	// Per-project custom actions (openchamber ProjectActionsButton parity):
+	// Per-project custom actions:
 	// listed above the auto-discover entry in the project-actions menu and
 	// executed in the bottom terminal dock through the same
 	// musepi-gui-terminal-cmd broadcast the dev server uses. Persisted in
@@ -468,7 +466,7 @@ export function GuiHeader({
 		};
 	}, [rpc, store]);
 
-	// Instance info (openchamber DesktopServicesMenu / DesktopHostSwitcher):
+	// Instance info:
 	// real version + round-trip latency from system.meta, refreshed whenever
 	// the menu opens or the refresh button is hit.
 	const [daemonVersion, setDaemonVersion] = useState<string | null>(null);
@@ -616,7 +614,7 @@ export function GuiHeader({
 	};
 
 	/** Export the active session transcript as a downloadable Markdown file
-	 *  (openchamber exportMarkdown parity; client-side from the store). */
+	 *  (client-side from the store). */
 	const exportSessionMarkdown = (): void => {
 		if (!store) return;
 		const snap = store.getSnapshot();
@@ -635,7 +633,7 @@ export function GuiHeader({
 		URL.revokeObjectURL(a.href);
 	};
 
-	/** Archive the active session (openchamber bulkActions.archive parity):
+	/** Archive the active session:
 	 *  the shared session-archive store the sidebar reads, so the sidebar and
 	 *  the guest/mobile shell follow without a reload (2026-09-15: this used to
 	 *  write `musepi-gui-archived` directly while the guest shell wrote its own
@@ -669,8 +667,7 @@ export function GuiHeader({
 		window.dispatchEvent(new CustomEvent("musepi-gui-toast", { detail: text }));
 	};
 
-	/** Move this session into a fresh isolated git worktree (openchamber's
-	 *  "move to new worktree"). Two existing pieces do the work: the
+	/** Move this session into a fresh isolated git worktree . Two existing pieces do the work: the
 	 *  `worktree.create` RPC builds the tree under `~/.musepi/wt`
 	 *  (`worktree.base` aware), and the `/move` slash command re-roots the live
 	 *  session — `SessionManager.moveSession` plus its settings/plugin reloads,
@@ -769,8 +766,7 @@ export function GuiHeader({
 			{/* TitlebarLeftControls (openchamber): a fixed, HORIZONTAL overlay
 			 * cluster — a CHILD of the drag header so Electron honors
 			 * no-drag reliably. Sidebar toggle + the project-actions capsule
-			 * (auto-discover dev server / stop while running), exactly like
-			 * openchamber's toggle + ProjectActionsButton. */}
+			 * (auto-discover dev server / stop while running), the toggle and the actions capsule both work from here. */}
 			<div className="gui-float-controls gui-float-controls--overlay" ref={floatRef}>
 				<button
 					type="button"
@@ -908,7 +904,7 @@ export function GuiHeader({
 			</div>
 			{/* §5t collapsed-sidebar carve spacer: reserves the float
 			 * cluster's measured width so the session-title pill never
-			 * slides underneath it (openchamber no-drag carve parity). */}
+			 * slides underneath it (drag strip carved out). */}
 			<div className="gui-header-spacer" data-collapsed={sideCollapsed ? "true" : undefined} aria-hidden="true" />
 			<div className="flex min-w-0 flex-1 items-center gap-0.5">
 				{/* Session title = switcher trigger (openchamber

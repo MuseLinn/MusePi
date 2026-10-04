@@ -144,7 +144,6 @@
 		"packages/desktop-app/src/components/FadeScroll.tsx": 1,
 		"packages/desktop-app/src/components/FilePane.tsx": 8,
 		"packages/desktop-app/src/components/GroupedSessionList.tsx": 3,
-		"packages/desktop-app/src/components/GuiHeader.tsx": 22,
 		"packages/desktop-app/src/components/ManagedBrowserHost.tsx": 1,
 		"packages/desktop-app/src/components/ManagedBrowserPane.tsx": 7,
 		"packages/desktop-app/src/components/MenuPopup.tsx": 1,
