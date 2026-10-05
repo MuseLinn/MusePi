@@ -105,6 +105,40 @@ describe("zai usage provider", () => {
 		]);
 	});
 
+	it("surfaces GLM Coding Plan credit windows with the exact ratio", async () => {
+		const report = await zaiUsageProvider.fetchUsage!(
+			{ provider: "zai", credential: makeCredential(), signal: undefined },
+			makeCtx({
+				success: true,
+				data: {
+					limits: [
+						{
+							type: "CREDIT_LIMIT",
+							usage: 12000,
+							currentValue: 1438,
+							remaining: 10562,
+							// Server-rounded integer: 1438/12000 ≈ 11.98% is reported as 11.
+							percentage: 11,
+							nextResetTime: 1782656863894,
+							unit: 3,
+							number: 5,
+						},
+					],
+				},
+			}),
+		);
+
+		expect(report).not.toBeNull();
+		const credit = report!.limits[0];
+		expect(credit?.id).toBe("zai:credits:5h");
+		expect(credit?.label).toBe("ZAI 5 Hours Credit Quota");
+		expect(credit?.amount.unit).toBe("credits");
+		expect(credit?.amount.used).toBe(1438);
+		expect(credit?.amount.limit).toBe(12000);
+		// The server's rounded percentage must not win over the exact ratio.
+		expect(credit?.amount.usedFraction).toBeCloseTo(1438 / 12000, 6);
+	});
+
 	it("supports both api-key and oauth credentials, rejecting oauth rows with no access token", () => {
 		expect(zaiUsageProvider.supports!({ provider: "zai", credential: makeCredential(), signal: undefined })).toBe(
 			true,

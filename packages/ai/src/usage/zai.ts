@@ -306,6 +306,33 @@ async function fetchZaiUsage(params: UsageFetchParams, ctx: UsageFetchContext): 
 				status: getUsageStatus(amount.usedFraction),
 			});
 		}
+		if (parsed.type === "CREDIT_LIMIT") {
+			// GLM Coding Plan credit windows (e.g. 12k credits / 5h + 60k / week):
+			// `usage` is the plan's credit allotment and `currentValue` the spend.
+			// The server's `percentage` is a rounded integer (11 for 1438/12000 ≈
+			// 11.98%), so pass it only when there is no absolute meter to divide.
+			const window = buildZaiWindow(parsed);
+			const hasAbsoluteMeter = parsed.currentValue !== undefined && parsed.usage !== undefined && parsed.usage > 0;
+			const amount = buildUsageAmount({
+				used: parsed.currentValue,
+				limit: parsed.usage,
+				remaining: parsed.remaining,
+				...(hasAbsoluteMeter ? {} : { percentage: parsed.percentage }),
+				unit: "credits",
+			});
+			limits.push({
+				id: `zai:credits:${window.id}`,
+				label: `ZAI ${window.label} Credit Quota`,
+				scope: {
+					provider: params.provider,
+					windowId: window.id,
+					shared: true,
+				},
+				window,
+				amount,
+				status: getUsageStatus(amount.usedFraction),
+			});
+		}
 	}
 
 	if (limits.length === 0) return null;
