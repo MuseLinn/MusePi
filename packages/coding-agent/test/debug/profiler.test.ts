@@ -1,5 +1,9 @@
-import { describe, expect, it } from "bun:test";
-import { startCpuProfile } from "@musepi/pi-coding-agent/debug/profiler";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { generateHeapSnapshotData, startCpuProfile } from "@musepi/pi-coding-agent/debug/profiler";
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 describe("startCpuProfile", () => {
 	// Regression: `node:v8` `setFlagsFromString` throws on Bun
@@ -20,5 +24,20 @@ describe("startCpuProfile", () => {
 		expect(parsed.nodes.length).toBeGreaterThan(0);
 		expect(typeof profile.markdown).toBe("string");
 		expect(profile.markdown.length).toBeGreaterThan(0);
+	});
+});
+
+describe("generateHeapSnapshotData", () => {
+	it("returns binary snapshot bytes rather than a JavaScript string", () => {
+		const snapshot = generateHeapSnapshotData();
+
+		expect(snapshot.data).toBeInstanceOf(Uint8Array);
+		expect(snapshot.data.byteLength).toBeGreaterThan(0);
+	});
+
+	it("rejects an empty snapshot instead of reporting success", () => {
+		vi.spyOn(Bun, "generateHeapSnapshot").mockReturnValue(new ArrayBuffer(0));
+
+		expect(() => generateHeapSnapshotData()).toThrow("Bun generated an empty heap snapshot");
 	});
 });
