@@ -7,8 +7,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ### Added
 
-- **外观新增「始终显示滚动条」开关**：打开后滚动条不再自动淡出，鼠标移入可滚动区域就会出现；横向也能拖动了，此前只有纵向有把手。
-  - EN: Appearance gains an "Always show scrollbars" switch — scrollbars stop auto-fading and appear when the pointer enters a scrollable area; they are now also draggable horizontally, which only the vertical axis supported before.
+- **外观新增「始终显示滚动条」开关**：打开后已经出现的滚动条不再自动淡出，会一直亮着；横向也能拖动了，此前只有纵向有把手。
+  - EN: Appearance gains an "Always show scrollbars" switch — a scrollbar that has appeared stays lit instead of fading out; they are also draggable horizontally, which only the vertical axis supported before.
 - **左右并排的两个可滚动区域现在各有一条滚动条**：此前只有最后滚动的那一个区域有轨道，另一个区域的滚动状态完全看不到。滚动条槽位按容器分配，左右两栏、上下分栏互不抢占了。
   - EN: Two independently scrolling areas side by side each get their own scrollbar. Previously only the most recently scrolled area had a rail, so the other one's position was invisible. Rail slots are now keyed per container, so side-by-side and stacked panes no longer steal each other's indicator.
 - **内容自己滚动（比如新消息到达时自动跟随到底）不再凭空冒出滚动条**：只有你真的滚了（滚轮、触摸、PageDown 这类按键、拖动把手）滚动条才出现，此前程序化的滚动也会点亮它。
@@ -23,8 +23,8 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
-- **预付费余额现在在客户端也看得到**：只有余额、没有额度的供应商，此前只在命令行 `/usage` 里显示这条余额，桌面转录、移动端与鸿蒙端的用量卡片上没有它。现在这些端的卡片同样会给出。
-  - EN: A prepaid balance now appears on every client. A provider that reports only a remaining balance and no allowance showed it on the command line alone; the usage card in the desktop transcript, mobile and HarmonyOS clients had no line for it. Those cards now report the balance too.
+- **预付费余额现在在每一处用量视图里都能看到**：只有余额、没有额度的供应商，此前只在命令行报告里显示；终端用量面板在那个位置只有一排暗点，客户端卡片上则完全没有这行。现在三处都会给出该余额，账户级的共享池只计一次。
+  - EN: A prepaid balance now appears in every usage view. A provider that reports only a remaining balance and no allowance showed it in the command-line report alone — the terminal panel drew dim dots in that cell and the client card had no line for it. All three now report the balance, counting an account-wide pool once.
 
 - **客户端用量卡片不再把「按量计费」的额度显示成 0%**：只有绝对数额、没有百分比的额度（Z.ai 的 token 与 credit 额度、按美元计的额外用量），在桌面转录、移动端与鸿蒙端此前显示成「0% used · 0% left」加一条空进度条。现在直接显示供应商报出的数额，进度条按剩余比例画。
   - EN: The usage card no longer shows an amount-metered quota as 0%. Meters that report an absolute amount and no percentage — Z.ai token and credit quotas, dollar-denominated extra usage — read as "0% used · 0% left" with an empty bar in the desktop transcript, mobile and HarmonyOS clients. The card now shows the amount the provider reported and draws the bar from the remaining share.
