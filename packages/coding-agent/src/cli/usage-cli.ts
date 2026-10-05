@@ -28,6 +28,7 @@ import {
 } from "../daemon/usage-shared";
 import { discoverAuthStorage } from "../sdk";
 import { formatRemainingOnlyTotal } from "../utils/usage-amounts";
+import { formatLimitTitle } from "../utils/usage-display";
 
 export { collectUnreportedAccounts, selectReportableAccounts, type UsageAccountIdentity };
 
@@ -254,9 +255,7 @@ function renderBar(limit: UsageLimit): string {
 
 /** Append the window label when the limit label doesn't already carry it. */
 function limitTitle(limit: UsageLimit): string {
-	let label = limit.label;
-	const tier = limit.scope.tier;
-	if (tier && !label.toLowerCase().includes(tier.toLowerCase())) label = `${label} (${tier})`;
+	const label = formatLimitTitle(limit);
 	const windowLabel = limit.window?.label ?? limit.scope.windowId;
 	if (!windowLabel) return label;
 	if (windowLabel.toLowerCase() === "quota window") return label;

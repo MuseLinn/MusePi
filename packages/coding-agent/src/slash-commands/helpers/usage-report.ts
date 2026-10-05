@@ -2,6 +2,7 @@ import type { UsageLimit, UsageReport } from "@musepi/pi-ai";
 import { sanitizeText } from "@musepi/pi-utils";
 import type { OAuthAccountIdentity } from "../../session/auth-storage";
 import { formatRemainingOnlyTotal } from "../../utils/usage-amounts";
+import { formatLimitTitle } from "../../utils/usage-display";
 import type { SlashCommandRuntime } from "../types";
 import { reportMatchesActiveAccount } from "./active-oauth-account";
 import { formatDuration, renderAsciiBar } from "./format";
@@ -127,13 +128,7 @@ function renderUsageReports(
 			for (let index = 0; index < report.limits.length; index++) {
 				const limit = report.limits[index]!;
 				const window = limit.window?.label ?? limit.scope.windowId;
-				// Skip the tier suffix when the label already names it (e.g. Anthropic's
-				// "Claude 7 Day (Fable)" with scope.tier "fable") — mirrors limitTitle in usage-cli.
-				const tier =
-					limit.scope.tier && !limit.label.toLowerCase().includes(limit.scope.tier.toLowerCase())
-						? ` (${limit.scope.tier})`
-						: "";
-				lines.push(`- ${limit.label}${tier}${formatWindowSuffix(limit.label, window)}`);
+				lines.push(`- ${formatLimitTitle(limit)}${formatWindowSuffix(limit.label, window)}`);
 				lines.push(
 					`  ${formatUsageReportAccount(report, limit, index)}: ${formatUsageAmount(limit)}${inUse ? "  ← in use by this session" : ""}`,
 				);

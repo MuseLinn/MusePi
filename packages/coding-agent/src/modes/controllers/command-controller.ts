@@ -60,6 +60,7 @@ import { copyToClipboard } from "../../utils/clipboard";
 import { openPath } from "../../utils/open";
 import { setSessionTerminalTitle } from "../../utils/title-generator";
 import { formatRemainingOnlyTotal, isUsedOnlyAbsoluteAmount } from "../../utils/usage-amounts";
+import { formatLimitTitle } from "../../utils/usage-display";
 
 function showMarkdownPanel(ctx: InteractiveModeContext, title: string, markdown: string): void {
 	const block = new TranscriptBlock();
@@ -1654,14 +1655,6 @@ function resolveProviderUsageTotal(reports: UsageReport[]): number {
 		.flatMap(report => report.limits)
 		.map(limit => resolveUsedFraction(limit) ?? 0)
 		.reduce((sum, value) => sum + value, 0);
-}
-
-function formatLimitTitle(limit: UsageLimit): string {
-	const tier = limit.scope.tier;
-	if (tier && !limit.label.toLowerCase().includes(tier.toLowerCase())) {
-		return `${limit.label} (${tier})`;
-	}
-	return limit.label;
 }
 
 function formatWindowSuffix(label: string, windowLabel: string, uiTheme: typeof theme): string {
