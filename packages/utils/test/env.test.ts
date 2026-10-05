@@ -239,6 +239,67 @@ describe("filterChildShellEnv", () => {
 			nodeEnv: "production",
 		});
 	});
+
+	it("reads the launch project directory, not the live cwd, when no cwd is given", async () => {
+		const projectDir = path.dirname(writeTempEnv("OMP_DOTENV_REPRO_MARKER=synthetic-project-value\n"));
+		const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-utils-env-other-"));
+		tempDirs.push(otherDir);
+		const envModulePath = path.join(import.meta.dir, "..", "src", "env.ts");
+		const script = [
+			`import { filterChildShellEnv } from ${JSON.stringify(envModulePath)};`,
+			`process.chdir(${JSON.stringify(otherDir)});`,
+			'const child = filterChildShellEnv({ OMP_DOTENV_REPRO_MARKER: "synthetic-project-value", UNCHANGED: "parent-value" });',
+			"process.stdout.write(JSON.stringify(child));",
+		].join("\n");
+		const proc = Bun.spawn([process.execPath, "--no-install", "--eval", script], {
+			cwd: projectDir,
+			env: { ...process.env, OMP_DOTENV_REPRO_MARKER: undefined },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const [stdout, stderr, exitCode] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		]);
+
+		expect(exitCode, stderr).toBe(0);
+		// The live cwd (`otherDir`) has no dotenv file, so only the frozen project
+		// directory can account for the marker. A surviving marker means the
+		// default fell back to `process.cwd()`, which is the deleted-cwd crash path.
+		expect(JSON.parse(stdout)).toEqual({ UNCHANGED: "parent-value" });
+	});
+
+	it.skipIf(process.platform === "win32")(
+		"keeps filtering after the process working directory is deleted",
+		async () => {
+			const cwd = path.dirname(writeTempEnv(""));
+			const envModulePath = path.join(import.meta.dir, "..", "src", "env.ts");
+			const dirsModulePath = path.join(import.meta.dir, "..", "src", "dirs.ts");
+			const script = [
+				'import * as fs from "node:fs";',
+				`import { filterChildShellEnv } from ${JSON.stringify(envModulePath)};`,
+				`import { getProjectDir } from ${JSON.stringify(dirsModulePath)};`,
+				"getProjectDir();",
+				"fs.rmSync(process.cwd(), { recursive: true });",
+				'const child = filterChildShellEnv({ UNCHANGED: "parent-value" });',
+				"process.stdout.write(JSON.stringify(child));",
+			].join("\n");
+			const proc = Bun.spawn([process.execPath, "--no-install", "--eval", script], {
+				cwd,
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			const [stdout, stderr, exitCode] = await Promise.all([
+				new Response(proc.stdout).text(),
+				new Response(proc.stderr).text(),
+				proc.exited,
+			]);
+
+			expect(exitCode, stderr).toBe(0);
+			expect(JSON.parse(stdout)).toEqual({ UNCHANGED: "parent-value" });
+		},
+	);
 });
 
 describe("isBunTestRuntime", () => {

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getAgentDir, getConfigRootDir, refreshDirsFromEnv } from "./dirs";
+import { getAgentDir, getConfigRootDir, getProjectDir, refreshDirsFromEnv } from "./dirs";
 
 export * from "./worker-host";
 
@@ -98,7 +98,7 @@ function expandDotenvValues(values: Record<string, string>, env: Record<string, 
 /** Filters process env for child shells without launch-cwd dotenv values. */
 export function filterChildShellEnv(
 	env: Record<string, string | undefined>,
-	cwd: string = process.cwd(),
+	cwd: string = getProjectDir(),
 ): Record<string, string> {
 	const result = filterProcessEnv(env);
 	const projectEnv = parseEnvFile(path.join(cwd, ".env"));
