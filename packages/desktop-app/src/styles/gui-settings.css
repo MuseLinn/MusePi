@@ -1162,8 +1162,16 @@
 /* Narrow windows: sidebar collapses to an icon rail (tooltips carry the
  * labels — ZCode's compact settings sidebar); the nav header keeps only
  * the back arrow (narrow overrides for the new header classes live in the
- * EOF media query, after their base definitions). */
+ * EOF media query, after their base definitions).
+ *
+ * The slot and the nav column are collapsed together on purpose. app.tsx sizes the
+ * slot inline from the main sidebar's live width (a user-dragged value), so the
+ * column alone collapsing left the frame at full sidebar width — icons floating in
+ * an empty band. `!important` is what beats that inline style; the two widths are
+ * declared in one media query because keeping them apart is how they drifted.
+ */
 @media (max-width: 900px) {
+	.gui-settings-nav-slot,
 	.gui-settings-nav-col {
 		width: 64px !important;
 	}

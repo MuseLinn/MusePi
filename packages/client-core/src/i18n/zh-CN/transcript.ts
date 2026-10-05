@@ -121,8 +121,6 @@ export const transcript = {
 	"btw failed — check the daemon connection": "/btw 失败，请检查 daemon 连接",
 	"follow up…": "追问…",
 	"Enter to ask — Esc closes": "Enter 提问 — Esc 关闭",
-	"turn running": "进行中",
-	"turn done": "已完成",
 	"back to bottom": "回到底部",
 } as const;
 

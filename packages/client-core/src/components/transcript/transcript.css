@@ -3443,42 +3443,15 @@ a.tr-tool-search-title:hover {
 /* ── M1 turn header (design doc §A — docs/review/0.5.0-m1-transcript-design.md) ──
  * Light boundary above each turn start: hairline · dot · 序号/模型/时间 · 状态+耗时 ·
  * hairline. Reads as a timeline separator, not a section title. */
-.tr-turn-head {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 14px 2px 8px;
-	color: var(--fg-faint);
-	font-size: var(--ui-font-size-xs);
-	font-family: var(--font-mono);
-	white-space: nowrap;
-}
-.tr-turn-head-line {
-	flex: 1;
-	height: 1px;
-	min-width: 16px;
-	background: linear-gradient(90deg, transparent, var(--border) 22%, var(--border) 78%, transparent);
-}
-.tr-turn-head-dot {
-	width: 6px;
-	height: 6px;
-	border-radius: 50%;
-	background: var(--fg-faint);
-	opacity: 0.6;
-	flex: none;
-}
-.tr-turn-head-dot--run {
-	background: var(--accent);
-	opacity: 1;
-}
-.tr-turn-head-status--run {
-	color: var(--accent);
-}
-.tr-turn-head-status--done {
-	color: var(--ok);
-}
-.tr-turn-head-sep {
-	opacity: 0.45;
+/* Turn separation. This used to be a decorative header row carrying the turn's
+ * model, clock, status and frozen duration, which duplicated what the work-timer
+ * line under each reply already says — and read worse, because that line takes the
+ * model from the message itself while the header's came from a `model_change`
+ * projection that went stale as soon as the model was switched. The gap the header
+ * provided now belongs to the row that starts the turn, on the same attribute the
+ * turn rail anchors to, so the space and the semantics cannot drift apart. */
+[data-turn-start] {
+	padding-top: 14px;
 }
 
 /* Back-to-bottom (M1.10 batch A, L2 float spec): ghost round button,

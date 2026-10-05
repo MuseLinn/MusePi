@@ -392,11 +392,7 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 	const activeTools = useGuestSelector(client, s => s.activeTools);
 	const working = useGuestSelector(client, s => s.working);
 	const roundDurations = useGuestSelector(client, s => s.roundDurations);
-	// M1 turn header model fallback: live sessions carry a WireModel; history
-	// sessions carry the persisted "provider/modelId" string on the header.
-	const sessionModel = useGuestSelector(client, s =>
-		s.state?.model ? `${s.state.model.provider}/${s.state.model.id}` : (s.header?.model ?? null),
-	);
+
 	const focusedSessionId = useGuestSelector(client, s => s.focusedSessionId);
 	// Read-aloud wiring (design 「语音输出四帧」): the Transcript's onSpeak slot
 	// was always there — this is the shell side that was never connected. The
@@ -503,7 +499,6 @@ function TranscriptPane({ client, host }: { client: SessionClient; host: ToolRen
 			activeTools={activeTools}
 			working={working}
 			roundDurations={roundDurations}
-			model={sessionModel ?? undefined}
 			host={host}
 			emptySlot={emptySlot}
 			onRevert={id => branchAt(id)}

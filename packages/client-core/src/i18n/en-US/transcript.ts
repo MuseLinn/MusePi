@@ -124,7 +124,5 @@ export const transcript = {
 	"btw failed — check the daemon connection": "Btw failed — check the daemon connection",
 	"follow up…": "Follow up…",
 	"Enter to ask — Esc closes": "Enter to ask, Esc to close",
-	"turn running": "Running",
-	"turn done": "Done",
 	"back to bottom": "Back to bottom",
 } as const satisfies Record<TranscriptKey, string>;
