@@ -251,7 +251,7 @@ export const settings = {
 
 	"scrollbar style hint": "橡皮糖果冻胶囊或吃豆人豆豆轨道——支持导入皮肤包",
 	"always show scrollbars": "始终显示滚动条",
-	"always show scrollbars desc": "滚动条不再自动淡出，鼠标移入可滚动区域即出现",
+	"always show scrollbars desc": "滚动条一旦出现便保持常亮，不再自动淡出隐藏",
 	gummy: "橡皮糖",
 	"import scrollbar skin": "导入滚动条皮肤…",
 	"invalid scrollbar skin": "无效的皮肤包",

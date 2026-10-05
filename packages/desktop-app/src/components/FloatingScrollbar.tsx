@@ -64,20 +64,41 @@ interface Rail {
 	target: HTMLElement | null;
 	vLen: number;
 	hLen: number;
+	/** Rail lengths the thumbs travel in, and where the rails start. The drag
+	 *  handler inverts exactly the same numbers position uses, so the thumb
+	 *  cannot separate from the pointer mid-drag. */
+	vTrack: number;
+	hTrack: number;
+	/** Scrollable extent per axis, so the pacman base can derive one progress
+	 *  scalar for both its glyph and its eaten bead run. */
+	vRange: number;
+	hRange: number;
 	vScale: number;
 	hScale: number;
 	vOverflow: boolean;
 	hOverflow: boolean;
 	/** A scroll landed since the last position pass — the hot path's only trigger. */
 	dirty: boolean;
+	/** The gummy release spring is armed on the thumb and will animate the next
+	 *  transform write. `position` disarms it before moving the thumb; only
+	 *  `armSettle` arms it, so the spring plays when scrolling stops. */
+	releaseArmed: boolean;
 	/** The container's box may have changed; the next pass re-measures. */
 	needsMeasure: boolean;
+	/** Fingerprint of the geometry the last measure derived from. An unchanged
+	 *  fingerprint makes the next measure a no-op, which is what keeps
+	 *  `vScale` from drifting while a virtualizer nudges its spacer. */
+	measureKey: string;
 	/** Monotonic idle deadline — a scroll burst only rewrites the timestamp. */
 	hideAt: number;
 	hideTimer: number;
 	settleTimer: number;
 	/** Live drag, or null. Also gates the idle timer. */
-	drag: { axis: Axis; pointerId: number; pointerStart: number; scrollStart: number } | null;
+	/** Live drag, or null. Also gates the idle timer. The grab POINT is the
+	 *  origin: a move reads the rail's current scale and inverts `position`
+	 *  exactly, so the thumb tracks the pointer 1:1 even when the content
+	 *  height shifts mid-drag. */
+	drag: { axis: Axis; pointerId: number; pointerStart: number; grabOffset: number } | null;
 	/** Monotonic deadline for releasing an idle slot back to the pool. */
 	releaseAt: number;
 	/** Last time this rail moved — pool eviction order. */
@@ -98,6 +119,12 @@ interface RailEngine {
 	indicate(target: HTMLElement, rail: Rail): void;
 	retire(target: HTMLElement, rail: Rail): void;
 	armIdle(rail: Rail): void;
+	/** Re-resolve the rail's elements from its slot. React replaces the slot's
+	 *  subtree when the skin changes base (gummy renders one div, pacman a
+	 *  fragment of four), so a rail holding the elements it captured at mount
+	 *  writes every transform to a detached node and the visible thumb stays at
+	 *  its CSS default — pinned to the top of the rail. */
+	rebind(rail: Rail): void;
 }
 
 /**
@@ -145,9 +172,28 @@ function isGone(el: HTMLElement): boolean {
 	return r.width === 0 || r.height === 0;
 }
 
-/** A container still overflows on at least one axis. */
+const SCROLL_AXIS = new Set(["auto", "scroll", "overlay"]);
+
+/**
+ * Is this axis a scroll container? A box can be SHORTER than its content and
+ * still not scroll: `overflow: hidden` clips. `scrollHeight` / `scrollWidth`
+ * keep reporting the clipped overflow, so a geometry-only test invents a rail
+ * on every strip that pads its row — the panel tab strip (30px box, 26px
+ * chips, 6px bottom padding, `overflow-y: hidden`) grew a vertical thumb that
+ * could never move and sat on top of the tab's close button. The range is
+ * only meaningful where the user can actually scroll it.
+ */
+function isScrollAxis(el: HTMLElement, axis: "y" | "x"): boolean {
+	const cs = getComputedStyle(el);
+	return SCROLL_AXIS.has(axis === "y" ? cs.overflowY : cs.overflowX);
+}
+
+/** A container still overflows on at least one axis it can scroll. */
 function overflows(el: HTMLElement): boolean {
-	return el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+	return (
+		(el.scrollHeight > el.clientHeight + 1 && isScrollAxis(el, "y")) ||
+		(el.scrollWidth > el.clientWidth + 1 && isScrollAxis(el, "x"))
+	);
 }
 
 /** Thumb length, floored at the grabbable minimum and capped to the track. */
@@ -193,8 +239,9 @@ function clampThumb(length: number, track: number): number {
  * Programmatic motion (virtualizer spacer writes, auto-follow, morph height,
  * focus restore) does NOT raise a rail: a scroll only counts when a real
  * gesture (wheel / touch / scroll key) landed on the container recently, or the
- * rail is already up, or it is being dragged or hovered. In always-visible mode
- * the gesture gate is bypassed.
+ * rail is already up, or it is being dragged or hovered. Always-visible mode does
+ * NOT bypass that gate: it only changes how long an already-raised rail stays
+ * lit, so the switch can never bolt a rail onto a hidden or nested container.
  *
  * ## Single exit
  *
@@ -254,12 +301,18 @@ export function FloatingScrollbar(): ReactNode {
 				target: null,
 				vLen: 0,
 				hLen: 0,
+				vTrack: 0,
+				hTrack: 0,
+				vRange: 0,
+				hRange: 0,
 				vScale: 0,
 				hScale: 0,
 				vOverflow: false,
 				hOverflow: false,
 				dirty: false,
+				releaseArmed: false,
 				needsMeasure: true,
+				measureKey: "",
 				hideAt: 0,
 				hideTimer: 0,
 				settleTimer: 0,
@@ -283,10 +336,20 @@ export function FloatingScrollbar(): ReactNode {
 		 */
 		const retire = (target: HTMLElement, rail: Rail): void => {
 			if (rails.get(target) !== rail) return;
+			// A rail under the pointer survives: the user is actively scrolling
+			// this container, so a momentary "content stopped overflowing" (a
+			// virtualizer collapsing its spacer at the end of a drag) must not
+			// tear the rail down. Tearing it down cleared `drag`, and every
+			// later pointermove was ignored — an upward drag did nothing.
+			if (rail.drag) return;
 			rails.delete(target);
 			rail.target = null;
 			rail.vLen = 0;
 			rail.hLen = 0;
+			rail.vTrack = 0;
+			rail.hTrack = 0;
+			rail.vRange = 0;
+			rail.hRange = 0;
 			rail.vScale = 0;
 			rail.hScale = 0;
 			rail.vOverflow = false;
@@ -294,6 +357,7 @@ export function FloatingScrollbar(): ReactNode {
 			rail.drag = null;
 			rail.overThumb = false;
 			rail.overContainer = false;
+			rail.measureKey = "";
 			window.clearTimeout(rail.hideTimer);
 			window.clearTimeout(rail.settleTimer);
 			rail.hideTimer = 0;
@@ -333,22 +397,38 @@ export function FloatingScrollbar(): ReactNode {
 			if (r.width === 0 || r.height === 0) return false;
 			const vRange = el.scrollHeight - el.clientHeight;
 			const hRange = el.scrollWidth - el.clientWidth;
-			if (vRange <= 0 && hRange <= 0) return false;
+			// Clipped overflow is not scrollable overflow: only a real scroll
+			// container's range may raise a thumb (see `isScrollAxis`).
+			const vScroll = vRange > 0 && isScrollAxis(el, "y");
+			const hScroll = hRange > 0 && isScrollAxis(el, "x");
+			if (!vScroll && !hScroll) return false;
 
 			const size = sizeRef.current;
 			const vTrack = Math.max(r.height - V_EDGE_INSET * 2, 1);
 			const hTrack = Math.max(r.width - H_EDGE_INSET * 2, 1);
 			// Gummy's thumb is sized by the visible ratio; pac-man's is the
-			// glyph itself, travelling the full track.
-			const vLen =
-				skinRef.current.base === "gummy"
+			// glyph itself, travelling the full track. An axis that cannot
+			// scroll gets a ZERO-length thumb — the skin's default — rather
+			// than a ratio-scaled stub parked at the top of the track.
+			const vLen = !vScroll
+				? 0
+				: skinRef.current.base === "gummy"
 					? clampThumb(vTrack * (el.clientHeight / Math.max(el.scrollHeight, 1)), vTrack)
 					: Math.min(size, vTrack);
 			// A non-overflowing axis gets a zero-length thumb, not a full-length one:
 			// the visible ratio is 1 there, and a full-width bar would read as
 			// "there is more to scroll sideways".
-			const hLen = hRange > 0 ? clampThumb(hTrack * (el.clientWidth / Math.max(el.scrollWidth, 1)), hTrack) : 0;
+			const hLen = hScroll ? clampThumb(hTrack * (el.clientWidth / Math.max(el.scrollWidth, 1)), hTrack) : 0;
+
+			// Everything the rail paints is derived from these numbers. If none
+			// of them moved, the pass is a pure no-op: no writes, and crucially
+			// `vScale` keeps the value the rail was drawn with. Re-deriving it
+			// from a range that wobbled by a pixel or two is what made the thumb
+			// drift under a steady scroll.
+			const key = `${r.left},${r.top},${r.width},${r.height},${vRange},${hRange},${vLen},${hLen},${size},${skinRef.current.base}`;
+			if (rail.measureKey === key) return true;
 			const v = stackZ(el);
+			rail.measureKey = key;
 
 			rail.root.style.left = `${r.left}px`;
 			rail.root.style.top = `${r.top}px`;
@@ -359,10 +439,14 @@ export function FloatingScrollbar(): ReactNode {
 			rail.horizontal.style.width = `${Math.round(hLen)}px`;
 			rail.vLen = vLen;
 			rail.hLen = hLen;
-			rail.vScale = vRange > 0 ? (vTrack - vLen) / vRange : 0;
-			rail.hScale = hRange > 0 ? (hTrack - hLen) / hRange : 0;
-			rail.vOverflow = vRange > 0;
-			rail.hOverflow = hRange > 0;
+			rail.vTrack = vTrack;
+			rail.hTrack = hTrack;
+			rail.vRange = vRange;
+			rail.hRange = hRange;
+			rail.vScale = vScroll ? (vTrack - vLen) / vRange : 0;
+			rail.hScale = hScroll ? (hTrack - hLen) / hRange : 0;
+			rail.vOverflow = vScroll;
+			rail.hOverflow = hScroll;
 			return true;
 		};
 
@@ -370,33 +454,45 @@ export function FloatingScrollbar(): ReactNode {
 		 * Hot path. Reads `scrollTop` / `scrollLeft` and nothing else; writes
 		 * `transform` and nothing else — no layout reads, no layout writes. Both
 		 * offsets are read before either thumb is written.
+		 *
+		 * `releaseArmed` is the guard that keeps the thumb glued to the scroll
+		 * offset. The release spring is a 420ms BACK-out curve (it overshoots),
+		 * so leaving it armed while the position moves animates every frame's
+		 * transform: the thumb trails the offset, reads as non-linear tracking,
+		 * and while dragging it trails the pointer far enough that an upward
+		 * drag looks like it refuses to move. Only `armSettle` — which runs once
+		 * the scroll has actually stopped — arms it, and the first pass that
+		 * moves the thumb again disarms it.
 		 */
 		const position = (rail: Rail): void => {
 			const el = rail.target;
 			if (!el) return;
+			if (rail.releaseArmed) {
+				rail.releaseArmed = false;
+				rail.vertical.style.transition = "none";
+			}
 			if (rail.vOverflow) {
-				const offset = Math.round(el.scrollTop * rail.vScale);
+				// Sub-pixel, never rounded. A thumb travelling 68px over a 400px
+				// range moves 0.17px per scroll pixel; rounding turned that into a
+				// step every ~6px, which reads as dropped frames rather than
+				// motion. Composited transforms take fractional offsets.
+				const offset = el.scrollTop * rail.vScale;
 				if (skinRef.current.base === "gummy") {
-					// Squashed while scrolling; the release transition is armed
-					// by armSettle, which drops the scale.
+					// Squashed while the position is moving.
 					rail.vertical.style.transform = `translate3d(0, ${offset}px, 0) scaleY(1.06)`;
 				} else {
+					// One progress scalar drives both the glyph and the eaten
+					// run, so the eaten beads always end where the glyph starts.
+					// They used to come from two independent formulas and drifted
+					// apart on screen.
+					const progress = rail.vRange > 0 ? Math.min(1, Math.max(0, el.scrollTop / rail.vRange)) : 0;
 					rail.vertical.style.transform = `translate3d(0, ${offset}px, 0)`;
-					// The eaten bead run IS the progress readout; scaling it
-					// keeps the length off the layout path.
-					if (rail.eaten) rail.eaten.style.transform = `scaleY(${vProgress(rail)})`;
+					if (rail.eaten) rail.eaten.style.transform = `scaleY(${progress})`;
 				}
 			}
 			if (rail.hOverflow) {
-				rail.horizontal.style.transform = `translate3d(${Math.round(el.scrollLeft * rail.hScale)}px, 0, 0)`;
+				rail.horizontal.style.transform = `translate3d(${el.scrollLeft * rail.hScale}px, 0, 0)`;
 			}
-		};
-
-		const vProgress = (rail: Rail): number => {
-			const el = rail.target;
-			if (!el) return 0;
-			const range = el.scrollHeight - el.clientHeight;
-			return range > 0 ? Math.min(1, Math.max(0, el.scrollTop / range)) : 0;
 		};
 
 		/**
@@ -444,6 +540,12 @@ export function FloatingScrollbar(): ReactNode {
 					return;
 				}
 				if (skinRef.current.base !== "gummy") return;
+				// Never spring while the thumb is under the pointer: the release
+				// animation would lag the drag instead of following it.
+				if (rail.drag) return;
+				// Arm the spring and drop the stretch in one animated step. The
+				// flag tells `position` to disarm it before the next real move.
+				rail.releaseArmed = true;
 				rail.vertical.style.transition = GUMMY_RELEASE;
 				rail.vertical.style.transform = `translate3d(0, ${Math.round(el.scrollTop * rail.vScale)}px, 0)`;
 			}, 140);
@@ -459,7 +561,6 @@ export function FloatingScrollbar(): ReactNode {
 			delete rail.root.dataset.idle;
 			rail.releaseAt = 0;
 			rail.lastUsed = performance.now();
-			rail.vertical.style.transition = "none";
 			position(rail);
 			armSettle(rail);
 			armIdle(rail);
@@ -490,38 +591,63 @@ export function FloatingScrollbar(): ReactNode {
 		}
 
 		/**
+		 * Queue a re-measure for the next animation frame.
+		 *
+		 * Observers must never measure synchronously. A virtualized transcript
+		 * swaps rows and adjusts its spacer while you scroll, so both callbacks
+		 * fire many times per scroll frame; measuring inline re-derived
+		 * `vScale` every time, and since `vScale` divides the scroll range a
+		 * range that wobbles by a few pixels moved the thumb for an unchanged
+		 * `scrollTop` — the rail read as drifting and laggy, and a drag in
+		 * progress disagreed with the pointer. One frame collapses the burst,
+		 * and `measure` skips the write when the geometry is unchanged.
+		 */
+		const requestMeasure = (rail: Rail): void => {
+			rail.needsMeasure = true;
+			rail.dirty = true;
+			scheduleUpdate();
+		};
+
+		/**
 		 * Watch the container for box changes AND direct-child churn. A
 		 * transcript that gains a turn, or a virtualized list that swaps rows,
 		 * never resizes the scroller itself — watching only the scroller strands
 		 * the rail at stale geometry. Re-observing from scratch on every change
 		 * of target is what keeps a recycled slot from accumulating observers.
 		 */
+		/** Re-resolve the slot's LIVE elements into the rail. React replaces the
+		 *  subtree when the skin changes base, so captured references go stale. */
+		const rebind = (rail: Rail): void => {
+			const s = slots[rail.slot];
+			if (!s) return;
+			rail.root = s.root ?? rail.root;
+			rail.vertical = s.vertical ?? rail.vertical;
+			rail.horizontal = s.horizontal ?? rail.horizontal;
+			rail.eaten = s.eaten;
+		};
+
+		/** Watch the container's own box only. Watching children churned on every
+		 *  virtualized row swap, and the liveness probe already catches a container
+		 *  whose content stopped overflowing. */
+		const reobserveChildren = (rail: Rail): void => {
+			const el = rail.target;
+			if (!el || !rail.resizeObserver) return;
+			rail.resizeObserver.disconnect();
+			rail.resizeObserver.observe(el);
+		};
+
 		const observe = (rail: Rail): void => {
 			const el = rail.target;
 			if (!el) return;
 			if (!rail.resizeObserver) {
-				rail.resizeObserver = new ResizeObserver(() => refresh(rail));
+				rail.resizeObserver = new ResizeObserver(() => requestMeasure(rail));
 			}
-			rail.resizeObserver.disconnect();
-			rail.resizeObserver.observe(el);
-			for (const child of Array.from(el.children)) rail.resizeObserver.observe(child);
+			reobserveChildren(rail);
 			if (!rail.mutationObserver) {
-				rail.mutationObserver = new MutationObserver(() => refresh(rail));
+				rail.mutationObserver = new MutationObserver(() => requestMeasure(rail));
 			}
 			rail.mutationObserver.disconnect();
 			rail.mutationObserver.observe(el, { childList: true });
-		};
-
-		/** Re-measure and re-position without touching visibility. */
-		const refresh = (rail: Rail): void => {
-			const el = rail.target;
-			if (!el) return;
-			if (rail.root.dataset.visible !== "1") return;
-			if (!measure(rail)) {
-				retire(el, rail);
-				return;
-			}
-			position(rail);
 		};
 
 		/** Bind a container to a slot, recycling the coldest rail when full. */
@@ -540,6 +666,13 @@ export function FloatingScrollbar(): ReactNode {
 			}
 			const rail = mounted[slot];
 			if (!rail) return null;
+			// Resolve the slot's elements NOW, not from the mount-time snapshot.
+			// A skin switch can happen at any time, and `mounted` still holds the
+			// elements the slot had when the pool mounted — after a base change
+			// those are the wrong nodes, so a freshly bound rail wrote its
+			// transforms to the old skin's elements and the visible thumb never
+			// moved.
+			rebind(rail);
 			rail.target = target;
 			rail.intentAt = 0;
 			rail.lastUsed = performance.now();
@@ -614,12 +747,12 @@ export function FloatingScrollbar(): ReactNode {
 			}
 			const existing = rails.get(t);
 			if (!existing) {
-				// First sighting. Only a real gesture (or always-visible) may
-				// open a rail: programmatic motion on a never-scrolled container
-				// — a virtualizer's first spacer write, a focus restore, a morph
-				// height — must not flash one.
-				const gestured = performance.now() - lastIntentAt <= INTENT_WINDOW_MS;
-				if (!alwaysRef.current && !gestured) return;
+				// First sighting. Only a real gesture may open a rail, in every
+				// mode: programmatic motion on a never-scrolled container — a
+				// virtualizer's first spacer write, a focus restore, a morph
+				// height — must not flash one. Always-visible changes how long a
+				// rail STAYS, never which containers get one.
+				if (performance.now() - lastIntentAt > INTENT_WINDOW_MS) return;
 				const rail = bind(t);
 				if (!rail) return;
 				// The bind measures once: nothing about this box is known yet.
@@ -666,8 +799,10 @@ export function FloatingScrollbar(): ReactNode {
 			armIdle(rail);
 		};
 
+		// A resize changes every bound container's box at once: one flag per
+		// rail, one frame, one measure each — same path the observers use.
 		const onWindowResize = (): void => {
-			for (const rail of rails.values()) refresh(rail);
+			for (const rail of rails.values()) requestMeasure(rail);
 		};
 
 		// Liveness sweep: an idle ghost has no pending event to wake it, so a
@@ -696,13 +831,8 @@ export function FloatingScrollbar(): ReactNode {
 			const rail = mounted[slot];
 			const target = rail?.target;
 			if (!rail || !target) return;
+			rebind(rail);
 			const isVertical = axis === "v";
-			const range = isVertical ? target.scrollHeight - target.clientHeight : target.scrollWidth - target.clientWidth;
-			const track = isVertical
-				? Math.max((rail.root.offsetHeight || 0) - V_EDGE_INSET * 2, 1)
-				: Math.max((rail.root.offsetWidth || 0) - H_EDGE_INSET * 2, 1);
-			const travel = track - (isVertical ? rail.vLen : rail.hLen);
-			if (range <= 0 || travel <= 0) return;
 			e.preventDefault();
 			const thumb = isVertical ? rail.vertical : rail.horizontal;
 			thumb.setPointerCapture(e.pointerId);
@@ -710,7 +840,11 @@ export function FloatingScrollbar(): ReactNode {
 				axis,
 				pointerId: e.pointerId,
 				pointerStart: isVertical ? e.clientY : e.clientX,
-				scrollStart: isVertical ? target.scrollTop : target.scrollLeft,
+				// Where the thumb sat when it was grabbed. Without this the
+				// pointer delta is treated as an absolute offset, so a 1px drag
+				// up slams the container to the top and a 1px drag down slams it
+				// to the bottom — the thumb stops tracking the pointer entirely.
+				grabOffset: isVertical ? target.scrollTop * rail.vScale : target.scrollLeft * rail.hScale,
 			};
 			rail.root.dataset.visible = "1";
 			delete rail.root.dataset.idle;
@@ -718,10 +852,20 @@ export function FloatingScrollbar(): ReactNode {
 			rail.hideTimer = 0;
 			const onMove = (ev: PointerEvent): void => {
 				if (!rail.drag || rail.drag.pointerId !== ev.pointerId) return;
+				// Invert what `position` does: offset = scroll * scale, so
+				// scroll = offset / scale. Reading the scale on every move —
+				// rather than freezing range and travel at pointerdown — is what
+				// keeps the thumb under the pointer when a virtualizer shifts the
+				// content height mid-drag. Freezing the two made them disagree,
+				// and an upward drag then read as stuck.
+				const scale = isVertical ? rail.vScale : rail.hScale;
+				const travel = isVertical ? rail.vTrack - rail.vLen : rail.hTrack - rail.hLen;
+				if (scale <= 0 || travel <= 0) return;
 				const pointer = isVertical ? ev.clientY : ev.clientX;
-				const ratio = Math.min(1, Math.max(0, (pointer - rail.drag.pointerStart) / travel));
-				if (isVertical) target.scrollTop = Math.round(rail.drag.scrollStart + ratio * range);
-				else target.scrollLeft = Math.round(rail.drag.scrollStart + ratio * range);
+				const offset = Math.min(travel, Math.max(0, rail.drag.grabOffset + (pointer - rail.drag.pointerStart)));
+				const scroll = offset / scale;
+				if (isVertical) target.scrollTop = scroll;
+				else target.scrollLeft = scroll;
 			};
 			const onUp = (ev: PointerEvent): void => {
 				thumb.removeEventListener("pointermove", onMove);
@@ -736,7 +880,7 @@ export function FloatingScrollbar(): ReactNode {
 			thumb.addEventListener("pointercancel", onUp);
 		};
 
-		engineRef.current = { measure, position, indicate, retire, armIdle };
+		engineRef.current = { measure, position, indicate, retire, armIdle, rebind };
 
 		window.addEventListener("scroll", onScroll, { capture: true, passive: true });
 		window.addEventListener("wheel", markIntent, { capture: true, passive: true });
@@ -765,8 +909,15 @@ export function FloatingScrollbar(): ReactNode {
 		};
 	}, []);
 
-	// Always-visible mode: the idle gate is bypassed and every bound rail shows
-	// immediately. Turning it off re-arms the normal idle deadline.
+	// Always-visible mode means "a rail that is up stays up", nothing more.
+	// Turning it on bypasses the idle gate for every rail that a real scroll
+	// gesture has already bound; turning it off re-arms the idle deadline.
+	// The hover flags are cleared on the way down because `armIdle` skips a
+	// rail it believes is still hovered, and a flag left true by a
+	// `pointerenter` whose `pointerleave` never arrived (pointer left the
+	// window, or the container was swapped under it) would pin that rail
+	// visible until the next remount. An explicit switch is stronger evidence
+	// of intent than a stale hover.
 	useEffect(() => {
 		alwaysRef.current = alwaysShow;
 		const rails = railsRef.current;
@@ -777,6 +928,8 @@ export function FloatingScrollbar(): ReactNode {
 				rail.intentAt = performance.now();
 				engineRef.current?.indicate(target, rail);
 			} else {
+				rail.overThumb = false;
+				rail.overContainer = false;
 				engineRef.current?.armIdle(rail);
 			}
 		}
@@ -788,6 +941,9 @@ export function FloatingScrollbar(): ReactNode {
 	useEffect(() => {
 		sizeRef.current = skin.size;
 		for (const rail of railsRef.current.values()) {
+			// The slot's DOM was just replaced by the new base's markup, so the
+			// rail's captured elements are detached.
+			engineRef.current?.rebind(rail);
 			rail.root.style.setProperty("--skin-accent", skin.colors.accent);
 			rail.root.style.setProperty("--skin-track", skin.colors.track);
 			rail.root.style.setProperty("--skin-eaten", skin.colors.eaten);
@@ -852,7 +1008,7 @@ function RailSlot({
 						ref={el => {
 							entry.vertical = el;
 						}}
-						className="gfs-gummy"
+						className="gfs-v"
 						onPointerDown={e => dragRef.current?.(slot, "v", e)}
 					>
 						<span className="gfs-gummy-shine" />
@@ -861,7 +1017,7 @@ function RailSlot({
 						ref={el => {
 							entry.horizontal = el;
 						}}
-						className="gfs-gummy gfs-h"
+						className="gfs-h"
 						onPointerDown={e => dragRef.current?.(slot, "h", e)}
 					/>
 				</>

@@ -416,26 +416,6 @@ export function AppearanceSection({
 							]}
 						/>
 						<div className="flex items-center gap-2 mt-2">
-							<div className="gui-settings-row">
-								<div className="flex-1">
-									<div className="gui-settings-row-label">{t("always show scrollbars")}</div>
-									<div className="gui-settings-row-desc">{t("always show scrollbars desc")}</div>
-								</div>
-								<button
-									type="button"
-									role="switch"
-									aria-checked={alwaysShowScrollbars}
-									className={`gui-toggle${alwaysShowScrollbars ? " gui-toggle--on" : ""}`}
-									aria-label={t("always show scrollbars")}
-									onClick={() => {
-										const next = !alwaysShowScrollbars;
-										setAlwaysShowScrollbars(next);
-										saveAlwaysShowScrollbar(next);
-									}}
-								>
-									<span className="gui-toggle-knob" />
-								</button>
-							</div>
 							<button
 								type="button"
 								className="gui-btn gui-btn--small"
@@ -477,6 +457,26 @@ export function AppearanceSection({
 							)}
 						</div>
 					</div>
+				</div>
+				<div className="gui-settings-row">
+					<div className="flex-1">
+						<div className="gui-settings-row-label">{t("always show scrollbars")}</div>
+						<div className="gui-settings-row-desc">{t("always show scrollbars desc")}</div>
+					</div>
+					<button
+						type="button"
+						role="switch"
+						aria-checked={alwaysShowScrollbars}
+						className={`gui-toggle${alwaysShowScrollbars ? " gui-toggle--on" : ""}`}
+						aria-label={t("always show scrollbars")}
+						onClick={() => {
+							const next = !alwaysShowScrollbars;
+							setAlwaysShowScrollbars(next);
+							saveAlwaysShowScrollbar(next);
+						}}
+					>
+						<span className="gui-toggle-knob" />
+					</button>
 				</div>
 				<div className="gui-settings-field">
 					<div className="gui-settings-field-label">{t("accent")}</div>

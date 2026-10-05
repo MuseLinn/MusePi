@@ -77,13 +77,20 @@ const rail = (): HTMLElement => {
 	return el;
 };
 
-const verticalThumb = (el: HTMLElement): HTMLElement => el.querySelector<HTMLElement>(".gfs-gummy, .gfs-pac")!;
+const verticalThumb = (el: HTMLElement): HTMLElement => el.querySelector<HTMLElement>(".gfs-v, .gfs-pac")!;
 const horizontalThumb = (el: HTMLElement): HTMLElement => el.querySelector<HTMLElement>(".gfs-h")!;
 
 /** Bind a scrollable element into the DOM with controllable geometry. */
-function mountScroller(opts: { className?: string; parent?: HTMLElement } = {}): HTMLDivElement {
+function mountScroller(
+	opts: { className?: string; parent?: HTMLElement; overflowY?: string; overflowX?: string } = {},
+): HTMLDivElement {
 	const el = document.createElement("div");
 	if (opts.className) el.className = opts.className;
+	// The overlay trusts a range only on an axis the user can actually scroll,
+	// so the fixture has to declare itself a scroll container — `auto` on both
+	// axes is what every real pane uses. A bare div computes to `visible`.
+	el.style.overflowY = opts.overflowY ?? "auto";
+	el.style.overflowX = opts.overflowX ?? "auto";
 	document.body.appendChild(el);
 	(opts.parent ?? host).appendChild(el);
 	Object.defineProperties(el, {
@@ -344,17 +351,215 @@ describe("FloatingScrollbar 热路径", () => {
 
 		expect(verticalLayoutReads).toBe(0);
 		expect(horizontalLayoutReads).toBe(0);
-		// The pass wrote transform and nothing else.
+		// The pass wrote transforms and nothing that touches layout. `transition`
+		// is the one other property a scroll pass may write: cancelling an armed
+		// release spring (see the spring regression case below).
 		expect(writes.length).toBeGreaterThan(0);
-		expect(new Set(writes)).toEqual(new Set(["transform"]));
+		for (const property of new Set(writes)) {
+			expect(["transform", "transition"]).toContain(property);
+		}
+		expect(writes).not.toContain("height");
+		expect(writes).not.toContain("top");
 		// The thumb moved along the track; the rail's own box did not. The gummy
 		// base also carries its squash-and-stretch scaleY in the same transform.
-		expect(v.style.transform).toMatch(/^translate3d\(0(px)?, \d+px, 0(px)?\)( scaleY\(1\.06\))?$/);
-		expect(Number.parseInt(v.style.transform.match(/,\s*(\d+)px/)![1], 10)).toBeGreaterThan(0);
+		expect(v.style.transform).toMatch(/^translate3d\(0(px)?, \d+(?:\.\d+)?px, 0(px)?\)( scaleY\(1\.06\))?$/);
+		expect(Number.parseFloat(v.style.transform.match(/,\s*(\d+(?:\.\d+)?)px/)![1])).toBeGreaterThan(0);
 		expect(shown.style.left).toBe(rootLeft);
 		expect(shown.style.top).toBe(rootTop);
 		expect(shown.style.height).toBe(rootHeight);
 		expect(v.style.height).toBe(thumbHeight);
+	});
+
+	test("拇指位移与滚动距离成正比，且不套着回弹动画（用户：非线性 + 卡顿 + 往上拖不动）", async () => {
+		const el = mountScroller();
+		userScroll(el);
+		await flushFrames();
+		const shown = rail();
+		const v = verticalThumb(shown);
+
+		// 让 140ms 的 settle 真的跑完，装上回弹 spring。
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 200));
+		});
+		await flushFrames();
+		expect(v.style.transition).not.toBe("");
+
+		// 之后的每一次滚动都必须在写新 transform 之前先拆掉 spring ——
+		// 420ms 的 back-out 曲线会把每一帧动画化，拇指就追不上滚动距离。
+		for (const offset of [100, 200, 300]) {
+			scrollTop = offset;
+			el.dispatchEvent(new window.Event("scroll"));
+			await flushFrames();
+			expect(v.style.transition).toBe("none");
+		}
+
+		// 位移严格线性：等距滚动增量 → 等距位移增量。
+		const sample = async (target: number): Promise<number> => {
+			scrollTop = target;
+			el.dispatchEvent(new window.Event("scroll"));
+			await flushFrames();
+			const match = /^translate3d\(0(px)?, (\d+(?:\.\d+)?)px/.exec(v.style.transform);
+			return match ? Number.parseInt(match[2], 10) : Number.NaN;
+		};
+		const at0 = await sample(0);
+		const at100 = await sample(100);
+		const at200 = await sample(200);
+		const at300 = await sample(300);
+		expect(at200 - at100).toBe(at100 - at0);
+		expect(at300 - at200).toBe(at200 - at100);
+		expect(at0).toBe(0);
+	});
+
+	test("拖拽双向可用：往下拖到底再往上拖回顶", async () => {
+		const el = mountScroller();
+		userScroll(el);
+		await flushFrames();
+		const shown = rail();
+		const v = verticalThumb(shown);
+		// happy-dom has no layout engine, so the rail's rendered box is 0 and
+		// the drag travel would compute as negative. Give it the box the
+		// container reports.
+		Object.defineProperty(shown, "offsetHeight", { configurable: true, get: () => rect.height });
+		v.setPointerCapture = (): void => {};
+		v.releasePointerCapture = (): void => {};
+		v.hasPointerCapture = (): boolean => true;
+
+		scrollTop = 200;
+		v.dispatchEvent(new window.PointerEvent("pointerdown", { bubbles: true, clientY: 0, pointerId: 1 }));
+		// 拇指 1:1 跟手：往上挪 10px，滚动距离按同比例回退，而不是被钳到顶。
+		// vTrack = 100-8 = 92, vLen = 24 → travel = 68; vRange = 400
+		// → scale = 0.17。10px 位移 = 10/0.17 ≈ 58.8px 滚动距离。
+		v.dispatchEvent(new window.PointerEvent("pointermove", { bubbles: true, clientY: -10, pointerId: 1 }));
+		expect(Math.round(scrollTop)).toBe(Math.round(200 - 10 / 0.17));
+
+		// 拖过整条轨道仍能到两端。
+		v.dispatchEvent(new window.PointerEvent("pointermove", { bubbles: true, clientY: 10_000, pointerId: 1 }));
+		expect(Math.round(scrollTop)).toBe(400);
+		v.dispatchEvent(new window.PointerEvent("pointermove", { bubbles: true, clientY: -10_000, pointerId: 1 }));
+		expect(Math.round(scrollTop)).toBe(0);
+	});
+
+	test("切换皮肤后轨仍作用于可见节点（用户：换样式后卡在最顶上）", async () => {
+		const el = mountScroller();
+		userScroll(el);
+		await flushFrames();
+		const before = rail();
+		const vBefore = verticalThumb(before);
+
+		localStorage.setItem("musepi-gui-scrollbar-style", "builtin-pacman");
+		window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
+		await act(async () => {
+			await Promise.resolve();
+		});
+		await flushFrames();
+
+		// The skin change swaps the slot's whole subtree, so the rail must
+		// re-resolve its elements. Writing transforms to the detached ones
+		// left the visible thumb at its CSS default — pinned to the top.
+		const after = rail();
+		expect(after.dataset.base).toBe("pacman");
+		const pac = after.querySelector<HTMLElement>(".gfs-pac");
+		expect(pac).not.toBeNull();
+		expect(before.contains(pac!)).toBe(true);
+
+		// And it still tracks the container. React reconciles the two bases'
+		// markup by index, so the old node is REUSED with a new class rather
+		// than detached — which is why the rail kept writing the pac-man's
+		// transform onto the thread element while the glyph sat at `top: 0`.
+		scrollTop = 300;
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+		const shown = rail();
+		const pacAfter = shown.querySelector<HTMLElement>(".gfs-pac")!;
+		expect(pacAfter.style.transform).toMatch(/,\s*\d+px/);
+		expect(vBefore).not.toBe(pacAfter);
+	});
+
+	test("吃豆人：豆子条常驻满轨，pac 随进度移动，已吃段与 pac 同步（用户：pac 卡在顶部）", async () => {
+		localStorage.setItem("musepi-gui-scrollbar-style", "builtin-pacman");
+		window.dispatchEvent(new Event("omp-scrollbar-style-changed"));
+		await act(async () => {
+			await Promise.resolve();
+		});
+		await flushFrames();
+
+		const el = mountScroller();
+		rect = { top: 0, left: 0, width: 100, height: 400, right: 100 };
+		userScroll(el);
+		await flushFrames();
+
+		const shown = rail();
+		expect(shown.dataset.base).toBe("pacman");
+		// The bead rail is the persistent track: it is a full-height element and
+		// never carries a progress transform.
+		const beads = shown.querySelector<HTMLElement>(".gfs-beads")!;
+		const eaten = shown.querySelector<HTMLElement>(".gfs-beads-eaten")!;
+		const pac = shown.querySelector<HTMLElement>(".gfs-pac")!;
+		expect(beads.style.transform).toBe("");
+
+		// The glyph travels, and where it stops the eaten run ends with it.
+		// Both come from one progress scalar, so they cannot drift apart.
+		const readProgress = (el2: HTMLElement): number => {
+			const m = /scaleY\(([\d.]+)\)/.exec(el2.style.transform);
+			return m ? Number.parseFloat(m[1]) : Number.NaN;
+		};
+		const pacOffset = (el2: HTMLElement): number => {
+			const m = /translate3d\(0(?:px)?, (-?[\d.]+)px/.exec(el2.style.transform);
+			return m ? Number.parseFloat(m[1]) : Number.NaN;
+		};
+
+		scrollTop = 200; // half of the 400px range
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+
+		expect(pac.style.transform).not.toBe("");
+		expect(pacOffset(pac)).toBeGreaterThan(0);
+		expect(readProgress(eaten)).toBeCloseTo(0.5, 5);
+		// Glyph travel = progress × (track − glyph), so at half the glyph sits at
+		// half of ITS travel — not pinned at the top, not past the end.
+		const track = 400 - 2 * 4;
+		expect(pacOffset(pac)).toBeCloseTo(0.5 * (track - 12), 0);
+
+		// At the bottom the glyph's own edge reaches the end of the rail.
+		scrollTop = 400;
+		el.dispatchEvent(new window.Event("scroll"));
+		await flushFrames();
+		expect(readProgress(eaten)).toBeCloseTo(1, 5);
+		expect(pacOffset(pac)).toBeCloseTo(track - 12, 0);
+	});
+
+	test("一帧内再多的内容变动也只测一次（用户：滚轮滚动时卡顿、尺度抖动）", async () => {
+		const el = mountScroller();
+		el.appendChild(document.createElement("div"));
+		userScroll(el);
+		await flushFrames();
+		const observer = TestResizeObserver.instances.find(o => o.observed().length > 0);
+		expect(observer).toBeDefined();
+
+		// A virtualizer swapping rows reports a size change per row, and a row
+		// swap also shifts the scroll range. Each report used to measure
+		// synchronously — a rect read plus an ancestor z walk — so the rail
+		// re-derived its scroll-range scale dozens of times per scroll frame and
+		// the thumb drifted against a steady scroll. Fifty reports in one frame
+		// must collapse to a single measure.
+		verticalLayoutReads = 0;
+		for (let i = 0; i < 50; i += 1) {
+			scrollHeight = 500 + (i % 5);
+			observer!.trigger();
+		}
+		// Flush synchronously: awaiting would yield to the event loop, and the
+		// overlay's 600ms liveness probe could land inside the window and add a
+		// read that has nothing to do with coalescing.
+		for (const callback of Array.from(pendingFrames.values())) callback(0);
+		pendingFrames.clear();
+
+		expect(verticalLayoutReads).toBe(1);
+
+		// The next frame measures again — coalescing must not go deaf.
+		observer!.trigger();
+		for (const callback of Array.from(pendingFrames.values())) callback(0);
+		pendingFrames.clear();
+		expect(verticalLayoutReads).toBe(2);
 	});
 
 	test("同一帧内两个容器滚动，各自的 rAF 合并后两条轨都指向最新容器", async () => {
@@ -422,6 +627,31 @@ describe("FloatingScrollbar 水平轴", () => {
 		expect(horizontalThumb(rail()).style.left).toBe("");
 	});
 
+	test("被裁剪的溢出不算溢出：只横向可滚的 tab 条不长出纵向拇指", async () => {
+		// 复刻右栏 tab 条：横向滚动，纵向 `overflow-y: hidden` 把 6px 下内边距
+		// 之外的 chip 裁掉。scrollHeight 仍然报告这段被裁掉的溢出，只看尺寸差
+		// 就会凭空画一条永远拖不动的纵向轨，压在标签的关闭按钮上。
+		scrollWidth = 400;
+		scrollHeight = 132;
+		clientHeight = 124;
+		clientWidth = 100;
+		const el = mountScroller({ overflowY: "hidden", overflowX: "auto" });
+		userScroll(el);
+		await flushFrames();
+
+		const r = rail();
+		expect(parseFloat(verticalThumb(r).style.height)).toBe(0);
+		expect(parseFloat(horizontalThumb(r).style.width)).toBeGreaterThan(0);
+	});
+
+	test("两轴都被裁剪的容器不生成轨", async () => {
+		const el = mountScroller({ overflowY: "hidden", overflowX: "hidden" });
+		userScroll(el);
+		await flushFrames();
+
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+	});
+
 	test("没有横向溢出时不显示横向拇指", async () => {
 		scrollWidth = clientWidth;
 		const el = mountScroller();
@@ -453,19 +683,45 @@ describe("FloatingScrollbar 交互可见性", () => {
 		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).not.toBeNull();
 	});
 
-	test("always-show 打开后程序化滚动也点亮轨，且偏好持久化", async () => {
-		saveAlwaysShowScrollbar(true);
-		expect(readAlwaysShowScrollbar()).toBe(true);
+	test("始终显示只决定已点亮轨是否淡出，不决定哪些容器有轨；且关掉后必定恢复淡出", async () => {
+		// 派发必须包在 act 里：saveAlwaysShowScrollbar 触发的是 React 状态更新，
+		// 在 act 作用域外派发会等到 act 退出时才 flush，那 1000ms 的 idle 定时器
+		// 会在断言之后才武装。
 		await act(async () => {
-			root.render(createElement(FloatingScrollbar));
+			saveAlwaysShowScrollbar(true);
 		});
+		expect(readAlwaysShowScrollbar()).toBe(true);
 		await flushFrames();
 
+		// 常显不是「发现模式」。一个从未被手势滚动过的容器即使发生程序性
+		// 滚动也不生成轨——否则这个开关会往隐藏的、嵌套的容器上凭空挂轨，
+		// 把 6 个槽位占满后每条轨都不再淡出。
+		const untouched = mountScroller();
+		programmaticScroll(untouched);
+		await flushFrames();
+		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).toBeNull();
+
+		// 真实手势才开轨，且常显期间保持常亮（越过 HIDE_MS 也不进 idle）。
 		const el = mountScroller();
-		programmaticScroll(el);
+		userScroll(el);
 		await flushFrames();
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 1200));
+		});
+		expect(rail().dataset.visible).toBe("1");
+		expect(rail().dataset.idle).toBeUndefined();
 
-		expect(host.querySelector(".gui-float-scrollbar[data-visible]")).not.toBeNull();
+		// 关掉开关必须真的重新淡出，即使残留一个没有配对 leave 的 pointerenter
+		// 让 overContainer 卡在 true。修复前 armIdle 会在这里直接 return，
+		// 轨一直亮到重启才消失。
+		await act(async () => {
+			el.dispatchEvent(new window.PointerEvent("pointerenter", { bubbles: false }));
+			saveAlwaysShowScrollbar(false);
+		});
+		await act(async () => {
+			await new Promise(resolve => setTimeout(resolve, 1200));
+		});
+		expect(rail().dataset.idle).toBe("1");
 	});
 
 	test("滚动停止后进入 idle 淡出态，轨仍然存在（拖拽把手不被销毁）", async () => {

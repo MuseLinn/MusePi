@@ -159,8 +159,9 @@ export function readScrollbarStyle(): string {
 	return localStorage.getItem(SCROLLBAR_STYLE_KEY) ?? DEFAULT_SCROLLBAR_SKIN_ID;
 }
 
-/** Always-visible mode: every scrollable container keeps a rail on screen
- *  without waiting for a scroll. Off by default. */
+/** Always-visible mode: a rail that a scroll gesture has already raised stays
+ *  lit instead of fading to an idle ghost. It never decides WHICH containers get
+ *  a rail. Off by default. */
 export function readAlwaysShowScrollbar(): boolean {
 	try {
 		return localStorage.getItem(SCROLLBAR_ALWAYS_KEY) === "1";
