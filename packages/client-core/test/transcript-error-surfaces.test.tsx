@@ -61,12 +61,23 @@ describe("transcript error surfaces", () => {
 	});
 
 	test("keeps the retry count the assistant row cannot know", () => {
-		// Withholding the reason must not cost the fact only the retry row has, or
-		// the row would render as an empty chip.
+		// Withholding the reason must not cost the fact only the retry row has. The
+		// reduced form is a plain dim line — reusing the bordered card would leave a
+		// box with one word in it, which is what the on-device screenshot showed.
 		const html = render(REASON);
 
-		expect(html).toContain("retry-failure");
+		expect(html).toContain("tr-retry-note");
+		// The bordered card is the unreduced form and must not appear here.
+		expect(html).not.toContain("tr-retry-failure");
 		expect(html).toContain("2");
+	});
+
+	test("an error-only turn leaves no empty bordered box behind", () => {
+		// Regression: suppressing the reason made ErrorNotice render null while its
+		// bordered wrapper still painted, so the row collapsed to an empty card.
+		const html = render(REASON);
+
+		expect(html).not.toMatch(/tr-retry-failure[^"]*"><\/\w+>/);
 	});
 
 	test("still shows a retry card that reports something the assistant row did not", () => {

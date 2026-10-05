@@ -251,6 +251,16 @@
 /* Mirrors the async-result card chrome; uses --error so the failure reads as a
  * hard stop rather than a neutral status. */
 
+/* Reduced form of .tr-retry-failure: shown when the reason already lives on the
+ * assistant row and this row contributes only the attempt count. No border and no
+ * padding — a bordered box with one dim word in it reads as an empty card. */
+.tr-retry-note {
+	color: var(--fg-faint);
+	font-size: var(--ui-font-size-xs);
+	line-height: 1.5;
+	padding: 2px 0;
+}
+
 .tr-retry-failure {
 	display: flex;
 	flex-wrap: wrap;
@@ -508,20 +518,36 @@
 	background: color-mix(in oklch, var(--warn) 10%, transparent);
 }
 
+/* A failed turn is a fact about the request, so it is presented the way the
+ * reference implementations present one: a quiet neutral surface with a single
+ * truncated line, not a red block of monospace. Red is kept for the chip alone so
+ * severity stays readable, and the body text uses the normal foreground colour —
+ * a paragraph of red reads as the whole message being wrong rather than one line
+ * of it. */
 .tr-stop {
 	display: flex;
-	align-items: baseline;
+	align-items: center;
 	flex-wrap: wrap;
 	gap: 8px;
+	max-width: 100%;
 	margin-top: 2px;
+	padding: 6px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface-raised);
 }
 
+/* One truncated line, never a wrapped paragraph. A provider body can be a long
+ * JSON envelope, and wrapping it fills the transcript and buries the detail
+ * affordance below the fold; the folded half keeps the rest reachable. */
 .tr-stop-msg {
-	color: var(--err);
-	font-family: var(--font-mono);
+	min-width: 0;
+	flex: 1 1 auto;
+	color: var(--color-text);
 	font-size: var(--ui-font-size-sm);
-	white-space: pre-wrap;
-	word-break: break-word;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .tr-stop-meta {
