@@ -27,7 +27,7 @@ export function isUsedOnlyAbsoluteAmount(limit: UsageLimit): boolean {
 }
 
 /** A prepaid balance with no total and no derivable fraction. */
-function isRemainingOnlyAbsoluteAmount(limit: UsageLimit): boolean {
+export function isRemainingOnlyAbsoluteAmount(limit: UsageLimit): boolean {
 	const amount = limit.amount;
 	return (
 		isAbsoluteUnit(limit) &&
@@ -80,4 +80,21 @@ function totalRemainingOnly(
 export function formatRemainingOnlyTotal(limits: readonly UsageLimit[]): string | undefined {
 	const total = totalRemainingOnly(limits);
 	return total === undefined ? undefined : formatQuantity(total.value, total.unit, "left");
+}
+
+/**
+ * Text for a bucket no quota bar can draw: spend-to-date or prepaid headroom.
+ * Used-only limits report the worst (highest) spend; remaining-only limits go
+ * through {@link formatRemainingOnlyTotal} so shared pools are not double-counted.
+ */
+export function formatAbsoluteOnlyAmount(limits: readonly UsageLimit[]): string | undefined {
+	const first = limits[0];
+	if (first === undefined) return undefined;
+	if (limits.every(isUsedOnlyAbsoluteAmount)) {
+		const unit = first.amount.unit;
+		if (!limits.every(limit => limit.amount.unit === unit)) return undefined;
+		const used = limits.reduce((max, limit) => Math.max(max, limit.amount.used ?? 0), 0);
+		return formatQuantity(used, unit, "used");
+	}
+	return formatRemainingOnlyTotal(limits);
 }

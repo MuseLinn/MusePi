@@ -572,24 +572,8 @@ export class CommandController {
 			return;
 		}
 
-		const availableWidth = Math.max(40, (this.ctx.ui.terminal.columns ?? 100) - 2);
-		const currentProvider = this.ctx.session.model?.provider;
-		const activeAccount = currentProvider
-			? this.ctx.session.modelRegistry.authStorage.getOAuthAccountIdentity(
-					currentProvider,
-					this.ctx.session.sessionId,
-				)
-			: undefined;
-		const usageModelSelectors = this.ctx.session.getUsageReportingModelSelectors(usageReports);
-		const output = renderUsageReports(
-			usageReports,
-			theme,
-			Date.now(),
-			availableWidth,
-			provider => (provider === currentProvider ? activeAccount : undefined),
-			usageModelSelectors,
-		);
-		this.ctx.presentCommandOutput([new Spacer(1), new Text(output, 1, 0)]);
+		// Fullscreen dashboard; the same report is its expanded view.
+		this.ctx.showUsageDashboard(usageReports);
 	}
 
 	async handleChangelogCommand(showFull = false): Promise<void> {

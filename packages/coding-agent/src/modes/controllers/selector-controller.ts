@@ -1,5 +1,6 @@
 import { type AgentToolResult, ThinkingLevel } from "@musepi/pi-agent-core";
 import type { CompactionOutcome } from "@musepi/pi-agent-core/compaction";
+import type { UsageReport } from "@musepi/pi-ai";
 import { PASTE_CODE_LOGIN_PROVIDERS } from "@musepi/pi-ai";
 import { getOAuthProviders } from "@musepi/pi-ai/oauth";
 import type { OAuthProvider } from "@musepi/pi-ai/oauth/types";
@@ -104,9 +105,11 @@ import { SettingsSelectorComponent } from "../components/settings-selector";
 import { ToolExecutionComponent } from "../components/tool-execution";
 import { TranscriptBlock } from "../components/transcript-container";
 import { TreeSelectorComponent } from "../components/tree-selector";
+import { UsageDashboard } from "../components/usage-dashboard";
 import { UserMessageSelectorComponent } from "../components/user-message-selector";
 import type { SessionObserverRegistry } from "../session-observer-registry";
 import { buildCopyTargets } from "../utils/copy-targets";
+import { renderUsageReports } from "./command-controller";
 
 const MANUAL_LOGIN_PROMPT = "Paste the authorization code (or full redirect URL), then press Enter:";
 
@@ -436,6 +439,45 @@ export class SelectorController {
 			{ onCancel: () => done() },
 		);
 		overlayHandle = this.#showFullscreenMenu(hub);
+	}
+
+	/**
+	 * Fullscreen usage dashboard on the alternate screen (the /agents idiom): a
+	 * compact per-account summary whose expanded view is the same report the
+	 * inline `/usage` panel prints, so the two never disagree.
+	 */
+	showUsageDashboard(reports: UsageReport[]): void {
+		const nowMs = Date.now();
+		const currentProvider = this.ctx.session.model?.provider;
+		const activeAccount = currentProvider
+			? this.ctx.session.modelRegistry.authStorage.getOAuthAccountIdentity(
+					currentProvider,
+					this.ctx.session.sessionId,
+				)
+			: undefined;
+		const usageModelSelectors = this.ctx.session.getUsageReportingModelSelectors(reports);
+		const dashboard = new UsageDashboard({
+			reports,
+			renderDetail: (innerWidth, detailReports) =>
+				renderUsageReports(
+					detailReports,
+					theme,
+					nowMs,
+					Math.max(40, innerWidth),
+					provider => (provider === currentProvider ? activeAccount : undefined),
+					usageModelSelectors,
+				),
+		});
+		dashboard.setViewportRowsProvider(() => this.ctx.ui.terminal.rows);
+		const handle = this.#showFullscreenMenu(dashboard);
+		dashboard.onClose = () => {
+			handle.hide();
+			this.focusActiveEditorArea();
+			this.ctx.ui.requestRender();
+		};
+		dashboard.onRequestRender = () => {
+			this.ctx.ui.requestRender();
+		};
 	}
 
 	/**

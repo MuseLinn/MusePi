@@ -54,6 +54,15 @@ export const dashboard = {
 	"No models available": "没有可用模型",
 	"Enter: edit": "回车: 编辑",
 	"(default)": "（默认）",
+	// ── Usage Dashboard ────────────────────────────────
+	Usage: "用量",
+	"Usage · Details": "用量 · 详情",
+	"Enter details · Esc close": "回车 详情 · Esc 关闭",
+	"Enter details · wheel scrolls · Esc close": "回车 详情 · 滚轮滚动 · Esc 关闭",
+	"Enter summary · Esc close": "回车 摘要 · Esc 关闭",
+	"no data": "无数据",
+	"resets in {0}": "{0} 后重置",
+	"prepaid: {0}": "预付费：{0}",
 } as const;
 
 /** Key union for the dashboard domain (mirrors the guest-client locale split). */

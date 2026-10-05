@@ -5016,6 +5016,10 @@ export class InteractiveMode implements InteractiveModeContext {
 		void this.#selectorController.showAgentsDashboard();
 	}
 
+	showUsageDashboard(reports: UsageReport[]): void {
+		void this.#selectorController.showUsageDashboard(reports);
+	}
+
 	showModelSelector(options?: { temporaryOnly?: boolean }): void {
 		this.#selectorController.showModelSelector(options);
 	}

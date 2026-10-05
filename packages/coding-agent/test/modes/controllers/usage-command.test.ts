@@ -1,27 +1,48 @@
 import { beforeAll, describe, expect, it, vi } from "bun:test";
 import type { UsageReport } from "@musepi/pi-ai";
-import { CommandController } from "@musepi/pi-coding-agent/modes/controllers/command-controller";
-import { getThemeByName, setThemeInstance } from "@musepi/pi-coding-agent/modes/theme/theme";
+import { UsageDashboard } from "@musepi/pi-coding-agent/modes/components/usage-dashboard";
+import { CommandController, renderUsageReports } from "@musepi/pi-coding-agent/modes/controllers/command-controller";
+import { getThemeByName, setThemeInstance, theme } from "@musepi/pi-coding-agent/modes/theme/theme";
 import type { InteractiveModeContext } from "@musepi/pi-coding-agent/modes/types";
 
-interface RenderableBlock {
-	render(width: number): string[];
-}
-
-function isRenderableBlock(value: unknown): value is RenderableBlock {
-	return value !== null && typeof value === "object" && "render" in value && typeof value.render === "function";
-}
-
-function renderPresentedBlocks(value: unknown): string {
-	const blocks = Array.isArray(value) ? value : [value];
-	return blocks
-		.filter(isRenderableBlock)
-		.flatMap(block => block.render(120))
-		.join("\n");
+/**
+ * `/usage` opens the fullscreen dashboard, whose expanded view is the classic
+ * report. These tests pin that report's text, so they render the dashboard's
+ * detail view (Enter) rather than the retired inline panel. The viewport is
+ * wide so the report's own column fitting is not what is under test.
+ */
+function renderDashboardDetail(reports: UsageReport[], width = 200): string {
+	const dashboard = new UsageDashboard({
+		reports,
+		renderDetail: (renderWidth, detailReports) => renderUsageReports(detailReports, theme, Date.now(), renderWidth),
+	});
+	dashboard.setViewportRowsProvider(() => 40);
+	dashboard.handleInput("\r");
+	return dashboard.render(width).join("\n");
 }
 
 function createUsageSessionDouble() {
 	return { getUsageReportingModelSelectors: () => [] };
+}
+
+/**
+ * Context double for `/usage`. The command's product is the dashboard, so the
+ * double records what the dashboard would be shown rather than rendered output.
+ */
+function createUsageContext(): { ctx: InteractiveModeContext; dashboardReports: UsageReport[][] } {
+	const dashboardReports: UsageReport[][] = [];
+	const ctx = {
+		session: createUsageSessionDouble(),
+		ui: { terminal: { columns: 100 } },
+		present: vi.fn(),
+		presentCommandOutput: vi.fn(),
+		showWarning: vi.fn(),
+		showError: vi.fn(),
+		showUsageDashboard: (reports: UsageReport[]) => {
+			dashboardReports.push(reports);
+		},
+	} as unknown as InteractiveModeContext;
+	return { ctx, dashboardReports };
 }
 
 describe("CommandController /usage", () => {
@@ -32,15 +53,7 @@ describe("CommandController /usage", () => {
 	});
 
 	it("renders bars and free percentage for limits that only report remainingFraction", async () => {
-		const present = vi.fn();
-		const ctx = {
-			session: createUsageSessionDouble(),
-			ui: { terminal: { columns: 100 } },
-			present,
-			presentCommandOutput: present,
-			showWarning: vi.fn(),
-			showError: vi.fn(),
-		} as unknown as InteractiveModeContext;
+		const { ctx, dashboardReports } = createUsageContext();
 		const controller = new CommandController(ctx);
 		const reports: UsageReport[] = [
 			{
@@ -62,25 +75,15 @@ describe("CommandController /usage", () => {
 
 		await controller.handleUsageCommand(reports);
 
-		expect(present).toHaveBeenCalledTimes(1);
-		const firstCall = present.mock.calls[0];
-		expect(firstCall).toBeDefined();
-		const output = renderPresentedBlocks(firstCall?.[0]);
+		expect(dashboardReports).toHaveLength(1);
+		const output = renderDashboardDetail(dashboardReports[0]!);
 		expect(output).toContain("25% free");
 		expect(output).toContain("█");
 		expect(output).not.toContain("··········");
 	});
 
 	it("renders Cursor request quotas in the /usage view", async () => {
-		const present = vi.fn();
-		const ctx = {
-			session: createUsageSessionDouble(),
-			ui: { terminal: { columns: 100 } },
-			present,
-			presentCommandOutput: present,
-			showWarning: vi.fn(),
-			showError: vi.fn(),
-		} as unknown as InteractiveModeContext;
+		const { ctx, dashboardReports } = createUsageContext();
 		const controller = new CommandController(ctx);
 		const now = Date.now();
 		const reports: UsageReport[] = [
@@ -110,10 +113,8 @@ describe("CommandController /usage", () => {
 
 		await controller.handleUsageCommand(reports);
 
-		expect(present).toHaveBeenCalledTimes(1);
-		const firstCall = present.mock.calls[0];
-		expect(firstCall).toBeDefined();
-		const output = renderPresentedBlocks(firstCall?.[0]);
+		expect(dashboardReports).toHaveLength(1);
+		const output = renderDashboardDetail(dashboardReports[0]!);
 		expect(output).toContain("Cursor");
 		expect(output).toContain("gpt-4 requests");
 		expect(output).toContain("70% free");
@@ -121,15 +122,7 @@ describe("CommandController /usage", () => {
 	});
 
 	it("renders saved reset expiry lines for future and expired credits", async () => {
-		const present = vi.fn();
-		const ctx = {
-			session: createUsageSessionDouble(),
-			ui: { terminal: { columns: 100 } },
-			present,
-			presentCommandOutput: present,
-			showWarning: vi.fn(),
-			showError: vi.fn(),
-		} as unknown as InteractiveModeContext;
+		const { ctx, dashboardReports } = createUsageContext();
 		const controller = new CommandController(ctx);
 		const now = Date.now();
 		const dayMs = 24 * 60 * 60 * 1000;
@@ -150,10 +143,8 @@ describe("CommandController /usage", () => {
 
 		await controller.handleUsageCommand(reports);
 
-		expect(present).toHaveBeenCalledTimes(1);
-		const firstCall = present.mock.calls[0];
-		expect(firstCall).toBeDefined();
-		const output = renderPresentedBlocks(firstCall?.[0]);
+		expect(dashboardReports).toHaveLength(1);
+		const output = renderDashboardDetail(dashboardReports[0]!);
 		expect(output).toContain("Saved rate-limit resets");
 		expect(output).toContain("user@example.com: 2 saved resets");
 		expect(output).toContain(`expires in`);

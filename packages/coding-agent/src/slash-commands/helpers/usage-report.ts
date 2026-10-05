@@ -2,7 +2,7 @@ import type { UsageLimit, UsageReport } from "@musepi/pi-ai";
 import { sanitizeText } from "@musepi/pi-utils";
 import type { OAuthAccountIdentity } from "../../session/auth-storage";
 import { formatRemainingOnlyTotal } from "../../utils/usage-amounts";
-import { formatLimitTitle } from "../../utils/usage-display";
+import { formatLimitTitle, usageAccountLabel } from "../../utils/usage-display";
 import type { SlashCommandRuntime } from "../types";
 import { reportMatchesActiveAccount } from "./active-oauth-account";
 import { formatDuration, renderAsciiBar } from "./format";
@@ -32,33 +32,6 @@ function formatUsageAmount(limit: UsageLimit): string {
 	const usedText = used === undefined ? "unknown used" : `${used.toFixed(2)}${unit} used`;
 	const remainingText = remainingFraction === undefined ? "" : ` (${(remainingFraction * 100).toFixed(1)}% left)`;
 	return `${usedText}${remainingText}`;
-}
-
-function formatUsageReportAccount(report: UsageReport, limit: UsageLimit, index: number): string {
-	const metaOrgName = report.metadata?.orgName;
-	const metaOrgId = report.metadata?.orgId;
-	const org =
-		typeof metaOrgName === "string" && metaOrgName
-			? metaOrgName
-			: typeof metaOrgId === "string" && metaOrgId
-				? metaOrgId
-				: undefined;
-	// Two subscriptions (orgs) can share one email — suffix the org so the rows
-	// are tellable apart.
-	const email = report.metadata?.email;
-	if (typeof email === "string" && email) return org ? `${email} (${org})` : email;
-	// Guard metadata values for truthiness before using, then fall back to scope.
-	// ?? won't help here: empty string is not null/undefined, so it would suppress
-	// a valid scoped fallback (e.g. metadata.accountId="" hides limit.scope.accountId).
-	const metaAccountId = report.metadata?.accountId;
-	const accountId = typeof metaAccountId === "string" && metaAccountId ? metaAccountId : limit.scope.accountId;
-	if (typeof accountId === "string" && accountId) {
-		return org && org !== accountId ? `${accountId} (${org})` : accountId;
-	}
-	const metaProjectId = report.metadata?.projectId;
-	const projectId = typeof metaProjectId === "string" && metaProjectId ? metaProjectId : limit.scope.projectId;
-	if (typeof projectId === "string" && projectId) return projectId;
-	return `account ${index + 1}`;
 }
 
 function renderUsageReports(
@@ -130,7 +103,7 @@ function renderUsageReports(
 				const window = limit.window?.label ?? limit.scope.windowId;
 				lines.push(`- ${formatLimitTitle(limit)}${formatWindowSuffix(limit.label, window)}`);
 				lines.push(
-					`  ${formatUsageReportAccount(report, limit, index)}: ${formatUsageAmount(limit)}${inUse ? "  ← in use by this session" : ""}`,
+					`  ${usageAccountLabel(report, limit, index)}: ${formatUsageAmount(limit)}${inUse ? "  ← in use by this session" : ""}`,
 				);
 				lines.push(`  ${renderAsciiBar(limit.amount.usedFraction)}`);
 				if (limit.window?.resetsAt && limit.window.resetsAt > nowMs) {
