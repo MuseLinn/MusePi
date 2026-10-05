@@ -23,6 +23,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
+- **`/usage` 现在会显示 Z.ai GLM Coding Plan 的 credit 额度**：这类额度此前被整条丢掉——只带 credit 窗口的账户连用量报告都拿不到，在界面上等同于「未上报」。现在按 credit 计量显示，进度用服务端的精确比值，而不是取整后的百分比。
+  - EN: `/usage` now shows Z.ai GLM Coding Plan credit windows. They were dropped entirely — an account whose only meter is a credit window produced no usage report at all and read as unreported. Credits render as their own unit, and the bar uses the exact consumed ratio instead of the server's rounded percentage.
+
 - **走代理的供应商现在按配置的地址校验凭据**：`/usage` 与后台用量服务此前只从已发现的模型里推地址；对只在发现后才出现的供应商，这一刻拿不到地址，于是把代理作用域的密钥发给了供应商的官方主机。现在配置与运行时的供应商地址优先于模型推导。
   - EN: A proxied provider is now probed at its configured address. `/usage` and the background usage service derived the address only from discovered models, so a provider that appears solely through discovery had none yet and sent a proxy-scoped key to the vendor's canonical host. Configured and runtime provider addresses now take precedence over model-derived ones.
 - **`/usage` 会显示预付费余额**：只有余额、没有额度的供应商此前只在每个凭据下逐条列出余额，汇总行里什么都不显示——同一账户挂多个密钥时也看不出那是一个共享池。现在汇总给出池级总额，共享池只计一次。
