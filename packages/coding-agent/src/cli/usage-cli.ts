@@ -27,7 +27,7 @@ import {
 	type UsageAccountIdentity,
 } from "../daemon/usage-shared";
 import { discoverAuthStorage } from "../sdk";
-import { formatRemainingOnlyTotal } from "./usage-amounts";
+import { formatRemainingOnlyTotal } from "../utils/usage-amounts";
 
 export { collectUnreportedAccounts, selectReportableAccounts, type UsageAccountIdentity };
 

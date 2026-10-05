@@ -1,6 +1,7 @@
 import type { UsageLimit, UsageReport } from "@musepi/pi-ai";
 import { sanitizeText } from "@musepi/pi-utils";
 import type { OAuthAccountIdentity } from "../../session/auth-storage";
+import { formatRemainingOnlyTotal } from "../../utils/usage-amounts";
 import type { SlashCommandRuntime } from "../types";
 import { reportMatchesActiveAccount } from "./active-oauth-account";
 import { formatDuration, renderAsciiBar } from "./format";
@@ -148,6 +149,10 @@ function renderUsageReports(
 					);
 			}
 		}
+		// A prepaid balance carries no window bucket to draw a bar from, and the
+		// client usage card reads this text, so it is reported on its own line.
+		const prepaid = formatRemainingOnlyTotal(providerReports.flatMap(report => report.limits));
+		if (prepaid !== undefined) lines.push(`  prepaid: ${prepaid}`);
 	}
 	return ["```", ...lines, "```"].join("\n");
 }

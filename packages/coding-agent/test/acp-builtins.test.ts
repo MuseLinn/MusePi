@@ -275,6 +275,32 @@ describe("ACP builtin slash commands", () => {
 		expect(output[0]).toContain("resets in");
 	});
 
+	it("reports a prepaid balance that no quota window can express", async () => {
+		const { output, runtime } = createRuntime();
+		runtime.session.fetchUsageReports = async () => [
+			{
+				provider: "charm-hyper",
+				fetchedAt: Date.now(),
+				limits: [
+					{
+						id: "charm-hyper:credits",
+						label: "Credits",
+						scope: { provider: "charm-hyper", shared: true },
+						amount: { remaining: 100, unit: "credits" },
+					},
+				],
+				metadata: { email: "prepaid@example.com" },
+			},
+		];
+
+		const result = await executeAcpBuiltinSlashCommand("/usage", runtime);
+
+		expect(result).toEqual({ consumed: true });
+		// A balance carries no window bucket, so the client card reads this line
+		// instead of recomputing an amount it cannot derive.
+		expect(output[0]).toContain("prepaid: 100 credits left");
+	});
+
 	it("suppresses redundant usage window suffixes while retaining legitimate ones", async () => {
 		const { output, runtime } = createRuntime();
 		runtime.session.fetchUsageReports = async () => [
