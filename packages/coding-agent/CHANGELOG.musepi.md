@@ -23,6 +23,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
+- **走代理的供应商现在按配置的地址校验凭据**：`/usage` 与后台用量服务此前只从已发现的模型里推地址；对只在发现后才出现的供应商，这一刻拿不到地址，于是把代理作用域的密钥发给了供应商的官方主机。现在配置与运行时的供应商地址优先于模型推导。
+  - EN: A proxied provider is now probed at its configured address. `/usage` and the background usage service derived the address only from discovered models, so a provider that appears solely through discovery had none yet and sent a proxy-scoped key to the vendor's canonical host. Configured and runtime provider addresses now take precedence over model-derived ones.
+- **`/usage` 会显示预付费余额**：只有余额、没有额度的供应商此前只在每个凭据下逐条列出余额，汇总行里什么都不显示——同一账户挂多个密钥时也看不出那是一个共享池。现在汇总给出池级总额，共享池只计一次。
+  - EN: `/usage` now reports a prepaid balance. A provider that reports only a remaining balance and no allowance listed it per credential and showed nothing in the summary, so several keys on one account never read as a single shared pool. The summary now totals the pool, counting a shared pool once.
+
 - **工作目录被删除后，会话不再崩溃**：长任务里临时目录、已移除的 worktree、整个项目被删掉，都会让会话的工作目录在运行中消失；此前这一刻会在准备子 shell 环境时抛错并中断会话。现在环境的默认工作目录取会话启动时记录的那一个，删除之后仍能继续跑。
   - EN: A session no longer crashes when its working directory is deleted. In a long-running task a temp directory, a removed worktree, or a whole project can disappear underneath the session; that used to throw while preparing the child-shell environment and interrupt the session. The environment now defaults to the directory recorded at session start, so work continues after the deletion.
 - **`/debug` 的内存报告不再因为快照太大而失败**：此前堆快照按字符串生成，堆大的时候会超过字符串长度上限直接报错；快照为空时又会静默落下一个 0 字节文件。现在快照按二进制生成，并在为空时明确报错。
