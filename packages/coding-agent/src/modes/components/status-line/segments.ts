@@ -2,7 +2,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { ThinkingLevel } from "@musepi/pi-agent-core";
 import { TERMINAL } from "@musepi/pi-tui";
-import { formatDuration, formatNumber, getProjectDir, pathIsWithin, relativePathWithinRoot } from "@musepi/pi-utils";
+import {
+	formatDuration,
+	formatNumber,
+	getProjectDir,
+	normalizePremiumRequests,
+	pathIsWithin,
+	relativePathWithinRoot,
+} from "@musepi/pi-utils";
 import { t } from "../../../i18n/index.js";
 import { type ThemeColor, theme } from "../../../modes/theme/theme";
 import { shortenPath, TRUNCATE_LENGTHS, truncateToWidth } from "../../../tools/render-utils";
@@ -46,10 +53,6 @@ function stripDisplayRoot(pwd: string): string {
 		if (relative) return relative;
 	}
 	return pwd;
-}
-
-function normalizePremiumRequests(value: number): number {
-	return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 const SCRATCH_ROOTS: readonly string[] = (() => {
