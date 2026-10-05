@@ -73,6 +73,24 @@ Opencode Go
 		expect(parsed!.limits[0]!.resetsIn).toBe("2h");
 	});
 
+	test("keeps an absolute meter (credits) instead of degrading it to 0% used", () => {
+		const report = `Usage (1m ago)
+Zai
+- ZAI 5 Hours Credit Quota
+  user@example.test: 1438.00 credits used (88.0% left)
+  ███████████············································································ 12%
+  resets in 3h`;
+		const parsed = parseUsageReport(report);
+		expect(parsed).not.toBeNull();
+		const limit = parsed!.limits[0]!;
+		expect(limit.account).toBe("user@example.test");
+		// The provider reported an amount, not a percentage: the card must keep the
+		// amount it cannot recompute, and take the bar from the left percentage.
+		expect(limit.usedLabel).toBe("1438.00 credits used");
+		expect(limit.leftPercent).toBeCloseTo(88);
+		expect(limit.usedPercent).toBeCloseTo(12);
+	});
+
 	test("ordinary prose mentioning usage is NOT a report", () => {
 		expect(isUsageReport("Usage of the API went up this month")).toBe(false);
 		expect(isUsageReport("Please explain how limits work")).toBe(false);

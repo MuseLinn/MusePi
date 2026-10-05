@@ -26,7 +26,10 @@ export type ParsedUsage = {
 		label: string;
 		account: string;
 		usedPercent: number;
-		leftPercent: number;
+		/** Percentage of the allowance left, when the row reports one. */
+		leftPercent?: number;
+		/** Reported amount for a meter no percentage can express (`1438.00 credits used`). */
+		usedLabel?: string;
 		resetsIn: string;
 	}>;
 };
@@ -89,15 +92,28 @@ export function parseUsageReport(text: string): ParsedUsage | null {
 		// Following lines: account row + optional "resets in …".
 		let account = "account";
 		let usedPercent = 0;
-		let leftPercent = 0;
+		let leftPercent: number | undefined;
+		let usedLabel: string | undefined;
 		let resetsIn = "";
 		for (let j = i + 1; j < lines.length; j++) {
 			const next = lines[j]!;
-			const accountRow = /^\s+(.+?): ([\d.]+)% used \(([\d.]+)% left\)/.exec(next);
+			// Two row shapes reach this parser. A quota meter prints a percentage
+			// (`4.00% used (96.0% left)`); a meter reported as an absolute amount
+			// (credits, usd, tokens) prints that amount instead and carries no
+			// percentage, so the amount itself is the only thing worth keeping.
+			const accountRow = /^\s+(.+?): (.+? used)(?: \(([\d.]+)% left\))?/.exec(next);
 			if (accountRow) {
 				account = accountRow[1]!;
-				usedPercent = Number.parseFloat(accountRow[2]!);
-				leftPercent = Number.parseFloat(accountRow[3]!);
+				const usedSegment = accountRow[2]!;
+				const leftText = accountRow[3];
+				if (leftText !== undefined) leftPercent = Number.parseFloat(leftText);
+				const percentOnly = /^([\d.]+)% used$/.exec(usedSegment);
+				if (percentOnly) {
+					usedPercent = Number.parseFloat(percentOnly[1]!);
+				} else {
+					usedLabel = usedSegment;
+					if (leftPercent !== undefined) usedPercent = 100 - leftPercent;
+				}
 				continue;
 			}
 			const resetRow = /^\s+resets? in (.+)$/.exec(next);
@@ -107,7 +123,7 @@ export function parseUsageReport(text: string): ParsedUsage | null {
 			}
 			if (/^\s*- /.test(next) || (next && !next.startsWith(" "))) break;
 		}
-		limits.push({ label, account, usedPercent, leftPercent, resetsIn });
+		limits.push({ label, account, usedPercent, leftPercent, usedLabel, resetsIn });
 	}
 	if (limits.length === 0 && models.length === 0) return null;
 	return { provider, fetchedLabel, models, limits };
@@ -150,7 +166,8 @@ export function UsageCard({ usage }: { usage: ParsedUsage }): ReactNode {
 							<div className="tr-usage-limit-row">
 								<span className="tr-usage-limit-label">{limit.label}</span>
 								<span className="tr-usage-limit-pct">
-									{limit.usedPercent.toFixed(0)}% used · {limit.leftPercent.toFixed(0)}% left
+									{limit.usedLabel ?? `${limit.usedPercent.toFixed(0)}% used`}
+									{limit.leftPercent !== undefined ? ` · ${limit.leftPercent.toFixed(0)}% left` : ""}
 								</span>
 							</div>
 							<div className="tr-usage-limit-acct">{limit.account}</div>
