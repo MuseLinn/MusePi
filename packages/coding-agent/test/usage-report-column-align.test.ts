@@ -61,6 +61,22 @@ function spendAcct(email: string, used: number, limit?: number): UsageReport {
 	};
 }
 
+function prepaidAcct(email: string, remaining: number): UsageReport {
+	return {
+		provider: "charm-hyper",
+		fetchedAt: Date.now(),
+		metadata: { email },
+		limits: [
+			{
+				id: "charm-hyper:credits",
+				label: "Credits",
+				scope: { provider: "charm-hyper", windowId: "credits", shared: true },
+				amount: { remaining, unit: "credits" } as const,
+			},
+		],
+	} satisfies UsageReport;
+}
+
 describe("renderUsageReports multi-account column alignment (#6067)", () => {
 	it("keeps account columns in the same order across every window row", () => {
 		// Account A: weekly exhausted, 5h free. Account B: weekly light, 5h exhausted.
@@ -109,5 +125,17 @@ describe("renderUsageReports multi-account column alignment (#6067)", () => {
 		expect(summaryStart).toBeGreaterThanOrEqual(0);
 		expect(Bun.stringWidth(labelRow)).toBe(11);
 		expect(Bun.stringWidth(amountRow.slice(2, summaryStart))).toBe(9);
+	});
+
+	it("shows a prepaid balance in the amount cell and counts a shared pool once", () => {
+		// A balance has no total to divide by, so the cell cannot be a percentage.
+		// Both reports observe the same account-wide pool through different
+		// stored keys: summing them would claim twice the credits one request
+		// can draw on.
+		const reports = [prepaidAcct("pool-a@example.test", 100), prepaidAcct("pool-b@example.test", 100)];
+		const text = stripVTControlCharacters(renderUsageReports(reports, theme, Date.now(), 160));
+
+		expect(text).toContain("100 credits left");
+		expect(text).not.toContain("200 credits left");
 	});
 });

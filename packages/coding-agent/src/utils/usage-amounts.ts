@@ -1,17 +1,29 @@
 /**
- * Formatting for prepaid usage balances.
+ * Classification and formatting for the usage shapes no quota bar can draw.
  *
  * Providers report one of two one-sided shapes: spend-to-date with no
  * allowance (`used` only), or a prepaid balance with no total (`remaining`
- * only). Neither can fill a quota bar, so the windowed capacity view — which
- * counts used fractions — drops them entirely and leaves a prepaid pool
- * invisible in `musepi usage`. Spend-to-date already renders per limit, so
- * only the prepaid total is aggregated here.
+ * only). Neither yields a used fraction, so every windowed or percentage view
+ * drops them — a prepaid pool stayed invisible until this module was shared by
+ * the CLI report, the ACP report text and the TUI panel.
  */
 import { resolveUsedFraction, type UsageLimit } from "@musepi/pi-ai";
 
 function isAbsoluteUnit(limit: UsageLimit): boolean {
 	return limit.amount.unit !== "percent" && limit.amount.unit !== "unknown";
+}
+
+/** A spend-to-date amount with no allowance and no derivable fraction. */
+export function isUsedOnlyAbsoluteAmount(limit: UsageLimit): boolean {
+	const amount = limit.amount;
+	return (
+		isAbsoluteUnit(limit) &&
+		amount.used !== undefined &&
+		Number.isFinite(amount.used) &&
+		amount.limit === undefined &&
+		amount.remaining === undefined &&
+		resolveUsedFraction(limit) === undefined
+	);
 }
 
 /** A prepaid balance with no total and no derivable fraction. */
