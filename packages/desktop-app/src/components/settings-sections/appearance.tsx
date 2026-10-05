@@ -50,11 +50,13 @@ import { applyGlassMaterial, applyGlassPreset, GLASS_PRESETS, readGlassPreset } 
 import { nativeHighlight } from "../../lib/highlight";
 import type { RpcClient } from "../../lib/rpc";
 import {
+	readAlwaysShowScrollbar,
 	readImportedSkins,
 	readScrollbarStyle,
 	SCROLLBAR_STYLE_CHANGED_EVENT,
 	SCROLLBAR_STYLE_KEY,
 	type ScrollbarSkin,
+	saveAlwaysShowScrollbar,
 	saveImportedSkin,
 	validateImportedSkin,
 } from "../../lib/scrollbar-skins";
@@ -192,6 +194,7 @@ export function AppearanceSection({
 	);
 	const [scrollbarStyle, setScrollbarStyle] = useState<string>(() => readScrollbarStyle());
 	const [importedSkins, setImportedSkins] = useState<ScrollbarSkin[]>(() => readImportedSkins());
+	const [alwaysShowScrollbars, setAlwaysShowScrollbars] = useState<boolean>(() => readAlwaysShowScrollbar());
 	const [skinError, setSkinError] = useState(false);
 	const [importingSkin, setImportingSkin] = useState(false);
 	const [glass, setGlass] = useState<string>(() => readGlassPreset().id);
@@ -413,6 +416,26 @@ export function AppearanceSection({
 							]}
 						/>
 						<div className="flex items-center gap-2 mt-2">
+							<div className="gui-settings-row">
+								<div className="flex-1">
+									<div className="gui-settings-row-label">{t("always show scrollbars")}</div>
+									<div className="gui-settings-row-desc">{t("always show scrollbars desc")}</div>
+								</div>
+								<button
+									type="button"
+									role="switch"
+									aria-checked={alwaysShowScrollbars}
+									className={`gui-toggle${alwaysShowScrollbars ? " gui-toggle--on" : ""}`}
+									aria-label={t("always show scrollbars")}
+									onClick={() => {
+										const next = !alwaysShowScrollbars;
+										setAlwaysShowScrollbars(next);
+										saveAlwaysShowScrollbar(next);
+									}}
+								>
+									<span className="gui-toggle-knob" />
+								</button>
+							</div>
 							<button
 								type="button"
 								className="gui-btn gui-btn--small"

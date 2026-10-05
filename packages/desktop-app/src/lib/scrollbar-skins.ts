@@ -41,10 +41,15 @@ export interface ScrollbarSkin {
 
 export const SCROLLBAR_STYLE_KEY = "musepi-gui-scrollbar-style";
 export const SCROLLBAR_SKINS_KEY = "musepi-gui-scrollbar-skins";
+/** Presence toggle for the always-visible rail mode (off by default).
+ *  Private: the accessors below are the only way in or out. */
+const SCROLLBAR_ALWAYS_KEY = "musepi-gui-scrollbar-always";
 /** Fired on the window when the imported-skin registry changes. */
 export const SCROLLBAR_SKINS_CHANGED_EVENT = "omp-scrollbar-skins-changed";
 /** Fired on the window when the active skin id changes. */
 export const SCROLLBAR_STYLE_CHANGED_EVENT = "omp-scrollbar-style-changed";
+/** Fired on the window when the always-visible rail mode flips. */
+export const SCROLLBAR_ALWAYS_CHANGED_EVENT = "omp-scrollbar-always-changed";
 
 const BUILTIN_PACMAN: ScrollbarSkin = {
 	id: "builtin-pacman",
@@ -152,4 +157,24 @@ export function saveImportedSkin(skin: ScrollbarSkin): void {
 
 export function readScrollbarStyle(): string {
 	return localStorage.getItem(SCROLLBAR_STYLE_KEY) ?? DEFAULT_SCROLLBAR_SKIN_ID;
+}
+
+/** Always-visible mode: every scrollable container keeps a rail on screen
+ *  without waiting for a scroll. Off by default. */
+export function readAlwaysShowScrollbar(): boolean {
+	try {
+		return localStorage.getItem(SCROLLBAR_ALWAYS_KEY) === "1";
+	} catch {
+		return false;
+	}
+}
+
+/** Persist the always-visible preference + notify the overlay. */
+export function saveAlwaysShowScrollbar(value: boolean): void {
+	try {
+		localStorage.setItem(SCROLLBAR_ALWAYS_KEY, value ? "1" : "0");
+	} catch {
+		// storage unavailable — preference stays for this session only
+	}
+	window.dispatchEvent(new Event(SCROLLBAR_ALWAYS_CHANGED_EVENT));
 }

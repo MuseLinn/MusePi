@@ -270,6 +270,8 @@ export const settings = {
 	"gummy rainbow": "Gummy Rainbow",
 
 	"scrollbar style hint": "Gummy jelly thumb or pac-man bead rail — skins are importable",
+	"always show scrollbars": "Always show scrollbars",
+	"always show scrollbars desc": "Scrollbars no longer fade out, and appear when the pointer enters a scrollable area",
 	gummy: "Gummy",
 	"import scrollbar skin": "Import scrollbar skin…",
 	"invalid scrollbar skin": "Invalid skin package",

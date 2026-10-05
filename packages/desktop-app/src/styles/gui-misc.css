@@ -2494,20 +2494,21 @@
 
 
 /* ── Floating scroll indicator (FloatingScrollbar.tsx) ──────────────────
- * A fixed overlay rail drawn next to the scrolled container — system
- * scrollbars are hidden globally (gui-base.css), so this is the only
- * progress affordance. Skin-driven via --skin-* custom properties:
- *   gummy  — jelly capsule thumb (data-base="gummy"), height = visible
- *            ratio, stretches while scrolling and springs back.
+ * Fixed overlay rails drawn over scrolled containers — system scrollbars
+ * are hidden globally (gui-base.css), so these are the only progress
+ * affordance. The overlay keeps a POOL of slots keyed by container, so two
+ * independently scrolling panes each hold a rail; each rail is sized and
+ * positioned by the component (left/top/width/height inline).
+ * Skin-driven via --skin-* custom properties injected inline by the component:
+ *   gummy  — jelly capsule thumb (data-base="gummy"), length = visible
+ *            ratio on both axes, stretches while scrolling and springs back.
  *   pacman — hairline thread + a string of beads at 7px pitch; a pac-man
  *            rides the thread, beads above it are "eaten" (dimmed).
- * Both thumbs are drag handles (onThumbDown); idle does not hide the
- * rail — it fades to a faint ghost so progress stays grabbable.
- * Bead colors come from the active skin (--skin-accent / --skin-track /
- * --skin-eaten) injected inline by the component. */
+ * Both thumbs on both axes are drag handles; idle does not hide the rail —
+ * it fades to a faint ghost so progress stays grabbable. */
 .gui-float-scrollbar {
 	position: fixed;
-	width: 12px;
+	inset: auto;
 	/* Fallback only — update()/remeasure() set an inline z-index one step
 	 * above the scrolled container's own stacking level (see stackZ in
 	 * FloatingScrollbar.tsx): the rail is bound to its container's layer,
@@ -2536,45 +2537,89 @@
 .gui-float-scrollbar[data-idle]:hover {
 	opacity: 1;
 }
+/* The vertical rail is inset from the container's right edge (--edge-v), the
+ * horizontal one from the bottom (--edge-h) so it never runs under the
+ * vertical thumb at the corner. The rail LINE stays pointer-events:none for
+ * its whole length — only the thumbs opt in. */
+.gui-float-scrollbar {
+	--edge-v: 4px;
+	--edge-h: 4px;
+	--edge-size: var(--skin-size, 12px);
+}
 .gfs-track {
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: 50%;
+	right: var(--edge-v);
 	width: 1px;
-	margin-left: -0.5px;
 	background: var(--skin-track, color-mix(in oklab, var(--color-text-faint, var(--color-text, oklch(0.6 0.02 60))) 30%, transparent));
 }
 .gfs-beads,
 .gfs-beads-eaten {
 	position: absolute;
-	inset-inline: 0;
 	top: 0;
+	bottom: 0;
+	right: var(--edge-v);
+	width: var(--edge-size);
 	background-image: radial-gradient(circle 2px at 50% 3.5px, var(--skin-accent, #ffd94d) 99%, transparent);
 	background-size: 100% 7px;
 	background-repeat: repeat-y;
 }
 .gfs-beads {
-	height: 100%;
+	opacity: 0.45;
 }
+/* The eaten run IS the scroll progress. It is scaled (transform-origin: top)
+ * rather than resized, so tracking progress costs no layout. */
 .gfs-beads-eaten {
-	height: 0;
+	transform-origin: top center;
+	transform: scaleY(0);
 	background-image: radial-gradient(circle 2px at 50% 3.5px, var(--skin-eaten, #7a7462) 99%, transparent);
 }
 .gfs-pac {
 	position: absolute;
 	top: 0;
-	left: 50%;
-	transform: translateX(-50%);
-	width: calc(var(--skin-size, 12px));
-	height: calc(var(--skin-size, 12px));
+	left: auto;
+	right: var(--edge-v);
+	transform: translateX(0);
+	width: var(--edge-size);
+	height: var(--edge-size);
+}
+/* Horizontal thumb: same skin language as the vertical one, sized by the
+ * visible-ratio length the component writes and moved by transform alone.
+ * The length comes from the inline `width`, so it always wins over a skin's
+ * width rule; the thickness is pinned here so a skin that narrows the
+ * vertical capsule cannot flatten this one to zero. */
+.gui-float-scrollbar .gfs-h {
+	position: absolute;
+	left: var(--edge-h);
+	bottom: var(--edge-h);
+	height: calc(var(--edge-size) * 0.55);
+	border-radius: 999px;
+	background: var(--skin-accent, var(--color-accent));
+	opacity: 0.55;
+	transition: opacity 150ms ease;
+	will-change: transform;
+}
+.gui-float-scrollbar[data-visible] .gfs-h {
+	pointer-events: auto;
+	cursor: grab;
+	touch-action: none;
+	user-select: none;
+	opacity: 0.85;
+}
+.gui-float-scrollbar[data-visible] .gfs-h:hover,
+.gui-float-scrollbar[data-visible] .gfs-h:active {
+	opacity: 1;
+}
+.gui-float-scrollbar[data-visible] .gfs-h:active {
+	cursor: grabbing;
 }
 
 /* Pac thumb: same drag-handle contract as the gummy capsule — the rail
  * stays pointer-events:none, the pac opts back in while visible (idle
- * included: the ghost pac is grabbable) and drags the indicated container
- * (FloatingScrollbar onThumbDown). Enlarged hit area via a transparent
- * ring: a 12px glyph is a tiny grab target. */
+ * included: the ghost pac is grabbable) and drags the indicated container.
+ * Enlarged hit area via a transparent ring: a 12px glyph is a tiny grab
+ * target. `will-change` keeps its per-frame translate off the layout path. */
 .gui-float-scrollbar[data-base="pacman"][data-visible] .gfs-pac {
 	pointer-events: auto;
 	cursor: grab;
@@ -2592,26 +2637,29 @@
 .gfs-pac svg {
 	display: block;
 }
-/* Gummy base: a jelly capsule thumb — height = the visible ratio,
- * stretched while scrolling (JS scaleY) and springing back on the
- * release transition. Accent-tinted glass: a top highlight and a soft
- * accent drop shadow carry the candy gloss; the capsule is narrower
- * than the rail (0.55×) and centered on it. */
+.gui-float-scrollbar[data-base="pacman"] .gfs-pac {
+	will-change: transform;
+}
+/* Gummy base: a jelly capsule thumb — length = the visible ratio (written by
+ * the component on both axes), stretched while scrolling (JS scaleY) and
+ * springing back on the release transition. Accent-tinted glass: a top
+ * highlight and a soft accent drop shadow carry the candy gloss; the capsule
+ * is narrower than the rail (0.55×). */
 .gui-float-scrollbar[data-base="gummy"] .gfs-gummy {
 	position: absolute;
-	left: 50%;
-	transform: translateX(-50%);
-	width: calc(var(--skin-size, 12px) * 0.55);
-	min-height: 24px;
+	top: 0;
+	right: var(--edge-v);
+	width: var(--edge-size);
+	height: 0;
 	border-radius: 999px;
+	will-change: transform;
 	/* Drag handle: the rail itself stays pointer-events:none (never eats
 	 * clicks over content); the capsule opts back in — dragging it scrolls
-	 * the indicated container (FloatingScrollbar onThumbDown). touch-action
-	 * none so a touch drag moves the thumb, not the page. Gated on
-	 * [data-visible]: before the first scroll the rail has no container to
-	 * indicate and must not be clickable; once visible it stays interactive
-	 * even in the idle-faint state — the ghost thumb IS the drag
-	 * affordance. */
+	 * the indicated container. touch-action none so a touch drag moves the
+	 * thumb, not the page. Gated on [data-visible]: before the first scroll
+	 * the rail has no container to indicate and must not be clickable; once
+	 * visible it stays interactive even in the idle-faint state — the ghost
+	 * thumb IS the drag affordance. */
 	cursor: grab;
 	touch-action: none;
 	user-select: none;

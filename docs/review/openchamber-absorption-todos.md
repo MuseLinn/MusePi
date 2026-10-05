@@ -47,7 +47,7 @@
 | 11  | 文件预览 audio/video/字体/mermaid | 未动     | `FilePane.tsx:74-97` `PreviewState` 九态不含这四类；mermaid 只在 Markdown 里渲染                                                                                |
 | 12  | 悬浮磨砂 composer + 羽化          | 未动     | 布局模型未动：composer 仍是 flex 兄弟（`ChatView.tsx:2741-2775`），`--chat-composer-inset`/`data-live-tail` 全仓零命中                                          |
 | 13  | 引用悬浮面板                      | 未动     | `quote-cards.tsx` 仍 27 行、`quotes: string[]`、12px X；发出时仍拍平成 `> ` 纯文本                                                                              |
-| 14  | 滚动条交互打磨 5 点               | 未动     | 5 点全零改动：`FloatingScrollbar.tsx:184,187` 热路径仍每帧读布局、`:89-96` 单 last-scrolled 实例、无程序化滚动抑制、`:217-221` pacman 无比例 thumb 且只支持垂直 |
+| 14  | 滚动条交互打磨 5 点               | 已落地   | 2026-10-05 重写 `FloatingScrollbar.tsx`（见 gui-implementation §28b）：measure/position 拆分后热路径零布局读只写 transform、单 last-scrolled 实例换成按容器 keyed 的 6 槽轨池、程序化滚动按意图闸抑制（滚轮/触摸/滚动按键/悬停才点亮）、双轴比例 thumb（pacman 的已吃豆串改 `scaleY`）、always-show 开关进外观页；契约测试 `test/floating-scrollbar.test.tsx` 16 例 |
 | 15  | 「In work」会话分区               | 未动     | 侧栏仍只有 pinned/projects/archived/cron，无第四轴                                                                                                              |
 | 16  | 每会话三态权限 + 盾牌             | **部分** | 三态胶囊与盾牌已存在（`composer/approval-mode-button.tsx:22,108`），但读写的是**全局** `tools.approvalMode`，注释自承 "no per-session state involved"           |
 | 17  | multi-run                         | 未动     | 全仓零命中，daemon 无对应 RPC                                                                                                                                   |
@@ -63,7 +63,7 @@
 | Timeline 视图 | Grouped ↔ Timeline            | `SessionSidebar.tsx` 已有，另多 groups / archived                                                 |
 | 扩展贡献面板  | SDK `service.surface`         | `collab-proto/extension-slots.ts` 契约更严，连 `transcript.node` 都有                             |
 | 用量统计      | 柱状图面板                    | `settings-sections/usage.tsx` 已细分到 per-model / per-folder / per-agent-type                    |
-| 滚动条        | per-container 浮层 + 原生混用 | **我们领先**：全局浮层轨零抖动 + 皮肤导入；对方至今**没有** always-show 开关                      |
+| 滚动条        | per-container 浮层 + 原生混用 | **我们领先**：皮肤导入（zip 皮肤包）+ 皮肤化外观；对方的 always-show 是 2026 年后补的，我们已对齐（外观页开关）|
 
 ## 待办（按投入产出排序）
 

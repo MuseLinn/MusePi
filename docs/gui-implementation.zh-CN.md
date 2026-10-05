@@ -558,6 +558,22 @@ dsh-desktop 对齐目标是**壳包装运行时提供的渲染器**，而非捆�
 - **会话侧栏:ZCode 列表对齐一轮**(`SessionSidebar.tsx` / `SessionList.tsx` / gui-misc.css,用户指出):① 运行中指示器改为 8 芒星标**旋转**(`.gui-tree-working-spin`,ZCode ✳ parity —— 原为呼吸圆点;欢迎页提醒行保留脉动点);② 「近期」重复区块从三个 tab 全部移除 —— 它把下方分组/文件夹里已有的会话在顶部再列一遍,白占列表头部空间;`isRecentlyActive` 助手与其测试一并删除;③ 分组 tab 底栏保持**日期分组** —— 曾试过按项目文件夹自动分组「空间」,已回退(用户:与项目 tab 设计重合);导入的会话改为在导入时自动归纳进**可编辑**自定义分组(见 §30)。
 - **分组 tab 的全部展开/收起覆盖自定义分组**(`SessionSidebar.tsx`):tab 行按钮切换 `groupsAll`(null/true → 全部收起,false → 全部展开);自定义组是分组 tab 唯一的折叠块(「空间」已回退,见 §28③),展开/收起不再需要驱动文件夹块。
 - **浮动滚动条在容器死亡时收回**(`FloatingScrollbar.tsx`):闲时幽灵化让进度条获得了「余生」,容器被卸载后幽灵会永久悬在无关 UI 上 —— 进入设置后仍挂着会话列表的幽灵轨(用户报告)。轨可见期间跑一个 ~600ms 的探活(`targetGone()`:已断连**或**尺寸归零)并完全收回(`hideForGood`:摘除 `data-visible`/`data-idle`、清空拖拽目标);140ms 的 settle 检查与 1s 的 idle 定时走同一判断,滚动后立刻切界面也在一个探活周期内收回,不再滞留。
+
+## 28b. 浮动滚动条:按容器 keyed 的轨池 + 拆分热路径(2026-10-05)
+
+- **浮层按容器分配槽位,不再是全应用一条轨**(`FloatingScrollbar.tsx`)。`window` capture 阶段的 `scroll` 能看到每个可滚动容器,槽位首次见到容器时绑定(`bind`),经统一的 `retire` 回收。两个各自独立滚动的窗格现在各有自己的轨 —— 扩展中心的列表列与详情列都能显示位置。`MAX_RAILS`(6)个槽位占满时回收**最冷**的一条,所以用户正在动的容器总能保住轨。
+- **所有退出路径收敛到 `retire`** —— 已卸载、尺寸归零、两轴都不再溢出、或被池回收。`measure` 对每一种都返回 `false`,调用方随即回收。这修掉了「残轨」这一类缺陷:旧 `update()` 里 `overflowY` / `scrollHeight` / 零矩形三处提前 `return` 会把上一次定位的轨留在屏幕上,而 `remeasure()` 对同样情况的处理与它们并不一致。
+- **measure / position 拆分**(`measure` 冷路径,`position` 热路径)。`measure` 在第一次写之前就把各轴都读完 —— 矩形、`scrollHeight`/`clientHeight`、`scrollWidth`/`clientWidth`,以及解出的 `vScale`/`hScale`(每个滚动像素对应多少拇指像素),因此不会触发第二次布局。`position` 只读 `scrollTop`/`scrollLeft`,只写 `transform`。测量只由「盒尺寸真的可能变了」的路径触发:首次绑定、窗口尺寸变化、内容增删、指针移入、换皮肤(它们都置 `needsMeasure`,由 `measure` 清掉)。稳态滚动帧零布局读、零布局写。
+- **滚动按帧合并**(`scheduleUpdate`)。帧内重新读池,而不是捕获某个 scroll 事件的目标,所以同一帧内滚动的两个容器都会被处理。旧的闭包捕获的是本帧**第一个**目标,其余全部丢弃。
+- **程序化滚动的意图闸**。轨只为真实手势打开:`wheel`、`touchstart`、`touchmove`,或滚动按键(`SCROLL_KEYS`:方向键、PageUp/PageDown、Home/End、空格)落在 `INTENT_WINDOW_MS` 内。虚拟器占位写入、auto-follow、高度变形、焦点恢复不再闪出轨道。已经打开的轨不受此闸影响 —— 它只决定是否**打开**。
+- **容器悬停唤醒,仅鼠标**(`pointerenter`/`pointerleave` 绑在容器上):悬停可滚动区域即显示其轨并重新测量,因为被抑制的轨可能持有过期几何。触摸与触控笔在接触时同样触发 `pointerenter`,故排除在外,否则每次点击都会闪一下轨。
+- **单一移动 idle deadline**(`armIdle`),取代每个 scroll 事件的 `clearTimeout`+`setTimeout`:一次滚动突发只改写 `hideAt`,已装载的定时器重新检查并按剩余延时自我重装。闲时仍是拖拽把手 —— 轨淡为幽灵、拇指保持可抓 —— 但**槽位**在 `RELEASE_MS`(5s)后归还,池因此始终可用。
+- **双轴比例拇指**。两种皮肤都按可见比例定拇指长度,下限 `MIN_THUMB`(24px)、上限为轨道;吃豆人字形走满轨,已吃豆串用 `scaleY(进度)` 使进度表达不产生布局。无溢出的轴拿到的是**零长**拇指而非满长 —— 满宽的条会读成「横向还有更多」。横向拇指(`.gfs-h`)与纵向一样是拖拽把手。
+- **`stackZ` 不再按元素缓存**。祖先层级在运行时变化(提示条挂载、最大化面板升到 850、菜单打开),缓存的层级比产生它的状态活得更久,把轨画到了它本该跟随的遮罩之下。现在每次测量重走一遍。
+- **观察器按槽位持有,随槽位一起释放**。`ResizeObserver` 同时观察容器与其直接子节点(转写多一个回合、虚拟器换行都不会让滚动容器本身改变尺寸),`MutationObserver` 观察直接子节点变动,两者都在 `retire` 里 `disconnect()` —— 于是被回收的槽位既不累积观察目标,也不钉住已脱离文档的子树。
+- **常显偏好**(`scrollbar-skins.ts`:`readAlwaysShowScrollbar` / `saveAlwaysShowScrollbar` + `SCROLLBAR_ALWAYS_CHANGED_EVENT`,存储键模块内私有),在外观页与皮肤选择器并列一个开关。打开后轨出现即显示,并绕过 idle 闸。
+- 契约测试:`test/floating-scrollbar.test.tsx`(16 例)覆盖轨池(两条同时在用、回收、观察器释放)、retract 收敛(不溢出、卸载、零尺寸)、热路径(零布局读;通过劫持 `style.setProperty` 断言只写 `transform`)、双轴比例拇指、意图闸、常显、闲时,以及不缓存的层级解析。
+- **刻意不动**:系统滚动条仍全局隐藏(`gui-base.css`)—— 那是产品模型,而轨池正是修掉它代价的方式。轨池的代价是同时在用轨的上限为 6,超出即回收最冷的一条。
 - **设置行标签规范下沉到 CSS;索引库开关补 knob;使用统计热力图流式自适应**(同轮,用户指出):① `.gui-settings-row > div:first-child { flex: 1 1 0%; min-width: 0 }`(gui-chat.css,嵌套规则)—— 行是 `flex-wrap: wrap`,裸标签 `<div>` 按描述的 max-content 计宽,长中文文案一溢出就把开关挤到下一行(浏览器与 Computer Use 各行);需要特例的行仍可用显式 flex 工具类覆盖。② 索引库两个开关与此前 MCP/信息状态条是同一个缺 `.gui-toggle-knob` 的问题(已补)。③ 使用统计热力图原为固定 11px 网格(~690px),宽面板大片留白 —— 现为居中的 `max-w-[920px]` 图,53 个周列分享剩余宽度(`flex-1`,上限 15px),单元格 `aspect-square w-full` 跟随列宽,月份/星期标签镜像列几何(星期行 `1fr` 拉伸),任意宽度下都对齐。
 
 ## 29. 会话排序:打开不得重排(2026-09-13)
