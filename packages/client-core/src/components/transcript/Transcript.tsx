@@ -29,6 +29,7 @@ import { fmtDuration, fmtTokens } from "../../lib/format";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
+import { ErrorNotice } from "./error-notice";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { roundTimerKeyByRow, type TurnRenderUnit } from "./render-units";
@@ -843,14 +844,24 @@ function renderCustomMessage({
 				: undefined;
 		return (
 			<Row kind="custom" gutter="" title={timestamp}>
-				<div className="tr-retry-failure" role="alert">
-					<span className="tr-retry-failure-chip">{t("model error")}</span>
-					<span className="tr-retry-failure-message">{msgText({ content })}</span>
-					{attempt !== undefined && (
-						<span className="tr-retry-failure-attempt">
-							{t("retry attempt {count}", { count: String(attempt) })}
-						</span>
-					)}
+				<div className="tr-retry-failure">
+					{/*
+					 * Same surface as a turn's own error, and deliberately without
+					 * `role="alert"` twice over: this row and the assistant stop block
+					 * can both describe the same failure, and two live regions for one
+					 * fact makes a screen reader announce it twice. The retry row is
+					 * the durable record, so it keeps the role.
+					 */}
+					<ErrorNotice
+						kind="retry"
+						label={t("model error")}
+						raw={msgText({ content })}
+						meta={
+							attempt !== undefined ? (
+								<span className="tr-stop-meta">{t("retry attempt {count}", { count: String(attempt) })}</span>
+							) : undefined
+						}
+					/>
 				</div>
 			</Row>
 		);

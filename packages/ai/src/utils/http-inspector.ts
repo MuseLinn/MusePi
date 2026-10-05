@@ -80,12 +80,18 @@ export async function finalizeErrorMessage(
 	capturedErrorResponse?: CapturedHttpErrorResponse,
 ): Promise<string> {
 	let message = formatErrorMessageWithRetryAfter(error, capturedErrorResponse?.headers);
-	const capturedMessage = formatCapturedHttpError(capturedErrorResponse);
-	if (capturedMessage) {
+	const captured = formatCapturedHttpError(capturedErrorResponse);
+	if (captured) {
 		if (/\bstatus code\s*\(no body\)/i.test(message)) {
-			message = `${capturedErrorResponse?.status ?? "HTTP"} status code: ${capturedMessage}`;
-		} else if (!message.includes(capturedMessage)) {
-			message = `${message}\n${capturedMessage}`;
+			message = `${capturedErrorResponse?.status ?? "HTTP"} status code: ${captured.body}${captured.extras}`;
+		} else if (message.includes(captured.body)) {
+			// The provider already said this. Add only the provider code, which its
+			// own message has no field for.
+			if (captured.extras && !message.includes(captured.extras.trim())) {
+				message = `${message}${captured.extras}`;
+			}
+		} else {
+			message = `${message}\n${captured.body}${captured.extras}`;
 		}
 	}
 	return appendRawHttpRequestDumpFor400(message, error, rawRequestDump);
@@ -141,12 +147,14 @@ function redactHeaders(headers: Record<string, string> | undefined): Record<stri
 	return redacted;
 }
 
-function formatCapturedHttpError(captured: CapturedHttpErrorResponse | undefined): string | undefined {
+function formatCapturedHttpError(
+	captured: CapturedHttpErrorResponse | undefined,
+): { body: string; extras: string } | undefined {
 	if (!captured) return undefined;
 	const bodyText = captured.bodyText?.trim();
 	if (!bodyText) return undefined;
 	const payload = parseCapturedErrorPayload(captured);
-	if (!payload) return bodyText;
+	if (!payload) return { body: bodyText, extras: "" };
 
 	const errorPayload = getObjectProperty(payload, "error") ?? payload;
 	// {"error": "string"} — the error value is a plain string, not a nested object.
@@ -165,7 +173,12 @@ function formatCapturedHttpError(captured: CapturedHttpErrorResponse | undefined
 			if (index === 1) return `param=${value}`;
 			return `code=${value}`;
 		});
-	return extras.length > 0 ? `${message} (${extras.join(" ")})` : message;
+	// Body and metadata are kept apart so the merge can add whichever one is
+	// actually missing. Comparing a single decorated string missed the common
+	// case — a provider whose own message is the captured body without the
+	// (type=… code=…) suffix — and printed the body twice; comparing only the body
+	// would fix that but throw the provider code away.
+	return { body: message, extras: extras.length > 0 ? ` (${extras.join(" ")})` : "" };
 }
 
 function parseCapturedErrorPayload(captured: CapturedHttpErrorResponse): Record<string, unknown> | undefined {

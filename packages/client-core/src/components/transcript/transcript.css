@@ -511,6 +511,7 @@
 .tr-stop {
 	display: flex;
 	align-items: baseline;
+	flex-wrap: wrap;
 	gap: 8px;
 	margin-top: 2px;
 }
@@ -521,6 +522,49 @@
 	font-size: var(--ui-font-size-sm);
 	white-space: pre-wrap;
 	word-break: break-word;
+}
+
+.tr-stop-meta {
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-sm);
+}
+
+/* Disclosure, not a truncation: a provider body is usually one long line and its
+ * tail carries the provider's own message, so it folds rather than gets cut. */
+.tr-stop-toggle {
+	flex: none;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--color-text-muted);
+	font: inherit;
+	font-size: var(--ui-font-size-sm);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	cursor: pointer;
+}
+
+.tr-stop-toggle:hover {
+	color: var(--color-text);
+}
+
+.tr-stop-detail {
+	/* Own row: as a flex item it would share the baseline with the summary and
+	 * inherit its colour, which reads as more of the same sentence. */
+	flex: 1 0 100%;
+	margin: 2px 0 0;
+	padding: 6px 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	background: var(--color-surface-sunken);
+	color: var(--color-text-muted);
+	font-family: var(--font-mono);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 40vh;
+	overflow: auto;
 }
 
 /* ---- thinking ---- */

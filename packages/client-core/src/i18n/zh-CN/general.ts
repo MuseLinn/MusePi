@@ -612,6 +612,11 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "模型错误",
 	"retry attempt {count}": "重试第 {count} 次",
+	// 错误文本的摘要 / 技术细节分离：正文只留可操作的那句，其余折叠。
+	"show details": "显示详情",
+	"hide details": "隐藏详情",
+	"request failed": "请求失败",
+	"request interrupted": "请求已中断",
 	// 工具注册表时间线注入行（扩展/插件热插拔，display-only custom_message）。
 	"tools updated": "工具已更新",
 	"tools added {count}": "+{count} 新增",

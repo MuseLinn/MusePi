@@ -15,6 +15,7 @@ import { fmtDuration } from "../../lib/format";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
+import { ErrorNotice } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
@@ -967,14 +968,7 @@ export function AssistantBody({
 	return (
 		<>
 			{blocks}
-			{failed && (
-				<div className="tr-stop">
-					<span className={`tr-chip ${stop === "error" ? "tr-chip--err" : "tr-chip--warn"}`}>{stop}</span>
-					{message.errorMessage !== undefined && message.errorMessage.length > 0 && (
-						<span className="tr-stop-msg">{message.errorMessage}</span>
-					)}
-				</div>
-			)}
+			{failed ? <ErrorNotice kind={stop === "error" ? "error" : "aborted"} raw={message.errorMessage} /> : null}
 			{!pending && artifacts !== undefined && <FileCards items={artifacts} />}
 			{/* Standalone widget display (config 开启): the visualization
 			 * renders as its own adaptive card in the message flow, like a

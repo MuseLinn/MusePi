@@ -619,6 +619,12 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "Model error",
 	"retry attempt {count}": "Retry attempt {count}",
+	// Summary / technical-detail split for error text: the body keeps the one line
+	// the user can act on, the rest folds away.
+	"show details": "Show details",
+	"hide details": "Hide details",
+	"request failed": "Request failed",
+	"request interrupted": "Request interrupted",
 	// Tool-registry timeline injection row (extension/plugin hot-toggle; display-only custom_message).
 	"tools updated": "Tools updated",
 	"tools added {count}": "+{count} added",
