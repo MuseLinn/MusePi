@@ -1914,10 +1914,21 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Get the base URL associated with a provider, if any model defines one.
+	 * Get the base URL associated with a provider.
+	 *
+	 * Runtime and config overrides lead because a model-derived answer only
+	 * exists once discovery has populated the registry. A caller that probes
+	 * credentials immediately — `musepi usage`, the daemon usage service — has
+	 * no discovered model for a discovery-only provider yet, so deriving solely
+	 * from models returned `undefined` cache-cold and let a proxy-scoped key
+	 * reach the provider's canonical host.
 	 */
 	getProviderBaseUrl(provider: string): string | undefined {
-		return this.#modelsForProviderLookup(provider).find(m => m.provider === provider && m.baseUrl)?.baseUrl;
+		return (
+			this.#runtimeProviderOverrides.get(provider)?.baseUrl ??
+			this.#providerOverrides.get(provider)?.baseUrl ??
+			this.#modelsForProviderLookup(provider).find(m => m.provider === provider && m.baseUrl)?.baseUrl
+		);
 	}
 	/**
 	 * Get provider-level headers without including per-model overrides.

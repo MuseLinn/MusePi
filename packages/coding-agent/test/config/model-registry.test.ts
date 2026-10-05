@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AuthStorage } from "@musepi/pi-ai";
@@ -178,5 +178,45 @@ describe("ModelRegistry", () => {
 		vi.spyOn(registry, "getApiKey").mockRejectedValue(new Error("auth failed"));
 
 		expect(await registry.getApiKeyAndHeaders(model)).toEqual({ ok: false, error: "auth failed" });
+	});
+
+	test("a configured provider baseUrl wins before any model is discovered", () => {
+		// A discovery-only provider has no model to read a URL from cache-cold.
+		// Deriving solely from models left this `undefined`, which sent a
+		// proxy-scoped credential probe to the provider's canonical host.
+		writeFileSync(
+			path.join(tmpDir, "models.yaml"),
+			[
+				"providers:",
+				"  override-leads:",
+				"    baseUrl: https://proxy.example.test/v1",
+				"    api: anthropic-messages",
+				"",
+			].join("\n"),
+		);
+		// The registry resolves its config file through the agent dir, so the
+		// lookup runs in a subprocess scoped to the temp dir.
+		const script = `
+			import { ModelRegistry } from "@musepi/pi-coding-agent/config/model-registry";
+			import { AuthStorage } from "@musepi/pi-coding-agent/session/auth-storage";
+			const authStorage = await AuthStorage.create(":memory:");
+			try {
+				const registry = new ModelRegistry(authStorage);
+				process.stdout.write(JSON.stringify(registry.getProviderBaseUrl("override-leads") ?? null));
+			} finally {
+				authStorage.close();
+			}
+		`;
+		const result = Bun.spawnSync([process.execPath, "-e", script], {
+			cwd: path.resolve(import.meta.dir, "../.."),
+			env: { ...process.env, PI_CODING_AGENT_DIR: tmpDir },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const stdout = new TextDecoder().decode(result.stdout).trim();
+		const stderr = new TextDecoder().decode(result.stderr).trim();
+
+		expect(result.exitCode, stderr || stdout).toBe(0);
+		expect(JSON.parse(stdout)).toBe("https://proxy.example.test/v1");
 	});
 });
