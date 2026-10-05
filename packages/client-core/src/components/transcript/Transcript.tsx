@@ -1,10 +1,4 @@
-import {
-	type AssistantMessage,
-	type CustomMessageEntry,
-	entryStartMs,
-	type SessionEntry,
-	type ToolResultMessage,
-} from "@musepi/pi-wire";
+import type { AssistantMessage, CustomMessageEntry, SessionEntry, ToolResultMessage } from "@musepi/pi-wire";
 import { play } from "cuelume";
 import { Check as CheckIconData, Copy as CopyIconData } from "lucide";
 import { ArrowDown, GitFork, ImageDown, MessageSquare, Pencil, RefreshCw, Undo2, Volume2 } from "lucide-react";
@@ -33,7 +27,7 @@ import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
-import { roundTimerKeyByRow, type TurnRenderUnit } from "./render-units";
+import { roundTimerKeyByRow } from "./render-units";
 import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
 import { hasTextBlock } from "./row-kinds";
 import {
@@ -66,7 +60,6 @@ import {
 	ToolRunLine,
 	type TranscriptNodeInjection,
 	TtsrBlock,
-	TurnHeader,
 	transcriptNodeKind,
 	UserMsgContent,
 	WorkingLine,
@@ -191,9 +184,7 @@ export interface TranscriptProps {
 	 *  auto-classified or user-picked effort). Shown beside the per-round
 	 *  work timer as `model · level` (auto-thinking transparency). */
 	thinkingLevel?: string;
-	/** Session model ("provider/modelId") — the M1 turn header's per-turn
-	 *  model fallback for turns before any `model_change` row. */
-	model?: string;
+
 	compact?: boolean; // dense variant for the agent drawer
 	/** Sub-session drill-down capabilities forwarded to tool renderers. */
 	host?: ToolRenderHost;
@@ -1168,7 +1159,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		working,
 		roundDurations,
 		thinkingLevel,
-		model,
 		compact,
 		host,
 		userGutter,
@@ -1493,35 +1483,13 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		deriveCacheRef.current = createTurnDeriveCache();
 	}, [sessionKey]);
 	const { folds, units: turnUnits } = useMemo(
-		() => deriveTurns(entries, working, { fallbackModel: model }, deriveCacheRef.current),
-		[entries, working, model],
+		() => deriveTurns(entries, working, deriveCacheRef.current),
+		[entries, working],
 	);
-	const turnUnitByStart = useMemo(() => {
-		const map = new Map<number, TurnRenderUnit>();
-		for (const unit of turnUnits) map.set(unit.startIdx, unit);
-		return map;
-	}, [turnUnits]);
 	// Frozen-total lookup: each turn's LAST assistant row → the turn-start ts
 	// key the daemon/GUI recorders freeze the total under (one key space —
 	// daemon-seeded snapshots and live GUI writes hit the same entry).
 	const roundTimerKeys = useMemo(() => roundTimerKeyByRow(entries, turnUnits), [entries, turnUnits]);
-	// Turn header's 已完成 + frozen total: same turn-start key, with the
-	// reply-ts fallback for pre-anchor snapshots.
-	const turnHeaderDurationMs = useCallback(
-		(unit: TurnRenderUnit): number | undefined => {
-			const startEntry = entries[unit.startIdx];
-			if (startEntry === undefined) return undefined;
-			const startMs = entryStartMs(startEntry);
-			if (!Number.isFinite(startMs)) return undefined;
-			return (
-				roundDurations?.get(startMs) ??
-				(unit.replyIdx >= 0
-					? roundDurations?.get((entries[unit.replyIdx] as { message: { timestamp: number } }).message.timestamp)
-					: undefined)
-			);
-		},
-		[entries, roundDurations],
-	);
 
 	// Completed-round fold OPEN-state keys are the round's user-message id
 	// (fold.userId), NOT the entry index: history prepends shift absolute
@@ -2084,7 +2052,6 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		// The frozen round duration keys off the turn-START ts (shared
 		// recorder contract), with the reply-ts fallback for pre-anchor
 		// snapshots.
-		const turnUnit = turnUnitByStart.get(absIdx);
 		// Completed-round folding: working
 		// entries between a user message and its final reply fold behind
 		// a header once the round is done and isn't the live tail. The
@@ -2286,23 +2253,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				{body}
 			</Fragment>
 		);
-		// M1 turn header: rendered above the turn-start row. Rows hidden
-		// by the compaction fold returned null earlier (no orphans), and
-		// turn starts never sit inside a fold's hidden span — the span
-		// begins AFTER the user message.
-		const rowWithTurnHead =
-			turnUnit !== undefined ? (
-				<Fragment key={`${entry.id}-turn`}>
-					<TurnHeader
-						unit={turnUnit}
-						time={branchClock(entry.timestamp)}
-						durationMs={turnHeaderDurationMs(turnUnit)}
-					/>
-					{row}
-				</Fragment>
-			) : (
-				row
-			);
+
 		// Layer-1 branch bar: a message with MULTIPLE children gets
 		// a switchable divider under it (hidden when the caller
 		// provides no branch topology — plain linear sessions).
@@ -2320,7 +2271,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 		if (branchInfo && !anchorCollapsed && kids.length > 1 && entry.type === "message") {
 			return (
 				<div key={entry.id} className="tr-branch-wrap">
-					{rowWithTurnHead}
+					{row}
 					<BranchBar
 						count={kids.length}
 						childrenLabels={kids}
@@ -2330,7 +2281,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 				</div>
 			);
 		}
-		return rowWithTurnHead;
+		return row;
 	};
 
 	return (

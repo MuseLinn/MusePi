@@ -71,22 +71,6 @@ export interface TurnRenderUnit {
 	/** True while this turn is the in-flight tail and the agent is working —
 	 *  the design doc §D streaming state (work segment stays expanded). */
 	isRunning: boolean;
-	/** Model serving this turn (design doc turn header): the LAST
-	 *  `model_change` within the turn (a mid-turn switch applies to the reply
-	 *  the turn ends on), falling back to the session model. "provider/modelId"
-	 *  shortened to "modelId". */
-	model?: string;
-}
-
-/** "provider/modelId" → "modelId" (turn header real estate). */
-function shortModel(model: string): string {
-	const slash = model.lastIndexOf("/");
-	return slash > 0 && slash < model.length - 1 ? model.slice(slash + 1) : model;
-}
-
-export interface BuildTurnRenderUnitsOptions {
-	/** Session model for turns before any `model_change` row. */
-	fallbackModel?: string;
 }
 
 /**
@@ -143,30 +127,12 @@ export function turnUnitSpan(entries: readonly SessionEntry[], startIdx: number,
  * in-flight boundary — passing the same value keeps fold state and render
  * units consistent.
  */
-export function buildTurnRenderUnits(
-	entries: readonly SessionEntry[],
-	working: boolean,
-	options?: BuildTurnRenderUnitsOptions,
-): TurnRenderUnit[] {
+export function buildTurnRenderUnits(entries: readonly SessionEntry[], working: boolean): TurnRenderUnit[] {
 	const starts: number[] = [];
 	for (let i = 0; i < entries.length; i++) {
 		if (isTurnStart(entries[i])) starts.push(i);
 	}
-	// Model serving each turn: the LAST model_change within the turn
-	// (inclusive — a switch mid-turn applies to the reply the turn ends on),
-	// falling back to the session model for turns with no change at all. One
-	// forward pass records the model at every turn END index.
-	const modelAtEnd = new Map<number, string>();
-	const endIdxs = new Set<number>();
-	for (let t = 0; t < starts.length; t++) {
-		endIdxs.add((t + 1 < starts.length ? starts[t + 1]! : entries.length) - 1);
-	}
-	let currentModel = options?.fallbackModel;
-	for (let i = 0; i < entries.length; i++) {
-		const e = entries[i]!;
-		if (e.type === "model_change") currentModel = e.model;
-		if (currentModel !== undefined && endIdxs.has(i)) modelAtEnd.set(i, shortModel(currentModel));
-	}
+
 	const units: TurnRenderUnit[] = [];
 	for (let t = 0; t < starts.length; t++) {
 		const startIdx = starts[t]!;
@@ -185,7 +151,6 @@ export function buildTurnRenderUnits(
 			hookIdxs: span.hookRel.map(r => r + startIdx),
 			isLastTurn,
 			isRunning: working && isLastTurn,
-			model: modelAtEnd.get(endIdx),
 		});
 	}
 	return units;

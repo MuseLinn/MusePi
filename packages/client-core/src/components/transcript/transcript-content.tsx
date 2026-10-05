@@ -11,7 +11,7 @@ import type { ComponentType, ReactNode } from "react";
 import { createElement, Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { ActiveTool } from "../../lib/client";
-import { fmtDuration } from "../../lib/format";
+
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
@@ -19,7 +19,7 @@ import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
-import type { TurnRenderUnit } from "./render-units";
+
 import type { RoundFold, ToolRunSummary } from "./round-collapse";
 import { ToolCard } from "./ToolCard";
 import { splitThinkingSentences } from "./thinking-sentences";
@@ -995,50 +995,5 @@ export function AssistantBody({
 				<div className="tr-usage">{usageRow(message)}</div>
 			)}
 		</>
-	);
-}
-
-/**
- * M1 turn header (design doc §A): the light timeline boundary above each turn
- * start — hairline · dot · 模型/时间 · 状态(+冻结耗时) · hairline. The
- * running tail shows an accent dot + 进行中 with NO duration (the live ticker
- * under the reply owns the counting); completed turns show ✓-colored 已完成
- * plus the frozen round total. NO absolute turn number: the header's index
- * was relative to the currently loaded window, while the round rail counts
- * the daemon's full session.turns — long sessions / paging / branch switches
- * made the two disagree (product decision 2026-09-24: the rail is the sole
- * turn counter; the header keeps model / time / status / duration). Purely
- * presentational — all data comes from the caller's TurnRenderUnit plus the
- * round-duration map lookup.
- */
-export function TurnHeader({
-	unit,
-	time,
-	durationMs,
-}: {
-	unit: TurnRenderUnit;
-	/** Turn-start clock label ("14:02") — undefined hides the clock. */
-	time?: string;
-	/** Frozen round total (roundDurations, keyed by the turn-START timestamp
-	 *  under the shared pi-wire recorder contract; pre-anchor snapshots keyed
-	 *  by the reply ts stay readable via the caller's fallback) — undefined
-	 *  while running or when no reply yet. */
-	durationMs?: number;
-}): ReactNode {
-	const running = unit.isRunning;
-	return (
-		<div className="tr-turn-head" aria-hidden={running ? undefined : true}>
-			<span className="tr-turn-head-line" />
-			<span className={`tr-turn-head-dot${running ? " tr-turn-head-dot--run" : ""}`} />
-			{unit.model !== undefined && <span>{unit.model}</span>}
-			{unit.model !== undefined && time !== undefined && <span className="tr-turn-head-sep">·</span>}
-			{time !== undefined && <span>{time}</span>}
-			<span className="tr-turn-head-sep">·</span>
-			<span className={running ? "tr-turn-head-status--run" : "tr-turn-head-status--done"}>
-				{running ? t("turn running") : t("turn done")}
-			</span>
-			{!running && durationMs !== undefined && <span className="tr-turn-head-dur">· {fmtDuration(durationMs)}</span>}
-			<span className="tr-turn-head-line" />
-		</div>
 	);
 }

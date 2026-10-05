@@ -234,39 +234,6 @@ describe("shouldShowChatLoading (design doc §B judgment table)", () => {
 	});
 });
 
-describe("buildTurnRenderUnits model tracking", () => {
-	test("fallback model applies to turns before any model_change", () => {
-		const entries = [userMsg(), assistantText("a")];
-		const [u] = buildTurnRenderUnits(entries, false, { fallbackModel: "anthropic/k2.5" });
-		expect(u!.model).toBe("k2.5");
-	});
-
-	test("no fallback and no model_change → model undefined", () => {
-		const entries = [userMsg(), assistantText("a")];
-		const [u] = buildTurnRenderUnits(entries, false);
-		expect(u!.model).toBeUndefined();
-	});
-
-	test("model_change folds forward to later turns only", () => {
-		const entries = [
-			userMsg(),
-			assistantText("a"),
-			userMsg("next"),
-			withId({ type: "model_change", model: "zai/glm-5" }),
-			assistantText("b"),
-		];
-		const units = buildTurnRenderUnits(entries, false);
-		expect(units[0]!.model).toBeUndefined();
-		expect(units[1]!.model).toBe("glm-5");
-	});
-
-	test("bare model id without provider stays as-is", () => {
-		const entries = [withId({ type: "model_change", model: "k2.5" }), userMsg(), assistantText("a")];
-		const [u] = buildTurnRenderUnits(entries, false);
-		expect(u!.model).toBe("k2.5");
-	});
-});
-
 describe("roundTimerKeyByRow", () => {
 	// Contract: the row that displays a turn's frozen total (its LAST
 	// assistant row) maps to the turn-START key the shared recorder writes —

@@ -18,12 +18,7 @@
  */
 
 import type { SessionEntry } from "@musepi/pi-wire";
-import {
-	type BuildTurnRenderUnitsOptions,
-	buildTurnRenderUnits,
-	type TurnRenderUnit,
-	turnUnitSpan,
-} from "./render-units.js";
+import { buildTurnRenderUnits, type TurnRenderUnit, turnUnitSpan } from "./render-units.js";
 import { buildRoundFolds, foldSpan, isTurnStart, type RoundFold } from "./round-collapse.js";
 
 export interface TurnDeriveResult {
@@ -74,7 +69,6 @@ function entryUserId(e: SessionEntry): string | null {
 export function deriveTurns(
 	entries: readonly SessionEntry[],
 	working: boolean,
-	options?: BuildTurnRenderUnitsOptions,
 	cache?: TurnDeriveCache,
 ): TurnDeriveResult {
 	const c = cache ?? createTurnDeriveCache();
@@ -85,7 +79,7 @@ export function deriveTurns(
 	const lastEntry = entries[entries.length - 1];
 	const sig = `${entries.length}:${entryId(firstEntry, 0)}:${entryId(lastEntry, entries.length - 1)}:${
 		working ? 1 : 0
-	}:${options?.fallbackModel ?? ""}`;
+	}`;
 	if (
 		c.lastResult !== null &&
 		c.lastSig === sig &&
@@ -102,25 +96,6 @@ export function deriveTurns(
 	const starts: number[] = [];
 	for (let i = 0; i < entries.length; i++) {
 		if (isTurnStart(entries[i])) starts.push(i);
-	}
-
-	// ── Model resolution: one full pass of `type === "model_change"`
-	// compares — cheap, and a turn's model depends on every change before
-	// it, so it cannot be span-cached. ────────────────────────────────────
-	const endIdxs = new Set<number>();
-	for (let t = 0; t < starts.length; t++) {
-		endIdxs.add((t + 1 < starts.length ? starts[t + 1]! : entries.length) - 1);
-	}
-	const modelAtEnd = new Map<number, string>();
-	let currentModel = options?.fallbackModel;
-	const shortModel = (m: string): string => {
-		const slash = m.lastIndexOf("/");
-		return slash > 0 && slash < m.length - 1 ? m.slice(slash + 1) : m;
-	};
-	for (let i = 0; i < entries.length; i++) {
-		const e = entries[i]!;
-		if (e.type === "model_change") currentModel = e.model;
-		if (currentModel !== undefined && endIdxs.has(i)) modelAtEnd.set(i, shortModel(currentModel));
 	}
 
 	// ── Per-round spans, cache-first ─────────────────────────────────────
@@ -178,7 +153,6 @@ export function deriveTurns(
 			hookIdxs: span.unit.hookRel.map(r => r + startIdx),
 			isLastTurn,
 			isRunning: working && isLastTurn,
-			model: modelAtEnd.get(endIdx),
 		});
 	}
 
@@ -200,13 +174,9 @@ export function deriveTurns(
  * Parity baseline for tests and diagnostics: the uncached full-list
  * derivation (existing builders, kept as the ground truth).
  */
-export function deriveTurnsUncached(
-	entries: readonly SessionEntry[],
-	working: boolean,
-	options?: BuildTurnRenderUnitsOptions,
-): TurnDeriveResult {
+export function deriveTurnsUncached(entries: readonly SessionEntry[], working: boolean): TurnDeriveResult {
 	return {
 		folds: buildRoundFolds(entries, working),
-		units: buildTurnRenderUnits(entries, working, options),
+		units: buildTurnRenderUnits(entries, working),
 	};
 }

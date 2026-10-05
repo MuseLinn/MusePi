@@ -51,9 +51,9 @@ function round(): SessionEntry[] {
 	return [userMsg(), assistantToolCall(`c${++seq}`), toolResult(`c${seq}`), assistantText("done")];
 }
 
-function expectParity(entries: readonly SessionEntry[], working: boolean, options?: { fallbackModel?: string }): void {
-	const cached = deriveTurns(entries, working, options, createTurnDeriveCache());
-	const uncached = deriveTurnsUncached(entries, working, options);
+function expectParity(entries: readonly SessionEntry[], working: boolean): void {
+	const cached = deriveTurns(entries, working, createTurnDeriveCache());
+	const uncached = deriveTurnsUncached(entries, working);
 	expect(cached.folds).toEqual(uncached.folds);
 	expect(cached.units).toEqual(uncached.units);
 }
@@ -93,7 +93,7 @@ describe("deriveTurns parity with uncached builders", () => {
 		];
 		expectParity(entries, false);
 		expectParity(entries, true);
-		expectParity(entries, false, { fallbackModel: "acme/fallback" });
+		expectParity(entries, false);
 	});
 
 	test("pre-compaction entries + trailing compaction row", () => {
@@ -106,19 +106,19 @@ describe("deriveTurns incremental caching", () => {
 	test("identical inputs return the same result by reference", () => {
 		const cache = createTurnDeriveCache();
 		const entries = [...round(), ...round()];
-		const a = deriveTurns(entries, false, undefined, cache);
-		const b = deriveTurns(entries, false, undefined, cache);
+		const a = deriveTurns(entries, false, cache);
+		const b = deriveTurns(entries, false, cache);
 		expect(a).toBe(b);
 	});
 
 	test("streaming append reuses completed-round spans (absolute shifts correct)", () => {
 		const cache = createTurnDeriveCache();
 		const first = round();
-		const r1 = deriveTurns(first, false, undefined, cache);
+		const r1 = deriveTurns(first, false, cache);
 		// Stream a second round in: the first round's fold must be reused
 		// internally AND come out with identical absolute indexes.
 		const second = [...first, ...round()];
-		const r2 = deriveTurns(second, false, undefined, cache);
+		const r2 = deriveTurns(second, false, cache);
 		expect(r2.folds.slice(0, r1.folds.length)).toEqual(r1.folds);
 		expect(deriveTurnsUncached(second, false).folds).toEqual(r2.folds);
 	});
@@ -126,11 +126,11 @@ describe("deriveTurns incremental caching", () => {
 	test("history prepend hits the same span cache (indexes shift, content stable)", () => {
 		const cache = createTurnDeriveCache();
 		const tail = [...round(), ...round()];
-		deriveTurns(tail, false, undefined, cache);
+		deriveTurns(tail, false, cache);
 		// Page in an older round ABOVE: every existing round shifts by +4
 		// but its content (and span key) is unchanged.
 		const prepended = [...round(), ...tail];
-		const r = deriveTurns(prepended, false, undefined, cache);
+		const r = deriveTurns(prepended, false, cache);
 		expect(r.folds).toEqual(deriveTurnsUncached(prepended, false).folds);
 		expect(r.units).toEqual(deriveTurnsUncached(prepended, false).units);
 	});
@@ -138,8 +138,8 @@ describe("deriveTurns incremental caching", () => {
 	test("working flag flips the in-flight fold without touching spans", () => {
 		const cache = createTurnDeriveCache();
 		const entries = [...round(), userMsg(), assistantToolCall(`c${++seq}`), toolResult(`c${seq}`)];
-		const idle = deriveTurns(entries, false, undefined, cache);
-		const working = deriveTurns(entries, true, undefined, cache);
+		const idle = deriveTurns(entries, false, cache);
+		const working = deriveTurns(entries, true, cache);
 		// The trailing round folds only when idle.
 		expect(idle.folds.length).toBe(2);
 		expect(working.folds.length).toBe(1);
@@ -149,10 +149,10 @@ describe("deriveTurns incremental caching", () => {
 	test("truncated tail prunes stale span entries", () => {
 		const cache = createTurnDeriveCache();
 		const full = [...round(), ...round(), ...round()];
-		deriveTurns(full, false, undefined, cache);
+		deriveTurns(full, false, cache);
 		expect(cache.spans.size).toBe(3);
 		const truncated = full.slice(0, 4); // keep one round
-		const r = deriveTurns(truncated, false, undefined, cache);
+		const r = deriveTurns(truncated, false, cache);
 		expect(r.folds).toEqual(deriveTurnsUncached(truncated, false).folds);
 		expect(cache.spans.size).toBe(1);
 	});
@@ -160,11 +160,11 @@ describe("deriveTurns incremental caching", () => {
 	test("endpoint identity changes defeat the cache (no stale data)", () => {
 		const cache = createTurnDeriveCache();
 		const entries = [...round()];
-		const a = deriveTurns(entries, false, undefined, cache);
+		const a = deriveTurns(entries, false, cache);
 		// (a) An in-place ID change alters the signature → full recompute.
 		const first = entries[0] as { id: string };
 		first.id = "mutated-id";
-		const b = deriveTurns(entries, false, undefined, cache);
+		const b = deriveTurns(entries, false, cache);
 		expect(b.folds).toEqual(deriveTurnsUncached(entries, false).folds);
 		expect(b).not.toBe(a);
 		// (b) Replacing the tail entry object (new reference, same id/length)
@@ -178,25 +178,8 @@ describe("deriveTurns incremental caching", () => {
 		];
 		// Keep the id stable so only object identity differs.
 		(replaced[replaced.length - 1] as { id: string }).id = (entries[entries.length - 1] as { id: string }).id;
-		const d = deriveTurns(replaced, false, undefined, cache);
+		const d = deriveTurns(replaced, false, cache);
 		expect(d).not.toBe(b);
 		expect(d.units.map(u => u.replyIdx)).toEqual(deriveTurnsUncached(replaced, false).units.map(u => u.replyIdx));
-	});
-
-	test("model resolution stays correct with cached spans", () => {
-		const cache = createTurnDeriveCache();
-		const entries: SessionEntry[] = [modelChange("acme/fast"), ...round(), modelChange("acme/slow"), ...round()];
-		const r = deriveTurns(entries, false, { fallbackModel: "acme/fb" }, cache);
-		// The model_change row sits INSIDE turn 0's range (turn = up to the row
-		// before the next turn start) — inclusive semantics make it apply to
-		// turn 0's end (same as the uncached builder, verified by parity).
-		expect(r.units.map(u => u.model)).toEqual(["slow", "slow"]);
-		expect(r.units.map(u => u.model)).toEqual(
-			deriveTurnsUncached(entries, false, { fallbackModel: "acme/fb" }).units.map(u => u.model),
-		);
-		// Append another round — model carries forward through the cache.
-		const grown: SessionEntry[] = [...entries, ...round()];
-		const r2 = deriveTurns(grown, false, { fallbackModel: "acme/fb" }, cache);
-		expect(r2.units.map(u => u.model)).toEqual(["slow", "slow", "slow"]);
 	});
 });
