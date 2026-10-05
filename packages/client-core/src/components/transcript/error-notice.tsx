@@ -1,121 +1,107 @@
 /**
- * Error presentation shared by the two surfaces that report a failed turn.
+ * The two surfaces a failed turn can reach, split by who owns the failure.
  *
- * A failed turn used to reach the user as an ordinary assistant message: it took
- * the reply's avatar and gutter, and printed whatever the provider sent in raw
- * monospace. That reads as the model having said it, and a provider error is not
- * the model's words — it is a fact about the request. Both surfaces now go
- * through here so the same failure cannot look like two different things.
+ * Both come from the same fact, so both had to be reconciled with the rule the
+ * reference implementations use: one failure, one owning surface.
  *
- * Two ideas from the reference implementations are in play:
+ *  - {@link TurnErrorBody} is the message-level surface. The turn failed while
+ *    (or before) producing its reply, so its reason stands in for the reply, in
+ *    the message column, in ordinary body typography. It stays in history,
+ *    because scrolling back to read why a turn stopped is a legitimate thing to
+ *    want, and it takes no alarm colours: severity here is carried by the words
+ *    and a small mark, not by painting a paragraph red.
+ *  - {@link SessionErrorBanner} is the session-level surface. The runtime gave
+ *    up on the round rather than reporting it into a message, so it docks above
+ *    the composer instead of joining the flow, and it shows only while that round
+ *    is the current one — sending again supersedes it. There is no close button
+ *    on purpose: the next prompt is the dismissal.
  *
- *  - The captured-response merge in packages/ai can hand us several lines, where
- *    only the first is the reason and the rest is diagnostic. So the text is
- *    split: the summary is what stays visible, the remainder folds.
- *  - A long single-line provider body (a JSON envelope, typically) must not be
- *    truncated at a fixed column, because the tail is where the provider's own
- *    error message usually is. It folds by length here instead of being cut.
+ * The banner is the liquid-glass treatment the rest of the docked composer
+ * surfaces use, tinted with the error hue rather than the accent.
  *
- * Summary versus detail is decided by shape, not by pattern-matching provider
- * text: matching message strings is exactly the practice the transport-error
- * layer warns against, because renaming a provider's phrasing silently
- * reclassifies the failure.
+ * Long provider bodies fold through {@link LongErrorText} on both surfaces. The
+ * threshold is on the whole text, not on a line width, because a provider error
+ * is typically one enormous line and a width-based cut would hide the provider's
+ * own message at the tail.
  */
 import type { ReactNode } from "react";
-import { useState } from "react";
 import { t } from "../../i18n/index.js";
+import { LongErrorText } from "./long-error-text.js";
 
-/** Above this, a single unbroken line is folded rather than shown whole. */
-const SUMMARY_MAX = 220;
+/** Which way the turn ended, so the body can say so in words. */
+export type TurnErrorKind = "error" | "aborted";
 
-export interface ErrorText {
-	/** The line that stays visible. */
-	summary: string;
-	/** Everything else, or empty when there is nothing to fold away. */
-	detail: string;
-}
-
-/**
- * Split raw error text into a visible summary and foldable detail.
- *
- * Lines come first because that is how the captured-response merge composes
- * them. A single line longer than {@link SUMMARY_MAX} is cut at a word boundary
- * when one is near, and the tail becomes the detail — never dropped.
- */
-export function splitErrorText(raw: string | undefined): ErrorText {
-	const text = (raw ?? "").trim();
-	if (!text) return { summary: "", detail: "" };
-
-	const lines = text
-		.split("\n")
-		.map(line => line.trim())
-		.filter(line => line.length > 0);
-	const [first = "", ...rest] = lines;
-
-	if (lines.length > 1) {
-		return { summary: first, detail: rest.join("\n") };
-	}
-	if (first.length <= SUMMARY_MAX) {
-		return { summary: first, detail: "" };
-	}
-
-	// Single long line: keep the cut on a space so the visible half is readable,
-	// falling back to a hard cut when the text has no spaces to break on.
-	const window = first.slice(0, SUMMARY_MAX);
-	const lastSpace = window.lastIndexOf(" ");
-	const head = lastSpace > SUMMARY_MAX / 2 ? window.slice(0, lastSpace) : window;
-	return { summary: `${head}…`, detail: first.slice(head.length).replace(/^\s+/, "") };
-}
-
-export interface ErrorNoticeProps {
-	/** `error` reads as a failure, `aborted` as something the user stopped. */
-	kind: "error" | "aborted" | "retry";
-	/** Chip label. Defaults to a translated phrase when omitted. */
-	label?: string;
-	/** Trailing metadata, e.g. the retry attempt counter. */
-	meta?: ReactNode;
+export interface TurnErrorBodyProps {
+	kind: TurnErrorKind;
+	/** The provider's text. Nothing renders when this is empty. */
 	raw?: string | undefined;
-	/** When given, wins over `raw` so a caller can supply its own split. */
-	text?: ErrorText;
+	/**
+	 * Attempt count, merged in from a co-located `retry_failure` row. The body is
+	 * the surface that owns the reason, so the count belongs to it too rather
+	 * than to a second row repeating a failure the reader has already passed.
+	 */
+	attempt?: number | undefined;
 }
 
 /**
- * One failed turn, rendered as a fact about the request rather than as speech.
+ * A failed turn, rendered as that turn's own text.
  *
- * The disclosure is a plain button rather than `<details>` so the open state is
- * controllable — a provider error that folds itself shut the moment it is
- * expanded cannot be expanded again after a re-render.
+ * No live region: this sits inside the transcript, which announces its own
+ * messages, and a second region describing the same fact makes a screen reader
+ * say it twice.
  */
-export function ErrorNotice({ kind, label, meta, raw, text }: ErrorNoticeProps): ReactNode {
-	const [open, setOpen] = useState(false);
-	const split = text ?? splitErrorText(raw);
-	if (!split.summary && !split.detail) return null;
-
-	const chip =
-		label ??
-		(kind === "aborted" ? t("request interrupted") : kind === "retry" ? t("model error") : t("request failed"));
+export function TurnErrorBody({ kind, raw, attempt }: TurnErrorBodyProps): ReactNode {
+	const text = (raw ?? "").trim();
+	if (!text) return null;
+	const label = kind === "aborted" ? t("request interrupted") : t("request failed");
 
 	return (
-		<div className="tr-stop" role="alert" data-error-kind={kind}>
-			<span className={`tr-chip ${kind === "error" ? "tr-chip--err" : "tr-chip--warn"}`}>{chip}</span>
-			<span className="tr-stop-msg">{split.summary}</span>
-			{meta !== undefined && meta !== null ? <span className="tr-stop-meta">{meta}</span> : null}
-			{split.detail ? (
-				<>
-					<button
-						type="button"
-						className="tr-stop-toggle"
-						aria-expanded={open}
-						onClick={() => setOpen(value => !value)}
-					>
-						{open ? t("hide details") : t("show details")}
-					</button>
-					{open ? (
-						<pre className="tr-stop-detail" tabIndex={0}>
-							{split.detail}
-						</pre>
-					) : null}
-				</>
+		<div className="tr-error-body" data-error-kind={kind}>
+			<div className="tr-error-body-head">
+				<span className="tr-error-body-mark" aria-hidden="true" />
+				<span className="tr-error-body-label">{label}</span>
+				{attempt !== undefined ? (
+					<span className="tr-error-body-meta">{t("retry attempt {count}", { count: String(attempt) })}</span>
+				) : null}
+			</div>
+			<LongErrorText text={text}>{visible => <div className="tr-error-body-text">{visible}</div>}</LongErrorText>
+		</div>
+	);
+}
+
+export interface SessionErrorBannerProps {
+	title: string;
+	/** The provider's text. When empty, only the title and `action` render. */
+	raw?: string | undefined;
+	/** Trailing metadata, e.g. how many attempts were spent. */
+	meta?: ReactNode;
+	/** Offered when there is no text to show, e.g. a link to the runtime status. */
+	action?: ReactNode;
+}
+
+/**
+ * A round the runtime stopped without reporting into any message.
+ *
+ * `role="status"` rather than `alert`: this is a standing fact about the current
+ * round, not something that just happened at the moment it appeared, and an
+ * assertive region would interrupt whatever the transcript was saying.
+ */
+export function SessionErrorBanner({ title, raw, meta, action }: SessionErrorBannerProps): ReactNode {
+	const text = (raw ?? "").trim();
+	return (
+		<div className="tr-error-banner" role="status" data-error-kind="session">
+			<div className="tr-error-banner-head">
+				<span className="tr-error-banner-mark" aria-hidden="true" />
+				<span className="tr-error-banner-title">{title}</span>
+				{meta !== undefined && meta !== null ? <span className="tr-error-banner-meta">{meta}</span> : null}
+			</div>
+			{text ? (
+				<LongErrorText text={text}>
+					{visible => <div className="tr-error-banner-text">{visible}</div>}
+				</LongErrorText>
+			) : null}
+			{!text && action !== undefined && action !== null ? (
+				<div className="tr-error-banner-action">{action}</div>
 			) : null}
 		</div>
 	);

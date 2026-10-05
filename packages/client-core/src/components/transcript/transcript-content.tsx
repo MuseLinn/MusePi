@@ -15,7 +15,7 @@ import { fmtDuration } from "../../lib/format";
 import { collapseStyle, useCollapseHeight } from "../../lib/use-collapse.js";
 import type { ToolRenderHost } from "../../tool-render";
 import { CanvasJumpCard, extractCanvasJumpBlocks } from "./canvas-jump";
-import { ErrorNotice } from "./error-notice.js";
+import { TurnErrorBody } from "./error-notice.js";
 import { type FileCardItem, FileCards } from "./FileCards";
 import { ImageCardStack } from "./image-card-stack";
 import { Markdown } from "./Markdown";
@@ -856,6 +856,10 @@ export function AssistantBody({
 	/** Open the transcript full-size image preview (lightbox) for this turn's
 	 *  hoisted tool-result media. */
 	onPreviewImage,
+	/** Attempt count for a failed turn, merged in from the transcript-wide error
+	 *  surface plan. This message owns its round's reason, so the count belongs
+	 *  here rather than on a second row repeating the failure. */
+	errorAttempt,
 }: {
 	message: AssistantMessage;
 	results: ReadonlyMap<string, ToolResultMessage>;
@@ -890,6 +894,8 @@ export function AssistantBody({
 	/** Open the transcript full-size image preview (lightbox) for this turn's
 	 *  hoisted tool-result media. */
 	onPreviewImage?: (images: { src: string; alt: string }[], index: number) => void;
+	/** Attempt count for a failed turn (see the prop comment above). */
+	errorAttempt?: number;
 }): ReactNode {
 	// Caret goes on the LAST text block only (not the last block of any
 	// kind — a trailing thinking/tool block must not get the caret).
@@ -968,7 +974,13 @@ export function AssistantBody({
 	return (
 		<>
 			{blocks}
-			{failed ? <ErrorNotice kind={stop === "error" ? "error" : "aborted"} raw={message.errorMessage} /> : null}
+			{failed ? (
+				<TurnErrorBody
+					kind={stop === "error" ? "error" : "aborted"}
+					raw={message.errorMessage}
+					attempt={errorAttempt}
+				/>
+			) : null}
 			{!pending && artifacts !== undefined && <FileCards items={artifacts} />}
 			{/* Standalone widget display (config 开启): the visualization
 			 * renders as its own adaptive card in the message flow, like a

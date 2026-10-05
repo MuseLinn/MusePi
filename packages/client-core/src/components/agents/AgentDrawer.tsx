@@ -1,12 +1,13 @@
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { t } from "../../i18n/index.js";
 import type { SessionClient } from "../../lib/client";
 import { fmtCost, fmtDuration, fmtTokens } from "../../lib/format";
 import { decideTranscriptPoll } from "../../lib/transcript-poll";
 import { useGuestSelector } from "../../lib/use-guest";
+import { SessionErrorDock } from "../transcript/session-error-dock";
 import type { TranscriptProps } from "../transcript/Transcript";
 import { Transcript } from "../transcript/Transcript";
 
@@ -37,6 +38,16 @@ export function AgentDrawer(props: {
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [onClose]);
+
+	/**
+	 * The live poll, hoisted so the session dock's no-reply check can re-read the
+	 * transcript on demand. It is the same reader the interval uses, so the check
+	 * cannot disagree with what the panel is showing.
+	 */
+	const pollRef = useRef<(() => Promise<void>) | null>(null);
+	const verifyTranscript = useCallback(async (): Promise<void> => {
+		await pollRef.current?.();
+	}, []);
 
 	// Live transcript: poll the host-side session file while the drawer is
 	// open, appending parsed JSONL entries. State resets when the agent
@@ -86,6 +97,10 @@ export function AgentDrawer(props: {
 				inFlight = false;
 			}
 		};
+		// The poll is the only reader of this transcript, so the session dock's
+		// no-reply check re-runs it rather than opening a second reader on the same
+		// file. Held in a ref because the poll's lifetime is the effect's.
+		pollRef.current = poll;
 		void poll();
 		timer = setInterval(() => {
 			void poll();
@@ -181,6 +196,11 @@ export function AgentDrawer(props: {
 							activeTools={EMPTY_TOOLS}
 							working={agent.status === "running" && fetchError === null}
 							host={host}
+						/>
+						<SessionErrorDock
+							entries={entries}
+							working={agent.status === "running" && fetchError === null}
+							verifyTranscript={verifyTranscript}
 						/>
 						{fetchError !== null ? (
 							<div className="ag-fetch-error" role="alert">

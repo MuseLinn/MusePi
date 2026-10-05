@@ -619,12 +619,19 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "Model error",
 	"retry attempt {count}": "Retry attempt {count}",
-	// Summary / technical-detail split for error text: the body keeps the one line
-	// the user can act on, the rest folds away.
-	"show details": "Show details",
-	"hide details": "Hide details",
+	// Failed-turn presentation. The turn-level body carries the reason in message
+	// typography and the session-level banner docks above the composer; both fold a
+	// long provider body rather than truncating it, because the provider's own message
+	// is usually at the tail. The fold toggle reuses the settings domain's
+	// "show more" / "show less".
 	"request failed": "Request failed",
 	"request interrupted": "Request interrupted",
+	// Session-level dock above the composer. The no-reply branch reports a round
+	// that produced neither a reply nor an error, which the transcript can only show
+	// as an abrupt stop.
+	"no reply": "No reply",
+	"no reply detail": "The session is idle and nothing came back for this message.",
+	"check again": "Check again",
 	// Tool-registry timeline injection row (extension/plugin hot-toggle; display-only custom_message).
 	"tools updated": "Tools updated",
 	"tools added {count}": "+{count} added",

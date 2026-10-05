@@ -68,6 +68,7 @@ export {
 	typingFadeOpacity,
 } from "./components/transcript/reveal";
 export { isTurnStart } from "./components/transcript/round-collapse";
+export * from "./components/transcript/session-error-dock";
 export { ToolCard, type ToolCardProps } from "./components/transcript/ToolCard";
 export {
 	isBranchFormingEntry,

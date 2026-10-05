@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionEntry } from "@musepi/pi-wire";
 import { renderToStaticMarkup } from "react-dom/server";
+import { t } from "../src/i18n/index.js";
 import "./transcript-dom-shim";
 import { Transcript } from "../src/components/transcript/Transcript";
 
@@ -11,13 +12,14 @@ import { Transcript } from "../src/components/transcript/Transcript";
  * folded detail. The assistant row also took the orb and the reply's alignment, so
  * a request-level fact read as something the agent said.
  *
- * These cases assert what the user sees, not which branch renders it: the reason
- * appears exactly once, the retry row keeps the one thing only it knows, and a
- * turn that produced no reply does not wear the assistant row's chrome.
+ * The turn-level surface is now the message's own body: no card, no orb, and the
+ * retry row's attempt count merged onto it so nothing is lost when the row stops
+ * rendering. These cases assert what the user sees in the transcript; the
+ * session-level dock is covered in session-error-dock.test.tsx.
  */
 const REASON = "429 insufficient balance, top up required";
 
-function entries(reason: string): SessionEntry[] {
+function entries(assistantReason: string, retryReason: string, attempt: number): SessionEntry[] {
 	return [
 		{
 			type: "message",
@@ -31,23 +33,30 @@ function entries(reason: string): SessionEntry[] {
 			id: "assistant-err",
 			parentId: null,
 			timestamp: "2026-10-05T00:00:01Z",
-			message: { role: "assistant", content: [], stopReason: "error", errorMessage: reason, timestamp: 2 },
+			message: { role: "assistant", content: [], stopReason: "error", errorMessage: assistantReason, timestamp: 2 },
 		} as unknown as SessionEntry,
 		{
 			type: "custom_message",
 			id: "retry-1",
 			parentId: null,
 			customType: "retry_failure",
-			content: reason,
+			content: retryReason,
+			details: { attempt },
 			timestamp: "2026-10-05T00:00:02Z",
 			display: true,
 		} as unknown as SessionEntry,
 	];
 }
 
-const render = (reason: string): string =>
+const render = (reason: string, attempt = 2): string =>
 	renderToStaticMarkup(
-		<Transcript entries={entries(reason)} stream={null} streamDone={true} activeTools={new Map()} working={false} />,
+		<Transcript
+			entries={entries(reason, reason, attempt)}
+			stream={null}
+			streamDone={true}
+			activeTools={new Map()}
+			working={false}
+		/>,
 	);
 
 describe("transcript error surfaces", () => {
@@ -60,32 +69,23 @@ describe("transcript error surfaces", () => {
 		expect(occurrences).toBe(1);
 	});
 
-	test("keeps the retry count the assistant row cannot know", () => {
-		// Withholding the reason must not cost the fact only the retry row has. The
-		// reduced form is a plain dim line — reusing the bordered card would leave a
-		// box with one word in it, which is what the on-device screenshot showed.
+	test("moves the retry count onto the body that took the reason", () => {
+		// The retry row no longer renders, so the attempt count it alone knew would
+		// vanish with it. A reader who cannot tell one attempt from three cannot tell
+		// a transient blip from a provider that is down.
+		const html = render(REASON, 3);
+
+		expect(html).toContain(t("retry attempt {count}", { count: "3" }));
+	});
+
+	test("renders no bordered card for a failed turn", () => {
+		// The card was the loud part: a red block of monospace that read as an alarm
+		// rather than a record. Its absence is the presentation change itself.
 		const html = render(REASON);
 
-		expect(html).toContain("tr-retry-note");
-		// The bordered card is the unreduced form and must not appear here.
+		expect(html).not.toContain("tr-stop");
 		expect(html).not.toContain("tr-retry-failure");
-		expect(html).toContain("2");
-	});
-
-	test("an error-only turn leaves no empty bordered box behind", () => {
-		// Regression: suppressing the reason made ErrorNotice render null while its
-		// bordered wrapper still painted, so the row collapsed to an empty card.
-		const html = render(REASON);
-
-		expect(html).not.toMatch(/tr-retry-failure[^"]*"><\/\w+>/);
-	});
-
-	test("still shows a retry card that reports something the assistant row did not", () => {
-		// Different text means two separate failures, not one written twice — the
-		// earlier card must stay visible in full.
-		const html = render("socket connection was closed unexpectedly");
-
-		expect(html).toContain("socket connection was closed unexpectedly");
+		expect(html).not.toContain("tr-retry-note");
 	});
 
 	test("does not give an error-only turn the assistant row's chrome", () => {
@@ -97,6 +97,24 @@ describe("transcript error surfaces", () => {
 
 		expect(html).not.toContain("tr-row--assistant");
 		expect(html).toContain("tr-row--custom");
+	});
+
+	test("drops a retry row the assistant row did not claim, for the dock to report", () => {
+		// Different text means two separate failures. The retry row still leaves the
+		// transcript — the dock above the composer reports it — because a row in the
+		// message flow is not where a session-level failure belongs.
+		const html = renderToStaticMarkup(
+			<Transcript
+				entries={entries(REASON, "socket connection was closed unexpectedly", 2)}
+				stream={null}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+			/>,
+		);
+
+		expect(html).toContain(REASON);
+		expect(html).not.toContain("socket connection was closed unexpectedly");
 	});
 
 	test("still renders a normal assistant turn as an assistant row", () => {
@@ -134,5 +152,43 @@ describe("transcript error surfaces", () => {
 		);
 
 		expect(html).toContain("tr-row--assistant");
+	});
+
+	test("shows an interrupted turn as an interruption, not a failure", () => {
+		// A stop the user asked for is not an error. Rendering both under the same
+		// "request failed" heading would make an intentional stop read as a fault.
+		const html = renderToStaticMarkup(
+			<Transcript
+				entries={[
+					{
+						type: "message",
+						id: "user-1",
+						parentId: null,
+						timestamp: "2026-10-05T00:00:00Z",
+						message: { role: "user", content: "hello?", timestamp: 1 },
+					} as unknown as SessionEntry,
+					{
+						type: "message",
+						id: "assistant-stop",
+						parentId: null,
+						timestamp: "2026-10-05T00:00:01Z",
+						message: {
+							role: "assistant",
+							content: [{ type: "text", text: "partial answer" }],
+							stopReason: "aborted",
+							errorMessage: "aborted",
+							timestamp: 2,
+						},
+					} as unknown as SessionEntry,
+				]}
+				stream={null}
+				streamDone={true}
+				activeTools={new Map()}
+				working={false}
+			/>,
+		);
+
+		expect(html).toContain(t("request interrupted"));
+		expect(html).not.toContain(t("request failed"));
 	});
 });

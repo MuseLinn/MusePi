@@ -1,3 +1,4 @@
+import { SessionErrorDock } from "@musepi/client-core";
 import { Transcript, type TranscriptProps } from "@musepi/client-core/src/components/transcript/Transcript";
 import { t } from "@musepi/client-core/src/i18n/index.js";
 import { fmtCost, fmtDuration, fmtTokens } from "@musepi/client-core/src/lib/format";
@@ -5,7 +6,7 @@ import { decideTranscriptPoll } from "@musepi/client-core/src/lib/transcript-pol
 import type { AgentSnapshot, SessionEntry } from "@musepi/pi-wire";
 import { ExternalLink, OctagonX, RotateCcw, SendHorizontal, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { useFocusTrap } from "../lib/use-focus-trap";
 
@@ -79,6 +80,16 @@ export function SubagentPanel(props: {
 		return () => window.removeEventListener("keydown", onKey);
 	}, [open, onClose]);
 
+	/**
+	 * The live poll, hoisted so the session dock's no-reply check can re-read the
+	 * transcript on demand. It is the same reader the interval uses, so the check
+	 * cannot disagree with what the panel is showing.
+	 */
+	const pollRef = useRef<(() => Promise<void>) | null>(null);
+	const verifyTranscript = useCallback(async (): Promise<void> => {
+		await pollRef.current?.();
+	}, []);
+
 	// Live transcript: poll the daemon's agents.transcript RPC while the
 	// layer is open, appending parsed JSONL entries. Same cursor semantics
 	// as the collab drawer — a terminal `error` reply stops polling and
@@ -139,6 +150,10 @@ export function SubagentPanel(props: {
 				inFlight = false;
 			}
 		};
+		// The poll is the only reader of this transcript, so the session dock's
+		// no-reply check re-runs it rather than opening a second reader on the same
+		// file. Held in a ref because the poll's lifetime is the effect's.
+		pollRef.current = poll;
 		void poll();
 		timer = setInterval(() => {
 			void poll();
@@ -257,6 +272,11 @@ export function SubagentPanel(props: {
 							activeTools={EMPTY_TOOLS}
 							working={shownAgent.status === "running" && fetchError === null}
 							host={host}
+						/>
+						<SessionErrorDock
+							entries={entries}
+							working={shownAgent.status === "running" && fetchError === null}
+							verifyTranscript={verifyTranscript}
 						/>
 						{fetchError !== null ? (
 							<div className="ag-fetch-error" role="alert">

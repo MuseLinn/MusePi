@@ -5,6 +5,14 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **发出去没回应的消息，现在会告诉你**：一条消息发出去，会话已经空闲，既没有回复也没有报错 —— 转录里只能表现为「到这儿就断了」，看上去像还在想。这个状态现在会在输入框上方亮一张横幅。这个判断本身是要核实的：实时流可能只是漏掉了这一轮的事件，而且也没有别的东西会重读会话。所以横幅出现之前会按 0 / 10 / 30 秒的节奏重读：读到了回复就不出现，读不到才出现；重读本身失败也算「读不到」，因为一次读失败不该把一次真实的静默藏起来。重试次数从那张不再显示的卡片并到了正文里，所以「试了几次」不会因为卡片退场而丢失。
+  - EN: A message that got no answer now says so. A prompt that was sent, on a session that has since gone idle, with neither a reply nor an error shows in the transcript only as an abrupt stop — indistinguishable from still-thinking. It now raises a banner above the composer. The verdict is checked rather than guessed: a live stream can simply drop a turn's events, and nothing else re-reads the session, so the transcript is re-read at 0, 10 and 30 seconds first. A reply found by a read means no banner; only a read that finds nothing raises one, and a read that fails counts as finding nothing — a failed check must not hide a genuine silence. The retry attempt count moves off the card that no longer renders and onto the body, so "how many attempts" survives the card's retirement.
+### Changed
+
+- **界面里的失败不再是一整块红色告警**：一次失败的请求此前是一张带边框的卡片，正文用红色等宽字体整段倒出来，长报文还会换行铺满、把折叠开关挤到折线以下。现在这一轮的原因**就是那一轮的正文** —— 助手列里的普通文字，正常前景色，不带卡片也不带边框；严重程度由一个小标记和标签承担，供应商原文按需折叠（超过 1000 字才折，预览 400 字 / 6 行，展开后在自己的框里滚动）。运行时就某一轮给出的失败不再挤进消息流，而是停靠在输入框上方，用的是输入框那一层一直在用的液态玻璃，只把色调换成红色。**下一次发送就是它的关闭动作** —— 不需要 × 按钮：失败是当前状态，新一轮自然会顶掉它；往上翻它也不跟着走。同一次失败仍然只出现一次。
+  - EN: A failure in the interface is no longer a block of red alarm. A failed request used to be a bordered card that printed the provider's body in red monospace, and a long body wrapped to fill the width and pushed the disclosure below the fold. The round's reason is now the round's own text — ordinary message typography in the message column, normal foreground colour, no card and no border. Severity is carried by a small mark and a label, and the provider's own text folds on demand: past 1000 characters it collapses to a 400-character, 6-line preview, and expands into a box that scrolls on its own. A failure the runtime reports for the round no longer crowds the message flow at all — it docks above the composer in the liquid glass the composer's own layer already uses, with the tint switched to the error hue. The next send is the dismissal: there is no × button, because a failure is current state and a new round supersedes it, and scrolling up does not take it along. One failure still surfaces once.
 ### Fixed
 
 - **界面里的报错不再伪装成模型说的话**：一次失败的请求此前会占着助手行的头像与行内缩进，把供应商返回的原始报文用红色等宽字体整段倒出来 —— 读起来就像模型自己说了这句，但它其实是**关于这次请求的事实**。「重试失败」那张卡也走同一条路径，于是同一次失败能在两副面孔下各出现一次。现在两处都走同一个错误呈现组件：按形状而非按文案切分，摘要只留用户能操作的那句，其余折叠进「显示详情」。判定靠形状而不是供应商措辞，是因为改一次供应商文案就会静默改变分类结果。

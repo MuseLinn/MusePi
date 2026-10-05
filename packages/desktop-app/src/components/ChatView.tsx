@@ -5,6 +5,7 @@ import {
 	isBranchFormingEntry,
 	punkAvatarUri,
 	relTime,
+	SessionErrorDock,
 	Transcript,
 	type TranscriptAnchor,
 	type TranscriptAnchorCtl,
@@ -1438,6 +1439,42 @@ export function ChatView({
 	// and estimate corrections both skew the delta) and triggered
 	// measurement-correction cascades.
 	const anchorCtlRef = useRef<TranscriptAnchorCtl | null>(null);
+	/**
+	 * Re-read the transcript from the daemon, so a "no reply" verdict is checked
+	 * against fresh state rather than the live stream's view — the stream can drop a
+	 * turn's events and leave the prompt as the last entry even though the daemon
+	 * answered it.
+	 *
+	 * Mirrors the session_leaf_moved recovery: fetch a fresh snapshot and swap the
+	 * view in place, preserving the store identity so the pinned leaf and the
+	 * jump-back dock survive the refresh.
+	 */
+	const verifyTranscript = useCallback(async (): Promise<void> => {
+		if (!rpc || !store) return;
+		try {
+			const res = await rpc.request<{
+				snapshot: {
+					entries: unknown[];
+					state?: unknown;
+					cursor: number;
+					roundDurations?: [number, number][];
+					tail?: { hasMore: boolean; beforeId: string | null };
+				};
+			}>("session.resume", { sessionId: store.sessionId });
+			store.reloadFromSnapshot({
+				entries: res.snapshot.entries as never,
+				state: res.snapshot.state as never,
+				cursor: res.snapshot.cursor,
+				roundDurations: res.snapshot.roundDurations,
+				tail: res.snapshot.tail,
+			});
+		} catch {
+			// Daemon restarting, session gone, or an older daemon without the call:
+			// the reconnect path re-opens the session. Swallowed on purpose — the dock
+			// reads a settled-but-failed check as "still no reply", which is the
+			// honest reading of a daemon it could not reach.
+		}
+	}, [rpc, store]);
 	const loadOlder = useCallback(async (): Promise<void> => {
 		if (!rpc || !store || loadOlderRef.current || !store.hasMore) return;
 		const firstCursor = store.historyBeforeId;
@@ -2736,6 +2773,14 @@ export function ChatView({
 												</Reveal>
 											</div>
 										</Reveal>
+										{/* Session-level failure dock: a round the runtime gave up on, or one
+										 *  that produced neither a reply nor an error. Docked above the composer
+										 *  rather than in the message flow, and cleared by the next send. */}
+										<SessionErrorDock
+											entries={visibleEntries}
+											working={snap?.working ?? false}
+											verifyTranscript={verifyTranscript}
+										/>
 										{snap?.approvals.map(a => (
 											<ApprovalCard
 												key={a.requestId}

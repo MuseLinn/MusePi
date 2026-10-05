@@ -612,11 +612,16 @@ export const general = {
 	// Retry-failure transcript card (terminal auto-retry gave up; display-only).
 	"model error": "模型错误",
 	"retry attempt {count}": "重试第 {count} 次",
-	// 错误文本的摘要 / 技术细节分离：正文只留可操作的那句，其余折叠。
-	"show details": "显示详情",
-	"hide details": "隐藏详情",
+	// 失败回合的呈现：回合级正文用消息排版承载原因，会话级横幅停在输入框上方。
+	// 两者都折叠超长正文而不是截断——供应商自己的报错通常在尾部。折叠开关复用
+	// settings 域已有的「展开 / 收起」。
 	"request failed": "请求失败",
 	"request interrupted": "请求已中断",
+	// 输入框上方的会话级横幅。「无应答」分支报告的是既没有回复也没有错误的那一轮，
+	// 转录里只能表现为突然中断。
+	"no reply": "无应答",
+	"no reply detail": "会话已空闲，这条消息没有收到任何回应。",
+	"check again": "重新检查",
 	// 工具注册表时间线注入行（扩展/插件热插拔，display-only custom_message）。
 	"tools updated": "工具已更新",
 	"tools added {count}": "+{count} 新增",

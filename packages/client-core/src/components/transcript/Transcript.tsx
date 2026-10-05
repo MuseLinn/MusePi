@@ -29,7 +29,7 @@ import { fmtDuration, fmtTokens } from "../../lib/format";
 import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
-import { ErrorNotice } from "./error-notice";
+import { TurnErrorBody } from "./error-notice";
 import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
@@ -676,10 +676,9 @@ interface EntryRowProps {
 	taskCardStyle?: "swarm" | "classic";
 	/** Turn-final aggregated file artifacts (undefined = no cards). */
 	artifacts?: FileCardItem[];
-	/** This row's failure reason is already shown by an assistant row in the same
-	 *  round, so render only what this row alone knows (retry attempt, empty
-	 *  output). */
-	suppressErrorReason?: boolean;
+	/** Attempt count for a failed turn, merged in from the transcript-wide error
+	 *  surface plan. */
+	errorAttempt?: number;
 	/** Session thinking level — work-timer `model · level` badge. */
 	thinkingLevel?: string;
 	onQuote?(text: string): void;
@@ -768,16 +767,12 @@ function renderCustomMessage({
 	onPreviewImage,
 	advisorOpen = false,
 	onToggleAdvisor,
-	suppressReason = false,
 }: {
 	customType: string;
 	content: CustomMessageEntry["content"];
 	details: unknown;
 	display: boolean;
 	timestamp: string;
-	/** This row's reason is already shown by an assistant row in the same round.
-	 *  Set by the transcript-wide surface plan, never per-row. */
-	suppressReason?: boolean;
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
 	/** Advisor-card expansion (transcript-level, keyed by the entry id). */
 	advisorOpen?: boolean;
@@ -848,42 +843,17 @@ function renderCustomMessage({
 		);
 	}
 	if (customType === "retry_failure") {
-		const attempt =
-			details !== null && typeof details === "object" && "attempt" in details && typeof details.attempt === "number"
-				? details.attempt
-				: undefined;
-		return (
-			<Row kind="custom" gutter="" title={timestamp}>
-				{suppressReason ? (
-					/*
-					 * The reason is already on the assistant row, so this row renders as
-					 * what it alone contributes: how many attempts were spent. It is a
-					 * single dim line rather than an ErrorNotice — that component drops
-					 * to null without a reason, and its bordered wrapper would have left
-					 * an empty box here.
-					 */
-					<div className="tr-retry-note">
-						{t("model error")}
-						{attempt !== undefined ? ` · ${t("retry attempt {count}", { count: String(attempt) })}` : ""}
-					</div>
-				) : (
-					<div className="tr-retry-failure">
-						<ErrorNotice
-							kind="retry"
-							label={t("model error")}
-							raw={msgText({ content })}
-							meta={
-								attempt !== undefined ? (
-									<span className="tr-stop-meta">
-										{t("retry attempt {count}", { count: String(attempt) })}
-									</span>
-								) : undefined
-							}
-						/>
-					</div>
-				)}
-			</Row>
-		);
+		/*
+		 * A terminal retry failure is not a message and must not join the flow: it is
+		 * reported by the session-level banner docked above the composer, and only
+		 * while this round is the current one.
+		 *
+		 * This returns null whether or not an assistant row in the same round took the
+		 * reason, and that is deliberate. Either way the row's whole content now lives
+		 * somewhere else — the body that owns the reason, or the dock — so rendering
+		 * anything here would put one failure back into the message flow.
+		 */
+		return null;
 	}
 	if (customType.startsWith("irc:")) {
 		const from =
@@ -1022,7 +992,7 @@ const EntryRow = memo(function EntryRow({
 	onStopSpeak,
 	retryTarget,
 	renderTranscriptNode,
-	suppressErrorReason = false,
+	errorAttempt,
 }: EntryRowProps): ReactNode {
 	const row = ((): ReactNode => {
 		switch (entry.type) {
@@ -1042,7 +1012,6 @@ const EntryRow = memo(function EntryRow({
 						onPreviewImage,
 						advisorOpen,
 						onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
-						suppressReason: suppressErrorReason,
 					});
 				}
 				// A turn that produced no reply at all is a fact about the request, not
@@ -1054,7 +1023,7 @@ const EntryRow = memo(function EntryRow({
 				if (msg.role === "assistant" && msg.stopReason === "error" && !hasTextBlock(msg.content)) {
 					return (
 						<Row kind="custom" id={entry.id} gutter="" title={entry.timestamp}>
-							<ErrorNotice kind="error" raw={msg.errorMessage} />
+							<TurnErrorBody kind="error" raw={msg.errorMessage} attempt={errorAttempt} />
 						</Row>
 					);
 				}
@@ -1116,6 +1085,7 @@ const EntryRow = memo(function EntryRow({
 									artifacts={artifacts}
 									thinkingLevel={thinkingLevel}
 									onPreviewImage={onPreviewImage}
+									errorAttempt={errorAttempt}
 								/>
 							</Row>
 						);
@@ -1142,7 +1112,6 @@ const EntryRow = memo(function EntryRow({
 					onPreviewImage,
 					advisorOpen,
 					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
-					suppressReason: suppressErrorReason,
 				});
 			case "compaction":
 				return (
@@ -2272,7 +2241,9 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							smoothStreaming={smoothStreaming}
 							taskCardStyle={taskCardStyle}
 							artifacts={turnArtifactsByFinal.get(entry.id)}
-							suppressErrorReason={entry.id !== undefined && errorPlan.suppressedReason.has(entry.id)}
+							errorAttempt={
+								entry.id !== undefined ? errorPlan.ownedByAssistant.get(entry.id)?.attempt : undefined
+							}
 							thinkingLevel={thinkingLevel}
 							streamingLast={streamingLast}
 							runStartTs={streamingLast ? lastUserTs : undefined}

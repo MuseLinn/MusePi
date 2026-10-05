@@ -247,35 +247,6 @@
 	color: var(--fg-faint);
 }
 
-/* ---- retry_failure (terminal auto-retry gave up; display-only error card) ---- */
-/* Mirrors the async-result card chrome; uses --error so the failure reads as a
- * hard stop rather than a neutral status. */
-
-/* Reduced form of .tr-retry-failure: shown when the reason already lives on the
- * assistant row and this row contributes only the attempt count. No border and no
- * padding — a bordered box with one dim word in it reads as an empty card. */
-.tr-retry-note {
-	color: var(--fg-faint);
-	font-size: var(--ui-font-size-xs);
-	line-height: 1.5;
-	padding: 2px 0;
-}
-
-.tr-retry-failure {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px;
-	max-width: 100%;
-	padding: 8px 10px;
-	border: 0.5px solid color-mix(in oklab, var(--error, #f85149) 40%, transparent);
-	border-radius: var(--radius-lg);
-	background: color-mix(in oklab, var(--error, #f85149) 10%, transparent);
-	font-family: var(--font-mono);
-	font-size: 12px;
-	line-height: 1.4;
-	color: var(--fg);
-}
 
 /* 工具注册表时间线注入行（扩展/插件热插拔；display-only custom_message）。 */
 .tr-tool-registry {
@@ -318,25 +289,6 @@
 	opacity: 0.75;
 }
 
-.tr-retry-failure-chip {
-	flex: none;
-	padding: 1px 7px;
-	border-radius: 999px;
-	background: color-mix(in oklab, var(--error, #f85149) 22%, transparent);
-	color: var(--error, #f85149);
-	font-weight: 600;
-	font-size: 11px;
-}
-
-.tr-retry-failure-message {
-	min-width: 0;
-	overflow-wrap: anywhere;
-}
-
-.tr-retry-failure-attempt {
-	flex: none;
-	color: var(--fg-faint);
-}
 
 /* ---- advisor notes (TUI createAdvisorMessageCard parity) ---- */
 /* Distinct voice so notes never blend into thinking output: a header tag, a
@@ -506,91 +458,182 @@
 	white-space: nowrap;
 }
 
-.tr-chip--err {
-	border-color: color-mix(in oklch, var(--err) 50%, var(--border));
+/* ---- failed turn ----
+ * Two surfaces, split by who owns the failure.
+ *
+ * The turn-level body stands in for a reply the model never gave, so it is set as
+ * ordinary message text: no card, no border, no alarm colour across the paragraph,
+ * and not in monospace. Painting a provider's words red reads as the whole message
+ * being wrong rather than one line of it, and setting them in a terminal face reads
+ * as output rather than as something said about your request. A small mark plus the
+ * label carries the severity.
+ *
+ * The session-level banner is the opposite case: the runtime gave up without
+ * reporting into any message, so it docks above the composer as a floating
+ * surface and takes the liquid-glass treatment the other docked surfaces use,
+ * tinted with the error hue instead of the accent.
+ */
+
+.tr-error-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-width: 100%;
+}
+
+.tr-error-body-head {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* A glyph rather than an icon: the transcript has no icon set, and the existing
+ * inline marks (the async-result tick) are characters for the same reason. */
+.tr-error-body-mark {
+	width: 14px;
+	height: 14px;
+	flex: none;
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--err) 18%, transparent);
 	color: var(--err);
-	background: color-mix(in oklch, var(--err) 10%, transparent);
+	font-size: 10px;
+	font-weight: 700;
+	line-height: 14px;
+	text-align: center;
 }
 
-.tr-chip--warn {
-	border-color: color-mix(in oklch, var(--warn) 50%, var(--border));
-	color: var(--warn);
-	background: color-mix(in oklch, var(--warn) 10%, transparent);
+.tr-error-body-mark::before {
+	content: "!";
 }
 
-/* A failed turn is a fact about the request, so it is presented the way the
- * reference implementations present one: a quiet neutral surface with a single
- * truncated line, not a red block of monospace. Red is kept for the chip alone so
- * severity stays readable, and the body text uses the normal foreground colour —
- * a paragraph of red reads as the whole message being wrong rather than one line
- * of it. */
-.tr-stop {
+/* Meta weight and size carry the severity; the wording does the rest. Setting it in
+ * caps was tried and read as shouting, which is the register this surface exists
+ * to leave behind. */
+.tr-error-body-label {
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-xs);
+	font-weight: 600;
+	letter-spacing: 0.02em;
+}
+
+.tr-error-body-meta {
+	color: var(--color-text-faint);
+	font-size: var(--ui-font-size-xs);
+}
+
+.tr-error-body-text {
+	min-width: 0;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+/* The banner docks above the composer, so it is a floating surface rather than a
+ * row in the scroll flow. Glass needs something behind it to refract; where the
+ * composer floats over an opaque surface there is nothing to blur, and the tint
+ * carries the panel on its own rather than reading as a bug. */
+.tr-error-banner {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-width: 100%;
+	margin-bottom: 8px;
+	padding: 10px 12px;
+	border: 1px solid color-mix(in oklab, var(--err) 22%, transparent);
+	border-radius: var(--radius-xl);
+	background: color-mix(in oklab, var(--err) 7%, var(--color-surface));
+	backdrop-filter: blur(18px) saturate(1.4);
+	-webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.tr-error-banner-head {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
 	gap: 8px;
-	max-width: 100%;
-	margin-top: 2px;
-	padding: 6px 10px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-lg);
-	background: var(--color-surface-raised);
 }
 
-/* One truncated line, never a wrapped paragraph. A provider body can be a long
- * JSON envelope, and wrapping it fills the transcript and buries the detail
- * affordance below the fold; the folded half keeps the rest reachable. */
-.tr-stop-msg {
-	min-width: 0;
-	flex: 1 1 auto;
+.tr-error-banner-mark {
+	width: 16px;
+	height: 16px;
+	flex: none;
+	border-radius: 999px;
+	background: color-mix(in oklch, var(--err) 20%, transparent);
+	color: var(--err);
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 16px;
+	text-align: center;
+}
+
+.tr-error-banner-mark::before {
+	content: "!";
+}
+
+.tr-error-banner-title {
 	color: var(--color-text);
 	font-size: var(--ui-font-size-sm);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	font-weight: 600;
 }
 
-.tr-stop-meta {
+.tr-error-banner-meta {
 	color: var(--color-text-faint);
-	font-size: var(--ui-font-size-sm);
+	font-size: var(--ui-font-size-xs);
 }
 
-/* Disclosure, not a truncation: a provider body is usually one long line and its
- * tail carries the provider's own message, so it folds rather than gets cut. */
-.tr-stop-toggle {
+/* The detail sits under the title and reads as secondary: the title says what
+ * happened, the body says what the provider said. */
+.tr-error-banner-text {
+	min-width: 0;
+	padding-left: 24px;
+	color: var(--color-text-muted);
+	font-size: var(--ui-font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tr-error-banner-action {
+	padding-left: 24px;
+}
+
+/* ---- long error folding (shared by both surfaces) ---- */
+
+.tr-error-fold {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	align-items: flex-start;
+	min-width: 0;
+}
+
+/* Expanded, the full body scrolls in its own box so the collapse control stays
+ * right underneath it instead of being pushed off-screen by the text it reveals. */
+.tr-error-fold-full {
+	max-height: 24rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.tr-error-fold-toggle {
 	flex: none;
 	padding: 0;
 	border: 0;
 	background: none;
 	color: var(--color-text-muted);
 	font: inherit;
-	font-size: var(--ui-font-size-sm);
+	font-size: var(--ui-font-size-xs);
+	text-align: left;
 	text-decoration: underline;
 	text-underline-offset: 2px;
 	cursor: pointer;
 }
 
-.tr-stop-toggle:hover {
+.tr-error-fold-toggle:hover {
 	color: var(--color-text);
-}
-
-.tr-stop-detail {
-	/* Own row: as a flex item it would share the baseline with the summary and
-	 * inherit its colour, which reads as more of the same sentence. */
-	flex: 1 0 100%;
-	margin: 2px 0 0;
-	padding: 6px 8px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-sm);
-	background: var(--color-surface-sunken);
-	color: var(--color-text-muted);
-	font-family: var(--font-mono);
-	font-size: var(--ui-font-size-sm);
-	line-height: 1.5;
-	white-space: pre-wrap;
-	word-break: break-word;
-	max-height: 40vh;
-	overflow: auto;
 }
 
 /* ---- thinking ---- */
