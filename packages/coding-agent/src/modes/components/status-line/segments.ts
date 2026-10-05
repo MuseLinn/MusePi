@@ -6,8 +6,9 @@ import {
 	formatDuration,
 	formatNumber,
 	getProjectDir,
+	normalizePathForComparison,
 	normalizePremiumRequests,
-	pathIsWithin,
+	relativePathWithinNormalizedRoot,
 	relativePathWithinRoot,
 } from "@musepi/pi-utils";
 import { t } from "../../../i18n/index.js";
@@ -73,11 +74,18 @@ const SCRATCH_ROOTS: readonly string[] = (() => {
 	return [...roots];
 })();
 
+/**
+ * The scratch roots never change after startup, so their normalized form is
+ * computed once: classifying one directory against all of them then costs a
+ * single normalization of that directory instead of one per root.
+ */
+const NORMALIZED_SCRATCH_ROOTS: readonly string[] = SCRATCH_ROOTS.map(normalizePathForComparison);
+
 function classifyProjectDir(pwd: string): { scratch: boolean; relative: string | null } {
-	for (const root of SCRATCH_ROOTS) {
-		if (pathIsWithin(root, pwd)) {
-			return { scratch: true, relative: relativePathWithinRoot(root, pwd) };
-		}
+	const normalizedPwd = normalizePathForComparison(pwd);
+	for (const root of NORMALIZED_SCRATCH_ROOTS) {
+		const relative = relativePathWithinNormalizedRoot(root, normalizedPwd);
+		if (relative !== null) return { scratch: true, relative: relative || null };
 	}
 	return { scratch: false, relative: null };
 }
