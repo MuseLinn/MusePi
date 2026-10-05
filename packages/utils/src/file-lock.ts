@@ -26,7 +26,9 @@ function getLockPath(filePath: string): string {
 
 function tryAcquireLock(lockPath: string): NativeFileLock | null {
 	const lock = NativeFileLock.tryAcquire(lockPath);
-	return lock.acquired ? lock : null;
+	if (lock.acquired) return lock;
+	lock.release();
+	return null;
 }
 
 async function acquireLock(filePath: string, options: FileLockOptions = {}): Promise<NativeFileLock> {

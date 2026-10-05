@@ -1,7 +1,8 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import { FileLock } from "@musepi/pi-natives";
 import { __internalsForTesting, withFileLock } from "../src/file-lock";
 import { isEnoent } from "../src/fs-error";
 import { removeWithRetries } from "../src/temp";
@@ -9,6 +10,10 @@ import { removeWithRetries } from "../src/temp";
 const { tryAcquireLock, getLockPath } = __internalsForTesting;
 
 const ROOTS: string[] = [];
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 async function mkRoot(): Promise<string> {
 	const root = await fs.mkdtemp(path.join(os.tmpdir(), "filelock-test-"));
@@ -90,6 +95,19 @@ describe("native file-lock ownership", () => {
 		const finalOwner = tryAcquireLock(lockPath);
 		if (!finalOwner) throw new Error("final owner failed to acquire");
 		finalOwner.release();
+	});
+
+	test("a lost race releases the native handle instead of dropping it", () => {
+		const release = vi.fn();
+		const failed = Object.create(FileLock.prototype) as FileLock;
+		Object.defineProperty(failed, "acquired", { value: false });
+		Object.defineProperty(failed, "release", { value: release });
+		vi.spyOn(FileLock, "tryAcquire").mockReturnValue(failed);
+
+		expect(tryAcquireLock(getLockPath(path.join(os.tmpdir(), "lost-race.json")))).toBeNull();
+		// Dropping the handle without releasing it leaks the native lease; the
+		// next attempt on this path must not find a half-open one.
+		expect(release).toHaveBeenCalledTimes(1);
 	});
 
 	test("withFileLock serializes N concurrent writers without lost updates", async () => {
