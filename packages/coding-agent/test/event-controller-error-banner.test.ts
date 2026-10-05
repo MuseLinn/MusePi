@@ -536,13 +536,17 @@ describe("ErrorBannerComponent", () => {
 		expect(rendered).toContain("Dismissed when you send your next message.");
 	});
 
-	it("caps an oversized multi-line error to a few lines", () => {
+	it("caps an oversized multi-line error to a bounded height", () => {
+		// The cap counts wrapped rows, not source lines, so a terminal narrow enough
+		// to fold each line still cannot make this block grow without bound.
 		const huge = Array.from({ length: 50 }, (_, i) => `error detail line ${i}`).join("\n");
-		const banner = new ErrorBannerComponent(huge);
-		const lines = Bun.stripANSI(banner.render(120).join("\n")).split("\n");
-		const detailLines = lines.filter(line => line.includes("error detail line"));
-		expect(detailLines.length).toBeLessThanOrEqual(3);
-		expect(detailLines.length).toBeGreaterThan(0);
+		for (const width of [120, 60, 40]) {
+			const banner = new ErrorBannerComponent(huge);
+			const lines = Bun.stripANSI(banner.render(width).join("\n")).split("\n");
+			const detailLines = lines.filter(line => line.includes("error detail line"));
+			expect(detailLines.length).toBeGreaterThan(0);
+			expect(detailLines.length).toBeLessThanOrEqual(4);
+		}
 	});
 });
 
