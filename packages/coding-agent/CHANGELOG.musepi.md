@@ -23,6 +23,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
+- **客户端用量卡片不再把「按量计费」的额度显示成 0%**：只有绝对数额、没有百分比的额度（Z.ai 的 token 与 credit 额度、按美元计的额外用量），在桌面转录、移动端与鸿蒙端此前显示成「0% used · 0% left」加一条空进度条。现在直接显示供应商报出的数额，进度条按剩余比例画。
+  - EN: The usage card no longer shows an amount-metered quota as 0%. Meters that report an absolute amount and no percentage — Z.ai token and credit quotas, dollar-denominated extra usage — read as "0% used · 0% left" with an empty bar in the desktop transcript, mobile and HarmonyOS clients. The card now shows the amount the provider reported and draws the bar from the remaining share.
+
 - **`/usage` 现在会显示 Z.ai GLM Coding Plan 的 credit 额度**：这类额度此前被整条丢掉——只带 credit 窗口的账户连用量报告都拿不到，在界面上等同于「未上报」。现在按 credit 计量显示，进度用服务端的精确比值，而不是取整后的百分比。
   - EN: `/usage` now shows Z.ai GLM Coding Plan credit windows. They were dropped entirely — an account whose only meter is a credit window produced no usage report at all and read as unreported. Credits render as their own unit, and the bar uses the exact consumed ratio instead of the server's rounded percentage.
 
