@@ -30,10 +30,12 @@ import type { ToolRenderHost } from "../../tool-render";
 import { ImageLightbox } from "../image-lightbox";
 import { BashCard } from "./bash-card";
 import { ErrorNotice } from "./error-notice";
+import { planErrorSurfaces } from "./error-surfaces";
 import type { FileCardItem } from "./FileCards";
 import { finalArtifacts } from "./file-artifacts.js";
 import { roundTimerKeyByRow, type TurnRenderUnit } from "./render-units";
 import { buildToolRuns, type RoundFold, type ToolRunSummary } from "./round-collapse";
+import { hasTextBlock } from "./row-kinds";
 import {
 	anchorActionAfterContentChange,
 	createShouldAdjustForItemSizeChange,
@@ -674,6 +676,10 @@ interface EntryRowProps {
 	taskCardStyle?: "swarm" | "classic";
 	/** Turn-final aggregated file artifacts (undefined = no cards). */
 	artifacts?: FileCardItem[];
+	/** This row's failure reason is already shown by an assistant row in the same
+	 *  round, so render only what this row alone knows (retry attempt, empty
+	 *  output). */
+	suppressErrorReason?: boolean;
 	/** Session thinking level — work-timer `model · level` badge. */
 	thinkingLevel?: string;
 	onQuote?(text: string): void;
@@ -762,12 +768,16 @@ function renderCustomMessage({
 	onPreviewImage,
 	advisorOpen = false,
 	onToggleAdvisor,
+	suppressReason = false,
 }: {
 	customType: string;
 	content: CustomMessageEntry["content"];
 	details: unknown;
 	display: boolean;
 	timestamp: string;
+	/** This row's reason is already shown by an assistant row in the same round.
+	 *  Set by the transcript-wide surface plan, never per-row. */
+	suppressReason?: boolean;
 	onPreviewImage?(images: { src: string; alt: string }[], index: number): void;
 	/** Advisor-card expansion (transcript-level, keyed by the entry id). */
 	advisorOpen?: boolean;
@@ -855,7 +865,7 @@ function renderCustomMessage({
 					<ErrorNotice
 						kind="retry"
 						label={t("model error")}
-						raw={msgText({ content })}
+						raw={suppressReason ? undefined : msgText({ content })}
 						meta={
 							attempt !== undefined ? (
 								<span className="tr-stop-meta">{t("retry attempt {count}", { count: String(attempt) })}</span>
@@ -1003,6 +1013,7 @@ const EntryRow = memo(function EntryRow({
 	onStopSpeak,
 	retryTarget,
 	renderTranscriptNode,
+	suppressErrorReason = false,
 }: EntryRowProps): ReactNode {
 	const row = ((): ReactNode => {
 		switch (entry.type) {
@@ -1022,7 +1033,21 @@ const EntryRow = memo(function EntryRow({
 						onPreviewImage,
 						advisorOpen,
 						onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
+						suppressReason: suppressErrorReason,
 					});
+				}
+				// A turn that produced no reply at all is a fact about the request, not
+				// something the agent said. Rendered as an assistant row it took the orb
+				// and the reply's alignment, so it read as the model's own output — both
+				// reference implementations keep errors out of the message stream for
+				// the same reason: there is nothing here to attribute to the agent.
+				// Checked before the role switch so it needs no block-scoped case.
+				if (msg.role === "assistant" && msg.stopReason === "error" && !hasTextBlock(msg.content)) {
+					return (
+						<Row kind="custom" id={entry.id} gutter="" title={entry.timestamp}>
+							<ErrorNotice kind="error" raw={msg.errorMessage} />
+						</Row>
+					);
 				}
 				switch (msg.role) {
 					case "user":
@@ -1108,6 +1133,7 @@ const EntryRow = memo(function EntryRow({
 					onPreviewImage,
 					advisorOpen,
 					onToggleAdvisor: onToggleAdvisor ? () => onToggleAdvisor(advisorKeyOf(entry)) : undefined,
+					suppressReason: suppressErrorReason,
 				});
 			case "compaction":
 				return (
@@ -1523,6 +1549,12 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 	// (fold.userId), NOT the entry index: history prepends shift absolute
 	// indexes, and index keys silently dropped the user's fold deviations.
 	const foldKeyOf = useCallback((f: RoundFold): string => f.userId ?? `idx:${f.startIdx}`, []);
+	// Which surface owns a failed turn's reason. Computed once for the whole
+	// transcript because the two writers of one failure — the assistant message and
+	// the durable retry_failure row — are siblings here and neither can see the
+	// other on its own.
+	const errorPlan = useMemo(() => planErrorSurfaces(entries), [entries]);
+
 	const foldsExpanded = defaultRoundFoldExpanded && !hideToolActivity;
 	const foldOpenOf = useCallback(
 		(f: RoundFold): boolean => roundFoldOpen.has(foldKeyOf(f)) !== foldsExpanded,
@@ -2231,6 +2263,7 @@ export const Transcript = memo(function Transcript(props: TranscriptProps): Reac
 							smoothStreaming={smoothStreaming}
 							taskCardStyle={taskCardStyle}
 							artifacts={turnArtifactsByFinal.get(entry.id)}
+							suppressErrorReason={entry.id !== undefined && errorPlan.suppressedReason.has(entry.id)}
 							thinkingLevel={thinkingLevel}
 							streamingLast={streamingLast}
 							runStartTs={streamingLast ? lastUserTs : undefined}
