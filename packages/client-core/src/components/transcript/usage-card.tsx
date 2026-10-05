@@ -32,6 +32,8 @@ export type ParsedUsage = {
 		usedLabel?: string;
 		resetsIn: string;
 	}>;
+	/** Provider-reported prepaid balances, kept verbatim (`prepaid: 100 requests left`). */
+	prepaid: string[];
 };
 
 const USAGE_FENCE_RE = /^```(?:text)?\s*\nUsage/;
@@ -125,8 +127,15 @@ export function parseUsageReport(text: string): ParsedUsage | null {
 		}
 		limits.push({ label, account, usedPercent, leftPercent, usedLabel, resetsIn });
 	}
-	if (limits.length === 0 && models.length === 0) return null;
-	return { provider, fetchedLabel, models, limits };
+	// Provider-level prepaid balances ride on their own indented line; the card
+	// shows them verbatim because a balance carries no percentage to recompute.
+	const prepaid: string[] = [];
+	for (const line of lines) {
+		const balance = /^\s+(prepaid: .+?)\s*$/.exec(line);
+		if (balance) prepaid.push(balance[1]!);
+	}
+	if (limits.length === 0 && models.length === 0 && prepaid.length === 0) return null;
+	return { provider, fetchedLabel, models, limits, prepaid };
 }
 
 /** Bar color by consumption — semantic (ok/warn/err) like the TUI's green/
@@ -182,6 +191,11 @@ export function UsageCard({ usage }: { usage: ParsedUsage }): ReactNode {
 					))}
 				</div>
 			)}
+			{usage.prepaid.map(line => (
+				<div key={line} className="tr-usage-reset">
+					{line}
+				</div>
+			))}
 		</div>
 	);
 }

@@ -91,6 +91,22 @@ Zai
 		expect(limit.usedPercent).toBeCloseTo(12);
 	});
 
+	test("carries a provider's prepaid balance without inventing a limit row", () => {
+		const report = `Usage (1m ago)
+Charm Hyper
+- Credits
+  user@example.test: unknown used
+  prepaid: 100 requests left`;
+		const parsed = parseUsageReport(report);
+		expect(parsed).not.toBeNull();
+		// The balance is provider-level, so it must survive as its own line and
+		// must not be absorbed as the preceding limit's account row.
+		expect(parsed!.prepaid).toEqual(["prepaid: 100 requests left"]);
+		expect(parsed!.limits).toHaveLength(1);
+		expect(parsed!.limits[0]!.label).toBe("Credits");
+		expect(parsed!.limits[0]!.account).toBe("user@example.test");
+	});
+
 	test("ordinary prose mentioning usage is NOT a report", () => {
 		expect(isUsageReport("Usage of the API went up this month")).toBe(false);
 		expect(isUsageReport("Please explain how limits work")).toBe(false);
