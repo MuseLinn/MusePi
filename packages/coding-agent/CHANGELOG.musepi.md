@@ -23,6 +23,9 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
+- **预付费余额现在在客户端也看得到**：只有余额、没有额度的供应商，此前只在命令行 `/usage` 里显示这条余额，桌面转录、移动端与鸿蒙端的用量卡片上没有它。现在这些端的卡片同样会给出。
+  - EN: A prepaid balance now appears on every client. A provider that reports only a remaining balance and no allowance showed it on the command line alone; the usage card in the desktop transcript, mobile and HarmonyOS clients had no line for it. Those cards now report the balance too.
+
 - **客户端用量卡片不再把「按量计费」的额度显示成 0%**：只有绝对数额、没有百分比的额度（Z.ai 的 token 与 credit 额度、按美元计的额外用量），在桌面转录、移动端与鸿蒙端此前显示成「0% used · 0% left」加一条空进度条。现在直接显示供应商报出的数额，进度条按剩余比例画。
   - EN: The usage card no longer shows an amount-metered quota as 0%. Meters that report an absolute amount and no percentage — Z.ai token and credit quotas, dollar-denominated extra usage — read as "0% used · 0% left" with an empty bar in the desktop transcript, mobile and HarmonyOS clients. The card now shows the amount the provider reported and draws the bar from the remaining share.
 
