@@ -248,6 +248,23 @@ export class SessionTools {
 	#rebuildSystemPrompt: SessionToolsOptions["rebuildSystemPrompt"];
 	#getLocalCalendarDate: () => string;
 	#getMcpServerInstructions: SessionToolsOptions["getMcpServerInstructions"];
+	/**
+	 * Session-lifetime factory shared by every custom-tool wrapper. Defining it
+	 * outside the refresh frame prevents wrappers from retaining rollback maps
+	 * from earlier MCP generations through a shared lexical environment.
+	 */
+	readonly #getCustomToolContext = (): CustomToolContext => ({
+		sessionManager: this.#host.sessionManager,
+		modelRegistry: this.#host.modelRegistry,
+		model: this.#host.model(),
+		isIdle: () => !this.#host.isStreaming(),
+		hasQueuedMessages: () => this.#host.queuedMessageCount() > 0,
+		abort: () => {
+			this.#host.agent.abort();
+		},
+		settings: this.#host.settings,
+		localProtocolOptions: this.#host.localProtocolOptions(),
+	});
 	#setActiveToolNames: SessionToolsOptions["setActiveToolNames"];
 	#ensureWriteRegistered: SessionToolsOptions["ensureWriteRegistered"];
 	#skills: Skill[];
@@ -1566,23 +1583,12 @@ export class SessionTools {
 			this.#mcpManagerToolNames = previousMcpManagerToolNames;
 		};
 
-		const getCustomToolContext = (): CustomToolContext => ({
-			sessionManager: this.#host.sessionManager,
-			modelRegistry: this.#host.modelRegistry,
-			model: this.#host.model(),
-			isIdle: () => !this.#host.isStreaming(),
-			hasQueuedMessages: () => this.#host.queuedMessageCount() > 0,
-			abort: () => {
-				this.#host.agent.abort();
-			},
-			settings: this.#host.settings,
-			localProtocolOptions: this.#host.localProtocolOptions(),
-		});
-
 		const extensionRunner = this.#host.extensionRunner();
 		const dedupedManagerTools = deduplicateMCPToolsByName(mcpTools);
 		const managerTools = dedupedManagerTools.map(customTool => {
-			const wrapped = wrapToolWithMetaNotice(CustomToolAdapter.wrap(customTool, getCustomToolContext) as AgentTool);
+			const wrapped = wrapToolWithMetaNotice(
+				CustomToolAdapter.wrap(customTool, this.#getCustomToolContext) as AgentTool,
+			);
 			return (extensionRunner ? new ExtensionToolWrapper(wrapped, extensionRunner) : wrapped) as AgentTool;
 		});
 		const managerToolSet = new Set(managerTools);
@@ -1620,7 +1626,13 @@ export class SessionTools {
 		];
 		try {
 			await this.#applyActiveToolsByName(nextActive);
-			if (this.#host.isDisposed()) restorePreviousMcpTools();
+			if (this.#host.isDisposed()) {
+				restorePreviousMcpTools();
+			} else {
+				// The settled mutation promise may retain this async frame; drop
+				// rollback references as soon as the new generation commits.
+				previousMcpTools.clear();
+			}
 		} catch (error) {
 			restorePreviousMcpTools();
 			throw error;
@@ -1693,22 +1705,11 @@ export class SessionTools {
 			this.#dynamicToolNames = new Set(previousDynamicTools.keys());
 		};
 
-		const getCustomToolContext = (): CustomToolContext => ({
-			sessionManager: this.#host.sessionManager,
-			modelRegistry: this.#host.modelRegistry,
-			model: this.#host.model(),
-			isIdle: () => !this.#host.isStreaming(),
-			hasQueuedMessages: () => this.#host.queuedMessageCount() > 0,
-			abort: () => {
-				this.#host.agent.abort();
-			},
-			settings: this.#host.settings,
-			localProtocolOptions: this.#host.localProtocolOptions(),
-		});
-
 		const extensionRunner = this.#host.extensionRunner();
 		const wrappedTools = customTools.map(customTool => {
-			const wrapped = wrapToolWithMetaNotice(CustomToolAdapter.wrap(customTool, getCustomToolContext) as AgentTool);
+			const wrapped = wrapToolWithMetaNotice(
+				CustomToolAdapter.wrap(customTool, this.#getCustomToolContext) as AgentTool,
+			);
 			return (extensionRunner ? new ExtensionToolWrapper(wrapped, extensionRunner) : wrapped) as AgentTool;
 		});
 		const nextDynamicNames = new Set(wrappedTools.map(tool => tool.name));
@@ -1724,7 +1725,13 @@ export class SessionTools {
 		];
 		try {
 			await this.#applyActiveToolsByName(nextActive);
-			if (this.#host.isDisposed()) restorePreviousDynamicTools();
+			if (this.#host.isDisposed()) {
+				restorePreviousDynamicTools();
+			} else {
+				// Same retention rule as the MCP refresh: release the previous
+				// generation's tools once the new one has committed.
+				previousDynamicTools.clear();
+			}
 		} catch (error) {
 			restorePreviousDynamicTools();
 			throw error;
