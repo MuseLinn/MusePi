@@ -23,6 +23,13 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: The per-round "model · time · done · duration" line is gone. It said what the timer line under each reply already says, but the two read the model differently: the timer line takes it from the message itself, while that line went through a separate projection and kept naming the previous model after a switch, as though the round before had used it. The line is removed and the space between rounds now belongs to the row that starts the turn. The "elapsed · model · thinking level" line under each reply is unchanged, and it was always current.
 ### Fixed
 
+- **工作目录被删除后，会话不再崩溃**：长任务里临时目录、已移除的 worktree、整个项目被删掉，都会让会话的工作目录在运行中消失；此前这一刻会在准备子 shell 环境时抛错并中断会话。现在环境的默认工作目录取会话启动时记录的那一个，删除之后仍能继续跑。
+  - EN: A session no longer crashes when its working directory is deleted. In a long-running task a temp directory, a removed worktree, or a whole project can disappear underneath the session; that used to throw while preparing the child-shell environment and interrupt the session. The environment now defaults to the directory recorded at session start, so work continues after the deletion.
+- **`/debug` 的内存报告不再因为快照太大而失败**：此前堆快照按字符串生成，堆大的时候会超过字符串长度上限直接报错；快照为空时又会静默落下一个 0 字节文件。现在快照按二进制生成，并在为空时明确报错。
+  - EN: A `/debug` memory report no longer fails because the snapshot is too large. Heap snapshots were generated as a JavaScript string, which exceeded the string length limit on a large heap; an empty snapshot silently produced a zero-byte file instead. Snapshots are now generated as binary data, and an empty one raises an explicit error.
+- **MCP 服务器重连后不再逐次累积内存**：每次重连都会重新包装该服务器暴露的工具，而上一代的包装仍被引用着，于是重连次数越多、占用越大。现在工具包装共享同一个上下文工厂，并且在新一代替换成功之后释放上一代的引用。
+  - EN: Reconnecting an MCP server no longer accumulates memory on every reconnect. Each reconnect re-wrapped the tools the server exposes while the previous generation stayed reachable, so memory grew with the number of reconnects. Tool wrappers now share one context factory, and the previous generation's references are released once the new one has replaced it.
+
 - **内容折叠回去后，滚动条有时会留在屏幕上**：内容收进可视高度（切换标签页、折叠一段工具输出、消息被合并）时轨道不会立刻收回，要等窗口尺寸变化才会纠正 —— 那时候它会停在半途，或者干脆指向一个已经不需要指示的地方。现在内容一旦不再溢出，轨道就会收回。
   - EN: After content collapses back into view, the scrollbar could stay on screen. When content folded into the visible height — switching a tab, folding a tool output, messages merging — the rail did not retract immediately and only corrected itself on a window resize, at which point it could sit mid-content or point at something it no longer indicated. The rail now retracts as soon as there is nothing left to scroll.
 - **滚动条可能压在弹出的对话框底下**：轨道的层级此前按容器算一次就记住，之后弹窗打开、面板最大化都不再看 —— 于是那条本来该跟着内容走的轨道沉到了遮罩之下。现在每次重新测量都重新读层级。
