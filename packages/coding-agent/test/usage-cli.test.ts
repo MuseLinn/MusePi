@@ -255,6 +255,42 @@ describe("formatUsageBreakdown", () => {
 		expect(text).not.toContain("%");
 		expect(text).not.toContain("resets");
 	});
+
+	it("reports a prepaid balance that no quota bar can draw", () => {
+		const prepaidReports = [
+			makeReport("charm-hyper", "prepaid@example.test", [
+				{
+					id: "charm-hyper:credits",
+					label: "Credits",
+					scope: { provider: "charm-hyper" },
+					amount: { remaining: 100, unit: "requests" },
+				},
+			]),
+		];
+
+		const text = stripVTControlCharacters(formatUsageBreakdown(prepaidReports, [], Date.now()));
+
+		expect(text).toContain("prepaid: 100 requests left");
+		expect(text).not.toContain("no data");
+	});
+
+	it("counts a shared prepaid pool once instead of once per credential", () => {
+		const sharedLimit = (): UsageReport["limits"][number] => ({
+			id: "charm-hyper:credits",
+			label: "Credits",
+			scope: { provider: "charm-hyper", shared: true },
+			amount: { remaining: 100, unit: "requests" },
+		});
+		const sharedReports = [
+			makeReport("charm-hyper", "shared-a@example.test", [sharedLimit()]),
+			makeReport("charm-hyper", "shared-b@example.test", [sharedLimit()]),
+		];
+
+		const text = stripVTControlCharacters(formatUsageBreakdown(sharedReports, [], Date.now()));
+
+		expect(text).toContain("prepaid: 100 requests left");
+		expect(text).not.toContain("200 requests left");
+	});
 	it("renders every account: reported ones with limits, credential-only ones as no-data rows", () => {
 		const text = stripVTControlCharacters(formatUsageBreakdown(reports, accounts, Date.now()));
 		expect(text).toContain("dummy.primary@example.test");

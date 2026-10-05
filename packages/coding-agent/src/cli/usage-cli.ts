@@ -27,6 +27,7 @@ import {
 	type UsageAccountIdentity,
 } from "../daemon/usage-shared";
 import { discoverAuthStorage } from "../sdk";
+import { formatRemainingOnlyTotal } from "./usage-amounts";
 
 export { collectUnreportedAccounts, selectReportableAccounts, type UsageAccountIdentity };
 
@@ -576,6 +577,10 @@ export function formatUsageBreakdown(
 			);
 			lines.push(`  ${chalk.dim(`capacity: ${parts.join(" · ")}`)}`);
 		}
+		// A prepaid balance carries no window bucket to draw a bar from, so it
+		// is reported on its own line instead of vanishing from the summary.
+		const prepaid = formatRemainingOnlyTotal(providerReports.flatMap(report => report.limits));
+		if (prepaid !== undefined) lines.push(`  ${chalk.dim(`prepaid: ${prepaid}`)}`);
 	}
 
 	return lines.join("\n");
