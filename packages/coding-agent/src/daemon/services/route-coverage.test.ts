@@ -16,6 +16,7 @@ import { ExtensionService } from "./extension-service";
 import { FileService } from "./file-service";
 import { LEGACY_ROUTES } from "./legacy-routes";
 import { MarketplaceService } from "./marketplace-service";
+import { PluginInstallService } from "./plugin-install-service";
 import { HostServices } from "./registry";
 import { RemoteService } from "./remote-service";
 import { ScheduleService } from "./schedule-service";
@@ -160,6 +161,16 @@ function buildRegistry(): HostServices {
 	services.register(
 		new CredentialService({
 			storePath: join(mkdtempSync(join(tmpdir(), "musepi-creds-")), "credentials.json"),
+		}),
+	);
+	// PluginInstallService：只认领路由（本测试不发起安装），stub 掉宿主访问。
+	services.register(
+		new PluginInstallService({
+			cwd: () => "",
+			invalidatePluginCaches: () => {},
+			onChanged: () => {},
+			onInstallState: () => {},
+			onInstallOutput: () => {},
 		}),
 	);
 	return services;

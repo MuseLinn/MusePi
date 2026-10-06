@@ -1,11 +1,12 @@
 import { t } from "@musepi/client-core";
 import { coerceConfigValues } from "@musepi/pi-wire";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import type { RpcClient } from "../lib/rpc";
 import { type ExtensionItem, useExtensionRegistry } from "../lib/slot-host";
 import { Icon } from "../vendor/oc-icons";
 import { ConfigFormRenderer } from "./ConfigFormRenderer";
 import { PluginDetailDialog } from "./PluginDetailDialog";
+import { PluginInstallDialog } from "./PluginInstallDialog";
 
 /**
  * 插件 tab 的统一清单（ExtensionsCenter 与 CapabilityCenterPage 共用）：
@@ -311,6 +312,7 @@ export function UnifiedPluginsView({
 	onTogglePackage,
 	onOpenMarketplace,
 	onError,
+	onPackagesRefreshed,
 	variant = "list",
 }: {
 	rpc: RpcClient | null;
@@ -320,6 +322,8 @@ export function UnifiedPluginsView({
 	onOpenMarketplace(): void;
 	/** 模块开关/组件开关的错误出口（父级顶栏 error 横幅）。 */
 	onError(message: string | null): void;
+	/** 父级持有插件包清单；spec 安装完成后由本视图回读并交给它替换。 */
+	onPackagesRefreshed?(packages: PluginPackageEntry[]): void;
 	/** list = dsh 插件列表面板（能力中心,管理导向:分组行+开关）;
 	 *  cards = 卡片网格（扩展中心,发现导向,与设置插件分区同款）。 */
 	variant?: "list" | "cards";
@@ -331,6 +335,24 @@ export function UnifiedPluginsView({
 	const [query, setQuery] = useState("");
 	// 详情弹层（dsh 插件详情 parity；行点击打开,同一时刻至多一个）。
 	const [detailId, setDetailId] = useState<string | null>(null);
+	// spec 安装弹层：marketplace 只覆盖已收录的包,自建/未发布的插件走这条。
+	const [installOpen, setInstallOpen] = useState(false);
+	/**
+	 * Re-read the installed packages after a spec install.
+	 *
+	 * The install ran on the daemon and the list this view renders came from the
+	 * parent, so a completed install would otherwise leave the new package
+	 * invisible until the settings panel was reopened. The daemon broadcasts
+	 * `plugins.install.state`; this reads the authoritative list rather than
+	 * patching the parent's copy from the install's own view of the result.
+	 */
+	const refreshPackages = useCallback((): void => {
+		if (!rpc) return;
+		void rpc
+			.request<{ packages: PluginPackageEntry[] }>("plugins.packages")
+			.then(res => onPackagesRefreshed?.(res?.packages ?? []))
+			.catch((e: unknown) => onError(e instanceof Error ? e.message : String(e)));
+	}, [rpc, onError, onPackagesRefreshed]);
 	// 模块 lane：真实插件模块 + 内置插件单元（isPluginLaneEntry 单一权威，
 	// 与 ExtensionsCenter tab 计数同口径）。其余 kind（skill/tool/mcp/…）
 	// 在能力清单 tab 有完整 provider→kind→item 树，这里不重复。
@@ -415,6 +437,11 @@ export function UnifiedPluginsView({
 				<button type="button" className="gui-btn gui-btn--sm" onClick={onOpenMarketplace}>
 					<Icon name="add" className="h-3.5 w-3.5" />
 					{t("ext add plugin")}
+				</button>
+				{/* 市场只收录已发布的包；自建插件、压缩包与本机目录从这里进。 */}
+				<button type="button" className="gui-btn gui-btn--sm" onClick={() => setInstallOpen(true)}>
+					<Icon name="download" className="h-3.5 w-3.5" />
+					{t("plugin install title")}
 				</button>
 			</div>
 			{pluginsError && <div className="gui-ext-plugins-error">{pluginsError}</div>}
@@ -551,6 +578,12 @@ export function UnifiedPluginsView({
 				item={detailItem}
 				rpc={rpc}
 				onError={onError}
+			/>
+			<PluginInstallDialog
+				rpc={rpc}
+				open={installOpen}
+				onClose={() => setInstallOpen(false)}
+				onInstalled={refreshPackages}
 			/>
 		</div>
 	);

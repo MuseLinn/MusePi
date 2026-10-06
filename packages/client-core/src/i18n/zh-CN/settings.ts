@@ -1820,6 +1820,19 @@ export const settings = {
 	"Spend a saved Codex reset automatically when it would otherwise expire within this many hours and either chat window (5h or weekly) has meaningful usage to restore (0 disables expiry salvage).":
 		"当已保存的 Codex 重置将在此小时数内过期、且任一聊天窗口（5 小时或每周）有可恢复的有效用量时自动消耗它（0 禁用过期挽救）。",
 	"Enable the Exa web search provider": "启用 Exa 网络搜索提供商",
+	// ── 插件安装（spec 安装：包名 / git / 压缩包 / 本地路径）──
+	"plugin install title": "安装插件",
+	"plugin install hint": "填入包名、git 地址、压缩包链接或本机绝对路径。安装完成后会检查此插件能否在当前环境运行。",
+	"plugin install placeholder": "包名、git 地址、.tgz 链接或绝对路径",
+	"plugin install start": "安装",
+	"plugin install cancel": "取消安装",
+	"plugin install cancelled": "已取消安装，插件目录已还原。",
+	"plugin install failed": "安装失败。",
+	"plugin install no id": "安装请求未被接受，请重试。",
+	"plugin install done {name}": "已安装 {name}",
+	"plugin install drop hint": "也可以把 .tgz / .zip 压缩包或插件文件夹直接拖到这里",
+	"plugin install drop unreadable": "读不到拖入文件的路径，请改用输入框填写路径。",
+	"plugin install drop unsupported": "只支持 .tgz / .tar.gz / .zip 压缩包或插件文件夹。",
 	// ── TUI settings schema translations (ported from coding-agent i18n, 2026-08-11) ──
 	"~1.25K tokens": "约 1.25K tokens",
 	"~10K tokens": "约 10K tokens",

@@ -5,12 +5,31 @@
  */
 "use strict";
 
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
 	/** Node platform of the desktop shell ("darwin" | "win32" | "linux") —
 	 *  gates macOS-only features (haptics, native window glass). */
 	platform: process.platform,
+	/**
+	 * Absolute path of a dropped `File`, or "" when it has none.
+	 *
+	 * Electron 32 removed `File.path` from the renderer, so a drag-and-drop
+	 * consumer has no way to learn where an item came from. `webUtils` lives in
+	 * the preload because it is the only context that can read the path off a
+	 * `File` object built in the renderer.
+	 *
+	 * The empty-string answer is for a `File` that has no filesystem path — a
+	 * blob from a paste or a synthetic item from a test — which a caller must
+	 * handle rather than treat as a path to install from.
+	 */
+	getDroppedFilePath: (file) => {
+		try {
+			return webUtils.getPathForFile(file);
+		} catch {
+			return "";
+		}
+	},
 	/** Port of a running daemon (ws.port file), or null. */
 	probeDaemonPort: () => ipcRenderer.invoke("daemon-probe"),
 	/** GUI package version (OTA/发布一致性比对,见 app.tsx boot)。 */

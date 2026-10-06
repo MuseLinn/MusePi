@@ -3294,4 +3294,18 @@ export const settings = {
 	"video gen note":
 		"Video generation (agnes_video_gen) reuses the Agnes credential above; the tool toggle lives in Tools settings",
 	"extension providers count": "{count} media provider(s) contributed by extensions",
+	// ── Plugin install (spec install: package name / git / archive / local path) ──
+	"plugin install title": "Install plugin",
+	"plugin install hint":
+		"Enter a package name, git address, archive link, or absolute local path. Once installed, it is checked against this environment to confirm it can run here.",
+	"plugin install placeholder": "Package name, git address, .tgz link, or absolute path",
+	"plugin install start": "Install",
+	"plugin install cancel": "Cancel install",
+	"plugin install cancelled": "Install cancelled; the plugin directory was restored.",
+	"plugin install failed": "Install failed.",
+	"plugin install no id": "The install request was not accepted. Try again.",
+	"plugin install done {name}": "Installed {name}",
+	"plugin install drop hint": "You can also drop a .tgz / .zip archive or a plugin folder here",
+	"plugin install drop unreadable": "Could not read the dropped file's path. Type the path in the field instead.",
+	"plugin install drop unsupported": "Only .tgz / .tar.gz / .zip archives and plugin folders can be dropped here.",
 } as const satisfies Record<SettingsKey, string>;

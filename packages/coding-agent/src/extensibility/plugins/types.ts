@@ -186,6 +186,40 @@ export interface InstallOptions {
 	force?: boolean;
 	/** Preview changes without applying */
 	dryRun?: boolean;
+	/**
+	 * Receive the package manager's output as it is produced.
+	 *
+	 * Called once per stream chunk and never with an empty string. The install
+	 * still completes whether or not this is supplied: output is a report of a
+	 * run that is already in flight, not a gate on it.
+	 */
+	onOutput?: (chunk: InstallOutputChunk) => void;
+	/**
+	 * Cancel the install. Aborting stops the package manager, and the install
+	 * then throws `InstallAbortedError` after restoring the manifest, lockfile,
+	 * and `node_modules` entry it snapshotted — a cancelled install leaves no
+	 * partial dependency state behind.
+	 */
+	signal?: AbortSignal;
+}
+
+/** One piece of package-manager output, tagged with the stream it arrived on. */
+export interface InstallOutputChunk {
+	readonly stream: "stdout" | "stderr";
+	readonly text: string;
+}
+
+/**
+ * An install stopped by {@link InstallOptions.signal}.
+ *
+ * Distinct from a package-manager failure: nothing went wrong, the person asked
+ * to stop, and the GUI reads it as a cancellation rather than an error.
+ */
+export class InstallAbortedError extends Error {
+	constructor(readonly spec: string) {
+		super(`plugin install cancelled: ${spec}`);
+		this.name = "InstallAbortedError";
+	}
 }
 
 export interface DoctorOptions {

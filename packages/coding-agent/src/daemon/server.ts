@@ -401,6 +401,7 @@ import { EventService } from "./services/event-service";
 import { ExtensionService } from "./services/extension-service";
 import { FileService } from "./services/file-service";
 import { MarketplaceService } from "./services/marketplace-service";
+import { PluginInstallService } from "./services/plugin-install-service";
 import { HostServices } from "./services/registry";
 import { RemoteService } from "./services/remote-service";
 import { ScheduleService } from "./services/schedule-service";
@@ -640,6 +641,15 @@ export class DaemonServer {
 				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
 				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
 				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
+			}),
+		);
+		this.#services.register(
+			new PluginInstallService({
+				cwd: () => this.#host.cwd(),
+				invalidatePluginCaches: () => this.#services.get<ExtensionService>("extensions").invalidatePluginCaches(),
+				onChanged: () => this.#services.get<EventService>("events").broadcastExtensionsChanged(),
+				onInstallState: payload => this.#services.get<EventService>("events").broadcast(payload),
+				onInstallOutput: payload => this.#services.get<EventService>("events").broadcast(payload),
 			}),
 		);
 		this.#services.register(
@@ -1917,6 +1927,31 @@ export class DaemonServer {
 			}
 			case "plugins.setEnabled": {
 				return this.#services.get<ExtensionService>("extensions").setPluginEnabled(params ?? {});
+			}
+			case "plugins.install": {
+				// 插件安装走 PluginInstallService 的状态机：install 立即返回 installId，
+				// 进度/输出经 plugins.install.state / plugins.install.output 事件推送。
+				return this.#services
+					.get<PluginInstallService>("pluginInstall")
+					.install((params ?? {}) as { spec: string });
+			}
+			case "plugins.install.status": {
+				return this.#services.get<PluginInstallService>("pluginInstall").installStatus();
+			}
+			case "plugins.install.cancel": {
+				return this.#services
+					.get<PluginInstallService>("pluginInstall")
+					.cancelInstall((params ?? {}) as { installId: string });
+			}
+			case "plugins.install.output": {
+				return this.#services
+					.get<PluginInstallService>("pluginInstall")
+					.installOutput((params ?? {}) as { installId: string });
+			}
+			case "plugins.uninstall": {
+				return this.#services
+					.get<PluginInstallService>("pluginInstall")
+					.uninstall((params ?? {}) as { name: string });
 			}
 			case "marketplace.list": {
 				// 实现归 MarketplaceService（marketplace/skills 面语义不变）。

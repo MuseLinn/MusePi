@@ -4,6 +4,15 @@ declare module "*?url";
 /** Electron shell bridge (electron/preload.cjs → contextBridge). */
 interface Window {
 	electronAPI?: {
+		/** Node platform of the desktop shell. */
+		platform: string;
+		/**
+		 * Absolute path of a dropped `File`, or "" when it has none (a pasted
+		 * blob, a synthetic test item). Electron 32 removed `File.path`, so this
+		 * is the only way a drag-and-drop consumer learns where an item came
+		 * from; the empty answer must be handled, not installed from.
+		 */
+		getDroppedFilePath(file: File): string;
 		probeDaemonPort(): Promise<number | null>;
 		startDaemon(port: number): Promise<number>;
 		restartDaemon(port: number): Promise<number>;

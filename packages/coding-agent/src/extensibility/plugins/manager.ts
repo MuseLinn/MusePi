@@ -19,16 +19,19 @@ import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from ".
 import { parsePluginId } from "./marketplace/types";
 import { extractPackageName, parsePluginSpec } from "./parser";
 import { normalizePluginRuntimeConfig } from "./runtime-config";
+import { installSpecFor, parseInstallSpec } from "./spec-classifier";
 import type {
 	DoctorCheck,
 	DoctorOptions,
 	InstalledPlugin,
 	InstallOptions,
+	InstallOutputChunk,
 	PluginManifest,
 	PluginRuntimeConfig,
 	PluginSettingSchema,
 	ProjectPluginOverrides,
 } from "./types";
+import { InstallAbortedError } from "./types";
 
 // =============================================================================
 // Validation
@@ -71,14 +74,78 @@ function validateGitSpec(spec: string): void {
 	}
 }
 
-function gitInstallSpec(original: string, source: GitSource): string {
-	if (/^github:/i.test(original) || !/^[a-z]+:[^/]/i.test(original)) {
-		return original;
+/**
+ * Stream one package-manager run, forwarding its output as it arrives.
+ *
+ * Output is forwarded per chunk rather than collected, because a GUI install has
+ * to show progress while the run is in flight; a caller that passes no
+ * `onOutput` still gets the same run and the same exit status, it just keeps no
+ * transcript.
+ *
+ * An aborted run kills the whole process tree. A package manager that spawned a
+ * lifecycle script outlives its own `bun install` process, and leaving that
+ * child running would keep writing into `node_modules` after the rollback
+ * restored the manifest — the exact corruption the snapshot exists to prevent.
+ *
+ * @param argv - the command and its arguments; no shell is involved.
+ * @param cwd - directory to run in.
+ * @param options - output sink and cancellation for this run.
+ * @returns the exit code and the tail of each stream, for a failure message.
+ */
+async function runPackageManager(
+	argv: readonly string[],
+	cwd: string,
+	options: { onOutput?: (chunk: InstallOutputChunk) => void; signal?: AbortSignal },
+): Promise<{ exitCode: number; stdoutTail: string; stderrTail: string }> {
+	const proc = Bun.spawn([...argv], {
+		cwd,
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+		windowsHide: true,
+	});
+
+	// Cap the retained tail. A failing run's diagnostics matter, but an
+	// unbounded buffer would let a chatty run grow without limit while the
+	// caller keeps every chunk anyway.
+	const TAIL_MAX_CHARS = 8_192;
+	let stdoutTail = "";
+	let stderrTail = "";
+
+	const forward = (text: string, stream: "stdout" | "stderr"): void => {
+		if (text === "") return;
+		if (stream === "stdout") stdoutTail = (stdoutTail + text).slice(-TAIL_MAX_CHARS);
+		else stderrTail = (stderrTail + text).slice(-TAIL_MAX_CHARS);
+		options.onOutput?.({ stream, text });
+	};
+
+	// Both pipes are drained concurrently with the exit wait. Awaiting the exit
+	// before reading either pipe risks a >64 KiB OS-pipe-buffer deadlock once the
+	// manager prints enough progress.
+	const read = async (stream: "stdout" | "stderr", body: ReadableStream<Uint8Array> | null) => {
+		if (body === null) return;
+		const decoder = new TextDecoder();
+		for await (const chunk of body) forward(decoder.decode(chunk, { stream: true }), stream);
+		// A multi-byte character can straddle two chunks; the final decode emits
+		// whatever the streaming decode was holding.
+		forward(decoder.decode(), stream);
+	};
+
+	const stop = () => {
+		try {
+			proc.kill();
+		} catch {
+			// The run already exited; nothing to stop.
+		}
+	};
+	options.signal?.addEventListener("abort", stop, { once: true });
+
+	try {
+		const [exitCode] = await Promise.all([proc.exited, read("stdout", proc.stdout), read("stderr", proc.stderr)]);
+		return { exitCode, stdoutTail, stderrTail };
+	} finally {
+		options.signal?.removeEventListener("abort", stop);
 	}
-	if (!source.ref || source.repo.includes("#")) {
-		return source.repo;
-	}
-	return `${source.repo}#${source.ref}`;
 }
 
 function findGitPackageName(source: GitSource, deps: Record<string, string>): string | undefined {
@@ -416,12 +483,14 @@ export class PluginManager {
 
 	async install(specString: string, options: InstallOptions = {}): Promise<InstalledPlugin> {
 		const spec = parsePluginSpec(specString);
+		const classification = parseInstallSpec(spec.packageName);
 		const gitSource = parseGitUrl(spec.packageName);
 		if (gitSource) {
 			validateGitSpec(spec.packageName);
-		} else {
+		} else if (classification.kind === "registry") {
 			validatePackageName(spec.packageName);
 		}
+		options.signal?.throwIfAborted();
 
 		await this.#ensurePackageJson();
 
@@ -451,10 +520,12 @@ export class PluginManager {
 			bunLockBefore = null;
 		}
 		const depsBefore = await this.#readDeps(pkgJsonPath);
-		const packageInstallSpec = gitSource ? gitInstallSpec(spec.packageName, gitSource) : spec.packageName;
+		const { installSpec: packageInstallSpec, specNamesPackage } = installSpecFor(classification);
 		const existingActualName = gitSource
 			? findGitPackageName(gitSource, depsBefore)
-			: extractPackageName(spec.packageName);
+			: specNamesPackage
+				? extractPackageName(spec.packageName)
+				: undefined;
 		const packageSnapshot = await this.#snapshotInstalledPackage(existingActualName);
 
 		// `actualName` is hoisted so the rollback handler can clean up the right
@@ -474,28 +545,28 @@ export class PluginManager {
 			}
 
 			// Step 1: write the spec into plugins/package.json + node_modules.
-			const installProc = Bun.spawn(["bun", "install", packageInstallSpec], {
-				cwd: getPluginsDir(),
-				stdin: "ignore",
-				stdout: "pipe",
-				stderr: "pipe",
-				windowsHide: true,
+			const installRun = await runPackageManager(["bun", "install", packageInstallSpec], getPluginsDir(), {
+				onOutput: options.onOutput,
+				signal: options.signal,
 			});
-			// Drain stdout+stderr concurrently with proc.exited. Awaiting exited
-			// before reading either pipe risks a >64 KiB OS-pipe-buffer deadlock
-			// once bun install prints enough progress; even where Bun currently
-			// buffers eagerly, doing this leaks unbounded memory.
-			const [installExit, , installStderr] = await Promise.all([
-				installProc.exited,
-				new Response(installProc.stdout).text(),
-				new Response(installProc.stderr).text(),
-			]);
-			if (installExit !== 0) {
-				throw new Error(`bun install failed: ${installStderr}`);
+			// A cancelled run is a different outcome from a failing one, and the
+			// GUI reads them differently. Check the signal before the exit code:
+			// killing the process always leaves a non-zero status, which would
+			// otherwise report a cancellation as a package-manager failure.
+			options.signal?.throwIfAborted();
+			if (installRun.exitCode !== 0) {
+				throw new Error(
+					`bun install failed: ${installRun.stderrTail.trim() || installRun.stdoutTail.trim() || `exit code ${installRun.exitCode}`}`,
+				);
 			}
-			// Resolve actual package name. npm specs encode the name (strip version);
-			// git specs do not, so diff plugins/package.json deps to find the new entry.
-			if (gitSource) {
+			// Resolve the actual package name. A registry spec encodes the name (strip
+			// the version), so it is known before the run. Every other source — git,
+			// tarball, local path — is written into plugins/package.json under whatever
+			// name the installed package declares, so the only source of truth is a
+			// diff of the dependency map across the install.
+			if (specNamesPackage) {
+				actualName = extractPackageName(spec.packageName);
+			} else {
 				const depsAfter = await this.#readDeps(pkgJsonPath);
 				let resolved: string | undefined;
 				for (const key of Object.keys(depsAfter)) {
@@ -504,11 +575,11 @@ export class PluginManager {
 						break;
 					}
 				}
-				// Fallback: a force-reinstall of an already-present git plugin will not
-				// add a new key, just rewrite the existing one to the new spec value.
-				// Match by repository identity, not by ref, so failed upgrades from
-				// one ref to another still resolve to the original package name.
-				if (!resolved) {
+				// Fallback: re-installing a source that is already present adds no
+				// key, it only rewrites the existing one to the new spec value. A git
+				// spec is then matched by repository identity, so a failed upgrade
+				// from one ref to another still resolves to the original name.
+				if (!resolved && gitSource) {
 					resolved = findGitPackageName(gitSource, depsAfter);
 				}
 				if (!resolved) {
@@ -517,8 +588,6 @@ export class PluginManager {
 					);
 				}
 				actualName = resolved;
-			} else {
-				actualName = extractPackageName(spec.packageName);
 			}
 
 			// Step 2: refresh the git lockfile pin when re-installing an existing
@@ -530,21 +599,15 @@ export class PluginManager {
 			// cache from the remote. Rollback is handled by the outer catch.
 			if (gitSource && existingActualName) {
 				await refreshBunGitCache(gitSource, getPluginsDir());
-				const updateProc = Bun.spawn(["bun", "update", actualName], {
-					cwd: getPluginsDir(),
-					stdin: "ignore",
-					stdout: "pipe",
-					stderr: "pipe",
-					windowsHide: true,
+				const updateRun = await runPackageManager(["bun", "update", actualName], getPluginsDir(), {
+					onOutput: options.onOutput,
+					signal: options.signal,
 				});
-				// Same drain-concurrent-with-exit pattern as the bun install above.
-				const [updateExit, , updateStderr] = await Promise.all([
-					updateProc.exited,
-					new Response(updateProc.stdout).text(),
-					new Response(updateProc.stderr).text(),
-				]);
-				if (updateExit !== 0) {
-					throw new Error(`bun update ${actualName} failed: ${updateStderr}`);
+				options.signal?.throwIfAborted();
+				if (updateRun.exitCode !== 0) {
+					throw new Error(
+						`bun update ${actualName} failed: ${updateRun.stderrTail.trim() || updateRun.stdoutTail.trim() || `exit code ${updateRun.exitCode}`}`,
+					);
 				}
 			}
 
@@ -608,6 +671,11 @@ export class PluginManager {
 
 			return installedPlugin;
 		} catch (err) {
+			// Every exit from here — a package-manager failure, a rejected spec, a
+			// validation failure, or a cancellation — restores the manifest,
+			// lockfile, and node_modules entry captured above. The rollback runs
+			// first so the person never sees a cancelled install reported as a
+			// failure, and so a cancellation leaves no half-installed dependency.
 			try {
 				await this.#rollbackFailedInstall(
 					actualName ?? existingActualName,
@@ -619,6 +687,13 @@ export class PluginManager {
 				const message = err instanceof Error ? err.message : String(err);
 				const rollbackMessage = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
 				throw new Error(`${message}\nRollback failed: ${rollbackMessage}`);
+			}
+			// The signal is the authority on cancellation, not the thrown error: a
+			// kill during rollback reports a rollback failure, and a package manager
+			// that failed on its own while the person pressed cancel should still
+			// read as the cancellation they asked for.
+			if (options.signal?.aborted) {
+				throw new InstallAbortedError(spec.packageName);
 			}
 			throw err;
 		} finally {

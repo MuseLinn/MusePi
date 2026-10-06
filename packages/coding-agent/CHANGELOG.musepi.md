@@ -5,6 +5,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Added
+
+- **插件页现在可以直接填包名、git 地址、压缩包或本机路径来安装插件**：以前只有市场能装已收录的包，自己做的、还没发布的插件没法进。新的入口在插件页工具栏「安装插件」——填入内容后立即开始，边装边显示输出，可以中途取消，失败后原样重试；**也可以把压缩包或插件文件夹直接拖进去**，自制的插件不用先发布给别人。取消或失败都会把插件目录还原回安装前的样子，不会留下装了一半的依赖。装完会告诉你这个插件能不能在当前环境跑：依赖对得上就标为可用，缺东西或者有界面找不到落点时，把缺的是什么一并列出来，不用等到加载失败才发现。
+  - EN: The plugins page can now install from a package name, git address, archive, or local path. Only the marketplace could install before, so a plugin you built yourself — or one that was never published — had no way in. The new entry sits in the plugins toolbar: fill in the spec and it starts, shows output as it runs, can be cancelled mid-flight, and retries unchanged after a failure; **or drop an archive or plugin folder straight onto it**, so a hand-built plugin needs publishing to nobody first. A cancellation or a failure restores the plugin directory to its pre-install state, so no half-installed dependency is left behind. Once it finishes you are told whether the plugin can actually run here: matching dependencies mark it usable, and a missing runtime or a component with no mount point on this host is listed by name, instead of surfacing later as a load failure.
+
 ## [0.5.4] - 2026-10-06
 
 ### Added

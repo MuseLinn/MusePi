@@ -2090,6 +2090,56 @@
 	gap: 12px;
 	min-height: 0;
 }
+/* 插件安装输出转录：包管理器的实时输出按行追加，失败时是唯一可读的原因。 */
+.gui-plugin-log {
+	flex: 1 1 auto;
+	min-height: 120px;
+	max-height: 40vh;
+	overflow-y: auto;
+	padding: 8px 10px;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--border);
+	background: var(--color-surface-raised);
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 11px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	word-break: break-all;
+	/* 输出是一段可复制的文本，不允许长包名把面板撑出横向滚动条。 */
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+.gui-plugin-log-err {
+	color: var(--color-danger, #f87171);
+}
+.gui-plugin-dialog-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	padding-top: 4px;
+}
+/* 拖入安装:未发布插件无需发布即可装 —— 把压缩包或目录拖进这块区域。 */
+.gui-plugin-drop {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	margin: -8px;
+	border-radius: var(--radius-xl);
+	border: 1px dashed transparent;
+	transition:
+		border-color var(--gui-motion-fade-in) var(--gui-ease-out),
+		background-color var(--gui-motion-fade-in) var(--gui-ease-out);
+}
+.gui-plugin-drop--over {
+	border-color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 8%, transparent);
+}
+.gui-plugin-drop-hint {
+	font-size: 11px;
+	color: var(--color-text-tertiary);
+	text-align: center;
+}
 .gui-plugin-components {
 	display: flex;
 	flex-direction: column;
