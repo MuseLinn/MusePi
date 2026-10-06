@@ -622,7 +622,9 @@ export class PluginManager {
 				}
 				throw err;
 			}
-			const manifest: PluginManifest = readPluginBlock<PluginManifest>(pkg) ?? { version: pkg.version };
+			const manifest: PluginManifest = (readPluginBlock(pkg) as PluginManifest | undefined) ?? {
+				version: pkg.version,
+			};
 			manifest.version = pkg.version;
 
 			// Resolve enabled features
@@ -759,7 +761,9 @@ export class PluginManager {
 				if (isEnoent(err)) continue;
 				throw err;
 			}
-			const manifest: PluginManifest = readPluginBlock<PluginManifest>(pluginPkg) ?? { version: pluginPkg.version };
+			const manifest: PluginManifest = (readPluginBlock(pluginPkg) as PluginManifest | undefined) ?? {
+				version: pluginPkg.version,
+			};
 			manifest.version = pluginPkg.version;
 
 			const runtimeState = config.plugins[name] || {
@@ -824,7 +828,7 @@ export class PluginManager {
 
 		await fs.promises.symlink(absolutePath, linkPath);
 
-		const manifest: PluginManifest = readPluginBlock<PluginManifest>(pkg) ?? { version: pkg.version };
+		const manifest: PluginManifest = (readPluginBlock(pkg) as PluginManifest | undefined) ?? { version: pkg.version };
 		manifest.version = pkg.version;
 
 		// Add to runtime config
@@ -1043,7 +1047,7 @@ export class PluginManager {
 				}
 				throw err;
 			}
-			const manifest = readPluginBlock<PluginManifest>(pluginPkg);
+			const manifest = readPluginBlock(pluginPkg) as PluginManifest | undefined;
 			const hasManifest = manifest !== undefined;
 
 			checks.push({

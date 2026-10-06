@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
+import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { describePluginCapability } from "./capability-report";
 import type { InstalledPlugin } from "./types";
 
@@ -127,5 +128,42 @@ describe("describePluginCapability", () => {
 		const report = await describePluginCapability(plugin);
 		expect(report.verdict).toBe("incompatible");
 		expect(report.missing.join(" ")).toContain("missing.ts");
+	});
+
+	it("accepts every slot the host declares, without a copy of the list", async () => {
+		// The check used to carry its own list of exact names and prefix
+		// families. It matched, and would have gone on matching right up until a
+		// slot was added in the one authoritative place: from then on every
+		// plugin registering into the new slot rendered correctly and was
+		// reported here as having nowhere to appear. Driving the case from the
+		// declaration itself means a newly declared slot is covered the moment it
+		// exists, and a slot removed from it stops being accepted.
+		for (const slot of EXTENSION_SLOT_DECLARATION.exact) {
+			const { plugin } = await writeFixture({
+				"package.json": JSON.stringify({
+					name: "slot-probe",
+					version: "1.0.0",
+					musepi: { extensions: ["index.ts"] },
+				}),
+				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "./ui.tsx" });`,
+			});
+
+			const report = await describePluginCapability(plugin);
+			expect({ slot, unhosted: report.unhostedSlots }).toEqual({ slot, unhosted: [] });
+		}
+		for (const prefix of EXTENSION_SLOT_DECLARATION.prefixes) {
+			const slot = `${prefix}probe`;
+			const { plugin } = await writeFixture({
+				"package.json": JSON.stringify({
+					name: "slot-probe",
+					version: "1.0.0",
+					musepi: { extensions: ["index.ts"] },
+				}),
+				"index.ts": `pi.registerComponent({ slot: ${JSON.stringify(slot)}, moduleUrl: "./ui.tsx" });`,
+			});
+
+			const report = await describePluginCapability(plugin);
+			expect({ slot, unhosted: report.unhostedSlots }).toEqual({ slot, unhosted: [] });
+		}
 	});
 });

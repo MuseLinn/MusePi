@@ -27,6 +27,7 @@
  */
 
 import * as path from "node:path";
+import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
 import type { InstalledPlugin } from "./types";
 
@@ -61,37 +62,28 @@ const HOST_PACKAGE_SCOPE: ReadonlySet<string> = new Set(["@musepi/", "musepi-", 
 /** Package namespaces that are plugins for a different harness. */
 const FOREIGN_SCOPE_HINT = /^@(?:deepseek-ai|anthropic-ai|huanlin|michengai|omdsh)\//;
 
-/**
- * Slot prefixes and exact names this host mounts.
- *
- * Mirrors the prefix families in `@musepi/collab-proto/extension-slots`, which
- * is the single authority the daemon validates against. A slot outside this set
- * loads (registration is not a mount) but never renders, which is why the
- * verdict is `partial` rather than `incompatible`.
- */
-const HOSTED_SLOT_PREFIXES: readonly string[] = [
-	"panel.tab.",
-	"settings.tab.",
-	"rail.",
-	"settings.item.",
-	"settings.action.",
-];
-const HOSTED_SLOT_EXACT: ReadonlySet<string> = new Set([
-	"panel.right",
-	"rail.right",
-	"settings.extensions",
-	"composer.dock",
-	"composer.left",
-	"composer.right",
-	"transcript.node",
-]);
-
 /** Entry suffixes a manifest `extensions` entry can name. */
 const ENTRY_SUFFIXES: readonly string[] = [".ts", ".tsx", ".js", ".jsx", ".mjs"];
 
+/**
+ * Whether this host mounts a slot.
+ *
+ * The slot vocabulary is read from `@musepi/collab-proto/extension-slots`,
+ * the same declaration the loader validates registrations against and the
+ * daemon serves to the GUI. This module used to carry its own copy of the
+ * prefix families and exact names; the copy matched, and would have kept
+ * matching right up until someone added a slot in the one place and every
+ * plugin registering into it started being reported as partial here while
+ * rendering correctly. Referring to the declaration means a new slot is
+ * reported as hosted the moment it is declared.
+ *
+ * A slot outside the declaration loads — registration is not a mount — but
+ * never renders, which is why that case is `partial` rather than
+ * `incompatible`.
+ */
 function isHostedSlot(slot: string): boolean {
-	if (HOSTED_SLOT_EXACT.has(slot)) return true;
-	return HOSTED_SLOT_PREFIXES.some(prefix => slot.startsWith(prefix));
+	if ((EXTENSION_SLOT_DECLARATION.exact as readonly string[]).includes(slot)) return true;
+	return EXTENSION_SLOT_DECLARATION.prefixes.some(prefix => slot.startsWith(prefix));
 }
 
 /**
