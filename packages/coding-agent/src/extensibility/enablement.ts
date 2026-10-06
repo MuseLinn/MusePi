@@ -25,43 +25,114 @@ import { Settings } from "../config/settings";
 export type EnablementPredicate = () => boolean;
 
 /**
+ * The settings keys a subsystem keeps behind its own on/off switch.
+ *
+ * Named here so the loader's gate and the settings panel read the same list.
+ * `shell.enabled` is deliberately absent from the schema and so from the type
+ * the settings surface is built from — it is written through the extension
+ * service only — which is why this is its own type rather than a derived one.
+ */
+export type SubsystemSwitchKey =
+	| "stt.enabled"
+	| "speech.enabled"
+	| "browser.enabled"
+	| "computer.enabled"
+	| "lsp.enabled"
+	| "shell.enabled";
+
+/**
+ * Whether a subsystem's own switch reads as on.
+ *
+ * Two consumers ask this question and they do not agree on what an unreadable
+ * answer means. A gate treats it as off, because the thing it guards should stay
+ * out. The settings panel treats it as on for most subsystems, because a setting
+ * hidden by a failed read cannot be turned back on. That difference is real and
+ * lives with the consumer, not here.
+ *
+ * What is shared is which key answers which question and how a missing key
+ * differs from a key set to false — `shell.enabled` has no schema entry and so
+ * no default, which makes it on unless something explicitly wrote false, while
+ * `stt.enabled` defaults to false and so an absent value is off. Two registries
+ * reading these independently is how a subsystem ends up gated in the loader
+ * and visible in the panel.
+ *
+ * @param key - the subsystem switch's settings key.
+ * @returns whether the switch is on, or `undefined` when it cannot be read.
+ * A key that reads normally never yields `undefined` — an unset key resolves to
+ * its schema default.
+ */
+export function readSubsystemEnabled(key: SubsystemSwitchKey): boolean | undefined {
+	const raw = readRawSubsystemSwitch(key);
+	// `undefined` here means the read failed, and it has to stay distinguishable
+	// from a switch that genuinely reads false — comparing it to `true` here
+	// would collapse the two and leave every caller with no way to apply its own
+	// failure direction.
+	if (raw === undefined) return undefined;
+	return raw === true;
+}
+
+/** A gate's answer when a switch cannot be read: keep the thing out. */
+const READ_FAILURE_AS_GATE = false;
+
+/** The settings panel's answer when a switch cannot be read: keep the setting
+ *  reachable, because a setting hidden by a failed read cannot be turned back on. */
+const READ_FAILURE_AS_VISIBILITY = true;
+
+/**
  * Named conditions that take no argument.
  *
- * A predicate that reads a setting treats an unreadable value as "not set"
- * rather than throwing: settings are readable only after the configuration
- * layer is up, and a gate has to answer during early boot. The two failure
- * directions are deliberate per predicate — a gate reads false, because the
- * thing it guards should stay out; the settings panel reads its own way
- * because a setting that should be visible must stay reachable to turn the
- * thing back on.
+ * Each delegates to {@link readSubsystemEnabled} and then applies its own
+ * direction, so a gate that cannot read the switch keeps the plugin out.
  */
 const UNARY_CONDITIONS: Readonly<Record<string, EnablementPredicate>> = {
 	/** Speech input is configured and enabled. */
-	sttEnabled: () => readSetting("stt.enabled") === true,
+	sttEnabled: () => readSubsystemEnabled("stt.enabled") ?? READ_FAILURE_AS_GATE,
 	/** Speech output is configured and enabled. */
-	speechEnabled: () => readSetting("speech.enabled") === true,
+	speechEnabled: () => readSubsystemEnabled("speech.enabled") ?? READ_FAILURE_AS_GATE,
 	/** The browser subsystem's own switch is on. */
-	browserEnabled: () => readSetting("browser.enabled") === true,
-	/** Computer use's own switch is on. Note its schema default is already false,
-	 *  so an absent value means off here as elsewhere. */
-	computerEnabled: () => readSetting("computer.enabled") === true,
+	browserEnabled: () => readSubsystemEnabled("browser.enabled") ?? READ_FAILURE_AS_GATE,
+	/** Computer use's own switch is on. */
+	computerEnabled: () => readSubsystemEnabled("computer.enabled") ?? READ_FAILURE_AS_GATE,
 	/** Language servers are enabled. */
-	lspEnabled: () => readSetting("lsp.enabled") === true,
+	lspEnabled: () => readSubsystemEnabled("lsp.enabled") ?? READ_FAILURE_AS_GATE,
 	/** Running under the desktop shell rather than headless.
-	 *  This key is absent from the settings schema, so it has no default to read
-	 *  and only an explicit `false` means the shell is off - the same reading the
-	 *  daemon's registry projection uses. */
-	desktopShell: () => readSetting("shell.enabled") !== false,
+	 *  This key is absent from the settings schema, so `readSubsystemEnabled`
+	 *  cannot answer it — there is no default to resolve an absent value to —
+	 *  and only an explicit `false` means the shell is off, which is the reading
+	 *  the daemon's registry projection uses. */
+	desktopShell: () => readRawSubsystemSwitch("shell.enabled") !== false,
 	/** Running on macOS. */
 	macOS: () => process.platform === "darwin",
 };
 
-function readSetting(path: string): unknown {
+/**
+ * Read a switch that has no schema entry.
+ *
+ * `Settings.get` is typed against the schema, and `shell.enabled` is not in it —
+ * which is the fact this function exists to work around rather than hide. The
+ * cast is confined here so that a future schema entry for the key makes this
+ * the one place that has to change.
+ *
+ * @param key - the switch's settings key.
+ * @returns the raw value, or `undefined` when it cannot be read.
+ */
+export function readRawSubsystemSwitch(key: SubsystemSwitchKey): unknown {
 	try {
-		return Settings.instance.get(path as Parameters<Settings["get"]>[0]);
+		return Settings.instance.get(key as Parameters<Settings["get"]>[0]) as unknown;
 	} catch {
 		return undefined;
 	}
+}
+
+/**
+ * Whether a subsystem's switch reads as on, for a consumer that keeps its
+ * settings reachable when the switch cannot be read.
+ *
+ * @param key - the subsystem switch's settings key.
+ * @returns whether the panel should show the settings this switch governs.
+ */
+export function subsystemVisible(key: SubsystemSwitchKey): boolean {
+	return readSubsystemEnabled(key) ?? READ_FAILURE_AS_VISIBILITY;
 }
 
 /** The condition this name and argument resolve to, or undefined if unknown. */

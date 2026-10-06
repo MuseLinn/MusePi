@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import { isKnownEnablementCondition, knownEnablementConditions } from "./enablement";
+import {
+	enablementHolds,
+	isKnownEnablementCondition,
+	knownEnablementConditions,
+	readSubsystemEnabled,
+	subsystemVisible,
+} from "./enablement";
 
 /**
  * Two registries of named predicates exist: the one here, which the loader asks
@@ -66,5 +72,43 @@ describe("enablement condition registry", () => {
 		// settings-panel entry, so nothing outside this host can set it. If it is
 		// ever given a schema entry, this assertion is where that gets noticed.
 		expect("shell.enabled" in SETTINGS_SCHEMA).toBe(false);
+	});
+});
+
+/**
+ * The two consumers of a subsystem's switch disagree about what an unreadable
+ * answer means, and that disagreement is the point. Sharing the read is right;
+ * sharing the answer would be wrong. These cases pin both directions against the
+ * same keys, so a later "simplification" that collapses them has to fail here.
+ *
+ * Settings are unreadable until the configuration layer is up, and both a gate
+ * and a panel have to answer during early boot, so this is a state the code
+ * really reaches rather than a defensive branch.
+ */
+describe("unreadable subsystem switches", () => {
+	it("keeps a plugin out when its switch cannot be read", () => {
+		// Refusing to answer is not permission to load.
+		expect(enablementHolds("lspEnabled")).toBe(false);
+		expect(enablementHolds("sttEnabled")).toBe(false);
+		expect(enablementHolds("computerEnabled")).toBe(false);
+	});
+
+	it("keeps the settings reachable when the same switch cannot be read", () => {
+		// The same read, the opposite question. A panel that hid its own settings
+		// on a failed read would leave the person with no way to turn the plugin
+		// back on.
+		expect(subsystemVisible("lsp.enabled")).toBe(true);
+		expect(subsystemVisible("stt.enabled")).toBe(true);
+	});
+
+	it("treats every switch as unreadable before settings are initialized", () => {
+		// The state the gate actually meets on a cold start, and the reason the
+		// failure direction is worth specifying at all. Settings cannot be read
+		// before `Settings.init`, so both directions below are answers to "I do
+		// not know", not answers to "no".
+		const keys = ["lsp.enabled", "browser.enabled", "stt.enabled", "speech.enabled", "computer.enabled"] as const;
+		for (const key of keys) {
+			expect({ key, answer: readSubsystemEnabled(key) }).toEqual({ key, answer: undefined });
+		}
 	});
 });
