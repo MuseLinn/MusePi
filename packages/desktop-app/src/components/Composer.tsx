@@ -36,6 +36,7 @@ import {
 import { CompactionStatusLine } from "./composer/agent-status-line";
 import { ApprovalModeButton } from "./composer/approval-mode-button";
 import { CompletionMenus, SlashNotice } from "./composer/completion-menus";
+import { ConnectorChip, ConnectorPanel, nextSelection, useConnectors } from "./composer/connector-panel";
 import { ContextUsageCard } from "./composer/context-dialog";
 import { DesignStyleSelect } from "./composer/design-styles";
 import { GoalDetailCard } from "./composer/goal-detail-card";
@@ -1181,6 +1182,26 @@ export function Composer({
 		className: "gui-queue-popup",
 	});
 
+	// Connector picker (M4 P1 client): which MCP servers this session may use.
+	// Only rendered for a live session — the daemon answers per live session, and
+	// a historical one has no composer to put a chip above anyway.
+	const [connectorsOpen, setConnectorsOpen] = useState(false);
+	const { anchorRef: connectorsAnchorRef, renderMenu: renderConnectorsMenu } = useFloatingMenu(
+		connectorsOpen,
+		setConnectorsOpen,
+		{ className: "gui-connector-popup" },
+	);
+	const {
+		snapshot: connectorSnapshot,
+		loadFailed: connectorsLoadFailed,
+		setSelection: setConnectorSelection,
+	} = useConnectors(rpc, sessionId);
+	const connectorServers = connectorSnapshot?.servers ?? [];
+	const connectorChosen = connectorSnapshot
+		? connectorServers.filter(s => connectorSnapshot.selected === null || connectorSnapshot.selected.includes(s.name))
+				.length
+		: 0;
+
 	// ── Slash commands (TUI parity) ──────────────────────────────────────
 	// "/xxx" executes the daemon's builtin registry headlessly; "//xxx"
 	// escapes to literal text (the doubled slash parses to no command, so
@@ -1962,8 +1983,38 @@ export function Composer({
 					<div className="gui-composer-above">
 						{composerDockItems.length > 0 ||
 						(modes && (todoTotal > 0 || (working && queued != null && queued.count > 0))) ||
+						connectorServers.length > 0 ||
 						activeTask ? (
 							<div className="gui-composer-dock">
+								{/* Connector picker (M4 P1): which MCP servers this session
+								    may use. Only appears once the daemon has reported at
+								    least one — an empty list has nothing to pick. */}
+								{connectorServers.length > 0 && (
+									<ConnectorChip
+										open={connectorsOpen}
+										onToggle={() => setConnectorsOpen(v => !v)}
+										anchorRef={connectorsAnchorRef}
+										serverCount={connectorServers.length}
+										chosenCount={connectorChosen}
+										menu={renderConnectorsMenu(
+											<ConnectorPanel
+												snapshot={connectorSnapshot}
+												loadFailed={connectorsLoadFailed}
+												onToggleServer={name =>
+													connectorSnapshot &&
+													setConnectorSelection(nextSelection(connectorSnapshot, name))
+												}
+												onToggleServers={names =>
+													setConnectorSelection(
+														names.length === connectorSnapshot?.servers.length ? null : names,
+													)
+												}
+												onSelectAll={() => setConnectorSelection([])}
+												onUseAll={() => setConnectorSelection(null)}
+											/>,
+										)}
+									/>
+								)}
 								{composerDockItems.length > 0 && (
 									<SlotComponentHost rpc={rpc} slot={COMPOSER_DOCK_SLOT} sessionId={sessionId} cwd={cwd} />
 								)}

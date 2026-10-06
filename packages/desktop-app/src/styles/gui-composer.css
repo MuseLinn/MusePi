@@ -2635,6 +2635,7 @@ button.gui-stats-pill {
 .gui-todo-chip,
 .gui-swarm-chip,
 .gui-queue-chip,
+.gui-connector-chip,
 .gui-stats-pill,
 .gui-model-capsule,
 .gui-suggest-chip,
@@ -2683,6 +2684,7 @@ button.gui-stats-pill {
 .gui-todo-chip::before,
 .gui-swarm-chip::before,
 .gui-queue-chip::before,
+.gui-connector-chip::before,
 .gui-stats-pill::before,
 .gui-model-capsule::before,
 .gui-suggest-chip::before,
@@ -2709,6 +2711,7 @@ button.gui-stats-pill {
 .gui-todo-chip > *,
 .gui-swarm-chip > *,
 .gui-queue-chip > *,
+.gui-connector-chip > *,
 .gui-stats-pill > *,
 .gui-model-capsule > *,
 .gui-suggest-chip > *,
@@ -2738,6 +2741,8 @@ button.gui-stats-pill {
 .gui-swarm-chip--open,
 .gui-queue-chip:hover,
 .gui-queue-chip--open,
+.gui-connector-chip:hover,
+.gui-connector-chip--open,
 .gui-stats-pill:hover,
 .gui-suggest-chip:hover,
 .gui-send-btn:hover {
@@ -2759,6 +2764,7 @@ button.gui-stats-pill {
 .gui-todo-chip:active,
 .gui-swarm-chip:active,
 .gui-queue-chip:active,
+.gui-connector-chip:active,
 .gui-stats-pill:active,
 .gui-suggest-chip:active,
 .gui-send-btn:active {
@@ -3073,4 +3079,131 @@ button.gui-stats-pill {
 		opacity: 0;
 		transform: translate(0, calc(-100% + 4px));
 	}
+}
+
+/* ── 连接器选择（M4 P1 client）────────────────────────────────────────────
+ * A chip above the input listing how many connectors this session may use, and
+ * a floating panel for choosing which. It appears only once the daemon has
+ * reported at least one server — an empty list has nothing to pick from. */
+.gui-connector-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 9px;
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+	animation: gui-chip-in var(--gui-motion-chip) var(--spring);
+}
+
+/* A narrowed selection reads as armed: the label already carries the count, so
+ * the colour only has to say "this session is not using all of them". */
+.gui-connector-chip--narrowed {
+	color: var(--color-accent);
+}
+
+.gui-connector-chip-label {
+	white-space: nowrap;
+}
+
+.gui-connector-popup {
+	min-width: 260px;
+	max-width: 340px;
+}
+
+.gui-connector-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	max-height: 320px;
+	overflow-y: auto;
+}
+
+.gui-connector-panel--empty {
+	padding: 10px 12px;
+	color: var(--color-text-muted);
+	font-size: 12px;
+}
+
+.gui-connector-panel-head {
+	display: flex;
+	gap: 10px;
+	padding: 4px 8px 6px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.gui-connector-link {
+	border: 0;
+	background: none;
+	padding: 0;
+	color: var(--color-accent);
+	font-size: 11.5px;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.gui-connector-link:hover {
+	text-decoration: underline;
+}
+
+.gui-connector-list {
+	list-style: none;
+	margin: 0;
+	padding: 4px 0;
+}
+
+.gui-connector-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 5px 10px;
+	cursor: pointer;
+}
+
+.gui-connector-row:hover {
+	background: color-mix(in oklab, var(--color-text-faint) 10%, transparent);
+}
+
+.gui-connector-row input {
+	flex: none;
+	margin: 0;
+}
+
+.gui-connector-row-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 12.5px;
+}
+
+/* Transport is secondary; the dot is the fact the person needs. */
+.gui-connector-row-meta {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	flex: none;
+	color: var(--color-text-faint);
+	font-size: 11px;
+}
+
+.gui-connector-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 999px;
+	background: var(--color-text-faint);
+}
+
+.gui-connector-dot--connected {
+	background: oklch(0.7 0.15 150);
+}
+
+.gui-connector-dot--connecting {
+	background: oklch(0.8 0.15 85);
+}
+
+.gui-connector-dot--disconnected {
+	background: var(--color-text-faint);
 }
