@@ -406,6 +406,14 @@ export default async function (pi: ExtensionAPI) {
 
 报告随 `plugins.install.state` 的终态返回,渲染端据此提示,不必等到加载失败才发现装了个跑不起来的插件。
 
+### 安装源与回退链
+
+三个设置键(`pluginRegistryMode` / `pluginRegistryUrl` / `pluginRegistryFallbacks`,均不带点号——点号键会被 Settings 当嵌套路径解析)决定安装问哪个源。默认模式先问官方源,遇到「换源可能有救」的失败再试公开镜像。
+
+换源与否由 `attributeFailure`(`extensibility/plugins/registry-fallback.ts`)判定,而非「失败就重试」:包管理器报的是哪一类失败、该失败是否点名了 spec 自己的主机(host 失败换 registry 无意义)、纯 registry spec 的失败永远可换。链在每次重试前先还原本轮开始时捕获的文件,否则失败尝试留下的半写状态会成为下一次尝试的起点。
+
+**不测延迟、不做粘性回退**,理由与 DSH 的差异见 `docs/handoff-plugin-install.md` §4。
+
 ## 15. 用户自定义扩展(现状核实,2026-10-06)
 
 对照 DSH 的用户 patch 层核实过一次,结论是**不构成能力缺口**,这里记录实测依据以免重复讨论。
