@@ -631,8 +631,10 @@ export const SETTINGS_SCHEMA = {
 	disabledExtensions: { type: "array", default: EMPTY_STRING_ARRAY },
 
 	/** 插件安装源的三态选择（registry 回退链的上游）。
-	 *  - `auto`：每次安装前探测官方源与镜像的延迟，取快者；探测失败不拦安装。
-	 *  - `custom`：用下面 `pluginRegistry.url` 指定的源，永不探测。
+	 *  - `auto`：先问官方源，遇到「换源可能有救」的失败再试公开镜像。不测
+	 *    延迟——能快速应答小请求的源不代表拉 tarball 也快。
+	 *  - `custom`：用 `pluginRegistryUrl` 指定的源；地址为空或不是 http(s)
+	 *    时退回 `bun`，不留一个装不上的设置。
 	 *  - `bun`：完全不干预，走包管理器自己的配置（.npmrc / bunfig.toml）。
 	 *  键名不带点号：点号键会被 Settings 当嵌套路径解析。 */
 	pluginRegistryMode: {
@@ -644,12 +646,13 @@ export const SETTINGS_SCHEMA = {
 			group: "Plugin Sources",
 			label: "Plugin Install Source",
 			description:
-				"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
+				"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
 			options: [
 				{
 					value: "auto",
 					label: "Auto",
-					description: "Probe the official registry and the public mirror, then use whichever answers first",
+					description:
+						"Ask the official registry first, then try the public mirror if the failure is one it could answer",
 				},
 				{
 					value: "custom",
@@ -665,8 +668,9 @@ export const SETTINGS_SCHEMA = {
 		},
 	},
 
-	/** 自定义插件安装源。仅在 pluginRegistryMode = "custom" 时被读。留空则
-	 *  该模式等同于 `bun`——一个没有地址的"自定义"没有可问的源。 */
+	/** 自定义插件安装源。仅在 pluginRegistryMode = "custom" 时被读。留空或
+	 *  不是 http(s) 地址则该模式等同于 `bun`——一个问不到地址的"自定义"
+	 *  没有可问的源，而让一个设置写错直接装不上更糟。 */
 	pluginRegistryUrl: {
 		type: "string",
 		default: undefined,

@@ -320,10 +320,10 @@ export const settings = {
 	"Plugin Install Source": "Plugin Install Source",
 	"Custom Plugin Registry URL": "Custom Plugin Registry URL",
 	"Package manager": "Package manager",
-	"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
-		"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
-	"Probe the official registry and the public mirror, then use whichever answers first":
-		"Probe the official registry and the public mirror, then use whichever answers first",
+	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
+		"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
+	"Ask the official registry first, then try the public mirror if the failure is one it could answer":
+		"Ask the official registry first, then try the public mirror if the failure is one it could answer",
 	"Always use the URL configured below": "Always use the URL configured below",
 	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)":
 		"Use whatever the package manager is configured with (.npmrc, bunfig.toml)",

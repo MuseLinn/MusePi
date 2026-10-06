@@ -308,10 +308,10 @@ export const settings = {
 	"Plugin Install Source": "插件安装源",
 	"Custom Plugin Registry URL": "自定义插件源地址",
 	"Package manager": "包管理器",
-	"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
-		"插件从哪个包源安装。自动：探测官方源与公开镜像，用先应答的那个；自定义：使用下方地址；包管理器：完全交给包管理器自己的配置（.npmrc / bunfig.toml）。",
-	"Probe the official registry and the public mirror, then use whichever answers first":
-		"探测官方源与公开镜像，用先应答的那个",
+	"Which package registry installs plugins from. Auto asks the official registry first and tries the public mirror when a failure is one it could answer; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
+		"插件从哪个包源安装。自动：先问官方源，遇到「换源可能有救」的失败再试公开镜像；自定义：使用下方地址；包管理器：完全交给包管理器自己的配置（.npmrc / bunfig.toml）。",
+	"Ask the official registry first, then try the public mirror if the failure is one it could answer":
+		"先问官方源，遇到「换源可能有救」的失败再试公开镜像",
 	"Always use the URL configured below": "始终使用下方配置的地址",
 	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)":
 		"使用包管理器自己的配置（.npmrc / bunfig.toml）",

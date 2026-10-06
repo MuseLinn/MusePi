@@ -230,8 +230,7 @@ export class PluginManager {
 			abort: AbortSignal | undefined;
 		},
 	): Promise<{ exitCode: number; stdoutTail: string; stderrTail: string }> {
-		const { config } = resolveRegistryConfig();
-		const plan = registryPlan(undefined, config);
+		const plan = registryPlan(undefined, resolveRegistryConfig());
 		let last: { exitCode: number; stdoutTail: string; stderrTail: string } | undefined;
 
 		for (const [index, registry] of plan.entries()) {
