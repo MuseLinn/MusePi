@@ -416,21 +416,29 @@ export default async function (pi: ExtensionAPI) {
 
 ## 15. 用户自定义扩展(现状核实,2026-10-06)
 
-对照 DSH 的用户 patch 层核实过一次,结论是**不构成能力缺口**,这里记录实测依据以免重复讨论。
+对照 DSH 的用户 patch 层核实过两次(2026-10-06 修正)。**先纠正本文档早前的一处错误记录**:早前称「DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包」——**这是错的**。`insert` 的 `name` 必须是一个真实的、已安装的包名,Loader 靠它 import;`insert` 做的是**在 Loader 树里增加一行指向该包**,并可同时携带 `config` 与 `disabled` 条件(`vendor/include/src/index.ts:77-101`、`packages/bundle/web-app/cordis.patch.yml:44-63`)。它不是凭空造插件,配置里永远配着实现。
 
-DSH 的插件装载分两步:装包,再把包的 `cordis.patch.yml` 合进 profile 的 Loader 配置树,树里才出现这个插件的「行」;用户可以自己往这棵树插行,也可以按行单独开关(`setPluginEnabled` 写用户层的 `disabled` 覆写)。
+两侧的真实对照:
 
-musepi 的对应能力:
+| 能力 | DSH | musepi | 依据 |
+|---|---|---|---|
+| 本地未发布插件 | `plugin add .`,相对路径锚定到调用目录;装完按 manifest 的 `dsh.bundle.patch` 自动 reconcile 进 `profile.bundles` | `PluginManager.link(path)` 建符号链接;`PluginManager.install` 支持 path/tarball 形态 | `deepseek-harness/apps/cli/reference/README.md:81`、`extensibility/plugins/manager.ts:917` |
+| 装完即生效 | 否——须进 Loader 树 | 是——`getAllPluginExtensionPaths` 运行时发现 | `extensibility/extensions/loader.ts:1012-1015` |
+| 按行开关 | `setPluginEnabled` 写 patch 的 `disabled` 覆写 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>` | `daemon/services/extension-service.ts:601` |
+| 整包启停 | 同上(行级) | `plugins.setEnabled` → `settings.disabledExtensions` | `daemon/server.ts:1928` |
+| **关掉整个发现层** | **无此概念** | `disableExtensionDiscovery`,已用于 compress/session、security/coordinator、commit/agentic | `extensibility/extensions/loader.ts:950-955`、`compress/session.ts:61`、`security/coordinator.ts:265` |
+| **整包条件启停** | `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"` | **无** | DSH `packages/bundle/web-app/cordis.patch.yml:47` |
+| profile 隔离 | `$DSH_HOME/profiles/<name>/`,含完整 Loader 树 | `~/.musepi/profiles/<name>/agent/`,含 sessions/MCP 凭据/兼容性豁免/扩展加载 | `discovery/builtin.ts:72-73`、`mcp/oauth-flow.ts:26-30` |
 
-| DSH | musepi | 依据 |
-|---|---|---|
-| 用户 patch 层插自定义行 | `discoverExtensionPaths` 第 4 类来源 `configuredPaths`,可直接喂目录或单文件;`~/.musepi/agent/extensions` 亦可放 | `extensibility/extensions/loader.ts:1017-1043` |
-| 按行单独开关 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>`,写隐藏设置键,GUI 在插件详情页有开关 | `daemon/services/extension-service.ts:601`、`daemon/cordis-dynamic-extensions.ts:791` |
-| 整包启停 | `plugins.setEnabled` → `settings.disabledExtensions`(`extension-module:<name>`) | `daemon/server.ts:1928` |
+**粒度上我们不比 DSH 细**:DSH 的「行」不可再分,而 `Extension` 接口为每个注册面各持一个独立通道(`extensibility/extensions/types.ts` 的 `Extension`),每条各自加载与卸载。但我们**多一个控制维度**——`disableExtensionDiscovery` 能整层关闭环境发现,DSH 的 Loader 树没有对应概念。通道数会随注册 API 增加而变,故不复述具体数字,以该接口为准。
 
-粒度上我们比 DSH **更细**:DSH 的「行」是 Loader 树的一个节点,行内不可再分;`Extension` 接口为每个注册面各持一个独立通道(`extensibility/extensions/types.ts` 的 `Extension`),每条各自加载与卸载。通道数会随注册 API 增加而变,故此处不复述具体数字——以该接口为准。
+### 真实差异只有一处:整包级条件启停
 
-真实差异只有一处:**没有「用一段配置声明一个插件」的能力** —— DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包。适用场景是临时代理、实验开关,代价是要手写一个模块文件。若这个场景被提出,应扩展 `configuredPaths` 侧的声明式配置,而不是引入 Loader 配置树 —— 那会把「插件是运行时发现的」这个前提改掉。
+`disabledExtensions` 是静态 id 列表,没有表达式求值。DSH 能在 patch 里写 `disabled: !!js <表达式>`,Loader 在每次挂载决策时针对 loader ctx 求值——所以「这个包只在 desktop profile 下启用」是可表达的。
+
+这条差异**在 DSH 插件兼容层落地时会直接咬人**:bundle 的 `disabled: !!js` 翻译不了。对应的做法是兼容层求值常见形态(比较 profile 名、判断环境变量存在性)并写入 `disabledExtensions`,求值不了的表达式显式报「无法翻译」而非静默忽略——静默忽略会让一个本该禁用的插件被装载。
+
+不必为此把 musepi 改成声明式 Loader 树:那会把「插件是运行时发现的」这个前提改掉,代价大于收益。
 
 ## 16. Claude Code 兼容面(现状核实,2026-10-06)
 
