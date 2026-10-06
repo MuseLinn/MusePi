@@ -6,7 +6,7 @@ import {
 	resetThinkingSpeedTracker,
 } from "@musepi/pi-coding-agent/modes/components/assistant-message";
 import { initTheme } from "@musepi/pi-coding-agent/modes/theme/theme";
-import { setTerminalImageProtocol, TERMINAL } from "@musepi/pi-tui";
+import { setTerminalImageProtocol, TERMINAL, visibleWidth } from "@musepi/pi-tui";
 
 const originalImageProtocol = TERMINAL.imageProtocol;
 
@@ -91,12 +91,14 @@ describe("AssistantMessageComponent error rendering", () => {
 
 	it("width-truncates an overlong error line", () => {
 		const lines = renderLines(erroredMessage(proxy502));
-		const head = lines.find(line => line.trim().startsWith("Error:"));
-		expect(head).toBeDefined();
+		// The body wraps, so the overflow lands on whichever row runs past the
+		// render width. The leading label is localized, so the row is located by
+		// content rather than by a prefix that only exists in one locale.
+		const overflow = lines.find(line => line.includes("…"));
+		expect(overflow).toBeDefined();
 		// 300 'x' chars must not survive the render width; the line is truncated
-		// with an ellipsis well under the 120-col terminal width.
-		expect(head?.includes("…")).toBe(true);
-		expect(head?.length).toBeLessThan(RENDER_WIDTH);
+		// well under the 120-col terminal width.
+		expect(visibleWidth(overflow!)).toBeLessThanOrEqual(RENDER_WIDTH);
 	});
 
 	it("renders a short single-line error unchanged", () => {

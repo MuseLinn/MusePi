@@ -64,6 +64,10 @@ async function createMode(opts: { flushFails?: boolean } = {}): Promise<{
 		session,
 		cleanup: async () => {
 			resetSettingsForTest();
+			// The auth database holds a SQLite handle; Windows keeps the file
+			// locked until it is closed, so the temp dir cannot be removed without
+			// this and the cleanup times out.
+			authStorage.close();
 			await tempDir.remove();
 		},
 	};

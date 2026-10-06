@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, spyOn
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getProjectDir, setProjectDir } from "@musepi/pi-utils";
+import { getProjectDir, removeSyncWithRetries, setProjectDir } from "@musepi/pi-utils";
 import { Settings, settings } from "../../../../src/config/settings";
 import { StatusLineComponent } from "../../../../src/modes/components/status-line/component";
 import { getThemeByName, setThemeInstance } from "../../../../src/modes/theme/theme";
@@ -69,8 +69,10 @@ afterAll(() => {
 	settings.clearOverride("statusLine.leftSegments");
 	settings.clearOverride("statusLine.rightSegments");
 	setProjectDir(originalProjectDir);
-	fs.rmSync(tmpA, { recursive: true, force: true });
-	fs.rmSync(tmpB, { recursive: true, force: true });
+	// The VCS lookups can still hold a handle briefly; a bare rmSync turns that
+	// into an EBUSY failure on Windows.
+	removeSyncWithRetries(tmpA);
+	removeSyncWithRetries(tmpB);
 });
 
 beforeEach(() => {
