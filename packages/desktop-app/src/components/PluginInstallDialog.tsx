@@ -116,6 +116,46 @@ export function PluginInstallDialog({
 		if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
 	}, [lines]);
 
+	// Re-adopt an install this dialog started before a reload. The renderer can
+	// be torn down and rebuilt while `bun install` is still running — a window
+	// reload, or a daemon restart that kept the install alive — and the events
+	// for a run whose id this instance never received are gone. Without this the
+	// dialog comes back idle while the install keeps writing to the plugins
+	// directory, and the only way to see it is `plugins.install.status` by hand.
+	//
+	// Adoption is keyed on the spec still in the input, so an install the person
+	// has since replaced is not dragged back in front of them.
+	const adoptedRef = useRef<string | null>(null);
+	useEffect(() => {
+		if (!open || !rpc) return;
+		const wanted = spec.trim();
+		if (wanted === "" || adoptedRef.current === wanted) return;
+		let cancelled = false;
+		void rpc
+			.request<{ installs: InstallView[] }>("plugins.install.status")
+			.then(res => {
+				if (cancelled) return;
+				const live = res?.installs?.find(
+					view => view.spec === wanted && (view.state === "inspecting" || view.state === "installing"),
+				);
+				if (!live) return;
+				adoptedRef.current = wanted;
+				setView(live);
+				return rpc
+					.request<{ lines: OutputLine[] }>("plugins.install.output", { installId: live.installId })
+					.then(out => {
+						if (!cancelled) setLines(out?.lines ?? []);
+					});
+			})
+			.catch(() => {
+				// A daemon that cannot be asked has nothing live to adopt; the
+				// dialog stays idle and a fresh submit starts a new install.
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, rpc, spec]);
+
 	// Drag-and-drop: a dropped archive or folder becomes the spec, so a plugin
 	// that was never published can be installed without typing a path. The
 	// dragged-over state is tracked so the drop target can be seen; a drag that
