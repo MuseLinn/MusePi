@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { emergencyTerminalRestore, ProcessTerminal, setAltScreenActive } from "@musepi/pi-tui/terminal";
+import { emergencyTerminalRestore, isConPTYHosted, ProcessTerminal, setAltScreenActive } from "@musepi/pi-tui/terminal";
 import { setTerminalHeadless } from "@musepi/pi-utils";
 
 // Regression coverage for the Windows shell-handoff corruption on exit:
@@ -127,7 +127,10 @@ describe("emergencyTerminalRestore alt-screen gating", () => {
 	it("pops keyboard enhancement frames on both screens when crashing from a fullscreen overlay", () => {
 		const { terminal, writes } = startCapturedTerminal();
 		process.stdin.emit("data", "\x1b[?0u");
-		expect(terminal.kittyEnableSequence).toBe("\x1b[>5u");
+		// The pushed level is host-dependent: ConPTY (native Windows and WSL) is
+		// given disambiguation only, because flag 4 makes it drop Shift+letter
+		// keypresses. Read it back rather than assuming the POSIX level.
+		expect(terminal.kittyEnableSequence).toBe(isConPTYHosted() ? "\x1b[>1u" : "\x1b[>5u");
 
 		terminal.write(`\x1b[?1049h${terminal.kittyEnableSequence}`);
 		setAltScreenActive(true);

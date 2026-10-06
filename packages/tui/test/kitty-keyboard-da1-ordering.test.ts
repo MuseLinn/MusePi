@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import type { Component } from "@musepi/pi-tui";
+import { isConPTYHosted } from "@musepi/pi-tui/terminal";
 import { TERMINAL } from "@musepi/pi-tui/terminal-capabilities";
 import {
 	createProcessTerminalRenderHarness,
@@ -12,6 +13,18 @@ import {
 // is only a sentinel that guarantees a reply even from terminals that ignore
 // `CSI ? u`. Some terminals (Superset / xterm-on-Electron) answer DA1 first;
 // the kitty reply must still be honored regardless of ordering.
+
+/**
+ * The level the terminal should be pushed to, which is host-dependent: under
+ * ConPTY (native Windows and WSL) flag 4 (report alternate keys) makes the
+ * host drop Shift+letter keypresses, so only disambiguation is requested.
+ * Asserting the host's own level keeps these cases meaningful on every
+ * platform instead of skipping Windows outright.
+ */
+function expectedEnableSeq(reportedFlags: number): string {
+	if (isConPTYHosted()) return (reportedFlags & 2) !== 0 ? "\x1b[>3u" : "\x1b[>1u";
+	return (reportedFlags & 2) !== 0 ? "\x1b[>7u" : "\x1b[>5u";
+}
 
 class ModalProbe implements Component {
 	invalidate(): void {}
@@ -56,7 +69,7 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 
 		const out = harness.writes.join("");
 		expect(harness.terminal.kittyProtocolActive).toBe(true);
-		expect(out).toContain("\x1b[>5u");
+		expect(out).toContain(expectedEnableSeq(0));
 		expect(out).not.toContain("\x1b[>4;2m");
 	});
 
@@ -68,8 +81,8 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 		await harness.feed("\x1b[?5u");
 
 		const out = harness.writes.join("");
-		expect(out).toContain("\x1b[>5u");
-		expect(out).not.toContain("\x1b[>7u");
+		expect(out).toContain(expectedEnableSeq(5));
+		expect(out).not.toContain(expectedEnableSeq(3));
 	});
 
 	it("preserves event-type reporting enabled by a parent app", async () => {
@@ -79,7 +92,7 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 
 		await harness.feed("\x1b[?3u");
 
-		expect(harness.writes.join("")).toContain("\x1b[>7u");
+		expect(harness.writes.join("")).toContain(expectedEnableSeq(3));
 	});
 
 	it("enables kitty when the DA1 sentinel arrives before the kitty reply (#2042)", async () => {
@@ -93,10 +106,9 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 
 		const out = harness.writes.join("");
 		expect(harness.terminal.kittyProtocolActive).toBe(true);
-		expect(out).toContain("\x1b[>5u");
 		const enableIdx = out.indexOf("\x1b[>4;2m");
 		const disableIdx = out.indexOf("\x1b[>4;0m");
-		const kittyIdx = out.indexOf("\x1b[>5u");
+		const kittyIdx = out.indexOf(expectedEnableSeq(0));
 		expect(enableIdx).toBeGreaterThanOrEqual(0);
 		expect(disableIdx).toBeGreaterThan(enableIdx);
 		expect(kittyIdx).toBeGreaterThan(enableIdx);
@@ -114,7 +126,9 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 		const out = harness.writes.join("");
 		expect(harness.terminal.kittyProtocolActive).toBe(false);
 		expect(out).toContain("\x1b[>4;2m");
-		expect(out).not.toContain("\x1b[>5u");
+		// No kitty level may be pushed: every candidate level is a distinct
+		// sequence, so asserting all of them is the host-independent form.
+		for (const flags of [1, 3, 5, 7]) expect(out).not.toContain(`\x1b[>${flags}u`);
 	});
 
 	it("skips modifyOtherKeys fallback for SSH_CONNECTION-only unknown terminals", async () => {
@@ -204,7 +218,7 @@ describe("ProcessTerminal kitty keyboard progressive-enhancement ordering", () =
 			margin: 0,
 		});
 		await harness.settle();
-		expect(harness.writes.join("")).toContain("\x1b[?1049h\x1b[>5u");
+		expect(harness.writes.join("")).toContain(`\x1b[?1049h${expectedEnableSeq(0)}`);
 		harness.writes.length = 0;
 
 		overlay.hide();
