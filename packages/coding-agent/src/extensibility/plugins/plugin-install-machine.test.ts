@@ -151,4 +151,35 @@ describe("PluginInstallMachine", () => {
 		// An id this machine never issued reads empty rather than failing.
 		expect(machine.output("not-a-real-id")).toEqual([]);
 	});
+
+	it("aborts live installs on shutdown and does not resolve until they have settled", async () => {
+		// The daemon closes by awaiting this. If it resolved on the abort alone,
+		// shutdown would continue while the cancelled install was still restoring
+		// the manifest, lockfile, and node_modules it had captured — leaving the
+		// plugins directory holding whatever the abort interrupted.
+		const { manager, calls } = stubManager({
+			abortsAsCancelled: true,
+			settle: () => {
+				// Ends only when the abort arrives.
+			},
+		});
+		const machine = new PluginInstallMachine(manager);
+		machine.start({ spec: "acme-plugin" });
+		await drain();
+
+		await machine.stop();
+
+		// Awaiting stop() is the guarantee: by the time it resolved, the run had
+		// already reached its terminal state and the abort had reached the manager.
+		expect(calls[0]?.signals[0]?.aborted).toBe(true);
+		expect(machine.status().installs.every(view => view.state !== "installing")).toBe(true);
+		expect(machine.status().installs[0]?.state).toBe("cancelled");
+	});
+
+	it("resolves a shutdown with nothing live without waiting", async () => {
+		// A quiet daemon must not pay the poll interval on the way down.
+		const { manager } = stubManager();
+		const machine = new PluginInstallMachine(manager);
+		await expect(machine.stop()).resolves.toBeUndefined();
+	});
 });

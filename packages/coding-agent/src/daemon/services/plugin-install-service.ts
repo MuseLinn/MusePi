@@ -154,12 +154,17 @@ export class PluginInstallService implements DaemonService {
 		return { name: params.name };
 	}
 
-	/** Abort every live install when the daemon stops. */
-	stop(): void {
-		for (const view of this.#installs.status().installs) {
-			if (view.state === "inspecting" || view.state === "installing") {
-				this.#installs.cancel(view.installId);
-			}
-		}
+	/**
+	 * Abort every live install and wait for the rollbacks to land.
+	 *
+	 * Reached through the cordis disposer (the host mounts this service with
+	 * `lifecycle: "cordis"`), so it runs on daemon shutdown and on a future hot
+	 * reload. It awaits the machine's own stop rather than firing and returning:
+	 * an aborted install restores the plugins directory, and a shutdown that
+	 * returned mid-restore would leave that directory holding a half-written
+	 * state.
+	 */
+	stop(): Promise<void> {
+		return this.#installs.stop();
 	}
 }

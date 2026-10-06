@@ -703,28 +703,21 @@ export class PluginManager {
 
 	/**
 	 * Uninstall a plugin.
+	 *
+	 * Shares {@link runPackageManager} with the install path so the failure
+	 * message carries what bun actually said. Discarding the streams here — as
+	 * this path used to — reports "uninstall failed" with no reason attached,
+	 * which for a name the registry no longer carries is indistinguishable from
+	 * a lockfile or permission problem.
 	 */
 	async uninstall(name: string): Promise<void> {
 		validatePackageName(name);
 		await this.#ensurePackageJson();
 
-		const proc = Bun.spawn(["bun", "uninstall", name], {
-			cwd: getPluginsDir(),
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-			windowsHide: true,
-		});
-
-		// Drain both pipes concurrently with proc.exited to avoid a pipe-buffer
-		// deadlock if bun uninstall floods stdout/stderr.
-		const [exitCode] = await Promise.all([
-			proc.exited,
-			new Response(proc.stdout).text(),
-			new Response(proc.stderr).text(),
-		]);
-		if (exitCode !== 0) {
-			throw new Error(`npm uninstall failed for ${name}`);
+		const run = await runPackageManager(["bun", "uninstall", name], getPluginsDir(), {});
+		if (run.exitCode !== 0) {
+			const detail = run.stderrTail.trim() || run.stdoutTail.trim() || `exit code ${run.exitCode}`;
+			throw new Error(`bun uninstall ${name} failed: ${detail}`);
 		}
 
 		// Remove from runtime config

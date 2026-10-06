@@ -117,6 +117,18 @@ const TERMINAL_KEEP = 20;
 /** How much output one install retains in its transcript. */
 const OUTPUT_LINES_MAX = 2_000;
 
+/**
+ * How long a shutdown waits for aborted installs to finish rolling back.
+ *
+ * Bounded so a package manager that ignores the kill cannot hold daemon
+ * shutdown open indefinitely; past this the directory is already restored by
+ * the same code path either way, and the daemon exiting is the safer state.
+ */
+const STOP_WAIT_MS = 10_000;
+
+/** How often a shutdown re-reads whether the aborted installs have settled. */
+const STOP_POLL_MS = 50;
+
 export class PluginInstallMachine {
 	readonly #records = new Map<string, InstallRecord>();
 	readonly #lines = new Map<string, PluginInstallOutputLine[]>();
@@ -200,6 +212,33 @@ export class PluginInstallMachine {
 		rec.cancelRequested = true;
 		rec.controller.abort();
 		return { status: "cancelled" };
+	}
+
+	/**
+	 * Abort every live install and wait for the rollbacks to land.
+	 *
+	 * The daemon's shutdown path needs this to be awaitable rather than
+	 * fire-and-forget. A cancelled install restores the manifest, lockfile, and
+	 * node_modules entry it captured before the run; if shutdown returned while
+	 * that restore was still in flight, the plugins directory would be left
+	 * holding whatever half-written state the abort interrupted.
+	 *
+	 * @returns once no install is still running.
+	 */
+	async stop(): Promise<void> {
+		const live = [...this.#records.values()].filter(record => !this.#isTerminal(record));
+		if (live.length === 0) return;
+		for (const record of live) {
+			record.cancelRequested = true;
+			record.controller.abort();
+		}
+		// Each record's run settles itself in a finally-shaped path; polling here
+		// rather than keeping per-run handles keeps the machine's single source of
+		// truth (the record's own state) as the thing being waited on.
+		const deadline = Date.now() + STOP_WAIT_MS;
+		while (live.some(record => !this.#isTerminal(record)) && Date.now() < deadline) {
+			await Bun.sleep(STOP_POLL_MS);
+		}
 	}
 
 	/**

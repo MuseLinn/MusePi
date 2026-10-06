@@ -690,7 +690,12 @@ export class DaemonServer {
 			// 它是第一个真正带 effect 的服务，此前靠 server.ts 里那次手写 start()
 			// ——手写调用既不会被 dispose 回收（daemon 重启即漏一个定时器），
 			// 也拿不到「启动失败 = 启动失败」的归因。其余服务仍由 P1 掌管。
-			lifecycleByKey: { schedule: "cordis" },
+			//
+			// pluginInstall 同理：装插件会 spawn `bun install`，若关闭时不回收，
+			// 子进程会脱离 daemon 继续写 plugins/package.json 与 node_modules，
+			// 而它自己捕获的那份快照回滚就再也等不到了。disposer 会 await
+			// stop()，所以关闭路径等到回滚落定才继续。
+			lifecycleByKey: { schedule: "cordis", pluginInstall: "cordis" },
 		});
 		// 无人 settle 时（测试直构）不得变成 unhandledRejection；真 await 见 settleHostServices。
 		void this.#hostServicesMounted.catch(() => {});
