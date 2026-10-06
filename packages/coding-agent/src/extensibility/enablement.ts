@@ -47,8 +47,11 @@ const UNARY_CONDITIONS: Readonly<Record<string, EnablementPredicate>> = {
 	computerEnabled: () => readSetting("computer.enabled") === true,
 	/** Language servers are enabled. */
 	lspEnabled: () => readSetting("lsp.enabled") === true,
-	/** Running under a desktop shell rather than headless. */
-	desktopShell: () => readSetting("shell.enabled") === true,
+	/** Running under the desktop shell rather than headless.
+	 *  This key is absent from the settings schema, so it has no default to read
+	 *  and only an explicit `false` means the shell is off - the same reading the
+	 *  daemon's registry projection uses. */
+	desktopShell: () => readSetting("shell.enabled") !== false,
 	/** Running on macOS. */
 	macOS: () => process.platform === "darwin",
 };
