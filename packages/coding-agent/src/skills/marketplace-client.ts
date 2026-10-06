@@ -156,6 +156,30 @@ export interface SkillHubQuery {
 	pageSize?: number;
 }
 
+/**
+ * Collapse entries that share an id, keeping the first.
+ *
+ * An id is `source:slug` and is documented as unique across sources, which makes
+ * it the renderer's React key. A catalog that lists the same slug twice — once
+ * per published version, or once per namespace alias — therefore produced two
+ * rows under one key, and React drops the whole subtree on a duplicate key: the
+ * marketplace went blank rather than showing one card too many. The first row
+ * wins, which is the one the source listed before it repeated itself.
+ *
+ * @param entries - entries in arrival order.
+ * @returns the same entries with later ids removed.
+ */
+function dedupeById(entries: readonly SkillMarketEntry[]): SkillMarketEntry[] {
+	const seen = new Set<string>();
+	const out: SkillMarketEntry[] = [];
+	for (const entry of entries) {
+		if (seen.has(entry.id)) continue;
+		seen.add(entry.id);
+		out.push(entry);
+	}
+	return out;
+}
+
 export async function searchSkillHub(q: SkillHubQuery = {}): Promise<{ entries: SkillMarketEntry[]; total: number }> {
 	const url = new URL(`${SKILLHUB_BASE}/api/skills`);
 	url.searchParams.set("pageSize", String(Math.min(Math.max(q.pageSize ?? 24, 1), 100)));
@@ -168,14 +192,20 @@ export async function searchSkillHub(q: SkillHubQuery = {}): Promise<{ entries: 
 	const raw = await getJson(url.toString());
 	const data = unwrap(raw);
 	const rows = Array.isArray(data.skills) ? (data.skills as SkillHubRow[]) : [];
-	return { entries: rows.map(fromSkillHub), total: num(data.total) ?? rows.length };
+	const entries = dedupeById(rows.map(fromSkillHub));
+	// `total` is the catalog's own count and stays as reported: it is what the
+	// pager reads, and the pager cannot know how many of those rows the catalog
+	// happened to duplicate.
+	return { entries, total: num(data.total) ?? entries.length };
 }
 
 export async function topSkillHub(pageSize = 12): Promise<SkillMarketEntry[]> {
 	const raw = await getJson(`${SKILLHUB_BASE}/api/skills/top`);
 	const data = unwrap(raw);
 	const rows = Array.isArray(data.skills) ? (data.skills as SkillHubRow[]) : [];
-	return rows.slice(0, pageSize).map(fromSkillHub);
+	// Slice before deduping so a duplicated head row does not shrink the page:
+	// the caller asked for this many distinct cards.
+	return dedupeById(rows.map(fromSkillHub)).slice(0, pageSize);
 }
 
 /** First-level categories (13 at time of writing) — drives the chip row. */
@@ -401,5 +431,9 @@ export async function querySkillMarket(q: MarketQuery = {}): Promise<SkillMarket
 		entries.sort((a, b) => (b.downloads ?? b.installs ?? 0) - (a.downloads ?? a.installs ?? 0));
 	}
 
-	return { entries, total, liveSources, failures };
+	// Sorted, then deduped: each source dedupes its own rows, but the keyword
+	// fallback below re-reads the same catalog and can land on an entry an
+	// earlier search already returned. Sorting first means the surviving row is
+	// the better-scored one rather than whichever arrived first.
+	return { entries: dedupeById(entries), total, liveSources, failures };
 }
