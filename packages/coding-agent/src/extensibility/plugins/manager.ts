@@ -19,6 +19,8 @@ import { readPluginBlock } from "./manifest-block";
 import { getInstalledPluginsRegistryPath, readInstalledPluginsRegistry } from "./marketplace/registry";
 import { parsePluginId } from "./marketplace/types";
 import { extractPackageName, parsePluginSpec } from "./parser";
+import { resolveRegistryConfig } from "./registry-config";
+import { attributeFailure, registryArgument, registryPlan } from "./registry-fallback";
 import { normalizePluginRuntimeConfig } from "./runtime-config";
 import { installSpecFor, parseInstallSpec } from "./spec-classifier";
 import type {
@@ -197,6 +199,59 @@ export class PluginManager {
 	constructor(cwd: string = getProjectDir(), run: PackageManagerRunner = runPackageManager) {
 		this.#cwd = cwd;
 		this.#run = run;
+	}
+
+	/**
+	 * Run `bun install`, asking a second registry only when one could help.
+	 *
+	 * The loop restores the files it captured before each retry. Without that, a
+	 * failed attempt leaves a rewritten manifest and lockfile that the next
+	 * attempt reads as its starting state, so a package the first registry
+	 * refused half-added stays half-added.
+	 *
+	 * A retry is decided by {@link attributeFailure}, not by "it failed": a
+	 * package that does not exist on this registry will not appear on the next
+	 * one either, and a git host that could not be resolved is not a registry's
+	 * business. Only a failure a different registry could plausibly answer for
+	 * earns another attempt.
+	 *
+	 * @param spec - the classified spec, for host attribution.
+	 * @param packageInstallSpec - the argument the package manager takes.
+	 * @param options - the caller's output sink and cancellation.
+	 * @param hooks - file restoration between attempts, and the abort check.
+	 * @returns the last attempt's result, successful or not.
+	 */
+	async #installWithRegistryFallback(
+		spec: ReturnType<typeof parseInstallSpec>,
+		packageInstallSpec: string,
+		options: InstallOptions,
+		hooks: {
+			restoreFiles(): Promise<void>;
+			abort: AbortSignal | undefined;
+		},
+	): Promise<{ exitCode: number; stdoutTail: string; stderrTail: string }> {
+		const { config } = resolveRegistryConfig();
+		const plan = registryPlan(undefined, config);
+		let last: { exitCode: number; stdoutTail: string; stderrTail: string } | undefined;
+
+		for (const [index, registry] of plan.entries()) {
+			if (index > 0) {
+				// Each attempt starts from the files as they were before this run,
+				// not as the previous attempt left them.
+				await hooks.restoreFiles();
+			}
+			hooks.abort?.throwIfAborted();
+			last = await this.#packageManager(["bun", "install", packageInstallSpec, ...registryArgument(registry)], {
+				onOutput: options.onOutput,
+				signal: options.signal,
+			});
+			if (last.exitCode === 0) return last;
+			if (index === plan.length - 1) break;
+			const log = `${last.stderrTail}\n${last.stdoutTail}`;
+			if (attributeFailure(classifyPackageManagerFailure(log), log, spec) !== "registry") break;
+		}
+		// The loop always runs at least once: `registryPlan` never returns empty.
+		return last ?? { exitCode: 1, stdoutTail: "", stderrTail: "no registry was asked" };
 	}
 
 	/** Run the package manager through this manager's seam. */
@@ -615,9 +670,9 @@ export class PluginManager {
 			}
 
 			// Step 1: write the spec into plugins/package.json + node_modules.
-			const installRun = await this.#packageManager(["bun", "install", packageInstallSpec], {
-				onOutput: options.onOutput,
-				signal: options.signal,
+			const installRun = await this.#installWithRegistryFallback(classification, packageInstallSpec, options, {
+				restoreFiles: () => this.#rollbackFailedInstall(undefined, packageJsonBefore, bunLockBefore, null),
+				abort: options.signal,
 			});
 			// A cancelled run is a different outcome from a failing one, and the
 			// GUI reads them differently. Check the signal before the exit code:
@@ -1288,4 +1343,34 @@ export function parseSettingValue(valueStr: string, schema: PluginSettingSchema)
 		default:
 			return valueStr;
 	}
+}
+
+/**
+ * Map a package manager's output to the failure kind a registry could act on.
+ *
+ * Ordered from most specific to least, so a specific code is never read as the
+ * generic family it also matches: a tarball integrity failure mentions a fetch,
+ * and treating it as a fetch problem would send a corrupted download to a second
+ * registry to corrupt again.
+ *
+ * @param log - what the attempt printed, across both streams.
+ * @returns the kind, or `other` when nothing here explains the failure — which
+ * is the answer that stops the fallback chain rather than extending it.
+ */
+export function classifyPackageManagerFailure(log: string): string {
+	const text = log.toLowerCase();
+	if (/\benospc\b|no space left/.test(text)) return "disk-full";
+	if (/\beacces\b|\beperm\b|permission denied/.test(text)) return "permission";
+	if (/\beintegrity\b|tarball integrity|bad tarball/.test(text)) return "integrity";
+	if (/\betarget\b|no matching version/.test(text)) return "no-matching-version";
+	if (/\be404\b|404 not found|not found - get/.test(text)) return "not-found";
+	if (/ignored build scripts|trusteddependencies|\bpostinstall\b/.test(text)) return "build-blocked";
+	if (
+		/\benotfound\b|econnreset|etimedout|econnrefused|eai_again|socket hang up|could not resolve|unable to access/.test(
+			text,
+		)
+	) {
+		return "network";
+	}
+	return "other";
 }

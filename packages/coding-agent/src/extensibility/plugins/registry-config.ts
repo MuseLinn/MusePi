@@ -42,9 +42,23 @@ export interface ResolvedRegistryConfig {
  * first without having probed anything.
  */
 export function resolveRegistryConfig(): ResolvedRegistryConfig {
-	const settings = Settings.instance;
-	const mode = settings.get("pluginRegistryMode");
-	const fallbacks = settings.get("pluginRegistryFallbacks").filter(entry => entry.trim() !== "");
+	// Settings are not always up when an install runs: reaching the singleton at
+	// all throws when nothing has initialized it, and a CLI invocation can
+	// install before the first read does. Unreadable settings resolve to "leave
+	// it alone", which is the behaviour that was in force before these settings
+	// existed — an install must not start failing because a configuration layer
+	// is not ready.
+	let mode: ResolvedRegistryConfig["mode"];
+	let fallbacks: string[];
+	let customUrl: string | undefined;
+	try {
+		const settings = Settings.instance;
+		mode = settings.get("pluginRegistryMode");
+		fallbacks = settings.get("pluginRegistryFallbacks").filter(entry => entry.trim() !== "");
+		customUrl = settings.get("pluginRegistryUrl");
+	} catch {
+		return { mode: "bun", config: { registry: null, fallbackRegistries: [], resolved: null }, probed: null };
+	}
 
 	if (mode === "bun") {
 		return {
@@ -58,7 +72,7 @@ export function resolveRegistryConfig(): ResolvedRegistryConfig {
 	}
 
 	if (mode === "custom") {
-		const url = settings.get("pluginRegistryUrl")?.trim() ?? "";
+		const url = customUrl?.trim() ?? "";
 		if (url === "") {
 			// No address to ask. Degrading to the package manager's own registry
 			// installs from somewhere real, where refusing would install from

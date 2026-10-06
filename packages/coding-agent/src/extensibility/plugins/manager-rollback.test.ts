@@ -98,3 +98,36 @@ describe("PluginManager rollback repair", () => {
 		expect(calls.some(argv => argv.includes("--frozen-lockfile"))).toBe(true);
 	});
 });
+
+/**
+ * The fallback chain only earns its place if it stops asking when asking cannot
+ * help. With nothing configured the package manager's own registry is the whole
+ * chain, so there is nowhere else to go and a second run would only repeat the
+ * same failure — which is the behaviour before the install-source settings
+ * existed, and must survive them.
+ */
+describe("install registry fallback", () => {
+	it("asks once and leaves the registry to the package manager when none is configured", async () => {
+		const dir = await mkdtemp(path.join(tmpdir(), "plugin-fallback-"));
+		const calls: string[][] = [];
+		spyOn(piUtils, "getPluginsDir").mockReturnValue(dir);
+		spyOn(piUtils, "getPluginsNodeModules").mockReturnValue(path.join(dir, "node_modules"));
+		spyOn(piUtils, "getPluginsPackageJson").mockReturnValue(path.join(dir, "package.json"));
+		spyOn(piUtils, "getPluginsLockfile").mockReturnValue(path.join(dir, "musepi-plugins.lock.json"));
+		await Bun.write(path.join(dir, "package.json"), JSON.stringify({ dependencies: { "acme-plugin": "1.0.0" } }));
+		const manager = new PluginManager(dir, async argv => {
+			calls.push([...argv]);
+			return { exitCode: 1, stdoutTail: "", stderrTail: "ENOTFOUND registry.example" };
+		});
+
+		await expect(manager.install("acme-plugin")).rejects.toThrow(/ENOTFOUND/);
+
+		// One attempt, and no `--registry` on it: the package manager was not
+		// told where to go, which is what leaving it alone means.
+		const installs = calls.filter(argv => argv[1] === "install" && !argv.includes("--no-save"));
+		expect(installs.length).toBe(1);
+		expect(installs[0]?.some(arg => arg.startsWith("--registry="))).toBe(false);
+
+		await rm(dir, { recursive: true, force: true });
+	});
+});
