@@ -17,7 +17,7 @@
 		"check:types": "tsgo -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
-		"@capacitor/core": "^8.4.1",
+		"@capacitor/core": "^8.4.1"
 	},
 	"devDependencies": {
 		"@capacitor/android": "^8.4.1",
