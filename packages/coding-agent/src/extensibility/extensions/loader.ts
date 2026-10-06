@@ -33,6 +33,7 @@ import * as PiCodingAgent from "../../index";
 import type { CustomMessagePayload } from "../../session/messages";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import { EventBus } from "../../utils/event-bus";
+import { enablementAllowsPath } from "../enablement-manifest";
 import { readPluginConfigStore } from "../extensions-center/plugin-config-store";
 import * as TypeBox from "../legacy-typebox";
 import { readCompatibilityExemptions, resolveCompatibilityPath } from "../plugins/compatibility-store";
@@ -743,6 +744,12 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 		for (const warning of warnings) logger.warn(warning);
 		admissible = [];
 		for (const extPath of paths) {
+			// A plugin whose manifest condition does not hold is skipped, not
+			// errored: the condition is how it says "not in this configuration",
+			// which is an expected state rather than a failure to report. Both
+			// gates are checked before any import, so a gated-out plugin never
+			// runs code.
+			if (!(await enablementAllowsPath(extPath))) continue;
 			const gate = await compatibilityGateForExtensionPath(extPath, exemptions);
 			if (gate && gate.status !== "exempted") {
 				errors.push({ path: extPath, error: pluginCompatibilityWarning(gate) });
