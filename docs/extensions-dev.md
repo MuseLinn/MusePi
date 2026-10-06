@@ -420,7 +420,7 @@ musepi 的对应能力:
 | 按行单独开关 | `extensions.setComponentEnabled`,粒度 `<plugin>/<component>`,写隐藏设置键,GUI 在插件详情页有开关 | `daemon/services/extension-service.ts:601`、`daemon/cordis-dynamic-extensions.ts:791` |
 | 整包启停 | `plugins.setEnabled` → `settings.disabledExtensions`(`extension-module:<name>`) | `daemon/server.ts:1928` |
 
-粒度上我们比 DSH **更细**:DSH 的「行」是 Loader 树的一个节点,行内不可再分;`ExtensionItem` 有 17 条独立贡献通道(components / skills / toolViews / services / themeTokens / promptSections / modes / designSystems / notificationChannels …),每条各自加载与卸载(`extensibility/extensions/types.ts:2085-2142`)。
+粒度上我们比 DSH **更细**:DSH 的「行」是 Loader 树的一个节点,行内不可再分;`Extension` 接口为每个注册面各持一个独立通道(`extensibility/extensions/types.ts` 的 `Extension`),每条各自加载与卸载。通道数会随注册 API 增加而变,故此处不复述具体数字——以该接口为准。
 
 真实差异只有一处:**没有「用一段配置声明一个插件」的能力** —— DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包。适用场景是临时代理、实验开关,代价是要手写一个模块文件。若这个场景被提出,应扩展 `configuredPaths` 侧的声明式配置,而不是引入 Loader 配置树 —— 那会把「插件是运行时发现的」这个前提改掉。
 

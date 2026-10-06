@@ -124,7 +124,7 @@ bunx biome check --write packages/ docs/
 
 **拖入的脚本批准闸门 —— 不做。** 原计划照技能市场加 `awaiting-approval`。实测 `bun install --help`：dependency scripts are never run（除非该包进了 `trustedDependencies`，我们不传 `--trust`）。所以拖入的包执行不了自己的 `postinstall`，闸门没有可拦的东西。**注意：早先写在状态机注释里的相反陈述已改正**，别照旧版本改回去。
 
-**用户 patch 层（DSH 的 `cordis.patch.yml`）—— 不做。** 两条能力其实都已有：`discoverExtensionPaths` 第 4 类来源 `configuredPaths` 等价于"插自定义行"（`loader.ts:1017-1043`）；"按行单独开关"就是 `extensions.setComponentEnabled`（粒度 `<plugin>/<component>`）。且我们粒度更细——`ExtensionItem` 有 17 条独立贡献通道（`types.ts:2085-2142`），DSH 的"行"不可再分。真实差异只有"不能用一段配置声明一个插件"，场景极少。详见 §15。
+**用户 patch 层（DSH 的 `cordis.patch.yml`）—— 不做。** 两条能力其实都已有：`discoverExtensionPaths` 第 4 类来源 `configuredPaths` 等价于"插自定义行"（`loader.ts:1017-1043`）；"按行单独开关"就是 `extensions.setComponentEnabled`（粒度 `<plugin>/<component>`）。且我们粒度更细——`Extension` 接口为每个注册面各持一个独立贡献通道（`extensibility/extensions/types.ts` 的 `Extension`），DSH 的"行"不可再分。真实差异只有"不能用一段配置声明一个插件"，场景极少。详见 §15。
 
 **bundle 概念 —— 不引入。** DSH 的 bundle = 包 + 一份 Loader 配置 patch。我们不需要：插件由 `pi.extensions` 运行时发现，`package.json` 的 `musepi` 块声明它提供什么，装上即用。
 
@@ -132,8 +132,10 @@ bunx biome check --write packages/ docs/
 
 ## 6. 需要注意的坑
 
-- **`PluginManager.install` 的回滚语义**：任何退出路径（失败 / spec 非法 / 取消）都会走 `#rollbackFailedInstall` 恢复 manifest + lockfile + node_modules。取消判定看的是 `options.signal.aborted` 而非抛出的错误——kill 进程必留非零码，否则取消会被误报成失败。
-- **`capability-report.ts` 读磁盘 package.json**，不读 `InstalledPlugin.manifest`（后者是 `omp`/`pi` 块，装 `musepi` 块的包会是 undefined，会把"入口文件缺失"误判成 runnable）。这个坑有测试兜底。
+- **`PluginManager.install` 的回滚语义**：任何退出路径（失败 / spec 非法 / 取消）都会走 `#rollbackFailedInstall` 恢复 manifest + lockfile + 被替换的包目录，**随后重跑一次包管理器把 node_modules 拉回与还原后文件一致**（有 lock 用 `--frozen-lockfile`，无 lock 用 `--no-save`）——包管理器写的是整棵树，只还原单个包目录会让别的插件的传递依赖停在半换状态。取消判定看的是 `options.signal.aborted` 而非抛出的错误——kill 进程必留非零码，否则取消会被误报成失败。
+- **manifest 块的读取只有一处权威**：`readPluginBlock`（`extensibility/plugins/manifest-block.ts`），`musepi` 优先、`omp`/`pi` 兼容。新增读取点必须用它——`PluginManager` 曾只读后两个字段，导致只声明 `musepi` 的插件在 `doctor()` 里被报成"非插件"。
+- **`capability-report.ts` 读磁盘 package.json**，不读 `InstalledPlugin.manifest`（后者是安装器解析出的块，可能为空）。这个坑有测试兜底。
+- **能力报告的槽位集合引用 `collab-proto` 的 `EXTENSION_SLOT_DECLARATION`**，不要复制一份——复制品曾与权威一致，直到新增槽位时静默失配。
 - **i18n 双语是硬约束**：en 侧 `satisfies Record<SettingsKey, string>`，zh 加 key 不加 en 会编译失败，反之亦然。
 - **`route-coverage.test.ts` 必须同步登记新服务**，否则 daemon RPC 不可达（测试会红）。
 - **CSS token**：`--color-text-tertiary` / `--color-accent` 不在 CSS 里定义，由 JS 主题注入，用了是安全的；但别照抄不存在的类名（`gui-btn-primary` 有，`gui-btn--primary` 没有）。
