@@ -42,7 +42,7 @@ async function collectManifests(root: string): Promise<string[]> {
 }
 
 async function main(): Promise<void> {
-	const root = process.argv[2] ?? import.meta.dirname + "/..";
+	const root = process.argv[2] ?? `${import.meta.dirname}/..`;
 	const manifests = await collectManifests(root);
 	const invalid: Manifest[] = [];
 	for (const relative of manifests) {

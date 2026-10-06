@@ -1,5 +1,6 @@
 [
 	"dependencies package.json @babel/traverse",
+	"dependencies package.json @huggingface/transformers",
 	"dependencies package.json @types/babel__traverse",
 	"dependencies packages/coding-agent/package.json @bufbuild/protobuf",
 	"dependencies packages/coding-agent/package.json arktype",
