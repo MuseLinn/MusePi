@@ -17,6 +17,7 @@ export * from "./components/settings-list";
 export * from "./components/spacer";
 export * from "./components/tab-bar";
 export * from "./components/text";
+export * from "./components/tooltip-hint";
 export * from "./components/truncated-text";
 // DECCARA rectangular-SGR background-fill optimizer
 export * from "./deccara";

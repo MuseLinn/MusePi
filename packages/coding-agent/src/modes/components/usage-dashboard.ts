@@ -13,7 +13,16 @@
  * - Esc: close
  */
 import { resolveUsedFraction, type UsageLimit, type UsageReport } from "@musepi/pi-ai";
-import { type Component, matchesKey, padding, parseSgrMouse, ScrollView, truncateToWidth } from "@musepi/pi-tui";
+import {
+	type Component,
+	matchesKey,
+	padding,
+	parseSgrMouse,
+	ScrollView,
+	TooltipHint,
+	truncateToWidth,
+	visibleWidth,
+} from "@musepi/pi-tui";
 import { formatDuration, formatNumber } from "@musepi/pi-utils";
 import { t } from "../../i18n/index.js";
 import {
@@ -42,6 +51,10 @@ const MIN_BODY_ROWS = 3;
 const DEFAULT_VIEWPORT_ROWS = 24;
 const ACCOUNT_INDENT = "  ";
 const LIMIT_INDENT = "    ";
+/** `row()` insets by a border column and a space on each side. */
+const BOX_INSET = 2;
+/** Screen row of the first body row: the top border occupies row 0. */
+const BODY_TOP_ROW = 1;
 
 function usageValue(limit: UsageLimit): string {
 	const fraction = resolveUsedFraction(limit);
@@ -62,10 +75,13 @@ export class UsageDashboard implements Component {
 	readonly #renderDetail: UsageDashboardOptions["renderDetail"];
 	readonly #nowMs: number;
 	readonly #viewport: ScrollView;
+	readonly #hints = new TooltipHint();
 	#view: View = "summary";
 	#viewportRows = DEFAULT_VIEWPORT_ROWS;
 	/** `view:width` of the content currently loaded into the viewport. */
 	#contentKey = "";
+	/** Text the hovered cell truncated away, or undefined when nothing is hovered. */
+	#hoverText: string | undefined;
 
 	onClose?: () => void;
 	onRequestRender?: () => void;
@@ -103,16 +119,31 @@ export class UsageDashboard implements Component {
 		const resetWidth = 18;
 		const anyReset = this.#reports.some(report => report.limits.some(limit => usageReset(limit, this.#nowMs) !== ""));
 		const titleWidth = Math.max(8, width - valueWidth - (anyReset ? resetWidth + 2 : 0) - 2);
+		this.#hints.clear();
 
 		for (const report of this.#reports) {
 			lines.push("", theme.bold(theme.fg("accent", report.provider)));
-			lines.push(`${ACCOUNT_INDENT}${usageAccountLabel(report, report.limits[0], 0)}`);
+			const account = usageAccountLabel(report, report.limits[0], 0);
+			this.#trackCell(lines.length, BOX_INSET, width - BOX_INSET * 2, account);
+			lines.push(`${ACCOUNT_INDENT}${account}`);
 			for (const limit of report.limits) {
-				const title = truncateToWidth(formatLimitTitle(limit), titleWidth);
+				const fullTitle = formatLimitTitle(limit);
+				const fullReset = usageReset(limit, this.#nowMs);
+				// Title and reset sit in their own columns, so each is hinted where
+				// it is painted rather than the row as a whole.
+				this.#trackCell(lines.length, LIMIT_INDENT.length, titleWidth, fullTitle);
+				if (fullReset !== "") {
+					this.#trackCell(
+						lines.length,
+						LIMIT_INDENT.length + titleWidth + 2 + valueWidth + 2,
+						resetWidth,
+						fullReset,
+					);
+				}
+				const title = truncateToWidth(fullTitle, titleWidth);
 				const value = truncateToWidth(usageValue(limit), valueWidth);
-				const reset = usageReset(limit, this.#nowMs);
 				const head = `${LIMIT_INDENT}${title}${padding(Math.max(0, titleWidth - title.length))}  ${value}`;
-				lines.push(reset === "" ? head : `${head}  ${theme.fg("dim", truncateToWidth(reset, resetWidth))}`);
+				lines.push(fullReset === "" ? head : `${head}  ${theme.fg("dim", truncateToWidth(fullReset, resetWidth))}`);
 			}
 			// The pool total is only meaningful across the remaining-only meters:
 			// a provider that also reports percentage windows would otherwise
@@ -121,10 +152,28 @@ export class UsageDashboard implements Component {
 			const balanceMeters = report.limits.filter(limit => isRemainingOnlyAbsoluteAmount(limit));
 			const prepaid = formatRemainingOnlyTotal(balanceMeters);
 			if (prepaid !== undefined && balanceMeters.length > 1) {
-				lines.push(`${LIMIT_INDENT}${theme.fg("dim", t("prepaid: {0}").replace("{0}", prepaid))}`);
+				const label = t("prepaid: {0}").replace("{0}", prepaid);
+				this.#trackCell(lines.length, LIMIT_INDENT.length, width - BOX_INSET * 2, label);
+				lines.push(`${LIMIT_INDENT}${theme.fg("dim", label)}`);
 			}
 		}
 		return lines;
+	}
+
+	/**
+	 * Record what a cell truncated away, in screen coordinates: the box's top
+	 * border takes row 0 and `ScrollView` paints the body from the current scroll
+	 * offset, so a content row maps to `BODY_TOP_ROW + row - offset`. A cell that
+	 * fits records nothing, so hovering never raises an unasked-for hint.
+	 */
+	#trackCell(contentRow: number, from: number, available: number, fullText: string): void {
+		const hidden = visibleWidth(fullText) > available ? fullText : "";
+		this.#hints.track(
+			BODY_TOP_ROW + contentRow - this.#viewport.getScrollOffset(),
+			BOX_INSET + from,
+			available,
+			hidden,
+		);
 	}
 
 	/**
@@ -140,6 +189,7 @@ export class UsageDashboard implements Component {
 		const key = `${this.#view}:${innerWidth}`;
 		if (key === this.#contentKey) return;
 		this.#contentKey = key;
+		this.#hints.clear();
 		this.#viewport.setLines(
 			(this.#view === "detail"
 				? this.#renderDetail(innerWidth, this.#reports)
@@ -149,26 +199,41 @@ export class UsageDashboard implements Component {
 	}
 
 	render(width: number): readonly string[] {
-		const innerWidth = Math.max(0, width - 4);
+		const innerWidth = Math.max(0, width - BOX_INSET * 2);
 		this.#refresh(innerWidth);
 		const body = this.#viewport.render(innerWidth).map(line => row(line, width));
 		const title = this.#view === "detail" ? t("Usage · Details") : t("Usage");
-		const hint =
-			this.#view === "detail"
-				? t("Enter summary · Esc close")
-				: this.#viewport.getMaxScrollOffset() > 0
-					? t("Enter details · wheel scrolls · Esc close")
-					: t("Enter details · Esc close");
-		return [topBorder(width, title), ...body, "", row(hint, width), bottomBorder(width)];
+		// A hovered cell's full text replaces the key hint: the hint bar is the one
+		// row the reader is looking at anyway, and a second line would shrink the
+		// body on exactly the frames where the text is worth reading.
+		const footer =
+			this.#hoverText === undefined
+				? this.#view === "detail"
+					? t("Enter summary · Esc close")
+					: this.#viewport.getMaxScrollOffset() > 0
+						? t("Enter details · wheel scrolls · Esc close")
+						: t("Enter details · Esc close")
+				: this.#hoverText;
+		return [topBorder(width, title), ...body, "", row(footer, width), bottomBorder(width)];
 	}
 
 	handleInput(data: string): void {
 		// SGR mouse reports (the fullscreen overlay enables tracking).
 		if (data.startsWith("\x1b[<")) {
 			const event = parseSgrMouse(data);
-			if (event?.wheel === null || event === null) return;
-			this.#viewport.scroll(event.wheel);
-			this.onRequestRender?.();
+			if (event === null) return;
+			if (event.wheel !== null) {
+				this.#viewport.scroll(event.wheel);
+				this.onRequestRender?.();
+				return;
+			}
+			if (event.motion) {
+				// The body scrolls under a stationary pointer, so a hint is only
+				// trustworthy while the rows under the pointer are the ones painted:
+				// hovering after a scroll asks about whatever moved into that row.
+				this.#hoverText = this.#hints.hover(event.col, event.row);
+				this.onRequestRender?.();
+			}
 			return;
 		}
 
