@@ -630,6 +630,59 @@ export const SETTINGS_SCHEMA = {
 
 	disabledExtensions: { type: "array", default: EMPTY_STRING_ARRAY },
 
+	/** 插件安装源的三态选择（registry 回退链的上游）。
+	 *  - `auto`：每次安装前探测官方源与镜像的延迟，取快者；探测失败不拦安装。
+	 *  - `custom`：用下面 `pluginRegistry.url` 指定的源，永不探测。
+	 *  - `bun`：完全不干预，走包管理器自己的配置（.npmrc / bunfig.toml）。
+	 *  键名不带点号：点号键会被 Settings 当嵌套路径解析。 */
+	pluginRegistryMode: {
+		type: "enum",
+		values: ["auto", "custom", "bun"] as const,
+		default: "auto",
+		ui: {
+			tab: "tools",
+			group: "Plugin Sources",
+			label: "Plugin Install Source",
+			description:
+				"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
+			options: [
+				{
+					value: "auto",
+					label: "Auto",
+					description: "Probe the official registry and the public mirror, then use whichever answers first",
+				},
+				{
+					value: "custom",
+					label: "Custom",
+					description: "Always use the URL configured below",
+				},
+				{
+					value: "bun",
+					label: "Package manager",
+					description: "Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
+				},
+			],
+		},
+	},
+
+	/** 自定义插件安装源。仅在 pluginRegistryMode = "custom" 时被读。留空则
+	 *  该模式等同于 `bun`——一个没有地址的"自定义"没有可问的源。 */
+	pluginRegistryUrl: {
+		type: "string",
+		default: undefined,
+		ui: {
+			tab: "tools",
+			group: "Plugin Sources",
+			label: "Custom Plugin Registry URL",
+			description:
+				"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
+		},
+	},
+
+	/** 安装失败后的换源回退。只有 `auto` 与 `custom` 模式会走到回退：
+	 *  一个私有源不会因为公网镜像更快而跳过——私有包名不能发给公有索引。 */
+	pluginRegistryFallbacks: { type: "array", default: EMPTY_STRING_ARRAY },
+
 	/** 工具级黑名单（插件「包含的组件」开关写入此处）：名单内的工具
 	 *  无论自身 enabled 门如何都不进 agent 工具集。与单元总开关正交——
 	 *  dsh 组件级禁用的我方落地（browser/computer/lsp 等子系统的组件

@@ -316,6 +316,19 @@ export const settings = {
 	"agent capabilities": "Agent capabilities",
 	"data and statistics": "Data & statistics",
 	plugins: "Plugins",
+	"Plugin Sources": "Plugin Sources",
+	"Plugin Install Source": "Plugin Install Source",
+	"Custom Plugin Registry URL": "Custom Plugin Registry URL",
+	"Package manager": "Package manager",
+	"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.":
+		"Which package registry installs plugins from. Auto probes the official registry and the public mirror and uses whichever answers first; Custom uses the URL below; Package manager leaves it to the package manager's own configuration.",
+	"Probe the official registry and the public mirror, then use whichever answers first":
+		"Probe the official registry and the public mirror, then use whichever answers first",
+	"Always use the URL configured below": "Always use the URL configured below",
+	"Use whatever the package manager is configured with (.npmrc, bunfig.toml)":
+		"Use whatever the package manager is configured with (.npmrc, bunfig.toml)",
+	"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.":
+		"Registry URL used when the install source is set to Custom. Takes effect on the next plugin install.",
 	"speech test": "Speech test",
 	"speech test hint": "Verify the local speech stack end-to-end before trusting the mic button",
 	"speech test local note": "runs fully on-device (sherpa-ONNX ASR + Kokoro TTS)",
