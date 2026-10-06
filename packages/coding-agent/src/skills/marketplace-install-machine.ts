@@ -163,6 +163,12 @@ export interface MarketplaceInstallStartParams {
 /** 终态记录保留上限（status 查询可见，超出裁最旧）。 */
 const TERMINAL_KEEP = 20;
 
+/** 关停等待在途安装落定的上限；下载不理会中止时不能把 daemon 挂住。 */
+const STOP_WAIT_MS = 10_000;
+
+/** 关停期间轮询在途安装是否已落定的间隔。 */
+const STOP_POLL_MS = 50;
+
 export class MarketplaceInstallMachine {
 	readonly #records = new Map<string, InstallRecord>();
 	readonly #onState: ((view: MarketplaceInstallView) => void) | null;
@@ -253,10 +259,24 @@ export class MarketplaceInstallMachine {
 		return { installs: [...active, ...terminal].map(rec => ({ ...rec.view })) };
 	}
 
-	/** 停止全部进行中安装（服务 stop 钩子；半成品照常清理）。 */
-	stop(): void {
-		for (const rec of this.#records.values()) {
-			if (!this.#isTerminal(rec)) this.cancel(rec.installId);
+	/**
+	 * Stop every in-flight install and wait for the cleanup to land.
+	 *
+	 * The daemon's shutdown path awaits this. Cancelling only queues the abort;
+	 * the destination cleanup (`#cleanup`) still has to run, and a shutdown that
+	 * returned before it finished would leave a half-written install directory
+	 * behind for the next boot to trip over.
+	 *
+	 * @returns once no install is still running.
+	 */
+	async stop(): Promise<void> {
+		const active = [...this.#records.values()].filter(rec => !this.#isTerminal(rec));
+		if (active.length === 0) return;
+		for (const rec of active) this.cancel(rec.installId);
+		// Bounded so a download that ignores the abort cannot hold shutdown open.
+		const deadline = Date.now() + STOP_WAIT_MS;
+		while (active.some(rec => !this.#isTerminal(rec)) && Date.now() < deadline) {
+			await Bun.sleep(STOP_POLL_MS);
 		}
 	}
 

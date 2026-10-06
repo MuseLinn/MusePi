@@ -182,9 +182,15 @@ export class MarketplaceService implements DaemonService {
 		});
 	}
 
-	/** DaemonService.stop：中止进行中的安装并清理半成品。 */
-	stop(): void {
-		this.#installs.stop();
+	/**
+	 * DaemonService.stop：中止进行中的安装并等半成品清理落定。
+	 *
+	 * 与 pluginInstall 同一条关闭路径：两条安装路径都写
+	 * plugins/package.json，关闭时必须都停、都等到清理完，否则留下的
+	 * bun 子进程会继续往已还原的目录里写。
+	 */
+	stop(): Promise<void> {
+		return this.#installs.stop();
 	}
 
 	/** Build a `MarketplaceManager` wired to the host's cwd and the global
