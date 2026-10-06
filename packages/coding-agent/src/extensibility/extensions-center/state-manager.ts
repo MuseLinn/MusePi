@@ -26,6 +26,7 @@ import {
 	loadCapability,
 } from "../../discovery";
 import { readDisabledServers, readEnabledServers } from "../../mcp/config-writer";
+import { enablementAllowsPath } from "../enablement-manifest";
 import type { ExtensionPluginMeta } from "../extensions/plugin-manifest";
 import { readExtensionPluginMeta } from "../extensions/plugin-manifest";
 import {
@@ -186,17 +187,35 @@ export async function loadAllExtensions(
 		const nativeModules = modules.all.filter(
 			module => module._source.provider === "native" || module._source.provider === "musepi-extensions",
 		);
+		// A module whose manifest condition does not hold is not loaded, so it is
+		// not listed either. Listing it would be worse than omitting it: the row
+		// would offer a switch that changes nothing, because the loader skips the
+		// module on every start regardless of what the switch says.
+		const loadableModules = (
+			await Promise.all(
+				nativeModules.map(async module => ({ module, allowed: await enablementAllowsPath(module.path) })),
+			)
+		)
+			.filter(entry => {
+				if (entry.allowed) return true;
+				logger.debug("extension-module not listed: manifest condition does not hold", {
+					name: entry.module.name,
+					path: entry.module.path,
+				});
+				return false;
+			})
+			.map(entry => entry.module);
 		// 插件清单 config/resources(dsh 式管理页):逐模块向上解析最近的
 		// package.json 的 omp/pi 字段,fail-soft 校验后挂到条目上;已落盘的
 		// 配置值同帧读出,经字段声明钳制后以 configValues 下发(表单初始值)。
 		const pluginMetaByPath = new Map<string, ExtensionPluginMeta | null>();
 		await Promise.all(
-			nativeModules.map(async module => {
+			loadableModules.map(async module => {
 				pluginMetaByPath.set(module.path, await readExtensionPluginMeta(module.path));
 			}),
 		);
 		const configStore = await readPluginConfigStore();
-		addItems(nativeModules, "extension-module", {
+		addItems(loadableModules, "extension-module", {
 			getShadowedBy: item => (item as { _shadowedBy?: string })._shadowedBy,
 			getPluginMeta: item => pluginMetaByPath.get(item.path) ?? null,
 			getPluginConfigValues: item => {
