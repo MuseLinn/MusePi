@@ -27,6 +27,11 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
   - EN: Truncated text in the usage panel can be read in full by hovering it. Quota names, accounts and reset times were cut off in a narrow window, and a terminal has no hover of its own, so widening the window was the only way to see them. Moving the pointer over such a cell now shows the full text along the bottom; a cell that fits never raises a hint.
 ### Fixed
 
+- **Windows 上桌面通知不再找不到会话总线**：`XDG_RUNTIME_DIR` 已设置但 `DBUS_SESSION_BUS_ADDRESS` 未导出时，程序按 Windows 的路径分隔符去拼 socket 路径，找不到就判定没有桌面会话。现在按 POSIX 分隔符拼接，与实际路径一致。
+  - EN: Desktop notifications on Windows no longer miss the session bus. With `XDG_RUNTIME_DIR` set but `DBUS_SESSION_BUS_ADDRESS` unexported, the socket path was joined with Windows separators, never matched, and the session was reported as headless. The path is now joined POSIX-style, as the real one is.
+- **Windows 与 WSL 上输出积压的上限重新生效**：输出被拒后，程序按「写了多少次」判断何时停止输出，而 Windows 终端会把大块绘制拆成多段写出，于是次数被放大、真正的积压量被低估。现在按字节判断，跨平台一致。
+  - EN: The output backlog cap counts bytes again. When a write is refused the program decided when to stop by counting write calls, but a Windows terminal splits a large paint into several writes, which inflated the count and understated the real backlog. The accounting is now by bytes, consistently across platforms.
+
 - **预付费余额现在在每一处用量视图里都能看到**：只有余额、没有额度的供应商，此前只在命令行报告里显示；终端用量面板在那个位置只有一排暗点，客户端卡片上则完全没有这行。现在三处都会给出该余额，账户级的共享池只计一次。
   - EN: A prepaid balance now appears in every usage view. A provider that reports only a remaining balance and no allowance showed it in the command-line report alone — the terminal panel drew dim dots in that cell and the client card had no line for it. All three now report the balance, counting an account-wide pool once.
 
