@@ -78,6 +78,10 @@ function validateGitSpec(spec: string): void {
 /**
  * Stream one package-manager run, forwarding its output as it arrives.
  *
+ * Exported so a test can stand in for the package manager: the rollback's
+ * repair step is defined by which arguments it runs the manager with, and that
+ * is only observable from outside the module.
+ *
  * Output is forwarded per chunk rather than collected, because a GUI install has
  * to show progress while the run is in flight; a caller that passes no
  * `onOutput` still gets the same run and the same exit status, it just keeps no
@@ -93,7 +97,7 @@ function validateGitSpec(spec: string): void {
  * @param options - output sink and cancellation for this run.
  * @returns the exit code and the tail of each stream, for a failure message.
  */
-async function runPackageManager(
+export async function runPackageManager(
 	argv: readonly string[],
 	cwd: string,
 	options: { onOutput?: (chunk: InstallOutputChunk) => void; signal?: AbortSignal },
@@ -176,12 +180,31 @@ interface RuntimePackageJson {
 // Plugin Manager
 // =============================================================================
 
+/** The package-manager seam {@link PluginManager} runs every install through. */
+export type PackageManagerRunner = typeof runPackageManager;
+
 export class PluginManager {
 	#runtimeConfig: PluginRuntimeConfig | null = null;
 	#cwd: string;
+	#run: PackageManagerRunner;
 
-	constructor(cwd: string = getProjectDir()) {
+	/**
+	 * @param cwd - the project directory a project-scoped install resolves against.
+	 * @param run - the package-manager seam. Injectable because the rollback's
+	 * repair step is defined by the arguments it runs the manager with, which is
+	 * only observable from outside this module.
+	 */
+	constructor(cwd: string = getProjectDir(), run: PackageManagerRunner = runPackageManager) {
 		this.#cwd = cwd;
+		this.#run = run;
+	}
+
+	/** Run the package manager through this manager's seam. */
+	#packageManager(
+		argv: readonly string[],
+		options: { onOutput?: (chunk: InstallOutputChunk) => void; signal?: AbortSignal } = {},
+	): Promise<{ exitCode: number; stdoutTail: string; stderrTail: string }> {
+		return this.#run(argv, getPluginsDir(), options);
 	}
 
 	// ==========================================================================
@@ -400,18 +423,64 @@ export class PluginManager {
 		}
 
 		// `actualName` may be undefined when the install failed before the dep
-		// key was resolved — package.json + bun.lock restoration above is the
-		// complete rollback in that case.
-		if (!actualName) {
-			return;
+		// key was resolved. Either way the tree was rewritten by the package
+		// manager, so the repair runs on every path.
+		try {
+			if (actualName) {
+				const packagePath = path.join(getPluginsNodeModules(), actualName);
+				await fs.promises.rm(packagePath, { recursive: true, force: true });
+				if (snapshot) {
+					await fs.promises.mkdir(path.dirname(snapshot.packagePath), { recursive: true });
+					await fs.promises.cp(snapshot.backupPath, snapshot.packagePath, {
+						recursive: true,
+						verbatimSymlinks: true,
+					});
+				}
+			}
+		} finally {
+			await this.#repairNodeModulesAfterRollback(bunLockBefore);
 		}
-		const packagePath = path.join(getPluginsNodeModules(), actualName);
-		await fs.promises.rm(packagePath, { recursive: true, force: true });
-		if (!snapshot) {
-			return;
+	}
+
+	/**
+	 * Put `node_modules` back in step with the restored manifest.
+	 *
+	 * Restoring the manifest, the lockfile, and the one package directory above
+	 * is not the same as restoring what is installed. A `bun install` writes the
+	 * whole dependency tree: it can hoist, deduplicate, or replace a transitive
+	 * dependency of a plugin that was already installed and had nothing to do
+	 * with this run. That plugin's directory is not in the snapshot, so after the
+	 * restore the manifest and the lockfile both describe the pre-run state while
+	 * the tree on disk is a mixture of the two, and the next boot loads against
+	 * whatever that mixture resolves to.
+	 *
+	 * Running the package manager once more against the restored files repairs
+	 * the tree. Which flag depends on what was restored: a run that had a
+	 * lockfile gets `--frozen-lockfile`, so the install reproduces the restored
+	 * lock rather than resolving anything new; a run that had none gets
+	 * `--no-save`, which installs what the restored manifest asks for without
+	 * writing a manifest or creating the lockfile this run did not have.
+	 *
+	 * A repair that fails is logged rather than thrown. The restored files are
+	 * already correct, the caller is already reporting the failure that sent it
+	 * here, and replacing that message with a repair failure would hide the
+	 * reason the install was rolled back.
+	 */
+	async #repairNodeModulesAfterRollback(bunLockBefore: string | null): Promise<void> {
+		const args = bunLockBefore === null ? ["bun", "install", "--no-save"] : ["bun", "install", "--frozen-lockfile"];
+		try {
+			const run = await this.#packageManager(args);
+			if (run.exitCode !== 0) {
+				logger.warn("Plugin rollback could not reinstall node_modules from the restored files", {
+					exitCode: run.exitCode,
+					detail: run.stderrTail.trim() || run.stdoutTail.trim(),
+				});
+			}
+		} catch (err) {
+			logger.warn("Plugin rollback could not reinstall node_modules from the restored files", {
+				error: String(err),
+			});
 		}
-		await fs.promises.mkdir(path.dirname(snapshot.packagePath), { recursive: true });
-		await fs.promises.cp(snapshot.backupPath, snapshot.packagePath, { recursive: true, verbatimSymlinks: true });
 	}
 
 	async #validateInstalledExtensions(plugin: InstalledPlugin): Promise<void> {
@@ -546,7 +615,7 @@ export class PluginManager {
 			}
 
 			// Step 1: write the spec into plugins/package.json + node_modules.
-			const installRun = await runPackageManager(["bun", "install", packageInstallSpec], getPluginsDir(), {
+			const installRun = await this.#packageManager(["bun", "install", packageInstallSpec], {
 				onOutput: options.onOutput,
 				signal: options.signal,
 			});
@@ -600,7 +669,7 @@ export class PluginManager {
 			// cache from the remote. Rollback is handled by the outer catch.
 			if (gitSource && existingActualName) {
 				await refreshBunGitCache(gitSource, getPluginsDir());
-				const updateRun = await runPackageManager(["bun", "update", actualName], getPluginsDir(), {
+				const updateRun = await this.#packageManager(["bun", "update", actualName], {
 					onOutput: options.onOutput,
 					signal: options.signal,
 				});
@@ -717,7 +786,7 @@ export class PluginManager {
 		validatePackageName(name);
 		await this.#ensurePackageJson();
 
-		const run = await runPackageManager(["bun", "uninstall", name], getPluginsDir(), {});
+		const run = await this.#packageManager(["bun", "uninstall", name]);
 		if (run.exitCode !== 0) {
 			const detail = run.stderrTail.trim() || run.stdoutTail.trim() || `exit code ${run.exitCode}`;
 			throw new Error(`bun uninstall ${name} failed: ${detail}`);
