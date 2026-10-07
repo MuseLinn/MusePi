@@ -152,6 +152,23 @@ describe("bundled design templates", () => {
 		}
 	});
 
+	it("gives every template a label a person can tell apart", () => {
+		// The card shows one name, so two templates sharing one make the rail
+		// read as a single choice offered twice.
+		const labels = BUNDLED_TEMPLATES.map(template => template.title.en.toLowerCase());
+		const duplicateLabels = labels.filter((label, index) => labels.indexOf(label) !== index);
+		expect({ duplicateLabels }).toEqual({ duplicateLabels: [] });
+
+		// Distinct names are not enough on their own. The tooltip has to say why
+		// one would be picked over another, and the part of a description that
+		// does that is the tail — which is why it is kept whole rather than
+		// trimmed to a first sentence. Two templates whose descriptions match are
+		// the same shape under two names.
+		const descriptions = BUNDLED_TEMPLATES.map(template => template.description.en.toLowerCase());
+		const repeatedDescriptions = descriptions.filter((text, index) => descriptions.indexOf(text) !== index);
+		expect({ repeatedDescriptions }).toEqual({ repeatedDescriptions: [] });
+	});
+
 	it("resolves a template by its creation tab", () => {
 		expect(bundledTemplateForTab("deck")?.name).toBe("simple-deck");
 		expect(bundledTemplateForTab("nope")).toBeUndefined();

@@ -14,10 +14,18 @@
  * seeds a creation draft, and saving the result as a creation template keeps
  * the parameters. Both appear in the same rail, distinguished by origin.
  *
- * Provenance: the three shapes here were absorbed from open-design's
- * `design-templates/` and carry no upstream LICENSE (the licensed templates there
- * — 36 of them, third-party authorship — are deliberately not bundled; adding one
- * requires carrying its LICENSE and an attribution entry).
+ * Provenance: every shape here was absorbed from open-design's
+ * `design-templates/` and carries no upstream LICENSE. The licensed templates
+ * there — 35 of 114, third-party authorship — are deliberately not bundled;
+ * adding one requires carrying its LICENSE and an attribution entry.
+ *
+ * Selection was by coverage rather than by count. Of the 79 upstream templates
+ * that carry no licence and ship a baked example, 27 are prototypes free of
+ * any off-host asset; four more landing pages among them would have read as the
+ * same choice four times. Each one bundled here answers a brief the others do
+ * not, and the examples were checked to load nothing over the network, because
+ * a card renders inside a sandboxed iframe where that is an outbound request
+ * per hover.
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -25,15 +33,31 @@ import { parseFrontmatter } from "@musepi/pi-utils";
 import type { CreationTemplateTab } from "../daemon/creation";
 import bundledBlogPostExamplePath from "./blog-post/example.html" with { type: "file" };
 import bundledBlogPostSkill from "./blog-post/SKILL.md" with { type: "text" };
+import bundledDashboardExamplePath from "./dashboard/example.html" with { type: "file" };
+import bundledDashboardSkill from "./dashboard/SKILL.md" with { type: "text" };
 import bundledDocsPageExamplePath from "./docs-page/example.html" with { type: "file" };
 import bundledDocsPageSkill from "./docs-page/SKILL.md" with { type: "text" };
+import bundledEmailMarketingExamplePath from "./email-marketing/example.html" with { type: "file" };
+import bundledEmailMarketingSkill from "./email-marketing/SKILL.md" with { type: "text" };
+import bundledFinanceReportExamplePath from "./finance-report/example.html" with { type: "file" };
+import bundledFinanceReportSkill from "./finance-report/SKILL.md" with { type: "text" };
 import bundledImagePosterExamplePath from "./image-poster/example.html" with { type: "file" };
 // bun-types claims `*.html` as HTMLBundle, so this repo imports it as a file
 // and reads it at call time (same shape as src/export/html) rather than
 // overriding the ambient declaration for every package.
 import bundledImagePosterSkill from "./image-poster/SKILL.md" with { type: "text" };
+import bundledInvoiceExamplePath from "./invoice/example.html" with { type: "file" };
+import bundledInvoiceSkill from "./invoice/SKILL.md" with { type: "text" };
 import bundledKamiDeckExamplePath from "./kami-deck/example.html" with { type: "file" };
 import bundledKamiDeckSkill from "./kami-deck/SKILL.md" with { type: "text" };
+import bundledKanbanBoardExamplePath from "./kanban-board/example.html" with { type: "file" };
+import bundledKanbanBoardSkill from "./kanban-board/SKILL.md" with { type: "text" };
+import bundledMeetingNotesExamplePath from "./meeting-notes/example.html" with { type: "file" };
+import bundledMeetingNotesSkill from "./meeting-notes/SKILL.md" with { type: "text" };
+import bundledPmSpecExamplePath from "./pm-spec/example.html" with { type: "file" };
+import bundledPmSpecSkill from "./pm-spec/SKILL.md" with { type: "text" };
+import bundledPricingPageExamplePath from "./pricing-page/example.html" with { type: "file" };
+import bundledPricingPageSkill from "./pricing-page/SKILL.md" with { type: "text" };
 import bundledSaasLandingExamplePath from "./saas-landing/example.html" with { type: "file" };
 import bundledSaasLandingSkill from "./saas-landing/SKILL.md" with { type: "text" };
 import bundledSimpleDeckExamplePath from "./simple-deck/example.html" with { type: "file" };
@@ -143,12 +167,43 @@ function build(name: string, tab: CreationTemplateTab, skill: string, examplePat
 	};
 }
 
-/** Bundled design templates, in the order the rail lists them. */
+/**
+ * Bundled design templates, in the order the rail lists them.
+ *
+ * Grouped by the brief the shape answers rather than alphabetically, and within
+ * a group from the general to the specific: `web-prototype` is the fallback a
+ * person picks when nothing else fits, so it leads, and `pricing-page` is a
+ * page inside a site rather than a site. Two decks sit together because they
+ * are the same choice with two different visual languages, which is the only
+ * distinction a person makes when choosing between them.
+ */
 export const BUNDLED_TEMPLATES: readonly BundledTemplateDef[] = [
+	// Marketing and content.
 	build("web-prototype", "prototype", bundledWebPrototypeSkill, bundledWebPrototypeExamplePath as unknown as string),
 	build("saas-landing", "prototype", bundledSaasLandingSkill, bundledSaasLandingExamplePath as unknown as string),
-	build("docs-page", "prototype", bundledDocsPageSkill, bundledDocsPageExamplePath as unknown as string),
+	build("pricing-page", "prototype", bundledPricingPageSkill, bundledPricingPageExamplePath as unknown as string),
 	build("blog-post", "prototype", bundledBlogPostSkill, bundledBlogPostExamplePath as unknown as string),
+	build(
+		"email-marketing",
+		"prototype",
+		bundledEmailMarketingSkill,
+		bundledEmailMarketingExamplePath as unknown as string,
+	),
+	// Product and engineering documents.
+	build("docs-page", "prototype", bundledDocsPageSkill, bundledDocsPageExamplePath as unknown as string),
+	build("pm-spec", "prototype", bundledPmSpecSkill, bundledPmSpecExamplePath as unknown as string),
+	// Working surfaces: the shapes a person drives a team from.
+	build("dashboard", "prototype", bundledDashboardSkill, bundledDashboardExamplePath as unknown as string),
+	build("kanban-board", "prototype", bundledKanbanBoardSkill, bundledKanbanBoardExamplePath as unknown as string),
+	build("meeting-notes", "prototype", bundledMeetingNotesSkill, bundledMeetingNotesExamplePath as unknown as string),
+	// Documents with money or a sender on them.
+	build("invoice", "prototype", bundledInvoiceSkill, bundledInvoiceExamplePath as unknown as string),
+	build(
+		"finance-report",
+		"prototype",
+		bundledFinanceReportSkill,
+		bundledFinanceReportExamplePath as unknown as string,
+	),
 	build("simple-deck", "deck", bundledSimpleDeckSkill, bundledSimpleDeckExamplePath as unknown as string),
 	build("kami-deck", "deck", bundledKamiDeckSkill, bundledKamiDeckExamplePath as unknown as string),
 	build("image-poster", "media", bundledImagePosterSkill, bundledImagePosterExamplePath as unknown as string),
