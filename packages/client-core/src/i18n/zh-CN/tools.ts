@@ -845,6 +845,8 @@ export const tools = {
 	"artifacts empty": "还没有产物",
 	"artifacts empty hint": "设计模式产出的、带 artifact.manifest.json 的产物会出现在这里",
 	"artifact manifest invalid": "清单无效",
+	"artifact badge hint": "工作区产物——类型：{kind}",
+	"artifact exports hint": "工作区产物——导出格式：{exports}",
 	"back to artifacts": "全部产物",
 	"exports label": "支持的导出格式",
 	"artifact code view hint": "该渲染器暂不支持实时预览——正在显示源码",

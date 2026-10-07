@@ -22,8 +22,11 @@ import { Icon } from "../vendor/oc-icons";
  *      panel).
  */
 
-/** One scanned artifact (daemon artifact.list → WorkspaceArtifact). */
-interface ArtifactRow {
+/** One scanned artifact (daemon artifact.list → WorkspaceArtifact).
+ *  Exported so the file pane's manifest awareness reads the same shape —
+ *  a second local definition here and there is how the two preview surfaces
+ *  drift into disagreeing about what an artifact is. */
+export interface ArtifactRow {
 	dir: string;
 	dirName: string;
 	title: string;

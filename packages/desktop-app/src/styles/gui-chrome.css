@@ -1001,6 +1001,27 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+/* M3-3.4 manifest badge: the preview head names the artifact a file belongs
+ * to. Compact pill so it reads as metadata next to the name, not as a second
+ * title; the invalid variant borrows the error colour where one exists. */
+.gui-filepane-artifact-badge {
+	flex-shrink: 0;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 10.5px;
+	font-family: inherit;
+	background: var(--glass-bg);
+	color: var(--color-text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 180px;
+}
+
+.gui-filepane-artifact-badge--invalid {
+	color: var(--color-danger);
+}
 /* Preview-head context tools: md render|source seg + copy/reveal actions
  * (ZCode preview toolbar parity). Name shrinks, tools hug the close btn. */
 .gui-filepane-preview-modes {

@@ -878,6 +878,8 @@ export const tools = {
 	"artifacts empty": "No artifacts yet",
 	"artifacts empty hint": "Design-mode products carrying an artifact.manifest.json sidecar show up here",
 	"artifact manifest invalid": "invalid",
+	"artifact badge hint": "Workspace artifact — kind: {kind}",
+	"artifact exports hint": "Workspace artifact — export formats: {exports}",
 	"back to artifacts": "All artifacts",
 	"exports label": "Supported export formats",
 	"artifact code view hint": "This renderer has no live preview — showing the source",

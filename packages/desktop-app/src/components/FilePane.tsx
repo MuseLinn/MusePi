@@ -28,6 +28,7 @@ import * as pdfjs from "pdfjs-dist";
 import type { ReactElement, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { owningArtifact, useArtifactIndex } from "../lib/artifact-index";
 // Import order below is alphabetical by module path (biome).
 import {
 	onGitPrefsChanged,
@@ -94,6 +95,11 @@ interface PreviewState {
 	error?: string;
 	/** preview shown but content opens externally (unsupported binaries) */
 	external?: boolean;
+	/** The workspace artifact this file belongs to, when its directory carries
+	 *  a valid `artifact.manifest.json` (M3-3.4). Undefined for plain files —
+	 *  most of the tree is not an artifact, and the badge's absence is the
+	 *  ordinary case. */
+	artifact?: { kind: string; renderer: string; exports?: string[]; errors?: string[] };
 }
 
 /** Files above this size open view-only — a textarea holding megabytes drags
@@ -387,6 +393,10 @@ export function FilePane({
 	const [entries, setEntries] = useState<WorkspaceEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [preview, setPreview] = useState<PreviewState | null>(null);
+	// Manifest awareness (M3-3.4): one daemon scan, shared with the artifacts
+	// panel, consulted when a preview opens so the header can name the artifact
+	// the file belongs to.
+	const { byDir: artifactByDir } = useArtifactIndex(rpc, cwd);
 	const [lightbox, setLightbox] = useState<{ src: string; name: string } | null>(null);
 	/** Inline editor buffer: null = view mode; text/saved drive the dirty dot. */
 	const [edit, setEdit] = useState<{ text: string; saved: string } | null>(null);
@@ -508,6 +518,23 @@ export function FilePane({
 	useEffect(() => {
 		previewPathRef.current = preview?.path ?? null;
 	}, [preview]);
+	// Attach manifest awareness to whatever preview is open (M3-3.4). Keyed on
+	// the path rather than woven into openPreview's branches: every branch that
+	// produces a preview gets the badge, and a file outside any manifest
+	// directory simply clears it.
+	useEffect(() => {
+		if (!preview) return;
+		const rel = preview.path.startsWith(`${cwd}/`) ? preview.path.slice(cwd.length + 1) : preview.path;
+		const artifact = owningArtifact(rel, artifactByDir);
+		const artifactFields = artifact
+			? { kind: artifact.kind, renderer: artifact.renderer, exports: artifact.exports, errors: artifact.errors }
+			: undefined;
+		setPreview(current =>
+			current && current.path === preview.path && JSON.stringify(current.artifact) !== JSON.stringify(artifactFields)
+				? { ...current, artifact: artifactFields }
+				: current,
+		);
+	}, [preview?.path, artifactByDir, cwd]);
 	useEffect(() => {
 		return () => {
 			const buf = editBufRef.current;
@@ -1172,6 +1199,31 @@ export function FilePane({
 							<span className="gui-filepane-preview-name" title={preview.path}>
 								{preview.name}
 							</span>
+							{/* M3-3.4: a file inside an artifact directory previews with its
+							    manifest's identity. An invalid manifest names itself — the
+							    agent's mistake is visible where the person is looking, the
+							    same rule the artifacts panel follows by listing broken
+							    manifests instead of dropping them. */}
+							{preview.artifact &&
+								(preview.artifact.errors && preview.artifact.errors.length > 0 ? (
+									<span
+										className="gui-filepane-artifact-badge gui-filepane-artifact-badge--invalid"
+										title={preview.artifact.errors.join("\n")}
+									>
+										{t("artifact manifest invalid")}
+									</span>
+								) : (
+									<span
+										className="gui-filepane-artifact-badge"
+										title={
+											preview.artifact.exports?.length
+												? t("artifact exports hint", { exports: preview.artifact.exports.join(", ") })
+												: t("artifact badge hint", { kind: preview.artifact.kind })
+										}
+									>
+										{preview.artifact.kind} · {preview.artifact.renderer}
+									</span>
+								))}
 							{extOf(preview.name) === "md" && preview.text !== undefined && !edit && (
 								<Segmented
 									className="gui-seg--compact"
