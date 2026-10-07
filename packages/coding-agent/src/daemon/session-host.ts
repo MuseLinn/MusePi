@@ -2696,8 +2696,12 @@ export class DaemonSessionHost {
 		try {
 			const batcher = this.batcherFor(conn);
 			let page = 0;
-			for (const record of await journal.readAll()) {
-				if (record.seq > cursor) batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });
+			// `recordsAfter` parses only what the cursor asks for. Reading the
+			// whole journal and filtering here cost every client a full parse of
+			// the session on every reconnect, growing with the session's age
+			// rather than with the gap it had missed.
+			for (const record of await journal.recordsAfter(cursor)) {
+				batcher.push({ kind: "event", seq: record.seq, payload: record.event, sessionId });
 				page += 1;
 				if (page % CATCHUP_PAGE_SIZE === 0) {
 					batcher.flushNow();
