@@ -19,8 +19,7 @@ function localize(text: LocalizedText, locale: string): string {
  *
  * A radio row, not a launcher. Picking a template records the choice and stops
  * there — the creation happens when the composer is submitted, not when a card
- * is clicked. That is the open-design shape (`StartFromPicker` in its
- * NewProjectPanel), and it is what lets a person change their mind before
+ * is clicked. Deferring it is what lets a person change their mind before
  * committing to a session.
  *
  * "Start blank" is the first option of the same radio group rather than a
@@ -183,7 +182,7 @@ function TemplateCard({
 				{html ? (
 					// The example is a document we ship, run with scripts the way the
 					// artifact and file previewers already run them — a deck navigates
-					// inside its own frame (open-design's deck preview contract), so the
+					// inside its own frame by keyboard, wheel and swipe, so the
 					// host must not try to drive it.
 					<iframe
 						className="gui-creation-startcard-frame"

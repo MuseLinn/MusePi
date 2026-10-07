@@ -254,7 +254,7 @@ export interface ModeResolver {
 	invalidate(): void;
 }
 
-/** 内置模板(决策 #12 修订,DSH 四预设对齐):work(默认全量)/ chat(极简)/
+/** 内置模板(决策 #12 修订,四预设对齐):work(默认全量)/ chat(极简)/
  *  design(设计)/ creator(创作);文件已存在不覆盖(用户编辑优先)。
  *  label/description 由 daemon modes.list 按内置 id 本地化(i18n keys)。 */
 export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {

@@ -4,7 +4,7 @@ import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 
 /**
- * Connector picker — M4 P1 连接器面的客户端（对应 dsh M4 §4.3 的 composer chip）。
+ * Connector picker — M4 P1 连接器面的客户端（composer 上的连接器 chip）。
  *
  * The daemon already decides which servers this session may use: `connectors.list`
  * returns the live session's MCP servers with their real health, plus the

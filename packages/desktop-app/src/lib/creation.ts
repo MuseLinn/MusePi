@@ -91,9 +91,9 @@ export interface CreationDraft {
 	/**
 	 * 选中的内置设计模板 id（M1.x 起点选择）。
 	 *
-	 * `null` 是「空白起步」，与 open-design 的 StartFromPicker 同语义：它不是
-	 * 「没选」，而是同一个 radio 组里的第一项。它写进 metadata 的 `skillId`——
-	 * agent 读该 id 对应的 SKILL.md 决定渲染什么形状，与保存型模板（参数快照）
+	 * `null` 是「空白起步」而非「没选」：它是同一个 radio 组里的第一项，
+	 * 选中后与其它卡片走同一条提交路径。写进 metadata 的 `skillId`——agent
+	 * 读该 id 对应的 SKILL.md 决定渲染什么形状，与保存型模板（参数快照）
 	 * 互补：前者管「长什么样」，后者管「参数填了什么」。
 	 */
 	startFrom: string | null;

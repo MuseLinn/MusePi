@@ -144,7 +144,7 @@ interface WelcomeAttachment {
 }
 
 /**
- * Empty-state composer (opencode/ZCode style): large centered input with a
+ * Empty-state composer: large centered input with a
  * border-beam accent, a faint brand watermark, a time-aware greeting, and a
  * rotating tip line that refreshes with a shimmer.
  *
@@ -168,7 +168,7 @@ export function WelcomeComposer({
 	reminders,
 	onSelectReminder,
 	onMarkAllRead,
-	/** 预设(mode)chip(项目行旁,DSH hero 对齐):欢迎页选择,新会话创建时应用。 */
+	/** 预设(mode)chip(项目行旁):欢迎页选择,新会话创建时应用。 */
 	modes,
 	modeId,
 	onModeChange,
@@ -179,7 +179,7 @@ export function WelcomeComposer({
 	 *  carried along so the new session starts with them. planMode/goalMode
 	 *  ride along when the corresponding mode chip is armed — the mode is
 	 *  applied to the session this first prompt creates (goal: the prompt
-	 *  text becomes the objective, openchamber parity). */
+	 *  text becomes the objective). */
 	onSubmit(
 		text: string,
 		opts?: {
@@ -212,7 +212,7 @@ export function WelcomeComposer({
 	/** 打开文件夹 / 远程连接 / 不在项目中 project actions, or an already
 	 *  saved workspace path (picked from the saved-workspaces list). */
 	onProject?(action: "folder" | "remote" | "none" | string): void;
-	/** Focus mode (openchamber ⌘⇧E): the composer fills the surface. */
+	/** Focus mode (⌘⇧E): the composer fills the surface. */
 	focused?: boolean;
 	onToggleFocus?(): void;
 	/** Daemon-settings default model (modelRoles.default; refreshed live via
@@ -293,7 +293,7 @@ export function WelcomeComposer({
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [quotaOpen]);
-	// Global selection append (Cmd/Ctrl+L, openchamber parity): any
+	// Global selection append (Cmd/Ctrl+L): any
 	// non-composer selection lands here through the shared window event,
 	// exactly like the session Composer's handler.
 	useEffect(() => {
@@ -504,7 +504,7 @@ export function WelcomeComposer({
 	const [tipKey, setTipKey] = useState<(typeof TIP_KEYS)[number]>(
 		() => TIP_KEYS[Math.floor(Math.random() * TIP_KEYS.length)]!,
 	);
-	// Git branch selector (openchamber new-session parity): current branch +
+	// Git branch selector: current branch +
 	// local branch list for the active project; hidden outside a repo.
 	const [branchInfo, setBranchInfo] = useState<{ current: string | null; branches: string[] } | null>(null);
 	const [branchOpen, setBranchOpen] = useState(false);
@@ -562,14 +562,14 @@ export function WelcomeComposer({
 		},
 		[rpc, project, switchingBranch],
 	);
-	// Draft suggestions (openchamber DraftPresetChips parity): user-curated
+	// Draft suggestions: user-curated
 	// via 设置 → 预设提示词 (lib/suggestions — localStorage + change event);
 	// builtins fall back to the i18n-keyed defaults. Collapsed shows the
 	// first 8 chips; + expands with a staggered blur-in and morphs into ✕;
 	// a 自定义补充 chip jumps to the settings section.
 	const [suggestions, setSuggestions] = useState<StoredSuggestion[]>(() => loadSuggestions());
-	// Active preset mode: the welcome default is always a real mode ("work",
-	// DSH parity) — there is no "no preset" state anymore, so null never
+	// Active preset mode: the welcome default is always a real mode ("work")
+	// — there is no "no preset" state anymore, so null never
 	// reaches the UI (chip label / active check / session create all use
 	// this normalized id).
 	const activeModeId = modeId ?? "work";
@@ -849,7 +849,7 @@ export function WelcomeComposer({
 	const { anchorRef: projAnchorRef, renderMenu: renderProjMenu } = useFloatingMenu(projOpen, setProjOpen, {
 		className: "gui-proj-menu",
 	});
-	// 预设(mode)选择菜单:与项目选择同款浮层样式(DSH hero 对齐)。
+	// 预设(mode)选择菜单:与项目选择同款浮层样式。
 	const { anchorRef: presetAnchorRef, renderMenu: renderPresetMenu } = useFloatingMenu(presetOpen, setPresetOpen, {
 		className: "gui-proj-menu",
 	});
@@ -1454,7 +1454,7 @@ export function WelcomeComposer({
 				 * π watermark. Toggle lives in 设置 → 常规 (musepi-gui-dotmatrix). */}
 				{dotMatrixOn && <DotMatrixMark text={dotMatrixText || "MusePi"} className="gui-welcome-mark" />}
 				<div className="relative z-10 flex w-full max-w-[720px] flex-col items-center gui-welcome-inner">
-					{/* Workspace picker (openchamber/ZCode): dropdown list attached
+					{/* Workspace picker: dropdown list attached
 					 * right above the input — current project, open folder, remote. */}
 					<div className="gui-brand mb-2 flex items-center gap-2">
 						<span className="gui-brand-mark">π</span>
@@ -1522,7 +1522,7 @@ export function WelcomeComposer({
 						/>
 					</Reveal>
 					{/* Project target — an independent row above the composer,
-					 * left-aligned (openchamber DraftTargetSelectors). */}
+					 * left-aligned. */}
 					{onProject && (
 						<div className="gui-project-row mb-2 flex w-full min-w-0 items-center gap-1.5 px-0.5">
 							<div className="relative z-20" ref={projAnchorRef}>
@@ -1630,7 +1630,7 @@ export function WelcomeComposer({
 									</>,
 								)}
 							</div>
-							{/* 预设(mode)chip:与项目 chip 并排一行(DSH hero 对齐),
+							{/* 预设(mode)chip:与项目 chip 并排一行,
 							 * 新会话创建时应用。样式与项目选择同款(按钮 + 浮层菜单)。 */}
 							{modes && (
 								<div className="relative z-20 flex-shrink-0" ref={presetAnchorRef}>
@@ -1646,8 +1646,8 @@ export function WelcomeComposer({
 									</button>
 									{renderPresetMenu(
 										<>
-											{/* 无“默认(无预设)”:modeId 恒非 null(默认 work),
-											 * 与 DSH 一致——每次新建都带一个预设。 */}
+											{/* 无"默认(无预设)":modeId 恒非 null(默认 work),
+											 * 每次新建都带一个预设。 */}
 											{modes.map(m => {
 												const desc = resolveModeDescription(m.id);
 												return (
@@ -1877,7 +1877,7 @@ export function WelcomeComposer({
 										}}
 									/>
 									{/* Focus mode sits between the attach menu and the model
-									 * selector (openchamber ComposerFooter order). */}
+									 * selector — between the attach menu and the model selector. */}
 									{onToggleFocus && (
 										<button
 											type="button"
@@ -1954,8 +1954,7 @@ export function WelcomeComposer({
 							}
 							footerRight={
 								<>
-									{/* Approval mode (openchamber input permission-picker
-									 * parity) — a global setting, so it works session-less. */}
+									{/* Approval mode — a global setting, so it works session-less. */}
 									<ApprovalModeButton rpc={rpc} />
 									{/* Compact motion-only mic control; the live waveform,
 									 * clock and phase copy live in the in-input strip. */}
@@ -2333,7 +2332,7 @@ export function WelcomeComposer({
 					<p key={tipKey} className="gui-tip mt-5 text-[14px] text-[var(--color-text-faint)]">
 						{t(tipKey).replace("{mod}", modLabel()).replace("⌘", modLabel())}
 					</p>
-					{/* Suggestion chips (openchamber new-session parity): one tap
+					{/* Suggestion chips: one tap
 					 * fills the composer; the user hits Enter to send. */}
 					<div className="gui-suggest-reveal mt-4" ref={suggestRevealRef}>
 						<div className="gui-suggest">
