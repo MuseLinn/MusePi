@@ -369,3 +369,71 @@ describe("duplicatePanelTab", () => {
 		expect(duplicatePanelTab(s, "nope")).toBe(s);
 	});
 });
+
+// M1.12 rail modifier-click. An ordinary rail open is open-or-focus; the
+// modifier means "another one of these". These cases pin that the difference is
+// exactly one new instance and not a re-focus — same surface, same target, and
+// a genuinely different id, which is what keeps the two from collapsing back
+// into one on the next open.
+describe("upsertPanelTab forceNew", () => {
+	const oneNotesTab = (): PanelTabState => upsertPanelTab(state([], null), desc("notes"), { now: 1 });
+
+	it("opens a new instance instead of focusing the existing one", () => {
+		const first = oneNotesTab();
+		expect(first.tabs).toHaveLength(1);
+
+		const again = upsertPanelTab(first, desc("notes"), { now: 2, forceNew: true });
+
+		expect(again.tabs).toHaveLength(2);
+		expect(again.tabs[1]?.id).not.toBe(again.tabs[0]?.id);
+		expect(again.tabs[1]?.surface).toBe("notes");
+		expect(again.activeId).toBe(again.tabs[1]?.id);
+	});
+
+	it("behaves as an ordinary open when the instance does not exist yet", () => {
+		// forceNew on a surface with nothing open must not invent a `#copy2`.
+		const out = upsertPanelTab(state([], null), desc("notes"), { now: 2, forceNew: true });
+
+		expect(out.tabs).toHaveLength(1);
+		expect(out.tabs[0]?.id).toBe("notes::");
+	});
+
+	it("keeps a plain open an open-or-focus", () => {
+		// The default is unchanged: without the modifier a second rail click lands
+		// back on the tab already open rather than piling up copies.
+		const first = oneNotesTab();
+		const again = upsertPanelTab(first, desc("notes"), { now: 2 });
+
+		expect(again.tabs).toHaveLength(1);
+		expect(again.activeId).toBe("notes::");
+	});
+
+	it("a forced instance is itself duplicable without colliding", () => {
+		const forced = upsertPanelTab(oneNotesTab(), desc("notes"), { now: 2, forceNew: true });
+		const forcedId = forced.tabs[1]!.id;
+		const forcedAgain = upsertPanelTab(forced, desc("notes"), { now: 3, forceNew: true });
+
+		expect(forcedAgain.tabs).toHaveLength(3);
+		expect(new Set(forcedAgain.tabs.map(t => t.id)).size).toBe(3);
+		expect(forcedAgain.tabs.map(t => t.id)).toContain(forcedId);
+	});
+
+	it("carries the source's column and display", () => {
+		let s = upsertPanelTab(state([], null), desc("notes"), { now: 1 });
+		s = upsertPanelTab(s, desc("git"), { now: 2, column: 1 });
+		s = { ...s, split: true, columnActive: ["notes::", "git::"] };
+
+		const out = upsertPanelTab(s, desc("notes"), { now: 3, forceNew: true });
+
+		// The copy joins the source's column, not the focused tab's — those
+		// differ under split, which is the case this covers.
+		const copy = out.tabs.find(t => t.surface === "notes" && t.id !== "notes::");
+		expect(copy).toBeDefined();
+		expect(copy!.column).toBe(0);
+		expect(out.columnActive[0]).toBe(copy!.id);
+		// The flat array stays column-grouped: every column-0 tab before every
+		// column-1 tab, which is the invariant the strip's rendering relies on.
+		const columns = out.tabs.map(t => t.column);
+		expect(columns).toEqual([...columns].sort());
+	});
+});

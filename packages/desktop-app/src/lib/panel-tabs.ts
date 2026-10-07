@@ -111,6 +111,29 @@ function toTab(descriptor: PanelTabDescriptor, now: number, column: PanelColumn 
 	};
 }
 
+/**
+ * A tab id that is free in `tabs`.
+ *
+ * Two features need "the same thing again, as a separate instance": the tab
+ * menu's duplicate and a rail modifier-click. Both walk forward from `#copy2`
+ * until the derived id is unused, so duplicating a copy cannot collide with
+ * anything. One helper, because two copies of this walk would be two places to
+ * disagree about what a copy is called.
+ *
+ * @param tabs - tabs the new id must not collide with.
+ * @param baseId - the id being duplicated.
+ * @returns the free id, and the tab fields a copy of `source` needs for it.
+ */
+function deriveCopyIdentity(tabs: readonly PanelTab[], baseId: string): string {
+	let copyN = 2;
+	let candidate = `${baseId}#copy${copyN}`;
+	while (tabs.some(tab => tab.id === candidate)) {
+		copyN += 1;
+		candidate = `${baseId}#copy${copyN}`;
+	}
+	return candidate;
+}
+
 /** Keep the budget per surface, spending the oldest non-active tabs first.
  *  If eviction would have to touch the active tab, keep one over budget —
  *  losing the tab in use is worse than exceeding a soft limit. */
@@ -175,6 +198,18 @@ export interface UpsertPanelTabOptions {
 	/** Open into a specific split column (drag-into-empty-column parity).
 	 *  Defaults to the focused tab's column. */
 	column?: PanelColumn;
+	/**
+	 * Open a NEW instance instead of focusing the one this descriptor names
+	 * (M1.12: rail middle-click / ⌘-click).
+	 *
+	 * An ordinary open is open-or-focus: a rail click on an already-open
+	 * surface lands back on that tab, which is what a launcher does. The
+	 * modifier-click means something else — "another one of these" — and for
+	 * surfaces whose instance address is the surface itself there is no address
+	 * to differ by, so the new instance has to derive its identity the same way
+	 * a duplicate does. Without this the two would also collide on upsert.
+	 */
+	forceNew?: boolean;
 	/** Injectable for tests; defaults to Date.now(). */
 	now?: number;
 }
@@ -187,8 +222,8 @@ export function upsertPanelTab(
 	const reveal = options?.reveal !== false;
 	const maxPerSurface = options?.maxPerSurface ?? PANEL_TABS_MAX_PER_SURFACE;
 	const now = options?.now ?? Date.now();
-	const column = options?.column ?? targetColumnForNewTab(state);
-	const next = toTab(descriptor, now, column);
+	let column = options?.column ?? targetColumnForNewTab(state);
+	let next = toTab(descriptor, now, column);
 
 	// A real instance replaces its surface's placeholder: the rail opens
 	// "Files" with no target to show the empty editor; the first actual file
@@ -201,8 +236,31 @@ export function upsertPanelTab(
 			? state.tabs.filter(tab => !(tab.surface === next.surface && tab.target === null))
 			: state.tabs;
 
+	// forceNew: the descriptor named an instance that already exists and the
+	// caller means "another one". Its id cannot be reused or the open below would
+	// land on the existing tab, so it derives a fresh identity the way a
+	// duplicate does — same surface, same target, independent instance. It also
+	// joins the SOURCE's column rather than the focused tab's: "another one of
+	// these" belongs beside the one it copies, and under split those can differ.
+	let insertAfter: number | null = null;
+	if (options?.forceNew === true) {
+		const sourceIndex = state.tabs.findIndex(tab => tab.id === panelTabId(descriptor));
+		if (sourceIndex !== -1) {
+			const source = state.tabs[sourceIndex]!;
+			const candidateId = deriveCopyIdentity(state.tabs, source.id);
+			next = { ...source, id: candidateId, dedupeKey: candidateId, touchedAt: now };
+			column = source.column;
+			// Insert within the column's slice rather than at the end of the flat
+			// array: that array is column-grouped, and appending across the
+			// boundary would put a column-0 tab behind a column-1 one.
+			let last = sourceIndex;
+			while (last + 1 < state.tabs.length && state.tabs[last + 1]!.column === source.column) last += 1;
+			insertAfter = last;
+		}
+	}
+
 	const existing = base.find(tab => tab.id === next.id);
-	const tabs = existing
+	const added = existing
 		? base.map(tab =>
 				tab.id === next.id
 					? {
@@ -214,9 +272,11 @@ export function upsertPanelTab(
 						}
 					: tab,
 			)
-		: [...base, next];
+		: insertAfter === null
+			? [...base, next]
+			: [...base.slice(0, insertAfter + 1), next, ...base.slice(insertAfter + 1)];
 
-	const clamped = clampPanelTabs(tabs, maxPerSurface, reveal ? next.id : state.activeId);
+	const clamped = clampPanelTabs(added, maxPerSurface, reveal ? next.id : state.activeId);
 	const activeId = reveal ? next.id : (state.activeId ?? next.id);
 	const resolvedActive = resolveActivePanelTabId(clamped, activeId);
 	const columnActive: [string | null, string | null] = reveal
@@ -281,12 +341,7 @@ export function duplicatePanelTab(state: PanelTabState, id: string, now = Date.n
 	if (!source) return state;
 
 	const column = source.column;
-	let copyN = 2;
-	let candidateId = `${source.id}#copy${copyN}`;
-	while (state.tabs.some(tab => tab.id === candidateId)) {
-		copyN += 1;
-		candidateId = `${source.id}#copy${copyN}`;
-	}
+	const candidateId = deriveCopyIdentity(state.tabs, source.id);
 
 	const copy: PanelTab = {
 		id: candidateId,

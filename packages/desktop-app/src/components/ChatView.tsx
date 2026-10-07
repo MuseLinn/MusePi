@@ -816,19 +816,21 @@ export function ChatView({
 	// continuously, which read as "the + button does nothing").
 	const extTabsRef = useRef(extTabs);
 	extTabsRef.current = extTabs;
+	// Strip label: registry display name for built-ins, the slot's own label for
+	// extension tabs — a raw surface id like "ext:settings" must never reach a
+	// tab title. Shared by every path that opens a rail surface.
+	const tabLabelFor = useCallback((view: string): string => {
+		const ext = view.startsWith("ext:") ? extTabsRef.current.find(x => `ext:${x.slot}` === view) : undefined;
+		return ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
+	}, []);
 	const setActiveView = useCallback(
 		(view: string | null): void => {
 			// null = "nothing selected"; the empty state owns that, the rail and
 			// the strip never navigate to it.
 			if (!view) return;
-			// Strip label: registry display name for built-ins, the slot's own
-			// label for extension tabs — a raw
-			// surface id like "ext:settings" must never reach the tab title.
-			const ext = view.startsWith("ext:") ? extTabsRef.current.find(x => `ext:${x.slot}` === view) : undefined;
-			const label = ext ? (ext.label ?? ext.slot) : t((surfaceById(view)?.label ?? view) as TranslationKey);
-			panelTabs.open({ surface: view, label });
+			panelTabs.open({ surface: view, label: tabLabelFor(view) });
 		},
-		[panelTabs.open],
+		[panelTabs.open, tabLabelFor],
 	);
 	// transcript.node seat dispatch: extensions register renderers for specific
 	// node kinds (transcriptNodeKind). A matched renderer OWNS the entry's
@@ -2914,6 +2916,14 @@ export function ChatView({
 											return;
 										}
 										setActiveView(id);
+										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
+									}}
+									onSelectNew={id => {
+										// M1.12: middle-click / ⌘-click means "another one of
+										// these" — a new instance, not a focus. The panel also
+										// has to be showing for a second instance to be
+										// reachable, so this expands rather than folds.
+										panelTabs.open({ surface: id, label: tabLabelFor(id) }, { forceNew: true });
 										if (!rightPanelOpen || focusMode) onExpandRightPanel?.();
 									}}
 									onToggleRightPanel={onToggleRightPanel}

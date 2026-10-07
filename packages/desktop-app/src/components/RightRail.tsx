@@ -43,6 +43,7 @@ export function RightRail({
 	tool,
 	rightPanelOpen,
 	onSelect,
+	onSelectNew,
 	onToggleRightPanel,
 	extTabs = [],
 }: {
@@ -52,6 +53,10 @@ export function RightRail({
 	tool: string | null;
 	rightPanelOpen: boolean;
 	onSelect(tool: string): void;
+	/** Middle-click / ⌘-click on a rail item: open another instance of that
+	 *  surface rather than focusing the one already open (M1.12). Optional so a
+	 *  caller without a tab model still renders the rail. */
+	onSelectNew?(tool: string): void;
 	onToggleRightPanel?(): void;
 	/** Extension panel-tab slots (panel.tab.*), rendered as primary rail
 	 *  items after the built-in surfaces (nav unification: the rail is the
@@ -317,6 +322,7 @@ export function RightRail({
 								badgeCount={id === "git" ? gitChanges : null}
 								dragging={dragging}
 								onSelect={onSelect}
+								onSelectNew={nextId => onSelectNew?.(nextId)}
 								onHover={(anchor, hoverId) => setTip(anchor && hoverId ? { anchor, id: hoverId } : null)}
 							/>
 						))}
@@ -438,6 +444,7 @@ function SortableRailItem({
 	badgeCount,
 	dragging,
 	onSelect,
+	onSelectNew,
 	onHover,
 }: {
 	id: string;
@@ -447,12 +454,25 @@ function SortableRailItem({
 	badgeCount: number | null;
 	dragging: boolean;
 	onSelect(id: string): void;
+	/** Middle-click / ⌘-click: another instance rather than open-or-focus. */
+	onSelectNew(id: string): void;
 	onHover(anchor: HTMLElement | null, hoverId: string | null): void;
 }): ReactNode {
 	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 	const label = t(s.label as TranslationKey);
 	const displayBadge = badgeCount != null && badgeCount > 0 ? (badgeCount > 99 ? "99+" : String(badgeCount)) : null;
 	const badgeAria = badgeCount ? t("{count} changed files", { count: badgeCount }) : null;
+	// A launcher button opens its surface; the modifier means "another one of
+	// these". Both live on one button rather than a separate affordance: the
+	// modifier is how browsers open new tabs of a link, and the rail is the same
+	// kind of thing.
+	const openNew = (event: React.MouseEvent<HTMLButtonElement>): void => {
+		if (event.button === 1 || event.metaKey || event.ctrlKey) {
+			// Middle click also starts an autoscroll gesture on a draggable.
+			event.preventDefault();
+			onSelectNew(id);
+		}
+	};
 	return (
 		<div
 			ref={setNodeRef}
@@ -465,7 +485,18 @@ function SortableRailItem({
 				{...listeners}
 				className="gui-right-rail-btn"
 				aria-label={badgeAria ? `${label}，${badgeAria}` : label}
-				onClick={() => onSelect(id)}
+				onClick={event => {
+					// A modified click is the "new instance" gesture; letting it also
+					// run the plain path would open one and then focus it again.
+					if (event.button === 1 || event.metaKey || event.ctrlKey) {
+						openNew(event);
+						return;
+					}
+					onSelect(id);
+				}}
+				// Middle click does not synthesise onClick in every browser, and its
+				// autoscroll default on a draggable is user-hostile either way.
+				onAuxClick={openNew}
 				onMouseEnter={e => onHover(e.currentTarget, id)}
 				onMouseLeave={() => onHover(null, null)}
 				onFocus={e => onHover(e.currentTarget, id)}
