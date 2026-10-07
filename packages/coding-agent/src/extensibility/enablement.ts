@@ -109,16 +109,18 @@ const UNARY_CONDITIONS: Readonly<Record<string, EnablementPredicate>> = {
  * Read a switch that has no schema entry.
  *
  * `Settings.get` is typed against the schema, and `shell.enabled` is not in it —
- * which is the fact this function exists to work around rather than hide. The
- * cast is confined here so that a future schema entry for the key makes this
- * the one place that has to change.
+ * but the type is not the only problem: `get` resolves the value through the
+ * schema's path-segment table, which has no entry for this key, so a value
+ * written through the extension service never reads back through it. `getRaw`
+ * addresses the merged store directly and is the same channel the extension
+ * service writes the key through.
  *
  * @param key - the switch's settings key.
  * @returns the raw value, or `undefined` when it cannot be read.
  */
 export function readRawSubsystemSwitch(key: SubsystemSwitchKey): unknown {
 	try {
-		return Settings.instance.get(key as Parameters<Settings["get"]>[0]) as unknown;
+		return Settings.instance.getRaw(key);
 	} catch {
 		return undefined;
 	}
