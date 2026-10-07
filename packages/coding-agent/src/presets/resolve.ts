@@ -266,7 +266,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 	chat: {
 		id: "chat",
 		label: "Chat",
-		description: "极简对话:仅内置核心工具 + 固定 prompt + 无压缩",
+		description: "极简对话:仅核心对话工具 + 固定 prompt + 无压缩",
 		modelRole: "fast",
 		extensions: [],
 		promptComplete: true,
@@ -278,7 +278,46 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 				text: "你是一名简洁的对话助手。只回答结论,不做多余分析;优先给出最小可行的方案。",
 			},
 		],
-		settings: { "compaction.enabled": false },
+		settings: {
+			"compaction.enabled": false,
+			// DSH minimal parity (web-app/presets/minimal.patch.yml): a minimal
+			// preset is defined by what it removes, and its keep-set there is the
+			// shell plus the persona. Here the keep-set is the shell and the one
+			// tool a heads-down conversation can need (ask); everything else in
+			// the builtin slate is denied through the per-tool denylist, which the
+			// mode-settings override reaches before createTools builds the slate.
+			"tools.disabled": [
+				"read",
+				"edit",
+				"ast_grep",
+				"ast_edit",
+				"debug",
+				"eval",
+				"github",
+				"glob",
+				"grep",
+				"lsp",
+				"inspect_image",
+				"browser",
+				"computer",
+				"checkpoint",
+				"rewind",
+				"security_scan",
+				"task",
+				"hub",
+				"todo",
+				"web_search",
+				"write",
+				"board",
+				"widget",
+				"memory_edit",
+				"retain",
+				"recall",
+				"reflect",
+				"learn",
+				"manage_skill",
+			],
+		},
 	},
 	design: {
 		id: "design",
@@ -329,7 +368,7 @@ export const BUILTIN_MODE_TEMPLATES: Record<string, ModeDefinition> = {
 };
 
 /** 内置模板修订号:内置模板内容变更后递增(见 ensureModeTemplates 的升级规则)。 */
-export const BUILTIN_TEMPLATE_REVISION = 5;
+export const BUILTIN_TEMPLATE_REVISION = 6;
 
 /**
  * 历史修订的形状 —— 升级比对链。ensureModeTemplates 只在"文件内容仍等于
@@ -344,8 +383,11 @@ export const BUILTIN_TEMPLATE_REVISION = 5;
  * 硬纪律:这里的每一档必须是**字面量快照**,禁止 spread/map 当前模板
  * (BUILTIN_MODE_TEMPLATES)——当前模板一变,动态构造的历史档会跟着漂移,
  * 真实老用户文件就再也比对不上、升级链断裂(rev2 档 2026-09-29 曾因此冻结)。
+ *
+ * Exported for the upgrade-chain tests: a revision bump that breaks its own
+ * compare chain is exactly the failure the hard rule above guards against.
  */
-const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
+export const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
 	1: {
 		design: {
 			id: "design",
@@ -441,6 +483,26 @@ const LEGACY_TEMPLATES: Record<number, Record<string, ModeDefinition>> = {
 					text: "你是一名 MusePi 插件与预设创作者。创建/修改扩展时遵循 musepi-extension-dev 技能;创建预设时遵循 docs/archive/modes-plan.md 的契约(extends 继承、promptComplete、settings 覆盖),完成后用 modes.validate 自检。",
 				},
 			],
+		},
+	},
+	// v5 存档:chat 尚未收窄工具面(design/creator/work 未变,比对走 rev[id] ?? def 兜底)。
+	5: {
+		chat: {
+			id: "chat",
+			label: "Chat",
+			description: "极简对话:仅内置核心工具 + 固定 prompt + 无压缩",
+			modelRole: "fast",
+			extensions: [],
+			promptComplete: true,
+			runtimeContext: false,
+			prompt: [
+				{
+					name: "mode:chat:persona",
+					order: 0,
+					text: "你是一名简洁的对话助手。只回答结论,不做多余分析;优先给出最小可行的方案。",
+				},
+			],
+			settings: { "compaction.enabled": false },
 		},
 	},
 };
