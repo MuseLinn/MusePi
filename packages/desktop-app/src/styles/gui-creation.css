@@ -59,6 +59,106 @@
 	}
 }
 
+/* ── 起点选择（opendesign StartFromPicker 形态）─────────────────────────
+ * 一排卡片而非一排 chip：每张带缩略图,选中表达「这次做什么形状」,与上方
+ * 类型 chip 排的「做哪一面」是两层不同的选择。卡片材质沿用 chip 家族,缩略
+ * 图按 mode 上色,让 deck / prototype / media 在横排里可区分。 */
+.gui-creation-startfrom {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 2px 2px 0;
+}
+
+.gui-creation-startfrom-label {
+	font-size: 11.5px;
+	color: var(--color-text-faint);
+}
+
+.gui-creation-startfrom-row {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 8px;
+	overflow-x: auto;
+	scrollbar-width: none;
+	padding: 2px;
+}
+
+.gui-creation-startfrom-row::-webkit-scrollbar {
+	display: none;
+}
+
+.gui-creation-startcard {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 5px;
+	flex: none;
+	width: 88px;
+	padding: 8px 6px 7px;
+	border: 0;
+	border-radius: var(--radius-md);
+	font-family: inherit;
+	cursor: pointer;
+	background: var(--glass-bg);
+	box-shadow: inset 0 0 0 1px var(--glass-border);
+	color: var(--color-text-muted);
+	transition:
+		color 130ms ease,
+		background-color 130ms ease,
+		box-shadow 130ms ease;
+}
+
+.gui-creation-startcard:hover {
+	color: var(--color-text);
+	box-shadow: inset 0 0 0 1px var(--color-accent-bd);
+}
+
+.gui-creation-startcard--on {
+	color: var(--color-accent);
+	background: color-mix(in oklab, var(--color-accent) 14%, var(--glass-bg));
+	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+
+/* 缩略图:首字母/加号。mode 上色是唯一区分手段 —— 卡片本身不写类型名,
+ * 避免一行出现「原型 Prototype」这类重复读。 */
+.gui-creation-startcard-thumb {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: var(--radius-sm);
+	font-size: 15px;
+	font-weight: 600;
+	background: var(--color-surface-hover);
+	color: var(--color-text-muted);
+}
+
+.gui-creation-startcard--prototype .gui-creation-startcard-thumb {
+	background: color-mix(in oklab, #4c8dff 22%, var(--glass-bg));
+	color: #8fb6ff;
+}
+
+.gui-creation-startcard--deck .gui-creation-startcard-thumb {
+	background: color-mix(in oklab, #c07cf0 22%, var(--glass-bg));
+	color: #d5aef8;
+}
+
+.gui-creation-startcard--media .gui-creation-startcard-thumb {
+	background: color-mix(in oklab, #3fbf9a 22%, var(--glass-bg));
+	color: #7fdcc4;
+}
+
+.gui-creation-startcard-name {
+	font-size: 11px;
+	line-height: 1.25;
+	text-align: center;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 100%;
+}
+
 /* ── template chip 的模板 rail（composer 下方内联展开，§3.4 机制不变）────
  * opendesign 铁律：composer 是创建页永久锚点，rail 落在 composer 之下
  * （与 gui-ds-rail 同层同构：标题行 + 内容区，进出场由 Reveal 承担），

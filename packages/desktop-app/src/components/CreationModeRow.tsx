@@ -17,6 +17,7 @@ import {
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { AssetPolicyRow } from "./composer/asset-policy-row";
+import { StartFromPicker } from "./composer/start-from-picker";
 
 /**
  * CreationModeRow — M3.7a design 模式页的欢迎页内联形态
@@ -258,6 +259,16 @@ export function CreationModeRow({
 						);
 					})}
 				</div>
+				{/* 起点选择（opendesign StartFromPicker 形态）：选形状，不立即创建 ——
+				 *  创建发生在 composer 提交时，所以改主意还来得及。空白起步是同一个
+				 *  radio 组的第一项：不选形状也是一个决定。选中的 id 进草稿
+				 *  startFrom，最终写进 metadata.skillId（M3-3.3）。 */}
+				<StartFromPicker
+					rpc={rpc}
+					active={active}
+					value={draft.startFrom}
+					onChange={id => updateDraft({ ...draft, startFrom: id })}
+				/>
 			</div>
 			{/* 素材策略行 + 「高级 ▸」折叠区(M3.7c §4):composer 下方、设计
 			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 WelcomeComposer

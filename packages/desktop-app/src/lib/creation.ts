@@ -88,6 +88,15 @@ export interface CreationDraft {
 	mediaPrompt: string;
 	/** 素材策略（§4:默认 ai-image,发送总是落 metadata.assetPolicy）。 */
 	assetPolicy: AssetPolicy;
+	/**
+	 * 选中的内置设计模板 id（M1.x 起点选择）。
+	 *
+	 * `null` 是「空白起步」，与 open-design 的 StartFromPicker 同语义：它不是
+	 * 「没选」，而是同一个 radio 组里的第一项。它写进 metadata 的 `skillId`——
+	 * agent 读该 id 对应的 SKILL.md 决定渲染什么形状，与保存型模板（参数快照）
+	 * 互补：前者管「长什么样」，后者管「参数填了什么」。
+	 */
+	startFrom: string | null;
 	/** 「高级 ▸」折叠区展开态（UI 态入草稿缓存,切 chip 不丢,不进 metadata）。 */
 	advancedOpen: boolean;
 }
@@ -110,6 +119,7 @@ export const DEFAULT_CREATION_DRAFT: CreationDraft = {
 	mediaPromptTemplateId: null,
 	mediaPrompt: "",
 	assetPolicy: "ai-image",
+	startFrom: null,
 	advancedOpen: false,
 };
 
@@ -173,9 +183,13 @@ export function chipForDraft(draft: CreationDraft): CreationChip {
  * Build the §4 project metadata object for a create. Field routing is
  * per-tab (设计稿 §3 各表"去向"列):platform/fidelity/surfaceOptions only
  * for prototype/live-artifact/other;speakerNotes only for deck;media only
- * for media. `skillId` stays null in M3.2 — the design preset rides on
- * modeId, and the resolved-skill + template-replacement semantics land in
- * M3.3 (applied templates keep their snapshot's skillId).
+ * for media.
+ *
+ * `skillId` carries the shape a person picked in the creation surface: the id
+ * of a bundled design template whose SKILL.md the agent reads as its rendering
+ * brief (M3-3.3 — it was a hardcoded null until the start-from picker landed).
+ * A saved creation template overrides it, because that template's snapshot was
+ * taken with a shape already chosen.
  */
 export function buildProjectMetadata(draft: CreationDraft, templateId?: string | null): Record<string, unknown> {
 	const now = new Date().toISOString();
@@ -183,7 +197,7 @@ export function buildProjectMetadata(draft: CreationDraft, templateId?: string |
 	const metadata: Record<string, unknown> = {
 		version: 1,
 		name: name || null,
-		skillId: null,
+		skillId: draft.startFrom,
 		designSystemId: null,
 		inspirationDesignSystemIds: [],
 		templateId: templateId ?? null,
@@ -231,6 +245,10 @@ export function buildProjectMetadata(draft: CreationDraft, templateId?: string |
 export function hydrateDraftFromMetadata(metadata: Record<string, unknown>, base?: CreationDraft): CreationDraft {
 	const draft: CreationDraft = { ...(base ?? DEFAULT_CREATION_DRAFT) };
 	if (typeof metadata.name === "string") draft.name = metadata.name;
+	// The shape a person picked. Read before the per-kind branches because deck
+	// and media return early — a template survives whichever surface it was
+	// chosen from.
+	if (typeof metadata.skillId === "string" && metadata.skillId !== "") draft.startFrom = metadata.skillId;
 	// 素材策略（M3.7c §4）:合法值回填;缺省/未知保持 base（可能是缓存草稿）。
 	if (metadata.assetPolicy === "ai-image" || metadata.assetPolicy === "placeholder") {
 		draft.assetPolicy = metadata.assetPolicy;

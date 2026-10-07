@@ -2331,6 +2331,16 @@ export class DaemonServer {
 			case "creation.templates.delete": {
 				return this.#services.get<CreationService>("creation").deleteTemplate((params ?? {}) as { id?: string });
 			}
+			case "creation.templates.bundled": {
+				// 随 CLI 发布的内置设计模板清单（视觉形状参考，与 saved templates
+				// 的参数快照不是同一种条目）——创建面的起点选择器数据源。
+				return this.#services.get<CreationService>("creation").listBundledTemplates();
+			}
+			case "creation.templates.bundledExample": {
+				return this.#services
+					.get<CreationService>("creation")
+					.readBundledTemplateExample((params ?? {}) as { id?: string });
+			}
 			case "creation.metadata.get": {
 				return this.#services
 					.get<CreationService>("creation")

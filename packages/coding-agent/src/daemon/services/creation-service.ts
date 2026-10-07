@@ -1,4 +1,5 @@
 import type { SessionHeader } from "@musepi/pi-wire";
+import { BUNDLED_TEMPLATES, readBundledTemplateExample } from "../../bundled-templates";
 import {
 	CREATION_TEMPLATE_TABS,
 	type CreationTemplate,
@@ -10,6 +11,16 @@ import {
 	validateProjectMetadata,
 } from "../creation";
 import type { DaemonService } from "./types";
+
+/** One bundled design template as the rail sees it: no preview body. */
+interface BundledTemplateSummary {
+	/** Stable id — rides into project metadata as `skillId`. */
+	id: string;
+	/** Creation surface this shape belongs to. */
+	tab: CreationTemplateTab;
+	/** One-line blurb for the card. */
+	summary: string;
+}
 
 /**
  * CreationService — 创作面（M3.2）数据面 L2 宿主服务。
@@ -36,6 +47,8 @@ export class CreationService implements DaemonService {
 		"creation.templates.list": "listTemplates",
 		"creation.templates.save": "saveTemplate",
 		"creation.templates.delete": "deleteTemplate",
+		"creation.templates.bundled": "listBundledTemplates",
+		"creation.templates.bundledExample": "readBundledTemplateExample",
 		"creation.metadata.get": "getMetadata",
 	} as const;
 
@@ -50,6 +63,36 @@ export class CreationService implements DaemonService {
 	/** RPC creation.templates.list：新 updatedAt 在前（模板 rail/列表序）。 */
 	async listTemplates(): Promise<{ templates: CreationTemplate[] }> {
 		return { templates: await listCreationTemplates() };
+	}
+
+	/**
+	 * RPC creation.templates.bundled：随 CLI 发布的内置设计模板清单。
+	 *
+	 * 形状与 saved templates 不同且必须不同：saved template 是一份创建参数
+	 * 快照（metadata，16KiB 上限），bundled template 是一份视觉形状参考
+	 * （SKILL.md + example.html）。两者共用一个 rail 但不是同一种条目，客户端
+	 * 据 `origin` 区分。这里只给摘要 —— example 动辄几 KB 到几十 KB，走
+	 * 单独的读取路由，让一个只画缩略图的 rail 不必传输全部预览。
+	 */
+	async listBundledTemplates(): Promise<{ templates: BundledTemplateSummary[] }> {
+		return {
+			templates: BUNDLED_TEMPLATES.map(t => ({
+				id: t.name,
+				tab: t.tab,
+				summary: t.summary,
+			})),
+		};
+	}
+
+	/**
+	 * RPC creation.templates.bundledExample：一个内置模板的 example.html。
+	 *
+	 * 未知 id 与文件缺失都返回空串而不是报错：客户端会拿持久化的布局 id 来问，
+	 * 一个陈旧 id 不该把创建面板带崩。
+	 */
+	async readBundledTemplateExample(params: { id?: unknown }): Promise<{ html: string }> {
+		const id = typeof params?.id === "string" ? params.id : "";
+		return { html: readBundledTemplateExample(id) ?? "" };
 	}
 
 	/** RPC creation.templates.save：upsert（带 id 覆盖，缺 id 新建）。 */

@@ -9,6 +9,10 @@ import type { CreationKey } from "../zh-CN/creation.js";
 export const creation = {
 	"creation title": "Create",
 	"creation close": "Close creation panel",
+	// Start-from picker: choose a shape; nothing is created until submit.
+	"creation start from": "Start from",
+	"creation start blank": "Blank start",
+	"creation start blank hint": "No shape — just start",
 	"creation tab prototype": "Prototype",
 	"creation tab live artifact": "Live Artifact",
 	"creation tab deck": "Deck",

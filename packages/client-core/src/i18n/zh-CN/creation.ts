@@ -9,6 +9,10 @@ export const creation = {
 	// 模式页骨架（§2.1:overlay 骨架沿用 M3.1,内容物是模式页空态）
 	"creation title": "创建",
 	"creation close": "关闭创作面板",
+	// 起点选择（opendesign StartFromPicker 形态）：选形状,不立即创建
+	"creation start from": "起点",
+	"creation start blank": "空白起步",
+	"creation start blank hint": "不选形状,直接开始",
 	// 类型 chip 排（§2.3:六面分类法 + 模板 rail + 其他，单选）
 	"creation tab prototype": "原型",
 	"creation tab live artifact": "实况产物",
