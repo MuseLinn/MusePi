@@ -3,6 +3,7 @@ import {
 	activatePanelTab,
 	closePanelTab,
 	closePanelTabs,
+	duplicatePanelTab,
 	EMPTY_PANEL_TAB_STATE,
 	movePanelTabToColumn,
 	type PanelColumn,
@@ -315,5 +316,56 @@ describe("split columns (dsh 0.2.0 two-column parity)", () => {
 		const s = splitBase();
 		const back = restorePanelTabs(JSON.parse(JSON.stringify(serializePanelTabs(s))));
 		expect(back).toEqual(s);
+	});
+});
+
+// M1.12 tab-menu duplicate: same target, an independent instance. The wrinkle
+// under test is identity — a copy that kept the source's id would upsert right
+// over it, so the copy must derive a fresh dedupeKey while everything the
+// surface renders from (surface + target) stays the same.
+describe("duplicatePanelTab", () => {
+	const oneFileTab = (): PanelTabState => upsertPanelTab(state([], null), desc("files", "/a.md"), { now: 1 });
+
+	it("creates an independent instance with the same target, next to its source", () => {
+		const out = duplicatePanelTab(oneFileTab(), "files::/a.md");
+
+		expect(out.tabs).toHaveLength(2);
+		const [source, copy] = out.tabs;
+		expect(copy?.id).not.toBe(source?.id);
+		expect(copy?.target).toBe("/a.md");
+		expect(copy?.surface).toBe("files");
+		// The copy sits right after its source and takes focus, the same reveal
+		// contract a rail open follows.
+		expect(ids(out)).toEqual(["files::/a.md", copy?.id]);
+		expect(out.activeId).toBe(copy?.id);
+	});
+
+	it("never collides while duplicating a copy", () => {
+		const once = duplicatePanelTab(oneFileTab(), "files::/a.md");
+		const copy = once.tabs.find(t => t.id !== "files::/a.md");
+		expect(copy).toBeDefined();
+		const twice = duplicatePanelTab(once, copy!.id);
+
+		expect(twice.tabs.map(t => t.target)).toEqual(["/a.md", "/a.md", "/a.md"]);
+		expect(new Set(twice.tabs.map(t => t.id)).size).toBe(3);
+	});
+
+	it("keeps the copy in the source's column under split", () => {
+		let s = upsertPanelTab(state([], null), desc("files", "/a.md"), { now: 1 });
+		s = upsertPanelTab(s, desc("notes", "n1"), { now: 2, column: 1 });
+		s = { ...s, split: true, columnActive: ["files::/a.md", "notes::n1"] };
+
+		const out = duplicatePanelTab(s, "files::/a.md");
+		const source = out.tabs.find(t => t.id === "files::/a.md");
+		const copy = out.tabs.find(t => t.id !== "files::/a.md" && t.surface === "files");
+		expect(source).toBeDefined();
+		expect(copy).toBeDefined();
+		expect(copy!.column).toBe(source!.column);
+		expect(out.columnActive[copy!.column]).toBe(copy!.id);
+	});
+
+	it("is a no-op for an unknown id", () => {
+		const s = oneFileTab();
+		expect(duplicatePanelTab(s, "nope")).toBe(s);
 	});
 });

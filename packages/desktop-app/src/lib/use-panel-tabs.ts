@@ -12,6 +12,7 @@ import {
 	activatePanelTab,
 	closePanelTab,
 	closePanelTabs,
+	duplicatePanelTab,
 	EMPTY_PANEL_TAB_STATE,
 	movePanelTabToColumn,
 	type PanelColumn,
@@ -30,6 +31,8 @@ export interface UsePanelTabsResult extends PanelTabState {
 	open(descriptor: PanelTabDescriptor, options?: UpsertPanelTabOptions): void;
 	close(id: string): void;
 	closeMany(ids: readonly string[]): void;
+	/** Same target, an independent instance (M1.12 tab-menu parity). */
+	duplicate(id: string): void;
 	activate(id: string): void;
 	reorder(fromId: string, toId: string): void;
 	setDirty(id: string, dirty: boolean): void;
@@ -72,6 +75,7 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 	);
 	const close = useCallback((id: string): void => setState(s => closePanelTab(s, id)), []);
 	const closeMany = useCallback((ids: readonly string[]): void => setState(s => closePanelTabs(s, ids)), []);
+	const duplicate = useCallback((id: string): void => setState(s => duplicatePanelTab(s, id)), []);
 	const activate = useCallback((id: string): void => setState(s => activatePanelTab(s, id)), []);
 	const reorder = useCallback(
 		(fromId: string, toId: string): void =>
@@ -91,5 +95,5 @@ export function usePanelTabs(storageKey: string): UsePanelTabsResult {
 	);
 	const setSplit = useCallback((split: boolean): void => setState(s => setPanelSplit(s, split)), []);
 
-	return { ...state, open, close, closeMany, activate, reorder, setDirty, moveToColumn, setSplit };
+	return { ...state, open, close, closeMany, duplicate, activate, reorder, setDirty, moveToColumn, setSplit };
 }

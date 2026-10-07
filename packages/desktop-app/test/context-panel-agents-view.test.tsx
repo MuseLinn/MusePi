@@ -30,6 +30,7 @@ const agentsPanelTabs: UsePanelTabsResult = {
 	open: () => {},
 	close: () => {},
 	closeMany: () => {},
+	duplicate: () => {},
 	activate: () => {},
 	reorder: () => {},
 	moveToColumn: () => {},

@@ -259,6 +259,58 @@ export function closePanelTabs(state: PanelTabState, ids: readonly string[]): Pa
 	return current;
 }
 
+/**
+ * Duplicate a tab: same surface, same target, an independent instance.
+ *
+ * Identity is the wrinkle. A tab's id is `surface::target` (plus an explicit
+ * dedupeKey when the surface's instances are not 1:1 with targets), so a copy
+ * with the source's identity would upsert right over it. The copy therefore
+ * takes a fresh dedupeKey, which the model already supports for exactly this
+ * shape — instances that share a target string but carry separate state. Two
+ * tabs looking at one file is the point: independent scroll, independent dirty
+ * buffer, one staying put while the other moves.
+ *
+ * The copy lands next to its source in the same column and takes focus, the
+ * same reveal contract a rail open follows. `copyN` walks forward until the
+ * derived id is free, so duplicating a copy cannot collide with either.
+ *
+ * Reference-stable on unknown id.
+ */
+export function duplicatePanelTab(state: PanelTabState, id: string, now = Date.now()): PanelTabState {
+	const source = state.tabs.find(tab => tab.id === id);
+	if (!source) return state;
+
+	const column = source.column;
+	let copyN = 2;
+	let candidateId = `${source.id}#copy${copyN}`;
+	while (state.tabs.some(tab => tab.id === candidateId)) {
+		copyN += 1;
+		candidateId = `${source.id}#copy${copyN}`;
+	}
+
+	const copy: PanelTab = {
+		id: candidateId,
+		surface: source.surface,
+		target: source.target,
+		label: source.label,
+		readOnly: source.readOnly,
+		touchedAt: now,
+		dedupeKey: candidateId,
+		dirty: false,
+		column,
+	};
+
+	// Insert directly after the source within its column slice, so the copy
+	// reads as "another one of these" rather than landing at the strip's end.
+	const srcIdx = state.tabs.findIndex(tab => tab.id === id);
+	const tabs = [...state.tabs.slice(0, srcIdx + 1), copy, ...state.tabs.slice(srcIdx + 1)];
+	const clamped = clampPanelTabs(tabs, PANEL_TABS_MAX_PER_SURFACE, copy.id);
+	const resolvedActive = resolveActivePanelTabId(clamped, copy.id);
+	const columnActive: [string | null, string | null] = [state.columnActive[0], state.columnActive[1]];
+	columnActive[column] = copy.id;
+	return { ...state, tabs: clamped, activeId: resolvedActive, columnActive };
+}
+
 /** Mark a tab's unsaved-content state. Reference-stable when the value is
  *  unchanged — the file editor re-reports dirty on every parent render, so
  *  a fresh array here would loop the re-render it reports from. */

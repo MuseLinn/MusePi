@@ -632,6 +632,7 @@ export const general = {
 	"close other tabs": "关闭其他标签页",
 	"close all tabs": "关闭所有标签页",
 	"close tab": "关闭标签页",
+	"duplicate tab": "复制标签页",
 	// Tab-primary right panel empty state.
 	"start here": "从这里开始",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).

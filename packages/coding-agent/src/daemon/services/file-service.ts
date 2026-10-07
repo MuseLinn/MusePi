@@ -4,7 +4,13 @@ import * as path from "node:path";
 import { FileType, type GlobMatch, listWorkspace } from "@musepi/pi-natives";
 import type { FileIndexService } from "../../file-index";
 import type { FsOpResult } from "../fs-ops";
-import { createWorkspaceDir, deleteWorkspaceEntry, renameWorkspaceEntry, writeWorkspaceFile } from "../fs-ops";
+import {
+	createWorkspaceDir,
+	deleteWorkspaceEntry,
+	renameWorkspaceEntry,
+	resolveInCwd,
+	writeWorkspaceFile,
+} from "../fs-ops";
 import type { DaemonService } from "./types";
 
 /**
@@ -178,10 +184,24 @@ export class FileService implements DaemonService {
 		return deleteWorkspaceEntry(p.cwd, p.path);
 	}
 
-	/** RPC workspace.tree：结构化工作区树（文件面板）——native 单遍扫描 +
-	 *  每目录帽（超帽时保留最新 + 最旧，与 TUI 同策略）。`gitignore: false`
-	 *  连 .gitignore 内的路径也列出（Files 面板开关）；缺省过滤。 */
-	async tree(params: { cwd?: string; maxDepth?: number; perDirLimit?: number | null; gitignore?: boolean }): Promise<{
+	/**
+	 * RPC workspace.tree：结构化工作区树（文件面板）——native 单遍扫描 +
+	 * 每目录帽（超帽时保留最新 + 最旧，与 TUI 同策略）。`gitignore: false`
+	 * 连 .gitignore 内的路径也列出（Files 面板开关）；缺省过滤。
+	 *
+	 * `root`（M1.12 target picker）把扫描起点缩到 cwd 内的一个子目录——
+	 * 标签「+」选目录后，tab 的浏览根就是它而非整个工作区。扫描返回的
+	 * entries 路径**仍相对 cwd**（带子根前缀），FilePane 的预览/外显对账
+	 * 等逻辑不需要第二条路径规则。越出 cwd 的 root 拒绝为空树，与 fs 面板
+	 * 其余部位的越界契约一致（不抛进 JSON-RPC）。
+	 */
+	async tree(params: {
+		cwd?: string;
+		maxDepth?: number;
+		perDirLimit?: number | null;
+		gitignore?: boolean;
+		root?: string;
+	}): Promise<{
 		rootPath: string;
 		truncated: boolean;
 		entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }>;
@@ -190,10 +210,21 @@ export class FileService implements DaemonService {
 		const rootPath = path.resolve(p.cwd || this.#deps.fallbackCwd() || os.homedir());
 		const maxDepth = p.maxDepth ?? 2;
 		const perDirLimit = p.perDirLimit ?? 50;
+		// The sub-root: a cwd-relative directory the scan starts from. Depth
+		// budget stays as asked — a narrower root with the same depth reaches
+		// proportionally deeper content, which is the point of picking one.
+		let scanRoot = rootPath;
+		const relRoot = p.root?.trim().replace(/\\/g, "/") ?? "";
+		const subRoot = relRoot === "" || relRoot === "." ? "" : relRoot.replace(/\/+$/, "");
+		if (subRoot !== "") {
+			const resolved = resolveInCwd(rootPath, subRoot);
+			if (resolved === null) return { rootPath, truncated: false, entries: [] };
+			scanRoot = resolved;
+		}
 		let result: { entries: readonly GlobMatch[]; truncated: boolean };
 		try {
 			const scan = await listWorkspace({
-				path: rootPath,
+				path: scanRoot,
 				maxDepth,
 				hidden: true,
 				gitignore: p.gitignore ?? true,
@@ -209,9 +240,12 @@ export class FileService implements DaemonService {
 		const entries: Array<{ name: string; path: string; isDir: boolean; size: number; mtime: number; depth: number }> =
 			[];
 		for (const entry of result.entries) {
-			const slash = entry.path.lastIndexOf("/");
-			const name = slash === -1 ? entry.path : entry.path.slice(slash + 1);
-			const parentPath = slash === -1 ? "" : entry.path.slice(0, slash);
+			// Scan paths are relative to `scanRoot`; re-root them onto cwd so every
+			// consumer below keeps one path rule.
+			const relToCwd = subRoot === "" ? entry.path : `${subRoot}/${entry.path}`;
+			const slash = relToCwd.lastIndexOf("/");
+			const name = slash === -1 ? relToCwd : relToCwd.slice(slash + 1);
+			const parentPath = slash === -1 ? "" : relToCwd.slice(0, slash);
 			const bucket = byParent.get(parentPath) ?? [];
 			bucket.push({ name, entry, parentPath });
 			byParent.set(parentPath, bucket);

@@ -22,7 +22,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { BROWSER_ASK_SELECTION_SCRIPT, BROWSER_INSPECT_SCRIPT, type PickedElement } from "../lib/browser-scripts";
-import { isElectron, openExternalUrl } from "../lib/electron";
+import { isElectron, openExternalUrl, pickDirectory } from "../lib/electron";
 import { createTab as createBrowserTab } from "../lib/managed-browser-host";
 import { type ModeLabelEntry, resolveModeLabel } from "../lib/mode-label";
 import { type PanelColumn, type PanelTab, panelTabId, tabsInColumn } from "../lib/panel-tabs";
@@ -72,6 +72,25 @@ declare global {
  *  then each shows an honest placeholder with its future scope. (The
  *  terminal lives in the bottom dock now, not here.) Exported so the
  *  right-edge rail (RightRail) renders the same icon set. */
+
+/**
+ * Workspace-relative form of an absolute path, or `null` when it sits outside
+ * the workspace.
+ *
+ * The Files add-picker receives an absolute path from a native dialog, and the
+ * tab it opens carries a workspace-relative target like every other one. A
+ * directory outside the workspace has no such form, and the daemon would scan
+ * nothing for it — so it is refused here rather than opened as an empty tab.
+ */
+function cwdRelative(cwd: string, absolute: string): string | null {
+	const slash = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
+	const norm = absolute.replace(/\\/g, "/");
+	if (norm === slash) return null;
+	const prefix = `${slash}/`;
+	if (!norm.startsWith(prefix)) return null;
+	const rel = norm.slice(prefix.length);
+	return rel === "" ? null : rel;
+}
 function fmtTokens(n: number): string {
 	if (!Number.isFinite(n)) return "0";
 	if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
@@ -811,6 +830,13 @@ export function ContextPanel({
 						// the pane loads whatever file tab is active and
 						// registers tree clicks back into the strip.
 						activeFile={bodyTab?.surface === "files" ? bodyTab.target : null}
+						// M1.12 target picker: a directory tab browses that
+						// directory. A directory instance is opened through the
+						// add menu (which resolves the picked directory) and
+						// carries a dedupeKey; a file instance, opened by a tree
+						// click, does not. That makes the two distinguishable
+						// without stat-ing on every render.
+						browseRoot={bodyTab?.surface === "files" && bodyTab.dedupeKey !== null ? bodyTab.target : null}
 						onOpenFile={(path, name) => panelTabs.open({ surface: "files", target: path, label: name })}
 						onDirty={onFileDirty}
 						// Tree and file previews are sibling tabs:
@@ -1023,6 +1049,15 @@ export function ContextPanel({
 					y={tabMenu.y}
 					items={[
 						{
+							label: t("duplicate tab"),
+							icon: "file-copy-2",
+							// A copy is a second independent instance of the same
+							// target (M1.12): single-instance surfaces (the whole
+							// panel renders one of them) have nothing to duplicate.
+							disabled: panelTabs.tabs.find(tb => tb.id === tabMenu.id)?.surface === "context",
+							onSelect: () => panelTabs.duplicate(tabMenu.id),
+						},
+						{
 							label: t("close tab"),
 							icon: "close",
 							onSelect: () => void closeTabWithGuard(tabMenu.id),
@@ -1060,9 +1095,29 @@ export function ContextPanel({
 							if (s.id === "browser") {
 								panelTabs.open({ surface: "browser" }, { column: addMenu.column });
 								void createBrowserTab("about:blank").catch(() => {});
-							} else {
-								panelTabs.open({ surface: s.id }, { column: addMenu.column });
+								return;
 							}
+							if (s.id === "files") {
+								// M1.12 target picker: Files opens a chosen directory
+								// rather than a target-less placeholder — the picker is
+								// what turns "another Files" from a second copy of the
+								// whole tree into a second thing to look at.
+								const column = addMenu.column;
+								void pickDirectory().then(picked => {
+									if (!picked || !cwd) return;
+									const rel = cwdRelative(cwd, picked);
+									// A directory outside the workspace has no workspace-relative
+									// form, and the daemon would scan nothing for it.
+									if (rel === null) return;
+									const name = rel.split("/").filter(Boolean).at(-1) || t("files");
+									panelTabs.open(
+										{ surface: "files", target: rel, label: name, dedupeKey: `dir:${rel}` },
+										{ column },
+									);
+								});
+								return;
+							}
+							panelTabs.open({ surface: s.id }, { column: addMenu.column });
 						},
 					}))}
 					onClose={() => setAddMenu(null)}

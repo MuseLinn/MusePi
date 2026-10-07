@@ -367,6 +367,7 @@ export function FilePane({
 	cwd,
 	openRequest = null,
 	activeFile = null,
+	browseRoot = null,
 	onOpenFile,
 	onDirty,
 	onShowTree,
@@ -379,6 +380,11 @@ export function FilePane({
 	/** Tab-primary model (docs §3.3.2): file instances live in the PANEL
 	 *  strip. The pane loads whatever file tab the panel activated. */
 	activeFile?: string | null;
+	/** Workspace-relative directory this instance browses (M1.12 target
+	 *  picker). `null`/absent means the whole workspace. Distinct from
+	 *  `activeFile`, which addresses a file to preview — one tab is a directory
+	 *  to browse or a file to preview, never both. */
+	browseRoot?: string | null;
 	/** Tree clicks / previews register back into the panel strip. */
 	onOpenFile?: (path: string, name: string) => void;
 	/** Inline-editor dirty state for the given tree path, mirrored onto the
@@ -452,6 +458,11 @@ export function FilePane({
 		try {
 			const res = await rpc.request<{ entries: WorkspaceEntry[] }>("workspace.tree", {
 				cwd,
+				// M1.12 target picker: a tab opened on a directory browses that
+				// directory instead of the whole workspace. Entry paths stay
+				// workspace-relative either way (daemon re-roots them), so every
+				// path consumer below keeps one rule.
+				...(browseRoot ? { root: browseRoot } : {}),
 				maxDepth: 4,
 				perDirLimit: 80,
 				// Respect .gitignore only while the user has it off: a tree that
@@ -463,7 +474,7 @@ export function FilePane({
 			setError(err instanceof Error ? err.message : String(err));
 			setEntries(null);
 		}
-	}, [rpc, cwd, showIgnored]);
+	}, [rpc, cwd, browseRoot, showIgnored]);
 
 	useEffect(() => {
 		void load();

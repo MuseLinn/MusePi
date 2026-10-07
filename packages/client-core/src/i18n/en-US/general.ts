@@ -642,6 +642,7 @@ export const general = {
 	"close other tabs": "Close other tabs",
 	"close all tabs": "Close all tabs",
 	"close tab": "Close tab",
+	"duplicate tab": "Duplicate tab",
 	// Tab-primary right panel empty state.
 	"start here": "Start here",
 	// Approval card note field (TUI ask-dialog "✎ note" parity).
