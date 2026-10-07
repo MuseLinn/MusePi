@@ -3,6 +3,7 @@ import {
 	BUNDLED_TEMPLATE_NAMES,
 	BUNDLED_TEMPLATES,
 	bundledTemplateForTab,
+	localizeText,
 	readBundledTemplateExample,
 } from "../src/bundled-templates";
 
@@ -34,11 +35,36 @@ describe("bundled design templates", () => {
 		}
 	});
 
-	it("gives each template a summary and a creation tab", () => {
+	it("gives each template a blurb and a creation tab", () => {
 		for (const template of BUNDLED_TEMPLATES) {
-			expect(template.summary.trim().length).toBeGreaterThan(0);
+			expect(template.blurb.en.trim().length).toBeGreaterThan(0);
 			expect(["prototype", "deck", "media", "live-artifact", "other"]).toContain(template.tab);
 		}
+	});
+
+	it("reads both languages from the skill frontmatter, id as the fallback", () => {
+		// The upstream templates carry `en_name`/`zh_name` for the translated
+		// ones; the rest fall back to the id rather than an empty label.
+		for (const template of BUNDLED_TEMPLATES) {
+			expect(template.title.en.trim().length).toBeGreaterThan(0);
+			if (template.title.zh !== null) expect(template.title.zh.trim().length).toBeGreaterThan(0);
+			if (template.blurb.zh !== null) expect(template.blurb.zh.trim().length).toBeGreaterThan(0);
+		}
+		// simple-deck is the bundled template that ships a translation.
+		const deck = BUNDLED_TEMPLATES.find(t => t.name === "simple-deck");
+		expect(deck?.title.zh).toBeTruthy();
+		expect(deck?.blurb.zh).toBeTruthy();
+	});
+
+	it("localizes against the active locale and falls back to English", () => {
+		const deck = BUNDLED_TEMPLATES.find(t => t.name === "simple-deck")!;
+		// A translated template reads in Chinese and in English.
+		expect(deck.title.zh).not.toBeNull();
+		expect(localizeText(deck.title, "zh-CN")).toBe(deck.title.zh!);
+		expect(localizeText(deck.title, "en-US")).toBe(deck.title.en);
+		// An untranslated one is English in every locale rather than blank.
+		const untranslated = BUNDLED_TEMPLATES.find(t => t.title.zh === null)!;
+		expect(localizeText(untranslated.title, "zh-CN")).toBe(untranslated.title.en);
 	});
 
 	it("covers prototype, deck and media — one of each shape class", () => {

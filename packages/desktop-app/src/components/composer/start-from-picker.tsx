@@ -1,6 +1,18 @@
-import { t } from "@musepi/client-core";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { getLocaleSnapshot, subscribeLocale, t } from "@musepi/client-core";
+import { type ReactNode, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { RpcClient } from "../../lib/rpc";
+
+/** One string per language, English as the fallback when a translation is
+ *  absent — a partially translated catalogue still reads. */
+interface LocalizedText {
+	readonly en: string;
+	readonly zh: string | null;
+}
+
+/** Resolve a bilingual field against the active locale. */
+function localize(text: LocalizedText, locale: string): string {
+	return locale.toLowerCase().startsWith("zh") && text.zh ? text.zh : text.en;
+}
 
 /**
  * Start-from picker: which shape this creation begins from.
@@ -31,7 +43,10 @@ interface BundledTemplateSummary {
 	/** Creation surface this shape belongs to; a plain string like the saved
 	 *  template rail's, because the renderer does not import daemon types. */
 	readonly tab: string;
-	readonly summary: string;
+	/** Card label and blurb, each bilingual — the daemon ships both and the
+	 *  renderer resolves against the active locale. */
+	readonly title: LocalizedText;
+	readonly summary: LocalizedText;
 }
 
 export function StartFromPicker({
@@ -67,6 +82,7 @@ export function StartFromPicker({
 	}, [rpc]);
 
 	const pick = useCallback((id: string | null) => onChange(id), [onChange]);
+	const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot);
 
 	return (
 		<div className="gui-creation-startfrom">
@@ -86,7 +102,14 @@ export function StartFromPicker({
 					<span className="gui-creation-startcard-name">{t("creation start blank")}</span>
 				</button>
 				{templates.map(tpl => (
-					<TemplateCard key={tpl.id} rpc={rpc} template={tpl} active={value === tpl.id} onHover={pick} />
+					<TemplateCard
+						key={tpl.id}
+						rpc={rpc}
+						template={tpl}
+						active={value === tpl.id}
+						onPick={pick}
+						locale={locale}
+					/>
 				))}
 			</div>
 		</div>
@@ -94,20 +117,28 @@ export function StartFromPicker({
 }
 
 /** One template's card: the baked example as its thumbnail, loaded when the
- *  card is hovered or selected. */
+ *  card is hovered or selected.
+ *
+ *  Hovering previews; it does not select. Reading a row of shapes means moving
+ *  across it, and a row that commits as the pointer passes over it makes
+ *  comparing two templates impossible — the person cannot look at the second
+ *  one without losing the first. Selection is the click, and only the click.
+ */
 function TemplateCard({
 	rpc,
 	template,
 	active,
-	onHover,
+	onPick,
+	locale,
 }: {
 	rpc: RpcClient;
 	template: BundledTemplateSummary;
 	/** Selected — its preview stays loaded even after the pointer leaves. */
 	active: boolean;
-	/** Hovering a card previews it too, so the choice can be made by looking
-	 *  rather than by clicking through each one. */
-	onHover(id: string): void;
+	/** The row's selection setter. Called from the click only. */
+	onPick(id: string | null): void;
+	/** Active locale, so the card's label follows a language switch. */
+	locale: string;
 }): ReactNode {
 	const [wantPreview, setWantPreview] = useState(false);
 	const [html, setHtml] = useState<string | null>(null);
@@ -133,24 +164,20 @@ function TemplateCard({
 	}, [rpc, template.id, wanted, html]);
 
 	const on = active;
+	const title = localize(template.title, locale);
+	const blurb = localize(template.summary, locale);
 	return (
 		<button
 			type="button"
 			role="radio"
 			aria-checked={on}
 			className={`gui-creation-startcard gui-creation-startcard--${template.tab}${on ? " gui-creation-startcard--on" : ""}`}
-			title={template.summary}
-			onMouseEnter={() => {
-				setWantPreview(true);
-				onHover(template.id);
-			}}
+			title={blurb}
+			onMouseEnter={() => setWantPreview(true)}
 			onMouseLeave={() => setWantPreview(false)}
-			onFocus={() => {
-				setWantPreview(true);
-				onHover(template.id);
-			}}
+			onFocus={() => setWantPreview(true)}
 			onBlur={() => setWantPreview(false)}
-			onClick={() => onHover(active ? "" : template.id)}
+			onClick={() => onPick(active ? null : template.id)}
 		>
 			<span className="gui-creation-startcard-thumb" aria-hidden="true">
 				{html ? (
@@ -160,7 +187,7 @@ function TemplateCard({
 					// host must not try to drive it.
 					<iframe
 						className="gui-creation-startcard-frame"
-						title={template.summary}
+						title={blurb}
 						sandbox="allow-scripts"
 						srcDoc={html}
 						// Decks read their own width, so a fixed 0 width would hide
@@ -171,7 +198,7 @@ function TemplateCard({
 					template.id.charAt(0).toUpperCase()
 				)}
 			</span>
-			<span className="gui-creation-startcard-name">{template.id}</span>
+			<span className="gui-creation-startcard-name">{title}</span>
 		</button>
 	);
 }

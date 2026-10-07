@@ -12,14 +12,18 @@ import {
 } from "../creation";
 import type { DaemonService } from "./types";
 
-/** One bundled design template as the rail sees it: no preview body. */
+/** One bundled design template as the rail sees it: no preview body.
+ *  Both strings are bilingual rather than pre-resolved — the locale lives in
+ *  the renderer, and resolving here would mean the daemon has to know it. */
 interface BundledTemplateSummary {
 	/** Stable id — rides into project metadata as `skillId`. */
 	id: string;
 	/** Creation surface this shape belongs to. */
 	tab: CreationTemplateTab;
-	/** One-line blurb for the card. */
-	summary: string;
+	/** Card label, per language. */
+	title: { en: string; zh: string | null };
+	/** One-line blurb, per language. */
+	summary: { en: string; zh: string | null };
 }
 
 /**
@@ -79,7 +83,8 @@ export class CreationService implements DaemonService {
 			templates: BUNDLED_TEMPLATES.map(t => ({
 				id: t.name,
 				tab: t.tab,
-				summary: t.summary,
+				title: t.title,
+				summary: t.blurb,
 			})),
 		};
 	}

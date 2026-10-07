@@ -21,6 +21,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parseFrontmatter } from "@musepi/pi-utils";
 import type { CreationTemplateTab } from "../daemon/creation";
 import bundledImagePosterExamplePath from "./image-poster/example.html" with { type: "file" };
 // bun-types claims `*.html` as HTMLBundle, so this repo imports it as a file
@@ -49,7 +50,7 @@ function resolveAssetPath(assetPath: string): string {
  * under the prototype tab, and the rail already filters by it.
  */
 export interface BundledTemplateDef {
-	/** Stable id — also the rail's key. */
+	/** Stable id — also the rail's key, and the `skillId` in project metadata. */
 	readonly name: string;
 	/** Surface this shape renders into. */
 	readonly tab: CreationTemplateTab;
@@ -61,33 +62,75 @@ export interface BundledTemplateDef {
 	 * metadata allows, and a rail that never opens a card should not pay for it.
 	 */
 	readonly examplePath: string;
-	/** Short blurb for the rail card. */
-	readonly summary: string;
+	/**
+	 * What the card says, in both languages.
+	 *
+	 * The blurb comes from the template's own SKILL.md rather than from a string
+	 * written here: a summary in this file drifts from the skill it describes the
+	 * moment either is edited, and the upstream templates already carry the
+	 * Chinese fields for the ones that have been translated. A template with no
+	 * translation falls back to English rather than losing its label.
+	 */
+	readonly blurb: LocalizedText;
+	/** Display name, also from the frontmatter (`name` / `zh_name`). */
+	readonly title: LocalizedText;
+}
+
+/** One string per language, with English as the fallback when a translation is
+ *  absent — a partially translated catalogue still reads, rather than showing
+ *  an empty card. */
+export interface LocalizedText {
+	readonly en: string;
+	readonly zh: string | null;
+}
+
+/** Resolve a bilingual field against the active locale. */
+export function localizeText(text: LocalizedText, locale: string): string {
+	return locale.toLowerCase().startsWith("zh") && text.zh ? text.zh : text.en;
+}
+
+/** Frontmatter → bilingual field, tolerating a missing translation. */
+function localized(fm: Record<string, unknown>, enKey: string, zhKey: string): LocalizedText {
+	const en = typeof fm[enKey] === "string" ? (fm[enKey] as string).trim() : "";
+	const zh = typeof fm[zhKey] === "string" ? (fm[zhKey] as string).trim() : "";
+	return { en, zh: zh === "" ? null : zh };
+}
+
+function build(name: string, tab: CreationTemplateTab, skill: string, examplePath: string): BundledTemplateDef {
+	const fm = parseFrontmatter(skill).frontmatter as Record<string, unknown>;
+	const title = localized(fm, "en_name", "zh_name");
+	// `description` is the skill's own summary and the only one most templates
+	// carry; `en_description` exists on the translated ones as an explicit
+	// English side. Read either, so a template is never left without a blurb.
+	const blurb = {
+		en:
+			(typeof fm.en_description === "string" && fm.en_description.trim()) ||
+			(typeof fm.description === "string" ? fm.description.trim() : ""),
+		zh: typeof fm.zh_description === "string" && fm.zh_description.trim() ? fm.zh_description.trim() : null,
+	};
+	// A skill's description is a paragraph; a rail card's blurb is a line. Trim to
+	// the first sentence so the tooltip says what the shape is rather than how
+	// the skill works — the agent reads the whole thing anyway.
+	const firstSentence = (text: string): string => {
+		const flat = text.replace(/\s+/g, " ").trim();
+		const stop = flat.search(/[.!?。！？](\s|$)/);
+		return stop === -1 ? flat : flat.slice(0, stop + 1);
+	};
+	return {
+		name,
+		tab,
+		skill,
+		examplePath,
+		title: { en: title.en || name, zh: title.zh },
+		blurb: { en: firstSentence(blurb.en), zh: blurb.zh ? firstSentence(blurb.zh) : null },
+	};
 }
 
 /** Bundled design templates, in the order the rail lists them. */
 export const BUNDLED_TEMPLATES: readonly BundledTemplateDef[] = [
-	{
-		name: "web-prototype",
-		tab: "prototype",
-		skill: bundledWebPrototypeSkill,
-		examplePath: bundledWebPrototypeExamplePath as unknown as string,
-		summary: "Single self-contained HTML page — landing, marketing, docs or SaaS.",
-	},
-	{
-		name: "simple-deck",
-		tab: "deck",
-		skill: bundledSimpleDeckSkill,
-		examplePath: bundledSimpleDeckExamplePath as unknown as string,
-		summary: "Decision-grade operating-review deck: growth, burn, path to sustainability.",
-	},
-	{
-		name: "image-poster",
-		tab: "media",
-		skill: bundledImagePosterSkill,
-		examplePath: bundledImagePosterExamplePath as unknown as string,
-		summary: "Single-image poster or key art — provider-agnostic.",
-	},
+	build("web-prototype", "prototype", bundledWebPrototypeSkill, bundledWebPrototypeExamplePath as unknown as string),
+	build("simple-deck", "deck", bundledSimpleDeckSkill, bundledSimpleDeckExamplePath as unknown as string),
+	build("image-poster", "media", bundledImagePosterSkill, bundledImagePosterExamplePath as unknown as string),
 ];
 
 /** Bundled template ids (stable, for the rail's keys and tests). */
