@@ -69,8 +69,18 @@ export interface DshPatchRow {
 /** The rows one patch file inserts, and what could not be read. */
 export interface DshPatchDocument {
 	readonly rows: readonly DshPatchRow[];
-	/** Entries skipped because they were not a readable insert. */
-	readonly skipped: readonly { readonly index: number; readonly reason: string }[];
+	/**
+	 * Entries skipped because they were not a readable insert.
+	 *
+	 * `droppedExpressions` is how many `!!js` values the skipped entry carried —
+	 * data discarded with the entry rather than translated, reported so that a
+	 * caller listing what was not taken says what was lost with it.
+	 */
+	readonly skipped: readonly {
+		readonly index: number;
+		readonly reason: string;
+		readonly droppedExpressions: number;
+	}[];
 }
 
 /**
@@ -150,10 +160,29 @@ function revive(value: unknown): DshValue {
 }
 
 /**
+ * Count the tagged expressions inside a value.
+ *
+ * A skipped entry's expressions are dropped with it, and dropping them silently
+ * means a file whose non-insert half carried all of its dynamic configuration
+ * parses "cleanly" while half of what it said was lost. The count is what turns
+ * that from a silent omission into a number the caller can report.
+ */
+function countTagged(value: unknown): number {
+	if (value === null || value === undefined) return 0;
+	if (typeof value === "object" && (value as { kind?: string }).kind === "js-expr") return 1;
+	if (Array.isArray(value)) return value.reduce((sum, item) => sum + countTagged(item), 0);
+	if (typeof value === "object") return Object.values(value).reduce((sum, item) => sum + countTagged(item), 0);
+	return 0;
+}
+
+/**
  * Parse a DSH patch file into the rows it inserts.
  *
  * @param source - the file's contents.
- * @returns the readable rows, and a note for every entry that was not one.
+ * @returns the readable rows, and a note for every entry that was not one —
+ * including how many `!!js` expressions the skipped entry carried, since those
+ * are dropped with it and a caller that reports only "skipped" would be hiding
+ * the interesting part.
  * @throws {Error} when the file is not parseable at all, which is a corrupt file
  * rather than a shape this reader does not handle.
  */
@@ -165,33 +194,39 @@ export function parseDshPatch(source: string): DshPatchDocument {
 	}
 
 	const rows: DshPatchRow[] = [];
-	const skipped: { index: number; reason: string }[] = [];
+	const skipped: { index: number; reason: string; droppedExpressions: number }[] = [];
 	parsed.forEach((entry: unknown, index: number) => {
 		if (entry === null || typeof entry !== "object") {
-			skipped.push({ index, reason: "not a patch entry object" });
+			skipped.push({ index, reason: "not a patch entry object", droppedExpressions: 0 });
 			return;
 		}
 		const record = entry as Record<string, unknown>;
 		const insert = record.insert;
 		if (!Array.isArray(insert)) {
 			// Every other form DSH supports targets rows by id, which needs the
-			// layer stack this host does not build.
+			// layer stack this host does not build. Its tagged expressions are
+			// dropped with it, so the count travels with the skip.
 			skipped.push({
 				index,
 				reason: record.id === undefined ? "no insert list and no id to target" : "id-targeted patch",
+				droppedExpressions: countTagged(revive(record)),
 			});
 			return;
 		}
 		for (const raw of insert as unknown[]) {
 			if (raw === null || typeof raw !== "object") {
-				skipped.push({ index, reason: "insert entry is not an object" });
+				skipped.push({ index, reason: "insert entry is not an object", droppedExpressions: 0 });
 				continue;
 			}
 			const row = raw as Record<string, unknown>;
 			const id = typeof row.id === "string" ? row.id : undefined;
 			const name = typeof row.name === "string" ? row.name : undefined;
 			if (id === undefined || name === undefined) {
-				skipped.push({ index, reason: "insert entry is missing id or name" });
+				skipped.push({
+					index,
+					reason: "insert entry is missing id or name",
+					droppedExpressions: countTagged(revive(raw)),
+				});
 				continue;
 			}
 			rows.push({

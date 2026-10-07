@@ -136,6 +136,29 @@ describe("parseDshPatch", () => {
 
 		expect(rows).toEqual([]);
 		expect(skipped.map(s => s.reason)).toEqual(["id-targeted patch", "id-targeted patch"]);
+		expect(skipped.map(s => s.droppedExpressions)).toEqual([0, 0]);
+	});
+
+	it("counts the tagged expressions a skipped id-targeted patch carried", () => {
+		// The real headless bundle patches a row by id, and its config values are
+		// all tagged — they read the loader context that provides the task. Those
+		// expressions are dropped with the entry, and dropping them silently would
+		// make a file whose non-insert half carried all of its dynamic
+		// configuration parse "cleanly" while half of what it said was lost. The
+		// count is the caller's way to say what was not taken.
+		const source = [
+			"- id: headless-runner",
+			"  name: '@deepseek-ai/dsh-headless'",
+			"  config:",
+			"    task: !!js ctx.headlessStartup.task",
+			"    sessionId: !!js ctx.headlessStartup.sessionId",
+			"    json: !!js ctx.headlessStartup.json",
+		].join("\n");
+
+		const { rows, skipped } = parseDshPatch(source);
+
+		expect(rows).toEqual([]);
+		expect(skipped).toEqual([{ index: 0, reason: "id-targeted patch", droppedExpressions: 3 }]);
 	});
 
 	it("reads a group row without flattening the rows inside it", () => {
