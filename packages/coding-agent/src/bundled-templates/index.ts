@@ -33,14 +33,20 @@ import { parseFrontmatter } from "@musepi/pi-utils";
 import type { CreationTemplateTab } from "../daemon/creation";
 import bundledBlogPostExamplePath from "./blog-post/example.html" with { type: "file" };
 import bundledBlogPostSkill from "./blog-post/SKILL.md" with { type: "text" };
+import bundledClinicalCaseReportExamplePath from "./clinical-case-report/example.html" with { type: "file" };
+import bundledClinicalCaseReportSkill from "./clinical-case-report/SKILL.md" with { type: "text" };
 import bundledDashboardExamplePath from "./dashboard/example.html" with { type: "file" };
 import bundledDashboardSkill from "./dashboard/SKILL.md" with { type: "text" };
 import bundledDocsPageExamplePath from "./docs-page/example.html" with { type: "file" };
 import bundledDocsPageSkill from "./docs-page/SKILL.md" with { type: "text" };
 import bundledEmailMarketingExamplePath from "./email-marketing/example.html" with { type: "file" };
 import bundledEmailMarketingSkill from "./email-marketing/SKILL.md" with { type: "text" };
+import bundledEngRunbookExamplePath from "./eng-runbook/example.html" with { type: "file" };
+import bundledEngRunbookSkill from "./eng-runbook/SKILL.md" with { type: "text" };
 import bundledFinanceReportExamplePath from "./finance-report/example.html" with { type: "file" };
 import bundledFinanceReportSkill from "./finance-report/SKILL.md" with { type: "text" };
+import bundledHrOnboardingExamplePath from "./hr-onboarding/example.html" with { type: "file" };
+import bundledHrOnboardingSkill from "./hr-onboarding/SKILL.md" with { type: "text" };
 import bundledImagePosterExamplePath from "./image-poster/example.html" with { type: "file" };
 // bun-types claims `*.html` as HTMLBundle, so this repo imports it as a file
 // and reads it at call time (same shape as src/export/html) rather than
@@ -52,8 +58,18 @@ import bundledKamiDeckExamplePath from "./kami-deck/example.html" with { type: "
 import bundledKamiDeckSkill from "./kami-deck/SKILL.md" with { type: "text" };
 import bundledKanbanBoardExamplePath from "./kanban-board/example.html" with { type: "file" };
 import bundledKanbanBoardSkill from "./kanban-board/SKILL.md" with { type: "text" };
+import bundledLiveDashboardExamplePath from "./live-dashboard/example.html" with { type: "file" };
+import bundledLiveDashboardSkill from "./live-dashboard/SKILL.md" with { type: "text" };
+import bundledMagazinePosterExamplePath from "./magazine-poster/example.html" with { type: "file" };
+import bundledMagazinePosterSkill from "./magazine-poster/SKILL.md" with { type: "text" };
 import bundledMeetingNotesExamplePath from "./meeting-notes/example.html" with { type: "file" };
 import bundledMeetingNotesSkill from "./meeting-notes/SKILL.md" with { type: "text" };
+import bundledMobileAppExamplePath from "./mobile-app/example.html" with { type: "file" };
+import bundledMobileAppSkill from "./mobile-app/SKILL.md" with { type: "text" };
+import bundledMobileOnboardingExamplePath from "./mobile-onboarding/example.html" with { type: "file" };
+import bundledMobileOnboardingSkill from "./mobile-onboarding/SKILL.md" with { type: "text" };
+import bundledMotionFramesExamplePath from "./motion-frames/example.html" with { type: "file" };
+import bundledMotionFramesSkill from "./motion-frames/SKILL.md" with { type: "text" };
 import bundledPmSpecExamplePath from "./pm-spec/example.html" with { type: "file" };
 import bundledPmSpecSkill from "./pm-spec/SKILL.md" with { type: "text" };
 import bundledPricingPageExamplePath from "./pricing-page/example.html" with { type: "file" };
@@ -62,8 +78,14 @@ import bundledSaasLandingExamplePath from "./saas-landing/example.html" with { t
 import bundledSaasLandingSkill from "./saas-landing/SKILL.md" with { type: "text" };
 import bundledSimpleDeckExamplePath from "./simple-deck/example.html" with { type: "file" };
 import bundledSimpleDeckSkill from "./simple-deck/SKILL.md" with { type: "text" };
+import bundledTeamOkrsExamplePath from "./team-okrs/example.html" with { type: "file" };
+import bundledTeamOkrsSkill from "./team-okrs/SKILL.md" with { type: "text" };
 import bundledWebPrototypeExamplePath from "./web-prototype/example.html" with { type: "file" };
 import bundledWebPrototypeSkill from "./web-prototype/SKILL.md" with { type: "text" };
+import bundledWebglExperienceExamplePath from "./webgl-experience/example.html" with { type: "file" };
+import bundledWebglExperienceSkill from "./webgl-experience/SKILL.md" with { type: "text" };
+import bundledWorkerVisualizerExamplePath from "./worker-visualizer/example.html" with { type: "file" };
+import bundledWorkerVisualizerSkill from "./worker-visualizer/SKILL.md" with { type: "text" };
 
 /**
  * Resolve a Bun file-loader value without parsing Windows drive letters as URL
@@ -189,13 +211,56 @@ export const BUNDLED_TEMPLATES: readonly BundledTemplateDef[] = [
 		bundledEmailMarketingSkill,
 		bundledEmailMarketingExamplePath as unknown as string,
 	),
+	build(
+		"magazine-poster",
+		"prototype",
+		bundledMagazinePosterSkill,
+		bundledMagazinePosterExamplePath as unknown as string,
+	),
+	build("motion-frames", "prototype", bundledMotionFramesSkill, bundledMotionFramesExamplePath as unknown as string),
 	// Product and engineering documents.
 	build("docs-page", "prototype", bundledDocsPageSkill, bundledDocsPageExamplePath as unknown as string),
 	build("pm-spec", "prototype", bundledPmSpecSkill, bundledPmSpecExamplePath as unknown as string),
+	build("team-okrs", "prototype", bundledTeamOkrsSkill, bundledTeamOkrsExamplePath as unknown as string),
+	build("eng-runbook", "prototype", bundledEngRunbookSkill, bundledEngRunbookExamplePath as unknown as string),
+	build("hr-onboarding", "prototype", bundledHrOnboardingSkill, bundledHrOnboardingExamplePath as unknown as string),
+	build(
+		"clinical-case-report",
+		"prototype",
+		bundledClinicalCaseReportSkill,
+		bundledClinicalCaseReportExamplePath as unknown as string,
+	),
 	// Working surfaces: the shapes a person drives a team from.
 	build("dashboard", "prototype", bundledDashboardSkill, bundledDashboardExamplePath as unknown as string),
+	build(
+		"live-dashboard",
+		"prototype",
+		bundledLiveDashboardSkill,
+		bundledLiveDashboardExamplePath as unknown as string,
+	),
 	build("kanban-board", "prototype", bundledKanbanBoardSkill, bundledKanbanBoardExamplePath as unknown as string),
 	build("meeting-notes", "prototype", bundledMeetingNotesSkill, bundledMeetingNotesExamplePath as unknown as string),
+	// Mobile: a phone frame rather than a page.
+	build("mobile-app", "prototype", bundledMobileAppSkill, bundledMobileAppExamplePath as unknown as string),
+	build(
+		"mobile-onboarding",
+		"prototype",
+		bundledMobileOnboardingSkill,
+		bundledMobileOnboardingExamplePath as unknown as string,
+	),
+	// Motion and 3d: the shapes that have to run rather than print.
+	build(
+		"webgl-experience",
+		"prototype",
+		bundledWebglExperienceSkill,
+		bundledWebglExperienceExamplePath as unknown as string,
+	),
+	build(
+		"worker-visualizer",
+		"prototype",
+		bundledWorkerVisualizerSkill,
+		bundledWorkerVisualizerExamplePath as unknown as string,
+	),
 	// Documents with money or a sender on them.
 	build("invoice", "prototype", bundledInvoiceSkill, bundledInvoiceExamplePath as unknown as string),
 	build(
