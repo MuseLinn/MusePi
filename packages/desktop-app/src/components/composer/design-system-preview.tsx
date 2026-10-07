@@ -1,4 +1,5 @@
 import { t } from "@musepi/client-core";
+import { resolveBorder, resolveTokenOrHost } from "@musepi/collab-proto/design-tokens";
 import type { CSSProperties, ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useTwoPhaseEnter } from "../../lib/use-two-phase-enter";
@@ -44,18 +45,25 @@ export function DesignSystemSwatchBar({
 }
 
 /**
- * tokens → 迷你 mock 的内联样式：底/文/圆角/描边取体系 token，缺项
- * 回落宿主 GUI token——离线兜底数据与扩展注册体系都能画出一个
- * 「像它」的小卡片（§3.3）。
+ * tokens → 迷你 mock 的内联样式。
+ *
+ * The alias chains and the host fallbacks come from the shared token vocabulary
+ * (`presets/design-tokens`), not from lookups written here. That file is the
+ * one place that knows `--bg` and `--glass-bg` mean the same slot and that a
+ * missing border means "draw nothing" rather than "draw grey" — a mock that
+ * guessed it locally drew five identical cards whenever a system used a key
+ * this component had not heard of, which reads as the design system being
+ * ignored rather than the key being unrecognised.
  */
 function miniSurfaceStyle(entry: DesignSystemEntry): CSSProperties {
-	const tok = entry.tokens;
 	return {
-		background: tok["--bg"] ?? tok["--glass-bg"] ?? "var(--color-surface)",
-		color: tok["--fg"] ?? "var(--color-text)",
-		borderRadius: tok["--radius"] ?? tok["--radius-2xl"] ?? "6px",
-		border: tok["--border"]?.startsWith("oklch") ? `1px solid ${tok["--border"]}` : undefined,
-		fontFamily: tok["--font-ui"],
+		background: resolveTokenOrHost(entry.tokens, "background"),
+		color: resolveTokenOrHost(entry.tokens, "foreground"),
+		borderRadius: resolveTokenOrHost(entry.tokens, "radius"),
+		// `undefined` both when the design system chose no border and when the
+		// slot has no host value, so the property is omitted either way.
+		border: resolveBorder(entry.tokens),
+		fontFamily: resolveTokenOrHost(entry.tokens, "font"),
 	};
 }
 
@@ -63,7 +71,7 @@ function miniSurfaceStyle(entry: DesignSystemEntry): CSSProperties {
  *  的迷你按钮——浮卡里的「这个体系长这样」示意。 */
 export function DesignSystemMiniMock({ entry }: { entry: DesignSystemEntry }): ReactNode {
 	const accent = entry.swatches[5] ?? entry.swatches[0] ?? "var(--color-accent)";
-	const fg = entry.tokens["--fg"] ?? "#fff";
+	const fg = resolveTokenOrHost(entry.tokens, "foreground") ?? "#fff";
 	return (
 		<div className="gui-ds-mock" style={miniSurfaceStyle(entry)} aria-hidden="true">
 			<div className="gui-ds-mock-lines">

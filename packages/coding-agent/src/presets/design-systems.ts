@@ -85,6 +85,9 @@ export const BUILTIN_DESIGN_SYSTEMS: readonly DesignSystemConfig[] = [
 		description: "Editorial — 衬线标题、强字阶对比、分栏与引文排版，像纸质杂志的页面节奏。",
 		swatches: ["#18181b", "#3f3f46", "#a1a1aa", "#e4e4e7", "#fafaf9", "#b45309"],
 		tokens: {
+			// The brief calls for a paper-white page; without a surface token the
+			// preview card renders in the host's own and stops looking editorial.
+			"--bg": "#fafaf9",
 			"--font-ui": "Georgia, 'Times New Roman', serif",
 			"--fg": "oklch(0.2 0.01 60)",
 			"--border": "oklch(0 0 0 / 12%)",
