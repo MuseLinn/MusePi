@@ -80,6 +80,7 @@
 		"packages/coding-agent/src/extensibility/loader-utils.ts": 1,
 		"packages/coding-agent/src/extensibility/plugins/capability-report.ts": 1,
 		"packages/coding-agent/src/extensibility/plugins/compatibility-store.ts": 6,
+		"packages/coding-agent/src/extensibility/plugins/dsh-bundle.ts": 6,
 		"packages/coding-agent/src/extensibility/plugins/dsh-name-resolution.ts": 5,
 		"packages/coding-agent/src/extensibility/plugins/dsh-patch.ts": 7,
 		"packages/coding-agent/src/extensibility/plugins/marketplace/manager.ts": 1,
