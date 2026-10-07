@@ -413,11 +413,15 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 				// `coerceToolResult` in agent-loop), so replacement failure content reaches
 				// the model while the call remains an error — the original exception text is
 				// no longer forced through, which previously discarded the replacement.
+				//
+				// The flag is written unconditionally, matching the return above: the
+				// event type declares `isError` required, and a conditional spread here
+				// could produce an object without it while the type said it was there.
 				return {
 					content: modifiedContent,
 					details: modifiedDetails,
 					providerMetadata: result.providerMetadata,
-					...(effectiveError ? { isError: true } : {}),
+					isError: effectiveError,
 				};
 			}
 		}
