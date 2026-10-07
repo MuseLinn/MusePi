@@ -2,6 +2,9 @@
 
 export * from "./compatibility-store";
 export * from "./doctor";
+export * from "./dsh-bundle";
+export * from "./dsh-name-resolution";
+export * from "./dsh-patch";
 export * from "./git-url";
 export * from "./loader";
 export * from "./manager";

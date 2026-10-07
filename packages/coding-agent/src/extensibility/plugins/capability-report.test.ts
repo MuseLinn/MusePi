@@ -37,6 +37,68 @@ async function writeFixture(files: Record<string, string>): Promise<{ dir: strin
 }
 
 describe("describePluginCapability", () => {
+	it("reports a package that declares a bundle alongside its own verdict", async () => {
+		// The two facts are independent: a bundle's rows name plugins this host
+		// does not have, which says nothing about whether this package loads.
+		// Folding the row report into the verdict would report a healthy package
+		// as broken.
+		const { plugin } = await writeFixture({
+			"package.json": JSON.stringify({
+				name: "acme-bundle",
+				version: "1.0.0",
+				musepi: { extensions: ["index.ts"] },
+				dsh: { bundle: { patch: "./rows.yml" } },
+			}),
+			"index.ts": "export default () => {}",
+			"rows.yml":
+				"- insert:\n    - id: tool\n      name: '@deepseek-ai/dsh-terminal-bash'\n      disabled: !!js process.platform === 'win32'\n",
+		});
+
+		const report = await describePluginCapability(plugin);
+		expect(report.verdict).toBe("runnable");
+		expect(report.bundle?.rows).toBe(1);
+		// Named, not guessed: the report has to say which packages to install.
+		expect(report.bundle?.unresolvedNames).toEqual(["@deepseek-ai/dsh-terminal-bash"]);
+		expect(report.bundle?.unevaluatedExpressions).toBe(1);
+		// And the sentence a person reads has to carry both halves.
+		expect(report.summary).toContain("1 行");
+		expect(report.summary).toContain("未安装");
+	});
+
+	it("leaves the report alone for a package that declares no bundle", async () => {
+		const { plugin } = await writeFixture({
+			"package.json": JSON.stringify({
+				name: "acme-plugin",
+				version: "1.0.0",
+				musepi: { extensions: ["index.ts"] },
+			}),
+			"index.ts": "export default () => {}",
+		});
+
+		const report = await describePluginCapability(plugin);
+		expect(report.bundle).toBeUndefined();
+		expect(report.summary).toBe("安装完成，此插件可在当前底座运行。");
+	});
+
+	it("fails a bundle whose declared patch file is missing", async () => {
+		// A package that points at a file it did not ship is broken, not
+		// merely empty — the difference between "contributes nothing" and
+		// "cannot be read" is the whole point of the report.
+		const { plugin } = await writeFixture({
+			"package.json": JSON.stringify({
+				name: "acme-bundle",
+				version: "1.0.0",
+				musepi: { extensions: ["index.ts"] },
+				dsh: { bundle: { patch: "./absent.yml" } },
+			}),
+			"index.ts": "export default () => {}",
+		});
+
+		const report = await describePluginCapability(plugin);
+		expect(report.verdict).toBe("incompatible");
+		expect(report.missing.some(entry => entry.includes("absent.yml"))).toBe(true);
+	});
+
 	it("reports a plugin whose dependencies this host provides as runnable", async () => {
 		const { plugin } = await writeFixture({
 			"package.json": JSON.stringify({

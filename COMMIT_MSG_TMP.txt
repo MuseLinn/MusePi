@@ -1,0 +1,30 @@
+feat(plugins): read what a bundle package declares when it is installed
+
+Two modules already existed for this and nothing called them: a patch reader and
+a package-name resolver, each imported only by its own test and neither exported
+from the plugins barrel. They now have the caller they were written for.
+
+Installing a bundle — a package that contributes rows rather than registering a
+plugin — used to look exactly like installing an ordinary plugin. The report
+now says what came with it: how many rows it declares, which packages those
+rows name that are not here, and how many of its conditions this host will not
+evaluate. A bundle that installs clean and contributes nothing used to read as
+the host being broken.
+
+Still no patch is applied, no !!js expression is run, and no layer stack is
+built. The refusal in the patch reader stands: a bundle is a package this host
+installed, and a value it cannot translate is reported rather than executed.
+
+Two report fields that are independent of the verdict: a bundle's rows naming
+plugins this host lacks says nothing about whether the package loads, so it
+never moves the verdict. A declared patch file that cannot be read is the
+exception — that is the package shipping something unreadable.
+
+The nesting here is the reason the fixture is copied from a real preset file
+rather than written by hand. Rows nest three deep — a preset row, its plugins
+array, a group row, that group's members — and four separate bugs only showed up
+once the fixture had that shape: nested groups vanishing, an unbounded walk that
+re-entered the arrays it collected, a member counted twice because two paths
+reached it, and expressions counted once per ancestor.
+
+13 new contract tests; the plugin suite is 127 passing.

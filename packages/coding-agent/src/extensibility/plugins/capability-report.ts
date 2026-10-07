@@ -29,6 +29,7 @@
 import * as path from "node:path";
 import { EXTENSION_SLOT_DECLARATION } from "@musepi/collab-proto/extension-slots";
 import { logger } from "@musepi/pi-utils";
+import { describeDshBundle } from "./dsh-bundle";
 import type { InstalledPlugin } from "./types";
 
 /** How a plugin fared against this host's runtime. */
@@ -46,8 +47,30 @@ export interface PluginCapabilityReport {
 	readonly verdict: PluginCapabilityVerdict;
 	readonly missing: readonly string[];
 	readonly unhostedSlots: readonly string[];
+	/**
+	 * What the package declares as a bundle, when it declares one.
+	 *
+	 * Absent for an ordinary plugin. A bundle is the other distribution shape —
+	 * a package that contributes rows rather than registering a plugin — so a
+	 * person installing one needs to see what came with it: the rows it would
+	 * mount, which of the plugins they name are not here, and how many of its
+	 * conditions this host will not evaluate. Without this a bundle installs
+	 * clean and contributes nothing, which reads as the host being broken.
+	 */
+	readonly bundle?: PluginCapabilityBundle;
 	/** One sentence in the person’s language, ready to render. */
 	readonly summary: string;
+}
+
+/** A package's bundle declaration, as far as a static read can account for it. */
+export interface PluginCapabilityBundle {
+	readonly rows: number;
+	/** Package names the rows name, deduplicated, that are not installed here. */
+	readonly unresolvedNames: readonly string[];
+	/** `!!js` conditions read and not run, across every patch file. */
+	readonly unevaluatedExpressions: number;
+	/** Patch files the manifest named that could not be read. */
+	readonly unreadable: readonly string[];
 }
 
 /**
@@ -187,14 +210,35 @@ export async function describePluginCapability(plugin: InstalledPlugin): Promise
 		}
 	}
 
-	const verdict: PluginCapabilityVerdict =
+	// A bundle contributes rows rather than registering a plugin, so its rows
+	// are read separately and never change the verdict on their own: the package
+	// may well load, and what the bundle answers is what it would add, not
+	// whether it runs. A patch file that could not be read is the exception —
+	// that is the package shipping something unreadable, which belongs in
+	// `missing` and does make it incompatible.
+	const inventory = await describeDshBundle(plugin.path);
+	if (inventory.isBundle) {
+		for (const file of inventory.unreadable) missing.push(`bundle patch ${file.path}`);
+	}
+	const bundle: PluginCapabilityBundle | undefined = inventory.isBundle
+		? {
+				rows: inventory.rows.length,
+				unresolvedNames: [
+					...new Set(inventory.rows.filter(row => row.resolution.status !== "resolved").map(row => row.name)),
+				],
+				unevaluatedExpressions: inventory.unevaluatedExpressions,
+				unreadable: inventory.unreadable.map(file => file.path),
+			}
+		: undefined;
+	const settled: PluginCapabilityVerdict =
 		missing.length > 0 ? "incompatible" : unhostedSlots.length > 0 ? "partial" : "runnable";
 
 	return {
-		verdict,
+		verdict: settled,
 		missing,
 		unhostedSlots: [...new Set(unhostedSlots)],
-		summary: summarize(verdict, missing, unhostedSlots),
+		...(bundle ? { bundle } : {}),
+		summary: summarize(settled, missing, unhostedSlots, bundle),
 	};
 }
 
@@ -243,13 +287,34 @@ function summarize(
 	verdict: PluginCapabilityVerdict,
 	missing: readonly string[],
 	unhostedSlots: readonly string[],
+	bundle: PluginCapabilityBundle | undefined,
 ): string {
+	// A bundle's own counts are appended to whatever the verdict already said,
+	// never substituted for it: "installed, runs, and would have added twelve
+	// rows" is two facts and the person needs both.
+	const bundleNote = bundle === undefined ? "" : describeBundle(bundle);
 	switch (verdict) {
 		case "runnable":
-			return "安装完成，此插件可在当前底座运行。";
+			return `安装完成，此插件可在当前底座运行。${bundleNote}`;
 		case "partial":
-			return `安装完成，但 ${unhostedSlots.join("、")} 这些位置当前底座没有挂载点，对应界面不会出现。`;
+			return `安装完成，但 ${unhostedSlots.join("、")} 这些位置当前底座没有挂载点，对应界面不会出现。${bundleNote}`;
 		case "incompatible":
-			return `安装完成，但缺少 ${missing.join("、")}，此插件无法在此底座加载。`;
+			return `安装完成，但缺少 ${missing.join("、")}，此插件无法在此底座加载。${bundleNote}`;
 	}
+}
+
+/** The bundle half of an install sentence. */
+function describeBundle(bundle: PluginCapabilityBundle): string {
+	const parts: string[] = [];
+	if (bundle.rows > 0) {
+		const unresolved = bundle.unresolvedNames.length > 0 ? `，其中 ${bundle.unresolvedNames.length} 个包未安装` : "";
+		parts.push(`它声明了 ${bundle.rows} 行插件${unresolved}`);
+	}
+	if (bundle.unevaluatedExpressions > 0) {
+		parts.push(`${bundle.unevaluatedExpressions} 处条件表达式当前底座不会求值`);
+	}
+	if (bundle.unreadable.length > 0) {
+		parts.push(`${bundle.unreadable.length} 个补丁文件无法读取`);
+	}
+	return parts.length === 0 ? "" : ` ${parts.join("；")}。`;
 }
