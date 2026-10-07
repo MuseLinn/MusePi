@@ -86,7 +86,7 @@
 		"puppeteer-core": "catalog:"
 	},
 	"optionalDependencies": {
-		"@huggingface/transformers": "catalog:",
+		"@huggingface/transformers": "^4.2.0",
 		"sherpa-onnx-node": "1.13.2"
 	},
 	"devDependencies": {
