@@ -25,6 +25,15 @@ function event(type: string, n: number): AgentEvent {
 	return { type, thinkingLevel: `lvl-${n}` } as unknown as AgentEvent;
 }
 
+/** A record large enough that parsing a journal full of them is measurable. */
+function bulkyEvent(n: number): AgentEvent {
+	return {
+		type: "assistant_message",
+		message: { role: "assistant", content: [{ type: "text", text: "x".repeat(900) }] },
+		seq: n,
+	} as unknown as AgentEvent;
+}
+
 describe("AppendJournal", () => {
 	test("append + readAll round-trips in order with monotonic seqs", async () => {
 		const j = new AppendJournal(tempDir(), "s1");
@@ -250,5 +259,66 @@ describe("AppendJournal", () => {
 				return "";
 			}),
 		).toEqual(["lvl-2", "lvl-3", "lvl-4", "lvl-5", "lvl-6", "lvl-7"]);
+	});
+
+	test("recordsAfter reads only the records a catch-up actually delivers", async () => {
+		// The failure this pins: catch-up is asked for the handful of records a
+		// client missed, and the read path parsed the entire journal to hand back
+		// those few. On a journal sitting at the byte-compaction threshold that is
+		// megabytes of JSON parsed per reconnect, every time, and the cost grows
+		// with the session rather than with the gap.
+		//
+		// Measured by bytes scanned rather than by elapsed time, because a
+		// duration assertion is a coin flip on a loaded CI box while "did it read
+		// the part it skipped" is a fact about the code.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 2000; i++) j.append(bulkyEvent(i));
+		await j.close();
+
+		const size = fs.statSync(j.filePath).size;
+		expect(size).toBeGreaterThan(1024 * 1024);
+
+		const scanned = new AppendJournal(dir, "s1");
+		await scanned.open();
+		const tail = await scanned.recordsAfter(1990);
+		expect(tail.map(r => r.seq)).toEqual([1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000]);
+		// Records parsed rather than elapsed time: parsing the whole file to
+		// deliver ten records is the failure, and the count is how it shows.
+		const parsed = scanned.lastParseCount;
+		expect(tail).toHaveLength(10);
+		expect(parsed).toBeLessThan(2000);
+		await scanned.close();
+	});
+
+	test("recordsAfter still returns the whole tail when the cursor is at zero", async () => {
+		// The optimisation must not become a correctness shortcut: a client that
+		// has seen nothing needs every record, and a first connection is the
+		// common case, not the rare one.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 50; i++) j.append(event("thinking_level_changed", i));
+		const all = await j.recordsAfter(0);
+		expect(all.map(r => r.seq)).toEqual(Array.from({ length: 50 }, (_, i) => i + 1));
+		await j.close();
+	});
+
+	test("recordsAfter agrees with readAll on the same cursor", async () => {
+		// Two readers of the same file, one scanning and one indexing, must not
+		// disagree about which records exist. A partial line at the tail is
+		// dropped by both.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 40; i++) j.append(event("thinking_level_changed", i));
+		await j.flush();
+		for (const cursor of [0, 1, 20, 39, 40, 999]) {
+			const incremental = await j.recordsAfter(cursor);
+			const filtered = (await j.readAll()).filter(r => r.seq > cursor);
+			expect(incremental.map(r => r.seq)).toEqual(filtered.map(r => r.seq));
+		}
+		await j.close();
 	});
 });

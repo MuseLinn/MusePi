@@ -201,6 +201,9 @@ export class AppendJournal {
 	append(event: WireAgentEvent): number {
 		const seq = ++this.#seq;
 		this.#appendedSinceCompact += 1;
+		// The index is a view of the file's current bytes; an append invalidates
+		// it, and the next read rebuilds it from the longer text.
+		this.#lineIndexCache = null;
 		const record: JournalRecord = { seq, ts: new Date().toISOString(), event: shrinkForReplication(event) };
 		const line = `${JSON.stringify(record)}\n`;
 		this.#writtenBytes += line.length;
@@ -236,12 +239,125 @@ export class AppendJournal {
 	 *  replay contract (M1.4): a gap fill must arrive strictly in the
 	 *  journal numbering the client's watermark gate compares against. */
 	async recordsAfter(afterSeq: number): Promise<JournalRecord[]> {
-		await this.flush();
+		const text = await this.#readText();
 		const out: JournalRecord[] = [];
-		for (const record of await this.readAll()) {
-			if (record.seq > afterSeq) out.push(record);
+		if (text.length === 0) {
+			this.lastParseCount = 0;
+			return out;
 		}
+
+		// Where the cursor falls. A journal is append-only and its seqs increase
+		// down the file, so the first line whose seq passes the cursor is where
+		// the replay begins — and that seq sits in the first bytes of the line,
+		// so the lines before it never have to be parsed at all. Reading the
+		// file is cheap; parsing it is the cost this avoids paying on a
+		// reconnect, where the gap is often a handful of records in a journal
+		// sitting at the byte-compaction threshold.
+		const index = this.#lineIndex(text);
+		let startByte = -1;
+		for (let i = 0; i < index.seqs.length; i++) {
+			if ((index.seqs[i] as number) > afterSeq) {
+				startByte = index.offsets[i] as number;
+				break;
+			}
+		}
+		// Everything in the file is at or below the cursor: nothing to deliver.
+		if (startByte === -1) {
+			this.lastParseCount = 0;
+			return out;
+		}
+
+		let lineStart = startByte;
+		let delivered = 0;
+		while (lineStart < text.length) {
+			const newline = text.indexOf("\n", lineStart);
+			const lineEnd = newline === -1 ? text.length : newline;
+			if (lineEnd > lineStart) {
+				const line = text.slice(lineStart, lineEnd).trim();
+				if (line) {
+					try {
+						const record = JSON.parse(line) as JournalRecord;
+						if (record.seq > afterSeq) {
+							out.push(record);
+							delivered++;
+						}
+					} catch {
+						// A partial tail line: stop, exactly as `readAll` does.
+						// Continuing would splice a truncated record into a replay.
+						break;
+					}
+				}
+			}
+			if (newline === -1) break;
+			lineStart = newline + 1;
+		}
+		this.lastParseCount = delivered;
 		return out;
+	}
+
+	/**
+	 * Byte offset and seq of every record line, or the cached copy.
+	 *
+	 * Building it costs one pass over the file that reads each line's head and
+	 * nothing else — no JSON.parse, no record allocated. Cached because the
+	 * cost is per-file, not per-cursor: a second catch-up on the same journal
+	 * (another client reconnecting, a page size that spans several reads) pays
+	 * nothing.
+	 *
+	 * Invalidated by anything that can move a line, which is exactly: an
+	 * append, a compaction rewrite, and a cross-instance rewrite that replaces
+	 * the file under a held fd.
+	 */
+	#lineIndexCache: { offsets: number[]; seqs: number[]; bytes: number } | null = null;
+
+	#lineIndex(text: string): { offsets: number[]; seqs: number[]; bytes: number } {
+		if (this.#lineIndexCache !== null && this.#lineIndexCache.bytes === text.length) {
+			return this.#lineIndexCache;
+		}
+		const offsets: number[] = [];
+		const seqs: number[] = [];
+		let lineStart = 0;
+		while (lineStart < text.length) {
+			const newline = text.indexOf("\n", lineStart);
+			// A trailing run with no newline is a partial append: it is not a
+			// record yet, so the index stops before it, and `readAll` stops there
+			// too — the two agree on where the records end.
+			if (newline === -1) break;
+			if (newline > lineStart) {
+				const seq = this.#seqFromLine(text, lineStart, newline);
+				if (seq === null) break;
+				offsets.push(lineStart);
+				seqs.push(seq);
+			}
+			lineStart = newline + 1;
+		}
+		this.#lineIndexCache = { offsets, seqs, bytes: text.length };
+		return this.#lineIndexCache;
+	}
+
+	/**
+	 * The seq on the line spanning `[start, end)`, read from its head.
+	 *
+	 * A record is written as `{"seq":N,"ts":…,"event":…}` — seq first, so the
+	 * number is within the first bytes of every line and finding it does not
+	 * need the record parsed. Returns null for a line whose head carries no
+	 * seq, which is how a partial append at the tail is told apart from a
+	 * record.
+	 */
+	#seqFromLine(text: string, start: number, end: number): number | null {
+		const head = text.slice(start, Math.min(end, start + 64));
+		const match = /^\{"seq":(\d+),/.exec(head);
+		return match?.[1] === undefined ? null : Number(match[1]);
+	}
+
+	/** Read the journal file as text, flushing first so the tail is included. */
+	async #readText(): Promise<string> {
+		await this.flush();
+		try {
+			return await fs.promises.readFile(this.filePath, "utf8");
+		} catch {
+			return "";
+		}
 	}
 
 	/** All records in seq order (used for resume initial replay). */
@@ -284,6 +400,16 @@ export class AppendJournal {
 
 	/** Bytes written so far this process (for the byte threshold). */
 	#writtenBytes = 0;
+
+	/**
+	 * Records parsed by the last `recordsAfter` call, for instrumentation.
+	 *
+	 * Exposed so a caller — and a test — can assert what a read *parsed* rather
+	 * than how long it took: a duration assertion is a coin flip on a loaded
+	 * machine, while "it parsed the tail and not the whole file" is a fact
+	 * about the code. Not part of the replay contract; nothing branches on it.
+	 */
+	lastParseCount = 0;
 	/** Chain of pending writes — readAll/compact/close flush before reading. */
 	#pendingWrite: Promise<void> | null = null;
 
@@ -316,6 +442,9 @@ export class AppendJournal {
 			await this.#replaceFile(tmpJournal);
 			this.#writtenBytes = keep.reduce((acc, r) => acc + JSON.stringify(r).length, 0);
 			this.#appendedSinceCompact = 0;
+			// The rewrite replaced the file: every offset in the cached index
+			// now points into a file that no longer exists.
+			this.#lineIndexCache = null;
 		});
 	}
 
