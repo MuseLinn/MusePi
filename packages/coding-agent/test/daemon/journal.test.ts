@@ -305,6 +305,94 @@ describe("AppendJournal", () => {
 		await j.close();
 	});
 
+	test("recordsAfter reads only the tail of the file, not all of it", async () => {
+		// The parse is only half the cost. On a journal at the byte-compaction
+		// threshold the *read* measures larger than the parse it saves, so a
+		// reader that opens the whole file to deliver ten records pays the
+		// dominant term in full — and it pays it on every reconnect.
+		//
+		// Asserted over bytes touched rather than elapsed time: how much of the
+		// file was read is a fact about the code, while how long it took is a
+		// coin flip on a loaded machine.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 2000; i++) j.append(bulkyEvent(i));
+		await j.close();
+
+		const size = fs.statSync(j.filePath).size;
+		expect(size).toBeGreaterThan(1024 * 1024);
+
+		const reader = new AppendJournal(dir, "s1");
+		await reader.open();
+		const tail = await reader.recordsAfter(1990);
+		expect(tail.map(r => r.seq)).toEqual([1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000]);
+		expect(reader.lastBytesRead).toBeLessThan(size / 4);
+		await reader.close();
+	});
+
+	test("scans from both ends: a cursor at the start still reads everything", async () => {
+		// The complement of the case above. A client that has seen nothing asks
+		// for everything, and a reader that only ever looked at the tail would hand
+		// it back almost nothing — a failure that reads as "my history vanished"
+		// rather than as a slow read.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 2000; i++) j.append(bulkyEvent(i));
+		await j.close();
+
+		const size = fs.statSync(j.filePath).size;
+		const reader = new AppendJournal(dir, "s1");
+		await reader.open();
+		const all = await reader.recordsAfter(0);
+		expect(all).toHaveLength(2000);
+		expect(all[0]?.seq).toBe(1);
+		expect(all[1999]?.seq).toBe(2000);
+		expect(reader.lastBytesRead).toBeGreaterThan(size / 2);
+		await reader.close();
+	});
+
+	test("reads a torn tail line as no record rather than a truncated one", async () => {
+		// A window starting mid-record would hand the replay half a JSON object.
+		// The tail boundary is the last newline, so an append still in flight is
+		// excluded exactly as `readAll` excludes it.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 5; i++) j.append(event("thinking_level_changed", i));
+		await j.close();
+		fs.appendFileSync(j.filePath, '{"seq":6,"ts":"2026-01-01T00:00:00.000Z","eve');
+
+		const reader = new AppendJournal(dir, "s1");
+		await reader.open();
+		expect((await reader.recordsAfter(0)).map(r => r.seq)).toEqual([1, 2, 3, 4, 5]);
+		expect((await reader.readAll()).map(r => r.seq)).toEqual([1, 2, 3, 4, 5]);
+		await reader.close();
+	});
+
+	test("answers empty for a cursor at or past the tail", async () => {
+		// A client that claims to have seen everything is not owed a replay, and
+		// the cheapest correct answer to that is no records at all.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		for (let i = 0; i < 10; i++) j.append(event("thinking_level_changed", i));
+		expect(await j.recordsAfter(10)).toEqual([]);
+		expect(await j.recordsAfter(999)).toEqual([]);
+		await j.close();
+	});
+
+	test("answers empty for a journal that does not exist", async () => {
+		// A session whose journal was removed answers a catch-up with nothing
+		// rather than throwing: `catchupPlan` has already decided whether a
+		// missing tail is a resync, and this layer's job is the records.
+		const j = new AppendJournal(tempDir(), "never-written");
+		await j.open();
+		expect(await j.recordsAfter(0)).toEqual([]);
+		await j.close();
+	});
+
 	test("recordsAfter agrees with readAll on the same cursor", async () => {
 		// Two readers of the same file, one scanning and one indexing, must not
 		// disagree about which records exist. A partial line at the tail is

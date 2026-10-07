@@ -37,6 +37,31 @@ export interface JournalCheckpoint {
 export const COMPACT_EVENT_THRESHOLD = 2000;
 export const COMPACT_BYTE_THRESHOLD = 4 * 1024 * 1024;
 
+/**
+ * Byte offset and seq of every record line in a window, keyed to where that
+ * window began.
+ *
+ * `base` is what makes a window indistinguishable from a whole file: the
+ * offsets are absolute, so a caller comparing one against a file position does
+ * not have to know the text it was handed started somewhere other than zero.
+ */
+interface LineIndex {
+	/** Absolute offset of the text the offsets are measured from. */
+	readonly base: number;
+	readonly offsets: number[];
+	readonly seqs: number[];
+	readonly bytes: number;
+}
+
+/**
+ * Bytes a tail scan reads per step while growing a window back from the end.
+ *
+ * 64 KiB holds a few hundred typical records, so the common case — a client
+ * reconnecting after a few seconds — is a single read, and a wide gap costs
+ * four reads rather than thousands of small ones.
+ */
+const TAIL_SCAN_CHUNK = 64 * 1024;
+
 /** session.catchup verdict (M1.4) — pure guard over (checkpoint, tail,
  *  afterSeq) so the contract is testable without a daemon host:
  *
@@ -237,23 +262,34 @@ export class AppendJournal {
 
 	/** Records with seq > afterSeq, in journal order — the session.catchup
 	 *  replay contract (M1.4): a gap fill must arrive strictly in the
-	 *  journal numbering the client's watermark gate compares against. */
+	 *  journal numbering the client's watermark gate compares against.
+	 *
+	 *  Reads the tail of the journal rather than the whole file. A reconnect
+	 *  asks for the records after a cursor, and a journal only grows at the end,
+	 *  so those records are at the end — and on a journal at the
+	 *  byte-compaction threshold, opening the whole file to find them costs
+	 *  more than parsing them does. The read is what dominates; the parse is
+	 *  what this also avoids.
+	 *
+	 *  The cost tracks the gap rather than the age of the session: a client that
+	 *  missed one event reads a chunk, and a client that missed a thousand reads
+	 *  about what a thousand events weigh. A cursor below everything the file
+	 *  holds — a first connection, or one that has been compacted away — reads
+	 *  the whole file, because that is what was asked for. */
 	async recordsAfter(afterSeq: number): Promise<JournalRecord[]> {
-		const text = await this.#readText();
+		const window = await this.#tailWindow(afterSeq);
+		this.lastBytesRead = window.bytesRead;
+		const text = window.text;
 		const out: JournalRecord[] = [];
-		if (text.length === 0) {
+		if (text === null || text.length === 0) {
 			this.lastParseCount = 0;
 			return out;
 		}
 
-		// Where the cursor falls. A journal is append-only and its seqs increase
-		// down the file, so the first line whose seq passes the cursor is where
-		// the replay begins — and that seq sits in the first bytes of the line,
-		// so the lines before it never have to be parsed at all. Reading the
-		// file is cheap; parsing it is the cost this avoids paying on a
-		// reconnect, where the gap is often a handful of records in a journal
-		// sitting at the byte-compaction threshold.
-		const index = this.#lineIndex(text);
+		// The window starts at a record at or below the cursor (or at the file's
+		// first record, when the cursor predates it), so the first line whose seq
+		// passes the cursor is where the replay begins.
+		const index = this.#lineIndex(text, window.startByte);
 		let startByte = -1;
 		for (let i = 0; i < index.seqs.length; i++) {
 			if ((index.seqs[i] as number) > afterSeq) {
@@ -261,13 +297,13 @@ export class AppendJournal {
 				break;
 			}
 		}
-		// Everything in the file is at or below the cursor: nothing to deliver.
+		// Everything in the window is at or below the cursor: nothing to deliver.
 		if (startByte === -1) {
 			this.lastParseCount = 0;
 			return out;
 		}
 
-		let lineStart = startByte;
+		let lineStart = startByte - window.startByte;
 		let delivered = 0;
 		while (lineStart < text.length) {
 			const newline = text.indexOf("\n", lineStart);
@@ -296,24 +332,21 @@ export class AppendJournal {
 	}
 
 	/**
-	 * Byte offset and seq of every record line, or the cached copy.
+	 * Byte offset and seq of every record line in `text`, or the cached copy.
 	 *
-	 * Building it costs one pass over the file that reads each line's head and
-	 * nothing else — no JSON.parse, no record allocated. Cached because the
-	 * cost is per-file, not per-cursor: a second catch-up on the same journal
-	 * (another client reconnecting, a page size that spans several reads) pays
-	 * nothing.
+	 * Building it costs one pass that reads each line's head and nothing else —
+	 * no JSON.parse, no record allocated. Cached per (base offset, length), so a
+	 * second catch-up whose window lands on the same bytes pays nothing.
 	 *
-	 * Invalidated by anything that can move a line, which is exactly: an
-	 * append, a compaction rewrite, and a cross-instance rewrite that replaces
-	 * the file under a held fd.
+	 * Invalidated by anything that can move a line: an append, a compaction
+	 * rewrite, and a cross-instance rewrite that replaces the file under a held
+	 * fd.
 	 */
-	#lineIndexCache: { offsets: number[]; seqs: number[]; bytes: number } | null = null;
+	#lineIndexCache: LineIndex | null = null;
 
-	#lineIndex(text: string): { offsets: number[]; seqs: number[]; bytes: number } {
-		if (this.#lineIndexCache !== null && this.#lineIndexCache.bytes === text.length) {
-			return this.#lineIndexCache;
-		}
+	#lineIndex(text: string, base: number): LineIndex {
+		const cached = this.#lineIndexCache;
+		if (cached !== null && cached.base === base && cached.bytes === text.length) return cached;
 		const offsets: number[] = [];
 		const seqs: number[] = [];
 		let lineStart = 0;
@@ -326,13 +359,110 @@ export class AppendJournal {
 			if (newline > lineStart) {
 				const seq = this.#seqFromLine(text, lineStart, newline);
 				if (seq === null) break;
-				offsets.push(lineStart);
+				offsets.push(base + lineStart);
 				seqs.push(seq);
 			}
 			lineStart = newline + 1;
 		}
-		this.#lineIndexCache = { offsets, seqs, bytes: text.length };
+		this.#lineIndexCache = { base, offsets, seqs, bytes: text.length };
 		return this.#lineIndexCache;
+	}
+
+	/**
+	 * The tail of the journal, far enough back to hold the cursor.
+	 *
+	 * Grows a window back from the end of the last complete line until it
+	 * contains a record whose seq is at or below `afterSeq`, then returns that
+	 * window's text together with the absolute byte offset it starts at — so a
+	 * window is indistinguishable from a whole file to everything downstream.
+	 *
+	 * Growing by four rather than stepping in fixed chunks because a gap and a
+	 * record's size vary by orders of magnitude: a fixed step either stops short
+	 * on a wide gap or walks the whole file for a narrow one. The first window
+	 * holds a few hundred typical records, so the common case — a client
+	 * reconnecting after a moment — is one read.
+	 *
+	 * Returns `text: null` for a journal that is missing, empty, or holds no
+	 * complete line. Falls back to the whole file in two cases: a cursor below
+	 * the first record (a compacted or restarted journal), and a scan that grew
+	 * all the way to the start without meeting it.
+	 */
+	async #tailWindow(afterSeq: number): Promise<{ text: string | null; startByte: number; bytesRead: number }> {
+		await this.flush();
+		const handle = await fs.promises.open(this.filePath, "r").catch(() => null);
+		if (!handle) {
+			// The file went away between the flush and the open — a compaction
+			// rewrite from another instance. Reading whatever is there now is the
+			// honest answer; there is no file left to take a tail of.
+			const text = await this.#readText();
+			return { text, startByte: 0, bytesRead: text.length };
+		}
+		try {
+			const completeEnd = await this.#lastCompleteLineEnd(handle);
+			if (completeEnd === 0) return { text: null, startByte: 0, bytesRead: 0 };
+
+			let window = TAIL_SCAN_CHUNK;
+			let from = Math.max(0, completeEnd - window);
+			let found = -1;
+			for (;;) {
+				const want = completeEnd - from;
+				const buf = Buffer.allocUnsafe(want);
+				await handle.read(buf, 0, want, from);
+				const chunk = buf.toString("utf8");
+				const lines = chunk.split("\n");
+				// Line 0 starts mid-record unless this window is the whole file,
+				// and a record whose head is missing cannot be recognised, so it
+				// is only trusted when nothing precedes it.
+				const firstUsable = from > 0 ? 1 : 0;
+				let offset = 0;
+				for (let i = 0; i < firstUsable; i++) offset += (lines[i] as string).length + 1;
+				for (let i = firstUsable; i < lines.length; i++) {
+					const line = lines[i] as string;
+					const seq = this.#seqFromLine(line, 0, line.length);
+					if (seq !== null && seq <= afterSeq) {
+						found = from + offset;
+						break;
+					}
+					offset += line.length + 1;
+				}
+				if (found !== -1) break;
+				if (from === 0) break;
+				window *= 4;
+				from = Math.max(0, completeEnd - window);
+			}
+
+			const start = found === -1 ? 0 : found;
+			const want = completeEnd - start;
+			const buf = Buffer.allocUnsafe(want);
+			await handle.read(buf, 0, want, start);
+			return { text: buf.toString("utf8"), startByte: start, bytesRead: want };
+		} finally {
+			await handle.close();
+		}
+	}
+
+	/**
+	 * Byte offset just past the journal's last newline.
+	 *
+	 * Everything after it is an append that has not finished, and starting a
+	 * replay there would hand back a truncated record. Found by walking the tail
+	 * a chunk at a time rather than from one fixed window, because a single
+	 * record can be larger than any window worth allocating and the boundary is
+	 * then the newline before it — however far back that is.
+	 */
+	async #lastCompleteLineEnd(handle: fs.promises.FileHandle): Promise<number> {
+		const { size } = await handle.stat();
+		let end = size;
+		while (end > 0) {
+			const want = Math.min(TAIL_SCAN_CHUNK, end);
+			const start = end - want;
+			const buf = Buffer.allocUnsafe(want);
+			await handle.read(buf, 0, want, start);
+			const newline = buf.subarray(0, want).toString("utf8").lastIndexOf("\n");
+			if (newline !== -1) return start + newline + 1;
+			end = start;
+		}
+		return 0;
 	}
 
 	/**
@@ -410,6 +540,16 @@ export class AppendJournal {
 	 * about the code. Not part of the replay contract; nothing branches on it.
 	 */
 	lastParseCount = 0;
+
+	/**
+	 * Bytes the last `recordsAfter` read, for instrumentation.
+	 *
+	 * The number that says whether the tail scan is doing its job: a catch-up
+	 * delivering ten records should read a fraction of a multi-megabyte journal,
+	 * and one that reads all of it is back to paying per reconnect.
+	 */
+	lastBytesRead = 0;
+
 	/** Chain of pending writes — readAll/compact/close flush before reading. */
 	#pendingWrite: Promise<void> | null = null;
 
