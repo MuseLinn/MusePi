@@ -116,6 +116,42 @@ describe("bundled design templates", () => {
 		}
 	});
 
+	it("ships a deck a person can move through inside the card's iframe", () => {
+		// The card renders the example in a sandboxed iframe and does not drive
+		// it, so a deck with no navigation of its own shows one slide and no way
+		// to reach the rest.
+		//
+		// Two models satisfy that, and they are checked as alternatives rather
+		// than as one list: a deck may drive itself from key/wheel/touch events,
+		// or it may hand the job to the platform with CSS scroll snapping and
+		// read its position back from scroll. Requiring both would reject either
+		// a correct keyboard-driven deck or a correct scroll-snap one.
+		for (const template of BUNDLED_TEMPLATES.filter(t => t.tab === "deck")) {
+			const html = readBundledTemplateExample(template.name)!.toLowerCase();
+			expect(html).toContain("keydown");
+			expect(html).toContain("arrowright");
+			expect(html).toContain("arrowleft");
+			const selfDriving = html.includes("touchstart") || html.includes("deltay");
+			const snapDriven = html.includes("scroll-snap");
+			expect({ template: template.name, navigable: selfDriving || snapDriven }).toEqual({
+				template: template.name,
+				navigable: true,
+			});
+		}
+	});
+
+	it("keeps every bundled example self-contained, with no off-host asset", () => {
+		// A card renders through `srcDoc` with scripts allowed. A stylesheet or
+		// image fetched over the network inside that frame is a blank card on a
+		// slow link and an unexpected outbound request on a private one, so a
+		// template that needs one does not ship.
+		for (const template of BUNDLED_TEMPLATES) {
+			const html = readBundledTemplateExample(template.name)!;
+			const remote = html.match(/(?:src|href)\s*=\s*["'](?:https?:)?\/\/[^"']+/gi) ?? [];
+			expect({ template: template.name, remote: remote.length }).toEqual({ template: template.name, remote: 0 });
+		}
+	});
+
 	it("resolves a template by its creation tab", () => {
 		expect(bundledTemplateForTab("deck")?.name).toBe("simple-deck");
 		expect(bundledTemplateForTab("nope")).toBeUndefined();

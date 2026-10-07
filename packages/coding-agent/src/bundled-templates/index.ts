@@ -23,11 +23,19 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { parseFrontmatter } from "@musepi/pi-utils";
 import type { CreationTemplateTab } from "../daemon/creation";
+import bundledBlogPostExamplePath from "./blog-post/example.html" with { type: "file" };
+import bundledBlogPostSkill from "./blog-post/SKILL.md" with { type: "text" };
+import bundledDocsPageExamplePath from "./docs-page/example.html" with { type: "file" };
+import bundledDocsPageSkill from "./docs-page/SKILL.md" with { type: "text" };
 import bundledImagePosterExamplePath from "./image-poster/example.html" with { type: "file" };
 // bun-types claims `*.html` as HTMLBundle, so this repo imports it as a file
 // and reads it at call time (same shape as src/export/html) rather than
 // overriding the ambient declaration for every package.
 import bundledImagePosterSkill from "./image-poster/SKILL.md" with { type: "text" };
+import bundledKamiDeckExamplePath from "./kami-deck/example.html" with { type: "file" };
+import bundledKamiDeckSkill from "./kami-deck/SKILL.md" with { type: "text" };
+import bundledSaasLandingExamplePath from "./saas-landing/example.html" with { type: "file" };
+import bundledSaasLandingSkill from "./saas-landing/SKILL.md" with { type: "text" };
 import bundledSimpleDeckExamplePath from "./simple-deck/example.html" with { type: "file" };
 import bundledSimpleDeckSkill from "./simple-deck/SKILL.md" with { type: "text" };
 import bundledWebPrototypeExamplePath from "./web-prototype/example.html" with { type: "file" };
@@ -138,7 +146,11 @@ function build(name: string, tab: CreationTemplateTab, skill: string, examplePat
 /** Bundled design templates, in the order the rail lists them. */
 export const BUNDLED_TEMPLATES: readonly BundledTemplateDef[] = [
 	build("web-prototype", "prototype", bundledWebPrototypeSkill, bundledWebPrototypeExamplePath as unknown as string),
+	build("saas-landing", "prototype", bundledSaasLandingSkill, bundledSaasLandingExamplePath as unknown as string),
+	build("docs-page", "prototype", bundledDocsPageSkill, bundledDocsPageExamplePath as unknown as string),
+	build("blog-post", "prototype", bundledBlogPostSkill, bundledBlogPostExamplePath as unknown as string),
 	build("simple-deck", "deck", bundledSimpleDeckSkill, bundledSimpleDeckExamplePath as unknown as string),
+	build("kami-deck", "deck", bundledKamiDeckSkill, bundledKamiDeckExamplePath as unknown as string),
 	build("image-poster", "media", bundledImagePosterSkill, bundledImagePosterExamplePath as unknown as string),
 ];
 
