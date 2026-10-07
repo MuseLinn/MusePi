@@ -30,23 +30,20 @@ interface BundledTemplateSummary {
 
 export function StartFromPicker({
 	rpc,
-	active,
 	value,
 	onChange,
 }: {
 	rpc: RpcClient;
-	/** Mounted only while the creation surface is open, like the chip row. */
-	active: boolean;
 	/** The chosen shape, or `null` for a blank start. */
 	value: string | null;
 	onChange(value: string | null): void;
 }): ReactNode {
 	const [templates, setTemplates] = useState<readonly BundledTemplateSummary[]>([]);
 
-	// Only while expanded: an ordinary welcome page must not produce creation
-	// RPCs (the same rule the template rail follows).
+	// Fetched on mount. The composer only mounts this while the design mode is
+	// armed, so there is no gate to keep — an ordinary welcome page never
+	// produces this RPC.
 	useEffect(() => {
-		if (!active) return;
 		let cancelled = false;
 		void rpc
 			.request<{ templates: BundledTemplateSummary[] }>("creation.templates.bundled", {})
@@ -61,7 +58,7 @@ export function StartFromPicker({
 		return () => {
 			cancelled = true;
 		};
-	}, [active, rpc]);
+	}, [rpc]);
 
 	const pick = useCallback((id: string | null) => onChange(id), [onChange]);
 

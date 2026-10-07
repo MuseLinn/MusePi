@@ -17,7 +17,6 @@ import {
 import type { RpcClient } from "../lib/rpc";
 import { useScrollShadow } from "../lib/use-scroll-shadow";
 import { AssetPolicyRow } from "./composer/asset-policy-row";
-import { StartFromPicker } from "./composer/start-from-picker";
 
 /**
  * CreationModeRow — M3.7a design 模式页的欢迎页内联形态
@@ -66,6 +65,12 @@ export interface CreationRailHandle {
 	 * 回填输入草稿,模式页保持展开供修正。
 	 */
 	submit(text: string, opts?: Omit<CreationMessage, "text">): Promise<boolean>;
+	/**
+	 * Write a chosen shape back into the draft. The picker is rendered by the
+	 * composer (directly above the input), but the draft is owned here, so the
+	 * selection travels down this handle.
+	 */
+	setStartFrom(id: string | null): void;
 }
 
 /** 上报给 composer 的派生态:placeholder 随选中 chip 变化,template
@@ -75,6 +80,10 @@ export interface CreationRailState {
 	placeholder: string;
 	template: boolean;
 	busy: boolean;
+	/** Selected bundled shape; 
+ull is a blank start. Rendered directly
+	 *  above the composer (see the note on this interface). */
+	startFrom: string | null;
 }
 
 /** 草稿的模块级缓存:chip 排收起(卸载)后仍保留,再入即回填。 */
@@ -97,6 +106,7 @@ export function CreationModeRow({
 	assetSlot,
 	onSubmit,
 	onClose,
+	onStartFromChange,
 	onStateChange,
 	onReady,
 }: {
@@ -118,6 +128,10 @@ export function CreationModeRow({
 	onSubmit(metadata: Record<string, unknown>, message?: CreationMessage): Promise<boolean>;
 	/** 收起模式页(§2.1:Escape/切回其他 mode chip 回到普通欢迎页)。 */
 	onClose(): void;
+	/** 起点选择的回写通道 —— picker 渲染在 composer 正上方
+	 *  （WelcomeComposer），但草稿归本组件所有，所以选中的形状从那里回来。
+	 *  未给时选择无处落草稿，picker 也就不会渲染。 */
+	onStartFromChange?(id: string | null): void;
 	/** 派生态上报(composer 覆盖 placeholder / 展开模板 rail / 禁按发送)。 */
 	onStateChange(state: CreationRailState): void;
 	/** 发送句柄注册(composer 的发送钩子经此进入创建管线)。 */
@@ -155,11 +169,14 @@ export function CreationModeRow({
 	// 派生态变化即上报(composer 依此覆盖 placeholder/展开模板 rail/禁按);
 	// 收起期间上报中性态——composer 的 designActive 分支不消费 placeholder,
 	// 但 busy/template 必须复位,防止收起态残留禁按或 rail 保持展开。
+	// `startFrom` 收起时不清:它选择的是形状,不是界面态,收起后草稿仍持有。
 	useEffect(() => {
 		onStateChangeRef.current(
-			active ? { placeholder, template, busy } : { placeholder: "", template: false, busy: false },
+			active
+				? { placeholder, template, busy, startFrom: draft.startFrom }
+				: { placeholder: "", template: false, busy: false, startFrom: draft.startFrom },
 		);
-	}, [active, placeholder, template, busy]);
+	}, [active, placeholder, template, busy, draft.startFrom]);
 
 	// 挂载时:一次性镜像回填(重启后恢复上次的类型选择)。只在展开时消费:
 	// 普通欢迎页(work 模式)不应产生 creation RPC(模板列表由 TemplateRail
@@ -221,6 +238,7 @@ export function CreationModeRow({
 					})
 					.finally(() => setBusy(false));
 			},
+			setStartFrom: id => updateDraft({ startFrom: id }),
 		});
 		return () => onReady(null);
 	}, [busy, draft, onSubmit]);
@@ -259,23 +277,6 @@ export function CreationModeRow({
 						);
 					})}
 				</div>
-				{/* 起点选择（opendesign StartFromPicker 形态）：选形状，不立即创建 ——
-				 *  创建发生在 composer 提交时，所以改主意还来得及。空白起步是同一个
-				 *  radio 组的第一项：不选形状也是一个决定。选中的 id 进草稿
-				 *  startFrom，最终写进 metadata.skillId（M3-3.3）。
-				 *
-				 *  收起时不渲染：这个行只在 design 模式展开时有意义，留一个只有
-				 *  「空白起步」的空行在欢迎页上是个既不能选也没用的控件 —— 而
-				 *  Reveal 为了播退场动画会保持本组件挂载，`active` 只是副作用
-				 *  的门控，不是不渲染的门控。 */}
-				{active ? (
-					<StartFromPicker
-						rpc={rpc}
-						active={active}
-						value={draft.startFrom}
-						onChange={id => updateDraft({ ...draft, startFrom: id })}
-					/>
-				) : null}
 			</div>
 			{/* 素材策略行 + 「高级 ▸」折叠区(M3.7c §4):composer 下方、设计
 			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 WelcomeComposer

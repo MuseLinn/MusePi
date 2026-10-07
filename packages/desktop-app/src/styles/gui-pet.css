@@ -479,14 +479,18 @@
 	z-index:1;
 	cursor:pointer;
 	display:flex;
-	width:var(--gui-composer-pet-size, clamp(38px, 4.6cqw + 27px, 52px));
+	width:var(--gui-composer-pet-size, clamp(34px, 4cqw + 23px, 46px));
 	filter:drop-shadow(0 2px 6px #00000047);
 	align-items: flex-end;
 	justify-content:flex-end;
 	/* Flush with the input's top edge it is perched on: the box is very nearly
 	 * the ball now, so only the ring's overhang sits above it. */
 	bottom:calc(100% - 2px);
-	right:10px;
+	/* Flush with the input's own right edge. At 10px in from the page the pet
+	 * cleared the composer but read as floating beside whatever the panel put
+	 * there; riding the input's edge keeps it perched on the thing it belongs
+	 * to at any panel width (user 2026-10-07). */
+	right:6px;
 	transform-origin:50% 100%;
 	transition:transform .18s cubic-bezier(.22,1,.36,1),filter .18s cubic-bezier(.22,1,.36,1);
 	-webkit-tap-highlight-color:transparent;

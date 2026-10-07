@@ -58,6 +58,7 @@ import {
 	retargetMentionTokens,
 	spliceMentionToken,
 } from "./composer/mention-token";
+import { StartFromPicker } from "./composer/start-from-picker";
 import { TemplateRail } from "./composer/template-rail";
 import {
 	attachmentFiles,
@@ -896,6 +897,11 @@ export function WelcomeComposer({
 	// 交出发送句柄——发送钩子改走 session.create + projectMetadata 管线。
 	const designActive = activeModeId === "design" && designSubmit !== undefined;
 	const [railState, setRailState] = useState<CreationRailState | null>(null);
+	// The chosen shape. Mirrors the draft field CreationModeRow owns — this
+	// copy is what the picker (rendered below, above the input) reads, so
+	// picking does not need a round trip through the draft before the card
+	// highlights.
+	const [startFrom, setStartFrom] = useState<string | null>(null);
 	const railRef = useRef<CreationRailHandle | null>(null);
 	const designTemplate = designActive && railState?.template === true;
 	// 模板 rail 自建会话期的 busy(TemplateRail 经 onBusyChange 上报),
@@ -1505,6 +1511,10 @@ export function WelcomeComposer({
 								return designSubmit ? designSubmit(withDesign, message) : Promise.resolve(false);
 							}}
 							onClose={() => onModeChange?.("work")}
+							onStartFromChange={id => {
+								setStartFrom(id);
+								railRef.current?.setStartFrom(id);
+							}}
 							onStateChange={setRailState}
 							onReady={handle => {
 								railRef.current = handle;
@@ -1708,6 +1718,18 @@ export function WelcomeComposer({
 					 * 选中态下输入框都保持可见可用——template chip 选中时模板 rail
 					 * 在 composer 下方展开(见 form 之后的 TemplateRail),输入框
 					 * 不再被替换/卸载,草稿跨 chip 切换存活。 */}
+					{/* Start-from picker (open-design StartFromPicker): which shape
+					 *  this creation begins from. Sits directly above the input —
+					 *  it is a decision made before writing, so it belongs with the
+					 *  input rather than up among the type chips, where it read as a
+					 *  layer squeezed between two chip rows. Hidden unless the
+					 *  design mode is armed; choosing nothing is a decision too, and
+					 *  that is the blank option inside this radio group. */}
+					{designActive && rpc ? (
+						<div className="w-full px-0.5 pb-2">
+							<StartFromPicker rpc={rpc} value={startFrom} onChange={setStartFrom} />
+						</div>
+					) : null}
 					<form
 						ref={formRef}
 						className="gui-welcome-form relative w-full"
