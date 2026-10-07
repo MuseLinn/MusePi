@@ -262,13 +262,20 @@ export function CreationModeRow({
 				{/* 起点选择（opendesign StartFromPicker 形态）：选形状，不立即创建 ——
 				 *  创建发生在 composer 提交时，所以改主意还来得及。空白起步是同一个
 				 *  radio 组的第一项：不选形状也是一个决定。选中的 id 进草稿
-				 *  startFrom，最终写进 metadata.skillId（M3-3.3）。 */}
-				<StartFromPicker
-					rpc={rpc}
-					active={active}
-					value={draft.startFrom}
-					onChange={id => updateDraft({ ...draft, startFrom: id })}
-				/>
+				 *  startFrom，最终写进 metadata.skillId（M3-3.3）。
+				 *
+				 *  收起时不渲染：这个行只在 design 模式展开时有意义，留一个只有
+				 *  「空白起步」的空行在欢迎页上是个既不能选也没用的控件 —— 而
+				 *  Reveal 为了播退场动画会保持本组件挂载，`active` 只是副作用
+				 *  的门控，不是不渲染的门控。 */}
+				{active ? (
+					<StartFromPicker
+						rpc={rpc}
+						active={active}
+						value={draft.startFrom}
+						onChange={id => updateDraft({ ...draft, startFrom: id })}
+					/>
+				) : null}
 			</div>
 			{/* 素材策略行 + 「高级 ▸」折叠区(M3.7c §4):composer 下方、设计
 			 *  体系 rail 之下(§2.2 信息架构最底行),经 portal 落进 WelcomeComposer
