@@ -1402,6 +1402,27 @@ export interface ExtensionAPI {
 	 *  stored value lives under `key` like any static setting. */
 	registerSetting(setting: ExtensionSetting): void;
 
+	/**
+	 * Store and read the extension's own secrets, encrypted at rest.
+	 *
+	 * Separate from the provider keys a plugin registers through
+	 * `registerProvider`, and from `AuthStorage` in general: those belong to the
+	 * model gateway, are keyed by `provider/id`, and are managed by the settings
+	 * UI. This slot belongs to the extension, is namespaced by its own id, and
+	 * carries a free-form `name` so one extension can hold several — an account
+	 * per upstream service, a token per workspace.
+	 *
+	 * Nothing is written until the extension writes it, and reading an unset
+	 * slot returns `null` rather than an empty credential, so "has no account
+	 * here yet" stays distinguishable from "the account is blank".
+	 *
+	 * The store is encrypted (AES-256-GCM, key derived from a machine id) and
+	 * written 0600. An extension that needs to keep a secret out of the
+	 * filesystem entirely can set `MUSPI_PLUGIN_CRED_<PLUGIN_ID>_<NAME>` in the
+	 * environment instead, which takes precedence over the file.
+	 */
+	credentials: ExtensionCredentialStore;
+
 	/** Contribute a renderer-side component to a GUI slot (e.g.
 	 *  "settings.extensions"). The daemon compiles `moduleUrl` to ESM and
 	 *  serves the code via extensions.list; the GUI dynamically imports and
@@ -1502,6 +1523,8 @@ export interface ExtensionAPI {
 	 * Registration happens during extension load. Built-in ids cannot be
 	 * replaced; when extensions reuse an id, the later extension wins.
 	 */
+	registerComposerShape(definition: ComposerShapeDefinition): void;
+
 	// Notification / Service / Theme Contribution
 	// =========================================================================
 
@@ -1765,6 +1788,51 @@ export interface MediaProviderConfig {
 export interface RegisteredMediaProvider {
 	config: MediaProviderConfig;
 	sourceId: string;
+}
+
+/**
+ * One secret an extension owns, as the extension side sees it.
+ *
+ * The OAuth fields exist because a plugin that logs in on the extension's
+ * behalf has the same problem a provider does — a token that expires and a
+ * refresh token that renews it — and re-deriving those names per plugin is how
+ * the two halves drift apart.
+ */
+export interface ExtensionCredential {
+	/** Bearer token, API key, or OAuth access token. */
+	value: string;
+	refreshToken?: string;
+	/** Unix epoch ms; lets a caller refresh before a request fails rather than after. */
+	expiresAt?: number;
+	clientId?: string;
+	clientSecret?: string;
+	/** Anything the plugin needs to remember alongside the secret. */
+	metadata?: Record<string, string>;
+}
+
+/**
+ * An extension's credential slots, already namespaced to that extension.
+ *
+ * Every method takes the slot's `name` rather than a full identifier: the
+ * extension's own id is supplied by the host, so an extension cannot read or
+ * overwrite another one's secrets by guessing its id.
+ */
+export interface ExtensionCredentialStore {
+	/** The unset slot is `null`, never a blank credential. */
+	get(name: string): Promise<ExtensionCredential | null>;
+	set(name: string, credential: ExtensionCredential): Promise<void>;
+	/** Returns whether any backend held it, so "already gone" is distinguishable. */
+	delete(name: string): Promise<boolean>;
+	/** This extension's slot names. Never another extension's. */
+	list(): Promise<string[]>;
+	/**
+	 * Whether the store is usable at all.
+	 *
+	 * Distinct from "the slot is empty": a corrupt or unwritable store means
+	 * every subsequent `set` will fail, which a caller should learn about
+	 * before it tries to log someone in rather than after.
+	 */
+	health(): Promise<{ healthy: boolean; issues: readonly { message: string }[] }>;
 }
 
 /**

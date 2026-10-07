@@ -30,6 +30,8 @@ import type { ExecOptions } from "../../exec/exec";
 import { execCommand } from "../../exec/exec";
 // Runtime self-reference: dereference this namespace only inside loader functions to keep the index.ts cycle safe.
 import * as PiCodingAgent from "../../index";
+import type { StoredPluginCredential } from "../../plugin-credentials";
+import { getPluginCredentialManager } from "../../plugin-credentials";
 import type { CustomMessagePayload } from "../../session/messages";
 import type { FileDeleteFallbackHandler, FileWriteFallbackHandler } from "../../tools/file-write-fallback";
 import { EventBus } from "../../utils/event-bus";
@@ -51,6 +53,8 @@ import type {
 	ExtensionAPI,
 	ExtensionComponent,
 	ExtensionContext,
+	ExtensionCredential,
+	ExtensionCredentialStore,
 	ExtensionFactory,
 	ExtensionModeDefinition,
 	ExtensionNotificationMessage,
@@ -212,6 +216,52 @@ export function createConcreteExtensionAPI(
  * Registration methods write to the extension object.
  * Action methods delegate to the shared runtime.
  */
+/**
+ * The `name` of the nearest `package.json` above an extension entry.
+ *
+ * Walks up rather than reading one fixed level, because an extension may be a
+ * single file dropped into a directory that is not itself a package. Stops at
+ * the first manifest that actually declares a name — a `package.json` with no
+ * `name` is not the extension's identity and keeps the walk going.
+ *
+ * Returns `null` when there is none, which is the case for an unpackaged
+ * single-file extension; the caller falls back to the directory name.
+ */
+async function readPackageNameNear(entryPath: string): Promise<string | null> {
+	let dir = path.dirname(entryPath);
+	// Bounded so a malformed path cannot walk to the filesystem root forever.
+	// Eight levels covers a pnpm store layout (`.pnpm/<pkg>@<ver>/node_modules/…`)
+	// with room to spare.
+	for (let depth = 0; depth < 8; depth++) {
+		const manifest = path.join(dir, "package.json");
+		if (await Bun.file(manifest).exists()) {
+			try {
+				const parsed = JSON.parse(await Bun.file(manifest).text()) as { name?: unknown };
+				if (typeof parsed.name === "string" && parsed.name.trim() !== "") return parsed.name.trim();
+			} catch {
+				// An unreadable manifest is not this extension's identity; keep
+				// walking rather than failing a credential read over it.
+			}
+		}
+		const parent = path.dirname(dir);
+		if (parent === dir) break;
+		dir = parent;
+	}
+	return null;
+}
+
+/** Map a stored credential onto the shape an extension sees. */
+function toExtensionCredential(stored: StoredPluginCredential): ExtensionCredential {
+	return {
+		value: stored.value,
+		...(stored.refreshToken === undefined ? {} : { refreshToken: stored.refreshToken }),
+		...(stored.expiresAt === undefined ? {} : { expiresAt: stored.expiresAt }),
+		...(stored.clientId === undefined ? {} : { clientId: stored.clientId }),
+		...(stored.clientSecret === undefined ? {} : { clientSecret: stored.clientSecret }),
+		...(stored.metadata === undefined ? {} : { metadata: stored.metadata }),
+	};
+}
+
 class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 	readonly logger = logger;
 	readonly typebox = TypeBox;
@@ -293,6 +343,79 @@ class ConcreteExtensionAPI implements ExtensionAPI, IExtensionRuntime {
 
 	registerSetting(setting: ExtensionSetting): void {
 		this.extension.settings.set(setting.key, setting);
+	}
+
+	/**
+	 * The extension's own credential slots, namespaced to it.
+	 *
+	 * The namespace is the extension's label, falling back to its derived name —
+	 * never its path. A path would give the same extension a different set of
+	 * slots depending on where it happens to be installed, so an account someone
+	 * logged into would silently vanish after a move or a reinstall.
+	 *
+	 * Slots are stored as the id's `scope`, not its `name`. That is what the
+	 * store's key format means by a two-part id: `plugin::scope` parses back as
+	 * a scope, and `plugin::name` parses back as one too — so a slot written as
+	 * a name would be read back under a field nothing here reads, and
+	 * `list()` would come back empty while `get()` and `delete()` kept working.
+	 *
+	 * Filtering happens here rather than in the store, so an extension cannot
+	 * enumerate another one's secrets by naming them.
+	 */
+	readonly credentials: ExtensionCredentialStore = {
+		get: async (name: string) => {
+			const stored = await getPluginCredentialManager().get({
+				pluginId: await this.#credentialNamespace(),
+				scope: name,
+			});
+			return stored ? toExtensionCredential(stored) : null;
+		},
+		set: async (name: string, credential: ExtensionCredential) => {
+			await getPluginCredentialManager().set(
+				{ pluginId: await this.#credentialNamespace(), scope: name },
+				{
+					value: credential.value,
+					refreshToken: credential.refreshToken,
+					expiresAt: credential.expiresAt,
+					clientId: credential.clientId,
+					clientSecret: credential.clientSecret,
+					metadata: credential.metadata,
+				},
+			);
+		},
+		delete: async (name: string) =>
+			getPluginCredentialManager().delete({ pluginId: await this.#credentialNamespace(), scope: name }),
+		list: async () => {
+			const ids = await getPluginCredentialManager().list({ pluginId: await this.#credentialNamespace() });
+			return ids.map(id => id.scope).filter((scope): scope is string => typeof scope === "string");
+		},
+		health: async () => {
+			const status = await getPluginCredentialManager().health();
+			return { healthy: status.healthy, issues: status.issues.map(issue => ({ message: issue.message })) };
+		},
+	};
+
+	/**
+	 * Stable per-extension namespace for credential slots.
+	 *
+	 * The package name, read from the nearest `package.json` above the entry —
+	 * never the path, and never `label`. A path would hand back an empty store
+	 * after the extension is reinstalled somewhere else, and `label` is a
+	 * display string a person (or `setLabel`) can change at will, which would
+	 * silently orphan every secret the extension owns. The package name is the
+	 * one identifier that travels with the code.
+	 *
+	 * Read once and cached: it is on the credential path, which a login flow
+	 * calls several times.
+	 */
+	#credentialNamespacePromise: Promise<string> | null = null;
+	#credentialNamespace(): Promise<string> {
+		this.#credentialNamespacePromise ??= readPackageNameNear(this.extension.path).then(
+			// A single-file extension with no manifest still needs a namespace
+			// that is stable across restarts, and its directory name is.
+			name => name ?? getExtensionNameFromPath(this.extension.path),
+		);
+		return this.#credentialNamespacePromise;
 	}
 
 	registerComponent(component: ExtensionComponent): void {
