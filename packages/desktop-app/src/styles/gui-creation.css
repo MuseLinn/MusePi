@@ -94,7 +94,7 @@
 	align-items: center;
 	gap: 5px;
 	flex: none;
-	width: 88px;
+	width: 108px;
 	padding: 8px 6px 7px;
 	border: 0;
 	border-radius: var(--radius-md);
@@ -120,13 +120,15 @@
 	box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
 }
 
-/* 缩略图:首字母/加号。mode 上色是唯一区分手段 —— 卡片本身不写类型名,
- * 避免一行出现「原型 Prototype」这类重复读。 */
+/* 缩略图:模板自带 example 的实时预览,或首字母兜底。尺寸够大才认得出
+ * 「这是一份经营复盘 deck」而不是一个字母 —— 首字母只够区分 mode。 */
 .gui-creation-startcard-thumb {
+	position: relative;
 	display: grid;
 	place-items: center;
-	width: 34px;
-	height: 34px;
+	overflow: hidden;
+	width: 96px;
+	height: 62px;
 	border-radius: var(--radius-sm);
 	font-size: 15px;
 	font-weight: 600;
@@ -134,19 +136,38 @@
 	color: var(--color-text-muted);
 }
 
+/* The example is a whole document, not an image: it renders at the frame's own
+ * size and we scale that result down rather than squeezing the document into a
+ * thumbnail, so type stays proportional to the card instead of to the source.
+ * `transform-origin: top left` + scale keeps the top-left of the page visible —
+ * a deck's first slide, a poster's headline — which is the identifying part. */
+.gui-creation-startcard-frame {
+	width: 640px;
+	height: 420px;
+	border: 0;
+	transform: scale(0.15);
+	transform-origin: top left;
+	/* The card's own click decides the selection; a live document inside it
+	 * must not swallow the pointer or scroll the page. */
+	pointer-events: none;
+}
+
+/* mode 上色现在是缩略图的**边框**，不是它的底色 —— 底色已经被预览文档占满。
+ * 一行里 prototype/deck/media 仍然靠色带区分。 */
 .gui-creation-startcard--prototype .gui-creation-startcard-thumb {
-	background: color-mix(in oklab, #4c8dff 22%, var(--glass-bg));
-	color: #8fb6ff;
+	box-shadow: inset 0 0 0 1.5px #4c8dff66;
 }
 
 .gui-creation-startcard--deck .gui-creation-startcard-thumb {
-	background: color-mix(in oklab, #c07cf0 22%, var(--glass-bg));
-	color: #d5aef8;
+	box-shadow: inset 0 0 0 1.5px #c07cf066;
 }
 
 .gui-creation-startcard--media .gui-creation-startcard-thumb {
-	background: color-mix(in oklab, #3fbf9a 22%, var(--glass-bg));
-	color: #7fdcc4;
+	box-shadow: inset 0 0 0 1.5px #3fbf9a66;
+}
+
+.gui-creation-startcard-thumb--blank {
+	box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .gui-creation-startcard-name {

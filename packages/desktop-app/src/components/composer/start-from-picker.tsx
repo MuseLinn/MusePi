@@ -16,9 +16,15 @@ import type { RpcClient } from "../../lib/rpc";
  * absence of one. Selecting the active card again clears it, so the row is
  * reversible without a second control.
  *
- * This sits in the creation surface rather than beside the composer. A saved
+ * This sits with the composer rather than above it in the chip rows. A saved
  * creation template (parameters a person filled in before) is a different thing
  * and keeps its own rail there; this one answers "what should this look like".
+ *
+ * Cards preview the template's own baked example rather than showing an
+ * initial. That is the whole reason a template ships an example: picking a shape
+ * you have seen renders is a different act from picking a name. The example
+ * loads on hover or selection rather than on mount — a rail of live documents
+ * nobody looked at is a rail that costs a frame tree per card.
  */
 interface BundledTemplateSummary {
 	readonly id: string;
@@ -62,10 +68,6 @@ export function StartFromPicker({
 
 	const pick = useCallback((id: string | null) => onChange(id), [onChange]);
 
-	// The row is a single radio group over one creation's shapes: blank plus the
-	// bundled templates for the surface currently picked.
-	const shown = templates;
-
 	return (
 		<div className="gui-creation-startfrom">
 			<span className="gui-creation-startfrom-label">{t("creation start from")}</span>
@@ -78,31 +80,98 @@ export function StartFromPicker({
 					title={t("creation start blank hint")}
 					onClick={() => pick(null)}
 				>
-					<span className="gui-creation-startcard-thumb" aria-hidden="true">
+					<span className="gui-creation-startcard-thumb gui-creation-startcard-thumb--blank" aria-hidden="true">
 						+
 					</span>
 					<span className="gui-creation-startcard-name">{t("creation start blank")}</span>
 				</button>
-				{shown.map(tpl => {
-					const on = value === tpl.id;
-					return (
-						<button
-							key={tpl.id}
-							type="button"
-							role="radio"
-							aria-checked={on}
-							className={`gui-creation-startcard gui-creation-startcard--${tpl.tab}${on ? " gui-creation-startcard--on" : ""}`}
-							title={tpl.summary}
-							onClick={() => pick(on ? null : tpl.id)}
-						>
-							<span className="gui-creation-startcard-thumb" aria-hidden="true">
-								{tpl.id.charAt(0).toUpperCase()}
-							</span>
-							<span className="gui-creation-startcard-name">{tpl.id}</span>
-						</button>
-					);
-				})}
+				{templates.map(tpl => (
+					<TemplateCard key={tpl.id} rpc={rpc} template={tpl} active={value === tpl.id} onHover={pick} />
+				))}
 			</div>
 		</div>
+	);
+}
+
+/** One template's card: the baked example as its thumbnail, loaded when the
+ *  card is hovered or selected. */
+function TemplateCard({
+	rpc,
+	template,
+	active,
+	onHover,
+}: {
+	rpc: RpcClient;
+	template: BundledTemplateSummary;
+	/** Selected — its preview stays loaded even after the pointer leaves. */
+	active: boolean;
+	/** Hovering a card previews it too, so the choice can be made by looking
+	 *  rather than by clicking through each one. */
+	onHover(id: string): void;
+}): ReactNode {
+	const [wantPreview, setWantPreview] = useState(false);
+	const [html, setHtml] = useState<string | null>(null);
+
+	const wanted = wantPreview || active;
+
+	useEffect(() => {
+		if (!wanted || html !== null) return;
+		let cancelled = false;
+		void rpc
+			.request<{ html: string }>("creation.templates.bundledExample", { id: template.id })
+			.then(res => {
+				if (!cancelled) setHtml(res?.html ?? "");
+			})
+			.catch(() => {
+				// No preview for this one: the card falls back to its initial, which
+				// is what it showed before previews existed.
+				if (!cancelled) setHtml("");
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [rpc, template.id, wanted, html]);
+
+	const on = active;
+	return (
+		<button
+			type="button"
+			role="radio"
+			aria-checked={on}
+			className={`gui-creation-startcard gui-creation-startcard--${template.tab}${on ? " gui-creation-startcard--on" : ""}`}
+			title={template.summary}
+			onMouseEnter={() => {
+				setWantPreview(true);
+				onHover(template.id);
+			}}
+			onMouseLeave={() => setWantPreview(false)}
+			onFocus={() => {
+				setWantPreview(true);
+				onHover(template.id);
+			}}
+			onBlur={() => setWantPreview(false)}
+			onClick={() => onHover(active ? "" : template.id)}
+		>
+			<span className="gui-creation-startcard-thumb" aria-hidden="true">
+				{html ? (
+					// The example is a document we ship, run with scripts the way the
+					// artifact and file previewers already run them — a deck navigates
+					// inside its own frame (open-design's deck preview contract), so the
+					// host must not try to drive it.
+					<iframe
+						className="gui-creation-startcard-frame"
+						title={template.summary}
+						sandbox="allow-scripts"
+						srcDoc={html}
+						// Decks read their own width, so a fixed 0 width would hide
+						// everything; the frame is inert to the pointer instead.
+						tabIndex={-1}
+					/>
+				) : (
+					template.id.charAt(0).toUpperCase()
+				)}
+			</span>
+			<span className="gui-creation-startcard-name">{template.id}</span>
+		</button>
 	);
 }
