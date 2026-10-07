@@ -22,8 +22,8 @@ interface BundledTemplateSummary {
 	tab: CreationTemplateTab;
 	/** Card label, per language. */
 	title: { en: string; zh: string | null };
-	/** One-line blurb, per language. */
-	summary: { en: string; zh: string | null };
+	/** The template's own description, per language. */
+	description: { en: string; zh: string | null };
 }
 
 /**
@@ -84,7 +84,7 @@ export class CreationService implements DaemonService {
 				id: t.name,
 				tab: t.tab,
 				title: t.title,
-				summary: t.blurb,
+				description: t.description,
 			})),
 		};
 	}

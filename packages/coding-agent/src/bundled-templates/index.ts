@@ -63,16 +63,21 @@ export interface BundledTemplateDef {
 	 */
 	readonly examplePath: string;
 	/**
-	 * What the card says, in both languages.
+	 * What the card's tooltip says, in both languages.
 	 *
-	 * The blurb comes from the template's own SKILL.md rather than from a string
-	 * written here: a summary in this file drifts from the skill it describes the
-	 * moment either is edited, and the upstream templates already carry the
-	 * Chinese fields for the ones that have been translated. A template with no
-	 * translation falls back to English rather than losing its label.
+	 * The description comes from the template's own SKILL.md rather than from a
+	 * string written here: a summary in this file drifts from the skill it
+	 * describes the moment either is edited, and the upstream templates already
+	 * carry the Chinese fields for the ones that have been translated. A template
+	 * with no translation falls back to English rather than losing its tooltip.
+	 *
+	 * Kept whole. A skill's description is several sentences, and the tail is
+	 * where it says when to reach for this shape rather than a neighbouring one
+	 * — the part a person reads to decide between six prototypes. A one-line trim
+	 * keeps the first sentence and drops exactly that.
 	 */
-	readonly blurb: LocalizedText;
-	/** Display name, also from the frontmatter (`name` / `zh_name`). */
+	readonly description: LocalizedText;
+	/** Display name, also from the frontmatter (`en_name` / `zh_name`). */
 	readonly title: LocalizedText;
 }
 
@@ -89,11 +94,23 @@ export function localizeText(text: LocalizedText, locale: string): string {
 	return locale.toLowerCase().startsWith("zh") && text.zh ? text.zh : text.en;
 }
 
+/**
+ * Read a frontmatter string field as one line.
+ *
+ * Both steps matter for a tooltip. The trim drops a YAML block scalar's
+ * trailing newline; the fold drops the soft line breaks inside one, which the
+ * YAML parser keeps because the source wraps them for readability. An untrimmed
+ * field arrives with a newline in the middle, and the browser's `title`
+ * renders a tooltip with a hard line break in it.
+ */
+function readField(fm: Record<string, unknown>, key: string): string {
+	return typeof fm[key] === "string" ? (fm[key] as string).replace(/\s+/g, " ").trim() : "";
+}
+
 /** Frontmatter → bilingual field, tolerating a missing translation. */
 function localized(fm: Record<string, unknown>, enKey: string, zhKey: string): LocalizedText {
-	const en = typeof fm[enKey] === "string" ? (fm[enKey] as string).trim() : "";
-	const zh = typeof fm[zhKey] === "string" ? (fm[zhKey] as string).trim() : "";
-	return { en, zh: zh === "" ? null : zh };
+	const zh = readField(fm, zhKey);
+	return { en: readField(fm, enKey), zh: zh === "" ? null : zh };
 }
 
 function build(name: string, tab: CreationTemplateTab, skill: string, examplePath: string): BundledTemplateDef {
@@ -101,20 +118,12 @@ function build(name: string, tab: CreationTemplateTab, skill: string, examplePat
 	const title = localized(fm, "en_name", "zh_name");
 	// `description` is the skill's own summary and the only one most templates
 	// carry; `en_description` exists on the translated ones as an explicit
-	// English side. Read either, so a template is never left without a blurb.
-	const blurb = {
-		en:
-			(typeof fm.en_description === "string" && fm.en_description.trim()) ||
-			(typeof fm.description === "string" ? fm.description.trim() : ""),
-		zh: typeof fm.zh_description === "string" && fm.zh_description.trim() ? fm.zh_description.trim() : null,
-	};
-	// A skill's description is a paragraph; a rail card's blurb is a line. Trim to
-	// the first sentence so the tooltip says what the shape is rather than how
-	// the skill works — the agent reads the whole thing anyway.
-	const firstSentence = (text: string): string => {
-		const flat = text.replace(/\s+/g, " ").trim();
-		const stop = flat.search(/[.!?。！？](\s|$)/);
-		return stop === -1 ? flat : flat.slice(0, stop + 1);
+	// English side, which is what a card in an English locale should read rather
+	// than whatever the shared field happens to say. English wins, then the
+	// shared field, so a template is never left without a tooltip.
+	const description: LocalizedText = {
+		en: readField(fm, "en_description") || readField(fm, "description"),
+		zh: readField(fm, "zh_description") || null,
 	};
 	return {
 		name,
@@ -122,7 +131,7 @@ function build(name: string, tab: CreationTemplateTab, skill: string, examplePat
 		skill,
 		examplePath,
 		title: { en: title.en || name, zh: title.zh },
-		blurb: { en: firstSentence(blurb.en), zh: blurb.zh ? firstSentence(blurb.zh) : null },
+		description,
 	};
 }
 

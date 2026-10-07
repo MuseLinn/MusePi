@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { parseFrontmatter } from "@musepi/pi-utils";
 import {
 	BUNDLED_TEMPLATE_NAMES,
 	BUNDLED_TEMPLATES,
@@ -35,9 +36,9 @@ describe("bundled design templates", () => {
 		}
 	});
 
-	it("gives each template a blurb and a creation tab", () => {
+	it("gives each template a description and a creation tab", () => {
 		for (const template of BUNDLED_TEMPLATES) {
-			expect(template.blurb.en.trim().length).toBeGreaterThan(0);
+			expect(template.description.en.trim().length).toBeGreaterThan(0);
 			expect(["prototype", "deck", "media", "live-artifact", "other"]).toContain(template.tab);
 		}
 	});
@@ -48,12 +49,41 @@ describe("bundled design templates", () => {
 		for (const template of BUNDLED_TEMPLATES) {
 			expect(template.title.en.trim().length).toBeGreaterThan(0);
 			if (template.title.zh !== null) expect(template.title.zh.trim().length).toBeGreaterThan(0);
-			if (template.blurb.zh !== null) expect(template.blurb.zh.trim().length).toBeGreaterThan(0);
+			if (template.description.zh !== null) expect(template.description.zh.trim().length).toBeGreaterThan(0);
 		}
 		// simple-deck is the bundled template that ships a translation.
 		const deck = BUNDLED_TEMPLATES.find(t => t.name === "simple-deck");
 		expect(deck?.title.zh).toBeTruthy();
-		expect(deck?.blurb.zh).toBeTruthy();
+		expect(deck?.description.zh).toBeTruthy();
+	});
+
+	it("keeps the whole description rather than trimming it to one sentence", () => {
+		// The card carries a name and nothing else, so the tooltip is where a shape
+		// gets explained. Cutting it to the first sentence drops exactly the half
+		// that tells two neighbouring templates apart — the reference product's
+		// own start-from rail puts the full localized description in the tooltip.
+		const prototype = BUNDLED_TEMPLATES.find(t => t.name === "web-prototype")!;
+		const fm = parseFrontmatter(prototype.skill).frontmatter as Record<string, unknown>;
+		expect(prototype.description.en).toBe((fm.description as string).replace(/\s+/g, " ").trim());
+		// Its description is three sentences; a one-line trim would keep one.
+		expect(prototype.description.en.split(/[.!?。！？]\s/).filter(s => s.trim()).length).toBeGreaterThan(1);
+		// It ends on the last sentence, not the first: the tail is what says
+		// "default when nothing more specific matches", which is the whole reason
+		// to prefer this shape over the six other prototypes.
+		expect(prototype.description.en).toContain("when no more specific skill matches");
+		// A hard line break inside a tooltip renders as a broken two-row bubble.
+		expect(prototype.description.en).not.toContain("\n");
+	});
+
+	it("prefers the explicit English side when a template ships one", () => {
+		// `en_description` exists on the translated templates as the English half
+		// of a pair; a template that carries it must not fall back to the shared
+		// `description`, which may describe the same thing in the other language.
+		const deck = BUNDLED_TEMPLATES.find(t => t.name === "simple-deck")!;
+		const fm = parseFrontmatter(deck.skill).frontmatter as Record<string, unknown>;
+		expect(fm.en_description).toBeTruthy();
+		expect(deck.description.en).toBe((fm.en_description as string).trim());
+		expect(deck.description.zh).toBe((fm.zh_description as string).trim());
 	});
 
 	it("localizes against the active locale and falls back to English", () => {

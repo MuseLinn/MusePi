@@ -43,10 +43,10 @@ interface BundledTemplateSummary {
 	/** Creation surface this shape belongs to; a plain string like the saved
 	 *  template rail's, because the renderer does not import daemon types. */
 	readonly tab: string;
-	/** Card label and blurb, each bilingual — the daemon ships both and the
+	/** Card label and tooltip, each bilingual — the daemon ships both and the
 	 *  renderer resolves against the active locale. */
 	readonly title: LocalizedText;
-	readonly summary: LocalizedText;
+	readonly description: LocalizedText;
 }
 
 export function StartFromPicker({
@@ -165,14 +165,14 @@ function TemplateCard({
 
 	const on = active;
 	const title = localize(template.title, locale);
-	const blurb = localize(template.summary, locale);
+	const description = localize(template.description, locale);
 	return (
 		<button
 			type="button"
 			role="radio"
 			aria-checked={on}
 			className={`gui-creation-startcard gui-creation-startcard--${template.tab}${on ? " gui-creation-startcard--on" : ""}`}
-			title={blurb}
+			title={description}
 			onMouseEnter={() => setWantPreview(true)}
 			onMouseLeave={() => setWantPreview(false)}
 			onFocus={() => setWantPreview(true)}
@@ -187,7 +187,7 @@ function TemplateCard({
 					// host must not try to drive it.
 					<iframe
 						className="gui-creation-startcard-frame"
-						title={blurb}
+						title={description}
 						sandbox="allow-scripts"
 						srcDoc={html}
 						// Decks read their own width, so a fixed 0 width would hide
