@@ -426,10 +426,33 @@ describe("PluginManager.install load validation", () => {
 
 		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
 			if (cmd[1] === "install") {
+				// `--frozen-lockfile` writes neither package.json nor bun.lock,
+				// which is what makes the rollback repair safe: it re-runs the
+				// install against what was just restored and must not disturb it.
+				// Verified against bun itself rather than assumed — a mock that
+				// wrote here made the rollback look like it had restored the wrong
+				// state, and the failure read as a rollback bug rather than a
+				// fixture that disagreed with the tool.
+				if (cmd.includes("--frozen-lockfile")) {
+					return {
+						pid: 3,
+						stdout: emptyStream(),
+						stderr: emptyStream(),
+						exited: Promise.resolve(0),
+					} as Subprocess;
+				}
 				const prepare = (async () => {
 					// bun install rewrites the lockfile to a stale-but-different pin
 					// and stages the broken v2 tree.
-					await Bun.write(bunLockPath, '# bun.lock\n"git-plugin": "github:org/plugin#sha-install"\n');
+					//
+					// Except under `--frozen-lockfile`, which the rollback repair
+					// passes: that flag exists precisely so the install reproduces the
+					// lock it was handed instead of writing one. A mock that rewrote
+					// it there made the rollback look like it had restored the wrong
+					// pin, when the real command would have left it alone.
+					if (!cmd.includes("--frozen-lockfile")) {
+						await Bun.write(bunLockPath, '# bun.lock\n"git-plugin": "github:org/plugin#sha-install"\n');
+					}
 					await Bun.write(
 						pluginsPkgJson,
 						JSON.stringify(
@@ -556,8 +579,27 @@ describe("PluginManager.install load validation", () => {
 
 		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
 			if (cmd[1] === "install") {
+				// `--frozen-lockfile` writes neither package.json nor bun.lock,
+				// which is what makes the rollback repair safe: it re-runs the
+				// install against what was just restored and must not disturb it.
+				// Verified against bun itself rather than assumed — a mock that
+				// wrote here made the rollback look like it had restored the wrong
+				// state, and the failure read as a rollback bug rather than a
+				// fixture that disagreed with the tool.
+				if (cmd.includes("--frozen-lockfile")) {
+					return {
+						pid: 3,
+						stdout: emptyStream(),
+						stderr: emptyStream(),
+						exited: Promise.resolve(0),
+					} as Subprocess;
+				}
 				const prepare = (async () => {
-					await Bun.write(bunLockPath, '# bun.lock\n"git-plugin": "github:org/plugin#sha-install"\n');
+					// As above: only a resolving install rewrites the pin, and the
+					// rollback repair's `--frozen-lockfile` is not one.
+					if (!cmd.includes("--frozen-lockfile")) {
+						await Bun.write(bunLockPath, '# bun.lock\n"git-plugin": "github:org/plugin#sha-install"\n');
+					}
 				})();
 				return {
 					pid: 1,

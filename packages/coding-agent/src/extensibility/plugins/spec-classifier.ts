@@ -204,9 +204,21 @@ export function parseInstallSpec(raw: string): ParsedInstallSpec {
 		throw invalid(spec, "a URL must point at a git repository or a tarball");
 	}
 
-	const at = spec.indexOf("@", 1);
-	const name = at === -1 ? spec : spec.slice(0, at);
-	const range = at === -1 ? undefined : spec.slice(at + 1);
+	// `npm:<name>` — the package manager's own alias spelling, meaning "this
+	// name, from the registry". Accepted because a person copying an install
+	// command out of a README or another tool's output gets this form, and
+	// rejecting it reports the package as malformed when it is not.
+	//
+	// `name` carries the bare package name because that is what the dependency
+	// map is keyed by; the original spec is preserved so the install command
+	// passes the alias through unchanged rather than rewriting it into a
+	// different resolution.
+	const aliased = /^npm:(?=\S)/i.exec(spec);
+	const bare = aliased === null ? spec : spec.slice(aliased[0].length);
+
+	const at = bare.indexOf("@", 1);
+	const name = at === -1 ? bare : bare.slice(0, at);
+	const range = at === -1 ? undefined : bare.slice(at + 1);
 	if (name.length > PACKAGE_NAME_MAX_LENGTH || !PACKAGE_NAME.test(name)) {
 		throw invalid(spec, "not a package name the registry accepts");
 	}

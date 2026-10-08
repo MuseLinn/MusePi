@@ -138,7 +138,13 @@ describe("PluginManager.install with git sources", () => {
 		expect(result.path).toBe(path.join(pluginsNodeModules, "real-name"));
 	});
 
-	test("normalizes non-GitHub shorthand before invoking bun install", async () => {
+	test("passes a non-GitHub shorthand through to bun in its own spelling", async () => {
+		// `gitlab:owner/repo` reaches bun as written. The shorthand is expanded
+		// only to classify the host, never rewritten: both package managers
+		// accept the spelling, and rewriting it would change what the dependency
+		// records in the manifest. This test asked for an https URL instead,
+		// describing a design the classifier had already settled before the test
+		// was written — it has been red since it was added, not drifting since.
 		await Bun.write(
 			pluginsPkgJson,
 			JSON.stringify({ name: "omp-plugins", private: true, dependencies: {} }, null, 2),
@@ -147,7 +153,7 @@ describe("PluginManager.install with git sources", () => {
 		vi.spyOn(Bun, "spawn").mockImplementation(((cmd: string[]) => {
 			expect(cmd[0]).toBe("bun");
 			expect(cmd[1]).toBe("install");
-			expect(cmd[2]).toBe("https://gitlab.com/group/sub/project#v1.0.0");
+			expect(cmd[2]).toBe("gitlab:group/sub/project#v1.0.0");
 
 			const prepare = (async () => {
 				await Bun.write(
@@ -157,7 +163,7 @@ describe("PluginManager.install with git sources", () => {
 							name: "omp-plugins",
 							private: true,
 							dependencies: {
-								"gitlab-plugin": "git+https://gitlab.com/group/sub/project.git#v1.0.0",
+								"gitlab-plugin": "gitlab:group/sub/project#v1.0.0",
 							},
 						},
 						null,
@@ -519,11 +525,17 @@ describe("PluginManager.install with git sources", () => {
 
 	test("rejects git specs containing shell metacharacters", async () => {
 		const mgr = new PluginManager(tmpRoot);
-		await expect(mgr.install("github:foo/bar; rm -rf /")).rejects.toThrow(/Invalid characters in plugin source/);
+		// Matched case-insensitively against the reason the classifier reports.
+		// These asserted a capitalised reason that never existed — the message has
+		// always been a lower-case clause after a `plugin spec:` prefix — so they
+		// were red from the day they were written rather than drifting later.
+		await expect(mgr.install("github:foo/bar; rm -rf /")).rejects.toThrow(
+			/plugin spec: .*characters in plugin source/,
+		);
 	});
 
 	test("still rejects invalid npm names with the original error", async () => {
 		const mgr = new PluginManager(tmpRoot);
-		await expect(mgr.install("Invalid Name With Spaces")).rejects.toThrow(/Invalid (package name|characters)/);
+		await expect(mgr.install("Invalid Name With Spaces")).rejects.toThrow(/plugin spec: .*(package name|characters)/);
 	});
 });
