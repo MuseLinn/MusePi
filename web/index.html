@@ -44,7 +44,7 @@
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" fill="currentColor"><path d="M8 .2a8 8 0 0 0-2.5 15.6c.4.07.55-.17.55-.38v-1.3c-2.25.5-2.72-1.08-2.72-1.08-.37-.94-.9-1.19-.9-1.19-.73-.5.06-.49.06-.49.82.06 1.25.84 1.25.84.73 1.25 1.9.89 2.37.68.07-.53.29-.89.52-1.1-1.8-.2-3.7-.9-3.7-4 0-.88.31-1.6.83-2.16-.08-.2-.36-1.02.08-2.12 0 0 .68-.22 2.23.83a7.7 7.7 0 0 1 4.05 0c1.54-1.05 2.22-.83 2.22-.83.45 1.1.16 1.92.08 2.13.52.56.83 1.27.83 2.16 0 3.11-1.9 3.8-3.7 4 .29.25.55.75.55 1.51v2.24c0 .21.15.46.55.38A8 8 0 0 0 8 .2z"/></svg>
           <span class="mp-topbar-gh-word">GitHub</span>
         </a>
-        <button class="mp-btn mp-btn--primary mp-btn--sm" type="button" data-open-demo data-i18n="nav.cta">体验 MusePi</button>
+        <a class="mp-btn mp-btn--primary mp-btn--sm" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="nav.cta">体验 MusePi</a>
         <button class="mp-nav-toggle" type="button" id="nav-toggle" aria-label="菜单" data-i18n-aria="menu.aria" aria-controls="mp-nav" aria-expanded="false">
           <span></span><span></span><span></span>
         </button>
@@ -70,7 +70,7 @@
           MusePi 是一位真正能动手的 AI 搭档：写代码、跑命令、查资料、开浏览器，样样上手。桌面应用、命令行、手机随时切换，会话与设置一路跟着你；模型、工具、界面都是可换的零件，按你的工作流重新组装——而不只是浏览器里又一个标签页。
         </p>
         <div class="mp-cta-row">
-          <button class="mp-btn mp-btn--primary" type="button" data-open-demo data-i18n="hero.cta.book">预约演示</button>
+          <a class="mp-btn mp-btn--primary" href="https://discord.gg/4NMW9cdXZa" target="_blank" rel="noopener" data-i18n="hero.cta.discord">加入 Discord</a>
           <span class="mp-dl">
             <a class="mp-btn mp-btn--soft mp-dl-main" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="hero.cta.dl">下载桌面版</a>
             <button class="mp-dl-caret" type="button" id="dl-caret" aria-haspopup="true" aria-expanded="false" aria-controls="dl-menu" aria-label="选择其他平台" data-i18n-aria="dl.aria">
@@ -449,10 +449,10 @@
       <div class="mp-container mp-cta-band-inner mp-reveal">
         <div class="mp-cta-band-copy">
           <h2 class="mp-h2" data-i18n="cta.h2">把它接到你手上的机器</h2>
-          <p data-i18n="cta.sub">一行命令装好后台服务与桌面应用，或在首屏的平台菜单里直接挑你的安装包。想先看我们走一遍，就约个演示。</p>
+          <p data-i18n="cta.sub">一行命令装好后台服务与桌面应用，或在首屏的平台菜单里直接挑你的安装包。有问题、想找人一起折腾，就来 Discord 找我们。</p>
         </div>
         <div class="mp-cta-band-actions">
-          <button class="mp-btn mp-btn--primary" type="button" data-open-demo data-i18n="cta.book">预约演示</button>
+          <a class="mp-btn mp-btn--primary" href="https://discord.gg/4NMW9cdXZa" target="_blank" rel="noopener" data-i18n="cta.discord">加入 Discord</a>
           <a class="mp-btn mp-btn--soft" href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="cta.dl">下载</a>
         </div>
       </div>
@@ -491,7 +491,7 @@
           <div class="mp-footer-col">
             <span class="mp-footer-col-title" data-i18n="footer.colStart">开始</span>
             <a href="#faq" data-i18n="footer.faq">常见问题</a>
-            <button class="mp-footer-linkbtn" type="button" data-open-demo data-i18n="cta.book">预约演示</button>
+            <a class="mp-footer-linkbtn" href="https://discord.gg/4NMW9cdXZa" target="_blank" rel="noopener" data-i18n="cta.discord">加入 Discord</a>
             <a href="https://github.com/MuseLinn/MusePi/releases/latest" target="_blank" rel="noopener" data-i18n="footer.get">获取安装包</a>
           </div>
         </nav>
@@ -502,79 +502,6 @@
       </div>
     </div>
   </footer>
-
-  <!-- ===== 演示预约表单（模态） ===== -->
-  <div class="mp-modal" id="demo-modal" hidden>
-    <div class="mp-modal-backdrop" data-close-demo></div>
-    <div class="mp-modal-card" role="dialog" aria-modal="true" aria-labelledby="demo-title" aria-describedby="demo-desc">
-      <button class="mp-modal-x" type="button" data-close-demo aria-label="关闭" data-i18n-aria="demo.close">
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-      </button>
-
-      <div class="mp-modal-head">
-        <p class="mp-kicker" data-i18n="demo.kicker">预约演示</p>
-        <h2 id="demo-title" class="mp-h3" data-i18n="demo.title">我们带你走一遍 MusePi</h2>
-        <p id="demo-desc" class="mp-modal-desc" data-i18n="demo.desc">留下几行信息，正式版会按你的场景准备一段 20 分钟的实地演示——从安装到多面协作。当前这一步还是原型：只做输入校验与提交结果展示，不联网。</p>
-      </div>
-
-      <form class="mp-form" id="demo-form" novalidate>
-        <div class="mp-field">
-          <label for="f-name" data-i18n="demo.name">称呼</label>
-          <input id="f-name" name="name" type="text" autocomplete="name" data-i18n-ph="demo.name.ph" placeholder="怎么称呼你" />
-          <p class="mp-field-err" data-err-for="name" role="alert"></p>
-        </div>
-        <div class="mp-field">
-          <label for="f-email" data-i18n="demo.email">邮箱</label>
-          <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" />
-          <p class="mp-field-err" data-err-for="email" role="alert"></p>
-        </div>
-        <div class="mp-field-row">
-          <div class="mp-field">
-            <label for="f-team" data-i18n="demo.team">团队规模</label>
-            <select id="f-team" name="team">
-              <option value="个人" data-i18n="demo.team.o1">个人 / 独立开发</option>
-              <option value="2-10 人" data-i18n="demo.team.o2">2–10 人</option>
-              <option value="11-50 人" data-i18n="demo.team.o3">11–50 人</option>
-              <option value="50 人以上" data-i18n="demo.team.o4">50 人以上</option>
-            </select>
-            <p class="mp-field-err" data-err-for="team" role="alert"></p>
-          </div>
-          <div class="mp-field">
-            <label for="f-platform" data-i18n="demo.platform">常用平台</label>
-            <select id="f-platform" name="platform">
-              <option value="macOS">macOS</option>
-              <option value="Windows">Windows</option>
-              <option value="Linux">Linux</option>
-              <option value="Android" data-i18n="demo.platform.o4">Android 移动伴侣</option>
-              <option value="终端 TUI" data-i18n="demo.platform.o5">终端 TUI</option>
-            </select>
-            <p class="mp-field-err" data-err-for="platform" role="alert"></p>
-          </div>
-        </div>
-        <div class="mp-field">
-          <label for="f-goal" data-i18n="demo.goal">最想解决的问题</label>
-          <textarea id="f-goal" name="goal" rows="3" data-i18n-ph="demo.goal.ph" placeholder="比如：想在多个终端会话里共享上下文，并接自己的模型密钥……"></textarea>
-          <p class="mp-field-err" data-err-for="goal" role="alert"></p>
-        </div>
-        <button class="mp-btn mp-btn--primary mp-btn--block" type="submit" data-i18n="demo.submit">提交演示申请</button>
-        <p class="mp-form-fine" data-i18n="demo.fine">原型表单：内容只留在你浏览器的这一页里，不上传、不发送，也不会给你发邮件。</p>
-      </form>
-
-      <div class="mp-form-done" id="demo-done" hidden>
-        <div class="mp-form-done-mark" aria-hidden="true">
-          <svg viewBox="0 0 44 44" width="44" height="44" fill="none"><circle cx="22" cy="22" r="20" stroke="currentColor" stroke-width="2"/><path d="M13 22.5l6 6 12-13" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <h3 class="mp-h3" data-i18n="demo.doneTitle">校验通过，信息如下</h3>
-        <p class="mp-form-done-lead"><span data-i18n="demo.doneLead">原型流程跑通了，</span><span class="mp-form-done-name">朋友</span><span data-i18n="demo.doneLead2">。下面这些只存在于你当前这个页面里：</span></p>
-        <dl class="mp-form-done-list" id="done-summary"></dl>
-        <p class="mp-form-done-note" data-i18n="demo.doneNote">没有邮件发出，也没有任何数据上传。接入后端后，这里会显示真实的预约编号与确认时间。</p>
-        <div class="mp-form-done-actions">
-          <button class="mp-btn mp-btn--soft" type="button" id="demo-reset" data-i18n="demo.reset">再填一份</button>
-          <button class="mp-btn mp-btn--primary" type="button" data-close-demo data-i18n="demo.finish">完成</button>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script src="./i18n.js" defer></script>
   <script src="./main.js" defer></script>

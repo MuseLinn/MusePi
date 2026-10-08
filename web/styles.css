@@ -860,74 +860,6 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
 .mp-footer-bottom { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 26px; font-size: 13px; color: var(--text-faint); }
 .mp-footer-fine { color: var(--text-faint); opacity: 0.8; }
 
-/* ===== 演示模态 ===== */
-.mp-modal { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; }
-.mp-modal[hidden] { display: none; }
-.mp-modal-backdrop { position: absolute; inset: 0; background: rgba(6, 6, 8, 0.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); animation: mp-fade 200ms var(--ease); }
-.mp-modal-card {
-  position: relative;
-  width: min(520px, 100%);
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  padding: 32px;
-  background: var(--bg-1);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-lg);
-  box-shadow: inset 0 1px 0 var(--line-inner), 0 40px 100px -30px rgba(0, 0, 0, 0.9), 0 0 60px -34px var(--accent-glow);
-  animation: mp-rise 280ms var(--spring);
-}
-@keyframes mp-fade { from { opacity: 0; } }
-@keyframes mp-rise { from { opacity: 0; transform: translateY(16px) scale(0.98); } }
-.mp-modal-x {
-  position: absolute; top: 18px; right: 18px;
-  width: 34px; height: 34px;
-  display: grid; place-items: center;
-  color: var(--text-muted);
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  transition: color 160ms var(--ease), border-color 160ms var(--ease);
-}
-.mp-modal-x:hover { color: var(--text); border-color: var(--line-strong); }
-.mp-modal-head { margin-bottom: 22px; }
-.mp-modal-desc { margin-top: 10px; color: var(--text-muted); font-size: 14.5px; line-height: 1.6; }
-
-.mp-form { display: flex; flex-direction: column; gap: 16px; }
-.mp-form fieldset { border: 0; margin: 0; padding: 0; }
-.mp-field { display: flex; flex-direction: column; gap: 7px; }
-.mp-field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.mp-field label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-.mp-field input, .mp-field select, .mp-field textarea {
-  width: 100%;
-  padding: 11px 13px;
-  font-family: inherit;
-  font-size: 14.5px;
-  color: var(--text);
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
-}
-.mp-field textarea { resize: vertical; min-height: 78px; line-height: 1.55; }
-.mp-field select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%); background-position: calc(100% - 18px) center, calc(100% - 13px) center; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px; }
-.mp-field input::placeholder, .mp-field textarea::placeholder { color: var(--text-faint); }
-.mp-field input:focus, .mp-field select:focus, .mp-field textarea:focus { outline: 0; border-color: var(--accent-line); box-shadow: 0 0 0 3px var(--accent-soft); }
-.mp-field.is-error input, .mp-field.is-error select, .mp-field.is-error textarea { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(242, 85, 90, 0.16); }
-.mp-field-err { min-height: 0; font-size: 12.5px; color: var(--danger); opacity: 0; max-height: 0; overflow: hidden; transition: opacity 160ms var(--ease), max-height 160ms var(--ease); }
-.mp-field.is-error .mp-field-err { opacity: 1; max-height: 2.6em; }
-.mp-form-fine { font-size: 12px; color: var(--text-faint); line-height: 1.5; }
-
-.mp-form-done { text-align: center; padding: 8px 0; }
-.mp-form-done-mark { display: grid; place-items: center; width: 72px; height: 72px; margin: 6px auto 18px; color: var(--accent); border-radius: 50%; background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent-line), 0 0 40px -8px var(--accent-glow); animation: mp-pop 380ms var(--spring); }
-@keyframes mp-pop { from { transform: scale(0.6); opacity: 0; } }
-.mp-form-done-lead { color: var(--text-muted); font-size: 14.5px; margin-top: 8px; }
-.mp-form-done-name { color: var(--accent); font-weight: 600; }
-.mp-form-done-list { margin: 20px auto 4px; padding: 18px 20px; max-width: 360px; text-align: left; display: grid; grid-template-columns: auto 1fr; gap: 8px 18px; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); }
-.mp-form-done-list dt { font-size: 13px; color: var(--text-faint); }
-.mp-form-done-list dd { margin: 0; font-size: 13px; color: var(--text); font-weight: 500; }
-.mp-form-done-note { margin-top: 14px; font-size: 12px; color: var(--text-faint); }
-.mp-form-done-actions { display: flex; gap: 12px; justify-content: center; margin-top: 22px; }
-
 /* ===== 滚动揭示 ===== */
 .mp-reveal { opacity: 0; transform: translateY(18px); transition: opacity 620ms var(--ease), transform 620ms var(--spring); }
 .mp-reveal.is-in { opacity: 1; transform: none; }
@@ -982,8 +914,6 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
   .mp-pane--chat { min-height: 360px; }
   .mp-cta-band-inner { flex-direction: column; align-items: flex-start; }
   .mp-log-item { flex-direction: column; gap: 10px; align-items: flex-start; }
-  .mp-modal-card { padding: 24px 20px; }
-  .mp-field-row { grid-template-columns: 1fr; }
   .mp-footer-bottom { flex-direction: column; gap: 6px; }
 }
 
@@ -1003,5 +933,4 @@ body.mp-menu-open .mp-nav-toggle span:nth-child(3) { transform: translateY(-7px)
     transition-duration: 0.001ms !important;
   }
   .mp-reveal { opacity: 1; transform: none; }
-  .mp-modal-backdrop, .mp-modal-card, .mp-form-done-mark { animation: none; }
 }

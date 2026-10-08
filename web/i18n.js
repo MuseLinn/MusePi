@@ -1,7 +1,7 @@
 /* MusePi 官网双语层：中 / EN。
  * 静态文案靠 DOM 上的 data-i18n / data-i18n-ph / data-i18n-aria 键切换；
  * 中文是页面里的原文（首次加载时快照，切回中文即还原），英文来自下面的 EN 表。
- * 运行时字符串（校验提示、提交摘要标签）走 MPI18N.t()，供 main.js 调用。 */
+ * 运行时字符串走 MPI18N.t()，供 main.js 调用。 */
 (function () {
   "use strict";
 
@@ -27,7 +27,7 @@
       'Your <span class="mp-accent">AI partner</span> —<br />it does more than write code:<br class="mp-only-desktop" />rebuild it around your workflow.',
     "hero.sub":
       "MusePi is a hands-on AI partner: it writes code, runs commands, reads up and drives the browser. Switch between the desktop app, the command line and your phone anytime — sessions and settings follow you. Models, tools and surfaces are swappable parts, so you can rebuild it around the way you work instead of accepting one more browser tab.",
-    "hero.cta.book": "Book a demo",
+    "hero.cta.discord": "Join Discord",
     "hero.cta.dl": "Download desktop",
     "hero.cta.look": "See the interface",
     "hero.term.aria": "Install commands",
@@ -188,8 +188,8 @@
     /* CTA band */
     "cta.h2": "Connect it to the machines you have",
     "cta.sub":
-      "One command installs the background service and the desktop app, or pick your package from the platform menu in the first screen. Want to watch us run it first? Book a demo.",
-    "cta.book": "Book a demo",
+      "One command installs the background service and the desktop app, or pick your package from the platform menu in the first screen. Questions, ideas or just want to poke around? Join us on Discord.",
+    "cta.discord": "Join Discord",
     "cta.dl": "Download",
 
     /* 页脚 */
@@ -210,36 +210,6 @@
     "footer.rights": " · MIT License",
     "footer.fine":
       "Our own engine, running locally, MIT open source — your code and your keys stay on your machine.",
-
-    /* 演示模态 */
-    "demo.close": "Close",
-    "demo.kicker": "Book a demo",
-    "demo.title": "We'll walk you through MusePi",
-    "demo.desc":
-      "Leave a few lines and we'll prepare a 20-minute hands-on demo tailored to your scenario — from install to multi-surface collaboration. This step is still a prototype: it validates your input and shows the result, nothing more.",
-    "demo.name": "Name",
-    "demo.name.ph": "What should we call you",
-    "demo.email": "Email",
-    "demo.team": "Team size",
-    "demo.team.o1": "Solo / independent",
-    "demo.team.o2": "2–10 people",
-    "demo.team.o3": "11–50 people",
-    "demo.team.o4": "50+ people",
-    "demo.platform": "Main platform",
-    "demo.platform.o4": "Android companion",
-    "demo.platform.o5": "Terminal TUI",
-    "demo.goal": "Problem you most want to solve",
-    "demo.goal.ph": "e.g. share context across several terminal sessions and plug in my own model keys…",
-    "demo.submit": "Submit demo request",
-    "demo.fine":
-      "Prototype form: what you type stays in this page on your own browser. Nothing is uploaded, nothing is sent, and no email reaches you.",
-    "demo.doneTitle": "Validation passed — here is what was captured",
-    "demo.doneLead": "The prototype flow ran, ",
-    "demo.doneLead2": ". Everything below lives only in the page you have open:",
-    "demo.doneNote":
-      "No email was sent and no data was uploaded. Once a backend is wired in, a real booking reference and confirmation time will appear here.",
-    "demo.reset": "Fill another",
-    "demo.finish": "Done",
   };
 
   var HEAD_EN = {
@@ -251,29 +221,8 @@
       "A hands-on AI partner: it writes code, runs commands and drives the browser, and you can rebuild it around your workflow. Desktop · command line · phone share the same sessions, 60+ providers, runs locally. Free to test, community edition free forever.",
   };
 
-  /* 运行时字符串（不在 DOM 上，供 main.js 调用） */
-  var JS = {
-    "lbl.name": { zh: "称呼", en: "Name" },
-    "lbl.email": { zh: "邮箱", en: "Email" },
-    "lbl.team": { zh: "团队规模", en: "Team size" },
-    "lbl.platform": { zh: "常用平台", en: "Main platform" },
-    "lbl.goal": { zh: "想解决的问题", en: "Problem to solve" },
-    "err.name.req": { zh: "请填写称呼。", en: "Please enter your name." },
-    "err.name.min": { zh: "称呼至少 2 个字符。", en: "Name must be at least 2 characters." },
-    "err.email.req": { zh: "请填写邮箱。", en: "Please enter your email." },
-    "err.email.fmt": {
-      zh: "邮箱格式不正确，例如 name@example.com。",
-      en: "That email doesn't look right, e.g. name@example.com.",
-    },
-    "err.goal.req": {
-      zh: "简单说说你想解决的问题。",
-      en: "Briefly describe the problem you want to solve.",
-    },
-    "err.goal.min": {
-      zh: "再多写一点，至少 10 个字符。",
-      en: "A bit more, at least 10 characters.",
-    },
-  };
+  /* MPI18N.t() 供 main.js 调用；当前没有运行时文案，保留这个空表作为接口。 */
+  var JS = {};
 
   var nodes = [];
   document.querySelectorAll("[data-i18n]").forEach(function (el) {
