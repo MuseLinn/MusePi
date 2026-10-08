@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { ExtensionRuntime } from "../../extensibility/extensions/loader";
 import { ViewStore } from "../view-store";
 import { ApprovalService } from "./approval-service";
+import { ArchiveService } from "./archive-service";
 import { BoardService } from "./board-service";
 import { BrowserService } from "./browser-service";
 import { ConnectorService } from "./connector-service";
@@ -173,6 +174,8 @@ function buildRegistry(): HostServices {
 			onInstallOutput: () => {},
 		}),
 	);
+	// ArchiveService：无宿主依赖（本测试不发起归档），仅需认领路由参与闭包。
+	services.register(new ArchiveService({ archivesDir: () => join(mkdtempSync(join(tmpdir(), "musepi-arch-")), "z") }));
 	return services;
 }
 

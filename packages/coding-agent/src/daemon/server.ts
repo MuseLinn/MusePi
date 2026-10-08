@@ -474,6 +474,7 @@ import { isFileIndexBackendEnabled } from "../tools/file-backend";
 import { openPath } from "../utils/open";
 import { installWindowsSpawnGuard } from "../utils/windows-spawn-guard";
 import { ApprovalService } from "./services/approval-service";
+import { ArchiveService } from "./services/archive-service";
 import { BoardService } from "./services/board-service";
 import { BrowserService } from "./services/browser-service";
 import { ConnectorService } from "./services/connector-service";
@@ -659,6 +660,8 @@ export class DaemonServer {
 				ensureFileIndex: () => host.ensureFileIndex(),
 			}),
 		);
+		// ArchiveService 无宿主依赖：归档落 agent dir 下，随会话隔离走。
+		this.#services.register(new ArchiveService());
 		// 收编第四刀（设计稿 §2 目标形态）：terminal-core builtin 插件单元——
 		// pty backend 注册表收进插件 fiber（provide terminal:backends），
 		// bun-pty / node-pty 两个 provider 子单元经 cordis inject 注册
@@ -7202,6 +7205,16 @@ export class DaemonServer {
 			}
 			case "workspace.tree": {
 				return this.#services.get<FileService>("files").tree(params ?? {});
+			}
+			case "archive.build": {
+				// 委托 ArchiveService（选中文件打 zip；build-then-poll 语义、
+				// 输出路径围栏与接缝声明都在服务头）。
+				return this.#services
+					.get<ArchiveService>("archive")
+					.build((params ?? {}) as { sessionId?: string; paths?: readonly string[]; name?: string });
+			}
+			case "archive.status": {
+				return this.#services.get<ArchiveService>("archive").status((params ?? {}) as { id?: string });
 			}
 			case "artifact.list": {
 				// Artifacts-panel discovery: scan the workspace for
