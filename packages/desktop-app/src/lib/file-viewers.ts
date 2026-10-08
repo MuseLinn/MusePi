@@ -119,15 +119,13 @@ export function registerFileViewer(viewer: FileViewer): () => void {
 /**
  * Registered viewers, in the order they will be tried.
  *
- * Not exported: what a person needs when two viewers disagree is the order, and
- * that is answered by the symptom (a preview that never appears) rather than by
- * a list. Exporting it would also freeze this ordering into a second contract
- * that has to be kept in step with the one below.
+ * Exported because the pane has to merge this global table with the viewers it
+ * builds itself: a component-scoped list alone would make
+ * {@link registerFileViewer} decorative — a plugin could register a viewer and
+ * nothing would ever consult it. This is the read side of that contract.
  */
-function listFileViewers(): readonly FileViewer[] {
-	return [...registry].sort(
-		(a, b) => (a.priority ?? VIEWER_PRIORITY.builtin) - (b.priority ?? VIEWER_PRIORITY.builtin),
-	);
+export function listFileViewers(): readonly FileViewer[] {
+	return orderViewers(registry);
 }
 
 /** Drop every registration. Tests only — a real unload goes through the returned disposer. */
@@ -145,6 +143,38 @@ export function resetFileViewers(): void {
  */
 export function selectFileViewer(input: ViewerInput): FileViewer | undefined {
 	return listFileViewers().find(viewer => viewer.matches(input));
+}
+
+/**
+ * Order a viewer list by declared priority. Exposed so a host that keeps its
+ * own set — a component whose viewers are built per-instance from component-
+ * scoped services — runs the same ordering the global registry uses, rather
+ * than relying on the order it happened to assemble them in.
+ */
+export function orderViewers(viewers: readonly FileViewer[]): readonly FileViewer[] {
+	return [...viewers].sort(
+		(a, b) => (a.priority ?? VIEWER_PRIORITY.builtin) - (b.priority ?? VIEWER_PRIORITY.builtin),
+	);
+}
+
+/**
+ * Render a file against an explicit viewer list, first match that renders wins.
+ *
+ * The same decline-then-try-the-next rule as {@link renderWithViewers}, over a
+ * caller's own viewers rather than the global table — for the case where the
+ * services a viewer needs are component-scoped and a process-wide registry
+ * would have one instance's services answer another's file.
+ */
+export async function renderWithViewerList(
+	viewers: readonly FileViewer[],
+	input: ViewerInput,
+): Promise<ViewerResult | undefined> {
+	for (const viewer of orderViewers(viewers)) {
+		if (!viewer.matches(input)) continue;
+		const result = await viewer.render(input);
+		if (result !== undefined) return result;
+	}
+	return undefined;
 }
 
 /**

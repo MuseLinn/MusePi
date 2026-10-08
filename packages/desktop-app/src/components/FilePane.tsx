@@ -30,6 +30,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { owningArtifact, useArtifactIndex } from "../lib/artifact-index";
 // Import order below is alphabetical by module path (biome).
+import { type BuiltinViewerDeps, builtinFileViewers } from "../lib/builtin-file-viewers";
+import { listFileViewers, orderViewers, renderWithViewerList } from "../lib/file-viewers";
 import {
 	onGitPrefsChanged,
 	readShowHidden,
@@ -38,6 +40,7 @@ import {
 	writeShowIgnored,
 } from "../lib/git-prefs";
 import { useChatHighlight } from "../lib/highlight";
+import { previewMappingFor } from "../lib/preview-from-viewer";
 import { useConfirm } from "../lib/prompt-dialog";
 import type { RpcClient } from "../lib/rpc";
 import { ContextMenu, type ContextMenuItem } from "./ContextMenu";
@@ -53,6 +56,28 @@ const HTML_VIEW_SEGMENTS: SegmentedOption<"live" | "source">[] = [
 	{ value: "live", label: t("page preview") },
 	{ value: "source", label: t("source code") },
 ];
+
+/**
+ * Inline PDF preview via pdf.js (VS Code-style): render every page to a canvas
+ * → data URL. Throws on a corrupt/encrypted PDF; the pdf viewer turns that into
+ * a decline, which the pane reads as "open in the system default app".
+ */
+async function renderPdfPagesToDataUrls(bytes: Uint8Array): Promise<string[]> {
+	const doc = await pdfjs.getDocument({ data: bytes }).promise;
+	const pages: string[] = [];
+	for (let i = 1; i <= doc.numPages; i++) {
+		const page = await doc.getPage(i);
+		const viewport = page.getViewport({ scale: 1.5 });
+		const canvas = document.createElement("canvas");
+		canvas.width = Math.ceil(viewport.width);
+		canvas.height = Math.ceil(viewport.height);
+		const pctx = canvas.getContext("2d");
+		if (!pctx) throw new Error("canvas unavailable");
+		await page.render({ canvas, canvasContext: pctx, viewport }).promise;
+		pages.push(canvas.toDataURL("image/png"));
+	}
+	return pages;
+}
 
 /**
  * Workspace file pane: the daemon's structured workspace.tree scan rendered
@@ -86,12 +111,14 @@ interface PreviewState {
 	htmlLive?: string;
 	/** blob URL for image preview */
 	imageUrl?: string;
-	/** rendered PDF pages as data URLs (inline pdf.js preview) */
-	pdfPages?: string[];
+	/** rendered PDF pages as data URLs (inline pdf.js preview). Readonly: the
+	 *  viewer produces them frozen and the pane only maps over them. */
+	pdfPages?: readonly string[];
 	/** docx bytes for the docx-preview renderer */
 	docxBytes?: ArrayBuffer;
-	/** xlsx/xls/csv sheets rendered to standalone HTML tables */
-	officeSheets?: Array<{ name: string; html: string; truncated: boolean }>;
+	/** xlsx/xls/csv sheets rendered to standalone HTML tables. Readonly: the
+	 *  sheet builder's output is handed to the pane to render, never edited. */
+	officeSheets?: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
 	error?: string;
 	/** preview shown but content opens externally (unsupported binaries) */
 	external?: boolean;
@@ -108,82 +135,6 @@ interface PreviewState {
 const EDIT_MAX_BYTES = 2 * 1024 * 1024;
 /** sheet_to_html truncation point per sheet (parse-time sheetRows cap). */
 const OFFICE_SHEET_ROWS = 1000;
-
-const TEXT_EXT = new Set([
-	"txt",
-	"md",
-	"ts",
-	"tsx",
-	"js",
-	"jsx",
-	"json",
-	"toml",
-	"yaml",
-	"yml",
-	"css",
-	"html",
-	"xml",
-	"log",
-	"c",
-	"h",
-	"rs",
-	"py",
-	"go",
-	"sh",
-	"zsh",
-	"bash",
-	"csv",
-	"env",
-	"gitignore",
-	"ini",
-	"conf",
-]);
-
-/** Extension → tree-sitter language name for the preview highlighter.
- *  Mirrors the transcript diff set (tool-render parts.tsx EXT_HIGHLIGHT_LANG)
- *  so previews and diffs highlight the same languages consistently. */
-const EXT_LANG: Record<string, string> = {
-	ts: "typescript",
-	mts: "typescript",
-	cts: "typescript",
-	tsx: "tsx",
-	js: "javascript",
-	mjs: "javascript",
-	cjs: "javascript",
-	jsx: "javascript",
-	json: "json",
-	md: "markdown",
-	markdown: "markdown",
-	toml: "toml",
-	yaml: "yaml",
-	yml: "yaml",
-	css: "css",
-	scss: "scss",
-	html: "html",
-	htm: "html",
-	xml: "xml",
-	c: "c",
-	h: "c",
-	cpp: "cpp",
-	cc: "cpp",
-	cxx: "cpp",
-	hpp: "cpp",
-	hh: "cpp",
-	rs: "rust",
-	py: "python",
-	pyi: "python",
-	rb: "ruby",
-	go: "go",
-	sh: "bash",
-	zsh: "bash",
-	bash: "bash",
-	java: "java",
-	kt: "kotlin",
-	kts: "kotlin",
-	swift: "swift",
-	php: "php",
-	sql: "sql",
-};
 
 /** Fixed virtual-row height (px); keep in sync with .gui-filepane-vrow CSS. */
 const ROW_H = 26;
@@ -429,6 +380,29 @@ export function FilePane({
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const editRef = useRef<HTMLInputElement | null>(null);
 	const highlight = useChatHighlight();
+	// Viewers are built once per pane from the component's own services, not
+	// from a process-wide registry: the highlighter is a hook result scoped to
+	// this instance, and a global table would let one pane's bytes be answered
+	// by another's services. The set is stable for the pane's life because its
+	// only moving part is the highlighter identity.
+	const viewerDeps = useMemo<BuiltinViewerDeps>(
+		() => ({
+			highlight: (text, lang) => Promise.resolve(highlight(text, lang)),
+			highlightToHtml: highlightToCodeHtml,
+			buildSheets: buildSheetModels,
+			renderPdfPages: renderPdfPagesToDataUrls,
+		}),
+		[highlight],
+	);
+	// Built-ins from this pane's services, then anything registered globally,
+	// ordered by declared priority. The global half is what makes the seam real
+	// rather than decorative: without it a plugin calling `registerFileViewer`
+	// would register into a table no component consults. Ordering merges them
+	// instead of concatenating, so a plugin at `override` priority takes a format
+	// the built-ins also claim, and one at `fallback` only sees what they
+	// declined. The table is read at setup — a registration that arrives after
+	// this pane mounted is seen on the next pane, not mid-life.
+	const viewers = useMemo(() => orderViewers([...builtinFileViewers(viewerDeps), ...listFileViewers()]), [viewerDeps]);
 	const { confirm } = useConfirm();
 	// Mirror of `edit` for async guards (openPreview/activeFile effect read it
 	// without re-memoizing their callbacks on every keystroke).
@@ -639,112 +613,41 @@ export function FilePane({
 					return true;
 				}
 				const bytes = Uint8Array.from(atob(res.base64), c => c.charCodeAt(0));
-				const isText =
-					(res.mime?.startsWith("text/") ?? false) ||
-					(TEXT_EXT.has(extOf(entry.name)) && !bytes.subarray(0, 4096).includes(0));
-				if (isText) {
-					const text = new TextDecoder().decode(bytes);
-					const raw = bytes.length <= EDIT_MAX_BYTES ? text : undefined;
-					// HTML pages render live in a sandboxed iframe (openchamber
-					// parity) — the preview IS the page, not its source.
-					const ext = extOf(entry.name);
-					if (ext === "html" || ext === "htm") {
-						setHtmlLiveMode("live");
-						setPreview({
-							path: absPath,
-							name: entry.name,
-							size: res.size ?? bytes.length,
-							htmlLive: text,
-							raw,
-						});
-						return true;
-					}
-					// Markdown previews render through the shared component;
-					// other text files highlight via the tree-sitter bridge.
-					const lang = EXT_LANG[ext];
-					if (ext === "md") setMdRender(true);
-					if (lang && ext !== "md" && highlight) {
-						try {
-							const hl = await highlight(text, lang);
-							if (hl) {
-								setPreview({
-									path: absPath,
-									name: entry.name,
-									size: res.size ?? bytes.length,
-									html: highlightToCodeHtml(hl),
-									raw,
-								});
-								return true;
-							}
-						} catch {
-							// fall through to plain text
-						}
-					}
-					setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, text, raw });
-					if (restoreEdit) setEdit(buffer ?? { text, saved: text });
-					return true;
-				}
-				if (res.mime?.startsWith("image/")) {
-					const url = URL.createObjectURL(new Blob([bytes], { type: res.mime }));
-					setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, imageUrl: url });
-					return true;
-				}
-				if (res.mime === "application/pdf") {
-					// Inline PDF preview via pdf.js (VS Code-style): render every
-					// page to a canvas → data URL. Falls back to the OS default
-					// app when rendering fails (corrupt/encrypted PDFs).
-					try {
-						const doc = await pdfjs.getDocument({ data: bytes }).promise;
-						const pages: string[] = [];
-						for (let i = 1; i <= doc.numPages; i++) {
-							const page = await doc.getPage(i);
-							const viewport = page.getViewport({ scale: 1.5 });
-							const canvas = document.createElement("canvas");
-							canvas.width = Math.ceil(viewport.width);
-							canvas.height = Math.ceil(viewport.height);
-							const pctx = canvas.getContext("2d");
-							if (!pctx) throw new Error("canvas unavailable");
-							await page.render({ canvas, canvasContext: pctx, viewport }).promise;
-							pages.push(canvas.toDataURL("image/png"));
-						}
-						setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, pdfPages: pages });
-						return true;
-					} catch {
-						// fall through to system default app
-					}
-				}
+				// Classification, decode, and per-format rendering live in the
+				// viewer registry (lib/file-viewers), ordered by priority; the pane
+				// hands these bytes to the first viewer that takes the file and maps
+				// the result back onto preview state through `previewMappingFor`.
+				// That mapping is pure and unit-tested so the two editor-seed
+				// asymmetries that were in the branch chain this replaced — html and
+				// a highlighted file open read-only, plain text and Markdown seed the
+				// inline editor — stay pinned without mounting the component.
 				const ext = extOf(entry.name);
-				if (ext === "docx") {
-					// Office preview (this round's boundary: view-only — no in-app
-					// office editing SDK). docx renders through docx-preview; a
-					// failed parse falls through to the OS default app.
-					setPreview({
-						path: absPath,
-						name: entry.name,
-						size: res.size ?? bytes.length,
-						docxBytes: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-					});
+				const result = await renderWithViewerList(viewers, {
+					name: entry.name,
+					path: absPath,
+					size: res.size ?? bytes.length,
+					bytes,
+					mime: res.mime,
+					ext,
+				});
+				if (result === undefined) {
+					// No viewer took the file (an unknown binary, or a corrupt/encrypted
+					// document that declined to render): open it in the system app, the
+					// same fall-through the chain had.
+					await window.electronAPI?.openWith("", absPath);
+					setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, external: true });
 					return true;
 				}
-				if (ext === "xlsx" || ext === "xls" || ext === "csv") {
-					// Spreadsheet sheets render as escaped HTML tables (self-built
-					// from the cell matrix — sheet_to_html does not escape cell
-					// text). Failures (encrypted/corrupt workbooks) fall through
-					// to the system default app.
-					const sheets = buildSheetModels(bytes);
-					if (sheets) {
-						setPreview({
-							path: absPath,
-							name: entry.name,
-							size: res.size ?? bytes.length,
-							officeSheets: sheets,
-						});
-						return true;
-					}
+				const mapped = previewMappingFor(result);
+				if (mapped.htmlLiveMode === "live") setHtmlLiveMode("live");
+				if (mapped.mdRender === true) setMdRender(true);
+				setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, ...mapped.fields });
+				// The editor seeds only for a format whose preview IS its text
+				// (plain text, Markdown); an html or highlighted view opens
+				// read-only, and a dirty cached buffer re-enters the editor.
+				if (restoreEdit && mapped.editable !== undefined) {
+					setEdit(buffer ?? { text: mapped.editable, saved: mapped.editable });
 				}
-				// Other binaries: open in the system default app.
-				await window.electronAPI?.openWith("", absPath);
-				setPreview({ path: absPath, name: entry.name, size: res.size ?? bytes.length, external: true });
 				return true;
 			} catch (err) {
 				setPreview({
@@ -756,7 +659,7 @@ export function FilePane({
 				return true;
 			}
 		},
-		[rpc, cwd, highlight, onOpenFile, confirmDiscard],
+		[rpc, cwd, viewers, onOpenFile, confirmDiscard],
 	);
 
 	// Load whichever file tab the panel strip activated. Skipped when the
@@ -1549,7 +1452,10 @@ function SheetPreview({
 	sheets,
 }: {
 	name: string;
-	sheets: Array<{ name: string; html: string; truncated: boolean }>;
+	// Readonly: the pane maps over the sheet models and indexes the active one,
+	// never mutates them, so a caller holding a frozen array should not have to
+	// copy it to satisfy this prop.
+	sheets: ReadonlyArray<{ name: string; html: string; truncated: boolean }>;
 }): ReactNode {
 	const [active, setActive] = useState(0);
 	useEffect(() => {

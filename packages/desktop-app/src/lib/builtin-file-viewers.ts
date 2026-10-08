@@ -13,48 +13,40 @@
  */
 import { type FileViewer, VIEWER_PRIORITY, type ViewerInput, type ViewerResult } from "./file-viewers";
 
-/** Files whose bytes are decoded as text when the mime does not say so. */
+/**
+ * Files whose bytes are decoded as text when the mime does not say so.
+ *
+ * The list is the original branch chain's, kept deliberately narrow. It is not
+ * a typo that `cpp`, `java`, `php` and `sql` are absent even though they are in
+ * {@link EXT_LANG}: a file whose extension is in EXT_LANG but not here does not
+ * preview as text at all — the mime alone decides. Widening this set would
+ * change the boundary between "shows a preview" and "opens in the system app",
+ * which is exactly the kind of drift a refactor that promises identical
+ * behaviour must not introduce.
+ */
 const TEXT_EXT = new Set([
 	"txt",
 	"md",
-	"markdown",
 	"ts",
 	"tsx",
 	"js",
 	"jsx",
-	"mjs",
-	"cjs",
 	"json",
 	"toml",
 	"yaml",
 	"yml",
 	"css",
-	"scss",
 	"html",
-	"htm",
 	"xml",
 	"log",
 	"c",
 	"h",
-	"cpp",
-	"cc",
-	"cxx",
-	"hpp",
-	"hh",
 	"rs",
 	"py",
-	"pyi",
-	"rb",
 	"go",
 	"sh",
 	"zsh",
 	"bash",
-	"java",
-	"kt",
-	"kts",
-	"swift",
-	"php",
-	"sql",
 	"csv",
 	"env",
 	"gitignore",
@@ -122,13 +114,16 @@ export function looksLikeText(input: Pick<ViewerInput, "ext" | "mime" | "bytes">
  *  buffer the editor would refuse. */
 const MAX_EDIT_BYTES = 2 * 1024 * 1024;
 
-/** Services the built-in viewers need, supplied by the host that owns the pane. */
+/** Services the built-in viewers need, supplied by the host that owns the pane.
+ *  Typed against the real highlighter contract (`CodeHighlightFn` from
+ *  client-core returns ANSI or null), so the wiring is not an `unknown` handoff. */
 export interface BuiltinViewerDeps {
-	/** Tree-sitter highlight. Absent when the bridge is unavailable, and the
-	 *  viewers fall back to plain text rather than failing. */
-	readonly highlight?: (text: string, language: string) => Promise<unknown | undefined>;
-	/** Turn a highlighter result into preview HTML. */
-	readonly highlightToHtml?: (highlighted: unknown) => string;
+	/** Tree-sitter highlight, returning ANSI output or null. Absent when the
+	 *  bridge is unavailable, and the viewer falls back to plain text rather
+	 *  than failing. */
+	readonly highlight?: (text: string, language: string) => Promise<string | null>;
+	/** Turn a highlighter's ANSI output into preview HTML. */
+	readonly highlightToHtml?: (ansi: string) => string;
 	/** Render a spreadsheet to escaped HTML tables. Absent disables the sheets viewer. */
 	readonly buildSheets?: (bytes: Uint8Array) => { name: string; html: string; truncated: boolean }[] | null;
 	/** Render PDF pages to data URLs. Absent disables the pdf viewer. */
