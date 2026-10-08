@@ -46,12 +46,12 @@ export interface PluginMountDeclaration {
  */
 export function readMountDeclaration(pkg: PluginPackageJson | null | undefined): PluginMountDeclaration {
 	const block: PluginBlock | undefined = readPluginBlock(pkg);
-	const mount = block?.["mount"];
+	const mount = block?.mount;
 	if (mount === null || typeof mount !== "object") return { exclusive: false };
 	const record = mount as Record<string, unknown>;
-	const owns = typeof record["owns"] === "string" ? record["owns"] : undefined;
+	const owns = typeof record.owns === "string" ? record.owns : undefined;
 	return {
-		exclusive: record["exclusive"] === true,
+		exclusive: record.exclusive === true,
 		...(owns === undefined ? {} : { owns }),
 	};
 }
