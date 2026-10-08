@@ -3,6 +3,13 @@
 	"include": [
 		"src",
 		"test",
-		"scripts"
+		"scripts",
+		// Benchmarks are type-checked because nothing else is: no test imports
+		// them and no script runs them, so a refactor that moves what one
+		// measures leaves it importing a name that no longer exists — and the
+		// only symptom is that a measurement nobody has run in months no longer
+		// starts. `session-tree-nav.bench.ts` sat that way after its subject was
+		// split out of `session-manager`.
+		"bench"
 	]
 }

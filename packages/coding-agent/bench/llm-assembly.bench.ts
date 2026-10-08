@@ -25,7 +25,8 @@
  *      `PI_TOKENIZER_ACCURATE=1` uses the native cl100k tokenizer.
  */
 import type { AgentMessage } from "@musepi/pi-agent-core";
-import { estimateTokens } from "@musepi/pi-agent-core/compaction";
+import { estimateTranscriptTokens } from "@musepi/pi-agent-core/compaction";
+import { Tokenizer } from "@musepi/pi-agent-core/tokenizer";
 import type { AssistantMessage, ToolResultMessage, Usage } from "@musepi/pi-ai";
 import { convertToLlm } from "../src/session/messages";
 
@@ -135,9 +136,11 @@ function sample<T>(makeWorkload: () => T, run: (workload: T) => void, batch = 1)
 }
 
 function estimateAll(messages: AgentMessage[]): number {
-	let total = 0;
-	for (const m of messages) total += estimateTokens(m);
-	return total;
+	// `estimateTokens(message)` became `estimateTranscriptTokens(messages,
+	// tokenizer)`: the per-message helper went away with the tokenizer move, and
+	// what the bench wanted — count every message in a history — is now the
+	// shape the shared helper takes.
+	return estimateTranscriptTokens(messages, new Tokenizer());
 }
 
 console.log(`\nBenchmark: llm-assembly (N=${N}, warmup=${WARMUP}, samples=${SAMPLES})\n`);

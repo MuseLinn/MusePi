@@ -7,8 +7,13 @@
  * Run: bun packages/coding-agent/bench/session-tree-nav.bench.ts
  */
 
-import type { SessionEntry } from "../src/session/session-manager";
-import { buildSessionContext } from "../src/session/session-manager";
+// Both imports moved when the session modules were split: the entry type into
+// `session-entries`, the context builder into `session-context`. The bench kept
+// pointing at the old home and had been failing to resolve ever since — nothing
+// imports a bench, and `bench/` sat outside the tsconfig program, so the rot was
+// silent. It is covered now that the directory is type-checked.
+import type { SessionEntry } from "../src/session/session-entries";
+import { buildSessionContext } from "../src/session/session-context";
 
 // ─── Synthetic session ───────────────────────────────────────────────────────
 
@@ -31,6 +36,10 @@ function buildEntries(): SessionEntry[] {
 		const id = makeId(i);
 		const parentId = i === 0 ? null : makeId(i - 1);
 		const timestamp = new Date(now.getTime() + i * 1000).toISOString();
+		// The message-level timestamp is epoch ms, distinct from the entry's
+		// ISO string. The type has required both since the message shapes were
+		// widened — more of the drift that accumulated here unchecked.
+		const messageTimestamp = now.getTime() + i * 1000;
 
 		const codeBlocks = Array.from({ length: CODE_BLOCKS_PER_MSG }, (_, k) =>
 			makeCodeBlock(i * CODE_BLOCKS_PER_MSG + k),
@@ -43,9 +52,14 @@ function buildEntries(): SessionEntry[] {
 				id,
 				parentId,
 				timestamp,
+				// `timestamp` is carried on the entry and on the message itself; the
+				// type has required it on the message since the AgentMessage shape
+				// was widened, which is one of the rot this bench accumulated
+				// while nothing type-checked the directory.
 				message: {
 					role: "user",
 					content: `User message ${i}: please analyze this code.\n\n${codeBlocks}`,
+					timestamp: messageTimestamp,
 				},
 			} satisfies SessionEntry);
 		} else {
@@ -55,9 +69,25 @@ function buildEntries(): SessionEntry[] {
 				id,
 				parentId,
 				timestamp,
+				// An assistant message carries its provenance and usage; a bench that
+				// omits them no longer type-checks, and context building reads none
+				// of it — the fields are here to satisfy the shape, not to be used.
 				message: {
 					role: "assistant",
 					content: [{ type: "text", text: `Assistant reply ${i}:\n\n${codeBlocks}` }],
+					api: "anthropic-messages",
+					provider: "bench",
+					model: "bench",
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						totalTokens: 0,
+						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+					},
+					stopReason: "stop",
+					timestamp: messageTimestamp,
 				},
 			} satisfies SessionEntry);
 		}

@@ -112,7 +112,7 @@ function measure(n: number): { median: number; p95: number } {
 }
 
 await Settings.init({ inMemory: true });
-await initTheme("dark");
+await initTheme();
 
 console.log(`\nBenchmark: transcript-compose (live tail tick after committed finalized history, width ${WIDTH})\n`);
 

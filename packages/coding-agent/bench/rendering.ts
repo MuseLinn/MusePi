@@ -37,7 +37,7 @@ function bench(name: string, fn: () => void): number {
 }
 
 await Settings.init({ inMemory: true });
-await initTheme("dark");
+await initTheme();
 
 console.log(`Rendering benchmark (${ITERATIONS} iterations)\n`);
 
