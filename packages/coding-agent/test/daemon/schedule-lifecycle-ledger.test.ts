@@ -17,7 +17,12 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { type CronTask, saveCronTasks } from "../../src/daemon/crons";
 import { DaemonServer, type DaemonSessionHost } from "../../src/daemon/server";
-import { isolateAgentDirForTest, restoreAgentDirForTest } from "../helpers/isolate-agent-dir";
+import {
+	isolateAgentDirForTest,
+	isolateConfigRootForTest,
+	restoreAgentDirForTest,
+	restoreConfigRootForTest,
+} from "../helpers/isolate-agent-dir";
 
 /** setInterval 返回值别名：Node 是 Timeout、DOM 是 number，测试里只当不透明句柄。 */
 type IntervalHandle = ReturnType<typeof setInterval>;
@@ -49,12 +54,19 @@ const SEEDED_TASK: CronTask = {
 
 describe("收编第二刀 — schedule 生命周期归 cordis effect 账本", () => {
 	let isolatedDir = "";
+	let isolatedConfigRoot = "";
 
 	beforeAll(async () => {
+		// The cron store lives at the CONFIG ROOT (`<configRoot>/crons.json`),
+		// which `setAgentDir` does not move — so the agent-dir redirect alone
+		// let this suite's `saveCronTasks` seed `SEEDED_TASK` into the
+		// developer's real `~/.musepi/crons.json`. Isolate both roots.
 		isolatedDir = await isolateAgentDirForTest("schedule-ledger-");
+		isolatedConfigRoot = await isolateConfigRootForTest("schedule-ledger-config-");
 	});
 
 	afterAll(async () => {
+		await restoreConfigRootForTest(isolatedConfigRoot);
 		await restoreAgentDirForTest(isolatedDir);
 	}, 30000);
 

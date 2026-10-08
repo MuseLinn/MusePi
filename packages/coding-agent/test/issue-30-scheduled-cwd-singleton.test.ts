@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import * as fs from "node:fs";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as os from "node:os";
 import * as path from "node:path";
 import { DaemonServer, type DaemonSessionHost } from "../src/daemon/server";
+import { isolateConfigRootForTest, restoreConfigRootForTest } from "./helpers/isolate-agent-dir";
 
 /**
  * Regression for issue #30, part 1+2: `schedule_task` defaulted its `cwd` to
@@ -18,10 +18,10 @@ import { DaemonServer, type DaemonSessionHost } from "../src/daemon/server";
  * `scheduledTaskHandle(sessionCwd)` is a pure function of the requesting
  * session's workspace, so it is driven directly here — no session boot.
  *
- * Named `*-singleton` on purpose: `saveCronTasks` resolves `<home>/.musepi`
- * at call time, so this suite monkey-patches `os.homedir` — a process-global.
- * `scripts/ci-test-ts.ts` routes this filename to the serial singleton bucket
- * (parallel buckets would see the patched home).
+ * The cron store follows the shared dirs resolver, so this suite isolates
+ * the CONFIG ROOT (`isolateConfigRootForTest`) — the `upsert` calls below
+ * persist through `saveCronTasks`, and an unisolated run seeds throwaway
+ * tasks ("a"/"b") into the developer's real `~/.musepi/crons.json`.
  */
 
 function makeServer(): DaemonServer {
@@ -39,19 +39,14 @@ function makeServer(): DaemonServer {
 const SESSION_CWD = path.join(os.tmpdir(), "musepi-issue30-workspace");
 
 describe("issue #30 — schedule_task cwd defaults to the session workspace", () => {
-	let tempHome = "";
-	let homedirSpy: ReturnType<typeof spyOn>;
+	let configRoot = "";
 
-	beforeEach(() => {
-		// saveCronTasks writes to <home>/.musepi/crons.json — keep the real
-		// store out of the test's blast radius.
-		tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "musepi-issue30-home-"));
-		homedirSpy = spyOn(os, "homedir").mockReturnValue(tempHome);
+	beforeAll(async () => {
+		configRoot = await isolateConfigRootForTest("issue30-config-");
 	});
 
-	afterEach(() => {
-		homedirSpy.mockRestore();
-		fs.rmSync(tempHome, { recursive: true, force: true });
+	afterAll(async () => {
+		await restoreConfigRootForTest(configRoot);
 	});
 
 	test("blank cwd resolves to the session workspace, not process.cwd()", async () => {

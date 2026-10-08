@@ -28,7 +28,7 @@ import * as path from "node:path";
 import type { AgentEvent } from "@musepi/pi-agent-core";
 import { AgentPauseGate } from "@musepi/pi-agent-core";
 import { DesktopSession } from "@musepi/pi-natives";
-import { getAgentDir, getSessionsDir, logger, prompt } from "@musepi/pi-utils";
+import { getAgentDir, getSessionsDir, logger, prompt, removeWithRetries } from "@musepi/pi-utils";
 import { advisorNoteText, isTurnStartEntry, type SessionEntry, type WireMessage } from "@musepi/pi-wire";
 import type { SessionStreamEvent } from "@musepi/sdk";
 import { MaterializedView, messageKey, type Static, type sessionSnapshot } from "@musepi/sdk";
@@ -3029,28 +3029,30 @@ export class DaemonSessionHost {
 	 *  subagent transcripts are invisible to the glob), and any depth-2
 	 *  transcript/artifacts dir matching the id (parent cleanup parity). */
 	async #deleteSessionArtifacts(sessionId: string, transcriptPath: string | null): Promise<void> {
+		// Capture the live journal BEFORE teardown: `dispose()` releases its
+		// append fd unawaited, and on Windows an unlink of a file another
+		// handle still has open fails with EPERM/EBUSY. A journal left on
+		// disk makes the next `session.list` re-scan resurrect the session
+		// the user just deleted (任务中心「删除并删除会话」删不掉).
+		const journal = this.#sessions.get(sessionId)?.journal ?? null;
 		this.close(sessionId);
 		this.#store.remove(sessionId);
-		try {
-			await fs.promises.unlink(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`));
-		} catch (err) {
-			// Journal may already be gone; only surface a real IO failure.
-			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-		}
+		// close() is idempotent — safe when there was no live session, and
+		// when teardown already started the release.
+		await journal?.close();
+		// removeWithRetries is the central Windows deletion helper: `force`
+		// makes absence success and it retries the transient lock codes, so a
+		// delete never silently leaves a file behind for the next scan to
+		// resurrect.
+		await removeWithRetries(path.join(JOURNAL_DIR, `${sessionId}.journal.jsonl`));
 		// Pause sidecar: a deleted session must not resurrect as paused
 		// (a stale file would freeze a re-created session with the same id).
-		try {
-			await fs.promises.unlink(pauseSidecarPath(sessionId, JOURNAL_DIR));
-		} catch (err) {
-			// Absence is the non-paused state; a real IO failure still
-			// surfaces so a stuck delete is visible.
-			if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
-		}
+		await removeWithRetries(pauseSidecarPath(sessionId, JOURNAL_DIR));
 		if (transcriptPath) {
 			// Exact path from the scan (subagent depth-3 transcripts) — the
 			// glob below only reaches depth 2. Absence is fine (adopted
 			// rows, already-cascaded children).
-			await fs.promises.unlink(transcriptPath).catch(() => {});
+			await removeWithRetries(transcriptPath);
 		}
 		// SDK transcript files (`<sessionsDir>/<project>/<id>.jsonl`) and
 		// their artifacts dir (`<project>/<id>/` — subagent transcripts,
@@ -3063,13 +3065,9 @@ export class DaemonSessionHost {
 		const sessionsRoot = getSessionsDir();
 		try {
 			for (const f of new Bun.Glob(`*/*${sessionId}*`).scanSync(sessionsRoot)) {
-				const full = path.join(sessionsRoot, f);
-				const st = await fs.promises.stat(full);
-				if (st.isDirectory()) {
-					await fs.promises.rm(full, { recursive: true, force: true });
-				} else {
-					await fs.promises.unlink(full);
-				}
+				// rm(recursive, force) covers both the transcript file and the
+				// artifacts dir, so no stat branch is needed.
+				await removeWithRetries(path.join(sessionsRoot, f));
 			}
 		} catch {
 			// transcript already gone — fine

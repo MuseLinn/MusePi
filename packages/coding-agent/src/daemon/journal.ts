@@ -146,6 +146,8 @@ function forEachFdInstance(filePath: string, fn: (inst: AppendJournal) => Promis
 export class AppendJournal {
 	readonly filePath: string;
 	#fd: fs.promises.FileHandle | null = null;
+	/** Memoized teardown — see close(). */
+	#closePromise: Promise<void> | null = null;
 	/** Resolves to the current append fd once open (re-resolved after a
 	 *  rewrite's close→rename→reopen). Appends chain on this so a write
 	 *  landing in the rewrite window is queued, not silently dropped. */
@@ -664,7 +666,19 @@ export class AppendJournal {
 		return { checkpoint, events };
 	}
 
-	async close(): Promise<void> {
+	/**
+	 * Release the append fd. Idempotent AND concurrency-safe: session
+	 * teardown fires this without awaiting it, so a caller that must delete
+	 * the journal file afterwards calls it again. Without the memo both
+	 * invocations pass the `#fd !== null` check and the second
+	 * `FileHandle.close()` rejects with EBADF.
+	 */
+	close(): Promise<void> {
+		this.#closePromise ??= this.#doClose();
+		return this.#closePromise;
+	}
+
+	async #doClose(): Promise<void> {
 		withFd(this.filePath).delete(this);
 		if (this.#fd !== null) {
 			await this.flush();

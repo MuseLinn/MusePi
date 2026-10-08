@@ -1,13 +1,19 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, join } from "node:path";
+import { getConfigRootDir } from "@musepi/pi-utils";
 
 /**
- * Scheduled tasks store + scheduler: tasks live in
- * ~/.musepi/crons.json, the daemon checks due runs
- * on an interval and executes each task's prompt in a fresh session bound
- * to the task's cwd. State (last run / next run / status) is persisted so
- * the GUI list survives restarts.
+ * Scheduled tasks store + scheduler: tasks live in `<config root>/crons.json`
+ * (default `~/.musepi/crons.json`), the daemon checks due runs on an interval
+ * and executes each task's prompt in a fresh session bound to the task's cwd.
+ * State (last run / next run / status) is persisted so the GUI list survives
+ * restarts.
+ *
+ * The root is resolved through the shared dirs resolver rather than
+ * `homedir() + ".musepi"` so `PI_CONFIG_DIR` (the dev GUI's data-root
+ * isolation) and XDG relocation actually move the store: a task list written
+ * outside the active root is invisible to the daemon that reads it, which
+ * reads as "deleted tasks come back on restart".
  */
 
 export interface CronSchedule {
@@ -74,10 +80,16 @@ export interface CronRun {
 
 const MAX_PROMPT = 20_000;
 
+/** Config-root subdir for one cron file, resolved on every call so a
+ *  relocated data root (PI_CONFIG_DIR, XDG, test isolation) is honored. */
+function cronFile(name: string): string {
+	return join(getConfigRootDir(), name);
+}
+
 export function cronStoragePath(): string {
-	const dir = resolve(homedir(), ".musepi");
-	mkdirSync(dir, { recursive: true });
-	return resolve(dir, "crons.json");
+	const dir = cronFile("crons.json");
+	mkdirSync(dirname(dir), { recursive: true });
+	return dir;
 }
 
 export function loadCronTasks(): CronTask[] {
@@ -98,7 +110,7 @@ export function saveCronTasks(tasks: CronTask[]): void {
 /** Persist run history (bounded): crons.runs.json, newest 100 runs. */
 export function loadCronRuns(): CronRun[] {
 	try {
-		const raw = readFileSync(resolve(homedir(), ".musepi", "crons.runs.json"), "utf8");
+		const raw = readFileSync(cronFile("crons.runs.json"), "utf8");
 		const parsed = JSON.parse(raw) as { runs?: CronRun[] };
 		if (!Array.isArray(parsed.runs)) return [];
 		return parsed.runs;
@@ -109,7 +121,7 @@ export function loadCronRuns(): CronRun[] {
 
 export function saveCronRuns(runs: CronRun[]): void {
 	const bounded = runs.slice(-100);
-	writeFileSync(resolve(homedir(), ".musepi", "crons.runs.json"), JSON.stringify({ runs: bounded }, null, 2), "utf8");
+	writeFileSync(cronFile("crons.runs.json"), JSON.stringify({ runs: bounded }, null, 2));
 }
 
 function sanitizeCronTask(t: unknown): CronTask | null {

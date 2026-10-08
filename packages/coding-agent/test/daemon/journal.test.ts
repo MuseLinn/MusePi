@@ -393,6 +393,25 @@ describe("AppendJournal", () => {
 		await j.close();
 	});
 
+	test("concurrent close() calls leave the file deletable once closed", async () => {
+		// Session delete awaits the journal's close while session teardown is
+		// already closing the same instance unawaited. The contract the delete
+		// path needs: overlapping close() calls all resolve, none rejects, and
+		// afterwards no handle is left on the file — a left-behind handle makes
+		// the delete's unlink fail on Windows and the journal survives to
+		// resurrect the deleted session on the next scan.
+		const dir = tempDir();
+		const j = new AppendJournal(dir, "s1");
+		await j.open();
+		j.append(event("thinking_level_changed", 1));
+		await Promise.all([j.close(), j.close()]);
+		// A third, later close is also safe (idempotent).
+		await j.close();
+		// The file must be deletable with no handle left behind — the actual
+		// precondition the delete path needs.
+		expect(() => fs.unlinkSync(j.filePath)).not.toThrow();
+	});
+
 	test("recordsAfter agrees with readAll on the same cursor", async () => {
 		// Two readers of the same file, one scanning and one indexing, must not
 		// disagree about which records exist. A partial line at the tail is

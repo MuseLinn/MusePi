@@ -1,7 +1,7 @@
 import * as fsp from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
+import { __resetDirsFromEnvForTests, getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
 
 /**
  * Agent-dir isolation for tests that exercise real session storage
@@ -29,6 +29,58 @@ import { getConfigRootDir, setAgentDir } from "@musepi/pi-utils";
 
 let originalAgentDir: string | undefined;
 const fallbackAgentDir = path.join(getConfigRootDir(), "agent");
+
+/** Snapshot of the config-root env a suite redirected, for exact restore. */
+let originalConfigDir: string | undefined;
+let configDirIsolated = false;
+
+/**
+ * Redirect the CONFIG ROOT (`~/.musepi`, `PI_CONFIG_DIR`-relocatable) into a
+ * fresh temp dir. The agent dir holds sessions/auth; the config root holds
+ * host-level stores like `crons.json` and `crons.runs.json`. `setAgentDir`
+ * does NOT move the config root, so a suite that writes the cron store
+ * (ScheduleService `start()`/`saveCronTasks`) must isolate this too — or it
+ * seeds a task into the developer's real task center (the "nightly report
+ * keeps coming back" bug: the schedule-ledger test's fixture leaked into
+ * `~/.musepi/crons.json`).
+ *
+ * Pair with {@link restoreConfigRootForTest}. Independent of the agent-dir
+ * isolation: a suite may use either or both.
+ */
+export async function isolateConfigRootForTest(prefix: string): Promise<string> {
+	if (!configDirIsolated) {
+		originalConfigDir = process.env.PI_CONFIG_DIR;
+		configDirIsolated = true;
+	}
+	const dir = await fsp.mkdtemp(path.join(os.tmpdir(), prefix));
+	process.env.PI_CONFIG_DIR = dir;
+	// Rebuild the resolver from the new env so getConfigRootDir() (and every
+	// derived path) points into the temp tree.
+	__resetDirsFromEnvForTests();
+	return dir;
+}
+
+/** Restore the config root captured by the first isolate call and remove the temp dir. */
+export async function restoreConfigRootForTest(isolatedDir: string): Promise<void> {
+	if (!configDirIsolated) return;
+	if (originalConfigDir === undefined) {
+		delete process.env.PI_CONFIG_DIR;
+	} else {
+		process.env.PI_CONFIG_DIR = originalConfigDir;
+	}
+	configDirIsolated = false;
+	__resetDirsFromEnvForTests();
+	for (let attempt = 0; attempt < 20; attempt++) {
+		try {
+			await fsp.rm(isolatedDir, { recursive: true, force: true });
+			return;
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw err;
+			await Bun.sleep(100);
+		}
+	}
+}
 
 /** Redirect the agent directory (sessions/auth/memories root) into a fresh temp dir. */
 export async function isolateAgentDirForTest(prefix: string): Promise<string> {
