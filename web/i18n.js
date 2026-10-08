@@ -110,9 +110,9 @@
 
     /* 迭代进行时 */
     "mom.kicker": "Momentum",
-    "mom.h2": "A self-contained platform, moving every day",
+    "mom.h2": "Built on open source, moving every day",
     "mom.desc":
-      "MusePi started from the Agent engine of the open-source oh-my-pi, but the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are all our own work — and along the way the engine itself grew into its own shape. MusePi is MusePi: evolving on its own, following no upstream. What follows aren't roadmap promises — they're things already shipped in recent releases.",
+      "MusePi's Agent engine is continuously synced from the open-source oh-my-pi project (sync baseline and verification notes live in the repo's UPSTREAM.md); the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work built on top of it. What follows aren't roadmap promises — they're things already shipped in recent releases.",
     "mom.stat1": "LLM providers",
     "mom.stat2": "Supported platforms",
     "mom.stat3": "Extension hubs",
@@ -180,7 +180,7 @@
       "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. The only outbound network request is to the model provider you configure.",
     "faq.q5": "What's its relationship to oh-my-pi?",
     "faq.a5":
-      "MusePi is an independently evolving AI agent platform. It borrowed oh-my-pi's Agent engine to get going, but the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are all our own work; after this many years of changes the engine has grown into its own shape too. MusePi is MusePi — its own upstream, still MIT-licensed.",
+      "MusePi is a standalone coding-agent platform. Its Agent engine is continuously synced from the open-source oh-my-pi project (baseline in the repo's UPSTREAM.md); the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work built on top of it, all MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
       "One command installs the background service, the terminal TUI and the desktop app: <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
@@ -209,13 +209,13 @@
     "footer.get": "Get the installer",
     "footer.rights": " · MIT License",
     "footer.fine":
-      "Our own engine, running locally, MIT open source — your code and your keys stay on your machine.",
+      "Runs locally, MIT open source — your code and your keys stay on your machine.",
   };
 
   var HEAD_EN = {
     title: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     description:
-      "MusePi is a self-contained AI agent platform: the desktop app, the command line and the mobile companion share the same sessions and settings, so work picks up wherever you are. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
+      "MusePi is a standalone coding-agent platform: the desktop app, the command line and the mobile companion share the same sessions and settings, so work picks up wherever you are. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
     ogTitle: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     ogDescription:
       "A hands-on AI partner: it writes code, runs commands and drives the browser, and you can rebuild it around your workflow. Desktop · command line · phone share the same sessions, 60+ providers, runs locally. Free to test, community edition free forever.",
