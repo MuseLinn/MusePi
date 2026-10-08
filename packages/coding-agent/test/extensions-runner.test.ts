@@ -1311,7 +1311,30 @@ describe("ExtensionRunner", () => {
 			const wrapper = new ExtensionToolWrapper(throwingTool, runner);
 			const res = await wrapper.execute("call-cleared", {} as never, undefined, undefined, undefined);
 			expect(firstText(res)).toBe("recovered");
-			expect(res.isError).toBeUndefined();
+			// `false`, not absent: the handler said *this is not an error*, which is
+			// a statement. Collapsing it into absence would make it
+			// indistinguishable from having said nothing at all.
+			expect(res.isError).toBe(false);
+		});
+
+		it("leaves isError absent when a handler rewrites content without touching it", async () => {
+			// The counterpart, and the reason the field is optional: a handler that
+			// returns content but no `isError` has expressed no opinion about the
+			// error state, so the original outcome stands and the flag is written
+			// only because the execution failed.
+			const runner = await runnerFor(`
+				export default function(pi) {
+					pi.on("tool_result", (event) => {
+						return { content: [{ type: "text", text: "annotated" }] };
+					});
+				}
+			`);
+			const wrapper = new ExtensionToolWrapper(throwingTool, runner);
+			const res = await wrapper.execute("call-silent", {} as never, undefined, undefined, undefined);
+			expect(firstText(res)).toBe("annotated");
+			// Silence keeps the failure: a handler that rewrote the words did not
+			// say the call succeeded.
+			expect(res.isError).toBe(true);
 		});
 
 		it("marks a successful result as an error when a handler sets isError", async () => {

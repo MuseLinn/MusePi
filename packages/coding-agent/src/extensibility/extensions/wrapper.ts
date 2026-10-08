@@ -401,11 +401,21 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 				const modifiedContent: (TextContent | ImageContent)[] = resultResult.content ?? result.content;
 				const modifiedDetails = (resultResult.details ?? result.details) as TDetails;
 
-				// Effective error state: an explicit handler override wins; otherwise the
-				// original execution outcome stands. This lets a handler rewrite a failed
-				// call's model-visible content/details while keeping it an error, flip a
-				// failure to success, or flag a success as an error.
-				const effectiveError = resultResult.isError ?? !!executionError;
+				// Effective error state. Three cases, not two:
+				//
+				//   - a handler set the flag      → that value, including `false`
+				//   - a handler cleared it        → absent, and that is not the same
+				//                                    as saying it was not an error
+				//   - no handler spoke to it      → the original outcome stands
+				//
+				// Collapsing "cleared" into "not an error" would lose a distinction
+				// a handler can actually observe: `isError: false` says *this is not
+				// an error*, while omitting the field says *I have no opinion*.
+				// `AgentToolResult.isError` is optional precisely so the second is
+				// expressible — coercing it to `false` makes the field carry no
+				// information the agent loop did not already have.
+				const effectiveError =
+					resultResult.isError !== undefined ? resultResult.isError : executionError ? true : undefined;
 
 				// Return the (possibly modified) result carrying the error flag rather than
 				// rethrowing the original exception. The agent loop honors
@@ -414,14 +424,15 @@ export class ExtensionToolWrapper<TParameters extends TSchema = TSchema, TDetail
 				// the model while the call remains an error — the original exception text is
 				// no longer forced through, which previously discarded the replacement.
 				//
-				// The flag is written unconditionally, matching the return above: the
-				// event type declares `isError` required, and a conditional spread here
-				// could produce an object without it while the type said it was there.
+				// Written as a conditional spread so a cleared flag stays absent. The event
+				// type above declares `isError` required and does write it unconditionally;
+				// this return is an `AgentToolResult`, a different type where the field is
+				// optional, and forcing it there would break the contract the type states.
 				return {
 					content: modifiedContent,
 					details: modifiedDetails,
 					providerMetadata: result.providerMetadata,
-					isError: effectiveError,
+					...(effectiveError === undefined ? {} : { isError: effectiveError }),
 				};
 			}
 		}
