@@ -73,7 +73,7 @@ Website: <https://muselinn.github.io/MusePi/> (bilingual, download guides for al
 
 ## Screenshots
 
-Skip the stale bitmaps — the [website's live tour](https://muselinn.github.io/MusePi/#demo) renders the actual app surfaces (welcome, terminal splash, mobile) in-page, so it never goes out of date.
+No bitmaps that go stale — the [website's interface preview](https://muselinn.github.io/MusePi/#preview) draws the app's layout in-page (session tree, conversation with tool rows, task progress) as an illustration rather than a screenshot.
 
 ## Features
 

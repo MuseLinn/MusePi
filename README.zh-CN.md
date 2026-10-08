@@ -60,7 +60,7 @@ MusePi 是一个**独立的编码智能体平台**：**Electron 桌面 GUI + dae
 
 ## 📸 截图
 
-不再放会过期的位图——[官网实况演示](https://muselinn.github.io/MusePi/#demo)在页面里直接绘制真实应用界面（欢迎页、终端开屏、移动端），永远与产品同步。
+不放会过期的位图——[官网界面预览](https://muselinn.github.io/MusePi/#preview)在页面里直接绘制应用布局（会话树、带工具行的对话、任务进度），是界面示意而非截图。
 
 ## 🚀 快速开始
 
