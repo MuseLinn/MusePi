@@ -64,6 +64,7 @@ export const LEGACY_ROUTES: readonly string[] = [
 	"git.log",
 	"git.numstat",
 	"git.revert",
+	"git.worktrees",
 	"git.show",
 	"git.stage",
 	"git.status",

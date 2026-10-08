@@ -61,6 +61,11 @@ export class SidebarApiError extends Error {
  *   surfaced as a `'network'` code, which is what this reproduces; a component
  *   telling abort from a real failure keys on `signal.aborted` or the message,
  *   as before.
+ *
+ *   The generic is the CALLER'S view, not the wire shape: adapted routes
+ *   return the sidebar's shape (declared via `callSidebar<SidebarGitBranch>`
+ *   etc.) even though a different method name and envelope travelled the
+ *   wire, so a ported component's type annotations hold unchanged.
  */
 export async function callSidebar<T>(
 	rpc: RpcTransport,
@@ -70,16 +75,21 @@ export async function callSidebar<T>(
 ): Promise<T> {
 	if (signal?.aborted) throw new SidebarApiError("network", "aborted");
 
-	// The one near-named route adapted so far. The sidebar calls `git.branch`;
-	// this host answers `git.branches` with a different result shape, so the
-	// forward is renamed AND the result passes through the verified adapter.
-	// Everything else forwards by identity.
-	const request =
+	// Adapted routes. `git.branch` renames to `git.branches` AND reshapes;
+	// `git.worktrees` keeps its name but unwraps the host's `{worktrees}`
+	// envelope into the bare list the sidebar consumes. Everything else
+	// forwards by identity. The adapter results are the caller's declared
+	// shape, hence the single narrowed cast at the return boundary.
+	const request: Promise<unknown> =
 		method === "git.branch"
 			? settle(rpc.request<{ current: string | null; branches: string[] }>("git.branches", payload)).then(result =>
 					adaptGitBranches(result),
 				)
-			: settle(rpc.request<T>(method, payload));
+			: method === "git.worktrees"
+				? settle(rpc.request<{ worktrees?: unknown[] }>("git.worktrees", payload)).then(result =>
+						adaptGitWorktrees(result),
+					)
+				: settle(rpc.request<T>(method, payload));
 	if (!signal) return request as Promise<T>;
 
 	// Abort releases the caller, but the request cannot be cancelled and keeps
@@ -90,7 +100,7 @@ export async function callSidebar<T>(
 	const abort = new Promise<never>((_, reject) => {
 		signal.addEventListener("abort", () => reject(new SidebarApiError("network", "aborted")), { once: true });
 	});
-	return Promise.race([request, abort]);
+	return Promise.race([request, abort]) as Promise<T>;
 }
 
 /** Translate the RPC layer's rejection into the sidebar's error type. A
@@ -145,4 +155,17 @@ function adaptGitBranches(host: { current: string | null; branches: string[] }):
 		current,
 		branches: Object.fromEntries(host.branches.map(name => [name, { current: name === current, name }])),
 	};
+}
+
+/**
+ * The sidebar's `git.worktrees` → this host's `git.worktrees` (same name,
+ * different envelope). The sidebar's HTTP client returned the list BARE
+ * (`GitWorktreeInfo[]` — `gitApiHttp.listGitWorktrees` json()s the body
+ * straight through), while this host answers `{worktrees: [...]}`. The
+ * entries themselves line up field-for-field: head/name/branch/path plus
+ * `prunable`, with the daemon already stripping the `refs/heads/` prefix
+ * the sidebar's consumers otherwise handle on their side.
+ */
+function adaptGitWorktrees(host: { worktrees?: unknown[] }): unknown[] {
+	return Array.isArray(host.worktrees) ? host.worktrees : [];
 }

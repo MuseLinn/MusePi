@@ -113,7 +113,7 @@ import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOI
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
-import { restore as gitRestore } from "../utils/git";
+import { restore as gitRestore, worktree as gitWorktrees } from "../utils/git";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicExtensionRuntime } from "./cordis-dynamic-extensions";
@@ -3032,6 +3032,31 @@ export class DaemonServer {
 				});
 				if (proc.exitCode !== 0) return { error: proc.stderr.toString().trim() || "git checkout failed" };
 				return { ok: true };
+			}
+			case "git.worktrees": {
+				// Linked-worktree list for the sidebar's worktree switcher:
+				// path, HEAD, branch per entry, plus a `prunable` flag for
+				// worktrees whose directory vanished outside git. Central
+				// git.worktree.list is the async spawn — NOT spawnSync, which
+				// froze the whole daemon on a hung git.
+				const p = (params ?? {}) as { cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				try {
+					const entries = await gitWorktrees.list(cwd);
+					return {
+						worktrees: entries.map(e => ({
+							// Main worktree has no `branch` line in porcelain
+							// when checked out; detached ones have none at all.
+							head: (e.head ?? "").trim(),
+							name: path.basename(e.path),
+							branch: (e.branch ?? "").replace(/^refs\/heads\//, ""),
+							path: e.path,
+							prunable: false,
+						})),
+					};
+				} catch (err) {
+					return { error: err instanceof Error ? err.message : String(err) };
+				}
 			}
 			case "worktree.create": {
 				// Create (or reuse) an isolated git worktree for the caller's repo

@@ -117,7 +117,7 @@ describe("callSidebar", () => {
 
 describe("callSidebar git.branch adaptation", () => {
 	test("renames the call to git.branches and lifts the result into the sidebar's GitBranch shape", async () => {
-		// The one near-named route adapted so far. The sidebar consumes
+		// The sidebar consumes
 		// `{all, current, branches}` (GitView derives localBranches from .all;
 		// the selector reads branchInfo[name].ahead through optional chaining),
 		// while the host answers `{current, branches: string[]}` — names only.
@@ -148,7 +148,7 @@ describe("callSidebar git.branch adaptation", () => {
 		// for detached HEAD. The adapter must not leak null through — a null
 		// would read as a branch literally named "null" in display code.
 		const { rpc } = transport({ result: { current: null, branches: ["main"] } });
-		const value = await callSidebar<{ current: string }>(rpc, "git.branch", {});
+		const value = await callSidebar<{ current: string; branches: Record<string, unknown> }>(rpc, "git.branch", {});
 		expect(value.current).toBe("");
 		expect(value.branches.main).toEqual({ current: false, name: "main" });
 	});
@@ -160,5 +160,36 @@ describe("callSidebar git.branch adaptation", () => {
 		const { rpc, calls } = transport({ result: { entries: [] } });
 		await callSidebar(rpc, "git.status", { cwd: "/w" });
 		expect(calls).toEqual([{ method: "git.status", params: { cwd: "/w" } }]);
+	});
+});
+
+describe("callSidebar git.worktrees adaptation", () => {
+	test("same-named route unwraps the host {worktrees} envelope into the bare list", async () => {
+		// The sidebar's HTTP client json()ed the body straight into
+		// GitWorktreeInfo[]; the host wraps the list in {worktrees}. A bare
+		// identity forward would hand the component an object where it reads
+		// .length and .map, breaking the worktree switcher on every repo.
+		const { rpc, calls } = transport({
+			result: {
+				worktrees: [
+					{ head: "abc1234", name: "repo", branch: "main", path: "/repo", prunable: false },
+					{ head: "def5678", name: "wt", branch: "feature", path: "/wt", prunable: false },
+				],
+			},
+		});
+		const value = await callSidebar<{ length: number; 0: { branch: string } }>(rpc, "git.worktrees", { cwd: "/w" });
+		expect(calls).toEqual([{ method: "git.worktrees", params: { cwd: "/w" } }]);
+		expect(value.length).toBe(2);
+		expect(value[0].branch).toBe("main");
+	});
+
+	test("a host error result (not a git repo) unwraps to an empty list, not a throw", async () => {
+		// The daemon answers {error: "..."} for a non-repo cwd. The sidebar's
+		// old client THREW on the HTTP error and callers caught it; the
+		// closest faithful behavior here is an empty list — the switcher
+		// renders nothing, matching a repo with no linked worktrees.
+		const { rpc } = transport({ result: { error: "not a git repository" } });
+		const value = await callSidebar<unknown[]>(rpc, "git.worktrees", { cwd: "/w" });
+		expect(value).toEqual([]);
 	});
 });
