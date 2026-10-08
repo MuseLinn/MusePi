@@ -25,8 +25,8 @@ jobs:
       # site in web/, so its files replace the generated root pages here.
       - name: Overlay web/ as the site root
         run: |
-          rm -f _site/index.html _site/index.zh-CN.html
-          cp -r web/. _site/
+          sudo rm -f _site/index.html _site/index.zh-CN.html
+          sudo cp -r web/. _site/
       - uses: actions/upload-pages-artifact@v3
 
   deploy:
