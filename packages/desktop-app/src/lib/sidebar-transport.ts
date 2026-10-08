@@ -70,8 +70,17 @@ export async function callSidebar<T>(
 ): Promise<T> {
 	if (signal?.aborted) throw new SidebarApiError("network", "aborted");
 
-	const request = settle(rpc.request<T>(method, payload));
-	if (!signal) return request;
+	// The one near-named route adapted so far. The sidebar calls `git.branch`;
+	// this host answers `git.branches` with a different result shape, so the
+	// forward is renamed AND the result passes through the verified adapter.
+	// Everything else forwards by identity.
+	const request =
+		method === "git.branch"
+			? settle(rpc.request<{ current: string | null; branches: string[] }>("git.branches", payload)).then(result =>
+					adaptGitBranches(result),
+				)
+			: settle(rpc.request<T>(method, payload));
+	if (!signal) return request as Promise<T>;
 
 	// Abort releases the caller, but the request cannot be cancelled and keeps
 	// running. That is safe here because `settle` awaits the request inside its
@@ -95,4 +104,45 @@ async function settle<T>(request: Promise<T>): Promise<T> {
 		if (err instanceof SidebarApiError) throw err;
 		throw new SidebarApiError("host", err instanceof Error ? err.message : String(err));
 	}
+}
+
+/* ── Verified adapters (one per near-named route, each with a test) ──────── */
+
+/**
+ * The sidebar's `git.branch` → this host's `git.branches`.
+ *
+ * The two routes do not just differ in name; the payloads are different
+ * shapes, verified against both sides rather than assumed:
+ *
+ *   sidebar `GitBranch` (what components consume — GitView's
+ *   `localBranches` derives from `.all`, the selector renders
+ *   `branchInfo?.[name]?.ahead` with optional chaining throughout):
+ *
+ *     { all: string[]; current: string;
+ *       branches: Record<name, { current, name, commit, label, ahead?, behind? }>;
+ *       defaultBranches?: Record<string, string> }
+ *
+ *   this host's `git.branches` (server.ts): `{ current: string | null,
+ *   branches: string[] }` — names only, local heads, no detail.
+ *
+ * The adapter lifts names into the sidebar's shape. Detail fields the host
+ * cannot answer (commit hash, tracking, ahead/behind) are left out on
+ * purpose: every consumer reads them through optional chaining or treats a
+ * missing detail entry as normal (the reference's own git API documentation
+ * pins that tolerance), so omitting them degrades the UI to plain names
+ * instead of fabricating data.
+ */
+interface SidebarGitBranch {
+	all: string[];
+	current: string;
+	branches: Record<string, { current: boolean; name: string }>;
+}
+
+function adaptGitBranches(host: { current: string | null; branches: string[] }): SidebarGitBranch {
+	const current = host.current ?? "";
+	return {
+		all: host.branches,
+		current,
+		branches: Object.fromEntries(host.branches.map(name => [name, { current: name === current, name }])),
+	};
 }

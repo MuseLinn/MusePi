@@ -114,3 +114,51 @@ describe("callSidebar", () => {
 		expect((err as SidebarApiError).code).toBe("host");
 	});
 });
+
+describe("callSidebar git.branch adaptation", () => {
+	test("renames the call to git.branches and lifts the result into the sidebar's GitBranch shape", async () => {
+		// The one near-named route adapted so far. The sidebar consumes
+		// `{all, current, branches}` (GitView derives localBranches from .all;
+		// the selector reads branchInfo[name].ahead through optional chaining),
+		// while the host answers `{current, branches: string[]}` — names only.
+		// If regressed to a bare identity forward, the component would read
+		// `all` off a host result that only has `branches` and render an
+		// empty selector on a repo with plenty of branches.
+		const { rpc, calls } = transport({
+			result: { current: "main", branches: ["main", "feature/one", "fix-2"] },
+		});
+		const value = await callSidebar<{ all: string[]; current: string; branches: Record<string, unknown> }>(
+			rpc,
+			"git.branch",
+			{ cwd: "/w" },
+		);
+		expect(calls).toEqual([{ method: "git.branches", params: { cwd: "/w" } }]);
+		expect(value.all).toEqual(["main", "feature/one", "fix-2"]);
+		expect(value.current).toBe("main");
+		// Detail entries exist per branch with the current flag computed; the
+		// fields the host cannot answer (commit, tracking, ahead/behind) stay
+		// absent — consumers tolerate that, fabricating zeros would not.
+		expect(value.branches.main).toEqual({ current: true, name: "main" });
+		expect(value.branches["feature/one"]).toEqual({ current: false, name: "feature/one" });
+		expect(value.branches["fix-2"]).toEqual({ current: false, name: "fix-2" });
+	});
+
+	test("a detached HEAD (host current: null) maps to the empty current the sidebar treats as no-branch", async () => {
+		// The sidebar's GitBranch.current is a plain string; the host uses null
+		// for detached HEAD. The adapter must not leak null through — a null
+		// would read as a branch literally named "null" in display code.
+		const { rpc } = transport({ result: { current: null, branches: ["main"] } });
+		const value = await callSidebar<{ current: string }>(rpc, "git.branch", {});
+		expect(value.current).toBe("");
+		expect(value.branches.main).toEqual({ current: false, name: "main" });
+	});
+
+	test("an un-adapted git method still forwards by identity", async () => {
+		// The adapter is per-method, not a git.* wildcard: git.status returns
+		// the same shape on both ends of the bridge and must not be routed
+		// through the branch adapter.
+		const { rpc, calls } = transport({ result: { entries: [] } });
+		await callSidebar(rpc, "git.status", { cwd: "/w" });
+		expect(calls).toEqual([{ method: "git.status", params: { cwd: "/w" } }]);
+	});
+});
