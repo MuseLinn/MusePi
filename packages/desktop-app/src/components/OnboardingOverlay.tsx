@@ -28,6 +28,7 @@ import { ColorPickerPanel } from "./ColorPicker";
 import { GuiSelect } from "./GuiSelect";
 import { ImportSessionsSetup } from "./ImportSessionsSetup";
 import { MenuPopup } from "./MenuPopup";
+import { ModelBrandIcon } from "./model-brand-icon";
 import { PersonalizeSetup } from "./PersonalizeSetup";
 import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointModels } from "./provider-setup-shared";
 import { Reveal } from "./Reveal";
@@ -759,14 +760,64 @@ function ProviderSetup({
 		</div>
 	);
 
-	// Builtin list: all providers (no cap), logged-in first, local search —
-	// the API-key import rows join the same scrolled list and filter.
+	// Builtin list: all providers (no cap), logged-in first, local search.
+	// API-key-import rows join the SAME list (one scroll, one filter, one row
+	// shape) — they used to sit in a separate "API 密钥导入" group under the
+	// subscription rows, which read as two disconnected features.
 	const q = providerQuery.trim().toLowerCase();
 	const matchQ = (name: string): boolean => !q || name.toLowerCase().includes(q);
-	const visibleBuiltins = (builtins ?? [])
-		.filter(p => matchQ(p.name))
-		.sort((a, b) => Number(b.loggedIn) - Number(a.loggedIn) || a.name.localeCompare(b.name, "zh"));
-	const visibleImportable = importable.filter(p => matchQ(p.name)).sort((a, b) => a.name.localeCompare(b.name, "zh"));
+	// One merged row list: OAuth logins + key imports + already-configured
+	// key providers, deduped by id (a provider that supports both login and
+	// import shows ONE row whose action prefers login). `managed` marks rows
+	// whose credential menu adds another key (API-configured rows) vs another
+	// login (OAuth rows) — the menu's onAddAnother differs by source.
+	type OboRow = {
+		id: string;
+		name: string;
+		kind: "login" | "import" | "configured";
+		addAnother: () => void;
+	};
+	const oboRows: OboRow[] = (() => {
+		const map = new Map<string, OboRow>();
+		for (const p of builtins ?? []) {
+			map.set(p.id, {
+				id: p.id,
+				name: p.name,
+				kind: p.loggedIn ? "configured" : "login",
+				addAnother: () => void login(p.id),
+			});
+		}
+		for (const p of importable) {
+			if (map.has(p.id)) continue; // login flow exists — import reachable via it
+			map.set(p.id, {
+				id: p.id,
+				name: p.name,
+				kind: "import",
+				addAnother: () => {
+					setError(null);
+					setImportTarget(p);
+				},
+			});
+		}
+		for (const p of configuredApi) {
+			if (map.has(p.id)) continue;
+			map.set(p.id, {
+				id: p.id,
+				name: p.name,
+				kind: "configured",
+				addAnother: () => {
+					setError(null);
+					setImportTarget(p);
+				},
+			});
+		}
+		return [...map.values()]
+			.filter(p => matchQ(p.name))
+			.sort(
+				(a, b) =>
+					Number(b.kind === "configured") - Number(a.kind === "configured") || a.name.localeCompare(b.name, "zh"),
+			);
+	})();
 
 	return (
 		<div className="gui-obo-provider-form">
@@ -805,18 +856,21 @@ function ProviderSetup({
 						/>
 					</div>
 					<div className="gui-obo-provider-scroll">
-						{visibleBuiltins.map(p => (
+						{oboRows.map(p => (
 							<div key={p.id} className="gui-obo-provider-row">
+								<span className="gui-obo-provider-logo" aria-hidden="true">
+									<ModelBrandIcon provider={p.id} modelId="" size={15} />
+								</span>
 								<span className="gui-obo-provider-name">{p.name}</span>
-								{p.loggedIn ? (
+								{p.kind === "configured" ? (
 									<div className="flex shrink-0 items-center gap-2">
 										<span className="gui-obo-provider-status">
 											<Icon name="check" className="h-3.5 w-3.5" />
-											{t("logged in")}
+											{t("configured")}
 										</span>
-										{renderCredsMenu(p.id, () => void login(p.id))}
+										{renderCredsMenu(p.id, p.addAnother)}
 									</div>
-								) : (
+								) : p.kind === "login" ? (
 									<button
 										type="button"
 										className="gui-btn gui-obo-provider-login"
@@ -825,48 +879,14 @@ function ProviderSetup({
 									>
 										{t("login")}
 									</button>
+								) : (
+									<button type="button" className="gui-btn gui-obo-provider-login" onClick={p.addAnother}>
+										{t("import api key")}
+									</button>
 								)}
 							</div>
 						))}
-						{/* Configured API-key providers — settings parity: shown with
-						 * the credential menu so they can be managed (previously
-						 * they vanished from the list entirely). */}
-						{configuredApi.length > 0 && (
-							<>
-								<div className="gui-obo-quick-label gui-obo-import-label">{t("configured")}</div>
-								{configuredApi.map(p => (
-									<div key={p.id} className="gui-obo-provider-row">
-										<span className="gui-obo-provider-name">{p.name}</span>
-										<div className="flex shrink-0 items-center gap-2">
-											<span className="gui-obo-provider-status">
-												<Icon name="check" className="h-3.5 w-3.5" />
-												{t("configured")}
-											</span>
-											{renderCredsMenu(p.id, () => setImportTarget(p))}
-										</div>
-									</div>
-								))}
-							</>
-						)}
-						{visibleImportable.length > 0 && (
-							<div className="gui-obo-quick-label gui-obo-import-label">{t("api key import")}</div>
-						)}
-						{visibleImportable.map(p => (
-							<div key={p.id} className="gui-obo-provider-row">
-								<span className="gui-obo-provider-name">{p.name}</span>
-								<button
-									type="button"
-									className="gui-btn gui-obo-provider-login"
-									onClick={() => {
-										setError(null);
-										setImportTarget(p);
-									}}
-								>
-									{t("import api key")}
-								</button>
-							</div>
-						))}
-						{visibleBuiltins.length === 0 && visibleImportable.length === 0 && configuredApi.length === 0 && (
+						{oboRows.length === 0 && (
 							<div className="gui-obo-provider-empty">
 								{q ? t("no matching providers") : t("no models available")}
 							</div>
@@ -925,7 +945,9 @@ function ProviderSetup({
 					/>
 					{/* Fetch available models: interrogates the endpoint the form
 					 * currently shows (including an unsaved key), and offers the
-					 * reply as adoptable candidates. */}
+					 * reply as adoptable candidates. 添加模型 sits beside it —
+					 * settings-dialog parity (the manual-row path the guide form
+					 * was missing, which made its model list feel read-only). */}
 					<div className="flex items-center gap-2">
 						<button
 							type="button"
@@ -935,6 +957,22 @@ function ProviderSetup({
 							onClick={() => void ep.fetchModels()}
 						>
 							{ep.fetchingModels ? t("fetching models…") : t("fetch available models")}
+						</button>
+						<button
+							type="button"
+							className="gui-btn"
+							disabled={busy}
+							title={t("add model hint")}
+							onClick={() =>
+								setForm(v => ({
+									...v,
+									adopted: [...v.adopted, { id: v.modelId.trim(), name: v.modelName.trim() || undefined }],
+									modelId: "",
+									modelName: "",
+								}))
+							}
+						>
+							{t("add model")}
 						</button>
 						{form.adopted.length > 0 && (
 							<span className="text-[12px] text-[var(--color-text-faint)]">

@@ -3657,6 +3657,16 @@
 	border-radius: var(--radius-lg);
 	transition: background 120ms ease;
 }
+/* Brand mark on the onboarding provider row (settings parity). */
+.gui-obo-provider-logo {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 17px;
+	height: 17px;
+	color: var(--fg);
+}
 .gui-obo-provider-row:hover {
 	background: color-mix(in oklab, var(--bg-overlay) 60%, transparent);
 }
@@ -3710,6 +3720,24 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding-right: 2px;
+	/* Scrollbar styled to the app surface — the native green scrollbar
+	 * here clashed with the step's dark glass (user report: 引导自定义
+	 * 表单的滚动条样式不规范). Same recipe as gui-menu-popup. */
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--fg) 22%, transparent) transparent;
+}
+.gui-obo-custom::-webkit-scrollbar {
+	width: 8px;
+}
+.gui-obo-custom::-webkit-scrollbar-thumb {
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--fg) 18%, transparent);
+}
+.gui-obo-custom::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--fg) 30%, transparent);
+}
+.gui-obo-custom::-webkit-scrollbar-track {
+	background: transparent;
 }
 .gui-obo-quick {
 	display: flex;

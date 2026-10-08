@@ -2859,6 +2859,22 @@ body.gui-resizing .gui-pane-right {
 	color: var(--color-text);
 }
 
+/* Brand mark replacing the rail's status dot — the logo carries more
+ * recognition than an on/off dot (login state already shows in the card
+ * grid; the rail is a navigation list). */
+.gui-model-rail-logo {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	color: var(--color-text-muted);
+}
+.gui-model-rail-entry--active .gui-model-rail-logo {
+	color: var(--color-text);
+}
+
 .gui-model-rail-label {
 	min-width: 0;
 	flex: 1;
@@ -3026,6 +3042,19 @@ body.gui-resizing .gui-pane-right {
 	gap: 10px;
 }
 
+/* Brand mark on the card head — fixed box so unknown providers' fallback
+ * icon aligns with Lobe's fixed-size glyphs. */
+.gui-provider-card-logo {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	margin-top: 1px;
+	color: var(--color-text);
+}
+
 .gui-provider-card-name {
 	font-size: var(--ui-font-size-sm);
 	font-weight: 600;
@@ -3178,12 +3207,21 @@ body.gui-resizing .gui-pane-right {
  * edge (margin-top:auto) so stretch space lands between it and the
  * fallback list — every card in a row keeps its controls on one baseline.
  * Thinking select + fallback + cycle sit left; clear/remove are pushed
- * to the far right via the trailing spacer. */
+ * to the far right via the trailing spacer. Every control gets the SAME
+ * height so the row never shows mismatched button sizes across cards
+ * (a thinking select at 4px padding next to default-padding gui-btns
+ * rendered visibly shorter). */
 .gui-role-card > .gui-role-actions {
 	flex-wrap: nowrap;
 	align-items: center;
 	gap: 6px;
 	min-width: 0;
+}
+.gui-role-card > .gui-role-actions > .gui-btn,
+.gui-role-card > .gui-role-actions > .gui-select-trigger.gui-role-thinking {
+	height: 26px;
+	padding-top: 0;
+	padding-bottom: 0;
 }
 
 .gui-role-card > .gui-role-actions--pin {
@@ -3363,8 +3401,27 @@ body.gui-resizing .gui-pane-right {
 .gui-role-fallback-row {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
 	min-width: 0;
+	/* Draggable reorder (HTML5 DnD lives on the row): the grab cursor reads
+	 * on the whole row while the grip is the visible affordance. */
+	cursor: grab;
+}
+.gui-role-fallback-row:active {
+	cursor: grabbing;
+}
+
+/* Reorder grip — a quiet affordance that only surfaces on hover, keeping
+ * the resting row as clean as it was before drag-reorder existed. */
+.gui-role-fallback-grip {
+	display: inline-flex;
+	flex-shrink: 0;
+	color: var(--color-text-faint);
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+.gui-role-fallback-row:hover .gui-role-fallback-grip {
+	opacity: 1;
 }
 
 .gui-role-fallback-arrow {
@@ -3851,6 +3908,22 @@ body.gui-resizing .gui-pane-right {
 	margin-top: 8px;
 	font-size: 12.5px;
 	color: var(--color-text-muted);
+}
+
+/* Provider login / API-key import inside their modal shell (DialogFrame).
+ * The inline flow carried a pane margin; in the dialog the shell owns the
+ * spacing, and the URL wraps instead of stretching the dialog. */
+.gui-provider-flow-dialog {
+	max-width: 480px;
+}
+.gui-provider-flow-dialog .gui-github-flow {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+}
+.gui-provider-flow-dialog .gui-github-flow-actions {
+	flex-wrap: wrap;
 }
 .gui-flow-spinner {
 	width: 12px;

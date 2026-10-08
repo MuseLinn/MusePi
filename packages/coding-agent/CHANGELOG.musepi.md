@@ -5,6 +5,31 @@ MusePi 定制版本的发布说明,供启动时的"新功能"面板(`changelog.s
 
 ## [Unreleased]
 
+### Fixed
+
+- **登录弹窗取消后按钮不再卡死五分钟**：关闭登录弹窗（点遮罩或 Esc）只取消了界面，登录中的标记还挂在供应商上——期间该供应商的登录按钮一直是禁用态，要等 5 分钟 RPC 超时才恢复（「点了添加凭证后再点不弹」）。现在取消时同步清除标记，并通知 daemon 终止登录流程。
+  - EN: Cancelling the login dialog no longer bricks the buttons for five minutes. Closing the dialog (backdrop or Esc) only dismissed the UI — the in-flight marker stayed on the provider, keeping its login buttons disabled until the 5-minute RPC timeout. Cancel now clears the marker immediately and asks the daemon to abort the flow.
+- **首次配置引导的供应商列表合成一列**：订阅登录、已配置与 API key 导入此前是三段分组——「API 密钥导入」小标题把同一件事割成两个区域，行为还不一致。现在是一个列表：每行一个供应商，行尾动作只有一种（已配置 → 凭证菜单，OAuth 供应商 → 登录，纯 API 供应商 → 导入），排序、搜索、图标一致。
+  - EN: The onboarding provider list is one list now. Subscription logins, configured providers, and API-key imports were three separated groups — an "API key import" subheading split one concern into two areas with inconsistent behavior. One list remains: one row per provider with a single trailing action (configured → credential menu, OAuth provider → sign in, key-only provider → import), with shared ordering, search, and icons.
+- **供应商标识图标铺到设置与引导各处**：供应商卡片、角色模型侧栏、引导供应商行此前都是纯文字，逐一读名才能分辨。现在与模型选择器同一套 Lobe 品牌图标，未知供应商回落到通用 AI 图标。
+  - EN: Provider brand icons now appear across settings and onboarding. The provider cards, the role-model sidebar, and the onboarding provider rows were text-only, forcing name-by-name reading. They now share the same Lobe brand icons as the model picker, with a generic AI fallback for unknown providers.
+- **角色卡回退链可以编辑和拖拽排序了**：此前每条回退只能删除重加，顺序错了只能重建整条链。现在点击条目原地换模型，拖动条目直接重排，把手悬停浮现。
+  - EN: Role-card fallback chains can be edited and drag-reordered. Entries were delete-and-retype only — a wrong order meant rebuilding the whole chain. Clicking an entry swaps the model in place, dragging reorders directly, and the grip appears on hover.
+- **角色卡工具行按钮高度统一**：思考档位下拉与旁边的按钮此前高低不齐，同一行读起来像两种组件。现在该行所有控件统一 26px 高度。
+  - EN: The role-card toolbar buttons share one height. The thinking-level select rendered visibly shorter than the buttons beside it, reading as two different components in one row; all controls in the row are now 26px.
+- **自定义供应商表单两处对齐**：引导表单此前缺「添加模型」手动行（模型列表看着像只读），两处的 Base URL 占位提示也不一致。现在两处共用同一套字段与协议感知的占位提示，表单滚动条换成应用样式（原生绿色滚动条与暗色玻璃面冲突）。
+  - EN: The custom-provider forms now match between onboarding and settings. The onboarding form lacked the manual "add model" row (its model list read as read-only), and the two forms showed different base-URL placeholder hints. Both now share the same fields and protocol-aware hints, and the form scrollbars use the app styling (the native green scrollbar clashed with the dark glass).
+- **删除定时任务时选「同时删除会话」现在真的删得掉**：此前删除后任务中心里的会话仍在——关闭会话时日志文件句柄的释放是不等待的，Windows 上紧接着的删除会因句柄未释放而失败，留下的文件让下一次扫描把会话复活。现在删除前先等句柄释放完毕，删除动作对暂时性的占用失败自动重试，不再静默留下半删的文件。
+  - EN: Choosing "delete its sessions" when deleting a scheduled task now actually deletes them. The journal handle released on session teardown was never awaited, so the immediately following delete failed on Windows with the handle still open, and the leftover file resurrected the session on the next scan. The delete now waits for the release first and retries transient lock failures, so no half-deleted file is left behind silently.
+- **供应商卡片不再把同一个账号显示成两张**：同一供应商的两种登录方式（如 ChatGPT 的浏览器回调与设备码登录）凭证存在同一处，此前按内部 id 分列成两张卡，看着像登录了两次，且每张卡的「添加另一个凭证」各自只能走到其中一种流程。现在折成一张卡，另一种登录方式收进凭证菜单，凭证、退出登录共用一份。
+  - EN: A provider account no longer renders as two cards. A provider's two sign-in flows (ChatGPT's browser callback and device-code login, say) share one credential store, but the cards were split by internal id — reading as logged in twice, with each card's "add another credential" reaching only one of the two flows. They now fold into one card, the other flow living in the credential menu, sharing credentials and logout.
+- **「添加另一个凭证」在订阅类供应商上不再跳去 API key 输入框**：有订阅登录流程的供应商（同时恰好自带模型目录）此前被误判成纯 API key 供应商，点下去打开的是粘 key 的输入框。现在按卡片实际持有的凭证种类走：订阅账号开新的登录流程，纯 API key 供应商才开 key 输入框。
+  - EN: "Add another credential" no longer jumps to the API-key box on subscription providers. A provider with a subscription login flow — which also happened to ship a bundled model catalog — was misread as API-key-only, so the button opened the key input. It now follows the kind of credential the card actually holds: a subscription account starts another login, and only a pure API-key provider opens the key input.
+- **登录与导入 API key 改为居中弹窗**：这两个流程此前渲染在设置页内部——先是在页面顶部，离触发它的供应商卡片隔着一整屏；后来嵌进卡片里，三张卡片并列时又宽到放不下，链接和按钮被截掉。现在以弹窗打开：宽度充裕、永远居中、Esc 可关，从哪张卡片发起都一样。
+  - EN: Login and API-key import now open in a centered dialog. Both flows used to render inside the settings page — first at the top, a full screen away from the provider card that triggered them, then embedded in the card, where two neighbouring cards left too little width and clipped the link and buttons. They now open as a dialog: roomy, always centered, closable with Esc, identical from wherever in the grid they start.
+- **定时任务存储跟随数据根目录**：任务列表此前固定写在用户主目录下，数据根被重定位（开发隔离、自定义数据目录）后守护进程读的是另一个位置——表现为删掉的任务一重启又回来。现在存储位置随激活的数据根解析，开发环境不再读写真实任务列表，测试也不再向生产目录落任务。
+  - EN: The scheduled-task store follows the active data root. The task list was hardcoded under the home directory, so a relocated data root (dev isolation, a custom data directory) made the daemon read a different location — deleted tasks reappearing after restart. The store now resolves against the active root: the dev environment no longer touches the real task list, and tests no longer seed tasks into production storage.
+
 ### Added
 
 - **插件页现在可以直接填包名、git 地址、压缩包或本机路径来安装插件**：以前只有市场能装已收录的包，自己做的、还没发布的插件没法进。新的入口在插件页工具栏「安装插件」——填入内容后立即开始，边装边显示输出，可以中途取消，失败后原样重试；**也可以把压缩包或插件文件夹直接拖进去**，自制的插件不用先发布给别人。取消或失败都会把插件目录还原回安装前的样子，不会留下装了一半的依赖。装完会告诉你这个插件能不能在当前环境跑：依赖对得上就标为可用，缺东西或者有界面找不到落点时，把缺的是什么一并列出来，不用等到加载失败才发现。

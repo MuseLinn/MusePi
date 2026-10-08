@@ -12,7 +12,7 @@ import type { RpcClient } from "../../lib/rpc";
 import { Icon } from "../../vendor/oc-icons";
 import { DialogFrame } from "../DialogFrame";
 import { GuiSelect } from "../GuiSelect";
-import { EndpointCandidatesDialog, QuickProviderChips, useEndpointModels } from "../provider-setup-shared";
+import { EndpointCandidatesDialog, QuickProviderChips, URL_HINTS, useEndpointModels } from "../provider-setup-shared";
 
 export interface CustomProvider {
 	name: string;
@@ -368,6 +368,20 @@ export function CustomProviderPane({
 					<div className="text-[14px] font-medium">
 						{editingProvider ? t("edit custom provider") : t("add custom provider")}
 					</div>
+					<button
+						type="button"
+						className="gui-btn gui-btn--icon"
+						aria-label={t("close")}
+						onClick={() => {
+							setAddOpen(false);
+							setEditingProvider(null);
+							setFormError(null);
+							setForm(EMPTY_FORM);
+							ep.setFetchError(null);
+						}}
+					>
+						<Icon name="close" className="h-3.5 w-3.5" />
+					</button>
 				</div>
 				<div className="flex flex-col gap-2 p-4">
 					{/* Quick-fill chips — shared with onboarding (same four
@@ -382,7 +396,7 @@ export function CustomProviderPane({
 					/>
 					<input
 						className="gui-input"
-						placeholder="https://api.example.com/v1"
+						placeholder={URL_HINTS[form.api] ?? "https://api.example.com/v1"}
 						value={form.baseUrl}
 						onChange={e => setForm(v => ({ ...v, baseUrl: e.target.value }))}
 					/>

@@ -296,6 +296,12 @@ export function SettingsView({
 			// ignore
 		}
 		setLoginState(null);
+		// loginCancel aborts the daemon flow, which settles the providers.login
+		// RPC — but the reply can race the dialog close. Clear the pending flag
+		// HERE as well: a stuck flag left the provider's login buttons disabled
+		// for the full 5-minute RPC timeout ("点了添加另一个凭证后再点不弹").
+		const id = loginState.providerId;
+		setPendingLogins(p => p.filter(x => x !== id));
 	};
 
 	const logout = async (providerId: string): Promise<void> => {

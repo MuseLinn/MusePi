@@ -7,10 +7,12 @@ import type { RpcClient } from "../../lib/rpc";
 import { useScrollShadow } from "../../lib/use-scroll-shadow";
 import { Icon } from "../../vendor/oc-icons";
 import { ChromaGroup } from "../ChromaGroup";
+import { DialogFrame } from "../DialogFrame";
 import { GuiSelect } from "../GuiSelect";
 import { HeightMorph } from "../HeightMorph";
 import { MenuPopup } from "../MenuPopup";
 import { ModelSelector } from "../ModelSelector";
+import { ModelBrandIcon } from "../model-brand-icon";
 import { StateIcon } from "../StateIcon";
 import { type CustomProvider, CustomProviderPane } from "./custom-provider";
 import { SchemaTabSection } from "./schema";
@@ -238,11 +240,19 @@ export function ModelSection({
 	const [apiKeyTarget, setApiKeyTarget] = useState<string | null>(null);
 	const [apiKeyValue, setApiKeyValue] = useState("");
 	// Unified provider list: subscription (OAuth) + API-key providers merged
-	// by id — subscription wins login state, API model tags merge in.
+	// by CREDENTIAL STORAGE KEY (`storeCredentialsAs ?? id`), not raw id.
+	//
+	// Two OAuth rows can back one account store — `openai-codex` (browser
+	// callback) and `openai-codex-device` (headless/device code) both persist
+	// under `openai-codex`. Keyed by id they rendered as two "ChatGPT
+	// Plus/P…" cards that shared login state, credential rows and logout, and
+	// each card only offered one of the two flows. Folded into one card, the
+	// other flow stays reachable through `alternateLogins`.
 	const mergedProviders = useMemo(() => {
 		const map = new Map<
 			string,
 			{
+				key: string;
 				id: string;
 				name: string;
 				loggedIn: boolean;
@@ -252,10 +262,20 @@ export function ModelSection({
 				available: boolean;
 				canLogin: boolean;
 				canImport: boolean;
+				alternateLogins: { id: string; name: string }[];
 			}
 		>();
 		for (const p of providers ?? []) {
-			map.set(p.id, {
+			const key = p.storeCredentialsAs ?? p.id;
+			const existing = map.get(key);
+			if (existing) {
+				existing.alternateLogins.push({ id: p.id, name: p.name });
+				existing.loggedIn = existing.loggedIn || p.loggedIn;
+				existing.available = existing.available || p.available;
+				continue;
+			}
+			map.set(key, {
+				key,
 				id: p.id,
 				name: p.name,
 				loggedIn: p.loggedIn,
@@ -265,17 +285,23 @@ export function ModelSection({
 				available: p.available,
 				canLogin: true,
 				canImport: false,
+				alternateLogins: [],
 			});
 		}
+		// OAuth id → storage key, so an API row for a subscription provider
+		// merges into that provider's card instead of starting its own.
+		const storageKeyOf = new Map(providers?.map(p => [p.id, p.storeCredentialsAs ?? p.id]) ?? []);
 		for (const p of apiProviders) {
-			const existing = map.get(p.id);
+			const key = storageKeyOf.get(p.id) ?? p.id;
+			const existing = map.get(key);
 			if (existing) {
 				existing.configured = p.configured;
 				existing.models = p.models;
 				existing.modelCount = p.modelCount;
 				existing.canImport = true;
 			} else {
-				map.set(p.id, {
+				map.set(key, {
+					key,
 					id: p.id,
 					// API-key providers from the daemon may ship an EMPTY name —
 					// fall back to the id so the card header never renders blank
@@ -288,6 +314,7 @@ export function ModelSection({
 					available: true,
 					canLogin: false,
 					canImport: true,
+					alternateLogins: [],
 				});
 			}
 		}
@@ -375,6 +402,9 @@ export function ModelSection({
 	const [fallbackChains, setFallbackChains] = useState<Record<string, string[]>>({});
 	// Role whose fallback-chain editor is open (inline ModelSelector).
 	const [fallbackEditor, setFallbackEditor] = useState<string | null>(null);
+	// Which existing chain row is being REPLACED via the inline picker
+	// (`role:index`) — editing an entry, not appending one. Null = none.
+	const [fallbackEditIndex, setFallbackEditIndex] = useState<string | null>(null);
 
 	// Role presets only exist on a live session (settings live there).
 	useEffect(() => {
@@ -480,14 +510,13 @@ export function ModelSection({
 	}, [loadProjectOverrides]);
 
 	// Stored credentials per logged-in provider — powers the multi-account
-	// logout dropdown and the logged-in count. Covers both lists: OAuth
-	// accounts (providers) and configured API-key providers (apiProviders).
+	// logout dropdown and the logged-in count. Driven by the MERGED cards (not
+	// the raw lists) so the map is keyed by the id each card reads back: two
+	// OAuth flows folded onto one storage key must not double-fetch, and a
+	// folded secondary id must not leave the card showing no accounts.
 	const loadCredentials = useCallback(async (): Promise<void> => {
 		if (!rpc || !providers) return;
-		const ids = [
-			...providers.filter(p => p.loggedIn).map(p => p.id),
-			...apiProviders.filter(p => p.configured).map(p => p.id),
-		];
+		const ids = mergedProviders.filter(p => p.loggedIn || p.configured).map(p => p.id);
 		const entries = await Promise.all(
 			ids.map(async id => {
 				try {
@@ -501,7 +530,7 @@ export function ModelSection({
 		const next: Record<string, CredentialInfo[]> = {};
 		for (const [id, list] of entries) next[id] = list;
 		setCredentialsByProvider(next);
-	}, [rpc, providers, apiProviders]);
+	}, [rpc, providers, mergedProviders]);
 
 	useEffect(() => {
 		void loadCredentials();
@@ -686,32 +715,96 @@ export function ModelSection({
 								<span>{t("fallback chain")}</span>
 							</div>
 						)}
-						{chain.map((selector, i) => (
-							<div key={selector} className="gui-role-fallback-row">
-								<span className="gui-role-fallback-arrow">↳</span>
-								<span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
-									{selector}
-								</span>
-								<button
-									type="button"
-									className="gui-btn gui-btn--icon"
-									title={t("remove fallback")}
-									aria-label={t("remove fallback")}
-									onClick={() => {
-										const nextChain = chain.filter((_, idx) => idx !== i);
-										const next = { ...fallbackChains };
-										if (nextChain.length > 0) next[role] = nextChain;
-										else delete next[role];
+						{chain.map((selector, i) =>
+							fallbackEditIndex === `${role}:${i}` ? (
+								<div key={`${role}-edit-${i}`} className="gui-role-fallback-add">
+									<ModelSelector
+										rpc={rpc}
+										sessionId={null}
+										presetId={selector}
+										onSelect={(id, provider) => {
+											setFallbackEditIndex(null);
+											if (!id || !provider) return;
+											const replacement = `${provider}/${id}`;
+											// Same model re-picked → just close (no-op);
+											// a duplicate of ANOTHER row is rejected so
+											// the chain never carries two identical
+											// selectors.
+											if (replacement === selector || chain.includes(replacement)) return;
+											const nextChain = chain.map((s, idx) => (idx === i ? replacement : s));
+											const next = { ...fallbackChains, [role]: nextChain };
+											setFallbackChains(next);
+											void rpc
+												.request("settings.set", { key: "retry.fallbackChains", value: next })
+												.catch(() => {});
+										}}
+									/>
+								</div>
+							) : (
+								<div
+									key={selector}
+									className="gui-role-fallback-row"
+									draggable
+									onDragStart={e => {
+										e.dataTransfer.setData("text/fallback-index", String(i));
+										e.dataTransfer.effectAllowed = "move";
+									}}
+									onDragOver={e => {
+										if (e.dataTransfer.types.includes("text/fallback-index")) e.preventDefault();
+									}}
+									onDrop={e => {
+										e.preventDefault();
+										const from = Number(e.dataTransfer.getData("text/fallback-index"));
+										if (!Number.isInteger(from) || from === i || from < 0 || from >= chain.length) return;
+										const nextChain = [...chain];
+										const [moved] = nextChain.splice(from, 1);
+										nextChain.splice(i, 0, moved);
+										const next = { ...fallbackChains, [role]: nextChain };
 										setFallbackChains(next);
 										void rpc
 											.request("settings.set", { key: "retry.fallbackChains", value: next })
 											.catch(() => {});
 									}}
 								>
-									<Icon name="delete-bin" className="h-3 w-3" />
-								</button>
-							</div>
-						))}
+									<span className="gui-role-fallback-grip" title={t("drag to reorder")} aria-hidden="true">
+										<Icon name="draggable" className="h-3 w-3" />
+									</span>
+									<span className="gui-role-fallback-arrow">↳</span>
+									{fallbackEditIndex === null ? (
+										<button
+											type="button"
+											className="min-w-0 flex-1 truncate text-left text-[12px] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+											title={t("edit fallback")}
+											onClick={() => setFallbackEditIndex(`${role}:${i}`)}
+										>
+											{selector}
+										</button>
+									) : (
+										<span className="min-w-0 flex-1 truncate text-[12px] text-[var(--color-text-muted)]">
+											{selector}
+										</span>
+									)}
+									<button
+										type="button"
+										className="gui-btn gui-btn--icon"
+										title={t("remove fallback")}
+										aria-label={t("remove fallback")}
+										onClick={() => {
+											const nextChain = chain.filter((_, idx) => idx !== i);
+											const next = { ...fallbackChains };
+											if (nextChain.length > 0) next[role] = nextChain;
+											else delete next[role];
+											setFallbackChains(next);
+											void rpc
+												.request("settings.set", { key: "retry.fallbackChains", value: next })
+												.catch(() => {});
+										}}
+									>
+										<Icon name="delete-bin" className="h-3 w-3" />
+									</button>
+								</div>
+							),
+						)}
 						{editingFallback && (
 							<div className="gui-role-fallback-add">
 								<ModelSelector
@@ -769,7 +862,10 @@ export function ModelSection({
 						className="gui-btn"
 						title={editingFallback ? t("add fallback") : t("fallback chain")}
 						aria-label={editingFallback ? t("add fallback") : t("fallback chain")}
-						onClick={() => setFallbackEditor(editingFallback ? null : role)}
+						onClick={() => {
+							setFallbackEditIndex(null);
+							setFallbackEditor(editingFallback ? null : role);
+						}}
 					>
 						<Icon name="git-branch" className="h-3.5 w-3.5" />
 						{chain.length > 0 && <span className="gui-role-fallback-count">{chain.length}</span>}
@@ -843,7 +939,14 @@ export function ModelSection({
 	// "not logged in" in providers.list) + login/import capability lookup.
 	const railProviders = useMemo(() => {
 		if (!catalog) return [];
-		const byId = new Map(mergedProviders.map(p => [p.id, p]));
+		// Index every id a card answers to (primary + folded alternate login
+		// ids) so a catalog row naming a secondary id still inherits the
+		// card's login/import capabilities and registration state.
+		const byId = new Map<string, (typeof mergedProviders)[number]>();
+		for (const p of mergedProviders) {
+			byId.set(p.id, p);
+			for (const alt of p.alternateLogins) byId.set(alt.id, p);
+		}
 		return catalog.map(c => {
 			const known = byId.get(c.provider);
 			return {
@@ -940,7 +1043,9 @@ export function ModelSection({
 	// Provider detail (rail "provider:*" view): models + registration status
 	// + enable actions for unregistered providers.
 	const renderProviderDetail = (p: (typeof railProviders)[number]): ReactNode => {
-		const known = mergedProviders.find(m => m.id === p.provider);
+		// Fold-aware: the rail can name a secondary login id, whose card is
+		// the primary one (they share a credential store).
+		const known = mergedProviders.find(m => m.id === p.provider || m.alternateLogins.some(a => a.id === p.provider));
 		const status = known
 			? known.loggedIn
 				? t("logged in")
@@ -995,120 +1100,147 @@ export function ModelSection({
 			</div>
 		);
 	};
-	// Login flow (OAuth device-code): lives at the pane body top so it shows
-	// over whichever tab triggered it (providers tab OR a locked-provider
-	// action from the roles rail).
+	// Login flow (OAuth device-code) and API-key import render as one inline
+	// panel. Placement follows the trigger: a panel opened from a provider
+	// card appears inside that card (a flow for a card far down the grid used
+	// to appear at the pane top, far from its trigger and its Cancel button);
+	// a flow started from elsewhere — the roles rail, or a card hidden by the
+	// collapse limit — falls back to the pane-body top so it is never lost.
 	// Provider id → catalog display name (raw ids like "kimi-code" read broken
 	// in the flow title when the daemon keys differ from the label).
 	const providerDisplayName = (id: string): string =>
 		providers?.find(p => p.id === id)?.name ?? apiProviders.find(p => p.id === id)?.name ?? id;
+	// Login (OAuth) and API-key import render as one MODAL dialog (model.tsx
+	// previously anchored them inside the triggering provider card, but a
+	// grid card is a third of the pane wide — a URL plus its buttons clipped
+	// off the right edge whenever two other cards sat beside it). The dialog
+	// owns the keyboard while open (DialogFrame contract) and is always
+	// centered regardless of where in the grid the trigger sits.
 	const renderLoginFlow = (): ReactNode => {
-		if (!loginState) return null;
+		// Always-mounted, driven by `open` (DialogFrame contract: conditional
+		// mounting kills the exit animation).
+		const s = loginState;
 		return (
-			<div className="gui-github-flow">
-				<div className="gui-github-flow-title flex items-center gap-1.5">
-					<Icon name="lock" className="h-3.5 w-3.5" />
-					{t("login to {name}", { name: providerDisplayName(loginState.providerId) })}
-				</div>
-				{loginState.url && (
-					<div className="gui-github-flow-actions">
-						<button
-							type="button"
-							className="gui-btn gui-btn-primary"
-							onClick={() => void openExternalUrl(loginState.launchUrl ?? loginState.url!)}
-						>
-							<Icon name="external-link" className="h-3.5 w-3.5" />
-							{t("open login page")}
-						</button>
-						<button
-							type="button"
-							className="gui-link"
-							onClick={() => {
-								void navigator.clipboard.writeText(loginState.url ?? "").catch(() => {});
-								setCopied(true);
-								window.setTimeout(() => setCopied(false), 1500);
-							}}
-						>
-							{copied ? t("link copied") : t("copy link")}
-						</button>
-						{loginState.url && (
-							<button type="button" className="gui-link" onClick={() => void onCancelLogin()}>
+			<DialogFrame
+				open={s !== null}
+				label={t("login to {name}", { name: providerDisplayName(s?.providerId ?? "") })}
+				onClose={() => void onCancelLogin()}
+				className="gui-dialog--confirm gui-provider-flow-dialog"
+			>
+				{s && (
+					<div className="gui-github-flow">
+						<div className="gui-github-flow-title flex items-center gap-1.5">
+							<Icon name="lock" className="h-3.5 w-3.5" />
+							{t("login to {name}", { name: providerDisplayName(s.providerId) })}
+						</div>
+						{s.url && (
+							<div className="gui-github-flow-actions">
+								<button
+									type="button"
+									className="gui-btn gui-btn-primary"
+									onClick={() => void openExternalUrl(s.launchUrl ?? s.url!)}
+								>
+									<Icon name="external-link" className="h-3.5 w-3.5" />
+									{t("open login page")}
+								</button>
+								<button
+									type="button"
+									className="gui-link"
+									onClick={() => {
+										void navigator.clipboard.writeText(s.url ?? "").catch(() => {});
+										setCopied(true);
+										window.setTimeout(() => setCopied(false), 1500);
+									}}
+								>
+									{copied ? t("link copied") : t("copy link")}
+								</button>
+							</div>
+						)}
+						{s.instructions && <div className="gui-github-flow-hint">{s.instructions}</div>}
+						{s.message && <div className="gui-github-flow-hint">{s.message}</div>}
+						{s.waitingInput ? (
+							<div className="mt-2 flex items-center gap-2">
+								<input
+									className="gui-input flex-1"
+									value={inputValue}
+									onChange={e => setInputValue(e.target.value)}
+									placeholder={t("paste the code or redirect URL")}
+									onKeyDown={e => {
+										if (e.key === "Enter") {
+											void onSubmitInput(inputValue);
+											setInputValue("");
+										}
+									}}
+								/>
+								<button
+									type="button"
+									className="gui-btn gui-btn-approve"
+									onClick={() => void onSubmitInput(inputValue)}
+								>
+									{t("submit")}
+								</button>
+							</div>
+						) : (
+							s.url &&
+							pendingLogins.includes(s.providerId) && (
+								<div className="gui-github-flow-waiting">
+									<span className="gui-flow-spinner" aria-hidden="true" />
+									{t("waiting login")}
+								</div>
+							)
+						)}
+						<div className="gui-github-flow-actions">
+							<button type="button" className="gui-btn" onClick={() => void onCancelLogin()}>
 								{t("cancel")}
 							</button>
-						)}
-					</div>
-				)}
-				{loginState.instructions && <div className="gui-github-flow-hint">{loginState.instructions}</div>}
-				{loginState.message && <div className="gui-github-flow-hint">{loginState.message}</div>}
-				{loginState.waitingInput ? (
-					<div className="mt-2 flex items-center gap-2">
-						<input
-							className="gui-input flex-1"
-							value={inputValue}
-							onChange={e => setInputValue(e.target.value)}
-							placeholder={t("paste the code or redirect URL")}
-							onKeyDown={e => {
-								if (e.key === "Enter") {
-									void onSubmitInput(inputValue);
-									setInputValue("");
-								}
-							}}
-						/>
-						<button
-							type="button"
-							className="gui-btn gui-btn-approve"
-							onClick={() => void onSubmitInput(inputValue)}
-						>
-							{t("submit")}
-						</button>
-					</div>
-				) : (
-					loginState.url &&
-					pendingLogins.includes(loginState.providerId) && (
-						<div className="gui-github-flow-waiting">
-							<span className="gui-flow-spinner" aria-hidden="true" />
-							{t("waiting login")}
 						</div>
-					)
+					</div>
 				)}
-			</div>
+			</DialogFrame>
 		);
 	};
-	// API-key import flow: same inline pattern as login — renders at the pane
-	// body top wherever the import button was pressed.
+	// API-key import flow: the same modal shell as login (always mounted,
+	// driven by `open` — DialogFrame exit-animation contract).
 	const renderApiKeyImport = (): ReactNode => {
-		if (!apiKeyTarget) return null;
 		return (
-			<div className="gui-github-flow">
-				<div className="gui-github-flow-title flex items-center gap-1.5">
-					<Icon name="key" className="h-3.5 w-3.5" />
-					{t("import api key for {name}", { name: providerDisplayName(apiKeyTarget) })}
-				</div>
-				<div className="flex items-center gap-2">
-					<input
-						className="gui-input flex-1"
-						type="password"
-						value={apiKeyValue}
-						placeholder="sk-…"
-						autoFocus
-						onChange={e => setApiKeyValue(e.target.value)}
-						onKeyDown={e => {
-							if (e.key === "Enter" && apiKeyValue.trim()) void submitApiKey();
-						}}
-					/>
-					<button
-						type="button"
-						className="gui-btn gui-btn-approve"
-						disabled={!apiKeyValue.trim()}
-						onClick={() => void submitApiKey()}
-					>
-						{t("import")}
-					</button>
-					<button type="button" className="gui-btn" onClick={() => setApiKeyTarget(null)}>
-						{t("cancel")}
-					</button>
-				</div>
-			</div>
+			<DialogFrame
+				open={apiKeyTarget !== null}
+				label={t("import api key for {name}", { name: providerDisplayName(apiKeyTarget ?? "") })}
+				onClose={() => setApiKeyTarget(null)}
+				className="gui-dialog--confirm gui-provider-flow-dialog"
+			>
+				{apiKeyTarget && (
+					<div className="gui-github-flow">
+						<div className="gui-github-flow-title flex items-center gap-1.5">
+							<Icon name="key" className="h-3.5 w-3.5" />
+							{t("import api key for {name}", { name: providerDisplayName(apiKeyTarget) })}
+						</div>
+						<div className="flex items-center gap-2">
+							<input
+								className="gui-input flex-1"
+								type="password"
+								value={apiKeyValue}
+								placeholder="sk-…"
+								onChange={e => setApiKeyValue(e.target.value)}
+								onKeyDown={e => {
+									if (e.key === "Enter" && apiKeyValue.trim()) void submitApiKey();
+								}}
+							/>
+							<button
+								type="button"
+								className="gui-btn gui-btn-approve"
+								disabled={!apiKeyValue.trim()}
+								onClick={() => void submitApiKey()}
+							>
+								{t("import")}
+							</button>
+							<button type="button" className="gui-btn" onClick={() => setApiKeyTarget(null)}>
+								{t("cancel")}
+							</button>
+						</div>
+					</div>
+				)}
+			</DialogFrame>
 		);
 	};
 
@@ -1139,7 +1271,7 @@ export function ModelSection({
 				 * between rail views (different content heights — no abrupt
 				 * jump). */}
 				<HeightMorph morphKey={`${activeTab}:${railView}`} className="gui-model-pane-body">
-					{loginState && renderLoginFlow()}
+					{renderLoginFlow()}
 					{activeTab === "roles" && rpc && (
 						<>
 							<div className="gui-settings-section">
@@ -1172,10 +1304,13 @@ export function ModelSection({
 													className={railEntryCls(`provider:${p.provider}`)}
 													onClick={() => setRailView(`provider:${p.provider}`)}
 												>
-													<span
-														className="gui-provider-status-dot gui-provider-status-dot--on"
-														aria-hidden="true"
-													/>
+													<span className="gui-model-rail-logo" aria-hidden="true">
+														<ModelBrandIcon
+															provider={p.provider}
+															modelId={p.models[0]?.id ?? ""}
+															size={14}
+														/>
+													</span>
 													<span className="gui-model-rail-label truncate">{p.name}</span>
 													<span className="gui-model-rail-count">{p.modelCount}</span>
 												</button>
@@ -1188,7 +1323,13 @@ export function ModelSection({
 													className={railEntryCls(`provider:${p.provider}`)}
 													onClick={() => setRailView(`provider:${p.provider}`)}
 												>
-													<span className="gui-provider-status-dot" aria-hidden="true" />
+													<span className="gui-model-rail-logo" aria-hidden="true">
+														<ModelBrandIcon
+															provider={p.provider}
+															modelId={p.models[0]?.id ?? ""}
+															size={14}
+														/>
+													</span>
 													<span className="gui-model-rail-label truncate">{p.name}</span>
 												</button>
 											))}
@@ -1387,6 +1528,16 @@ export function ModelSection({
 															spotlightColor="rgba(255, 255, 255, 0.08)"
 														>
 															<div className="gui-provider-card-head">
+																{/* Brand mark (same Lobe icon the model picker
+																 * rows use) — a grid of text-only cards is
+																 * hard to scan; the logo carries recognition. */}
+																<span className="gui-provider-card-logo" aria-hidden="true">
+																	<ModelBrandIcon
+																		provider={p.key}
+																		modelId={p.models[0] ?? ""}
+																		size={16}
+																	/>
+																</span>
 																<div className="min-w-0 flex-1">
 																	<div className="gui-provider-card-name" title={p.name}>
 																		{p.name}
@@ -1476,16 +1627,23 @@ export function ModelSection({
 																				</div>
 																			))}
 																			<div className="gui-creds-menu-sep" />
+																			{/* "Another credential" adds one of the SAME
+																			 * kind the card already holds: a
+																			 * subscription account starts another
+																			 * login flow, a pure API-key provider opens
+																			 * the key input. Preferring canImport here
+																			 * sent ChatGPT (which also ships a bundled
+																			 * model list) to the API-key box. */}
 																			<button
 																				type="button"
 																				className="gui-view-opt"
+																				disabled={p.canLogin && pendingLogins.includes(p.id)}
 																				onClick={() => {
 																					setCredsMenu(null);
-																					if (p.canImport) {
+																					if (p.canLogin) void onLogin(p.id);
+																					else {
 																						setApiKeyTarget(p.id);
 																						setApiKeyValue("");
-																					} else {
-																						void onLogin(p.id);
 																					}
 																				}}
 																			>
@@ -1494,6 +1652,24 @@ export function ModelSection({
 																					{t("add another credential")}
 																				</span>
 																			</button>
+																			{p.alternateLogins.map(alt => (
+																				<button
+																					type="button"
+																					key={alt.id}
+																					className="gui-view-opt"
+																					title={t("alternate login hint")}
+																					disabled={pendingLogins.includes(alt.id)}
+																					onClick={() => {
+																						setCredsMenu(null);
+																						void onLogin(alt.id);
+																					}}
+																				>
+																					<Icon name="arrow-right-s" className="h-3.5 w-3.5" />
+																					<span className="min-w-0 flex-1">
+																						{t("login with {name}", { name: alt.name })}
+																					</span>
+																				</button>
+																			))}
 																			<button
 																				type="button"
 																				className="gui-view-opt gui-view-opt--danger"
@@ -1622,12 +1798,12 @@ export function ModelSection({
 						</>
 					)}
 
-					{/* API-key import — INLINE (same pattern as the login flow):
-					 * a modal here is inconsistent with provider login, which
-					 * stays embedded in the tab (user report). Rendered at the
-					 * pane body top via renderApiKeyImport() so it also works
-					 * from the roles-rail provider actions. */}
-					{apiKeyTarget && renderApiKeyImport()}
+					{/* Login / API-key import modals: always mounted, driven by
+					 * `open` (DialogFrame exit-animation contract). DialogFrame
+					 * portals to document.body, so tree position is irrelevant —
+					 * they stay visible over whichever tab the trigger came
+					 * from, and no longer clip inside a third-of-a-pane card. */}
+					{renderApiKeyImport()}
 					{/* The pane owns the "custom providers" tab. Rendering it
 					 * unconditionally leaked the whole section (title, list, add
 					 * button) under the roles/behavior/providers tabs too. */}

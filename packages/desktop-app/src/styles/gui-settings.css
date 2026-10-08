@@ -3,6 +3,23 @@
 	width: min(640px, 92vw);
 	height: min(440px, 84vh);
 	overflow-y: auto;
+	/* App-styled scrollbar — the native green scrollbar on this tall form
+	 * clashed with the dialog's dark glass (user report: 样式有点不规范). */
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--color-text) 22%, transparent) transparent;
+}
+.gui-dialog--settings::-webkit-scrollbar {
+	width: 8px;
+}
+.gui-dialog--settings::-webkit-scrollbar-thumb {
+	border-radius: 999px;
+	background: color-mix(in oklab, var(--color-text) 18%, transparent);
+}
+.gui-dialog--settings::-webkit-scrollbar-thumb:hover {
+	background: color-mix(in oklab, var(--color-text) 30%, transparent);
+}
+.gui-dialog--settings::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 .gui-settings-nav {
