@@ -113,12 +113,14 @@ import { getExtensionMediaProviders, IMAGE_PROVIDER_CHOICES, VIDEO_PROVIDER_CHOI
 import type { ScheduledTaskHandle } from "../tools/schedule-task";
 import type { TodoPhase } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
+import { restore as gitRestore } from "../utils/git";
 import { createSessionWorktree } from "../utils/session-worktree";
 import { readArtifactEntryText, scanWorkspaceArtifacts } from "./artifact-scan.js";
 import type { CordisDynamicExtensionRuntime } from "./cordis-dynamic-extensions";
 import { writeProjectMirror } from "./creation";
 import { resolveExtensionWatchRoots } from "./extension-watch-roots";
 import { DaemonHostContext, mountRegistryServices } from "./host-context";
+import { catchupPlan } from "./journal";
 
 /** Stable per-project notes filename (cwd hash). */
 async function hashProjectPath(cwd: string): Promise<string> {
@@ -374,6 +376,43 @@ function extractSnapshotText(content: unknown): string {
 			.join("\n");
 	}
 	return "";
+}
+
+/**
+ * Run git for a write RPC.
+ *
+ * Separate from {@link runGitRead} because the failure modes differ. A write
+ * that fails leaves the tree changed, so the error carries git's own stderr —
+ * "your local changes would be overwritten" is the answer to why a revert did
+ * not happen, and a generic "git exited 1" sends the reader to the terminal to
+ * find out. A write also gets a longer kill guard: revert legitimately waits on
+ * a commit hook, and killing it halfway is worse than waiting.
+ */
+async function runGitWrite(cwd: string, args: readonly string[], timeoutMs = 60_000): Promise<void> {
+	const proc = Bun.spawn({
+		cmd: ["git", ...args],
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+		windowsHide: true,
+	});
+	const guard = setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// already exited
+		}
+	}, timeoutMs);
+	try {
+		const [exitCode, , stderr] = await Promise.all([
+			proc.exited,
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+		if (exitCode !== 0) throw new Error(stderr.trim() || `git ${args[0] ?? ""} exited ${exitCode}`);
+	} finally {
+		clearTimeout(guard);
+	}
 }
 
 /**
@@ -1522,6 +1561,25 @@ export class DaemonServer {
 				};
 				return this.#host.createSession(p);
 			}
+			case "subagents.live": {
+				// What is running under a session right now, straight from the
+				// progress map the subscription path already keeps.
+				//
+				// A snapshot, not a subscription: a lens that polls between its own
+				// refreshes gets its answer from the same map a re-subscribing
+				// client hydrates from, so the poll and the push cannot disagree
+				// about what is live.
+				//
+				// An unattached session answers with an empty list, which is true
+				// rather than misleading: nothing runs under a session that is not
+				// running.
+				const p = (params ?? {}) as { sessionId?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) return { error: "sessionId required" };
+				const live = this.#host.get(sessionId);
+				if (!live) return { agents: [] };
+				return { agents: [...live.subagentProgress.values()] };
+			}
 			case "workflows.list": {
 				// Orchestration runs for one session, newest first.
 				//
@@ -2649,6 +2707,71 @@ export class DaemonServer {
 						};
 					});
 				return { files };
+			}
+			case "git.discard": {
+				// Throw away one file's unstaged edits.
+				//
+				// `--worktree` alone is the whole point: a staged change stays
+				// staged. Discarding both would silently undo something the person
+				// had deliberately prepared for a commit, which is not what "throw
+				// away this file's edits" means.
+				const p = (params ?? {}) as { path?: unknown; cwd?: unknown };
+				const file = typeof p.path === "string" ? p.path : "";
+				if (!file) return { error: "path required" };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				// `--` after the flag list: a path beginning with a dash is a legal
+				// filename, and without this git reads it as an option.
+				await gitRestore(cwd, { files: [file], worktree: true });
+				return { ok: true };
+			}
+			case "git.revert": {
+				// Add a commit that undoes an earlier one, leaving history intact.
+				//
+				// `git revert` rather than `reset --hard`: this is the operation a
+				// person wants from a "revert this commit" button, and the other one
+				// is data loss they did not ask for.
+				const p = (params ?? {}) as { hash?: unknown; cwd?: unknown };
+				const hash = typeof p.hash === "string" ? p.hash.trim() : "";
+				if (!hash) return { error: "hash required" };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				await runGitWrite(cwd, ["revert", "--no-edit", hash]);
+				return { ok: true };
+			}
+			case "changes.ops": {
+				// Session events after a watermark, for a client that polls rather
+				// than holding a subscription.
+				//
+				// The same contract `session.catchup` implements, including what
+				// happens when the watermark predates a compaction. Reusing it is
+				// the point: a checkpoint folded away records the client had not
+				// seen, and replaying from a buffer that no longer holds them
+				// would skip them silently.
+				const p = (params ?? {}) as { sessionId?: unknown; afterSeq?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) return { error: "sessionId required" };
+				const afterSeq =
+					typeof p.afterSeq === "number" && Number.isInteger(p.afterSeq) && p.afterSeq >= 0 ? p.afterSeq : 0;
+				const live = this.#host.get(sessionId);
+				if (!live) return { error: "session not found" };
+				// The live journal, not a fresh one: a new instance would miss appends
+				// whose writes are still queued in the live instance's chain.
+				const journal = live.journal;
+				const checkpoint = await this.#host.checkpointSeq(sessionId);
+				const tailSeq = journal ? journal.tailSeq : afterSeq;
+				const plan = catchupPlan(afterSeq, checkpoint, tailSeq);
+				if (plan.resyncRequired) {
+					// Said explicitly rather than served as a short list: a client
+					// reading this as "nothing happened" would keep a stale view
+					// forever without ever knowing it missed something.
+					return { events: [], lastSeq: tailSeq, resyncRequired: true, compactedThrough: plan.compactedThrough };
+				}
+				const records = journal ? await journal.recordsAfter(afterSeq) : [];
+				const last = records[records.length - 1];
+				return {
+					events: records.map(record => record.event),
+					lastSeq: last ? last.seq : afterSeq,
+					resyncRequired: false,
+				};
 			}
 			case "git.status": {
 				// Structured working-tree state for the changes tree: branch,
