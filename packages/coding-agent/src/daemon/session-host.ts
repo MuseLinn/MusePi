@@ -342,6 +342,7 @@ import type {
 	ExtensionUIContext,
 } from "../extensibility/extensions/types";
 import type { AgentSession } from "../session/agent-session";
+import { RunRecorder } from "../task/run-record";
 import {
 	type SubagentLifecyclePayload,
 	type SubagentProgressPayload,
@@ -902,6 +903,9 @@ export interface LiveSession {
 	 *  are stream-only, so a re-subscribing client would otherwise start
 	 *  blank until the next frame arrives). */
 	subagentProgress: Map<string, SubagentProgressPayload>;
+	/** Orchestration records, folded from the same lifecycle events this session
+	 *  already forwards. In-memory and bounded — see `task/run-record`. */
+	runRecorder: RunRecorder;
 	/** Last activity (send or event) — drives the idle auto-dispose. */
 	lastActivity: number;
 	/** Idle timer; cleared on close/dispose. */
@@ -1844,6 +1848,10 @@ export class DaemonSessionHost {
 			subscribers: new Map(),
 			activeToolCalls: new Map(),
 			subagentProgress: new Map(),
+			// Bounded, in-memory, and rebuilt from live lifecycle events only: a run
+			// that ended before this daemon attached is not reconstructable, which is
+			// why the list is a "what ran since you connected" view rather than a log.
+			runRecorder: new RunRecorder(sessionId),
 			lastActivity: Date.now(),
 			idleTimer: null,
 			recapTimer: null,
@@ -1987,6 +1995,10 @@ export class DaemonSessionHost {
 		const onSubagentLifecycle = (raw: unknown): void => {
 			if (!ownsSubagentPayload(raw)) return;
 			const payload = raw as SubagentLifecyclePayload;
+			// Fold into the run record before anything else reads the payload: a
+			// run whose last member completed before the subscribers are told will
+			// otherwise show up already finished with no member list.
+			live.runRecorder.apply(payload);
 			// Terminal lifecycle: drop the retained progress so a later
 			// re-subscribe hydrates only still-running agents.
 			if (payload.status !== "started") live.subagentProgress.delete(payload.id);

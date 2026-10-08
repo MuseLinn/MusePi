@@ -105,6 +105,7 @@ import { lookupBuiltinSlashCommand } from "../slash-commands/builtin-registry";
 import { parseSlashCommand } from "../slash-commands/helpers/parse";
 import { resolvePromptInput } from "../system-prompt";
 import { refreshAgentDiscovery } from "../task";
+import { RUN_HISTORY_LIMIT } from "../task/run-record";
 import type { ConfiguredThinkingLevel } from "../thinking";
 import { parseConfiguredThinkingLevel } from "../thinking";
 import type { CollabToolHandle } from "../tools/collab";
@@ -1520,6 +1521,25 @@ export class DaemonServer {
 					projectMetadata?: Record<string, unknown>;
 				};
 				return this.#host.createSession(p);
+			}
+			case "workflows.list": {
+				// Orchestration runs for one session, newest first.
+				//
+				// Reads the live recorder rather than any store, so the answer is
+				// exactly "what ran since this daemon attached" — a run that
+				// finished while nothing was connected is not in it, and the
+				// response says so rather than implying an empty history.
+				//
+				// A session that is not live has no recorder, which is reported as
+				// an empty list with `live: false` instead of an error: the caller
+				// asked about runs, not about whether the session exists.
+				const p = (params ?? {}) as { sessionId?: unknown; limit?: unknown };
+				const sessionId = typeof p.sessionId === "string" ? p.sessionId : "";
+				if (!sessionId) return { error: "sessionId required" };
+				const live = this.#host.get(sessionId);
+				if (!live) return { runs: [], live: false };
+				const limit = Math.min(RUN_HISTORY_LIMIT, Math.max(1, Number(p.limit) || RUN_HISTORY_LIMIT));
+				return { runs: live.runRecorder.list(limit), live: true };
 			}
 			case "session.list": {
 				const cronIds = this.#services.get<ScheduleService>("schedule").sessionIds();
