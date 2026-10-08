@@ -58,7 +58,7 @@ function walk(dir: string, acc: string[] = []): string[] {
 
 function inScope(file: string): boolean {
 	const rel = relative(root, file).replaceAll("\\", "/");
-	if (!rel.startsWith("docs/") && rel !== "index.md" && rel !== "README.md") return false;
+	if (!rel.startsWith("docs/") && rel !== "README.md") return false;
 	if (rel.endsWith(".zh-CN.md")) return true; // counterpart discovery handles pairing
 	for (const stem of EXCLUDED_STEMS) {
 		if (rel === `${stem}.md` || rel.startsWith(`${stem}.`)) return false;
@@ -167,7 +167,7 @@ function collectStems(): string[] {
 		if (!inScope(file)) continue;
 		stems.add(pairOf(file).stem);
 	}
-	for (const f of ["index.md", "README.md"]) {
+	for (const f of ["README.md"]) {
 		const p = join(root, f);
 		if (existsSync(p) && inScope(p)) stems.add(pairOf(p).stem);
 	}

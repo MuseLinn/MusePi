@@ -1,7 +1,7 @@
 # Naming Convention
 
 > Status: Active (2026-09-15). Applies to all user-facing surfaces (GUI, mobile, TUI, i18n strings).
-> 中文版：[naming.zh-CN.md](./naming.zh-CN.md)
+English | [中文](./naming.zh-CN.md)
 
 ## Three layers, three rules
 

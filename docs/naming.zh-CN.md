@@ -1,7 +1,7 @@
 # 命名规范
 
 > 状态：生效（2026-09-15）。适用于所有用户可见界面（GUI、移动端、TUI、i18n 文案）。
-> English: [naming.md](./naming.md)
+[English](./naming.md) | 中文
 
 ## 三层三规则
 

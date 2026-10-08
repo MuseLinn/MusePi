@@ -337,3 +337,116 @@ export default async function (pi: ExtensionAPI) {
 - 存储落点：`<agentDir>/extensions/plugin-config.json`，键空间与 `disabledExtensions` 一致（`extension-module:<name>`）。
 
 契约与类型：`ConfigFieldDesc`/`PluginResources`/`coerceConfigValues` 见 `packages/wire/src/plugin-config.ts`；存储见 `packages/coding-agent/src/extensibility/extensions-center/plugin-config-store.ts`；运行时读取见 `ConcreteExtensionAPI.config`（loader.ts）。
+
+## 14. 插件安装（spec 安装与能力报告，2026-10-06）
+
+市场（`marketplace.*`）只覆盖已收录的包。自己做的、还没发布的插件走本节的 spec 安装面：插件页工具栏「安装插件」直接填包名、git 地址、压缩包或本机绝对路径。
+
+### RPC
+
+| 方法 | 入参 | 出参 |
+|---|---|---|
+| `plugins.install` | `{ spec, force? }` | `{ installId }`（立即返回，不阻塞到安装结束） |
+| `plugins.install.status` | — | `{ installs: PluginInstallView[] }` |
+| `plugins.install.cancel` | `{ installId }` | `{ status: "cancelled" \| "not-running" }` |
+| `plugins.install.output` | `{ installId }` | `{ lines: PluginInstallOutputLine[] }` |
+| `plugins.uninstall` | `{ name }` | `{ name }` |
+
+事件（daemon 广播，渲染端按 `installId` 对账）：
+- `plugins.install.state` — 状态迁移，载荷同 `PluginInstallView`；
+- `plugins.install.output` — 包管理器输出的每一块，带 `stream`。
+
+### spec 分类
+
+`parseInstallSpec`（单一权威，`extensibility/plugins/spec-classifier.ts`）把 spec 分四类，安装按类走不同分支：
+
+| 类别 | 例子 | 包名来源 |
+|---|---|---|
+| `registry` | `acme-plugin`、`@scope/plugin@1.2.3` | spec 自身 |
+| `git` | `github:owner/repo#v1`、`https://github.com/owner/repo` | 装后 diff `plugins/package.json` |
+| `tarball` | `/path/pkg.tgz`、`https://host/pkg-1.0.0.tgz` | 装后 diff |
+| `path` | `C:\dir\pkg`、`/home/me/pkg` | 装后 diff |
+
+- 本地路径必须绝对：GUI 输入框没有工作目录可依，相对路径会被解析到插件目录内。
+- 三段式 http(s) URL 仅在 host 属已知 forge（github/gitlab/bitbucket/codeberg/sr.ht/gitee/gitcode）时读作仓库；其它 host 需带 `.git` 后缀自证。否则一个网页链接会启动必然失败的克隆。
+- 取消与失败是两回事：取消后插件目录已还原、不带失败分类，GUI 文案与动作都不同。
+
+### 拖入安装
+
+安装框本身是拖放目标：把 `.tgz` / `.tar.gz` / `.zip` 压缩包或一个插件文件夹拖进去，绝对路径直接落到 spec 字段，随后与手输路径走同一条安装路径。未发布、自建、只在同事机器上存在的插件因此不需要先发布。
+
+取路径走 preload 暴露的 `webUtils.getPathForFile`（`electron/preload.cjs` 的 `getDroppedFilePath`）。Electron 32 起渲染端的 `File.path` 已移除，渲染器没有别的办法知道拖进来的是什么位置；取不到路径时该 API 返回空串，调用方必须区别对待而不是当作路径去装。
+
+拖放只接受 bun 能读的归档或目录。文件夹没有扩展名可判，一律接受；文件按扩展名判 —— 拖进一个 `.docx` 或 `.png` 会在落进输入框之前就拒绝，而不是让包管理器报一个“无法解析的 spec”。
+
+**拖入不会执行被拖包的安装脚本。** `PluginManager.install` 跑 `bun install <spec>`，不传 `--trust`，而 bun 默认不执行依赖的 lifecycle 脚本（除非该包进了项目的 `trustedDependencies`）。因此拖入一个带 `postinstall` 的包，它自己的脚本不会运行。这与技能市场的 `awaiting-approval` 阶段不同 —— 那里拦的是“下载后的文件会被 loader 求值”，插件安装没有这一步可拦；真要加批准闸门，先要决定的是“插件安装允许执行什么”，不是界面怎么摆。
+
+### 能力报告（装上 ≠ 能跑）
+
+`describePluginCapability`（`extensibility/plugins/capability-report.ts`）在安装完成后静态判定该插件能否在本底座加载，三档：
+
+- `runnable` — 声明的依赖都能满足，入口文件都在。
+- `partial` — 能加载，但有组件注册的槽位本底座没有挂载点（例如指向 `panel.tab.*` 之外的槽），那部分界面不会出现。
+- `incompatible` — 缺少运行包（常见于为其它 harness 构建的插件，其 `peerDependencies` 指向本仓不提供的包），或声明的入口文件不在盘上。缺失项逐个列出。
+
+判定只读插件自己的 `package.json` 依赖与入口源码，**不加载插件代码** —— 「能不能加载」正是要避免先加载再观察的东西。缺失的运行包与缺席的槽位分别影响 `incompatible` 与 `partial`，因为前者加载不了、后者只是那部分不显示。
+
+报告随 `plugins.install.state` 的终态返回，渲染端据此提示，不必等到加载失败才发现装了个跑不起来的插件。
+
+### 安装源与回退链
+
+三个设置键（`pluginRegistryMode` / `pluginRegistryUrl` / `pluginRegistryFallbacks`，均不带点号——点号键会被 Settings 当嵌套路径解析）决定安装问哪个源。默认模式先问官方源，遇到「换源可能有救」的失败再试公开镜像。
+
+换源与否由 `attributeFailure`（`extensibility/plugins/registry-fallback.ts`）判定，而非「失败就重试」：包管理器报的是哪一类失败、该失败是否点名了 spec 自己的主机（host 失败换 registry 无意义）、纯 registry spec 的失败永远可换。链在每次重试前先还原本轮开始时捕获的文件，否则失败尝试留下的半写状态会成为下一次尝试的起点。
+
+**不测延迟、不做粘性回退**，理由与 DSH 的差异见 `docs/handoff-plugin-install.md` §4。
+
+## 15. 用户自定义扩展（现状核实，2026-10-06）
+
+对照 DSH 的用户 patch 层核实过两次（2026-10-06 修正）。**先纠正本文档早前的一处错误记录**：早前称「DSH 可以在 patch 里写 `insert: [{ id, name, config }]` 而不必有包」——**这是错的**。`insert` 的 `name` 必须是一个真实的、已安装的包名，Loader 靠它 import；`insert` 做的是**在 Loader 树里增加一行指向该包**，并可同时携带 `config` 与 `disabled` 条件（`vendor/include/src/index.ts:77-101`、`packages/bundle/web-app/cordis.patch.yml:44-63`）。它不是凭空造插件，配置里永远配着实现。
+
+两侧的真实对照：
+
+| 能力 | DSH | musepi | 依据 |
+|---|---|---|---|
+| 本地未发布插件 | `plugin add .`，相对路径锚定到调用目录；装完按 manifest 的 `dsh.bundle.patch` 自动 reconcile 进 `profile.bundles` | `PluginManager.link(path)` 建符号链接；`PluginManager.install` 支持 path/tarball 形态 | `deepseek-harness/apps/cli/reference/README.md:81`、`extensibility/plugins/manager.ts:917` |
+| 装完即生效 | 否——须进 Loader 树 | 是——`getAllPluginExtensionPaths` 运行时发现 | `extensibility/extensions/loader.ts:1012-1015` |
+| 按行开关 | `setPluginEnabled` 写 patch 的 `disabled` 覆写 | `extensions.setComponentEnabled`，粒度 `<plugin>/<component>` | `daemon/services/extension-service.ts:601` |
+| 整包启停 | 同上（行级） | `plugins.setEnabled` → `settings.disabledExtensions` | `daemon/server.ts:1928` |
+| **关掉整个发现层** | **无此概念** | `disableExtensionDiscovery`，已用于 compress/session、security/coordinator、commit/agentic | `extensibility/extensions/loader.ts:950-955`、`compress/session.ts:61`、`security/coordinator.ts:265` |
+| **整包条件启停** | `disabled: !!js "ctx.get('profileContext')?.name !== 'desktop'"` | **无** | DSH `packages/bundle/web-app/cordis.patch.yml:47` |
+| profile 隔离 | `$DSH_HOME/profiles/<name>/`，含完整 Loader 树 | `~/.musepi/profiles/<name>/agent/`，含 sessions/MCP 凭据/兼容性豁免/扩展加载 | `discovery/builtin.ts:72-73`、`mcp/oauth-flow.ts:26-30` |
+
+**粒度上我们不比 DSH 细**：DSH 的「行」不可再分，而 `Extension` 接口为每个注册面各持一个独立通道（`extensibility/extensions/types.ts` 的 `Extension`），每条各自加载与卸载。但我们**多一个控制维度**——`disableExtensionDiscovery` 能整层关闭环境发现，DSH 的 Loader 树没有对应概念。通道数会随注册 API 增加而变，故不复述具体数字，以该接口为准。
+
+### 真实差异只有一处：整包级条件启停
+
+`disabledExtensions` 是静态 id 列表，没有表达式求值。DSH 能在 patch 里写 `disabled: !!js <表达式>`，Loader 在每次挂载决策时针对 loader ctx 求值——所以「这个包只在 desktop profile 下启用」是可表达的。
+
+这条差异**在 DSH 插件兼容层落地时会直接咬人**：bundle 的 `disabled: !!js` 翻译不了。对应的做法是兼容层求值常见形态（比较 profile 名、判断环境变量存在性）并写入 `disabledExtensions`，求值不了的表达式显式报「无法翻译」而非静默忽略——静默忽略会让一个本该禁用的插件被装载。
+
+不必为此把 musepi 改成声明式 Loader 树：那会把「插件是运行时发现的」这个前提改掉，代价大于收益。
+
+## 16. Claude Code 兼容面（现状核实，2026-10-06）
+
+对照 DSH 的 `hooks-claude-code` 核实过一次。DSH 的 Claude Code 兼容**只有一件事**：把 Claude Code `hooks.json` 的 command 型钩子桥到自己的扩展点，认 7 个事件（`SessionStart` / `UserPromptSubmit` / `PreToolUse` / `PostToolUse` / `Stop` / `SubagentStart` / `SubagentStop`），`configPath` 必填、无自动发现，且不读 `.claude-plugin/plugin.json`、marketplace、commands、agents、skills、`.mcp.json`。
+
+musepi 的覆盖面**更广**，不必为了“对齐 DSH”补 P3 —— 补了反而是改窄：
+
+| 兼容面 | 实现 | 依据 |
+|---|---|---|
+| 插件目录（`~/.claude/plugins`） | `claude-plugins` provider：读 `installed_plugins.json` 清单、认 `.claude-plugin/plugin.json`，含 skills / MCP / commands，带路径逃逸防护 | `discovery/claude-plugins.ts:4-5,75,119,188` |
+| `.claude/` 配置目录 | `claude` provider 共 9 个能力面 | `discovery/claude.ts:523-587` |
+| CLAUDE.md / AGENTS.md | 指令文件 + `@import` 展开 | `discovery/claude.ts:128-149`、`discovery/at-imports.ts` |
+| skills | `~/.claude/skills/*/SKILL.md` | `discovery/claude.ts:539` |
+| slash commands | `~/.claude/commands/*.md` | `discovery/claude.ts:555` |
+| hooks | `.claude/hooks/pre/` 与 `post/` | `discovery/claude.ts:563` |
+| 自定义工具 | `~/.claude/tools/` | `discovery/claude.ts:571` |
+| MCP | `.claude.json`、`.claude/mcp.json` | `discovery/claude.ts:523` |
+| marketplace | `.claude-plugin/marketplace.json` 目录清单 | `extensibility/plugins/marketplace/fetcher.ts:199` |
+| LSP | `.claude/lsp.*` | `lsp/config.ts:410-411` |
+| settings | `.claude/settings.json` 项目层 | `config/settings.ts:295,362` |
+
+优先级是刻意排的：claude-plugins(70) < claude(80)，所以用户自己在 `.claude/` 里的覆盖优先于 marketplace 装来的插件（`discovery/agent-plugins.ts:39-40`）。
+
+**与 DSH 的实质差异只有钩子的执行模型**：DSH 桥的是 Claude Code 的 shell 命令钩子（带 `hookSpecificOutput.hookEventName` 事件门控、`${CLAUDE_PLUGIN_ROOT}` 替换、exit 2 阻断），而 musepi 的 hooks 是 JS/TS 模块（`HookFactory`），命令钩子另走 `.claude/hooks/{pre,post}/` 的目录约定。若要补 command 型钩子，应作为 hooks 引擎的一种新来源接进现有 `HookEvent` 联合，而不是新建一套与 DSH 对齐的独立桥。
