@@ -2,11 +2,11 @@
  * Transport bridge between the ported sidebar UI and the MusePi daemon.
  *
  * The sidebar's client code calls `POST /sidebar/api/<method>` and unwraps a
- * `{ok:true, value}` envelope (dsh's contract). This host answers RPC over a
- * single WebSocket with JSON-RPC 2.0, has no REST surface, and returns the
- * result directly rather than wrapped. So the ported UI cannot run against this
- * daemon until its every-call chokepoint is redirected — that is what this
- * module does: one function the whole API surface will funnel through.
+ * `{ok:true, value}` envelope. This host answers RPC over a single WebSocket
+ * with JSON-RPC 2.0, has no REST surface, and returns the result directly
+ * rather than wrapped. So the ported UI cannot run against this daemon until its
+ * every-call chokepoint is redirected — that is what this module does: one
+ * function the whole API surface will funnel through.
  *
  * It forwards by identity and does NOT judge a successful result's shape. Two
  * reasons, both found by reading the actual hosts rather than assumed:
@@ -17,14 +17,16 @@
  *     swallow real results or invent failures, so the transport only reacts to
  *     errors the RPC layer itself raises.
  *
- *   • Some near-named routes return different shapes (`fs.remove` answers
- *     `{path}` in dsh, `{ok:true}` in MusePi's `fs.delete`), so identity is not
- *     always enough — but reshaping is a per-method decision with its own test,
- *     not a global rule. When a method needs one, the adapter lives with the
- *     method's own verified test rather than as an empty mechanism here.
+ *   • Some near-named routes return different shapes between the two ends of
+ *     this bridge — the sidebar's `fs.remove` expects a `{path}` result while
+ *     this host's `fs.delete` answers `{ok:true}` — so identity is not always
+ *     enough. But reshaping is a per-method decision with its own test, not a
+ *     global rule; a method that needs one carries its verified adapter with
+ *     the test that proves it, rather than a speculative mechanism here.
  *
- * The error type mirrors the sidebar's own so a component's existing `catch`
- * keeps working unchanged; only the production of that error moved.
+ * The error type matches the sidebar's own name and code vocabulary so a
+ * component's existing `catch` keeps working unchanged; only the production of
+ * that error moved.
  */
 
 /** The slice of `RpcClient` this bridge needs, kept structural so the transport
