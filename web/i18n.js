@@ -112,7 +112,7 @@
     "mom.kicker": "Momentum",
     "mom.h2": "Built on open source, moving every day",
     "mom.desc":
-      "MusePi's Agent engine is continuously synced from the open-source oh-my-pi project (sync baseline and verification notes live in the repo's UPSTREAM.md); the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work built on top of it. What follows aren't roadmap promises — they're things already shipped in recent releases.",
+      "The desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work; the Agent engine stands on the shoulders of the open-source oh-my-pi project and stays in sync with it. What follows aren't roadmap promises — they're things already shipped in recent releases.",
     "mom.stat1": "LLM providers",
     "mom.stat2": "Supported platforms",
     "mom.stat3": "Extension hubs",
@@ -178,9 +178,9 @@
     "faq.q4": "Are my code and data safe?",
     "faq.a4":
       "MusePi runs on your own machine; sessions, settings and history are stored locally and aren't uploaded by default. The mobile companion pairs over the LAN by QR code, and remote control is end-to-end encrypted the whole way — no third-party server in between. The only outbound network request is to the model provider you configure.",
-    "faq.q5": "What's its relationship to oh-my-pi?",
+    "faq.q5": "Where does MusePi come from?",
     "faq.a5":
-      "MusePi is a standalone coding-agent platform. Its Agent engine is continuously synced from the open-source oh-my-pi project (baseline in the repo's UPSTREAM.md); the desktop GUI, the shared background service, the resident desktop pet, the mobile companion, the extension system and the collaboration surfaces are our own work built on top of it, all MIT-licensed.",
+      "MusePi is an AI workspace: the desktop GUI, the terminal, the mobile companion and the resident desktop pet share one background service, with models, tools and surfaces all swappable. The desktop and mobile apps, the extension system and the collaboration surfaces are our own work; the Agent engine stands on the shoulders of the open-source oh-my-pi project (see its repo for details), and everything is MIT-licensed.",
     "faq.q6": "How do I get started?",
     "faq.a6":
       "One command installs the background service, the terminal TUI and the desktop app: <code>curl -fsSL https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.sh | sh</code> (macOS / Linux / WSL); on Windows use <code>irm https://raw.githubusercontent.com/MuseLinn/MusePi/main/scripts/install.ps1 | iex</code>. Requires Node ≥ 22 or Bun. Want the GUI straight away? Pick your system in the platform menu up top, or browse every installer in Releases.",
@@ -215,7 +215,7 @@
   var HEAD_EN = {
     title: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     description:
-      "MusePi is a standalone coding-agent platform: the desktop app, the command line and the mobile companion share the same sessions and settings, so work picks up wherever you are. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
+      "MusePi is an AI workspace: the desktop app, the terminal and the mobile companion share the same sessions and settings, so work picks up wherever you are. It gets hands on — writing code, running commands, driving the browser — and it comes apart so you can rebuild it around your workflow: models, tools and surfaces are swappable. 60+ model providers, runs locally, end-to-end encrypted collaboration. Free to test; the community edition is free forever.",
     ogTitle: "MusePi — Your AI partner: more than writing code, reshaped to your workflow",
     ogDescription:
       "A hands-on AI partner: it writes code, runs commands and drives the browser, and you can rebuild it around your workflow. Desktop · command line · phone share the same sessions, 60+ providers, runs locally. Free to test, community edition free forever.",
