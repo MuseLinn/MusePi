@@ -82,22 +82,30 @@ describe("issue #6767 /usage output during streaming", () => {
 		resetSettingsForTest();
 	});
 
-	it("defers the usage panel until the active turn ends, mounting it once", async () => {
+	it("keeps /usage out of the transcript entirely, streaming or not", async () => {
+		// The original bug (#6767) was /usage printing into the conversation while
+		// a turn was still streaming, which duplicated in native scrollback. The
+		// command now opens a dashboard instead of writing to the transcript at
+		// any point — so the property to hold is that the transcript is untouched,
+		// not that a deferred row appears once the turn ends. This test asserted
+		// the older deferred-row shape and has been red since /usage became a
+		// dashboard; it is restated here against the contract that replaced it.
 		const streamedReply = new Text("agent is streaming", 0, 0);
 		mode.chatContainer.addChild(streamedReply);
 
 		await mode.handleUsageCommand(usageReports);
 
-		// Mid-stream: the finalized panel must NOT mount above the growing live
-		// block (that is what duplicates in native scrollback — issue #6767).
+		// Mid-stream: nothing added. The dashboard is a separate surface, so a
+		// block appearing here is what would duplicate.
 		expect(mode.chatContainer.children).toEqual([streamedReply]);
 
 		streaming = false;
 		await mode.eventController.handleEvent({ type: "agent_end", messages: [] } as AgentSessionEvent);
 
-		// streamedReply + the deferred usage panel (Spacer + Text).
-		expect(mode.chatContainer.children).toHaveLength(3);
+		// After the turn ends: still nothing. The dashboard does not become a
+		// transcript row once it is safe to print one.
+		expect(mode.chatContainer.children).toEqual([streamedReply]);
 		const transcript = mode.chatContainer.render(80).join("\n");
-		expect(transcript.match(/Usage \(/g)).toHaveLength(1);
+		expect(transcript).not.toMatch(/Usage \(/);
 	});
 });
