@@ -1,7 +1,12 @@
 title: MusePi
-description: MusePi — a desktop-first AI coding agent (fork of oh-my-pi)
+description: MusePi — an AI pair engineer that writes the code, on desktop, terminal and phone
 baseurl: /MusePi
 lang: en
+
+# web/ is the landing page; pages.yml copies it onto the artifact root, so
+# building it here too would publish a second copy at /MusePi/web/.
+exclude:
+  - web
 
 # Render every docs/*.md as an HTML page. Files without explicit front
 # matter would otherwise be copied verbatim by Jekyll and served as raw
