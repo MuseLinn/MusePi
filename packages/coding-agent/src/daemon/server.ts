@@ -376,6 +376,49 @@ function extractSnapshotText(content: unknown): string {
 }
 
 /**
+ * Run git for a read-only RPC.
+ *
+ * Async rather than sync because a synchronous spawn blocks the daemon's event
+ * loop for the duration — `git.log` records that a `spawnSync` here froze every
+ * connection at once. The kill guard is for the same reason `git.log` carries
+ * one: a git that hangs on a network filesystem or a hook must not pin the RPC
+ * open indefinitely.
+ *
+ * Returns git's own words on failure rather than throwing, because every caller
+ * surfaces a missing repository as a view state rather than as an error dialog.
+ */
+async function runGitRead(
+	cwd: string,
+	args: readonly string[],
+	timeoutMs = 10_000,
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+	const proc = Bun.spawn({
+		cmd: ["git", ...args],
+		cwd,
+		stdout: "pipe",
+		stderr: "pipe",
+		windowsHide: true,
+	});
+	const guard = setTimeout(() => {
+		try {
+			proc.kill();
+		} catch {
+			// already exited
+		}
+	}, timeoutMs);
+	try {
+		const [exitCode, stdout, stderr] = await Promise.all([
+			proc.exited.catch(() => null),
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+		]);
+		return { exitCode, stdout, stderr };
+	} finally {
+		clearTimeout(guard);
+	}
+}
+
+/**
  * Project an SDK transcript (jsonl of final entries, `session` header line,
  * optional leading `title` slot line) into the session-snapshot shape.
  * Canonical implementation lives in ./jsonl-snapshot (P0-5: full record
@@ -2495,6 +2538,97 @@ export class DaemonServer {
 					staged: cap(stagedRaw),
 					unstaged: cap(unstagedRaw),
 				};
+			}
+			case "git.show": {
+				// One commit: metadata plus the patch that commit introduced.
+				//
+				// Two calls because git has no single command for both: `show -s`
+				// with a NUL-separated format for the metadata (a message
+				// containing newlines survives it, which a space-separated format
+				// does not), and `diff-tree -p` against the first parent for the
+				// patch. A root commit has no parent, so it diffs against the empty
+				// tree — otherwise a repository's first commit renders as an empty
+				// change, which reads as "this commit did nothing".
+				const p = (params ?? {}) as { revision?: unknown; maxLines?: unknown; cwd?: unknown };
+				const revision = typeof p.revision === "string" && p.revision.length > 0 ? p.revision : "HEAD";
+				const maxLines = Math.min(2000, Math.max(20, Number(p.maxLines) || 400));
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+
+				const [meta, parents, patch] = await Promise.all([
+					runGitRead(cwd, ["show", "-s", "--format=%H%x00%h%x00%an%x00%ae%x00%aI%x00%P%x00%B", revision]),
+					runGitRead(cwd, ["rev-list", "--parents", "-n", "1", revision]),
+					runGitRead(cwd, ["diff-tree", "-r", "-p", "--root", revision]),
+				]);
+				if (meta.exitCode !== 0) return { error: "not found or not a git repository" };
+				const [hash = "", shortHash = "", name = "", email = "", date = "", parentLine = "", ...messageParts] =
+					meta.stdout.split("\0");
+				const parentList = parents.exitCode === 0 ? parents.stdout.trim().split(/\s+/).slice(1) : [];
+				const truncated =
+					patch.exitCode === 0 && patch.stdout.length > maxLines * 400
+						? `${patch.stdout.slice(0, maxLines * 400)}\n… (truncated)`
+						: patch.stdout;
+				return {
+					revision: hash.trim(),
+					shortHash: shortHash.trim(),
+					author: { name, email, date: date.trim() },
+					// `%B` is the raw body and git terminates it with the blank line
+					// that separates it from the next record — two newlines, not one.
+					// Stripping a single trailing newline leaves the message with a
+					// phantom trailing blank line in every view that renders it.
+					message: messageParts.join("\0").replace(/\n+$/, ""),
+					parents: parentList.filter(Boolean),
+					diff: truncated,
+				};
+			}
+			case "git.changedFiles": {
+				// Changed paths between two tree-ish objects, or the working tree
+				// when neither is given. The panel needs this to decide which files
+				// to fetch a diff for, and asking for a diff of every tracked path
+				// to find out which ones moved is the expensive way round.
+				const p = (params ?? {}) as { base?: unknown; head?: unknown; cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const base = typeof p.base === "string" && p.base.length > 0 ? p.base : undefined;
+				const head = typeof p.head === "string" && p.head.length > 0 ? p.head : undefined;
+				const args = base && head ? ["diff", "--name-only", base, head] : ["status", "--porcelain"];
+				const res = await runGitRead(cwd, args);
+				if (res.exitCode !== 0) return { error: "not a git repository" };
+				const files = res.stdout
+					.split("\n")
+					.filter(line => line.trim() !== "")
+					// A porcelain line is `<XY> <path>` — exactly three leading columns
+					// whose width is the whole point, so the line must NOT be trimmed
+					// before the path is sliced off. Trimming first drops the
+					// leading space of an unstaged change and the slice then eats
+					// the first characters of the filename.
+					.map(line => (base && head ? line.trim() : line.slice(3)));
+				return { files };
+			}
+			case "git.numstat": {
+				// Per-file added/removed counts. A panel renders "＋n −m" per file
+				// and computes its own bar widths, and asking it to count lines out
+				// of a diff means shipping every diff to count them in the client.
+				const p = (params ?? {}) as { path?: unknown; cwd?: unknown };
+				const cwd = path.resolve(typeof p.cwd === "string" && p.cwd.length > 0 ? p.cwd : this.#host.cwd());
+				const fileArgs = typeof p.path === "string" && p.path.length > 0 ? ["--", p.path] : [];
+				const res = await runGitRead(cwd, ["diff", "--numstat", ...fileArgs]);
+				if (res.exitCode !== 0) return { error: "not a git repository" };
+				const files = res.stdout
+					.split("\n")
+					.map(line => line.trim())
+					.filter(Boolean)
+					.map(line => {
+						const [added = "", removed = "", file = ""] = line.split("\t");
+						return {
+							path: file,
+							// `-` counts appear for a binary file, which has no lines to
+							// count; passing it through would render as arithmetic on
+							// a minus sign.
+							added: added === "-" ? 0 : Number(added) || 0,
+							removed: removed === "-" ? 0 : Number(removed) || 0,
+							binary: added === "-" || removed === "-",
+						};
+					});
+				return { files };
 			}
 			case "git.status": {
 				// Structured working-tree state for the changes tree: branch,
